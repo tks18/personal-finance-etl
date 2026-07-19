@@ -1,0 +1,20 @@
+{
+  "name": "personal-finance-etl",
+  "description": "E2E ETL App for processing my personal finances and investment data for robust investment and tax capabilities",
+  "version": "0.1.0",
+  "repository": "https://github.com/tks18/personal-finance-etl",
+  "author": "tks18 <tksudharshan@gmail.com>",
+  "license": "GPL-3.0-only",
+  "packageManager": "yarn@4.12.0",
+  "scripts": {
+    "git:stage": "git add",
+    "git:commit": "cz",
+    "git:push": "git push --follow-tags origin master",
+    "release": "standard-version --commit-all",
+    "release:pre": "standard-version --commit-all --prerelease",
+    "release:patch": "standard-version --commit-all --release-as patch",
+    "release:minor": "standard-version --commit-all --release-as minor",
+    "release:major": "standard-version --commit-all --release-as major",
+    "release:as": "standard-version --commit-all --release-as"
+  }
+}
