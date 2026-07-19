@@ -83,6 +83,8 @@ class IsinProcessor:
         def get_bm_price(dt) -> float | None:
             dt_val = dt if isinstance(dt, date) and not isinstance(
                 dt, datetime) else to_date_obj(dt)
+            if dt_val is None:
+                return None
             return bm_price_map.get(dt_val)
 
         inst_px: dict[date, float] = {}
@@ -133,36 +135,44 @@ class IsinProcessor:
             if not m_date or m_date < first_p_date:
                 continue
 
-            while p_idx < len(p_inst) and to_date_obj(p_inst[p_idx]["Date"]) <= m_date:
+            while p_idx < len(p_inst):
+                row_dt_obj = to_date_obj(p_inst[p_idx]["Date"])
+                if row_dt_obj is None or row_dt_obj > m_date:
+                    break
                 row = p_inst[p_idx]
                 qty = float(row["Quantity"])
                 b_price = float(row["Price"])
-                buy_val = float(row.get("Value") if row.get(
-                    "Value") is not None else qty * b_price)
-                row_dt = to_date_obj(row["Date"])
-                bm_p = get_bm_price(row_dt)
+                
+                v_val = row.get("Value")
+                buy_val = float(v_val) if v_val is not None else float(qty * b_price)
+                
+                bm_p = get_bm_price(row_dt_obj)
                 shadow_q = buy_val / bm_p if (bm_p and bm_p > 0) else 0.0
 
-                fifo.buy(row_dt, qty, b_price, shadow_q, bm_p)
-                cf_dates.append(row_dt)
+                fifo.buy(row_dt_obj, qty, b_price, shadow_q, float(bm_p or 0.0))
+                cf_dates.append(row_dt_obj)
                 cf_amounts.append(-buy_val)
-                isin_cashflows.append({"date": row_dt, "amount": -buy_val})
+                isin_cashflows.append({"date": row_dt_obj, "amount": -buy_val})
                 p_idx += 1
 
-            while s_idx < len(s_inst) and to_date_obj(s_inst[s_idx]["Date"]) <= m_date:
+            while s_idx < len(s_inst):
+                row_dt_obj = to_date_obj(s_inst[s_idx]["Date"])
+                if row_dt_obj is None or row_dt_obj > m_date:
+                    break
                 row = s_inst[s_idx]
                 s_qty = float(row["Quantity"])
-                row_dt = to_date_obj(row["Date"])
-                s_price = float(row.get("Price") if row.get(
-                    "Price") is not None else m_row["Closing Price"])
-                s_val = float(row.get("Sell Value") if row.get(
-                    "Sell Value") is not None else s_qty * s_price)
+                
+                p_val = row.get("Price")
+                s_price = float(p_val) if p_val is not None else float(m_row["Closing Price"])
+                
+                sv_val = row.get("Sell Value")
+                s_val = float(sv_val) if sv_val is not None else float(s_qty * s_price)
 
-                cf_dates.append(row_dt)
+                cf_dates.append(row_dt_obj)
                 cf_amounts.append(s_val)
-                isin_cashflows.append({"date": row_dt, "amount": s_val})
+                isin_cashflows.append({"date": row_dt_obj, "amount": s_val})
 
-                events = fifo.sell(row_dt, s_qty, s_price)
+                events = fifo.sell(row_dt_obj, s_qty, s_price)
                 isin_realized.extend(events)
                 s_idx += 1
 

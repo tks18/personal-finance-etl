@@ -51,7 +51,7 @@ def run_pipeline(
 ):
     start_time = time.time()
     if status_queue is None:
-        status_queue = multiprocessing.Queue() # type: ignore
+        status_queue = multiprocessing.Queue()  # type: ignore
 
     if cfg is None:
         raise ValueError("Configuration settings (cfg) cannot be None")

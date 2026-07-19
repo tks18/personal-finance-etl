@@ -131,7 +131,8 @@ class BenchmarkEngine:
             df_new = pd.DataFrame()
             # Strip timezones and normalize to midnight
             if not hist.empty:
-                hist.index = pd.to_datetime(hist.index).tz_localize(None).normalize()
+                hist.index = pd.to_datetime(
+                    hist.index).tz_localize(None).normalize()
 
                 # ffill() to cover weekends/holidays, then bfill()
                 df_new = hist[["Close"]].reindex(
@@ -172,7 +173,8 @@ class BenchmarkEngine:
                 # greater than 40% drop
                 huge_drops = pct_drops[pct_drops < -0.4]
                 if not huge_drops.empty:
-                    drop_dts = pd.to_datetime(huge_drops.index).strftime("%Y-%m-%d").tolist()
+                    drop_dts = pd.to_datetime(
+                        huge_drops.index).strftime("%Y-%m-%d").tolist()
                     warn_msg = f"⚠ Anomalous drops (>40%) in {ticker} on {', '.join(drop_dts)} (Unadjusted split?)"
 
             msg = f"✓ Fetched {ticker}" if not warn_msg else f"✓ Fetched {ticker}. {warn_msg}"

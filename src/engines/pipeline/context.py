@@ -66,17 +66,17 @@ class RunContext:
         start_date: date | None = None,
         end_date: date | None = None
     ) -> "RunContext":
-        df_p, df_s, df_m, isin_master, df_b = TaxDataLoader.load_from_dataframes(
+        loaded_p, loaded_s, loaded_m, is_m, loaded_b = TaxDataLoader.load_from_dataframes(
             df_p, df_s, df_m, df_i, df_b
         )
         fy_table = FYTaxRateTable(df_t)
 
         return cls(
-            df_p=df_p,
-            df_s=df_s,
-            df_m=df_m,
-            isin_master=isin_master,
-            df_b=df_b,
+            df_p=loaded_p,
+            df_s=loaded_s,
+            df_m=loaded_m,
+            isin_master=is_m,
+            df_b=loaded_b,
             fy_table=fy_table,
             start_date=start_date,
             end_date=end_date
