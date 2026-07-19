@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [1.0.0](https://github.com/tks18/personal-finance-etl/compare/0.1.5...1.0.0) (2026-07-19)
+
+
+### Features 🔥
+
+* **engines/pipeline:** main processor for investment manager ([af103b6](https://github.com/tks18/personal-finance-etl/commit/af103b62c383497efa66685f189315aaa7fd2dee))
+* **engines/pipeline:** write the post processing script that will run after data load ([1042838](https://github.com/tks18/personal-finance-etl/commit/10428386f3a5b1bd8a0c01c67aaa062403381215))
+* **engines:** write the benchmark engine for handling the market bechmark data through yfinance ([eb7f193](https://github.com/tks18/personal-finance-etl/commit/eb7f193920676f9317a61bd279b77f88f0e5fefe))
+* **engines:** write the main investment engine ([8b8fcb2](https://github.com/tks18/personal-finance-etl/commit/8b8fcb2bc2f64b61f67600d8971251bd34341eb2))
+* **load:** setup the main db load module for init, optimize and loading data ([173ad56](https://github.com/tks18/personal-finance-etl/commit/173ad56565f34553e8503a767cfce046e016b7ac))
+* **main:** completely modularize the app, add new features and this simply runs the ui mainloop ([89dc915](https://github.com/tks18/personal-finance-etl/commit/89dc9158601c244afab49742cc166aba430b209c))
+* **pipeline:** orchestrate the entire ETL pipeline End-to-End ([b50c162](https://github.com/tks18/personal-finance-etl/commit/b50c162659801780a3adfafa3589ea69fb2780a8))
+* **transform:** write the core transforms across various datasets ([c350d05](https://github.com/tks18/personal-finance-etl/commit/c350d0569ceacf95209f18588d4b3f0da4ed437b))
+* **transform:** write transforms related to mutual funds ([9c8a6fa](https://github.com/tks18/personal-finance-etl/commit/9c8a6fa1da78790431ef719bd86463a393eb69c1))
+* **transform:** write transforms related to stocks ([61fe666](https://github.com/tks18/personal-finance-etl/commit/61fe66678939fd24f87e2773e6576413047e8f3a))
+* **ui:** create custom-tkinter app ([5cb0ea9](https://github.com/tks18/personal-finance-etl/commit/5cb0ea9a4035fc39b4235b6ada61915a1923b637))
+* **ui:** setup the base ui tab ([0839548](https://github.com/tks18/personal-finance-etl/commit/083954863c9071a16aebd12cbdf2af0546acbeef))
+
+
+### Tests 🧪
+
+* add some sample config and tests ([8587c1b](https://github.com/tks18/personal-finance-etl/commit/8587c1bb75003a89ee318862f2c02e40682d964a))
+
+
+### Docs 📃
+
+* **readme:** add a personalized readme ([da503b5](https://github.com/tks18/personal-finance-etl/commit/da503b58e8c8d77ee95341e3ec81dfde6278f926))
+
 ### [0.1.5](https://github.com/tks18/personal-finance-etl/compare/0.1.4...0.1.5) (2026-07-19)
 
 ### [0.1.4](https://github.com/tks18/personal-finance-etl/compare/0.1.3...0.1.4) (2026-07-19)
