@@ -1,6 +1,6 @@
 [project]
 name = "personal-finance-etl"
-version = "0.1.1"
+version = "0.1.3"
 description = "E2E ETL App for processing my personal finances and investment data for robust investment and tax capabilities"
 authors = [
   { name="Shan", email="tksudharshan@gmail.com" },
