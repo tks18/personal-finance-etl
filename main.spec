@@ -1,0 +1,92 @@
+# -*- mode: python ; coding: utf-8 -*-
+import PyInstaller.config
+from PyInstaller.utils.hooks import copy_metadata, collect_data_files, collect_submodules, collect_dynamic_libs
+
+PyInstaller.config.CONF['upx_dir'] = r"C:\Tools\_bins_\upx"
+
+# Bulletproof ADBC Driver hooks (These packages use native C/Rust extensions and _static_version.py)
+adbc_sqlite_datas = collect_data_files('adbc_driver_sqlite', include_py_files=True)
+adbc_sqlite_meta = copy_metadata('adbc_driver_sqlite')
+adbc_sqlite_libs = collect_dynamic_libs('adbc_driver_sqlite')
+adbc_sqlite_hidden = collect_submodules('adbc_driver_sqlite')
+
+adbc_manager_datas = collect_data_files('adbc_driver_manager', include_py_files=True)
+adbc_manager_meta = copy_metadata('adbc_driver_manager')
+adbc_manager_libs = collect_dynamic_libs('adbc_driver_manager')
+adbc_manager_hidden = collect_submodules('adbc_driver_manager')
+
+datas = [('logo.ico', '.'), ('logo.png', '.')] + adbc_sqlite_datas + adbc_sqlite_meta + adbc_manager_datas + adbc_manager_meta
+binaries = adbc_sqlite_libs + adbc_manager_libs
+
+hiddenimports = [
+    'darkdetect',
+    'win32timezone',
+    'polars',
+    'pyxirr',
+    'yfinance',
+    'customtkinter',
+    'numpy',
+    'pandas',
+    'tomllib',
+    'src.ui.app',
+    'src.ui.base_tab',
+    'src.engines.tax_engine',
+    'src.engines.benchmark_engine',
+    'src.engines.pipeline.context',
+    'src.engines.pipeline.processor',
+    'src.engines.pipeline.postprocessor',
+    'src.load.database',
+    'src.utils.helpers',
+    'src.utils.models',
+    'src.utils.theme',
+    'src.utils.logger',
+    'src.extract.excel_parser',
+    'src.extract.sqlite_extractor',
+    'src.transform.core',
+    'src.transform.stocks',
+    'src.transform.mutual_funds',
+    'src.pipeline.etl_pipeline',
+    'src.config.settings',
+] + adbc_sqlite_hidden + adbc_manager_hidden
+
+a = Analysis(
+    ['main.py'],
+    pathex=['.'],
+    binaries=binaries,
+    datas=datas,
+    hiddenimports=hiddenimports,
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=[
+        'matplotlib', 'scipy', 'notebook', 'nbconvert', 'nbformat',
+        'jedi', 'IPython', 'tkinter.test', 'unittest',
+        'PyQt5', 'PySide2', 'PySide6'
+    ],
+    noarchive=False,
+    optimize=1,
+)
+pyz = PYZ(a.pure)
+
+exe = EXE(
+    pyz,
+    a.scripts,
+    a.binaries,
+    a.datas,
+    [],
+    name='Shan\'s Personal Finance ETL',
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    runtime_tmpdir=None,
+    console=False,
+    disable_windowed_traceback=False,
+    argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
+    icon='logo.ico',
+    version='version_info.txt',
+)
