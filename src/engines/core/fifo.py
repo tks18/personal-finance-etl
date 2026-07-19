@@ -73,8 +73,11 @@ class FIFOPortfolio:
 
     def get_average_bm_cost(self) -> float:
         s_units = self.get_closing_shadow_units()
-        valid_lots = [lot for lot in self.active_lots if lot.bm_buy]
-        return sum(lot.shadow_qty * lot.bm_buy for lot in valid_lots) / s_units if s_units > 0 else 0.0
+        total_cost = 0.0
+        for lot in self.active_lots:
+            if lot.bm_buy is not None:
+                total_cost += lot.shadow_qty * lot.bm_buy
+        return total_cost / s_units if s_units > 0 else 0.0
 
     def reconcile_quantity(self, m_qty_val, m_date: date, bm_price: float) -> list[dict]:
         """Reconcile portfolio units with broker units. Returns dummy cashflows if adjustments were made."""
