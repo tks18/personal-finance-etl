@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [1.0.1](https://github.com/tks18/personal-finance-etl/compare/1.0.0...1.0.1) (2026-07-19)
+
+
+### Bug Fixes 🛠
+
+* **engines/core:** fix fifo: small check for linter ([58f1ca7](https://github.com/tks18/personal-finance-etl/commit/58f1ca712ab2494821c84b506555571ea2cd8038))
+
 ## [1.0.0](https://github.com/tks18/personal-finance-etl/compare/0.1.5...1.0.0) (2026-07-19)
 
 

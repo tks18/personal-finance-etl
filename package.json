@@ -1,7 +1,7 @@
 {
   "name": "personal-finance-etl",
   "description": "E2E ETL App for processing my personal finances and investment data for robust investment and tax capabilities",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "repository": "https://github.com/tks18/personal-finance-etl",
   "author": "tks18 <tksudharshan@gmail.com>",
   "license": "GPL-3.0-only",
