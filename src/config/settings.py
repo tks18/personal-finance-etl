@@ -1,6 +1,7 @@
-from dataclasses import dataclass, fields
-import tomllib
 import os
+import tomllib
+from dataclasses import dataclass, fields
+
 from src.utils.prefs import add_recent_config
 
 
@@ -27,7 +28,7 @@ def load_config(filepath: str) -> Settings:
     if not os.path.exists(filepath):
         return cfg
 
-    with open(filepath, 'rb') as f:
+    with open(filepath, "rb") as f:
         data = tomllib.load(f)
     for field in fields(Settings):
         if field.name in data:

@@ -1,5 +1,6 @@
-import numpy as np
 from datetime import date
+
+import numpy as np
 from pyxirr import xirr
 
 
@@ -25,7 +26,7 @@ def calculate_risk_metrics(
     inst_returns: dict[date, float],
     bm_returns: dict[date, float],
     past_dates: list[date],
-    periods_per_year: float
+    periods_per_year: float,
 ) -> tuple[float, float, float, float]:
     """
     Calculate Beta, Tracking Error (Ann), Upside Capture, and Downside Capture.
@@ -52,7 +53,7 @@ def calculate_risk_metrics(
 
     # Tracking Error
     t_err_raw = float(np.std(ira - bra, ddof=1))
-    t_err_ann = t_err_raw * (periods_per_year ** 0.5)
+    t_err_ann = t_err_raw * (periods_per_year**0.5)
 
     # Upside Capture
     up_idx = bra > 0

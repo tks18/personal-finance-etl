@@ -5,10 +5,11 @@ Holds shared state (loaded data, FY table, config) for the execution run.
 
 from dataclasses import dataclass
 from datetime import date
+
 import polars as pl
 
-from src.engines.rules.tax import FYTaxRateTable
 from src.engines.io.loader import TaxDataLoader
+from src.engines.rules.tax import FYTaxRateTable
 
 
 @dataclass
@@ -32,7 +33,7 @@ class RunContext:
         b_path: str,
         t_path: str,
         start_date: date | None = None,
-        end_date: date | None = None
+        end_date: date | None = None,
     ) -> "RunContext":
         df_p, df_s, df_m, isin_master, df_b = TaxDataLoader.load_all(
             p_path, s_path, m_path, i_path, b_path
@@ -41,7 +42,7 @@ class RunContext:
             df_t = pl.read_csv(t_path)
             fy_table = FYTaxRateTable(df_t)
         except Exception as e:
-            raise Exception(f"Failed to load mandatory Tax Rates CSV: {e}")
+            raise Exception(f"Failed to load mandatory Tax Rates CSV: {e}") from e
 
         return cls(
             df_p=df_p,
@@ -51,7 +52,7 @@ class RunContext:
             df_b=df_b,
             fy_table=fy_table,
             start_date=start_date,
-            end_date=end_date
+            end_date=end_date,
         )
 
     @classmethod
@@ -64,7 +65,7 @@ class RunContext:
         df_b: pl.DataFrame,
         df_t: pl.DataFrame,
         start_date: date | None = None,
-        end_date: date | None = None
+        end_date: date | None = None,
     ) -> "RunContext":
         loaded_p, loaded_s, loaded_m, is_m, loaded_b = TaxDataLoader.load_from_dataframes(
             df_p, df_s, df_m, df_i, df_b
@@ -79,5 +80,5 @@ class RunContext:
             df_b=loaded_b,
             fy_table=fy_table,
             start_date=start_date,
-            end_date=end_date
+            end_date=end_date,
         )

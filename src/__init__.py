@@ -1,10 +1,10 @@
 """
-Description: 
-Shan's Personal Finance ETL is a tool that automates the process of extracting, 
-transforming, and loading financial data from various sources into a centralized database. 
+Description:
+Shan's Personal Finance ETL is a tool that automates the process of extracting,
+transforming, and loading financial data from various sources into a centralized database.
 It helps users to track their income, expenses, assets, and investments.
 
-Features: 
+Features:
 - E2E ETL Processing for my Cashflows
 - Portfolio-level calculations
 - Tax calculations

@@ -4,15 +4,16 @@ Shared utility helpers for the Investment Manager application.
 
 import os
 import sys
+from datetime import date, datetime
+
 import polars as pl
-from datetime import datetime, date
 
 
 def resource_path(relative_path: str) -> str:
     """Get absolute path to resource, works for both dev and PyInstaller onefile."""
     try:
         # PyInstaller extracts resources to a temp folder at runtime
-        base_path = getattr(sys, '_MEIPASS', os.path.abspath('.'))
+        base_path = getattr(sys, "_MEIPASS", os.path.abspath("."))
     except AttributeError:
         base_path = os.path.abspath(".")
     return os.path.join(base_path, relative_path)
@@ -20,10 +21,12 @@ def resource_path(relative_path: str) -> str:
 
 def clean_numeric_col(df: pl.DataFrame, col: str) -> pl.DataFrame:
     """Strip currency formatting from a string column and cast to Float64."""
-    if col in df.columns and getattr(df.schema[col], "base_type", df.schema[col]) in [pl.Utf8, pl.String]:
+    if col in df.columns and getattr(df.schema[col], "base_type", df.schema[col]) in [
+        pl.Utf8,
+        pl.String,
+    ]:
         df = df.with_columns(
-            pl.col(col).str.replace_all(
-                r"[\\',]", "").str.strip_chars().cast(pl.Float64)
+            pl.col(col).str.replace_all(r"[\\',]", "").str.strip_chars().cast(pl.Float64)
         )
     return df
 

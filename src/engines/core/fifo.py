@@ -1,8 +1,9 @@
 from collections import deque
-from typing import cast
 from datetime import date
-from src.utils.models import TaxLot
+from typing import cast
+
 from src.engines.rules.tax import FYTaxRateTable
+from src.utils.models import TaxLot
 
 
 class FIFOPortfolio:
@@ -20,11 +21,12 @@ class FIFOPortfolio:
         """Read-only access to active lots."""
         return list(self._active_lots)
 
-    def buy(self, buy_date: date, qty: float, price: float, shadow_qty: float, bm_price: float) -> None:
+    def buy(
+        self, buy_date: date, qty: float, price: float, shadow_qty: float, bm_price: float
+    ) -> None:
         """Register a new buy lot."""
         self._active_lots.append(
-            TaxLot(date=buy_date, qty=qty, price=price,
-                   shadow_qty=shadow_qty, bm_buy=bm_price)
+            TaxLot(date=buy_date, qty=qty, price=price, shadow_qty=shadow_qty, bm_buy=bm_price)
         )
 
     def sell(self, sell_date: date, qty: float, price: float) -> list[dict]:
@@ -44,25 +46,28 @@ class FIFOPortfolio:
 
             pnl = (price - lot.price) * consumed if lot.price > 0 else 0.0
 
-            realized_events.append({
-                "date": sell_date,
-                "gain": pnl,
-                "gain_type": ht_sale if pnl >= 0 else "LOSS",
-                "tax_type": self.tax_type.strip().lower()
-            })
+            realized_events.append(
+                {
+                    "date": sell_date,
+                    "gain": pnl,
+                    "gain_type": ht_sale if pnl >= 0 else "LOSS",
+                    "tax_type": self.tax_type.strip().lower(),
+                }
+            )
 
             if lot.qty <= rem + 1e-8:
                 rem -= lot.qty
                 self._active_lots.popleft()
             else:
-                new_shadow_qty = lot.shadow_qty - \
-                    (lot.shadow_qty * (rem / lot.qty)) if lot.shadow_qty else 0
+                new_shadow_qty = (
+                    lot.shadow_qty - (lot.shadow_qty * (rem / lot.qty)) if lot.shadow_qty else 0
+                )
                 self._active_lots[0] = TaxLot(
                     date=lot.date,
                     qty=lot.qty - rem,
                     price=lot.price,
                     shadow_qty=new_shadow_qty,
-                    bm_buy=lot.bm_buy
+                    bm_buy=lot.bm_buy,
                 )
                 rem = 0
 
@@ -92,7 +97,9 @@ class FIFOPortfolio:
                 total_cost += lot.shadow_qty * lot.bm_buy
         return total_cost / s_units if s_units > 0 else 0.0
 
-    def reconcile_quantity(self, m_qty_val: float | None, m_date: date, bm_price: float) -> list[dict[str, date | float]]:
+    def reconcile_quantity(
+        self, m_qty_val: float | None, m_date: date, bm_price: float
+    ) -> list[dict[str, date | float]]:
         """Reconcile portfolio units with broker units. Returns dummy cashflows if adjustments were made."""
         if m_qty_val is None or str(m_qty_val).strip() == "":
             return []
@@ -114,14 +121,13 @@ class FIFOPortfolio:
                 else:
                     lot = self._active_lots[0]
                     r = diff / lot.qty
-                    new_shadow_qty = lot.shadow_qty - \
-                        (lot.shadow_qty * r) if lot.shadow_qty else 0
+                    new_shadow_qty = lot.shadow_qty - (lot.shadow_qty * r) if lot.shadow_qty else 0
                     self._active_lots[0] = TaxLot(
                         date=lot.date,
                         qty=lot.qty - diff,
                         price=lot.price,
                         shadow_qty=new_shadow_qty,
-                        bm_buy=lot.bm_buy
+                        bm_buy=lot.bm_buy,
                     )
                     diff = 0
         return [cast(dict[str, date | float], c) for c in cf]
@@ -144,5 +150,5 @@ class FIFOPortfolio:
                     qty=lot.qty,
                     price=lot.price * r,
                     shadow_qty=lot.shadow_qty,
-                    bm_buy=lot.bm_buy
+                    bm_buy=lot.bm_buy,
                 )

@@ -3,10 +3,10 @@ Theme definitions for the Investment Manager App.
 Centralizes all color codes and UI tokens to maintain DRY principles.
 """
 
-from enum import Enum
+from enum import StrEnum
 
 
-class Color(str, Enum):
+class Color(StrEnum):
     BG = "#0D1117"
     SIDEBAR = "#101624"
     HEADER = "#0D1117"
@@ -21,7 +21,7 @@ class Color(str, Enum):
     LOG_BG = "#080C14"
 
 
-class LogTag(str, Enum):
+class LogTag(StrEnum):
     TS = "#3D5A80"
     INFO = "#7B93B0"
     STEP = "#60A5FA"
@@ -31,10 +31,10 @@ class LogTag(str, Enum):
 
 
 LOG_TAG_COLORS = {
-    "ts":      LogTag.TS.value,
-    "info":    LogTag.INFO.value,
-    "step":    LogTag.STEP.value,
+    "ts": LogTag.TS.value,
+    "info": LogTag.INFO.value,
+    "step": LogTag.STEP.value,
     "success": LogTag.SUCCESS.value,
     "warning": LogTag.WARNING.value,
-    "error":   LogTag.ERROR.value,
+    "error": LogTag.ERROR.value,
 }

@@ -3,16 +3,15 @@ BaseEngineTab — Abstract base class for UI tabs.
 Consolidates duplicated log panel, queue polling, and styling code.
 """
 
+import multiprocessing
 import queue
 import time
 from tkinter import messagebox
+
 import customtkinter as ctk  # type: ignore[import-untyped]
 
-from src.utils.models import EngineStatus, LogLevel, ExportMode
-from src.utils.theme import Color, LOG_TAG_COLORS
-
-
-import multiprocessing
+from src.utils.models import EngineStatus, ExportMode, LogLevel
+from src.utils.theme import LOG_TAG_COLORS, Color
 
 
 class BaseEngineTab(ctk.CTkFrame):
@@ -21,7 +20,7 @@ class BaseEngineTab(ctk.CTkFrame):
     def __init__(self, parent: ctk.CTk | ctk.CTkFrame) -> None:
         super().__init__(parent, fg_color=Color.BG)
 
-        self.status_queue: "multiprocessing.Queue[EngineStatus]" = multiprocessing.Queue()
+        self.status_queue: multiprocessing.Queue[EngineStatus] = multiprocessing.Queue()
         self.save_target = ""
         self.save_type = ExportMode.CONSOLIDATED
         self._run_btn_text = "▶  Run"
@@ -47,16 +46,22 @@ class BaseEngineTab(ctk.CTkFrame):
         prog.grid_columnconfigure(0, weight=1)
 
         self.progress = ctk.CTkProgressBar(
-            prog, height=3, corner_radius=2,
-            fg_color=Color.SIDEBAR, progress_color=Color.ACCENT,
+            prog,
+            height=3,
+            corner_radius=2,
+            fg_color=Color.SIDEBAR,
+            progress_color=Color.ACCENT,
         )
         self.progress.grid(row=0, column=0, sticky="ew")
         self.progress.set(0)
 
         self.pct_label = ctk.CTkLabel(
-            prog, text="0%",
+            prog,
+            text="0%",
             font=ctk.CTkFont(family="Segoe UI", size=10),
-            text_color=Color.DIM, width=32, anchor="e",
+            text_color=Color.DIM,
+            width=32,
+            anchor="e",
         )
         self.pct_label.grid(row=0, column=1, padx=(6, 0))
 
@@ -70,15 +75,13 @@ class BaseEngineTab(ctk.CTkFrame):
             state="disabled",
             wrap="word",
         )
-        self.status_log.grid(row=1, column=0, sticky="nsew",
-                             padx=(8, 0), pady=(6, 0))
+        self.status_log.grid(row=1, column=0, sticky="nsew", padx=(8, 0), pady=(6, 0))
 
     def _configure_log_tags(self) -> None:
         tb = self.status_log._textbox
         for tag, colour in LOG_TAG_COLORS.items():
             tb.tag_config(tag, foreground=colour)
-        tb.tag_config(
-            "ts", foreground=LOG_TAG_COLORS["ts"], font=("Consolas", 10))
+        tb.tag_config("ts", foreground=LOG_TAG_COLORS["ts"], font=("Consolas", 10))
 
     def _set_progress(self, value: float) -> None:
         self.progress.set(value)
@@ -95,9 +98,11 @@ class BaseEngineTab(ctk.CTkFrame):
 
     def _section_label(self, parent: ctk.CTkFrame, text: str, row: int) -> int:
         ctk.CTkLabel(
-            parent, text=text,
+            parent,
+            text=text,
             font=ctk.CTkFont(family="Segoe UI", size=9, weight="bold"),
-            text_color=Color.DIM, anchor="w",
+            text_color=Color.DIM,
+            anchor="w",
         ).grid(row=row, column=0, padx=10, pady=(12, 4), sticky="w")
         return row + 1
 
@@ -117,11 +122,22 @@ class BaseEngineTab(ctk.CTkFrame):
                         lw = msg.lower()
                         if "error" in lw or msg.startswith("Error"):
                             status.level = LogLevel.ERROR
-                        elif "✅" in msg or "complete" in lw or "success" in lw or "✓" in msg or "exported" in lw:
+                        elif (
+                            "✅" in msg
+                            or "complete" in lw
+                            or "success" in lw
+                            or "✓" in msg
+                            or "exported" in lw
+                        ):
                             status.level = LogLevel.SUCCESS
                         elif "warning" in lw:
                             status.level = LogLevel.WARNING
-                        elif "fetching" in lw or "loading" in lw or "post-processing" in lw or msg.startswith("["):
+                        elif (
+                            "fetching" in lw
+                            or "loading" in lw
+                            or "post-processing" in lw
+                            or msg.startswith("[")
+                        ):
                             status.level = LogLevel.STEP
                         else:
                             status.level = LogLevel.INFO
@@ -134,8 +150,7 @@ class BaseEngineTab(ctk.CTkFrame):
                 if status.msg:
                     self._log(status.msg, status.level)
                     if status.level == LogLevel.ERROR:
-                        run_btn.configure(
-                            state="normal", text=self._run_btn_text)
+                        run_btn.configure(state="normal", text=self._run_btn_text)
                         messagebox.showerror("Error", status.msg)
 
                 if status.progress == 1.0:

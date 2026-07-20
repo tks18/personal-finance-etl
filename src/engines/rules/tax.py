@@ -4,7 +4,9 @@ Defines all holding period thresholds and FY-specific rate lookups.
 """
 
 from datetime import date
+
 import polars as pl
+
 from src.utils.helpers import to_date_obj
 
 _DEFAULT_DEBT_MF_CUTOFF = date(2023, 4, 1)
@@ -52,14 +54,21 @@ class FYTaxRateTable:
                 end_d = to_date_obj(row.get("FY_End_Date"))
 
                 raw_cutoff = str(row.get("Debt_MF_Cutoff_Date", "")).strip()
-                cutoff_d = to_date_obj(
-                    raw_cutoff) if raw_cutoff and raw_cutoff != "None" else _DEFAULT_DEBT_MF_CUTOFF
+                cutoff_d = (
+                    to_date_obj(raw_cutoff)
+                    if raw_cutoff and raw_cutoff != "None"
+                    else _DEFAULT_DEBT_MF_CUTOFF
+                )
 
                 if start_d and end_d:
-                    self.fy_map.append({
-                        "start": start_d, "end": end_d,
-                        "debt_cutoff": cutoff_d or _DEFAULT_DEBT_MF_CUTOFF, "raw": row
-                    })
+                    self.fy_map.append(
+                        {
+                            "start": start_d,
+                            "end": end_d,
+                            "debt_cutoff": cutoff_d or _DEFAULT_DEBT_MF_CUTOFF,
+                            "raw": row,
+                        }
+                    )
             except Exception as e:
                 print(f"Tax Rates parsing error on row: {row}")
                 print(f"Error details: {e}")
@@ -80,7 +89,9 @@ class FYTaxRateTable:
             return self.fy_map[0]
         return None
 
-    def _classify(self, tax_type: str, tax_subtype: str, lot_buy_date: date, debt_cutoff: date) -> tuple[str, str]:
+    def _classify(
+        self, tax_type: str, tax_subtype: str, lot_buy_date: date, debt_cutoff: date
+    ) -> tuple[str, str]:
         tt = tax_type.strip().lower()
         tst = tax_subtype.strip().lower()
         if tt in ("equity", "reit", "invit"):
@@ -105,17 +116,16 @@ class FYTaxRateTable:
         key = self._classify(tax_type, tax_subtype, lot_buy_date, cutoff)
 
         if entry is None:
-            raise ValueError(
-                f"No Tax Rate defined for FY encompassing date: {ref_date}")
+            raise ValueError(f"No Tax Rate defined for FY encompassing date: {ref_date}")
 
-        ltcg_col, stcg_col = self._COL_MAP.get(
-            key, ("Default_LTCG", "Default_STCG"))
+        ltcg_col, stcg_col = self._COL_MAP.get(key, ("Default_LTCG", "Default_STCG"))
         raw = entry["raw"]
         try:
             return float(raw[ltcg_col]), float(raw[stcg_col])
-        except (KeyError, TypeError, ValueError):
+        except (KeyError, TypeError, ValueError) as e:
             raise ValueError(
-                f"Missing or invalid tax rate data for columns: {ltcg_col}, {stcg_col}")
+                f"Missing or invalid tax rate data for columns: {ltcg_col}, {stcg_col}"
+            ) from e
 
     def get_equity_ltcg_exemption(self, ref_date: date) -> float:
         """Returns the annual LTCG exemption limit specifically for equity."""

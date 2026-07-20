@@ -3,15 +3,16 @@ Pipeline Processor.
 Handles the per-ISIN processing logic.
 """
 
-import polars as pl
-from typing import cast
 from datetime import date, datetime, timedelta
+from typing import cast
 
-from src.engines.pipeline.context import RunContext
-from src.utils.helpers import to_date_obj
-from src.engines.core.math import calculate_cagr, calculate_xirr, calculate_risk_metrics
+import polars as pl
+
 from src.engines.core.fifo import FIFOPortfolio
+from src.engines.core.math import calculate_cagr, calculate_risk_metrics, calculate_xirr
+from src.engines.pipeline.context import RunContext
 from src.engines.rules.tax import get_ltcg_threshold
+from src.utils.helpers import to_date_obj
 
 
 class IsinProcessor:
@@ -41,11 +42,13 @@ class IsinProcessor:
             df_m.filter(pl.col("ISIN") == isin)
             .sort("Date")
             .group_by("Date", maintain_order=True)
-            .agg([
-                pl.col("Quantity").sum().alias("Quantity"),
-                pl.col("Closing Price").last().alias("Closing Price"),
-                pl.col("Buy Value").sum().alias("Buy Value"),
-            ])
+            .agg(
+                [
+                    pl.col("Quantity").sum().alias("Quantity"),
+                    pl.col("Closing Price").last().alias("Closing Price"),
+                    pl.col("Buy Value").sum().alias("Buy Value"),
+                ]
+            )
             .to_dicts()
         )
         if not m_inst:
@@ -59,10 +62,8 @@ class IsinProcessor:
         bm_price_map: dict[date, float] = {}
         if df_b is not None and bench_id and str(bench_id).strip():
             try:
-                b_subset = (
-                    df_b.filter(pl.col("ID").cast(pl.String)
-                                == str(bench_id).strip())
-                    .sort("Date")
+                b_subset = df_b.filter(pl.col("ID").cast(pl.String) == str(bench_id).strip()).sort(
+                    "Date"
                 )
                 last_date, last_price = None, None
                 for row in b_subset.select(["Date", "Close"]).to_dicts():
@@ -82,8 +83,9 @@ class IsinProcessor:
                 pass
 
         def get_bm_price(dt: date) -> float | None:
-            dt_val = dt if isinstance(dt, date) and not isinstance(
-                dt, datetime) else to_date_obj(dt)
+            dt_val = (
+                dt if isinstance(dt, date) and not isinstance(dt, datetime) else to_date_obj(dt)
+            )
             if dt_val is None:
                 return None
             return bm_price_map.get(dt_val)
@@ -118,7 +120,8 @@ class IsinProcessor:
         cf_amounts: list[float] = []
 
         first_p_date = (
-            to_date_obj(p_inst[0]["Date"]) if p_inst
+            to_date_obj(p_inst[0]["Date"])
+            if p_inst
             else (to_date_obj(m_inst[0]["Date"]) if m_inst else None)
         )
         if not first_p_date:
@@ -126,7 +129,6 @@ class IsinProcessor:
 
         p_idx = s_idx = 0
 
-        
         isin_cashflows: list[dict[str, float | date]] = []
         isin_terminals: dict[date, dict[str, float]] = {}
         isin_realized: list[dict[str, float | date]] = []
@@ -144,10 +146,10 @@ class IsinProcessor:
                 row = p_inst[p_idx]
                 qty = float(row["Quantity"])
                 b_price = float(row["Price"])
-                
+
                 v_val = row.get("Value")
                 buy_val = float(v_val) if v_val is not None else float(qty * b_price)
-                
+
                 bm_p = get_bm_price(row_dt_obj)
                 shadow_q = buy_val / bm_p if (bm_p and bm_p > 0) else 0.0
 
@@ -163,10 +165,12 @@ class IsinProcessor:
                     break
                 row = s_inst[s_idx]
                 s_qty = float(row["Quantity"])
-                
+
                 row_p_val: float | None = row.get("Price")
-                s_price = float(row_p_val) if row_p_val is not None else float(m_row["Closing Price"])
-                
+                s_price = (
+                    float(row_p_val) if row_p_val is not None else float(m_row["Closing Price"])
+                )
+
                 sv_val: float | None = row.get("Sell Value")
                 s_val = float(sv_val) if sv_val is not None else float(s_qty * s_price)
 
@@ -179,7 +183,8 @@ class IsinProcessor:
                 s_idx += 1
 
             cf_recon = fifo.reconcile_quantity(
-                m_row.get("Quantity"), m_date, get_bm_price(m_date) or 1.0)
+                m_row.get("Quantity"), m_date, get_bm_price(m_date) or 1.0
+            )
             for cf in cf_recon:
                 cf_dates.append(cast(date, cf["date"]))
                 cf_amounts.append(cast(float, cf["amount"]))
@@ -201,15 +206,12 @@ class IsinProcessor:
             terminal_val = fifo.get_terminal_value(m_price)
             shadow_terminal_val = fifo.get_shadow_terminal_value(m_bm_price)
 
-            pt = isin_terminals.setdefault(
-                m_date, {"val": 0.0, "shadow_val": 0.0})
+            pt = isin_terminals.setdefault(m_date, {"val": 0.0, "shadow_val": 0.0})
             pt["val"] += terminal_val
             pt["shadow_val"] += shadow_terminal_val
 
-            inst_xirr = calculate_xirr(
-                cf_dates + [m_date], cf_amounts + [terminal_val])
-            bm_xirr_val = calculate_xirr(
-                cf_dates + [m_date], cf_amounts + [shadow_terminal_val])
+            inst_xirr = calculate_xirr(cf_dates + [m_date], cf_amounts + [terminal_val])
+            bm_xirr_val = calculate_xirr(cf_dates + [m_date], cf_amounts + [shadow_terminal_val])
 
             inst_active_return = inst_xirr - bm_xirr_val
             is_lagging = inst_xirr < bm_xirr_val
@@ -223,17 +225,14 @@ class IsinProcessor:
                 if avg_cost > 0:
                     inst_cagr = calculate_cagr(avg_cost, m_price, inst_age)
                 if avg_bm_cost > 0:
-                    inst_bm_cagr = calculate_cagr(
-                        avg_bm_cost, m_bm_price, inst_age)
+                    inst_bm_cagr = calculate_cagr(avg_bm_cost, m_bm_price, inst_age)
 
-            past_dates = [
-                d for d in valid_dates if first_p_date <= d <= m_date]
+            past_dates = [d for d in valid_dates if first_p_date <= d <= m_date]
             beta, t_err_ann, up_c, down_c = calculate_risk_metrics(
                 inst_ret_map, bm_ret_map, past_dates, periods_per_year
             )
 
-            info_ratio = (inst_active_return /
-                          t_err_ann) if t_err_ann != 0 else 0.0
+            info_ratio = (inst_active_return / t_err_ann) if t_err_ann != 0 else 0.0
 
             outperform_cnt = 0
             lot_count = len(fifo.active_lots)
@@ -248,14 +247,14 @@ class IsinProcessor:
 
                 ltcg_thr = get_ltcg_threshold(tax_type, tax_subtype)
                 holding_type = fy_table.get_holding_type(
-                    age, tax_type, tax_subtype, lbd or m_date, m_date)
-                days_to_ltcg = max(
-                    0, ltcg_thr - age) if holding_type == "STCG" else 0
+                    age, tax_type, tax_subtype, lbd or m_date, m_date
+                )
+                days_to_ltcg = max(0, ltcg_thr - age) if holding_type == "STCG" else 0
                 ltcg_rate, stcg_rate = fy_table.get_tax_rates(
-                    tax_type, tax_subtype, lbd or m_date, m_date)
+                    tax_type, tax_subtype, lbd or m_date, m_date
+                )
 
-                lot_return = (m_price - lot.price) / \
-                    lot.price if lot.price > 0 else 0.0
+                lot_return = (m_price - lot.price) / lot.price if lot.price > 0 else 0.0
                 lot_cagr = calculate_cagr(lot.price, m_price, age)
 
                 lbm_buy = lot.bm_buy
@@ -284,50 +283,52 @@ class IsinProcessor:
                 after_tax_pl = pnl - (ltcg_tax + stcg_tax)
                 after_tax_cv = close_val - (ltcg_tax + stcg_tax)
 
-                buffer.append({
-                    "Closing_Date":       m_date,
-                    "ISIN":               isin,
-                    "BENCHMARK_ID":       bench_id,
-                    "TAX_TYPE":           tax_type,
-                    "TAX_SUBTYPE":        tax_subtype,
-                    "Buy_Date":           lbd,
-                    "Age_Days":           age,
-                    "LTCG_Threshold_Days": ltcg_thr,
-                    "Days_To_LTCG":       days_to_ltcg,
-                    "Holding_Type":       holding_type,
-                    "Quantity":           lot.qty,
-                    "Buy_Price":          lot.price,
-                    "Market_Price":       m_price,
-                    "Buy_Value":          round(buy_val_lot, 4),
-                    "Close_Value":        round(close_val, 4),
-                    "P/L":                round(pnl, 4),
-                    "Returns_%":          round(lot_return, 8),
-                    "Lot_CAGR":           round(lot_cagr, 8),
-                    "CAGR":               round(inst_cagr, 8),
-                    "XIRR":               round(inst_xirr, 8),
-                    "BM_Buy_Price":       round(lbm_buy, 4) if lbm_buy else None,
-                    "BM_Market_Price":    round(m_bm_price, 4),
-                    "Lot_BM_Returns_%":   round(lot_bm_ret, 8),
-                    "Lot_BM_CAGR":        round(lot_bm_cagr, 8),
-                    "BM_CAGR":            round(inst_bm_cagr, 8),
-                    "BM_XIRR":            round(bm_xirr_val, 8),
-                    "Active_Return":      round(inst_active_return, 8),
-                    "Lot_Alpha":          round(lot_alpha, 8),
-                    "Is_Lagging_Benchmark": is_lagging,
-                    "Beta":               round(beta, 8),
-                    "Tracking_Error":     round(t_err_ann, 8),
-                    "Information_Ratio":  round(info_ratio, 8),
-                    "Upside_Capture":     round(up_c, 8),
-                    "Downside_Capture":   round(down_c, 8),
-                    "Tax_Rate":           ltcg_rate if holding_type == "LTCG" else stcg_rate,
-                    "Unrealized_LTCG":    round(unreal_ltcg, 4),
-                    "Unrealized_STCG":    round(unreal_stcg, 4),
-                    "Unrealized_Loss":    round(unreal_loss, 4),
-                    "LTCG_Tax_If_Sold":   round(ltcg_tax, 4),
-                    "STCG_Tax_If_Sold":   round(stcg_tax, 4),
-                    "After_Tax_PL":       round(after_tax_pl, 4),
-                    "After_Tax_Close_Value": round(after_tax_cv, 4),
-                })
+                buffer.append(
+                    {
+                        "Closing_Date": m_date,
+                        "ISIN": isin,
+                        "BENCHMARK_ID": bench_id,
+                        "TAX_TYPE": tax_type,
+                        "TAX_SUBTYPE": tax_subtype,
+                        "Buy_Date": lbd,
+                        "Age_Days": age,
+                        "LTCG_Threshold_Days": ltcg_thr,
+                        "Days_To_LTCG": days_to_ltcg,
+                        "Holding_Type": holding_type,
+                        "Quantity": lot.qty,
+                        "Buy_Price": lot.price,
+                        "Market_Price": m_price,
+                        "Buy_Value": round(buy_val_lot, 4),
+                        "Close_Value": round(close_val, 4),
+                        "P/L": round(pnl, 4),
+                        "Returns_%": round(lot_return, 8),
+                        "Lot_CAGR": round(lot_cagr, 8),
+                        "CAGR": round(inst_cagr, 8),
+                        "XIRR": round(inst_xirr, 8),
+                        "BM_Buy_Price": round(lbm_buy, 4) if lbm_buy else None,
+                        "BM_Market_Price": round(m_bm_price, 4),
+                        "Lot_BM_Returns_%": round(lot_bm_ret, 8),
+                        "Lot_BM_CAGR": round(lot_bm_cagr, 8),
+                        "BM_CAGR": round(inst_bm_cagr, 8),
+                        "BM_XIRR": round(bm_xirr_val, 8),
+                        "Active_Return": round(inst_active_return, 8),
+                        "Lot_Alpha": round(lot_alpha, 8),
+                        "Is_Lagging_Benchmark": is_lagging,
+                        "Beta": round(beta, 8),
+                        "Tracking_Error": round(t_err_ann, 8),
+                        "Information_Ratio": round(info_ratio, 8),
+                        "Upside_Capture": round(up_c, 8),
+                        "Downside_Capture": round(down_c, 8),
+                        "Tax_Rate": ltcg_rate if holding_type == "LTCG" else stcg_rate,
+                        "Unrealized_LTCG": round(unreal_ltcg, 4),
+                        "Unrealized_STCG": round(unreal_stcg, 4),
+                        "Unrealized_Loss": round(unreal_loss, 4),
+                        "LTCG_Tax_If_Sold": round(ltcg_tax, 4),
+                        "STCG_Tax_If_Sold": round(stcg_tax, 4),
+                        "After_Tax_PL": round(after_tax_pl, 4),
+                        "After_Tax_Close_Value": round(after_tax_cv, 4),
+                    }
+                )
 
             opt_prob = (outperform_cnt / lot_count) if lot_count > 0 else 0.0
             for row in buffer:
@@ -339,6 +340,9 @@ class IsinProcessor:
             "BENCHMARK_ID": pl.String,
             "Buy_Date": pl.Date,
         }
-        df = pl.DataFrame(
-            isin_snapshots, schema_overrides=schema_overrides) if isin_snapshots else None
+        df = (
+            pl.DataFrame(isin_snapshots, schema_overrides=schema_overrides)
+            if isin_snapshots
+            else None
+        )
         return df, isin_cashflows, isin_terminals, isin_realized
