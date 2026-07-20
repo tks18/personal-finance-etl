@@ -4,6 +4,7 @@ Handles the per-ISIN processing logic.
 """
 
 import polars as pl
+from typing import cast
 from datetime import date, datetime, timedelta
 
 from src.engines.pipeline.context import RunContext
@@ -80,7 +81,7 @@ class IsinProcessor:
             except Exception:
                 pass
 
-        def get_bm_price(dt) -> float | None:
+        def get_bm_price(dt: date) -> float | None:
             dt_val = dt if isinstance(dt, date) and not isinstance(
                 dt, datetime) else to_date_obj(dt)
             if dt_val is None:
@@ -125,10 +126,11 @@ class IsinProcessor:
 
         p_idx = s_idx = 0
 
-        isin_cashflows = []
-        isin_terminals = {}
-        isin_realized = []
-        isin_snapshots = []
+        
+        isin_cashflows: list[dict[str, float | date]] = []
+        isin_terminals: dict[date, dict[str, float]] = {}
+        isin_realized: list[dict[str, float | date]] = []
+        isin_snapshots: list[dict[str, float | date]] = []
 
         for m_row in m_inst:
             m_date = to_date_obj(m_row["Date"])
@@ -162,10 +164,10 @@ class IsinProcessor:
                 row = s_inst[s_idx]
                 s_qty = float(row["Quantity"])
                 
-                p_val = row.get("Price")
-                s_price = float(p_val) if p_val is not None else float(m_row["Closing Price"])
+                row_p_val: float | None = row.get("Price")
+                s_price = float(row_p_val) if row_p_val is not None else float(m_row["Closing Price"])
                 
-                sv_val = row.get("Sell Value")
+                sv_val: float | None = row.get("Sell Value")
                 s_val = float(sv_val) if sv_val is not None else float(s_qty * s_price)
 
                 cf_dates.append(row_dt_obj)
@@ -179,8 +181,8 @@ class IsinProcessor:
             cf_recon = fifo.reconcile_quantity(
                 m_row.get("Quantity"), m_date, get_bm_price(m_date) or 1.0)
             for cf in cf_recon:
-                cf_dates.append(cf["date"])
-                cf_amounts.append(cf["amount"])
+                cf_dates.append(cast(date, cf["date"]))
+                cf_amounts.append(cast(float, cf["amount"]))
 
             fifo.reconcile_cost_basis(m_row.get("Buy Value"))
 
