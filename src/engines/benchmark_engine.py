@@ -106,7 +106,7 @@ class BenchmarkEngine:
 
         try:
             ticker_cached = None
-            if cached_df is not None:
+            if cached_df is not None and not cached_df.is_empty():
                 ticker_cached = cached_df.filter(pl.col("yF_Ticker") == ticker)
                 if not ticker_cached.is_empty():
                     max_date_val = ticker_cached.select(pl.max("Date")).item()
@@ -306,7 +306,7 @@ class BenchmarkEngine:
                             EngineStatus(msg=msg or "", data=None, progress=prog, level=level)
                         )
 
-                        if df_pd is not None:
+                        if df_pd is not None and not df_pd.empty:
                             all_dfs.append(df_pd)
                     except Exception as e:
                         # Catch catastrophic thread failures

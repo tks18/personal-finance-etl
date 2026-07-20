@@ -205,6 +205,7 @@ class PostProcessor:
                     pl.when(pl.col("date").dt.month() >= 4)
                     .then(pl.col("date").dt.year())
                     .otherwise(pl.col("date").dt.year() - 1)
+                    .cast(pl.Int64)
                     .alias("event_fy_sy")
                 )
                 .with_columns(pl.col("tax_type").fill_null("equity").str.to_lowercase())
@@ -260,7 +261,7 @@ class PostProcessor:
                 right_on="date",
                 by="event_fy_sy",
                 strategy="backward",
-            ).fill_null(0.0)
+            ).fill_null(0.0).with_columns(pl.col("event_fy_sy").cast(pl.Int64))
 
             exemption_limits = {
                 fy_sy: self.ctx.fy_table.get_equity_ltcg_exemption(date(fy_sy, 4, 1))
