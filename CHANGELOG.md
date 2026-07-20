@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [1.1.0](https://github.com/tks18/personal-finance-etl/compare/1.0.2...1.1.0) (2026-07-20)
+
+
+### CI 🛠
+
+* add pyright, mypy and ruff for strong typing and linting support ([bf9645e](https://github.com/tks18/personal-finance-etl/commit/bf9645e51bb013d1e965d128aa230246a46b6b22))
+
+
+### Features 🔥
+
+* **utils:** add logger and database protocol models ([80484b5](https://github.com/tks18/personal-finance-etl/commit/80484b5c78fe28e4f7fb5adbb5ef3308664f1de1))
+
+
+### Code Refactoring 🖌
+
+* completely refactor for better typings, code maintainability ([fde93e6](https://github.com/tks18/personal-finance-etl/commit/fde93e607bab0ba12892980fbaeb022be5f74a31))
+* **config:** refactor settings to follow SRP ([bab566d](https://github.com/tks18/personal-finance-etl/commit/bab566df37fad4125e712db2fdd23f34b3fea001))
+* **engines/core:** fifo: refactor for better maintenance ([974d087](https://github.com/tks18/personal-finance-etl/commit/974d08786256094e9d8b06ae6a3a62c72bd95140))
+* **engines/pipeline:** refactor for better typings ([3249208](https://github.com/tks18/personal-finance-etl/commit/324920812ad7b6b9d36260f412dcb8df61412760))
+* **engines/rules:** add typings ([f7bb870](https://github.com/tks18/personal-finance-etl/commit/f7bb8700eba73c46ab11559a4ac26f9562e5cd6c))
+* **engines:** full typing support ([142c645](https://github.com/tks18/personal-finance-etl/commit/142c645001d7d4acbbe86ad0f7d95a77aa2d1917))
+* **utils:** better typing support ([34054f7](https://github.com/tks18/personal-finance-etl/commit/34054f723b6e7931a518a138d118868ce17acc28))
+
 ### [1.0.2](https://github.com/tks18/personal-finance-etl/compare/1.0.1...1.0.2) (2026-07-19)
 
 
