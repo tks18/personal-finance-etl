@@ -1,12 +1,14 @@
 import logging
+import multiprocessing
 
 
 class QueueHandler(logging.Handler):
-    def __init__(self, log_queue):
+
+    def __init__(self, log_queue: "multiprocessing.Queue[tuple[str, str | None, str | None]]") -> None:
         super().__init__()
         self.log_queue = log_queue
 
-    def emit(self, record):
+    def emit(self, record: logging.LogRecord) -> None:
         try:
             msg = self.format(record)
             self.log_queue.put((msg, None, None))
@@ -25,7 +27,7 @@ def setup_logger(name: str = "etl_pipeline") -> logging.Logger:
 logger = setup_logger()
 
 
-def add_queue_handler(log_queue):
+def add_queue_handler(log_queue: "multiprocessing.Queue[tuple[str, str | None, str | None]]") -> None:
     handler = QueueHandler(log_queue)
     # The UI handles its own timestamps, so just send the pure message
     formatter = logging.Formatter('%(message)s')

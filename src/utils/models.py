@@ -45,7 +45,7 @@ class AssetClass(str, Enum):
     DEFAULT = "default"
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class TaxLot:
     """Represents a single active purchase lot."""
     date: date | None
@@ -53,3 +53,25 @@ class TaxLot:
     price: float
     bm_buy: float | None
     shadow_qty: float
+
+
+@dataclass
+class ExtractionResult:
+    zcategory: pl.LazyFrame
+    assetgroup: pl.LazyFrame
+    assets: pl.LazyFrame
+    currency: pl.LazyFrame
+    inoutcome: pl.LazyFrame
+    mappings: dict[str, dict[str, str]]
+    stg_mf_isin_mapping: pl.LazyFrame
+    stg_benchmark_mapping: pl.LazyFrame
+    statement_files: dict[str, list[str]]
+
+
+@dataclass
+class AssetPipelineResult:
+    market_data: pl.LazyFrame
+    market_data_ref: pl.LazyFrame
+    purchase_ref: pl.LazyFrame
+    sale_ref: pl.LazyFrame
+    master_ref: pl.LazyFrame

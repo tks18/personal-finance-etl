@@ -12,7 +12,7 @@ def resource_path(relative_path: str) -> str:
     """Get absolute path to resource, works for both dev and PyInstaller onefile."""
     try:
         # PyInstaller extracts resources to a temp folder at runtime
-        base_path = sys._MEIPASS  # type: ignore[attr-defined]
+        base_path = getattr(sys, '_MEIPASS', os.path.abspath('.'))
     except AttributeError:
         base_path = os.path.abspath(".")
     return os.path.join(base_path, relative_path)
@@ -28,7 +28,7 @@ def clean_numeric_col(df: pl.DataFrame, col: str) -> pl.DataFrame:
     return df
 
 
-def to_date_obj(val) -> date | None:
+def to_date_obj(val: str | date | datetime | None) -> date | None:
     """Flexibly coerce a value to a Python date object."""
     if val is None:
         return None
@@ -44,7 +44,7 @@ def to_date_obj(val) -> date | None:
             except ValueError:
                 pass
         return None
-    return val  # type: ignore[return-value]
+    return None
 
 
 def get_fy_folder_name(dt: date) -> str:
