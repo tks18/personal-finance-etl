@@ -80,7 +80,7 @@ class FYTaxRateTable:
             return self.fy_map[0]
         return None
 
-    def _classify(self, tax_type: str, tax_subtype: str, lot_buy_date: date, debt_cutoff: date):
+    def _classify(self, tax_type: str, tax_subtype: str, lot_buy_date: date, debt_cutoff: date) -> tuple[str, str]:
         tt = tax_type.strip().lower()
         tst = tax_subtype.strip().lower()
         if tt in ("equity", "reit", "invit"):
