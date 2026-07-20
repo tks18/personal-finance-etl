@@ -2,7 +2,7 @@ import os
 import glob
 
 
-def categorize_statement_files(folder_path):
+def categorize_statement_files(folder_path: str) -> dict[str, list[str]]:
     """Does a single directory traversal to categorize all statement files."""
     all_files = glob.glob(os.path.join(
         folder_path, "**", "*.*"), recursive=True)

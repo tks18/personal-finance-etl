@@ -2,7 +2,7 @@
 Unified App: Root application window for Personal Finance ETL.
 """
 
-import customtkinter as ctk
+import customtkinter as ctk  # type: ignore[import-untyped]
 from PIL import Image
 import os
 from tkinter import filedialog
@@ -12,8 +12,12 @@ from src.utils.theme import Color
 from src.utils.helpers import resource_path
 
 import multiprocessing
+import traceback
+import queue
 from src.pipeline.etl_pipeline import process_wrapper
-from src.config.settings import get_recent_configs, load_config
+from src.utils.models import EngineStatus, LogLevel
+from src.utils.prefs import get_recent_configs
+from src.config.settings import load_config
 
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
@@ -22,8 +26,8 @@ ctk.set_default_color_theme("blue")
 class UnifiedETLTab(BaseEngineTab):
     """Unified Control Panel for the ETL, Benchmark, and Tax Engines."""
 
-    def __init__(self, parent, **kwargs):
-        super().__init__(parent, **kwargs)
+    def __init__(self, parent: ctk.CTk | ctk.CTkFrame) -> None:
+        super().__init__(parent)
 
         self._run_btn_text = "▶  Run Pipeline"
         self.config_path_var = ctk.StringVar()
@@ -34,7 +38,7 @@ class UnifiedETLTab(BaseEngineTab):
 
         self._poll_queue_base(self.run_btn)
 
-    def _build_header(self):
+    def _build_header(self) -> None:
         hdr = ctk.CTkFrame(self, fg_color=Color.HEADER, corner_radius=0)
         hdr.grid(row=0, column=0, sticky="ew")
 
@@ -132,30 +136,32 @@ class UnifiedETLTab(BaseEngineTab):
         try:
             if self.config_path_var.get():
                 self._on_config_selected(self.config_path_var.get())
-        except Exception:
-            pass
+        except Exception as e:
+            self.status_queue.put(EngineStatus(
+                msg=f"Error loading initial config: {e}", data=None, progress=0.0, level=LogLevel.ERROR))
 
-    def _on_config_selected(self, path):
+    def _on_config_selected(self, path: str) -> None:
         if not path:
             return
         try:
             cfg = load_config(path)
         except Exception as e:
-            print(f"Failed to load config: {e}")
+            self.status_queue.put(EngineStatus(
+                msg=f"Failed to load config: {e}\n{traceback.format_exc()}", data=None, progress=0.0, level=LogLevel.ERROR))
 
-    def _select_file(self, str_var):
+    def _select_file(self, str_var: ctk.StringVar) -> None:
         path = filedialog.askopenfilename(title="Select Config", filetypes=[
                                           ("TOML files", "*.toml"), ("All files", "*.*")])
         if path:
             str_var.set(path)
             self._on_config_selected(path)
 
-    def _start_pipeline(self):
+    def _start_pipeline(self) -> None:
         self.run_btn.configure(state="disabled", text="Running...")
         while not self.status_queue.empty():
             try:
                 self.status_queue.get_nowait()
-            except Exception:
+            except queue.Empty:
                 break
         self.status_log.configure(state="normal")
         self.status_log.delete("1.0", "end")
@@ -171,7 +177,7 @@ class UnifiedETLTab(BaseEngineTab):
 class App(ctk.CTk):
     """Root application window."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self.title("Shan's Personal Finance ETL")
         self.geometry("960x660")

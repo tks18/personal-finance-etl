@@ -1,9 +1,10 @@
 import polars as pl
 from dateutil.relativedelta import relativedelta
 import calendar
+from datetime import date
 
 
-def get_column_mapping(df_map, table_name="CATEGORY"):
+def get_column_mapping(df_map: pl.DataFrame, table_name: str = "CATEGORY") -> dict[str, str]:
     """Filters the pre-loaded COLUMN_MASTER DataFrame and returns a dictionary of {OLD_COLUMN: NEW_COLUMN}"""
     # Filter for the specific table and create a dict
     mapping = (
@@ -14,7 +15,7 @@ def get_column_mapping(df_map, table_name="CATEGORY"):
     return {old: new for old, new in mapping}
 
 
-def get_stg_mf_isin_mapping(csv_path):
+def get_stg_mf_isin_mapping(csv_path: str) -> pl.LazyFrame:
     """
     Loads the ISIN mapping as a LazyFrame.
     This will NOT be written to SQLite. It will be passed to the 
@@ -29,7 +30,7 @@ def get_stg_mf_isin_mapping(csv_path):
     return pl.scan_csv(csv_path, schema_overrides=schema_overrides)
 
 
-def get_stg_benchmark_mapping(csv_path):
+def get_stg_benchmark_mapping(csv_path: str) -> pl.LazyFrame:
     """
     Loads the Benchmark mapping as a LazyFrame.
     Will be passed to the Investment Master transformation to replicate 
@@ -46,7 +47,7 @@ def get_stg_benchmark_mapping(csv_path):
     return pl.scan_csv(csv_path, schema_overrides=schema_overrides)
 
 
-def get_purchase_reference(df_lazy, instrument_col, date_col, price_col, qty_col):
+def get_purchase_reference(df_lazy: pl.LazyFrame, instrument_col: str, date_col: str, price_col: str, qty_col: str) -> pl.LazyFrame:
     """
     Translates DAX SUMMARIZE + CALCULATE(SUM) for Purchases.
     Groups by Instrument, ISIN, Date, and Price, then sums the Quantity.
@@ -73,7 +74,7 @@ def get_purchase_reference(df_lazy, instrument_col, date_col, price_col, qty_col
     return df_grouped
 
 
-def get_sale_reference(df_sale_lazy, df_purchase_ref_lazy, instrument_col, date_col, price_col, qty_col):
+def get_sale_reference(df_sale_lazy: pl.LazyFrame, df_purchase_ref_lazy: pl.LazyFrame, instrument_col: str, date_col: str, price_col: str, qty_col: str) -> pl.LazyFrame:
     """
     Translates DAX SUMMARIZE + CALCULATE(SUM) for Sales.
     Also calculates the Rolling Average Buy Price based on historical purchases.
@@ -142,7 +143,7 @@ def get_sale_reference(df_sale_lazy, df_purchase_ref_lazy, instrument_col, date_
     return df_final
 
 
-def transform_d_income_category(df_lazy, column_mapping):
+def transform_d_income_category(df_lazy: pl.LazyFrame, column_mapping: dict[str, str]) -> pl.LazyFrame:
     """Executes the PQ and DAX logic using Polars LazyFrames."""
 
     df_transformed = (
@@ -183,7 +184,7 @@ def transform_d_income_category(df_lazy, column_mapping):
     return df_transformed
 
 
-def transform_d_income_subcategory(df_lazy, column_mapping, df_d_income_category_lazy):
+def transform_d_income_subcategory(df_lazy: pl.LazyFrame, column_mapping: dict[str, str], df_d_income_category_lazy: pl.LazyFrame) -> pl.LazyFrame:
     """
     Executes the PQ and DAX logic for Income Subcategories.
     Requires the lazy frame of d_Income_Category to replicate DAX's RELATED().
@@ -239,7 +240,7 @@ def transform_d_income_subcategory(df_lazy, column_mapping, df_d_income_category
     return df_transformed
 
 
-def transform_d_expense_category(df_lazy, column_mapping):
+def transform_d_expense_category(df_lazy: pl.LazyFrame, column_mapping: dict[str, str]) -> pl.LazyFrame:
     """Executes the PQ logic for Expense Categories (TYPE = 1)."""
 
     df_transformed = (
@@ -265,7 +266,7 @@ def transform_d_expense_category(df_lazy, column_mapping):
     return df_transformed
 
 
-def transform_d_expense_subcategory(df_lazy, column_mapping):
+def transform_d_expense_subcategory(df_lazy: pl.LazyFrame, column_mapping: dict[str, str]) -> pl.LazyFrame:
     """Executes the PQ logic for Expense Subcategories."""
 
     df_transformed = (
@@ -292,7 +293,7 @@ def transform_d_expense_subcategory(df_lazy, column_mapping):
     return df_transformed
 
 
-def transform_d_asset_category(df_lazy, column_mapping):
+def transform_d_asset_category(df_lazy: pl.LazyFrame, column_mapping: dict[str, str]) -> pl.LazyFrame:
     """Executes the PQ logic for Asset Categories (ASSETGROUP)."""
 
     df_transformed = (
@@ -314,7 +315,7 @@ def transform_d_asset_category(df_lazy, column_mapping):
     return df_transformed
 
 
-def transform_d_asset_subcategory(df_lazy, column_mapping):
+def transform_d_asset_subcategory(df_lazy: pl.LazyFrame, column_mapping: dict[str, str]) -> pl.LazyFrame:
     """Executes the PQ logic for Asset Subcategories (ASSETS)."""
 
     df_transformed = (
@@ -344,7 +345,7 @@ def transform_d_asset_subcategory(df_lazy, column_mapping):
     return df_transformed
 
 
-def transform_d_currency(df_lazy, column_mapping):
+def transform_d_currency(df_lazy: pl.LazyFrame, column_mapping: dict[str, str]) -> pl.LazyFrame:
     """Executes the PQ logic for the Currency Master table."""
 
     df_transformed = (
@@ -374,7 +375,7 @@ def transform_d_currency(df_lazy, column_mapping):
     return df_transformed
 
 
-def transform_d_investment_benchmark_master(csv_path):
+def transform_d_investment_benchmark_master(csv_path: str) -> pl.LazyFrame:
     """Executes the PQ logic for the Benchmark Master table."""
 
     # Enforce strict string types as defined in your Power Query
@@ -390,7 +391,7 @@ def transform_d_investment_benchmark_master(csv_path):
     return df_lazy
 
 
-def transform_d_tax_rates(csv_path):
+def transform_d_tax_rates(csv_path: str) -> pl.LazyFrame:
     """Executes the PQ logic for the Tax Rates table."""
 
     # We use schema overrides to strictly enforce the types from your PQ logic.
@@ -429,7 +430,7 @@ def transform_d_tax_rates(csv_path):
     return df_lazy
 
 
-def get_base_transactions(df_lazy, column_mapping):
+def get_base_transactions(df_lazy: pl.LazyFrame, column_mapping: dict[str, str]) -> pl.LazyFrame:
     """
     Acts as the TRANSACTIONS helper query. 
     Reads INOUTCOME once, renames columns, and filters deleted rows.
@@ -454,7 +455,7 @@ def get_base_transactions(df_lazy, column_mapping):
     return df_base
 
 
-def transform_f_income_transactions(base_transactions_lazy):
+def transform_f_income_transactions(base_transactions_lazy: pl.LazyFrame) -> pl.LazyFrame:
     """
     Branches off the base transactions for Income (TYPE = 0) 
     and applies the DAX calculation.
@@ -481,7 +482,7 @@ def transform_f_income_transactions(base_transactions_lazy):
     return df_transformed
 
 
-def transform_f_expense_transactions(base_transactions_lazy):
+def transform_f_expense_transactions(base_transactions_lazy: pl.LazyFrame) -> pl.LazyFrame:
     """
     Branches off the base transactions for Expenses (TYPE = 1) 
     and applies the EXCH_RATE calculation.
@@ -509,10 +510,10 @@ def transform_f_expense_transactions(base_transactions_lazy):
 
 
 def transform_f_transfer_transactions(
-    base_transactions_lazy,
-    d_asset_subcategory_lazy,
-    d_asset_category_lazy
-):
+    base_transactions_lazy: pl.LazyFrame,
+    df_d_asset_subcategory_lazy: pl.LazyFrame,
+    df_d_asset_category_lazy: pl.LazyFrame
+) -> pl.LazyFrame:
     """
     Branches off base transactions for Transfers (TYPE = 3 or 4) 
     and applies RELATED() logic via joins, plus temporal shifts for EDATE().
@@ -521,7 +522,7 @@ def transform_f_transfer_transactions(
     # 1. Replicate DAX RELATED() by joining up the Asset hierarchy
     # Join Transactions (ASSET_ID) -> SubCategory (UID)
     df_joined_sub = base_transactions_lazy.join(
-        d_asset_subcategory_lazy.select([
+        df_d_asset_subcategory_lazy.select([
             pl.col("UID").alias("SUB_UID"),
             "ASSET_GROUP_ID"
         ]),
@@ -532,7 +533,7 @@ def transform_f_transfer_transactions(
 
     # Join SubCategory (ASSET_GROUP_ID) -> Category (UID) to get ASSET_GROUP
     df_joined_cat = df_joined_sub.join(
-        d_asset_category_lazy.select([
+        df_d_asset_category_lazy.select([
             pl.col("UID").alias("CAT_UID"),
             "ASSET_GROUP"
         ]),
@@ -593,7 +594,7 @@ def transform_f_transfer_transactions(
     return df_transformed
 
 
-def transform_f_opening_balances(csv_path, column_mapping):
+def transform_f_opening_balances(csv_path: str, column_mapping: dict[str, str]) -> pl.LazyFrame:
     """Executes the PQ logic for Opening Balances."""
 
     # We use try_parse_dates so Polars automatically attempts to parse ZTXDATESTR
@@ -633,14 +634,19 @@ def transform_f_opening_balances(csv_path, column_mapping):
 
 
 def get_stg_calendar_ref(
-    f_inc_lazy, f_exp_lazy, f_trans_lazy, f_opbal_lazy,
-    stg_mkt_lazy, f_pur_lazy, f_sale_lazy
-):
+    f_inc_lazy: pl.LazyFrame,
+    f_exp_lazy: pl.LazyFrame,
+    f_trans_lazy: pl.LazyFrame,
+    f_opbal_lazy: pl.LazyFrame,
+    stg_mkt_lazy: pl.LazyFrame,
+    f_pur_lazy: pl.LazyFrame,
+    f_sale_lazy: pl.LazyFrame
+) -> tuple[date, date]:
     """
     Translates stg_CalendarRef.
     Unions the DATE columns from all 7 fact tables to find the min and max dates.
     """
-    def safe_date_cast(col_name):
+    def safe_date_cast(col_name: str) -> pl.Expr:
         return pl.coalesce([
             # 1. If it's already a Date or Datetime, this cast succeeds
             pl.col(col_name).cast(pl.Date, strict=False),
@@ -674,17 +680,17 @@ def get_stg_calendar_ref(
     min_date = df_collected["DATE"].min()
     max_date = df_collected["DATE"].max()
 
-    return min_date, max_date
+    from typing import cast
+    return cast(date, min_date), cast(date, max_date)
 
 
-def transform_d_calendar(min_date, max_date):
+def transform_d_calendar(min_date: date, max_date: date) -> pl.LazyFrame:
     """
     Generates all 40 requested time-intelligence columns for the Calendar Master.
     Assumes an April 1st - March 31st Financial Year.
     """
     start_date = (min_date.replace(day=1) - relativedelta(months=1))
-    last_day_of_max_month = calendar.monthrange(
-        max_date.year, max_date.month)[1]
+    last_day_of_max_month = calendar.monthrange(max_date.year, max_date.month)[1]
     end_date = max_date.replace(day=last_day_of_max_month)
 
     df_cal = pl.DataFrame({
@@ -794,10 +800,10 @@ def transform_d_calendar(min_date, max_date):
     return df_transformed
 
 
-def transform_stg_investment_market_data(stock_ref_lazy, mf_ref_lazy):
+def transform_stg_investment_market_data(refs: list[pl.LazyFrame]) -> pl.LazyFrame:
     """
     Translates DAX UNION + SUMMARIZE.
-    Concatenates the Stock and MF aggregated tables and selects the final columns.
+    Concatenates the aggregated tables and selects the final columns.
     """
 
     # Ensure both frames have the exact same columns in the exact same order for UNION
@@ -806,60 +812,52 @@ def transform_stg_investment_market_data(stock_ref_lazy, mf_ref_lazy):
         "Closing Value", "Buy Value", "Unit P/L", "Total P/L"
     ]
 
-    df_union = pl.concat([
-        mf_ref_lazy.select(select_cols),
-        stock_ref_lazy.select(select_cols)
-    ], how="vertical")
+    df_union = pl.concat([ref.select(select_cols) for ref in refs], how="vertical")
 
     # The outer SUMMARIZE in DAX acts as a distinct/group by on the unioned result.
-    # We group by all columns to remove any exact duplicates, mirroring the DAX behavior.
-    df_final = df_union.group_by(select_cols).agg([])
+    df_final = df_union.group_by(select_cols).agg([]).sort(["ISIN", "Date", "Quantity", "Buy Price", "Closing Price"])
 
     return df_final
 
 
-def get_f_tf_investment_purchase_data(stock_ref, mf_ref):
+def get_f_tf_investment_purchase_data(refs: list[pl.LazyFrame]) -> pl.LazyFrame:
     """Translates DAX UNION + SUMMARIZE for Purchases."""
     select_cols = ["ISIN", "Date", "Price", "Quantity", "Value"]
 
-    df_union = pl.concat([
-        stock_ref.select(select_cols),
-        mf_ref.select(select_cols)
-    ], how="vertical")
+    df_union = pl.concat([ref.select(select_cols) for ref in refs], how="vertical")
 
     df_final = (
         df_union
         .group_by(select_cols).agg([])  # SUMMARIZE (distinct)
+        .sort(["ISIN", "Date", "Quantity", "Price"])
         # DAX calculated col
         .with_columns(pl.lit("INR_INR").alias("CURRENCY_ID"))
     )
     return df_final
 
 
-def get_f_tf_investment_sale_data(stock_ref, mf_ref):
+def get_f_tf_investment_sale_data(refs: list[pl.LazyFrame]) -> pl.LazyFrame:
     """Translates DAX UNION + SUMMARIZE for Sales."""
     select_cols = [
         "ISIN", "Date", "Quantity", "Sell Price", "Sell Value",
         "Buy Price", "Buy Value", "Unit P/L", "Total P/L"
     ]
 
-    df_union = pl.concat([
-        stock_ref.select(select_cols),
-        mf_ref.select(select_cols)
-    ], how="vertical")
+    df_union = pl.concat([ref.select(select_cols) for ref in refs], how="vertical")
 
     df_final = (
         df_union
         .group_by(select_cols).agg([])  # SUMMARIZE (distinct)
+        .sort(["ISIN", "Date", "Quantity", "Sell Price"])
         .with_columns(pl.lit("INR_INR").alias("CURRENCY_ID"))
     )
     return df_final
 
 
-def get_d_tf_investment_master(stock_master_ref, mf_master_ref, stg_benchmark_mapping_lazy):
+def get_d_tf_investment_master(master_refs: list[pl.LazyFrame], stg_benchmark_mapping_lazy: pl.LazyFrame) -> pl.LazyFrame:
     """
     Translates d_tf_InvestmentMaster.
-    Unions the Stock and MF references into a single distinct dimension table,
+    Unions the References into a single distinct dimension table,
     then joins the Benchmark Mapping to pull in Sector, Industry, Tax flags, etc.
     """
 
@@ -869,11 +867,8 @@ def get_d_tf_investment_master(stock_master_ref, mf_master_ref, stg_benchmark_ma
         "INSTRUMENT_TYPE", "INSTRUMENT_SUBTYPE", "CATEGORY_ID"
     ]
 
-    # Union the Stock and MF References
-    df_master_union = pl.concat([
-        stock_master_ref.select(select_cols),
-        mf_master_ref.select(select_cols)
-    ]).unique(subset=["ISIN"])  # Ensure one row per ISIN
+    # Union the References
+    df_master_union = pl.concat([ref.select(select_cols) for ref in master_refs]).unique(subset=["ISIN"])  # Ensure one row per ISIN
 
     # Replicate DAX LOOKUPVALUE by joining the Benchmark Mapping
     df_final = (

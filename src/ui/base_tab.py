@@ -6,7 +6,7 @@ Consolidates duplicated log panel, queue polling, and styling code.
 import queue
 import time
 from tkinter import messagebox
-import customtkinter as ctk
+import customtkinter as ctk  # type: ignore[import-untyped]
 
 from src.utils.models import EngineStatus, LogLevel, ExportMode
 from src.utils.theme import Color, LOG_TAG_COLORS
@@ -18,10 +18,10 @@ import multiprocessing
 class BaseEngineTab(ctk.CTkFrame):
     """Base tab handling standard 2-column layout and log/queue operations."""
 
-    def __init__(self, parent, **kwargs):
-        super().__init__(parent, fg_color=Color.BG, **kwargs)
+    def __init__(self, parent: ctk.CTk | ctk.CTkFrame) -> None:
+        super().__init__(parent, fg_color=Color.BG)
 
-        self.status_queue = multiprocessing.Queue()
+        self.status_queue: "multiprocessing.Queue[EngineStatus]" = multiprocessing.Queue()
         self.save_target = ""
         self.save_type = ExportMode.CONSOLIDATED
         self._run_btn_text = "▶  Run"
@@ -31,7 +31,7 @@ class BaseEngineTab(ctk.CTkFrame):
         self.grid_rowconfigure(0, weight=0)
         self.grid_rowconfigure(1, weight=1)
 
-    def _build_log_panel(self):
+    def _build_log_panel(self) -> None:
         panel = ctk.CTkFrame(self, fg_color=Color.BG, corner_radius=0)
         panel.grid(row=1, column=0, sticky="nsew")
         panel.grid_columnconfigure(1, weight=1)
@@ -73,18 +73,18 @@ class BaseEngineTab(ctk.CTkFrame):
         self.status_log.grid(row=1, column=0, sticky="nsew",
                              padx=(8, 0), pady=(6, 0))
 
-    def _configure_log_tags(self):
+    def _configure_log_tags(self) -> None:
         tb = self.status_log._textbox
         for tag, colour in LOG_TAG_COLORS.items():
             tb.tag_config(tag, foreground=colour)
         tb.tag_config(
             "ts", foreground=LOG_TAG_COLORS["ts"], font=("Consolas", 10))
 
-    def _set_progress(self, value: float):
+    def _set_progress(self, value: float) -> None:
         self.progress.set(value)
         self.pct_label.configure(text=f"{int(value * 100)}%")
 
-    def _log(self, msg: str, level: str = "info"):
+    def _log(self, msg: str, level: str = "info") -> None:
         ts = time.strftime("%H:%M:%S")
         self.status_log.configure(state="normal")
         tb = self.status_log._textbox
@@ -93,7 +93,7 @@ class BaseEngineTab(ctk.CTkFrame):
         self.status_log.see("end")
         self.status_log.configure(state="disabled")
 
-    def _section_label(self, parent, text: str, row: int) -> int:
+    def _section_label(self, parent: ctk.CTkFrame, text: str, row: int) -> int:
         ctk.CTkLabel(
             parent, text=text,
             font=ctk.CTkFont(family="Segoe UI", size=9, weight="bold"),
@@ -101,7 +101,7 @@ class BaseEngineTab(ctk.CTkFrame):
         ).grid(row=row, column=0, padx=10, pady=(12, 4), sticky="w")
         return row + 1
 
-    def _poll_queue_base(self, run_btn):
+    def _poll_queue_base(self, run_btn: ctk.CTkButton) -> None:
         try:
             while True:
                 item = self.status_queue.get_nowait()

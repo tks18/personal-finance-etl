@@ -4,7 +4,7 @@ from datetime import datetime
 import fastexcel
 
 
-def process_mf_statement(file_path):
+def process_mf_statement(file_path: str) -> pl.DataFrame:
     """
     Acts as the ProcessMFStatements helper query.
     Reads unstructured Excel file, finds 'Scheme Name', 
@@ -36,7 +36,7 @@ def process_mf_statement(file_path):
     # ---------------------------------------------------------
     raw_headers = df_sliced.row(0)
     clean_headers = []
-    seen = {}
+    seen: dict[str, int] = {}
 
     for i, h in enumerate(raw_headers):
         header_str = str(h).strip() if h is not None else ""
@@ -63,7 +63,7 @@ def process_mf_statement(file_path):
     return df_clean
 
 
-def get_stg_mf_market_data(valid_files, stg_mf_isin_mapping_lazy):
+def get_stg_mf_market_data(valid_files: list[str], stg_mf_isin_mapping_lazy: pl.LazyFrame) -> pl.LazyFrame:
     """
     Extracts dates, processes binaries, 
     and applies final PQ & DAX transformations (including LOOKUPVALUE).
@@ -144,7 +144,7 @@ def get_stg_mf_market_data(valid_files, stg_mf_isin_mapping_lazy):
     return df_transformed
 
 
-def get_stg_mf_market_data_ref(stg_mf_market_data_lazy):
+def get_stg_mf_market_data_ref(stg_mf_market_data_lazy: pl.LazyFrame) -> pl.LazyFrame:
     """
     Translates DAX SUMMARIZE + CALCULATE(SUM) for Mutual Funds.
     Groups by Date, ISIN, and Instrument Name, sums the Units and Values, 
@@ -184,7 +184,7 @@ def get_stg_mf_market_data_ref(stg_mf_market_data_lazy):
     return df_grouped
 
 
-def process_mf_transaction_statements(file_path):
+def process_mf_transaction_statements(file_path: str) -> pl.DataFrame:
     """
     Acts as the ProcessMFTransactionStatements helper query.
     Reads the 'Transactions' sheet and dynamically finds the header row.
@@ -217,7 +217,7 @@ def process_mf_transaction_statements(file_path):
     # ---------------------------------------------------------
     raw_headers = df_sliced.row(0)
     clean_headers = []
-    seen = {}
+    seen: dict[str, int] = {}
 
     for i, h in enumerate(raw_headers):
         header_str = str(h).strip() if h is not None else ""
@@ -244,7 +244,7 @@ def process_mf_transaction_statements(file_path):
     return df_clean
 
 
-def get_base_mf_transactions(valid_files):
+def get_base_mf_transactions(valid_files: list[str]) -> pl.LazyFrame:
     """
     Acts as the MF_TRANSACTIONS helper query.
     Extracts complex dates, and parses binaries.
@@ -306,7 +306,7 @@ def get_base_mf_transactions(valid_files):
     return df_transformed
 
 
-def transform_stg_mf_trades(base_mf_orders_lazy, stg_mf_isin_mapping_lazy, trade_type):
+def transform_stg_mf_trades(base_mf_orders_lazy: pl.LazyFrame, stg_mf_isin_mapping_lazy: pl.LazyFrame, trade_type: str) -> pl.LazyFrame:
     """
     Branches into Purchase or Sale tables, applies DAX SWITCH logic for old names,
     and runs the ISIN LOOKUPVALUE join.
@@ -346,7 +346,7 @@ def transform_stg_mf_trades(base_mf_orders_lazy, stg_mf_isin_mapping_lazy, trade
     return df_transformed
 
 
-def get_stg_mf_master_ref(stg_mf_market_data_lazy, stg_mf_purchase_transactions_lazy, stg_mf_sale_transactions_lazy, d_asset_subcategory_lazy):
+def get_stg_mf_master_ref(stg_mf_market_data_lazy: pl.LazyFrame, stg_mf_purchase_transactions_lazy: pl.LazyFrame, stg_mf_sale_transactions_lazy: pl.LazyFrame, d_asset_subcategory_lazy: pl.LazyFrame) -> pl.LazyFrame:
     """
     Translates stg_MFMasterRef.
     Unions unique ISINs across MF tables, then looks up attributes from Market Data.

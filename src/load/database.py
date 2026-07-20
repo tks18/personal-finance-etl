@@ -2,9 +2,12 @@ import polars as pl
 import sqlite3
 import os
 from datetime import datetime
+from src.utils.logger import logger
+from src.utils.interfaces import ILogger
+from src.utils.models import EngineStatus
 
 
-def setup_sqlite_schema(db_path):
+def setup_sqlite_schema(db_path: str) -> None:
     """Deletes old DB, applies production PRAGMAs, and creates strict schemas."""
     if os.path.exists(db_path):
         os.remove(db_path)
@@ -406,7 +409,7 @@ def setup_sqlite_schema(db_path):
         """)
 
 
-def apply_indexes_and_optimize(db_path):
+def apply_indexes_and_optimize(db_path: str) -> None:
     with sqlite3.connect(db_path) as conn:
         cursor = conn.cursor()
 
@@ -489,7 +492,7 @@ def apply_indexes_and_optimize(db_path):
         cursor.execute("PRAGMA optimize;")
 
 
-def generate_target_db_path(base_path):
+def generate_target_db_path(base_path: str) -> str:
     now = datetime.now()
     if now.month >= 4:
         fy_str = f"{now.year}-{str(now.year + 1)[-2:]}"
@@ -506,7 +509,7 @@ def generate_target_db_path(base_path):
     return os.path.join(full_dir_path, file_name)
 
 
-def batch_write_database(df, table_name, db_path, chunk_size=50000):
+def batch_write_database(df: pl.DataFrame, table_name: str, db_path: str, chunk_size: int = 50000) -> None:
     """Writes a DataFrame to SQLite using the ultra-fast ADBC driver."""
     if df.height == 0:
         return
@@ -521,3 +524,60 @@ def batch_write_database(df, table_name, db_path, chunk_size=50000):
         if_table_exists="append",
         engine="adbc"
     )
+
+
+class SQLiteLoader:
+    def __init__(self, target_db_path: str, status_queue: ILogger):
+        self.target_db_path = target_db_path
+        self.status_queue = status_queue
+
+    def run(self, dfs: dict[str, pl.DataFrame]) -> None:
+        logger.info("Writing tables to SQLite in batches...")
+        batch_write_database(dfs["df_d_calendar"],
+                             "d_Calendar", self.target_db_path)
+        batch_write_database(dfs["df_d_income_category"],
+                             "d_Income_Category", self.target_db_path)
+        batch_write_database(dfs["df_d_income_subcategory"],
+                             "d_Income_Subcategory", self.target_db_path)
+        batch_write_database(dfs["df_d_expense_category"],
+                             "d_Expense_Category", self.target_db_path)
+        batch_write_database(
+            dfs["df_d_expense_subcategory"], "d_Expense_Subcategory", self.target_db_path)
+        batch_write_database(dfs["df_d_asset_category"],
+                             "d_Asset_Category", self.target_db_path)
+        batch_write_database(dfs["df_d_asset_subcategory"],
+                             "d_Asset_SubCategory", self.target_db_path)
+        batch_write_database(dfs["df_d_currency"],
+                             "d_Currency", self.target_db_path)
+        batch_write_database(dfs["df_d_benchmark_master"],
+                             "d_Investment_Benchmark_Master", self.target_db_path)
+        batch_write_database(dfs["df_d_tf_investment_master"],
+                             "d_tf_Investment_Master", self.target_db_path)
+        batch_write_database(dfs["df_d_tax_rates"],
+                             "d_Tax_Rates", self.target_db_path)
+        batch_write_database(
+            dfs["df_f_income_transactions"], "f_Income_Transactions", self.target_db_path)
+        batch_write_database(dfs["df_f_expense_transactions"],
+                             "f_Expense_Transactions", self.target_db_path)
+        batch_write_database(dfs["df_f_transfer_transactions"],
+                             "f_Transfer_Transactions", self.target_db_path)
+        batch_write_database(dfs["df_f_opening_balances"],
+                             "f_Opening_Balances", self.target_db_path)
+        batch_write_database(dfs["df_stg_investment_market_data"],
+                             "stg_Investment_Market_Data", self.target_db_path)
+        batch_write_database(dfs["df_f_tf_inv_purchase"],
+                             "f_tf_Investment_Purchase_Data", self.target_db_path)
+        batch_write_database(
+            dfs["df_f_tf_inv_sale"], "f_tf_Investment_Sale_Data", self.target_db_path)
+        batch_write_database(dfs["df_f_investment_benchmark_data"],
+                             "f_Investment_Benchmark_Data", self.target_db_path)
+        batch_write_database(dfs["df_f_investment_market_data"],
+                             "f_Investment_Market_Data", self.target_db_path)
+
+        self.status_queue.put(EngineStatus(msg="", data=None, progress=0.9))
+        logger.info("Applying indexes and optimizing database...")
+        apply_indexes_and_optimize(self.target_db_path)
+
+        with sqlite3.connect(self.target_db_path) as conn:
+            conn.cursor().execute("PRAGMA optimize;")
+            conn.cursor().execute("PRAGMA wal_checkpoint(TRUNCATE);")

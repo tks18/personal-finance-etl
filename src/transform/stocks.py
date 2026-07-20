@@ -4,7 +4,7 @@ from datetime import datetime
 import fastexcel
 
 
-def process_stock_closing_statement(file_path):
+def process_stock_closing_statement(file_path: str) -> pl.DataFrame:
     """
     Acts as the ProcessStockClosingStatements helper query.
     Reads an unstructured Excel file, finds the 'Unrealised trades' block, 
@@ -47,7 +47,7 @@ def process_stock_closing_statement(file_path):
     # Deduplicate and clean headers before renaming
     raw_headers = df_sliced.row(0)
     clean_headers = []
-    seen = {}
+    seen: dict[str, int] = {}
 
     for i, h in enumerate(raw_headers):
         # Convert nulls or purely whitespace headers to a default string
@@ -80,7 +80,7 @@ def process_stock_closing_statement(file_path):
     return df_data
 
 
-def get_stg_stock_market_data(valid_files):
+def get_stg_stock_market_data(valid_files: list[str]) -> pl.LazyFrame:
     """
     Extracts dates from filenames, processes the binaries, 
     and applies the final PQ & DAX transformations.
@@ -185,7 +185,7 @@ def get_stg_stock_market_data(valid_files):
     return df_transformed
 
 
-def get_stg_stock_market_data_ref(stg_stock_market_data_lazy):
+def get_stg_stock_market_data_ref(stg_stock_market_data_lazy: pl.LazyFrame) -> pl.LazyFrame:
     """
     Translates DAX SUMMARIZE + CALCULATE(SUM) for Stocks.
     Groups by Date, ISIN, Instrument Name, Closing Price, and Buy Price,
@@ -218,7 +218,7 @@ def get_stg_stock_market_data_ref(stg_stock_market_data_lazy):
     return df_grouped
 
 
-def process_stock_transactions(file_path):
+def process_stock_transactions(file_path: str) -> pl.DataFrame:
     """
     Acts as the ProcessStockTransactions helper query.
     Reads 'Sheet1', skips 5 rows of broker headers, and promotes the 6th row.
@@ -240,7 +240,7 @@ def process_stock_transactions(file_path):
     return df_clean
 
 
-def get_base_stock_transactions(valid_files):
+def get_base_stock_transactions(valid_files: list[str]) -> pl.LazyFrame:
     """
     Acts as the STOCK_TRANSACTIONS helper query.
     Processes files and sets data types.
@@ -292,7 +292,7 @@ def get_base_stock_transactions(valid_files):
     return df_transformed
 
 
-def transform_stg_stock_trades(base_stock_orders_lazy, trade_type):
+def transform_stg_stock_trades(base_stock_orders_lazy: pl.LazyFrame, trade_type: str) -> pl.LazyFrame:
     """
     Branches the base orders into BUY or SELL tables and applies DAX calcs.
     trade_type must be "BUY" or "SELL".
@@ -313,7 +313,7 @@ def transform_stg_stock_trades(base_stock_orders_lazy, trade_type):
     return df_transformed
 
 
-def get_stg_stock_master_ref(stg_stock_market_data_lazy, d_asset_subcategory_lazy):
+def get_stg_stock_master_ref(stg_stock_market_data_lazy: pl.LazyFrame, d_asset_subcategory_lazy: pl.LazyFrame) -> pl.LazyFrame:
     """
     Translates stg_StockMasterRef.
     Groups by ISIN, Name, and Class, and adds static Stock attributes.
