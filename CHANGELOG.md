@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [1.5.0](https://github.com/tks18/personal-finance-etl/compare/1.4.0...1.5.0) (2026-07-21)
+
+
+### Styling 🎨
+
+* ruff linting fixes ([09cddf7](https://github.com/tks18/personal-finance-etl/commit/09cddf77656efefb64ef56f8899344737da76113))
+
 ## [1.4.0](https://github.com/tks18/personal-finance-etl/compare/1.3.0...1.4.0) (2026-07-21)
 
 
