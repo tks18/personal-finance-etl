@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [1.4.0](https://github.com/tks18/personal-finance-etl/compare/1.3.0...1.4.0) (2026-07-21)
+
+
+### Build System 🏗
+
+* add vulture for finding dead code ([b5122e1](https://github.com/tks18/personal-finance-etl/commit/b5122e10d503f4678449621c4d196de8d09666ec))
+
+
+### Features 🔥
+
+* **config:** move to class based config module ([2064f0b](https://github.com/tks18/personal-finance-etl/commit/2064f0bb67e0ff639e1f68ccd9f6add72301b554))
+
+
+### Code Refactoring 🖌
+
+* **engine:** make the benchmark engine to oop, better folder struct ([2b022f9](https://github.com/tks18/personal-finance-etl/commit/2b022f90c6b967badb7ad4b642d2a29a20ce3f43))
+* **engines:** refactor tax to analytics engine, better folder struct, also move to oop ([e3b4c46](https://github.com/tks18/personal-finance-etl/commit/e3b4c4601dbb3af4539d85b7a43f3b4bcd248366))
+* **extract:** move csv related loading to extract folder only from transforms ([283d7cb](https://github.com/tks18/personal-finance-etl/commit/283d7cb1cb927f36215f13eecdcbd57c4218caf1))
+* **extract:** move excel related loading to extract folder only ([3ae07b4](https://github.com/tks18/personal-finance-etl/commit/3ae07b42ba5a7ed4966d5863b6fa4021f0e956c9))
+* **extract:** sqlite extract - move to oop based module ([417fbcb](https://github.com/tks18/personal-finance-etl/commit/417fbcb9836e4c1ad1bc8e66a1ce9179b6a893ad))
+* **load:** move the db to separate modules, also now move to oop ([3360c06](https://github.com/tks18/personal-finance-etl/commit/3360c06fbbe0264c27d7ab3b688743d802c9c3bb))
+* **pipeline:** refactor the etl pipeline to sizeable sub modules ([4e3dfc1](https://github.com/tks18/personal-finance-etl/commit/4e3dfc16186ef2eb8da01658be3dae0b186959b9))
+* **pipeline:** use the new extract and transform modules ([6d4c6e9](https://github.com/tks18/personal-finance-etl/commit/6d4c6e9d1cc88725d3166095a55a35cc6787aae3))
+* **transform:** refactor transform functions into sizeable sub modules ([1fe09f0](https://github.com/tks18/personal-finance-etl/commit/1fe09f0359b5ffdc1f7e1cd26c3d6c008ef1460c))
+* **ui:** use the new config class for handling configs ([fe2ecd7](https://github.com/tks18/personal-finance-etl/commit/fe2ecd79670135a6f0a855bd2ba8099e72fe3b93))
+* **utils:** models - add more tables in the extraction result, separation of extract and t'ion ([867cf21](https://github.com/tks18/personal-finance-etl/commit/867cf218fbbbdf2ce60fbabc4e1f94a3ed938e67))
+
 ## [1.3.0](https://github.com/tks18/personal-finance-etl/compare/1.2.0...1.3.0) (2026-07-20)
 
 
