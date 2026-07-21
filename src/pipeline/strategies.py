@@ -3,7 +3,7 @@ from typing import Protocol
 
 import polars as pl
 
-from src.transform.core import get_purchase_reference, get_sale_reference
+from src.transform.investments import get_purchase_reference, get_sale_reference
 from src.transform.mutual_funds import (
     get_base_mf_transactions,
     get_stg_mf_market_data,
@@ -43,11 +43,11 @@ class StockPipeline:
         logger: logging.Logger,
     ) -> AssetPipelineResult:
         logger.info("Parsing unstructured Stock Excel files...")
-        market_data = get_stg_stock_market_data(extracted.statement_files["stock_pl"])
+        market_data = get_stg_stock_market_data(extracted.stock_market_data_raw)
         market_data_ref = get_stg_stock_market_data_ref(market_data)
 
         logger.info("Parsing Stock Trade Orders...")
-        base_orders = get_base_stock_transactions(extracted.statement_files["stock_orders"])
+        base_orders = get_base_stock_transactions(extracted.stock_transactions_raw)
         purchase_trans = transform_stg_stock_trades(base_orders, trade_type="BUY")
         sale_trans = transform_stg_stock_trades(base_orders, trade_type="SELL")
 
@@ -81,11 +81,11 @@ class MutualFundPipeline:
     ) -> AssetPipelineResult:
         logger.info("Parsing unstructured Mutual Fund Excel files...")
         mapping = extracted.stg_mf_isin_mapping
-        market_data = get_stg_mf_market_data(extracted.statement_files["mf_holdings"], mapping)
+        market_data = get_stg_mf_market_data(extracted.mf_market_data_raw, mapping)
         market_data_ref = get_stg_mf_market_data_ref(market_data)
 
         logger.info("Parsing Mutual Fund Trade Orders...")
-        base_orders = get_base_mf_transactions(extracted.statement_files["mf_orders"])
+        base_orders = get_base_mf_transactions(extracted.mf_transactions_raw)
         purchase_trans = transform_stg_mf_trades(base_orders, mapping, trade_type="PURCHASE")
         sale_trans = transform_stg_mf_trades(base_orders, mapping, trade_type="REDEEM")
 
