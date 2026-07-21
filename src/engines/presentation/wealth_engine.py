@@ -46,7 +46,13 @@ class WealthPresentationEngine:
 
         results = {}
 
-        # Group by Month Start and End, dropping any future months beyond the active one
+        # Determine the absolute start date based on the earliest Opening Balance
+        min_open_date = f_open.select(pl.col("ZTXDATESTR").min()).item()
+        if min_open_date is None:
+            min_open_date = date(2000, 1, 1)
+
+        # Group by Month Start and End, dropping any future months beyond the active one,
+        # and dropping any historic months before the user started recording data.
         lf_months = (
             lf_cal.group_by(["YEAR", "MONTH"])
             .agg(
@@ -55,7 +61,10 @@ class WealthPresentationEngine:
                     pl.col("DATE").max().alias("MONTH_END_DATE"),
                 ]
             )
-            .filter(pl.col("MONTH_START_DATE") <= pl.lit(date.today()))
+            .filter(
+                (pl.col("MONTH_START_DATE") <= pl.lit(date.today()))
+                & (pl.col("MONTH_END_DATE") >= pl.lit(min_open_date))
+            )
             .sort(["YEAR", "MONTH"])
         )
 
@@ -310,12 +319,8 @@ class WealthPresentationEngine:
         # Compute 3M averages for ratios
         lf_monthly_totals = lf_monthly_totals.sort("MONTH_START_DATE").with_columns(
             [
-                pl.col("Total_Expense")
-                .rolling_mean(window_size=3)
-                .alias("3M_Avg_Total_Expense"),
-                pl.col("Total_Income")
-                .rolling_mean(window_size=3)
-                .alias("3M_Avg_Total_Income"),
+                pl.col("Total_Expense").rolling_mean(window_size=3).alias("3M_Avg_Total_Expense"),
+                pl.col("Total_Income").rolling_mean(window_size=3).alias("3M_Avg_Total_Income"),
                 pl.col("Total_Net_Worth").shift(12).alias("Prev_Year_NW"),
             ]
         )
