@@ -68,7 +68,13 @@ class ExtractionResult:
     mappings: dict[str, dict[str, str]]
     stg_mf_isin_mapping: pl.LazyFrame
     stg_benchmark_mapping: pl.LazyFrame
-    statement_files: dict[str, list[str]]
+    mf_market_data_raw: pl.LazyFrame
+    mf_transactions_raw: pl.LazyFrame
+    stock_market_data_raw: pl.LazyFrame
+    stock_transactions_raw: pl.LazyFrame
+    raw_opening_balances: pl.LazyFrame
+    raw_benchmark_master: pl.LazyFrame
+    raw_tax_rates: pl.LazyFrame
 
 
 @dataclass
