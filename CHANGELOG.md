@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [1.6.0](https://github.com/tks18/personal-finance-etl/compare/1.5.0...1.6.0) (2026-07-21)
+
+
+### Features 🔥
+
+* **engines:** add a presentation engine for calculating various metrics ([51d4d8a](https://github.com/tks18/personal-finance-etl/commit/51d4d8a2a4cff300836746e0c7085f0a00359e92))
+* **etl/pipeline:** add presentation dag to the flow ([699a851](https://github.com/tks18/personal-finance-etl/commit/699a8512ccdb2c402683e4fdadc23cc814f81e97))
+* **load:** add presentation tables to ddl ([87280b3](https://github.com/tks18/personal-finance-etl/commit/87280b38621391d6b6f7f5cc26e91431034964dc))
+
+
+### Docs 📃
+
+* **readme:** update readme to add more rizz ([0a2d870](https://github.com/tks18/personal-finance-etl/commit/0a2d8702506aa973001f6a6acbe096122de66182))
+
 ## [1.5.0](https://github.com/tks18/personal-finance-etl/compare/1.4.0...1.5.0) (2026-07-21)
 
 
