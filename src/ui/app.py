@@ -11,12 +11,11 @@ from tkinter import filedialog
 import customtkinter as ctk  # type: ignore[import-untyped]
 from PIL import Image
 
-from src.config.settings import load_config
+from src.config.settings import PreferencesManager, Settings
 from src.pipeline.etl_pipeline import process_wrapper
 from src.ui.base_tab import BaseEngineTab
 from src.utils.helpers import resource_path
 from src.utils.models import EngineStatus, LogLevel
-from src.utils.prefs import get_recent_configs
 from src.utils.theme import Color
 
 ctk.set_appearance_mode("Dark")
@@ -79,7 +78,7 @@ class UnifiedETLTab(BaseEngineTab):
         cfg_frame.grid(row=1, column=0, padx=(16, 10), pady=(12, 4), sticky="ew")
         cfg_frame.grid_columnconfigure(0, weight=1)
 
-        recents = get_recent_configs()
+        recents = PreferencesManager().get_recent_configs()
         if recents:
             self.config_path_var.set(recents[0])
 
@@ -166,7 +165,7 @@ class UnifiedETLTab(BaseEngineTab):
         if not path:
             return
         try:
-            load_config(path)
+            Settings.from_toml(path)
         except Exception as e:
             self.status_queue.put(
                 EngineStatus(
