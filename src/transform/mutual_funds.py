@@ -5,100 +5,14 @@ import fastexcel
 import polars as pl
 
 
-def process_mf_statement(file_path: str) -> pl.DataFrame:
-    """
-    Acts as the ProcessMFStatements helper query.
-    Reads unstructured Excel file, finds 'Scheme Name',
-    and returns a clean DataFrame.
-    """
-    excel_reader = fastexcel.read_excel(file_path)
-
-    # Power Query logic: Filter for "Holdings" sheet
-    if "Holdings" not in excel_reader.sheet_names:
-        return pl.DataFrame()
-
-    df_raw = excel_reader.load_sheet("Holdings", header_row=None).to_polars()
-    col_1 = df_raw.columns[0]
-
-    # Dynamically find the row where "Scheme Name" appears
-    start_search = df_raw.with_row_index().filter(pl.col(col_1) == "Scheme Name")
-
-    if start_search.is_empty():
-        return pl.DataFrame()
-
-    # Power Query: Table.PositionOf (unlike stocks, the header IS this row)
-    header_idx = start_search["index"][0]
-
-    # Slice the dataframe starting from the header row
-    df_sliced = df_raw.slice(header_idx)
-
-    # ---------------------------------------------------------
-    # Deduplicate and clean headers before renaming
-    # ---------------------------------------------------------
-    raw_headers = df_sliced.row(0)
-    clean_headers = []
-    seen: dict[str, int] = {}
-
-    for i, h in enumerate(raw_headers):
-        header_str = str(h).strip() if h is not None else ""
-        if header_str in ("", "None", "null"):
-            header_str = f"Unnamed_{i}"
-
-        if header_str in seen:
-            seen[header_str] += 1
-            header_str = f"{header_str}_{seen[header_str]}"
-        else:
-            seen[header_str] = 0
-
-        clean_headers.append(header_str)
-
-    # Rename columns using the cleaned header list
-    df_data = df_sliced.slice(1).rename(
-        {old: new for old, new in zip(df_sliced.columns, clean_headers, strict=False)}
-    )
-
-    # Filter out rows where the primary column (Scheme Name) is null
-    first_col = clean_headers[0]
-    df_clean = df_data.filter(pl.col(first_col).is_not_null())
-
-    return df_clean
-
-
 def get_stg_mf_market_data(
-    valid_files: list[str], stg_mf_isin_mapping_lazy: pl.LazyFrame
+    raw_data: pl.LazyFrame, stg_mf_isin_mapping_lazy: pl.LazyFrame
 ) -> pl.LazyFrame:
     """
-    Extracts dates, processes binaries,
-    and applies final PQ & DAX transformations (including LOOKUPVALUE).
+    Applies final PQ & DAX transformations (including LOOKUPVALUE).
     Returns a LazyFrame.
     """
-    all_dfs = []
-
-    for file_path in valid_files:
-        filename = os.path.basename(file_path)
-
-        # Extract Text Between Delimiters (" - " and ".")
-        try:
-            date_str = filename.split(" - ")[1].split(".")[0].strip()
-            month_date = datetime.strptime(date_str, "%d-%m-%Y").date()
-        except (IndexError, ValueError):
-            continue
-
-        df_processed = process_mf_statement(file_path)
-
-        if df_processed.is_empty():
-            continue
-
-        df_processed = df_processed.with_columns(
-            pl.lit(filename).alias("Name"), pl.lit(month_date).alias("Month Date")
-        )
-
-        all_dfs.append(df_processed)
-
-    if not all_dfs:
-        raise ValueError("No valid MF statements found in Folder")
-
-    df_combined = pl.concat(all_dfs, how="diagonal").lazy()
+    df_combined = raw_data
 
     # Apply PQ & DAX Transformations
     df_transformed = (
@@ -131,7 +45,8 @@ def get_stg_mf_market_data(
         # Final Select (Ensure output matches your expected schema)
         .select(
             [
-                "Name",
+                "__file_name__",
+                "__folder_path__",
                 "Month Date",
                 "Scheme Name",
                 "AMC",
@@ -164,6 +79,8 @@ def get_stg_mf_market_data_ref(stg_mf_market_data_lazy: pl.LazyFrame) -> pl.Lazy
         # SUMMARIZE (Group By)
         .group_by(
             [
+                "__file_name__",
+                "__folder_path__",
                 pl.col("Month Date").alias("Date"),
                 "ISIN",
                 pl.col("Scheme Name").alias("Instrument Name"),
@@ -196,108 +113,15 @@ def get_stg_mf_market_data_ref(stg_mf_market_data_lazy: pl.LazyFrame) -> pl.Lazy
     return df_grouped
 
 
-def process_mf_transaction_statements(file_path: str) -> pl.DataFrame:
-    """
-    Acts as the ProcessMFTransactionStatements helper query.
-    Reads the 'Transactions' sheet and dynamically finds the header row.
-    """
-    excel_reader = fastexcel.read_excel(file_path)
-
-    if "Transactions" not in excel_reader.sheet_names:
-        return pl.DataFrame()
-
-    df_raw = excel_reader.load_sheet("Transactions", header_row=None).to_polars()
-
-    if df_raw.is_empty():
-        return pl.DataFrame()
-
-    col_1 = df_raw.columns[0]
-
-    # Find the row where "Scheme Name" appears
-    start_search = df_raw.with_row_index().filter(pl.col(col_1) == "Scheme Name")
-
-    if start_search.is_empty():
-        return pl.DataFrame()
-
-    header_idx = start_search["index"][0]
-
-    df_sliced = df_raw.slice(header_idx)
-
-    # ---------------------------------------------------------
-    # Deduplicate and clean headers before renaming
-    # ---------------------------------------------------------
-    raw_headers = df_sliced.row(0)
-    clean_headers = []
-    seen: dict[str, int] = {}
-
-    for i, h in enumerate(raw_headers):
-        header_str = str(h).strip() if h is not None else ""
-        if header_str in ("", "None", "null"):
-            header_str = f"Unnamed_{i}"
-
-        if header_str in seen:
-            seen[header_str] += 1
-            header_str = f"{header_str}_{seen[header_str]}"
-        else:
-            seen[header_str] = 0
-
-        clean_headers.append(header_str)
-
-    # Rename columns and slice the data
-    df_data = df_sliced.slice(1).rename(
-        {old: new for old, new in zip(df_sliced.columns, clean_headers, strict=False)}
-    )
-
-    # Filter out rows where the primary column is null
-    first_col = clean_headers[0]
-    df_clean = df_data.filter(pl.col(first_col).is_not_null())
-
-    return df_clean
-
-
-def get_base_mf_transactions(valid_files: list[str]) -> pl.LazyFrame:
+def get_base_mf_transactions(raw_data: pl.LazyFrame) -> pl.LazyFrame:
     """
     Acts as the MF_TRANSACTIONS helper query.
     Extracts complex dates, and parses binaries.
     """
-    all_dfs = []
-
-    for file_path in valid_files:
-        filename = os.path.basename(file_path)
-
-        # Power Query logic for Date: Date.FromText("01-" & BeforeDelimiter & "-" & AfterDelimiter.1)
-        # Assuming filename structure like: "Something - MM-YYYY.xlsx"
-        try:
-            date_str = filename.split(" - ")[1].split(".")[0].strip()
-            parts = date_str.split("-")
-            # If parts is [MM, YYYY], construct "01-MM-YYYY"
-            if len(parts) == 2:
-                month_date_str = f"01-{parts[0]}-{parts[1]}"
-                month_date = datetime.strptime(month_date_str, "%d-%m-%Y").date()
-            else:
-                # Fallback if standard format
-                month_date = datetime.strptime(date_str, "%d-%m-%Y").date()
-        except (IndexError, ValueError):
-            continue
-
-        df_processed = process_mf_transaction_statements(file_path)
-
-        if df_processed.is_empty():
-            continue
-
-        df_processed = df_processed.with_columns(
-            pl.lit(filename).alias("Name"), pl.lit(month_date).alias("Month Date")
-        )
-
-        all_dfs.append(df_processed)
-
-    if not all_dfs:
-        raise ValueError("No valid MF Orders found in Folder")
-
-    df_combined = pl.concat(all_dfs, how="diagonal").lazy()
+    df_combined = raw_data
 
     df_transformed = df_combined.select(
-        ["Name", "Month Date", "Scheme Name", "Transaction Type", "Units", "NAV", "Amount", "Date"]
+        ["__file_name__", "__folder_path__", "Month Date", "Scheme Name", "Transaction Type", "Units", "NAV", "Amount", "Date"]
     ).with_columns(
         [
             pl.col("Units").cast(pl.Float64),
@@ -408,3 +232,4 @@ def get_stg_mf_master_ref(
         ]
     )
     return df_grouped
+
