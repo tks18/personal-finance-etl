@@ -1,153 +1,120 @@
 <div align="center">
   <img src="logo.png" alt="Logo" width="150"/>
   <h1>Shan's Personal Finance ETL 💸✨</h1>
-  <p><b>Open-sourcing the secret sauce to my entire financial existence.</b></p>
-  <p><i>Because tracking your bags shouldn't give you L's.</i></p>
+  <p><b>An enterprise-grade, localized Data Warehouse built to track my personal net worth.</b></p>
+  <p><i>Because tracking your bags in an Excel sheet in 2026 is pure NPC behavior.</i></p>
+
+  <p>
+    <img alt="Python Version" src="https://img.shields.io/badge/Python-3.13+-blue.svg" />
+    <img alt="Tech Stack" src="https://img.shields.io/badge/Powered%20by-Polars%20%7C%20ADBC-orange.svg" />
+    <img alt="Type Safety" src="https://img.shields.io/badge/Type%20Safety-Strict%20(100%25)-success.svg" />
+  </p>
 </div>
 
 ---
 
-## 🗣️ Wait, What is this? (No Cap)
+## 🗣️ What is this? (No Cap)
 
-Okay, let's get one thing straight right out of the gate: **this is not a SaaS app or a generic plug-and-play product**. This is literally my personal, highly-customized ETL (Extract, Transform, Load) data warehouse that I built from scratch to flex on my own net worth.
+Let's get one thing straight right out of the gate: **this is not a SaaS app or a generic plug-and-play budget tracker**. 
 
-I'm open-sourcing it because gatekeeping is cringe, and maybe you can learn some enterprise-grade architecture patterns from my unhinged obsession with data engineering. If you're still manually tracking your cash flows and stock gains in messy Excel sheets... highkey, you're living like an NPC. I built this absolute unit of a pipeline to take my raw, chaotic broker and bank statements and blast them into a highly relational `SQLite` database.
+This is my personal, highly customized ETL (Extract, Transform, Load) data warehouse. I built this from scratch to consolidate messy broker logs, scattered mutual fund statements, and raw bank transactions into a single, aggressively optimized `SQLite` database. 
 
-*(Disclaimer: My actual portfolio data, net worth, passwords, and personal configs are strictly `.gitignore`'d. You won't find my bags here. We stay secure. 🔒)*
+I'm open-sourcing it because gatekeeping architecture patterns is cringe. If you want to see how to build a highly relational, 100% type-safe, multi-processed financial pipeline that calculates quant metrics on your laptop—you've come to the right place. 
 
----
-
-## 🔥 Why it's goated (The Flex)
-
-- **Unified Wealth Data Warehouse:** It takes messy broker logs, mutual fund statements, and raw bank transactions and flawlessly merges them into a pristine Star Schema. No more manually stitching Excel files together like a boomer.
-- **Enterprise-Grade Quant Engine:** The `PolarsTaxEngine` doesn't just do basic math. It handles complex FIFO lot matching, archaic grandfathering tax laws, and calculates XIRR, Lot-Level CAGR, Tracking Error, and Beta. It's basically a hedge fund analyst running locally on your laptop.
-- **Ludicrous Speed (ADBC + Polars):** We skip the slow Python DBAPI completely. By using `Polars` and the `adbc-driver-sqlite`, we yeet native Arrow memory directly to the database disk. It compiles your entire financial history faster than you can blink.
-- **Market-Calibrated Analytics:** The `BenchmarkEngine` dynamically pulls live market indices from Yahoo Finance (`yfinance`) and maps them directly to your personal holdings. We use this to compute Alpha, Beta, and Capture Ratios so you actually know if you're beating the market or just getting lucky. Pure W rizz.
-- **Aesthetic 1-Click Execution:** A clean, custom dark-mode GUI. Select your config, hit run, and watch the progress bar go brrr. No bloat, no confusing menus.
+*(Disclaimer: My actual portfolio data, net worth, and personal configs are strictly `.gitignore`'d. You won't find my bags here. We stay secure. 🔒)*
 
 ---
 
-## ⚙️ The `config.toml` (The Keys to the Kingdom)
+## 🔥 Key Features (The Flex)
 
-Because we don't hardcode paths like amateurs, the entire pipeline is driven by a `config.toml` file. It's the blueprint that tells the engine exactly where to hunt for data. Here is the vibe:
+This pipeline doesn't just log expenses. It is a full-fledged quantitative engine designed to yield W's only.
 
-```toml
-# Where the old MoneyManager SQLite DBs live
-SOURCE_DB_FOLDER = "...\\SOURCE_DB.db"
-
-# Where the ultra-fast Polars engine drops the new SQLite data warehouse
-TARGET_DB_BASE_PATH = "...\\outputs"
-
-# The Static Master Dependencies (The Lore)
-COLUMN_MASTER_PATH = "...\\COLUMN_MASTER.csv"
-MF_ISIN_CSV_PATH = "...\\MF_ISIN_MAPPING.csv"
-BENCHMARK_MAPPING_CSV_PATH = "...\\BENCHMARK_MAPPING.csv"
-BENCHMARK_MASTER_CSV_PATH = "...\\BENCHMARK_MASTER.csv"
-TAX_RATES_CSV_PATH = "...\\TAX_RATES.csv"
-OPENING_BALANCE_CSV_PATH = "...\\OPENING_BALANCE.csv"
-
-# The messy broker dump folder
-STATEMENTS_FOLDER = "...\\Statements"
-```
-
-*Pro Tip: You can have multiple `.toml` files (e.g. `test_config.toml` vs `prod_config.toml`) and the UI will literally remember your top 10 most used configs automatically.*
+- **Ludicrous Speed (ADBC + Polars):** We skip the slow Python DBAPI completely. By leveraging Rust-backed `Polars` and the `adbc-driver-sqlite`, we map native Arrow memory directly to the database disk. It compiles years of financial history instantly.
+- **Enterprise-Grade Tax Engine:** The `PolarsTaxEngine` natively handles complex FIFO lot matching, legacy grandfathering tax laws, and actively splits holdings into STCG/LTCG. Tax loss harvesting is how we stay rich.
+- **Market-Calibrated Quant Analytics:** The `BenchmarkEngine` dynamically pulls live market indices from Yahoo Finance (`yfinance`). It maps benchmarks directly to your personal holdings to compute **Alpha, Beta, XIRR, Lot-Level CAGR, and Capture Ratios**.
+- **Presentation-Tier BI Engines:** The `WealthPresentationEngine` does the heavy lifting for downstream BI dashboards, auto-aggregating metrics like Months of Runway, Savings Rate, Debt-to-Asset ratios, and Category Inflation Trends.
+- **100% Type-Safe Architecture:** Fully typed in Python 3.13. Zero Pylance warnings, zero `Any` types, zero `type: ignore` hacks. 
 
 ---
 
-## 📈 Investment Analytics (The Tax Engine Deep Dive)
+## 🧠 The Data Model (Star Schema)
 
-The `PolarsTaxEngine` is the absolute final boss of this repository. It doesn't just calculate your total returns and call it a day. It is a full-fledged quantitative engine doing the most:
+We do not tolerate spaghetti data in this house. The database is strictly modeled using a dimensional Star Schema, divided into three distinct operational tiers.
 
-- **FIFO Lot Matching:** When I sell a stock, the engine iterates back in time in memory and matches the sell order to the *exact* buy lot (First-In, First-Out). It doesn't guess my profits; it knows them down to the exact decimal.
-- **Tax Harvesting (Realized vs Unrealized):** It dynamically splits my portfolio into Short-Term Capital Gains (STCG) and Long-Term Capital Gains (LTCG). It even reads the `Tax_Rates.csv` to know the exact `Age_Days` threshold for the financial year.
-- **Grandfathering Logic:** It understands legacy tax laws and protects my pre-2018 grandfathered equity gains from double-taxation.
-- **Quant Metrics:** We're computing **Lot-Level CAGR**, **XIRR** across the entire holding period, **Beta** (to see how volatile my bags are), **Active Returns** (Alpha), and **Upside/Downside Capture ratios**. If you aren't benchmarking your trades against the market, you're flying blind.
+### 1. Cash Flow Core (Raw Facts)
+Standard Fact (`f_`) tables that track every penny moving through the system:
+- **`f_Income_Transactions` & `f_Expense_Transactions`:** Every swipe, salary drop, and purchase categorized down to the molecular level.
+- **`f_Transfer_Transactions`:** Safely tracks money moving *between* accounts without artificially double-counting your net worth.
+- **`f_Opening_Balances`:** Aggressively deduplicated seeds for starting capital.
 
----
+### 2. The Investment Zone
+Where the Tax and Benchmark engines store their computations:
+- **`f_tf_Investment_Purchase_Data` & `f_tf_Investment_Sale_Data`:** Maps every single sell order to its exact buy lot via FIFO.
+- **`f_Investment_Market_Data` & `f_Investment_Benchmark_Data`:** Daily tracking of asset valuations vs. delta-fetched Yahoo Finance closing prices.
 
-## 🧠 The Data Model (The Star Schema Lore)
+### 3. The Presentation Tier (`p_tf_`)
+Downstream presentation tables specifically designed to be ingested by BI Dashboards. Calculated by the Wealth Engine, ensuring the UI remains clean.
+- **`p_tf_Net_Worth_Monthly_Summary`:** Tracks cumulative running balances, `Organic_Yield_%`, `Asset_Velocity_%`, and `Months_of_Runway`.
+- **`p_tf_Financial_Ratios_Monthly`:** Tracks structural health like `Savings_Rate_%`, `Debt_to_Asset_Ratio_%`, and `FIRE_Progress_%` based on a 4% SWR.
+- **`p_tf_Category_Inflation_Trends`:** Calculates personal hyper-inflation by tracking exactly how your category spending grows MoM and YoY.
 
-Since this is my personal vault, here is exactly how I model my financial life under the hood. I built a strict, enterprise-grade **Star Schema** design because we do not tolerate spaghetti data in this house.
-
-### 💸 1. Cash Flow Engineering (The Fact Tables)
-
-We track every single penny that enters or leaves my life. The ETL builds these massive Fact tables:
-
-- **`f_Income_Transactions` & `f_Expense_Transactions`:** Every swipe, salary drop, and impulsive purchase is categorized down to the molecular level.
-- **`f_Transfer_Transactions`:** Tracks money moving *between* my own accounts so I don't accidentally double-count my net worth like a rookie.
-- **`f_Opening_Balances`:** Seeds the starting capital so cash-flow algorithms don't break spacetime.
-
-### 📥 2. The Final Staging Zone
-
-- **`f_tf_Investment_Purchase_Data` & `f_tf_Investment_Sale_Data`:** Maps every single sell order to its exact buy lot.
-- **`stg_Investment_Market_Data` & `f_Investment_Market_Data`:** Daily valuations for every asset I own.
-- **`f_Investment_Benchmark_Data`:** Delta-fetches daily closing prices of benchmarks from Yahoo Finance.
-
-### 🗃️ 3. Dimension Mastery (The 'D' Tables)
-
-To make my BI dashboards look immaculate, the ETL generates these highly structured dimensions:
-
-- **`d_Calendar`:** A flawless date table with Fiscal Years, Quarters, and Weekend flags.
-- **`d_Income_Category`, `d_Expense_Category`, `d_Asset_Category`:** Multi-level hierarchical categories.
-- **`d_Currency` & `d_Tax_Rates`:** Forex and temporal tax bands.
-- **`d_tf_Investment_Master` & `d_Investment_Benchmark_Master`:** Golden records of every asset and index tracked in my ecosystem.
+### 4. Dimension Mastery (`d_`)
+- **`d_Calendar`:** A flawless date table spanning from the year 2000 to the present with Fiscal Years and Weekends.
+- **`d_Income_SubCategory`, `d_Expense_Category`, `d_Asset_SubCategory`:** Multi-level hierarchical groupings.
+- **`d_tf_Investment_Master` & `d_Investment_Benchmark_Master`:** Golden records for tracked assets.
 
 ---
 
-## 🛠️ Tech Stack (The Built-Different Blueprint)
+## 🛠️ The Tech Stack 
 
-- **Core Engine:** Python 3.13+ (because we live in the future).
-- **Data Manipulation:** `Polars` (Built in Rust 🦀, absolutely mogs the competition).
-- **Database Backend:** `SQLite` + `adbc-driver-sqlite` (Zero-copy Arrow memory maps for instant writes).
-- **Frontend / UI:** `CustomTkinter` (Dark mode only, obviously).
-- **Financial Math / Quants:** `pyxirr` & `yfinance`.
-- **Packaging:** `PyInstaller` (Compiled into a single, standalone Windows `.exe` with custom branding).
+- **Language:** `Python 3.13+`
+- **Engine:** `Polars` (Streaming enabled for infinite out-of-core memory scaling)
+- **Database:** `SQLite` + `adbc-driver-sqlite`
+- **Frontend UI:** `CustomTkinter` (Dark mode only. Peak aesthetics)
+- **Financial Math:** `pyxirr` & `yfinance`
+- **Packaging & Package Management:** `uv` & `PyInstaller`
 
 ---
 
-## 🚀 How to go about it (The Playbook)
+## ⚙️ How it Works (Architecture)
 
-Since this is heavily tailored to my specific broker formats, it won't just magically work on yours out of the box. But if you want to fork it and adapt the `excel_parser.py` logic to your own life, let him cook:
+If you're a developer looking under the hood, here is how the pipeline runs without blowing up the CPU:
 
-### 1. Install the vibes
+1. **Config-Driven:** The engine dynamically reads a `config.toml` that stores the paths to your raw statement dumps, master dependency CSVs, and target DB folders.
+2. **True Multiprocessing:** The `CustomTkinter` UI and the ETL Pipeline live in completely different OS processes. They communicate via `multiprocessing.Queue`. The UI never freezes, even when Polars is chewing through millions of rows.
+3. **Decoupled Engines:** Extraction, standard transformation, advanced analytics, and downstream presentation are strictly isolated modules. This Separation of Concerns (SoC) ensures side-effect-free execution.
+4. **PyInstaller Bulletproofing:** The entire app, alongside its native C/Rust ADBC extensions, is bundled into a single standalone Windows `.exe` using custom PyInstaller hooks.
 
-We use `uv` for lightning-fast package management. Install it, clone the repo, and run:
+---
 
+## 🚀 Developer Quickstart
+
+If you want to fork this and adapt the `csv_extractor.py` and `excel_extractor.py` to your own life, here is the playbook:
+
+### 1. Install Dependencies
+We use `uv` for lightning-fast package management. Clone the repo and sync:
 ```bash
 uv sync
 ```
 
-### 2. Configure
-
-Create a `config.toml` setting up your source paths (use the blueprint above). The UI automatically remembers your recent configs so you don't have to keep digging for them.
+### 2. Configure your Environment
+Create a `config.toml` setting up your source paths (see the codebase for exact key requirements). The GUI automatically remembers your recent configs.
 
 ### 3. Run or Build
-
-We got custom CLI entry points up in here.
-
+Custom CLI entry points are registered in `pyproject.toml`:
 ```bash
-# Run in dev mode with hot-reloading (via tkreload)
+# Run the GUI in dev mode with hot-reloading
 uv run dev
 
-# Build a standalone EXE using PyInstaller
+# Compile a standalone native EXE using PyInstaller
 uv run build
 ```
 
-This drops a sleek `Shan's Personal Finance ETL.exe` straight into your dist folder, fully bundled with native C/Rust ADBC extensions.
-
 ---
 
-## 🏗️ The Pipeline Architecture (Under the Hood)
-If you're a gigabrain developer looking at the code, here is how the actual pipeline runs without blowing up your PC:
-- **True Multiprocessing:** The UI and the ETL Pipeline live in completely different OS processes. We use `multiprocessing.Queue` to pipe log messages from the heavy data engine straight into the `CustomTkinter` UI. The UI literally never freezes, even when processing millions of rows.
-- **PyInstaller Bulletproofing:** Ever tried compiling a massive data app into a `.exe`? It’s a nightmare. I injected PyInstaller hooks to specifically compile native C/Rust binaries (`adbc_driver_sqlite`) so the executable stays totally standalone. No dependencies required on the host machine.
-- **Professional `src/` Layout:** This isn't a messy script dump. We use a strictly decoupled `src/` layout. Extraction, transformation, loading, and the UI are all isolated domains.
+## 💅 The Release Cycle
 
----
-
-## 💅 The Glow-Up Cycle (Semantic Releases)
-We don't just push to main and pray. This repo has a meticulously crafted release cycle powered by `yarn` and `standard-version`. 
-Because why track your personal finance if you can't even track your own software versions?
+We run enterprise-grade SDLC here. Semantic versioning is enforced via `yarn` and `standard-version`.
 
 ```bash
 # Stage changes
@@ -156,13 +123,10 @@ yarn run git:stage
 # Commit using Commitizen (cz) for immaculate conventional commits
 yarn run git:commit
 
-# Push to dev branch
-yarn run git:push
-
 # Bump versions and generate changelogs automatically
-yarn run release:patch  # (or release:minor / release:major)
+yarn run release:patch  # (or minor / major)
 ```
-Every release drops a tagged changelog, updating `__version__ = "0.1.0"` across the python package (`src/__init__.py`) and `package.json` files. We run enterprise-grade SDLC in this house.
+Every release drops a tagged changelog and perfectly syncs the `__version__` across the Python module and the node ecosystem.
 
 ---
 
