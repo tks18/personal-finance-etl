@@ -10,6 +10,7 @@ import polars as pl
 from src.config.settings import Settings
 from src.engines.analytics import InvestmentAnalyticsEngine
 from src.engines.benchmark import BenchmarkEngine
+from src.engines.presentation.wealth_engine import WealthPresentationEngine
 from src.load.database import SQLiteDatabaseManager, SQLiteLoader
 from src.pipeline.core.extractor import DataExtractor
 from src.pipeline.core.transformer import TransformationDAG
@@ -106,6 +107,30 @@ class ETLOrchestrator:
             end_date=None,
         )
         self.dfs["df_f_investment_market_data"] = tax_engine.run()
+
+        self.status_queue.put(
+            EngineStatus(
+                msg="Starting Presentation Engines...", data=None, progress=0.8, level=LogLevel.STEP
+            )
+        )
+        wealth_engine = WealthPresentationEngine()
+        wealth_lazy = wealth_engine.run(self.dfs)
+
+        presentation_lazy = wealth_lazy
+        if presentation_lazy:
+            self.status_queue.put(
+                EngineStatus(
+                    msg="Executing Presentation DAG in Parallel...",
+                    data=None,
+                    progress=0.9,
+                    level=LogLevel.STEP,
+                )
+            )
+            keys = list(presentation_lazy.keys())
+            lazy_frames = [presentation_lazy[k] for k in keys]
+            results = pl.collect_all(lazy_frames, engine="streaming")
+            for k, res in zip(keys, results, strict=True):
+                self.dfs[k] = res
 
     def _load(self) -> None:
         loader: IDatabaseLoader = SQLiteLoader(self.db_manager, self.status_queue)
