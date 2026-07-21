@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [1.7.0](https://github.com/tks18/personal-finance-etl/compare/1.6.0...1.7.0) (2026-07-21)
+
+
+### Bug Fixes 🛠
+
+* **engines:** presentation - trim out all historical months with no data ([977dd88](https://github.com/tks18/personal-finance-etl/commit/977dd88d2971e4c2de759db67e0e95213fbe873c))
+
 ## [1.6.0](https://github.com/tks18/personal-finance-etl/compare/1.5.0...1.6.0) (2026-07-21)
 
 
