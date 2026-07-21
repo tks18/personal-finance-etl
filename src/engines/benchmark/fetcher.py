@@ -1,4 +1,5 @@
 import time
+
 import pandas as pd
 import polars as pl
 import yfinance as yf  # type: ignore[import-untyped]
@@ -6,6 +7,7 @@ import yfinance as yf  # type: ignore[import-untyped]
 
 class BenchmarkDataFetcher:
     """Handles fetching and normalising single ticker data from yfinance."""
+
     @staticmethod
     def fetch_ticker(
         row: dict[str, str],

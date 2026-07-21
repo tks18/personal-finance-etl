@@ -5,6 +5,7 @@ from src.utils.models import EngineStatus, LogLevel
 
 class AnalyticsContextManager:
     """Manages the initialization of the tax engine context."""
+
     def __init__(self, status_queue: ILogger | None = None):
         self.status_queue = status_queue
 
@@ -16,9 +17,7 @@ class AnalyticsContextManager:
                 EngineStatus("Loading DataFrame memory structures...", None, 0.01, LogLevel.STEP)
             )
 
-        ctx = RunContext.from_dataframes(
-            df_p, df_s, df_m, df_i, df_b, df_t, start_date, end_date
-        )
+        ctx = RunContext.from_dataframes(df_p, df_s, df_m, df_i, df_b, df_t, start_date, end_date)
 
         if self.status_queue:
             self.status_queue.put(
@@ -29,5 +28,5 @@ class AnalyticsContextManager:
         isins_s = ctx.df_s["ISIN"].unique().to_list() if "ISIN" in ctx.df_s.columns else []
         isins_m = ctx.df_m["ISIN"].unique().to_list() if "ISIN" in ctx.df_m.columns else []
         isins = sorted(set(isins_p + isins_s + isins_m))
-        
+
         return ctx, isins

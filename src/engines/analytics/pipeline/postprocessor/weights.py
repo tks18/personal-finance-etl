@@ -1,7 +1,9 @@
 import polars as pl
 
+
 class PortfolioWeightsCalculator:
     """Calculates Portfolio Weights."""
+
     @staticmethod
     def calculate(lazy_df: pl.LazyFrame) -> pl.LazyFrame:
         instr_val = lazy_df.group_by(["Closing_Date", "ISIN"]).agg(

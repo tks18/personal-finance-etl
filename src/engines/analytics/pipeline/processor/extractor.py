@@ -1,5 +1,7 @@
 import polars as pl
+
 from src.engines.analytics.pipeline.context import RunContext
+
 
 class IsinDataExtractor:
     @staticmethod

@@ -115,4 +115,3 @@ CREATE TABLE f_Opening_Balances (
     FOREIGN KEY(ZTXDATESTR) REFERENCES d_Calendar(Date)
 );
 """
-

@@ -1,13 +1,18 @@
 import math
 from datetime import date
+
 import polars as pl
 
 from src.utils.helpers import to_date_obj
 
+
 class AdvancedAnalyticsCalculator:
     """Calculates Sharpe, MDD, Sortino ratios."""
+
     @staticmethod
-    def calculate(df_port: pl.DataFrame, unique_dates: list[date], portfolio_terminals: dict[date, dict]) -> pl.DataFrame:
+    def calculate(
+        df_port: pl.DataFrame, unique_dates: list[date], portfolio_terminals: dict[date, dict]
+    ) -> pl.DataFrame:
         pt_records = []
         for d in unique_dates:
             d_obj = to_date_obj(d)
@@ -73,5 +78,5 @@ class AdvancedAnalyticsCalculator:
                 pl.lit(0.0).alias("Portfolio_Sharpe_Ratio"),
                 pl.lit(0.0).alias("Portfolio_Sortino_Ratio"),
             )
-            
+
         return df_port

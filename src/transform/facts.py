@@ -1,5 +1,6 @@
 import polars as pl
 
+
 def get_base_transactions(df_lazy: pl.LazyFrame, column_mapping: dict[str, str]) -> pl.LazyFrame:
     """
     Acts as the TRANSACTIONS helper query.
@@ -22,6 +23,7 @@ def get_base_transactions(df_lazy: pl.LazyFrame, column_mapping: dict[str, str])
 
     return df_base
 
+
 def transform_f_income_transactions(base_transactions_lazy: pl.LazyFrame) -> pl.LazyFrame:
     """
     Branches off the base transactions for Income (TYPE = 0)
@@ -31,7 +33,9 @@ def transform_f_income_transactions(base_transactions_lazy: pl.LazyFrame) -> pl.
         base_transactions_lazy.filter(pl.col("TRANSACTION_TYPE") == 0)
         .select(
             [
-                "__file_name__", "__folder_path__", "S_NO",
+                "__file_name__",
+                "__folder_path__",
+                "S_NO",
                 "UID",
                 "ASSET_ID",
                 "CARDDIVIDMONTH",
@@ -64,6 +68,7 @@ def transform_f_income_transactions(base_transactions_lazy: pl.LazyFrame) -> pl.
     )
 
     return df_transformed
+
 
 def transform_f_expense_transactions(base_transactions_lazy: pl.LazyFrame) -> pl.LazyFrame:
     """
@@ -74,7 +79,9 @@ def transform_f_expense_transactions(base_transactions_lazy: pl.LazyFrame) -> pl
         base_transactions_lazy.filter(pl.col("TRANSACTION_TYPE") == 1)
         .select(
             [
-                "__file_name__", "__folder_path__", "S_NO",
+                "__file_name__",
+                "__folder_path__",
+                "S_NO",
                 "UID",
                 "ASSET_ID",
                 "CARDDIVIDMONTH",
@@ -107,6 +114,7 @@ def transform_f_expense_transactions(base_transactions_lazy: pl.LazyFrame) -> pl
     )
 
     return df_transformed
+
 
 def transform_f_transfer_transactions(
     base_transactions_lazy: pl.LazyFrame,
@@ -142,7 +150,9 @@ def transform_f_transfer_transactions(
         # Select base columns
         .select(
             [
-                "__file_name__", "__folder_path__", "S_NO",
+                "__file_name__",
+                "__folder_path__",
+                "S_NO",
                 "UID",
                 "ASSET_ID",
                 "CARDDIVIDMONTH",
@@ -203,7 +213,10 @@ def transform_f_transfer_transactions(
 
     return df_transformed
 
-def transform_f_opening_balances(raw_data: pl.LazyFrame, column_mapping: dict[str, str]) -> pl.LazyFrame:
+
+def transform_f_opening_balances(
+    raw_data: pl.LazyFrame, column_mapping: dict[str, str]
+) -> pl.LazyFrame:
     """Executes the PQ logic for Opening Balances."""
 
     df_transformed = (
@@ -213,7 +226,9 @@ def transform_f_opening_balances(raw_data: pl.LazyFrame, column_mapping: dict[st
         # Select the columns immediately to minimize memory footprint
         .select(
             [
-                "__file_name__", "__folder_path__", "Z_PK",
+                "__file_name__",
+                "__folder_path__",
+                "Z_PK",
                 "ZUTIME",
                 "ZDATE",
                 "ZAMOUNT",
@@ -248,4 +263,3 @@ def transform_f_opening_balances(raw_data: pl.LazyFrame, column_mapping: dict[st
     )
 
     return df_transformed
-

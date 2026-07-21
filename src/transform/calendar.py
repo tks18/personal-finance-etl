@@ -1,7 +1,9 @@
 import calendar
 from datetime import date
+
 import polars as pl
 from dateutil.relativedelta import relativedelta
+
 
 def get_stg_calendar_ref(
     f_inc_lazy: pl.LazyFrame,
@@ -55,6 +57,7 @@ def get_stg_calendar_ref(
     from typing import cast
 
     return cast(date, min_date), cast(date, max_date)
+
 
 def transform_d_calendar(min_date: date, max_date: date) -> pl.LazyFrame:
     """

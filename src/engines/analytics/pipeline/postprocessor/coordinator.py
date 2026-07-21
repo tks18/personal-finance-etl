@@ -1,12 +1,14 @@
 from datetime import date
+
 import polars as pl
 
 from src.engines.analytics.pipeline.context import RunContext
-from src.engines.analytics.pipeline.postprocessor.xirr import PortfolioXIRRCalculator
 from src.engines.analytics.pipeline.postprocessor.analytics import AdvancedAnalyticsCalculator
-from src.engines.analytics.pipeline.postprocessor.weights import PortfolioWeightsCalculator
 from src.engines.analytics.pipeline.postprocessor.gains import RealizedGainsCalculator
 from src.engines.analytics.pipeline.postprocessor.harvest import HarvestRecommendationCalculator
+from src.engines.analytics.pipeline.postprocessor.weights import PortfolioWeightsCalculator
+from src.engines.analytics.pipeline.postprocessor.xirr import PortfolioXIRRCalculator
+
 
 class PostProcessor:
     def __init__(self, ctx: RunContext):
@@ -31,7 +33,7 @@ class PostProcessor:
         df_port = self.xirr_calc.calculate(unique_dates, global_cashflows, portfolio_terminals)
         df_port = self.analytics_calc.calculate(df_port, unique_dates, portfolio_terminals)
         lazy_df = lazy_df.join(df_port.lazy(), on="Closing_Date", how="left")
-        
+
         lazy_df = self.weights_calc.calculate(lazy_df)
         lazy_df = self.gains_calc.calculate(lazy_df, unique_dates, realized_events)
         lazy_df = self.harvest_calc.calculate(lazy_df)

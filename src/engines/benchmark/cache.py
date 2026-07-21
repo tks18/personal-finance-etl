@@ -1,6 +1,7 @@
 import glob
 import os
 import sqlite3
+
 import polars as pl
 
 from src.utils.interfaces import ILogger
@@ -9,7 +10,10 @@ from src.utils.models import EngineStatus, LogLevel
 
 class BenchmarkCacheManager:
     """Manages the cached benchmark SQLite database."""
-    def __init__(self, target_db_base_path: str | None, current_db_path: str | None, status_queue: ILogger):
+
+    def __init__(
+        self, target_db_base_path: str | None, current_db_path: str | None, status_queue: ILogger
+    ):
         self.target_db_base_path = target_db_base_path
         self.current_db_path = current_db_path
         self.status_queue = status_queue

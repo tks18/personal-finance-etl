@@ -6,12 +6,12 @@ from dataclasses import dataclass, fields
 
 class PreferencesManager:
     """Manages reading and writing application user preferences to disk."""
-    
+
     def __init__(self) -> None:
         app_data = os.getenv("APPDATA")
         if not app_data:
             app_data = os.path.expanduser("~")
-        
+
         prefs_dir = os.path.join(app_data, "PersonalFinanceETL")
         os.makedirs(prefs_dir, exist_ok=True)
         self.prefs_path = os.path.join(prefs_dir, "prefs.json")
@@ -69,7 +69,7 @@ class Settings:
 
         with open(filepath, "rb") as f:
             data = tomllib.load(f)
-            
+
         for field in fields(cls):
             if field.name in data:
                 setattr(cfg, field.name, data[field.name])

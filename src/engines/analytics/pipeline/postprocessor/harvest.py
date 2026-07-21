@@ -1,7 +1,9 @@
 import polars as pl
 
+
 class HarvestRecommendationCalculator:
     """Calculates Stepup and Harvest Recommendations."""
+
     @staticmethod
     def calculate(lazy_df: pl.LazyFrame) -> pl.LazyFrame:
         lazy_df = lazy_df.with_columns(

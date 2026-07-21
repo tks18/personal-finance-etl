@@ -27,14 +27,23 @@ class ADBCSQLiteExtractor:
 
         def add_file_info(lf: pl.LazyFrame) -> pl.LazyFrame:
             return lf.with_columns(
-                pl.lit(filename).alias("__file_name__"),
-                pl.lit(folder).alias("__folder_path__")
+                pl.lit(filename).alias("__file_name__"), pl.lit(folder).alias("__folder_path__")
             )
 
-        zcategory_lazy = add_file_info(pl.read_database_uri("SELECT * FROM ZCATEGORY", uri, engine="adbc").lazy())
-        assetgroup_lazy = add_file_info(pl.read_database_uri("SELECT * FROM ASSETGROUP", uri, engine="adbc").lazy())
-        assets_lazy = add_file_info(pl.read_database_uri("SELECT * FROM ASSETS", uri, engine="adbc").lazy())
-        currency_lazy = add_file_info(pl.read_database_uri("SELECT * FROM CURRENCY", uri, engine="adbc").lazy())
-        inoutcome_lazy = add_file_info(pl.read_database_uri("SELECT * FROM INOUTCOME", uri, engine="adbc").lazy())
+        zcategory_lazy = add_file_info(
+            pl.read_database_uri("SELECT * FROM ZCATEGORY", uri, engine="adbc").lazy()
+        )
+        assetgroup_lazy = add_file_info(
+            pl.read_database_uri("SELECT * FROM ASSETGROUP", uri, engine="adbc").lazy()
+        )
+        assets_lazy = add_file_info(
+            pl.read_database_uri("SELECT * FROM ASSETS", uri, engine="adbc").lazy()
+        )
+        currency_lazy = add_file_info(
+            pl.read_database_uri("SELECT * FROM CURRENCY", uri, engine="adbc").lazy()
+        )
+        inoutcome_lazy = add_file_info(
+            pl.read_database_uri("SELECT * FROM INOUTCOME", uri, engine="adbc").lazy()
+        )
 
         return zcategory_lazy, assetgroup_lazy, assets_lazy, currency_lazy, inoutcome_lazy

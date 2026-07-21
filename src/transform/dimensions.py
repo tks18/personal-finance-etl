@@ -1,5 +1,6 @@
 import polars as pl
 
+
 def transform_d_income_category(
     df_lazy: pl.LazyFrame, column_mapping: dict[str, str]
 ) -> pl.LazyFrame:
@@ -19,7 +20,17 @@ def transform_d_income_category(
             & (pl.col("CATEGORY_ID").is_null() | (pl.col("CATEGORY_ID").str.len_chars() < 1))
         )
         # PQ: #"Removed Other Columns"
-        .select(["__file_name__", "__folder_path__", "S_NO", "MODIFY_DATE", "UID", "CATEGORY_NAME", "ORDER_SEQUENCE"])
+        .select(
+            [
+                "__file_name__",
+                "__folder_path__",
+                "S_NO",
+                "MODIFY_DATE",
+                "UID",
+                "CATEGORY_NAME",
+                "ORDER_SEQUENCE",
+            ]
+        )
         # DAX: CATEGORY_NAME_SHORT
         # Using string replacement to remove "Income from " if it exists
         .with_columns(
@@ -30,6 +41,7 @@ def transform_d_income_category(
     )
 
     return df_transformed
+
 
 def transform_d_income_subcategory(
     df_lazy: pl.LazyFrame, column_mapping: dict[str, str], df_d_income_category_lazy: pl.LazyFrame
@@ -49,7 +61,18 @@ def transform_d_income_subcategory(
             & pl.col("CATEGORY_ID").is_not_null()
             & (pl.col("CATEGORY_ID").str.len_chars() > 0)
         )
-        .select(["__file_name__", "__folder_path__", "S_NO", "MODIFY_DATE", "UID", "CATEGORY_NAME", "ORDER_SEQUENCE", "CATEGORY_ID"])
+        .select(
+            [
+                "__file_name__",
+                "__folder_path__",
+                "S_NO",
+                "MODIFY_DATE",
+                "UID",
+                "CATEGORY_NAME",
+                "ORDER_SEQUENCE",
+                "CATEGORY_ID",
+            ]
+        )
     )
 
     # 2. DAX Steps (RELATED and IF/SEARCH)
@@ -79,6 +102,7 @@ def transform_d_income_subcategory(
 
     return df_transformed
 
+
 def transform_d_expense_category(
     df_lazy: pl.LazyFrame, column_mapping: dict[str, str]
 ) -> pl.LazyFrame:
@@ -93,10 +117,21 @@ def transform_d_expense_category(
             (pl.col("TYPE") == 1)
             & (pl.col("CATEGORY_ID").is_null() | (pl.col("CATEGORY_ID").str.len_chars() < 1))
         )
-        .select(["__file_name__", "__folder_path__", "S_NO", "MODIFY_DATE", "UID", "CATEGORY_NAME", "ORDER_SEQUENCE"])
+        .select(
+            [
+                "__file_name__",
+                "__folder_path__",
+                "S_NO",
+                "MODIFY_DATE",
+                "UID",
+                "CATEGORY_NAME",
+                "ORDER_SEQUENCE",
+            ]
+        )
     )
 
     return df_transformed
+
 
 def transform_d_expense_subcategory(
     df_lazy: pl.LazyFrame, column_mapping: dict[str, str]
@@ -113,10 +148,22 @@ def transform_d_expense_subcategory(
             & pl.col("CATEGORY_ID").is_not_null()
             & (pl.col("CATEGORY_ID").str.len_chars() > 0)
         )
-        .select(["__file_name__", "__folder_path__", "S_NO", "MODIFY_DATE", "UID", "CATEGORY_NAME", "ORDER_SEQUENCE", "CATEGORY_ID"])
+        .select(
+            [
+                "__file_name__",
+                "__folder_path__",
+                "S_NO",
+                "MODIFY_DATE",
+                "UID",
+                "CATEGORY_NAME",
+                "ORDER_SEQUENCE",
+                "CATEGORY_ID",
+            ]
+        )
     )
 
     return df_transformed
+
 
 def transform_d_asset_category(
     df_lazy: pl.LazyFrame, column_mapping: dict[str, str]
@@ -128,10 +175,22 @@ def transform_d_asset_category(
         # IS_DEL <> 1
         .with_columns(pl.col("IS_DEL").cast(pl.String))
         .filter(pl.col("IS_DEL").fill_null("0") == "0")
-        .select(["__file_name__", "__folder_path__", "DEVICE_ID", "UID", "USE_TIME", "ASSET_GROUP", "TYPE", "ORDER_SEQUENCE"])
+        .select(
+            [
+                "__file_name__",
+                "__folder_path__",
+                "DEVICE_ID",
+                "UID",
+                "USE_TIME",
+                "ASSET_GROUP",
+                "TYPE",
+                "ORDER_SEQUENCE",
+            ]
+        )
     )
 
     return df_transformed
+
 
 def transform_d_asset_subcategory(
     df_lazy: pl.LazyFrame, column_mapping: dict[str, str]
@@ -145,7 +204,9 @@ def transform_d_asset_subcategory(
         .filter(pl.col("IS_DEL").fill_null("0") == "0")
         .select(
             [
-                "__file_name__", "__folder_path__", "S_NO",
+                "__file_name__",
+                "__folder_path__",
+                "S_NO",
                 "CARD_STATEMENT_DATE",
                 "CARD_PAYMENT_DATE",
                 "ASSET_NAME",
@@ -165,6 +226,7 @@ def transform_d_asset_subcategory(
 
     return df_transformed
 
+
 def transform_d_currency(df_lazy: pl.LazyFrame, column_mapping: dict[str, str]) -> pl.LazyFrame:
     """Executes the PQ logic for the Currency Master table."""
 
@@ -175,7 +237,9 @@ def transform_d_currency(df_lazy: pl.LazyFrame, column_mapping: dict[str, str]) 
         .filter(pl.col("IS_DEL").fill_null("0") == "0")
         .select(
             [
-                "__file_name__", "__folder_path__", "S_NO",
+                "__file_name__",
+                "__folder_path__",
+                "S_NO",
                 "UID",
                 "CURRENCY_NAME",
                 "ISO",
@@ -195,41 +259,46 @@ def transform_d_currency(df_lazy: pl.LazyFrame, column_mapping: dict[str, str]) 
 
     return df_transformed
 
+
 def transform_d_investment_benchmark_master(raw_data: pl.LazyFrame) -> pl.LazyFrame:
     """Executes the PQ logic for the Benchmark Master table."""
-    return raw_data.select([
-        "__file_name__",
-        "__folder_path__",
-        "ID",
-        "Benchmark_Name",
-        "yF_Ticker",
-        "Currency",
-    ])
+    return raw_data.select(
+        [
+            "__file_name__",
+            "__folder_path__",
+            "ID",
+            "Benchmark_Name",
+            "yF_Ticker",
+            "Currency",
+        ]
+    )
+
 
 def transform_d_tax_rates(raw_data: pl.LazyFrame) -> pl.LazyFrame:
     """Executes the PQ logic for the Tax Rates table."""
-    return raw_data.select([
-        "__file_name__",
-        "__folder_path__",
-        "FY",
-        "FY_Start_Date",
-        "FY_End_Date",
-        "Debt_MF_Cutoff_Date",
-        "Equity_Listed_LTCG",
-        "Equity_Listed_STCG",
-        "Equity_Unlisted_LTCG",
-        "Equity_Unlisted_STCG",
-        "Gold_LTCG",
-        "Gold_STCG",
-        "Debt_MF_Pre_Cutoff_LTCG",
-        "Debt_MF_Pre_Cutoff_STCG",
-        "Debt_MF_Post_Cutoff_LTCG",
-        "Debt_MF_Post_Cutoff_STCG",
-        "Other_Debt_LTCG",
-        "Other_Debt_STCG",
-        "Default_LTCG",
-        "Default_STCG",
-        "Equity_LTCG_Exemption",
-        "Remarks",
-    ])
-
+    return raw_data.select(
+        [
+            "__file_name__",
+            "__folder_path__",
+            "FY",
+            "FY_Start_Date",
+            "FY_End_Date",
+            "Debt_MF_Cutoff_Date",
+            "Equity_Listed_LTCG",
+            "Equity_Listed_STCG",
+            "Equity_Unlisted_LTCG",
+            "Equity_Unlisted_STCG",
+            "Gold_LTCG",
+            "Gold_STCG",
+            "Debt_MF_Pre_Cutoff_LTCG",
+            "Debt_MF_Pre_Cutoff_STCG",
+            "Debt_MF_Post_Cutoff_LTCG",
+            "Debt_MF_Post_Cutoff_STCG",
+            "Other_Debt_LTCG",
+            "Other_Debt_STCG",
+            "Default_LTCG",
+            "Default_STCG",
+            "Equity_LTCG_Exemption",
+            "Remarks",
+        ]
+    )

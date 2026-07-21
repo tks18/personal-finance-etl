@@ -1,7 +1,9 @@
 from datetime import date
-from src.engines.analytics.pipeline.processor.benchmark import BenchmarkPriceProvider
+
 from src.engines.analytics.core.math import calculate_risk_metrics
+from src.engines.analytics.pipeline.processor.benchmark import BenchmarkPriceProvider
 from src.utils.helpers import to_date_obj
+
 
 class RiskMetricsProvider:
     def __init__(self, m_inst: list[dict], bm_provider: BenchmarkPriceProvider):

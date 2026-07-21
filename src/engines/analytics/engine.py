@@ -1,19 +1,21 @@
 import tempfile
 import traceback
 from datetime import date
+
 import polars as pl
 
-from src.utils.interfaces import ILogger
-from src.utils.models import EngineStatus, LogLevel
 from src.engines.analytics.context import AnalyticsContextManager
 from src.engines.analytics.isin_pipeline import IsinPipeline
 from src.engines.analytics.post_pipeline import PostProcessingPipeline
+from src.utils.interfaces import ILogger
+from src.utils.models import EngineStatus, LogLevel
 
 
 class InvestmentAnalyticsEngine:
     """
     Orchestrates the tax engine pipeline.
     """
+
     def __init__(
         self,
         df_p: pl.DataFrame,
@@ -54,7 +56,14 @@ class InvestmentAnalyticsEngine:
     def _run(self) -> pl.DataFrame:
         context_manager = AnalyticsContextManager(self.status_queue)
         ctx, isins = context_manager.initialize(
-            self.df_p, self.df_s, self.df_m, self.df_i, self.df_b, self.df_t, self.start_date, self.end_date
+            self.df_p,
+            self.df_s,
+            self.df_m,
+            self.df_i,
+            self.df_b,
+            self.df_t,
+            self.start_date,
+            self.end_date,
         )
 
         if not isins:

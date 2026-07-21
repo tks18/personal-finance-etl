@@ -1,7 +1,3 @@
-import os
-from datetime import datetime
-
-import fastexcel
 import polars as pl
 
 
@@ -121,7 +117,17 @@ def get_base_mf_transactions(raw_data: pl.LazyFrame) -> pl.LazyFrame:
     df_combined = raw_data
 
     df_transformed = df_combined.select(
-        ["__file_name__", "__folder_path__", "Month Date", "Scheme Name", "Transaction Type", "Units", "NAV", "Amount", "Date"]
+        [
+            "__file_name__",
+            "__folder_path__",
+            "Month Date",
+            "Scheme Name",
+            "Transaction Type",
+            "Units",
+            "NAV",
+            "Amount",
+            "Date",
+        ]
     ).with_columns(
         [
             pl.col("Units").cast(pl.Float64),
@@ -232,4 +238,3 @@ def get_stg_mf_master_ref(
         ]
     )
     return df_grouped
-

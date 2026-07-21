@@ -1,11 +1,11 @@
 from datetime import date
-import polars as pl
 
 from src.engines.analytics.core.fifo import FIFOPortfolio
 from src.engines.analytics.core.math import calculate_cagr
 from src.engines.analytics.pipeline.context import RunContext
 from src.engines.analytics.rules.tax import get_ltcg_threshold
 from src.utils.helpers import to_date_obj
+
 
 class SnapshotGenerator:
     def __init__(self, ctx: RunContext, isin: str, master_row: dict):
@@ -16,7 +16,15 @@ class SnapshotGenerator:
         self.bench_id = master_row.get("BENCHMARK_ID")
         self.fy_table = ctx.fy_table
 
-    def generate(self, fifo: FIFOPortfolio, m_date: date, m_price: float, m_bm_price: float, risk_metrics: tuple, inst_metrics: dict) -> list[dict]:
+    def generate(
+        self,
+        fifo: FIFOPortfolio,
+        m_date: date,
+        m_price: float,
+        m_bm_price: float,
+        risk_metrics: tuple,
+        inst_metrics: dict,
+    ) -> list[dict]:
         beta, t_err_ann, up_c, down_c = risk_metrics
         inst_cagr = inst_metrics.get("cagr", 0.0)
         inst_bm_cagr = inst_metrics.get("bm_cagr", 0.0)
@@ -125,5 +133,5 @@ class SnapshotGenerator:
         opt_prob = (outperform_cnt / lot_count) if lot_count > 0 else 0.0
         for row in buffer:
             row["Outperformance_Probability"] = round(opt_prob, 8)
-            
+
         return buffer

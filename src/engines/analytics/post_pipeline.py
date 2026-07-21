@@ -1,6 +1,8 @@
 import os
 from datetime import date
+
 import polars as pl
+
 from src.engines.analytics.pipeline.context import RunContext
 from src.engines.analytics.pipeline.postprocessor import PostProcessor
 from src.utils.interfaces import ILogger
@@ -9,13 +11,19 @@ from src.utils.models import EngineStatus, LogLevel
 
 class PostProcessingPipeline:
     """Handles reading spilled parquet files and running final aggregations."""
+
     def __init__(self, ctx: RunContext, tmp_dir: str, status_queue: ILogger | None = None):
         self.ctx = ctx
         self.tmp_dir = tmp_dir
         self.status_queue = status_queue
         self.postprocessor = PostProcessor(ctx)
 
-    def run(self, global_cashflows: list[dict], portfolio_terminals: dict[date, dict[str, float]], realized_events: list[dict]) -> pl.DataFrame:
+    def run(
+        self,
+        global_cashflows: list[dict],
+        portfolio_terminals: dict[date, dict[str, float]],
+        realized_events: list[dict],
+    ) -> pl.DataFrame:
         if self.status_queue:
             self.status_queue.put(
                 EngineStatus(

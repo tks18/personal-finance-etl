@@ -1,15 +1,20 @@
 from datetime import date
+
 import polars as pl
 
 from src.engines.analytics.pipeline.context import RunContext
 from src.utils.helpers import to_date_obj
 
+
 class RealizedGainsCalculator:
     """Calculates FY realized gains."""
+
     def __init__(self, ctx: RunContext):
         self.ctx = ctx
 
-    def calculate(self, lazy_df: pl.LazyFrame, unique_dates: list[date], realized_events: list[dict]) -> pl.LazyFrame:
+    def calculate(
+        self, lazy_df: pl.LazyFrame, unique_dates: list[date], realized_events: list[dict]
+    ) -> pl.LazyFrame:
         if realized_events:
             df_events = pl.DataFrame(realized_events)
 
@@ -78,13 +83,17 @@ class RealizedGainsCalculator:
                 ]
             )
 
-            df_fy_joined = df_dates.join_asof(
-                df_daily_events,
-                left_on="Date_Obj",
-                right_on="date",
-                by="event_fy_sy",
-                strategy="backward",
-            ).fill_null(0.0).with_columns(pl.col("event_fy_sy").cast(pl.Int64))
+            df_fy_joined = (
+                df_dates.join_asof(
+                    df_daily_events,
+                    left_on="Date_Obj",
+                    right_on="date",
+                    by="event_fy_sy",
+                    strategy="backward",
+                )
+                .fill_null(0.0)
+                .with_columns(pl.col("event_fy_sy").cast(pl.Int64))
+            )
 
             exemption_limits = {
                 fy_sy: self.ctx.fy_table.get_equity_ltcg_exemption(date(fy_sy, 4, 1))

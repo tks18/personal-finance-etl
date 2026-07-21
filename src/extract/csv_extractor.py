@@ -1,9 +1,12 @@
-import polars as pl
 import os
+
+import polars as pl
+
 
 def extract_stg_mf_isin_mapping(csv_path: str) -> pl.LazyFrame:
     schema_overrides = {"INSTRUMENT_NAME": pl.String, "ISIN": pl.String}
     return pl.scan_csv(csv_path, schema_overrides=schema_overrides)
+
 
 def extract_stg_benchmark_mapping(csv_path: str) -> pl.LazyFrame:
     schema_overrides = {
@@ -13,6 +16,7 @@ def extract_stg_benchmark_mapping(csv_path: str) -> pl.LazyFrame:
         "Benchmark_ID": pl.String,
     }
     return pl.scan_csv(csv_path, schema_overrides=schema_overrides)
+
 
 def extract_benchmark_master_raw(csv_path: str) -> pl.LazyFrame:
     filename = os.path.basename(csv_path)
@@ -24,9 +28,9 @@ def extract_benchmark_master_raw(csv_path: str) -> pl.LazyFrame:
         "Currency": pl.String,
     }
     return pl.scan_csv(csv_path, schema_overrides=schema_overrides).with_columns(
-        pl.lit(filename).alias("__file_name__"),
-        pl.lit(folder).alias("__folder_path__")
+        pl.lit(filename).alias("__file_name__"), pl.lit(folder).alias("__folder_path__")
     )
+
 
 def extract_tax_rates_raw(csv_path: str) -> pl.LazyFrame:
     filename = os.path.basename(csv_path)
@@ -53,10 +57,10 @@ def extract_tax_rates_raw(csv_path: str) -> pl.LazyFrame:
         "Equity_LTCG_Exemption": pl.Int64,
         "Remarks": pl.String,
     }
-    return pl.scan_csv(csv_path, schema_overrides=schema_overrides, try_parse_dates=True).with_columns(
-        pl.lit(filename).alias("__file_name__"),
-        pl.lit(folder).alias("__folder_path__")
-    )
+    return pl.scan_csv(
+        csv_path, schema_overrides=schema_overrides, try_parse_dates=True
+    ).with_columns(pl.lit(filename).alias("__file_name__"), pl.lit(folder).alias("__folder_path__"))
+
 
 def extract_opening_balances_raw(csv_path: str) -> pl.LazyFrame:
     filename = os.path.basename(csv_path)
@@ -64,6 +68,5 @@ def extract_opening_balances_raw(csv_path: str) -> pl.LazyFrame:
 
     df_lazy = pl.scan_csv(csv_path, try_parse_dates=True)
     return df_lazy.with_columns(
-        pl.lit(filename).alias("__file_name__"),
-        pl.lit(folder).alias("__folder_path__")
+        pl.lit(filename).alias("__file_name__"), pl.lit(folder).alias("__folder_path__")
     )

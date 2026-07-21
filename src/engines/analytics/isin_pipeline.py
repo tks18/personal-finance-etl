@@ -1,5 +1,6 @@
 import os
 from datetime import date
+
 from src.engines.analytics.pipeline.context import RunContext
 from src.engines.analytics.pipeline.processor import IsinProcessor
 from src.utils.interfaces import ILogger
@@ -8,7 +9,10 @@ from src.utils.models import EngineStatus, LogLevel
 
 class IsinPipeline:
     """Handles processing individual ISINs and spilling results to disk."""
-    def __init__(self, ctx: RunContext, isins: list[str], tmp_dir: str, status_queue: ILogger | None = None):
+
+    def __init__(
+        self, ctx: RunContext, isins: list[str], tmp_dir: str, status_queue: ILogger | None = None
+    ):
         self.ctx = ctx
         self.isins = isins
         self.tmp_dir = tmp_dir
@@ -37,7 +41,9 @@ class IsinPipeline:
             try:
                 df, isin_cf, isin_pt, isin_re = self.processor.process(isin)
                 if df is not None and not df.is_empty():
-                    df.write_parquet(os.path.join(self.tmp_dir, f"{isin.replace('/', '_')}.parquet"))
+                    df.write_parquet(
+                        os.path.join(self.tmp_dir, f"{isin.replace('/', '_')}.parquet")
+                    )
                     has_data = True
 
                 global_cashflows.extend(isin_cf)

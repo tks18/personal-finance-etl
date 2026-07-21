@@ -1,5 +1,6 @@
 import polars as pl
 
+
 def get_purchase_reference(
     df_lazy: pl.LazyFrame, instrument_col: str, date_col: str, price_col: str, qty_col: str
 ) -> pl.LazyFrame:
@@ -27,6 +28,7 @@ def get_purchase_reference(
         .with_columns((pl.col("Quantity") * pl.col("Price")).alias("Value"))
     )
     return df_grouped
+
 
 def get_sale_reference(
     df_sale_lazy: pl.LazyFrame,
@@ -117,6 +119,7 @@ def get_sale_reference(
 
     return df_final
 
+
 def transform_stg_investment_market_data(refs: list[pl.LazyFrame]) -> pl.LazyFrame:
     """
     Translates DAX UNION + SUMMARIZE.
@@ -149,6 +152,7 @@ def transform_stg_investment_market_data(refs: list[pl.LazyFrame]) -> pl.LazyFra
 
     return df_final
 
+
 def get_f_tf_investment_purchase_data(refs: list[pl.LazyFrame]) -> pl.LazyFrame:
     """Translates DAX UNION + SUMMARIZE for Purchases."""
     select_cols = ["__file_name__", "__folder_path__", "ISIN", "Date", "Price", "Quantity", "Value"]
@@ -163,6 +167,7 @@ def get_f_tf_investment_purchase_data(refs: list[pl.LazyFrame]) -> pl.LazyFrame:
         .with_columns(pl.lit("INR_INR").alias("CURRENCY_ID"))
     )
     return df_final
+
 
 def get_f_tf_investment_sale_data(refs: list[pl.LazyFrame]) -> pl.LazyFrame:
     """Translates DAX UNION + SUMMARIZE for Sales."""
@@ -189,6 +194,7 @@ def get_f_tf_investment_sale_data(refs: list[pl.LazyFrame]) -> pl.LazyFrame:
         .with_columns(pl.lit("INR_INR").alias("CURRENCY_ID"))
     )
     return df_final
+
 
 def get_d_tf_investment_master(
     master_refs: list[pl.LazyFrame], stg_benchmark_mapping_lazy: pl.LazyFrame

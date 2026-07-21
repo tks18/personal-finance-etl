@@ -1,5 +1,6 @@
 from datetime import date
 from typing import cast
+
 import polars as pl
 
 from src.engines.analytics.core.fifo import FIFOPortfolio
@@ -10,6 +11,7 @@ from src.engines.analytics.pipeline.processor.extractor import IsinDataExtractor
 from src.engines.analytics.pipeline.processor.risk import RiskMetricsProvider
 from src.engines.analytics.pipeline.processor.snapshot import SnapshotGenerator
 from src.utils.helpers import to_date_obj
+
 
 class IsinProcessor:
     def __init__(self, ctx: RunContext):
@@ -79,7 +81,9 @@ class IsinProcessor:
                 s_qty = float(row["Quantity"])
 
                 row_p_val: float | None = row.get("Price")
-                s_price = float(row_p_val) if row_p_val is not None else float(m_row["Closing Price"])
+                s_price = (
+                    float(row_p_val) if row_p_val is not None else float(m_row["Closing Price"])
+                )
 
                 sv_val: float | None = row.get("Sell Value")
                 s_val = float(sv_val) if sv_val is not None else float(s_qty * s_price)

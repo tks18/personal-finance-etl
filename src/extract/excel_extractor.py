@@ -55,7 +55,7 @@ def extract_mf_market_data_raw(valid_files: list[str]) -> pl.LazyFrame:
         df_processed = df_processed.with_columns(
             pl.lit(filename).alias("__file_name__"),
             pl.lit(os.path.dirname(file_path)).alias("__folder_path__"),
-            pl.lit(month_date).alias("Month Date")
+            pl.lit(month_date).alias("Month Date"),
         )
         all_dfs.append(df_processed)
     if not all_dfs:
@@ -117,7 +117,7 @@ def extract_mf_transactions_raw(valid_files: list[str]) -> pl.LazyFrame:
         df_processed = df_processed.with_columns(
             pl.lit(filename).alias("__file_name__"),
             pl.lit(os.path.dirname(file_path)).alias("__folder_path__"),
-            pl.lit(month_date).alias("Month Date")
+            pl.lit(month_date).alias("Month Date"),
         )
         all_dfs.append(df_processed)
     if not all_dfs:
@@ -128,7 +128,9 @@ def extract_mf_transactions_raw(valid_files: list[str]) -> pl.LazyFrame:
 def _process_stock_closing_statement(file_path: str) -> pl.DataFrame:
     excel_reader = fastexcel.read_excel(file_path)
     sheet_names = excel_reader.sheet_names
-    target_sheet = next((name for name in ["Trade Level", "Sheet", "Sheet1"] if name in sheet_names), None)
+    target_sheet = next(
+        (name for name in ["Trade Level", "Sheet", "Sheet1"] if name in sheet_names), None
+    )
     if not target_sheet:
         return pl.DataFrame()
     df_raw = excel_reader.load_sheet(target_sheet, header_row=None).to_polars()
@@ -179,7 +181,7 @@ def extract_stock_market_data_raw(valid_files: list[str]) -> pl.LazyFrame:
         df_processed = df_processed.with_columns(
             pl.lit(filename).alias("__file_name__"),
             pl.lit(os.path.dirname(file_path)).alias("__folder_path__"),
-            pl.lit(month_date).alias("Month Date")
+            pl.lit(month_date).alias("Month Date"),
         )
         all_dfs.append(df_processed)
     if not all_dfs:
@@ -206,7 +208,7 @@ def extract_stock_transactions_raw(valid_files: list[str]) -> pl.LazyFrame:
         filename = os.path.basename(file_path)
         df_processed = df_processed.with_columns(
             pl.lit(filename).alias("__file_name__"),
-            pl.lit(os.path.dirname(file_path)).alias("__folder_path__")
+            pl.lit(os.path.dirname(file_path)).alias("__folder_path__"),
         )
         all_dfs.append(df_processed)
     if not all_dfs:

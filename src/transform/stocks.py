@@ -1,7 +1,3 @@
-import os
-from datetime import datetime
-
-import fastexcel
 import polars as pl
 
 
@@ -239,4 +235,3 @@ def get_stg_stock_master_ref(
         )
     )
     return df_grouped
-

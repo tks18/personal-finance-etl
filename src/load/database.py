@@ -49,55 +49,113 @@ class SQLiteDatabaseManager:
             cursor = conn.cursor()
 
             # Asset Category Indexes
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_asset_category ON d_Asset_Category(UID);")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_asset_subcategory ON d_Asset_Subcategory(UID);")
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_asset_category ON d_Asset_Category(UID);"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_asset_subcategory ON d_Asset_Subcategory(UID);"
+            )
 
             # Expense Category Indexes
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_expense_category ON d_Expense_Category(UID);")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_expense_subcategory ON d_Expense_Subcategory(UID);")
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_expense_category ON d_Expense_Category(UID);"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_expense_subcategory ON d_Expense_Subcategory(UID);"
+            )
 
             # Income Category Indexes
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_income_category ON d_Income_Category(UID);")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_income_subcategory ON d_Income_Subcategory(UID);")
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_income_category ON d_Income_Category(UID);"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_income_subcategory ON d_Income_Subcategory(UID);"
+            )
 
             # Fact Table Indexes: Incomes
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_inc_date ON f_Income_Transactions(DATE);")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_inc_category ON f_Income_Transactions(CATEGORY_ID);")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_inc_currency ON f_Income_Transactions(CURRENCY_ID);")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_inc_asset ON f_Income_Transactions(ASSET_ID);")
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_inc_date ON f_Income_Transactions(DATE);"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_inc_category ON f_Income_Transactions(CATEGORY_ID);"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_inc_currency ON f_Income_Transactions(CURRENCY_ID);"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_inc_asset ON f_Income_Transactions(ASSET_ID);"
+            )
 
             # Fact Table Indexes: Expenses
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_exp_date ON f_Expense_Transactions(DATE);")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_exp_category ON f_Expense_Transactions(CATEGORY_ID);")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_exp_currency ON f_Expense_Transactions(CURRENCY_ID);")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_exp_asset ON f_Expense_Transactions(ASSET_ID);")
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_exp_date ON f_Expense_Transactions(DATE);"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_exp_category ON f_Expense_Transactions(CATEGORY_ID);"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_exp_currency ON f_Expense_Transactions(CURRENCY_ID);"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_exp_asset ON f_Expense_Transactions(ASSET_ID);"
+            )
 
             # Fact Table Indexes: Transfers
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_trans_date ON f_Transfer_Transactions(DATE);")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_trans_adj_date ON f_Transfer_Transactions(ADJUSTED_DATE_FOR_ANALYSIS);")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_trans_currency ON f_Transfer_Transactions(CURRENCY_ID);")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_trans_asset ON f_Transfer_Transactions(ASSET_ID);")
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_trans_date ON f_Transfer_Transactions(DATE);"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_trans_adj_date ON f_Transfer_Transactions(ADJUSTED_DATE_FOR_ANALYSIS);"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_trans_currency ON f_Transfer_Transactions(CURRENCY_ID);"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_trans_asset ON f_Transfer_Transactions(ASSET_ID);"
+            )
 
             # Fact Table Indexes: Opening Balances
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_opbal_uid ON f_Opening_Balances(ZUID);")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_opbal_asset ON f_Opening_Balances(ZASSETUID);")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_opbal_currency ON f_Opening_Balances(ZCURRENCYUID);")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_opbal_category ON f_Opening_Balances(ZCATEGORYUID);")
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_opbal_asset ON f_Opening_Balances(ZASSETUID);"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_opbal_currency ON f_Opening_Balances(ZCURRENCYUID);"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_opbal_category ON f_Opening_Balances(ZCATEGORYUID);"
+            )
 
             # Final Investment Benchmark & Market Data Indexes
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_inv_bm_id ON f_Investment_Benchmark_Data(ID);")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_inv_bm_date ON f_Investment_Benchmark_Data(Date);")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_inv_mkt_isin ON f_Investment_Market_Data(ISIN);")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_inv_mkt_date ON f_Investment_Market_Data(Closing_Date);")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_inv_buy_date ON f_Investment_Market_Data(Buy_Date);")
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_inv_bm_id ON f_Investment_Benchmark_Data(ID);"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_inv_bm_date ON f_Investment_Benchmark_Data(Date);"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_inv_mkt_isin ON f_Investment_Market_Data(ISIN);"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_inv_mkt_date ON f_Investment_Market_Data(Closing_Date);"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_inv_buy_date ON f_Investment_Market_Data(Buy_Date);"
+            )
 
             # Investment Master Indexes
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_invmst_cat ON d_tf_Investment_Master(CATEGORY_ID);")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_invmst_class ON d_tf_Investment_Master(INSTRUMENT_CLASS);")
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_invmst_cat ON d_tf_Investment_Master(CATEGORY_ID);"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_invmst_class ON d_tf_Investment_Master(INSTRUMENT_CLASS);"
+            )
 
             cursor.execute("PRAGMA optimize;")
 
-    def batch_write_dataframe(self, df: pl.DataFrame, table_name: str, chunk_size: int = 50000) -> None:
+    def batch_write_dataframe(
+        self, df: pl.DataFrame, table_name: str, chunk_size: int = 50000
+    ) -> None:
         """Writes a DataFrame to SQLite using the ultra-fast ADBC driver."""
         if df.height == 0:
             return
@@ -113,7 +171,7 @@ class SQLiteDatabaseManager:
 
 class SQLiteLoader:
     """Orchestrates the loading of dataframes via the SQLiteDatabaseManager."""
-    
+
     def __init__(self, db_manager: SQLiteDatabaseManager, status_queue: ILogger):
         self.db_manager = db_manager
         self.status_queue = status_queue
@@ -122,24 +180,46 @@ class SQLiteLoader:
         logger.info("Writing tables to SQLite in batches...")
         self.db_manager.batch_write_dataframe(dfs["df_d_calendar"], "d_Calendar")
         self.db_manager.batch_write_dataframe(dfs["df_d_income_category"], "d_Income_Category")
-        self.db_manager.batch_write_dataframe(dfs["df_d_income_subcategory"], "d_Income_Subcategory")
+        self.db_manager.batch_write_dataframe(
+            dfs["df_d_income_subcategory"], "d_Income_Subcategory"
+        )
         self.db_manager.batch_write_dataframe(dfs["df_d_expense_category"], "d_Expense_Category")
-        self.db_manager.batch_write_dataframe(dfs["df_d_expense_subcategory"], "d_Expense_Subcategory")
+        self.db_manager.batch_write_dataframe(
+            dfs["df_d_expense_subcategory"], "d_Expense_Subcategory"
+        )
         self.db_manager.batch_write_dataframe(dfs["df_d_asset_category"], "d_Asset_Category")
         self.db_manager.batch_write_dataframe(dfs["df_d_asset_subcategory"], "d_Asset_SubCategory")
         self.db_manager.batch_write_dataframe(dfs["df_d_currency"], "d_Currency")
-        self.db_manager.batch_write_dataframe(dfs["df_d_benchmark_master"], "d_Investment_Benchmark_Master")
-        self.db_manager.batch_write_dataframe(dfs["df_d_tf_investment_master"], "d_tf_Investment_Master")
+        self.db_manager.batch_write_dataframe(
+            dfs["df_d_benchmark_master"], "d_Investment_Benchmark_Master"
+        )
+        self.db_manager.batch_write_dataframe(
+            dfs["df_d_tf_investment_master"], "d_tf_Investment_Master"
+        )
         self.db_manager.batch_write_dataframe(dfs["df_d_tax_rates"], "d_Tax_Rates")
-        self.db_manager.batch_write_dataframe(dfs["df_f_income_transactions"], "f_Income_Transactions")
-        self.db_manager.batch_write_dataframe(dfs["df_f_expense_transactions"], "f_Expense_Transactions")
-        self.db_manager.batch_write_dataframe(dfs["df_f_transfer_transactions"], "f_Transfer_Transactions")
+        self.db_manager.batch_write_dataframe(
+            dfs["df_f_income_transactions"], "f_Income_Transactions"
+        )
+        self.db_manager.batch_write_dataframe(
+            dfs["df_f_expense_transactions"], "f_Expense_Transactions"
+        )
+        self.db_manager.batch_write_dataframe(
+            dfs["df_f_transfer_transactions"], "f_Transfer_Transactions"
+        )
         self.db_manager.batch_write_dataframe(dfs["df_f_opening_balances"], "f_Opening_Balances")
-        self.db_manager.batch_write_dataframe(dfs["df_stg_investment_market_data"], "stg_Investment_Market_Data")
-        self.db_manager.batch_write_dataframe(dfs["df_f_tf_inv_purchase"], "f_tf_Investment_Purchase_Data")
+        self.db_manager.batch_write_dataframe(
+            dfs["df_stg_investment_market_data"], "stg_Investment_Market_Data"
+        )
+        self.db_manager.batch_write_dataframe(
+            dfs["df_f_tf_inv_purchase"], "f_tf_Investment_Purchase_Data"
+        )
         self.db_manager.batch_write_dataframe(dfs["df_f_tf_inv_sale"], "f_tf_Investment_Sale_Data")
-        self.db_manager.batch_write_dataframe(dfs["df_f_investment_benchmark_data"], "f_Investment_Benchmark_Data")
-        self.db_manager.batch_write_dataframe(dfs["df_f_investment_market_data"], "f_Investment_Market_Data")
+        self.db_manager.batch_write_dataframe(
+            dfs["df_f_investment_benchmark_data"], "f_Investment_Benchmark_Data"
+        )
+        self.db_manager.batch_write_dataframe(
+            dfs["df_f_investment_market_data"], "f_Investment_Market_Data"
+        )
 
         self.status_queue.put(EngineStatus(msg="", data=None, progress=0.9))
         logger.info("Applying indexes and optimizing database...")

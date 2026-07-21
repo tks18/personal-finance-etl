@@ -2,6 +2,10 @@ import polars as pl
 
 from src.config.settings import Settings
 from src.pipeline.strategies import AssetPipeline, MutualFundPipeline, StockPipeline
+from src.transform.calendar import (
+    get_stg_calendar_ref,
+    transform_d_calendar,
+)
 from src.transform.dimensions import (
     transform_d_asset_category,
     transform_d_asset_subcategory,
@@ -19,10 +23,6 @@ from src.transform.facts import (
     transform_f_income_transactions,
     transform_f_opening_balances,
     transform_f_transfer_transactions,
-)
-from src.transform.calendar import (
-    get_stg_calendar_ref,
-    transform_d_calendar,
 )
 from src.transform.investments import (
     get_d_tf_investment_master,
@@ -81,7 +81,6 @@ class TransformationDAG:
         f_transfer_transactions_lazy = transform_f_transfer_transactions(
             base_transactions_lazy, d_asset_subcategory_lazy, d_asset_category_lazy
         )
-
 
         asset_pipelines: list[AssetPipeline] = [MutualFundPipeline(), StockPipeline()]
 

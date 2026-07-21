@@ -1,6 +1,5 @@
 import gc
 import multiprocessing
-import os
 import time
 import traceback
 from datetime import date, datetime
@@ -9,11 +8,11 @@ from typing import cast
 import polars as pl
 
 from src.config.settings import Settings
-from src.engines.benchmark import BenchmarkEngine
 from src.engines.analytics import InvestmentAnalyticsEngine
+from src.engines.benchmark import BenchmarkEngine
+from src.load.database import SQLiteDatabaseManager, SQLiteLoader
 from src.pipeline.core.extractor import DataExtractor
 from src.pipeline.core.transformer import TransformationDAG
-from src.load.database import SQLiteLoader, SQLiteDatabaseManager
 from src.utils.interfaces import IDatabaseLoader, ILogger
 from src.utils.logger import add_queue_handler, logger
 from src.utils.models import EngineStatus, ExtractionResult, LogLevel
@@ -117,13 +116,13 @@ class ETLOrchestrator:
         add_queue_handler(cast(multiprocessing.Queue, self.status_queue))
         logger.info("Starting ETL Pipeline")
         self.status_queue.put(EngineStatus(msg="", data=None, progress=0.0))
-        
+
         logger.info(f"Setting up Target DB at {self.db_manager.db_path}")
         self.db_manager.setup_schema()
 
         extracted_data = self._extract()
         self._transform(extracted_data)
-        
+
         start_date, end_date = self._detect_benchmark_dates()
         self._run_engines(start_date, end_date)
         self._load()
@@ -143,6 +142,7 @@ def process_wrapper(status_queue: ILogger | None = None, config_path: str = "con
 
         if status_queue is None:
             from typing import cast
+
             status_queue = cast(ILogger, multiprocessing.Queue())
 
         orchestrator = ETLOrchestrator(cfg, status_queue)

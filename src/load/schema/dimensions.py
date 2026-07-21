@@ -132,4 +132,3 @@ CREATE TABLE d_Currency (
     DECIMAL_POINT INTEGER
 );
 """
-

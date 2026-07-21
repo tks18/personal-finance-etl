@@ -1,17 +1,24 @@
 from datetime import date
+
 import polars as pl
 from pyxirr import xirr
 
 from src.utils.helpers import to_date_obj
 
+
 class PortfolioXIRRCalculator:
     """Calculates portfolio XIRR per closing date."""
+
     @staticmethod
-    def calculate(unique_dates: list[date], global_cashflows: list[dict], portfolio_terminals: dict[date, dict]) -> pl.DataFrame:
+    def calculate(
+        unique_dates: list[date],
+        global_cashflows: list[dict],
+        portfolio_terminals: dict[date, dict],
+    ) -> pl.DataFrame:
         for cf in global_cashflows:
             cf["date_obj"] = to_date_obj(cf["date"])
-            
-        global_cashflows.sort(key=lambda x: (x["date_obj"] or date.min))
+
+        global_cashflows.sort(key=lambda x: x["date_obj"] or date.min)
         cf_ptr = 0
         port_rows = []
         port_dl: list[date] = []

@@ -1,6 +1,9 @@
 from datetime import date, datetime, timedelta
+
 import polars as pl
+
 from src.utils.helpers import to_date_obj
+
 
 class BenchmarkPriceProvider:
     def __init__(self, bench_id, df_b: pl.DataFrame | None):
@@ -30,9 +33,7 @@ class BenchmarkPriceProvider:
     def get_bm_price(self, dt: date | datetime | str | None) -> float | None:
         if not dt:
             return None
-        dt_val = (
-            dt if isinstance(dt, date) and not isinstance(dt, datetime) else to_date_obj(dt)
-        )
+        dt_val = dt if isinstance(dt, date) and not isinstance(dt, datetime) else to_date_obj(dt)
         if dt_val is None:
             return None
         return self.bm_price_map.get(dt_val)

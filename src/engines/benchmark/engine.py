@@ -1,12 +1,13 @@
 import concurrent.futures
 from datetime import date
+
 import pandas as pd
 import polars as pl
 
-from src.utils.interfaces import ILogger
-from src.utils.models import EngineStatus, LogLevel
 from src.engines.benchmark.cache import BenchmarkCacheManager
 from src.engines.benchmark.fetcher import BenchmarkDataFetcher
+from src.utils.interfaces import ILogger
+from src.utils.models import EngineStatus, LogLevel
 
 
 class BenchmarkEngine:
@@ -14,6 +15,7 @@ class BenchmarkEngine:
     Downloads benchmark price data concurrently for all tickers defined in a master CSV.
     Pushes progress tuples of (message, data_or_None, progress_float) to status_queue.
     """
+
     def __init__(
         self,
         df_m: pl.DataFrame,
@@ -29,7 +31,9 @@ class BenchmarkEngine:
         self.start_date = start_date
         self.end_date = end_date
         self.max_workers = max_workers
-        self.cache_manager = BenchmarkCacheManager(target_db_base_path, current_db_path, status_queue)
+        self.cache_manager = BenchmarkCacheManager(
+            target_db_base_path, current_db_path, status_queue
+        )
 
     def run(self) -> pl.DataFrame:
         try:
