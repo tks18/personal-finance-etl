@@ -1,0 +1,105 @@
+import tempfile
+import traceback
+from datetime import date
+import polars as pl
+
+from src.utils.interfaces import ILogger
+from src.utils.models import EngineStatus, LogLevel
+from src.engines.analytics.context import AnalyticsContextManager
+from src.engines.analytics.isin_pipeline import IsinPipeline
+from src.engines.analytics.post_pipeline import PostProcessingPipeline
+
+
+class InvestmentAnalyticsEngine:
+    """
+    Orchestrates the tax engine pipeline.
+    """
+    def __init__(
+        self,
+        df_p: pl.DataFrame,
+        df_s: pl.DataFrame,
+        df_m: pl.DataFrame,
+        df_i: pl.DataFrame,
+        df_b: pl.DataFrame | None,
+        df_t: pl.DataFrame,
+        status_queue: ILogger | None = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
+    ):
+        self.df_p = df_p
+        self.df_s = df_s
+        self.df_m = df_m
+        self.df_i = df_i
+        self.df_b = df_b if df_b is not None else pl.DataFrame()
+        self.df_t = df_t
+        self.status_queue = status_queue
+        self.start_date = start_date
+        self.end_date = end_date
+
+    def run(self) -> pl.DataFrame:
+        try:
+            return self._run()
+        except Exception as e:
+            if self.status_queue is not None:
+                self.status_queue.put(
+                    EngineStatus(
+                        msg=f"Error: {e}\n{traceback.format_exc()}",
+                        data=None,
+                        progress=0.0,
+                        level=LogLevel.ERROR,
+                    )
+                )
+            raise e
+
+    def _run(self) -> pl.DataFrame:
+        context_manager = AnalyticsContextManager(self.status_queue)
+        ctx, isins = context_manager.initialize(
+            self.df_p, self.df_s, self.df_m, self.df_i, self.df_b, self.df_t, self.start_date, self.end_date
+        )
+
+        if not isins:
+            empty_df = pl.DataFrame()
+            if self.status_queue:
+                self.status_queue.put(
+                    EngineStatus(
+                        msg="Processing Complete! (no valid ISINs found)",
+                        data=empty_df,
+                        progress=1.0,
+                        level=LogLevel.SUCCESS,
+                    )
+                )
+            return empty_df
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            isin_pipeline = IsinPipeline(ctx, isins, tmp_dir, self.status_queue)
+            has_data, global_cf, port_terms, realized = isin_pipeline.process_all()
+
+            if not has_data:
+                empty_df = pl.DataFrame()
+                if self.status_queue:
+                    self.status_queue.put(
+                        EngineStatus(
+                            msg="Processing Complete! (no output rows)",
+                            data=empty_df,
+                            progress=1.0,
+                            level=LogLevel.SUCCESS,
+                        )
+                    )
+                return empty_df
+
+            post_pipeline = PostProcessingPipeline(ctx, tmp_dir, self.status_queue)
+            final_df = post_pipeline.run(global_cf, port_terms, realized)
+
+        n_rows = len(final_df)
+        n_cols = len(final_df.columns)
+        if self.status_queue:
+            self.status_queue.put(
+                EngineStatus(
+                    msg=f"✅  Processing Complete — {n_rows:,} rows x {n_cols} columns.",
+                    data=final_df,
+                    progress=1.0,
+                    level=LogLevel.SUCCESS,
+                )
+            )
+
+        return final_df

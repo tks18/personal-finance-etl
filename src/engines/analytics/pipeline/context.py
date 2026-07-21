@@ -8,8 +8,8 @@ from datetime import date
 
 import polars as pl
 
-from src.engines.io.loader import TaxDataLoader
-from src.engines.rules.tax import FYTaxRateTable
+from src.engines.analytics.io.loader import TaxDataLoader
+from src.engines.analytics.rules.tax import FYTaxRateTable
 
 
 @dataclass

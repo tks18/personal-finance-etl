@@ -1,0 +1,149 @@
+from datetime import date
+import polars as pl
+
+from src.engines.analytics.pipeline.context import RunContext
+from src.utils.helpers import to_date_obj
+
+class RealizedGainsCalculator:
+    """Calculates FY realized gains."""
+    def __init__(self, ctx: RunContext):
+        self.ctx = ctx
+
+    def calculate(self, lazy_df: pl.LazyFrame, unique_dates: list[date], realized_events: list[dict]) -> pl.LazyFrame:
+        if realized_events:
+            df_events = pl.DataFrame(realized_events)
+
+            df_dates_list = []
+            for d in unique_dates:
+                d_obj = to_date_obj(d)
+                if not d_obj:
+                    continue
+                fy_sy = d_obj.year if d_obj.month >= 4 else d_obj.year - 1
+                df_dates_list.append({"Closing_Date": d, "Date_Obj": d_obj, "event_fy_sy": fy_sy})
+            df_dates = pl.DataFrame(df_dates_list).sort("Date_Obj")
+
+            df_events = (
+                df_events.with_columns(pl.col("date").cast(pl.Date))
+                .with_columns(
+                    pl.when(pl.col("date").dt.month() >= 4)
+                    .then(pl.col("date").dt.year())
+                    .otherwise(pl.col("date").dt.year() - 1)
+                    .cast(pl.Int64)
+                    .alias("event_fy_sy")
+                )
+                .with_columns(pl.col("tax_type").fill_null("equity").str.to_lowercase())
+                .with_columns(
+                    pl.when((pl.col("gain_type") == "LTCG") & (pl.col("gain") > 0))
+                    .then(pl.col("gain"))
+                    .otherwise(0.0)
+                    .alias("is_ltcg"),
+                    pl.when(
+                        (pl.col("gain_type") == "LTCG")
+                        & (pl.col("gain") > 0)
+                        & (pl.col("tax_type") == "equity")
+                    )
+                    .then(pl.col("gain"))
+                    .otherwise(0.0)
+                    .alias("is_eq_ltcg"),
+                    pl.when((pl.col("gain_type") == "STCG") & (pl.col("gain") > 0))
+                    .then(pl.col("gain"))
+                    .otherwise(0.0)
+                    .alias("is_stcg"),
+                    pl.when(pl.col("gain") < 0)
+                    .then(pl.col("gain"))
+                    .otherwise(0.0)
+                    .alias("is_loss"),
+                )
+            )
+
+            df_daily_events = (
+                df_events.group_by(["date", "event_fy_sy"])
+                .agg(
+                    [
+                        pl.col("is_ltcg").sum().alias("daily_ltcg"),
+                        pl.col("is_eq_ltcg").sum().alias("daily_eq_ltcg"),
+                        pl.col("is_stcg").sum().alias("daily_stcg"),
+                        pl.col("is_loss").sum().alias("daily_loss"),
+                    ]
+                )
+                .sort("date")
+            )
+
+            df_daily_events = df_daily_events.with_columns(
+                [
+                    pl.col("daily_ltcg").cum_sum().over("event_fy_sy").alias("cum_ltcg"),
+                    pl.col("daily_eq_ltcg").cum_sum().over("event_fy_sy").alias("cum_eq_ltcg"),
+                    pl.col("daily_stcg").cum_sum().over("event_fy_sy").alias("cum_stcg"),
+                    pl.col("daily_loss").cum_sum().over("event_fy_sy").alias("cum_loss"),
+                ]
+            )
+
+            df_fy_joined = df_dates.join_asof(
+                df_daily_events,
+                left_on="Date_Obj",
+                right_on="date",
+                by="event_fy_sy",
+                strategy="backward",
+            ).fill_null(0.0).with_columns(pl.col("event_fy_sy").cast(pl.Int64))
+
+            exemption_limits = {
+                fy_sy: self.ctx.fy_table.get_equity_ltcg_exemption(date(fy_sy, 4, 1))
+                for fy_sy in df_dates["event_fy_sy"].unique()
+            }
+            exemption_df = pl.DataFrame(
+                {
+                    "event_fy_sy": list(exemption_limits.keys()),
+                    "exemption_limit": list(exemption_limits.values()),
+                }
+            )
+
+            df_fy_joined = df_fy_joined.join(exemption_df, on="event_fy_sy", how="left")
+
+            df_fy_joined = df_fy_joined.with_columns(
+                (
+                    pl.col("event_fy_sy").cast(pl.String)
+                    + "-"
+                    + (pl.col("event_fy_sy") + 1).cast(pl.String).str.slice(2)
+                ).alias("FY"),
+                pl.col("cum_ltcg").round(4).alias("FY_Realized_LTCG"),
+                pl.col("cum_stcg").round(4).alias("FY_Realized_STCG"),
+                pl.col("cum_loss").round(4).alias("FY_Realized_Loss"),
+                pl.max_horizontal(0.0, pl.col("exemption_limit") - pl.col("cum_eq_ltcg"))
+                .round(4)
+                .alias("FY_LTCG_Remaining_Exemption"),
+            ).select(
+                [
+                    "Closing_Date",
+                    "FY",
+                    "FY_Realized_LTCG",
+                    "FY_Realized_STCG",
+                    "FY_Realized_Loss",
+                    "FY_LTCG_Remaining_Exemption",
+                ]
+            )
+
+            lazy_df = lazy_df.join(df_fy_joined.lazy(), on="Closing_Date", how="left")
+
+        else:
+            df_dates_list = []
+            for d in unique_dates:
+                d_obj = to_date_obj(d)
+                if not d_obj:
+                    continue
+                fy_sy = d_obj.year if d_obj.month >= 4 else d_obj.year - 1
+                limit = self.ctx.fy_table.get_equity_ltcg_exemption(date(fy_sy, 4, 1))
+                df_dates_list.append(
+                    {
+                        "Closing_Date": d,
+                        "FY": f"{fy_sy}-{str(fy_sy + 1)[-2:]}",
+                        "FY_Realized_LTCG": 0.0,
+                        "FY_Realized_STCG": 0.0,
+                        "FY_Realized_Loss": 0.0,
+                        "FY_LTCG_Remaining_Exemption": float(limit),
+                    }
+                )
+
+            df_fy_empty = pl.DataFrame(df_dates_list)
+            lazy_df = lazy_df.join(df_fy_empty.lazy(), on="Closing_Date", how="left")
+
+        return lazy_df

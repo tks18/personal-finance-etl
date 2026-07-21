@@ -2,7 +2,7 @@ from collections import deque
 from datetime import date
 from typing import cast
 
-from src.engines.rules.tax import FYTaxRateTable
+from src.engines.analytics.rules.tax import FYTaxRateTable
 from src.utils.models import TaxLot
 
 
