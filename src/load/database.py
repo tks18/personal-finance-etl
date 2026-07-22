@@ -220,16 +220,16 @@ class SQLiteLoader:
         self.db_manager.batch_write_dataframe(
             dfs["df_f_investment_market_data"], "f_Investment_Market_Data"
         )
-        if "df_p_tf_net_worth_monthly_summary" in dfs:
-            self.db_manager.batch_write_dataframe(
-                dfs["df_p_tf_net_worth_monthly_summary"], "p_tf_Net_Worth_Monthly_Summary"
-            )
-            self.db_manager.batch_write_dataframe(
-                dfs["df_p_tf_financial_ratios_monthly"], "p_tf_Financial_Ratios_Monthly"
-            )
-            self.db_manager.batch_write_dataframe(
-                dfs["df_p_tf_category_inflation_trends"], "p_tf_Category_Inflation_Trends"
-            )
+        presentation_tables = {
+            "df_p_tf_net_worth_monthly_summary": "p_tf_Net_Worth_Monthly_Summary",
+            "df_p_tf_financial_ratios_monthly": "p_tf_Financial_Ratios_Monthly",
+            "df_p_tf_category_spend_analytics": "p_tf_category_spend_analytics",
+            "df_p_tf_income_streams_monthly": "p_tf_income_streams_monthly",
+            "df_p_tf_fire_forecasting_monthly": "p_tf_fire_forecasting_monthly",
+        }
+        for df_key, table_name in presentation_tables.items():
+            if df_key in dfs:
+                self.db_manager.batch_write_dataframe(dfs[df_key], table_name)
 
         self.status_queue.put(EngineStatus(msg="", data=None, progress=0.9))
         logger.info("Applying indexes and optimizing database...")

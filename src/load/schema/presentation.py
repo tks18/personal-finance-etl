@@ -37,17 +37,60 @@ CREATE TABLE IF NOT EXISTS p_tf_Financial_Ratios_Monthly (
     FOREIGN KEY(MONTH_END_DATE) REFERENCES d_Calendar(Date)
 );
 
-CREATE TABLE IF NOT EXISTS p_tf_Category_Inflation_Trends (
+CREATE TABLE IF NOT EXISTS p_tf_category_spend_analytics (
     MONTH_START_DATE DATE,
     MONTH_END_DATE DATE,
+    YEAR_MONTH TEXT,
     CATEGORY_ID TEXT,
+    CATEGORY_NAME TEXT,
+    CATEGORY_GROUPS TEXT,
     Total_Monthly_Spend REAL,
     Average_Transaction_Value REAL,
-    "MoM_Spend_Growth_%" REAL,
-    "YoY_Spend_Growth_%" REAL,
+    Trailing_3M_Avg_Spend REAL,
+    Trailing_6M_Avg_Spend REAL,
+    Spend_Share_Pct REAL,
+    MoM_Variance_Pct REAL,
+    YoY_Variance_Pct REAL,
+    Spend_Intensity_Z_Score REAL,
+    Is_Category_Creep BOOLEAN,
     FOREIGN KEY(MONTH_START_DATE) REFERENCES d_Calendar(Date),
     FOREIGN KEY(MONTH_END_DATE) REFERENCES d_Calendar(Date),
-    FOREIGN KEY(CATEGORY_ID) REFERENCES d_Expense_Category(UID)
+    FOREIGN KEY(CATEGORY_ID) REFERENCES d_Expense_Subcategory(UID)
+);
+
+CREATE TABLE IF NOT EXISTS p_tf_income_streams_monthly (
+    MONTH_START_DATE DATE,
+    MONTH_END_DATE DATE,
+    YEAR_MONTH TEXT,
+    CATEGORY_ID TEXT,
+    CATEGORY_NAME TEXT,
+    CATEGORY_GROUPS TEXT,
+    Total_Monthly_Income REAL,
+    Average_Transaction_Value REAL,
+    Trailing_3M_Avg_Income REAL,
+    Trailing_6M_Avg_Income REAL,
+    Income_Share_Pct REAL,
+    MoM_Variance_Pct REAL,
+    YoY_Variance_Pct REAL,
+    Is_Passive_Income BOOLEAN,
+    FOREIGN KEY(MONTH_START_DATE) REFERENCES d_Calendar(Date),
+    FOREIGN KEY(MONTH_END_DATE) REFERENCES d_Calendar(Date),
+    FOREIGN KEY(CATEGORY_ID) REFERENCES d_Income_Subcategory(UID)
+);
+
+CREATE TABLE IF NOT EXISTS p_tf_fire_forecasting_monthly (
+    MONTH_START_DATE DATE,
+    MONTH_END_DATE DATE,
+    YEAR_MONTH TEXT,
+    Total_Net_Worth REAL,
+    Trailing_6M_Avg_Spend REAL,
+    Trailing_6M_Avg_Savings REAL,
+    Target_FI_Number REAL,
+    Current_FI_Coverage_Pct REAL,
+    Estimated_Months_To_FI REAL,
+    Runway_Months REAL,
+    FOREIGN KEY(MONTH_START_DATE) REFERENCES d_Calendar(Date),
+    FOREIGN KEY(MONTH_END_DATE) REFERENCES d_Calendar(Date)
 );
 
 """
