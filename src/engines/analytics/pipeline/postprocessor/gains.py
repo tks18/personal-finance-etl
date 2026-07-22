@@ -25,7 +25,7 @@ class RealizedGainsCalculator:
                     continue
                 fy_sy = d_obj.year if d_obj.month >= 4 else d_obj.year - 1
                 df_dates_list.append({"Closing_Date": d, "Date_Obj": d_obj, "event_fy_sy": fy_sy})
-            df_dates = pl.DataFrame(df_dates_list).sort("Date_Obj")
+            df_dates = pl.DataFrame(df_dates_list).sort(["event_fy_sy", "Date_Obj"]).with_columns(pl.col("Date_Obj").set_sorted())
 
             df_events = (
                 df_events.with_columns(pl.col("date").cast(pl.Date))
@@ -71,7 +71,8 @@ class RealizedGainsCalculator:
                         pl.col("is_loss").sum().alias("daily_loss"),
                     ]
                 )
-                .sort("date")
+                .sort(["event_fy_sy", "date"])
+                .with_columns(pl.col("date").set_sorted())
             )
 
             df_daily_events = df_daily_events.with_columns(
