@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [1.8.0](https://github.com/tks18/personal-finance-etl/compare/1.7.0...1.8.0) (2026-07-22)
+
+
+### Features 🔥
+
+* **engines/presentations:** add new tables for spend, income and fire analytics ([ea98b83](https://github.com/tks18/personal-finance-etl/commit/ea98b83a9be2fd1fb74bbeae00bd0fdc207c2a7e))
+* **load:** add schema ddl ([25222dd](https://github.com/tks18/personal-finance-etl/commit/25222ddf56d5a8511830487d7debaec7b4134efd))
+
 ## [1.7.0](https://github.com/tks18/personal-finance-etl/compare/1.6.0...1.7.0) (2026-07-21)
 
 
