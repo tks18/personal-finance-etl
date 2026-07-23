@@ -38,14 +38,14 @@ class SQLiteDatabaseManager:
         if os.path.exists(self.db_path):
             os.remove(self.db_path)
 
-        with sqlite3.connect(self.db_path) as conn:
+        with sqlite3.connect(self.db_path, timeout=60.0) as conn:
             cursor = conn.cursor()
             cursor.executescript(SQLITE_PRAGMAS)
             cursor.executescript(SQLITE_SCHEMA_DDL)
 
     def apply_indexes_and_optimize(self) -> None:
         """Applies indexes to critical tables for read performance."""
-        with sqlite3.connect(self.db_path) as conn:
+        with sqlite3.connect(self.db_path, timeout=60.0) as conn:
             cursor = conn.cursor()
 
             # Asset Category Indexes
@@ -152,6 +152,8 @@ class SQLiteDatabaseManager:
             )
 
             cursor.execute("PRAGMA optimize;")
+            cursor.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+            cursor.execute("PRAGMA journal_mode = DELETE;")
 
     def batch_write_dataframe(
         self, df: pl.DataFrame, table_name: str, chunk_size: int = 50000
@@ -234,8 +236,3 @@ class SQLiteLoader:
         self.status_queue.put(EngineStatus(msg="", data=None, progress=0.9))
         logger.info("Applying indexes and optimizing database...")
         self.db_manager.apply_indexes_and_optimize()
-
-        with sqlite3.connect(self.db_manager.db_path) as conn:
-            conn.cursor().execute("PRAGMA optimize;")
-            conn.cursor().execute("PRAGMA wal_checkpoint(TRUNCATE);")
-            conn.cursor().execute("PRAGMA journal_mode = DELETE;")
