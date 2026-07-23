@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [1.8.2](https://github.com/tks18/personal-finance-etl/compare/1.8.1...1.8.2) (2026-07-23)
+
+
+### Bug Fixes 🛠
+
+* **load:** fix database journal mode ([e7f532c](https://github.com/tks18/personal-finance-etl/commit/e7f532cb695638320c1abec8147abf2ea452e492))
+
 ### [1.8.1](https://github.com/tks18/personal-finance-etl/compare/1.8.0...1.8.1) (2026-07-23)
 
 
