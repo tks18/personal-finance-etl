@@ -238,3 +238,4 @@ class SQLiteLoader:
         with sqlite3.connect(self.db_manager.db_path) as conn:
             conn.cursor().execute("PRAGMA optimize;")
             conn.cursor().execute("PRAGMA wal_checkpoint(TRUNCATE);")
+            conn.cursor().execute("PRAGMA journal_mode = DELETE;")
