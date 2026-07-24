@@ -193,8 +193,8 @@ def transform_f_transfer_transactions(
         .with_columns(
             # AMOUNT_PROPER
             pl.when(pl.col("TRANSFER_TYPE") == "Out")
-            .then(pl.col("LOCAL_AMOUNT") * -1)
-            .otherwise(pl.col("LOCAL_AMOUNT"))
+            .then(pl.col("AMOUNT_ACCOUNT") * -1)
+            .otherwise(pl.col("AMOUNT_ACCOUNT"))
             .alias("AMOUNT_PROPER"),
             # ADJUSTED_DATE_FOR_ANALYSIS (EDATE equivalent)
             pl.when(pl.col("ASSET_GROUP") == "Investments")
