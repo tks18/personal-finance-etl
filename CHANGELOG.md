@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [1.8.5](https://github.com/tks18/personal-finance-etl/compare/1.8.4...1.8.5) (2026-07-25)
+
+
+### Bug Fixes 🛠
+
+* **transform:** fix data type issue for amount column ([73bb402](https://github.com/tks18/personal-finance-etl/commit/73bb402c6c403b6a9f8fdd2931cceb61cd11ffca))
+
 ### [1.8.4](https://github.com/tks18/personal-finance-etl/compare/1.8.3...1.8.4) (2026-07-25)
 
 
