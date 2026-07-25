@@ -62,7 +62,7 @@ def transform_f_income_transactions(base_transactions_lazy: pl.LazyFrame) -> pl.
         .with_columns(
             pl.when(pl.col("LOCAL_AMOUNT") == 0)
             .then(0.0)
-            .otherwise(pl.col("AMOUNT_ACCOUNT") / pl.col("LOCAL_AMOUNT"))
+            .otherwise(pl.col("BASE_AMOUNT") / pl.col("LOCAL_AMOUNT"))
             .alias("EXCH_RATE")
         )
     )
@@ -108,7 +108,7 @@ def transform_f_expense_transactions(base_transactions_lazy: pl.LazyFrame) -> pl
         .with_columns(
             pl.when(pl.col("LOCAL_AMOUNT") == 0)
             .then(0.0)
-            .otherwise(pl.col("AMOUNT_ACCOUNT") / pl.col("LOCAL_AMOUNT"))
+            .otherwise(pl.col("BASE_AMOUNT") / pl.col("LOCAL_AMOUNT"))
             .alias("EXCH_RATE")
         )
     )
@@ -186,15 +186,15 @@ def transform_f_transfer_transactions(
             # EXCH_RATE
             pl.when(pl.col("LOCAL_AMOUNT") == 0)
             .then(0.0)
-            .otherwise(pl.col("AMOUNT_ACCOUNT") / pl.col("LOCAL_AMOUNT"))
+            .otherwise(pl.col("BASE_AMOUNT") / pl.col("LOCAL_AMOUNT"))
             .alias("EXCH_RATE"),
         )
         # Add Dependent Calculated Columns (These rely on the previous step's outputs)
         .with_columns(
             # AMOUNT_PROPER
             pl.when(pl.col("TRANSFER_TYPE") == "Out")
-            .then(pl.col("AMOUNT_ACCOUNT") * -1)
-            .otherwise(pl.col("AMOUNT_ACCOUNT"))
+            .then(pl.col("BASE_AMOUNT") * -1)
+            .otherwise(pl.col("BASE_AMOUNT"))
             .alias("AMOUNT_PROPER"),
             # ADJUSTED_DATE_FOR_ANALYSIS (EDATE equivalent)
             pl.when(pl.col("ASSET_GROUP") == "Investments")

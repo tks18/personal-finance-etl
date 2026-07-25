@@ -31,14 +31,17 @@ class BaseMetricsBuilder:
             return {}
 
         from typing import cast
+
         lf_open = cast(pl.LazyFrame, f_open.lazy() if isinstance(f_open, pl.DataFrame) else f_open)
         lf_inc = cast(pl.LazyFrame, f_inc.lazy() if isinstance(f_inc, pl.DataFrame) else f_inc)
         lf_exp = cast(pl.LazyFrame, f_exp.lazy() if isinstance(f_exp, pl.DataFrame) else f_exp)
         lf_trn = cast(pl.LazyFrame, f_trn.lazy() if isinstance(f_trn, pl.DataFrame) else f_trn)
-        lf_cal = cast(pl.LazyFrame, (d_cal.lazy() if isinstance(d_cal, pl.DataFrame) else d_cal)).rename(
-            {"Date": "DATE", "Year": "YEAR", "Month": "MONTH"}
+        lf_cal = cast(
+            pl.LazyFrame, (d_cal.lazy() if isinstance(d_cal, pl.DataFrame) else d_cal)
+        ).rename({"Date": "DATE", "Year": "YEAR", "Month": "MONTH"})
+        lf_asset = cast(
+            pl.LazyFrame, d_asset.lazy() if isinstance(d_asset, pl.DataFrame) else d_asset
         )
-        lf_asset = cast(pl.LazyFrame, d_asset.lazy() if isinstance(d_asset, pl.DataFrame) else d_asset)
 
         if isinstance(f_open, pl.DataFrame):
             min_open_date = f_open.select(pl.col("ZTXDATESTR").min()).item()
@@ -85,7 +88,7 @@ class BaseMetricsBuilder:
         ).select(
             [
                 pl.col("ASSET_ID").alias("ASSET_SUBCATEGORY_ID"),
-                pl.col("AMOUNT_ACCOUNT").alias("INCOME"),
+                pl.col("BASE_AMOUNT").alias("INCOME"),
                 pl.col("CATEGORY_ID"),
                 pl.col("DATE"),
             ]
@@ -96,7 +99,7 @@ class BaseMetricsBuilder:
         ).select(
             [
                 pl.col("ASSET_ID").alias("ASSET_SUBCATEGORY_ID"),
-                pl.col("AMOUNT_ACCOUNT").alias("EXPENSE"),
+                pl.col("BASE_AMOUNT").alias("EXPENSE"),
                 pl.col("CATEGORY_ID"),
                 pl.col("DATE"),
             ]
