@@ -13,6 +13,7 @@ def get_base_transactions(df_lazy: pl.LazyFrame, column_mapping: dict[str, str])
         .with_columns(
             [
                 pl.col("IS_DEL").cast(pl.String),
+                pl.col("BASE_AMOUNT").cast(pl.Float64, strict=False).fill_null(0.0),
                 pl.col("LOCAL_AMOUNT").cast(pl.Float64, strict=False).fill_null(0.0),
                 pl.col("AMOUNT_ACCOUNT").cast(pl.Float64, strict=False).fill_null(0.0),
                 pl.col("TRANSACTION_TYPE").cast(pl.Int64, strict=False),
