@@ -59,7 +59,7 @@ def transform_f_income_transactions(base_transactions_lazy: pl.LazyFrame) -> pl.
                 "AMOUNT_ACCOUNT",
             ]
         )
-        # DAX: EXCH_RATE = DIVIDE(AMOUNT_ACCOUNT, LOCAL_AMOUNT, 0)
+        # DAX: EXCH_RATE = DIVIDE(BASE_AMOUNT, LOCAL_AMOUNT, 0)
         .with_columns(
             pl.when(pl.col("LOCAL_AMOUNT") == 0)
             .then(0.0)
@@ -105,7 +105,7 @@ def transform_f_expense_transactions(base_transactions_lazy: pl.LazyFrame) -> pl
                 "AMOUNT_ACCOUNT",
             ]
         )
-        # DAX: EXCH_RATE = DIVIDE(AMOUNT_ACCOUNT, LOCAL_AMOUNT, 0)
+        # DAX: EXCH_RATE = DIVIDE(BASE_AMOUNT, LOCAL_AMOUNT, 0)
         .with_columns(
             pl.when(pl.col("LOCAL_AMOUNT") == 0)
             .then(0.0)
