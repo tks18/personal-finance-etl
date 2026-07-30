@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS p_tf_Net_Worth_Monthly_Summary (
     Months_of_Runway REAL,
     FOREIGN KEY(MONTH_START_DATE) REFERENCES d_Calendar(Date),
     FOREIGN KEY(MONTH_END_DATE) REFERENCES d_Calendar(Date),
-    FOREIGN KEY(ASSET_SUBCATEGORY_ID) REFERENCES d_Asset_SubCategory(UID)
+    FOREIGN KEY(ASSET_SUBCATEGORY_ID) REFERENCES d_Asset_Subcategory(UID)
 );
 
 CREATE TABLE IF NOT EXISTS p_tf_Financial_Ratios_Monthly (

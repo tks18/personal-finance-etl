@@ -23,7 +23,7 @@ CREATE TABLE d_tf_Investment_Master (
     BENCHMARK_ID TEXT,
     TAX_TYPE TEXT,
     TAX_SUBTYPE TEXT,
-    FOREIGN KEY(CATEGORY_ID) REFERENCES d_AssetSubCategory(UID),
+    FOREIGN KEY(CATEGORY_ID) REFERENCES d_Asset_Subcategory(UID),
     FOREIGN KEY(BENCHMARK_ID) REFERENCES d_Investment_Benchmark_Master(ID)
 );
 
@@ -177,6 +177,7 @@ CREATE TABLE f_Investment_Market_Data (
     FY_LTCG_Remaining_Exemption INTEGER, 
     Stepup_Eligible INTEGER, 
     Harvest_Recommendation TEXT, 
+    PRIMARY KEY (ISIN, Closing_Date, Buy_Date),
     FOREIGN KEY(Closing_Date) REFERENCES d_Calendar(Date),
     FOREIGN KEY(BENCHMARK_ID) REFERENCES d_Investment_Benchmark_Master(ID),
     FOREIGN KEY(ISIN) REFERENCES d_tf_InvestmentMaster(ISIN),

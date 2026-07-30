@@ -95,8 +95,8 @@ CREATE TABLE d_Asset_Category (
     ORDER_SEQUENCE INTEGER
 );
 
--- DDL: d_AssetSubCategory
-CREATE TABLE d_Asset_SubCategory (
+-- DDL: d_Asset_Subcategory
+CREATE TABLE d_Asset_Subcategory (
     __file_name__ TEXT, __folder_path__ TEXT, S_NO INTEGER,
     CARD_STATEMENT_DATE INTEGER,
     CARD_PAYMENT_DATE INTEGER,
