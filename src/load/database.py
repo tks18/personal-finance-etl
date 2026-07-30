@@ -25,8 +25,7 @@ class SQLiteDatabaseManager:
             fy_str = f"{now.year - 1}-{str(now.year)[-2:]}"
 
         month_year_str = now.strftime("%m-%Y")
-        timestamp_str = now.strftime("%Y%m%d_%H%M%S")
-        file_name = f"Personal_Finance_DB_{timestamp_str}.db"
+        file_name = f"Personal_Finance_DB_{month_year_str}.db"
 
         full_dir_path = os.path.join(self.base_path, fy_str, month_year_str)
         os.makedirs(full_dir_path, exist_ok=True)
@@ -126,6 +125,13 @@ class SQLiteDatabaseManager:
                 "CREATE INDEX IF NOT EXISTS idx_opbal_category ON f_Opening_Balances(ZCATEGORYUID);"
             )
 
+            # Presentation Table Indexes
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_ptf_nw_ms ON p_tf_Net_Worth_Monthly_Summary(MONTH_START_DATE);")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_ptf_fr_ms ON p_tf_Financial_Ratios_Monthly(MONTH_START_DATE);")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_ptf_csa_ms ON p_tf_category_spend_analytics(MONTH_START_DATE, CATEGORY_ID);")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_ptf_is_ms ON p_tf_income_streams_monthly(MONTH_START_DATE, CATEGORY_ID);")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_ptf_ff_ms ON p_tf_fire_forecasting_monthly(MONTH_START_DATE);")
+
             # Final Investment Benchmark & Market Data Indexes
             cursor.execute(
                 "CREATE INDEX IF NOT EXISTS idx_inv_bm_id ON f_Investment_Benchmark_Data(ID);"
@@ -134,10 +140,13 @@ class SQLiteDatabaseManager:
                 "CREATE INDEX IF NOT EXISTS idx_inv_bm_date ON f_Investment_Benchmark_Data(Date);"
             )
             cursor.execute(
-                "CREATE INDEX IF NOT EXISTS idx_inv_mkt_isin ON f_Investment_Market_Data(ISIN);"
+                "CREATE INDEX IF NOT EXISTS idx_stg_inv_mkt_isin_date ON stg_Investment_Market_Data(ISIN, Date);"
             )
             cursor.execute(
-                "CREATE INDEX IF NOT EXISTS idx_inv_mkt_date ON f_Investment_Market_Data(Closing_Date);"
+                "CREATE INDEX IF NOT EXISTS idx_inv_mkt_isin_date ON f_Investment_Market_Data(ISIN, Closing_Date);"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_inv_mkt_isin ON f_Investment_Market_Data(ISIN);"
             )
             cursor.execute(
                 "CREATE INDEX IF NOT EXISTS idx_inv_buy_date ON f_Investment_Market_Data(Buy_Date);"
@@ -152,8 +161,15 @@ class SQLiteDatabaseManager:
             )
 
             cursor.execute("PRAGMA optimize;")
-            cursor.execute("PRAGMA wal_checkpoint(TRUNCATE);")
-            cursor.execute("PRAGMA journal_mode = DELETE;")
+
+    def cleanup(self) -> None:
+        """Ensures WAL mode is disabled and sidecar files are merged."""
+        if os.path.exists(self.db_path):
+            with sqlite3.connect(self.db_path, timeout=60.0) as conn:
+                cursor = conn.cursor()
+                cursor.execute("PRAGMA optimize;")
+                cursor.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+                cursor.execute("PRAGMA journal_mode = DELETE;")
 
     def batch_write_dataframe(
         self, df: pl.DataFrame, table_name: str, chunk_size: int = 50000
