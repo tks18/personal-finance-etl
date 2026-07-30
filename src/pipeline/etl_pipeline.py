@@ -145,17 +145,21 @@ class ETLOrchestrator:
         logger.info(f"Setting up Target DB at {self.db_manager.db_path}")
         self.db_manager.setup_schema()
 
-        extracted_data = self._extract()
-        self._transform(extracted_data)
+        try:
+            extracted_data = self._extract()
+            self._transform(extracted_data)
 
-        start_date, end_date = self._detect_benchmark_dates()
-        self._run_engines(start_date, end_date)
-        self._load()
+            start_date, end_date = self._detect_benchmark_dates()
+            self._run_engines(start_date, end_date)
+            self._load()
 
-        self.status_queue.put(EngineStatus(msg="", data=None, progress=1.0))
-        total_time = time.time() - start_time
-        logger.info(f"ETL complete in {total_time:.2f} seconds. All tables generated successfully.")
-        gc.collect()
+            self.status_queue.put(EngineStatus(msg="", data=None, progress=1.0))
+            total_time = time.time() - start_time
+            logger.info(f"ETL complete in {total_time:.2f} seconds. All tables generated successfully.")
+        finally:
+            logger.info("Cleaning up database connections and WAL sidecars...")
+            self.db_manager.cleanup()
+            gc.collect()
 
 
 def process_wrapper(status_queue: ILogger | None = None, config_path: str = "config.toml") -> None:
