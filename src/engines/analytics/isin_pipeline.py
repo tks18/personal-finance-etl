@@ -1,3 +1,4 @@
+import concurrent.futures
 import os
 from datetime import date
 
@@ -26,14 +27,13 @@ class IsinPipeline:
         has_data = False
         total_inst = len(self.isins)
 
-        for idx, isin in enumerate(self.isins):
-            progress = 0.05 + 0.8 * (idx / total_inst)
+        def _process_single(isin: str, idx: int) -> tuple[bool, list, dict, list]:
             if self.status_queue:
                 self.status_queue.put(
                     EngineStatus(
                         msg=f"[{idx + 1}/{total_inst}] Processing {isin}...",
                         data=None,
-                        progress=progress,
+                        progress=0.05 + 0.8 * (idx / total_inst),
                         level=LogLevel.STEP,
                     )
                 )
@@ -44,6 +44,29 @@ class IsinPipeline:
                     df.write_parquet(
                         os.path.join(self.tmp_dir, f"{isin.replace('/', '_')}.parquet")
                     )
+                    return True, isin_cf, isin_pt, isin_re
+                return False, isin_cf, isin_pt, isin_re
+            except Exception as e:
+                if self.status_queue:
+                    self.status_queue.put(
+                        EngineStatus(
+                            msg=f"Error processing {isin}: {e}",
+                            data=None,
+                            progress=0.05 + 0.8 * (idx / total_inst),
+                            level=LogLevel.ERROR,
+                        )
+                    )
+                return False, [], {}, []
+
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=min(32, (os.cpu_count() or 1) * 2)
+        ) as executor:
+            futures = [
+                executor.submit(_process_single, isin, idx) for idx, isin in enumerate(self.isins)
+            ]
+            for future in concurrent.futures.as_completed(futures):
+                success, isin_cf, isin_pt, isin_re = future.result()
+                if success:
                     has_data = True
 
                 global_cashflows.extend(isin_cf)
@@ -52,15 +75,5 @@ class IsinPipeline:
                     pt["val"] += vals["val"]
                     pt["shadow_val"] += vals["shadow_val"]
                 realized_events.extend(isin_re)
-            except Exception as e:
-                if self.status_queue:
-                    self.status_queue.put(
-                        EngineStatus(
-                            msg=f"Error processing {isin}: {e}",
-                            data=None,
-                            progress=progress,
-                            level=LogLevel.ERROR,
-                        )
-                    )
 
         return has_data, global_cashflows, portfolio_terminals, realized_events
