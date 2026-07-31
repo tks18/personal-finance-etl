@@ -1,8 +1,4 @@
-import calendar
-from datetime import date
-
 import polars as pl
-from dateutil.relativedelta import relativedelta
 
 
 def get_stg_calendar_ref(
@@ -13,7 +9,7 @@ def get_stg_calendar_ref(
     stg_mkt_lazy: pl.LazyFrame,
     f_pur_lazy: pl.LazyFrame,
     f_sale_lazy: pl.LazyFrame,
-) -> tuple[date, date]:
+) -> pl.LazyFrame:
     """
     Translates stg_CalendarRef.
     Unions the DATE columns from all 7 fact tables to find the min and max dates.
@@ -48,27 +44,25 @@ def get_stg_calendar_ref(
         ]
     ).unique()
 
-    # We collect this immediately because we need the scalar min/max values to generate the calendar range
-    df_collected = df_union.drop_nulls().collect()
+    df_bounds_lazy = df_union.drop_nulls().select(
+        pl.min("DATE").alias("min_date"), pl.max("DATE").alias("max_date")
+    )
 
-    min_date = df_collected["DATE"].min()
-    max_date = df_collected["DATE"].max()
-
-    from typing import cast
-
-    return cast(date, min_date), cast(date, max_date)
+    return df_bounds_lazy
 
 
-def transform_d_calendar(min_date: date, max_date: date) -> pl.LazyFrame:
+def transform_d_calendar(df_bounds_lazy: pl.LazyFrame) -> pl.LazyFrame:
     """
     Generates all 40 requested time-intelligence columns for the Calendar Master.
     Assumes an April 1st - March 31st Financial Year.
     """
-    start_date = min_date.replace(day=1) - relativedelta(months=1)
-    last_day_of_max_month = calendar.monthrange(max_date.year, max_date.month)[1]
-    end_date = max_date.replace(day=last_day_of_max_month)
-
-    df_cal = pl.DataFrame({"Date": pl.date_range(start_date, end_date, "1d", eager=True)}).lazy()
+    df_cal = df_bounds_lazy.select(
+        pl.date_ranges(
+            pl.col("min_date").dt.truncate("1mo").dt.offset_by("-1mo"),
+            pl.col("max_date").dt.month_end(),
+            "1d",
+        ).alias("Date")
+    ).explode("Date")
 
     df_transformed = (
         df_cal

@@ -144,11 +144,7 @@ def transform_stg_investment_market_data(refs: list[pl.LazyFrame]) -> pl.LazyFra
     df_union = pl.concat([ref.select(select_cols) for ref in refs], how="vertical")
 
     # The outer SUMMARIZE in DAX acts as a distinct/group by on the unioned result.
-    df_final = (
-        df_union.group_by(select_cols)
-        .agg([])
-        .sort(["ISIN", "Date", "Quantity", "Buy Price", "Closing Price"])
-    )
+    df_final = df_union.unique().sort(["ISIN", "Date", "Quantity", "Buy Price", "Closing Price"])
 
     return df_final
 
@@ -160,8 +156,7 @@ def get_f_tf_investment_purchase_data(refs: list[pl.LazyFrame]) -> pl.LazyFrame:
     df_union = pl.concat([ref.select(select_cols) for ref in refs], how="vertical")
 
     df_final = (
-        df_union.group_by(select_cols)
-        .agg([])  # SUMMARIZE (distinct)
+        df_union.unique()  # SUMMARIZE (distinct)
         .sort(["ISIN", "Date", "Quantity", "Price"])
         # DAX calculated col
         .with_columns(pl.lit("INR_INR").alias("CURRENCY_ID"))
@@ -188,8 +183,7 @@ def get_f_tf_investment_sale_data(refs: list[pl.LazyFrame]) -> pl.LazyFrame:
     df_union = pl.concat([ref.select(select_cols) for ref in refs], how="vertical")
 
     df_final = (
-        df_union.group_by(select_cols)
-        .agg([])  # SUMMARIZE (distinct)
+        df_union.unique()  # SUMMARIZE (distinct)
         .sort(["ISIN", "Date", "Quantity", "Sell Price"])
         .with_columns(pl.lit("INR_INR").alias("CURRENCY_ID"))
     )

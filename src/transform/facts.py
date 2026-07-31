@@ -1,5 +1,32 @@
 import polars as pl
 
+BASE_TRANSACTION_COLS = [
+    "__file_name__",
+    "__folder_path__",
+    "S_NO",
+    "UID",
+    "ASSET_ID",
+    "CARDDIVIDMONTH",
+    "CATEGORY_ID",
+    "TO_ASSET_ID",
+    "DESCRIPTION",
+    "TIMESTAMP",
+    "DATE",
+    "TIME",
+    "PAID",
+    "TRANSACTION_TYPE",
+    "BASE_AMOUNT",
+    "TRANSFER_UID",
+    "FEES_NOTES",
+    "LOCAL_AMOUNT",
+    "MARK",
+    "TRANSFER_FEES",
+    "UPDATED_TIME",
+    "CURRENCY_ID",
+    "AMOUNT_ACCOUNT",
+    "EXCH_RATE",
+]
+
 
 def get_base_transactions(df_lazy: pl.LazyFrame, column_mapping: dict[str, str]) -> pl.LazyFrame:
     """
@@ -20,6 +47,12 @@ def get_base_transactions(df_lazy: pl.LazyFrame, column_mapping: dict[str, str])
             ]
         )
         .filter(pl.col("IS_DEL").fill_null("0") == "0")
+        .with_columns(
+            pl.when(pl.col("LOCAL_AMOUNT") == 0)
+            .then(0.0)
+            .otherwise(pl.col("BASE_AMOUNT") / pl.col("LOCAL_AMOUNT"))
+            .alias("EXCH_RATE")
+        )
     )
 
     return df_base
@@ -30,42 +63,8 @@ def transform_f_income_transactions(base_transactions_lazy: pl.LazyFrame) -> pl.
     Branches off the base transactions for Income (TYPE = 0)
     and applies the DAX calculation.
     """
-    df_transformed = (
-        base_transactions_lazy.filter(pl.col("TRANSACTION_TYPE") == 0)
-        .select(
-            [
-                "__file_name__",
-                "__folder_path__",
-                "S_NO",
-                "UID",
-                "ASSET_ID",
-                "CARDDIVIDMONTH",
-                "CATEGORY_ID",
-                "TO_ASSET_ID",
-                "DESCRIPTION",
-                "TIMESTAMP",
-                "DATE",
-                "TIME",
-                "PAID",
-                "TRANSACTION_TYPE",
-                "BASE_AMOUNT",
-                "TRANSFER_UID",
-                "FEES_NOTES",
-                "LOCAL_AMOUNT",
-                "MARK",
-                "TRANSFER_FEES",
-                "UPDATED_TIME",
-                "CURRENCY_ID",
-                "AMOUNT_ACCOUNT",
-            ]
-        )
-        # DAX: EXCH_RATE = DIVIDE(BASE_AMOUNT, LOCAL_AMOUNT, 0)
-        .with_columns(
-            pl.when(pl.col("LOCAL_AMOUNT") == 0)
-            .then(0.0)
-            .otherwise(pl.col("BASE_AMOUNT") / pl.col("LOCAL_AMOUNT"))
-            .alias("EXCH_RATE")
-        )
+    df_transformed = base_transactions_lazy.filter(pl.col("TRANSACTION_TYPE") == 0).select(
+        BASE_TRANSACTION_COLS
     )
 
     return df_transformed
@@ -76,42 +75,8 @@ def transform_f_expense_transactions(base_transactions_lazy: pl.LazyFrame) -> pl
     Branches off the base transactions for Expenses (TYPE = 1)
     and applies the EXCH_RATE calculation.
     """
-    df_transformed = (
-        base_transactions_lazy.filter(pl.col("TRANSACTION_TYPE") == 1)
-        .select(
-            [
-                "__file_name__",
-                "__folder_path__",
-                "S_NO",
-                "UID",
-                "ASSET_ID",
-                "CARDDIVIDMONTH",
-                "CATEGORY_ID",
-                "TO_ASSET_ID",
-                "DESCRIPTION",
-                "TIMESTAMP",
-                "DATE",
-                "TIME",
-                "PAID",
-                "TRANSACTION_TYPE",
-                "BASE_AMOUNT",
-                "TRANSFER_UID",
-                "FEES_NOTES",
-                "LOCAL_AMOUNT",
-                "MARK",
-                "TRANSFER_FEES",
-                "UPDATED_TIME",
-                "CURRENCY_ID",
-                "AMOUNT_ACCOUNT",
-            ]
-        )
-        # DAX: EXCH_RATE = DIVIDE(BASE_AMOUNT, LOCAL_AMOUNT, 0)
-        .with_columns(
-            pl.when(pl.col("LOCAL_AMOUNT") == 0)
-            .then(0.0)
-            .otherwise(pl.col("BASE_AMOUNT") / pl.col("LOCAL_AMOUNT"))
-            .alias("EXCH_RATE")
-        )
+    df_transformed = base_transactions_lazy.filter(pl.col("TRANSACTION_TYPE") == 1).select(
+        BASE_TRANSACTION_COLS
     )
 
     return df_transformed
@@ -149,46 +114,14 @@ def transform_f_transfer_transactions(
         # Filter for Types 3 or 4
         .filter((pl.col("TRANSACTION_TYPE") == 3) | (pl.col("TRANSACTION_TYPE") == 4))
         # Select base columns
-        .select(
-            [
-                "__file_name__",
-                "__folder_path__",
-                "S_NO",
-                "UID",
-                "ASSET_ID",
-                "CARDDIVIDMONTH",
-                "CATEGORY_ID",
-                "TO_ASSET_ID",
-                "DESCRIPTION",
-                "TIMESTAMP",
-                "DATE",
-                "TIME",
-                "PAID",
-                "TRANSACTION_TYPE",
-                "BASE_AMOUNT",
-                "TRANSFER_UID",
-                "FEES_NOTES",
-                "LOCAL_AMOUNT",
-                "MARK",
-                "TRANSFER_FEES",
-                "UPDATED_TIME",
-                "CURRENCY_ID",
-                "AMOUNT_ACCOUNT",
-                "ASSET_GROUP",  # Kept temporarily for the calculation
-            ]
-        )
+        .select(BASE_TRANSACTION_COLS + ["ASSET_GROUP"])
         # Add Independent Calculated Columns
         .with_columns(
             # TRANSFER_TYPE
             pl.when(pl.col("TRANSACTION_TYPE") == 3)
             .then(pl.lit("Out"))
             .otherwise(pl.lit("In"))
-            .alias("TRANSFER_TYPE"),
-            # EXCH_RATE
-            pl.when(pl.col("LOCAL_AMOUNT") == 0)
-            .then(0.0)
-            .otherwise(pl.col("BASE_AMOUNT") / pl.col("LOCAL_AMOUNT"))
-            .alias("EXCH_RATE"),
+            .alias("TRANSFER_TYPE")
         )
         # Add Dependent Calculated Columns (These rely on the previous step's outputs)
         .with_columns(

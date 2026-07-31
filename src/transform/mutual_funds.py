@@ -142,7 +142,10 @@ def get_base_mf_transactions(raw_data: pl.LazyFrame) -> pl.LazyFrame:
 
 
 def transform_stg_mf_trades(
-    base_mf_orders_lazy: pl.LazyFrame, stg_mf_isin_mapping_lazy: pl.LazyFrame, trade_type: str
+    base_mf_orders_lazy: pl.LazyFrame,
+    stg_mf_isin_mapping_lazy: pl.LazyFrame,
+    scheme_mapping: dict[str, str],
+    trade_type: str,
 ) -> pl.LazyFrame:
     """
     Branches into Purchase or Sale tables, applies DAX SWITCH logic for old names,
@@ -154,15 +157,16 @@ def transform_stg_mf_trades(
         pl.col("Transaction Type").str.contains(f"(?i){trade_type}")
     )
 
-    # 2. DAX SWITCH Logic (Fixing old Scheme Names)
-    # Using a dictionary mapping for cleaner execution
-    scheme_mapping = {
-        "Quant Tax Plan Direct Growth": "Quant ELSS Tax Saver Fund Direct Growth",
-        "IDBI India Top 100 Equity Fund Direct Growth": "LIC MF Large Cap Fund Direct Growth",
-        "TATA DIGITAL INDIA FUND DIRECT PLAN GROWTH": "Tata Digital India Fund Direct Growth",
-        "ICICI PRUDENTIAL TECHNOLOGY FUND - DIRECT PLAN - GROWTH": "ICICI Prudential Technology Direct Plan Growth",
-        "DSP BlackRock Small Cap Fund - Direct - Growth": "DSP Small Cap Direct Plan Growth",
-    }
+    # 2. DAX SWITCH Logic (Fixing old Scheme Names via configuration)
+    if not scheme_mapping:
+        # Fallback to default if not configured in TOML
+        scheme_mapping = {
+            "Quant Tax Plan Direct Growth": "Quant ELSS Tax Saver Fund Direct Growth",
+            "IDBI India Top 100 Equity Fund Direct Growth": "LIC MF Large Cap Fund Direct Growth",
+            "TATA DIGITAL INDIA FUND DIRECT PLAN GROWTH": "Tata Digital India Fund Direct Growth",
+            "ICICI PRUDENTIAL TECHNOLOGY FUND - DIRECT PLAN - GROWTH": "ICICI Prudential Technology Direct Plan Growth",
+            "DSP BlackRock Small Cap Fund - Direct - Growth": "DSP Small Cap Direct Plan Growth",
+        }
 
     # Replace strings natively if they exist in the dictionary, otherwise keep original
     df_mapped = df_filtered.with_columns(
@@ -194,13 +198,9 @@ def get_stg_mf_master_ref(
     Unions unique ISINs across MF tables, then looks up attributes from Market Data.
     """
 
-    # Get Category ID for Mutual Funds
-    category_id_df = (
-        d_asset_subcategory_lazy.filter(pl.col("ASSET_NAME") == "Mutual Funds")
-        .select("UID")
-        .collect()
-    )
-    mf_category_id = category_id_df[0, 0] if not category_id_df.is_empty() else None
+    mf_category_lazy = d_asset_subcategory_lazy.filter(
+        pl.col("ASSET_NAME") == "Mutual Funds"
+    ).select(pl.col("UID").alias("CATEGORY_ID"))
 
     # Step 1: UNION of ISIN and Name across the 3 MF tables
     df_union = pl.concat(
@@ -231,10 +231,9 @@ def get_stg_mf_master_ref(
         )
     )
 
-    df_grouped = df_union.join(mf_attributes, on="ISIN", how="left").with_columns(
-        [
-            pl.lit("Mutual Funds").alias("INSTRUMENT_CLASS"),
-            pl.lit(mf_category_id).alias("CATEGORY_ID"),
-        ]
+    df_grouped = (
+        df_union.join(mf_attributes, on="ISIN", how="left")
+        .with_columns([pl.lit("Mutual Funds").alias("INSTRUMENT_CLASS")])
+        .join(mf_category_lazy, how="cross")
     )
     return df_grouped

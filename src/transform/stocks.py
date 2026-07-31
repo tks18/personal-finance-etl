@@ -204,14 +204,10 @@ def get_stg_stock_master_ref(
     Groups by ISIN, Name, and Class, and adds static Stock attributes.
     """
 
-    # DAX LOOKUPVALUE equivalent for CATEGORY_ID
-    # We find the UID where ASSET_NAME == "Stocks & ETFs"
-    category_id_df = (
-        d_asset_subcategory_lazy.filter(pl.col("ASSET_NAME") == "Stocks & ETFs")
-        .select("UID")
-        .collect()
-    )
-    stock_category_id = category_id_df[0, 0] if not category_id_df.is_empty() else None
+    # We lazily fetch Category ID
+    stock_category_lazy = d_asset_subcategory_lazy.filter(
+        pl.col("ASSET_NAME") == "Stocks & ETFs"
+    ).select(pl.col("UID").alias("CATEGORY_ID"))
 
     df_grouped = (
         stg_stock_market_data_lazy
@@ -230,8 +226,8 @@ def get_stg_stock_master_ref(
                 pl.col("INSTRUMENT_NAME").alias("INSTRUMENT_HOUSE"),
                 pl.lit("Equity").alias("INSTRUMENT_TYPE"),
                 pl.col("INSTRUMENT_CLASS").alias("INSTRUMENT_SUBTYPE"),
-                pl.lit(stock_category_id).alias("CATEGORY_ID"),
             ]
         )
+        .join(stock_category_lazy, how="cross")
     )
     return df_grouped
