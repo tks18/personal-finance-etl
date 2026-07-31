@@ -1,7 +1,8 @@
 import queue
 import time
 
-from src.pipeline.etl_pipeline import run_pipeline
+from src.config.settings import Settings
+from src.pipeline.etl_pipeline import ETLOrchestrator
 
 
 def main():
@@ -10,12 +11,11 @@ def main():
     start_time = time.time()
 
     try:
-        from src.config.settings import load_config
-
-        cfg = load_config("config.toml")
+        cfg = Settings.from_toml("config.toml")
 
         # Run in main thread for profiling
-        run_pipeline(q, cfg)
+        orchestrator = ETLOrchestrator(cfg, q)
+        orchestrator.run()
     except Exception as e:
         print(f"Error: {e}")
         raise e
