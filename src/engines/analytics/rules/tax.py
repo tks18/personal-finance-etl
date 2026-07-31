@@ -12,19 +12,31 @@ from src.utils.helpers import to_date_obj
 _DEFAULT_DEBT_MF_CUTOFF = date(2023, 4, 1)
 
 
+_LTCG_THRESHOLDS = {
+    ("equity", "listed"): 365,
+    ("equity", "unlisted"): 730,
+    ("debt", "mf"): 1095,
+    ("debt", "other"): 1095,
+    ("debt", ""): 1095,
+    ("gold", "mf"): 730,
+    ("gold", ""): 365,
+    ("sgb", "mf"): 730,
+    ("sgb", ""): 365,
+    ("silver", "mf"): 730,
+    ("silver", ""): 365,
+}
+
+
 def get_ltcg_threshold(tax_type: str, tax_subtype: str) -> int:
-    """Return holding period threshold for LTCG in days."""
+    """Return holding period threshold for LTCG in days based on declarative rules."""
     tt = tax_type.strip().lower()
     tst = tax_subtype.strip().lower()
 
-    if tt == "equity":
-        return 365 if tst == "listed" else 730
-    elif tt == "debt":
-        return 1095
-    elif tt == "gold" or tt == "sgb":
-        return 730 if tst == "mf" else 365
-    elif tt == "silver":
-        return 730 if tst == "mf" else 365
+    if (tt, tst) in _LTCG_THRESHOLDS:
+        return _LTCG_THRESHOLDS[(tt, tst)]
+    if (tt, "") in _LTCG_THRESHOLDS:
+        return _LTCG_THRESHOLDS[(tt, "")]
+
     return 730
 
 
@@ -89,19 +101,30 @@ class FYTaxRateTable:
             return self.fy_map[0]
         return None
 
+    _CLASSIFICATION_RULES = {
+        "equity": lambda tst, _: ("equity", "unlisted" if tst == "unlisted" else "listed"),
+        "reit": lambda tst, _: ("reit", "unlisted" if tst == "unlisted" else "listed"),
+        "invit": lambda tst, _: ("invit", "unlisted" if tst == "unlisted" else "listed"),
+        "gold": lambda tst, _: ("gold", ""),
+        "sgb": lambda tst, _: ("sgb", ""),
+        "debt": lambda tst, kwargs: (
+            "debt",
+            ("mf_post" if kwargs["lot_buy_date"] >= kwargs["debt_cutoff"] else "mf_pre")
+            if tst in ("mf", "mutual_fund", "debt_mf")
+            else "other",
+        ),
+    }
+
     def _classify(
         self, tax_type: str, tax_subtype: str, lot_buy_date: date, debt_cutoff: date
     ) -> tuple[str, str]:
         tt = tax_type.strip().lower()
         tst = tax_subtype.strip().lower()
-        if tt in ("equity", "reit", "invit"):
-            return (tt, "listed" if tst != "unlisted" else "unlisted")
-        if tt in ("gold", "sgb"):
-            return (tt, "")
-        if tt == "debt":
-            if tst in ("mf", "mutual_fund", "debt_mf"):
-                return ("debt", "mf_post" if lot_buy_date >= debt_cutoff else "mf_pre")
-            return ("debt", "other")
+
+        rule = self._CLASSIFICATION_RULES.get(tt)
+        if rule:
+            return rule(tst, {"lot_buy_date": lot_buy_date, "debt_cutoff": debt_cutoff})
+
         return ("default", "")
 
     def get_debt_mf_cutoff(self, ref_date: date) -> date:
