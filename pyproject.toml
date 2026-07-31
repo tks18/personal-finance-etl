@@ -10,8 +10,9 @@ license-files = ["LICENSE"]
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "adbc-driver-sqlite>=1.11.0",
+    "adbc-driver-sqlite>=1.12.0",
     "customtkinter>=6.0.0",
+    "duckdb>=1.5.5",
     "fastexcel>=0.20.2",
     "pillow>=12.3.0",
     "polars>=1.42.1",
