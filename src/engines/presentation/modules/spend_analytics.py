@@ -17,16 +17,15 @@ class SpendAnalyticsBuilder:
 
     def build(self) -> pl.LazyFrame:
         lf_exp_agg = self.base_lf["lf_exp_agg"]
-        lf_months = self.base_lf["lf_months"]
 
         d_subcat = self.dfs.get("df_d_expense_subcategory")
         d_exp_cat = self.dfs.get("df_d_expense_category")
 
         lf_cat_agg = (
-            lf_exp_agg.join(lf_months, how="cross")
-            .filter(
-                (pl.col("DATE") >= pl.col("MONTH_START_DATE"))
-                & (pl.col("DATE") <= pl.col("MONTH_END_DATE"))
+            lf_exp_agg
+            .with_columns(
+                pl.col("DATE").dt.month_start().alias("MONTH_START_DATE"),
+                pl.col("DATE").dt.month_end().alias("MONTH_END_DATE")
             )
             .group_by(["MONTH_START_DATE", "MONTH_END_DATE", "CATEGORY_ID"])
             .agg(
@@ -35,7 +34,18 @@ class SpendAnalyticsBuilder:
                     pl.col("EXPENSE").mean().fill_null(0.0).alias("Average_Transaction_Value"),
                 ]
             )
+        )
+
+        lf_months = self.base_lf["lf_months"]
+        lf_grid = lf_months.join(
+            lf_exp_agg.select("CATEGORY_ID").unique(), how="cross"
+        )
+        
+        lf_cat_agg = (
+            lf_grid.join(lf_cat_agg, on=["MONTH_START_DATE", "MONTH_END_DATE", "CATEGORY_ID"], how="left")
             .with_columns(
+                pl.col("Total_Monthly_Spend").fill_null(0.0),
+                pl.col("Average_Transaction_Value").fill_null(0.0),
                 pl.col("MONTH_START_DATE").cast(pl.String).str.slice(0, 7).alias("YEAR_MONTH")
             )
         )

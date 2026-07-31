@@ -23,10 +23,10 @@ class IncomeStreamsBuilder:
         d_inc_cat = self.dfs.get("df_d_income_category")
 
         lf_inc_monthly = (
-            lf_inc_agg.join(lf_months, how="cross")
-            .filter(
-                (pl.col("DATE") >= pl.col("MONTH_START_DATE"))
-                & (pl.col("DATE") <= pl.col("MONTH_END_DATE"))
+            lf_inc_agg
+            .with_columns(
+                pl.col("DATE").dt.month_start().alias("MONTH_START_DATE"),
+                pl.col("DATE").dt.month_end().alias("MONTH_END_DATE")
             )
             .group_by(["MONTH_START_DATE", "MONTH_END_DATE", "CATEGORY_ID"])
             .agg(
@@ -35,7 +35,17 @@ class IncomeStreamsBuilder:
                     pl.col("INCOME").mean().fill_null(0.0).alias("Average_Transaction_Value"),
                 ]
             )
+        )
+
+        lf_grid = lf_months.join(
+            lf_inc_agg.select("CATEGORY_ID").unique(), how="cross"
+        )
+        
+        lf_inc_monthly = (
+            lf_grid.join(lf_inc_monthly, on=["MONTH_START_DATE", "MONTH_END_DATE", "CATEGORY_ID"], how="left")
             .with_columns(
+                pl.col("Total_Monthly_Income").fill_null(0.0),
+                pl.col("Average_Transaction_Value").fill_null(0.0),
                 pl.col("MONTH_START_DATE").cast(pl.String).str.slice(0, 7).alias("YEAR_MONTH")
             )
         )

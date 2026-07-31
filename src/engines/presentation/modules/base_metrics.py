@@ -3,6 +3,8 @@ from datetime import date
 
 import polars as pl
 
+from src.utils.helpers import ensure_date_col
+
 
 class BaseMetricsBuilder:
     """
@@ -83,9 +85,7 @@ class BaseMetricsBuilder:
             )
         )
 
-        lf_inc_agg = lf_inc.with_columns(
-            pl.col("DATE").str.to_date("%Y-%m-%d", strict=False)
-        ).select(
+        lf_inc_agg = ensure_date_col(lf_inc, "DATE").select(
             [
                 pl.col("ASSET_ID").alias("ASSET_SUBCATEGORY_ID"),
                 pl.col("BASE_AMOUNT").alias("INCOME"),
@@ -94,9 +94,7 @@ class BaseMetricsBuilder:
             ]
         )
 
-        lf_exp_agg = lf_exp.with_columns(
-            pl.col("DATE").str.to_date("%Y-%m-%d", strict=False)
-        ).select(
+        lf_exp_agg = ensure_date_col(lf_exp, "DATE").select(
             [
                 pl.col("ASSET_ID").alias("ASSET_SUBCATEGORY_ID"),
                 pl.col("BASE_AMOUNT").alias("EXPENSE"),
@@ -105,9 +103,7 @@ class BaseMetricsBuilder:
             ]
         )
 
-        lf_trn_agg = lf_trn.with_columns(
-            pl.col("DATE").str.to_date("%Y-%m-%d", strict=False)
-        ).select(
+        lf_trn_agg = ensure_date_col(lf_trn, "DATE").select(
             [
                 pl.col("ASSET_ID").alias("ASSET_SUBCATEGORY_ID"),
                 pl.col("AMOUNT_PROPER").alias("TRANSFER"),
@@ -132,10 +128,10 @@ class BaseMetricsBuilder:
         )
 
         lf_activity = (
-            lf_ledger.join(lf_months, how="cross")
-            .filter(
-                (pl.col("DATE") >= pl.col("MONTH_START_DATE"))
-                & (pl.col("DATE") <= pl.col("MONTH_END_DATE"))
+            lf_ledger
+            .with_columns(
+                pl.col("DATE").dt.month_start().alias("MONTH_START_DATE"),
+                pl.col("DATE").dt.month_end().alias("MONTH_END_DATE")
             )
             .group_by(["MONTH_START_DATE", "MONTH_END_DATE", "ASSET_SUBCATEGORY_ID"])
             .agg(
@@ -163,14 +159,14 @@ class BaseMetricsBuilder:
             pl.when(pl.col("TYPE") == "EXPENSE")
             .then(pl.col("AMOUNT") * -1)
             .otherwise(pl.col("AMOUNT"))
-            .alias("NET_AMOUNT")
+            .alias("NET_AMOUNT"),
+            pl.col("DATE").dt.month_end().alias("MONTH_END_DATE")
         )
 
         lf_balances = (
-            lf_ledger_balance.join(lf_months, how="cross")
-            .filter(pl.col("DATE") <= pl.col("MONTH_END_DATE"))
+            lf_ledger_balance
             .group_by(["ASSET_SUBCATEGORY_ID", "MONTH_END_DATE"])
-            .agg(pl.col("NET_AMOUNT").sum().fill_null(0.0).alias("Closing_Balance"))
+            .agg(pl.col("NET_AMOUNT").sum().fill_null(0.0).alias("MONTHLY_NET_CHANGE"))
         )
 
         lf_nw_summary = (
@@ -188,9 +184,17 @@ class BaseMetricsBuilder:
                 pl.col("Income_Inflow").fill_null(0.0),
                 pl.col("Expense_Outflow").fill_null(0.0),
                 pl.col("Net_Transfers").fill_null(0.0),
-                pl.col("Closing_Balance").fill_null(0.0),
+                pl.col("MONTHLY_NET_CHANGE").fill_null(0.0),
             )
             .sort(["ASSET_SUBCATEGORY_ID", "MONTH_START_DATE"])
+        )
+
+        # Compute Closing Balance as cumulative sum of Net Changes
+        lf_nw_summary = lf_nw_summary.with_columns(
+            pl.col("MONTHLY_NET_CHANGE")
+            .cum_sum()
+            .over("ASSET_SUBCATEGORY_ID")
+            .alias("Closing_Balance")
         )
 
         lf_nw_summary = lf_nw_summary.with_columns(
@@ -199,7 +203,7 @@ class BaseMetricsBuilder:
             .over("ASSET_SUBCATEGORY_ID")
             .fill_null(0.0)
             .alias("Opening_Balance")
-        )
+        ).drop("MONTHLY_NET_CHANGE")
 
         lf_nw_summary = (
             lf_nw_summary.with_columns(
