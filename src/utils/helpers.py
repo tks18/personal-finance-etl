@@ -66,3 +66,25 @@ def get_month_folder_name(dt: date) -> str:
 def get_file_name(dt: date) -> str:
     """Return a zero-padded day-month-year CSV filename (e.g. '01-04-2024.csv')."""
     return f"{dt.day:02d}-{dt.month:02d}-{dt.year}.csv"
+
+
+def ensure_date_col[T: (pl.DataFrame, pl.LazyFrame)](df: T, col_name: str = "DATE") -> T:
+    """Safely cast a column to Date, handling String, Datetime, or Date types."""
+    schema = df.collect_schema() if hasattr(df, "collect_schema") else df.schema
+    if col_name not in schema:
+        return df
+
+    dtype = schema[col_name]
+    base = getattr(dtype, "base_type", dtype)
+
+    if base in (getattr(pl, "Utf8", pl.String), pl.String):
+        try:
+            return df.with_columns(pl.col(col_name).str.to_date("%Y-%m-%d", strict=False))
+        except AttributeError:
+            return df.with_columns(pl.col(col_name).str.strptime(pl.Date, "%Y-%m-%d", strict=False))
+    elif base == pl.Datetime:
+        return df.with_columns(pl.col(col_name).cast(pl.Date))
+    elif base != pl.Date:
+        return df.with_columns(pl.col(col_name).cast(pl.Date, strict=False))
+
+    return df
