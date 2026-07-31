@@ -86,9 +86,10 @@ class TransformationDAG:
 
         asset_results = []
         for pipeline in asset_pipelines:
-            asset_results.append(pipeline.process(extracted, d_asset_subcategory_lazy, logger))
+            asset_results.append(
+                pipeline.process(extracted, d_asset_subcategory_lazy, self.cfg, logger)
+            )
 
-        [res.market_data for res in asset_results]
         market_data_ref_lazy_list = [res.market_data_ref for res in asset_results]
         purchase_ref_lazy_list = [res.purchase_ref for res in asset_results]
         sale_ref_lazy_list = [res.sale_ref for res in asset_results]
@@ -107,7 +108,7 @@ class TransformationDAG:
 
         logger.info("Generating Master Calendar...")
         # Get first market_data to seed calendar (simplified since they're processed downstream anyway)
-        min_date, max_date = get_stg_calendar_ref(
+        df_bounds_lazy = get_stg_calendar_ref(
             f_income_transactions_lazy,
             f_expense_transactions_lazy,
             f_transfer_transactions_lazy,
@@ -116,7 +117,7 @@ class TransformationDAG:
             f_tf_inv_purchase_data_lazy,
             f_tf_inv_sale_data_lazy,
         )
-        d_calendar_lazy = transform_d_calendar(min_date, max_date)
+        d_calendar_lazy = transform_d_calendar(df_bounds_lazy)
 
         self.status_queue.put(
             EngineStatus(
