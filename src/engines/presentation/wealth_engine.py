@@ -2,6 +2,7 @@ from collections.abc import Mapping
 
 import polars as pl
 
+from src.engines.presentation.modules.advanced_analytics import AdvancedAnalyticsBuilder
 from src.engines.presentation.modules.base_metrics import BaseMetricsBuilder
 from src.engines.presentation.modules.financial_ratios import FinancialRatiosBuilder
 from src.engines.presentation.modules.fire_forecasting import FireForecastingBuilder
@@ -45,5 +46,11 @@ class WealthPresentationEngine:
 
         # 6. FIRE & Wealth Forecasting
         results["df_p_tf_fire_forecasting_monthly"] = FireForecastingBuilder(base_lf).build()
+
+        # 7. Advanced Analytics (Risk, Sectors, Tax Harvesting)
+        adv_builder = AdvancedAnalyticsBuilder(dfs, base_lf)
+        results["df_p_tf_risk_metrics"] = adv_builder.build_risk_dashboard()
+        results["df_p_tf_sector_allocation_monthly"] = adv_builder.build_sector_allocation()
+        results["df_p_tf_tax_harvesting"] = adv_builder.build_tax_harvesting()
 
         return results
