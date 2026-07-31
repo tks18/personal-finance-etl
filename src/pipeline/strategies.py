@@ -3,6 +3,7 @@ from typing import Protocol
 
 import polars as pl
 
+from src.config.settings import Settings
 from src.transform.investments import get_purchase_reference, get_sale_reference
 from src.transform.mutual_funds import (
     get_base_mf_transactions,
@@ -26,6 +27,7 @@ class AssetPipeline(Protocol):
         self,
         extracted: ExtractionResult,
         d_asset_subcategory_lazy: pl.LazyFrame,
+        cfg: Settings,
         logger: logging.Logger,
     ) -> AssetPipelineResult:
         """
@@ -40,6 +42,7 @@ class StockPipeline:
         self,
         extracted: ExtractionResult,
         d_asset_subcategory_lazy: pl.LazyFrame,
+        cfg: Settings,
         logger: logging.Logger,
     ) -> AssetPipelineResult:
         logger.info("Parsing unstructured Stock Excel files...")
@@ -77,6 +80,7 @@ class MutualFundPipeline:
         self,
         extracted: ExtractionResult,
         d_asset_subcategory_lazy: pl.LazyFrame,
+        cfg: Settings,
         logger: logging.Logger,
     ) -> AssetPipelineResult:
         logger.info("Parsing unstructured Mutual Fund Excel files...")
@@ -86,8 +90,12 @@ class MutualFundPipeline:
 
         logger.info("Parsing Mutual Fund Trade Orders...")
         base_orders = get_base_mf_transactions(extracted.mf_transactions_raw)
-        purchase_trans = transform_stg_mf_trades(base_orders, mapping, trade_type="PURCHASE")
-        sale_trans = transform_stg_mf_trades(base_orders, mapping, trade_type="REDEEM")
+        purchase_trans = transform_stg_mf_trades(
+            base_orders, mapping, cfg.MF_SCHEME_MAPPINGS, trade_type="PURCHASE"
+        )
+        sale_trans = transform_stg_mf_trades(
+            base_orders, mapping, cfg.MF_SCHEME_MAPPINGS, trade_type="REDEEM"
+        )
 
         logger.info("Aggregating Mutual Fund Purchases...")
         purchase_ref = get_purchase_reference(
