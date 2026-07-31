@@ -1,24 +1,13 @@
 import os
+import re
 from datetime import datetime
 
 import fastexcel
 import polars as pl
 
 
-def _process_mf_statement(file_path: str) -> pl.DataFrame:
-    excel_reader = fastexcel.read_excel(file_path)
-    if "Holdings" not in excel_reader.sheet_names:
-        return pl.DataFrame()
-
-    df_raw = excel_reader.load_sheet("Holdings", header_row=None).to_polars()
-    col_1 = df_raw.columns[0]
-    start_search = df_raw.with_row_index().filter(pl.col(col_1) == "Scheme Name")
-    if start_search.is_empty():
-        return pl.DataFrame()
-
-    header_idx = start_search["index"][0]
-    df_sliced = df_raw.slice(header_idx)
-
+def _clean_excel_headers(df_sliced: pl.DataFrame) -> tuple[pl.DataFrame, str]:
+    """Reusable header detection + cleaning for all Excel parsers."""
     raw_headers = df_sliced.row(0)
     clean_headers = []
     seen: dict[str, int] = {}
@@ -37,6 +26,24 @@ def _process_mf_statement(file_path: str) -> pl.DataFrame:
         {old: new for old, new in zip(df_sliced.columns, clean_headers, strict=False)}
     )
     first_col = clean_headers[0]
+    return df_data, first_col
+
+
+def _process_mf_statement(file_path: str) -> pl.DataFrame:
+    excel_reader = fastexcel.read_excel(file_path)
+    if "Holdings" not in excel_reader.sheet_names:
+        return pl.DataFrame()
+
+    df_raw = excel_reader.load_sheet("Holdings", header_row=None).to_polars()
+    col_1 = df_raw.columns[0]
+    start_search = df_raw.with_row_index().filter(pl.col(col_1) == "Scheme Name")
+    if start_search.is_empty():
+        return pl.DataFrame()
+
+    header_idx = start_search["index"][0]
+    df_sliced = df_raw.slice(header_idx)
+
+    df_data, first_col = _clean_excel_headers(df_sliced)
     return df_data.filter(pl.col(first_col).is_not_null())
 
 
@@ -45,9 +52,11 @@ def extract_mf_market_data_raw(valid_files: list[str]) -> pl.LazyFrame:
     for file_path in valid_files:
         filename = os.path.basename(file_path)
         try:
-            date_str = filename.split(" - ")[1].split(".")[0].strip()
-            month_date = datetime.strptime(date_str, "%d-%m-%Y").date()
-        except (IndexError, ValueError):
+            match = re.search(r"(\d{2}-\d{2}-\d{4})", filename)
+            if not match:
+                continue
+            month_date = datetime.strptime(match.group(1), "%d-%m-%Y").date()
+        except ValueError:
             continue
         df_processed = _process_mf_statement(file_path)
         if df_processed.is_empty():
@@ -77,24 +86,7 @@ def _process_mf_transaction_statements(file_path: str) -> pl.DataFrame:
     header_idx = start_search["index"][0]
     df_sliced = df_raw.slice(header_idx)
 
-    raw_headers = df_sliced.row(0)
-    clean_headers = []
-    seen: dict[str, int] = {}
-    for i, h in enumerate(raw_headers):
-        header_str = str(h).strip() if h is not None else ""
-        if header_str in ("", "None", "null"):
-            header_str = f"Unnamed_{i}"
-        if header_str in seen:
-            seen[header_str] += 1
-            header_str = f"{header_str}_{seen[header_str]}"
-        else:
-            seen[header_str] = 0
-        clean_headers.append(header_str)
-
-    df_data = df_sliced.slice(1).rename(
-        {old: new for old, new in zip(df_sliced.columns, clean_headers, strict=False)}
-    )
-    first_col = clean_headers[0]
+    df_data, first_col = _clean_excel_headers(df_sliced)
     return df_data.filter(pl.col(first_col).is_not_null())
 
 
@@ -103,13 +95,15 @@ def extract_mf_transactions_raw(valid_files: list[str]) -> pl.LazyFrame:
     for file_path in valid_files:
         filename = os.path.basename(file_path)
         try:
-            date_str = filename.split(" - ")[1].split(".")[0].strip()
-            parts = date_str.split("-")
-            if len(parts) == 2:
-                month_date = datetime.strptime(f"01-{parts[0]}-{parts[1]}", "%d-%m-%Y").date()
+            match = re.search(r"(\d{2}-\d{2}-\d{4}|\d{2}-\d{4})", filename)
+            if not match:
+                continue
+            date_str = match.group(1)
+            if len(date_str.split("-")) == 2:
+                month_date = datetime.strptime(f"01-{date_str}", "%d-%m-%Y").date()
             else:
                 month_date = datetime.strptime(date_str, "%d-%m-%Y").date()
-        except (IndexError, ValueError):
+        except ValueError:
             continue
         df_processed = _process_mf_transaction_statements(file_path)
         if df_processed.is_empty():
@@ -141,24 +135,8 @@ def _process_stock_closing_statement(file_path: str) -> pl.DataFrame:
 
     header_idx = start_search["index"][0] + 2
     df_sliced = df_raw.slice(header_idx)
-    raw_headers = df_sliced.row(0)
-    clean_headers = []
-    seen: dict[str, int] = {}
-    for i, h in enumerate(raw_headers):
-        header_str = str(h).strip() if h is not None else ""
-        if header_str in ("", "None", "null"):
-            header_str = f"Unnamed_{i}"
-        if header_str in seen:
-            seen[header_str] += 1
-            header_str = f"{header_str}_{seen[header_str]}"
-        else:
-            seen[header_str] = 0
-        clean_headers.append(header_str)
 
-    df_data = df_sliced.slice(1).rename(
-        {old: new for old, new in zip(df_sliced.columns, clean_headers, strict=False)}
-    )
-    first_col = clean_headers[0]
+    df_data, first_col = _clean_excel_headers(df_sliced)
     null_search = df_data.with_row_index().filter(pl.col(first_col).is_null())
     if not null_search.is_empty():
         end_idx = null_search["index"][0]
@@ -171,9 +149,11 @@ def extract_stock_market_data_raw(valid_files: list[str]) -> pl.LazyFrame:
     for file_path in valid_files:
         filename = os.path.basename(file_path)
         try:
-            date_str = filename.split("- ")[1].split(".")[0].strip()
-            month_date = datetime.strptime(date_str, "%d-%m-%Y").date()
-        except (IndexError, ValueError):
+            match = re.search(r"(\d{2}-\d{2}-\d{4})", filename)
+            if not match:
+                continue
+            month_date = datetime.strptime(match.group(1), "%d-%m-%Y").date()
+        except ValueError:
             continue
         df_processed = _process_stock_closing_statement(file_path)
         if df_processed.is_empty():
