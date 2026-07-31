@@ -35,8 +35,34 @@ class BenchmarkEngine:
             target_db_base_path, current_db_path, status_queue
         )
 
-    def run(self) -> pl.DataFrame:
+    def _resolve_dates(self, df_market: pl.DataFrame | None, df_purchase: pl.DataFrame | None) -> tuple[date, date]:
+        min_market, max_market, min_purch = None, None, None
+        
+        if df_market is not None and not df_market.is_empty():
+            market_dates = df_market.select(pl.col("Date").drop_nulls())
+            if not market_dates.is_empty():
+                min_market = market_dates.select(pl.min("Date")).item()
+                max_market = market_dates.select(pl.max("Date")).item()
+                
+        if df_purchase is not None and not df_purchase.is_empty():
+            purch_dates = df_purchase.select(pl.col("Date").drop_nulls())
+            if not purch_dates.is_empty():
+                min_purch = purch_dates.select(pl.min("Date")).item()
+                
+        valid_starts = [d for d in [min_market, min_purch] if d is not None]
+        start = min(valid_starts) if valid_starts else date(2000, 1, 1)
+        end = max_market if max_market else date.today()
+        
+        if isinstance(start, str): start = date.fromisoformat(start)
+        if isinstance(end, str): end = date.fromisoformat(end)
+        
+        return start, end
+
+    def run(self, df_market: pl.DataFrame | None = None, df_purchase: pl.DataFrame | None = None) -> pl.DataFrame:
         try:
+            if self.start_date is None or self.end_date is None:
+                self.start_date, self.end_date = self._resolve_dates(df_market, df_purchase)
+                
             self.status_queue.put(
                 EngineStatus(
                     msg="Loading Benchmark Master...", data=None, progress=0.05, level=LogLevel.STEP
