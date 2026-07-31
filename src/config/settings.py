@@ -1,7 +1,7 @@
 import json
 import os
 import tomllib
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, field, fields
 
 
 class PreferencesManager:
@@ -60,6 +60,9 @@ class Settings:
     # Statements
     STATEMENTS_FOLDER: str = ""
 
+    # Configurable Mappings
+    MF_SCHEME_MAPPINGS: dict[str, str] = field(default_factory=dict)
+
     @classmethod
     def from_toml(cls, filepath: str) -> "Settings":
         """Loads a TOML configuration and returns a Settings instance."""
@@ -70,9 +73,45 @@ class Settings:
         with open(filepath, "rb") as f:
             data = tomllib.load(f)
 
-        for field in fields(cls):
-            if field.name in data:
-                setattr(cfg, field.name, data[field.name])
+        for fld in fields(cls):
+            if fld.name in data:
+                setattr(cfg, fld.name, data[fld.name])
 
         PreferencesManager().add_recent_config(filepath)
         return cfg
+
+    def validate(self) -> None:
+        """Validates that all necessary files and folders exist before starting."""
+        required_dirs = [
+            ("SOURCE_DB_FOLDER", self.SOURCE_DB_FOLDER),
+            ("STATEMENTS_FOLDER", self.STATEMENTS_FOLDER),
+        ]
+
+        required_files = [
+            ("COLUMN_MASTER_PATH", self.COLUMN_MASTER_PATH),
+            ("MF_ISIN_CSV_PATH", self.MF_ISIN_CSV_PATH),
+            ("BENCHMARK_MAPPING_CSV_PATH", self.BENCHMARK_MAPPING_CSV_PATH),
+            ("BENCHMARK_MASTER_CSV_PATH", self.BENCHMARK_MASTER_CSV_PATH),
+            ("TAX_RATES_CSV_PATH", self.TAX_RATES_CSV_PATH),
+            ("OPENING_BALANCE_CSV_PATH", self.OPENING_BALANCE_CSV_PATH),
+        ]
+
+        errors = []
+
+        # We don't validate TARGET_DB_BASE_PATH because it is created automatically if missing
+        if not self.TARGET_DB_BASE_PATH:
+            errors.append("TARGET_DB_BASE_PATH is empty in configuration.")
+
+        for name, path in required_dirs:
+            if not path or not os.path.isdir(path):
+                errors.append(f"Directory {name} not found: '{path}'")
+
+        for name, path in required_files:
+            if not path or not os.path.isfile(path):
+                errors.append(f"File {name} not found: '{path}'")
+
+        if errors:
+            raise FileNotFoundError(
+                "Configuration Validation Failed. The following paths are missing or invalid:\n"
+                + "\n".join(errors)
+            )
