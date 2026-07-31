@@ -2,6 +2,59 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [2.0.0](https://github.com/tks18/personal-finance-etl/compare/1.8.5...2.0.0) (2026-07-31)
+
+
+### Docs 📃
+
+* **transform:** fix docstring/comments ([0a79e5d](https://github.com/tks18/personal-finance-etl/commit/0a79e5dce699e4d8055ebc885e48c68acecd71fe))
+
+
+### Bug Fixes 🛠
+
+* **engines/analytics:** tax - more maintainable rule using tuple and dict mappings ([f2e618e](https://github.com/tks18/personal-finance-etl/commit/f2e618eedf3bad02e065658e2c55d4f07fa7cf29))
+* **engines/presentations:** some common polars query optimizations ([6266452](https://github.com/tks18/personal-finance-etl/commit/62664526bde17f31e6f12cae00616593992604e2))
+* **extract:** add logging if no files found ([64f31c8](https://github.com/tks18/personal-finance-etl/commit/64f31c87526a070c295263c0577203d874489e26))
+* **extract:** sqlite - add extension in the glob search ([56bcce7](https://github.com/tks18/personal-finance-etl/commit/56bcce7afff7720e1a4d9d149a7310f977d82b95))
+* **helpers:** add common polars date parsng function ([459b644](https://github.com/tks18/personal-finance-etl/commit/459b644290f3ed8cc377f8e77f97133db69111a1))
+* **load/schema:** fix schema namings ([aa93cde](https://github.com/tks18/personal-finance-etl/commit/aa93cde3fa8e350599f1bbe7ecad88c81c2b8509))
+* **load:** database: add cleanups on fail ([a330aed](https://github.com/tks18/personal-finance-etl/commit/a330aed45369badc11b3a79d97a3bfa8c99ed2c7))
+* **pipeline/core:** add validation before collect all ([972e5b2](https://github.com/tks18/personal-finance-etl/commit/972e5b2e078d9349e1b1f6f5bb8c19415cf2602e))
+* **pipeline:** add cleanup on pipeline fail ([5595ff8](https://github.com/tks18/personal-finance-etl/commit/5595ff8359f475ef5bdb3a5341b1400ce3e323f9))
+* **transform:** add common pl query optimizations & fixes, dedupe code ([6173724](https://github.com/tks18/personal-finance-etl/commit/61737247f9c3373adc4361a45d7632d599774d1f))
+
+
+### Build System 🏗
+
+* add duckdb to move out of sqlite3 ([4da3fdf](https://github.com/tks18/personal-finance-etl/commit/4da3fdf6066daa24c4c6bde65ebe1050d2f012f5))
+
+
+### Features 🔥
+
+* **config:** settings - add validation and raise errors ([137b944](https://github.com/tks18/personal-finance-etl/commit/137b94405b95e3a5e4002d3ef6c4627f0d178ea0))
+* **engines/analytics:** isin_pipeline - parallelerize the isin pipeline using futures ([294ddbc](https://github.com/tks18/personal-finance-etl/commit/294ddbc8a6b99513eb86479329ae02ced7cc6157))
+* **engines/benchmark:** introduce new benchmark cache manager ([5b5c8f2](https://github.com/tks18/personal-finance-etl/commit/5b5c8f271d0708076138a3e5f500251551a73f54))
+* **engines/presentations:** add a new advanced analytics views for more in depth insights ([9673031](https://github.com/tks18/personal-finance-etl/commit/9673031334b86125ec91d5f79df43c9f9ec21dac))
+* **engines/presentations:** add a new monte carlo simulation for FIRE Forecasting ([4411179](https://github.com/tks18/personal-finance-etl/commit/44111797dd6fc02a5217b579a87c15d57d4132ac))
+* **engines/presentations:** integrate advanced analytics engine ([7e114a7](https://github.com/tks18/personal-finance-etl/commit/7e114a7a8a485b9b11d87d6839e4607816f111d6))
+* **load/db:** move to duckdb froms sqlite ([56a8c14](https://github.com/tks18/personal-finance-etl/commit/56a8c14616014f81c99195cfa53265b13296b4da))
+* **load/schema:** add new presentation tables based on duckdb ddl ([667a42c](https://github.com/tks18/personal-finance-etl/commit/667a42c65ba23faaf70b517491bd0c6e7bfa1c80))
+* **load/schema:** rewrite all sqlite3 ddl to duckdb ddl ([1d99f4d](https://github.com/tks18/personal-finance-etl/commit/1d99f4dfed0891f3946935d3c7cb0c097669f0b1))
+* **pipeline:** now mf scheme mappings are configurable ([56c79ef](https://github.com/tks18/personal-finance-etl/commit/56c79ef4cd2e21c48b596805e7fb341a37167446))
+
+
+### Code Refactoring 🖌
+
+* **engine/benchmark:** refactor for better maintainability ([c15227c](https://github.com/tks18/personal-finance-etl/commit/c15227c5c2ceb6ba04f43b783c3c1fbe66b57a43))
+* **extract:** excel - refactor common function and dedupe the code ([b1d4f47](https://github.com/tks18/personal-finance-etl/commit/b1d4f47fe82e8b2596d24ba0758c5656c00297e2))
+* **pipeline/core:** minor refactors ([54b00c1](https://github.com/tks18/personal-finance-etl/commit/54b00c19a0a41b15209ccee14633f168a201d06e))
+* **pipeline:** refactor to new db and other module refactors ([e7563c7](https://github.com/tks18/personal-finance-etl/commit/e7563c73e9e64d3617e218c2fed5bbe841fdd508))
+
+
+### Tests 🧪
+
+* correct the headless test file properly to use new modules ([1559b76](https://github.com/tks18/personal-finance-etl/commit/1559b76e5063a226e28e3c784b03633536feae21))
+
 ### [1.8.5](https://github.com/tks18/personal-finance-etl/compare/1.8.4...1.8.5) (2026-07-25)
 
 
