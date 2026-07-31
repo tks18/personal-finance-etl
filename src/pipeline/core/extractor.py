@@ -83,7 +83,7 @@ class DataExtractor:
         stock_market_data_raw = extract_stock_market_data_raw(statement_files["stock_pl"])
         stock_transactions_raw = extract_stock_transactions_raw(statement_files["stock_orders"])
 
-        return ExtractionResult(
+        result = ExtractionResult(
             zcategory=zcategory_lazy,
             assetgroup=assetgroup_lazy,
             assets=assets_lazy,
@@ -100,3 +100,31 @@ class DataExtractor:
             raw_benchmark_master=raw_benchmark_master,
             raw_tax_rates=raw_tax_rates,
         )
+
+        logger.info("Running Gatekeeper Schema Validation...")
+        self.status_queue.put(
+            EngineStatus(
+                msg="Running Gatekeeper Schema Validation...",
+                data=None,
+                progress=0.15,
+                level=LogLevel.STEP,
+            )
+        )
+        # Fail-fast by attempting to collect the first row of all extract lazy frames.
+        # This will trigger Polars to aggressively evaluate schema_overrides and cast(strict=True) 
+        # instantly, preventing OOM or compute waste down the DAG if source files are corrupted.
+        validation_frames = [
+            result.zcategory, result.assetgroup, result.assets, result.currency, result.inoutcome,
+            result.stg_mf_isin_mapping, result.stg_benchmark_mapping,
+            result.raw_opening_balances, result.raw_benchmark_master, result.raw_tax_rates
+        ]
+        
+        try:
+            pl.collect_all([lf.head(1) for lf in validation_frames])
+        except Exception as e:
+            self.status_queue.put(
+                EngineStatus(msg=f"Gatekeeper Validation Failed: {e}", data=None, progress=0, level=LogLevel.ERROR)
+            )
+            raise RuntimeError(f"Corrupted source data detected during extraction: {e}") from e
+
+        return result
