@@ -2,7 +2,6 @@ import gc
 import multiprocessing
 import time
 import traceback
-from datetime import date, datetime
 from typing import cast
 
 import polars as pl
@@ -11,7 +10,7 @@ from src.config.settings import Settings
 from src.engines.analytics import InvestmentAnalyticsEngine
 from src.engines.benchmark import BenchmarkEngine
 from src.engines.presentation.wealth_engine import WealthPresentationEngine
-from src.load.database import SQLiteDatabaseManager, SQLiteLoader
+from src.load.database import DuckDBLoader, DuckDBManager
 from src.pipeline.core.extractor import DataExtractor
 from src.pipeline.core.transformer import TransformationDAG
 from src.utils.interfaces import IDatabaseLoader, ILogger
@@ -25,7 +24,7 @@ class ETLOrchestrator:
             raise ValueError("Configuration settings (cfg) cannot be None")
         self.cfg = cfg
         self.status_queue = status_queue
-        self.db_manager = SQLiteDatabaseManager(cfg.TARGET_DB_BASE_PATH)
+        self.db_manager = DuckDBManager(cfg.TARGET_DB_BASE_PATH)
         self.dfs: dict[str, pl.DataFrame] = {}
 
     def _extract(self) -> ExtractionResult:
@@ -36,57 +35,25 @@ class ETLOrchestrator:
         transformer = TransformationDAG(self.cfg, self.status_queue)
         self.dfs = transformer.run(extracted_data)
 
-    def _detect_benchmark_dates(self) -> tuple[date, date]:
+    def _run_engines(self) -> None:
         self.status_queue.put(
             EngineStatus(
-                msg="Detecting date range for Benchmarks...",
+                msg="Detecting date range & Starting Benchmark Engine...",
                 data=None,
-                progress=0.35,
+                progress=0.4,
                 level=LogLevel.STEP,
-            )
-        )
-        market_dates = self.dfs["df_stg_investment_market_data"].select(pl.col("Date").drop_nulls())
-        purchase_dates = self.dfs["df_f_tf_inv_purchase"].select(pl.col("Date").drop_nulls())
-
-        min_market_date = (
-            market_dates.select(pl.min("Date")).item() if not market_dates.is_empty() else None
-        )
-        max_market_date = (
-            market_dates.select(pl.max("Date")).item() if not market_dates.is_empty() else None
-        )
-        min_purchase_date = (
-            purchase_dates.select(pl.min("Date")).item() if not purchase_dates.is_empty() else None
-        )
-
-        valid_start_dates = [d for d in [min_market_date, min_purchase_date] if d is not None]
-        if valid_start_dates:
-            start_date = min(valid_start_dates)
-            end_date = max_market_date or date.today()
-            if isinstance(start_date, str):
-                start_date = datetime.strptime(start_date, "%Y-%m-%d").date()
-            if isinstance(end_date, str):
-                end_date = datetime.strptime(end_date, "%Y-%m-%d").date()
-        else:
-            start_date = date(2000, 1, 1)
-            end_date = date.today()
-
-        return start_date, end_date
-
-    def _run_engines(self, start_date: date, end_date: date) -> None:
-        self.status_queue.put(
-            EngineStatus(
-                msg="Starting Benchmark Engine...", data=None, progress=0.4, level=LogLevel.STEP
             )
         )
         bm_engine = BenchmarkEngine(
             df_m=self.dfs["df_d_benchmark_master"],
             status_queue=self.status_queue,
-            start_date=start_date,
-            end_date=end_date,
             target_db_base_path=self.cfg.TARGET_DB_BASE_PATH,
             current_db_path=self.db_manager.db_path,
         )
-        self.dfs["df_f_investment_benchmark_data"] = bm_engine.run()
+        self.dfs["df_f_investment_benchmark_data"] = bm_engine.run(
+            df_market=self.dfs.get("df_stg_investment_market_data"),
+            df_purchase=self.dfs.get("df_f_tf_inv_purchase"),
+        )
 
         self.status_queue.put(
             EngineStatus(
@@ -133,29 +100,38 @@ class ETLOrchestrator:
                 self.dfs[k] = res
 
     def _load(self) -> None:
-        loader: IDatabaseLoader = SQLiteLoader(self.db_manager, self.status_queue)
+        loader: IDatabaseLoader = DuckDBLoader(self.db_manager, self.status_queue)
         loader.run(self.dfs)
 
     def run(self) -> None:
+        self.cfg.validate()
+
         start_time = time.time()
         add_queue_handler(cast(multiprocessing.Queue, self.status_queue))
         logger.info("Starting ETL Pipeline")
         self.status_queue.put(EngineStatus(msg="", data=None, progress=0.0))
 
         logger.info(f"Setting up Target DB at {self.db_manager.db_path}")
+
+        # Rescue Benchmark Data before schema wipe
+        from src.engines.benchmark.cache import BenchmarkCacheManager
+
+        BenchmarkCacheManager.rescue_benchmark_cache(self.db_manager.db_path)
+
         self.db_manager.setup_schema()
 
         try:
             extracted_data = self._extract()
             self._transform(extracted_data)
 
-            start_date, end_date = self._detect_benchmark_dates()
-            self._run_engines(start_date, end_date)
+            self._run_engines()
             self._load()
 
             self.status_queue.put(EngineStatus(msg="", data=None, progress=1.0))
             total_time = time.time() - start_time
-            logger.info(f"ETL complete in {total_time:.2f} seconds. All tables generated successfully.")
+            logger.info(
+                f"ETL complete in {total_time:.2f} seconds. All tables generated successfully."
+            )
         finally:
             logger.info("Cleaning up database connections and WAL sidecars...")
             self.db_manager.cleanup()
@@ -187,3 +163,4 @@ def process_wrapper(status_queue: ILogger | None = None, config_path: str = "con
                 )
             )
         time.sleep(0.5)
+        raise e
