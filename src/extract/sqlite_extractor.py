@@ -10,7 +10,9 @@ class ADBCSQLiteExtractor:
 
     def _get_latest_sqlite_backup(self) -> str:
         """Finds the most recently modified SQLite file in the given folder."""
-        files = glob.glob(os.path.join(self.folder_path, "*.*"))
+        files = glob.glob(os.path.join(self.folder_path, "*.mmbak")) + glob.glob(
+            os.path.join(self.folder_path, "*.sqlite")
+        )
         if not files:
             raise FileNotFoundError(f"No database backup found in {self.folder_path}")
         return max(files, key=os.path.getmtime)
