@@ -1,12 +1,12 @@
 import concurrent.futures
-from datetime import date
+from datetime import date, timedelta
 
-import pandas as pd
 import polars as pl
 
 from src.engines.benchmark.cache import BenchmarkCacheManager
 from src.engines.benchmark.fetcher import BenchmarkDataFetcher
 from src.utils.interfaces import ILogger
+from src.utils.logger import logger
 from src.utils.models import EngineStatus, LogLevel
 
 
@@ -35,34 +35,40 @@ class BenchmarkEngine:
             target_db_base_path, current_db_path, status_queue
         )
 
-    def _resolve_dates(self, df_market: pl.DataFrame | None, df_purchase: pl.DataFrame | None) -> tuple[date, date]:
+    def _resolve_dates(
+        self, df_market: pl.DataFrame | None, df_purchase: pl.DataFrame | None
+    ) -> tuple[date, date]:
         min_market, max_market, min_purch = None, None, None
-        
+
         if df_market is not None and not df_market.is_empty():
             market_dates = df_market.select(pl.col("Date").drop_nulls())
             if not market_dates.is_empty():
                 min_market = market_dates.select(pl.min("Date")).item()
                 max_market = market_dates.select(pl.max("Date")).item()
-                
+
         if df_purchase is not None and not df_purchase.is_empty():
             purch_dates = df_purchase.select(pl.col("Date").drop_nulls())
             if not purch_dates.is_empty():
                 min_purch = purch_dates.select(pl.min("Date")).item()
-                
+
         valid_starts = [d for d in [min_market, min_purch] if d is not None]
         start = min(valid_starts) if valid_starts else date(2000, 1, 1)
         end = max_market if max_market else date.today()
-        
-        if isinstance(start, str): start = date.fromisoformat(start)
-        if isinstance(end, str): end = date.fromisoformat(end)
-        
+
+        if isinstance(start, str):
+            start = date.fromisoformat(start)
+        if isinstance(end, str):
+            end = date.fromisoformat(end)
+
         return start, end
 
-    def run(self, df_market: pl.DataFrame | None = None, df_purchase: pl.DataFrame | None = None) -> pl.DataFrame:
+    def run(
+        self, df_market: pl.DataFrame | None = None, df_purchase: pl.DataFrame | None = None
+    ) -> pl.DataFrame:
         try:
             if self.start_date is None or self.end_date is None:
                 self.start_date, self.end_date = self._resolve_dates(df_market, df_purchase)
-                
+
             self.status_queue.put(
                 EngineStatus(
                     msg="Loading Benchmark Master...", data=None, progress=0.05, level=LogLevel.STEP
@@ -97,8 +103,15 @@ class BenchmarkEngine:
                 )
                 return pl.DataFrame()
 
-            start_dt = pd.to_datetime(self.start_date)
-            end_dt = pd.to_datetime(self.end_date)
+            if isinstance(self.start_date, str):
+                start_dt = date.fromisoformat(self.start_date)
+            else:
+                start_dt = self.start_date
+
+            if isinstance(self.end_date, str):
+                end_dt = date.fromisoformat(self.end_date)
+            else:
+                end_dt = self.end_date
 
             cached_df = self.cache_manager.get_cached_benchmark_data()
             if cached_df is not None:
@@ -111,14 +124,17 @@ class BenchmarkEngine:
                     )
                 )
 
-            base_fetch_start = start_dt - pd.Timedelta(days=15)
-            full_idx = pd.date_range(start=start_dt, end=end_dt, freq="D")
+            base_fetch_start = start_dt - timedelta(days=15)
+            df_full_idx = pl.DataFrame(
+                {"Date": pl.date_range(start_dt, end_dt, "1d", eager=True).cast(pl.Date)}
+            )
 
             all_dfs = []
 
+            logger.info(f"Starting concurrent download for {total} tickers...")
             self.status_queue.put(
                 EngineStatus(
-                    msg=f"Starting concurrent download for {total} tickers...",
+                    msg="",
                     data=None,
                     progress=0.1,
                     level=LogLevel.STEP,
@@ -134,7 +150,7 @@ class BenchmarkEngine:
                         start_dt,
                         end_dt,
                         base_fetch_start,
-                        full_idx,
+                        df_full_idx,
                         cached_df,
                     ): row
                     for row in tickers_df
@@ -145,18 +161,24 @@ class BenchmarkEngine:
                     prog = 0.1 + 0.85 * (processed / total)
 
                     try:
-                        df_pd, row, msg = future.result()
+                        df_pl, row, msg = future.result()
                         level = (
                             LogLevel.WARNING
                             if "Warning" in (msg or "") or "⚠" in (msg or "")
                             else LogLevel.INFO
                         )
+                        if msg:
+                            if level == LogLevel.WARNING:
+                                logger.warning(msg)
+                            else:
+                                logger.debug(msg)
+
                         self.status_queue.put(
-                            EngineStatus(msg=msg or "", data=None, progress=prog, level=level)
+                            EngineStatus(msg="", data=None, progress=prog, level=level)
                         )
 
-                        if df_pd is not None and not df_pd.empty:
-                            all_dfs.append(df_pd)
+                        if df_pl is not None and not df_pl.is_empty():
+                            all_dfs.append(df_pl)
                     except Exception as e:
                         ticker = futures[future].get("yF_Ticker", "Unknown")
                         self.status_queue.put(
@@ -171,13 +193,12 @@ class BenchmarkEngine:
             if not all_dfs:
                 return pl.DataFrame()
 
-            final_pd = pd.concat(all_dfs, ignore_index=True)
-            final_df = pl.from_pandas(final_pd)
-            final_df = final_df.with_columns(pl.col("Date").cast(pl.Date))
+            final_df = pl.concat(all_dfs, how="vertical")
 
+            logger.info("Benchmark Downloader successfully processed all tickers.")
             self.status_queue.put(
                 EngineStatus(
-                    msg="Benchmark Downloader successfully processed all tickers.",
+                    msg="",
                     data=None,
                     progress=1.0,
                     level=LogLevel.SUCCESS,
