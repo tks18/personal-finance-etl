@@ -17,6 +17,12 @@ CREATE TABLE IF NOT EXISTS p_tf_Net_Worth_Monthly_Summary (
     "3M_Avg_Income" REAL,
     "YoY_Balance_Growth_%" REAL,
     Months_of_Runway REAL,
+    INFLATION_YOY_PCT REAL,
+    Closing_Balance_Real REAL,
+    "YoY_Balance_Growth_%_Real" REAL,
+    Organic_Growth_Value_Real REAL,
+    "Organic_Yield_%_Real" REAL,
+    "MoM_Balance_Growth_%_Real" REAL,
     FOREIGN KEY(MONTH_START_DATE) REFERENCES d_Calendar(Date),
     FOREIGN KEY(MONTH_END_DATE) REFERENCES d_Calendar(Date),
     FOREIGN KEY(ASSET_SUBCATEGORY_ID) REFERENCES d_Asset_Subcategory(UID)
@@ -33,6 +39,8 @@ CREATE TABLE IF NOT EXISTS p_tf_Financial_Ratios_Monthly (
     Total_Assets REAL,
     Total_Liabilities REAL,
     Total_Net_Worth REAL,
+    "YoY_Net_Worth_Growth_%_Real" REAL,
+    "FIRE_Progress_%_Real" REAL,
     FOREIGN KEY(MONTH_START_DATE) REFERENCES d_Calendar(Date),
     FOREIGN KEY(MONTH_END_DATE) REFERENCES d_Calendar(Date)
 );
@@ -92,6 +100,8 @@ CREATE TABLE IF NOT EXISTS p_tf_fire_forecasting_monthly (
     Months_To_FI_Base_P50 DOUBLE,
     Months_To_FI_Aggressive_P10 DOUBLE,
     Runway_Months DOUBLE,
+    INFLATION_YOY_PCT DOUBLE,
+    Real_Return_Assumed_Pct DOUBLE,
     FOREIGN KEY(MONTH_START_DATE) REFERENCES d_Calendar(Date),
     FOREIGN KEY(MONTH_END_DATE) REFERENCES d_Calendar(Date)
 );
