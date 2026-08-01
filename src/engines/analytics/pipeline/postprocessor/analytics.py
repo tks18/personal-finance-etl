@@ -9,9 +9,11 @@ from src.utils.helpers import to_date_obj
 class AdvancedAnalyticsCalculator:
     """Calculates Sharpe, MDD, Sortino ratios."""
 
-    @staticmethod
+    def __init__(self, fy_table=None):
+        self.fy_table = fy_table
+
     def calculate(
-        df_port: pl.DataFrame, unique_dates: list[date], portfolio_terminals: dict[date, dict]
+        self, df_port: pl.DataFrame, unique_dates: list[date], portfolio_terminals: dict[date, dict]
     ) -> pl.DataFrame:
         pt_records = []
         for d in unique_dates:
@@ -26,6 +28,19 @@ class AdvancedAnalyticsCalculator:
             df_pt = pl.DataFrame(pt_records).sort("Date_Obj")
             df_pt = (
                 df_pt.with_columns(pl.col("val").pct_change().fill_null(0.0).alias("daily_return"))
+                .with_columns(
+                    (pl.col("daily_return") + 1.0).cum_prod().alias("cum_return")
+                )
+                .with_columns(
+                    pl.when(pl.col("Date_Obj").cum_count() > 1)
+                    .then(
+                        pl.col("cum_return").pow(
+                            365.0 / pl.max_horizontal(1.0, (pl.col("Date_Obj") - pl.col("Date_Obj").first()).dt.total_days())
+                        ) - 1.0
+                    )
+                    .otherwise(0.0)
+                    .alias("annualized_twr")
+                )
                 .with_columns(
                     pl.col("daily_return")
                     .rolling_std(window_size=252, min_samples=1)
@@ -49,12 +64,20 @@ class AdvancedAnalyticsCalculator:
 
             df_port = df_port.join(
                 df_pt.select(
-                    ["Closing_Date", "volatility", "downside_volatility", "Portfolio_Max_Drawdown"]
+                    ["Closing_Date", "volatility", "downside_volatility", "Portfolio_Max_Drawdown", "annualized_twr"]
                 ),
                 on="Closing_Date",
                 how="left",
             )
-            risk_free_rate = 0.06  # Assuming 6% Risk Free Rate for India
+            
+            if self.fy_table is not None:
+                rfr_list = [{"Closing_Date": d, "risk_free_rate": self.fy_table.get_risk_free_rate(d)} for d in unique_dates]
+                df_rfr = pl.DataFrame(rfr_list)
+            else:
+                df_rfr = pl.DataFrame([{"Closing_Date": d, "risk_free_rate": 0.06} for d in unique_dates])
+
+            df_port = df_port.join(df_rfr, on="Closing_Date", how="left")
+
             df_port = (
                 df_port.with_columns(
                     (pl.col("volatility") * math.sqrt(252)).alias("ann_vol"),
@@ -62,15 +85,15 @@ class AdvancedAnalyticsCalculator:
                 )
                 .with_columns(
                     pl.when(pl.col("ann_vol") > 0)
-                    .then((pl.col("Portfolio_XIRR") - risk_free_rate) / pl.col("ann_vol"))
+                    .then((pl.col("annualized_twr") - pl.col("risk_free_rate")) / pl.col("ann_vol"))
                     .otherwise(0.0)
                     .alias("Portfolio_Sharpe_Ratio"),
                     pl.when(pl.col("ann_down_vol") > 0)
-                    .then((pl.col("Portfolio_XIRR") - risk_free_rate) / pl.col("ann_down_vol"))
+                    .then((pl.col("annualized_twr") - pl.col("risk_free_rate")) / pl.col("ann_down_vol"))
                     .otherwise(0.0)
                     .alias("Portfolio_Sortino_Ratio"),
                 )
-                .drop(["volatility", "downside_volatility", "ann_vol", "ann_down_vol"])
+                .drop(["volatility", "downside_volatility", "ann_vol", "ann_down_vol", "annualized_twr", "risk_free_rate"])
             )
         else:
             df_port = df_port.with_columns(
