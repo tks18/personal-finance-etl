@@ -17,27 +17,56 @@ class AdvancedAnalyticsBuilder:
     def build_risk_dashboard(self) -> pl.LazyFrame:
         """AE7: Rolling Risk & Drawdown Dashboard."""
         lf_monthly = self.base_lf.get("lf_monthly_totals")
-        if lf_monthly is None:
+        f_market_data = self.dfs.get("df_f_tf_investment_analytics_lot")
+
+        if lf_monthly is None or f_market_data is None:
             return pl.LazyFrame()
 
+        lf_market = (
+            f_market_data.lazy() if isinstance(f_market_data, pl.DataFrame) else f_market_data
+        )
+
+        # Get latest closing date per month and total value
+        lf_inv_monthly = lf_market.with_columns(
+            pl.col("Closing_Date")
+            .cast(pl.String)
+            .str.slice(0, 7)
+            .str.strptime(pl.Date, "%Y-%m", strict=False)
+            .alias("MONTH_START_DATE")
+        )
+
+        lf_inv_monthly = (
+            lf_inv_monthly.group_by("MONTH_START_DATE")
+            .agg(pl.col("Closing_Date").max().alias("Max_Closing_Date"))
+            .join(lf_inv_monthly, on="MONTH_START_DATE")
+            .filter(pl.col("Closing_Date") == pl.col("Max_Closing_Date"))
+            .group_by("MONTH_START_DATE")
+            .agg(pl.col("Close_Value").sum().alias("Total_Investment_Value"))
+        )
+
         return (
-            lf_monthly.sort("MONTH_START_DATE")
-            .with_columns(pl.col("Total_Net_Worth").cum_max().alias("All_Time_High_NW"))
+            lf_monthly.join(lf_inv_monthly, on="MONTH_START_DATE", how="left")
+            .with_columns(pl.col("Total_Investment_Value").fill_null(0.0))
+            .sort("MONTH_START_DATE")
             .with_columns(
-                pl.when(pl.col("All_Time_High_NW") > 0)
+                pl.col("Total_Investment_Value").cum_max().alias("All_Time_High_Inv"),
+                pl.col("Total_Net_Worth").cum_max().alias("All_Time_High_NW"),
+            )
+            .with_columns(
+                pl.when(pl.col("All_Time_High_Inv") > 0)
                 .then(
-                    (pl.col("Total_Net_Worth") - pl.col("All_Time_High_NW"))
-                    / pl.col("All_Time_High_NW")
+                    (pl.col("Total_Investment_Value") - pl.col("All_Time_High_Inv"))
+                    / pl.col("All_Time_High_Inv")
                 )
                 .otherwise(0.0)
                 .alias("Drawdown_Pct")
             )
             .with_columns(
-                # Calculate Monthly Return
-                pl.when(pl.col("Total_Net_Worth").shift(1) > 0)
+                # Calculate Monthly Return on Investments
+                pl.when(pl.col("Total_Investment_Value").shift(1) > 0)
                 .then(
-                    (pl.col("Total_Net_Worth") - pl.col("Total_Net_Worth").shift(1))
-                    / pl.col("Total_Net_Worth").shift(1)
+                    (pl.col("Total_Investment_Value") - pl.col("Total_Investment_Value").shift(1))
+                    / pl.col("Total_Investment_Value").shift(1)
                 )
                 .otherwise(0.0)
                 .alias("Monthly_Return")
@@ -63,7 +92,7 @@ class AdvancedAnalyticsBuilder:
 
     def build_sector_allocation(self) -> pl.LazyFrame:
         """AE3: Sector Rotation Analytics (Using Instrument Class and Subtype as a Proxy)."""
-        f_market_data = self.dfs.get("df_f_investment_market_data")
+        f_market_data = self.dfs.get("df_f_tf_investment_analytics_lot")
         d_inv_master = self.dfs.get("df_d_tf_investment_master")
         if f_market_data is None or d_inv_master is None:
             return pl.LazyFrame()
@@ -177,7 +206,7 @@ class AdvancedAnalyticsBuilder:
 
     def build_tax_harvesting(self) -> pl.LazyFrame:
         """AE6: Tax Harvesting Optimizer."""
-        f_market = self.dfs.get("df_f_investment_market_data")
+        f_market = self.dfs.get("df_f_tf_investment_analytics_lot")
         d_inv_master = self.dfs.get("df_d_tf_investment_master")
         if f_market is None or d_inv_master is None:
             return pl.LazyFrame()

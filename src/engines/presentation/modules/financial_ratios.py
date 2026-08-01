@@ -44,7 +44,28 @@ class FinancialRatiosBuilder:
                 .otherwise(0.0)
                 .alias("FIRE_Progress_%"),
             ]
-        ).select(
+        )
+
+        # Add real metrics
+        lf_ratios = lf_ratios.with_columns(
+            (
+                (
+                    (1 + pl.col("YoY_Net_Worth_Growth_%"))
+                    / (1 + (pl.col("INFLATION_YOY_PCT") / 100.0))
+                )
+                - 1
+            ).alias("YoY_Net_Worth_Growth_%_Real"),
+            (
+                pl.col("Total_Assets")
+                / (
+                    25
+                    * 12
+                    * (pl.col("3M_Avg_Total_Expense") * (pl.col("CPI_INDEX") / pl.lit(151.4)))
+                )
+            ).alias("FIRE_Progress_%_Real"),
+        )
+
+        lf_ratios = lf_ratios.select(
             [
                 "MONTH_START_DATE",
                 "MONTH_END_DATE",
@@ -56,6 +77,8 @@ class FinancialRatiosBuilder:
                 "Total_Assets",
                 "Total_Liabilities",
                 "Total_Net_Worth",
+                "YoY_Net_Worth_Growth_%_Real",
+                "FIRE_Progress_%_Real",
             ]
         )
         return lf_ratios

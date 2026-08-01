@@ -1,5 +1,6 @@
 from collections.abc import Mapping
 from datetime import date
+from typing import cast
 
 import polars as pl
 
@@ -21,6 +22,7 @@ class BaseMetricsBuilder:
         f_trn = self.dfs.get("df_f_transfer_transactions")
         d_cal = self.dfs.get("df_d_calendar")
         d_asset = self.dfs.get("df_d_asset_subcategory")
+        f_inflation = self.dfs.get("df_f_inflation_rates")
 
         if (
             f_open is None
@@ -32,8 +34,6 @@ class BaseMetricsBuilder:
         ):
             return {}
 
-        from typing import cast
-
         lf_open = cast(pl.LazyFrame, f_open.lazy() if isinstance(f_open, pl.DataFrame) else f_open)
         lf_inc = cast(pl.LazyFrame, f_inc.lazy() if isinstance(f_inc, pl.DataFrame) else f_inc)
         lf_exp = cast(pl.LazyFrame, f_exp.lazy() if isinstance(f_exp, pl.DataFrame) else f_exp)
@@ -43,6 +43,15 @@ class BaseMetricsBuilder:
         ).rename({"Date": "DATE", "Year": "YEAR", "Month": "MONTH"})
         lf_asset = cast(
             pl.LazyFrame, d_asset.lazy() if isinstance(d_asset, pl.DataFrame) else d_asset
+        )
+
+        lf_inflation = cast(
+            pl.LazyFrame,
+            f_inflation.lazy() if isinstance(f_inflation, pl.DataFrame) else f_inflation,
+        ).select(
+            pl.col("DATE").dt.month_start().alias("MONTH_START_DATE"),
+            pl.col("INFLATION_YOY_PCT"),
+            pl.col("CPI_INDEX"),
         )
 
         if isinstance(f_open, pl.DataFrame):
@@ -128,10 +137,9 @@ class BaseMetricsBuilder:
         )
 
         lf_activity = (
-            lf_ledger
-            .with_columns(
+            lf_ledger.with_columns(
                 pl.col("DATE").dt.month_start().alias("MONTH_START_DATE"),
-                pl.col("DATE").dt.month_end().alias("MONTH_END_DATE")
+                pl.col("DATE").dt.month_end().alias("MONTH_END_DATE"),
             )
             .group_by(["MONTH_START_DATE", "MONTH_END_DATE", "ASSET_SUBCATEGORY_ID"])
             .agg(
@@ -160,13 +168,11 @@ class BaseMetricsBuilder:
             .then(pl.col("AMOUNT") * -1)
             .otherwise(pl.col("AMOUNT"))
             .alias("NET_AMOUNT"),
-            pl.col("DATE").dt.month_end().alias("MONTH_END_DATE")
+            pl.col("DATE").dt.month_end().alias("MONTH_END_DATE"),
         )
 
-        lf_balances = (
-            lf_ledger_balance
-            .group_by(["ASSET_SUBCATEGORY_ID", "MONTH_END_DATE"])
-            .agg(pl.col("NET_AMOUNT").sum().fill_null(0.0).alias("MONTHLY_NET_CHANGE"))
+        lf_balances = lf_ledger_balance.group_by(["ASSET_SUBCATEGORY_ID", "MONTH_END_DATE"]).agg(
+            pl.col("NET_AMOUNT").sum().fill_null(0.0).alias("MONTHLY_NET_CHANGE")
         )
 
         lf_nw_summary = (
@@ -279,6 +285,38 @@ class BaseMetricsBuilder:
             .drop(["Prev_Year_Balance", "YEAR", "MONTH"])
         )
 
+        lf_nw_summary = (
+            lf_nw_summary.join(lf_inflation, on="MONTH_START_DATE", how="left")
+            .with_columns(
+                pl.col("INFLATION_YOY_PCT").fill_null(0.0),
+                (pl.col("Closing_Balance") / (pl.col("CPI_INDEX") / pl.lit(151.4))).alias(
+                    "Closing_Balance_Real"
+                ),
+                (
+                    (
+                        (1 + pl.col("YoY_Balance_Growth_%"))
+                        / (1 + (pl.col("INFLATION_YOY_PCT") / 100.0))
+                    )
+                    - 1
+                ).alias("YoY_Balance_Growth_%_Real"),
+                (pl.col("Organic_Growth_Value") / (pl.col("CPI_INDEX") / pl.lit(151.4))).alias(
+                    "Organic_Growth_Value_Real"
+                ),
+                (
+                    ((1 + pl.col("Organic_Yield_%")) / (1 + (pl.col("INFLATION_YOY_PCT") / 100.0)))
+                    - 1
+                ).alias("Organic_Yield_%_Real"),
+                (
+                    (
+                        (1 + pl.col("MoM_Balance_Growth_%"))
+                        / (1 + (pl.col("INFLATION_YOY_PCT") / 1200.0))
+                    )
+                    - 1
+                ).alias("MoM_Balance_Growth_%_Real"),
+            )
+            .drop("CPI_INDEX")
+        )
+
         lf_monthly_totals = (
             lf_nw_summary.group_by(["MONTH_START_DATE", "MONTH_END_DATE"])
             .agg(
@@ -301,6 +339,15 @@ class BaseMetricsBuilder:
                     "Total_Net_Worth"
                 ),
             )
+        )
+
+        lf_monthly_totals = lf_monthly_totals.join(
+            lf_inflation, on="MONTH_START_DATE", how="left"
+        ).with_columns(
+            pl.col("INFLATION_YOY_PCT").fill_null(0.0),
+            (pl.col("Total_Net_Worth") / (pl.col("CPI_INDEX") / pl.lit(151.4))).alias(
+                "Total_Net_Worth_Real"
+            ),
         )
 
         return {

@@ -21,6 +21,7 @@ class FireForecastingBuilder:
                     "Total_Net_Worth",
                     "Total_Income",
                     "Total_Expense",
+                    "INFLATION_YOY_PCT",
                 ]
             )
             .with_columns(
@@ -50,82 +51,121 @@ class FireForecastingBuilder:
             )
         )
 
-        # Probabilistic Monte Carlo Simulation for FIRE
-        def monte_carlo_fire(row: dict[str, float]) -> dict[str, float]:
-            pv_val = row.get("Total_Net_Worth")
-            pv = float(pv_val) if pv_val is not None else 0.0
-            pmt_val = row.get("Trailing_6M_Avg_Savings")
-            pmt = float(pmt_val) if pmt_val is not None else 0.0
-            fv_val = row.get("Target_FI_Number")
-            fv = float(fv_val) if fv_val is not None else 0.0
+        rng = np.random.default_rng(42)
 
-            if fv <= pv:
-                return {"Months_To_FI_Conservative_P90": 0.0, "Months_To_FI_Base_P50": 0.0, "Months_To_FI_Aggressive_P10": 0.0}
-            if pmt <= 0:
-                return {"Months_To_FI_Conservative_P90": 999.0, "Months_To_FI_Base_P50": 999.0, "Months_To_FI_Aggressive_P10": 999.0}
+        # Probabilistic Monte Carlo Simulation for FIRE using map_batches
+        def monte_carlo_fire_batch(s: pl.Series) -> pl.Series:
+            df = s.struct.unnest()
+            pv = df["Total_Net_Worth"].to_numpy().astype(float)
+            pmt = df["Trailing_6M_Avg_Savings"].to_numpy().astype(float)
+            fv = df["Target_FI_Number"].to_numpy().astype(float)
+            infl = df["INFLATION_YOY_PCT"].to_numpy().astype(float)
+
+            n_rows = len(pv)
+            out_p90 = np.zeros(n_rows)
+            out_p50 = np.zeros(n_rows)
+            out_p10 = np.zeros(n_rows)
 
             iterations = 1000
             max_months = 480  # Max 40 years forecast
-            mean_r = 0.07 / 12  # 7% real return
             vol_r = 0.15 / np.sqrt(12)  # 15% annual volatility
 
-            np.random.seed(42) # For deterministic dashboard results
-            returns = np.random.normal(mean_r, vol_r, (iterations, max_months))
-            multipliers = 1.0 + returns
+            # We process sequentially in the batch to avoid creating a massive 3D matrix (n_rows x iterations x max_months)
+            for i in range(n_rows):
+                # Calculate real return dynamically: Assumes 12% nominal return - trailing inflation
+                mean_r = (0.12 - (infl[i] / 100.0)) / 12.0
+                if mean_r < 0.01 / 12.0:
+                    mean_r = 0.01 / 12.0  # Floor at 1% real return
+                if fv[i] <= pv[i]:
+                    out_p90[i], out_p50[i], out_p10[i] = 0.0, 0.0, 0.0
+                    continue
+                if pmt[i] <= 0:
+                    out_p90[i], out_p50[i], out_p10[i] = 999.0, 999.0, 999.0
+                    continue
 
-            wealth = np.empty((iterations, max_months))
-            wealth[:, 0] = pv
-            for i in range(1, max_months):
-                wealth[:, i] = wealth[:, i - 1] * multipliers[:, i] + pmt
+                returns = rng.normal(mean_r, vol_r, (iterations, max_months))
+                multipliers = 1.0 + returns
 
-            reached = wealth >= fv
-            months_to_fire = np.argmax(reached, axis=1).astype(float)
-            never_reached = ~np.any(reached, axis=1)
-            months_to_fire[never_reached] = 999.0
+                wealth = np.empty((iterations, max_months))
+                wealth[:, 0] = pv[i]
+                for m in range(1, max_months):
+                    wealth[:, m] = wealth[:, m - 1] * multipliers[:, m] + pmt[i]
 
-            return {
-                "Months_To_FI_Conservative_P90": float(np.percentile(months_to_fire, 90)),
-                "Months_To_FI_Base_P50": float(np.percentile(months_to_fire, 50)),
-                "Months_To_FI_Aggressive_P10": float(np.percentile(months_to_fire, 10)),
-            }
+                reached = wealth >= fv[i]
+                months_to_fire = np.argmax(reached, axis=1).astype(float)
+                never_reached = ~np.any(reached, axis=1)
+                months_to_fire[never_reached] = 999.0
 
-        schema = pl.Struct([
-            pl.Field("Months_To_FI_Conservative_P90", pl.Float64),
-            pl.Field("Months_To_FI_Base_P50", pl.Float64),
-            pl.Field("Months_To_FI_Aggressive_P10", pl.Float64),
-        ])
+                out_p90[i] = float(np.percentile(months_to_fire, 90))
+                out_p50[i] = float(np.percentile(months_to_fire, 50))
+                out_p10[i] = float(np.percentile(months_to_fire, 10))
 
-        lf_fire_forecast = lf_fire_forecast.with_columns(
-            pl.struct(["Total_Net_Worth", "Trailing_6M_Avg_Savings", "Target_FI_Number"])
-            .map_elements(monte_carlo_fire, return_dtype=schema)
-            .alias("mc_results")
-        ).unnest("mc_results").with_columns(
-            # Legacy linear for reference
-            pl.when(
-                (pl.col("Trailing_6M_Avg_Savings") > 0)
-                & (pl.col("Target_FI_Number") > pl.col("Total_Net_Worth"))
+            return pl.Series(
+                [
+                    {
+                        "Months_To_FI_Conservative_P90": p90,
+                        "Months_To_FI_Base_P50": p50,
+                        "Months_To_FI_Aggressive_P10": p10,
+                    }
+                    for p90, p50, p10 in zip(out_p90, out_p50, out_p10, strict=True)
+                ]
             )
-            .then(
-                (pl.col("Target_FI_Number") - pl.col("Total_Net_Worth"))
-                / pl.col("Trailing_6M_Avg_Savings")
+
+        lf_fire_forecast = (
+            lf_fire_forecast.with_columns(
+                pl.struct(
+                    [
+                        "Total_Net_Worth",
+                        "Trailing_6M_Avg_Savings",
+                        "Target_FI_Number",
+                        "INFLATION_YOY_PCT",
+                    ]
+                )
+                .map_batches(
+                    monte_carlo_fire_batch,
+                    return_dtype=pl.Struct(
+                        [
+                            pl.Field("Months_To_FI_Conservative_P90", pl.Float64),
+                            pl.Field("Months_To_FI_Base_P50", pl.Float64),
+                            pl.Field("Months_To_FI_Aggressive_P10", pl.Float64),
+                        ]
+                    ),
+                )
+                .alias("mc_results")
             )
-            .otherwise(0.0)
-            .alias("Estimated_Months_To_FI_Linear"),
-        ).select(
-            [
-                "MONTH_START_DATE",
-                "MONTH_END_DATE",
-                "YEAR_MONTH",
-                "Total_Net_Worth",
-                "Trailing_6M_Avg_Spend",
-                "Trailing_6M_Avg_Savings",
-                "Target_FI_Number",
-                "Current_FI_Coverage_Pct",
-                "Estimated_Months_To_FI_Linear",
-                "Months_To_FI_Conservative_P90",
-                "Months_To_FI_Base_P50",
-                "Months_To_FI_Aggressive_P10",
-                "Runway_Months",
-            ]
+            .unnest("mc_results")
+            .with_columns(
+                # Legacy linear for reference
+                pl.when(
+                    (pl.col("Trailing_6M_Avg_Savings") > 0)
+                    & (pl.col("Target_FI_Number") > pl.col("Total_Net_Worth"))
+                )
+                .then(
+                    (pl.col("Target_FI_Number") - pl.col("Total_Net_Worth"))
+                    / pl.col("Trailing_6M_Avg_Savings")
+                )
+                .otherwise(0.0)
+                .alias("Estimated_Months_To_FI_Linear"),
+                (pl.lit(12.0) - pl.col("INFLATION_YOY_PCT")).alias("Real_Return_Assumed_Pct"),
+            )
+            .select(
+                [
+                    "MONTH_START_DATE",
+                    "MONTH_END_DATE",
+                    "YEAR_MONTH",
+                    "Total_Net_Worth",
+                    "Trailing_6M_Avg_Spend",
+                    "Trailing_6M_Avg_Savings",
+                    "Target_FI_Number",
+                    "Current_FI_Coverage_Pct",
+                    "Estimated_Months_To_FI_Linear",
+                    "Months_To_FI_Conservative_P90",
+                    "Months_To_FI_Base_P50",
+                    "Months_To_FI_Aggressive_P10",
+                    "Runway_Months",
+                    "INFLATION_YOY_PCT",
+                    "Real_Return_Assumed_Pct",
+                ]
+            )
         )
         return lf_fire_forecast
