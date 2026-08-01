@@ -1,5 +1,6 @@
 import numpy as np
 import polars as pl
+from typing import Any
 
 
 class FireForecastingBuilder:
@@ -7,7 +8,7 @@ class FireForecastingBuilder:
     Constructs the FIRE & Wealth Forecasting presentation model.
     """
 
-    def __init__(self, base_lf: dict[str, pl.LazyFrame]):
+    def __init__(self, base_lf: dict[str, Any]):
         self.base_lf = base_lf
 
     def build(self) -> pl.LazyFrame:
@@ -20,23 +21,34 @@ class FireForecastingBuilder:
                     "MONTH_END_DATE",
                     "Total_Net_Worth",
                     "Total_Income",
-                    "Total_Expense",
+                    "Total_Core_Expense",
                     "INFLATION_YOY_PCT",
+                    "CPI_INDEX",
                 ]
             )
             .with_columns(
                 pl.col("MONTH_START_DATE").cast(pl.String).str.slice(0, 7).alias("YEAR_MONTH"),
-                (pl.col("Total_Income") - pl.col("Total_Expense")).alias("Net_Savings"),
+                (pl.col("Total_Income") - pl.col("Total_Core_Expense")).alias("Net_Savings"),
             )
             .sort("MONTH_START_DATE")
         )
 
         lf_fire_forecast = (
             lf_fire_base.with_columns(
-                pl.col("Total_Expense").rolling_mean(window_size=3).alias("Trailing_3M_Avg_Spend"),
-                pl.col("Total_Expense").rolling_mean(window_size=6).alias("Trailing_6M_Avg_Spend"),
-                pl.col("Total_Expense").rolling_sum(window_size=12).alias("Trailing_12M_Spend"),
+                pl.col("Total_Core_Expense").rolling_mean(window_size=3).alias("Trailing_3M_Avg_Spend"),
+                pl.col("Total_Core_Expense").rolling_mean(window_size=6).alias("Trailing_6M_Avg_Spend"),
+                pl.col("Total_Core_Expense").rolling_sum(window_size=12).alias("Trailing_12M_Spend"),
                 pl.col("Net_Savings").rolling_mean(window_size=6).alias("Trailing_6M_Avg_Savings"),
+                pl.col("Net_Savings").rolling_sum(window_size=12).alias("Trailing_12M_Savings"),
+            )
+            .with_columns(
+                pl.when(pl.col("Total_Net_Worth").shift(12) > 0)
+                .then(
+                    (pl.col("Total_Net_Worth") - pl.col("Total_Net_Worth").shift(12) - pl.col("Trailing_12M_Savings"))
+                    / pl.col("Total_Net_Worth").shift(12)
+                )
+                .otherwise(0.12)
+                .alias("Trailing_12M_Return")
             )
             .with_columns((pl.col("Trailing_12M_Spend") * 25.0).alias("Target_FI_Number"))
             .with_columns(
@@ -60,6 +72,7 @@ class FireForecastingBuilder:
             pmt = df["Trailing_6M_Avg_Savings"].to_numpy().astype(float)
             fv = df["Target_FI_Number"].to_numpy().astype(float)
             infl = df["INFLATION_YOY_PCT"].to_numpy().astype(float)
+            ret_12m = df["Trailing_12M_Return"].to_numpy().astype(float)
 
             n_rows = len(pv)
             out_p90 = np.zeros(n_rows)
@@ -72,8 +85,8 @@ class FireForecastingBuilder:
 
             # We process sequentially in the batch to avoid creating a massive 3D matrix (n_rows x iterations x max_months)
             for i in range(n_rows):
-                # Calculate real return dynamically: Assumes 12% nominal return - trailing inflation
-                mean_r = (0.12 - (infl[i] / 100.0)) / 12.0
+                # Calculate real return dynamically: Assumes Trailing 12M nominal return - trailing inflation
+                mean_r = (ret_12m[i] - (infl[i] / 100.0)) / 12.0
                 if mean_r < 0.01 / 12.0:
                     mean_r = 0.01 / 12.0  # Floor at 1% real return
                 if fv[i] <= pv[i]:
@@ -119,6 +132,7 @@ class FireForecastingBuilder:
                         "Trailing_6M_Avg_Savings",
                         "Target_FI_Number",
                         "INFLATION_YOY_PCT",
+                        "Trailing_12M_Return",
                     ]
                 )
                 .map_batches(
@@ -146,7 +160,22 @@ class FireForecastingBuilder:
                 )
                 .otherwise(0.0)
                 .alias("Estimated_Months_To_FI_Linear"),
-                (pl.lit(12.0) - pl.col("INFLATION_YOY_PCT")).alias("Real_Return_Assumed_Pct"),
+                ((pl.col("Trailing_12M_Return") * 100.0) - pl.col("INFLATION_YOY_PCT")).alias("Real_Return_Assumed_Pct"),
+                pl.max_horizontal(0.0, pl.col("Target_FI_Number") - pl.col("Total_Net_Worth")).alias("FI_Gap"),
+                (pl.col("Target_FI_Number") / (pl.col("CPI_INDEX") / pl.lit(self.base_lf.get("cpi_base", 151.4)))).alias("FI_Number_Real"),
+                (pl.col("Target_FI_Number") / (1.05 ** 10)).alias("Coast_FI_Number"),
+                (pl.col("Target_FI_Number") * 0.7).alias("Lean_FI_Number"),
+                pl.when(pl.col("Total_Net_Worth") > 0)
+                .then(pl.col("Trailing_12M_Spend") / pl.col("Total_Net_Worth"))
+                .otherwise(0.0)
+                .alias("Withdrawal_Rate_If_Retired_Now"),
+            )
+            .with_columns(
+                (pl.col("FI_Gap") - pl.col("FI_Gap").shift(1)).alias("FI_Gap_Monthly_Trend"),
+                pl.when((pl.col("Months_To_FI_Base_P50") > 0) & (pl.col("Months_To_FI_Base_P50") < 999) & (pl.col("Total_Income") > 0))
+                .then((pl.col("FI_Gap") / pl.col("Months_To_FI_Base_P50")) / pl.col("Total_Income"))
+                .otherwise(0.0)
+                .alias("Savings_Rate_Required"),
             )
             .select(
                 [
@@ -165,6 +194,13 @@ class FireForecastingBuilder:
                     "Runway_Months",
                     "INFLATION_YOY_PCT",
                     "Real_Return_Assumed_Pct",
+                    "FI_Number_Real",
+                    "Coast_FI_Number",
+                    "Lean_FI_Number",
+                    "Savings_Rate_Required",
+                    "FI_Gap",
+                    "FI_Gap_Monthly_Trend",
+                    "Withdrawal_Rate_If_Retired_Now",
                 ]
             )
         )

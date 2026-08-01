@@ -1,5 +1,5 @@
 from collections.abc import Mapping
-from typing import cast
+from typing import cast, Any
 
 import polars as pl
 
@@ -10,7 +10,7 @@ class SpendAnalyticsBuilder:
     """
 
     def __init__(
-        self, dfs: Mapping[str, pl.DataFrame | pl.LazyFrame], base_lf: dict[str, pl.LazyFrame]
+        self, dfs: Mapping[str, pl.DataFrame | pl.LazyFrame], base_lf: dict[str, Any]
     ):
         self.dfs = dfs
         self.base_lf = base_lf
@@ -32,6 +32,7 @@ class SpendAnalyticsBuilder:
                 [
                     pl.col("EXPENSE").sum().fill_null(0.0).alias("Total_Monthly_Spend"),
                     pl.col("EXPENSE").mean().fill_null(0.0).alias("Average_Transaction_Value"),
+                    pl.len().alias("Transaction_Count"),
                 ]
             )
         )
@@ -46,6 +47,7 @@ class SpendAnalyticsBuilder:
             .with_columns(
                 pl.col("Total_Monthly_Spend").fill_null(0.0),
                 pl.col("Average_Transaction_Value").fill_null(0.0),
+                pl.col("Transaction_Count").fill_null(0).cast(pl.Int64),
                 pl.col("MONTH_START_DATE").cast(pl.String).str.slice(0, 7).alias("YEAR_MONTH")
             )
         )
@@ -102,6 +104,22 @@ class SpendAnalyticsBuilder:
                 .shift(12)
                 .over("CATEGORY_ID")
                 .alias("Prev_Year_Spend"),
+                pl.col("Total_Monthly_Spend")
+                .rolling_mean(window_size=12)
+                .over("CATEGORY_ID")
+                .alias("Trailing_12M_Avg_Spend"),
+                pl.col("Total_Monthly_Spend")
+                .rolling_sum(window_size=12)
+                .over("CATEGORY_ID")
+                .alias("Trailing_12M_Total_Spend"),
+                pl.col("Total_Monthly_Spend")
+                .cum_sum()
+                .over(["CATEGORY_ID", pl.col("MONTH_START_DATE").dt.year()])
+                .alias("Cumulative_YTD_Spend"),
+                pl.col("Transaction_Count")
+                .rolling_mean(window_size=3)
+                .over("CATEGORY_ID")
+                .alias("Trailing_3M_Avg_Frequency"),
                 pl.col("Total_Monthly_Spend").mean().over("CATEGORY_ID").alias("Cat_Mean"),
                 pl.col("Total_Monthly_Spend").std().over("CATEGORY_ID").alias("Cat_Std"),
                 pl.col("Total_Monthly_Spend")
@@ -117,6 +135,14 @@ class SpendAnalyticsBuilder:
                 )
                 .otherwise(0.0)
                 .alias("MoM_Variance_Pct"),
+                pl.when(pl.col("CATEGORY_GROUPS").str.to_lowercase().str.contains("(?i)invest|saving"))
+                .then(pl.lit(True))
+                .otherwise(pl.lit(False))
+                .alias("Is_Investment"),
+                pl.when(pl.col("CATEGORY_GROUPS").str.to_lowercase().str.contains("(?i)fixed|utilities|rent|insurance|tax|emi|loan"))
+                .then(pl.lit("Fixed"))
+                .otherwise(pl.lit("Variable"))
+                .alias("Spend_Type"),
                 pl.when(pl.col("Prev_Year_Spend") > 0)
                 .then(
                     (pl.col("Total_Monthly_Spend") - pl.col("Prev_Year_Spend"))
@@ -125,35 +151,75 @@ class SpendAnalyticsBuilder:
                 .otherwise(0.0)
                 .alias("YoY_Variance_Pct"),
                 pl.when(pl.col("Cat_Std").is_not_null() & (pl.col("Cat_Std") > 0))
-                .then((pl.col("Total_Monthly_Spend") - pl.col("Cat_Mean")) / pl.col("Cat_Std"))
-                .otherwise(0.0)
-                .alias("Spend_Intensity_Z_Score"),
-                (pl.col("Total_Monthly_Spend") > (pl.col("Trailing_3M_Avg_Spend") * 1.15)).alias(
-                    "Is_Category_Creep"
-                ),
+                .then(pl.col("Cat_Mean") / pl.col("Cat_Std"))
+                .otherwise(999.0)
+                .alias("Spend_Consistency_Score"),
+                (
+                    (pl.col("Total_Monthly_Spend") > (pl.col("Trailing_3M_Avg_Spend") * 1.15)) &
+                    (pl.col("Transaction_Count") > (pl.col("Trailing_3M_Avg_Frequency") * 1.1))
+                ).alias("Is_Category_Creep"),
+                pl.col("Total_Monthly_Spend").rank("dense", descending=True).over("MONTH_START_DATE").alias("Rank_by_Spend"),
                 pl.when(pl.col("Total_Month_All_Categories_Spend") > 0)
                 .then(pl.col("Total_Monthly_Spend") / pl.col("Total_Month_All_Categories_Spend"))
                 .otherwise(0.0)
                 .alias("Spend_Share_Pct"),
             )
-            .select(
-                [
-                    "MONTH_START_DATE",
-                    "MONTH_END_DATE",
-                    "YEAR_MONTH",
-                    "CATEGORY_ID",
-                    "CATEGORY_NAME",
-                    "CATEGORY_GROUPS",
-                    "Total_Monthly_Spend",
-                    "Average_Transaction_Value",
-                    "Trailing_3M_Avg_Spend",
-                    "Trailing_6M_Avg_Spend",
-                    "Spend_Share_Pct",
-                    "MoM_Variance_Pct",
-                    "YoY_Variance_Pct",
-                    "Spend_Intensity_Z_Score",
-                    "Is_Category_Creep",
-                ]
+            .with_columns(
+                (pl.col("Spend_Type") == "Variable").alias("Is_Discretionary"),
             )
         )
-        return lf_spend_analytics
+        
+        f_inflation = self.dfs.get("df_f_inflation_rates")
+        if f_inflation is not None:
+            cpi_base = self.base_lf.get("cpi_base", 151.4)
+            lf_inflation = (
+                f_inflation.lazy() if isinstance(f_inflation, pl.DataFrame) else f_inflation
+            ).select(
+                pl.col("DATE").dt.month_start().alias("MONTH_START_DATE"),
+                pl.col("INFLATION_YOY_PCT"),
+                pl.col("CPI_INDEX"),
+            )
+            lf_spend_analytics = lf_spend_analytics.join(lf_inflation, on="MONTH_START_DATE", how="left").with_columns(
+                (pl.col("Total_Monthly_Spend") / (pl.col("CPI_INDEX") / pl.lit(cpi_base))).alias("Real_Monthly_Spend"),
+                pl.when(pl.col("Prev_Year_Spend") > 0)
+                .then(
+                    (
+                        (1 + pl.col("YoY_Variance_Pct"))
+                        / (1 + (pl.col("INFLATION_YOY_PCT") / 100.0))
+                    ) - 1
+                ).otherwise(0.0).alias("YoY_Real_Variance_Pct")
+            ).drop(["INFLATION_YOY_PCT", "CPI_INDEX"])
+        else:
+            lf_spend_analytics = lf_spend_analytics.with_columns(
+                pl.lit(0.0).alias("Real_Monthly_Spend"),
+                pl.lit(0.0).alias("YoY_Real_Variance_Pct"),
+            )
+
+        return lf_spend_analytics.select(
+            [
+                "MONTH_START_DATE",
+                "MONTH_END_DATE",
+                "YEAR_MONTH",
+                "CATEGORY_ID",
+                "CATEGORY_NAME",
+                "CATEGORY_GROUPS",
+                "Total_Monthly_Spend",
+                "Average_Transaction_Value",
+                "Trailing_3M_Avg_Spend",
+                "Trailing_6M_Avg_Spend",
+                "Trailing_12M_Avg_Spend",
+                "Trailing_12M_Total_Spend",
+                "Cumulative_YTD_Spend",
+                "Spend_Share_Pct",
+                "MoM_Variance_Pct",
+                "YoY_Variance_Pct",
+                "Spend_Consistency_Score",
+                "Is_Category_Creep",
+                "Is_Investment",
+                "Spend_Type",
+                "Rank_by_Spend",
+                "Is_Discretionary",
+                "Real_Monthly_Spend",
+                "YoY_Real_Variance_Pct",
+            ]
+        )

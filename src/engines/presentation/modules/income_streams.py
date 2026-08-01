@@ -1,5 +1,5 @@
 from collections.abc import Mapping
-from typing import cast
+from typing import cast, Any
 
 import polars as pl
 
@@ -10,7 +10,7 @@ class IncomeStreamsBuilder:
     """
 
     def __init__(
-        self, dfs: Mapping[str, pl.DataFrame | pl.LazyFrame], base_lf: dict[str, pl.LazyFrame]
+        self, dfs: Mapping[str, pl.DataFrame | pl.LazyFrame], base_lf: dict[str, Any]
     ):
         self.dfs = dfs
         self.base_lf = base_lf
@@ -100,6 +100,27 @@ class IncomeStreamsBuilder:
                 .over("CATEGORY_ID")
                 .alias("Prev_Year_Income"),
                 pl.col("Total_Monthly_Income")
+                .rolling_mean(window_size=12)
+                .over("CATEGORY_ID")
+                .alias("Trailing_12M_Avg_Income"),
+                pl.col("Total_Monthly_Income")
+                .rolling_sum(window_size=12)
+                .over("CATEGORY_ID")
+                .alias("Trailing_12M_Total_Income"),
+                pl.col("Total_Monthly_Income")
+                .cum_sum()
+                .over(["CATEGORY_ID", pl.col("MONTH_START_DATE").dt.year()])
+                .alias("Cumulative_YTD_Income"),
+                pl.when(pl.col("Total_Monthly_Income") > 0)
+                .then(pl.col("MONTH_START_DATE"))
+                .otherwise(None)
+                .forward_fill()
+                .shift(1)
+                .over("CATEGORY_ID")
+                .alias("Last_Received_Date"),
+                pl.col("Total_Monthly_Income").mean().over("CATEGORY_ID").alias("Cat_Mean"),
+                pl.col("Total_Monthly_Income").std().over("CATEGORY_ID").alias("Cat_Std"),
+                pl.col("Total_Monthly_Income")
                 .sum()
                 .over("MONTH_START_DATE")
                 .alias("Total_Month_All_Categories_Income"),
@@ -123,28 +144,61 @@ class IncomeStreamsBuilder:
                 .then(pl.col("Total_Monthly_Income") / pl.col("Total_Month_All_Categories_Income"))
                 .otherwise(0.0)
                 .alias("Income_Share_Pct"),
+                pl.when(pl.col("Cat_Std").is_not_null() & (pl.col("Cat_Std") > 0))
+                .then(pl.col("Cat_Mean") / pl.col("Cat_Std"))
+                .otherwise(999.0)
+                .alias("Income_Stability_Score"),
+                pl.when(pl.col("Last_Received_Date").is_not_null())
+                .then(
+                    (pl.col("MONTH_START_DATE").dt.year() - pl.col("Last_Received_Date").dt.year()) * 12 +
+                    (pl.col("MONTH_START_DATE").dt.month() - pl.col("Last_Received_Date").dt.month())
+                ).otherwise(999)
+                .cast(pl.Int64)
+                .alias("Months_Since_Last_Received"),
                 pl.col("CATEGORY_GROUPS")
                 .str.contains("(?i)invest|interest|dividend|capital|passive")
                 .fill_null(False)
                 .alias("Is_Passive_Income"),
             )
-            .select(
-                [
-                    "MONTH_START_DATE",
-                    "MONTH_END_DATE",
-                    "YEAR_MONTH",
-                    "CATEGORY_ID",
-                    "CATEGORY_NAME",
-                    "CATEGORY_GROUPS",
-                    "Total_Monthly_Income",
-                    "Average_Transaction_Value",
-                    "Trailing_3M_Avg_Income",
-                    "Trailing_6M_Avg_Income",
-                    "Income_Share_Pct",
-                    "MoM_Variance_Pct",
-                    "YoY_Variance_Pct",
-                    "Is_Passive_Income",
-                ]
-            )
         )
-        return lf_income_streams
+        f_inflation = self.dfs.get("df_f_inflation_rates")
+        if f_inflation is not None:
+            cpi_base = self.base_lf.get("cpi_base", 151.4)
+            lf_inflation = (
+                f_inflation.lazy() if isinstance(f_inflation, pl.DataFrame) else f_inflation
+            ).select(
+                pl.col("DATE").dt.month_start().alias("MONTH_START_DATE"),
+                pl.col("CPI_INDEX"),
+            )
+            lf_income_streams = lf_income_streams.join(lf_inflation, on="MONTH_START_DATE", how="left").with_columns(
+                (pl.col("Total_Monthly_Income") / (pl.col("CPI_INDEX") / pl.lit(cpi_base))).alias("Real_Monthly_Income"),
+            ).drop(["CPI_INDEX"])
+        else:
+            lf_income_streams = lf_income_streams.with_columns(
+                pl.lit(0.0).alias("Real_Monthly_Income"),
+            )
+
+        return lf_income_streams.select(
+            [
+                "MONTH_START_DATE",
+                "MONTH_END_DATE",
+                "YEAR_MONTH",
+                "CATEGORY_ID",
+                "CATEGORY_NAME",
+                "CATEGORY_GROUPS",
+                "Total_Monthly_Income",
+                "Average_Transaction_Value",
+                "Trailing_3M_Avg_Income",
+                "Trailing_6M_Avg_Income",
+                "Trailing_12M_Avg_Income",
+                "Trailing_12M_Total_Income",
+                "Cumulative_YTD_Income",
+                "Income_Share_Pct",
+                "MoM_Variance_Pct",
+                "YoY_Variance_Pct",
+                "Income_Stability_Score",
+                "Months_Since_Last_Received",
+                "Is_Passive_Income",
+                "Real_Monthly_Income",
+            ]
+        )

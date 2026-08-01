@@ -1,4 +1,5 @@
 from collections.abc import Mapping
+from typing import Any
 
 import polars as pl
 
@@ -9,7 +10,7 @@ class AdvancedAnalyticsBuilder:
     """
 
     def __init__(
-        self, dfs: Mapping[str, pl.DataFrame | pl.LazyFrame], base_lf: dict[str, pl.LazyFrame]
+        self, dfs: Mapping[str, pl.DataFrame | pl.LazyFrame], base_lf: dict[str, Any]
     ):
         self.dfs = dfs
         self.base_lf = base_lf
@@ -29,9 +30,7 @@ class AdvancedAnalyticsBuilder:
         # Get latest closing date per month and total value
         lf_inv_monthly = lf_market.with_columns(
             pl.col("Closing_Date")
-            .cast(pl.String)
-            .str.slice(0, 7)
-            .str.strptime(pl.Date, "%Y-%m", strict=False)
+            .dt.month_start()
             .alias("MONTH_START_DATE")
         )
 
@@ -69,13 +68,38 @@ class AdvancedAnalyticsBuilder:
                     / pl.col("Total_Investment_Value").shift(1)
                 )
                 .otherwise(0.0)
-                .alias("Monthly_Return")
+                .alias("Monthly_Return"),
+                pl.when(pl.col("Total_Net_Worth").shift(1) > 0)
+                .then((pl.col("Total_Net_Worth") - pl.col("Total_Net_Worth").shift(1)) / pl.col("Total_Net_Worth").shift(1))
+                .otherwise(0.0)
+                .alias("NW_Monthly_Return"),
+                pl.when(pl.col("All_Time_High_NW") > 0)
+                .then((pl.col("Total_Net_Worth") - pl.col("All_Time_High_NW")) / pl.col("All_Time_High_NW"))
+                .otherwise(0.0)
+                .alias("NW_Drawdown_Pct"),
+                pl.when(pl.col("All_Time_High_Inv") > 0)
+                .then(pl.col("Total_Investment_Value") / pl.col("All_Time_High_Inv"))
+                .otherwise(0.0)
+                .alias("Recovery_From_Drawdown_%"),
+                pl.when(pl.col("Total_Investment_Value").shift(6) > 0)
+                .then((pl.col("Total_Investment_Value") - pl.col("Total_Investment_Value").shift(6)) / pl.col("Total_Investment_Value").shift(6))
+                .otherwise(0.0)
+                .alias("Rolling_6M_Return")
             )
             .with_columns(
                 # 12M Rolling Volatility
                 (pl.col("Monthly_Return").rolling_std(window_size=12) * (12**0.5)).alias(
                     "Annualized_Volatility_12M"
-                )
+                ),
+                (pl.col("NW_Monthly_Return").rolling_std(window_size=12) * (12**0.5)).alias(
+                    "NW_Volatility_12M"
+                ),
+                pl.col("Monthly_Return").rolling_quantile(0.05, interpolation="nearest", window_size=12).alias("VaR_95_Monthly")
+            )
+            .with_columns(
+                pl.when(pl.col("Drawdown_Pct") < 0)
+                .then(pl.col("Rolling_6M_Return") * 2 / pl.col("Drawdown_Pct").abs())
+                .otherwise(999.0).alias("Calmar_Ratio")
             )
             .select(
                 [
@@ -84,8 +108,14 @@ class AdvancedAnalyticsBuilder:
                     "Total_Net_Worth",
                     "All_Time_High_NW",
                     "Drawdown_Pct",
+                    "NW_Drawdown_Pct",
                     "Monthly_Return",
+                    "Recovery_From_Drawdown_%",
+                    "Rolling_6M_Return",
                     "Annualized_Volatility_12M",
+                    "NW_Volatility_12M",
+                    "VaR_95_Monthly",
+                    "Calmar_Ratio",
                 ]
             )
         )
@@ -107,9 +137,7 @@ class AdvancedAnalyticsBuilder:
         # Get latest closing date per month
         lf_market_data = lf_market_data.with_columns(
             pl.col("Closing_Date")
-            .cast(pl.String)
-            .str.slice(0, 7)
-            .str.strptime(pl.Date, "%Y-%m", strict=False)
+            .dt.month_start()
             .alias("MONTH_START_DATE")
         )
 
@@ -159,7 +187,15 @@ class AdvancedAnalyticsBuilder:
                 pl.col("Squared_Subtype_Weight")
                 .sum()
                 .over("MONTH_START_DATE")
-                .alias("Subtype_HHI_Concentration_Index")
+                .alias("Subtype_HHI_Concentration_Index"),
+                (pl.col("Subtype_Weight") - pl.col("Subtype_Weight").shift(1).over("INSTRUMENT_SUBTYPE")).alias("Weight_Change_MoM")
+            )
+            .with_columns(
+                (10000 / pl.col("Subtype_HHI_Concentration_Index")).alias("Effective_Diversification"),
+                pl.col("INSTRUMENT_SUBTYPE").count().over("MONTH_START_DATE").alias("Num_Subtypes")
+            )
+            .with_columns(
+                (pl.col("Subtype_Weight") > (1.0 / pl.col("Num_Subtypes"))).alias("Is_Overweight")
             )
         )
 
@@ -193,8 +229,11 @@ class AdvancedAnalyticsBuilder:
                     "Total_Portfolio_Value",
                     "Class_Weight",
                     "Subtype_Weight",
+                    "Weight_Change_MoM",
                     "Class_HHI_Concentration_Index",
                     "Subtype_HHI_Concentration_Index",
+                    "Effective_Diversification",
+                    "Is_Overweight",
                 ]
             )
             .sort(
@@ -231,10 +270,15 @@ class AdvancedAnalyticsBuilder:
                     pl.col("Buy_Value").sum().alias("Total_Invested"),
                     pl.col("Close_Value").sum().alias("Current_Value"),
                     pl.col("P/L").sum().alias("Harvestable_Loss"),
+                    (pl.col("Closing_Date").max() - pl.col("Buy_Date").min()).dt.total_days().alias("Max_Days_Held"),
                 ]
             )
             .with_columns(
-                (pl.col("Harvestable_Loss") / pl.col("Total_Invested")).alias("Loss_Percentage")
+                (pl.col("Harvestable_Loss") / pl.col("Total_Invested")).alias("Loss_Percentage"),
+                (pl.col("Harvestable_Loss").abs() * 0.125).alias("Tax_Savings_If_Harvested"),
+            )
+            .with_columns(
+                (pl.col("Loss_Percentage").abs() * pl.col("Harvestable_Loss").abs()).alias("Priority_Score")
             )
             .sort("Harvestable_Loss")  # Most negative first
         )

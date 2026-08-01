@@ -1,6 +1,6 @@
 from collections.abc import Mapping
 from datetime import date
-from typing import cast
+from typing import Any, cast
 
 import polars as pl
 
@@ -15,7 +15,7 @@ class BaseMetricsBuilder:
     def __init__(self, dfs: Mapping[str, pl.DataFrame | pl.LazyFrame]):
         self.dfs = dfs
 
-    def build(self) -> dict[str, pl.LazyFrame]:
+    def build(self) -> dict[str, Any]:
         f_open = self.dfs.get("df_f_opening_balances")
         f_inc = self.dfs.get("df_f_income_transactions")
         f_exp = self.dfs.get("df_f_expense_transactions")
@@ -61,6 +61,22 @@ class BaseMetricsBuilder:
 
         if min_open_date is None:
             min_open_date = date(2000, 1, 1)
+
+        min_open_month_start = min_open_date.replace(day=1)
+        try:
+            cpi_base_df = (
+                lf_inflation.filter(pl.col("MONTH_START_DATE") >= min_open_month_start)
+                .sort("MONTH_START_DATE")
+                .head(1)
+                .select("CPI_INDEX")
+                .collect()
+            )
+            if not cpi_base_df.is_empty():
+                cpi_base = cpi_base_df.item()
+            else:
+                cpi_base = 151.4
+        except Exception:
+            cpi_base = 151.4
 
         lf_months = (
             lf_cal.group_by(["YEAR", "MONTH"])
@@ -112,6 +128,51 @@ class BaseMetricsBuilder:
             ]
         )
 
+        d_exp_subcat = self.dfs.get("df_d_expense_subcategory")
+        d_exp_cat = self.dfs.get("df_d_expense_category")
+        if d_exp_subcat is not None and d_exp_cat is not None:
+            lf_exp_subcat = cast(
+                pl.LazyFrame,
+                d_exp_subcat.lazy() if isinstance(d_exp_subcat, pl.DataFrame) else d_exp_subcat,
+            )
+            lf_exp_cat = cast(
+                pl.LazyFrame, d_exp_cat.lazy() if isinstance(d_exp_cat, pl.DataFrame) else d_exp_cat
+            )
+
+            lf_exp_agg = (
+                lf_exp_agg.join(
+                    lf_exp_subcat.select(["UID", "CATEGORY_ID"]).rename(
+                        {"CATEGORY_ID": "PARENT_ID", "UID": "CATEGORY_ID"}
+                    ),
+                    on="CATEGORY_ID",
+                    how="left",
+                )
+                .join(
+                    lf_exp_cat.select(
+                        [
+                            pl.col("UID").alias("PARENT_ID"),
+                            pl.col("CATEGORY_NAME").alias("CATEGORY_GROUPS"),
+                        ]
+                    ),
+                    on="PARENT_ID",
+                    how="left",
+                )
+                .drop("PARENT_ID")
+            )
+
+            lf_exp_agg = lf_exp_agg.with_columns(
+                pl.when(
+                    pl.col("CATEGORY_GROUPS")
+                    .str.to_lowercase()
+                    .str.contains("(?i)invest|saving|sunk|anomaly|one-off|tax")
+                )
+                .then(pl.lit(False))
+                .otherwise(pl.lit(True))
+                .alias("Is_Core_Expense")
+            )
+        else:
+            lf_exp_agg = lf_exp_agg.with_columns(pl.lit(True).alias("Is_Core_Expense"))
+
         lf_trn_agg = ensure_date_col(lf_trn, "DATE").select(
             [
                 pl.col("ASSET_ID").alias("ASSET_SUBCATEGORY_ID"),
@@ -126,7 +187,7 @@ class BaseMetricsBuilder:
                 lf_inc_agg.rename({"INCOME": "AMOUNT"}).with_columns(
                     pl.lit("INCOME").alias("TYPE")
                 ),
-                lf_exp_agg.select(["ASSET_SUBCATEGORY_ID", "EXPENSE", "DATE"])
+                lf_exp_agg.select(["ASSET_SUBCATEGORY_ID", "EXPENSE", "DATE", "Is_Core_Expense"])
                 .rename({"EXPENSE": "AMOUNT"})
                 .with_columns(pl.lit("EXPENSE").alias("TYPE")),
                 lf_trn_agg.rename({"TRANSFER": "AMOUNT"}).with_columns(
@@ -149,6 +210,13 @@ class BaseMetricsBuilder:
                     .sum()
                     .fill_null(0.0)
                     .alias("Income_Inflow"),
+                    pl.col("AMOUNT")
+                    .filter(
+                        (pl.col("TYPE") == "EXPENSE") & pl.col("Is_Core_Expense").fill_null(True)
+                    )
+                    .sum()
+                    .fill_null(0.0)
+                    .alias("Core_Expense_Outflow"),
                     pl.col("AMOUNT")
                     .filter(pl.col("TYPE") == "EXPENSE")
                     .sum()
@@ -189,6 +257,7 @@ class BaseMetricsBuilder:
             .with_columns(
                 pl.col("Income_Inflow").fill_null(0.0),
                 pl.col("Expense_Outflow").fill_null(0.0),
+                pl.col("Core_Expense_Outflow").fill_null(0.0),
                 pl.col("Net_Transfers").fill_null(0.0),
                 pl.col("MONTHLY_NET_CHANGE").fill_null(0.0),
             )
@@ -221,7 +290,15 @@ class BaseMetricsBuilder:
                 (
                     pl.col("Closing_Balance")
                     - (pl.col("Opening_Balance") + pl.col("Net_Cashflow_Month"))
-                ).alias("Organic_Growth_Value")
+                ).alias("Organic_Growth_Value"),
+                pl.col("Net_Cashflow_Month")
+                .cum_sum()
+                .over("ASSET_SUBCATEGORY_ID")
+                .alias("Cumulative_Net_Savings"),
+                pl.col("Closing_Balance")
+                .cum_max()
+                .over("ASSET_SUBCATEGORY_ID")
+                .alias("All_Time_High_Balance"),
             )
             .with_columns(
                 pl.when(pl.col("Opening_Balance") != 0)
@@ -242,10 +319,28 @@ class BaseMetricsBuilder:
                         + pl.col("Expense_Outflow")
                         + pl.col("Net_Transfers").abs()
                     )
-                    / pl.col("Opening_Balance")
+                    / pl.col("Closing_Balance")
                 )
                 .otherwise(0.0)
                 .alias("Asset_Velocity_%"),
+                pl.when(pl.col("Closing_Balance") > 0)
+                .then(pl.col("Cumulative_Net_Savings") / pl.col("Closing_Balance"))
+                .otherwise(0.0)
+                .alias("Savings_to_NW_Ratio"),
+                pl.when(pl.col("All_Time_High_Balance") > 0)
+                .then(
+                    (pl.col("Closing_Balance") - pl.col("All_Time_High_Balance"))
+                    / pl.col("All_Time_High_Balance")
+                )
+                .otherwise(0.0)
+                .alias("Drawdown_From_Peak"),
+                pl.when(pl.col("Closing_Balance").sum().over("MONTH_START_DATE") > 0)
+                .then(
+                    pl.col("Closing_Balance")
+                    / pl.col("Closing_Balance").sum().over("MONTH_START_DATE")
+                )
+                .otherwise(0.0)
+                .alias("Balance_Concentration_%"),
             )
         )
 
@@ -257,6 +352,10 @@ class BaseMetricsBuilder:
                     .rolling_mean(window_size=3)
                     .over("ASSET_SUBCATEGORY_ID")
                     .alias("3M_Avg_Expense"),
+                    pl.col("Core_Expense_Outflow")
+                    .rolling_mean(window_size=3)
+                    .over("ASSET_SUBCATEGORY_ID")
+                    .alias("3M_Avg_Core_Expense"),
                     pl.col("Income_Inflow")
                     .rolling_mean(window_size=3)
                     .over("ASSET_SUBCATEGORY_ID")
@@ -289,7 +388,7 @@ class BaseMetricsBuilder:
             lf_nw_summary.join(lf_inflation, on="MONTH_START_DATE", how="left")
             .with_columns(
                 pl.col("INFLATION_YOY_PCT").fill_null(0.0),
-                (pl.col("Closing_Balance") / (pl.col("CPI_INDEX") / pl.lit(151.4))).alias(
+                (pl.col("Closing_Balance") / (pl.col("CPI_INDEX") / pl.lit(cpi_base))).alias(
                     "Closing_Balance_Real"
                 ),
                 (
@@ -299,9 +398,16 @@ class BaseMetricsBuilder:
                     )
                     - 1
                 ).alias("YoY_Balance_Growth_%_Real"),
-                (pl.col("Organic_Growth_Value") / (pl.col("CPI_INDEX") / pl.lit(151.4))).alias(
+                (pl.col("Organic_Growth_Value") / (pl.col("CPI_INDEX") / pl.lit(cpi_base))).alias(
                     "Organic_Growth_Value_Real"
                 ),
+                (pl.col("Income_Inflow") / (pl.col("CPI_INDEX") / pl.lit(cpi_base))).alias(
+                    "Real_Income_Inflow"
+                ),
+                (pl.col("Expense_Outflow") / (pl.col("CPI_INDEX") / pl.lit(cpi_base))).alias(
+                    "Real_Expense_Outflow"
+                ),
+                pl.col("Months_of_Runway").alias("Months_of_Runway_Real"),
                 (
                     ((1 + pl.col("Organic_Yield_%")) / (1 + (pl.col("INFLATION_YOY_PCT") / 100.0)))
                     - 1
@@ -309,7 +415,7 @@ class BaseMetricsBuilder:
                 (
                     (
                         (1 + pl.col("MoM_Balance_Growth_%"))
-                        / (1 + (pl.col("INFLATION_YOY_PCT") / 1200.0))
+                        / ((1 + (pl.col("INFLATION_YOY_PCT") / 100.0)).pow(1 / 12.0))
                     )
                     - 1
                 ).alias("MoM_Balance_Growth_%_Real"),
@@ -323,6 +429,7 @@ class BaseMetricsBuilder:
                 [
                     pl.col("Income_Inflow").sum().alias("Total_Income"),
                     pl.col("Expense_Outflow").sum().alias("Total_Expense"),
+                    pl.col("Core_Expense_Outflow").sum().alias("Total_Core_Expense"),
                     pl.col("Closing_Balance")
                     .filter(pl.col("Closing_Balance") >= 0)
                     .sum()
@@ -338,6 +445,7 @@ class BaseMetricsBuilder:
                 (pl.col("Total_Assets") + pl.col("Total_Liabilities_Negative")).alias(
                     "Total_Net_Worth"
                 ),
+                pl.col("MONTH_START_DATE").cum_count().alias("Months_Elapsed"),
             )
         )
 
@@ -345,7 +453,7 @@ class BaseMetricsBuilder:
             lf_inflation, on="MONTH_START_DATE", how="left"
         ).with_columns(
             pl.col("INFLATION_YOY_PCT").fill_null(0.0),
-            (pl.col("Total_Net_Worth") / (pl.col("CPI_INDEX") / pl.lit(151.4))).alias(
+            (pl.col("Total_Net_Worth") / (pl.col("CPI_INDEX") / pl.lit(cpi_base))).alias(
                 "Total_Net_Worth_Real"
             ),
         )
@@ -356,4 +464,5 @@ class BaseMetricsBuilder:
             "lf_exp_agg": lf_exp_agg,
             "lf_inc_agg": lf_inc_agg,
             "lf_months": lf_months,
+            "cpi_base": cpi_base,
         }
