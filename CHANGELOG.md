@@ -2,6 +2,35 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [2.2.0](https://github.com/tks18/personal-finance-etl/compare/2.1.0...2.2.0) (2026-08-01)
+
+
+### CI 🛠
+
+* **package.json:** add uv scripts to package.json ([3cc6450](https://github.com/tks18/personal-finance-etl/commit/3cc6450b715bfde3a18dcf6f36d9b99746b5db0e))
+
+
+### Bug Fixes 🛠
+
+* **engines/analytics:** fix cagr calculation ([b5c4d9c](https://github.com/tks18/personal-finance-etl/commit/b5c4d9c09f7db5630b9623e6c2a8c438d2c1dbd1))
+* **engines/analytics:** xirr array fix ([2edeefd](https://github.com/tks18/personal-finance-etl/commit/2edeefdac123c832d3ace2d4d33636cf67372a8e))
+
+
+### Code Refactoring 🖌
+
+* **engines/analytics:** minor refactor to dedupe code ([ec79773](https://github.com/tks18/personal-finance-etl/commit/ec79773f0d95a534cd64401f9b44fde6d69ca443))
+* **engines/analytics:** now uses risk free rate from tax table ([c383e8e](https://github.com/tks18/personal-finance-etl/commit/c383e8e5eb0853199fcd0d1b33ba8a5bc5b00ac8))
+* minor refactor ([ab8fae8](https://github.com/tks18/personal-finance-etl/commit/ab8fae8ab28f482ea74cb97b5e211c3287bf2656))
+* minor refactor ([a4aca38](https://github.com/tks18/personal-finance-etl/commit/a4aca38017a60c91e16a792ee1eb84c7e4c8b425))
+* minor refactors ([1fbada5](https://github.com/tks18/personal-finance-etl/commit/1fbada55bd058cf8aa9b07d042b71a85d649af2a))
+
+
+### Features 🔥
+
+* **engines/analytics:** add function to extract risk free rate ([7f45498](https://github.com/tks18/personal-finance-etl/commit/7f4549868ef353fbcf7d09b08b3838aeee8cd072))
+* **engines/presentations:** include various metrics for personal finance management ([fd21dca](https://github.com/tks18/personal-finance-etl/commit/fd21dca30e8f12eca34b6efc1494f532c7b95f43))
+* schema update to tax_rates table ([8888d33](https://github.com/tks18/personal-finance-etl/commit/8888d33609b3a5d7141703a315c9718bd5e47822))
+
 ## [2.1.0](https://github.com/tks18/personal-finance-etl/compare/2.0.0...2.1.0) (2026-08-01)
 
 
