@@ -38,7 +38,7 @@ class InvestmentAnalyticsEngine:
         self.start_date = start_date
         self.end_date = end_date
 
-    def run(self) -> pl.DataFrame:
+    def run(self) -> dict[str, pl.DataFrame]:
         try:
             return self._run()
         except Exception as e:
@@ -53,7 +53,7 @@ class InvestmentAnalyticsEngine:
                 )
             raise e
 
-    def _run(self) -> pl.DataFrame:
+    def _run(self) -> dict[str, pl.DataFrame]:
         context_manager = AnalyticsContextManager(self.status_queue)
         ctx, isins = context_manager.initialize(
             self.df_p,
@@ -77,11 +77,12 @@ class InvestmentAnalyticsEngine:
                         level=LogLevel.SUCCESS,
                     )
                 )
-            return empty_df
+            return {"df_f_tf_investment_analytics_lot": empty_df}
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             isin_pipeline = IsinPipeline(ctx, isins, tmp_dir, self.status_queue)
-            has_data, global_cf, port_terms, realized = isin_pipeline.process_all()
+            pipeline_res = isin_pipeline.process_all()
+            has_data = pipeline_res["has_data"]
 
             if not has_data:
                 empty_df = pl.DataFrame()
@@ -94,21 +95,19 @@ class InvestmentAnalyticsEngine:
                             level=LogLevel.SUCCESS,
                         )
                     )
-                return empty_df
+                return {"df_f_tf_investment_analytics_lot": empty_df}
 
             post_pipeline = PostProcessingPipeline(ctx, tmp_dir, self.status_queue)
-            final_df = post_pipeline.run(global_cf, port_terms, realized)
+            final_dfs = post_pipeline.run(pipeline_res)
 
-        n_rows = len(final_df)
-        n_cols = len(final_df.columns)
-        if self.status_queue:
-            self.status_queue.put(
-                EngineStatus(
-                    msg=f"✅  Processing Complete — {n_rows:,} rows x {n_cols} columns.",
-                    data=final_df,
-                    progress=1.0,
-                    level=LogLevel.SUCCESS,
+            if self.status_queue:
+                self.status_queue.put(
+                    EngineStatus(
+                        msg=f"✅  Processing Complete — generated {len(final_dfs)} analytics tables.",
+                        data=None,
+                        progress=1.0,
+                        level=LogLevel.SUCCESS,
+                    )
                 )
-            )
 
-        return final_df
+            return final_dfs

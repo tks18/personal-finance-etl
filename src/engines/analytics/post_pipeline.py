@@ -1,11 +1,11 @@
 import os
-from datetime import date
 
 import polars as pl
 
 from src.engines.analytics.pipeline.context import RunContext
 from src.engines.analytics.pipeline.postprocessor import PostProcessor
 from src.utils.interfaces import ILogger
+from src.utils.logger import logger
 from src.utils.models import EngineStatus, LogLevel
 
 
@@ -20,14 +20,14 @@ class PostProcessingPipeline:
 
     def run(
         self,
-        global_cashflows: list[dict],
-        portfolio_terminals: dict[date, dict[str, float]],
-        realized_events: list[dict],
-    ) -> pl.DataFrame:
+        pipeline_res: dict,
+    ) -> dict[str, pl.DataFrame]:
+
         if self.status_queue:
+            logger.info("Post-processing: Scanning temporary parquet files...")
             self.status_queue.put(
                 EngineStatus(
-                    msg="Post-processing: Scanning temporary parquet files...",
+                    msg="",
                     data=None,
                     progress=0.86,
                     level=LogLevel.STEP,
@@ -40,25 +40,31 @@ class PostProcessingPipeline:
         unique_dates = unique_dates_df["Closing_Date"].sort().to_list()
 
         if self.status_queue:
+            logger.info("Post-processing: Aggregating portfolio metrics...")
             self.status_queue.put(
                 EngineStatus(
-                    msg="Post-processing: Aggregating portfolio metrics...",
+                    msg="",
                     data=None,
                     progress=0.90,
                     level=LogLevel.STEP,
                 )
             )
-        lazy_df = self.postprocessor.run(
-            lazy_df, unique_dates, global_cashflows, portfolio_terminals, realized_events
-        )
+        res_dict = self.postprocessor.run(lazy_df, unique_dates, pipeline_res)
 
         if self.status_queue:
+            logger.info("Post-processing: Collecting final output...")
             self.status_queue.put(
                 EngineStatus(
-                    msg="Post-processing: Collecting final output...",
+                    msg="",
                     data=None,
                     progress=0.95,
                     level=LogLevel.STEP,
                 )
             )
-        return lazy_df.collect()
+        final_res = {}
+        for k, v in res_dict.items():
+            if isinstance(v, pl.LazyFrame):
+                final_res[k] = v.collect()
+            else:
+                final_res[k] = v
+        return final_res
