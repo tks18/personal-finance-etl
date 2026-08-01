@@ -44,13 +44,18 @@ def get_base_transactions(df_lazy: pl.LazyFrame, column_mapping: dict[str, str])
                 pl.col("LOCAL_AMOUNT").cast(pl.Float64, strict=False).fill_null(0.0),
                 pl.col("AMOUNT_ACCOUNT").cast(pl.Float64, strict=False).fill_null(0.0),
                 pl.col("TRANSACTION_TYPE").cast(pl.Int64, strict=False),
+                pl.col("CARDDIVIDMONTH").cast(pl.Int64, strict=False),
+                pl.col("TIMESTAMP").cast(pl.Int64, strict=False),
+                pl.col("UPDATED_TIME").cast(pl.Int64, strict=False),
+                pl.col("S_NO").cast(pl.Int64, strict=False),
             ]
         )
         .filter(pl.col("IS_DEL").fill_null("0") == "0")
         .with_columns(
-            pl.when(pl.col("LOCAL_AMOUNT") == 0)
+            pl.when(pl.col("LOCAL_AMOUNT").abs() < 1e-10)
             .then(0.0)
             .otherwise(pl.col("BASE_AMOUNT") / pl.col("LOCAL_AMOUNT"))
+            .fill_nan(0.0)
             .alias("EXCH_RATE")
         )
     )
@@ -132,13 +137,8 @@ def transform_f_transfer_transactions(
             .alias("AMOUNT_PROPER"),
             # ADJUSTED_DATE_FOR_ANALYSIS (EDATE equivalent)
             pl.when(pl.col("ASSET_GROUP") == "Investments")
-            .then(
-                pl.col("DATE")
-                .cast(pl.String)
-                .str.to_date("%Y-%m-%d", strict=False)
-                .dt.offset_by("-1mo")
-            )
-            .otherwise(pl.col("DATE").cast(pl.String).str.to_date("%Y-%m-%d", strict=False))
+            .then(pl.col("DATE").cast(pl.Date, strict=False).dt.offset_by("-1mo"))
+            .otherwise(pl.col("DATE").cast(pl.Date, strict=False))
             .alias("ADJUSTED_DATE_FOR_ANALYSIS"),
         )
         # Clean up: Drop the temporary ASSET_GROUP column so it matches the exact schema

@@ -2,7 +2,7 @@ import polars as pl
 
 
 def get_stg_mf_market_data(
-    raw_data: pl.LazyFrame, stg_mf_isin_mapping_lazy: pl.LazyFrame
+    raw_data: pl.LazyFrame, stg_mf_isin_mapping_lazy: pl.LazyFrame, default_currency_id: str
 ) -> pl.LazyFrame:
     """
     Applies final PQ & DAX transformations (including LOOKUPVALUE).
@@ -32,7 +32,7 @@ def get_stg_mf_market_data(
         # Filter: Scheme Name <> "NO HOLDINGS FOUND"
         .filter(pl.col("Scheme Name") != "NO HOLDINGS FOUND")
         # DAX: CURRENCY_ID
-        .with_columns(pl.lit("INR_INR").alias("CURRENCY_ID"))
+        .with_columns(pl.lit(default_currency_id).alias("CURRENCY_ID"))
         # DAX: LOOKUPVALUE for ISIN
         # This replicates DAX by joining the MF_ISIN_MAPPING table
         .join(
@@ -158,15 +158,9 @@ def transform_stg_mf_trades(
     )
 
     # 2. DAX SWITCH Logic (Fixing old Scheme Names via configuration)
+    # The mapping is strictly provided via the config.toml file.
     if not scheme_mapping:
-        # Fallback to default if not configured in TOML
-        scheme_mapping = {
-            "Quant Tax Plan Direct Growth": "Quant ELSS Tax Saver Fund Direct Growth",
-            "IDBI India Top 100 Equity Fund Direct Growth": "LIC MF Large Cap Fund Direct Growth",
-            "TATA DIGITAL INDIA FUND DIRECT PLAN GROWTH": "Tata Digital India Fund Direct Growth",
-            "ICICI PRUDENTIAL TECHNOLOGY FUND - DIRECT PLAN - GROWTH": "ICICI Prudential Technology Direct Plan Growth",
-            "DSP BlackRock Small Cap Fund - Direct - Growth": "DSP Small Cap Direct Plan Growth",
-        }
+        scheme_mapping = {}
 
     # Replace strings natively if they exist in the dictionary, otherwise keep original
     df_mapped = df_filtered.with_columns(

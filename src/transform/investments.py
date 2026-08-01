@@ -82,6 +82,7 @@ def get_sale_reference(
             on="Date",
             by="ISIN",
             strategy="backward",  # Matches the closest date <= Sale Date
+            suffix="_purchase",
         )
         # Calculate final DAX columns
         .with_columns(
@@ -149,7 +150,9 @@ def transform_stg_investment_market_data(refs: list[pl.LazyFrame]) -> pl.LazyFra
     return df_final
 
 
-def get_f_tf_investment_purchase_data(refs: list[pl.LazyFrame]) -> pl.LazyFrame:
+def get_f_tf_investment_purchase_data(
+    refs: list[pl.LazyFrame], default_currency_id: str
+) -> pl.LazyFrame:
     """Translates DAX UNION + SUMMARIZE for Purchases."""
     select_cols = ["__file_name__", "__folder_path__", "ISIN", "Date", "Price", "Quantity", "Value"]
 
@@ -159,12 +162,14 @@ def get_f_tf_investment_purchase_data(refs: list[pl.LazyFrame]) -> pl.LazyFrame:
         df_union.unique()  # SUMMARIZE (distinct)
         .sort(["ISIN", "Date", "Quantity", "Price"])
         # DAX calculated col
-        .with_columns(pl.lit("INR_INR").alias("CURRENCY_ID"))
+        .with_columns(pl.lit(default_currency_id).alias("CURRENCY_ID"))
     )
     return df_final
 
 
-def get_f_tf_investment_sale_data(refs: list[pl.LazyFrame]) -> pl.LazyFrame:
+def get_f_tf_investment_sale_data(
+    refs: list[pl.LazyFrame], default_currency_id: str
+) -> pl.LazyFrame:
     """Translates DAX UNION + SUMMARIZE for Sales."""
     select_cols = [
         "__file_name__",
@@ -185,7 +190,7 @@ def get_f_tf_investment_sale_data(refs: list[pl.LazyFrame]) -> pl.LazyFrame:
     df_final = (
         df_union.unique()  # SUMMARIZE (distinct)
         .sort(["ISIN", "Date", "Quantity", "Sell Price"])
-        .with_columns(pl.lit("INR_INR").alias("CURRENCY_ID"))
+        .with_columns(pl.lit(default_currency_id).alias("CURRENCY_ID"))
     )
     return df_final
 

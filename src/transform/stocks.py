@@ -1,7 +1,7 @@
 import polars as pl
 
 
-def get_stg_stock_market_data(raw_data: pl.LazyFrame) -> pl.LazyFrame:
+def get_stg_stock_market_data(raw_data: pl.LazyFrame, default_currency_id: str) -> pl.LazyFrame:
     """
     Applies the final PQ & DAX transformations.
     Returns a LazyFrame.
@@ -65,7 +65,7 @@ def get_stg_stock_market_data(raw_data: pl.LazyFrame) -> pl.LazyFrame:
             .then(pl.lit("ETFs"))
             .otherwise(pl.lit("Direct Stocks"))
             .alias("STOCKS_CLASS"),
-            pl.lit("INR_INR").alias("CURRENCY_ID"),
+            pl.lit(default_currency_id).alias("CURRENCY_ID"),
         )
         # Power Query: Reordered Columns (Select)
         .select(
