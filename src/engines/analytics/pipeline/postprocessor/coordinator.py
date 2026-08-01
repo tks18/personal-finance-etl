@@ -5,7 +5,10 @@ import polars as pl
 from src.engines.analytics.pipeline.context import RunContext
 from src.engines.analytics.pipeline.postprocessor.analytics import AdvancedAnalyticsCalculator
 from src.engines.analytics.pipeline.postprocessor.gains import RealizedGainsCalculator
-from src.engines.analytics.pipeline.postprocessor.group_processor import GroupProcessor
+from src.engines.analytics.pipeline.postprocessor.group_processor import (
+    PORTFOLIO_COL_RENAMES,
+    GroupProcessor,
+)
 from src.engines.analytics.pipeline.postprocessor.harvest import HarvestRecommendationCalculator
 from src.engines.analytics.pipeline.postprocessor.weights import PortfolioWeightsCalculator
 from src.engines.analytics.pipeline.postprocessor.xirr import PortfolioXIRRCalculator
@@ -15,11 +18,11 @@ class PostProcessor:
     def __init__(self, ctx: RunContext):
         self.ctx = ctx
         self.xirr_calc = PortfolioXIRRCalculator()
-        self.analytics_calc = AdvancedAnalyticsCalculator()
+        self.analytics_calc = AdvancedAnalyticsCalculator(ctx.fy_table)
         self.weights_calc = PortfolioWeightsCalculator()
         self.gains_calc = RealizedGainsCalculator(ctx)
         self.harvest_calc = HarvestRecommendationCalculator()
-        self.group_calc = GroupProcessor()
+        self.group_calc = GroupProcessor(ctx.fy_table)
 
     def run(
         self,
@@ -132,16 +135,7 @@ class PostProcessor:
             else _aggregate_level(["Closing_Date", "INSTRUMENT_CLASS", "INSTRUMENT_SUBTYPE"])
         )
         f_tf_port = _aggregate_level(["Closing_Date"]).join(
-            df_port.lazy().rename(
-                {
-                    "Portfolio_XIRR": "XIRR",
-                    "Portfolio_BM_XIRR": "BM_XIRR",
-                    "Portfolio_Active_Return": "Active_Return",
-                    "Portfolio_Sharpe_Ratio": "Sharpe_Ratio",
-                    "Portfolio_Sortino_Ratio": "Sortino_Ratio",
-                    "Portfolio_Max_Drawdown": "Max_Drawdown",
-                }
-            ),
+            df_port.lazy().rename(PORTFOLIO_COL_RENAMES),
             on=["Closing_Date"],
             how="left",
         )

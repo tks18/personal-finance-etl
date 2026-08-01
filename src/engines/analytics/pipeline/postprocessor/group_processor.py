@@ -5,15 +5,24 @@ import polars as pl
 from src.engines.analytics.pipeline.postprocessor.analytics import AdvancedAnalyticsCalculator
 from src.engines.analytics.pipeline.postprocessor.xirr import PortfolioXIRRCalculator
 
+PORTFOLIO_COL_RENAMES = {
+    "Portfolio_XIRR": "XIRR",
+    "Portfolio_BM_XIRR": "BM_XIRR",
+    "Portfolio_Active_Return": "Active_Return",
+    "Portfolio_Sharpe_Ratio": "Sharpe_Ratio",
+    "Portfolio_Sortino_Ratio": "Sortino_Ratio",
+    "Portfolio_Max_Drawdown": "Max_Drawdown",
+}
+
 
 class GroupProcessor:
     """
     Computes XIRR, Sharpe, and other metrics at arbitrary group levels (Class, Subtype).
     """
 
-    def __init__(self):
+    def __init__(self, fy_table=None):
         self.xirr_calc = PortfolioXIRRCalculator()
-        self.analytics_calc = AdvancedAnalyticsCalculator()
+        self.analytics_calc = AdvancedAnalyticsCalculator(fy_table)
 
     def run(
         self,
@@ -35,17 +44,7 @@ class GroupProcessor:
             df_group = self.xirr_calc.calculate(unique_dates, cashflows, terminals)
             df_group = self.analytics_calc.calculate(df_group, unique_dates, terminals)
 
-            # Rename the portfolio columns to generic columns so we can use them anywhere
-            df_group = df_group.rename(
-                {
-                    "Portfolio_XIRR": "XIRR",
-                    "Portfolio_BM_XIRR": "BM_XIRR",
-                    "Portfolio_Active_Return": "Active_Return",
-                    "Portfolio_Sharpe_Ratio": "Sharpe_Ratio",
-                    "Portfolio_Sortino_Ratio": "Sortino_Ratio",
-                    "Portfolio_Max_Drawdown": "Max_Drawdown",
-                }
-            )
+            df_group = df_group.rename(PORTFOLIO_COL_RENAMES)
 
             if extra_key_col:
                 parts = key.split("___")
