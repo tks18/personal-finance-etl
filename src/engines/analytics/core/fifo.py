@@ -3,6 +3,7 @@ from datetime import date
 from typing import cast
 
 from src.engines.analytics.rules.tax import FYTaxRateTable
+from src.utils.logger import logger
 from src.utils.models import TaxLot
 
 
@@ -17,7 +18,6 @@ class FIFOPortfolio:
 
     @property
     def active_lots(self) -> list[TaxLot]:
-        return list(self._active_lots)
         """Read-only access to active lots."""
         return list(self._active_lots)
 
@@ -143,6 +143,10 @@ class FIFOPortfolio:
 
         if abs(our_avg - target_avg) > 0.01 and our_avg > 0:
             r = target_avg / our_avg
+            logger.debug(
+                f"FIFO: Reconciling cost basis. Scaling {len(self._active_lots)} lots by {r:.4f}. "
+                f"Original Avg: {our_avg:.2f}, Target Avg: {target_avg:.2f}"
+            )
             for i in range(len(self._active_lots)):
                 lot = self._active_lots[i]
                 self._active_lots[i] = TaxLot(
