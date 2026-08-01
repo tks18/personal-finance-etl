@@ -3,7 +3,7 @@ from datetime import date
 import polars as pl
 
 from src.engines.analytics.pipeline.context import RunContext
-from src.utils.helpers import to_date_obj
+from src.utils.helpers import get_fy_start_year, to_date_obj
 
 
 class RealizedGainsCalculator:
@@ -23,7 +23,7 @@ class RealizedGainsCalculator:
                 d_obj = to_date_obj(d)
                 if not d_obj:
                     continue
-                fy_sy = d_obj.year if d_obj.month >= 4 else d_obj.year - 1
+                fy_sy = get_fy_start_year(d_obj)
                 df_dates_list.append({"Closing_Date": d, "Date_Obj": d_obj, "event_fy_sy": fy_sy})
             df_dates = pl.DataFrame(df_dates_list).sort(["event_fy_sy", "Date_Obj"]).with_columns(pl.col("Date_Obj").set_sorted())
 
@@ -38,26 +38,30 @@ class RealizedGainsCalculator:
                 )
                 .with_columns(pl.col("tax_type").fill_null("equity").str.to_lowercase())
                 .with_columns(
-                    pl.when((pl.col("gain_type") == "LTCG") & (pl.col("gain") > 0))
+                    pl.when((pl.col("gain_type") == "LTCG") & (pl.col("gain") >= 0))
                     .then(pl.col("gain"))
                     .otherwise(0.0)
                     .alias("is_ltcg"),
                     pl.when(
                         (pl.col("gain_type") == "LTCG")
-                        & (pl.col("gain") > 0)
+                        & (pl.col("gain") >= 0)
                         & (pl.col("tax_type") == "equity")
                     )
                     .then(pl.col("gain"))
                     .otherwise(0.0)
                     .alias("is_eq_ltcg"),
-                    pl.when((pl.col("gain_type") == "STCG") & (pl.col("gain") > 0))
+                    pl.when((pl.col("gain_type") == "STCG") & (pl.col("gain") >= 0))
                     .then(pl.col("gain"))
                     .otherwise(0.0)
                     .alias("is_stcg"),
-                    pl.when(pl.col("gain") < 0)
+                    pl.when((pl.col("gain_type") == "LTCG") & pl.col("is_loss"))
                     .then(pl.col("gain"))
                     .otherwise(0.0)
-                    .alias("is_loss"),
+                    .alias("is_ltcl"),
+                    pl.when((pl.col("gain_type") == "STCG") & pl.col("is_loss"))
+                    .then(pl.col("gain"))
+                    .otherwise(0.0)
+                    .alias("is_stcl"),
                 )
             )
 
@@ -68,7 +72,8 @@ class RealizedGainsCalculator:
                         pl.col("is_ltcg").sum().alias("daily_ltcg"),
                         pl.col("is_eq_ltcg").sum().alias("daily_eq_ltcg"),
                         pl.col("is_stcg").sum().alias("daily_stcg"),
-                        pl.col("is_loss").sum().alias("daily_loss"),
+                        pl.col("is_ltcl").sum().alias("daily_ltcl"),
+                        pl.col("is_stcl").sum().alias("daily_stcl"),
                     ]
                 )
                 .sort(["event_fy_sy", "date"])
@@ -80,7 +85,8 @@ class RealizedGainsCalculator:
                     pl.col("daily_ltcg").cum_sum().over("event_fy_sy").alias("cum_ltcg"),
                     pl.col("daily_eq_ltcg").cum_sum().over("event_fy_sy").alias("cum_eq_ltcg"),
                     pl.col("daily_stcg").cum_sum().over("event_fy_sy").alias("cum_stcg"),
-                    pl.col("daily_loss").cum_sum().over("event_fy_sy").alias("cum_loss"),
+                    pl.col("daily_ltcl").cum_sum().over("event_fy_sy").alias("cum_ltcl"),
+                    pl.col("daily_stcl").cum_sum().over("event_fy_sy").alias("cum_stcl"),
                 ]
             )
 
@@ -117,7 +123,7 @@ class RealizedGainsCalculator:
                 ).alias("FY"),
                 pl.col("cum_ltcg").round(4).alias("FY_Realized_LTCG"),
                 pl.col("cum_stcg").round(4).alias("FY_Realized_STCG"),
-                pl.col("cum_loss").round(4).alias("FY_Realized_Loss"),
+                (pl.col("cum_ltcl") + pl.col("cum_stcl")).round(4).alias("FY_Realized_Loss"),
                 pl.max_horizontal(0.0, pl.col("exemption_limit") - pl.col("cum_eq_ltcg"))
                 .round(4)
                 .alias("FY_LTCG_Remaining_Exemption"),
@@ -140,7 +146,7 @@ class RealizedGainsCalculator:
                 d_obj = to_date_obj(d)
                 if not d_obj:
                     continue
-                fy_sy = d_obj.year if d_obj.month >= 4 else d_obj.year - 1
+                fy_sy = get_fy_start_year(d_obj)
                 limit = self.ctx.fy_table.get_equity_ltcg_exemption(date(fy_sy, 4, 1))
                 df_dates_list.append(
                     {
