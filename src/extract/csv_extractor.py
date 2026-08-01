@@ -70,3 +70,17 @@ def extract_opening_balances_raw(csv_path: str) -> pl.LazyFrame:
     return df_lazy.with_columns(
         pl.lit(filename).alias("__file_name__"), pl.lit(folder).alias("__folder_path__")
     )
+
+
+def extract_inflation_rates_raw(csv_path: str) -> pl.LazyFrame:
+    filename = os.path.basename(csv_path)
+    folder = os.path.dirname(csv_path)
+    schema_overrides = {
+        "INFLATION_ID": pl.Int64,
+        "DATE": pl.Date,
+        "INFLATION_YOY_PCT": pl.Float64,
+        "CPI_INDEX": pl.Float64,
+    }
+    return pl.scan_csv(
+        csv_path, schema_overrides=schema_overrides, try_parse_dates=True
+    ).with_columns(pl.lit(filename).alias("__file_name__"), pl.lit(folder).alias("__folder_path__"))
