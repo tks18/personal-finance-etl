@@ -98,8 +98,12 @@ class TransformationDAG:
         stg_investment_market_data_lazy = transform_stg_investment_market_data(
             market_data_ref_lazy_list
         )
-        f_tf_inv_purchase_data_lazy = get_f_tf_investment_purchase_data(purchase_ref_lazy_list)
-        f_tf_inv_sale_data_lazy = get_f_tf_investment_sale_data(sale_ref_lazy_list)
+        f_tf_inv_purchase_data_lazy = get_f_tf_investment_purchase_data(
+            purchase_ref_lazy_list, self.cfg.DEFAULT_CURRENCY_ID
+        )
+        f_tf_inv_sale_data_lazy = get_f_tf_investment_sale_data(
+            sale_ref_lazy_list, self.cfg.DEFAULT_CURRENCY_ID
+        )
 
         logger.info("Building Investment Master...")
         d_tf_investment_master_lazy = get_d_tf_investment_master(
@@ -119,15 +123,15 @@ class TransformationDAG:
         )
         d_calendar_lazy = transform_d_calendar(df_bounds_lazy)
 
+        logger.info("Executing Base Transformation DAG in Parallel...")
         self.status_queue.put(
             EngineStatus(
-                msg="Executing Base Transformation DAG in Parallel...",
+                msg="",
                 data=None,
                 progress=0.2,
                 level=LogLevel.STEP,
             )
         )
-        logger.info("Executing Base Transformation DAG in Parallel...")
         results = pl.collect_all(
             [
                 d_income_category_lazy,
@@ -147,10 +151,16 @@ class TransformationDAG:
                 f_tf_inv_purchase_data_lazy,
                 f_tf_inv_sale_data_lazy,
                 d_tf_investment_master_lazy,
-                d_calendar_lazy,
             ],
             engine="streaming",
         )
+
+        logger.info("Executing Calendar Generation DAG...")
+        calendar_result = d_calendar_lazy.collect(engine="streaming")
+
+        inflation_result = pl.DataFrame()
+        if extracted.raw_inflation_rates is not None:
+            inflation_result = extracted.raw_inflation_rates.collect(engine="streaming")
 
         return {
             "df_d_income_category": results[0],
@@ -170,5 +180,6 @@ class TransformationDAG:
             "df_f_tf_inv_purchase": results[14],
             "df_f_tf_inv_sale": results[15],
             "df_d_tf_investment_master": results[16],
-            "df_d_calendar": results[17],
+            "df_d_calendar": calendar_result,
+            "df_f_inflation_rates": inflation_result,
         }

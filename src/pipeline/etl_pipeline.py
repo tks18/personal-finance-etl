@@ -9,6 +9,7 @@ import polars as pl
 from src.config.settings import Settings
 from src.engines.analytics import InvestmentAnalyticsEngine
 from src.engines.benchmark import BenchmarkEngine
+from src.engines.benchmark.cache import BenchmarkCacheManager
 from src.engines.presentation.wealth_engine import WealthPresentationEngine
 from src.load.database import DuckDBLoader, DuckDBManager
 from src.pipeline.core.extractor import DataExtractor
@@ -36,9 +37,10 @@ class ETLOrchestrator:
         self.dfs = transformer.run(extracted_data)
 
     def _run_engines(self) -> None:
+        logger.info("Detecting date range & Starting Benchmark Engine...")
         self.status_queue.put(
             EngineStatus(
-                msg="Detecting date range & Starting Benchmark Engine...",
+                msg="",
                 data=None,
                 progress=0.4,
                 level=LogLevel.STEP,
@@ -55,11 +57,8 @@ class ETLOrchestrator:
             df_purchase=self.dfs.get("df_f_tf_inv_purchase"),
         )
 
-        self.status_queue.put(
-            EngineStatus(
-                msg="Starting Polars Tax Engine...", data=None, progress=0.6, level=LogLevel.STEP
-            )
-        )
+        logger.info("Starting Polars Tax Engine...")
+        self.status_queue.put(EngineStatus(msg="", data=None, progress=0.6, level=LogLevel.STEP))
         tax_engine = InvestmentAnalyticsEngine(
             df_p=self.dfs["df_f_tf_inv_purchase"],
             df_s=self.dfs["df_f_tf_inv_sale"],
@@ -73,21 +72,20 @@ class ETLOrchestrator:
             start_date=None,
             end_date=None,
         )
-        self.dfs["df_f_investment_market_data"] = tax_engine.run()
+        analytics_results = tax_engine.run()
+        self.dfs.update(analytics_results)
 
-        self.status_queue.put(
-            EngineStatus(
-                msg="Starting Presentation Engines...", data=None, progress=0.8, level=LogLevel.STEP
-            )
-        )
+        logger.info("Starting Presentation Engines...")
+        self.status_queue.put(EngineStatus(msg="", data=None, progress=0.8, level=LogLevel.STEP))
         wealth_engine = WealthPresentationEngine()
         wealth_lazy = wealth_engine.run(self.dfs)
 
         presentation_lazy = wealth_lazy
         if presentation_lazy:
+            logger.info("Executing Presentation DAG in Parallel...")
             self.status_queue.put(
                 EngineStatus(
-                    msg="Executing Presentation DAG in Parallel...",
+                    msg="",
                     data=None,
                     progress=0.9,
                     level=LogLevel.STEP,
@@ -113,9 +111,6 @@ class ETLOrchestrator:
 
         logger.info(f"Setting up Target DB at {self.db_manager.db_path}")
 
-        # Rescue Benchmark Data before schema wipe
-        from src.engines.benchmark.cache import BenchmarkCacheManager
-
         BenchmarkCacheManager.rescue_benchmark_cache(self.db_manager.db_path)
 
         self.db_manager.setup_schema()
@@ -132,6 +127,8 @@ class ETLOrchestrator:
             logger.info(
                 f"ETL complete in {total_time:.2f} seconds. All tables generated successfully."
             )
+            logger.info("Finalizing database writes...")
+            self.db_manager.commit()
         finally:
             logger.info("Cleaning up database connections and WAL sidecars...")
             self.db_manager.cleanup()
@@ -146,8 +143,6 @@ def process_wrapper(status_queue: ILogger | None = None, config_path: str = "con
             cfg = Settings.from_toml(config_path)
 
         if status_queue is None:
-            from typing import cast
-
             status_queue = cast(ILogger, multiprocessing.Queue())
 
         orchestrator = ETLOrchestrator(cfg, status_queue)

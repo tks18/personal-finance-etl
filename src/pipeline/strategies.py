@@ -46,7 +46,9 @@ class StockPipeline:
         logger: logging.Logger,
     ) -> AssetPipelineResult:
         logger.info("Parsing unstructured Stock Excel files...")
-        market_data = get_stg_stock_market_data(extracted.stock_market_data_raw)
+        market_data = get_stg_stock_market_data(
+            extracted.stock_market_data_raw, cfg.DEFAULT_CURRENCY_ID
+        )
         market_data_ref = get_stg_stock_market_data_ref(market_data)
 
         logger.info("Parsing Stock Trade Orders...")
@@ -85,7 +87,9 @@ class MutualFundPipeline:
     ) -> AssetPipelineResult:
         logger.info("Parsing unstructured Mutual Fund Excel files...")
         mapping = extracted.stg_mf_isin_mapping
-        market_data = get_stg_mf_market_data(extracted.mf_market_data_raw, mapping)
+        market_data = get_stg_mf_market_data(
+            extracted.mf_market_data_raw, mapping, cfg.DEFAULT_CURRENCY_ID
+        )
         market_data_ref = get_stg_mf_market_data_ref(market_data)
 
         logger.info("Parsing Mutual Fund Trade Orders...")

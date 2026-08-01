@@ -5,6 +5,7 @@ import polars as pl
 from src.config.settings import Settings
 from src.extract.csv_extractor import (
     extract_benchmark_master_raw,
+    extract_inflation_rates_raw,
     extract_opening_balances_raw,
     extract_stg_benchmark_mapping,
     extract_stg_mf_isin_mapping,
@@ -30,9 +31,10 @@ class DataExtractor:
         self.status_queue = status_queue
 
     def run(self) -> ExtractionResult:
+        logger.info("Validating input configuration files...")
         self.status_queue.put(
             EngineStatus(
-                msg="Validating input configuration files...",
+                msg="",
                 data=None,
                 progress=0.01,
                 level=LogLevel.STEP,
@@ -45,6 +47,7 @@ class DataExtractor:
             self.cfg.BENCHMARK_MASTER_CSV_PATH,
             self.cfg.TAX_RATES_CSV_PATH,
             self.cfg.OPENING_BALANCE_CSV_PATH,
+            self.cfg.INFLATION_RATES_CSV_PATH,
         ]
         for filepath in required_files:
             if not os.path.exists(filepath):
@@ -73,6 +76,7 @@ class DataExtractor:
         raw_opening_balances = extract_opening_balances_raw(self.cfg.OPENING_BALANCE_CSV_PATH)
         raw_benchmark_master = extract_benchmark_master_raw(self.cfg.BENCHMARK_MASTER_CSV_PATH)
         raw_tax_rates = extract_tax_rates_raw(self.cfg.TAX_RATES_CSV_PATH)
+        raw_inflation_rates = extract_inflation_rates_raw(self.cfg.INFLATION_RATES_CSV_PATH)
 
         logger.info("Categorizing Statement Files...")
         statement_files = categorize_statement_files(self.cfg.STATEMENTS_FOLDER)
@@ -99,31 +103,49 @@ class DataExtractor:
             raw_opening_balances=raw_opening_balances,
             raw_benchmark_master=raw_benchmark_master,
             raw_tax_rates=raw_tax_rates,
+            raw_inflation_rates=raw_inflation_rates,
         )
 
         logger.info("Running Gatekeeper Schema Validation...")
         self.status_queue.put(
             EngineStatus(
-                msg="Running Gatekeeper Schema Validation...",
+                msg="",
                 data=None,
                 progress=0.15,
                 level=LogLevel.STEP,
             )
         )
         # Fail-fast by attempting to collect the first row of all extract lazy frames.
-        # This will trigger Polars to aggressively evaluate schema_overrides and cast(strict=True) 
+        # This will trigger Polars to aggressively evaluate schema_overrides and cast(strict=True)
         # instantly, preventing OOM or compute waste down the DAG if source files are corrupted.
         validation_frames = [
-            result.zcategory, result.assetgroup, result.assets, result.currency, result.inoutcome,
-            result.stg_mf_isin_mapping, result.stg_benchmark_mapping,
-            result.raw_opening_balances, result.raw_benchmark_master, result.raw_tax_rates
+            result.zcategory,
+            result.assetgroup,
+            result.assets,
+            result.currency,
+            result.inoutcome,
+            result.stg_mf_isin_mapping,
+            result.stg_benchmark_mapping,
+            result.mf_market_data_raw,
+            result.mf_transactions_raw,
+            result.stock_market_data_raw,
+            result.stock_transactions_raw,
+            result.raw_opening_balances,
+            result.raw_benchmark_master,
+            result.raw_tax_rates,
+            result.raw_inflation_rates,
         ]
-        
+
         try:
             pl.collect_all([lf.head(1) for lf in validation_frames])
         except Exception as e:
             self.status_queue.put(
-                EngineStatus(msg=f"Gatekeeper Validation Failed: {e}", data=None, progress=0, level=LogLevel.ERROR)
+                EngineStatus(
+                    msg=f"Gatekeeper Validation Failed: {e}",
+                    data=None,
+                    progress=0,
+                    level=LogLevel.ERROR,
+                )
             )
             raise RuntimeError(f"Corrupted source data detected during extraction: {e}") from e
 
