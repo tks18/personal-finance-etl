@@ -171,3 +171,14 @@ class FYTaxRateTable:
         if tt == "debt" and tst in ("mf", "mutual_fund", "debt_mf") and lot_buy_date >= cutoff:
             return "STCG"
         return "LTCG" if age_days > get_ltcg_threshold(tax_type, tax_subtype) else "STCG"
+
+    def get_risk_free_rate(self, ref_date: date) -> float:
+        entry = self._find_entry(ref_date)
+        if entry is None:
+            return 0.06
+        raw = entry["raw"]
+        try:
+            val = raw.get("Risk_Free_Rate")
+            return float(val) if val is not None and str(val).strip() != "" else 0.06
+        except (ValueError, TypeError):
+            return 0.06
