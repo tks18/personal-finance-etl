@@ -284,6 +284,7 @@ def transform_d_tax_rates(raw_data: pl.LazyFrame) -> pl.LazyFrame:
             "FY_Start_Date",
             "FY_End_Date",
             "Debt_MF_Cutoff_Date",
+            "Risk_Free_Rate",
             "Equity_Listed_LTCG",
             "Equity_Listed_STCG",
             "Equity_Unlisted_LTCG",

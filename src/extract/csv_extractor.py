@@ -40,6 +40,7 @@ def extract_tax_rates_raw(csv_path: str) -> pl.LazyFrame:
         "FY_Start_Date": pl.Date,
         "FY_End_Date": pl.Date,
         "Debt_MF_Cutoff_Date": pl.Date,
+        "Risk_Free_Rate": pl.Float64,
         "Equity_Listed_LTCG": pl.Float64,
         "Equity_Listed_STCG": pl.Float64,
         "Equity_Unlisted_LTCG": pl.Float64,
