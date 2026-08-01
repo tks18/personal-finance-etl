@@ -1,10 +1,13 @@
 import glob
 import os
 import shutil
+import tempfile
+import uuid
 from datetime import datetime
 
 import duckdb
 import polars as pl
+import psutil
 
 from src.load.schema import SQLITE_SCHEMA_DDL
 from src.utils.interfaces import ILogger
@@ -18,6 +21,9 @@ class DuckDBManager:
     def __init__(self, base_path: str):
         self.base_path = base_path
         self.db_path = self._generate_target_db_path()
+        self.active_db_path = os.path.join(
+            tempfile.gettempdir(), f"etl_tmp_{uuid.uuid4().hex}.duckdb"
+        )
 
     def _generate_target_db_path(self) -> str:
         now = datetime.now()
@@ -35,15 +41,23 @@ class DuckDBManager:
         return os.path.join(full_dir_path, file_name)
 
     def setup_schema(self) -> None:
-        """Deletes old DB and creates strict schemas."""
-        if os.path.exists(self.db_path):
-            os.remove(self.db_path)
+        """Deletes old tmp DB and creates strict schemas."""
+        if os.path.exists(self.active_db_path):
+            os.remove(self.active_db_path)
 
-        with duckdb.connect(self.db_path) as conn:
+        with duckdb.connect(self.active_db_path) as conn:
             # Phase 2.2: DuckDB Pragma Tuning for Batch ETL
-            conn.execute("PRAGMA memory_limit='8GB'")
+            mem_gb = max(4, int(psutil.virtual_memory().total / (1024**3) * 0.75))
+            conn.execute(f"PRAGMA memory_limit='{mem_gb}GB'")
             conn.execute("PRAGMA threads=4")
             conn.execute(SQLITE_SCHEMA_DDL)
+
+    def commit(self) -> None:
+        """Atomically rename the tmp db to the final db path."""
+        if os.path.exists(self.active_db_path):
+            if os.path.exists(self.db_path):
+                os.remove(self.db_path)
+            shutil.move(self.active_db_path, self.db_path)
 
     def apply_indexes_and_optimize(self) -> None:
         """DuckDB natively manages optimization and zone maps, no explicit indexes needed."""
@@ -74,7 +88,13 @@ class DuckDBManager:
                 logger.warning(f"Failed to delete old DB {db_file}: {e}")
 
     def cleanup(self) -> None:
-        """Ensures WAL sidecar files are merged if any, and enforces retention."""
+        """Ensures WAL sidecar files are merged if any, removes tmp files, and enforces retention."""
+        if os.path.exists(self.active_db_path):
+            try:
+                os.remove(self.active_db_path)
+            except Exception as e:
+                logger.warning(f"Failed to delete temp DB {self.active_db_path}: {e}")
+
         if os.path.exists(self.db_path):
             with duckdb.connect(self.db_path) as conn:
                 conn.execute("CHECKPOINT;")
@@ -82,30 +102,34 @@ class DuckDBManager:
         self.enforce_retention_policy()
 
     def batch_write_dataframe(
-        self, df: pl.DataFrame, table_name: str, chunk_size: int = 50000
+        self,
+        df: pl.DataFrame,
+        table_name: str,
+        conn: duckdb.DuckDBPyConnection,
+        chunk_size: int = 50000,
     ) -> None:
         """Writes a DataFrame to DuckDB using native zero-copy integration."""
         if df.height == 0:
             return
 
-        # Clean empty strings into true nulls to prevent DuckDB strict-typing conversion errors
-        string_cols = [
-            c
-            for c, d in zip(df.columns, df.dtypes, strict=True)
-            if d in (getattr(pl, "Utf8", None), getattr(pl, "String", None))
-        ]
-        if string_cols:
-            df = df.with_columns(
-                [
-                    pl.when(pl.col(c) == "").then(None).otherwise(pl.col(c)).alias(c)
-                    for c in string_cols
-                ]
-            )
+        # Clean empty strings into true nulls only for dimension tables
+        if table_name.startswith("d_"):
+            string_cols = [
+                c
+                for c, d in zip(df.columns, df.dtypes, strict=True)
+                if d in (getattr(pl, "Utf8", None), getattr(pl, "String", None))
+            ]
+            if string_cols:
+                df = df.with_columns(
+                    [
+                        pl.when(pl.col(c) == "").then(None).otherwise(pl.col(c)).alias(c)
+                        for c in string_cols
+                    ]
+                )
 
-        with duckdb.connect(self.db_path) as conn:
-            conn.register("temp_df", df)
-            conn.execute(f"INSERT INTO {table_name} BY NAME SELECT * FROM temp_df")
-            conn.unregister("temp_df")
+        conn.register("temp_df", df)
+        conn.execute(f"INSERT INTO {table_name} BY NAME SELECT * FROM temp_df")
+        conn.unregister("temp_df")
 
 
 class DuckDBLoader:
@@ -117,48 +141,33 @@ class DuckDBLoader:
 
     def run(self, dfs: dict[str, pl.DataFrame]) -> None:
         logger.info("Writing tables to DuckDB...")
-        self.db_manager.batch_write_dataframe(dfs["df_d_calendar"], "d_Calendar")
-        self.db_manager.batch_write_dataframe(dfs["df_d_income_category"], "d_Income_Category")
-        self.db_manager.batch_write_dataframe(
-            dfs["df_d_income_subcategory"], "d_Income_Subcategory"
-        )
-        self.db_manager.batch_write_dataframe(dfs["df_d_expense_category"], "d_Expense_Category")
-        self.db_manager.batch_write_dataframe(
-            dfs["df_d_expense_subcategory"], "d_Expense_Subcategory"
-        )
-        self.db_manager.batch_write_dataframe(dfs["df_d_asset_category"], "d_Asset_Category")
-        self.db_manager.batch_write_dataframe(dfs["df_d_asset_subcategory"], "d_Asset_SubCategory")
-        self.db_manager.batch_write_dataframe(dfs["df_d_currency"], "d_Currency")
-        self.db_manager.batch_write_dataframe(
-            dfs["df_d_benchmark_master"], "d_Investment_Benchmark_Master"
-        )
-        self.db_manager.batch_write_dataframe(
-            dfs["df_d_tf_investment_master"], "d_tf_Investment_Master"
-        )
-        self.db_manager.batch_write_dataframe(dfs["df_d_tax_rates"], "d_Tax_Rates")
-        self.db_manager.batch_write_dataframe(
-            dfs["df_f_income_transactions"], "f_Income_Transactions"
-        )
-        self.db_manager.batch_write_dataframe(
-            dfs["df_f_expense_transactions"], "f_Expense_Transactions"
-        )
-        self.db_manager.batch_write_dataframe(
-            dfs["df_f_transfer_transactions"], "f_Transfer_Transactions"
-        )
-        self.db_manager.batch_write_dataframe(dfs["df_f_opening_balances"], "f_Opening_Balances")
-        self.db_manager.batch_write_dataframe(
-            dfs["df_stg_investment_market_data"], "stg_Investment_Market_Data"
-        )
-        self.db_manager.batch_write_dataframe(
-            dfs["df_f_tf_inv_purchase"], "f_tf_Investment_Purchase_Data"
-        )
-        self.db_manager.batch_write_dataframe(dfs["df_f_tf_inv_sale"], "f_tf_Investment_Sale_Data")
-        self.db_manager.batch_write_dataframe(
-            dfs["df_f_investment_benchmark_data"], "f_Investment_Benchmark_Data"
-        )
-        self.db_manager.batch_write_dataframe(
-            dfs["df_f_investment_market_data"], "f_Investment_Market_Data"
-        )
+        table_mappings = {
+            "df_d_calendar": "d_Calendar",
+            "df_d_income_category": "d_Income_Category",
+            "df_d_income_subcategory": "d_Income_Subcategory",
+            "df_d_expense_category": "d_Expense_Category",
+            "df_d_expense_subcategory": "d_Expense_Subcategory",
+            "df_d_asset_category": "d_Asset_Category",
+            "df_d_asset_subcategory": "d_Asset_SubCategory",
+            "df_d_currency": "d_Currency",
+            "df_d_benchmark_master": "d_Investment_Benchmark_Master",
+            "df_d_tf_investment_master": "d_tf_Investment_Master",
+            "df_d_tax_rates": "d_Tax_Rates",
+            "df_f_income_transactions": "f_Income_Transactions",
+            "df_f_expense_transactions": "f_Expense_Transactions",
+            "df_f_transfer_transactions": "f_Transfer_Transactions",
+            "df_f_opening_balances": "f_Opening_Balances",
+            "df_stg_investment_market_data": "stg_Investment_Market_Data",
+            "df_f_tf_inv_purchase": "f_tf_Investment_Purchase_Data",
+            "df_f_tf_inv_sale": "f_tf_Investment_Sale_Data",
+            "df_f_investment_benchmark_data": "f_Investment_Benchmark_Data",
+            "df_f_tf_investment_analytics_lot": "f_tf_Investment_Analytics_Lot",
+            "df_f_inflation_rates": "f_Inflation_Rates",
+            "df_f_tf_investment_analytics_isin": "f_tf_Investment_Analytics_ISIN",
+            "df_f_tf_investment_analytics_subtype": "f_tf_Investment_Analytics_Subtype",
+            "df_f_tf_investment_analytics_class": "f_tf_Investment_Analytics_Class",
+            "df_f_tf_investment_analytics_portfolio": "f_tf_Investment_Analytics_Portfolio",
+        }
         presentation_tables = {
             "df_p_tf_net_worth_monthly_summary": "p_tf_Net_Worth_Monthly_Summary",
             "df_p_tf_financial_ratios_monthly": "p_tf_Financial_Ratios_Monthly",
@@ -169,21 +178,25 @@ class DuckDBLoader:
             "df_p_tf_sector_allocation_monthly": "p_tf_sector_allocation_monthly",
             "df_p_tf_tax_harvesting": "p_tf_tax_harvesting",
         }
-        for df_key, table_name in presentation_tables.items():
-            if df_key in dfs:
-                self.db_manager.batch_write_dataframe(dfs[df_key], table_name)
+        table_mappings.update(presentation_tables)
 
-        logger.info("Generating Data Quality Metadata...")
-        metadata_rows = []
-        for key, df in dfs.items():
-            if df is not None:
-                metadata_rows.append({"Table_Name": key, "Row_Count": df.height})
+        with duckdb.connect(self.db_manager.active_db_path) as conn:
+            for df_key, table_name in table_mappings.items():
+                if df_key in dfs and dfs[df_key] is not None:
+                    self.db_manager.batch_write_dataframe(dfs[df_key], table_name, conn)
 
-        if metadata_rows:
-            df_metadata = pl.DataFrame(metadata_rows).with_columns(
-                pl.lit(datetime.now()).alias("Generated_At")
-            )
-            self.db_manager.batch_write_dataframe(df_metadata, "_ETL_Metadata")
+            logger.info("Generating Data Quality Metadata...")
+            metadata_rows = []
+            for key, df in dfs.items():
+                if df is not None:
+                    table_name = table_mappings.get(key, key)
+                    metadata_rows.append({"Table_Name": table_name, "Row_Count": df.height})
+
+            if metadata_rows:
+                df_metadata = pl.DataFrame(metadata_rows).with_columns(
+                    pl.lit(datetime.now()).alias("Generated_At")
+                )
+                self.db_manager.batch_write_dataframe(df_metadata, "_ETL_Metadata", conn)
 
         self.status_queue.put(EngineStatus(msg="", data=None, progress=0.9))
         logger.info("Applying indexes and optimizing database...")
