@@ -18,7 +18,7 @@ class HarvestRecommendationCalculator:
         lazy_df = lazy_df.with_columns(
             pl.when(pl.col("Unrealized_Loss") < 0)
             .then(pl.lit("HARVEST_LOSS"))
-            .when(pl.col("Holding_Type") == "LTCG", pl.col("Stepup_Eligible"))
+            .when((pl.col("Holding_Type") == "LTCG") & pl.col("Stepup_Eligible"))
             .then(pl.lit("HARVEST_LTCG_EXEMPT"))
             .when(
                 (pl.col("Holding_Type") == "STCG")
