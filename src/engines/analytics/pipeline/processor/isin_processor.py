@@ -17,10 +17,12 @@ class IsinProcessor:
     def __init__(self, ctx: RunContext):
         self.ctx = ctx
 
-    def process(self, isin: str) -> tuple[pl.DataFrame | None, list[dict], dict, list[dict]]:
+    def process(
+        self, isin: str
+    ) -> tuple[pl.DataFrame | None, list[dict], dict, list[dict], dict[str, str]]:
         p_inst, s_inst, m_inst, master_row = IsinDataExtractor.extract(self.ctx, isin)
         if not m_inst:
-            return None, [], {}, []
+            return None, [], {}, [], {}
 
         tax_type = str(master_row.get("TAX_TYPE", "equity"))
         tax_subtype = str(master_row.get("TAX_SUBTYPE", "listed"))
@@ -40,7 +42,7 @@ class IsinProcessor:
             else (to_date_obj(m_inst[0]["Date"]) if m_inst else None)
         )
         if not first_p_date:
-            return None, [], {}, []
+            return None, [], {}, [], {}
 
         p_idx = s_idx = 0
         isin_cashflows: list[dict[str, float | date]] = []
@@ -170,4 +172,9 @@ class IsinProcessor:
             if isin_snapshots
             else None
         )
-        return df, isin_cashflows, isin_terminals, isin_realized
+
+        tags = {
+            "class": str(master_row.get("INSTRUMENT_CLASS", "Unknown")),
+            "subtype": str(master_row.get("INSTRUMENT_SUBTYPE", "Unknown")),
+        }
+        return df, isin_cashflows, isin_terminals, isin_realized, tags
