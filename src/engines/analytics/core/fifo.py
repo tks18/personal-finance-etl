@@ -50,7 +50,8 @@ class FIFOPortfolio:
                 {
                     "date": sell_date,
                     "gain": pnl,
-                    "gain_type": ht_sale if pnl >= 0 else "LOSS",
+                    "gain_type": ht_sale,
+                    "is_loss": pnl < 0,
                     "tax_type": self.tax_type.strip().lower(),
                 }
             )

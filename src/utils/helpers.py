@@ -50,12 +50,14 @@ def to_date_obj(val: str | date | datetime | None) -> date | None:
     return None
 
 
+def get_fy_start_year(dt: date) -> int:
+    """Return the starting year of the Indian financial year for a given date."""
+    return dt.year if dt.month >= 4 else dt.year - 1
+
 def get_fy_folder_name(dt: date) -> str:
     """Return the Indian financial year folder name for a given date (e.g. '2024-25')."""
-    year, month = dt.year, dt.month
-    if month >= 4:
-        return f"{year}-{str(year + 1)[-2:]}"
-    return f"{year - 1}-{str(year)[-2:]}"
+    year = get_fy_start_year(dt)
+    return f"{year}-{str(year + 1)[-2:]}"
 
 
 def get_month_folder_name(dt: date) -> str:

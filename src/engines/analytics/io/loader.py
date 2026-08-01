@@ -38,40 +38,15 @@ def clean_numeric_col(df: pl.DataFrame, col: str) -> pl.DataFrame:
 class TaxDataLoader:
     """Pre-processes all dataframes required for tax evaluation."""
 
-    @staticmethod
-    def load_all(
-        p_path: str, s_path: str, m_path: str, i_path: str | None, b_path: str | None
-    ) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame, dict, pl.DataFrame | None]:
-
-        df_p = parse_date_col(pl.read_csv(p_path, infer_schema_length=500_000))
-        df_s = parse_date_col(pl.read_csv(s_path, infer_schema_length=500_000))
-        df_m = parse_date_col(pl.read_csv(m_path, infer_schema_length=500_000))
-
-        df_i = pl.read_csv(i_path, infer_schema_length=500_000) if i_path else None
-        isin_master = {row["ISIN"]: row for row in df_i.to_dicts()} if df_i is not None else {}
-
-        df_b = None
-        if b_path and os.path.exists(b_path):
-            df_b = parse_date_col(pl.read_csv(b_path, infer_schema_length=500_000))
-
-        for c in ["Quantity", "Price", "Value"]:
-            df_p = clean_numeric_col(df_p, c)
-        for c in ["Quantity", "Price", "Sell Value"]:
-            df_s = clean_numeric_col(df_s, c)
-        for c in ["Quantity", "Closing Price", "Buy Value"]:
-            df_m = clean_numeric_col(df_m, c)
-
-        return df_p, df_s, df_m, isin_master, df_b
-
-    @staticmethod
-    def load_from_dataframes(
+    @classmethod
+    def _normalize(
+        cls,
         df_p: pl.DataFrame,
         df_s: pl.DataFrame,
         df_m: pl.DataFrame,
         df_i: pl.DataFrame | None,
         df_b: pl.DataFrame | None,
     ) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame, dict, pl.DataFrame | None]:
-
         df_p = parse_date_col(df_p)
         df_s = parse_date_col(df_s)
         df_m = parse_date_col(df_m)
@@ -89,3 +64,32 @@ class TaxDataLoader:
             df_m = clean_numeric_col(df_m, c)
 
         return df_p, df_s, df_m, isin_master, df_b
+
+    @classmethod
+    def load_all(
+        cls, p_path: str, s_path: str, m_path: str, i_path: str | None, b_path: str | None
+    ) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame, dict, pl.DataFrame | None]:
+
+        df_p = pl.read_csv(p_path, infer_schema_length=500_000)
+        df_s = pl.read_csv(s_path, infer_schema_length=500_000)
+        df_m = pl.read_csv(m_path, infer_schema_length=500_000)
+
+        df_i = pl.read_csv(i_path, infer_schema_length=500_000) if i_path else None
+        
+        df_b = None
+        if b_path and os.path.exists(b_path):
+            df_b = pl.read_csv(b_path, infer_schema_length=500_000)
+
+        return cls._normalize(df_p, df_s, df_m, df_i, df_b)
+
+    @classmethod
+    def load_from_dataframes(
+        cls,
+        df_p: pl.DataFrame,
+        df_s: pl.DataFrame,
+        df_m: pl.DataFrame,
+        df_i: pl.DataFrame | None,
+        df_b: pl.DataFrame | None,
+    ) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame, dict, pl.DataFrame | None]:
+
+        return cls._normalize(df_p, df_s, df_m, df_i, df_b)
