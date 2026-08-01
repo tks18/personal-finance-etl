@@ -136,7 +136,11 @@ class IsinProcessor:
             if closing_units > 0:
                 avg_cost = fifo.get_average_cost()
                 avg_bm_cost = fifo.get_average_bm_cost()
-                inst_age = max((m_date - first_p_date).days, 1)
+                
+                weighted_days = sum(
+                    lot.qty * (m_date - lot.date).days for lot in fifo.active_lots if lot.date
+                ) / closing_units
+                inst_age = max(int(weighted_days), 1)
 
                 if avg_cost > 0:
                     inst_cagr = calculate_cagr(avg_cost, m_price, inst_age)
