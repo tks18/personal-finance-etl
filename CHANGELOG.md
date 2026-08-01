@@ -2,6 +2,43 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [2.1.0](https://github.com/tks18/personal-finance-etl/compare/2.0.0...2.1.0) (2026-08-01)
+
+
+### Build System 🏗
+
+* add psutil module ([8ab235c](https://github.com/tks18/personal-finance-etl/commit/8ab235cbbd170f9c59ffd2c2910dafa3ae4c61e1))
+
+
+### Bug Fixes 🛠
+
+* **utils:** logger - add proper logging formatting ([44ccb29](https://github.com/tks18/personal-finance-etl/commit/44ccb2916911a30855c462cd07203aa9d6aac600))
+
+
+### Features 🔥
+
+* **config:** remove hardcoded literals to configs ([180a6db](https://github.com/tks18/personal-finance-etl/commit/180a6db591c0628153ef3ce32c27a4f859be8093))
+* **engines/analytics:** add a group processor for a future update to reuse code at diff grp lvls ([e3e6f92](https://github.com/tks18/personal-finance-etl/commit/e3e6f9224d8fe368f3505574019d5a56172dbc4f))
+* **engines/analytics:** allow group processing ([081c4d4](https://github.com/tks18/personal-finance-etl/commit/081c4d4d37cd51ca07073089046ee7135a833607))
+* **engines/analytics:** allow processing at different group levels ([41f1ced](https://github.com/tks18/personal-finance-etl/commit/41f1cedb2bee28ec146b1e9c8df63f94c6435077))
+* **engines/analytics:** integrate group processor for processing at diff group levels ([36a00ea](https://github.com/tks18/personal-finance-etl/commit/36a00ea5306b1a55fd32ca61c33432f1b680c528))
+* **engines/analytics:** orchestrate the entire invt analytics engine ([e8c063a](https://github.com/tks18/personal-finance-etl/commit/e8c063a42104e2ca9f4585eb962fa83a9dbd68d9))
+* **engines/presentations:** add inflation related calculations + logging refactor ([53b4bfe](https://github.com/tks18/personal-finance-etl/commit/53b4bfe164f24badd3a5a4a106c8934ffabc9717))
+* **extract:** add a new source: inflation rates ([10f13f2](https://github.com/tks18/personal-finance-etl/commit/10f13f24eb64620c578d20b6bcc34606126bb46b))
+* **load/schema:** add ddl for inflation related cols across presentation tables ([4d97d5f](https://github.com/tks18/personal-finance-etl/commit/4d97d5f8b8e9ae05a72374347b64bcb6a2c4fceb))
+* **load/schema:** enforce not null, also add invt group views, inflation related cols ([1096684](https://github.com/tks18/personal-finance-etl/commit/1096684d4df7d0ef2f838be8f3f98d1b4dacf8c5))
+* **utils:** models - add a inflation raw data extraction result ([15ebc60](https://github.com/tks18/personal-finance-etl/commit/15ebc6089e71be2a43266e722ccb8f99c6c7a12a))
+
+
+### Code Refactoring 🖌
+
+* **engines/analytics:** logging refactor ([803bf2f](https://github.com/tks18/personal-finance-etl/commit/803bf2fbaeb7517633df2dc3978312ee905c37d5))
+* **engines/benchmark:** logging + polars refactor (move form pandas) ([b48835f](https://github.com/tks18/personal-finance-etl/commit/b48835f2a34b674ff745eeb77641252a99be0f50))
+* **extract:** logging refactor + sqlite optimization ([f1f8025](https://github.com/tks18/personal-finance-etl/commit/f1f8025b04e298a3f123b74c8ac3114f78505622))
+* **load:** logging refac + duckdb optimzations and code dedupe ([2cbbf14](https://github.com/tks18/personal-finance-etl/commit/2cbbf140b93a2da4704635a4975a86861ed5926a))
+* **pipeline:** logging refac + inflation tables + orchestration optimizations ([88a6042](https://github.com/tks18/personal-finance-etl/commit/88a6042117307b76906a1abc17bdbe2d667b32ad))
+* **transform:** polars query optimization ([71b1a82](https://github.com/tks18/personal-finance-etl/commit/71b1a82ff0b4719c9fffd744d91eb768c431a29d))
+
 ## [2.0.0](https://github.com/tks18/personal-finance-etl/compare/1.8.5...2.0.0) (2026-07-31)
 
 
