@@ -51,9 +51,9 @@ class PortfolioXIRRCalculator:
                 except Exception:
                     pxirr = 0.0
 
-                port_al[-1] = t_shadow
+                bm_port_al = port_al[:-1] + [t_shadow]
                 try:
-                    bm_pxirr = xirr(port_dl, port_al) or 0.0
+                    bm_pxirr = xirr(port_dl, bm_port_al) or 0.0
                 except Exception:
                     bm_pxirr = 0.0
 
