@@ -21,6 +21,8 @@ def categorize_statement_files(folder_path: str) -> dict[str, list[str]]:
 
     for cat, files in categories.items():
         if not files:
-            logger.warning(f"No files found for category: {cat}")
+            raise FileNotFoundError(
+                f"No files found for category: '{cat}'. Please ensure statements are present."
+            )
 
     return categories

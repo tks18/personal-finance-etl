@@ -5,6 +5,8 @@ from datetime import datetime
 import fastexcel
 import polars as pl
 
+from src.utils.logger import logger
+
 
 def _clean_excel_headers(df_sliced: pl.DataFrame) -> tuple[pl.DataFrame, str]:
     """Reusable header detection + cleaning for all Excel parsers."""
@@ -54,9 +56,11 @@ def extract_mf_market_data_raw(valid_files: list[str]) -> pl.LazyFrame:
         try:
             match = re.search(r"(\d{2}-\d{2}-\d{4})", filename)
             if not match:
+                logger.warning(f"File skipped (regex miss): {filename}")
                 continue
             month_date = datetime.strptime(match.group(1), "%d-%m-%Y").date()
         except ValueError:
+            logger.warning(f"File skipped (parse error): {filename}")
             continue
         df_processed = _process_mf_statement(file_path)
         if df_processed.is_empty():
@@ -97,6 +101,7 @@ def extract_mf_transactions_raw(valid_files: list[str]) -> pl.LazyFrame:
         try:
             match = re.search(r"(\d{2}-\d{2}-\d{4}|\d{2}-\d{4})", filename)
             if not match:
+                logger.warning(f"File skipped (regex miss): {filename}")
                 continue
             date_str = match.group(1)
             if len(date_str.split("-")) == 2:
@@ -104,6 +109,7 @@ def extract_mf_transactions_raw(valid_files: list[str]) -> pl.LazyFrame:
             else:
                 month_date = datetime.strptime(date_str, "%d-%m-%Y").date()
         except ValueError:
+            logger.warning(f"File skipped (parse error): {filename}")
             continue
         df_processed = _process_mf_transaction_statements(file_path)
         if df_processed.is_empty():
@@ -151,9 +157,11 @@ def extract_stock_market_data_raw(valid_files: list[str]) -> pl.LazyFrame:
         try:
             match = re.search(r"(\d{2}-\d{2}-\d{4})", filename)
             if not match:
+                logger.warning(f"File skipped (regex miss): {filename}")
                 continue
             month_date = datetime.strptime(match.group(1), "%d-%m-%Y").date()
         except ValueError:
+            logger.warning(f"File skipped (parse error): {filename}")
             continue
         df_processed = _process_stock_closing_statement(file_path)
         if df_processed.is_empty():
