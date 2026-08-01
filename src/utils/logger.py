@@ -21,7 +21,15 @@ def setup_logger(name: str = "etl_pipeline") -> logging.Logger:
     logger = logging.getLogger(name)
     if not logger.handlers:
         logger.setLevel(logging.INFO)
-        # Console handler is removed to force all logs exclusively to the UI queue
+
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(logging.INFO)
+        console_formatter = logging.Formatter(
+            "[%(asctime)s] %(levelname)s: %(message)s", datefmt="%H:%M:%S"
+        )
+        console_handler.setFormatter(console_formatter)
+        logger.addHandler(console_handler)
+
     return logger
 
 
