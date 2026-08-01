@@ -8,6 +8,22 @@ BENCHMARK_MAPPING_CSV_PATH = "...\\BENCHMARK_MAPPING.csv"
 BENCHMARK_MASTER_CSV_PATH = "...\\BENCHMARK_MASTER.csv"
 TAX_RATES_CSV_PATH = "...\\TAX_RATES.csv"
 OPENING_BALANCE_CSV_PATH = "...\\OPENING_BALANCE.csv"
+INFLATION_RATES_CSV_PATH = "...\\INFLATION_RATES.csv"
 
 # Statements
 STATEMENTS_FOLDER = "...\\Statements"
+
+# Defaults
+DEFAULT_CURRENCY_ID = "INR_INR"
+
+# Configurable Mappings
+# Use the TOML table syntax [MF_SCHEME_MAPPINGS] for dictionaries.
+# Left side is the target mapped name, Right side is the source misspelled name.
+[MF_SCHEME_MAPPINGS]
+"Quant Tax Plan Direct Growth" = "Quant ELSS Tax Saver Fund Direct Growth"
+"IDBI India Top 100 Equity Fund Direct Growth" = "LIC MF Large Cap Fund Direct Growth"
+"TATA DIGITAL INDIA FUND DIRECT PLAN GROWTH" = "Tata Digital India Fund Direct Growth"
+"ICICI PRUDENTIAL TECHNOLOGY FUND - DIRECT PLAN - GROWTH" = "ICICI Prudential Technology Direct Plan Growth"
+"DSP BlackRock Small Cap Fund - Direct - Growth" = "DSP Small Cap Direct Plan Growth"
+"ICICI Prudential S&P BSE Liquid Rate ETF" = "ICICI Prudential S&P BSE Liquid Rate"
+"Zerodha Nifty LargeMidcap 250 Index Fund" = "Zerodha Nifty LargeMidcap 250 Index Fd"

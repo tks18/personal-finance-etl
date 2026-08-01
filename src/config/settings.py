@@ -56,12 +56,16 @@ class Settings:
     BENCHMARK_MASTER_CSV_PATH: str = ""
     TAX_RATES_CSV_PATH: str = ""
     OPENING_BALANCE_CSV_PATH: str = ""
+    INFLATION_RATES_CSV_PATH: str = ""
 
     # Statements
     STATEMENTS_FOLDER: str = ""
 
     # Configurable Mappings
     MF_SCHEME_MAPPINGS: dict[str, str] = field(default_factory=dict)
+
+    # Defaults
+    DEFAULT_CURRENCY_ID: str = "INR_INR"
 
     @classmethod
     def from_toml(cls, filepath: str) -> "Settings":
@@ -94,6 +98,7 @@ class Settings:
             ("BENCHMARK_MASTER_CSV_PATH", self.BENCHMARK_MASTER_CSV_PATH),
             ("TAX_RATES_CSV_PATH", self.TAX_RATES_CSV_PATH),
             ("OPENING_BALANCE_CSV_PATH", self.OPENING_BALANCE_CSV_PATH),
+            ("INFLATION_RATES_CSV_PATH", self.INFLATION_RATES_CSV_PATH),
         ]
 
         errors = []
