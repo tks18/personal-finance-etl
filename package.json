@@ -15,6 +15,10 @@
     "release:patch": "standard-version --commit-all --release-as patch",
     "release:minor": "standard-version --commit-all --release-as minor",
     "release:major": "standard-version --commit-all --release-as major",
-    "release:as": "standard-version --commit-all --release-as"
+    "release:as": "standard-version --commit-all --release-as",
+    "dev": "uv run poe dev",
+    "build": "uv run poe build",
+    "lint": "uv run ruff check",
+    "lint:fix": "uv run ruff check --fix"
   }
 }
