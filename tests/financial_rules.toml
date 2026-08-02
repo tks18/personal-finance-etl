@@ -1,0 +1,48 @@
+# Financial Rules Configuration
+
+[income.active]
+category_ids = []
+sub_category_ids = []
+
+[income.dividends]
+category_ids = []
+sub_category_ids = []
+
+[income.interest]
+category_ids = []
+sub_category_ids = []
+
+[expense.core]
+category_ids = []
+sub_category_ids = []
+
+# Investment mappings
+
+[investments.stocks_and_etfs]
+category_ids = []
+sub_category_ids = []
+
+[investments.mutual_funds]
+category_ids = []
+sub_category_ids = []
+
+[assumptions.macro]
+cpi_base_index = 151.4
+default_trading_days = 252.0
+
+[assumptions.fire]
+swr_multiplier = 25.0
+coast_fi_real_return = 0.05
+coast_fi_years = 10
+lean_fi_ratio = 0.7
+fallback_trailing_return = 0.12
+
+[assumptions.monte_carlo]
+iterations = 1000
+max_months = 480
+annual_volatility = 0.15
+real_return_floor = 0.01
+
+[assumptions.tax]
+debt_mf_cutoff_date = "2023-04-01"
+harvest_wait_days_threshold = 90
