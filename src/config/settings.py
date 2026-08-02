@@ -1,7 +1,8 @@
 import json
 import os
 import tomllib
-from dataclasses import dataclass, field, fields
+
+from pydantic import BaseModel, Field
 
 
 class PreferencesManager:
@@ -27,8 +28,17 @@ class PreferencesManager:
         # Keep top 10
         recents = recents[:10]
 
+        data = {}
+        if os.path.exists(self.prefs_path):
+            with open(self.prefs_path) as f:
+                try:
+                    data = json.load(f)
+                except Exception:
+                    pass
+
+        data["recent_configs"] = recents
         with open(self.prefs_path, "w") as f:
-            json.dump({"recent_configs": recents}, f)
+            json.dump(data, f)
 
     def get_recent_configs(self) -> list[str]:
         """Returns a list of recent configuration file paths."""
@@ -43,9 +53,40 @@ class PreferencesManager:
                     pass
         return []
 
+    def add_recent_rules(self, filepath: str) -> None:
+        """Adds a financial rules configuration path to the recent list."""
+        recents = self.get_recent_rules()
+        if filepath in recents:
+            recents.remove(filepath)
+        recents.insert(0, filepath)
+        recents = recents[:10]
 
-@dataclass
-class Settings:
+        data = {}
+        if os.path.exists(self.prefs_path):
+            with open(self.prefs_path) as f:
+                try:
+                    data = json.load(f)
+                except Exception:
+                    pass
+        data["recent_rules"] = recents
+        with open(self.prefs_path, "w") as f:
+            json.dump(data, f)
+
+    def get_recent_rules(self) -> list[str]:
+        """Returns a list of recent financial rules file paths."""
+        if os.path.exists(self.prefs_path):
+            with open(self.prefs_path) as f:
+                try:
+                    data = json.load(f)
+                    recents = data.get("recent_rules", [])
+                    if isinstance(recents, list):
+                        return [r for r in recents if os.path.exists(r)]
+                except Exception:
+                    pass
+        return []
+
+
+class Settings(BaseModel):
     SOURCE_DB_FOLDER: str = ""
     TARGET_DB_BASE_PATH: str = ""
 
@@ -62,7 +103,7 @@ class Settings:
     STATEMENTS_FOLDER: str = ""
 
     # Configurable Mappings
-    MF_SCHEME_MAPPINGS: dict[str, str] = field(default_factory=dict)
+    MF_SCHEME_MAPPINGS: dict[str, str] = Field(default_factory=dict)
 
     # Defaults
     DEFAULT_CURRENCY_ID: str = "INR_INR"
@@ -70,21 +111,17 @@ class Settings:
     @classmethod
     def from_toml(cls, filepath: str) -> "Settings":
         """Loads a TOML configuration and returns a Settings instance."""
-        cfg = cls()
         if not os.path.exists(filepath):
-            return cfg
+            return cls()
 
         with open(filepath, "rb") as f:
             data = tomllib.load(f)
 
-        for fld in fields(cls):
-            if fld.name in data:
-                setattr(cfg, fld.name, data[fld.name])
-
+        cfg = cls(**data)
         PreferencesManager().add_recent_config(filepath)
         return cfg
 
-    def validate(self) -> None:
+    def validate_config(self) -> None:
         """Validates that all necessary files and folders exist before starting."""
         required_dirs = [
             ("SOURCE_DB_FOLDER", self.SOURCE_DB_FOLDER),
