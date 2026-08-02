@@ -1,5 +1,6 @@
 import polars as pl
 
+from src.config.financial_rules import FinancialRules
 from src.config.settings import Settings
 from src.pipeline.strategies import AssetPipeline, MutualFundPipeline, StockPipeline
 from src.transform.calendar import (
@@ -36,9 +37,10 @@ from src.utils.models import EngineStatus, ExtractionResult, LogLevel
 
 
 class TransformationDAG:
-    def __init__(self, cfg: Settings, status_queue: ILogger):
+    def __init__(self, cfg: Settings, status_queue: ILogger, rules: "FinancialRules | None" = None):
         self.cfg = cfg
         self.status_queue = status_queue
+        self.rules = rules
 
     def run(self, extracted: ExtractionResult) -> dict[str, pl.DataFrame]:
         logger.info("Transforming Base Dimensions...")
@@ -76,8 +78,12 @@ class TransformationDAG:
         )
 
         base_transactions_lazy = get_base_transactions(extracted.inoutcome, mappings["inoutcome"])
-        f_income_transactions_lazy = transform_f_income_transactions(base_transactions_lazy)
-        f_expense_transactions_lazy = transform_f_expense_transactions(base_transactions_lazy)
+        f_income_transactions_lazy = transform_f_income_transactions(
+            base_transactions_lazy, self.rules, d_income_subcategory_lazy
+        )
+        f_expense_transactions_lazy = transform_f_expense_transactions(
+            base_transactions_lazy, self.rules, d_expense_subcategory_lazy
+        )
         f_transfer_transactions_lazy = transform_f_transfer_transactions(
             base_transactions_lazy, d_asset_subcategory_lazy, d_asset_category_lazy
         )
@@ -162,6 +168,26 @@ class TransformationDAG:
         if extracted.raw_inflation_rates is not None:
             inflation_result = extracted.raw_inflation_rates.collect(engine="streaming")
 
+        rules_records = []
+        if self.rules:
+            rules_records = self.rules.export_to_db_records()
+        if not rules_records:
+            rules_records = [
+                {
+                    "Rule_Domain": "None",
+                    "Rule_Type": "None",
+                    "Target_Level": "None",
+                    "Target_ID": "None",
+                }
+            ]
+        df_rules_lazy = pl.LazyFrame(rules_records).with_columns(
+            pl.col("Rule_Domain").cast(pl.String),
+            pl.col("Rule_Type").cast(pl.String),
+            pl.col("Target_Level").cast(pl.String),
+            pl.col("Target_ID").cast(pl.String),
+        )
+        rules_result = df_rules_lazy.collect()
+
         return {
             "df_d_income_category": results[0],
             "df_d_income_subcategory": results[1],
@@ -182,4 +208,5 @@ class TransformationDAG:
             "df_d_tf_investment_master": results[16],
             "df_d_calendar": calendar_result,
             "df_f_inflation_rates": inflation_result,
+            "_ETL_Metadata_Financial_Rules": rules_result,
         }
