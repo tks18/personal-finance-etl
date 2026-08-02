@@ -30,6 +30,7 @@ class UnifiedETLTab(BaseEngineTab):
 
         self._run_btn_text = "▶  Run Pipeline"
         self.config_path_var = ctk.StringVar()
+        self.rules_path_var = ctk.StringVar()
 
         self._build_header()
         self._build_log_panel()
@@ -76,11 +77,23 @@ class UnifiedETLTab(BaseEngineTab):
         # ── 2. Config Path (Row 1, Col 0) (3/4th) ───────────────────
         cfg_frame = ctk.CTkFrame(hdr, fg_color="transparent")
         cfg_frame.grid(row=1, column=0, padx=(16, 10), pady=(12, 4), sticky="ew")
-        cfg_frame.grid_columnconfigure(0, weight=1)
+        cfg_frame.grid_columnconfigure(0, weight=0)  # label
+        cfg_frame.grid_columnconfigure(1, weight=1)  # entry
 
         recents = PreferencesManager().get_recent_configs()
         if recents:
             self.config_path_var.set(recents[0])
+
+        ctk.CTkLabel(
+            cfg_frame,
+            text="Pipeline Config",
+            font=ctk.CTkFont(family="Segoe UI", size=10, weight="bold"),
+            text_color="#7DD3FC",
+            fg_color="#0E2235",
+            corner_radius=4,
+            width=100,
+            anchor="center",
+        ).grid(row=0, column=0, sticky="w", padx=(0, 8), ipady=3, ipadx=6)
 
         cfg_entry = ctk.CTkComboBox(
             cfg_frame,
@@ -94,7 +107,7 @@ class UnifiedETLTab(BaseEngineTab):
             corner_radius=5,
             command=self._on_config_selected,
         )
-        cfg_entry.grid(row=0, column=0, sticky="ew", padx=(0, 6))
+        cfg_entry.grid(row=0, column=1, sticky="ew", padx=(0, 6))
 
         ctk.CTkButton(
             cfg_frame,
@@ -107,12 +120,60 @@ class UnifiedETLTab(BaseEngineTab):
             border_width=1,
             border_color=Color.BORDER,
             corner_radius=4,
-            command=lambda: self._select_file(self.config_path_var),
-        ).grid(row=0, column=1)
+            command=lambda: self._select_file(self.config_path_var, "TOML", "*.toml"),
+        ).grid(row=0, column=2)
 
-        # ── 3. Run Button (Row 1, Col 1) (1/4th) ────────────────────
+        # ── 2.5 Rules Path (Row 2, Col 0) ───────────────────────────
+        rules_frame = ctk.CTkFrame(hdr, fg_color="transparent")
+        rules_frame.grid(row=2, column=0, padx=(16, 10), pady=(4, 4), sticky="ew")
+        rules_frame.grid_columnconfigure(0, weight=0)  # label
+        rules_frame.grid_columnconfigure(1, weight=1)  # entry
+
+        recent_rules = PreferencesManager().get_recent_rules()
+        if recent_rules:
+            self.rules_path_var.set(recent_rules[0])
+
+        ctk.CTkLabel(
+            rules_frame,
+            text="Financial Rules",
+            font=ctk.CTkFont(family="Segoe UI", size=10, weight="bold"),
+            text_color="#86EFAC",
+            fg_color="#0E2318",
+            corner_radius=4,
+            width=100,
+            anchor="center",
+        ).grid(row=0, column=0, sticky="w", padx=(0, 8), ipady=3, ipadx=6)
+
+        rules_entry = ctk.CTkComboBox(
+            rules_frame,
+            variable=self.rules_path_var,
+            values=recent_rules if recent_rules else [""],
+            height=32,
+            font=ctk.CTkFont(family="Segoe UI", size=12),
+            fg_color="#080C14",
+            border_color=Color.BORDER,
+            border_width=1,
+            corner_radius=5,
+        )
+        rules_entry.grid(row=0, column=1, sticky="ew", padx=(0, 6))
+
+        ctk.CTkButton(
+            rules_frame,
+            text="…",
+            width=32,
+            height=32,
+            font=ctk.CTkFont(size=14),
+            fg_color="transparent",
+            hover_color=Color.BORDER,
+            border_width=1,
+            border_color=Color.BORDER,
+            corner_radius=4,
+            command=lambda: self._select_file(self.rules_path_var, "Rules TOML", "*.toml"),
+        ).grid(row=0, column=2)
+
+        # ── 3. Run Button (Row 1-2, Col 1) (1/4th) ────────────────────
         btn_frame = ctk.CTkFrame(hdr, fg_color="transparent")
-        btn_frame.grid(row=1, column=1, padx=(0, 16), pady=(12, 4), sticky="ew")
+        btn_frame.grid(row=1, column=1, rowspan=2, padx=(0, 16), pady=(12, 4), sticky="ns")
         btn_frame.grid_columnconfigure(0, weight=1)
 
         self.run_btn = ctk.CTkButton(
@@ -127,9 +188,9 @@ class UnifiedETLTab(BaseEngineTab):
         )
         self.run_btn.grid(row=0, column=0, sticky="ew")
 
-        # ── 4. Helper Info Box (Row 2) ──────────────────────────────
+        # ── 4. Helper Info Box (Row 3) ──────────────────────────────
         info_block = ctk.CTkFrame(hdr, fg_color="transparent")
-        info_block.grid(row=2, column=0, columnspan=2, padx=(16, 16), pady=(4, 16), sticky="ew")
+        info_block.grid(row=3, column=0, columnspan=2, padx=(16, 16), pady=(4, 16), sticky="ew")
 
         info = ctk.CTkFrame(info_block, fg_color=Color.BORDER, corner_radius=6)
         info.pack(fill="x", expand=True)
@@ -176,13 +237,20 @@ class UnifiedETLTab(BaseEngineTab):
                 )
             )
 
-    def _select_file(self, str_var: ctk.StringVar) -> None:
+    def _select_file(
+        self, str_var: ctk.StringVar, type_name: str = "TOML", ext: str = "*.toml"
+    ) -> None:
         path = filedialog.askopenfilename(
-            title="Select Config", filetypes=[("TOML files", "*.toml"), ("All files", "*.*")]
+            title=f"Select {type_name} Config",
+            filetypes=[(f"{type_name} files", ext), ("All files", "*.*")],
         )
         if path:
             str_var.set(path)
-            self._on_config_selected(path)
+            if type_name == "TOML":  # Main Config TOML
+                self._on_config_selected(path)
+            else:
+                # Save to recents immediately for rules
+                PreferencesManager().add_recent_rules(path)
 
     def _start_pipeline(self) -> None:
         self.run_btn.configure(state="disabled", text="Running...")
@@ -197,7 +265,7 @@ class UnifiedETLTab(BaseEngineTab):
 
         multiprocessing.Process(
             target=process_wrapper,
-            args=(self.status_queue, self.config_path_var.get()),
+            args=(self.status_queue, self.config_path_var.get(), self.rules_path_var.get()),
             daemon=True,
         ).start()
 
