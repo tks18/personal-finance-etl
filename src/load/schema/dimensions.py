@@ -131,4 +131,12 @@ CREATE TABLE d_Currency (
     MODIFY_DATE BIGINT,
     DECIMAL_POINT BIGINT
 );
+
+-- DDL: _ETL_Metadata_Financial_Rules
+CREATE TABLE _ETL_Metadata_Financial_Rules (
+    Rule_Domain TEXT NOT NULL,
+    Rule_Type TEXT NOT NULL,
+    Target_Level TEXT NOT NULL,
+    Target_ID TEXT NOT NULL
+);
 """
