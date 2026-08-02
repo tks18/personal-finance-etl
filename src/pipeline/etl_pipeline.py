@@ -6,6 +6,7 @@ from typing import cast
 
 import polars as pl
 
+from src.config.financial_rules import FinancialRules
 from src.config.settings import Settings
 from src.engines.analytics import InvestmentAnalyticsEngine
 from src.engines.benchmark import BenchmarkEngine
@@ -20,10 +21,11 @@ from src.utils.models import EngineStatus, ExtractionResult, LogLevel
 
 
 class ETLOrchestrator:
-    def __init__(self, cfg: Settings, status_queue: ILogger):
+    def __init__(self, cfg: Settings, status_queue: ILogger, rules: "FinancialRules | None" = None):
         if cfg is None:
             raise ValueError("Configuration settings (cfg) cannot be None")
         self.cfg = cfg
+        self.rules = rules
         self.status_queue = status_queue
         self.db_manager = DuckDBManager(cfg.TARGET_DB_BASE_PATH)
         self.dfs: dict[str, pl.DataFrame] = {}
@@ -33,7 +35,7 @@ class ETLOrchestrator:
         return extractor.run()
 
     def _transform(self, extracted_data: ExtractionResult) -> None:
-        transformer = TransformationDAG(self.cfg, self.status_queue)
+        transformer = TransformationDAG(self.cfg, self.status_queue, self.rules)
         self.dfs = transformer.run(extracted_data)
 
     def _run_engines(self) -> None:
@@ -69,6 +71,7 @@ class ETLOrchestrator:
             else pl.DataFrame(),
             df_t=self.dfs["df_d_tax_rates"],
             status_queue=self.status_queue,
+            rules=self.rules,
             start_date=None,
             end_date=None,
         )
@@ -77,7 +80,7 @@ class ETLOrchestrator:
 
         logger.info("Starting Presentation Engines...")
         self.status_queue.put(EngineStatus(msg="", data=None, progress=0.8, level=LogLevel.STEP))
-        wealth_engine = WealthPresentationEngine()
+        wealth_engine = WealthPresentationEngine(rules=self.rules)
         wealth_lazy = wealth_engine.run(self.dfs)
 
         presentation_lazy = wealth_lazy
@@ -102,7 +105,7 @@ class ETLOrchestrator:
         loader.run(self.dfs)
 
     def run(self) -> None:
-        self.cfg.validate()
+        self.cfg.validate_config()
 
         start_time = time.time()
         add_queue_handler(cast(multiprocessing.Queue, self.status_queue))
@@ -135,7 +138,9 @@ class ETLOrchestrator:
             gc.collect()
 
 
-def process_wrapper(status_queue: ILogger | None = None, config_path: str = "config.toml") -> None:
+def process_wrapper(
+    status_queue: ILogger | None = None, config_path: str = "config.toml", rules_path: str = ""
+) -> None:
     """Wrapper to catch exceptions inside the child process and send them back to the UI."""
     try:
         cfg = Settings()
@@ -145,7 +150,9 @@ def process_wrapper(status_queue: ILogger | None = None, config_path: str = "con
         if status_queue is None:
             status_queue = cast(ILogger, multiprocessing.Queue())
 
-        orchestrator = ETLOrchestrator(cfg, status_queue)
+        rules = FinancialRules.from_toml(rules_path)
+
+        orchestrator = ETLOrchestrator(cfg, status_queue, rules)
         orchestrator.run()
     except Exception as e:
         if status_queue is not None:
