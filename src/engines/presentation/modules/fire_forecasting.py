@@ -1,6 +1,7 @@
+from typing import Any
+
 import numpy as np
 import polars as pl
-from typing import Any
 
 
 class FireForecastingBuilder:
@@ -8,8 +9,10 @@ class FireForecastingBuilder:
     Constructs the FIRE & Wealth Forecasting presentation model.
     """
 
-    def __init__(self, base_lf: dict[str, Any]):
+    def __init__(self, base_lf: dict[str, Any], lf_risk: pl.LazyFrame, rules=None):
         self.base_lf = base_lf
+        self.lf_risk = lf_risk
+        self.rules = rules
 
     def build(self) -> pl.LazyFrame:
         lf_monthly_totals = self.base_lf["lf_monthly_totals"]
@@ -33,24 +36,54 @@ class FireForecastingBuilder:
             .sort("MONTH_START_DATE")
         )
 
+        fallback_return = 0.12
+        if self.rules and self.rules.assumptions:
+            fallback_return = self.rules.assumptions.fire.fallback_trailing_return
+
+        lf_fire_base = lf_fire_base.join(
+            self.lf_risk.select(
+                ["MONTH_START_DATE", pl.col("Rolling_12M_Return").alias("Trailing_12M_Return")]
+            ),
+            on="MONTH_START_DATE",
+            how="left",
+        ).with_columns(pl.col("Trailing_12M_Return").fill_null(fallback_return))
+
+        swr = 25.0
+        coast_real_return = 0.05
+        coast_years = 10
+        lean_ratio = 0.7
+        mc_iterations = 1000
+        mc_max_months = 480
+        mc_volatility = 0.15
+        mc_floor = 0.01
+        cpi_base = self.base_lf.get("cpi_base", 151.4)
+
+        if self.rules and self.rules.assumptions:
+            swr = self.rules.assumptions.fire.swr_multiplier
+            coast_real_return = self.rules.assumptions.fire.coast_fi_real_return
+            coast_years = self.rules.assumptions.fire.coast_fi_years
+            lean_ratio = self.rules.assumptions.fire.lean_fi_ratio
+            mc_iterations = self.rules.assumptions.monte_carlo.iterations
+            mc_max_months = self.rules.assumptions.monte_carlo.max_months
+            mc_volatility = self.rules.assumptions.monte_carlo.annual_volatility
+            mc_floor = self.rules.assumptions.monte_carlo.real_return_floor
+            cpi_base = self.rules.assumptions.macro.cpi_base_index
+
         lf_fire_forecast = (
             lf_fire_base.with_columns(
-                pl.col("Total_Core_Expense").rolling_mean(window_size=3).alias("Trailing_3M_Avg_Spend"),
-                pl.col("Total_Core_Expense").rolling_mean(window_size=6).alias("Trailing_6M_Avg_Spend"),
-                pl.col("Total_Core_Expense").rolling_sum(window_size=12).alias("Trailing_12M_Spend"),
+                pl.col("Total_Core_Expense")
+                .rolling_mean(window_size=3)
+                .alias("Trailing_3M_Avg_Spend"),
+                pl.col("Total_Core_Expense")
+                .rolling_mean(window_size=6)
+                .alias("Trailing_6M_Avg_Spend"),
+                pl.col("Total_Core_Expense")
+                .rolling_sum(window_size=12)
+                .alias("Trailing_12M_Spend"),
                 pl.col("Net_Savings").rolling_mean(window_size=6).alias("Trailing_6M_Avg_Savings"),
                 pl.col("Net_Savings").rolling_sum(window_size=12).alias("Trailing_12M_Savings"),
             )
-            .with_columns(
-                pl.when(pl.col("Total_Net_Worth").shift(12) > 0)
-                .then(
-                    (pl.col("Total_Net_Worth") - pl.col("Total_Net_Worth").shift(12) - pl.col("Trailing_12M_Savings"))
-                    / pl.col("Total_Net_Worth").shift(12)
-                )
-                .otherwise(0.12)
-                .alias("Trailing_12M_Return")
-            )
-            .with_columns((pl.col("Trailing_12M_Spend") * 25.0).alias("Target_FI_Number"))
+            .with_columns((pl.col("Trailing_12M_Spend") * swr).alias("Target_FI_Number"))
             .with_columns(
                 pl.when(pl.col("Target_FI_Number") > 0)
                 .then(pl.col("Total_Net_Worth") / pl.col("Target_FI_Number"))
@@ -79,16 +112,16 @@ class FireForecastingBuilder:
             out_p50 = np.zeros(n_rows)
             out_p10 = np.zeros(n_rows)
 
-            iterations = 1000
-            max_months = 480  # Max 40 years forecast
-            vol_r = 0.15 / np.sqrt(12)  # 15% annual volatility
+            iterations = mc_iterations
+            max_months = mc_max_months  # Max 40 years forecast
+            vol_r = mc_volatility / np.sqrt(12)  # monthly volatility
 
             # We process sequentially in the batch to avoid creating a massive 3D matrix (n_rows x iterations x max_months)
             for i in range(n_rows):
                 # Calculate real return dynamically: Assumes Trailing 12M nominal return - trailing inflation
                 mean_r = (ret_12m[i] - (infl[i] / 100.0)) / 12.0
-                if mean_r < 0.01 / 12.0:
-                    mean_r = 0.01 / 12.0  # Floor at 1% real return
+                if mean_r < mc_floor / 12.0:
+                    mean_r = mc_floor / 12.0  # Floor at X% real return
                 if fv[i] <= pv[i]:
                     out_p90[i], out_p50[i], out_p10[i] = 0.0, 0.0, 0.0
                     continue
@@ -160,11 +193,19 @@ class FireForecastingBuilder:
                 )
                 .otherwise(0.0)
                 .alias("Estimated_Months_To_FI_Linear"),
-                ((pl.col("Trailing_12M_Return") * 100.0) - pl.col("INFLATION_YOY_PCT")).alias("Real_Return_Assumed_Pct"),
-                pl.max_horizontal(0.0, pl.col("Target_FI_Number") - pl.col("Total_Net_Worth")).alias("FI_Gap"),
-                (pl.col("Target_FI_Number") / (pl.col("CPI_INDEX") / pl.lit(self.base_lf.get("cpi_base", 151.4)))).alias("FI_Number_Real"),
-                (pl.col("Target_FI_Number") / (1.05 ** 10)).alias("Coast_FI_Number"),
-                (pl.col("Target_FI_Number") * 0.7).alias("Lean_FI_Number"),
+                ((pl.col("Trailing_12M_Return") * 100.0) - pl.col("INFLATION_YOY_PCT")).alias(
+                    "Real_Return_Assumed_Pct"
+                ),
+                pl.max_horizontal(
+                    0.0, pl.col("Target_FI_Number") - pl.col("Total_Net_Worth")
+                ).alias("FI_Gap"),
+                (pl.col("Target_FI_Number") / (pl.col("CPI_INDEX") / pl.lit(cpi_base))).alias(
+                    "FI_Number_Real"
+                ),
+                (pl.col("Target_FI_Number") / ((1.0 + coast_real_return) ** coast_years)).alias(
+                    "Coast_FI_Number"
+                ),
+                (pl.col("Target_FI_Number") * lean_ratio).alias("Lean_FI_Number"),
                 pl.when(pl.col("Total_Net_Worth") > 0)
                 .then(pl.col("Trailing_12M_Spend") / pl.col("Total_Net_Worth"))
                 .otherwise(0.0)
@@ -172,10 +213,24 @@ class FireForecastingBuilder:
             )
             .with_columns(
                 (pl.col("FI_Gap") - pl.col("FI_Gap").shift(1)).alias("FI_Gap_Monthly_Trend"),
-                pl.when((pl.col("Months_To_FI_Base_P50") > 0) & (pl.col("Months_To_FI_Base_P50") < 999) & (pl.col("Total_Income") > 0))
+                pl.when(
+                    (pl.col("Months_To_FI_Base_P50") > 0)
+                    & (pl.col("Months_To_FI_Base_P50") < 999)
+                    & (pl.col("Total_Income") > 0)
+                )
                 .then((pl.col("FI_Gap") / pl.col("Months_To_FI_Base_P50")) / pl.col("Total_Income"))
                 .otherwise(0.0)
                 .alias("Savings_Rate_Required"),
+                (pl.col("Months_To_FI_Base_P50") / 12.0).alias("Years_To_FI_P50"),
+                pl.when(pl.col("Months_To_FI_Base_P50") < 999)
+                .then(
+                    pl.col("MONTH_START_DATE").dt.offset_by(
+                        pl.format("{}mo", pl.col("Months_To_FI_Base_P50").cast(pl.Int64))
+                    )
+                )
+                .otherwise(pl.lit(None).cast(pl.Date))
+                .alias("Projected_FI_Date_P50"),
+                pl.col("Current_FI_Coverage_Pct").alias("NW_Percentile_of_FI"),
             )
             .select(
                 [
@@ -192,6 +247,9 @@ class FireForecastingBuilder:
                     "Months_To_FI_Base_P50",
                     "Months_To_FI_Aggressive_P10",
                     "Runway_Months",
+                    "Years_To_FI_P50",
+                    "Projected_FI_Date_P50",
+                    "NW_Percentile_of_FI",
                     "INFLATION_YOY_PCT",
                     "Real_Return_Assumed_Pct",
                     "FI_Number_Real",

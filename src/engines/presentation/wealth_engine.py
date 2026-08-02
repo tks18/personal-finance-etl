@@ -16,8 +16,8 @@ class WealthPresentationEngine:
     Consumes LazyFrames and produces aggregated summary tables suitable for BI dashboards.
     """
 
-    def __init__(self):
-        pass
+    def __init__(self, rules=None):
+        self.rules = rules
 
     def run(self, dfs: Mapping[str, pl.DataFrame | pl.LazyFrame]) -> dict[str, pl.LazyFrame]:
         """
@@ -25,7 +25,7 @@ class WealthPresentationEngine:
         performs presentation-tier aggregations, and returns them to be collected.
         """
         # 1. Base Aggregations (Net Worth Summary, Ledger, etc.)
-        base_lf = BaseMetricsBuilder(dfs).build()
+        base_lf = BaseMetricsBuilder(dfs, rules=self.rules).build()
 
         if not base_lf:
             return {}
@@ -36,21 +36,29 @@ class WealthPresentationEngine:
         results["df_p_tf_net_worth_monthly_summary"] = base_lf["lf_nw_summary"]
 
         # 3. Financial Ratios Monthly
-        results["df_p_tf_financial_ratios_monthly"] = FinancialRatiosBuilder(base_lf).build()
+        results["df_p_tf_financial_ratios_monthly"] = FinancialRatiosBuilder(
+            base_lf, rules=self.rules
+        ).build()
 
         # 4. Category Spend Analytics
-        results["df_p_tf_category_spend_analytics"] = SpendAnalyticsBuilder(dfs, base_lf).build()
+        results["df_p_tf_category_spend_analytics"] = SpendAnalyticsBuilder(
+            dfs, base_lf, rules=self.rules
+        ).build()
 
         # 5. Income Streams & Passive Yield
-        results["df_p_tf_income_streams_monthly"] = IncomeStreamsBuilder(dfs, base_lf).build()
+        results["df_p_tf_income_streams_monthly"] = IncomeStreamsBuilder(
+            dfs, base_lf, rules=self.rules
+        ).build()
 
-        # 6. FIRE & Wealth Forecasting
-        results["df_p_tf_fire_forecasting_monthly"] = FireForecastingBuilder(base_lf).build()
-
-        # 7. Advanced Analytics (Risk, Sectors, Tax Harvesting)
-        adv_builder = AdvancedAnalyticsBuilder(dfs, base_lf)
+        # 6. Advanced Analytics (Risk, Sectors, Tax Harvesting)
+        adv_builder = AdvancedAnalyticsBuilder(dfs, base_lf, rules=self.rules)
         results["df_p_tf_risk_metrics"] = adv_builder.build_risk_dashboard()
         results["df_p_tf_sector_allocation_monthly"] = adv_builder.build_sector_allocation()
         results["df_p_tf_tax_harvesting"] = adv_builder.build_tax_harvesting()
+
+        # 7. FIRE & Wealth Forecasting
+        results["df_p_tf_fire_forecasting_monthly"] = FireForecastingBuilder(
+            base_lf, results["df_p_tf_risk_metrics"], rules=self.rules
+        ).build()
 
         return results

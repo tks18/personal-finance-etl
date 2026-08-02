@@ -12,8 +12,9 @@ class BaseMetricsBuilder:
     Constructs the foundational lazy frames required by downstream analytical presentation models.
     """
 
-    def __init__(self, dfs: Mapping[str, pl.DataFrame | pl.LazyFrame]):
+    def __init__(self, dfs: Mapping[str, pl.DataFrame | pl.LazyFrame], rules=None):
         self.dfs = dfs
+        self.rules = rules
 
     def build(self) -> dict[str, Any]:
         f_open = self.dfs.get("df_f_opening_balances")
@@ -75,8 +76,12 @@ class BaseMetricsBuilder:
                 cpi_base = cpi_base_df.item()
             else:
                 cpi_base = 151.4
+            if self.rules and self.rules.assumptions:
+                cpi_base = self.rules.assumptions.macro.cpi_base_index
         except Exception:
             cpi_base = 151.4
+            if self.rules and self.rules.assumptions:
+                cpi_base = self.rules.assumptions.macro.cpi_base_index
 
         lf_months = (
             lf_cal.group_by(["YEAR", "MONTH"])
@@ -116,6 +121,9 @@ class BaseMetricsBuilder:
                 pl.col("BASE_AMOUNT").alias("INCOME"),
                 pl.col("CATEGORY_ID"),
                 pl.col("DATE"),
+                pl.col("Is_Active_Income"),
+                pl.col("Is_Dividend_Income"),
+                pl.col("Is_Interest_Income"),
             ]
         )
 
@@ -125,6 +133,7 @@ class BaseMetricsBuilder:
                 pl.col("BASE_AMOUNT").alias("EXPENSE"),
                 pl.col("CATEGORY_ID"),
                 pl.col("DATE"),
+                pl.col("Is_Core_Expense"),
             ]
         )
 
@@ -160,18 +169,8 @@ class BaseMetricsBuilder:
                 .drop("PARENT_ID")
             )
 
-            lf_exp_agg = lf_exp_agg.with_columns(
-                pl.when(
-                    pl.col("CATEGORY_GROUPS")
-                    .str.to_lowercase()
-                    .str.contains("(?i)invest|saving|sunk|anomaly|one-off|tax")
-                )
-                .then(pl.lit(False))
-                .otherwise(pl.lit(True))
-                .alias("Is_Core_Expense")
-            )
-        else:
-            lf_exp_agg = lf_exp_agg.with_columns(pl.lit(True).alias("Is_Core_Expense"))
+        # Removed the legacy regex-based Is_Core_Expense logic.
+        # Is_Core_Expense is now pre-calculated in facts.py via the FinancialRules Engine.
 
         lf_trn_agg = ensure_date_col(lf_trn, "DATE").select(
             [
@@ -284,9 +283,16 @@ class BaseMetricsBuilder:
             lf_nw_summary.with_columns(
                 (
                     pl.col("Income_Inflow") - pl.col("Expense_Outflow") + pl.col("Net_Transfers")
-                ).alias("Net_Cashflow_Month")
+                ).alias("Net_Cashflow_Month"),
+                (pl.col("Income_Inflow") - pl.col("Expense_Outflow")).alias(
+                    "Surplus_Deficit_Month"
+                ),
             )
             .with_columns(
+                pl.when(pl.col("Surplus_Deficit_Month") > 0)
+                .then(pl.col("Net_Transfers") / pl.col("Surplus_Deficit_Month"))
+                .otherwise(0.0)
+                .alias("Investment_Contribution_Pct"),
                 (
                     pl.col("Closing_Balance")
                     - (pl.col("Opening_Balance") + pl.col("Net_Cashflow_Month"))
@@ -312,14 +318,14 @@ class BaseMetricsBuilder:
                 )
                 .otherwise(0.0)
                 .alias("MoM_Balance_Growth_%"),
-                pl.when(pl.col("Opening_Balance") != 0)
+                pl.when((pl.col("Opening_Balance") + pl.col("Closing_Balance")) > 0)
                 .then(
                     (
                         pl.col("Income_Inflow")
                         + pl.col("Expense_Outflow")
                         + pl.col("Net_Transfers").abs()
                     )
-                    / pl.col("Closing_Balance")
+                    / ((pl.col("Opening_Balance") + pl.col("Closing_Balance")) / 2.0)
                 )
                 .otherwise(0.0)
                 .alias("Asset_Velocity_%"),
@@ -384,6 +390,56 @@ class BaseMetricsBuilder:
             .drop(["Prev_Year_Balance", "YEAR", "MONTH"])
         )
 
+        # Inject Market Values for assets if available
+        df_inv_isin = self.dfs.get("df_f_tf_investment_analytics_isin")
+        df_inv_master = self.dfs.get("df_d_tf_investment_master")
+
+        if df_inv_isin is not None and df_inv_master is not None:
+            lf_inv_isin = (
+                df_inv_isin.lazy() if isinstance(df_inv_isin, pl.DataFrame) else df_inv_isin
+            )
+            lf_inv_master = (
+                df_inv_master.lazy() if isinstance(df_inv_master, pl.DataFrame) else df_inv_master
+            )
+
+            # Map ISIN to ASSET_SUBCATEGORY_ID (CATEGORY_ID in master) and aggregate to month-end
+            lf_inv_agg = (
+                lf_inv_isin.join(
+                    lf_inv_master.select(["ISIN", "CATEGORY_ID"]), on="ISIN", how="left"
+                )
+                .group_by(["Closing_Date", "CATEGORY_ID"])
+                .agg(
+                    pl.col("Total_Current_Value").sum().fill_null(0.0).alias("Asset_Market_Value"),
+                    pl.col("Total_Invested_Value").sum().fill_null(0.0).alias("Asset_Book_Value"),
+                )
+                .rename({"Closing_Date": "MONTH_END_DATE", "CATEGORY_ID": "ASSET_SUBCATEGORY_ID"})
+            )
+
+            lf_nw_summary = (
+                lf_nw_summary.join(
+                    lf_inv_agg, on=["MONTH_END_DATE", "ASSET_SUBCATEGORY_ID"], how="left"
+                )
+                .with_columns(
+                    pl.col("Asset_Market_Value").fill_null(0.0),
+                    pl.col("Asset_Book_Value").fill_null(0.0),
+                )
+                .with_columns(
+                    pl.when(pl.col("Asset_Book_Value") > 0)
+                    .then(
+                        pl.col("Closing_Balance")
+                        - pl.col("Asset_Book_Value")
+                        + pl.col("Asset_Market_Value")
+                    )
+                    .otherwise(pl.col("Closing_Balance"))
+                    .alias("Closing_Balance_Market")
+                )
+                .drop(["Asset_Market_Value", "Asset_Book_Value"])
+            )
+        else:
+            lf_nw_summary = lf_nw_summary.with_columns(
+                pl.col("Closing_Balance").alias("Closing_Balance_Market")
+            )
+
         lf_nw_summary = (
             lf_nw_summary.join(lf_inflation, on="MONTH_START_DATE", how="left")
             .with_columns(
@@ -407,7 +463,18 @@ class BaseMetricsBuilder:
                 (pl.col("Expense_Outflow") / (pl.col("CPI_INDEX") / pl.lit(cpi_base))).alias(
                     "Real_Expense_Outflow"
                 ),
-                pl.col("Months_of_Runway").alias("Months_of_Runway_Real"),
+                (pl.col("3M_Avg_Core_Expense") / (pl.col("CPI_INDEX") / pl.lit(cpi_base))).alias(
+                    "3M_Avg_Core_Expense_Real"
+                ),
+                (pl.col("Closing_Balance_Market") / (pl.col("CPI_INDEX") / pl.lit(cpi_base))).alias(
+                    "Closing_Balance_Market_Real"
+                ),
+            )
+            .with_columns(
+                pl.when(pl.col("3M_Avg_Core_Expense_Real") > 0)
+                .then(pl.col("Closing_Balance_Real") / pl.col("3M_Avg_Core_Expense_Real"))
+                .otherwise(0.0)
+                .alias("Months_of_Runway_Real"),
                 (
                     ((1 + pl.col("Organic_Yield_%")) / (1 + (pl.col("INFLATION_YOY_PCT") / 100.0)))
                     - 1
@@ -419,6 +486,10 @@ class BaseMetricsBuilder:
                     )
                     - 1
                 ).alias("MoM_Balance_Growth_%_Real"),
+                (
+                    pl.col("Closing_Balance_Real")
+                    - pl.col("Closing_Balance_Real").shift(1).over("ASSET_SUBCATEGORY_ID")
+                ).alias("Balance_MoM_Real"),
             )
             .drop("CPI_INDEX")
         )
@@ -430,6 +501,8 @@ class BaseMetricsBuilder:
                     pl.col("Income_Inflow").sum().alias("Total_Income"),
                     pl.col("Expense_Outflow").sum().alias("Total_Expense"),
                     pl.col("Core_Expense_Outflow").sum().alias("Total_Core_Expense"),
+                    pl.col("Real_Income_Inflow").sum().alias("Total_Real_Income"),
+                    pl.col("Real_Expense_Outflow").sum().alias("Total_Real_Expense"),
                     pl.col("Closing_Balance")
                     .filter(pl.col("Closing_Balance") >= 0)
                     .sum()
@@ -448,6 +521,54 @@ class BaseMetricsBuilder:
                 pl.col("MONTH_START_DATE").cum_count().alias("Months_Elapsed"),
             )
         )
+
+        # Inject Total Market Value into Monthly Totals
+        df_inv_port = self.dfs.get("df_f_tf_investment_analytics_portfolio")
+        if df_inv_port is not None:
+            lf_inv_port = (
+                df_inv_port.lazy() if isinstance(df_inv_port, pl.DataFrame) else df_inv_port
+            )
+            lf_monthly_totals = (
+                lf_monthly_totals.join(
+                    lf_inv_port.select(
+                        [
+                            pl.col("Closing_Date").alias("MONTH_END_DATE"),
+                            pl.col("Total_Current_Value").alias("Port_Market_Value"),
+                            pl.col("Total_Invested_Value").alias("Port_Book_Value"),
+                        ]
+                    ),
+                    on="MONTH_END_DATE",
+                    how="left",
+                )
+                .with_columns(
+                    pl.col("Port_Market_Value").fill_null(0.0),
+                    pl.col("Port_Book_Value").fill_null(0.0),
+                )
+                .with_columns(
+                    pl.when(pl.col("Port_Book_Value") > 0)
+                    .then(
+                        pl.col("Total_Assets")
+                        - pl.col("Port_Book_Value")
+                        + pl.col("Port_Market_Value")
+                    )
+                    .otherwise(pl.col("Total_Assets"))
+                    .alias("Total_Assets_Market"),
+                    pl.when(pl.col("Port_Book_Value") > 0)
+                    .then(
+                        pl.col("Total_Net_Worth")
+                        - pl.col("Port_Book_Value")
+                        + pl.col("Port_Market_Value")
+                    )
+                    .otherwise(pl.col("Total_Net_Worth"))
+                    .alias("Total_Net_Worth_Market"),
+                )
+                .drop(["Port_Market_Value", "Port_Book_Value"])
+            )
+        else:
+            lf_monthly_totals = lf_monthly_totals.with_columns(
+                pl.col("Total_Assets").alias("Total_Assets_Market"),
+                pl.col("Total_Net_Worth").alias("Total_Net_Worth_Market"),
+            )
 
         lf_monthly_totals = lf_monthly_totals.join(
             lf_inflation, on="MONTH_START_DATE", how="left"
