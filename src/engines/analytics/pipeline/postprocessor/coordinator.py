@@ -22,7 +22,7 @@ class PostProcessor:
         self.weights_calc = PortfolioWeightsCalculator()
         self.gains_calc = RealizedGainsCalculator(ctx)
         self.harvest_calc = HarvestRecommendationCalculator()
-        self.group_calc = GroupProcessor(ctx.fy_table)
+        self.group_calc = GroupProcessor(self.analytics_calc)
 
     def run(
         self,
@@ -41,7 +41,7 @@ class PostProcessor:
 
         lazy_df = self.weights_calc.calculate(lazy_df)
         lazy_df = self.gains_calc.calculate(lazy_df, unique_dates, pipeline_res["global_re"])
-        lazy_df = self.harvest_calc.calculate(lazy_df)
+        lazy_df = self.harvest_calc.calculate(lazy_df, rules=self.ctx.rules)
 
         # 1. Process Class Level
         df_class = self.group_calc.run(
@@ -69,7 +69,26 @@ class PostProcessor:
 
         def _aggregate_level(group_cols: list[str]) -> pl.LazyFrame:
             return (
-                lazy_df_agg.group_by(group_cols)
+                lazy_df_agg.select(
+                    list(
+                        set(
+                            group_cols
+                            + [
+                                "Buy_Value",
+                                "Close_Value",
+                                "Unrealized_LTCG",
+                                "Unrealized_STCG",
+                                "Unrealized_Loss",
+                                "LTCG_Tax_If_Sold",
+                                "STCG_Tax_If_Sold",
+                                "FY_Realized_LTCG",
+                                "FY_Realized_STCG",
+                                "FY_Realized_Loss",
+                            ]
+                        )
+                    )
+                )
+                .group_by(group_cols)
                 .agg(
                     pl.col("Buy_Value").sum().alias("Total_Invested_Value"),
                     pl.col("Close_Value").sum().alias("Total_Current_Value"),
@@ -101,6 +120,7 @@ class PostProcessor:
                     "Closing_Date",
                     "ISIN",
                     "XIRR",
+                    "After_Tax_XIRR",
                     "BM_XIRR",
                     "Active_Return",
                     "CAGR",

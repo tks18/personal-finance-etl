@@ -22,6 +22,7 @@ class RunContext:
     fy_table: FYTaxRateTable
     start_date: date | None
     end_date: date | None
+    rules: "FinancialRules | None" = None
 
     @classmethod
     def load(
@@ -34,13 +35,14 @@ class RunContext:
         t_path: str,
         start_date: date | None = None,
         end_date: date | None = None,
+        rules: "FinancialRules | None" = None,
     ) -> "RunContext":
         df_p, df_s, df_m, isin_master, df_b = TaxDataLoader.load_all(
             p_path, s_path, m_path, i_path, b_path
         )
         try:
             df_t = pl.read_csv(t_path)
-            fy_table = FYTaxRateTable(df_t)
+            fy_table = FYTaxRateTable(df_t, rules=rules)
         except Exception as e:
             raise Exception(f"Failed to load mandatory Tax Rates CSV: {e}") from e
 
@@ -53,6 +55,7 @@ class RunContext:
             fy_table=fy_table,
             start_date=start_date,
             end_date=end_date,
+            rules=rules,
         )
 
     @classmethod
@@ -66,11 +69,12 @@ class RunContext:
         df_t: pl.DataFrame,
         start_date: date | None = None,
         end_date: date | None = None,
+        rules: "FinancialRules | None" = None,
     ) -> "RunContext":
         loaded_p, loaded_s, loaded_m, is_m, loaded_b = TaxDataLoader.load_from_dataframes(
             df_p, df_s, df_m, df_i, df_b
         )
-        fy_table = FYTaxRateTable(df_t)
+        fy_table = FYTaxRateTable(df_t, rules=rules)
 
         return cls(
             df_p=loaded_p,
@@ -81,4 +85,5 @@ class RunContext:
             fy_table=fy_table,
             start_date=start_date,
             end_date=end_date,
+            rules=rules,
         )

@@ -42,6 +42,7 @@ class PortfolioXIRRCalculator:
             pt_entry = portfolio_terminals.get(d_obj, portfolio_terminals.get(d, {}))
             t_val = pt_entry.get("val", 0.0)
             t_shadow = pt_entry.get("shadow_val", 0.0)
+            t_after_tax = pt_entry.get("after_tax_val", 0.0)
 
             if port_dl:
                 port_dl.append(d_obj)
@@ -57,15 +58,22 @@ class PortfolioXIRRCalculator:
                 except Exception:
                     bm_pxirr = 0.0
 
+                at_port_al = port_al[:-1] + [t_after_tax]
+                try:
+                    at_pxirr = xirr(port_dl, at_port_al) or 0.0
+                except Exception:
+                    at_pxirr = 0.0
+
                 port_dl.pop()
                 port_al.pop()
             else:
-                pxirr = bm_pxirr = 0.0
+                pxirr = bm_pxirr = at_pxirr = 0.0
 
             port_rows.append(
                 {
                     "Closing_Date": d,
                     "Portfolio_XIRR": pxirr,
+                    "Portfolio_After_Tax_XIRR": at_pxirr,
                     "Portfolio_BM_XIRR": bm_pxirr,
                     "Portfolio_Active_Return": pxirr - bm_pxirr,
                 }

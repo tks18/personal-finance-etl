@@ -7,6 +7,7 @@ from src.engines.analytics.pipeline.postprocessor.xirr import PortfolioXIRRCalcu
 
 PORTFOLIO_COL_RENAMES = {
     "Portfolio_XIRR": "XIRR",
+    "Portfolio_After_Tax_XIRR": "After_Tax_XIRR",
     "Portfolio_BM_XIRR": "BM_XIRR",
     "Portfolio_Active_Return": "Active_Return",
     "Portfolio_Sharpe_Ratio": "Sharpe_Ratio",
@@ -20,9 +21,9 @@ class GroupProcessor:
     Computes XIRR, Sharpe, and other metrics at arbitrary group levels (Class, Subtype).
     """
 
-    def __init__(self, fy_table=None):
+    def __init__(self, analytics_calc: AdvancedAnalyticsCalculator):
         self.xirr_calc = PortfolioXIRRCalculator()
-        self.analytics_calc = AdvancedAnalyticsCalculator(fy_table)
+        self.analytics_calc = analytics_calc
 
     def run(
         self,

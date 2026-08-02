@@ -10,14 +10,14 @@ class AnalyticsContextManager:
         self.status_queue = status_queue
 
     def initialize(
-        self, df_p, df_s, df_m, df_i, df_b, df_t, start_date, end_date
+        self, df_p, df_s, df_m, df_i, df_b, df_t, start_date, end_date, rules=None
     ) -> tuple[RunContext, list[str]]:
         if self.status_queue:
             self.status_queue.put(
                 EngineStatus("Loading DataFrame memory structures...", None, 0.01, LogLevel.STEP)
             )
 
-        ctx = RunContext.from_dataframes(df_p, df_s, df_m, df_i, df_b, df_t, start_date, end_date)
+        ctx = RunContext.from_dataframes(df_p, df_s, df_m, df_i, df_b, df_t, start_date, end_date, rules)
 
         if self.status_queue:
             self.status_queue.put(

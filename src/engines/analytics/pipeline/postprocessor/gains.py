@@ -12,20 +12,40 @@ class RealizedGainsCalculator:
     def __init__(self, ctx: RunContext):
         self.ctx = ctx
 
+    def _build_empty_fy_frame(self, unique_dates: list[date]) -> pl.DataFrame:
+        df_dates_list = []
+        for d in unique_dates:
+            d_obj = to_date_obj(d)
+            if not d_obj:
+                continue
+            fy_sy = get_fy_start_year(d_obj)
+            limit = self.ctx.fy_table.get_equity_ltcg_exemption(date(fy_sy, 4, 1))
+            df_dates_list.append(
+                {
+                    "Closing_Date": d,
+                    "Date_Obj": d_obj,
+                    "event_fy_sy": fy_sy,
+                    "FY": f"{fy_sy}-{str(fy_sy + 1)[-2:]}",
+                    "FY_Realized_LTCG": 0.0,
+                    "FY_Realized_STCG": 0.0,
+                    "FY_Realized_Loss": 0.0,
+                    "FY_LTCG_Remaining_Exemption": float(limit),
+                }
+            )
+        return pl.DataFrame(df_dates_list)
+
     def calculate(
         self, lazy_df: pl.LazyFrame, unique_dates: list[date], realized_events: list[dict]
     ) -> pl.LazyFrame:
+        df_fy_empty = self._build_empty_fy_frame(unique_dates)
+
         if realized_events:
             df_events = pl.DataFrame(realized_events)
-
-            df_dates_list = []
-            for d in unique_dates:
-                d_obj = to_date_obj(d)
-                if not d_obj:
-                    continue
-                fy_sy = get_fy_start_year(d_obj)
-                df_dates_list.append({"Closing_Date": d, "Date_Obj": d_obj, "event_fy_sy": fy_sy})
-            df_dates = pl.DataFrame(df_dates_list).sort(["event_fy_sy", "Date_Obj"]).with_columns(pl.col("Date_Obj").set_sorted())
+            df_dates = (
+                df_fy_empty.select(["Closing_Date", "Date_Obj", "event_fy_sy"])
+                .sort(["event_fy_sy", "Date_Obj"])
+                .with_columns(pl.col("Date_Obj").set_sorted())
+            )
 
             df_events = (
                 df_events.with_columns(pl.col("date").cast(pl.Date))
@@ -141,25 +161,19 @@ class RealizedGainsCalculator:
             lazy_df = lazy_df.join(df_fy_joined.lazy(), on="Closing_Date", how="left")
 
         else:
-            df_dates_list = []
-            for d in unique_dates:
-                d_obj = to_date_obj(d)
-                if not d_obj:
-                    continue
-                fy_sy = get_fy_start_year(d_obj)
-                limit = self.ctx.fy_table.get_equity_ltcg_exemption(date(fy_sy, 4, 1))
-                df_dates_list.append(
-                    {
-                        "Closing_Date": d,
-                        "FY": f"{fy_sy}-{str(fy_sy + 1)[-2:]}",
-                        "FY_Realized_LTCG": 0.0,
-                        "FY_Realized_STCG": 0.0,
-                        "FY_Realized_Loss": 0.0,
-                        "FY_LTCG_Remaining_Exemption": float(limit),
-                    }
-                )
-
-            df_fy_empty = pl.DataFrame(df_dates_list)
-            lazy_df = lazy_df.join(df_fy_empty.lazy(), on="Closing_Date", how="left")
+            lazy_df = lazy_df.join(
+                df_fy_empty.select(
+                    [
+                        "Closing_Date",
+                        "FY",
+                        "FY_Realized_LTCG",
+                        "FY_Realized_STCG",
+                        "FY_Realized_Loss",
+                        "FY_LTCG_Remaining_Exemption",
+                    ]
+                ).lazy(),
+                on="Closing_Date",
+                how="left",
+            )
 
         return lazy_df

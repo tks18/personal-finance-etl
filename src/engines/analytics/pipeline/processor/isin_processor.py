@@ -122,12 +122,38 @@ class IsinProcessor:
             terminal_val = fifo.get_terminal_value(m_price)
             shadow_terminal_val = fifo.get_shadow_terminal_value(m_bm_price)
 
-            pt = isin_terminals.setdefault(m_date, {"val": 0.0, "shadow_val": 0.0})
+            pt = isin_terminals.setdefault(
+                m_date, {"val": 0.0, "shadow_val": 0.0, "after_tax_val": 0.0}
+            )
             pt["val"] += terminal_val
             pt["shadow_val"] += shadow_terminal_val
 
+            after_tax_terminal_val = 0.0
+            for lot in fifo.active_lots:
+                if lot.qty <= 1e-8:
+                    continue
+                lbd = to_date_obj(lot.date)
+                age = max((m_date - lbd).days, 1) if lbd else 1
+                holding_type = self.ctx.fy_table.get_holding_type(
+                    age, tax_type, tax_subtype, lbd or m_date, m_date
+                )
+                ltcg_rate, stcg_rate = self.ctx.fy_table.get_tax_rates(
+                    tax_type, tax_subtype, lbd or m_date, m_date
+                )
+                pnl = (m_price - lot.price) * lot.qty
+                unreal_ltcg = max(0.0, pnl) if holding_type == "LTCG" else 0.0
+                unreal_stcg = max(0.0, pnl) if holding_type == "STCG" else 0.0
+                ltcg_tax = unreal_ltcg * ltcg_rate
+                stcg_tax = unreal_stcg * stcg_rate
+                after_tax_terminal_val += (lot.qty * m_price) - (ltcg_tax + stcg_tax)
+
+            pt["after_tax_val"] += after_tax_terminal_val
+
             inst_xirr = calculate_xirr(cf_dates + [m_date], cf_amounts + [terminal_val])
             bm_xirr_val = calculate_xirr(cf_dates + [m_date], cf_amounts + [shadow_terminal_val])
+            inst_after_tax_xirr = calculate_xirr(
+                cf_dates + [m_date], cf_amounts + [after_tax_terminal_val]
+            )
 
             inst_active_return = inst_xirr - bm_xirr_val
             is_lagging = inst_xirr < bm_xirr_val
@@ -136,10 +162,11 @@ class IsinProcessor:
             if closing_units > 0:
                 avg_cost = fifo.get_average_cost()
                 avg_bm_cost = fifo.get_average_bm_cost()
-                
-                weighted_days = sum(
-                    lot.qty * (m_date - lot.date).days for lot in fifo.active_lots if lot.date
-                ) / closing_units
+
+                weighted_days = (
+                    sum(lot.qty * (m_date - lot.date).days for lot in fifo.active_lots if lot.date)
+                    / closing_units
+                )
                 inst_age = max(int(weighted_days), 1)
 
                 if avg_cost > 0:
@@ -156,6 +183,7 @@ class IsinProcessor:
                 "bm_cagr": inst_bm_cagr,
                 "xirr": inst_xirr,
                 "bm_xirr": bm_xirr_val,
+                "after_tax_xirr": inst_after_tax_xirr,
                 "active_return": inst_active_return,
                 "is_lagging": is_lagging,
                 "info_ratio": info_ratio,

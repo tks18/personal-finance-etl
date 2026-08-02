@@ -25,6 +25,7 @@ class InvestmentAnalyticsEngine:
         df_b: pl.DataFrame | None,
         df_t: pl.DataFrame,
         status_queue: ILogger | None = None,
+        rules: "FinancialRules | None" = None,
         start_date: date | None = None,
         end_date: date | None = None,
     ):
@@ -35,6 +36,7 @@ class InvestmentAnalyticsEngine:
         self.df_b = df_b if df_b is not None else pl.DataFrame()
         self.df_t = df_t
         self.status_queue = status_queue
+        self.rules = rules
         self.start_date = start_date
         self.end_date = end_date
 
@@ -64,6 +66,7 @@ class InvestmentAnalyticsEngine:
             self.df_t,
             self.start_date,
             self.end_date,
+            self.rules,
         )
 
         if not isins:

@@ -29,6 +29,7 @@ class SnapshotGenerator:
         inst_cagr = inst_metrics.get("cagr", 0.0)
         inst_bm_cagr = inst_metrics.get("bm_cagr", 0.0)
         inst_xirr = inst_metrics.get("xirr", 0.0)
+        inst_after_tax_xirr = inst_metrics.get("after_tax_xirr", 0.0)
         bm_xirr_val = inst_metrics.get("bm_xirr", 0.0)
         inst_active_return = inst_metrics.get("active_return", 0.0)
         is_lagging = inst_metrics.get("is_lagging", False)
@@ -45,7 +46,7 @@ class SnapshotGenerator:
             lbd = to_date_obj(lot.date)
             age = max((m_date - lbd).days, 1) if lbd else 1
 
-            ltcg_thr = get_ltcg_threshold(self.tax_type, self.tax_subtype)
+            ltcg_thr = get_ltcg_threshold(self.tax_type, self.tax_subtype, self.ctx.rules)
             holding_type = self.fy_table.get_holding_type(
                 age, self.tax_type, self.tax_subtype, lbd or m_date, m_date
             )
@@ -105,6 +106,7 @@ class SnapshotGenerator:
                     "Lot_CAGR": round(lot_cagr, 8),
                     "CAGR": round(inst_cagr, 8),
                     "XIRR": round(inst_xirr, 8),
+                    "After_Tax_XIRR": round(inst_after_tax_xirr, 8),
                     "BM_Buy_Price": round(lbm_buy, 4) if lbm_buy else None,
                     "BM_Market_Price": round(m_bm_price, 4),
                     "Lot_BM_Returns_%": round(lot_bm_ret, 8),

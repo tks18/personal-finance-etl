@@ -12,30 +12,34 @@ from src.utils.helpers import to_date_obj
 _DEFAULT_DEBT_MF_CUTOFF = date(2023, 4, 1)
 
 
-_LTCG_THRESHOLDS = {
-    ("equity", "listed"): 365,
-    ("equity", "unlisted"): 730,
-    ("debt", "mf"): 1095,
-    ("debt", "other"): 1095,
-    ("debt", ""): 1095,
-    ("gold", "mf"): 730,
-    ("gold", ""): 365,
-    ("sgb", "mf"): 730,
-    ("sgb", ""): 365,
-    ("silver", "mf"): 730,
-    ("silver", ""): 365,
-}
-
-
-def get_ltcg_threshold(tax_type: str, tax_subtype: str) -> int:
+def get_ltcg_threshold(tax_type: str, tax_subtype: str, rules=None) -> int:
     """Return holding period threshold for LTCG in days based on declarative rules."""
     tt = tax_type.strip().lower()
     tst = tax_subtype.strip().lower()
 
-    if (tt, tst) in _LTCG_THRESHOLDS:
-        return _LTCG_THRESHOLDS[(tt, tst)]
-    if (tt, "") in _LTCG_THRESHOLDS:
-        return _LTCG_THRESHOLDS[(tt, "")]
+    if rules and rules.assumptions:
+        thresholds = rules.assumptions.tax.ltcg_thresholds
+    else:
+        thresholds = {
+            "equity_listed": 365,
+            "equity_unlisted": 730,
+            "debt_mf": 1095,
+            "debt_other": 1095,
+            "debt_": 1095,
+            "gold_mf": 730,
+            "gold_": 365,
+            "sgb_mf": 730,
+            "sgb_": 365,
+            "silver_mf": 730,
+            "silver_": 365,
+        }
+
+    key = f"{tt}_{tst}"
+    if key in thresholds:
+        return thresholds[key]
+    key_base = f"{tt}_"
+    if key_base in thresholds:
+        return thresholds[key_base]
 
     return 730
 
@@ -55,7 +59,8 @@ class FYTaxRateTable:
         ("default", ""): ("Default_LTCG", "Default_STCG"),
     }
 
-    def __init__(self, df: pl.DataFrame):
+    def __init__(self, df: pl.DataFrame, rules=None):
+        self.rules = rules
         self.fy_map: list[dict] = []
         if df.is_empty():
             raise ValueError("Tax Rates DataFrame cannot be empty.")
@@ -66,10 +71,21 @@ class FYTaxRateTable:
                 end_d = to_date_obj(row.get("FY_End_Date"))
 
                 raw_cutoff = str(row.get("Debt_MF_Cutoff_Date", "")).strip()
+
+                default_cutoff = _DEFAULT_DEBT_MF_CUTOFF
+                if self.rules and self.rules.assumptions:
+                    try:
+                        default_cutoff = (
+                            to_date_obj(self.rules.assumptions.tax.debt_mf_cutoff_date)
+                            or _DEFAULT_DEBT_MF_CUTOFF
+                        )
+                    except Exception:
+                        pass
+
                 cutoff_d = (
                     to_date_obj(raw_cutoff)
                     if raw_cutoff and raw_cutoff != "None"
-                    else _DEFAULT_DEBT_MF_CUTOFF
+                    else default_cutoff
                 )
 
                 if start_d and end_d:
@@ -77,7 +93,7 @@ class FYTaxRateTable:
                         {
                             "start": start_d,
                             "end": end_d,
-                            "debt_cutoff": cutoff_d or _DEFAULT_DEBT_MF_CUTOFF,
+                            "debt_cutoff": cutoff_d or default_cutoff,
                             "raw": row,
                         }
                     )
