@@ -1,5 +1,7 @@
 import polars as pl
 
+from src.config.financial_rules import FinancialRules
+
 BASE_TRANSACTION_COLS = [
     "__file_name__",
     "__folder_path__",
@@ -63,7 +65,11 @@ def get_base_transactions(df_lazy: pl.LazyFrame, column_mapping: dict[str, str])
     return df_base
 
 
-def transform_f_income_transactions(base_transactions_lazy: pl.LazyFrame) -> pl.LazyFrame:
+def transform_f_income_transactions(
+    base_transactions_lazy: pl.LazyFrame,
+    rules: "FinancialRules | None" = None,
+    d_subcat: pl.LazyFrame | None = None,
+) -> pl.LazyFrame:
     """
     Branches off the base transactions for Income (TYPE = 0)
     and applies the DAX calculation.
@@ -72,10 +78,59 @@ def transform_f_income_transactions(base_transactions_lazy: pl.LazyFrame) -> pl.
         BASE_TRANSACTION_COLS
     )
 
+    if rules and d_subcat is not None:
+        df_transformed = df_transformed.join(
+            d_subcat.select(
+                [pl.col("UID").alias("CATEGORY_ID"), pl.col("CATEGORY_ID").alias("PARENT_ID")]
+            ),
+            on="CATEGORY_ID",
+            how="left",
+        )
+        active_cat = [uid.upper() for uid in rules.income.active.category_ids]
+        active_sub = [uid.upper() for uid in rules.income.active.sub_category_ids]
+        div_cat = [uid.upper() for uid in rules.income.dividends.category_ids]
+        div_sub = [uid.upper() for uid in rules.income.dividends.sub_category_ids]
+        int_cat = [uid.upper() for uid in rules.income.interest.category_ids]
+        int_sub = [uid.upper() for uid in rules.income.interest.sub_category_ids]
+
+        df_transformed = df_transformed.with_columns(
+            pl.when(
+                pl.col("CATEGORY_ID").str.to_uppercase().is_in(active_sub)
+                | pl.col("PARENT_ID").str.to_uppercase().is_in(active_cat)
+            )
+            .then(True)
+            .otherwise(False)
+            .alias("Is_Active_Income"),
+            pl.when(
+                pl.col("CATEGORY_ID").str.to_uppercase().is_in(div_sub)
+                | pl.col("PARENT_ID").str.to_uppercase().is_in(div_cat)
+            )
+            .then(True)
+            .otherwise(False)
+            .alias("Is_Dividend_Income"),
+            pl.when(
+                pl.col("CATEGORY_ID").str.to_uppercase().is_in(int_sub)
+                | pl.col("PARENT_ID").str.to_uppercase().is_in(int_cat)
+            )
+            .then(True)
+            .otherwise(False)
+            .alias("Is_Interest_Income"),
+        ).drop("PARENT_ID")
+    else:
+        df_transformed = df_transformed.with_columns(
+            pl.lit(False).alias("Is_Active_Income"),
+            pl.lit(False).alias("Is_Dividend_Income"),
+            pl.lit(False).alias("Is_Interest_Income"),
+        )
+
     return df_transformed
 
 
-def transform_f_expense_transactions(base_transactions_lazy: pl.LazyFrame) -> pl.LazyFrame:
+def transform_f_expense_transactions(
+    base_transactions_lazy: pl.LazyFrame,
+    rules: "FinancialRules | None" = None,
+    d_subcat: pl.LazyFrame | None = None,
+) -> pl.LazyFrame:
     """
     Branches off the base transactions for Expenses (TYPE = 1)
     and applies the EXCH_RATE calculation.
@@ -83,6 +138,29 @@ def transform_f_expense_transactions(base_transactions_lazy: pl.LazyFrame) -> pl
     df_transformed = base_transactions_lazy.filter(pl.col("TRANSACTION_TYPE") == 1).select(
         BASE_TRANSACTION_COLS
     )
+
+    if rules and d_subcat is not None:
+        df_transformed = df_transformed.join(
+            d_subcat.select(
+                [pl.col("UID").alias("CATEGORY_ID"), pl.col("CATEGORY_ID").alias("PARENT_ID")]
+            ),
+            on="CATEGORY_ID",
+            how="left",
+        )
+        core_cat = [uid.upper() for uid in rules.expense.core.category_ids]
+        core_sub = [uid.upper() for uid in rules.expense.core.sub_category_ids]
+
+        df_transformed = df_transformed.with_columns(
+            pl.when(
+                pl.col("CATEGORY_ID").str.to_uppercase().is_in(core_sub)
+                | pl.col("PARENT_ID").str.to_uppercase().is_in(core_cat)
+            )
+            .then(True)
+            .otherwise(False)
+            .alias("Is_Core_Expense")
+        ).drop("PARENT_ID")
+    else:
+        df_transformed = df_transformed.with_columns(pl.lit(False).alias("Is_Core_Expense"))
 
     return df_transformed
 
