@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [2.3.0](https://github.com/tks18/personal-finance-etl/compare/2.2.0...2.3.0) (2026-08-02)
+
+
+### Build System 🏗
+
+* add pydantic ([ddebe1e](https://github.com/tks18/personal-finance-etl/commit/ddebe1eb939656c3562b66198ed9eb5b438cac6b))
+
+
+### Code Refactoring 🖌
+
+* **config:** move to pydantic ([d76b8f8](https://github.com/tks18/personal-finance-etl/commit/d76b8f8a0254e8e77cb20cb2a78147f6ab5761fa))
+* **load:** rules refactor + reorder the cols ([804b16d](https://github.com/tks18/personal-finance-etl/commit/804b16d03b468d11548e1e0d359fd644a818b4e4))
+
+
+### Features 🔥
+
+* **config:** introduce new config to handle financial rules / assumptions ([ef1dffa](https://github.com/tks18/personal-finance-etl/commit/ef1dffa7cab2d3f4459416f9b896aff077964208))
+* **engines/analytics:** add rules to context + some fixes for calcs ([a64dd7d](https://github.com/tks18/personal-finance-etl/commit/a64dd7df3db206fb02936c67e3e9efba503dab87))
+* **engines/presentations:** integrate rules and add various metrics based on that ([b0f9e18](https://github.com/tks18/personal-finance-etl/commit/b0f9e1807ccfcd258f7b4968c64b5c8e28696388))
+* **load/schema:** add rules metadata to the db ([ca480a6](https://github.com/tks18/personal-finance-etl/commit/ca480a6aa6f87d8faaa7fa1df549555156043f7a))
+* **pipeline:** integrate rules ([8e7e526](https://github.com/tks18/personal-finance-etl/commit/8e7e526bb616ee8ff9bcfa7bcd8f4819de12aa0f))
+* **pipeline:** integrate rules in the pipeline ([ce4e2e7](https://github.com/tks18/personal-finance-etl/commit/ce4e2e7d56fa6fb74075a2d70b48a522f9569667))
+* **transform:** add metrics using financial rules ([2d5cea3](https://github.com/tks18/personal-finance-etl/commit/2d5cea31139df09f70c909a3cb87c163cd3e283b))
+* **ui:** integrate ui funcs for financial rules ([aa1e951](https://github.com/tks18/personal-finance-etl/commit/aa1e9517ae8e849687b211b88eee0a3c9b513f49))
+
+
+### Tests 🧪
+
+* add sample financial rules config ([0bbfc4c](https://github.com/tks18/personal-finance-etl/commit/0bbfc4cc1edfe70535e3612796042f23b1e501dc))
+
 ## [2.2.0](https://github.com/tks18/personal-finance-etl/compare/2.1.0...2.2.0) (2026-08-01)
 
 
