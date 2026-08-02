@@ -167,6 +167,7 @@ class DuckDBLoader:
             "df_f_tf_investment_analytics_subtype": "f_tf_Investment_Analytics_Subtype",
             "df_f_tf_investment_analytics_class": "f_tf_Investment_Analytics_Class",
             "df_f_tf_investment_analytics_portfolio": "f_tf_Investment_Analytics_Portfolio",
+            "_ETL_Metadata_Financial_Rules": "_ETL_Metadata_Financial_Rules",
         }
         presentation_tables = {
             "df_p_tf_net_worth_monthly_summary": "p_tf_Net_Worth_Monthly_Summary",
