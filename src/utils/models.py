@@ -74,8 +74,7 @@ class ExtractionResult:
     stock_transactions_raw: pl.LazyFrame
     raw_opening_balances: pl.LazyFrame
     raw_benchmark_master: pl.LazyFrame
-    raw_tax_rates: pl.LazyFrame
-    raw_inflation_rates: pl.LazyFrame
+    raw_macro_parameters: pl.LazyFrame
 
 
 @dataclass
