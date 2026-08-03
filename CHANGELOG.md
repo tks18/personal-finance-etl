@@ -2,6 +2,41 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [2.4.0](https://github.com/tks18/personal-finance-etl/compare/2.3.0...2.4.0) (2026-08-03)
+
+
+### Bug Fixes 🛠
+
+* **logging:** overhaul logging to properly add correct metrics ([c494024](https://github.com/tks18/personal-finance-etl/commit/c4940246111c97dd6af6cf50af7d833f2c3f4870))
+
+
+### Code Refactoring 🖌
+
+* **helpers:** refactor tax to macro table ([a781444](https://github.com/tks18/personal-finance-etl/commit/a78144413fbc1873ee030906c3a77dca2e6b6116))
+* **pipeline:** refactor tax to macro ([534d049](https://github.com/tks18/personal-finance-etl/commit/534d0491d170cada5ee9e9fa85ae79cc7098a485))
+* rename tax parameters to macro parameters ([a2d888a](https://github.com/tks18/personal-finance-etl/commit/a2d888adae746c0419ce0f7c8bbffd6f94276f8d))
+* rename tax table to macro table ([9a4f4c9](https://github.com/tks18/personal-finance-etl/commit/9a4f4c951180c556f7e782d11479ef47b2c13b38))
+* rename tax to macro, change invt analytics to quant engine ([72ef069](https://github.com/tks18/personal-finance-etl/commit/72ef069c5b329053a36982f82f314990efd3046a))
+
+
+### Styling 🎨
+
+* change the content to correct reflect the state ([4f580ae](https://github.com/tks18/personal-finance-etl/commit/4f580ae6c48f7b2e4d56cb46b131ba546f4be071))
+
+
+### Features 🔥
+
+* **config:** introduce new parameters to configure the app ([498fdbb](https://github.com/tks18/personal-finance-etl/commit/498fdbb59da6a692c0c7a9d603a8b1c5c6151e01))
+* **engine/presentations:** harden maths, quant, metrics, introduce correct metrics ([7b5ba6f](https://github.com/tks18/personal-finance-etl/commit/7b5ba6f4851efe78918a1d75142d1ac817c0c322))
+* **load/schema:** update duckdb ddl ([d3feb0e](https://github.com/tks18/personal-finance-etl/commit/d3feb0e74efac9d94946994afb4245ce3f76e214))
+* **transform:** add all the rules to the dim tables ([440b685](https://github.com/tks18/personal-finance-etl/commit/440b6854b7f8fb9cc7c6d9bb2abd9a429d4656ad))
+
+
+### Docs 📃
+
+* add a metrics guide for understanding ([a99762b](https://github.com/tks18/personal-finance-etl/commit/a99762b272c6a1515d1be9c5f592c9ee2b07f5dc))
+* update readme to reflect recent changes ([ef39804](https://github.com/tks18/personal-finance-etl/commit/ef39804487e08e03c028f9655890241688214623))
+
 ## [2.3.0](https://github.com/tks18/personal-finance-etl/compare/2.2.0...2.3.0) (2026-08-02)
 
 
