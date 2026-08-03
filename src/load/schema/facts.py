@@ -119,13 +119,5 @@ CREATE TABLE f_Opening_Balances (
     FOREIGN KEY(ZTXDATESTR) REFERENCES d_Calendar(Date)
 );
 
--- DDL: f_Inflation_Rates
-CREATE TABLE f_Inflation_Rates (
-    __file_name__ TEXT, __folder_path__ TEXT,
-    INFLATION_ID BIGINT PRIMARY KEY,
-    DATE DATE NOT NULL,
-    INFLATION_YOY_PCT DOUBLE,
-    CPI_INDEX DOUBLE,
-    FOREIGN KEY(DATE) REFERENCES d_Calendar(Date)
-);
+
 """
