@@ -16,7 +16,7 @@ from src.transform.dimensions import (
     transform_d_income_category,
     transform_d_income_subcategory,
     transform_d_investment_benchmark_master,
-    transform_d_tax_rates,
+    transform_d_macro_parameters,
 )
 from src.transform.facts import (
     get_base_transactions,
@@ -49,25 +49,25 @@ class TransformationDAG:
             extracted.zcategory, mappings["category"]
         )
         d_income_subcategory_lazy = transform_d_income_subcategory(
-            extracted.zcategory, mappings["category"], d_income_category_lazy
+            extracted.zcategory, mappings["category"], d_income_category_lazy, self.rules
         )
         d_expense_category_lazy = transform_d_expense_category(
             extracted.zcategory, mappings["category"]
         )
         d_expense_subcategory_lazy = transform_d_expense_subcategory(
-            extracted.zcategory, mappings["category"]
+            extracted.zcategory, mappings["category"], self.rules
         )
         d_asset_category_lazy = transform_d_asset_category(
             extracted.assetgroup, mappings["asset_group"]
         )
         d_asset_subcategory_lazy = transform_d_asset_subcategory(
-            extracted.assets, mappings["assets"]
+            extracted.assets, mappings["assets"], self.rules
         )
         d_currency_lazy = transform_d_currency(extracted.currency, mappings["currency"])
 
         # Load mapping dependencies
-        logger.info("Transforming Tax Rates and Opening Balances...")
-        d_tax_rates_lazy = transform_d_tax_rates(extracted.raw_tax_rates)
+        logger.info("Transforming Macro Parameters and Opening Balances...")
+        d_macro_parameters_lazy = transform_d_macro_parameters(extracted.raw_macro_parameters)
 
         f_opening_balances_lazy = transform_f_opening_balances(
             extracted.raw_opening_balances, extracted.mappings["opbal"]
@@ -148,7 +148,7 @@ class TransformationDAG:
                 d_asset_subcategory_lazy,
                 d_currency_lazy,
                 d_benchmark_master_lazy,
-                d_tax_rates_lazy,
+                d_macro_parameters_lazy,
                 f_income_transactions_lazy,
                 f_expense_transactions_lazy,
                 f_transfer_transactions_lazy,
@@ -163,10 +163,6 @@ class TransformationDAG:
 
         logger.info("Executing Calendar Generation DAG...")
         calendar_result = d_calendar_lazy.collect(engine="streaming")
-
-        inflation_result = pl.DataFrame()
-        if extracted.raw_inflation_rates is not None:
-            inflation_result = extracted.raw_inflation_rates.collect(engine="streaming")
 
         rules_records = []
         if self.rules:
@@ -197,7 +193,7 @@ class TransformationDAG:
             "df_d_asset_subcategory": results[5],
             "df_d_currency": results[6],
             "df_d_benchmark_master": results[7],
-            "df_d_tax_rates": results[8],
+            "df_d_macro_parameters": results[8],
             "df_f_income_transactions": results[9],
             "df_f_expense_transactions": results[10],
             "df_f_transfer_transactions": results[11],
@@ -207,6 +203,5 @@ class TransformationDAG:
             "df_f_tf_inv_sale": results[15],
             "df_d_tf_investment_master": results[16],
             "df_d_calendar": calendar_result,
-            "df_f_inflation_rates": inflation_result,
             "_ETL_Metadata_Financial_Rules": rules_result,
         }
