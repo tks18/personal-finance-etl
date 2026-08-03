@@ -1,3 +1,5 @@
+from typing import Any
+
 import polars as pl
 
 
@@ -44,7 +46,10 @@ def transform_d_income_category(
 
 
 def transform_d_income_subcategory(
-    df_lazy: pl.LazyFrame, column_mapping: dict[str, str], df_d_income_category_lazy: pl.LazyFrame
+    df_lazy: pl.LazyFrame,
+    column_mapping: dict[str, str],
+    df_d_income_category_lazy: pl.LazyFrame,
+    rules: Any = None,
 ) -> pl.LazyFrame:
     """
     Executes the PQ and DAX logic for Income Subcategories.
@@ -100,6 +105,38 @@ def transform_d_income_subcategory(
         .drop("CATEGORY_NAME_SHORT")
     )
 
+    if rules:
+        active_cats = rules.income.active.category_ids
+        active_subcats = rules.income.active.sub_category_ids
+        div_cats = rules.income.dividends.category_ids
+        div_subcats = rules.income.dividends.sub_category_ids
+        int_cats = rules.income.interest.category_ids
+        int_subcats = rules.income.interest.sub_category_ids
+
+        df_transformed = df_transformed.with_columns(
+            pl.when(pl.col("CATEGORY_ID").is_in(active_cats) | pl.col("UID").is_in(active_subcats))
+            .then(pl.lit(True))
+            .otherwise(pl.lit(False))
+            .alias("Is_Active_Income"),
+            pl.when(pl.col("CATEGORY_ID").is_in(div_cats) | pl.col("UID").is_in(div_subcats))
+            .then(pl.lit(True))
+            .otherwise(pl.lit(False))
+            .alias("Is_Dividend_Income"),
+            pl.when(pl.col("CATEGORY_ID").is_in(int_cats) | pl.col("UID").is_in(int_subcats))
+            .then(pl.lit(True))
+            .otherwise(pl.lit(False))
+            .alias("Is_Interest_Income"),
+        ).with_columns(
+            (pl.col("Is_Dividend_Income") | pl.col("Is_Interest_Income")).alias("Is_Passive_Income")
+        )
+    else:
+        df_transformed = df_transformed.with_columns(
+            pl.lit(False).alias("Is_Active_Income"),
+            pl.lit(False).alias("Is_Dividend_Income"),
+            pl.lit(False).alias("Is_Interest_Income"),
+            pl.lit(False).alias("Is_Passive_Income"),
+        )
+
     return df_transformed
 
 
@@ -134,7 +171,7 @@ def transform_d_expense_category(
 
 
 def transform_d_expense_subcategory(
-    df_lazy: pl.LazyFrame, column_mapping: dict[str, str]
+    df_lazy: pl.LazyFrame, column_mapping: dict[str, str], rules: Any = None
 ) -> pl.LazyFrame:
     """Executes the PQ logic for Expense Subcategories."""
 
@@ -161,6 +198,19 @@ def transform_d_expense_subcategory(
             ]
         )
     )
+
+    if rules:
+        core_cats = rules.expense.core.category_ids
+        core_subcats = rules.expense.core.sub_category_ids
+
+        df_transformed = df_transformed.with_columns(
+            pl.when(pl.col("CATEGORY_ID").is_in(core_cats) | pl.col("UID").is_in(core_subcats))
+            .then(pl.lit(True))
+            .otherwise(pl.lit(False))
+            .alias("Is_Core_Expense")
+        )
+    else:
+        df_transformed = df_transformed.with_columns(pl.lit(False).alias("Is_Core_Expense"))
 
     return df_transformed
 
@@ -193,7 +243,7 @@ def transform_d_asset_category(
 
 
 def transform_d_asset_subcategory(
-    df_lazy: pl.LazyFrame, column_mapping: dict[str, str]
+    df_lazy: pl.LazyFrame, column_mapping: dict[str, str], rules: Any = None
 ) -> pl.LazyFrame:
     """Executes the PQ logic for Asset Subcategories (ASSETS)."""
 
@@ -223,6 +273,25 @@ def transform_d_asset_subcategory(
             ]
         )
     )
+
+    if rules:
+        illiquid_cats = rules.assets.illiquid.category_ids
+        illiquid_subcats = rules.assets.illiquid.sub_category_ids
+
+        df_transformed = df_transformed.with_columns(
+            pl.when(
+                pl.col("ASSET_GROUP_ID").is_in(illiquid_cats)
+                | pl.col("UID").is_in(illiquid_subcats)
+            )
+            .then(pl.lit(True))
+            .otherwise(pl.lit(False))
+            .alias("Is_Illiquid")
+        ).with_columns((~pl.col("Is_Illiquid")).alias("Is_Liquid"))
+    else:
+        df_transformed = df_transformed.with_columns(
+            pl.lit(False).alias("Is_Illiquid"),
+            pl.lit(True).alias("Is_Liquid"),
+        )
 
     return df_transformed
 
@@ -274,16 +343,17 @@ def transform_d_investment_benchmark_master(raw_data: pl.LazyFrame) -> pl.LazyFr
     )
 
 
-def transform_d_tax_rates(raw_data: pl.LazyFrame) -> pl.LazyFrame:
-    """Executes the PQ logic for the Tax Rates table."""
+def transform_d_macro_parameters(raw_data: pl.LazyFrame) -> pl.LazyFrame:
+    """Executes the PQ logic for the Macro Parameters table."""
     return raw_data.select(
         [
+            "FY",
             "__file_name__",
             "__folder_path__",
-            "FY",
             "FY_Start_Date",
             "FY_End_Date",
             "Debt_MF_Cutoff_Date",
+            "Inflation_Rate",
             "Risk_Free_Rate",
             "Equity_Listed_LTCG",
             "Equity_Listed_STCG",
