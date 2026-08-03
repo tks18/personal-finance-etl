@@ -1,6 +1,6 @@
 """
-Tax Rules Module.
-Defines all holding period thresholds and FY-specific rate lookups.
+Macro Parameters Rules Module.
+Defines holding period thresholds and FY-specific rate lookups (tax, inflation, risk-free).
 """
 
 from datetime import date
@@ -17,22 +17,7 @@ def get_ltcg_threshold(tax_type: str, tax_subtype: str, rules=None) -> int:
     tt = tax_type.strip().lower()
     tst = tax_subtype.strip().lower()
 
-    if rules and rules.assumptions:
-        thresholds = rules.assumptions.tax.ltcg_thresholds
-    else:
-        thresholds = {
-            "equity_listed": 365,
-            "equity_unlisted": 730,
-            "debt_mf": 1095,
-            "debt_other": 1095,
-            "debt_": 1095,
-            "gold_mf": 730,
-            "gold_": 365,
-            "sgb_mf": 730,
-            "sgb_": 365,
-            "silver_mf": 730,
-            "silver_": 365,
-        }
+    thresholds = rules.assumptions.tax.ltcg_thresholds
 
     key = f"{tt}_{tst}"
     if key in thresholds:
@@ -44,8 +29,8 @@ def get_ltcg_threshold(tax_type: str, tax_subtype: str, rules=None) -> int:
     return 730
 
 
-class FYTaxRateTable:
-    """Loads and queries Financial Year tax rates."""
+class FYMacroParametersTable:
+    """Loads and queries Financial Year macro parameters."""
 
     _COL_MAP = {
         ("equity", "listed"): ("Equity_Listed_LTCG", "Equity_Listed_STCG"),
@@ -63,7 +48,7 @@ class FYTaxRateTable:
         self.rules = rules
         self.fy_map: list[dict] = []
         if df.is_empty():
-            raise ValueError("Tax Rates DataFrame cannot be empty.")
+            raise ValueError("Macro Parameters DataFrame cannot be empty.")
 
         for row in df.to_dicts():
             try:
@@ -72,15 +57,7 @@ class FYTaxRateTable:
 
                 raw_cutoff = str(row.get("Debt_MF_Cutoff_Date", "")).strip()
 
-                default_cutoff = _DEFAULT_DEBT_MF_CUTOFF
-                if self.rules and self.rules.assumptions:
-                    try:
-                        default_cutoff = (
-                            to_date_obj(self.rules.assumptions.tax.debt_mf_cutoff_date)
-                            or _DEFAULT_DEBT_MF_CUTOFF
-                        )
-                    except Exception:
-                        pass
+                default_cutoff = to_date_obj(self.rules.assumptions.tax.debt_mf_cutoff_date)
 
                 cutoff_d = (
                     to_date_obj(raw_cutoff)
@@ -98,7 +75,7 @@ class FYTaxRateTable:
                         }
                     )
             except Exception as e:
-                print(f"Tax Rates parsing error on row: {row}")
+                print(f"Macro Parameters parsing error on row: {row}")
                 print(f"Error details: {e}")
 
         self.fy_map.sort(key=lambda x: x["start"])
@@ -170,13 +147,13 @@ class FYTaxRateTable:
         """Returns the annual LTCG exemption limit specifically for equity."""
         entry = self._find_entry(ref_date)
         if entry is None:
-            return 125_000.0
+            return self.rules.assumptions.tax.fallback_equity_ltcg_exemption
         raw = entry["raw"]
         try:
             val = raw.get("Equity_LTCG_Exemption")
-            return float(val) if val is not None and str(val).strip() != "" else 125_000.0
+            return float(val) if val is not None and str(val).strip() != "" else self.rules.assumptions.tax.fallback_equity_ltcg_exemption
         except (ValueError, TypeError):
-            return 125_000.0
+            return self.rules.assumptions.tax.fallback_equity_ltcg_exemption
 
     def get_holding_type(
         self, age_days: int, tax_type: str, tax_subtype: str, lot_buy_date: date, ref_date: date
@@ -186,15 +163,26 @@ class FYTaxRateTable:
         cutoff = self.get_debt_mf_cutoff(ref_date)
         if tt == "debt" and tst in ("mf", "mutual_fund", "debt_mf") and lot_buy_date >= cutoff:
             return "STCG"
-        return "LTCG" if age_days > get_ltcg_threshold(tax_type, tax_subtype) else "STCG"
+        return "LTCG" if age_days > get_ltcg_threshold(tax_type, tax_subtype, self.rules) else "STCG"
 
     def get_risk_free_rate(self, ref_date: date) -> float:
         entry = self._find_entry(ref_date)
         if entry is None:
-            return 0.06
+            return self.rules.assumptions.macro.fallback_risk_free_rate
         raw = entry["raw"]
         try:
             val = raw.get("Risk_Free_Rate")
-            return float(val) if val is not None and str(val).strip() != "" else 0.06
+            return float(val) if val is not None and str(val).strip() != "" else self.rules.assumptions.macro.fallback_risk_free_rate
         except (ValueError, TypeError):
-            return 0.06
+            return self.rules.assumptions.macro.fallback_risk_free_rate
+
+    def get_inflation_rate(self, ref_date: date) -> float:
+        entry = self._find_entry(ref_date)
+        if entry is None:
+            return self.rules.assumptions.macro.fallback_inflation_rate
+        raw = entry["raw"]
+        try:
+            val = raw.get("Inflation_Rate")
+            return float(val) if val is not None and str(val).strip() != "" else self.rules.assumptions.macro.fallback_inflation_rate
+        except (ValueError, TypeError):
+            return self.rules.assumptions.macro.fallback_inflation_rate

@@ -95,9 +95,8 @@ class Settings(BaseModel):
     MF_ISIN_CSV_PATH: str = ""
     BENCHMARK_MAPPING_CSV_PATH: str = ""
     BENCHMARK_MASTER_CSV_PATH: str = ""
-    TAX_RATES_CSV_PATH: str = ""
+    MACRO_PARAMETERS_CSV_PATH: str = ""
     OPENING_BALANCE_CSV_PATH: str = ""
-    INFLATION_RATES_CSV_PATH: str = ""
 
     # Statements
     STATEMENTS_FOLDER: str = ""
@@ -133,9 +132,8 @@ class Settings(BaseModel):
             ("MF_ISIN_CSV_PATH", self.MF_ISIN_CSV_PATH),
             ("BENCHMARK_MAPPING_CSV_PATH", self.BENCHMARK_MAPPING_CSV_PATH),
             ("BENCHMARK_MASTER_CSV_PATH", self.BENCHMARK_MASTER_CSV_PATH),
-            ("TAX_RATES_CSV_PATH", self.TAX_RATES_CSV_PATH),
+            ("MACRO_PARAMETERS_CSV_PATH", self.MACRO_PARAMETERS_CSV_PATH),
             ("OPENING_BALANCE_CSV_PATH", self.OPENING_BALANCE_CSV_PATH),
-            ("INFLATION_RATES_CSV_PATH", self.INFLATION_RATES_CSV_PATH),
         ]
 
         errors = []
