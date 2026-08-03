@@ -89,55 +89,71 @@ class IncomeStreamsBuilder:
             .with_columns(
                 pl.col("Total_Monthly_Income")
                 .rolling_mean(window_size=3)
-                .over("CATEGORY_ID")
+                .over("CATEGORY_ID", order_by="MONTH_START_DATE")
                 .alias("Trailing_3M_Avg_Income"),
                 pl.col("Total_Monthly_Income")
                 .rolling_mean(window_size=6)
-                .over("CATEGORY_ID")
+                .over("CATEGORY_ID", order_by="MONTH_START_DATE")
                 .alias("Trailing_6M_Avg_Income"),
                 pl.col("Total_Monthly_Income")
                 .shift(1)
-                .over("CATEGORY_ID")
+                .over("CATEGORY_ID", order_by="MONTH_START_DATE")
                 .alias("Prev_Month_Income"),
                 pl.col("Total_Monthly_Income")
                 .shift(12)
-                .over("CATEGORY_ID")
+                .over("CATEGORY_ID", order_by="MONTH_START_DATE")
                 .alias("Prev_Year_Income"),
                 pl.col("Total_Monthly_Income")
                 .rolling_mean(window_size=12)
-                .over("CATEGORY_ID")
+                .over("CATEGORY_ID", order_by="MONTH_START_DATE")
                 .alias("Trailing_12M_Avg_Income"),
                 pl.col("Total_Monthly_Income")
                 .rolling_sum(window_size=12)
-                .over("CATEGORY_ID")
+                .over("CATEGORY_ID", order_by="MONTH_START_DATE")
                 .alias("Trailing_12M_Total_Income"),
                 pl.col("Total_Monthly_Income")
                 .cum_sum()
-                .over(["CATEGORY_ID", pl.col("MONTH_START_DATE").dt.year()])
+                .over(
+                    ["CATEGORY_ID", pl.col("MONTH_START_DATE").dt.year()],
+                    order_by="MONTH_START_DATE",
+                )
                 .alias("Cumulative_YTD_Income"),
                 pl.when(pl.col("Total_Monthly_Income") > 0)
                 .then(pl.col("MONTH_START_DATE"))
                 .otherwise(None)
                 .forward_fill()
                 .shift(1)
-                .over("CATEGORY_ID")
+                .over("CATEGORY_ID", order_by="MONTH_START_DATE")
                 .alias("Last_Received_Date"),
-                pl.col("Total_Monthly_Income").mean().over("CATEGORY_ID").alias("Cat_Mean"),
-                pl.col("Total_Monthly_Income").std().over("CATEGORY_ID").alias("Cat_Std"),
+                pl.col("Total_Monthly_Income")
+                .rolling_mean(window_size=12)
+                .over("CATEGORY_ID", order_by="MONTH_START_DATE")
+                .alias("Cat_Mean"),
+                pl.col("Total_Monthly_Income")
+                .rolling_std(window_size=12)
+                .over("CATEGORY_ID", order_by="MONTH_START_DATE")
+                .alias("Cat_Std"),
                 pl.col("Total_Monthly_Income")
                 .sum()
                 .over("MONTH_START_DATE")
                 .alias("Total_Month_All_Categories_Income"),
-                pl.col("Total_Monthly_Income").first().over("CATEGORY_ID").alias("First_Income"),
                 pl.col("MONTH_START_DATE")
                 .cum_count()
-                .over("CATEGORY_ID")
+                .over("CATEGORY_ID", order_by="MONTH_START_DATE")
                 .alias("Months_Since_First"),
                 (pl.col("Total_Monthly_Income") > 0)
                 .cast(pl.Int64)
                 .rolling_sum(window_size=12)
-                .over("CATEGORY_ID")
+                .over("CATEGORY_ID", order_by="MONTH_START_DATE")
                 .alias("Months_Active_TTM"),
+            )
+            .with_columns(
+                pl.when(pl.col("Months_Since_First") == 12)
+                .then(pl.col("Trailing_12M_Total_Income"))
+                .otherwise(None)
+                .forward_fill()
+                .over("CATEGORY_ID", order_by="MONTH_START_DATE")
+                .alias("First_12M_Total_Income"),
             )
             .with_columns(
                 pl.when(pl.col("Prev_Month_Income") > 0)
@@ -179,14 +195,16 @@ class IncomeStreamsBuilder:
                         + pl.col("Last_Received_Date").dt.month()
                     )
                 )
-                .otherwise(999)
+                .otherwise(None)
                 .cast(pl.Int64)
                 .alias("Months_Since_Last_Received"),
                 (~pl.col("Is_Active_Income")).alias("Is_Passive_Income"),
-                pl.when((pl.col("Months_Since_First") > 0) & (pl.col("First_Income") > 0))
+                pl.when(
+                    (pl.col("Months_Since_First") >= 12) & (pl.col("First_12M_Total_Income") > 0)
+                )
                 .then(
-                    (pl.col("Total_Monthly_Income") / pl.col("First_Income")).pow(
-                        12.0 / pl.col("Months_Since_First")
+                    (pl.col("Trailing_12M_Total_Income") / pl.col("First_12M_Total_Income")).pow(
+                        1.0 / (pl.col("Months_Since_First") / 12.0)
                     )
                     - 1.0
                 )
@@ -202,11 +220,7 @@ class IncomeStreamsBuilder:
         )
         f_inflation = self.dfs.get("df_f_inflation_rates")
         if f_inflation is not None:
-            cpi_base = (
-                self.rules.assumptions.macro.cpi_base_index
-                if (self.rules and self.rules.assumptions)
-                else self.base_lf.get("cpi_base", 151.4)
-            )
+            cpi_latest = self.base_lf.get("cpi_latest", 100.0)
             lf_inflation = (
                 f_inflation.lazy() if isinstance(f_inflation, pl.DataFrame) else f_inflation
             ).select(
@@ -218,15 +232,11 @@ class IncomeStreamsBuilder:
                 lf_income_streams.join(lf_inflation, on="MONTH_START_DATE", how="left")
                 .with_columns(
                     (
-                        pl.col("Total_Monthly_Income") / (pl.col("CPI_INDEX") / pl.lit(cpi_base))
+                        pl.col("Total_Monthly_Income") * (pl.lit(cpi_latest) / pl.col("CPI_INDEX"))
                     ).alias("Real_Monthly_Income"),
                     pl.when(pl.col("Prev_Year_Income") > 0)
                     .then(
-                        (
-                            (1 + pl.col("YoY_Variance_Pct"))
-                            / (1 + (pl.col("INFLATION_YOY_PCT") / 100.0))
-                        )
-                        - 1
+                        ((1 + pl.col("YoY_Variance_Pct")) / (1 + pl.col("INFLATION_YOY_PCT"))) - 1
                     )
                     .otherwise(0.0)
                     .alias("Real_YoY_Income_Growth"),

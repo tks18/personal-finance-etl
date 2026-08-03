@@ -1,6 +1,7 @@
 from collections.abc import Mapping
 
 import polars as pl
+import polars.selectors as cs
 
 from src.engines.presentation.modules.advanced_analytics import AdvancedAnalyticsBuilder
 from src.engines.presentation.modules.base_metrics import BaseMetricsBuilder
@@ -58,7 +59,12 @@ class WealthPresentationEngine:
 
         # 7. FIRE & Wealth Forecasting
         results["df_p_tf_fire_forecasting_monthly"] = FireForecastingBuilder(
-            base_lf, results["df_p_tf_risk_metrics"], rules=self.rules
+            dfs, base_lf, results["df_p_tf_risk_metrics"], rules=self.rules
         ).build()
 
-        return results
+        # 8. Post-Processing: Clean NaN values for BI compatibility (DuckDB / Power BI)
+        return {
+            key: lf.with_columns(cs.float().fill_nan(None))
+            for key, lf in results.items()
+            if lf is not None
+        }

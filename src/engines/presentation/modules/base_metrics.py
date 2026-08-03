@@ -23,7 +23,7 @@ class BaseMetricsBuilder:
         f_trn = self.dfs.get("df_f_transfer_transactions")
         d_cal = self.dfs.get("df_d_calendar")
         d_asset = self.dfs.get("df_d_asset_subcategory")
-        f_inflation = self.dfs.get("df_f_inflation_rates")
+        d_macro = self.dfs.get("df_d_macro_parameters")
 
         if (
             f_open is None
@@ -46,14 +46,9 @@ class BaseMetricsBuilder:
             pl.LazyFrame, d_asset.lazy() if isinstance(d_asset, pl.DataFrame) else d_asset
         )
 
-        lf_inflation = cast(
-            pl.LazyFrame,
-            f_inflation.lazy() if isinstance(f_inflation, pl.DataFrame) else f_inflation,
-        ).select(
-            pl.col("DATE").dt.month_start().alias("MONTH_START_DATE"),
-            pl.col("INFLATION_YOY_PCT"),
-            pl.col("CPI_INDEX"),
-        )
+        lf_macro = cast(
+            pl.LazyFrame, d_macro.lazy() if isinstance(d_macro, pl.DataFrame) else d_macro
+        ).select(pl.col("FY_Start_Date").cast(pl.Date), pl.col("Inflation_Rate").cast(pl.Float64))
 
         if isinstance(f_open, pl.DataFrame):
             min_open_date = f_open.select(pl.col("ZTXDATESTR").min()).item()
@@ -62,26 +57,6 @@ class BaseMetricsBuilder:
 
         if min_open_date is None:
             min_open_date = date(2000, 1, 1)
-
-        min_open_month_start = min_open_date.replace(day=1)
-        try:
-            cpi_base_df = (
-                lf_inflation.filter(pl.col("MONTH_START_DATE") >= min_open_month_start)
-                .sort("MONTH_START_DATE")
-                .head(1)
-                .select("CPI_INDEX")
-                .collect()
-            )
-            if not cpi_base_df.is_empty():
-                cpi_base = cpi_base_df.item()
-            else:
-                cpi_base = 151.4
-            if self.rules and self.rules.assumptions:
-                cpi_base = self.rules.assumptions.macro.cpi_base_index
-        except Exception:
-            cpi_base = 151.4
-            if self.rules and self.rules.assumptions:
-                cpi_base = self.rules.assumptions.macro.cpi_base_index
 
         lf_months = (
             lf_cal.group_by(["YEAR", "MONTH"])
@@ -98,8 +73,42 @@ class BaseMetricsBuilder:
             .sort(["YEAR", "MONTH"])
         )
 
+        lf_inflation = (
+            lf_months.sort("MONTH_START_DATE")
+            .join_asof(
+                lf_macro.sort("FY_Start_Date"),
+                left_on="MONTH_START_DATE",
+                right_on="FY_Start_Date",
+                strategy="backward",
+            )
+            .with_columns(
+                pl.col("Inflation_Rate")
+                .fill_null(self.rules.assumptions.macro.fallback_inflation_rate if self.rules else 0.06)
+                .alias("INFLATION_YOY_PCT")
+            )
+            .with_columns(
+                ((pl.col("INFLATION_YOY_PCT") + 1.0).pow(1.0 / 12.0)).alias("monthly_factor")
+            )
+            .with_columns((pl.col("monthly_factor").cum_prod() * 100.0).alias("CPI_INDEX"))
+            .select(["MONTH_START_DATE", "INFLATION_YOY_PCT", "CPI_INDEX"])
+        )
+
+        try:
+            cpi_latest_df = (
+                lf_inflation.sort("MONTH_START_DATE").tail(1).select("CPI_INDEX").collect()
+            )
+            if not cpi_latest_df.is_empty():
+                cpi_latest = cpi_latest_df.item()
+            else:
+                cpi_latest = 100.0
+        except Exception:
+            cpi_latest = 100.0
+
         lf_assets_months = lf_months.join(
-            lf_asset.select([pl.col("UID").alias("ASSET_SUBCATEGORY_ID")]), how="cross"
+            lf_asset.select(
+                [pl.col("UID").alias("ASSET_SUBCATEGORY_ID"), pl.col("Is_Liquid").fill_null(True)]
+            ),
+            how="cross",
         )
 
         lf_open_agg = (
@@ -402,17 +411,26 @@ class BaseMetricsBuilder:
                 df_inv_master.lazy() if isinstance(df_inv_master, pl.DataFrame) else df_inv_master
             )
 
-            # Map ISIN to ASSET_SUBCATEGORY_ID (CATEGORY_ID in master) and aggregate to month-end
+            # Map ISIN to ASSET_SUBCATEGORY_ID (CATEGORY_ID in master) and snap to month-end
+            lf_inv_mapped = lf_inv_isin.join(
+                lf_inv_master.select(["ISIN", "CATEGORY_ID"]), on="ISIN", how="left"
+            ).with_columns(pl.col("Closing_Date").dt.month_end().alias("MONTH_END_DATE"))
+
+            lf_inv_latest_dates = lf_inv_mapped.group_by(["MONTH_END_DATE", "CATEGORY_ID"]).agg(
+                pl.col("Closing_Date").max().alias("Max_Closing_Date")
+            )
+
             lf_inv_agg = (
-                lf_inv_isin.join(
-                    lf_inv_master.select(["ISIN", "CATEGORY_ID"]), on="ISIN", how="left"
+                lf_inv_mapped.join(
+                    lf_inv_latest_dates, on=["MONTH_END_DATE", "CATEGORY_ID"]
                 )
-                .group_by(["Closing_Date", "CATEGORY_ID"])
+                .filter(pl.col("Closing_Date") == pl.col("Max_Closing_Date"))
+                .group_by(["MONTH_END_DATE", "CATEGORY_ID"])
                 .agg(
                     pl.col("Total_Current_Value").sum().fill_null(0.0).alias("Asset_Market_Value"),
                     pl.col("Total_Invested_Value").sum().fill_null(0.0).alias("Asset_Book_Value"),
                 )
-                .rename({"Closing_Date": "MONTH_END_DATE", "CATEGORY_ID": "ASSET_SUBCATEGORY_ID"})
+                .rename({"CATEGORY_ID": "ASSET_SUBCATEGORY_ID"})
             )
 
             lf_nw_summary = (
@@ -444,45 +462,42 @@ class BaseMetricsBuilder:
             lf_nw_summary.join(lf_inflation, on="MONTH_START_DATE", how="left")
             .with_columns(
                 pl.col("INFLATION_YOY_PCT").fill_null(0.0),
-                (pl.col("Closing_Balance") / (pl.col("CPI_INDEX") / pl.lit(cpi_base))).alias(
+                (pl.col("Closing_Balance") * (pl.lit(cpi_latest) / pl.col("CPI_INDEX"))).alias(
                     "Closing_Balance_Real"
                 ),
                 (
-                    (
-                        (1 + pl.col("YoY_Balance_Growth_%"))
-                        / (1 + (pl.col("INFLATION_YOY_PCT") / 100.0))
-                    )
-                    - 1
+                    ((1 + pl.col("YoY_Balance_Growth_%")) / (1 + pl.col("INFLATION_YOY_PCT"))) - 1
                 ).alias("YoY_Balance_Growth_%_Real"),
-                (pl.col("Organic_Growth_Value") / (pl.col("CPI_INDEX") / pl.lit(cpi_base))).alias(
+            )
+            .with_columns(
+                (pl.col("Organic_Growth_Value") * (pl.lit(cpi_latest) / pl.col("CPI_INDEX"))).alias(
                     "Organic_Growth_Value_Real"
                 ),
-                (pl.col("Income_Inflow") / (pl.col("CPI_INDEX") / pl.lit(cpi_base))).alias(
+                (pl.col("Income_Inflow") * (pl.lit(cpi_latest) / pl.col("CPI_INDEX"))).alias(
                     "Real_Income_Inflow"
                 ),
-                (pl.col("Expense_Outflow") / (pl.col("CPI_INDEX") / pl.lit(cpi_base))).alias(
+                (pl.col("Expense_Outflow") * (pl.lit(cpi_latest) / pl.col("CPI_INDEX"))).alias(
                     "Real_Expense_Outflow"
                 ),
-                (pl.col("3M_Avg_Core_Expense") / (pl.col("CPI_INDEX") / pl.lit(cpi_base))).alias(
+                (pl.col("3M_Avg_Core_Expense") * (pl.lit(cpi_latest) / pl.col("CPI_INDEX"))).alias(
                     "3M_Avg_Core_Expense_Real"
                 ),
-                (pl.col("Closing_Balance_Market") / (pl.col("CPI_INDEX") / pl.lit(cpi_base))).alias(
-                    "Closing_Balance_Market_Real"
-                ),
+                (
+                    pl.col("Closing_Balance_Market") * (pl.lit(cpi_latest) / pl.col("CPI_INDEX"))
+                ).alias("Closing_Balance_Market_Real"),
             )
             .with_columns(
                 pl.when(pl.col("3M_Avg_Core_Expense_Real") > 0)
                 .then(pl.col("Closing_Balance_Real") / pl.col("3M_Avg_Core_Expense_Real"))
                 .otherwise(0.0)
                 .alias("Months_of_Runway_Real"),
-                (
-                    ((1 + pl.col("Organic_Yield_%")) / (1 + (pl.col("INFLATION_YOY_PCT") / 100.0)))
-                    - 1
-                ).alias("Organic_Yield_%_Real"),
+                (((1 + pl.col("Organic_Yield_%")) / (1 + pl.col("INFLATION_YOY_PCT"))) - 1).alias(
+                    "Organic_Yield_%_Real"
+                ),
                 (
                     (
                         (1 + pl.col("MoM_Balance_Growth_%"))
-                        / ((1 + (pl.col("INFLATION_YOY_PCT") / 100.0)).pow(1 / 12.0))
+                        / ((1 + pl.col("INFLATION_YOY_PCT")).pow(1 / 12.0))
                     )
                     - 1
                 ).alias("MoM_Balance_Growth_%_Real"),
@@ -503,10 +518,15 @@ class BaseMetricsBuilder:
                     pl.col("Core_Expense_Outflow").sum().alias("Total_Core_Expense"),
                     pl.col("Real_Income_Inflow").sum().alias("Total_Real_Income"),
                     pl.col("Real_Expense_Outflow").sum().alias("Total_Real_Expense"),
+                    pl.col("Net_Cashflow_Month").sum().alias("Net_Cashflow_Month"),
                     pl.col("Closing_Balance")
                     .filter(pl.col("Closing_Balance") >= 0)
                     .sum()
                     .alias("Total_Assets"),
+                    pl.col("Closing_Balance")
+                    .filter((pl.col("Closing_Balance") >= 0) & pl.col("Is_Liquid"))
+                    .sum()
+                    .alias("Liquid_Assets"),
                     pl.col("Closing_Balance")
                     .filter(pl.col("Closing_Balance") < 0)
                     .sum()
@@ -528,15 +548,27 @@ class BaseMetricsBuilder:
             lf_inv_port = (
                 df_inv_port.lazy() if isinstance(df_inv_port, pl.DataFrame) else df_inv_port
             )
+            lf_inv_port_mapped = lf_inv_port.with_columns(
+                pl.col("Closing_Date").dt.month_end().alias("MONTH_END_DATE")
+            )
+            lf_inv_port_latest = lf_inv_port_mapped.group_by("MONTH_END_DATE").agg(
+                pl.col("Closing_Date").max().alias("Max_Closing_Date")
+            )
+            lf_inv_port_agg = (
+                lf_inv_port_mapped.join(lf_inv_port_latest, on="MONTH_END_DATE")
+                .filter(pl.col("Closing_Date") == pl.col("Max_Closing_Date"))
+                .select(
+                    [
+                        "MONTH_END_DATE",
+                        pl.col("Total_Current_Value").alias("Port_Market_Value"),
+                        pl.col("Total_Invested_Value").alias("Port_Book_Value"),
+                    ]
+                )
+            )
+
             lf_monthly_totals = (
                 lf_monthly_totals.join(
-                    lf_inv_port.select(
-                        [
-                            pl.col("Closing_Date").alias("MONTH_END_DATE"),
-                            pl.col("Total_Current_Value").alias("Port_Market_Value"),
-                            pl.col("Total_Invested_Value").alias("Port_Book_Value"),
-                        ]
-                    ),
+                    lf_inv_port_agg,
                     on="MONTH_END_DATE",
                     how="left",
                 )
@@ -561,6 +593,14 @@ class BaseMetricsBuilder:
                     )
                     .otherwise(pl.col("Total_Net_Worth"))
                     .alias("Total_Net_Worth_Market"),
+                    pl.when(pl.col("Port_Book_Value") > 0)
+                    .then(
+                        pl.col("Liquid_Assets")
+                        - pl.col("Port_Book_Value")
+                        + pl.col("Port_Market_Value")
+                    )
+                    .otherwise(pl.col("Liquid_Assets"))
+                    .alias("Liquid_Assets_Market"),
                 )
                 .drop(["Port_Market_Value", "Port_Book_Value"])
             )
@@ -568,22 +608,23 @@ class BaseMetricsBuilder:
             lf_monthly_totals = lf_monthly_totals.with_columns(
                 pl.col("Total_Assets").alias("Total_Assets_Market"),
                 pl.col("Total_Net_Worth").alias("Total_Net_Worth_Market"),
+                pl.col("Liquid_Assets").alias("Liquid_Assets_Market"),
             )
 
         lf_monthly_totals = lf_monthly_totals.join(
             lf_inflation, on="MONTH_START_DATE", how="left"
         ).with_columns(
             pl.col("INFLATION_YOY_PCT").fill_null(0.0),
-            (pl.col("Total_Net_Worth") / (pl.col("CPI_INDEX") / pl.lit(cpi_base))).alias(
+            (pl.col("Total_Net_Worth") * (pl.lit(cpi_latest) / pl.col("CPI_INDEX"))).alias(
                 "Total_Net_Worth_Real"
             ),
         )
 
         return {
-            "lf_nw_summary": lf_nw_summary,
+            "lf_nw_summary": lf_nw_summary.drop("Is_Liquid"),
             "lf_monthly_totals": lf_monthly_totals,
             "lf_exp_agg": lf_exp_agg,
             "lf_inc_agg": lf_inc_agg,
             "lf_months": lf_months,
-            "cpi_base": cpi_base,
+            "cpi_latest": cpi_latest,
         }

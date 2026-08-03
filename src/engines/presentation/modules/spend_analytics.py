@@ -88,38 +88,47 @@ class SpendAnalyticsBuilder:
             .with_columns(
                 pl.col("Total_Monthly_Spend")
                 .rolling_mean(window_size=3)
-                .over("CATEGORY_ID")
+                .over("CATEGORY_ID", order_by="MONTH_START_DATE")
                 .alias("Trailing_3M_Avg_Spend"),
                 pl.col("Total_Monthly_Spend")
                 .rolling_mean(window_size=6)
-                .over("CATEGORY_ID")
+                .over("CATEGORY_ID", order_by="MONTH_START_DATE")
                 .alias("Trailing_6M_Avg_Spend"),
                 pl.col("Total_Monthly_Spend")
                 .shift(1)
-                .over("CATEGORY_ID")
+                .over("CATEGORY_ID", order_by="MONTH_START_DATE")
                 .alias("Prev_Month_Spend"),
                 pl.col("Total_Monthly_Spend")
                 .shift(12)
-                .over("CATEGORY_ID")
+                .over("CATEGORY_ID", order_by="MONTH_START_DATE")
                 .alias("Prev_Year_Spend"),
                 pl.col("Total_Monthly_Spend")
                 .rolling_mean(window_size=12)
-                .over("CATEGORY_ID")
+                .over("CATEGORY_ID", order_by="MONTH_START_DATE")
                 .alias("Trailing_12M_Avg_Spend"),
                 pl.col("Total_Monthly_Spend")
                 .rolling_sum(window_size=12)
-                .over("CATEGORY_ID")
+                .over("CATEGORY_ID", order_by="MONTH_START_DATE")
                 .alias("Trailing_12M_Total_Spend"),
                 pl.col("Total_Monthly_Spend")
                 .cum_sum()
-                .over(["CATEGORY_ID", pl.col("MONTH_START_DATE").dt.year()])
+                .over(
+                    ["CATEGORY_ID", pl.col("MONTH_START_DATE").dt.year()],
+                    order_by="MONTH_START_DATE",
+                )
                 .alias("Cumulative_YTD_Spend"),
                 pl.col("Transaction_Count")
                 .rolling_mean(window_size=3)
-                .over("CATEGORY_ID")
+                .over("CATEGORY_ID", order_by="MONTH_START_DATE")
                 .alias("Trailing_3M_Avg_Frequency"),
-                pl.col("Total_Monthly_Spend").mean().over("CATEGORY_ID").alias("Cat_Mean"),
-                pl.col("Total_Monthly_Spend").std().over("CATEGORY_ID").alias("Cat_Std"),
+                pl.col("Total_Monthly_Spend")
+                .rolling_mean(window_size=12)
+                .over("CATEGORY_ID", order_by="MONTH_START_DATE")
+                .alias("Cat_Mean"),
+                pl.col("Total_Monthly_Spend")
+                .rolling_std(window_size=12)
+                .over("CATEGORY_ID", order_by="MONTH_START_DATE")
+                .alias("Cat_Std"),
                 pl.col("Total_Monthly_Spend")
                 .sum()
                 .over("MONTH_START_DATE")
@@ -182,19 +191,24 @@ class SpendAnalyticsBuilder:
                 .then(pl.col("Total_Monthly_Spend") / pl.col("Total_Month_All_Categories_Spend"))
                 .otherwise(0.0)
                 .alias("Spend_Share_Pct"),
-                pl.when(pl.col("Trailing_6M_Avg_Spend") > 0)
+                pl.when(pl.col("Transaction_Count") > 0)
+                .then(30.4375 / pl.col("Transaction_Count"))
+                .otherwise(None)
+                .alias("Avg_Days_Between_Transactions"),
+            )
+            .with_columns(
+                pl.when((pl.col("Spend_Type") == "Fixed") & (pl.col("Prev_Year_Spend") > 0))
+                .then(
+                    (pl.col("Total_Monthly_Spend") - pl.col("Prev_Year_Spend"))
+                    / pl.col("Prev_Year_Spend")
+                )
+                .when(pl.col("Trailing_6M_Avg_Spend") > 0)
                 .then(
                     (pl.col("Total_Monthly_Spend") - pl.col("Trailing_6M_Avg_Spend"))
                     / pl.col("Trailing_6M_Avg_Spend")
                 )
                 .otherwise(0.0)
                 .alias("Budget_Variance_Pct"),
-                pl.when(pl.col("Transaction_Count") > 0)
-                .then(30.4375 / pl.col("Transaction_Count"))
-                .otherwise(999.0)
-                .alias("Avg_Days_Between_Transactions"),
-            )
-            .with_columns(
                 ((pl.col("Spend_Type") == "Variable") & ~(pl.col("Is_Investment"))).alias(
                     "Is_Discretionary"
                 ),
@@ -203,11 +217,7 @@ class SpendAnalyticsBuilder:
 
         f_inflation = self.dfs.get("df_f_inflation_rates")
         if f_inflation is not None:
-            cpi_base = (
-                self.rules.assumptions.macro.cpi_base_index
-                if (self.rules and self.rules.assumptions)
-                else self.base_lf.get("cpi_base", 151.4)
-            )
+            cpi_latest = self.base_lf.get("cpi_latest", 100.0)
             lf_inflation = (
                 f_inflation.lazy() if isinstance(f_inflation, pl.DataFrame) else f_inflation
             ).select(
@@ -219,22 +229,17 @@ class SpendAnalyticsBuilder:
                 lf_spend_analytics.join(lf_inflation, on="MONTH_START_DATE", how="left")
                 .with_columns(
                     (
-                        pl.col("Total_Monthly_Spend") / (pl.col("CPI_INDEX") / pl.lit(cpi_base))
+                        pl.col("Total_Monthly_Spend") * (pl.lit(cpi_latest) / pl.col("CPI_INDEX"))
                     ).alias("Real_Monthly_Spend"),
                     pl.when(pl.col("Prev_Year_Spend") > 0)
                     .then(
-                        (
-                            (1 + pl.col("YoY_Variance_Pct"))
-                            / (1 + (pl.col("INFLATION_YOY_PCT") / 100.0))
-                        )
-                        - 1
+                        ((1 + pl.col("YoY_Variance_Pct")) / (1 + pl.col("INFLATION_YOY_PCT"))) - 1
                     )
                     .otherwise(0.0)
                     .alias("YoY_Real_Variance_Pct"),
-                    (
-                        pl.col("Total_Monthly_Spend")
-                        - (pl.col("Total_Monthly_Spend") / (pl.col("CPI_INDEX") / pl.lit(cpi_base)))
-                    ).alias("Category_Inflation_Contribution"),
+                    (pl.col("Real_Monthly_Spend") - pl.col("Total_Monthly_Spend")).alias(
+                        "Category_Inflation_Contribution"
+                    ),
                 )
                 .drop(["INFLATION_YOY_PCT", "CPI_INDEX"])
             )
