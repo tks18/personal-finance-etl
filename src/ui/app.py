@@ -23,7 +23,7 @@ ctk.set_default_color_theme("blue")
 
 
 class UnifiedETLTab(BaseEngineTab):
-    """Unified Control Panel for the ETL, Benchmark, and Tax Engines."""
+    """Unified Control Panel for the ETL, Benchmark, and Quant Engines."""
 
     def __init__(self, parent: ctk.CTk | ctk.CTkFrame) -> None:
         super().__init__(parent)
@@ -69,7 +69,7 @@ class UnifiedETLTab(BaseEngineTab):
 
         ctk.CTkLabel(
             text_block,
-            text="Automated Pipeline Orchestrator & Tax Engine",
+            text="Institutional Quantitative Master Engine & Personal Finance Orchestrator",
             font=ctk.CTkFont(family="Segoe UI", size=10),
             text_color=Color.DIM,
         ).pack(anchor="w")
@@ -197,7 +197,7 @@ class UnifiedETLTab(BaseEngineTab):
 
         ctk.CTkLabel(
             info,
-            text="Pipeline fully automated: Automatically detects dates from Market Data for Benchmarks and skips manual CSV exports.",
+            text="Quant Engine fully autonomous: Automatically maps stochastic macro parameters, stress-tests FIRE survival via Monte Carlo regimes, and actively harvests tax-alpha.",
             font=ctk.CTkFont(family="Segoe UI", size=10),
             text_color=Color.DIM,
             justify="left",
