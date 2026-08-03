@@ -10,6 +10,8 @@ CREATE TABLE IF NOT EXISTS p_tf_Net_Worth_Monthly_Summary (
     Closing_Balance_Market REAL,
     All_Time_High_Balance REAL,
     Drawdown_From_Peak REAL,
+    Liquid_Assets REAL,
+    Liquid_Assets_Market REAL,
     -- Cashflow
     Income_Inflow REAL,
     Expense_Outflow REAL,
@@ -72,10 +74,8 @@ CREATE TABLE IF NOT EXISTS p_tf_Financial_Ratios_Monthly (
     "Debt_to_Asset_Ratio_%" REAL,
     Debt_Service_Coverage REAL,
     Liability_Coverage_Ratio REAL,
+    Liquid_Liability_Coverage_Ratio REAL,
     Expense_to_NW_Ratio REAL,
-    -- FIRE Progress
-    "FIRE_Progress_%" REAL,
-    "FIRE_Progress_%_Real" REAL,
     -- Growth
     "YoY_Net_Worth_Growth_%" REAL,
     "YoY_Net_Worth_Growth_%_Real" REAL,
@@ -172,32 +172,55 @@ CREATE TABLE IF NOT EXISTS p_tf_fire_forecasting_monthly (
     YEAR_MONTH TEXT,
     -- Wealth Snapshot
     Total_Net_Worth DOUBLE,
+    Total_Net_Worth_Market DOUBLE,
     -- Spending & Savings
     Trailing_6M_Avg_Spend DOUBLE,
     Trailing_6M_Avg_Savings DOUBLE,
+    Trailing_6M_Avg_Total_Spend DOUBLE,
+    Trailing_6M_Avg_Total_Savings DOUBLE,
     INFLATION_YOY_PCT DOUBLE,
     Real_Return_Assumed_Pct DOUBLE,
-    -- FI Numbers
-    Target_FI_Number DOUBLE,
-    FI_Number_Real DOUBLE,
-    Coast_FI_Number DOUBLE,
-    Lean_FI_Number DOUBLE,
+    -- FI Numbers (Today's Money)
+    Target_FI_Today DOUBLE,
+    Target_FI_Today_Total DOUBLE,
+    Coast_FI_Today DOUBLE,
+    Coast_FI_Today_Total DOUBLE,
+    Lean_FI_Today DOUBLE,
+    Lean_FI_Today_Total DOUBLE,
+    -- FI Future Nominal Values
+    Target_FI_Future_Nominal DOUBLE,
+    Target_FI_Total_Future_Nominal DOUBLE,
     -- FI Progress
     Current_FI_Coverage_Pct DOUBLE,
+    Current_FI_Coverage_Pct_Total DOUBLE,
     NW_Percentile_of_FI DOUBLE,
+    NW_Percentile_of_FI_Total DOUBLE,
     FI_Gap DOUBLE,
+    FI_Gap_Total DOUBLE,
     FI_Gap_Monthly_Trend DOUBLE,
+    FI_Gap_Total_Monthly_Trend DOUBLE,
     -- Time to FI
     Estimated_Months_To_FI_Linear DOUBLE,
+    Estimated_Months_To_FI_Total_Linear DOUBLE,
     Months_To_FI_Conservative_P90 DOUBLE,
+    Months_To_FI_Total_Conservative_P90 DOUBLE,
     Months_To_FI_Base_P50 DOUBLE,
+    Months_To_FI_Total_Base_P50 DOUBLE,
     Months_To_FI_Aggressive_P10 DOUBLE,
+    Months_To_FI_Total_Aggressive_P10 DOUBLE,
+    Probability_Of_Success_Pct DOUBLE,
+    Probability_Of_Success_Total_Pct DOUBLE,
     Years_To_FI_P50 DOUBLE,
+    Years_To_FI_Total_P50 DOUBLE,
     Projected_FI_Date_P50 DATE,
+    Projected_FI_Date_Total_P50 DATE,
     -- Sustainability
     Runway_Months DOUBLE,
+    Runway_Months_Total DOUBLE,
     Withdrawal_Rate_If_Retired_Now DOUBLE,
+    Withdrawal_Rate_If_Retired_Now_Total DOUBLE,
     Savings_Rate_Required DOUBLE,
+    Savings_Rate_Required_Total DOUBLE,
     FOREIGN KEY(MONTH_START_DATE) REFERENCES d_Calendar(Date),
     FOREIGN KEY(MONTH_END_DATE) REFERENCES d_Calendar(Date)
 );
@@ -214,6 +237,7 @@ CREATE TABLE IF NOT EXISTS p_tf_risk_metrics (
     -- Drawdown
     All_Time_High_NW DOUBLE,
     NW_Drawdown_Pct DOUBLE,
+    Real_Drawdown_Pct DOUBLE,
     Drawdown_Pct DOUBLE,
     "Recovery_From_Drawdown_%" DOUBLE,
     Max_Drawdown_12M DOUBLE,

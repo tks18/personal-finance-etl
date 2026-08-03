@@ -27,31 +27,41 @@ CREATE TABLE d_tf_Investment_Master (
     FOREIGN KEY(BENCHMARK_ID) REFERENCES d_Investment_Benchmark_Master(ID)
 );
 
--- DDL: d_Tax_Rates
-CREATE TABLE d_Tax_Rates (
-    __file_name__ TEXT,
-    __folder_path__ TEXT,
+-- DDL: d_Macro_Parameters
+CREATE TABLE d_Macro_Parameters (
+    -- Identifier
     FY TEXT PRIMARY KEY,
+    -- Period
     FY_Start_Date DATE,
     FY_End_Date DATE,
     Debt_MF_Cutoff_Date DATE,
+    -- Market Rate
+    Inflation_Rate DOUBLE,
     Risk_Free_Rate DOUBLE,
+    -- Equity Rates
     Equity_Listed_LTCG DOUBLE,
     Equity_Listed_STCG DOUBLE,
     Equity_Unlisted_LTCG DOUBLE,
     Equity_Unlisted_STCG DOUBLE,
+    Equity_LTCG_Exemption BIGINT,
+    -- Gold Rates
     Gold_LTCG DOUBLE,
     Gold_STCG DOUBLE,
+    -- Debt MF Rates
     Debt_MF_Pre_Cutoff_LTCG DOUBLE,
     Debt_MF_Pre_Cutoff_STCG DOUBLE,
     Debt_MF_Post_Cutoff_LTCG DOUBLE,
     Debt_MF_Post_Cutoff_STCG DOUBLE,
+    -- Other Debt
     Other_Debt_LTCG DOUBLE,
     Other_Debt_STCG DOUBLE,
+    -- Default (fallback)
     Default_LTCG DOUBLE,
     Default_STCG DOUBLE,
-    Equity_LTCG_Exemption BIGINT,
+    -- Meta
     Remarks TEXT,
+    __file_name__ TEXT,
+    __folder_path__ TEXT,
     FOREIGN KEY(FY_Start_Date) REFERENCES d_Calendar(Date)
 );
 

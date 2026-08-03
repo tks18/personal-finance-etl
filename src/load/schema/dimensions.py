@@ -62,6 +62,10 @@ CREATE TABLE d_Income_Subcategory (
     ORDER_SEQUENCE BIGINT,
     CATEGORY_ID TEXT,
     CATEGORY_GROUPS TEXT,
+    Is_Active_Income BOOLEAN,
+    Is_Passive_Income BOOLEAN,
+    Is_Dividend_Income BOOLEAN,
+    Is_Interest_Income BOOLEAN,
     FOREIGN KEY (CATEGORY_ID) REFERENCES d_Income_Category(UID)
 );
 
@@ -82,6 +86,7 @@ CREATE TABLE d_Expense_Subcategory (
     CATEGORY_NAME TEXT,
     ORDER_SEQUENCE BIGINT,
     CATEGORY_ID TEXT,
+    Is_Core_Expense BOOLEAN,
     FOREIGN KEY(CATEGORY_ID) REFERENCES d_Expense_Category(UID)
 );
 
@@ -111,6 +116,8 @@ CREATE TABLE d_Asset_Subcategory (
     CURRENCY_ID TEXT,
     AUTOPAY_ASSET_ID TEXT,
     ASSET_GROUP_ID TEXT,
+    Is_Liquid BOOLEAN,
+    Is_Illiquid BOOLEAN,
     FOREIGN KEY(ASSET_GROUP_ID) REFERENCES d_Asset_Category(UID)
 );
 
