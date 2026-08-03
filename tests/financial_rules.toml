@@ -16,6 +16,12 @@ sub_category_ids = []
 category_ids = []
 sub_category_ids = []
 
+# Asset mappings
+
+[assets.illiquid]
+category_ids = ["ESTATE", "EPF", "PPF", "NPS"] # Example IDs, adjust as needed
+sub_category_ids = []
+
 # Investment mappings
 
 [investments.stocks_and_etfs]
@@ -27,22 +33,70 @@ category_ids = []
 sub_category_ids = []
 
 [assumptions.macro]
-cpi_base_index = 151.4
+# Default number of trading days in a year for annualized volatility calculations.
 default_trading_days = 252.0
+# Fallback annualized inflation rate if historical macro data is unavailable.
+fallback_inflation_rate = 0.06
+# Fallback annualized risk-free rate if historical macro data is unavailable.
+fallback_risk_free_rate = 0.06
 
 [assumptions.fire]
+# Safe Withdrawal Rate multiplier (e.g., 25.0 for the 4% rule).
 swr_multiplier = 25.0
+# Assumed real (inflation-adjusted) return for Coast FI compounding.
 coast_fi_real_return = 0.05
+# Number of years to coast (compound without contributions) for Coast FI targets.
 coast_fi_years = 10
+# Ratio of the Target FI amount considered sufficient for Lean FI (e.g., 0.7 for 70%).
 lean_fi_ratio = 0.7
+# Fallback nominal return to use for FIRE forecasting if historical trailing returns are unavailable.
 fallback_trailing_return = 0.12
 
 [assumptions.monte_carlo]
+# Number of Monte Carlo paths/simulations to run.
 iterations = 1000
+# Maximum duration of the Monte Carlo simulation in months.
 max_months = 480
+# Assumed annualized standard deviation (volatility) of returns.
 annual_volatility = 0.15
+# Absolute minimum annualized real return applied during Monte Carlo forecasting.
 real_return_floor = 0.01
 
 [assumptions.tax]
+# Date before which debt mutual funds retain indexation benefits.
 debt_mf_cutoff_date = "2023-04-01"
+# Minimum days to wait before re-buying a harvested instrument to avoid wash-sale rules.
 harvest_wait_days_threshold = 90
+# Annual tax-free exemption limit for equity Long Term Capital Gains.
+fallback_equity_ltcg_exemption = 125000.0
+
+[assumptions.tax.ltcg_thresholds]
+# Holding period thresholds in days for Long Term Capital Gains across asset classes.
+equity_listed = 365
+equity_unlisted = 730
+debt_mf = 1095
+debt_other = 1095
+debt_ = 1095
+gold_mf = 730
+gold_ = 365
+sgb_mf = 730
+sgb_ = 365
+silver_mf = 730
+silver_ = 365
+
+[assumptions.tax.rates]
+equity_ltcg = 0.125
+equity_stcg = 0.20
+debt_ltcg = 0.20
+debt_stcg = 0.30
+gold_ltcg = 0.20
+gold_stcg = 0.30
+
+[assumptions.cma]
+expected_real_return = 0.05
+fat_tail_multiplier = 1.2
+
+[assumptions.target_allocations]
+"Direct Stocks" = 0.40
+"ETFs" = 0.40
+"Mutual Funds" = 0.20
