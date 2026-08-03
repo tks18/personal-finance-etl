@@ -1,95 +1,101 @@
 <div align="center">
-  <img src="logo.png" alt="Logo" width="150"/>
-  <h1>Shan's Personal Finance ETL 💸✨</h1>
-  <p><b>An enterprise-grade, localized Data Warehouse built to track my personal net worth.</b></p>
-  <p><i>Because tracking your bags in an Excel sheet in 2026 is pure NPC behavior.</i></p>
+  <img src="logo.png" alt="Logo" width="180"/>
+  <h1>Shan's Personal Finance Quant Engine 💸✨</h1>
+  <p><b>An institutional-grade, hyper-optimized Quantitative Master Engine built to absolutely dominate personal net worth.</b></p>
+  <p><i>Because tracking your bags in a spreadsheet in 2026 is pure NPC behavior.</i></p>
 
   <p>
-    <img alt="Python Version" src="https://img.shields.io/badge/Python-3.13+-blue.svg" />
-    <img alt="Tech Stack" src="https://img.shields.io/badge/Powered%20by-Polars%20%7C%20ADBC-orange.svg" />
-    <img alt="Type Safety" src="https://img.shields.io/badge/Type%20Safety-Strict%20(100%25)-success.svg" />
+    <img alt="Python Version" src="https://img.shields.io/badge/Python-3.13+-blue.svg?style=for-the-badge&logo=python&logoColor=white" />
+    <img alt="Tech Stack" src="https://img.shields.io/badge/Engine-Polars%20%7C%20DuckDB-FF8C00.svg?style=for-the-badge" />
+    <img alt="Type Safety" src="https://img.shields.io/badge/Type%20Safety-Strict%20(100%25)-4C1.svg?style=for-the-badge" />
+    <img alt="Architecture" src="https://img.shields.io/badge/Architecture-Event%20Driven%20DAG-8A2BE2.svg?style=for-the-badge" />
   </p>
 </div>
 
 ---
 
-## 🗣️ What is this? (No Cap)
+## 🗣️ The Manifesto (No Cap)
 
-Let's get one thing straight right out of the gate: **this is not a SaaS app or a generic plug-and-play budget tracker**. 
+Let's get one thing straight right out of the gate: **this is not a generic, plug-and-play budget tracker.** 
 
-This is my personal, highly customized ETL (Extract, Transform, Load) data warehouse. I built this from scratch to consolidate messy broker logs, scattered mutual fund statements, and raw bank transactions into a single, aggressively optimized `SQLite` database. 
+If you want a colorful pie chart that tells you you spend too much on coffee, go download a SaaS app. 
 
-I'm open-sourcing it because gatekeeping architecture patterns is cringe. If you want to see how to build a highly relational, 100% type-safe, multi-processed financial pipeline that calculates quant metrics on your laptop—you've come to the right place. 
+This is a rigorously mathematical, multi-processed **Quantitative Wealth Manager** running natively on bare metal. I built this monolith from scratch to ingest messy broker logs, scattered mutual fund statements, and raw bank transactions, and forge them into a single, aggressively performant `DuckDB` data warehouse.
 
-*(Disclaimer: My actual portfolio data, net worth, and personal configs are strictly `.gitignore`'d. You won't find my bags here. We stay secure. 🔒)*
+I'm open-sourcing the engine because gatekeeping institutional architecture patterns is cringe. If you want to see how to build a highly relational, 100% type-safe financial pipeline that calculates true Modified Dietz cashflows, actively hunts tax-alpha, and runs stochastic Monte Carlo survival simulations on your laptop—you have arrived.
 
----
-
-## 🔥 Key Features (The Flex)
-
-This pipeline doesn't just log expenses. It is a full-fledged quantitative engine designed to yield W's only.
-
-- **Ludicrous Speed (ADBC + Polars):** We skip the slow Python DBAPI completely. By leveraging Rust-backed `Polars` and the `adbc-driver-sqlite`, we map native Arrow memory directly to the database disk. It compiles years of financial history instantly.
-- **Enterprise-Grade Tax Engine:** The `PolarsTaxEngine` natively handles complex FIFO lot matching, legacy grandfathering tax laws, and actively splits holdings into STCG/LTCG. Tax loss harvesting is how we stay rich.
-- **Market-Calibrated Quant Analytics:** The `BenchmarkEngine` dynamically pulls live market indices from Yahoo Finance (`yfinance`). It maps benchmarks directly to your personal holdings to compute **Alpha, Beta, XIRR, Lot-Level CAGR, and Capture Ratios**.
-- **Presentation-Tier BI Engines:** The `WealthPresentationEngine` does the heavy lifting for downstream BI dashboards, auto-aggregating metrics like Months of Runway, Savings Rate, Debt-to-Asset ratios, and Category Inflation Trends.
-- **100% Type-Safe Architecture:** Fully typed in Python 3.13. Zero Pylance warnings, zero `Any` types, zero `type: ignore` hacks. 
+*(Disclaimer: My actual portfolio data, net worth, and personal TOML configs are strictly `.gitignore`'d. You won't find my bags here. We stay secure. 🔒)*
 
 ---
 
-## 🧠 The Data Model (Star Schema)
+## 🔥 The Alpha (Institutional Quant Features)
 
-We do not tolerate spaghetti data in this house. The database is strictly modeled using a dimensional Star Schema, divided into three distinct operational tiers.
+This pipeline doesn't just log where your fiat went. It actively models risk, tests survival, and mathematically optimizes your capital preservation. 
 
-### 1. Cash Flow Core (Raw Facts)
-Standard Fact (`f_`) tables that track every penny moving through the system:
-- **`f_Income_Transactions` & `f_Expense_Transactions`:** Every swipe, salary drop, and purchase categorized down to the molecular level.
-- **`f_Transfer_Transactions`:** Safely tracks money moving *between* accounts without artificially double-counting your net worth.
-- **`f_Opening_Balances`:** Aggressively deduplicated seeds for starting capital.
+### 🎲 Stochastic FIRE Forecaster (Monte Carlo Survival)
+We don't draw a straight, linear line to retirement. The Quant Engine runs thousands of randomized, fat-tailed standard-T distributions across your portfolio.
+- **Sequence of Return Risk (SORR):** Actively forces your portfolio through brutal simulated market drawdowns to mathematically prove your probability of success.
+- **Stagflation Drift Modeling:** Runs a geometric Brownian motion random walk for inflation, actively widening your future FIRE targets to simulate severe macro shocks over a 360-month horizon.
+- **Yield Drag Awareness:** Dynamically haircuts your simulated gross returns based on tax friction to prevent wealth overstatement.
 
-### 2. The Investment Zone
-Where the Tax and Benchmark engines store their computations:
-- **`f_tf_Investment_Purchase_Data` & `f_tf_Investment_Sale_Data`:** Maps every single sell order to its exact buy lot via FIFO.
-- **`f_Investment_Market_Data` & `f_Investment_Benchmark_Data`:** Daily tracking of asset valuations vs. delta-fetched Yahoo Finance closing prices.
+### 🧠 True Cashflow Attribution (Modified Dietz)
+Stop conflating your savings rate with your investment acumen. The engine completely isolates investment performance using internal portfolio cashflows (`Inv_Cashflow`), zeroing out the massive distortions caused by global external savings. It knows exactly what you saved vs. what the market actually gave you.
 
-### 3. The Presentation Tier (`p_tf_`)
-Downstream presentation tables specifically designed to be ingested by BI Dashboards. Calculated by the Wealth Engine, ensuring the UI remains clean.
-- **`p_tf_Net_Worth_Monthly_Summary`:** Tracks cumulative running balances, `Organic_Yield_%`, `Asset_Velocity_%`, and `Months_of_Runway`.
-- **`p_tf_Financial_Ratios_Monthly`:** Tracks structural health like `Savings_Rate_%`, `Debt_to_Asset_Ratio_%`, and `FIRE_Progress_%` based on a 4% SWR.
-- **`p_tf_Category_Inflation_Trends`:** Calculates personal hyper-inflation by tracking exactly how your category spending grows MoM and YoY.
+### 🦅 Tax-Alpha Harvesting
+The engine dynamically parses your long-term and short-term capital gains rules (`financial_rules.toml`) and actively hunts your open portfolio for loss harvesting opportunities. It ranks them based on the actual fiat currency saved (`Net_Tax_Benefit`), exploiting the arbitrage between holding periods and distinct asset tax rates.
 
-### 4. Dimension Mastery (`d_`)
-- **`d_Calendar`:** A flawless date table spanning from the year 2000 to the present with Fiscal Years and Weekends.
-- **`d_Income_SubCategory`, `d_Expense_Category`, `d_Asset_SubCategory`:** Multi-level hierarchical groupings.
-- **`d_tf_Investment_Master` & `d_Investment_Benchmark_Master`:** Golden records for tracked assets.
+### 🏛️ Institutional Risk Metrics
+We eradicate the "Nominal Illusion."
+- **Real Drawdowns:** Tracks `Real_Drawdown_Pct` to measure your true purchasing power erosion during high-inflation environments.
+- **Dynamic Sharpe & Calmar Ratios:** Maps your portfolio's annualized volatility against a historically accurate, dynamic Risk-Free Rate using temporal `join_asof` operations.
+- **Liquid Liability Coverage:** Strips out illiquid assets (like real estate) to mathematically evaluate your immediate solvency risk against your rolling debt.
+- **Target-Weighted Benchmarking:** Equal-weight assumptions are gone. The Sector Rotation engine natively understands your specific mandate (e.g., `Direct Stocks`, `ETFs`) and autonomously flags concentration risks.
 
 ---
 
-## 🛠️ The Tech Stack 
+## 🛠️ The Tech Stack (The Ferrari)
 
-- **Language:** `Python 3.13+`
-- **Engine:** `Polars` (Streaming enabled for infinite out-of-core memory scaling)
-- **Database:** `SQLite` + `adbc-driver-sqlite`
-- **Frontend UI:** `CustomTkinter` (Dark mode only. Peak aesthetics)
-- **Financial Math:** `pyxirr` & `yfinance`
-- **Packaging & Package Management:** `uv` & `PyInstaller`
+- **Core Engine:** `Polars` (Streaming memory graphs for infinite out-of-core scaling)
+- **Data Warehouse:** `DuckDB` (Columnar, lightning-fast disk synchronization)
+- **Source Extractor:** `SQLite` + `adbc-driver-sqlite` (Zero-copy Arrow memory transfers)
+- **Financial Math:** `pyxirr`, `numpy`, `scipy`
+- **Control Panel:** `CustomTkinter` (Dark mode only. Peak aesthetics)
+- **Configuration:** `Pydantic` strict validation over `TOML`
+- **DevOps:** `uv` (Insane dependency resolution) & `PyInstaller`
 
 ---
 
-## ⚙️ How it Works (Architecture)
+## ⚙️ The Pipeline Architecture
 
-If you're a developer looking under the hood, here is how the pipeline runs without blowing up the CPU:
+If you're a developer looking under the hood, here is how the monolith is engineered to never crash:
 
-1. **Config-Driven:** The engine dynamically reads a `config.toml` that stores the paths to your raw statement dumps, master dependency CSVs, and target DB folders.
-2. **True Multiprocessing:** The `CustomTkinter` UI and the ETL Pipeline live in completely different OS processes. They communicate via `multiprocessing.Queue`. The UI never freezes, even when Polars is chewing through millions of rows.
-3. **Decoupled Engines:** Extraction, standard transformation, advanced analytics, and downstream presentation are strictly isolated modules. This Separation of Concerns (SoC) ensures side-effect-free execution.
-4. **PyInstaller Bulletproofing:** The entire app, alongside its native C/Rust ADBC extensions, is bundled into a single standalone Windows `.exe` using custom PyInstaller hooks.
+1. **Phase 1 (Gatekeeper Extraction):** Raw CSVs, Excel binaries, and SQLite databases are pulled into memory. The system runs an instant `head(1)` fail-fast Polars evaluation to guarantee schema integrity before wasting a single CPU cycle.
+2. **Phase 2 (The Transformation DAG):** A strictly decoupled Directed Acyclic Graph harmonizes currencies, maps hierarchical dimensions, and dedupes all historical state.
+3. **Phase 3 (Quant Analytics):** The `InvestmentQuantEngine` takes over. Parallel execution graphs spawn across your CPU cores to compute tax-lots, execute temporal benchmark joins, and run the Monte Carlo batches.
+4. **Phase 4 (DuckDB Materialization):** The presentation layer (`p_tf_` tables) is aggressively materialized and flushed directly to the local `DuckDB` columnar file.
+5. **True Multiprocessing:** The `CustomTkinter` GUI and the ETL pipeline live in completely isolated OS processes communicating strictly via `QueueHandlers`. The UI never freezes, maintaining peak 60fps telemetry visibility while Polars chews through millions of rows in the background.
+
+---
+
+## 🗄️ The Data Warehouse (Star Schema)
+
+The downstream database is rigorously modeled and entirely BI-ready. No complex DAX required.
+
+### 📊 The Presentation Tier (`p_tf_`)
+- **`p_tf_Net_Worth_Monthly_Summary`:** Tracks cumulative running balances, Organic Yields, Asset Velocity, and `Months_of_Runway`.
+- **`p_tf_Financial_Ratios_Monthly`:** Tracks structural health like Liquid Liability Coverage, Real Savings Rates, and FIRE progress.
+- **`p_tf_FIRE_Forecast_Stochastic`:** The raw output grid of all Monte Carlo wealth paths (10th, 50th, 90th percentiles).
+- **`p_tf_Risk_Dashboard`:** Trailing 12M Volatility, Calmar Ratio, Sharpe Ratio, Sortino Ratio, and Effective Diversification indices.
+
+### 🧬 Dimension Mastery (`d_`)
+- **`d_Calendar` & `d_Macro_Parameters`:** Flawless date tables spanning from the year 2000, mapped against historical inflation rates and real-time interest rate benchmarks.
+- **`d_Income_SubCategory`, `d_Expense_Category`, `d_Asset_SubCategory`:** Strict hierarchical entity groupings.
 
 ---
 
 ## 🚀 Developer Quickstart
 
-If you want to fork this and adapt the `csv_extractor.py` and `excel_extractor.py` to your own life, here is the playbook:
+If you want to fork this and adapt the codebase to your own life, here is the playbook:
 
 ### 1. Install Dependencies
 We use `uv` for lightning-fast package management. Clone the repo and sync:
@@ -98,7 +104,7 @@ uv sync
 ```
 
 ### 2. Configure your Environment
-Create a `config.toml` setting up your source paths (see the codebase for exact key requirements). The GUI automatically remembers your recent configs.
+Create your `config.toml` (data paths) and `financial_rules.toml` (tax rates, macro fallback assumptions, target allocations). The GUI automatically remembers your recent environments.
 
 ### 3. Run or Build
 Custom CLI entry points are registered in `pyproject.toml`:
@@ -114,7 +120,7 @@ uv run build
 
 ## 💅 The Release Cycle
 
-We run enterprise-grade SDLC here. Semantic versioning is enforced via `yarn` and `standard-version`.
+We run enterprise-grade SDLC here. Semantic versioning is strictly enforced via `yarn` and `standard-version`.
 
 ```bash
 # Stage changes
@@ -132,6 +138,6 @@ Every release drops a tagged changelog and perfectly syncs the `__version__` acr
 
 <div align="center">
   <br>
-  <i>Stay based, keep stacking those W's. 📈</i><br>
+  <i>Stay based, keep compounding those W's. 📈</i><br>
   <b>Copyright (c) 2026 Shan.TK</b>
 </div>
