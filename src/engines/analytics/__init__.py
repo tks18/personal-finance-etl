@@ -1,3 +1,3 @@
-from src.engines.analytics.engine import InvestmentAnalyticsEngine
+from src.engines.analytics.engine import InvestmentQuantEngine
 
-__all__ = ["InvestmentAnalyticsEngine"]
+__all__ = ["InvestmentQuantEngine"]

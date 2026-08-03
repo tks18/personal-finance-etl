@@ -9,8 +9,9 @@ from src.utils.helpers import to_date_obj
 class AdvancedAnalyticsCalculator:
     """Calculates Sharpe, MDD, Sortino ratios."""
 
-    def __init__(self, fy_table=None):
+    def __init__(self, fy_table=None, rules=None):
         self.fy_table = fy_table
+        self.rules = rules
 
     def calculate(
         self, df_port: pl.DataFrame, unique_dates: list[date], portfolio_terminals: dict[date, dict]
@@ -92,8 +93,9 @@ class AdvancedAnalyticsCalculator:
                 ]
                 df_rfr = pl.DataFrame(rfr_list)
             else:
+                fallback_rfr = self.rules.assumptions.macro.fallback_risk_free_rate if self.rules else 0.06
                 df_rfr = pl.DataFrame(
-                    [{"Closing_Date": d, "risk_free_rate": 0.06} for d in unique_dates]
+                    [{"Closing_Date": d, "risk_free_rate": fallback_rfr} for d in unique_dates]
                 )
 
             df_port = df_port.join(df_rfr, on="Closing_Date", how="left")

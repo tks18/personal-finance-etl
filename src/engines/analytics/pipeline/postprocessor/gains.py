@@ -102,11 +102,26 @@ class RealizedGainsCalculator:
 
             df_daily_events = df_daily_events.with_columns(
                 [
-                    pl.col("daily_ltcg").cum_sum().over("event_fy_sy").alias("cum_ltcg"),
-                    pl.col("daily_eq_ltcg").cum_sum().over("event_fy_sy").alias("cum_eq_ltcg"),
-                    pl.col("daily_stcg").cum_sum().over("event_fy_sy").alias("cum_stcg"),
-                    pl.col("daily_ltcl").cum_sum().over("event_fy_sy").alias("cum_ltcl"),
-                    pl.col("daily_stcl").cum_sum().over("event_fy_sy").alias("cum_stcl"),
+                    pl.col("daily_ltcg")
+                    .cum_sum()
+                    .over("event_fy_sy", order_by="date")
+                    .alias("cum_ltcg"),
+                    pl.col("daily_eq_ltcg")
+                    .cum_sum()
+                    .over("event_fy_sy", order_by="date")
+                    .alias("cum_eq_ltcg"),
+                    pl.col("daily_stcg")
+                    .cum_sum()
+                    .over("event_fy_sy", order_by="date")
+                    .alias("cum_stcg"),
+                    pl.col("daily_ltcl")
+                    .cum_sum()
+                    .over("event_fy_sy", order_by="date")
+                    .alias("cum_ltcl"),
+                    pl.col("daily_stcl")
+                    .cum_sum()
+                    .over("event_fy_sy", order_by="date")
+                    .alias("cum_stcl"),
                 ]
             )
 

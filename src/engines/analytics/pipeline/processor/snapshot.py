@@ -3,7 +3,7 @@ from datetime import date
 from src.engines.analytics.core.fifo import FIFOPortfolio
 from src.engines.analytics.core.math import calculate_cagr
 from src.engines.analytics.pipeline.context import RunContext
-from src.engines.analytics.rules.tax import get_ltcg_threshold
+from src.engines.analytics.rules.macro import get_ltcg_threshold
 from src.utils.helpers import to_date_obj
 
 

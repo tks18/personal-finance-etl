@@ -2,7 +2,7 @@ from collections import deque
 from datetime import date
 from typing import cast
 
-from src.engines.analytics.rules.tax import FYTaxRateTable
+from src.engines.analytics.rules.macro import FYMacroParametersTable
 from src.utils.logger import logger
 from src.utils.models import TaxLot
 
@@ -10,7 +10,7 @@ from src.utils.models import TaxLot
 class FIFOPortfolio:
     """Manages the FIFO tracking of a single instrument's lots."""
 
-    def __init__(self, tax_type: str, tax_subtype: str, fy_table: FYTaxRateTable):
+    def __init__(self, tax_type: str, tax_subtype: str, fy_table: FYMacroParametersTable):
         self._active_lots: deque[TaxLot] = deque()
         self.tax_type = tax_type
         self.tax_subtype = tax_subtype

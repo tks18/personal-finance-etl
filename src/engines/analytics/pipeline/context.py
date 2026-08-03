@@ -8,8 +8,9 @@ from datetime import date
 
 import polars as pl
 
+from src.config.financial_rules import FinancialRules
 from src.engines.analytics.io.loader import TaxDataLoader
-from src.engines.analytics.rules.tax import FYTaxRateTable
+from src.engines.analytics.rules.macro import FYMacroParametersTable
 
 
 @dataclass
@@ -19,7 +20,7 @@ class RunContext:
     df_m: pl.DataFrame
     isin_master: dict
     df_b: pl.DataFrame | None
-    fy_table: FYTaxRateTable
+    fy_table: FYMacroParametersTable
     start_date: date | None
     end_date: date | None
     rules: "FinancialRules | None" = None
@@ -42,9 +43,9 @@ class RunContext:
         )
         try:
             df_t = pl.read_csv(t_path)
-            fy_table = FYTaxRateTable(df_t, rules=rules)
+            fy_table = FYMacroParametersTable(df_t, rules=rules)
         except Exception as e:
-            raise Exception(f"Failed to load mandatory Tax Rates CSV: {e}") from e
+            raise Exception(f"Failed to load mandatory Macro Parameters CSV: {e}") from e
 
         return cls(
             df_p=df_p,
@@ -74,7 +75,7 @@ class RunContext:
         loaded_p, loaded_s, loaded_m, is_m, loaded_b = TaxDataLoader.load_from_dataframes(
             df_p, df_s, df_m, df_i, df_b
         )
-        fy_table = FYTaxRateTable(df_t, rules=rules)
+        fy_table = FYMacroParametersTable(df_t, rules=rules)
 
         return cls(
             df_p=loaded_p,

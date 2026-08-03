@@ -18,7 +18,7 @@ class PostProcessor:
     def __init__(self, ctx: RunContext):
         self.ctx = ctx
         self.xirr_calc = PortfolioXIRRCalculator()
-        self.analytics_calc = AdvancedAnalyticsCalculator(ctx.fy_table)
+        self.analytics_calc = AdvancedAnalyticsCalculator(ctx.fy_table, ctx.rules)
         self.weights_calc = PortfolioWeightsCalculator()
         self.gains_calc = RealizedGainsCalculator(ctx)
         self.harvest_calc = HarvestRecommendationCalculator()

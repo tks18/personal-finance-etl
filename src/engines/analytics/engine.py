@@ -4,6 +4,7 @@ from datetime import date
 
 import polars as pl
 
+from src.config.financial_rules import FinancialRules
 from src.engines.analytics.context import AnalyticsContextManager
 from src.engines.analytics.isin_pipeline import IsinPipeline
 from src.engines.analytics.post_pipeline import PostProcessingPipeline
@@ -11,9 +12,9 @@ from src.utils.interfaces import ILogger
 from src.utils.models import EngineStatus, LogLevel
 
 
-class InvestmentAnalyticsEngine:
+class InvestmentQuantEngine:
     """
-    Orchestrates the tax engine pipeline.
+    Orchestrates the quantitative engine pipeline.
     """
 
     def __init__(
