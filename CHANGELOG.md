@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [3.1.1](https://github.com/tks18/personal-finance-etl/compare/3.1.0...3.1.1) (2026-08-04)
+
+
+### Docs 📃
+
+* add presentation and analytics layer guide ([d81f719](https://github.com/tks18/personal-finance-etl/commit/d81f719d5d1bd46e6fcb7ad98c27cc170806891f))
+* **readme:** dialed down genz vibes ([277c39d](https://github.com/tks18/personal-finance-etl/commit/277c39dbe60f2d1af87326727d3d2984a6715acf))
+* update descriptions ([05cb589](https://github.com/tks18/personal-finance-etl/commit/05cb589fc56039b23cdd48b345b5fa6c0eff64c1))
+
 ## [3.1.0](https://github.com/tks18/personal-finance-etl/compare/3.0.0...3.1.0) (2026-08-04)
 
 
