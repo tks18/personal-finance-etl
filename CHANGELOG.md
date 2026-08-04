@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [3.1.2](https://github.com/tks18/personal-finance-etl/compare/3.1.1...3.1.2) (2026-08-04)
+
+
+### Docs 📃
+
+* update metrics guide ([c9ba2da](https://github.com/tks18/personal-finance-etl/commit/c9ba2dadef9b5deea00838f420e7f4bec7d0b764))
+
 ### [3.1.1](https://github.com/tks18/personal-finance-etl/compare/3.1.0...3.1.1) (2026-08-04)
 
 
