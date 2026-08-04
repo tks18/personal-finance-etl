@@ -147,7 +147,7 @@ class IsinPipeline:
 
         try:
             with concurrent.futures.ProcessPoolExecutor(
-                max_workers=min(32, (os.cpu_count() or 1) * 2)
+                max_workers=min(4, os.cpu_count() or 1)
             ) as executor:
                 futures = [executor.submit(_process_isin_worker, task) for task in tasks]
 
@@ -168,9 +168,10 @@ class IsinPipeline:
 
                     global_cashflows.extend(isin_cf)
                     for d, vals in isin_pt.items():
-                        pt = portfolio_terminals.setdefault(d, {"val": 0.0, "shadow_val": 0.0})
+                        pt = portfolio_terminals.setdefault(d, {"val": 0.0, "shadow_val": 0.0, "after_tax_val": 0.0})
                         pt["val"] += vals["val"]
                         pt["shadow_val"] += vals["shadow_val"]
+                        pt["after_tax_val"] += vals.get("after_tax_val", 0.0)
                     realized_events.extend(isin_re)
 
                     if not tags:
@@ -183,18 +184,20 @@ class IsinPipeline:
                     class_re.setdefault(cls, []).extend(isin_re)
                     cp = class_pt.setdefault(cls, {})
                     for d, vals in isin_pt.items():
-                        pt = cp.setdefault(d, {"val": 0.0, "shadow_val": 0.0})
+                        pt = cp.setdefault(d, {"val": 0.0, "shadow_val": 0.0, "after_tax_val": 0.0})
                         pt["val"] += vals["val"]
                         pt["shadow_val"] += vals["shadow_val"]
+                        pt["after_tax_val"] += vals.get("after_tax_val", 0.0)
 
                     sub_key = f"{cls}___{sub}"
                     subtype_cf.setdefault(sub_key, []).extend(isin_cf)
                     subtype_re.setdefault(sub_key, []).extend(isin_re)
                     sp = subtype_pt.setdefault(sub_key, {})
                     for d, vals in isin_pt.items():
-                        pt = sp.setdefault(d, {"val": 0.0, "shadow_val": 0.0})
+                        pt = sp.setdefault(d, {"val": 0.0, "shadow_val": 0.0, "after_tax_val": 0.0})
                         pt["val"] += vals["val"]
                         pt["shadow_val"] += vals["shadow_val"]
+                        pt["after_tax_val"] += vals.get("after_tax_val", 0.0)
         finally:
             current_process.daemon = is_daemon
 
