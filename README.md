@@ -9,6 +9,7 @@
     <img alt="Tech Stack" src="https://img.shields.io/badge/Engine-Polars%20%7C%20DuckDB-FF8C00.svg?style=for-the-badge" />
     <img alt="Type Safety" src="https://img.shields.io/badge/Type%20Safety-Strict%20(100%25)-4C1.svg?style=for-the-badge" />
     <img alt="Architecture" src="https://img.shields.io/badge/Architecture-Event%20Driven%20DAG-8A2BE2.svg?style=for-the-badge" />
+    <img alt="Grade" src="https://img.shields.io/badge/Grade-Diamond%20Certified%20%F0%9F%92%8E-000000.svg?style=for-the-badge" />
   </p>
 </div>
 
@@ -28,34 +29,56 @@ I'm open-sourcing the engine because gatekeeping institutional architecture patt
 
 ---
 
-## 🔥 The Alpha (Institutional Quant Features)
+## 💎 The Diamond Standard: Module Breakdown
 
-This pipeline doesn't just log where your fiat went. It actively models risk, tests survival, and mathematically optimizes your capital preservation. 
+This pipeline doesn't just log where your fiat went. It actively models risk, tests survival, and mathematically optimizes your capital preservation through a series of strictly decoupled, **SRP-compliant Presentation Builders**.
 
-### 🎲 Stochastic FIRE Forecaster (Monte Carlo Survival)
-We don't draw a straight, linear line to retirement. The Quant Engine runs thousands of randomized, fat-tailed standard-T distributions across your portfolio.
-- **Sequence of Return Risk (SORR):** Actively forces your portfolio through brutal simulated market drawdowns to mathematically prove your probability of success.
-- **Stagflation Drift Modeling:** Runs a geometric Brownian motion random walk for inflation, actively widening your future FIRE targets to simulate severe macro shocks over a 360-month horizon.
-- **Yield Drag Awareness:** Dynamically haircuts your simulated gross returns based on tax friction to prevent wealth overstatement.
+Here is how each module is engineered to give you unfair levels of financial awareness.
 
-### 🧠 True Cashflow Attribution (Modified Dietz)
-Stop conflating your savings rate with your investment acumen. The engine completely isolates investment performance using internal portfolio cashflows (`Inv_Cashflow`), zeroing out the massive distortions caused by global external savings. It knows exactly what you saved vs. what the market actually gave you.
+### 🎲 1. Fire Forecasting Engine (`fire_forecasting.py`)
+**What it handles:** Long-term wealth projection and Sequence of Returns Risk (SoRR) analysis.
+**How it helps:** Stops you from retiring on a naive, straight-line 7% return assumption that gets nuked the second a recession hits.
+**The Math (Rizzed up):** We ripped out the standard Geometric Brownian Motion and injected a **Merton Jump-Diffusion Model**. 
+*   It runs thousands of Monte Carlo pathways using fat-tailed Student-T distributions.
+*   **Poisson Crash Injection:** It autonomously fires Bernoulli trials (`binomial(1, 0.05/12)`) simulating sudden, -20% market collapses. 
+*   **The Result:** Your `Probability_Of_Success_Pct` is now hyper-resilient. If the dashboard says you're mathematically free to retire, you can actually sleep at night knowing your model survived simulated black-swan crashes.
 
-### 🦅 Tax-Alpha Harvesting
-The engine dynamically parses your long-term and short-term capital gains rules (`financial_rules.toml`) and actively hunts your open portfolio for loss harvesting opportunities. It ranks them based on the actual fiat currency saved (`Net_Tax_Benefit`), exploiting the arbitrage between holding periods and distinct asset tax rates.
+### 🏛️ 2. Risk Metrics Engine (`risk_metrics.py`)
+**What it handles:** Advanced volatility mapping, drawdown analysis, and Expected Shortfall.
+**How it helps:** Eradicates the "Nominal Illusion" by stripping down your portfolio to its bare-metal risk exposure.
+**The Math (Rizzed up):** Historical VaR (Value at Risk) is weak because it ignores the magnitude of losses past the 95th percentile. 
+*   We replaced basic VaR with **Expected Shortfall (CVaR)** via rolling `.map_elements` Polars aggregations. 
+*   It computes exact `NW_Volatility_12M`, `Sharpe_Ratio`, `Sortino_Ratio`, and `Calmar_Ratio` against dynamic risk-free rates. 
+*   **The Result:** You see the exact expected loss magnitude of your worst-case scenarios, giving you a definitive floor on your capital preservation.
 
-### 🏛️ Institutional Risk Metrics
-We eradicate the "Nominal Illusion."
-- **Real Drawdowns:** Tracks `Real_Drawdown_Pct` to measure your true purchasing power erosion during high-inflation environments.
-- **Dynamic Sharpe & Calmar Ratios:** Maps your portfolio's annualized volatility against a historically accurate, dynamic Risk-Free Rate using temporal `join_asof` operations.
-- **Liquid Liability Coverage:** Strips out illiquid assets (like real estate) to mathematically evaluate your immediate solvency risk against your rolling debt.
-- **Target-Weighted Benchmarking:** Equal-weight assumptions are gone. The Sector Rotation engine natively understands your specific mandate (e.g., `Direct Stocks`, `ETFs`) and autonomously flags concentration risks.
+### 🦅 3. Tax Analytics Engine (`tax_analytics.py`)
+**What it handles:** Granular tax liability forecasting and automated Tax-Loss Harvesting (TLH).
+**How it helps:** Prevents you from leaking yield to the government and intelligently weaponizes your losses.
+**The Math (Rizzed up):** We built a **Tax Alpha Maximizer**. Standard software tells you to just "sell your losers." That's a rookie move that triggers Wash Sale rules and locks you out of the market.
+*   Our engine calculates the precise `Net_Tax_Benefit` of every tax-lot based on its `Holding_Type` (STCG/LTCG) and dynamic config rates.
+*   **Substitute Asset AI:** It analyzes the `INSTRUMENT_SUBTYPE`. If you are holding a losing Nifty50 ETF, it flags `Substitute_Asset_Available = True` and aggressively bumps its `Priority_Score`.
+*   **The Result:** The system explicitly directs you to harvest losses where you can instantly rotate into a correlated proxy asset, generating pure tax-alpha while remaining 100% delta-neutral to the market. 
+
+### 🧠 4. Performance Attribution (`performance_attribution.py`)
+**What it handles:** Multi-Level Brinson-Fachler Institutional Performance Attribution.
+**How it helps:** Tells you if you are actually a good investor or if you just rode a bull market.
+**The Math (Rizzed up):** Naive returns get horribly distorted by mid-month cash flows (e.g., dumping your salary into the market on the 15th). 
+*   We engineered a true **Time-Weighted Return** system using the **Modified Dietz** method.
+*   Every single transaction generated by the FIFO lot processor is mapped with a `Dietz_Day_Weight` `((Total_Days - Day_Of_Month) / Total_Days)`. 
+*   **The Result:** The engine isolates your `Selection_Effect` and `Allocation_Effect` perfectly, giving you a mathematically pure `Total_Active_Return` (Alpha) entirely scrubbed of capital flow noise.
+
+### 🌐 5. Sector Allocation (`sector_allocation.py`)
+**What it handles:** Hierarchical exposure mapping and dynamic risk budgeting.
+**How it helps:** Stops you from building a high-risk, hyper-correlated glass cannon portfolio.
+**The Math (Rizzed up):** We dumped the basic Herfindahl-Hirschman Index (HHI). Just because your money is split 50/50 between Tech stocks and Crypto doesn't mean you're diversified—they are highly correlated.
+*   We calculate the exact **Marginal Risk Contribution (MRC)** of every instrument class using rolling covariances mapped natively in Polars: $MRC_i = w_i \frac{Cov(R_i, R_p)}{Var(R_p)}$.
+*   **The Result:** The pipeline explicitly highlights which assets are violently driving the volatility of your portfolio, allowing you to rebalance based on actual risk budgets, not just arbitrary target weights.
 
 ---
 
 ## 🛠️ The Tech Stack (The Ferrari)
 
-- **Core Engine:** `Polars` (Streaming memory graphs for infinite out-of-core scaling)
+- **Core Engine:** `Polars` (Streaming memory DAGs for infinite out-of-core scaling)
 - **Data Warehouse:** `DuckDB` (Columnar, lightning-fast disk synchronization)
 - **Source Extractor:** `SQLite` + `adbc-driver-sqlite` (Zero-copy Arrow memory transfers)
 - **Financial Math:** `pyxirr`, `numpy`, `scipy`
@@ -83,9 +106,11 @@ The downstream database is rigorously modeled and entirely BI-ready. No complex 
 
 ### 📊 The Presentation Tier (`p_tf_`)
 - **`p_tf_Net_Worth_Monthly_Summary`:** Tracks cumulative running balances, Organic Yields, Asset Velocity, and `Months_of_Runway`.
-- **`p_tf_Financial_Ratios_Monthly`:** Tracks structural health like Liquid Liability Coverage, Real Savings Rates, and FIRE progress.
-- **`p_tf_FIRE_Forecast_Stochastic`:** The raw output grid of all Monte Carlo wealth paths (10th, 50th, 90th percentiles).
-- **`p_tf_Risk_Dashboard`:** Trailing 12M Volatility, Calmar Ratio, Sharpe Ratio, Sortino Ratio, and Effective Diversification indices.
+- **`p_tf_Risk_Metrics`:** Houses the heavy-duty Expected Shortfall, Drawdowns, and Volatility metadata.
+- **`p_tf_Performance_Attribution`:** Your Brinson-Fachler alpha scores mapped by sector.
+- **`p_tf_Sector_Allocation_Monthly`:** Marginal Risk Contributions and benchmark deviations.
+- **`p_tf_Tax_Harvesting`:** The ranked priority list of substitute-friendly assets to harvest.
+- **`p_tf_FIRE_Forecast_Stochastic`:** The raw output grid of the Merton Jump-Diffusion pathways.
 
 ### 🧬 Dimension Mastery (`d_`)
 - **`d_Calendar` & `d_Macro_Parameters`:** Flawless date tables spanning from the year 2000, mapped against historical inflation rates and real-time interest rate benchmarks.
