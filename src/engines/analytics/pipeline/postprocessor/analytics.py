@@ -93,7 +93,9 @@ class AdvancedAnalyticsCalculator:
                 ]
                 df_rfr = pl.DataFrame(rfr_list)
             else:
-                fallback_rfr = self.rules.assumptions.macro.fallback_risk_free_rate if self.rules else 0.06
+                fallback_rfr = (
+                    self.rules.assumptions.macro.fallback_risk_free_rate if self.rules else 0.06
+                )
                 df_rfr = pl.DataFrame(
                     [{"Closing_Date": d, "risk_free_rate": fallback_rfr} for d in unique_dates]
                 )

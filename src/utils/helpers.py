@@ -54,6 +54,7 @@ def get_fy_start_year(dt: date) -> int:
     """Return the starting year of the Indian financial year for a given date."""
     return dt.year if dt.month >= 4 else dt.year - 1
 
+
 def get_fy_folder_name(dt: date) -> str:
     """Return the Indian financial year folder name for a given date (e.g. '2024-25')."""
     year = get_fy_start_year(dt)

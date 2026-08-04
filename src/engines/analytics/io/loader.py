@@ -75,7 +75,7 @@ class TaxDataLoader:
         df_m = pl.read_csv(m_path, infer_schema_length=500_000)
 
         df_i = pl.read_csv(i_path, infer_schema_length=500_000) if i_path else None
-        
+
         df_b = None
         if b_path and os.path.exists(b_path):
             df_b = pl.read_csv(b_path, infer_schema_length=500_000)
