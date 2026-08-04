@@ -32,14 +32,19 @@ def _clean_excel_headers(df_sliced: pl.DataFrame) -> tuple[pl.DataFrame, str]:
 
 
 def _process_mf_statement(file_path: str) -> pl.DataFrame:
+    logger.debug(f"[Extractor] Processing MF Holding Statement: {os.path.basename(file_path)}")
     excel_reader = fastexcel.read_excel(file_path)
     if "Holdings" not in excel_reader.sheet_names:
+        logger.debug(f"[Extractor] Skipped {os.path.basename(file_path)}: Missing 'Holdings' sheet")
         return pl.DataFrame()
 
     df_raw = excel_reader.load_sheet("Holdings", header_row=None).to_polars()
     col_1 = df_raw.columns[0]
     start_search = df_raw.with_row_index().filter(pl.col(col_1) == "Scheme Name")
     if start_search.is_empty():
+        logger.debug(
+            f"[Extractor] Skipped {os.path.basename(file_path)}: Could not find 'Scheme Name' anchor"
+        )
         return pl.DataFrame()
 
     header_idx = start_search["index"][0]

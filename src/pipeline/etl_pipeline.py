@@ -16,7 +16,7 @@ from src.load.database import DuckDBLoader, DuckDBManager
 from src.pipeline.core.extractor import DataExtractor
 from src.pipeline.core.transformer import TransformationDAG
 from src.utils.interfaces import IDatabaseLoader, ILogger
-from src.utils.logger import add_queue_handler, logger
+from src.utils.logger import add_file_handler, add_queue_handler, logger
 from src.utils.models import EngineStatus, ExtractionResult, LogLevel
 
 
@@ -80,10 +80,20 @@ class ETLOrchestrator:
         )
         analytics_results = quant_engine.run()
         self.dfs.update(analytics_results)
-        logger.info(
-            f"  -> Quant Engine mapped {analytics_results.get('df_f_tf_inv_tax_harvesting', pl.DataFrame()).height} open tax lots and "
-            f"{analytics_results.get('df_f_tf_inv_tax_realized', pl.DataFrame()).height} realized gain events."
-        )
+        lot_df = analytics_results.get("df_f_tf_investment_analytics_lot", pl.DataFrame())
+        if (
+            not lot_df.is_empty()
+            and "Quantity" in lot_df.columns
+            and "Closing_Date" in lot_df.columns
+        ):
+            max_date = lot_df.select(pl.col("Closing_Date").max()).item()
+            open_lots = lot_df.filter(
+                (pl.col("Closing_Date") == max_date) & (pl.col("Quantity") > 0)
+            ).height
+        else:
+            open_lots = 0
+
+        logger.info(f"  -> Quant Engine mapped {open_lots} open tax lots across portfolio.")
 
         logger.info("Starting Presentation Layer Engines...")
         self.status_queue.put(EngineStatus(msg="", data=None, progress=0.8, level=LogLevel.STEP))
@@ -116,7 +126,25 @@ class ETLOrchestrator:
         self.cfg.validate_config()
 
         start_time = time.time()
+
         add_queue_handler(cast(multiprocessing.Queue, self.status_queue))
+
+        log_file_path = self.db_manager.db_path.replace(".duckdb", ".log")
+        add_file_handler(log_file_path)
+
+        logger.debug("=== ETL CONFIGURATION DUMP ===")
+        if hasattr(self.cfg, "model_dump_json"):
+            logger.debug(self.cfg.model_dump_json(indent=2))
+        else:
+            logger.debug(str(self.cfg))
+
+        logger.debug("=== FINANCIAL RULES DUMP ===")
+        if self.rules is not None and hasattr(self.rules, "model_dump_json"):
+            logger.debug(self.rules.model_dump_json(indent=2))  # type: ignore
+        else:
+            logger.debug(str(self.rules))
+        logger.debug("==============================")
+
         logger.info("Initializing Quantitative Master Engine...")
         self.status_queue.put(EngineStatus(msg="", data=None, progress=0.0))
 
@@ -131,25 +159,33 @@ class ETLOrchestrator:
             t_ext_start = time.time()
             logger.info("Phase 1/4: Extracting base rules and raw statements...")
             extracted_data = self._extract()
-            logger.info(f"Phase 1 Complete [{time.time() - t_ext_start:.2f}s] - Data streams loaded into memory.")
+            logger.info(
+                f"Phase 1 Complete [{time.time() - t_ext_start:.2f}s] - Data streams loaded into memory."
+            )
 
             # Transformation Phase
             t_trans_start = time.time()
             logger.info("Phase 2/4: Transforming and harmonizing data streams...")
             self._transform(extracted_data)
-            logger.info(f"Phase 2 Complete [{time.time() - t_trans_start:.2f}s] - DAG mapped {len(self.dfs)} base tables.")
+            logger.info(
+                f"Phase 2 Complete [{time.time() - t_trans_start:.2f}s] - DAG mapped {len(self.dfs)} base tables."
+            )
 
             # Analytics Phase
             t_eng_start = time.time()
             logger.info("Phase 3/4: Executing Advanced Analytics & Monte Carlo engines...")
             self._run_engines()
-            logger.info(f"Phase 3 Complete [{time.time() - t_eng_start:.2f}s] - Presentation logic built {len(self.dfs)} total tables.")
+            logger.info(
+                f"Phase 3 Complete [{time.time() - t_eng_start:.2f}s] - Presentation logic built {len(self.dfs)} total tables."
+            )
 
             # Load Phase
             t_load_start = time.time()
             logger.info("Phase 4/4: Flushing materialized tables to DuckDB...")
             self._load()
-            logger.info(f"Phase 4 Complete [{time.time() - t_load_start:.2f}s] - Disk synchronization successful.")
+            logger.info(
+                f"Phase 4 Complete [{time.time() - t_load_start:.2f}s] - Disk synchronization successful."
+            )
 
             self.status_queue.put(EngineStatus(msg="", data=None, progress=1.0))
             total_time = time.time() - start_time

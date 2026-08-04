@@ -56,6 +56,7 @@ class DataExtractor:
         zcategory_lazy, assetgroup_lazy, assets_lazy, currency_lazy, inoutcome_lazy = (
             extractor.extract_base_tables()
         )
+        logger.info("  -> Successfully extracted 5 base reference tables from SQLite Source.")
 
         df_column_master = pl.read_csv(self.cfg.COLUMN_MASTER_PATH)
         mappings = {
@@ -83,6 +84,9 @@ class DataExtractor:
         mf_transactions_raw = extract_mf_transactions_raw(statement_files["mf_orders"])
         stock_market_data_raw = extract_stock_market_data_raw(statement_files["stock_pl"])
         stock_transactions_raw = extract_stock_transactions_raw(statement_files["stock_orders"])
+        logger.info(
+            f"  -> Successfully parsed {sum(len(f) for f in statement_files.values())} raw Excel files into unified dataframes."
+        )
 
         result = ExtractionResult(
             zcategory=zcategory_lazy,

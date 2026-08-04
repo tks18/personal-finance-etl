@@ -161,8 +161,11 @@ class TransformationDAG:
             engine="streaming",
         )
 
+        logger.info(f"  -> Base Transformation DAG successfully mapped {len(results)} core tables.")
+
         logger.info("Executing Calendar Generation DAG...")
         calendar_result = d_calendar_lazy.collect(engine="streaming")
+        logger.info(f"  -> Generated {calendar_result.height} rows for Master Calendar.")
 
         rules_records = []
         if self.rules:

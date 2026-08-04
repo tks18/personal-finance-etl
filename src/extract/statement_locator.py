@@ -1,8 +1,7 @@
 import glob
-import logging
 import os
 
-logger = logging.getLogger(__name__)
+from src.utils.logger import logger
 
 
 def categorize_statement_files(folder_path: str) -> dict[str, list[str]]:
@@ -24,5 +23,9 @@ def categorize_statement_files(folder_path: str) -> dict[str, list[str]]:
             raise FileNotFoundError(
                 f"No files found for category: '{cat}'. Please ensure statements are present."
             )
+        logger.info(f"  -> Discovered {len(files)} files for category: '{cat}'")
 
+    logger.info(
+        f"Successfully categorized {sum(len(f) for f in categories.values())} total raw statement files."
+    )
     return categories
