@@ -1,6 +1,6 @@
 [project]
 name = "personal-finance-etl"
-version = "3.2.0"
+version = "3.3.0"
 description = "An institutional-grade, hyper-optimized Quantitative Master Engine built to absolutely dominate personal net worth"
 authors = [
   { name="Shan", email="tksudharshan@gmail.com" },
