@@ -1,6 +1,6 @@
 {
   "name": "personal-finance-etl",
-  "description": "E2E ETL App for processing my personal finances and investment data for robust investment and tax capabilities",
+  "description": "An institutional-grade, hyper-optimized Quantitative Master Engine built to absolutely dominate personal net worth",
   "version": "3.1.0",
   "repository": "https://github.com/tks18/personal-finance-etl",
   "author": "tks18 <tksudharshan@gmail.com>",
