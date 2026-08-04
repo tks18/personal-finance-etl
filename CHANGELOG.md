@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [3.0.0](https://github.com/tks18/personal-finance-etl/compare/2.4.0...3.0.0) (2026-08-04)
+
+
+### Styling 🎨
+
+* linter fixes ([68c8418](https://github.com/tks18/personal-finance-etl/commit/68c84181b0c5e03178ddb0eadda7623a62b246b7))
+
+
+### Features 🔥
+
+* **engines/analytics:** enhance the speed for processing an isin ([6f3b43c](https://github.com/tks18/personal-finance-etl/commit/6f3b43ce228f44bed8afb2777b3c5640fdd6ee29))
+* **engines/presentations:** introduce math fixes and enhancements and refactor to sep mods ([f67bcfb](https://github.com/tks18/personal-finance-etl/commit/f67bcfb5834bb922a7d6ab7ee7c46e4de42166c7))
+* **load:** add ddl for new columns and tables ([5128905](https://github.com/tks18/personal-finance-etl/commit/5128905bce5cbbd64aa33357637660beacb72a4f))
+* **logging:** add debug level logging at various places ([3457ede](https://github.com/tks18/personal-finance-etl/commit/3457ede17555dc23d142c53011b5298fbaa5e243))
+* **utils:** logger - add a file level debug logger for detailed logging ([ac84c58](https://github.com/tks18/personal-finance-etl/commit/ac84c58aca6e07bbe71f0dbfa01b1674be5c3cb7))
+
+
+### Docs 📃
+
+* update readme and metrics guide to add new metrics ([77adaa1](https://github.com/tks18/personal-finance-etl/commit/77adaa1479142835e48a30397aaed37d3a10f44d))
+
 ## [2.4.0](https://github.com/tks18/personal-finance-etl/compare/2.3.0...2.4.0) (2026-08-03)
 
 
