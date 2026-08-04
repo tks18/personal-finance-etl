@@ -221,6 +221,14 @@ CREATE TABLE IF NOT EXISTS p_tf_fire_forecasting_monthly (
     Withdrawal_Rate_If_Retired_Now_Total DOUBLE,
     Savings_Rate_Required DOUBLE,
     Savings_Rate_Required_Total DOUBLE,
+    -- Decumulation & Velocity (GOAT Metrics)
+    Wealth_Velocity DOUBLE,
+    Wealth_Acceleration DOUBLE,
+    CAPE_Adjusted_SWR DOUBLE,
+    Guyton_Klinger_Floor DOUBLE,
+    Guyton_Klinger_Ceiling DOUBLE,
+    Human_Capital_Value DOUBLE,
+    Human_to_Financial_Capital_Ratio DOUBLE,
     FOREIGN KEY(MONTH_START_DATE) REFERENCES d_Calendar(Date),
     FOREIGN KEY(MONTH_END_DATE) REFERENCES d_Calendar(Date)
 );
@@ -231,6 +239,7 @@ CREATE TABLE IF NOT EXISTS p_tf_risk_metrics (
     MONTH_END_DATE DATE,
     -- Wealth Snapshot
     Total_Net_Worth DOUBLE,
+    Total_Net_Worth_Market DOUBLE,
     -- Returns
     Monthly_Return DOUBLE,
     Rolling_12M_Return DOUBLE,
@@ -244,9 +253,12 @@ CREATE TABLE IF NOT EXISTS p_tf_risk_metrics (
     -- Volatility & Risk
     Annualized_Volatility_12M DOUBLE,
     NW_Volatility_12M DOUBLE,
+    Downside_Deviation_12M DOUBLE,
     VaR_95_Monthly DOUBLE,
+    Expected_Shortfall_95 DOUBLE,
     -- Risk-Adjusted Ratios
     Sharpe_Ratio_Monthly DOUBLE,
+    Sortino_Ratio_Monthly DOUBLE,
     Calmar_Ratio DOUBLE,
     FOREIGN KEY(MONTH_START_DATE) REFERENCES d_Calendar(Date),
     FOREIGN KEY(MONTH_END_DATE) REFERENCES d_Calendar(Date)
@@ -258,24 +270,92 @@ CREATE TABLE IF NOT EXISTS p_tf_sector_allocation_monthly (
     As_Of_Date DATE,
     -- Dimensions
     INSTRUMENT_CLASS TEXT,
+    INSTRUMENT_TYPE TEXT,
     INSTRUMENT_SUBTYPE TEXT,
+    SECTOR TEXT,
     -- Values
     Total_Portfolio_Value DOUBLE,
     Class_Total_Value DOUBLE,
-    Subtype_Total_Value DOUBLE,
+    Sector_Total_Value DOUBLE,
     -- Weights
+    Class_Target_Weight DOUBLE,
     Class_Weight DOUBLE,
-    Subtype_Weight DOUBLE,
+    Weight_In_Class DOUBLE,
+    Portfolio_Weight DOUBLE,
     Weight_Change_MoM DOUBLE,
     -- Concentration
     Class_HHI_Concentration_Index DOUBLE,
-    Subtype_HHI_Concentration_Index REAL,
+    Sector_HHI_Concentration_Index REAL,
     Effective_Diversification REAL,
+    Marginal_Risk_Contribution DOUBLE,
     -- Performance
     Class_CAGR REAL,
     Benchmark_Deviation REAL,
     -- Flags
     Is_Overweight BOOLEAN,
+    FOREIGN KEY(MONTH_START_DATE) REFERENCES d_Calendar(Date)
+);
+
+CREATE TABLE IF NOT EXISTS p_tf_tax_liability_forecast (
+    -- Identifiers
+    MONTH_START_DATE DATE,
+    Financial_Year TEXT,
+    -- Realized Gains/Income
+    Realized_STCG DOUBLE,
+    Realized_LTCG DOUBLE,
+    Taxable_Dividends DOUBLE,
+    Taxable_Interest DOUBLE,
+    -- Tax Exemptions
+    LTCG_Exemption_Used DOUBLE,
+    LTCG_Exemption_Remaining DOUBLE,
+    -- Projections
+    Projected_Tax_Bill DOUBLE,
+    Harvesting_Offset_Remaining DOUBLE,
+    -- Efficiency
+    Tax_Drag_Pct DOUBLE,
+    Tax_Alpha_Pct DOUBLE,
+    FOREIGN KEY(MONTH_START_DATE) REFERENCES d_Calendar(Date)
+);
+
+CREATE TABLE IF NOT EXISTS p_tf_performance_attribution (
+    -- Identifiers
+    MONTH_START_DATE DATE,
+    INSTRUMENT_CLASS TEXT,
+    INSTRUMENT_TYPE TEXT,
+    INSTRUMENT_SUBTYPE TEXT,
+    SECTOR TEXT,
+    -- Macro Weights (Class Level)
+    Class_Target_Weight DOUBLE,
+    Class_Actual_Weight DOUBLE,
+    -- Returns
+    Sector_Return DOUBLE,
+    Class_Benchmark_Return DOUBLE,
+    -- Brinson-Fachler Attribution
+    Allocation_Effect DOUBLE,
+    Selection_Effect DOUBLE,
+    Interaction_Effect DOUBLE,
+    Total_Active_Return DOUBLE,
+    FOREIGN KEY(MONTH_START_DATE) REFERENCES d_Calendar(Date)
+);
+
+CREATE TABLE IF NOT EXISTS p_tf_portfolio_rebalancing_plan (
+    -- Identifiers
+    MONTH_START_DATE DATE,
+    INSTRUMENT_CLASS TEXT,
+    INSTRUMENT_TYPE TEXT,
+    INSTRUMENT_SUBTYPE TEXT,
+    SECTOR TEXT,
+    -- Macro Status (Class Level)
+    Class_Target_Weight DOUBLE,
+    Class_Actual_Weight DOUBLE,
+    Class_Deviation DOUBLE,
+    Class_Rebalance_Action TEXT,
+    Class_Order_Value DOUBLE,
+    -- Micro Component (Sector Level)
+    Sector_Value DOUBLE,
+    Sector_Unrealized_Loss DOUBLE,
+    -- Status
+    Is_Rebalance_Required BOOLEAN,
     FOREIGN KEY(MONTH_START_DATE) REFERENCES d_Calendar(Date)
 );
 
@@ -298,6 +378,7 @@ CREATE TABLE IF NOT EXISTS p_tf_tax_harvesting (
     Net_Tax_Benefit REAL,
     -- Scoring
     Offset_Potential REAL,
+    Substitute_Asset_Available BOOLEAN,
     Priority_Score REAL,
     FOREIGN KEY(ISIN) REFERENCES d_tf_Investment_Master(ISIN)
 );

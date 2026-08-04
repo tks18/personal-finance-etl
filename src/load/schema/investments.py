@@ -143,6 +143,7 @@ CREATE TABLE f_tf_Investment_Analytics_Lot (
     LTCG_Threshold_Days BIGINT,
     Days_To_LTCG BIGINT,
     Holding_Type TEXT,
+    Dietz_Day_Weight DOUBLE,
     -- Position
     Quantity DOUBLE,
     Buy_Price DOUBLE,

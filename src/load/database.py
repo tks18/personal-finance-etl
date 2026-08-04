@@ -128,6 +128,9 @@ class DuckDBManager:
                 )
 
         conn.register("temp_df", df)
+        logger.debug(
+            f"[DuckDB] Executing zero-copy INSERT INTO {table_name} BY NAME SELECT * FROM temp_df (Rows: {df.height})"
+        )
         conn.execute(f"INSERT INTO {table_name} BY NAME SELECT * FROM temp_df")
         conn.unregister("temp_df")
 
@@ -177,6 +180,9 @@ class DuckDBLoader:
             "df_p_tf_risk_metrics": "p_tf_risk_metrics",
             "df_p_tf_sector_allocation_monthly": "p_tf_sector_allocation_monthly",
             "df_p_tf_tax_harvesting": "p_tf_tax_harvesting",
+            "df_p_tf_portfolio_rebalancing_plan": "p_tf_portfolio_rebalancing_plan",
+            "df_p_tf_tax_liability_forecast": "p_tf_tax_liability_forecast",
+            "df_p_tf_performance_attribution": "p_tf_performance_attribution",
         }
         table_mappings.update(presentation_tables)
 
@@ -184,6 +190,7 @@ class DuckDBLoader:
             for df_key, table_name in table_mappings.items():
                 if df_key in dfs and dfs[df_key] is not None:
                     self.db_manager.batch_write_dataframe(dfs[df_key], table_name, conn)
+                    logger.info(f"  -> Flushed {table_name} ({dfs[df_key].height} rows) to DuckDB.")
 
             logger.info("Generating Data Quality Metadata...")
             metadata_rows = []
