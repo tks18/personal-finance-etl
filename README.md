@@ -2,7 +2,7 @@
   <img src="logo.png" alt="Logo" width="180"/>
   <h1>Shan's Personal Finance Quant Engine 💸✨</h1>
   <p><b>An institutional-grade, hyper-optimized Quantitative Master Engine built to absolutely dominate personal net worth.</b></p>
-  <p><i>Because tracking your bags in a spreadsheet in 2026 is pure NPC behavior.</i></p>
+  <p><i>Because tracking your portfolio in a basic spreadsheet or a SaaS pie-chart app is officially outdated.</i></p>
 
   <p>
     <img alt="Python Version" src="https://img.shields.io/badge/Python-3.13+-blue.svg?style=for-the-badge&logo=python&logoColor=white" />
@@ -15,73 +15,68 @@
 
 ---
 
-## 🗣️ The Manifesto (No Cap)
+## 🗣️ The Manifesto
 
 Let's get one thing straight right out of the gate: **this is not a generic, plug-and-play budget tracker.** 
 
-If you want a colorful pie chart that tells you you spend too much on coffee, go download a SaaS app. 
+Retail personal finance apps focus on one thing: **budgeting**. They show you a colorful pie chart of your coffee expenses and pat you on the back. But true wealth is not created by aggressively auditing your Starbucks habit; wealth is created through asymmetric risk management, capital velocity, and tax alpha. 
 
-This is a rigorously mathematical, multi-processed **Quantitative Wealth Manager** running natively on bare metal. I built this monolith from scratch to ingest messy broker logs, scattered mutual fund statements, and raw bank transactions, and forge them into a single, aggressively performant `DuckDB` data warehouse.
+This engine is a **Sovereign Wealth Management Pipeline**. It treats your household balance sheet like a multi-million dollar quantitative fund. I built this monolith from scratch to ingest messy broker logs, scattered mutual fund statements, and raw bank transactions, and forge them into a single, aggressively performant `DuckDB` data warehouse.
 
-I'm open-sourcing the engine because gatekeeping institutional architecture patterns is cringe. If you want to see how to build a highly relational, 100% type-safe financial pipeline that calculates true Modified Dietz cashflows, actively hunts tax-alpha, and runs stochastic Monte Carlo survival simulations on your laptop—you have arrived.
+I'm open-sourcing the engine because gatekeeping institutional architecture patterns is unnecessary. If you want to see how to build a highly relational, 100% type-safe financial pipeline that calculates true Modified Dietz cashflows, actively hunts tax-alpha, and runs stochastic Monte Carlo survival simulations on your laptop—you have arrived.
 
-*(Disclaimer: My actual portfolio data, net worth, and personal TOML configs are strictly `.gitignore`'d. You won't find my bags here. We stay secure. 🔒)*
+*(Disclaimer: My actual portfolio data, net worth, and personal TOML configs are strictly `.gitignore`'d. We stay secure. 🔒)*
 
 ---
 
-## 💎 The Diamond Standard: Module Breakdown
+## 💎 How This Solves Personal Finance Management
 
-This pipeline doesn't just log where your fiat went. It actively models risk, tests survival, and mathematically optimizes your capital preservation through a series of strictly decoupled, **SRP-compliant Presentation Builders**.
+This architecture replaces "guessing" with deterministic mathematics. It actively models risk, tests survival, and mathematically optimizes your capital preservation through a series of strictly decoupled, **SRP-compliant Presentation Builders**. 
 
-Here is how each module is engineered to give you unfair levels of financial awareness.
+Here is how each module is engineered to give you an unfair level of financial awareness.
 
-### 🎲 1. Fire Forecasting Engine (`fire_forecasting.py`)
-**What it handles:** Long-term wealth projection and Sequence of Returns Risk (SoRR) analysis.
-**How it helps:** Stops you from retiring on a naive, straight-line 7% return assumption that gets nuked the second a recession hits.
-**The Math (Rizzed up):** We ripped out the standard Geometric Brownian Motion and injected a **Merton Jump-Diffusion Model**. 
+### 🎲 1. Decumulation & FIRE Forecasting (`fire_forecasting.py`)
+**The Problem:** Most FI calculators use a naive, straight-line 7% return assumption, completely ignoring Sequence of Returns Risk (SoRR). If a recession hits the year you retire, your spreadsheet model shatters.
+**The Edge:** We ripped out standard Geometric Brownian Motion and injected a **Merton Jump-Diffusion Model**. 
 *   It runs thousands of Monte Carlo pathways using fat-tailed Student-T distributions.
 *   **Poisson Crash Injection:** It autonomously fires Bernoulli trials (`binomial(1, 0.05/12)`) simulating sudden, -20% market collapses. 
-*   **The Result:** Your `Probability_Of_Success_Pct` is now hyper-resilient. If the dashboard says you're mathematically free to retire, you can actually sleep at night knowing your model survived simulated black-swan crashes.
+*   **Institutional Decumulation:** Implements **Guyton-Klinger dynamic withdrawal rules** and **CAPE-Adjusted Safe Withdrawal Rates** based on macroeconomic valuations.
+*   **The Result:** Your `Probability_Of_Success_Pct` is hyper-resilient. If the dashboard says you're free to retire, you can sleep at night knowing your model survived simulated black-swan crashes.
 
-### 🏛️ 2. Risk Metrics Engine (`risk_metrics.py`)
-**What it handles:** Advanced volatility mapping, drawdown analysis, and Expected Shortfall.
-**How it helps:** Eradicates the "Nominal Illusion" by stripping down your portfolio to its bare-metal risk exposure.
-**The Math (Rizzed up):** Historical VaR (Value at Risk) is weak because it ignores the magnitude of losses past the 95th percentile. 
+### 🏛️ 2. Institutional Risk Engine (`risk_metrics.py`)
+**The Problem:** "Risk" in retail apps is just a color (Red/Green). You don't know the actual dollar amount of exposure your portfolio faces when volatility spikes.
+**The Edge:** Historical VaR (Value at Risk) is weak because it ignores the magnitude of losses past the 95th percentile. 
 *   We replaced basic VaR with **Expected Shortfall (CVaR)** via rolling `.map_elements` Polars aggregations. 
 *   It computes exact `NW_Volatility_12M`, `Sharpe_Ratio`, `Sortino_Ratio`, and `Calmar_Ratio` against dynamic risk-free rates. 
 *   **The Result:** You see the exact expected loss magnitude of your worst-case scenarios, giving you a definitive floor on your capital preservation.
 
-### 🦅 3. Tax Analytics Engine (`tax_analytics.py`)
-**What it handles:** Granular tax liability forecasting and automated Tax-Loss Harvesting (TLH).
-**How it helps:** Prevents you from leaking yield to the government and intelligently weaponizes your losses.
-**The Math (Rizzed up):** We built a **Tax Alpha Maximizer**. Standard software tells you to just "sell your losers." That's a rookie move that triggers Wash Sale rules and locks you out of the market.
+### 🦅 3. Tax Alpha Maximizer (`tax_analytics.py`)
+**The Problem:** You leak basis points of yield to taxes every year because you don't intelligently offset your gains. Standard software just tells you to "sell your losers," which is a rookie move that triggers Wash Sale rules.
+**The Edge:** We built an automated Tax-Loss Harvesting AI.
 *   Our engine calculates the precise `Net_Tax_Benefit` of every tax-lot based on its `Holding_Type` (STCG/LTCG) and dynamic config rates.
 *   **Substitute Asset AI:** It analyzes the `INSTRUMENT_SUBTYPE`. If you are holding a losing Nifty50 ETF, it flags `Substitute_Asset_Available = True` and aggressively bumps its `Priority_Score`.
 *   **The Result:** The system explicitly directs you to harvest losses where you can instantly rotate into a correlated proxy asset, generating pure tax-alpha while remaining 100% delta-neutral to the market. 
 
-### 🧠 4. Performance Attribution (`performance_attribution.py`)
-**What it handles:** Multi-Level Brinson-Fachler Institutional Performance Attribution.
-**How it helps:** Tells you if you are actually a good investor or if you just rode a bull market.
-**The Math (Rizzed up):** Naive returns get horribly distorted by mid-month cash flows (e.g., dumping your salary into the market on the 15th). 
-*   We engineered a true **Time-Weighted Return** system using the **Modified Dietz** method.
-*   Every single transaction generated by the FIFO lot processor is mapped with a `Dietz_Day_Weight` `((Total_Days - Day_Of_Month) / Total_Days)`. 
+### 🧠 4. Time-Weighted Performance Attribution (`performance_attribution.py`)
+**The Problem:** Naive returns get horribly distorted by mid-month cash flows (e.g., dumping your salary into the market on the 15th). It's impossible to tell if you're a skilled investor or just riding a bull market.
+**The Edge:** Multi-Level **Brinson-Fachler Institutional Attribution**.
+*   We engineered a true Time-Weighted Return system using the **Modified Dietz** method. Every single transaction generated by the FIFO lot processor is mapped with a `Dietz_Day_Weight` `((Total_Days - Day_Of_Month) / Total_Days)`. 
 *   **The Result:** The engine isolates your `Selection_Effect` and `Allocation_Effect` perfectly, giving you a mathematically pure `Total_Active_Return` (Alpha) entirely scrubbed of capital flow noise.
 
-### 🌐 5. Sector Allocation (`sector_allocation.py`)
-**What it handles:** Hierarchical exposure mapping and dynamic risk budgeting.
-**How it helps:** Stops you from building a high-risk, hyper-correlated glass cannon portfolio.
-**The Math (Rizzed up):** We dumped the basic Herfindahl-Hirschman Index (HHI). Just because your money is split 50/50 between Tech stocks and Crypto doesn't mean you're diversified—they are highly correlated.
-*   We calculate the exact **Marginal Risk Contribution (MRC)** of every instrument class using rolling covariances mapped natively in Polars: $MRC_i = w_i \frac{Cov(R_i, R_p)}{Var(R_p)}$.
+### 🌐 5. Advanced Sector & Risk Budgeting (`sector_allocation.py`)
+**The Problem:** You think you're diversified because your money is split 50/50 between Tech stocks and Crypto, ignoring that they are highly correlated risk assets.
+**The Edge:** We dumped the basic Herfindahl-Hirschman Index (HHI) for actual **Marginal Risk Contribution (MRC)**.
+*   We calculate the exact MRC of every instrument class using rolling covariances mapped natively in Polars: $MRC_i = w_i \frac{Cov(R_i, R_p)}{Var(R_p)}$.
 *   **The Result:** The pipeline explicitly highlights which assets are violently driving the volatility of your portfolio, allowing you to rebalance based on actual risk budgets, not just arbitrary target weights.
 
 ---
 
-## 🛠️ The Tech Stack (The Ferrari)
+## 🛠️ The Tech Stack
 
-- **Core Engine:** `Polars` (Streaming memory DAGs for infinite out-of-core scaling)
+- **Core Engine:** `Polars` (Streaming memory DAGs for infinite out-of-core scaling, millions of rows in milliseconds)
 - **Data Warehouse:** `DuckDB` (Columnar, lightning-fast disk synchronization)
 - **Source Extractor:** `SQLite` + `adbc-driver-sqlite` (Zero-copy Arrow memory transfers)
-- **Financial Math:** `pyxirr`, `numpy`, `scipy`
+- **Financial Math:** `pyxirr`, `numpy`, `scipy` for rigorous yield and matrix math
 - **Control Panel:** `CustomTkinter` (Dark mode only. Peak aesthetics)
 - **Configuration:** `Pydantic` strict validation over `TOML`
 - **DevOps:** `uv` (Insane dependency resolution) & `PyInstaller`
@@ -163,6 +158,6 @@ Every release drops a tagged changelog and perfectly syncs the `__version__` acr
 
 <div align="center">
   <br>
-  <i>Stay based, keep compounding those W's. 📈</i><br>
+  <i>Keep compounding, stay ahead of the curve. 📈</i><br>
   <b>Copyright (c) 2026 Shan.TK</b>
 </div>
