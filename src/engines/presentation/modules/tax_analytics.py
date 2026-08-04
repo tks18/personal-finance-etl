@@ -241,6 +241,11 @@ class TaxAnalyticsBuilder:
             .agg(
                 pl.col("FY_Realized_STCG").last().alias("Realized_STCG"),
                 pl.col("FY_Realized_LTCG").last().alias("Realized_LTCG"),
+                pl.col("FY_Realized_Gain").last().alias("Realized_Gain"),
+                pl.col("FY_Realized_STCL").last().alias("Realized_STCL"),
+                pl.col("FY_Realized_LTCL").last().alias("Realized_LTCL"),
+                pl.col("FY_Realized_Loss").last().alias("Realized_Loss"),
+                pl.col("FY_Realized_Net_PnL").last().alias("Realized_Net_PnL"),
                 pl.col("FY_LTCG_Remaining_Exemption").last().alias("LTCG_Exemption_Remaining"),
                 pl.col("Close_Value").sum().alias("Total_Portfolio_Value"),
                 pl.when(pl.col("P/L") < 0)
@@ -291,6 +296,11 @@ class TaxAnalyticsBuilder:
                     pl.col("FY").alias("Financial_Year"),
                     "Realized_STCG",
                     "Realized_LTCG",
+                    "Realized_Gain",
+                    "Realized_STCL",
+                    "Realized_LTCL",
+                    "Realized_Loss",
+                    "Realized_Net_PnL",
                     "Taxable_Dividends",
                     "Taxable_Interest",
                     "LTCG_Exemption_Used",

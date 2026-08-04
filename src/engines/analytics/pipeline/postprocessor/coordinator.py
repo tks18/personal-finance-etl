@@ -78,14 +78,19 @@ class PostProcessor:
                                 "Close_Value",
                                 "Unrealized_LTCG",
                                 "Unrealized_STCG",
+                                "Unrealized_Gain",
+                                "Unrealized_LTCL",
+                                "Unrealized_STCL",
                                 "Unrealized_Loss",
                                 "LTCG_Tax_If_Sold",
                                 "STCG_Tax_If_Sold",
                                 "FY_Realized_LTCG",
                                 "FY_Realized_STCG",
+                                "FY_Realized_Gain",
                                 "FY_Realized_LTCL",
                                 "FY_Realized_STCL",
                                 "FY_Realized_Loss",
+                                "FY_Realized_Net_PnL",
                             ]
                         )
                     )
@@ -96,14 +101,19 @@ class PostProcessor:
                     pl.col("Close_Value").sum().alias("Total_Current_Value"),
                     pl.col("Unrealized_LTCG").sum().alias("Unrealized_LTCG"),
                     pl.col("Unrealized_STCG").sum().alias("Unrealized_STCG"),
+                    pl.col("Unrealized_Gain").sum().alias("Unrealized_Gain"),
+                    pl.col("Unrealized_LTCL").sum().alias("Unrealized_LTCL"),
+                    pl.col("Unrealized_STCL").sum().alias("Unrealized_STCL"),
                     pl.col("Unrealized_Loss").sum().alias("Unrealized_Loss"),
                     pl.col("LTCG_Tax_If_Sold").sum().alias("LTCG_Tax_If_Sold"),
                     pl.col("STCG_Tax_If_Sold").sum().alias("STCG_Tax_If_Sold"),
                     pl.col("FY_Realized_LTCG").sum().alias("FY_Realized_LTCG"),
                     pl.col("FY_Realized_STCG").sum().alias("FY_Realized_STCG"),
+                    pl.col("FY_Realized_Gain").sum().alias("FY_Realized_Gain"),
                     pl.col("FY_Realized_LTCL").sum().alias("FY_Realized_LTCL"),
                     pl.col("FY_Realized_STCL").sum().alias("FY_Realized_STCL"),
                     pl.col("FY_Realized_Loss").sum().alias("FY_Realized_Loss"),
+                    pl.col("FY_Realized_Net_PnL").sum().alias("FY_Realized_Net_PnL"),
                 )
                 .with_columns(
                     (pl.col("Total_Current_Value") - pl.col("Total_Invested_Value")).alias(

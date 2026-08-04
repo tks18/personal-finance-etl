@@ -179,6 +179,9 @@ CREATE TABLE f_tf_Investment_Analytics_Lot (
     Tax_Rate DOUBLE,
     Unrealized_LTCG DOUBLE,
     Unrealized_STCG DOUBLE,
+    Unrealized_Gain DOUBLE,
+    Unrealized_LTCL DOUBLE,
+    Unrealized_STCL DOUBLE,
     Unrealized_Loss DOUBLE,
     LTCG_Tax_If_Sold DOUBLE,
     STCG_Tax_If_Sold DOUBLE,
@@ -198,9 +201,11 @@ CREATE TABLE f_tf_Investment_Analytics_Lot (
     FY TEXT,
     FY_Realized_LTCG DOUBLE,
     FY_Realized_STCG DOUBLE,
+    FY_Realized_Gain DOUBLE,
     FY_Realized_LTCL DOUBLE,
     FY_Realized_STCL DOUBLE,
     FY_Realized_Loss DOUBLE,
+    FY_Realized_Net_PnL DOUBLE,
     FY_LTCG_Remaining_Exemption BIGINT,
     -- Harvest Signals
     Stepup_Eligible BIGINT,
@@ -241,14 +246,19 @@ CREATE TABLE f_tf_Investment_Analytics_ISIN (
     -- Tax Exposure
     Unrealized_LTCG DOUBLE,
     Unrealized_STCG DOUBLE,
+    Unrealized_Gain DOUBLE,
+    Unrealized_LTCL DOUBLE,
+    Unrealized_STCL DOUBLE,
     Unrealized_Loss DOUBLE,
     LTCG_Tax_If_Sold DOUBLE,
     STCG_Tax_If_Sold DOUBLE,
     FY_Realized_LTCG DOUBLE,
     FY_Realized_STCG DOUBLE,
+    FY_Realized_Gain DOUBLE,
     FY_Realized_LTCL DOUBLE,
     FY_Realized_STCL DOUBLE,
     FY_Realized_Loss DOUBLE,
+    FY_Realized_Net_PnL DOUBLE,
     FOREIGN KEY(Closing_Date) REFERENCES d_Calendar(Date),
     FOREIGN KEY(ISIN) REFERENCES d_tf_Investment_Master(ISIN)
 );
@@ -277,14 +287,19 @@ CREATE TABLE f_tf_Investment_Analytics_Subtype (
     -- Tax Exposure
     Unrealized_LTCG DOUBLE,
     Unrealized_STCG DOUBLE,
+    Unrealized_Gain DOUBLE,
+    Unrealized_LTCL DOUBLE,
+    Unrealized_STCL DOUBLE,
     Unrealized_Loss DOUBLE,
     LTCG_Tax_If_Sold DOUBLE,
     STCG_Tax_If_Sold DOUBLE,
     FY_Realized_LTCG DOUBLE,
     FY_Realized_STCG DOUBLE,
+    FY_Realized_Gain DOUBLE,
     FY_Realized_LTCL DOUBLE,
     FY_Realized_STCL DOUBLE,
     FY_Realized_Loss DOUBLE,
+    FY_Realized_Net_PnL DOUBLE,
     FOREIGN KEY(Closing_Date) REFERENCES d_Calendar(Date)
 );
 
@@ -311,14 +326,19 @@ CREATE TABLE f_tf_Investment_Analytics_Class (
     -- Tax Exposure
     Unrealized_LTCG DOUBLE,
     Unrealized_STCG DOUBLE,
+    Unrealized_Gain DOUBLE,
+    Unrealized_LTCL DOUBLE,
+    Unrealized_STCL DOUBLE,
     Unrealized_Loss DOUBLE,
     LTCG_Tax_If_Sold DOUBLE,
     STCG_Tax_If_Sold DOUBLE,
     FY_Realized_LTCG DOUBLE,
     FY_Realized_STCG DOUBLE,
+    FY_Realized_Gain DOUBLE,
     FY_Realized_LTCL DOUBLE,
     FY_Realized_STCL DOUBLE,
     FY_Realized_Loss DOUBLE,
+    FY_Realized_Net_PnL DOUBLE,
     FOREIGN KEY(Closing_Date) REFERENCES d_Calendar(Date)
 );
 
@@ -344,14 +364,19 @@ CREATE TABLE f_tf_Investment_Analytics_Portfolio (
     -- Tax Exposure
     Unrealized_LTCG DOUBLE,
     Unrealized_STCG DOUBLE,
+    Unrealized_Gain DOUBLE,
+    Unrealized_LTCL DOUBLE,
+    Unrealized_STCL DOUBLE,
     Unrealized_Loss DOUBLE,
     LTCG_Tax_If_Sold DOUBLE,
     STCG_Tax_If_Sold DOUBLE,
     FY_Realized_LTCG DOUBLE,
     FY_Realized_STCG DOUBLE,
+    FY_Realized_Gain DOUBLE,
     FY_Realized_LTCL DOUBLE,
     FY_Realized_STCL DOUBLE,
     FY_Realized_Loss DOUBLE,
+    FY_Realized_Net_PnL DOUBLE,
     FOREIGN KEY(Closing_Date) REFERENCES d_Calendar(Date)
 );
 """

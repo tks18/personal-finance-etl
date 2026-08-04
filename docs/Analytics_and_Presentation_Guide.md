@@ -119,7 +119,7 @@ The foundational quantitative core. Every fractional purchase tracked independen
 | `Information_Ratio` | `Active_Return / Tracking_Error`. | Evaluates return per unit of active risk. | **Good:** > 0.5. Excellent: > 1.0. | - |
 | `Upside_Capture` / `Downside_Capture` | Asymmetry of returns. | Shows behavior in bull/bear markets. | **Good:** Upside > 100, Downside < 100. | - |
 | `Tax_Rate` | Explicit tax % applicable right now. | Driven by `Holding_Type`. | **Good:** Lower. | - |
-| `Unrealized_LTCG/STCG/Loss` | Tax bucketing. | Calculate exact liabilities. | N/A | - |
+| `Unrealized_LTCG/STCG/Loss/Gain` | Tax bucketing. | Calculate exact liabilities and total unrealized numbers. | N/A | - |
 | `LTCG/STCG_Tax_If_Sold` | Fiat owed if liquidated today. | Deduct from total to get liquid wealth. | **Bad:** High numbers (High tax drag). | - |
 | `After_Tax_PL` / `After_Tax_Close_Value` | Mark-to-market stripped of liabilities. | True, unencumbered FI metrics. | N/A | - |
 | `Portfolio_Weight_%` | Lot size relative to total net worth. | Macro concentration risk. | **Bad:** Single lot > 5% total NW. | - |
@@ -274,6 +274,7 @@ Macro tax tracking.
 | Column | Meaning / Description | How to Use / Interpretation | Good vs Bad (Heuristics) | Correlation |
 | --- | --- | --- | --- | --- |
 | `Realized_STCG/LTCG` / `STCL/LTCL` | YTD realized gains and losses, strictly bifurcated. | Track limits and offset pools. | N/A | - |
+| `Realized_Gain` / `Realized_Net_PnL` | Aggregated total gains and the absolute final netted PnL (Gains + Losses). | High-level portfolio tracking. | N/A | - |
 | `LTCG_Exemption_Used/Remaining` | Tax-free threshold usage. | Indicates when to stop harvesting gains. | **Good:** High remaining. | - |
 | `Projected_Tax_Bill` | Estimated fiat owed based on unrealized gains and realized data. | Liability deduction. | **Bad:** High. | - |
 | `Tax_Drag_Pct` | Yield lost to taxes. | N/A | **Bad:** High. | - |

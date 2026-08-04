@@ -80,6 +80,9 @@ class SnapshotGenerator:
 
             unreal_ltcg = max(0.0, pnl) if holding_type == "LTCG" else 0.0
             unreal_stcg = max(0.0, pnl) if holding_type == "STCG" else 0.0
+            unreal_gain = max(0.0, pnl)
+            unreal_ltcl = min(0.0, pnl) if holding_type == "LTCG" else 0.0
+            unreal_stcl = min(0.0, pnl) if holding_type == "STCG" else 0.0
             unreal_loss = min(0.0, pnl)
 
             ltcg_tax = unreal_ltcg * ltcg_rate
@@ -127,6 +130,9 @@ class SnapshotGenerator:
                     "Tax_Rate": ltcg_rate if holding_type == "LTCG" else stcg_rate,
                     "Unrealized_LTCG": round(unreal_ltcg, 4),
                     "Unrealized_STCG": round(unreal_stcg, 4),
+                    "Unrealized_Gain": round(unreal_gain, 4),
+                    "Unrealized_LTCL": round(unreal_ltcl, 4),
+                    "Unrealized_STCL": round(unreal_stcl, 4),
                     "Unrealized_Loss": round(unreal_loss, 4),
                     "LTCG_Tax_If_Sold": round(ltcg_tax, 4),
                     "STCG_Tax_If_Sold": round(stcg_tax, 4),
