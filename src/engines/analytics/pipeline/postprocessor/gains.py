@@ -33,6 +33,8 @@ class RealizedGainsCalculator:
                     "FY": f"{fy_sy}-{str(fy_sy + 1)[-2:]}",
                     "FY_Realized_LTCG": 0.0,
                     "FY_Realized_STCG": 0.0,
+                    "FY_Realized_LTCL": 0.0,
+                    "FY_Realized_STCL": 0.0,
                     "FY_Realized_Loss": 0.0,
                     "FY_LTCG_Remaining_Exemption": float(limit),
                 }
@@ -163,6 +165,8 @@ class RealizedGainsCalculator:
                 ).alias("FY"),
                 pl.col("cum_ltcg").round(4).alias("FY_Realized_LTCG"),
                 pl.col("cum_stcg").round(4).alias("FY_Realized_STCG"),
+                pl.col("cum_ltcl").round(4).alias("FY_Realized_LTCL"),
+                pl.col("cum_stcl").round(4).alias("FY_Realized_STCL"),
                 (pl.col("cum_ltcl") + pl.col("cum_stcl")).round(4).alias("FY_Realized_Loss"),
                 pl.max_horizontal(0.0, pl.col("exemption_limit") - pl.col("cum_eq_ltcg"))
                 .round(4)
@@ -173,12 +177,20 @@ class RealizedGainsCalculator:
                     "FY",
                     "FY_Realized_LTCG",
                     "FY_Realized_STCG",
+                    "FY_Realized_LTCL",
+                    "FY_Realized_STCL",
                     "FY_Realized_Loss",
                     "FY_LTCG_Remaining_Exemption",
                 ]
             )
 
-            lazy_df = lazy_df.join(df_fy_joined.lazy(), on="Closing_Date", how="left")
+            lazy_df = lazy_df.join(df_fy_joined.lazy(), on="Closing_Date", how="left").with_columns(
+                (pl.col("FY_Realized_LTCG") * pl.col("Lot_Weight_%")).alias("FY_Realized_LTCG"),
+                (pl.col("FY_Realized_STCG") * pl.col("Lot_Weight_%")).alias("FY_Realized_STCG"),
+                (pl.col("FY_Realized_LTCL") * pl.col("Lot_Weight_%")).alias("FY_Realized_LTCL"),
+                (pl.col("FY_Realized_STCL") * pl.col("Lot_Weight_%")).alias("FY_Realized_STCL"),
+                (pl.col("FY_Realized_Loss") * pl.col("Lot_Weight_%")).alias("FY_Realized_Loss"),
+            )
 
         else:
             lazy_df = lazy_df.join(
@@ -188,12 +200,20 @@ class RealizedGainsCalculator:
                         "FY",
                         "FY_Realized_LTCG",
                         "FY_Realized_STCG",
+                        "FY_Realized_LTCL",
+                        "FY_Realized_STCL",
                         "FY_Realized_Loss",
                         "FY_LTCG_Remaining_Exemption",
                     ]
                 ).lazy(),
                 on="Closing_Date",
                 how="left",
+            ).with_columns(
+                (pl.col("FY_Realized_LTCG") * pl.col("Lot_Weight_%")).alias("FY_Realized_LTCG"),
+                (pl.col("FY_Realized_STCG") * pl.col("Lot_Weight_%")).alias("FY_Realized_STCG"),
+                (pl.col("FY_Realized_LTCL") * pl.col("Lot_Weight_%")).alias("FY_Realized_LTCL"),
+                (pl.col("FY_Realized_STCL") * pl.col("Lot_Weight_%")).alias("FY_Realized_STCL"),
+                (pl.col("FY_Realized_Loss") * pl.col("Lot_Weight_%")).alias("FY_Realized_Loss"),
             )
 
         return lazy_df
