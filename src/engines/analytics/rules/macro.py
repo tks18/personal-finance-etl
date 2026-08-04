@@ -17,7 +17,9 @@ def get_ltcg_threshold(tax_type: str, tax_subtype: str, rules=None) -> int:
     tt = tax_type.strip().lower()
     tst = tax_subtype.strip().lower()
 
-    thresholds = rules.assumptions.tax.ltcg_thresholds
+    thresholds = (
+        rules.assumptions.tax.ltcg_thresholds if rules and hasattr(rules, "assumptions") else {}
+    )
 
     key = f"{tt}_{tst}"
     if key in thresholds:
@@ -57,7 +59,11 @@ class FYMacroParametersTable:
 
                 raw_cutoff = str(row.get("Debt_MF_Cutoff_Date", "")).strip()
 
-                default_cutoff = to_date_obj(self.rules.assumptions.tax.debt_mf_cutoff_date)
+                default_cutoff = (
+                    to_date_obj(self.rules.assumptions.tax.debt_mf_cutoff_date)
+                    if self.rules and hasattr(self.rules, "assumptions")
+                    else _DEFAULT_DEBT_MF_CUTOFF
+                )
 
                 cutoff_d = (
                     to_date_obj(raw_cutoff)
@@ -145,15 +151,20 @@ class FYMacroParametersTable:
 
     def get_equity_ltcg_exemption(self, ref_date: date) -> float:
         """Returns the annual LTCG exemption limit specifically for equity."""
+        fallback = (
+            self.rules.assumptions.tax.fallback_equity_ltcg_exemption
+            if self.rules and hasattr(self.rules, "assumptions")
+            else 125000.0
+        )
         entry = self._find_entry(ref_date)
         if entry is None:
-            return self.rules.assumptions.tax.fallback_equity_ltcg_exemption
+            return fallback
         raw = entry["raw"]
         try:
             val = raw.get("Equity_LTCG_Exemption")
-            return float(val) if val is not None and str(val).strip() != "" else self.rules.assumptions.tax.fallback_equity_ltcg_exemption
+            return float(val) if val is not None and str(val).strip() != "" else fallback
         except (ValueError, TypeError):
-            return self.rules.assumptions.tax.fallback_equity_ltcg_exemption
+            return fallback
 
     def get_holding_type(
         self, age_days: int, tax_type: str, tax_subtype: str, lot_buy_date: date, ref_date: date
@@ -163,26 +174,38 @@ class FYMacroParametersTable:
         cutoff = self.get_debt_mf_cutoff(ref_date)
         if tt == "debt" and tst in ("mf", "mutual_fund", "debt_mf") and lot_buy_date >= cutoff:
             return "STCG"
-        return "LTCG" if age_days > get_ltcg_threshold(tax_type, tax_subtype, self.rules) else "STCG"
+        return (
+            "LTCG" if age_days > get_ltcg_threshold(tax_type, tax_subtype, self.rules) else "STCG"
+        )
 
     def get_risk_free_rate(self, ref_date: date) -> float:
+        fallback = (
+            self.rules.assumptions.macro.fallback_risk_free_rate
+            if self.rules and hasattr(self.rules, "assumptions")
+            else 0.05
+        )
         entry = self._find_entry(ref_date)
         if entry is None:
-            return self.rules.assumptions.macro.fallback_risk_free_rate
+            return fallback
         raw = entry["raw"]
         try:
             val = raw.get("Risk_Free_Rate")
-            return float(val) if val is not None and str(val).strip() != "" else self.rules.assumptions.macro.fallback_risk_free_rate
+            return float(val) if val is not None and str(val).strip() != "" else fallback
         except (ValueError, TypeError):
-            return self.rules.assumptions.macro.fallback_risk_free_rate
+            return fallback
 
     def get_inflation_rate(self, ref_date: date) -> float:
+        fallback = (
+            self.rules.assumptions.macro.fallback_inflation_rate
+            if self.rules and hasattr(self.rules, "assumptions")
+            else 0.05
+        )
         entry = self._find_entry(ref_date)
         if entry is None:
-            return self.rules.assumptions.macro.fallback_inflation_rate
+            return fallback
         raw = entry["raw"]
         try:
             val = raw.get("Inflation_Rate")
-            return float(val) if val is not None and str(val).strip() != "" else self.rules.assumptions.macro.fallback_inflation_rate
+            return float(val) if val is not None and str(val).strip() != "" else fallback
         except (ValueError, TypeError):
-            return self.rules.assumptions.macro.fallback_inflation_rate
+            return fallback

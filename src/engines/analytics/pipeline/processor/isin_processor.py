@@ -5,34 +5,43 @@ import polars as pl
 
 from src.engines.analytics.core.fifo import FIFOPortfolio
 from src.engines.analytics.core.math import calculate_cagr, calculate_xirr
-from src.engines.analytics.pipeline.context import RunContext
 from src.engines.analytics.pipeline.processor.benchmark import BenchmarkPriceProvider
-from src.engines.analytics.pipeline.processor.extractor import IsinDataExtractor
 from src.engines.analytics.pipeline.processor.risk import RiskMetricsProvider
 from src.engines.analytics.pipeline.processor.snapshot import SnapshotGenerator
 from src.utils.helpers import to_date_obj
+from src.utils.logger import logger
 
 
 class IsinProcessor:
-    def __init__(self, ctx: RunContext):
-        self.ctx = ctx
+    def __init__(self, fy_table, start_date, end_date, rules):
+        self.fy_table = fy_table
+        self.start_date = start_date
+        self.end_date = end_date
+        self.rules = rules
 
     def process(
-        self, isin: str
+        self,
+        isin: str,
+        p_inst: list[dict],
+        s_inst: list[dict],
+        m_inst: list[dict],
+        master_row: dict,
+        bm_map: dict,
     ) -> tuple[pl.DataFrame | None, list[dict], dict, list[dict], dict[str, str]]:
-        p_inst, s_inst, m_inst, master_row = IsinDataExtractor.extract(self.ctx, isin)
         if not m_inst:
             return None, [], {}, [], {}
+
+        logger.debug(f"[Processor] ISIN {isin} computing across {len(m_inst)} historical dates.")
 
         tax_type = str(master_row.get("TAX_TYPE", "equity"))
         tax_subtype = str(master_row.get("TAX_SUBTYPE", "listed"))
         bench_id = master_row.get("BENCHMARK_ID")
 
-        bm_provider = BenchmarkPriceProvider(bench_id, self.ctx.df_b)
+        bm_provider = BenchmarkPriceProvider(bench_id, None, prebuilt_map=bm_map)
         risk_provider = RiskMetricsProvider(m_inst, bm_provider)
-        snapshot_generator = SnapshotGenerator(self.ctx, isin, master_row)
+        snapshot_generator = SnapshotGenerator(self.fy_table, self.rules, isin, master_row)
 
-        fifo = FIFOPortfolio(tax_type, tax_subtype, self.ctx.fy_table)
+        fifo = FIFOPortfolio(tax_type, tax_subtype, self.fy_table)
         cf_dates: list[date] = []
         cf_amounts: list[float] = []
 
@@ -110,9 +119,9 @@ class IsinProcessor:
             if not fifo.active_lots:
                 continue
 
-            if self.ctx.start_date and m_date < self.ctx.start_date:
+            if self.start_date and m_date < self.start_date:
                 continue
-            if self.ctx.end_date and m_date > self.ctx.end_date:
+            if self.end_date and m_date > self.end_date:
                 continue
 
             m_price = float(m_row["Closing Price"])
@@ -132,12 +141,12 @@ class IsinProcessor:
             for lot in fifo.active_lots:
                 if lot.qty <= 1e-8:
                     continue
-                lbd = to_date_obj(lot.date)
+                lbd = lot.date
                 age = max((m_date - lbd).days, 1) if lbd else 1
-                holding_type = self.ctx.fy_table.get_holding_type(
+                holding_type = self.fy_table.get_holding_type(
                     age, tax_type, tax_subtype, lbd or m_date, m_date
                 )
-                ltcg_rate, stcg_rate = self.ctx.fy_table.get_tax_rates(
+                ltcg_rate, stcg_rate = self.fy_table.get_tax_rates(
                     tax_type, tax_subtype, lbd or m_date, m_date
                 )
                 pnl = (m_price - lot.price) * lot.qty

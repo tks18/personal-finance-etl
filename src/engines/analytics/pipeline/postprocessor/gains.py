@@ -1,9 +1,14 @@
+import warnings
 from datetime import date
 
 import polars as pl
 
 from src.engines.analytics.pipeline.context import RunContext
 from src.utils.helpers import get_fy_start_year, to_date_obj
+
+warnings.filterwarnings(
+    "ignore", message="Sortedness of columns cannot be checked when 'by' groups provided"
+)
 
 
 class RealizedGainsCalculator:

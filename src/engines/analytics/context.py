@@ -17,7 +17,9 @@ class AnalyticsContextManager:
                 EngineStatus("Loading DataFrame memory structures...", None, 0.01, LogLevel.STEP)
             )
 
-        ctx = RunContext.from_dataframes(df_p, df_s, df_m, df_i, df_b, df_t, start_date, end_date, rules)
+        ctx = RunContext.from_dataframes(
+            df_p, df_s, df_m, df_i, df_b, df_t, start_date, end_date, rules
+        )
 
         if self.status_queue:
             self.status_queue.put(

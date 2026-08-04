@@ -2,19 +2,17 @@ from datetime import date
 
 from src.engines.analytics.core.fifo import FIFOPortfolio
 from src.engines.analytics.core.math import calculate_cagr
-from src.engines.analytics.pipeline.context import RunContext
 from src.engines.analytics.rules.macro import get_ltcg_threshold
-from src.utils.helpers import to_date_obj
 
 
 class SnapshotGenerator:
-    def __init__(self, ctx: RunContext, isin: str, master_row: dict):
-        self.ctx = ctx
+    def __init__(self, fy_table, rules, isin: str, master_row: dict):
+        self.rules = rules
         self.isin = isin
         self.tax_type = str(master_row.get("TAX_TYPE", "equity"))
         self.tax_subtype = str(master_row.get("TAX_SUBTYPE", "listed"))
         self.bench_id = master_row.get("BENCHMARK_ID")
-        self.fy_table = ctx.fy_table
+        self.fy_table = fy_table
 
     def generate(
         self,
@@ -43,10 +41,10 @@ class SnapshotGenerator:
             if lot.qty <= 1e-8:
                 continue
 
-            lbd = to_date_obj(lot.date)
+            lbd = lot.date
             age = max((m_date - lbd).days, 1) if lbd else 1
 
-            ltcg_thr = get_ltcg_threshold(self.tax_type, self.tax_subtype, self.ctx.rules)
+            ltcg_thr = get_ltcg_threshold(self.tax_type, self.tax_subtype, self.rules)
             holding_type = self.fy_table.get_holding_type(
                 age, self.tax_type, self.tax_subtype, lbd or m_date, m_date
             )
@@ -57,6 +55,11 @@ class SnapshotGenerator:
 
             lot_return = (m_price - lot.price) / lot.price if lot.price > 0 else 0.0
             lot_cagr = calculate_cagr(lot.price, m_price, age)
+
+            if lbd and lbd.year == m_date.year and lbd.month == m_date.month:
+                day_weight = (m_date.day - lbd.day + 1) / max(1, m_date.day)
+            else:
+                day_weight = 1.0
 
             lbm_buy = lot.bm_buy
             if lbm_buy and lbm_buy > 0:
@@ -129,6 +132,7 @@ class SnapshotGenerator:
                     "STCG_Tax_If_Sold": round(stcg_tax, 4),
                     "After_Tax_PL": round(after_tax_pl, 4),
                     "After_Tax_Close_Value": round(after_tax_cv, 4),
+                    "Dietz_Day_Weight": round(day_weight, 6),
                 }
             )
 
