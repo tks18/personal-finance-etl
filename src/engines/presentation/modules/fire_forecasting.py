@@ -296,10 +296,22 @@ class FireForecastingBuilder:
                         returns_dec = returns_dec + (jumps_dec * -0.20)
                         mult_dec = 1.0 + returns_dec
 
+                        current_withdraw = np.full(len(valid_paths), withdraw_fire)
+                        initial_rate = 1.0 / swr if swr > 0 else 0.04
+
                         dec_wealth = np.empty((len(valid_paths), decum_months))
                         dec_wealth[:, 0] = fv[i]  # Start at target FI
                         for m in range(1, decum_months):
-                            dec_wealth[:, m] = dec_wealth[:, m - 1] * mult_dec[:, m] - withdraw_fire
+                            if m % 12 == 0:
+                                current_rate = (current_withdraw * 12.0) / np.maximum(
+                                    dec_wealth[:, m - 1], 1.0
+                                )
+                                current_withdraw[current_rate > (initial_rate * 1.2)] *= 0.90
+                                current_withdraw[current_rate < (initial_rate * 0.8)] *= 1.10
+
+                            dec_wealth[:, m] = (
+                                dec_wealth[:, m - 1] * mult_dec[:, m] - current_withdraw
+                            )
 
                         survived = np.all(dec_wealth > 0, axis=1)
                         success_count = np.sum(survived)
@@ -376,11 +388,26 @@ class FireForecastingBuilder:
                         returns_dec_total = returns_dec_total + (jumps_dec_total * -0.20)
                         mult_dec_total = 1.0 + returns_dec_total
 
+                        current_withdraw_total = np.full(len(valid_paths_total), withdraw_total)
+                        initial_rate_total = 1.0 / swr if swr > 0 else 0.04
+
                         dec_wealth_total = np.empty((len(valid_paths_total), decum_months))
                         dec_wealth_total[:, 0] = fv_total[i]
                         for m in range(1, decum_months):
+                            if m % 12 == 0:
+                                current_rate_t = (current_withdraw_total * 12.0) / np.maximum(
+                                    dec_wealth_total[:, m - 1], 1.0
+                                )
+                                current_withdraw_total[
+                                    current_rate_t > (initial_rate_total * 1.2)
+                                ] *= 0.90
+                                current_withdraw_total[
+                                    current_rate_t < (initial_rate_total * 0.8)
+                                ] *= 1.10
+
                             dec_wealth_total[:, m] = (
-                                dec_wealth_total[:, m - 1] * mult_dec_total[:, m] - withdraw_total
+                                dec_wealth_total[:, m - 1] * mult_dec_total[:, m]
+                                - current_withdraw_total
                             )
 
                         survived_total = np.all(dec_wealth_total > 0, axis=1)
