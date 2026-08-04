@@ -76,9 +76,11 @@ class IsinProcessor:
                 buy_val = float(v_val) if v_val is not None else float(qty * b_price)
 
                 bm_p = bm_provider.get_bm_price(row_dt_obj)
-                shadow_q = buy_val / bm_p if (bm_p and bm_p > 0) else 0.0
+                if not bm_p or bm_p <= 0:
+                    bm_p = b_price
+                shadow_q = buy_val / bm_p if bm_p > 0 else 0.0
 
-                fifo.buy(row_dt_obj, qty, b_price, shadow_q, float(bm_p or 0.0))
+                fifo.buy(row_dt_obj, qty, b_price, shadow_q, float(bm_p))
                 cf_dates.append(row_dt_obj)
                 cf_amounts.append(-buy_val)
                 isin_cashflows.append({"date": row_dt_obj, "amount": -buy_val})
@@ -92,11 +94,15 @@ class IsinProcessor:
                 s_qty = float(row["Quantity"])
 
                 row_p_val: float | None = row.get("Price")
-                s_price = (
-                    float(row_p_val) if row_p_val is not None else float(m_row["Closing Price"])
-                )
-
                 sv_val: float | None = row.get("Sell Value")
+                
+                if row_p_val is not None:
+                    s_price = float(row_p_val)
+                elif sv_val is not None and s_qty > 0:
+                    s_price = float(sv_val) / s_qty
+                else:
+                    s_price = float(m_row.get("Closing Price", 0.0))
+
                 s_val = float(sv_val) if sv_val is not None else float(s_qty * s_price)
 
                 cf_dates.append(row_dt_obj)
@@ -107,8 +113,11 @@ class IsinProcessor:
                 isin_realized.extend(events)
                 s_idx += 1
 
+            m_recon_bm_price = bm_provider.get_bm_price(m_date)
+            if not m_recon_bm_price or m_recon_bm_price <= 0:
+                m_recon_bm_price = float(m_row.get("Closing Price", 1.0))
             cf_recon = fifo.reconcile_quantity(
-                m_row.get("Quantity"), m_date, bm_provider.get_bm_price(m_date) or 1.0
+                m_row.get("Quantity"), m_date, m_recon_bm_price
             )
             for cf in cf_recon:
                 cf_dates.append(cast(date, cf["date"]))
@@ -125,7 +134,9 @@ class IsinProcessor:
                 continue
 
             m_price = float(m_row["Closing Price"])
-            m_bm_price = bm_provider.get_bm_price(m_date) or 1.0
+            m_bm_price = bm_provider.get_bm_price(m_date)
+            if not m_bm_price or m_bm_price <= 0:
+                m_bm_price = m_price
 
             closing_units = fifo.get_closing_units()
             terminal_val = fifo.get_terminal_value(m_price)
@@ -202,6 +213,55 @@ class IsinProcessor:
                 fifo, m_date, m_price, m_bm_price, risk_metrics, inst_metrics
             )
             isin_snapshots.extend(snapshots)
+
+        while p_idx < len(p_inst):
+            row_dt_obj = to_date_obj(p_inst[p_idx]["Date"])
+            if not row_dt_obj:
+                p_idx += 1
+                continue
+            row = p_inst[p_idx]
+            qty = float(row["Quantity"])
+            b_price = float(row["Price"])
+            v_val = row.get("Value")
+            buy_val = float(v_val) if v_val is not None else float(qty * b_price)
+            
+            bm_p = bm_provider.get_bm_price(row_dt_obj)
+            if not bm_p or bm_p <= 0:
+                bm_p = b_price
+            shadow_q = buy_val / bm_p if bm_p > 0 else 0.0
+
+            fifo.buy(row_dt_obj, qty, b_price, shadow_q, float(bm_p))
+            cf_dates.append(row_dt_obj)
+            cf_amounts.append(-buy_val)
+            isin_cashflows.append({"date": row_dt_obj, "amount": -buy_val})
+            p_idx += 1
+
+        while s_idx < len(s_inst):
+            row_dt_obj = to_date_obj(s_inst[s_idx]["Date"])
+            if not row_dt_obj:
+                s_idx += 1
+                continue
+            row = s_inst[s_idx]
+            s_qty = float(row["Quantity"])
+            row_p_val: float | None = row.get("Price")
+            sv_val: float | None = row.get("Sell Value")
+            
+            if row_p_val is not None:
+                s_price = float(row_p_val)
+            elif sv_val is not None and s_qty > 0:
+                s_price = float(sv_val) / s_qty
+            else:
+                s_price = 0.0
+                
+            s_val = float(sv_val) if sv_val is not None else float(s_qty * s_price)
+
+            cf_dates.append(row_dt_obj)
+            cf_amounts.append(s_val)
+            isin_cashflows.append({"date": row_dt_obj, "amount": s_val})
+
+            events = fifo.sell(row_dt_obj, s_qty, s_price)
+            isin_realized.extend(events)
+            s_idx += 1
 
         schema_overrides = {
             "BM_Buy_Price": pl.Float64,
