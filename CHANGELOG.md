@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [3.2.0](https://github.com/tks18/personal-finance-etl/compare/3.1.2...3.2.0) (2026-08-04)
+
+
+### Features 🔥
+
+* **engines/analytics:** split loss into LTCL and STCL for tax purposes ([b3e86fd](https://github.com/tks18/personal-finance-etl/commit/b3e86fd913f1b4b7a2db24dd950155e2d4549fac))
+
+
+### Bug Fixes 🛠
+
+* **engines/analytics:** fix loss being coming up as portfolio total instead of Lot Total ([6028b88](https://github.com/tks18/personal-finance-etl/commit/6028b88f71f791a2fc6af74aa35f9f4720dca584))
+* **engines/analytics:** fix realized events ([b83f0d2](https://github.com/tks18/personal-finance-etl/commit/b83f0d2b9786b22866061830b111f714f1436e99))
+* **engines/analytics:** fix realized events not being properly captured for gain/loss calc ([d31b4bb](https://github.com/tks18/personal-finance-etl/commit/d31b4bb9c5c4f9bb4f6f6a7f4c64f9c89a09e067))
+
+
+### Docs 📃
+
+* minor update to docs ([62d205d](https://github.com/tks18/personal-finance-etl/commit/62d205d20eb883c3570bbd18ab16a66294ee8589))
+
 ### [3.1.2](https://github.com/tks18/personal-finance-etl/compare/3.1.1...3.1.2) (2026-08-04)
 
 
