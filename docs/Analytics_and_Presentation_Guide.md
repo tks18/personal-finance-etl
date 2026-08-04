@@ -273,7 +273,7 @@ Macro tax tracking.
 
 | Column | Meaning / Description | How to Use / Interpretation | Good vs Bad (Heuristics) | Correlation |
 | --- | --- | --- | --- | --- |
-| `Realized_STCG/LTCG` | YTD realized gains. | Track limits. | N/A | - |
+| `Realized_STCG/LTCG` / `STCL/LTCL` | YTD realized gains and losses, strictly bifurcated. | Track limits and offset pools. | N/A | - |
 | `LTCG_Exemption_Used/Remaining` | Tax-free threshold usage. | Indicates when to stop harvesting gains. | **Good:** High remaining. | - |
 | `Projected_Tax_Bill` | Estimated fiat owed based on unrealized gains and realized data. | Liability deduction. | **Bad:** High. | - |
 | `Tax_Drag_Pct` | Yield lost to taxes. | N/A | **Bad:** High. | - |
