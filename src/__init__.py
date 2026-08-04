@@ -17,5 +17,5 @@ Author: Sudharshan TK
 
 __all__ = ["__version__", "PACKAGE_NAME"]
 
-__version__ = "3.0.0"
+__version__ = "3.1.0"
 PACKAGE_NAME = "personal-finance-etl"

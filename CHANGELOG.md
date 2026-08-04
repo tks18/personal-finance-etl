@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [3.1.0](https://github.com/tks18/personal-finance-etl/compare/3.0.0...3.1.0) (2026-08-04)
+
+
+### Bug Fixes 🛠
+
+* **engines/presentation:** fix monte-carlo to have variable withdrawal rate ([d45c7f2](https://github.com/tks18/personal-finance-etl/commit/d45c7f21c084dc139071f14b0f191241d7e1a9ab))
+
 ## [3.0.0](https://github.com/tks18/personal-finance-etl/compare/2.4.0...3.0.0) (2026-08-04)
 
 
