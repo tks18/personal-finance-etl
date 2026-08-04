@@ -198,6 +198,8 @@ CREATE TABLE f_tf_Investment_Analytics_Lot (
     FY TEXT,
     FY_Realized_LTCG DOUBLE,
     FY_Realized_STCG DOUBLE,
+    FY_Realized_LTCL DOUBLE,
+    FY_Realized_STCL DOUBLE,
     FY_Realized_Loss DOUBLE,
     FY_LTCG_Remaining_Exemption BIGINT,
     -- Harvest Signals
@@ -244,6 +246,8 @@ CREATE TABLE f_tf_Investment_Analytics_ISIN (
     STCG_Tax_If_Sold DOUBLE,
     FY_Realized_LTCG DOUBLE,
     FY_Realized_STCG DOUBLE,
+    FY_Realized_LTCL DOUBLE,
+    FY_Realized_STCL DOUBLE,
     FY_Realized_Loss DOUBLE,
     FOREIGN KEY(Closing_Date) REFERENCES d_Calendar(Date),
     FOREIGN KEY(ISIN) REFERENCES d_tf_Investment_Master(ISIN)
@@ -278,6 +282,8 @@ CREATE TABLE f_tf_Investment_Analytics_Subtype (
     STCG_Tax_If_Sold DOUBLE,
     FY_Realized_LTCG DOUBLE,
     FY_Realized_STCG DOUBLE,
+    FY_Realized_LTCL DOUBLE,
+    FY_Realized_STCL DOUBLE,
     FY_Realized_Loss DOUBLE,
     FOREIGN KEY(Closing_Date) REFERENCES d_Calendar(Date)
 );
@@ -310,6 +316,8 @@ CREATE TABLE f_tf_Investment_Analytics_Class (
     STCG_Tax_If_Sold DOUBLE,
     FY_Realized_LTCG DOUBLE,
     FY_Realized_STCG DOUBLE,
+    FY_Realized_LTCL DOUBLE,
+    FY_Realized_STCL DOUBLE,
     FY_Realized_Loss DOUBLE,
     FOREIGN KEY(Closing_Date) REFERENCES d_Calendar(Date)
 );
@@ -341,6 +349,8 @@ CREATE TABLE f_tf_Investment_Analytics_Portfolio (
     STCG_Tax_If_Sold DOUBLE,
     FY_Realized_LTCG DOUBLE,
     FY_Realized_STCG DOUBLE,
+    FY_Realized_LTCL DOUBLE,
+    FY_Realized_STCL DOUBLE,
     FY_Realized_Loss DOUBLE,
     FOREIGN KEY(Closing_Date) REFERENCES d_Calendar(Date)
 );

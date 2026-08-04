@@ -303,6 +303,8 @@ CREATE TABLE IF NOT EXISTS p_tf_tax_liability_forecast (
     -- Realized Gains/Income
     Realized_STCG DOUBLE,
     Realized_LTCG DOUBLE,
+    Realized_STCL DOUBLE,
+    Realized_LTCL DOUBLE,
     Taxable_Dividends DOUBLE,
     Taxable_Interest DOUBLE,
     -- Tax Exemptions

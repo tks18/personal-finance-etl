@@ -83,6 +83,8 @@ class PostProcessor:
                                 "STCG_Tax_If_Sold",
                                 "FY_Realized_LTCG",
                                 "FY_Realized_STCG",
+                                "FY_Realized_LTCL",
+                                "FY_Realized_STCL",
                                 "FY_Realized_Loss",
                             ]
                         )
@@ -99,6 +101,8 @@ class PostProcessor:
                     pl.col("STCG_Tax_If_Sold").sum().alias("STCG_Tax_If_Sold"),
                     pl.col("FY_Realized_LTCG").sum().alias("FY_Realized_LTCG"),
                     pl.col("FY_Realized_STCG").sum().alias("FY_Realized_STCG"),
+                    pl.col("FY_Realized_LTCL").sum().alias("FY_Realized_LTCL"),
+                    pl.col("FY_Realized_STCL").sum().alias("FY_Realized_STCL"),
                     pl.col("FY_Realized_Loss").sum().alias("FY_Realized_Loss"),
                 )
                 .with_columns(
