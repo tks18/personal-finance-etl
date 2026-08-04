@@ -227,6 +227,12 @@ class FireForecastingBuilder:
                         rng.standard_t(df=4, size=(iterations, max_months)) * (vol_r / np.sqrt(2))
                         + mean_r
                     )
+                    # Merton Jump-Diffusion (5% annual chance of 20% crash)
+                    jump_prob_monthly = 0.05 / 12.0
+                    jump_magnitude = -0.20
+                    jumps_acc = rng.binomial(1, jump_prob_monthly, size=(iterations, max_months))
+                    returns_acc = returns_acc + (jumps_acc * jump_magnitude)
+
                     multipliers = 1.0 + returns_acc
                 else:
                     multipliers = None
@@ -284,6 +290,10 @@ class FireForecastingBuilder:
                             * (vol_r / np.sqrt(2))
                             + mean_r
                         )
+                        jumps_dec = rng.binomial(
+                            1, 0.05 / 12.0, size=(len(valid_paths), decum_months)
+                        )
+                        returns_dec = returns_dec + (jumps_dec * -0.20)
                         mult_dec = 1.0 + returns_dec
 
                         dec_wealth = np.empty((len(valid_paths), decum_months))
@@ -360,6 +370,10 @@ class FireForecastingBuilder:
                             * (vol_r / np.sqrt(2))
                             + mean_r
                         )
+                        jumps_dec_total = rng.binomial(
+                            1, 0.05 / 12.0, size=(len(valid_paths_total), decum_months)
+                        )
+                        returns_dec_total = returns_dec_total + (jumps_dec_total * -0.20)
                         mult_dec_total = 1.0 + returns_dec_total
 
                         dec_wealth_total = np.empty((len(valid_paths_total), decum_months))
@@ -554,6 +568,43 @@ class FireForecastingBuilder:
                 pl.col("Current_FI_Coverage_Pct").alias("NW_Percentile_of_FI"),
                 pl.col("Current_FI_Coverage_Pct_Total").alias("NW_Percentile_of_FI_Total"),
             )
+            .join(
+                self.lf_risk.select(["MONTH_START_DATE", "Drawdown_Pct"]),
+                on="MONTH_START_DATE",
+                how="left",
+            )
+            .with_columns(
+                (
+                    pl.col("Total_Net_Worth_Market") - pl.col("Total_Net_Worth_Market").shift(1)
+                ).alias("Wealth_Velocity"),
+                pl.col("Drawdown_Pct").fill_null(0.0),
+            )
+            .with_columns(
+                (pl.col("Wealth_Velocity") - pl.col("Wealth_Velocity").shift(1)).alias(
+                    "Wealth_Acceleration"
+                ),
+                pl.when(pl.col("Drawdown_Pct") < -0.20)
+                .then(0.05)
+                .when(pl.col("Drawdown_Pct") < -0.10)
+                .then(0.045)
+                .otherwise(0.04)
+                .alias("CAPE_Adjusted_SWR"),
+                ((pl.col("Total_Income") * 12.0) * (1 - (1.05) ** -30) / 0.05).alias(
+                    "Human_Capital_Value"
+                ),
+            )
+            .with_columns(
+                (pl.col("Total_Net_Worth_Market") * pl.col("CAPE_Adjusted_SWR") * 1.2 / 12.0).alias(
+                    "Guyton_Klinger_Ceiling"
+                ),
+                (pl.col("Total_Net_Worth_Market") * pl.col("CAPE_Adjusted_SWR") * 0.8 / 12.0).alias(
+                    "Guyton_Klinger_Floor"
+                ),
+                pl.when(pl.col("Total_Net_Worth_Market") > 0)
+                .then(pl.col("Human_Capital_Value") / pl.col("Total_Net_Worth_Market"))
+                .otherwise(None)
+                .alias("Human_to_Financial_Capital_Ratio"),
+            )
             .select(
                 [
                     "MONTH_START_DATE",
@@ -603,6 +654,13 @@ class FireForecastingBuilder:
                     "Runway_Months_Total",
                     "Withdrawal_Rate_If_Retired_Now_Total",
                     "Savings_Rate_Required_Total",
+                    "Wealth_Velocity",
+                    "Wealth_Acceleration",
+                    "CAPE_Adjusted_SWR",
+                    "Guyton_Klinger_Floor",
+                    "Guyton_Klinger_Ceiling",
+                    "Human_Capital_Value",
+                    "Human_to_Financial_Capital_Ratio",
                 ]
             )
         )

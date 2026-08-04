@@ -83,7 +83,9 @@ class BaseMetricsBuilder:
             )
             .with_columns(
                 pl.col("Inflation_Rate")
-                .fill_null(self.rules.assumptions.macro.fallback_inflation_rate if self.rules else 0.06)
+                .fill_null(
+                    self.rules.assumptions.macro.fallback_inflation_rate if self.rules else 0.06
+                )
                 .alias("INFLATION_YOY_PCT")
             )
             .with_columns(
@@ -421,9 +423,7 @@ class BaseMetricsBuilder:
             )
 
             lf_inv_agg = (
-                lf_inv_mapped.join(
-                    lf_inv_latest_dates, on=["MONTH_END_DATE", "CATEGORY_ID"]
-                )
+                lf_inv_mapped.join(lf_inv_latest_dates, on=["MONTH_END_DATE", "CATEGORY_ID"])
                 .filter(pl.col("Closing_Date") == pl.col("Max_Closing_Date"))
                 .group_by(["MONTH_END_DATE", "CATEGORY_ID"])
                 .agg(

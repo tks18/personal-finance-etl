@@ -15,7 +15,6 @@ class FinancialRatiosBuilder:
     def build(self) -> pl.LazyFrame:
         lf_monthly_totals = self.base_lf["lf_monthly_totals"]
 
-
         # Compute 3M averages for ratios
         lf_monthly_totals = lf_monthly_totals.sort("MONTH_START_DATE").with_columns(
             [
@@ -55,7 +54,6 @@ class FinancialRatiosBuilder:
                 )
                 .otherwise(0.0)
                 .alias("YoY_Net_Worth_Growth_%"),
-
                 pl.when(pl.col("Total_Net_Worth_Market") > 0)
                 .then(pl.col("Total_Expense") / pl.col("Total_Net_Worth_Market"))
                 .otherwise(0.0)
@@ -114,7 +112,6 @@ class FinancialRatiosBuilder:
                 "Savings_Rate_%",
                 "Liquidity_Ratio_Months",
                 "Debt_to_Asset_Ratio_%",
-
                 "YoY_Net_Worth_Growth_%",
                 "Total_Assets",
                 "Total_Assets_Market",
