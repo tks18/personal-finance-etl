@@ -115,3 +115,23 @@ fat_tail_multiplier = 1.2
 "Direct Stocks" = 0.40
 "ETFs" = 0.40
 "Mutual Funds" = 0.20
+
+# Budget Rules (40/20/30+10 rule)
+[budget.income_allocation]
+# Max % of smoothed income for core/fixed needs (rent, EMI, utilities, groceries)
+core_expense_pct = 0.40
+# Max % for non-core/discretionary (dining, shopping, travel)
+non_core_expense_pct = 0.20
+# Minimum % to deploy into investment accounts via net transfers
+investment_pct = 0.30
+# Implicit buffer/savings cushion = 1 - 0.40 - 0.20 - 0.30 = 0.10
+
+[budget.alerts]
+# Flag Is_Overspent if actual > budget_target by this fraction
+overspend_alert_threshold = 0.05
+# Emergency fund target: N months of core expenses
+emergency_fund_target_months = 6
+
+[budget.smoothing]
+# Trailing months used for recency-biased income smoothing (3×T-1 + 2×T-2 + 1×T-3)
+income_smoothing_months = 3

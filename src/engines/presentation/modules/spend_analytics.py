@@ -43,7 +43,7 @@ class SpendAnalyticsBuilder:
 
         lf_cat_agg = lf_grid.join(
             lf_cat_agg, on=["MONTH_START_DATE", "MONTH_END_DATE", "CATEGORY_ID"], how="left"
-        ).with_columns(
+        ).sort(["CATEGORY_ID", "MONTH_START_DATE"]).with_columns(
             pl.col("Total_Monthly_Spend").fill_null(0.0),
             pl.col("Average_Transaction_Value").fill_null(0.0),
             pl.col("Transaction_Count").fill_null(0).cast(pl.Int64),

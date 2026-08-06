@@ -611,13 +611,15 @@ class BaseMetricsBuilder:
                 pl.col("Liquid_Assets").alias("Liquid_Assets_Market"),
             )
 
-        lf_monthly_totals = lf_monthly_totals.join(
-            lf_inflation, on="MONTH_START_DATE", how="left"
-        ).with_columns(
-            pl.col("INFLATION_YOY_PCT").fill_null(0.0),
-            (pl.col("Total_Net_Worth") * (pl.lit(cpi_latest) / pl.col("CPI_INDEX"))).alias(
-                "Total_Net_Worth_Real"
-            ),
+        lf_monthly_totals = (
+            lf_monthly_totals.join(lf_inflation, on="MONTH_START_DATE", how="left")
+            .sort("MONTH_START_DATE")  # Sort guard: join does not preserve order
+            .with_columns(
+                pl.col("INFLATION_YOY_PCT").fill_null(0.0),
+                (pl.col("Total_Net_Worth") * (pl.lit(cpi_latest) / pl.col("CPI_INDEX"))).alias(
+                    "Total_Net_Worth_Real"
+                ),
+            )
         )
 
         return {

@@ -83,7 +83,7 @@ CREATE TABLE IF NOT EXISTS p_tf_Financial_Ratios_Monthly (
     FOREIGN KEY(MONTH_END_DATE) REFERENCES d_Calendar(Date)
 );
 
-CREATE TABLE IF NOT EXISTS p_tf_category_spend_analytics (
+CREATE TABLE IF NOT EXISTS p_tf_Category_Spend_Analytics (
     -- Identifiers
     MONTH_START_DATE DATE,
     MONTH_END_DATE DATE,
@@ -124,7 +124,7 @@ CREATE TABLE IF NOT EXISTS p_tf_category_spend_analytics (
     FOREIGN KEY(CATEGORY_ID) REFERENCES d_Expense_Subcategory(UID)
 );
 
-CREATE TABLE IF NOT EXISTS p_tf_income_streams_monthly (
+CREATE TABLE IF NOT EXISTS p_tf_Income_Streams_Monthly (
     -- Identifiers
     MONTH_START_DATE DATE,
     MONTH_END_DATE DATE,
@@ -165,7 +165,7 @@ CREATE TABLE IF NOT EXISTS p_tf_income_streams_monthly (
     FOREIGN KEY(CATEGORY_ID) REFERENCES d_Income_Subcategory(UID)
 );
 
-CREATE TABLE IF NOT EXISTS p_tf_fire_forecasting_monthly (
+CREATE TABLE IF NOT EXISTS p_tf_Fire_Forecasting_Monthly (
     -- Identifiers
     MONTH_START_DATE DATE,
     MONTH_END_DATE DATE,
@@ -246,7 +246,7 @@ CREATE TABLE IF NOT EXISTS p_tf_fire_forecasting_monthly (
     FOREIGN KEY(MONTH_END_DATE) REFERENCES d_Calendar(Date)
 );
 
-CREATE TABLE IF NOT EXISTS p_tf_risk_metrics (
+CREATE TABLE IF NOT EXISTS p_tf_Risk_Metrics (
     -- Identifiers
     MONTH_START_DATE DATE,
     MONTH_END_DATE DATE,
@@ -277,7 +277,7 @@ CREATE TABLE IF NOT EXISTS p_tf_risk_metrics (
     FOREIGN KEY(MONTH_END_DATE) REFERENCES d_Calendar(Date)
 );
 
-CREATE TABLE IF NOT EXISTS p_tf_sector_allocation_monthly (
+CREATE TABLE IF NOT EXISTS p_tf_Sector_Allocation_Monthly (
     -- Identifiers
     MONTH_START_DATE DATE,
     As_Of_Date DATE,
@@ -309,7 +309,7 @@ CREATE TABLE IF NOT EXISTS p_tf_sector_allocation_monthly (
     FOREIGN KEY(MONTH_START_DATE) REFERENCES d_Calendar(Date)
 );
 
-CREATE TABLE IF NOT EXISTS p_tf_tax_liability_forecast (
+CREATE TABLE IF NOT EXISTS p_tf_Tax_Liability_Forecast (
     -- Identifiers
     MONTH_START_DATE DATE,
     Financial_Year TEXT,
@@ -335,7 +335,7 @@ CREATE TABLE IF NOT EXISTS p_tf_tax_liability_forecast (
     FOREIGN KEY(MONTH_START_DATE) REFERENCES d_Calendar(Date)
 );
 
-CREATE TABLE IF NOT EXISTS p_tf_performance_attribution (
+CREATE TABLE IF NOT EXISTS p_tf_Performance_Attribution (
     -- Identifiers
     MONTH_START_DATE DATE,
     INSTRUMENT_CLASS TEXT,
@@ -356,7 +356,7 @@ CREATE TABLE IF NOT EXISTS p_tf_performance_attribution (
     FOREIGN KEY(MONTH_START_DATE) REFERENCES d_Calendar(Date)
 );
 
-CREATE TABLE IF NOT EXISTS p_tf_portfolio_rebalancing_plan (
+CREATE TABLE IF NOT EXISTS p_tf_Portfolio_Rebalancing_Plan (
     -- Identifiers
     MONTH_START_DATE DATE,
     INSTRUMENT_CLASS TEXT,
@@ -377,7 +377,7 @@ CREATE TABLE IF NOT EXISTS p_tf_portfolio_rebalancing_plan (
     FOREIGN KEY(MONTH_START_DATE) REFERENCES d_Calendar(Date)
 );
 
-CREATE TABLE IF NOT EXISTS p_tf_tax_harvesting (
+CREATE TABLE IF NOT EXISTS p_tf_Tax_Harvesting (
     -- Identifiers
     ISIN TEXT,
     "Instrument Name" TEXT,
@@ -399,6 +399,252 @@ CREATE TABLE IF NOT EXISTS p_tf_tax_harvesting (
     Substitute_Asset_Available BOOLEAN,
     Priority_Score REAL,
     FOREIGN KEY(ISIN) REFERENCES d_tf_Investment_Master(ISIN)
+);
+
+CREATE TABLE IF NOT EXISTS p_tf_Budget_Forecast_Monthly (
+    -- Identifiers
+    MONTH_START_DATE DATE,
+    MONTH_END_DATE DATE,
+    YEAR_MONTH TEXT,
+    -- Income Anchor
+    Actual_Income DOUBLE,
+    Budget_Income DOUBLE,
+    Income_Volatility_Pct DOUBLE,
+    Income_Regime TEXT,
+    -- Rule Targets (from config: 40/20/30+10)
+    Rule_Core_Pct_Budget DOUBLE,
+    Rule_NonCore_Pct_Budget DOUBLE,
+    Rule_Investment_Pct_Budget DOUBLE,
+    Budget_Core_Expense_Target DOUBLE,
+    Budget_NonCore_Expense_Target DOUBLE,
+    Budget_Investment_Target DOUBLE,
+    Budget_Surplus_Buffer DOUBLE,
+    Budget_Total_Expense_Target DOUBLE,
+    -- Actuals
+    Actual_Core_Expense DOUBLE,
+    Actual_NonCore_Expense DOUBLE,
+    Actual_Investment DOUBLE,
+    Actual_Savings DOUBLE,
+    -- Actual Percentages of Income
+    Actual_Core_Pct_of_Income DOUBLE,
+    Actual_NonCore_Pct_of_Income DOUBLE,
+    Actual_Investment_Pct_of_Income DOUBLE,
+    Actual_Savings_Pct_of_Income DOUBLE,
+    -- Variance Accounting
+    Core_Expense_Variance DOUBLE,
+    NonCore_Expense_Variance DOUBLE,
+    Investment_Shortfall DOUBLE,
+    Total_Budget_Variance DOUBLE,
+    -- Trend & Momentum Signals
+    Core_Expense_3M_Trend DOUBLE,
+    NonCore_Expense_3M_Trend DOUBLE,
+    Income_3M_Trend DOUBLE,
+    -- Z-Score Anomaly Detection (6M rolling baseline)
+    Core_Expense_ZScore DOUBLE,
+    NonCore_Expense_ZScore DOUBLE,
+    Income_ZScore DOUBLE,
+    Savings_Rate_Trend_Signal TEXT,
+    -- Composite Health Score
+    Savings_Rate_Health_Score DOUBLE,
+    Savings_Rate_Grade TEXT,
+    Budget_Stress_Score DOUBLE,
+    -- Lifestyle & Efficiency Metrics
+    Marginal_Core_Efficiency DOUBLE,
+    Lifestyle_Creep_Index DOUBLE,
+    Budget_Elasticity DOUBLE,
+    -- Runway
+    Zero_Income_Runway_Months DOUBLE,
+    Emergency_Fund_Gap DOUBLE,
+    -- M+1 Forward Budget Plan
+    NextMonth_Budget_Income_Forecast DOUBLE,
+    NextMonth_Core_Budget DOUBLE,
+    NextMonth_NonCore_Budget DOUBLE,
+    NextMonth_Investment_Budget DOUBLE,
+    NextMonth_Discretionary_Pool DOUBLE,
+    NextMonth_Recommended_Savings DOUBLE,
+    -- M+2 Forward Budget Plan
+    Next2Month_Budget_Income_Forecast DOUBLE,
+    Next2Month_Core_Budget DOUBLE,
+    Next2Month_NonCore_Budget DOUBLE,
+    Next2Month_Investment_Budget DOUBLE,
+    Next2Month_Discretionary_Pool DOUBLE,
+    Next2Month_Recommended_Savings DOUBLE,
+    -- M+3 Forward Budget Plan
+    Next3Month_Budget_Income_Forecast DOUBLE,
+    Next3Month_Core_Budget DOUBLE,
+    Next3Month_NonCore_Budget DOUBLE,
+    Next3Month_Investment_Budget DOUBLE,
+    Next3Month_Discretionary_Pool DOUBLE,
+    Next3Month_Recommended_Savings DOUBLE,
+    -- Flags
+    Is_Core_Overspent BOOLEAN,
+    Is_NonCore_Overspent BOOLEAN,
+    Is_Investment_Underfunded BOOLEAN,
+    Is_Income_Volatile BOOLEAN,
+    Is_Budget_Month_Healthy BOOLEAN,
+    Is_Lifestyle_Creep BOOLEAN,
+    Is_Expense_Anomaly BOOLEAN,
+    FOREIGN KEY(MONTH_START_DATE) REFERENCES d_Calendar(Date),
+    FOREIGN KEY(MONTH_END_DATE) REFERENCES d_Calendar(Date)
+);
+
+CREATE TABLE IF NOT EXISTS p_tf_Investment_Snapshot_ISIN (
+    -- Identifiers
+    MONTH_START_DATE DATE,
+    MONTH_END_DATE DATE,
+    YEAR_MONTH TEXT,
+    ISIN TEXT,
+    INSTRUMENT_NAME TEXT,
+    INSTRUMENT_CLASS TEXT,
+    INSTRUMENT_TYPE TEXT,
+    INSTRUMENT_SUBTYPE TEXT,
+    SECTOR TEXT,
+    -- Position Values
+    Invested_Value DOUBLE,
+    Market_Value DOUBLE,
+    Unrealized_PL DOUBLE,
+    Absolute_Return_Pct DOUBLE,
+    Portfolio_Weight_Pct DOUBLE,
+    -- MoM Return
+    Prev_Month_Market_Value DOUBLE,
+    Monthly_Value_Change DOUBLE,
+    Monthly_Deployed DOUBLE,
+    Monthly_Redeemed DOUBLE,
+    Net_Monthly_Flow DOUBLE,
+    MoM_Return_Pct DOUBLE,
+    MoM_Return_Pct_Simple DOUBLE,
+    -- Trailing Returns
+    Rolling_3M_Return_Pct DOUBLE,
+    Rolling_6M_Return_Pct DOUBLE,
+    Rolling_12M_Return_Pct DOUBLE,
+    -- Benchmark MoM
+    BM_MoM_Return_Pct DOUBLE,
+    MoM_Alpha DOUBLE,
+    -- Snapshot Metrics (cumulative)
+    CAGR DOUBLE,
+    XIRR DOUBLE,
+    After_Tax_XIRR DOUBLE,
+    Active_Return DOUBLE,
+    Beta DOUBLE,
+    Tracking_Error DOUBLE,
+    Information_Ratio DOUBLE,
+    -- Tax Context
+    Unrealized_LTCG DOUBLE,
+    Unrealized_STCG DOUBLE,
+    Unrealized_LTCL DOUBLE,
+    Unrealized_STCL DOUBLE,
+    LTCG_Tax_If_Sold DOUBLE,
+    STCG_Tax_If_Sold DOUBLE,
+    -- Flags
+    Is_New_Position BOOLEAN,
+    Is_Closed_Position BOOLEAN,
+    Is_Active_Month BOOLEAN,
+    Is_MoM_Positive BOOLEAN,
+    Is_Beating_BM_MoM BOOLEAN,
+    FOREIGN KEY(MONTH_START_DATE) REFERENCES d_Calendar(Date),
+    FOREIGN KEY(MONTH_END_DATE) REFERENCES d_Calendar(Date),
+    FOREIGN KEY(ISIN) REFERENCES d_tf_Investment_Master(ISIN)
+);
+
+CREATE TABLE IF NOT EXISTS p_tf_Investment_Snapshot_Portfolio (
+    -- Identifiers
+    MONTH_START_DATE DATE,
+    MONTH_END_DATE DATE,
+    YEAR_MONTH TEXT,
+    -- Portfolio Valuation
+    Total_Invested_Value DOUBLE,
+    Total_Market_Value DOUBLE,
+    Total_Unrealized_PL DOUBLE,
+    Absolute_Return_Pct DOUBLE,
+    -- MoM Return
+    Prev_Month_Market_Value DOUBLE,
+    Portfolio_MoM_Return_Pct DOUBLE,
+    Portfolio_MoM_Return_Pct_Simple DOUBLE,
+    Portfolio_MoM_Value_Change DOUBLE,
+    Monthly_Deployed_Total DOUBLE,
+    Monthly_Redeemed_Total DOUBLE,
+    -- Rolling Returns
+    Rolling_3M_Return_Pct DOUBLE,
+    Rolling_6M_Return_Pct DOUBLE,
+    Rolling_12M_Return_Pct DOUBLE,
+    Rolling_3M_Annualized_Return DOUBLE,
+    -- Quant Metrics
+    XIRR DOUBLE,
+    After_Tax_XIRR DOUBLE,
+    BM_XIRR DOUBLE,
+    Active_Return DOUBLE,
+    Sharpe_Ratio DOUBLE,
+    Sortino_Ratio DOUBLE,
+    Max_Drawdown DOUBLE,
+    -- Cashflow Context
+    Total_Income DOUBLE,
+    Total_Expense DOUBLE,
+    Total_Core_Expense DOUBLE,
+    Surplus_For_Investment DOUBLE,
+    Deployment_Efficiency_Pct DOUBLE,
+    -- Tax Summary
+    Total_Unrealized_LTCG DOUBLE,
+    Total_Unrealized_STCG DOUBLE,
+    Total_Unrealized_LTCL DOUBLE,
+    Total_Unrealized_STCL DOUBLE,
+    Total_LTCG_Tax_If_Sold DOUBLE,
+    Total_STCG_Tax_If_Sold DOUBLE,
+    FY_Realized_Net_PnL DOUBLE,
+    FOREIGN KEY(MONTH_START_DATE) REFERENCES d_Calendar(Date),
+    FOREIGN KEY(MONTH_END_DATE) REFERENCES d_Calendar(Date)
+);
+
+CREATE TABLE IF NOT EXISTS p_tf_Monthly_Cashflow_Summary (
+    -- Identifiers
+    MONTH_START_DATE DATE,
+    MONTH_END_DATE DATE,
+    YEAR_MONTH TEXT,
+    -- Income bifurcation
+    Total_Income DOUBLE,
+    Active_Income DOUBLE,
+    Passive_Income DOUBLE,
+    Dividend_Income DOUBLE,
+    Interest_Income DOUBLE,
+    Active_Income_Share_Pct DOUBLE,
+    Passive_Income_Share_Pct DOUBLE,
+    -- Expense bifurcation
+    Total_Expense DOUBLE,
+    Total_Core_Expense DOUBLE,
+    NonCore_Expense DOUBLE,
+    Core_Expense_Share_Pct DOUBLE,
+    -- Investments deployed (buys)
+    Total_Investment_Deployed DOUBLE,
+    Equity_Deployed DOUBLE,
+    Stocks_Deployed DOUBLE,
+    ETFs_Deployed DOUBLE,
+    MF_Deployed DOUBLE,
+    Other_Deployed DOUBLE,
+    Equity_Pct_of_Deployed DOUBLE,
+    MF_Pct_of_Deployed DOUBLE,
+    -- Redemptions & net flow
+    Total_Investment_Redeemed DOUBLE,
+    Net_Investment_Flow DOUBLE,
+    -- Surplus & rates
+    Gross_Surplus DOUBLE,
+    Net_Surplus_After_Invest DOUBLE,
+    Savings_Rate_Pct DOUBLE,
+    Investment_Rate_Pct DOUBLE,
+    -- MoM deltas
+    Income_MoM_Delta DOUBLE,
+    Expense_MoM_Delta DOUBLE,
+    Investment_MoM_Delta DOUBLE,
+    Income_MoM_Pct DOUBLE,
+    Expense_MoM_Pct DOUBLE,
+    -- Trailing averages
+    Trailing_3M_Avg_Income DOUBLE,
+    Trailing_3M_Avg_Expense DOUBLE,
+    Trailing_3M_Avg_Investment DOUBLE,
+    Trailing_3M_Avg_Savings_Rate DOUBLE,
+    -- Flags
+    Is_Surplus_Month BOOLEAN,
+    Is_Investment_Target_Met BOOLEAN,
+    FOREIGN KEY(MONTH_START_DATE) REFERENCES d_Calendar(Date),
+    FOREIGN KEY(MONTH_END_DATE) REFERENCES d_Calendar(Date)
 );
 
 CREATE TABLE IF NOT EXISTS _ETL_Metadata (

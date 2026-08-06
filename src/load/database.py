@@ -174,15 +174,19 @@ class DuckDBLoader:
         presentation_tables = {
             "df_p_tf_net_worth_monthly_summary": "p_tf_Net_Worth_Monthly_Summary",
             "df_p_tf_financial_ratios_monthly": "p_tf_Financial_Ratios_Monthly",
-            "df_p_tf_category_spend_analytics": "p_tf_category_spend_analytics",
-            "df_p_tf_income_streams_monthly": "p_tf_income_streams_monthly",
-            "df_p_tf_fire_forecasting_monthly": "p_tf_fire_forecasting_monthly",
-            "df_p_tf_risk_metrics": "p_tf_risk_metrics",
-            "df_p_tf_sector_allocation_monthly": "p_tf_sector_allocation_monthly",
-            "df_p_tf_tax_harvesting": "p_tf_tax_harvesting",
-            "df_p_tf_portfolio_rebalancing_plan": "p_tf_portfolio_rebalancing_plan",
-            "df_p_tf_tax_liability_forecast": "p_tf_tax_liability_forecast",
-            "df_p_tf_performance_attribution": "p_tf_performance_attribution",
+            "df_p_tf_category_spend_analytics": "p_tf_Category_Spend_Analytics",
+            "df_p_tf_income_streams_monthly": "p_tf_Income_Streams_Monthly",
+            "df_p_tf_fire_forecasting_monthly": "p_tf_Fire_Forecasting_Monthly",
+            "df_p_tf_risk_metrics": "p_tf_Risk_Metrics",
+            "df_p_tf_sector_allocation_monthly": "p_tf_Sector_Allocation_Monthly",
+            "df_p_tf_tax_harvesting": "p_tf_Tax_Harvesting",
+            "df_p_tf_portfolio_rebalancing_plan": "p_tf_Portfolio_Rebalancing_Plan",
+            "df_p_tf_tax_liability_forecast": "p_tf_Tax_Liability_Forecast",
+            "df_p_tf_performance_attribution": "p_tf_Performance_Attribution",
+            "df_p_tf_budget_forecast_monthly": "p_tf_Budget_Forecast_Monthly",
+            "df_p_tf_investment_snapshot_isin": "p_tf_Investment_Snapshot_ISIN",
+            "df_p_tf_investment_snapshot_portfolio": "p_tf_Investment_Snapshot_Portfolio",
+            "df_p_tf_monthly_cashflow_summary": "p_tf_Monthly_Cashflow_Summary",
         }
         table_mappings.update(presentation_tables)
 

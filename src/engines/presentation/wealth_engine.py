@@ -4,9 +4,12 @@ import polars as pl
 import polars.selectors as cs
 
 from src.engines.presentation.modules.base_metrics import BaseMetricsBuilder
+from src.engines.presentation.modules.budget_forecast import BudgetForecastBuilder
 from src.engines.presentation.modules.financial_ratios import FinancialRatiosBuilder
 from src.engines.presentation.modules.fire_forecasting import FireForecastingBuilder
 from src.engines.presentation.modules.income_streams import IncomeStreamsBuilder
+from src.engines.presentation.modules.investment_snapshot import InvestmentSnapshotBuilder
+from src.engines.presentation.modules.monthly_cashflow_summary import MonthlyCashflowSummaryBuilder
 from src.engines.presentation.modules.performance_attribution import PerformanceAttributionBuilder
 from src.engines.presentation.modules.portfolio_rebalancing import PortfolioRebalancingBuilder
 from src.engines.presentation.modules.risk_metrics import RiskMetricsBuilder
@@ -73,9 +76,24 @@ class WealthPresentationEngine:
             dfs, base_lf, rules=self.rules
         ).build()
 
-        # 7. FIRE & Wealth Forecasting
+        # 7. Budget Forecast (40/20/30+10 rule, 3-month forward plan)
+        results["df_p_tf_budget_forecast_monthly"] = BudgetForecastBuilder(
+            base_lf, rules=self.rules
+        ).build()
+
+        # 8. FIRE & Wealth Forecasting
         results["df_p_tf_fire_forecasting_monthly"] = FireForecastingBuilder(
             dfs, base_lf, results["df_p_tf_risk_metrics"], rules=self.rules
+        ).build()
+
+        # 9. Investment Snapshots (ISIN & Portfolio level)
+        snapshot_builder = InvestmentSnapshotBuilder(dfs, base_lf, rules=self.rules)
+        results["df_p_tf_investment_snapshot_isin"] = snapshot_builder.build_isin()
+        results["df_p_tf_investment_snapshot_portfolio"] = snapshot_builder.build_portfolio()
+
+        # 10. Monthly Cashflow Summary
+        results["df_p_tf_monthly_cashflow_summary"] = MonthlyCashflowSummaryBuilder(
+            dfs, base_lf, rules=self.rules
         ).build()
 
         logger.info(
