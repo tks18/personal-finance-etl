@@ -34,6 +34,48 @@ class ExpenseRules(BaseModel):
     core: CoreExpenseRules = Field(default_factory=CoreExpenseRules)
 
 
+class IncomeAllocationRules(BaseModel):
+    core_expense_pct: float = Field(
+        0.40,
+        description="Max % of smoothed income allocated to core/fixed expenses (40% default).",
+    )
+    non_core_expense_pct: float = Field(
+        0.20,
+        description="Max % of smoothed income allocated to non-core/discretionary expenses (20% default).",
+    )
+    investment_pct: float = Field(
+        0.30,
+        description="Minimum % of smoothed income to invest/save via net transfers (30% default).",
+    )
+
+
+class BudgetAlerts(BaseModel):
+    overspend_alert_threshold: float = Field(
+        0.05,
+        description="Fractional overage above budget target that triggers Is_Overspent flags (5% default).",
+    )
+    emergency_fund_target_months: int = Field(
+        6,
+        description="Target number of months of core expenses to hold as emergency fund.",
+    )
+
+
+class BudgetSmoothing(BaseModel):
+    income_smoothing_months: int = Field(
+        3,
+        description="Number of trailing months used for recency-weighted income smoothing.",
+    )
+
+
+class BudgetRules(BaseModel):
+    income_allocation: IncomeAllocationRules = Field(
+        default_factory=IncomeAllocationRules
+    )
+    alerts: BudgetAlerts = Field(default_factory=BudgetAlerts)
+    smoothing: BudgetSmoothing = Field(default_factory=BudgetSmoothing)
+
+
+
 class IlliquidAssetRules(BaseModel):
     category_ids: list[str] = Field(default_factory=list)
     sub_category_ids: list[str] = Field(default_factory=list)
@@ -180,6 +222,7 @@ class FinancialRules(BaseModel):
     assets: AssetRules = Field(default_factory=lambda: AssetRules())
     investments: dict[str, InvestmentInstrumentRules] = Field(default_factory=dict)
     assumptions: AssumptionsRules = Field(...)
+    budget: BudgetRules = Field(default_factory=BudgetRules)
 
     @classmethod
     def from_toml(cls, filepath: str) -> "FinancialRules":
