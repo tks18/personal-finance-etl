@@ -576,12 +576,7 @@ CREATE TABLE IF NOT EXISTS p_tf_Investment_Snapshot_Portfolio (
     Sharpe_Ratio DOUBLE,
     Sortino_Ratio DOUBLE,
     Max_Drawdown DOUBLE,
-    -- Cashflow Context
-    Total_Income DOUBLE,
-    Total_Expense DOUBLE,
-    Total_Core_Expense DOUBLE,
-    Surplus_For_Investment DOUBLE,
-    Deployment_Efficiency_Pct DOUBLE,
+
     -- Tax Summary
     Total_Unrealized_LTCG DOUBLE,
     Total_Unrealized_STCG DOUBLE,

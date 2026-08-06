@@ -439,35 +439,6 @@ class InvestmentSnapshotBuilder:
             .alias("Rolling_3M_Annualized_Return"),
         )
 
-        # ── Join cashflow context from base_metrics ───────────────────────────
-        if lf_monthly_totals is not None:
-            lf_cashflow = lf_monthly_totals.select(
-                [
-                    "MONTH_START_DATE",
-                    pl.col("Total_Income"),
-                    pl.col("Total_Expense"),
-                    pl.col("Total_Core_Expense"),
-                ]
-            ).with_columns(
-                (pl.col("Total_Income") - pl.col("Total_Expense")).alias("Surplus_For_Investment"),
-            )
-            lf_port = lf_port.join(lf_cashflow, on="MONTH_START_DATE", how="left").sort(
-                "MONTH_START_DATE"  # Re-sort after join
-            )
-            lf_port = lf_port.with_columns(
-                pl.when(pl.col("Surplus_For_Investment") > 0)
-                .then(pl.col("Monthly_Deployed_Total") / pl.col("Surplus_For_Investment"))
-                .otherwise(0.0)
-                .alias("Deployment_Efficiency_Pct"),
-            )
-        else:
-            lf_port = lf_port.with_columns(
-                pl.lit(None).cast(pl.Float64).alias("Total_Income"),
-                pl.lit(None).cast(pl.Float64).alias("Total_Expense"),
-                pl.lit(None).cast(pl.Float64).alias("Total_Core_Expense"),
-                pl.lit(None).cast(pl.Float64).alias("Surplus_For_Investment"),
-                pl.lit(None).cast(pl.Float64).alias("Deployment_Efficiency_Pct"),
-            )
 
         # ── YEAR_MONTH ────────────────────────────────────────────────────────
         lf_port = lf_port.with_columns(
@@ -497,9 +468,7 @@ class InvestmentSnapshotBuilder:
                 # Quant
                 "XIRR", "After_Tax_XIRR", "BM_XIRR",
                 "Active_Return", "Sharpe_Ratio", "Sortino_Ratio", "Max_Drawdown",
-                # Cashflow context
-                "Total_Income", "Total_Expense", "Total_Core_Expense",
-                "Surplus_For_Investment", "Deployment_Efficiency_Pct",
+
                 # Tax summary
                 pl.col("Unrealized_LTCG").alias("Total_Unrealized_LTCG"),
                 pl.col("Unrealized_STCG").alias("Total_Unrealized_STCG"),
