@@ -27,18 +27,11 @@ class DuckDBManager:
 
     def _generate_target_db_path(self) -> str:
         now = datetime.now()
-        if now.month >= 4:
-            fy_str = f"{now.year}-{str(now.year + 1)[-2:]}"
-        else:
-            fy_str = f"{now.year - 1}-{str(now.year)[-2:]}"
-
-        month_year_str = now.strftime("%m-%Y")
-        file_name = f"Personal_Finance_DB_{month_year_str}.duckdb"
-
-        full_dir_path = os.path.join(self.base_path, fy_str, month_year_str)
-        os.makedirs(full_dir_path, exist_ok=True)
-
-        return os.path.join(full_dir_path, file_name)
+        timestamp_str = now.strftime("%Y%m%d_%H%M%S")
+        file_name = f"Personal_Finance_DB_{timestamp_str}.duckdb"
+        
+        os.makedirs(self.base_path, exist_ok=True)
+        return os.path.join(self.base_path, file_name)
 
     def setup_schema(self) -> None:
         """Deletes old tmp DB and creates strict schemas."""
@@ -63,10 +56,10 @@ class DuckDBManager:
         """DuckDB natively manages optimization and zone maps, no explicit indexes needed."""
         pass
 
-    def enforce_retention_policy(self, max_files: int = 12) -> None:
+    def enforce_retention_policy(self, max_files: int = 3) -> None:
         """Keeps only the most recent N database files to prevent disk bloat."""
-        search_pattern = os.path.join(self.base_path, "**", "*.duckdb")
-        db_files = glob.glob(search_pattern, recursive=True)
+        search_pattern = os.path.join(self.base_path, "*.duckdb")
+        db_files = glob.glob(search_pattern)
 
         if len(db_files) <= max_files:
             return
@@ -79,11 +72,11 @@ class DuckDBManager:
             try:
                 os.remove(db_file)
                 logger.info(f"Deleted old database file: {db_file}")
-
-                # Cleanup parent dir if empty
-                parent_dir = os.path.dirname(db_file)
-                if not os.listdir(parent_dir):
-                    shutil.rmtree(parent_dir)
+                
+                log_file = db_file.replace(".duckdb", ".log")
+                if os.path.exists(log_file):
+                    os.remove(log_file)
+                    logger.info(f"Deleted old log file: {log_file}")
             except Exception as e:
                 logger.warning(f"Failed to delete old DB {db_file}: {e}")
 
