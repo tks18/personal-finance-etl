@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [3.4.1](https://github.com/tks18/personal-finance-etl/compare/3.4.0...3.4.1) (2026-08-06)
+
+
+### Reverts ◀
+
+* revert back to 3.4.0 ([590fe05](https://github.com/tks18/personal-finance-etl/commit/590fe05c7dd32c962392d87b9f9e6e84a83d5988))
+* revert to fd69f74 ([72fac0e](https://github.com/tks18/personal-finance-etl/commit/72fac0ead7e91f2ecb1944edf4d60231e8cb024c))
+
+
+### Bug Fixes 🛠
+
+* fix redudant columns ([ec0d77f](https://github.com/tks18/personal-finance-etl/commit/ec0d77fe362fe8a6d920aa76bf5736da607898b4))
+
 ## [3.4.0](https://github.com/tks18/personal-finance-etl/compare/3.3.0...3.4.0) (2026-08-06)
 
 
