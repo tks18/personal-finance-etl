@@ -5,7 +5,7 @@ class HarvestRecommendationCalculator:
     """Calculates Stepup and Harvest Recommendations."""
 
     @staticmethod
-    def calculate(lazy_df: pl.LazyFrame, rules=None) -> pl.LazyFrame:
+    def calculate(lazy_df: pl.LazyFrame, rules) -> pl.LazyFrame:
         wait_days = rules.assumptions.tax.harvest_wait_days_threshold if rules else 90
 
         lazy_df = lazy_df.with_columns(

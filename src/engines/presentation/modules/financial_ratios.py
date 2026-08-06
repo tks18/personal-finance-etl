@@ -8,7 +8,7 @@ class FinancialRatiosBuilder:
     Constructs the Financial Ratios Monthly presentation model.
     """
 
-    def __init__(self, base_lf: dict[str, Any], rules=None):
+    def __init__(self, base_lf: dict[str, Any], rules):
         self.base_lf = base_lf
         self.rules = rules
 

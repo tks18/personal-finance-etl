@@ -41,8 +41,8 @@ fallback_inflation_rate = 0.06
 fallback_risk_free_rate = 0.06
 
 [assumptions.fire]
-# Safe Withdrawal Rate multiplier (e.g., 25.0 for the 4% rule).
-swr_multiplier = 25.0
+# Safe Withdrawal Rate multiplier (e.g., 28.5 for the 3.5% rule, moderate stance).
+swr_multiplier = 28.5
 # Assumed real (inflation-adjusted) return for Coast FI compounding.
 coast_fi_real_return = 0.05
 # Number of years to coast (compound without contributions) for Coast FI targets.
@@ -50,17 +50,32 @@ coast_fi_years = 10
 # Ratio of the Target FI amount considered sufficient for Lean FI (e.g., 0.7 for 70%).
 lean_fi_ratio = 0.7
 # Fallback nominal return to use for FIRE forecasting if historical trailing returns are unavailable.
-fallback_trailing_return = 0.12
+fallback_trailing_return = 0.11
+# Floor Safe Withdrawal Rate (SWR) during severe portfolio drawdowns.
+cape_swr_floor = 0.04
+# Ceiling Safe Withdrawal Rate (SWR) during moderate drawdowns.
+cape_swr_ceiling = 0.045
+# Base Safe Withdrawal Rate (SWR) during normal market conditions.
+cape_swr_base = 0.035
+# The maximum age until which you expect to be healthy and working.
+human_capital_max_age = 55.0
+# Annual discount rate applied to future earnings to assess human capital value.
+human_capital_discount_rate = 0.05
+
 
 [assumptions.monte_carlo]
 # Number of Monte Carlo paths/simulations to run.
-iterations = 1000
-# Maximum duration of the Monte Carlo simulation in months.
-max_months = 480
+iterations = 10000
+# Maximum months allowed to reach FI. (400 months = ~33 years to hit your FI number)
+max_months = 400
 # Assumed annualized standard deviation (volatility) of returns.
 annual_volatility = 0.15
 # Absolute minimum annualized real return applied during Monte Carlo forecasting.
 real_return_floor = 0.01
+# Desired target age for FIRE calculations. (Plan for longer lifespan for safety)
+desired_target_age = 85
+# Date of birth in YYYY-MM-DD format.
+date_of_birth = "2000-05-16"
 
 [assumptions.tax]
 # Date before which debt mutual funds retain indexation benefits.

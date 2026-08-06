@@ -10,7 +10,7 @@ class SectorAllocationBuilder:
     """
 
     def __init__(
-        self, dfs: Mapping[str, pl.DataFrame | pl.LazyFrame], base_lf: dict[str, Any], rules=None
+        self, dfs: Mapping[str, pl.DataFrame | pl.LazyFrame], base_lf: dict[str, Any], rules
     ):
         self.dfs = dfs
         self.base_lf = base_lf

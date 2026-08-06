@@ -12,7 +12,7 @@ from src.utils.helpers import to_date_obj
 _DEFAULT_DEBT_MF_CUTOFF = date(2023, 4, 1)
 
 
-def get_ltcg_threshold(tax_type: str, tax_subtype: str, rules=None) -> int:
+def get_ltcg_threshold(tax_type: str, tax_subtype: str, rules) -> int:
     """Return holding period threshold for LTCG in days based on declarative rules."""
     tt = tax_type.strip().lower()
     tst = tax_subtype.strip().lower()
@@ -46,7 +46,7 @@ class FYMacroParametersTable:
         ("default", ""): ("Default_LTCG", "Default_STCG"),
     }
 
-    def __init__(self, df: pl.DataFrame, rules=None):
+    def __init__(self, df: pl.DataFrame, rules):
         self.rules = rules
         self.fy_map: list[dict] = []
         if df.is_empty():

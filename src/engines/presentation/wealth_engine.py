@@ -22,7 +22,7 @@ class WealthPresentationEngine:
     Consumes LazyFrames and produces aggregated summary tables suitable for BI dashboards.
     """
 
-    def __init__(self, rules=None):
+    def __init__(self, rules):
         self.rules = rules
 
     def run(self, dfs: Mapping[str, pl.DataFrame | pl.LazyFrame]) -> dict[str, pl.LazyFrame]:

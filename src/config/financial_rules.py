@@ -81,6 +81,23 @@ class FireAssumptions(BaseModel):
         description="Fallback nominal return to use for FIRE forecasting if historical returns are unavailable.",
     )
 
+    cape_swr_floor: float = Field(
+        ..., description="Floor SWR during severe drawdown."
+    )
+    cape_swr_ceiling: float = Field(
+        ..., description="Ceiling SWR during moderate drawdown."
+    )
+    cape_swr_base: float = Field(
+        ..., description="Base SWR during normal markets."
+    )
+    human_capital_max_age: float = Field(
+        ..., description="Maximum age until which you expect to be healthy and working."
+    )
+    human_capital_discount_rate: float = Field(
+        ..., description="Discount rate for human capital."
+    )
+
+
 
 class MonteCarloAssumptions(BaseModel):
     iterations: int = Field(..., description="Number of Monte Carlo paths/simulations to run.")
@@ -92,6 +109,12 @@ class MonteCarloAssumptions(BaseModel):
     )
     real_return_floor: float = Field(
         ..., description="Absolute minimum annualized real return applied during forecasting."
+    )
+    desired_target_age: int = Field(
+        ..., description="Desired target age for FIRE calculations."
+    )
+    date_of_birth: str = Field(
+        ..., description="Date of birth in YYYY-MM-DD format."
     )
 
 

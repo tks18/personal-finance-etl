@@ -10,7 +10,7 @@ class AnalyticsContextManager:
         self.status_queue = status_queue
 
     def initialize(
-        self, df_p, df_s, df_m, df_i, df_b, df_t, start_date, end_date, rules=None
+        self, df_p, df_s, df_m, df_i, df_b, df_t, start_date, end_date, rules
     ) -> tuple[RunContext, list[str]]:
         if self.status_queue:
             self.status_queue.put(

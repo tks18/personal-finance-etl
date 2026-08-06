@@ -170,9 +170,15 @@ CREATE TABLE IF NOT EXISTS p_tf_fire_forecasting_monthly (
     MONTH_START_DATE DATE,
     MONTH_END_DATE DATE,
     YEAR_MONTH TEXT,
+    Total_Income DOUBLE,
+    Total_Core_Expense DOUBLE,
+    Total_Expense DOUBLE,
+    Net_Savings DOUBLE,
+    Net_Savings_Total DOUBLE,
     -- Wealth Snapshot
     Total_Net_Worth DOUBLE,
     Total_Net_Worth_Market DOUBLE,
+    Total_Net_Worth_Market_Af_Tax DOUBLE,
     -- Spending & Savings
     Trailing_6M_Avg_Spend DOUBLE,
     Trailing_6M_Avg_Savings DOUBLE,
@@ -215,8 +221,12 @@ CREATE TABLE IF NOT EXISTS p_tf_fire_forecasting_monthly (
     Projected_FI_Date_P50 DATE,
     Projected_FI_Date_Total_P50 DATE,
     -- Sustainability
-    Runway_Months DOUBLE,
-    Runway_Months_Total DOUBLE,
+    Runway_Months_Linear DOUBLE,
+    Runway_Months_Stressed_P10 DOUBLE,
+    Runway_Months_Base_P50 DOUBLE,
+    Runway_Months_Total_Linear DOUBLE,
+    Runway_Months_Total_Stressed_P10 DOUBLE,
+    Runway_Months_Total_Base_P50 DOUBLE,
     Withdrawal_Rate_If_Retired_Now DOUBLE,
     Withdrawal_Rate_If_Retired_Now_Total DOUBLE,
     Savings_Rate_Required DOUBLE,
@@ -229,6 +239,9 @@ CREATE TABLE IF NOT EXISTS p_tf_fire_forecasting_monthly (
     Guyton_Klinger_Ceiling DOUBLE,
     Human_Capital_Value DOUBLE,
     Human_to_Financial_Capital_Ratio DOUBLE,
+    Velocity_vs_Savings_Ratio DOUBLE,
+    Model_Error_Months_To_FI DOUBLE,
+    Net_Worth_Post_Tax_Delta_Pct DOUBLE,
     FOREIGN KEY(MONTH_START_DATE) REFERENCES d_Calendar(Date),
     FOREIGN KEY(MONTH_END_DATE) REFERENCES d_Calendar(Date)
 );

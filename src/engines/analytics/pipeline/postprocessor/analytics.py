@@ -9,7 +9,7 @@ from src.utils.helpers import to_date_obj
 class AdvancedAnalyticsCalculator:
     """Calculates Sharpe, MDD, Sortino ratios."""
 
-    def __init__(self, fy_table=None, rules=None):
+    def __init__(self, fy_table, rules):
         self.fy_table = fy_table
         self.rules = rules
 

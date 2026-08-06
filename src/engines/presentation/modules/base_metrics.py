@@ -12,7 +12,7 @@ class BaseMetricsBuilder:
     Constructs the foundational lazy frames required by downstream analytical presentation models.
     """
 
-    def __init__(self, dfs: Mapping[str, pl.DataFrame | pl.LazyFrame], rules=None):
+    def __init__(self, dfs: Mapping[str, pl.DataFrame | pl.LazyFrame], rules):
         self.dfs = dfs
         self.rules = rules
 
@@ -84,7 +84,7 @@ class BaseMetricsBuilder:
             .with_columns(
                 pl.col("Inflation_Rate")
                 .fill_null(
-                    self.rules.assumptions.macro.fallback_inflation_rate if self.rules else 0.06
+                    self.rules.assumptions.macro.fallback_inflation_rate
                 )
                 .alias("INFLATION_YOY_PCT")
             )
