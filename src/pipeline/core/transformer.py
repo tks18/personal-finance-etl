@@ -2,12 +2,12 @@ import polars as pl
 
 from src.config.financial_rules import FinancialRules
 from src.config.settings import Settings
+from src.pipeline.core.cache import DatabaseCacheManager
 from src.pipeline.strategies import AssetPipeline, MutualFundPipeline, StockPipeline
 from src.transform.calendar import (
     get_stg_calendar_ref,
     transform_d_calendar,
 )
-from src.pipeline.core.cache import DatabaseCacheManager
 from src.transform.dimensions import (
     transform_d_asset_category,
     transform_d_asset_subcategory,
@@ -97,18 +97,18 @@ class TransformationDAG:
             d_tf_investment_master_lazy = pl.LazyFrame()
         else:
             asset_pipelines: list[AssetPipeline] = [MutualFundPipeline(), StockPipeline()]
-    
+
             asset_results = []
             for pipeline in asset_pipelines:
                 asset_results.append(
                     pipeline.process(extracted, d_asset_subcategory_lazy, self.cfg, logger)
                 )
-    
+
             market_data_ref_lazy_list = [res.market_data_ref for res in asset_results]
             purchase_ref_lazy_list = [res.purchase_ref for res in asset_results]
             sale_ref_lazy_list = [res.sale_ref for res in asset_results]
             master_ref_lazy_list = [res.master_ref for res in asset_results]
-    
+
             stg_investment_market_data_lazy = transform_stg_investment_market_data(
                 market_data_ref_lazy_list
             )
@@ -118,43 +118,55 @@ class TransformationDAG:
             f_tf_inv_sale_data_lazy = get_f_tf_investment_sale_data(
                 sale_ref_lazy_list, self.cfg.DEFAULT_CURRENCY_ID
             )
-    
+
             logger.info("Building Investment Master...")
             d_tf_investment_master_lazy = get_d_tf_investment_master(
                 master_ref_lazy_list, extracted.stg_benchmark_mapping
             )
 
         if not self.cfg.FULL_REFRESH:
-            logger.info("FULL_REFRESH=False. Merging historical Silver tables from previous DuckDB...")
+            logger.info(
+                "FULL_REFRESH=False. Merging historical Silver tables from previous DuckDB..."
+            )
             cache_manager = DatabaseCacheManager(self.cfg.TARGET_DB_BASE_PATH)
-            
+
             hist_market = cache_manager.get_historical_silver_table("stg_Investment_Market_Data")
             if hist_market is not None:
                 if len(stg_investment_market_data_lazy.collect_schema().names()) == 0:
                     stg_investment_market_data_lazy = hist_market
                 else:
-                    stg_investment_market_data_lazy = pl.concat([hist_market, stg_investment_market_data_lazy]).unique()
-                    
-            hist_purchase = cache_manager.get_historical_silver_table("f_tf_Investment_Purchase_Data")
+                    stg_investment_market_data_lazy = pl.concat(
+                        [hist_market, stg_investment_market_data_lazy]
+                    ).unique()
+
+            hist_purchase = cache_manager.get_historical_silver_table(
+                "f_tf_Investment_Purchase_Data"
+            )
             if hist_purchase is not None:
                 if len(f_tf_inv_purchase_data_lazy.collect_schema().names()) == 0:
                     f_tf_inv_purchase_data_lazy = hist_purchase
                 else:
-                    f_tf_inv_purchase_data_lazy = pl.concat([hist_purchase, f_tf_inv_purchase_data_lazy]).unique()
-                    
+                    f_tf_inv_purchase_data_lazy = pl.concat(
+                        [hist_purchase, f_tf_inv_purchase_data_lazy]
+                    ).unique()
+
             hist_sale = cache_manager.get_historical_silver_table("f_tf_Investment_Sale_Data")
             if hist_sale is not None:
                 if len(f_tf_inv_sale_data_lazy.collect_schema().names()) == 0:
                     f_tf_inv_sale_data_lazy = hist_sale
                 else:
-                    f_tf_inv_sale_data_lazy = pl.concat([hist_sale, f_tf_inv_sale_data_lazy]).unique()
-                    
+                    f_tf_inv_sale_data_lazy = pl.concat(
+                        [hist_sale, f_tf_inv_sale_data_lazy]
+                    ).unique()
+
             hist_master = cache_manager.get_historical_silver_table("d_tf_Investment_Master")
             if hist_master is not None:
                 if len(d_tf_investment_master_lazy.collect_schema().names()) == 0:
                     d_tf_investment_master_lazy = hist_master
                 else:
-                    d_tf_investment_master_lazy = pl.concat([hist_master, d_tf_investment_master_lazy]).unique()
+                    d_tf_investment_master_lazy = pl.concat(
+                        [hist_master, d_tf_investment_master_lazy]
+                    ).unique()
 
         logger.info("Generating Master Calendar...")
         # Get first market_data to seed calendar (simplified since they're processed downstream anyway)
@@ -202,7 +214,7 @@ class TransformationDAG:
         )
 
         logger.info(f"  -> Base Transformation DAG successfully mapped {len(results)} core tables.")
-        
+
         if not self.cfg.FULL_REFRESH:
             logger.info(
                 f"  -> Incremental Merge Summary (New + Historical): "

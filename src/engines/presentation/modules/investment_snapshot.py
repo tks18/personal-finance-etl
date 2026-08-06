@@ -49,9 +49,7 @@ class InvestmentSnapshotBuilder:
 
     def _latest_per_month(self, lf: pl.LazyFrame) -> pl.LazyFrame:
         """Deduplicate to one row per MONTH_END_DATE (portfolio level)."""
-        latest = lf.group_by("MONTH_END_DATE").agg(
-            pl.col("Closing_Date").max().alias("_max_date")
-        )
+        latest = lf.group_by("MONTH_END_DATE").agg(pl.col("Closing_Date").max().alias("_max_date"))
         return (
             lf.join(latest, on="MONTH_END_DATE", how="left")
             .filter(pl.col("Closing_Date") == pl.col("_max_date"))
@@ -88,8 +86,15 @@ class InvestmentSnapshotBuilder:
             )
             lf_isin = lf_isin.join(
                 lf_master.select(
-                    ["ISIN", "INSTRUMENT_NAME", "INSTRUMENT_CLASS", "INSTRUMENT_TYPE",
-                     "INSTRUMENT_SUBTYPE", "SECTOR", "BENCHMARK_ID"]
+                    [
+                        "ISIN",
+                        "INSTRUMENT_NAME",
+                        "INSTRUMENT_CLASS",
+                        "INSTRUMENT_TYPE",
+                        "INSTRUMENT_SUBTYPE",
+                        "SECTOR",
+                        "BENCHMARK_ID",
+                    ]
                 ),
                 on="ISIN",
                 how="left",
@@ -133,7 +138,11 @@ class InvestmentSnapshotBuilder:
             lf_isin = lf_isin.with_columns(pl.lit(0.0).alias("Monthly_Redeemed"))
 
         # ── Benchmark MoM price return ────────────────────────────────────────
-        if df_benchmark is not None and "Date" in df_benchmark.columns and "BENCHMARK_ID" in (lf_isin.collect_schema().names()):
+        if (
+            df_benchmark is not None
+            and "Date" in df_benchmark.columns
+            and "BENCHMARK_ID" in (lf_isin.collect_schema().names())
+        ):
             lf_bm = cast(
                 pl.LazyFrame,
                 df_benchmark.lazy() if isinstance(df_benchmark, pl.DataFrame) else df_benchmark,
@@ -218,7 +227,9 @@ class InvestmentSnapshotBuilder:
 
         # ── Rolling returns ───────────────────────────────────────────────────
         lf_isin = lf_isin.with_columns(
-            pl.when(pl.col("Total_Current_Value").shift(3).over("ISIN", order_by="MONTH_START_DATE") > 0)
+            pl.when(
+                pl.col("Total_Current_Value").shift(3).over("ISIN", order_by="MONTH_START_DATE") > 0
+            )
             .then(
                 pl.col("Total_Current_Value")
                 / pl.col("Total_Current_Value").shift(3).over("ISIN", order_by="MONTH_START_DATE")
@@ -226,7 +237,9 @@ class InvestmentSnapshotBuilder:
             )
             .otherwise(None)
             .alias("Rolling_3M_Return_Pct"),
-            pl.when(pl.col("Total_Current_Value").shift(6).over("ISIN", order_by="MONTH_START_DATE") > 0)
+            pl.when(
+                pl.col("Total_Current_Value").shift(6).over("ISIN", order_by="MONTH_START_DATE") > 0
+            )
             .then(
                 pl.col("Total_Current_Value")
                 / pl.col("Total_Current_Value").shift(6).over("ISIN", order_by="MONTH_START_DATE")
@@ -234,7 +247,10 @@ class InvestmentSnapshotBuilder:
             )
             .otherwise(None)
             .alias("Rolling_6M_Return_Pct"),
-            pl.when(pl.col("Total_Current_Value").shift(12).over("ISIN", order_by="MONTH_START_DATE") > 0)
+            pl.when(
+                pl.col("Total_Current_Value").shift(12).over("ISIN", order_by="MONTH_START_DATE")
+                > 0
+            )
             .then(
                 pl.col("Total_Current_Value")
                 / pl.col("Total_Current_Value").shift(12).over("ISIN", order_by="MONTH_START_DATE")
@@ -247,8 +263,7 @@ class InvestmentSnapshotBuilder:
         # ── Benchmark alpha ───────────────────────────────────────────────────
         lf_isin = lf_isin.with_columns(
             pl.when(
-                pl.col("MoM_Return_Pct").is_not_null()
-                & pl.col("BM_MoM_Return_Pct").is_not_null()
+                pl.col("MoM_Return_Pct").is_not_null() & pl.col("BM_MoM_Return_Pct").is_not_null()
             )
             .then(pl.col("MoM_Return_Pct") - pl.col("BM_MoM_Return_Pct"))
             .otherwise(None)
@@ -274,30 +289,37 @@ class InvestmentSnapshotBuilder:
         # ── Flags ─────────────────────────────────────────────────────────────
         lf_isin = lf_isin.with_columns(
             (
-                pl.col("Prev_Month_Market_Value").is_null()
-                & (pl.col("Total_Current_Value") > 0)
+                pl.col("Prev_Month_Market_Value").is_null() & (pl.col("Total_Current_Value") > 0)
             ).alias("Is_New_Position"),
             (
                 (pl.col("Total_Current_Value") == 0)
                 & pl.col("Prev_Month_Market_Value").is_not_null()
                 & (pl.col("Prev_Month_Market_Value") > 0)
             ).alias("Is_Closed_Position"),
-            (
-                (pl.col("Monthly_Deployed") > 0) | (pl.col("Monthly_Redeemed") > 0)
-            ).alias("Is_Active_Month"),
-            pl.col("MoM_Return_Pct").is_not_null()
+            ((pl.col("Monthly_Deployed") > 0) | (pl.col("Monthly_Redeemed") > 0)).alias(
+                "Is_Active_Month"
+            ),
+            pl.col("MoM_Return_Pct")
+            .is_not_null()
             .and_(pl.col("MoM_Return_Pct") > 0)
             .alias("Is_MoM_Positive"),
-            pl.col("MoM_Alpha").is_not_null()
+            pl.col("MoM_Alpha")
+            .is_not_null()
             .and_(pl.col("MoM_Alpha") > 0)
             .alias("Is_Beating_BM_MoM"),
         )
 
         return lf_isin.select(
             [
-                "MONTH_START_DATE", "MONTH_END_DATE", "YEAR_MONTH",
-                "ISIN", "INSTRUMENT_NAME", "INSTRUMENT_CLASS",
-                "INSTRUMENT_TYPE", "INSTRUMENT_SUBTYPE", "SECTOR",
+                "MONTH_START_DATE",
+                "MONTH_END_DATE",
+                "YEAR_MONTH",
+                "ISIN",
+                "INSTRUMENT_NAME",
+                "INSTRUMENT_CLASS",
+                "INSTRUMENT_TYPE",
+                "INSTRUMENT_SUBTYPE",
+                "SECTOR",
                 # Position values
                 pl.col("Total_Invested_Value").alias("Invested_Value"),
                 pl.col("Total_Current_Value").alias("Market_Value"),
@@ -320,15 +342,26 @@ class InvestmentSnapshotBuilder:
                 "BM_MoM_Return_Pct",
                 "MoM_Alpha",
                 # Snapshot metrics (cumulative)
-                "CAGR", "XIRR", "After_Tax_XIRR", "Active_Return",
-                "Beta", "Tracking_Error", "Information_Ratio",
+                "CAGR",
+                "XIRR",
+                "After_Tax_XIRR",
+                "Active_Return",
+                "Beta",
+                "Tracking_Error",
+                "Information_Ratio",
                 # Tax context
-                "Unrealized_LTCG", "Unrealized_STCG",
-                "Unrealized_LTCL", "Unrealized_STCL",
-                "LTCG_Tax_If_Sold", "STCG_Tax_If_Sold",
+                "Unrealized_LTCG",
+                "Unrealized_STCG",
+                "Unrealized_LTCL",
+                "Unrealized_STCL",
+                "LTCG_Tax_If_Sold",
+                "STCG_Tax_If_Sold",
                 # Flags
-                "Is_New_Position", "Is_Closed_Position",
-                "Is_Active_Month", "Is_MoM_Positive", "Is_Beating_BM_MoM",
+                "Is_New_Position",
+                "Is_Closed_Position",
+                "Is_Active_Month",
+                "Is_MoM_Positive",
+                "Is_Beating_BM_MoM",
             ]
         )
 
@@ -340,7 +373,6 @@ class InvestmentSnapshotBuilder:
         df_port = self.dfs.get("df_f_tf_investment_analytics_portfolio")
         df_buys = self.dfs.get("df_f_tf_inv_purchase")
         df_sells = self.dfs.get("df_f_tf_inv_sale")
-        lf_monthly_totals = self.base_lf.get("lf_monthly_totals")
 
         if df_port is None:
             return pl.LazyFrame()
@@ -439,7 +471,6 @@ class InvestmentSnapshotBuilder:
             .alias("Rolling_3M_Annualized_Return"),
         )
 
-
         # ── YEAR_MONTH ────────────────────────────────────────────────────────
         lf_port = lf_port.with_columns(
             pl.col("MONTH_START_DATE").cast(pl.String).str.slice(0, 7).alias("YEAR_MONTH"),
@@ -447,7 +478,9 @@ class InvestmentSnapshotBuilder:
 
         return lf_port.select(
             [
-                "MONTH_START_DATE", "MONTH_END_DATE", "YEAR_MONTH",
+                "MONTH_START_DATE",
+                "MONTH_END_DATE",
+                "YEAR_MONTH",
                 # Valuation
                 pl.col("Total_Invested_Value"),
                 pl.col("Total_Current_Value").alias("Total_Market_Value"),
@@ -466,9 +499,13 @@ class InvestmentSnapshotBuilder:
                 "Rolling_12M_Return_Pct",
                 "Rolling_3M_Annualized_Return",
                 # Quant
-                "XIRR", "After_Tax_XIRR", "BM_XIRR",
-                "Active_Return", "Sharpe_Ratio", "Sortino_Ratio", "Max_Drawdown",
-
+                "XIRR",
+                "After_Tax_XIRR",
+                "BM_XIRR",
+                "Active_Return",
+                "Sharpe_Ratio",
+                "Sortino_Ratio",
+                "Max_Drawdown",
                 # Tax summary
                 pl.col("Unrealized_LTCG").alias("Total_Unrealized_LTCG"),
                 pl.col("Unrealized_STCG").alias("Total_Unrealized_STCG"),

@@ -22,7 +22,6 @@ from src.transform.helpers import get_column_mapping
 from src.utils.interfaces import ILogger
 from src.utils.logger import logger
 from src.utils.models import EngineStatus, ExtractionResult, LogLevel
-from src.utils.models import EngineStatus, ExtractionResult, LogLevel
 
 
 class DataExtractor:
@@ -79,14 +78,14 @@ class DataExtractor:
 
         is_strict = self.cfg.FULL_REFRESH
         mode_str = "FULL" if is_strict else "INCREMENTAL"
-        
+
         logger.info(f"Categorizing Statement Files from {mode_str} Statements Folder...")
         if not self.cfg.STATEMENTS_FOLDER or not os.path.isdir(self.cfg.STATEMENTS_FOLDER):
             raise FileNotFoundError("Statements folder not found.")
-            
+
         statement_files = categorize_statement_files(self.cfg.STATEMENTS_FOLDER, strict=is_strict)
         total_files = sum(len(f) for f in statement_files.values())
-        
+
         if total_files > 0:
             logger.info(f"Extracting {total_files} {mode_str} Excel Binaries...")
             mf_market_data_raw = extract_mf_market_data_raw(statement_files["mf_holdings"])

@@ -3,8 +3,8 @@ from datetime import date, timedelta
 
 import polars as pl
 
-from src.pipeline.core.cache import DatabaseCacheManager
 from src.engines.benchmark.fetcher import BenchmarkDataFetcher
+from src.pipeline.core.cache import DatabaseCacheManager
 from src.utils.interfaces import ILogger
 from src.utils.logger import logger
 from src.utils.models import EngineStatus, LogLevel
