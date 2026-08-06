@@ -4,7 +4,7 @@ import os
 from src.utils.logger import logger
 
 
-def categorize_statement_files(folder_path: str, strict: bool = True) -> dict[str, list[str]]:
+def categorize_statement_files(folder_path: str) -> dict[str, list[str]]:
     """Does a single directory traversal to categorize all statement files."""
     all_files = glob.glob(os.path.join(folder_path, "**", "*.*"), recursive=True)
     all_files = [f for f in all_files if not os.path.basename(f).startswith("~")]
@@ -20,14 +20,10 @@ def categorize_statement_files(folder_path: str, strict: bool = True) -> dict[st
 
     for cat, files in categories.items():
         if not files:
-            if strict:
-                raise FileNotFoundError(
-                    f"No files found for category: '{cat}'. Please ensure statements are present."
-                )
-            else:
-                logger.info(f"  -> Discovered 0 files for category: '{cat}'")
-        else:
-            logger.info(f"  -> Discovered {len(files)} files for category: '{cat}'")
+            raise FileNotFoundError(
+                f"No files found for category: '{cat}'. Please ensure statements are present."
+            )
+        logger.info(f"  -> Discovered {len(files)} files for category: '{cat}'")
 
     logger.info(
         f"Successfully categorized {sum(len(f) for f in categories.values())} total raw statement files."

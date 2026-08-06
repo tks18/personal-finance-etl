@@ -4,7 +4,6 @@ Shared utility helpers for the Investment Manager application.
 
 import os
 import sys
-import tempfile
 from datetime import date, datetime
 
 import polars as pl
@@ -18,22 +17,6 @@ def resource_path(relative_path: str) -> str:
     except AttributeError:
         base_path = os.path.abspath(".")
     return os.path.join(base_path, relative_path)
-
-
-def get_temp_dir() -> str:
-    """Return a consistent temporary directory for the application."""
-    path = os.path.join(tempfile.gettempdir(), "PersonalFinanceETL")
-    os.makedirs(path, exist_ok=True)
-    return path
-
-
-def get_cache_dir(base_path: str, subfolder: str = "") -> str:
-    """Return an absolute path to a cache directory inside the given base path."""
-    path = os.path.join(base_path, "cache")
-    if subfolder:
-        path = os.path.join(path, subfolder)
-    os.makedirs(path, exist_ok=True)
-    return path
 
 
 def clean_numeric_col(df: pl.DataFrame, col: str) -> pl.DataFrame:

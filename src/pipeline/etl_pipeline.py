@@ -10,7 +10,7 @@ from src.config.financial_rules import FinancialRules
 from src.config.settings import Settings
 from src.engines.analytics import InvestmentQuantEngine
 from src.engines.benchmark import BenchmarkEngine
-from src.pipeline.core.cache import DatabaseCacheManager
+from src.engines.benchmark.cache import BenchmarkCacheManager
 from src.engines.presentation.wealth_engine import WealthPresentationEngine
 from src.load.database import DuckDBLoader, DuckDBManager
 from src.pipeline.core.extractor import DataExtractor
@@ -151,7 +151,7 @@ class ETLOrchestrator:
         logger.info(f"Target Database: {self.cfg.TARGET_DB_BASE_PATH}")
         logger.info(f"Source Extractor Folder: {self.cfg.STATEMENTS_FOLDER}")
 
-        DatabaseCacheManager.rescue_benchmark_cache(self.db_manager.db_path)
+        BenchmarkCacheManager.rescue_benchmark_cache(self.db_manager.db_path)
         self.db_manager.setup_schema()
 
         try:
