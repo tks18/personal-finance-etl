@@ -3,7 +3,7 @@ from datetime import date, timedelta
 
 import polars as pl
 
-from src.engines.benchmark.cache import BenchmarkCacheManager
+from src.pipeline.core.cache import DatabaseCacheManager
 from src.engines.benchmark.fetcher import BenchmarkDataFetcher
 from src.utils.interfaces import ILogger
 from src.utils.logger import logger
@@ -31,7 +31,7 @@ class BenchmarkEngine:
         self.start_date = start_date
         self.end_date = end_date
         self.max_workers = max_workers
-        self.cache_manager = BenchmarkCacheManager(
+        self.cache_manager = DatabaseCacheManager(
             target_db_base_path, current_db_path, status_queue
         )
 

@@ -12,6 +12,7 @@ INFLATION_RATES_CSV_PATH = "...\\INFLATION_RATES.csv"
 
 # Statements
 STATEMENTS_FOLDER = "...\\Statements"
+FULL_REFRESH = true
 
 # Defaults
 DEFAULT_CURRENCY_ID = "INR_INR"

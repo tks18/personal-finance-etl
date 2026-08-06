@@ -134,14 +134,14 @@ class MonthlyCashflowSummaryBuilder:
                     pl.col("Value").sum().fill_null(0.0).alias("Total_Investment_Deployed"),
                     # Equity = Stocks + ETFs
                     pl.col("Value")
-                    .filter(pl.col("INSTRUMENT_CLASS").str.to_lowercase().str.contains("equity"))
+                    .filter(pl.col("INSTRUMENT_CLASS").str.to_lowercase().str.contains( "(?i)stocks|etfs"))
                     .sum()
                     .fill_null(0.0)
                     .alias("Equity_Deployed"),
                     # Direct stocks
                     pl.col("Value")
                     .filter(
-                        pl.col("INSTRUMENT_TYPE").str.to_lowercase().str.contains(
+                        pl.col("INSTRUMENT_CLASS").str.to_lowercase().str.contains(
                             "(?i)direct|stock"
                         )
                     )
@@ -150,7 +150,7 @@ class MonthlyCashflowSummaryBuilder:
                     .alias("Stocks_Deployed"),
                     # ETFs
                     pl.col("Value")
-                    .filter(pl.col("INSTRUMENT_TYPE").str.to_lowercase().str.contains("etf"))
+                    .filter(pl.col("INSTRUMENT_CLASS").str.to_lowercase().str.contains("etf"))
                     .sum()
                     .fill_null(0.0)
                     .alias("ETFs_Deployed"),

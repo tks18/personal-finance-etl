@@ -2,6 +2,40 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [3.4.0](https://github.com/tks18/personal-finance-etl/compare/3.3.0...3.4.0) (2026-08-06)
+
+
+### Build System 🏗
+
+* **pyproject:** add numba for jit ([de5f8fb](https://github.com/tks18/personal-finance-etl/commit/de5f8fb94ecd4d59615a99c3931dc5d9bdefcc5e))
+
+
+### Docs 📃
+
+* add FIRE Guide ([2523806](https://github.com/tks18/personal-finance-etl/commit/25238069d16d1cab6ff6d04b8f871e4917919b2c))
+* **roadmap:** add roadmap ([3475271](https://github.com/tks18/personal-finance-etl/commit/34752716498c42eb435c832425b520a50f469090))
+
+
+### Code Refactoring 🖌
+
+* add ddls, update sample config, some minor fixes ([fd69f74](https://github.com/tks18/personal-finance-etl/commit/fd69f7429bbfe4410162421a3e21a8ae4f61ff13))
+* **settings:** bring out more rules outside to fin_rules config ([a190a22](https://github.com/tks18/personal-finance-etl/commit/a190a2245bfdc801bf8aaf9b2347998a693c70a5))
+
+
+### Features 🔥
+
+* **cache:** implement a central cache manager for raw files ([f3ae9e6](https://github.com/tks18/personal-finance-etl/commit/f3ae9e60d518d3dfb9f7ed929d1c5f8a9490b723))
+* **config:** new parameters for budgeting and forecasting ([1951ecb](https://github.com/tks18/personal-finance-etl/commit/1951ecb02e94e8ba78b71c3b891e8805c384e527))
+* **engines/presentations:** budgeting and forecasting module ([b73c504](https://github.com/tks18/personal-finance-etl/commit/b73c504c9ab1416eef106748e1442b71835190a5))
+* **engines/presentations:** investment snapshot presentation module ([f0488ea](https://github.com/tks18/personal-finance-etl/commit/f0488ea1582f22bca1e0c60fd2fde4cb2abe2bbf))
+* **engines/presentations:** monthly cashflow summary presentation module ([9a1ee0c](https://github.com/tks18/personal-finance-etl/commit/9a1ee0cfd8138b358ac0a2f4cf264e4c91e76308))
+* implement a incremental load strategy ([c8da49c](https://github.com/tks18/personal-finance-etl/commit/c8da49c8eb09b6f251ea97517bc46723e3dc858b))
+
+
+### Tests 🧪
+
+* sampe config file ([5a2e7ef](https://github.com/tks18/personal-finance-etl/commit/5a2e7ef4165520c3727bcb4bef4f8d772f0578df))
+
 ## [3.3.0](https://github.com/tks18/personal-finance-etl/compare/3.2.0...3.3.0) (2026-08-04)
 
 

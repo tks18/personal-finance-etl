@@ -105,7 +105,7 @@ class InvestmentSnapshotBuilder:
             )
 
         # ── Monthly deployed (buys) per ISIN ─────────────────────────────────
-        if df_buys is not None:
+        if df_buys is not None and "Date" in df_buys.columns:
             lf_buys = cast(
                 pl.LazyFrame, df_buys.lazy() if isinstance(df_buys, pl.DataFrame) else df_buys
             )
@@ -119,7 +119,7 @@ class InvestmentSnapshotBuilder:
             lf_isin = lf_isin.with_columns(pl.lit(0.0).alias("Monthly_Deployed"))
 
         # ── Monthly redeemed (sells) per ISIN ────────────────────────────────
-        if df_sells is not None:
+        if df_sells is not None and "Date" in df_sells.columns:
             lf_sells = cast(
                 pl.LazyFrame, df_sells.lazy() if isinstance(df_sells, pl.DataFrame) else df_sells
             )
@@ -133,7 +133,7 @@ class InvestmentSnapshotBuilder:
             lf_isin = lf_isin.with_columns(pl.lit(0.0).alias("Monthly_Redeemed"))
 
         # ── Benchmark MoM price return ────────────────────────────────────────
-        if df_benchmark is not None and "BENCHMARK_ID" in (lf_isin.collect_schema().names()):
+        if df_benchmark is not None and "Date" in df_benchmark.columns and "BENCHMARK_ID" in (lf_isin.collect_schema().names()):
             lf_bm = cast(
                 pl.LazyFrame,
                 df_benchmark.lazy() if isinstance(df_benchmark, pl.DataFrame) else df_benchmark,
@@ -354,7 +354,7 @@ class InvestmentSnapshotBuilder:
         lf_port = self._latest_per_month(lf_port)
 
         # ── Monthly deployed/redeemed (all ISINs combined) ───────────────────
-        if df_buys is not None:
+        if df_buys is not None and "Date" in df_buys.columns:
             lf_buys = cast(
                 pl.LazyFrame, df_buys.lazy() if isinstance(df_buys, pl.DataFrame) else df_buys
             )
@@ -367,7 +367,7 @@ class InvestmentSnapshotBuilder:
         else:
             lf_port = lf_port.with_columns(pl.lit(0.0).alias("Monthly_Deployed_Total"))
 
-        if df_sells is not None:
+        if df_sells is not None and "Date" in df_sells.columns:
             lf_sells = cast(
                 pl.LazyFrame, df_sells.lazy() if isinstance(df_sells, pl.DataFrame) else df_sells
             )
