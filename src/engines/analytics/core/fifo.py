@@ -1,6 +1,5 @@
 from collections import deque
 from datetime import date
-from typing import cast
 
 from src.engines.analytics.rules.macro import FYMacroParametersTable
 from src.utils.logger import logger

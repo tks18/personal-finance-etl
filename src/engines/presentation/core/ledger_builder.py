@@ -2,7 +2,9 @@ from collections.abc import Mapping
 from typing import Any
 
 import polars as pl
+
 from src.utils.helpers import ensure_date_col
+
 
 class LedgerBuilder:
     def __init__(self, dfs: Mapping[str, pl.DataFrame | pl.LazyFrame], rules):
@@ -61,7 +63,9 @@ class LedgerBuilder:
         d_exp_subcat = self.dfs.get("df_d_expense_subcategory")
         d_exp_cat = self.dfs.get("df_d_expense_category")
         if d_exp_subcat is not None and d_exp_cat is not None:
-            lf_exp_subcat = d_exp_subcat.lazy() if isinstance(d_exp_subcat, pl.DataFrame) else d_exp_subcat
+            lf_exp_subcat = (
+                d_exp_subcat.lazy() if isinstance(d_exp_subcat, pl.DataFrame) else d_exp_subcat
+            )
             lf_exp_cat = d_exp_cat.lazy() if isinstance(d_exp_cat, pl.DataFrame) else d_exp_cat
 
             lf_exp_agg = (

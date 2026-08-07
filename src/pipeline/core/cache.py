@@ -1,14 +1,13 @@
 import glob
 import os
 import sqlite3
+
 import duckdb
 import polars as pl
-from typing import Optional
 
-from src.utils.interfaces import ILogger
-from src.utils.logger import logger
-from src.utils.models import EngineStatus, LogLevel
 from src.utils.helpers import get_temp_dir
+from src.utils.interfaces import ILogger
+from src.utils.models import EngineStatus, LogLevel
 
 
 class DatabaseCacheManager:
@@ -146,5 +145,3 @@ class DatabaseCacheManager:
                     )
                 )
         return pl.DataFrame()
-
-

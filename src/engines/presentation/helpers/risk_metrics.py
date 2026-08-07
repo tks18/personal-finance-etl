@@ -161,12 +161,16 @@ class RiskMetricsBuilder:
             )
         )
 
-        lf_cvar = lf_base.rolling(index_column="MONTH_START_DATE", period="36mo").agg(
-            pl.col("Monthly_Return")
-            .filter(pl.col("Monthly_Return") <= pl.col("Monthly_Return").quantile(0.05))
-            .mean()
-            .alias("Expected_Shortfall_95")
-        ).select(["MONTH_START_DATE", pl.col("Expected_Shortfall_95").fill_null(0.0)])
+        lf_cvar = (
+            lf_base.rolling(index_column="MONTH_START_DATE", period="36mo")
+            .agg(
+                pl.col("Monthly_Return")
+                .filter(pl.col("Monthly_Return") <= pl.col("Monthly_Return").quantile(0.05))
+                .mean()
+                .alias("Expected_Shortfall_95")
+            )
+            .select(["MONTH_START_DATE", pl.col("Expected_Shortfall_95").fill_null(0.0)])
+        )
 
         return (
             lf_base.join(lf_cvar, on="MONTH_START_DATE", how="left")

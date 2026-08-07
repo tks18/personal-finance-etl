@@ -1,5 +1,5 @@
 from collections.abc import Mapping
-from typing import Any, cast
+from typing import Any
 
 import polars as pl
 
@@ -129,16 +129,20 @@ class MonthlyCashflowSummaryBuilder:
                     pl.col("Value").sum().fill_null(0.0).alias("Total_Investment_Deployed"),
                     # Equity = Stocks + ETFs
                     pl.col("Value")
-                    .filter(pl.col("INSTRUMENT_CLASS").str.to_lowercase().str.contains( "(?i)stocks|etfs"))
+                    .filter(
+                        pl.col("INSTRUMENT_CLASS")
+                        .str.to_lowercase()
+                        .str.contains("(?i)stocks|etfs")
+                    )
                     .sum()
                     .fill_null(0.0)
                     .alias("Equity_Deployed"),
                     # Direct stocks
                     pl.col("Value")
                     .filter(
-                        pl.col("INSTRUMENT_CLASS").str.to_lowercase().str.contains(
-                            "(?i)direct|stock"
-                        )
+                        pl.col("INSTRUMENT_CLASS")
+                        .str.to_lowercase()
+                        .str.contains("(?i)direct|stock")
                     )
                     .sum()
                     .fill_null(0.0)
@@ -152,9 +156,9 @@ class MonthlyCashflowSummaryBuilder:
                     # Mutual Funds
                     pl.col("Value")
                     .filter(
-                        pl.col("INSTRUMENT_CLASS").str.to_lowercase().str.contains(
-                            "(?i)mutual|fund"
-                        )
+                        pl.col("INSTRUMENT_CLASS")
+                        .str.to_lowercase()
+                        .str.contains("(?i)mutual|fund")
                     )
                     .sum()
                     .fill_null(0.0)
@@ -196,9 +200,7 @@ class MonthlyCashflowSummaryBuilder:
             lf_inv_redeemed = (
                 lf_sells.with_columns(pl.col("Date").dt.month_start().alias("MONTH_START_DATE"))
                 .group_by("MONTH_START_DATE")
-                .agg(
-                    pl.col("Sell Value").sum().fill_null(0.0).alias("Total_Investment_Redeemed")
-                )
+                .agg(pl.col("Sell Value").sum().fill_null(0.0).alias("Total_Investment_Redeemed"))
             )
             lf_monthly = lf_monthly.join(lf_inv_redeemed, on="MONTH_START_DATE", how="left").sort(
                 "MONTH_START_DATE"
@@ -211,9 +213,9 @@ class MonthlyCashflowSummaryBuilder:
 
         # ── Step 4: Net investment flow & surplus ─────────────────────────────
         lf_monthly = lf_monthly.with_columns(
-            (
-                pl.col("Total_Investment_Deployed") - pl.col("Total_Investment_Redeemed")
-            ).alias("Net_Investment_Flow"),
+            (pl.col("Total_Investment_Deployed") - pl.col("Total_Investment_Redeemed")).alias(
+                "Net_Investment_Flow"
+            ),
             (pl.col("Total_Income") - pl.col("Total_Expense")).alias("Gross_Surplus"),
         ).with_columns(
             (pl.col("Gross_Surplus") - pl.col("Net_Investment_Flow")).alias(
@@ -338,7 +340,6 @@ class MonthlyCashflowSummaryBuilder:
                 .then(pl.col("Liquid_Assets_Market") / pl.col("12M_Avg_Total_Core_Expense"))
                 .otherwise(0.0)
                 .alias("Emergency_Fund_Coverage"),
-
                 pl.when(pl.col("Total_Real_Income") > 0)
                 .then(
                     (pl.col("Total_Real_Income") - pl.col("Total_Real_Expense"))
@@ -356,14 +357,17 @@ class MonthlyCashflowSummaryBuilder:
             ).alias("YoY_Net_Worth_Growth_Pct_Real"),
             pl.col("MONTH_START_DATE").cast(pl.String).str.slice(0, 7).alias("YEAR_MONTH"),
             (pl.col("Gross_Surplus") > 0).alias("Is_Surplus_Month"),
-            (pl.col("Net_Investment_Flow") >= pl.col("Total_Income") * self.rules.budget.income_allocation.investment_pct).alias(
-                "Is_Investment_Target_Met"
-            ),
+            (
+                pl.col("Net_Investment_Flow")
+                >= pl.col("Total_Income") * self.rules.budget.income_allocation.investment_pct
+            ).alias("Is_Investment_Target_Met"),
         )
 
         return lf_monthly.select(
             [
-                "MONTH_START_DATE", "MONTH_END_DATE", "YEAR_MONTH",
+                "MONTH_START_DATE",
+                "MONTH_END_DATE",
+                "YEAR_MONTH",
                 # Income bifurcation
                 "Total_Income",
                 "Active_Income",

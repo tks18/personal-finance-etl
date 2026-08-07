@@ -3,8 +3,14 @@ from typing import Any
 
 import polars as pl
 
+
 class NetWorthBuilder:
-    def __init__(self, dfs: Mapping[str, pl.DataFrame | pl.LazyFrame], inflation_res: dict[str, Any], ledger_res: dict[str, Any]):
+    def __init__(
+        self,
+        dfs: Mapping[str, pl.DataFrame | pl.LazyFrame],
+        inflation_res: dict[str, Any],
+        ledger_res: dict[str, Any],
+    ):
         self.dfs = dfs
         self.inflation_res = inflation_res
         self.ledger_res = ledger_res
@@ -15,7 +21,7 @@ class NetWorthBuilder:
             return {}
 
         lf_asset = d_asset.lazy() if isinstance(d_asset, pl.DataFrame) else d_asset
-        
+
         lf_months = self.inflation_res["lf_months"]
         lf_inflation = self.inflation_res["lf_inflation"]
         cpi_latest = self.inflation_res["cpi_latest"]

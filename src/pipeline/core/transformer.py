@@ -123,8 +123,6 @@ class TransformationDAG:
                 master_ref_lazy_list, extracted.stg_benchmark_mapping
             )
 
-
-
         logger.info("Generating Master Calendar...")
         # Get first market_data to seed calendar (simplified since they're processed downstream anyway)
         df_bounds_lazy = get_stg_calendar_ref(
@@ -171,8 +169,6 @@ class TransformationDAG:
         )
 
         logger.info(f"  -> Base Transformation DAG successfully mapped {len(results)} core tables.")
-
-
 
         logger.info("Executing Calendar Generation DAG...")
         calendar_result = d_calendar_lazy.collect(engine="streaming")

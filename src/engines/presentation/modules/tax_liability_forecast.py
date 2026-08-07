@@ -101,7 +101,12 @@ class TaxLiabilityForecastBuilder:
             .with_columns(
                 (
                     (pl.col("Realized_STCG").clip(lower_bound=0.0) * eq_stcg)
-                    + ((pl.col("Realized_LTCG") - pl.col("LTCG_Exemption_Used")).clip(lower_bound=0.0) * eq_ltcg)
+                    + (
+                        (pl.col("Realized_LTCG") - pl.col("LTCG_Exemption_Used")).clip(
+                            lower_bound=0.0
+                        )
+                        * eq_ltcg
+                    )
                     + (pl.col("Taxable_Dividends").clip(lower_bound=0.0) * 0.30)
                 ).alias("Projected_Tax_Bill"),
                 (pl.col("Unrealized_Losses").abs()).alias("Harvesting_Offset_Remaining"),

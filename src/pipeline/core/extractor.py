@@ -76,7 +76,7 @@ class DataExtractor:
         raw_benchmark_master = extract_benchmark_master_raw(self.cfg.BENCHMARK_MASTER_CSV_PATH)
         raw_macro_parameters = extract_macro_parameters_raw(self.cfg.MACRO_PARAMETERS_CSV_PATH)
 
-        logger.info(f"Categorizing Statement Files from FULL Statements Folder...")
+        logger.info("Categorizing Statement Files from FULL Statements Folder...")
         if not self.cfg.STATEMENTS_FOLDER or not os.path.isdir(self.cfg.STATEMENTS_FOLDER):
             raise FileNotFoundError("Statements folder not found.")
 

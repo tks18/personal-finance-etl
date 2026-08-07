@@ -1,5 +1,5 @@
 from collections.abc import Mapping
-from typing import Any, cast
+from typing import Any
 
 import polars as pl
 
@@ -41,13 +41,17 @@ class SpendAnalyticsBuilder:
         lf_months = self.base_lf["lf_months"]
         lf_grid = lf_months.join(lf_exp_agg.select("CATEGORY_ID").unique(), how="cross")
 
-        lf_cat_agg = lf_grid.join(
-            lf_cat_agg, on=["MONTH_START_DATE", "MONTH_END_DATE", "CATEGORY_ID"], how="left"
-        ).sort(["CATEGORY_ID", "MONTH_START_DATE"]).with_columns(
-            pl.col("Total_Monthly_Spend").fill_null(0.0),
-            pl.col("Average_Transaction_Value").fill_null(0.0),
-            pl.col("Transaction_Count").fill_null(0).cast(pl.Int64),
-            pl.col("MONTH_START_DATE").cast(pl.String).str.slice(0, 7).alias("YEAR_MONTH"),
+        lf_cat_agg = (
+            lf_grid.join(
+                lf_cat_agg, on=["MONTH_START_DATE", "MONTH_END_DATE", "CATEGORY_ID"], how="left"
+            )
+            .sort(["CATEGORY_ID", "MONTH_START_DATE"])
+            .with_columns(
+                pl.col("Total_Monthly_Spend").fill_null(0.0),
+                pl.col("Average_Transaction_Value").fill_null(0.0),
+                pl.col("Transaction_Count").fill_null(0).cast(pl.Int64),
+                pl.col("MONTH_START_DATE").cast(pl.String).str.slice(0, 7).alias("YEAR_MONTH"),
+            )
         )
 
         if d_subcat is not None and d_exp_cat is not None:

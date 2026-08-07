@@ -44,10 +44,12 @@ class BudgetForecastBuilder:
         lf = lf.with_columns(
             pl.col("Total_Income").alias("Actual_Income"),
             pl.col("Total_Core_Expense").alias("Actual_Core_Expense"),
-            (pl.col("Total_Expense") - pl.col("Total_Core_Expense")).alias("Actual_NonCore_Expense"),
-            (
-                pl.col("Net_Cashflow_Month") - pl.col("Total_Income") + pl.col("Total_Expense")
-            ).alias("Actual_Investment"),
+            (pl.col("Total_Expense") - pl.col("Total_Core_Expense")).alias(
+                "Actual_NonCore_Expense"
+            ),
+            (pl.col("Net_Cashflow_Month") - pl.col("Total_Income") + pl.col("Total_Expense")).alias(
+                "Actual_Investment"
+            ),
             pl.col("MONTH_START_DATE").cast(pl.String).str.slice(0, 7).alias("YEAR_MONTH"),
         ).with_columns(
             (
@@ -119,12 +121,10 @@ class BudgetForecastBuilder:
             (pl.col("Budget_Income") * non_core_pct).alias("Budget_NonCore_Expense_Target"),
             (pl.col("Budget_Income") * investment_pct).alias("Budget_Investment_Target"),
         ).with_columns(
-            (
-                pl.col("Budget_Core_Expense_Target") + pl.col("Budget_NonCore_Expense_Target")
-            ).alias("Budget_Total_Expense_Target"),
-            (
-                pl.col("Budget_Income") * buffer_pct
-            ).alias("Budget_Surplus_Buffer"),
+            (pl.col("Budget_Core_Expense_Target") + pl.col("Budget_NonCore_Expense_Target")).alias(
+                "Budget_Total_Expense_Target"
+            ),
+            (pl.col("Budget_Income") * buffer_pct).alias("Budget_Surplus_Buffer"),
         )
 
         # ── Step 6: Actuals vs targets (variance) ────────────────────────────────
@@ -191,33 +191,35 @@ class BudgetForecastBuilder:
             (pl.col("NonCore_3M_Mean") - pl.col("NonCore_3M_Mean").shift(1)).alias(
                 "NonCore_Expense_3M_Trend"
             ),
-            (pl.col("Income_3M_Mean") - pl.col("Income_3M_Mean").shift(1)).alias(
-                "Income_3M_Trend"
-            ),
+            (pl.col("Income_3M_Mean") - pl.col("Income_3M_Mean").shift(1)).alias("Income_3M_Trend"),
         )
 
         # Savings rate trend signal
-        lf = lf.with_columns(
-            pl.when(pl.col("Actual_Income") > 0)
-            .then(
-                (
-                    pl.col("Actual_Income")
-                    - pl.col("Actual_Core_Expense")
-                    - pl.col("Actual_NonCore_Expense")
+        lf = (
+            lf.with_columns(
+                pl.when(pl.col("Actual_Income") > 0)
+                .then(
+                    (
+                        pl.col("Actual_Income")
+                        - pl.col("Actual_Core_Expense")
+                        - pl.col("Actual_NonCore_Expense")
+                    )
+                    / pl.col("Actual_Income")
                 )
-                / pl.col("Actual_Income")
+                .otherwise(0.0)
+                .alias("Curr_Savings_Rate"),
             )
-            .otherwise(0.0)
-            .alias("Curr_Savings_Rate"),
-        ).with_columns(
-            pl.col("Curr_Savings_Rate").shift(1).alias("Prev_Savings_Rate"),
-        ).with_columns(
-            pl.when(pl.col("Curr_Savings_Rate") > pl.col("Prev_Savings_Rate") + 0.02)
-            .then(pl.lit("Improving"))
-            .when(pl.col("Curr_Savings_Rate") < pl.col("Prev_Savings_Rate") - 0.02)
-            .then(pl.lit("Deteriorating"))
-            .otherwise(pl.lit("Stable"))
-            .alias("Savings_Rate_Trend_Signal"),
+            .with_columns(
+                pl.col("Curr_Savings_Rate").shift(1).alias("Prev_Savings_Rate"),
+            )
+            .with_columns(
+                pl.when(pl.col("Curr_Savings_Rate") > pl.col("Prev_Savings_Rate") + 0.02)
+                .then(pl.lit("Improving"))
+                .when(pl.col("Curr_Savings_Rate") < pl.col("Prev_Savings_Rate") - 0.02)
+                .then(pl.lit("Deteriorating"))
+                .otherwise(pl.lit("Stable"))
+                .alias("Savings_Rate_Trend_Signal"),
+            )
         )
 
         # ── Step 10: Lifestyle Creep Index & Efficiency ──────────────────────────
@@ -247,86 +249,92 @@ class BudgetForecastBuilder:
 
         # ── Step 11: Health Score (0–100) ────────────────────────────────────────
         # 4 equal components × 25 pts each
-        lf = lf.with_columns(
-            # Comp 1: Actual savings rate vs investment_pct target
-            pl.when(pl.col("Actual_Savings_Pct_of_Income") >= investment_pct)
-            .then(pl.lit(25.0))
-            .when(pl.col("Actual_Savings_Pct_of_Income") > 0)
-            .then((pl.col("Actual_Savings_Pct_of_Income") / investment_pct) * 25.0)
-            .otherwise(pl.lit(0.0))
-            .alias("_score_savings"),
-            # Comp 2: Investment fulfillment
-            pl.when(pl.col("Budget_Investment_Target") > 0)
-            .then(
-                (pl.col("Actual_Investment") / pl.col("Budget_Investment_Target") * 25.0).clip(
-                    0.0, 25.0
-                )
-            )
-            .otherwise(pl.lit(0.0))
-            .alias("_score_investment"),
-            # Comp 3: Core expense control (full marks if under budget)
-            pl.when(pl.col("Budget_Core_Expense_Target") > 0)
-            .then(
-                pl.when(pl.col("Actual_Core_Expense") <= pl.col("Budget_Core_Expense_Target"))
+        lf = (
+            lf.with_columns(
+                # Comp 1: Actual savings rate vs investment_pct target
+                pl.when(pl.col("Actual_Savings_Pct_of_Income") >= investment_pct)
                 .then(pl.lit(25.0))
-                .otherwise(
-                    (
-                        pl.lit(1.0)
-                        - pl.col("Core_Expense_Variance") / pl.col("Budget_Core_Expense_Target")
-                    ).clip(0.0, 1.0)
-                    * 25.0
-                )
-            )
-            .otherwise(pl.lit(0.0))
-            .alias("_score_core"),
-            # Comp 4: Non-core discipline
-            pl.when(pl.col("Budget_NonCore_Expense_Target") > 0)
-            .then(
-                pl.when(pl.col("Actual_NonCore_Expense") <= pl.col("Budget_NonCore_Expense_Target"))
-                .then(pl.lit(25.0))
-                .otherwise(
-                    (
-                        pl.lit(1.0)
-                        - pl.col("NonCore_Expense_Variance")
-                        / pl.col("Budget_NonCore_Expense_Target")
-                    ).clip(0.0, 1.0)
-                    * 25.0
-                )
-            )
-            .otherwise(pl.lit(0.0))
-            .alias("_score_noncore"),
-        ).with_columns(
-            (
-                pl.col("_score_savings")
-                + pl.col("_score_investment")
-                + pl.col("_score_core")
-                + pl.col("_score_noncore")
-            ).alias("Savings_Rate_Health_Score"),
-        ).with_columns(
-            pl.when(pl.col("Savings_Rate_Health_Score") >= 90)
-            .then(pl.lit("A+"))
-            .when(pl.col("Savings_Rate_Health_Score") >= 80)
-            .then(pl.lit("A"))
-            .when(pl.col("Savings_Rate_Health_Score") >= 70)
-            .then(pl.lit("B"))
-            .when(pl.col("Savings_Rate_Health_Score") >= 60)
-            .then(pl.lit("C"))
-            .when(pl.col("Savings_Rate_Health_Score") >= 50)
-            .then(pl.lit("D"))
-            .otherwise(pl.lit("F"))
-            .alias("Savings_Rate_Grade"),
-            # Budget stress = % over-budget (0 = within budget)
-            pl.when(pl.col("Budget_Total_Expense_Target") > 0)
-            .then(
-                pl.when(pl.col("Total_Budget_Variance") > 0)
+                .when(pl.col("Actual_Savings_Pct_of_Income") > 0)
+                .then((pl.col("Actual_Savings_Pct_of_Income") / investment_pct) * 25.0)
+                .otherwise(pl.lit(0.0))
+                .alias("_score_savings"),
+                # Comp 2: Investment fulfillment
+                pl.when(pl.col("Budget_Investment_Target") > 0)
                 .then(
-                    (pl.col("Total_Budget_Variance") / pl.col("Budget_Total_Expense_Target"))
-                    * 100.0
+                    (pl.col("Actual_Investment") / pl.col("Budget_Investment_Target") * 25.0).clip(
+                        0.0, 25.0
+                    )
                 )
                 .otherwise(pl.lit(0.0))
+                .alias("_score_investment"),
+                # Comp 3: Core expense control (full marks if under budget)
+                pl.when(pl.col("Budget_Core_Expense_Target") > 0)
+                .then(
+                    pl.when(pl.col("Actual_Core_Expense") <= pl.col("Budget_Core_Expense_Target"))
+                    .then(pl.lit(25.0))
+                    .otherwise(
+                        (
+                            pl.lit(1.0)
+                            - pl.col("Core_Expense_Variance") / pl.col("Budget_Core_Expense_Target")
+                        ).clip(0.0, 1.0)
+                        * 25.0
+                    )
+                )
+                .otherwise(pl.lit(0.0))
+                .alias("_score_core"),
+                # Comp 4: Non-core discipline
+                pl.when(pl.col("Budget_NonCore_Expense_Target") > 0)
+                .then(
+                    pl.when(
+                        pl.col("Actual_NonCore_Expense") <= pl.col("Budget_NonCore_Expense_Target")
+                    )
+                    .then(pl.lit(25.0))
+                    .otherwise(
+                        (
+                            pl.lit(1.0)
+                            - pl.col("NonCore_Expense_Variance")
+                            / pl.col("Budget_NonCore_Expense_Target")
+                        ).clip(0.0, 1.0)
+                        * 25.0
+                    )
+                )
+                .otherwise(pl.lit(0.0))
+                .alias("_score_noncore"),
             )
-            .otherwise(pl.lit(0.0))
-            .alias("Budget_Stress_Score"),
+            .with_columns(
+                (
+                    pl.col("_score_savings")
+                    + pl.col("_score_investment")
+                    + pl.col("_score_core")
+                    + pl.col("_score_noncore")
+                ).alias("Savings_Rate_Health_Score"),
+            )
+            .with_columns(
+                pl.when(pl.col("Savings_Rate_Health_Score") >= 90)
+                .then(pl.lit("A+"))
+                .when(pl.col("Savings_Rate_Health_Score") >= 80)
+                .then(pl.lit("A"))
+                .when(pl.col("Savings_Rate_Health_Score") >= 70)
+                .then(pl.lit("B"))
+                .when(pl.col("Savings_Rate_Health_Score") >= 60)
+                .then(pl.lit("C"))
+                .when(pl.col("Savings_Rate_Health_Score") >= 50)
+                .then(pl.lit("D"))
+                .otherwise(pl.lit("F"))
+                .alias("Savings_Rate_Grade"),
+                # Budget stress = % over-budget (0 = within budget)
+                pl.when(pl.col("Budget_Total_Expense_Target") > 0)
+                .then(
+                    pl.when(pl.col("Total_Budget_Variance") > 0)
+                    .then(
+                        (pl.col("Total_Budget_Variance") / pl.col("Budget_Total_Expense_Target"))
+                        * 100.0
+                    )
+                    .otherwise(pl.lit(0.0))
+                )
+                .otherwise(pl.lit(0.0))
+                .alias("Budget_Stress_Score"),
+            )
         )
 
         # ── Step 12: Runway metrics ───────────────────────────────────────────────
@@ -381,19 +389,20 @@ class BudgetForecastBuilder:
             ),
             (pl.col("Income_Volatility_Pct") > 0.20).alias("Is_Income_Volatile"),
             (
-                (pl.col("Lifestyle_Creep_Index") > 1.0)
-                & (pl.col("NonCore_Expense_ZScore") > 1.0)
+                (pl.col("Lifestyle_Creep_Index") > 1.0) & (pl.col("NonCore_Expense_ZScore") > 1.0)
             ).alias("Is_Lifestyle_Creep"),
             (
                 (pl.col("Core_Expense_ZScore").abs() > 2.0)
                 | (pl.col("NonCore_Expense_ZScore").abs() > 2.0)
             ).alias("Is_Expense_Anomaly"),
         ).with_columns(
-            (~(
-                pl.col("Is_Core_Overspent")
-                | pl.col("Is_NonCore_Overspent")
-                | pl.col("Is_Investment_Underfunded")
-            )).alias("Is_Budget_Month_Healthy"),
+            (
+                ~(
+                    pl.col("Is_Core_Overspent")
+                    | pl.col("Is_NonCore_Overspent")
+                    | pl.col("Is_Investment_Underfunded")
+                )
+            ).alias("Is_Budget_Month_Healthy"),
         )
 
         # ── Final select ──────────────────────────────────────────────────────────

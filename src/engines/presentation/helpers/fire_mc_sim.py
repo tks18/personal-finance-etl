@@ -2,6 +2,7 @@ import numpy as np
 import polars as pl
 from numba import njit
 
+
 @njit
 def _run_mc_simulations_numba(
     pv_arr,
@@ -202,6 +203,7 @@ def get_monte_carlo_fire_batch(rules, cma_real_return, cma_fat_tail):
     """
     Factory that returns the map_batches function for Polars.
     """
+
     def monte_carlo_fire_batch(s: pl.Series, **kwargs) -> pl.Series:
         df = s.struct.unnest()
         pv = df["Total_Net_Worth_Market_Af_Tax"].to_numpy().astype(float)
@@ -224,9 +226,7 @@ def get_monte_carlo_fire_batch(rules, cma_real_return, cma_fat_tail):
         max_months = mc_max_months
 
         # Numba requires concrete dtypes. Convert year_months to reproducible int seeds (e.g., 202608)
-        year_month_ints = np.array(
-            [int(ym.replace("-", "")) for ym in year_month], dtype=np.int32
-        )
+        year_month_ints = np.array([int(ym.replace("-", "")) for ym in year_month], dtype=np.int32)
 
         # Establish target age and dob
         dob_str = rules.assumptions.monte_carlo.date_of_birth
@@ -310,12 +310,8 @@ def get_monte_carlo_fire_batch(rules, cma_real_return, cma_fat_tail):
                     "Runway_Months_Total_Stressed_P10": rt_10,
                     "Runway_Months_Total_Base_P50": rt_50,
                     "Probability_Of_Success_Pct": ps * 100 if not np.isnan(ps) else None,
-                    "Probability_Of_Success_Total_Pct": pst * 100
-                    if not np.isnan(pst)
-                    else None,
-                    "Target_FI_Future_Nominal_P50": np.nan
-                    if np.isnan(nom) or nom == 0
-                    else nom,
+                    "Probability_Of_Success_Total_Pct": pst * 100 if not np.isnan(pst) else None,
+                    "Target_FI_Future_Nominal_P50": np.nan if np.isnan(nom) or nom == 0 else nom,
                     "Target_FI_Total_Future_Nominal_P50": np.nan
                     if np.isnan(tnom) or tnom == 0
                     else tnom,
@@ -339,4 +335,5 @@ def get_monte_carlo_fire_batch(rules, cma_real_return, cma_fat_tail):
                 )
             ]
         )
+
     return monte_carlo_fire_batch

@@ -36,44 +36,41 @@ class ExpenseRules(BaseModel):
 
 class IncomeAllocationRules(BaseModel):
     core_expense_pct: float = Field(
-        0.40,
+        default=0.40,
         description="Max % of smoothed income allocated to core/fixed expenses (40% default).",
     )
     non_core_expense_pct: float = Field(
-        0.20,
+        default=0.20,
         description="Max % of smoothed income allocated to non-core/discretionary expenses (20% default).",
     )
     investment_pct: float = Field(
-        0.30,
+        default=0.30,
         description="Minimum % of smoothed income to invest/save via net transfers (30% default).",
     )
 
 
 class BudgetAlerts(BaseModel):
     overspend_alert_threshold: float = Field(
-        0.05,
+        default=0.05,
         description="Fractional overage above budget target that triggers Is_Overspent flags (5% default).",
     )
     emergency_fund_target_months: int = Field(
-        6,
+        default=6,
         description="Target number of months of core expenses to hold as emergency fund.",
     )
 
 
 class BudgetSmoothing(BaseModel):
     income_smoothing_months: int = Field(
-        3,
+        default=3,
         description="Number of trailing months used for recency-weighted income smoothing.",
     )
 
 
 class BudgetRules(BaseModel):
-    income_allocation: IncomeAllocationRules = Field(
-        default_factory=IncomeAllocationRules
-    )
-    alerts: BudgetAlerts = Field(default_factory=BudgetAlerts)
-    smoothing: BudgetSmoothing = Field(default_factory=BudgetSmoothing)
-
+    income_allocation: IncomeAllocationRules = Field(default=IncomeAllocationRules())
+    alerts: BudgetAlerts = Field(default=BudgetAlerts())
+    smoothing: BudgetSmoothing = Field(default=BudgetSmoothing())
 
 
 class IlliquidAssetRules(BaseModel):
@@ -123,22 +120,13 @@ class FireAssumptions(BaseModel):
         description="Fallback nominal return to use for FIRE forecasting if historical returns are unavailable.",
     )
 
-    cape_swr_floor: float = Field(
-        ..., description="Floor SWR during severe drawdown."
-    )
-    cape_swr_ceiling: float = Field(
-        ..., description="Ceiling SWR during moderate drawdown."
-    )
-    cape_swr_base: float = Field(
-        ..., description="Base SWR during normal markets."
-    )
+    cape_swr_floor: float = Field(..., description="Floor SWR during severe drawdown.")
+    cape_swr_ceiling: float = Field(..., description="Ceiling SWR during moderate drawdown.")
+    cape_swr_base: float = Field(..., description="Base SWR during normal markets.")
     human_capital_max_age: float = Field(
         ..., description="Maximum age until which you expect to be healthy and working."
     )
-    human_capital_discount_rate: float = Field(
-        ..., description="Discount rate for human capital."
-    )
-
+    human_capital_discount_rate: float = Field(..., description="Discount rate for human capital.")
 
 
 class MonteCarloAssumptions(BaseModel):
@@ -152,12 +140,8 @@ class MonteCarloAssumptions(BaseModel):
     real_return_floor: float = Field(
         ..., description="Absolute minimum annualized real return applied during forecasting."
     )
-    desired_target_age: int = Field(
-        ..., description="Desired target age for FIRE calculations."
-    )
-    date_of_birth: str = Field(
-        ..., description="Date of birth in YYYY-MM-DD format."
-    )
+    desired_target_age: int = Field(..., description="Desired target age for FIRE calculations.")
+    date_of_birth: str = Field(..., description="Date of birth in YYYY-MM-DD format.")
 
 
 class TaxRates(BaseModel):

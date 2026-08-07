@@ -4,6 +4,7 @@ from typing import Any
 
 import polars as pl
 
+
 class InflationBuilder:
     def __init__(self, dfs: Mapping[str, pl.DataFrame | pl.LazyFrame], rules):
         self.dfs = dfs
@@ -25,9 +26,8 @@ class InflationBuilder:
             pl.col("FY_Start_Date").cast(pl.Date), pl.col("Inflation_Rate").cast(pl.Float64)
         )
 
-        lf_min_date = (
-            lf_open.select(pl.col("ZTXDATESTR").min().alias("min_open_date"))
-            .fill_null(date(2000, 1, 1))
+        lf_min_date = lf_open.select(pl.col("ZTXDATESTR").min().alias("min_open_date")).fill_null(
+            date(2000, 1, 1)
         )
 
         lf_months = (
@@ -66,7 +66,9 @@ class InflationBuilder:
         )
 
         try:
-            cpi_latest_df = lf_inflation.sort("MONTH_START_DATE").tail(1).select("CPI_INDEX").collect()
+            cpi_latest_df = (
+                lf_inflation.sort("MONTH_START_DATE").tail(1).select("CPI_INDEX").collect()
+            )
             if not cpi_latest_df.is_empty():
                 cpi_latest = cpi_latest_df.item()
             else:
