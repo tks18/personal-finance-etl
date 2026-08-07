@@ -72,7 +72,7 @@ We don't just look at standard deviation. The engine maps extreme downside risk.
 
 ---
 
-## 🏦 3. Core Presentation Metrics (Wealth & Solvency)
+## 🏦 3. Core Presentation Metrics (Wealth & Budgeting)
 
 The UI/BI ingestion layer. These metrics assess your overall structural financial health, combining your investments with your income, expenses, and liabilities.
 
@@ -82,10 +82,11 @@ The UI/BI ingestion layer. These metrics assess your overall structural financia
 * **`Liquid_Liability_Coverage_Ratio`**: `Liquid Assets / Total Liabilities`. A strict insolvency stress-test. Demands to know if you can clear your debts *tomorrow* using only liquid capital. Target: **> 1.0**.
 * **`Months_of_Runway`**: `Liquid Assets / Trailing 3M Avg Expenses`. Calculates exactly how many months you can survive a total loss of income. Target: **12.0 to 24.0**.
 
-### Growth & Efficiency Metrics (`p_tf_Net_Worth_Monthly_Summary`)
-* **Organic Yield %**: `(Surplus/Deficit - Net Cashflow) / Opening Balance`. Measures the pure organic growth of your net worth strictly from investment appreciation and passive interest.
-* **Asset Velocity %**: `Total_Invested_Capital / Liquid_Net_Worth`. The speed at which your liquid cash is being deployed into the market. High is good during accumulation phases.
-* **Real Drawdown %**: Strips away the "Nominal Illusion." If your portfolio goes up 2% but inflation is 6%, your *Real* Drawdown will flag a -4% loss in purchasing power.
+### Platinum-Grade Budgeting & Cashflows (`p_tf_Budget_Forecast_Monthly`)
+Instead of deriving metrics from balancing identities (which creates phantom money), this engine enforces strict ground-truth mapping:
+* **`Investment_Deployed` & `Investment_Redeemed`**: Extracted natively from your `df_f_tf_inv_purchase` and `df_f_tf_inv_sale` fact tables.
+* **`Actual_Investment`**: The mathematically pure net flow (`Deployed - Redeemed`). 
+* **`Actual_Savings`**: What remains uninvested and unspent (`Total_Income - Total_Expense - Actual_Investment`).
 
 ---
 
@@ -94,12 +95,14 @@ The UI/BI ingestion layer. These metrics assess your overall structural financia
 The engine simulates 1,000 parallel realities traversing 30 years into the future. We do not use basic straight-line math.
 
 ### The Merton Jump-Diffusion Engine
-The simulation runs on a **Merton Jump-Diffusion** stochastic model. 
+The simulation runs on a **Merton Jump-Diffusion** stochastic model utilizing a **Student-T Distribution** (fat tails).
 *   **Poisson Crashes**: The engine runs localized Bernoulli trials across the simulation matrix, enforcing a random 5% annual probability of a sudden 20% market collapse. 
 *   **Sequence of Returns Risk (SoRR)**: Because of these simulated crashes, the `Probability_Of_Success_Pct` mathematically tests if your portfolio can survive a devastating black-swan event occurring in the very first year of your retirement. Target: **> 90%**.
+*   **Coast FI Engine**: The `@njit` engine gracefully handles Coast FI pathways. If your monthly contributions hit $0, the simulation continues unabated, letting the raw compounding of your existing real wealth mathematically prove your success.
 
 ### Stochastic Drifting Targets
-* **`Target_FI_Future_Nominal_P50` (50th Percentile)**: Unlike a static spreadsheet, this assumes inflation acts as a volatile Random Walk. It tells you what your FIRE number will physically need to be 10, 20, or 30 years from now just to maintain your current lifestyle.
+* **Real vs Nominal Sync**: The engine uses your Capital Market Assumptions (`cma_real_return`) to run the core loops entirely in "Real" purchasing power. This perfectly prevents double-counting inflation.
+* **`Target_FI_Future_Nominal_P50` (50th Percentile)**: The nominal future targets are tracked separately via an Ornstein-Uhlenbeck stochastic inflation process for your dashboard.
 * **`Wealth_P10`, `Wealth_P50`, `Wealth_P90`**: The projected size of your portfolio across worst-case (P10), median (P50), and best-case (P90) scenarios. 
 
 **Actionable Insight**: If your `Current_FI_Coverage_Pct` is high against today's target, but your future stochastic nominal projections show a massive gap against `Target_FI_Future`, your portfolio is suffering from cash-drag and will be eroded by stagflation. Increase `Asset_Velocity_%` to deploy capital!

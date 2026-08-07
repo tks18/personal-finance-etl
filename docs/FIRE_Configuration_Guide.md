@@ -1,10 +1,10 @@
 # FIRE Forecasting Configuration Guide
 
-The FIRE Forecasting engine computes your financial independence progress and models probabilities using stochastic Monte Carlo simulations and advanced risk vectors. Your configuration parameters heavily influence these calculations. 
+The FIRE Forecasting engine computes your financial independence progress, sequence of returns risk (SoRR), and runway survival using a compiled Numba stochastic Monte Carlo simulation. Your configuration parameters heavily influence these calculations. 
 
-Because life events (such as marriage, starting a family, or shifting careers) drastically alter both the capital required and your earning runway, the configuration should be adapted to mirror your current risk profile. 
+Because life events drastically alter both the capital required and your earning runway, the configuration should be adapted to mirror your current risk profile. 
 
-This guide breaks down how to fine-tune the `financial_rules.toml` configuration to accommodate an aggressive (optimistic) FIRE approach versus a conservative (highly resilient) approach.
+This guide breaks down how to fine-tune the `financial_rules.toml` configuration to accommodate an aggressive (optimistic) FIRE approach versus a conservative (highly resilient) approach, and exactly how each parameter affects your dashboard metrics.
 
 ---
 
@@ -13,55 +13,54 @@ This guide breaks down how to fine-tune the `financial_rules.toml` configuration
 ### 1. The Aggressive (Optimistic) Profile
 You assume strong market performance, fewer unplanned expenses, and high career stability. 
 - **Goal:** Achieve FIRE numbers faster, assuming your lifestyle won't dramatically shift and your expenses stay near their baseline.
-- **FI Probability:** Will model high because the simulation assumes fewer adverse shocks.
+- **Impact on Dashboard:** `Probability_Of_Success_Pct` will model high. `Runway_Months` will stretch further.
 
 ### 2. The Conservative (Resilient) Profile
-Designed for younger individuals (e.g., a 26-year-old) who expect major life events (marriage, kids, healthcare costs) and anticipate economic headwinds. 
+Designed for younger individuals who expect major life events (marriage, kids, healthcare costs) and anticipate economic headwinds. 
 - **Goal:** Build an airtight "End Game" portfolio. The model will require significantly more wealth to show a "High Probability of Success."
-- **FI Probability:** Harder to reach 95%+, but when you do, your portfolio is nearly invincible against sequence risk and fat-tailed market crashes.
+- **Impact on Dashboard:** `Probability_Of_Success_Pct` is harder to reach 95%+, but when you do, your portfolio is nearly invincible against fat-tailed market crashes.
 
 ---
 
-## Key Parameters to Adjust
+## Key Parameters & Their Impact
 
-### 1. Core Withdrawal & Returns
+### 1. Core Withdrawal & FIRE Rules (`[assumptions.fire]`)
 These parameters dictate how fast you accumulate wealth and how much you need to stop working.
 
-| Parameter | Aggressive | Conservative | What it does |
+| Parameter | Aggressive | Conservative | Impact on Metrics |
 | :--- | :--- | :--- | :--- |
-| `swr_multiplier` | `25.0` (4%) | `33.3` (3%) | Lower multiplier requires a much larger portfolio to consider you FI, creating a massive safety cushion for unknown future expenses (like marriage). |
-| `coast_fi_real_return` | `0.06` | `0.04` | Conservative modeling assumes inflation eats into more of your investment growth while coasting. |
-| `cape_swr_floor` | `0.04` | `0.035` | The withdrawal rate you would drop to in a severe market crash. A lower floor means you assume you will tighten your belt significantly more. |
+| `swr_multiplier` | `25.0` (4%) | `33.3` (3%) | Determines your absolute `Target_FI_Today`. A lower SWR (higher multiplier) drastically increases the capital required, lowering your `Probability_Of_Success_Pct` if you retire early. |
+| `lean_fi_ratio` | `0.75` | `0.60` | Multiplier on Target FI for survival mode. Affects `Lean_FI_Today`. Lower ratio = you assume you can survive on less. |
+| `coast_fi_real_return` | `0.06` | `0.04` | Assumed compounding rate for Coast FI. A lower return significantly raises the amount of `Coast_FI_Today` you need right now to coast. |
+| `cape_swr_floor` | `0.04` | `0.03` | Guyton-Klinger Guardrail. If the market crashes in the simulation, this is the lowest your withdrawal rate can go. A lower floor means you assume you can tighten your belt significantly, which **increases** survival probabilities. |
+| `cape_swr_ceiling` | `0.06` | `0.05` | Guyton-Klinger Guardrail. How high your spending can scale in a bull market. A higher ceiling increases lifestyle but slightly degrades long-term safety. |
+| `human_capital_max_age`| `65.0` | `50.0` | The age you expect to stop earning. A lower age forces your `Target_FI` to shoulder the load sooner. |
 
-### 2. Human Capital & Career Risk
-Your human capital is your ability to earn. If you are 26, this is your biggest asset.
+### 2. Capital Market Assumptions (`[assumptions.cma]`)
+These define the baseline growth and volatility of your portfolio.
 
-| Parameter | Aggressive | Conservative | What it does |
+| Parameter | Aggressive | Conservative | Impact on Metrics |
 | :--- | :--- | :--- | :--- |
-| `human_capital_max_age`| `65.0` | `55.0` | If conservative, assume you stop earning at 55 instead of 65. The model will force your investments to shoulder the load sooner. |
-| `human_capital_discount_rate` | `0.04` | `0.06` | A higher discount rate assumes your future earnings are less reliable and therefore worth less today. |
-| `career_volatility_risk_score` | `0.3` | `0.7` | Assuming high risk of job disruption requires a heavier reliance on liquid assets and passive income. |
-| `upskilling_roi_multiplier_base` | `0.15` | `0.08` | Assume lower returns on any upskilling or salary bumps. |
+| `expected_real_return` | `0.07` | `0.04` | The average inflation-adjusted return. Directly controls the mean drift of the simulation. A lower return dramatically reduces `Wealth_P50` projections and lowers `Probability_Of_Success`. |
+| `fat_tail_multiplier` | `1.0` | `1.3` | Inflates your historical volatility to simulate extreme Black Swan crashes using a Student-T distribution. Higher multiplier drastically increases sequence of returns risk (SoRR), punishing your `Runway_Months_Stressed_P10`. |
 
-### 3. Monte Carlo & Macrostochastic Engine
-These parameters run the 10,000+ simulation paths to estimate sequence risk and probability of ruin.
+### 3. Monte Carlo Simulation Mechanics (`[assumptions.monte_carlo]`)
+These parameters dictate the mathematical bounds of the 1,000+ simulation paths.
 
-| Parameter | Aggressive | Conservative | What it does |
+| Parameter | Aggressive | Conservative | Impact on Metrics |
 | :--- | :--- | :--- | :--- |
-| `desired_target_age` | `85` | `95` | A conservative approach assumes you live longer and therefore models a longer decumulation phase where your money cannot run out. |
-| `max_months` | `480` (40 yrs) | `720` (60 yrs) | Required to match `desired_target_age`. If you are 26 and model to 86, use 720 months. |
-| `annual_volatility` | `0.12` | `0.18` | Models much wider swings in your portfolio value during simulations. |
-| `fat_tail_multiplier` | `1.1` | `1.3` | Forces the Monte Carlo simulation to generate more extreme, heavy market crashes (fat tails). |
-| `stochastic_inflation_p90_multiplier` | `1.2` | `1.8` | Simulates high inflation environments that relentlessly compound your future lifestyle expenses. |
+| `annual_volatility` | `0.12` | `0.18` | Base market volatility. Higher volatility creates wider spreads between your `Wealth_P10` and `Wealth_P90` outcomes. |
+| `real_return_floor` | `-0.20` | `-0.40` | Absolute limit on how bad a single year can be in the simulation. A lower floor allows the jump-diffusion model to generate apocalyptic crashes, testing extreme resilience. |
+| `desired_target_age` | `85` | `95` | Sets the decumulation lifespan. A longer lifespan (95) requires the portfolio to survive more years, demanding a lower withdrawal rate and reducing `Probability_Of_Success` for early retirees. |
 
 ---
 
-## Action Plan for a 26-Year-Old
+## Action Plan for a Resilient Future
 
-If you are currently single and expecting potential marriage, kids, or career changes, it is highly recommended to use the **Conservative** configuration. This prevents the model from giving you a false sense of security.
+If you are currently single and expecting potential marriage, kids, or career changes, it is highly recommended to use the **Conservative** configuration. This prevents the mathematical engine from giving you a false sense of security.
 
-If the model says you have a 90% chance of success under the Conservative parameters, you are exceptionally well-positioned to handle whatever life throws at you.
+If the dashboard says you have a **90%+ Probability of Success** under the Conservative parameters, you are exceptionally well-positioned to handle whatever life throws at you.
 
 **How to Apply:**
-Edit the `financial_rules.toml` inside your repository according to the table above. 
-The ETL pipeline will automatically read the updated `.toml`, parse it through `FinancialRules`, and pipe the exact parameters into the Numba Monte Carlo simulation and Polars vectorization engine at runtime.
+Edit the `financial_rules.toml` inside your repository according to the tables above. 
+The ETL pipeline will automatically read the updated `.toml`, parse it through `FinancialRules`, and pipe the exact parameters directly into the Numba Monte Carlo simulation and Polars vectorization engine at runtime.
