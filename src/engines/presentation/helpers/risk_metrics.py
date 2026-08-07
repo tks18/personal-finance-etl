@@ -61,7 +61,7 @@ class RiskMetricsBuilder:
         else:
             lf_monthly = lf_monthly.with_columns(pl.lit(fallback_rfr).alias("Risk_Free_Rate"))
 
-        return (
+        lf_base = (
             lf_monthly.join(lf_inv_monthly, on="MONTH_START_DATE", how="left")
             .with_columns(pl.col("Total_Investment_Value").fill_null(0.0))
             .sort("MONTH_START_DATE")
@@ -157,12 +157,20 @@ class RiskMetricsBuilder:
                 pl.col("Monthly_Return")
                 .rolling_quantile(0.05, window_size=36, interpolation="linear")
                 .fill_null(0.0)
-                .alias("VaR_95_Monthly"),
-                pl.col("Monthly_Return")
-                .rolling_map(lambda s: s.filter(s <= s.quantile(0.05)).mean(), window_size=36)
-                .fill_null(0.0)
-                .alias("Expected_Shortfall_95"),
+                .alias("VaR_95_Monthly")
             )
+        )
+
+        lf_cvar = lf_base.rolling(index_column="MONTH_START_DATE", period="36mo").agg(
+            pl.col("Monthly_Return")
+            .filter(pl.col("Monthly_Return") <= pl.col("Monthly_Return").quantile(0.05))
+            .mean()
+            .alias("Expected_Shortfall_95")
+        ).select(["MONTH_START_DATE", pl.col("Expected_Shortfall_95").fill_null(0.0)])
+
+        return (
+            lf_base.join(lf_cvar, on="MONTH_START_DATE", how="left")
+            .with_columns(pl.col("Expected_Shortfall_95").fill_null(0.0))
             .with_columns(
                 pl.when(pl.col("Annualized_Volatility_12M") > 0)
                 .then(

@@ -280,8 +280,80 @@ class MonthlyCashflowSummaryBuilder:
             pl.col("Savings_Rate_Pct").rolling_mean(3).alias("Trailing_3M_Avg_Savings_Rate"),
         )
 
-        # ── Step 7: YEAR_MONTH & flags ────────────────────────────────────────
+        # ── Step 7: Financial Ratios Integration ──────────────────────────────
         lf_monthly = lf_monthly.with_columns(
+            [
+                pl.col("Total_Core_Expense")
+                .rolling_mean(window_size=12)
+                .alias("12M_Avg_Total_Core_Expense"),
+                pl.col("Total_Net_Worth_Market").shift(12).alias("Prev_Year_NW_Market"),
+            ]
+        )
+
+        lf_monthly = lf_monthly.with_columns(
+            [
+                pl.when(pl.col("Trailing_3M_Avg_Expense") > 0)
+                .then(pl.col("Liquid_Assets_Market") / pl.col("Trailing_3M_Avg_Expense"))
+                .otherwise(0.0)
+                .alias("Liquidity_Ratio_Months"),
+                pl.when(pl.col("Total_Assets_Market") > 0)
+                .then(pl.col("Total_Liabilities") / pl.col("Total_Assets_Market"))
+                .otherwise(0.0)
+                .alias("Debt_to_Asset_Ratio_Pct"),
+                pl.when(
+                    (pl.col("Prev_Year_NW_Market").is_not_null())
+                    & (pl.col("Prev_Year_NW_Market") != 0)
+                )
+                .then(
+                    (pl.col("Total_Net_Worth_Market") - pl.col("Prev_Year_NW_Market"))
+                    / pl.col("Prev_Year_NW_Market")
+                )
+                .otherwise(0.0)
+                .alias("YoY_Net_Worth_Growth_Pct"),
+                pl.when(pl.col("Total_Net_Worth_Market") > 0)
+                .then(pl.col("Total_Expense") / pl.col("Total_Net_Worth_Market"))
+                .otherwise(0.0)
+                .alias("Expense_to_NW_Ratio"),
+                pl.when(pl.col("Total_Liabilities") > 0)
+                .then(pl.col("Total_Income") / pl.col("Total_Liabilities"))
+                .otherwise(None)
+                .alias("Debt_Service_Coverage"),
+                pl.when(pl.col("Months_Elapsed") > 0)
+                .then(pl.col("Total_Net_Worth_Market") / pl.col("Months_Elapsed"))
+                .otherwise(0.0)
+                .alias("Net_Worth_per_Month_Age"),
+                pl.when(pl.col("Trailing_3M_Avg_Expense") > 0)
+                .then(pl.col("Total_Net_Worth_Market") / (pl.col("Trailing_3M_Avg_Expense") * 4))
+                .otherwise(0.0)
+                .alias("Net_Worth_to_Annual_Expense_Ratio"),
+                pl.when(pl.col("Total_Liabilities") > 0)
+                .then(pl.col("Total_Assets_Market") / pl.col("Total_Liabilities"))
+                .otherwise(None)
+                .alias("Liability_Coverage_Ratio"),
+                pl.when(pl.col("Total_Liabilities") > 0)
+                .then(pl.col("Liquid_Assets_Market") / pl.col("Total_Liabilities"))
+                .otherwise(None)
+                .alias("Liquid_Liability_Coverage_Ratio"),
+                pl.when(pl.col("12M_Avg_Total_Core_Expense") > 0)
+                .then(pl.col("Liquid_Assets_Market") / pl.col("12M_Avg_Total_Core_Expense"))
+                .otherwise(0.0)
+                .alias("Emergency_Fund_Coverage"),
+
+                pl.when(pl.col("Total_Real_Income") > 0)
+                .then(
+                    (pl.col("Total_Real_Income") - pl.col("Total_Real_Expense"))
+                    / pl.col("Total_Real_Income")
+                )
+                .otherwise(0.0)
+                .alias("Real_Savings_Rate_Pct"),
+            ]
+        )
+
+        # ── Step 8: YEAR_MONTH, flags & derived ratios ────────────────────────
+        lf_monthly = lf_monthly.with_columns(
+            (
+                ((1 + pl.col("YoY_Net_Worth_Growth_Pct")) / (1 + pl.col("INFLATION_YOY_PCT"))) - 1
+            ).alias("YoY_Net_Worth_Growth_Pct_Real"),
             pl.col("MONTH_START_DATE").cast(pl.String).str.slice(0, 7).alias("YEAR_MONTH"),
             (pl.col("Gross_Surplus") > 0).alias("Is_Surplus_Month"),
             (pl.col("Net_Investment_Flow") >= pl.col("Total_Income") * self.rules.budget.income_allocation.investment_pct).alias(
@@ -336,5 +408,18 @@ class MonthlyCashflowSummaryBuilder:
                 # Flags
                 "Is_Surplus_Month",
                 "Is_Investment_Target_Met",
+                # Financial Ratios
+                "Liquidity_Ratio_Months",
+                "Debt_to_Asset_Ratio_Pct",
+                "YoY_Net_Worth_Growth_Pct",
+                "Expense_to_NW_Ratio",
+                "Debt_Service_Coverage",
+                "Emergency_Fund_Coverage",
+                "Net_Worth_per_Month_Age",
+                "Real_Savings_Rate_Pct",
+                "Net_Worth_to_Annual_Expense_Ratio",
+                "Liability_Coverage_Ratio",
+                "Liquid_Liability_Coverage_Ratio",
+                "YoY_Net_Worth_Growth_Pct_Real",
             ]
         )

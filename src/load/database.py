@@ -27,7 +27,7 @@ class DuckDBManager:
 
     def _generate_target_db_path(self) -> str:
         now = datetime.now()
-        timestamp_str = now.strftime("%Y%m%d_%H%M%S")
+        timestamp_str = now.strftime("%Y_%m")
         file_name = f"Personal_Finance_DB_{timestamp_str}.duckdb"
         
         os.makedirs(self.base_path, exist_ok=True)
@@ -166,19 +166,12 @@ class DuckDBLoader:
         }
         presentation_tables = {
             "df_p_tf_net_worth_monthly_summary": "p_tf_Net_Worth_Monthly_Summary",
-            "df_p_tf_financial_ratios_monthly": "p_tf_Financial_Ratios_Monthly",
             "df_p_tf_category_spend_analytics": "p_tf_Category_Spend_Analytics",
             "df_p_tf_income_streams_monthly": "p_tf_Income_Streams_Monthly",
-            "df_p_tf_fire_forecasting_monthly": "p_tf_Fire_Forecasting_Monthly",
-            "df_p_tf_risk_metrics": "p_tf_Risk_Metrics",
-            "df_p_tf_sector_allocation_monthly": "p_tf_Sector_Allocation_Monthly",
-            "df_p_tf_tax_harvesting": "p_tf_Tax_Harvesting",
-            "df_p_tf_portfolio_rebalancing_plan": "p_tf_Portfolio_Rebalancing_Plan",
+            "df_p_tf_wealth_risk_analytics": "p_tf_Wealth_Risk_Analytics",
             "df_p_tf_tax_liability_forecast": "p_tf_Tax_Liability_Forecast",
-            "df_p_tf_performance_attribution": "p_tf_Performance_Attribution",
             "df_p_tf_budget_forecast_monthly": "p_tf_Budget_Forecast_Monthly",
-            "df_p_tf_investment_snapshot_isin": "p_tf_Investment_Snapshot_ISIN",
-            "df_p_tf_investment_snapshot_portfolio": "p_tf_Investment_Snapshot_Portfolio",
+            "df_p_tf_investment_analytics": "p_tf_Investment_Analytics",
             "df_p_tf_monthly_cashflow_summary": "p_tf_Monthly_Cashflow_Summary",
         }
         table_mappings.update(presentation_tables)

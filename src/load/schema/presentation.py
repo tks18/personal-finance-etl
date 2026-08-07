@@ -52,37 +52,6 @@ CREATE TABLE IF NOT EXISTS p_tf_Net_Worth_Monthly_Summary (
     FOREIGN KEY(ASSET_SUBCATEGORY_ID) REFERENCES d_Asset_Subcategory(UID)
 );
 
-CREATE TABLE IF NOT EXISTS p_tf_Financial_Ratios_Monthly (
-    -- Identifiers
-    MONTH_START_DATE DATE,
-    MONTH_END_DATE DATE,
-    -- Net Worth Summary
-    Total_Assets REAL,
-    Total_Assets_Market REAL,
-    Total_Liabilities REAL,
-    Total_Net_Worth REAL,
-    Total_Net_Worth_Market REAL,
-    -- Core Ratios
-    "Savings_Rate_%" REAL,
-    "Real_Savings_Rate_%" REAL,
-    "Income_Surplus_Rate_%" REAL,
-    Liquidity_Ratio_Months REAL,
-    Emergency_Fund_Coverage REAL,
-    Net_Worth_to_Annual_Expense_Ratio REAL,
-    Net_Worth_per_Month_Age REAL,
-    -- Debt Ratios
-    "Debt_to_Asset_Ratio_%" REAL,
-    Debt_Service_Coverage REAL,
-    Liability_Coverage_Ratio REAL,
-    Liquid_Liability_Coverage_Ratio REAL,
-    Expense_to_NW_Ratio REAL,
-    -- Growth
-    "YoY_Net_Worth_Growth_%" REAL,
-    "YoY_Net_Worth_Growth_%_Real" REAL,
-    FOREIGN KEY(MONTH_START_DATE) REFERENCES d_Calendar(Date),
-    FOREIGN KEY(MONTH_END_DATE) REFERENCES d_Calendar(Date)
-);
-
 CREATE TABLE IF NOT EXISTS p_tf_Category_Spend_Analytics (
     -- Identifiers
     MONTH_START_DATE DATE,
@@ -165,7 +134,7 @@ CREATE TABLE IF NOT EXISTS p_tf_Income_Streams_Monthly (
     FOREIGN KEY(CATEGORY_ID) REFERENCES d_Income_Subcategory(UID)
 );
 
-CREATE TABLE IF NOT EXISTS p_tf_Fire_Forecasting_Monthly (
+CREATE TABLE IF NOT EXISTS p_tf_Wealth_Risk_Analytics (
     -- Identifiers
     MONTH_START_DATE DATE,
     MONTH_END_DATE DATE,
@@ -242,71 +211,25 @@ CREATE TABLE IF NOT EXISTS p_tf_Fire_Forecasting_Monthly (
     Velocity_vs_Savings_Ratio DOUBLE,
     Model_Error_Months_To_FI DOUBLE,
     Net_Worth_Post_Tax_Delta_Pct DOUBLE,
-    FOREIGN KEY(MONTH_START_DATE) REFERENCES d_Calendar(Date),
-    FOREIGN KEY(MONTH_END_DATE) REFERENCES d_Calendar(Date)
-);
-
-CREATE TABLE IF NOT EXISTS p_tf_Risk_Metrics (
-    -- Identifiers
-    MONTH_START_DATE DATE,
-    MONTH_END_DATE DATE,
-    -- Wealth Snapshot
-    Total_Net_Worth DOUBLE,
-    Total_Net_Worth_Market DOUBLE,
-    -- Returns
+    -- Risk Metrics natively merged
     Monthly_Return DOUBLE,
     Rolling_12M_Return DOUBLE,
-    -- Drawdown
     All_Time_High_NW DOUBLE,
     NW_Drawdown_Pct DOUBLE,
     Real_Drawdown_Pct DOUBLE,
     Drawdown_Pct DOUBLE,
     "Recovery_From_Drawdown_%" DOUBLE,
     Max_Drawdown_12M DOUBLE,
-    -- Volatility & Risk
     Annualized_Volatility_12M DOUBLE,
     NW_Volatility_12M DOUBLE,
     Downside_Deviation_12M DOUBLE,
     VaR_95_Monthly DOUBLE,
     Expected_Shortfall_95 DOUBLE,
-    -- Risk-Adjusted Ratios
     Sharpe_Ratio_Monthly DOUBLE,
     Sortino_Ratio_Monthly DOUBLE,
     Calmar_Ratio DOUBLE,
     FOREIGN KEY(MONTH_START_DATE) REFERENCES d_Calendar(Date),
     FOREIGN KEY(MONTH_END_DATE) REFERENCES d_Calendar(Date)
-);
-
-CREATE TABLE IF NOT EXISTS p_tf_Sector_Allocation_Monthly (
-    -- Identifiers
-    MONTH_START_DATE DATE,
-    As_Of_Date DATE,
-    -- Dimensions
-    INSTRUMENT_CLASS TEXT,
-    INSTRUMENT_TYPE TEXT,
-    INSTRUMENT_SUBTYPE TEXT,
-    SECTOR TEXT,
-    -- Values
-    Total_Portfolio_Value DOUBLE,
-    Class_Total_Value DOUBLE,
-    Sector_Total_Value DOUBLE,
-    -- Weights
-    Class_Target_Weight DOUBLE,
-    Class_Weight DOUBLE,
-    Weight_In_Class DOUBLE,
-    Portfolio_Weight DOUBLE,
-    Weight_Change_MoM DOUBLE,
-    -- Concentration
-    Class_HHI_Concentration_Index DOUBLE,
-    Sector_HHI_Concentration_Index REAL,
-    Effective_Diversification REAL,
-    Marginal_Risk_Contribution DOUBLE,
-    -- Performance
-    Class_CAGR REAL,
-    Benchmark_Deviation REAL,
-    -- Flags
-    Is_Overweight BOOLEAN,
-    FOREIGN KEY(MONTH_START_DATE) REFERENCES d_Calendar(Date)
 );
 
 CREATE TABLE IF NOT EXISTS p_tf_Tax_Liability_Forecast (
@@ -333,72 +256,6 @@ CREATE TABLE IF NOT EXISTS p_tf_Tax_Liability_Forecast (
     Tax_Drag_Pct DOUBLE,
     Tax_Alpha_Pct DOUBLE,
     FOREIGN KEY(MONTH_START_DATE) REFERENCES d_Calendar(Date)
-);
-
-CREATE TABLE IF NOT EXISTS p_tf_Performance_Attribution (
-    -- Identifiers
-    MONTH_START_DATE DATE,
-    INSTRUMENT_CLASS TEXT,
-    INSTRUMENT_TYPE TEXT,
-    INSTRUMENT_SUBTYPE TEXT,
-    SECTOR TEXT,
-    -- Macro Weights (Class Level)
-    Class_Target_Weight DOUBLE,
-    Class_Actual_Weight DOUBLE,
-    -- Returns
-    Sector_Return DOUBLE,
-    Class_Benchmark_Return DOUBLE,
-    -- Brinson-Fachler Attribution
-    Allocation_Effect DOUBLE,
-    Selection_Effect DOUBLE,
-    Interaction_Effect DOUBLE,
-    Total_Active_Return DOUBLE,
-    FOREIGN KEY(MONTH_START_DATE) REFERENCES d_Calendar(Date)
-);
-
-CREATE TABLE IF NOT EXISTS p_tf_Portfolio_Rebalancing_Plan (
-    -- Identifiers
-    MONTH_START_DATE DATE,
-    INSTRUMENT_CLASS TEXT,
-    INSTRUMENT_TYPE TEXT,
-    INSTRUMENT_SUBTYPE TEXT,
-    SECTOR TEXT,
-    -- Macro Status (Class Level)
-    Class_Target_Weight DOUBLE,
-    Class_Actual_Weight DOUBLE,
-    Class_Deviation DOUBLE,
-    Class_Rebalance_Action TEXT,
-    Class_Order_Value DOUBLE,
-    -- Micro Component (Sector Level)
-    Sector_Value DOUBLE,
-    Sector_Unrealized_Loss DOUBLE,
-    -- Status
-    Is_Rebalance_Required BOOLEAN,
-    FOREIGN KEY(MONTH_START_DATE) REFERENCES d_Calendar(Date)
-);
-
-CREATE TABLE IF NOT EXISTS p_tf_Tax_Harvesting (
-    -- Identifiers
-    ISIN TEXT,
-    "Instrument Name" TEXT,
-    -- Position
-    Holding_Type TEXT,
-    Max_Days_Held BIGINT,
-    Harvestable_Quantity DOUBLE,
-    -- Values
-    Total_Invested DOUBLE,
-    Current_Value DOUBLE,
-    Harvestable_Loss DOUBLE,
-    Loss_Percentage DOUBLE,
-    -- Tax Benefit
-    LTCG_Exemption_Remaining REAL,
-    Tax_Savings_If_Harvested REAL,
-    Net_Tax_Benefit REAL,
-    -- Scoring
-    Offset_Potential REAL,
-    Substitute_Asset_Available BOOLEAN,
-    Priority_Score REAL,
-    FOREIGN KEY(ISIN) REFERENCES d_tf_Investment_Master(ISIN)
 );
 
 CREATE TABLE IF NOT EXISTS p_tf_Budget_Forecast_Monthly (
@@ -488,105 +345,28 @@ CREATE TABLE IF NOT EXISTS p_tf_Budget_Forecast_Monthly (
     FOREIGN KEY(MONTH_END_DATE) REFERENCES d_Calendar(Date)
 );
 
-CREATE TABLE IF NOT EXISTS p_tf_Investment_Snapshot_ISIN (
-    -- Identifiers
+CREATE TABLE IF NOT EXISTS p_tf_Investment_Analytics (
     MONTH_START_DATE DATE,
-    MONTH_END_DATE DATE,
-    YEAR_MONTH TEXT,
+    Max_Closing_Date DATE,
     ISIN TEXT,
     INSTRUMENT_NAME TEXT,
     INSTRUMENT_CLASS TEXT,
     INSTRUMENT_TYPE TEXT,
-    INSTRUMENT_SUBTYPE TEXT,
     SECTOR TEXT,
-    -- Position Values
-    Invested_Value DOUBLE,
-    Market_Value DOUBLE,
-    Unrealized_PL DOUBLE,
-    Absolute_Return_Pct DOUBLE,
-    Portfolio_Weight_Pct DOUBLE,
-    -- MoM Return
-    Prev_Month_Market_Value DOUBLE,
-    Monthly_Value_Change DOUBLE,
-    Monthly_Deployed DOUBLE,
-    Monthly_Redeemed DOUBLE,
-    Net_Monthly_Flow DOUBLE,
-    MoM_Return_Pct DOUBLE,
-    MoM_Return_Pct_Simple DOUBLE,
-    -- Trailing Returns
-    Rolling_3M_Return_Pct DOUBLE,
-    Rolling_6M_Return_Pct DOUBLE,
-    Rolling_12M_Return_Pct DOUBLE,
-    -- Benchmark MoM
-    BM_MoM_Return_Pct DOUBLE,
-    MoM_Alpha DOUBLE,
-    -- Snapshot Metrics (cumulative)
-    CAGR DOUBLE,
-    XIRR DOUBLE,
-    After_Tax_XIRR DOUBLE,
-    Active_Return DOUBLE,
-    Beta DOUBLE,
-    Tracking_Error DOUBLE,
-    Information_Ratio DOUBLE,
-    -- Tax Context
-    Unrealized_LTCG DOUBLE,
-    Unrealized_STCG DOUBLE,
-    Unrealized_LTCL DOUBLE,
-    Unrealized_STCL DOUBLE,
-    LTCG_Tax_If_Sold DOUBLE,
-    STCG_Tax_If_Sold DOUBLE,
-    -- Flags
-    Is_New_Position BOOLEAN,
-    Is_Closed_Position BOOLEAN,
-    Is_Active_Month BOOLEAN,
-    Is_MoM_Positive BOOLEAN,
-    Is_Beating_BM_MoM BOOLEAN,
+    ISIN_Market_Value DOUBLE,
+    ISIN_Book_Value DOUBLE,
+    ISIN_Unrealized_PnL DOUBLE,
+    ISIN_Harvestable_Loss DOUBLE,
+    ISIN_Weight DOUBLE,
+    Class_Weight DOUBLE,
+    Class_Target_Weight DOUBLE,
+    Class_Drift DOUBLE,
+    Rebalance_Required BOOLEAN,
+    Sector_Weight DOUBLE,
+    ISIN_Monthly_Return DOUBLE,
+    Tax_Harvesting_Priority_Score DOUBLE,
     FOREIGN KEY(MONTH_START_DATE) REFERENCES d_Calendar(Date),
-    FOREIGN KEY(MONTH_END_DATE) REFERENCES d_Calendar(Date),
     FOREIGN KEY(ISIN) REFERENCES d_tf_Investment_Master(ISIN)
-);
-
-CREATE TABLE IF NOT EXISTS p_tf_Investment_Snapshot_Portfolio (
-    -- Identifiers
-    MONTH_START_DATE DATE,
-    MONTH_END_DATE DATE,
-    YEAR_MONTH TEXT,
-    -- Portfolio Valuation
-    Total_Invested_Value DOUBLE,
-    Total_Market_Value DOUBLE,
-    Total_Unrealized_PL DOUBLE,
-    Absolute_Return_Pct DOUBLE,
-    -- MoM Return
-    Prev_Month_Market_Value DOUBLE,
-    Portfolio_MoM_Return_Pct DOUBLE,
-    Portfolio_MoM_Return_Pct_Simple DOUBLE,
-    Portfolio_MoM_Value_Change DOUBLE,
-    Monthly_Deployed_Total DOUBLE,
-    Monthly_Redeemed_Total DOUBLE,
-    -- Rolling Returns
-    Rolling_3M_Return_Pct DOUBLE,
-    Rolling_6M_Return_Pct DOUBLE,
-    Rolling_12M_Return_Pct DOUBLE,
-    Rolling_3M_Annualized_Return DOUBLE,
-    -- Quant Metrics
-    XIRR DOUBLE,
-    After_Tax_XIRR DOUBLE,
-    BM_XIRR DOUBLE,
-    Active_Return DOUBLE,
-    Sharpe_Ratio DOUBLE,
-    Sortino_Ratio DOUBLE,
-    Max_Drawdown DOUBLE,
-
-    -- Tax Summary
-    Total_Unrealized_LTCG DOUBLE,
-    Total_Unrealized_STCG DOUBLE,
-    Total_Unrealized_LTCL DOUBLE,
-    Total_Unrealized_STCL DOUBLE,
-    Total_LTCG_Tax_If_Sold DOUBLE,
-    Total_STCG_Tax_If_Sold DOUBLE,
-    FY_Realized_Net_PnL DOUBLE,
-    FOREIGN KEY(MONTH_START_DATE) REFERENCES d_Calendar(Date),
-    FOREIGN KEY(MONTH_END_DATE) REFERENCES d_Calendar(Date)
 );
 
 CREATE TABLE IF NOT EXISTS p_tf_Monthly_Cashflow_Summary (
@@ -638,6 +418,19 @@ CREATE TABLE IF NOT EXISTS p_tf_Monthly_Cashflow_Summary (
     -- Flags
     Is_Surplus_Month BOOLEAN,
     Is_Investment_Target_Met BOOLEAN,
+    -- Financial Ratios
+    Liquidity_Ratio_Months DOUBLE,
+    Debt_to_Asset_Ratio_Pct DOUBLE,
+    YoY_Net_Worth_Growth_Pct DOUBLE,
+    Expense_to_NW_Ratio DOUBLE,
+    Debt_Service_Coverage DOUBLE,
+    Emergency_Fund_Coverage DOUBLE,
+    Net_Worth_per_Month_Age DOUBLE,
+    Real_Savings_Rate_Pct DOUBLE,
+    Net_Worth_to_Annual_Expense_Ratio DOUBLE,
+    Liability_Coverage_Ratio DOUBLE,
+    Liquid_Liability_Coverage_Ratio DOUBLE,
+    YoY_Net_Worth_Growth_Pct_Real DOUBLE,
     FOREIGN KEY(MONTH_START_DATE) REFERENCES d_Calendar(Date),
     FOREIGN KEY(MONTH_END_DATE) REFERENCES d_Calendar(Date)
 );
