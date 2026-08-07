@@ -76,6 +76,68 @@ real_return_floor = 0.01
 desired_target_age = 85
 # Date of birth in YYYY-MM-DD format.
 date_of_birth = "2000-05-16"
+# Time horizon for Sequence of Returns Risk (SORR) CAGR calculations
+sorr_cagr_window_months = 60
+
+[assumptions.monte_carlo.markov_regime]
+# 3x3 Matrix defining probabilities to transition between Bull, Bear, and Stagflation states.
+# Row 0: Bull, Row 1: Bear, Row 2: Stagflation
+transition_matrix = [
+    [0.90, 0.08, 0.02],
+    [0.15, 0.80, 0.05],
+    [0.10, 0.15, 0.75]
+]
+# State Parameters defined as: [drift, volatility, inflation_target]
+state_bull = [0.10, 0.12, 0.04]  # High drift, low vol, stable inflation
+state_bear = [-0.15, 0.25, 0.02] # Negative drift, high vol, falling inflation
+state_stag = [-0.05, 0.18, 0.08] # Flat/negative drift, moderate vol, spiking inflation
+
+[assumptions.monte_carlo.human_capital]
+# Probability of losing income (job loss, zero bonus) when entering a Bear or Stagflation state.
+shock_probability = 0.20
+# Duration of the income shock in months
+shock_duration_min = 6
+shock_duration_max = 12
+
+[assumptions.monte_carlo.glide_path]
+# "Bond Tent" settings to protect against Sequence of Returns Risk (SORR)
+# Begin scaling down equities this many months before your target FI date.
+derisk_start_months_prior = 60
+# Slowly scale equities back up this many months after reaching FI.
+post_fi_re_risk_months = 120
+# Maximum equity allocation during accumulation and late retirement.
+base_equity_weight = 0.70
+# Minimum equity allocation (maximum safety) at the exact moment of FI.
+fi_target_equity_weight = 0.40
+# Expected real return for the non-equity (debt) portion.
+debt_real_return = 0.02
+# Expected volatility for the non-equity (debt) portion.
+debt_volatility = 0.04
+
+[assumptions.monte_carlo.guyton_klinger]
+# Multiplier over initial SWR to trigger a lifestyle cut (e.g., 1.2 for +20% threshold breach)
+withdrawal_upper_threshold = 1.2
+# Multiplier under initial SWR to trigger a lifestyle raise (e.g., 0.8 for -20% threshold breach)
+withdrawal_lower_threshold = 0.8
+# Multiplier for withdrawal amount when cutting lifestyle (e.g., 0.90 for -10% spend cut)
+lifestyle_cut_multiplier = 0.90
+# Multiplier for withdrawal amount when raising lifestyle (e.g., 1.10 for +10% spend raise)
+lifestyle_raise_multiplier = 1.10
+
+[assumptions.monte_carlo.inflation_model]
+# Speed of mean reversion (theta) for the Ornstein-Uhlenbeck stochastic inflation process
+mean_reversion_speed = 0.1
+# Annualized standard deviation (volatility) of the inflation path
+volatility_annual = 0.015
+# Absolute maximum cap for simulated inflation to prevent unrealistic hyperinflation runs (e.g., 15%)
+max_inflation_cap = 0.15
+
+[assumptions.monte_carlo.jump_diffusion]
+# Merton Jump-Diffusion parameters for simulating Black Swan events
+jump_probability_annual = 0.05
+jump_magnitude = -0.20
+# Expected annual drag from ETF expense ratios and portfolio fees
+expense_ratio_drag = 0.005
 
 [assumptions.tax]
 # Date before which debt mutual funds retain indexation benefits.

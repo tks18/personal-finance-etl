@@ -129,6 +129,84 @@ class FireAssumptions(BaseModel):
     human_capital_discount_rate: float = Field(..., description="Discount rate for human capital.")
 
 
+class MarkovRegimeConfig(BaseModel):
+    transition_matrix: list[list[float]] = Field(
+        default=[
+            [0.90, 0.08, 0.02],
+            [0.15, 0.80, 0.05],
+            [0.10, 0.15, 0.75],
+        ],
+        description="3x3 Matrix for probabilities of transitioning between Bull, Bear, and Stagflation states."
+    )
+    state_bull: tuple[float, float, float] = Field(
+        default=(0.10, 0.12, 0.04), description="Bull Market parameters: (drift, volatility, inflation target)"
+    )
+    state_bear: tuple[float, float, float] = Field(
+        default=(-0.15, 0.25, 0.02), description="Bear Market parameters: (drift, volatility, inflation target)"
+    )
+    state_stag: tuple[float, float, float] = Field(
+        default=(-0.05, 0.18, 0.08), description="Stagflation parameters: (drift, volatility, inflation target)"
+    )
+
+
+class HumanCapitalConfig(BaseModel):
+    shock_probability: float = Field(
+        default=0.20, description="Probability of an income shock (job loss, zero bonus) when in Bear or Stagflation states."
+    )
+    shock_duration_min: int = Field(
+        default=6, description="Minimum duration (in months) of the income shock."
+    )
+    shock_duration_max: int = Field(
+        default=12, description="Maximum duration (in months) of the income shock."
+    )
+
+
+class GlidePathConfig(BaseModel):
+    derisk_start_months_prior: int = Field(
+        default=60, description="Months prior to the FI target date to begin de-risking the portfolio."
+    )
+    post_fi_re_risk_months: int = Field(
+        default=120, description="Months after reaching FI to slowly re-risk the portfolio back to base."
+    )
+    base_equity_weight: float = Field(
+        default=0.70, description="Base/maximum equity allocation weight (e.g., 70%)."
+    )
+    fi_target_equity_weight: float = Field(
+        default=0.40, description="Target minimum equity allocation weight upon reaching FI (e.g., 40%)."
+    )
+    debt_real_return: float = Field(
+        default=0.02, description="Expected real return for the non-equity (debt) portion of the glide path."
+    )
+    debt_volatility: float = Field(
+        default=0.04, description="Expected volatility for the non-equity (debt) portion of the glide path."
+    )
+
+
+class JumpDiffusionConfig(BaseModel):
+    jump_probability_annual: float = Field(
+        default=0.05, description="Annual probability of a Black Swan market crash (e.g., 5%)."
+    )
+    jump_magnitude: float = Field(
+        default=-0.20, description="The magnitude of the crash when a jump occurs (e.g., -20%)."
+    )
+    expense_ratio_drag: float = Field(
+        default=0.005, description="Annual portfolio expense ratio or fee drag deducted from returns (e.g., 50 bps)."
+    )
+
+
+class GuytonKlingerConfig(BaseModel):
+    withdrawal_upper_threshold: float = Field(default=1.2, description="Multiplier over initial SWR to trigger a lifestyle cut (e.g., 1.2 for +20%).")
+    withdrawal_lower_threshold: float = Field(default=0.8, description="Multiplier under initial SWR to trigger a lifestyle raise (e.g., 0.8 for -20%).")
+    lifestyle_cut_multiplier: float = Field(default=0.90, description="Multiplier for withdrawal amount when cutting lifestyle (e.g., 0.90 for -10%).")
+    lifestyle_raise_multiplier: float = Field(default=1.10, description="Multiplier for withdrawal amount when raising lifestyle (e.g., 1.10 for +10%).")
+
+
+class InflationModelConfig(BaseModel):
+    mean_reversion_speed: float = Field(default=0.1, description="Speed of mean reversion (theta) for Ornstein-Uhlenbeck inflation process.")
+    volatility_annual: float = Field(default=0.015, description="Annual volatility of inflation.")
+    max_inflation_cap: float = Field(default=0.15, description="Absolute maximum cap for inflation (e.g., 15%).")
+
+
 class MonteCarloAssumptions(BaseModel):
     iterations: int = Field(..., description="Number of Monte Carlo paths/simulations to run.")
     max_months: int = Field(
@@ -140,8 +218,15 @@ class MonteCarloAssumptions(BaseModel):
     real_return_floor: float = Field(
         ..., description="Absolute minimum annualized real return applied during forecasting."
     )
+    sorr_cagr_window_months: int = Field(default=60, description="Months window used to evaluate Sequence of Returns Risk (SORR) CAGR.")
     desired_target_age: int = Field(..., description="Desired target age for FIRE calculations.")
     date_of_birth: str = Field(..., description="Date of birth in YYYY-MM-DD format.")
+    markov_regime: MarkovRegimeConfig = Field(default_factory=MarkovRegimeConfig)
+    human_capital: HumanCapitalConfig = Field(default_factory=HumanCapitalConfig)
+    glide_path: GlidePathConfig = Field(default_factory=GlidePathConfig)
+    jump_diffusion: JumpDiffusionConfig = Field(default_factory=JumpDiffusionConfig)
+    guyton_klinger: GuytonKlingerConfig = Field(default_factory=GuytonKlingerConfig)
+    inflation_model: InflationModelConfig = Field(default_factory=InflationModelConfig)
 
 
 class TaxRates(BaseModel):
