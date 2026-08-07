@@ -143,83 +143,24 @@ class RiskMetricsBuilder:
                 (pl.col("NW_Monthly_Return").rolling_std(window_size=12) * (12**0.5))
                 .fill_null(0.0)
                 .alias("NW_Volatility_12M"),
-                pl.when(pl.col("Monthly_Return") < 0)
-                .then(pl.col("Monthly_Return"))
-                .otherwise(None)
-                .rolling_std(window_size=12)
-                .fill_null(0.0)
-                .alias("Downside_Deviation_Monthly"),
-            )
-            .with_columns(
-                (pl.col("Downside_Deviation_Monthly") * (12**0.5)).alias("Downside_Deviation_12M")
-            )
-            .with_columns(
-                pl.col("Monthly_Return")
-                .rolling_quantile(0.05, window_size=36, interpolation="linear")
-                .fill_null(0.0)
-                .alias("VaR_95_Monthly")
             )
         )
 
-        lf_cvar = (
-            lf_base.rolling(index_column="MONTH_START_DATE", period="36mo")
-            .agg(
-                pl.col("Monthly_Return")
-                .filter(pl.col("Monthly_Return") <= pl.col("Monthly_Return").quantile(0.05))
-                .mean()
-                .alias("Expected_Shortfall_95")
-            )
-            .select(["MONTH_START_DATE", pl.col("Expected_Shortfall_95").fill_null(0.0)])
-        )
-
-        return (
-            lf_base.join(lf_cvar, on="MONTH_START_DATE", how="left")
-            .with_columns(pl.col("Expected_Shortfall_95").fill_null(0.0))
-            .with_columns(
-                pl.when(pl.col("Annualized_Volatility_12M") > 0)
-                .then(
-                    (((1.0 + pl.col("Monthly_Return")).pow(12) - 1.0) - pl.col("Risk_Free_Rate"))
-                    / pl.col("Annualized_Volatility_12M")
-                )
-                .otherwise(0.0)
-                .alias("Sharpe_Ratio_Monthly"),
-                pl.when(pl.col("Downside_Deviation_12M") > 0)
-                .then(
-                    (((1.0 + pl.col("Monthly_Return")).pow(12) - 1.0) - pl.col("Risk_Free_Rate"))
-                    / pl.col("Downside_Deviation_12M")
-                )
-                .otherwise(0.0)
-                .alias("Sortino_Ratio_Monthly"),
-                pl.when(pl.col("Max_Drawdown_12M").abs() > 0)
-                .then(
-                    (((1.0 + pl.col("Monthly_Return")).pow(12) - 1.0) - pl.col("Risk_Free_Rate"))
-                    / pl.col("Max_Drawdown_12M").abs()
-                )
-                .otherwise(0.0)
-                .alias("Calmar_Ratio"),
-            )
-            .select(
-                [
-                    "MONTH_START_DATE",
-                    pl.col("MONTH_START_DATE").dt.month_end().cast(pl.Date).alias("MONTH_END_DATE"),
-                    pl.col("Total_Net_Worth").fill_null(0.0),
-                    pl.col("Total_Net_Worth_Market").fill_null(0.0),
-                    "Monthly_Return",
-                    "Rolling_12M_Return",
-                    "All_Time_High_NW",
-                    "NW_Drawdown_Pct",
-                    "Real_Drawdown_Pct",
-                    "Drawdown_Pct",
-                    "Recovery_From_Drawdown_%",
-                    "Max_Drawdown_12M",
-                    "Annualized_Volatility_12M",
-                    "NW_Volatility_12M",
-                    "Downside_Deviation_12M",
-                    "VaR_95_Monthly",
-                    "Expected_Shortfall_95",
-                    "Sharpe_Ratio_Monthly",
-                    "Sortino_Ratio_Monthly",
-                    "Calmar_Ratio",
-                ]
-            )
+        return lf_base.select(
+            [
+                "MONTH_START_DATE",
+                pl.col("MONTH_START_DATE").dt.month_end().cast(pl.Date).alias("MONTH_END_DATE"),
+                pl.col("Total_Net_Worth").fill_null(0.0),
+                pl.col("Total_Net_Worth_Market").fill_null(0.0),
+                "Monthly_Return",
+                "Rolling_12M_Return",
+                "All_Time_High_NW",
+                "NW_Drawdown_Pct",
+                "Real_Drawdown_Pct",
+                "Drawdown_Pct",
+                "Recovery_From_Drawdown_%",
+                "Max_Drawdown_12M",
+                "Annualized_Volatility_12M",
+                "NW_Volatility_12M",
+            ]
         )

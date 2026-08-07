@@ -168,7 +168,9 @@ class IsinPipeline:
 
                     global_cashflows.extend(isin_cf)
                     for d, vals in isin_pt.items():
-                        pt = portfolio_terminals.setdefault(d, {"val": 0.0, "shadow_val": 0.0, "after_tax_val": 0.0})
+                        pt = portfolio_terminals.setdefault(
+                            d, {"val": 0.0, "shadow_val": 0.0, "after_tax_val": 0.0}
+                        )
                         pt["val"] += vals["val"]
                         pt["shadow_val"] += vals["shadow_val"]
                         pt["after_tax_val"] += vals.get("after_tax_val", 0.0)

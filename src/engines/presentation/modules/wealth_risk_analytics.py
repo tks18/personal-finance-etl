@@ -4,6 +4,7 @@ from typing import Any
 import polars as pl
 
 from src.engines.presentation.helpers.fire_mc_sim import get_monte_carlo_fire_batch
+from src.utils.polars_expressions import rolling_avg, rolling_sum, safe_divide
 
 
 class WealthRiskAnalyticsBuilder:
@@ -59,19 +60,14 @@ class WealthRiskAnalyticsBuilder:
             lf_inv_port_mapped = lf_inv_port.with_columns(
                 pl.col("Closing_Date").dt.month_end().alias("MONTH_END_DATE")
             )
-            lf_inv_port_latest = lf_inv_port_mapped.group_by("MONTH_END_DATE").agg(
-                pl.col("Closing_Date").max().alias("Max_Closing_Date")
-            )
-            lf_inv_port_agg = (
-                lf_inv_port_mapped.join(lf_inv_port_latest, on="MONTH_END_DATE")
-                .filter(pl.col("Closing_Date") == pl.col("Max_Closing_Date"))
-                .select(
-                    [
-                        "MONTH_END_DATE",
-                        pl.col("Total_Current_Value").alias("Port_Market_Value"),
-                        pl.col("Total_Invested_Value").alias("Port_Book_Value"),
-                    ]
-                )
+            lf_inv_port_agg = lf_inv_port_mapped.filter(
+                pl.col("Closing_Date") == pl.col("Closing_Date").max().over("MONTH_END_DATE")
+            ).select(
+                [
+                    "MONTH_END_DATE",
+                    pl.col("Total_Current_Value").alias("Port_Market_Value"),
+                    pl.col("Total_Invested_Value").alias("Port_Book_Value"),
+                ]
             )
 
             lf_fire_base = (
@@ -106,60 +102,58 @@ class WealthRiskAnalyticsBuilder:
         lf_fire_forecast = (
             lf_fire_base.sort("MONTH_START_DATE")
             .with_columns(
-                pl.col("Total_Core_Expense")
-                .rolling_mean(window_size=3)
-                .alias("Trailing_3M_Avg_Spend"),
-                pl.col("Total_Core_Expense")
-                .rolling_mean(window_size=6)
-                .alias("Trailing_6M_Avg_Spend"),
-                pl.col("Total_Core_Expense")
-                .rolling_sum(window_size=12)
-                .alias("Trailing_12M_Spend"),
-                pl.col("Net_Savings").rolling_mean(window_size=6).alias("Trailing_6M_Avg_Savings"),
-                pl.col("Net_Savings").rolling_sum(window_size=12).alias("Trailing_12M_Savings"),
-                pl.col("Total_Expense")
-                .rolling_mean(window_size=3)
-                .alias("Trailing_3M_Avg_Total_Spend"),
-                pl.col("Total_Expense")
-                .rolling_mean(window_size=6)
-                .alias("Trailing_6M_Avg_Total_Spend"),
-                pl.col("Total_Expense")
-                .rolling_sum(window_size=12)
-                .alias("Trailing_12M_Total_Spend"),
-                pl.col("Net_Savings_Total")
-                .rolling_mean(window_size=6)
-                .alias("Trailing_6M_Avg_Total_Savings"),
-                pl.col("Net_Savings_Total")
-                .rolling_sum(window_size=12)
-                .alias("Trailing_12M_Total_Savings"),
+                rolling_avg("Total_Core_Expense", 3).alias("Trailing_3M_Avg_Spend"),
+                rolling_avg("Total_Core_Expense", 6).alias("Trailing_6M_Avg_Spend"),
+                rolling_sum("Total_Core_Expense", 12).alias("Trailing_12M_Spend"),
+                rolling_avg("Net_Savings", 6).alias("Trailing_6M_Avg_Savings"),
+                rolling_sum("Net_Savings", 12).alias("Trailing_12M_Savings"),
+                rolling_avg("Total_Expense", 3).alias("Trailing_3M_Avg_Total_Spend"),
+                rolling_avg("Total_Expense", 6).alias("Trailing_6M_Avg_Total_Spend"),
+                rolling_sum("Total_Expense", 12).alias("Trailing_12M_Total_Spend"),
+                rolling_avg("Net_Savings_Total", 6).alias("Trailing_6M_Avg_Total_Savings"),
+                rolling_sum("Net_Savings_Total", 12).alias("Trailing_12M_Total_Savings"),
             )
             .with_columns(
                 (pl.col("Trailing_12M_Spend") * swr).alias("Target_FI_Today"),
                 (pl.col("Trailing_12M_Total_Spend") * swr).alias("Target_FI_Today_Total"),
             )
             .with_columns(
-                pl.when(pl.col("Target_FI_Today") > 0)
-                .then(pl.col("Total_Net_Worth_Market_Af_Tax") / pl.col("Target_FI_Today"))
-                .otherwise(0.0)
-                .alias("Current_FI_Coverage_Pct"),
-                pl.when(pl.col("Trailing_3M_Avg_Spend") > 0)
-                .then(pl.col("Total_Net_Worth_Market_Af_Tax") / pl.col("Trailing_3M_Avg_Spend"))
-                .otherwise(0.0)
-                .alias("Runway_Months_Linear"),
-                pl.when(pl.col("Target_FI_Today_Total") > 0)
-                .then(pl.col("Total_Net_Worth_Market_Af_Tax") / pl.col("Target_FI_Today_Total"))
-                .otherwise(0.0)
-                .alias("Current_FI_Coverage_Pct_Total"),
-                pl.when(pl.col("Trailing_3M_Avg_Total_Spend") > 0)
-                .then(
-                    pl.col("Total_Net_Worth_Market_Af_Tax") / pl.col("Trailing_3M_Avg_Total_Spend")
-                )
-                .otherwise(0.0)
-                .alias("Runway_Months_Total_Linear"),
+                safe_divide("Total_Net_Worth_Market_Af_Tax", "Target_FI_Today").alias(
+                    "Current_FI_Coverage_Pct"
+                ),
+                safe_divide("Total_Net_Worth_Market_Af_Tax", "Trailing_3M_Avg_Spend").alias(
+                    "Runway_Months_Linear"
+                ),
+                safe_divide("Total_Net_Worth_Market_Af_Tax", "Target_FI_Today_Total").alias(
+                    "Current_FI_Coverage_Pct_Total"
+                ),
+                safe_divide("Total_Net_Worth_Market_Af_Tax", "Trailing_3M_Avg_Total_Spend").alias(
+                    "Runway_Months_Total_Linear"
+                ),
             )
         )
         lf_fire_forecast = (
             lf_fire_forecast.with_columns(
+                pl.col("MONTH_START_DATE").dt.year().alias("_temp_year"),
+                pl.col("MONTH_START_DATE").dt.month().alias("_temp_month"),
+            )
+            .with_columns(
+                (
+                    (
+                        pl.col("_temp_year")
+                        - int(self.rules.assumptions.monte_carlo.date_of_birth.split("-")[0])
+                    )
+                    * 12
+                    + (
+                        pl.col("_temp_month")
+                        - int(self.rules.assumptions.monte_carlo.date_of_birth.split("-")[1])
+                    )
+                )
+                .cast(pl.Int32)
+                .alias("Age_Months"),
+                pl.col("YEAR_MONTH").str.replace("-", "").cast(pl.Int32).alias("Seed_Int"),
+            )
+            .with_columns(
                 pl.struct(
                     [
                         "Total_Net_Worth_Market_Af_Tax",
@@ -169,8 +163,9 @@ class WealthRiskAnalyticsBuilder:
                         "Target_FI_Today",
                         "Trailing_6M_Avg_Total_Savings",
                         "Target_FI_Today_Total",
-                        "YEAR_MONTH",
                         "INFLATION_YOY_PCT",
+                        "Age_Months",
+                        "Seed_Int",
                     ]
                 )
                 .map_batches(
@@ -197,28 +192,22 @@ class WealthRiskAnalyticsBuilder:
                 .alias("mc_results")
             )
             .unnest("mc_results")
+            .drop(["_temp_year", "_temp_month", "Age_Months", "Seed_Int"])
             .with_columns(
                 # Legacy linear for reference
-                pl.when(
-                    (pl.col("Trailing_6M_Avg_Savings") > 0)
-                    & (pl.col("Target_FI_Today") > pl.col("Total_Net_Worth_Market_Af_Tax"))
-                )
-                .then(
-                    (pl.col("Target_FI_Today") - pl.col("Total_Net_Worth_Market_Af_Tax"))
-                    / pl.col("Trailing_6M_Avg_Savings")
-                )
-                .otherwise(0.0)
-                .alias("Estimated_Months_To_FI_Linear"),
-                pl.when(
-                    (pl.col("Trailing_6M_Avg_Total_Savings") > 0)
-                    & (pl.col("Target_FI_Today_Total") > pl.col("Total_Net_Worth_Market_Af_Tax"))
-                )
-                .then(
-                    (pl.col("Target_FI_Today_Total") - pl.col("Total_Net_Worth_Market_Af_Tax"))
-                    / pl.col("Trailing_6M_Avg_Total_Savings")
-                )
-                .otherwise(0.0)
-                .alias("Estimated_Months_To_FI_Total_Linear"),
+                safe_divide(
+                    pl.max_horizontal(
+                        0.0, pl.col("Target_FI_Today") - pl.col("Total_Net_Worth_Market_Af_Tax")
+                    ),
+                    "Trailing_6M_Avg_Savings",
+                ).alias("Estimated_Months_To_FI_Linear"),
+                safe_divide(
+                    pl.max_horizontal(
+                        0.0,
+                        pl.col("Target_FI_Today_Total") - pl.col("Total_Net_Worth_Market_Af_Tax"),
+                    ),
+                    "Trailing_6M_Avg_Total_Savings",
+                ).alias("Estimated_Months_To_FI_Total_Linear"),
                 pl.lit(cma_real_return).alias("Real_Return_Assumed_Pct"),
                 pl.max_horizontal(
                     0.0, pl.col("Target_FI_Today") - pl.col("Total_Net_Worth_Market_Af_Tax")
@@ -234,41 +223,24 @@ class WealthRiskAnalyticsBuilder:
                 ).alias("Coast_FI_Today_Total"),
                 (pl.col("Target_FI_Today") * lean_ratio).alias("Lean_FI_Today"),
                 (pl.col("Target_FI_Today_Total") * lean_ratio).alias("Lean_FI_Today_Total"),
-                pl.when(pl.col("Total_Net_Worth_Market_Af_Tax") > 0)
-                .then(pl.col("Trailing_12M_Spend") / pl.col("Total_Net_Worth_Market_Af_Tax"))
-                .otherwise(0.0)
-                .alias("Withdrawal_Rate_If_Retired_Now"),
-                pl.when(pl.col("Total_Net_Worth_Market_Af_Tax") > 0)
-                .then(pl.col("Trailing_12M_Total_Spend") / pl.col("Total_Net_Worth_Market_Af_Tax"))
-                .otherwise(0.0)
-                .alias("Withdrawal_Rate_If_Retired_Now_Total"),
+                safe_divide("Trailing_12M_Spend", "Total_Net_Worth_Market_Af_Tax").alias(
+                    "Withdrawal_Rate_If_Retired_Now"
+                ),
+                safe_divide("Trailing_12M_Total_Spend", "Total_Net_Worth_Market_Af_Tax").alias(
+                    "Withdrawal_Rate_If_Retired_Now_Total"
+                ),
             )
             .with_columns(
                 (pl.col("FI_Gap") - pl.col("FI_Gap").shift(1)).alias("FI_Gap_Monthly_Trend"),
                 (pl.col("FI_Gap_Total") - pl.col("FI_Gap_Total").shift(1)).alias(
                     "FI_Gap_Total_Monthly_Trend"
                 ),
-                pl.when(
-                    (pl.col("Months_To_FI_Base_P50") > 0)
-                    & pl.col("Months_To_FI_Base_P50").is_not_nan()
-                    & pl.col("Months_To_FI_Base_P50").is_not_null()
-                    & (pl.col("Total_Income") > 0)
-                )
-                .then((pl.col("FI_Gap") / pl.col("Months_To_FI_Base_P50")) / pl.col("Total_Income"))
-                .otherwise(0.0)
-                .alias("Savings_Rate_Required"),
-                pl.when(
-                    (pl.col("Months_To_FI_Total_Base_P50") > 0)
-                    & pl.col("Months_To_FI_Total_Base_P50").is_not_nan()
-                    & pl.col("Months_To_FI_Total_Base_P50").is_not_null()
-                    & (pl.col("Total_Income") > 0)
-                )
-                .then(
-                    (pl.col("FI_Gap_Total") / pl.col("Months_To_FI_Total_Base_P50"))
-                    / pl.col("Total_Income")
-                )
-                .otherwise(0.0)
-                .alias("Savings_Rate_Required_Total"),
+                safe_divide(safe_divide("FI_Gap", "Months_To_FI_Base_P50"), "Total_Income").alias(
+                    "Savings_Rate_Required"
+                ),
+                safe_divide(
+                    safe_divide("FI_Gap_Total", "Months_To_FI_Total_Base_P50"), "Total_Income"
+                ).alias("Savings_Rate_Required_Total"),
                 (pl.col("Months_To_FI_Base_P50") / 12.0).alias("Years_To_FI_P50"),
                 (pl.col("Months_To_FI_Total_Base_P50") / 12.0).alias("Years_To_FI_Total_P50"),
                 pl.col("Target_FI_Future_Nominal_P50")
@@ -284,7 +256,12 @@ class WealthRiskAnalyticsBuilder:
                 .then(
                     pl.col("MONTH_START_DATE").dt.offset_by(
                         pl.format(
-                            "{}mo", pl.col("Months_To_FI_Base_P50").cast(pl.Int64, strict=False)
+                            "{}mo",
+                            pl.col("Months_To_FI_Base_P50")
+                            .fill_nan(0.0)
+                            .fill_null(0.0)
+                            .clip(0.0, 1200.0)
+                            .cast(pl.Int64),
                         )
                     )
                 )
@@ -298,7 +275,11 @@ class WealthRiskAnalyticsBuilder:
                     pl.col("MONTH_START_DATE").dt.offset_by(
                         pl.format(
                             "{}mo",
-                            pl.col("Months_To_FI_Total_Base_P50").cast(pl.Int64, strict=False),
+                            pl.col("Months_To_FI_Total_Base_P50")
+                            .fill_nan(0.0)
+                            .fill_null(0.0)
+                            .clip(0.0, 1200.0)
+                            .cast(pl.Int64),
                         )
                     )
                 )
@@ -308,7 +289,21 @@ class WealthRiskAnalyticsBuilder:
                 pl.col("Current_FI_Coverage_Pct_Total").alias("NW_Percentile_of_FI_Total"),
             )
             .join(
-                self.lf_risk.select(["MONTH_START_DATE", "Drawdown_Pct"]),
+                self.lf_risk.select(
+                    [
+                        "MONTH_START_DATE",
+                        "Drawdown_Pct",
+                        "Monthly_Return",
+                        "Rolling_12M_Return",
+                        "All_Time_High_NW",
+                        "NW_Drawdown_Pct",
+                        "Real_Drawdown_Pct",
+                        "Recovery_From_Drawdown_%",
+                        "Max_Drawdown_12M",
+                        "Annualized_Volatility_12M",
+                        "NW_Volatility_12M",
+                    ]
+                ),
                 on="MONTH_START_DATE",
                 how="left",
             )
@@ -330,91 +325,10 @@ class WealthRiskAnalyticsBuilder:
                 .then(self.rules.assumptions.fire.cape_swr_ceiling)
                 .otherwise(self.rules.assumptions.fire.cape_swr_base)
                 .alias("CAPE_Adjusted_SWR"),
-                pl.when(
-                    (
-                        self.rules.assumptions.fire.human_capital_max_age
-                        - (
-                            pl.col("MONTH_START_DATE").dt.year()
-                            - int(self.rules.assumptions.monte_carlo.date_of_birth[:4])
-                        )
-                    )
-                    > 0
-                )
-                .then(
-                    (
-                        (pl.col("Total_Income") * 12.0)
-                        * (
-                            1
-                            - (1.0 + self.rules.assumptions.fire.human_capital_discount_rate)
-                            ** -(
-                                self.rules.assumptions.fire.human_capital_max_age
-                                - (
-                                    pl.col("MONTH_START_DATE").dt.year()
-                                    - int(self.rules.assumptions.monte_carlo.date_of_birth[:4])
-                                )
-                            )
-                        )
-                    )
-                    / self.rules.assumptions.fire.human_capital_discount_rate
-                )
-                .otherwise(0.0)
-                .alias("Human_Capital_Value"),
-            )
-            .with_columns(
-                (
-                    pl.col("Total_Net_Worth_Market_Af_Tax")
-                    * pl.col("CAPE_Adjusted_SWR")
-                    * 1.2
-                    / 12.0
-                ).alias("Guyton_Klinger_Ceiling"),
-                (
-                    pl.col("Total_Net_Worth_Market_Af_Tax")
-                    * pl.col("CAPE_Adjusted_SWR")
-                    * 0.8
-                    / 12.0
-                ).alias("Guyton_Klinger_Floor"),
-                pl.when(pl.col("Total_Net_Worth_Market_Af_Tax") > 0)
-                .then(pl.col("Human_Capital_Value") / pl.col("Total_Net_Worth_Market_Af_Tax"))
-                .otherwise(None)
-                .alias("Human_to_Financial_Capital_Ratio"),
-            )
-            .with_columns(
-                pl.when(pl.col("Trailing_6M_Avg_Total_Savings") > 0)
-                .then(pl.col("Wealth_Velocity") / pl.col("Trailing_6M_Avg_Total_Savings"))
-                .otherwise(0.0)
-                .alias("Velocity_vs_Savings_Ratio"),
-                (
-                    pl.col("Estimated_Months_To_FI_Linear")
-                    - (pl.col("Estimated_Months_To_FI_Linear").shift(1) - 1.0)
-                ).alias("Model_Error_Months_To_FI"),
-                pl.when(
-                    (
-                        pl.col("Total_Net_Worth_Market").shift(1)
-                        - pl.col("Total_Net_Worth_Market_Af_Tax").shift(1)
-                    )
-                    > 0
-                )
-                .then(
-                    (
-                        (pl.col("Total_Net_Worth_Market") - pl.col("Total_Net_Worth_Market_Af_Tax"))
-                        - (
-                            pl.col("Total_Net_Worth_Market").shift(1)
-                            - pl.col("Total_Net_Worth_Market_Af_Tax").shift(1)
-                        )
-                    )
-                    / (
-                        pl.col("Total_Net_Worth_Market").shift(1)
-                        - pl.col("Total_Net_Worth_Market_Af_Tax").shift(1)
-                    )
-                )
-                .otherwise(0.0)
-                .alias("Net_Worth_Post_Tax_Delta_Pct"),
             )
         )
 
-        # --- Merge Risk Metrics ---
-        lf_risk = self.lf_risk.drop(["MONTH_END_DATE", "Total_Net_Worth", "Total_Net_Worth_Market"])
-        lf_fire_forecast = lf_fire_forecast.join(lf_risk, on="MONTH_START_DATE", how="left")
+        # Risk Metrics are already natively merged
 
         lf_fire_forecast = lf_fire_forecast.select(
             [
@@ -478,13 +392,6 @@ class WealthRiskAnalyticsBuilder:
                 "Wealth_Velocity",
                 "Wealth_Acceleration",
                 "CAPE_Adjusted_SWR",
-                "Velocity_vs_Savings_Ratio",
-                "Model_Error_Months_To_FI",
-                "Net_Worth_Post_Tax_Delta_Pct",
-                "Guyton_Klinger_Floor",
-                "Guyton_Klinger_Ceiling",
-                "Human_Capital_Value",
-                "Human_to_Financial_Capital_Ratio",
                 # Risk Metrics natively merged
                 "Monthly_Return",
                 "Rolling_12M_Return",
@@ -496,12 +403,6 @@ class WealthRiskAnalyticsBuilder:
                 "Max_Drawdown_12M",
                 "Annualized_Volatility_12M",
                 "NW_Volatility_12M",
-                "Downside_Deviation_12M",
-                "VaR_95_Monthly",
-                "Expected_Shortfall_95",
-                "Sharpe_Ratio_Monthly",
-                "Sortino_Ratio_Monthly",
-                "Calmar_Ratio",
             ]
         )
         return lf_fire_forecast

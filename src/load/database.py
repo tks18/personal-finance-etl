@@ -29,7 +29,7 @@ class DuckDBManager:
         now = datetime.now()
         timestamp_str = now.strftime("%Y_%m")
         file_name = f"Personal_Finance_DB_{timestamp_str}.duckdb"
-        
+
         os.makedirs(self.base_path, exist_ok=True)
         return os.path.join(self.base_path, file_name)
 
@@ -72,7 +72,7 @@ class DuckDBManager:
             try:
                 os.remove(db_file)
                 logger.info(f"Deleted old database file: {db_file}")
-                
+
                 log_file = db_file.replace(".duckdb", ".log")
                 if os.path.exists(log_file):
                     os.remove(log_file)

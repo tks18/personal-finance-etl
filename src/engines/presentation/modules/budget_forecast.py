@@ -1,6 +1,11 @@
+from collections.abc import Mapping
 from typing import Any
 
 import polars as pl
+
+from src.engines.presentation.helpers.forecasting import calculate_budget_forecast
+from src.engines.presentation.helpers.scoring import calculate_budget_health_score
+from src.utils.polars_expressions import rolling_avg, rolling_std, safe_divide
 
 
 class BudgetForecastBuilder:
@@ -18,7 +23,13 @@ class BudgetForecastBuilder:
     and a 3-month rolling income-weighted forward budget plan.
     """
 
-    def __init__(self, base_lf: dict[str, Any], rules):
+    def __init__(
+        self,
+        dfs: Mapping[str, pl.DataFrame | pl.LazyFrame],
+        base_lf: dict[str, Any],
+        rules,
+    ):
+        self.dfs = dfs
         self.base_lf = base_lf
         self.rules = rules
 
@@ -39,16 +50,44 @@ class BudgetForecastBuilder:
         lf = lf.sort("MONTH_START_DATE")
 
         # ── Step 1: Derive raw actuals ───────────────────────────────────────────
-        # Actual_Investment = Net_Transfers reconstructed from ledger identity:
-        #   Net_Cashflow_Month = Income - Expense + Net_Transfers
+        df_buys = self.dfs.get("df_f_tf_inv_purchase")
+        df_sells = self.dfs.get("df_f_tf_inv_sale")
+
+        if df_buys is not None:
+            lf_buys = df_buys.lazy() if isinstance(df_buys, pl.DataFrame) else df_buys
+            lf_inv_buys = (
+                lf_buys.with_columns(pl.col("Date").dt.month_start().alias("MONTH_START_DATE"))
+                .group_by("MONTH_START_DATE")
+                .agg(pl.col("Value").sum().fill_null(0.0).alias("Investment_Deployed"))
+            )
+            lf = lf.join(lf_inv_buys, on="MONTH_START_DATE", how="left").sort("MONTH_START_DATE")
+            lf = lf.with_columns(pl.col("Investment_Deployed").fill_null(0.0))
+        else:
+            lf = lf.with_columns(pl.lit(0.0).alias("Investment_Deployed"))
+
+        if df_sells is not None:
+            lf_sells = df_sells.lazy() if isinstance(df_sells, pl.DataFrame) else df_sells
+            lf_inv_sells = (
+                lf_sells.with_columns(pl.col("Date").dt.month_start().alias("MONTH_START_DATE"))
+                .group_by("MONTH_START_DATE")
+                .agg(pl.col("Sell Value").sum().fill_null(0.0).alias("Investment_Redeemed"))
+            )
+            lf = lf.join(lf_inv_sells, on="MONTH_START_DATE", how="left").sort("MONTH_START_DATE")
+            lf = lf.with_columns(pl.col("Investment_Redeemed").fill_null(0.0))
+        else:
+            lf = lf.with_columns(pl.lit(0.0).alias("Investment_Redeemed"))
+
+        lf = lf.with_columns(
+            (pl.col("Investment_Deployed") - pl.col("Investment_Redeemed")).alias(
+                "Actual_Investment"
+            )
+        )
+
         lf = lf.with_columns(
             pl.col("Total_Income").alias("Actual_Income"),
             pl.col("Total_Core_Expense").alias("Actual_Core_Expense"),
             (pl.col("Total_Expense") - pl.col("Total_Core_Expense")).alias(
                 "Actual_NonCore_Expense"
-            ),
-            (pl.col("Net_Cashflow_Month") - pl.col("Total_Income") + pl.col("Total_Expense")).alias(
-                "Actual_Investment"
             ),
             pl.col("MONTH_START_DATE").cast(pl.String).str.slice(0, 7).alias("YEAR_MONTH"),
         ).with_columns(
@@ -65,15 +104,15 @@ class BudgetForecastBuilder:
             pl.col("Actual_Income").shift(1).alias("Inc_T1"),
             pl.col("Actual_Income").shift(2).alias("Inc_T2"),
             pl.col("Actual_Income").shift(3).alias("Inc_T3"),
-            pl.col("Actual_Income").rolling_mean(window_size=3).alias("Income_3M_Mean"),
-            pl.col("Actual_Income").rolling_mean(window_size=6).alias("Income_6M_Mean"),
-            pl.col("Actual_Income").rolling_std(window_size=6).alias("Income_6M_Std"),
-            pl.col("Actual_Core_Expense").rolling_mean(window_size=3).alias("Core_3M_Mean"),
-            pl.col("Actual_Core_Expense").rolling_mean(window_size=6).alias("Core_6M_Mean"),
-            pl.col("Actual_Core_Expense").rolling_std(window_size=6).alias("Core_6M_Std"),
-            pl.col("Actual_NonCore_Expense").rolling_mean(window_size=3).alias("NonCore_3M_Mean"),
-            pl.col("Actual_NonCore_Expense").rolling_mean(window_size=6).alias("NonCore_6M_Mean"),
-            pl.col("Actual_NonCore_Expense").rolling_std(window_size=6).alias("NonCore_6M_Std"),
+            rolling_avg("Actual_Income", 3).alias("Income_3M_Mean"),
+            rolling_avg("Actual_Income", 6).alias("Income_6M_Mean"),
+            rolling_std("Actual_Income", 6).alias("Income_6M_Std"),
+            rolling_avg("Actual_Core_Expense", 3).alias("Core_3M_Mean"),
+            rolling_avg("Actual_Core_Expense", 6).alias("Core_6M_Mean"),
+            rolling_std("Actual_Core_Expense", 6).alias("Core_6M_Std"),
+            rolling_avg("Actual_NonCore_Expense", 3).alias("NonCore_3M_Mean"),
+            rolling_avg("Actual_NonCore_Expense", 6).alias("NonCore_6M_Mean"),
+            rolling_std("Actual_NonCore_Expense", 6).alias("NonCore_6M_Std"),
         )
 
         # ── Step 3: Smoothed budget base (recency-biased 3M weighted avg) ────────
@@ -95,10 +134,7 @@ class BudgetForecastBuilder:
 
         # ── Step 4: Income volatility & regime ───────────────────────────────────
         lf = lf.with_columns(
-            pl.when(pl.col("Income_6M_Mean") > 0)
-            .then(pl.col("Income_6M_Std") / pl.col("Income_6M_Mean"))
-            .otherwise(0.0)
-            .alias("Income_Volatility_Pct"),
+            safe_divide("Income_6M_Std", "Income_6M_Mean").alias("Income_Volatility_Pct"),
             pl.col("Actual_Income").shift(1).alias("Prev_Income"),
         ).with_columns(
             pl.when(pl.col("Income_Volatility_Pct") > 0.20)
@@ -146,41 +182,27 @@ class BudgetForecastBuilder:
 
         # ── Step 7: Actual allocation percentages ────────────────────────────────
         lf = lf.with_columns(
-            pl.when(pl.col("Actual_Income") > 0)
-            .then(pl.col("Actual_Core_Expense") / pl.col("Actual_Income"))
-            .otherwise(0.0)
-            .alias("Actual_Core_Pct_of_Income"),
-            pl.when(pl.col("Actual_Income") > 0)
-            .then(pl.col("Actual_NonCore_Expense") / pl.col("Actual_Income"))
-            .otherwise(0.0)
-            .alias("Actual_NonCore_Pct_of_Income"),
-            pl.when(pl.col("Actual_Income") > 0)
-            .then(pl.col("Actual_Investment") / pl.col("Actual_Income"))
-            .otherwise(0.0)
-            .alias("Actual_Investment_Pct_of_Income"),
-            pl.when(pl.col("Actual_Income") > 0)
-            .then(pl.col("Actual_Savings") / pl.col("Actual_Income"))
-            .otherwise(0.0)
-            .alias("Actual_Savings_Pct_of_Income"),
+            safe_divide("Actual_Core_Expense", "Actual_Income").alias("Actual_Core_Pct_of_Income"),
+            safe_divide("Actual_NonCore_Expense", "Actual_Income").alias(
+                "Actual_NonCore_Pct_of_Income"
+            ),
+            safe_divide("Actual_Investment", "Actual_Income").alias(
+                "Actual_Investment_Pct_of_Income"
+            ),
+            safe_divide("Actual_Savings", "Actual_Income").alias("Actual_Savings_Pct_of_Income"),
         )
 
         # ── Step 8: Z-Score anomaly detection (6M rolling baseline) ──────────────
         lf = lf.with_columns(
-            pl.when(pl.col("Core_6M_Std") > 0)
-            .then((pl.col("Actual_Core_Expense") - pl.col("Core_6M_Mean")) / pl.col("Core_6M_Std"))
-            .otherwise(0.0)
-            .alias("Core_Expense_ZScore"),
-            pl.when(pl.col("NonCore_6M_Std") > 0)
-            .then(
-                (pl.col("Actual_NonCore_Expense") - pl.col("NonCore_6M_Mean"))
-                / pl.col("NonCore_6M_Std")
-            )
-            .otherwise(0.0)
-            .alias("NonCore_Expense_ZScore"),
-            pl.when(pl.col("Income_6M_Std") > 0)
-            .then((pl.col("Actual_Income") - pl.col("Income_6M_Mean")) / pl.col("Income_6M_Std"))
-            .otherwise(0.0)
-            .alias("Income_ZScore"),
+            safe_divide(
+                pl.col("Actual_Core_Expense") - pl.col("Core_6M_Mean"), "Core_6M_Std"
+            ).alias("Core_Expense_ZScore"),
+            safe_divide(
+                pl.col("Actual_NonCore_Expense") - pl.col("NonCore_6M_Mean"), "NonCore_6M_Std"
+            ).alias("NonCore_Expense_ZScore"),
+            safe_divide(pl.col("Actual_Income") - pl.col("Income_6M_Mean"), "Income_6M_Std").alias(
+                "Income_ZScore"
+            ),
         )
 
         # ── Step 9: Trend signals (rolling mean slope proxy) ─────────────────────
@@ -197,17 +219,12 @@ class BudgetForecastBuilder:
         # Savings rate trend signal
         lf = (
             lf.with_columns(
-                pl.when(pl.col("Actual_Income") > 0)
-                .then(
-                    (
-                        pl.col("Actual_Income")
-                        - pl.col("Actual_Core_Expense")
-                        - pl.col("Actual_NonCore_Expense")
-                    )
-                    / pl.col("Actual_Income")
-                )
-                .otherwise(0.0)
-                .alias("Curr_Savings_Rate"),
+                safe_divide(
+                    pl.col("Actual_Income")
+                    - pl.col("Actual_Core_Expense")
+                    - pl.col("Actual_NonCore_Expense"),
+                    "Actual_Income",
+                ).alias("Curr_Savings_Rate"),
             )
             .with_columns(
                 pl.col("Curr_Savings_Rate").shift(1).alias("Prev_Savings_Rate"),
@@ -222,159 +239,22 @@ class BudgetForecastBuilder:
             )
         )
 
-        # ── Step 10: Lifestyle Creep Index & Efficiency ──────────────────────────
-        lf = lf.with_columns(
-            pl.when(pl.col("Income_3M_Trend").abs() > 0)
-            .then(pl.col("Core_Expense_3M_Trend") / pl.col("Income_3M_Trend").abs())
-            .otherwise(0.0)
-            .alias("Marginal_Core_Efficiency"),
-            pl.when(pl.col("Income_3M_Trend").abs() > 0)
-            .then(pl.col("NonCore_Expense_3M_Trend") / pl.col("Income_3M_Trend").abs())
-            .otherwise(0.0)
-            .alias("Lifestyle_Creep_Index"),
-        ).with_columns(
-            pl.when(
-                (pl.col("Actual_NonCore_Expense").shift(1) > 0)
-                & (pl.col("Actual_Income").shift(1) > 0)
-            )
-            .then(
-                (pl.col("Actual_NonCore_Expense") - pl.col("Actual_NonCore_Expense").shift(1))
-                / pl.col("Actual_NonCore_Expense").shift(1)
-                - (pl.col("Actual_Income") - pl.col("Actual_Income").shift(1))
-                / pl.col("Actual_Income").shift(1)
-            )
-            .otherwise(0.0)
-            .alias("Budget_Elasticity"),
-        )
-
         # ── Step 11: Health Score (0–100) ────────────────────────────────────────
-        # 4 equal components × 25 pts each
-        lf = (
-            lf.with_columns(
-                # Comp 1: Actual savings rate vs investment_pct target
-                pl.when(pl.col("Actual_Savings_Pct_of_Income") >= investment_pct)
-                .then(pl.lit(25.0))
-                .when(pl.col("Actual_Savings_Pct_of_Income") > 0)
-                .then((pl.col("Actual_Savings_Pct_of_Income") / investment_pct) * 25.0)
-                .otherwise(pl.lit(0.0))
-                .alias("_score_savings"),
-                # Comp 2: Investment fulfillment
-                pl.when(pl.col("Budget_Investment_Target") > 0)
-                .then(
-                    (pl.col("Actual_Investment") / pl.col("Budget_Investment_Target") * 25.0).clip(
-                        0.0, 25.0
-                    )
-                )
-                .otherwise(pl.lit(0.0))
-                .alias("_score_investment"),
-                # Comp 3: Core expense control (full marks if under budget)
-                pl.when(pl.col("Budget_Core_Expense_Target") > 0)
-                .then(
-                    pl.when(pl.col("Actual_Core_Expense") <= pl.col("Budget_Core_Expense_Target"))
-                    .then(pl.lit(25.0))
-                    .otherwise(
-                        (
-                            pl.lit(1.0)
-                            - pl.col("Core_Expense_Variance") / pl.col("Budget_Core_Expense_Target")
-                        ).clip(0.0, 1.0)
-                        * 25.0
-                    )
-                )
-                .otherwise(pl.lit(0.0))
-                .alias("_score_core"),
-                # Comp 4: Non-core discipline
-                pl.when(pl.col("Budget_NonCore_Expense_Target") > 0)
-                .then(
-                    pl.when(
-                        pl.col("Actual_NonCore_Expense") <= pl.col("Budget_NonCore_Expense_Target")
-                    )
-                    .then(pl.lit(25.0))
-                    .otherwise(
-                        (
-                            pl.lit(1.0)
-                            - pl.col("NonCore_Expense_Variance")
-                            / pl.col("Budget_NonCore_Expense_Target")
-                        ).clip(0.0, 1.0)
-                        * 25.0
-                    )
-                )
-                .otherwise(pl.lit(0.0))
-                .alias("_score_noncore"),
-            )
-            .with_columns(
-                (
-                    pl.col("_score_savings")
-                    + pl.col("_score_investment")
-                    + pl.col("_score_core")
-                    + pl.col("_score_noncore")
-                ).alias("Savings_Rate_Health_Score"),
-            )
-            .with_columns(
-                pl.when(pl.col("Savings_Rate_Health_Score") >= 90)
-                .then(pl.lit("A+"))
-                .when(pl.col("Savings_Rate_Health_Score") >= 80)
-                .then(pl.lit("A"))
-                .when(pl.col("Savings_Rate_Health_Score") >= 70)
-                .then(pl.lit("B"))
-                .when(pl.col("Savings_Rate_Health_Score") >= 60)
-                .then(pl.lit("C"))
-                .when(pl.col("Savings_Rate_Health_Score") >= 50)
-                .then(pl.lit("D"))
-                .otherwise(pl.lit("F"))
-                .alias("Savings_Rate_Grade"),
-                # Budget stress = % over-budget (0 = within budget)
-                pl.when(pl.col("Budget_Total_Expense_Target") > 0)
-                .then(
-                    pl.when(pl.col("Total_Budget_Variance") > 0)
-                    .then(
-                        (pl.col("Total_Budget_Variance") / pl.col("Budget_Total_Expense_Target"))
-                        * 100.0
-                    )
-                    .otherwise(pl.lit(0.0))
-                )
-                .otherwise(pl.lit(0.0))
-                .alias("Budget_Stress_Score"),
-            )
-        )
+        lf = calculate_budget_health_score(lf, investment_pct)
 
         # ── Step 12: Runway metrics ───────────────────────────────────────────────
         lf = lf.with_columns(
-            pl.when(pl.col("Actual_Core_Expense") > 0)
-            .then(pl.col("Liquid_Assets_Market") / pl.col("Actual_Core_Expense"))
-            .otherwise(0.0)
-            .alias("Zero_Income_Runway_Months"),
+            safe_divide("Liquid_Assets_Market", "Actual_Core_Expense").alias(
+                "Zero_Income_Runway_Months"
+            ),
             (
                 pl.col("Core_6M_Mean").fill_null(pl.col("Actual_Core_Expense")) * emergency_months
                 - pl.col("Liquid_Assets_Market")
             ).alias("Emergency_Fund_Gap"),
         )
 
-        # ── Step 13: 3-Month Rolling Forward Budget Forecast ─────────────────────
-        # M+1: current Budget_Income (3M weighted lag)
-        # M+2: Budget_Income + 1× income trend slope
-        # M+3: Budget_Income + 2× income trend slope
-        lf = lf.with_columns(
-            pl.col("Budget_Income").alias("NextMonth_Budget_Income_Forecast"),
-            (pl.col("Budget_Income") + pl.col("Income_3M_Trend").fill_null(0.0)).alias(
-                "Next2Month_Budget_Income_Forecast"
-            ),
-            (pl.col("Budget_Income") + 2.0 * pl.col("Income_3M_Trend").fill_null(0.0)).alias(
-                "Next3Month_Budget_Income_Forecast"
-            ),
-        )
-
-        for prefix, col in [
-            ("NextMonth", "NextMonth_Budget_Income_Forecast"),
-            ("Next2Month", "Next2Month_Budget_Income_Forecast"),
-            ("Next3Month", "Next3Month_Budget_Income_Forecast"),
-        ]:
-            lf = lf.with_columns(
-                (pl.col(col) * core_pct).alias(f"{prefix}_Core_Budget"),
-                (pl.col(col) * non_core_pct).alias(f"{prefix}_NonCore_Budget"),
-                (pl.col(col) * investment_pct).alias(f"{prefix}_Investment_Budget"),
-                (pl.col(col) * non_core_pct).alias(f"{prefix}_Discretionary_Pool"),
-                (pl.col(col) * buffer_pct).alias(f"{prefix}_Recommended_Savings"),
-            )
+        # ── Step 13: Forward Budget Forecast (M+1) ───────────────────────────────
+        lf = calculate_budget_forecast(lf, core_pct, non_core_pct, investment_pct, buffer_pct)
 
         # ── Step 14: Boolean flags ────────────────────────────────────────────────
         lf = lf.with_columns(
@@ -388,9 +268,6 @@ class BudgetForecastBuilder:
                 "Is_Investment_Underfunded"
             ),
             (pl.col("Income_Volatility_Pct") > 0.20).alias("Is_Income_Volatile"),
-            (
-                (pl.col("Lifestyle_Creep_Index") > 1.0) & (pl.col("NonCore_Expense_ZScore") > 1.0)
-            ).alias("Is_Lifestyle_Creep"),
             (
                 (pl.col("Core_Expense_ZScore").abs() > 2.0)
                 | (pl.col("NonCore_Expense_ZScore").abs() > 2.0)
@@ -428,6 +305,8 @@ class BudgetForecastBuilder:
                 # Actuals
                 "Actual_Core_Expense",
                 "Actual_NonCore_Expense",
+                "Investment_Deployed",
+                "Investment_Redeemed",
                 "Actual_Investment",
                 "Actual_Savings",
                 # Actual % of income
@@ -452,10 +331,6 @@ class BudgetForecastBuilder:
                 "Savings_Rate_Health_Score",
                 "Savings_Rate_Grade",
                 "Budget_Stress_Score",
-                # Lifestyle & efficiency
-                "Marginal_Core_Efficiency",
-                "Lifestyle_Creep_Index",
-                "Budget_Elasticity",
                 # Runway
                 "Zero_Income_Runway_Months",
                 "Emergency_Fund_Gap",
@@ -466,27 +341,12 @@ class BudgetForecastBuilder:
                 "NextMonth_Investment_Budget",
                 "NextMonth_Discretionary_Pool",
                 "NextMonth_Recommended_Savings",
-                # M+2 forecast
-                "Next2Month_Budget_Income_Forecast",
-                "Next2Month_Core_Budget",
-                "Next2Month_NonCore_Budget",
-                "Next2Month_Investment_Budget",
-                "Next2Month_Discretionary_Pool",
-                "Next2Month_Recommended_Savings",
-                # M+3 forecast
-                "Next3Month_Budget_Income_Forecast",
-                "Next3Month_Core_Budget",
-                "Next3Month_NonCore_Budget",
-                "Next3Month_Investment_Budget",
-                "Next3Month_Discretionary_Pool",
-                "Next3Month_Recommended_Savings",
                 # Flags
                 "Is_Core_Overspent",
                 "Is_NonCore_Overspent",
                 "Is_Investment_Underfunded",
                 "Is_Income_Volatile",
                 "Is_Budget_Month_Healthy",
-                "Is_Lifestyle_Creep",
                 "Is_Expense_Anomaly",
             ]
         )

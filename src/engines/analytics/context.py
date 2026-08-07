@@ -26,9 +26,21 @@ class AnalyticsContextManager:
                 EngineStatus("Data loaded into Context successfully.", None, 0.05, LogLevel.INFO)
             )
 
-        isins_p = [str(x) for x in ctx.df_p["ISIN"].unique().to_list()] if "ISIN" in ctx.df_p.columns else []
-        isins_s = [str(x) for x in ctx.df_s["ISIN"].unique().to_list()] if "ISIN" in ctx.df_s.columns else []
-        isins_m = [str(x) for x in ctx.df_m["ISIN"].unique().to_list()] if "ISIN" in ctx.df_m.columns else []
+        isins_p = (
+            [str(x) for x in ctx.df_p["ISIN"].unique().to_list()]
+            if "ISIN" in ctx.df_p.columns
+            else []
+        )
+        isins_s = (
+            [str(x) for x in ctx.df_s["ISIN"].unique().to_list()]
+            if "ISIN" in ctx.df_s.columns
+            else []
+        )
+        isins_m = (
+            [str(x) for x in ctx.df_m["ISIN"].unique().to_list()]
+            if "ISIN" in ctx.df_m.columns
+            else []
+        )
         isins = sorted(set(isins_p + isins_s + isins_m))
 
         return ctx, isins

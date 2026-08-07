@@ -204,13 +204,6 @@ CREATE TABLE IF NOT EXISTS p_tf_Wealth_Risk_Analytics (
     Wealth_Velocity DOUBLE,
     Wealth_Acceleration DOUBLE,
     CAPE_Adjusted_SWR DOUBLE,
-    Guyton_Klinger_Floor DOUBLE,
-    Guyton_Klinger_Ceiling DOUBLE,
-    Human_Capital_Value DOUBLE,
-    Human_to_Financial_Capital_Ratio DOUBLE,
-    Velocity_vs_Savings_Ratio DOUBLE,
-    Model_Error_Months_To_FI DOUBLE,
-    Net_Worth_Post_Tax_Delta_Pct DOUBLE,
     -- Risk Metrics natively merged
     Monthly_Return DOUBLE,
     Rolling_12M_Return DOUBLE,
@@ -222,12 +215,6 @@ CREATE TABLE IF NOT EXISTS p_tf_Wealth_Risk_Analytics (
     Max_Drawdown_12M DOUBLE,
     Annualized_Volatility_12M DOUBLE,
     NW_Volatility_12M DOUBLE,
-    Downside_Deviation_12M DOUBLE,
-    VaR_95_Monthly DOUBLE,
-    Expected_Shortfall_95 DOUBLE,
-    Sharpe_Ratio_Monthly DOUBLE,
-    Sortino_Ratio_Monthly DOUBLE,
-    Calmar_Ratio DOUBLE,
     FOREIGN KEY(MONTH_START_DATE) REFERENCES d_Calendar(Date),
     FOREIGN KEY(MONTH_END_DATE) REFERENCES d_Calendar(Date)
 );
@@ -280,6 +267,8 @@ CREATE TABLE IF NOT EXISTS p_tf_Budget_Forecast_Monthly (
     -- Actuals
     Actual_Core_Expense DOUBLE,
     Actual_NonCore_Expense DOUBLE,
+    Investment_Deployed DOUBLE,
+    Investment_Redeemed DOUBLE,
     Actual_Investment DOUBLE,
     Actual_Savings DOUBLE,
     -- Actual Percentages of Income
@@ -305,10 +294,6 @@ CREATE TABLE IF NOT EXISTS p_tf_Budget_Forecast_Monthly (
     Savings_Rate_Health_Score DOUBLE,
     Savings_Rate_Grade TEXT,
     Budget_Stress_Score DOUBLE,
-    -- Lifestyle & Efficiency Metrics
-    Marginal_Core_Efficiency DOUBLE,
-    Lifestyle_Creep_Index DOUBLE,
-    Budget_Elasticity DOUBLE,
     -- Runway
     Zero_Income_Runway_Months DOUBLE,
     Emergency_Fund_Gap DOUBLE,
@@ -319,27 +304,12 @@ CREATE TABLE IF NOT EXISTS p_tf_Budget_Forecast_Monthly (
     NextMonth_Investment_Budget DOUBLE,
     NextMonth_Discretionary_Pool DOUBLE,
     NextMonth_Recommended_Savings DOUBLE,
-    -- M+2 Forward Budget Plan
-    Next2Month_Budget_Income_Forecast DOUBLE,
-    Next2Month_Core_Budget DOUBLE,
-    Next2Month_NonCore_Budget DOUBLE,
-    Next2Month_Investment_Budget DOUBLE,
-    Next2Month_Discretionary_Pool DOUBLE,
-    Next2Month_Recommended_Savings DOUBLE,
-    -- M+3 Forward Budget Plan
-    Next3Month_Budget_Income_Forecast DOUBLE,
-    Next3Month_Core_Budget DOUBLE,
-    Next3Month_NonCore_Budget DOUBLE,
-    Next3Month_Investment_Budget DOUBLE,
-    Next3Month_Discretionary_Pool DOUBLE,
-    Next3Month_Recommended_Savings DOUBLE,
     -- Flags
     Is_Core_Overspent BOOLEAN,
     Is_NonCore_Overspent BOOLEAN,
     Is_Investment_Underfunded BOOLEAN,
     Is_Income_Volatile BOOLEAN,
     Is_Budget_Month_Healthy BOOLEAN,
-    Is_Lifestyle_Creep BOOLEAN,
     Is_Expense_Anomaly BOOLEAN,
     FOREIGN KEY(MONTH_START_DATE) REFERENCES d_Calendar(Date),
     FOREIGN KEY(MONTH_END_DATE) REFERENCES d_Calendar(Date)
@@ -423,13 +393,8 @@ CREATE TABLE IF NOT EXISTS p_tf_Monthly_Cashflow_Summary (
     Debt_to_Asset_Ratio_Pct DOUBLE,
     YoY_Net_Worth_Growth_Pct DOUBLE,
     Expense_to_NW_Ratio DOUBLE,
-    Debt_Service_Coverage DOUBLE,
     Emergency_Fund_Coverage DOUBLE,
-    Net_Worth_per_Month_Age DOUBLE,
     Real_Savings_Rate_Pct DOUBLE,
-    Net_Worth_to_Annual_Expense_Ratio DOUBLE,
-    Liability_Coverage_Ratio DOUBLE,
-    Liquid_Liability_Coverage_Ratio DOUBLE,
     YoY_Net_Worth_Growth_Pct_Real DOUBLE,
     FOREIGN KEY(MONTH_START_DATE) REFERENCES d_Calendar(Date),
     FOREIGN KEY(MONTH_END_DATE) REFERENCES d_Calendar(Date)

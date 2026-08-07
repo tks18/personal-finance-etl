@@ -66,7 +66,7 @@ class WealthPresentationEngine:
 
         # 7. Budget Forecast
         results["df_p_tf_budget_forecast_monthly"] = BudgetForecastBuilder(
-            base_lf, rules=self.rules
+            dfs, base_lf, rules=self.rules
         ).build()
 
         # 8. Investment Analytics (Merged Sector, Rebalancing, Attribution, Tax Harvesting)

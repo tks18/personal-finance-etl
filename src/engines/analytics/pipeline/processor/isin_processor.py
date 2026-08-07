@@ -95,7 +95,7 @@ class IsinProcessor:
 
                 row_p_val: float | None = row.get("Price")
                 sv_val: float | None = row.get("Sell Value")
-                
+
                 if row_p_val is not None:
                     s_price = float(row_p_val)
                 elif sv_val is not None and s_qty > 0:
@@ -116,9 +116,7 @@ class IsinProcessor:
             m_recon_bm_price = bm_provider.get_bm_price(m_date)
             if not m_recon_bm_price or m_recon_bm_price <= 0:
                 m_recon_bm_price = float(m_row.get("Closing Price", 1.0))
-            cf_recon = fifo.reconcile_quantity(
-                m_row.get("Quantity"), m_date, m_recon_bm_price
-            )
+            cf_recon = fifo.reconcile_quantity(m_row.get("Quantity"), m_date, m_recon_bm_price)
             for cf in cf_recon:
                 cf_dates.append(cast(date, cf["date"]))
                 cf_amounts.append(cast(float, cf["amount"]))
@@ -224,7 +222,7 @@ class IsinProcessor:
             b_price = float(row["Price"])
             v_val = row.get("Value")
             buy_val = float(v_val) if v_val is not None else float(qty * b_price)
-            
+
             bm_p = bm_provider.get_bm_price(row_dt_obj)
             if not bm_p or bm_p <= 0:
                 bm_p = b_price
@@ -245,14 +243,14 @@ class IsinProcessor:
             s_qty = float(row["Quantity"])
             row_p_val: float | None = row.get("Price")
             sv_val: float | None = row.get("Sell Value")
-            
+
             if row_p_val is not None:
                 s_price = float(row_p_val)
             elif sv_val is not None and s_qty > 0:
                 s_price = float(sv_val) / s_qty
             else:
                 s_price = 0.0
-                
+
             s_val = float(sv_val) if sv_val is not None else float(s_qty * s_price)
 
             cf_dates.append(row_dt_obj)

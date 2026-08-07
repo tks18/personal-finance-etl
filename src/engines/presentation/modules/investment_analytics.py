@@ -37,13 +37,11 @@ class InvestmentAnalyticsBuilder:
             pl.col("Closing_Date").dt.month_start().alias("MONTH_START_DATE")
         )
 
-        latest_month_dates = lf_market_data.group_by("MONTH_START_DATE").agg(
-            pl.col("Closing_Date").max().alias("Max_Closing_Date")
-        )
-
         df_monthly_base = (
-            lf_market_data.join(latest_month_dates, on="MONTH_START_DATE")
-            .filter(pl.col("Closing_Date") == pl.col("Max_Closing_Date"))
+            lf_market_data.filter(
+                pl.col("Closing_Date") == pl.col("Closing_Date").max().over("MONTH_START_DATE")
+            )
+            .with_columns(pl.col("Closing_Date").alias("Max_Closing_Date"))
             .join(
                 lf_inv_master.select(
                     [
