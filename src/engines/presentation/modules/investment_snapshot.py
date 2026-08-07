@@ -70,9 +70,7 @@ class InvestmentSnapshotBuilder:
         if df_isin is None:
             return pl.LazyFrame()
 
-        lf_isin = cast(
-            pl.LazyFrame, df_isin.lazy() if isinstance(df_isin, pl.DataFrame) else df_isin
-        )
+        lf_isin = df_isin.lazy() if isinstance(df_isin, pl.DataFrame) else df_isin
 
         # ── Snap to month-end and dedup ──────────────────────────────────────
         lf_isin = self._snap_to_month(lf_isin)
@@ -80,10 +78,7 @@ class InvestmentSnapshotBuilder:
 
         # ── Join master for instrument metadata ──────────────────────────────
         if df_master is not None:
-            lf_master = cast(
-                pl.LazyFrame,
-                df_master.lazy() if isinstance(df_master, pl.DataFrame) else df_master,
-            )
+            lf_master = df_master.lazy() if isinstance(df_master, pl.DataFrame) else df_master
             lf_isin = lf_isin.join(
                 lf_master.select(
                     [
@@ -111,9 +106,7 @@ class InvestmentSnapshotBuilder:
 
         # ── Monthly deployed (buys) per ISIN ─────────────────────────────────
         if df_buys is not None and "Date" in df_buys.columns:
-            lf_buys = cast(
-                pl.LazyFrame, df_buys.lazy() if isinstance(df_buys, pl.DataFrame) else df_buys
-            )
+            lf_buys = df_buys.lazy() if isinstance(df_buys, pl.DataFrame) else df_buys
             lf_deployed = (
                 lf_buys.with_columns(pl.col("Date").dt.month_end().alias("MONTH_END_DATE"))
                 .group_by(["ISIN", "MONTH_END_DATE"])
@@ -125,9 +118,7 @@ class InvestmentSnapshotBuilder:
 
         # ── Monthly redeemed (sells) per ISIN ────────────────────────────────
         if df_sells is not None and "Date" in df_sells.columns:
-            lf_sells = cast(
-                pl.LazyFrame, df_sells.lazy() if isinstance(df_sells, pl.DataFrame) else df_sells
-            )
+            lf_sells = df_sells.lazy() if isinstance(df_sells, pl.DataFrame) else df_sells
             lf_redeemed = (
                 lf_sells.with_columns(pl.col("Date").dt.month_end().alias("MONTH_END_DATE"))
                 .group_by(["ISIN", "MONTH_END_DATE"])
@@ -143,10 +134,7 @@ class InvestmentSnapshotBuilder:
             and "Date" in df_benchmark.columns
             and "BENCHMARK_ID" in (lf_isin.collect_schema().names())
         ):
-            lf_bm = cast(
-                pl.LazyFrame,
-                df_benchmark.lazy() if isinstance(df_benchmark, pl.DataFrame) else df_benchmark,
-            )
+            lf_bm = df_benchmark.lazy() if isinstance(df_benchmark, pl.DataFrame) else df_benchmark
             # Latest benchmark close per month
             lf_bm_monthly = (
                 lf_bm.with_columns(pl.col("Date").dt.month_end().alias("MONTH_END_DATE"))
@@ -377,9 +365,7 @@ class InvestmentSnapshotBuilder:
         if df_port is None:
             return pl.LazyFrame()
 
-        lf_port = cast(
-            pl.LazyFrame, df_port.lazy() if isinstance(df_port, pl.DataFrame) else df_port
-        )
+        lf_port = df_port.lazy() if isinstance(df_port, pl.DataFrame) else df_port
 
         # ── Snap to month-end and dedup ──────────────────────────────────────
         lf_port = self._snap_to_month(lf_port)
@@ -387,9 +373,7 @@ class InvestmentSnapshotBuilder:
 
         # ── Monthly deployed/redeemed (all ISINs combined) ───────────────────
         if df_buys is not None and "Date" in df_buys.columns:
-            lf_buys = cast(
-                pl.LazyFrame, df_buys.lazy() if isinstance(df_buys, pl.DataFrame) else df_buys
-            )
+            lf_buys = df_buys.lazy() if isinstance(df_buys, pl.DataFrame) else df_buys
             lf_deployed_total = (
                 lf_buys.with_columns(pl.col("Date").dt.month_end().alias("MONTH_END_DATE"))
                 .group_by("MONTH_END_DATE")
@@ -400,9 +384,7 @@ class InvestmentSnapshotBuilder:
             lf_port = lf_port.with_columns(pl.lit(0.0).alias("Monthly_Deployed_Total"))
 
         if df_sells is not None and "Date" in df_sells.columns:
-            lf_sells = cast(
-                pl.LazyFrame, df_sells.lazy() if isinstance(df_sells, pl.DataFrame) else df_sells
-            )
+            lf_sells = df_sells.lazy() if isinstance(df_sells, pl.DataFrame) else df_sells
             lf_redeemed_total = (
                 lf_sells.with_columns(pl.col("Date").dt.month_end().alias("MONTH_END_DATE"))
                 .group_by("MONTH_END_DATE")

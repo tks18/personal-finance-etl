@@ -32,23 +32,18 @@ class BaseMetricsBuilder:
             or f_trn is None
             or d_cal is None
             or d_asset is None
+            or d_macro is None
         ):
             return {}
 
-        lf_open = cast(pl.LazyFrame, f_open.lazy() if isinstance(f_open, pl.DataFrame) else f_open)
-        lf_inc = cast(pl.LazyFrame, f_inc.lazy() if isinstance(f_inc, pl.DataFrame) else f_inc)
-        lf_exp = cast(pl.LazyFrame, f_exp.lazy() if isinstance(f_exp, pl.DataFrame) else f_exp)
-        lf_trn = cast(pl.LazyFrame, f_trn.lazy() if isinstance(f_trn, pl.DataFrame) else f_trn)
-        lf_cal = cast(
-            pl.LazyFrame, (d_cal.lazy() if isinstance(d_cal, pl.DataFrame) else d_cal)
-        ).rename({"Date": "DATE", "Year": "YEAR", "Month": "MONTH"})
-        lf_asset = cast(
-            pl.LazyFrame, d_asset.lazy() if isinstance(d_asset, pl.DataFrame) else d_asset
-        )
+        lf_open = f_open.lazy() if isinstance(f_open, pl.DataFrame) else f_open
+        lf_inc = f_inc.lazy() if isinstance(f_inc, pl.DataFrame) else f_inc
+        lf_exp = f_exp.lazy() if isinstance(f_exp, pl.DataFrame) else f_exp
+        lf_trn = f_trn.lazy() if isinstance(f_trn, pl.DataFrame) else f_trn
+        lf_cal = (d_cal.lazy() if isinstance(d_cal, pl.DataFrame) else d_cal).rename({"Date": "DATE", "Year": "YEAR", "Month": "MONTH"})
+        lf_asset = d_asset.lazy() if isinstance(d_asset, pl.DataFrame) else d_asset
 
-        lf_macro = cast(
-            pl.LazyFrame, d_macro.lazy() if isinstance(d_macro, pl.DataFrame) else d_macro
-        ).select(pl.col("FY_Start_Date").cast(pl.Date), pl.col("Inflation_Rate").cast(pl.Float64))
+        lf_macro = (d_macro.lazy() if isinstance(d_macro, pl.DataFrame) else d_macro).select(pl.col("FY_Start_Date").cast(pl.Date), pl.col("Inflation_Rate").cast(pl.Float64))
 
         if isinstance(f_open, pl.DataFrame):
             min_open_date = f_open.select(pl.col("ZTXDATESTR").min()).item()
@@ -151,13 +146,8 @@ class BaseMetricsBuilder:
         d_exp_subcat = self.dfs.get("df_d_expense_subcategory")
         d_exp_cat = self.dfs.get("df_d_expense_category")
         if d_exp_subcat is not None and d_exp_cat is not None:
-            lf_exp_subcat = cast(
-                pl.LazyFrame,
-                d_exp_subcat.lazy() if isinstance(d_exp_subcat, pl.DataFrame) else d_exp_subcat,
-            )
-            lf_exp_cat = cast(
-                pl.LazyFrame, d_exp_cat.lazy() if isinstance(d_exp_cat, pl.DataFrame) else d_exp_cat
-            )
+            lf_exp_subcat = d_exp_subcat.lazy() if isinstance(d_exp_subcat, pl.DataFrame) else d_exp_subcat
+            lf_exp_cat = d_exp_cat.lazy() if isinstance(d_exp_cat, pl.DataFrame) else d_exp_cat
 
             lf_exp_agg = (
                 lf_exp_agg.join(

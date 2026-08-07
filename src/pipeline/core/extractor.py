@@ -76,33 +76,22 @@ class DataExtractor:
         raw_benchmark_master = extract_benchmark_master_raw(self.cfg.BENCHMARK_MASTER_CSV_PATH)
         raw_macro_parameters = extract_macro_parameters_raw(self.cfg.MACRO_PARAMETERS_CSV_PATH)
 
-        is_strict = self.cfg.FULL_REFRESH
-        mode_str = "FULL" if is_strict else "INCREMENTAL"
-
-        logger.info(f"Categorizing Statement Files from {mode_str} Statements Folder...")
+        logger.info(f"Categorizing Statement Files from FULL Statements Folder...")
         if not self.cfg.STATEMENTS_FOLDER or not os.path.isdir(self.cfg.STATEMENTS_FOLDER):
             raise FileNotFoundError("Statements folder not found.")
 
-        statement_files = categorize_statement_files(self.cfg.STATEMENTS_FOLDER, strict=is_strict)
+        statement_files = categorize_statement_files(self.cfg.STATEMENTS_FOLDER, strict=True)
         total_files = sum(len(f) for f in statement_files.values())
 
         if total_files > 0:
-            logger.info(f"Extracting {total_files} {mode_str} Excel Binaries...")
+            logger.info(f"Extracting {total_files} FULL Excel Binaries...")
             mf_market_data_raw = extract_mf_market_data_raw(statement_files["mf_holdings"])
             mf_transactions_raw = extract_mf_transactions_raw(statement_files["mf_orders"])
             stock_market_data_raw = extract_stock_market_data_raw(statement_files["stock_pl"])
             stock_transactions_raw = extract_stock_transactions_raw(statement_files["stock_orders"])
             logger.info(f"  -> Successfully parsed {total_files} raw Excel files.")
         else:
-            if is_strict:
-                raise FileNotFoundError("No statement files found in FULL_REFRESH mode.")
-            else:
-                logger.info("No new files found in statements folder. Yielding empty raw frames.")
-                # Create empty lazy frames to signal the transformer to bypass AssetPipelines
-                mf_market_data_raw = pl.LazyFrame()
-                mf_transactions_raw = pl.LazyFrame()
-                stock_market_data_raw = pl.LazyFrame()
-                stock_transactions_raw = pl.LazyFrame()
+            raise FileNotFoundError("No statement files found.")
 
         result = ExtractionResult(
             zcategory=zcategory_lazy,

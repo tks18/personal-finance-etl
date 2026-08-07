@@ -147,23 +147,4 @@ class DatabaseCacheManager:
                 )
         return pl.DataFrame()
 
-    # =========================================================================
-    # SILVER TABLES (MEDALLION ETL) CACHE LOGIC
-    # =========================================================================
 
-    def get_historical_silver_table(self, table_name: str) -> Optional[pl.LazyFrame]:
-        """
-        Zero-copy extraction of historical Silver tables directly into Polars LazyFrames.
-        Used extensively in the Incremental Extraction pipeline.
-        """
-        latest_db = self._find_latest_db(include_sqlite=False)
-        if not latest_db:
-            return None
-
-        with duckdb.connect(latest_db, read_only=True) as conn:
-            existing_tables = [r[0] for r in conn.execute("SHOW TABLES").fetchall()]
-            if table_name in existing_tables:
-                h_count = conn.execute(f"SELECT count(*) FROM {table_name}").fetchone()[0]
-                logger.info(f"    -> Extracted {h_count} historical records for {table_name}")
-                return conn.execute(f"SELECT * FROM {table_name}").pl().lazy()
-        return None

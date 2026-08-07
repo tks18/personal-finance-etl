@@ -17,42 +17,9 @@ class PerformanceAttributionBuilder:
         self.rules = rules
 
     def build(self) -> pl.LazyFrame:
-        f_market_data = self.dfs.get("df_f_tf_investment_analytics_lot")
-        d_inv_master = self.dfs.get("df_d_tf_investment_master")
-
-        if f_market_data is None or d_inv_master is None:
+        df_monthly_base = self.base_lf.get("lf_portfolio_base")
+        if df_monthly_base is None:
             return pl.LazyFrame()
-
-        lf_market_data = (
-            f_market_data.lazy() if isinstance(f_market_data, pl.DataFrame) else f_market_data
-        )
-        lf_inv_master = (
-            d_inv_master.lazy() if isinstance(d_inv_master, pl.DataFrame) else d_inv_master
-        )
-
-        lf_market_data = lf_market_data.with_columns(
-            pl.col("Closing_Date").dt.month_start().alias("MONTH_START_DATE")
-        )
-
-        latest_month_dates = lf_market_data.group_by("MONTH_START_DATE").agg(
-            pl.col("Closing_Date").max().alias("Max_Closing_Date")
-        )
-
-        df_monthly_base = (
-            lf_market_data.join(latest_month_dates, on="MONTH_START_DATE")
-            .filter(pl.col("Closing_Date") == pl.col("Max_Closing_Date"))
-            .join(
-                lf_inv_master.select(
-                    ["ISIN", "INSTRUMENT_CLASS", "INSTRUMENT_TYPE", "INSTRUMENT_SUBTYPE", "SECTOR"]
-                ),
-                on="ISIN",
-                how="left",
-            )
-        ).with_columns(
-            pl.col("INSTRUMENT_TYPE").fill_null("Unknown"),
-            pl.col("INSTRUMENT_SUBTYPE").fill_null("Unknown"),
-            pl.col("SECTOR").fill_null("Unknown"),
-        )
 
         # Sector level returns
         df_sector_agg = (

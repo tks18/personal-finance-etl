@@ -3,11 +3,20 @@ import time
 
 from src.config.settings import Settings
 from src.pipeline.etl_pipeline import ETLOrchestrator
+from src.utils.models import EngineStatus
+
+
+class LoggerQueue:
+    def __init__(self) -> None:
+        self._q: queue.Queue[EngineStatus] = queue.Queue()
+
+    def put(self, status: EngineStatus, block: bool = True, timeout: float | None = None) -> None:
+        self._q.put(status, block=block, timeout=timeout)
 
 
 def main():
     print("Starting Headless ETL Pipeline...")
-    q = queue.Queue()
+    q = LoggerQueue()
     start_time = time.time()
 
     try:

@@ -100,7 +100,6 @@ class Settings(BaseModel):
 
     # Statements
     STATEMENTS_FOLDER: str = ""
-    FULL_REFRESH: bool = True
 
     # Configurable Mappings
     MF_SCHEME_MAPPINGS: dict[str, str] = Field(default_factory=dict)

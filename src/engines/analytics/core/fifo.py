@@ -107,7 +107,7 @@ class FIFOPortfolio:
 
         m_qty = float(m_qty_val)
         current_units = self.get_closing_units()
-        cf = []
+        cf: list[dict[str, date | float]] = []
 
         if m_qty > current_units + 1e-8:
             diff = m_qty - current_units
@@ -131,7 +131,7 @@ class FIFOPortfolio:
                         bm_buy=lot.bm_buy,
                     )
                     diff = 0
-        return [cast(dict[str, date | float], c) for c in cf]
+        return cf
 
     def reconcile_cost_basis(self, m_buy_val: float | None) -> None:
         """Reconcile internal average cost with broker average cost."""

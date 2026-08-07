@@ -110,13 +110,8 @@ class MonthlyCashflowSummaryBuilder:
         df_master = self.dfs.get("df_d_tf_investment_master")
 
         if df_buys is not None and df_master is not None:
-            lf_buys = cast(
-                pl.LazyFrame, df_buys.lazy() if isinstance(df_buys, pl.DataFrame) else df_buys
-            )
-            lf_master = cast(
-                pl.LazyFrame,
-                df_master.lazy() if isinstance(df_master, pl.DataFrame) else df_master,
-            )
+            lf_buys = df_buys.lazy() if isinstance(df_buys, pl.DataFrame) else df_buys
+            lf_master = df_master.lazy() if isinstance(df_master, pl.DataFrame) else df_master
             # Enrich buys with instrument class/type from master
             lf_buys_enriched = lf_buys.join(
                 lf_master.select(["ISIN", "INSTRUMENT_CLASS", "INSTRUMENT_TYPE"]),
@@ -197,9 +192,7 @@ class MonthlyCashflowSummaryBuilder:
             )
 
         if df_sells is not None:
-            lf_sells = cast(
-                pl.LazyFrame, df_sells.lazy() if isinstance(df_sells, pl.DataFrame) else df_sells
-            )
+            lf_sells = df_sells.lazy() if isinstance(df_sells, pl.DataFrame) else df_sells
             lf_inv_redeemed = (
                 lf_sells.with_columns(pl.col("Date").dt.month_start().alias("MONTH_START_DATE"))
                 .group_by("MONTH_START_DATE")

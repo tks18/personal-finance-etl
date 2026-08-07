@@ -51,13 +51,8 @@ class IncomeStreamsBuilder:
         )
 
         if d_inc_subcat is not None and d_inc_cat is not None:
-            lf_inc_subcat = cast(
-                pl.LazyFrame,
-                d_inc_subcat.lazy() if isinstance(d_inc_subcat, pl.DataFrame) else d_inc_subcat,
-            )
-            lf_inc_cat = cast(
-                pl.LazyFrame, d_inc_cat.lazy() if isinstance(d_inc_cat, pl.DataFrame) else d_inc_cat
-            )
+            lf_inc_subcat = d_inc_subcat.lazy() if isinstance(d_inc_subcat, pl.DataFrame) else d_inc_subcat
+            lf_inc_cat = d_inc_cat.lazy() if isinstance(d_inc_cat, pl.DataFrame) else d_inc_cat
 
             lf_inc_monthly = (
                 lf_inc_monthly.join(

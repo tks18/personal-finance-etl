@@ -51,12 +51,8 @@ class SpendAnalyticsBuilder:
         )
 
         if d_subcat is not None and d_exp_cat is not None:
-            lf_subcat = cast(
-                pl.LazyFrame, d_subcat.lazy() if isinstance(d_subcat, pl.DataFrame) else d_subcat
-            )
-            lf_exp_cat = cast(
-                pl.LazyFrame, d_exp_cat.lazy() if isinstance(d_exp_cat, pl.DataFrame) else d_exp_cat
-            )
+            lf_subcat = d_subcat.lazy() if isinstance(d_subcat, pl.DataFrame) else d_subcat
+            lf_exp_cat = d_exp_cat.lazy() if isinstance(d_exp_cat, pl.DataFrame) else d_exp_cat
 
             lf_cat_agg = (
                 lf_cat_agg.join(

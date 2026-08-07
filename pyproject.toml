@@ -72,3 +72,6 @@ Documentation = "https://github.com/tks18/personal-finance-etl#readme"
 Repository = "https://github.com/tks18/personal-finance-etl"
 Issues = "https://github.com/tks18/personal-finance-etl/issues"
 Changelog = "https://github.com/tks18/personal-finance-etl/releases"
+
+[tool.pyrefly]
+search-path = ["."]
