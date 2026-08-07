@@ -204,6 +204,14 @@ CREATE TABLE IF NOT EXISTS p_tf_Wealth_Risk_Analytics (
     Wealth_Velocity DOUBLE,
     Wealth_Acceleration DOUBLE,
     CAPE_Adjusted_SWR DOUBLE,
+    -- Advanced Monte Carlo Outputs
+    Terminal_Wealth_P50 DOUBLE,
+    Terminal_Wealth_P10 DOUBLE,
+    Max_Drawdown_Pct_P50 DOUBLE,
+    Lost_Savings_Expected_Value DOUBLE,
+    Peak_Inflation_Experienced_Pct DOUBLE,
+    Decumulation_First_5Y_CAGR_P10 DOUBLE,
+    Average_Realized_Withdrawal_Rate_P50 DOUBLE,
     -- Risk Metrics natively merged
     Monthly_Return DOUBLE,
     Rolling_12M_Return DOUBLE,

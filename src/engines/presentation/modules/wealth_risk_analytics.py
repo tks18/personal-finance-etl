@@ -186,6 +186,13 @@ class WealthRiskAnalyticsBuilder:
                             pl.Field("Runway_Months_Base_P50", pl.Float64),
                             pl.Field("Runway_Months_Total_Stressed_P10", pl.Float64),
                             pl.Field("Runway_Months_Total_Base_P50", pl.Float64),
+                            pl.Field("Terminal_Wealth_P50", pl.Float64),
+                            pl.Field("Terminal_Wealth_P10", pl.Float64),
+                            pl.Field("Max_Drawdown_Pct_P50", pl.Float64),
+                            pl.Field("Lost_Savings_Expected_Value", pl.Float64),
+                            pl.Field("Peak_Inflation_Experienced_Pct", pl.Float64),
+                            pl.Field("Decumulation_First_5Y_CAGR_P10", pl.Float64),
+                            pl.Field("Average_Realized_Withdrawal_Rate_P50", pl.Float64),
                         ]
                     ),
                 )
@@ -392,6 +399,13 @@ class WealthRiskAnalyticsBuilder:
                 "Wealth_Velocity",
                 "Wealth_Acceleration",
                 "CAPE_Adjusted_SWR",
+                "Terminal_Wealth_P50",
+                "Terminal_Wealth_P10",
+                "Max_Drawdown_Pct_P50",
+                "Lost_Savings_Expected_Value",
+                "Peak_Inflation_Experienced_Pct",
+                "Decumulation_First_5Y_CAGR_P10",
+                "Average_Realized_Withdrawal_Rate_P50",
                 # Risk Metrics natively merged
                 "Monthly_Return",
                 "Rolling_12M_Return",
