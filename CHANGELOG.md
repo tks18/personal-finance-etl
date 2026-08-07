@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [3.5.0](https://github.com/tks18/personal-finance-etl/compare/3.4.1...3.5.0) (2026-08-07)
+
+
+### Bug Fixes 🛠
+
+* remove incremental refresh mode ([42706dd](https://github.com/tks18/personal-finance-etl/commit/42706dd0fc30ec7a198bac5df2d3daf6c6ee412c))
+
+
+### Features 🔥
+
+* consolidate presentation tables to domain specific areas instead of 15 tables ([e06f3e1](https://github.com/tks18/personal-finance-etl/commit/e06f3e16d576a4be25b9aff59caa994d7668d47b))
+
+
+### Styling 🎨
+
+* lint fixes ([6ca2597](https://github.com/tks18/personal-finance-etl/commit/6ca2597a3b3f294452c86fe00774808c87814b36))
+* lint fixes ([22ab630](https://github.com/tks18/personal-finance-etl/commit/22ab6304dbc95e92a527fcfb04292990d5b942f0))
+
 ### [3.4.1](https://github.com/tks18/personal-finance-etl/compare/3.4.0...3.4.1) (2026-08-06)
 
 
