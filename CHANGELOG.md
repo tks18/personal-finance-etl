@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [3.6.0](https://github.com/tks18/personal-finance-etl/compare/3.5.1...3.6.0) (2026-08-07)
+
+
+### Features 🔥
+
+* **engines/presentations:** upgrade monte carlo to account for market shifts, de-risking & more ([5258f3d](https://github.com/tks18/personal-finance-etl/commit/5258f3d4e4737e5b5b9ba2b5cd3652df9693c56b))
+* **load/schema:** integrate the new columns ([c248679](https://github.com/tks18/personal-finance-etl/commit/c24867988e74aec13d0e0f07456098982dbe9599))
+
+
+### Code Refactoring 🖌
+
+* update docs, add configs ([c035d63](https://github.com/tks18/personal-finance-etl/commit/c035d63b68519243998e070c2dd6c04565193370))
+
+
+### Docs 📃
+
+* update readme ([69fdcce](https://github.com/tks18/personal-finance-etl/commit/69fdcce6e0ea13316d351bea4939d8c1af8fe501))
+
+
+### Styling 🎨
+
+* linter fixes ([fcdec86](https://github.com/tks18/personal-finance-etl/commit/fcdec861ae7a8733889bc0a2344f52ee11684c95))
+
 ### [3.5.1](https://github.com/tks18/personal-finance-etl/compare/3.5.0...3.5.1) (2026-08-07)
 
 
