@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [3.5.1](https://github.com/tks18/personal-finance-etl/compare/3.5.0...3.5.1) (2026-08-07)
+
+
+### Code Refactoring 🖌
+
+* **engines/presentations:** proper refactor into maintainable modules ([d59b0e4](https://github.com/tks18/personal-finance-etl/commit/d59b0e4073b377c2f52f000086b42e6fb73d078e))
+
+
+### Build System 🏗
+
+* add types for psutils ([6842eab](https://github.com/tks18/personal-finance-etl/commit/6842eab0819e3371ea36caeb50815145c5a764ee))
+
+
+### Docs 📃
+
+* update guides, readme ([dab7a75](https://github.com/tks18/personal-finance-etl/commit/dab7a75c3229b70266ee16edb5791d0e7ee867d5))
+
 ## [3.5.0](https://github.com/tks18/personal-finance-etl/compare/3.4.1...3.5.0) (2026-08-07)
 
 
