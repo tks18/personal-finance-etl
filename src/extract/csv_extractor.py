@@ -4,18 +4,26 @@ import polars as pl
 
 
 def extract_stg_mf_isin_mapping(csv_path: str) -> pl.LazyFrame:
+    filename = os.path.basename(csv_path)
+    folder = os.path.dirname(csv_path)
     schema_overrides = {"INSTRUMENT_NAME": pl.String, "ISIN": pl.String}
-    return pl.scan_csv(csv_path, schema_overrides=schema_overrides)
+    return pl.scan_csv(csv_path, schema_overrides=schema_overrides).with_columns(
+        pl.lit(filename).alias("__file_name__"), pl.lit(folder).alias("__folder_path__")
+    )
 
 
 def extract_stg_benchmark_mapping(csv_path: str) -> pl.LazyFrame:
+    filename = os.path.basename(csv_path)
+    folder = os.path.dirname(csv_path)
     schema_overrides = {
         "ISIN": pl.String,
         "Sector": pl.String,
         "Industry": pl.String,
         "Benchmark_ID": pl.String,
     }
-    return pl.scan_csv(csv_path, schema_overrides=schema_overrides)
+    return pl.scan_csv(csv_path, schema_overrides=schema_overrides).with_columns(
+        pl.lit(filename).alias("__file_name__"), pl.lit(folder).alias("__folder_path__")
+    )
 
 
 def extract_benchmark_master_raw(csv_path: str) -> pl.LazyFrame:
