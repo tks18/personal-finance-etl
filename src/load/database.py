@@ -1,200 +1,72 @@
-import glob
 import os
 import shutil
-import tempfile
-import uuid
 from datetime import datetime
 
 import duckdb
-import polars as pl
 import psutil
 
-from src.load.schema import SQLITE_SCHEMA_DDL
-from src.utils.interfaces import ILogger
-from src.utils.logger import logger
-from src.utils.models import EngineStatus
+from src.load.schema.gold import GOLD_DDL
+from src.load.schema.meta import META_DDL
+from src.load.schema.silver import SILVER_DDL
 
 
 class DuckDBManager:
-    """Manages DuckDB database creation, schema setup, indexing, and batch writing."""
+    """Owns the single persistent DuckDB file and its long-lived connection."""
 
-    def __init__(self, base_path: str):
+    def __init__(self, base_path: str, db_name: str = "Personal_Finance_DB.duckdb"):
         self.base_path = base_path
-        self.db_path = self._generate_target_db_path()
-        self.active_db_path = os.path.join(
-            tempfile.gettempdir(), f"etl_tmp_{uuid.uuid4().hex}.duckdb"
-        )
+        self.db_path = os.path.join(base_path, db_name)
+        os.makedirs(base_path, exist_ok=True)
+        self._conn: duckdb.DuckDBPyConnection | None = None
 
-    def _generate_target_db_path(self) -> str:
-        now = datetime.now()
-        timestamp_str = now.strftime("%Y_%m")
-        file_name = f"Personal_Finance_DB_{timestamp_str}.duckdb"
+    @property
+    def conn(self) -> duckdb.DuckDBPyConnection:
+        """Returns the active connection. Raises if not opened."""
+        if self._conn is None:
+            raise RuntimeError("DuckDBManager.open() must be called before accessing conn.")
+        return self._conn
 
-        os.makedirs(self.base_path, exist_ok=True)
-        return os.path.join(self.base_path, file_name)
+    def open(self) -> duckdb.DuckDBPyConnection:
+        """Opens the single long-lived connection. Called once at pipeline start."""
+        if self._conn is not None:
+            return self._conn
+        self._conn = duckdb.connect(self.db_path)
+        mem_gb = max(4, int(psutil.virtual_memory().total / (1024**3) * 0.75))
+        self._conn.execute(f"PRAGMA memory_limit='{mem_gb}GB'")
+        self._conn.execute("PRAGMA threads=4")
+        return self._conn
 
-    def setup_schema(self) -> None:
-        """Deletes old tmp DB and creates strict schemas."""
-        if os.path.exists(self.active_db_path):
-            os.remove(self.active_db_path)
-
-        with duckdb.connect(self.active_db_path) as conn:
-            # Phase 2.2: DuckDB Pragma Tuning for Batch ETL
-            mem_gb = max(4, int(psutil.virtual_memory().total / (1024**3) * 0.75))
-            conn.execute(f"PRAGMA memory_limit='{mem_gb}GB'")
-            conn.execute("PRAGMA threads=4")
-            conn.execute(SQLITE_SCHEMA_DDL)
-
-    def commit(self) -> None:
-        """Atomically rename the tmp db to the final db path."""
-        if os.path.exists(self.active_db_path):
-            if os.path.exists(self.db_path):
-                os.remove(self.db_path)
-            shutil.move(self.active_db_path, self.db_path)
-
-    def apply_indexes_and_optimize(self) -> None:
-        """DuckDB natively manages optimization and zone maps, no explicit indexes needed."""
-        pass
-
-    def enforce_retention_policy(self, max_files: int = 3) -> None:
-        """Keeps only the most recent N database files to prevent disk bloat."""
-        search_pattern = os.path.join(self.base_path, "*.duckdb")
-        db_files = glob.glob(search_pattern)
-
-        if len(db_files) <= max_files:
-            return
-
-        # Sort by modification time, oldest first
-        db_files.sort(key=os.path.getmtime)
-        files_to_delete = db_files[:-max_files]
-
-        for db_file in files_to_delete:
+    def close(self) -> None:
+        """Checkpoints and closes the connection. Called once at pipeline end."""
+        if self._conn is not None:
             try:
-                os.remove(db_file)
-                logger.info(f"Deleted old database file: {db_file}")
+                self._conn.execute("VACUUM")
+                self._conn.execute("CHECKPOINT")
+            finally:
+                self._conn.close()
+                self._conn = None
 
-                log_file = db_file.replace(".duckdb", ".log")
-                if os.path.exists(log_file):
-                    os.remove(log_file)
-                    logger.info(f"Deleted old log file: {log_file}")
-            except Exception as e:
-                logger.warning(f"Failed to delete old DB {db_file}: {e}")
+    def ensure_schemas(self) -> None:
+        """Creates bronze/silver/gold/meta schemas + all DDL tables if not exist.
+        Uses the already-open connection."""
+        self.conn.execute("CREATE SCHEMA IF NOT EXISTS meta")
+        self.conn.execute("CREATE SCHEMA IF NOT EXISTS bronze")
+        self.conn.execute("CREATE SCHEMA IF NOT EXISTS silver")
+        self.conn.execute("CREATE SCHEMA IF NOT EXISTS gold")
+        self.conn.execute(META_DDL)
+        self.conn.execute(SILVER_DDL)
+        self.conn.execute(GOLD_DDL)
 
-    def cleanup(self) -> None:
-        """Ensures WAL sidecar files are merged if any, removes tmp files, and enforces retention."""
-        if os.path.exists(self.active_db_path):
-            try:
-                os.remove(self.active_db_path)
-            except Exception as e:
-                logger.warning(f"Failed to delete temp DB {self.active_db_path}: {e}")
+    def backup(self, snapshot_path: str) -> None:
+        """Future UI hook — copies the persistent DB file as a snapshot."""
+        shutil.copy2(self.db_path, snapshot_path)
 
-        if os.path.exists(self.db_path):
-            with duckdb.connect(self.db_path) as conn:
-                conn.execute("CHECKPOINT;")
-
-        self.enforce_retention_policy()
-
-    def batch_write_dataframe(
-        self,
-        df: pl.DataFrame,
-        table_name: str,
-        conn: duckdb.DuckDBPyConnection,
-        chunk_size: int = 50000,
-    ) -> None:
-        """Writes a DataFrame to DuckDB using native zero-copy integration."""
-        if df.height == 0:
-            return
-
-        # Clean empty strings into true nulls only for dimension tables
-        if table_name.startswith("d_"):
-            string_cols = [
-                c
-                for c, d in zip(df.columns, df.dtypes, strict=True)
-                if d in (getattr(pl, "Utf8", None), getattr(pl, "String", None))
-            ]
-            if string_cols:
-                df = df.with_columns(
-                    [
-                        pl.when(pl.col(c) == "").then(None).otherwise(pl.col(c)).alias(c)
-                        for c in string_cols
-                    ]
-                )
-
-        conn.register("temp_df", df)
-        logger.debug(
-            f"[DuckDB] Executing zero-copy INSERT INTO {table_name} BY NAME SELECT * FROM temp_df (Rows: {df.height})"
-        )
-        conn.execute(f"INSERT INTO {table_name} BY NAME SELECT * FROM temp_df")
-        conn.unregister("temp_df")
-
-
-class DuckDBLoader:
-    """Orchestrates the loading of dataframes via the DuckDBManager."""
-
-    def __init__(self, db_manager: DuckDBManager, status_queue: ILogger):
-        self.db_manager = db_manager
-        self.status_queue = status_queue
-
-    def run(self, dfs: dict[str, pl.DataFrame]) -> None:
-        logger.info("Writing tables to DuckDB...")
-        table_mappings = {
-            "df_d_calendar": "d_Calendar",
-            "df_d_income_category": "d_Income_Category",
-            "df_d_income_subcategory": "d_Income_Subcategory",
-            "df_d_expense_category": "d_Expense_Category",
-            "df_d_expense_subcategory": "d_Expense_Subcategory",
-            "df_d_asset_category": "d_Asset_Category",
-            "df_d_asset_subcategory": "d_Asset_SubCategory",
-            "df_d_currency": "d_Currency",
-            "df_d_benchmark_master": "d_Investment_Benchmark_Master",
-            "df_d_tf_investment_master": "d_tf_Investment_Master",
-            "df_d_macro_parameters": "d_Macro_Parameters",
-            "df_f_income_transactions": "f_Income_Transactions",
-            "df_f_expense_transactions": "f_Expense_Transactions",
-            "df_f_transfer_transactions": "f_Transfer_Transactions",
-            "df_f_opening_balances": "f_Opening_Balances",
-            "df_stg_investment_market_data": "stg_Investment_Market_Data",
-            "df_f_tf_inv_purchase": "f_tf_Investment_Purchase_Data",
-            "df_f_tf_inv_sale": "f_tf_Investment_Sale_Data",
-            "df_f_investment_benchmark_data": "f_Investment_Benchmark_Data",
-            "df_f_tf_investment_analytics_lot": "f_tf_Investment_Analytics_Lot",
-            "df_f_tf_investment_analytics_isin": "f_tf_Investment_Analytics_ISIN",
-            "df_f_tf_investment_analytics_subtype": "f_tf_Investment_Analytics_Subtype",
-            "df_f_tf_investment_analytics_class": "f_tf_Investment_Analytics_Class",
-            "df_f_tf_investment_analytics_portfolio": "f_tf_Investment_Analytics_Portfolio",
-            "_ETL_Metadata_Financial_Rules": "_ETL_Metadata_Financial_Rules",
-        }
-        presentation_tables = {
-            "df_p_tf_net_worth_monthly_summary": "p_tf_Net_Worth_Monthly_Summary",
-            "df_p_tf_category_spend_analytics": "p_tf_Category_Spend_Analytics",
-            "df_p_tf_income_streams_monthly": "p_tf_Income_Streams_Monthly",
-            "df_p_tf_wealth_risk_analytics": "p_tf_Wealth_Risk_Analytics",
-            "df_p_tf_tax_liability_forecast": "p_tf_Tax_Liability_Forecast",
-            "df_p_tf_budget_forecast_monthly": "p_tf_Budget_Forecast_Monthly",
-            "df_p_tf_investment_analytics": "p_tf_Investment_Analytics",
-            "df_p_tf_monthly_cashflow_summary": "p_tf_Monthly_Cashflow_Summary",
-        }
-        table_mappings.update(presentation_tables)
-
-        with duckdb.connect(self.db_manager.active_db_path) as conn:
-            for df_key, table_name in table_mappings.items():
-                if df_key in dfs and dfs[df_key] is not None:
-                    self.db_manager.batch_write_dataframe(dfs[df_key], table_name, conn)
-                    logger.info(f"  -> Flushed {table_name} ({dfs[df_key].height} rows) to DuckDB.")
-
-            logger.info("Generating Data Quality Metadata...")
-            metadata_rows = []
-            for key, df in dfs.items():
-                if df is not None:
-                    table_name = table_mappings.get(key, key)
-                    metadata_rows.append({"Table_Name": table_name, "Row_Count": df.height})
-
-            if metadata_rows:
-                df_metadata = pl.DataFrame(metadata_rows).with_columns(
-                    pl.lit(datetime.now()).alias("Generated_At")
-                )
-                self.db_manager.batch_write_dataframe(df_metadata, "_ETL_Metadata", conn)
-
-        self.status_queue.put(EngineStatus(msg="", data=None, progress=0.9))
-        logger.info("Applying indexes and optimizing database...")
-        self.db_manager.apply_indexes_and_optimize()
+    def snapshot(self) -> str | None:
+        """Creates a snapshot of the DB in the same folder appended with _TIMESTAMP."""
+        if not os.path.exists(self.db_path):
+            return None
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        base, ext = os.path.splitext(self.db_path)
+        snapshot_path = f"{base}_{ts}{ext}"
+        shutil.copy2(self.db_path, snapshot_path)
+        return snapshot_path
