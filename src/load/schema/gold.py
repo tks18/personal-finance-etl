@@ -1,5 +1,5 @@
-PRESENTATION_DDL = """
-CREATE TABLE IF NOT EXISTS p_tf_Net_Worth_Monthly_Summary (
+GOLD_DDL = """
+CREATE TABLE IF NOT EXISTS gold.p_Net_Worth_Monthly_Summary (
     -- Identifiers
     MONTH_START_DATE DATE,
     MONTH_END_DATE DATE,
@@ -46,13 +46,10 @@ CREATE TABLE IF NOT EXISTS p_tf_Net_Worth_Monthly_Summary (
     "YoY_Balance_Growth_%_Real" REAL,
     Organic_Growth_Value_Real REAL,
     "Organic_Yield_%_Real" REAL,
-    "MoM_Balance_Growth_%_Real" REAL,
-    FOREIGN KEY(MONTH_START_DATE) REFERENCES d_Calendar(Date),
-    FOREIGN KEY(MONTH_END_DATE) REFERENCES d_Calendar(Date),
-    FOREIGN KEY(ASSET_SUBCATEGORY_ID) REFERENCES d_Asset_Subcategory(UID)
+    "MoM_Balance_Growth_%_Real" REAL
 );
 
-CREATE TABLE IF NOT EXISTS p_tf_Category_Spend_Analytics (
+CREATE TABLE IF NOT EXISTS gold.p_Category_Spend_Analytics (
     -- Identifiers
     MONTH_START_DATE DATE,
     MONTH_END_DATE DATE,
@@ -87,13 +84,10 @@ CREATE TABLE IF NOT EXISTS p_tf_Category_Spend_Analytics (
     Is_Core_Expense BOOLEAN,
     Is_Investment BOOLEAN,
     Is_Discretionary BOOLEAN,
-    Is_Category_Creep BOOLEAN,
-    FOREIGN KEY(MONTH_START_DATE) REFERENCES d_Calendar(Date),
-    FOREIGN KEY(MONTH_END_DATE) REFERENCES d_Calendar(Date),
-    FOREIGN KEY(CATEGORY_ID) REFERENCES d_Expense_Subcategory(UID)
+    Is_Category_Creep BOOLEAN
 );
 
-CREATE TABLE IF NOT EXISTS p_tf_Income_Streams_Monthly (
+CREATE TABLE IF NOT EXISTS gold.p_Income_Streams_Monthly (
     -- Identifiers
     MONTH_START_DATE DATE,
     MONTH_END_DATE DATE,
@@ -128,13 +122,10 @@ CREATE TABLE IF NOT EXISTS p_tf_Income_Streams_Monthly (
     Is_Active_Income BOOLEAN,
     Is_Passive_Income BOOLEAN,
     Is_Dividend_Income BOOLEAN,
-    Is_Interest_Income BOOLEAN,
-    FOREIGN KEY(MONTH_START_DATE) REFERENCES d_Calendar(Date),
-    FOREIGN KEY(MONTH_END_DATE) REFERENCES d_Calendar(Date),
-    FOREIGN KEY(CATEGORY_ID) REFERENCES d_Income_Subcategory(UID)
+    Is_Interest_Income BOOLEAN
 );
 
-CREATE TABLE IF NOT EXISTS p_tf_Wealth_Risk_Analytics (
+CREATE TABLE IF NOT EXISTS gold.p_Wealth_Risk_Analytics (
     -- Identifiers
     MONTH_START_DATE DATE,
     MONTH_END_DATE DATE,
@@ -222,12 +213,10 @@ CREATE TABLE IF NOT EXISTS p_tf_Wealth_Risk_Analytics (
     "Recovery_From_Drawdown_%" DOUBLE,
     Max_Drawdown_12M DOUBLE,
     Annualized_Volatility_12M DOUBLE,
-    NW_Volatility_12M DOUBLE,
-    FOREIGN KEY(MONTH_START_DATE) REFERENCES d_Calendar(Date),
-    FOREIGN KEY(MONTH_END_DATE) REFERENCES d_Calendar(Date)
+    NW_Volatility_12M DOUBLE
 );
 
-CREATE TABLE IF NOT EXISTS p_tf_Tax_Liability_Forecast (
+CREATE TABLE IF NOT EXISTS gold.p_Tax_Liability_Forecast (
     -- Identifiers
     MONTH_START_DATE DATE,
     Financial_Year TEXT,
@@ -249,11 +238,10 @@ CREATE TABLE IF NOT EXISTS p_tf_Tax_Liability_Forecast (
     Harvesting_Offset_Remaining DOUBLE,
     -- Efficiency
     Tax_Drag_Pct DOUBLE,
-    Tax_Alpha_Pct DOUBLE,
-    FOREIGN KEY(MONTH_START_DATE) REFERENCES d_Calendar(Date)
+    Tax_Alpha_Pct DOUBLE
 );
 
-CREATE TABLE IF NOT EXISTS p_tf_Budget_Forecast_Monthly (
+CREATE TABLE IF NOT EXISTS gold.p_Budget_Forecast_Monthly (
     -- Identifiers
     MONTH_START_DATE DATE,
     MONTH_END_DATE DATE,
@@ -318,12 +306,10 @@ CREATE TABLE IF NOT EXISTS p_tf_Budget_Forecast_Monthly (
     Is_Investment_Underfunded BOOLEAN,
     Is_Income_Volatile BOOLEAN,
     Is_Budget_Month_Healthy BOOLEAN,
-    Is_Expense_Anomaly BOOLEAN,
-    FOREIGN KEY(MONTH_START_DATE) REFERENCES d_Calendar(Date),
-    FOREIGN KEY(MONTH_END_DATE) REFERENCES d_Calendar(Date)
+    Is_Expense_Anomaly BOOLEAN
 );
 
-CREATE TABLE IF NOT EXISTS p_tf_Investment_Analytics (
+CREATE TABLE IF NOT EXISTS gold.p_Investment_Analytics (
     MONTH_START_DATE DATE,
     Max_Closing_Date DATE,
     ISIN TEXT,
@@ -342,12 +328,10 @@ CREATE TABLE IF NOT EXISTS p_tf_Investment_Analytics (
     Rebalance_Required BOOLEAN,
     Sector_Weight DOUBLE,
     ISIN_Monthly_Return DOUBLE,
-    Tax_Harvesting_Priority_Score DOUBLE,
-    FOREIGN KEY(MONTH_START_DATE) REFERENCES d_Calendar(Date),
-    FOREIGN KEY(ISIN) REFERENCES d_tf_Investment_Master(ISIN)
+    Tax_Harvesting_Priority_Score DOUBLE
 );
 
-CREATE TABLE IF NOT EXISTS p_tf_Monthly_Cashflow_Summary (
+CREATE TABLE IF NOT EXISTS gold.p_Monthly_Cashflow_Summary (
     -- Identifiers
     MONTH_START_DATE DATE,
     MONTH_END_DATE DATE,
@@ -403,15 +387,6 @@ CREATE TABLE IF NOT EXISTS p_tf_Monthly_Cashflow_Summary (
     Expense_to_NW_Ratio DOUBLE,
     Emergency_Fund_Coverage DOUBLE,
     Real_Savings_Rate_Pct DOUBLE,
-    YoY_Net_Worth_Growth_Pct_Real DOUBLE,
-    FOREIGN KEY(MONTH_START_DATE) REFERENCES d_Calendar(Date),
-    FOREIGN KEY(MONTH_END_DATE) REFERENCES d_Calendar(Date)
+    YoY_Net_Worth_Growth_Pct_Real DOUBLE
 );
-
-CREATE TABLE IF NOT EXISTS _ETL_Metadata (
-    Table_Name TEXT,
-    Row_Count INTEGER,
-    Generated_At TIMESTAMP
-);
-
 """
