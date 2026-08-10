@@ -4,7 +4,6 @@ from datetime import date, timedelta
 import polars as pl
 
 from src.engines.benchmark.fetcher import BenchmarkDataFetcher
-from src.pipeline.core.cache import DatabaseCacheManager
 from src.utils.interfaces import ILogger
 from src.utils.logger import logger
 from src.utils.models import EngineStatus, LogLevel
@@ -23,17 +22,12 @@ class BenchmarkEngine:
         start_date: str | date | None = None,
         end_date: str | date | None = None,
         max_workers: int = 8,
-        target_db_base_path: str | None = None,
-        current_db_path: str | None = None,
     ) -> None:
         self.df_m = df_m
         self.status_queue = status_queue
         self.start_date = start_date
         self.end_date = end_date
         self.max_workers = max_workers
-        self.cache_manager = DatabaseCacheManager(
-            target_db_base_path, current_db_path, status_queue
-        )
 
     def _resolve_dates(
         self, df_market: pl.DataFrame | None, df_purchase: pl.DataFrame | None
@@ -63,7 +57,10 @@ class BenchmarkEngine:
         return start, end
 
     def run(
-        self, df_market: pl.DataFrame | None = None, df_purchase: pl.DataFrame | None = None
+        self,
+        df_market: pl.DataFrame | None = None,
+        df_purchase: pl.DataFrame | None = None,
+        df_cached: pl.DataFrame | None = None,
     ) -> pl.DataFrame:
         try:
             if self.start_date is None or self.end_date is None:
@@ -113,11 +110,16 @@ class BenchmarkEngine:
             else:
                 end_dt = self.end_date
 
-            cached_df = self.cache_manager.get_cached_benchmark_data()
-            if cached_df is not None:
+            cached_df = df_cached
+            if cached_df is not None and not cached_df.is_empty():
+                min_cache_date = cached_df.select(pl.min("Date")).item()
+                max_cache_date = cached_df.select(pl.max("Date")).item()
+                logger.info(
+                    f"  -> Found {cached_df.height} cached benchmark records from {min_cache_date} to {max_cache_date}"
+                )
                 self.status_queue.put(
                     EngineStatus(
-                        msg="Validating cached benchmark data...",
+                        msg=f"Validating cached benchmark data ({min_cache_date} to {max_cache_date})...",
                         data=None,
                         progress=0.08,
                         level=LogLevel.STEP,
@@ -131,7 +133,9 @@ class BenchmarkEngine:
 
             all_dfs = []
 
-            logger.info(f"Starting concurrent download for {total} tickers...")
+            logger.info(
+                f"  -> Starting benchmark thread pool for {total} tickers (evaluating cache vs API deltas)..."
+            )
             self.status_queue.put(
                 EngineStatus(
                     msg="",
@@ -142,6 +146,8 @@ class BenchmarkEngine:
             )
 
             processed = 0
+            cache_hits = 0
+            api_hits = 0
             with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
                 futures = {
                     executor.submit(
@@ -162,13 +168,16 @@ class BenchmarkEngine:
 
                     try:
                         df_pl, row, msg = future.result()
-                        level = (
-                            LogLevel.WARNING
-                            if "Warning" in (msg or "") or "⚠" in (msg or "")
-                            else LogLevel.INFO
-                        )
+                        level = LogLevel.INFO
+                        if "Error" in (msg or ""):
+                            level = LogLevel.ERROR
+                        elif "Warning" in (msg or "") or "⚠" in (msg or ""):
+                            level = LogLevel.WARNING
+
                         if msg:
-                            if level == LogLevel.WARNING:
+                            if level == LogLevel.ERROR:
+                                logger.error(msg)
+                            elif level == LogLevel.WARNING:
                                 logger.warning(msg)
                             else:
                                 logger.debug(msg)
@@ -179,6 +188,10 @@ class BenchmarkEngine:
 
                         if df_pl is not None and not df_pl.is_empty():
                             all_dfs.append(df_pl)
+                            if "Cached" in (msg or ""):
+                                cache_hits += 1
+                            elif "Fetched" in (msg or ""):
+                                api_hits += 1
                     except Exception as e:
                         ticker = futures[future].get("yF_Ticker", "Unknown")
                         self.status_queue.put(
@@ -195,7 +208,9 @@ class BenchmarkEngine:
 
             final_df = pl.concat(all_dfs, how="vertical")
 
-            logger.info("Benchmark Downloader successfully processed all tickers.")
+            logger.info(
+                f"Benchmark Downloader successfully processed all tickers. (Cache Hits: {cache_hits}, API Fetches: {api_hits})"
+            )
             self.status_queue.put(
                 EngineStatus(
                     msg="",
