@@ -1,8 +1,15 @@
 import json
 import os
 import tomllib
+from typing import Any
 
 from pydantic import BaseModel, Field
+
+
+class FileHashPolicy(BaseModel):
+    csv: bool = True
+    excel: bool = False
+    sqlite: bool = False
 
 
 class PreferencesManager:
@@ -89,6 +96,7 @@ class PreferencesManager:
 class Settings(BaseModel):
     SOURCE_DB_FOLDER: str = ""
     TARGET_DB_BASE_PATH: str = ""
+    TARGET_DB_NAME: str = "Personal_Finance_DB.duckdb"
 
     # Dependencies
     COLUMN_MASTER_PATH: str = ""
@@ -103,6 +111,8 @@ class Settings(BaseModel):
 
     # Configurable Mappings
     MF_SCHEME_MAPPINGS: dict[str, str] = Field(default_factory=dict)
+
+    FILE_HASH_POLICY: FileHashPolicy = Field(default_factory=FileHashPolicy)
 
     # Defaults
     DEFAULT_CURRENCY_ID: str = "INR_INR"
@@ -155,3 +165,35 @@ class Settings(BaseModel):
                 "Configuration Validation Failed. The following paths are missing or invalid:\n"
                 + "\n".join(errors)
             )
+
+    def export_to_db_records(self) -> list[dict]:
+        """Flattens the settings dynamically into a list of records for database auditing."""
+        records = []
+        data = self.model_dump()
+
+        def _flatten(node: Any, path: list[str]):
+            if isinstance(node, dict):
+                for k, v in node.items():
+                    _flatten(v, path + [k])
+            elif isinstance(node, list):
+                for i, v in enumerate(node):
+                    _flatten(v, path + [str(i)])
+            else:
+                # Top level settings have length 1
+                group = "General"
+                if len(path) > 1:
+                    group = path[0].capitalize()
+                    key = "_".join(path[1:])
+                else:
+                    key = path[0]
+
+                records.append(
+                    {
+                        "Setting_Group": group,
+                        "Setting_Key": key,
+                        "Setting_Value": str(node) if node is not None else "",
+                    }
+                )
+
+        _flatten(data, [])
+        return records
