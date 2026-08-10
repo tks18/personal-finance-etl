@@ -1,5 +1,6 @@
 import logging
 import multiprocessing
+import os
 
 
 class QueueHandler(logging.Handler):
@@ -44,8 +45,6 @@ def add_queue_handler(
 
 
 def add_file_handler(file_path: str) -> None:
-    import os
-
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
 
     # Remove existing FileHandlers

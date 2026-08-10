@@ -75,6 +75,7 @@ class ExtractionResult:
     raw_opening_balances: pl.LazyFrame
     raw_benchmark_master: pl.LazyFrame
     raw_macro_parameters: pl.LazyFrame
+    column_master: pl.DataFrame | pl.LazyFrame
 
 
 @dataclass
