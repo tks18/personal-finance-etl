@@ -12,6 +12,7 @@ import customtkinter as ctk  # type: ignore[import-untyped]
 from PIL import Image
 
 from src.config.settings import PreferencesManager, Settings
+from src.load.database import DuckDBManager
 from src.pipeline.etl_pipeline import process_wrapper
 from src.ui.base_tab import BaseEngineTab
 from src.utils.helpers import resource_path
@@ -188,6 +189,18 @@ class UnifiedETLTab(BaseEngineTab):
         )
         self.run_btn.grid(row=0, column=0, sticky="ew")
 
+        self.snapshot_btn = ctk.CTkButton(
+            btn_frame,
+            text="📸 Snapshot DB",
+            height=32,
+            font=ctk.CTkFont(family="Segoe UI", size=13, weight="bold"),
+            fg_color="#1F2937",
+            hover_color="#374151",
+            corner_radius=6,
+            command=self._snapshot_db,
+        )
+        self.snapshot_btn.grid(row=1, column=0, sticky="ew", pady=(8, 0))
+
         # ── 4. Helper Info Box (Row 3) ──────────────────────────────
         info_block = ctk.CTkFrame(hdr, fg_color="transparent")
         info_block.grid(row=3, column=0, columnspan=2, padx=(16, 16), pady=(4, 16), sticky="ew")
@@ -268,6 +281,39 @@ class UnifiedETLTab(BaseEngineTab):
             args=(self.status_queue, self.config_path_var.get(), self.rules_path_var.get()),
             daemon=True,
         ).start()
+
+    def _snapshot_db(self) -> None:
+        try:
+            cfg = Settings.from_toml(self.config_path_var.get())
+            db_manager = DuckDBManager(cfg.TARGET_DB_BASE_PATH, cfg.TARGET_DB_NAME)
+            snap_path = db_manager.snapshot()
+            if snap_path:
+                self.status_queue.put(
+                    EngineStatus(
+                        msg=f"Database snapshot created at: {snap_path}",
+                        data=None,
+                        progress=1.0,
+                        level=LogLevel.SUCCESS,
+                    )
+                )
+            else:
+                self.status_queue.put(
+                    EngineStatus(
+                        msg="Database file does not exist yet. Run the pipeline first.",
+                        data=None,
+                        progress=0.0,
+                        level=LogLevel.WARNING,
+                    )
+                )
+        except Exception as e:
+            self.status_queue.put(
+                EngineStatus(
+                    msg=f"Failed to create snapshot: {e}",
+                    data=None,
+                    progress=0.0,
+                    level=LogLevel.ERROR,
+                )
+            )
 
 
 class App(ctk.CTk):
