@@ -2,6 +2,45 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [4.0.0](https://github.com/tks18/personal-finance-etl/compare/3.6.0...4.0.0) (2026-08-10)
+
+
+### Bug Fixes 🛠
+
+* **engines/analytics:** implement more details in log ([0909af3](https://github.com/tks18/personal-finance-etl/commit/0909af36248c10d96135c1bd33398157be1e6d31))
+* **engines/benchmark:** fix edge cases, add logging with more details ([9e134c7](https://github.com/tks18/personal-finance-etl/commit/9e134c7ee40b527caad61ed81fae62a4eb081ae5))
+* **engines/presentattions:** remove * 100 in monte carlo result for consistency with other outputs ([76149d1](https://github.com/tks18/personal-finance-etl/commit/76149d1fc4a9299626f8355d8e32725963c987f3))
+* **extract:** excel_extractor: more proper error handling ([0a9831f](https://github.com/tks18/personal-finance-etl/commit/0a9831ff7bd4f5641e290cd4bc0b479061a3eed8))
+
+
+### Code Refactoring 🖌
+
+* **utils:** misc refactor ([cfce092](https://github.com/tks18/personal-finance-etl/commit/cfce09239c3f679374b3992032dc37b735230527))
+
+
+### Features 🔥
+
+* **config/finance_rules:** update convert_to_db func to handle any new parameters automatically ([644a7b6](https://github.com/tks18/personal-finance-etl/commit/644a7b6f0d42cca44b821f6957a6498c24e4523d))
+* **config/settings:** add function to convert to db records for meta ingestion ([1cda32b](https://github.com/tks18/personal-finance-etl/commit/1cda32bf8756d2f0aca2b79420c99db44802aaeb))
+* **engine/benchmark:** remove the cache manager and implement it natively in the persistent db ([e16a9ff](https://github.com/tks18/personal-finance-etl/commit/e16a9ff5826a192be107cfaf759d56c6cf82bcb8))
+* **extract:** add data source meta to the csv sources ([65304b2](https://github.com/tks18/personal-finance-etl/commit/65304b2db732dc9b00f4659b2c545a0e746dd4be))
+* **load/schema:** add schemas / replace schemas to match medallion architecture ([6dce5c0](https://github.com/tks18/personal-finance-etl/commit/6dce5c036a6ac2e4387ec5a3f76fc7893dd36e44))
+* **load:** add metadata db manager ([c885819](https://github.com/tks18/personal-finance-etl/commit/c8858194284ad686760a7015883b50f47f3dee80))
+* **load:** file_tracker: this will help in hashing, tracking of incremental files ([d322102](https://github.com/tks18/personal-finance-etl/commit/d3221027fb92105a095a909f1c2d7635760508df))
+* **load:** implement bronze db manager ([67ba00f](https://github.com/tks18/personal-finance-etl/commit/67ba00f4733d099112261da73528756be9612089))
+* **load:** implement gold db manager ([d6ab286](https://github.com/tks18/personal-finance-etl/commit/d6ab28662591f0fd6104ec318d5a379cbaf5c9dc))
+* **load:** implement silver db manager ([d0bed8f](https://github.com/tks18/personal-finance-etl/commit/d0bed8f7911a97869d233efe8f6b6eb5b6a3d132))
+* **load:** reframe database manager to central duck db manager ([60fca04](https://github.com/tks18/personal-finance-etl/commit/60fca041a9aaf98e9ceb82a439e24b459b171bbd))
+* **pipeline/core:** support for incremental extractor for medallion arch ([6a757d5](https://github.com/tks18/personal-finance-etl/commit/6a757d5afed73d59d1e725ee185d30691d475d3e))
+* **pipeline:** orchestrate the medallion pipeline with proper run tracking ([55720da](https://github.com/tks18/personal-finance-etl/commit/55720da61c92168224cbf37256f6a870ba604af5))
+* **ui:** add a btn to snapshot DB at point in time ([833ebb2](https://github.com/tks18/personal-finance-etl/commit/833ebb2d3b21412d4b1ae558ee3fe239765932fc))
+
+
+### Docs 📃
+
+* add tech guides for new data sources, new presentation tables ([3e0da18](https://github.com/tks18/personal-finance-etl/commit/3e0da18c46e5696a54164ccc9c8e023d60ce8562))
+* **readme:** update readme to reflect recent changes ([efabaff](https://github.com/tks18/personal-finance-etl/commit/efabaff6d9dc16185c6a9b0f8e08ccc99b528b87))
+
 ## [3.6.0](https://github.com/tks18/personal-finance-etl/compare/3.5.1...3.6.0) (2026-08-07)
 
 
