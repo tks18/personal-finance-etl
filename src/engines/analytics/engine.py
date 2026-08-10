@@ -9,6 +9,7 @@ from src.engines.analytics.context import AnalyticsContextManager
 from src.engines.analytics.isin_pipeline import IsinPipeline
 from src.engines.analytics.post_pipeline import PostProcessingPipeline
 from src.utils.interfaces import ILogger
+from src.utils.logger import logger
 from src.utils.models import EngineStatus, LogLevel
 
 
@@ -68,6 +69,12 @@ class InvestmentQuantEngine:
             self.start_date,
             self.end_date,
             self.rules,
+        )
+
+        min_market = ctx.df_m.select(pl.min("Date")).item() if not ctx.df_m.is_empty() else None
+        max_market = ctx.df_m.select(pl.max("Date")).item() if not ctx.df_m.is_empty() else None
+        logger.info(
+            f"  -> Quant Engine initialized context spanning market dates {min_market} to {max_market} for {len(isins)} unique ISINs."
         )
 
         if not isins:
