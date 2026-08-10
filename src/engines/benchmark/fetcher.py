@@ -1,5 +1,5 @@
 import time
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 import polars as pl
 import yfinance as yf  # type: ignore[import-untyped]
@@ -26,23 +26,40 @@ class BenchmarkDataFetcher:
             if cached_df is not None and not cached_df.is_empty():
                 ticker_cached = cached_df.filter(pl.col("yF_Ticker") == ticker)
                 if not ticker_cached.is_empty():
+                    min_date_val = ticker_cached.select(pl.min("Date")).item()
                     max_date_val = ticker_cached.select(pl.max("Date")).item()
-                    if max_date_val and max_date_val >= start_dt:
-                        if max_date_val >= end_dt:
-                            df_full = ticker_cached.filter(
-                                (pl.col("Date") >= start_dt) & (pl.col("Date") <= end_dt)
-                            )
-                            df_full = df_full_idx.join(df_full, on="Date", how="left")
-                            df_full = df_full.with_columns(
-                                pl.col("Close").forward_fill().backward_fill(),
-                                pl.lit(row["ID"]).alias("ID"),
-                                pl.lit(row["Benchmark_Name"]).alias("Benchmark_Name"),
-                                pl.lit(ticker).alias("yF_Ticker"),
-                                pl.lit(row["Currency"]).alias("Currency"),
-                            )
-                            return df_full, row, f"✓ Cached {ticker}"
+
+                    if min_date_val and max_date_val:
+                        if isinstance(min_date_val, datetime):
+                            min_date_val = min_date_val.date()
+                        if isinstance(max_date_val, datetime):
+                            max_date_val = max_date_val.date()
+
+                        s_dt = start_dt.date() if isinstance(start_dt, datetime) else start_dt
+                        e_dt = end_dt.date() if isinstance(end_dt, datetime) else end_dt
+
+                        if min_date_val <= s_dt + timedelta(days=7):
+                            if max_date_val >= e_dt:
+                                df_full = ticker_cached.filter(
+                                    (pl.col("Date") >= start_dt) & (pl.col("Date") <= end_dt)
+                                )
+                                df_full = df_full_idx.join(df_full, on="Date", how="left")
+                                df_full = df_full.with_columns(
+                                    pl.col("Close").forward_fill().backward_fill(),
+                                    pl.lit(row["ID"]).alias("ID"),
+                                    pl.lit(row["Benchmark_Name"]).alias("Benchmark_Name"),
+                                    pl.lit(ticker).alias("yF_Ticker"),
+                                    pl.lit(row["Currency"]).alias("Currency"),
+                                )
+                                return df_full, row, f"✓ Cached {ticker} (Full: {s_dt} to {e_dt})"
+                            else:
+                                fetch_start = max_date_val + timedelta(days=1)
                         else:
-                            fetch_start = max_date_val + timedelta(days=1)
+                            # Cache is missing historical data (user added an older transaction).
+                            # Invalidate cache for this ticker to force a clean full-history refetch.
+                            ticker_cached = None
+                    else:
+                        ticker_cached = None
 
             hist_pd = None
             if fetch_start <= end_dt:
@@ -106,7 +123,8 @@ class BenchmarkDataFetcher:
                     drop_dts = [d.strftime("%Y-%m-%d") for d in huge_drops.index]
                     warn_msg = f"⚠ Anomalous drops (>40%) in {ticker} on {', '.join(drop_dts)} (Unadjusted split?)"
 
-            msg = f"✓ Fetched {ticker}" if not warn_msg else f"✓ Fetched {ticker}. {warn_msg}"
+            base_msg = f"✓ API Fetched {ticker} ({fetch_start} to {end_dt})"
+            msg = base_msg if not warn_msg else f"{base_msg}. {warn_msg}"
             return df_full, row, msg
 
         except Exception as e:
