@@ -540,8 +540,8 @@ def get_monte_carlo_fire_batch(rules, cma_real_return, cma_fat_tail):
                 "Months_To_FI_Total_Conservative_P90": total_res[0],
                 "Months_To_FI_Total_Base_P50": total_res[1],
                 "Months_To_FI_Total_Aggressive_P10": total_res[2],
-                "Probability_Of_Success_Pct": core_res[3] * 100.0,
-                "Probability_Of_Success_Total_Pct": total_res[3] * 100.0,
+                "Probability_Of_Success_Pct": core_res[3],
+                "Probability_Of_Success_Total_Pct": total_res[3],
                 "Target_FI_Future_Nominal_P50": np.where(
                     np.isnan(core_res[4]) | (core_res[4] == 0), np.nan, core_res[4]
                 ),
@@ -554,11 +554,11 @@ def get_monte_carlo_fire_batch(rules, cma_real_return, cma_fat_tail):
                 "Runway_Months_Total_Base_P50": total_res[6],
                 "Terminal_Wealth_P50": core_res[8],
                 "Terminal_Wealth_P10": core_res[9],
-                "Max_Drawdown_Pct_P50": core_res[10] * 100.0,
+                "Max_Drawdown_Pct_P50": core_res[10],
                 "Lost_Savings_Expected_Value": core_res[11],
-                "Peak_Inflation_Experienced_Pct": core_res[12] * 100.0,
-                "Decumulation_First_5Y_CAGR_P10": core_res[13] * 100.0,
-                "Average_Realized_Withdrawal_Rate_P50": core_res[14] * 100.0,
+                "Peak_Inflation_Experienced_Pct": core_res[12],
+                "Decumulation_First_5Y_CAGR_P10": core_res[13],
+                "Average_Realized_Withdrawal_Rate_P50": core_res[14],
             }
         )
         return df_out.to_struct("")
