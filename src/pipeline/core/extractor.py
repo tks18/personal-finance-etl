@@ -29,7 +29,7 @@ class DataExtractor:
         self.cfg = cfg
         self.status_queue = status_queue
 
-    def run(self) -> ExtractionResult:
+    def run(self, actionable_files: dict[str, list[str]] | None = None) -> ExtractionResult:
         logger.info("Validating input configuration files...")
         self.status_queue.put(
             EngineStatus(
@@ -58,7 +58,10 @@ class DataExtractor:
         )
         logger.info("  -> Successfully extracted 5 base reference tables from SQLite Source.")
 
-        df_column_master = pl.read_csv(self.cfg.COLUMN_MASTER_PATH)
+        df_column_master = pl.read_csv(self.cfg.COLUMN_MASTER_PATH).with_columns(
+            pl.lit(os.path.basename(self.cfg.COLUMN_MASTER_PATH)).alias("__file_name__"),
+            pl.lit(os.path.dirname(self.cfg.COLUMN_MASTER_PATH)).alias("__folder_path__"),
+        )
         mappings = {
             "category": get_column_mapping(df_column_master, "CATEGORY"),
             "asset_group": get_column_mapping(df_column_master, "ASSETGROUP"),
@@ -68,19 +71,43 @@ class DataExtractor:
             "opbal": get_column_mapping(df_column_master, "ZOPBAL"),
         }
 
-        stg_mf_isin_mapping_lazy = extract_stg_mf_isin_mapping(self.cfg.MF_ISIN_CSV_PATH)
-        stg_benchmark_mapping_lazy = extract_stg_benchmark_mapping(
-            self.cfg.BENCHMARK_MAPPING_CSV_PATH
+        stg_mf_isin_mapping_lazy = (
+            extract_stg_mf_isin_mapping(self.cfg.MF_ISIN_CSV_PATH)
+            if (not actionable_files or actionable_files.get("mf_isin"))
+            else pl.LazyFrame()
         )
-        raw_opening_balances = extract_opening_balances_raw(self.cfg.OPENING_BALANCE_CSV_PATH)
-        raw_benchmark_master = extract_benchmark_master_raw(self.cfg.BENCHMARK_MASTER_CSV_PATH)
-        raw_macro_parameters = extract_macro_parameters_raw(self.cfg.MACRO_PARAMETERS_CSV_PATH)
+        stg_benchmark_mapping_lazy = (
+            extract_stg_benchmark_mapping(self.cfg.BENCHMARK_MAPPING_CSV_PATH)
+            if (not actionable_files or actionable_files.get("benchmark_mapping"))
+            else pl.LazyFrame()
+        )
+        raw_opening_balances = (
+            extract_opening_balances_raw(self.cfg.OPENING_BALANCE_CSV_PATH)
+            if (not actionable_files or actionable_files.get("opening_balances"))
+            else pl.LazyFrame()
+        )
+        raw_benchmark_master = (
+            extract_benchmark_master_raw(self.cfg.BENCHMARK_MASTER_CSV_PATH)
+            if (not actionable_files or actionable_files.get("benchmark_master"))
+            else pl.LazyFrame()
+        )
+        raw_macro_parameters = (
+            extract_macro_parameters_raw(self.cfg.MACRO_PARAMETERS_CSV_PATH)
+            if (not actionable_files or actionable_files.get("macro_parameters"))
+            else pl.LazyFrame()
+        )
 
         logger.info("Categorizing Statement Files from FULL Statements Folder...")
         if not self.cfg.STATEMENTS_FOLDER or not os.path.isdir(self.cfg.STATEMENTS_FOLDER):
             raise FileNotFoundError("Statements folder not found.")
 
         statement_files = categorize_statement_files(self.cfg.STATEMENTS_FOLDER, strict=True)
+        if actionable_files is not None:
+            for k in statement_files:
+                statement_files[k] = [
+                    f for f in statement_files[k] if f in actionable_files.get(k, [])
+                ]
+
         total_files = sum(len(f) for f in statement_files.values())
 
         if total_files > 0:
@@ -91,7 +118,10 @@ class DataExtractor:
             stock_transactions_raw = extract_stock_transactions_raw(statement_files["stock_orders"])
             logger.info(f"  -> Successfully parsed {total_files} raw Excel files.")
         else:
-            raise FileNotFoundError("No statement files found.")
+            mf_market_data_raw = pl.LazyFrame()
+            mf_transactions_raw = pl.LazyFrame()
+            stock_market_data_raw = pl.LazyFrame()
+            stock_transactions_raw = pl.LazyFrame()
 
         result = ExtractionResult(
             zcategory=zcategory_lazy,
@@ -109,6 +139,7 @@ class DataExtractor:
             raw_opening_balances=raw_opening_balances,
             raw_benchmark_master=raw_benchmark_master,
             raw_macro_parameters=raw_macro_parameters,
+            column_master=df_column_master,
         )
 
         logger.info("Running Gatekeeper Schema Validation...")
