@@ -77,7 +77,7 @@ def extract_mf_market_data_raw(valid_files: list[str]) -> pl.LazyFrame:
         )
         all_dfs.append(df_processed)
     if not all_dfs:
-        raise ValueError("No valid MF statements found in Folder")
+        return pl.LazyFrame()
     return pl.concat(all_dfs, how="diagonal").lazy()
 
 
@@ -126,7 +126,7 @@ def extract_mf_transactions_raw(valid_files: list[str]) -> pl.LazyFrame:
         )
         all_dfs.append(df_processed)
     if not all_dfs:
-        raise ValueError("No valid MF transaction statements found in Folder")
+        return pl.LazyFrame()
     return pl.concat(all_dfs, how="diagonal").lazy()
 
 
@@ -178,7 +178,7 @@ def extract_stock_market_data_raw(valid_files: list[str]) -> pl.LazyFrame:
         )
         all_dfs.append(df_processed)
     if not all_dfs:
-        raise ValueError("No valid Stock PL statements found in Folder")
+        return pl.LazyFrame()
     return pl.concat(all_dfs, how="diagonal").lazy()
 
 
@@ -205,5 +205,5 @@ def extract_stock_transactions_raw(valid_files: list[str]) -> pl.LazyFrame:
         )
         all_dfs.append(df_processed)
     if not all_dfs:
-        raise ValueError("No valid Stock Trade statements found in Folder")
+        return pl.LazyFrame()
     return pl.concat(all_dfs, how="diagonal").lazy()
