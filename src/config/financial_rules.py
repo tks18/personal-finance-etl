@@ -1,5 +1,6 @@
 import os
 import tomllib
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -333,187 +334,60 @@ class FinancialRules(BaseModel):
             return cls(**data)
 
     def export_to_db_records(self) -> list[dict]:
-        """Flattens the rules into a list of records for database auditing."""
+        """Flattens the rules dynamically into a list of records for database auditing.
+        Automatically scales to handle any new nested parameters added to the schema."""
         records = []
 
-        # Income Rules
-        for cat_id in self.income.active.category_ids:
+        # model_dump() recursively serializes all nested models to dictionaries
+        data = self.model_dump()
+
+        def _add_record(path: list[str], val: Any):
+            if not path or val is None:
+                return
+
+            # Clean and map Domain
+            domain = path[0].capitalize()
+            if domain.endswith("s") and domain not in ["Assumptions"]:
+                domain = domain[:-1]
+            if domain == "Assumptions":
+                domain = "Assumption"
+
+            # Clean and map Rule Type (second level key)
+            if len(path) > 1:
+                raw_rule = str(path[1])
+                # Maintain standard acronym capitalizations
+                if raw_rule.lower() in ["cma", "fire", "mf", "etf", "roi"]:
+                    rule_type = raw_rule.upper()
+                else:
+                    rule_type = raw_rule.replace("_", " ").title().replace(" ", "")
+            else:
+                rule_type = "Global"
+
+            # Clean and map Target Level (deepest key)
+            level = str(path[-1])
+            if level == "category_ids":
+                level = "Category"
+            elif level == "sub_category_ids":
+                level = "Subcategory"
+
             records.append(
                 {
-                    "Rule_Domain": "Income",
-                    "Rule_Type": "Active",
-                    "Target_Level": "Category",
-                    "Target_ID": cat_id,
-                }
-            )
-        for sub_id in self.income.active.sub_category_ids:
-            records.append(
-                {
-                    "Rule_Domain": "Income",
-                    "Rule_Type": "Active",
-                    "Target_Level": "Subcategory",
-                    "Target_ID": sub_id,
+                    "Rule_Domain": domain,
+                    "Rule_Type": rule_type,
+                    "Target_Level": level,
+                    "Target_ID": str(val),
                 }
             )
 
-        for cat_id in self.income.dividends.category_ids:
-            records.append(
-                {
-                    "Rule_Domain": "Income",
-                    "Rule_Type": "Dividends",
-                    "Target_Level": "Category",
-                    "Target_ID": cat_id,
-                }
-            )
-        for sub_id in self.income.dividends.sub_category_ids:
-            records.append(
-                {
-                    "Rule_Domain": "Income",
-                    "Rule_Type": "Dividends",
-                    "Target_Level": "Subcategory",
-                    "Target_ID": sub_id,
-                }
-            )
+        def _flatten(node: Any, path: list[str]):
+            if isinstance(node, dict):
+                for k, v in node.items():
+                    _flatten(v, path + [k])
+            elif isinstance(node, list):
+                for item in node:
+                    _add_record(path, item)
+            else:
+                _add_record(path, node)
 
-        for cat_id in self.income.interest.category_ids:
-            records.append(
-                {
-                    "Rule_Domain": "Income",
-                    "Rule_Type": "Interest",
-                    "Target_Level": "Category",
-                    "Target_ID": cat_id,
-                }
-            )
-        for sub_id in self.income.interest.sub_category_ids:
-            records.append(
-                {
-                    "Rule_Domain": "Income",
-                    "Rule_Type": "Interest",
-                    "Target_Level": "Subcategory",
-                    "Target_ID": sub_id,
-                }
-            )
-
-        # Expense Rules
-        for cat_id in self.expense.core.category_ids:
-            records.append(
-                {
-                    "Rule_Domain": "Expense",
-                    "Rule_Type": "Core",
-                    "Target_Level": "Category",
-                    "Target_ID": cat_id,
-                }
-            )
-        for sub_id in self.expense.core.sub_category_ids:
-            records.append(
-                {
-                    "Rule_Domain": "Expense",
-                    "Rule_Type": "Core",
-                    "Target_Level": "Subcategory",
-                    "Target_ID": sub_id,
-                }
-            )
-
-        # Asset Rules
-        for cat_id in self.assets.illiquid.category_ids:
-            records.append(
-                {
-                    "Rule_Domain": "Asset",
-                    "Rule_Type": "Illiquid",
-                    "Target_Level": "Category",
-                    "Target_ID": cat_id,
-                }
-            )
-        for sub_id in self.assets.illiquid.sub_category_ids:
-            records.append(
-                {
-                    "Rule_Domain": "Asset",
-                    "Rule_Type": "Illiquid",
-                    "Target_Level": "Subcategory",
-                    "Target_ID": sub_id,
-                }
-            )
-
-        # Investment Rules
-        for instr_name, instr_rules in self.investments.items():
-            for cat_id in instr_rules.category_ids:
-                records.append(
-                    {
-                        "Rule_Domain": "Investment",
-                        "Rule_Type": instr_name,
-                        "Target_Level": "Category",
-                        "Target_ID": cat_id,
-                    }
-                )
-            for sub_id in instr_rules.sub_category_ids:
-                records.append(
-                    {
-                        "Rule_Domain": "Investment",
-                        "Rule_Type": instr_name,
-                        "Target_Level": "Subcategory",
-                        "Target_ID": sub_id,
-                    }
-                )
-
-        # Assumptions Audit Records
-        a = self.assumptions
-        for key, value in {
-            "default_trading_days": a.macro.default_trading_days,
-            "fallback_inflation_rate": a.macro.fallback_inflation_rate,
-            "fallback_risk_free_rate": a.macro.fallback_risk_free_rate,
-        }.items():
-            records.append(
-                {
-                    "Rule_Domain": "Assumption",
-                    "Rule_Type": "Macro",
-                    "Target_Level": key,
-                    "Target_ID": str(value),
-                }
-            )
-
-        for key, value in {
-            "swr_multiplier": a.fire.swr_multiplier,
-            "coast_fi_real_return": a.fire.coast_fi_real_return,
-            "coast_fi_years": a.fire.coast_fi_years,
-            "lean_fi_ratio": a.fire.lean_fi_ratio,
-            "fallback_trailing_return": a.fire.fallback_trailing_return,
-        }.items():
-            records.append(
-                {
-                    "Rule_Domain": "Assumption",
-                    "Rule_Type": "FIRE",
-                    "Target_Level": key,
-                    "Target_ID": str(value),
-                }
-            )
-
-        for key, value in {
-            "iterations": a.monte_carlo.iterations,
-            "max_months": a.monte_carlo.max_months,
-            "annual_volatility": a.monte_carlo.annual_volatility,
-            "real_return_floor": a.monte_carlo.real_return_floor,
-        }.items():
-            records.append(
-                {
-                    "Rule_Domain": "Assumption",
-                    "Rule_Type": "MonteCarlo",
-                    "Target_Level": key,
-                    "Target_ID": str(value),
-                }
-            )
-
-        for key, value in {
-            "debt_mf_cutoff_date": a.tax.debt_mf_cutoff_date,
-            "harvest_wait_days_threshold": a.tax.harvest_wait_days_threshold,
-            "fallback_equity_ltcg_exemption": a.tax.fallback_equity_ltcg_exemption,
-        }.items():
-            records.append(
-                {
-                    "Rule_Domain": "Assumption",
-                    "Rule_Type": "Tax",
-                    "Target_Level": key,
-                    "Target_ID": str(value),
-                }
-            )
-
+        _flatten(data, [])
         return records
