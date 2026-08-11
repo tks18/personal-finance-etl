@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [4.1.1](https://github.com/tks18/personal-finance-etl/compare/4.1.0...4.1.1) (2026-08-11)
+
+
+### Code Refactoring 🖌
+
+* add full typing to the entire pipeline ([197e14d](https://github.com/tks18/personal-finance-etl/commit/197e14de9c6994a191c907ae2ce99ca46cbf6978))
+
 ## [4.1.0](https://github.com/tks18/personal-finance-etl/compare/4.0.0...4.1.0) (2026-08-11)
 
 
