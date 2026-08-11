@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [4.1.0](https://github.com/tks18/personal-finance-etl/compare/4.0.0...4.1.0) (2026-08-11)
+
+
+### Bug Fixes 🛠
+
+* **engines/benchmark:** fix edge cases where cache & api fails to fetch data ([41ed7a7](https://github.com/tks18/personal-finance-etl/commit/41ed7a7847ba25b2efb327fa76a8d928a3fcc231))
+* **engines/presentations:** use 12m avgs for better smoothing, constant seed for deterministic outs ([9014984](https://github.com/tks18/personal-finance-etl/commit/9014984e570f874aae64e8cf7670f86152d6139c))
+* **engines/presentations:** use 12m avgs for monte carlo ([5a91df4](https://github.com/tks18/personal-finance-etl/commit/5a91df420b819cfce439d59177b4654b06488078))
+
+
+### Code Refactoring 🖌
+
+* **load/schema:** just add new 12m avgs to wealth analytics ([8af1372](https://github.com/tks18/personal-finance-etl/commit/8af13727cde91eefa4d7cc1e15b67739b7371f2c))
+
 ## [4.0.0](https://github.com/tks18/personal-finance-etl/compare/3.6.0...4.0.0) (2026-08-10)
 
 
