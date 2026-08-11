@@ -15,6 +15,37 @@ const tracker = {
   },
 };
 
+const versionInfoTracker = {
+  readVersion: function (contents) {
+    const match = contents.match(/StringStruct\('FileVersion', '([^']+)'\)/);
+    if (!match) return null;
+    return match[1];
+  },
+  writeVersion: function (contents, version) {
+    // Convert SemVer '4.1.1' to '4, 1, 1, 0' for Windows fixed info
+    const tupleParts = version.split('.').concat(['0', '0', '0', '0']).slice(0, 4);
+    const tupleStr = tupleParts.join(', ');
+    
+    let newContents = contents.replace(
+      /filevers=\(\d+, \d+, \d+, \d+\)/g,
+      `filevers=(${tupleStr})`
+    );
+    newContents = newContents.replace(
+      /prodvers=\(\d+, \d+, \d+, \d+\)/g,
+      `prodvers=(${tupleStr})`
+    );
+    newContents = newContents.replace(
+      /StringStruct\('FileVersion', '[^']+'\)/g,
+      `StringStruct('FileVersion', '${version}')`
+    );
+    newContents = newContents.replace(
+      /StringStruct\('ProductVersion', '[^']+'\)/g,
+      `StringStruct('ProductVersion', '${version}')`
+    );
+    return newContents;
+  },
+};
+
 module.exports = {
   'tag-prefix': '',
   scripts: {
@@ -94,6 +125,10 @@ module.exports = {
     {
       filename: 'src/__init__.py',
       updater: tracker,
+    },
+    {
+      filename: 'version_info.txt',
+      updater: versionInfoTracker,
     },
   ],
 };
