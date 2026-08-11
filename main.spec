@@ -61,7 +61,14 @@ a = Analysis(
     excludes=[
         'matplotlib', 'scipy', 'notebook', 'nbconvert', 'nbformat',
         'jedi', 'IPython', 'tkinter.test', 'unittest',
-        'PyQt5', 'PySide2', 'PySide6'
+        'PyQt5', 'PySide2', 'PySide6', 'PyQt6',
+        'openpyxl', 'xlsxwriter', 'xlrd', 'pyxlsb', 'odf',
+        'sqlalchemy', 'boto3', 'botocore', 's3fs', 'gcsfs', 'fsspec',
+        'bokeh', 'plotly', 'altair', 'seaborn',
+        'pytest', 'pydoc', 'doctest', 'pdb', 'idlelib',
+        'pydantic.v1', 
+        'numba.tests', 'numpy.random.tests', 'numpy.core.tests', 'pandas.tests', 'pyarrow.tests',
+        'PIL.ImageQt', 'PIL.ImageWebP'
     ],
     noarchive=False,
     optimize=1,
