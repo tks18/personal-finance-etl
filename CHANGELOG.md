@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [4.1.3](https://github.com/tks18/personal-finance-etl/compare/4.1.2...4.1.3) (2026-08-11)
+
+
+### Build System 🏗
+
+* **main.spec:** add few more exclusions to save space ([2931a06](https://github.com/tks18/personal-finance-etl/commit/2931a06d5fe158bcc5fe72791216b70e55e1586a))
+
+
+### CI 🛠
+
+* **.versionrc.js:** add custom version tracker for version_info.txt file ([b7e6ec7](https://github.com/tks18/personal-finance-etl/commit/b7e6ec7658677beef0f88eed0ec78f60952bc7dd))
+
 ### [4.1.2](https://github.com/tks18/personal-finance-etl/compare/4.1.1...4.1.2) (2026-08-11)
 
 ### [4.1.1](https://github.com/tks18/personal-finance-etl/compare/4.1.0...4.1.1) (2026-08-11)
