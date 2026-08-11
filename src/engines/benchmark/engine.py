@@ -206,7 +206,7 @@ class BenchmarkEngine:
             if not all_dfs:
                 return pl.DataFrame()
 
-            final_df = pl.concat(all_dfs, how="vertical")
+            final_df = pl.concat(all_dfs, how="diagonal")
 
             logger.info(
                 f"Benchmark Downloader successfully processed all tickers. (Cache Hits: {cache_hits}, API Fetches: {api_hits})"

@@ -75,9 +75,6 @@ class BenchmarkDataFetcher:
                             raise e
                         time.sleep(1 + attempt * 2)
 
-            if (hist_pd is None or hist_pd.empty) and fetch_start <= end_dt:
-                return pl.DataFrame(), row, f"Warning: No data available for {ticker}"
-
             df_new = pl.DataFrame()
             if hist_pd is not None and not hist_pd.empty:
                 hist_pd.index = hist_pd.index.tz_localize(None).normalize()  # type: ignore[attr-defined]
@@ -103,17 +100,24 @@ class BenchmarkDataFetcher:
                 )
 
             if ticker_cached is not None and not ticker_cached.is_empty():
-                df_full = pl.concat([ticker_cached, df_new], how="vertical")
+                if not df_new.is_empty():
+                    df_full = pl.concat([ticker_cached, df_new], how="diagonal")
+                else:
+                    df_full = ticker_cached
             else:
                 df_full = df_new
 
-            df_full = df_full_idx.join(df_full, on="Date", how="left").with_columns(
-                pl.col("Close").forward_fill().backward_fill(),
-                pl.lit(row["ID"]).alias("ID"),
-                pl.lit(row["Benchmark_Name"]).alias("Benchmark_Name"),
-                pl.lit(ticker).alias("yF_Ticker"),
-                pl.lit(row["Currency"]).alias("Currency"),
-            )
+            if df_full.is_empty():
+                return pl.DataFrame(), row, f"Warning: No data available for {ticker}"
+
+            if not df_new.is_empty():
+                df_full = df_full_idx.join(df_full, on="Date", how="left").with_columns(
+                    pl.col("Close").forward_fill().backward_fill(),
+                    pl.lit(row["ID"]).alias("ID"),
+                    pl.lit(row["Benchmark_Name"]).alias("Benchmark_Name"),
+                    pl.lit(ticker).alias("yF_Ticker"),
+                    pl.lit(row["Currency"]).alias("Currency"),
+                )
 
             warn_msg = None
             if hist_pd is not None and not hist_pd.empty:
@@ -123,7 +127,10 @@ class BenchmarkDataFetcher:
                     drop_dts = [d.strftime("%Y-%m-%d") for d in huge_drops.index]
                     warn_msg = f"⚠ Anomalous drops (>40%) in {ticker} on {', '.join(drop_dts)} (Unadjusted split?)"
 
-            base_msg = f"✓ API Fetched {ticker} ({fetch_start} to {end_dt})"
+            if df_new.is_empty():
+                base_msg = f"⚠ No new data fetched for {ticker}, relying on cache."
+            else:
+                base_msg = f"✓ API Fetched {ticker} ({fetch_start} to {end_dt})"
             msg = base_msg if not warn_msg else f"{base_msg}. {warn_msg}"
             return df_full, row, msg
 
