@@ -396,15 +396,15 @@ def get_monte_carlo_fire_batch(rules, cma_real_return, cma_fat_tail):
     def monte_carlo_fire_batch(s: pl.Series, **kwargs) -> pl.Series:
         df = s.struct.unnest()
         pv = df["Total_Net_Worth_Market_Af_Tax"].to_numpy().astype(float)
-        pmt = df["Trailing_6M_Avg_Savings"].to_numpy().astype(float)
+        pmt = df["Trailing_12M_Avg_Savings"].to_numpy().astype(float)
         fv = df["Target_FI_Today"].to_numpy().astype(float)
-        burn_core = df["Trailing_6M_Avg_Spend"].to_numpy().astype(float)
+        burn_core = df["Trailing_12M_Avg_Spend"].to_numpy().astype(float)
 
-        pmt_total = df["Trailing_6M_Avg_Total_Savings"].to_numpy().astype(float)
+        pmt_total = df["Trailing_12M_Avg_Total_Savings"].to_numpy().astype(float)
         fv_total = df["Target_FI_Today_Total"].to_numpy().astype(float)
         inf_rates = df["INFLATION_YOY_PCT"].to_numpy().astype(float)
         seed_ints = df["Seed_Int"].to_numpy().astype(np.int32)
-        burn_total = df["Trailing_6M_Avg_Total_Spend"].to_numpy().astype(float)
+        burn_total = df["Trailing_12M_Avg_Total_Spend"].to_numpy().astype(float)
 
         swr = rules.assumptions.fire.swr_multiplier
         iterations = rules.assumptions.monte_carlo.iterations
