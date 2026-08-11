@@ -1,4 +1,5 @@
 from datetime import date
+from typing import Any
 
 from src.engines.analytics.core.math import calculate_risk_metrics
 from src.engines.analytics.pipeline.processor.benchmark import BenchmarkPriceProvider
@@ -6,7 +7,7 @@ from src.utils.helpers import to_date_obj
 
 
 class RiskMetricsProvider:
-    def __init__(self, m_inst: list[dict], bm_provider: BenchmarkPriceProvider):
+    def __init__(self, m_inst: list[dict[str, Any]], bm_provider: BenchmarkPriceProvider):
         self.inst_px: dict[date, float] = {}
         for m_row in m_inst:
             d = to_date_obj(m_row["Date"])

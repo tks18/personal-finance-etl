@@ -74,7 +74,7 @@ class SilverLayer:
 
         # Phase 2: Insert all data in forward topological order (Dimensions -> Facts)
         for df_key, table_name in table_mappings.items():
-            if df_key in dfs and dfs[df_key] is not None:
+            if df_key in dfs:
                 self._write(dfs[df_key], table_name)
 
         logger.info("Silver layer load complete.")

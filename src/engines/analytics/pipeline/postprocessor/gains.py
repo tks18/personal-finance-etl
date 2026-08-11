@@ -1,5 +1,6 @@
 import warnings
 from datetime import date
+from typing import Any
 
 import polars as pl
 
@@ -18,7 +19,7 @@ class RealizedGainsCalculator:
         self.ctx = ctx
 
     def _build_empty_fy_frame(self, unique_dates: list[date]) -> pl.DataFrame:
-        df_dates_list = []
+        df_dates_list: list[dict[str, Any]] = []
         for d in unique_dates:
             d_obj = to_date_obj(d)
             if not d_obj:
@@ -44,7 +45,7 @@ class RealizedGainsCalculator:
         return pl.DataFrame(df_dates_list)
 
     def calculate(
-        self, lazy_df: pl.LazyFrame, unique_dates: list[date], realized_events: list[dict]
+        self, lazy_df: pl.LazyFrame, unique_dates: list[date], realized_events: list[dict[str, Any]]
     ) -> pl.LazyFrame:
         df_fy_empty = self._build_empty_fy_frame(unique_dates)
 

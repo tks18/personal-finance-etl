@@ -3,6 +3,8 @@ from typing import Any
 
 import polars as pl
 
+from src.config.financial_rules import FinancialRules
+
 
 class IncomeStreamsBuilder:
     """
@@ -10,7 +12,10 @@ class IncomeStreamsBuilder:
     """
 
     def __init__(
-        self, dfs: Mapping[str, pl.DataFrame | pl.LazyFrame], base_lf: dict[str, Any], rules
+        self,
+        dfs: Mapping[str, pl.DataFrame | pl.LazyFrame],
+        base_lf: dict[str, Any],
+        rules: FinancialRules,
     ):
         self.dfs = dfs
         self.base_lf = base_lf

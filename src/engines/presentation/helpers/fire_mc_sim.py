@@ -1,47 +1,74 @@
+# pyright: reportUnknownVariableType=false
+# pyright: reportUnknownArgumentType=false
+# pyright: reportUnknownMemberType=false
+# pyright: reportAttributeAccessIssue=false
+
+from collections.abc import Callable
+from typing import Any
+
 import numpy as np
+import numpy.typing as npt
 import polars as pl
 from numba import njit, prange
+
+from src.config.financial_rules import FinancialRules
 
 
 @njit(fastmath=True, parallel=True, cache=True)
 def _run_mc_simulations_numba(
-    pv_arr,
-    pmt_arr,
-    fv_arr,
-    burn_arr,
-    inf_rates,
-    seed_ints,
-    iterations,
-    max_months,
-    vol_r,
-    mean_r,
-    swr,
-    current_age_months_arr,
-    target_lifespan_months,
-    tm_flat,
-    state_bull_params,
-    state_bear_params,
-    state_stag_params,
-    hc_shock_prob,
-    hc_shock_min,
-    hc_shock_max,
-    gp_derisk_start,
-    gp_rerisk_end,
-    gp_base_eq,
-    gp_target_eq,
-    jump_prob_ann,
-    jump_mag,
-    gp_debt_ret,
-    gp_debt_vol,
-    gk_upper,
-    gk_lower,
-    gk_cut,
-    gk_raise,
-    inf_theta,
-    inf_vol_ann,
-    inf_max,
-    sorr_months,
-):
+    pv_arr: npt.NDArray[np.float64],
+    pmt_arr: npt.NDArray[np.float64],
+    fv_arr: npt.NDArray[np.float64],
+    burn_arr: npt.NDArray[np.float64],
+    inf_rates: npt.NDArray[np.float64],
+    seed_ints: npt.NDArray[np.int32],
+    iterations: int,
+    max_months: int,
+    vol_r: float,
+    mean_r: float,
+    swr: float,
+    current_age_months_arr: npt.NDArray[np.int32],
+    target_lifespan_months: int,
+    tm_flat: npt.NDArray[np.float64],
+    state_bull_params: npt.NDArray[np.float64],
+    state_bear_params: npt.NDArray[np.float64],
+    state_stag_params: npt.NDArray[np.float64],
+    hc_shock_prob: float,
+    hc_shock_min: int,
+    hc_shock_max: int,
+    gp_derisk_start: int,
+    gp_rerisk_end: int,
+    gp_base_eq: float,
+    gp_target_eq: float,
+    jump_prob_ann: float,
+    jump_mag: float,
+    gp_debt_ret: float,
+    gp_debt_vol: float,
+    gk_upper: float,
+    gk_lower: float,
+    gk_cut: float,
+    gk_raise: float,
+    inf_theta: float,
+    inf_vol_ann: float,
+    inf_max: float,
+    sorr_months: int,
+) -> tuple[
+    npt.NDArray[np.float64],
+    npt.NDArray[np.float64],
+    npt.NDArray[np.float64],
+    npt.NDArray[np.float64],
+    npt.NDArray[np.float64],
+    npt.NDArray[np.float64],
+    npt.NDArray[np.float64],
+    npt.NDArray[np.float64],
+    npt.NDArray[np.float64],
+    npt.NDArray[np.float64],
+    npt.NDArray[np.float64],
+    npt.NDArray[np.float64],
+    npt.NDArray[np.float64],
+    npt.NDArray[np.float64],
+    npt.NDArray[np.float64],
+]:
     n_rows = len(pv_arr)
 
     out_p90 = np.full(n_rows, np.nan)
@@ -335,21 +362,21 @@ def _run_mc_simulations_numba(
         v_noms = nom_targets[~np.isnan(nom_targets)]
 
         if len(v_months) > 0:
-            out_p90[i] = np.percentile(v_months, 90)
-            out_p50[i] = np.percentile(v_months, 50)
-            out_p10[i] = np.percentile(v_months, 10)
-            out_nom_p50[i] = np.percentile(v_noms, 50)
+            out_p90[i] = np.percentile(v_months, 90.0)
+            out_p50[i] = np.percentile(v_months, 50.0)
+            out_p10[i] = np.percentile(v_months, 10.0)
+            out_nom_p50[i] = np.percentile(v_noms, 50.0)
 
-            out_runway_p90[i] = np.percentile(runway_months, 90)
-            out_runway_p50[i] = np.percentile(runway_months, 50)
-            out_runway_p10[i] = np.percentile(runway_months, 10)
+            out_runway_p90[i] = np.percentile(runway_months, 90.0)
+            out_runway_p50[i] = np.percentile(runway_months, 50.0)
+            out_runway_p10[i] = np.percentile(runway_months, 10.0)
 
         if valid_decum > 0:
             prob_success[i] = survived_count / valid_decum
             v_term = term_wealth[~np.isnan(term_wealth)]
             if len(v_term) > 0:
-                out_terminal_wealth_p50[i] = np.percentile(v_term, 50)
-                out_terminal_wealth_p10[i] = np.percentile(v_term, 10)
+                out_terminal_wealth_p50[i] = np.percentile(v_term, 50.0)
+                out_terminal_wealth_p10[i] = np.percentile(v_term, 10.0)
 
             v_dd = max_dds[~np.isnan(max_dds)]
             if len(v_dd) > 0:
@@ -365,7 +392,7 @@ def _run_mc_simulations_numba(
 
             v_sorr = sorr_cagrs[~np.isnan(sorr_cagrs)]
             if len(v_sorr) > 0:
-                out_sorr_cagr_p10[i] = np.percentile(v_sorr, 10)
+                out_sorr_cagr_p10[i] = np.percentile(v_sorr, 10.0)
 
             v_swr = avg_swrs[~np.isnan(avg_swrs)]
             if len(v_swr) > 0:
@@ -392,8 +419,10 @@ def _run_mc_simulations_numba(
     )
 
 
-def get_monte_carlo_fire_batch(rules, cma_real_return, cma_fat_tail):
-    def monte_carlo_fire_batch(s: pl.Series, **kwargs) -> pl.Series:
+def get_monte_carlo_fire_batch(
+    rules: FinancialRules, cma_real_return: float, cma_fat_tail: float
+) -> Callable[..., pl.Series]:
+    def monte_carlo_fire_batch(s: pl.Series, **kwargs: Any) -> pl.Series:
         df = s.struct.unnest()
         pv = df["Total_Net_Worth_Market_Af_Tax"].to_numpy().astype(float)
         pmt = df["Trailing_12M_Avg_Savings"].to_numpy().astype(float)

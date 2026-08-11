@@ -2,7 +2,7 @@ import gc
 import multiprocessing
 import time
 import traceback
-from typing import cast
+from typing import Any, cast
 
 import polars as pl
 
@@ -28,8 +28,7 @@ from src.utils.models import EngineStatus, ExtractionResult, LogLevel
 
 class ETLOrchestrator:
     def __init__(self, cfg: Settings, status_queue: ILogger, rules: "FinancialRules | None" = None):
-        if cfg is None:
-            raise ValueError("Configuration settings (cfg) cannot be None")
+
         self.cfg = cfg
         self.rules = rules
         self.status_queue = status_queue
@@ -83,9 +82,7 @@ class ETLOrchestrator:
             df_s=self.dfs["df_f_tf_inv_sale"],
             df_m=self.dfs["df_stg_investment_market_data"],
             df_i=self.dfs["df_d_tf_investment_master"],
-            df_b=self.dfs["df_f_investment_benchmark_data"]
-            if self.dfs["df_f_investment_benchmark_data"] is not None
-            else pl.DataFrame(),
+            df_b=self.dfs["df_f_investment_benchmark_data"],
             df_t=self.dfs["df_d_macro_parameters"],
             status_queue=self.status_queue,
             rules=self.rules,
@@ -111,6 +108,10 @@ class ETLOrchestrator:
 
         logger.info("Starting Presentation Layer Engines...")
         self.status_queue.put(EngineStatus(msg="", data=None, progress=0.8, level=LogLevel.STEP))
+
+        if self.rules is None:
+            raise ValueError("FinancialRules must be provided to ETL pipeline")
+
         wealth_engine = WealthPresentationEngine(rules=self.rules)
         wealth_lazy = wealth_engine.run(self.dfs)
 
@@ -139,7 +140,7 @@ class ETLOrchestrator:
 
         start_time = time.time()
 
-        add_queue_handler(cast(multiprocessing.Queue, self.status_queue))
+        add_queue_handler(cast("multiprocessing.Queue[Any]", self.status_queue))
 
         log_file_path = self.db_manager.db_path.replace(".duckdb", ".log")
         add_file_handler(log_file_path)
@@ -179,7 +180,7 @@ class ETLOrchestrator:
 
             discovered_files = categorize_statement_files(self.cfg.STATEMENTS_FOLDER, strict=True)
             discovered_files["sqlite_source"] = [
-                ADBCSQLiteExtractor(self.cfg.SOURCE_DB_FOLDER)._get_latest_sqlite_backup()
+                ADBCSQLiteExtractor(self.cfg.SOURCE_DB_FOLDER).get_latest_sqlite_backup()
             ]
             discovered_files["mf_isin"] = [self.cfg.MF_ISIN_CSV_PATH]
             discovered_files["benchmark_mapping"] = [self.cfg.BENCHMARK_MAPPING_CSV_PATH]
@@ -225,7 +226,7 @@ class ETLOrchestrator:
 
             # Full Dataset Read
             logger.info("Fetching complete dataset from Bronze Lakehouse for Transformation...")
-            full_dataset = bronze.get_full_dataset(extracted_data.mappings)
+            full_dataset = bronze.get_full_dataset(extracted_data.mappings)  # type: ignore
 
             # Transformation Phase
             t_trans_start = time.time()

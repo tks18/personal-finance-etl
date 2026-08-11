@@ -93,7 +93,7 @@ class InvestmentQuantEngine:
         with tempfile.TemporaryDirectory() as tmp_dir:
             isin_pipeline = IsinPipeline(ctx, isins, tmp_dir, self.status_queue)
             pipeline_res = isin_pipeline.process_all()
-            has_data = pipeline_res["has_data"]
+            has_data = pipeline_res.has_data
 
             if not has_data:
                 empty_df = pl.DataFrame()

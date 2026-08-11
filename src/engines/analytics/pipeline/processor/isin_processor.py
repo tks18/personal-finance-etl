@@ -1,19 +1,34 @@
 from datetime import date
-from typing import cast
+from typing import Any, cast
 
 import polars as pl
 
+from src.config.financial_rules import FinancialRules
 from src.engines.analytics.core.fifo import FIFOPortfolio
 from src.engines.analytics.core.math import calculate_cagr, calculate_xirr
 from src.engines.analytics.pipeline.processor.benchmark import BenchmarkPriceProvider
 from src.engines.analytics.pipeline.processor.risk import RiskMetricsProvider
 from src.engines.analytics.pipeline.processor.snapshot import SnapshotGenerator
+from src.engines.analytics.rules.macro import FYMacroParametersTable
+from src.types.analytics import (
+    CashflowRecord,
+    ISINProcessResult,
+    ISINTags,
+    SnapshotRecord,
+    TerminalValueRecord,
+)
 from src.utils.helpers import to_date_obj
 from src.utils.logger import logger
 
 
 class IsinProcessor:
-    def __init__(self, fy_table, start_date, end_date, rules):
+    def __init__(
+        self,
+        fy_table: FYMacroParametersTable,
+        start_date: date | None,
+        end_date: date | None,
+        rules: FinancialRules | None,
+    ) -> None:
         self.fy_table = fy_table
         self.start_date = start_date
         self.end_date = end_date
@@ -22,14 +37,14 @@ class IsinProcessor:
     def process(
         self,
         isin: str,
-        p_inst: list[dict],
-        s_inst: list[dict],
-        m_inst: list[dict],
-        master_row: dict,
-        bm_map: dict,
-    ) -> tuple[pl.DataFrame | None, list[dict], dict, list[dict], dict[str, str]]:
+        p_inst: list[dict[str, Any]],
+        s_inst: list[dict[str, Any]],
+        m_inst: list[dict[str, Any]],
+        master_row: dict[str, Any],
+        bm_map: dict[date, float],
+    ) -> ISINProcessResult | None:
         if not m_inst:
-            return None, [], {}, [], {}
+            return None
 
         logger.debug(f"[Processor] ISIN {isin} computing across {len(m_inst)} historical dates.")
 
@@ -51,13 +66,13 @@ class IsinProcessor:
             else (to_date_obj(m_inst[0]["Date"]) if m_inst else None)
         )
         if not first_p_date:
-            return None, [], {}, [], {}
+            return None
 
         p_idx = s_idx = 0
-        isin_cashflows: list[dict[str, float | date]] = []
-        isin_terminals: dict[date, dict[str, float]] = {}
+        isin_cashflows: list[CashflowRecord] = []
+        isin_terminals: dict[date, TerminalValueRecord] = {}
         isin_realized: list[dict[str, float | date]] = []
-        isin_snapshots: list[dict[str, float | date]] = []
+        isin_snapshots: list[SnapshotRecord] = []
 
         for m_row in m_inst:
             m_date = to_date_obj(m_row["Date"])
@@ -83,7 +98,7 @@ class IsinProcessor:
                 fifo.buy(row_dt_obj, qty, b_price, shadow_q, float(bm_p))
                 cf_dates.append(row_dt_obj)
                 cf_amounts.append(-buy_val)
-                isin_cashflows.append({"date": row_dt_obj, "amount": -buy_val})
+                isin_cashflows.append(CashflowRecord(date=row_dt_obj, amount=-buy_val))
                 p_idx += 1
 
             while s_idx < len(s_inst):
@@ -107,7 +122,7 @@ class IsinProcessor:
 
                 cf_dates.append(row_dt_obj)
                 cf_amounts.append(s_val)
-                isin_cashflows.append({"date": row_dt_obj, "amount": s_val})
+                isin_cashflows.append(CashflowRecord(date=row_dt_obj, amount=s_val))
 
                 events = fifo.sell(row_dt_obj, s_qty, s_price)
                 isin_realized.extend(events)
@@ -140,11 +155,9 @@ class IsinProcessor:
             terminal_val = fifo.get_terminal_value(m_price)
             shadow_terminal_val = fifo.get_shadow_terminal_value(m_bm_price)
 
-            pt = isin_terminals.setdefault(
-                m_date, {"val": 0.0, "shadow_val": 0.0, "after_tax_val": 0.0}
-            )
-            pt["val"] += terminal_val
-            pt["shadow_val"] += shadow_terminal_val
+            pt = isin_terminals.setdefault(m_date, TerminalValueRecord())
+            pt.val += terminal_val
+            pt.shadow_val += shadow_terminal_val
 
             after_tax_terminal_val = 0.0
             for lot in fifo.active_lots:
@@ -165,7 +178,7 @@ class IsinProcessor:
                 stcg_tax = unreal_stcg * stcg_rate
                 after_tax_terminal_val += (lot.qty * m_price) - (ltcg_tax + stcg_tax)
 
-            pt["after_tax_val"] += after_tax_terminal_val
+            pt.after_tax_val += after_tax_terminal_val
 
             inst_xirr = calculate_xirr(cf_dates + [m_date], cf_amounts + [terminal_val])
             bm_xirr_val = calculate_xirr(cf_dates + [m_date], cf_amounts + [shadow_terminal_val])
@@ -231,7 +244,7 @@ class IsinProcessor:
             fifo.buy(row_dt_obj, qty, b_price, shadow_q, float(bm_p))
             cf_dates.append(row_dt_obj)
             cf_amounts.append(-buy_val)
-            isin_cashflows.append({"date": row_dt_obj, "amount": -buy_val})
+            isin_cashflows.append(CashflowRecord(date=row_dt_obj, amount=-buy_val))
             p_idx += 1
 
         while s_idx < len(s_inst):
@@ -241,8 +254,8 @@ class IsinProcessor:
                 continue
             row = s_inst[s_idx]
             s_qty = float(row["Quantity"])
-            row_p_val: float | None = row.get("Price")
-            sv_val: float | None = row.get("Sell Value")
+            row_p_val = row.get("Price")
+            sv_val = row.get("Sell Value")
 
             if row_p_val is not None:
                 s_price = float(row_p_val)
@@ -255,7 +268,7 @@ class IsinProcessor:
 
             cf_dates.append(row_dt_obj)
             cf_amounts.append(s_val)
-            isin_cashflows.append({"date": row_dt_obj, "amount": s_val})
+            isin_cashflows.append(CashflowRecord(date=row_dt_obj, amount=s_val))
 
             events = fifo.sell(row_dt_obj, s_qty, s_price)
             isin_realized.extend(events)
@@ -267,13 +280,24 @@ class IsinProcessor:
             "Buy_Date": pl.Date,
         }
         df = (
-            pl.DataFrame(isin_snapshots, schema_overrides=schema_overrides)
+            pl.DataFrame(
+                [s.model_dump(by_alias=True) for s in isin_snapshots],
+                schema_overrides=schema_overrides,
+            )
             if isin_snapshots
             else None
         )
 
-        tags = {
-            "class": str(master_row.get("INSTRUMENT_CLASS", "Unknown")),
-            "subtype": str(master_row.get("INSTRUMENT_SUBTYPE", "Unknown")),
-        }
-        return df, isin_cashflows, isin_terminals, isin_realized, tags
+        tags = ISINTags(
+            **{
+                "class": str(master_row.get("INSTRUMENT_CLASS", "Unknown")),
+                "subtype": str(master_row.get("INSTRUMENT_SUBTYPE", "Unknown")),
+            }
+        )
+        return ISINProcessResult(
+            df_snapshots=df,
+            cashflows=isin_cashflows,
+            terminals=isin_terminals,
+            realized_events=isin_realized,
+            tags=tags,
+        )

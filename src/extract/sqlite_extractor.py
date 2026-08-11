@@ -1,3 +1,4 @@
+# pyright: reportUnknownMemberType=false, reportUnknownVariableType=false, reportUnknownArgumentType=false
 import glob
 import os
 
@@ -9,7 +10,7 @@ class ADBCSQLiteExtractor:
     def __init__(self, folder_path: str):
         self.folder_path = folder_path
 
-    def _get_latest_sqlite_backup(self) -> str:
+    def get_latest_sqlite_backup(self) -> str:
         """Finds the most recently modified SQLite file in the given folder."""
         files = glob.glob(os.path.join(self.folder_path, "*.mmbak")) + glob.glob(
             os.path.join(self.folder_path, "*.sqlite")
@@ -22,7 +23,7 @@ class ADBCSQLiteExtractor:
         self,
     ) -> tuple[pl.LazyFrame, pl.LazyFrame, pl.LazyFrame, pl.LazyFrame, pl.LazyFrame]:
         """Connects to SQLite once and returns LazyFrames for all base tables."""
-        source_db_path = self._get_latest_sqlite_backup()
+        source_db_path = self.get_latest_sqlite_backup()
 
         filename = os.path.basename(source_db_path)
         folder = os.path.dirname(source_db_path)
@@ -32,21 +33,21 @@ class ADBCSQLiteExtractor:
                 pl.lit(filename).alias("__file_name__"), pl.lit(folder).alias("__folder_path__")
             )
 
-        with adbc_sqlite.connect(source_db_path) as conn:
+        with adbc_sqlite.connect(source_db_path) as conn:  # type: ignore
             zcategory_lazy = add_file_info(
-                pl.read_database("SELECT * FROM ZCATEGORY", connection=conn).lazy()
+                pl.read_database("SELECT * FROM ZCATEGORY", connection=conn).lazy()  # type: ignore
             )
             assetgroup_lazy = add_file_info(
-                pl.read_database("SELECT * FROM ASSETGROUP", connection=conn).lazy()
+                pl.read_database("SELECT * FROM ASSETGROUP", connection=conn).lazy()  # type: ignore
             )
             assets_lazy = add_file_info(
-                pl.read_database("SELECT * FROM ASSETS", connection=conn).lazy()
+                pl.read_database("SELECT * FROM ASSETS", connection=conn).lazy()  # type: ignore
             )
             currency_lazy = add_file_info(
-                pl.read_database("SELECT * FROM CURRENCY", connection=conn).lazy()
+                pl.read_database("SELECT * FROM CURRENCY", connection=conn).lazy()  # type: ignore
             )
             inoutcome_lazy = add_file_info(
-                pl.read_database("SELECT * FROM INOUTCOME", connection=conn).lazy()
+                pl.read_database("SELECT * FROM INOUTCOME", connection=conn).lazy()  # type: ignore
             )
 
         return zcategory_lazy, assetgroup_lazy, assets_lazy, currency_lazy, inoutcome_lazy

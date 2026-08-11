@@ -33,7 +33,7 @@ from src.transform.investments import (
 )
 from src.utils.interfaces import ILogger
 from src.utils.logger import logger
-from src.utils.models import EngineStatus, ExtractionResult, LogLevel
+from src.utils.models import AssetPipelineResult, EngineStatus, ExtractionResult, LogLevel
 
 
 class TransformationDAG:
@@ -97,7 +97,7 @@ class TransformationDAG:
         else:
             asset_pipelines: list[AssetPipeline] = [MutualFundPipeline(), StockPipeline()]
 
-            asset_results = []
+            asset_results: list[AssetPipelineResult] = []
             for pipeline in asset_pipelines:
                 asset_results.append(
                     pipeline.process(extracted, d_asset_subcategory_lazy, self.cfg, logger)

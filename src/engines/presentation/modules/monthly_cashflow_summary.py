@@ -3,6 +3,7 @@ from typing import Any
 
 import polars as pl
 
+from src.config.financial_rules import FinancialRules
 from src.utils.polars_expressions import pct_growth, rolling_avg, safe_divide
 
 
@@ -41,7 +42,7 @@ class MonthlyCashflowSummaryBuilder:
         self,
         dfs: Mapping[str, pl.DataFrame | pl.LazyFrame],
         base_lf: dict[str, Any],
-        rules,
+        rules: FinancialRules,
     ):
         self.dfs = dfs
         self.base_lf = base_lf

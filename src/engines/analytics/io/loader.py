@@ -4,6 +4,7 @@ Handles loading and strict-typing of DataFrames.
 """
 
 import os
+from typing import Any
 
 import polars as pl
 
@@ -46,12 +47,16 @@ class TaxDataLoader:
         df_m: pl.DataFrame,
         df_i: pl.DataFrame | None,
         df_b: pl.DataFrame | None,
-    ) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame, dict, pl.DataFrame | None]:
+    ) -> tuple[
+        pl.DataFrame, pl.DataFrame, pl.DataFrame, dict[str, dict[str, Any]], pl.DataFrame | None
+    ]:
         df_p = parse_date_col(df_p)
         df_s = parse_date_col(df_s)
         df_m = parse_date_col(df_m)
 
-        isin_master = {row["ISIN"]: row for row in df_i.to_dicts()} if df_i is not None else {}
+        isin_master: dict[str, dict[str, Any]] = (
+            {str(row["ISIN"]): row for row in df_i.to_dicts()} if df_i is not None else {}
+        )
 
         if df_b is not None:
             df_b = parse_date_col(df_b)
@@ -68,7 +73,9 @@ class TaxDataLoader:
     @classmethod
     def load_all(
         cls, p_path: str, s_path: str, m_path: str, i_path: str | None, b_path: str | None
-    ) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame, dict, pl.DataFrame | None]:
+    ) -> tuple[
+        pl.DataFrame, pl.DataFrame, pl.DataFrame, dict[str, dict[str, Any]], pl.DataFrame | None
+    ]:
 
         df_p = pl.read_csv(p_path, infer_schema_length=500_000)
         df_s = pl.read_csv(s_path, infer_schema_length=500_000)
@@ -90,6 +97,8 @@ class TaxDataLoader:
         df_m: pl.DataFrame,
         df_i: pl.DataFrame | None,
         df_b: pl.DataFrame | None,
-    ) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame, dict, pl.DataFrame | None]:
+    ) -> tuple[
+        pl.DataFrame, pl.DataFrame, pl.DataFrame, dict[str, dict[str, Any]], pl.DataFrame | None
+    ]:
 
         return cls._normalize(df_p, df_s, df_m, df_i, df_b)

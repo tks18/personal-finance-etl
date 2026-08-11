@@ -56,7 +56,7 @@ def to_date_obj(val: str | date | datetime | None) -> date | None:
         return val
     if isinstance(val, datetime):
         return val.date()
-    if isinstance(val, str):
+    else:
         val = val.strip().split(" ")[0]
         for fmt in ("%Y-%m-%d", "%d-%m-%Y"):
             try:

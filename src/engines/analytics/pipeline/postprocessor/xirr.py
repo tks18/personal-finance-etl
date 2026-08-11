@@ -1,4 +1,5 @@
 from datetime import date
+from typing import Any
 
 import polars as pl
 from pyxirr import xirr
@@ -12,15 +13,15 @@ class PortfolioXIRRCalculator:
     @staticmethod
     def calculate(
         unique_dates: list[date],
-        global_cashflows: list[dict],
-        portfolio_terminals: dict[date, dict],
+        global_cashflows: list[dict[str, Any]],
+        portfolio_terminals: dict[date, dict[str, float]],
     ) -> pl.DataFrame:
         for cf in global_cashflows:
             cf["date_obj"] = to_date_obj(cf["date"])
 
         global_cashflows.sort(key=lambda x: x["date_obj"] or date.min)
         cf_ptr = 0
-        port_rows = []
+        port_rows: list[dict[str, Any]] = []
         port_dl: list[date] = []
         port_al: list[float] = []
 

@@ -3,6 +3,7 @@ from typing import Any
 
 import polars as pl
 
+from src.config.financial_rules import FinancialRules
 from src.engines.presentation.helpers.fire_mc_sim import get_monte_carlo_fire_batch
 from src.utils.polars_expressions import rolling_avg, rolling_sum, safe_divide
 
@@ -17,8 +18,8 @@ class WealthRiskAnalyticsBuilder:
         dfs: Mapping[str, pl.DataFrame | pl.LazyFrame],
         base_lf: dict[str, Any],
         lf_risk: pl.LazyFrame,
-        rules,
-    ):
+        rules: FinancialRules,
+    ) -> None:
         self.dfs = dfs
         self.base_lf = base_lf
         self.lf_risk = lf_risk

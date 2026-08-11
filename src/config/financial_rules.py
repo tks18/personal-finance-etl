@@ -1,6 +1,6 @@
 import os
 import tomllib
-from typing import Any
+from typing import Any, cast
 
 from pydantic import BaseModel, Field
 
@@ -333,10 +333,10 @@ class FinancialRules(BaseModel):
             data = tomllib.load(f)
             return cls(**data)
 
-    def export_to_db_records(self) -> list[dict]:
+    def export_to_db_records(self) -> list[dict[str, str]]:
         """Flattens the rules dynamically into a list of records for database auditing.
         Automatically scales to handle any new nested parameters added to the schema."""
-        records = []
+        records: list[dict[str, str]] = []
 
         # model_dump() recursively serializes all nested models to dictionaries
         data = self.model_dump()
@@ -379,12 +379,13 @@ class FinancialRules(BaseModel):
                 }
             )
 
-        def _flatten(node: Any, path: list[str]):
+        def _flatten(node: Any, path: list[str]) -> None:
             if isinstance(node, dict):
-                for k, v in node.items():
+                dict_node = cast("dict[str, Any]", node)
+                for k, v in dict_node.items():
                     _flatten(v, path + [k])
             elif isinstance(node, list):
-                for item in node:
+                for item in node:  # type: ignore
                     _add_record(path, item)
             else:
                 _add_record(path, node)

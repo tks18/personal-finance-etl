@@ -4,6 +4,7 @@ import polars as pl
 
 from src.engines.analytics.pipeline.context import RunContext
 from src.engines.analytics.pipeline.postprocessor import PostProcessor
+from src.types.pipeline import PipelineExecutionResult
 from src.utils.interfaces import ILogger
 from src.utils.logger import logger
 from src.utils.models import EngineStatus, LogLevel
@@ -20,7 +21,7 @@ class PostProcessingPipeline:
 
     def run(
         self,
-        pipeline_res: dict,
+        pipeline_res: PipelineExecutionResult,
     ) -> dict[str, pl.DataFrame]:
 
         if self.status_queue:
@@ -61,10 +62,5 @@ class PostProcessingPipeline:
                     level=LogLevel.STEP,
                 )
             )
-        final_res = {}
-        for k, v in res_dict.items():
-            if isinstance(v, pl.LazyFrame):
-                final_res[k] = v.collect()
-            else:
-                final_res[k] = v
+        final_res: dict[str, pl.DataFrame] = {k: v.collect() for k, v in res_dict.items()}
         return final_res

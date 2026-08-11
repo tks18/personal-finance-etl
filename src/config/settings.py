@@ -1,7 +1,7 @@
 import json
 import os
 import tomllib
-from typing import Any
+from typing import Any, cast
 
 from pydantic import BaseModel, Field
 
@@ -55,7 +55,10 @@ class PreferencesManager:
                     data = json.load(f)
                     recents = data.get("recent_configs", [])
                     if isinstance(recents, list):
-                        return [r for r in recents if os.path.exists(r)]
+                        list_recents = cast("list[Any]", recents)
+                        return [
+                            str(r) for r in list_recents if isinstance(r, str) and os.path.exists(r)
+                        ]
                 except Exception:
                     pass
         return []
@@ -87,7 +90,10 @@ class PreferencesManager:
                     data = json.load(f)
                     recents = data.get("recent_rules", [])
                     if isinstance(recents, list):
-                        return [r for r in recents if os.path.exists(r)]
+                        list_recents = cast("list[Any]", recents)
+                        return [
+                            str(r) for r in list_recents if isinstance(r, str) and os.path.exists(r)
+                        ]
                 except Exception:
                     pass
         return []
@@ -146,7 +152,7 @@ class Settings(BaseModel):
             ("OPENING_BALANCE_CSV_PATH", self.OPENING_BALANCE_CSV_PATH),
         ]
 
-        errors = []
+        errors: list[str] = []
 
         # We don't validate TARGET_DB_BASE_PATH because it is created automatically if missing
         if not self.TARGET_DB_BASE_PATH:
@@ -166,17 +172,18 @@ class Settings(BaseModel):
                 + "\n".join(errors)
             )
 
-    def export_to_db_records(self) -> list[dict]:
+    def export_to_db_records(self) -> list[dict[str, str]]:
         """Flattens the settings dynamically into a list of records for database auditing."""
-        records = []
+        records: list[dict[str, str]] = []
         data = self.model_dump()
 
-        def _flatten(node: Any, path: list[str]):
+        def _flatten(node: Any, path: list[str]) -> None:
             if isinstance(node, dict):
-                for k, v in node.items():
+                dict_node = cast("dict[str, Any]", node)
+                for k, v in dict_node.items():
                     _flatten(v, path + [k])
             elif isinstance(node, list):
-                for i, v in enumerate(node):
+                for i, v in enumerate(node):  # type: ignore
                     _flatten(v, path + [str(i)])
             else:
                 # Top level settings have length 1

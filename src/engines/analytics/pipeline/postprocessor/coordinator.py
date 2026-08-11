@@ -12,6 +12,7 @@ from src.engines.analytics.pipeline.postprocessor.group_processor import (
 from src.engines.analytics.pipeline.postprocessor.harvest import HarvestRecommendationCalculator
 from src.engines.analytics.pipeline.postprocessor.weights import PortfolioWeightsCalculator
 from src.engines.analytics.pipeline.postprocessor.xirr import PortfolioXIRRCalculator
+from src.types.pipeline import PipelineExecutionResult
 
 
 class PostProcessor:
@@ -28,30 +29,30 @@ class PostProcessor:
         self,
         lazy_df: pl.LazyFrame,
         unique_dates: list[date],
-        pipeline_res: dict,
+        pipeline_res: PipelineExecutionResult,
     ) -> dict[str, pl.LazyFrame]:
         """
         Calculates portfolio metrics and lazily attaches them to the lot-level DataFrame.
         """
         df_port = self.xirr_calc.calculate(
-            unique_dates, pipeline_res["global_cf"], pipeline_res["global_pt"]
+            unique_dates, pipeline_res.global_cf, pipeline_res.global_pt
         )
-        df_port = self.analytics_calc.calculate(df_port, unique_dates, pipeline_res["global_pt"])
+        df_port = self.analytics_calc.calculate(df_port, unique_dates, pipeline_res.global_pt)
         lazy_df = lazy_df.join(df_port.lazy(), on="Closing_Date", how="left")
 
         lazy_df = self.weights_calc.calculate(lazy_df)
-        lazy_df = self.gains_calc.calculate(lazy_df, unique_dates, pipeline_res["global_re"])
+        lazy_df = self.gains_calc.calculate(lazy_df, unique_dates, pipeline_res.global_re)
         lazy_df = self.harvest_calc.calculate(lazy_df, rules=self.ctx.rules)
 
         # 1. Process Class Level
         df_class = self.group_calc.run(
-            unique_dates, pipeline_res["class_cf"], pipeline_res["class_pt"], "INSTRUMENT_CLASS"
+            unique_dates, pipeline_res.class_cf, pipeline_res.class_pt, "INSTRUMENT_CLASS"
         )
         # 2. Process Subtype Level
         df_subtype = self.group_calc.run(
             unique_dates,
-            pipeline_res["subtype_cf"],
-            pipeline_res["subtype_pt"],
+            pipeline_res.subtype_cf,
+            pipeline_res.subtype_pt,
             "INSTRUMENT_CLASS",
             "INSTRUMENT_SUBTYPE",
         )

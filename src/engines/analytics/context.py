@@ -1,3 +1,8 @@
+from datetime import date
+
+import polars as pl
+
+from src.config.financial_rules import FinancialRules
 from src.engines.analytics.pipeline.context import RunContext
 from src.utils.interfaces import ILogger
 from src.utils.models import EngineStatus, LogLevel
@@ -10,15 +15,27 @@ class AnalyticsContextManager:
         self.status_queue = status_queue
 
     def initialize(
-        self, df_p, df_s, df_m, df_i, df_b, df_t, start_date, end_date, rules
+        self,
+        df_p: pl.DataFrame,
+        df_s: pl.DataFrame,
+        df_m: pl.DataFrame,
+        df_i: pl.DataFrame,
+        df_b: pl.DataFrame,
+        df_t: pl.DataFrame,
+        start_date: date | None,
+        end_date: date | None,
+        rules: FinancialRules | None,
     ) -> tuple[RunContext, list[str]]:
         if self.status_queue:
             self.status_queue.put(
                 EngineStatus("Loading DataFrame memory structures...", None, 0.01, LogLevel.STEP)
             )
 
+        if rules is None:
+            raise ValueError("Financial rules must be provided")
+
         ctx = RunContext.from_dataframes(
-            df_p, df_s, df_m, df_i, df_b, df_t, start_date, end_date, rules
+            df_p, df_s, df_m, df_i, df_b, df_t, rules, start_date, end_date
         )
 
         if self.status_queue:

@@ -3,16 +3,26 @@ Macro Parameters Rules Module.
 Defines holding period thresholds and FY-specific rate lookups (tax, inflation, risk-free).
 """
 
+from collections.abc import Callable
 from datetime import date
+from typing import Any, TypedDict
 
 import polars as pl
 
+from src.config.financial_rules import FinancialRules
 from src.utils.helpers import to_date_obj
 
 _DEFAULT_DEBT_MF_CUTOFF = date(2023, 4, 1)
 
 
-def get_ltcg_threshold(tax_type: str, tax_subtype: str, rules) -> int:
+class FYMapEntry(TypedDict):
+    start: date
+    end: date
+    debt_cutoff: date
+    raw: dict[str, float | str | date | None]
+
+
+def get_ltcg_threshold(tax_type: str, tax_subtype: str, rules: FinancialRules | None) -> int:
     """Return holding period threshold for LTCG in days based on declarative rules."""
     tt = tax_type.strip().lower()
     tst = tax_subtype.strip().lower()
@@ -46,9 +56,9 @@ class FYMacroParametersTable:
         ("default", ""): ("Default_LTCG", "Default_STCG"),
     }
 
-    def __init__(self, df: pl.DataFrame, rules):
+    def __init__(self, df: pl.DataFrame, rules: FinancialRules):
         self.rules = rules
-        self.fy_map: list[dict] = []
+        self.fy_map: list[FYMapEntry] = []
         if df.is_empty():
             raise ValueError("Macro Parameters DataFrame cannot be empty.")
 
@@ -76,7 +86,7 @@ class FYMacroParametersTable:
                         {
                             "start": start_d,
                             "end": end_d,
-                            "debt_cutoff": cutoff_d or default_cutoff,
+                            "debt_cutoff": cutoff_d or default_cutoff or _DEFAULT_DEBT_MF_CUTOFF,
                             "raw": row,
                         }
                     )
@@ -86,7 +96,7 @@ class FYMacroParametersTable:
 
         self.fy_map.sort(key=lambda x: x["start"])
 
-    def _find_entry(self, ref_date: date) -> dict | None:
+    def _find_entry(self, ref_date: date) -> FYMapEntry | None:
         # Exact match
         for entry in reversed(self.fy_map):
             if entry["start"] <= ref_date <= entry["end"]:
@@ -100,7 +110,7 @@ class FYMacroParametersTable:
             return self.fy_map[0]
         return None
 
-    _CLASSIFICATION_RULES = {
+    _CLASSIFICATION_RULES: dict[str, Callable[[str, dict[str, Any]], tuple[str, str]]] = {
         "equity": lambda tst, _: ("equity", "unlisted" if tst == "unlisted" else "listed"),
         "reit": lambda tst, _: ("reit", "unlisted" if tst == "unlisted" else "listed"),
         "invit": lambda tst, _: ("invit", "unlisted" if tst == "unlisted" else "listed"),
@@ -143,7 +153,7 @@ class FYMacroParametersTable:
         ltcg_col, stcg_col = self._COL_MAP.get(key, ("Default_LTCG", "Default_STCG"))
         raw = entry["raw"]
         try:
-            return float(raw[ltcg_col]), float(raw[stcg_col])
+            return float(str(raw[ltcg_col])), float(str(raw[stcg_col]))
         except (KeyError, TypeError, ValueError) as e:
             raise ValueError(
                 f"Missing or invalid tax rate data for columns: {ltcg_col}, {stcg_col}"
@@ -162,7 +172,7 @@ class FYMacroParametersTable:
         raw = entry["raw"]
         try:
             val = raw.get("Equity_LTCG_Exemption")
-            return float(val) if val is not None and str(val).strip() != "" else fallback
+            return float(str(val)) if val is not None and str(val).strip() != "" else fallback
         except (ValueError, TypeError):
             return fallback
 
@@ -190,7 +200,7 @@ class FYMacroParametersTable:
         raw = entry["raw"]
         try:
             val = raw.get("Risk_Free_Rate")
-            return float(val) if val is not None and str(val).strip() != "" else fallback
+            return float(str(val)) if val is not None and str(val).strip() != "" else fallback
         except (ValueError, TypeError):
             return fallback
 
@@ -206,6 +216,6 @@ class FYMacroParametersTable:
         raw = entry["raw"]
         try:
             val = raw.get("Inflation_Rate")
-            return float(val) if val is not None and str(val).strip() != "" else fallback
+            return float(str(val)) if val is not None and str(val).strip() != "" else fallback
         except (ValueError, TypeError):
             return fallback

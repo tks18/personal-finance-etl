@@ -1,6 +1,6 @@
-from typing import Any
-
 import polars as pl
+
+from src.config.financial_rules import FinancialRules
 
 
 def transform_d_income_category(
@@ -49,7 +49,7 @@ def transform_d_income_subcategory(
     df_lazy: pl.LazyFrame,
     column_mapping: dict[str, str],
     df_d_income_category_lazy: pl.LazyFrame,
-    rules: Any = None,
+    rules: FinancialRules | None = None,
 ) -> pl.LazyFrame:
     """
     Executes the PQ and DAX logic for Income Subcategories.
@@ -171,7 +171,7 @@ def transform_d_expense_category(
 
 
 def transform_d_expense_subcategory(
-    df_lazy: pl.LazyFrame, column_mapping: dict[str, str], rules: Any = None
+    df_lazy: pl.LazyFrame, column_mapping: dict[str, str], rules: FinancialRules | None = None
 ) -> pl.LazyFrame:
     """Executes the PQ logic for Expense Subcategories."""
 
@@ -243,7 +243,7 @@ def transform_d_asset_category(
 
 
 def transform_d_asset_subcategory(
-    df_lazy: pl.LazyFrame, column_mapping: dict[str, str], rules: Any = None
+    df_lazy: pl.LazyFrame, column_mapping: dict[str, str], rules: FinancialRules | None = None
 ) -> pl.LazyFrame:
     """Executes the PQ logic for Asset Subcategories (ASSETS)."""
 

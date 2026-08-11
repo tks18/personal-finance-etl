@@ -1,3 +1,5 @@
+from typing import Any
+
 import polars as pl
 
 from src.engines.analytics.pipeline.context import RunContext
@@ -5,7 +7,9 @@ from src.engines.analytics.pipeline.context import RunContext
 
 class IsinDataExtractor:
     @staticmethod
-    def extract(ctx: RunContext, isin: str):
+    def extract(
+        ctx: RunContext, isin: str
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
         p_inst = ctx.df_p.filter(pl.col("ISIN") == isin).sort("Date").to_dicts()
         s_inst = ctx.df_s.filter(pl.col("ISIN") == isin).sort("Date").to_dicts()
 

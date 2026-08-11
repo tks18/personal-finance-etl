@@ -131,7 +131,7 @@ class BenchmarkEngine:
                 {"Date": pl.date_range(start_dt, end_dt, "1d", eager=True).cast(pl.Date)}
             )
 
-            all_dfs = []
+            all_dfs: list[pl.DataFrame] = []
 
             logger.info(
                 f"  -> Starting benchmark thread pool for {total} tickers (evaluating cache vs API deltas)..."
@@ -167,7 +167,7 @@ class BenchmarkEngine:
                     prog = 0.1 + 0.85 * (processed / total)
 
                     try:
-                        df_pl, row, msg = future.result()
+                        df_pl, _, msg = future.result()
                         level = LogLevel.INFO
                         if "Error" in (msg or ""):
                             level = LogLevel.ERROR
@@ -186,7 +186,7 @@ class BenchmarkEngine:
                             EngineStatus(msg="", data=None, progress=prog, level=level)
                         )
 
-                        if df_pl is not None and not df_pl.is_empty():
+                        if not df_pl.is_empty():
                             all_dfs.append(df_pl)
                             if "Cached" in (msg or ""):
                                 cache_hits += 1

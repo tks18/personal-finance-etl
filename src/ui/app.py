@@ -316,7 +316,7 @@ class UnifiedETLTab(BaseEngineTab):
             )
 
 
-class App(ctk.CTk):
+class App(ctk.CTk):  # type: ignore
     """Root application window."""
 
     def __init__(self) -> None:

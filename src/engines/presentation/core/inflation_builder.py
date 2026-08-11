@@ -4,9 +4,11 @@ from typing import Any
 
 import polars as pl
 
+from src.config.financial_rules import FinancialRules
+
 
 class InflationBuilder:
-    def __init__(self, dfs: Mapping[str, pl.DataFrame | pl.LazyFrame], rules):
+    def __init__(self, dfs: Mapping[str, pl.DataFrame | pl.LazyFrame], rules: FinancialRules):
         self.dfs = dfs
         self.rules = rules
 

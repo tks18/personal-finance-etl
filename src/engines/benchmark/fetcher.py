@@ -66,7 +66,7 @@ class BenchmarkDataFetcher:
                 for attempt in range(3):
                     try:
                         ticker_obj = yf.Ticker(ticker)
-                        hist_pd = ticker_obj.history(
+                        hist_pd = ticker_obj.history(  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
                             start=fetch_start, end=end_dt + timedelta(days=1)
                         )
                         break
@@ -77,7 +77,7 @@ class BenchmarkDataFetcher:
 
             df_new = pl.DataFrame()
             if hist_pd is not None and not hist_pd.empty:
-                hist_pd.index = hist_pd.index.tz_localize(None).normalize()  # type: ignore[attr-defined]
+                hist_pd.index = hist_pd.index.tz_localize(None).normalize()  # pyright: ignore[reportAttributeAccessIssue, reportUnknownMemberType]
                 hist_pl = pl.from_pandas(hist_pd.reset_index())
 
                 if "Date" not in hist_pl.columns:
@@ -121,11 +121,11 @@ class BenchmarkDataFetcher:
 
             warn_msg = None
             if hist_pd is not None and not hist_pd.empty:
-                pct_drops = hist_pd["Close"].pct_change()
-                huge_drops = pct_drops[pct_drops < -0.4]
-                if not huge_drops.empty:
-                    drop_dts = [d.strftime("%Y-%m-%d") for d in huge_drops.index]
-                    warn_msg = f"⚠ Anomalous drops (>40%) in {ticker} on {', '.join(drop_dts)} (Unadjusted split?)"
+                pct_drops = hist_pd["Close"].pct_change()  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+                huge_drops = pct_drops[pct_drops < -0.4]  # pyright: ignore[reportUnknownVariableType]
+                if not huge_drops.empty:  # pyright: ignore[reportAttributeAccessIssue, reportUnknownMemberType]
+                    drop_dts = [d.strftime("%Y-%m-%d") for d in huge_drops.index]  # pyright: ignore[reportAttributeAccessIssue, reportUnknownMemberType, reportUnknownVariableType]
+                    warn_msg = f"⚠ Anomalous drops (>40%) in {ticker} on {', '.join(drop_dts)} (Unadjusted split?)"  # pyright: ignore[reportUnknownArgumentType]
 
             if df_new.is_empty():
                 base_msg = f"⚠ No new data fetched for {ticker}, relying on cache."

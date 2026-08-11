@@ -1,22 +1,28 @@
 import math
 from datetime import date
+from typing import Any
 
 import polars as pl
 
+from src.config.financial_rules import FinancialRules
+from src.engines.analytics.rules.macro import FYMacroParametersTable
 from src.utils.helpers import to_date_obj
 
 
 class AdvancedAnalyticsCalculator:
     """Calculates Sharpe, MDD, Sortino ratios."""
 
-    def __init__(self, fy_table, rules):
+    def __init__(self, fy_table: FYMacroParametersTable, rules: FinancialRules | None) -> None:
         self.fy_table = fy_table
         self.rules = rules
 
     def calculate(
-        self, df_port: pl.DataFrame, unique_dates: list[date], portfolio_terminals: dict[date, dict]
+        self,
+        df_port: pl.DataFrame,
+        unique_dates: list[date],
+        portfolio_terminals: dict[date, dict[str, Any]],
     ) -> pl.DataFrame:
-        pt_records = []
+        pt_records: list[dict[str, Any]] = []
         for d in unique_dates:
             d_obj = to_date_obj(d)
             if d_obj:
@@ -86,7 +92,7 @@ class AdvancedAnalyticsCalculator:
                 how="left",
             )
 
-            if self.fy_table is not None:
+            if True:
                 rfr_list = [
                     {"Closing_Date": d, "risk_free_rate": self.fy_table.get_risk_free_rate(d)}
                     for d in unique_dates

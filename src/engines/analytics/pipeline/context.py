@@ -5,6 +5,7 @@ Holds shared state (loaded data, FY table, config) for the execution run.
 
 from dataclasses import dataclass
 from datetime import date
+from typing import Any
 
 import polars as pl
 
@@ -18,12 +19,12 @@ class RunContext:
     df_p: pl.DataFrame
     df_s: pl.DataFrame
     df_m: pl.DataFrame
-    isin_master: dict
+    isin_master: dict[str, dict[str, Any]]
     df_b: pl.DataFrame | None
     fy_table: FYMacroParametersTable
     start_date: date | None
     end_date: date | None
-    rules: "FinancialRules | None" = None
+    rules: FinancialRules
 
     @classmethod
     def load(
@@ -34,9 +35,9 @@ class RunContext:
         i_path: str,
         b_path: str,
         t_path: str,
+        rules: FinancialRules,
         start_date: date | None = None,
         end_date: date | None = None,
-        rules: "FinancialRules | None" = None,
     ) -> "RunContext":
         df_p, df_s, df_m, isin_master, df_b = TaxDataLoader.load_all(
             p_path, s_path, m_path, i_path, b_path
@@ -68,9 +69,9 @@ class RunContext:
         df_i: pl.DataFrame,
         df_b: pl.DataFrame,
         df_t: pl.DataFrame,
+        rules: FinancialRules,
         start_date: date | None = None,
         end_date: date | None = None,
-        rules: "FinancialRules | None" = None,
     ) -> "RunContext":
         loaded_p, loaded_s, loaded_m, is_m, loaded_b = TaxDataLoader.load_from_dataframes(
             df_p, df_s, df_m, df_i, df_b

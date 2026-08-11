@@ -5,4 +5,4 @@ from src.ui import App
 if __name__ == "__main__":
     multiprocessing.freeze_support()
     app = App()
-    app.mainloop()
+    app.mainloop()  # type: ignore

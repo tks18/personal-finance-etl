@@ -1,4 +1,5 @@
 from datetime import date
+from typing import Any
 
 import polars as pl
 
@@ -28,15 +29,15 @@ class GroupProcessor:
     def run(
         self,
         unique_dates: list[date],
-        group_cashflows: dict[str, list[dict]],
-        group_terminals: dict[str, dict[date, dict]],
+        group_cashflows: dict[str, list[dict[str, Any]]],
+        group_terminals: dict[str, dict[date, dict[str, Any]]],
         level_name: str,
         extra_key_col: str | None = None,
     ) -> pl.DataFrame:
         """
         Runs the exact same portfolio-level metric calculations, but partitioned by a group key.
         """
-        all_group_dfs = []
+        all_group_dfs: list[pl.DataFrame] = []
 
         for key, cashflows in group_cashflows.items():
             terminals = group_terminals.get(key, {})

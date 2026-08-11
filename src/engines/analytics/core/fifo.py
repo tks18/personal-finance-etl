@@ -1,5 +1,6 @@
 from collections import deque
 from datetime import date
+from typing import Any
 
 from src.engines.analytics.rules.macro import FYMacroParametersTable
 from src.utils.logger import logger
@@ -28,10 +29,10 @@ class FIFOPortfolio:
             TaxLot(date=buy_date, qty=qty, price=price, shadow_qty=shadow_qty, bm_buy=bm_price)
         )
 
-    def sell(self, sell_date: date, qty: float, price: float) -> list[dict]:
+    def sell(self, sell_date: date, qty: float, price: float) -> list[dict[str, Any]]:
         """Process a sale via FIFO and return the realized gain events."""
         rem = qty
-        realized_events = []
+        realized_events: list[dict[str, Any]] = []
 
         while rem > 0 and self._active_lots:
             lot = self._active_lots[0]

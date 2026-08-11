@@ -6,7 +6,12 @@ from src.utils.helpers import to_date_obj
 
 
 class BenchmarkPriceProvider:
-    def __init__(self, bench_id, df_b: pl.DataFrame | None, prebuilt_map: dict | None = None):
+    def __init__(
+        self,
+        bench_id: str | None,
+        df_b: pl.DataFrame | None,
+        prebuilt_map: dict[date, float] | None = None,
+    ):
         if prebuilt_map is not None:
             self.bm_price_map = prebuilt_map
             return

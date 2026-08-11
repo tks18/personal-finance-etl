@@ -3,6 +3,7 @@ from collections.abc import Mapping
 import polars as pl
 import polars.selectors as cs
 
+from src.config.financial_rules import FinancialRules
 from src.engines.presentation.core.inflation_builder import InflationBuilder
 from src.engines.presentation.core.ledger_builder import LedgerBuilder
 from src.engines.presentation.core.net_worth_builder import NetWorthBuilder
@@ -23,7 +24,7 @@ class WealthPresentationEngine:
     Consumes LazyFrames and produces aggregated summary tables suitable for BI dashboards.
     """
 
-    def __init__(self, rules):
+    def __init__(self, rules: FinancialRules) -> None:
         self.rules = rules
 
     def run(self, dfs: Mapping[str, pl.DataFrame | pl.LazyFrame]) -> dict[str, pl.LazyFrame]:
@@ -85,13 +86,7 @@ class WealthPresentationEngine:
             dfs, base_lf, rules=self.rules
         ).build()
 
-        logger.info(
-            f"  -> Built {sum(1 for v in results.values() if v is not None)} BI presentation tables in DAG."
-        )
+        logger.info(f"  -> Built {len(results)} BI presentation tables in DAG.")
 
         # 8. Post-Processing: Clean NaN values for BI compatibility (DuckDB / Power BI)
-        return {
-            key: lf.with_columns(cs.float().fill_nan(None))
-            for key, lf in results.items()
-            if lf is not None
-        }
+        return {key: lf.with_columns(cs.float().fill_nan(None)) for key, lf in results.items()}

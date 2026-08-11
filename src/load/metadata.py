@@ -23,21 +23,20 @@ class MetaLayer:
 
         # 1. Record Table Row Counts
         for table_name, df in dfs.items():
-            if df is not None:
-                try:
-                    count = df.height if isinstance(df, pl.DataFrame) else df.collect().height
-                except Exception:
-                    count = 0
+            try:
+                count = df.height
+            except Exception:
+                count = 0
 
-                schema = "gold" if "p_tf_" in table_name else "silver"
-                self.db_manager.conn.execute(
-                    """
-                    INSERT INTO meta.m_Table_Row_Counts 
-                    (run_id, schema_name, table_name, row_count, generated_at) 
-                    VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-                    """,
-                    [self.run_id, schema, table_name, count],
-                )
+            schema = "gold" if "p_tf_" in table_name else "silver"
+            self.db_manager.conn.execute(
+                """
+                INSERT INTO meta.m_Table_Row_Counts 
+                (run_id, schema_name, table_name, row_count, generated_at) 
+                VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                """,
+                [self.run_id, schema, table_name, count],
+            )
 
         # 2. Record Financial Rules Snapshot
         if self.rules is not None:

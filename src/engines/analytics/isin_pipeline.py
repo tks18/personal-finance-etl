@@ -2,18 +2,36 @@ import concurrent.futures
 import multiprocessing
 import os
 from datetime import date
+from typing import Any
 
 import polars as pl
 
 from src.engines.analytics.pipeline.context import RunContext
 from src.engines.analytics.pipeline.processor import IsinProcessor
 from src.engines.analytics.pipeline.processor.benchmark import BenchmarkPriceProvider
+from src.types.pipeline import PipelineExecutionResult
 from src.utils.interfaces import ILogger
 from src.utils.logger import logger
 from src.utils.models import EngineStatus, LogLevel
 
 
-def _process_isin_worker(task: tuple) -> tuple[bool, list, dict, list, dict]:
+def _process_isin_worker(
+    task: tuple[
+        str,
+        list[dict[str, Any]],
+        list[dict[str, Any]],
+        list[dict[str, Any]],
+        dict[str, Any],
+        dict[date, float],
+        Any,
+        Any,
+        Any,
+        Any,
+        str,
+    ],
+) -> tuple[
+    bool, list[dict[str, Any]], dict[date, dict[str, Any]], list[dict[str, Any]], dict[str, Any]
+]:
     (
         isin,
         p_inst,
@@ -34,13 +52,19 @@ def _process_isin_worker(task: tuple) -> tuple[bool, list, dict, list, dict]:
 
     processor = IsinProcessor(fy_table, start_date, end_date, rules)
     try:
-        df, isin_cf, isin_pt, isin_re, tags = processor.process(
-            isin, p_inst, s_inst, m_inst, master_row, bm_map
-        )
-        if df is not None and not df.is_empty():
-            df.write_parquet(os.path.join(tmp_dir, f"{isin.replace('/', '_')}.parquet"))
-            return True, isin_cf, isin_pt, isin_re, tags
-        return False, isin_cf, isin_pt, isin_re, tags
+        res = processor.process(isin, p_inst, s_inst, m_inst, master_row, bm_map)
+        if res is not None:
+            df = res.df_snapshots
+            isin_cf = [c.model_dump(mode="python") for c in res.cashflows]
+            isin_pt = {d: pt.model_dump(mode="python") for d, pt in res.terminals.items()}
+            tags = res.tags.model_dump(by_alias=True)
+            isin_re = res.realized_events
+
+            if df is not None and not df.is_empty():
+                df.write_parquet(os.path.join(tmp_dir, f"{isin.replace('/', '_')}.parquet"))
+                return True, isin_cf, isin_pt, isin_re, tags
+            return False, isin_cf, isin_pt, isin_re, tags
+        return False, [], {}, [], {}
     except Exception:
         return False, [], {}, [], {}
 
@@ -56,18 +80,18 @@ class IsinPipeline:
         self.tmp_dir = tmp_dir
         self.status_queue = status_queue
 
-    def process_all(self):
-        global_cashflows = []
+    def process_all(self) -> PipelineExecutionResult:
+        global_cashflows: list[dict[str, Any]] = []
         portfolio_terminals: dict[date, dict[str, float]] = {}
-        realized_events = []
+        realized_events: list[dict[str, Any]] = []
 
-        class_cf: dict[str, list[dict]] = {}
+        class_cf: dict[str, list[dict[str, Any]]] = {}
         class_pt: dict[str, dict[date, dict[str, float]]] = {}
-        class_re: dict[str, list[dict]] = {}
+        class_re: dict[str, list[dict[str, Any]]] = {}
 
-        subtype_cf: dict[str, list[dict]] = {}
+        subtype_cf: dict[str, list[dict[str, Any]]] = {}
         subtype_pt: dict[str, dict[date, dict[str, float]]] = {}
-        subtype_re: dict[str, list[dict]] = {}
+        subtype_re: dict[str, list[dict[str, Any]]] = {}
 
         has_data = False
         total_inst = len(self.isins)
@@ -99,13 +123,27 @@ class IsinPipeline:
 
         m_dict_pl = m_grouped.partition_by("ISIN", as_dict=True) if not m_grouped.is_empty() else {}
 
-        bm_maps = {}
+        bm_maps: dict[str, dict[date, float]] = {}
         for _isin, row in self.ctx.isin_master.items():
-            b_id = row.get("BENCHMARK_ID")
+            b_id = str(row.get("BENCHMARK_ID", ""))
             if b_id and b_id not in bm_maps:
                 bm_maps[b_id] = BenchmarkPriceProvider(b_id, self.ctx.df_b).bm_price_map
 
-        tasks = []
+        tasks: list[
+            tuple[
+                str,
+                list[dict[str, Any]],
+                list[dict[str, Any]],
+                list[dict[str, Any]],
+                dict[str, Any],
+                dict[date, float],
+                Any,
+                Any,
+                Any,
+                Any,
+                str,
+            ]
+        ] = []
         for isin in self.isins:
             p_df = p_dict_pl.get((isin,)) if (isin,) in p_dict_pl else p_dict_pl.get(isin)  # type: ignore
             p_inst = (
@@ -121,7 +159,7 @@ class IsinPipeline:
             m_inst = m_df.to_dicts() if m_df is not None and not m_df.is_empty() else []
 
             master_row = self.ctx.isin_master.get(isin, {})
-            b_id = master_row.get("BENCHMARK_ID")
+            b_id = str(master_row.get("BENCHMARK_ID", ""))
             bm_map = bm_maps.get(b_id, {})
 
             tasks.append(
@@ -207,15 +245,15 @@ class IsinPipeline:
             f"  -> Quant Engine successfully processed {len(self.isins)} ISIN workloads across Process Pool."
         )
 
-        return {
-            "has_data": has_data,
-            "global_cf": global_cashflows,
-            "global_pt": portfolio_terminals,
-            "global_re": realized_events,
-            "class_cf": class_cf,
-            "class_pt": class_pt,
-            "class_re": class_re,
-            "subtype_cf": subtype_cf,
-            "subtype_pt": subtype_pt,
-            "subtype_re": subtype_re,
-        }
+        return PipelineExecutionResult(
+            has_data=has_data,
+            global_cf=global_cashflows,
+            global_pt=portfolio_terminals,
+            global_re=realized_events,
+            class_cf=class_cf,
+            class_pt=class_pt,
+            class_re=class_re,
+            subtype_cf=subtype_cf,
+            subtype_pt=subtype_pt,
+            subtype_re=subtype_re,
+        )

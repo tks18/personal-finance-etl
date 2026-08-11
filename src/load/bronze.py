@@ -58,7 +58,7 @@ class BronzeLayer:
         # Calculate per-file row count
         counts = df_filtered.group_by("__file_name__").len()
         # Polars group_by returns a dataframe, we convert it to dict
-        result = {}
+        result: dict[str, int] = {}
         for row in counts.iter_rows():
             result[row[0]] = row[1]
         return result
@@ -112,8 +112,7 @@ class BronzeLayer:
                     # Wipe old registry entries for full-replace sources to prevent obsolete file bloating
                     if is_full_replace:
                         self.db_manager.conn.execute(
-                            "DELETE FROM meta.m_File_Registry WHERE file_category = ?",
-                            [category]
+                            "DELETE FROM meta.m_File_Registry WHERE file_category = ?", [category]
                         )
 
                     for filepath in actionable:
@@ -123,7 +122,7 @@ class BronzeLayer:
 
         logger.info("Bronze layer load complete.")
 
-    def get_full_dataset(self, original_mappings: dict) -> ExtractionResult:
+    def get_full_dataset(self, original_mappings: dict[str, dict[str, str]]) -> ExtractionResult:
         """Reads the full dataset from Bronze tables via DuckDB and returns a complete ExtractionResult."""
         logger.info("Reading full dataset from Bronze Layer Lakehouse...")
 

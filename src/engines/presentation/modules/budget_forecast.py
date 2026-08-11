@@ -3,6 +3,7 @@ from typing import Any
 
 import polars as pl
 
+from src.config.financial_rules import FinancialRules
 from src.engines.presentation.helpers.forecasting import calculate_budget_forecast
 from src.engines.presentation.helpers.scoring import calculate_budget_health_score
 from src.utils.polars_expressions import rolling_avg, rolling_std, safe_divide
@@ -27,8 +28,8 @@ class BudgetForecastBuilder:
         self,
         dfs: Mapping[str, pl.DataFrame | pl.LazyFrame],
         base_lf: dict[str, Any],
-        rules,
-    ):
+        rules: FinancialRules,
+    ) -> None:
         self.dfs = dfs
         self.base_lf = base_lf
         self.rules = rules
