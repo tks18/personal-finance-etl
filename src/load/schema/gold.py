@@ -142,8 +142,12 @@ CREATE TABLE IF NOT EXISTS gold.p_Wealth_Risk_Analytics (
     -- Spending & Savings
     Trailing_6M_Avg_Spend DOUBLE,
     Trailing_6M_Avg_Savings DOUBLE,
+    Trailing_12M_Avg_Spend DOUBLE,
+    Trailing_12M_Avg_Savings DOUBLE,
     Trailing_6M_Avg_Total_Spend DOUBLE,
     Trailing_6M_Avg_Total_Savings DOUBLE,
+    Trailing_12M_Avg_Total_Spend DOUBLE,
+    Trailing_12M_Avg_Total_Savings DOUBLE,
     INFLATION_YOY_PCT DOUBLE,
     Real_Return_Assumed_Pct DOUBLE,
     -- FI Numbers (Today's Money)
