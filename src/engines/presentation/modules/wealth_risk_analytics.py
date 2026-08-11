@@ -104,13 +104,17 @@ class WealthRiskAnalyticsBuilder:
             .with_columns(
                 rolling_avg("Total_Core_Expense", 3).alias("Trailing_3M_Avg_Spend"),
                 rolling_avg("Total_Core_Expense", 6).alias("Trailing_6M_Avg_Spend"),
+                rolling_avg("Total_Core_Expense", 12).alias("Trailing_12M_Avg_Spend"),
                 rolling_sum("Total_Core_Expense", 12).alias("Trailing_12M_Spend"),
                 rolling_avg("Net_Savings", 6).alias("Trailing_6M_Avg_Savings"),
+                rolling_avg("Net_Savings", 12).alias("Trailing_12M_Avg_Savings"),
                 rolling_sum("Net_Savings", 12).alias("Trailing_12M_Savings"),
                 rolling_avg("Total_Expense", 3).alias("Trailing_3M_Avg_Total_Spend"),
                 rolling_avg("Total_Expense", 6).alias("Trailing_6M_Avg_Total_Spend"),
+                rolling_avg("Total_Expense", 12).alias("Trailing_12M_Avg_Total_Spend"),
                 rolling_sum("Total_Expense", 12).alias("Trailing_12M_Total_Spend"),
                 rolling_avg("Net_Savings_Total", 6).alias("Trailing_6M_Avg_Total_Savings"),
+                rolling_avg("Net_Savings_Total", 12).alias("Trailing_12M_Avg_Total_Savings"),
                 rolling_sum("Net_Savings_Total", 12).alias("Trailing_12M_Total_Savings"),
             )
             .with_columns(
@@ -151,17 +155,17 @@ class WealthRiskAnalyticsBuilder:
                 )
                 .cast(pl.Int32)
                 .alias("Age_Months"),
-                pl.col("YEAR_MONTH").str.replace("-", "").cast(pl.Int32).alias("Seed_Int"),
+                pl.lit(42).cast(pl.Int32).alias("Seed_Int"),
             )
             .with_columns(
                 pl.struct(
                     [
                         "Total_Net_Worth_Market_Af_Tax",
-                        "Trailing_6M_Avg_Savings",
-                        "Trailing_6M_Avg_Spend",
-                        "Trailing_6M_Avg_Total_Spend",
+                        "Trailing_12M_Avg_Savings",
+                        "Trailing_12M_Avg_Spend",
+                        "Trailing_12M_Avg_Total_Spend",
                         "Target_FI_Today",
-                        "Trailing_6M_Avg_Total_Savings",
+                        "Trailing_12M_Avg_Total_Savings",
                         "Target_FI_Today_Total",
                         "INFLATION_YOY_PCT",
                         "Age_Months",
@@ -206,14 +210,14 @@ class WealthRiskAnalyticsBuilder:
                     pl.max_horizontal(
                         0.0, pl.col("Target_FI_Today") - pl.col("Total_Net_Worth_Market_Af_Tax")
                     ),
-                    "Trailing_6M_Avg_Savings",
+                    "Trailing_12M_Avg_Savings",
                 ).alias("Estimated_Months_To_FI_Linear"),
                 safe_divide(
                     pl.max_horizontal(
                         0.0,
                         pl.col("Target_FI_Today_Total") - pl.col("Total_Net_Worth_Market_Af_Tax"),
                     ),
-                    "Trailing_6M_Avg_Total_Savings",
+                    "Trailing_12M_Avg_Total_Savings",
                 ).alias("Estimated_Months_To_FI_Total_Linear"),
                 pl.lit(cma_real_return).alias("Real_Return_Assumed_Pct"),
                 pl.max_horizontal(
@@ -352,6 +356,8 @@ class WealthRiskAnalyticsBuilder:
                 "Total_Net_Worth_Market_Af_Tax",
                 "Trailing_6M_Avg_Spend",
                 "Trailing_6M_Avg_Savings",
+                "Trailing_12M_Avg_Spend",
+                "Trailing_12M_Avg_Savings",
                 "INFLATION_YOY_PCT",
                 "Real_Return_Assumed_Pct",
                 "Target_FI_Today",
@@ -376,6 +382,8 @@ class WealthRiskAnalyticsBuilder:
                 "Savings_Rate_Required",
                 "Trailing_6M_Avg_Total_Spend",
                 "Trailing_6M_Avg_Total_Savings",
+                "Trailing_12M_Avg_Total_Spend",
+                "Trailing_12M_Avg_Total_Savings",
                 "Target_FI_Today_Total",
                 "Coast_FI_Today_Total",
                 "Lean_FI_Today_Total",
