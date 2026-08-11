@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [4.1.4](https://github.com/tks18/personal-finance-etl/compare/4.1.3...4.1.4) (2026-08-11)
+
+
+### Build System 🏗
+
+* **main.spec:** remove some exclusions ([91ab0b3](https://github.com/tks18/personal-finance-etl/commit/91ab0b3d9793e31d3c6497f27022b54174be4eb1))
+
 ### [4.1.3](https://github.com/tks18/personal-finance-etl/compare/4.1.2...4.1.3) (2026-08-11)
 
 
