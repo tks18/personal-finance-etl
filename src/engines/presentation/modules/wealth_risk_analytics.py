@@ -198,6 +198,8 @@ class WealthRiskAnalyticsBuilder:
                             pl.Field("Peak_Inflation_Experienced_Pct", pl.Float64),
                             pl.Field("Decumulation_First_5Y_CAGR_P10", pl.Float64),
                             pl.Field("Average_Realized_Withdrawal_Rate_P50", pl.Float64),
+                            pl.Field("Terminal_Wealth_Nominal_P50", pl.Float64),
+                            pl.Field("Terminal_Wealth_Total_Nominal_P50", pl.Float64),
                         ]
                     ),
                 )
@@ -415,6 +417,8 @@ class WealthRiskAnalyticsBuilder:
                 "Peak_Inflation_Experienced_Pct",
                 "Decumulation_First_5Y_CAGR_P10",
                 "Average_Realized_Withdrawal_Rate_P50",
+                "Terminal_Wealth_Nominal_P50",
+                "Terminal_Wealth_Total_Nominal_P50",
                 # Risk Metrics natively merged
                 "Monthly_Return",
                 "Rolling_12M_Return",

@@ -202,6 +202,8 @@ CREATE TABLE IF NOT EXISTS gold.p_Wealth_Risk_Analytics (
     -- Advanced Monte Carlo Outputs
     Terminal_Wealth_P50 DOUBLE,
     Terminal_Wealth_P10 DOUBLE,
+    Terminal_Wealth_Nominal_P50 DOUBLE,
+    Terminal_Wealth_Total_Nominal_P50 DOUBLE,
     Max_Drawdown_Pct_P50 DOUBLE,
     Lost_Savings_Expected_Value DOUBLE,
     Peak_Inflation_Experienced_Pct DOUBLE,
