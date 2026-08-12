@@ -68,6 +68,7 @@ def _run_mc_simulations_numba(
     npt.NDArray[np.float64],
     npt.NDArray[np.float64],
     npt.NDArray[np.float64],
+    npt.NDArray[np.float64],
 ]:
     n_rows = len(pv_arr)
 
@@ -83,6 +84,7 @@ def _run_mc_simulations_numba(
 
     out_terminal_wealth_p50 = np.full(n_rows, np.nan)
     out_terminal_wealth_p10 = np.full(n_rows, np.nan)
+    out_terminal_wealth_nom_p50 = np.full(n_rows, np.nan)
     out_max_drawdown_p50 = np.full(n_rows, np.nan)
     out_lost_savings_ev = np.full(n_rows, np.nan)
     out_peak_inf_p50 = np.full(n_rows, np.nan)
@@ -131,6 +133,7 @@ def _run_mc_simulations_numba(
         runway_months = np.zeros(iterations)
 
         term_wealth = np.full(iterations, np.nan)
+        term_wealth_nom = np.full(iterations, np.nan)
         max_dds = np.full(iterations, np.nan)
         lost_savings = np.zeros(iterations)
         peak_infs = np.full(iterations, np.nan)
@@ -191,7 +194,7 @@ def _run_mc_simulations_numba(
                 if t_fi <= gp_derisk_start and t_fi >= 0:
                     # Linearly scale down to gp_target_eq
                     # fraction complete of the derisking phase
-                    frac = (gp_derisk_start - t_fi) / gp_derisk_start
+                    frac = (gp_derisk_start - t_fi) / gp_derisk_start if gp_derisk_start > 0 else 0.0
                     eq_w = gp_base_eq - frac * (gp_base_eq - gp_target_eq)
                 elif t_fi < 0:
                     eq_w = gp_target_eq
@@ -204,7 +207,7 @@ def _run_mc_simulations_numba(
                 # Human Capital Shock
                 if (current_state == 1 or current_state == 2) and unemployment_months == 0:
                     u_hc = np.random.uniform(0.0, 1.0)
-                    if u_hc < hc_shock_prob:
+                    if u_hc < (hc_shock_prob / 12.0):
                         # np randint doesn't accept arrays well in older numba, safe scalar
                         span = hc_shock_max - hc_shock_min + 1
                         unemployment_months = hc_shock_min + int(np.random.uniform(0.0, span))
@@ -245,7 +248,6 @@ def _run_mc_simulations_numba(
                     break
 
             lost_savings[j] = path_lost_savings
-            peak_infs[j] = path_peak_inf
 
             # --- Decumulation Phase ---
             if hit_month != -1:
@@ -257,7 +259,7 @@ def _run_mc_simulations_numba(
 
                 if months_left > 0:
                     dec_wealth = wealth
-                    current_withdraw = fv / swr / 12.0
+                    current_withdraw = (fv / swr / 12.0) if swr > 0 else 0.0
                     initial_rate = 1.0 / swr if swr > 0 else 0.04
 
                     realized_swr_sum = 0.0
@@ -278,6 +280,20 @@ def _run_mc_simulations_numba(
 
                         s_drift = state_params[current_state, 0] / 12.0
                         s_vol = state_params[current_state, 1] / np.sqrt(12.0)
+                        s_inf_target = state_params[current_state, 2]
+
+                        # OU Stochastic Inflation
+                        shock_inf = np.random.normal(0.0, sigma_inf)
+                        inf_path = inf_path + theta * (s_inf_target - inf_path) + shock_inf
+                        if inf_path < 0.0:
+                            inf_path = 0.0
+                        elif inf_path > inf_max:
+                            inf_path = inf_max
+
+                        if inf_path > path_peak_inf:
+                            path_peak_inf = inf_path
+
+                        cum_inf *= 1.0 + (inf_path / 12.0)
 
                         # Post-FI Glide Path (re-risking)
                         eq_w = gp_target_eq
@@ -317,6 +333,7 @@ def _run_mc_simulations_numba(
                         if dec_wealth <= 0.0:
                             survived = False
                             term_wealth[j] = 0.0
+                            term_wealth_nom[j] = 0.0
                             avg_swrs[j] = realized_swr_sum / d
                             if d >= sorr_months:
                                 sorr_cagrs[j] = (wealth_5y / wealth) ** (12.0 / sorr_months) - 1.0
@@ -327,6 +344,7 @@ def _run_mc_simulations_numba(
                     if survived:
                         survived_count += 1
                         term_wealth[j] = dec_wealth
+                        term_wealth_nom[j] = dec_wealth * cum_inf
                         avg_swrs[j] = realized_swr_sum / months_left
                         if months_left >= sorr_months:
                             sorr_cagrs[j] = (wealth_5y / wealth) ** (12.0 / sorr_months) - 1.0
@@ -335,10 +353,12 @@ def _run_mc_simulations_numba(
                 else:
                     survived_count += 1
                     term_wealth[j] = wealth
+                    term_wealth_nom[j] = wealth * cum_inf
                     avg_swrs[j] = 1.0 / swr if swr > 0 else 0.04
                     sorr_cagrs[j] = 0.0
 
             max_dds[j] = max_dd
+            peak_infs[j] = path_peak_inf
 
             # Runway Calculation
             r_wealth = pv
@@ -378,6 +398,10 @@ def _run_mc_simulations_numba(
                 out_terminal_wealth_p50[i] = np.percentile(v_term, 50.0)
                 out_terminal_wealth_p10[i] = np.percentile(v_term, 10.0)
 
+            v_term_nom = term_wealth_nom[~np.isnan(term_wealth_nom)]
+            if len(v_term_nom) > 0:
+                out_terminal_wealth_nom_p50[i] = np.percentile(v_term_nom, 50.0)
+
             v_dd = max_dds[~np.isnan(max_dds)]
             if len(v_dd) > 0:
                 out_max_drawdown_p50[i] = np.percentile(v_dd, 50)
@@ -416,6 +440,7 @@ def _run_mc_simulations_numba(
         out_peak_inf_p50,
         out_sorr_cagr_p10,
         out_avg_swr_p50,
+        out_terminal_wealth_nom_p50,
     )
 
 
@@ -588,6 +613,8 @@ def get_monte_carlo_fire_batch(
                 "Peak_Inflation_Experienced_Pct": core_res[12],
                 "Decumulation_First_5Y_CAGR_P10": core_res[13],
                 "Average_Realized_Withdrawal_Rate_P50": core_res[14],
+                "Terminal_Wealth_Nominal_P50": core_res[15],
+                "Terminal_Wealth_Total_Nominal_P50": total_res[15],
             }
         )
         return df_out.to_struct("")
