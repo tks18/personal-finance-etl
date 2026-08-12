@@ -38,7 +38,6 @@ class SpendAnalyticsBuilder:
                     pl.col("EXPENSE").sum().fill_null(0.0).alias("Total_Monthly_Spend"),
                     pl.col("EXPENSE").mean().fill_null(0.0).alias("Average_Transaction_Value"),
                     pl.len().alias("Transaction_Count"),
-                    pl.col("Is_Core_Expense").first().alias("Is_Core_Expense"),
                 ]
             )
         )
@@ -65,9 +64,9 @@ class SpendAnalyticsBuilder:
 
             lf_cat_agg = (
                 lf_cat_agg.join(
-                    lf_subcat.select(["UID", "CATEGORY_NAME", "CATEGORY_ID"]).rename(
-                        {"CATEGORY_ID": "PARENT_ID", "UID": "CATEGORY_ID"}
-                    ),
+                    lf_subcat.select(
+                        ["UID", "CATEGORY_NAME", "CATEGORY_ID", "Is_Core_Expense"]
+                    ).rename({"CATEGORY_ID": "PARENT_ID", "UID": "CATEGORY_ID"}),
                     on="CATEGORY_ID",
                     how="left",
                 )
@@ -85,7 +84,9 @@ class SpendAnalyticsBuilder:
             )
         else:
             lf_cat_agg = lf_cat_agg.with_columns(
-                pl.lit(None).alias("CATEGORY_NAME"), pl.lit(None).alias("CATEGORY_GROUPS")
+                pl.lit(None).alias("CATEGORY_NAME"),
+                pl.lit(None).alias("CATEGORY_GROUPS"),
+                pl.lit(False).alias("Is_Core_Expense"),
             )
 
         lf_spend_analytics = (
@@ -284,5 +285,6 @@ class SpendAnalyticsBuilder:
                 "Budget_Variance_Pct",
                 "Category_Inflation_Contribution",
                 "Avg_Days_Between_Transactions",
+                "Is_Core_Expense",
             ]
         )

@@ -38,9 +38,6 @@ class IncomeStreamsBuilder:
                 [
                     pl.col("INCOME").sum().fill_null(0.0).alias("Total_Monthly_Income"),
                     pl.col("INCOME").mean().fill_null(0.0).alias("Average_Transaction_Value"),
-                    pl.col("Is_Active_Income").first().alias("Is_Active_Income"),
-                    pl.col("Is_Dividend_Income").first().alias("Is_Dividend_Income"),
-                    pl.col("Is_Interest_Income").first().alias("Is_Interest_Income"),
                 ]
             )
         )
@@ -63,9 +60,17 @@ class IncomeStreamsBuilder:
 
             lf_inc_monthly = (
                 lf_inc_monthly.join(
-                    lf_inc_subcat.select(["UID", "CATEGORY_NAME", "CATEGORY_ID"]).rename(
-                        {"CATEGORY_ID": "PARENT_ID", "UID": "CATEGORY_ID"}
-                    ),
+                    lf_inc_subcat.select(
+                        [
+                            "UID",
+                            "CATEGORY_NAME",
+                            "CATEGORY_ID",
+                            "Is_Active_Income",
+                            "Is_Passive_Income",
+                            "Is_Dividend_Income",
+                            "Is_Interest_Income",
+                        ]
+                    ).rename({"CATEGORY_ID": "PARENT_ID", "UID": "CATEGORY_ID"}),
                     on="CATEGORY_ID",
                     how="left",
                 )
@@ -83,7 +88,12 @@ class IncomeStreamsBuilder:
             )
         else:
             lf_inc_monthly = lf_inc_monthly.with_columns(
-                pl.lit(None).alias("CATEGORY_NAME"), pl.lit(None).alias("CATEGORY_GROUPS")
+                pl.lit(None).alias("CATEGORY_NAME"),
+                pl.lit(None).alias("CATEGORY_GROUPS"),
+                pl.lit(False).alias("Is_Active_Income"),
+                pl.lit(False).alias("Is_Passive_Income"),
+                pl.lit(False).alias("Is_Dividend_Income"),
+                pl.lit(False).alias("Is_Interest_Income"),
             )
 
         lf_income_streams = (
@@ -200,7 +210,6 @@ class IncomeStreamsBuilder:
                 .otherwise(None)
                 .cast(pl.Int64)
                 .alias("Months_Since_Last_Received"),
-                (~pl.col("Is_Active_Income")).alias("Is_Passive_Income"),
                 pl.when(
                     (pl.col("Months_Since_First") >= 12) & (pl.col("First_12M_Total_Income") > 0)
                 )
@@ -271,7 +280,10 @@ class IncomeStreamsBuilder:
                 "YoY_Variance_Pct",
                 "Income_Stability_Score",
                 "Months_Since_Last_Received",
+                "Is_Active_Income",
                 "Is_Passive_Income",
+                "Is_Dividend_Income",
+                "Is_Interest_Income",
                 "Real_Monthly_Income",
                 "Income_CAGR",
                 "Real_YoY_Income_Growth",
