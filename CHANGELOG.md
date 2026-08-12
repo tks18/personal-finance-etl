@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [4.1.5](https://github.com/tks18/personal-finance-etl/compare/4.1.4...4.1.5) (2026-08-12)
+
+
+### Bug Fixes 🛠
+
+* **engines/presentations:** fix edge cases in monte carlo ([20733ea](https://github.com/tks18/personal-finance-etl/commit/20733eaeaed7985349d20abe219be0cc932b6fcc))
+* update ddl ([ab15901](https://github.com/tks18/personal-finance-etl/commit/ab159010c2b3b9512f7651bd9e94decb70949fc3))
+
 ### [4.1.4](https://github.com/tks18/personal-finance-etl/compare/4.1.3...4.1.4) (2026-08-11)
 
 
