@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [4.1.6](https://github.com/tks18/personal-finance-etl/compare/4.1.5...4.1.6) (2026-08-12)
+
+
+### Bug Fixes 🛠
+
+* **engines/presentations:** fix some boolean cols not populating ([efa7948](https://github.com/tks18/personal-finance-etl/commit/efa7948290cc3be6fe045df5bfaf30b3c52a74bd))
+
 ### [4.1.5](https://github.com/tks18/personal-finance-etl/compare/4.1.4...4.1.5) (2026-08-12)
 
 
