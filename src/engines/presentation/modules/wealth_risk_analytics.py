@@ -24,6 +24,11 @@ class WealthRiskAnalyticsBuilder:
         self.base_lf = base_lf
         self.lf_risk = lf_risk
         self.rules = rules
+        # Cache DOB parts once to avoid repeated string splits in LazyFrame expressions
+        dob_parts = rules.assumptions.monte_carlo.date_of_birth.split("-")
+        self._dob_year = int(dob_parts[0])
+        self._dob_month = int(dob_parts[1])
+        self._tax_rate = rules.assumptions.tax.rates.equity_ltcg
 
     def build(self) -> pl.LazyFrame:
         lf_monthly_totals = self.base_lf["lf_monthly_totals"]
@@ -52,7 +57,6 @@ class WealthRiskAnalyticsBuilder:
         )
 
         df_inv_port = self.dfs.get("df_f_tf_investment_analytics_portfolio")
-        tax_rate = self.rules.assumptions.tax.rates.equity_ltcg
 
         if df_inv_port is not None:
             lf_inv_port = (
@@ -85,7 +89,7 @@ class WealthRiskAnalyticsBuilder:
                     pl.when(pl.col("Port_Market_Value") > pl.col("Port_Book_Value"))
                     .then(
                         pl.col("Total_Net_Worth_Market")
-                        - ((pl.col("Port_Market_Value") - pl.col("Port_Book_Value")) * tax_rate)
+                        - ((pl.col("Port_Market_Value") - pl.col("Port_Book_Value")) * self._tax_rate)
                     )
                     .otherwise(pl.col("Total_Net_Worth_Market"))
                     .alias("Total_Net_Worth_Market_Af_Tax")
@@ -145,18 +149,19 @@ class WealthRiskAnalyticsBuilder:
             .with_columns(
                 (
                     (
-                        pl.col("_temp_year")
-                        - int(self.rules.assumptions.monte_carlo.date_of_birth.split("-")[0])
+                        pl.col("_temp_year") - self._dob_year
                     )
                     * 12
                     + (
-                        pl.col("_temp_month")
-                        - int(self.rules.assumptions.monte_carlo.date_of_birth.split("-")[1])
+                        pl.col("_temp_month") - self._dob_month
                     )
                 )
                 .cast(pl.Int32)
                 .alias("Age_Months"),
-                pl.lit(42).cast(pl.Int32).alias("Seed_Int"),
+                # Month-year derived seed: same month always produces identical MC paths,
+                # large integer gap between adjacent months prevents RNG correlation.
+                # e.g. Jan 2025 = 2025*12+1 = 24301, Feb 2025 = 24302
+                (pl.col("_temp_year") * 12 + pl.col("_temp_month")).cast(pl.Int32).alias("Seed_Int"),
             )
             .with_columns(
                 pl.struct(
@@ -194,7 +199,7 @@ class WealthRiskAnalyticsBuilder:
                             pl.Field("Terminal_Wealth_P50", pl.Float64),
                             pl.Field("Terminal_Wealth_P10", pl.Float64),
                             pl.Field("Max_Drawdown_Pct_P50", pl.Float64),
-                            pl.Field("Lost_Savings_Expected_Value", pl.Float64),
+                            pl.Field("Compounded_Lost_Savings_EV", pl.Float64),
                             pl.Field("Peak_Inflation_Experienced_Pct", pl.Float64),
                             pl.Field("Decumulation_First_5Y_CAGR_P10", pl.Float64),
                             pl.Field("Average_Realized_Withdrawal_Rate_P50", pl.Float64),
@@ -316,6 +321,9 @@ class WealthRiskAnalyticsBuilder:
                         "Max_Drawdown_12M",
                         "Annualized_Volatility_12M",
                         "NW_Volatility_12M",
+                        "Sharpe_Ratio_12M",
+                        "Sortino_Ratio_12M",
+                        "Calmar_Ratio_12M",
                     ]
                 ),
                 on="MONTH_START_DATE",
@@ -339,6 +347,28 @@ class WealthRiskAnalyticsBuilder:
                 .then(self.rules.assumptions.fire.cape_swr_ceiling)
                 .otherwise(self.rules.assumptions.fire.cape_swr_base)
                 .alias("CAPE_Adjusted_SWR"),
+            )
+            .with_columns(
+                # Actual monthly savings rate as a percentage of income
+                safe_divide("Net_Savings", "Total_Income").alias("Savings_Rate_Actual"),
+                safe_divide("Net_Savings_Total", "Total_Income").alias("Savings_Rate_Actual_Total"),
+                # FI Velocity: MoM change in FI coverage — positive = approaching FI
+                (pl.col("Current_FI_Coverage_Pct") - pl.col("Current_FI_Coverage_Pct").shift(1))
+                .alias("FI_Velocity"),
+                (pl.col("Current_FI_Coverage_Pct_Total") - pl.col("Current_FI_Coverage_Pct_Total").shift(1))
+                .alias("FI_Velocity_Total"),
+                # Real Net Worth CAGR over 3 years (36 months), inflation-adjusted
+                pl.when(pl.col("Total_Net_Worth_Market_Af_Tax").shift(36) > 0)
+                .then(
+                    (
+                        (pl.col("Total_Net_Worth_Market_Af_Tax") / pl.col("CPI_INDEX"))
+                        / (pl.col("Total_Net_Worth_Market_Af_Tax").shift(36) / pl.col("CPI_INDEX").shift(36))
+                    )
+                    .pow(1.0 / 3.0)
+                    - 1.0
+                )
+                .otherwise(pl.lit(None))
+                .alias("Real_NW_CAGR_3Y"),
             )
         )
 
@@ -410,10 +440,15 @@ class WealthRiskAnalyticsBuilder:
                 "Wealth_Velocity",
                 "Wealth_Acceleration",
                 "CAPE_Adjusted_SWR",
+                "Savings_Rate_Actual",
+                "Savings_Rate_Actual_Total",
+                "FI_Velocity",
+                "FI_Velocity_Total",
+                "Real_NW_CAGR_3Y",
                 "Terminal_Wealth_P50",
                 "Terminal_Wealth_P10",
                 "Max_Drawdown_Pct_P50",
-                "Lost_Savings_Expected_Value",
+                "Compounded_Lost_Savings_EV",
                 "Peak_Inflation_Experienced_Pct",
                 "Decumulation_First_5Y_CAGR_P10",
                 "Average_Realized_Withdrawal_Rate_P50",
@@ -430,6 +465,9 @@ class WealthRiskAnalyticsBuilder:
                 "Max_Drawdown_12M",
                 "Annualized_Volatility_12M",
                 "NW_Volatility_12M",
+                "Sharpe_Ratio_12M",
+                "Sortino_Ratio_12M",
+                "Calmar_Ratio_12M",
             ]
         )
         return lf_fire_forecast
