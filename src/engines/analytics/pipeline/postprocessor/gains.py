@@ -88,6 +88,14 @@ class RealizedGainsCalculator:
                     .then(pl.col("gain"))
                     .otherwise(0.0)
                     .alias("is_ltcl"),
+                    pl.when(
+                        (pl.col("gain_type") == "LTCG")
+                        & pl.col("is_loss")
+                        & (pl.col("tax_type") == "equity")
+                    )
+                    .then(pl.col("gain"))
+                    .otherwise(0.0)
+                    .alias("is_eq_ltcl"),
                     pl.when((pl.col("gain_type") == "STCG") & pl.col("is_loss"))
                     .then(pl.col("gain"))
                     .otherwise(0.0)
@@ -103,6 +111,7 @@ class RealizedGainsCalculator:
                         pl.col("is_eq_ltcg").sum().alias("daily_eq_ltcg"),
                         pl.col("is_stcg").sum().alias("daily_stcg"),
                         pl.col("is_ltcl").sum().alias("daily_ltcl"),
+                        pl.col("is_eq_ltcl").sum().alias("daily_eq_ltcl"),
                         pl.col("is_stcl").sum().alias("daily_stcl"),
                     ]
                 )
@@ -128,6 +137,10 @@ class RealizedGainsCalculator:
                     .cum_sum()
                     .over("event_fy_sy", order_by="date")
                     .alias("cum_ltcl"),
+                    pl.col("daily_eq_ltcl")
+                    .cum_sum()
+                    .over("event_fy_sy", order_by="date")
+                    .alias("cum_eq_ltcl"),
                     pl.col("daily_stcl")
                     .cum_sum()
                     .over("event_fy_sy", order_by="date")
@@ -175,7 +188,7 @@ class RealizedGainsCalculator:
                 (pl.col("cum_ltcg") + pl.col("cum_stcg") + pl.col("cum_ltcl") + pl.col("cum_stcl"))
                 .round(4)
                 .alias("FY_Realized_Net_PnL"),
-                pl.max_horizontal(0.0, pl.col("exemption_limit") - pl.col("cum_eq_ltcg"))
+                pl.max_horizontal(0.0, pl.col("exemption_limit") - pl.max_horizontal(0.0, pl.col("cum_eq_ltcg") + pl.col("cum_eq_ltcl")))
                 .round(4)
                 .alias("FY_LTCG_Remaining_Exemption"),
             ).select(
