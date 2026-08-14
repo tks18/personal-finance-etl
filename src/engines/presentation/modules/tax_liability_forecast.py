@@ -34,12 +34,9 @@ class TaxLiabilityForecastBuilder:
             pl.col("Closing_Date").dt.month_start().alias("MONTH_START_DATE")
         )
 
-        latest_month_dates = lf_market_data.group_by("MONTH_START_DATE").agg(
-            pl.col("Closing_Date").max().alias("Max_Closing_Date")
-        )
-
-        df_monthly_tax = lf_market_data.join(latest_month_dates, on="MONTH_START_DATE").filter(
-            pl.col("Closing_Date") == pl.col("Max_Closing_Date")
+        # Use .over() to get latest closing date per month — avoids double group-by pattern
+        df_monthly_tax = lf_market_data.filter(
+            pl.col("Closing_Date") == pl.col("Closing_Date").max().over("MONTH_START_DATE")
         )
 
         tax_rates = self.rules.assumptions.tax.rates if self.rules else None
@@ -48,6 +45,34 @@ class TaxLiabilityForecastBuilder:
         ltcg_exemption = (
             self.rules.assumptions.tax.fallback_equity_ltcg_exemption if self.rules else 125000.0
         )
+        # Fallback dividend rate from TOML — live value joined from macro table below
+        fallback_div_rate = self.rules.assumptions.macro.fallback_dividend_income_rate if self.rules else 0.30
+
+        # Join Dividend_Income_Tax_Rate from d_macro_parameters using the same asof pattern
+        df_macro = self.dfs.get("df_d_macro_parameters")
+        if df_macro is not None:
+            lf_macro = (
+                df_macro.lazy() if isinstance(df_macro, pl.DataFrame) else df_macro
+            ).select(
+                pl.col("FY_Start_Date").cast(pl.Date),
+                pl.col("Dividend_Income_Tax_Rate").cast(pl.Float64),
+            )
+            df_monthly_tax = (
+                df_monthly_tax.sort("Closing_Date")
+                .join_asof(
+                    lf_macro.sort("FY_Start_Date"),
+                    left_on="Closing_Date",
+                    right_on="FY_Start_Date",
+                    strategy="backward",
+                )
+                .with_columns(
+                    pl.col("Dividend_Income_Tax_Rate").fill_null(fallback_div_rate)
+                )
+            )
+        else:
+            df_monthly_tax = df_monthly_tax.with_columns(
+                pl.lit(fallback_div_rate).alias("Dividend_Income_Tax_Rate")
+            )
 
         lf_inc_agg = self.base_lf.get("lf_inc_agg")
         if lf_inc_agg is not None:
@@ -94,14 +119,17 @@ class TaxLiabilityForecastBuilder:
                 .otherwise(0.0)
                 .sum()
                 .alias("Unrealized_Losses"),
+                # Carry forward the FY-specific dividend tax rate (last observation in month)
+                pl.col("Dividend_Income_Tax_Rate").last().alias("Dividend_Income_Tax_Rate"),
             )
             .join(df_inc_tax, on="MONTH_START_DATE", how="left")
             .with_columns(
                 pl.col("Taxable_Dividends").fill_null(0.0),
                 pl.col("Taxable_Interest").fill_null(0.0),
-                (pl.lit(ltcg_exemption) - pl.col("LTCG_Exemption_Remaining")).alias(
-                    "LTCG_Exemption_Used"
-                ),
+                # Fix: clip to 0+ so this never goes negative due to carry data anomalies
+                (pl.lit(ltcg_exemption) - pl.col("LTCG_Exemption_Remaining"))
+                .clip(lower_bound=0.0)
+                .alias("LTCG_Exemption_Used"),
             )
             .with_columns(
                 (
@@ -112,7 +140,8 @@ class TaxLiabilityForecastBuilder:
                         )
                         * eq_ltcg
                     )
-                    + (pl.col("Taxable_Dividends").clip(lower_bound=0.0) * 0.30)
+                    # Dividend rate sourced from macro table (individual marginal slab)
+                    + (pl.col("Taxable_Dividends").clip(lower_bound=0.0) * pl.col("Dividend_Income_Tax_Rate"))
                 ).alias("Projected_Tax_Bill"),
                 (pl.col("Unrealized_Losses").abs()).alias("Harvesting_Offset_Remaining"),
             )
@@ -120,7 +149,12 @@ class TaxLiabilityForecastBuilder:
                 pl.when(pl.col("Total_Portfolio_Value") > 0)
                 .then((pl.col("Projected_Tax_Bill") / pl.col("Total_Portfolio_Value")) * 100.0)
                 .otherwise(0.0)
-                .alias("Tax_Drag_Pct")
+                .alias("Tax_Drag_Pct"),
+                # Tax Harvesting Capacity = amount of unrealized losses usable against this FY's gains
+                pl.min_horizontal(
+                    pl.col("Harvesting_Offset_Remaining"),
+                    (pl.col("Realized_STCG") + pl.col("Realized_LTCG")).clip(lower_bound=0.0),
+                ).alias("Tax_Harvesting_Capacity"),
             )
             .with_columns(
                 pl.when(pl.col("Total_Portfolio_Value") > 0)
@@ -134,7 +168,15 @@ class TaxLiabilityForecastBuilder:
                     * 100.0
                 )
                 .otherwise(0.0)
-                .alias("Tax_Alpha_Pct")
+                .alias("Tax_Alpha_Pct"),
+                # Tax Efficiency Ratio = fraction of realized gains kept after tax
+                pl.when(pl.col("Realized_Gain") > 0)
+                .then(
+                    (pl.col("Realized_Gain") - pl.col("Projected_Tax_Bill"))
+                    / pl.col("Realized_Gain")
+                )
+                .otherwise(pl.lit(None))
+                .alias("Tax_Efficiency_Ratio"),
             )
             .select(
                 [
@@ -155,6 +197,8 @@ class TaxLiabilityForecastBuilder:
                     "Harvesting_Offset_Remaining",
                     "Tax_Drag_Pct",
                     "Tax_Alpha_Pct",
+                    "Tax_Harvesting_Capacity",
+                    "Tax_Efficiency_Ratio",
                 ]
             )
             .sort("MONTH_START_DATE")
