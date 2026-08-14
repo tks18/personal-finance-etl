@@ -32,16 +32,15 @@ class RiskMetricsBuilder:
             f_market_data.lazy() if isinstance(f_market_data, pl.DataFrame) else f_market_data
         )
 
-        # Get latest closing date per month and total value
-        lf_inv_monthly = lf_market.with_columns(
-            pl.col("Closing_Date").dt.month_start().alias("MONTH_START_DATE")
-        )
-
+        # Get latest closing date per month using .over() — avoids double group-by self-join
         lf_inv_monthly = (
-            lf_inv_monthly.group_by("MONTH_START_DATE")
-            .agg(pl.col("Closing_Date").max().alias("Max_Closing_Date"))
-            .join(lf_inv_monthly, on="MONTH_START_DATE")
-            .filter(pl.col("Closing_Date") == pl.col("Max_Closing_Date"))
+            lf_market.with_columns(
+                pl.col("Closing_Date").dt.month_start().alias("MONTH_START_DATE")
+            )
+            .filter(
+                pl.col("Closing_Date")
+                == pl.col("Closing_Date").max().over("MONTH_START_DATE")
+            )
             .group_by("MONTH_START_DATE")
             .agg(
                 pl.col("Close_Value").sum().alias("Total_Investment_Value"),
@@ -88,9 +87,10 @@ class RiskMetricsBuilder:
                 .alias("Drawdown_Pct")
             )
             .with_columns(
-                # Calculate Monthly Return on Investments using Modified Dietz (Investment specific cash flows)
+                # Modified Dietz return on investments (investment-specific cash flows)
                 pl.when(
-                    (pl.col("Total_Investment_Value").shift(1) + (pl.col("Inv_Cashflow") * 0.5)) > 0
+                    (pl.col("Total_Investment_Value").shift(1) + (pl.col("Inv_Cashflow") * 0.5))
+                    > 0
                 )
                 .then(
                     (
@@ -141,13 +141,45 @@ class RiskMetricsBuilder:
             .with_columns(
                 (1.0 + pl.col("Drawdown_Pct")).alias("Recovery_From_Drawdown_%"),
                 pl.col("Drawdown_Pct").rolling_min(window_size=12).alias("Max_Drawdown_12M"),
-                # Calculate Volatility on the Investment Return
+                # Annualised volatility on investment return (12M rolling)
                 (pl.col("Monthly_Return").rolling_std(window_size=12) * (12**0.5))
                 .fill_null(0.0)
                 .alias("Annualized_Volatility_12M"),
                 (pl.col("NW_Monthly_Return").rolling_std(window_size=12) * (12**0.5))
                 .fill_null(0.0)
                 .alias("NW_Volatility_12M"),
+                # Downside-only volatility for Sortino (negative monthly returns only)
+                (
+                    pl.col("Monthly_Return")
+                    .clip(upper_bound=0.0)
+                    .rolling_std(window_size=12)
+                    * (12**0.5)
+                )
+                .fill_null(0.0)
+                .alias("Downside_Volatility_12M"),
+            )
+            .with_columns(
+                # Sharpe Ratio = (Rolling_12M_Return - Risk_Free_Rate) / Annualized_Volatility
+                pl.when(pl.col("Annualized_Volatility_12M") > 0)
+                .then(
+                    (pl.col("Rolling_12M_Return") - pl.col("Risk_Free_Rate"))
+                    / pl.col("Annualized_Volatility_12M")
+                )
+                .otherwise(0.0)
+                .alias("Sharpe_Ratio_12M"),
+                # Sortino Ratio = (Rolling_12M_Return - Risk_Free_Rate) / Downside_Volatility
+                pl.when(pl.col("Downside_Volatility_12M") > 0)
+                .then(
+                    (pl.col("Rolling_12M_Return") - pl.col("Risk_Free_Rate"))
+                    / pl.col("Downside_Volatility_12M")
+                )
+                .otherwise(0.0)
+                .alias("Sortino_Ratio_12M"),
+                # Calmar Ratio = Rolling_12M_Return / abs(Max_Drawdown_12M)
+                pl.when(pl.col("Max_Drawdown_12M") < 0)
+                .then(pl.col("Rolling_12M_Return") / pl.col("Max_Drawdown_12M").abs())
+                .otherwise(0.0)
+                .alias("Calmar_Ratio_12M"),
             )
         )
 
@@ -167,5 +199,8 @@ class RiskMetricsBuilder:
                 "Max_Drawdown_12M",
                 "Annualized_Volatility_12M",
                 "NW_Volatility_12M",
+                "Sharpe_Ratio_12M",
+                "Sortino_Ratio_12M",
+                "Calmar_Ratio_12M",
             ]
         )
