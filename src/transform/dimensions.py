@@ -369,6 +369,7 @@ def transform_d_macro_parameters(raw_data: pl.LazyFrame) -> pl.LazyFrame:
             "Other_Debt_STCG",
             "Default_LTCG",
             "Default_STCG",
+            "Dividend_Income_Tax_Rate",
             "Equity_LTCG_Exemption",
             "Remarks",
         ]
