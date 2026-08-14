@@ -64,7 +64,6 @@ def to_date_obj(val: str | date | datetime | None) -> date | None:
             except ValueError:
                 pass
         return None
-    return None
 
 
 def get_fy_start_year(dt: date) -> int:
