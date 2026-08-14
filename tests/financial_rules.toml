@@ -39,6 +39,8 @@ default_trading_days = 252.0
 fallback_inflation_rate = 0.06
 # Fallback annualized risk-free rate if historical macro data is unavailable.
 fallback_risk_free_rate = 0.06
+# Fallback dividend income tax rate (individual marginal slab) if not in macro table.
+fallback_dividend_income_rate = 0.30
 
 [assumptions.fire]
 # Safe Withdrawal Rate multiplier (e.g., 28.5 for the 3.5% rule, moderate stance).
@@ -83,14 +85,14 @@ sorr_cagr_window_months = 60
 # 3x3 Matrix defining probabilities to transition between Bull, Bear, and Stagflation states.
 # Row 0: Bull, Row 1: Bear, Row 2: Stagflation
 transition_matrix = [
-    [0.90, 0.08, 0.02],
-    [0.15, 0.80, 0.05],
-    [0.10, 0.15, 0.75]
+    [0.85, 0.12, 0.03], # Bull (lasts ~6.5 years)
+    [0.45, 0.50, 0.05], # Bear (lasts ~2 years)
+    [0.30, 0.10, 0.60]  # Stagflation (lasts ~2.5 years)
 ]
 # State Parameters defined as: [drift, volatility, inflation_target]
-state_bull = [0.10, 0.12, 0.04]  # High drift, low vol, stable inflation
-state_bear = [-0.15, 0.25, 0.02] # Negative drift, high vol, falling inflation
-state_stag = [-0.05, 0.18, 0.08] # Flat/negative drift, moderate vol, spiking inflation
+state_bull = [0.18, 0.18, 0.05]  # High drift, high vol, stable inflation
+state_bear = [-0.20, 0.25, 0.04] # Negative drift, high vol, falling inflation
+state_stag = [-0.02, 0.20, 0.08] # Flat/negative drift, moderate vol, spiking inflation
 
 [assumptions.monte_carlo.human_capital]
 # Probability of losing income (job loss, zero bonus) when entering a Bear or Stagflation state.
@@ -98,6 +100,8 @@ shock_probability = 0.20
 # Duration of the income shock in months
 shock_duration_min = 6
 shock_duration_max = 12
+# Percentage of core expenses covered by unemployment benefits or severance during a shock
+unemployment_benefit_coverage_pct = 0.0
 
 [assumptions.monte_carlo.glide_path]
 # "Bond Tent" settings to protect against Sequence of Returns Risk (SORR)
@@ -108,11 +112,13 @@ post_fi_re_risk_months = 120
 # Maximum equity allocation during accumulation and late retirement.
 base_equity_weight = 0.70
 # Minimum equity allocation (maximum safety) at the exact moment of FI.
-fi_target_equity_weight = 0.40
+fi_target_equity_weight = 0.55
 # Expected real return for the non-equity (debt) portion.
 debt_real_return = 0.02
 # Expected volatility for the non-equity (debt) portion.
 debt_volatility = 0.04
+# If true, during decumulation down-months, withdrawals are taken from debt, bypassing equity liquidation.
+dynamic_debt_drawdown_first = true
 
 [assumptions.monte_carlo.guyton_klinger]
 # Multiplier over initial SWR to trigger a lifestyle cut (e.g., 1.2 for +20% threshold breach)
@@ -131,13 +137,15 @@ mean_reversion_speed = 0.1
 volatility_annual = 0.015
 # Absolute maximum cap for simulated inflation to prevent unrealistic hyperinflation runs (e.g., 15%)
 max_inflation_cap = 0.15
+# Absolute minimum floor for deflation (e.g., -2%)
+min_deflation_floor = -0.02
 
 [assumptions.monte_carlo.jump_diffusion]
 # Merton Jump-Diffusion parameters for simulating Black Swan events
 jump_probability_annual = 0.05
 jump_magnitude = -0.20
 # Expected annual drag from ETF expense ratios and portfolio fees
-expense_ratio_drag = 0.005
+expense_ratio_drag = 0.003
 
 [assumptions.tax]
 # Date before which debt mutual funds retain indexation benefits.

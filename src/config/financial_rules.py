@@ -101,6 +101,10 @@ class MacroAssumptions(BaseModel):
         ...,
         description="Fallback annualized risk-free rate if historical macro data is unavailable.",
     )
+    fallback_dividend_income_rate: float = Field(
+        default=0.30,
+        description="Fallback dividend income tax rate (marginal slab) if not found in macro table.",
+    )
 
 
 class FireAssumptions(BaseModel):
@@ -164,6 +168,10 @@ class HumanCapitalConfig(BaseModel):
     shock_duration_max: int = Field(
         default=12, description="Maximum duration (in months) of the income shock."
     )
+    unemployment_benefit_coverage_pct: float = Field(
+        default=0.0,
+        description="Percentage of core expenses covered by unemployment benefits or severance during a shock.",
+    )
 
 
 class GlidePathConfig(BaseModel):
@@ -189,6 +197,10 @@ class GlidePathConfig(BaseModel):
     debt_volatility: float = Field(
         default=0.04,
         description="Expected volatility for the non-equity (debt) portion of the glide path.",
+    )
+    dynamic_debt_drawdown_first: bool = Field(
+        default=False,
+        description="If True, during decumulation down-months, withdrawals are taken from debt, bypassing equity liquidation.",
     )
 
 
@@ -233,7 +245,9 @@ class InflationModelConfig(BaseModel):
     max_inflation_cap: float = Field(
         default=0.15, description="Absolute maximum cap for inflation (e.g., 15%)."
     )
-
+    min_deflation_floor: float = Field(
+        default=-0.02, description="Absolute minimum floor for deflation (e.g., -2%)."
+    )
 
 class MonteCarloAssumptions(BaseModel):
     iterations: int = Field(..., description="Number of Monte Carlo paths/simulations to run.")
