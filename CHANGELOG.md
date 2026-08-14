@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [4.2.0](https://github.com/tks18/personal-finance-etl/compare/4.1.6...4.2.0) (2026-08-14)
+
+
+### Styling 🎨
+
+* lint fixes ([cb2bd90](https://github.com/tks18/personal-finance-etl/commit/cb2bd9003a7d3ad63a5daf6bdf19d7f5934c15a4))
+
+
+### Features 🔥
+
+* **engines/presentations:** intrroduce new risk metrics to integrrate in wealth risk ([b95cc64](https://github.com/tks18/personal-finance-etl/commit/b95cc64c7202a571444116de9cf9f9c84df5b698))
+* **transform:** add dividend tax rate to macro table ([5500411](https://github.com/tks18/personal-finance-etl/commit/5500411e96248ed357487089a1bc6061b597c9c1))
+
+
+### Bug Fixes 🛠
+
+* **engines/analytics:** fix ltcl offset logic ([af30dc6](https://github.com/tks18/personal-finance-etl/commit/af30dc62d312fee59fd42c3ed9a645c9707af890))
+* **engines/presentations:** fix tax liabilities to calculate proper offset logic ([6f8c4ab](https://github.com/tks18/personal-finance-etl/commit/6f8c4abffb56a24840e2d0147bcb958e9da9e302))
+* **engines/presentations:** monte_carlo: massive improvement in cpu usage + math fixes ([a638196](https://github.com/tks18/personal-finance-etl/commit/a63819648e4043fd9212254743b58a4331bb3fbb))
+* **engines/presentations:** wealth_risk: fix month seeds for mc, add new risk metrics, some refactor ([82816d1](https://github.com/tks18/personal-finance-etl/commit/82816d1760bb72a3eb233de4d5a9c3c6e8f38360))
+
+
+### Code Refactoring 🖌
+
+* **config/rules:** move more hardcoded params to rules ([88c7c2e](https://github.com/tks18/personal-finance-etl/commit/88c7c2eb5f54b519917d427796f7e1ed3b46e1b9))
+* **load:** add new schema ddl for new metrics ([26e6da5](https://github.com/tks18/personal-finance-etl/commit/26e6da5f9d791763fa77929f92a71f2dce6d379a))
+
 ### [4.1.6](https://github.com/tks18/personal-finance-etl/compare/4.1.5...4.1.6) (2026-08-12)
 
 
