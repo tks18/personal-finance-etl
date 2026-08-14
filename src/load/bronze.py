@@ -100,9 +100,18 @@ class BronzeLayer:
                         df.limit(0).collect() if isinstance(df, pl.LazyFrame) else df.head(0)
                     )
                     self.db_manager.conn.register("schema_df", schema_df)
-                    self.db_manager.conn.execute(
-                        f"CREATE TABLE IF NOT EXISTS {table_name} AS SELECT * FROM schema_df"
-                    )
+                    
+                    if is_full_replace:
+                        # Drop and recreate to support automatic schema evolution for new columns
+                        self.db_manager.conn.execute(f"DROP TABLE IF EXISTS {table_name}")
+                        self.db_manager.conn.execute(
+                            f"CREATE TABLE {table_name} AS SELECT * FROM schema_df"
+                        )
+                    else:
+                        self.db_manager.conn.execute(
+                            f"CREATE TABLE IF NOT EXISTS {table_name} AS SELECT * FROM schema_df"
+                        )
+                    
                     self.db_manager.conn.unregister("schema_df")
 
                     row_counts = self._upsert_table(

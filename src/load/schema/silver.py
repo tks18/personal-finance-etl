@@ -304,6 +304,8 @@ CREATE TABLE IF NOT EXISTS silver.d_Macro_Parameters (
     -- Default (fallback)
     Default_LTCG DOUBLE,
     Default_STCG DOUBLE,
+    -- Income Tax
+    Dividend_Income_Tax_Rate DOUBLE,
     -- Meta
     Remarks TEXT,
     __file_name__ TEXT,

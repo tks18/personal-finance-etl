@@ -199,13 +199,19 @@ CREATE TABLE IF NOT EXISTS gold.p_Wealth_Risk_Analytics (
     Wealth_Velocity DOUBLE,
     Wealth_Acceleration DOUBLE,
     CAPE_Adjusted_SWR DOUBLE,
+    -- Savings & FI Progress Metrics
+    Savings_Rate_Actual DOUBLE,
+    Savings_Rate_Actual_Total DOUBLE,
+    FI_Velocity DOUBLE,
+    FI_Velocity_Total DOUBLE,
+    Real_NW_CAGR_3Y DOUBLE,
     -- Advanced Monte Carlo Outputs
     Terminal_Wealth_P50 DOUBLE,
     Terminal_Wealth_P10 DOUBLE,
     Terminal_Wealth_Nominal_P50 DOUBLE,
     Terminal_Wealth_Total_Nominal_P50 DOUBLE,
     Max_Drawdown_Pct_P50 DOUBLE,
-    Lost_Savings_Expected_Value DOUBLE,
+    Compounded_Lost_Savings_EV DOUBLE,
     Peak_Inflation_Experienced_Pct DOUBLE,
     Decumulation_First_5Y_CAGR_P10 DOUBLE,
     Average_Realized_Withdrawal_Rate_P50 DOUBLE,
@@ -219,7 +225,11 @@ CREATE TABLE IF NOT EXISTS gold.p_Wealth_Risk_Analytics (
     "Recovery_From_Drawdown_%" DOUBLE,
     Max_Drawdown_12M DOUBLE,
     Annualized_Volatility_12M DOUBLE,
-    NW_Volatility_12M DOUBLE
+    NW_Volatility_12M DOUBLE,
+    -- Risk-Adjusted Return Ratios
+    Sharpe_Ratio_12M DOUBLE,
+    Sortino_Ratio_12M DOUBLE,
+    Calmar_Ratio_12M DOUBLE
 );
 
 CREATE TABLE IF NOT EXISTS gold.p_Tax_Liability_Forecast (
@@ -244,7 +254,9 @@ CREATE TABLE IF NOT EXISTS gold.p_Tax_Liability_Forecast (
     Harvesting_Offset_Remaining DOUBLE,
     -- Efficiency
     Tax_Drag_Pct DOUBLE,
-    Tax_Alpha_Pct DOUBLE
+    Tax_Alpha_Pct DOUBLE,
+    Tax_Harvesting_Capacity DOUBLE,
+    Tax_Efficiency_Ratio DOUBLE
 );
 
 CREATE TABLE IF NOT EXISTS gold.p_Budget_Forecast_Monthly (
