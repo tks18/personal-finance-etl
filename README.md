@@ -99,11 +99,11 @@ graph TD
     classDef external fill:#2d2d2d,stroke:#00ffcc,stroke-width:2px,color:#fff;
     classDef core fill:#00008b,stroke:#00ffcc,stroke-width:3px,color:#fff;
     
-    A[Raw Broker/Bank Files<br><i>(Excel, CSV, PDF)</i>]:::external -->|FileTracker & Hashes| B
+    A["Raw Broker/Bank Files<br><i>(Excel, CSV, PDF)</i>"]:::external -->|FileTracker & Hashes| B
     
     subgraph Bronze Layer [Raw Ingestion Phase]
         B[(bronze.* Tables)]:::bronze
-        B_Desc[FastExcel Zero-Copy Parsing]:::bronze
+        B_Desc["FastExcel Zero-Copy Parsing"]:::bronze
     end
     
     B -->|Schema Validation| C
@@ -114,7 +114,7 @@ graph TD
         C -->|Type Enforcement & Dedupe| D
     end
     
-    D -->|yfinance Daemon| E[Benchmark Engine<br><i>(Delta Pulls Only)</i>]:::external
+    D -->|yfinance Daemon| E["Benchmark Engine<br><i>(Delta Pulls Only)</i>"]:::external
     E --> F
     
     subgraph Gold Layer [Quant Analytics Phase]
