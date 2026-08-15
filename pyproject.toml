@@ -22,11 +22,20 @@ dependencies = [
     "pydantic>=2.13.4",
     "python-dateutil>=2.9.0.post0",
     "pyxirr>=0.10.8",
+    "rich>=15.0.0",
     "tkcalendar>=1.6.1",
     "types-psutil>=7.2.2.20260518",
     "types-python-dateutil>=2.9.0.20260716",
     "yfinance>=1.5.1",
 ]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project.scripts]
+shan-fin = "personal_finance_etl.frontend.launcher:main"
+shan-fin-gui = "personal_finance_etl.frontend.desktop.app:main"
 
 [dependency-groups]
 dev = [
@@ -69,7 +78,7 @@ strict = true
 
 [tool.pyright]
 typeCheckingMode = "strict"
-ignore = ["src/ui"]
+ignore = ["src/personal_finance_etl/frontend/desktop"]
 
 [project.urls]
 Homepage = "https://github.com/tks18/personal-finance-etl"
