@@ -89,7 +89,7 @@ The `WealthPresentationEngine` acts as the orchestrator for all presentation bui
 
 1. **Import your new builder at the top.**
 ```python
-from src.engines.presentation.modules.cohort_analysis import CohortAnalysisBuilder
+from personal_finance_etl.engines.presentation.modules.cohort_analysis import CohortAnalysisBuilder
 ```
 
 2. **Execute it in the `run()` method.**
