@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [5.0.0](https://github.com/tks18/personal-finance-etl/compare/4.3.0...5.0.0) (2026-08-15)
+
+
+### Features 🔥
+
+* **backend/api:** create a backend facade api for the entire pipeline ([033e135](https://github.com/tks18/personal-finance-etl/commit/033e1350a9bed55b0e6663b0275600068f0fcadb))
+* **frontend/cli:** introduce new frontend for gui less pipelines ([6c9aa56](https://github.com/tks18/personal-finance-etl/commit/6c9aa56f6248ca5cd113fde42193235eaaea24d9))
+
+
+### Code Refactoring 🖌
+
+* move backend modules to backend/*, ui modules to frontend/desktop/* ([fe1a195](https://github.com/tks18/personal-finance-etl/commit/fe1a195c90a1155f0a4a6f8b060f8d84d3c41589))
+* refactor to a package based folder structure for publishing ([2416c02](https://github.com/tks18/personal-finance-etl/commit/2416c0298ff6871e2f72a832dd08775637cc062c))
+* use the new module for starting the app ([f45cfc2](https://github.com/tks18/personal-finance-etl/commit/f45cfc2bdaa563517517e7d90771d258136fac08))
+
+
+### Build System 🏗
+
+* add build configs ([19e9951](https://github.com/tks18/personal-finance-etl/commit/19e9951abf3557ed2ac304337c570ec28d5b3fb1))
+* update build spec to generate two builds cli, desktop ([ce2b013](https://github.com/tks18/personal-finance-etl/commit/ce2b013d20a8ad2d7e2e829749bd75dbd74fea03))
+
+
+### Docs 📃
+
+* update documentations ([8fbd1c3](https://github.com/tks18/personal-finance-etl/commit/8fbd1c3d7583c59976a99009f679dc17d5c942e8))
+* update readme mermail diag ([693bb20](https://github.com/tks18/personal-finance-etl/commit/693bb203bed59cd67f691ec79f6c5741ecd1bfab))
+
 ## [4.3.0](https://github.com/tks18/personal-finance-etl/compare/4.2.0...4.3.0) (2026-08-15)
 
 
