@@ -3,11 +3,18 @@ from typing import Any
 
 from src.engines.analytics.core.math import calculate_risk_metrics
 from src.engines.analytics.pipeline.processor.benchmark import BenchmarkPriceProvider
+from src.engines.analytics.rules.macro import FYMacroParametersTable
 from src.utils.helpers import to_date_obj
 
 
 class RiskMetricsProvider:
-    def __init__(self, m_inst: list[dict[str, Any]], bm_provider: BenchmarkPriceProvider):
+    def __init__(
+        self,
+        m_inst: list[dict[str, Any]],
+        bm_provider: BenchmarkPriceProvider,
+        fy_table: FYMacroParametersTable,
+    ):
+        self.fy_table = fy_table
         self.inst_px: dict[date, float] = {}
         for m_row in m_inst:
             d = to_date_obj(m_row["Date"])
@@ -33,8 +40,30 @@ class RiskMetricsProvider:
         else:
             self.periods_per_year = 252.0
 
-    def calculate_risk(self, first_p_date: date, m_date: date):
+    def calculate_risk(
+        self, first_p_date: date, m_date: date
+    ) -> tuple[
+        float,
+        float,
+        float,
+        float,
+        float,
+        float,
+        float,
+        float,
+        float,
+        float,
+        float,
+        float,
+    ]:
+        """
+        Returns:
+            (beta, t_err_ann, up_capture, down_capture,
+             inst_sharpe, inst_sortino, inst_calmar, inst_max_dd,
+             bm_sharpe,   bm_sortino,   bm_calmar,   bm_max_dd)
+        """
         past_dates = [d for d in self.valid_dates if first_p_date <= d <= m_date]
+        rfr = self.fy_table.get_risk_free_rate(m_date)
         return calculate_risk_metrics(
-            self.inst_ret_map, self.bm_ret_map, past_dates, self.periods_per_year
+            self.inst_ret_map, self.bm_ret_map, past_dates, self.periods_per_year, rfr
         )
