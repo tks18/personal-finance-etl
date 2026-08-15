@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [4.3.0](https://github.com/tks18/personal-finance-etl/compare/4.2.0...4.3.0) (2026-08-15)
+
+
+### Features 🔥
+
+* **engines/analytics:** integrate new metrics ([95fa55c](https://github.com/tks18/personal-finance-etl/commit/95fa55c0ba80361329c6f7918992a101cbd2426a))
+* **engines/analytics:** integrate new metrics to isin processor ([fbd5973](https://github.com/tks18/personal-finance-etl/commit/fbd59737815a2e0d1bd8a9531e1149984d4d58e0))
+* **engines/analytics:** integrate new risk metrics across all aggregations ([9d83427](https://github.com/tks18/personal-finance-etl/commit/9d834277da244db0f302aaf27bf3feddc4f9f477))
+* **engines/analytics:** math: introduce new risk metrics for investments ([a406e29](https://github.com/tks18/personal-finance-etl/commit/a406e29eac0777934c6beb0b34446c3a8b0d53b0))
+
+
+### Bug Fixes 🛠
+
+* **engines/presentations:** monte_carlo: fix non deterministic seeds, various math fixes ([61a6e5c](https://github.com/tks18/personal-finance-etl/commit/61a6e5c2bc3b5e9883c7a7e7bf2a24e5dca45688))
+
+
+### Code Refactoring 🖌
+
+* **load/schema:** add new risk metrics ddl ([c43fcc8](https://github.com/tks18/personal-finance-etl/commit/c43fcc83879305ea5117d2ed191e30305d42d913))
+
+
+### Docs 📃
+
+* update docs - readme, fire guide & metrics guide ([24c99af](https://github.com/tks18/personal-finance-etl/commit/24c99af1ca4dcdead787e25a55c5edb32c872a40))
+
 ## [4.2.0](https://github.com/tks18/personal-finance-etl/compare/4.1.6...4.2.0) (2026-08-14)
 
 
