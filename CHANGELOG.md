@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [5.0.1](https://github.com/tks18/personal-finance-etl/compare/5.0.0...5.0.1) (2026-08-15)
+
+
+### Styling 🎨
+
+* **frontend/cli:** automatically get the version ([23611eb](https://github.com/tks18/personal-finance-etl/commit/23611eb89a3e70ec081543ca85566fdf528e924d))
+
+
+### Bug Fixes 🛠
+
+* **.versionrc.js:** fix the path to __init__.py file ([af980c0](https://github.com/tks18/personal-finance-etl/commit/af980c0e015f370a561dcf0d2c254440ddeae6f1))
+
 ## [5.0.0](https://github.com/tks18/personal-finance-etl/compare/4.3.0...5.0.0) (2026-08-15)
 
 
