@@ -29,10 +29,12 @@ class SnapshotGenerator:
         m_date: date,
         m_price: float,
         m_bm_price: float,
-        risk_metrics: tuple[Any, ...],
         inst_metrics: dict[str, Any],
     ) -> list[SnapshotRecord]:
-        beta, t_err_ann, up_c, down_c = risk_metrics
+        beta = inst_metrics.get("beta", 0.0)
+        t_err_ann = inst_metrics.get("tracking_error", 0.0)
+        up_c = inst_metrics.get("up_capture", 0.0)
+        down_c = inst_metrics.get("down_capture", 0.0)
         inst_cagr = inst_metrics.get("cagr", 0.0)
         inst_bm_cagr = inst_metrics.get("bm_cagr", 0.0)
         inst_xirr = inst_metrics.get("xirr", 0.0)
@@ -41,6 +43,15 @@ class SnapshotGenerator:
         inst_active_return = inst_metrics.get("active_return", 0.0)
         is_lagging = inst_metrics.get("is_lagging", False)
         info_ratio = inst_metrics.get("info_ratio", 0.0)
+        # Risk-adjusted ratios
+        inst_sharpe = inst_metrics.get("sharpe", 0.0)
+        inst_sortino = inst_metrics.get("sortino", 0.0)
+        inst_calmar = inst_metrics.get("calmar", 0.0)
+        inst_max_dd = inst_metrics.get("max_drawdown", 0.0)
+        bm_sharpe = inst_metrics.get("bm_sharpe", 0.0)
+        bm_sortino = inst_metrics.get("bm_sortino", 0.0)
+        bm_calmar = inst_metrics.get("bm_calmar", 0.0)
+        bm_max_dd = inst_metrics.get("bm_max_drawdown", 0.0)
 
         outperform_cnt = 0
         lot_count = len(fifo.active_lots)
@@ -138,6 +149,17 @@ class SnapshotGenerator:
                     Information_Ratio=round(info_ratio, 8),
                     Upside_Capture=round(up_c, 8),
                     Downside_Capture=round(down_c, 8),
+                    Sharpe_Ratio=round(inst_sharpe, 8),
+                    Sortino_Ratio=round(inst_sortino, 8),
+                    Calmar_Ratio=round(inst_calmar, 8),
+                    Max_Drawdown=round(inst_max_dd, 8),
+                    BM_Sharpe_Ratio=round(bm_sharpe, 8),
+                    BM_Sortino_Ratio=round(bm_sortino, 8),
+                    BM_Calmar_Ratio=round(bm_calmar, 8),
+                    BM_Max_Drawdown=round(bm_max_dd, 8),
+                    Sharpe_Alpha=round(inst_sharpe - bm_sharpe, 8),
+                    Sortino_Alpha=round(inst_sortino - bm_sortino, 8),
+                    Calmar_Alpha=round(inst_calmar - bm_calmar, 8),
                     Tax_Rate=ltcg_rate if holding_type == "LTCG" else stcg_rate,
                     Unrealized_LTCG=round(unreal_ltcg, 4),
                     Unrealized_STCG=round(unreal_stcg, 4),

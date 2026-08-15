@@ -11,9 +11,20 @@ PORTFOLIO_COL_RENAMES = {
     "Portfolio_After_Tax_XIRR": "After_Tax_XIRR",
     "Portfolio_BM_XIRR": "BM_XIRR",
     "Portfolio_Active_Return": "Active_Return",
+    # Risk-adjusted (portfolio)
     "Portfolio_Sharpe_Ratio": "Sharpe_Ratio",
     "Portfolio_Sortino_Ratio": "Sortino_Ratio",
+    "Portfolio_Calmar_Ratio": "Calmar_Ratio",
     "Portfolio_Max_Drawdown": "Max_Drawdown",
+    # Benchmark equivalents
+    "Portfolio_BM_Sharpe_Ratio": "BM_Sharpe_Ratio",
+    "Portfolio_BM_Sortino_Ratio": "BM_Sortino_Ratio",
+    "Portfolio_BM_Calmar_Ratio": "BM_Calmar_Ratio",
+    "Portfolio_BM_Max_Drawdown": "BM_Max_Drawdown",
+    # Comparison alphas
+    "Portfolio_Sharpe_Alpha": "Sharpe_Alpha",
+    "Portfolio_Sortino_Alpha": "Sortino_Alpha",
+    "Portfolio_Calmar_Alpha": "Calmar_Alpha",
 }
 
 

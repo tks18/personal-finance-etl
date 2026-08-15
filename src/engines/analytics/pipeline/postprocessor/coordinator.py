@@ -147,6 +147,18 @@ class PostProcessor:
                     "Upside_Capture",
                     "Downside_Capture",
                     "Outperformance_Probability",
+                    # Per-ISIN risk-adjusted ratios
+                    "Sharpe_Ratio",
+                    "Sortino_Ratio",
+                    "Calmar_Ratio",
+                    "Max_Drawdown",
+                    "BM_Sharpe_Ratio",
+                    "BM_Sortino_Ratio",
+                    "BM_Calmar_Ratio",
+                    "BM_Max_Drawdown",
+                    "Sharpe_Alpha",
+                    "Sortino_Alpha",
+                    "Calmar_Alpha",
                 ]
             ).unique(),
             on=["Closing_Date", "ISIN"],
