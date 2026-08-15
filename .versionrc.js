@@ -123,7 +123,7 @@ module.exports = {
       updater: tracker,
     },
     {
-      filename: 'src/__init__.py',
+      filename: 'src/personal_finance_etl/__init__.py',
       updater: tracker,
     },
     {
