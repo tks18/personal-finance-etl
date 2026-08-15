@@ -82,6 +82,20 @@ class SnapshotRecord(BaseModel):
     Information_Ratio: float
     Upside_Capture: float
     Downside_Capture: float
+    # Per-ISIN risk-adjusted ratios (from instrument price return series)
+    Sharpe_Ratio: float = 0.0
+    Sortino_Ratio: float = 0.0
+    Calmar_Ratio: float = 0.0
+    Max_Drawdown: float = 0.0
+    # Benchmark equivalents (same formula on benchmark price series)
+    BM_Sharpe_Ratio: float = 0.0
+    BM_Sortino_Ratio: float = 0.0
+    BM_Calmar_Ratio: float = 0.0
+    BM_Max_Drawdown: float = 0.0
+    # Comparison alphas (instrument minus benchmark)
+    Sharpe_Alpha: float = 0.0
+    Sortino_Alpha: float = 0.0
+    Calmar_Alpha: float = 0.0
     Tax_Rate: float
     Unrealized_LTCG: float
     Unrealized_STCG: float

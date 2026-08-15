@@ -418,6 +418,20 @@ CREATE TABLE IF NOT EXISTS silver.f_tf_Investment_Analytics_Lot (
     Information_Ratio DOUBLE,
     Upside_Capture DOUBLE,
     Downside_Capture DOUBLE,
+    -- Per-ISIN Risk-Adjusted Ratios
+    Sharpe_Ratio DOUBLE,
+    Sortino_Ratio DOUBLE,
+    Calmar_Ratio DOUBLE,
+    Max_Drawdown DOUBLE,
+    -- Benchmark Equivalents
+    BM_Sharpe_Ratio DOUBLE,
+    BM_Sortino_Ratio DOUBLE,
+    BM_Calmar_Ratio DOUBLE,
+    BM_Max_Drawdown DOUBLE,
+    -- Comparison Alphas (instrument minus benchmark)
+    Sharpe_Alpha DOUBLE,
+    Sortino_Alpha DOUBLE,
+    Calmar_Alpha DOUBLE,
     -- Tax Exposure
     Tax_Rate DOUBLE,
     Unrealized_LTCG DOUBLE,
@@ -438,7 +452,15 @@ CREATE TABLE IF NOT EXISTS silver.f_tf_Investment_Analytics_Lot (
     Portfolio_Active_Return DOUBLE,
     Portfolio_Sharpe_Ratio DOUBLE,
     Portfolio_Sortino_Ratio DOUBLE,
+    Portfolio_Calmar_Ratio DOUBLE,
     Portfolio_Max_Drawdown DOUBLE,
+    Portfolio_BM_Sharpe_Ratio DOUBLE,
+    Portfolio_BM_Sortino_Ratio DOUBLE,
+    Portfolio_BM_Calmar_Ratio DOUBLE,
+    Portfolio_BM_Max_Drawdown DOUBLE,
+    Portfolio_Sharpe_Alpha DOUBLE,
+    Portfolio_Sortino_Alpha DOUBLE,
+    Portfolio_Calmar_Alpha DOUBLE,
     Outperformance_Probability DOUBLE,
     -- FY Tax Tracking
     FY TEXT,
@@ -485,6 +507,20 @@ CREATE TABLE IF NOT EXISTS silver.f_tf_Investment_Analytics_ISIN (
     Upside_Capture DOUBLE,
     Downside_Capture DOUBLE,
     Outperformance_Probability DOUBLE,
+    -- Per-ISIN Risk-Adjusted Ratios
+    Sharpe_Ratio DOUBLE,
+    Sortino_Ratio DOUBLE,
+    Calmar_Ratio DOUBLE,
+    Max_Drawdown DOUBLE,
+    -- Benchmark Equivalents
+    BM_Sharpe_Ratio DOUBLE,
+    BM_Sortino_Ratio DOUBLE,
+    BM_Calmar_Ratio DOUBLE,
+    BM_Max_Drawdown DOUBLE,
+    -- Comparison Alphas
+    Sharpe_Alpha DOUBLE,
+    Sortino_Alpha DOUBLE,
+    Calmar_Alpha DOUBLE,
     -- Tax Exposure
     Unrealized_LTCG DOUBLE,
     Unrealized_STCG DOUBLE,
@@ -521,10 +557,20 @@ CREATE TABLE IF NOT EXISTS silver.f_tf_Investment_Analytics_Subtype (
     After_Tax_XIRR DOUBLE,
     BM_XIRR DOUBLE,
     Active_Return DOUBLE,
-    -- Risk-Adjusted
+    -- Risk-Adjusted (Portfolio)
     Sharpe_Ratio DOUBLE,
     Sortino_Ratio DOUBLE,
+    Calmar_Ratio DOUBLE,
     Max_Drawdown DOUBLE,
+    -- Benchmark Equivalents
+    BM_Sharpe_Ratio DOUBLE,
+    BM_Sortino_Ratio DOUBLE,
+    BM_Calmar_Ratio DOUBLE,
+    BM_Max_Drawdown DOUBLE,
+    -- Comparison Alphas
+    Sharpe_Alpha DOUBLE,
+    Sortino_Alpha DOUBLE,
+    Calmar_Alpha DOUBLE,
     -- Tax Exposure
     Unrealized_LTCG DOUBLE,
     Unrealized_STCG DOUBLE,
@@ -559,10 +605,20 @@ CREATE TABLE IF NOT EXISTS silver.f_tf_Investment_Analytics_Class (
     After_Tax_XIRR DOUBLE,
     BM_XIRR DOUBLE,
     Active_Return DOUBLE,
-    -- Risk-Adjusted
+    -- Risk-Adjusted (Portfolio)
     Sharpe_Ratio DOUBLE,
     Sortino_Ratio DOUBLE,
+    Calmar_Ratio DOUBLE,
     Max_Drawdown DOUBLE,
+    -- Benchmark Equivalents
+    BM_Sharpe_Ratio DOUBLE,
+    BM_Sortino_Ratio DOUBLE,
+    BM_Calmar_Ratio DOUBLE,
+    BM_Max_Drawdown DOUBLE,
+    -- Comparison Alphas
+    Sharpe_Alpha DOUBLE,
+    Sortino_Alpha DOUBLE,
+    Calmar_Alpha DOUBLE,
     -- Tax Exposure
     Unrealized_LTCG DOUBLE,
     Unrealized_STCG DOUBLE,
@@ -596,10 +652,20 @@ CREATE TABLE IF NOT EXISTS silver.f_tf_Investment_Analytics_Portfolio (
     After_Tax_XIRR DOUBLE,
     BM_XIRR DOUBLE,
     Active_Return DOUBLE,
-    -- Risk-Adjusted
+    -- Risk-Adjusted (Portfolio)
     Sharpe_Ratio DOUBLE,
     Sortino_Ratio DOUBLE,
+    Calmar_Ratio DOUBLE,
     Max_Drawdown DOUBLE,
+    -- Benchmark Equivalents
+    BM_Sharpe_Ratio DOUBLE,
+    BM_Sortino_Ratio DOUBLE,
+    BM_Calmar_Ratio DOUBLE,
+    BM_Max_Drawdown DOUBLE,
+    -- Comparison Alphas
+    Sharpe_Alpha DOUBLE,
+    Sortino_Alpha DOUBLE,
+    Calmar_Alpha DOUBLE,
     -- Tax Exposure
     Unrealized_LTCG DOUBLE,
     Unrealized_STCG DOUBLE,
