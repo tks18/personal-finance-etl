@@ -53,7 +53,7 @@ class IsinProcessor:
         bench_id = master_row.get("BENCHMARK_ID")
 
         bm_provider = BenchmarkPriceProvider(bench_id, None, prebuilt_map=bm_map)
-        risk_provider = RiskMetricsProvider(m_inst, bm_provider)
+        risk_provider = RiskMetricsProvider(m_inst, bm_provider, self.fy_table)
         snapshot_generator = SnapshotGenerator(self.fy_table, self.rules, isin, master_row)
 
         fifo = FIFOPortfolio(tax_type, tax_subtype, self.fy_table)
@@ -205,8 +205,20 @@ class IsinProcessor:
                 if avg_bm_cost > 0:
                     inst_bm_cagr = calculate_cagr(avg_bm_cost, m_bm_price, inst_age)
 
-            risk_metrics = risk_provider.calculate_risk(first_p_date, m_date)
-            t_err_ann = risk_metrics[1]
+            (
+                beta_r,
+                t_err_ann,
+                up_c_r,
+                dn_c_r,
+                inst_sharpe,
+                inst_sortino,
+                inst_calmar,
+                inst_max_dd,
+                bm_sharpe,
+                bm_sortino,
+                bm_calmar,
+                bm_max_dd,
+            ) = risk_provider.calculate_risk(first_p_date, m_date)
             info_ratio = (inst_active_return / t_err_ann) if t_err_ann != 0 else 0.0
 
             inst_metrics = {
@@ -218,11 +230,24 @@ class IsinProcessor:
                 "active_return": inst_active_return,
                 "is_lagging": is_lagging,
                 "info_ratio": info_ratio,
+                # Classic risk metrics
+                "beta": beta_r,
+                "tracking_error": t_err_ann,
+                "up_capture": up_c_r,
+                "down_capture": dn_c_r,
+                # Per-instrument risk-adjusted ratios
+                "sharpe": inst_sharpe,
+                "sortino": inst_sortino,
+                "calmar": inst_calmar,
+                "max_drawdown": inst_max_dd,
+                # Benchmark equivalents (for comparison)
+                "bm_sharpe": bm_sharpe,
+                "bm_sortino": bm_sortino,
+                "bm_calmar": bm_calmar,
+                "bm_max_drawdown": bm_max_dd,
             }
 
-            snapshots = snapshot_generator.generate(
-                fifo, m_date, m_price, m_bm_price, risk_metrics, inst_metrics
-            )
+            snapshots = snapshot_generator.generate(fifo, m_date, m_price, m_bm_price, inst_metrics)
             isin_snapshots.extend(snapshots)
 
         while p_idx < len(p_inst):
