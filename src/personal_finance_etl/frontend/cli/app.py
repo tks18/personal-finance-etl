@@ -1,7 +1,13 @@
 import argparse
 import sys
 import threading
+import importlib.metadata
 import time
+
+try:
+    __version__ = importlib.metadata.version("personal-finance-etl")
+except importlib.metadata.PackageNotFoundError:
+    __version__ = "unknown"
 
 from rich.console import Console
 from rich.panel import Panel
@@ -29,7 +35,7 @@ if sys.platform == "win32":
 
 console = Console()
 
-LOGO = """
+LOGO = f"""
 [bold cyan]
 ███████╗██╗  ██╗ █████╗ ███╗   ██╗    ███████╗████████╗██╗     
 ██╔════╝██║  ██║██╔══██╗████╗  ██║    ██╔════╝╚══██╔══╝██║     
@@ -38,7 +44,7 @@ LOGO = """
 ███████║██║  ██║██║  ██║██║ ╚████║    ███████╗   ██║   ███████╗
 ╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝    ╚══════╝   ╚═╝   ╚══════╝
 [/bold cyan]
-[bold bright_black]INSTITUTIONAL QUANTITATIVE MASTER ENGINE v4.3.0[/bold bright_black]
+[bold bright_black]INSTITUTIONAL QUANTITATIVE MASTER ENGINE v{__version__}[/bold bright_black]
 """
 
 
