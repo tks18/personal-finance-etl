@@ -1,8 +1,4 @@
-import multiprocessing
-
-from src.ui import App
+from personal_finance_etl import run_app
 
 if __name__ == "__main__":
-    multiprocessing.freeze_support()
-    app = App()
-    app.mainloop()  # type: ignore
+    run_app()

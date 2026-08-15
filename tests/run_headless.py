@@ -1,9 +1,9 @@
 import queue
 import time
 
-from src.config.settings import Settings
-from src.pipeline.etl_pipeline import ETLOrchestrator
-from src.utils.models import EngineStatus
+from personal_finance_etl.backend.config.settings import Settings
+from personal_finance_etl.backend.pipeline.etl_pipeline import ETLOrchestrator
+from personal_finance_etl.backend.utils.models import EngineStatus
 
 
 class LoggerQueue:
