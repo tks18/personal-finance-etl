@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [5.0.4](https://github.com/tks18/personal-finance-etl/compare/5.0.3...5.0.4) (2026-08-16)
+
+
+### Tests 🧪
+
+* update cron script ([f4aac7a](https://github.com/tks18/personal-finance-etl/commit/f4aac7ac9d252c97b7cd2329db9b08ce84a11854))
+
 ### [5.0.3](https://github.com/tks18/personal-finance-etl/compare/5.0.2...5.0.3) (2026-08-16)
 
 
