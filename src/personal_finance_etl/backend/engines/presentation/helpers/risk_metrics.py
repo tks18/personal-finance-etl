@@ -70,21 +70,9 @@ class RiskMetricsBuilder:
             .with_columns(pl.col("Total_Investment_Value").fill_null(0.0))
             .sort("MONTH_START_DATE")
             .with_columns(
-                pl.col("Total_Investment_Value").cum_max().alias("All_Time_High_Inv"),
-                pl.col("Total_Net_Worth_Market").cum_max().alias("All_Time_High_NW"),
-                pl.col("Total_Net_Worth_Real").cum_max().alias("All_Time_High_Real_NW"),
                 (pl.col("Total_Invested_Value") - pl.col("Total_Invested_Value").shift(1))
                 .fill_null(0.0)
                 .alias("Inv_Cashflow"),
-            )
-            .with_columns(
-                pl.when(pl.col("All_Time_High_Inv") > 0)
-                .then(
-                    (pl.col("Total_Investment_Value") - pl.col("All_Time_High_Inv"))
-                    / pl.col("All_Time_High_Inv")
-                )
-                .otherwise(0.0)
-                .alias("Drawdown_Pct")
             )
             .with_columns(
                 # Modified Dietz return on investments (investment-specific cash flows)
@@ -116,10 +104,31 @@ class RiskMetricsBuilder:
                 )
                 .otherwise(0.0)
                 .alias("NW_Monthly_Return"),
-                pl.when(pl.col("All_Time_High_NW") > 0)
+            )
+            .with_columns(
+                pl.col("Total_Investment_Value").cum_max().alias("All_Time_High_Inv"),
+                pl.col("Total_Net_Worth_Market").cum_max().alias("All_Time_High_NW"),
+                pl.col("Total_Net_Worth_Real").cum_max().alias("All_Time_High_Real_NW"),
+                # Synthetic cumulative return indices to track true drawdowns immune to cash injections
+                (1.0 + pl.col("Monthly_Return")).cum_prod().alias("Cum_Return_Index"),
+                (1.0 + pl.col("NW_Monthly_Return")).cum_prod().alias("NW_Cum_Return_Index"),
+            )
+            .with_columns(
+                pl.col("Cum_Return_Index").cum_max().alias("All_Time_High_Inv_Index"),
+                pl.col("NW_Cum_Return_Index").cum_max().alias("All_Time_High_NW_Index"),
+            )
+            .with_columns(
+                pl.when(pl.col("All_Time_High_Inv_Index") > 0)
                 .then(
-                    (pl.col("Total_Net_Worth_Market") - pl.col("All_Time_High_NW"))
-                    / pl.col("All_Time_High_NW")
+                    (pl.col("Cum_Return_Index") - pl.col("All_Time_High_Inv_Index"))
+                    / pl.col("All_Time_High_Inv_Index")
+                )
+                .otherwise(0.0)
+                .alias("Drawdown_Pct"),
+                pl.when(pl.col("All_Time_High_NW_Index") > 0)
+                .then(
+                    (pl.col("NW_Cum_Return_Index") - pl.col("All_Time_High_NW_Index"))
+                    / pl.col("All_Time_High_NW_Index")
                 )
                 .otherwise(0.0)
                 .alias("NW_Drawdown_Pct"),
@@ -130,10 +139,10 @@ class RiskMetricsBuilder:
                 )
                 .otherwise(0.0)
                 .alias("Real_Drawdown_Pct"),
-                pl.when(pl.col("Total_Investment_Value").shift(12) > 0)
+                pl.when(pl.col("Cum_Return_Index").shift(12) > 0)
                 .then(
-                    (pl.col("Total_Investment_Value") - pl.col("Total_Investment_Value").shift(12))
-                    / pl.col("Total_Investment_Value").shift(12)
+                    (pl.col("Cum_Return_Index") - pl.col("Cum_Return_Index").shift(12))
+                    / pl.col("Cum_Return_Index").shift(12)
                 )
                 .otherwise(0.0)
                 .alias("Rolling_12M_Return"),
@@ -152,7 +161,9 @@ class RiskMetricsBuilder:
                 (
                     pl.col("Monthly_Return")
                     .clip(upper_bound=0.0)
-                    .rolling_std(window_size=12)
+                    .pow(2)
+                    .rolling_mean(window_size=12)
+                    .sqrt()
                     * (12**0.5)
                 )
                 .fill_null(0.0)
