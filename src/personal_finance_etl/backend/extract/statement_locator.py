@@ -25,9 +25,9 @@ def categorize_statement_files(folder_path: str, strict: bool = True) -> dict[st
                     f"No files found for category: '{cat}'. Please ensure statements are present."
                 )
             else:
-                logger.info(f"  -> Discovered 0 files for category: '{cat}'")
+                logger.info(f"  -> [{cat}] Discovered 0 files.")
         else:
-            logger.info(f"  -> Discovered {len(files)} files for category: '{cat}'")
+            logger.info(f"  -> [{cat}] Discovered {len(files)} files.")
 
     logger.info(
         f"Successfully categorized {sum(len(f) for f in categories.values())} total raw statement files."
