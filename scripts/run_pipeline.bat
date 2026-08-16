@@ -16,12 +16,15 @@ echo [%DATE% %TIME%] [Cron Job] Starting Personal Finance ETL Pipeline...
 echo [%DATE% %TIME%] Executable: %CLI_EXECUTABLE%
 echo ---------------------------------------------------------------------
 
-%CLI_EXECUTABLE% cli --config="%CONFIG_PATH%" --rules="%RULES_PATH%" --auto --cron
+"%CLI_EXECUTABLE%" cli --config="%CONFIG_PATH%" --rules="%RULES_PATH%" --auto --cron
 
 if %ERRORLEVEL% equ 0 (
     echo [%DATE% %TIME%] [Cron Job] Pipeline completed successfully.
 ) else (
     echo [%DATE% %TIME%] [Cron Job] Pipeline failed with error code %ERRORLEVEL%.
 )
+
+:: Wait for 10 seconds before closing
+timeout /t 10
 
 endlocal
