@@ -55,7 +55,7 @@ class GroupProcessor:
 
             # Use the exact same PyXIRR calculator as the portfolio uses!
             df_group = self.xirr_calc.calculate(unique_dates, cashflows, terminals)
-            df_group = self.analytics_calc.calculate(df_group, unique_dates, terminals)
+            df_group = self.analytics_calc.calculate(df_group, unique_dates, terminals, cashflows)
 
             df_group = df_group.rename(PORTFOLIO_COL_RENAMES)
 

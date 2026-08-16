@@ -37,7 +37,7 @@ class PostProcessor:
         df_port = self.xirr_calc.calculate(
             unique_dates, pipeline_res.global_cf, pipeline_res.global_pt
         )
-        df_port = self.analytics_calc.calculate(df_port, unique_dates, pipeline_res.global_pt)
+        df_port = self.analytics_calc.calculate(df_port, unique_dates, pipeline_res.global_pt, pipeline_res.global_cf)
         lazy_df = lazy_df.join(df_port.lazy(), on="Closing_Date", how="left")
 
         lazy_df = self.weights_calc.calculate(lazy_df)

@@ -21,6 +21,7 @@ class AdvancedAnalyticsCalculator:
         df_port: pl.DataFrame,
         unique_dates: list[date],
         portfolio_terminals: dict[date, dict[str, Any]],
+        cashflows: list[dict[str, Any]],
     ) -> pl.DataFrame:
         pt_records: list[dict[str, Any]] = []
         for d in unique_dates:
@@ -39,6 +40,21 @@ class AdvancedAnalyticsCalculator:
 
         if pt_records:
             df_pt = pl.DataFrame(pt_records).sort("Date_Obj")
+            
+            # Aggregate cash flows by date to compute net injection
+            cf_records = []
+            for cf in cashflows:
+                d_obj = to_date_obj(cf["date"])
+                if d_obj:
+                    # 'amount' is negative for buys (injections) and positive for sells (withdrawals)
+                    cf_records.append({"Date_Obj": d_obj, "injection": -float(cf["amount"])})
+            
+            if cf_records:
+                df_cf = pl.DataFrame(cf_records).group_by("Date_Obj").agg(pl.col("injection").sum().alias("net_injection"))
+                df_pt = df_pt.join(df_cf, on="Date_Obj", how="left").with_columns(pl.col("net_injection").fill_null(0.0))
+            else:
+                df_pt = df_pt.with_columns(pl.lit(0.0).alias("net_injection"))
+
             if df_pt.height > 1:
                 avg_days = (df_pt["Date_Obj"][-1] - df_pt["Date_Obj"][0]).days / (df_pt.height - 1)
                 annual_periods = max(1, int(round(365.0 / max(1.0, avg_days))))
@@ -48,8 +64,16 @@ class AdvancedAnalyticsCalculator:
             sqrt_ann = math.sqrt(annual_periods)
 
             df_pt = (
-                # ── Portfolio (actual) returns ──────────────────────────────
-                df_pt.with_columns(pl.col("val").pct_change().fill_null(0.0).alias("daily_return"))
+                # ── Portfolio (actual) returns (Adjusted for Cash flows) ──────────
+                df_pt.with_columns(
+                    pl.when((pl.col("val").shift(1) + (pl.col("net_injection") * 0.5)) > 0)
+                    .then(
+                        (pl.col("val") - pl.col("val").shift(1) - pl.col("net_injection"))
+                        / (pl.col("val").shift(1) + (pl.col("net_injection") * 0.5))
+                    )
+                    .otherwise(0.0)
+                    .alias("daily_return")
+                )
                 .with_columns((pl.col("daily_return") + 1.0).cum_prod().alias("cum_return"))
                 .with_columns(
                     pl.when(pl.col("Date_Obj").cum_count() > 1)
@@ -71,14 +95,15 @@ class AdvancedAnalyticsCalculator:
                     .rolling_std(window_size=annual_periods, min_samples=1)
                     .fill_null(0.0)
                     .alias("volatility"),
-                    # Sortino semi-deviation: null out non-negative returns so that
-                    # rolling_std counts only negative observations in its window.
-                    # Using 0.0 instead of null inflates the sample-size denominator
-                    # and overstates the Sortino ratio.
+                    # Sortino semi-deviation: replace positive returns with 0.0,
+                    # square the results, take the rolling mean, and square root it.
+                    # This correctly computes the Root Mean Square of negative returns.
                     pl.when(pl.col("daily_return") < 0)
                     .then(pl.col("daily_return"))
-                    .otherwise(pl.lit(None))
-                    .rolling_std(window_size=annual_periods, min_samples=1)
+                    .otherwise(0.0)
+                    .pow(2)
+                    .rolling_mean(window_size=annual_periods, min_samples=1)
+                    .sqrt()
                     .fill_null(0.0)
                     .alias("downside_volatility"),
                     pl.col("val").cum_max().alias("peak_val"),
@@ -90,12 +115,12 @@ class AdvancedAnalyticsCalculator:
                     .cum_min()
                     .alias("Portfolio_Max_Drawdown")
                 )
-                # ── Benchmark (shadow) returns — safe pct_change ────────────
+                # ── Benchmark (shadow) returns (Adjusted for Cash flows) ────
                 .with_columns(
-                    pl.when((pl.col("shadow_val").shift(1) > 0) & (pl.col("shadow_val") > 0))
+                    pl.when((pl.col("shadow_val").shift(1) + (pl.col("net_injection") * 0.5)) > 0)
                     .then(
-                        (pl.col("shadow_val") - pl.col("shadow_val").shift(1))
-                        / pl.col("shadow_val").shift(1)
+                        (pl.col("shadow_val") - pl.col("shadow_val").shift(1) - pl.col("net_injection"))
+                        / (pl.col("shadow_val").shift(1) + (pl.col("net_injection") * 0.5))
                     )
                     .otherwise(0.0)
                     .alias("bm_daily_return")
@@ -121,12 +146,13 @@ class AdvancedAnalyticsCalculator:
                     .rolling_std(window_size=annual_periods, min_samples=1)
                     .fill_null(0.0)
                     .alias("bm_volatility"),
-                    # Benchmark Sortino semi-deviation: same fix as portfolio — null
-                    # non-negative returns so rolling_std uses only negative observations.
+                    # Benchmark Sortino semi-deviation: same fix as portfolio.
                     pl.when(pl.col("bm_daily_return") < 0)
                     .then(pl.col("bm_daily_return"))
-                    .otherwise(pl.lit(None))
-                    .rolling_std(window_size=annual_periods, min_samples=1)
+                    .otherwise(0.0)
+                    .pow(2)
+                    .rolling_mean(window_size=annual_periods, min_samples=1)
+                    .sqrt()
                     .fill_null(0.0)
                     .alias("bm_downside_volatility"),
                     pl.col("shadow_val").cum_max().alias("bm_peak_val"),
