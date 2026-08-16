@@ -68,9 +68,13 @@ a = Analysis(
         'sqlalchemy', 'boto3', 'botocore', 's3fs', 'gcsfs', 'fsspec',
         'bokeh', 'plotly', 'altair', 'seaborn',
         'pytest', 'pdb', 'idlelib',
-        'pydantic.v1', 
+        'pydantic.v1', 'pydantic.tests', 'pydantic._internal.tests',
         'numba.tests', 'numpy.random.tests', 'numpy.core.tests', 'pandas.tests', 'pyarrow.tests',
-        'PIL.ImageQt', 'PIL.ImageWebP'
+        'pyarrow.flight', 'pyarrow.cuda', 'pyarrow.ganesha',
+        'duckdb.tests', 'psutil.tests', 'cryptography',
+        'PIL.ImageQt', 'PIL.ImageWebP',
+        'mypy', 'mypyc', 'pyright', 'black', 'flake8', 'isort', 'ruff',
+        'poethepoet', 'pyinstaller', 'tkreload', 'vulture'
     ],
     noarchive=False,
     optimize=1,
