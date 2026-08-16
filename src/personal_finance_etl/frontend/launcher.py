@@ -20,6 +20,16 @@ def main() -> None:
         action="store_true",
         help="Snapshot the DuckDB database instead of running ETL",
     )
+    cli_parser.add_argument(
+        "--auto",
+        action="store_true",
+        help="Bypass confirmation prompts and automatically start the pipeline",
+    )
+    cli_parser.add_argument(
+        "--cron",
+        action="store_true",
+        help="Run completely unattended and exit immediately after completion (implies --auto)",
+    )
 
     # Tkinter Subcommand
     subparsers.add_parser("tkinter", help="Launch the Desktop GUI")
