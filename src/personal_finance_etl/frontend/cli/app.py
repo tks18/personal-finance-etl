@@ -1,7 +1,7 @@
 import argparse
+import importlib.metadata
 import sys
 import threading
-import importlib.metadata
 import time
 from datetime import datetime
 
@@ -11,11 +11,13 @@ except importlib.metadata.PackageNotFoundError:
     __version__ = "unknown"
 
 from rich.console import Console
+from rich.markup import escape
 from rich.panel import Panel
 from rich.progress import (
     BarColumn,
     Progress,
     SpinnerColumn,
+    TaskID,
     TaskProgressColumn,
     TextColumn,
     TimeElapsedColumn,
@@ -159,19 +161,36 @@ def main_cli(args: argparse.Namespace) -> None:
         ) as progress:
             main_task = progress.add_task("[cyan]ETL Pipeline Progress", total=100.0)
 
-            def on_status(status: EngineStatus) -> None:
+            def on_status(
+                status: EngineStatus,
+                progress: Progress = progress,
+                main_task: TaskID = main_task,
+                completion_event: threading.Event = completion_event,
+            ) -> None:
                 if status.msg:
                     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+                    # Escape the message so rich doesn't swallow things like "[stock_pl]"
+                    safe_msg = escape(status.msg)
+
                     if status.level == LogLevel.SUCCESS:
-                        progress.console.print(f"[dim][{ts}][/dim] [bold green]✓[/bold green] {status.msg}")
+                        progress.console.print(
+                            f"[dim][{ts}][/dim] [bold green]✓[/bold green] {safe_msg}"
+                        )
                     elif status.level == LogLevel.ERROR:
-                        progress.console.print(f"[dim][{ts}][/dim] [bold red]✗ ERROR:[/bold red] {status.msg}")
+                        progress.console.print(
+                            f"[dim][{ts}][/dim] [bold red]✗ ERROR:[/bold red] {safe_msg}"
+                        )
                     elif status.level == LogLevel.WARNING:
-                        progress.console.print(f"[dim][{ts}][/dim] [bold yellow]![/bold yellow] {status.msg}")
+                        progress.console.print(
+                            f"[dim][{ts}][/dim] [bold yellow]![/bold yellow] {safe_msg}"
+                        )
                     elif status.level == LogLevel.STEP:
-                        progress.console.print(f"[dim][{ts}][/dim] [bold cyan]>>[/bold cyan] {status.msg}")
+                        progress.console.print(
+                            f"[dim][{ts}][/dim] [bold cyan]>>[/bold cyan] {safe_msg}"
+                        )
                     else:
-                        progress.console.print(f"[dim][{ts}][/dim] [dim]•[/dim] {status.msg}")
+                        progress.console.print(f"[dim][{ts}][/dim] [dim]•[/dim] {safe_msg}")
 
                 if status.progress is not None:
                     # Update bar (backend sends 0.0 to 1.0)
@@ -190,7 +209,9 @@ def main_cli(args: argparse.Namespace) -> None:
                 # Force progress to 100% on clean completion
                 progress.update(main_task, completed=100.0)
             except KeyboardInterrupt:
-                progress.console.print("\n[bold red]Pipeline forcefully terminated by user.[/bold red]")
+                progress.console.print(
+                    "\n[bold red]Pipeline forcefully terminated by user.[/bold red]"
+                )
                 sys.exit(1)
 
         console.print("\n[bold green]=== SYSTEM HALTED. OPERATION COMPLETE. ===[/bold green]\n")
