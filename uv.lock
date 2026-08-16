@@ -717,7 +717,7 @@ wheels = [
 
 [[package]]
 name = "personal-finance-etl"
-version = "5.0.5"
+version = "5.0.6"
 source = { editable = "." }
 dependencies = [
     { name = "adbc-driver-sqlite" },

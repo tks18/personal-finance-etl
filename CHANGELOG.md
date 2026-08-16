@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [5.0.6](https://github.com/tks18/personal-finance-etl/compare/5.0.5...5.0.6) (2026-08-16)
+
+
+### Bug Fixes 🛠
+
+* **backend/engine:** fix risk metrics ([5ba3de9](https://github.com/tks18/personal-finance-etl/commit/5ba3de9bf667241bb1694e54be711282a8091947))
+* **backend/engine:** fix risk metrics ([fcf9b71](https://github.com/tks18/personal-finance-etl/commit/fcf9b717c56bfcc96f7598577df4b6227ec9f321))
+* **backend/engine:** fix risk metrics calculation anomaly ([77f99db](https://github.com/tks18/personal-finance-etl/commit/77f99db9f6c06ea0c07cd7c023d382c174eaaafe))
+
 ### [5.0.5](https://github.com/tks18/personal-finance-etl/compare/5.0.4...5.0.5) (2026-08-16)
 
 
