@@ -21,5 +21,5 @@ from personal_finance_etl.frontend import DesktopApp, main_cli, run_app
 
 __all__ = ["__version__", "PACKAGE_NAME", "DesktopApp", "PersonalFinanceEngine", "main_cli", "run_app"]
 
-__version__ = "5.0.1"
+__version__ = "5.0.2"
 PACKAGE_NAME = "personal-finance-etl"
