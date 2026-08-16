@@ -3,6 +3,7 @@ import sys
 import threading
 import importlib.metadata
 import time
+from datetime import datetime
 
 try:
     __version__ = importlib.metadata.version("personal-finance-etl")
@@ -96,6 +97,10 @@ def main_cli(args: argparse.Namespace) -> None:
 
     config_path = args.config
     rules_path = args.rules
+    auto_mode = getattr(args, "auto", False)
+    cron_mode = getattr(args, "cron", False)
+    if cron_mode:
+        auto_mode = True
 
     if args.snapshot:
         if not config_path:
@@ -116,73 +121,99 @@ def main_cli(args: argparse.Namespace) -> None:
             )
         sys.exit(0)
 
-    if not config_path:
-        config_path = get_file_interactive("Config TOML", engine.get_recent_configs())
+    while True:
+        if not config_path:
+            config_path = get_file_interactive("Config TOML", engine.get_recent_configs())
 
-    if not rules_path:
-        rules_path = get_file_interactive("Financial Rules TOML", engine.get_recent_rules())
-        engine.add_recent_rules(rules_path)
+        if not rules_path:
+            rules_path = get_file_interactive("Financial Rules TOML", engine.get_recent_rules())
+            engine.add_recent_rules(rules_path)
 
-    console.print()
-    console.print(
-        Panel(
-            f"[bold]Targeting Configuration:[/bold]\nConfig: {config_path}\nRules:  {rules_path}",
-            title="[bold magenta]Execution Parameters[/bold magenta]",
-            border_style="magenta",
+        console.print()
+        console.print(
+            Panel(
+                f"[bold]Targeting Configuration:[/bold]\nConfig: {config_path}\nRules:  {rules_path}",
+                title="[bold magenta]Execution Parameters[/bold magenta]",
+                border_style="magenta",
+            )
         )
-    )
 
-    if not Confirm.ask("[bold red]Are you ready to IGNITE the pipeline?[/bold red]"):
-        console.print("[yellow]Operation aborted by user.[/yellow]")
-        sys.exit(0)
+        if not auto_mode:
+            if not Confirm.ask("[bold red]Are you ready to IGNITE the pipeline?[/bold red]"):
+                console.print("[yellow]Operation aborted by user.[/yellow]")
+                sys.exit(0)
 
-    console.print("\n[bold green]🚀 IGNITING ETL PIPELINE...[/bold green]\n")
+        console.print("\n[bold green]🚀 IGNITING ETL PIPELINE...[/bold green]\n")
 
-    completion_event = threading.Event()
+        completion_event = threading.Event()
 
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        BarColumn(bar_width=None),
-        TaskProgressColumn(),
-        TimeElapsedColumn(),
-        console=console,
-        transient=False,
-        expand=True,
-    ) as progress:
-        main_task = progress.add_task("[cyan]ETL Pipeline Progress", total=100.0)
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(bar_width=None),
+            TaskProgressColumn(),
+            TimeElapsedColumn(),
+            console=console,
+            transient=False,
+            expand=True,
+        ) as progress:
+            main_task = progress.add_task("[cyan]ETL Pipeline Progress", total=100.0)
 
-        def on_status(status: EngineStatus) -> None:
-            if status.msg:
-                if status.level == LogLevel.SUCCESS:
-                    progress.console.print(f"[bold green]✓[/bold green] {status.msg}")
-                elif status.level == LogLevel.ERROR:
-                    progress.console.print(f"[bold red]✗ ERROR:[/bold red] {status.msg}")
-                elif status.level == LogLevel.WARNING:
-                    progress.console.print(f"[bold yellow]![/bold yellow] {status.msg}")
-                elif status.level == LogLevel.STEP:
-                    progress.console.print(f"[bold cyan]>>[/bold cyan] {status.msg}")
-                else:
-                    progress.console.print(f"[dim]•[/dim] {status.msg}")
+            def on_status(status: EngineStatus) -> None:
+                if status.msg:
+                    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    if status.level == LogLevel.SUCCESS:
+                        progress.console.print(f"[dim][{ts}][/dim] [bold green]✓[/bold green] {status.msg}")
+                    elif status.level == LogLevel.ERROR:
+                        progress.console.print(f"[dim][{ts}][/dim] [bold red]✗ ERROR:[/bold red] {status.msg}")
+                    elif status.level == LogLevel.WARNING:
+                        progress.console.print(f"[dim][{ts}][/dim] [bold yellow]![/bold yellow] {status.msg}")
+                    elif status.level == LogLevel.STEP:
+                        progress.console.print(f"[dim][{ts}][/dim] [bold cyan]>>[/bold cyan] {status.msg}")
+                    else:
+                        progress.console.print(f"[dim][{ts}][/dim] [dim]•[/dim] {status.msg}")
 
-            if status.progress is not None:
-                # Update bar (backend sends 0.0 to 1.0)
-                progress.update(main_task, completed=status.progress * 100.0)
+                if status.progress is not None:
+                    # Update bar (backend sends 0.0 to 1.0)
+                    progress.update(main_task, completed=status.progress * 100.0)
 
-            if (
-                status.msg in ("Process completed cleanly.", "Process exited abnormally.")
-                or "Critical Pipeline Failure" in status.msg
-            ):
-                completion_event.set()
+                if (
+                    status.msg in ("Process completed cleanly.", "Process exited abnormally.")
+                    or "Critical Pipeline Failure" in status.msg
+                ):
+                    completion_event.set()
 
-        engine.run_pipeline_async(config_path, rules_path, on_status)
+            engine.run_pipeline_async(config_path, rules_path, on_status)
 
-        try:
-            completion_event.wait()
-            # Force progress to 100% on clean completion
-            progress.update(main_task, completed=100.0)
-        except KeyboardInterrupt:
-            progress.console.print("\n[bold red]Pipeline forcefully terminated by user.[/bold red]")
-            sys.exit(1)
+            try:
+                completion_event.wait()
+                # Force progress to 100% on clean completion
+                progress.update(main_task, completed=100.0)
+            except KeyboardInterrupt:
+                progress.console.print("\n[bold red]Pipeline forcefully terminated by user.[/bold red]")
+                sys.exit(1)
 
-    console.print("\n[bold green]=== SYSTEM HALTED. OPERATION COMPLETE. ===[/bold green]\n")
+        console.print("\n[bold green]=== SYSTEM HALTED. OPERATION COMPLETE. ===[/bold green]\n")
+
+        if cron_mode:
+            sys.exit(0)
+
+        console.print("\n[bold cyan]--- What would you like to do next? ---[/bold cyan]")
+        console.print("[1] Restart pipeline with PREVIOUS configuration")
+        console.print("[2] Restart pipeline with NEW configuration")
+        console.print("[3] Exit")
+
+        while True:
+            choice = Prompt.ask("[bold cyan]Select an option (1-3)[/bold cyan]", default="1")
+            if choice == "1":
+                auto_mode = False
+                break
+            elif choice == "2":
+                config_path = None
+                rules_path = None
+                auto_mode = False
+                break
+            elif choice == "3":
+                sys.exit(0)
+            else:
+                console.print("[red]Invalid selection.[/red]")
