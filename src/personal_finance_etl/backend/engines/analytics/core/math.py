@@ -49,12 +49,11 @@ def _compute_risk_adjusted(
     ann_mean = float(np.mean(r)) * periods_per_year
     ann_std = float(np.std(r, ddof=1)) * sqrt_p
 
-    # Sortino: semi-deviation — std computed only over negative return observations.
-    # Using np.where(..., 0.0) would include the zeroed positive returns in the
-    # sample-size denominator, inflating n and deflating std, which overstates
-    # the Sortino ratio. Filtering to negatives-only is the correct definition.
-    down_r = r[r < 0]
-    ann_down_std = (float(np.std(down_r, ddof=1)) * sqrt_p) if len(down_r) > 1 else ZERO
+    # Sortino: semi-deviation — Downside deviation must be calculated relative to a target 
+    # return (typically 0.0), not the mean of the negative returns. We keep the entire 
+    # array size 'n' but zero out any positive returns, then take the root mean square.
+    down_r = np.minimum(r, 0.0)
+    ann_down_std = float(np.sqrt(np.mean(down_r**2))) * sqrt_p if n > 1 else ZERO
 
     # Max Drawdown via cumulative product peak-to-trough
     cum = np.cumprod(1.0 + r)
