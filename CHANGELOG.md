@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [5.0.5](https://github.com/tks18/personal-finance-etl/compare/5.0.4...5.0.5) (2026-08-16)
+
+
+### Code Refactoring 🖌
+
+* **backend/extract:** refactor log message ([6c5bea1](https://github.com/tks18/personal-finance-etl/commit/6c5bea1274b96af37211fb070cce88bd545e99bd))
+
+
+### Bug Fixes 🛠
+
+* **frontend/cli:** escape [] blocks in rich console ([4203f41](https://github.com/tks18/personal-finance-etl/commit/4203f41d66c34110c02b6fa1bfd6f2b3c2c8e8ad))
+
 ### [5.0.4](https://github.com/tks18/personal-finance-etl/compare/5.0.3...5.0.4) (2026-08-16)
 
 
