@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [5.0.3](https://github.com/tks18/personal-finance-etl/compare/5.0.2...5.0.3) (2026-08-16)
+
+
+### Features 🔥
+
+* **frontend/cli:** improve logging, support for auto + cron mode ([4257d68](https://github.com/tks18/personal-finance-etl/commit/4257d68d8124ef6b804e5979537e438ae75167b9))
+* **frontend/cli:** support for auto + cron mode for headless run ([ace159f](https://github.com/tks18/personal-finance-etl/commit/ace159f226d9cb2adbb02105aa8ecf642febfe6c))
+
+
+### Tests 🧪
+
+* **run_pipeline:** add cron script to run pipeline headless ([f0fcad3](https://github.com/tks18/personal-finance-etl/commit/f0fcad354bdca2c4fe031113d0a8f81ad31a2417))
+
 ### [5.0.2](https://github.com/tks18/personal-finance-etl/compare/5.0.1...5.0.2) (2026-08-16)
 
 
