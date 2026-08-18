@@ -4,17 +4,35 @@ import polars as pl
 import polars.selectors as cs
 
 from personal_finance_etl.backend.config.financial_rules import FinancialRules
-from personal_finance_etl.backend.engines.presentation.core.inflation_builder import InflationBuilder
+from personal_finance_etl.backend.engines.presentation.core.inflation_builder import (
+    InflationBuilder,
+)
 from personal_finance_etl.backend.engines.presentation.core.ledger_builder import LedgerBuilder
 from personal_finance_etl.backend.engines.presentation.core.net_worth_builder import NetWorthBuilder
-from personal_finance_etl.backend.engines.presentation.helpers.risk_metrics import RiskMetricsBuilder
-from personal_finance_etl.backend.engines.presentation.modules.budget_forecast import BudgetForecastBuilder
-from personal_finance_etl.backend.engines.presentation.modules.income_streams import IncomeStreamsBuilder
-from personal_finance_etl.backend.engines.presentation.modules.investment_analytics import InvestmentAnalyticsBuilder
-from personal_finance_etl.backend.engines.presentation.modules.monthly_cashflow_summary import MonthlyCashflowSummaryBuilder
-from personal_finance_etl.backend.engines.presentation.modules.spend_analytics import SpendAnalyticsBuilder
-from personal_finance_etl.backend.engines.presentation.modules.tax_liability_forecast import TaxLiabilityForecastBuilder
-from personal_finance_etl.backend.engines.presentation.modules.wealth_risk_analytics import WealthRiskAnalyticsBuilder
+from personal_finance_etl.backend.engines.presentation.helpers.risk_metrics import (
+    RiskMetricsBuilder,
+)
+from personal_finance_etl.backend.engines.presentation.modules.budget_forecast import (
+    BudgetForecastBuilder,
+)
+from personal_finance_etl.backend.engines.presentation.modules.income_streams import (
+    IncomeStreamsBuilder,
+)
+from personal_finance_etl.backend.engines.presentation.modules.investment_analytics import (
+    InvestmentAnalyticsBuilder,
+)
+from personal_finance_etl.backend.engines.presentation.modules.monthly_cashflow_summary import (
+    MonthlyCashflowSummaryBuilder,
+)
+from personal_finance_etl.backend.engines.presentation.modules.spend_analytics import (
+    SpendAnalyticsBuilder,
+)
+from personal_finance_etl.backend.engines.presentation.modules.tax_liability_forecast import (
+    TaxLiabilityForecastBuilder,
+)
+from personal_finance_etl.backend.engines.presentation.modules.wealth_risk_analytics import (
+    WealthRiskAnalyticsBuilder,
+)
 from personal_finance_etl.backend.utils.logger import logger
 
 

@@ -8,7 +8,9 @@ import polars as pl
 
 from personal_finance_etl.backend.engines.analytics.pipeline.context import RunContext
 from personal_finance_etl.backend.engines.analytics.pipeline.processor import IsinProcessor
-from personal_finance_etl.backend.engines.analytics.pipeline.processor.benchmark import BenchmarkPriceProvider
+from personal_finance_etl.backend.engines.analytics.pipeline.processor.benchmark import (
+    BenchmarkPriceProvider,
+)
 from personal_finance_etl.backend.types.pipeline import PipelineExecutionResult
 from personal_finance_etl.backend.utils.interfaces import ILogger
 from personal_finance_etl.backend.utils.logger import logger

@@ -4,9 +4,17 @@ from typing import Any
 import polars as pl
 
 from personal_finance_etl.backend.config.financial_rules import FinancialRules
-from personal_finance_etl.backend.engines.presentation.helpers.forecasting import calculate_budget_forecast
-from personal_finance_etl.backend.engines.presentation.helpers.scoring import calculate_budget_health_score
-from personal_finance_etl.backend.utils.polars_expressions import rolling_avg, rolling_std, safe_divide
+from personal_finance_etl.backend.engines.presentation.helpers.forecasting import (
+    calculate_budget_forecast,
+)
+from personal_finance_etl.backend.engines.presentation.helpers.scoring import (
+    calculate_budget_health_score,
+)
+from personal_finance_etl.backend.utils.polars_expressions import (
+    rolling_avg,
+    rolling_std,
+    safe_divide,
+)
 
 
 class BudgetForecastBuilder:

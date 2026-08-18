@@ -3,8 +3,12 @@ from typing import Any
 
 import polars as pl
 
-from personal_finance_etl.backend.engines.analytics.pipeline.postprocessor.analytics import AdvancedAnalyticsCalculator
-from personal_finance_etl.backend.engines.analytics.pipeline.postprocessor.xirr import PortfolioXIRRCalculator
+from personal_finance_etl.backend.engines.analytics.pipeline.postprocessor.analytics import (
+    AdvancedAnalyticsCalculator,
+)
+from personal_finance_etl.backend.engines.analytics.pipeline.postprocessor.xirr import (
+    PortfolioXIRRCalculator,
+)
 
 PORTFOLIO_COL_RENAMES = {
     "Portfolio_XIRR": "XIRR",

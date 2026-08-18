@@ -4,7 +4,10 @@ from typing import Protocol
 import polars as pl
 
 from personal_finance_etl.backend.config.settings import Settings
-from personal_finance_etl.backend.transform.investments import get_purchase_reference, get_sale_reference
+from personal_finance_etl.backend.transform.investments import (
+    get_purchase_reference,
+    get_sale_reference,
+)
 from personal_finance_etl.backend.transform.mutual_funds import (
     get_base_mf_transactions,
     get_stg_mf_market_data,

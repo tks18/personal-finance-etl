@@ -4,8 +4,14 @@ from typing import Any
 import polars as pl
 
 from personal_finance_etl.backend.config.financial_rules import FinancialRules
-from personal_finance_etl.backend.engines.presentation.helpers.fire_mc_sim import get_monte_carlo_fire_batch
-from personal_finance_etl.backend.utils.polars_expressions import rolling_avg, rolling_sum, safe_divide
+from personal_finance_etl.backend.engines.presentation.helpers.fire_mc_sim import (
+    get_monte_carlo_fire_batch,
+)
+from personal_finance_etl.backend.utils.polars_expressions import (
+    rolling_avg,
+    rolling_sum,
+    safe_divide,
+)
 
 
 class WealthRiskAnalyticsBuilder:
@@ -89,7 +95,10 @@ class WealthRiskAnalyticsBuilder:
                     pl.when(pl.col("Port_Market_Value") > pl.col("Port_Book_Value"))
                     .then(
                         pl.col("Total_Net_Worth_Market")
-                        - ((pl.col("Port_Market_Value") - pl.col("Port_Book_Value")) * self._tax_rate)
+                        - (
+                            (pl.col("Port_Market_Value") - pl.col("Port_Book_Value"))
+                            * self._tax_rate
+                        )
                     )
                     .otherwise(pl.col("Total_Net_Worth_Market"))
                     .alias("Total_Net_Worth_Market_Af_Tax")
@@ -148,20 +157,17 @@ class WealthRiskAnalyticsBuilder:
             )
             .with_columns(
                 (
-                    (
-                        pl.col("_temp_year") - self._dob_year
-                    )
-                    * 12
-                    + (
-                        pl.col("_temp_month") - self._dob_month
-                    )
+                    (pl.col("_temp_year") - self._dob_year) * 12
+                    + (pl.col("_temp_month") - self._dob_month)
                 )
                 .cast(pl.Int32)
                 .alias("Age_Months"),
                 # Month-year derived seed: same month always produces identical MC paths,
                 # large integer gap between adjacent months prevents RNG correlation.
                 # e.g. Jan 2025 = 2025*12+1 = 24301, Feb 2025 = 24302
-                (pl.col("_temp_year") * 12 + pl.col("_temp_month")).cast(pl.Int32).alias("Seed_Int"),
+                (pl.col("_temp_year") * 12 + pl.col("_temp_month"))
+                .cast(pl.Int32)
+                .alias("Seed_Int"),
             )
             .with_columns(
                 pl.struct(
@@ -353,18 +359,23 @@ class WealthRiskAnalyticsBuilder:
                 safe_divide("Net_Savings", "Total_Income").alias("Savings_Rate_Actual"),
                 safe_divide("Net_Savings_Total", "Total_Income").alias("Savings_Rate_Actual_Total"),
                 # FI Velocity: MoM change in FI coverage — positive = approaching FI
-                (pl.col("Current_FI_Coverage_Pct") - pl.col("Current_FI_Coverage_Pct").shift(1))
-                .alias("FI_Velocity"),
-                (pl.col("Current_FI_Coverage_Pct_Total") - pl.col("Current_FI_Coverage_Pct_Total").shift(1))
-                .alias("FI_Velocity_Total"),
+                (
+                    pl.col("Current_FI_Coverage_Pct") - pl.col("Current_FI_Coverage_Pct").shift(1)
+                ).alias("FI_Velocity"),
+                (
+                    pl.col("Current_FI_Coverage_Pct_Total")
+                    - pl.col("Current_FI_Coverage_Pct_Total").shift(1)
+                ).alias("FI_Velocity_Total"),
                 # Real Net Worth CAGR over 3 years (36 months), inflation-adjusted
                 pl.when(pl.col("Total_Net_Worth_Market_Af_Tax").shift(36) > 0)
                 .then(
                     (
                         (pl.col("Total_Net_Worth_Market_Af_Tax") / pl.col("CPI_INDEX"))
-                        / (pl.col("Total_Net_Worth_Market_Af_Tax").shift(36) / pl.col("CPI_INDEX").shift(36))
-                    )
-                    .pow(1.0 / 3.0)
+                        / (
+                            pl.col("Total_Net_Worth_Market_Af_Tax").shift(36)
+                            / pl.col("CPI_INDEX").shift(36)
+                        )
+                    ).pow(1.0 / 3.0)
                     - 1.0
                 )
                 .otherwise(pl.lit(None))

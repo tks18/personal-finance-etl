@@ -4,7 +4,11 @@ from typing import Any
 import polars as pl
 
 from personal_finance_etl.backend.config.financial_rules import FinancialRules
-from personal_finance_etl.backend.utils.polars_expressions import pct_growth, rolling_avg, safe_divide
+from personal_finance_etl.backend.utils.polars_expressions import (
+    pct_growth,
+    rolling_avg,
+    safe_divide,
+)
 
 
 class MonthlyCashflowSummaryBuilder:

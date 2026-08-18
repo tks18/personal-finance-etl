@@ -2,7 +2,9 @@ from datetime import date
 from typing import Any
 
 from personal_finance_etl.backend.engines.analytics.core.math import calculate_risk_metrics
-from personal_finance_etl.backend.engines.analytics.pipeline.processor.benchmark import BenchmarkPriceProvider
+from personal_finance_etl.backend.engines.analytics.pipeline.processor.benchmark import (
+    BenchmarkPriceProvider,
+)
 from personal_finance_etl.backend.engines.analytics.rules.macro import FYMacroParametersTable
 from personal_finance_etl.backend.utils.helpers import to_date_obj
 

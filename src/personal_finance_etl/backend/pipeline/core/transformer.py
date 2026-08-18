@@ -2,7 +2,11 @@ import polars as pl
 
 from personal_finance_etl.backend.config.financial_rules import FinancialRules
 from personal_finance_etl.backend.config.settings import Settings
-from personal_finance_etl.backend.pipeline.strategies import AssetPipeline, MutualFundPipeline, StockPipeline
+from personal_finance_etl.backend.pipeline.strategies import (
+    AssetPipeline,
+    MutualFundPipeline,
+    StockPipeline,
+)
 from personal_finance_etl.backend.transform.calendar import (
     get_stg_calendar_ref,
     transform_d_calendar,
@@ -33,7 +37,12 @@ from personal_finance_etl.backend.transform.investments import (
 )
 from personal_finance_etl.backend.utils.interfaces import ILogger
 from personal_finance_etl.backend.utils.logger import logger
-from personal_finance_etl.backend.utils.models import AssetPipelineResult, EngineStatus, ExtractionResult, LogLevel
+from personal_finance_etl.backend.utils.models import (
+    AssetPipelineResult,
+    EngineStatus,
+    ExtractionResult,
+    LogLevel,
+)
 
 
 class TransformationDAG:

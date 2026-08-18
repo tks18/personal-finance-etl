@@ -40,18 +40,24 @@ class AdvancedAnalyticsCalculator:
 
         if pt_records:
             df_pt = pl.DataFrame(pt_records).sort("Date_Obj")
-            
+
             # Aggregate cash flows by date to compute net injection
-            cf_records = []
+            cf_records: list[dict[str, Any]] = []
             for cf in cashflows:
                 d_obj = to_date_obj(cf["date"])
                 if d_obj:
                     # 'amount' is negative for buys (injections) and positive for sells (withdrawals)
                     cf_records.append({"Date_Obj": d_obj, "injection": -float(cf["amount"])})
-            
+
             if cf_records:
-                df_cf = pl.DataFrame(cf_records).group_by("Date_Obj").agg(pl.col("injection").sum().alias("net_injection"))
-                df_pt = df_pt.join(df_cf, on="Date_Obj", how="left").with_columns(pl.col("net_injection").fill_null(0.0))
+                df_cf = (
+                    pl.DataFrame(cf_records)
+                    .group_by("Date_Obj")
+                    .agg(pl.col("injection").sum().alias("net_injection"))
+                )
+                df_pt = df_pt.join(df_cf, on="Date_Obj", how="left").with_columns(
+                    pl.col("net_injection").fill_null(0.0)
+                )
             else:
                 df_pt = df_pt.with_columns(pl.lit(0.0).alias("net_injection"))
 
@@ -119,7 +125,11 @@ class AdvancedAnalyticsCalculator:
                 .with_columns(
                     pl.when((pl.col("shadow_val").shift(1) + (pl.col("net_injection") * 0.5)) > 0)
                     .then(
-                        (pl.col("shadow_val") - pl.col("shadow_val").shift(1) - pl.col("net_injection"))
+                        (
+                            pl.col("shadow_val")
+                            - pl.col("shadow_val").shift(1)
+                            - pl.col("net_injection")
+                        )
                         / (pl.col("shadow_val").shift(1) + (pl.col("net_injection") * 0.5))
                     )
                     .otherwise(0.0)

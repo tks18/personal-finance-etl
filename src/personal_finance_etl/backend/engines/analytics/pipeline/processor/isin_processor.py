@@ -6,9 +6,15 @@ import polars as pl
 from personal_finance_etl.backend.config.financial_rules import FinancialRules
 from personal_finance_etl.backend.engines.analytics.core.fifo import FIFOPortfolio
 from personal_finance_etl.backend.engines.analytics.core.math import calculate_cagr, calculate_xirr
-from personal_finance_etl.backend.engines.analytics.pipeline.processor.benchmark import BenchmarkPriceProvider
-from personal_finance_etl.backend.engines.analytics.pipeline.processor.risk import RiskMetricsProvider
-from personal_finance_etl.backend.engines.analytics.pipeline.processor.snapshot import SnapshotGenerator
+from personal_finance_etl.backend.engines.analytics.pipeline.processor.benchmark import (
+    BenchmarkPriceProvider,
+)
+from personal_finance_etl.backend.engines.analytics.pipeline.processor.risk import (
+    RiskMetricsProvider,
+)
+from personal_finance_etl.backend.engines.analytics.pipeline.processor.snapshot import (
+    SnapshotGenerator,
+)
 from personal_finance_etl.backend.engines.analytics.rules.macro import FYMacroParametersTable
 from personal_finance_etl.backend.types.analytics import (
     CashflowRecord,

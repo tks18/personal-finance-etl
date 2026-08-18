@@ -4,7 +4,10 @@ from typing import Any
 from personal_finance_etl.backend.config.financial_rules import FinancialRules
 from personal_finance_etl.backend.engines.analytics.core.fifo import FIFOPortfolio
 from personal_finance_etl.backend.engines.analytics.core.math import calculate_cagr
-from personal_finance_etl.backend.engines.analytics.rules.macro import FYMacroParametersTable, get_ltcg_threshold
+from personal_finance_etl.backend.engines.analytics.rules.macro import (
+    FYMacroParametersTable,
+    get_ltcg_threshold,
+)
 from personal_finance_etl.backend.types.analytics import SnapshotRecord
 
 
