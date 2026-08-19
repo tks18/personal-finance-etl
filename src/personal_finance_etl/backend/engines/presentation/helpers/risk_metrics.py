@@ -23,7 +23,7 @@ class RiskMetricsBuilder:
 
     def build(self) -> pl.LazyFrame:
         lf_monthly = self.base_lf.get("lf_monthly_totals")
-        f_market_data = self.dfs.get("df_f_tf_investment_analytics_lot")
+        f_market_data = self.dfs.get("df_f_investment_analytics_lot")
 
         if lf_monthly is None or f_market_data is None:
             return pl.LazyFrame()
@@ -37,10 +37,7 @@ class RiskMetricsBuilder:
             lf_market.with_columns(
                 pl.col("Closing_Date").dt.month_start().alias("MONTH_START_DATE")
             )
-            .filter(
-                pl.col("Closing_Date")
-                == pl.col("Closing_Date").max().over("MONTH_START_DATE")
-            )
+            .filter(pl.col("Closing_Date") == pl.col("Closing_Date").max().over("MONTH_START_DATE"))
             .group_by("MONTH_START_DATE")
             .agg(
                 pl.col("Close_Value").sum().alias("Total_Investment_Value"),
@@ -77,8 +74,7 @@ class RiskMetricsBuilder:
             .with_columns(
                 # Modified Dietz return on investments (investment-specific cash flows)
                 pl.when(
-                    (pl.col("Total_Investment_Value").shift(1) + (pl.col("Inv_Cashflow") * 0.5))
-                    > 0
+                    (pl.col("Total_Investment_Value").shift(1) + (pl.col("Inv_Cashflow") * 0.5)) > 0
                 )
                 .then(
                     (

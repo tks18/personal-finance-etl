@@ -24,8 +24,8 @@ class MonthlyCashflowSummaryBuilder:
         Total_Expense = Core_Expense + NonCore_Expense
 
     Investments (from net transfers to investment accounts):
-        Total_Investment_Deployed  — from f_tf_Investment_Purchase_Data
-        Total_Investment_Redeemed  — from f_tf_Investment_Sale_Data
+        Total_Investment_Deployed  — from f_Investment_Purchase_Data
+        Total_Investment_Redeemed  — from f_Investment_Sale_Data
         Net_Investment_Flow        — Deployed - Redeemed
         Equity_Deployed            — CLASS = 'Equity' (Stocks + ETFs)
             Stocks_Deployed        — TYPE = 'Direct Stocks' (or similar)
@@ -114,7 +114,7 @@ class MonthlyCashflowSummaryBuilder:
         # ── Step 3: Investment activity from purchase/sale facts ──────────────
         df_buys = self.dfs.get("df_f_tf_inv_purchase")
         df_sells = self.dfs.get("df_f_tf_inv_sale")
-        df_master = self.dfs.get("df_d_tf_investment_master")
+        df_master = self.dfs.get("df_d_investment_master")
 
         if df_buys is not None and df_master is not None:
             lf_buys = df_buys.lazy() if isinstance(df_buys, pl.DataFrame) else df_buys

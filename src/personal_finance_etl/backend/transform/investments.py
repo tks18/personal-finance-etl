@@ -195,11 +195,11 @@ def get_f_tf_investment_sale_data(
     return df_final
 
 
-def get_d_tf_investment_master(
+def get_d_investment_master(
     master_refs: list[pl.LazyFrame], stg_benchmark_mapping_lazy: pl.LazyFrame
 ) -> pl.LazyFrame:
     """
-    Translates d_tf_InvestmentMaster.
+    Translates d_InvestmentMaster.
     Unions the References into a single distinct dimension table,
     then joins the Benchmark Mapping to pull in Sector, Industry, Tax flags, etc.
     """

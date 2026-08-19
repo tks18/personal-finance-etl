@@ -68,7 +68,7 @@ class ETLOrchestrator:
             cached_benchmark_df = pl.DataFrame()
 
         self.dfs["df_f_investment_benchmark_data"] = bm_engine.run(
-            df_market=self.dfs.get("df_stg_investment_market_data"),
+            df_market=self.dfs.get("df_f_investment_market_data"),
             df_purchase=self.dfs.get("df_f_tf_inv_purchase"),
             df_cached=cached_benchmark_df,
         )
@@ -81,8 +81,8 @@ class ETLOrchestrator:
         quant_engine = InvestmentQuantEngine(
             df_p=self.dfs["df_f_tf_inv_purchase"],
             df_s=self.dfs["df_f_tf_inv_sale"],
-            df_m=self.dfs["df_stg_investment_market_data"],
-            df_i=self.dfs["df_d_tf_investment_master"],
+            df_m=self.dfs["df_f_investment_market_data"],
+            df_i=self.dfs["df_d_investment_master"],
             df_b=self.dfs["df_f_investment_benchmark_data"],
             df_t=self.dfs["df_d_macro_parameters"],
             status_queue=self.status_queue,
@@ -92,7 +92,7 @@ class ETLOrchestrator:
         )
         analytics_results = quant_engine.run()
         self.dfs.update(analytics_results)
-        lot_df = analytics_results.get("df_f_tf_investment_analytics_lot", pl.DataFrame())
+        lot_df = analytics_results.get("df_f_investment_analytics_lot", pl.DataFrame())
         if (
             not lot_df.is_empty()
             and "Quantity" in lot_df.columns
@@ -294,22 +294,24 @@ def process_wrapper(
     status_queue: ILogger | None = None, config_path: str = "config.toml", rules_path: str = ""
 ) -> None:
     """Wrapper to catch exceptions inside the child process and send them back to the UI."""
-    
+
     class QueueStream:
-        def __init__(self, queue, is_error=False):
+        def __init__(self, queue: ILogger, is_error: bool = False):
             self.queue = queue
             self.buffer = ""
             self.is_error = is_error
 
         def write(self, msg: str) -> None:
             self.buffer += msg
-            if '\n' in self.buffer:
-                lines = self.buffer.split('\n')
+            if "\n" in self.buffer:
+                lines = self.buffer.split("\n")
                 for line in lines[:-1]:
                     if line.strip():
                         # For warnings/errors from yfinance
                         level = LogLevel.WARNING if self.is_error else LogLevel.INFO
-                        self.queue.put(EngineStatus(msg=line.strip(), data=None, progress=None, level=level))
+                        self.queue.put(
+                            EngineStatus(msg=line.strip(), data=None, progress=None, level=level)
+                        )
                 self.buffer = lines[-1]
 
         def flush(self) -> None:
@@ -317,7 +319,7 @@ def process_wrapper(
 
     sys.stdout = QueueStream(status_queue, is_error=False)  # type: ignore
     sys.stderr = QueueStream(status_queue, is_error=True)  # type: ignore
-    
+
     try:
         cfg = Settings()
         if config_path:

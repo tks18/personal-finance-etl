@@ -8,7 +8,7 @@ from personal_finance_etl.backend.config.financial_rules import FinancialRules
 
 class InvestmentAnalyticsBuilder:
     """
-    Constructs p_tf_Investment_Analytics.
+    Constructs p_Portfolio_Management_Analytics.
     Unifies Rebalancing (drift), Sector Allocation (weights), Performance Attribution (returns),
     and Tax Harvesting (unrealized losses) into a single cohesive ISIN-level table.
     """
@@ -24,9 +24,9 @@ class InvestmentAnalyticsBuilder:
         self.rules = rules
 
     def build(self) -> pl.LazyFrame:
-        f_market_data = self.dfs.get("df_f_tf_investment_analytics_lot")
-        d_inv_master = self.dfs.get("df_d_tf_investment_master")
-        df_inv_port = self.dfs.get("df_f_tf_investment_analytics_portfolio")
+        f_market_data = self.dfs.get("df_f_investment_analytics_lot")
+        d_inv_master = self.dfs.get("df_d_investment_master")
+        df_inv_port = self.dfs.get("df_f_investment_analytics_portfolio")
 
         if f_market_data is None or d_inv_master is None or df_inv_port is None:
             return pl.LazyFrame()

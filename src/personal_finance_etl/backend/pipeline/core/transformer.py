@@ -30,7 +30,7 @@ from personal_finance_etl.backend.transform.facts import (
     transform_f_transfer_transactions,
 )
 from personal_finance_etl.backend.transform.investments import (
-    get_d_tf_investment_master,
+    get_d_investment_master,
     get_f_tf_investment_purchase_data,
     get_f_tf_investment_sale_data,
     transform_stg_investment_market_data,
@@ -128,7 +128,7 @@ class TransformationDAG:
             )
 
             logger.info("Building Investment Master...")
-            d_tf_investment_master_lazy = get_d_tf_investment_master(
+            d_tf_investment_master_lazy = get_d_investment_master(
                 master_ref_lazy_list, extracted.stg_benchmark_mapping
             )
 
@@ -217,10 +217,10 @@ class TransformationDAG:
             "df_f_expense_transactions": results[10],
             "df_f_transfer_transactions": results[11],
             "df_f_opening_balances": results[12],
-            "df_stg_investment_market_data": results[13],
+            "df_f_investment_market_data": results[13],
             "df_f_tf_inv_purchase": results[14],
             "df_f_tf_inv_sale": results[15],
-            "df_d_tf_investment_master": results[16],
+            "df_d_investment_master": results[16],
             "df_d_calendar": calendar_result,
             "_ETL_Metadata_Financial_Rules": rules_result,
         }

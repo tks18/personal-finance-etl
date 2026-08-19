@@ -22,7 +22,7 @@ class TaxLiabilityForecastBuilder:
         self.rules = rules
 
     def build(self) -> pl.LazyFrame:
-        f_market_data = self.dfs.get("df_f_tf_investment_analytics_lot")
+        f_market_data = self.dfs.get("df_f_investment_analytics_lot")
         if f_market_data is None:
             return pl.LazyFrame()
 
@@ -46,14 +46,14 @@ class TaxLiabilityForecastBuilder:
             self.rules.assumptions.tax.fallback_equity_ltcg_exemption if self.rules else 125000.0
         )
         # Fallback dividend rate from TOML — live value joined from macro table below
-        fallback_div_rate = self.rules.assumptions.macro.fallback_dividend_income_rate if self.rules else 0.30
+        fallback_div_rate = (
+            self.rules.assumptions.macro.fallback_dividend_income_rate if self.rules else 0.30
+        )
 
         # Join Dividend_Income_Tax_Rate from d_macro_parameters using the same asof pattern
         df_macro = self.dfs.get("df_d_macro_parameters")
         if df_macro is not None:
-            lf_macro = (
-                df_macro.lazy() if isinstance(df_macro, pl.DataFrame) else df_macro
-            ).select(
+            lf_macro = (df_macro.lazy() if isinstance(df_macro, pl.DataFrame) else df_macro).select(
                 pl.col("FY_Start_Date").cast(pl.Date),
                 pl.col("Dividend_Income_Tax_Rate").cast(pl.Float64),
             )
@@ -65,9 +65,7 @@ class TaxLiabilityForecastBuilder:
                     right_on="FY_Start_Date",
                     strategy="backward",
                 )
-                .with_columns(
-                    pl.col("Dividend_Income_Tax_Rate").fill_null(fallback_div_rate)
-                )
+                .with_columns(pl.col("Dividend_Income_Tax_Rate").fill_null(fallback_div_rate))
             )
         else:
             df_monthly_tax = df_monthly_tax.with_columns(
@@ -112,7 +110,7 @@ class TaxLiabilityForecastBuilder:
                 pl.col("FY_Realized_LTCL").last().alias("Realized_LTCL"),
                 pl.col("FY_Realized_Loss").last().alias("Realized_Loss"),
                 pl.col("FY_Realized_Net_PnL").last().alias("Realized_Net_PnL"),
-                pl.col("FY_LTCG_Remaining_Exemption").last().alias("LTCG_Exemption_Remaining"),
+                pl.col("Equity_LTCG_Exemption").last().alias("LTCG_Exemption_Remaining"),
                 pl.col("Close_Value").sum().alias("Total_Portfolio_Value"),
                 pl.when(pl.col("P/L") < 0)
                 .then(pl.col("P/L"))
@@ -141,7 +139,10 @@ class TaxLiabilityForecastBuilder:
                         * eq_ltcg
                     )
                     # Dividend rate sourced from macro table (individual marginal slab)
-                    + (pl.col("Taxable_Dividends").clip(lower_bound=0.0) * pl.col("Dividend_Income_Tax_Rate"))
+                    + (
+                        pl.col("Taxable_Dividends").clip(lower_bound=0.0)
+                        * pl.col("Dividend_Income_Tax_Rate")
+                    )
                 ).alias("Projected_Tax_Bill"),
                 (pl.col("Unrealized_Losses").abs()).alias("Harvesting_Offset_Remaining"),
             )
