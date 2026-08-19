@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [5.1.0](https://github.com/tks18/personal-finance-etl/compare/5.0.6...5.1.0) (2026-08-19)
+
+
+### Styling 🎨
+
+* linter fixes ([b9a82f6](https://github.com/tks18/personal-finance-etl/commit/b9a82f68dfa8740933ac55ff0a67eb78d0c8b477))
+* renaming some table names ([48a503b](https://github.com/tks18/personal-finance-etl/commit/48a503b1ba034699884098113fb20d80775feda0))
+
+
+### Features 🔥
+
+* **engines/analytics:** implement twr, time horizon analytics in investment analytics ([3bd6402](https://github.com/tks18/personal-finance-etl/commit/3bd640239b3a4007924d138b00d91655ab4a04e3))
+
 ### [5.0.6](https://github.com/tks18/personal-finance-etl/compare/5.0.5...5.0.6) (2026-08-16)
 
 
