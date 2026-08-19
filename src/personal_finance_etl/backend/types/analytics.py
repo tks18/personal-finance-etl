@@ -40,6 +40,9 @@ class ISINTags(BaseModel):
     model_config = ConfigDict(strict=True, populate_by_name=True)
     instrument_class: str = Field(alias="class")
     subtype: str
+    instrument_type: str = "Unknown"
+    sector: str = "Unknown"
+    industry: str = "Unknown"
 
 
 class SnapshotRecord(BaseModel):
@@ -63,14 +66,37 @@ class SnapshotRecord(BaseModel):
     Buy_Value: float
     Close_Value: float
     P_L: float = Field(alias="P/L")
-    Returns_pct: float = Field(alias="Returns_%")
+    Absolute_Return: float = 0.0
+    Lot_Weight: float = 0.0
     Lot_CAGR: float
+    # Time-Range Returns
+    Return_1D: float = 0.0
+    Return_1W: float = 0.0
+    Return_1M: float = 0.0
+    Return_3M: float = 0.0
+    Return_6M: float = 0.0
+    Return_12M: float = 0.0
+    Return_3Y: float = 0.0
+    Return_5Y: float = 0.0
+    Return_YTD: float = 0.0
+    Return_FY_YTD: float = 0.0
+    # Time-Range Alphas
+    Alpha_1D: float = 0.0
+    Alpha_1W: float = 0.0
+    Alpha_1M: float = 0.0
+    Alpha_3M: float = 0.0
+    Alpha_6M: float = 0.0
+    Alpha_12M: float = 0.0
+    Alpha_3Y: float = 0.0
+    Alpha_5Y: float = 0.0
+    Alpha_YTD: float = 0.0
+    Alpha_FY_YTD: float = 0.0
     CAGR: float
     XIRR: float
     After_Tax_XIRR: float
     BM_Buy_Price: float | None
     BM_Market_Price: float
-    Lot_BM_Returns_pct: float = Field(alias="Lot_BM_Returns_%")
+    Lot_BM_Return: float = 0.0
     Lot_BM_CAGR: float
     BM_CAGR: float
     BM_XIRR: float
@@ -87,11 +113,16 @@ class SnapshotRecord(BaseModel):
     Sortino_Ratio: float = 0.0
     Calmar_Ratio: float = 0.0
     Max_Drawdown: float = 0.0
+    Historical_Max_DD: float = 0.0
+    Peak_Date: datetime.date | None = None
+    Drawdown_Duration: int = 0
+    Underwater_Days: int = 0
     # Benchmark equivalents (same formula on benchmark price series)
     BM_Sharpe_Ratio: float = 0.0
     BM_Sortino_Ratio: float = 0.0
     BM_Calmar_Ratio: float = 0.0
     BM_Max_Drawdown: float = 0.0
+    Historical_BM_Max_DD: float = 0.0
     # Comparison alphas (instrument minus benchmark)
     Sharpe_Alpha: float = 0.0
     Sortino_Alpha: float = 0.0

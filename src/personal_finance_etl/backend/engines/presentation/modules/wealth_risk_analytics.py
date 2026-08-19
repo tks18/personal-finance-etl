@@ -62,7 +62,7 @@ class WealthRiskAnalyticsBuilder:
             .sort("MONTH_START_DATE")
         )
 
-        df_inv_port = self.dfs.get("df_f_tf_investment_analytics_portfolio")
+        df_inv_port = self.dfs.get("df_f_investment_analytics_portfolio")
 
         if df_inv_port is not None:
             lf_inv_port = (
@@ -78,6 +78,10 @@ class WealthRiskAnalyticsBuilder:
                     "MONTH_END_DATE",
                     pl.col("Total_Current_Value").alias("Port_Market_Value"),
                     pl.col("Total_Invested_Value").alias("Port_Book_Value"),
+                    pl.col("Peak_Date").alias("Peak_Date"),
+                    pl.col("Drawdown_Duration").alias("Drawdown_Duration"),
+                    pl.col("Underwater_Days").alias("Underwater_Days"),
+                    pl.col("TWR").alias("Time_Weighted_Return"),
                 ]
             )
 
@@ -104,6 +108,13 @@ class WealthRiskAnalyticsBuilder:
                     .alias("Total_Net_Worth_Market_Af_Tax")
                 )
                 .drop(["Port_Market_Value", "Port_Book_Value"])
+            )
+        else:
+            lf_fire_base = lf_fire_base.with_columns(
+                pl.lit(None).cast(pl.Date).alias("Peak_Date"),
+                pl.lit(0).cast(pl.Int64).alias("Drawdown_Duration"),
+                pl.lit(0).cast(pl.Int64).alias("Underwater_Days"),
+                pl.lit(0.0).alias("Time_Weighted_Return"),
             )
 
         swr = self.rules.assumptions.fire.swr_multiplier
@@ -479,6 +490,10 @@ class WealthRiskAnalyticsBuilder:
                 "Sharpe_Ratio_12M",
                 "Sortino_Ratio_12M",
                 "Calmar_Ratio_12M",
+                "Peak_Date",
+                "Drawdown_Duration",
+                "Underwater_Days",
+                "Time_Weighted_Return",
             ]
         )
         return lf_fire_forecast

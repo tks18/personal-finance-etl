@@ -3,15 +3,25 @@ from datetime import date
 import polars as pl
 
 from personal_finance_etl.backend.engines.analytics.pipeline.context import RunContext
-from personal_finance_etl.backend.engines.analytics.pipeline.postprocessor.analytics import AdvancedAnalyticsCalculator
-from personal_finance_etl.backend.engines.analytics.pipeline.postprocessor.gains import RealizedGainsCalculator
+from personal_finance_etl.backend.engines.analytics.pipeline.postprocessor.analytics import (
+    AdvancedAnalyticsCalculator,
+)
+from personal_finance_etl.backend.engines.analytics.pipeline.postprocessor.gains import (
+    RealizedGainsCalculator,
+)
 from personal_finance_etl.backend.engines.analytics.pipeline.postprocessor.group_processor import (
     PORTFOLIO_COL_RENAMES,
     GroupProcessor,
 )
-from personal_finance_etl.backend.engines.analytics.pipeline.postprocessor.harvest import HarvestRecommendationCalculator
-from personal_finance_etl.backend.engines.analytics.pipeline.postprocessor.weights import PortfolioWeightsCalculator
-from personal_finance_etl.backend.engines.analytics.pipeline.postprocessor.xirr import PortfolioXIRRCalculator
+from personal_finance_etl.backend.engines.analytics.pipeline.postprocessor.harvest import (
+    HarvestRecommendationCalculator,
+)
+from personal_finance_etl.backend.engines.analytics.pipeline.postprocessor.weights import (
+    PortfolioWeightsCalculator,
+)
+from personal_finance_etl.backend.engines.analytics.pipeline.postprocessor.xirr import (
+    PortfolioXIRRCalculator,
+)
 from personal_finance_etl.backend.types.pipeline import PipelineExecutionResult
 
 
@@ -37,8 +47,9 @@ class PostProcessor:
         df_port = self.xirr_calc.calculate(
             unique_dates, pipeline_res.global_cf, pipeline_res.global_pt
         )
-        df_port = self.analytics_calc.calculate(df_port, unique_dates, pipeline_res.global_pt, pipeline_res.global_cf)
-        lazy_df = lazy_df.join(df_port.lazy(), on="Closing_Date", how="left")
+        df_port = self.analytics_calc.calculate(
+            df_port, unique_dates, pipeline_res.global_pt, pipeline_res.global_cf
+        )
 
         lazy_df = self.weights_calc.calculate(lazy_df)
         lazy_df = self.gains_calc.calculate(lazy_df, unique_dates, pipeline_res.global_re)
@@ -56,6 +67,21 @@ class PostProcessor:
             "INSTRUMENT_CLASS",
             "INSTRUMENT_SUBTYPE",
         )
+        # 3. Process Instrument Type Level
+        df_inst_type = self.group_calc.run(
+            unique_dates,
+            pipeline_res.instrument_type_cf,
+            pipeline_res.instrument_type_pt,
+            "INSTRUMENT_TYPE",
+        )
+        # 4. Process Sector Level
+        df_sector = self.group_calc.run(
+            unique_dates, pipeline_res.sector_cf, pipeline_res.sector_pt, "SECTOR"
+        )
+        # 5. Process Industry Level
+        df_industry = self.group_calc.run(
+            unique_dates, pipeline_res.industry_cf, pipeline_res.industry_pt, "INDUSTRY"
+        )
 
         # 3. Create the Port, Class, and Subtype final aggregated tables
         # Since df_port doesn't have the standard columns (Total_Invested_Value, etc)
@@ -63,8 +89,23 @@ class PostProcessor:
 
         # We need INSTRUMENT_CLASS and INSTRUMENT_SUBTYPE for aggregation
         master_records = [{"ISIN": k, **v} for k, v in self.ctx.isin_master.items()]
-        master_cols = pl.LazyFrame(master_records).select(
-            ["ISIN", "INSTRUMENT_CLASS", "INSTRUMENT_SUBTYPE"]
+        master_cols = (
+            pl.LazyFrame(master_records)
+            .select(
+                [
+                    "ISIN",
+                    "INSTRUMENT_CLASS",
+                    "INSTRUMENT_SUBTYPE",
+                    "INSTRUMENT_TYPE",
+                    "SECTOR",
+                    "INDUSTRY",
+                ]
+            )
+            .with_columns(
+                pl.col("INSTRUMENT_TYPE").fill_null("Unknown"),
+                pl.col("SECTOR").fill_null("Unknown"),
+                pl.col("INDUSTRY").fill_null("Unknown"),
+            )
         )
         lazy_df_agg = lazy_df.join(master_cols, on="ISIN", how="left")
 
@@ -125,7 +166,7 @@ class PostProcessor:
                     pl.when(pl.col("Total_Invested_Value") > 0)
                     .then(pl.col("Unrealized_PL") / pl.col("Total_Invested_Value"))
                     .otherwise(0.0)
-                    .alias("Absolute_Return_%")
+                    .alias("Absolute_Return")
                 )
             )
 
@@ -181,6 +222,27 @@ class PostProcessor:
             if not df_subtype.is_empty()
             else _aggregate_level(["Closing_Date", "INSTRUMENT_CLASS", "INSTRUMENT_SUBTYPE"])
         )
+        f_tf_inst_type = (
+            _aggregate_level(["Closing_Date", "INSTRUMENT_TYPE"]).join(
+                df_inst_type.lazy(), on=["Closing_Date", "INSTRUMENT_TYPE"], how="left"
+            )
+            if not df_inst_type.is_empty()
+            else _aggregate_level(["Closing_Date", "INSTRUMENT_TYPE"])
+        )
+        f_tf_sector = (
+            _aggregate_level(["Closing_Date", "SECTOR"]).join(
+                df_sector.lazy(), on=["Closing_Date", "SECTOR"], how="left"
+            )
+            if not df_sector.is_empty()
+            else _aggregate_level(["Closing_Date", "SECTOR"])
+        )
+        f_tf_industry = (
+            _aggregate_level(["Closing_Date", "INDUSTRY"]).join(
+                df_industry.lazy(), on=["Closing_Date", "INDUSTRY"], how="left"
+            )
+            if not df_industry.is_empty()
+            else _aggregate_level(["Closing_Date", "INDUSTRY"])
+        )
         f_tf_port = _aggregate_level(["Closing_Date"]).join(
             df_port.lazy().rename(PORTFOLIO_COL_RENAMES),
             on=["Closing_Date"],
@@ -192,26 +254,40 @@ class PostProcessor:
             (f_tf_isin, "ISIN"),
             (f_tf_subtype, "INSTRUMENT_SUBTYPE"),
             (f_tf_class, "INSTRUMENT_CLASS"),
+            (f_tf_inst_type, "INSTRUMENT_TYPE"),
+            (f_tf_sector, "SECTOR"),
+            (f_tf_industry, "INDUSTRY"),
         ]:
             lf = lf.with_columns(
                 (
                     pl.col("Total_Current_Value")
                     / pl.col("Total_Current_Value").sum().over("Closing_Date")
-                ).alias("Weight_%")
-            )
+                ).alias("Weight")
+            ).drop(["annualized_twr", "bm_annualized_twr"], strict=False)
             if g == "ISIN":
                 f_tf_isin = lf
             elif g == "INSTRUMENT_SUBTYPE":
                 f_tf_subtype = lf
-            else:
+            elif g == "INSTRUMENT_CLASS":
                 f_tf_class = lf
+            elif g == "INSTRUMENT_TYPE":
+                f_tf_inst_type = lf
+            elif g == "SECTOR":
+                f_tf_sector = lf
+            elif g == "INDUSTRY":
+                f_tf_industry = lf
 
-        f_tf_port = f_tf_port.with_columns(pl.lit(1.0).alias("Weight_%"))
+        f_tf_port = f_tf_port.with_columns(pl.lit(1.0).alias("Weight")).rename(
+            {"annualized_twr": "TWR", "bm_annualized_twr": "BM_TWR"}
+        )
 
         return {
-            "df_f_tf_investment_analytics_lot": lazy_df,
-            "df_f_tf_investment_analytics_isin": f_tf_isin,
-            "df_f_tf_investment_analytics_subtype": f_tf_subtype,
-            "df_f_tf_investment_analytics_class": f_tf_class,
-            "df_f_tf_investment_analytics_portfolio": f_tf_port,
+            "df_f_investment_analytics_lot": lazy_df,
+            "df_f_investment_analytics_isin": f_tf_isin,
+            "df_f_investment_analytics_subtype": f_tf_subtype,
+            "df_f_investment_analytics_class": f_tf_class,
+            "df_f_investment_analytics_instrument_type": f_tf_inst_type,
+            "df_f_investment_analytics_sector": f_tf_sector,
+            "df_f_investment_analytics_industry": f_tf_industry,
+            "df_f_investment_analytics_portfolio": f_tf_port,
         }

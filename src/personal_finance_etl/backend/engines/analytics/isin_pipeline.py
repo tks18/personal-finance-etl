@@ -95,6 +95,15 @@ class IsinPipeline:
         subtype_pt: dict[str, dict[date, dict[str, float]]] = {}
         subtype_re: dict[str, list[dict[str, Any]]] = {}
 
+        instrument_type_cf: dict[str, list[dict[str, Any]]] = {}
+        instrument_type_pt: dict[str, dict[date, dict[str, float]]] = {}
+
+        sector_cf: dict[str, list[dict[str, Any]]] = {}
+        sector_pt: dict[str, dict[date, dict[str, float]]] = {}
+
+        industry_cf: dict[str, list[dict[str, Any]]] = {}
+        industry_pt: dict[str, dict[date, dict[str, float]]] = {}
+
         has_data = False
         total_inst = len(self.isins)
 
@@ -221,6 +230,9 @@ class IsinPipeline:
 
                     cls = tags.get("class", "Unknown")
                     sub = tags.get("subtype", "Unknown")
+                    inst_type = tags.get("instrument_type", "Unknown")
+                    sector = tags.get("sector", "Unknown")
+                    industry = tags.get("industry", "Unknown")
 
                     class_cf.setdefault(cls, []).extend(isin_cf)
                     class_re.setdefault(cls, []).extend(isin_re)
@@ -240,6 +252,27 @@ class IsinPipeline:
                         pt["val"] += vals["val"]
                         pt["shadow_val"] += vals["shadow_val"]
                         pt["after_tax_val"] += vals.get("after_tax_val", 0.0)
+
+                    def _update_group(
+                        group_key: str, 
+                        cf_dict: dict[str, Any], 
+                        pt_dict: dict[str, Any], 
+                        current_cf: list[Any], 
+                        current_pt: dict[date, Any]
+                    ):
+                        cf_dict.setdefault(group_key, []).extend(current_cf)
+                        gp = pt_dict.setdefault(group_key, {})
+                        for d, vals in current_pt.items():
+                            pt = gp.setdefault(
+                                d, {"val": 0.0, "shadow_val": 0.0, "after_tax_val": 0.0}
+                            )
+                            pt["val"] += vals["val"]
+                            pt["shadow_val"] += vals["shadow_val"]
+                            pt["after_tax_val"] += vals.get("after_tax_val", 0.0)
+
+                    _update_group(inst_type, instrument_type_cf, instrument_type_pt, isin_cf, isin_pt)
+                    _update_group(sector, sector_cf, sector_pt, isin_cf, isin_pt)
+                    _update_group(industry, industry_cf, industry_pt, isin_cf, isin_pt)
         finally:
             current_process.daemon = is_daemon
 
@@ -258,4 +291,10 @@ class IsinPipeline:
             subtype_cf=subtype_cf,
             subtype_pt=subtype_pt,
             subtype_re=subtype_re,
+            instrument_type_cf=instrument_type_cf,
+            instrument_type_pt=instrument_type_pt,
+            sector_cf=sector_cf,
+            sector_pt=sector_pt,
+            industry_cf=industry_cf,
+            industry_pt=industry_pt,
         )

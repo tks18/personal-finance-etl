@@ -185,8 +185,8 @@ class NetWorthBuilder:
         )
 
         # Inject Market Values for assets if available
-        df_inv_isin = self.dfs.get("df_f_tf_investment_analytics_isin")
-        df_inv_master = self.dfs.get("df_d_tf_investment_master")
+        df_inv_isin = self.dfs.get("df_f_investment_analytics_isin")
+        df_inv_master = self.dfs.get("df_d_investment_master")
 
         if df_inv_isin is not None and df_inv_master is not None:
             lf_inv_isin = (
@@ -240,6 +240,13 @@ class NetWorthBuilder:
             lf_nw_summary = lf_nw_summary.with_columns(
                 pl.col("Closing_Balance").alias("Closing_Balance_Market")
             )
+
+        lf_nw_summary = lf_nw_summary.with_columns(
+            pl.lit(None).cast(pl.Date).alias("Peak_Date"),
+            pl.lit(0).cast(pl.Int64).alias("Drawdown_Duration"),
+            pl.lit(0).cast(pl.Int64).alias("Underwater_Days"),
+            pl.lit(0.0).alias("Time_Weighted_Return"),
+        )
 
         lf_nw_summary = (
             lf_nw_summary.join(lf_inflation, on="MONTH_START_DATE", how="left")
@@ -326,7 +333,7 @@ class NetWorthBuilder:
         )
 
         # Inject Total Market Value into Monthly Totals
-        df_inv_port = self.dfs.get("df_f_tf_investment_analytics_portfolio")
+        df_inv_port = self.dfs.get("df_f_investment_analytics_portfolio")
         if df_inv_port is not None:
             lf_inv_port = (
                 df_inv_port.lazy() if isinstance(df_inv_port, pl.DataFrame) else df_inv_port

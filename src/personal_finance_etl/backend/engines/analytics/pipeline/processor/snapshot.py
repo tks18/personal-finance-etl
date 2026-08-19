@@ -51,10 +51,23 @@ class SnapshotGenerator:
         inst_sortino = inst_metrics.get("sortino", 0.0)
         inst_calmar = inst_metrics.get("calmar", 0.0)
         inst_max_dd = inst_metrics.get("max_drawdown", 0.0)
+        inst_peak_date = inst_metrics.get("peak_date")
+        inst_drawdown_duration = inst_metrics.get("drawdown_duration", 0)
+        inst_underwater_days = inst_metrics.get("underwater_days", 0)
+
         bm_sharpe = inst_metrics.get("bm_sharpe", 0.0)
         bm_sortino = inst_metrics.get("bm_sortino", 0.0)
         bm_calmar = inst_metrics.get("bm_calmar", 0.0)
         bm_max_dd = inst_metrics.get("bm_max_drawdown", 0.0)
+
+        # Time ranges
+        time_ranges = ["1D", "1W", "1M", "3M", "6M", "12M", "3Y", "5Y", "YTD", "FY_YTD"]
+        ret_dict = {
+            f"Return_{tr}": inst_metrics.get(f"return_{tr.lower()}", 0.0) for tr in time_ranges
+        }
+        alpha_dict = {
+            f"Alpha_{tr}": inst_metrics.get(f"alpha_{tr.lower()}", 0.0) for tr in time_ranges
+        }
 
         outperform_cnt = 0
         lot_count = len(fifo.active_lots)
@@ -140,13 +153,15 @@ class SnapshotGenerator:
                     BM_CAGR=round(inst_bm_cagr, 8),
                     **{
                         "P/L": round(pnl, 4),
-                        "Returns_%": round(lot_return, 8),
-                        "Lot_BM_Returns_%": round(lot_bm_ret, 8),
                     },
+                    Absolute_Return=round(lot_return, 8),
+                    Lot_BM_Return=round(lot_bm_ret, 8),
                     BM_XIRR=round(bm_xirr_val, 8),
                     Active_Return=round(inst_active_return, 8),
                     Lot_Alpha=round(lot_alpha, 8),
                     Is_Lagging_Benchmark=is_lagging,
+                    **ret_dict,
+                    **alpha_dict,
                     Beta=round(beta, 8),
                     Tracking_Error=round(t_err_ann, 8),
                     Information_Ratio=round(info_ratio, 8),
@@ -156,6 +171,9 @@ class SnapshotGenerator:
                     Sortino_Ratio=round(inst_sortino, 8),
                     Calmar_Ratio=round(inst_calmar, 8),
                     Max_Drawdown=round(inst_max_dd, 8),
+                    Peak_Date=inst_peak_date,
+                    Drawdown_Duration=inst_drawdown_duration,
+                    Underwater_Days=inst_underwater_days,
                     BM_Sharpe_Ratio=round(bm_sharpe, 8),
                     BM_Sortino_Ratio=round(bm_sortino, 8),
                     BM_Calmar_Ratio=round(bm_calmar, 8),

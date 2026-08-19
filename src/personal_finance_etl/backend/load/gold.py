@@ -33,8 +33,15 @@ class GoldLayer:
             "df_p_tf_wealth_risk_analytics": "gold.p_Wealth_Risk_Analytics",
             "df_p_tf_tax_liability_forecast": "gold.p_Tax_Liability_Forecast",
             "df_p_tf_budget_forecast_monthly": "gold.p_Budget_Forecast_Monthly",
-            "df_p_tf_investment_analytics": "gold.p_Investment_Analytics",
+            "df_p_tf_investment_analytics": "gold.p_Portfolio_Management_Analytics",
             "df_p_tf_monthly_cashflow_summary": "gold.p_Monthly_Cashflow_Summary",
+            "df_f_investment_analytics_isin": "gold.p_Investment_Analytics_ISIN",
+            "df_f_investment_analytics_subtype": "gold.p_Investment_Analytics_Subtype",
+            "df_f_investment_analytics_class": "gold.p_Investment_Analytics_Class",
+            "df_f_investment_analytics_instrument_type": "gold.p_Investment_Analytics_Instrument_Type",
+            "df_f_investment_analytics_sector": "gold.p_Investment_Analytics_Sector",
+            "df_f_investment_analytics_industry": "gold.p_Investment_Analytics_Industry",
+            "df_f_investment_analytics_portfolio": "gold.p_Investment_Analytics_Portfolio",
         }
         # Phase 1: Cleanly wipe the entire schema
         self.db_manager.conn.execute("DROP SCHEMA IF EXISTS gold CASCADE")

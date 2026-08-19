@@ -219,13 +219,20 @@ class IsinProcessor:
                 inst_sharpe,
                 inst_sortino,
                 inst_calmar,
+                inst_current_dd,
                 inst_max_dd,
                 bm_sharpe,
                 bm_sortino,
                 bm_calmar,
+                bm_current_dd,
                 bm_max_dd,
             ) = risk_provider.calculate_risk(first_p_date, m_date)
             info_ratio = (inst_active_return / t_err_ann) if t_err_ann != 0 else 0.0
+
+            inst_peak, inst_dd_dur, inst_ud_days = risk_provider.calculate_drawdowns(
+                first_p_date, m_date
+            )
+            time_range_metrics = risk_provider.calculate_time_ranges(m_date)
 
             inst_metrics = {
                 "cagr": inst_cagr,
@@ -245,13 +252,19 @@ class IsinProcessor:
                 "sharpe": inst_sharpe,
                 "sortino": inst_sortino,
                 "calmar": inst_calmar,
-                "max_drawdown": inst_max_dd,
+                "max_drawdown": inst_current_dd,
+                "historical_max_dd": inst_max_dd,
+                "peak_date": inst_peak,
+                "drawdown_duration": inst_dd_dur,
+                "underwater_days": inst_ud_days,
                 # Benchmark equivalents (for comparison)
                 "bm_sharpe": bm_sharpe,
                 "bm_sortino": bm_sortino,
                 "bm_calmar": bm_calmar,
-                "bm_max_drawdown": bm_max_dd,
+                "bm_max_drawdown": bm_current_dd,
+                "historical_bm_max_dd": bm_max_dd,
             }
+            inst_metrics.update(time_range_metrics)
 
             snapshots = snapshot_generator.generate(fifo, m_date, m_price, m_bm_price, inst_metrics)
             isin_snapshots.extend(snapshots)
@@ -323,6 +336,9 @@ class IsinProcessor:
             **{
                 "class": str(master_row.get("INSTRUMENT_CLASS", "Unknown")),
                 "subtype": str(master_row.get("INSTRUMENT_SUBTYPE", "Unknown")),
+                "instrument_type": str(master_row.get("INSTRUMENT_TYPE", "Unknown")),
+                "sector": str(master_row.get("SECTOR", "Unknown")),
+                "industry": str(master_row.get("INDUSTRY", "Unknown")),
             }
         )
         return ISINProcessResult(

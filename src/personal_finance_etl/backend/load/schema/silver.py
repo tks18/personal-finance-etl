@@ -257,7 +257,7 @@ CREATE TABLE IF NOT EXISTS silver.d_Investment_Benchmark_Master (
     Currency TEXT
 );
 
-CREATE TABLE IF NOT EXISTS silver.d_tf_Investment_Master (
+CREATE TABLE IF NOT EXISTS silver.d_Investment_Master (
     ISIN TEXT PRIMARY KEY,
     INSTRUMENT_NAME TEXT,
     INSTRUMENT_HOUSE TEXT,
@@ -313,7 +313,7 @@ CREATE TABLE IF NOT EXISTS silver.d_Macro_Parameters (
     FOREIGN KEY(FY_Start_Date) REFERENCES silver.d_Calendar(Date)
 );
 
-CREATE TABLE IF NOT EXISTS silver.stg_Investment_Market_Data (
+CREATE TABLE IF NOT EXISTS silver.f_Investment_Market_Data (
     __file_name__ TEXT,
     __folder_path__ TEXT,
     Date DATE NOT NULL,
@@ -326,10 +326,10 @@ CREATE TABLE IF NOT EXISTS silver.stg_Investment_Market_Data (
     "Unit P/L" DOUBLE,
     "Total P/L" DOUBLE,
     FOREIGN KEY(Date) REFERENCES silver.d_Calendar(Date),
-    FOREIGN KEY(ISIN) REFERENCES silver.d_tf_Investment_Master(ISIN)
+    FOREIGN KEY(ISIN) REFERENCES silver.d_Investment_Master(ISIN)
 );
 
-CREATE TABLE IF NOT EXISTS silver.f_tf_Investment_Purchase_Data (
+CREATE TABLE IF NOT EXISTS silver.f_Investment_Purchase_Data (
     __file_name__ TEXT,
     __folder_path__ TEXT,
     ISIN TEXT NOT NULL,
@@ -339,11 +339,11 @@ CREATE TABLE IF NOT EXISTS silver.f_tf_Investment_Purchase_Data (
     Value DOUBLE,
     CURRENCY_ID TEXT,
     FOREIGN KEY(Date) REFERENCES silver.d_Calendar(Date),
-    FOREIGN KEY(ISIN) REFERENCES silver.d_tf_Investment_Master(ISIN),
+    FOREIGN KEY(ISIN) REFERENCES silver.d_Investment_Master(ISIN),
     FOREIGN KEY(CURRENCY_ID) REFERENCES silver.d_Currency(UID)
 );
 
-CREATE TABLE IF NOT EXISTS silver.f_tf_Investment_Sale_Data (
+CREATE TABLE IF NOT EXISTS silver.f_Investment_Sale_Data (
     __file_name__ TEXT,
     __folder_path__ TEXT,
     ISIN TEXT NOT NULL,
@@ -357,7 +357,7 @@ CREATE TABLE IF NOT EXISTS silver.f_tf_Investment_Sale_Data (
     "Total P/L" DOUBLE,
     CURRENCY_ID TEXT,
     FOREIGN KEY(Date) REFERENCES silver.d_Calendar(Date),
-    FOREIGN KEY(ISIN) REFERENCES silver.d_tf_Investment_Master(ISIN),
+    FOREIGN KEY(ISIN) REFERENCES silver.d_Investment_Master(ISIN),
     FOREIGN KEY(CURRENCY_ID) REFERENCES silver.d_Currency(UID)
 );
 
@@ -372,7 +372,7 @@ CREATE TABLE IF NOT EXISTS silver.f_Investment_Benchmark_Data (
     FOREIGN KEY(ID) REFERENCES silver.d_Investment_Benchmark_Master(ID)
 );
 
-CREATE TABLE IF NOT EXISTS silver.f_tf_Investment_Analytics_Lot (
+CREATE TABLE IF NOT EXISTS silver.f_Investment_Analytics_Lot (
     -- Identifiers
     Closing_Date DATE NOT NULL,
     ISIN TEXT NOT NULL,
@@ -395,17 +395,43 @@ CREATE TABLE IF NOT EXISTS silver.f_tf_Investment_Analytics_Lot (
     Close_Value DOUBLE,
     -- Absolute Returns
     "P/L" DOUBLE,
-    "Returns_%" DOUBLE,
-    "Lot_Weight_%" DOUBLE,
+    Absolute_Return DOUBLE,
+    Lot_Weight DOUBLE,
     Lot_CAGR DOUBLE,
-    -- Portfolio-Level Returns
+    -- Time-Range Returns
+    Return_1D DOUBLE,
+    Return_1W DOUBLE,
+    Return_1M DOUBLE,
+    Return_3M DOUBLE,
+    Return_6M DOUBLE,
+    Return_12M DOUBLE,
+    Return_3Y DOUBLE,
+    Return_5Y DOUBLE,
+    Return_YTD DOUBLE,
+    Return_FY_YTD DOUBLE,
+    -- Time-Range Alphas
+    Alpha_1D DOUBLE,
+    Alpha_1W DOUBLE,
+    Alpha_1M DOUBLE,
+    Alpha_3M DOUBLE,
+    Alpha_6M DOUBLE,
+    Alpha_12M DOUBLE,
+    Alpha_3Y DOUBLE,
+    Alpha_5Y DOUBLE,
+    Alpha_YTD DOUBLE,
+    Alpha_FY_YTD DOUBLE,
+    -- Drawdown Metadata
+    Peak_Date DATE,
+    Drawdown_Duration BIGINT,
+    Underwater_Days BIGINT,
+    -- Returns
     CAGR DOUBLE,
     XIRR DOUBLE,
     After_Tax_XIRR DOUBLE,
     -- Benchmark Comparison
     BM_Buy_Price DOUBLE,
     BM_Market_Price DOUBLE,
-    "Lot_BM_Returns_%" DOUBLE,
+    Lot_BM_Return DOUBLE,
     Lot_BM_CAGR DOUBLE,
     BM_CAGR DOUBLE,
     BM_XIRR DOUBLE,
@@ -423,11 +449,13 @@ CREATE TABLE IF NOT EXISTS silver.f_tf_Investment_Analytics_Lot (
     Sortino_Ratio DOUBLE,
     Calmar_Ratio DOUBLE,
     Max_Drawdown DOUBLE,
+    Historical_Max_DD DOUBLE,
     -- Benchmark Equivalents
     BM_Sharpe_Ratio DOUBLE,
     BM_Sortino_Ratio DOUBLE,
     BM_Calmar_Ratio DOUBLE,
     BM_Max_Drawdown DOUBLE,
+    Historical_BM_Max_DD DOUBLE,
     -- Comparison Alphas (instrument minus benchmark)
     Sharpe_Alpha DOUBLE,
     Sortino_Alpha DOUBLE,
@@ -445,22 +473,7 @@ CREATE TABLE IF NOT EXISTS silver.f_tf_Investment_Analytics_Lot (
     After_Tax_PL DOUBLE,
     After_Tax_Close_Value DOUBLE,
     -- Portfolio Aggregates
-    "Portfolio_Weight_%" DOUBLE,
-    Portfolio_XIRR DOUBLE,
-    Portfolio_After_Tax_XIRR DOUBLE,
-    Portfolio_BM_XIRR DOUBLE,
-    Portfolio_Active_Return DOUBLE,
-    Portfolio_Sharpe_Ratio DOUBLE,
-    Portfolio_Sortino_Ratio DOUBLE,
-    Portfolio_Calmar_Ratio DOUBLE,
-    Portfolio_Max_Drawdown DOUBLE,
-    Portfolio_BM_Sharpe_Ratio DOUBLE,
-    Portfolio_BM_Sortino_Ratio DOUBLE,
-    Portfolio_BM_Calmar_Ratio DOUBLE,
-    Portfolio_BM_Max_Drawdown DOUBLE,
-    Portfolio_Sharpe_Alpha DOUBLE,
-    Portfolio_Sortino_Alpha DOUBLE,
-    Portfolio_Calmar_Alpha DOUBLE,
+    Portfolio_Weight DOUBLE,
     Outperformance_Probability DOUBLE,
     -- FY Tax Tracking
     FY TEXT,
@@ -471,217 +484,48 @@ CREATE TABLE IF NOT EXISTS silver.f_tf_Investment_Analytics_Lot (
     FY_Realized_STCL DOUBLE,
     FY_Realized_Loss DOUBLE,
     FY_Realized_Net_PnL DOUBLE,
-    FY_LTCG_Remaining_Exemption BIGINT,
+    Equity_Unlisted_LTCG DOUBLE,
+    Equity_Unlisted_STCG DOUBLE,
+    Equity_LTCG_Exemption BIGINT,
+    -- Gold Rates
+    Gold_LTCG DOUBLE,
+    Gold_STCG DOUBLE,
+    -- Debt MF Rates
+    Debt_MF_Pre_Cutoff_LTCG DOUBLE,
+    Debt_MF_Pre_Cutoff_STCG DOUBLE,
+    Debt_MF_Post_Cutoff_LTCG DOUBLE,
+    Debt_MF_Post_Cutoff_STCG DOUBLE,
+    -- Other Debt
+    Other_Debt_LTCG DOUBLE,
+    Other_Debt_STCG DOUBLE,
+    -- Default (fallback)
+    Default_LTCG DOUBLE,
+    Default_STCG DOUBLE,
+    -- Income Tax
+    Dividend_Income_Tax_Rate DOUBLE,
     -- Harvest Signals
     Stepup_Eligible BIGINT,
     Can_Harvest_Loss BOOLEAN,
     Harvest_Recommendation TEXT,
-    FOREIGN KEY(Closing_Date) REFERENCES silver.d_Calendar(Date),
-    FOREIGN KEY(Buy_Date) REFERENCES silver.d_Calendar(Date),
-    FOREIGN KEY(ISIN) REFERENCES silver.d_tf_Investment_Master(ISIN),
-    FOREIGN KEY(BENCHMARK_ID) REFERENCES silver.d_Investment_Benchmark_Master(ID)
+    -- Meta
+    Remarks TEXT,
+    __file_name__ TEXT,
+    __folder_path__ TEXT
 );
 
-CREATE TABLE IF NOT EXISTS silver.f_tf_Investment_Analytics_ISIN (
-    -- Identifiers
-    Closing_Date DATE NOT NULL,
+CREATE TABLE IF NOT EXISTS silver.f_Investment_Market_Data (
+    __file_name__ TEXT,
+    __folder_path__ TEXT,
+    Date DATE NOT NULL,
     ISIN TEXT NOT NULL,
-    -- Position Values
-    Total_Invested_Value DOUBLE,
-    Total_Current_Value DOUBLE,
-    Unrealized_PL DOUBLE,
-    "Absolute_Return_%" DOUBLE,
-    "Weight_%" DOUBLE,
-    -- Returns
-    CAGR DOUBLE,
-    XIRR DOUBLE,
-    After_Tax_XIRR DOUBLE,
-    BM_CAGR DOUBLE,
-    BM_XIRR DOUBLE,
-    Active_Return DOUBLE,
-    Is_Lagging_Benchmark BIGINT,
-    -- Risk
-    Beta DOUBLE,
-    Tracking_Error DOUBLE,
-    Information_Ratio DOUBLE,
-    Upside_Capture DOUBLE,
-    Downside_Capture DOUBLE,
-    Outperformance_Probability DOUBLE,
-    -- Per-ISIN Risk-Adjusted Ratios
-    Sharpe_Ratio DOUBLE,
-    Sortino_Ratio DOUBLE,
-    Calmar_Ratio DOUBLE,
-    Max_Drawdown DOUBLE,
-    -- Benchmark Equivalents
-    BM_Sharpe_Ratio DOUBLE,
-    BM_Sortino_Ratio DOUBLE,
-    BM_Calmar_Ratio DOUBLE,
-    BM_Max_Drawdown DOUBLE,
-    -- Comparison Alphas
-    Sharpe_Alpha DOUBLE,
-    Sortino_Alpha DOUBLE,
-    Calmar_Alpha DOUBLE,
-    -- Tax Exposure
-    Unrealized_LTCG DOUBLE,
-    Unrealized_STCG DOUBLE,
-    Unrealized_Gain DOUBLE,
-    Unrealized_LTCL DOUBLE,
-    Unrealized_STCL DOUBLE,
-    Unrealized_Loss DOUBLE,
-    LTCG_Tax_If_Sold DOUBLE,
-    STCG_Tax_If_Sold DOUBLE,
-    FY_Realized_LTCG DOUBLE,
-    FY_Realized_STCG DOUBLE,
-    FY_Realized_Gain DOUBLE,
-    FY_Realized_LTCL DOUBLE,
-    FY_Realized_STCL DOUBLE,
-    FY_Realized_Loss DOUBLE,
-    FY_Realized_Net_PnL DOUBLE,
-    FOREIGN KEY(Closing_Date) REFERENCES silver.d_Calendar(Date),
-    FOREIGN KEY(ISIN) REFERENCES silver.d_tf_Investment_Master(ISIN)
-);
-
-CREATE TABLE IF NOT EXISTS silver.f_tf_Investment_Analytics_Subtype (
-    -- Identifiers
-    Closing_Date DATE NOT NULL,
-    INSTRUMENT_CLASS TEXT NOT NULL,
-    INSTRUMENT_SUBTYPE TEXT NOT NULL,
-    -- Position Values
-    Total_Invested_Value DOUBLE,
-    Total_Current_Value DOUBLE,
-    Unrealized_PL DOUBLE,
-    "Absolute_Return_%" DOUBLE,
-    "Weight_%" DOUBLE,
-    -- Returns
-    XIRR DOUBLE,
-    After_Tax_XIRR DOUBLE,
-    BM_XIRR DOUBLE,
-    Active_Return DOUBLE,
-    -- Risk-Adjusted (Portfolio)
-    Sharpe_Ratio DOUBLE,
-    Sortino_Ratio DOUBLE,
-    Calmar_Ratio DOUBLE,
-    Max_Drawdown DOUBLE,
-    -- Benchmark Equivalents
-    BM_Sharpe_Ratio DOUBLE,
-    BM_Sortino_Ratio DOUBLE,
-    BM_Calmar_Ratio DOUBLE,
-    BM_Max_Drawdown DOUBLE,
-    -- Comparison Alphas
-    Sharpe_Alpha DOUBLE,
-    Sortino_Alpha DOUBLE,
-    Calmar_Alpha DOUBLE,
-    -- Tax Exposure
-    Unrealized_LTCG DOUBLE,
-    Unrealized_STCG DOUBLE,
-    Unrealized_Gain DOUBLE,
-    Unrealized_LTCL DOUBLE,
-    Unrealized_STCL DOUBLE,
-    Unrealized_Loss DOUBLE,
-    LTCG_Tax_If_Sold DOUBLE,
-    STCG_Tax_If_Sold DOUBLE,
-    FY_Realized_LTCG DOUBLE,
-    FY_Realized_STCG DOUBLE,
-    FY_Realized_Gain DOUBLE,
-    FY_Realized_LTCL DOUBLE,
-    FY_Realized_STCL DOUBLE,
-    FY_Realized_Loss DOUBLE,
-    FY_Realized_Net_PnL DOUBLE,
-    FOREIGN KEY(Closing_Date) REFERENCES silver.d_Calendar(Date)
-);
-
-CREATE TABLE IF NOT EXISTS silver.f_tf_Investment_Analytics_Class (
-    -- Identifiers
-    Closing_Date DATE NOT NULL,
-    INSTRUMENT_CLASS TEXT NOT NULL,
-    -- Position Values
-    Total_Invested_Value DOUBLE,
-    Total_Current_Value DOUBLE,
-    Unrealized_PL DOUBLE,
-    "Absolute_Return_%" DOUBLE,
-    "Weight_%" DOUBLE,
-    -- Returns
-    XIRR DOUBLE,
-    After_Tax_XIRR DOUBLE,
-    BM_XIRR DOUBLE,
-    Active_Return DOUBLE,
-    -- Risk-Adjusted (Portfolio)
-    Sharpe_Ratio DOUBLE,
-    Sortino_Ratio DOUBLE,
-    Calmar_Ratio DOUBLE,
-    Max_Drawdown DOUBLE,
-    -- Benchmark Equivalents
-    BM_Sharpe_Ratio DOUBLE,
-    BM_Sortino_Ratio DOUBLE,
-    BM_Calmar_Ratio DOUBLE,
-    BM_Max_Drawdown DOUBLE,
-    -- Comparison Alphas
-    Sharpe_Alpha DOUBLE,
-    Sortino_Alpha DOUBLE,
-    Calmar_Alpha DOUBLE,
-    -- Tax Exposure
-    Unrealized_LTCG DOUBLE,
-    Unrealized_STCG DOUBLE,
-    Unrealized_Gain DOUBLE,
-    Unrealized_LTCL DOUBLE,
-    Unrealized_STCL DOUBLE,
-    Unrealized_Loss DOUBLE,
-    LTCG_Tax_If_Sold DOUBLE,
-    STCG_Tax_If_Sold DOUBLE,
-    FY_Realized_LTCG DOUBLE,
-    FY_Realized_STCG DOUBLE,
-    FY_Realized_Gain DOUBLE,
-    FY_Realized_LTCL DOUBLE,
-    FY_Realized_STCL DOUBLE,
-    FY_Realized_Loss DOUBLE,
-    FY_Realized_Net_PnL DOUBLE,
-    FOREIGN KEY(Closing_Date) REFERENCES silver.d_Calendar(Date)
-);
-
-CREATE TABLE IF NOT EXISTS silver.f_tf_Investment_Analytics_Portfolio (
-    -- Identifier
-    Closing_Date DATE NOT NULL,
-    -- Position Values
-    Total_Invested_Value DOUBLE,
-    Total_Current_Value DOUBLE,
-    Unrealized_PL DOUBLE,
-    "Absolute_Return_%" DOUBLE,
-    "Weight_%" DOUBLE,
-    -- Returns
-    XIRR DOUBLE,
-    After_Tax_XIRR DOUBLE,
-    BM_XIRR DOUBLE,
-    Active_Return DOUBLE,
-    -- Risk-Adjusted (Portfolio)
-    Sharpe_Ratio DOUBLE,
-    Sortino_Ratio DOUBLE,
-    Calmar_Ratio DOUBLE,
-    Max_Drawdown DOUBLE,
-    -- Benchmark Equivalents
-    BM_Sharpe_Ratio DOUBLE,
-    BM_Sortino_Ratio DOUBLE,
-    BM_Calmar_Ratio DOUBLE,
-    BM_Max_Drawdown DOUBLE,
-    -- Comparison Alphas
-    Sharpe_Alpha DOUBLE,
-    Sortino_Alpha DOUBLE,
-    Calmar_Alpha DOUBLE,
-    -- Tax Exposure
-    Unrealized_LTCG DOUBLE,
-    Unrealized_STCG DOUBLE,
-    Unrealized_Gain DOUBLE,
-    Unrealized_LTCL DOUBLE,
-    Unrealized_STCL DOUBLE,
-    Unrealized_Loss DOUBLE,
-    LTCG_Tax_If_Sold DOUBLE,
-    STCG_Tax_If_Sold DOUBLE,
-    FY_Realized_LTCG DOUBLE,
-    FY_Realized_STCG DOUBLE,
-    FY_Realized_Gain DOUBLE,
-    FY_Realized_LTCL DOUBLE,
-    FY_Realized_STCL DOUBLE,
-    FY_Realized_Loss DOUBLE,
-    FY_Realized_Net_PnL DOUBLE,
-    FOREIGN KEY(Closing_Date) REFERENCES silver.d_Calendar(Date)
+    Quantity DOUBLE,
+    "Closing Price" DOUBLE,
+    "Buy Price" DOUBLE,
+    "Closing Value" DOUBLE,
+    "Buy Value" DOUBLE,
+    "Unit P/L" DOUBLE,
+    "Total P/L" DOUBLE,
+    FOREIGN KEY(Date) REFERENCES silver.d_Calendar(Date),
+    FOREIGN KEY(ISIN) REFERENCES silver.d_Investment_Master(ISIN)
 );
 """

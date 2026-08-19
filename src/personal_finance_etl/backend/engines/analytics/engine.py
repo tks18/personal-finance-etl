@@ -88,7 +88,7 @@ class InvestmentQuantEngine:
                         level=LogLevel.SUCCESS,
                     )
                 )
-            return {"df_f_tf_investment_analytics_lot": empty_df}
+            return {"df_f_investment_analytics_lot": empty_df}
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             isin_pipeline = IsinPipeline(ctx, isins, tmp_dir, self.status_queue)
@@ -106,7 +106,7 @@ class InvestmentQuantEngine:
                             level=LogLevel.SUCCESS,
                         )
                     )
-                return {"df_f_tf_investment_analytics_lot": empty_df}
+                return {"df_f_investment_analytics_lot": empty_df}
 
             post_pipeline = PostProcessingPipeline(ctx, tmp_dir, self.status_queue)
             final_dfs = post_pipeline.run(pipeline_res)

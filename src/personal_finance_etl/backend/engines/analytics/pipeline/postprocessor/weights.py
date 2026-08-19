@@ -15,11 +15,11 @@ class PortfolioWeightsCalculator:
         instr_val = instr_val.join(port_tot, on="Closing_Date", how="left").with_columns(
             (pl.col("Instrument_Close_Value") / pl.col("Total_Portfolio_Value"))
             .round(8)
-            .alias("Portfolio_Weight_%")
+            .alias("Portfolio_Weight")
         )
         lazy_df = lazy_df.join(
             instr_val.select(
-                ["Closing_Date", "ISIN", "Instrument_Close_Value", "Portfolio_Weight_%"]
+                ["Closing_Date", "ISIN", "Instrument_Close_Value", "Portfolio_Weight"]
             ),
             on=["Closing_Date", "ISIN"],
             how="left",
@@ -33,7 +33,7 @@ class PortfolioWeightsCalculator:
             .with_columns(
                 (pl.col("Close_Value") / pl.col("Total_Portfolio_Value"))
                 .round(8)
-                .alias("Lot_Weight_%")
+                .alias("Lot_Weight")
             )
             .drop("Total_Portfolio_Value", "Instrument_Close_Value")
         )
