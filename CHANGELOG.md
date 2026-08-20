@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [5.1.2](https://github.com/tks18/personal-finance-etl/compare/5.1.1...5.1.2) (2026-08-20)
+
+
+### Bug Fixes 🛠
+
+* **load/schema:** schema duplication fix ([faad6ee](https://github.com/tks18/personal-finance-etl/commit/faad6ee5cbce75a158aeb4007a168d8bf806e410))
+
 ### [5.1.1](https://github.com/tks18/personal-finance-etl/compare/5.1.0...5.1.1) (2026-08-20)
 
 
