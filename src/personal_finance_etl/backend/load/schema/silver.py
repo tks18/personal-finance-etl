@@ -484,8 +484,6 @@ CREATE TABLE IF NOT EXISTS silver.f_Investment_Analytics_Lot (
     FY_Realized_STCL DOUBLE,
     FY_Realized_Loss DOUBLE,
     FY_Realized_Net_PnL DOUBLE,
-    Equity_Unlisted_LTCG DOUBLE,
-    Equity_Unlisted_STCG DOUBLE,
     Equity_LTCG_Exemption BIGINT,
     -- Harvest Signals
     Stepup_Eligible BIGINT,
