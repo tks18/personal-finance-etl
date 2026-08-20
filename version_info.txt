@@ -1,7 +1,7 @@
 VSVersionInfo(
   ffi=FixedFileInfo(
-    filevers=(5, 1, 0, 0),
-    prodvers=(5, 1, 0, 0),
+    filevers=(5, 1, 1, 0),
+    prodvers=(5, 1, 1, 0),
     mask=0x3f,
     flags=0x0,
     OS=0x40004,
@@ -16,12 +16,12 @@ VSVersionInfo(
         '040904B0',
         [StringStruct('CompanyName', 'Sudharshan TK'),
         StringStruct('FileDescription', 'Hyper-optimized, strict-typed Quantitative Medallion ETL & FIRE Simulation Engine.'),
-        StringStruct('FileVersion', '5.1.0'),
+        StringStruct('FileVersion', '5.1.1'),
         StringStruct('InternalName', 'Personal Finance ETL'),
         StringStruct('LegalCopyright', 'Copyright (c) 2026 Shan.TK. All rights reserved.'),
         StringStruct('OriginalFilename', 'Shan\'s Personal Finance ETL.exe'),
         StringStruct('ProductName', 'Shan\'s Personal Finance ETL'),
-        StringStruct('ProductVersion', '5.1.0')])
+        StringStruct('ProductVersion', '5.1.1')])
       ]), 
     VarFileInfo([VarStruct('Translation', [1033, 1200])])
   ]
