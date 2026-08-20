@@ -489,10 +489,6 @@ CREATE TABLE IF NOT EXISTS silver.f_Investment_Analytics_Lot (
     Stepup_Eligible BIGINT,
     Can_Harvest_Loss BOOLEAN,
     Harvest_Recommendation TEXT,
-    -- Meta
-    Remarks TEXT,
-    __file_name__ TEXT,
-    __folder_path__ TEXT
 );
 
 CREATE TABLE IF NOT EXISTS silver.f_Investment_Market_Data (
