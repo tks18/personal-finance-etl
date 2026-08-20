@@ -1,7 +1,7 @@
 {
   "name": "personal-finance-etl",
   "description": "An institutional-grade, hyper-optimized Quantitative Master Engine built to absolutely dominate personal net worth",
-  "version": "5.1.2",
+  "version": "5.1.3",
   "repository": "https://github.com/tks18/personal-finance-etl",
   "author": "tks18 <tksudharshan@gmail.com>",
   "license": "GPL-3.0-only",
