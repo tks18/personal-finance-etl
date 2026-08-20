@@ -487,22 +487,6 @@ CREATE TABLE IF NOT EXISTS silver.f_Investment_Analytics_Lot (
     Equity_Unlisted_LTCG DOUBLE,
     Equity_Unlisted_STCG DOUBLE,
     Equity_LTCG_Exemption BIGINT,
-    -- Gold Rates
-    Gold_LTCG DOUBLE,
-    Gold_STCG DOUBLE,
-    -- Debt MF Rates
-    Debt_MF_Pre_Cutoff_LTCG DOUBLE,
-    Debt_MF_Pre_Cutoff_STCG DOUBLE,
-    Debt_MF_Post_Cutoff_LTCG DOUBLE,
-    Debt_MF_Post_Cutoff_STCG DOUBLE,
-    -- Other Debt
-    Other_Debt_LTCG DOUBLE,
-    Other_Debt_STCG DOUBLE,
-    -- Default (fallback)
-    Default_LTCG DOUBLE,
-    Default_STCG DOUBLE,
-    -- Income Tax
-    Dividend_Income_Tax_Rate DOUBLE,
     -- Harvest Signals
     Stepup_Eligible BIGINT,
     Can_Harvest_Loss BOOLEAN,
