@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [5.1.4](https://github.com/tks18/personal-finance-etl/compare/5.1.3...5.1.4) (2026-08-21)
+
+
+### Code Refactoring 🖌
+
+* **load/schema:** update table names for proper organization ([88d96ae](https://github.com/tks18/personal-finance-etl/commit/88d96ae25b90b3b37a5b96ee68cf1266ef772b4c))
+* remove spaces in cols:refactor across all the files ([09287a7](https://github.com/tks18/personal-finance-etl/commit/09287a7e5be4a9fa1a8c268a28e9b05c9ecf8fa0))
+
+
+### Features 🔥
+
+* **transform:** enhance calendar dimension for great slicing / dicing of data ([02c5d32](https://github.com/tks18/personal-finance-etl/commit/02c5d32eba51d6316566af112d9d95694f4e1255))
+
 ### [5.1.3](https://github.com/tks18/personal-finance-etl/compare/5.1.2...5.1.3) (2026-08-20)
 
 
