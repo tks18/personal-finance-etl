@@ -63,9 +63,9 @@ class TaxDataLoader:
 
         for c in ["Quantity", "Price", "Value"]:
             df_p = clean_numeric_col(df_p, c)
-        for c in ["Quantity", "Price", "Sell Value"]:
+        for c in ["Quantity", "Price", "Sell_Value"]:
             df_s = clean_numeric_col(df_s, c)
-        for c in ["Quantity", "Closing Price", "Buy Value"]:
+        for c in ["Quantity", "Closing_Price", "Buy_Value"]:
             df_m = clean_numeric_col(df_m, c)
 
         return df_p, df_s, df_m, isin_master, df_b

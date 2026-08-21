@@ -115,14 +115,14 @@ class IsinProcessor:
                 s_qty = float(row["Quantity"])
 
                 row_p_val: float | None = row.get("Price")
-                sv_val: float | None = row.get("Sell Value")
+                sv_val: float | None = row.get("Sell_Value")
 
                 if row_p_val is not None:
                     s_price = float(row_p_val)
                 elif sv_val is not None and s_qty > 0:
                     s_price = float(sv_val) / s_qty
                 else:
-                    s_price = float(m_row.get("Closing Price", 0.0))
+                    s_price = float(m_row.get("Closing_Price", 0.0))
 
                 s_val = float(sv_val) if sv_val is not None else float(s_qty * s_price)
 
@@ -136,13 +136,13 @@ class IsinProcessor:
 
             m_recon_bm_price = bm_provider.get_bm_price(m_date)
             if not m_recon_bm_price or m_recon_bm_price <= 0:
-                m_recon_bm_price = float(m_row.get("Closing Price", 1.0))
+                m_recon_bm_price = float(m_row.get("Closing_Price", 1.0))
             cf_recon = fifo.reconcile_quantity(m_row.get("Quantity"), m_date, m_recon_bm_price)
             for cf in cf_recon:
                 cf_dates.append(cast(date, cf["date"]))
                 cf_amounts.append(cast(float, cf["amount"]))
 
-            fifo.reconcile_cost_basis(m_row.get("Buy Value"))
+            fifo.reconcile_cost_basis(m_row.get("Buy_Value"))
 
             if not fifo.active_lots:
                 continue
@@ -152,7 +152,7 @@ class IsinProcessor:
             if self.end_date and m_date > self.end_date:
                 continue
 
-            m_price = float(m_row["Closing Price"])
+            m_price = float(m_row["Closing_Price"])
             m_bm_price = bm_provider.get_bm_price(m_date)
             if not m_bm_price or m_bm_price <= 0:
                 m_bm_price = m_price
@@ -299,7 +299,7 @@ class IsinProcessor:
             row = s_inst[s_idx]
             s_qty = float(row["Quantity"])
             row_p_val = row.get("Price")
-            sv_val = row.get("Sell Value")
+            sv_val = row.get("Sell_Value")
 
             if row_p_val is not None:
                 s_price = float(row_p_val)

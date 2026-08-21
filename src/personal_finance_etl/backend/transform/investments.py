@@ -52,11 +52,11 @@ def get_sale_reference(
                 "ISIN",
                 pl.col(instrument_col).alias("Instrument name"),
                 pl.col(date_col).alias("Date"),
-                pl.col(price_col).alias("Sell Price"),
+                pl.col(price_col).alias("Sell_Price"),
             ]
         )
         .agg(pl.col(qty_col).sum().alias("Quantity"))
-        .with_columns((pl.col("Quantity") * pl.col("Sell Price")).alias("Sell Value"))
+        .with_columns((pl.col("Quantity") * pl.col("Sell_Price")).alias("Sell_Value"))
     )
 
     # Step 2: Cumulative Sum of Purchases (Rolling calculation for DAX VAR Qty & VAR Val)
@@ -90,15 +90,15 @@ def get_sale_reference(
             pl.when(pl.col("Cum_Buy_Qty").is_null() | (pl.col("Cum_Buy_Qty") == 0))
             .then(0.0)
             .otherwise(pl.col("Cum_Buy_Val") / pl.col("Cum_Buy_Qty"))
-            .alias("Buy Price")
+            .alias("Buy_Price")
         )
         .with_columns(
             [
-                (pl.col("Quantity") * pl.col("Buy Price")).alias("Buy Value"),
-                (pl.col("Sell Price") - pl.col("Buy Price")).alias("Unit P/L"),
+                (pl.col("Quantity") * pl.col("Buy_Price")).alias("Buy_Value"),
+                (pl.col("Sell_Price") - pl.col("Buy_Price")).alias("Unit_PnL"),
             ]
         )
-        .with_columns((pl.col("Unit P/L") * pl.col("Quantity")).alias("Total P/L"))
+        .with_columns((pl.col("Unit_PnL") * pl.col("Quantity")).alias("Total_PnL"))
         # Keep only required columns
         .select(
             [
@@ -108,12 +108,12 @@ def get_sale_reference(
                 "Instrument name",
                 "Date",
                 "Quantity",
-                "Sell Price",
-                "Sell Value",
-                "Buy Price",
-                "Buy Value",
-                "Unit P/L",
-                "Total P/L",
+                "Sell_Price",
+                "Sell_Value",
+                "Buy_Price",
+                "Buy_Value",
+                "Unit_PnL",
+                "Total_PnL",
             ]
         )
     )
@@ -134,18 +134,17 @@ def transform_stg_investment_market_data(refs: list[pl.LazyFrame]) -> pl.LazyFra
         "Date",
         "ISIN",
         "Quantity",
-        "Closing Price",
-        "Buy Price",
-        "Closing Value",
-        "Buy Value",
-        "Unit P/L",
-        "Total P/L",
+        "Closing_Price",
+        "Buy_Price",
+        "Closing_Value",
+        "Buy_Value",
+        "Unit_PnL",
+        "Total_PnL",
     ]
 
     df_union = pl.concat([ref.select(select_cols) for ref in refs], how="vertical")
 
-    # The outer SUMMARIZE in DAX acts as a distinct/group by on the unioned result.
-    df_final = df_union.unique().sort(["ISIN", "Date", "Quantity", "Buy Price", "Closing Price"])
+    df_final = df_union.unique().sort(["ISIN", "Date", "Quantity", "Buy_Price", "Closing_Price"])
 
     return df_final
 
@@ -177,19 +176,19 @@ def get_f_tf_investment_sale_data(
         "ISIN",
         "Date",
         "Quantity",
-        "Sell Price",
-        "Sell Value",
-        "Buy Price",
-        "Buy Value",
-        "Unit P/L",
-        "Total P/L",
+        "Sell_Price",
+        "Sell_Value",
+        "Buy_Price",
+        "Buy_Value",
+        "Unit_PnL",
+        "Total_PnL",
     ]
 
     df_union = pl.concat([ref.select(select_cols) for ref in refs], how="vertical")
 
     df_final = (
         df_union.unique()  # SUMMARIZE (distinct)
-        .sort(["ISIN", "Date", "Quantity", "Sell Price"])
+        .sort(["ISIN", "Date", "Quantity", "Sell_Price"])
         .with_columns(pl.lit(default_currency_id).alias("CURRENCY_ID"))
     )
     return df_final

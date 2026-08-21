@@ -109,8 +109,8 @@ def get_stg_stock_market_data_ref(stg_stock_market_data_lazy: pl.LazyFrame) -> p
                 pl.col("Month Date").alias("Date"),
                 "ISIN",
                 pl.col("Stock name").alias("Instrument Name"),
-                pl.col("Closing price").alias("Closing Price"),
-                pl.col("Buy price").alias("Buy Price"),
+                pl.col("Closing price").alias("Closing_Price"),
+                pl.col("Buy price").alias("Buy_Price"),
             ]
         )
         # CALCULATE(SUM(Quantity))
@@ -118,12 +118,12 @@ def get_stg_stock_market_data_ref(stg_stock_market_data_lazy: pl.LazyFrame) -> p
         # Add DAX Calculated Columns
         .with_columns(
             [
-                (pl.col("Quantity") * pl.col("Closing Price")).alias("Closing Value"),
-                (pl.col("Quantity") * pl.col("Buy Price")).alias("Buy Value"),
-                (pl.col("Closing Price") - pl.col("Buy Price")).alias("Unit P/L"),
+                (pl.col("Quantity") * pl.col("Closing_Price")).alias("Closing_Value"),
+                (pl.col("Quantity") * pl.col("Buy_Price")).alias("Buy_Value"),
+                (pl.col("Closing_Price") - pl.col("Buy_Price")).alias("Unit_PnL"),
             ]
         )
-        .with_columns((pl.col("Quantity") * pl.col("Unit P/L")).alias("Total P/L"))
+        .with_columns((pl.col("Quantity") * pl.col("Unit_PnL")).alias("Total_PnL"))
     )
     return df_grouped
 

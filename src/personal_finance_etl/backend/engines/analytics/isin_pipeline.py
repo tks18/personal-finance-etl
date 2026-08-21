@@ -123,8 +123,8 @@ class IsinPipeline:
                 .agg(
                     [
                         pl.col("Quantity").sum().alias("Quantity"),
-                        pl.col("Closing Price").last().alias("Closing Price"),
-                        pl.col("Buy Value").sum().alias("Buy Value"),
+                        pl.col("Closing_Price").last().alias("Closing_Price"),
+                        pl.col("Buy_Value").sum().alias("Buy_Value"),
                     ]
                 )
             )

@@ -79,7 +79,7 @@ class BudgetForecastBuilder:
             lf_inv_sells = (
                 lf_sells.with_columns(pl.col("Date").dt.month_start().alias("MONTH_START_DATE"))
                 .group_by("MONTH_START_DATE")
-                .agg(pl.col("Sell Value").sum().fill_null(0.0).alias("Investment_Redeemed"))
+                .agg(pl.col("Sell_Value").sum().fill_null(0.0).alias("Investment_Redeemed"))
             )
             lf = lf.join(lf_inv_sells, on="MONTH_START_DATE", how="left").sort("MONTH_START_DATE")
             lf = lf.with_columns(pl.col("Investment_Redeemed").fill_null(0.0))

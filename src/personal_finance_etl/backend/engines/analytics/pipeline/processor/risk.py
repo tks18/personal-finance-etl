@@ -29,7 +29,7 @@ class RiskMetricsProvider:
         for m_row in m_inst:
             d = to_date_obj(m_row["Date"])
             if d:
-                self.inst_px[d] = float(m_row["Closing Price"])
+                self.inst_px[d] = float(m_row["Closing_Price"])
         self.valid_dates = sorted(self.inst_px.keys())
 
         self.inst_ret_map: dict[date, float] = {}

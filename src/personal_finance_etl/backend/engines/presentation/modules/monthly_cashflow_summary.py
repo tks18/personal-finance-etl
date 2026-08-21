@@ -207,7 +207,7 @@ class MonthlyCashflowSummaryBuilder:
             lf_inv_redeemed = (
                 lf_sells.with_columns(pl.col("Date").dt.month_start().alias("MONTH_START_DATE"))
                 .group_by("MONTH_START_DATE")
-                .agg(pl.col("Sell Value").sum().fill_null(0.0).alias("Total_Investment_Redeemed"))
+                .agg(pl.col("Sell_Value").sum().fill_null(0.0).alias("Total_Investment_Redeemed"))
             )
             lf_monthly = lf_monthly.join(lf_inv_redeemed, on="MONTH_START_DATE", how="left").sort(
                 "MONTH_START_DATE"

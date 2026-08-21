@@ -86,8 +86,8 @@ def get_stg_mf_market_data_ref(stg_mf_market_data_lazy: pl.LazyFrame) -> pl.Lazy
         .agg(
             [
                 pl.col("Units").sum().alias("Quantity"),
-                pl.col("Current Value").sum().alias("Closing Value"),
-                pl.col("Invested Value").sum().alias("Buy Value"),
+                pl.col("Current Value").sum().alias("Closing_Value"),
+                pl.col("Invested Value").sum().alias("Buy_Value"),
             ]
         )
         # Add DAX Calculated Columns (with division by zero protection)
@@ -95,16 +95,16 @@ def get_stg_mf_market_data_ref(stg_mf_market_data_lazy: pl.LazyFrame) -> pl.Lazy
             [
                 pl.when(pl.col("Quantity") == 0)
                 .then(0.0)
-                .otherwise(pl.col("Closing Value") / pl.col("Quantity"))
-                .alias("Closing Price"),
+                .otherwise(pl.col("Closing_Value") / pl.col("Quantity"))
+                .alias("Closing_Price"),
                 pl.when(pl.col("Quantity") == 0)
                 .then(0.0)
-                .otherwise(pl.col("Buy Value") / pl.col("Quantity"))
-                .alias("Buy Price"),
+                .otherwise(pl.col("Buy_Value") / pl.col("Quantity"))
+                .alias("Buy_Price"),
             ]
         )
-        .with_columns((pl.col("Closing Price") - pl.col("Buy Price")).alias("Unit P/L"))
-        .with_columns((pl.col("Unit P/L") * pl.col("Quantity")).alias("Total P/L"))
+        .with_columns((pl.col("Closing_Price") - pl.col("Buy_Price")).alias("Unit_PnL"))
+        .with_columns((pl.col("Unit_PnL") * pl.col("Quantity")).alias("Total_PnL"))
     )
     return df_grouped
 
