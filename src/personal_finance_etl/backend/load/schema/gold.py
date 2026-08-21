@@ -1,5 +1,5 @@
 GOLD_DDL = """
-CREATE TABLE IF NOT EXISTS gold.p_Net_Worth_Monthly_Summary (
+CREATE TABLE IF NOT EXISTS gold.Wealth_Net_Worth_Monthly (
     -- Identifiers
     MONTH_START_DATE DATE,
     MONTH_END_DATE DATE,
@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS gold.p_Net_Worth_Monthly_Summary (
     "MoM_Balance_Growth_%_Real" REAL
 );
 
-CREATE TABLE IF NOT EXISTS gold.p_Category_Spend_Analytics (
+CREATE TABLE IF NOT EXISTS gold.Cashflow_Spend_Monthly (
     -- Identifiers
     MONTH_START_DATE DATE,
     MONTH_END_DATE DATE,
@@ -91,7 +91,7 @@ CREATE TABLE IF NOT EXISTS gold.p_Category_Spend_Analytics (
     Is_Category_Creep BOOLEAN
 );
 
-CREATE TABLE IF NOT EXISTS gold.p_Income_Streams_Monthly (
+CREATE TABLE IF NOT EXISTS gold.Cashflow_Income_Monthly (
     -- Identifiers
     MONTH_START_DATE DATE,
     MONTH_END_DATE DATE,
@@ -129,7 +129,7 @@ CREATE TABLE IF NOT EXISTS gold.p_Income_Streams_Monthly (
     Is_Interest_Income BOOLEAN
 );
 
-CREATE TABLE IF NOT EXISTS gold.p_Wealth_Risk_Analytics (
+CREATE TABLE IF NOT EXISTS gold.Wealth_Risk_Metrics (
     -- Identifiers
     MONTH_START_DATE DATE,
     MONTH_END_DATE DATE,
@@ -240,7 +240,7 @@ CREATE TABLE IF NOT EXISTS gold.p_Wealth_Risk_Analytics (
     Calmar_Ratio_12M DOUBLE
 );
 
-CREATE TABLE IF NOT EXISTS gold.p_Tax_Liability_Forecast (
+CREATE TABLE IF NOT EXISTS gold.Forecast_Tax_Liability_Annual (
     -- Identifiers
     MONTH_START_DATE DATE,
     Financial_Year TEXT,
@@ -267,7 +267,7 @@ CREATE TABLE IF NOT EXISTS gold.p_Tax_Liability_Forecast (
     Tax_Efficiency_Ratio DOUBLE
 );
 
-CREATE TABLE IF NOT EXISTS gold.p_Budget_Forecast_Monthly (
+CREATE TABLE IF NOT EXISTS gold.Forecast_Budget_Monthly (
     -- Identifiers
     MONTH_START_DATE DATE,
     MONTH_END_DATE DATE,
@@ -335,7 +335,7 @@ CREATE TABLE IF NOT EXISTS gold.p_Budget_Forecast_Monthly (
     Is_Expense_Anomaly BOOLEAN
 );
 
-CREATE TABLE IF NOT EXISTS gold.p_Portfolio_Management_Analytics (
+CREATE TABLE IF NOT EXISTS gold.Investment_Portfolio_Summary (
     MONTH_START_DATE DATE,
     Max_Closing_Date DATE,
     ISIN TEXT,
@@ -357,7 +357,7 @@ CREATE TABLE IF NOT EXISTS gold.p_Portfolio_Management_Analytics (
     Tax_Harvesting_Priority_Score DOUBLE
 );
 
-CREATE TABLE IF NOT EXISTS gold.p_Monthly_Cashflow_Summary (
+CREATE TABLE IF NOT EXISTS gold.Cashflow_Summary_Monthly (
     -- Identifiers
     MONTH_START_DATE DATE,
     MONTH_END_DATE DATE,
@@ -415,7 +415,7 @@ CREATE TABLE IF NOT EXISTS gold.p_Monthly_Cashflow_Summary (
     Real_Savings_Rate_Pct DOUBLE,
     YoY_Net_Worth_Growth_Pct_Real DOUBLE
 );
-CREATE TABLE IF NOT EXISTS gold.p_Investment_Analytics_ISIN (
+CREATE TABLE IF NOT EXISTS gold.Investment_By_ISIN (
     -- Identifiers
     Closing_Date DATE NOT NULL,
     ISIN TEXT NOT NULL,
@@ -499,7 +499,7 @@ CREATE TABLE IF NOT EXISTS gold.p_Investment_Analytics_ISIN (
     FY_Realized_Net_PnL DOUBLE
 );
 
-CREATE TABLE IF NOT EXISTS gold.p_Investment_Analytics_Subtype (
+CREATE TABLE IF NOT EXISTS gold.Investment_By_Subtype (
     -- Identifiers
     Closing_Date DATE NOT NULL,
     INSTRUMENT_SUBTYPE TEXT NOT NULL,
@@ -575,7 +575,7 @@ CREATE TABLE IF NOT EXISTS gold.p_Investment_Analytics_Subtype (
     FY_Realized_Net_PnL DOUBLE
 );
 
-CREATE TABLE IF NOT EXISTS gold.p_Investment_Analytics_Class (
+CREATE TABLE IF NOT EXISTS gold.Investment_By_Class (
     -- Identifiers
     Closing_Date DATE NOT NULL,
     INSTRUMENT_CLASS TEXT NOT NULL,
@@ -650,7 +650,7 @@ CREATE TABLE IF NOT EXISTS gold.p_Investment_Analytics_Class (
     FY_Realized_Net_PnL DOUBLE
 );
 
-CREATE TABLE IF NOT EXISTS gold.p_Investment_Analytics_Instrument_Type (
+CREATE TABLE IF NOT EXISTS gold.Investment_By_Instrument_Type (
     -- Identifiers
     Closing_Date DATE NOT NULL,
     INSTRUMENT_TYPE TEXT NOT NULL,
@@ -725,7 +725,7 @@ CREATE TABLE IF NOT EXISTS gold.p_Investment_Analytics_Instrument_Type (
     FY_Realized_Net_PnL DOUBLE
 );
 
-CREATE TABLE IF NOT EXISTS gold.p_Investment_Analytics_Sector (
+CREATE TABLE IF NOT EXISTS gold.Investment_By_Sector (
     -- Identifiers
     Closing_Date DATE NOT NULL,
     SECTOR TEXT NOT NULL,
@@ -800,7 +800,7 @@ CREATE TABLE IF NOT EXISTS gold.p_Investment_Analytics_Sector (
     FY_Realized_Net_PnL DOUBLE
 );
 
-CREATE TABLE IF NOT EXISTS gold.p_Investment_Analytics_Industry (
+CREATE TABLE IF NOT EXISTS gold.Investment_By_Industry (
     -- Identifiers
     Closing_Date DATE NOT NULL,
     INDUSTRY TEXT NOT NULL,
@@ -875,7 +875,7 @@ CREATE TABLE IF NOT EXISTS gold.p_Investment_Analytics_Industry (
     FY_Realized_Net_PnL DOUBLE
 );
 
-CREATE TABLE IF NOT EXISTS gold.p_Investment_Analytics_Portfolio (
+CREATE TABLE IF NOT EXISTS gold.Investment_By_Portfolio (
     -- Identifiers
     Closing_Date DATE NOT NULL,
 
