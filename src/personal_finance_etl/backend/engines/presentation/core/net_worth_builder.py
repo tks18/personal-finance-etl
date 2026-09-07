@@ -23,8 +23,6 @@ class NetWorthBuilder:
         lf_asset = d_asset.lazy() if isinstance(d_asset, pl.DataFrame) else d_asset
 
         lf_months = self.inflation_res["lf_months"]
-        lf_inflation = self.inflation_res["lf_inflation"]
-        cpi_latest = self.inflation_res["cpi_latest"]
 
         lf_activity = self.ledger_res["lf_activity"]
         lf_balances = self.ledger_res["lf_balances"]
@@ -112,17 +110,6 @@ class NetWorthBuilder:
                 )
                 .otherwise(0.0)
                 .alias("MoM_Balance_Growth_%"),
-                pl.when((pl.col("Opening_Balance") + pl.col("Closing_Balance")) > 0)
-                .then(
-                    (
-                        pl.col("Income_Inflow")
-                        + pl.col("Expense_Outflow")
-                        + pl.col("Net_Transfers").abs()
-                    )
-                    / ((pl.col("Opening_Balance") + pl.col("Closing_Balance")) / 2.0)
-                )
-                .otherwise(0.0)
-                .alias("Asset_Velocity_%"),
                 pl.when(pl.col("Closing_Balance") > 0)
                 .then(pl.col("Cumulative_Net_Savings") / pl.col("Closing_Balance"))
                 .otherwise(0.0)
@@ -134,13 +121,6 @@ class NetWorthBuilder:
                 )
                 .otherwise(0.0)
                 .alias("Drawdown_From_Peak"),
-                pl.when(pl.col("Closing_Balance").sum().over("MONTH_START_DATE") > 0)
-                .then(
-                    pl.col("Closing_Balance")
-                    / pl.col("Closing_Balance").sum().over("MONTH_START_DATE")
-                )
-                .otherwise(0.0)
-                .alias("Balance_Concentration_%"),
             )
         )
 
@@ -242,61 +222,6 @@ class NetWorthBuilder:
             )
 
         lf_nw_summary = lf_nw_summary.with_columns(
-            pl.lit(None).cast(pl.Date).alias("Peak_Date"),
-            pl.lit(0).cast(pl.Int64).alias("Drawdown_Duration"),
-            pl.lit(0).cast(pl.Int64).alias("Underwater_Days"),
-            pl.lit(0.0).alias("Time_Weighted_Return"),
-        )
-
-        lf_nw_summary = (
-            lf_nw_summary.join(lf_inflation, on="MONTH_START_DATE", how="left")
-            .with_columns(
-                pl.col("INFLATION_YOY_PCT").fill_null(0.0),
-                (pl.col("Closing_Balance") * (pl.lit(cpi_latest) / pl.col("CPI_INDEX"))).alias(
-                    "Closing_Balance_Real"
-                ),
-                (
-                    ((1 + pl.col("YoY_Balance_Growth_%")) / (1 + pl.col("INFLATION_YOY_PCT"))) - 1
-                ).alias("YoY_Balance_Growth_%_Real"),
-            )
-            .with_columns(
-                (pl.col("Organic_Growth_Value") * (pl.lit(cpi_latest) / pl.col("CPI_INDEX"))).alias(
-                    "Organic_Growth_Value_Real"
-                ),
-                (pl.col("Income_Inflow") * (pl.lit(cpi_latest) / pl.col("CPI_INDEX"))).alias(
-                    "Real_Income_Inflow"
-                ),
-                (pl.col("Expense_Outflow") * (pl.lit(cpi_latest) / pl.col("CPI_INDEX"))).alias(
-                    "Real_Expense_Outflow"
-                ),
-                (pl.col("3M_Avg_Core_Expense") * (pl.lit(cpi_latest) / pl.col("CPI_INDEX"))).alias(
-                    "3M_Avg_Core_Expense_Real"
-                ),
-                (
-                    pl.col("Closing_Balance_Market") * (pl.lit(cpi_latest) / pl.col("CPI_INDEX"))
-                ).alias("Closing_Balance_Market_Real"),
-            )
-            .with_columns(
-                pl.when(pl.col("3M_Avg_Core_Expense_Real") > 0)
-                .then(pl.col("Closing_Balance_Real") / pl.col("3M_Avg_Core_Expense_Real"))
-                .otherwise(0.0)
-                .alias("Months_of_Runway_Real"),
-                (((1 + pl.col("Organic_Yield_%")) / (1 + pl.col("INFLATION_YOY_PCT"))) - 1).alias(
-                    "Organic_Yield_%_Real"
-                ),
-                (
-                    (
-                        (1 + pl.col("MoM_Balance_Growth_%"))
-                        / ((1 + pl.col("INFLATION_YOY_PCT")).pow(1 / 12.0))
-                    )
-                    - 1
-                ).alias("MoM_Balance_Growth_%_Real"),
-                (
-                    pl.col("Closing_Balance_Real")
-                    - pl.col("Closing_Balance_Real").shift(1).over("ASSET_SUBCATEGORY_ID")
-                ).alias("Balance_MoM_Real"),
-            )
-            .drop("CPI_INDEX")
         )
 
         lf_monthly_totals = (
@@ -306,8 +231,6 @@ class NetWorthBuilder:
                     pl.col("Income_Inflow").sum().alias("Total_Income"),
                     pl.col("Expense_Outflow").sum().alias("Total_Expense"),
                     pl.col("Core_Expense_Outflow").sum().alias("Total_Core_Expense"),
-                    pl.col("Real_Income_Inflow").sum().alias("Total_Real_Income"),
-                    pl.col("Real_Expense_Outflow").sum().alias("Total_Real_Expense"),
                     pl.col("Net_Cashflow_Month").sum().alias("Net_Cashflow_Month"),
                     pl.col("Closing_Balance")
                     .filter(pl.col("Closing_Balance") >= 0)
@@ -402,14 +325,11 @@ class NetWorthBuilder:
             )
 
         lf_monthly_totals = (
-            lf_monthly_totals.join(lf_inflation, on="MONTH_START_DATE", how="left")
-            .sort("MONTH_START_DATE")
-            .with_columns(
-                pl.col("INFLATION_YOY_PCT").fill_null(0.0),
-                (pl.col("Total_Net_Worth") * (pl.lit(cpi_latest) / pl.col("CPI_INDEX"))).alias(
-                    "Total_Net_Worth_Real"
-                ),
-            )
+            lf_monthly_totals.sort("MONTH_START_DATE")
+        )
+        
+        lf_monthly_totals = lf_monthly_totals.join(
+            self.inflation_res["lf_inflation"], on="MONTH_START_DATE", how="left"
         )
 
         return {

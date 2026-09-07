@@ -229,36 +229,6 @@ class IncomeStreamsBuilder:
                 .alias("Income_Diversification_Score"),
             )
         )
-        f_inflation = self.dfs.get("df_f_inflation_rates")
-        if f_inflation is not None:
-            cpi_latest = self.base_lf.get("cpi_latest", 100.0)
-            lf_inflation = (
-                f_inflation.lazy() if isinstance(f_inflation, pl.DataFrame) else f_inflation
-            ).select(
-                pl.col("DATE").dt.month_start().alias("MONTH_START_DATE"),
-                pl.col("INFLATION_YOY_PCT"),
-                pl.col("CPI_INDEX"),
-            )
-            lf_income_streams = (
-                lf_income_streams.join(lf_inflation, on="MONTH_START_DATE", how="left")
-                .with_columns(
-                    (
-                        pl.col("Total_Monthly_Income") * (pl.lit(cpi_latest) / pl.col("CPI_INDEX"))
-                    ).alias("Real_Monthly_Income"),
-                    pl.when(pl.col("Prev_Year_Income") > 0)
-                    .then(
-                        ((1 + pl.col("YoY_Variance_Pct")) / (1 + pl.col("INFLATION_YOY_PCT"))) - 1
-                    )
-                    .otherwise(0.0)
-                    .alias("Real_YoY_Income_Growth"),
-                )
-                .drop(["INFLATION_YOY_PCT", "CPI_INDEX"])
-            )
-        else:
-            lf_income_streams = lf_income_streams.with_columns(
-                pl.lit(0.0).alias("Real_Monthly_Income"),
-                pl.lit(0.0).alias("Real_YoY_Income_Growth"),
-            )
 
         return lf_income_streams.select(
             [
@@ -271,23 +241,15 @@ class IncomeStreamsBuilder:
                 "Total_Monthly_Income",
                 "Average_Transaction_Value",
                 "Trailing_3M_Avg_Income",
-                "Trailing_6M_Avg_Income",
-                "Trailing_12M_Avg_Income",
-                "Trailing_12M_Total_Income",
                 "Cumulative_YTD_Income",
                 "Income_Share_Pct",
                 "MoM_Variance_Pct",
                 "YoY_Variance_Pct",
-                "Income_Stability_Score",
                 "Months_Since_Last_Received",
                 "Is_Active_Income",
                 "Is_Passive_Income",
                 "Is_Dividend_Income",
                 "Is_Interest_Income",
-                "Real_Monthly_Income",
-                "Income_CAGR",
-                "Real_YoY_Income_Growth",
-                "Income_Diversification_Score",
                 "Months_Active_TTM",
             ]
         )

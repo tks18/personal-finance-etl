@@ -69,28 +69,7 @@ class SnapshotRecord(BaseModel):
     Absolute_Return: float = 0.0
     Lot_Weight: float = 0.0
     Lot_CAGR: float
-    # Time-Range Returns
-    Return_1D: float = 0.0
-    Return_1W: float = 0.0
-    Return_1M: float = 0.0
-    Return_3M: float = 0.0
-    Return_6M: float = 0.0
-    Return_12M: float = 0.0
-    Return_3Y: float = 0.0
-    Return_5Y: float = 0.0
-    Return_YTD: float = 0.0
-    Return_FY_YTD: float = 0.0
-    # Time-Range Alphas
-    Alpha_1D: float = 0.0
-    Alpha_1W: float = 0.0
-    Alpha_1M: float = 0.0
-    Alpha_3M: float = 0.0
-    Alpha_6M: float = 0.0
-    Alpha_12M: float = 0.0
-    Alpha_3Y: float = 0.0
-    Alpha_5Y: float = 0.0
-    Alpha_YTD: float = 0.0
-    Alpha_FY_YTD: float = 0.0
+
     CAGR: float
     XIRR: float
     After_Tax_XIRR: float
@@ -103,30 +82,10 @@ class SnapshotRecord(BaseModel):
     Active_Return: float
     Lot_Alpha: float
     Is_Lagging_Benchmark: bool
-    Beta: float
-    Tracking_Error: float
-    Information_Ratio: float
-    Upside_Capture: float
-    Downside_Capture: float
-    # Per-ISIN risk-adjusted ratios (from instrument price return series)
-    Sharpe_Ratio: float = 0.0
-    Sortino_Ratio: float = 0.0
-    Calmar_Ratio: float = 0.0
+
+    # Per-ISIN risk
     Max_Drawdown: float = 0.0
-    Historical_Max_DD: float = 0.0
-    Peak_Date: datetime.date | None = None
-    Drawdown_Duration: int = 0
-    Underwater_Days: int = 0
-    # Benchmark equivalents (same formula on benchmark price series)
-    BM_Sharpe_Ratio: float = 0.0
-    BM_Sortino_Ratio: float = 0.0
-    BM_Calmar_Ratio: float = 0.0
-    BM_Max_Drawdown: float = 0.0
-    Historical_BM_Max_DD: float = 0.0
-    # Comparison alphas (instrument minus benchmark)
-    Sharpe_Alpha: float = 0.0
-    Sortino_Alpha: float = 0.0
-    Calmar_Alpha: float = 0.0
+
     Tax_Rate: float
     Unrealized_LTCG: float
     Unrealized_STCG: float

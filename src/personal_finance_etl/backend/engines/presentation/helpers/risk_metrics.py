@@ -104,7 +104,6 @@ class RiskMetricsBuilder:
             .with_columns(
                 pl.col("Total_Investment_Value").cum_max().alias("All_Time_High_Inv"),
                 pl.col("Total_Net_Worth_Market").cum_max().alias("All_Time_High_NW"),
-                pl.col("Total_Net_Worth_Real").cum_max().alias("All_Time_High_Real_NW"),
                 # Synthetic cumulative return indices to track true drawdowns immune to cash injections
                 (1.0 + pl.col("Monthly_Return")).cum_prod().alias("Cum_Return_Index"),
                 (1.0 + pl.col("NW_Monthly_Return")).cum_prod().alias("NW_Cum_Return_Index"),
@@ -128,13 +127,6 @@ class RiskMetricsBuilder:
                 )
                 .otherwise(0.0)
                 .alias("NW_Drawdown_Pct"),
-                pl.when(pl.col("All_Time_High_Real_NW") > 0)
-                .then(
-                    (pl.col("Total_Net_Worth_Real") - pl.col("All_Time_High_Real_NW"))
-                    / pl.col("All_Time_High_Real_NW")
-                )
-                .otherwise(0.0)
-                .alias("Real_Drawdown_Pct"),
                 pl.when(pl.col("Cum_Return_Index").shift(12) > 0)
                 .then(
                     (pl.col("Cum_Return_Index") - pl.col("Cum_Return_Index").shift(12))
@@ -200,7 +192,6 @@ class RiskMetricsBuilder:
                 "Rolling_12M_Return",
                 "All_Time_High_NW",
                 "NW_Drawdown_Pct",
-                "Real_Drawdown_Pct",
                 "Drawdown_Pct",
                 "Recovery_From_Drawdown_%",
                 "Max_Drawdown_12M",

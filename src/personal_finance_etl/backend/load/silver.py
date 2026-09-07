@@ -33,6 +33,22 @@ class SilverLayer:
                     ]
                 )
 
+        if table_name == "silver.d_Investment_Master":
+            if "ISIN" in df.columns:
+                missing_isin = df.filter(pl.col("ISIN").is_null())
+                if missing_isin.height > 0:
+                    logger.error(f"CRITICAL: Found {missing_isin.height} rows with missing ISIN in d_Investment_Master.")
+                    logger.error("Please add the ISIN for the following instruments to your tracker:")
+                    for row in missing_isin.to_dicts():
+                        logger.error(f"-> {row}")
+            if "TAX_TYPE" in df.columns:
+                missing_tax = df.filter(pl.col("TAX_TYPE").is_null())
+                if missing_tax.height > 0:
+                    logger.error(f"CRITICAL: Found {missing_tax.height} rows with missing TAX_TYPE in d_Investment_Master.")
+                    logger.error("Please add the TAX_TYPE for the following instruments to your tracker:")
+                    for row in missing_tax.to_dicts():
+                        logger.error(f"-> {row}")
+
         self.db_manager.conn.register("temp_df", df)
         logger.debug(f"[Silver] Replacing {df.height} rows into {table_name}")
         self.db_manager.conn.execute(f"INSERT INTO {table_name} BY NAME SELECT * FROM temp_df")

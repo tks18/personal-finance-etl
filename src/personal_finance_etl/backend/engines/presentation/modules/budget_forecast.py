@@ -4,12 +4,6 @@ from typing import Any
 import polars as pl
 
 from personal_finance_etl.backend.config.financial_rules import FinancialRules
-from personal_finance_etl.backend.engines.presentation.helpers.forecasting import (
-    calculate_budget_forecast,
-)
-from personal_finance_etl.backend.engines.presentation.helpers.scoring import (
-    calculate_budget_health_score,
-)
 from personal_finance_etl.backend.utils.polars_expressions import (
     rolling_avg,
     rolling_std,
@@ -201,56 +195,6 @@ class BudgetForecastBuilder:
             safe_divide("Actual_Savings", "Actual_Income").alias("Actual_Savings_Pct_of_Income"),
         )
 
-        # ── Step 8: Z-Score anomaly detection (6M rolling baseline) ──────────────
-        lf = lf.with_columns(
-            safe_divide(
-                pl.col("Actual_Core_Expense") - pl.col("Core_6M_Mean"), "Core_6M_Std"
-            ).alias("Core_Expense_ZScore"),
-            safe_divide(
-                pl.col("Actual_NonCore_Expense") - pl.col("NonCore_6M_Mean"), "NonCore_6M_Std"
-            ).alias("NonCore_Expense_ZScore"),
-            safe_divide(pl.col("Actual_Income") - pl.col("Income_6M_Mean"), "Income_6M_Std").alias(
-                "Income_ZScore"
-            ),
-        )
-
-        # ── Step 9: Trend signals (rolling mean slope proxy) ─────────────────────
-        lf = lf.with_columns(
-            (pl.col("Core_3M_Mean") - pl.col("Core_3M_Mean").shift(1)).alias(
-                "Core_Expense_3M_Trend"
-            ),
-            (pl.col("NonCore_3M_Mean") - pl.col("NonCore_3M_Mean").shift(1)).alias(
-                "NonCore_Expense_3M_Trend"
-            ),
-            (pl.col("Income_3M_Mean") - pl.col("Income_3M_Mean").shift(1)).alias("Income_3M_Trend"),
-        )
-
-        # Savings rate trend signal
-        lf = (
-            lf.with_columns(
-                safe_divide(
-                    pl.col("Actual_Income")
-                    - pl.col("Actual_Core_Expense")
-                    - pl.col("Actual_NonCore_Expense"),
-                    "Actual_Income",
-                ).alias("Curr_Savings_Rate"),
-            )
-            .with_columns(
-                pl.col("Curr_Savings_Rate").shift(1).alias("Prev_Savings_Rate"),
-            )
-            .with_columns(
-                pl.when(pl.col("Curr_Savings_Rate") > pl.col("Prev_Savings_Rate") + 0.02)
-                .then(pl.lit("Improving"))
-                .when(pl.col("Curr_Savings_Rate") < pl.col("Prev_Savings_Rate") - 0.02)
-                .then(pl.lit("Deteriorating"))
-                .otherwise(pl.lit("Stable"))
-                .alias("Savings_Rate_Trend_Signal"),
-            )
-        )
-
-        # ── Step 11: Health Score (0–100) ────────────────────────────────────────
-        lf = calculate_budget_health_score(lf, investment_pct)
-
         # ── Step 12: Runway metrics ───────────────────────────────────────────────
         lf = lf.with_columns(
             safe_divide("Liquid_Assets_Market", "Actual_Core_Expense").alias(
@@ -261,9 +205,6 @@ class BudgetForecastBuilder:
                 - pl.col("Liquid_Assets_Market")
             ).alias("Emergency_Fund_Gap"),
         )
-
-        # ── Step 13: Forward Budget Forecast (M+1) ───────────────────────────────
-        lf = calculate_budget_forecast(lf, core_pct, non_core_pct, investment_pct, buffer_pct)
 
         # ── Step 14: Boolean flags ────────────────────────────────────────────────
         lf = lf.with_columns(
@@ -277,10 +218,6 @@ class BudgetForecastBuilder:
                 "Is_Investment_Underfunded"
             ),
             (pl.col("Income_Volatility_Pct") > 0.20).alias("Is_Income_Volatile"),
-            (
-                (pl.col("Core_Expense_ZScore").abs() > 2.0)
-                | (pl.col("NonCore_Expense_ZScore").abs() > 2.0)
-            ).alias("Is_Expense_Anomaly"),
         ).with_columns(
             (
                 ~(
@@ -329,33 +266,16 @@ class BudgetForecastBuilder:
                 "Investment_Shortfall",
                 "Total_Budget_Variance",
                 # Statistical signals
-                "Core_Expense_3M_Trend",
-                "NonCore_Expense_3M_Trend",
-                "Income_3M_Trend",
-                "Core_Expense_ZScore",
-                "NonCore_Expense_ZScore",
-                "Income_ZScore",
-                "Savings_Rate_Trend_Signal",
                 # Composite scores
-                "Savings_Rate_Health_Score",
-                "Savings_Rate_Grade",
-                "Budget_Stress_Score",
                 # Runway
                 "Zero_Income_Runway_Months",
                 "Emergency_Fund_Gap",
                 # M+1 forecast
-                "NextMonth_Budget_Income_Forecast",
-                "NextMonth_Core_Budget",
-                "NextMonth_NonCore_Budget",
-                "NextMonth_Investment_Budget",
-                "NextMonth_Discretionary_Pool",
-                "NextMonth_Recommended_Savings",
                 # Flags
                 "Is_Core_Overspent",
                 "Is_NonCore_Overspent",
                 "Is_Investment_Underfunded",
                 "Is_Income_Volatile",
                 "Is_Budget_Month_Healthy",
-                "Is_Expense_Anomaly",
-            ]
+                ]
         )

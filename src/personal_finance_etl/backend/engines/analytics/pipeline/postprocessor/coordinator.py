@@ -182,24 +182,7 @@ class PostProcessor:
                     "CAGR",
                     "BM_CAGR",
                     "Is_Lagging_Benchmark",
-                    "Beta",
-                    "Tracking_Error",
-                    "Information_Ratio",
-                    "Upside_Capture",
-                    "Downside_Capture",
-                    "Outperformance_Probability",
-                    # Per-ISIN risk-adjusted ratios
-                    "Sharpe_Ratio",
-                    "Sortino_Ratio",
-                    "Calmar_Ratio",
                     "Max_Drawdown",
-                    "BM_Sharpe_Ratio",
-                    "BM_Sortino_Ratio",
-                    "BM_Calmar_Ratio",
-                    "BM_Max_Drawdown",
-                    "Sharpe_Alpha",
-                    "Sortino_Alpha",
-                    "Calmar_Alpha",
                 ]
             ).unique(),
             on=["Closing_Date", "ISIN"],
@@ -277,9 +260,7 @@ class PostProcessor:
             elif g == "INDUSTRY":
                 f_tf_industry = lf
 
-        f_tf_port = f_tf_port.with_columns(pl.lit(1.0).alias("Weight")).rename(
-            {"annualized_twr": "TWR", "bm_annualized_twr": "BM_TWR"}
-        )
+        f_tf_port = f_tf_port.with_columns(pl.lit(1.0).alias("Weight"))
 
         return {
             "df_f_investment_analytics_lot": lazy_df,

@@ -294,6 +294,9 @@ class MonthlyCashflowSummaryBuilder:
                 pl.col("Net_Investment_Flow")
                 >= pl.col("Total_Income") * self.rules.budget.income_allocation.investment_pct
             ).alias("Is_Investment_Target_Met"),
+            pl.col("Total_Assets").shift(1).fill_null(0.0).alias("Opening_Balance_Asset"),
+            pl.col("Total_Assets").alias("Closing_Balance_Asset"),
+            pl.col("Total_Assets_Market").alias("Closing_Balance_Asset_Market"),
         )
 
         return lf_monthly.select(
@@ -301,6 +304,10 @@ class MonthlyCashflowSummaryBuilder:
                 "MONTH_START_DATE",
                 "MONTH_END_DATE",
                 "YEAR_MONTH",
+                # Asset Balances
+                "Opening_Balance_Asset",
+                "Closing_Balance_Asset",
+                "Closing_Balance_Asset_Market",
                 # Income bifurcation
                 "Total_Income",
                 "Active_Income",

@@ -221,41 +221,6 @@ class SpendAnalyticsBuilder:
             )
         )
 
-        f_inflation = self.dfs.get("df_f_inflation_rates")
-        if f_inflation is not None:
-            cpi_latest = self.base_lf.get("cpi_latest", 100.0)
-            lf_inflation = (
-                f_inflation.lazy() if isinstance(f_inflation, pl.DataFrame) else f_inflation
-            ).select(
-                pl.col("DATE").dt.month_start().alias("MONTH_START_DATE"),
-                pl.col("INFLATION_YOY_PCT"),
-                pl.col("CPI_INDEX"),
-            )
-            lf_spend_analytics = (
-                lf_spend_analytics.join(lf_inflation, on="MONTH_START_DATE", how="left")
-                .with_columns(
-                    (
-                        pl.col("Total_Monthly_Spend") * (pl.lit(cpi_latest) / pl.col("CPI_INDEX"))
-                    ).alias("Real_Monthly_Spend"),
-                    pl.when(pl.col("Prev_Year_Spend") > 0)
-                    .then(
-                        ((1 + pl.col("YoY_Variance_Pct")) / (1 + pl.col("INFLATION_YOY_PCT"))) - 1
-                    )
-                    .otherwise(0.0)
-                    .alias("YoY_Real_Variance_Pct"),
-                    (pl.col("Real_Monthly_Spend") - pl.col("Total_Monthly_Spend")).alias(
-                        "Category_Inflation_Contribution"
-                    ),
-                )
-                .drop(["INFLATION_YOY_PCT", "CPI_INDEX"])
-            )
-        else:
-            lf_spend_analytics = lf_spend_analytics.with_columns(
-                pl.lit(0.0).alias("Real_Monthly_Spend"),
-                pl.lit(0.0).alias("YoY_Real_Variance_Pct"),
-                pl.lit(0.0).alias("Category_Inflation_Contribution"),
-            )
-
         return lf_spend_analytics.select(
             [
                 "MONTH_START_DATE",
@@ -267,24 +232,14 @@ class SpendAnalyticsBuilder:
                 "Total_Monthly_Spend",
                 "Average_Transaction_Value",
                 "Trailing_3M_Avg_Spend",
-                "Trailing_6M_Avg_Spend",
-                "Trailing_12M_Avg_Spend",
-                "Trailing_12M_Total_Spend",
                 "Cumulative_YTD_Spend",
                 "Spend_Share_Pct",
                 "MoM_Variance_Pct",
                 "YoY_Variance_Pct",
-                "Spend_Consistency_Score",
-                "Is_Category_Creep",
                 "Is_Investment",
                 "Spend_Type",
-                "Rank_by_Spend",
                 "Is_Discretionary",
-                "Real_Monthly_Spend",
-                "YoY_Real_Variance_Pct",
                 "Budget_Variance_Pct",
-                "Category_Inflation_Contribution",
-                "Avg_Days_Between_Transactions",
                 "Is_Core_Expense",
             ]
         )

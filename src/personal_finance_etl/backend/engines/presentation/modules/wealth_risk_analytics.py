@@ -78,10 +78,6 @@ class WealthRiskAnalyticsBuilder:
                     "MONTH_END_DATE",
                     pl.col("Total_Current_Value").alias("Port_Market_Value"),
                     pl.col("Total_Invested_Value").alias("Port_Book_Value"),
-                    pl.col("Peak_Date").alias("Peak_Date"),
-                    pl.col("Drawdown_Duration").alias("Drawdown_Duration"),
-                    pl.col("Underwater_Days").alias("Underwater_Days"),
-                    pl.col("TWR").alias("Time_Weighted_Return"),
                 ]
             )
 
@@ -111,10 +107,6 @@ class WealthRiskAnalyticsBuilder:
             )
         else:
             lf_fire_base = lf_fire_base.with_columns(
-                pl.lit(None).cast(pl.Date).alias("Peak_Date"),
-                pl.lit(0).cast(pl.Int64).alias("Drawdown_Duration"),
-                pl.lit(0).cast(pl.Int64).alias("Underwater_Days"),
-                pl.lit(0.0).alias("Time_Weighted_Return"),
             )
 
         swr = self.rules.assumptions.fire.swr_multiplier
@@ -333,7 +325,6 @@ class WealthRiskAnalyticsBuilder:
                         "Rolling_12M_Return",
                         "All_Time_High_NW",
                         "NW_Drawdown_Pct",
-                        "Real_Drawdown_Pct",
                         "Recovery_From_Drawdown_%",
                         "Max_Drawdown_12M",
                         "Annualized_Volatility_12M",
@@ -416,8 +407,6 @@ class WealthRiskAnalyticsBuilder:
                 "INFLATION_YOY_PCT",
                 "Real_Return_Assumed_Pct",
                 "Target_FI_Today",
-                "Coast_FI_Today",
-                "Lean_FI_Today",
                 "Target_FI_Future_Nominal",
                 "Current_FI_Coverage_Pct",
                 "NW_Percentile_of_FI",
@@ -440,8 +429,6 @@ class WealthRiskAnalyticsBuilder:
                 "Trailing_12M_Avg_Total_Spend",
                 "Trailing_12M_Avg_Total_Savings",
                 "Target_FI_Today_Total",
-                "Coast_FI_Today_Total",
-                "Lean_FI_Today_Total",
                 "Target_FI_Total_Future_Nominal",
                 "Current_FI_Coverage_Pct_Total",
                 "NW_Percentile_of_FI_Total",
@@ -459,14 +446,10 @@ class WealthRiskAnalyticsBuilder:
                 "Runway_Months_Total_Base_P50",
                 "Withdrawal_Rate_If_Retired_Now_Total",
                 "Savings_Rate_Required_Total",
-                "Wealth_Velocity",
-                "Wealth_Acceleration",
-                "CAPE_Adjusted_SWR",
                 "Savings_Rate_Actual",
                 "Savings_Rate_Actual_Total",
                 "FI_Velocity",
                 "FI_Velocity_Total",
-                "Real_NW_CAGR_3Y",
                 "Terminal_Wealth_P50",
                 "Terminal_Wealth_P10",
                 "Max_Drawdown_Pct_P50",
@@ -481,7 +464,6 @@ class WealthRiskAnalyticsBuilder:
                 "Rolling_12M_Return",
                 "All_Time_High_NW",
                 "NW_Drawdown_Pct",
-                "Real_Drawdown_Pct",
                 "Drawdown_Pct",
                 "Recovery_From_Drawdown_%",
                 "Max_Drawdown_12M",
@@ -490,10 +472,6 @@ class WealthRiskAnalyticsBuilder:
                 "Sharpe_Ratio_12M",
                 "Sortino_Ratio_12M",
                 "Calmar_Ratio_12M",
-                "Peak_Date",
-                "Drawdown_Duration",
-                "Underwater_Days",
-                "Time_Weighted_Return",
             ]
         )
         return lf_fire_forecast

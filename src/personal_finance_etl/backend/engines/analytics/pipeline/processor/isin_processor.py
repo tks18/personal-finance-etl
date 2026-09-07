@@ -211,29 +211,10 @@ class IsinProcessor:
                 if avg_bm_cost > 0:
                     inst_bm_cagr = calculate_cagr(avg_bm_cost, m_bm_price, inst_age)
 
-            (
-                beta_r,
-                t_err_ann,
-                up_c_r,
-                dn_c_r,
-                inst_sharpe,
-                inst_sortino,
-                inst_calmar,
-                inst_current_dd,
-                inst_max_dd,
-                bm_sharpe,
-                bm_sortino,
-                bm_calmar,
-                bm_current_dd,
-                bm_max_dd,
-            ) = risk_provider.calculate_risk(first_p_date, m_date)
-            info_ratio = (inst_active_return / t_err_ann) if t_err_ann != 0 else 0.0
-
-            inst_peak, inst_dd_dur, inst_ud_days = risk_provider.calculate_drawdowns(
-                first_p_date, m_date
-            )
-            time_range_metrics = risk_provider.calculate_time_ranges(m_date)
-
+            res = risk_provider.calculate_risk(first_p_date, m_date)
+            # res returns a 14-tuple. Index 8 is inst_max_dd.
+            inst_max_dd = res[8]
+            
             inst_metrics = {
                 "cagr": inst_cagr,
                 "bm_cagr": inst_bm_cagr,
@@ -242,29 +223,8 @@ class IsinProcessor:
                 "after_tax_xirr": inst_after_tax_xirr,
                 "active_return": inst_active_return,
                 "is_lagging": is_lagging,
-                "info_ratio": info_ratio,
-                # Classic risk metrics
-                "beta": beta_r,
-                "tracking_error": t_err_ann,
-                "up_capture": up_c_r,
-                "down_capture": dn_c_r,
-                # Per-instrument risk-adjusted ratios
-                "sharpe": inst_sharpe,
-                "sortino": inst_sortino,
-                "calmar": inst_calmar,
-                "max_drawdown": inst_current_dd,
-                "historical_max_dd": inst_max_dd,
-                "peak_date": inst_peak,
-                "drawdown_duration": inst_dd_dur,
-                "underwater_days": inst_ud_days,
-                # Benchmark equivalents (for comparison)
-                "bm_sharpe": bm_sharpe,
-                "bm_sortino": bm_sortino,
-                "bm_calmar": bm_calmar,
-                "bm_max_drawdown": bm_current_dd,
-                "historical_bm_max_dd": bm_max_dd,
+                "max_drawdown": inst_max_dd,
             }
-            inst_metrics.update(time_range_metrics)
 
             snapshots = snapshot_generator.generate(fifo, m_date, m_price, m_bm_price, inst_metrics)
             isin_snapshots.extend(snapshots)

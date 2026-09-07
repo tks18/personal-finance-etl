@@ -10,10 +10,6 @@ CREATE TABLE IF NOT EXISTS gold.Wealth_Net_Worth_Monthly (
     Closing_Balance_Market REAL,
     All_Time_High_Balance REAL,
     Drawdown_From_Peak REAL,
-    Peak_Date DATE,
-    Drawdown_Duration BIGINT,
-    Underwater_Days BIGINT,
-    Time_Weighted_Return REAL,
     Liquid_Assets REAL,
     Liquid_Assets_Market REAL,
     -- Cashflow
@@ -29,8 +25,6 @@ CREATE TABLE IF NOT EXISTS gold.Wealth_Net_Worth_Monthly (
     "YoY_Balance_Growth_%" REAL,
     Organic_Growth_Value REAL,
     "Organic_Yield_%" REAL,
-    "Asset_Velocity_%" REAL,
-    "Balance_Concentration_%" REAL,
     Investment_Contribution_Pct REAL,
     Savings_to_NW_Ratio REAL,
     -- Trailing Averages
@@ -39,18 +33,6 @@ CREATE TABLE IF NOT EXISTS gold.Wealth_Net_Worth_Monthly (
     "3M_Avg_Income" REAL,
     Months_of_Runway REAL,
     -- Inflation-Adjusted (Real)
-    INFLATION_YOY_PCT REAL,
-    Closing_Balance_Real REAL,
-    Closing_Balance_Market_Real REAL,
-    Balance_MoM_Real REAL,
-    Real_Income_Inflow REAL,
-    Real_Expense_Outflow REAL,
-    "3M_Avg_Core_Expense_Real" REAL,
-    Months_of_Runway_Real REAL,
-    "YoY_Balance_Growth_%_Real" REAL,
-    Organic_Growth_Value_Real REAL,
-    "Organic_Yield_%_Real" REAL,
-    "MoM_Balance_Growth_%_Real" REAL
 );
 
 CREATE TABLE IF NOT EXISTS gold.Cashflow_Spend_Monthly (
@@ -66,29 +48,19 @@ CREATE TABLE IF NOT EXISTS gold.Cashflow_Spend_Monthly (
     -- Core Metrics
     Total_Monthly_Spend REAL,
     Average_Transaction_Value REAL,
-    Avg_Days_Between_Transactions REAL,
     -- Trailing Averages
     Trailing_3M_Avg_Spend REAL,
-    Trailing_6M_Avg_Spend REAL,
-    Trailing_12M_Avg_Spend REAL,
-    Trailing_12M_Total_Spend REAL,
     Cumulative_YTD_Spend REAL,
     -- Variance & Share
     Spend_Share_Pct REAL,
     MoM_Variance_Pct REAL,
     YoY_Variance_Pct REAL,
     Budget_Variance_Pct REAL,
-    Spend_Consistency_Score REAL,
-    Rank_by_Spend BIGINT,
     -- Inflation-Adjusted
-    Real_Monthly_Spend REAL,
-    YoY_Real_Variance_Pct REAL,
-    Category_Inflation_Contribution REAL,
     -- Flags
     Is_Core_Expense BOOLEAN,
     Is_Investment BOOLEAN,
-    Is_Discretionary BOOLEAN,
-    Is_Category_Creep BOOLEAN
+    Is_Discretionary BOOLEAN
 );
 
 CREATE TABLE IF NOT EXISTS gold.Cashflow_Income_Monthly (
@@ -105,20 +77,12 @@ CREATE TABLE IF NOT EXISTS gold.Cashflow_Income_Monthly (
     Average_Transaction_Value REAL,
     -- Trailing Averages
     Trailing_3M_Avg_Income REAL,
-    Trailing_6M_Avg_Income REAL,
-    Trailing_12M_Avg_Income REAL,
-    Trailing_12M_Total_Income REAL,
     Cumulative_YTD_Income REAL,
     -- Variance & Share
     Income_Share_Pct REAL,
     MoM_Variance_Pct REAL,
     YoY_Variance_Pct REAL,
-    Income_Stability_Score REAL,
-    Income_Diversification_Score REAL,
     -- Growth
-    Income_CAGR REAL,
-    Real_Monthly_Income REAL,
-    Real_YoY_Income_Growth REAL,
     -- Activity
     Months_Active_TTM REAL,
     Months_Since_Last_Received BIGINT,
@@ -143,24 +107,21 @@ CREATE TABLE IF NOT EXISTS gold.Wealth_Risk_Metrics (
     Total_Net_Worth DOUBLE,
     Total_Net_Worth_Market DOUBLE,
     Total_Net_Worth_Market_Af_Tax DOUBLE,
+    INFLATION_YOY_PCT DOUBLE,
+    CPI_INDEX DOUBLE,
     -- Spending & Savings
     Trailing_6M_Avg_Spend DOUBLE,
-    Trailing_6M_Avg_Savings DOUBLE,
     Trailing_12M_Avg_Spend DOUBLE,
+    Trailing_6M_Avg_Savings DOUBLE,
     Trailing_12M_Avg_Savings DOUBLE,
     Trailing_6M_Avg_Total_Spend DOUBLE,
     Trailing_6M_Avg_Total_Savings DOUBLE,
     Trailing_12M_Avg_Total_Spend DOUBLE,
     Trailing_12M_Avg_Total_Savings DOUBLE,
-    INFLATION_YOY_PCT DOUBLE,
     Real_Return_Assumed_Pct DOUBLE,
     -- FI Numbers (Today's Money)
     Target_FI_Today DOUBLE,
     Target_FI_Today_Total DOUBLE,
-    Coast_FI_Today DOUBLE,
-    Coast_FI_Today_Total DOUBLE,
-    Lean_FI_Today DOUBLE,
-    Lean_FI_Today_Total DOUBLE,
     -- FI Future Nominal Values
     Target_FI_Future_Nominal DOUBLE,
     Target_FI_Total_Future_Nominal DOUBLE,
@@ -200,15 +161,11 @@ CREATE TABLE IF NOT EXISTS gold.Wealth_Risk_Metrics (
     Savings_Rate_Required DOUBLE,
     Savings_Rate_Required_Total DOUBLE,
     -- Decumulation & Velocity (GOAT Metrics)
-    Wealth_Velocity DOUBLE,
-    Wealth_Acceleration DOUBLE,
-    CAPE_Adjusted_SWR DOUBLE,
     -- Savings & FI Progress Metrics
     Savings_Rate_Actual DOUBLE,
     Savings_Rate_Actual_Total DOUBLE,
     FI_Velocity DOUBLE,
     FI_Velocity_Total DOUBLE,
-    Real_NW_CAGR_3Y DOUBLE,
     -- Advanced Monte Carlo Outputs
     Terminal_Wealth_P50 DOUBLE,
     Terminal_Wealth_P10 DOUBLE,
@@ -224,12 +181,7 @@ CREATE TABLE IF NOT EXISTS gold.Wealth_Risk_Metrics (
     Rolling_12M_Return DOUBLE,
     All_Time_High_NW DOUBLE,
     NW_Drawdown_Pct DOUBLE,
-    Real_Drawdown_Pct DOUBLE,
     Drawdown_Pct DOUBLE,
-    Peak_Date DATE,
-    Drawdown_Duration BIGINT,
-    Underwater_Days BIGINT,
-    Time_Weighted_Return DOUBLE,
     "Recovery_From_Drawdown_%" DOUBLE,
     Max_Drawdown_12M DOUBLE,
     Annualized_Volatility_12M DOUBLE,
@@ -303,36 +255,15 @@ CREATE TABLE IF NOT EXISTS gold.Forecast_Budget_Monthly (
     NonCore_Expense_Variance DOUBLE,
     Investment_Shortfall DOUBLE,
     Total_Budget_Variance DOUBLE,
-    -- Trend & Momentum Signals
-    Core_Expense_3M_Trend DOUBLE,
-    NonCore_Expense_3M_Trend DOUBLE,
-    Income_3M_Trend DOUBLE,
-    -- Z-Score Anomaly Detection (6M rolling baseline)
-    Core_Expense_ZScore DOUBLE,
-    NonCore_Expense_ZScore DOUBLE,
-    Income_ZScore DOUBLE,
-    Savings_Rate_Trend_Signal TEXT,
-    -- Composite Health Score
-    Savings_Rate_Health_Score DOUBLE,
-    Savings_Rate_Grade TEXT,
-    Budget_Stress_Score DOUBLE,
     -- Runway
     Zero_Income_Runway_Months DOUBLE,
     Emergency_Fund_Gap DOUBLE,
-    -- M+1 Forward Budget Plan
-    NextMonth_Budget_Income_Forecast DOUBLE,
-    NextMonth_Core_Budget DOUBLE,
-    NextMonth_NonCore_Budget DOUBLE,
-    NextMonth_Investment_Budget DOUBLE,
-    NextMonth_Discretionary_Pool DOUBLE,
-    NextMonth_Recommended_Savings DOUBLE,
     -- Flags
     Is_Core_Overspent BOOLEAN,
     Is_NonCore_Overspent BOOLEAN,
     Is_Investment_Underfunded BOOLEAN,
     Is_Income_Volatile BOOLEAN,
-    Is_Budget_Month_Healthy BOOLEAN,
-    Is_Expense_Anomaly BOOLEAN
+    Is_Budget_Month_Healthy BOOLEAN
 );
 
 CREATE TABLE IF NOT EXISTS gold.Investment_Portfolio_Summary (
@@ -362,6 +293,10 @@ CREATE TABLE IF NOT EXISTS gold.Cashflow_Summary_Monthly (
     MONTH_START_DATE DATE,
     MONTH_END_DATE DATE,
     YEAR_MONTH TEXT,
+    -- Asset Balances
+    Opening_Balance_Asset DOUBLE,
+    Closing_Balance_Asset DOUBLE,
+    Closing_Balance_Asset_Market DOUBLE,
     -- Income bifurcation
     Total_Income DOUBLE,
     Active_Income DOUBLE,
@@ -434,53 +369,13 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_ISIN (
     Active_Return DOUBLE,
     Is_Lagging_Benchmark BIGINT,
     -- Time-Range Returns
-    Return_1D DOUBLE,
-    Return_1W DOUBLE,
-    Return_1M DOUBLE,
-    Return_3M DOUBLE,
-    Return_6M DOUBLE,
-    Return_12M DOUBLE,
-    Return_3Y DOUBLE,
-    Return_5Y DOUBLE,
-    Return_YTD DOUBLE,
-    Return_FY_YTD DOUBLE,
     -- Time-Range Alphas
-    Alpha_1D DOUBLE,
-    Alpha_1W DOUBLE,
-    Alpha_1M DOUBLE,
-    Alpha_3M DOUBLE,
-    Alpha_6M DOUBLE,
-    Alpha_12M DOUBLE,
-    Alpha_3Y DOUBLE,
-    Alpha_5Y DOUBLE,
-    Alpha_YTD DOUBLE,
-    Alpha_FY_YTD DOUBLE,
     -- Risk
-    Beta DOUBLE,
-    Tracking_Error DOUBLE,
-    Information_Ratio DOUBLE,
-    Upside_Capture DOUBLE,
-    Downside_Capture DOUBLE,
     Outperformance_Probability DOUBLE,
     -- Per-ISIN Risk-Adjusted Ratios
-    Sharpe_Ratio DOUBLE,
-    Sortino_Ratio DOUBLE,
-    Calmar_Ratio DOUBLE,
     Max_Drawdown DOUBLE,
-    Historical_Max_DD DOUBLE,
-    Peak_Date DATE,
-    Drawdown_Duration BIGINT,
-    Underwater_Days BIGINT,
     -- Benchmark Equivalents
-    BM_Sharpe_Ratio DOUBLE,
-    BM_Sortino_Ratio DOUBLE,
-    BM_Calmar_Ratio DOUBLE,
-    BM_Max_Drawdown DOUBLE,
-    Historical_BM_Max_DD DOUBLE,
     -- Comparison Alphas
-    Sharpe_Alpha DOUBLE,
-    Sortino_Alpha DOUBLE,
-    Calmar_Alpha DOUBLE,
     -- Tax Exposure
     Unrealized_LTCG DOUBLE,
     Unrealized_STCG DOUBLE,
@@ -517,46 +412,11 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_Subtype (
     Active_Return DOUBLE,
 
     -- Time-Range Returns
-    Return_1D DOUBLE,
-    Return_1W DOUBLE,
-    Return_1M DOUBLE,
-    Return_3M DOUBLE,
-    Return_6M DOUBLE,
-    Return_12M DOUBLE,
-    Return_3Y DOUBLE,
-    Return_5Y DOUBLE,
-    Return_YTD DOUBLE,
-    Return_FY_YTD DOUBLE,
     -- Time-Range Alphas
-    Alpha_1D DOUBLE,
-    Alpha_1W DOUBLE,
-    Alpha_1M DOUBLE,
-    Alpha_3M DOUBLE,
-    Alpha_6M DOUBLE,
-    Alpha_12M DOUBLE,
-    Alpha_3Y DOUBLE,
-    Alpha_5Y DOUBLE,
-    Alpha_YTD DOUBLE,
-    Alpha_FY_YTD DOUBLE,
     -- Risk-Adjusted (Portfolio)
-    Sharpe_Ratio DOUBLE,
-    Sortino_Ratio DOUBLE,
-    Calmar_Ratio DOUBLE,
     Max_Drawdown DOUBLE,
-    Historical_Max_DD DOUBLE,
-    Peak_Date DATE,
-    Drawdown_Duration BIGINT,
-    Underwater_Days BIGINT,
     -- Benchmark Equivalents
-    BM_Sharpe_Ratio DOUBLE,
-    BM_Sortino_Ratio DOUBLE,
-    BM_Calmar_Ratio DOUBLE,
-    BM_Max_Drawdown DOUBLE,
-    Historical_BM_Max_DD DOUBLE,
     -- Comparison Alphas
-    Sharpe_Alpha DOUBLE,
-    Sortino_Alpha DOUBLE,
-    Calmar_Alpha DOUBLE,
     -- Tax Exposure
     Unrealized_LTCG DOUBLE,
     Unrealized_STCG DOUBLE,
@@ -592,46 +452,11 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_Class (
     Active_Return DOUBLE,
 
     -- Time-Range Returns
-    Return_1D DOUBLE,
-    Return_1W DOUBLE,
-    Return_1M DOUBLE,
-    Return_3M DOUBLE,
-    Return_6M DOUBLE,
-    Return_12M DOUBLE,
-    Return_3Y DOUBLE,
-    Return_5Y DOUBLE,
-    Return_YTD DOUBLE,
-    Return_FY_YTD DOUBLE,
     -- Time-Range Alphas
-    Alpha_1D DOUBLE,
-    Alpha_1W DOUBLE,
-    Alpha_1M DOUBLE,
-    Alpha_3M DOUBLE,
-    Alpha_6M DOUBLE,
-    Alpha_12M DOUBLE,
-    Alpha_3Y DOUBLE,
-    Alpha_5Y DOUBLE,
-    Alpha_YTD DOUBLE,
-    Alpha_FY_YTD DOUBLE,
     -- Risk-Adjusted (Portfolio)
-    Sharpe_Ratio DOUBLE,
-    Sortino_Ratio DOUBLE,
-    Calmar_Ratio DOUBLE,
     Max_Drawdown DOUBLE,
-    Historical_Max_DD DOUBLE,
-    Peak_Date DATE,
-    Drawdown_Duration BIGINT,
-    Underwater_Days BIGINT,
     -- Benchmark Equivalents
-    BM_Sharpe_Ratio DOUBLE,
-    BM_Sortino_Ratio DOUBLE,
-    BM_Calmar_Ratio DOUBLE,
-    BM_Max_Drawdown DOUBLE,
-    Historical_BM_Max_DD DOUBLE,
     -- Comparison Alphas
-    Sharpe_Alpha DOUBLE,
-    Sortino_Alpha DOUBLE,
-    Calmar_Alpha DOUBLE,
     -- Tax Exposure
     Unrealized_LTCG DOUBLE,
     Unrealized_STCG DOUBLE,
@@ -667,46 +492,11 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_Instrument_Type (
     Active_Return DOUBLE,
 
     -- Time-Range Returns
-    Return_1D DOUBLE,
-    Return_1W DOUBLE,
-    Return_1M DOUBLE,
-    Return_3M DOUBLE,
-    Return_6M DOUBLE,
-    Return_12M DOUBLE,
-    Return_3Y DOUBLE,
-    Return_5Y DOUBLE,
-    Return_YTD DOUBLE,
-    Return_FY_YTD DOUBLE,
     -- Time-Range Alphas
-    Alpha_1D DOUBLE,
-    Alpha_1W DOUBLE,
-    Alpha_1M DOUBLE,
-    Alpha_3M DOUBLE,
-    Alpha_6M DOUBLE,
-    Alpha_12M DOUBLE,
-    Alpha_3Y DOUBLE,
-    Alpha_5Y DOUBLE,
-    Alpha_YTD DOUBLE,
-    Alpha_FY_YTD DOUBLE,
     -- Risk-Adjusted (Portfolio)
-    Sharpe_Ratio DOUBLE,
-    Sortino_Ratio DOUBLE,
-    Calmar_Ratio DOUBLE,
     Max_Drawdown DOUBLE,
-    Historical_Max_DD DOUBLE,
-    Peak_Date DATE,
-    Drawdown_Duration BIGINT,
-    Underwater_Days BIGINT,
     -- Benchmark Equivalents
-    BM_Sharpe_Ratio DOUBLE,
-    BM_Sortino_Ratio DOUBLE,
-    BM_Calmar_Ratio DOUBLE,
-    BM_Max_Drawdown DOUBLE,
-    Historical_BM_Max_DD DOUBLE,
     -- Comparison Alphas
-    Sharpe_Alpha DOUBLE,
-    Sortino_Alpha DOUBLE,
-    Calmar_Alpha DOUBLE,
     -- Tax Exposure
     Unrealized_LTCG DOUBLE,
     Unrealized_STCG DOUBLE,
@@ -742,46 +532,11 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_Sector (
     Active_Return DOUBLE,
 
     -- Time-Range Returns
-    Return_1D DOUBLE,
-    Return_1W DOUBLE,
-    Return_1M DOUBLE,
-    Return_3M DOUBLE,
-    Return_6M DOUBLE,
-    Return_12M DOUBLE,
-    Return_3Y DOUBLE,
-    Return_5Y DOUBLE,
-    Return_YTD DOUBLE,
-    Return_FY_YTD DOUBLE,
     -- Time-Range Alphas
-    Alpha_1D DOUBLE,
-    Alpha_1W DOUBLE,
-    Alpha_1M DOUBLE,
-    Alpha_3M DOUBLE,
-    Alpha_6M DOUBLE,
-    Alpha_12M DOUBLE,
-    Alpha_3Y DOUBLE,
-    Alpha_5Y DOUBLE,
-    Alpha_YTD DOUBLE,
-    Alpha_FY_YTD DOUBLE,
     -- Risk-Adjusted (Portfolio)
-    Sharpe_Ratio DOUBLE,
-    Sortino_Ratio DOUBLE,
-    Calmar_Ratio DOUBLE,
     Max_Drawdown DOUBLE,
-    Historical_Max_DD DOUBLE,
-    Peak_Date DATE,
-    Drawdown_Duration BIGINT,
-    Underwater_Days BIGINT,
     -- Benchmark Equivalents
-    BM_Sharpe_Ratio DOUBLE,
-    BM_Sortino_Ratio DOUBLE,
-    BM_Calmar_Ratio DOUBLE,
-    BM_Max_Drawdown DOUBLE,
-    Historical_BM_Max_DD DOUBLE,
     -- Comparison Alphas
-    Sharpe_Alpha DOUBLE,
-    Sortino_Alpha DOUBLE,
-    Calmar_Alpha DOUBLE,
     -- Tax Exposure
     Unrealized_LTCG DOUBLE,
     Unrealized_STCG DOUBLE,
@@ -817,46 +572,11 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_Industry (
     Active_Return DOUBLE,
 
     -- Time-Range Returns
-    Return_1D DOUBLE,
-    Return_1W DOUBLE,
-    Return_1M DOUBLE,
-    Return_3M DOUBLE,
-    Return_6M DOUBLE,
-    Return_12M DOUBLE,
-    Return_3Y DOUBLE,
-    Return_5Y DOUBLE,
-    Return_YTD DOUBLE,
-    Return_FY_YTD DOUBLE,
     -- Time-Range Alphas
-    Alpha_1D DOUBLE,
-    Alpha_1W DOUBLE,
-    Alpha_1M DOUBLE,
-    Alpha_3M DOUBLE,
-    Alpha_6M DOUBLE,
-    Alpha_12M DOUBLE,
-    Alpha_3Y DOUBLE,
-    Alpha_5Y DOUBLE,
-    Alpha_YTD DOUBLE,
-    Alpha_FY_YTD DOUBLE,
     -- Risk-Adjusted (Portfolio)
-    Sharpe_Ratio DOUBLE,
-    Sortino_Ratio DOUBLE,
-    Calmar_Ratio DOUBLE,
     Max_Drawdown DOUBLE,
-    Historical_Max_DD DOUBLE,
-    Peak_Date DATE,
-    Drawdown_Duration BIGINT,
-    Underwater_Days BIGINT,
     -- Benchmark Equivalents
-    BM_Sharpe_Ratio DOUBLE,
-    BM_Sortino_Ratio DOUBLE,
-    BM_Calmar_Ratio DOUBLE,
-    BM_Max_Drawdown DOUBLE,
-    Historical_BM_Max_DD DOUBLE,
     -- Comparison Alphas
-    Sharpe_Alpha DOUBLE,
-    Sortino_Alpha DOUBLE,
-    Calmar_Alpha DOUBLE,
     -- Tax Exposure
     Unrealized_LTCG DOUBLE,
     Unrealized_STCG DOUBLE,
@@ -894,46 +614,11 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_Portfolio (
     BM_TWR DOUBLE,
 
     -- Time-Range Returns
-    Return_1D DOUBLE,
-    Return_1W DOUBLE,
-    Return_1M DOUBLE,
-    Return_3M DOUBLE,
-    Return_6M DOUBLE,
-    Return_12M DOUBLE,
-    Return_3Y DOUBLE,
-    Return_5Y DOUBLE,
-    Return_YTD DOUBLE,
-    Return_FY_YTD DOUBLE,
     -- Time-Range Alphas
-    Alpha_1D DOUBLE,
-    Alpha_1W DOUBLE,
-    Alpha_1M DOUBLE,
-    Alpha_3M DOUBLE,
-    Alpha_6M DOUBLE,
-    Alpha_12M DOUBLE,
-    Alpha_3Y DOUBLE,
-    Alpha_5Y DOUBLE,
-    Alpha_YTD DOUBLE,
-    Alpha_FY_YTD DOUBLE,
     -- Risk-Adjusted (Portfolio)
-    Sharpe_Ratio DOUBLE,
-    Sortino_Ratio DOUBLE,
-    Calmar_Ratio DOUBLE,
     Max_Drawdown DOUBLE,
-    Historical_Max_DD DOUBLE,
-    Peak_Date DATE,
-    Drawdown_Duration BIGINT,
-    Underwater_Days BIGINT,
     -- Benchmark Equivalents
-    BM_Sharpe_Ratio DOUBLE,
-    BM_Sortino_Ratio DOUBLE,
-    BM_Calmar_Ratio DOUBLE,
-    BM_Max_Drawdown DOUBLE,
-    Historical_BM_Max_DD DOUBLE,
     -- Comparison Alphas
-    Sharpe_Alpha DOUBLE,
-    Sortino_Alpha DOUBLE,
-    Calmar_Alpha DOUBLE,
     -- Tax Exposure
     Unrealized_LTCG DOUBLE,
     Unrealized_STCG DOUBLE,
