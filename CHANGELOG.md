@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [5.3.0](https://github.com/tks18/personal-finance-etl/compare/5.2.0...5.3.0) (2026-09-08)
+
+
+### Bug Fixes 🛠
+
+* more overkill columns removal ([17a6565](https://github.com/tks18/personal-finance-etl/commit/17a65658b92f7b5a13e7e1f32aa47f6efa1a3781))
+
 ## [5.2.0](https://github.com/tks18/personal-finance-etl/compare/5.1.4...5.2.0) (2026-09-07)
 
 
