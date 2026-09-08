@@ -237,8 +237,6 @@ class BudgetForecastBuilder:
                 # Income anchor
                 "Actual_Income",
                 "Budget_Income",
-                "Income_Volatility_Pct",
-                "Income_Regime",
                 # Rule targets
                 "Rule_Core_Pct_Budget",
                 "Rule_NonCore_Pct_Budget",
@@ -256,15 +254,7 @@ class BudgetForecastBuilder:
                 "Actual_Investment",
                 "Actual_Savings",
                 # Actual % of income
-                "Actual_Core_Pct_of_Income",
-                "Actual_NonCore_Pct_of_Income",
-                "Actual_Investment_Pct_of_Income",
-                "Actual_Savings_Pct_of_Income",
                 # Variance
-                "Core_Expense_Variance",
-                "NonCore_Expense_Variance",
-                "Investment_Shortfall",
-                "Total_Budget_Variance",
                 # Statistical signals
                 # Composite scores
                 # Runway

@@ -194,26 +194,11 @@ class WealthRiskAnalyticsBuilder:
                             pl.Field("Months_To_FI_Conservative_P90", pl.Float64),
                             pl.Field("Months_To_FI_Base_P50", pl.Float64),
                             pl.Field("Months_To_FI_Aggressive_P10", pl.Float64),
-                            pl.Field("Months_To_FI_Total_Conservative_P90", pl.Float64),
-                            pl.Field("Months_To_FI_Total_Base_P50", pl.Float64),
-                            pl.Field("Months_To_FI_Total_Aggressive_P10", pl.Float64),
                             pl.Field("Probability_Of_Success_Pct", pl.Float64),
-                            pl.Field("Probability_Of_Success_Total_Pct", pl.Float64),
                             pl.Field("Target_FI_Future_Nominal_P50", pl.Float64),
-                            pl.Field("Target_FI_Total_Future_Nominal_P50", pl.Float64),
                             pl.Field("Runway_Months_Stressed_P10", pl.Float64),
                             pl.Field("Runway_Months_Base_P50", pl.Float64),
-                            pl.Field("Runway_Months_Total_Stressed_P10", pl.Float64),
-                            pl.Field("Runway_Months_Total_Base_P50", pl.Float64),
-                            pl.Field("Terminal_Wealth_P50", pl.Float64),
-                            pl.Field("Terminal_Wealth_P10", pl.Float64),
-                            pl.Field("Max_Drawdown_Pct_P50", pl.Float64),
-                            pl.Field("Compounded_Lost_Savings_EV", pl.Float64),
-                            pl.Field("Peak_Inflation_Experienced_Pct", pl.Float64),
-                            pl.Field("Decumulation_First_5Y_CAGR_P10", pl.Float64),
-                            pl.Field("Average_Realized_Withdrawal_Rate_P50", pl.Float64),
                             pl.Field("Terminal_Wealth_Nominal_P50", pl.Float64),
-                            pl.Field("Terminal_Wealth_Total_Nominal_P50", pl.Float64),
                         ]
                     ),
                 )
@@ -267,14 +252,13 @@ class WealthRiskAnalyticsBuilder:
                     "Savings_Rate_Required"
                 ),
                 safe_divide(
-                    safe_divide("FI_Gap_Total", "Months_To_FI_Total_Base_P50"), "Total_Income"
+                    safe_divide("FI_Gap_Total", "Months_To_FI_Base_P50"), "Total_Income"
                 ).alias("Savings_Rate_Required_Total"),
                 (pl.col("Months_To_FI_Base_P50") / 12.0).alias("Years_To_FI_P50"),
-                (pl.col("Months_To_FI_Total_Base_P50") / 12.0).alias("Years_To_FI_Total_P50"),
                 pl.col("Target_FI_Future_Nominal_P50")
                 .fill_null(pl.col("Target_FI_Today"))
                 .alias("Target_FI_Future_Nominal"),
-                pl.col("Target_FI_Total_Future_Nominal_P50")
+                pl.col("Target_FI_Future_Nominal_P50")
                 .fill_null(pl.col("Target_FI_Today_Total"))
                 .alias("Target_FI_Total_Future_Nominal"),
                 pl.when(
@@ -295,24 +279,6 @@ class WealthRiskAnalyticsBuilder:
                 )
                 .otherwise(pl.lit(None).cast(pl.Date))
                 .alias("Projected_FI_Date_P50"),
-                pl.when(
-                    pl.col("Months_To_FI_Total_Base_P50").is_not_nan()
-                    & pl.col("Months_To_FI_Total_Base_P50").is_not_null()
-                )
-                .then(
-                    pl.col("MONTH_START_DATE").dt.offset_by(
-                        pl.format(
-                            "{}mo",
-                            pl.col("Months_To_FI_Total_Base_P50")
-                            .fill_nan(0.0)
-                            .fill_null(0.0)
-                            .clip(0.0, 1200.0)
-                            .cast(pl.Int64),
-                        )
-                    )
-                )
-                .otherwise(pl.lit(None).cast(pl.Date))
-                .alias("Projected_FI_Date_Total_P50"),
                 pl.col("Current_FI_Coverage_Pct").alias("NW_Percentile_of_FI"),
                 pl.col("Current_FI_Coverage_Pct_Total").alias("NW_Percentile_of_FI_Total"),
             )
@@ -320,18 +286,6 @@ class WealthRiskAnalyticsBuilder:
                 self.lf_risk.select(
                     [
                         "MONTH_START_DATE",
-                        "Drawdown_Pct",
-                        "Monthly_Return",
-                        "Rolling_12M_Return",
-                        "All_Time_High_NW",
-                        "NW_Drawdown_Pct",
-                        "Recovery_From_Drawdown_%",
-                        "Max_Drawdown_12M",
-                        "Annualized_Volatility_12M",
-                        "NW_Volatility_12M",
-                        "Sharpe_Ratio_12M",
-                        "Sortino_Ratio_12M",
-                        "Calmar_Ratio_12M",
                     ]
                 ),
                 on="MONTH_START_DATE",
@@ -343,18 +297,11 @@ class WealthRiskAnalyticsBuilder:
                     pl.col("Total_Net_Worth_Market_Af_Tax")
                     - pl.col("Total_Net_Worth_Market_Af_Tax").shift(1)
                 ).alias("Wealth_Velocity"),
-                pl.col("Drawdown_Pct").fill_null(0.0),
             )
             .with_columns(
                 (pl.col("Wealth_Velocity") - pl.col("Wealth_Velocity").shift(1)).alias(
                     "Wealth_Acceleration"
                 ),
-                pl.when(pl.col("Drawdown_Pct") < -0.20)
-                .then(self.rules.assumptions.fire.cape_swr_floor)
-                .when(pl.col("Drawdown_Pct") < -0.10)
-                .then(self.rules.assumptions.fire.cape_swr_ceiling)
-                .otherwise(self.rules.assumptions.fire.cape_swr_base)
-                .alias("CAPE_Adjusted_SWR"),
             )
             .with_columns(
                 # Actual monthly savings rate as a percentage of income
@@ -407,21 +354,12 @@ class WealthRiskAnalyticsBuilder:
                 "INFLATION_YOY_PCT",
                 "Real_Return_Assumed_Pct",
                 "Target_FI_Today",
-                "Target_FI_Future_Nominal",
                 "Current_FI_Coverage_Pct",
                 "NW_Percentile_of_FI",
                 "FI_Gap",
                 "FI_Gap_Monthly_Trend",
                 "Estimated_Months_To_FI_Linear",
-                "Months_To_FI_Conservative_P90",
-                "Months_To_FI_Base_P50",
-                "Months_To_FI_Aggressive_P10",
-                "Probability_Of_Success_Pct",
-                "Years_To_FI_P50",
-                "Projected_FI_Date_P50",
                 "Runway_Months_Linear",
-                "Runway_Months_Stressed_P10",
-                "Runway_Months_Base_P50",
                 "Withdrawal_Rate_If_Retired_Now",
                 "Savings_Rate_Required",
                 "Trailing_6M_Avg_Total_Spend",
@@ -435,43 +373,23 @@ class WealthRiskAnalyticsBuilder:
                 "FI_Gap_Total",
                 "FI_Gap_Total_Monthly_Trend",
                 "Estimated_Months_To_FI_Total_Linear",
-                "Months_To_FI_Total_Conservative_P90",
-                "Months_To_FI_Total_Base_P50",
-                "Months_To_FI_Total_Aggressive_P10",
-                "Probability_Of_Success_Total_Pct",
-                "Years_To_FI_Total_P50",
-                "Projected_FI_Date_Total_P50",
+                "Months_To_FI_Conservative_P90",
+                "Months_To_FI_Base_P50",
+                "Months_To_FI_Aggressive_P10",
+                "Probability_Of_Success_Pct",
+                "Years_To_FI_P50",
+                "Projected_FI_Date_P50",
                 "Runway_Months_Total_Linear",
-                "Runway_Months_Total_Stressed_P10",
-                "Runway_Months_Total_Base_P50",
+                "Runway_Months_Stressed_P10",
+                "Runway_Months_Base_P50",
                 "Withdrawal_Rate_If_Retired_Now_Total",
                 "Savings_Rate_Required_Total",
                 "Savings_Rate_Actual",
                 "Savings_Rate_Actual_Total",
                 "FI_Velocity",
                 "FI_Velocity_Total",
-                "Terminal_Wealth_P50",
-                "Terminal_Wealth_P10",
-                "Max_Drawdown_Pct_P50",
-                "Compounded_Lost_Savings_EV",
-                "Peak_Inflation_Experienced_Pct",
-                "Decumulation_First_5Y_CAGR_P10",
-                "Average_Realized_Withdrawal_Rate_P50",
                 "Terminal_Wealth_Nominal_P50",
-                "Terminal_Wealth_Total_Nominal_P50",
                 # Risk Metrics natively merged
-                "Monthly_Return",
-                "Rolling_12M_Return",
-                "All_Time_High_NW",
-                "NW_Drawdown_Pct",
-                "Drawdown_Pct",
-                "Recovery_From_Drawdown_%",
-                "Max_Drawdown_12M",
-                "Annualized_Volatility_12M",
-                "NW_Volatility_12M",
-                "Sharpe_Ratio_12M",
-                "Sortino_Ratio_12M",
-                "Calmar_Ratio_12M",
             ]
         )
         return lf_fire_forecast

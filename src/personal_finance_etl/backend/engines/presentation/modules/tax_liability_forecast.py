@@ -196,10 +196,7 @@ class TaxLiabilityForecastBuilder:
                     "LTCG_Exemption_Remaining",
                     "Projected_Tax_Bill",
                     "Harvesting_Offset_Remaining",
-                    "Tax_Drag_Pct",
-                    "Tax_Alpha_Pct",
                     "Tax_Harvesting_Capacity",
-                    "Tax_Efficiency_Ratio",
                 ]
             )
             .sort("MONTH_START_DATE")

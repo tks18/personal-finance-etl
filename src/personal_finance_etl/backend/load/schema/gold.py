@@ -47,15 +47,10 @@ CREATE TABLE IF NOT EXISTS gold.Cashflow_Spend_Monthly (
     Spend_Type TEXT,
     -- Core Metrics
     Total_Monthly_Spend REAL,
-    Average_Transaction_Value REAL,
     -- Trailing Averages
     Trailing_3M_Avg_Spend REAL,
     Cumulative_YTD_Spend REAL,
     -- Variance & Share
-    Spend_Share_Pct REAL,
-    MoM_Variance_Pct REAL,
-    YoY_Variance_Pct REAL,
-    Budget_Variance_Pct REAL,
     -- Inflation-Adjusted
     -- Flags
     Is_Core_Expense BOOLEAN,
@@ -74,18 +69,12 @@ CREATE TABLE IF NOT EXISTS gold.Cashflow_Income_Monthly (
     CATEGORY_GROUPS TEXT,
     -- Core Metrics
     Total_Monthly_Income REAL,
-    Average_Transaction_Value REAL,
     -- Trailing Averages
     Trailing_3M_Avg_Income REAL,
     Cumulative_YTD_Income REAL,
     -- Variance & Share
-    Income_Share_Pct REAL,
-    MoM_Variance_Pct REAL,
-    YoY_Variance_Pct REAL,
     -- Growth
     -- Activity
-    Months_Active_TTM REAL,
-    Months_Since_Last_Received BIGINT,
     -- Flags
     Is_Active_Income BOOLEAN,
     Is_Passive_Income BOOLEAN,
@@ -123,7 +112,6 @@ CREATE TABLE IF NOT EXISTS gold.Wealth_Risk_Metrics (
     Target_FI_Today DOUBLE,
     Target_FI_Today_Total DOUBLE,
     -- FI Future Nominal Values
-    Target_FI_Future_Nominal DOUBLE,
     Target_FI_Total_Future_Nominal DOUBLE,
     -- FI Progress
     Current_FI_Coverage_Pct DOUBLE,
@@ -138,24 +126,16 @@ CREATE TABLE IF NOT EXISTS gold.Wealth_Risk_Metrics (
     Estimated_Months_To_FI_Linear DOUBLE,
     Estimated_Months_To_FI_Total_Linear DOUBLE,
     Months_To_FI_Conservative_P90 DOUBLE,
-    Months_To_FI_Total_Conservative_P90 DOUBLE,
     Months_To_FI_Base_P50 DOUBLE,
-    Months_To_FI_Total_Base_P50 DOUBLE,
     Months_To_FI_Aggressive_P10 DOUBLE,
-    Months_To_FI_Total_Aggressive_P10 DOUBLE,
     Probability_Of_Success_Pct DOUBLE,
-    Probability_Of_Success_Total_Pct DOUBLE,
     Years_To_FI_P50 DOUBLE,
-    Years_To_FI_Total_P50 DOUBLE,
     Projected_FI_Date_P50 DATE,
-    Projected_FI_Date_Total_P50 DATE,
     -- Sustainability
     Runway_Months_Linear DOUBLE,
+    Runway_Months_Total_Linear DOUBLE,
     Runway_Months_Stressed_P10 DOUBLE,
     Runway_Months_Base_P50 DOUBLE,
-    Runway_Months_Total_Linear DOUBLE,
-    Runway_Months_Total_Stressed_P10 DOUBLE,
-    Runway_Months_Total_Base_P50 DOUBLE,
     Withdrawal_Rate_If_Retired_Now DOUBLE,
     Withdrawal_Rate_If_Retired_Now_Total DOUBLE,
     Savings_Rate_Required DOUBLE,
@@ -167,29 +147,9 @@ CREATE TABLE IF NOT EXISTS gold.Wealth_Risk_Metrics (
     FI_Velocity DOUBLE,
     FI_Velocity_Total DOUBLE,
     -- Advanced Monte Carlo Outputs
-    Terminal_Wealth_P50 DOUBLE,
-    Terminal_Wealth_P10 DOUBLE,
     Terminal_Wealth_Nominal_P50 DOUBLE,
-    Terminal_Wealth_Total_Nominal_P50 DOUBLE,
-    Max_Drawdown_Pct_P50 DOUBLE,
-    Compounded_Lost_Savings_EV DOUBLE,
-    Peak_Inflation_Experienced_Pct DOUBLE,
-    Decumulation_First_5Y_CAGR_P10 DOUBLE,
-    Average_Realized_Withdrawal_Rate_P50 DOUBLE,
     -- Risk Metrics natively merged
-    Monthly_Return DOUBLE,
-    Rolling_12M_Return DOUBLE,
-    All_Time_High_NW DOUBLE,
-    NW_Drawdown_Pct DOUBLE,
-    Drawdown_Pct DOUBLE,
-    "Recovery_From_Drawdown_%" DOUBLE,
-    Max_Drawdown_12M DOUBLE,
-    Annualized_Volatility_12M DOUBLE,
-    NW_Volatility_12M DOUBLE,
     -- Risk-Adjusted Return Ratios
-    Sharpe_Ratio_12M DOUBLE,
-    Sortino_Ratio_12M DOUBLE,
-    Calmar_Ratio_12M DOUBLE
 );
 
 CREATE TABLE IF NOT EXISTS gold.Forecast_Tax_Liability_Annual (
@@ -213,10 +173,7 @@ CREATE TABLE IF NOT EXISTS gold.Forecast_Tax_Liability_Annual (
     Projected_Tax_Bill DOUBLE,
     Harvesting_Offset_Remaining DOUBLE,
     -- Efficiency
-    Tax_Drag_Pct DOUBLE,
-    Tax_Alpha_Pct DOUBLE,
-    Tax_Harvesting_Capacity DOUBLE,
-    Tax_Efficiency_Ratio DOUBLE
+    Tax_Harvesting_Capacity DOUBLE
 );
 
 CREATE TABLE IF NOT EXISTS gold.Forecast_Budget_Monthly (
@@ -227,8 +184,6 @@ CREATE TABLE IF NOT EXISTS gold.Forecast_Budget_Monthly (
     -- Income Anchor
     Actual_Income DOUBLE,
     Budget_Income DOUBLE,
-    Income_Volatility_Pct DOUBLE,
-    Income_Regime TEXT,
     -- Rule Targets (from config: 40/20/30+10)
     Rule_Core_Pct_Budget DOUBLE,
     Rule_NonCore_Pct_Budget DOUBLE,
@@ -246,15 +201,7 @@ CREATE TABLE IF NOT EXISTS gold.Forecast_Budget_Monthly (
     Actual_Investment DOUBLE,
     Actual_Savings DOUBLE,
     -- Actual Percentages of Income
-    Actual_Core_Pct_of_Income DOUBLE,
-    Actual_NonCore_Pct_of_Income DOUBLE,
-    Actual_Investment_Pct_of_Income DOUBLE,
-    Actual_Savings_Pct_of_Income DOUBLE,
     -- Variance Accounting
-    Core_Expense_Variance DOUBLE,
-    NonCore_Expense_Variance DOUBLE,
-    Investment_Shortfall DOUBLE,
-    Total_Budget_Variance DOUBLE,
     -- Runway
     Zero_Income_Runway_Months DOUBLE,
     Emergency_Fund_Gap DOUBLE,
@@ -303,13 +250,10 @@ CREATE TABLE IF NOT EXISTS gold.Cashflow_Summary_Monthly (
     Passive_Income DOUBLE,
     Dividend_Income DOUBLE,
     Interest_Income DOUBLE,
-    Active_Income_Share_Pct DOUBLE,
-    Passive_Income_Share_Pct DOUBLE,
     -- Expense bifurcation
     Total_Expense DOUBLE,
     Total_Core_Expense DOUBLE,
     NonCore_Expense DOUBLE,
-    Core_Expense_Share_Pct DOUBLE,
     -- Investments deployed (buys)
     Total_Investment_Deployed DOUBLE,
     Equity_Deployed DOUBLE,
@@ -317,10 +261,9 @@ CREATE TABLE IF NOT EXISTS gold.Cashflow_Summary_Monthly (
     ETFs_Deployed DOUBLE,
     MF_Deployed DOUBLE,
     Other_Deployed DOUBLE,
-    Equity_Pct_of_Deployed DOUBLE,
-    MF_Pct_of_Deployed DOUBLE,
     -- Redemptions & net flow
     Total_Investment_Redeemed DOUBLE,
+    Redemption_Gain_Loss_Value DOUBLE,
     Net_Investment_Flow DOUBLE,
     -- Surplus & rates
     Gross_Surplus DOUBLE,
@@ -328,11 +271,6 @@ CREATE TABLE IF NOT EXISTS gold.Cashflow_Summary_Monthly (
     Savings_Rate_Pct DOUBLE,
     Investment_Rate_Pct DOUBLE,
     -- MoM deltas
-    Income_MoM_Delta DOUBLE,
-    Expense_MoM_Delta DOUBLE,
-    Investment_MoM_Delta DOUBLE,
-    Income_MoM_Pct DOUBLE,
-    Expense_MoM_Pct DOUBLE,
     -- Trailing averages
     Trailing_3M_Avg_Income DOUBLE,
     Trailing_3M_Avg_Expense DOUBLE,
@@ -347,9 +285,7 @@ CREATE TABLE IF NOT EXISTS gold.Cashflow_Summary_Monthly (
     YoY_Net_Worth_Growth_Pct DOUBLE,
     Expense_to_NW_Ratio DOUBLE,
     Emergency_Fund_Coverage DOUBLE,
-    Real_Savings_Rate_Pct DOUBLE,
-    YoY_Net_Worth_Growth_Pct_Real DOUBLE
-);
+        );
 CREATE TABLE IF NOT EXISTS gold.Investment_By_ISIN (
     -- Identifiers
     Closing_Date DATE NOT NULL,
@@ -418,20 +354,10 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_Subtype (
     -- Benchmark Equivalents
     -- Comparison Alphas
     -- Tax Exposure
-    Unrealized_LTCG DOUBLE,
-    Unrealized_STCG DOUBLE,
-    Unrealized_Gain DOUBLE,
-    Unrealized_LTCL DOUBLE,
-    Unrealized_STCL DOUBLE,
-    Unrealized_Loss DOUBLE,
-    LTCG_Tax_If_Sold DOUBLE,
-    STCG_Tax_If_Sold DOUBLE,
-    FY_Realized_LTCG DOUBLE,
-    FY_Realized_STCG DOUBLE,
-    FY_Realized_Gain DOUBLE,
-    FY_Realized_LTCL DOUBLE,
-    FY_Realized_STCL DOUBLE,
-    FY_Realized_Loss DOUBLE,
+            Unrealized_Gain DOUBLE,
+            Unrealized_Loss DOUBLE,
+                    FY_Realized_Gain DOUBLE,
+            FY_Realized_Loss DOUBLE,
     FY_Realized_Net_PnL DOUBLE
 );
 
@@ -458,20 +384,10 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_Class (
     -- Benchmark Equivalents
     -- Comparison Alphas
     -- Tax Exposure
-    Unrealized_LTCG DOUBLE,
-    Unrealized_STCG DOUBLE,
-    Unrealized_Gain DOUBLE,
-    Unrealized_LTCL DOUBLE,
-    Unrealized_STCL DOUBLE,
-    Unrealized_Loss DOUBLE,
-    LTCG_Tax_If_Sold DOUBLE,
-    STCG_Tax_If_Sold DOUBLE,
-    FY_Realized_LTCG DOUBLE,
-    FY_Realized_STCG DOUBLE,
-    FY_Realized_Gain DOUBLE,
-    FY_Realized_LTCL DOUBLE,
-    FY_Realized_STCL DOUBLE,
-    FY_Realized_Loss DOUBLE,
+            Unrealized_Gain DOUBLE,
+            Unrealized_Loss DOUBLE,
+                    FY_Realized_Gain DOUBLE,
+            FY_Realized_Loss DOUBLE,
     FY_Realized_Net_PnL DOUBLE
 );
 
@@ -498,19 +414,9 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_Instrument_Type (
     -- Benchmark Equivalents
     -- Comparison Alphas
     -- Tax Exposure
-    Unrealized_LTCG DOUBLE,
-    Unrealized_STCG DOUBLE,
     Unrealized_Gain DOUBLE,
-    Unrealized_LTCL DOUBLE,
-    Unrealized_STCL DOUBLE,
     Unrealized_Loss DOUBLE,
-    LTCG_Tax_If_Sold DOUBLE,
-    STCG_Tax_If_Sold DOUBLE,
-    FY_Realized_LTCG DOUBLE,
-    FY_Realized_STCG DOUBLE,
     FY_Realized_Gain DOUBLE,
-    FY_Realized_LTCL DOUBLE,
-    FY_Realized_STCL DOUBLE,
     FY_Realized_Loss DOUBLE,
     FY_Realized_Net_PnL DOUBLE
 );
@@ -538,19 +444,9 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_Sector (
     -- Benchmark Equivalents
     -- Comparison Alphas
     -- Tax Exposure
-    Unrealized_LTCG DOUBLE,
-    Unrealized_STCG DOUBLE,
     Unrealized_Gain DOUBLE,
-    Unrealized_LTCL DOUBLE,
-    Unrealized_STCL DOUBLE,
     Unrealized_Loss DOUBLE,
-    LTCG_Tax_If_Sold DOUBLE,
-    STCG_Tax_If_Sold DOUBLE,
-    FY_Realized_LTCG DOUBLE,
-    FY_Realized_STCG DOUBLE,
     FY_Realized_Gain DOUBLE,
-    FY_Realized_LTCL DOUBLE,
-    FY_Realized_STCL DOUBLE,
     FY_Realized_Loss DOUBLE,
     FY_Realized_Net_PnL DOUBLE
 );
@@ -578,19 +474,9 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_Industry (
     -- Benchmark Equivalents
     -- Comparison Alphas
     -- Tax Exposure
-    Unrealized_LTCG DOUBLE,
-    Unrealized_STCG DOUBLE,
     Unrealized_Gain DOUBLE,
-    Unrealized_LTCL DOUBLE,
-    Unrealized_STCL DOUBLE,
     Unrealized_Loss DOUBLE,
-    LTCG_Tax_If_Sold DOUBLE,
-    STCG_Tax_If_Sold DOUBLE,
-    FY_Realized_LTCG DOUBLE,
-    FY_Realized_STCG DOUBLE,
     FY_Realized_Gain DOUBLE,
-    FY_Realized_LTCL DOUBLE,
-    FY_Realized_STCL DOUBLE,
     FY_Realized_Loss DOUBLE,
     FY_Realized_Net_PnL DOUBLE
 );
@@ -610,9 +496,7 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_Portfolio (
     After_Tax_XIRR DOUBLE,
     BM_XIRR DOUBLE,
     Active_Return DOUBLE,
-    TWR DOUBLE,
-    BM_TWR DOUBLE,
-
+        
     -- Time-Range Returns
     -- Time-Range Alphas
     -- Risk-Adjusted (Portfolio)
@@ -620,19 +504,9 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_Portfolio (
     -- Benchmark Equivalents
     -- Comparison Alphas
     -- Tax Exposure
-    Unrealized_LTCG DOUBLE,
-    Unrealized_STCG DOUBLE,
     Unrealized_Gain DOUBLE,
-    Unrealized_LTCL DOUBLE,
-    Unrealized_STCL DOUBLE,
     Unrealized_Loss DOUBLE,
-    LTCG_Tax_If_Sold DOUBLE,
-    STCG_Tax_If_Sold DOUBLE,
-    FY_Realized_LTCG DOUBLE,
-    FY_Realized_STCG DOUBLE,
     FY_Realized_Gain DOUBLE,
-    FY_Realized_LTCL DOUBLE,
-    FY_Realized_STCL DOUBLE,
     FY_Realized_Loss DOUBLE,
     FY_Realized_Net_PnL DOUBLE
 );

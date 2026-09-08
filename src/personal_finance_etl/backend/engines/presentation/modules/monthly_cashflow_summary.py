@@ -207,16 +207,20 @@ class MonthlyCashflowSummaryBuilder:
             lf_inv_redeemed = (
                 lf_sells.with_columns(pl.col("Date").dt.month_start().alias("MONTH_START_DATE"))
                 .group_by("MONTH_START_DATE")
-                .agg(pl.col("Sell_Value").sum().fill_null(0.0).alias("Total_Investment_Redeemed"))
+                .agg(
+                    pl.col("Sell_Value").sum().fill_null(0.0).alias("Total_Investment_Redeemed"),
+                    pl.col("Total_PnL").sum().fill_null(0.0).alias("Redemption_Gain_Loss_Value"),
+                )
             )
             lf_monthly = lf_monthly.join(lf_inv_redeemed, on="MONTH_START_DATE", how="left").sort(
                 "MONTH_START_DATE"
             )
             lf_monthly = lf_monthly.with_columns(
                 pl.col("Total_Investment_Redeemed").fill_null(0.0),
+                pl.col("Redemption_Gain_Loss_Value").fill_null(0.0),
             )
         else:
-            lf_monthly = lf_monthly.with_columns(pl.lit(0.0).alias("Total_Investment_Redeemed"))
+            lf_monthly = lf_monthly.with_columns(pl.lit(0.0).alias("Total_Investment_Redeemed"), pl.lit(0.0).alias("Redemption_Gain_Loss_Value"))
 
         # ── Step 4: Net investment flow & surplus ─────────────────────────────
         lf_monthly = lf_monthly.with_columns(
@@ -279,7 +283,6 @@ class MonthlyCashflowSummaryBuilder:
                 safe_divide("Liquid_Assets_Market", "12M_Avg_Total_Core_Expense").alias(
                     "Emergency_Fund_Coverage"
                 ),
-                pl.col("Savings_Rate_Pct").alias("Real_Savings_Rate_Pct"),
             ]
         )
 
@@ -314,13 +317,10 @@ class MonthlyCashflowSummaryBuilder:
                 "Passive_Income",
                 "Dividend_Income",
                 "Interest_Income",
-                "Active_Income_Share_Pct",
-                "Passive_Income_Share_Pct",
                 # Expense bifurcation
                 "Total_Expense",
                 "Total_Core_Expense",
                 "NonCore_Expense",
-                "Core_Expense_Share_Pct",
                 # Investments deployed (buys)
                 "Total_Investment_Deployed",
                 "Equity_Deployed",
@@ -328,10 +328,9 @@ class MonthlyCashflowSummaryBuilder:
                 "ETFs_Deployed",
                 "MF_Deployed",
                 "Other_Deployed",
-                "Equity_Pct_of_Deployed",
-                "MF_Pct_of_Deployed",
                 # Redemptions & net flow
                 "Total_Investment_Redeemed",
+                "Redemption_Gain_Loss_Value",
                 "Net_Investment_Flow",
                 # Surplus & rates
                 "Gross_Surplus",
@@ -339,11 +338,6 @@ class MonthlyCashflowSummaryBuilder:
                 "Savings_Rate_Pct",
                 "Investment_Rate_Pct",
                 # MoM deltas
-                "Income_MoM_Delta",
-                "Expense_MoM_Delta",
-                "Investment_MoM_Delta",
-                "Income_MoM_Pct",
-                "Expense_MoM_Pct",
                 # Trailing averages
                 "Trailing_3M_Avg_Income",
                 "Trailing_3M_Avg_Expense",
@@ -358,7 +352,5 @@ class MonthlyCashflowSummaryBuilder:
                 "YoY_Net_Worth_Growth_Pct",
                 "Expense_to_NW_Ratio",
                 "Emergency_Fund_Coverage",
-                "Real_Savings_Rate_Pct",
-                "YoY_Net_Worth_Growth_Pct_Real",
             ]
         )

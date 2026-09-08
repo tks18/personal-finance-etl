@@ -230,16 +230,11 @@ class SpendAnalyticsBuilder:
                 "CATEGORY_NAME",
                 "CATEGORY_GROUPS",
                 "Total_Monthly_Spend",
-                "Average_Transaction_Value",
                 "Trailing_3M_Avg_Spend",
                 "Cumulative_YTD_Spend",
-                "Spend_Share_Pct",
-                "MoM_Variance_Pct",
-                "YoY_Variance_Pct",
                 "Is_Investment",
                 "Spend_Type",
                 "Is_Discretionary",
-                "Budget_Variance_Pct",
                 "Is_Core_Expense",
             ]
         )

@@ -18,9 +18,6 @@ from personal_finance_etl.backend.config.financial_rules import FinancialRules
 @njit(fastmath=True, parallel=True, cache=True)
 def _run_mc_simulations_numba(
     pv_arr: npt.NDArray[np.float64],
-    pmt_core_arr: npt.NDArray[np.float64],
-    fv_core_arr: npt.NDArray[np.float64],
-    burn_core_arr: npt.NDArray[np.float64],
     pmt_total_arr: npt.NDArray[np.float64],
     fv_total_arr: npt.NDArray[np.float64],
     burn_total_arr: npt.NDArray[np.float64],
@@ -62,47 +59,45 @@ def _run_mc_simulations_numba(
     sorr_months: int,
     expense_drag: float,
 ) -> tuple[
-    npt.NDArray[np.float64],
-    npt.NDArray[np.float64],
-    npt.NDArray[np.float64],
-    npt.NDArray[np.float64],
-    npt.NDArray[np.float64],
-    npt.NDArray[np.float64],
-    npt.NDArray[np.float64],
-    npt.NDArray[np.float64],
-    npt.NDArray[np.float64],
-    npt.NDArray[np.float64],
-    npt.NDArray[np.float64],
-    npt.NDArray[np.float64],
-    npt.NDArray[np.float64],
-    npt.NDArray[np.float64],
-    npt.NDArray[np.float64],
-    npt.NDArray[np.float64],
-    npt.NDArray[np.float64],
-    npt.NDArray[np.float64],
-    npt.NDArray[np.float64],
-    npt.NDArray[np.float64],
-    npt.NDArray[np.float64],
-    npt.NDArray[np.float64],
-    npt.NDArray[np.float64],
-    npt.NDArray[np.float64],
-    npt.NDArray[np.float64],
-    npt.NDArray[np.float64],
-    npt.NDArray[np.float64],
-    npt.NDArray[np.float64],
-    npt.NDArray[np.float64],
-    npt.NDArray[np.float64],
-    npt.NDArray[np.float64],
-    npt.NDArray[np.float64],
+    npt.NDArray[np.float64],  # 0  out_p90_c
+    npt.NDArray[np.float64],  # 1  out_p50_c
+    npt.NDArray[np.float64],  # 2  out_p10_c
+    npt.NDArray[np.float64],  # 3  prob_success_c
+    npt.NDArray[np.float64],  # 4  out_nom_p50_c
+    npt.NDArray[np.float64],  # 5  out_runway_p90_c
+    npt.NDArray[np.float64],  # 6  out_runway_p50_c
+    npt.NDArray[np.float64],  # 7  out_runway_p10_c
+    npt.NDArray[np.float64],  # 8  out_terminal_wealth_p50_c
+    npt.NDArray[np.float64],  # 9  out_terminal_wealth_p10_c
+    npt.NDArray[np.float64],  # 10 out_max_drawdown_p50_c
+    npt.NDArray[np.float64],  # 11 out_lost_savings_ev_c
+    npt.NDArray[np.float64],  # 12 out_peak_inf_p50_c
+    npt.NDArray[np.float64],  # 13 out_sorr_cagr_p10_c
+    npt.NDArray[np.float64],  # 14 out_avg_swr_p50_c
+    npt.NDArray[np.float64],  # 15 out_terminal_wealth_nom_p50_c
+    npt.NDArray[np.float64],  # 16 out_p90_t
+    npt.NDArray[np.float64],  # 17 out_p50_t
+    npt.NDArray[np.float64],  # 18 out_p10_t
+    npt.NDArray[np.float64],  # 19 prob_success_t
+    npt.NDArray[np.float64],  # 20 out_nom_p50_t
+    npt.NDArray[np.float64],  # 21 out_runway_p90_t
+    npt.NDArray[np.float64],  # 22 out_runway_p50_t
+    npt.NDArray[np.float64],  # 23 out_runway_p10_t
+    npt.NDArray[np.float64],  # 24 out_terminal_wealth_p50_t
+    npt.NDArray[np.float64],  # 25 out_terminal_wealth_p10_t
+    npt.NDArray[np.float64],  # 26 out_max_drawdown_p50_t
+    npt.NDArray[np.float64],  # 27 out_lost_savings_ev_t
+    npt.NDArray[np.float64],  # 28 out_peak_inf_p50_t
+    npt.NDArray[np.float64],  # 29 out_sorr_cagr_p10_t
+    npt.NDArray[np.float64],  # 30 out_avg_swr_p50_t
+    npt.NDArray[np.float64],  # 31 out_terminal_wealth_nom_p50_t
 ]:
     n_rows = len(pv_arr)
-
-    # Core Outputs (16 arrays)
+    prob_success_c = np.zeros(n_rows)
     out_p90_c = np.full(n_rows, np.nan)
     out_p50_c = np.full(n_rows, np.nan)
     out_p10_c = np.full(n_rows, np.nan)
     out_nom_p50_c = np.full(n_rows, np.nan)
-    prob_success_c = np.zeros(n_rows)
     out_runway_p90_c = np.full(n_rows, np.nan)
     out_runway_p50_c = np.full(n_rows, np.nan)
     out_runway_p10_c = np.full(n_rows, np.nan)
@@ -114,7 +109,6 @@ def _run_mc_simulations_numba(
     out_peak_inf_p50_c = np.full(n_rows, np.nan)
     out_sorr_cagr_p10_c = np.full(n_rows, np.nan)
     out_avg_swr_p50_c = np.full(n_rows, np.nan)
-
     # Total Outputs (16 arrays)
     out_p90_t = np.full(n_rows, np.nan)
     out_p50_t = np.full(n_rows, np.nan)
@@ -150,12 +144,12 @@ def _run_mc_simulations_numba(
         gen = gens[np.intp(i)]
 
         pv = pv_arr[i]
-        pmt_c = pmt_core_arr[i]
-        fv_c = fv_core_arr[i]
-        burn_c = burn_core_arr[i]
         pmt_t = pmt_total_arr[i]
         fv_t = fv_total_arr[i]
         burn_t = burn_total_arr[i]
+        fv_c = 0.0
+        pmt_c = 0.0
+        burn_c = 0.0
 
         inf_base = inf_rates[i]
         if np.isnan(inf_base):
@@ -166,27 +160,26 @@ def _run_mc_simulations_numba(
         if np.isnan(fv_c) or np.isnan(pv) or np.isnan(pmt_c):
             prob_success_c[i] = np.nan
             prob_success_t[i] = np.nan
-            continue
-
-        # Arrays for storing iteration metrics
+            continue  # Arrays for storing iteration metrics
         m_fi_c = np.full(iterations, np.nan)
-        m_fi_t = np.full(iterations, np.nan)
         nom_targ_c = np.full(iterations, np.nan)
-        nom_targ_t = np.full(iterations, np.nan)
         term_w_c = np.full(iterations, np.nan)
-        term_w_t = np.full(iterations, np.nan)
         term_w_nom_c = np.full(iterations, np.nan)
-        term_w_nom_t = np.full(iterations, np.nan)
-        runway_m_c = np.zeros(iterations)
-        runway_m_t = np.zeros(iterations)
         dds_c = np.full(iterations, np.nan)
-        dds_t = np.full(iterations, np.nan)
         lost_sav_c = np.zeros(iterations)
+        cagrs_c = np.full(iterations, np.nan)
+        swrs_c = np.full(iterations, np.nan)
+        runway_m_c = np.full(iterations, np.nan)
+
+        m_fi_t = np.full(iterations, np.nan)
+        nom_targ_t = np.full(iterations, np.nan)
+        term_w_t = np.full(iterations, np.nan)
+        term_w_nom_t = np.full(iterations, np.nan)
+        runway_m_t = np.zeros(iterations)
+        dds_t = np.full(iterations, np.nan)
         lost_sav_t = np.zeros(iterations)
         p_infs = np.full(iterations, np.nan)
-        cagrs_c = np.full(iterations, np.nan)
         cagrs_t = np.full(iterations, np.nan)
-        swrs_c = np.full(iterations, np.nan)
         swrs_t = np.full(iterations, np.nan)
 
         surv_count_c = 0
@@ -201,33 +194,7 @@ def _run_mc_simulations_numba(
             inf_path = inf_base
             cum_inf = 1.0
             unemployment_months = 0
-            path_peak_inf = inf_path
-
-            # Core State
-            w_c = pv
-            hit_m_c = -1
-            dec_w_c = 0.0
-            dec_nom_c = 0.0
-            peak_w_c = pv
-            max_dd_c = 0.0
-            path_ls_c = 0.0
-            surv_c = True
-            curr_wd_c = 0.0
-            init_rt_c = 0.0
-            swr_sum_c = 0.0
-            w_5y_c = 0.0
-            dec_w_c_init = 0.0
-            surv_m_c = 0
-
-            if pv >= fv_c:
-                hit_m_c = 0
-                dec_w_c = pv
-                dec_w_c_init = pv
-                dec_nom_c = fv_c
-                curr_wd_c = (fv_c / swr / 12.0) if swr > 0 else 0.0
-                init_rt_c = 1.0 / swr if swr > 0 else 0.04
-
-            # Total State
+            path_peak_inf = inf_path  # Total State
             w_t = pv
             hit_m_t = -1
             dec_w_t = 0.0
@@ -243,6 +210,27 @@ def _run_mc_simulations_numba(
             dec_w_t_init = 0.0
             surv_m_t = 0
 
+            # CORE DUMMIES
+            w_c = pv
+            hit_m_c = -1
+            dec_w_c = 0.0
+            dec_nom_c = 0.0
+            peak_w_c = pv
+            max_dd_c = 0.0
+            path_ls_c = 0.0
+            surv_c = True
+            curr_wd_c = 0.0
+            init_rt_c = 0.0
+            swr_sum_c = 0.0
+            w_5y_c = 0.0
+            dec_w_c_init = 0.0
+            surv_m_c = 0
+            fv_c = 0.0
+            pmt_c = 0.0
+            burn_c = 0.0
+            r_w_c = pv
+            r_m_c = max_runway_possible
+            alv_c = pv > 0
             if pv >= fv_t:
                 hit_m_t = 0
                 dec_w_t = pv
@@ -252,11 +240,8 @@ def _run_mc_simulations_numba(
                 init_rt_t = 1.0 / swr if swr > 0 else 0.04
 
             # Runway States Embedded
-            r_w_c = pv
             r_w_t = pv
-            r_m_c = max_runway_possible
             r_m_t = max_runway_possible
-            alv_c = pv > 0 and burn_c > 0
             alv_t = pv > 0 and burn_t > 0
 
             # --- Unified Trajectory Loop ---
@@ -767,10 +752,6 @@ def get_monte_carlo_fire_batch(
     def monte_carlo_fire_batch(s: pl.Series, **kwargs: Any) -> pl.Series:
         df = s.struct.unnest()
         pv = df["Total_Net_Worth_Market_Af_Tax"].to_numpy().astype(float)
-        pmt_c = df["Trailing_12M_Avg_Savings"].to_numpy().astype(float)
-        fv_c = df["Target_FI_Today"].to_numpy().astype(float)
-        burn_c = df["Trailing_12M_Avg_Spend"].to_numpy().astype(float)
-
         pmt_t = df["Trailing_12M_Avg_Total_Savings"].to_numpy().astype(float)
         fv_t = df["Target_FI_Today_Total"].to_numpy().astype(float)
         burn_t = df["Trailing_12M_Avg_Total_Spend"].to_numpy().astype(float)
@@ -835,9 +816,6 @@ def get_monte_carlo_fire_batch(
 
         res = _run_mc_simulations_numba(
             pv,
-            pmt_c,
-            fv_c,
-            burn_c,
             pmt_t,
             fv_t,
             burn_t,
@@ -882,33 +860,16 @@ def get_monte_carlo_fire_batch(
 
         df_out = pl.DataFrame(
             {
-                "Months_To_FI_Conservative_P90": res[0],
-                "Months_To_FI_Base_P50": res[1],
-                "Months_To_FI_Aggressive_P10": res[2],
-                "Months_To_FI_Total_Conservative_P90": res[16],
-                "Months_To_FI_Total_Base_P50": res[17],
-                "Months_To_FI_Total_Aggressive_P10": res[18],
-                "Probability_Of_Success_Pct": res[3],
-                "Probability_Of_Success_Total_Pct": res[19],
+                "Months_To_FI_Conservative_P90": res[16],
+                "Months_To_FI_Base_P50": res[17],
+                "Months_To_FI_Aggressive_P10": res[18],
+                "Probability_Of_Success_Pct": res[19],
                 "Target_FI_Future_Nominal_P50": np.where(
-                    np.isnan(res[4]) | (res[4] == 0), np.nan, res[4]
-                ),
-                "Target_FI_Total_Future_Nominal_P50": np.where(
                     np.isnan(res[20]) | (res[20] == 0), np.nan, res[20]
                 ),
-                "Runway_Months_Stressed_P10": res[7],
-                "Runway_Months_Base_P50": res[6],
-                "Runway_Months_Total_Stressed_P10": res[23],
-                "Runway_Months_Total_Base_P50": res[22],
-                "Terminal_Wealth_P50": res[8],
-                "Terminal_Wealth_P10": res[9],
-                "Max_Drawdown_Pct_P50": res[10],
-                "Compounded_Lost_Savings_EV": res[11],
-                "Peak_Inflation_Experienced_Pct": res[12],
-                "Decumulation_First_5Y_CAGR_P10": res[13],
-                "Average_Realized_Withdrawal_Rate_P50": res[14],
-                "Terminal_Wealth_Nominal_P50": res[15],
-                "Terminal_Wealth_Total_Nominal_P50": res[31],
+                "Runway_Months_Stressed_P10": res[23],
+                "Runway_Months_Base_P50": res[22],
+                "Terminal_Wealth_Nominal_P50": res[31],
             }
         )
         return df_out.to_struct("")

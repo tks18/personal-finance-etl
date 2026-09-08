@@ -239,17 +239,11 @@ class IncomeStreamsBuilder:
                 "CATEGORY_NAME",
                 "CATEGORY_GROUPS",
                 "Total_Monthly_Income",
-                "Average_Transaction_Value",
                 "Trailing_3M_Avg_Income",
                 "Cumulative_YTD_Income",
-                "Income_Share_Pct",
-                "MoM_Variance_Pct",
-                "YoY_Variance_Pct",
-                "Months_Since_Last_Received",
                 "Is_Active_Income",
                 "Is_Passive_Income",
                 "Is_Dividend_Income",
                 "Is_Interest_Income",
-                "Months_Active_TTM",
             ]
         )
