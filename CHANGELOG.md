@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [5.4.0](https://github.com/tks18/personal-finance-etl/compare/5.3.0...5.4.0) (2026-09-09)
+
+
+### Bug Fixes 🛠
+
+* reorganize the gold layer structure ([552a4f2](https://github.com/tks18/personal-finance-etl/commit/552a4f2f77252788c04ba305fcd10bb819112a64))
+
 ## [5.3.0](https://github.com/tks18/personal-finance-etl/compare/5.2.0...5.3.0) (2026-09-08)
 
 
