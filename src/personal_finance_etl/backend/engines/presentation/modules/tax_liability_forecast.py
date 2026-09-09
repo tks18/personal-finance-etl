@@ -176,8 +176,11 @@ class TaxLiabilityForecastBuilder:
                     (pl.col("Realized_Gain") - pl.col("Projected_Tax_Bill"))
                     / pl.col("Realized_Gain")
                 )
-                .otherwise(pl.lit(None))
                 .alias("Tax_Efficiency_Ratio"),
+                pl.when(pl.col("Realized_Gain") > 0)
+                .then((pl.col("Projected_Tax_Bill") / pl.col("Realized_Gain")) * 100.0)
+                .otherwise(0.0)
+                .alias("Effective_Tax_Rate_Pct"),
             )
             .select(
                 [
@@ -195,6 +198,7 @@ class TaxLiabilityForecastBuilder:
                     "LTCG_Exemption_Used",
                     "LTCG_Exemption_Remaining",
                     "Projected_Tax_Bill",
+                    "Effective_Tax_Rate_Pct",
                     "Harvesting_Offset_Remaining",
                     "Tax_Harvesting_Capacity",
                 ]

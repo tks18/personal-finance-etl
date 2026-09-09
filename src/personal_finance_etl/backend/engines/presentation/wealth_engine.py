@@ -67,6 +67,7 @@ class WealthPresentationEngine:
 
         # 2. Net Worth Monthly Summary
         results["df_p_tf_net_worth_monthly_summary"] = base_lf["lf_nw_summary"]
+        results["df_p_tf_wealth_monthly_totals"] = base_lf["lf_monthly_totals"]
 
         # 4. Category Spend Analytics
         results["df_p_tf_category_spend_analytics"] = SpendAnalyticsBuilder(

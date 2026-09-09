@@ -106,8 +106,7 @@ class WealthRiskAnalyticsBuilder:
                 .drop(["Port_Market_Value", "Port_Book_Value"])
             )
         else:
-            lf_fire_base = lf_fire_base.with_columns(
-            )
+            pass
 
         swr = self.rules.assumptions.fire.swr_multiplier
         coast_real_return = self.rules.assumptions.fire.coast_fi_real_return
@@ -279,8 +278,6 @@ class WealthRiskAnalyticsBuilder:
                 )
                 .otherwise(pl.lit(None).cast(pl.Date))
                 .alias("Projected_FI_Date_P50"),
-                pl.col("Current_FI_Coverage_Pct").alias("NW_Percentile_of_FI"),
-                pl.col("Current_FI_Coverage_Pct_Total").alias("NW_Percentile_of_FI_Total"),
             )
             .join(
                 self.lf_risk.select(
@@ -339,55 +336,47 @@ class WealthRiskAnalyticsBuilder:
                 "MONTH_START_DATE",
                 "MONTH_END_DATE",
                 "YEAR_MONTH",
-                "Total_Income",
-                "Total_Core_Expense",
-                "Total_Expense",
-                "Net_Savings",
-                "Net_Savings_Total",
-                "Total_Net_Worth",
-                "Total_Net_Worth_Market",
-                "Total_Net_Worth_Market_Af_Tax",
-                "Trailing_6M_Avg_Spend",
-                "Trailing_6M_Avg_Savings",
-                "Trailing_12M_Avg_Spend",
-                "Trailing_12M_Avg_Savings",
-                "INFLATION_YOY_PCT",
+                # Spending & Savings
+                pl.col("Trailing_6M_Avg_Total_Spend").alias("Trailing_6M_Avg_Spend"),
+                pl.col("Trailing_12M_Avg_Total_Spend").alias("Trailing_12M_Avg_Spend"),
+                pl.col("Trailing_6M_Avg_Total_Savings").alias("Trailing_6M_Avg_Savings"),
+                pl.col("Trailing_12M_Avg_Total_Savings").alias("Trailing_12M_Avg_Savings"),
                 "Real_Return_Assumed_Pct",
-                "Target_FI_Today",
-                "Current_FI_Coverage_Pct",
-                "NW_Percentile_of_FI",
-                "FI_Gap",
-                "FI_Gap_Monthly_Trend",
-                "Estimated_Months_To_FI_Linear",
-                "Runway_Months_Linear",
-                "Withdrawal_Rate_If_Retired_Now",
-                "Savings_Rate_Required",
-                "Trailing_6M_Avg_Total_Spend",
-                "Trailing_6M_Avg_Total_Savings",
-                "Trailing_12M_Avg_Total_Spend",
-                "Trailing_12M_Avg_Total_Savings",
-                "Target_FI_Today_Total",
+                # FI Numbers (Today's Money)
+                pl.col("Target_FI_Today_Total").alias("Target_FI_Today"),
+                pl.col("Coast_FI_Today_Total").alias("Coast_FI_Today"),
+                pl.col("Lean_FI_Today_Total").alias("Lean_FI_Today"),
+                # FI Future Nominal Values
                 "Target_FI_Total_Future_Nominal",
-                "Current_FI_Coverage_Pct_Total",
-                "NW_Percentile_of_FI_Total",
-                "FI_Gap_Total",
-                "FI_Gap_Total_Monthly_Trend",
-                "Estimated_Months_To_FI_Total_Linear",
+                # FI Progress
+                pl.col("Current_FI_Coverage_Pct_Total").alias("Current_FI_Coverage_Pct"),
+                pl.col("FI_Gap_Total").alias("FI_Gap"),
+                pl.col("FI_Gap_Total_Monthly_Trend").alias("FI_Gap_Monthly_Trend"),
+                # Time to FI
+                pl.col("Estimated_Months_To_FI_Total_Linear").alias(
+                    "Estimated_Months_To_FI_Linear"
+                ),
                 "Months_To_FI_Conservative_P90",
                 "Months_To_FI_Base_P50",
                 "Months_To_FI_Aggressive_P10",
                 "Probability_Of_Success_Pct",
                 "Years_To_FI_P50",
                 "Projected_FI_Date_P50",
-                "Runway_Months_Total_Linear",
+                # Sustainability
+                pl.col("Runway_Months_Total_Linear").alias("Runway_Months_Linear"),
                 "Runway_Months_Stressed_P10",
                 "Runway_Months_Base_P50",
-                "Withdrawal_Rate_If_Retired_Now_Total",
-                "Savings_Rate_Required_Total",
-                "Savings_Rate_Actual",
-                "Savings_Rate_Actual_Total",
-                "FI_Velocity",
-                "FI_Velocity_Total",
+                pl.col("Withdrawal_Rate_If_Retired_Now_Total").alias(
+                    "Withdrawal_Rate_If_Retired_Now"
+                ),
+                pl.col("Savings_Rate_Required_Total").alias("Savings_Rate_Required"),
+                # Savings & FI Progress Metrics
+                pl.col("Savings_Rate_Actual_Total").alias("Savings_Rate_Actual"),
+                pl.col("FI_Velocity_Total").alias("FI_Velocity"),
+                # Decumulation & Velocity
+                "Wealth_Velocity",
+                "Wealth_Acceleration",
+                "Real_NW_CAGR_3Y",
                 "Terminal_Wealth_Nominal_P50",
                 # Risk Metrics natively merged
             ]

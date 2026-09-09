@@ -59,73 +59,41 @@ def _run_mc_simulations_numba(
     sorr_months: int,
     expense_drag: float,
 ) -> tuple[
-    npt.NDArray[np.float64],  # 0  out_p90_c
-    npt.NDArray[np.float64],  # 1  out_p50_c
-    npt.NDArray[np.float64],  # 2  out_p10_c
-    npt.NDArray[np.float64],  # 3  prob_success_c
-    npt.NDArray[np.float64],  # 4  out_nom_p50_c
-    npt.NDArray[np.float64],  # 5  out_runway_p90_c
-    npt.NDArray[np.float64],  # 6  out_runway_p50_c
-    npt.NDArray[np.float64],  # 7  out_runway_p10_c
-    npt.NDArray[np.float64],  # 8  out_terminal_wealth_p50_c
-    npt.NDArray[np.float64],  # 9  out_terminal_wealth_p10_c
-    npt.NDArray[np.float64],  # 10 out_max_drawdown_p50_c
-    npt.NDArray[np.float64],  # 11 out_lost_savings_ev_c
-    npt.NDArray[np.float64],  # 12 out_peak_inf_p50_c
-    npt.NDArray[np.float64],  # 13 out_sorr_cagr_p10_c
-    npt.NDArray[np.float64],  # 14 out_avg_swr_p50_c
-    npt.NDArray[np.float64],  # 15 out_terminal_wealth_nom_p50_c
-    npt.NDArray[np.float64],  # 16 out_p90_t
-    npt.NDArray[np.float64],  # 17 out_p50_t
-    npt.NDArray[np.float64],  # 18 out_p10_t
-    npt.NDArray[np.float64],  # 19 prob_success_t
-    npt.NDArray[np.float64],  # 20 out_nom_p50_t
-    npt.NDArray[np.float64],  # 21 out_runway_p90_t
-    npt.NDArray[np.float64],  # 22 out_runway_p50_t
-    npt.NDArray[np.float64],  # 23 out_runway_p10_t
-    npt.NDArray[np.float64],  # 24 out_terminal_wealth_p50_t
-    npt.NDArray[np.float64],  # 25 out_terminal_wealth_p10_t
-    npt.NDArray[np.float64],  # 26 out_max_drawdown_p50_t
-    npt.NDArray[np.float64],  # 27 out_lost_savings_ev_t
-    npt.NDArray[np.float64],  # 28 out_peak_inf_p50_t
-    npt.NDArray[np.float64],  # 29 out_sorr_cagr_p10_t
-    npt.NDArray[np.float64],  # 30 out_avg_swr_p50_t
-    npt.NDArray[np.float64],  # 31 out_terminal_wealth_nom_p50_t
+    npt.NDArray[np.float64],  # 16 out_p90
+    npt.NDArray[np.float64],  # 17 out_p50
+    npt.NDArray[np.float64],  # 18 out_p10
+    npt.NDArray[np.float64],  # 19 prob_success
+    npt.NDArray[np.float64],  # 20 out_nom_p50
+    npt.NDArray[np.float64],  # 21 out_runway_p90
+    npt.NDArray[np.float64],  # 22 out_runway_p50
+    npt.NDArray[np.float64],  # 23 out_runway_p10
+    npt.NDArray[np.float64],  # 24 out_terminal_wealth_p50
+    npt.NDArray[np.float64],  # 25 out_terminal_wealth_p10
+    npt.NDArray[np.float64],  # 26 out_max_drawdown_p50
+    npt.NDArray[np.float64],  # 27 out_lost_savings_ev
+    npt.NDArray[np.float64],  # 28 out_peak_inf_p50
+    npt.NDArray[np.float64],  # 29 out_sorr_cagr_p10
+    npt.NDArray[np.float64],  # 30 out_avg_swr_p50
+    npt.NDArray[np.float64],  # 31 out_terminal_wealth_nom_p50
 ]:
     n_rows = len(pv_arr)
-    prob_success_c = np.zeros(n_rows)
-    out_p90_c = np.full(n_rows, np.nan)
-    out_p50_c = np.full(n_rows, np.nan)
-    out_p10_c = np.full(n_rows, np.nan)
-    out_nom_p50_c = np.full(n_rows, np.nan)
-    out_runway_p90_c = np.full(n_rows, np.nan)
-    out_runway_p50_c = np.full(n_rows, np.nan)
-    out_runway_p10_c = np.full(n_rows, np.nan)
-    out_terminal_wealth_p50_c = np.full(n_rows, np.nan)
-    out_terminal_wealth_p10_c = np.full(n_rows, np.nan)
-    out_terminal_wealth_nom_p50_c = np.full(n_rows, np.nan)
-    out_max_drawdown_p50_c = np.full(n_rows, np.nan)
-    out_lost_savings_ev_c = np.full(n_rows, np.nan)
-    out_peak_inf_p50_c = np.full(n_rows, np.nan)
-    out_sorr_cagr_p10_c = np.full(n_rows, np.nan)
-    out_avg_swr_p50_c = np.full(n_rows, np.nan)
     # Total Outputs (16 arrays)
-    out_p90_t = np.full(n_rows, np.nan)
-    out_p50_t = np.full(n_rows, np.nan)
-    out_p10_t = np.full(n_rows, np.nan)
-    out_nom_p50_t = np.full(n_rows, np.nan)
-    prob_success_t = np.zeros(n_rows)
-    out_runway_p90_t = np.full(n_rows, np.nan)
-    out_runway_p50_t = np.full(n_rows, np.nan)
-    out_runway_p10_t = np.full(n_rows, np.nan)
-    out_terminal_wealth_p50_t = np.full(n_rows, np.nan)
-    out_terminal_wealth_p10_t = np.full(n_rows, np.nan)
-    out_terminal_wealth_nom_p50_t = np.full(n_rows, np.nan)
-    out_max_drawdown_p50_t = np.full(n_rows, np.nan)
-    out_lost_savings_ev_t = np.full(n_rows, np.nan)
-    out_peak_inf_p50_t = np.full(n_rows, np.nan)
-    out_sorr_cagr_p10_t = np.full(n_rows, np.nan)
-    out_avg_swr_p50_t = np.full(n_rows, np.nan)
+    out_p90 = np.full(n_rows, np.nan)
+    out_p50 = np.full(n_rows, np.nan)
+    out_p10 = np.full(n_rows, np.nan)
+    out_nom_p50 = np.full(n_rows, np.nan)
+    prob_success = np.zeros(n_rows)
+    out_runway_p90 = np.full(n_rows, np.nan)
+    out_runway_p50 = np.full(n_rows, np.nan)
+    out_runway_p10 = np.full(n_rows, np.nan)
+    out_terminal_wealth_p50 = np.full(n_rows, np.nan)
+    out_terminal_wealth_p10 = np.full(n_rows, np.nan)
+    out_terminal_wealth_nom_p50 = np.full(n_rows, np.nan)
+    out_max_drawdown_p50 = np.full(n_rows, np.nan)
+    out_lost_savings_ev = np.full(n_rows, np.nan)
+    out_peak_inf_p50 = np.full(n_rows, np.nan)
+    out_sorr_cagr_p10 = np.full(n_rows, np.nan)
+    out_avg_swr_p50 = np.full(n_rows, np.nan)
 
     monthly_jump_prob = jump_prob_ann / 12.0
     theta = inf_theta
@@ -144,12 +112,9 @@ def _run_mc_simulations_numba(
         gen = gens[np.intp(i)]
 
         pv = pv_arr[i]
-        pmt_t = pmt_total_arr[i]
-        fv_t = fv_total_arr[i]
-        burn_t = burn_total_arr[i]
-        fv_c = 0.0
-        pmt_c = 0.0
-        burn_c = 0.0
+        pmt = pmt_total_arr[i]
+        fv = fv_total_arr[i]
+        burn = burn_total_arr[i]
 
         inf_base = inf_rates[i]
         if np.isnan(inf_base):
@@ -157,35 +122,23 @@ def _run_mc_simulations_numba(
 
         current_age_m = current_age_months_arr[i]
 
-        if np.isnan(fv_c) or np.isnan(pv) or np.isnan(pmt_c):
-            prob_success_c[i] = np.nan
-            prob_success_t[i] = np.nan
+        if np.isnan(fv) or np.isnan(pv) or np.isnan(pmt):
+            prob_success[i] = np.nan
             continue  # Arrays for storing iteration metrics
-        m_fi_c = np.full(iterations, np.nan)
-        nom_targ_c = np.full(iterations, np.nan)
-        term_w_c = np.full(iterations, np.nan)
-        term_w_nom_c = np.full(iterations, np.nan)
-        dds_c = np.full(iterations, np.nan)
-        lost_sav_c = np.zeros(iterations)
-        cagrs_c = np.full(iterations, np.nan)
-        swrs_c = np.full(iterations, np.nan)
-        runway_m_c = np.full(iterations, np.nan)
 
-        m_fi_t = np.full(iterations, np.nan)
-        nom_targ_t = np.full(iterations, np.nan)
-        term_w_t = np.full(iterations, np.nan)
-        term_w_nom_t = np.full(iterations, np.nan)
-        runway_m_t = np.zeros(iterations)
-        dds_t = np.full(iterations, np.nan)
-        lost_sav_t = np.zeros(iterations)
+        m_fi = np.full(iterations, np.nan)
+        nom_targ = np.full(iterations, np.nan)
+        term_w = np.full(iterations, np.nan)
+        term_w_nom = np.full(iterations, np.nan)
+        runway_m = np.zeros(iterations)
+        dds = np.full(iterations, np.nan)
+        lost_sav = np.zeros(iterations)
         p_infs = np.full(iterations, np.nan)
-        cagrs_t = np.full(iterations, np.nan)
-        swrs_t = np.full(iterations, np.nan)
+        cagrs = np.full(iterations, np.nan)
+        swrs = np.full(iterations, np.nan)
 
-        surv_count_c = 0
-        surv_count_t = 0
-        valid_decum_c = 0
-        valid_decum_t = 0
+        surv_count = 0
+        valid_decum = 0
         max_runway_possible = target_lifespan_months - current_age_m
 
         for j in range(iterations):
@@ -195,54 +148,32 @@ def _run_mc_simulations_numba(
             cum_inf = 1.0
             unemployment_months = 0
             path_peak_inf = inf_path  # Total State
-            w_t = pv
-            hit_m_t = -1
-            dec_w_t = 0.0
-            dec_nom_t = 0.0
-            peak_w_t = pv
-            max_dd_t = 0.0
-            path_ls_t = 0.0
-            surv_t = True
-            curr_wd_t = 0.0
-            init_rt_t = 0.0
-            swr_sum_t = 0.0
-            w_5y_t = 0.0
-            dec_w_t_init = 0.0
-            surv_m_t = 0
-
-            # CORE DUMMIES
-            w_c = pv
-            hit_m_c = -1
-            dec_w_c = 0.0
-            dec_nom_c = 0.0
-            peak_w_c = pv
-            max_dd_c = 0.0
-            path_ls_c = 0.0
-            surv_c = True
-            curr_wd_c = 0.0
-            init_rt_c = 0.0
-            swr_sum_c = 0.0
-            w_5y_c = 0.0
-            dec_w_c_init = 0.0
-            surv_m_c = 0
-            fv_c = 0.0
-            pmt_c = 0.0
-            burn_c = 0.0
-            r_w_c = pv
-            r_m_c = max_runway_possible
-            alv_c = pv > 0
-            if pv >= fv_t:
-                hit_m_t = 0
-                dec_w_t = pv
-                dec_w_t_init = pv
-                dec_nom_t = fv_t
-                curr_wd_t = (fv_t / swr / 12.0) if swr > 0 else 0.0
-                init_rt_t = 1.0 / swr if swr > 0 else 0.04
+            w = pv
+            hit_m = -1
+            dec_w = 0.0
+            dec_nom = 0.0
+            peak_w = pv
+            max_dd = 0.0
+            path_ls = 0.0
+            surv = True
+            curr_wd = 0.0
+            init_rt = 0.0
+            swr_sum = 0.0
+            w_5y = 0.0
+            dec_w_init = 0.0
+            surv_m = 0
+            if pv >= fv:
+                hit_m = 0
+                dec_w = pv
+                dec_w_init = pv
+                dec_nom = fv
+                curr_wd = (fv / swr / 12.0) if swr > 0 else 0.0
+                init_rt = 1.0 / swr if swr > 0 else 0.04
 
             # Runway States Embedded
-            r_w_t = pv
-            r_m_t = max_runway_possible
-            alv_t = pv > 0 and burn_t > 0
+            r_w = pv
+            r_m = max_runway_possible
+            alv = pv > 0 and burn > 0
 
             # --- Unified Trajectory Loop ---
             for m in range(1, max_runway_possible + 1):
@@ -296,18 +227,18 @@ def _run_mc_simulations_numba(
                 if is_unemployed:
                     unemployment_months -= 1
 
-                # === CORE ===
-                if hit_m_c == -1 and pv < fv_c:
+                # === TRAJECTORY LOOP ===
+                if hit_m == -1 and pv < fv:
                     if mean_r > 0.0001:
-                        num = fv_c + pmt_c / mean_r
-                        den = w_c + pmt_c / mean_r
+                        num = fv + pmt / mean_r
+                        den = w + pmt / mean_r
                         t_fi = (
                             int(np.ceil(np.log(num / den) / np.log(1.0 + mean_r)))
                             if (num > 0 and den > 0)
                             else max_months
                         )
                     else:
-                        t_fi = int(np.ceil((fv_c - w_c) / pmt_c)) if pmt_c > 0 else max_months
+                        t_fi = int(np.ceil((fv - w) / pmt)) if pmt > 0 else max_months
 
                     eq_w = gp_base_eq
                     if t_fi <= gp_derisk_start and t_fi >= 0:
@@ -326,32 +257,32 @@ def _run_mc_simulations_numba(
                         (s_vol * eq_w) ** 2 + ((gp_debt_vol / np.sqrt(12.0)) * (1.0 - eq_w)) ** 2
                     )
 
-                    path_ls_c = path_ls_c * (1.0 + mean_r)
-                    eff_pmt_c = -burn_c * (1.0 - hc_cov) if is_unemployed else pmt_c
+                    path_ls = path_ls * (1.0 + mean_r)
+                    eff_pmt = -burn * (1.0 - hc_cov) if is_unemployed else pmt
                     if is_unemployed:
-                        path_ls_c += pmt_c + burn_c * (1.0 - hc_cov)
+                        path_ls += pmt + burn * (1.0 - hc_cov)
 
                     ret = z_ret_eq * (p_vol / np.sqrt(2.0)) + p_drift
                     eff_jump = jump_eq * eq_w
-                    w_c = w_c * (1.0 + ret) * (1.0 + eff_jump) + eff_pmt_c
+                    w = w * (1.0 + ret) * (1.0 + eff_jump) + eff_pmt
 
-                    if w_c > peak_w_c:
-                        peak_w_c = w_c
-                    dd = (peak_w_c - w_c) / peak_w_c
-                    if dd > max_dd_c:
-                        max_dd_c = dd
+                    if w > peak_w:
+                        peak_w = w
+                    dd = (peak_w - w) / peak_w
+                    if dd > max_dd:
+                        max_dd = dd
 
-                    if w_c >= fv_c and m <= max_months:
-                        hit_m_c = m
-                        dec_w_c = w_c
-                        dec_w_c_init = w_c
-                        dec_nom_c = fv_c * cum_inf
-                        curr_wd_c = (fv_c / swr / 12.0) if swr > 0 else 0.0
-                        init_rt_c = 1.0 / swr if swr > 0 else 0.04
-                elif hit_m_c != -1 or pv >= fv_c:
-                    if surv_c:
-                        d = m - hit_m_c
-                        surv_m_c = d
+                    if w >= fv and m <= max_months:
+                        hit_m = m
+                        dec_w = w
+                        dec_w_init = w
+                        dec_nom = fv * cum_inf
+                        curr_wd = (fv / swr / 12.0) if swr > 0 else 0.0
+                        init_rt = 1.0 / swr if swr > 0 else 0.04
+                elif hit_m != -1 or pv >= fv:
+                    if surv:
+                        d = m - hit_m
+                        surv_m = d
                         if gp_rerisk_end > 0:
                             if d <= gp_rerisk_end:
                                 frac = d / float(gp_rerisk_end)
@@ -369,139 +300,37 @@ def _run_mc_simulations_numba(
                         )
 
                         if d > 0 and d % 12 == 0:
-                            curr_rt = (curr_wd_c * 12.0) / max(dec_w_c, 1.0)
-                            if curr_rt > (init_rt_c * gk_upper):
-                                curr_wd_c *= gk_cut
-                            elif curr_rt < (init_rt_c * gk_lower):
-                                curr_wd_c *= gk_raise
+                            curr_rt = (curr_wd * 12.0) / max(dec_w, 1.0)
+                            if curr_rt > (init_rt * gk_upper):
+                                curr_wd *= gk_cut
+                            elif curr_rt < (init_rt * gk_lower):
+                                curr_wd *= gk_raise
 
-                        swr_sum_c += curr_wd_c * 12.0
+                        swr_sum += curr_wd * 12.0
                         ret = z_ret_eq * (p_vol / np.sqrt(2.0)) + p_drift
                         eff_jump = jump_eq * eq_w
 
                         eff_ret = (1.0 + ret) * (1.0 + eff_jump)
                         if gp_dyn_debt and eff_ret < 1.0 and d <= sorr_months:
-                            dec_w_c = (dec_w_c - curr_wd_c) * eff_ret
+                            dec_w = (dec_w - curr_wd) * eff_ret
                         else:
-                            dec_w_c = dec_w_c * eff_ret - curr_wd_c
+                            dec_w = dec_w * eff_ret - curr_wd
 
-                        if dec_w_c > peak_w_c:
-                            peak_w_c = dec_w_c
-                        dd = (peak_w_c - dec_w_c) / peak_w_c
-                        if dd > max_dd_c:
-                            max_dd_c = dd
+                        if dec_w > peak_w:
+                            peak_w = dec_w
+                        dd = (peak_w - dec_w) / peak_w
+                        if dd > max_dd:
+                            max_dd = dd
 
                         if d == sorr_months:
-                            w_5y_c = dec_w_c
+                            w_5y = dec_w
 
-                        if dec_w_c <= 0.0:
-                            surv_c = False
-                            dec_w_c = 0.0
-
-                # === TOTAL ===
-                if hit_m_t == -1 and pv < fv_t:
-                    if mean_r > 0.0001:
-                        num = fv_t + pmt_t / mean_r
-                        den = w_t + pmt_t / mean_r
-                        t_fi = (
-                            int(np.ceil(np.log(num / den) / np.log(1.0 + mean_r)))
-                            if (num > 0 and den > 0)
-                            else max_months
-                        )
-                    else:
-                        t_fi = int(np.ceil((fv_t - w_t) / pmt_t)) if pmt_t > 0 else max_months
-
-                    eq_w = gp_base_eq
-                    if t_fi <= gp_derisk_start and t_fi >= 0:
-                        frac = (
-                            (gp_derisk_start - t_fi) / gp_derisk_start
-                            if gp_derisk_start > 0
-                            else 0.0
-                        )
-                        eq_w = gp_base_eq - frac * (gp_base_eq - gp_target_eq)
-                    elif t_fi < 0:
-                        eq_w = gp_target_eq
-
-                    debt_drift_m = (1.0 + gp_debt_ret - expense_drag) ** (1.0 / 12.0) - 1.0
-                    p_drift = (s_drift * eq_w) + (debt_drift_m * (1.0 - eq_w))
-                    p_vol = np.sqrt(
-                        (s_vol * eq_w) ** 2 + ((gp_debt_vol / np.sqrt(12.0)) * (1.0 - eq_w)) ** 2
-                    )
-
-                    path_ls_t = path_ls_t * (1.0 + mean_r)
-                    eff_pmt_t = -burn_t * (1.0 - hc_cov) if is_unemployed else pmt_t
-                    if is_unemployed:
-                        path_ls_t += pmt_t + burn_t * (1.0 - hc_cov)
-
-                    ret = z_ret_eq * (p_vol / np.sqrt(2.0)) + p_drift
-                    eff_jump = jump_eq * eq_w
-                    w_t = w_t * (1.0 + ret) * (1.0 + eff_jump) + eff_pmt_t
-
-                    if w_t > peak_w_t:
-                        peak_w_t = w_t
-                    dd = (peak_w_t - w_t) / peak_w_t
-                    if dd > max_dd_t:
-                        max_dd_t = dd
-
-                    if w_t >= fv_t and m <= max_months:
-                        hit_m_t = m
-                        dec_w_t = w_t
-                        dec_w_t_init = w_t
-                        dec_nom_t = fv_t * cum_inf
-                        curr_wd_t = (fv_t / swr / 12.0) if swr > 0 else 0.0
-                        init_rt_t = 1.0 / swr if swr > 0 else 0.04
-                elif hit_m_t != -1 or pv >= fv_t:
-                    if surv_t:
-                        d = m - hit_m_t
-                        surv_m_t = d
-                        if gp_rerisk_end > 0:
-                            if d <= gp_rerisk_end:
-                                frac = d / float(gp_rerisk_end)
-                                eq_w = gp_target_eq + frac * (gp_base_eq - gp_target_eq)
-                            else:
-                                eq_w = gp_base_eq
-                        else:
-                            eq_w = gp_target_eq
-
-                        debt_drift_m = (1.0 + gp_debt_ret - expense_drag) ** (1.0 / 12.0) - 1.0
-                        p_drift = (s_drift * eq_w) + (debt_drift_m * (1.0 - eq_w))
-                        p_vol = np.sqrt(
-                            (s_vol * eq_w) ** 2
-                            + ((gp_debt_vol / np.sqrt(12.0)) * (1.0 - eq_w)) ** 2
-                        )
-
-                        if d > 0 and d % 12 == 0:
-                            curr_rt = (curr_wd_t * 12.0) / max(dec_w_t, 1.0)
-                            if curr_rt > (init_rt_t * gk_upper):
-                                curr_wd_t *= gk_cut
-                            elif curr_rt < (init_rt_t * gk_lower):
-                                curr_wd_t *= gk_raise
-
-                        swr_sum_t += curr_wd_t * 12.0
-                        ret = z_ret_eq * (p_vol / np.sqrt(2.0)) + p_drift
-                        eff_jump = jump_eq * eq_w
-
-                        eff_ret = (1.0 + ret) * (1.0 + eff_jump)
-                        if gp_dyn_debt and eff_ret < 1.0 and d <= sorr_months:
-                            dec_w_t = (dec_w_t - curr_wd_t) * eff_ret
-                        else:
-                            dec_w_t = dec_w_t * eff_ret - curr_wd_t
-
-                        if dec_w_t > peak_w_t:
-                            peak_w_t = dec_w_t
-                        dd = (peak_w_t - dec_w_t) / peak_w_t
-                        if dd > max_dd_t:
-                            max_dd_t = dd
-
-                        if d == sorr_months:
-                            w_5y_t = dec_w_t
-
-                        if dec_w_t <= 0.0:
-                            surv_t = False
-                            dec_w_t = 0.0
+                        if dec_w <= 0.0:
+                            surv = False
+                            dec_w = 0.0
 
                 # === RUNWAY ===
-                if alv_c:
+                if alv:
                     eq_w_r = gp_target_eq
                     debt_drift_m = (1.0 + gp_debt_ret - expense_drag) ** (1.0 / 12.0) - 1.0
                     p_drift_r = (s_drift * eq_w_r) + (debt_drift_m * (1.0 - eq_w_r))
@@ -509,240 +338,120 @@ def _run_mc_simulations_numba(
                         (s_vol * eq_w_r) ** 2
                         + ((gp_debt_vol / np.sqrt(12.0)) * (1.0 - eq_w_r)) ** 2
                     )
-                    ret_r_c = z_ret_r * (p_vol_r / np.sqrt(2.0)) + p_drift_r
-                    eff_jump_r_c = jump_r * eq_w_r
-                    r_w_c = r_w_c * (1.0 + ret_r_c) * (1.0 + eff_jump_r_c) - burn_c
-                    if r_w_c <= 0.0:
-                        r_m_c = m
-                        alv_c = False
+                    ret_r = z_ret_r * (p_vol_r / np.sqrt(2.0)) + p_drift_r
+                    eff_jump_r = jump_r * eq_w_r
+                    r_w = r_w * (1.0 + ret_r) * (1.0 + eff_jump_r) - burn
+                    if r_w <= 0.0:
+                        r_m = m
+                        alv = False
 
-                if alv_t:
-                    eq_w_r = gp_target_eq
-                    debt_drift_m = (1.0 + gp_debt_ret - expense_drag) ** (1.0 / 12.0) - 1.0
-                    p_drift_r = (s_drift * eq_w_r) + (debt_drift_m * (1.0 - eq_w_r))
-                    p_vol_r = np.sqrt(
-                        (s_vol * eq_w_r) ** 2
-                        + ((gp_debt_vol / np.sqrt(12.0)) * (1.0 - eq_w_r)) ** 2
-                    )
-                    ret_r_t = z_ret_r * (p_vol_r / np.sqrt(2.0)) + p_drift_r
-                    eff_jump_r_t = jump_r * eq_w_r
-                    r_w_t = r_w_t * (1.0 + ret_r_t) * (1.0 + eff_jump_r_t) - burn_t
-                    if r_w_t <= 0.0:
-                        r_m_t = m
-                        alv_t = False
+            # Store iteration metrics
+            if hit_m != -1 and hit_m <= max_months:
+                m_fi[j] = hit_m
+                nom_targ[j] = dec_nom
+                valid_decum += 1
+                months_decum = max_runway_possible - hit_m
 
-            # Store iteration metrics for CORE
-            if hit_m_c != -1 and hit_m_c <= max_months:
-                m_fi_c[j] = hit_m_c
-                nom_targ_c[j] = dec_nom_c
-                valid_decum_c += 1
-                months_decum_c = max_runway_possible - hit_m_c
-
-                term_w_c[j] = dec_w_c
-                term_w_nom_c[j] = dec_w_c * cum_inf
-                if months_decum_c > 0:
-                    # NOTE (survivor bias): swrs_c[j] = nan for failed paths (see line ~514),
-                    # so out_avg_swr_p50_c is computed only over paths where the portfolio
+                term_w[j] = dec_w
+                term_w_nom[j] = dec_w * cum_inf
+                if months_decum > 0:
+                    # NOTE (survivor bias): swrs[j] = nan for failed paths (see line ~548),
+                    # so out_avg_swr_p50 is computed only over paths where the portfolio
                     # survived to end-of-horizon — it overstates withdrawal sustainability.
-                    swrs_c[j] = (
-                        (swr_sum_c / surv_m_c) / dec_w_c_init
-                        if surv_m_c > 0 and dec_w_c_init > 0
+                    swrs[j] = (
+                        (swr_sum / surv_m) / dec_w_init
+                        if surv_m > 0 and dec_w_init > 0
                         else 0.0
                     )
-                    if months_decum_c >= sorr_months:
-                        if w_5y_c > 0.0:
-                            cagrs_c[j] = (w_5y_c / dec_w_c_init) ** (12.0 / sorr_months) - 1.0
+                    if months_decum >= sorr_months:
+                        if w_5y > 0.0:
+                            cagrs[j] = (w_5y / dec_w_init) ** (12.0 / sorr_months) - 1.0
                         else:
-                            cagrs_c[j] = -1.0
+                            cagrs[j] = -1.0
                     else:
-                        cagrs_c[j] = (dec_w_c / dec_w_c_init) ** (12.0 / months_decum_c) - 1.0
+                        cagrs[j] = (dec_w / dec_w_init) ** (12.0 / months_decum) - 1.0
                 else:
-                    swrs_c[j] = 1.0 / swr if swr > 0 else 0.04
-                    cagrs_c[j] = 0.0
-                if surv_c:
-                    surv_count_c += 1
+                    swrs[j] = 1.0 / swr if swr > 0 else 0.04
+                    cagrs[j] = 0.0
+                if surv:
+                    surv_count += 1
             else:
-                m_fi_c[j] = np.nan
-                nom_targ_c[j] = np.nan
-                term_w_c[j] = w_c
-                term_w_nom_c[j] = w_c * cum_inf
-                swrs_c[j] = np.nan
-                cagrs_c[j] = np.nan
+                m_fi[j] = np.nan
+                nom_targ[j] = np.nan
+                term_w[j] = w
+                term_w_nom[j] = w * cum_inf
+                swrs[j] = np.nan
+                cagrs[j] = np.nan
 
-            dds_c[j] = max_dd_c
-            lost_sav_c[j] = path_ls_c
-
-            # Store iteration metrics for TOTAL
-            if hit_m_t != -1 and hit_m_t <= max_months:
-                m_fi_t[j] = hit_m_t
-                nom_targ_t[j] = dec_nom_t
-                valid_decum_t += 1
-                months_decum_t = max_runway_possible - hit_m_t
-
-                term_w_t[j] = dec_w_t
-                term_w_nom_t[j] = dec_w_t * cum_inf
-                if months_decum_t > 0:
-                    # NOTE (survivor bias): swrs_t[j] = nan for failed paths (see line ~548),
-                    # so out_avg_swr_p50_t is computed only over paths where the portfolio
-                    # survived to end-of-horizon — it overstates withdrawal sustainability.
-                    swrs_t[j] = (
-                        (swr_sum_t / surv_m_t) / dec_w_t_init
-                        if surv_m_t > 0 and dec_w_t_init > 0
-                        else 0.0
-                    )
-                    if months_decum_t >= sorr_months:
-                        if w_5y_t > 0.0:
-                            cagrs_t[j] = (w_5y_t / dec_w_t_init) ** (12.0 / sorr_months) - 1.0
-                        else:
-                            cagrs_t[j] = -1.0
-                    else:
-                        cagrs_t[j] = (dec_w_t / dec_w_t_init) ** (12.0 / months_decum_t) - 1.0
-                else:
-                    swrs_t[j] = 1.0 / swr if swr > 0 else 0.04
-                    cagrs_t[j] = 0.0
-                if surv_t:
-                    surv_count_t += 1
-            else:
-                m_fi_t[j] = np.nan
-                nom_targ_t[j] = np.nan
-                term_w_t[j] = w_t
-                term_w_nom_t[j] = w_t * cum_inf
-                swrs_t[j] = np.nan
-                cagrs_t[j] = np.nan
-
-            dds_t[j] = max_dd_t
-            lost_sav_t[j] = path_ls_t
+            dds[j] = max_dd
+            lost_sav[j] = path_ls
 
             p_infs[j] = path_peak_inf
+            runway_m[j] = r_m
 
-            runway_m_c[j] = r_m_c
-            runway_m_t[j] = r_m_t
-
-        # --- Aggregation CORE ---
-        v_m_c = m_fi_c[~np.isnan(m_fi_c)]
-        v_nom_c = nom_targ_c[~np.isnan(nom_targ_c)]
-        if len(v_m_c) > 0:
-            out_p90_c[i] = np.percentile(v_m_c, 90.0)
-            out_p50_c[i] = np.percentile(v_m_c, 50.0)
-            out_p10_c[i] = np.percentile(v_m_c, 10.0)
-            out_nom_p50_c[i] = np.percentile(v_nom_c, 50.0)
+        # --- Aggregation ---
+        v_m = m_fi[~np.isnan(m_fi)]
+        v_nom = nom_targ[~np.isnan(nom_targ)]
+        if len(v_m) > 0:
+            out_p90[i] = np.percentile(v_m, 90.0)
+            out_p50[i] = np.percentile(v_m, 50.0)
+            out_p10[i] = np.percentile(v_m, 10.0)
+            out_nom_p50[i] = np.percentile(v_nom, 50.0)
 
         # Independent Metrics (Runway, Terminal Wealth, Drawdown, Lost Savings, Inflation)
-        out_runway_p90_c[i] = np.percentile(runway_m_c, 90.0)
-        out_runway_p50_c[i] = np.percentile(runway_m_c, 50.0)
-        out_runway_p10_c[i] = np.percentile(runway_m_c, 10.0)
+        out_runway_p90[i] = np.percentile(runway_m, 90.0)
+        out_runway_p50[i] = np.percentile(runway_m, 50.0)
+        out_runway_p10[i] = np.percentile(runway_m, 10.0)
 
-        v_term_c = term_w_c[~np.isnan(term_w_c)]
-        if len(v_term_c) > 0:
-            out_terminal_wealth_p50_c[i] = np.percentile(v_term_c, 50.0)
-            out_terminal_wealth_p10_c[i] = np.percentile(v_term_c, 10.0)
+        v_term = term_w[~np.isnan(term_w)]
+        if len(v_term) > 0:
+            out_terminal_wealth_p50[i] = np.percentile(v_term, 50.0)
+            out_terminal_wealth_p10[i] = np.percentile(v_term, 10.0)
 
-        v_term_nom_c = term_w_nom_c[~np.isnan(term_w_nom_c)]
-        if len(v_term_nom_c) > 0:
-            out_terminal_wealth_nom_p50_c[i] = np.percentile(v_term_nom_c, 50.0)
+        v_term_nom = term_w_nom[~np.isnan(term_w_nom)]
+        if len(v_term_nom) > 0:
+            out_terminal_wealth_nom_p50[i] = np.percentile(v_term_nom, 50.0)
 
-        v_dd_c = dds_c[~np.isnan(dds_c)]
-        if len(v_dd_c) > 0:
-            out_max_drawdown_p50_c[i] = np.percentile(v_dd_c, 50.0)
+        v_dd = dds[~np.isnan(dds)]
+        if len(v_dd) > 0:
+            out_max_drawdown_p50[i] = np.percentile(v_dd, 50.0)
 
-        v_ls_c = lost_sav_c[~np.isnan(lost_sav_c)]
-        if len(v_ls_c) > 0:
-            out_lost_savings_ev_c[i] = np.mean(v_ls_c)
+        v_ls = lost_sav[~np.isnan(lost_sav)]
+        if len(v_ls) > 0:
+            out_lost_savings_ev[i] = np.mean(v_ls)
 
-        v_pi_c = p_infs[~np.isnan(p_infs)]
-        if len(v_pi_c) > 0:
-            out_peak_inf_p50_c[i] = np.percentile(v_pi_c, 50.0)
+        v_pi = p_infs[~np.isnan(p_infs)]
+        if len(v_pi) > 0:
+            out_peak_inf_p50[i] = np.percentile(v_pi, 50.0)
 
-        if valid_decum_c > 0:
-            prob_success_c[i] = surv_count_c / valid_decum_c
-            v_sorr_c = cagrs_c[~np.isnan(cagrs_c)]
-            if len(v_sorr_c) > 0:
-                out_sorr_cagr_p10_c[i] = np.percentile(v_sorr_c, 10.0)
-            v_swr_c = swrs_c[~np.isnan(swrs_c)]
-            if len(v_swr_c) > 0:
-                out_avg_swr_p50_c[i] = np.percentile(v_swr_c, 50.0)
+        if valid_decum > 0:
+            prob_success[i] = surv_count / valid_decum
+            v_sorr = cagrs[~np.isnan(cagrs)]
+            if len(v_sorr) > 0:
+                out_sorr_cagr_p10[i] = np.percentile(v_sorr, 10.0)
+            v_swr = swrs[~np.isnan(swrs)]
+            if len(v_swr) > 0:
+                out_avg_swr_p50[i] = np.percentile(v_swr, 50.0)
         else:
-            prob_success_c[i] = 0.0
-
-        # --- Aggregation TOTAL ---
-        v_m_t = m_fi_t[~np.isnan(m_fi_t)]
-        v_nom_t = nom_targ_t[~np.isnan(nom_targ_t)]
-        if len(v_m_t) > 0:
-            out_p90_t[i] = np.percentile(v_m_t, 90.0)
-            out_p50_t[i] = np.percentile(v_m_t, 50.0)
-            out_p10_t[i] = np.percentile(v_m_t, 10.0)
-            out_nom_p50_t[i] = np.percentile(v_nom_t, 50.0)
-
-        # Independent Metrics (Runway, Terminal Wealth, Drawdown, Lost Savings, Inflation)
-        out_runway_p90_t[i] = np.percentile(runway_m_t, 90.0)
-        out_runway_p50_t[i] = np.percentile(runway_m_t, 50.0)
-        out_runway_p10_t[i] = np.percentile(runway_m_t, 10.0)
-
-        v_term_t = term_w_t[~np.isnan(term_w_t)]
-        if len(v_term_t) > 0:
-            out_terminal_wealth_p50_t[i] = np.percentile(v_term_t, 50.0)
-            out_terminal_wealth_p10_t[i] = np.percentile(v_term_t, 10.0)
-
-        v_term_nom_t = term_w_nom_t[~np.isnan(term_w_nom_t)]
-        if len(v_term_nom_t) > 0:
-            out_terminal_wealth_nom_p50_t[i] = np.percentile(v_term_nom_t, 50.0)
-
-        v_dd_t = dds_t[~np.isnan(dds_t)]
-        if len(v_dd_t) > 0:
-            out_max_drawdown_p50_t[i] = np.percentile(v_dd_t, 50.0)
-
-        v_ls_t = lost_sav_t[~np.isnan(lost_sav_t)]
-        if len(v_ls_t) > 0:
-            out_lost_savings_ev_t[i] = np.mean(v_ls_t)
-
-        v_pi_t = p_infs[~np.isnan(p_infs)]
-        if len(v_pi_t) > 0:
-            out_peak_inf_p50_t[i] = np.percentile(v_pi_t, 50.0)
-
-        if valid_decum_t > 0:
-            prob_success_t[i] = surv_count_t / valid_decum_t
-            v_sorr_t = cagrs_t[~np.isnan(cagrs_t)]
-            if len(v_sorr_t) > 0:
-                out_sorr_cagr_p10_t[i] = np.percentile(v_sorr_t, 10.0)
-            v_swr_t = swrs_t[~np.isnan(swrs_t)]
-            if len(v_swr_t) > 0:
-                out_avg_swr_p50_t[i] = np.percentile(v_swr_t, 50.0)
-        else:
-            prob_success_t[i] = 0.0
+            prob_success[i] = 0.0
 
     return (
-        out_p90_c,
-        out_p50_c,
-        out_p10_c,
-        prob_success_c,
-        out_nom_p50_c,
-        out_runway_p90_c,
-        out_runway_p50_c,
-        out_runway_p10_c,
-        out_terminal_wealth_p50_c,
-        out_terminal_wealth_p10_c,
-        out_max_drawdown_p50_c,
-        out_lost_savings_ev_c,
-        out_peak_inf_p50_c,
-        out_sorr_cagr_p10_c,
-        out_avg_swr_p50_c,
-        out_terminal_wealth_nom_p50_c,
-        out_p90_t,
-        out_p50_t,
-        out_p10_t,
-        prob_success_t,
-        out_nom_p50_t,
-        out_runway_p90_t,
-        out_runway_p50_t,
-        out_runway_p10_t,
-        out_terminal_wealth_p50_t,
-        out_terminal_wealth_p10_t,
-        out_max_drawdown_p50_t,
-        out_lost_savings_ev_t,
-        out_peak_inf_p50_t,
-        out_sorr_cagr_p10_t,
-        out_avg_swr_p50_t,
-        out_terminal_wealth_nom_p50_t,
+        out_p90,
+        out_p50,
+        out_p10,
+        prob_success,
+        out_nom_p50,
+        out_runway_p90,
+        out_runway_p50,
+        out_runway_p10,
+        out_terminal_wealth_p50,
+        out_terminal_wealth_p10,
+        out_max_drawdown_p50,
+        out_lost_savings_ev,
+        out_peak_inf_p50,
+        out_sorr_cagr_p10,
+        out_avg_swr_p50,
+        out_terminal_wealth_nom_p50,
     )
 
 
@@ -752,9 +461,9 @@ def get_monte_carlo_fire_batch(
     def monte_carlo_fire_batch(s: pl.Series, **kwargs: Any) -> pl.Series:
         df = s.struct.unnest()
         pv = df["Total_Net_Worth_Market_Af_Tax"].to_numpy().astype(float)
-        pmt_t = df["Trailing_12M_Avg_Total_Savings"].to_numpy().astype(float)
-        fv_t = df["Target_FI_Today_Total"].to_numpy().astype(float)
-        burn_t = df["Trailing_12M_Avg_Total_Spend"].to_numpy().astype(float)
+        pmt = df["Trailing_12M_Avg_Total_Savings"].to_numpy().astype(float)
+        fv = df["Target_FI_Today_Total"].to_numpy().astype(float)
+        burn = df["Trailing_12M_Avg_Total_Spend"].to_numpy().astype(float)
 
         inf_rates = df["INFLATION_YOY_PCT"].to_numpy().astype(float)
         seed_ints = df["Seed_Int"].to_numpy().astype(np.int32)
@@ -816,9 +525,9 @@ def get_monte_carlo_fire_batch(
 
         res = _run_mc_simulations_numba(
             pv,
-            pmt_t,
-            fv_t,
-            burn_t,
+            pmt,
+            fv,
+            burn,
             inf_rates,
             seed_ints,
             gens,
@@ -860,16 +569,16 @@ def get_monte_carlo_fire_batch(
 
         df_out = pl.DataFrame(
             {
-                "Months_To_FI_Conservative_P90": res[16],
-                "Months_To_FI_Base_P50": res[17],
-                "Months_To_FI_Aggressive_P10": res[18],
-                "Probability_Of_Success_Pct": res[19],
+                "Months_To_FI_Conservative_P90": res[0],
+                "Months_To_FI_Base_P50": res[1],
+                "Months_To_FI_Aggressive_P10": res[2],
+                "Probability_Of_Success_Pct": res[3],
                 "Target_FI_Future_Nominal_P50": np.where(
-                    np.isnan(res[20]) | (res[20] == 0), np.nan, res[20]
+                    np.isnan(res[4]) | (res[4] == 0), np.nan, res[4]
                 ),
-                "Runway_Months_Stressed_P10": res[23],
-                "Runway_Months_Base_P50": res[22],
-                "Terminal_Wealth_Nominal_P50": res[31],
+                "Runway_Months_Stressed_P10": res[7],
+                "Runway_Months_Base_P50": res[6],
+                "Terminal_Wealth_Nominal_P50": res[15],
             }
         )
         return df_out.to_struct("")

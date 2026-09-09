@@ -221,9 +221,6 @@ class NetWorthBuilder:
                 pl.col("Closing_Balance").alias("Closing_Balance_Market")
             )
 
-        lf_nw_summary = lf_nw_summary.with_columns(
-        )
-
         lf_monthly_totals = (
             lf_nw_summary.group_by(["MONTH_START_DATE", "MONTH_END_DATE"])
             .agg(
@@ -273,8 +270,10 @@ class NetWorthBuilder:
                 .select(
                     [
                         "MONTH_END_DATE",
-                        pl.col("Total_Current_Value").alias("Port_Market_Value"),
-                        pl.col("Total_Invested_Value").alias("Port_Book_Value"),
+                        pl.col("Total_Current_Value").alias("Closing_Investment_Market_Value"),
+                        pl.col("Total_Invested_Value").alias("Closing_Investment_Book_Value"),
+                        pl.col("XIRR").alias("Closing_Investment_XIRR"),
+                        pl.col("Unrealized_Gain").alias("Closing_Unrealized_Gain"),
                     ]
                 )
             )
@@ -286,51 +285,95 @@ class NetWorthBuilder:
                     how="left",
                 )
                 .with_columns(
-                    pl.col("Port_Market_Value").fill_null(0.0),
-                    pl.col("Port_Book_Value").fill_null(0.0),
+                    pl.col("Closing_Investment_Market_Value").fill_null(0.0),
+                    pl.col("Closing_Investment_Book_Value").fill_null(0.0),
+                    pl.col("Closing_Investment_XIRR").fill_null(0.0),
+                    pl.col("Closing_Unrealized_Gain").fill_null(0.0),
                 )
                 .with_columns(
-                    pl.when(pl.col("Port_Book_Value") > 0)
+                    pl.when(pl.col("Closing_Investment_Book_Value") > 0)
                     .then(
                         pl.col("Total_Assets")
-                        - pl.col("Port_Book_Value")
-                        + pl.col("Port_Market_Value")
+                        - pl.col("Closing_Investment_Book_Value")
+                        + pl.col("Closing_Investment_Market_Value")
                     )
                     .otherwise(pl.col("Total_Assets"))
                     .alias("Total_Assets_Market"),
-                    pl.when(pl.col("Port_Book_Value") > 0)
+                    pl.when(pl.col("Closing_Investment_Book_Value") > 0)
                     .then(
                         pl.col("Total_Net_Worth")
-                        - pl.col("Port_Book_Value")
-                        + pl.col("Port_Market_Value")
+                        - pl.col("Closing_Investment_Book_Value")
+                        + pl.col("Closing_Investment_Market_Value")
                     )
                     .otherwise(pl.col("Total_Net_Worth"))
                     .alias("Total_Net_Worth_Market"),
-                    pl.when(pl.col("Port_Book_Value") > 0)
+                    pl.when(pl.col("Closing_Investment_Book_Value") > 0)
                     .then(
                         pl.col("Liquid_Assets")
-                        - pl.col("Port_Book_Value")
-                        + pl.col("Port_Market_Value")
+                        - pl.col("Closing_Investment_Book_Value")
+                        + pl.col("Closing_Investment_Market_Value")
                     )
                     .otherwise(pl.col("Liquid_Assets"))
                     .alias("Liquid_Assets_Market"),
                 )
-                .drop(["Port_Market_Value", "Port_Book_Value"])
             )
         else:
             lf_monthly_totals = lf_monthly_totals.with_columns(
                 pl.col("Total_Assets").alias("Total_Assets_Market"),
                 pl.col("Total_Net_Worth").alias("Total_Net_Worth_Market"),
                 pl.col("Liquid_Assets").alias("Liquid_Assets_Market"),
+                pl.lit(0.0).alias("Closing_Investment_Market_Value"),
+                pl.lit(0.0).alias("Closing_Investment_Book_Value"),
+                pl.lit(0.0).alias("Closing_Investment_XIRR"),
+                pl.lit(0.0).alias("Closing_Unrealized_Gain"),
             )
 
         lf_monthly_totals = (
             lf_monthly_totals.sort("MONTH_START_DATE")
+            .with_columns(
+                pl.col("Total_Assets").shift(1).fill_null(0.0).alias("Opening_Balance_Asset"),
+                pl.col("Total_Assets_Market")
+                .shift(1)
+                .fill_null(0.0)
+                .alias("Opening_Balance_Asset_Market"),
+                pl.col("Closing_Investment_Book_Value")
+                .shift(1)
+                .fill_null(0.0)
+                .alias("Opening_Investment_Book_Value"),
+                pl.col("Closing_Investment_Market_Value")
+                .shift(1)
+                .fill_null(0.0)
+                .alias("Opening_Investment_Market_Value"),
+                pl.col("Closing_Investment_XIRR")
+                .shift(1)
+                .fill_null(0.0)
+                .alias("Opening_Investment_XIRR"),
+                pl.col("Closing_Unrealized_Gain")
+                .shift(1)
+                .fill_null(0.0)
+                .alias("Opening_Unrealized_Gain"),
+            )
+            .with_columns(
+                pl.col("Total_Assets").alias("Closing_Balance_Asset"),
+                pl.col("Total_Assets_Market").alias("Closing_Balance_Asset_Market"),
+                (pl.col("Total_Assets") - pl.col("Opening_Balance_Asset")).alias("Asset_Delta"),
+                (pl.col("Total_Assets_Market") - pl.col("Opening_Balance_Asset_Market")).alias(
+                    "Asset_Market_Delta"
+                ),
+                (
+                    pl.col("Closing_Investment_Book_Value")
+                    - pl.col("Opening_Investment_Book_Value")
+                ).alias("Investment_Book_Value_Delta"),
+                (
+                    pl.col("Closing_Investment_Market_Value")
+                    - pl.col("Opening_Investment_Market_Value")
+                ).alias("Investment_Market_Value_Delta"),
+            )
         )
-        
+
         lf_monthly_totals = lf_monthly_totals.join(
             self.inflation_res["lf_inflation"], on="MONTH_START_DATE", how="left"
-        )
+        ).drop("Total_Liabilities_Negative", strict=False)
 
         return {
             "lf_nw_summary": lf_nw_summary.drop("Is_Liquid"),
