@@ -116,6 +116,8 @@ class PostProcessor:
                         set(
                             group_cols
                             + [
+                                "ISIN",
+                                "Quantity",
                                 "Buy_Value",
                                 "Close_Value",
                                 "Unrealized_Gain",
@@ -131,6 +133,8 @@ class PostProcessor:
                 .agg(
                     pl.col("Buy_Value").sum().alias("Total_Invested_Value"),
                     pl.col("Close_Value").sum().alias("Total_Current_Value"),
+                    pl.col("Quantity").sum().alias("Total_Quantity"),
+                    pl.col("ISIN").n_unique().alias("Total_Stocks"),
                     pl.col("Unrealized_Gain").sum().alias("Unrealized_Gain"),
                     pl.col("Unrealized_Loss").sum().alias("Unrealized_Loss"),
                     pl.col("FY_Realized_Gain").sum().alias("FY_Realized_Gain"),

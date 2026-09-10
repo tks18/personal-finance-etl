@@ -304,6 +304,8 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_ISIN (
     -- Position Values
     Total_Invested_Value DOUBLE,
     Total_Current_Value DOUBLE,
+    Total_Quantity DOUBLE,
+    Total_Stocks DOUBLE,
     Unrealized_PL DOUBLE,
     Absolute_Return DOUBLE,
     Weight DOUBLE,
@@ -344,6 +346,8 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_Subtype (
     -- Position Values
     Total_Invested_Value DOUBLE,
     Total_Current_Value DOUBLE,
+    Total_Quantity DOUBLE,
+    Total_Stocks DOUBLE,
     Unrealized_PL DOUBLE,
     Absolute_Return DOUBLE,
     Weight DOUBLE,
@@ -369,6 +373,8 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_Class (
     -- Position Values
     Total_Invested_Value DOUBLE,
     Total_Current_Value DOUBLE,
+    Total_Quantity DOUBLE,
+    Total_Stocks DOUBLE,
     Unrealized_PL DOUBLE,
     Absolute_Return DOUBLE,
     Weight DOUBLE,
@@ -394,6 +400,8 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_Instrument_Type (
     -- Position Values
     Total_Invested_Value DOUBLE,
     Total_Current_Value DOUBLE,
+    Total_Quantity DOUBLE,
+    Total_Stocks DOUBLE,
     Unrealized_PL DOUBLE,
     Absolute_Return DOUBLE,
     Weight DOUBLE,
@@ -419,6 +427,8 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_Sector (
     -- Position Values
     Total_Invested_Value DOUBLE,
     Total_Current_Value DOUBLE,
+    Total_Quantity DOUBLE,
+    Total_Stocks DOUBLE,
     Unrealized_PL DOUBLE,
     Absolute_Return DOUBLE,
     Weight DOUBLE,
@@ -444,6 +454,8 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_Industry (
     -- Position Values
     Total_Invested_Value DOUBLE,
     Total_Current_Value DOUBLE,
+    Total_Quantity DOUBLE,
+    Total_Stocks DOUBLE,
     Unrealized_PL DOUBLE,
     Absolute_Return DOUBLE,
     Weight DOUBLE,
@@ -468,6 +480,8 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_Portfolio (
     -- Position Values
     Total_Invested_Value DOUBLE,
     Total_Current_Value DOUBLE,
+    Total_Quantity DOUBLE,
+    Total_Stocks DOUBLE,
     Unrealized_PL DOUBLE,
     Absolute_Return DOUBLE,
     Weight DOUBLE,
