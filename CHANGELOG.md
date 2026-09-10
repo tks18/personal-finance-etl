@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [5.6.0](https://github.com/tks18/personal-finance-etl/compare/5.5.0...5.6.0) (2026-09-10)
+
+
+### Bug Fixes 🛠
+
+* fix sort bug due to which month elapsed was wrong ([2a355e5](https://github.com/tks18/personal-finance-etl/commit/2a355e517a1587a4e04ecbbc6134ec99df762334))
+
+
+### Features 🔥
+
+* **db/gold:** add two cols to investment tables: total stocks and total quantity for agg tables ([9144111](https://github.com/tks18/personal-finance-etl/commit/9144111187f6491913986134a7656957ce36df3f))
+
 ## [5.5.0](https://github.com/tks18/personal-finance-etl/compare/5.4.0...5.5.0) (2026-09-10)
 
 
