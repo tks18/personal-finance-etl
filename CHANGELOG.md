@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [5.5.0](https://github.com/tks18/personal-finance-etl/compare/5.4.0...5.5.0) (2026-09-10)
+
+
+### Features 🔥
+
+* **db/gold:** add two essential columns related to investments ([83c763b](https://github.com/tks18/personal-finance-etl/commit/83c763b6e97328b6b38f0b02c2abd6274cbeb20a))
+
 ## [5.4.0](https://github.com/tks18/personal-finance-etl/compare/5.3.0...5.4.0) (2026-09-09)
 
 
