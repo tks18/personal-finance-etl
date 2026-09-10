@@ -63,8 +63,8 @@ CREATE TABLE IF NOT EXISTS gold.Core_Monthly_Fact (
     -- Investment Performance
     Opening_Investment_XIRR DOUBLE,
     Closing_Investment_XIRR DOUBLE,
-    Opening_Unrealized_Gain DOUBLE,
-    Closing_Unrealized_Gain DOUBLE,
+    Opening_Unrealized_PL DOUBLE,
+    Closing_Unrealized_PL DOUBLE,
     -- Liabilities & Wealth
     Liquid_Assets DOUBLE,
     Liquid_Assets_Market DOUBLE,
@@ -264,6 +264,7 @@ CREATE TABLE IF NOT EXISTS gold.Cashflow_Efficiency_Analytics (
     -- Investments
     Total_Investment_Deployed DOUBLE,
     Total_Investment_Redeemed DOUBLE,
+    Redemption_Gain_Loss_Value DOUBLE,
     Net_Investment_Flow DOUBLE,
     -- Surplus & rates
     Gross_Surplus DOUBLE,

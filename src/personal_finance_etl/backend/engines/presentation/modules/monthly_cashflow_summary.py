@@ -322,6 +322,7 @@ class MonthlyCashflowSummaryBuilder:
                 # Investments
                 "Total_Investment_Deployed",
                 "Total_Investment_Redeemed",
+                "Redemption_Gain_Loss_Value",
                 "Net_Investment_Flow",
                 # Surplus & rates
                 "Gross_Surplus",

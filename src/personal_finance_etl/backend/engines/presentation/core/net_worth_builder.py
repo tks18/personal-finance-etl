@@ -273,7 +273,7 @@ class NetWorthBuilder:
                         pl.col("Total_Current_Value").alias("Closing_Investment_Market_Value"),
                         pl.col("Total_Invested_Value").alias("Closing_Investment_Book_Value"),
                         pl.col("XIRR").alias("Closing_Investment_XIRR"),
-                        pl.col("Unrealized_Gain").alias("Closing_Unrealized_Gain"),
+                        pl.col("Unrealized_PL").alias("Closing_Unrealized_PL"),
                     ]
                 )
             )
@@ -288,7 +288,7 @@ class NetWorthBuilder:
                     pl.col("Closing_Investment_Market_Value").fill_null(0.0),
                     pl.col("Closing_Investment_Book_Value").fill_null(0.0),
                     pl.col("Closing_Investment_XIRR").fill_null(0.0),
-                    pl.col("Closing_Unrealized_Gain").fill_null(0.0),
+                    pl.col("Closing_Unrealized_PL").fill_null(0.0),
                 )
                 .with_columns(
                     pl.when(pl.col("Closing_Investment_Book_Value") > 0)
@@ -325,7 +325,7 @@ class NetWorthBuilder:
                 pl.lit(0.0).alias("Closing_Investment_Market_Value"),
                 pl.lit(0.0).alias("Closing_Investment_Book_Value"),
                 pl.lit(0.0).alias("Closing_Investment_XIRR"),
-                pl.lit(0.0).alias("Closing_Unrealized_Gain"),
+                pl.lit(0.0).alias("Closing_Unrealized_PL"),
             )
 
         lf_monthly_totals = (
@@ -348,10 +348,10 @@ class NetWorthBuilder:
                 .shift(1)
                 .fill_null(0.0)
                 .alias("Opening_Investment_XIRR"),
-                pl.col("Closing_Unrealized_Gain")
+                pl.col("Closing_Unrealized_PL")
                 .shift(1)
                 .fill_null(0.0)
-                .alias("Opening_Unrealized_Gain"),
+                .alias("Opening_Unrealized_PL"),
             )
             .with_columns(
                 pl.col("Total_Assets").alias("Closing_Balance_Asset"),
