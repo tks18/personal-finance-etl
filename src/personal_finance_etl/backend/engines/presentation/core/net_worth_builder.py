@@ -248,6 +248,9 @@ class NetWorthBuilder:
                 (pl.col("Total_Assets") + pl.col("Total_Liabilities_Negative")).alias(
                     "Total_Net_Worth"
                 ),
+            )
+            .sort("MONTH_START_DATE")
+            .with_columns(
                 pl.col("MONTH_START_DATE").cum_count().alias("Months_Elapsed"),
             )
         )
