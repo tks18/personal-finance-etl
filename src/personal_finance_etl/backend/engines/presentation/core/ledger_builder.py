@@ -51,6 +51,7 @@ class LedgerBuilder:
             ]
         )
 
+        d_asset_subcat = self.dfs.get("df_d_asset_subcategory")
         lf_exp_agg = ensure_date_col(lf_exp, "DATE").select(
             [
                 pl.col("ASSET_ID").alias("ASSET_SUBCATEGORY_ID"),
@@ -60,6 +61,20 @@ class LedgerBuilder:
                 pl.col("Is_Core_Expense"),
             ]
         )
+        if d_asset_subcat is not None:
+            lf_asset_subcat = (
+                d_asset_subcat.lazy()
+                if isinstance(d_asset_subcat, pl.DataFrame)
+                else d_asset_subcat
+            )
+            lf_exp_agg = lf_exp_agg.join(
+                lf_asset_subcat.select(["UID", "is_non_cash_pnl"]),
+                left_on="ASSET_SUBCATEGORY_ID",
+                right_on="UID",
+                how="left",
+            ).with_columns(pl.col("is_non_cash_pnl").fill_null(False))
+        else:
+            lf_exp_agg = lf_exp_agg.with_columns(pl.lit(False).alias("is_non_cash_pnl"))
 
         d_exp_subcat = self.dfs.get("df_d_expense_subcategory")
         d_exp_cat = self.dfs.get("df_d_expense_category")
@@ -104,7 +119,15 @@ class LedgerBuilder:
                 lf_inc_agg.rename({"INCOME": "AMOUNT"}).with_columns(
                     pl.lit("INCOME").alias("TYPE")
                 ),
-                lf_exp_agg.select(["ASSET_SUBCATEGORY_ID", "EXPENSE", "DATE", "Is_Core_Expense"])
+                lf_exp_agg.select(
+                    [
+                        "ASSET_SUBCATEGORY_ID",
+                        "EXPENSE",
+                        "DATE",
+                        "Is_Core_Expense",
+                        "is_non_cash_pnl",
+                    ]
+                )
                 .rename({"EXPENSE": "AMOUNT"})
                 .with_columns(pl.lit("EXPENSE").alias("TYPE")),
                 lf_trn_agg.rename({"TRANSFER": "AMOUNT"}).with_columns(
@@ -135,6 +158,20 @@ class LedgerBuilder:
                     .fill_null(0.0)
                     .alias("Core_Expense_Outflow"),
                     pl.col("AMOUNT")
+                    .filter(
+                        (pl.col("TYPE") == "EXPENSE") & ~pl.col("is_non_cash_pnl").fill_null(False)
+                    )
+                    .sum()
+                    .fill_null(0.0)
+                    .alias("Cash_Expense_Outflow"),
+                    pl.col("AMOUNT")
+                    .filter(
+                        (pl.col("TYPE") == "EXPENSE") & pl.col("is_non_cash_pnl").fill_null(False)
+                    )
+                    .sum()
+                    .fill_null(0.0)
+                    .alias("Non_Cash_Expense_Outflow"),
+                    pl.col("AMOUNT")
                     .filter(pl.col("TYPE") == "EXPENSE")
                     .sum()
                     .fill_null(0.0)
@@ -144,6 +181,11 @@ class LedgerBuilder:
                     .sum()
                     .fill_null(0.0)
                     .alias("Net_Transfers"),
+                    pl.col("AMOUNT")
+                    .filter(pl.col("TYPE") == "OPENING")
+                    .sum()
+                    .fill_null(0.0)
+                    .alias("DB_Opening_Balance"),
                 ]
             )
         )

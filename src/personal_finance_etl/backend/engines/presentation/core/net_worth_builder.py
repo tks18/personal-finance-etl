@@ -49,8 +49,11 @@ class NetWorthBuilder:
                 pl.col("Income_Inflow").fill_null(0.0),
                 pl.col("Expense_Outflow").fill_null(0.0),
                 pl.col("Core_Expense_Outflow").fill_null(0.0),
+                pl.col("Cash_Expense_Outflow").fill_null(0.0),
+                pl.col("Non_Cash_Expense_Outflow").fill_null(0.0),
                 pl.col("Net_Transfers").fill_null(0.0),
                 pl.col("MONTHLY_NET_CHANGE").fill_null(0.0),
+                pl.col("DB_Opening_Balance").fill_null(0.0),
             )
             .sort(["ASSET_SUBCATEGORY_ID", "MONTH_START_DATE"])
         )
@@ -64,12 +67,13 @@ class NetWorthBuilder:
         )
 
         lf_nw_summary = lf_nw_summary.with_columns(
-            pl.col("Closing_Balance")
-            .shift(1)
-            .over("ASSET_SUBCATEGORY_ID")
-            .fill_null(0.0)
-            .alias("Opening_Balance")
-        ).drop("MONTHLY_NET_CHANGE")
+            (
+                pl.col("Closing_Balance").shift(1).over("ASSET_SUBCATEGORY_ID").fill_null(0.0)
+                + pl.col("DB_Opening_Balance").fill_null(0.0)
+            ).alias("Opening_Balance")
+        ).drop(
+            ["MONTHLY_NET_CHANGE", "MONTHLY_NET_CHANGE_right", "DB_Opening_Balance"], strict=False
+        )
 
         lf_nw_summary = (
             lf_nw_summary.with_columns(
@@ -228,6 +232,8 @@ class NetWorthBuilder:
                     pl.col("Income_Inflow").sum().alias("Total_Income"),
                     pl.col("Expense_Outflow").sum().alias("Total_Expense"),
                     pl.col("Core_Expense_Outflow").sum().alias("Total_Core_Expense"),
+                    pl.col("Cash_Expense_Outflow").sum().alias("Total_Cash_Expense"),
+                    pl.col("Non_Cash_Expense_Outflow").sum().alias("Total_Non_Cash_Expense"),
                     pl.col("Net_Cashflow_Month").sum().alias("Net_Cashflow_Month"),
                     pl.col("Closing_Balance")
                     .filter(pl.col("Closing_Balance") >= 0)
