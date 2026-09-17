@@ -15,6 +15,9 @@ from personal_finance_etl.backend.engines.presentation.helpers.risk_metrics impo
 from personal_finance_etl.backend.engines.presentation.modules.budget_forecast import (
     BudgetForecastBuilder,
 )
+from personal_finance_etl.backend.engines.presentation.modules.cashflow_statement_builder import (
+    CashflowStatementBuilder,
+)
 from personal_finance_etl.backend.engines.presentation.modules.income_streams import (
     IncomeStreamsBuilder,
 )
@@ -102,6 +105,11 @@ class WealthPresentationEngine:
 
         # 10. Monthly Cashflow Summary (now includes Financial Ratios)
         results["df_p_tf_monthly_cashflow_summary"] = MonthlyCashflowSummaryBuilder(
+            dfs, base_lf, rules=self.rules
+        ).build()
+
+        # 11. Direct Method Cashflow Statement
+        results["df_p_tf_cashflow_activity_summary"] = CashflowStatementBuilder(
             dfs, base_lf, rules=self.rules
         ).build()
 
