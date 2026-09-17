@@ -319,6 +319,8 @@ class MonthlyCashflowSummaryBuilder:
                 # Expense bifurcation
                 "Core_Expense",
                 "NonCore_Expense",
+                "Total_Cash_Expense",
+                "Total_Non_Cash_Expense",
                 # Investments
                 "Total_Investment_Deployed",
                 "Total_Investment_Redeemed",

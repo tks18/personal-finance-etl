@@ -36,6 +36,16 @@ class SpendAnalyticsBuilder:
             .agg(
                 [
                     pl.col("EXPENSE").sum().fill_null(0.0).alias("Total_Monthly_Spend"),
+                    pl.col("EXPENSE")
+                    .filter(~pl.col("is_non_cash_pnl").fill_null(False))
+                    .sum()
+                    .fill_null(0.0)
+                    .alias("Cash_Spend"),
+                    pl.col("EXPENSE")
+                    .filter(pl.col("is_non_cash_pnl").fill_null(False))
+                    .sum()
+                    .fill_null(0.0)
+                    .alias("Non_Cash_Spend"),
                     pl.col("EXPENSE").mean().fill_null(0.0).alias("Average_Transaction_Value"),
                     pl.len().alias("Transaction_Count"),
                 ]
@@ -230,6 +240,8 @@ class SpendAnalyticsBuilder:
                 "CATEGORY_NAME",
                 "CATEGORY_GROUPS",
                 "Total_Monthly_Spend",
+                "Cash_Spend",
+                "Non_Cash_Spend",
                 "Trailing_3M_Avg_Spend",
                 "Cumulative_YTD_Spend",
                 "Is_Investment",
