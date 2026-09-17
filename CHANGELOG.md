@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [5.7.0](https://github.com/tks18/personal-finance-etl/compare/5.6.0...5.7.0) (2026-09-17)
+
+
+### Features 🔥
+
+* **backend/config:** add new configs for cashflow management ([edc9374](https://github.com/tks18/personal-finance-etl/commit/edc93744aa517af085d442a9421dea85e7e6905e))
+* **backend/db:** add new dims to the schema ([323eb07](https://github.com/tks18/personal-finance-etl/commit/323eb07aa3bf760fa4625a659583dea4f9d4ebdd))
+* **backend/db:** add schema for new table ([f40989a](https://github.com/tks18/personal-finance-etl/commit/f40989aebb7d82f1483f81577bf2f8fccbc64588))
+* **backend/gold:** add new cashflow metrics ([c25c0ec](https://github.com/tks18/personal-finance-etl/commit/c25c0ec8d2ad322da1c7d91e70d471a83b0d5ccf))
+* **backend/gold:** add various metrics using cashflow related dim ([6462ae0](https://github.com/tks18/personal-finance-etl/commit/6462ae06443c2b1e8e20353a0abb7f432fdbef99))
+* **backend/gold:** new table for cashflow statement ([a47326b](https://github.com/tks18/personal-finance-etl/commit/a47326b218faf7d9322b6ab044d2b22f44281ae0))
+* **backend/transform:** update method to add dims for cashflow management ([cd3ee84](https://github.com/tks18/personal-finance-etl/commit/cd3ee84bee872127cea5d7c2a7933bfda27e6cfd))
+
+
+### Docs 📃
+
+* add sample config ([be8f541](https://github.com/tks18/personal-finance-etl/commit/be8f5414734c7c34b6b48cdd9cb3163820c77084))
+
 ## [5.6.0](https://github.com/tks18/personal-finance-etl/compare/5.5.0...5.6.0) (2026-09-10)
 
 
