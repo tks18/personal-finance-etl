@@ -67,7 +67,7 @@ class TransformationDAG:
             extracted.zcategory, mappings["category"], self.rules
         )
         d_asset_category_lazy = transform_d_asset_category(
-            extracted.assetgroup, mappings["asset_group"]
+            extracted.assetgroup, mappings["asset_group"], self.rules
         )
         d_asset_subcategory_lazy = transform_d_asset_subcategory(
             extracted.assets, mappings["assets"], self.rules

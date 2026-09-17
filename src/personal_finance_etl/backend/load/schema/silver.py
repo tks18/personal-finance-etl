@@ -130,7 +130,13 @@ CREATE TABLE IF NOT EXISTS silver.d_Asset_Category (
     USE_TIME BIGINT,
     ASSET_GROUP TEXT,
     TYPE BIGINT,
-    ORDER_SEQUENCE BIGINT
+    ORDER_SEQUENCE BIGINT,
+    Is_Digital_Asset BOOLEAN,
+    ledger_role TEXT,
+    is_cash_pool BOOLEAN,
+    is_non_cash_pnl BOOLEAN,
+    cashflow_activity_type TEXT,
+    settlement_timing TEXT
 );
 
 CREATE TABLE IF NOT EXISTS silver.d_Asset_Subcategory (
@@ -150,6 +156,12 @@ CREATE TABLE IF NOT EXISTS silver.d_Asset_Subcategory (
     ASSET_GROUP_ID TEXT,
     Is_Liquid BOOLEAN,
     Is_Illiquid BOOLEAN,
+    Is_Digital_Asset BOOLEAN,
+    ledger_role TEXT,
+    is_cash_pool BOOLEAN,
+    is_non_cash_pnl BOOLEAN,
+    cashflow_activity_type TEXT,
+    settlement_timing TEXT,
     FOREIGN KEY(ASSET_GROUP_ID) REFERENCES silver.d_Asset_Category(UID)
 );
 
