@@ -22,6 +22,16 @@ sub_category_ids = []
 category_ids = ["ESTATE", "EPF", "PPF", "NPS"] # Example IDs, adjust as needed
 sub_category_ids = []
 
+[assets.cashflow]
+cash_pools = ["BANK_ACCOUNT", "CASH", "WALLET"]
+non_cash_pnl_sources = ["DEPRECIATION", "AMORTIZATION"]
+working_capital_conduits = ["CREDIT_CARD", "REIMBURSEMENT", "PREPAID"]
+investing_activities = ["INVESTMENT_ACCOUNT", "SECURITY_DEPOSIT"]
+financing_liabilities = ["PERSONAL_LOAN", "OVERDRAFT"]
+
+[assets.digital]
+category_ids = ["CRYPTO_WALLET", "DIGITAL_GOLD"] # Replace with real digital asset IDs
+
 # Investment mappings
 
 [investments.stocks_and_etfs]
