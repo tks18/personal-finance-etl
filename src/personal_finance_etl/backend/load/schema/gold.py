@@ -16,6 +16,8 @@ CREATE TABLE IF NOT EXISTS gold.Wealth_Asset_Breakdown (
     Income_Inflow DOUBLE,
     Expense_Outflow DOUBLE,
     Core_Expense_Outflow DOUBLE,
+    Cash_Expense_Outflow DOUBLE,
+    Non_Cash_Expense_Outflow DOUBLE,
     Net_Transfers DOUBLE,
     Net_Cashflow_Month DOUBLE,
     Surplus_Deficit_Month DOUBLE,
@@ -42,6 +44,8 @@ CREATE TABLE IF NOT EXISTS gold.Core_Monthly_Fact (
     Total_Income DOUBLE,
     Total_Expense DOUBLE,
     Total_Core_Expense DOUBLE,
+    Total_Cash_Expense DOUBLE,
+    Total_Non_Cash_Expense DOUBLE,
     Net_Cashflow_Month DOUBLE,
     -- Asset Balances
     Opening_Balance_Asset DOUBLE,
@@ -89,6 +93,8 @@ CREATE TABLE IF NOT EXISTS gold.Cashflow_Expense_Breakdown (
     Spend_Type TEXT,
     -- Core Metrics
     Total_Monthly_Spend DOUBLE,
+    Cash_Spend DOUBLE,
+    Non_Cash_Spend DOUBLE,
     -- Trailing Averages
     Trailing_3M_Avg_Spend DOUBLE,
     Cumulative_YTD_Spend DOUBLE,
@@ -261,6 +267,8 @@ CREATE TABLE IF NOT EXISTS gold.Cashflow_Efficiency_Analytics (
     -- Expense bifurcation
     Core_Expense DOUBLE,
     NonCore_Expense DOUBLE,
+    Total_Cash_Expense DOUBLE,
+    Total_Non_Cash_Expense DOUBLE,
     -- Investments
     Total_Investment_Deployed DOUBLE,
     Total_Investment_Redeemed DOUBLE,
@@ -498,6 +506,47 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_Portfolio (
     FY_Realized_Gain DOUBLE,
     FY_Realized_Loss DOUBLE,
     FY_Realized_Net_PnL DOUBLE
+);
+CREATE TABLE IF NOT EXISTS gold.Cashflow_Activity_Summary (
+    -- Identifiers
+    MONTH_START_DATE DATE,
+    MONTH_END_DATE DATE,
+    YEAR_MONTH TEXT,
+    
+    -- Headline Cash Balances (Only counting assets where `is_cash_pool = True`)
+    Opening_Cash_Balance DOUBLE,
+    Closing_Cash_Balance DOUBLE,
+    Net_Cash_Movement DOUBLE,
+    
+    -- 1. Cashflow from Operating Activities (CFO)
+    Cash_Inflow_Operating DOUBLE,
+    Cash_Outflow_Operating DOUBLE,
+    Net_Cashflow_Operating DOUBLE,
+    
+    -- 2. Cashflow from Investing Activities (CFI)
+    Cash_Inflow_Investing DOUBLE,
+    Cash_Outflow_Investing DOUBLE,
+    Net_Cashflow_Investing DOUBLE,
+    
+    -- 3. Cashflow from Financing Activities (CFF)
+    Cash_Inflow_Financing DOUBLE,
+    Cash_Outflow_Financing DOUBLE,
+    Net_Cashflow_Financing DOUBLE,
+    
+    -- Internal Transfers (Should net out to 0, useful for diagnostics)
+    Internal_Transfer_Inflow DOUBLE,
+    Internal_Transfer_Outflow DOUBLE,
+    Net_Internal_Transfers DOUBLE,
+    
+    -- Non-Cash & Reconciliations
+    Total_Cash_Expenses DOUBLE,
+    Total_Non_Cash_Expenses DOUBLE,
+    
+    -- Summary Cashflow
+    Total_Cash_Inflow DOUBLE,
+    Total_Cash_Outflow DOUBLE,
+    Calculated_Net_Cashflow DOUBLE,
+    Unreconciled_Difference DOUBLE
 );
 
 """

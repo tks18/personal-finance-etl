@@ -36,6 +36,7 @@ class GoldLayer:
             "df_p_tf_budget_forecast_monthly": "gold.Forecast_Budget_Variance",
             "df_p_tf_investment_analytics": "gold.Investment_Portfolio_Summary",
             "df_p_tf_monthly_cashflow_summary": "gold.Cashflow_Efficiency_Analytics",
+            "df_p_tf_cashflow_activity_summary": "gold.Cashflow_Activity_Summary",
             "df_f_investment_analytics_isin": "gold.Investment_By_ISIN",
             "df_f_investment_analytics_subtype": "gold.Investment_By_Subtype",
             "df_f_investment_analytics_class": "gold.Investment_By_Class",
