@@ -79,8 +79,22 @@ class IlliquidAssetRules(BaseModel):
     sub_category_ids: list[str] = Field(default_factory=list)
 
 
+class CashflowAssetRules(BaseModel):
+    cash_pools: list[str] = Field(default_factory=list)
+    non_cash_pnl_sources: list[str] = Field(default_factory=list)
+    working_capital_conduits: list[str] = Field(default_factory=list)
+    investing_activities: list[str] = Field(default_factory=list)
+    financing_liabilities: list[str] = Field(default_factory=list)
+
+
+class DigitalAssetRules(BaseModel):
+    category_ids: list[str] = Field(default_factory=list)
+
+
 class AssetRules(BaseModel):
     illiquid: IlliquidAssetRules = Field(default_factory=IlliquidAssetRules)
+    cashflow: CashflowAssetRules = Field(default_factory=CashflowAssetRules)
+    digital: DigitalAssetRules = Field(default_factory=DigitalAssetRules)
 
 
 class InvestmentInstrumentRules(BaseModel):
