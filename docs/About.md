@@ -1,7 +1,7 @@
 <div align="center">
   <img src="../logo.png" alt="Logo" width="150"/>
   <h1>About Personal Finance ETL</h1>
-  <p><b>Version 5.7.0</b></p>
+  <p><b>Version 5.8.0</b></p>
 </div>
 
 ---

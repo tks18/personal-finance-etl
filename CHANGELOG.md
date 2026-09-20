@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [5.8.0](https://github.com/tks18/personal-finance-etl/compare/5.7.0...5.8.0) (2026-09-20)
+
+
+### CI 🛠
+
+* **versionrc:** update versionrc.js file to auto update version in about.md ([709ab63](https://github.com/tks18/personal-finance-etl/commit/709ab634bb8ffdab03b4f6392e5e301f4e524197))
+
+
+### Build System 🏗
+
+* add markdown, pywebview packages, update pyproject.toml ([4fa4a09](https://github.com/tks18/personal-finance-etl/commit/4fa4a09c39e73ad9dea073ddbe0a4756aac38834))
+* **main.spec:** add additional docs to include in the build spec for pyinstaller ([3b9648f](https://github.com/tks18/personal-finance-etl/commit/3b9648fa62c27765d8be6de04eb615fd2d2f02d3))
+
+
+### Docs 📃
+
+* **about.md:** add a short about.md for introduction ([64efc01](https://github.com/tks18/personal-finance-etl/commit/64efc0155f3073d0e18672167e66cb88f582a133))
+* **readme:** update note in readme ([7f551eb](https://github.com/tks18/personal-finance-etl/commit/7f551eb95584d6fc72f1b2ed8a1474af4259d9b0))
+* update docs guides ([ced59bf](https://github.com/tks18/personal-finance-etl/commit/ced59bf99cd56339868855e2927be6eb86f031dc))
+* update readme, other guides in docs folder ([8460f1b](https://github.com/tks18/personal-finance-etl/commit/8460f1b056e895ac1d7a4cded827a2c891dc8bed))
+
+
+### Features 🔥
+
+* **frontend/docs:** create a simple webview module for docs rendering ([5580a0f](https://github.com/tks18/personal-finance-etl/commit/5580a0f97f9de0bede2cf48d4b852ca8a81f21e5))
+* **frontend:** add docs options to both cli and gui ([62e0bc2](https://github.com/tks18/personal-finance-etl/commit/62e0bc22b359595990debbd8c4c1a30b2aff2a7e))
+* **helpers:** update to add helpers for docs file identifications on build ([9ea9565](https://github.com/tks18/personal-finance-etl/commit/9ea95659d344eb9d6926ecfddb872f1c22cb23c7))
+
 ## [5.7.0](https://github.com/tks18/personal-finance-etl/compare/5.6.0...5.7.0) (2026-09-17)
 
 
