@@ -2,6 +2,7 @@
 Shared utility helpers for the Investment Manager application.
 """
 
+import importlib.resources
 import os
 import sys
 import tempfile
@@ -11,13 +12,27 @@ import polars as pl
 
 
 def resource_path(relative_path: str) -> str:
-    """Get absolute path to resource, works for both dev and PyInstaller onefile."""
+    """Get absolute path to resource, works for PyInstaller, PyPI, and local dev."""
+    # 1. PyInstaller (EXE)
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass is not None:
+        return os.path.join(str(meipass), relative_path)
+
+    # 2. Local Dev (Root Directory)
+    local_path = os.path.join(os.path.abspath("."), relative_path)
+    if os.path.exists(local_path):
+        return local_path
+
+    # 3. PyPI (pip install via hatchling)
     try:
-        # PyInstaller extracts resources to a temp folder at runtime
-        base_path = getattr(sys, "_MEIPASS", os.path.abspath("."))
-    except AttributeError:
-        base_path = os.path.abspath(".")
-    return os.path.join(base_path, relative_path)
+        parts = relative_path.replace("\\", "/").split("/")
+        pkg_path = importlib.resources.files("personal_finance_etl").joinpath(*parts)
+        if pkg_path.is_file() or pkg_path.is_dir():
+            return str(pkg_path)
+    except Exception:
+        pass
+
+    return local_path
 
 
 def get_temp_dir() -> str:
