@@ -14,6 +14,7 @@ dependencies = [
     "customtkinter>=6.0.0",
     "duckdb>=1.5.5",
     "fastexcel>=0.20.2",
+    "markdown>=3.7",
     "numba>=0.66.0",
     "pillow>=12.3.0",
     "polars>=1.42.1",
@@ -22,6 +23,7 @@ dependencies = [
     "pydantic>=2.13.4",
     "python-dateutil>=2.9.0.post0",
     "pyxirr>=0.10.8",
+    "pywebview>=5.3.2",
     "rich>=15.0.0",
     "tkcalendar>=1.6.1",
     "types-psutil>=7.2.2.20260518",
@@ -57,6 +59,11 @@ package = true
 
 [tool.uv.sources]
 tasks = { path = "./scripts/tasks.py" }
+
+[tool.hatch.build.targets.wheel.force-include]
+"README.md" = "personal_finance_etl/README.md"
+"docs" = "personal_finance_etl/docs"
+"logo.png" = "personal_finance_etl/logo.png"
 
 [tool.ruff]
 line-length = 100
