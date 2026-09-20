@@ -15,7 +15,7 @@ adbc_manager_meta = copy_metadata('adbc_driver_manager')
 adbc_manager_libs = collect_dynamic_libs('adbc_driver_manager')
 adbc_manager_hidden = collect_submodules('adbc_driver_manager')
 
-datas = [('logo.ico', '.'), ('logo.png', '.')] + adbc_sqlite_datas + adbc_sqlite_meta + adbc_manager_datas + adbc_manager_meta
+datas = [('logo.ico', '.'), ('logo.png', '.'), ('README.md', '.'), ('docs/*', 'docs/')] + adbc_sqlite_datas + adbc_sqlite_meta + adbc_manager_datas + adbc_manager_meta
 binaries = adbc_sqlite_libs + adbc_manager_libs
 
 hiddenimports = [
@@ -29,6 +29,8 @@ hiddenimports = [
     'pandas',
     'tomllib',
     'rich',
+    'webview',
+    'markdown',
     'personal_finance_etl.frontend.cli.app',
     'personal_finance_etl.frontend.app',
     'personal_finance_etl.frontend.base_tab',
