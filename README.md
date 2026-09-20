@@ -34,6 +34,10 @@ This engine is a **Sovereign Wealth Management Pipeline**. It treats your person
 
 ## 🌟 The Vision: What This Engine Actually Delivers (In Plain English)
 
+> [!IMPORTANT]
+> **ARCHITECTURE TEMPLATE NOT A PLUG-AND-PLAY APP**
+> This repository is a **highly customized Medallion Architecture Template** tailored specifically to the author's personal broker data dumps and bank CSV formats. While it provides a complete, production-ready ecosystem for managing household financial statements (complete with a DuckDB state manager, Polars DAG, Monte Carlo engine, and UI), you must fork it and write your own custom Python Extractors to parse your specific bank's data.
+
 Imagine having a **hyper-intelligent, institutional-grade financial advisor** living on your laptop. It never sleeps, it doesn't charge you a 1% AUM fee, and it processes millions of data points a second to ruthlessly optimize your wealth. Pure W.
 
 Here is exactly what it does for you:
@@ -97,36 +101,36 @@ graph TD
     classDef external fill:#2d2d2d,stroke:#00ffcc,stroke-width:2px,color:#fff;
     classDef core fill:#00008b,stroke:#00ffcc,stroke-width:3px,color:#fff;
 
-    A["Raw Broker/Bank Files<br><i>(Excel, CSV, PDF)</i>"]:::external -->|FileTracker & SHA-256 Hashes| B
+    A["Raw Broker/Bank Files<br><i>(Excel, CSV, PDF)</i>"]:::external -->|"FileTracker & SHA-256 Hashes"| B
 
-    subgraph Bronze Layer [Raw Ingestion Phase]
-        B[(bronze.* Tables)]:::bronze
+    subgraph BronzeLayer ["Raw Ingestion Phase"]
+        B[("bronze.* Tables")]:::bronze
         B_Desc["FastExcel Zero-Copy Parsing"]:::bronze
     end
 
-    B -->|Schema Validation| C
+    B -->|"Schema Validation"| C
 
-    subgraph Silver Layer [Harmonization & Cleansing DAG]
-        C{Polars Transforms}:::silver
-        D[(silver.* Tables)]:::silver
-        C -->|Type Enforcement & Dedupe| D
+    subgraph SilverLayer ["Harmonization & Cleansing DAG"]
+        C{"Polars Transforms"}:::silver
+        D[("silver.* Tables")]:::silver
+        C -->|"Type Enforcement & Dedupe"| D
     end
 
-    D -->|yfinance Daemon| E["Benchmark Engine<br><i>(Delta Pulls Only)</i>"]:::external
+    D -->|"yfinance Daemon"| E["Benchmark Engine<br><i>(Delta Pulls Only)</i>"]:::external
     E --> F
 
-    subgraph Gold Layer [Quant Analytics & Wealth Presentation]
-        F{Parallel Streaming Polars DAG}:::gold
-        G[(gold.* Views)]:::gold
-        F -->|PyXIRR & FIFO Tax Lots| G
-        F -->|Numba JIT Monte Carlo| G
+    subgraph GoldLayer ["Quant Analytics & Wealth Presentation"]
+        F{"Parallel Streaming Polars DAG"}:::gold
+        G[("gold.* Views")]:::gold
+        F -->|"PyXIRR & FIFO Tax Lots"| G
+        F -->|"Numba JIT Monte Carlo"| G
     end
 
-    G -->|ACID Commits (BEGIN/ROLLBACK)| H[(DuckDB Master Warehouse)]:::core
+    G -->|"ACID Commits (BEGIN/ROLLBACK)"| H[("DuckDB Master Warehouse")]:::core
 
-    subgraph Meta Layer [Telemetry & State]
-        I[(meta.* Tables)]:::meta
-        H -.->|Execution Logs| I
+    subgraph MetaLayer ["Telemetry & State"]
+        I[("meta.* Tables")]:::meta
+        H -.->|"Execution Logs"| I
     end
 ```
 
@@ -164,9 +168,18 @@ We provide radically different ways to interact with the engine, tailored to you
 
 ---
 
-## 🚀 Developer Quickstart
+## 🚀 Developer Quickstart (Fork & Adapt)
 
-If you want to adapt this institutional codebase to your own life, here is the playbook:
+> **⚠️ IMPORTANT DISCLAIMER:**
+> This is **not** a generic "out-of-the-box" tool that will magically parse any random bank statement you throw at it.
+>
+> This codebase is a **highly customized Medallion Architecture Template** explicitly tailored to _my_ specific portfolio of broker data dumps, mutual fund statements, and bank CSV formats.
+>
+> However, it provides a **complete, production-ready ecosystem** for managing household financial statements. The core orchestration, DuckDB state management, Polars DAGs, Monte Carlo engines, and CustomTkinter GUI are entirely data-agnostic.
+>
+> To use this for your own net worth, you will need to fork this repository and write your own custom Python Extractors and Transformers to map your specific bank's messy CSVs into the standardized Silver layer schema.
+
+If you are a developer ready to adapt this institutional codebase to your own life, here is the playbook:
 
 ### 1. Install the Package
 
