@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [5.8.1](https://github.com/tks18/personal-finance-etl/compare/5.8.0...5.8.1) (2026-09-20)
+
+
+### Bug Fixes 🛠
+
+* **backend/gold:** add more helper cols to cashflow_efficiency_table ([dbdaa0a](https://github.com/tks18/personal-finance-etl/commit/dbdaa0abddd3e8cae266dd08f8560b0918216d1f))
+* **backend/gold:** fix cashflow summary reporting inconsistent cash expenses ([6998f51](https://github.com/tks18/personal-finance-etl/commit/6998f516967cdb0c0537c3f52b211e2fa3b2096e))
+
 ## [5.8.0](https://github.com/tks18/personal-finance-etl/compare/5.7.0...5.8.0) (2026-09-20)
 
 
