@@ -62,6 +62,26 @@ class UnifiedETLTab(BaseEngineTab):
             text_color=Color.TEXT,
         ).pack(anchor="w")
 
+        # ── 1.5 Guides Button (Row 0, Col 1, Right Aligned) ────────
+        from personal_finance_etl.frontend.desktop.components.guides_window import (
+            show_guides_window,
+        )
+
+        guides_btn_frame = ctk.CTkFrame(hdr, fg_color="transparent")
+        guides_btn_frame.grid(row=0, column=1, padx=(0, 16), pady=(12, 0), sticky="e")
+
+        ctk.CTkButton(
+            guides_btn_frame,
+            text="📚 Guides & About",
+            width=140,
+            height=32,
+            font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"),
+            fg_color="#1E293B",
+            hover_color="#334155",
+            corner_radius=6,
+            command=show_guides_window,
+        ).pack(anchor="e")
+
         ctk.CTkLabel(
             text_block,
             text="Institutional Quantitative Master Engine & Personal Finance Orchestrator",

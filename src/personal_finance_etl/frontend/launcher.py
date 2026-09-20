@@ -30,6 +30,11 @@ def main() -> None:
         action="store_true",
         help="Run completely unattended and exit immediately after completion (implies --auto)",
     )
+    cli_parser.add_argument(
+        "--docs",
+        action="store_true",
+        help="Open the documentation and guides window, then exit",
+    )
 
     # Tkinter Subcommand
     subparsers.add_parser("tkinter", help="Launch the Desktop GUI")

@@ -26,6 +26,7 @@ from rich.prompt import Confirm, Prompt
 
 from personal_finance_etl.backend.api.engine import PersonalFinanceEngine
 from personal_finance_etl.backend.utils.models import EngineStatus, LogLevel
+from personal_finance_etl.frontend.desktop.components.guides_window import show_guides_window
 
 if sys.platform == "win32":
     try:
@@ -93,6 +94,13 @@ def get_file_interactive(prompt_text: str, recents: list[str]) -> str:
 
 
 def main_cli(args: argparse.Namespace) -> None:
+    docs_mode = getattr(args, "docs", False)
+
+    if docs_mode:
+        console.print("[bold cyan]Initializing Documentation Engine...[/bold cyan]")
+        show_guides_window()
+        sys.exit(0)
+
     print_bootloader()
 
     engine = PersonalFinanceEngine()
@@ -101,6 +109,7 @@ def main_cli(args: argparse.Namespace) -> None:
     rules_path = args.rules
     auto_mode = getattr(args, "auto", False)
     cron_mode = getattr(args, "cron", False)
+
     if cron_mode:
         auto_mode = True
 
