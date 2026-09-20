@@ -100,14 +100,21 @@ class CashflowStatementBuilder:
             .agg(pl.col("BASE_AMOUNT").sum().fill_null(0.0).alias("Cash_Outflow_Operating_Exp"))
         )
 
-        # Get Non-Cash Expenses (for reconciliation/diagnostics)
-        lf_non_cash_exp = (
-            lf_exp.join(lf_asset, left_on="ASSET_ID", right_on="UID", how="left")
-            .filter(pl.col("is_non_cash_pnl").fill_null(False))
-            .with_columns(pl.col("DATE").dt.month_start().alias("MONTH_START_DATE"))
-            .group_by("MONTH_START_DATE")
-            .agg(pl.col("BASE_AMOUNT").sum().fill_null(0.0).alias("Total_Non_Cash_Expenses"))
-        )
+        # We need monthly totals to get the consistent definition of cash/non-cash expenses
+        lf_monthly_totals = self.base_lf.get("lf_monthly_totals")
+        if lf_monthly_totals is not None:
+            lf_expense_totals = lf_monthly_totals.select(
+                [
+                    "MONTH_START_DATE",
+                    pl.col("Total_Cash_Expense").alias("Total_Cash_Expenses"),
+                    pl.col("Total_Non_Cash_Expense").alias("Total_Non_Cash_Expenses"),
+                ]
+            )
+        else:
+            lf_expense_totals = lf_months.with_columns(
+                pl.lit(0.0).alias("Total_Cash_Expenses"),
+                pl.lit(0.0).alias("Total_Non_Cash_Expenses"),
+            ).select(["MONTH_START_DATE", "Total_Cash_Expenses", "Total_Non_Cash_Expenses"])
 
         # 4. Transfers (Can be any activity type based on TO_ASSET_ID)
         # First filter to where the source (ASSET_ID) is a cash pool.
@@ -185,7 +192,7 @@ class CashflowStatementBuilder:
             lf_months.join(lf_cash_balances, on="MONTH_END_DATE", how="left")
             .join(lf_cash_inc, on="MONTH_START_DATE", how="left")
             .join(lf_cash_exp, on="MONTH_START_DATE", how="left")
-            .join(lf_non_cash_exp, on="MONTH_START_DATE", how="left")
+            .join(lf_expense_totals, on="MONTH_START_DATE", how="left")
             .join(lf_trn_agg, on="MONTH_START_DATE", how="left")
             .fill_null(0.0)
             .with_columns(
@@ -223,7 +230,6 @@ class CashflowStatementBuilder:
                 ),
             )
             .with_columns(
-                pl.col("Cash_Outflow_Operating_Exp").alias("Total_Cash_Expenses"),
                 (
                     pl.col("Cash_Inflow_Operating")
                     + pl.col("Cash_Inflow_Investing")
