@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [5.8.2](https://github.com/tks18/personal-finance-etl/compare/5.8.1...5.8.2) (2026-09-20)
+
+
+### Features 🔥
+
+* **backend/gold:** add avg investment rate to cashflow efficiency table ([db05774](https://github.com/tks18/personal-finance-etl/commit/db057744ecb822917ce9e8a69295b71687d29b9c))
+
 ### [5.8.1](https://github.com/tks18/personal-finance-etl/compare/5.8.0...5.8.1) (2026-09-20)
 
 
