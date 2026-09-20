@@ -297,6 +297,7 @@ CREATE TABLE IF NOT EXISTS gold.Cashflow_Efficiency_Analytics (
     Trailing_3M_Avg_Expense DOUBLE,
     Trailing_3M_Avg_Investment DOUBLE,
     Trailing_3M_Avg_Savings_Rate DOUBLE,
+    Trailing_3M_Avg_Investment_Rate DOUBLE,
     -- Flags
     Is_Surplus_Month BOOLEAN,
     Is_Investment_Target_Met BOOLEAN,

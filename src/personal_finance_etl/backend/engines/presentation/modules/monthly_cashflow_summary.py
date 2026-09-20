@@ -265,6 +265,7 @@ class MonthlyCashflowSummaryBuilder:
             rolling_avg("Total_Expense", 3).alias("Trailing_3M_Avg_Expense"),
             rolling_avg("Net_Investment_Flow", 3).alias("Trailing_3M_Avg_Investment"),
             rolling_avg("Savings_Rate_Pct", 3).alias("Trailing_3M_Avg_Savings_Rate"),
+            rolling_avg("Investment_Rate_Pct", 3).alias("Trailing_3M_Avg_Investment_Rate"),
         )
 
         # ── Step 7: Financial Ratios Integration ──────────────────────────────
@@ -350,6 +351,7 @@ class MonthlyCashflowSummaryBuilder:
                 "Trailing_3M_Avg_Expense",
                 "Trailing_3M_Avg_Investment",
                 "Trailing_3M_Avg_Savings_Rate",
+                "Trailing_3M_Avg_Investment_Rate",
                 # Flags
                 "Is_Surplus_Month",
                 "Is_Investment_Target_Met",
