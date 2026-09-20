@@ -259,6 +259,9 @@ CREATE TABLE IF NOT EXISTS gold.Cashflow_Efficiency_Analytics (
     MONTH_START_DATE DATE,
     MONTH_END_DATE DATE,
     YEAR_MONTH TEXT,
+    -- Totals
+    Total_Income DOUBLE,
+    Total_Expense DOUBLE,
     -- Income bifurcation
     Active_Income DOUBLE,
     Passive_Income DOUBLE,
@@ -282,6 +285,7 @@ CREATE TABLE IF NOT EXISTS gold.Cashflow_Efficiency_Analytics (
     Active_Income_Share_Pct DOUBLE,
     Passive_Income_Share_Pct DOUBLE,
     Core_Expense_Share_Pct DOUBLE,
+    NonCore_Expense_Share_Pct DOUBLE,
     -- MoM deltas
     Income_MoM_Delta DOUBLE,
     Expense_MoM_Delta DOUBLE,

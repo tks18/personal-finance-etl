@@ -241,6 +241,7 @@ class MonthlyCashflowSummaryBuilder:
             safe_divide("Active_Income", "Total_Income").alias("Active_Income_Share_Pct"),
             safe_divide("Passive_Income", "Total_Income").alias("Passive_Income_Share_Pct"),
             safe_divide("Total_Core_Expense", "Total_Expense").alias("Core_Expense_Share_Pct"),
+            safe_divide("NonCore_Expense", "Total_Expense").alias("NonCore_Expense_Share_Pct"),
             safe_divide("Equity_Deployed", "Total_Investment_Deployed").alias(
                 "Equity_Pct_of_Deployed"
             ),
@@ -311,6 +312,9 @@ class MonthlyCashflowSummaryBuilder:
                 "MONTH_START_DATE",
                 "MONTH_END_DATE",
                 "YEAR_MONTH",
+                # Totals
+                "Total_Income",
+                "Total_Expense",
                 # Income bifurcation
                 "Active_Income",
                 "Passive_Income",
@@ -334,6 +338,7 @@ class MonthlyCashflowSummaryBuilder:
                 "Active_Income_Share_Pct",
                 "Passive_Income_Share_Pct",
                 "Core_Expense_Share_Pct",
+                "NonCore_Expense_Share_Pct",
                 # MoM deltas
                 "Income_MoM_Delta",
                 "Expense_MoM_Delta",
