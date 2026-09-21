@@ -102,6 +102,7 @@ CREATE TABLE IF NOT EXISTS silver.d_Income_Subcategory (
     Is_Passive_Income BOOLEAN,
     Is_Dividend_Income BOOLEAN,
     Is_Interest_Income BOOLEAN,
+    Is_Non_Cash_Income BOOLEAN,
     FOREIGN KEY (CATEGORY_ID) REFERENCES silver.d_Income_Category(UID)
 );
 
@@ -208,6 +209,7 @@ CREATE TABLE IF NOT EXISTS silver.f_Income_Transactions (
     Is_Active_Income BOOLEAN,
     Is_Dividend_Income BOOLEAN,
     Is_Interest_Income BOOLEAN,
+    Is_Non_Cash_Income BOOLEAN,
     FOREIGN KEY(CATEGORY_ID) REFERENCES silver.d_Income_Subcategory(UID),
     FOREIGN KEY(ASSET_ID) REFERENCES silver.d_Asset_Subcategory(UID),
     FOREIGN KEY(CURRENCY_ID) REFERENCES silver.d_Currency(UID),

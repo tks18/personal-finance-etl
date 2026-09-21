@@ -47,6 +47,8 @@ class NetWorthBuilder:
             )
             .with_columns(
                 pl.col("Income_Inflow").fill_null(0.0),
+                pl.col("Cash_Income_Inflow").fill_null(0.0),
+                pl.col("Non_Cash_Income_Inflow").fill_null(0.0),
                 pl.col("Expense_Outflow").fill_null(0.0),
                 pl.col("Core_Expense_Outflow").fill_null(0.0),
                 pl.col("Cash_Expense_Outflow").fill_null(0.0),
@@ -230,6 +232,8 @@ class NetWorthBuilder:
             .agg(
                 [
                     pl.col("Income_Inflow").sum().alias("Total_Income"),
+                    pl.col("Cash_Income_Inflow").sum().alias("Total_Cash_Income"),
+                    pl.col("Non_Cash_Income_Inflow").sum().alias("Total_Non_Cash_Income"),
                     pl.col("Expense_Outflow").sum().alias("Total_Expense"),
                     pl.col("Core_Expense_Outflow").sum().alias("Total_Core_Expense"),
                     pl.col("Cash_Expense_Outflow").sum().alias("Total_Cash_Expense"),

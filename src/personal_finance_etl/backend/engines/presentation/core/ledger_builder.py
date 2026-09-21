@@ -48,6 +48,7 @@ class LedgerBuilder:
                 pl.col("Is_Active_Income"),
                 pl.col("Is_Dividend_Income"),
                 pl.col("Is_Interest_Income"),
+                pl.col("Is_Non_Cash_Income"),
             ]
         )
 
@@ -115,10 +116,12 @@ class LedgerBuilder:
 
         lf_ledger = pl.concat(
             [
-                lf_open_agg.with_columns(pl.lit("OPENING").alias("TYPE")),
-                lf_inc_agg.rename({"INCOME": "AMOUNT"}).with_columns(
-                    pl.lit("INCOME").alias("TYPE")
+                lf_open_agg.with_columns(
+                    pl.lit("OPENING").alias("TYPE"), pl.lit(False).alias("Is_Non_Cash_Income")
                 ),
+                lf_inc_agg.select(["ASSET_SUBCATEGORY_ID", "INCOME", "DATE", "Is_Non_Cash_Income"])
+                .rename({"INCOME": "AMOUNT"})
+                .with_columns(pl.lit("INCOME").alias("TYPE")),
                 lf_exp_agg.select(
                     [
                         "ASSET_SUBCATEGORY_ID",
@@ -128,10 +131,11 @@ class LedgerBuilder:
                         "is_non_cash_pnl",
                     ]
                 )
+                .with_columns(pl.lit(False).alias("Is_Non_Cash_Income"))
                 .rename({"EXPENSE": "AMOUNT"})
                 .with_columns(pl.lit("EXPENSE").alias("TYPE")),
                 lf_trn_agg.rename({"TRANSFER": "AMOUNT"}).with_columns(
-                    pl.lit("TRANSFER").alias("TYPE")
+                    pl.lit("TRANSFER").alias("TYPE"), pl.lit(False).alias("Is_Non_Cash_Income")
                 ),
             ],
             how="diagonal",
@@ -145,6 +149,21 @@ class LedgerBuilder:
             .group_by(["MONTH_START_DATE", "MONTH_END_DATE", "ASSET_SUBCATEGORY_ID"])
             .agg(
                 [
+                    pl.col("AMOUNT")
+                    .filter(
+                        (pl.col("TYPE") == "INCOME")
+                        & ~pl.col("Is_Non_Cash_Income").fill_null(False)
+                    )
+                    .sum()
+                    .fill_null(0.0)
+                    .alias("Cash_Income_Inflow"),
+                    pl.col("AMOUNT")
+                    .filter(
+                        (pl.col("TYPE") == "INCOME") & pl.col("Is_Non_Cash_Income").fill_null(False)
+                    )
+                    .sum()
+                    .fill_null(0.0)
+                    .alias("Non_Cash_Income_Inflow"),
                     pl.col("AMOUNT")
                     .filter(pl.col("TYPE") == "INCOME")
                     .sum()
