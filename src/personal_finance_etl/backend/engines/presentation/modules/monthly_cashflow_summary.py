@@ -305,9 +305,9 @@ class MonthlyCashflowSummaryBuilder:
                 pl.col("Net_Investment_Flow")
                 >= pl.col("Total_Cash_Income") * self.rules.budget.income_allocation.investment_pct
             ).alias("Is_Investment_Target_Met"),
-            pl.col("Total_Assets").shift(1).fill_null(0.0).alias("Opening_Balance_Asset"),
-            pl.col("Total_Assets").alias("Closing_Balance_Asset"),
-            pl.col("Total_Assets_Market").alias("Closing_Balance_Asset_Market"),
+            pl.col("Total_Net_Worth").shift(1).fill_null(0.0).alias("Opening_Balance_Asset"),
+            pl.col("Total_Net_Worth").alias("Closing_Balance_Asset"),
+            pl.col("Total_Net_Worth_Market").alias("Closing_Balance_Asset_Market"),
         )
 
         return lf_monthly.select(

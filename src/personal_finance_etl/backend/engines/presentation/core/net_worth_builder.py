@@ -344,8 +344,8 @@ class NetWorthBuilder:
         lf_monthly_totals = (
             lf_monthly_totals.sort("MONTH_START_DATE")
             .with_columns(
-                pl.col("Total_Assets").shift(1).fill_null(0.0).alias("Opening_Balance_Asset"),
-                pl.col("Total_Assets_Market")
+                pl.col("Total_Net_Worth").shift(1).fill_null(0.0).alias("Opening_Balance_Asset"),
+                pl.col("Total_Net_Worth_Market")
                 .shift(1)
                 .fill_null(0.0)
                 .alias("Opening_Balance_Asset_Market"),
@@ -367,10 +367,10 @@ class NetWorthBuilder:
                 .alias("Opening_Unrealized_PL"),
             )
             .with_columns(
-                pl.col("Total_Assets").alias("Closing_Balance_Asset"),
-                pl.col("Total_Assets_Market").alias("Closing_Balance_Asset_Market"),
-                (pl.col("Total_Assets") - pl.col("Opening_Balance_Asset")).alias("Asset_Delta"),
-                (pl.col("Total_Assets_Market") - pl.col("Opening_Balance_Asset_Market")).alias(
+                pl.col("Total_Net_Worth").alias("Closing_Balance_Asset"),
+                pl.col("Total_Net_Worth_Market").alias("Closing_Balance_Asset_Market"),
+                (pl.col("Total_Net_Worth") - pl.col("Opening_Balance_Asset")).alias("Asset_Delta"),
+                (pl.col("Total_Net_Worth_Market") - pl.col("Opening_Balance_Asset_Market")).alias(
                     "Asset_Market_Delta"
                 ),
                 (
