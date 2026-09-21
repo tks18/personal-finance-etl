@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [5.9.0](https://github.com/tks18/personal-finance-etl/compare/5.8.2...5.9.0) (2026-09-21)
+
+
+### Features 🔥
+
+* **backend/config:** add new config for configuring non cash incomes ([e28b990](https://github.com/tks18/personal-finance-etl/commit/e28b990d48b5ff376591569c79bade5b76f69e17))
+* **backend/ddl:** update gold ddl tables ([949d781](https://github.com/tks18/personal-finance-etl/commit/949d78156462334117c8d0fedc86851e2a7029cd))
+* **backend/gold:** update all gold layer tables to implement the cash income for analytics ([72662fd](https://github.com/tks18/personal-finance-etl/commit/72662fdb64bf696b0fc43a8811ccff86d0c1674d))
+* **backend/gold:** update core processing to bifurcate income type to cash/non-cash ([3ca1849](https://github.com/tks18/personal-finance-etl/commit/3ca184940fb22faf72ae24bb6f94134e2b2bba90))
+* **backend/transform:** add the new dimension to income cat and sub cat tables ([5f3fe84](https://github.com/tks18/personal-finance-etl/commit/5f3fe845c738a0e8fc0d3f0e5d9df538e2abf87d))
+
+
+### Docs 📃
+
+* add sample config for rules ([693686c](https://github.com/tks18/personal-finance-etl/commit/693686c2a6d9501190eedaf427e54c297642856f))
+
 ### [5.8.2](https://github.com/tks18/personal-finance-etl/compare/5.8.1...5.8.2) (2026-09-20)
 
 
