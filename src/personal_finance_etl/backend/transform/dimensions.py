@@ -112,6 +112,8 @@ def transform_d_income_subcategory(
         div_subcats = rules.income.dividends.sub_category_ids
         int_cats = rules.income.interest.category_ids
         int_subcats = rules.income.interest.sub_category_ids
+        non_cash_cats = rules.income.non_cash.category_ids
+        non_cash_subcats = rules.income.non_cash.sub_category_ids
 
         df_transformed = df_transformed.with_columns(
             pl.when(pl.col("CATEGORY_ID").is_in(active_cats) | pl.col("UID").is_in(active_subcats))
@@ -126,6 +128,12 @@ def transform_d_income_subcategory(
             .then(pl.lit(True))
             .otherwise(pl.lit(False))
             .alias("Is_Interest_Income"),
+            pl.when(
+                pl.col("CATEGORY_ID").is_in(non_cash_cats) | pl.col("UID").is_in(non_cash_subcats)
+            )
+            .then(pl.lit(True))
+            .otherwise(pl.lit(False))
+            .alias("Is_Non_Cash_Income"),
         ).with_columns(
             (pl.col("Is_Dividend_Income") | pl.col("Is_Interest_Income")).alias("Is_Passive_Income")
         )
@@ -135,6 +143,7 @@ def transform_d_income_subcategory(
             pl.lit(False).alias("Is_Dividend_Income"),
             pl.lit(False).alias("Is_Interest_Income"),
             pl.lit(False).alias("Is_Passive_Income"),
+            pl.lit(False).alias("Is_Non_Cash_Income"),
         )
 
     return df_transformed

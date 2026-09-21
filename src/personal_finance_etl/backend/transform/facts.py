@@ -92,6 +92,8 @@ def transform_f_income_transactions(
         div_sub = [uid.upper() for uid in rules.income.dividends.sub_category_ids]
         int_cat = [uid.upper() for uid in rules.income.interest.category_ids]
         int_sub = [uid.upper() for uid in rules.income.interest.sub_category_ids]
+        non_cash_cat = [uid.upper() for uid in rules.income.non_cash.category_ids]
+        non_cash_sub = [uid.upper() for uid in rules.income.non_cash.sub_category_ids]
 
         df_transformed = df_transformed.with_columns(
             pl.when(
@@ -115,12 +117,20 @@ def transform_f_income_transactions(
             .then(True)
             .otherwise(False)
             .alias("Is_Interest_Income"),
+            pl.when(
+                pl.col("CATEGORY_ID").str.to_uppercase().is_in(non_cash_sub)
+                | pl.col("PARENT_ID").str.to_uppercase().is_in(non_cash_cat)
+            )
+            .then(True)
+            .otherwise(False)
+            .alias("Is_Non_Cash_Income"),
         ).drop("PARENT_ID")
     else:
         df_transformed = df_transformed.with_columns(
             pl.lit(False).alias("Is_Active_Income"),
             pl.lit(False).alias("Is_Dividend_Income"),
             pl.lit(False).alias("Is_Interest_Income"),
+            pl.lit(False).alias("Is_Non_Cash_Income"),
         )
 
     return df_transformed
