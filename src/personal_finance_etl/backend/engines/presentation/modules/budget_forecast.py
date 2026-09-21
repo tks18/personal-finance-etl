@@ -87,7 +87,7 @@ class BudgetForecastBuilder:
         )
 
         lf = lf.with_columns(
-            pl.col("Total_Income").alias("Actual_Income"),
+            pl.col("Total_Cash_Income").alias("Actual_Income"),
             pl.col("Total_Core_Expense").alias("Actual_Core_Expense"),
             (pl.col("Total_Expense") - pl.col("Total_Core_Expense")).alias(
                 "Actual_NonCore_Expense"
@@ -235,6 +235,7 @@ class BudgetForecastBuilder:
                 "MONTH_END_DATE",
                 "YEAR_MONTH",
                 # Income anchor
+                "Total_Income",
                 "Actual_Income",
                 "Budget_Income",
                 # Rule targets
@@ -267,5 +268,5 @@ class BudgetForecastBuilder:
                 "Is_Investment_Underfunded",
                 "Is_Income_Volatile",
                 "Is_Budget_Month_Healthy",
-                ]
+            ]
         )

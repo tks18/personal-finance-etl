@@ -231,15 +231,15 @@ class MonthlyCashflowSummaryBuilder:
             (pl.col("Total_Investment_Deployed") - pl.col("Total_Investment_Redeemed")).alias(
                 "Net_Investment_Flow"
             ),
-            (pl.col("Total_Income") - pl.col("Total_Expense")).alias("Gross_Surplus"),
+            (pl.col("Total_Cash_Income") - pl.col("Total_Expense")).alias("Gross_Surplus"),
         ).with_columns(
             (pl.col("Gross_Surplus") - pl.col("Net_Investment_Flow")).alias(
                 "Net_Surplus_After_Invest"
             ),
-            safe_divide("Gross_Surplus", "Total_Income").alias("Savings_Rate_Pct"),
-            safe_divide("Net_Investment_Flow", "Total_Income").alias("Investment_Rate_Pct"),
-            safe_divide("Active_Income", "Total_Income").alias("Active_Income_Share_Pct"),
-            safe_divide("Passive_Income", "Total_Income").alias("Passive_Income_Share_Pct"),
+            safe_divide("Gross_Surplus", "Total_Cash_Income").alias("Savings_Rate_Pct"),
+            safe_divide("Net_Investment_Flow", "Total_Cash_Income").alias("Investment_Rate_Pct"),
+            safe_divide("Active_Income", "Total_Cash_Income").alias("Active_Income_Share_Pct"),
+            safe_divide("Passive_Income", "Total_Cash_Income").alias("Passive_Income_Share_Pct"),
             safe_divide("Total_Core_Expense", "Total_Expense").alias("Core_Expense_Share_Pct"),
             safe_divide("NonCore_Expense", "Total_Expense").alias("NonCore_Expense_Share_Pct"),
             safe_divide("Equity_Deployed", "Total_Investment_Deployed").alias(
@@ -250,18 +250,20 @@ class MonthlyCashflowSummaryBuilder:
 
         # ── Step 5: MoM deltas (sort is already guaranteed above) ─────────────
         lf_monthly = lf_monthly.sort("MONTH_START_DATE").with_columns(
-            (pl.col("Total_Income") - pl.col("Total_Income").shift(1)).alias("Income_MoM_Delta"),
+            (pl.col("Total_Cash_Income") - pl.col("Total_Cash_Income").shift(1)).alias(
+                "Income_MoM_Delta"
+            ),
             (pl.col("Total_Expense") - pl.col("Total_Expense").shift(1)).alias("Expense_MoM_Delta"),
             (pl.col("Net_Investment_Flow") - pl.col("Net_Investment_Flow").shift(1)).alias(
                 "Investment_MoM_Delta"
             ),
-            pct_growth("Total_Income", 1, None).alias("Income_MoM_Pct"),
+            pct_growth("Total_Cash_Income", 1, None).alias("Income_MoM_Pct"),
             pct_growth("Total_Expense", 1, None).alias("Expense_MoM_Pct"),
         )
 
         # ── Step 6: Trailing averages (3M) ────────────────────────────────────
         lf_monthly = lf_monthly.with_columns(
-            rolling_avg("Total_Income", 3).alias("Trailing_3M_Avg_Income"),
+            rolling_avg("Total_Cash_Income", 3).alias("Trailing_3M_Avg_Income"),
             rolling_avg("Total_Expense", 3).alias("Trailing_3M_Avg_Expense"),
             rolling_avg("Net_Investment_Flow", 3).alias("Trailing_3M_Avg_Investment"),
             rolling_avg("Savings_Rate_Pct", 3).alias("Trailing_3M_Avg_Savings_Rate"),
@@ -301,7 +303,7 @@ class MonthlyCashflowSummaryBuilder:
             (pl.col("Gross_Surplus") > 0).alias("Is_Surplus_Month"),
             (
                 pl.col("Net_Investment_Flow")
-                >= pl.col("Total_Income") * self.rules.budget.income_allocation.investment_pct
+                >= pl.col("Total_Cash_Income") * self.rules.budget.income_allocation.investment_pct
             ).alias("Is_Investment_Target_Met"),
             pl.col("Total_Assets").shift(1).fill_null(0.0).alias("Opening_Balance_Asset"),
             pl.col("Total_Assets").alias("Closing_Balance_Asset"),
@@ -315,6 +317,8 @@ class MonthlyCashflowSummaryBuilder:
                 "YEAR_MONTH",
                 # Totals
                 "Total_Income",
+                "Total_Cash_Income",
+                "Total_Non_Cash_Income",
                 "Total_Expense",
                 # Income bifurcation
                 "Active_Income",

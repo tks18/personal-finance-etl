@@ -69,6 +69,7 @@ class IncomeStreamsBuilder:
                             "Is_Passive_Income",
                             "Is_Dividend_Income",
                             "Is_Interest_Income",
+                            "Is_Non_Cash_Income",
                         ]
                     ).rename({"CATEGORY_ID": "PARENT_ID", "UID": "CATEGORY_ID"}),
                     on="CATEGORY_ID",
@@ -94,6 +95,7 @@ class IncomeStreamsBuilder:
                 pl.lit(False).alias("Is_Passive_Income"),
                 pl.lit(False).alias("Is_Dividend_Income"),
                 pl.lit(False).alias("Is_Interest_Income"),
+                pl.lit(False).alias("Is_Non_Cash_Income"),
             )
 
         lf_income_streams = (
@@ -245,5 +247,6 @@ class IncomeStreamsBuilder:
                 "Is_Passive_Income",
                 "Is_Dividend_Income",
                 "Is_Interest_Income",
+                "Is_Non_Cash_Income",
             ]
         )

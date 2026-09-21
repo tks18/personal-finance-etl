@@ -47,6 +47,7 @@ class WealthRiskAnalyticsBuilder:
                     "Total_Net_Worth",
                     "Total_Net_Worth_Market",
                     "Total_Income",
+                    "Total_Cash_Income",
                     "Total_Core_Expense",
                     "Total_Expense",
                     "INFLATION_YOY_PCT",
@@ -56,8 +57,8 @@ class WealthRiskAnalyticsBuilder:
             )
             .with_columns(
                 pl.col("MONTH_START_DATE").cast(pl.String).str.slice(0, 7).alias("YEAR_MONTH"),
-                (pl.col("Total_Income") - pl.col("Total_Core_Expense")).alias("Net_Savings"),
-                (pl.col("Total_Income") - pl.col("Total_Expense")).alias("Net_Savings_Total"),
+                (pl.col("Total_Cash_Income") - pl.col("Total_Core_Expense")).alias("Net_Savings"),
+                (pl.col("Total_Cash_Income") - pl.col("Total_Expense")).alias("Net_Savings_Total"),
             )
             .sort("MONTH_START_DATE")
         )
@@ -247,11 +248,11 @@ class WealthRiskAnalyticsBuilder:
                 (pl.col("FI_Gap_Total") - pl.col("FI_Gap_Total").shift(1)).alias(
                     "FI_Gap_Total_Monthly_Trend"
                 ),
-                safe_divide(safe_divide("FI_Gap", "Months_To_FI_Base_P50"), "Total_Income").alias(
-                    "Savings_Rate_Required"
-                ),
                 safe_divide(
-                    safe_divide("FI_Gap_Total", "Months_To_FI_Base_P50"), "Total_Income"
+                    safe_divide("FI_Gap", "Months_To_FI_Base_P50"), "Total_Cash_Income"
+                ).alias("Savings_Rate_Required"),
+                safe_divide(
+                    safe_divide("FI_Gap_Total", "Months_To_FI_Base_P50"), "Total_Cash_Income"
                 ).alias("Savings_Rate_Required_Total"),
                 (pl.col("Months_To_FI_Base_P50") / 12.0).alias("Years_To_FI_P50"),
                 pl.col("Target_FI_Future_Nominal_P50")
@@ -302,8 +303,10 @@ class WealthRiskAnalyticsBuilder:
             )
             .with_columns(
                 # Actual monthly savings rate as a percentage of income
-                safe_divide("Net_Savings", "Total_Income").alias("Savings_Rate_Actual"),
-                safe_divide("Net_Savings_Total", "Total_Income").alias("Savings_Rate_Actual_Total"),
+                safe_divide("Net_Savings", "Total_Cash_Income").alias("Savings_Rate_Actual"),
+                safe_divide("Net_Savings_Total", "Total_Cash_Income").alias(
+                    "Savings_Rate_Actual_Total"
+                ),
                 # FI Velocity: MoM change in FI coverage — positive = approaching FI
                 (
                     pl.col("Current_FI_Coverage_Pct") - pl.col("Current_FI_Coverage_Pct").shift(1)
@@ -336,6 +339,8 @@ class WealthRiskAnalyticsBuilder:
                 "MONTH_START_DATE",
                 "MONTH_END_DATE",
                 "YEAR_MONTH",
+                "Total_Income",
+                "Total_Cash_Income",
                 # Spending & Savings
                 pl.col("Trailing_6M_Avg_Total_Spend").alias("Trailing_6M_Avg_Spend"),
                 pl.col("Trailing_12M_Avg_Total_Spend").alias("Trailing_12M_Avg_Spend"),
