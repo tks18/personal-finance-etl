@@ -14,6 +14,8 @@ CREATE TABLE IF NOT EXISTS gold.Wealth_Asset_Breakdown (
     Liquid_Assets_Market DOUBLE,
     -- Cashflow
     Income_Inflow DOUBLE,
+    Cash_Income_Inflow DOUBLE,
+    Non_Cash_Income_Inflow DOUBLE,
     Expense_Outflow DOUBLE,
     Core_Expense_Outflow DOUBLE,
     Cash_Expense_Outflow DOUBLE,
@@ -42,6 +44,8 @@ CREATE TABLE IF NOT EXISTS gold.Core_Monthly_Fact (
     MONTH_END_DATE DATE,
     -- Core Metrics
     Total_Income DOUBLE,
+    Total_Cash_Income DOUBLE,
+    Total_Non_Cash_Income DOUBLE,
     Total_Expense DOUBLE,
     Total_Core_Expense DOUBLE,
     Total_Cash_Expense DOUBLE,
@@ -122,7 +126,8 @@ CREATE TABLE IF NOT EXISTS gold.Cashflow_Income_Breakdown (
     Is_Active_Income BOOLEAN,
     Is_Passive_Income BOOLEAN,
     Is_Dividend_Income BOOLEAN,
-    Is_Interest_Income BOOLEAN
+    Is_Interest_Income BOOLEAN,
+    Is_Non_Cash_Income BOOLEAN
 );
 
 CREATE TABLE IF NOT EXISTS gold.Wealth_FIRE_Analytics (
@@ -130,6 +135,8 @@ CREATE TABLE IF NOT EXISTS gold.Wealth_FIRE_Analytics (
     MONTH_START_DATE DATE,
     MONTH_END_DATE DATE,
     YEAR_MONTH TEXT,
+    Total_Income DOUBLE,
+    Total_Cash_Income DOUBLE,
     -- Spending & Savings
     Trailing_6M_Avg_Spend DOUBLE,
     Trailing_12M_Avg_Spend DOUBLE,
@@ -202,6 +209,7 @@ CREATE TABLE IF NOT EXISTS gold.Forecast_Budget_Variance (
     MONTH_END_DATE DATE,
     YEAR_MONTH TEXT,
     -- Income Anchor
+    Total_Income DOUBLE,
     Actual_Income DOUBLE,
     Budget_Income DOUBLE,
     -- Rule Targets (from config: 40/20/30+10)
@@ -261,6 +269,8 @@ CREATE TABLE IF NOT EXISTS gold.Cashflow_Efficiency_Analytics (
     YEAR_MONTH TEXT,
     -- Totals
     Total_Income DOUBLE,
+    Total_Cash_Income DOUBLE,
+    Total_Non_Cash_Income DOUBLE,
     Total_Expense DOUBLE,
     -- Income bifurcation
     Active_Income DOUBLE,
