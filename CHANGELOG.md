@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [5.9.1](https://github.com/tks18/personal-finance-etl/compare/5.9.0...5.9.1) (2026-09-21)
+
+
+### Bug Fixes 🛠
+
+* **backend/gold:** fix total assets not included liabilities ([f946f2f](https://github.com/tks18/personal-finance-etl/commit/f946f2fb7bc3cf5426d77b6323ee2a878c0666f2))
+
 ## [5.9.0](https://github.com/tks18/personal-finance-etl/compare/5.8.2...5.9.0) (2026-09-21)
 
 
