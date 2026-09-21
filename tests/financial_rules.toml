@@ -12,6 +12,10 @@ sub_category_ids = []
 category_ids = []
 sub_category_ids = []
 
+[income.non_cash]
+category_ids = []
+sub_category_ids = []
+
 [expense.core]
 category_ids = []
 sub_category_ids = []
