@@ -20,10 +20,16 @@ class InterestIncomeRules(BaseModel):
     sub_category_ids: list[str] = Field(default_factory=list)
 
 
+class NonCashIncomeRules(BaseModel):
+    category_ids: list[str] = Field(default_factory=list)
+    sub_category_ids: list[str] = Field(default_factory=list)
+
+
 class IncomeRules(BaseModel):
     active: ActiveIncomeRules = Field(default_factory=ActiveIncomeRules)
     dividends: DividendIncomeRules = Field(default_factory=DividendIncomeRules)
     interest: InterestIncomeRules = Field(default_factory=InterestIncomeRules)
+    non_cash: NonCashIncomeRules = Field(default_factory=NonCashIncomeRules)
 
 
 class CoreExpenseRules(BaseModel):
