@@ -359,6 +359,10 @@ class FinancialRules(BaseModel):
     assumptions: AssumptionsRules = Field(...)
     budget: BudgetRules = Field(default_factory=BudgetRules)
 
+    # Transactional rules
+    DEFAULT_CURRENCY_ID: str = "INR_INR"
+    MF_SCHEME_MAPPINGS: dict[str, str] = Field(default_factory=dict)
+
     @classmethod
     def from_toml(cls, filepath: str) -> "FinancialRules":
         if not filepath or not os.path.exists(filepath):

@@ -52,6 +52,7 @@ class TransformationDAG:
         self.rules = rules
 
     def run(self, extracted: ExtractionResult) -> dict[str, pl.DataFrame]:
+        assert self.rules is not None, "FinancialRules must be provided to TransformationDAG"
         logger.info("Transforming Base Dimensions...")
         mappings = extracted.mappings
         d_income_category_lazy = transform_d_income_category(
@@ -109,7 +110,7 @@ class TransformationDAG:
             asset_results: list[AssetPipelineResult] = []
             for pipeline in asset_pipelines:
                 asset_results.append(
-                    pipeline.process(extracted, d_asset_subcategory_lazy, self.cfg, logger)
+                    pipeline.process(extracted, d_asset_subcategory_lazy, self.rules, logger)
                 )
 
             market_data_ref_lazy_list = [res.market_data_ref for res in asset_results]
@@ -121,10 +122,10 @@ class TransformationDAG:
                 market_data_ref_lazy_list
             )
             f_tf_inv_purchase_data_lazy = get_f_tf_investment_purchase_data(
-                purchase_ref_lazy_list, self.cfg.DEFAULT_CURRENCY_ID
+                purchase_ref_lazy_list, self.rules.DEFAULT_CURRENCY_ID
             )
             f_tf_inv_sale_data_lazy = get_f_tf_investment_sale_data(
-                sale_ref_lazy_list, self.cfg.DEFAULT_CURRENCY_ID
+                sale_ref_lazy_list, self.rules.DEFAULT_CURRENCY_ID
             )
 
             logger.info("Building Investment Master...")

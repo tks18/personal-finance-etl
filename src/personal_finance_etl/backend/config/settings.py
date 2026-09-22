@@ -115,13 +115,7 @@ class Settings(BaseModel):
     # Statements
     STATEMENTS_FOLDER: str = ""
 
-    # Configurable Mappings
-    MF_SCHEME_MAPPINGS: dict[str, str] = Field(default_factory=dict)
-
     FILE_HASH_POLICY: FileHashPolicy = Field(default_factory=FileHashPolicy)
-
-    # Defaults
-    DEFAULT_CURRENCY_ID: str = "INR_INR"
 
     @classmethod
     def from_toml(cls, filepath: str) -> "Settings":

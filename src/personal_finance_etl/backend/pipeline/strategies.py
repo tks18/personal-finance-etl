@@ -3,7 +3,7 @@ from typing import Protocol
 
 import polars as pl
 
-from personal_finance_etl.backend.config.settings import Settings
+from personal_finance_etl.backend.config.financial_rules import FinancialRules
 from personal_finance_etl.backend.transform.investments import (
     get_purchase_reference,
     get_sale_reference,
@@ -30,7 +30,7 @@ class AssetPipeline(Protocol):
         self,
         extracted: ExtractionResult,
         d_asset_subcategory_lazy: pl.LazyFrame,
-        cfg: Settings,
+        rules: FinancialRules,
         logger: logging.Logger,
     ) -> AssetPipelineResult:
         """
@@ -45,12 +45,12 @@ class StockPipeline:
         self,
         extracted: ExtractionResult,
         d_asset_subcategory_lazy: pl.LazyFrame,
-        cfg: Settings,
+        rules: FinancialRules,
         logger: logging.Logger,
     ) -> AssetPipelineResult:
         logger.info("Parsing unstructured Stock Excel files...")
         market_data = get_stg_stock_market_data(
-            extracted.stock_market_data_raw, cfg.DEFAULT_CURRENCY_ID
+            extracted.stock_market_data_raw, rules.DEFAULT_CURRENCY_ID
         )
         market_data_ref = get_stg_stock_market_data_ref(market_data)
 
@@ -85,23 +85,23 @@ class MutualFundPipeline:
         self,
         extracted: ExtractionResult,
         d_asset_subcategory_lazy: pl.LazyFrame,
-        cfg: Settings,
+        rules: FinancialRules,
         logger: logging.Logger,
     ) -> AssetPipelineResult:
         logger.info("Parsing unstructured Mutual Fund Excel files...")
         mapping = extracted.stg_mf_isin_mapping
         market_data = get_stg_mf_market_data(
-            extracted.mf_market_data_raw, mapping, cfg.DEFAULT_CURRENCY_ID
+            extracted.mf_market_data_raw, mapping, rules.DEFAULT_CURRENCY_ID
         )
         market_data_ref = get_stg_mf_market_data_ref(market_data)
 
         logger.info("Parsing Mutual Fund Trade Orders...")
         base_orders = get_base_mf_transactions(extracted.mf_transactions_raw)
         purchase_trans = transform_stg_mf_trades(
-            base_orders, mapping, cfg.MF_SCHEME_MAPPINGS, trade_type="PURCHASE"
+            base_orders, mapping, rules.MF_SCHEME_MAPPINGS, trade_type="PURCHASE"
         )
         sale_trans = transform_stg_mf_trades(
-            base_orders, mapping, cfg.MF_SCHEME_MAPPINGS, trade_type="REDEEM"
+            base_orders, mapping, rules.MF_SCHEME_MAPPINGS, trade_type="REDEEM"
         )
 
         logger.info("Aggregating Mutual Fund Purchases...")
