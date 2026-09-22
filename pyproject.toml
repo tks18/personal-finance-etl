@@ -29,6 +29,7 @@ dependencies = [
     "types-psutil>=7.2.2.20260518",
     "types-python-dateutil>=2.9.0.20260716",
     "yfinance>=1.5.1",
+    "uuid>=1.30",
 ]
 
 [build-system]
