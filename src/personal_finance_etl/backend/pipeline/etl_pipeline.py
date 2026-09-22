@@ -19,6 +19,7 @@ from personal_finance_etl.backend.load.database import DuckDBManager
 from personal_finance_etl.backend.load.file_tracker import FileTracker
 from personal_finance_etl.backend.load.gold import GoldLayer
 from personal_finance_etl.backend.load.metadata import MetaLayer
+from personal_finance_etl.backend.load.raw import RawDocumentStore
 from personal_finance_etl.backend.load.silver import SilverLayer
 from personal_finance_etl.backend.pipeline.core.extractor import DataExtractor
 from personal_finance_etl.backend.pipeline.core.transformer import TransformationDAG
@@ -171,9 +172,19 @@ class ETLOrchestrator:
         file_tracker = FileTracker(self.db_manager.conn, self.cfg.FILE_HASH_POLICY)
         run_id = file_tracker.start_run()
 
+        raw_store = None
+        if self.cfg.ENABLE_RAW_DOCUMENT_STORE:
+            raw_store = RawDocumentStore(
+                self.cfg.TARGET_DB_BASE_PATH, self.cfg.RAW_DOCUMENT_STORE_NAME
+            )
+            raw_store.open()
+            raw_store.ensure_schema()
+
         try:
             # Start ACID Transaction for the entire ETL run
             self.db_manager.conn.execute("BEGIN TRANSACTION")
+            if raw_store:
+                raw_store.begin_transaction()
 
             # Pre-Extraction File Discovery
             t_ext_start = time.time()
@@ -205,12 +216,20 @@ class ETLOrchestrator:
                         logger.info(f"  -> [{category}] {n_mod} modified file(s) detected.")
 
             # Actionable Extraction
-            extracted_data = self._extract(
-                actionable_files={
-                    k: new_files.get(k, []) + changed_files.get(k, [])
-                    for k in discovered_files.keys()
-                }
-            )
+            actionable_all = {
+                k: new_files.get(k, []) + changed_files.get(k, []) for k in discovered_files.keys()
+            }
+            if raw_store:
+                if self.cfg.FORCE_REBUILD_RAW_STORE:
+                    logger.info(
+                        "Raw Store Rebuild enabled. Ingesting ALL discovered binary files..."
+                    )
+                    raw_store.load_binaries(discovered_files, file_tracker)
+                else:
+                    logger.info("Raw Store is enabled. Ingesting new/modified binary files...")
+                    raw_store.load_binaries(actionable_all, file_tracker)
+
+            extracted_data = self._extract(actionable_files=actionable_all)
             logger.info(
                 f"Phase 1 Complete [{time.time() - t_ext_start:.2f}s] - Actionable streams loaded into memory."
             )
@@ -260,6 +279,8 @@ class ETLOrchestrator:
 
             # Commit the ACID Transaction
             self.db_manager.conn.execute("COMMIT")
+            if raw_store:
+                raw_store.commit()
 
             files_processed = sum(len(f) for f in new_files.values()) + sum(
                 len(f) for f in changed_files.values()
@@ -276,17 +297,27 @@ class ETLOrchestrator:
             # Rollback all changes if any phase fails
             try:
                 self.db_manager.conn.execute("ROLLBACK")
-                logger.warning(
-                    "Pipeline failed. Transaction completely rolled back to maintain ACID integrity."
-                )
+                logger.warning("DuckDB transaction rolled back.")
             except Exception as rollback_err:
-                logger.error(f"Failed to rollback transaction: {rollback_err}")
+                logger.error(f"Failed to rollback DuckDB transaction: {rollback_err}")
+
+            if raw_store:
+                try:
+                    raw_store.rollback()
+                except Exception as rollback_err:
+                    logger.error(f"Failed to rollback SQLite Raw Store transaction: {rollback_err}")
+
+            logger.warning(
+                "Pipeline failed. Transactions completely rolled back to maintain ACID integrity."
+            )
 
             file_tracker.finish_run(run_id, "failed")
             raise e
         finally:
             logger.info("Cleaning up database connections and WAL sidecars...")
             self.db_manager.close()
+            if raw_store:
+                raw_store.close()
             gc.collect()
 
 
@@ -332,6 +363,7 @@ def process_wrapper(
 
         orchestrator = ETLOrchestrator(cfg, status_queue, rules)
         orchestrator.run()
+
     except Exception as e:
         if status_queue is not None:
             status_queue.put(
