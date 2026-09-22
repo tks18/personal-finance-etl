@@ -46,6 +46,11 @@ class FileTracker:
         except FileNotFoundError:
             return ""
 
+    def generate_file_id(self, filepath: str) -> str:
+        """Generates a deterministic ID (SHA-256) across the platform based on relative path."""
+        unique_path = filepath.replace("\\", "/")
+        return hashlib.sha256(unique_path.encode("utf-8")).hexdigest()
+
     def get_actionable_files(
         self, discovered_files: dict[str, list[str]]
     ) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
@@ -94,7 +99,7 @@ class FileTracker:
         except OSError:
             file_size = 0
 
-        file_id = hashlib.sha256(unique_path.encode("utf-8")).hexdigest()
+        file_id = self.generate_file_id(filepath)
         now = datetime.now()
 
         exists = self.conn.execute(
