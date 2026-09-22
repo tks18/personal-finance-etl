@@ -1,6 +1,11 @@
 SOURCE_DB_FOLDER = "...\\SOURCE_DB.db"
 TARGET_DB_BASE_PATH = "...\\outputs"
 
+# Raw Store Config
+ENABLE_RAW_DOCUMENT_STORE = false
+RAW_DOCUMENT_STORE_NAME = "Raw_Documents.sqlite"
+FORCE_REBUILD_RAW_STORE = true
+
 # Dependencies
 COLUMN_MASTER_PATH = "...\\COLUMN_MASTER.csv"
 MF_ISIN_CSV_PATH = "...\\MF_ISIN_MAPPING.csv"
