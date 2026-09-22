@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [6.0.0](https://github.com/tks18/personal-finance-etl/compare/5.9.1...6.0.0) (2026-09-22)
+
+
+### Code Refactoring 🖌
+
+* move mf mapping, currency to fin_rules as this is a transactional config ([10bf852](https://github.com/tks18/personal-finance-etl/commit/10bf8524775200739d00d95b03cf33983e347889))
+
+
+### Features 🔥
+
+* **backend/load:** add uuid for file hasher for unique doc ids ([76ca211](https://github.com/tks18/personal-finance-etl/commit/76ca21100c4518d5af99613e0451b71cf04de88c))
+* **backend/load:** implement raw document store using the existing file hasher as base ([86c548d](https://github.com/tks18/personal-finance-etl/commit/86c548d5364694bb8be289c309eb241062a38344))
+* **backend/pipeline:** orchestrate the entire raw store in the existing plan ([a4a8e39](https://github.com/tks18/personal-finance-etl/commit/a4a8e3947ee0a26e6d581e61463c682183f9a303))
+* **backend/settings:** implement config for raw landing stage which will store raw file bytes ([630bd04](https://github.com/tks18/personal-finance-etl/commit/630bd04a3a9d65dc1d6fb319317fa6e695319911))
+
+
+### Build System 🏗
+
+* add uuid to package ([2c9eaa5](https://github.com/tks18/personal-finance-etl/commit/2c9eaa56709177deb6c11314932acdb63d3d8707))
+
 ### [5.9.1](https://github.com/tks18/personal-finance-etl/compare/5.9.0...5.9.1) (2026-09-21)
 
 
