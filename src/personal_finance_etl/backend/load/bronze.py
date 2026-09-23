@@ -71,6 +71,24 @@ class BronzeLayer:
             result[row[0]] = row[1]
         return result
 
+    TABLE_MAPPINGS = [
+        ("zcategory", "sqlite_source", "bronze.r_SQLite_ZCategory", True),
+        ("assetgroup", "sqlite_source", "bronze.r_SQLite_AssetGroup", True),
+        ("assets", "sqlite_source", "bronze.r_SQLite_Assets", True),
+        ("currency", "sqlite_source", "bronze.r_SQLite_Currency", True),
+        ("inoutcome", "sqlite_source", "bronze.r_SQLite_InOutcome", True),
+        ("stg_mf_isin_mapping", "mf_isin", "bronze.r_MF_ISIN_Mapping", True),
+        ("stg_benchmark_mapping", "benchmark_mapping", "bronze.r_Benchmark_Mapping", True),
+        ("raw_opening_balances", "opening_balances", "bronze.r_Opening_Balances", True),
+        ("raw_benchmark_master", "benchmark_master", "bronze.r_Benchmark_Master", True),
+        ("raw_macro_parameters", "macro_parameters", "bronze.r_Macro_Parameters", True),
+        ("column_master", "column_master", "bronze.r_Column_Master", True),
+        ("mf_market_data_raw", "mf_holdings", "bronze.r_MF_Market_Data", False),
+        ("mf_transactions_raw", "mf_orders", "bronze.r_MF_Transactions", False),
+        ("stock_market_data_raw", "stock_pl", "bronze.r_Stock_Market_Data", False),
+        ("stock_transactions_raw", "stock_orders", "bronze.r_Stock_Transactions", False),
+    ]
+
     def load(
         self,
         extracted_data: ExtractionResult,
@@ -80,25 +98,7 @@ class BronzeLayer:
         """Writes all raw extracted dataframes to bronze.* via db_manager.conn."""
         logger.info("Loading raw datasets into Bronze layer...")
 
-        table_mappings = [
-            ("zcategory", "sqlite_source", "bronze.r_SQLite_ZCategory", True),
-            ("assetgroup", "sqlite_source", "bronze.r_SQLite_AssetGroup", True),
-            ("assets", "sqlite_source", "bronze.r_SQLite_Assets", True),
-            ("currency", "sqlite_source", "bronze.r_SQLite_Currency", True),
-            ("inoutcome", "sqlite_source", "bronze.r_SQLite_InOutcome", True),
-            ("stg_mf_isin_mapping", "mf_isin", "bronze.r_MF_ISIN_Mapping", True),
-            ("stg_benchmark_mapping", "benchmark_mapping", "bronze.r_Benchmark_Mapping", True),
-            ("raw_opening_balances", "opening_balances", "bronze.r_Opening_Balances", True),
-            ("raw_benchmark_master", "benchmark_master", "bronze.r_Benchmark_Master", True),
-            ("raw_macro_parameters", "macro_parameters", "bronze.r_Macro_Parameters", True),
-            ("column_master", "column_master", "bronze.r_Column_Master", True),
-            ("mf_market_data_raw", "mf_holdings", "bronze.r_MF_Market_Data", False),
-            ("mf_transactions_raw", "mf_orders", "bronze.r_MF_Transactions", False),
-            ("stock_market_data_raw", "stock_pl", "bronze.r_Stock_Market_Data", False),
-            ("stock_transactions_raw", "stock_orders", "bronze.r_Stock_Transactions", False),
-        ]
-
-        for attr, category, table_name, is_full_replace in table_mappings:
+        for attr, category, table_name, is_full_replace in self.TABLE_MAPPINGS:
             df = getattr(extracted_data, attr, None)
             if df is not None:
                 actionable = new_files.get(category, []) + changed_files.get(category, [])

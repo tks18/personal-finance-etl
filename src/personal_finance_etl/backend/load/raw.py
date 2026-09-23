@@ -280,3 +280,38 @@ class RawDocumentStore:
             "SELECT relative_path, file_hash FROM raw_file_registry"
         ).fetchall()
         return {r[0]: r[1] for r in rows}
+
+    def delete_obsolete_files(self, category: str, keep_filepaths: list[str]) -> None:
+        """Deletes all files in a category from the Raw Store EXCEPT the ones in keep_filepaths.
+        Useful for full-replace data sources to prevent bloating the SQLite DB."""
+        if not self._conn:
+            return
+
+        unique_paths = [p.replace("\\", "/") for p in keep_filepaths]
+
+        if unique_paths:
+            placeholders = ",".join("?" * len(unique_paths))
+
+            # Find file_ids to delete
+            rows = self._conn.execute(
+                f"SELECT file_id FROM raw_file_registry WHERE file_category = ? AND relative_path NOT IN ({placeholders})",
+                [category] + unique_paths,
+            ).fetchall()
+        else:
+            rows = self._conn.execute(
+                "SELECT file_id FROM raw_file_registry WHERE file_category = ?", [category]
+            ).fetchall()
+
+        file_ids_to_delete = [r[0] for r in rows]
+
+        if file_ids_to_delete:
+            p_ids = ",".join("?" * len(file_ids_to_delete))
+            self._conn.execute(
+                f"DELETE FROM raw_payloads WHERE file_id IN ({p_ids})", file_ids_to_delete
+            )
+            self._conn.execute(
+                f"DELETE FROM raw_file_registry WHERE file_id IN ({p_ids})", file_ids_to_delete
+            )
+            logger.info(
+                f"Raw Store: Pruned {len(file_ids_to_delete)} obsolete file(s) from category '{category}'."
+            )

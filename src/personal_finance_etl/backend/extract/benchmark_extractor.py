@@ -1,6 +1,7 @@
 import concurrent.futures
 import io
 import time
+import uuid
 from datetime import date, timedelta
 
 import polars as pl
@@ -196,7 +197,8 @@ class BenchmarkExtractor:
             df_year.write_parquet(buf)
             raw_bytes = buf.getvalue()
 
-            filename = f"benchmark_history_{year}.parquet"
+            run_uuid = str(uuid.uuid4())[:8]
+            filename = f"benchmark_delta_{year}_{run_uuid}.parquet"
             virtual_path = self.raw_store.inject_virtual_file(
                 filename=filename, category="benchmark_history", raw_bytes=raw_bytes
             )

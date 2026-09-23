@@ -199,6 +199,14 @@ class ETLOrchestrator:
                 }
 
                 logger.info("Ingesting new/modified binary files into Raw Store...")
+
+                # Prune obsolete files from full-replace categories to prevent SQLite bloating
+                full_replace_categories = list(
+                    set(cat for _, cat, _, is_full in BronzeLayer.TABLE_MAPPINGS if is_full)
+                )
+                for cat in full_replace_categories:
+                    raw_store.delete_obsolete_files(cat, discovered_files.get(cat, []))
+
                 raw_store.load_binaries(actionable_all)
                 files_skipped = sum(len(f) for f in discovered_files.values()) - (
                     sum(len(f) for f in new_files.values())
