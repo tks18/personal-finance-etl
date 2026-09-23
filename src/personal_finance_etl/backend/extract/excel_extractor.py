@@ -1,5 +1,4 @@
 # pyright: reportUnknownMemberType=false, reportUnknownVariableType=false, reportUnknownArgumentType=false
-import os
 import re
 from datetime import datetime
 
@@ -32,20 +31,18 @@ def _clean_excel_headers(df_sliced: pl.DataFrame) -> tuple[pl.DataFrame, str]:
     return df_data, first_col
 
 
-def _process_mf_statement(file_path: str) -> pl.DataFrame:
-    logger.debug(f"[Extractor] Processing MF Holding Statement: {os.path.basename(file_path)}")
-    excel_reader = fastexcel.read_excel(file_path)
+def _process_mf_statement(filename: str, raw_bytes: bytes) -> pl.DataFrame:
+    logger.debug(f"[Extractor] Processing MF Holding Statement: {filename}")
+    excel_reader = fastexcel.read_excel(raw_bytes)
     if "Holdings" not in excel_reader.sheet_names:
-        logger.debug(f"[Extractor] Skipped {os.path.basename(file_path)}: Missing 'Holdings' sheet")
+        logger.debug(f"[Extractor] Skipped {filename}: Missing 'Holdings' sheet")
         return pl.DataFrame()
 
     df_raw = excel_reader.load_sheet("Holdings", header_row=None).to_polars()
     col_1 = df_raw.columns[0]
     start_search = df_raw.with_row_index().filter(pl.col(col_1) == "Scheme Name")
     if start_search.is_empty():
-        logger.debug(
-            f"[Extractor] Skipped {os.path.basename(file_path)}: Could not find 'Scheme Name' anchor"
-        )
+        logger.debug(f"[Extractor] Skipped {filename}: Could not find 'Scheme Name' anchor")
         return pl.DataFrame()
 
     header_idx = start_search["index"][0]
@@ -55,10 +52,10 @@ def _process_mf_statement(file_path: str) -> pl.DataFrame:
     return df_data.filter(pl.col(first_col).is_not_null())
 
 
-def extract_mf_market_data_raw(valid_files: list[str]) -> pl.LazyFrame:
+def extract_mf_market_data_raw(valid_files: list[tuple[str, str, bytes]]) -> pl.LazyFrame:
+    """Expects list of (filename, folder_path, raw_bytes)"""
     all_dfs = []
-    for file_path in valid_files:
-        filename = os.path.basename(file_path)
+    for filename, folder_path, raw_bytes in valid_files:
         try:
             match = re.search(r"(\d{2}-\d{2}-\d{4})", filename)
             if not match:
@@ -68,12 +65,12 @@ def extract_mf_market_data_raw(valid_files: list[str]) -> pl.LazyFrame:
         except ValueError:
             logger.warning(f"File skipped (parse error): {filename}")
             continue
-        df_processed = _process_mf_statement(file_path)
+        df_processed = _process_mf_statement(filename, raw_bytes)
         if df_processed.is_empty():
             continue
         df_processed = df_processed.with_columns(
             pl.lit(filename).alias("__file_name__"),
-            pl.lit(os.path.dirname(file_path)).alias("__folder_path__"),
+            pl.lit(folder_path).alias("__folder_path__"),
             pl.lit(month_date).alias("Month Date"),
         )
         all_dfs.append(df_processed)
@@ -82,8 +79,8 @@ def extract_mf_market_data_raw(valid_files: list[str]) -> pl.LazyFrame:
     return pl.concat(all_dfs, how="diagonal").lazy()
 
 
-def _process_mf_transaction_statements(file_path: str) -> pl.DataFrame:
-    excel_reader = fastexcel.read_excel(file_path)
+def _process_mf_transaction_statements(raw_bytes: bytes) -> pl.DataFrame:
+    excel_reader = fastexcel.read_excel(raw_bytes)
     if "Transactions" not in excel_reader.sheet_names:
         return pl.DataFrame()
     df_raw = excel_reader.load_sheet("Transactions", header_row=None).to_polars()
@@ -100,10 +97,9 @@ def _process_mf_transaction_statements(file_path: str) -> pl.DataFrame:
     return df_data.filter(pl.col(first_col).is_not_null())
 
 
-def extract_mf_transactions_raw(valid_files: list[str]) -> pl.LazyFrame:
+def extract_mf_transactions_raw(valid_files: list[tuple[str, str, bytes]]) -> pl.LazyFrame:
     all_dfs = []
-    for file_path in valid_files:
-        filename = os.path.basename(file_path)
+    for filename, folder_path, raw_bytes in valid_files:
         try:
             match = re.search(r"(\d{2}-\d{2}-\d{4}|\d{2}-\d{4})", filename)
             if not match:
@@ -117,12 +113,12 @@ def extract_mf_transactions_raw(valid_files: list[str]) -> pl.LazyFrame:
         except ValueError:
             logger.warning(f"File skipped (parse error): {filename}")
             continue
-        df_processed = _process_mf_transaction_statements(file_path)
+        df_processed = _process_mf_transaction_statements(raw_bytes)
         if df_processed.is_empty():
             continue
         df_processed = df_processed.with_columns(
             pl.lit(filename).alias("__file_name__"),
-            pl.lit(os.path.dirname(file_path)).alias("__folder_path__"),
+            pl.lit(folder_path).alias("__folder_path__"),
             pl.lit(month_date).alias("Month Date"),
         )
         all_dfs.append(df_processed)
@@ -131,8 +127,8 @@ def extract_mf_transactions_raw(valid_files: list[str]) -> pl.LazyFrame:
     return pl.concat(all_dfs, how="diagonal").lazy()
 
 
-def _process_stock_closing_statement(file_path: str) -> pl.DataFrame:
-    excel_reader = fastexcel.read_excel(file_path)
+def _process_stock_closing_statement(raw_bytes: bytes) -> pl.DataFrame:
+    excel_reader = fastexcel.read_excel(raw_bytes)
     sheet_names = excel_reader.sheet_names
     target_sheet = next(
         (name for name in ["Trade Level", "Sheet", "Sheet1"] if name in sheet_names), None
@@ -156,10 +152,9 @@ def _process_stock_closing_statement(file_path: str) -> pl.DataFrame:
     return df_data
 
 
-def extract_stock_market_data_raw(valid_files: list[str]) -> pl.LazyFrame:
+def extract_stock_market_data_raw(valid_files: list[tuple[str, str, bytes]]) -> pl.LazyFrame:
     all_dfs = []
-    for file_path in valid_files:
-        filename = os.path.basename(file_path)
+    for filename, folder_path, raw_bytes in valid_files:
         try:
             match = re.search(r"(\d{2}-\d{2}-\d{4})", filename)
             if not match:
@@ -169,12 +164,12 @@ def extract_stock_market_data_raw(valid_files: list[str]) -> pl.LazyFrame:
         except ValueError:
             logger.warning(f"File skipped (parse error): {filename}")
             continue
-        df_processed = _process_stock_closing_statement(file_path)
+        df_processed = _process_stock_closing_statement(raw_bytes)
         if df_processed.is_empty():
             continue
         df_processed = df_processed.with_columns(
             pl.lit(filename).alias("__file_name__"),
-            pl.lit(os.path.dirname(file_path)).alias("__folder_path__"),
+            pl.lit(folder_path).alias("__folder_path__"),
             pl.lit(month_date).alias("Month Date"),
         )
         all_dfs.append(df_processed)
@@ -183,8 +178,8 @@ def extract_stock_market_data_raw(valid_files: list[str]) -> pl.LazyFrame:
     return pl.concat(all_dfs, how="diagonal").lazy()
 
 
-def _process_stock_transactions(file_path: str) -> pl.DataFrame:
-    excel_reader = fastexcel.read_excel(file_path)
+def _process_stock_transactions(raw_bytes: bytes) -> pl.DataFrame:
+    excel_reader = fastexcel.read_excel(raw_bytes)
     if "Sheet1" not in excel_reader.sheet_names:
         return pl.DataFrame()
     df_raw = excel_reader.load_sheet("Sheet1", header_row=5).to_polars()
@@ -193,16 +188,15 @@ def _process_stock_transactions(file_path: str) -> pl.DataFrame:
     return pl.DataFrame()
 
 
-def extract_stock_transactions_raw(valid_files: list[str]) -> pl.LazyFrame:
+def extract_stock_transactions_raw(valid_files: list[tuple[str, str, bytes]]) -> pl.LazyFrame:
     all_dfs = []
-    for file_path in valid_files:
-        df_processed = _process_stock_transactions(file_path)
+    for filename, folder_path, raw_bytes in valid_files:
+        df_processed = _process_stock_transactions(raw_bytes)
         if df_processed.is_empty():
             continue
-        filename = os.path.basename(file_path)
         df_processed = df_processed.with_columns(
             pl.lit(filename).alias("__file_name__"),
-            pl.lit(os.path.dirname(file_path)).alias("__folder_path__"),
+            pl.lit(folder_path).alias("__folder_path__"),
         )
         all_dfs.append(df_processed)
     if not all_dfs:
