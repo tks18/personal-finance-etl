@@ -1,6 +1,7 @@
 <div align="center">
   <img src="logo.png" alt="Logo" width="220"/>
   <h1>Shan's Personal Finance Quant Engine 💸✨</h1>
+  <p><code>[ Broker Binaries & APIs ] ➔ [ SQLite WAL Parquet Store ] ➔ [ DuckDB Lakehouse ] ➔ [ Polars DAGs ] ➔ [ Numba JIT Quant Models ]</code></p>
   <p><b>The undisputed GOAT of personal wealth management frameworks. Built to literally mog your net worth into the stratosphere.</b></p>
   <p><i>Because tracking your portfolio in a basic spreadsheet or SaaS pie-chart app is officially NPC energy. We play on hard mode.</i></p>
 
@@ -94,6 +95,7 @@ If you're a data engineer or software dev looking under the hood, here is how th
 
 ```mermaid
 graph TD
+    classDef raw fill:#1c1c1c,stroke:#00ffcc,stroke-width:2px,color:#fff;
     classDef bronze fill:#cd7f32,stroke:#fff,stroke-width:2px,color:#fff;
     classDef silver fill:#c0c0c0,stroke:#fff,stroke-width:2px,color:#000;
     classDef gold fill:#ffd700,stroke:#fff,stroke-width:2px,color:#000;
@@ -101,32 +103,39 @@ graph TD
     classDef external fill:#2d2d2d,stroke:#00ffcc,stroke-width:2px,color:#fff;
     classDef core fill:#00008b,stroke:#00ffcc,stroke-width:3px,color:#fff;
 
-    A["Raw Broker/Bank Files<br><i>(Excel, CSV, PDF)</i>"]:::external -->|"FileTracker & SHA-256 Hashes"| B
+    A["Raw Broker/Bank Files<br><i>(Excel, CSV, PDF)</i>"]:::external -->|"FileTracker & SHA-256 Hashes"| Raw1
+    E["yfinance API<br><i>(Historical Market Data)</i>"]:::external -->|"Benchmark Extractor<br>Delta Pulls Only"| Raw1
 
-    subgraph BronzeLayer ["Raw Ingestion Phase"]
+    subgraph RawLayer ["Raw Blob Store"]
+        Raw1[("SQLite Raw Store<br><i>(WAL Optimized)</i>")]:::raw
+        Raw_Desc["Parquet Chunks & BLOBs"]:::raw
+    end
+
+    Raw1 -->|"Zero-Copy Binary Reads"| B
+
+    subgraph BronzeLayer ["Bronze Layer (Lakehouse)"]
         B[("bronze.* Tables")]:::bronze
-        B_Desc["FastExcel Zero-Copy Parsing"]:::bronze
+        B_Desc["Immutable Incremental Caches"]:::bronze
     end
 
-    B -->|"Schema Validation"| C
+    B -->|"Polars LazyFrames"| C
 
-    subgraph SilverLayer ["Harmonization & Cleansing DAG"]
-        C{"Polars Transforms"}:::silver
+    subgraph SilverLayer ["Silver Layer (Harmonization)"]
+        C{"Polars Transformation DAG"}:::silver
         D[("silver.* Tables")]:::silver
-        C -->|"Type Enforcement & Dedupe"| D
+        C -->|"Type Enforcement, Dedupe, Imputation"| D
     end
 
-    D -->|"yfinance Daemon"| E["Benchmark Engine<br><i>(Delta Pulls Only)</i>"]:::external
-    E --> F
+    D -->|"Clean Fact & Dimension Tables"| F
 
-    subgraph GoldLayer ["Quant Analytics & Wealth Presentation"]
+    subgraph GoldLayer ["Gold Layer (Quant Analytics)"]
         F{"Parallel Streaming Polars DAG"}:::gold
         G[("gold.* Views")]:::gold
         F -->|"PyXIRR & FIFO Tax Lots"| G
         F -->|"Numba JIT Monte Carlo"| G
     end
 
-    G -->|"ACID Commits (BEGIN/ROLLBACK)"| H[("DuckDB Master Warehouse")]:::core
+    G -->|"Two-Phase ACID Commits"| H[("DuckDB Master Warehouse")]:::core
 
     subgraph MetaLayer ["Telemetry & State"]
         I[("meta.* Tables")]:::meta
@@ -134,12 +143,12 @@ graph TD
     end
 ```
 
-1. **State-Aware File Tracker:** Recursively SHA-256 hashes thousands of binaries and only extracts _new or modified_ files. Skips massive redundant IO operations.
-2. **Phase 1: The Bronze Layer:** Parses messy broker files via `fastexcel` and upserts into dynamic `DuckDB` tables.
-3. **Phase 2: The Silver Layer:** A decoupled DAG using `Polars` harmonizes dimensions (Calendar, Investments, Class) and dedupes all historical facts.
-4. **Phase 3: The Benchmark Engine:** A multi-threaded `yfinance` daemon evaluates the exact temporal delta between your cache and pulls _only_ the missing market periods.
+1. **State-Aware File Tracker:** Recursively SHA-256 hashes thousands of binaries.
+2. **Phase 1: The Raw Store (SQLite):** Acts as a high-performance Write-Ahead Log (WAL) blob store. Caches raw Excel, CSV, and `yfinance` Parquet chunks purely in-memory as byte payloads to bypass all local disk I/O bottlenecks.
+3. **Phase 2: The Bronze Layer:** Ingests these binary payloads, extracting the raw immutable facts into deeply cached, incrementally upserted `DuckDB` tables.
+4. **Phase 3: The Silver Layer:** A decoupled DAG using `Polars` harmonizes dimensions (Calendar, Investments, Class), dedupes historical facts, and automatically imputes time-series benchmarks.
 5. **Phase 4: The Gold Layer (Quant Analytics & Presentation):** Numba JIT Monte Carlo and PyXIRR array math execute via multiprocessing worker pools down to the granular ISIN and tax-lot level.
-6. **Phase 5: Lakehouse Materialization:** Aggressively flushes 17 highly-optimized BI-ready presentation tables directly to the local `DuckDB` file via an ACID-compliant transaction rollback block.
+6. **Phase 5: Lakehouse Materialization:** Aggressively flushes 17 highly-optimized BI-ready presentation tables directly to the local `DuckDB` file via strict Two-Phase ACID-compliant transaction blocks.
 
 ---
 
