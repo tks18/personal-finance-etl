@@ -10,9 +10,8 @@ import polars as pl
 from personal_finance_etl.backend.config.financial_rules import FinancialRules
 from personal_finance_etl.backend.config.settings import Settings
 from personal_finance_etl.backend.engines.analytics import InvestmentQuantEngine
-from personal_finance_etl.backend.engines.benchmark import BenchmarkEngine
 from personal_finance_etl.backend.engines.presentation.wealth_engine import WealthPresentationEngine
-from personal_finance_etl.backend.extract.sqlite_extractor import ADBCSQLiteExtractor
+from personal_finance_etl.backend.extract.sqlite_extractor import SQLiteExtractor
 from personal_finance_etl.backend.extract.statement_locator import categorize_statement_files
 from personal_finance_etl.backend.load.bronze import BronzeLayer
 from personal_finance_etl.backend.load.database import DuckDBManager
@@ -21,6 +20,7 @@ from personal_finance_etl.backend.load.gold import GoldLayer
 from personal_finance_etl.backend.load.metadata import MetaLayer
 from personal_finance_etl.backend.load.raw import RawDocumentStore
 from personal_finance_etl.backend.load.silver import SilverLayer
+from personal_finance_etl.backend.pipeline.benchmark_pipeline import BenchmarkPipeline
 from personal_finance_etl.backend.pipeline.core.extractor import DataExtractor
 from personal_finance_etl.backend.pipeline.core.transformer import TransformationDAG
 from personal_finance_etl.backend.utils.interfaces import ILogger
@@ -37,48 +37,29 @@ class ETLOrchestrator:
         self.db_manager = DuckDBManager(cfg.TARGET_DB_BASE_PATH, cfg.TARGET_DB_NAME)
         self.dfs: dict[str, pl.DataFrame] = {}
 
-    def _extract(self, actionable_files: dict[str, list[str]] | None = None) -> ExtractionResult:
-        extractor = DataExtractor(self.cfg, self.status_queue)
+    def _extract(
+        self, raw_store: RawDocumentStore, actionable_files: dict[str, list[str]] | None = None
+    ) -> ExtractionResult:
+        extractor = DataExtractor(self.cfg, self.status_queue, raw_store)
         return extractor.run(actionable_files)
 
     def _transform(self, extracted_data: ExtractionResult) -> None:
         transformer = TransformationDAG(self.cfg, self.status_queue, self.rules)
         self.dfs = transformer.run(extracted_data)
 
-    def _run_engines(self) -> None:
-        logger.info("Detecting date range & Starting Benchmark Engine...")
-        self.status_queue.put(
-            EngineStatus(
-                msg="",
-                data=None,
-                progress=0.4,
-                level=LogLevel.STEP,
-            )
-        )
-        bm_engine = BenchmarkEngine(
-            df_m=self.dfs["df_d_benchmark_master"],
-            status_queue=self.status_queue,
-        )
-
-        # Read the cache directly from the active DuckDB transaction before the Silver layer is wiped
-        try:
-            cached_benchmark_df = self.db_manager.conn.execute(
-                "SELECT * FROM silver.f_Investment_Benchmark_Data"
-            ).pl()
-        except Exception:
-            cached_benchmark_df = pl.DataFrame()
-
-        self.dfs["df_f_investment_benchmark_data"] = bm_engine.run(
+    def _process_benchmark(self, raw_store: RawDocumentStore, bronze: BronzeLayer) -> None:
+        pipeline = BenchmarkPipeline(raw_store, bronze, self.status_queue)
+        self.dfs["df_f_investment_benchmark_data"] = pipeline.process(
             df_market=self.dfs.get("df_f_investment_market_data"),
             df_purchase=self.dfs.get("df_f_tf_inv_purchase"),
-            df_cached=cached_benchmark_df,
+            df_master=self.dfs["df_d_benchmark_master"],
         )
-        logger.info(
-            f"  -> Benchmark Engine computed tracking deviations for {self.dfs['df_f_investment_benchmark_data'].height} market periods."
-        )
+
+    def _run_engines(self) -> None:
 
         logger.info("Starting Investment Quant Engine...")
         self.status_queue.put(EngineStatus(msg="", data=None, progress=0.6, level=LogLevel.STEP))
+
         quant_engine = InvestmentQuantEngine(
             df_p=self.dfs["df_f_tf_inv_purchase"],
             df_s=self.dfs["df_f_tf_inv_sale"],
@@ -135,8 +116,6 @@ class ETLOrchestrator:
             for k, res in zip(keys, results, strict=True):
                 self.dfs[k] = res
 
-    # _load() removed since loading is handled per layer
-
     def run(self) -> None:
         self.cfg.validate_config()
 
@@ -155,7 +134,7 @@ class ETLOrchestrator:
 
         logger.debug("=== FINANCIAL RULES DUMP ===")
         if self.rules is not None and hasattr(self.rules, "model_dump_json"):
-            logger.debug(self.rules.model_dump_json(indent=2))  # type: ignore
+            logger.debug(self.rules.model_dump_json(indent=2))
         else:
             logger.debug(str(self.rules))
         logger.debug("==============================")
@@ -169,67 +148,72 @@ class ETLOrchestrator:
         self.db_manager.open()
         self.db_manager.ensure_schemas()
 
-        file_tracker = FileTracker(self.db_manager.conn, self.cfg.FILE_HASH_POLICY)
-        run_id = file_tracker.start_run()
+        raw_store = RawDocumentStore(self.cfg.TARGET_DB_BASE_PATH, self.cfg.RAW_DOCUMENT_STORE_NAME)
+        raw_store.open()
+        raw_store.ensure_schema()
 
-        raw_store = None
-        if self.cfg.ENABLE_RAW_DOCUMENT_STORE:
-            raw_store = RawDocumentStore(
-                self.cfg.TARGET_DB_BASE_PATH, self.cfg.RAW_DOCUMENT_STORE_NAME
-            )
-            raw_store.open()
-            raw_store.ensure_schema()
+        file_tracker = FileTracker(self.db_manager.conn, self.cfg.FILE_HASH_POLICY, raw_store)
+        run_id = file_tracker.start_run()
 
         try:
             # Start ACID Transaction for the entire ETL run
             self.db_manager.conn.execute("BEGIN TRANSACTION")
-            if raw_store:
-                raw_store.begin_transaction()
+            raw_store.begin_transaction()
 
-            # Pre-Extraction File Discovery
             t_ext_start = time.time()
-            logger.info("Phase 1/5: Discovering files and detecting changes...")
+            if not self.cfg.DISABLE_FILE_DISCOVERER:
+                logger.info("Phase 1/5: Discovering files and detecting changes...")
 
-            discovered_files = categorize_statement_files(self.cfg.STATEMENTS_FOLDER, strict=True)
-            discovered_files["sqlite_source"] = [
-                ADBCSQLiteExtractor(self.cfg.SOURCE_DB_FOLDER).get_latest_sqlite_backup()
-            ]
-            discovered_files["mf_isin"] = [self.cfg.MF_ISIN_CSV_PATH]
-            discovered_files["benchmark_mapping"] = [self.cfg.BENCHMARK_MAPPING_CSV_PATH]
-            discovered_files["opening_balances"] = [self.cfg.OPENING_BALANCE_CSV_PATH]
-            discovered_files["benchmark_master"] = [self.cfg.BENCHMARK_MASTER_CSV_PATH]
-            discovered_files["macro_parameters"] = [self.cfg.MACRO_PARAMETERS_CSV_PATH]
-            discovered_files["column_master"] = [self.cfg.COLUMN_MASTER_PATH]
+                discovered_files = categorize_statement_files(
+                    self.cfg.STATEMENTS_FOLDER, strict=True
+                )
+                discovered_files["sqlite_source"] = [
+                    SQLiteExtractor(self.cfg.SOURCE_DB_FOLDER).get_latest_sqlite_backup()
+                ]
+                discovered_files["mf_isin"] = [self.cfg.MF_ISIN_CSV_PATH]
+                discovered_files["benchmark_mapping"] = [self.cfg.BENCHMARK_MAPPING_CSV_PATH]
+                discovered_files["opening_balances"] = [self.cfg.OPENING_BALANCE_CSV_PATH]
+                discovered_files["benchmark_master"] = [self.cfg.BENCHMARK_MASTER_CSV_PATH]
+                discovered_files["macro_parameters"] = [self.cfg.MACRO_PARAMETERS_CSV_PATH]
+                discovered_files["column_master"] = [self.cfg.COLUMN_MASTER_PATH]
 
-            new_files, changed_files = file_tracker.get_actionable_files(discovered_files)
+                new_files, changed_files = file_tracker.get_actionable_files(discovered_files)
 
-            logger.info("File Tracker Discovery Breakdown:")
-            for category in discovered_files.keys():
-                n_new = len(new_files.get(category, []))
-                n_mod = len(changed_files.get(category, []))
-                if n_new == 0 and n_mod == 0:
-                    logger.info(f"  -> [{category}] 0 actionable file(s) detected. Cache intact.")
-                else:
-                    if n_new > 0:
-                        logger.info(f"  -> [{category}] {n_new} new file(s) detected.")
-                    if n_mod > 0:
-                        logger.info(f"  -> [{category}] {n_mod} modified file(s) detected.")
+                logger.info("File Tracker Discovery Breakdown:")
+                for category in discovered_files.keys():
+                    n_new = len(new_files.get(category, []))
+                    n_mod = len(changed_files.get(category, []))
+                    if n_new == 0 and n_mod == 0:
+                        logger.info(
+                            f"  -> [{category}] 0 actionable file(s) detected. Cache intact."
+                        )
+                    else:
+                        if n_new > 0:
+                            logger.info(f"  -> [{category}] {n_new} new file(s) detected.")
+                        if n_mod > 0:
+                            logger.info(f"  -> [{category}] {n_mod} modified file(s) detected.")
 
-            # Actionable Extraction
-            actionable_all = {
-                k: new_files.get(k, []) + changed_files.get(k, []) for k in discovered_files.keys()
-            }
-            if raw_store:
-                if self.cfg.FORCE_REBUILD_RAW_STORE:
-                    logger.info(
-                        "Raw Store Rebuild enabled. Ingesting ALL discovered binary files..."
-                    )
-                    raw_store.load_binaries(discovered_files, file_tracker)
-                else:
-                    logger.info("Raw Store is enabled. Ingesting new/modified binary files...")
-                    raw_store.load_binaries(actionable_all, file_tracker)
+                actionable_all = {
+                    k: new_files.get(k, []) + changed_files.get(k, [])
+                    for k in discovered_files.keys()
+                }
 
-            extracted_data = self._extract(actionable_files=actionable_all)
+                logger.info("Ingesting new/modified binary files into Raw Store...")
+                raw_store.load_binaries(actionable_all)
+                files_skipped = sum(len(f) for f in discovered_files.values()) - (
+                    sum(len(f) for f in new_files.values())
+                    + sum(len(f) for f in changed_files.values())
+                )
+            else:
+                logger.info(
+                    "Phase 1/5: Bypassing File Discoverer. Fetching pending files from Raw Store..."
+                )
+                new_files = {}
+                changed_files = raw_store.get_pending_files()
+                actionable_all = changed_files
+                files_skipped = 0
+
+            extracted_data = self._extract(raw_store, actionable_files=actionable_all)
             logger.info(
                 f"Phase 1 Complete [{time.time() - t_ext_start:.2f}s] - Actionable streams loaded into memory."
             )
@@ -246,7 +230,7 @@ class ETLOrchestrator:
 
             # Full Dataset Read
             logger.info("Fetching complete dataset from Bronze Lakehouse for Transformation...")
-            full_dataset = bronze.get_full_dataset(extracted_data.mappings)  # type: ignore
+            full_dataset = bronze.get_full_dataset(extracted_data.mappings)
 
             # Transformation Phase
             t_trans_start = time.time()
@@ -255,6 +239,9 @@ class ETLOrchestrator:
             logger.info(
                 f"Phase 3 Complete [{time.time() - t_trans_start:.2f}s] - DAG mapped {len(self.dfs)} base tables."
             )
+
+            # Phase 3.5 Dynamic Extraction
+            self._process_benchmark(raw_store, bronze)
 
             # Analytics Phase
             t_eng_start = time.time()
@@ -279,13 +266,11 @@ class ETLOrchestrator:
 
             # Commit the ACID Transaction
             self.db_manager.conn.execute("COMMIT")
-            if raw_store:
-                raw_store.commit()
+            raw_store.commit()
 
             files_processed = sum(len(f) for f in new_files.values()) + sum(
                 len(f) for f in changed_files.values()
             )
-            files_skipped = sum(len(f) for f in discovered_files.values()) - files_processed
             file_tracker.finish_run(run_id, "success", files_processed, files_skipped)
 
             self.status_queue.put(EngineStatus(msg="", data=None, progress=1.0))
@@ -301,11 +286,10 @@ class ETLOrchestrator:
             except Exception as rollback_err:
                 logger.error(f"Failed to rollback DuckDB transaction: {rollback_err}")
 
-            if raw_store:
-                try:
-                    raw_store.rollback()
-                except Exception as rollback_err:
-                    logger.error(f"Failed to rollback SQLite Raw Store transaction: {rollback_err}")
+            try:
+                raw_store.rollback()
+            except Exception as rollback_err:
+                logger.error(f"Failed to rollback SQLite Raw Store transaction: {rollback_err}")
 
             logger.warning(
                 "Pipeline failed. Transactions completely rolled back to maintain ACID integrity."
@@ -316,8 +300,7 @@ class ETLOrchestrator:
         finally:
             logger.info("Cleaning up database connections and WAL sidecars...")
             self.db_manager.close()
-            if raw_store:
-                raw_store.close()
+            raw_store.close()
             gc.collect()
 
 
