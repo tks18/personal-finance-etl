@@ -1,4 +1,5 @@
 import datetime
+import os
 
 import polars as pl
 
@@ -70,12 +71,18 @@ class BenchmarkPipeline:
         # 3. Load Delta directly into Bronze Layer
         if not df_new_raw.is_empty():
             logger.info("Upserting new Parquet chunks to Bronze...")
-            self.bronze.upsert_table(
+            row_counts = self.bronze.upsert_table(
                 df=df_new_raw,
                 table_name="bronze.r_Benchmark_Data",
                 actionable_files=virtual_files,
                 full_replace=False,
             )
+
+            for filepath in virtual_files:
+                filename = os.path.basename(filepath)
+                count = row_counts.get(filename, 0)
+                self.bronze.file_tracker.register_file(filepath, "benchmark_history", count)
+
             # Refetch the complete cache post-upsert
             df_bronze_cached = self.bronze.get_table("r_Benchmark_Data")
 
