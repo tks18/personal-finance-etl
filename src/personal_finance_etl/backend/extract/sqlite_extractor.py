@@ -1,12 +1,12 @@
 # pyright: reportUnknownMemberType=false, reportUnknownVariableType=false, reportUnknownArgumentType=false
 import glob
 import os
+import sqlite3
 
-import adbc_driver_sqlite.dbapi as adbc_sqlite
 import polars as pl
 
 
-class ADBCSQLiteExtractor:
+class SQLiteExtractor:
     def __init__(self, folder_path: str):
         self.folder_path = folder_path
 
@@ -20,34 +20,49 @@ class ADBCSQLiteExtractor:
         return max(files, key=os.path.getmtime)
 
     def extract_base_tables(
-        self,
+        self, filename: str, folder_path: str, raw_bytes: bytes
     ) -> tuple[pl.LazyFrame, pl.LazyFrame, pl.LazyFrame, pl.LazyFrame, pl.LazyFrame]:
-        """Connects to SQLite once and returns LazyFrames for all base tables."""
-        source_db_path = self.get_latest_sqlite_backup()
-
-        filename = os.path.basename(source_db_path)
-        folder = os.path.dirname(source_db_path)
+        """Writes the raw bytes to a temp file, connects via sqlite3, extracts tables, and cleans up."""
 
         def add_file_info(lf: pl.LazyFrame) -> pl.LazyFrame:
             return lf.with_columns(
-                pl.lit(filename).alias("__file_name__"), pl.lit(folder).alias("__folder_path__")
+                pl.lit(filename).alias("__file_name__"),
+                pl.lit(folder_path).alias("__folder_path__"),
             )
 
-        with adbc_sqlite.connect(source_db_path) as conn:  # type: ignore
+        with sqlite3.connect(":memory:") as conn:
+            conn.deserialize(raw_bytes)
             zcategory_lazy = add_file_info(
-                pl.read_database("SELECT * FROM ZCATEGORY", connection=conn).lazy()  # type: ignore
+                pl.read_database(
+                    "SELECT * FROM ZCATEGORY", connection=conn, infer_schema_length=10000
+                ).lazy()
             )
             assetgroup_lazy = add_file_info(
-                pl.read_database("SELECT * FROM ASSETGROUP", connection=conn).lazy()  # type: ignore
+                pl.read_database(
+                    "SELECT * FROM ASSETGROUP", connection=conn, infer_schema_length=10000
+                ).lazy()
             )
             assets_lazy = add_file_info(
-                pl.read_database("SELECT * FROM ASSETS", connection=conn).lazy()  # type: ignore
+                pl.read_database(
+                    "SELECT * FROM ASSETS", connection=conn, infer_schema_length=10000
+                ).lazy()
             )
             currency_lazy = add_file_info(
-                pl.read_database("SELECT * FROM CURRENCY", connection=conn).lazy()  # type: ignore
+                pl.read_database(
+                    "SELECT * FROM CURRENCY", connection=conn, infer_schema_length=10000
+                ).lazy()
             )
             inoutcome_lazy = add_file_info(
-                pl.read_database("SELECT * FROM INOUTCOME", connection=conn).lazy()  # type: ignore
+                pl.read_database(
+                    "SELECT * FROM INOUTCOME", connection=conn, infer_schema_length=10000
+                ).lazy()
             )
 
-        return zcategory_lazy, assetgroup_lazy, assets_lazy, currency_lazy, inoutcome_lazy
+        # Eagerly collect to memory as LazyFrames defer execution and the memory db drops on exit
+        return (
+            zcategory_lazy.collect().lazy(),
+            assetgroup_lazy.collect().lazy(),
+            assets_lazy.collect().lazy(),
+            currency_lazy.collect().lazy(),
+            inoutcome_lazy.collect().lazy(),
+        )
