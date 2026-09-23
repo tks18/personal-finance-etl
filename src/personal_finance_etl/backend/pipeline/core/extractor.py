@@ -1,4 +1,6 @@
+import io
 import os
+from collections.abc import Callable
 
 import polars as pl
 
@@ -16,8 +18,8 @@ from personal_finance_etl.backend.extract.excel_extractor import (
     extract_stock_market_data_raw,
     extract_stock_transactions_raw,
 )
-from personal_finance_etl.backend.extract.sqlite_extractor import ADBCSQLiteExtractor
-from personal_finance_etl.backend.extract.statement_locator import categorize_statement_files
+from personal_finance_etl.backend.extract.sqlite_extractor import SQLiteExtractor
+from personal_finance_etl.backend.load.raw import RawDocumentStore
 from personal_finance_etl.backend.transform.helpers import get_column_mapping
 from personal_finance_etl.backend.utils.interfaces import ILogger
 from personal_finance_etl.backend.utils.logger import logger
@@ -25,12 +27,23 @@ from personal_finance_etl.backend.utils.models import EngineStatus, ExtractionRe
 
 
 class DataExtractor:
-    def __init__(self, cfg: Settings, status_queue: ILogger):
+    def __init__(self, cfg: Settings, status_queue: ILogger, raw_store: "RawDocumentStore"):
         self.cfg = cfg
         self.status_queue = status_queue
+        self.raw_store = raw_store
+
+    def _get_bytes(self, filepath: str) -> bytes:
+        """Fetches bytes from Raw Store. Raises if missing."""
+        raw_bytes = self.raw_store.get_file_bytes(filepath)
+        if raw_bytes is None:
+            raise FileNotFoundError(f"Binary payload not found in Raw Store for: {filepath}")
+        return raw_bytes
+
+    def _get_file_list_with_bytes(self, filepaths: list[str]) -> list[tuple[str, str, bytes]]:
+        return [(os.path.basename(f), os.path.dirname(f), self._get_bytes(f)) for f in filepaths]
 
     def run(self, actionable_files: dict[str, list[str]] | None = None) -> ExtractionResult:
-        logger.info("Validating input configuration files...")
+        logger.info("Initializing extraction from Raw Store payloads...")
         self.status_queue.put(
             EngineStatus(
                 msg="",
@@ -39,26 +52,47 @@ class DataExtractor:
                 level=LogLevel.STEP,
             )
         )
-        required_files = [
-            self.cfg.COLUMN_MASTER_PATH,
-            self.cfg.MF_ISIN_CSV_PATH,
-            self.cfg.BENCHMARK_MAPPING_CSV_PATH,
-            self.cfg.BENCHMARK_MASTER_CSV_PATH,
-            self.cfg.MACRO_PARAMETERS_CSV_PATH,
-            self.cfg.OPENING_BALANCE_CSV_PATH,
-        ]
-        for filepath in required_files:
-            if not os.path.exists(filepath):
-                raise FileNotFoundError(f"Missing required configuration file: {filepath}")
 
-        extractor = ADBCSQLiteExtractor(self.cfg.SOURCE_DB_FOLDER)
+        # Determine files to process
+        pending_files = actionable_files or self.raw_store.get_pending_files()
+
         logger.info("Extracting Base Tables from SQLite...")
-        zcategory_lazy, assetgroup_lazy, assets_lazy, currency_lazy, inoutcome_lazy = (
-            extractor.extract_base_tables()
-        )
-        logger.info("  -> Successfully extracted 5 base reference tables from SQLite Source.")
+        # Get sqlite file
+        sqlite_files = pending_files.get("sqlite_source", [])
+        if sqlite_files:
+            sqlite_path = sqlite_files[0]
+            sqlite_bytes = self._get_bytes(sqlite_path)
+            extractor = SQLiteExtractor(self.cfg.SOURCE_DB_FOLDER)
+            zcategory_lazy, assetgroup_lazy, assets_lazy, currency_lazy, inoutcome_lazy = (
+                extractor.extract_base_tables(
+                    os.path.basename(sqlite_path), os.path.dirname(sqlite_path), sqlite_bytes
+                )
+            )
+            logger.info(
+                "  -> Successfully extracted 5 base reference tables from SQLite Source bytes."
+            )
+        else:
+            zcategory_lazy = pl.LazyFrame()
+            assetgroup_lazy = pl.LazyFrame()
+            assets_lazy = pl.LazyFrame()
+            currency_lazy = pl.LazyFrame()
+            inoutcome_lazy = pl.LazyFrame()
 
-        df_column_master = pl.read_csv(self.cfg.COLUMN_MASTER_PATH).with_columns(
+        # Config files
+
+        def get_csv_lazy(
+            filepath: str, func: Callable[[str, str, bytes], pl.LazyFrame], category: str
+        ) -> pl.LazyFrame:
+            files = pending_files.get(category, [])
+            if files and filepath in files:
+                return func(
+                    os.path.basename(filepath), os.path.dirname(filepath), self._get_bytes(filepath)
+                )
+            return pl.LazyFrame()
+
+        # column_master is always required to build mappings, read it directly or from bytes
+        column_master_bytes = self._get_bytes(self.cfg.COLUMN_MASTER_PATH)
+        df_column_master = pl.read_csv(io.BytesIO(column_master_bytes)).with_columns(
             pl.lit(os.path.basename(self.cfg.COLUMN_MASTER_PATH)).alias("__file_name__"),
             pl.lit(os.path.dirname(self.cfg.COLUMN_MASTER_PATH)).alias("__folder_path__"),
         )
@@ -71,52 +105,44 @@ class DataExtractor:
             "opbal": get_column_mapping(df_column_master, "ZOPBAL"),
         }
 
-        stg_mf_isin_mapping_lazy = (
-            extract_stg_mf_isin_mapping(self.cfg.MF_ISIN_CSV_PATH)
-            if (not actionable_files or actionable_files.get("mf_isin"))
-            else pl.LazyFrame()
+        stg_mf_isin_mapping_lazy = get_csv_lazy(
+            self.cfg.MF_ISIN_CSV_PATH, extract_stg_mf_isin_mapping, "mf_isin"
         )
-        stg_benchmark_mapping_lazy = (
-            extract_stg_benchmark_mapping(self.cfg.BENCHMARK_MAPPING_CSV_PATH)
-            if (not actionable_files or actionable_files.get("benchmark_mapping"))
-            else pl.LazyFrame()
+        stg_benchmark_mapping_lazy = get_csv_lazy(
+            self.cfg.BENCHMARK_MAPPING_CSV_PATH, extract_stg_benchmark_mapping, "benchmark_mapping"
         )
-        raw_opening_balances = (
-            extract_opening_balances_raw(self.cfg.OPENING_BALANCE_CSV_PATH)
-            if (not actionable_files or actionable_files.get("opening_balances"))
-            else pl.LazyFrame()
+        raw_opening_balances = get_csv_lazy(
+            self.cfg.OPENING_BALANCE_CSV_PATH, extract_opening_balances_raw, "opening_balances"
         )
-        raw_benchmark_master = (
-            extract_benchmark_master_raw(self.cfg.BENCHMARK_MASTER_CSV_PATH)
-            if (not actionable_files or actionable_files.get("benchmark_master"))
-            else pl.LazyFrame()
+        raw_benchmark_master = get_csv_lazy(
+            self.cfg.BENCHMARK_MASTER_CSV_PATH, extract_benchmark_master_raw, "benchmark_master"
         )
-        raw_macro_parameters = (
-            extract_macro_parameters_raw(self.cfg.MACRO_PARAMETERS_CSV_PATH)
-            if (not actionable_files or actionable_files.get("macro_parameters"))
-            else pl.LazyFrame()
+        raw_macro_parameters = get_csv_lazy(
+            self.cfg.MACRO_PARAMETERS_CSV_PATH, extract_macro_parameters_raw, "macro_parameters"
         )
 
-        logger.info("Categorizing Statement Files from FULL Statements Folder...")
-        if not self.cfg.STATEMENTS_FOLDER or not os.path.isdir(self.cfg.STATEMENTS_FOLDER):
-            raise FileNotFoundError("Statements folder not found.")
+        mf_holdings = pending_files.get("mf_holdings", [])
+        mf_orders = pending_files.get("mf_orders", [])
+        stock_pl = pending_files.get("stock_pl", [])
+        stock_orders = pending_files.get("stock_orders", [])
 
-        statement_files = categorize_statement_files(self.cfg.STATEMENTS_FOLDER, strict=True)
-        if actionable_files is not None:
-            for k in statement_files:
-                statement_files[k] = [
-                    f for f in statement_files[k] if f in actionable_files.get(k, [])
-                ]
-
-        total_files = sum(len(f) for f in statement_files.values())
+        total_files = len(mf_holdings) + len(mf_orders) + len(stock_pl) + len(stock_orders)
 
         if total_files > 0:
-            logger.info(f"Extracting {total_files} FULL Excel Binaries...")
-            mf_market_data_raw = extract_mf_market_data_raw(statement_files["mf_holdings"])
-            mf_transactions_raw = extract_mf_transactions_raw(statement_files["mf_orders"])
-            stock_market_data_raw = extract_stock_market_data_raw(statement_files["stock_pl"])
-            stock_transactions_raw = extract_stock_transactions_raw(statement_files["stock_orders"])
-            logger.info(f"  -> Successfully parsed {total_files} raw Excel files.")
+            logger.info(f"Extracting {total_files} Excel Binaries from Raw Store...")
+            mf_market_data_raw = extract_mf_market_data_raw(
+                self._get_file_list_with_bytes(mf_holdings)
+            )
+            mf_transactions_raw = extract_mf_transactions_raw(
+                self._get_file_list_with_bytes(mf_orders)
+            )
+            stock_market_data_raw = extract_stock_market_data_raw(
+                self._get_file_list_with_bytes(stock_pl)
+            )
+            stock_transactions_raw = extract_stock_transactions_raw(
+                self._get_file_list_with_bytes(stock_orders)
+            )
+            logger.info(f"  -> Successfully parsed {total_files} raw Excel payloads.")
         else:
             mf_market_data_raw = pl.LazyFrame()
             mf_transactions_raw = pl.LazyFrame()
@@ -151,9 +177,7 @@ class DataExtractor:
                 level=LogLevel.STEP,
             )
         )
-        # Fail-fast by attempting to collect the first row of all extract lazy frames.
-        # This will trigger Polars to aggressively evaluate schema_overrides and cast(strict=True)
-        # instantly, preventing OOM or compute waste down the DAG if source files are corrupted.
+
         validation_frames = [
             result.zcategory,
             result.assetgroup,
