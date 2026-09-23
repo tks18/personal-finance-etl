@@ -2,6 +2,39 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [6.0.1](https://github.com/tks18/personal-finance-etl/compare/6.0.0...6.0.1) (2026-09-23)
+
+
+### Build System 🏗
+
+* **main.spec:** update build spec to remove all adbc line items ([8e2fd4f](https://github.com/tks18/personal-finance-etl/commit/8e2fd4f5b554342f4450671276194c2b5ae171b4))
+* remove adbc driver dependency ([769dcb6](https://github.com/tks18/personal-finance-etl/commit/769dcb6bb0826c09331d9c01bcb8a438c66e63c1))
+
+
+### Code Refactoring 🖌
+
+* **engine/benchmark:** move the benchmark p'ing to transform folder for srp ([e56e2a1](https://github.com/tks18/personal-finance-etl/commit/e56e2a17f981382a4ad4fc2ca4dda3266287f54b))
+* **engines/benchmark:** move the benchmark fetcher to extract folder for proper srp ([a755c40](https://github.com/tks18/personal-finance-etl/commit/a755c404d14e74670a0bbdc31ff6542d54751b6d))
+* minor refactors and renames ([f0a52dd](https://github.com/tks18/personal-finance-etl/commit/f0a52ddbc0160bc9beda07a00039019ee86d5996))
+
+
+### Features 🔥
+
+* **backend/config:** make raw store mandatory, add a flag for new file discovery ([558fb4c](https://github.com/tks18/personal-finance-etl/commit/558fb4c00a26b87ffd9c48e98a28e1f32a354815))
+* **backend/extract:** convert csv extractors to process io bytes ([fed9474](https://github.com/tks18/personal-finance-etl/commit/fed947424f9d26d3a06fbeee72ba1fc72e1a91b3))
+* **backend/extract:** convert excel extractors to process io bytes ([09c1717](https://github.com/tks18/personal-finance-etl/commit/09c17176608e63569ff3d8e1697ac8e0fe2f4f4c))
+* **backend/extract:** sqlite: remove adbc, convert/implement memory stream processing ([7a3d1ad](https://github.com/tks18/personal-finance-etl/commit/7a3d1adfe1117991be1bc19f67df3b9f59da0879))
+* **backend/load:** file_tracker: use raw store methods and raw store file registry to handle ([0c8fb85](https://github.com/tks18/personal-finance-etl/commit/0c8fb852caedd9a634ad88df6f15e38d2d4d8977))
+* **backend/load:** raw: make raw store the primary file tracker rather than duckdb registry ([33a7611](https://github.com/tks18/personal-finance-etl/commit/33a76117c4796843d59f42f74bd48d3f3744bebd))
+* **backend/pipeline:** make the extractor now process raw bytes instead of file paths and os items ([150994c](https://github.com/tks18/personal-finance-etl/commit/150994c260f749d2d13b84d55c8f8874a13ce9a5))
+* **backend/pipeline:** move benchmark to pipeline ([08438c0](https://github.com/tks18/personal-finance-etl/commit/08438c0b27d6703bd129ef0a839130afb60e3920))
+* **backend/pipeline:** now orchestrate the entire raw store -> gold pipeline ([d719e17](https://github.com/tks18/personal-finance-etl/commit/d719e17b1e2e1075634e5fd23f144989845eb943))
+
+
+### Docs 📃
+
+* **readme, about:** update both readme and about to reflect recent changes ([f87201b](https://github.com/tks18/personal-finance-etl/commit/f87201b9ad6f75ad6b0140844f1ea2b09ce7fbad))
+
 ## [6.0.0](https://github.com/tks18/personal-finance-etl/compare/5.9.1...6.0.0) (2026-09-22)
 
 
