@@ -152,7 +152,7 @@ class ETLOrchestrator:
         raw_store.open()
         raw_store.ensure_schema()
 
-        file_tracker = FileTracker(self.db_manager.conn, self.cfg.FILE_HASH_POLICY, raw_store)
+        file_tracker = FileTracker(self.db_manager.conn, raw_store)
         run_id = file_tracker.start_run()
 
         try:
@@ -177,41 +177,19 @@ class ETLOrchestrator:
                 discovered_files["macro_parameters"] = [self.cfg.MACRO_PARAMETERS_CSV_PATH]
                 discovered_files["column_master"] = [self.cfg.COLUMN_MASTER_PATH]
 
-                new_files, changed_files = file_tracker.get_actionable_files(discovered_files)
-
-                logger.info("File Tracker Discovery Breakdown:")
-                for category in discovered_files.keys():
-                    n_new = len(new_files.get(category, []))
-                    n_mod = len(changed_files.get(category, []))
-                    if n_new == 0 and n_mod == 0:
-                        logger.info(
-                            f"  -> [{category}] 0 actionable file(s) detected. Cache intact."
-                        )
-                    else:
-                        if n_new > 0:
-                            logger.info(f"  -> [{category}] {n_new} new file(s) detected.")
-                        if n_mod > 0:
-                            logger.info(f"  -> [{category}] {n_mod} modified file(s) detected.")
+                # RawDocumentStore is the single source of truth for all Phase 1 logic:
+                # file change detection, pruning of obsolete blobs, and binary ingestion.
+                full_replace_categories = list(
+                    set(cat for _, cat, _, is_full in BronzeLayer.TABLE_MAPPINGS if is_full)
+                )
+                new_files, changed_files, files_skipped = raw_store.sync_with_disk(
+                    discovered_files, self.cfg.FILE_HASH_POLICY, full_replace_categories
+                )
 
                 actionable_all = {
                     k: new_files.get(k, []) + changed_files.get(k, [])
                     for k in discovered_files.keys()
                 }
-
-                logger.info("Ingesting new/modified binary files into Raw Store...")
-
-                # Prune obsolete files from full-replace categories to prevent SQLite bloating
-                full_replace_categories = list(
-                    set(cat for _, cat, _, is_full in BronzeLayer.TABLE_MAPPINGS if is_full)
-                )
-                for cat in full_replace_categories:
-                    raw_store.delete_obsolete_files(cat, discovered_files.get(cat, []))
-
-                raw_store.load_binaries(actionable_all)
-                files_skipped = sum(len(f) for f in discovered_files.values()) - (
-                    sum(len(f) for f in new_files.values())
-                    + sum(len(f) for f in changed_files.values())
-                )
             else:
                 logger.info(
                     "Phase 1/5: Bypassing File Discoverer. Fetching pending files from Raw Store..."

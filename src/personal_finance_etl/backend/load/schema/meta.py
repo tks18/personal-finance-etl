@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS meta.m_File_Registry (
     file_name       TEXT NOT NULL,
     relative_path   TEXT NOT NULL UNIQUE,
     file_category   TEXT NOT NULL,      -- 'mf_holdings', 'stock_pl', 'sqlite_source', etc.
+    file_type       TEXT,               -- 'excel', 'csv', 'sqlite', 'parquet', 'virtual'
     file_hash       TEXT NOT NULL,      -- SHA-256 of file content
     file_size_bytes BIGINT,
     first_ingested  TIMESTAMP NOT NULL,
