@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [6.1.1](https://github.com/tks18/personal-finance-etl/compare/6.1.0...6.1.1) (2026-09-23)
+
+
+### Bug Fixes 🛠
+
+* **backend/pipeline:** keep the file registry in sync (missed benchmark in duckdb registry) ([d9c1780](https://github.com/tks18/personal-finance-etl/commit/d9c178058b3f38ed352ea7ed09ba7eb5d8ddab0e))
+* **backend/raw:** fix full replacement datasets being unnecessarily stored in raw store ([1a755b8](https://github.com/tks18/personal-finance-etl/commit/1a755b8717c9f665130fde8e3795c8806883b0b3))
+
+
+### Features 🔥
+
+* **backend/load:** make raw store the primary source of truth for actionable files ([aa55dbe](https://github.com/tks18/personal-finance-etl/commit/aa55dbe25ab469667a4a04a83389fc60733677a4))
+* **backend/pipeline:** now just simply call the api to find actionable files ([aea882e](https://github.com/tks18/personal-finance-etl/commit/aea882e63597267423ef10e4405bd1b661836630))
+
 ## [6.1.0](https://github.com/tks18/personal-finance-etl/compare/6.0.1...6.1.0) (2026-09-23)
 
 ### [6.0.1](https://github.com/tks18/personal-finance-etl/compare/6.0.0...6.0.1) (2026-09-23)
