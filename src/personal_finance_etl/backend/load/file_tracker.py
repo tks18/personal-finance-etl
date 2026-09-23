@@ -6,6 +6,12 @@ from datetime import datetime
 import duckdb
 
 from personal_finance_etl.backend.config.settings import FileHashPolicy
+from personal_finance_etl.backend.load.raw import (
+    RawDocumentStore,
+    compute_file_hash,
+    generate_file_id,
+)
+from personal_finance_etl.backend.utils.logger import logger
 
 FILE_TYPE_MAP: dict[str, str] = {
     "mf_holdings": "excel",
@@ -22,51 +28,81 @@ FILE_TYPE_MAP: dict[str, str] = {
 
 
 class FileTracker:
-    """Tracks source file ingestion state via meta.file_registry.
-    Determines which files are new or changed based on per-type hash policy."""
+    """Tracks source file ingestion state using SQLite Raw Store as the primary source of truth.
+    Synchronizes state with DuckDB meta.m_File_Registry."""
 
-    def __init__(self, conn: duckdb.DuckDBPyConnection, hash_policy: FileHashPolicy):
+    def __init__(
+        self,
+        conn: duckdb.DuckDBPyConnection,
+        hash_policy: FileHashPolicy,
+        raw_store: RawDocumentStore,
+    ):
         self.conn = conn
         self.hash_policy = hash_policy
+        self.raw_store = raw_store
         self.run_id: str | None = None
+        self._sync_first_run()
 
     def _should_hash_check(self, category: str) -> bool:
         """Looks up the file type for a category and returns the hash policy."""
         file_type = FILE_TYPE_MAP.get(category, "csv")
         return getattr(self.hash_policy, file_type, False)
 
-    def compute_file_hash(self, filepath: str) -> str:
-        """SHA-256 of file contents."""
-        hasher = hashlib.sha256()
-        try:
-            with open(filepath, "rb") as f:
-                for chunk in iter(lambda: f.read(4096), b""):
-                    hasher.update(chunk)
-            return hasher.hexdigest()
-        except FileNotFoundError:
-            return ""
+    def _sync_first_run(self) -> None:
+        """Handles first-run migration: if DuckDB has files but SQLite doesn't, sync SQLite up."""
 
-    def generate_file_id(self, filepath: str) -> str:
-        """Generates a deterministic ID (SHA-256) across the platform based on relative path."""
-        unique_path = filepath.replace("\\", "/")
-        return hashlib.sha256(unique_path.encode("utf-8")).hexdigest()
+        duckdb_records = self.conn.execute(
+            "SELECT relative_path, file_hash, file_name, file_category, file_size_bytes FROM meta.m_File_Registry"
+        ).fetchall()
+
+        sqlite_records = self.raw_store.get_all_registry()
+
+        if duckdb_records and not sqlite_records:
+            logger.info(
+                "First-run migration detected: Syncing historical metadata to SQLite Raw Store..."
+            )
+            for rel_path, f_hash, f_name, f_cat, f_size in duckdb_records:
+                file_id = hashlib.sha256(rel_path.encode("utf-8")).hexdigest()
+                now = datetime.now().isoformat()
+
+                # We do not have the bytes during migration unless we read the disk
+                # Attempt to read disk to populate payloads, if available
+                # If file is missing, we insert NULL for bytes but mark SYNCED
+                raw_bytes = None
+                if os.path.exists(rel_path):
+                    try:
+                        with open(rel_path, "rb") as f:
+                            raw_bytes = f.read()
+                    except Exception:
+                        pass
+
+                self.raw_store.conn.execute(
+                    """
+                    INSERT INTO raw_file_registry (file_id, file_name, relative_path, file_category, file_hash, file_size_bytes, sync_status, first_ingested, last_ingested)
+                    VALUES (?, ?, ?, ?, ?, ?, 'SYNCED', ?, ?)
+                    """,
+                    (file_id, f_name, rel_path, f_cat, f_hash, f_size, now, now),
+                )
+                self.raw_store.conn.execute(
+                    """
+                    INSERT INTO raw_payloads (file_id, file_bytes)
+                    VALUES (?, ?)
+                    """,
+                    (file_id, raw_bytes),
+                )
+            self.raw_store.commit()
+            msg = f"Successfully migrated {len(duckdb_records)} historical records to Raw Store."
+            logger.info(msg)
 
     def get_actionable_files(
         self, discovered_files: dict[str, list[str]]
     ) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
         """Returns (new_files, changed_files) per category.
-        For each category:
-          - New files (not in registry) are always returned.
-          - Changed files returned ONLY if hash policy is True for that type."""
+        Uses SQLite Raw Store as the source of truth."""
         new_files: dict[str, list[str]] = {}
         changed_files: dict[str, list[str]] = {}
 
-        # Fetch existing registry into a dictionary for fast lookup
-        # mapping relative_path -> file_hash
-        existing_records = self.conn.execute(
-            "SELECT relative_path, file_hash FROM meta.m_File_Registry"
-        ).fetchall()
-        registry = {record[0]: record[1] for record in existing_records}
+        registry = self.raw_store.get_all_registry()
 
         for category, filepaths in discovered_files.items():
             new_files[category] = []
@@ -81,7 +117,7 @@ class FileTracker:
                     new_files[category].append(filepath)
                 else:
                     if should_check_hash:
-                        current_hash = self.compute_file_hash(filepath)
+                        current_hash = compute_file_hash(filepath)
                         stored_hash = registry[unique_path]
                         if current_hash != stored_hash:
                             changed_files[category].append(filepath)
@@ -89,17 +125,18 @@ class FileTracker:
         return new_files, changed_files
 
     def register_file(self, filepath: str, category: str, row_count: int) -> None:
-        """Upserts a record into meta.file_registry after successful Bronze ingestion."""
+        """Upserts a record into meta.file_registry after successful Bronze ingestion.
+        Also triggers Raw Store state update to SYNCED."""
         unique_path = filepath.replace("\\", "/")
         file_name = os.path.basename(filepath)
-        file_hash = self.compute_file_hash(filepath)
+        file_hash = compute_file_hash(filepath)
 
         try:
             file_size = os.path.getsize(filepath)
         except OSError:
             file_size = 0
 
-        file_id = self.generate_file_id(filepath)
+        file_id = generate_file_id(filepath)
         now = datetime.now()
 
         exists = self.conn.execute(
@@ -134,6 +171,9 @@ class FileTracker:
                     row_count,
                 ],
             )
+
+        # Update SQLite Sync Status
+        self.raw_store.mark_synced([filepath])
 
     def start_run(self) -> str:
         """Creates a record in meta.run_log and returns the run_id."""
