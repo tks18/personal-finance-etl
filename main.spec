@@ -4,19 +4,8 @@ from PyInstaller.utils.hooks import copy_metadata, collect_data_files, collect_s
 
 PyInstaller.config.CONF['upx_dir'] = r"C:\Tools\_bins_\upx"
 
-# Bulletproof ADBC Driver hooks (These packages use native C/Rust extensions and _static_version.py)
-adbc_sqlite_datas = collect_data_files('adbc_driver_sqlite', include_py_files=True)
-adbc_sqlite_meta = copy_metadata('adbc_driver_sqlite')
-adbc_sqlite_libs = collect_dynamic_libs('adbc_driver_sqlite')
-adbc_sqlite_hidden = collect_submodules('adbc_driver_sqlite')
-
-adbc_manager_datas = collect_data_files('adbc_driver_manager', include_py_files=True)
-adbc_manager_meta = copy_metadata('adbc_driver_manager')
-adbc_manager_libs = collect_dynamic_libs('adbc_driver_manager')
-adbc_manager_hidden = collect_submodules('adbc_driver_manager')
-
-datas = [('logo.ico', '.'), ('logo.png', '.'), ('README.md', '.'), ('docs/*', 'docs/')] + adbc_sqlite_datas + adbc_sqlite_meta + adbc_manager_datas + adbc_manager_meta
-binaries = adbc_sqlite_libs + adbc_manager_libs
+datas = [('logo.ico', '.'), ('logo.png', '.'), ('README.md', '.'), ('docs/*', 'docs/')]
+binaries = []
 
 hiddenimports = [
     'darkdetect',
@@ -51,7 +40,7 @@ hiddenimports = [
     'personal_finance_etl.backend.transform.mutual_funds',
     'personal_finance_etl.backend.pipeline.etl_pipeline',
     'personal_finance_etl.backend.config.settings',
-] + adbc_sqlite_hidden + adbc_manager_hidden
+]
 
 a = Analysis(
     ['main.py'],
