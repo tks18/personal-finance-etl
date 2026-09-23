@@ -105,9 +105,8 @@ class Settings(BaseModel):
     TARGET_DB_NAME: str = "Personal_Finance_DB.duckdb"
 
     # Raw Store Config
-    ENABLE_RAW_DOCUMENT_STORE: bool = False
+    DISABLE_FILE_DISCOVERER: bool = False
     RAW_DOCUMENT_STORE_NAME: str = "Personal_Finance_DB_Raw_Store.sqlite"
-    FORCE_REBUILD_RAW_STORE: bool = False
 
     # Dependencies
     COLUMN_MASTER_PATH: str = ""
