@@ -16,7 +16,7 @@ class BronzeLayer:
         self.db_manager = db_manager
         self.file_tracker = file_tracker
 
-    def _upsert_table(
+    def upsert_table(
         self,
         df: pl.DataFrame | pl.LazyFrame,
         table_name: str,
@@ -38,14 +38,22 @@ class BronzeLayer:
         if df_filtered.height == 0:
             return {}
 
-        # Delete old rows or truncate
+        # Dynamically create table schema if it doesn't exist or drop if full_replace
+        schema_df = df.head(0)
+        self.db_manager.conn.register("schema_df", schema_df)
         if full_replace:
-            self.db_manager.conn.execute(f"TRUNCATE TABLE {table_name}")
-            logger.debug(f"[Bronze] Truncated {table_name} for full replacement.")
+            self.db_manager.conn.execute(f"DROP TABLE IF EXISTS {table_name}")
+            self.db_manager.conn.execute(f"CREATE TABLE {table_name} AS SELECT * FROM schema_df")
+            logger.debug(f"[Bronze] Re-created {table_name} for full replacement.")
         else:
+            self.db_manager.conn.execute(
+                f"CREATE TABLE IF NOT EXISTS {table_name} AS SELECT * FROM schema_df"
+            )
             placeholders = ", ".join(["?"] * len(filenames))
             delete_query = f"DELETE FROM {table_name} WHERE __file_name__ IN ({placeholders})"
             self.db_manager.conn.execute(delete_query, filenames)
+
+        self.db_manager.conn.unregister("schema_df")
 
         # Insert new rows
         self.db_manager.conn.register("temp_df", df_filtered)
@@ -95,26 +103,7 @@ class BronzeLayer:
             if df is not None:
                 actionable = new_files.get(category, []) + changed_files.get(category, [])
                 if actionable:
-                    # Dynamically create table schema if it doesn't exist
-                    schema_df = (
-                        df.limit(0).collect() if isinstance(df, pl.LazyFrame) else df.head(0)
-                    )
-                    self.db_manager.conn.register("schema_df", schema_df)
-                    
-                    if is_full_replace:
-                        # Drop and recreate to support automatic schema evolution for new columns
-                        self.db_manager.conn.execute(f"DROP TABLE IF EXISTS {table_name}")
-                        self.db_manager.conn.execute(
-                            f"CREATE TABLE {table_name} AS SELECT * FROM schema_df"
-                        )
-                    else:
-                        self.db_manager.conn.execute(
-                            f"CREATE TABLE IF NOT EXISTS {table_name} AS SELECT * FROM schema_df"
-                        )
-                    
-                    self.db_manager.conn.unregister("schema_df")
-
-                    row_counts = self._upsert_table(
+                    row_counts = self.upsert_table(
                         df, table_name, actionable, full_replace=is_full_replace
                     )
 
@@ -130,6 +119,13 @@ class BronzeLayer:
                         self.file_tracker.register_file(filepath, category, count)
 
         logger.info("Bronze layer load complete.")
+
+    def get_table(self, table_name: str) -> pl.DataFrame:
+        """Reads a table from the Bronze schema. Returns empty DataFrame if it doesn't exist."""
+        try:
+            return self.db_manager.conn.execute(f"SELECT * FROM bronze.{table_name}").pl()
+        except duckdb.CatalogException:
+            return pl.DataFrame()
 
     def get_full_dataset(self, original_mappings: dict[str, dict[str, str]]) -> ExtractionResult:
         """Reads the full dataset from Bronze tables via DuckDB and returns a complete ExtractionResult."""
