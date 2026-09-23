@@ -1,48 +1,54 @@
-import os
+import io
 
 import polars as pl
 
 
-def extract_stg_mf_isin_mapping(csv_path: str) -> pl.LazyFrame:
-    filename = os.path.basename(csv_path)
-    folder = os.path.dirname(csv_path)
+def extract_stg_mf_isin_mapping(filename: str, folder_path: str, raw_bytes: bytes) -> pl.LazyFrame:
     schema_overrides = {"INSTRUMENT_NAME": pl.String, "ISIN": pl.String}
-    return pl.scan_csv(csv_path, schema_overrides=schema_overrides).with_columns(
-        pl.lit(filename).alias("__file_name__"), pl.lit(folder).alias("__folder_path__")
+    return (
+        pl.read_csv(io.BytesIO(raw_bytes), schema_overrides=schema_overrides)
+        .lazy()
+        .with_columns(
+            pl.lit(filename).alias("__file_name__"), pl.lit(folder_path).alias("__folder_path__")
+        )
     )
 
 
-def extract_stg_benchmark_mapping(csv_path: str) -> pl.LazyFrame:
-    filename = os.path.basename(csv_path)
-    folder = os.path.dirname(csv_path)
+def extract_stg_benchmark_mapping(
+    filename: str, folder_path: str, raw_bytes: bytes
+) -> pl.LazyFrame:
     schema_overrides = {
         "ISIN": pl.String,
         "Sector": pl.String,
         "Industry": pl.String,
         "Benchmark_ID": pl.String,
     }
-    return pl.scan_csv(csv_path, schema_overrides=schema_overrides).with_columns(
-        pl.lit(filename).alias("__file_name__"), pl.lit(folder).alias("__folder_path__")
+    return (
+        pl.read_csv(io.BytesIO(raw_bytes), schema_overrides=schema_overrides)
+        .lazy()
+        .with_columns(
+            pl.lit(filename).alias("__file_name__"), pl.lit(folder_path).alias("__folder_path__")
+        )
     )
 
 
-def extract_benchmark_master_raw(csv_path: str) -> pl.LazyFrame:
-    filename = os.path.basename(csv_path)
-    folder = os.path.dirname(csv_path)
+def extract_benchmark_master_raw(filename: str, folder_path: str, raw_bytes: bytes) -> pl.LazyFrame:
     schema_overrides = {
         "ID": pl.String,
         "Benchmark_Name": pl.String,
         "yF_Ticker": pl.String,
         "Currency": pl.String,
     }
-    return pl.scan_csv(csv_path, schema_overrides=schema_overrides).with_columns(
-        pl.lit(filename).alias("__file_name__"), pl.lit(folder).alias("__folder_path__")
+    return (
+        pl.read_csv(io.BytesIO(raw_bytes), schema_overrides=schema_overrides)
+        .lazy()
+        .with_columns(
+            pl.lit(filename).alias("__file_name__"), pl.lit(folder_path).alias("__folder_path__")
+        )
     )
 
 
-def extract_macro_parameters_raw(csv_path: str) -> pl.LazyFrame:
-    filename = os.path.basename(csv_path)
-    folder = os.path.dirname(csv_path)
+def extract_macro_parameters_raw(filename: str, folder_path: str, raw_bytes: bytes) -> pl.LazyFrame:
     schema_overrides = {
         "FY": pl.String,
         "FY_Start_Date": pl.Date,
@@ -67,16 +73,17 @@ def extract_macro_parameters_raw(csv_path: str) -> pl.LazyFrame:
         "Equity_LTCG_Exemption": pl.Int64,
         "Remarks": pl.String,
     }
-    return pl.scan_csv(
-        csv_path, schema_overrides=schema_overrides, try_parse_dates=True
-    ).with_columns(pl.lit(filename).alias("__file_name__"), pl.lit(folder).alias("__folder_path__"))
+    return (
+        pl.read_csv(io.BytesIO(raw_bytes), schema_overrides=schema_overrides, try_parse_dates=True)
+        .lazy()
+        .with_columns(
+            pl.lit(filename).alias("__file_name__"), pl.lit(folder_path).alias("__folder_path__")
+        )
+    )
 
 
-def extract_opening_balances_raw(csv_path: str) -> pl.LazyFrame:
-    filename = os.path.basename(csv_path)
-    folder = os.path.dirname(csv_path)
-
-    df_lazy = pl.scan_csv(csv_path, try_parse_dates=True)
-    return df_lazy.with_columns(
-        pl.lit(filename).alias("__file_name__"), pl.lit(folder).alias("__folder_path__")
+def extract_opening_balances_raw(filename: str, folder_path: str, raw_bytes: bytes) -> pl.LazyFrame:
+    df = pl.read_csv(io.BytesIO(raw_bytes), try_parse_dates=True)
+    return df.lazy().with_columns(
+        pl.lit(filename).alias("__file_name__"), pl.lit(folder_path).alias("__folder_path__")
     )
