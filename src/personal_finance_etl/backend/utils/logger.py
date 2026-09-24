@@ -59,3 +59,12 @@ def add_file_handler(file_path: str) -> None:
     )
     handler.setFormatter(formatter)
     logger.addHandler(handler)
+
+
+def remove_file_handlers() -> None:
+    """Closes and removes all FileHandlers from the logger."""
+    for h in logger.handlers[:]:
+        if isinstance(h, logging.FileHandler):
+            h.flush()
+            h.close()
+            logger.removeHandler(h)
