@@ -5,13 +5,16 @@ Unified App: Root application window for Personal Finance ETL.
 import os
 from tkinter import filedialog
 
-import customtkinter as ctk  # type: ignore[import-untyped]
+import customtkinter as ctk
 from PIL import Image
 
 from personal_finance_etl.backend.api.engine import PersonalFinanceEngine
 from personal_finance_etl.backend.utils.helpers import resource_path
 from personal_finance_etl.backend.utils.models import EngineStatus, LogLevel
 from personal_finance_etl.backend.utils.theme import Color
+from personal_finance_etl.frontend.commons.docs.guides_window import (
+    show_guides_window,  # type: ignore[import-untyped]
+)
 from personal_finance_etl.frontend.desktop.base_tab import BaseEngineTab
 
 ctk.set_appearance_mode("Dark")
@@ -63,9 +66,6 @@ class UnifiedETLTab(BaseEngineTab):
         ).pack(anchor="w")
 
         # ── 1.5 Guides Button (Row 0, Col 1, Right Aligned) ────────
-        from personal_finance_etl.frontend.desktop.components.guides_window import (
-            show_guides_window,
-        )
 
         guides_btn_frame = ctk.CTkFrame(hdr, fg_color="transparent")
         guides_btn_frame.grid(row=0, column=1, padx=(0, 16), pady=(12, 0), sticky="e")

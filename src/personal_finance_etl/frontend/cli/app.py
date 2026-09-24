@@ -26,7 +26,7 @@ from rich.prompt import Confirm, Prompt
 
 from personal_finance_etl.backend.api.engine import PersonalFinanceEngine
 from personal_finance_etl.backend.utils.models import EngineStatus, LogLevel
-from personal_finance_etl.frontend.desktop.components.guides_window import show_guides_window
+from personal_finance_etl.frontend.commons.docs.guides_window import show_guides_window
 
 if sys.platform == "win32":
     try:
