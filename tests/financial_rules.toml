@@ -233,3 +233,7 @@ emergency_fund_target_months = 6
 [budget.smoothing]
 # Trailing months used for recency-biased income smoothing (3×T-1 + 2×T-2 + 1×T-3)
 income_smoothing_months = 3
+
+[portfolio_management]
+# Threshold (in percentage points) for triggering a rebalance requirement.
+rebalance_tolerance_pct_points = 5.0
