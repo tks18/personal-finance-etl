@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [6.2.1](https://github.com/tks18/personal-finance-etl/compare/6.2.0...6.2.1) (2026-09-24)
+
+
+### CI 🛠
+
+* **pyproject:** change changelog link ([915ec82](https://github.com/tks18/personal-finance-etl/commit/915ec829150897bc9c29f863915f3e7910cb5ae8))
+
 ## [6.2.0](https://github.com/tks18/personal-finance-etl/compare/6.1.1...6.2.0) (2026-09-24)
 
 
