@@ -351,6 +351,13 @@ class AssumptionsRules(BaseModel):
     target_allocations: dict[str, float] = Field(default_factory=dict)
 
 
+class PortfolioManagementRules(BaseModel):
+    rebalance_tolerance_pct_points: float = Field(
+        default=5.0,
+        description="Threshold (in percentage points) for triggering a rebalance requirement.",
+    )
+
+
 class FinancialRules(BaseModel):
     income: IncomeRules = Field(default_factory=lambda: IncomeRules())
     expense: ExpenseRules = Field(default_factory=lambda: ExpenseRules())
@@ -358,6 +365,7 @@ class FinancialRules(BaseModel):
     investments: dict[str, InvestmentInstrumentRules] = Field(default_factory=dict)
     assumptions: AssumptionsRules = Field(...)
     budget: BudgetRules = Field(default_factory=BudgetRules)
+    portfolio_management: PortfolioManagementRules = Field(default_factory=PortfolioManagementRules)
 
     # Transactional rules
     DEFAULT_CURRENCY_ID: str = "INR_INR"
