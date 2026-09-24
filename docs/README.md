@@ -4,6 +4,8 @@ Welcome to the technical documentation for **Personal Finance ETL**, a local-fir
 
 The project connects raw financial evidence to household accounting, investment analytics, tax-aware wealth modelling, cash-flow reconciliation, long-range planning, and BI consumption through one end-to-end financial lineage.
 
+The documentation now also records the **project philosophy, roadmap, and engineering journey behind the system**, so the repository explains not only *what* I built, but also *why it exists*, *how I think about it*, and *where I want to take it*.
+
 > **New here?** Start with [Project Overview](about/project.md), then read [System Architecture](architecture/system-architecture.md) and [Data Lifecycle](architecture/data-lifecycle.md).
 
 ---
@@ -11,6 +13,8 @@ The project connects raw financial evidence to household accounting, investment 
 ## Documentation map
 
 ```text
+Project story & engineering journey
+        ↓
 Raw financial evidence
         ↓
 Architecture & data lifecycle
@@ -24,6 +28,8 @@ Configuration
 Developer extension points
         ↓
 Data contracts & reference
+        ↓
+Roadmap & future generalization
 ```
 
 The documentation is organized by **what you are trying to understand or do**, rather than by the Python package tree.
@@ -36,7 +42,7 @@ Use these pages if you are new to the project or want to operate the pipeline.
 
 | Guide | What it answers |
 | --- | --- |
-| [Project Overview](about/project.md) | Why the project exists, what it is today, what it is not, and where it is heading |
+| [Project Overview](about/project.md) | Why the project exists, what it is today, what it is not, and the philosophy behind it |
 | [Installation](getting-started/installation.md) | How to install the package and prepare a local environment |
 | [Configuration](getting-started/configuration.md) | How operational settings, paths, mappings, and financial rules fit together |
 | [Running the Pipeline](getting-started/running-the-pipeline.md) | How to run the CLI, desktop application, automated execution, and snapshots |
@@ -51,14 +57,12 @@ These documents explain how the platform is constructed and why its major engine
 | --- | --- |
 | [System Architecture](architecture/system-architecture.md) | End-to-end planes, components, engine boundaries, and runtime flow |
 | [Data Lifecycle](architecture/data-lifecycle.md) | Source discovery → Raw Store → Bronze → canonical transformations → analytics → serving |
-| [Warehouse Architecture](architecture/warehouse-architecture.md) | Bronze, Silver, Gold, and Meta responsibilities and persistence semantics |
+| [Warehouse Architecture](architecture/warehouse-architecture.md) | Raw, Bronze, Silver, Gold, and Meta responsibilities and persistence semantics |
 | [Data Model](architecture/data-model.md) | Canonical dimensions, facts, analytical grains, and major relationships |
 | [Reliability & Recovery](architecture/reliability-and-recovery.md) | Transaction handling, raw-state recovery, deterministic reconstruction, and failure behaviour |
 | [Design Decisions](architecture/design-decisions.md) | Why SQLite + DuckDB, why Silver/Gold rebuild, why raw BLOB persistence, and other trade-offs |
 
 ### Core architectural idea
-
-The platform deliberately separates several concerns:
 
 ```text
 Raw & Control Plane
@@ -121,7 +125,7 @@ Use these pages when extending or modifying the platform.
 | [Adding an Asset Pipeline](developer/adding-asset-pipelines.md) | Extending the investment model through the asset-pipeline contract |
 | [Adding a Gold Mart](developer/adding-gold-marts.md) | Business purpose → grain → builder → output contract → DDL → Gold publication |
 
-The current implementation is purpose-built around the my own financial environment. Extending it for another user can require source-adapter, mapping, financial-semantic, and jurisdictional customization.
+The current implementation is purpose-built around **my financial environment**. Extending it for another user can require source-adapter, mapping, financial-semantic, and jurisdictional customization.
 
 ---
 
@@ -136,7 +140,7 @@ These pages describe the physical analytical contracts exposed by the current ar
 | [Meta Data Contracts](reference/meta-data-contracts.md) | File registry, run telemetry, row counts, settings, and financial-rules snapshots |
 | [Glossary](reference/glossary.md) | Project terminology, financial concepts, architectural vocabulary, and abbreviations |
 
-For important analytical datasets, the reference documentation will use a common contract:
+For important analytical datasets, the reference documentation uses a common contract:
 
 ```text
 Purpose
@@ -148,6 +152,31 @@ Major inputs
 Key fields
 Downstream consumers
 Assumptions / caveats
+```
+
+---
+
+## 🧭 About, philosophy & direction
+
+These pages explain the human and architectural story around the code.
+
+| Guide | Focus |
+| --- | --- |
+| [Project Overview](about/project.md) | Why I built Personal Finance ETL, what problem it solves, and the philosophy behind the current vertical system |
+| [About Me](about/about-me.md) | My path from web development into Python, data engineering, BI, software architecture and the convergence with Chartered Accountancy |
+| [Roadmap](about/roadmap.md) | How I plan to harden and generalize the working system through contracts, adapters, strategies and behavioural equivalence |
+
+Together they answer three different questions:
+
+```text
+Project Overview
+→ Where did this system come from?
+
+About Me
+→ Who built it, and how did that engineering path evolve?
+
+Roadmap
+→ Where does the platform go from here?
 ```
 
 ---
@@ -192,11 +221,19 @@ Assumptions / caveats
 ### I want to adapt the project for another financial environment
 
 1. [Project Overview](about/project.md)
-2. [Configuration](getting-started/configuration.md)
-3. [Financial Rules](configuration/financial-rules.md)
-4. [Adding a Data Source](developer/adding-data-sources.md)
-5. [Adding an Asset Pipeline](developer/adding-asset-pipelines.md)
-6. [Design Decisions](architecture/design-decisions.md)
+2. [Roadmap](about/roadmap.md)
+3. [Configuration](getting-started/configuration.md)
+4. [Financial Rules](configuration/financial-rules.md)
+5. [Adding a Data Source](developer/adding-data-sources.md)
+6. [Adding an Asset Pipeline](developer/adding-asset-pipelines.md)
+7. [Design Decisions](architecture/design-decisions.md)
+
+### I want to understand the engineering journey behind the project
+
+1. [About Me](about/about-me.md)
+2. [Project Overview](about/project.md)
+3. [Design Decisions](architecture/design-decisions.md)
+4. [Roadmap](about/roadmap.md)
 
 ---
 
@@ -222,7 +259,11 @@ Month, Month × Asset, Date × ISIN, tax lot, category, class, sector, and portf
 
 ### Current state and future direction stay separate
 
-The current v6 implementation is a working vertical system. The long-term configuration- and adapter-driven architecture is a roadmap, not something the documentation should pretend already exists.
+The current v6 implementation is a working vertical system. The long-term configuration-, adapter-, and strategy-driven architecture is a roadmap, not something the documentation should pretend already exists.
+
+### First-person rationale, objective methodology
+
+Where a document explains why I built or chose something, I write from my own perspective. Where it defines a contract, formula, or methodology, precision takes priority over personality.
 
 ### Personality is welcome; precision wins
 
@@ -232,9 +273,9 @@ The project can have a pulse without turning methodology into meme soup. 😅
 
 ## Versioning & source of truth
 
-The Markdown files under `docs/` are intended to become the **authoritative, version-controlled technical documentation** for the project.
+The Markdown files under `docs/` are the **authoritative, version-controlled technical documentation** for the project.
 
-They can later be consumed by:
+They are intended to serve the same knowledge base across:
 
 ```text
 GitHub repository
@@ -251,16 +292,20 @@ The goal is one maintained body of technical knowledge rather than separate docu
 
 ## About the project
 
-Personal Finance ETL is currently a **purpose-built local financial platform** tailored to the my own financial data sources, financial semantics, and planning requirements.
+Personal Finance ETL is currently a **purpose-built local financial platform** tailored to my financial data sources, financial semantics, and planning requirements.
 
 Its architecture and many of its analytical components are reusable, but deploying it for a different financial environment can require meaningful customization.
 
 The longer-term direction is to progressively extract source-specific and jurisdiction-specific assumptions behind configuration, canonical contracts, adapters, and strategies while preserving the behaviour of the current production workload.
 
-See [Project Overview](about/project.md) for the full story.
+For the deeper story:
+
+- [Project Overview](about/project.md)
+- [About Me](about/about-me.md)
+- [Roadmap](about/roadmap.md)
 
 ---
 
-> **Yes, the documentation is getting its own architecture.**
+> **Yes, the documentation has its own architecture now.**
 >
 > After seeing what happened to the finance pipeline, we are taking no chances. 😎
