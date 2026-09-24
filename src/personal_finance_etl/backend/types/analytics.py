@@ -98,7 +98,7 @@ class SnapshotRecord(BaseModel):
     After_Tax_PL: float
     After_Tax_Close_Value: float
     Dietz_Day_Weight: float
-    Outperformance_Probability: float = 0.0
+    Outperforming_Lot_Ratio: float = 0.0
 
 
 class ISINProcessResult(BaseModel):

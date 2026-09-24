@@ -155,6 +155,6 @@ class SnapshotGenerator:
 
         opt_prob = (outperform_cnt / lot_count) if lot_count > 0 else 0.0
         for row in buffer:
-            row.Outperformance_Probability = round(opt_prob, 8)
+            row.Outperforming_Lot_Ratio = round(opt_prob, 8)
 
         return buffer

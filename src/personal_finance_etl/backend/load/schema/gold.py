@@ -341,7 +341,7 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_ISIN (
     Active_Return DOUBLE,
     Is_Lagging_Benchmark BIGINT,
     -- Risk
-    Outperformance_Probability DOUBLE,
+    Outperforming_Lot_Ratio DOUBLE,
     Max_Drawdown DOUBLE,
     -- Tax Exposure
     Unrealized_LTCG DOUBLE,

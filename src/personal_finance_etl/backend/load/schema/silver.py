@@ -480,7 +480,7 @@ CREATE TABLE IF NOT EXISTS silver.f_Investment_Analytics_Lot (
     After_Tax_Close_Value DOUBLE,
     -- Portfolio Aggregates
     Portfolio_Weight DOUBLE,
-    Outperformance_Probability DOUBLE,
+    Outperforming_Lot_Ratio DOUBLE,
     -- FY Tax Tracking
     FY TEXT,
     FY_Realized_LTCG DOUBLE,
