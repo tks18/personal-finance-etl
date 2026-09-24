@@ -133,13 +133,19 @@ class InvestmentAnalyticsBuilder:
         else:
             lf_isin_agg = lf_isin_agg.with_columns(pl.lit(0.0).alias("Class_Target_Weight"))
 
+        rebalance_tolerance = (
+            self.rules.portfolio_management.rebalance_tolerance_pct_points / 100.0
+            if self.rules
+            else 0.05
+        )
+
         lf_isin_agg = lf_isin_agg.with_columns(
             (pl.col("Class_Weight") - pl.col("Class_Target_Weight")).alias("Class_Drift"),
             (pl.col("Class_Target_Weight") * pl.col("Total_Portfolio_Value")).alias(
                 "Class_Target_Value"
             ),
         ).with_columns(
-            pl.when(pl.col("Class_Drift").abs() > 0.05)
+            pl.when(pl.col("Class_Drift").abs() > rebalance_tolerance)
             .then(True)
             .otherwise(False)
             .alias("Rebalance_Required")
