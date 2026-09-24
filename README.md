@@ -1,11 +1,24 @@
 <div align="center">
   <img src="logo.png" alt="Logo" width="220"/>
   <h1>Shan's Personal Finance Quant Engine 💸✨</h1>
-  <p><code>[ Broker Binaries & APIs ] ➔ [ SQLite WAL Parquet Store ] ➔ [ DuckDB Lakehouse ] ➔ [ Polars DAGs ] ➔ [ Numba JIT Quant Models ]</code></p>
-  <p><b>The undisputed GOAT of personal wealth management frameworks. Built to literally mog your net worth into the stratosphere.</b></p>
-  <p><i>Because tracking your portfolio in a basic spreadsheet or SaaS pie-chart app is officially NPC energy. We play on hard mode.</i></p>
-
-<p>
+  <p>
+    <a href="https://pypi.org/project/personal-finance-etl/">
+      <img alt="PyPI Version" src="https://img.shields.io/pypi/v/personal-finance-etl.svg?color=4CAF50&logo=python&logoColor=white" />
+    </a>
+    <a href="https://app.codacy.com/gh/tks18/personal-finance-etl/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_grade">
+      <img alt="Codacy Badge" src="https://app.codacy.com/project/badge/Grade/49aca2f2e7d044a5916adc56beb4c7dd" />
+    </a>
+    <a href="http://commitizen.github.io/cz-cli/">
+      <img alt="Commitizen friendly" src="https://img.shields.io/badge/commitizen-friendly-brightgreen.svg" />
+    </a>
+    <a href="https://github.com/semantic-release/semantic-release">
+      <img alt="semantic-release" src="https://img.shields.io/badge/%20%20%F0%9F%93%A6%F0%9F%9A%80-semantic--release-e10079.svg" />
+    </a>
+    <a href="https://github.com/tks18/personal-finance-etl/blob/master/LICENSE">
+      <img alt="License" src="https://img.shields.io/github/license/tks18/xl-pq-handler.svg?color=orange" />
+    </a>
+  </p>
+  <p>
     <img alt="Python Version" src="https://img.shields.io/badge/Python-3.13+-blue.svg?style=for-the-badge&logo=python&logoColor=white" />
     <img alt="Tech Stack" src="https://img.shields.io/badge/Engine-Polars%20%7C%20DuckDB-FF8C00.svg?style=for-the-badge" />
     <img alt="Architecture" src="https://img.shields.io/badge/Architecture-Event%20Driven%20DAG-8A2BE2.svg?style=for-the-badge" />
@@ -14,6 +27,17 @@
     <img alt="Tax" src="https://img.shields.io/badge/Alpha-Tax%20Loss%20Harvesting-FF4500.svg?style=for-the-badge" />
     <img alt="Sim" src="https://img.shields.io/badge/Sim-Jump%20Diffusion%20MC-1E90FF.svg?style=for-the-badge" />
   </p>
+  <p>
+    <p>
+      <code>[ Disparate CSV's, Broker excels, APIs ] ➔ [ SQLite WAL Blob Store ] ➔ [ DuckDB Lakehouse (Medallion Pipeline) ] ➔ [ Polars DAGs ] ➔ [ BI Consumable Gold Views ]</code> 
+    </p>
+    <p>
+      <b>The undisputed GOAT of personal wealth management frameworks. Built to literally mog your net worth into the stratosphere.</b>
+    </p>
+    <p>
+      <i>Because tracking your portfolio in a basic spreadsheet or SaaS pie-chart app is officially NPC energy. We play on hard mode.</i>
+    </p>
+  </p>  
 </div>
 
 ---
