@@ -1,6 +1,7 @@
 import polars as pl
 
 from personal_finance_etl.backend.load.database import DuckDBManager
+from personal_finance_etl.backend.load.registry import DATA_CONTRACT_REGISTRY
 from personal_finance_etl.backend.load.schema.silver import SILVER_DDL
 from personal_finance_etl.backend.utils.logger import logger
 
@@ -37,15 +38,23 @@ class SilverLayer:
             if "ISIN" in df.columns:
                 missing_isin = df.filter(pl.col("ISIN").is_null())
                 if missing_isin.height > 0:
-                    logger.error(f"CRITICAL: Found {missing_isin.height} rows with missing ISIN in d_Investment_Master.")
-                    logger.error("Please add the ISIN for the following instruments to your tracker:")
+                    logger.error(
+                        f"CRITICAL: Found {missing_isin.height} rows with missing ISIN in d_Investment_Master."
+                    )
+                    logger.error(
+                        "Please add the ISIN for the following instruments to your tracker:"
+                    )
                     for row in missing_isin.to_dicts():
                         logger.error(f"-> {row}")
             if "TAX_TYPE" in df.columns:
                 missing_tax = df.filter(pl.col("TAX_TYPE").is_null())
                 if missing_tax.height > 0:
-                    logger.error(f"CRITICAL: Found {missing_tax.height} rows with missing TAX_TYPE in d_Investment_Master.")
-                    logger.error("Please add the TAX_TYPE for the following instruments to your tracker:")
+                    logger.error(
+                        f"CRITICAL: Found {missing_tax.height} rows with missing TAX_TYPE in d_Investment_Master."
+                    )
+                    logger.error(
+                        "Please add the TAX_TYPE for the following instruments to your tracker:"
+                    )
                     for row in missing_tax.to_dicts():
                         logger.error(f"-> {row}")
 
@@ -56,28 +65,11 @@ class SilverLayer:
 
     def load(self, dfs: dict[str, pl.DataFrame]) -> None:
         """Truncates all silver.* tables and re-inserts via db_manager.conn."""
+
         logger.info("Loading transformed datasets into Silver layer...")
+
         table_mappings = {
-            "df_d_calendar": "silver.d_Calendar",
-            "df_d_income_category": "silver.d_Income_Category",
-            "df_d_income_subcategory": "silver.d_Income_Subcategory",
-            "df_d_expense_category": "silver.d_Expense_Category",
-            "df_d_expense_subcategory": "silver.d_Expense_Subcategory",
-            "df_d_asset_category": "silver.d_Asset_Category",
-            "df_d_asset_subcategory": "silver.d_Asset_SubCategory",
-            "df_d_currency": "silver.d_Currency",
-            "df_d_benchmark_master": "silver.d_Investment_Benchmark_Master",
-            "df_d_investment_master": "silver.d_Investment_Master",
-            "df_d_macro_parameters": "silver.d_Macro_Parameters",
-            "df_f_income_transactions": "silver.f_Income_Transactions",
-            "df_f_expense_transactions": "silver.f_Expense_Transactions",
-            "df_f_transfer_transactions": "silver.f_Transfer_Transactions",
-            "df_f_opening_balances": "silver.f_Opening_Balances",
-            "df_f_investment_market_data": "silver.f_Investment_Market_Data",
-            "df_f_tf_inv_purchase": "silver.f_Investment_Purchase_Data",
-            "df_f_tf_inv_sale": "silver.f_Investment_Sale_Data",
-            "df_f_investment_benchmark_data": "silver.f_Investment_Benchmark_Data",
-            "df_f_investment_analytics_lot": "silver.f_Investment_Analytics_Lot",
+            c.contract_id: c.physical_table for c in DATA_CONTRACT_REGISTRY if c.layer == "silver"
         }
         # Phase 1: Cleanly wipe the entire schema and its foreign keys
         self.db_manager.conn.execute("DROP SCHEMA IF EXISTS silver CASCADE")
