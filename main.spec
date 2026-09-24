@@ -4,7 +4,7 @@ from PyInstaller.utils.hooks import copy_metadata, collect_data_files, collect_s
 
 PyInstaller.config.CONF['upx_dir'] = r"C:\Tools\_bins_\upx"
 
-datas = [('logo.ico', '.'), ('logo.png', '.'), ('README.md', '.'), ('docs/*', 'docs/')]
+datas = [('logo.ico', '.'), ('logo.png', '.'), ('README.md', '.'), ('docs', 'docs')]
 binaries = []
 
 hiddenimports = [
