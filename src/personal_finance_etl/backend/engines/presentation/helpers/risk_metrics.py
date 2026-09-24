@@ -157,29 +157,6 @@ class RiskMetricsBuilder:
                 .fill_null(0.0)
                 .alias("Downside_Volatility_12M"),
             )
-            .with_columns(
-                # Sharpe Ratio = (Rolling_12M_Return - Risk_Free_Rate) / Annualized_Volatility
-                pl.when(pl.col("Annualized_Volatility_12M") > 0)
-                .then(
-                    (pl.col("Rolling_12M_Return") - pl.col("Risk_Free_Rate"))
-                    / pl.col("Annualized_Volatility_12M")
-                )
-                .otherwise(0.0)
-                .alias("Sharpe_Ratio_12M"),
-                # Sortino Ratio = (Rolling_12M_Return - Risk_Free_Rate) / Downside_Volatility
-                pl.when(pl.col("Downside_Volatility_12M") > 0)
-                .then(
-                    (pl.col("Rolling_12M_Return") - pl.col("Risk_Free_Rate"))
-                    / pl.col("Downside_Volatility_12M")
-                )
-                .otherwise(0.0)
-                .alias("Sortino_Ratio_12M"),
-                # Calmar Ratio = Rolling_12M_Return / abs(Max_Drawdown_12M)
-                pl.when(pl.col("Max_Drawdown_12M") < 0)
-                .then(pl.col("Rolling_12M_Return") / pl.col("Max_Drawdown_12M").abs())
-                .otherwise(0.0)
-                .alias("Calmar_Ratio_12M"),
-            )
         )
 
         return lf_base.select(
@@ -197,8 +174,5 @@ class RiskMetricsBuilder:
                 "Max_Drawdown_12M",
                 "Annualized_Volatility_12M",
                 "NW_Volatility_12M",
-                "Sharpe_Ratio_12M",
-                "Sortino_Ratio_12M",
-                "Calmar_Ratio_12M",
             ]
         )
