@@ -92,7 +92,7 @@ Homepage = "https://github.com/tks18/personal-finance-etl"
 Documentation = "https://github.com/tks18/personal-finance-etl#readme"
 Repository = "https://github.com/tks18/personal-finance-etl"
 Issues = "https://github.com/tks18/personal-finance-etl/issues"
-Changelog = "https://github.com/tks18/personal-finance-etl/releases"
+Changelog = "https://github.com/tks18/personal-finance-etl/blob/master/CHANGELOG.md"
 
 [tool.pyrefly]
 search-path = ["."]
