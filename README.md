@@ -1,10 +1,10 @@
-<img src="logo.png" alt="Logo" width="220"/>
+<img src="logo.png" alt="Personal Finance ETL logo" width="220"/>
 
 # Personal Finance ETL
 
 **A local-first financial data engineering, BI, and quantitative decision-support platform.**
 
-Built for real month-end close, investment accounting, portfolio analysis, cash-flow intelligence, and long-range financial planning.
+Built for real month-end close, investment accounting, portfolio analysis, cash-flow reconciliation, wealth tracking, and long-range financial planning.
 
 [![PyPI](https://img.shields.io/pypi/v/personal-finance-etl?label=PyPI)](https://pypi.org/project/personal-finance-etl/)
 ![Python](https://img.shields.io/badge/Python-3.13%2B-3776AB?logo=python&logoColor=white)
@@ -17,98 +17,80 @@ Built for real month-end close, investment accounting, portfolio analysis, cash-
 
 [Why I built it](#why-i-built-it) ·
 [Architecture](#architecture) ·
-[Warehouse](#analytical-warehouse) ·
-[Investment Analytics](#investment-analytics) ·
-[FIRE](#fire--long-range-planning) ·
-[Software Engineering](#software-engineering) ·
-[Run It](#running-the-project) ·
-[Docs](#documentation)
+[Financial system](#one-financial-lineage) ·
+[Engineering](#software-engineering) ·
+[Run it](#running-the-project) ·
+[Documentation](#documentation) ·
+[Roadmap](#where-this-is-going)
+
+---
 
 ## What is this?
 
-`personal-finance-etl` is the production financial system I built for
-myself after a collection of spreadsheets, broker statements, bank data,
-investment records, and planning models stopped being a sensible way to
-understand one financial life.
+`personal-finance-etl` is the production financial system I built after spreadsheets, bank data, broker statements, investment records, Power BI models, and planning calculations stopped being a sensible collection of separate workflows.
 
-Things escalated. 😅
+I wanted one system that could tell me:
 
-Today the project combines:
+> **What is actually happening with my money, why did it happen, and what does the current state imply for the decisions ahead?**
 
--   **Data engineering** --- durable raw-artifact persistence,
-    change-aware ingestion, incremental Bronze loading, deterministic
-    downstream reconstruction, lineage, and local analytical storage.
--   **BI engineering** --- canonical financial modelling, explicit
-    analytical grains, domain-oriented Gold marts, and Power BI-ready
-    serving tables.
--   **Python & software engineering** --- typed configuration contracts,
-    strategy abstractions, builder-based analytics, multiprocessing,
-    transactional orchestration, strict static analysis, and separated
-    application surfaces.
--   **Financial engineering** --- household accounting, cash/non-cash
-    semantics, FIFO tax lots, broker reconciliation, benchmark-relative
-    performance, tax-aware valuation, cash-flow reconciliation,
-    budgeting, and wealth modelling.
--   **Quantitative planning** --- irregular-cash-flow XIRR, drawdown
-    analysis, stochastic FIRE modelling, market regimes, inflation,
-    human-capital shocks, glide paths, dynamic withdrawals, and
-    terminal-wealth scenarios.
+Things escalated slightly. 😅
 
-This is a **working vertical system built around my own financial
-environment**, not a generic consumer-finance app. I actually use it for
-month-end closure, investment review, and long-range planning.
+Today the project combines five disciplines inside one end-to-end financial lineage:
 
-A spreadsheet can technically do pieces of this. At some point that
-became spreadsheet NPC energy.
+| Discipline | What it looks like in the project |
+| --- | --- |
+| **Data engineering** | Durable raw-artifact persistence, change-aware ingestion, persistent Bronze, deterministic reconstruction, lineage, recovery, local analytical storage |
+| **BI engineering** | Canonical financial semantics, explicit grains, 20 Silver contracts, 17 domain-oriented Gold marts, Power BI-ready serving state |
+| **Python & software engineering** | Pydantic contracts, Polars LazyFrames, strategy/protocol seams, multiprocessing, backend/frontend separation, transactional orchestration, strict static analysis |
+| **Finance** | Household accounting, cash/non-cash semantics, FIFO tax lots, broker reconciliation, tax-aware valuation, cash-flow reconciliation, budgeting and wealth modelling |
+| **Quantitative planning** | XIRR, benchmark shadow portfolios, drawdown, deterministic FIRE and Numba-accelerated stochastic scenario modelling |
+
+This is a **working vertical system built around my financial environment**, not a generic consumer-finance application. I use it for month-end closure, investment review, wealth monitoring and long-range planning.
+
+The repository is also deliberately transparent about that boundary. A new developer can study or extend the architecture, but using it against a different financial environment today can require meaningful customization of source contracts, mappings and financial policy.
+
+> New to the project? Start with the [Project Overview](docs/about/project.md), or enter the full [Documentation Portal](docs/README.md).
 
 ---
+
 ## Why I built it
 
-I wanted one local system that could answer a deceptively simple
-question:
+The original problem was practical, not architectural.
 
-> **What is actually happening with my money?**
+I wanted a reliable month-end view of income, expenses, transfers, cash, investments and net worth without manually stitching together multiple financial sources.
 
-That eventually became several connected questions:
+That gradually expanded into a connected set of questions.
 
 ### Month-end close
 
-Reconcile income, expenses, transfers, cash movement, asset balances,
-investments, and net worth from heterogeneous financial sources.
+Can I reconstruct household financial activity and reconcile the resulting balances?
 
 ### Wealth
 
-Understand book wealth, market-adjusted wealth, liquidity, liabilities,
-savings, organic growth, and how the household balance sheet is
-evolving.
+How much of my wealth change came from savings, market movement, liquidity changes or liabilities?
 
 ### Investments
 
-Reconstruct positions from transactions, maintain FIFO tax lots,
-reconcile against broker state, compare capital deployment against
-benchmarks, calculate cash-flow-aware returns, and understand after-tax
-outcomes.
+What do transaction history, current broker state, FIFO tax lots, benchmark-relative performance and tax exposure say together?
 
 ### Cash flow
 
-Separate accounting activity from actual cash movement and reconcile
-operating, investing, financing, and internal-transfer activity against
-cash-pool balances.
+Does classified operating, investing and financing activity actually explain the movement in my cash-pool balances?
 
 ### Planning
 
-Track budgets, tax exposure, savings capacity, runway, and progress
-toward financial independence.
+What do current savings, spending, tax exposure, allocation and wealth imply for the next decision?
 
-### Stress testing
+### FIRE
 
-Use configurable stochastic scenarios to explore distributions of FI
-timing, runway, portfolio survival, and terminal wealth.
+What does the current state imply under deterministic assumptions, and how does that picture change across stochastic market, inflation, employment and withdrawal scenarios?
 
-What started as an ETL pipeline therefore grew into a **local financial
-data and decision-support platform**.
+What began as ETL therefore became a **local financial data and decision-support platform**.
+
+For the longer project story and philosophy, see [About the Project](docs/about/project.md).
 
 ---
+
 ## The system in one line
 
 ```text
@@ -127,22 +109,20 @@ Decision-support marts
 Power BI • CLI • Desktop
 ```
 
-That lineage is the core of the project. The investment engine, household accounting model, cash-flow model, tax analytics, and FIRE engine are not isolated calculators; they operate on the same reconstructed financial state.
+The important part is not that each capability exists individually.
+
+It is that they operate on the **same reconstructed financial state**.
 
 ---
 
 ## Architecture
 
-The core design principle is simple:
+The core design principle is:
 
-> **Preserve raw evidence, reconstruct canonical financial state,
-> compute richly, and publish selectively.**
+> **Preserve raw evidence, model financial meaning explicitly, reconstruct derived state deterministically, and publish analytics at the grain required by the decision.**
 
 ```mermaid
 flowchart TB
-    %% =========================
-    %% SOURCE ENVIRONMENT
-    %% =========================
     subgraph SRC["1 · Financial Source Environment"]
         direction LR
         BANK["Bank / Finance Sources<br/>CSV · Excel · SQLite"]
@@ -151,9 +131,6 @@ flowchart TB
         MARKET["External Market Data<br/>Benchmark History"]
     end
 
-    %% =========================
-    %% RAW / CONTROL PLANE
-    %% =========================
     subgraph RAW["2 · Raw & Ingestion Control Plane · SQLite"]
         direction LR
         DISC["Discovery & Change Detection<br/>file categories · hash policy"]
@@ -172,9 +149,6 @@ flowchart TB
     REF --> DISC
     MARKET --> VIRT
 
-    %% =========================
-    %% EXTRACTION + BRONZE
-    %% =========================
     subgraph ING["3 · Extraction & Persistent Bronze · DuckDB"]
         direction LR
         EXT["Source Extractors / Adapters<br/>bytes → source-shaped frames"]
@@ -191,9 +165,6 @@ flowchart TB
     SYNC -. successful Bronze load .-> BRREF
     SYNC -. successful Bronze load .-> BRHIST
 
-    %% =========================
-    %% CANONICAL MODEL
-    %% =========================
     subgraph CANON["4 · Canonical Financial & Semantic Model · Polars"]
         direction LR
         DAG["Lazy Transformation DAG<br/>vectorized · streaming collection"]
@@ -209,9 +180,6 @@ flowchart TB
 
     LINEAGE --> DAG
 
-    %% =========================
-    %% ANALYTICS ENGINES
-    %% =========================
     subgraph ENGINES["5 · Analytics & Decision Engines"]
         direction LR
 
@@ -245,9 +213,6 @@ flowchart TB
     RULES -. policy .-> QUANT
     RULES -. policy .-> WEALTH
 
-    %% =========================
-    %% ANALYTICAL WAREHOUSE
-    %% =========================
     subgraph WH["6 · Analytical Warehouse · DuckDB"]
         direction LR
         SILVER["Silver · 20 Tables<br/>canonical dimensions · references · facts<br/>including lot-level investment analytics"]
@@ -266,9 +231,6 @@ flowchart TB
     SYNC -. operational state .-> META
     RULES -. captured policy .-> META
 
-    %% =========================
-    %% APPLICATION / CONSUMPTION
-    %% =========================
     subgraph APP["7 · Application & Consumption"]
         direction LR
         API["PersonalFinanceEngine<br/>backend facade"]
@@ -276,7 +238,7 @@ flowchart TB
         GUI["Desktop GUI<br/>shan-fin-gui"]
         AUTO["Headless / Scheduled<br/>auto · cron · snapshots"]
         PBI["Power BI<br/>decision dashboards"]
-        DOCS["Packaged Docs<br/>guides / methodology"]
+        DOCS["Packaged Docs<br/>guides · methodology · reference"]
         API --> CLI
         API --> GUI
         API --> AUTO
@@ -289,9 +251,6 @@ flowchart TB
     DOCS --> CLI
     DOCS --> GUI
 
-    %% =========================
-    %% RELIABILITY / RECOVERY
-    %% =========================
     subgraph REL["Cross-Cutting Reliability"]
         direction LR
         TX["Application-Coordinated Transactions<br/>DuckDB + SQLite commit / rollback"]
@@ -308,186 +267,131 @@ flowchart TB
     TYPE -. contracts .-> ENGINES
 ```
 
-> **How to read this:** the solid path is the financial-data lineage from raw evidence to decisions. Dotted paths represent policy, operational state, recovery, and cross-cutting engineering controls. The architecture deliberately separates source persistence, canonical semantics, analytical computation, serving contracts, and application surfaces.
+The README deliberately keeps this as the **executive architecture view**. The full architecture suite now lives under [`docs/architecture/`](docs/architecture/README.md):
 
-Each technology has a deliberately narrow job:
+- [System Architecture](docs/architecture/system-architecture.md)
+- [Data Lifecycle](docs/architecture/data-lifecycle.md)
+- [Warehouse Architecture](docs/architecture/warehouse-architecture.md)
+- [Data Model](docs/architecture/data-model.md)
+- [Reliability & Recovery](docs/architecture/reliability-and-recovery.md)
+- [Design Decisions](docs/architecture/design-decisions.md)
+
+---
+
+## Why SQLite + DuckDB + Polars?
+
+Each technology has a deliberately narrow responsibility.
 
 | Technology | Role |
 | --- | --- |
-| **SQLite** | Durable raw-document store, file registry, hashes, and ingestion synchronization state |
-| **DuckDB** | Local analytical warehouse and BI-serving layer |
-| **Polars** | Lazy/vectorized transformation and analytical computation |
+| **SQLite** | Durable raw-document store, registry, hashes, payload BLOBs and synchronization state |
+| **DuckDB** | Persistent Bronze/Silver/Gold/Meta analytical warehouse and BI-serving layer |
+| **Polars** | Lazy/vectorized canonical transformation and analytical computation |
 | **NumPy + Numba** | Numerically intensive stochastic simulation |
-| **Pydantic** | Validated operational and financial configuration contracts |
-| **PyXIRR** | Irregular-cash-flow return calculations |
-| **Rich** | CLI experience |
+| **Pydantic** | Validated operational and financial-policy contracts |
+| **PyXIRR** | Irregular dated cash-flow return calculations |
+| **Rich** | CLI |
 | **CustomTkinter** | Desktop application |
-| **Power BI** | Analytical consumption and visualization |
+| **Power BI** | Decision-oriented analytical consumption |
+
+I prefer explicit role separation over forcing one technology to own every workload.
+
+The reasoning behind these choices is documented in [Design Decisions](docs/architecture/design-decisions.md).
 
 ---
 
-## How the system works
-
-### 1. Raw & control plane
-
-Source artifacts are first registered in a dedicated SQLite **Raw
-Document Store**.
-
-It persists:
-
--   source metadata and relative paths,
--   SHA-256 fingerprints,
--   binary payloads,
--   first/last ingestion timestamps,
--   and Bronze synchronization state.
-
-Files move through an explicit lifecycle such as:
-
-``` text
-Source artifact
-      ↓
-Raw Store
-[PENDING_BRONZE]
-      ↓
-Extraction + Bronze load
-      ↓
-Raw Store
-[SYNCED]
-```
-
-This is more than archival storage. It creates a **recoverability
-boundary**: if the analytical DuckDB warehouse is recreated while the
-Raw Store survives, persisted raw artifacts can be reprocessed to
-rebuild downstream state.
-
-The same mechanism also supports **virtual artifacts**. Incrementally
-fetched benchmark history is serialized as Parquet bytes and registered
-under synthetic `virtual://...` identities before entering Bronze.
-
-### 2. Bronze
-
-Bronze is the persistent source-shaped analytical layer.
-
-Loading strategy depends on source semantics:
-
--   **Reference/configuration sources** are treated as full
-    replacements.
--   **Historical/event sources** use file-aware replacement, deleting
-    and reloading only rows belonging to changed source artifacts.
-
-This keeps source history incremental without forcing every downstream
-model to become incrementally stateful.
-
-### 3. Silver
-
-Silver is rebuilt deterministically from the current Bronze state.
-
-It is the **canonical financial and analytical model**, containing
-dimensions/reference models and facts for household transactions,
-assets, investments, benchmarks, market data, and lot-level analytics.
-
-### 4. Gold
-
-Gold is also rebuilt deterministically.
-
-Rather than being one giant star schema, Gold contains **domain-oriented
-decision-support marts at explicit grains**: household wealth, cash
-flow, planning, portfolio management, and investment analytics.
-
-### 5. Meta
-
-Meta captures operational and reproducibility context: source registry
-state, pipeline runs, output row counts, financial rules, and
-application settings.
-
----
 ## Analytical warehouse
 
-### Silver: canonical financial and analytical model
+The warehouse is Medallion-inspired, but each layer has a more specific contract.
 
-Silver currently contains **20 physical tables**.
+```text
+Raw
+→ preserve evidence and ingestion/control state
 
-### Dimensions and reference models
+Bronze
+→ preserve extracted source-shaped analytical state
 
-``` text
-d_Calendar
-d_Income_Category
-d_Income_Subcategory
-d_Expense_Category
-d_Expense_Subcategory
-d_Asset_Category
-d_Asset_SubCategory
-d_Currency
-d_Investment_Benchmark_Master
-d_Investment_Master
-d_Macro_Parameters
+Silver
+→ publish canonical financial and analytical state
+
+Gold
+→ publish decision-support marts
+
+Meta
+→ record operational and reproducibility context
 ```
 
-### Facts
+### Silver
 
-``` text
-f_Income_Transactions
-f_Expense_Transactions
-f_Transfer_Transactions
-f_Opening_Balances
-f_Investment_Market_Data
-f_Investment_Purchase_Data
-f_Investment_Sale_Data
-f_Investment_Benchmark_Data
-f_Investment_Analytics_Lot
+The current architecture publishes **20 Silver tables**:
+
+- 11 dimensions/reference models
+- 9 facts
+- including `f_Investment_Analytics_Lot` at deep tax-lot analytical grain
+
+### Gold
+
+The current architecture publishes **17 Gold marts** across:
+
+| Domain | Marts |
+| --- | ---: |
+| Wealth | 2 |
+| Cash Flow | 4 |
+| Planning | 3 |
+| Portfolio Management | 1 |
+| Investment Analytics | 7 |
+
+Gold is deliberately **multi-grain**. Month, Month × Asset, Month × ISIN, Date × ISIN, Date × Class, Date × Portfolio and Date × ISIN × Tax Lot are different analytical questions.
+
+For the physical warehouse contracts:
+
+- [Silver Data Contracts](docs/reference/silver-data-contracts.md)
+- [Gold Data Contracts](docs/reference/gold-data-contracts.md)
+- [Meta Data Contracts](docs/reference/meta-data-contracts.md)
+
+---
+
+## One financial lineage
+
+The investment engine, household model, tax model and FIRE engine are not independent calculators.
+
+They connect.
+
+```mermaid
+flowchart LR
+    TX["Financial Transactions"] --> HH["Household Ledger"]
+    ITX["Investment Transactions"] --> INV["FIFO / Broker / Benchmark Engine"]
+
+    INV --> MKT["Market + Tax-Aware Investment State"]
+    HH --> NW["Household Wealth"]
+    MKT --> NW
+
+    HH --> CF["Cash-Flow Reconciliation"]
+    NW --> PLAN["Tax · Budget · Allocation · FIRE"]
+    CF --> PLAN
+
+    PLAN --> BI["Gold Marts / Power BI"]
+    MKT --> BI
 ```
 
-`f_Investment_Analytics_Lot` is the deepest investment analytical fact,
-carrying lot-level position, holding-period, benchmark, return, tax, and
-realized/unrealized state.
-
-### Gold: curated decision-support marts
-
-Gold currently contains **17 physical analytical marts**.
-
-| Domain | Mart | Approximate grain |
-| --- | --- | --- |
-| Wealth | `Core_Monthly_Fact` | Month |
-| Wealth | `Wealth_Asset_Breakdown` | Month × Asset |
-| Cash flow | `Cashflow_Expense_Breakdown` | Month × Expense Category |
-| Cash flow | `Cashflow_Income_Breakdown` | Month × Income Category |
-| Cash flow | `Cashflow_Efficiency_Analytics` | Month |
-| Cash flow | `Cashflow_Activity_Summary` | Month |
-| Planning | `Wealth_FIRE_Analytics` | Month |
-| Planning | `Forecast_Tax_Liability` | Month |
-| Planning | `Forecast_Budget_Variance` | Month |
-| Portfolio management | `Investment_Portfolio_Summary` | Month × ISIN |
-| Investment analytics | `Investment_By_ISIN` | Date × ISIN |
-| Investment analytics | `Investment_By_Subtype` | Date × Subtype |
-| Investment analytics | `Investment_By_Class` | Date × Class |
-| Investment analytics | `Investment_By_Instrument_Type` | Date × Instrument Type |
-| Investment analytics | `Investment_By_Sector` | Date × Sector |
-| Investment analytics | `Investment_By_Industry` | Date × Industry |
-| Investment analytics | `Investment_By_Portfolio` | Date |
-
-The distinction is intentional:
-
-> **Silver models canonical financial state. Gold publishes decision-ready analytical views of that state.**
+That shared lineage is the core product idea.
 
 ---
 
 ## Investment analytics
 
-> **From transaction evidence to tax-aware portfolio state.**
+The investment engine reconstructs state rather than merely calculating dashboard ratios.
 
-The investment engine is a separate computational pipeline rather than a
-handful of dashboard calculations.
-
-``` text
-Investment transactions
+```text
+Canonical investment transactions
         ↓
-Per-instrument processing
+Per-ISIN processing
         ↓
-FIFO tax-lot reconstruction
+FIFO tax-lot inventory
         ↓
-Broker-state reconciliation
+Broker reconciliation
         ↓
-Shadow benchmark inventory
+Shadow benchmark portfolio
         ↓
 Historical market snapshots
         ↓
@@ -495,560 +399,450 @@ Tax-aware valuation
         ↓
 XIRR / After-Tax XIRR / Benchmark XIRR
         ↓
-Hierarchical portfolio aggregation
+Hierarchical portfolio analytics
 ```
 
-### FIFO tax lots
+The current serving contract focuses on measures I actually use:
 
-Purchases create individual lots. Sales consume the oldest available
-lots first, including partial-lot disposals.
+- CAGR
+- XIRR
+- After-Tax XIRR
+- Benchmark CAGR
+- Benchmark XIRR
+- Active Return
+- Max Drawdown
+- realized/unrealized tax state
+- position and portfolio weights
 
-The engine tracks:
-
--   quantity and cost basis,
--   holding age and tax classification,
--   realized gains and losses,
--   unrealized gains and losses,
--   days remaining to long-term classification,
--   estimated tax if sold,
--   and after-tax position value.
-
-### Broker reconciliation
-
-Transaction history explains the position, but broker-reported state
-anchors the current position.
-
-When reconstructed quantity or cost basis differs from broker state, the
-engine reconciles the lot inventory so downstream analytics reflect the
-authoritative reported position.
-
-This is a deliberate real-world trade-off: financial source history is
-not always pristine.
-
-### Shadow benchmarks
-
-Each investment purchase creates a cash-equivalent position in its
-configured benchmark.
-
-The benchmark shadow inventory evolves alongside the real position,
-including proportional reduction on partial disposals. This allows
-actual capital deployment to be compared with the benchmark under a more
-meaningful cash-flow context than simply subtracting two unrelated
-CAGRs.
-
-Benchmark history is itself cached incrementally and persisted through
-the Raw Store.
-
-### Current performance contract
-
-v6.1.1 intentionally exposes a focused set of decision-useful analytics
-rather than every ratio the engine could calculate:
-
--   CAGR
--   XIRR
--   After-Tax XIRR
--   Benchmark CAGR
--   Benchmark XIRR
--   Active Return
--   Max Drawdown
--   realized and unrealized tax state
--   position and portfolio weights
-
-The project previously carried a broader collection of risk ratios.
-Those were deliberately pruned from the current serving model as the
-analytics shifted toward metrics that are useful in my actual investment
-workflow.
+Earlier versions carried a broader collection of institutional-style risk ratios. Those were deliberately pruned from the serving model.
 
 **Compute richly. Publish selectively.**
 
-### Portfolio management
+For the actual methodology:
 
-A separate monthly management mart handles questions such as:
-
--   current portfolio weight,
--   asset-class weight,
--   target allocation,
--   allocation drift,
--   rebalance flags,
--   sector concentration,
--   harvestable losses,
--   and harvesting priority.
-
-Performance analytics and portfolio-management decisions therefore
-remain related but distinct analytical concerns.
+- [Investment Analytics](docs/finance/investment-analytics.md)
+- [Tax Methodology](docs/finance/tax-methodology.md)
+- [Metrics & Methodology](docs/finance/metrics-and-methodology.md)
 
 ---
-## Household finance & BI model
 
-### Unified ledger
+## Household finance, cash flow & wealth
 
-Income, expenses, transfers, and opening balances are normalized into a
-common financial activity model.
+Income, expenses, transfers and opening balances are normalized into a common household financial model.
 
-The system explicitly distinguishes concepts such as:
+The system distinguishes concepts such as:
 
--   cash vs non-cash income,
--   cash vs non-cash expense,
--   core vs non-core expense,
--   transfers,
--   book balances,
--   market balances,
--   liquid vs illiquid assets,
--   and liabilities.
+```text
+cash vs non-cash income
+cash vs non-cash expense
+core vs broader spending
+transfers vs external activity
+book vs market wealth
+liquid vs illiquid assets
+gross vs after-tax investment value
+```
 
-This ledger becomes the foundation for monthly asset balances and
-net-worth reconstruction.
+The wealth engine reconstructs asset balances, overlays investment market state, and connects that state to household planning.
 
-### Book wealth vs market wealth
+Cash-flow analytics independently reconcile classified operating, investing, financing and internal-transfer activity against actual cash-pool movement.
 
-The system first reconstructs balances from financial activity, then
-overlays investment market valuations where available.
+A dashboard can look plausible while failing to explain where the cash went. I would rather surface the difference.
 
-That creates distinct views of:
+See:
 
--   **book / ledger-derived wealth**, and
--   **market-adjusted wealth**.
-
-Tax-aware investment valuation can then flow into long-range planning.
-
-### Cash-flow reconciliation
-
-Cash-flow analytics are not merely an expense summary.
-
-Configured cash-pool assets are used to reconcile actual cash movement
-across:
-
--   operating activity,
--   investing activity,
--   financing activity,
--   internal transfers,
--   cash expenses,
--   and non-cash expenses.
-
-`Cashflow_Activity_Summary` compares calculated movement with
-opening/closing cash balances and surfaces any unreconciled difference.
-
-### `Core_Monthly_Fact`
-
-This is the monthly BI spine of the household model, bringing together
-major measures across:
-
--   income,
--   expenses,
--   cash flow,
--   assets,
--   investments,
--   liquidity,
--   liabilities,
--   net worth,
--   CPI,
--   and inflation.
-
-`Wealth_Asset_Breakdown` complements it at Month × Asset grain for
-drill-down analysis.
+- [Financial Model](docs/finance/financial-model.md)
+- [Cash Flow & Wealth](docs/finance/cashflow-and-wealth.md)
 
 ---
+
 ## FIRE & long-range planning
 
-> **Planning guidance, not prophecy.** Every stochastic output is conditional on the configured model assumptions.
+> **Planning guidance, not prophecy.**
 
-The FIRE subsystem has three conceptual layers.
+FIRE has three conceptual layers:
 
-### 1. Current state
+```text
+Current state
+      ↓
+Deterministic planning
+      ↓
+Stochastic scenario modelling
+```
 
-Where am I today?
+The stochastic engine can model:
 
--   current wealth,
--   spending,
--   savings,
--   FI coverage,
--   FI gap,
--   withdrawal rate,
--   and runway.
+- Bull/Bear/Stagflation regimes
+- Markov regime transitions
+- fat-tailed return shocks
+- jump/crash events
+- stochastic inflation
+- human-capital and unemployment shocks
+- glide paths
+- portfolio drag
+- dynamic withdrawal rules
+- sequence-of-returns effects
 
-### 2. Deterministic planning
+The Gold contract exposes a curated set of outputs such as:
 
-What does the current trajectory imply?
+- P10 / P50 / P90 months to FI
+- modelled probability of success
+- base and stressed runway
+- projected median FI date
+- P50 nominal terminal wealth
 
--   Target FI,
--   Lean FI,
--   Coast FI,
--   linear time-to-FI,
--   required savings rate,
--   projected FI trajectory,
--   and base runway.
+These are **scenario outputs conditional on the configured model**, not predictions.
 
-### 3. Stochastic scenario modelling
+See:
 
-What happens when the future refuses to behave nicely?
-
-The Numba-accelerated Monte Carlo model can incorporate:
-
--   Bull/Bear/Stagflation market regimes,
--   Markov regime transitions,
--   fat-tailed return shocks,
--   jump/crash events,
--   stochastic inflation,
--   human-capital and unemployment shocks,
--   equity/debt glide paths,
--   portfolio expense drag,
--   dynamic withdrawal rules,
--   and sequence-of-returns effects.
-
-The serving model deliberately exposes a compact set of scenario
-outputs, including:
-
--   P10 / P50 / P90 months to FI,
--   modelled probability of success,
--   stressed and base runway,
--   projected median FI date,
--   and P50 nominal terminal wealth.
-
-These are **scenario-model outputs conditional on configured
-assumptions**, not predictions or financial guarantees.
-
-In other words, the FIRE calculator has seen some things. 🔥
+- [FIRE Methodology](docs/finance/fire-methodology.md)
+- [FIRE Configuration](docs/configuration/fire-configuration.md)
 
 ---
+
 ## Configuration & financial policy
 
-The project separates operational settings from financial semantics.
+The project deliberately separates two concerns.
 
-### Operational configuration
+### Operational settings
 
-Controls things such as:
+Describe **where and how the system runs**:
 
--   source locations,
--   statement folders,
--   target database,
--   raw-store location,
--   mapping/reference files,
--   and per-file-type hashing policy.
+- source locations
+- statement folders
+- database locations
+- mappings/reference inputs
+- hash policy
 
 ### `FinancialRules`
 
-Defines much of the financial meaning of the system:
+Describe **what the financial model means**:
 
--   income classification,
--   non-cash income,
--   core expenses,
--   budget allocation,
--   cash pools,
--   cash-flow activity classification,
--   asset semantics,
--   investment classifications,
--   target allocations,
--   macro assumptions,
--   tax parameters,
--   FIRE assumptions,
--   market regimes,
--   human-capital shocks,
--   glide paths,
--   jump diffusion,
--   dynamic withdrawal rules,
--   and stochastic inflation.
+- income/expense semantics
+- cash/non-cash treatment
+- core expenses
+- cash pools
+- activity classifications
+- investment classifications
+- target allocations
+- tax parameters
+- FIRE assumptions
+- market regimes
+- human-capital shocks
+- glide paths
+- withdrawal policy
 
-This configuration layer is already an important step toward the
-project's longer-term goal of separating reusable engine behavior from
-user-specific financial policy.
+The long-term principle is:
+
+> **Parameters belong in configuration. Genuinely different behaviour belongs behind adapters or strategies.**
+
+See [Financial Rules](docs/configuration/financial-rules.md).
 
 ---
+
 ## Software engineering
 
-The project is built as a typed Python application, not a collection of
-notebook scripts.
+This is a typed Python application, not a collection of finance notebooks.
 
-Key engineering characteristics include:
+The implementation uses:
 
--   **Python 3.13+**
--   validated **Pydantic** configuration models,
--   structural **Protocols** and strategy boundaries,
--   asset-specific pipeline implementations behind common contracts,
--   builder-based analytical composition,
--   **Polars LazyFrames** and streaming collection,
--   multiprocessing and per-instrument process-pool execution,
--   backend facade separated from CLI/desktop frontends,
--   coordinated SQLite/DuckDB transaction handling,
--   snapshot and recovery workflows,
--   **Ruff** linting,
--   **strict mypy**,
--   and **strict Pyright** for the core application.
+- **Python 3.13+**
+- **Pydantic** configuration contracts
+- structural **Protocols** and strategy seams
+- asset-specific pipelines behind common investment contracts
+- builder-based analytical composition
+- **Polars LazyFrames**
+- multiprocessing and per-instrument process-pool execution
+- a backend facade separated from CLI/desktop frontends
+- coordinated SQLite/DuckDB transaction handling
+- snapshot/recovery workflows
+- **Ruff**
+- **strict mypy**
+- **strict Pyright**
 
-The goal is not abstraction for abstraction's sake. Interfaces exist
-where behavior genuinely varies; concrete implementations remain
-concrete where they make the system easier to reason about.
+The goal is not abstraction density.
+
+Interfaces exist where behaviour genuinely varies.
+
+Concrete code stays concrete where that makes the system easier to understand.
 
 No Enterprise Java cosplay required.
 
+For extension architecture:
+
+- [Development Guide](docs/developer/development-guide.md)
+- [Adding a Data Source](docs/developer/adding-data-sources.md)
+- [Adding an Asset Pipeline](docs/developer/adding-asset-pipelines.md)
+- [Adding a Gold Mart](docs/developer/adding-gold-marts.md)
+
 ---
+
 ## Reliability & recoverability
 
-The pipeline coordinates a DuckDB analytical transaction with a SQLite
-Raw Store transaction.
+The pipeline coordinates local DuckDB and SQLite transactions at the application layer.
 
-On downstream failure, both are rolled back by the orchestrator. On
-success, both are committed before the run is marked successful.
+On failure, active work is rolled back and failed-run telemetry remains observable.
 
-This is **application-coordinated transactional consistency across two
-local stores**, not a distributed two-phase commit protocol.
+Persisted raw artifacts form a separate recovery boundary, allowing analytical state to be reconstructed when the Raw Store survives.
 
-Operational run telemetry is intentionally maintained so failed
-executions remain observable even when the analytical transaction is
-rolled back.
+This is deliberately described as **application-coordinated transactional consistency**, not distributed two-phase commit.
 
-Combined with persisted raw artifacts and deterministic Silver/Gold
-reconstruction, this gives the platform a strong local recoverability
-model.
+That distinction matters.
+
+See [Reliability & Recovery](docs/architecture/reliability-and-recovery.md).
 
 ---
-## Application surfaces
 
-The package exposes:
-
-``` bash
-shan-fin
-shan-fin-gui
-```
-
-and supports interactive and unattended workflows including
-configuration selection, snapshots, automatic execution,
-scheduled/headless execution, and packaged documentation access.
-
-The heavy pipeline runs outside the GUI event loop through a backend
-execution process, keeping presentation concerns separated from
-analytical execution.
-
----
-## Is this plug-and-play?
-
-**No --- not yet.**
-
-The current implementation is a production system tailored to my
-financial environment.
-
-The reusable parts are substantial: raw persistence, state management,
-orchestration, warehouse architecture, canonical modelling patterns,
-analytical engines, application structure, and much of the configuration
-system.
-
-But adopting the project for another person today can require
-customization of:
-
--   bank/broker source adapters,
--   statement layouts,
--   source mappings,
--   asset pipelines,
--   financial classifications,
--   tax/regulatory behaviour,
--   and selected analytical policies.
-
-That boundary is intentional and documented rather than hidden.
-
----
-## Long-term direction
-
-The long-term goal is to evolve the current vertical implementation into
-a **configuration- and adapter-driven financial platform** without
-changing the analytical results produced for my own environment.
-
-Conceptually:
-
-``` text
-Current engine + my source assumptions
-                 │
-                 ▼
-          Expected results
-                 ▲
-                 │
-Future generic engine + my configuration
-```
-
-The path is evolutionary:
-
-1.  identify an embedded assumption,
-2.  characterize its current behaviour,
-3.  move it behind configuration or an explicit strategy/adapter,
-4.  run my existing configuration,
-5.  reconcile the outputs,
-6.  repeat.
-
-The likely future separation is:
-
-``` text
-Configuration
-     │
-     ├── Source definitions
-     ├── Financial semantics
-     └── Policy parameters
-     │
-     ▼
-Adapter / Strategy Registry
-     │
-     ├── Bank adapters
-     ├── Broker adapters
-     ├── Asset pipelines
-     ├── Market-data providers
-     └── Tax strategies
-     │
-     ▼
-Canonical Contracts
-     │
-     ▼
-Generic Analytical Engine
-```
-
-Configuration should describe ordinary differences. Python extension
-points should handle genuinely different behaviour.
-
-A 4,000-line YAML file wearing a fake moustache is still programming.
-
----
 ## Running the project
 
-> **Important:** the repository is currently tailored to my own source
-> contracts. Installation alone does not make it a universal
-> personal-finance application.
+> **Important:** installing the package does not make the current source contracts portable to an arbitrary financial environment.
 
 Requires **Python 3.13+**.
 
-``` bash
+### Install
+
+```bash
 pip install personal-finance-etl
 ```
 
-Launch the CLI:
+### CLI
 
-``` bash
+```bash
 shan-fin
 ```
 
-Launch the desktop application:
+### Desktop
 
-``` bash
+```bash
 shan-fin-gui
 ```
 
-For development:
+### Development
 
-``` bash
+```bash
 git clone https://github.com/tks18/personal-finance-etl.git
 cd personal-finance-etl
 pip install -e .
 ```
 
-A working deployment also requires valid operational configuration,
-financial rules, source mappings, and compatible source adapters.
+A working deployment also requires valid operational configuration, FinancialRules, mappings/reference inputs and compatible source contracts.
+
+For the real operating path:
+
+- [Installation](docs/getting-started/installation.md)
+- [Configuration](docs/getting-started/configuration.md)
+- [Running the Pipeline](docs/getting-started/running-the-pipeline.md)
 
 ---
+
+## Is this plug-and-play?
+
+**No, not yet.**
+
+The current implementation is a production system tailored to my financial environment.
+
+Substantial parts are already reusable:
+
+- Raw Store infrastructure
+- state management
+- orchestration
+- Bronze synchronization patterns
+- deterministic reconstruction
+- canonical modelling patterns
+- investment/wealth analytical engines
+- application architecture
+- much of the policy model
+
+But another deployment can currently require customization of:
+
+- bank/broker source contracts
+- statement layouts
+- source mappings
+- asset pipelines
+- financial classifications
+- jurisdictional tax behaviour
+- reconciliation policy
+- selected analytical thresholds
+
+I would rather document that boundary precisely than hide it behind "fully configurable" marketing.
+
+---
+
+## Where this is going
+
+The long-term goal is a **configuration-, adapter-, and strategy-driven financial platform** that preserves the analytical behaviour I rely on today.
+
+```text
+Current vertical system
+        ↓
+Harden semantics & observability
+        ↓
+Version contracts & reproducibility
+        ↓
+Extract bank / broker / provider adapters
+        ↓
+Extract tax / reconciliation strategies
+        ↓
+Preserve canonical financial contracts
+        ↓
+Broader configuration-led deployment
+```
+
+The migration discipline is equally important:
+
+```text
+identify embedded assumption
+        ↓
+characterize current behaviour
+        ↓
+extract configuration / adapter / strategy
+        ↓
+run my current environment
+        ↓
+reconcile outputs
+        ↓
+adopt generalized path
+```
+
+The current working system is the behavioural baseline, not something I want to throw away in pursuit of a prettier abstraction.
+
+See the full [Roadmap](docs/about/roadmap.md).
+
+---
+
 ## Documentation
 
-The repository documentation is being expanded around the actual v6
-architecture and financial model.
+The documentation is now a first-class part of the repository rather than a handful of disconnected guides.
 
-Current technical guides live under [`docs/`](docs/). They are being aligned with the v6 architecture before the deeper project Wiki is built.
+### Documentation portal
 
-The documentation is intended to serve four audiences:
+**[Open the full documentation →](docs/README.md)**
 
--   **Users** --- operating the pipeline and understanding outputs.
--   **Data/BI engineers** --- warehouse design, grains, lineage, and
-    serving models.
--   **Python developers** --- architecture, extension points, adapters,
-    and analytical builders.
--   **Finance/quant readers** --- definitions, methodology, assumptions,
-    and limitations.
+| Section | What it covers |
+| --- | --- |
+| 🚀 [Getting Started](docs/getting-started/README.md) | Installation, operational configuration and running the pipeline |
+| 🏗️ [Architecture](docs/architecture/README.md) | System architecture, data lifecycle, warehouse, model, reliability and ADRs |
+| 💰 [Finance & Methodology](docs/finance/README.md) | Financial model, metrics, investments, cash flow, tax and FIRE |
+| ⚙️ [Configuration](docs/configuration/README.md) | FinancialRules and FIRE/Monte Carlo configuration |
+| 🧑‍💻 [Developer](docs/developer/README.md) | Development conventions and extension workflows |
+| 📖 [Reference](docs/reference/README.md) | Silver, Gold, Meta contracts and project glossary |
+| 🧭 [About](docs/about/README.md) | Project philosophy, roadmap and the engineering journey behind it |
 
-A deeper project Wiki will build on those foundations with architecture
-decisions, data contracts, financial methodology, extension guides, and
-end-to-end lineage.
+### A few good entry points
+
+If you are a **data engineer**, start with [Data Lifecycle](docs/architecture/data-lifecycle.md).
+
+If you are a **BI engineer**, start with [Data Model](docs/architecture/data-model.md) and [Gold Data Contracts](docs/reference/gold-data-contracts.md).
+
+If you are a **Python developer**, start with [System Architecture](docs/architecture/system-architecture.md) and the [Development Guide](docs/developer/development-guide.md).
+
+If you are interested in the **finance**, start with [Financial Model](docs/finance/financial-model.md).
+
+If you are interested in the **quantitative planning**, start with [FIRE Methodology](docs/finance/fire-methodology.md).
+
+If you want the **story behind the system**, read [Project Overview](docs/about/project.md) and [About Me](docs/about/about-me.md).
+
+The same Markdown tree is intended to become the source for packaged application documentation and the future project Wiki.
 
 ---
+
 ## Engineering philosophy
 
-A few principles shaped the project:
+A few principles keep showing up across the system.
 
 ### Preserve evidence
 
-Raw financial artifacts should survive independently of derived
-analytical state.
+Raw financial artifacts survive independently from derived analytical state.
 
-### Make derived state reproducible
+### Model meaning explicitly
 
-Bronze keeps incremental source history; Silver and Gold can be
-reconstructed deterministically.
+Financial semantics belong in canonical contracts and validated policy, not scattered report formulas.
 
-### Model financial meaning explicitly
+### Respect grain
 
-Income, expenses, assets, investments, tax treatment, cash flow, and
-planning assumptions should be represented as financial semantics rather
-than scattered transformations.
+Month, asset, ISIN, tax lot, category, class and portfolio are different analytical objects.
 
-### Respect analytical grain
+### Reconcile reality
 
-Month, asset, ISIN, tax lot, category, class, and portfolio are
-different questions. They deserve different contracts.
+Broker state, cash movement and analytical totals should be checked against independent evidence where possible.
 
-### Compute richly, publish selectively
+### Rebuild derived state deliberately
 
-A metric existing in code is not sufficient reason to put it in a
-dashboard.
+Persistent Bronze supports deterministic Silver/Gold reconstruction and simpler correctness.
 
-### Prefer decision usefulness over metric collecting
+### Keep interfaces thin
 
-If a ratio does not help the actual financial workflow, it does not earn
-permanent real estate merely because a textbook has a formula for it.
+CLI, desktop and Power BI consume the engine; they do not become competing implementations of financial logic.
 
-### Keep it local
+### Compute richly. Publish selectively.
 
-Financial data stays on the machine. The platform is designed around
-local storage and computation.
+A calculation earns serving-layer real estate only when it helps the actual decision workflow.
+
+### Generalize from working behaviour
+
+I prefer extracting abstractions from a real vertical system over designing a universal framework before the variation exists.
 
 ---
+
 ## What this project demonstrates
 
-The repository is intentionally one coherent system rather than a collection of disconnected portfolio demos.
+This repository is intentionally one coherent system rather than a collection of disconnected portfolio demos.
 
-**Data engineering:** stateful ingestion, durable raw evidence, incremental history, deterministic reconstruction, lineage, recovery, and analytical persistence.
+**Data engineering**  
+Stateful ingestion, durable raw evidence, incremental source history, deterministic reconstruction, lineage, recovery and analytical persistence.
 
-**BI engineering:** canonical semantics, grain design, dimensional/reference modelling, domain marts, reconciliation, and decision-oriented serving contracts.
+**BI engineering**  
+Canonical semantics, dimensional/reference modelling, explicit grain design, domain marts, reconciliation and decision-oriented serving contracts.
 
-**Software architecture:** typed boundaries, configuration models, strategy seams, builder composition, process isolation, transactional orchestration, and frontend/backend separation.
+**Software architecture**  
+Typed boundaries, configuration models, strategy seams, builder composition, process isolation, transactional orchestration and frontend/backend separation.
 
-**Finance & quantitative modelling:** household accounting, investment lots, tax-aware valuation, benchmark-relative returns, cash-flow reconciliation, wealth planning, and stochastic FIRE.
+**Finance & quantitative modelling**  
+Household accounting, investment lots, tax-aware valuation, benchmark-relative returns, cash-flow reconciliation, wealth planning and stochastic FIRE.
 
-The interesting part is not that each capability exists individually. It is that they share one end-to-end financial lineage.
+The interesting part is not the number of technologies involved.
+
+It is that they share one end-to-end financial lineage.
 
 ---
 
 ## Project status
 
-This project is actively used for my own financial workflow and
-continues to evolve.
+The project is actively used in my own financial workflow and continues to evolve.
 
-The current architecture is a **purpose-built vertical implementation**,
-not the final form of the reusable platform I eventually want it to
-become.
+The current architecture is a **purpose-built vertical implementation**, not the final form of the reusable platform I eventually want it to become.
 
-That is also part of the engineering story: build something that works
-against a real workload first, understand its assumptions, and then
-extract generality without sacrificing behaviour.
+That is part of the engineering story:
+
+> **Build against a real workload. Understand the assumptions. Extract generality without sacrificing behaviour.**
 
 ---
+
+## About the builder
+
+I am a **Chartered Accountant who builds data-intensive software systems**, with my work increasingly sitting at the intersection of finance, data engineering, BI, Python software architecture and automation.
+
+The longer story, including the path from web development through PyQuery, BI/Excel engineering, semantic systems and financial data engineering, lives in:
+
+**[About Me →](docs/about/about-me.md)**
+
+---
+
 ## Final note
 
-This repository started because I wanted better visibility into my own
-finances.
+This repository started because I wanted better visibility into my own finances.
 
-It somehow ended up with a raw-document control plane, an analytical
-warehouse, FIFO tax-lot accounting, benchmark shadow portfolios,
-cash-flow reconciliation, typed financial policy, a Numba Monte Carlo
-engine, Power BI marts, a CLI, and a desktop app.
+It somehow ended up with a Raw Document Store, an analytical warehouse, FIFO tax-lot accounting, broker reconciliation, shadow benchmark portfolios, cash-flow reconciliation, typed financial policy, Power BI marts, a Numba Monte Carlo engine, a CLI, a desktop app, and enough documentation to explain why all of those things are in the same repository.
 
 **Is this overengineered for personal finance?**
 
 Almost certainly.
 
-That is also half the point. 😎
+It is also genuinely useful every month.
+
+That is the part that matters. 😎
 
 ---
+
 ## License
 
 See the repository license for usage terms.
