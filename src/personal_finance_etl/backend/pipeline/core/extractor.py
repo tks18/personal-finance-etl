@@ -19,7 +19,7 @@ from personal_finance_etl.backend.extract.excel_extractor import (
     extract_stock_transactions_raw,
 )
 from personal_finance_etl.backend.extract.sqlite_extractor import SQLiteExtractor
-from personal_finance_etl.backend.load.raw import RawDocumentStore
+from personal_finance_etl.backend.load.control_plane import ControlPlane
 from personal_finance_etl.backend.transform.helpers import get_column_mapping
 from personal_finance_etl.backend.utils.interfaces import ILogger
 from personal_finance_etl.backend.utils.logger import logger
@@ -27,14 +27,14 @@ from personal_finance_etl.backend.utils.models import EngineStatus, ExtractionRe
 
 
 class DataExtractor:
-    def __init__(self, cfg: Settings, status_queue: ILogger, raw_store: "RawDocumentStore"):
+    def __init__(self, cfg: Settings, status_queue: ILogger, cp: "ControlPlane"):
         self.cfg = cfg
         self.status_queue = status_queue
-        self.raw_store = raw_store
+        self.cp = cp
 
     def _get_bytes(self, filepath: str) -> bytes:
         """Fetches bytes from Raw Store. Raises if missing."""
-        raw_bytes = self.raw_store.get_file_bytes(filepath)
+        raw_bytes = self.cp.artifacts.get_file_bytes(filepath)
         if raw_bytes is None:
             raise FileNotFoundError(f"Binary payload not found in Raw Store for: {filepath}")
         return raw_bytes
@@ -54,7 +54,7 @@ class DataExtractor:
         )
 
         # Determine files to process
-        pending_files = actionable_files or self.raw_store.get_pending_files()
+        pending_files = actionable_files or self.cp.artifacts.get_pending_files()
 
         logger.info("Extracting Base Tables from SQLite...")
         # Get sqlite file
