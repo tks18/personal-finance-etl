@@ -1,0 +1,272 @@
+{
+  "sections": [
+    {
+      "id": "root",
+      "title": "Root",
+      "order": 0,
+      "pages": [
+        {
+          "title": "Root Overview",
+          "path": "README.md",
+          "order": 0
+        }
+      ]
+    },
+    {
+      "id": "getting-started",
+      "title": "Getting-Started",
+      "order": 1000,
+      "pages": [
+        {
+          "title": "Getting-Started Overview",
+          "path": "getting-started/README.md",
+          "order": 1000
+        },
+        {
+          "title": "Configuration",
+          "path": "getting-started/configuration.md",
+          "order": 1010
+        },
+        {
+          "title": "Installation",
+          "path": "getting-started/installation.md",
+          "order": 1010
+        },
+        {
+          "title": "Running The Pipeline",
+          "path": "getting-started/running-the-pipeline.md",
+          "order": 1010
+        }
+      ]
+    },
+    {
+      "id": "finance",
+      "title": "Finance",
+      "order": 2000,
+      "pages": [
+        {
+          "title": "Finance Overview",
+          "path": "finance/README.md",
+          "order": 2000
+        },
+        {
+          "title": "Cashflow And Wealth",
+          "path": "finance/cashflow-and-wealth.md",
+          "order": 2010
+        },
+        {
+          "title": "Financial Model",
+          "path": "finance/financial-model.md",
+          "order": 2010
+        },
+        {
+          "title": "Fire Methodology",
+          "path": "finance/fire-methodology.md",
+          "order": 2010
+        },
+        {
+          "title": "Investment Analytics",
+          "path": "finance/investment-analytics.md",
+          "order": 2010
+        },
+        {
+          "title": "Metrics And Methodology",
+          "path": "finance/metrics-and-methodology.md",
+          "order": 2010
+        },
+        {
+          "title": "Tax Methodology",
+          "path": "finance/tax-methodology.md",
+          "order": 2010
+        }
+      ]
+    },
+    {
+      "id": "architecture",
+      "title": "Architecture",
+      "order": 3000,
+      "pages": [
+        {
+          "title": "Architecture Overview",
+          "path": "architecture/README.md",
+          "order": 3000
+        },
+        {
+          "title": "Data Lifecycle",
+          "path": "architecture/data-lifecycle.md",
+          "order": 3010
+        },
+        {
+          "title": "Data Model",
+          "path": "architecture/data-model.md",
+          "order": 3010
+        },
+        {
+          "title": "Design Decisions",
+          "path": "architecture/design-decisions.md",
+          "order": 3010
+        },
+        {
+          "title": "Reliability And Recovery",
+          "path": "architecture/reliability-and-recovery.md",
+          "order": 3010
+        },
+        {
+          "title": "System Architecture",
+          "path": "architecture/system-architecture.md",
+          "order": 3010
+        },
+        {
+          "title": "Warehouse Architecture",
+          "path": "architecture/warehouse-architecture.md",
+          "order": 3010
+        }
+      ]
+    },
+    {
+      "id": "configuration",
+      "title": "Configuration",
+      "order": 4000,
+      "pages": [
+        {
+          "title": "Configuration Overview",
+          "path": "configuration/README.md",
+          "order": 4000
+        },
+        {
+          "title": "Financial Rules",
+          "path": "configuration/financial-rules.md",
+          "order": 4010
+        },
+        {
+          "title": "Fire Configuration",
+          "path": "configuration/fire-configuration.md",
+          "order": 4010
+        }
+      ]
+    },
+    {
+      "id": "developer",
+      "title": "Developer",
+      "order": 5000,
+      "pages": [
+        {
+          "title": "Developer Overview",
+          "path": "developer/README.md",
+          "order": 5000
+        },
+        {
+          "title": "Adding Asset Pipelines",
+          "path": "developer/adding-asset-pipelines.md",
+          "order": 5010
+        },
+        {
+          "title": "Adding Data Sources",
+          "path": "developer/adding-data-sources.md",
+          "order": 5010
+        },
+        {
+          "title": "Adding Gold Marts",
+          "path": "developer/adding-gold-marts.md",
+          "order": 5010
+        },
+        {
+          "title": "Development Guide",
+          "path": "developer/development-guide.md",
+          "order": 5010
+        }
+      ]
+    },
+    {
+      "id": "reference",
+      "title": "Reference",
+      "order": 6000,
+      "pages": [
+        {
+          "title": "Reference Overview",
+          "path": "reference/README.md",
+          "order": 6000
+        },
+        {
+          "title": "Glossary",
+          "path": "reference/glossary.md",
+          "order": 6010
+        },
+        {
+          "title": "Gold Data Contracts",
+          "path": "reference/gold-data-contracts.md",
+          "order": 6010
+        },
+        {
+          "title": "Meta Data Contracts",
+          "path": "reference/meta-data-contracts.md",
+          "order": 6010
+        },
+        {
+          "title": "Silver Data Contracts",
+          "path": "reference/silver-data-contracts.md",
+          "order": 6010
+        }
+      ]
+    },
+    {
+      "id": "about",
+      "title": "About",
+      "order": 7000,
+      "pages": [
+        {
+          "title": "About Overview",
+          "path": "about/README.md",
+          "order": 7000
+        },
+        {
+          "title": "About Me",
+          "path": "about/about-me.md",
+          "order": 7010
+        },
+        {
+          "title": "Project",
+          "path": "about/project.md",
+          "order": 7010
+        },
+        {
+          "title": "Roadmap",
+          "path": "about/roadmap.md",
+          "order": 7010
+        }
+      ]
+    },
+    {
+      "id": "legacy",
+      "title": "Legacy",
+      "order": 8000,
+      "pages": [
+        {
+          "title": "About",
+          "path": "legacy/About.md",
+          "order": 8010
+        },
+        {
+          "title": "Fire Configuration Guide",
+          "path": "legacy/FIRE_Configuration_Guide.md",
+          "order": 8010
+        },
+        {
+          "title": "Metrics Guide",
+          "path": "legacy/Metrics_Guide.md",
+          "order": 8010
+        },
+        {
+          "title": "New Data Source Guide",
+          "path": "legacy/New_Data_Source_Guide.md",
+          "order": 8010
+        },
+        {
+          "title": "New Presentation Table Guide",
+          "path": "legacy/New_Presentation_Table_Guide.md",
+          "order": 8010
+        }
+      ]
+    }
+  ]
+}
