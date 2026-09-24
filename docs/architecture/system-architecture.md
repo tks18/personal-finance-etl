@@ -11,7 +11,7 @@ This document explains the system as a whole: its architectural planes, runtime 
 
 ---
 
-## Architecture at a glance
+### Architecture at a glance
 
 ```mermaid
 flowchart TB
@@ -159,7 +159,7 @@ flowchart TB
     TYPE -. contracts .-> ENGINES
 ```
 
-### How to read the diagram
+#### How to read the diagram
 
 The solid path represents the primary financial-data lineage.
 
@@ -175,35 +175,35 @@ The system deliberately separates **source persistence**, **canonical financial 
 
 ---
 
-## Architectural goals
+### Architectural goals
 
 The architecture grew against a real financial workload rather than a synthetic reference application.
 
 I optimize for several properties.
 
-### Local-first operation
+#### Local-first operation
 
 Financial data is intended to remain on the machine.
 
 The core analytical stack does not require a cloud warehouse or hosted application backend.
 
-### Reproducibility
+#### Reproducibility
 
 Derived financial state should be reconstructable from persisted evidence and explicit rules.
 
-### Traceability
+#### Traceability
 
 I want to know which source artifact contributed to persistent source-shaped data and which configuration/rules governed a run.
 
-### Financial semantic consistency
+#### Financial semantic consistency
 
 The household ledger, investment engine, tax model, cash-flow model, wealth model, and FIRE engine should operate on compatible financial concepts rather than independently interpreting raw files.
 
-### Decision-oriented analytics
+#### Decision-oriented analytics
 
 The serving model should expose metrics and grains that support real decisions rather than publishing every intermediate calculation.
 
-### Extensibility without premature generalization
+#### Extensibility without premature generalization
 
 The current system solves my financial environment first.
 
@@ -252,7 +252,7 @@ Change / registry state
 Bronze synchronization state
 ```
 
-### Raw file registry
+#### Raw file registry
 
 The registry tracks information such as:
 
@@ -266,7 +266,7 @@ The registry tracks information such as:
 - last ingestion,
 - and synchronization status.
 
-### Raw payload persistence
+#### Raw payload persistence
 
 The source bytes themselves are stored as BLOBs.
 
@@ -274,7 +274,7 @@ This creates an important boundary:
 
 > The analytical warehouse does not need the original source file to remain unchanged forever in order to preserve the evidence that entered the system.
 
-### Synchronization state
+#### Synchronization state
 
 The Raw Store tracks whether an artifact is waiting for Bronze synchronization or has been successfully processed.
 
@@ -293,7 +293,7 @@ SYNCED
 
 This turns ingestion into an explicit state transition rather than "the script ran, therefore the file must be loaded."
 
-### Virtual artifacts
+#### Virtual artifacts
 
 Not every raw artifact originates as a physical file.
 
@@ -301,7 +301,7 @@ Incrementally fetched benchmark history can be serialized as Parquet bytes and r
 
 That allows externally acquired market data to participate in the same persistence, provenance, and recovery model as local financial sources.
 
-### Why SQLite?
+#### Why SQLite?
 
 The Raw Store workload consists primarily of:
 
@@ -334,17 +334,17 @@ Source extractor
 Bronze-compatible frame
 ```
 
-### Two Bronze persistence strategies
+#### Two Bronze persistence strategies
 
 The system does not force all sources into one incremental model.
 
-#### Reference and configuration sources
+##### Reference and configuration sources
 
 Reference-like datasets can be fully replaced when their source changes.
 
 Examples include mappings, masters, macro/reference data, and other datasets whose current complete state is more meaningful than preserving multiple file versions inside Bronze.
 
-#### Historical and event sources
+##### Historical and event sources
 
 Historical sources use file-aware replacement.
 
@@ -360,7 +360,7 @@ Insert newly extracted rows
 
 Bronze records retain source lineage such as `__file_name__`, allowing the loader to replace the affected source partition without rebuilding all source history.
 
-### Why the asymmetry?
+#### Why the asymmetry?
 
 Because source semantics differ.
 
@@ -378,7 +378,7 @@ The transformation layer converts that state into financial concepts that downst
 
 This is where source-specific structure stops being the dominant vocabulary.
 
-### Polars transformation graph
+#### Polars transformation graph
 
 The transformation layer uses Polars LazyFrames and a code-defined dependency graph.
 
@@ -386,7 +386,7 @@ Independent branches can be collected together using streaming/lazy execution ra
 
 The transformation layer produces canonical concepts such as:
 
-### Household contracts
+#### Household contracts
 
 - income transactions,
 - expense transactions,
@@ -397,7 +397,7 @@ The transformation layer produces canonical concepts such as:
 - assets,
 - and currencies.
 
-### Investment contracts
+#### Investment contracts
 
 - investment master,
 - purchases,
@@ -405,7 +405,7 @@ The transformation layer produces canonical concepts such as:
 - market data,
 - and instrument/reference state.
 
-### Benchmark and macro contracts
+#### Benchmark and macro contracts
 
 - benchmark master,
 - benchmark history,
@@ -414,7 +414,7 @@ The transformation layer produces canonical concepts such as:
 - CPI/inflation context,
 - and related reference state.
 
-### FinancialRules
+#### FinancialRules
 
 Operational settings answer questions such as:
 
@@ -477,7 +477,7 @@ Performance + tax state
 Hierarchical aggregation
 ```
 
-### Asset pipelines
+#### Asset pipelines
 
 The transformation architecture already contains a reusable asset-pipeline boundary.
 
@@ -494,7 +494,7 @@ This is an important extension seam.
 
 A future asset type should ideally satisfy the canonical contract rather than teach every downstream analytical component about another source format.
 
-### FIFO tax-lot accounting
+#### FIFO tax-lot accounting
 
 Purchases create individual lots.
 
@@ -511,7 +511,7 @@ The lot state carries concepts such as:
 - estimated tax state,
 - and after-tax value.
 
-### Broker reconciliation
+#### Broker reconciliation
 
 Transaction history reconstructs what the position should be.
 
@@ -525,7 +525,7 @@ The design philosophy is:
 
 That is a deliberate real-world compromise.
 
-### Shadow benchmark portfolio
+#### Shadow benchmark portfolio
 
 Investment purchases create cash-equivalent benchmark exposure.
 
@@ -533,7 +533,7 @@ The benchmark shadow inventory evolves alongside the actual investment inventory
 
 This allows benchmark-relative performance to reflect actual capital deployment more meaningfully than simply comparing two unrelated point-to-point returns.
 
-### Performance and tax state
+#### Performance and tax state
 
 The current serving model focuses on decision-useful measures such as:
 
@@ -548,7 +548,7 @@ The current serving model focuses on decision-useful measures such as:
 - unrealized gains/losses,
 - and tax-aware valuation.
 
-### Hierarchical aggregation
+#### Hierarchical aggregation
 
 Investment analytics are published at multiple grains:
 
@@ -602,7 +602,7 @@ FIRE
 Monte Carlo
 ```
 
-### Unified financial ledger
+#### Unified financial ledger
 
 Income, expenses, transfers, and opening balances are normalized into a common financial activity model.
 
@@ -618,7 +618,7 @@ The system distinguishes concepts such as:
 
 This creates a semantic bridge between heterogeneous transaction facts and household-level financial state.
 
-### Net-worth reconstruction
+#### Net-worth reconstruction
 
 Balances are reconstructed asset by asset over time.
 
@@ -636,7 +636,7 @@ The model can distinguish:
 
 Investment market state therefore flows into household wealth rather than living in an isolated portfolio dashboard.
 
-### Cash-flow reconciliation
+#### Cash-flow reconciliation
 
 Configured cash-pool assets allow actual cash movement to be classified into:
 
@@ -649,7 +649,7 @@ Calculated movement is reconciled against opening and closing cash balances.
 
 This makes the cash-flow model a reconciliation system, not merely an expense categorization view.
 
-### Planning analytics
+#### Planning analytics
 
 The wealth engine also produces decision context for:
 
@@ -660,7 +660,7 @@ The wealth engine also produces decision context for:
 - portfolio allocation,
 - and long-range planning.
 
-### FIRE engine
+#### FIRE engine
 
 FIRE modelling has three conceptual levels:
 
@@ -960,19 +960,19 @@ Load    Transform   Analytics
 
 A few principles guide this structure.
 
-### Frontends should not own business logic
+#### Frontends should not own business logic
 
 CLI and GUI code should invoke backend capabilities rather than calculate financial results themselves.
 
-### Source adapters should not define downstream finance
+#### Source adapters should not define downstream finance
 
 Source-specific parsing should terminate at canonical contracts.
 
-### Analytical engines should depend on financial concepts
+#### Analytical engines should depend on financial concepts
 
 The investment and wealth engines should reason about purchases, sales, assets, tax lots, market values, and financial rules rather than raw worksheet columns.
 
-### Publication should be explicit
+#### Publication should be explicit
 
 Gold marts represent deliberate analytical contracts rather than every intermediate DataFrame produced during computation.
 

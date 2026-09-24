@@ -16,7 +16,7 @@ The lifecycle is deliberately asymmetric:
 
 ---
 
-## Lifecycle at a glance
+### Lifecycle at a glance
 
 ```mermaid
 flowchart TB
@@ -220,11 +220,11 @@ stateDiagram-v2
 
 The two important states are:
 
-### `PENDING_BRONZE`
+#### `PENDING_BRONZE`
 
 The raw artifact exists, but Bronze is not yet considered synchronized with it.
 
-### `SYNCED`
+#### `SYNCED`
 
 The artifact has successfully passed through extraction and Bronze persistence and has been registered as synchronized.
 
@@ -913,7 +913,7 @@ The long-term goal is for the Markdown under `docs/` to remain the single mainta
 
 ---
 
-### Failure lifecycle
+## Failure lifecycle
 
 The successful path is only half the architecture.
 
@@ -935,7 +935,7 @@ A failed derived-state build does not erase the underlying financial evidence th
 
 ---
 
-### Warehouse-loss recovery lifecycle
+## Warehouse-loss recovery lifecycle
 
 A particularly useful recovery path exists when the Raw Store survives but the DuckDB analytical warehouse is recreated.
 
@@ -985,27 +985,27 @@ There is not one universal "source of truth" for every question.
 
 Different layers are authoritative for different concerns.
 
-### Original financial evidence
+#### Original financial evidence
 
 The persisted Raw Store payload represents the artifact that entered the system.
 
-### Ingestion synchronization
+#### Ingestion synchronization
 
 The Raw Store registry/sync state is authoritative for whether an artifact still needs Bronze processing.
 
-### Source-shaped analytical history
+#### Source-shaped analytical history
 
 Bronze is authoritative for the persistent extracted source state used by downstream transformations.
 
-### Canonical financial meaning
+#### Canonical financial meaning
 
 Silver represents the published canonical financial/analytical contract for the current run.
 
-### Decision-support analytics
+#### Decision-support analytics
 
 Gold represents the published decision-oriented analytical state.
 
-### External current investment position
+#### External current investment position
 
 Where historical reconstruction conflicts with broker-reported current position, the investment reconciliation policy treats broker state as the current anchor.
 

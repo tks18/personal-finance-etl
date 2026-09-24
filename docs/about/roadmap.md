@@ -687,9 +687,9 @@ That is a much stronger definition of "configurable" than simply having a large 
 
 Before broad generalization, the highest-value next steps are:
 
-### 1. Complete documentation QA and Wiki design
+### 1. Build the Wiki on the validated documentation base
 
-The authoritative repository documentation is now substantially built. Complete the cross-document QA pass, lock navigation/terminology, and then design the Wiki on top of the version-controlled docs.
+The authoritative repository documentation is now substantially built and has completed its cross-document QA pass. The next documentation milestone is to design the Wiki on top of the version-controlled docs without creating a second, drifting source of truth.
 
 ### 2. Harden known semantic quirks
 

@@ -547,7 +547,7 @@ Return to the [Documentation Home](../README.md) for the full documentation map.
 
 ---
 
-## A note from the me
+## A note from me
 
 This project began because I wanted a better answer to a very ordinary question:
 
