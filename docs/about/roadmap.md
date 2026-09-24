@@ -527,20 +527,22 @@ Where possible, it should link back to authoritative repository documentation ra
 
 ---
 
-## Phase 12 · Improve self-description and portfolio storytelling
+## Phase 12 · Continue portfolio storytelling
 
 The repository is also a record of how I think about engineering and finance.
 
-Future documentation can include:
+That layer now includes [`about-me.md`](about-me.md), which documents the engineering journey behind the project and connects it to the broader public project portfolio.
 
-- `about-me.md`,
+Future additions can build on that foundation through:
+
 - architecture case studies,
 - selected design retrospectives,
+- deeper cross-project technical narratives,
 - and links to related projects.
 
 The goal is not to turn technical docs into a résumé.
 
-It is to make the engineering philosophy behind the work visible.
+It is to make the engineering philosophy behind the work visible while keeping technical claims grounded in the systems I have actually built.
 
 ---
 
@@ -685,9 +687,9 @@ That is a much stronger definition of "configurable" than simply having a large 
 
 Before broad generalization, the highest-value next steps are:
 
-### 1. Finish documentation modernization
+### 1. Complete documentation QA and Wiki design
 
-Complete the authoritative docs, cross-document QA, and Wiki design.
+The authoritative repository documentation is now substantially built. Complete the cross-document QA pass, lock navigation/terminology, and then design the Wiki on top of the version-controlled docs.
 
 ### 2. Harden known semantic quirks
 
