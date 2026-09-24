@@ -1,6 +1,7 @@
 import polars as pl
 
 from personal_finance_etl.backend.load.database import DuckDBManager
+from personal_finance_etl.backend.load.registry import DATA_CONTRACT_REGISTRY
 from personal_finance_etl.backend.load.schema.gold import GOLD_DDL
 from personal_finance_etl.backend.utils.logger import logger
 
@@ -25,25 +26,11 @@ class GoldLayer:
 
     def load(self, dfs: dict[str, pl.DataFrame]) -> None:
         """Truncates all gold.* tables and re-inserts presentation DataFrames."""
+
         logger.info("Loading presentation datasets into Gold layer...")
+
         table_mappings = {
-            "df_p_tf_wealth_monthly_totals": "gold.Core_Monthly_Fact",
-            "df_p_tf_net_worth_monthly_summary": "gold.Wealth_Asset_Breakdown",
-            "df_p_tf_category_spend_analytics": "gold.Cashflow_Expense_Breakdown",
-            "df_p_tf_income_streams_monthly": "gold.Cashflow_Income_Breakdown",
-            "df_p_tf_wealth_risk_analytics": "gold.Wealth_FIRE_Analytics",
-            "df_p_tf_tax_liability_forecast": "gold.Forecast_Tax_Liability",
-            "df_p_tf_budget_forecast_monthly": "gold.Forecast_Budget_Variance",
-            "df_p_tf_investment_analytics": "gold.Investment_Portfolio_Summary",
-            "df_p_tf_monthly_cashflow_summary": "gold.Cashflow_Efficiency_Analytics",
-            "df_p_tf_cashflow_activity_summary": "gold.Cashflow_Activity_Summary",
-            "df_f_investment_analytics_isin": "gold.Investment_By_ISIN",
-            "df_f_investment_analytics_subtype": "gold.Investment_By_Subtype",
-            "df_f_investment_analytics_class": "gold.Investment_By_Class",
-            "df_f_investment_analytics_instrument_type": "gold.Investment_By_Instrument_Type",
-            "df_f_investment_analytics_sector": "gold.Investment_By_Sector",
-            "df_f_investment_analytics_industry": "gold.Investment_By_Industry",
-            "df_f_investment_analytics_portfolio": "gold.Investment_By_Portfolio",
+            c.contract_id: c.physical_table for c in DATA_CONTRACT_REGISTRY if c.layer == "gold"
         }
         # Phase 1: Cleanly wipe the entire schema
         self.db_manager.conn.execute("DROP SCHEMA IF EXISTS gold CASCADE")
