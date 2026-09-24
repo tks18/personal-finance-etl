@@ -5,15 +5,15 @@ import polars as pl
 
 from personal_finance_etl.backend.extract.benchmark_extractor import BenchmarkExtractor
 from personal_finance_etl.backend.load.bronze import BronzeLayer
-from personal_finance_etl.backend.load.raw import RawDocumentStore
+from personal_finance_etl.backend.load.control_plane import ControlPlane
 from personal_finance_etl.backend.transform.benchmark_transformer import BenchmarkTransformer
 from personal_finance_etl.backend.utils.interfaces import ILogger
 from personal_finance_etl.backend.utils.logger import logger
 
 
 class BenchmarkPipeline:
-    def __init__(self, raw_store: RawDocumentStore, bronze: BronzeLayer, status_queue: ILogger):
-        self.raw_store = raw_store
+    def __init__(self, cp: ControlPlane, bronze: BronzeLayer, status_queue: ILogger):
+        self.cp = cp
         self.bronze = bronze
         self.status_queue = status_queue
 
@@ -60,7 +60,7 @@ class BenchmarkPipeline:
             )
 
         # 2. Extract Delta from external sources to Raw Store
-        extractor = BenchmarkExtractor(self.raw_store, self.status_queue)
+        extractor = BenchmarkExtractor(self.cp, self.status_queue)
         df_new_raw, virtual_files = extractor.extract_benchmark_delta(
             df_m=df_master,
             global_start_date=start_date,
@@ -81,7 +81,10 @@ class BenchmarkPipeline:
             for filepath in virtual_files:
                 filename = os.path.basename(filepath)
                 count = row_counts.get(filename, 0)
-                self.bronze.file_tracker.register_file(filepath, "benchmark_history", count)
+                self.bronze.cp.artifacts.mark_synced([filepath])
+                self.bronze.meta_layer.register_file(
+                    filepath, "benchmark_history", count, self.bronze.cp
+                )
 
             # Refetch the complete cache post-upsert
             df_bronze_cached = self.bronze.get_table("r_Benchmark_Data")
