@@ -359,9 +359,7 @@ def _run_mc_simulations_numba(
                     # so out_avg_swr_p50 is computed only over paths where the portfolio
                     # survived to end-of-horizon — it overstates withdrawal sustainability.
                     swrs[j] = (
-                        (swr_sum / surv_m) / dec_w_init
-                        if surv_m > 0 and dec_w_init > 0
-                        else 0.0
+                        (swr_sum / surv_m) / dec_w_init if surv_m > 0 and dec_w_init > 0 else 0.0
                     )
                     if months_decum >= sorr_months:
                         if w_5y > 0.0:

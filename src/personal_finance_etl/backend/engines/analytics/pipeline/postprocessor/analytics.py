@@ -62,10 +62,23 @@ class AdvancedAnalyticsCalculator:
 
             df_pt = (
                 df_pt.with_columns(
-                    pl.when((pl.col("val").shift(1) + pl.when(pl.col("net_injection") > 0).then(pl.col("net_injection")).otherwise(0.0)) > 0)
+                    pl.when(
+                        (
+                            pl.col("val").shift(1)
+                            + pl.when(pl.col("net_injection") > 0)
+                            .then(pl.col("net_injection"))
+                            .otherwise(0.0)
+                        )
+                        > 0
+                    )
                     .then(
                         (pl.col("val") - pl.col("val").shift(1) - pl.col("net_injection"))
-                        / (pl.col("val").shift(1) + pl.when(pl.col("net_injection") > 0).then(pl.col("net_injection")).otherwise(0.0))
+                        / (
+                            pl.col("val").shift(1)
+                            + pl.when(pl.col("net_injection") > 0)
+                            .then(pl.col("net_injection"))
+                            .otherwise(0.0)
+                        )
                     )
                     .otherwise(0.0)
                     .alias("daily_return")

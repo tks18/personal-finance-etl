@@ -46,7 +46,8 @@ def calculate_modified_dietz(
 
     net_cf = sum(cashflows)
     weighted_cf = sum(
-        cf * (days / total_days) for cf, days in zip(cashflows, cashflow_days_remaining, strict=False)
+        cf * (days / total_days)
+        for cf, days in zip(cashflows, cashflow_days_remaining, strict=False)
     )
 
     denominator = start_value + weighted_cf

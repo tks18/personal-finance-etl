@@ -120,8 +120,12 @@ class PersonalFinanceEngine:
             # if one wasn't sent naturally by the process.
             if process.exitcode is not None:
                 if process.exitcode != 0:
-                    on_status(EngineStatus(msg="Process exited abnormally.", data=None, progress=0.0))
+                    on_status(
+                        EngineStatus(msg="Process exited abnormally.", data=None, progress=0.0)
+                    )
                 else:
-                    on_status(EngineStatus(msg="Process completed cleanly.", data=None, progress=1.0))
+                    on_status(
+                        EngineStatus(msg="Process completed cleanly.", data=None, progress=1.0)
+                    )
 
         threading.Thread(target=_queue_monitor, daemon=True).start()

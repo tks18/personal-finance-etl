@@ -214,7 +214,7 @@ class IsinProcessor:
             res = risk_provider.calculate_risk(first_p_date, m_date)
             # res returns a 14-tuple. Index 8 is inst_max_dd.
             inst_max_dd = res[8]
-            
+
             inst_metrics = {
                 "cagr": inst_cagr,
                 "bm_cagr": inst_bm_cagr,

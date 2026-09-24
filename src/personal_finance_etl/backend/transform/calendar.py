@@ -284,7 +284,6 @@ def transform_d_calendar(df_bounds_lazy: pl.LazyFrame) -> pl.LazyFrame:
             [
                 # Base Date
                 "Date",
-                
                 # Day Properties
                 "Day",
                 "Day_Name",
@@ -293,7 +292,6 @@ def transform_d_calendar(df_bounds_lazy: pl.LazyFrame) -> pl.LazyFrame:
                 "Day_Ordinal_Name",
                 "Weekday",
                 "IS_WEEKEND",
-                
                 # Week Properties
                 "Week",
                 "Week_Ordinal",
@@ -303,7 +301,6 @@ def transform_d_calendar(df_bounds_lazy: pl.LazyFrame) -> pl.LazyFrame:
                 "Week_Name_Year",
                 "Start_of_Week",
                 "End_of_Week",
-                
                 # Month Properties
                 "Month",
                 "Month_Name",
@@ -316,7 +313,6 @@ def transform_d_calendar(df_bounds_lazy: pl.LazyFrame) -> pl.LazyFrame:
                 "End_of_Month",
                 "Days_in_Month",
                 "Month_Progress_Pct",
-                
                 # Quarter Properties
                 "Quarter",
                 "Quarter_Name",
@@ -324,12 +320,10 @@ def transform_d_calendar(df_bounds_lazy: pl.LazyFrame) -> pl.LazyFrame:
                 "Quarter_Ordinal",
                 "Start_of_Quarter",
                 "End_of_Quarter",
-                
                 # Year Properties
                 "Year",
                 "Days_in_Year",
                 "Year_Progress_Pct",
-                
                 # Financial Year Properties
                 "Financial_Year",
                 "FY_Year",
@@ -343,7 +337,6 @@ def transform_d_calendar(df_bounds_lazy: pl.LazyFrame) -> pl.LazyFrame:
                 "FY_End_of_Month",
                 "FY_Start_of_Quarter",
                 "FY_End_of_Quarter",
-                
                 # Boolean / Snapshot Flags
                 "Is_Last_Day_Of_Month",
                 "Is_Last_Day_Of_Quarter",
