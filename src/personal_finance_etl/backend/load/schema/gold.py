@@ -258,7 +258,7 @@ CREATE TABLE IF NOT EXISTS gold.Investment_Portfolio_Summary (
     Class_Drift DOUBLE,
     Rebalance_Required BOOLEAN,
     Sector_Weight DOUBLE,
-    ISIN_Monthly_Return DOUBLE,
+    Monthly_Market_Value_Change_Pct DOUBLE,
     Tax_Harvesting_Priority_Score DOUBLE
 );
 

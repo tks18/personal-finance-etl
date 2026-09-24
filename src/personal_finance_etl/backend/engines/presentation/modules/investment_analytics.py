@@ -159,7 +159,7 @@ class InvestmentAnalyticsBuilder:
                 / pl.col("ISIN_Market_Value").shift(1).over("ISIN")
             )
             .otherwise(0.0)
-            .alias("ISIN_Monthly_Return")
+            .alias("Monthly_Market_Value_Change_Pct")
         )
 
         # 5. Tax Harvesting Priority
@@ -192,7 +192,7 @@ class InvestmentAnalyticsBuilder:
                 "Class_Drift",
                 "Rebalance_Required",
                 "Sector_Weight",
-                "ISIN_Monthly_Return",
+                "Monthly_Market_Value_Change_Pct",
                 "Tax_Harvesting_Priority_Score",
             ]
         )
