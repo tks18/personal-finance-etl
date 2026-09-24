@@ -11,6 +11,7 @@ import polars as pl
 
 from personal_finance_etl.backend.config.financial_rules import FinancialRules
 from personal_finance_etl.backend.utils.helpers import to_date_obj
+from personal_finance_etl.backend.utils.logger import logger
 
 _DEFAULT_DEBT_MF_CUTOFF = date(2023, 4, 1)
 
@@ -91,8 +92,8 @@ class FYMacroParametersTable:
                         }
                     )
             except Exception as e:
-                print(f"Macro Parameters parsing error on row: {row}")
-                print(f"Error details: {e}")
+                logger.error(f"Macro Parameters parsing error on row: {row}")
+                logger.error(f"Error details: {e}")
 
         self.fy_map.sort(key=lambda x: x["start"])
 
