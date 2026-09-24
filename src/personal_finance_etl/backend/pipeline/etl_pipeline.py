@@ -1,5 +1,6 @@
 import gc
 import multiprocessing
+import os
 import sys
 import time
 import traceback
@@ -14,17 +15,21 @@ from personal_finance_etl.backend.engines.presentation.wealth_engine import Weal
 from personal_finance_etl.backend.extract.sqlite_extractor import SQLiteExtractor
 from personal_finance_etl.backend.extract.statement_locator import categorize_statement_files
 from personal_finance_etl.backend.load.bronze import BronzeLayer
+from personal_finance_etl.backend.load.control_plane import ControlPlane
 from personal_finance_etl.backend.load.database import DuckDBManager
-from personal_finance_etl.backend.load.file_tracker import FileTracker
 from personal_finance_etl.backend.load.gold import GoldLayer
 from personal_finance_etl.backend.load.metadata import MetaLayer
-from personal_finance_etl.backend.load.raw import RawDocumentStore
 from personal_finance_etl.backend.load.silver import SilverLayer
 from personal_finance_etl.backend.pipeline.benchmark_pipeline import BenchmarkPipeline
 from personal_finance_etl.backend.pipeline.core.extractor import DataExtractor
 from personal_finance_etl.backend.pipeline.core.transformer import TransformationDAG
 from personal_finance_etl.backend.utils.interfaces import ILogger
-from personal_finance_etl.backend.utils.logger import add_file_handler, add_queue_handler, logger
+from personal_finance_etl.backend.utils.logger import (
+    add_file_handler,
+    add_queue_handler,
+    logger,
+    remove_file_handlers,
+)
 from personal_finance_etl.backend.utils.models import EngineStatus, ExtractionResult, LogLevel
 
 
@@ -38,17 +43,19 @@ class ETLOrchestrator:
         self.dfs: dict[str, pl.DataFrame] = {}
 
     def _extract(
-        self, raw_store: RawDocumentStore, actionable_files: dict[str, list[str]] | None = None
+        self,
+        cp: ControlPlane,
+        actionable_files: dict[str, list[str]] | None = None,
     ) -> ExtractionResult:
-        extractor = DataExtractor(self.cfg, self.status_queue, raw_store)
+        extractor = DataExtractor(self.cfg, self.status_queue, cp)
         return extractor.run(actionable_files)
 
     def _transform(self, extracted_data: ExtractionResult) -> None:
         transformer = TransformationDAG(self.cfg, self.status_queue, self.rules)
         self.dfs = transformer.run(extracted_data)
 
-    def _process_benchmark(self, raw_store: RawDocumentStore, bronze: BronzeLayer) -> None:
-        pipeline = BenchmarkPipeline(raw_store, bronze, self.status_queue)
+    def _process_benchmark(self, cp: ControlPlane, bronze: BronzeLayer) -> None:
+        pipeline = BenchmarkPipeline(cp, bronze, self.status_queue)
         self.dfs["df_f_investment_benchmark_data"] = pipeline.process(
             df_market=self.dfs.get("df_f_investment_market_data"),
             df_purchase=self.dfs.get("df_f_tf_inv_purchase"),
@@ -148,17 +155,26 @@ class ETLOrchestrator:
         self.db_manager.open()
         self.db_manager.ensure_schemas()
 
-        raw_store = RawDocumentStore(self.cfg.TARGET_DB_BASE_PATH, self.cfg.RAW_DOCUMENT_STORE_NAME)
-        raw_store.open()
-        raw_store.ensure_schema()
+        cp = ControlPlane(self.cfg.TARGET_DB_BASE_PATH, self.cfg.RAW_DOCUMENT_STORE_NAME)
+        cp.open()
+        cp.ensure_schema()
 
-        file_tracker = FileTracker(self.db_manager.conn, raw_store)
-        run_id = file_tracker.start_run()
+        # 1. Authoritative SQLite State
+        run_id = cp.runs.start_run(
+            cfg_json=self.cfg.model_dump_json(),
+            rules_json=self.rules.model_dump_json() if self.rules else None,
+        )
+
+        # 2. Mirror to DuckDB Analytics
+        meta_layer = MetaLayer(self.db_manager, self.cfg, self.rules)
+        meta_layer.heal_duckdb_registry(cp)
 
         try:
             # Start ACID Transaction for the entire ETL run
             self.db_manager.conn.execute("BEGIN TRANSACTION")
-            raw_store.begin_transaction()
+            cp.begin_transaction()
+
+            cp.runs.update_run_status(run_id, "RUNNING")
 
             t_ext_start = time.time()
             if not self.cfg.DISABLE_FILE_DISCOVERER:
@@ -177,12 +193,12 @@ class ETLOrchestrator:
                 discovered_files["macro_parameters"] = [self.cfg.MACRO_PARAMETERS_CSV_PATH]
                 discovered_files["column_master"] = [self.cfg.COLUMN_MASTER_PATH]
 
-                # RawDocumentStore is the single source of truth for all Phase 1 logic:
+                # ControlPlane is the single source of truth for all Phase 1 logic:
                 # file change detection, pruning of obsolete blobs, and binary ingestion.
                 full_replace_categories = list(
                     set(cat for _, cat, _, is_full in BronzeLayer.TABLE_MAPPINGS if is_full)
                 )
-                new_files, changed_files, files_skipped = raw_store.sync_with_disk(
+                new_files, changed_files, _ = cp.file_sync.sync_with_disk(
                     discovered_files, self.cfg.FILE_HASH_POLICY, full_replace_categories
                 )
 
@@ -194,12 +210,11 @@ class ETLOrchestrator:
                 logger.info(
                     "Phase 1/5: Bypassing File Discoverer. Fetching pending files from Raw Store..."
                 )
-                new_files = {}
-                changed_files = raw_store.get_pending_files()
+                new_files: dict[str, list[str]] = {}
+                changed_files: dict[str, list[str]] = cp.artifacts.get_pending_files()
                 actionable_all = changed_files
-                files_skipped = 0
 
-            extracted_data = self._extract(raw_store, actionable_files=actionable_all)
+            extracted_data = self._extract(cp, actionable_files=actionable_all)
             logger.info(
                 f"Phase 1 Complete [{time.time() - t_ext_start:.2f}s] - Actionable streams loaded into memory."
             )
@@ -208,7 +223,7 @@ class ETLOrchestrator:
             t_bronze_start = time.time()
             logger.info("Phase 2/5: Upserting new datasets into Bronze Lakehouse...")
 
-            bronze = BronzeLayer(self.db_manager, file_tracker)
+            bronze = BronzeLayer(self.db_manager, cp, meta_layer)
             bronze.load(extracted_data, new_files, changed_files)
             logger.info(
                 f"Phase 2 Complete [{time.time() - t_bronze_start:.2f}s] - Bronze layer synchronized."
@@ -227,7 +242,7 @@ class ETLOrchestrator:
             )
 
             # Phase 3.5 Dynamic Extraction
-            self._process_benchmark(raw_store, bronze)
+            self._process_benchmark(cp, bronze)
 
             # Analytics Phase
             t_eng_start = time.time()
@@ -247,17 +262,16 @@ class ETLOrchestrator:
             )
 
             # Write ETL metadata to DB
-            meta_layer = MetaLayer(self.db_manager, run_id, self.cfg, self.rules)
+            meta_layer = MetaLayer(self.db_manager, self.cfg, self.rules)
             meta_layer.load(self.dfs)
+
+            cp.runs.update_run_status(run_id, "COMMITTING")
 
             # Commit the ACID Transaction
             self.db_manager.conn.execute("COMMIT")
-            raw_store.commit()
+            cp.commit()
 
-            files_processed = sum(len(f) for f in new_files.values()) + sum(
-                len(f) for f in changed_files.values()
-            )
-            file_tracker.finish_run(run_id, "success", files_processed, files_skipped)
+            cp.runs.finish_run(run_id, "SUCCESS")
 
             self.status_queue.put(EngineStatus(msg="", data=None, progress=1.0))
             total_time = time.time() - start_time
@@ -273,7 +287,7 @@ class ETLOrchestrator:
                 logger.error(f"Failed to rollback DuckDB transaction: {rollback_err}")
 
             try:
-                raw_store.rollback()
+                cp.rollback()
             except Exception as rollback_err:
                 logger.error(f"Failed to rollback SQLite Raw Store transaction: {rollback_err}")
 
@@ -281,12 +295,49 @@ class ETLOrchestrator:
                 "Pipeline failed. Transactions completely rolled back to maintain ACID integrity."
             )
 
-            file_tracker.finish_run(run_id, "failed")
+            # Persist failure details
+            try:
+                if "ISIN_FAILURE" in str(e):
+                    parts = str(e).split("|")
+                    if len(parts) >= 3:
+                        failed_isin = parts[1]
+                        error_msg = parts[2]
+                        cp.runs.log_run_failure(
+                            run_id=run_id,
+                            failed_isin=failed_isin,
+                            stage="InvestmentQuantEngine",
+                            error_type="RuntimeError",
+                            error_message=error_msg,
+                            traceback_log=traceback.format_exc(),
+                        )
+                else:
+                    cp.runs.log_run_failure(
+                        run_id=run_id,
+                        failed_isin=None,
+                        stage="Pipeline",
+                        error_type=type(e).__name__,
+                        error_message=str(e),
+                        traceback_log=traceback.format_exc(),
+                    )
+            except Exception as failure_log_err:
+                logger.error(f"Failed to log run_failure to Control Plane: {failure_log_err}")
+
+            cp.runs.finish_run(run_id, "FAILED")
+
             raise e
         finally:
             logger.info("Cleaning up database connections and WAL sidecars...")
+            remove_file_handlers()
+            try:
+                if os.path.exists(log_file_path):
+                    with open(log_file_path, encoding="utf-8") as f:
+                        log_text = f.read()
+                    cp.runs.save_execution_log(run_id, log_text)
+            except Exception as log_err:
+                print(f"Failed to save execution log to Raw Store: {log_err}")
+
             self.db_manager.close()
-            raw_store.close()
+            cp.close()
             gc.collect()
 
 
