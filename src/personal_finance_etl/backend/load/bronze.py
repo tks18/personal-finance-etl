@@ -3,8 +3,9 @@ import os
 import duckdb
 import polars as pl
 
+from personal_finance_etl.backend.load.control_plane.orchestrator import ControlPlane
 from personal_finance_etl.backend.load.database import DuckDBManager
-from personal_finance_etl.backend.load.file_tracker import FileTracker
+from personal_finance_etl.backend.load.metadata import MetaLayer
 from personal_finance_etl.backend.utils.logger import logger
 from personal_finance_etl.backend.utils.models import ExtractionResult
 
@@ -12,9 +13,10 @@ from personal_finance_etl.backend.utils.models import ExtractionResult
 class BronzeLayer:
     """Handles incremental loading of raw extracted data into the bronze schema."""
 
-    def __init__(self, db_manager: DuckDBManager, file_tracker: FileTracker):
+    def __init__(self, db_manager: DuckDBManager, cp: ControlPlane, meta_layer: MetaLayer):
         self.db_manager = db_manager
-        self.file_tracker = file_tracker
+        self.cp = cp
+        self.meta_layer = meta_layer
 
     def upsert_table(
         self,
@@ -116,7 +118,8 @@ class BronzeLayer:
                     for filepath in actionable:
                         filename = os.path.basename(filepath)
                         count = row_counts.get(filename, 0)
-                        self.file_tracker.register_file(filepath, category, count)
+                        self.cp.artifacts.mark_synced([filepath])
+                        self.meta_layer.register_file(filepath, category, count, self.cp)
 
         logger.info("Bronze layer load complete.")
 
