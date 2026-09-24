@@ -1,6 +1,7 @@
 import concurrent.futures
 import multiprocessing
 import os
+import traceback
 from datetime import date
 from typing import Any
 
@@ -32,7 +33,12 @@ def _process_isin_worker(
         str,
     ],
 ) -> tuple[
-    bool, list[dict[str, Any]], dict[date, dict[str, Any]], list[dict[str, Any]], dict[str, Any]
+    bool,
+    list[dict[str, Any]],
+    dict[date, dict[str, Any]],
+    list[dict[str, Any]],
+    dict[str, Any],
+    dict[str, Any] | None,
 ]:
     (
         isin,
@@ -64,11 +70,12 @@ def _process_isin_worker(
 
             if df is not None and not df.is_empty():
                 df.write_parquet(os.path.join(tmp_dir, f"{isin.replace('/', '_')}.parquet"))
-                return True, isin_cf, isin_pt, isin_re, tags
-            return False, isin_cf, isin_pt, isin_re, tags
-        return False, [], {}, [], {}
-    except Exception:
-        return False, [], {}, [], {}
+                return True, isin_cf, isin_pt, isin_re, tags, None
+            return False, isin_cf, isin_pt, isin_re, tags, None
+        return False, [], {}, [], {}, None
+    except Exception as e:
+        tb = traceback.format_exc()
+        return False, [], {}, [], {}, {"isin": isin, "error": str(e), "traceback": tb}
 
 
 class IsinPipeline:
@@ -211,7 +218,17 @@ class IsinPipeline:
                             )
                         )
 
-                    success, isin_cf, isin_pt, isin_re, tags = future.result()
+                    success, isin_cf, isin_pt, isin_re, tags, error_info = future.result()
+
+                    if error_info is not None:
+                        failed_isin = error_info.get("isin", "Unknown")
+                        error_msg = error_info.get("error", "Unknown Error")
+                        tb = error_info.get("traceback", "")
+
+                        logger.error(f"ISIN Processing Failed for {failed_isin}: {error_msg}\n{tb}")
+                        # Wrap it in an exception that carries the payload
+                        raise RuntimeError(f"ISIN_FAILURE|{failed_isin}|{error_msg}")
+
                     if success:
                         has_data = True
 
@@ -254,11 +271,11 @@ class IsinPipeline:
                         pt["after_tax_val"] += vals.get("after_tax_val", 0.0)
 
                     def _update_group(
-                        group_key: str, 
-                        cf_dict: dict[str, Any], 
-                        pt_dict: dict[str, Any], 
-                        current_cf: list[Any], 
-                        current_pt: dict[date, Any]
+                        group_key: str,
+                        cf_dict: dict[str, Any],
+                        pt_dict: dict[str, Any],
+                        current_cf: list[Any],
+                        current_pt: dict[date, Any],
                     ):
                         cf_dict.setdefault(group_key, []).extend(current_cf)
                         gp = pt_dict.setdefault(group_key, {})
@@ -270,7 +287,9 @@ class IsinPipeline:
                             pt["shadow_val"] += vals["shadow_val"]
                             pt["after_tax_val"] += vals.get("after_tax_val", 0.0)
 
-                    _update_group(inst_type, instrument_type_cf, instrument_type_pt, isin_cf, isin_pt)
+                    _update_group(
+                        inst_type, instrument_type_cf, instrument_type_pt, isin_cf, isin_pt
+                    )
                     _update_group(sector, sector_cf, sector_pt, isin_cf, isin_pt)
                     _update_group(industry, industry_cf, industry_pt, isin_cf, isin_pt)
         finally:
