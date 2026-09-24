@@ -7,7 +7,7 @@ from datetime import date, timedelta
 import polars as pl
 import yfinance as yf  # type: ignore[import-untyped]
 
-from personal_finance_etl.backend.load.raw import RawDocumentStore
+from personal_finance_etl.backend.load.control_plane import ControlPlane
 from personal_finance_etl.backend.utils.interfaces import ILogger
 from personal_finance_etl.backend.utils.logger import logger
 from personal_finance_etl.backend.utils.models import EngineStatus, LogLevel
@@ -21,11 +21,11 @@ class BenchmarkExtractor:
 
     def __init__(
         self,
-        raw_store: RawDocumentStore,
+        cp: ControlPlane,
         status_queue: ILogger,
         max_workers: int = 8,
     ) -> None:
-        self.raw_store = raw_store
+        self.cp = cp
         self.status_queue = status_queue
         self.max_workers = max_workers
 
@@ -199,7 +199,7 @@ class BenchmarkExtractor:
 
             run_uuid = str(uuid.uuid4())[:8]
             filename = f"benchmark_delta_{year}_{run_uuid}.parquet"
-            virtual_path = self.raw_store.inject_virtual_file(
+            virtual_path = self.cp.artifacts.inject_virtual_file(
                 filename=filename, category="benchmark_history", raw_bytes=raw_bytes
             )
             injected_files.append(virtual_path)
