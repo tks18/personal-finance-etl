@@ -8,6 +8,9 @@
     <a href="https://app.codacy.com/gh/tks18/personal-finance-etl/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_grade">
       <img alt="Codacy Badge" src="https://app.codacy.com/project/badge/Grade/49aca2f2e7d044a5916adc56beb4c7dd" />
     </a>
+    <a href="https://www.codefactor.io/repository/github/tks18/personal-finance-etl">
+      <img src="https://www.codefactor.io/repository/github/tks18/personal-finance-etl/badge" alt="CodeFactor" />
+    </a>
     <a href="http://commitizen.github.io/cz-cli/">
       <img alt="Commitizen friendly" src="https://img.shields.io/badge/commitizen-friendly-brightgreen.svg" />
     </a>
