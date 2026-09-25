@@ -12,6 +12,44 @@ class DataContract:
     publication_order: int
 
 
+@dataclass
+class BronzeDataContract:
+    """Defines the relationship between raw extraction attributes, control plane sync categories, and physical DuckDB tables."""
+
+    extraction_attribute: str
+    sync_category: str
+    physical_table: str
+    is_full_replace: bool
+
+
+BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
+    BronzeDataContract("zcategory", "sqlite_source", "bronze.r_SQLite_ZCategory", True),
+    BronzeDataContract("assetgroup", "sqlite_source", "bronze.r_SQLite_AssetGroup", True),
+    BronzeDataContract("assets", "sqlite_source", "bronze.r_SQLite_Assets", True),
+    BronzeDataContract("currency", "sqlite_source", "bronze.r_SQLite_Currency", True),
+    BronzeDataContract("inoutcome", "sqlite_source", "bronze.r_SQLite_InOutcome", True),
+    BronzeDataContract("stg_mf_isin_mapping", "mf_isin", "bronze.r_MF_ISIN_Mapping", True),
+    BronzeDataContract(
+        "stg_benchmark_mapping", "benchmark_mapping", "bronze.r_Benchmark_Mapping", True
+    ),
+    BronzeDataContract(
+        "raw_opening_balances", "opening_balances", "bronze.r_Opening_Balances", True
+    ),
+    BronzeDataContract(
+        "raw_benchmark_master", "benchmark_master", "bronze.r_Benchmark_Master", True
+    ),
+    BronzeDataContract(
+        "raw_macro_parameters", "macro_parameters", "bronze.r_Macro_Parameters", True
+    ),
+    BronzeDataContract("column_master", "column_master", "bronze.r_Column_Master", True),
+    BronzeDataContract("mf_market_data_raw", "mf_holdings", "bronze.r_MF_Market_Data", False),
+    BronzeDataContract("mf_transactions_raw", "mf_orders", "bronze.r_MF_Transactions", False),
+    BronzeDataContract("stock_market_data_raw", "stock_pl", "bronze.r_Stock_Market_Data", False),
+    BronzeDataContract(
+        "stock_transactions_raw", "stock_orders", "bronze.r_Stock_Transactions", False
+    ),
+]
+
 # A lightweight registry for Silver and Gold analytical layers
 DATA_CONTRACT_REGISTRY: list[DataContract] = [
     # --- Silver Dimensions ---
