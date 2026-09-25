@@ -39,25 +39,36 @@ class MetaLayer:
         # We only care about checking files that CP thinks are SYNCED
         synced_registry = cp.artifacts.get_all_registry()
 
-        cat_to_table = {
-            contract.sync_category: contract.physical_table for contract in BRONZE_CONTRACT_REGISTRY
+        cat_to_contract = {
+            contract.sync_category: contract for contract in BRONZE_CONTRACT_REGISTRY
         }
+        cat_to_table = {k: v.physical_table for k, v in cat_to_contract.items()}
 
-        # Pre-check which tables actually exist in DuckDB
+        # Pre-check which tables actually exist in DuckDB and what files they own
         tables_exist: dict[str, bool] = {}
-        for table in cat_to_table.values():
+        table_files: dict[str, set[str]] = {}
+        for contract in BRONZE_CONTRACT_REGISTRY:
+            table = contract.physical_table
             try:
                 self.conn.execute(f"SELECT 1 FROM {table} LIMIT 1")
                 tables_exist[table] = True
+                if not contract.is_full_replace:
+                    rows = self.conn.execute(
+                        f"SELECT DISTINCT __file_name__ FROM {table}"
+                    ).fetchall()
+                    table_files[table] = {str(r[0]) for r in rows}
             except Exception:
                 tables_exist[table] = False
+                table_files[table] = set()
 
         missing_count = 0
         raw_all: dict[str, list[str]] = cp.artifacts.get_all_paths_by_category()
 
         for cat, paths in raw_all.items():
-            table = cat_to_table.get(cat)
+            contract = cat_to_contract.get(cat)
+            table = contract.physical_table if contract else None
             table_exists = tables_exist.get(table, False) if table else True
+            files_in_table: set[str] = table_files.get(table, set()) if table else set()
 
             for path in paths:
                 status = synced_registry.get(path)
@@ -69,10 +80,67 @@ class MetaLayer:
                             [path],
                         )
                         missing_count += 1
+                    # Or if it's an event source and its specific rows are missing
+                    elif (
+                        contract
+                        and not contract.is_full_replace
+                        and os.path.basename(path) not in files_in_table
+                    ):
+                        cp.artifacts.db.conn.execute(
+                            "UPDATE cp_file_registry SET sync_status = 'PENDING_BRONZE' WHERE relative_path = ?",
+                            [path],
+                        )
+                        missing_count += 1
 
-        if missing_count > 0:
+        # Delete from DuckDB anything that no longer exists in CP
+        deleted_count = 0
+        for duckdb_path in duckdb_paths:
+            if duckdb_path not in synced_registry:
+                # Get the category from DuckDB to find the table
+                row = self.conn.execute(
+                    "SELECT file_name, file_category FROM meta.m_File_Registry WHERE relative_path = ?",
+                    [duckdb_path],
+                ).fetchone()
+
+                if row:
+                    fname, cat = row
+                    table = cat_to_table.get(cat)
+                    if table and tables_exist.get(table, False):
+                        try:
+                            self.conn.execute(
+                                f"DELETE FROM {table} WHERE __file_name__ = ?", [fname]
+                            )
+                        except Exception as e:
+                            logger.debug(f"[Bronze] Could not delete {fname} from {table}: {e}")
+
+                    self.conn.execute(
+                        "DELETE FROM meta.m_File_Registry WHERE relative_path = ?", [duckdb_path]
+                    )
+                    deleted_count += 1
+
+        if missing_count > 0 or deleted_count > 0:
             logger.info(
-                f"Self-Healing: {missing_count} file(s) in Raw Store missing from DuckDB. Re-queued for Bronze."
+                f"Self-Healing: Re-queued {missing_count} missing file(s). Purged {deleted_count} deleted file(s)."
+            )
+
+    def migrate_identity(self, renames: list[tuple[str, str, str]]) -> None:
+        """Migrates relative paths in DuckDB meta.m_File_Registry."""
+        if not renames:
+            return
+
+        for old_path, new_path, _ in renames:
+            new_rel_path = new_path.replace("\\", "/")
+            old_rel_path = old_path.replace("\\", "/")
+            new_name = os.path.basename(new_path)
+            new_file_id = generate_file_id(new_rel_path)
+
+            self.conn.execute(
+                """
+                UPDATE meta.m_File_Registry
+                SET relative_path = ?, file_name = ?, file_id = ?
+                WHERE relative_path = ?
+                """,
+                [new_rel_path, new_name, new_file_id, old_rel_path],
             )
 
     def register_file(
@@ -86,7 +154,8 @@ class MetaLayer:
             file_type = "parquet"
             # Retrieve metadata from Raw Store registry directly
             reg = cp.artifacts.get_registry()
-            file_hash: str = str(reg.get(unique_path, ""))
+            file_data = reg.get(unique_path)
+            file_hash: str = str(file_data[0]) if file_data else ""
             file_size = 0
         else:
             file_type = FILE_TYPE_MAP.get(category, "csv")
