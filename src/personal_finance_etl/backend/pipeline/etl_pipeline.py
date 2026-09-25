@@ -180,6 +180,7 @@ class ETLOrchestrator:
             cp.runs.update_run_status(run_id, "RUNNING")
 
             t_ext_start = time.time()
+            renames: list[tuple[str, str, str]] = []
             if not self.cfg.DISABLE_FILE_DISCOVERER:
                 logger.info("Phase 1/5: Discovering files and detecting changes...")
 
@@ -205,21 +206,24 @@ class ETLOrchestrator:
                         if contract.is_full_replace
                     )
                 )
-                new_files, changed_files, _ = cp.file_sync.sync_with_disk(
+                new_files, changed_files, _, renames = cp.file_sync.sync_with_disk(
                     discovered_files, self.cfg.FILE_HASH_POLICY, full_replace_categories
                 )
 
-                actionable_all = {
-                    k: new_files.get(k, []) + changed_files.get(k, [])
-                    for k in discovered_files.keys()
-                }
+                pending_files = cp.artifacts.get_pending_files()
+                actionable_all = {}
+                all_keys = set(discovered_files.keys()).union(pending_files.keys())
+                for k in all_keys:
+                    paths = (
+                        new_files.get(k, []) + changed_files.get(k, []) + pending_files.get(k, [])
+                    )
+                    if paths:
+                        actionable_all[k] = list(set(paths))
             else:
                 logger.info(
                     "Phase 1/5: Bypassing File Discoverer. Fetching pending files from Raw Store..."
                 )
-                new_files = {}
-                changed_files = cp.artifacts.get_pending_files()
-                actionable_all = changed_files
+                actionable_all = cp.artifacts.get_pending_files()
 
             extracted_data = self._extract(cp, actionable_files=actionable_all)
             logger.info(
@@ -231,7 +235,11 @@ class ETLOrchestrator:
             logger.info("Phase 2/5: Upserting new datasets into Bronze Lakehouse...")
 
             bronze = BronzeLayer(self.db_manager, cp, meta_layer)
-            bronze.load(extracted_data, new_files, changed_files)
+            if renames:
+                bronze.migrate_identity(renames)
+                meta_layer.migrate_identity(renames)
+
+            bronze.load(extracted_data, actionable_all)
             logger.info(
                 f"Phase 2 Complete [{time.time() - t_bronze_start:.2f}s] - Bronze layer synchronized."
             )
@@ -255,6 +263,21 @@ class ETLOrchestrator:
             t_eng_start = time.time()
             logger.info("Phase 4/5: Executing Advanced Analytics & Monte Carlo engines...")
             self._run_engines()
+
+            # Strict DataContract Validation
+            from personal_finance_etl.backend.load.registry import DATA_CONTRACT_REGISTRY
+
+            registered_contracts = {c.contract_id for c in DATA_CONTRACT_REGISTRY}
+            for df_key in self.dfs.keys():
+                if df_key not in registered_contracts:
+                    raise RuntimeError(
+                        f"Engine produced unregistered table '{df_key}'. All analytical tables must be defined in DATA_CONTRACT_REGISTRY."
+                    )
+
+            missing_contracts = registered_contracts - set(self.dfs.keys())
+            if missing_contracts:
+                raise RuntimeError(f"Engine failed to produce required tables: {missing_contracts}")
+
             logger.info(
                 f"Phase 4 Complete [{time.time() - t_eng_start:.2f}s] - Presentation logic built {len(self.dfs)} total tables."
             )
