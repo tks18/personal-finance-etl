@@ -77,6 +77,43 @@ class ExtractionResult:
     raw_macro_parameters: pl.LazyFrame
     column_master: pl.DataFrame | pl.LazyFrame
 
+    def __init__(
+        self,
+        zcategory: pl.LazyFrame,
+        assetgroup: pl.LazyFrame,
+        assets: pl.LazyFrame,
+        currency: pl.LazyFrame,
+        inoutcome: pl.LazyFrame,
+        mappings: dict[str, dict[str, str]],
+        stg_mf_isin_mapping: pl.LazyFrame,
+        stg_benchmark_mapping: pl.LazyFrame,
+        mf_market_data_raw: pl.LazyFrame,
+        mf_transactions_raw: pl.LazyFrame,
+        stock_market_data_raw: pl.LazyFrame,
+        stock_transactions_raw: pl.LazyFrame,
+        raw_opening_balances: pl.LazyFrame,
+        raw_benchmark_master: pl.LazyFrame,
+        raw_macro_parameters: pl.LazyFrame,
+        column_master: pl.DataFrame | pl.LazyFrame,
+    ):
+        self.zcategory = zcategory
+        self.assetgroup = assetgroup
+        self.assets = assets
+        self.currency = currency
+        self.inoutcome = inoutcome
+        self.mappings = mappings
+        self.stg_mf_isin_mapping = stg_mf_isin_mapping
+        self.stg_benchmark_mapping = stg_benchmark_mapping
+        self.mf_market_data_raw = mf_market_data_raw
+        self.mf_transactions_raw = mf_transactions_raw
+        self.stock_market_data_raw = stock_market_data_raw
+        self.stock_transactions_raw = stock_transactions_raw
+        self.raw_opening_balances = raw_opening_balances
+        self.raw_benchmark_master = raw_benchmark_master
+        self.raw_macro_parameters = raw_macro_parameters
+        self.column_master = column_master
+
+
 
 @dataclass
 class AssetPipelineResult:
