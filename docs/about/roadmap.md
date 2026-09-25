@@ -1,224 +1,304 @@
 # Roadmap
 
-Personal Finance ETL is already a working vertical financial platform.
+The roadmap is not a promise to turn Personal Finance ETL into every possible finance product.
 
-My roadmap is **not** to replace that working system with a speculative generic framework.
+The direction is narrower:
 
-The long-term goal is more disciplined:
+> **Preserve the working financial system, make its assumptions increasingly explicit, and extract portability only where the production behaviour supports it.**
 
-> **Preserve the financial behaviour I already rely on, then progressively extract source-specific, jurisdiction-specific, and user-specific assumptions behind configuration, canonical contracts, adapters, and strategies.**
-
-The destination is a platform that can reproduce my current results through configuration while becoming substantially easier for another developer to adapt to a different financial environment.
+The current system is the behavioural baseline.
 
 ---
 
-## Roadmap at a glance
+## Where the project is now
+
+The current architecture already has:
+
+```text
+authoritative SQLite Control Plane
+raw evidence persistence
+change-aware source synchronization
+persistent Bronze
+canonical financial contracts
+FIFO / tax / benchmark analytics
+household wealth and cash reconciliation
+FIRE modelling
+20 Silver contracts
+17 Gold marts
+lean DuckDB Meta
+CLI + desktop + Power BI
+manifest-driven packaged documentation
+```
+
+The 6.2.x production-hardening cycle materially strengthened the operating shell without changing the financial truth I rely on.
+
+---
+
+## Roadmap philosophy
 
 ```mermaid
 flowchart LR
-    V["Current v6<br/>Working Vertical System"] --> H["Harden<br/>correctness · semantics · observability"]
-    H --> C["Contractualize<br/>canonical schemas · lineage · versions"]
-    C --> A["Extract Adapters<br/>banks · brokers · providers"]
-    A --> S["Extract Strategies<br/>tax · reconciliation · asset behaviour"]
-    S --> P["Configurable Publication<br/>marts · docs · application surfaces"]
-    P --> G["Generalized Local Platform<br/>same engine, different environments"]
-
-    V -. behavioural baseline .-> G
+    PROD["Working Behaviour"] --> OBS["Characterize"]
+    OBS --> ASSUME["Identify Hidden Assumption"]
+    ASSUME --> BOUND["Extract Boundary"]
+    BOUND --> ROUTE["Route Current Environment Through It"]
+    ROUTE --> REC["Reconcile Financial Truth"]
+    REC --> ADOPT["Adopt Generalized Path"]
 ```
 
-The current production implementation remains the behavioural reference throughout that evolution.
+I do not want to replace a working vertical system with a theoretically elegant framework whose behaviour is harder to trust.
 
 ---
 
-## What I am optimizing for
+## 1. Complete the Documentation v2 knowledge system
 
-The roadmap is guided by several priorities.
+The repository documentation is being rebased around a stronger editorial model:
 
-## Preserve real usefulness
+> **Explain less. Show more. Prove the architecture with production code. Connect the pieces with diagrams. Use prose for reasoning code cannot communicate.**
 
-The project exists because it solves my month-end close, investment analysis, cash-flow, wealth, and FIRE planning problems.
+The remaining documentation programme is:
 
-Generalization is valuable only if the system remains useful.
+```text
+Documentation v2
+      ↓
+full cross-document QA
+      ↓
+GitHub Wiki
+      ↓
+repository metadata polish
+```
 
-## Preserve analytical equivalence
+The Markdown docs remain authoritative.
 
-When I extract an assumption into configuration or a strategy, I want my current financial environment to produce equivalent results unless I intentionally change methodology.
-
-## Improve portability honestly
-
-I want another developer to be able to understand what must be configured, what must be adapted, and what is reusable.
-
-I do not want to advertise a turnkey universal finance engine before that is true.
-
-## Reduce hidden assumptions
-
-Source contracts, tax behaviour, thresholds, and policy should become increasingly explicit.
-
-## Keep the architecture local-first
-
-The project does not need cloud infrastructure merely to look more "platform-like."
-
-The local architecture is a deliberate strength for this workload.
+The Wiki will become a guided exploration layer rather than a second competing knowledge base.
 
 ---
 
-## Current state: a working vertical system
+## 2. Build the Wiki as a knowledge layer
 
-The current v6 architecture already has substantial reusable structure.
+The Wiki should answer journeys such as:
 
-## Reusable infrastructure
+```text
+How does one source artifact become a dashboard?
+How does a purchase become a tax lot?
+How does broker reconciliation affect current state?
+How does investment tax flow into household wealth?
+How does household wealth flow into FIRE?
+```
 
-- Raw Document Store,
-- source registry and synchronization state,
-- Bronze persistence patterns,
-- orchestration,
-- DuckDB warehouse lifecycle,
-- deterministic Silver/Gold reconstruction,
-- application facade,
-- CLI/desktop execution,
-- snapshots,
-- documentation architecture.
+It should use:
 
-## Reusable analytical foundations
+```text
+visual explanations
+selected production evidence
+guided reading paths
+links into canonical /docs
+```
 
-- canonical household modelling,
-- investment asset-pipeline seam,
-- FIFO tax-lot engine,
-- benchmark shadow portfolio,
-- return aggregation,
-- wealth reconstruction,
-- cash-flow reconciliation,
-- FIRE simulation.
-
-## Already configurable
-
-- many household classifications,
-- cash/non-cash semantics,
-- budget allocations,
-- cash pools,
-- target allocations,
-- tax parameters,
-- macro assumptions,
-- FIRE assumptions,
-- stochastic-model parameters,
-- file hashing policy.
-
-## Still purpose-built
-
-- bank/broker source contracts,
-- source categories,
-- statement layouts,
-- some mappings and transformations,
-- Indian tax behaviour,
-- selected reconciliation policy,
-- selected thresholds,
-- and parts of analytical publication.
-
-That last category defines much of the roadmap.
+rather than copying the entire docs tree.
 
 ---
 
-## Phase 1 · Harden the current vertical
+## 3. Repository information polish
 
-Before making the engine broader, I want the current vertical to become even more explicit and robust.
+After the Wiki, the surrounding repository metadata should catch up with the maturity of the implementation.
 
-## Worker-failure visibility
-
-Per-ISIN investment workers should not be able to fail silently while the portfolio appears complete.
-
-The future policy should make partial failure explicit:
+Targets include:
 
 ```text
-instrument succeeds
-        or
-instrument failure is surfaced with identity/context
+pyproject.toml
+package.json
+version_info.txt
+GitHub repository description
+topics / package metadata
+other distribution-facing text
 ```
 
-Whether the system ultimately fails fast or supports an explicit partial-result mode should be a deliberate choice.
-
-## Semantic naming cleanup
-
-Fields whose names overstate methodology should be corrected.
-
-Examples identified during the v6 audit include:
-
-```text
-Outperformance_Probability
-```
-
-which is closer to an outperforming-lot ratio, and:
-
-```text
-ISIN_Monthly_Return
-```
-
-which is closer to market-value percentage change than a fully cash-flow-adjusted return.
-
-Names are part of the analytical contract.
-
-## Remove residual analytical machinery
-
-Older risk calculations that no longer support the current Gold contract should be removed or simplified where nothing consumes them.
-
-The principle is:
-
-> **Do not pay complexity rent for metrics I deliberately stopped using.**
-
-## Move remaining policy thresholds into the right boundary
-
-For example, the current portfolio rebalance tolerance is still approximately five percentage points in code.
-
-If that threshold is intended to be user policy, it belongs in validated FinancialRules.
-
-Not every constant needs configuration, but policy should not be accidentally hard-coded.
+Older "hyper-optimized quant engine" style descriptions should give way to language that accurately represents the current financial/data platform.
 
 ---
 
-## Phase 2 · Strengthen reproducibility
+## 4. Coordinated system snapshots
 
-The Raw Store already provides strong recoverability.
+The current snapshot utility protects DuckDB.
 
-The next step is stronger **historical reproducibility context**.
-
-## Version fingerprints
-
-Meta can evolve to capture concepts such as:
+The architecture now has two important persistence planes:
 
 ```text
-application_version
-git_commit
-schema_version
-rules_schema_version
-settings_hash
-financial_rules_hash
-data_contract_version
+SQLite Control Plane
++
+DuckDB analytical warehouse
 ```
 
-This would make it easier to answer:
+A stronger backup/snapshot model would protect them as one coordinated bundle.
 
-> Why does rebuilding the same raw evidence today differ from a historical run?
-
-## Explicit run manifest
-
-A future run manifest could connect:
+Conceptually:
 
 ```text
-source artifacts
-      +
-configuration fingerprint
-      +
-financial-rules fingerprint
-      +
-application/schema version
-      +
-published contracts
+snapshot/
+├── Raw_Documents.sqlite
+└── Personal_Finance_DB.duckdb
 ```
 
-into one reproducibility record.
+This better reflects current ownership.
 
-## Stronger assumption provenance
+---
 
-Important modelled values could eventually carry provenance such as:
+## 5. Deeper normalized lineage
+
+The Control Plane already tracks:
+
+```text
+artifacts
+payloads
+sync state
+runs
+failures
+configuration provenance
+execution logs
+```
+
+A future lineage expansion could normalize relationships such as:
+
+```text
+run
+→ source artifacts
+→ Bronze partitions
+→ Silver contracts
+→ Gold contracts
+```
+
+Potential structures might include:
+
+```text
+run_artifacts
+run_stages
+run_outputs
+lineage_edges
+```
+
+This should be added only if the operational value justifies the extra state.
+
+The current system already has strong provenance; it should not be mislabelled as graph-complete lineage before that work exists.
+
+---
+
+## 6. Stronger cross-database recovery semantics
+
+SQLite and DuckDB commits are currently coordinated by the application.
+
+That is appropriate for the current local workload.
+
+Future hardening can explore recovery markers/commit reconciliation around the narrow case where one database commits and the other does not.
+
+I do **not** currently see a need to introduce distributed transaction infrastructure.
+
+The goal would be better local recovery semantics, not architectural theatre.
+
+---
+
+## 7. Continue extracting source adapters
+
+The largest portability constraint remains source specificity.
+
+The long-term direction is:
+
+```text
+Source
+   ↓
+Adapter / Extractor
+   ↓
+Canonical Financial Contract
+```
+
+New source support should increasingly require:
+
+```text
+new adapter
+new mapping/reference state
+```
+
+rather than downstream engine changes.
+
+The canonical financial model should remain stable.
+
+---
+
+## 8. Continue extracting behavioural strategies
+
+Some variation is not configuration.
+
+Examples can include:
+
+```text
+different asset accounting behaviour
+different tax jurisdiction methodology
+different reconciliation policy
+different withdrawal methodology
+```
+
+Those should become explicit strategies/pipelines when real variation exists.
+
+The rule remains:
+
+```text
+same algorithm, different value
+→ configuration
+
+different algorithm
+→ strategy
+```
+
+---
+
+## 9. Preserve the current environment as the regression oracle
+
+Generalization should always route the current production environment through the new abstraction.
+
+Then compare:
+
+```text
+positions
+tax lots
+XIRR
+wealth
+cash flow
+FIRE
+Gold contracts
+```
+
+If behaviour was not intentionally changed, outputs should reconcile.
+
+This is the main guardrail against "generalization" becoming a rewrite.
+
+---
+
+## 10. Broader configuration-led deployment
+
+The eventual target is a user who can describe more of their environment through:
+
+```text
+source definitions
+mappings
+financial classifications
+asset behaviour
+tax strategy
+planning assumptions
+```
+
+without editing core pipeline code.
+
+That does not mean zero customization.
+
+A genuinely different institution/jurisdiction can still require a new adapter or strategy.
+
+The goal is **controlled extensibility**, not magical universality.
+
+---
+
+## 11. Improve assumption provenance
+
+A useful future semantic layer could classify analytical values by provenance:
 
 ```text
 OBSERVED
@@ -230,516 +310,169 @@ ESTIMATED
 SIMULATED
 ```
 
-That would make analytical interpretation stronger, especially around tax and planning.
-
----
-
-## Phase 3 · Formalize data contracts
-
-The documentation now describes Silver, Gold, and Meta explicitly.
-
-A future step is to make those contracts first-class in code.
-
-## Shared contract registry
-
-A contract specification could eventually describe:
-
-```yaml
-Core_Monthly_Fact:
-  layer: gold
-  domain: wealth
-  grain:
-    - MONTH_START_DATE
-  producer: WealthPresentationEngine
-```
-
-The registry could become useful for:
-
-- publication mapping,
-- schema validation,
-- Meta lineage,
-- row-count registration,
-- documentation generation,
-- application navigation,
-- and contract versioning.
-
-## Why I am not doing this immediately
-
-The physical contracts should stabilize first.
-
-A registry introduced too early becomes another layer that must constantly be synchronized with code.
-
-I want it to become authoritative only when that reduces duplication rather than creating more of it.
-
----
-
-## Phase 4 · Extract source adapters
-
-This is the largest step toward portability.
-
-The current source implementation knows my bank/broker environment.
-
-The target architecture is:
-
-```mermaid
-flowchart TB
-    SRC["Institution / Source"] --> AD["Source Adapter"]
-    AD --> RAW["Raw / Bronze Contract"]
-    RAW --> CAN["Canonical Financial Contract"]
-    CAN --> ENG["Reusable Financial Engine"]
-```
-
-## Bank adapters
-
-A bank adapter should own:
-
-- institution-specific source parsing,
-- statement layout,
-- source-specific normalization,
-- and mapping into canonical household transactions.
-
-The wealth engine should not know which bank produced the transaction.
-
-## Broker adapters
-
-A broker adapter should own:
-
-- broker statement/order formats,
-- holdings/current-state extraction,
-- source-specific instrument identifiers,
-- and mapping into canonical investment contracts.
-
-The FIFO engine should not know which broker produced the purchase.
-
-## Adapter registry
-
-Once multiple implementations exist, a registry can select the appropriate adapter based on configuration/source identity.
-
-I do not need a plugin marketplace.
-
-I need a clean behavioural seam.
-
----
-
-## Phase 5 · Generalize asset pipelines
-
-The current asset-pipeline architecture already supports stocks and mutual funds.
-
-Future asset types can extend that seam where the shared investment semantics remain valid.
-
-Potential examples include:
-
-- ETFs,
-- bonds,
-- pension/retirement instruments,
-- or other market-valued investment types.
-
-The key question remains:
-
-> **Can this asset honestly satisfy the existing investment contract?**
-
-If not, I would rather design a new financial model than force it through FIFO because the interface happens to exist.
-
----
-
-## Phase 6 · Extract market-data providers
-
-Benchmark acquisition is already a natural provider boundary.
-
-The future architecture can make the provider explicit:
+That could be especially valuable in:
 
 ```text
-MarketDataProvider
+tax
+broker reconciliation
+market/reference state
+FIRE
+```
+
+because it would make epistemic status easier to inspect.
+
+This is a future enhancement, not current behaviour.
+
+---
+
+## 12. Continue performance work only where useful
+
+The 6.2.x hardening cycle already demonstrated a useful rule:
+
+```text
+delete unnecessary work
+before
+micro-optimizing unnecessary work
+```
+
+The current production workload moved from roughly **23 seconds** to **14–17 seconds** end-to-end while preserving financial outputs.
+
+Future optimization should remain evidence-driven.
+
+If 17 seconds is operationally fine, complexity added solely to chase a benchmark number needs a strong reason.
+
+---
+
+## 13. Keep the serving layer curated
+
+Gold should not grow because new metrics are easy to calculate.
+
+A new mart/metric should answer:
+
+```text
+What decision does this support?
+What is its grain?
+What methodology does it require?
+Can the consumer interpret it safely?
+```
+
+The removal of unused legacy risk metrics is the model for future pruning.
+
+---
+
+## 14. Maintain local-first architecture
+
+The current workload does not require cloud infrastructure for core execution.
+
+Local-first remains the default direction because it fits:
+
+```text
+privacy
+workload scale
+Power BI / desktop integration
+operational simplicity
+```
+
+Cloud services can be introduced when a concrete capability requires them.
+
+Not because architecture diagrams look more impressive with more boxes.
+
+---
+
+## 15. AI/semantic extensions should remain downstream of trustworthy data
+
+My broader engineering interests include semantic/local-AI systems.
+
+For Personal Finance ETL, any future agentic/semantic layer should consume:
+
+```text
+reconciled canonical financial state
++
+explicit provenance
+```
+
+rather than bypassing the financial model and reasoning directly over messy source files.
+
+The order matters:
+
+```text
+trustworthy data
+→ semantic layer
+→ AI interaction
+```
+
+not:
+
+```text
+AI first
+→ hope it reconstructs finance correctly
+```
+
+---
+
+## 16. What is intentionally not on the roadmap
+
+I am not currently optimizing for:
+
+- cloud-native multi-tenancy,
+- institutional trading execution,
+- a universal global tax engine,
+- every possible risk metric,
+- microservice decomposition,
+- distributed processing for its own sake.
+
+Those could be valid goals for a different product.
+
+They are not requirements of this one.
+
+---
+
+## Roadmap success criteria
+
+The project is moving in the right direction when:
+
+1. Financial truth remains trustworthy.
+2. New sources require less downstream change.
+3. Financial policy becomes more explicit.
+4. Behavioural variation has clean boundaries.
+5. Provenance improves.
+6. Documentation stays synchronized with implementation.
+7. BI contracts remain stable and interpretable.
+8. Performance remains operationally comfortable.
+9. Complexity is added because the workload needs it.
+10. The system remains useful to me while becoming easier for others to extend.
+
+---
+
+## Near-term sequence
+
+```text
+Documentation v2
         ↓
-canonical benchmark observations
+Full docs QA
         ↓
-Raw virtual artifact
+GitHub Wiki
         ↓
-existing benchmark lifecycle
-```
-
-This allows external data acquisition to vary without changing benchmark analytics.
-
-The Raw Store should continue to preserve fetched history for provenance and recovery.
-
----
-
-## Phase 7 · Extract tax strategies
-
-Tax is one of the clearest areas where parameters alone are insufficient.
-
-The current implementation contains Indian tax semantics.
-
-A future structure could separate:
-
-```text
-FinancialRules
-rates · thresholds · exemptions
-```
-
-from:
-
-```text
-TaxStrategy
-holding rules · regime dates · behavioural logic
-```
-
-Potentially:
-
-```mermaid
-flowchart LR
-    RULES["Tax Parameters"] --> STRAT["Tax Strategy"]
-    IN["Canonical Lot State"] --> STRAT
-    STRAT --> OUT["Tax-Aware Lot / Portfolio State"]
-
-    REG["Strategy Registry"] --> STRAT
-```
-
-This would make jurisdiction-specific behaviour explicit without turning configuration into a programming language.
-
----
-
-## Phase 8 · Make reconciliation policy explicit
-
-Broker-authoritative reconciliation is currently an important operational policy.
-
-Future architecture can make the policy boundary clearer.
-
-Possible behaviours could include:
-
-```text
-strict
-→ fail on material mismatch
-
-broker-authoritative
-→ reconcile toward reported state
-
-transaction-authoritative
-→ preserve reconstructed state and surface mismatch
-
-review-required
-→ publish mismatch without automatic adjustment
-```
-
-I am not committing to these exact modes yet.
-
-The roadmap point is that reconciliation behaviour should become explicit if multiple environments require different policies.
-
----
-
-## Phase 9 · Generalize publication
-
-The current Gold model is intentionally curated.
-
-A future generalized platform may allow publication configuration, but only within clear boundaries.
-
-I do **not** want:
-
-```text
-arbitrary formulas in YAML
-```
-
-to become the analytical engine.
-
-A better model is:
-
-```text
-registered analytical mart
-        +
-validated publication configuration
+Repository metadata polish
         ↓
-enabled / disabled / extended serving surface
+Broader portfolio/profile documentation
+        ↓
+Next production evolution
 ```
 
-Canonical methodology should remain code-owned.
+The roadmap remains subordinate to the working system.
 
----
+The system exists to improve financial understanding and decisions.
 
-## Phase 10 · Integrate documentation into the application
-
-The Markdown under `docs/` is now designed to become the authoritative technical knowledge base.
-
-The future application can consume it directly.
-
-## CLI
-
-Conceptually:
-
-```text
-shan-fin --docs
-
-Documentation
-├── Getting Started
-├── Architecture
-├── Finance
-├── Configuration
-├── Developer
-├── Reference
-└── About
-```
-
-## Desktop
-
-The GUI can expose:
-
-```text
-section navigation
-        +
-rendered Markdown
-        +
-search / cross-links
-```
-
-## Shared documentation manifest
-
-Once the documentation tree stabilizes, a small manifest could define ordering, titles, and application visibility.
-
-The docs remain the content source.
-
-The manifest only describes navigation.
-
----
-
-## Phase 11 · Build the GitHub Wiki
-
-The Wiki should not become a second copy of `/docs`.
-
-I want:
-
-```text
-/docs
-→ authoritative version-controlled technical documentation
-
-Wiki
-→ navigable knowledge base / encyclopedia built around those concepts
-```
-
-The Wiki can provide:
-
-- topic-oriented navigation,
-- conceptual walkthroughs,
-- architecture journeys,
-- deeper cross-linking,
-- onboarding paths,
-- and selected visual explanations.
-
-Where possible, it should link back to authoritative repository documentation rather than fork definitions.
-
----
-
-## Phase 12 · Continue portfolio storytelling
-
-The repository is also a record of how I think about engineering and finance.
-
-That layer now includes [`about-me.md`](about-me.md), which documents the engineering journey behind the project and connects it to the broader public project portfolio.
-
-Future additions can build on that foundation through:
-
-- architecture case studies,
-- selected design retrospectives,
-- deeper cross-project technical narratives,
-- and links to related projects.
-
-The goal is not to turn technical docs into a résumé.
-
-It is to make the engineering philosophy behind the work visible while keeping technical claims grounded in the systems I have actually built.
-
----
-
-## Phase 13 · Broader deployability
-
-The long-term deployment goal is:
-
-```text
-Reusable engine
-      +
-source adapters
-      +
-asset pipelines
-      +
-tax strategies
-      +
-validated configuration
-      +
-canonical contracts
-      ↓
-different user's financial environment
-```
-
-The current project is not there yet.
-
-That is fine.
-
-The roadmap is about reaching that state without pretending the difficult domain-specific work disappears.
-
----
-
-## Behavioural-equivalence migration strategy
-
-The most important roadmap mechanism is not a technology.
-
-It is the migration discipline.
-
-For each embedded assumption:
-
-```mermaid
-flowchart TB
-    FIND["Identify embedded assumption"] --> CHAR["Characterize current behaviour"]
-    CHAR --> TEST["Capture expected analytical result"]
-    TEST --> EXTRACT["Extract parameter / adapter / strategy"]
-    EXTRACT --> RUN["Run my current environment through new path"]
-    RUN --> COMP{"Equivalent?"}
-    COMP -->|"No"| FIX["Reconcile difference"]
-    FIX --> RUN
-    COMP -->|"Yes"| LOCK["Adopt generalized path"]
-```
-
-This makes the existing production system the specification for generalization.
-
----
-
-## What I do not want the roadmap to become
-
-## A rewrite
-
-The working engine is an asset, not technical debt simply because it is purpose-built.
-
-## Cloud migration theatre
-
-Cloud architecture is not a maturity badge.
-
-I will adopt it only if the workload requires it.
-
-## Plugin architecture before plugins exist
-
-Extension seams should emerge from real implementations.
-
-## Configuration maximalism
-
-Not everything belongs in TOML/YAML.
-
-## Metric expansion
-
-The project already learned this lesson.
-
-More analytics are not automatically more useful.
-
-## Framework-first design
-
-The goal is a configurable financial platform, not an abstract framework searching for a user.
-
----
-
-## Possible future milestones
-
-The exact version numbers are intentionally not promised, but the sequence can be thought of as:
-
-```text
-Current
-v6 vertical platform
-    ↓
-Hardening
-semantic cleanup · failure visibility · residual-code pruning
-    ↓
-Reproducibility
-versions · fingerprints · explicit contract metadata
-    ↓
-Source portability
-bank / broker / market-data adapters
-    ↓
-Policy portability
-tax / reconciliation strategies
-    ↓
-Publication portability
-contract registry · configurable serving
-    ↓
-Application knowledge
-docs browser · Wiki integration
-    ↓
-Broader deployment
-configuration-led user environments
-```
-
-I prefer capability milestones over arbitrary release promises.
-
----
-
-## Success criteria for the generalized platform
-
-I would consider the long-term architecture successful when:
-
-1. My current environment runs through the generalized path.
-2. It reproduces the financial outputs I rely on unless methodology was intentionally changed.
-3. A new source can be added without modifying downstream financial engines.
-4. A new compatible asset type can be added through an explicit pipeline.
-5. Jurisdictional tax behaviour can vary through a strategy boundary.
-6. Financial policy is primarily configuration-driven.
-7. Physical analytical contracts are explicit and versionable.
-8. Documentation remains synchronized with those contracts.
-9. CLI/GUI consume the same backend and documentation.
-10. Another developer can understand exactly what must be customized for their environment.
-
-That is a much stronger definition of "configurable" than simply having a large configuration file.
-
----
-
-## Near-term priorities
-
-Before broad generalization, the highest-value next steps are:
-
-### 1. Build the Wiki on the validated documentation base
-
-The authoritative repository documentation is now substantially built and has completed its cross-document QA pass. The next documentation milestone is to design the Wiki on top of the version-controlled docs without creating a second, drifting source of truth.
-
-### 2. Harden known semantic quirks
-
-Clean up misleading metric names and residual calculations.
-
-### 3. Strengthen failure visibility
-
-Especially per-instrument investment processing.
-
-### 4. Strengthen Meta
-
-Add explicit contract/layer identity and stronger reproducibility fingerprints.
-
-### 5. Extract the first real adapter
-
-Choose one source boundary and prove the adapter architecture against my existing environment.
-
-### 6. Preserve output equivalence
-
-Use current production results as the migration baseline.
-
-That gives the roadmap a concrete next move rather than jumping immediately to "support every bank."
-
----
-
-## Roadmap principles
-
-I want the roadmap to preserve these ideas.
-
-1. **The current working system is the behavioural baseline.**
-2. **Generalization happens by extraction, not blind rewrite.**
-3. **Source-specific behaviour moves behind adapters.**
-4. **Financial behavioural variation moves behind strategies.**
-5. **Parameters remain validated configuration.**
-6. **Canonical contracts remain the stable downstream boundary.**
-7. **Raw evidence and local-first privacy remain first-class.**
-8. **Decision-support publication remains curated.**
-9. **Documentation remains part of the architecture.**
-10. **Broader deployability does not erase domain complexity.**
-11. **Correctness and usefulness outrank architectural fashion.**
-12. **The platform should become easier to adapt without becoming harder for me to trust.**
+Everything else is engineering in service of that.
 
 ---
 
 ## Related documentation
 
 - [Project Overview](project.md)
-- [System Architecture](../architecture/system-architecture.md)
+- [About Me](about-me.md)
 - [Design Decisions](../architecture/design-decisions.md)
-- [Development Guide](../developer/development-guide.md)
-- [Financial Rules](../configuration/financial-rules.md)
+- [Developer Guide](../developer/development-guide.md)
 
 [← About Home](README.md) · [← Documentation Home](../README.md)
