@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [6.2.2](https://github.com/tks18/personal-finance-etl/compare/6.2.1...6.2.2) (2026-09-25)
+
+
+### Performance Improvements 🏎
+
+* **backend/engines:** math: remove dead code ([1c42789](https://github.com/tks18/personal-finance-etl/commit/1c427892b7babd266dd481ea81809b2c5aa97016))
+* **backend/engines:** persentation: remove risk metrics dead code, improving model perf ([afe2ef7](https://github.com/tks18/personal-finance-etl/commit/afe2ef7ee128ac839a9393bd1434942bdc2f140d))
+* **backend/engines:** quant: remove risk metrics dead code, improving perf ([3300997](https://github.com/tks18/personal-finance-etl/commit/330099723891ef322e4c0be422358a3800ed0eed))
+
+
+### Code Refactoring 🖌
+
+* remove risk metrics from main presentation dag ([b3b50d3](https://github.com/tks18/personal-finance-etl/commit/b3b50d3c334da497991fc4fa1f1df15ac565fb70))
+
+
+### Styling 🎨
+
+* linting fixes across files ([6a8d699](https://github.com/tks18/personal-finance-etl/commit/6a8d6990815972a417bc7d2d46a0c1354a146332))
+* remove legacy comments ([89a6950](https://github.com/tks18/personal-finance-etl/commit/89a6950c762bb1b6f24fd7d6ebd68e63498cbff0))
+
+
+### Docs 📃
+
+* update doc strings in main __init__.py files ([1ba0568](https://github.com/tks18/personal-finance-etl/commit/1ba056850fe092d4db9e81330047eb17d264afac))
+
 ### [6.2.1](https://github.com/tks18/personal-finance-etl/compare/6.2.0...6.2.1) (2026-09-24)
 
 
