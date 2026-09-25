@@ -262,18 +262,13 @@ A purchase made in 2022 and one made in 2026 should not be benchmarked as if bot
 
 Conceptually:
 
-\[
-ShadowQty =
-\frac{CapitalDeployed}
-{BenchmarkPriceAtDeployment}
-\]
+```text
+Shadow Quantity
+= Capital Deployed / Benchmark Price at Deployment
 
-Then at valuation date:
-
-\[
-BenchmarkValue =
-ShadowQty \times BenchmarkPrice_t
-\]
+Benchmark Value_t
+= Shadow Quantity × Benchmark Price_t
+```
 
 Partial real disposal reduces the associated benchmark exposure proportionally.
 
@@ -415,10 +410,9 @@ is a comparison between two capital histories built from aligned deployment timi
 
 Once actual and benchmark returns exist at a comparable grain:
 
-\[
-ActiveReturn =
-ActualReturn - BenchmarkReturn
-\]
+```text
+Active Return = Actual Return - Benchmark Return
+```
 
 The metric is descriptive.
 
@@ -430,15 +424,10 @@ It does not claim future alpha.
 
 Historical value paths also produce drawdown:
 
-\[
-Drawdown_t =
-\frac{V_t}{Peak_t} - 1
-\]
-
-\[
-MaxDrawdown =
-\min_t(Drawdown_t)
-\]
+```text
+Drawdown_t   = (V_t / Peak_t) - 1
+Max Drawdown = min(Drawdown_t)
+```
 
 The current serving model retains Max Drawdown because it describes an experienced path property that is useful in investment review.
 

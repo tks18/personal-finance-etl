@@ -48,9 +48,9 @@ The principle is:
 
 For positive start/end values:
 
-\[
-CAGR = \left(\frac{V_{end}}{V_{start}}\right)^{365/d} - 1
-\]
+```text
+CAGR = (V_end / V_start)^(365 / days) - 1
+```
 
 where:
 
@@ -89,10 +89,11 @@ It is not a substitute for cash-flow-aware performance when capital moves during
 
 XIRR solves for \(r\):
 
-\[
-\sum_i \frac{CF_i}
-{(1+r)^{(d_i-d_0)/365}} = 0
-\]
+```text
+Find r such that:
+
+Σ [ CF_i / (1 + r)^((d_i - d_0) / 365) ] = 0
+```
 
 The production wrapper delegates numerical solving to `pyxirr`:
 
@@ -194,9 +195,9 @@ The current serving interpretation is benchmark-relative return difference at a 
 
 Conceptually:
 
-\[
-ActiveReturn = PortfolioReturn - BenchmarkReturn
-\]
+```text
+Active Return = Portfolio Return - Benchmark Return
+```
 
 The exact return family should remain aligned:
 
@@ -213,17 +214,11 @@ Mixing incompatible return methodologies would create a mathematically valid sub
 
 For a value series \(V_t\):
 
-\[
-Peak_t = \max(V_0,\dots,V_t)
-\]
-
-\[
-Drawdown_t = \frac{V_t}{Peak_t} - 1
-\]
-
-\[
-MaxDrawdown = \min_t(Drawdown_t)
-\]
+```text
+Peak_t        = max(V_0, ..., V_t)
+Drawdown_t    = (V_t / Peak_t) - 1
+Max Drawdown  = min(Drawdown_t)
+```
 
 Max Drawdown survives the metric-pruning cycle because it answers a useful behavioural question:
 
@@ -241,11 +236,10 @@ The metric previously named `Outperformance_Probability` was renamed because tha
 
 The current concept is:
 
-\[
-OutperformingLotRatio =
-\frac{\text{active lots outperforming benchmark}}
-{\text{active lots}}
-\]
+```text
+Outperforming Lot Ratio
+= Active Lots Outperforming Benchmark / Active Lots
+```
 
 This is a descriptive ratio of current lot state.
 
@@ -279,9 +273,9 @@ Savings can be defined differently depending on whether non-cash items are inclu
 
 Conceptually:
 
-\[
+```text
 Savings = Income - Expense
-\]
+```
 
 but the project can distinguish:
 
@@ -301,9 +295,9 @@ A "savings rate" without a definition of income/expense scope is incomplete.
 
 At minimum:
 
-\[
-NetWorth = Assets - Liabilities
-\]
+```text
+Net Worth = Assets - Liabilities
+```
 
 But the project carries multiple valuation states.
 
@@ -326,21 +320,17 @@ Those are related metrics, not synonyms.
 
 Conceptually:
 
-\[
-CalculatedClosingCash =
-OpeningCash
-+ Operating
-+ Investing
-+ Financing
-+ TransferTreatment
-\]
+```text
+Calculated Closing Cash
+= Opening Cash
++ Operating Cash Flow
++ Investing Cash Flow
++ Financing Cash Flow
++ Transfer Treatment
 
-Then:
-
-\[
-UnreconciledDifference =
-ActualClosingCash - CalculatedClosingCash
-\]
+Unreconciled Difference
+= Actual Closing Cash - Calculated Closing Cash
+```
 
 A non-zero difference is not suppressed.
 
@@ -352,11 +342,9 @@ It is a financial/data-quality signal.
 
 For a portfolio component \(i\):
 
-\[
-Weight_i =
-\frac{MarketValue_i}
-{TotalPortfolioMarketValue}
-\]
+```text
+Weight_i = Market Value_i / Total Portfolio Market Value
+```
 
 Weights are non-additive across time.
 
@@ -368,9 +356,9 @@ They should be interpreted at one valuation date.
 
 Conceptually:
 
-\[
-Drift_i = ActualWeight_i - TargetWeight_i
-\]
+```text
+Drift_i = Actual Weight_i - Target Weight_i
+```
 
 Rebalance policy compares absolute drift with configured tolerance.
 
@@ -398,11 +386,9 @@ decision threshold
 
 A simple deterministic FI target can be expressed as:
 
-\[
-FITarget =
-\frac{AnnualCoreExpense}
-{WithdrawalRate}
-\]
+```text
+FI Target = Annual Core Expense / Withdrawal Rate
+```
 
 But the useful model depends on policy around:
 

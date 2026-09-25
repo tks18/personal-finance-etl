@@ -58,11 +58,9 @@ A simulation cannot repair bad financial semantics.
 
 A basic target can be represented as:
 
-\[
-FITarget =
-\frac{AnnualCoreExpense}
-{WithdrawalRate}
-\]
+```text
+FI Target = Annual Core Expense / Withdrawal Rate
+```
 
 This is useful as a deterministic planning anchor.
 
@@ -84,18 +82,10 @@ The model therefore treats the target as configured methodology, not a universal
 
 Once target and eligible wealth exist:
 
-\[
-Coverage =
-\frac{EligibleWealth}
-{FITarget}
-\]
-
-and:
-
-\[
-FIGap =
-FITarget - EligibleWealth
-\]
+```text
+FI Coverage = Eligible Wealth / FI Target
+FI Gap      = FI Target - Eligible Wealth
+```
 
 Those metrics describe current position under deterministic assumptions.
 
@@ -446,11 +436,10 @@ Percentile labels alone do not imply optimism/pessimism without understanding th
 
 A simulation success rate is:
 
-\[
-P_{model}(success) =
-\frac{SuccessfulSimulationPaths}
-{TotalSimulationPaths}
-\]
+```text
+Modelled Probability of Success
+= Successful Simulation Paths / Total Simulation Paths
+```
 
 The subscript matters conceptually.
 

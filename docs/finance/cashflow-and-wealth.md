@@ -51,13 +51,13 @@ Book state is reconstructed from household financial activity.
 
 Conceptually:
 
-\[
-ClosingBookBalance =
-OpeningBalance
+```text
+Closing Book Balance
+= Opening Balance
 + Income
 - Expense
-\pm Transfers
-\]
+± Transfers
+```
 
 at asset grain.
 
@@ -213,14 +213,14 @@ The exact mapping is financial policy.
 
 At monthly grain:
 
-\[
-CalculatedClosingCash =
-OpeningCash
-+ OperatingCashFlow
-+ InvestingCashFlow
-+ FinancingCashFlow
-+ TransferTreatment
-\]
+```text
+Calculated Closing Cash
+= Opening Cash
++ Operating Cash Flow
++ Investing Cash Flow
++ Financing Cash Flow
++ Transfer Treatment
+```
 
 The purpose is to reconstruct what closing cash **should** be from classified activity.
 
@@ -232,12 +232,10 @@ The system independently reconstructs/observes closing cash-pool state.
 
 Then:
 
-\[
-UnreconciledDifference =
-ActualClosingCash
--
-CalculatedClosingCash
-\]
+```text
+Unreconciled Difference
+= Actual Closing Cash - Calculated Closing Cash
+```
 
 That difference is preserved.
 
@@ -314,9 +312,9 @@ That is why the system carries explicit cash/non-cash semantics in FinancialRule
 
 Conceptually:
 
-\[
+```text
 Savings = Income - Expense
-\]
+```
 
 But different planning questions can require:
 

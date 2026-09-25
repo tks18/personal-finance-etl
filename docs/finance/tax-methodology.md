@@ -110,11 +110,10 @@ Tax classification must therefore follow the acquisition dates of the consumed l
 
 For a consumed lot:
 
-\[
-RealizedPnL =
-(SalePrice - PurchasePrice)
-\times QuantitySold
-\]
+```text
+Realized P&L
+= (Sale Price - Purchase Price) × Quantity Sold
+```
 
 The production sale path computes:
 
