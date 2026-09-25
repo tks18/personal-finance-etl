@@ -23,12 +23,10 @@ class WealthRiskAnalyticsBuilder:
         self,
         dfs: Mapping[str, pl.DataFrame | pl.LazyFrame],
         base_lf: dict[str, Any],
-        lf_risk: pl.LazyFrame,
         rules: FinancialRules,
     ) -> None:
         self.dfs = dfs
         self.base_lf = base_lf
-        self.lf_risk = lf_risk
         self.rules = rules
         # Cache DOB parts once to avoid repeated string splits in LazyFrame expressions
         dob_parts = rules.assumptions.monte_carlo.date_of_birth.split("-")
@@ -280,15 +278,6 @@ class WealthRiskAnalyticsBuilder:
                 .otherwise(pl.lit(None).cast(pl.Date))
                 .alias("Projected_FI_Date_P50"),
             )
-            .join(
-                self.lf_risk.select(
-                    [
-                        "MONTH_START_DATE",
-                    ]
-                ),
-                on="MONTH_START_DATE",
-                how="left",
-            )
             .sort("MONTH_START_DATE")
             .with_columns(
                 (
@@ -383,7 +372,6 @@ class WealthRiskAnalyticsBuilder:
                 "Wealth_Acceleration",
                 "Real_NW_CAGR_3Y",
                 "Terminal_Wealth_Nominal_P50",
-                # Risk Metrics natively merged
             ]
         )
-        return lf_fire_forecast
+        return lf_fire_forecast  # type: ignore[no-any-return]
