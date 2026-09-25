@@ -136,6 +136,9 @@ class ArtifactRepository:
                         """,
                         (file_id, raw_bytes),
                     )
+                    logger.debug(
+                        f"[SQLITE:QUERY] Upserted binary payload for '{filename}' ({file_size} bytes)."
+                    )
                     success_files.append(filename)
                     total_count += 1
                 except Exception as e:
