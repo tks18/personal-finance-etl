@@ -10,8 +10,8 @@ from personal_finance_etl.backend.load.control_plane.utils import (
     compute_file_hash,
     generate_file_id,
 )
-from personal_finance_etl.backend.load.registry import DATA_CONTRACT_REGISTRY
 from personal_finance_etl.backend.load.database import DuckDBManager
+from personal_finance_etl.backend.load.registry import DATA_CONTRACT_REGISTRY
 from personal_finance_etl.backend.utils.logger import logger
 
 

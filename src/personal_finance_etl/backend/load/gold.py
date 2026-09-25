@@ -40,10 +40,10 @@ class GoldLayer:
 
         # Phase 2: Insert all data
         for contract in contracts:
-          if contract.contract_id in dfs:
-              self._write(
-                  dfs[contract.contract_id],
-                  contract.physical_table,
-              )
+            if contract.contract_id in dfs:
+                self._write(
+                    dfs[contract.contract_id],
+                    contract.physical_table,
+                )
 
         logger.info("Gold layer load complete.")
