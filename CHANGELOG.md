@@ -2,6 +2,63 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [6.2.3](https://github.com/tks18/personal-finance-etl/compare/6.2.2...6.2.3) (2026-09-25)
+
+
+### Code Refactoring 🖌
+
+* **backend/engines:** math.py remove dead dietz calculation code ([7601e77](https://github.com/tks18/personal-finance-etl/commit/7601e7790350687a067a9da7c408ceb23151a064))
+
+
+### Bug Fixes 🛠
+
+* **backend/control_plane:** fix data contracts pub order, grain ([07bcbdb](https://github.com/tks18/personal-finance-etl/commit/07bcbdb61cb62b26031f026dcf5c7c8dbe186169))
+* **backend/control_plane:** fix virtual files path generation mismatch ([6cf7c1d](https://github.com/tks18/personal-finance-etl/commit/6cf7c1d952938f1e422caf4b2d2a23f36a75573d))
+* **backend/engines:** investment_analytics - add subtype back to the col list ([c100944](https://github.com/tks18/personal-finance-etl/commit/c1009443ce1a18aede5da9aa6a4049ed80f67fd9))
+* **backend/load:** gold - use the pub order to push to db ([3483ddc](https://github.com/tks18/personal-finance-etl/commit/3483ddc84235be7761c052803eae450262f8312d))
+* **backend/load:** meta - use the datacontracts for the meta layer ([c9ea76d](https://github.com/tks18/personal-finance-etl/commit/c9ea76dfdc116747fc52045176ac438250fdabdd))
+* **backend/load:** silver - use the pub order to push to db ([f899f71](https://github.com/tks18/personal-finance-etl/commit/f899f71d4541fb75952678d3c0d64be40059ad41))
+
+
+### Build System 🏗
+
+* **.versionrc.js:** remove stale version bump for docs/about.md ([51051e2](https://github.com/tks18/personal-finance-etl/commit/51051e2dbff8897fb5988803ec3b640ce93b91b0))
+* consistent repo metadata across all the files in the repo ([615eff2](https://github.com/tks18/personal-finance-etl/commit/615eff2e6dd1aa2097c558a4fa541f8c09feb1d7))
+
+
+### Others 🔧
+
+* add CONTRIBUTING.md file ([297447f](https://github.com/tks18/personal-finance-etl/commit/297447febb7c3ead22cc4b6500125b89e890efae))
+* add issue templates file ([4c758a8](https://github.com/tks18/personal-finance-etl/commit/4c758a8cbe2986fa1d2db824ad7e3e1f62599628))
+* add pull request template file ([4953636](https://github.com/tks18/personal-finance-etl/commit/4953636fe27efa54783ae26e3280112d6aaa5bad))
+* add SECURITY.md file ([84b291d](https://github.com/tks18/personal-finance-etl/commit/84b291d3f82e133da7efe84358bf55864f194081))
+
+
+### Docs 📃
+
+* add production hardening edge cases doc ([c9c6f9a](https://github.com/tks18/personal-finance-etl/commit/c9c6f9a08019c71d76f3d01c1299c1383e0eeac6))
+* fix logo link for pypi scenarios ([7849c1b](https://github.com/tks18/personal-finance-etl/commit/7849c1b3df5654ffcda54f2f2853865c9bc3aefa))
+* fix math formulas not rendering properly ([f245ec9](https://github.com/tks18/personal-finance-etl/commit/f245ec940023aac7470ee1eb4ac42f0ef4058f25))
+* link main readme to wiki ([4e74cdc](https://github.com/tks18/personal-finance-etl/commit/4e74cdc77c22203061afe9723e342046c7a00310))
+* link tech docs readme to wiki ([4a29389](https://github.com/tks18/personal-finance-etl/commit/4a2938921ff810ccee133c3ab8f08b903fa782ca))
+* minor wording changes ([ade0ffa](https://github.com/tks18/personal-finance-etl/commit/ade0ffa136584545845ce8dfd78fa87e3c11d12a))
+* **readme:** update readme after the recent architecture refactor ([62b2cdc](https://github.com/tks18/personal-finance-etl/commit/62b2cdca1553161005f3b5fd10da82ec8b5e9c48))
+* refactor about docs to reflect recent changes ([6fe32f6](https://github.com/tks18/personal-finance-etl/commit/6fe32f6df9d807c643ac711c70de7104af475448))
+* refactor architecture docs to reflect recent changes ([fe0a325](https://github.com/tks18/personal-finance-etl/commit/fe0a325502950103a678440132759266d871c66d))
+* refactor configuration docs to reflect recent changes ([c3abec2](https://github.com/tks18/personal-finance-etl/commit/c3abec271b11259cee8d262d6bb6b1f4cb7c3874))
+* refactor developer docs to reflect recent changes ([f34db04](https://github.com/tks18/personal-finance-etl/commit/f34db04c811819b4b690d762d4f49c83fded6e7c))
+* refactor finance docs to reflect recent changes ([3b02edd](https://github.com/tks18/personal-finance-etl/commit/3b02edd7b262d164f2b911ba5bc44e5c9829f9cc))
+* refactor getting started docs to reflect recent changes ([c2897b4](https://github.com/tks18/personal-finance-etl/commit/c2897b4d12b789d4ed2b2ab0eed1580b68fbdedd))
+* refactor reference docs to reflect recent changes ([6ab656d](https://github.com/tks18/personal-finance-etl/commit/6ab656d9c58369b3f8936cb568f62a297f5d9278))
+* update all sub folder base readme file ([c5d7aac](https://github.com/tks18/personal-finance-etl/commit/c5d7aacc08eb467bb7f402f849ec40847e02193b))
+* update base docs readme file ([092bcff](https://github.com/tks18/personal-finance-etl/commit/092bcff6e652c61b4a43fa43fffd702bd4d6e3ff))
+* update manifest, remove legacy docs in manifest ([4bf957c](https://github.com/tks18/personal-finance-etl/commit/4bf957c032992bfbbd7a71f8d7e2daa4dc0a9b7c))
+
+
+### Styling 🎨
+
+* lint fixes ([a6a6cee](https://github.com/tks18/personal-finance-etl/commit/a6a6cee4eeab3ff931ebdc9d28e09d0ab0e87699))
+
 ### [6.2.2](https://github.com/tks18/personal-finance-etl/compare/6.2.1...6.2.2) (2026-09-25)
 
 
