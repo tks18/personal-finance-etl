@@ -48,6 +48,9 @@ BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
     BronzeDataContract(
         "stock_transactions_raw", "stock_orders", "bronze.r_Stock_Transactions", False
     ),
+    BronzeDataContract(
+        "benchmark_history_raw", "benchmark_history", "bronze.r_Benchmark_Data", False
+    ),
 ]
 
 # A lightweight registry for Silver and Gold analytical layers
@@ -436,5 +439,5 @@ def validate_registry() -> None:
             raise ValueError(f"Duplicate Bronze table mapping: {contract.physical_table}")
         bronze_tables.add(contract.physical_table)
 
-    if len(BRONZE_CONTRACT_REGISTRY) != 15:
-        raise ValueError(f"Expected 15 Bronze contracts, found {len(BRONZE_CONTRACT_REGISTRY)}")
+    if len(BRONZE_CONTRACT_REGISTRY) != 16:
+        raise ValueError(f"Expected 16 Bronze contracts, found {len(BRONZE_CONTRACT_REGISTRY)}")
