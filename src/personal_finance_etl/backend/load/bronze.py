@@ -6,6 +6,7 @@ import polars as pl
 from personal_finance_etl.backend.load.control_plane.orchestrator import ControlPlane
 from personal_finance_etl.backend.load.database import DuckDBManager
 from personal_finance_etl.backend.load.metadata import MetaLayer
+from personal_finance_etl.backend.load.registry import BRONZE_CONTRACT_REGISTRY
 from personal_finance_etl.backend.utils.logger import logger
 from personal_finance_etl.backend.utils.models import ExtractionResult
 
@@ -73,24 +74,6 @@ class BronzeLayer:
             result[row[0]] = row[1]
         return result
 
-    TABLE_MAPPINGS = [
-        ("zcategory", "sqlite_source", "bronze.r_SQLite_ZCategory", True),
-        ("assetgroup", "sqlite_source", "bronze.r_SQLite_AssetGroup", True),
-        ("assets", "sqlite_source", "bronze.r_SQLite_Assets", True),
-        ("currency", "sqlite_source", "bronze.r_SQLite_Currency", True),
-        ("inoutcome", "sqlite_source", "bronze.r_SQLite_InOutcome", True),
-        ("stg_mf_isin_mapping", "mf_isin", "bronze.r_MF_ISIN_Mapping", True),
-        ("stg_benchmark_mapping", "benchmark_mapping", "bronze.r_Benchmark_Mapping", True),
-        ("raw_opening_balances", "opening_balances", "bronze.r_Opening_Balances", True),
-        ("raw_benchmark_master", "benchmark_master", "bronze.r_Benchmark_Master", True),
-        ("raw_macro_parameters", "macro_parameters", "bronze.r_Macro_Parameters", True),
-        ("column_master", "column_master", "bronze.r_Column_Master", True),
-        ("mf_market_data_raw", "mf_holdings", "bronze.r_MF_Market_Data", False),
-        ("mf_transactions_raw", "mf_orders", "bronze.r_MF_Transactions", False),
-        ("stock_market_data_raw", "stock_pl", "bronze.r_Stock_Market_Data", False),
-        ("stock_transactions_raw", "stock_orders", "bronze.r_Stock_Transactions", False),
-    ]
-
     def load(
         self,
         extracted_data: ExtractionResult,
@@ -100,26 +83,34 @@ class BronzeLayer:
         """Writes all raw extracted dataframes to bronze.* via db_manager.conn."""
         logger.info("Loading raw datasets into Bronze layer...")
 
-        for attr, category, table_name, is_full_replace in self.TABLE_MAPPINGS:
-            df = getattr(extracted_data, attr, None)
+        for contract in BRONZE_CONTRACT_REGISTRY:
+            df = getattr(extracted_data, contract.extraction_attribute, None)
             if df is not None:
-                actionable = new_files.get(category, []) + changed_files.get(category, [])
+                actionable = new_files.get(contract.sync_category, []) + changed_files.get(
+                    contract.sync_category, []
+                )
                 if actionable:
                     row_counts = self.upsert_table(
-                        df, table_name, actionable, full_replace=is_full_replace
+                        df,
+                        contract.physical_table,
+                        actionable,
+                        full_replace=contract.is_full_replace,
                     )
 
                     # Wipe old registry entries for full-replace sources to prevent obsolete file bloating
-                    if is_full_replace:
+                    if contract.is_full_replace:
                         self.db_manager.conn.execute(
-                            "DELETE FROM meta.m_File_Registry WHERE file_category = ?", [category]
+                            "DELETE FROM meta.m_File_Registry WHERE file_category = ?",
+                            [contract.sync_category],
                         )
 
                     for filepath in actionable:
                         filename = os.path.basename(filepath)
                         count = row_counts.get(filename, 0)
                         self.cp.artifacts.mark_synced([filepath])
-                        self.meta_layer.register_file(filepath, category, count, self.cp)
+                        self.meta_layer.register_file(
+                            filepath, contract.sync_category, count, self.cp
+                        )
 
         logger.info("Bronze layer load complete.")
 
