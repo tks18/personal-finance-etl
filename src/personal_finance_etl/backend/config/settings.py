@@ -55,9 +55,9 @@ class PreferencesManager:
                     data = json.load(f)
                     recents = data.get("recent_configs", [])
                     if isinstance(recents, list):
-                        list_recents = cast("list[Any]", recents)
+                        recents_list = cast(list[Any], recents)  # type: ignore[redundant-cast]  # pyright: ignore[reportUnknownVariableType]
                         return [
-                            str(r) for r in list_recents if isinstance(r, str) and os.path.exists(r)
+                            str(r) for r in recents_list if isinstance(r, str) and os.path.exists(r)
                         ]
                 except Exception:
                     pass
@@ -90,9 +90,9 @@ class PreferencesManager:
                     data = json.load(f)
                     recents = data.get("recent_rules", [])
                     if isinstance(recents, list):
-                        list_recents = cast("list[Any]", recents)
+                        recents_list = cast(list[Any], recents)  # type: ignore[redundant-cast]  # pyright: ignore[reportUnknownVariableType]
                         return [
-                            str(r) for r in list_recents if isinstance(r, str) and os.path.exists(r)
+                            str(r) for r in recents_list if isinstance(r, str) and os.path.exists(r)
                         ]
                 except Exception:
                     pass
@@ -181,7 +181,7 @@ class Settings(BaseModel):
                 for k, v in dict_node.items():
                     _flatten(v, path + [k])
             elif isinstance(node, list):
-                for i, v in enumerate(node):  # type: ignore
+                for i, v in enumerate(node):  # pyright: ignore
                     _flatten(v, path + [str(i)])
             else:
                 # Top level settings have length 1

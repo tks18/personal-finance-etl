@@ -12,7 +12,7 @@ from personal_finance_etl.backend.utils.models import EngineStatus, ExportMode, 
 from personal_finance_etl.backend.utils.theme import LOG_TAG_COLORS, Color
 
 
-class BaseEngineTab(ctk.CTkFrame):
+class BaseEngineTab(ctk.CTkFrame):  # type: ignore[misc]
     """Base tab handling standard 2-column layout and log/queue operations."""
 
     def __init__(self, parent: ctk.CTk | ctk.CTkFrame) -> None:

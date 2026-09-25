@@ -5,7 +5,7 @@ Unified App: Root application window for Personal Finance ETL.
 import os
 from tkinter import filedialog
 
-import customtkinter as ctk
+import customtkinter as ctk  # type: ignore[import-untyped]
 from PIL import Image
 
 from personal_finance_etl.backend.api.engine import PersonalFinanceEngine
@@ -13,7 +13,7 @@ from personal_finance_etl.backend.utils.helpers import resource_path
 from personal_finance_etl.backend.utils.models import EngineStatus, LogLevel
 from personal_finance_etl.backend.utils.theme import Color
 from personal_finance_etl.frontend.commons.docs.guides_window import (
-    show_guides_window,  # type: ignore[import-untyped]
+    show_guides_window,
 )
 from personal_finance_etl.frontend.desktop.base_tab import BaseEngineTab
 

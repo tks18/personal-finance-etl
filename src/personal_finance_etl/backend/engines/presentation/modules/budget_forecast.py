@@ -229,7 +229,7 @@ class BudgetForecastBuilder:
         )
 
         # ── Final select ──────────────────────────────────────────────────────────
-        return lf.select(
+        return lf.select(  # type: ignore[no-any-return]
             [
                 "MONTH_START_DATE",
                 "MONTH_END_DATE",

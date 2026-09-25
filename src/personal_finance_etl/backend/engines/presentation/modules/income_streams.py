@@ -232,7 +232,7 @@ class IncomeStreamsBuilder:
             )
         )
 
-        return lf_income_streams.select(
+        return lf_income_streams.select(  # type: ignore[no-any-return]
             [
                 "MONTH_START_DATE",
                 "MONTH_END_DATE",

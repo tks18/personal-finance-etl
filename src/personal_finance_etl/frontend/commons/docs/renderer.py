@@ -1,7 +1,7 @@
 import base64
 import os
 
-import markdown
+import markdown  # type: ignore[import-untyped]
 
 from personal_finance_etl.backend.utils.helpers import resource_path
 from personal_finance_etl.frontend.commons.docs.manifest import DocsCatalog

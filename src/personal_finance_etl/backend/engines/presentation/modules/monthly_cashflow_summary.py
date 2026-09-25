@@ -310,7 +310,7 @@ class MonthlyCashflowSummaryBuilder:
             pl.col("Total_Net_Worth_Market").alias("Closing_Balance_Asset_Market"),
         )
 
-        return lf_monthly.select(
+        return lf_monthly.select(  # type: ignore[no-any-return]
             [
                 "MONTH_START_DATE",
                 "MONTH_END_DATE",

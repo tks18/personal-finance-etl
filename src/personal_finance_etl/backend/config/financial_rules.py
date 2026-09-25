@@ -388,7 +388,7 @@ class FinancialRules(BaseModel):
         # model_dump() recursively serializes all nested models to dictionaries
         data = self.model_dump()
 
-        def _add_record(path: list[str], val: Any):
+        def _add_record(path: list[str], val: Any) -> None:
             if not path or val is None:
                 return
 
@@ -432,7 +432,7 @@ class FinancialRules(BaseModel):
                 for k, v in dict_node.items():
                     _flatten(v, path + [k])
             elif isinstance(node, list):
-                for item in node:  # type: ignore
+                for item in node:  # pyright: ignore[reportUnknownVariableType]
                     _add_record(path, item)
             else:
                 _add_record(path, node)

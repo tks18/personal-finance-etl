@@ -231,7 +231,7 @@ class SpendAnalyticsBuilder:
             )
         )
 
-        return lf_spend_analytics.select(
+        return lf_spend_analytics.select(  # type: ignore[no-any-return]
             [
                 "MONTH_START_DATE",
                 "MONTH_END_DATE",

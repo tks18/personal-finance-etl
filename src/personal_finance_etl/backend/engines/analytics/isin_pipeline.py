@@ -270,7 +270,7 @@ class IsinPipeline:
                         pt["shadow_val"] += vals["shadow_val"]
                         pt["after_tax_val"] += vals.get("after_tax_val", 0.0)
 
-                    def _update_group(
+                    def _update_group(  # type: ignore[no-untyped-def]
                         group_key: str,
                         cf_dict: dict[str, Any],
                         pt_dict: dict[str, Any],

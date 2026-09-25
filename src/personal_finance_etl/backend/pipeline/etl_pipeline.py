@@ -210,8 +210,8 @@ class ETLOrchestrator:
                 logger.info(
                     "Phase 1/5: Bypassing File Discoverer. Fetching pending files from Raw Store..."
                 )
-                new_files: dict[str, list[str]] = {}
-                changed_files: dict[str, list[str]] = cp.artifacts.get_pending_files()
+                new_files = {}
+                changed_files = cp.artifacts.get_pending_files()
                 actionable_all = changed_files
 
             extracted_data = self._extract(cp, actionable_files=actionable_all)

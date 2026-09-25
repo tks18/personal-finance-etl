@@ -21,7 +21,7 @@ def show_guides_window() -> None:
     html = renderer.build_html_app()
     icon_path = resource_path("logo.ico")
 
-    webview.create_window(  # type: ignore[reportUnknownMemberType]
+    webview.create_window(  # pyright: ignore[reportUnknownMemberType]
         "Shan's Personal Finance ETL - Guides & About",
         html=html,
         width=1280,

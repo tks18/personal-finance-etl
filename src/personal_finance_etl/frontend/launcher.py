@@ -46,7 +46,7 @@ def main() -> None:
     else:
         # Default to tkinter if no command, or if command == "tkinter"
         app = DesktopApp()
-        app.mainloop()  # type: ignore
+        app.mainloop()  # pyright: ignore[reportUnknownMemberType]
 
 
 if __name__ == "__main__":

@@ -517,7 +517,7 @@ def get_monte_carlo_fire_batch(
 
         sorr_months = mc_rules.sorr_cagr_window_months
 
-        gens = numba.typed.List()  # type: ignore
+        gens = numba.typed.List()  # pyright: ignore[reportCallIssue]
         for seed in seed_ints:
             gens.append(np.random.default_rng(seed))
 

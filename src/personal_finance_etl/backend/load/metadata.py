@@ -60,14 +60,14 @@ class MetaLayer:
             # Retrieve metadata from Raw Store registry directly
             reg = cp.artifacts.get_registry()
             file_hash: str = str(reg.get(unique_path, ""))
-            file_size: int = 0
+            file_size = 0
         else:
             file_type = FILE_TYPE_MAP.get(category, "csv")
-            file_hash: str = compute_file_hash(filepath)
+            file_hash = compute_file_hash(filepath)
             try:
-                file_size: int = os.path.getsize(filepath)
+                file_size = os.path.getsize(filepath)
             except OSError:
-                file_size: int = 0
+                file_size = 0
 
         file_id = generate_file_id(filepath)
 

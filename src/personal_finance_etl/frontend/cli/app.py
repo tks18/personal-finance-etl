@@ -31,9 +31,9 @@ from personal_finance_etl.frontend.commons.docs.guides_window import show_guides
 if sys.platform == "win32":
     try:
         if hasattr(sys.stdout, "reconfigure"):
-            sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
+            sys.stdout.reconfigure(encoding="utf-8")  # pyright: ignore
         if hasattr(sys.stderr, "reconfigure"):
-            sys.stderr.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
+            sys.stderr.reconfigure(encoding="utf-8")  # pyright: ignore
     except Exception:
         pass
 

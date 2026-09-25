@@ -256,7 +256,7 @@ class CashflowStatementBuilder:
             )
         )
 
-        return lf_statement.select(
+        return lf_statement.select(  # type: ignore[no-any-return]
             [
                 "MONTH_START_DATE",
                 "MONTH_END_DATE",
