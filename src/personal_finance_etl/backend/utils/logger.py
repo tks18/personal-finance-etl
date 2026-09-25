@@ -55,7 +55,8 @@ def add_file_handler(file_path: str) -> None:
     handler = logging.FileHandler(file_path, mode="w", encoding="utf-8")
     handler.setLevel(logging.DEBUG)  # Enterprise logging captures DEBUG
     formatter = logging.Formatter(
-        "%(asctime)s | %(levelname)-8s | %(process)d | %(module)s:%(funcName)s:%(lineno)d | %(message)s"
+        "%(asctime)s.%(msecs)03d | %(levelname)-8s | [%(module)s:%(funcName)s:%(lineno)d] | %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
     )
     handler.setFormatter(formatter)
     logger.addHandler(handler)
