@@ -1,5 +1,3 @@
-import os
-
 from personal_finance_etl.backend.config.settings import FileHashPolicy
 from personal_finance_etl.backend.load.control_plane.artifact_repo import ArtifactRepository
 from personal_finance_etl.backend.load.control_plane.utils import FILE_TYPE_MAP, compute_file_hash
@@ -14,16 +12,17 @@ class FileSyncService:
         discovered_files: dict[str, list[str]],
         hash_policy: FileHashPolicy,
         full_replace_categories: list[str],
-    ) -> tuple[dict[str, list[str]], dict[str, list[str]], int]:
+    ) -> tuple[dict[str, list[str]], dict[str, list[str]], int, list[tuple[str, str, str]]]:
 
         registry = self.artifact_repo.get_registry()
-        # Build hash index for detecting renames
-        hash_to_paths: dict[str, list[str]] = {}
-        for p, h in registry.items():
-            hash_to_paths.setdefault(h, []).append(p)
+        # Build hash index for detecting renames, scoped by category
+        hash_to_paths: dict[str, dict[str, list[str]]] = {}
+        for p, (h, cat) in registry.items():
+            hash_to_paths.setdefault(cat, {}).setdefault(h, []).append(p)
 
         new_files: dict[str, list[str]] = {}
         changed_files: dict[str, list[str]] = {}
+        renames: list[tuple[str, str, str]] = []
 
         for category, filepaths in discovered_files.items():
             new_files[category] = []
@@ -41,27 +40,27 @@ class FileSyncService:
                     disk_hash = compute_file_hash(filepath)
                     # Check if this is a rename: same hash exists in registry, but the old path is no longer on disk
                     is_rename = False
-                    if disk_hash in hash_to_paths:
-                        for old_path in hash_to_paths[disk_hash]:
+                    cat_hashes = hash_to_paths.get(category, {})
+                    if disk_hash in cat_hashes:
+                        for old_path in cat_hashes[disk_hash]:
                             # If the old path is not active on disk anymore, treat it as a rename
                             if old_path not in active_rel_paths:
-                                # We update the registry to point to the new path
-                                self.artifact_repo.db.conn.execute(
-                                    "UPDATE cp_file_registry SET relative_path = ?, file_name = ? WHERE relative_path = ?",
-                                    (rel_path, os.path.basename(filepath), old_path),
-                                )
+                                # We update the registry and payloads to point to the new path properly
+                                self.artifact_repo.migrate_identity(old_path, filepath)
+
                                 # Update our local registry copy so we don't treat it as new
-                                registry[rel_path] = disk_hash
+                                registry[rel_path] = (disk_hash, category)
                                 del registry[old_path]
                                 # No need to ingest binary, it's just a rename
                                 is_rename = True
+                                renames.append((old_path, filepath, category))
                                 break
 
                     if not is_rename:
                         new_files[category].append(filepath)
                 elif should_check_hash:
                     disk_hash = compute_file_hash(filepath)
-                    if disk_hash != registry[rel_path]:
+                    if disk_hash != registry[rel_path][0]:
                         changed_files[category].append(filepath)
 
             if category in full_replace_categories:
@@ -79,4 +78,4 @@ class FileSyncService:
 
         self.artifact_repo.ingest_binaries(actionable_files)
 
-        return new_files, changed_files, files_skipped
+        return new_files, changed_files, files_skipped, renames
