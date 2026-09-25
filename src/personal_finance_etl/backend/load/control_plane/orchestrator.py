@@ -1,4 +1,5 @@
 import os
+from typing import Any
 
 from filelock import FileLock, Timeout
 
@@ -22,8 +23,6 @@ class ControlPlane:
         self.runs = RunRepository(self.db)
         self.file_sync = FileSyncService(self.artifacts)
         self.lock_path = os.path.join(base_path, "pipeline.lock")
-        from typing import Any
-
         self._lock: Any = FileLock(self.lock_path)
 
     # ---------------------------------------------------------

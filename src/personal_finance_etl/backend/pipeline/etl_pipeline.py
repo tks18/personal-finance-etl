@@ -19,7 +19,11 @@ from personal_finance_etl.backend.load.control_plane import ControlPlane
 from personal_finance_etl.backend.load.database import DuckDBManager
 from personal_finance_etl.backend.load.gold import GoldLayer
 from personal_finance_etl.backend.load.metadata import MetaLayer
-from personal_finance_etl.backend.load.registry import BRONZE_CONTRACT_REGISTRY, validate_registry
+from personal_finance_etl.backend.load.registry import (
+    BRONZE_CONTRACT_REGISTRY,
+    DATA_CONTRACT_REGISTRY,
+    validate_registry,
+)
 from personal_finance_etl.backend.load.silver import SilverLayer
 from personal_finance_etl.backend.pipeline.benchmark_pipeline import BenchmarkPipeline
 from personal_finance_etl.backend.pipeline.core.extractor import DataExtractor
@@ -265,7 +269,6 @@ class ETLOrchestrator:
             self._run_engines()
 
             # Strict DataContract Validation
-            from personal_finance_etl.backend.load.registry import DATA_CONTRACT_REGISTRY
 
             registered_contracts = {c.contract_id for c in DATA_CONTRACT_REGISTRY}
             for df_key in self.dfs.keys():

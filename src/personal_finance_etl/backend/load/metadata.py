@@ -271,7 +271,6 @@ class MetaLayer:
             )
 
         self.conn.execute("DELETE FROM meta.m_Data_Contracts")
-        from personal_finance_etl.backend.load.registry import BRONZE_CONTRACT_REGISTRY
 
         for b_contract in BRONZE_CONTRACT_REGISTRY:
             self.conn.execute(

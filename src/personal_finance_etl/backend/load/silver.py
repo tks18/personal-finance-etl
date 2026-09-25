@@ -79,10 +79,10 @@ class SilverLayer:
 
         # Phase 2: Insert all data in forward topological order (Dimensions -> Facts)
         for contract in contracts:
-          if contract.contract_id in dfs:
-              self._write(
-                  dfs[contract.contract_id],
-                  contract.physical_table,
-              )
+            if contract.contract_id in dfs:
+                self._write(
+                    dfs[contract.contract_id],
+                    contract.physical_table,
+                )
 
         logger.info("Silver layer load complete.")

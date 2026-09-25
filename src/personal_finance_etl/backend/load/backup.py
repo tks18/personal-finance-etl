@@ -5,6 +5,7 @@ from datetime import datetime
 
 from filelock import FileLock, Timeout
 
+from personal_finance_etl.backend.utils.helpers import get_temp_dir
 from personal_finance_etl.backend.utils.logger import logger
 
 
@@ -43,8 +44,6 @@ class SystemBackupManager:
                 ts = datetime.now().strftime("%Y%m%d_%H%M%S")
                 zip_filename = f"pf_etl_snapshot_{ts}.zip"
                 zip_path = os.path.join(self.backup_dir, zip_filename)
-
-                from personal_finance_etl.backend.utils.helpers import get_temp_dir
 
                 with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
                     if os.path.exists(self.sqlite_path):
