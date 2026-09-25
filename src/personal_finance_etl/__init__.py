@@ -7,11 +7,13 @@ enforcing a rigid boundary between the Presentation Layer (Frontend) and the Dom
 
 Architecture Overview:
 ----------------------
-1. `personal_finance_etl.backend`: Core execution logic. Contains the DuckDB lakehouse orchestration,
-   Polars-based DAG transformations, Numba JIT-compiled stochastic Monte Carlo
-   simulations, and the `PersonalFinanceEngine` API facade.
-2. `personal_finance_etl.frontend`: User interface and presentation layer. Completely decoupled from
-   state management, it drives the application purely by consuming the `personal_finance_etl.backend.api`.
+1. `personal_finance_etl.backend`: Core execution logic. Implements a dual-plane architecture:
+   - Control Plane (SQLite): The operational source of truth for run lifecycle, ACID telemetry, and explicit data lineage.
+   - Analytical Engine (DuckDB): The presentation and calculation engine serving Bronze, Silver, and Gold analytical contracts.
+   - Transformation (Polars): High-performance DAG operations and Numba JIT-compiled stochastic Monte Carlo simulations.
+   - API Facade: Exposes the `PersonalFinanceEngine` as the strict boundary boundary.
+2. `personal_finance_etl.frontend`: User interface and presentation layer (CLI, Desktop GUI, and Document Rendering).
+   Completely decoupled from state management, driving the application purely by consuming the API facade.
 
 Author: Sudharshan TK
 """

@@ -1,10 +1,11 @@
 """
 Frontend Presentation Layer.
 
-This package contains all user-facing interfaces and interaction logic.
+This package contains all user-facing interfaces (CustomTkinter Desktop GUI, Rich CLI,
+and Pywebview Documentation renderer).
 It is strictly isolated from the backend business logic and infrastructure.
 No module within this package should import from `personal_finance_etl.backend` except for
-the `personal_finance_etl.backend.api` facade.
+the `personal_finance_etl.backend.api` facade and decoupled utility models.
 """
 
 from personal_finance_etl.frontend.cli.app import main_cli
