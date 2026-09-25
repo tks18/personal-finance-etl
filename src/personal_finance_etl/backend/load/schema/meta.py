@@ -35,4 +35,16 @@ CREATE TABLE IF NOT EXISTS meta.m_Settings (
     Setting_Key   TEXT NOT NULL,
     Setting_Value TEXT NOT NULL
 );
+
+-- Contract Authority (Latest Run Only)
+CREATE TABLE IF NOT EXISTS meta.m_Data_Contracts (
+    contract_id       TEXT NOT NULL,
+    layer             TEXT NOT NULL,
+    physical_table    TEXT NOT NULL,
+    domain            TEXT,
+    grain             TEXT,
+    producer          TEXT,
+    is_full_replace   BOOLEAN,
+    publication_order INTEGER
+);
 """
