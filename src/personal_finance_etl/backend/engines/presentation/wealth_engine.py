@@ -109,7 +109,7 @@ class WealthPresentationEngine:
             dfs, base_lf, rules=self.rules
         ).build()
 
-        logger.info(f"  -> Built {len(results)} BI presentation tables in DAG.")
+        logger.debug(f"  -> Built {len(results)} BI presentation tables in DAG.")
 
         # 8. Post-Processing: Clean NaN values for BI compatibility (DuckDB / Power BI)
         return {key: lf.with_columns(cs.float().fill_nan(None)) for key, lf in results.items()}

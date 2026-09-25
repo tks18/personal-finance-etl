@@ -25,7 +25,7 @@ class PostProcessingPipeline:
     ) -> dict[str, pl.DataFrame]:
 
         if self.status_queue:
-            logger.info("Post-processing: Scanning temporary parquet files...")
+            logger.debug("Post-processing: Scanning temporary parquet files...")
             self.status_queue.put(
                 EngineStatus(
                     msg="",
@@ -41,7 +41,7 @@ class PostProcessingPipeline:
         unique_dates = unique_dates_df["Closing_Date"].sort().to_list()
 
         if self.status_queue:
-            logger.info("Post-processing: Aggregating portfolio metrics...")
+            logger.debug("Post-processing: Aggregating portfolio metrics...")
             self.status_queue.put(
                 EngineStatus(
                     msg="",
@@ -53,7 +53,7 @@ class PostProcessingPipeline:
         res_dict = self.postprocessor.run(lazy_df, unique_dates, pipeline_res)
 
         if self.status_queue:
-            logger.info("Post-processing: Collecting final output...")
+            logger.debug("Post-processing: Collecting final output...")
             self.status_queue.put(
                 EngineStatus(
                     msg="",
