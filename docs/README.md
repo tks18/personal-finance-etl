@@ -16,10 +16,25 @@ flowchart LR
     RENDER --> GH["GitHub"]
     RENDER --> CLI["CLI"]
     RENDER --> GUI["Desktop"]
-    MD --> WIKI["Future Wiki<br/>guided knowledge layer"]
+    MD --> WIKI["GitHub Wiki<br/>guided exploration layer"]
 ```
 
 The Markdown files remain the authoritative source.
+
+> 🧭 **Prefer a guided tour?** Start with the [GitHub Wiki](https://github.com/tks18/personal-finance-etl/wiki). It walks through the project from why it exists → architecture → data lifecycle → Control Plane → financial model → investments → tax → wealth → FIRE → warehouse/BI → reliability → extensibility. Come back to `/docs` whenever you want the canonical technical depth.
+
+```text
+Wiki
+→ guided exploration
+
+/docs
+→ canonical technical documentation
+
+source code
+→ implementation ground truth
+```
+
+[← Back to the repository README](../README.md) · [Explore the Wiki →](https://github.com/tks18/personal-finance-etl/wiki)
 
 ---
 
