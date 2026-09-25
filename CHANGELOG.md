@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [6.4.1](https://github.com/tks18/personal-finance-etl/compare/6.4.0...6.4.1) (2026-09-25)
+
+
+### Bug Fixes 🛠
+
+* **backend/pipeline:** fix serious windows path bug due to which system failed to ingest files ([4189c46](https://github.com/tks18/personal-finance-etl/commit/4189c46c3321f1a9ab48a4f9e1b8f2ef2a6b7d82))
+
 ## [6.4.0](https://github.com/tks18/personal-finance-etl/compare/6.3.0...6.4.0) (2026-09-25)
 
 
