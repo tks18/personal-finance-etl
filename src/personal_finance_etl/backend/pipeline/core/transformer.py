@@ -184,26 +184,6 @@ class TransformationDAG:
         calendar_result = d_calendar_lazy.collect(engine="streaming")
         logger.info(f"  -> Generated {calendar_result.height} rows for Master Calendar.")
 
-        rules_records = []
-        if self.rules:
-            rules_records = self.rules.export_to_db_records()
-        if not rules_records:
-            rules_records = [
-                {
-                    "Rule_Domain": "None",
-                    "Rule_Type": "None",
-                    "Target_Level": "None",
-                    "Target_ID": "None",
-                }
-            ]
-        df_rules_lazy = pl.LazyFrame(rules_records).with_columns(
-            pl.col("Rule_Domain").cast(pl.String),
-            pl.col("Rule_Type").cast(pl.String),
-            pl.col("Target_Level").cast(pl.String),
-            pl.col("Target_ID").cast(pl.String),
-        )
-        rules_result = df_rules_lazy.collect()
-
         return {
             "df_d_income_category": results[0],
             "df_d_income_subcategory": results[1],
@@ -223,5 +203,4 @@ class TransformationDAG:
             "df_f_tf_inv_sale": results[15],
             "df_d_investment_master": results[16],
             "df_d_calendar": calendar_result,
-            "_ETL_Metadata_Financial_Rules": rules_result,
         }
