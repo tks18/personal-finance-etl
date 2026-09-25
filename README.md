@@ -926,7 +926,7 @@ Desktop
 Packaged distribution
 ```
 
-The prospective Wiki will sit above this source of truth rather than becoming a competing copy.
+The [GitHub Wiki](https://github.com/tks18/personal-finance-etl/wiki) now sits above this source of truth as the guided exploration layer rather than becoming a competing copy.
 
 Yes, the documentation explaining the architecture now has an architecture. 😅
 
@@ -1178,11 +1178,30 @@ See the full [Roadmap](docs/about/roadmap.md).
 
 ---
 
-## 24 · Documentation
+## 24 · Explore the project
 
-The repository documentation is the authoritative technical knowledge base.
+The repository now has two complementary knowledge surfaces built on top of the source code.
 
-## Explore the docs
+| I want to... | Go here |
+| --- | --- |
+| 🧭 **Understand the system as a guided journey** | [Explore the Wiki](https://github.com/tks18/personal-finance-etl/wiki) |
+| 📚 **Inspect the canonical technical specification** | [Open `/docs`](https://github.com/tks18/personal-finance-etl/blob/master/docs/README.md) |
+| 🔬 **Verify the implementation itself** | [Browse the source](https://github.com/tks18/personal-finance-etl) |
+
+```text
+README
+   ↓
+choose the depth you need
+   ├── Wiki   → guided exploration
+   ├── /docs  → canonical technical knowledge
+   └── source → implementation ground truth
+```
+
+The Wiki connects the architecture, data lifecycle, financial model, investment engine, tax, wealth, FIRE, BI, reliability, and project journey as one guided tour.
+
+`/docs` remains the authoritative technical documentation. The source code remains the implementation ground truth.
+
+### Explore the canonical docs
 
 | Section | Start here |
 | --- | --- |
