@@ -48,23 +48,23 @@ class StockPipeline:
         rules: FinancialRules,
         logger: logging.Logger,
     ) -> AssetPipelineResult:
-        logger.info("Parsing unstructured Stock Excel files...")
+        logger.debug("Parsing unstructured Stock Excel files...")
         market_data = get_stg_stock_market_data(
             extracted.stock_market_data_raw, rules.DEFAULT_CURRENCY_ID
         )
         market_data_ref = get_stg_stock_market_data_ref(market_data)
 
-        logger.info("Parsing Stock Trade Orders...")
+        logger.debug("Parsing Stock Trade Orders...")
         base_orders = get_base_stock_transactions(extracted.stock_transactions_raw)
         purchase_trans = transform_stg_stock_trades(base_orders, trade_type="BUY")
         sale_trans = transform_stg_stock_trades(base_orders, trade_type="SELL")
 
-        logger.info("Aggregating Stock Purchases...")
+        logger.debug("Aggregating Stock Purchases...")
         purchase_ref = get_purchase_reference(
             purchase_trans, "Stock name", "Execution date and time", "Price", "Quantity"
         )
 
-        logger.info("Processing Stock Sales...")
+        logger.debug("Processing Stock Sales...")
         sale_ref = get_sale_reference(
             sale_trans, purchase_ref, "Stock name", "Execution date and time", "Price", "Quantity"
         )
@@ -88,14 +88,14 @@ class MutualFundPipeline:
         rules: FinancialRules,
         logger: logging.Logger,
     ) -> AssetPipelineResult:
-        logger.info("Parsing unstructured Mutual Fund Excel files...")
+        logger.debug("Parsing unstructured Mutual Fund Excel files...")
         mapping = extracted.stg_mf_isin_mapping
         market_data = get_stg_mf_market_data(
             extracted.mf_market_data_raw, mapping, rules.DEFAULT_CURRENCY_ID
         )
         market_data_ref = get_stg_mf_market_data_ref(market_data)
 
-        logger.info("Parsing Mutual Fund Trade Orders...")
+        logger.debug("Parsing Mutual Fund Trade Orders...")
         base_orders = get_base_mf_transactions(extracted.mf_transactions_raw)
         purchase_trans = transform_stg_mf_trades(
             base_orders, mapping, rules.MF_SCHEME_MAPPINGS, trade_type="PURCHASE"
@@ -104,12 +104,12 @@ class MutualFundPipeline:
             base_orders, mapping, rules.MF_SCHEME_MAPPINGS, trade_type="REDEEM"
         )
 
-        logger.info("Aggregating Mutual Fund Purchases...")
+        logger.debug("Aggregating Mutual Fund Purchases...")
         purchase_ref = get_purchase_reference(
             purchase_trans, "Final Scheme Name", "Date", "NAV", "Units"
         )
 
-        logger.info("Processing Mutual Fund Sales...")
+        logger.debug("Processing Mutual Fund Sales...")
         sale_ref = get_sale_reference(
             sale_trans, purchase_ref, "Final Scheme Name", "Date", "NAV", "Units"
         )

@@ -53,7 +53,7 @@ class TransformationDAG:
 
     def run(self, extracted: ExtractionResult) -> dict[str, pl.DataFrame]:
         assert self.rules is not None, "FinancialRules must be provided to TransformationDAG"
-        logger.info("Transforming Base Dimensions...")
+        logger.debug("Transforming Base Dimensions...")
         mappings = extracted.mappings
         d_income_category_lazy = transform_d_income_category(
             extracted.zcategory, mappings["category"]
@@ -76,7 +76,7 @@ class TransformationDAG:
         d_currency_lazy = transform_d_currency(extracted.currency, mappings["currency"])
 
         # Load mapping dependencies
-        logger.info("Transforming Macro Parameters and Opening Balances...")
+        logger.debug("Transforming Macro Parameters and Opening Balances...")
         d_macro_parameters_lazy = transform_d_macro_parameters(extracted.raw_macro_parameters)
 
         f_opening_balances_lazy = transform_f_opening_balances(
@@ -99,7 +99,7 @@ class TransformationDAG:
         )
 
         if len(extracted.mf_market_data_raw.collect_schema().names()) == 0:
-            logger.info("Empty incremental frames detected. Skipping AssetPipelines...")
+            logger.debug("Empty incremental frames detected. Skipping AssetPipelines...")
             stg_investment_market_data_lazy = pl.LazyFrame()
             f_tf_inv_purchase_data_lazy = pl.LazyFrame()
             f_tf_inv_sale_data_lazy = pl.LazyFrame()
@@ -128,12 +128,12 @@ class TransformationDAG:
                 sale_ref_lazy_list, self.rules.DEFAULT_CURRENCY_ID
             )
 
-            logger.info("Building Investment Master...")
+            logger.debug("Building Investment Master...")
             d_tf_investment_master_lazy = get_d_investment_master(
                 master_ref_lazy_list, extracted.stg_benchmark_mapping
             )
 
-        logger.info("Generating Master Calendar...")
+        logger.debug("Generating Master Calendar...")
         # Get first market_data to seed calendar (simplified since they're processed downstream anyway)
         df_bounds_lazy = get_stg_calendar_ref(
             f_income_transactions_lazy,
@@ -146,7 +146,7 @@ class TransformationDAG:
         )
         d_calendar_lazy = transform_d_calendar(df_bounds_lazy)
 
-        logger.info("Executing Base Transformation DAG in Parallel...")
+        logger.debug("Executing Base Transformation DAG in Parallel...")
         self.status_queue.put(
             EngineStatus(
                 msg="",
@@ -178,11 +178,13 @@ class TransformationDAG:
             engine="streaming",
         )
 
-        logger.info(f"  -> Base Transformation DAG successfully mapped {len(results)} core tables.")
+        logger.debug(
+            f"  -> Base Transformation DAG successfully mapped {len(results)} core tables."
+        )
 
-        logger.info("Executing Calendar Generation DAG...")
+        logger.debug("Executing Calendar Generation DAG...")
         calendar_result = d_calendar_lazy.collect(engine="streaming")
-        logger.info(f"  -> Generated {calendar_result.height} rows for Master Calendar.")
+        logger.debug(f"  -> Generated {calendar_result.height} rows for Master Calendar.")
 
         return {
             "df_d_income_category": results[0],

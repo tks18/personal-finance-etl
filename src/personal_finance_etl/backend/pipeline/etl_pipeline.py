@@ -133,7 +133,7 @@ class ETLOrchestrator:
 
         validate_registry()
 
-        start_time = time.time()
+        start_time = time.perf_counter()
 
         add_queue_handler(cast("multiprocessing.Queue[Any]", self.status_queue))
 
@@ -183,10 +183,10 @@ class ETLOrchestrator:
 
             cp.runs.update_run_status(run_id, "RUNNING")
 
-            t_ext_start = time.time()
+            t_ext_start = time.perf_counter()
             renames: list[tuple[str, str, str]] = []
             if not self.cfg.DISABLE_FILE_DISCOVERER:
-                logger.info("Phase 1/5: Discovering files and detecting changes...")
+                logger.info("[PHASE] --- 1/5: Discovery & Sync ---")
 
                 discovered_files = categorize_statement_files(
                     self.cfg.STATEMENTS_FOLDER, strict=True
@@ -210,6 +210,9 @@ class ETLOrchestrator:
                     self.cfg.MACRO_PARAMETERS_CSV_PATH.replace("\\", "/")
                 ]
                 discovered_files["column_master"] = [self.cfg.COLUMN_MASTER_PATH.replace("\\", "/")]
+                logger.info(
+                    "[DISCOV] Injected 8 dynamic configuration assets (7 CSV, 1 SQLite DB)."
+                )
 
                 # ControlPlane is the single source of truth for all Phase 1 logic:
                 # file change detection, pruning of obsolete blobs, and binary ingestion.
@@ -244,12 +247,12 @@ class ETLOrchestrator:
 
             extracted_data = self._extract(cp, actionable_files=actionable_all)
             logger.info(
-                f"Phase 1 Complete [{time.time() - t_ext_start:.2f}s] - Actionable streams loaded into memory."
+                f"Phase 1 Complete [{time.perf_counter() - t_ext_start:.2f}s] - Actionable streams loaded into memory."
             )
 
             # Bronze Phase
-            t_bronze_start = time.time()
-            logger.info("Phase 2/5: Upserting new datasets into Bronze Lakehouse...")
+            t_bronze_start = time.perf_counter()
+            logger.info("[PHASE] --- 2/5: Upserting new datasets into Bronze Lakehouse ---")
 
             bronze = BronzeLayer(self.db_manager, cp, meta_layer)
             if renames:
@@ -258,27 +261,29 @@ class ETLOrchestrator:
 
             bronze.load(extracted_data, actionable_all)
             logger.info(
-                f"Phase 2 Complete [{time.time() - t_bronze_start:.2f}s] - Bronze layer synchronized."
+                f"Phase 2 Complete [{time.perf_counter() - t_bronze_start:.2f}s] - Bronze layer synchronized."
             )
 
             # Full Dataset Read
-            logger.info("Fetching complete dataset from Bronze Lakehouse for Transformation...")
+            logger.debug(
+                "[ENGINE:READ] Fetching complete dataset from Bronze Lakehouse for Transformation..."
+            )
             full_dataset = bronze.get_full_dataset(extracted_data.mappings)
 
             # Transformation Phase
-            t_trans_start = time.time()
-            logger.info("Phase 3/5: Transforming and harmonizing data streams...")
+            t_trans_start = time.perf_counter()
+            logger.info("[PHASE] --- 3/5: Transforming and harmonizing data streams ---")
             self._transform(full_dataset)
             logger.info(
-                f"Phase 3 Complete [{time.time() - t_trans_start:.2f}s] - DAG mapped {len(self.dfs)} base tables."
+                f"[PHASE] 3/5 Complete [{time.perf_counter() - t_trans_start:.2f}s] - DAG mapped {len(self.dfs)} base tables."
             )
 
             # Phase 3.5 Dynamic Extraction
             self._process_benchmark(cp, bronze)
 
             # Analytics Phase
-            t_eng_start = time.time()
-            logger.info("Phase 4/5: Executing Advanced Analytics & Monte Carlo engines...")
+            t_eng_start = time.perf_counter()
+            logger.info("[PHASE] --- 4/5: Executing Advanced Analytics & Monte Carlo engines ---")
             self._run_engines()
 
             # Strict DataContract Validation
@@ -295,16 +300,16 @@ class ETLOrchestrator:
                 raise RuntimeError(f"Engine failed to produce required tables: {missing_contracts}")
 
             logger.info(
-                f"Phase 4 Complete [{time.time() - t_eng_start:.2f}s] - Presentation logic built {len(self.dfs)} total tables."
+                f"[PHASE] 4/5 Complete [{time.perf_counter() - t_eng_start:.2f}s] - Presentation logic built {len(self.dfs)} total tables."
             )
 
             # Load Phase (Silver & Gold)
-            t_load_start = time.time()
-            logger.info("Phase 5/5: Fully replacing Silver and Gold analytical layers...")
+            t_load_start = time.perf_counter()
+            logger.info("[PHASE] --- 5/5: Fully replacing Silver and Gold analytical layers ---")
             SilverLayer(self.db_manager).load(self.dfs)
             GoldLayer(self.db_manager).load(self.dfs)
             logger.info(
-                f"Phase 5 Complete [{time.time() - t_load_start:.2f}s] - Disk synchronization successful."
+                f"[PHASE] 5/5 Complete [{time.perf_counter() - t_load_start:.2f}s] - Disk synchronization successful."
             )
 
             # Write ETL metadata to DB
@@ -333,11 +338,12 @@ class ETLOrchestrator:
             cp.runs.finish_run(run_id, "SUCCESS")
 
             self.status_queue.put(EngineStatus(msg="", data=None, progress=1.0))
-            total_time = time.time() - start_time
+            total_time = time.perf_counter() - start_time
             logger.info(
                 f"✅ Pipeline Execution Successful in {total_time:.2f} seconds. Total Nodes: {len(self.dfs)}"
             )
         except Exception as e:
+            logger.exception("CRITICAL PIPELINE FAILURE:")
             # Rollback all changes if any phase fails
             try:
                 self.db_manager.conn.execute("ROLLBACK")

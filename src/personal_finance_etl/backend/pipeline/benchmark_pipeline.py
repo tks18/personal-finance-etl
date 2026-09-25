@@ -51,12 +51,14 @@ class BenchmarkPipeline:
         # 1. Fetch cached bounds from Bronze Layer (Encapsulated)
         df_bronze_cached = self.bronze.get_table("r_Benchmark_Data")
         if df_bronze_cached.is_empty():
-            logger.info("  -> Bronze Cache: EMPTY. A full historical extraction will be performed.")
+            logger.debug(
+                "[ENGINE:BENCHMARK] Bronze Cache: EMPTY. A full historical extraction will be performed."
+            )
         else:
             cached_min = df_bronze_cached.select(pl.min("Date")).item()
             cached_max = df_bronze_cached.select(pl.max("Date")).item()
-            logger.info(
-                f"  -> Bronze Cache: FOUND {df_bronze_cached.height} rows ({cached_min} to {cached_max})."
+            logger.debug(
+                f"[ENGINE:BENCHMARK] Bronze Cache: FOUND {df_bronze_cached.height} rows ({cached_min} to {cached_max})."
             )
 
         # 2. Extract Delta from external sources to Raw Store
@@ -70,7 +72,7 @@ class BenchmarkPipeline:
 
         # 3. Load Delta directly into Bronze Layer
         if not df_new_raw.is_empty():
-            logger.info("Upserting new Parquet chunks to Bronze...")
+            logger.debug("[ENGINE:BENCHMARK] Upserting new Parquet chunks to Bronze...")
             row_counts = self.bronze.upsert_table(
                 df=df_new_raw,
                 table_name="bronze.r_Benchmark_Data",
@@ -93,8 +95,8 @@ class BenchmarkPipeline:
         transformer = BenchmarkTransformer(self.status_queue)
         df_silver = transformer.transform(df_bronze_cached, start_date, end_date)
 
-        logger.info(
-            f"  -> Transformation Complete: Silver Benchmark table has {df_silver.height} market periods."
+        logger.debug(
+            f"[ENGINE:BENCHMARK] Transformation Complete: Silver Benchmark table has {df_silver.height} market periods."
         )
 
         return df_silver

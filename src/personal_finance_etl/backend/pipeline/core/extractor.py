@@ -1,5 +1,6 @@
 import io
 import os
+import time
 from collections.abc import Callable
 
 import polars as pl
@@ -56,7 +57,7 @@ class DataExtractor:
         # Determine files to process
         pending_files = actionable_files or self.cp.artifacts.get_pending_files()
 
-        logger.info("Extracting Base Tables from SQLite...")
+        logger.debug("[EXTRACT:DETAIL] Extracting Base Tables from SQLite...")
         # Get sqlite file
         sqlite_files = pending_files.get("sqlite_source", [])
         if sqlite_files:
@@ -68,8 +69,8 @@ class DataExtractor:
                     os.path.basename(sqlite_path), os.path.dirname(sqlite_path), sqlite_bytes
                 )
             )
-            logger.info(
-                "  -> Successfully extracted 5 base reference tables from SQLite Source bytes."
+            logger.debug(
+                "[EXTRACT:DETAIL] Successfully extracted 5 base reference tables from SQLite Source bytes."
             )
         else:
             zcategory_lazy = pl.LazyFrame()
@@ -129,10 +130,26 @@ class DataExtractor:
         stock_pl = pending_files.get("stock_pl", [])
         stock_orders = pending_files.get("stock_orders", [])
 
-        total_files = len(mf_holdings) + len(mf_orders) + len(stock_pl) + len(stock_orders)
+        excel_count = len(mf_holdings) + len(mf_orders) + len(stock_pl) + len(stock_orders)
+        csv_count = sum(
+            len(pending_files.get(k, []))
+            for k in [
+                "mf_isin",
+                "benchmark_mapping",
+                "opening_balances",
+                "benchmark_master",
+                "macro_parameters",
+                "column_master",
+            ]
+        )
+        sqlite_count = len(pending_files.get("sqlite_source", []))
+        total_payloads = excel_count + csv_count + sqlite_count
 
-        if total_files > 0:
-            logger.info(f"Extracting {total_files} Excel Binaries from Raw Store...")
+        logger.info(
+            f"[EXTRACT] Pulled {total_payloads} binary payloads from Raw Store ({excel_count} Excel, {csv_count} CSV, {sqlite_count} DB)"
+        )
+
+        if excel_count > 0:
             mf_market_data_raw = extract_mf_market_data_raw(
                 self._get_file_list_with_bytes(mf_holdings)
             )
@@ -145,7 +162,6 @@ class DataExtractor:
             stock_transactions_raw = extract_stock_transactions_raw(
                 self._get_file_list_with_bytes(stock_orders)
             )
-            logger.info(f"  -> Successfully parsed {total_files} raw Excel payloads.")
         else:
             mf_market_data_raw = pl.LazyFrame()
             mf_transactions_raw = pl.LazyFrame()
@@ -171,7 +187,7 @@ class DataExtractor:
             column_master=df_column_master,
         )
 
-        logger.info("Running Gatekeeper Schema Validation...")
+        logger.info("[QUALITY] Running Gatekeeper Schema Validation on 16 active streams...")
         self.status_queue.put(
             EngineStatus(
                 msg="",
@@ -199,7 +215,11 @@ class DataExtractor:
         ]
 
         try:
+            t0 = time.perf_counter()
             pl.collect_all([lf.head(1) for lf in validation_frames])
+            logger.info(
+                f"[QUALITY] Gatekeeper validated 16 schemas with 0 violations in {(time.perf_counter() - t0) * 1000:.2f}ms."
+            )
         except Exception as e:
             self.status_queue.put(
                 EngineStatus(
