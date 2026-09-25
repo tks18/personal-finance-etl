@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS cp_runs (
     schema_version TEXT,
     settings_snapshot_id TEXT,
     rules_snapshot_id TEXT,
-    execution_log TEXT,
+    execution_log BLOB,
     FOREIGN KEY(settings_snapshot_id) REFERENCES cp_settings_snapshots(snapshot_id),
     FOREIGN KEY(rules_snapshot_id) REFERENCES cp_rules_snapshots(snapshot_id)
 );
