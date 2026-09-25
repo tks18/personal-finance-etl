@@ -1,598 +1,460 @@
 # Reliability & Recovery
 
-Personal Finance ETL is a local analytical system, but I still want failure behaviour to be explicit.
-
-Financial analytics are only useful when I can distinguish:
-
-- durable source evidence,
-- synchronized ingestion state,
-- successfully published analytical state,
-- failed execution,
-- and recoverable derived state.
-
-This document explains the reliability model across SQLite, DuckDB, orchestration, run telemetry, snapshots, and reconstruction.
-
-> The goal is not to pretend a local application has distributed-systems guarantees it does not have. The goal is to make the guarantees it *does* provide precise.
-
----
-
-## Reliability model at a glance
-
-```mermaid
-flowchart TB
-    SRC["Source Evidence"] --> RAW["SQLite Raw Store<br/>durable bytes + sync state"]
-    RAW --> TX["Application-Coordinated Transaction Scope"]
-    TX --> DUCK["DuckDB<br/>Bronze · Silver · Gold · Meta"]
-
-    DUCK -->|"success"| COMMIT["Commit local state"]
-    TX -->|"exception"| RB["Rollback active transactions"]
-
-    COMMIT --> SUCCESS["Run = successful"]
-    RB --> FAILED["Run = failed"]
-
-    RAW --> REC["Recovery Boundary"]
-    REC --> REBUILD["Rebuild Bronze → Silver → Gold"]
-```
-
-The architecture separates **durability of evidence** from **success of analytical publication**.
-
----
-
-## Reliability objectives
-
-## Preserve source evidence
-
-A downstream analytical failure should not require the original source file to be re-created from memory.
-
-The Raw Store persists the artifact that entered the platform.
-
-## Avoid partial analytical publication where possible
-
-The orchestrator coordinates DuckDB and SQLite transaction scopes so failed work is rolled back rather than intentionally published as successful state.
-
-## Keep failures observable
-
-Run telemetry should survive long enough to show that a run failed.
-
-## Make derived state reconstructable
-
-Bronze, Silver, and Gold have different recovery roles, with Raw providing the strongest upstream reconstruction boundary.
-
-## Be precise about guarantees
-
-The system does **not** implement a distributed two-phase commit coordinator.
-
-That matters because overstating transactional guarantees is worse than having a simpler but accurately documented model.
-
----
-
-## Transaction architecture
-
-The pipeline coordinates a DuckDB analytical transaction with a SQLite Raw Store transaction.
-
-Conceptually:
-
-```mermaid
-sequenceDiagram
-    participant App as Application
-    participant Log as Run Telemetry
-    participant Duck as DuckDB
-    participant Raw as SQLite Raw Store
-    participant ETL as ETL Orchestrator
-
-    App->>ETL: Start run
-    ETL->>Log: Create run record
-    ETL->>Duck: BEGIN
-    ETL->>Raw: BEGIN
-
-    ETL->>ETL: Synchronize + transform + analyze + publish
-
-    alt success
-        ETL->>Duck: COMMIT
-        ETL->>Raw: COMMIT
-        ETL->>Log: Mark success
-    else exception
-        ETL->>Duck: ROLLBACK
-        ETL->>Raw: ROLLBACK
-        ETL->>Log: Mark failed
-    end
-```
-
-This is **application-coordinated transactional consistency**.
-
-It is not formal distributed two-phase commit.
-
----
-
-## Why this is not two-phase commit
-
-A true distributed two-phase commit protocol has an explicit prepare phase and transaction coordinator capable of ensuring a coordinated distributed outcome.
-
-The current architecture instead performs local database transactions under application orchestration.
-
-The commits occur sequentially.
-
-Therefore a narrow theoretical failure window exists where one local commit could succeed and a later commit fail.
-
-Documenting the system as "Two-Phase ACID" would overstate the guarantee.
-
-The correct description is:
-
-> **Application-coordinated transactions across two local persistence engines.**
-
-For the current local workload, this provides useful rollback behaviour without introducing a distributed transaction coordinator.
-
----
-
-## Run telemetry lifecycle
-
-Run telemetry has a slightly different lifecycle from the analytical transaction.
-
-A run record is started before the main analytical work completes.
-
-That is useful because failure should remain observable even when analytical changes are rolled back.
-
-Conceptually:
+Financial analytics can fail in two dangerous ways:
 
 ```text
-Create run telemetry
-        ↓
-Begin analytical/raw transactions
-        ↓
-Execute pipeline
-        ↓
-success? ── no ─→ rollback → mark failed
-   │
-  yes
-   ↓
-commit state
-   ↓
-mark successful
+obviously
+→ pipeline crashes
+
+quietly
+→ pipeline succeeds with incomplete or inconsistent state
 ```
 
-Operational history therefore does not disappear simply because the analytical transaction failed.
+The second failure mode is worse.
+
+The reliability architecture therefore focuses on explicit run state, fatal analytical failures, coordinated rollback, durable evidence, and deterministic recovery.
 
 ---
 
-## Raw Store durability
-
-The SQLite Raw Store is the strongest upstream recovery boundary.
-
-It persists:
-
-- source registry state,
-- fingerprints,
-- synchronization status,
-- and source payload bytes.
-
-This means the platform can retain the evidence that entered the system independently from the current DuckDB warehouse.
-
-## SQLite workload tuning
-
-The Raw Store uses SQLite features/settings appropriate to local transactional metadata/BLOB persistence, including WAL-oriented operation and local performance pragmas.
-
-Those settings support the workload; they are not a substitute for backup.
-
----
-
-## DuckDB analytical durability
-
-DuckDB owns:
-
-- Bronze,
-- Silver,
-- Gold,
-- and Meta.
-
-The database is configured as the local analytical runtime rather than the raw artifact archive.
-
-Runtime settings can account for local machine resources such as memory and thread availability.
-
-On normal shutdown, maintenance operations such as checkpointing/compaction can help leave the analytical file in a clean local state.
-
----
-
-## Failure lifecycle
-
-When an exception escapes the pipeline, the intended lifecycle is:
-
-```mermaid
-flowchart TB
-    WORK["Pipeline Work"] --> ERR{"Exception?"}
-    ERR -->|"No"| C["Commit"]
-    ERR -->|"Yes"| D["Rollback DuckDB"]
-    D --> R["Rollback SQLite Raw Transaction"]
-    R --> L["Record Failed Run"]
-    L --> KEEP["Raw evidence remains available"]
-```
-
-The key distinction is:
-
-> **A failed analytical build is not equivalent to lost financial evidence.**
-
-That is one of the main reasons Raw is separate from the warehouse.
-
----
-
-## Recovery from analytical warehouse loss
-
-If DuckDB is recreated while the Raw Store survives, the system can detect that persisted raw artifacts are not represented in the new warehouse registry/state.
-
-Those artifacts can be returned to the Bronze synchronization path.
-
-```mermaid
-flowchart LR
-    RAW["Existing Raw Store"] --> NEW["New DuckDB"]
-    NEW --> CMP["Registry comparison"]
-    CMP --> GAP["Missing warehouse registrations"]
-    GAP --> PEND["PENDING_BRONZE"]
-    PEND --> EXT["Re-extract raw bytes"]
-    EXT --> BR["Rebuild Bronze"]
-    BR --> SI["Rebuild Silver"]
-    SI --> GO["Rebuild Gold"]
-```
-
-This gives the architecture a useful reconstruction property.
-
----
-
-## Recovery is not immutable historical replay
-
-This distinction is important.
-
-Reprocessing old raw evidence later can use:
-
-- newer application code,
-- newer transformation logic,
-- newer financial rules,
-- newer configuration,
-- or newer schema contracts.
-
-Therefore:
-
-> **Recoverability means I can reconstruct analytical state from preserved evidence. It does not automatically mean I can reproduce the exact historical output of an arbitrary old software version.**
-
-Stronger historical reproducibility would require explicit version/configuration fingerprints and potentially versioned transformation contracts.
-
-That is a future hardening opportunity.
-
----
-
-## Deterministic rebuilds as a reliability strategy
-
-Silver and Gold are rebuilt rather than incrementally patched across every dependency.
-
-This reduces several failure classes.
-
-Without deterministic reconstruction, the system would need to reason about:
-
-- stale rolling metrics,
-- partially invalidated portfolio aggregates,
-- historical FIRE periods affected by rule changes,
-- configuration-driven restatements,
-- and dependency-specific incremental repair.
-
-Instead:
-
-```text
-Complete Bronze state
-      +
-Current rules/configuration
-      +
-Current analytical code
-      ↓
-Rebuild Silver
-      ↓
-Rebuild Gold
-```
-
-The cost is compute.
-
-The reliability benefit is simpler state semantics.
-
----
-
-## Source synchronization reliability
-
-The Raw Store state machine prevents "seen" from being confused with "synchronized."
+## Reliability model
 
 ```mermaid
 stateDiagram-v2
-    [*] --> PENDING_BRONZE
-    PENDING_BRONZE --> SYNCED: successful Bronze persistence
-    SYNCED --> PENDING_BRONZE: warehouse gap / reprocessing
+    [*] --> STARTED
+    STARTED --> RUNNING
+    RUNNING --> COMMITTING
+    COMMITTING --> SUCCESS
+    RUNNING --> FAILED
+    COMMITTING --> FAILED
+    SUCCESS --> [*]
+    FAILED --> [*]
 ```
 
-A source can therefore remain pending until the Bronze side of the contract is satisfied.
-
-This is a small state model with an important operational effect.
+The run lifecycle lives in the SQLite Control Plane.
 
 ---
 
-## Source lineage and repair
+## Run creation survives analytical failure
 
-Historical Bronze records retain source identity such as `__file_name__`.
+A run is registered before the main transaction begins:
 
-That allows changed-file repair to be localized:
+```python
+run_id = cp.runs.start_run(
+    cfg_json=self.cfg.model_dump_json(),
+    rules_json=self.rules.model_dump_json() if self.rules else None,
+)
+```
+
+`start_run()` also records:
 
 ```text
-changed file
-   ↓
-remove old Bronze partition
-   ↓
-insert replacement partition
+application version
+schema version
+Settings snapshot
+FinancialRules snapshot
+started_at
+status = STARTED
 ```
 
-Unrelated source history remains intact.
-
-This is simpler than rebuilding all Bronze history and safer than blindly appending duplicate versions of the same source.
+The run therefore has an identity even if later analytical work is rolled back.
 
 ---
 
-## Reference-source replacement
+## Configuration provenance is immutable by content
 
-Reference datasets use a different repair model.
+Settings and FinancialRules are hashed:
 
-When the current reference source changes, replacing the complete Bronze representation can be more correct than retaining historical file partitions.
+```python
+cfg_hash = hashlib.sha256(
+    cfg_json.encode("utf-8")
+).hexdigest()
 
-This is another reliability choice based on source semantics.
-
-The architecture does not use incrementality as an ideology.
-
----
-
-## Benchmark-data reliability
-
-External benchmark data has its own failure/recovery considerations.
-
-Fetched history is serialized into virtual Parquet artifacts and persisted through the Raw Store before becoming Bronze benchmark state.
-
-That provides:
-
-- provenance,
-- replayability,
-- and protection from treating an external API response as ephemeral analytical truth.
-
-If benchmark coverage is already present, the pipeline avoids unnecessary refetching.
-
----
-
-## Data-quality safeguards
-
-Reliability is not only database durability.
-
-Financial correctness also depends on domain validity.
-
-The production path contains explicit checks around important canonical fields, including critical investment identity/tax information.
-
-The analytical models also contain reconciliation concepts such as:
-
-- broker quantity/cost reconciliation,
-- cash-flow unreconciled difference,
-- and source-to-Bronze synchronization state.
-
-These are domain-specific quality mechanisms.
-
-I prefer strengthening financial contracts where meaning is known rather than relying only on generic null/duplicate checks.
-
----
-
-## Broker reconciliation as reliability
-
-The investment engine treats current broker-reported position state as an anchor when reconstructed transaction state disagrees.
-
-This is a reliability policy for messy real-world financial history.
-
-It acknowledges that:
-
-- historical transactions can be incomplete,
-- corporate actions can complicate reconstruction,
-- imported opening positions can exist,
-- and broker corrections can occur.
-
-The trade-off is that reconciliation adjustments can affect lot interpretation.
-
-That policy should therefore remain explicit and documented.
-
----
-
-## Cash-flow reconciliation as reliability
-
-The household model independently checks whether classified financial activity explains actual cash movement.
-
-Conceptually:
-
-```text
-Opening cash
- + operating activity
- + investing activity
- + financing activity
- + internal-transfer treatment
- = calculated closing cash
+settings_id = f"snap_set_{cfg_hash[:12]}"
 ```
 
-The model compares this with actual closing cash and surfaces an unreconciled difference.
+Then persisted with:
 
-This is a financial reliability mechanism rather than an infrastructure one.
+```sql
+INSERT OR IGNORE
+```
+
+The same configuration payload does not need a new duplicate snapshot every run.
+
+A run references the snapshot identity instead.
+
+This improves both deduplication and reproducibility context.
 
 ---
 
-## Application process isolation
+## Coordinated local transactions
 
-The desktop/interactive application does not run the entire ETL workload directly in the GUI event loop.
+The orchestrator begins both transactions:
 
-Heavy pipeline execution occurs in a child process.
+```python
+self.db_manager.conn.execute("BEGIN TRANSACTION")
+cp.begin_transaction()
+```
+
+On success:
+
+```python
+cp.runs.update_run_status(
+    run_id,
+    "COMMITTING",
+)
+
+self.db_manager.conn.execute("COMMIT")
+cp.commit()
+
+cp.runs.finish_run(
+    run_id,
+    "SUCCESS",
+)
+```
+
+This gives the application a coherent local commit protocol.
+
+But the boundary is important:
+
+> **This is application-coordinated transaction management across SQLite and DuckDB, not distributed two-phase commit.**
+
+There remains a narrow theoretical failure window between independent commits.
+
+For the current local workload, I accept that trade-off rather than introducing distributed transaction machinery.
+
+---
+
+## Rollback path
+
+Any exception enters the rollback path:
+
+```python
+try:
+    self.db_manager.conn.execute("ROLLBACK")
+except Exception as rollback_err:
+    logger.error(
+        f"Failed to rollback DuckDB transaction: {rollback_err}"
+    )
+
+try:
+    cp.rollback()
+except Exception as rollback_err:
+    logger.error(
+        f"Failed to rollback SQLite Raw Store transaction: {rollback_err}"
+    )
+```
+
+Rollback failures are themselves logged.
+
+The system does not assume rollback is infallible.
+
+---
+
+## Failure history is written after rollback
+
+The pipeline then records structured failure context:
+
+```python
+cp.runs.log_run_failure(
+    run_id=run_id,
+    failed_isin=None,
+    stage="Pipeline",
+    error_type=type(exc).__name__,
+    error_message=str(exc),
+    traceback_log=traceback.format_exc(),
+)
+```
+
+And closes the lifecycle:
+
+```python
+cp.runs.finish_run(
+    run_id,
+    "FAILED",
+)
+```
+
+The analytical transaction can disappear while the operational fact that it failed survives.
+
+That is the key reliability property.
+
+---
+
+## Per-ISIN failure is not tolerated silently
+
+Investment analytics run across instrument boundaries.
+
+A worker failure is propagated rather than converted into an empty result.
 
 ```mermaid
 flowchart LR
-    GUI["CLI / GUI"] --> API["Backend Facade"]
-    API --> PROC["Child Process"]
-    PROC --> ETL["ETL / Analytics"]
-    ETL --> Q["Status Queue"]
-    Q --> MON["Monitor Thread"]
-    MON --> GUI
+    W["ISIN Worker"] --> P["ISIN Pipeline"]
+    P --> Q["Investment Quant Engine"]
+    Q --> O["ETLOrchestrator"]
+    O --> RB["Rollback"]
+    O --> FAIL["cp_run_failures"]
 ```
 
-This provides:
-
-- UI responsiveness,
-- cleaner failure isolation,
-- and a clearer boundary between presentation and analytical execution.
-
----
-
-## Snapshots
-
-The backend facade supports database snapshot workflows.
-
-Snapshots provide an additional operational safety mechanism around the analytical DuckDB state.
-
-They should be treated as complementary to the Raw Store:
-
-- **Raw Store** protects source evidence and supports reconstruction.
-- **Snapshots** protect a point-in-time analytical database state.
-
-Those solve different recovery problems.
-
----
-
-## Observability
-
-Current observability is primarily local and operational.
-
-Meta provides:
-
-- run logging,
-- file registry state,
-- table row counts,
-- settings snapshots,
-- and financial-rules snapshots.
-
-The application also emits execution status for interactive surfaces.
-
-This is sufficient for the current personal workload, but it is not a full distributed observability stack.
-
-That is intentional.
-
----
-
-## Current reliability gaps and hardening opportunities
-
-The archaeology phase identified several areas worth hardening.
-
-## Per-ISIN worker failures
-
-Worker-level investment exceptions should be surfaced with enough context that an instrument cannot silently disappear from otherwise successful analytics.
-
-For financial computation, I prefer explicit partial-failure policy or fail-fast behaviour over silent omission.
-
-## Meta layer identity
-
-Meta should eventually use explicit dataset/layer mappings rather than infer physical layer identity from internal DataFrame naming conventions.
-
-## Configuration/version fingerprints
-
-Capturing values such as:
+The failure record can carry:
 
 ```text
-application_version
-schema_version
-settings_hash
-financial_rules_hash
-git_commit
+failed_isin
+stage
+error_type
+error_message
+traceback
 ```
 
-would improve historical reproducibility.
+The production rule is:
 
-## Semantic naming
-
-Fields whose names overstate their methodology should be renamed or clarified.
-
-Examples discovered during archaeology include monthly market-value change being named as a return and lot-outperformance rate being labelled as probability.
-
-These are semantic reliability issues.
-
-## Residual computation
-
-Older risk machinery that no longer survives into the serving contract should be removed or simplified if nothing still consumes it.
-
-Dead analytical work increases complexity without improving decisions.
+> **An incomplete portfolio must not look like a successful portfolio.**
 
 ---
 
-## Backup and disaster-recovery perspective
+## Execution logs become run evidence
 
-The current architecture improves recoverability, but it does not remove the need for backups.
+The complete execution log is stored against the run.
 
-A robust personal operating practice should consider protecting:
+This complements structured failure fields.
 
-- the Raw SQLite store,
-- configuration and financial-rules files,
-- source/reference inputs,
-- and optionally DuckDB snapshots.
+Structured fields answer:
 
-Because the project is local-first, backup responsibility also remains local unless I deliberately integrate another storage strategy.
+```text
+what failed?
+where?
+which ISIN?
+what exception?
+```
 
-The software architecture can make reconstruction possible; it cannot recover a disk that lost every copy of the evidence.
+The execution log answers:
 
----
+```text
+what happened around it?
+```
 
-## Reliability boundaries
-
-It is useful to state what the system does and does not guarantee.
-
-## The architecture does provide
-
-- durable local raw artifact persistence,
-- explicit source synchronization state,
-- local database transactions,
-- application-coordinated rollback,
-- failed-run telemetry,
-- deterministic Silver/Gold reconstruction,
-- warehouse-loss reconstruction from surviving Raw state,
-- financial reconciliation mechanisms,
-- and process isolation for heavy execution.
-
-## The architecture does not currently claim
-
-- distributed two-phase commit,
-- immutable historical replay across arbitrary software versions,
-- multi-node high availability,
-- remote disaster recovery,
-- exactly-once distributed event processing,
-- or universal source correctness.
-
-Those are different problem classes.
+Both are useful.
 
 ---
 
-## Reliability invariants
+## Raw evidence creates a recovery boundary
 
-I want future changes to preserve these properties unless I intentionally redesign them.
+The strongest recovery property is independent raw persistence.
 
-1. **Failed analytical publication does not imply lost raw evidence.**
-2. **Source synchronization state remains explicit.**
-3. **A run is not marked successful before persistence commits complete.**
-4. **Silver and Gold remain reconstructable from valid upstream state.**
-5. **Operational failure remains observable.**
-6. **Financial reconciliation differences remain visible rather than silently hidden.**
-7. **Frontends remain isolated from heavy analytical execution.**
-8. **Transactional guarantees are documented precisely rather than overstated.**
-9. **Recovery and historical reproducibility remain distinct concepts.**
-10. **Financial correctness is treated as part of reliability, not only database durability.**
+```mermaid
+flowchart LR
+    FS["Original Source"] --> CP["SQLite<br/>Registry + Payload"]
+    CP --> BR["Bronze"]
+    BR --> SIL["Silver"]
+    SIL --> GOLD["Gold"]
+```
+
+If derived analytical state is lost while the Control Plane survives, the system still has the source evidence needed to reconstruct it.
+
+That is fundamentally different from a pipeline whose only copy of the input is a transient filesystem location.
 
 ---
 
-## Related documentation
+## Self-healing DuckDB registry
 
-Continue with:
+Before normal processing, Meta compares the DuckDB file registry with authoritative Control Plane state.
 
-- [Data Lifecycle](data-lifecycle.md) — the normal and failure paths through the platform.
-- [Warehouse Architecture](warehouse-architecture.md) — persistence semantics by layer.
-- [Design Decisions](design-decisions.md) — the trade-offs behind the reliability model.
-- [Meta Data Contracts](../reference/meta-data-contracts.md) — operational/control tables.
-- [Running the Pipeline](../getting-started/running-the-pipeline.md) — operational execution.
-- [Investment Analytics](../finance/investment-analytics.md) — broker reconciliation and investment methodology.
-- [Cash Flow & Wealth](../finance/cashflow-and-wealth.md) — household reconciliation methodology.
+If an artifact exists in SQLite but not analytically:
+
+```python
+cp.artifacts.db.conn.execute(
+    """
+    UPDATE cp_file_registry
+    SET sync_status = 'PENDING_BRONZE'
+    WHERE relative_path = ?
+    """,
+    [path],
+)
+```
+
+The artifact is reintroduced into the Bronze synchronization path.
+
+This is a small mechanism with an important ownership implication:
+
+```text
+SQLite can repair DuckDB state
+DuckDB does not redefine SQLite truth
+```
+
+---
+
+## Deterministic rebuild reduces recovery complexity
+
+Once Bronze is complete:
+
+```text
+Bronze
+→ canonical transform
+→ investment / wealth engines
+→ Silver
+→ Gold
+```
+
+Silver and Gold are rebuilt rather than incrementally repaired.
+
+That means recovery does not need a separate algorithm for every downstream mart.
+
+The normal production path is also the rebuild path.
+
+That is valuable.
+
+---
+
+## `PENDING_BRONZE` is an operational invariant
+
+Artifact state distinguishes:
+
+```text
+persisted raw evidence
+```
+
+from:
+
+```text
+successfully represented in Bronze
+```
+
+The lifecycle is:
+
+```text
+new / changed artifact
+        ↓
+PENDING_BRONZE
+        ↓
+successful extraction + Bronze write
+        ↓
+SYNCED
+```
+
+If synchronization is incomplete, the artifact remains actionable.
+
+---
+
+## What recovery does not guarantee
+
+### Immutable historical replay
+
+Rebuilding old raw evidence today can use newer:
+
+- code,
+- schema,
+- FinancialRules,
+- tax logic.
+
+Configuration snapshots improve provenance, but the current system is not an immutable historical build system.
+
+### Distributed atomicity
+
+SQLite and DuckDB do not share one physical transaction manager.
+
+### Complete lineage graph
+
+The Control Plane does not yet normalize every:
+
+```text
+run → artifact → Bronze partition → Silver contract → Gold contract
+```
+
+edge into dedicated lineage tables.
+
+### Complete system snapshots
+
+The current DuckDB snapshot utility protects the analytical database.
+
+Now that SQLite is authoritative for operational history, the stronger future backup model is a coordinated bundle containing both databases.
+
+These are known boundaries.
+
+---
+
+## Snapshot architecture: current vs stronger future model
+
+### Current
+
+```text
+DuckDB snapshot
+→ analytical state protected
+```
+
+### Stronger future model
+
+```text
+Snapshot Bundle
+├── Personal_Finance_DB.duckdb
+└── Raw_Documents.sqlite
+```
+
+The second model better matches current ownership.
+
+It is a future hardening opportunity rather than a requirement for the current pipeline to operate correctly.
+
+---
+
+## Data quality and reliability meet in Silver
+
+Some failures are not infrastructure failures.
+
+For example, missing investment identity/tax classification is a financial-contract problem.
+
+The Silver loader explicitly checks important fields:
+
+```python
+if table_name == "silver.d_Investment_Master":
+    if "ISIN" in df.columns:
+        missing_isin = df.filter(
+            pl.col("ISIN").is_null()
+        )
+
+    if "TAX_TYPE" in df.columns:
+        missing_tax = df.filter(
+            pl.col("TAX_TYPE").is_null()
+        )
+```
+
+A pipeline can be technically healthy while its financial contract is incomplete.
+
+Reliability therefore includes semantic quality, not just process uptime.
+
+---
+
+## Failure classes
+
+| Failure | Example | Expected behaviour |
+| --- | --- | --- |
+| Source | unreadable file | fail actionable ingestion |
+| Contract | missing critical identity | surface financial data-quality problem |
+| Worker | ISIN analytics exception | fail investment stage/run |
+| Persistence | DuckDB write failure | rollback |
+| Control Plane | SQLite write failure | fail run / surface operational error |
+| Simulation | invalid configured assumptions | validation or analytical failure |
+| Frontend | UI rendering issue | should not redefine backend financial state |
+
+---
+
+## Reliability principles
+
+1. Runs have explicit lifecycle state.
+2. Failure history survives rollback.
+3. Worker failures cannot silently reduce the portfolio.
+4. Raw evidence survives independently from derived analytics.
+5. Recovery flows from authoritative Control Plane state.
+6. Complete Bronze enables deterministic rebuild.
+7. Rollback errors are observable.
+8. Configuration provenance is content-addressed.
+9. Semantic data quality is part of reliability.
+10. Cross-database atomicity is described honestly.
+
+---
+
+## Go deeper
+
+- [System Architecture](system-architecture.md)
+- [Data Lifecycle](data-lifecycle.md)
+- [Warehouse Architecture](warehouse-architecture.md)
+- [Meta Data Contracts](../reference/meta-data-contracts.md)
 
 [← Architecture Home](README.md) · [← Documentation Home](../README.md)

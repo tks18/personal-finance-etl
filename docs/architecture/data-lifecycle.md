@@ -1,1072 +1,650 @@
 # Data Lifecycle
 
-This document follows financial data through Personal Finance ETL from **source discovery to decision-support consumption**.
+This document follows one source artifact from discovery to decision-ready analytical state.
 
-Where [System Architecture](system-architecture.md) explains the platform component by component, this page follows the lifecycle of data and state across those components.
+The lifecycle is intentionally asymmetric:
 
-The lifecycle is deliberately asymmetric:
+> **Raw/Bronze preserve and synchronize evidence incrementally. Silver/Gold reconstruct derived financial state deterministically.**
 
-- raw evidence is persisted,
-- Bronze source history is synchronized incrementally where appropriate,
-- canonical and serving state is rebuilt deterministically,
-- analytical engines operate on canonical financial concepts,
-- and successful publication is coordinated across the local persistence layers.
-
-> The central idea is simple: **preserve what entered the system, make state transitions explicit, and make derived analytics reproducible.**
+That split is what lets the system handle a growing source history without making downstream finance depend on fragile incremental patches.
 
 ---
 
-### Lifecycle at a glance
+## Lifecycle at a glance
 
 ```mermaid
-flowchart TB
-    S["1 · Source discovery<br/>physical files + configured sources"] --> D["2 · Raw registry comparison<br/>new · changed · unchanged · obsolete"]
-    D --> H["3 · Hash / change policy<br/>per physical file type"]
-    H --> R["4 · Persist actionable raw bytes<br/>SQLite Raw Store"]
-    R --> P["5 · PENDING_BRONZE"]
-    P --> E["6 · Extract from persisted bytes"]
-    E --> B{"7 · Bronze strategy"}
-    B -->|"reference / current-state source"| FR["Full replacement"]
-    B -->|"historical / event source"| IR["File-aware replacement"]
-    FR --> BL["8 · Persistent Bronze<br/>source-shaped state + lineage"]
-    IR --> BL
-    BL --> S2["9 · Mark source SYNCED"]
-    BL --> C["10 · Read complete Bronze state"]
-    C --> T["11 · Polars canonical transformation"]
-    T --> BG["12 · Benchmark coverage check"]
-    BG -->|"missing history"| V["Virtual benchmark Parquet artifact<br/>Raw Store → Bronze"]
-    BG -->|"coverage sufficient"| Q
-    V --> Q["13 · Investment Quant Engine"]
-    Q --> W["14 · Wealth Analytics Engine"]
-    W --> SI["15 · Rebuild Silver"]
-    SI --> GO["16 · Rebuild Gold"]
-    GO --> M["17 · Capture Meta state"]
-    M --> COM["18 · Commit coordinated local state"]
-    COM --> CSM["19 · Power BI · CLI · Desktop · Headless"]
+flowchart LR
+    SRC["Source Artifact"] --> DISC["Discover"]
+    DISC --> DIFF["Compare with Control Plane"]
+    DIFF --> RAW["Persist Raw Evidence"]
+    RAW --> PEND["PENDING_BRONZE"]
+    PEND --> EXT["Extract"]
+    EXT --> BR["Bronze Upsert"]
+    BR --> SYNC["SYNCED"]
+    SYNC --> FULL["Read Complete Bronze"]
+    FULL --> CAN["Canonical Transform"]
+    CAN --> ENG["Analytics"]
+    ENG --> SIL["Silver Rebuild"]
+    ENG --> GOLD["Gold Rebuild"]
+    SIL --> META["Lean Meta Projection"]
+    GOLD --> META
 ```
-
-This is the successful path.
-
-The rest of this document explains what each transition means, what state is durable at each point, and what happens when the happy path breaks.
 
 ---
 
-## 1. Run initialization
+## 1. A run starts before data processing
 
-A pipeline run begins before source extraction.
+The Control Plane creates a durable run identity before the main analytical transaction:
 
-At a high level, the application:
-
-1. loads operational settings,
-2. loads financial rules,
-3. opens the DuckDB analytical warehouse,
-4. opens the SQLite Raw Document Store,
-5. starts operational run telemetry,
-6. begins the coordinated analytical/raw transaction scope,
-7. and then enters source synchronization.
-
-The run record is intentionally useful even when the main analytical transaction fails.
-
-That gives execution telemetry a different lifecycle from the derived warehouse state.
-
-```mermaid
-sequenceDiagram
-    participant App as Application
-    participant Meta as Run Telemetry
-    participant Duck as DuckDB
-    participant Raw as SQLite Raw Store
-    participant ETL as ETL Orchestrator
-
-    App->>ETL: Start pipeline
-    ETL->>Meta: Start run record
-    ETL->>Duck: BEGIN
-    ETL->>Raw: BEGIN
-    ETL->>ETL: Execute lifecycle
+```python
+run_id = cp.runs.start_run(
+    cfg_json=self.cfg.model_dump_json(),
+    rules_json=self.rules.model_dump_json() if self.rules else None,
+)
 ```
 
-Operational status therefore does not depend on a successful Gold publication before a run can be observed.
+That call also snapshots Settings and FinancialRules by content hash.
+
+The run initially exists as:
+
+```text
+STARTED
+```
+
+Then both local persistence transactions begin:
+
+```python
+self.db_manager.conn.execute("BEGIN TRANSACTION")
+cp.begin_transaction()
+
+cp.runs.update_run_status(run_id, "RUNNING")
+```
+
+A failed analytical run therefore still has an operational identity.
 
 ---
 
-## 2. Source discovery
+## 2. Source discovery describes the current filesystem
 
-The source environment is currently purpose-built around my financial inputs.
+The orchestrator discovers statement files and then adds explicit configured sources:
 
-Configured source families include combinations of:
+```python
+discovered_files = categorize_statement_files(
+    self.cfg.STATEMENTS_FOLDER,
+    strict=True,
+)
 
-- CSV,
-- Excel,
-- SQLite,
-- bank/finance data,
-- mutual-fund holdings and orders,
-- stock statements/orders,
-- mappings and masters,
-- opening balances,
-- macro parameters,
-- and benchmark-related inputs.
+discovered_files["sqlite_source"] = [
+    SQLiteExtractor(self.cfg.SOURCE_DB_FOLDER).get_latest_sqlite_backup()
+]
+discovered_files["mf_isin"] = [self.cfg.MF_ISIN_CSV_PATH]
+discovered_files["benchmark_mapping"] = [self.cfg.BENCHMARK_MAPPING_CSV_PATH]
+discovered_files["opening_balances"] = [self.cfg.OPENING_BALANCE_CSV_PATH]
+```
 
 Discovery answers:
 
-> **Which configured artifacts are available to participate in this run?**
+> **What source artifacts exist now?**
 
-It does not yet answer:
+It does not answer:
 
-> **What do these records mean financially?**
+> **Which ones need processing?**
 
-That interpretation belongs later.
-
-Keeping those concerns separate prevents filesystem and statement-layout knowledge from leaking directly into the financial engines.
+That belongs to synchronization state.
 
 ---
 
-## 3. Raw registry reconciliation
+## 3. The Control Plane decides what changed
 
-Discovered sources are compared against the SQLite Raw Document Store.
+`FileSyncService` compares discovered paths with the artifact registry:
 
-The Raw Store maintains a registry containing source identity and state such as:
+```python
+registry = self.artifact_repo.get_registry()
 
-- file ID,
-- file name,
-- relative path,
-- file category,
-- file type,
-- file hash,
-- file size,
-- first ingestion timestamp,
-- last ingestion timestamp,
-- and synchronization status.
+for category, filepaths in discovered_files.items():
+    file_type = FILE_TYPE_MAP.get(category, "csv")
+    should_check_hash = getattr(hash_policy, file_type, False)
 
-The reconciliation step classifies what the pipeline needs to act on.
+    for filepath in filepaths:
+        rel_path = filepath.replace("\\", "/")
 
-Conceptually:
+        if rel_path not in registry:
+            new_files[category].append(filepath)
+        elif should_check_hash:
+            disk_hash = compute_file_hash(filepath)
+            if disk_hash != registry[rel_path]:
+                changed_files[category].append(filepath)
+```
+
+This separates:
 
 ```text
-Discovered artifact
-       │
-       ├── not registered ───────→ new
-       │
-       ├── registered + changed ─→ changed
-       │
-       ├── registered + same ────→ unchanged
-       │
-       └── registered but absent → obsolete / source-policy handling
+discovered
+from
+actionable
 ```
 
-The exact action depends on source category and configured hashing behaviour.
+With 1,608 artifacts in the production source environment, that distinction is fundamental.
 
 ---
 
-## 4. Hashing and change detection
+## 4. Hash policy is configurable by physical type
 
-The Raw Store records SHA-256 fingerprints for ingested artifacts.
+Not every file type needs the same change-detection cost.
 
-However, existing files are not blindly re-hashed under one universal policy.
+The synchronization service asks:
 
-The current configuration supports a per-file-type hash policy.
+```python
+should_check_hash = getattr(hash_policy, file_type, False)
+```
 
-That distinction matters:
+That allows the application to choose when an existing artifact should be rehashed.
 
-> **Hashing capability and modification-detection policy are separate concerns.**
-
-New artifacts can be registered and fingerprinted, while the decision to re-hash an already known CSV, Excel, or SQLite source can differ by configuration.
-
-This avoids documenting a stronger change-detection guarantee than the implementation actually provides.
-
----
-
-## 5. Raw payload persistence
-
-Actionable source bytes are persisted in SQLite before downstream analytical processing.
-
-The Raw Store separates registry metadata from the binary payload itself.
-
-Conceptually:
+The lifecycle therefore distinguishes:
 
 ```text
-Raw File Registry
-       │
-       └── file_id
-              │
-              ▼
-        Raw Payload BLOB
+path identity
++
+optional content identity
 ```
 
-This changes the ingestion contract in an important way.
-
-The downstream extractor can operate on **persisted raw bytes** rather than depending on the original disk file remaining the authoritative copy throughout the run.
-
-That gives the system:
-
-- source provenance,
-- replayability,
-- a recovery boundary,
-- and a durable representation of the evidence that entered the platform.
+rather than blindly hashing every artifact on every run.
 
 ---
 
-## 6. The Raw Store state machine
+## 5. Raw evidence is persisted before Bronze
 
-Persisting bytes does not mean Bronze is synchronized.
+Actionable files are stored as binary evidence:
 
-The Raw Store tracks an explicit lifecycle.
+```python
+with open(filepath, "rb") as file:
+    raw_bytes = file.read()
 
-```mermaid
-stateDiagram-v2
-    [*] --> PENDING_BRONZE: new / changed actionable artifact
-    PENDING_BRONZE --> SYNCED: successful extraction + Bronze persistence
-    SYNCED --> PENDING_BRONZE: warehouse registry gap / reprocessing requirement
-    PENDING_BRONZE --> PENDING_BRONZE: downstream failure / rollback
+self.db.conn.execute(
+    """
+    INSERT INTO cp_file_payloads (file_id, file_bytes)
+    VALUES (?, ?)
+    ON CONFLICT(file_id)
+    DO UPDATE SET file_bytes = excluded.file_bytes
+    """,
+    (file_id, raw_bytes),
+)
 ```
 
-The two important states are:
-
-#### `PENDING_BRONZE`
-
-The raw artifact exists, but Bronze is not yet considered synchronized with it.
-
-#### `SYNCED`
-
-The artifact has successfully passed through extraction and Bronze persistence and has been registered as synchronized.
-
-This is stronger than assuming:
-
-> "The file was seen, so the warehouse must contain it."
-
-The synchronization state makes that relationship explicit.
-
----
-
-## 7. Extraction from persisted evidence
-
-Extraction sits between raw persistence and Bronze.
-
-Conceptually:
+The registry stores:
 
 ```text
-Raw BLOB
-   ↓
-Extractor
-   ↓
-Source-shaped DataFrame / LazyFrame
-   ↓
-Bronze loader
+file_id
+relative_path
+category
+physical type
+SHA-256
+size
+first_ingested
+last_ingested
+sync_status
 ```
 
-The extractor is source-aware.
+New or changed artifacts become:
 
-It understands how to parse the current statement/source contracts, while the downstream canonical transformation layer is responsible for converting those source shapes into financial concepts.
+```text
+PENDING_BRONZE
+```
 
-This is one of the main current portability boundaries.
-
-The **raw-state infrastructure is reusable**, while several **extractor contracts remain tailored to my financial environment**.
+Raw evidence therefore exists before analytical persistence succeeds.
 
 ---
 
-## 8. Bronze persistence strategy
+## 6. Full-replace sources prune obsolete evidence
 
-Bronze is persistent, but not every Bronze source uses the same synchronization strategy.
+Some source categories represent current reference state rather than historical event history.
 
-This is deliberate.
+For those categories, the synchronizer prunes artifacts no longer present:
 
-### Full-replacement sources
-
-Reference/configuration-like sources are treated as current-state datasets.
-
-When their source changes, the relevant Bronze representation can be replaced as a whole.
-
-Examples include reference/master-style inputs where the complete current dataset is the useful contract.
-
-Conceptually:
-
-```text
-Changed reference artifact
-        ↓
-Replace Bronze representation
-        ↓
-Current reference state
+```python
+if category in full_replace_categories:
+    self.artifact_repo.prune_category(
+        category,
+        filepaths,
+    )
 ```
 
-### File-aware historical sources
+That behaviour follows source semantics.
 
-Historical/event datasets use source-aware replacement.
-
-Bronze retains source lineage such as `__file_name__`.
-
-When one source artifact changes:
-
-```text
-Changed historical artifact
-        ↓
-Identify old Bronze rows from that artifact
-        ↓
-DELETE those rows
-        ↓
-INSERT freshly extracted rows
-        ↓
-Preserve unrelated historical sources
-```
-
-This gives the platform incremental source-history maintenance without requiring row-level change-data-capture infrastructure.
-
-### Why two strategies?
-
-Because the meaning of the sources differs.
-
-I prefer matching persistence semantics to source semantics over pretending every input is the same kind of dataset.
+A current mapping/master is not necessarily useful as an indefinitely accumulating sequence of historical files.
 
 ---
 
-## 9. Bronze lineage
+## 7. Extraction operates on the actionable subset
 
-Source lineage is retained directly in persistent Bronze data.
+The orchestrator constructs:
 
-The current mechanism includes source identity such as:
+```python
+actionable_all = {
+    key: new_files.get(key, []) + changed_files.get(key, [])
+    for key in discovered_files.keys()
+}
+```
+
+Then:
+
+```python
+extracted_data = self._extract(
+    cp,
+    actionable_files=actionable_all,
+)
+```
+
+The extractor does not need to parse every unchanged historical source on every run.
+
+That is one of the main reasons persistent Bronze and the Control Plane exist.
+
+---
+
+## 8. Bronze synchronization follows source semantics
+
+Bronze has two broad persistence behaviours.
+
+### Historical/event sources
+
+Replace only the partition owned by the changed source artifact:
+
+```text
+changed file
+    ↓
+delete old Bronze rows with that source identity
+    ↓
+insert replacement rows
+    ↓
+leave all unrelated history untouched
+```
+
+### Reference/current-state sources
+
+Replace the complete current representation.
+
+The code chooses that behaviour from `BronzeLayer.TABLE_MAPPINGS`.
+
+This is more precise than describing Bronze as simply "incremental."
+
+---
+
+## 9. Source identity survives into Bronze
+
+Historical Bronze rows carry source context such as:
 
 ```text
 __file_name__
 ```
 
-This supports both:
+That identity allows changed source partitions to be replaced without rebuilding unrelated history.
 
-- traceability,
-- and file-partition replacement.
+The Control Plane remains the authoritative artifact registry; Bronze keeps enough source identity to support analytical synchronization.
 
-For the current local workload, filename-level lineage is a pragmatic contract.
-
-A future generalized platform could evolve this into richer identifiers such as:
-
-```text
-source_file_id
-source_adapter
-source_record_id
-ingestion_run_id
-```
-
-but those are future design possibilities, not current v6 behaviour.
+This is **artifact/partition lineage**, not row-level enterprise lineage.
 
 ---
 
-## 10. Transition from Raw to `SYNCED`
+## 10. Successful Bronze persistence closes the sync loop
 
-Once extraction and Bronze persistence complete successfully for an artifact, the source can move from:
+After a source has been persisted successfully:
+
+```python
+self.cp.artifacts.mark_synced([filepath])
+```
+
+The registry transitions:
 
 ```text
 PENDING_BRONZE
       ↓
-   SYNCED
+SYNCED
 ```
 
-This transition is important because the Raw Store is treated as the source-state authority.
+DuckDB Meta also receives a current-state registry projection for analytical consumers.
 
-A raw payload and a Bronze representation therefore have an explicit synchronization relationship.
-
-If downstream work later fails, the coordinated transaction scope prevents the run from being treated as successfully published.
-
----
-
-## 11. Reading complete Bronze state
-
-Downstream transformation does not operate only on the files changed in the current run.
-
-After Bronze synchronization, the transformation layer works from the **complete persistent Bronze state**.
-
-That distinction is critical.
+The distinction is important:
 
 ```text
-Changed sources this run
-        ↓
-Incrementally synchronize Bronze
-        ↓
-Complete Bronze history/state
-        ↓
-Reconstruct canonical model
+artifact discovered
+≠
+artifact persisted as Bronze
 ```
-
-This is the bridge between incremental ingestion and deterministic downstream reconstruction.
-
-The system does not need to maintain an incremental dependency graph across every Silver and Gold calculation.
 
 ---
 
-## 12. Canonical transformation
+## 11. The complete Bronze dataset is then read
 
-Polars transforms persistent Bronze state into canonical financial contracts.
+After synchronizing only what changed, the pipeline deliberately reads complete Bronze state:
 
-This is where the vocabulary changes from:
-
-> source columns and statement layouts
-
-to:
-
-> financial concepts.
-
-The canonical model includes household, investment, benchmark, calendar, and macro concepts.
-
-```mermaid
-flowchart LR
-    BR["Complete Bronze State"] --> DAG["Polars Lazy Transformation DAG"]
-
-    DAG --> HH["Household<br/>income · expense · transfer · opening balances"]
-    DAG --> INV["Investments<br/>master · purchases · sales · market data"]
-    DAG --> BM["Benchmark / Macro<br/>benchmark history · calendar · macro"]
-
-    RULES["FinancialRules"] -. semantics .-> DAG
+```python
+full_dataset = bronze.get_full_dataset(
+    extracted_data.mappings,
+)
 ```
 
-`FinancialRules` participates as financial policy.
+The returned `ExtractionResult` reconstructs the complete input surface:
 
-It influences how canonical and analytical state should be interpreted without being confused with source discovery or filesystem configuration.
+```python
+return ExtractionResult(
+    zcategory=_get_lf("bronze.r_SQLite_ZCategory"),
+    assetgroup=_get_lf("bronze.r_SQLite_AssetGroup"),
+    assets=_get_lf("bronze.r_SQLite_Assets"),
+    mf_market_data_raw=_get_lf("bronze.r_MF_Market_Data"),
+    mf_transactions_raw=_get_lf("bronze.r_MF_Transactions"),
+    stock_market_data_raw=_get_lf("bronze.r_Stock_Market_Data"),
+    stock_transactions_raw=_get_lf("bronze.r_Stock_Transactions"),
+    ...
+)
+```
+
+This is the pivot point in the lifecycle:
+
+```text
+incremental synchronization
+        ↓
+complete analytical state
+```
 
 ---
 
-## 13. Investment asset pipelines
+## 12. Canonical transformation starts from complete state
 
-Investment source paths can differ substantially upstream.
+The orchestrator passes complete Bronze into the transformation DAG:
 
-The transformation architecture already uses asset-specific pipelines to normalize those differences.
+```python
+self._transform(full_dataset)
+```
 
-Current implementations include:
+The DAG standardizes source-shaped data into canonical financial contracts.
 
-- stock processing,
-- and mutual-fund processing.
+This means downstream engines do not need to reason about:
 
-They converge toward common downstream investment contracts.
+```text
+which files changed today?
+```
+
+They reason about:
+
+```text
+what is the complete current financial state?
+```
+
+That simplifies analytical correctness.
+
+---
+
+## 13. Benchmark history uses virtual raw artifacts
+
+External benchmark data follows the same evidence philosophy even though it is not discovered as a normal local file.
+
+Fetched history is serialized and injected as a virtual artifact.
+
+The hardened identity convention is:
+
+```text
+virtual://<category>/<filename>
+```
+
+The virtual artifact receives:
+
+- deterministic identity,
+- SHA-256,
+- payload bytes,
+- synchronization state.
+
+So external acquisition does not bypass provenance merely because it originated from an API/provider.
+
+---
+
+## 14. Analytics consume canonical state
+
+The canonical frames feed:
+
+```text
+Investment Quant Engine
+        +
+Wealth Analytics Engine
+```
+
+The investment engine reconstructs:
+
+- FIFO lots,
+- realized/unrealized state,
+- broker reconciliation,
+- benchmark state,
+- tax-aware values,
+- cash-flow-aware returns.
+
+The wealth engine reconstructs:
+
+- household ledger,
+- book/market/after-tax wealth,
+- cash-flow reconciliation,
+- budget/tax planning,
+- FIRE.
+
+The two engines meet through shared financial state.
+
+---
+
+## 15. Independent presentation graphs are collected together
+
+The wealth engine returns LazyFrames.
+
+The orchestrator executes them together:
+
+```python
+lazy_frames = [presentation_lazy[key] for key in keys]
+
+results = pl.collect_all(
+    lazy_frames,
+    engine="streaming",
+)
+```
+
+This keeps the presentation model composable while allowing Polars to execute independent graphs efficiently.
+
+---
+
+## 16. Silver and Gold rebuild from the complete run state
+
+The serving layers are not incrementally patched:
+
+```python
+SilverLayer(self.db_manager).load(self.dfs)
+GoldLayer(self.db_manager).load(self.dfs)
+```
+
+The lifecycle therefore ends with:
+
+```text
+complete Bronze
+      ↓
+complete canonical state
+      ↓
+complete analytical state
+      ↓
+replace Silver / Gold
+```
+
+This is a deliberate correctness trade-off.
+
+Incrementalizing source history gives a large performance benefit.
+
+Incrementalizing every financial dependency would add complexity where the current workload does not require it.
+
+---
+
+## 17. Publication identity comes from the contract registry
+
+The hardened loaders use `DATA_CONTRACT_REGISTRY` and `publication_order`.
 
 Conceptually:
 
-```text
-Stock-specific source state ──────┐
-                                  │
-                                  ▼
-                         Canonical investment
-                                  contracts
-                                  ▲
-                                  │
-Mutual-fund-specific source state ┘
+```python
+contracts = sorted(
+    (c for c in DATA_CONTRACT_REGISTRY if c.layer == "gold"),
+    key=lambda c: c.publication_order,
+)
 ```
 
-This is one of the strongest existing extension seams.
+That makes publication explicit rather than inferred from internal DataFrame names.
 
-A future asset type should ideally satisfy the same downstream contract rather than force changes throughout the investment engine.
+Meta row-count tracking uses the same registry identity.
 
 ---
 
-## 14. Benchmark coverage and delta ingestion
+## 18. Run success happens after publication
 
-Benchmark history has a specialized lifecycle because it can be acquired externally and may need to expand as investment history grows.
-
-The benchmark pipeline determines the required historical range from investment activity.
-
-Conceptually:
+The run moves to:
 
 ```text
-Earliest relevant investment date
-              ↓
-        required start
-
-Latest relevant market date
-              ↓
-         required end
+COMMITTING
 ```
 
-The system checks existing cached benchmark coverage before fetching more history.
+only after Silver, Gold and Meta have been prepared.
 
-If coverage is incomplete, only the missing range is acquired.
+Then:
 
-This is **delta benchmark ingestion**.
+```python
+self.db_manager.conn.execute("COMMIT")
+cp.commit()
+
+cp.runs.finish_run(run_id, "SUCCESS")
+```
+
+The run lifecycle therefore reflects the execution lifecycle rather than merely logging a start/end timestamp.
 
 ---
 
-## 15. Virtual benchmark artifacts
+## 19. Failure reverses analytical work but preserves failure history
 
-New benchmark history does not bypass the Raw Store.
+If any phase raises:
 
-Fetched benchmark chunks are serialized into Parquet bytes and registered as virtual artifacts under synthetic identities such as:
-
-```text
-virtual://benchmark_history/...
+```python
+self.db_manager.conn.execute("ROLLBACK")
+cp.rollback()
 ```
 
-They then participate in the same lifecycle:
+Then structured failure context is written:
 
-```mermaid
-flowchart LR
-    EXT["External Benchmark Provider"] --> FETCH["Missing Range Fetch"]
-    FETCH --> PARQ["Parquet Bytes"]
-    PARQ --> RAW["SQLite Raw Store<br/>virtual:// artifact"]
-    RAW --> PEND["PENDING_BRONZE"]
-    PEND --> BR["bronze.r_Benchmark_Data"]
-    BR --> SYNC["SYNCED"]
-    SYNC --> CANON["Canonical Benchmark History"]
+```python
+cp.runs.log_run_failure(
+    run_id=run_id,
+    failed_isin=None,
+    stage="Pipeline",
+    error_type=type(exc).__name__,
+    error_message=str(exc),
+    traceback_log=traceback.format_exc(),
+)
 ```
 
-This is an important provenance decision.
+Finally:
 
-Externally acquired market history is preserved as an input artifact rather than existing only as an ephemeral API response.
+```python
+cp.runs.finish_run(run_id, "FAILED")
+```
+
+A failed run therefore does not disappear merely because its analytical transaction was rolled back.
 
 ---
 
-## 16. Investment Quant Engine lifecycle
+## 20. Per-ISIN failure is intentionally fatal
 
-Canonical investment state then enters the investment analytical engine.
+Investment processing uses per-instrument isolation, but a failed ISIN cannot silently vanish from a successful portfolio.
 
-The processing grain becomes much deeper.
-
-At a high level:
+The worker error propagates through:
 
 ```text
-Canonical instrument state
-        ↓
-Per-ISIN processing
-        ↓
-FIFO tax-lot reconstruction
-        ↓
-Broker reconciliation
-        ↓
-Shadow benchmark inventory
-        ↓
-Historical market snapshots
-        ↓
-Return + tax state
-        ↓
-Portfolio-level post-processing
-```
-
-### Per-instrument execution
-
-Investment data is partitioned by ISIN before worker execution.
-
-Per-instrument workloads can run through a process pool rather than repeatedly filtering the complete portfolio inside each worker.
-
-This is both an execution and architecture decision:
-
-- the instrument is a natural parallel unit,
-- and the lot engine owns instrument-specific state.
-
-### FIFO state evolution
-
-Purchases add lots.
-
-Sales consume the oldest available inventory first.
-
-Market observations advance the portfolio through time, applying purchases and sales up to the observation date before generating the next snapshot.
-
-### Reconciliation
-
-Reconstructed quantity and cost state are compared against broker-reported state.
-
-Where they differ, the engine reconciles the lot inventory so the analytical position reflects current reported reality.
-
-### Shadow benchmark state
-
-Each purchase also establishes benchmark-equivalent exposure.
-
-That shadow inventory evolves with the actual investment inventory.
-
-### Analytical snapshots
-
-Snapshots can contain:
-
-- lot state,
-- holding period,
-- market value,
-- book value,
-- tax state,
-- after-tax value,
-- XIRR context,
-- benchmark-relative state,
-- and realized/unrealized outcomes.
-
-The deepest persistent analytical grain is the lot-level Silver investment analytics fact.
-
----
-
-## 17. Investment post-processing
-
-Per-instrument results are not simply concatenated and averaged.
-
-Post-processing creates portfolio analytics across multiple grains.
-
-```text
-ISIN
- ↓
-Subtype
- ↓
-Class
- ↓
-Instrument Type
- ↓
-Sector
- ↓
-Industry
- ↓
-Portfolio
-```
-
-Cash-flow-aware measures such as portfolio XIRR are calculated using portfolio cash-flow context rather than by averaging security-level XIRRs.
-
-This distinction matters because return aggregation is a financial methodology problem, not merely a group-by operation.
-
----
-
-## 18. Wealth Analytics Engine lifecycle
-
-Canonical household state and investment analytics then feed the wealth model.
-
-The flow is approximately:
-
-```text
-Household facts
-      +
-Investment analytical state
-      ↓
-Unified ledger
-      ↓
-Asset-month balances
-      ↓
-Book net worth
-      ↓
-Market investment overlay
-      ↓
-Market / after-tax wealth
-      ↓
-Cash-flow reconciliation
-      ↓
-Budget + tax + portfolio planning
-      ↓
-FIRE
-```
-
-The important architectural point is integration.
-
-Investment state is not a separate analytical island.
-
-It influences household market wealth and therefore long-range planning.
-
----
-
-## 19. Unified ledger
-
-The ledger normalizes:
-
-- opening balances,
-- income,
-- expenses,
-- and transfers
-
-into a common financial activity model.
-
-It distinguishes concepts such as:
-
-- cash income,
-- non-cash income,
-- cash expenses,
-- non-cash expenses,
-- core expenses,
-- and transfers.
-
-That ledger becomes the basis for reconstructing asset balances over time.
-
----
-
-## 20. Net-worth reconstruction
-
-Asset-month balances are derived from opening state and subsequent financial activity.
-
-The wealth model can then distinguish:
-
-```text
-Book / ledger value
-        ↓
-Investment market overlay
-        ↓
-Market-adjusted value
-        ↓
-After-tax market wealth
-```
-
-This allows savings and transaction-driven growth to remain conceptually distinct from market-driven appreciation.
-
-The resulting household state feeds both BI outputs and FIRE planning.
-
----
-
-## 21. Cash-flow reconciliation
-
-Cash-flow modelling uses configured cash-pool assets and activity classifications.
-
-Financial movement is organized into:
-
-- operating,
-- investing,
-- financing,
-- and internal-transfer activity.
-
-Calculated cash movement is then compared with actual opening and closing cash balances.
-
-Conceptually:
-
-```text
-Opening cash
-    +
-classified cash activity
-    =
-calculated closing cash
-
-calculated closing cash
-    vs
-actual closing cash
+ISIN worker
     ↓
-unreconciled difference
+ISIN pipeline
+    ↓
+Investment Quant Engine
+    ↓
+ETLOrchestrator
+    ↓
+rollback + cp_run_failures
 ```
 
-This makes the cash-flow model a reconciliation layer rather than simply another expense aggregation.
+For this financial workload, an incomplete portfolio is worse than a failed run.
+
+That is a correctness decision, not just an exception-handling preference.
 
 ---
 
-## 22. Planning, tax, and portfolio management
+## 21. Recovery starts from authoritative evidence
 
-The wealth/presentation layer also builds planning-oriented state such as:
-
-- budget variance,
-- tax liability forecasts,
-- savings and investment rates,
-- liquidity measures,
-- allocation weights,
-- allocation drift,
-- rebalance flags,
-- harvestable losses,
-- and harvesting priority.
-
-These outputs are decision-support models built on the same underlying financial state.
-
----
-
-## 23. FIRE lifecycle
-
-FIRE analytics build progressively from current state.
+If DuckDB analytical state is lost or inconsistent while the Control Plane survives:
 
 ```text
-Current after-tax market wealth
-          +
-Trailing spending / savings
-          +
-Configured assumptions
-          ↓
-Current-state FIRE measures
-          ↓
-Deterministic planning
-          ↓
-Monte Carlo scenario engine
-          ↓
-Curated stochastic outputs
+Raw artifacts + payloads
+        ↓
+requeue missing Bronze state
+        ↓
+rebuild Bronze
+        ↓
+rebuild Silver
+        ↓
+rebuild Gold
 ```
 
-The deterministic layer calculates concepts such as:
+`MetaLayer.heal_duckdb_registry()` compares Control Plane artifacts with DuckDB's current registry and returns missing analytical artifacts to `PENDING_BRONZE`.
 
-- Target FI,
-- Lean FI,
-- Coast FI,
-- FI coverage,
-- FI gap,
-- runway,
-- withdrawal rate,
-- required savings rate,
-- and linear time-to-FI.
-
-The stochastic engine then models a distribution of possible paths under configured assumptions.
-
-Gold exposes a curated subset such as:
-
-- P10/P50/P90 months to FI,
-- modelled probability of success,
-- stressed/base runway,
-- projected median FI date,
-- and P50 nominal terminal wealth.
-
-The lifecycle therefore moves from **observed financial state** to **assumption-driven planning state**.
-
-That boundary should remain explicit.
-
----
-
-## 24. Silver reconstruction
-
-Silver is rebuilt from the current canonical state.
-
-The schema is recreated and populated in dependency-aware order, with dimensions/reference models loaded before dependent facts.
-
-The current Silver contract contains 20 physical tables.
-
-Silver represents the canonical financial and analytical model rather than source-specific ingestion history.
-
-That means a successful run effectively says:
-
-> Given the current Bronze evidence and current financial semantics, this is the canonical financial state.
-
----
-
-## 25. Gold reconstruction
-
-Gold is also rebuilt from current analytical state.
-
-The current contract contains 17 physical marts across:
-
-- wealth,
-- cash flow,
-- planning,
-- portfolio management,
-- and investment analytics.
-
-Gold is deliberately consumption-oriented.
-
-It does not publish every intermediate calculation.
-
-The publication rule is effectively:
-
-> **A calculation existing in code is not enough. It must earn a place in the decision-support contract.**
-
-That philosophy is why the current serving model is more focused than earlier metric-heavy versions.
-
----
-
-## 26. Meta capture
-
-Meta captures operational context around the run.
-
-Current Meta tables cover concepts such as:
-
-- source registry state,
-- run telemetry,
-- table row counts,
-- financial rules,
-- and application settings.
-
-This provides the beginnings of a reproducibility catalog:
+The direction of authority is one-way:
 
 ```text
-What entered?
-What ran?
-What was produced?
-Under which rules?
-Under which settings?
+Control Plane → analytical recovery
 ```
 
-The current implementation still has opportunities to strengthen this layer, such as more explicit dataset-layer mapping and version/configuration fingerprints.
-
-Those are future hardening opportunities rather than claims about current behaviour.
+not the reverse.
 
 ---
 
-## 27. Commit lifecycle
+## 22. What the lifecycle does not claim
 
-After analytical state has been built successfully, the pipeline coordinates local persistence commits.
+The current lifecycle provides strong operational provenance, but it is not a full normalized lineage graph.
 
-The conceptual successful ending is:
+There are not yet dedicated structures such as:
 
-```mermaid
-sequenceDiagram
-    participant ETL as ETL Orchestrator
-    participant Duck as DuckDB
-    participant Raw as SQLite Raw Store
-    participant Meta as Run Telemetry
-
-    ETL->>Duck: Complete Bronze / Silver / Gold / Meta work
-    ETL->>Duck: COMMIT
-    ETL->>Raw: COMMIT
-    ETL->>Meta: Mark run successful
+```text
+run_artifacts
+run_stages
+run_outputs
+lineage_edges
 ```
 
-This is application-coordinated transaction handling.
+linking every run to every downstream contract.
 
-It is not a distributed two-phase commit protocol.
+The current system can answer a great deal through artifact state, run history, logs, snapshots and publication contracts.
 
-That distinction is important because the stores commit sequentially.
-
----
-
-## 28. Consumption lifecycle
-
-After a successful run, analytical state can be consumed through several surfaces.
-
-### Power BI
-
-Power BI consumes curated DuckDB analytical state, especially Gold decision marts and supporting Silver contracts where appropriate.
-
-### CLI
-
-The Rich CLI provides an interactive local application surface.
-
-### Desktop
-
-The CustomTkinter desktop application provides graphical access while heavy pipeline execution remains isolated from the UI process.
-
-### Headless / scheduled execution
-
-The application supports unattended workflows such as automatic or scheduled runs.
-
-### Documentation
-
-The documentation itself is packaged with the project and can be surfaced through application interfaces.
-
-The long-term goal is for the Markdown under `docs/` to remain the single maintained documentation source across GitHub, CLI, desktop, package distribution, and the project Wiki.
-
----
-
-## Failure lifecycle
-
-The successful path is only half the architecture.
-
-When downstream processing fails, the run should not masquerade as a successful analytical publication.
-
-```mermaid
-flowchart TB
-    RUN["Pipeline work"] --> ERR{"Exception?"}
-    ERR -->|"No"| COM["Commit coordinated state"]
-    ERR -->|"Yes"| RB1["Rollback DuckDB transaction"]
-    RB1 --> RB2["Rollback SQLite Raw Store transaction"]
-    RB2 --> FAIL["Record failed run telemetry"]
-    FAIL --> RAW["Persisted raw evidence remains available"]
-```
-
-The Raw Store is important here.
-
-A failed derived-state build does not erase the underlying financial evidence that had already been durably captured outside the analytical warehouse lifecycle.
-
----
-
-## Warehouse-loss recovery lifecycle
-
-A particularly useful recovery path exists when the Raw Store survives but the DuckDB analytical warehouse is recreated.
-
-Conceptually:
-
-```mermaid
-flowchart TB
-    R["SQLite Raw Store survives"] --> N["New / recreated DuckDB"]
-    N --> CMP["Compare Raw registry with warehouse registry"]
-    CMP --> MISS["Raw artifacts missing from warehouse state"]
-    MISS --> P["Return artifacts to PENDING_BRONZE"]
-    P --> E["Re-extract persisted bytes"]
-    E --> B["Rebuild Bronze"]
-    B --> S["Rebuild Silver"]
-    S --> G["Rebuild Gold"]
-```
-
-This is why the Raw Store is a recoverability boundary rather than a transient cache.
-
-The exact reconstructed result still depends on the current code, rules, and configuration, so recovery should not be confused with immutable historical replay across arbitrary future software versions.
-
----
-
-## State ownership by layer
-
-The lifecycle becomes easier to reason about when state ownership is explicit.
-
-| Layer | Owns | Persistence behaviour |
-| --- | --- | --- |
-| Source environment | Original institution/user artifacts | External to the analytical platform |
-| Raw Store | Persisted source bytes + registry/sync state | Durable SQLite state |
-| Bronze | Source-shaped analytical history/current reference state | Persistent, synchronized incrementally by source semantics |
-| Canonical transformation | In-memory canonical financial state | Recomputed |
-| Investment / Wealth engines | Analytical intermediate state | Recomputed |
-| Silver | Canonical financial and analytical contracts | Deterministically rebuilt |
-| Gold | Decision-support marts | Deterministically rebuilt |
-| Meta | Operational/control context | Captured around runs |
-| Power BI / CLI / GUI | Consumption | Reads published analytical state |
-
-This ownership model is one of the main reasons the system can mix incremental ingestion with deterministic analytical reconstruction without becoming ambiguous about where truth lives.
-
----
-
-## Source of truth hierarchy
-
-There is not one universal "source of truth" for every question.
-
-Different layers are authoritative for different concerns.
-
-#### Original financial evidence
-
-The persisted Raw Store payload represents the artifact that entered the system.
-
-#### Ingestion synchronization
-
-The Raw Store registry/sync state is authoritative for whether an artifact still needs Bronze processing.
-
-#### Source-shaped analytical history
-
-Bronze is authoritative for the persistent extracted source state used by downstream transformations.
-
-#### Canonical financial meaning
-
-Silver represents the published canonical financial/analytical contract for the current run.
-
-#### Decision-support analytics
-
-Gold represents the published decision-oriented analytical state.
-
-#### External current investment position
-
-Where historical reconstruction conflicts with broker-reported current position, the investment reconciliation policy treats broker state as the current anchor.
-
-This layered authority is deliberate.
-
----
-
-## Current lifecycle boundaries
-
-Several parts of the lifecycle are highly reusable.
-
-### Reusable infrastructure
-
-- raw payload persistence,
-- registry state,
-- change detection mechanism,
-- Bronze synchronization pattern,
-- orchestration,
-- deterministic reconstruction,
-- analytical persistence,
-- and application execution.
-
-### Configurable semantics
-
-Many financial classifications and planning assumptions are already represented through validated configuration.
-
-### Purpose-built boundaries
-
-Current source discovery categories, extractors, mappings, some transformations, jurisdictional tax behaviour, and selected policies remain tailored to my environment.
-
-The long-term generalization effort should move those assumptions behind explicit configuration, adapters, or strategies without changing the core lifecycle unnecessarily.
+It should not be documented as row-level or graph-complete lineage.
 
 ---
 
 ## Lifecycle invariants
 
-I want future changes to preserve these properties unless I intentionally redesign the architecture.
-
-1. **A discovered artifact is not equivalent to a synchronized artifact.**
-2. **Raw evidence should be persisted before it becomes derived analytical state.**
-3. **Bronze synchronization should preserve unrelated historical source state.**
-4. **Downstream reconstruction should operate from complete Bronze state, not only the current run's deltas.**
-5. **Source-specific structure should terminate before analytical engines.**
-6. **External benchmark data should participate in provenance rather than bypass it.**
-7. **Investment state should flow into household wealth and planning rather than remain isolated.**
-8. **Scenario-model outputs should remain distinguishable from observed financial state.**
-9. **A failed run should not be presented as successfully published analytical state.**
-10. **The Raw Store should remain capable of supporting analytical reconstruction.**
+1. Raw evidence exists before derived analytical state.
+2. New/changed source artifacts become actionable; unchanged history is preserved.
+3. Bronze synchronization follows source semantics.
+4. `PENDING_BRONZE` and `SYNCED` are different operational states.
+5. Complete Bronze feeds deterministic downstream reconstruction.
+6. Canonical finance hides source-specific structure.
+7. Silver/Gold publication is contract-driven.
+8. A failed ISIN cannot silently disappear.
+9. Failed analytical work rolls back.
+10. Failure history survives.
+11. SQLite is authoritative for operational state.
+12. DuckDB Meta is a current-state projection.
 
 ---
 
-## Related documentation
+## Go deeper
 
-Continue with:
-
-- [Warehouse Architecture](warehouse-architecture.md) — persistence semantics and responsibilities of Bronze, Silver, Gold, and Meta.
-- [Data Model](data-model.md) — canonical tables, relationships, and analytical grains.
-- [Reliability & Recovery](reliability-and-recovery.md) — transactions, failure handling, and reconstruction in greater depth.
-- [Design Decisions](design-decisions.md) — why the lifecycle is intentionally asymmetric.
-- [Adding a Data Source](../developer/adding-data-sources.md) — how a new source enters this lifecycle.
-- [Investment Analytics](../finance/investment-analytics.md) — financial methodology inside the investment-engine portion of the lifecycle.
-- [FIRE Methodology](../finance/fire-methodology.md) — methodology inside the planning portion of the lifecycle.
+- [System Architecture](system-architecture.md)
+- [Warehouse Architecture](warehouse-architecture.md)
+- [Reliability & Recovery](reliability-and-recovery.md)
+- [Adding a Data Source](../developer/adding-data-sources.md)
 
 [← Architecture Home](README.md) · [← Documentation Home](../README.md)

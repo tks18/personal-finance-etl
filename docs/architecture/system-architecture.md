@@ -1,1187 +1,776 @@
 # System Architecture
 
-Personal Finance ETL is a **local-first financial data and decision-support platform** built around one end-to-end financial lineage.
+Personal Finance ETL is a local-first financial platform with two deliberately different persistence planes:
 
-I designed the system so raw financial evidence is preserved independently from derived analytics, source-specific formats are resolved before downstream computation, financial meaning is represented explicitly, and decision-support outputs can be rebuilt from canonical state.
+> **SQLite owns operational truth and raw evidence. DuckDB owns analytical state.**
 
-This document explains the system as a whole: its architectural planes, runtime boundaries, persistence model, analytical engines, technology roles, control flow, extension seams, and current portability boundary.
-
-> **If you only read one architecture document, read this one.**  
-> For the record-by-record journey through the pipeline, continue with [Data Lifecycle](data-lifecycle.md).
-
----
-
-### Architecture at a glance
+Everything else follows from that boundary.
 
 ```mermaid
 flowchart TB
-    subgraph SRC["1 · Financial Source Environment"]
-        direction LR
-        BANK["Bank / Finance Sources<br/>CSV · Excel · SQLite"]
-        BROKER["Broker & Investment Sources<br/>Holdings · Orders · P&L"]
-        REF["Reference & Policy Inputs<br/>Mappings · Opening Balances · Macro"]
-        MARKET["External Market Data<br/>Benchmark History"]
+    SRC["Financial Sources<br/>bank · broker · SQLite · CSV · Excel · market data"]
+
+    subgraph CP["SQLite Control Plane"]
+        ART["ArtifactRepository<br/>identity · hash · payload · sync state"]
+        RUN["RunRepository<br/>runs · failures · config provenance · logs"]
+        FS["FileSyncService<br/>discovery reconciliation"]
     end
 
-    subgraph RAW["2 · Raw & Ingestion Control Plane · SQLite"]
-        direction LR
-        DISC["Discovery & Change Detection<br/>file categories · hash policy"]
-        REG["Raw File Registry<br/>identity · SHA-256 · timestamps"]
-        BLOB["Raw Payload Store<br/>durable source BLOBs"]
-        SYNC["Sync State<br/>PENDING_BRONZE ↔ SYNCED"]
-        VIRT["Virtual Artifacts<br/>benchmark Parquet chunks"]
-        DISC --> REG
-        REG --> BLOB
-        REG --> SYNC
-        VIRT --> REG
+    subgraph DUCK["DuckDB Analytical Plane"]
+        BR["Bronze<br/>persistent source-shaped state"]
+        SIL["Silver<br/>canonical financial contracts"]
+        GOLD["Gold<br/>decision-support marts"]
+        META["Meta<br/>lean latest-run projection"]
     end
 
-    BANK --> DISC
-    BROKER --> DISC
-    REF --> DISC
-    MARKET --> VIRT
+    DAG["Polars Canonical DAG"]
+    IQ["Investment Quant Engine"]
+    WEALTH["Wealth Analytics Engine"]
+    APP["Power BI · CLI · Desktop"]
 
-    subgraph ING["3 · Extraction & Persistent Bronze · DuckDB"]
-        direction LR
-        EXT["Source Extractors / Adapters<br/>bytes → source-shaped frames"]
-        BRREF["Reference Bronze<br/>full replacement"]
-        BRHIST["Historical Bronze<br/>file-aware incremental replacement"]
-        LINEAGE["Source Lineage<br/>__file_name__"]
-        EXT --> BRREF
-        EXT --> BRHIST
-        BRREF --> LINEAGE
-        BRHIST --> LINEAGE
-    end
-
-    BLOB --> EXT
-    SYNC -. successful Bronze load .-> BRREF
-    SYNC -. successful Bronze load .-> BRHIST
-
-    subgraph CANON["4 · Canonical Financial & Semantic Model · Polars"]
-        direction LR
-        DAG["Lazy Transformation DAG<br/>vectorized · streaming collection"]
-        RULES["FinancialRules<br/>income · expense · assets · tax · FIRE"]
-        HH["Household Contracts<br/>income · expense · transfer · opening balance"]
-        INV["Investment Contracts<br/>master · purchases · sales · market data"]
-        BM["Benchmark & Macro Contracts<br/>benchmarks · calendar · CPI / macro"]
-        DAG --> HH
-        DAG --> INV
-        DAG --> BM
-        RULES -. policy .-> DAG
-    end
-
-    LINEAGE --> DAG
-
-    subgraph ENGINES["5 · Analytics & Decision Engines"]
-        direction LR
-
-        subgraph QUANT["Investment Quant Engine"]
-            direction TB
-            ASSET["Asset Pipelines<br/>Stocks · Mutual Funds"]
-            FIFO["FIFO Tax-Lot Accounting<br/>partial disposals · holding state"]
-            RECON["Broker Reconciliation<br/>transaction history ↔ reported state"]
-            SHADOW["Shadow Benchmark Portfolio<br/>cash-equivalent benchmark lots"]
-            PERF["Performance & Tax State<br/>XIRR · After-Tax XIRR · Active Return<br/>Max Drawdown · realized / unrealized tax"]
-            AGG["Hierarchical Aggregation<br/>ISIN → subtype → class → type<br/>sector → industry → portfolio"]
-            ASSET --> FIFO --> RECON --> SHADOW --> PERF --> AGG
-        end
-
-        subgraph WEALTH["Wealth Analytics Engine"]
-            direction TB
-            LEDGER["Unified Financial Ledger<br/>cash / non-cash · transfers"]
-            NW["Net-Worth Reconstruction<br/>book → market → after-tax wealth"]
-            CASH["Cash-Flow Reconciliation<br/>operating · investing · financing"]
-            PLAN["Planning Analytics<br/>budget · tax forecast · allocation"]
-            FIRE["FIRE Engine<br/>current state · deterministic planning"]
-            MC["Numba Monte Carlo<br/>regimes · fat tails · jumps · inflation<br/>human-capital shocks · glide paths · withdrawals"]
-            LEDGER --> NW --> CASH --> PLAN --> FIRE --> MC
-        end
-    end
-
-    INV --> ASSET
-    BM --> SHADOW
-    HH --> LEDGER
-    INV --> NW
-    RULES -. policy .-> QUANT
-    RULES -. policy .-> WEALTH
-
-    subgraph WH["6 · Analytical Warehouse · DuckDB"]
-        direction LR
-        SILVER["Silver · 20 Tables<br/>canonical dimensions · references · facts<br/>including lot-level investment analytics"]
-        GOLD["Gold · 17 Decision Marts<br/>wealth · cash flow · planning<br/>portfolio management · investment analytics"]
-        META["Meta · Control Catalog<br/>file registry · run log · row counts<br/>settings · financial rules"]
-        SILVER --> GOLD
-    end
-
-    HH --> SILVER
-    INV --> SILVER
-    BM --> SILVER
-    AGG --> GOLD
-    MC --> GOLD
-    CASH --> GOLD
-    PLAN --> GOLD
-    SYNC -. operational state .-> META
-    RULES -. captured policy .-> META
-
-    subgraph APP["7 · Application & Consumption"]
-        direction LR
-        API["PersonalFinanceEngine<br/>backend facade"]
-        CLI["Rich CLI<br/>shan-fin"]
-        GUI["Desktop GUI<br/>shan-fin-gui"]
-        AUTO["Headless / Scheduled<br/>auto · cron · snapshots"]
-        PBI["Power BI<br/>decision dashboards"]
-        DOCS["Packaged Docs<br/>guides / methodology"]
-        API --> CLI
-        API --> GUI
-        API --> AUTO
-    end
-
-    GOLD --> PBI
-    SILVER --> PBI
-    META --> API
-    GOLD --> API
-    DOCS --> CLI
-    DOCS --> GUI
-
-    subgraph REL["Cross-Cutting Reliability"]
-        direction LR
-        TX["Application-Coordinated Transactions<br/>DuckDB + SQLite commit / rollback"]
-        REC["Recoverability<br/>Raw Store → rebuild Bronze → Silver → Gold"]
-        TYPE["Engineering Discipline<br/>Pydantic · Ruff · strict mypy · strict Pyright"]
-    end
-
-    RAW -. governed by .-> TX
-    WH -. governed by .-> TX
-    BLOB -. recovery source .-> REC
-    REC -. reconstructs .-> ING
-    REC -. reconstructs .-> WH
-    TYPE -. contracts .-> CANON
-    TYPE -. contracts .-> ENGINES
+    SRC --> FS
+    FS --> ART
+    ART --> BR
+    BR --> DAG
+    DAG --> IQ
+    DAG --> WEALTH
+    IQ --> WEALTH
+    IQ --> SIL
+    WEALTH --> GOLD
+    CP -. current-state mirror .-> META
+    SIL --> APP
+    GOLD --> APP
+    META --> APP
 ```
 
-#### How to read the diagram
+---
 
-The solid path represents the primary financial-data lineage.
+## The production problem shaped the architecture
 
-Dotted paths represent cross-cutting concerns such as:
+As of **24 September 2026**, my production environment contains **1,608 source artifacts**.
 
-- financial policy,
+The source population includes daily stock and mutual-fund broker snapshots, transaction/history files, financial masters, mappings, reference inputs, opening state, and my personal-finance SQLite database.
+
+Broker history alone grows by approximately:
+
+```text
+1 stock snapshot / day
++
+1 mutual-fund snapshot / day
+=
+~2 additional source artifacts / day
+```
+
+That creates two different engineering problems:
+
+```text
+Source synchronization
+→ avoid reparsing unchanged evidence
+
+Analytical reconstruction
+→ keep downstream financial state coherent
+```
+
+The architecture therefore uses different persistence strategies for different layers.
+
+```mermaid
+flowchart LR
+    ALL["Discover 1,608+ artifacts"] --> HASH["Identity + hash policy"]
+    HASH --> CHANGE{"New / changed?"}
+    CHANGE -->|"No"| KEEP["Keep existing Bronze state"]
+    CHANGE -->|"Yes"| UPSERT["Synchronize affected Bronze partition"]
+    KEEP --> FULL["Complete Bronze state"]
+    UPSERT --> FULL
+    FULL --> REBUILD["Rebuild canonical + analytical state"]
+```
+
+The principle is:
+
+> **Incrementalize expensive source synchronization. Rebuild derived financial truth from complete state.**
+
+---
+
+## 1. Application surfaces stay thin
+
+The application exposes several ways to run or consume the system:
+
+```mermaid
+flowchart LR
+    API["PersonalFinanceEngine<br/>backend facade"]
+    CLI["Rich CLI"]
+    GUI["Desktop GUI"]
+    AUTO["Headless / scheduled"]
+    BI["Power BI"]
+
+    API --> CLI
+    API --> GUI
+    API --> AUTO
+    BI -. reads .-> WH["DuckDB"]
+```
+
+The frontends do not own financial methodology.
+
+They invoke the backend and present state.
+
+This keeps:
+
+```text
+CLI logic
+GUI logic
+automation logic
+```
+
+from becoming three competing implementations of the pipeline.
+
+---
+
+## 2. `ETLOrchestrator` coordinates the run
+
+The orchestrator opens both persistence planes and creates the authoritative run record before analytical work begins:
+
+```python
+self.db_manager.open()
+self.db_manager.ensure_schemas()
+
+cp = ControlPlane(
+    self.cfg.TARGET_DB_BASE_PATH,
+    self.cfg.RAW_DOCUMENT_STORE_NAME,
+)
+cp.open()
+cp.ensure_schema()
+
+run_id = cp.runs.start_run(
+    cfg_json=self.cfg.model_dump_json(),
+    rules_json=self.rules.model_dump_json() if self.rules else None,
+)
+```
+
+It then starts coordinated local transactions:
+
+```python
+self.db_manager.conn.execute("BEGIN TRANSACTION")
+cp.begin_transaction()
+
+cp.runs.update_run_status(run_id, "RUNNING")
+```
+
+The orchestrator owns **coordination**.
+
+It does not own:
+
+- SQLite repository SQL,
+- source-specific extraction,
+- financial transformation formulas,
+- FIFO state,
+- Gold business logic,
+- or frontend rendering.
+
+That separation is one of the most important boundaries in the application.
+
+---
+
+## 3. The Control Plane is a facade over focused services
+
+The production facade is intentionally small:
+
+```python
+class ControlPlane:
+    def __init__(self, base_path: str, db_name: str = "Raw_Documents.sqlite"):
+        self.db = SQLiteManager(base_path, db_name)
+        self.artifacts = ArtifactRepository(self.db)
+        self.runs = RunRepository(self.db)
+        self.file_sync = FileSyncService(self.artifacts)
+
+    def begin_transaction(self) -> None:
+        self.db.begin_transaction()
+
+    def commit(self) -> None:
+        self.db.commit()
+
+    def rollback(self) -> None:
+        self.db.rollback()
+```
+
+The structure is:
+
+```text
+ControlPlane
+├── SQLiteManager
+├── ArtifactRepository
+├── RunRepository
+└── FileSyncService
+```
+
+### `ArtifactRepository`
+
+Owns:
+
+- artifact registry,
+- raw payload BLOBs,
+- hashes,
+- file sizes,
 - synchronization state,
-- transaction coordination,
-- recoverability,
-- and engineering contracts.
+- virtual artifacts.
 
-The system deliberately separates **source persistence**, **canonical financial semantics**, **analytical computation**, **serving contracts**, and **application surfaces**.
+### `RunRepository`
 
----
+Owns:
 
-### Architectural goals
+- run identity,
+- run status,
+- application/schema version,
+- Settings snapshots,
+- FinancialRules snapshots,
+- failures,
+- tracebacks,
+- execution logs.
 
-The architecture grew against a real financial workload rather than a synthetic reference application.
+### `FileSyncService`
 
-I optimize for several properties.
+Owns:
 
-#### Local-first operation
+- comparison between discovered files and registered evidence,
+- configurable rehash policy,
+- new/changed classification,
+- full-replace pruning,
+- binary ingestion of actionable artifacts.
 
-Financial data is intended to remain on the machine.
-
-The core analytical stack does not require a cloud warehouse or hosted application backend.
-
-#### Reproducibility
-
-Derived financial state should be reconstructable from persisted evidence and explicit rules.
-
-#### Traceability
-
-I want to know which source artifact contributed to persistent source-shaped data and which configuration/rules governed a run.
-
-#### Financial semantic consistency
-
-The household ledger, investment engine, tax model, cash-flow model, wealth model, and FIRE engine should operate on compatible financial concepts rather than independently interpreting raw files.
-
-#### Decision-oriented analytics
-
-The serving model should expose metrics and grains that support real decisions rather than publishing every intermediate calculation.
-
-#### Extensibility without premature generalization
-
-The current system solves my financial environment first.
-
-Where behaviour genuinely varies, I introduce seams such as asset pipelines, configuration models, or future adapter/strategy boundaries. I do not try to encode every possible financial institution or jurisdiction before I have a real workload that needs it.
+This keeps operational persistence behind one subsystem rather than spreading SQLite statements through the pipeline.
 
 ---
 
-## The architectural planes
+## 4. Control Plane physical state
 
-### 1. Financial source environment
+The SQLite schema makes the ownership explicit:
 
-The platform begins with heterogeneous financial evidence.
-
-Current source families include:
-
-- CSV,
-- Excel,
-- SQLite,
-- broker/investment statements,
-- mapping and reference files,
-- opening balances,
-- macro parameters,
-- and externally acquired benchmark history.
-
-The source environment is intentionally treated as **evidence**, not as the financial model itself.
-
-A broker column name, worksheet layout, or bank-specific record shape should not leak deep into the analytical engines.
-
-That separation is one of the most important boundaries in the architecture.
-
----
-
-### 2. Raw & ingestion control plane
-
-The Raw Document Store is a dedicated SQLite database.
-
-It is responsible for more than staging files.
-
-Conceptually, it owns three things:
-
-```text
-Raw source persistence
-        +
-Change / registry state
-        +
-Bronze synchronization state
+```sql
+CREATE TABLE IF NOT EXISTS cp_file_registry (
+    file_id TEXT PRIMARY KEY,
+    file_name TEXT NOT NULL,
+    relative_path TEXT NOT NULL UNIQUE,
+    file_category TEXT NOT NULL,
+    file_type TEXT,
+    file_hash TEXT NOT NULL,
+    file_size_bytes BIGINT,
+    sync_status TEXT DEFAULT 'PENDING_BRONZE',
+    first_ingested TIMESTAMP NOT NULL,
+    last_ingested TIMESTAMP NOT NULL
+);
 ```
 
-#### Raw file registry
+Raw bytes are separate from registry state:
 
-The registry tracks information such as:
+```sql
+CREATE TABLE IF NOT EXISTS cp_file_payloads (
+    file_id TEXT PRIMARY KEY,
+    file_bytes BLOB,
+    FOREIGN KEY(file_id)
+        REFERENCES cp_file_registry(file_id)
+        ON DELETE CASCADE
+);
+```
 
-- file identity,
-- relative path,
-- category,
-- physical type,
-- SHA-256 fingerprint,
-- file size,
-- first ingestion,
-- last ingestion,
-- and synchronization status.
+Run provenance is also first-class:
 
-#### Raw payload persistence
+```sql
+CREATE TABLE IF NOT EXISTS cp_runs (
+    run_id TEXT PRIMARY KEY,
+    started_at TIMESTAMP NOT NULL,
+    finished_at TIMESTAMP,
+    status TEXT,
+    application_version TEXT,
+    schema_version TEXT,
+    settings_snapshot_id TEXT,
+    rules_snapshot_id TEXT,
+    execution_log TEXT
+);
+```
 
-The source bytes themselves are stored as BLOBs.
+And failures survive as structured history:
 
-This creates an important boundary:
+```sql
+CREATE TABLE IF NOT EXISTS cp_run_failures (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id TEXT NOT NULL,
+    failed_isin TEXT,
+    stage TEXT,
+    error_type TEXT,
+    error_message TEXT,
+    traceback_log TEXT,
+    created_at TIMESTAMP NOT NULL
+);
+```
 
-> The analytical warehouse does not need the original source file to remain unchanged forever in order to preserve the evidence that entered the system.
+The Control Plane is therefore more than a raw-file cache.
 
-#### Synchronization state
+It is the system's operational memory.
 
-The Raw Store tracks whether an artifact is waiting for Bronze synchronization or has been successfully processed.
+---
+
+## 5. Configuration provenance is content-addressed
+
+Runs reference immutable configuration snapshots by content identity.
+
+`RunRepository` hashes the serialized Settings payload:
+
+```python
+cfg_hash = hashlib.sha256(cfg_json.encode("utf-8")).hexdigest()
+settings_id = f"snap_set_{cfg_hash[:12]}"
+
+self.db.conn.execute(
+    """
+    INSERT OR IGNORE INTO cp_settings_snapshots
+    (snapshot_id, content_hash, canonical_payload, created_at)
+    VALUES (?, ?, ?, ?)
+    """,
+    (settings_id, cfg_hash, cfg_json, now),
+)
+```
+
+FinancialRules use the same pattern.
+
+This gives:
+
+```text
+same configuration
+      ↓
+same content hash
+      ↓
+same snapshot identity
+      ↓
+many runs can reference one immutable payload
+```
+
+The purpose is not deduplication alone.
+
+It lets a run answer:
+
+> **Which operational configuration and financial policy produced this execution?**
+
+---
+
+## 6. Ingestion reads from durable evidence
+
+The pipeline first discovers physical sources, then asks the Control Plane which ones are actionable:
+
+```python
+new_files, changed_files, _ = cp.file_sync.sync_with_disk(
+    discovered_files,
+    self.cfg.FILE_HASH_POLICY,
+    full_replace_categories,
+)
+
+actionable_all = {
+    key: new_files.get(key, []) + changed_files.get(key, [])
+    for key in discovered_files.keys()
+}
+```
+
+Only new or changed artifacts are persisted again.
+
+Extraction then works through the Control Plane rather than treating the filesystem as the only source of truth.
+
+That separation matters for recovery and reproducibility.
+
+---
+
+## 7. Bronze is persistent source-shaped state
+
+Bronze is where extracted source state becomes analytically persistent without pretending to be canonical finance.
+
+For historical sources, the upsert boundary is file-aware.
 
 Conceptually:
 
 ```text
-Raw artifact
-    │
-    ▼
-PENDING_BRONZE
-    │
-    │ successful extraction + Bronze persistence
-    ▼
-SYNCED
+changed artifact
+      ↓
+delete rows owned by that artifact
+      ↓
+insert replacement rows
+      ↓
+preserve unrelated history
 ```
 
-This turns ingestion into an explicit state transition rather than "the script ran, therefore the file must be loaded."
+For current/reference sources, complete replacement can be the correct semantic operation.
 
-#### Virtual artifacts
+The decision is driven by source meaning, not by a universal "incremental is always better" rule.
 
-Not every raw artifact originates as a physical file.
+After synchronization, the pipeline reads **complete Bronze state**:
 
-Incrementally fetched benchmark history can be serialized as Parquet bytes and registered under a synthetic `virtual://...` identity.
+```python
+full_dataset = bronze.get_full_dataset(extracted_data.mappings)
+```
 
-That allows externally acquired market data to participate in the same persistence, provenance, and recovery model as local financial sources.
-
-#### Why SQLite?
-
-The Raw Store workload consists primarily of:
-
-- small registry operations,
-- transactionally consistent state changes,
-- binary payload persistence,
-- and local metadata access.
-
-SQLite fits that role well.
-
-It is not being used as a second analytical warehouse.
+That complete state feeds deterministic transformation.
 
 ---
 
-### 3. Extraction & persistent Bronze
+## 8. Canonical transformation is Polars-first
 
-Extraction operates downstream of the Raw Store.
+The transformation layer converts source-shaped Bronze into canonical financial contracts.
 
-Source-specific extractors convert persisted source bytes into source-shaped analytical frames.
-
-This means the conceptual boundary is:
-
-```text
-Physical / virtual artifact
-          ↓
-Raw Store bytes
-          ↓
-Source extractor
-          ↓
-Bronze-compatible frame
+```python
+transformer = TransformationDAG(
+    self.cfg,
+    self.status_queue,
+    self.rules,
+)
+self.dfs = transformer.run(extracted_data)
 ```
 
-#### Two Bronze persistence strategies
+The transformation plane uses Polars LazyFrames where possible so expressions remain composable before materialization.
 
-The system does not force all sources into one incremental model.
-
-##### Reference and configuration sources
-
-Reference-like datasets can be fully replaced when their source changes.
-
-Examples include mappings, masters, macro/reference data, and other datasets whose current complete state is more meaningful than preserving multiple file versions inside Bronze.
-
-##### Historical and event sources
-
-Historical sources use file-aware replacement.
-
-Conceptually:
+The canonical boundary hides source vocabulary from downstream engines.
 
 ```text
-Changed source artifact
+source-specific field names
         ↓
-Delete Bronze rows for that source
+canonical financial concepts
         ↓
-Insert newly extracted rows
+shared analytics
 ```
 
-Bronze records retain source lineage such as `__file_name__`, allowing the loader to replace the affected source partition without rebuilding all source history.
+Examples include:
 
-#### Why the asymmetry?
-
-Because source semantics differ.
-
-I use incrementality where it preserves history efficiently, and replacement where a complete reference state is the cleaner contract.
-
-Trying to make every source behave identically would simplify the loader API while making the data model less honest.
-
----
-
-### 4. Canonical financial & semantic model
-
-Bronze preserves source-shaped state.
-
-The transformation layer converts that state into financial concepts that downstream engines can rely on.
-
-This is where source-specific structure stops being the dominant vocabulary.
-
-#### Polars transformation graph
-
-The transformation layer uses Polars LazyFrames and a code-defined dependency graph.
-
-Independent branches can be collected together using streaming/lazy execution rather than materializing every intermediate step eagerly.
-
-The transformation layer produces canonical concepts such as:
-
-#### Household contracts
-
-- income transactions,
-- expense transactions,
-- transfer transactions,
-- opening balances,
-- categories,
-- subcategories,
-- assets,
-- and currencies.
-
-#### Investment contracts
-
+- income,
+- expense,
+- transfer,
+- opening balance,
 - investment master,
-- purchases,
-- sales,
-- market data,
-- and instrument/reference state.
-
-#### Benchmark and macro contracts
-
-- benchmark master,
-- benchmark history,
-- calendar,
-- macro parameters,
-- CPI/inflation context,
-- and related reference state.
-
-#### FinancialRules
-
-Operational settings answer questions such as:
-
-> Where are the files and databases?
-
-`FinancialRules` answers a different question:
-
-> What does this financial activity mean?
-
-Rules can express concepts such as:
-
-- active/passive/non-cash income,
-- core expenses,
-- budget allocations,
-- cash pools,
-- operating/investing/financing activity,
-- asset classifications,
-- investment classifications,
-- target allocations,
-- tax parameters,
-- macro assumptions,
-- FIRE assumptions,
-- market regimes,
-- human-capital shocks,
-- glide paths,
-- dynamic withdrawals,
-- and stochastic inflation.
-
-This distinction matters because **configuration is part of the financial semantic model**.
+- purchase,
+- sale,
+- market observation,
+- benchmark observation.
 
 ---
 
-## Analytics engines
+## 9. Stateful investment analytics use a different compute model
 
-The platform contains two major analytical subsystems.
+Not every workload belongs in a vectorized dataframe expression.
 
-They share canonical financial state but solve different problems.
+FIFO tax-lot accounting is stateful.
 
-### Investment Quant Engine
-
-The investment engine reconstructs and evaluates investment state at a much deeper grain than household-level finance.
-
-Its conceptual pipeline is:
+Per-instrument analytics therefore use instrument identity as a natural isolation boundary.
 
 ```text
-Canonical investment transactions
+Canonical investment contracts
         ↓
-Asset-specific pipeline
+partition by ISIN
         ↓
-FIFO tax-lot inventory
+FIFO / tax / broker / benchmark state
         ↓
-Broker reconciliation
+lot analytics
         ↓
-Shadow benchmark state
-        ↓
-Historical lot snapshots
-        ↓
-Performance + tax state
-        ↓
-Hierarchical aggregation
+hierarchical portfolio analytics
 ```
 
-#### Asset pipelines
+This is an example of a broader design rule:
 
-The transformation architecture already contains a reusable asset-pipeline boundary.
+> **Use the compute model that matches the problem rather than forcing one abstraction across the entire system.**
 
-Current implementations cover stocks and mutual funds.
+Polars handles dataframe transformations.
 
-Each pipeline produces common downstream contracts for concepts such as:
+Stateful Python objects handle FIFO.
 
-- market data,
-- purchases,
-- sales,
-- and instrument master/reference state.
-
-This is an important extension seam.
-
-A future asset type should ideally satisfy the canonical contract rather than teach every downstream analytical component about another source format.
-
-#### FIFO tax-lot accounting
-
-Purchases create individual lots.
-
-Sales consume the oldest available lots first, including partial disposals.
-
-The lot state carries concepts such as:
-
-- quantity,
-- cost basis,
-- holding age,
-- holding classification,
-- realized gain/loss,
-- unrealized gain/loss,
-- estimated tax state,
-- and after-tax value.
-
-#### Broker reconciliation
-
-Transaction history reconstructs what the position should be.
-
-Broker-reported state represents the current external position.
-
-The engine reconciles differences rather than assuming historical transaction data is permanently perfect.
-
-The design philosophy is:
-
-> **Transactions explain history; broker state anchors current truth.**
-
-That is a deliberate real-world compromise.
-
-#### Shadow benchmark portfolio
-
-Investment purchases create cash-equivalent benchmark exposure.
-
-The benchmark shadow inventory evolves alongside the actual investment inventory, including proportional reduction when a real position is partially disposed.
-
-This allows benchmark-relative performance to reflect actual capital deployment more meaningfully than simply comparing two unrelated point-to-point returns.
-
-#### Performance and tax state
-
-The current serving model focuses on decision-useful measures such as:
-
-- CAGR,
-- XIRR,
-- after-tax XIRR,
-- benchmark CAGR,
-- benchmark XIRR,
-- active return,
-- max drawdown,
-- realized gains/losses,
-- unrealized gains/losses,
-- and tax-aware valuation.
-
-#### Hierarchical aggregation
-
-Investment analytics are published at multiple grains:
-
-```text
-Tax Lot
-   ↓
-ISIN
-   ↓
-Subtype
-   ↓
-Class
-   ↓
-Instrument Type
-   ↓
-Sector
-   ↓
-Industry
-   ↓
-Portfolio
-```
-
-Returns such as portfolio XIRR are calculated from portfolio cash-flow context rather than naively averaging instrument returns.
+NumPy/Numba handle simulation.
 
 ---
 
-### Wealth Analytics Engine
+## 10. Presentation analytics return lazy graphs
 
-The wealth engine turns canonical household and investment state into a household-level financial model.
+The wealth/presentation engine builds independent LazyFrame outputs.
 
-Its conceptual flow is:
+The orchestrator collects them together:
 
-```text
-Canonical household transactions
-        ↓
-Unified financial ledger
-        ↓
-Asset-month balances
-        ↓
-Book net worth
-        ↓
-Investment market overlay
-        ↓
-Market / after-tax wealth
-        ↓
-Cash-flow reconciliation
-        ↓
-Budget + tax + planning
-        ↓
-FIRE
-        ↓
-Monte Carlo
+```python
+keys = list(presentation_lazy.keys())
+lazy_frames = [presentation_lazy[key] for key in keys]
+
+results = pl.collect_all(
+    lazy_frames,
+    engine="streaming",
+)
+
+for key, result in zip(keys, results, strict=True):
+    self.dfs[key] = result
 ```
 
-#### Unified financial ledger
+This lets independent analytical graphs execute together while preserving a clear builder boundary.
 
-Income, expenses, transfers, and opening balances are normalized into a common financial activity model.
+The production-hardening cycle also removed presentation computations that no longer supported a serving decision.
 
-The system distinguishes concepts such as:
-
-- cash income,
-- non-cash income,
-- cash expenses,
-- non-cash expenses,
-- core expenses,
-- transfers,
-- and opening balances.
-
-This creates a semantic bridge between heterogeneous transaction facts and household-level financial state.
-
-#### Net-worth reconstruction
-
-Balances are reconstructed asset by asset over time.
-
-The model can distinguish:
-
-- ledger/book value,
-- investment market value,
-- market-adjusted net worth,
-- after-tax market wealth,
-- liquid assets,
-- illiquid assets,
-- liabilities,
-- savings contribution,
-- and organic growth.
-
-Investment market state therefore flows into household wealth rather than living in an isolated portfolio dashboard.
-
-#### Cash-flow reconciliation
-
-Configured cash-pool assets allow actual cash movement to be classified into:
-
-- operating activity,
-- investing activity,
-- financing activity,
-- and internal transfers.
-
-Calculated movement is reconciled against opening and closing cash balances.
-
-This makes the cash-flow model a reconciliation system, not merely an expense categorization view.
-
-#### Planning analytics
-
-The wealth engine also produces decision context for:
-
-- budgets,
-- savings,
-- liquidity,
-- tax exposure,
-- portfolio allocation,
-- and long-range planning.
-
-#### FIRE engine
-
-FIRE modelling has three conceptual levels:
-
-```text
-Current financial state
-        ↓
-Deterministic planning
-        ↓
-Stochastic scenario modelling
-```
-
-The deterministic layer calculates concepts such as:
-
-- FI targets,
-- FI coverage,
-- FI gap,
-- runway,
-- linear time-to-FI,
-- required savings rate,
-- and withdrawal rate.
-
-The stochastic layer can model:
-
-- Bull/Bear/Stagflation regimes,
-- Markov transitions,
-- fat-tailed return shocks,
-- jump/crash events,
-- stochastic inflation,
-- human-capital shocks,
-- unemployment periods,
-- glide paths,
-- portfolio drag,
-- dynamic withdrawal rules,
-- and sequence-of-returns effects.
-
-The simulation kernel uses NumPy/Numba for the computationally intensive path.
-
-These are scenario outputs under configured assumptions, not predictions.
+That reduced both conceptual and runtime cost.
 
 ---
 
-## Analytical warehouse
+## 11. Publication is contract-driven
 
-The analytical warehouse lives in DuckDB and contains four conceptual layers.
+Silver and Gold publication use an explicit registry:
 
-### Bronze
+```python
+@dataclass
+class DataContract:
+    contract_id: str
+    layer: str
+    physical_table: str
+    domain: str
+    grain: str
+    producer: str
+    publication_order: int
+```
 
-Persistent source-shaped ingestion state.
+The current hardened publication path sorts contracts by declared order:
 
-Bronze preserves the result of source extraction and supports incremental/file-aware synchronization.
+```python
+contracts = sorted(
+    (c for c in DATA_CONTRACT_REGISTRY if c.layer == "gold"),
+    key=lambda c: c.publication_order,
+)
+```
 
-### Silver
+Then writes only registered outputs:
 
-Silver is rebuilt deterministically from current Bronze state.
+```python
+for contract in contracts:
+    if contract.contract_id in dfs:
+        self._write(
+            dfs[contract.contract_id],
+            contract.physical_table,
+        )
+```
 
-It contains the **canonical financial and analytical model**.
+This replaces inference with explicit analytical identity.
 
-The current v6 architecture contains **20 Silver tables** spanning:
+The registry tells the system:
 
-- dimensions,
-- reference models,
-- household transaction facts,
-- investment transaction facts,
-- market/benchmark facts,
-- and lot-level investment analytics.
-
-Silver is the stable semantic boundary between source-specific data and downstream decision models.
-
-### Gold
-
-Gold is also rebuilt deterministically.
-
-It contains **17 decision-support marts** across:
-
-- wealth,
-- cash flow,
-- planning,
-- portfolio management,
-- and investment analytics.
-
-Gold deliberately contains multiple analytical grains.
-
-It is not one giant universal star schema.
-
-A household month, Month × Asset, Month × ISIN, Date × ISIN, investment class, and portfolio each answer different questions.
-
-### Meta
-
-Meta is the beginning of the operational/control catalog.
-
-It captures concepts such as:
-
-- source registry state,
-- run telemetry,
-- output row counts,
-- application settings,
-- and financial-rules snapshots.
-
-The long-term opportunity is to make this layer an even stronger reproducibility catalog through explicit schema/application versions and configuration fingerprints.
-
-For the physical warehouse contracts, see:
-
-- [Silver Data Contracts](../reference/silver-data-contracts.md)
-- [Gold Data Contracts](../reference/gold-data-contracts.md)
-- [Meta Data Contracts](../reference/meta-data-contracts.md)
+```text
+what the dataset is
+where it lives
+what layer owns it
+what one row means
+who produces it
+when it publishes
+```
 
 ---
 
-## Runtime architecture
+## 12. Silver and Gold are rebuilt, not patched
 
-The data architecture is only one half of the system.
+After the complete analytical state has been computed:
 
-The application also separates presentation from pipeline execution.
+```python
+SilverLayer(self.db_manager).load(self.dfs)
+GoldLayer(self.db_manager).load(self.dfs)
+```
+
+Silver and Gold are full-replace serving layers.
+
+That is intentional.
+
+The system already paid the complexity cost of maintaining incremental source history in Raw/Bronze.
+
+Trying to incrementally patch every downstream analytical dependency would make financial correctness harder to reason about.
+
+The architecture instead chooses:
+
+```text
+incremental evidence synchronization
+        +
+deterministic derived-state reconstruction
+```
+
+---
+
+## 13. DuckDB Meta is a projection, not authority
+
+DuckDB Meta is intentionally lean:
+
+```text
+m_File_Registry
+m_Table_Row_Counts
+m_Financial_Rules
+m_Settings
+```
+
+It exists beside the analytical warehouse because those current-state values are useful to BI/query consumers.
+
+Historical run truth belongs to SQLite.
+
+The hardened Meta row-count path uses the Data Contract Registry for layer/table identity rather than guessing from internal frame names.
+
+That distinction matters:
+
+```text
+Control Plane
+→ authoritative operational history
+
+DuckDB Meta
+→ current analytical context
+```
+
+---
+
+## 14. Reliability is part of the architecture
+
+A successful run transitions to `COMMITTING` before persistence is finalized:
+
+```python
+cp.runs.update_run_status(run_id, "COMMITTING")
+
+self.db_manager.conn.execute("COMMIT")
+cp.commit()
+
+cp.runs.finish_run(run_id, "SUCCESS")
+```
+
+Failure triggers rollback of both local persistence planes:
+
+```python
+self.db_manager.conn.execute("ROLLBACK")
+cp.rollback()
+```
+
+Then failure details are persisted:
+
+```python
+cp.runs.log_run_failure(
+    run_id=run_id,
+    failed_isin=None,
+    stage="Pipeline",
+    error_type=type(exc).__name__,
+    error_message=str(exc),
+    traceback_log=traceback.format_exc(),
+)
+```
+
+The system deliberately calls this **application-coordinated transactional consistency**.
+
+It is not distributed two-phase commit.
+
+That trade-off is documented rather than hidden.
+
+---
+
+## 15. Recovery flows from ownership
+
+Because raw evidence survives independently from DuckDB analytical state:
 
 ```mermaid
 flowchart LR
-    USER["User / Scheduler"] --> FRONT["CLI / Desktop / Headless"]
-    FRONT --> API["PersonalFinanceEngine<br/>Backend Facade"]
-    API --> PROC["Pipeline Child Process"]
-    PROC --> ETL["ETLOrchestrator"]
-    ETL --> RAW["SQLite Raw Store"]
-    ETL --> DB["DuckDB Warehouse"]
-    ETL --> ENGINES["Transform + Analytics Engines"]
-    PROC --> QUEUE["Status Queue"]
-    QUEUE --> MON["Monitor Thread"]
-    MON --> FRONT
+    RAW["SQLite Control Plane<br/>artifacts + payloads"] --> BR["Rebuild Bronze"]
+    BR --> SIL["Rebuild Silver"]
+    SIL --> GOLD["Rebuild Gold"]
 ```
 
-### Backend facade
+The Meta layer also performs a self-healing check.
 
-`PersonalFinanceEngine` provides the application-facing boundary.
+If an artifact exists in the Control Plane but is missing from the DuckDB registry, it is returned to `PENDING_BRONZE`.
 
-It handles responsibilities such as:
+The Control Plane therefore anchors recovery.
 
-- configuration validation,
-- recent configuration/rules state,
-- database snapshots,
-- pipeline launch,
-- and communication with frontends.
+---
 
-The frontends do not need to understand the full ETL/analytics implementation.
+## 16. Documentation is an application subsystem
 
-### Process isolation
-
-Heavy pipeline execution runs in a child process.
-
-This prevents long-running Polars, DuckDB, or Numba workloads from living directly inside the desktop UI event loop.
-
-Status messages are communicated back through a queue and monitor thread.
-
-This gives the application a cleaner failure and responsiveness boundary.
-
-### Application surfaces
-
-The package exposes:
+The same architecture philosophy extends to documentation.
 
 ```text
-shan-fin
-shan-fin-gui
+docs/*.md
+   ↓
+manifest.json
+   ↓
+DocsCatalog
+   ↓
+DocsRenderer
+   ↓
+CLI + Desktop
 ```
 
-and supports:
+The application does not maintain a hard-coded list of guide files.
 
-- CLI operation,
-- desktop GUI operation,
-- automated execution,
-- scheduled/headless execution,
-- snapshots,
-- and packaged documentation access.
+Documentation navigation is data-driven and packaged with the application.
 
-Power BI consumes the analytical warehouse independently of the interactive application surfaces.
-
----
-
-## Persistence architecture
-
-The system intentionally uses two database engines.
-
-```mermaid
-flowchart LR
-    subgraph SQLITE["SQLite · Raw / Control"]
-        R1["Raw File Registry"]
-        R2["Raw Payload BLOBs"]
-        R3["Sync State"]
-    end
-
-    subgraph DUCK["DuckDB · Analytical"]
-        B["Bronze"]
-        S["Silver"]
-        G["Gold"]
-        M["Meta"]
-        B --> S --> G
-        S --> M
-        G --> M
-    end
-
-    SQLITE -->|"extraction / synchronization"| B
-```
-
-### Why SQLite?
-
-SQLite is optimized here for durable local control-plane state and binary source persistence.
-
-The Raw Store uses database settings appropriate to that workload, including WAL-oriented local operation.
-
-### Why DuckDB?
-
-DuckDB is used for columnar analytical persistence, transformations, warehouse schemas, and BI consumption.
-
-The runtime configures analytical resources such as memory and thread usage for the local machine.
-
-### Why not one database?
-
-Because the responsibilities are different.
-
-Combining them would reduce the number of technologies while weakening the conceptual boundary between:
-
-- raw evidence/control state,
-- and analytical serving state.
-
-I prefer explicit role separation over storage-engine minimalism.
-
----
-
-## Transaction boundaries
-
-The pipeline coordinates transactions across SQLite and DuckDB at the application layer.
-
-Conceptually:
-
-```text
-Start run telemetry
-        ↓
-BEGIN DuckDB
-BEGIN SQLite
-        ↓
-Pipeline work
-        ↓
-Commit analytical state
-Commit raw/control state
-        ↓
-Mark run successful
-```
-
-On failure, the orchestrator rolls back both active transactions and records failed-run telemetry.
-
-This is **application-coordinated transactional consistency**, not a formal distributed two-phase commit protocol.
-
-That wording matters.
-
-The two databases commit sequentially, so the architecture should not claim guarantees provided by a distributed transaction coordinator that does not exist.
-
----
-
-## Recoverability model
-
-Persisting raw artifacts independently from DuckDB gives the system an important recovery property.
-
-```mermaid
-flowchart LR
-    RAW["SQLite Raw Store<br/>survives"] --> DETECT["Registry reconciliation"]
-    DETECT --> PEND["Artifacts marked<br/>PENDING_BRONZE"]
-    PEND --> BR["Rebuild Bronze"]
-    BR --> SI["Rebuild Silver"]
-    SI --> GO["Rebuild Gold"]
-```
-
-If the analytical warehouse is recreated while the Raw Store survives, registry reconciliation can identify source artifacts that are absent from the new warehouse state and return them to the Bronze synchronization path.
-
-Because Silver and Gold are deterministic rebuilds, the architecture can reconstruct a large portion of analytical state from persisted raw evidence.
-
-This is one of the strongest reasons the Raw Store is a first-class architectural component rather than a temporary staging cache.
-
-For the detailed recovery lifecycle, see [Reliability & Recovery](reliability-and-recovery.md).
+That means the technical knowledge base is part of the product surface rather than a separate repository afterthought.
 
 ---
 
 ## Dependency direction
 
-The intended dependency direction is generally downward toward canonical contracts and domain services.
-
-```text
-CLI / Desktop / Automation
-           ↓
-    Backend Facade
-           ↓
-      Orchestration
-           ↓
- ┌─────────┼──────────┐
- ↓         ↓          ↓
-Load    Transform   Analytics
-           ↓
-   Canonical Contracts
-           ↓
- Configuration / Domain Rules
-```
-
-A few principles guide this structure.
-
-#### Frontends should not own business logic
-
-CLI and GUI code should invoke backend capabilities rather than calculate financial results themselves.
-
-#### Source adapters should not define downstream finance
-
-Source-specific parsing should terminate at canonical contracts.
-
-#### Analytical engines should depend on financial concepts
-
-The investment and wealth engines should reason about purchases, sales, assets, tax lots, market values, and financial rules rather than raw worksheet columns.
-
-#### Publication should be explicit
-
-Gold marts represent deliberate analytical contracts rather than every intermediate DataFrame produced during computation.
-
----
-
-## Extension seams
-
-The current architecture is purpose-built, but several extension boundaries already exist or are emerging.
-
-### Source adapters
-
-Future source generalization should move institution-specific parsing behind explicit adapters.
-
-```text
-Bank / Broker Source
-        ↓
-Source Adapter
-        ↓
-Canonical Contract
-```
-
-### Asset pipelines
-
-The current investment architecture already supports asset-specific pipelines behind a common result contract.
-
-Current implementations include stocks and mutual funds.
-
-Future examples could include:
-
-- ETFs,
-- bonds,
-- pensions,
-- or other investment types.
-
-### Market-data providers
-
-Benchmark acquisition is a natural provider boundary.
-
-The downstream benchmark contract should not need to care which external service supplied the history.
-
-### Tax strategies
-
-Tax behaviour is more than a set of numeric parameters.
-
-Jurisdiction-specific rules, regime changes, holding-period behaviour, and exceptions are natural candidates for strategy-style implementations.
-
-Configuration should provide rates and thresholds where appropriate; behavioural differences should remain code.
-
-### Analytical marts
-
-New Gold outputs should be added through an explicit sequence:
-
-```text
-Business question
-      ↓
-Grain
-      ↓
-Dependencies
-      ↓
-Builder / computation
-      ↓
-Output contract
-      ↓
-DDL
-      ↓
-Gold publication
-```
-
-See [Adding a Gold Mart](../developer/adding-gold-marts.md).
-
----
-
-## Current portability boundary
-
-The architecture is not yet a universal personal-finance framework.
-
-### Reusable engine components
-
-Substantial reusable areas include:
-
-- Raw Store infrastructure,
-- state management,
-- orchestration,
-- Bronze synchronization patterns,
-- deterministic warehouse reconstruction,
-- canonical modelling patterns,
-- investment analytical primitives,
-- wealth analytics,
-- FIRE simulation,
-- and application architecture.
-
-### Already configurable
-
-Many semantics already live in validated configuration, including:
-
-- income and expense treatment,
-- asset classifications,
-- cash-flow policy,
-- budget allocations,
-- investment classifications,
-- target allocations,
-- macro assumptions,
-- tax parameters,
-- FIRE assumptions,
-- and stochastic-model parameters.
-
-### Still purpose-built
-
-Important areas remain tailored to my environment:
-
-- source categories,
-- broker/bank statement contracts,
-- mapping inputs,
-- some source transformations,
-- Indian tax behaviour,
-- reconciliation policy,
-- and selected analytical thresholds.
-
-This is the main architectural frontier for future generalization.
-
----
-
-## Future architecture direction
-
-I do not want to replace the working vertical system with a speculative generic framework.
-
-The goal is to progressively extract assumptions while preserving behaviour.
+The major dependency direction is:
 
 ```mermaid
 flowchart TB
-    CFG["Configuration<br/>sources · semantics · policies"] --> REG["Adapter / Strategy Registry"]
+    FRONT["CLI / Desktop / Automation"] --> API["Backend Facade"]
+    API --> ORCH["ETLOrchestrator"]
+    ORCH --> CP["Control Plane"]
+    ORCH --> EXT["Extraction"]
+    ORCH --> DAG["Canonical Transformation"]
+    ORCH --> ENG["Analytical Engines"]
+    ORCH --> LOAD["Silver / Gold / Meta Publication"]
 
-    REG --> BANK["Bank Adapters"]
-    REG --> BROKER["Broker Adapters"]
-    REG --> ASSET["Asset Pipelines"]
-    REG --> TAX["Tax Strategies"]
-    REG --> MD["Market-Data Providers"]
-
-    BANK --> CONTRACT["Versioned Canonical Contracts"]
-    BROKER --> CONTRACT
-    ASSET --> CONTRACT
-    TAX --> CONTRACT
-    MD --> CONTRACT
-
-    CONTRACT --> ENGINE["Reusable Financial Engine"]
-    ENGINE --> MARTS["Configurable Analytical Publication"]
+    EXT --> CP
+    DAG --> RULES["FinancialRules"]
+    ENG --> RULES
+    LOAD --> CONTRACT["DataContract Registry"]
 ```
 
-The migration contract is:
+Stable downstream finance should depend on canonical concepts, not source formats.
 
-```text
-Current engine + my environment
-             ↓
-      Expected results
-             ↑
-Future generic engine + my configuration
-```
-
-A generalization is successful only if it preserves the analytical behaviour I rely on, unless I intentionally change the methodology.
+That is the architectural test I use when deciding where new behaviour belongs.
 
 ---
 
-## Technology responsibility matrix
+## What this architecture optimizes for
 
-| Technology / Component | Primary responsibility | Why it exists |
-| --- | --- | --- |
-| SQLite | Raw/control persistence | Durable local BLOBs, registry state, transactional metadata |
-| DuckDB | Analytical warehouse | Columnar local analytics and BI-serving persistence |
-| Polars | Transformation and analytics | Lazy/vectorized computation and streaming collection |
-| NumPy / Numba | Simulation | High-throughput numerical Monte Carlo workloads |
-| Pydantic | Configuration contracts | Validation and explicit operational/financial semantics |
-| PyXIRR | Return calculation | Irregular dated cash-flow return methodology |
-| multiprocessing | Execution isolation / parallelism | UI separation and per-instrument compute |
-| Rich | CLI | Interactive terminal experience |
-| CustomTkinter | Desktop UI | Local graphical application surface |
-| Power BI | BI consumption | Decision dashboards over curated analytical marts |
+### Correctness
 
-The stack is intentionally heterogeneous.
+Financial state can be rebuilt from durable evidence and complete Bronze state.
 
-Each technology earns its place through a distinct workload.
+### Traceability
 
----
+Runs, failures, configuration snapshots and source synchronization have explicit ownership.
 
-## Architectural invariants
+### Performance
 
-These are the principles I want future changes to preserve unless there is a deliberate architectural decision to change them.
+Unchanged source history is not reparsed, while Polars and per-instrument parallelism handle downstream computation.
 
-1. **Raw evidence survives independently from derived analytical state.**
-2. **Source-specific structure should terminate before downstream analytical engines.**
-3. **Financial semantics should be explicit and validated.**
-4. **Bronze preserves source-shaped state; Silver represents canonical state; Gold represents decision-support state.**
-5. **Analytical grain must be defined before a mart is published.**
-6. **Frontends should not own financial business logic.**
-7. **Scenario outputs must remain distinguishable from predictions.**
-8. **Configuration should carry parameters; adapters/strategies should carry materially different behaviour.**
-9. **Generalization should preserve current analytical behaviour unless methodology is intentionally changed.**
-10. **Decision usefulness matters more than metric count.**
+### Maintainability
+
+Repositories, engines, loaders and frontends have different responsibilities.
+
+### Extensibility
+
+New sources and assets can converge into stable canonical contracts.
+
+### Local-first operation
+
+The entire stack remains viable on a local workstation without requiring cloud infrastructure to coordinate the workload.
 
 ---
 
-## Related documentation
+## Current boundaries
 
-Continue with:
+The architecture is intentionally not described as more general than it is.
 
-- [Data Lifecycle](data-lifecycle.md) — trace data through every stage in detail.
-- [Warehouse Architecture](warehouse-architecture.md) — understand Bronze, Silver, Gold, and Meta.
-- [Data Model](data-model.md) — understand canonical facts, dimensions, and analytical grains.
-- [Reliability & Recovery](reliability-and-recovery.md) — understand transactions, failure behaviour, and reconstruction.
-- [Design Decisions](design-decisions.md) — understand the trade-offs behind the architecture.
-- [Financial Model](../finance/financial-model.md) — understand the financial semantics carried by the architecture.
+Current limitations include:
+
+- source adapters remain tailored to my financial environment,
+- tax behaviour remains jurisdiction-specific,
+- cross-database commits are coordinated by the application rather than distributed 2PC,
+- the Control Plane provides strong operational provenance but is not yet a normalized row-level lineage graph,
+- a complete backup story should ultimately protect both DuckDB and the authoritative Control Plane together.
+
+Those are architectural boundaries, not footnotes to hide.
+
+---
+
+## Go deeper
+
+- [Data Lifecycle](data-lifecycle.md)
+- [Warehouse Architecture](warehouse-architecture.md)
+- [Data Model](data-model.md)
+- [Reliability & Recovery](reliability-and-recovery.md)
+- [Design Decisions](design-decisions.md)
 
 [← Architecture Home](README.md) · [← Documentation Home](../README.md)

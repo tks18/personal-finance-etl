@@ -1,844 +1,670 @@
 # Design Decisions
 
-This document records the reasoning behind major architectural choices in Personal Finance ETL.
+This page documents the architectural choices that are easiest to misunderstand when viewed only from the final code.
 
-I want these decisions documented because architecture is not just a diagram of what exists. The useful question is:
+The pattern is:
 
-> **Why does it exist this way, what problem does it solve, and what trade-off did I accept?**
+```text
+Problem
+→ decision
+→ production evidence
+→ benefit
+→ trade-off
+```
 
-These are not immutable laws. They are the decisions that best fit the current v6 workload and constraints.
+These are not claims that the chosen architecture is universally superior.
 
-When the workload changes, a decision can change too. But I want that change to be deliberate.
-
----
-
-## Decision summary
-
-| Decision | Chosen direction | Primary reason |
-| --- | --- | --- |
-| Local-first architecture | Local storage and compute | Privacy, control, personal workload |
-| SQLite + DuckDB | Separate raw/control and analytical roles | Workload-specific persistence |
-| Raw BLOB persistence | Preserve source artifacts | Provenance and recovery |
-| Incremental Bronze | Synchronize changed source state | Efficient source-history maintenance |
-| Rebuild Silver/Gold | Deterministic derived state | Simpler correctness |
-| Polars + DuckDB | Separate compute from serving persistence | Vectorized analytics + SQL/BI storage |
-| Canonical financial contracts | Resolve source semantics upstream | Stable downstream engines |
-| FinancialRules separate from Settings | Separate policy from operations | Explicit financial semantics |
-| Asset pipelines | Strategy boundary for investment types | Extensibility without engine conditionals |
-| Broker-authoritative reconciliation | Anchor current investment truth | Real-world source imperfections |
-| Shadow benchmarks | Match capital deployment | Better benchmark-relative context |
-| Multi-grain Gold marts | Model questions at correct grain | BI correctness |
-| Curated serving metrics | Publish decision-useful analytics | Reduce analytical noise |
-| Process-isolated pipeline | Keep frontends responsive | Failure and execution isolation |
-| Application-coordinated transactions | Coordinate two local stores | Practical rollback semantics |
-| Configuration + strategies | Parameters vs behaviour | Avoid configuration-as-code |
+They are the choices that fit this workload.
 
 ---
 
-## ADR-001 · Keep the platform local-first
+## 1. SQLite for the Control Plane
 
-## Context
+### Problem
 
-The system processes highly personal financial data and is used primarily by one local user.
+The system needs durable local ownership of:
 
-The workload does not require multi-user cloud serving, elastic distributed compute, or remote collaboration.
-
-## Decision
-
-I keep the core platform local-first.
-
-Financial data, raw artifacts, analytical databases, transformations, simulations, and BI-serving state are designed to live on the local machine.
-
-## Why
-
-This gives me:
-
-- direct control over financial data,
-- simple deployment,
-- low infrastructure overhead,
-- predictable local access,
-- and freedom to use embedded analytical technologies such as DuckDB and SQLite.
-
-## Trade-offs
-
-I accept:
-
-- local backup responsibility,
-- no built-in multi-user concurrency model,
-- no automatic remote disaster recovery,
-- and local machine resource limits.
-
-## Revisit when
-
-This decision should be revisited if the project becomes a true multi-user product or requires remote/mobile synchronization.
-
----
-
-## ADR-002 · Use SQLite and DuckDB for different jobs
-
-## Context
-
-The system needs both:
-
-- transactional registry/BLOB state,
-- and columnar analytical persistence.
-
-Using one database for everything would reduce technology count but force one engine into a workload it is not primarily chosen for.
-
-## Decision
-
-I use:
-
-**SQLite** for the Raw/control plane.
-
-**DuckDB** for the analytical warehouse.
-
-## Why
-
-SQLite is a strong fit for:
-
-- local metadata,
-- registry updates,
-- BLOB persistence,
+- raw evidence,
+- artifact identity,
+- hashes,
 - synchronization state,
-- and transactional control-plane operations.
+- runs,
+- failures,
+- configuration provenance,
+- execution logs.
 
-DuckDB is a strong fit for:
+This is operational state, not analytical fact modelling.
 
-- analytical tables,
-- columnar execution,
-- warehouse schemas,
-- SQL exploration,
-- and BI-serving workloads.
+### Decision
 
-## Trade-offs
+Use SQLite as the authoritative Control Plane.
 
-I accept:
+### Production evidence
 
-- two local database files,
-- transaction coordination at the application layer,
-- and more operational concepts to understand.
-
-## Rejected alternative
-
-### One DuckDB database for everything
-
-Simpler technology footprint, but weaker conceptual separation between raw evidence/control state and analytical state.
-
-### One SQLite database for everything
-
-Strong transactional simplicity, but less aligned with the analytical/BI workload.
-
----
-
-## ADR-003 · Persist raw source bytes
-
-## Context
-
-A file-based ETL pipeline can easily treat the source folder as permanent truth.
-
-That creates problems when files change, move, disappear, or external data is fetched dynamically.
-
-## Decision
-
-I persist actionable raw source bytes in the SQLite Raw Document Store.
-
-## Why
-
-This provides:
-
-- provenance,
-- replayability,
-- source evidence independent of filesystem state,
-- recovery after analytical warehouse loss,
-- and a consistent model for physical and virtual artifacts.
-
-## Trade-offs
-
-I accept:
-
-- additional local storage,
-- BLOB-management complexity,
-- and the need to distinguish source evidence from analytical state.
-
-## Rejected alternative
-
-### Store only paths and hashes
-
-Smaller Raw database, but the system would still depend on the original external file remaining available for reconstruction.
-
----
-
-## ADR-004 · Make source synchronization explicit
-
-## Context
-
-Seeing a file does not prove that Bronze contains its latest representation.
-
-## Decision
-
-I model Raw-to-Bronze synchronization using explicit states such as:
-
-```text
-PENDING_BRONZE
-SYNCED
+```python
+class ControlPlane:
+    def __init__(self, base_path: str, db_name: str = "Raw_Documents.sqlite"):
+        self.db = SQLiteManager(base_path, db_name)
+        self.artifacts = ArtifactRepository(self.db)
+        self.runs = RunRepository(self.db)
+        self.file_sync = FileSyncService(self.artifacts)
 ```
 
-## Why
+### Benefit
 
-This makes ingestion state observable and supports reconstruction when warehouse registry state is missing.
+One local transactional system owns operational truth.
 
-## Trade-offs
+### Trade-off
 
-A small state machine must be maintained correctly.
+The application now coordinates two databases.
 
-That is preferable to implicit assumptions about synchronization.
-
----
-
-## ADR-005 · Use asymmetric Bronze loading
-
-## Context
-
-Reference sources and historical event sources do not have the same semantics.
-
-## Decision
-
-I use:
-
-- full replacement for appropriate reference/current-state datasets,
-- file-aware replacement for historical/event datasets.
-
-## Why
-
-This matches persistence behaviour to source meaning.
-
-## Trade-offs
-
-The Bronze loader has more than one strategy.
-
-I consider that better than a simpler loader with less accurate data semantics.
+That creates a small cross-database commit window that does not exist in a single-database design.
 
 ---
 
-## ADR-006 · Rebuild Silver and Gold deterministically
+## 2. DuckDB for analytical state
 
-## Context
+### Problem
 
-Making every derived dataset incremental would require dependency-aware invalidation across canonical facts, rolling measures, portfolio aggregation, tax state, and FIRE.
+The system needs persistent local columnar analytics, SQL inspection, fast rebuilds, and Power BI serving.
 
-## Decision
+### Decision
 
-Bronze remains persistent and incrementally synchronized.
-
-Silver and Gold are rebuilt from complete current upstream state.
-
-## Why
-
-This simplifies correctness.
-
-The derived state becomes a deterministic function of:
+Use one embedded DuckDB file for:
 
 ```text
-Bronze evidence
-+ current rules
-+ current configuration
-+ current analytical code
+Bronze
+Silver
+Gold
+Meta
 ```
 
-## Trade-offs
+### Production evidence
 
-I accept more compute per run.
+```python
+self._conn = duckdb.connect(self.db_path)
 
-For the current local workload, that is preferable to complex stale-state management.
+self._conn.execute(
+    f"PRAGMA memory_limit='{mem_gb}GB'"
+)
+self._conn.execute("PRAGMA threads=4")
+```
 
-## Revisit when
+### Benefit
 
-If data volume grows enough that full reconstruction becomes the dominant operational constraint, incremental derived-state strategies may become worthwhile.
+No database server is required for a single-user analytical workload.
 
----
+### Trade-off
 
-## ADR-007 · Use Polars for computation and DuckDB for persistence
+This is not designed as a multi-user transactional warehouse.
 
-## Context
-
-The platform needs both expressive dataframe transformations and durable analytical SQL storage.
-
-## Decision
-
-I use Polars as the primary transformation/analytical compute layer and DuckDB as the persistent analytical warehouse.
-
-## Why
-
-Polars provides:
-
-- lazy execution,
-- vectorized transformations,
-- streaming collection,
-- and efficient dataframe composition.
-
-DuckDB provides:
-
-- durable analytical tables,
-- SQL access,
-- schema organization,
-- and BI-friendly local serving.
-
-## Trade-offs
-
-Some logic crosses dataframe and SQL boundaries.
-
-That requires clear ownership of where transformations belong.
+That is acceptable because the workload is local-first by design.
 
 ---
 
-## ADR-008 · Establish canonical financial contracts
+## 3. Separate operational truth from analytical truth
 
-## Context
+### Problem
 
-Source-specific layouts vary.
+Before the Control Plane existed, Meta naturally accumulated responsibilities because DuckDB was the only database.
 
-If analytical engines depend directly on broker columns, worksheet names, or bank-specific schemas, every new source contaminates the entire application.
+Once durable raw state was introduced, that ownership became ambiguous.
 
-## Decision
+### Decision
 
-I resolve source-specific structure upstream and expose canonical financial concepts downstream.
+Move historical operational authority into SQLite and keep DuckDB Meta lean.
 
-## Why
+```mermaid
+flowchart LR
+    CP["SQLite<br/>Historical Operational Truth"] -. projection .-> META["DuckDB Meta<br/>Current Analytical Context"]
+```
 
-This lets analytical engines reason about:
+### Benefit
 
-- income,
-- expenses,
-- transfers,
-- assets,
-- purchases,
-- sales,
-- market data,
-- benchmarks,
-- and tax lots
+There is one answer to:
 
-without understanding every source format.
+> Which system owns run history?
 
-## Trade-offs
+SQLite.
 
-The transformation boundary becomes more important and must be designed carefully.
+### Trade-off
 
-## Long-term significance
+Operational-history queries no longer live beside analytical marts in one database.
 
-This is probably the most important seam for making the platform more reusable.
+That is a good trade for clearer ownership.
 
 ---
 
-## ADR-009 · Separate Settings from FinancialRules
+## 4. Persist raw payload bytes
 
-## Context
+### Problem
 
-A file path and a tax rate are both configuration values, but they represent completely different concerns.
+A filesystem path can disappear or mutate after ingestion.
 
-## Decision
+### Decision
 
-I separate operational settings from financial semantic policy.
+Persist actionable source bytes in `cp_file_payloads`.
 
-## Why
+```sql
+CREATE TABLE IF NOT EXISTS cp_file_payloads (
+    file_id TEXT PRIMARY KEY,
+    file_bytes BLOB,
+    FOREIGN KEY(file_id)
+        REFERENCES cp_file_registry(file_id)
+        ON DELETE CASCADE
+);
+```
 
-Operational configuration answers:
+### Benefit
 
-> Where and how does the application run?
+Raw evidence survives independently from source-folder availability.
 
-Financial rules answer:
+### Trade-off
 
-> How should the system interpret financial meaning?
+Storage is duplicated.
 
-This makes policy visible and validated rather than burying it inside transformations.
-
-## Trade-offs
-
-Users/developers must understand two configuration concepts instead of one giant settings object.
-
-That is a good trade.
-
----
-
-## ADR-010 · Use asset pipelines as an investment extension seam
-
-## Context
-
-Stocks and mutual funds can have different upstream source structures.
-
-The downstream investment engine should not need branches everywhere for every asset type.
-
-## Decision
-
-I use asset-specific pipelines behind a common result contract.
-
-## Why
-
-This keeps source/asset-specific behaviour upstream while preserving common downstream investment semantics.
-
-## Trade-offs
-
-A new asset type must satisfy the canonical contract rather than simply dumping arbitrary columns into the engine.
-
-That constraint is intentional.
+For personal financial evidence, recoverability is worth more to me than minimizing disk usage.
 
 ---
 
-## ADR-011 · Reconcile to broker-reported current state
+## 5. Content-address configuration snapshots
 
-## Context
+### Problem
 
-Historical transaction data can be imperfect because of:
+A run needs reproducibility context, but copying the same configuration payload every run creates unnecessary duplication.
 
-- missing history,
-- opening positions,
-- corporate actions,
-- broker corrections,
-- and source limitations.
+### Decision
 
-## Decision
+Hash canonical Settings and FinancialRules payloads.
 
-I reconstruct history from transactions but allow broker-reported current quantity/cost state to anchor the analytical position when the two disagree.
+```python
+rules_hash = hashlib.sha256(
+    rules_json.encode("utf-8")
+).hexdigest()
 
-## Why
+rules_id = f"snap_rule_{rules_hash[:12]}"
+```
 
-The system is used operationally.
+### Benefit
 
-A theoretically pure reconstruction that disagrees with the actual broker position is less useful for current planning.
+Identical policy maps to identical snapshot identity.
 
-## Trade-offs
+### Trade-off
 
-Reconciliation adjustments can complicate lot-level interpretation.
-
-The policy must therefore remain explicit.
-
-## Alternative
-
-Fail every time transaction-derived state differs from broker state.
-
-That would maximize purity but make the system brittle against real financial data.
+The snapshot proves configuration identity, not full historical replay if code/schema later changes.
 
 ---
 
-## ADR-012 · Model a shadow benchmark portfolio
+## 6. Persistent Bronze, rebuilt Silver/Gold
 
-## Context
+### Problem
 
-Comparing an investment CAGR with an index CAGR ignores when capital was actually deployed.
-
-## Decision
-
-Investment purchases create cash-equivalent benchmark exposure.
-
-Shadow benchmark inventory evolves alongside real inventory.
-
-## Why
-
-This gives benchmark-relative analysis a closer relationship to actual cash deployment.
-
-## Trade-offs
-
-The engine must maintain another stateful position model and benchmark-history dependency.
-
-I accept that complexity because benchmark comparison is a real investment decision input.
-
----
-
-## ADR-013 · Keep investment and household analytics connected
-
-## Context
-
-It would be easy to build an investment dashboard and household finance dashboard as independent systems.
-
-That would create multiple financial truths.
-
-## Decision
-
-Investment market/tax state flows into household wealth and long-range planning.
-
-## Why
-
-My FIRE model should not use a manually entered portfolio value when the investment engine already knows the current market and tax-aware state.
-
-This creates one financial lineage.
-
-## Trade-offs
-
-The engines have meaningful dependency relationships that must be kept explicit.
-
----
-
-## ADR-014 · Publish multiple Gold grains
-
-## Context
-
-Household wealth, expense composition, tax lots, security performance, allocation drift, and portfolio performance are different analytical questions.
-
-## Decision
-
-Gold publishes domain marts at the grain appropriate to each question.
-
-## Why
-
-Trying to force everything into one fact table creates:
-
-- duplicated values,
-- ambiguous aggregation,
-- difficult BI semantics,
-- and misleading measures.
-
-## Trade-offs
-
-The serving layer contains more physical marts.
-
-That is preferable to one oversized ambiguous model.
-
----
-
-## ADR-015 · Treat grain as part of the contract
-
-## Context
-
-A metric name without grain can be misleading.
-
-For example:
+The production source population is large and continuously growing:
 
 ```text
-lot return
-instrument XIRR
-portfolio XIRR
+1,608 artifacts as of 24 Sep 2026
++ ~2 broker snapshots/day
 ```
 
-are not interchangeable.
+Reparsing everything every run wastes work.
 
-## Decision
+But incremental propagation through every downstream financial dependency increases correctness complexity.
 
-Every important published dataset should have an explicit grain.
+### Decision
 
-## Why
+Use:
 
-Grain determines:
+```text
+incremental Raw/Bronze
++
+deterministic Silver/Gold rebuild
+```
 
-- row meaning,
-- valid joins,
-- aggregation methodology,
-- and measure interpretation.
+### Benefit
 
-This is fundamental BI engineering, not documentation decoration.
+The expensive/growing source side is incrementalized while downstream financial state remains simple to reason about.
 
----
+### Trade-off
 
-## ADR-016 · Compute richly, publish selectively
+Derived analytics recompute every run.
 
-## Context
-
-Earlier versions accumulated more quantitative metrics than I found useful in the real workflow.
-
-Some older risk machinery can still exist internally even when it no longer belongs in Gold.
-
-## Decision
-
-The serving model exposes a curated analytical surface.
-
-## Why
-
-More metrics do not automatically produce better decisions.
-
-The current investment serving contract focuses on measures such as:
-
-- XIRR,
-- after-tax XIRR,
-- benchmark XIRR,
-- active return,
-- max drawdown,
-- tax state,
-- position,
-- and allocation.
-
-## Trade-offs
-
-Some technically valid calculations are intentionally absent from BI.
-
-That is a feature, not a deficiency.
+At the current workload, the full pipeline still completes in roughly **14–17 seconds**, so the correctness trade remains attractive.
 
 ---
 
-## ADR-017 · Keep financial logic out of Power BI where possible
+## 7. Source semantics decide Bronze replacement
 
-## Context
+### Problem
 
-Power BI can calculate almost anything, but report-specific business logic can fragment financial semantics.
+Not all sources mean the same thing.
 
-## Decision
+A daily broker snapshot is historical evidence.
 
-Important reusable financial state is calculated upstream and published through Silver/Gold contracts.
+A current mapping/master can represent only the latest valid reference state.
 
-## Why
+### Decision
 
-This gives:
+Support both:
 
-- consistent methodology,
-- reusable semantics,
-- easier testing/reconciliation,
-- and less dashboard-specific logic.
-
-Power BI remains the exploration and presentation layer.
-
----
-
-## ADR-018 · Isolate heavy execution from the frontend
-
-## Context
-
-Polars, DuckDB, investment processing, and Monte Carlo workloads can be long-running.
-
-Running them directly inside the desktop event loop would couple UI responsiveness to analytical execution.
-
-## Decision
-
-The backend facade launches pipeline execution in a child process and communicates status back to the frontend.
-
-## Why
-
-This improves:
-
-- responsiveness,
-- failure isolation,
-- and separation of concerns.
-
-## Trade-offs
-
-Inter-process communication and execution-state management add complexity.
-
----
-
-## ADR-019 · Coordinate local transactions at the application layer
-
-## Context
-
-The system writes to both DuckDB and SQLite during a run.
-
-## Decision
-
-The orchestrator begins, commits, and rolls back local transactions in a coordinated lifecycle.
-
-## Why
-
-This provides practical rollback semantics across the two local persistence roles.
-
-## Trade-offs
-
-It is not distributed two-phase commit.
-
-A narrow sequential-commit failure window remains.
-
-The documentation therefore deliberately avoids claiming a stronger guarantee.
-
----
-
-## ADR-020 · Preserve failed-run telemetry
-
-## Context
-
-If run telemetry were part of the same rollback scope as all analytical state, failure could erase the evidence that the run happened.
-
-## Decision
-
-Operational run logging has a lifecycle that allows failed execution to remain visible.
-
-## Why
-
-A failed run is operational information.
-
-Observability should not require successful Gold publication.
-
----
-
-## ADR-021 · Use Monte Carlo as scenario analysis, not prediction
-
-## Context
-
-FIRE planning involves uncertain returns, inflation, employment, withdrawal behaviour, and sequence risk.
-
-## Decision
-
-I model distributions of outcomes under explicit assumptions rather than claim one predicted future.
-
-## Why
-
-This is a more honest use of stochastic modelling.
-
-## Trade-offs
-
-Outputs such as probability of success are conditional on the configured model.
-
-They should never be interpreted as unconditional real-world probabilities.
-
----
-
-## ADR-022 · Use configuration for parameters, strategies for behaviour
-
-## Context
-
-The long-term platform needs to become more reusable.
-
-A tempting approach is to move every difference into YAML/TOML.
-
-## Decision
-
-I distinguish between:
-
-**parameters**, which belong in validated configuration,
-
+```text
+file-aware historical replacement
 and
-
-**materially different behaviour**, which belongs behind adapters or strategies.
-
-## Why
-
-Tax regimes, broker parsing, and asset-specific behaviour can contain logic, dates, exceptions, and branching that become unreadable when encoded as giant configuration files.
-
-## Trade-offs
-
-Some extension scenarios will require Python code.
-
-That is preferable to configuration becoming a programming language with worse tooling.
-
----
-
-## ADR-023 · Generalize by extraction, not rewrite
-
-## Context
-
-The current system already produces results I rely on.
-
-A full generic rewrite would discard a valuable working specification.
-
-## Decision
-
-I generalize incrementally.
-
-```text
-working behaviour
-      ↓
-identify embedded assumption
-      ↓
-extract parameter / strategy
-      ↓
-run existing environment
-      ↓
-reconcile outputs
+full replacement
 ```
 
-## Why
+### Benefit
 
-The current production results become the behavioural contract for refactoring.
+Persistence semantics match source semantics.
 
-## Trade-offs
+### Trade-off
 
-Generalization is slower than starting a clean framework.
+Bronze loading is slightly more complex than one universal append strategy.
 
-It is also much safer.
-
----
-
-## ADR-024 · Keep documentation version-controlled with the code
-
-## Context
-
-The project has a CLI, desktop application, GitHub repository, package distribution, and future Wiki.
-
-Maintaining separate documentation copies would invite drift.
-
-## Decision
-
-The Markdown under `docs/` becomes the authoritative technical documentation.
-
-Other surfaces should consume or derive from it.
-
-## Why
-
-One maintained source is easier to keep aligned with the production implementation.
-
-## Future direction
-
-The CLI and desktop documentation browser can eventually derive navigation from the same documentation hierarchy or manifest.
+That complexity is justified because the alternatives would either duplicate history or destroy it.
 
 ---
 
-## Decisions I intentionally have not made yet
+## 8. Canonical finance before analytics
 
-Some architecture questions should remain open until the workload justifies them.
+### Problem
 
-## Universal source plugin framework
+Bank/broker/source schemas change and differ.
 
-The seams are becoming clear, but I do not need to build a marketplace-style plugin system before multiple real source environments demand it.
+Financial engines should not encode every source vocabulary.
 
-## Distributed/cloud warehouse
+### Decision
 
-The current workload does not justify replacing the local architecture merely for scale theatre.
+Resolve source structure into canonical financial contracts before downstream analytics.
 
-## Generic jurisdiction engine
+```text
+source adapter / mapping
+        ↓
+canonical finance
+        ↓
+shared engine
+```
 
-Tax strategy boundaries are a likely future direction, but only real multi-jurisdiction requirements should determine the final abstraction.
+### Benefit
 
-## Fully incremental Silver/Gold
+Investment/wealth engines depend on stable concepts.
 
-This should be considered only if deterministic rebuild cost becomes materially problematic.
+### Trade-off
 
-## Automatic contract generation
+The transformation layer must carry the burden of semantic normalization.
 
-A shared data-contract registry is attractive, but the physical/reference documentation should stabilize before code is reorganized around it.
+That is exactly where I want that complexity to live.
 
 ---
 
-## Decision-making principles
+## 9. Polars LazyFrames for dataframe work
 
-Across these ADRs, several recurring principles appear.
+### Problem
 
-### Solve the real workload first
+The pipeline performs many composable transformations and presentation calculations.
 
-I prefer a working vertical system over a speculative universal framework.
+### Decision
 
-### Preserve evidence
+Use Polars LazyFrames where transformations can remain declarative.
 
-Derived state can be rebuilt; lost source evidence cannot.
+Independent presentation graphs are collected together:
 
-### Make semantics explicit
+```python
+results = pl.collect_all(
+    lazy_frames,
+    engine="streaming",
+)
+```
 
-Financial meaning should live in canonical contracts and validated policy rather than report-specific transformations.
+### Benefit
 
-### Use asymmetry deliberately
+Vectorized expressions, optimizer visibility, streaming execution, and reduced Python row iteration.
 
-Different workloads deserve different persistence, computation, and modelling strategies.
+### Trade-off
 
-### Respect grain
+Lazy execution can make debugging less immediate than eager step-by-step dataframes.
 
-BI correctness begins with row meaning.
+I materialize at persistence/algorithm boundaries where explicit state matters.
 
-### Be precise about guarantees
+---
 
-I would rather document a modest guarantee accurately than advertise a stronger architecture that does not exist.
+## 10. Do not force FIFO into dataframe vectorization
 
-### Prefer decision usefulness
+### Problem
 
-The goal is not maximum metric count.
+Tax-lot disposal is stateful.
 
-### Generalize without breaking behaviour
+Each sale changes the inventory available to the next sale.
 
-A reusable platform should emerge from the working system, not replace it blindly.
+### Decision
+
+Use explicit stateful lot objects/queues.
+
+```text
+purchase
+→ create lot
+
+sale
+→ consume oldest active lot
+→ possibly retain remainder
+```
+
+### Benefit
+
+The implementation maps directly to the financial methodology.
+
+### Trade-off
+
+This part is less naturally vectorized.
+
+Correct state semantics matter more than forcing every workload into the same compute style.
+
+---
+
+## 11. Per-ISIN multiprocessing
+
+### Problem
+
+Instrument calculations are naturally separable, but each instrument has stateful lot history.
+
+### Decision
+
+Use ISIN as a process-isolation boundary.
+
+### Benefit
+
+Parallelism without sharing mutable lot inventory across instruments.
+
+### Trade-off
+
+Worker inputs/results must remain serializable and failures need explicit propagation.
+
+The latter is now enforced: a failed ISIN fails the analytical stage.
+
+---
+
+## 12. Broker state anchors current truth
+
+### Problem
+
+Transaction history can be incomplete while the broker still reports authoritative current position state.
+
+### Decision
+
+Reconcile reconstructed inventory against broker-reported current quantity/cost.
+
+> **Transactions explain history; broker state anchors current truth.**
+
+### Benefit
+
+Current portfolio state can reconcile even when source history has gaps.
+
+### Trade-off
+
+Adjustment/reconciliation inventory can complicate historical tax interpretation.
+
+The docs therefore distinguish reconstructed history from reconciled current state.
+
+---
+
+## 13. Shadow benchmark portfolios
+
+### Problem
+
+Comparing an investment return with an unrelated index CAGR ignores the timing of actual capital deployment.
+
+### Decision
+
+Create benchmark-equivalent exposure when real capital is invested and reduce it proportionally when real lots are disposed.
+
+```mermaid
+flowchart LR
+    CASH["Investment Cash Flow"] --> REAL["Real Lot"]
+    CASH --> BM["Benchmark Shadow Lot"]
+    REAL --> R["Actual Return"]
+    BM --> B["Benchmark Return"]
+    R --> ACTIVE["Active Return"]
+    B --> ACTIVE
+```
+
+### Benefit
+
+Benchmark comparison respects cash-flow timing.
+
+### Trade-off
+
+Benchmark state becomes another lot-like state machine to maintain.
+
+That complexity buys a financially better comparison.
+
+---
+
+## 14. XIRR is recomputed at target grain
+
+### Problem
+
+Returns are non-additive.
+
+### Decision
+
+Reconstruct cash flows at ISIN/class/portfolio grain rather than averaging child XIRRs.
+
+```text
+Portfolio XIRR
+≠ average(ISIN XIRR)
+```
+
+### Benefit
+
+Return methodology matches the analytical object.
+
+### Trade-off
+
+Aggregation is more expensive than a simple group-by average.
+
+Correct finance wins.
+
+---
+
+## 15. Financial policy belongs in `FinancialRules`
+
+### Problem
+
+Thresholds and classifications that affect financial meaning become invisible if scattered through analytical code.
+
+### Decision
+
+Use validated Pydantic policy.
+
+```python
+class PortfolioManagementRules(BaseModel):
+    rebalance_tolerance_pct_points: float = Field(
+        default=5.0,
+        ge=0.0,
+    )
+```
+
+### Benefit
+
+Policy is inspectable, validated and snapshot-able.
+
+### Trade-off
+
+Configuration grows.
+
+The guardrail is:
+
+> **Parameters belong in configuration. Different behaviour belongs behind strategies.**
+
+---
+
+## 16. Explicit Data Contract Registry
+
+### Problem
+
+Layer/table identity becomes brittle if inferred from internal DataFrame names.
+
+### Decision
+
+Register analytical contracts explicitly.
+
+```python
+@dataclass
+class DataContract:
+    contract_id: str
+    layer: str
+    physical_table: str
+    domain: str
+    grain: str
+    producer: str
+    publication_order: int
+```
+
+### Benefit
+
+One compact source describes publication identity.
+
+### Trade-off
+
+Registry metadata must be maintained accurately.
+
+That is still preferable to hidden naming conventions.
+
+---
+
+## 17. Curated Gold instead of metric accumulation
+
+### Problem
+
+A calculation can be mathematically interesting while providing no useful decision support.
+
+Earlier versions accumulated more institutional-style risk metrics than the personal decision workflow needed.
+
+### Decision
+
+Remove unused metrics and their processing.
+
+The current serving model retains measures such as:
+
+```text
+XIRR
+After-Tax XIRR
+Benchmark XIRR
+Active Return
+Max Drawdown
+tax-aware state
+```
+
+### Benefit
+
+Smaller conceptual surface and less compute.
+
+The production-hardening cycle reduced the current end-to-end runtime from roughly **23 seconds** to **14–17 seconds** on my workload while preserving financial outputs.
+
+### Trade-off
+
+The platform intentionally does not attempt to be a general institutional quant library.
+
+Good.
+
+---
+
+## 18. Application-coordinated transactions instead of distributed 2PC
+
+### Problem
+
+SQLite and DuckDB are independent embedded databases.
+
+### Decision
+
+Coordinate begin/commit/rollback from the orchestrator.
+
+### Benefit
+
+Simple local operational model.
+
+### Trade-off
+
+No formal atomic commit across both databases.
+
+The docs say exactly that.
+
+Adding distributed transaction infrastructure would be disproportionate to the current single-user local workload.
+
+---
+
+## 19. Documentation is manifest-driven
+
+### Problem
+
+Hard-coded guide lists became brittle once the documentation tree grew.
+
+### Decision
+
+Use:
+
+```text
+manifest.json
+→ DocsCatalog
+→ DocsRenderer
+→ CLI / GUI
+```
+
+### Benefit
+
+One authoritative documentation tree can serve several application surfaces.
+
+### Trade-off
+
+The manifest becomes another small contract to maintain.
+
+That is preferable to hard-coded UI navigation.
+
+---
+
+## 20. Local-first by default
+
+### Problem
+
+Financial data is sensitive, and the workload does not require cloud-scale infrastructure.
+
+### Decision
+
+Keep ingestion, persistence, analytics, simulation and application surfaces local.
+
+### Benefit
+
+Privacy, portability, low operational overhead, direct access to local business tools.
+
+### Trade-off
+
+The system does not gain cloud-native multi-user scalability by default.
+
+I do not consider that a missing feature for this workload.
+
+---
+
+## Decision filter
+
+When considering a new abstraction or dependency, I ask:
+
+```text
+Does the current workload require it?
+Does it make financial behaviour clearer?
+Does it reduce hidden assumptions?
+Does it improve recovery / correctness?
+Does it preserve a useful boundary?
+```
+
+If not, it probably does not belong yet.
 
 ---
 
 ## Related documentation
 
-Continue with:
-
-- [System Architecture](system-architecture.md) — complete component view.
-- [Data Lifecycle](data-lifecycle.md) — state transitions and data movement.
-- [Warehouse Architecture](warehouse-architecture.md) — persistence model.
-- [Data Model](data-model.md) — canonical contracts and grains.
-- [Reliability & Recovery](reliability-and-recovery.md) — failure and reconstruction behaviour.
-- [Project Roadmap](../about/roadmap.md) — future generalization direction.
+- [System Architecture](system-architecture.md)
+- [Data Lifecycle](data-lifecycle.md)
+- [Warehouse Architecture](warehouse-architecture.md)
+- [Reliability & Recovery](reliability-and-recovery.md)
+- [Roadmap](../about/roadmap.md)
 
 [← Architecture Home](README.md) · [← Documentation Home](../README.md)
