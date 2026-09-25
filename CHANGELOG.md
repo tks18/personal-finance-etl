@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [6.4.2](https://github.com/tks18/personal-finance-etl/compare/6.4.1...6.4.2) (2026-09-25)
+
+
+### Bug Fixes 🛠
+
+* **backend/control_plane:** fix file renames broke pipelines, now truly resilient ([ddb13fb](https://github.com/tks18/personal-finance-etl/commit/ddb13fbd02e830a040143bde193b763ac615a55d))
+
+
+### Features 🔥
+
+* **backend/engines:** improve logging in backend engines ([3a25e49](https://github.com/tks18/personal-finance-etl/commit/3a25e49179a23f5d740b222a7f2a83cab104d71c))
+* **backend/extract:** improve logging in extract part ([549dd0b](https://github.com/tks18/personal-finance-etl/commit/549dd0b14ec3d3dabf3d2d03162886e618e657c2))
+* **backend/load:** improve logging across entire load interface ([ae406d1](https://github.com/tks18/personal-finance-etl/commit/ae406d110e53593986265d063432e4313a13cf48))
+* **backend/pipeline:** improve logging across the entire pipeline ([9e3be42](https://github.com/tks18/personal-finance-etl/commit/9e3be424fe40af560f3d4911bf888752c3e46727))
+* **backend/utils:** logger: integrate msecs, add datefmt ([d169274](https://github.com/tks18/personal-finance-etl/commit/d169274355608107bbe7476200ab9f654c77efa9))
+
 ### [6.4.1](https://github.com/tks18/personal-finance-etl/compare/6.4.0...6.4.1) (2026-09-25)
 
 
