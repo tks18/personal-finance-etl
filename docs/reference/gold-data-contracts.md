@@ -1,8 +1,10 @@
 # Gold Data Contracts
 
-Gold is the **decision-support serving layer** of Personal Finance ETL.
+Gold is the decision-support serving layer.
 
-The current v6 architecture publishes **17 physical Gold marts** across five domains:
+A Gold mart exists because a recurring analytical question deserves a stable physical contract.
+
+The current architecture publishes **17 Gold marts** across five domains.
 
 ```text
 Wealth                  2
@@ -14,35 +16,82 @@ Investment Analytics    7
                        17
 ```
 
-Gold is intentionally multi-grain.
+Gold is deliberately multi-grain.
 
-The marts are not denormalized copies of one universal fact table. Each exists because a specific analytical question requires a specific row meaning.
+---
 
-> **A calculation existing in code does not automatically make it a Gold metric. Gold is the curated product contract.**
+## Contract registry
+
+A Gold contract is explicit before it is persisted:
+
+```python
+DataContract(
+    contract_id="df_f_investment_analytics_isin",
+    layer="gold",
+    physical_table="gold.Investment_By_ISIN",
+    domain="Investments",
+    grain="Date-ISIN",
+    producer="InvestmentQuantEngine",
+    publication_order=200,
+)
+```
+
+The contract answers:
+
+```text
+What in-memory output is this?
+Where is it stored?
+What domain owns it?
+What does one row mean?
+Who produces it?
+When is it published?
+```
+
+---
+
+## Publication
+
+The hardened Gold loader uses the registry:
+
+```python
+contracts = sorted(
+    (c for c in DATA_CONTRACT_REGISTRY if c.layer == "gold"),
+    key=lambda c: c.publication_order,
+)
+
+for contract in contracts:
+    if contract.contract_id in dfs:
+        self._write(
+            dfs[contract.contract_id],
+            contract.physical_table,
+        )
+```
+
+The registry is therefore executable metadata, not documentation-only metadata.
 
 ---
 
 ## Gold catalog
 
-| Domain | Contract | Grain |
-| --- | --- | --- |
-| Wealth | `Core_Monthly_Fact` | Month |
-| Wealth | `Wealth_Asset_Breakdown` | Month × Asset |
-| Cash Flow | `Cashflow_Expense_Breakdown` | Month × Expense Category |
-| Cash Flow | `Cashflow_Income_Breakdown` | Month × Income Category |
-| Cash Flow | `Cashflow_Efficiency_Analytics` | Month |
-| Cash Flow | `Cashflow_Activity_Summary` | Month |
-| Planning | `Wealth_FIRE_Analytics` | Month |
-| Planning | `Forecast_Tax_Liability` | Month / planning context |
-| Planning | `Forecast_Budget_Variance` | Month / budget context |
-| Portfolio Management | `Investment_Portfolio_Summary` | Month × ISIN |
-| Investment Analytics | `Investment_By_ISIN` | Date × ISIN |
-| Investment Analytics | `Investment_By_Subtype` | Date × Subtype |
-| Investment Analytics | `Investment_By_Class` | Date × Class |
-| Investment Analytics | `Investment_By_Instrument_Type` | Date × Instrument Type |
-| Investment Analytics | `Investment_By_Sector` | Date × Sector |
-| Investment Analytics | `Investment_By_Industry` | Date × Industry |
-| Investment Analytics | `Investment_By_Portfolio` | Date |
+| Physical table | Domain | Grain | Producer |
+| --- | --- | --- | --- |
+| `gold.Core_Monthly_Fact` | Wealth | Month | WealthPresentationEngine |
+| `gold.Wealth_Asset_Breakdown` | Wealth | Month × Asset | WealthPresentationEngine |
+| `gold.Cashflow_Expense_Breakdown` | Cash Flow | Month × Expense Category | WealthPresentationEngine |
+| `gold.Cashflow_Income_Breakdown` | Cash Flow | Month × Income Category | WealthPresentationEngine |
+| `gold.Cashflow_Efficiency_Analytics` | Cash Flow | Month | WealthPresentationEngine |
+| `gold.Cashflow_Activity_Summary` | Cash Flow | Month | WealthPresentationEngine |
+| `gold.Wealth_FIRE_Analytics` | Planning | Month | WealthPresentationEngine |
+| `gold.Forecast_Tax_Liability` | Planning | Month / planning context | WealthPresentationEngine |
+| `gold.Forecast_Budget_Variance` | Planning | Month / budget context | WealthPresentationEngine |
+| `gold.Investment_Portfolio_Summary` | Portfolio Management | Month × ISIN | WealthPresentationEngine |
+| `gold.Investment_By_ISIN` | Investment Analytics | Date × ISIN | InvestmentQuantEngine |
+| `gold.Investment_By_Subtype` | Investment Analytics | Date × Subtype | InvestmentQuantEngine |
+| `gold.Investment_By_Class` | Investment Analytics | Date × Class | InvestmentQuantEngine |
+| `gold.Investment_By_Instrument_Type` | Investment Analytics | Date × Instrument Type | InvestmentQuantEngine |
+| `gold.Investment_By_Sector` | Investment Analytics | Date × Sector | InvestmentQuantEngine |
+| `gold.Investment_By_Industry` | Investment Analytics | Date × Industry | InvestmentQuantEngine |
+| `gold.Investment_By_Portfolio` | Investment Analytics | Date | InvestmentQuantEngine |
 
 ---
 
@@ -50,111 +99,45 @@ The marts are not denormalized copies of one universal fact table. Each exists b
 
 ## `Core_Monthly_Fact`
 
-**Purpose**  
-Provide the primary household-level monthly analytical state for BI and planning.
+**Grain:** Month.
 
-**Domain**  
-Wealth.
+**Purpose:** central household monthly state.
 
-**Grain**  
-One row per month.
+This mart can bring together decision-level measures around:
 
-**Producer**  
-Wealth Analytics / presentation engine.
+```text
+income
+expense
+savings
+wealth
+liquidity
+```
 
-**Major inputs**
+at a stable monthly grain.
 
-- canonical household transactions,
-- reconstructed asset balances,
-- investment market/tax state,
-- liabilities,
-- macro/inflation context,
-- FinancialRules.
+### Additivity
 
-**Important measure families**
+Individual flow measures can be additive within the month.
 
-### Income
-
-- total income,
-- cash income,
-- non-cash income,
-- active/passive income context.
-
-### Expenses
-
-- total expense,
-- cash expense,
-- non-cash expense,
-- core expense.
-
-### Cash flow and savings
-
-- net cash flow,
-- savings,
-- savings-rate context.
-
-### Assets and investments
-
-- asset balances,
-- investment book value,
-- investment market value,
-- liquid/illiquid state.
-
-### Wealth
-
-- book net worth,
-- market net worth,
-- after-tax context where applicable.
-
-### Macro
-
-- CPI/inflation context.
-
-**Downstream consumers**
-
-Power BI household dashboards and planning analytics.
-
-**Caveats**
-
-This is a household-month state vector. Do not join a lower-grain mart directly without respecting grain and relationship semantics.
+Balance/ratio measures should not be summed across months.
 
 ---
 
 ## `Wealth_Asset_Breakdown`
 
-**Purpose**  
-Provide asset-level drill-down beneath monthly household wealth.
+**Grain:** Month × Asset.
 
-**Domain**  
-Wealth.
+**Purpose:** show reconstructed wealth by asset through time.
 
-**Grain**  
-Month × Asset.
+This grain was made explicit in the hardened `DataContract` registry.
 
-**Major inputs**
+```text
+Month
+  └── Asset
+       └── book / market / planning state
+```
 
-Unified ledger and reconstructed asset-month state, plus investment market overlay.
-
-**Important concepts**
-
-- opening balance,
-- closing book balance,
-- market balance,
-- net movement,
-- income/expense effects,
-- transfers,
-- savings contribution,
-- organic growth,
-- liquidity context,
-- runway-related context.
-
-**Downstream consumers**
-
-Power BI asset analysis and wealth attribution.
-
-**Caveats**
-
-A balance is point-in-time/semi-additive across time. Do not sum monthly balances across months as though they were flows.
+It supports asset-level wealth composition without forcing the central monthly fact to duplicate one row per asset.
 
 ---
 
@@ -162,115 +145,72 @@ A balance is point-in-time/semi-additive across time. Do not sum monthly balance
 
 ## `Cashflow_Expense_Breakdown`
 
-**Purpose**  
-Explain where household spending occurred.
+**Grain:** Month × Expense Category.
 
-**Grain**  
-Month × expense category context.
+**Purpose:** decision-oriented monthly expense composition.
 
-**Major inputs**
+The mart consumes canonical expense semantics rather than raw source labels.
 
-Canonical expense facts and FinancialRules.
-
-**Important concepts**
-
-- category/subcategory,
-- total spend,
-- cash spend,
-- non-cash spend,
-- trailing/YTD spending context.
-
-**Downstream consumers**
-
-Expense analysis, budget/planning, FIRE spending interpretation.
-
-**Caveats**
-
-Core/non-core and cash/non-cash semantics depend on policy.
+FinancialRules can influence cash/non-cash and core/non-core interpretation upstream.
 
 ---
 
 ## `Cashflow_Income_Breakdown`
 
-**Purpose**  
-Explain where household income originated and what kind of income it represents.
+**Grain:** Month × Income Category.
 
-**Grain**  
-Month × income category context.
+**Purpose:** monthly income-stream composition.
 
-**Important concepts**
+The contract is useful for:
 
-- total income,
-- cash income,
-- active income,
-- dividend income,
-- interest income,
-- non-cash income.
+```text
+income mix
+active/passive stream analysis
+planning inputs
+```
 
-**Downstream consumers**
-
-Income analysis, savings, tax forecasting, FIRE context.
+without requiring consumers to reclassify transaction descriptions.
 
 ---
 
 ## `Cashflow_Efficiency_Analytics`
 
-**Purpose**  
-Summarize how effectively household income is converted into savings, investment, liquidity, and wealth.
+**Grain:** Month.
 
-**Grain**  
-Month.
+**Purpose:** monthly household cash-flow efficiency/savings-style analytics.
 
-**Important concepts**
+Non-additive rates should be interpreted at the published month grain.
 
-- savings rate,
-- investment rate,
-- income/expense mix,
-- liquidity ratio,
-- debt-to-assets,
-- emergency-fund coverage,
-- nominal/real wealth-growth context.
-
-**Caveats**
-
-Ratios depend on the configured financial definitions behind their numerators and denominators.
+They should not be summed across time.
 
 ---
 
 ## `Cashflow_Activity_Summary`
 
-**Purpose**  
-Reconcile classified cash activity with observed cash-pool movement.
+**Grain:** Month.
 
-**Grain**  
-Month.
+**Purpose:** reconcile classified cash activity with actual cash-pool movement.
 
-**Major inputs**
+Conceptually:
 
-- configured cash pools,
-- household ledger,
-- operating/investing/financing classifications,
-- internal transfers.
+```text
+Opening Cash
++ Operating
++ Investing
++ Financing
++ Transfer Treatment
+=
+Calculated Closing Cash
+```
 
-**Important concepts**
+Then:
 
-- opening cash,
-- closing cash,
-- actual net cash movement,
-- operating inflow/outflow,
-- investing inflow/outflow,
-- financing inflow/outflow,
-- internal transfers,
-- calculated net cash flow,
-- unreconciled difference.
+```text
+Unreconciled Difference
+= Actual Closing Cash - Calculated Closing Cash
+```
 
-**Interpretation**
-
-This is a **reconciliation mart**, not merely a spending summary.
-
-**Caveats**
-
-A non-zero unreconciled difference is a financial-quality signal and should remain visible.
+The difference remains visible as a financial/data-quality signal.
 
 ---
 
@@ -278,118 +218,46 @@ A non-zero unreconciled difference is a financial-quality signal and should rema
 
 ## `Wealth_FIRE_Analytics`
 
-**Purpose**  
-Publish current-state, deterministic, and selected stochastic FIRE/planning outputs.
+**Grain:** Month.
 
-**Grain**  
-Month.
+**Purpose:** expose selected deterministic and stochastic planning outputs.
 
-**Major inputs**
+Examples include:
 
-- after-tax market wealth,
-- trailing spending,
-- trailing savings,
-- macro assumptions,
-- FIRE/Monte Carlo FinancialRules.
+```text
+FI target / gap context
+P10 / P50 / P90 months to FI
+modelled probability of success
+projected P50 FI date
+base / stressed runway
+P50 nominal terminal wealth
+```
 
-**Important concepts**
+These are scenario outputs under configured assumptions.
 
-### Current / deterministic
-
-- trailing spending,
-- trailing savings,
-- assumed real return,
-- Target FI,
-- Lean FI,
-- Coast FI,
-- future nominal target,
-- FI coverage,
-- FI gap,
-- FI gap trend,
-- linear months to FI,
-- current withdrawal rate,
-- required savings rate,
-- actual savings rate,
-- FI velocity,
-- wealth velocity/acceleration,
-- real multi-year net-worth CAGR.
-
-### Stochastic
-
-- P10 months to FI,
-- P50 months to FI,
-- P90 months to FI,
-- modelled probability of success,
-- projected P50 FI date,
-- base/P50 runway,
-- stressed/P10 runway,
-- P50 nominal terminal wealth.
-
-**Caveats**
-
-These stochastic values are scenario outputs under configured assumptions, not predictions.
+They are not predictions.
 
 ---
 
 ## `Forecast_Tax_Liability`
 
-**Purpose**  
-Publish household tax-planning context from investment realized state and other taxable income.
+**Grain:** Month / planning context.
 
-**Grain**  
-Month / relevant planning-period context.
+**Purpose:** expose tax-planning state derived from the current financial model.
 
-**Major inputs**
+The exact tax treatment remains tied to configured/reference methodology.
 
-- realized investment tax state,
-- taxable dividends,
-- taxable interest,
-- tax FinancialRules,
-- exemption state.
-
-**Important concepts**
-
-- realized STCG,
-- realized LTCG,
-- realized gains,
-- realized STCL,
-- realized LTCL,
-- realized losses,
-- realized net P&L,
-- taxable dividends,
-- taxable interest,
-- LTCG exemption used,
-- LTCG exemption remaining,
-- projected tax bill,
-- effective tax rate,
-- harvesting offset remaining,
-- tax harvesting capacity.
-
-**Caveats**
-
-This is a planning estimate, not statutory tax filing output.
+This is planning output, not tax advice or an observed payable amount.
 
 ---
 
 ## `Forecast_Budget_Variance`
 
-**Purpose**  
-Publish budget/planning variance based on configured household allocation policy and analytical history.
+**Grain:** Month / budget context.
 
-**Grain**  
-Month / budget context.
+**Purpose:** compare planned/budget state with reconstructed financial activity.
 
-**Major inputs**
-
-Household income/expense history, FinancialRules budget allocations, and rolling analytical state.
-
-**Important concepts**
-
-Budget amount, actual/forecast spending, variance, and related planning context according to the physical implementation.
-
-**Caveats**
-
-The builder can compute richer intermediate statistics than the Gold contract exposes. The physical mart is intentionally curated.
+The contract belongs in Gold because it answers a recurring management/planning question rather than representing canonical transaction evidence.
 
 ---
 
@@ -397,320 +265,299 @@ The builder can compute richer intermediate statistics than the Gold contract ex
 
 ## `Investment_Portfolio_Summary`
 
-**Purpose**  
-Publish action-oriented portfolio allocation and tax-management context.
+**Grain:** Month × ISIN.
 
-**Domain**  
-Portfolio Management.
+**Producer:** `WealthPresentationEngine`.
 
-**Grain**  
-Month × ISIN.
+This distinction matters.
 
-**Major inputs**
+The deep investment engine produces date-grain analytical state.
 
-Investment analytical state, current values, instrument classifications, target allocations, tax-aware lot state.
+The presentation engine converts that state into a monthly management contract.
 
-**Important concepts**
+Important descriptive context includes:
 
-- current value,
-- portfolio weight,
-- class weight,
-- target weight,
-- allocation drift,
-- rebalance flag,
-- sector weight,
-- harvestable loss,
-- harvesting priority.
-
-**Caveats**
-
-During the v6 audit, rebalance tolerance remained approximately 5 percentage points in code rather than fully configurable.
-
-The historically named monthly-return field is closer to market-value percentage change than a fully cash-flow-adjusted return. XIRR remains the stronger cash-flow-aware performance measure.
-
----
-
-## Investment analytics domain
-
-The seven investment marts share a common analytical family but operate at different grains.
-
-```mermaid
-flowchart LR
-    LOT["Silver Tax Lots"] --> ISIN["Investment_By_ISIN"]
-    ISIN --> SUB["By_Subtype"]
-    SUB --> CLS["By_Class"]
-    CLS --> TYPE["By_Instrument_Type"]
-    TYPE --> SEC["By_Sector"]
-    SEC --> IND["By_Industry"]
-    IND --> PORT["By_Portfolio"]
+```text
+ISIN
+instrument name
+class
+type
+subtype
+sector
+industry
 ```
 
-This diagram shows the analytical roll-up idea. Some classifications are parallel portfolio views rather than a strict natural hierarchy in every semantic sense.
+The hardened builder explicitly carries `INSTRUMENT_SUBTYPE` into the final output so the physical DDL and builder contract agree.
+
+### Management semantics
+
+The mart can expose:
+
+```text
+market value
+actual allocation
+target allocation
+allocation drift
+rebalance state
+```
+
+Rebalance tolerance comes from `FinancialRules`.
 
 ---
 
-## Common investment measure families
+## Investment-analytics domain
 
-Depending on grain, marts can expose:
+The seven investment marts form a hierarchy.
 
-- invested value,
-- current value,
-- quantity,
-- unrealized P&L,
-- absolute return,
-- portfolio weight,
-- CAGR,
-- XIRR,
-- after-tax XIRR,
-- benchmark CAGR,
-- benchmark XIRR,
-- active return,
-- benchmark-lag state,
-- max drawdown,
-- realized LTCG/STCG/gain,
-- realized LTCL/STCL/loss,
-- unrealized LTCG/STCG/gain,
-- unrealized LTCL/STCL/loss,
-- estimated tax if sold,
-- and related tax-aware state.
+```mermaid
+flowchart TB
+    LOT["Silver Lot Analytics<br/>Date × ISIN × Lot"] --> ISIN["Investment_By_ISIN<br/>Date × ISIN"]
+    ISIN --> SUB["Investment_By_Subtype<br/>Date × Subtype"]
+    ISIN --> CLASS["Investment_By_Class<br/>Date × Class"]
+    ISIN --> TYPE["Investment_By_Instrument_Type<br/>Date × Type"]
+    ISIN --> SEC["Investment_By_Sector<br/>Date × Sector"]
+    ISIN --> IND["Investment_By_Industry<br/>Date × Industry"]
+    ISIN --> PORT["Investment_By_Portfolio<br/>Date"]
+```
 
-Not every field is meaningful at every grain.
+The child marts are not produced by averaging every metric from ISIN grain.
+
+Non-additive metrics are reconstructed at target grain.
 
 ---
 
 ## `Investment_By_ISIN`
 
-**Purpose**  
-Publish security-level investment performance and tax state.
+**Grain:** Date × ISIN.
 
-**Grain**  
-Date × ISIN.
+**Producer:** `InvestmentQuantEngine`.
 
-**Producer**  
-Investment Quant Engine post-processing.
+This is the core security-level analytical contract.
 
-**Major inputs**
+It can expose state such as:
 
-Silver lot analytics and portfolio cash-flow context.
+```text
+market value
+cost basis
+realized / unrealized state
+estimated tax
+after-tax value
+CAGR
+XIRR
+After-Tax XIRR
+Benchmark CAGR
+Benchmark XIRR
+Active Return
+Max Drawdown
+Outperforming Lot Ratio
+```
 
-**Important concepts**
-
-The broadest security-level set of investment performance, benchmark, risk, and tax measures.
-
-**Caveat: outperformance naming**
-
-The current `Outperformance_Probability` field is closer to a ratio of active lots currently outperforming their benchmark CAGR than a stochastic probability forecast.
-
-Interpret methodology, not the label.
+Not every field is additive.
 
 ---
 
 ## `Investment_By_Subtype`
 
-**Purpose**  
-Publish investment analytics grouped by configured instrument subtype.
+**Grain:** Date × Subtype.
 
-**Grain**  
-Date × Subtype.
+**Purpose:** aggregate investment state across instrument subtypes.
 
-**Methodology note**
+Examples might include lower-level classifications within broader investment types/classes.
 
-Additive state can be aggregated, while cash-flow-aware return metrics must be recomputed at subtype grain.
+Return metrics must be reconstructed from subtype-level cash flows.
 
 ---
 
 ## `Investment_By_Class`
 
-**Purpose**  
-Publish analytics by configured investment class.
+**Grain:** Date × Class.
 
-**Grain**  
-Date × Class.
+**Purpose:** class-level portfolio analytics.
 
-**Use**
+Examples:
 
-Asset-class performance and tax-aware portfolio analysis.
+```text
+Equity
+Debt
+other configured classes
+```
+
+The exact taxonomy comes from canonical investment classification.
 
 ---
 
 ## `Investment_By_Instrument_Type`
 
-**Purpose**  
-Publish analytics by instrument-type classification.
+**Grain:** Date × Instrument Type.
 
-**Grain**  
-Date × Instrument Type.
+**Purpose:** compare broad instrument families while preserving target-grain return methodology.
 
 ---
 
 ## `Investment_By_Sector`
 
-**Purpose**  
-Publish investment analytics by sector.
+**Grain:** Date × Sector.
 
-**Grain**  
-Date × Sector.
+**Purpose:** sector exposure/performance analysis where sector classification exists.
 
-**Caveats**
+Sector market values can aggregate.
 
-Sector classification is more meaningful for some asset types than others.
-
-Do not infer economic precision merely because every instrument has a populated label.
+Sector XIRR must be reconstructed.
 
 ---
 
 ## `Investment_By_Industry`
 
-**Purpose**  
-Publish investment analytics by industry.
+**Grain:** Date × Industry.
 
-**Grain**  
-Date × Industry.
+**Purpose:** lower-grain industry exposure/performance analysis.
+
+As with sector, classification quality depends on the Investment Master.
 
 ---
 
 ## `Investment_By_Portfolio`
 
-**Purpose**  
-Publish total portfolio investment analytics.
+**Grain:** Date.
 
-**Grain**  
-Date.
+**Purpose:** whole-portfolio investment analytics.
 
-**Methodology**
-
-Portfolio return measures are calculated from portfolio-level dated cash-flow context.
-
-Conceptually:
+This is where non-additivity becomes most important.
 
 ```text
 Portfolio XIRR
 ≠ average(ISIN XIRR)
+
+Portfolio Max Drawdown
+≠ average(ISIN Max Drawdown)
 ```
 
-**Important concepts**
-
-- total invested/current value,
-- total unrealized/realized state,
-- portfolio XIRR,
-- portfolio after-tax XIRR,
-- portfolio benchmark XIRR,
-- active return,
-- drawdown,
-- and tax-aware portfolio state.
+Portfolio cash flows and value path must be reconstructed at portfolio grain.
 
 ---
 
-## Gold producer map
+## Important metric semantics
 
-```mermaid
-flowchart TB
-    SIL["Silver Canonical State"] --> IQ["Investment Quant Engine"]
-    SIL --> WA["Wealth Analytics Engine"]
+## `Outperforming_Lot_Ratio`
 
-    IQ --> I["7 Investment Analytics Marts"]
-    IQ --> WA
+Descriptive ratio:
 
-    WA --> W["2 Wealth Marts"]
-    WA --> C["4 Cash-Flow Marts"]
-    WA --> P["3 Planning Marts"]
-    WA --> PM["1 Portfolio-Management Mart"]
+```text
+Active Lots Outperforming Benchmark / Active Lots
 ```
 
-The investment engine feeds household wealth as well as investment marts.
+It is not a probability forecast.
 
-That keeps the financial lineage connected.
-
----
-
-## Gold aggregation rules
-
-## Additive measures
-
-Can often be summed across compatible dimensions.
-
-Examples:
-
-- income,
-- expense,
-- current value,
-- realized gain/loss.
-
-## Semi-additive measures
-
-Balances can often aggregate across assets but not across time.
-
-## Non-additive measures
-
-Require explicit methodology.
-
-Examples:
-
-- XIRR,
-- CAGR,
-- max drawdown,
-- allocation weight,
-- rates/ratios.
-
-Gold contracts should never imply that all numeric columns are safely summable.
+The older `Outperformance_Probability` name was removed because it overstated the methodology.
 
 ---
 
-## Observed versus modelled fields
+## `Monthly_Market_Value_Change_Pct`
 
-Gold contains several semantic types.
+Describes month-over-month market-value change.
 
-### Observed / reconstructed
+It is not labelled as monthly investment return because capital flows can affect market value.
 
-Examples:
-
-- income,
-- expense,
-- current market value,
-- cash balances.
-
-### Derived analytical
-
-Examples:
-
-- XIRR,
-- active return,
-- savings rate,
-- allocation drift.
-
-### Modelled planning
-
-Examples:
-
-- projected tax bill,
-- estimated tax if sold,
-- FI timing percentiles,
-- probability of success,
-- terminal wealth.
-
-These categories should remain distinguishable in interpretation.
+The older `ISIN_Monthly_Return` name was removed to avoid that ambiguity.
 
 ---
 
-## Gold publication rules
+## Additivity
 
-1. **A mart has a business question.**
-2. **A mart has an explicit grain.**
-3. **A physical field has a defined financial meaning.**
-4. **Non-additive measures use target-grain methodology.**
-5. **Observed and modelled values are not conflated.**
-6. **Intermediate calculations do not automatically become Gold.**
-7. **Power BI should consume the published semantics rather than reinvent them.**
+| Measure family | Typical behaviour |
+| --- | --- |
+| Income / expense | Additive within compatible grain |
+| Market value | Additive across components at one date |
+| Realized gain/loss | Additive where classifications align |
+| Tax amount | Additive where methodology aligns |
+| XIRR | Non-additive |
+| CAGR | Non-additive |
+| Max Drawdown | Non-additive |
+| Weight | Non-additive |
+| Rates / ratios | Usually non-additive |
+
+The target mart must implement the correct aggregation methodology.
+
+---
+
+## Gold and Power BI
+
+Gold should simplify the BI semantic model.
+
+Python owns methodology that is:
+
+```text
+stateful
+cash-flow aware
+tax aware
+simulation heavy
+or difficult to express safely at BI query time
+```
+
+Power BI can then focus on:
+
+```text
+filtering
+slicing
+visual aggregation
+presentation measures
+decision dashboards
+```
+
+The boundary prevents DAX from becoming a second financial engine.
+
+---
+
+## Contract-change discipline
+
+Changing Gold can affect:
+
+```text
+DataContract registry
+builder output
+DuckDB DDL
+Meta row counts
+Power BI
+documentation
+```
+
+A Gold rename is therefore an interface change.
+
+The semantic hardening from:
+
+```text
+Outperformance_Probability
+→ Outperforming_Lot_Ratio
+
+ISIN_Monthly_Return
+→ Monthly_Market_Value_Change_Pct
+```
+
+is a good example: naming changes were required because the old contract invited incorrect interpretation.
+
+---
+
+## Gold design rules
+
+1. Start from a decision question.
+2. Define grain before schema.
+3. Reuse Silver where a mart is unnecessary.
+4. Recompute non-additive metrics at target grain.
+5. Register every physical Gold contract.
+6. Keep producer metadata accurate.
+7. Keep builder output aligned with DDL.
+8. Use intentional publication order.
+9. Keep Meta row counts registry-driven.
+10. Let Power BI consume financial methodology rather than reinvent it.
 
 ---
 
 ## Related documentation
 
-- [Warehouse Architecture](../architecture/warehouse-architecture.md)
-- [Data Model](../architecture/data-model.md)
-- [Metrics & Methodology](../finance/metrics-and-methodology.md)
+- [Adding a Gold Mart](../developer/adding-gold-marts.md)
 - [Investment Analytics](../finance/investment-analytics.md)
-- [Cash Flow & Wealth](../finance/cashflow-and-wealth.md)
-- [FIRE Methodology](../finance/fire-methodology.md)
+- [Metrics & Methodology](../finance/metrics-and-methodology.md)
+- [Data Model](../architecture/data-model.md)
+- [Silver Data Contracts](silver-data-contracts.md)
 
 [← Reference Home](README.md) · [← Documentation Home](../README.md)

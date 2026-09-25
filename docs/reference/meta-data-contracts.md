@@ -1,395 +1,544 @@
-# Meta Data Contracts
+# Meta & Control-Plane Data Contracts
 
-Meta is the **operational and reproducibility context layer** of the analytical warehouse.
+The current architecture has **two metadata surfaces with different ownership**.
 
-The current v6 architecture contains **5 Meta tables**:
+```mermaid
+flowchart LR
+    CP["SQLite Control Plane<br/>authoritative operational history"] -. current projection .-> META["DuckDB Meta<br/>latest/current analytical context"]
+```
+
+This distinction is one of the major architectural changes in the hardened system.
+
+> **Control Plane is authoritative. DuckDB Meta is a projection.**
+
+---
+
+## 1. SQLite Control Plane
+
+The Control Plane owns:
+
+```text
+raw artifact registry
+raw payload bytes
+sync state
+Settings snapshots
+FinancialRules snapshots
+run lifecycle
+run failures
+execution logs
+```
+
+It is not merely another warehouse schema.
+
+It is operational state.
+
+---
+
+## `cp_file_registry`
+
+**Purpose:** authoritative artifact identity and synchronization state.
+
+Representative production DDL:
+
+```sql
+CREATE TABLE IF NOT EXISTS cp_file_registry (
+    file_id TEXT PRIMARY KEY,
+    file_name TEXT NOT NULL,
+    relative_path TEXT NOT NULL UNIQUE,
+    file_category TEXT NOT NULL,
+    file_type TEXT,
+    file_hash TEXT NOT NULL,
+    file_size_bytes BIGINT,
+    sync_status TEXT DEFAULT 'PENDING_BRONZE',
+    first_ingested TIMESTAMP NOT NULL,
+    last_ingested TIMESTAMP NOT NULL
+);
+```
+
+### Key semantics
+
+| Field | Meaning |
+| --- | --- |
+| `file_id` | Stable artifact identity derived by the application |
+| `relative_path` | Canonical source/virtual identity |
+| `file_category` | Source semantic category |
+| `file_type` | Physical type used by ingestion policy |
+| `file_hash` | Content identity |
+| `sync_status` | Relationship to Bronze lifecycle |
+| `first_ingested` | First Control Plane observation |
+| `last_ingested` | Latest ingestion/update |
+
+### Sync state
+
+```text
+PENDING_BRONZE
+→ raw evidence exists but Bronze synchronization is incomplete
+
+SYNCED
+→ artifact has successfully reached Bronze
+```
+
+That state is operationally meaningful.
+
+---
+
+## `cp_file_payloads`
+
+**Purpose:** durable raw evidence.
+
+```sql
+CREATE TABLE IF NOT EXISTS cp_file_payloads (
+    file_id TEXT PRIMARY KEY,
+    file_bytes BLOB,
+    FOREIGN KEY(file_id)
+        REFERENCES cp_file_registry(file_id)
+        ON DELETE CASCADE
+);
+```
+
+The payload is separate from registry metadata.
+
+This allows the system to retain the actual source bytes rather than relying only on a filesystem path.
+
+---
+
+## Virtual artifacts
+
+External/provider data can enter the same evidence model through virtual identity:
+
+```text
+virtual://<category>/<filename>
+```
+
+A virtual artifact still receives:
+
+```text
+file identity
+content hash
+payload
+sync state
+```
+
+so API-acquired benchmark history does not bypass provenance.
+
+---
+
+## 2. Configuration snapshots
+
+The Control Plane stores Settings and FinancialRules by content identity.
+
+Conceptually:
+
+```text
+canonical serialized payload
+        ↓
+SHA-256
+        ↓
+snapshot_id
+```
+
+Production code follows this pattern:
+
+```python
+cfg_hash = hashlib.sha256(
+    cfg_json.encode("utf-8")
+).hexdigest()
+
+settings_id = f"snap_set_{cfg_hash[:12]}"
+```
+
+Then:
+
+```sql
+INSERT OR IGNORE
+```
+
+avoids duplicate snapshots for identical content.
+
+---
+
+## Settings snapshot
+
+**Purpose:** identify the operational configuration used by a run.
+
+Examples of operational concerns:
+
+```text
+source paths
+database paths
+reference-file paths
+hash policy
+```
+
+Settings are not financial policy.
+
+---
+
+## FinancialRules snapshot
+
+**Purpose:** identify the financial policy used by a run.
+
+Examples:
+
+```text
+income semantics
+expense semantics
+cash pools
+tax assumptions
+target allocation
+FIRE assumptions
+```
+
+A rules snapshot is part of financial provenance.
+
+---
+
+## 3. `cp_runs`
+
+**Purpose:** authoritative run lifecycle.
+
+Representative structure:
+
+```sql
+CREATE TABLE IF NOT EXISTS cp_runs (
+    run_id TEXT PRIMARY KEY,
+    started_at TIMESTAMP NOT NULL,
+    finished_at TIMESTAMP,
+    status TEXT,
+    application_version TEXT,
+    schema_version TEXT,
+    settings_snapshot_id TEXT,
+    rules_snapshot_id TEXT,
+    execution_log TEXT
+);
+```
+
+The lifecycle is:
+
+```mermaid
+stateDiagram-v2
+    [*] --> STARTED
+    STARTED --> RUNNING
+    RUNNING --> COMMITTING
+    COMMITTING --> SUCCESS
+    RUNNING --> FAILED
+    COMMITTING --> FAILED
+```
+
+A run is created before analytical work so failure does not erase the fact that execution occurred.
+
+---
+
+## Run provenance
+
+A run connects:
+
+```text
+run identity
+application version
+schema version
+Settings snapshot
+FinancialRules snapshot
+execution log
+status
+timestamps
+```
+
+That is much stronger than a simple start/end log row.
+
+---
+
+## 4. `cp_run_failures`
+
+**Purpose:** structured failure history.
+
+Representative DDL:
+
+```sql
+CREATE TABLE IF NOT EXISTS cp_run_failures (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id TEXT NOT NULL,
+    failed_isin TEXT,
+    stage TEXT,
+    error_type TEXT,
+    error_message TEXT,
+    traceback_log TEXT,
+    created_at TIMESTAMP NOT NULL
+);
+```
+
+The contract supports both:
+
+```text
+pipeline-level failure
+and
+instrument-specific failure
+```
+
+For investment failures, `failed_isin` can preserve the instrument boundary that failed.
+
+---
+
+## Why failures are separate from run status
+
+`cp_runs.status = FAILED` answers:
+
+> Did the run fail?
+
+`cp_run_failures` answers:
+
+> What failed, where, and with what context?
+
+Those are different operational questions.
+
+---
+
+## 5. Execution log
+
+The complete execution log is persisted against the run.
+
+Structured fields provide machine-queryable failure state.
+
+The log preserves chronological context.
+
+```text
+structured failure
++
+execution narrative
+```
+
+is more useful than either alone.
+
+---
+
+## 6. What the Control Plane does not yet model
+
+The current Control Plane provides strong operational provenance.
+
+It is not yet a complete normalized lineage graph.
+
+There are no dedicated contracts equivalent to:
+
+```text
+cp_run_artifacts
+cp_run_stages
+cp_run_outputs
+cp_lineage_edges
+```
+
+connecting every run/artifact/analytical contract.
+
+Do not describe the current implementation as row-level or graph-complete lineage.
+
+---
+
+## 7. DuckDB Meta
+
+DuckDB Meta is intentionally lean.
+
+Current tables:
 
 ```text
 m_File_Registry
-m_Run_Log
 m_Table_Row_Counts
 m_Financial_Rules
 m_Settings
 ```
 
-These tables do not represent household financial activity.
+It exists to put useful current-state context beside the analytical warehouse.
 
-They describe the analytical system and the context under which it ran.
+Historical operational truth stays in SQLite.
 
-Conceptually, Meta answers:
+---
 
-```text
-What entered?
-What ran?
-What was produced?
-Under which financial rules?
-Under which operational settings?
+## `meta.m_File_Registry`
+
+**Purpose:** current analytical projection of source registry state.
+
+This is useful for warehouse/BI inspection.
+
+It is not authoritative when it conflicts with the Control Plane.
+
+The self-healing path uses SQLite to repair missing DuckDB registry state, not the reverse.
+
+---
+
+## `meta.m_Table_Row_Counts`
+
+**Purpose:** current publication row-count telemetry.
+
+Representative DDL:
+
+```sql
+CREATE TABLE IF NOT EXISTS meta.m_Table_Row_Counts (
+    schema_name TEXT NOT NULL,
+    table_name TEXT NOT NULL,
+    row_count BIGINT,
+    generated_at TIMESTAMP
+);
 ```
 
----
-
-## Meta catalog
-
-| Contract | Purpose | Conceptual grain |
-| --- | --- | --- |
-| `m_File_Registry` | Source participation / warehouse registry context | File / artifact |
-| `m_Run_Log` | Pipeline execution telemetry | Run |
-| `m_Table_Row_Counts` | Published dataset volume | Run × table |
-| `m_Financial_Rules` | Financial-policy snapshot/context | Run / rules context |
-| `m_Settings` | Operational settings snapshot/context | Run / settings context |
-
-The exact physical columns should be interpreted from the live schema. This guide documents the stable conceptual contract.
-
----
-
-## `m_File_Registry`
-
-**Purpose**  
-Represent source/artifact registry context inside the analytical warehouse.
-
-**Conceptual grain**  
-File / artifact identity.
-
-**Relationship to Raw Store**
-
-The authoritative ingestion synchronization state lives in the SQLite Raw Document Store.
-
-The Meta registry provides warehouse-side operational context rather than replacing the Raw Store's control role.
-
-**Important concepts**
-
-- source identity,
-- file/artifact name,
-- category,
-- ingestion/synchronization context,
-- warehouse participation.
-
-**Use**
-
-Supports observability and comparison between Raw state and analytical warehouse state.
-
-**Recovery relevance**
-
-When the analytical warehouse is recreated, comparing surviving Raw registry state with warehouse-side registration helps identify artifacts that need to return to the Bronze synchronization path.
-
----
-
-## `m_Run_Log`
-
-**Purpose**  
-Record pipeline execution telemetry.
-
-**Conceptual grain**  
-One row per run/execution context.
-
-**Important concepts**
-
-- run identity,
-- start/end context,
-- status,
-- success/failure,
-- duration or related telemetry where present,
-- execution context.
-
-**Reliability role**
-
-Run telemetry is intentionally useful even when analytical work fails.
-
-A failed run should remain observable rather than disappearing with a rollback.
-
-**Caveat**
-
-Meta run logging is operational telemetry, not a distributed observability platform.
-
----
-
-## `m_Table_Row_Counts`
-
-**Purpose**  
-Record output row-count context for published datasets.
-
-**Conceptual grain**  
-Run × table/dataset.
-
-**Use**
-
-Useful for:
-
-- sanity checks,
-- detecting unexpectedly empty outputs,
-- detecting large unexplained volume changes,
-- and basic operational comparison between runs.
-
-**Caveat**
-
-Row count is not data quality by itself.
-
-A table can have the expected number of rows and still be financially wrong.
-
----
-
-## `m_Financial_Rules`
-
-**Purpose**  
-Capture the financial-policy context associated with analytical execution.
-
-**Conceptual grain**  
-Run / rules snapshot context.
-
-**Important concepts**
-
-Policy families can include:
-
-- income semantics,
-- expense semantics,
-- asset semantics,
-- cash-flow rules,
-- target allocation,
-- tax parameters,
-- FIRE assumptions,
-- and stochastic-model parameters.
-
-**Why it matters**
-
-Silver and Gold are rebuilt under current FinancialRules.
-
-Therefore policy is part of analytical reproducibility.
-
-**Current limitation**
-
-The current Meta layer can be strengthened further with an explicit rules fingerprint/hash and schema version.
-
----
-
-## `m_Settings`
-
-**Purpose**  
-Capture operational configuration context.
-
-**Conceptual grain**  
-Run / settings snapshot context.
-
-**Important concepts**
-
-Operational settings can include:
-
-- source locations,
-- persistence locations,
-- reference/mapping paths,
-- and ingestion policy.
-
-**Why it matters**
-
-A run is not fully understandable without knowing the environment in which it executed.
-
-**Current limitation**
-
-A future settings fingerprint/hash would make comparisons and historical reproducibility stronger.
-
----
-
-## Meta relationship map
-
-```mermaid
-flowchart TB
-    RAW["Raw Store Registry"] --> FR["m_File_Registry"]
-    RUN["Pipeline Execution"] --> LOG["m_Run_Log"]
-
-    RULES["FinancialRules"] --> MR["m_Financial_Rules"]
-    SETTINGS["Operational Settings"] --> MS["m_Settings"]
-
-    SIL["Silver Publication"] --> RC["m_Table_Row_Counts"]
-    GOLD["Gold Publication"] --> RC
-
-    FR --> OBS["Operational / Reproducibility Context"]
-    LOG --> OBS
-    MR --> OBS
-    MS --> OBS
-    RC --> OBS
-```
-
----
-
-## Meta and reproducibility
-
-A strong reproducibility question is:
-
-> If I see an analytical result, can I identify the evidence, code/policy context, and output contract that produced it?
-
-The current Meta layer provides part of that answer.
-
-It captures:
-
-- source participation,
-- run execution,
-- row counts,
-- settings,
-- and financial rules.
-
-It does **not yet** provide a complete immutable historical build manifest.
-
----
-
-## Future reproducibility fields
-
-Natural future additions include:
-
-```text
-application_version
-git_commit
-schema_version
-rules_schema_version
-settings_hash
-financial_rules_hash
-data_contract_version
-```
-
-These would make it easier to distinguish:
-
-```text
-same raw evidence + new rules
-```
-
-from:
-
-```text
-same raw evidence + new code
-```
-
-from:
-
-```text
-new raw evidence
-```
-
-Those are future hardening opportunities, not current v6 guarantees.
-
----
-
-## Meta and historical replay
-
-Even with Raw persistence, re-running old evidence later can use different:
-
-- application code,
-- schemas,
-- financial rules,
-- or configuration.
-
-Therefore:
-
-```text
-recoverability
-≠
-immutable historical replay
-```
-
-Meta version/fingerprint hardening would reduce that gap.
-
----
-
-## Meta and row-count validation
-
-Row counts can provide simple operational signals.
-
-Examples:
-
-```text
-expected Gold mart suddenly has 0 rows
-→ investigate
-
-investment lot table drops dramatically
-→ investigate source / reconciliation / processing
-
-household monthly table unexpectedly doubles
-→ investigate grain / duplication
-```
-
-But row counts should be paired with financial reconciliation and semantic checks.
-
----
-
-## Meta and data-contract registry
-
-During the architecture audit, one recurring opportunity emerged: a shared explicit data-contract registry.
+The hardened implementation resolves layer/table identity through `DATA_CONTRACT_REGISTRY`.
 
 Conceptually:
 
-```yaml
-Core_Monthly_Fact:
-  layer: gold
-  domain: wealth
-  grain:
-    - MONTH_START_DATE
-  producer: WealthPresentationEngine
+```python
+contract_by_id = {
+    contract.contract_id: contract
+    for contract in DATA_CONTRACT_REGISTRY
+}
+
+contract = contract_by_id.get(contract_id)
+
+physical_table = contract.physical_table.split(
+    ".",
+    maxsplit=1,
+)[-1]
 ```
 
-Such a registry could eventually support:
-
-- physical publication mapping,
-- Meta layer identity,
-- row-count cataloging,
-- schema validation,
-- documentation generation,
-- and application navigation.
-
-This is future architecture.
-
-The current implementation should not be documented as though this registry already exists.
+This replaces brittle inference from internal frame names.
 
 ---
 
-## Current Meta caveat: layer inference
+## `meta.m_Financial_Rules`
 
-The v6 audit identified an architectural weakness where physical layer identity can be inferred from internal frame/dataset naming conventions.
+**Purpose:** current financial-policy projection useful beside analytical state.
 
-That is less robust than explicit contract metadata.
+Historical FinancialRules provenance remains in Control Plane snapshots.
 
-A future improvement should make:
+Think:
 
 ```text
-physical layer
-physical table
-domain
-producer
-grain
+SQLite
+→ which rules did historical run X use?
+
+DuckDB Meta
+→ which rules describe the current analytical state?
 ```
 
-explicit rather than inferred.
+---
+
+## `meta.m_Settings`
+
+**Purpose:** current operational-settings projection useful to analytical consumers.
+
+Again:
+
+```text
+Control Plane
+→ historical authority
+
+Meta
+→ current analytical context
+```
 
 ---
 
-## Meta and sensitive information
+## 8. Control Plane vs Meta query guide
 
-Settings and FinancialRules can reveal sensitive information about my financial environment.
+| Question | Query surface |
+| --- | --- |
+| Which artifacts exist historically/currently? | Control Plane |
+| What raw bytes were stored? | Control Plane |
+| Which artifact is `PENDING_BRONZE`? | Control Plane |
+| What runs occurred? | Control Plane |
+| What failed in run X? | Control Plane |
+| Which FinancialRules snapshot did run X use? | Control Plane |
+| What is the latest warehouse file registry projection? | DuckDB Meta |
+| How many rows were published to current Silver/Gold tables? | DuckDB Meta |
+| What current rules/settings should BI inspect? | DuckDB Meta |
 
-Meta should therefore be treated as part of the sensitive local analytical system.
-
-Operational metadata is not automatically safe to publish merely because it does not contain individual bank transactions.
+This table is the easiest way to avoid confusing the two surfaces.
 
 ---
 
-## Meta contract invariants
+## 9. Self-healing direction
 
-1. **Meta describes the analytical system, not household finance.**
-2. **Raw Store remains authoritative for ingestion synchronization state.**
-3. **Failed runs remain observable.**
-4. **Row counts remain operational signals, not proof of correctness.**
-5. **Financial rules remain part of reproducibility context.**
-6. **Operational settings remain separate from financial policy.**
-7. **Recoverability remains distinct from immutable historical replay.**
-8. **Future version/fingerprint metadata should be explicit.**
-9. **Layer/domain identity should move toward explicit contract metadata rather than naming inference.**
-10. **Meta remains sensitive local data.**
+If a Control Plane artifact is missing from DuckDB's registry, Meta can requeue it:
+
+```python
+cp.artifacts.db.conn.execute(
+    """
+    UPDATE cp_file_registry
+    SET sync_status = 'PENDING_BRONZE'
+    WHERE relative_path = ?
+    """,
+    [path],
+)
+```
+
+The direction is:
+
+```text
+authoritative SQLite
+        ↓
+repair analytical DuckDB state
+```
+
+That direction should not be inverted.
+
+---
+
+## 10. Run/warehouse consistency boundary
+
+SQLite and DuckDB use separate local transactions coordinated by the application.
+
+So the metadata architecture should be understood with that limitation.
+
+```text
+DuckDB COMMIT
+then
+SQLite COMMIT
+```
+
+is not distributed 2PC.
+
+The Control Plane is still the authoritative operational system, but there is a narrow theoretical cross-database failure window.
+
+That trade-off is documented explicitly.
+
+---
+
+## 11. Recovery implications
+
+If DuckDB is lost while SQLite survives:
+
+```text
+Control Plane evidence
+        ↓
+rebuild Bronze
+        ↓
+rebuild Silver
+        ↓
+rebuild Gold
+```
+
+If SQLite is lost while DuckDB survives, current analytics can remain available but authoritative raw/run provenance is gone.
+
+That is why the stronger future backup model should snapshot both databases as one system bundle.
+
+---
+
+## 12. Metadata design rules
+
+1. One system owns historical operational truth.
+2. Raw evidence and payloads live with operational authority.
+3. Run state is durable and explicit.
+4. Configuration/rules are content-addressed.
+5. Failures are structured and queryable.
+6. Execution logs complement structured state.
+7. DuckDB Meta remains lean.
+8. Meta identity comes from explicit contracts where possible.
+9. Recovery flows from Control Plane to analytical state.
+10. Current provenance is strong but not graph-complete lineage.
 
 ---
 
 ## Related documentation
 
-- [Reliability & Recovery](../architecture/reliability-and-recovery.md)
-- [Warehouse Architecture](../architecture/warehouse-architecture.md)
+- [System Architecture](../architecture/system-architecture.md)
 - [Data Lifecycle](../architecture/data-lifecycle.md)
+- [Reliability & Recovery](../architecture/reliability-and-recovery.md)
 - [Financial Rules](../configuration/financial-rules.md)
-- [Silver Data Contracts](silver-data-contracts.md)
-- [Gold Data Contracts](gold-data-contracts.md)
 
 [← Reference Home](README.md) · [← Documentation Home](../README.md)

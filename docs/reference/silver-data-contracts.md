@@ -1,344 +1,294 @@
 # Silver Data Contracts
 
-Silver is the **canonical financial and analytical contract layer** of Personal Finance ETL.
+Silver is the canonical financial contract layer.
 
-The current v6 architecture publishes **20 physical Silver tables**:
+It sits after source-specific Bronze state and before decision-oriented Gold.
+
+```text
+Source-shaped Bronze
+        ↓
+canonical transformation
+        ↓
+Silver contracts
+        ↓
+investment / wealth / planning analytics
+```
+
+The current architecture publishes **20 Silver contracts**:
 
 ```text
 11 dimensions / reference models
 9 facts
 ```
 
-This guide is a contract reference rather than a methodology tutorial.
-
-For each dataset, it documents:
+This document focuses on:
 
 ```text
-Purpose
-Domain
-Grain
-Producer / origin
-Major inputs
-Important fields / concepts
-Downstream consumers
-Assumptions / caveats
+identity
+grain
+producer
+physical contract
+financial meaning
 ```
 
-For conceptual relationships, see [Data Model](../architecture/data-model.md).
+rather than narrating the transformation pipeline again.
 
-> Silver is not merely cleaned Bronze. It is the boundary where source-specific structure has been converted into stable financial concepts.
+---
+
+## Contract model
+
+Serving identity is explicit:
+
+```python
+@dataclass
+class DataContract:
+    contract_id: str
+    layer: str
+    physical_table: str
+    domain: str
+    grain: str
+    producer: str
+    publication_order: int
+```
+
+Silver publication uses the registry rather than inferring physical identity from DataFrame names.
 
 ---
 
 ## Contract catalog
 
-### Dimensions and reference models
+## Dimensions and reference models
 
-| Contract | Domain | Conceptual grain |
+| Physical table | Domain | Primary analytical role |
 | --- | --- | --- |
-| `d_Calendar` | Shared | Date |
-| `d_Income_Category` | Household | Income category |
-| `d_Income_Subcategory` | Household | Income subcategory |
-| `d_Expense_Category` | Household | Expense category |
-| `d_Expense_Subcategory` | Household | Expense subcategory |
-| `d_Asset_Category` | Household | Asset category |
-| `d_Asset_SubCategory` | Household | Asset subcategory |
-| `d_Currency` | Shared | Currency |
-| `d_Investment_Benchmark_Master` | Investment | Benchmark |
-| `d_Investment_Master` | Investment | Instrument / ISIN |
-| `d_Macro_Parameters` | Planning | Macro parameter context |
+| `silver.d_Calendar` | Shared | Canonical calendar/time semantics |
+| `silver.d_Income_Category` | Household | Income classification |
+| `silver.d_Income_Subcategory` | Household | Income sub-classification |
+| `silver.d_Expense_Category` | Household | Expense classification |
+| `silver.d_Expense_Subcategory` | Household | Expense sub-classification |
+| `silver.d_Asset_Category` | Household | Asset classification |
+| `silver.d_Asset_SubCategory` | Household | Asset sub-classification |
+| `silver.d_Currency` | Shared | Currency reference |
+| `silver.d_Investment_Benchmark_Master` | Investments | Benchmark identity/mapping |
+| `silver.d_Investment_Master` | Investments | Instrument identity and analytical/tax classification |
+| `silver.d_Macro_Parameters` | Planning | Macro/reference parameters |
 
-### Facts
+## Facts
 
-| Contract | Domain | Conceptual grain |
+| Physical table | Domain | Core grain |
 | --- | --- | --- |
-| `f_Income_Transactions` | Household | Income transaction |
-| `f_Expense_Transactions` | Household | Expense transaction |
-| `f_Transfer_Transactions` | Household | Transfer transaction |
-| `f_Opening_Balances` | Household | Opening balance by asset/context |
-| `f_Investment_Market_Data` | Investment | Date × instrument |
-| `f_Investment_Purchase_Data` | Investment | Purchase transaction |
-| `f_Investment_Sale_Data` | Investment | Sale transaction |
-| `f_Investment_Benchmark_Data` | Investment | Date × benchmark |
-| `f_Investment_Analytics_Lot` | Investment analytics | Date × ISIN × active tax lot |
+| `silver.f_Income_Transactions` | Household | Income transaction |
+| `silver.f_Expense_Transactions` | Household | Expense transaction |
+| `silver.f_Transfer_Transactions` | Household | Transfer transaction |
+| `silver.f_Opening_Balances` | Household | Opening state by asset |
+| `silver.f_Investment_Market_Data` | Investments | Date × ISIN |
+| `silver.f_Investment_Purchase_Data` | Investments | Purchase event |
+| `silver.f_Investment_Sale_Data` | Investments | Sale event |
+| `silver.f_Investment_Benchmark_Data` | Investments | Date × Benchmark |
+| `silver.f_Investment_Analytics_Lot` | Investments | Date × ISIN × Lot |
 
 ---
 
-## Shared dimensions
-
-## `d_Calendar`
-
-**Purpose**  
-Provide one canonical time vocabulary for household, investment, tax, and planning analytics.
-
-**Domain**  
-Shared.
-
-**Grain**  
-One row per calendar date.
-
-**Major concepts**
-
-- date identity,
-- month,
-- year,
-- financial/fiscal period context,
-- month boundaries,
-- reporting-period attributes.
-
-**Downstream consumers**
-
-- household facts,
-- investment facts,
-- Gold monthly marts,
-- tax financial-year logic,
-- FIRE/planning windows.
-
-**Caveats**
-
-Time semantics should be reused from the canonical calendar rather than independently recreated in each mart.
-
----
-
-## `d_Currency`
-
-**Purpose**  
-Represent currency as an explicit canonical reference rather than an implicit source property.
-
-**Domain**  
-Shared.
-
-**Grain**  
-One row per canonical currency.
-
-**Downstream consumers**
-
-Household and financial facts requiring currency identity.
-
-**Caveats**
-
-The current platform is built around my financial environment and should not be interpreted as a fully generalized multi-currency valuation engine merely because currency is modelled explicitly.
-
----
-
-## Household classification dimensions
+## Household dimensions
 
 ## `d_Income_Category`
 
-**Purpose**  
-Canonical top-level classification of income.
+**Purpose:** canonical income category.
 
-**Grain**  
-One row per income category.
+Typical relationship:
 
-**Major inputs**
+```text
+Income Transaction
+      ↓
+Income Subcategory
+      ↓
+Income Category
+```
 
-Source mappings and canonical transformation.
-
-**Downstream consumers**
-
-- `f_Income_Transactions`,
-- income breakdown marts,
-- household monthly state,
-- tax/planning analytics.
-
-**Caveats**
-
-FinancialRules can add semantic treatment such as active, dividend, interest, cash, or non-cash classification beyond the basic category identity.
+The dimension prevents raw/source labels from becoming permanent BI semantics.
 
 ---
 
 ## `d_Income_Subcategory`
 
-**Purpose**  
-Provide finer-grained income classification beneath the canonical category.
+**Purpose:** lower-grain income classification.
 
-**Grain**  
-One row per income subcategory.
-
-**Relationship**
+This supports questions such as:
 
 ```text
-Income Category
-      ↓
-Income Subcategory
+salary
+dividend
+interest
+other active/passive streams
 ```
 
-**Downstream consumers**
-
-Income transaction facts and category-level BI drill-down.
+without requiring Power BI to reverse-engineer source transaction descriptions.
 
 ---
 
 ## `d_Expense_Category`
 
-**Purpose**  
-Canonical top-level classification of household expense.
+**Purpose:** canonical expense category.
 
-**Grain**  
-One row per expense category.
+It is part of the household semantic model, not merely a chart label.
 
-**Downstream consumers**
+FinancialRules can further classify categories for:
 
-- expense transactions,
-- expense breakdown,
-- budget analytics,
-- spending/FIRE models.
-
-**Caveats**
-
-Core/non-core and cash/non-cash treatment is financial policy, not merely category identity.
+```text
+cash/non-cash treatment
+core/non-core treatment
+cash-flow activity
+```
 
 ---
 
 ## `d_Expense_Subcategory`
 
-**Purpose**  
-Provide finer expense classification beneath the canonical category.
+**Purpose:** lower-grain expense classification.
 
-**Grain**  
-One row per expense subcategory.
-
-**Downstream consumers**
-
-Expense facts and BI drill-down.
+Category/subcategory separation allows detailed consumption analysis while preserving a stable higher-level reporting hierarchy.
 
 ---
 
-## Asset dimensions
-
 ## `d_Asset_Category`
 
-**Purpose**  
-Define top-level household balance-sheet asset classifications.
+**Purpose:** canonical household asset grouping.
 
-**Grain**  
-One row per asset category.
+The dimension supports:
 
-**Downstream consumers**
-
-- opening balances,
-- transfers,
-- wealth reconstruction,
-- liquidity,
-- cash-flow modelling.
+```text
+wealth aggregation
+cash-pool policy
+liquidity interpretation
+asset reporting
+```
 
 ---
 
 ## `d_Asset_SubCategory`
 
-**Purpose**  
-Provide finer asset classification beneath the top-level asset category.
+**Purpose:** lower-grain asset classification.
 
-**Grain**  
-One row per asset subcategory.
-
-**Caveats**
-
-FinancialRules can assign additional semantics such as cash-pool, liquid/illiquid, or investment treatment.
+This lets the model preserve useful asset detail without forcing every Gold mart to operate at the most detailed asset taxonomy.
 
 ---
 
-## Investment reference dimensions
+## `d_Currency`
 
-## `d_Investment_Benchmark_Master`
+**Purpose:** canonical currency reference.
 
-**Purpose**  
-Define canonical benchmark identities used by the investment engine.
-
-**Domain**  
-Investment.
-
-**Grain**  
-One row per benchmark identity.
-
-**Major inputs**
-
-Benchmark master/reference inputs.
-
-**Downstream consumers**
-
-- instrument benchmark mapping,
-- benchmark history,
-- shadow benchmark construction,
-- benchmark-relative analytics.
-
-**Caveats**
-
-Benchmark mapping is part of investment methodology. A technically valid benchmark identity is not automatically an economically appropriate benchmark.
+Currency is explicit reference state rather than an implicit property of whichever source supplied a transaction.
 
 ---
+
+## Shared time model
+
+## `d_Calendar`
+
+**Purpose:** canonical date/time dimension.
+
+Time appears across:
+
+```text
+household transactions
+investment transactions
+market observations
+tax holding periods
+monthly marts
+FIRE planning
+```
+
+A shared calendar keeps period semantics consistent across domains.
+
+Typical attributes can include:
+
+```text
+date
+month
+year
+financial period attributes
+```
+
+The exact physical fields should be read from the current DDL.
+
+---
+
+## Investment dimensions
 
 ## `d_Investment_Master`
 
-**Purpose**  
-Provide canonical investment-instrument identity and analytical classification.
+This is one of the most important Silver contracts.
 
-**Domain**  
-Investment.
+**Grain:** one canonical instrument identity.
 
-**Grain**  
-One row per instrument / ISIN-level identity.
+Important semantics include:
 
-**Major concepts**
+```text
+ISIN
+instrument name
+instrument type
+instrument subtype
+instrument class
+sector
+industry
+benchmark identity
+tax type / subtype
+```
 
-- ISIN / stable instrument identity,
-- instrument type,
-- subtype,
-- class,
-- sector,
-- industry,
-- benchmark mapping,
-- tax type.
+The investment engine relies on this state for both analytics and methodology.
 
-**Major inputs**
+### Data quality
 
-Asset-pipeline outputs, mappings, and reference data.
+The Silver loader checks critical identity/tax fields.
 
-**Downstream consumers**
+Production logic includes checks such as:
 
-- purchase/sale/market facts,
-- FIFO engine,
-- tax engine,
-- hierarchical investment analytics,
-- portfolio-management marts.
+```python
+if table_name == "silver.d_Investment_Master":
+    if "ISIN" in df.columns:
+        missing_isin = df.filter(
+            pl.col("ISIN").is_null()
+        )
 
-**Quality expectations**
+    if "TAX_TYPE" in df.columns:
+        missing_tax = df.filter(
+            pl.col("TAX_TYPE").is_null()
+        )
+```
 
-The production load path treats critical investment identity and tax fields as required financial-contract data rather than harmless optional metadata.
+A row can be structurally valid while still being financially unusable.
 
-**Caveats**
-
-Some classifications are analytical views rather than a strict natural hierarchy for every instrument.
+Missing instrument identity or tax classification is therefore surfaced.
 
 ---
 
-## Planning reference model
+## `d_Investment_Benchmark_Master`
+
+**Purpose:** connect investment identity/classification to benchmark identity.
+
+This contract supports the shadow benchmark portfolio.
+
+```mermaid
+flowchart LR
+    INV["Investment Master"] --> MAP["Benchmark Mapping"]
+    MAP --> BM["Benchmark Master"]
+    BM --> HIST["Benchmark History"]
+    HIST --> SHADOW["Shadow Benchmark Lots"]
+```
+
+Benchmark mapping is semantic infrastructure.
+
+It is not merely a label displayed beside an investment.
+
+---
 
 ## `d_Macro_Parameters`
 
-**Purpose**  
-Persist macro/planning reference context used by household and FIRE analytics.
+**Purpose:** macro/reference state consumed by planning and analytical methodology.
 
-**Domain**  
-Planning.
+The exact parameters can evolve.
 
-**Grain**  
-Macro parameter context as defined by the physical contract.
-
-**Major concepts**
-
-Inflation and other configured/persisted macro context.
-
-**Downstream consumers**
-
-- household monthly analytics,
-- tax assumptions where applicable,
-- FIRE/planning models.
-
-**Caveats**
-
-Persisted macro context is distinct from stochastic simulation policy in `FinancialRules`.
+The important contract principle is that external/model assumptions should enter through explicit reference/configuration state rather than hidden literals in builders.
 
 ---
 
@@ -346,389 +296,331 @@ Persisted macro context is distinct from stochastic simulation policy in `Financ
 
 ## `f_Income_Transactions`
 
-**Purpose**  
-Publish canonical household income activity.
+**Grain:** one canonical income transaction.
 
-**Domain**  
-Household.
+**Purpose:** preserve standardized household inflow activity.
 
-**Grain**  
-One row per canonical income transaction.
+Conceptual fields include:
 
-**Major inputs**
+```text
+transaction date
+asset/account identity
+income category
+income subcategory
+amount
+```
 
-Source-shaped Bronze financial activity plus mappings/canonical transformation.
+FinancialRules determines downstream semantic treatment such as cash/non-cash classification.
 
-**Important concepts**
+### Additivity
 
-- transaction date,
-- amount,
-- category/subcategory,
-- asset/account context,
-- currency,
-- canonical income identity.
+Amount is generally additive across compatible transaction dimensions.
 
-**Downstream consumers**
-
-- unified household ledger,
-- `Core_Monthly_Fact`,
-- `Cashflow_Income_Breakdown`,
-- cash-flow analytics,
-- tax forecasting,
-- FIRE savings/income context.
-
-**Caveats**
-
-Cash/non-cash and active/passive/dividend/interest semantics can be supplied by FinancialRules rather than being intrinsic to the source transaction.
+Rates/ratios derived from income are not.
 
 ---
 
 ## `f_Expense_Transactions`
 
-**Purpose**  
-Publish canonical household expense activity.
+**Grain:** one canonical expense transaction.
 
-**Domain**  
-Household.
+**Purpose:** preserve standardized household outflow/consumption activity.
 
-**Grain**  
-One row per canonical expense transaction.
+Conceptual fields:
 
-**Important concepts**
+```text
+transaction date
+asset/account identity
+expense category
+expense subcategory
+amount
+```
 
-- transaction date,
-- amount,
-- category/subcategory,
-- asset/account context,
-- currency.
+Downstream policy can distinguish:
 
-**Downstream consumers**
+```text
+cash expense
+non-cash expense
+core expense
+```
 
-- unified ledger,
-- expense breakdown,
-- budget analytics,
-- cash-flow reconciliation,
-- FIRE spending inputs.
-
-**Caveats**
-
-Core/non-core and cash/non-cash semantics are policy-driven.
+The Silver fact itself preserves canonical activity before decision-specific aggregation.
 
 ---
 
 ## `f_Transfer_Transactions`
 
-**Purpose**  
-Publish movement of value between household assets without misclassifying that movement as income or expense.
+**Grain:** one canonical transfer event.
 
-**Domain**  
-Household.
+**Purpose:** represent internal household movement without manufacturing income/expense.
 
-**Grain**  
-One row per canonical transfer transaction.
+```text
+Asset A
+   ↓
+Transfer
+   ↓
+Asset B
+```
 
-**Important concepts**
+### Financial invariant
 
-- date,
-- source asset,
-- destination/counterparty asset,
-- amount,
-- transfer identity/context.
+```text
+transfer amount
+≠ household income
+≠ household expense
+```
 
-**Downstream consumers**
-
-- unified ledger,
-- asset-balance reconstruction,
-- cash-flow classification.
-
-**Caveats**
-
-Internal transfers must remain distinguishable from external household cash generation.
+Transfers can affect cash-flow classification while remaining wealth-neutral at household level.
 
 ---
 
 ## `f_Opening_Balances`
 
-**Purpose**  
-Initialize household asset state where complete lifetime transaction history is not represented inside the platform.
+**Grain:** opening state by asset/account context.
 
-**Domain**  
-Household.
+**Purpose:** initialize reconstructed financial state when complete lifetime transaction history is unavailable.
 
-**Grain**  
-Opening balance by asset and relevant effective-date/context.
+### Financial invariant
 
-**Downstream consumers**
+```text
+opening balance
+≠ income
+```
 
-- unified ledger,
-- asset-month reconstruction,
-- net-worth model.
-
-**Caveats**
-
-An opening balance is state initialization, not income.
-
-Its presence means current balance can be coherent without every lifetime movement being represented as a transaction.
+The contract exists to establish starting state, not to fabricate historical activity.
 
 ---
 
-## Investment facts
-
-## `f_Investment_Market_Data`
-
-**Purpose**  
-Publish canonical market observations for investment instruments.
-
-**Domain**  
-Investment.
-
-**Grain**  
-Date × instrument.
-
-**Major inputs**
-
-Asset-specific market data normalized by the relevant pipeline.
-
-**Important concepts**
-
-- instrument identity,
-- observation date,
-- market price/value basis.
-
-**Downstream consumers**
-
-- historical lot snapshots,
-- current valuation,
-- return analytics,
-- household market wealth.
-
-**Caveats**
-
-Analytical quality depends on market-history completeness and correct instrument identity.
-
----
+## Investment transaction facts
 
 ## `f_Investment_Purchase_Data`
 
-**Purpose**  
-Publish canonical investment acquisition events.
+**Grain:** purchase event.
 
-**Domain**  
-Investment.
+**Purpose:** canonical capital-deployment history used to create FIFO lots.
 
-**Grain**  
-One row per purchase/acquisition transaction.
+The shared investment engine needs enough state to reconstruct:
 
-**Important concepts**
+```text
+ISIN
+purchase date
+quantity
+purchase price / deployed capital
+```
 
-- instrument identity,
-- purchase date,
-- quantity,
-- purchase value/cost basis.
-
-**Downstream consumers**
-
-- FIFO lot creation,
-- XIRR cash-flow construction,
-- shadow benchmark creation.
+Asset-specific pipelines must normalize their source representation into this contract.
 
 ---
 
 ## `f_Investment_Sale_Data`
 
-**Purpose**  
-Publish canonical investment disposal events.
+**Grain:** sale event.
 
-**Domain**  
-Investment.
+**Purpose:** canonical disposal history used to consume FIFO inventory.
 
-**Grain**  
-One row per sale/redemption transaction.
+The engine needs:
 
-**Important concepts**
+```text
+ISIN
+sale date
+quantity
+sale price / proceeds
+```
 
-- instrument identity,
-- sale date,
-- quantity,
-- proceeds/value.
+The sale contract does not decide which historical lot was sold.
 
-**Downstream consumers**
+FIFO methodology does that downstream.
 
-- FIFO consumption,
-- realized gain/loss,
-- XIRR,
-- financial-year tax analytics.
+---
 
-**Caveats**
+## `f_Investment_Market_Data`
 
-Sale records do not themselves determine which historical lot is consumed; the FIFO engine owns that methodology.
+**Grain:** Date × ISIN.
+
+**Purpose:** provide valuation observations for active investment state.
+
+```text
+Date × ISIN
+      ↓
+market price / valuation context
+      ↓
+active lot market state
+```
+
+This contract enables historical investment paths rather than only latest-value reporting.
 
 ---
 
 ## `f_Investment_Benchmark_Data`
 
-**Purpose**  
-Publish canonical benchmark-history observations.
+**Grain:** Date × Benchmark.
 
-**Domain**  
-Investment.
+**Purpose:** benchmark price/history used by shadow benchmark lots.
 
-**Grain**  
-Date × benchmark.
+The benchmark history is aligned with real capital deployment through the investment engine.
 
-**Major inputs**
-
-Incrementally acquired benchmark history persisted upstream as Raw virtual artifacts.
-
-**Downstream consumers**
-
-- shadow benchmark state,
-- benchmark CAGR/XIRR,
-- active-return analytics.
-
-**Caveats**
-
-Benchmark coverage and mapping quality materially affect relative-performance interpretation.
+It should not be interpreted as a generic index return copied beside portfolio performance.
 
 ---
+
+## Deep analytical fact
 
 ## `f_Investment_Analytics_Lot`
 
-**Purpose**  
-Publish the deepest persistent investment analytical state.
+This is the deepest persistent analytical investment contract.
 
-**Domain**  
-Investment analytics.
+**Grain:**
 
-**Grain**  
-Closing/observation date × ISIN × active tax lot.
+```text
+Date × ISIN × Tax Lot
+```
 
-**Producer**
+Conceptually it carries state such as:
 
-Investment Quant Engine after FIFO reconstruction, broker reconciliation, benchmark state, and historical snapshot processing.
+```text
+lot acquisition context
+remaining quantity
+cost basis
+market value
+holding period
+holding classification
+benchmark state
+realized/unrealized state
+estimated tax
+after-tax value
+return context
+```
 
-**Major inputs**
+### Why this grain survives
 
-- investment master,
-- purchases,
-- sales,
-- market data,
-- benchmark data,
-- FinancialRules/tax policy,
-- broker-reported current state.
+Suppose one ISIN has:
 
-**Important concepts**
+```text
+Lot A → acquired 2022
+Lot B → acquired 2024
+Lot C → acquired 2026
+```
 
-The physical contract can carry state such as:
+At one valuation date those lots can have different:
 
-- lot identity/context,
-- purchase date,
-- quantity,
-- cost basis,
-- market value,
-- holding age,
-- days to long-term classification,
-- holding type,
-- lot/ISIN return context,
-- XIRR,
-- after-tax XIRR,
-- benchmark return context,
-- active return,
-- max drawdown context,
-- realized/unrealized tax state,
-- estimated tax if sold,
-- after-tax close value,
-- and tax-action classification.
+```text
+holding type
+cost basis
+tax rate
+unrealized gain/loss
+benchmark exposure
+```
 
-**Downstream consumers**
-
-- `Investment_By_ISIN`,
-- hierarchical investment marts,
-- portfolio-level analytics,
-- tax forecasting,
-- after-tax household wealth,
-- portfolio-management analytics.
-
-**Caveats**
-
-Not every field in this deep fact is published into Gold.
-
-Broker reconciliation can introduce adjusted lot state when transaction history and reported position differ.
+Aggregating them too early would destroy information required for tax-aware analytics.
 
 ---
 
-## Silver relationship map
+## Lot-to-Gold lineage
 
 ```mermaid
 flowchart TB
-    CAL["d_Calendar"] --> HH["Household Facts"]
-    IC["Income Dimensions"] --> HH
-    EC["Expense Dimensions"] --> HH
-    AC["Asset Dimensions"] --> HH
-
-    IM["d_Investment_Master"] --> IF["Investment Facts"]
-    BM["d_Investment_Benchmark_Master"] --> IF
-    MP["d_Macro_Parameters"] --> PLAN["Planning Context"]
-
-    IF --> LOT["f_Investment_Analytics_Lot"]
-    HH --> WEALTH["Wealth Analytics"]
-    LOT --> WEALTH
-    MP --> WEALTH
-
-    LOT --> IG["Gold Investment Marts"]
-    WEALTH --> WG["Gold Wealth / Cash Flow / Planning"]
+    LOT["Silver<br/>Date × ISIN × Lot"] --> ISIN["Gold<br/>Date × ISIN"]
+    ISIN --> SUB["Date × Subtype"]
+    ISIN --> CLASS["Date × Class"]
+    ISIN --> TYPE["Date × Instrument Type"]
+    ISIN --> SEC["Date × Sector"]
+    ISIN --> IND["Date × Industry"]
+    ISIN --> PORT["Date × Portfolio"]
 ```
 
-This is conceptual rather than a literal physical foreign-key diagram.
+At each target grain:
+
+- additive values can be aggregated,
+- weights are recomputed,
+- non-additive return metrics are reconstructed.
 
 ---
 
-## Silver loading semantics
+## Silver publication
 
-Silver is rebuilt deterministically.
+Silver uses the same registry-driven publication pattern as Gold.
 
-The load order is dependency-aware:
+Conceptually:
 
-```text
-recreate schema
-      ↓
-dimensions / reference models
-      ↓
-facts
-      ↓
-quality checks
+```python
+contracts = sorted(
+    (c for c in DATA_CONTRACT_REGISTRY if c.layer == "silver"),
+    key=lambda c: c.publication_order,
+)
+
+for contract in contracts:
+    if contract.contract_id in dfs:
+        self._write(
+            dfs[contract.contract_id],
+            contract.physical_table,
+        )
 ```
 
-This means Silver represents the canonical state implied by:
+This means Silver identity is explicit.
 
-```text
-complete current Bronze
-+
-current transformation code
-+
-current FinancialRules / mappings
-```
+The loader does not infer layer/table meaning from a naming convention.
 
 ---
 
-## Silver contract rules
+## Contract semantics
 
-1. **Source-specific layout should terminate before Silver.**
-2. **Every fact has an explicit conceptual grain.**
-3. **Reference dimensions represent stable financial identity.**
-4. **Financial policy is not hidden inside source fields.**
-5. **Deep investment lot state remains available below Gold aggregation.**
-6. **Silver is rebuildable canonical state, not immutable source evidence.**
-7. **Physical schema changes are contract changes.**
+## Additive
+
+Examples:
+
+```text
+transaction amount
+quantity at compatible event grain
+realized gain/loss
+```
+
+## Semi-additive
+
+Examples:
+
+```text
+balance
+market value
+```
+
+These can aggregate across assets at one date but not meaningfully across time.
+
+## Non-additive
+
+Examples:
+
+```text
+XIRR
+CAGR
+drawdown
+rates
+weights
+```
+
+These require target-grain methodology.
+
+---
+
+## Silver design rules
+
+1. Silver is canonical, not source-shaped.
+2. Source vocabulary should terminate upstream.
+3. Grain must be explicit.
+4. Transaction facts preserve financial events.
+5. Opening state remains distinct from activity.
+6. Transfer state remains distinct from income/expense.
+7. Lot detail survives until tax-aware methodology no longer needs it.
+8. Physical contracts are interfaces consumed downstream.
+9. Data quality includes financial usability, not only schema validity.
+10. Silver should not accumulate presentation-only metrics.
 
 ---
 
 ## Related documentation
 
 - [Data Model](../architecture/data-model.md)
-- [Warehouse Architecture](../architecture/warehouse-architecture.md)
-- [Gold Data Contracts](gold-data-contracts.md)
-- [Financial Model](../finance/financial-model.md)
 - [Investment Analytics](../finance/investment-analytics.md)
+- [Financial Model](../finance/financial-model.md)
+- [Gold Data Contracts](gold-data-contracts.md)
 
 [← Reference Home](README.md) · [← Documentation Home](../README.md)
