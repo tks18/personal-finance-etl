@@ -1,727 +1,604 @@
 # Investment Analytics
 
-The investment engine reconstructs portfolio state from transactions, reconciles that state against broker reporting, maintains tax-lot inventory, models benchmark-equivalent capital deployment, and publishes tax-aware performance across several portfolio grains.
+The investment engine reconstructs portfolio state from transaction evidence, market data, broker state, benchmark state, tax policy, and time.
 
-This is not a single "return calculator."
-
-It is a stateful analytical pipeline.
-
-```text
-Canonical investment evidence
-        ↓
-Asset pipelines
-        ↓
-FIFO tax lots
-        ↓
-Broker reconciliation
-        ↓
-Shadow benchmark inventory
-        ↓
-Historical market snapshots
-        ↓
-Tax-aware performance
-        ↓
-Hierarchical portfolio analytics
-```
-
-> This document describes the methodology implemented in the current v6 codebase. It is not investment or tax advice.
-
----
-
-## Investment architecture
-
-```mermaid
-flowchart TB
-    SRC["Canonical Investment Inputs"] --> AP["Asset Pipelines"]
-    AP --> BUY["Purchases"]
-    AP --> SELL["Sales"]
-    AP --> MD["Market Data"]
-    AP --> MASTER["Instrument Master"]
-
-    BUY --> FIFO["FIFO Lot Engine"]
-    SELL --> FIFO
-    MASTER --> REC["Broker Reconciliation"]
-    FIFO --> REC
-
-    BM["Benchmark Mapping + History"] --> SH["Shadow Benchmark"]
-    REC --> SNAP["Historical Lot Snapshots"]
-    MD --> SNAP
-    SH --> SNAP
-
-    SNAP --> TAX["Tax-Aware State"]
-    TAX --> RET["CAGR / XIRR / After-Tax XIRR<br/>Benchmark / Active Return / Drawdown"]
-    RET --> AGG["ISIN → Classification → Portfolio"]
-```
-
----
-
-## Canonical investment inputs
-
-The quant engine should not need to know the original broker worksheet layout.
-
-Upstream asset pipelines converge toward common concepts:
-
-- instrument master,
-- market data,
-- purchase data,
-- sale data,
-- and benchmark/reference state.
-
-This is the investment engine's semantic boundary.
-
----
-
-## Asset pipelines
-
-Current implementations cover:
-
-- stocks,
-- mutual funds.
-
-Each asset pipeline can handle source-specific normalization while producing a common result contract for downstream analytics.
-
-This is an important extension seam.
-
-A future asset type should ideally implement the canonical asset-pipeline contract rather than introduce branches throughout the lot and portfolio engines.
-
----
-
-## Per-ISIN processing
-
-The instrument is a natural state and parallelization boundary.
-
-Investment data is partitioned by ISIN before worker execution.
-
-Each worker can process the instrument's:
-
-- purchases,
-- sales,
-- market observations,
-- benchmark relationship,
-- and current broker state
-
-without repeatedly filtering the full portfolio.
-
-This aligns compute isolation with financial state ownership.
-
----
-
-## FIFO tax-lot accounting
-
-Purchases create individual lots.
-
-Sales consume active inventory oldest-first.
-
-```mermaid
-sequenceDiagram
-    participant Buy as Purchase
-    participant Inv as FIFO Inventory
-    participant Sale as Sale
-    participant Real as Realized Event
-
-    Buy->>Inv: Add lot(quantity, cost, date)
-    Sale->>Inv: Request disposal quantity
-    loop Until sale quantity consumed
-        Inv->>Inv: Select oldest active lot
-        Inv->>Real: Consume full or partial quantity
-        Real->>Real: Classify holding at sale date
-        Inv->>Inv: Reduce / close lot
-    end
-```
-
-Partial-lot disposals are supported.
-
-The remaining quantity continues as an active lot with its original acquisition context.
-
----
-
-## Lot state
-
-An active lot can carry concepts such as:
-
-- purchase date,
-- purchase quantity,
-- remaining quantity,
-- cost basis,
-- market value,
-- holding age,
-- holding classification,
-- days until long-term treatment,
-- unrealized gain/loss,
-- estimated tax if sold,
-- after-tax value,
-- benchmark purchase context,
-- and return state.
-
-This makes tax-lot state much richer than a simple average-cost position.
-
----
-
-## Sale-date classification
-
-Holding classification for a realized event is determined at the actual sale date.
-
-That matters because the same lot can move from short-term to long-term treatment as time passes.
-
-The lot's current classification and a historical sale's classification are therefore different temporal questions.
-
----
-
-## Realized events
-
-When FIFO inventory is consumed, the engine creates realized gain/loss state.
-
-The model distinguishes:
-
-```text
-Realized LTCG
-Realized STCG
-Realized Gain
-
-Realized LTCL
-Realized STCL
-Realized Loss
-
-Realized Net P&L
-```
-
-Realized state is aggregated with financial-year awareness.
-
----
-
-## Unrealized state
-
-Remaining active lots are revalued against market observations.
-
-The model can distinguish:
-
-- unrealized LTCG,
-- unrealized STCG,
-- unrealized LTCL,
-- unrealized STCL,
-- estimated tax if sold,
-- after-tax P&L,
-- and after-tax close value.
-
-These values evolve as:
-
-- market price changes,
-- holding age changes,
-- and tax classification changes.
-
----
-
-## Broker reconciliation
-
-Historical transactions are not assumed to be permanently perfect.
-
-The engine compares reconstructed state with broker-reported current state.
-
-## Quantity reconciliation
-
-If broker quantity exceeds reconstructed quantity, the current implementation can create reconciliation inventory to close the gap.
-
-During the v6 audit, this adjustment inventory used zero-cost treatment as a mechanical reconciliation technique.
-
-If broker quantity is below reconstructed quantity, active inventory is reduced until the reported quantity is matched.
-
-## Cost reconciliation
-
-If reconstructed cost state differs from broker-reported buy value, active lot costs can be scaled to reconcile the current cost basis.
-
-## Design rationale
-
-The policy is:
-
-> **Transactions explain history; broker state anchors current truth.**
-
-This makes the engine operationally useful against imperfect real-world history.
-
-## Caveat
-
-Reconciliation adjustments can affect lot-level tax/return interpretation.
-
-They should be understood as a data-reconciliation policy, not as evidence that the historical transactions were complete.
-
----
-
-## Shadow benchmark portfolio
-
-Benchmark-relative analysis uses a shadow position.
-
-For each real purchase:
-
-```text
-actual cash deployed
-      ↓
-real investment quantity
-
-same economic cash deployment
-      ↓
-benchmark shadow quantity
-```
-
-The benchmark purchase price at the relevant date determines shadow quantity.
-
----
-
-## Partial sales and benchmark inventory
-
-When a real lot is partially disposed, its shadow benchmark quantity is reduced proportionally.
-
-This keeps benchmark exposure aligned with the economic fraction of the real position that remains active.
-
-The benchmark is therefore stateful.
-
-It is not merely a lookup of "index return over the same date range."
-
----
-
-## Benchmark-history lifecycle
-
-Benchmark data has its own data-engineering path.
-
-The system:
-
-1. determines required historical coverage from investment dates,
-2. checks existing Bronze benchmark coverage,
-3. fetches only missing history,
-4. serializes new history as Parquet bytes,
-5. persists those bytes as `virtual://...` Raw artifacts,
-6. synchronizes them to Bronze,
-7. and publishes canonical benchmark history.
-
-This gives external market history the same provenance/recovery treatment as local financial artifacts.
-
----
-
-## Historical snapshot engine
-
-Investment state evolves through market time.
-
-At each relevant market observation, the engine applies transactions that have occurred up to that point and values the resulting active inventory.
-
-Conceptually:
+It is not a dashboard ratio calculator.
 
 ```mermaid
 flowchart LR
-    T0["Previous State"] --> TX["Apply purchases / sales through date"]
-    TX --> LOT["Active FIFO Inventory"]
-    LOT --> MV["Apply Market Price"]
-    BM["Benchmark State"] --> SNAP["Snapshot"]
-    MV --> SNAP
-    SNAP --> NEXT["Advance to next market date"]
+    MASTER["Investment Master"] --> PIPE["Asset Pipeline"]
+    BUY["Purchases"] --> PIPE
+    SELL["Sales"] --> PIPE
+    MKT["Market Data"] --> PIPE
+    BM["Benchmark Data"] --> PIPE
+
+    PIPE --> ISIN["Per-ISIN State Machine"]
+    ISIN --> FIFO["FIFO Tax Lots"]
+    FIFO --> RECON["Broker Reconciliation"]
+    RECON --> SHADOW["Shadow Benchmark"]
+    SHADOW --> PERF["Tax + Return State"]
+    PERF --> HIER["ISIN → Class → Portfolio"]
 ```
 
-This produces historical lot-level analytical state rather than only a current snapshot.
-
 ---
 
-## CAGR
+## 1. Asset pipelines normalize upstream variation
 
-CAGR provides point-to-point annualized growth context.
+Stocks and mutual funds have different upstream source shapes.
 
-It is useful for:
-
-- lot growth,
-- instrument growth,
-- benchmark growth
-
-when irregular intermediate cash flows are not the primary question.
-
-It is not a substitute for XIRR.
-
----
-
-## XIRR
-
-XIRR is used for irregular dated investment cash flows.
-
-For an active position, the series includes:
-
-- dated investment cash flows,
-- relevant realized proceeds,
-- and terminal current value.
-
-The return \(r\) solves:
+They converge into shared canonical investment contracts before the common engine.
 
 ```text
-Σ CF_i / (1 + r)^((d_i - d_0)/365) = 0
+Stock-specific transformation
+            ↘
+             Canonical Investment Contracts
+            ↗
+MF-specific transformation
 ```
 
-The implementation uses PyXIRR for this methodology.
-
----
-
-## After-tax XIRR
-
-After-tax XIRR uses tax-aware terminal value.
-
-It is not calculated by simply applying one tax percentage to pre-tax XIRR.
-
-The tax effect depends on active lot state.
-
-That makes after-tax performance sensitive to:
-
-- holding period,
-- unrealized gains/losses,
-- tax classification,
-- and current tax policy.
-
----
-
-## Benchmark XIRR
-
-Benchmark XIRR applies cash-flow-aware return methodology to the shadow benchmark portfolio.
-
-Because shadow exposure follows actual capital deployment, the comparison is aligned more closely with the investor's actual timing.
-
----
-
-## Active return
-
-Active return measures performance relative to the configured benchmark methodology.
-
-Its meaning depends on grain.
-
-At portfolio grain, benchmark-relative return should be based on portfolio-level cash-flow context rather than an average of security-level active returns.
-
----
-
-## Max drawdown
-
-Max drawdown is the main risk metric retained in the current Gold serving contract.
-
-It captures the largest peak-to-trough decline in the relevant analytical path.
-
-The current v6 serving model deliberately does not expose the older broad set of Sharpe/Sortino/Calmar/beta/tracking-error metrics as headline analytics.
-
----
-
-## Why the risk surface was pruned
-
-Earlier versions calculated a broader set of institutional-style risk metrics.
-
-The current system is used for my actual investment workflow.
-
-Metrics that did not materially improve that workflow were removed from the serving contract.
-
-The current philosophy is:
-
-> **Decision usefulness > metric collecting.**
-
-Residual helper code does not redefine the published analytical contract.
-
----
-
-## ISIN analytics
-
-`Investment_By_ISIN` is the most detailed Gold investment-performance mart.
-
-It can expose concepts such as:
-
-- invested value,
-- current value,
-- quantity,
-- unrealized P&L,
-- absolute return,
-- weight,
-- CAGR,
-- XIRR,
-- after-tax XIRR,
-- benchmark CAGR,
-- benchmark XIRR,
-- active return,
-- benchmark-lag state,
-- max drawdown,
-- realized/unrealized tax state,
-- and the historically named outperformance field.
-
----
-
-## Outperformance field caveat
-
-The current `Outperformance_Probability` name is semantically stronger than the implemented methodology.
-
-The v6 audit found it to be closer to:
-
-```text
-active lots with lot CAGR > benchmark lot CAGR
-        /
-active lots
-```
-
-That is a **current lot outperformance rate**, not a stochastic probability forecast.
-
-A future rename would improve semantic reliability.
-
-Until then, documentation should interpret the methodology rather than the label.
-
----
-
-## Hierarchical aggregation
-
-Investment state is published across:
+The shared engine then consumes concepts such as:
 
 ```text
 ISIN
-Subtype
-Class
-Instrument Type
-Sector
-Industry
-Portfolio
+purchase date
+purchase quantity
+purchase price
+sale date
+sale quantity
+sale price
+market price
+benchmark price
+tax classification
 ```
 
-These views allow portfolio analysis through different classifications.
-
-The post-processing layer aggregates additive state and recalculates return state where required.
+That boundary keeps source-specific logic out of FIFO and portfolio analytics.
 
 ---
 
-## Additive versus non-additive measures
+## 2. Per-ISIN processing is a natural state boundary
 
-Some measures aggregate naturally:
+Tax-lot inventory for one ISIN does not need mutable state from another ISIN.
 
-- current value,
-- invested value,
-- quantity where semantically compatible,
-- realized gain/loss,
-- unrealized gain/loss.
+The engine therefore partitions work by instrument and can process instruments in parallel.
 
-Others do not:
+```mermaid
+flowchart TB
+    PORT["Canonical Portfolio"] --> A["ISIN A Worker"]
+    PORT --> B["ISIN B Worker"]
+    PORT --> C["ISIN C Worker"]
 
-- XIRR,
-- CAGR,
-- drawdown,
-- ratios,
-- weights.
+    A --> OUT["Combined Analytics"]
+    B --> OUT
+    C --> OUT
+```
 
-Those require methodology appropriate to the target grain.
+The boundary provides both:
 
-This is why portfolio analytics are not merely a `group_by().mean()` exercise.
+- state isolation,
+- parallelism.
+
+But worker failure is explicit. An instrument cannot silently disappear from the portfolio result.
 
 ---
 
-## Portfolio XIRR
+## 3. Purchases create FIFO lots
 
-Portfolio XIRR is built from portfolio cash-flow context.
+A purchase becomes an active tax lot containing acquisition state.
 
 Conceptually:
 
 ```text
-all relevant portfolio contributions
-+
-all relevant portfolio withdrawals / realized proceeds
-+
-terminal portfolio value
-        ↓
-dated portfolio cash-flow series
-        ↓
-XIRR
+TaxLot
+├── acquisition date
+├── quantity
+├── purchase price
+├── benchmark quantity
+└── benchmark purchase price
 ```
 
-It is not the weighted average of instrument XIRRs.
+The active lot queue is ordered by acquisition time.
+
+A later sale consumes the oldest inventory first.
 
 ---
 
-## Portfolio after-tax XIRR
+## 4. Sales consume the oldest active lot
 
-The portfolio after-tax return similarly depends on tax-aware terminal state and relevant realized cash flows at portfolio grain.
+The production algorithm is intentionally stateful:
 
----
+```python
+while rem > 0 and self._active_lots:
+    lot = self._active_lots[0]
+    consumed = min(rem, lot.qty)
 
-## Portfolio benchmark XIRR
+    age_sale = max(
+        (sell_date - lot.date).days,
+        1,
+    )
 
-The portfolio benchmark return uses the corresponding shadow benchmark cash-flow context.
+    holding_type = self.fy_table.get_holding_type(
+        age_sale,
+        self.tax_type,
+        self.tax_subtype,
+        lot.date,
+        sell_date,
+    )
 
-This keeps:
+    pnl = (
+        (price - lot.price) * consumed
+        if lot.price > 0
+        else 0.0
+    )
+```
+
+This code simultaneously answers:
 
 ```text
-Actual portfolio
-vs
-Shadow benchmark portfolio
+Which lot was sold?
+How much?
+How old was it?
+What holding classification applied at sale?
+What gain/loss was realized?
 ```
-
-on comparable capital-deployment footing.
 
 ---
 
-## Portfolio-management analytics
+## 5. Partial disposals preserve remaining lot state
 
-`Investment_Portfolio_Summary` is separate from the quant marts.
+If a sale consumes only part of a lot, the remaining inventory survives.
 
-It operates at approximately Month × ISIN grain and focuses on management questions.
+The shadow benchmark position is reduced proportionally:
 
-Current concepts include:
+```python
+new_shadow_qty = (
+    lot.shadow_qty
+    - (lot.shadow_qty * (rem / lot.qty))
+    if lot.shadow_qty
+    else 0
+)
 
-- portfolio weight,
-- class weight,
-- target weight,
-- allocation drift,
-- rebalance flag,
-- sector weight,
-- harvestable loss,
-- and harvesting priority.
+self._active_lots[0] = TaxLot(
+    date=lot.date,
+    qty=lot.qty - rem,
+    price=lot.price,
+    shadow_qty=new_shadow_qty,
+    bm_buy=lot.bm_buy,
+)
+```
 
-This is a deliberate separation between:
+That proportional treatment matters because the benchmark comparison should continue to represent only the capital still economically active.
+
+---
+
+## 6. Holding period is lot-specific
+
+Holding classification depends on:
 
 ```text
-performance state
+asset tax type
+asset tax subtype
+purchase date
+sale / valuation date
+holding duration
+tax rules applicable to that period
 ```
 
-and:
+Two active lots of the same ISIN can therefore have different tax treatment on the same valuation date.
+
+That is why lot grain survives deep into the analytical model.
+
+---
+
+## 7. Broker reconciliation anchors current state
+
+Historical transactions can be incomplete.
+
+The broker can still report authoritative current quantity/cost.
+
+The engine reconciles reconstructed inventory against reported state.
+
+For quantity:
+
+```python
+if broker_qty > current_units + 1e-8:
+    diff = broker_qty - current_units
+
+    self.buy(
+        market_date,
+        diff,
+        0.0,
+        0.0,
+        benchmark_price,
+    )
+```
+
+If reconstructed quantity is too high, excess inventory is consumed until it matches broker state.
+
+The principle is:
+
+> **Transactions explain history; broker state anchors current truth.**
+
+---
+
+## 8. Reconciliation is not invisible history repair
+
+A reconciliation adjustment has different evidentiary status from an observed historical purchase.
+
+That matters for tax interpretation.
+
+So the model distinguishes:
 
 ```text
-management / action context
+observed transaction history
+from
+reconciled current inventory
 ```
 
----
-
-## Rebalancing
-
-The current implementation compares actual class allocation with configured target allocation.
-
-A rebalance flag is raised when drift exceeds the current tolerance.
-
-During the v6 audit, that tolerance remained hard-coded at approximately 5 percentage points.
-
-Moving it into `FinancialRules` is a natural future hardening step.
+The purpose is to produce a trustworthy current portfolio without pretending missing historical evidence was observed.
 
 ---
 
-## Tax-action classification
+## 9. Shadow benchmark portfolio
 
-The lot-level methodology can produce deterministic action categories such as:
-
-```text
-HARVEST_LOSS
-HARVEST_LTCG_EXEMPT
-WAIT_FOR_LTCG
-HOLD
-```
-
-The logic considers factors including:
-
-- unrealized loss,
-- tax type,
-- holding classification,
-- remaining LTCG exemption,
-- days until LTCG,
-- and configured waiting threshold.
-
-This is better described as **tax-aware lot action classification** than autonomous optimization.
-
----
-
-## Financial-year realized state
-
-Realized gain/loss analytics are financial-year aware.
-
-That is important because tax interpretation depends on the relevant tax period rather than only cumulative lifetime P&L.
-
-The model carries realized state forward into higher-level investment and tax analytics.
-
----
-
-## Current analytical grains
-
-| Grain | Purpose |
-| --- | --- |
-| Date × ISIN × Tax Lot | Deep tax/holding/performance state |
-| Date × ISIN | Security analytics |
-| Date × Subtype | Subtype view |
-| Date × Class | Asset-class view |
-| Date × Instrument Type | Instrument-type view |
-| Date × Sector | Sector view |
-| Date × Industry | Industry view |
-| Date × Portfolio | Total portfolio analytics |
-| Month × ISIN | Portfolio-management / allocation state |
-
-Understanding grain is mandatory before interpreting any investment metric.
-
----
-
-## Investment analytics and household wealth
-
-The investment engine feeds the household model.
+Every real deployment of capital creates benchmark-equivalent exposure.
 
 ```mermaid
 flowchart LR
-    LOT["Investment Lot State"] --> MKT["Market Value"]
-    LOT --> TAX["Tax Exposure"]
-    MKT --> NW["Household Market Net Worth"]
-    TAX --> AT["After-Tax Wealth"]
-    AT --> FIRE["FIRE / Planning"]
+    BUY["Real Purchase<br/>date · capital"] --> REAL["Real Lot"]
+    BUY --> SHADOW["Benchmark Shadow Lot"]
+    REAL --> REALV["Actual Terminal Value"]
+    SHADOW --> BMV["Benchmark Terminal Value"]
+    REALV --> COMP["Relative Performance"]
+    BMV --> COMP
 ```
 
-This is one of the most important integrations in the platform.
+This preserves cash-flow timing.
 
-Portfolio analytics are not isolated from household planning.
-
----
-
-## Investment data-quality dependencies
-
-Reliable investment analytics depend on:
-
-- instrument identity,
-- tax classification,
-- purchase history,
-- sale history,
-- market data,
-- benchmark mapping,
-- benchmark history,
-- and broker-reported current state.
-
-Missing or incorrect canonical master data can invalidate downstream methodology even if the code executes successfully.
+A purchase made in 2022 and one made in 2026 should not be benchmarked as if both capital amounts existed for the same period.
 
 ---
 
-## Current limitations and hardening areas
+## 10. Benchmark quantity is economic state
 
-## Reconciliation adjustments
+Conceptually:
 
-Zero-cost or scaled-cost reconciliation mechanics can affect lot interpretation.
+\[
+ShadowQty =
+\frac{CapitalDeployed}
+{BenchmarkPriceAtDeployment}
+\]
 
-## Worker failure visibility
+Then at valuation date:
 
-Per-ISIN worker failures should be surfaced explicitly enough that an instrument cannot silently disappear from an otherwise successful result.
+\[
+BenchmarkValue =
+ShadowQty \times BenchmarkPrice_t
+\]
 
-## Residual risk machinery
+Partial real disposal reduces the associated benchmark exposure proportionally.
 
-Older risk calculations should be removed/simplified if no current contract consumes them.
-
-## Semantic field names
-
-`Outperformance_Probability` and monthly market-value "return" naming deserve future cleanup.
-
-## Jurisdiction-specific tax behaviour
-
-Current tax methodology is tailored to the implemented regime and should not be treated as universal.
-
----
-
-## Investment invariants
-
-1. **Purchases create lot state.**
-2. **Sales consume FIFO inventory.**
-3. **Partial lots remain valid state.**
-4. **Sale-date holding classification governs realized treatment.**
-5. **Broker reconciliation remains explicit.**
-6. **Benchmark exposure follows actual capital deployment.**
-7. **Cash-flow-aware returns are recalculated at the target grain.**
-8. **After-tax return uses tax-aware state, not one blanket tax multiplier.**
-9. **Performance analytics remain separate from portfolio-management signals.**
-10. **Published metrics remain curated around decision usefulness.**
+That keeps the benchmark portfolio aligned with remaining economic capital.
 
 ---
 
-## Related documentation
+## 11. Realized state
 
-- [Financial Model](financial-model.md)
-- [Metrics & Methodology](metrics-and-methodology.md)
+A sale creates realized lot state:
+
+```text
+purchase cost
+sale proceeds
+realized P&L
+holding classification
+tax classification
+benchmark result
+```
+
+Realized return and tax state are historical facts/derivations tied to the sale event.
+
+They should not be mixed with active-lot unrealized state.
+
+---
+
+## 12. Unrealized state
+
+Active lots are marked to current/historical market prices.
+
+For each active lot:
+
+```text
+remaining quantity
+× current market price
+→ current market value
+
+market value
+- remaining cost basis
+→ unrealized gain/loss
+```
+
+Tax methodology can then estimate:
+
+```text
+tax if sold now
+```
+
+which produces:
+
+```text
+after-tax market value
+```
+
+That is a modelled liquidation state, not an observed sale.
+
+---
+
+## 13. XIRR is reconstructed from dated cash flows
+
+The numerical helper is small:
+
+```python
+def calculate_xirr(
+    dates: list[date],
+    amounts: list[float],
+) -> float:
+    try:
+        result = xirr(dates, amounts)
+        return (
+            float(result)
+            if result is not None
+            else float("nan")
+        )
+    except Exception:
+        return float("nan")
+```
+
+The financial work happens before that call.
+
+At ISIN grain:
+
+```text
+purchase cash outflows
+sale cash inflows
+terminal market value
+        ↓
+ISIN XIRR
+```
+
+At portfolio grain:
+
+```text
+all portfolio external investment flows
+portfolio terminal value
+        ↓
+Portfolio XIRR
+```
+
+The engine does not average child XIRRs.
+
+---
+
+## 14. After-Tax XIRR
+
+For active positions, the terminal value can be replaced with estimated after-tax liquidation value.
+
+```text
+historical external cash flows
+        +
+after-tax terminal portfolio state
+        ↓
+After-Tax XIRR
+```
+
+This answers a different question from pre-tax XIRR:
+
+> **What is the return profile after accounting for estimated embedded tax at the terminal date?**
+
+---
+
+## 15. Benchmark XIRR
+
+Shadow benchmark cash flows are reconstructed with the same timing principle.
+
+So:
+
+```text
+Portfolio XIRR
+vs
+Benchmark XIRR
+```
+
+is a comparison between two capital histories built from aligned deployment timing.
+
+---
+
+## 16. Active return
+
+Once actual and benchmark returns exist at a comparable grain:
+
+\[
+ActiveReturn =
+ActualReturn - BenchmarkReturn
+\]
+
+The metric is descriptive.
+
+It does not claim future alpha.
+
+---
+
+## 17. Max Drawdown
+
+Historical value paths also produce drawdown:
+
+\[
+Drawdown_t =
+\frac{V_t}{Peak_t} - 1
+\]
+
+\[
+MaxDrawdown =
+\min_t(Drawdown_t)
+\]
+
+The current serving model retains Max Drawdown because it describes an experienced path property that is useful in investment review.
+
+---
+
+## 18. Outperforming Lot Ratio
+
+The current metric:
+
+```text
+Outperforming_Lot_Ratio
+```
+
+describes the proportion of active lots whose benchmark-relative state is positive under the implemented comparison.
+
+It replaced the older name:
+
+```text
+Outperformance_Probability
+```
+
+because the old name implied probabilistic forecasting that the calculation did not perform.
+
+The rename made the contract more honest without changing the underlying financial truth.
+
+---
+
+## 19. Hierarchical aggregation
+
+The engine publishes several analytical grains:
+
+```mermaid
+flowchart TB
+    LOT["Date × ISIN × Lot"] --> ISIN["Date × ISIN"]
+    ISIN --> SUB["Date × Subtype"]
+    ISIN --> CLASS["Date × Class"]
+    ISIN --> TYPE["Date × Instrument Type"]
+    ISIN --> SEC["Date × Sector"]
+    ISIN --> IND["Date × Industry"]
+    ISIN --> PORT["Date × Portfolio"]
+```
+
+At each level:
+
+- additive values can be summed,
+- weights are recomputed,
+- return cash flows are reconstructed,
+- non-additive metrics are recalculated.
+
+That is analytics engineering, not merely aggregation.
+
+---
+
+## 20. Monthly portfolio-management view
+
+The presentation engine also publishes:
+
+```text
+Investment_Portfolio_Summary
+→ Month × ISIN
+```
+
+with descriptive instrument context such as:
+
+```text
+ISIN
+instrument name
+class
+type
+subtype
+sector
+industry
+```
+
+and management state such as allocation/target/drift.
+
+This is a different contract from the date-grain investment analytics marts.
+
+---
+
+## 21. Portfolio policy is configuration
+
+Rebalance tolerance lives in `FinancialRules`:
+
+```python
+class PortfolioManagementRules(BaseModel):
+    rebalance_tolerance_pct_points: float = Field(
+        default=5.0,
+        ge=0.0,
+    )
+```
+
+So the portfolio-management layer can distinguish:
+
+```text
+actual allocation
+target allocation
+drift
+configured action threshold
+```
+
+without hard-coding the policy into a report.
+
+---
+
+## 22. Why legacy risk metrics were removed
+
+Earlier versions computed measures such as Sharpe/Sortino/Calmar/beta/tracking-error style analytics.
+
+The current production model intentionally removed them when they stopped supporting the actual decision workflow.
+
+That produced two benefits:
+
+```text
+smaller analytical contract
++
+less processing
+```
+
+The serving layer is not intended to become a museum of every metric I have ever implemented.
+
+---
+
+## 23. Investment failure semantics
+
+A failed instrument is a failed analytical stage.
+
+```text
+ISIN worker fails
+      ↓
+error propagates
+      ↓
+InvestmentQuantEngine fails
+      ↓
+orchestrator rolls back
+      ↓
+Control Plane records failure
+```
+
+That policy protects the portfolio from silent incompleteness.
+
+---
+
+## 24. What the investment engine does not claim
+
+- Broker reconciliation does not recreate missing historical evidence.
+- Estimated tax is not an observed tax payment.
+- Benchmark relative performance is not a forecast.
+- XIRR can be unstable/undefined for degenerate cash-flow patterns.
+- Max Drawdown describes historical path, not future risk.
+- The engine is not a general institutional risk library.
+
+Those boundaries are intentional.
+
+---
+
+## Go deeper
+
 - [Tax Methodology](tax-methodology.md)
+- [Metrics & Methodology](metrics-and-methodology.md)
 - [Gold Data Contracts](../reference/gold-data-contracts.md)
 - [Silver Data Contracts](../reference/silver-data-contracts.md)
 - [Adding an Asset Pipeline](../developer/adding-asset-pipelines.md)

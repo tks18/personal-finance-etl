@@ -1,1094 +1,487 @@
 # Metrics & Methodology
 
-This guide defines the major **published financial metrics and analytical concepts** in Personal Finance ETL.
+A financial metric is not fully defined by its formula.
 
-The goal is not to create a dictionary of every intermediate column in the codebase.
-
-The goal is to document the metrics that survive into the current v6 analytical contracts and explain:
+It also needs:
 
 ```text
-Definition
-Methodology
-Grain
-Interpretation
-Assumptions
-Limitations
-Published location
+grain
+cash-flow treatment
+time convention
+tax treatment
+benchmark convention
+aggregation behaviour
+interpretation
 ```
 
-Earlier versions of the project exposed a broader collection of risk ratios. The current serving model intentionally focuses on measures I actually use for household, investment, tax, and FIRE decisions.
-
-> **A metric existing in helper code does not make it a current product metric. The published Silver/Gold contract is the documentation boundary.**
+This page documents the methodology principles behind the current serving model.
 
 ---
 
-## Metric families
+## 1. The current metric surface is intentionally curated
 
-```mermaid
-flowchart LR
-    M["Published Metrics"] --> H["Household<br/>income · expense · savings · wealth"]
-    M --> C["Cash Flow<br/>activity · reconciliation · efficiency"]
-    M --> I["Investment<br/>returns · benchmark · drawdown · allocation"]
-    M --> T["Tax<br/>realized · unrealized · projected"]
-    M --> F["FIRE<br/>coverage · gap · runway · scenarios"]
-```
+Earlier versions calculated a broader set of institutional-style risk measures.
 
----
+The production-hardening cycle removed metrics and processing that did not materially support my personal decision workflow.
 
-## Household metrics
-
-## Total income
-
-### Definition
-
-Canonical income recognized by the household financial model for the relevant period.
-
-### Grain
-
-Primarily monthly in Gold household marts, with category drill-down available separately.
-
-### Interpretation
-
-Measures total recognized income under current financial classifications.
-
-### Caveat
-
-Total income can include non-cash income depending on configured rules.
-
-It should not automatically be interpreted as deployable cash.
-
----
-
-## Cash income
-
-### Definition
-
-Income classified as cash-generating under `FinancialRules`.
-
-### Interpretation
-
-Useful for cash-flow and savings analysis where liquidity matters.
-
-### Relationship
+The current investment serving surface emphasizes:
 
 ```text
-Total Income
-    =
-Cash Income
-    +
-Non-Cash Income
+CAGR
+XIRR
+After-Tax XIRR
+Benchmark CAGR
+Benchmark XIRR
+Active Return
+Max Drawdown
+Outperforming Lot Ratio
+tax-aware position state
 ```
 
-subject to the configured classification model.
+The principle is:
+
+> **Compute richly. Publish selectively.**
 
 ---
 
-## Non-cash income
+## 2. CAGR
 
-### Definition
+For positive start/end values:
 
-Income recognized financially but not treated as equivalent current cash inflow.
-
-### Why it matters
-
-Without this distinction, household cash generation can be overstated.
-
----
-
-## Total expenses
-
-### Definition
-
-Canonical household expenses recognized for the relevant period.
-
-### Caveat
-
-Total expense can include non-cash expense.
-
----
-
-## Cash expenses
-
-### Definition
-
-Expenses that consume cash under current financial rules.
-
-These are especially important for cash-flow reconciliation and liquidity analysis.
-
----
-
-## Non-cash expenses
-
-### Definition
-
-Expense activity recognized by the financial model without equivalent current cash movement.
-
----
-
-## Core expenses
-
-### Definition
-
-Expenses classified as core under `FinancialRules`.
-
-### Interpretation
-
-Used to separate baseline/essential spending from broader total expenditure.
-
-### Planning use
-
-Core spending can support Lean-FI or resilience-oriented views where the model distinguishes baseline spending from total spending.
-
----
-
-## Savings metrics
-
-## Cash-oriented savings
-
-### Concept
-
-Savings measured from cash-relevant household activity.
-
-A conceptual representation is:
-
-```text
-Cash Income
-   -
-Cash Expense
-   =
-Cash-Oriented Savings
-```
-
-The exact production field should be interpreted according to its published contract.
-
-### Use
-
-Useful for:
-
-- liquidity,
-- deployable surplus,
-- and FIRE contribution capacity.
-
----
-
-## Total / accounting savings
-
-### Concept
-
-Savings measured from the broader income/expense model, including configured non-cash semantics.
-
-### Why both exist
-
-A household can appear to generate accounting surplus without producing equivalent deployable cash.
-
-That difference is financially meaningful.
-
----
-
-## Savings rate
-
-### Concept
-
-Savings relative to the appropriate income base.
-
-The exact numerator and denominator must be read from the published metric definition because cash-oriented and total savings perspectives can differ.
-
-### Interpretation
-
-Measures how much income is retained rather than consumed.
-
-### Limitation
-
-A savings rate is not automatically an investment rate.
-
-Retained cash can remain liquid rather than being deployed into investments.
-
----
-
-## Investment rate
-
-### Concept
-
-Investment contribution relative to the relevant household income/cash-flow base.
-
-### Interpretation
-
-Measures the rate at which household resources are being converted into investment assets.
-
----
-
-## Wealth metrics
-
-## Book net worth
-
-### Definition
-
-Net worth derived from reconstructed ledger/accounting balances.
-
-Conceptually:
-
-```text
-Book Assets
-   -
-Liabilities
-   =
-Book Net Worth
-```
-
-### Interpretation
-
-Represents transaction/accounting-derived household state.
-
----
-
-## Market net worth
-
-### Definition
-
-Net worth after incorporating market-derived investment values.
-
-Conceptually:
-
-```text
-Book household state
-with investment book values replaced / overlaid by market values
-   -
-Liabilities
-   =
-Market Net Worth
-```
-
-### Interpretation
-
-Provides a more economically current household balance sheet.
-
----
-
-## After-tax market net worth
-
-### Definition
-
-Market wealth adjusted for modelled investment tax exposure where applicable.
-
-### Interpretation
-
-Useful for long-range planning because gross market value is not always fully realizable.
-
-### Limitation
-
-This is modelled tax-aware wealth, not a guaranteed liquidation outcome.
-
----
-
-## Organic growth
-
-### Concept
-
-The portion of asset/wealth change attributed to growth rather than direct savings/contribution flows.
-
-### Interpretation
-
-Helps separate:
-
-```text
-I added more money
-```
-
-from:
-
-```text
-existing assets appreciated
-```
-
----
-
-## Liquidity ratio
-
-### Concept
-
-Liquid resources relative to the relevant household balance-sheet or spending base.
-
-### Interpretation
-
-Used to understand how much wealth is readily available rather than locked in illiquid assets.
-
-### Caveat
-
-The exact denominator is contract-specific and should be verified in the Gold metric definition.
-
----
-
-## Emergency-fund coverage
-
-### Concept
-
-Liquid/cash resources expressed in terms of spending coverage.
-
-### Interpretation
-
-Answers approximately:
-
-> How many months of the configured spending base can current liquid resources cover?
-
----
-
-## Cash-flow metrics
-
-## Operating cash flow
-
-Cash movement classified as operating activity under configured asset/counterparty semantics.
-
-## Investing cash flow
-
-Cash movement associated with investing activity.
-
-## Financing cash flow
-
-Cash movement associated with financing activity.
-
-## Internal transfers
-
-Movement between household assets that should not be interpreted as external cash generation or consumption.
-
----
-
-## Net cash movement
-
-### Concept
-
-The actual change in configured cash-pool balances over the period.
-
-Conceptually:
-
-```text
-Closing Cash
-  -
-Opening Cash
-  =
-Net Cash Movement
-```
-
----
-
-## Calculated net cash flow
-
-### Concept
-
-Cash movement implied by classified operating, investing, financing, and transfer activity.
-
----
-
-## Unreconciled difference
-
-### Definition
-
-Difference between actual cash-pool movement and calculated classified movement.
-
-Conceptually:
-
-```text
-Actual Net Cash Movement
-   -
-Calculated Net Cash Flow
-   =
-Unreconciled Difference
-```
-
-### Interpretation
-
-A non-zero value is a reconciliation signal.
-
-It should be investigated rather than automatically treated as income, expense, or noise.
-
----
-
-## Investment position metrics
-
-## Invested value
-
-Capital represented by the investment accounting state at the relevant analytical grain.
-
-## Current value
-
-Market value of the active position.
-
-## Quantity
-
-Current active instrument quantity after transaction reconstruction and broker reconciliation.
-
-## Unrealized P&L
-
-Conceptually:
-
-```text
-Current Market Value
-   -
-Current Cost Basis
-   =
-Unrealized P&L
-```
-
-subject to the lot/instrument aggregation methodology.
-
-## Absolute return
-
-A non-annualized return measure comparing current value with invested/cost state.
-
-It should not be confused with XIRR.
-
----
-
-## CAGR
-
-## Definition
-
-Compound annual growth rate.
-
-For beginning value \(V_0\), ending value \(V_T\), and elapsed years \(T\):
-
-```text
-CAGR = (V_T / V_0)^(1/T) - 1
-```
-
-## Use
-
-Useful for point-to-point annualized growth.
-
-## Limitation
-
-CAGR does not inherently model irregular intermediate cash flows.
-
-That is why XIRR is important for investment performance.
-
----
-
-## XIRR
-
-## Definition
-
-Annualized internal rate of return for irregular dated cash flows.
-
-XIRR solves for \(r\) such that:
-
-```text
-Σ CF_i / (1 + r)^((d_i - d_0)/365) = 0
-```
+\[
+CAGR = \left(\frac{V_{end}}{V_{start}}\right)^{365/d} - 1
+\]
 
 where:
 
-- `CF_i` is a dated cash flow,
-- `d_i` is its date,
-- and `d_0` is the base date.
+- \(V_{start}\) = starting value,
+- \(V_{end}\) = ending value,
+- \(d\) = elapsed days.
 
-## Cash-flow sign convention
+The production helper is intentionally small:
 
-Investment contributions/purchases and proceeds/terminal value must enter the return series with economically consistent signs.
+```python
+def calculate_cagr(
+    start_value: float,
+    end_value: float,
+    days: int,
+) -> float:
+    if start_value <= 0 or end_value <= 0 or days <= 0:
+        return 0.0
 
-## Active positions
+    try:
+        return float(
+            ((end_value / start_value) ** (365.0 / days)) - 1
+        )
+    except OverflowError:
+        return float("nan")
+```
 
-For an active position, current terminal value is included as the closing cash-flow equivalent.
+### Interpretation
 
-## Grain
+CAGR is useful when a start/end value relationship is meaningful.
 
-XIRR can exist at:
+It is not a substitute for cash-flow-aware performance when capital moves during the period.
 
-- ISIN,
-- classification,
-- and portfolio
+---
 
-levels, but the cash-flow series must be reconstructed appropriately for each grain.
+## 3. XIRR
 
-## Important aggregation rule
+XIRR solves for \(r\):
+
+\[
+\sum_i \frac{CF_i}
+{(1+r)^{(d_i-d_0)/365}} = 0
+\]
+
+The production wrapper delegates numerical solving to `pyxirr`:
+
+```python
+def calculate_xirr(
+    dates: list[date],
+    amounts: list[float],
+) -> float:
+    try:
+        result = xirr(dates, amounts)
+        return (
+            float(result)
+            if result is not None
+            else float("nan")
+        )
+    except Exception:
+        return float("nan")
+```
+
+The wrapper is not the interesting part.
+
+The difficult part is constructing the correct cash-flow series.
+
+---
+
+## 4. XIRR is non-additive
+
+This is one of the most important methodology rules in the project:
 
 ```text
 Portfolio XIRR
 ≠ average(ISIN XIRR)
+
+Class XIRR
+≠ average(security XIRR)
+
+ISIN XIRR
+≠ average(lot XIRR)
 ```
 
-Portfolio XIRR is calculated from portfolio-level dated cash flows.
+At each analytical grain, the engine reconstructs dated cash flows and solves the return again.
 
----
-
-## After-tax XIRR
-
-## Definition
-
-Cash-flow-aware annualized return using tax-aware terminal state.
-
-## Important distinction
-
-The methodology is **not**:
-
-```text
-Pre-Tax XIRR × (1 - tax rate)
+```mermaid
+flowchart TB
+    LOT["Lot Cash Flows"] --> ISIN["Reconstruct ISIN Cash Flows<br/>solve XIRR"]
+    ISIN --> CLASS["Reconstruct Class Cash Flows<br/>solve XIRR"]
+    CLASS --> PORT["Reconstruct Portfolio Cash Flows<br/>solve XIRR"]
 ```
 
-Tax exposure depends on lot-level state and holding classification.
-
-The after-tax terminal value is therefore constructed from the underlying tax-aware investment state before solving the return.
-
-## Interpretation
-
-Useful for comparing economic performance after modelled tax effects.
-
-## Limitation
-
-It remains conditional on current tax methodology and assumed realization state.
+This is why return aggregation is not a simple `group_by().mean()` problem.
 
 ---
 
-## Benchmark CAGR
+## 5. After-Tax XIRR
 
-Point-to-point annualized growth of the configured benchmark exposure.
-
-Useful for comparable point-to-point context.
-
----
-
-## Benchmark XIRR
-
-Cash-flow-aware return of the shadow benchmark portfolio.
-
-Because benchmark exposure follows actual capital deployment, this is more meaningful than comparing the investment XIRR with an unrelated index CAGR.
-
----
-
-## Active return
-
-## Concept
-
-Performance relative to the configured benchmark.
-
-The exact calculation depends on the corresponding return measures at the published grain.
-
-### Interpretation
-
-Positive active return indicates outperformance relative to the modelled benchmark comparison; negative indicates underperformance.
-
-### Caveat
-
-Active return is benchmark-relative, so benchmark mapping quality matters.
-
----
-
-## Max drawdown
-
-## Definition
-
-Largest peak-to-trough decline over the relevant value/performance path.
+After-tax performance uses tax-aware terminal state rather than pretending unrealized gains are fully spendable.
 
 Conceptually:
 
 ```text
-Drawdown_t = Value_t / RunningPeak_t - 1
-
-Max Drawdown = minimum(Drawdown_t)
+historical dated investment cash flows
+        +
+after-tax terminal value
+        ↓
+After-Tax XIRR
 ```
 
-when represented as a negative decline, or its magnitude depending on contract convention.
+The terminal value reflects estimated tax embedded in active lots.
 
-## Interpretation
-
-Captures the worst historical decline in the observed analytical path.
-
-## Why it remains in v6
-
-The current serving model retains max drawdown as a direct, interpretable risk measure while broader risk-ratio output was pruned.
+This is a modelled liquidation perspective, not an observed sale.
 
 ---
 
-## Portfolio weight
+## 6. Benchmark XIRR
 
-## Definition
+Benchmark return uses a shadow benchmark portfolio.
 
-Instrument current value as a share of total portfolio current value at the relevant date/month.
+Real investment cash flows create benchmark-equivalent exposure at matching dates.
+
+```text
+real purchase
+      ↓
+benchmark shadow purchase
+
+real disposal
+      ↓
+proportional benchmark shadow disposal
+```
+
+Benchmark XIRR therefore preserves capital-deployment timing.
+
+It is not simply an index CAGR copied beside the portfolio return.
+
+---
+
+## 7. Active Return
+
+The current serving interpretation is benchmark-relative return difference at a comparable grain.
 
 Conceptually:
 
+\[
+ActiveReturn = PortfolioReturn - BenchmarkReturn
+\]
+
+The exact return family should remain aligned:
+
 ```text
-Instrument Value / Portfolio Value
+XIRR vs Benchmark XIRR
+CAGR vs Benchmark CAGR
 ```
 
-## Interpretation
-
-Measures concentration.
+Mixing incompatible return methodologies would create a mathematically valid subtraction with weak financial meaning.
 
 ---
 
-## Class weight
+## 8. Max Drawdown
 
-Instrument/class exposure relative to the portfolio within the configured class taxonomy.
+For a value series \(V_t\):
 
-Used for allocation analysis.
+\[
+Peak_t = \max(V_0,\dots,V_t)
+\]
+
+\[
+Drawdown_t = \frac{V_t}{Peak_t} - 1
+\]
+
+\[
+MaxDrawdown = \min_t(Drawdown_t)
+\]
+
+Max Drawdown survives the metric-pruning cycle because it answers a useful behavioural question:
+
+> **How far did this investment/portfolio fall from a previous peak?**
+
+It describes realized historical path risk.
+
+It does not predict future drawdown.
 
 ---
 
-## Target weight
+## 9. Outperforming Lot Ratio
 
-Configured target allocation associated with the relevant investment class.
+The metric previously named `Outperformance_Probability` was renamed because that label overstated the methodology.
+
+The current concept is:
+
+\[
+OutperformingLotRatio =
+\frac{\text{active lots outperforming benchmark}}
+{\text{active lots}}
+\]
+
+This is a descriptive ratio of current lot state.
+
+It is **not** a probabilistic forecast.
+
+The rename is an example of a broader documentation rule:
+
+> **Metric names are part of the analytical contract.**
 
 ---
 
-## Allocation drift
+## 10. Monthly market-value change
 
-Difference between actual allocation and configured target allocation.
+The old `ISIN_Monthly_Return` name was also misleading.
+
+The current contract describes the quantity as:
+
+```text
+Monthly_Market_Value_Change_Pct
+```
+
+because the calculation represents percentage movement in market value rather than a fully cash-flow-adjusted investment return.
+
+That distinction prevents users from interpreting capital-flow-driven value movement as performance.
+
+---
+
+## 11. Savings metrics
+
+Savings can be defined differently depending on whether non-cash items are included.
 
 Conceptually:
 
-```text
-Actual Weight - Target Weight
-```
+\[
+Savings = Income - Expense
+\]
 
-The current implementation uses this state to determine rebalancing signals.
-
----
-
-## Rebalance required
-
-A rule-based flag indicating that allocation drift has crossed the current implementation's tolerance.
-
-During the v6 audit, the rebalance tolerance was still hard-coded at approximately **5 percentage points** rather than fully exposed through `FinancialRules`.
-
-That is a current implementation detail and a future configuration-hardening opportunity.
-
----
-
-## Harvestable loss
-
-Current unrealized loss state that can participate in tax-harvesting analysis under the implemented methodology.
-
-This is not automatically equivalent to a recommended trade.
-
----
-
-## Harvesting priority
-
-A management-oriented signal derived from tax-aware loss/opportunity state.
-
-It should be interpreted as decision support rather than autonomous execution.
-
----
-
-## Realized investment tax metrics
-
-The current investment/tax model distinguishes:
+but the project can distinguish:
 
 ```text
-Realized LTCG
-Realized STCG
-Realized Gain
-
-Realized LTCL
-Realized STCL
-Realized Loss
-
-Realized Net P&L
+economic savings
+cash savings
+core-spending-adjusted savings
 ```
 
-The calculations are financial-year aware.
+The denominator and inclusion policy must therefore be documented with the metric.
 
-These measures represent disposed positions, not current unrealized exposure.
-
----
-
-## Unrealized tax metrics
-
-The lot model can distinguish:
-
-- unrealized LTCG,
-- unrealized STCG,
-- unrealized LTCL,
-- unrealized STCL,
-- estimated tax if sold,
-- and after-tax value.
-
-These depend on current lot holding state and tax policy.
+A "savings rate" without a definition of income/expense scope is incomplete.
 
 ---
 
-## Taxable dividends
+## 12. Net worth
 
-Dividend income treated as taxable under the current tax/macro configuration.
+At minimum:
 
-## Taxable interest
+\[
+NetWorth = Assets - Liabilities
+\]
 
-Interest income treated as taxable under the current configuration.
-
----
-
-## LTCG exemption used
-
-Amount of the configured long-term capital-gains exemption consumed by realized state in the relevant tax context.
-
-## LTCG exemption remaining
-
-Configured exemption remaining after current realized usage.
-
----
-
-## Projected tax bill
-
-Modelled tax liability based on current realized/taxable state and configured rates/assumptions.
-
-It is a planning estimate, not a filed tax return.
-
----
-
-## Effective tax rate
-
-Projected/modelled tax liability relative to the relevant taxable or realized base used by the implementation.
-
-Interpretation should follow the published contract.
-
----
-
-## Tax harvesting capacity
-
-Remaining modelled capacity for losses to offset relevant taxable realized gains under the implemented methodology.
-
-This is a planning metric.
-
-It does not automatically mean a trade should be executed.
-
----
-
-## FIRE metrics
-
-FIRE metrics fall into three groups:
+But the project carries multiple valuation states.
 
 ```text
-Current state
-Deterministic planning
-Stochastic scenarios
+Book Net Worth
+→ reconstructed ledger values
+
+Market Net Worth
+→ market-valued investments
+
+After-Tax Wealth
+→ market wealth adjusted for estimated investment tax
 ```
+
+Those are related metrics, not synonyms.
 
 ---
 
-## Target FI today
-
-Current financial-independence target based on the configured spending base and withdrawal assumptions.
-
-Conceptually, a simple FI target often resembles:
-
-```text
-Annual Spending / Sustainable Withdrawal Rate
-```
-
-but the production implementation should be interpreted through its configured FIRE methodology rather than assuming a universal 4% rule.
-
----
-
-## Lean FI today
-
-FI target based on the model's lean/core spending perspective.
-
-## Coast FI
-
-Current capital required such that, under configured growth/time assumptions, additional contributions may no longer be required to reach the target at the relevant future horizon.
-
-## FI coverage
+## 13. Cash-flow reconciliation difference
 
 Conceptually:
 
-```text
-Relevant Current Wealth / FI Target
-```
+\[
+CalculatedClosingCash =
+OpeningCash
++ Operating
++ Investing
++ Financing
++ TransferTreatment
+\]
 
-It measures how much of the target is currently covered.
+Then:
 
-## FI gap
+\[
+UnreconciledDifference =
+ActualClosingCash - CalculatedClosingCash
+\]
+
+A non-zero difference is not suppressed.
+
+It is a financial/data-quality signal.
+
+---
+
+## 14. Allocation weight
+
+For a portfolio component \(i\):
+
+\[
+Weight_i =
+\frac{MarketValue_i}
+{TotalPortfolioMarketValue}
+\]
+
+Weights are non-additive across time.
+
+They should be interpreted at one valuation date.
+
+---
+
+## 15. Allocation drift
 
 Conceptually:
 
-```text
-FI Target - Relevant Current Wealth
+\[
+Drift_i = ActualWeight_i - TargetWeight_i
+\]
+
+Rebalance policy compares absolute drift with configured tolerance.
+
+The tolerance is now explicit FinancialRules policy rather than a hidden constant.
+
+```python
+class PortfolioManagementRules(BaseModel):
+    rebalance_tolerance_pct_points: float = Field(
+        default=5.0,
+        ge=0.0,
+    )
 ```
 
-subject to the current model's target/wealth basis.
-
----
-
-## Current withdrawal rate
-
-Current spending relative to relevant current wealth.
-
-Conceptually:
+This is a good example of separating:
 
 ```text
-Annualized Spending / Relevant Wealth
+metric
+from
+decision threshold
 ```
 
-Used to understand how current spending compares with the portfolio/wealth base.
-
 ---
 
-## Required savings rate
+## 16. FIRE target
 
-Modelled savings rate required to close the FI gap under configured deterministic assumptions.
+A simple deterministic FI target can be expressed as:
 
-This is a planning output, not a universal prescription.
+\[
+FITarget =
+\frac{AnnualCoreExpense}
+{WithdrawalRate}
+\]
 
----
+But the useful model depends on policy around:
 
-## Linear months to FI
-
-A simplified deterministic estimate based on current gap and savings trajectory.
-
-It is useful as an interpretable baseline but does not capture market-path uncertainty.
-
----
-
-## Runway
-
-Runway expresses how long current resources can support the configured spending base under the relevant deterministic or stochastic model.
-
-The serving model can distinguish perspectives such as:
-
-- linear runway,
-- base/P50 runway,
-- stressed/P10 runway,
-- and total-spend variants.
-
-The exact wealth/spending basis matters.
-
----
-
-## FI velocity
-
-A planning measure describing the rate at which the household is progressing toward FI under the implemented methodology.
-
-It should be interpreted as a model-derived trajectory measure, not a market return.
-
----
-
-## Wealth velocity and acceleration
-
-These describe the rate and change in rate of wealth progression over time.
-
-They are useful for trajectory analysis but depend on the smoothing/window methodology used by the implementation.
-
----
-
-## Real net-worth CAGR
-
-Annualized net-worth growth adjusted for inflation over the relevant trailing period.
-
-The current serving model includes a real multi-year net-worth CAGR measure.
-
-This helps separate nominal balance growth from purchasing-power growth.
-
----
-
-## Monte Carlo months-to-FI percentiles
-
-The stochastic model publishes:
-
-```text
-P10 months to FI
-P50 months to FI
-P90 months to FI
-```
-
-These summarize the distribution of simulated FI timing.
-
-They are not confidence intervals in the frequentist statistical sense unless the model is specifically interpreted that way.
-
-They are percentiles of simulated paths under configured assumptions.
-
----
-
-## Probability of success
-
-## Definition
-
-Proportion of simulated paths satisfying the model's success criterion.
-
-Conceptually:
-
-```text
-Successful simulated paths
-        /
-Total simulated paths
-```
-
-## Interpretation
-
-This is a **modelled scenario success rate**.
-
-It is not an objective real-world probability that retirement will succeed.
-
-Its value depends on:
-
-- market assumptions,
+- expense scope,
 - inflation,
-- regime transitions,
-- human-capital shocks,
-- glide paths,
-- withdrawal policy,
-- horizon,
-- and other configured model behaviour.
+- investable wealth,
+- tax,
+- expected returns,
+- withdrawal behaviour.
+
+The deterministic target is therefore a planning construct, not a universal constant.
 
 ---
 
-## Projected P50 FI date
+## 17. Monte Carlo percentiles
 
-Median projected FI date across the simulated FI timing distribution.
-
-Again, this is a scenario percentile, not a promised date.
-
----
-
-## Terminal wealth P50
-
-Median nominal terminal wealth across simulated paths at the model horizon.
-
-The current Gold contract intentionally exposes the median rather than every available percentile.
-
----
-
-## Stressed and base runway
-
-The stochastic serving model exposes selected runway percentiles such as:
-
-- stressed/P10 runway,
-- base/P50 runway.
-
-These provide distributional planning context rather than one deterministic survival estimate.
-
----
-
-## Metrics intentionally not part of the current serving contract
-
-Earlier versions of the project carried a broader risk-ratio surface.
-
-The current Gold contract does **not** use metrics such as the following as headline published analytics:
+Simulation outputs such as:
 
 ```text
-Sharpe ratio
-Sortino ratio
-Calmar ratio
-Beta
-Tracking error
-Upside capture
-Downside capture
-Expected Shortfall / CVaR
+P10
+P50
+P90
 ```
 
-Some residual helper code may still calculate portions of older risk machinery.
+describe the distribution produced by the configured stochastic model.
 
-That does not make those metrics part of the current v6 product contract.
-
-This distinction is deliberate.
-
----
-
-## Semantic caveats discovered during v6 audit
-
-## `Outperformance_Probability`
-
-The current investment implementation historically uses this name for a quantity closer to:
+For example:
 
 ```text
-active lots currently outperforming benchmark CAGR
-        /
-active lots
+P50 months to FI
 ```
 
-That is not a stochastic forecast probability.
+means the median simulated outcome under those assumptions.
 
-A future semantic rename such as `Outperforming_Lot_Ratio` would be clearer.
-
-Documentation should not interpret the current field as a predictive probability.
-
-## `ISIN_Monthly_Return`
-
-The current portfolio-management calculation is closer to market-value percentage change than a fully cash-flow-adjusted investment return.
-
-Contributions/redemptions can therefore affect interpretation.
-
-XIRR remains the more rigorous cash-flow-aware performance measure.
-
-This is a semantic hardening opportunity.
+It does **not** mean there is a 50% externally calibrated probability that the real world will exactly follow that path.
 
 ---
 
-## Metric interpretation rules
+## 18. Additivity classification
 
-### Always identify grain
-
-A portfolio metric and ISIN metric can share a name while using different cash-flow context.
-
-### Distinguish observed from modelled
-
-Market value is observed/derived from market data.
-
-Projected tax, after-tax wealth, and FIRE scenarios are modelled.
-
-### Distinguish cash from accounting
-
-Income, expense, and savings can have cash and non-cash variants.
-
-### Distinguish point-to-point from cash-flow-aware return
-
-CAGR and XIRR answer different questions.
-
-### Distinguish historical risk from future scenario uncertainty
-
-Max drawdown describes historical path behaviour.
-
-Monte Carlo describes scenario distributions under assumptions.
-
----
-
-## Published locations
-
-At a high level:
-
-| Metric family | Primary serving contracts |
+| Metric | Behaviour |
 | --- | --- |
-| Household income/expense/net worth | `Core_Monthly_Fact` |
-| Asset-level wealth | `Wealth_Asset_Breakdown` |
-| Income composition | `Cashflow_Income_Breakdown` |
-| Expense composition | `Cashflow_Expense_Breakdown` |
-| Cash-flow efficiency | `Cashflow_Efficiency_Analytics` |
-| Cash reconciliation | `Cashflow_Activity_Summary` |
-| FIRE / wealth planning | `Wealth_FIRE_Analytics` |
-| Tax planning | `Forecast_Tax_Liability` |
-| Budget planning | `Forecast_Budget_Variance` |
-| Portfolio management | `Investment_Portfolio_Summary` |
-| Security performance/tax | `Investment_By_ISIN` |
-| Hierarchical investment analytics | `Investment_By_*` marts |
-| Portfolio investment analytics | `Investment_By_Portfolio` |
+| Income | Additive across compatible categories |
+| Expense | Additive across compatible categories |
+| Market value | Additive across assets at one date |
+| Net worth | Semi-additive across time |
+| Cash balance | Semi-additive across time |
+| XIRR | Non-additive |
+| CAGR | Non-additive |
+| Max Drawdown | Non-additive |
+| Allocation weight | Non-additive |
+| Savings rate | Non-additive |
+| Tax rate | Non-additive |
 
-For exact physical fields, see [Gold Data Contracts](../reference/gold-data-contracts.md).
+The target grain determines the correct aggregation method.
 
 ---
 
-## Methodology hierarchy
+## 19. Metric methodology checklist
 
-When documentation appears to conflict, interpret the project in this order:
+Before a new metric enters Gold, I want to be able to answer:
 
 ```text
-Live calculation path
-        ↓
-Persisted Silver / Gold contract
-        ↓
-Current methodology documentation
-        ↓
-Comments / docstrings
-        ↓
-Historical documentation
+What decision does it support?
+What is its grain?
+What inputs does it use?
+Is it observed, reconstructed, estimated or simulated?
+Is it additive?
+How is it aggregated?
+What assumptions does it depend on?
+What could a reader misinterpret?
 ```
 
-This hierarchy exists because older comments or helper code can survive analytical pruning.
-
-The current published contract is the product boundary.
+If those questions are difficult to answer, the metric is probably not ready for the serving layer.
 
 ---
 
-## Related documentation
+## Go deeper
 
-- [Financial Model](financial-model.md)
 - [Investment Analytics](investment-analytics.md)
 - [Cash Flow & Wealth](cashflow-and-wealth.md)
 - [Tax Methodology](tax-methodology.md)

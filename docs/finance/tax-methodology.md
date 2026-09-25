@@ -1,518 +1,357 @@
 # Tax Methodology
 
-Tax analytics in Personal Finance ETL are integrated with the investment and household models.
+Tax in Personal Finance ETL is modelled at **lot grain before portfolio aggregation**.
 
-The system does not treat tax as one percentage applied to portfolio return.
-
-Tax state depends on:
-
-- individual investment lots,
-- holding periods,
-- realized events,
-- unrealized events,
-- instrument tax treatment,
-- exemptions,
-- taxable income components,
-- and configured jurisdiction-specific rules.
-
-> The current implementation reflects the tax regime encoded for my financial environment. It is methodology documentation, not tax advice.
-
----
-
-## Tax model at a glance
-
-```mermaid
-flowchart TB
-    LOT["Investment Tax Lots"] --> HOLD["Holding Classification"]
-    SALE["Realized Sales"] --> REAL["Realized Gain / Loss"]
-    MKT["Current Market Value"] --> UNR["Unrealized Gain / Loss"]
-
-    HOLD --> REAL
-    HOLD --> UNR
-
-    REAL --> FY["Financial-Year Tax State"]
-    UNR --> ATS["Estimated Tax If Sold<br/>After-Tax Value"]
-
-    DIV["Taxable Dividends"] --> FORE["Tax Forecast"]
-    INT["Taxable Interest"] --> FORE
-    FY --> FORE
-    EX["LTCG Exemption"] --> FORE
-
-    FORE --> GOLD["Forecast_Tax_Liability"]
-    ATS --> WEALTH["After-Tax Household Wealth"]
-```
-
----
-
-## Tax-lot foundation
-
-Tax methodology begins at lot grain.
-
-Purchases create lots with acquisition context.
-
-Sales consume FIFO inventory.
-
-Each lot can be classified according to:
-
-- instrument tax type,
-- acquisition date,
-- current/sale date,
-- holding period,
-- and configured tax rules.
-
-This makes tax state temporal.
-
----
-
-## Holding-period classification
-
-A lot's tax treatment can change as it ages.
-
-The system can track:
-
-- holding age,
-- days until long-term classification,
-- short-term/long-term state,
-- and applicable tax treatment.
-
-For a realized event, classification is evaluated at the sale date.
-
-For an active lot, classification continues to evolve over time.
-
----
-
-## Realized gains and losses
-
-When a sale consumes a lot, realized P&L is classified into tax-relevant buckets.
-
-Current analytical concepts include:
+That is necessary because tax treatment can depend on:
 
 ```text
-Realized LTCG
-Realized STCG
-Realized Gain
-
-Realized LTCL
-Realized STCL
-Realized Loss
-
-Realized Net P&L
+instrument tax classification
+purchase date
+sale / valuation date
+holding period
+realized vs unrealized state
+financial-year rules
 ```
 
-These values are aggregated with financial-year awareness.
+Two lots of the same ISIN can therefore have different tax state on the same date.
 
 ---
 
-## Financial-year context
-
-Tax reporting is period-sensitive.
-
-The investment engine therefore does not treat realized gains as one lifetime cumulative number for all purposes.
-
-Financial-year-aware state allows downstream tax forecasting to reason about the relevant tax period.
-
----
-
-## Unrealized tax state
-
-Active lots can carry:
-
-```text
-Unrealized LTCG
-Unrealized STCG
-Unrealized LTCL
-Unrealized STCL
-```
-
-These values are not tax already owed.
-
-They describe the current tax classification of unrealized investment P&L under the model.
-
----
-
-## Estimated tax if sold
-
-The lot model can estimate tax exposure if the current position were realized.
-
-Conceptually:
-
-```text
-Current unrealized taxable gain
-    ×
-applicable modelled tax treatment
-    =
-estimated tax if sold
-```
-
-The actual implementation is lot-aware and can involve different tax classes/rates.
-
-This is a planning estimate, not a filed liability.
-
----
-
-## After-tax close value
-
-Conceptually:
-
-```text
-Current Market Value
-   -
-Estimated Tax If Sold
-   =
-After-Tax Close Value
-```
-
-This tax-aware terminal state feeds:
-
-- after-tax XIRR,
-- after-tax portfolio state,
-- and household after-tax market wealth.
-
----
-
-## After-tax XIRR
-
-After-tax XIRR is calculated from tax-aware investment state.
-
-It is not:
-
-```text
-XIRR × (1 - tax rate)
-```
-
-The terminal value reflects lot-level tax exposure.
-
-This is methodologically important because different active lots can have different:
-
-- holding periods,
-- gains/losses,
-- and tax treatments.
-
----
-
-## Equity and debt treatment
-
-The current implementation contains jurisdiction-specific treatment for investment tax types.
-
-During the v6 audit, the model included separate treatment for equity and debt mutual-fund contexts, including a debt-MF regime cutoff around:
-
-```text
-2023-04-01
-```
-
-and tax parameters conceptually corresponding to:
-
-```text
-Debt_MF_Pre_Cutoff_LTCG
-Debt_MF_Pre_Cutoff_STCG
-
-Debt_MF_Post_Cutoff_LTCG
-Debt_MF_Post_Cutoff_STCG
-```
-
-This is one reason the current engine should not be described as jurisdiction-neutral.
-
----
-
-## Equity tax parameters
-
-The rules also include configurable equity-oriented concepts such as:
-
-- LTCG rate,
-- STCG rate,
-- long-term holding threshold,
-- and LTCG exemption.
-
-The exact values belong to configuration and can evolve with tax law.
-
-Documentation should explain methodology without freezing one tax year's rates into architecture prose.
-
----
-
-## LTCG exemption
-
-The tax forecast tracks use of the configured long-term capital-gains exemption.
-
-Current serving concepts include:
-
-```text
-LTCG Exemption Used
-LTCG Exemption Remaining
-```
-
-This allows realized long-term gains to be interpreted in the context of remaining exemption capacity.
-
----
-
-## Taxable dividends
-
-Dividend income can contribute to household tax forecasting.
-
-The implementation can source dividend tax assumptions from macro/reference configuration with fallback behaviour where applicable.
-
-That fallback is useful operationally, but it also means assumption provenance matters.
-
----
-
-## Taxable interest
-
-Interest income can similarly participate in taxable household state.
-
-Tax forecasting therefore combines investment disposal state with other taxable income components rather than treating capital gains as the entire tax model.
-
----
-
-## Tax forecast
-
-`Forecast_Tax_Liability` is the Gold planning mart for tax state.
-
-Current concepts can include:
-
-- realized STCG,
-- realized LTCG,
-- realized gains,
-- realized STCL,
-- realized LTCL,
-- realized losses,
-- realized net P&L,
-- taxable dividends,
-- taxable interest,
-- LTCG exemption used,
-- LTCG exemption remaining,
-- projected tax bill,
-- effective tax rate,
-- harvesting offset remaining,
-- and tax harvesting capacity.
-
----
-
-## Projected tax bill
-
-The projected tax bill is a modelled planning output.
-
-It uses current realized/taxable state and configured tax assumptions.
-
-It is not:
-
-- a tax filing,
-- a legal opinion,
-- or a guarantee of final liability.
-
----
-
-## Effective tax rate
-
-The serving model can expose an effective rate derived from projected tax relative to the relevant taxable base.
-
-The exact denominator should be interpreted from the physical contract.
-
----
-
-## Harvesting model
-
-The current tax-harvesting logic is deterministic and lot-aware.
-
-It is not an AI trade optimizer.
-
-The engine can classify active lots into actions such as:
-
-```text
-HARVEST_LOSS
-HARVEST_LTCG_EXEMPT
-WAIT_FOR_LTCG
-HOLD
-```
-
----
-
-## `HARVEST_LOSS`
-
-Used when current unrealized loss state creates a tax-harvesting opportunity under the implemented rules.
-
-This is a signal to inspect, not an automatic trade instruction.
-
----
-
-## `HARVEST_LTCG_EXEMPT`
-
-Used where realizing long-term gain can potentially make use of remaining configured exemption capacity under the methodology.
-
----
-
-## `WAIT_FOR_LTCG`
-
-Used where a lot is close enough to long-term classification that waiting can be favoured by the configured threshold.
-
-The rules include a configurable `harvest_wait_days_threshold`.
-
----
-
-## `HOLD`
-
-Default/no-action classification when the implemented harvesting conditions are not met.
-
----
-
-## Harvesting offset remaining
-
-Represents remaining realized gain context that could potentially be offset by losses under the model.
-
----
-
-## Tax harvesting capacity
-
-Represents modelled capacity for available loss state to offset relevant taxable realized gains.
-
-This is a planning metric.
-
-It does not include every real-world consideration that can affect whether a trade is appropriate.
-
----
-
-## Tax and broker reconciliation
-
-Reconciliation can create or adjust lot state when broker-reported positions disagree with reconstructed transaction history.
-
-That has tax implications.
-
-For example, zero-cost adjustment inventory can mechanically restore quantity but may not represent complete historical tax basis.
-
-This is a known methodological caveat.
-
-Tax analytics are only as reliable as the lot history/reconciliation state supporting them.
-
----
-
-## Tax and household wealth
-
-Tax state flows into household planning.
+## 1. Tax lineage
 
 ```mermaid
 flowchart LR
-    LOT["Lot Tax State"] --> AT["After-Tax Investment Value"]
-    AT --> NW["After-Tax Market Net Worth"]
-    NW --> FIRE["FIRE / Runway"]
+    MASTER["Investment Master<br/>tax type / subtype"] --> LOT["FIFO Lot"]
+    BUY["Purchase Date"] --> LOT
+    SALE["Sale / Valuation Date"] --> HOLD["Holding Classification"]
+    LOT --> HOLD
+    FY["Financial-Year Tax Rules"] --> HOLD
+    HOLD --> TAX["Tax Rate / Exemption Logic"]
+    TAX --> REAL["Realized Tax State"]
+    TAX --> UNREAL["Unrealized Tax-if-Sold"]
 ```
 
-This is one of the reasons tax is not isolated in a separate calculator.
+Tax is not applied after portfolio aggregation.
+
+It is attached to the lot state where the relevant facts still exist.
 
 ---
 
-## Tax and performance
+## 2. Holding period is contextual
 
-Tax also changes investment performance interpretation.
+When a sale consumes a lot:
+
+```python
+age_sale = max(
+    (sell_date - lot.date).days,
+    1,
+)
+
+holding_type = self.fy_table.get_holding_type(
+    age_sale,
+    self.tax_type,
+    self.tax_subtype,
+    lot.date,
+    sell_date,
+)
+```
+
+The method receives:
 
 ```text
-Pre-Tax XIRR
-        vs
+age
+tax type
+tax subtype
+purchase date
+sale date
+```
+
+because holding-period treatment can change across tax regimes and asset classes.
+
+A single universal:
+
+```text
+days > X → long term
+```
+
+rule would be too weak.
+
+---
+
+## 3. FIFO determines which tax history is realized
+
+Suppose active inventory is:
+
+```text
+Lot A: 100 units @ ₹10
+Lot B: 100 units @ ₹15
+```
+
+and 150 units are sold.
+
+FIFO realizes:
+
+```text
+100 units from Lot A
+50 units from Lot B
+```
+
+The remaining portfolio is:
+
+```text
+50 units from Lot B
+```
+
+Tax classification must therefore follow the acquisition dates of the consumed lots, not an average purchase date.
+
+---
+
+## 4. Realized gain/loss
+
+For a consumed lot:
+
+\[
+RealizedPnL =
+(SalePrice - PurchasePrice)
+\times QuantitySold
+\]
+
+The production sale path computes:
+
+```python
+pnl = (
+    (price - lot.price) * consumed
+    if lot.price > 0
+    else 0.0
+)
+```
+
+The realized state is then classified using sale-date holding treatment.
+
+---
+
+## 5. Realized and unrealized tax are different states
+
+### Realized
+
+A sale occurred.
+
+The gain/loss and holding classification belong to historical transaction state.
+
+### Unrealized
+
+No sale occurred.
+
+The engine asks:
+
+> **What tax would be estimated if this active lot were realized at the valuation price under the implemented rules?**
+
+That estimate supports:
+
+```text
+after-tax market value
+tax-aware planning
+harvesting analysis
+```
+
+but is not an observed tax liability/payment.
+
+---
+
+## 6. Tax-aware terminal value
+
+For an active lot:
+
+```text
+Market Value
+- Estimated Tax If Sold
+=
+After-Tax Value
+```
+
+Aggregating that state gives an after-tax portfolio terminal value.
+
+That value can feed:
+
+```text
 After-Tax XIRR
+After-Tax Wealth
+FIRE / planning state
 ```
 
-can differ materially when embedded gains are large or holding classifications differ.
-
-The model therefore supports both perspectives.
+This is where tax methodology becomes part of the broader financial model.
 
 ---
 
-## Tax assumption provenance
+## 7. Losses matter too
 
-The current system can use:
+Tax-aware analytics should not treat only gains as meaningful.
 
-- explicit FinancialRules,
-- macro/reference values,
-- and fallback assumptions
-
-depending on the specific calculation.
-
-Long term, I want sensitive assumption provenance to become more visible.
-
-A future analytical-quality model could distinguish values such as:
+Active or realized losses can affect:
 
 ```text
-CONFIGURED
-REFERENCE
-FALLBACK
-RECONCILED
-ESTIMATED
+STCL
+LTCL
+harvesting capacity
+net taxable gain
 ```
 
-That is a future design direction, not current contract behaviour.
+depending on the configured jurisdictional methodology.
+
+The current implementation is built around the Indian tax environment represented in the project's FinancialRules/reference state.
+
+That behaviour is not yet jurisdiction-neutral.
 
 ---
 
-## Jurisdiction boundary
+## 8. Exemptions and thresholds are policy
 
-The current tax model contains Indian financial/tax semantics.
+Tax rates and exemption behaviour belong in validated financial policy/reference data rather than being scattered through presentation code.
 
-That includes regime-specific rules and dates.
-
-A future generalized architecture should separate:
+Conceptually:
 
 ```text
-TaxStrategy
-    ↓
-jurisdiction-specific behaviour
+Tax Rules
+├── holding-period classification
+├── STCG rate
+├── LTCG rate
+├── exemptions
+└── effective-date behaviour
 ```
 
-from:
+The investment engine consumes those rules at lot grain.
+
+---
+
+## 9. Financial-year awareness
+
+Tax policy can change over time.
+
+That is why the engine passes both acquisition and realization/valuation dates into tax classification.
 
 ```text
-FinancialRules
-    ↓
-rates / thresholds / parameters
+same asset
+same holding duration
+different tax regime date
+→ potentially different treatment
 ```
 
-Tax behaviour should not become a giant configuration file pretending complex legislation is just data.
+The model therefore avoids assuming tax policy is timeless.
 
 ---
 
-## Current tax limitations
+## 10. Broker reconciliation complicates tax evidence
 
-## Not filing software
+Broker reconciliation can create adjustment inventory when transaction history and current broker quantity disagree.
 
-The model is designed for planning and analytical context, not statutory tax filing.
+That inventory is useful for reconciling current state.
 
-## Reconciliation sensitivity
+But it does not magically reconstruct missing historical acquisition evidence.
 
-Incomplete transaction history can affect tax-lot basis.
+So the tax interpretation must distinguish:
 
-## Regime evolution
+```text
+observed historical lot
+from
+reconciliation lot
+```
 
-Tax laws change.
+This is an important limitation.
 
-Configured rates/thresholds and behavioural code must remain current.
-
-## Fallback assumptions
-
-Fallbacks improve resilience but can reduce methodological provenance if not surfaced clearly.
-
-## No universal jurisdiction support
-
-The current model is purpose-built.
+Current-state correctness and historical-evidence completeness are different goals.
 
 ---
 
-## Tax invariants
+## 11. Tax-aware performance
 
-1. **Tax state begins at lot grain.**
-2. **Holding classification is time-dependent.**
-3. **Realized and unrealized state remain distinct.**
-4. **Financial-year context remains explicit for realized analytics.**
-5. **After-tax return uses lot-aware terminal state.**
-6. **Tax forecasting remains a planning model, not a filing engine.**
-7. **Harvesting outputs remain decision-support signals.**
-8. **Reconciliation effects on tax basis remain visible as a caveat.**
-9. **Jurisdiction-specific behaviour is not presented as universal.**
-10. **Tax parameters and tax behaviour remain conceptually separate.**
+Pre-tax XIRR uses market terminal value.
+
+After-tax XIRR uses estimated after-tax terminal value.
+
+```mermaid
+flowchart LR
+    CF["Historical Dated Cash Flows"] --> PRE["Pre-Tax XIRR"]
+    MV["Market Terminal Value"] --> PRE
+
+    CF --> POST["After-Tax XIRR"]
+    ATV["After-Tax Terminal Value"] --> POST
+```
+
+The difference represents embedded estimated tax drag under the implemented liquidation assumptions.
 
 ---
 
-## Related documentation
+## 12. Tax harvesting
+
+Lot-level tax state can identify:
+
+```text
+realizable gains
+realizable losses
+short-term state
+long-term state
+harvesting capacity
+```
+
+Any action classification should remain decision support rather than automatic tax advice.
+
+The system exposes state.
+
+It does not execute trades.
+
+---
+
+## 13. Tax state and household wealth
+
+After-tax investment value flows into household wealth.
+
+```text
+Investment Lot Tax State
+        ↓
+After-Tax Portfolio Value
+        ↓
+After-Tax Household Wealth
+        ↓
+Planning
+```
+
+This is why tax is not an isolated investment-report feature.
+
+---
+
+## 14. Tax methodology boundaries
+
+The current implementation does **not** claim:
+
+- universal jurisdiction support,
+- legal/tax-advice status,
+- perfect reconstruction when historical acquisition evidence is missing,
+- that unrealized tax estimates are payable tax,
+- that future tax regimes are known.
+
+The methodology is a decision-support model under explicit current rules.
+
+---
+
+## 15. Tax invariants
+
+1. Tax classification occurs before aggregation destroys lot history.
+2. FIFO determines which acquisition history is realized.
+3. Realized and unrealized tax remain separate.
+4. Estimated tax does not become observed tax.
+5. Holding treatment is date- and asset-aware.
+6. Reconciliation inventory does not become fabricated historical evidence.
+7. Tax policy remains explicit and jurisdiction-specific.
+8. After-tax value can feed performance and household planning.
+
+---
+
+## Go deeper
 
 - [Investment Analytics](investment-analytics.md)
-- [Financial Model](financial-model.md)
 - [Metrics & Methodology](metrics-and-methodology.md)
-- [Cash Flow & Wealth](cashflow-and-wealth.md)
 - [Financial Rules](../configuration/financial-rules.md)
+- [Silver Data Contracts](../reference/silver-data-contracts.md)
+- [Gold Data Contracts](../reference/gold-data-contracts.md)
 
 [← Finance Home](README.md) · [← Documentation Home](../README.md)
