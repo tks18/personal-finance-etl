@@ -1,6 +1,9 @@
 import os
+import sqlite3
 import zipfile
 from datetime import datetime
+
+from filelock import FileLock, Timeout
 
 from personal_finance_etl.backend.utils.logger import logger
 
@@ -33,18 +36,50 @@ class SystemBackupManager:
             logger.warning("Neither SQLite nor DuckDB files found for backup.")
             return None
 
-        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        zip_filename = f"pf_etl_snapshot_{ts}.zip"
-        zip_path = os.path.join(self.backup_dir, zip_filename)
+        lock_path = os.path.join(self.base_path, "pipeline.lock")
+        try:
+            lock = FileLock(lock_path, timeout=0)
+            with lock:
+                ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+                zip_filename = f"pf_etl_snapshot_{ts}.zip"
+                zip_path = os.path.join(self.backup_dir, zip_filename)
 
-        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
-            if os.path.exists(self.sqlite_path):
-                zipf.write(self.sqlite_path, os.path.basename(self.sqlite_path))
-            if os.path.exists(self.duckdb_path):
-                zipf.write(self.duckdb_path, os.path.basename(self.duckdb_path))
+                from personal_finance_etl.backend.utils.helpers import get_temp_dir
 
-        logger.info(f"Coordinated snapshot created at {zip_path}")
-        return zip_path
+                with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
+                    if os.path.exists(self.sqlite_path):
+                        # Use tempfile to prevent orphaned files on crash
+                        temp_sqlite = os.path.join(get_temp_dir(), f"temp_{ts}.sqlite")
+
+                        try:
+                            # Use sqlite3.backup to safely copy WAL into a single file
+                            source = sqlite3.connect(self.sqlite_path)
+                            dest = sqlite3.connect(temp_sqlite)
+                            with source, dest:
+                                source.backup(dest)
+                            dest.close()
+                            source.close()
+
+                            zipf.write(temp_sqlite, os.path.basename(self.sqlite_path))
+                        finally:
+                            if os.path.exists(temp_sqlite):
+                                os.remove(temp_sqlite)
+
+                    if os.path.exists(self.duckdb_path):
+                        zipf.write(self.duckdb_path, os.path.basename(self.duckdb_path))
+
+                        # DuckDB doesn't have an online single-file backup API like SQLite.
+                        # But since we hold the lock, it's safe to just backup the WAL file
+                        # if it exists from a previous ungraceful shutdown.
+                        duckdb_wal = self.duckdb_path + ".wal"
+                        if os.path.exists(duckdb_wal):
+                            zipf.write(duckdb_wal, os.path.basename(duckdb_wal))
+
+                logger.info(f"Coordinated snapshot created at {zip_path}")
+                return zip_path
+        except Timeout:
+            logger.error("Cannot create snapshot: Pipeline is currently running.")
+            return None
 
     def restore_snapshot(self, zip_path: str) -> None:
         """
@@ -53,7 +88,14 @@ class SystemBackupManager:
         if not os.path.exists(zip_path):
             raise FileNotFoundError(f"Backup file not found: {zip_path}")
 
-        with zipfile.ZipFile(zip_path, "r") as zipf:
-            zipf.extractall(self.base_path)
+        lock_path = os.path.join(self.base_path, "pipeline.lock")
+        try:
+            lock = FileLock(lock_path, timeout=0)
+            with lock:
+                with zipfile.ZipFile(zip_path, "r") as zipf:
+                    zipf.extractall(self.base_path)
 
-        logger.info(f"Coordinated snapshot restored from {zip_path} to {self.base_path}")
+                logger.info(f"Coordinated snapshot restored from {zip_path} to {self.base_path}")
+        except Timeout as err:
+            logger.error("Cannot restore snapshot: Pipeline is currently running.")
+            raise RuntimeError("Cannot restore snapshot: Pipeline is currently running.") from err
