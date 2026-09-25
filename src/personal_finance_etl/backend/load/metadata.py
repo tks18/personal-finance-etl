@@ -270,4 +270,60 @@ class MetaLayer:
                 ],
             )
 
+        self.conn.execute("DELETE FROM meta.m_Data_Contracts")
+        from personal_finance_etl.backend.load.registry import BRONZE_CONTRACT_REGISTRY
+
+        for b_contract in BRONZE_CONTRACT_REGISTRY:
+            self.conn.execute(
+                """
+                INSERT INTO meta.m_Data_Contracts 
+                (contract_id, layer, physical_table, domain, grain, producer, is_full_replace, publication_order) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    b_contract.extraction_attribute,
+                    "bronze",
+                    b_contract.physical_table,
+                    "Raw",
+                    "File",
+                    "ControlPlane",
+                    b_contract.is_full_replace,
+                    0,
+                ],
+            )
+
+        for contract in DATA_CONTRACT_REGISTRY:
+            self.conn.execute(
+                """
+                INSERT INTO meta.m_Data_Contracts 
+                (contract_id, layer, physical_table, domain, grain, producer, is_full_replace, publication_order) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    contract.contract_id,
+                    contract.layer,
+                    contract.physical_table,
+                    contract.domain,
+                    contract.grain,
+                    contract.producer,
+                    True,  # Silver and Gold are strictly full replace layers
+                    contract.publication_order,
+                ],
+            )
+
+        # Clean up any orphaned physical tables in DuckDB that aren't governed by a contract
+        # (excluding meta tables since they govern the system itself)
+        existing_tables = self.conn.execute(
+            "SELECT lower(table_schema), lower(table_name) FROM information_schema.tables WHERE lower(table_schema) IN ('bronze', 'silver', 'gold')"
+        ).fetchall()
+
+        valid_physical_tables = {c.physical_table.lower() for c in BRONZE_CONTRACT_REGISTRY}
+        valid_physical_tables.update({c.physical_table.lower() for c in DATA_CONTRACT_REGISTRY})
+
+        for schema_name, table_name in existing_tables:
+            full_table_name = f"{schema_name}.{table_name}"
+            if full_table_name not in valid_physical_tables:
+                logger.warning(f"MetaLayer: Dropping orphaned physical table {full_table_name}")
+                self.conn.execute(f"DROP TABLE IF EXISTS {full_table_name} CASCADE")
+
         logger.info("Meta layer load complete. DuckDB snapshot represents the latest active state.")
