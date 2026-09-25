@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [6.5.0](https://github.com/tks18/personal-finance-etl/compare/6.4.2...6.5.0) (2026-09-25)
+
+
+### Code Refactoring 🖌
+
+* schema change for run logs to blob ([7fabfc2](https://github.com/tks18/personal-finance-etl/commit/7fabfc2e5dfb5d5b1a76062ce37c003bcf6d1e26))
+
+
+### Features 🔥
+
+* **backend/analytics:** significantly beef up the debug logs for actual live env ([0450072](https://github.com/tks18/personal-finance-etl/commit/0450072d79bf51a41fa5a3e5e75fdc6e8362c488))
+* **backend/control_plane:** improve observability of the entire control plane ([1c1c023](https://github.com/tks18/personal-finance-etl/commit/1c1c0236fad4c4d239f24794a0032f62723e6437))
+* **backend/extract:** beef up logs across entire extraction interface ([4c048d1](https://github.com/tks18/personal-finance-etl/commit/4c048d11bc05fe3478f99a92fa75d105a703c6d3))
+* **backend/load:** entire load interface improves obs., now includes dag explanation and stuffs ([da8f743](https://github.com/tks18/personal-finance-etl/commit/da8f74331409d2cc9e957b3c346cf76b1b5b5bfb))
+* **backend/pipeline:** improve observability of the entire pipeline with dag expl. in the logs ([01d13ba](https://github.com/tks18/personal-finance-etl/commit/01d13ba1fffe8294ddf341cc91084f88c0f072fb))
+* **backend/pipeline:** now save compressed logs to db instead of raw ([9aa128a](https://github.com/tks18/personal-finance-etl/commit/9aa128ab0401681aa7f78aed2835d5df4b1f988d))
+
 ### [6.4.2](https://github.com/tks18/personal-finance-etl/compare/6.4.1...6.4.2) (2026-09-25)
 
 
