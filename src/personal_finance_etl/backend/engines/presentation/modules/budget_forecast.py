@@ -254,14 +254,9 @@ class BudgetForecastBuilder:
                 "Investment_Redeemed",
                 "Actual_Investment",
                 "Actual_Savings",
-                # Actual % of income
-                # Variance
-                # Statistical signals
-                # Composite scores
                 # Runway
                 "Zero_Income_Runway_Months",
                 "Emergency_Fund_Gap",
-                # M+1 forecast
                 # Flags
                 "Is_Core_Overspent",
                 "Is_NonCore_Overspent",

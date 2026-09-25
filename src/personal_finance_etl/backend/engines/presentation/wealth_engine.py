@@ -9,9 +9,6 @@ from personal_finance_etl.backend.engines.presentation.core.inflation_builder im
 )
 from personal_finance_etl.backend.engines.presentation.core.ledger_builder import LedgerBuilder
 from personal_finance_etl.backend.engines.presentation.core.net_worth_builder import NetWorthBuilder
-from personal_finance_etl.backend.engines.presentation.helpers.risk_metrics import (
-    RiskMetricsBuilder,
-)
 from personal_finance_etl.backend.engines.presentation.modules.budget_forecast import (
     BudgetForecastBuilder,
 )
@@ -97,10 +94,9 @@ class WealthPresentationEngine:
             dfs, base_lf, rules=self.rules
         ).build()
 
-        # 9. Wealth Risk Analytics (Merged FIRE + Risk Metrics)
-        lf_risk = RiskMetricsBuilder(dfs, base_lf, rules=self.rules).build()
+        # 9. Wealth Risk Analytics (FIRE Forecasting)
         results["df_p_tf_wealth_risk_analytics"] = WealthRiskAnalyticsBuilder(
-            dfs, base_lf, lf_risk, rules=self.rules
+            dfs, base_lf, rules=self.rules
         ).build()
 
         # 10. Monthly Cashflow Summary (now includes Financial Ratios)
