@@ -15,9 +15,11 @@ class ArtifactRepository:
     def __init__(self, db: SQLiteManager):
         self.db = db
 
-    def get_registry(self) -> dict[str, str]:
-        cursor = self.db.conn.execute("SELECT relative_path, file_hash FROM cp_file_registry")
-        return {row[0]: row[1] for row in cursor.fetchall()}
+    def get_registry(self) -> dict[str, tuple[str, str]]:
+        cursor = self.db.conn.execute(
+            "SELECT relative_path, file_hash, file_category FROM cp_file_registry"
+        )
+        return {row[0]: (row[1], row[2]) for row in cursor.fetchall()}
 
     def prune_category(self, category: str, keep_filepaths: list[str]) -> None:
         keep_paths = [p.replace("\\", "/") for p in keep_filepaths]
@@ -36,6 +38,33 @@ class ArtifactRepository:
                 f"DELETE FROM cp_file_registry WHERE file_id IN ({placeholders})", to_delete
             )
             logger.info(f"  -> Pruned {len(to_delete)} obsolete files from category '{category}'")
+
+    def migrate_identity(self, old_rel_path: str, new_filepath: str) -> None:
+        """Migrates all path-derived identity for a renamed file transactionally."""
+        new_rel_path = new_filepath.replace("\\", "/")
+        new_file_id = generate_file_id(new_rel_path)
+        new_file_name = os.path.basename(new_filepath)
+        old_file_id = generate_file_id(old_rel_path)
+
+        # Update CP Registry
+        self.db.conn.execute(
+            """
+            UPDATE cp_file_registry 
+            SET relative_path = ?, file_name = ?, file_id = ? 
+            WHERE relative_path = ?
+            """,
+            (new_rel_path, new_file_name, new_file_id, old_rel_path),
+        )
+
+        # Update CP Payloads
+        self.db.conn.execute(
+            """
+            UPDATE cp_file_payloads
+            SET file_id = ?
+            WHERE file_id = ?
+            """,
+            (new_file_id, old_file_id),
+        )
 
     def ingest_binaries(self, actionable_files: dict[str, list[str]]) -> None:
         now = datetime.now().isoformat()
