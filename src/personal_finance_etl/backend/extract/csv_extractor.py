@@ -2,9 +2,12 @@ import io
 
 import polars as pl
 
+from personal_finance_etl.backend.utils.logger import logger
+
 
 def extract_stg_mf_isin_mapping(filename: str, folder_path: str, raw_bytes: bytes) -> pl.LazyFrame:
     schema_overrides = {"INSTRUMENT_NAME": pl.String, "ISIN": pl.String}
+    logger.debug(f"[EXTRACT:CSV] Building lazy frame for MF ISIN mapping: {filename}")
     return (
         pl.read_csv(io.BytesIO(raw_bytes), schema_overrides=schema_overrides)
         .lazy()
@@ -23,6 +26,7 @@ def extract_stg_benchmark_mapping(
         "Industry": pl.String,
         "Benchmark_ID": pl.String,
     }
+    logger.debug(f"[EXTRACT:CSV] Building lazy frame for Benchmark mapping: {filename}")
     return (
         pl.read_csv(io.BytesIO(raw_bytes), schema_overrides=schema_overrides)
         .lazy()
@@ -39,6 +43,7 @@ def extract_benchmark_master_raw(filename: str, folder_path: str, raw_bytes: byt
         "yF_Ticker": pl.String,
         "Currency": pl.String,
     }
+    logger.debug(f"[EXTRACT:CSV] Building lazy frame for Benchmark master: {filename}")
     return (
         pl.read_csv(io.BytesIO(raw_bytes), schema_overrides=schema_overrides)
         .lazy()

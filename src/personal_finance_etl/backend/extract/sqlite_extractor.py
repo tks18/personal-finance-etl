@@ -5,6 +5,8 @@ import sqlite3
 
 import polars as pl
 
+from personal_finance_etl.backend.utils.logger import logger
+
 
 class SQLiteExtractor:
     def __init__(self, folder_path: str):
@@ -57,6 +59,8 @@ class SQLiteExtractor:
                     "SELECT * FROM INOUTCOME", connection=conn, infer_schema_length=10000
                 ).lazy()
             )
+
+            logger.debug(f"[EXTRACT:SQLITE] Successfully extracted 5 base tables from {filename}")
 
         # Eagerly collect to memory as LazyFrames defer execution and the memory db drops on exit
         return (

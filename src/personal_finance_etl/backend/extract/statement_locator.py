@@ -8,6 +8,7 @@ def categorize_statement_files(folder_path: str, strict: bool = True) -> dict[st
     """Does a single directory traversal to categorize all statement files."""
     all_files = glob.glob(os.path.join(folder_path, "**", "*.*"), recursive=True)
     all_files = [f.replace("\\", "/") for f in all_files if not os.path.basename(f).startswith("~")]
+    logger.debug(f"[DISCOV:TRACE] Scanning directory: {folder_path} - Found {len(all_files)} total blobs.")
 
     categories = {
         "stock_pl": [f for f in all_files if f.endswith(".xlsx") and "Stock PL Statements" in f],
