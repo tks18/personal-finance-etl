@@ -19,6 +19,7 @@ from personal_finance_etl.backend.load.control_plane import ControlPlane
 from personal_finance_etl.backend.load.database import DuckDBManager
 from personal_finance_etl.backend.load.gold import GoldLayer
 from personal_finance_etl.backend.load.metadata import MetaLayer
+from personal_finance_etl.backend.load.registry import BRONZE_CONTRACT_REGISTRY, validate_registry
 from personal_finance_etl.backend.load.silver import SilverLayer
 from personal_finance_etl.backend.pipeline.benchmark_pipeline import BenchmarkPipeline
 from personal_finance_etl.backend.pipeline.core.extractor import DataExtractor
@@ -126,6 +127,8 @@ class ETLOrchestrator:
     def run(self) -> None:
         self.cfg.validate_config()
 
+        validate_registry()
+
         start_time = time.time()
 
         add_queue_handler(cast("multiprocessing.Queue[Any]", self.status_queue))
@@ -196,7 +199,11 @@ class ETLOrchestrator:
                 # ControlPlane is the single source of truth for all Phase 1 logic:
                 # file change detection, pruning of obsolete blobs, and binary ingestion.
                 full_replace_categories = list(
-                    set(cat for _, cat, _, is_full in BronzeLayer.TABLE_MAPPINGS if is_full)
+                    set(
+                        contract.sync_category
+                        for contract in BRONZE_CONTRACT_REGISTRY
+                        if contract.is_full_replace
+                    )
                 )
                 new_files, changed_files, _ = cp.file_sync.sync_with_disk(
                     discovered_files, self.cfg.FILE_HASH_POLICY, full_replace_categories
@@ -268,8 +275,21 @@ class ETLOrchestrator:
             cp.runs.update_run_status(run_id, "COMMITTING")
 
             # Commit the ACID Transaction
-            self.db_manager.conn.execute("COMMIT")
-            cp.commit()
+            try:
+                self.db_manager.conn.execute("COMMIT")
+            except Exception as duckdb_commit_err:
+                raise RuntimeError(
+                    f"DuckDB Commit Failed: {duckdb_commit_err}"
+                ) from duckdb_commit_err
+
+            try:
+                cp.commit()
+            except Exception as sqlite_commit_err:
+                # DuckDB committed, but SQLite failed. The next run will rely on idempotency
+                # and Bronze self-healing to resolve this state mismatch.
+                raise RuntimeError(
+                    f"SQLite Commit Failed after DuckDB committed: {sqlite_commit_err}"
+                ) from sqlite_commit_err
 
             cp.runs.finish_run(run_id, "SUCCESS")
 
