@@ -84,9 +84,12 @@ class DataExtractor:
             filepath: str, func: Callable[[str, str, bytes], pl.LazyFrame], category: str
         ) -> pl.LazyFrame:
             files = pending_files.get(category, [])
-            if files and filepath in files:
+            normalized_filepath = filepath.replace("\\", "/")
+            if files and normalized_filepath in files:
                 return func(
-                    os.path.basename(filepath), os.path.dirname(filepath), self._get_bytes(filepath)
+                    os.path.basename(normalized_filepath),
+                    os.path.dirname(normalized_filepath),
+                    self._get_bytes(normalized_filepath),
                 )
             return pl.LazyFrame()
 

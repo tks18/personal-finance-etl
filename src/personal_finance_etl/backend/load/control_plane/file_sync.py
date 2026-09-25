@@ -57,11 +57,11 @@ class FileSyncService:
                                 break
 
                     if not is_rename:
-                        new_files[category].append(filepath)
+                        new_files[category].append(rel_path)
                 elif should_check_hash:
                     disk_hash = compute_file_hash(filepath)
                     if disk_hash != registry[rel_path][0]:
-                        changed_files[category].append(filepath)
+                        changed_files[category].append(rel_path)
 
             if category in full_replace_categories:
                 self.artifact_repo.prune_category(category, filepaths)

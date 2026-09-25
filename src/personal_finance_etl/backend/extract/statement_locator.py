@@ -7,7 +7,7 @@ from personal_finance_etl.backend.utils.logger import logger
 def categorize_statement_files(folder_path: str, strict: bool = True) -> dict[str, list[str]]:
     """Does a single directory traversal to categorize all statement files."""
     all_files = glob.glob(os.path.join(folder_path, "**", "*.*"), recursive=True)
-    all_files = [f for f in all_files if not os.path.basename(f).startswith("~")]
+    all_files = [f.replace("\\", "/") for f in all_files if not os.path.basename(f).startswith("~")]
 
     categories = {
         "stock_pl": [f for f in all_files if f.endswith(".xlsx") and "Stock PL Statements" in f],

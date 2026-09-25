@@ -192,14 +192,24 @@ class ETLOrchestrator:
                     self.cfg.STATEMENTS_FOLDER, strict=True
                 )
                 discovered_files["sqlite_source"] = [
-                    SQLiteExtractor(self.cfg.SOURCE_DB_FOLDER).get_latest_sqlite_backup()
+                    SQLiteExtractor(self.cfg.SOURCE_DB_FOLDER)
+                    .get_latest_sqlite_backup()
+                    .replace("\\", "/")
                 ]
-                discovered_files["mf_isin"] = [self.cfg.MF_ISIN_CSV_PATH]
-                discovered_files["benchmark_mapping"] = [self.cfg.BENCHMARK_MAPPING_CSV_PATH]
-                discovered_files["opening_balances"] = [self.cfg.OPENING_BALANCE_CSV_PATH]
-                discovered_files["benchmark_master"] = [self.cfg.BENCHMARK_MASTER_CSV_PATH]
-                discovered_files["macro_parameters"] = [self.cfg.MACRO_PARAMETERS_CSV_PATH]
-                discovered_files["column_master"] = [self.cfg.COLUMN_MASTER_PATH]
+                discovered_files["mf_isin"] = [self.cfg.MF_ISIN_CSV_PATH.replace("\\", "/")]
+                discovered_files["benchmark_mapping"] = [
+                    self.cfg.BENCHMARK_MAPPING_CSV_PATH.replace("\\", "/")
+                ]
+                discovered_files["opening_balances"] = [
+                    self.cfg.OPENING_BALANCE_CSV_PATH.replace("\\", "/")
+                ]
+                discovered_files["benchmark_master"] = [
+                    self.cfg.BENCHMARK_MASTER_CSV_PATH.replace("\\", "/")
+                ]
+                discovered_files["macro_parameters"] = [
+                    self.cfg.MACRO_PARAMETERS_CSV_PATH.replace("\\", "/")
+                ]
+                discovered_files["column_master"] = [self.cfg.COLUMN_MASTER_PATH.replace("\\", "/")]
 
                 # ControlPlane is the single source of truth for all Phase 1 logic:
                 # file change detection, pruning of obsolete blobs, and binary ingestion.
@@ -221,8 +231,11 @@ class ETLOrchestrator:
                     paths = (
                         new_files.get(k, []) + changed_files.get(k, []) + pending_files.get(k, [])
                     )
+
                     if paths:
-                        actionable_all[k] = list(set(paths))
+                        # Normalize slashes to ensure set() deduplicates absolute vs relative variations properly
+                        normalized_paths = {p.replace("\\", "/") for p in paths}
+                        actionable_all[k] = list(normalized_paths)
             else:
                 logger.info(
                     "Phase 1/5: Bypassing File Discoverer. Fetching pending files from Raw Store..."
