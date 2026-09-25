@@ -1,6 +1,4 @@
 import os
-import shutil
-from datetime import datetime
 
 import duckdb
 import psutil
@@ -56,17 +54,3 @@ class DuckDBManager:
         self.conn.execute(META_DDL)
         self.conn.execute(SILVER_DDL)
         self.conn.execute(GOLD_DDL)
-
-    def backup(self, snapshot_path: str) -> None:
-        """Future UI hook — copies the persistent DB file as a snapshot."""
-        shutil.copy2(self.db_path, snapshot_path)
-
-    def snapshot(self) -> str | None:
-        """Creates a snapshot of the DB in the same folder appended with _TIMESTAMP."""
-        if not os.path.exists(self.db_path):
-            return None
-        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        base, ext = os.path.splitext(self.db_path)
-        snapshot_path = f"{base}_{ts}{ext}"
-        shutil.copy2(self.db_path, snapshot_path)
-        return snapshot_path
