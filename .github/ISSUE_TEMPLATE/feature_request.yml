@@ -1,0 +1,60 @@
+name: Feature request
+description: Propose a focused capability or architectural improvement.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the problem before proposing the implementation.
+
+        **Do not upload real financial data.** Use synthetic or sanitized examples only.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem should this solve?
+    validations:
+      required: true
+  - type: dropdown
+    id: variation
+    attributes:
+      label: What kind of variation is this?
+      options: ["New source / provider", "New asset-specific behaviour", "Financial policy / configuration", "New financial methodology / algorithm", "New analytical contract / Gold mart", "Control Plane / reliability", "CLI / GUI / product surface", "Power BI / serving", "Documentation", "Build / packaging", "Unsure"]
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+    validations:
+      required: true
+  - type: textarea
+    id: current
+    attributes:
+      label: Current workaround
+  - type: textarea
+    id: contracts
+    attributes:
+      label: Contracts or financial state affected
+      description: If known, identify affected sources, canonical contracts, Silver/Gold marts, metrics, or application surfaces.
+  - type: dropdown
+    id: truth
+    attributes:
+      label: Would this intentionally change financial methodology or financial truth?
+      options: ["No", "Yes", "Unsure"]
+    validations:
+      required: true
+  - type: textarea
+    id: methodology
+    attributes:
+      label: Methodology impact
+      description: If yes or unsure, explain the intended semantic or methodological change.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I have checked the roadmap and existing issues for similar work.
+          required: true
+        - label: I have not included real or sensitive personal financial data.
+          required: true
