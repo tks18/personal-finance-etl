@@ -1,34 +1,49 @@
 # Getting Started
 
-This section covers the practical path from installing **Personal Finance ETL** to running a configured pipeline.
+This section gets the current application from **installed** to **running against a valid financial environment**.
 
-I currently use the project as a purpose-built financial system rather than a turnkey consumer application. A working deployment therefore requires more than installing the Python package: operational paths, financial rules, mapping/reference inputs, and compatible source contracts must all agree with the environment being processed.
+It is deliberately operational.
 
-> **New to the project?** Read the [Project Overview](../about/project.md) first. Then start here with [Installation](installation.md).
+For architecture, finance methodology, or extension design, follow the links into the deeper sections.
 
-## Guides
-
-| Guide | Purpose |
-| --- | --- |
-| [Installation](installation.md) | Install the package and prepare a local Python environment |
-| [Configuration](configuration.md) | Understand operational settings, source paths, mappings, and how configuration relates to financial rules |
-| [Running the Pipeline](running-the-pipeline.md) | Run the CLI, desktop application, automated/headless workflows, and snapshots |
-
-## Recommended path
-
-```text
-Installation
-     ↓
-Configuration
-     ↓
-Running the Pipeline
+```mermaid
+flowchart LR
+    INSTALL["Install"] --> SETTINGS["Operational Settings"]
+    SETTINGS --> RULES["FinancialRules"]
+    RULES --> INPUTS["Mappings + Source Contracts"]
+    INPUTS --> RUN["Run Pipeline"]
+    RUN --> OUT["DuckDB + Control Plane + Logs"]
 ```
 
-Configuration has two distinct concerns:
+## Read in this order
 
-- **Operational settings** describe where and how the application runs.
-- **Financial rules** describe how the system interprets financial meaning.
+| Step | Guide | Purpose |
+| ---: | --- | --- |
+| 1 | [Installation](installation.md) | Install Python/package and prepare the environment |
+| 2 | [Configuration](configuration.md) | Configure paths, mappings, databases and financial policy |
+| 3 | [Running the Pipeline](running-the-pipeline.md) | Run CLI, desktop or automated execution and understand outputs |
 
-For the financial-policy layer, continue to [Financial Rules](../configuration/financial-rules.md).
+## Two configuration planes
+
+```text
+Settings
+→ where / how the application runs
+
+FinancialRules
+→ what financial activity means
+```
+
+The distinction is fundamental. A database path is operational configuration. A rebalance tolerance, tax parameter, or cash-pool classification is financial policy.
+
+## Current portability boundary
+
+Installing the package is not sufficient to run it against an arbitrary user's financial data.
+
+The current implementation still assumes compatible source contracts, mappings, and jurisdiction-specific financial behaviour.
+
+For that boundary and the generalization plan, see:
+
+- [Project Overview](../about/project.md)
+- [Roadmap](../about/roadmap.md)
 
 [← Documentation Home](../README.md)

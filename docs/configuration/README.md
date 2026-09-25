@@ -1,33 +1,51 @@
 # Configuration
 
-This section explains how Personal Finance ETL separates **operational configuration** from **financial policy**.
+Configuration in Personal Finance ETL has two jobs:
 
-Paths, source locations, database settings, and ingestion behaviour answer *how the application runs*. Financial classifications, tax parameters, allocations, macro assumptions, and FIRE parameters answer *what the financial model means*.
+```text
+Settings
+→ where and how the application runs
 
-Keeping those concerns separate is an important architectural boundary.
+FinancialRules
+→ what financial activity means
+```
+
+The second category is part of the financial model.
+
+```mermaid
+flowchart LR
+    SET["Settings<br/>paths · databases · source policy"] --> APP["Runtime"]
+    RULE["FinancialRules<br/>finance · tax · allocation · FIRE"] --> ENG["Analytical Engines"]
+    APP --> ENG
+```
+
+## Validated policy
+
+Financial policy is represented through Pydantic rather than hidden constants.
+
+For example, portfolio-management tolerance is explicit policy:
+
+```python
+class PortfolioManagementRules(BaseModel):
+    rebalance_tolerance_pct_points: float = Field(
+        default=5.0,
+        ge=0.0,
+    )
+```
+
+The analytical engine consumes the configured value rather than embedding the threshold in presentation logic.
 
 ## Guides
 
-| Guide | Purpose |
+| Guide | Focus |
 | --- | --- |
-| [Financial Rules](financial-rules.md) | Configure income/expense semantics, assets, cash-flow policy, investments, allocations, tax, macro assumptions, and planning rules |
-| [FIRE Configuration](fire-configuration.md) | Configure market regimes, inflation, human-capital shocks, glide paths, dynamic withdrawals, and Monte Carlo behaviour |
-| [Operational Configuration](../getting-started/configuration.md) | Configure paths, source inputs, database locations, mappings, and runtime settings |
+| [Financial Rules](financial-rules.md) | Household semantics, cash pools, classifications, tax parameters, target allocations and policy boundaries |
+| [FIRE Configuration](fire-configuration.md) | Returns, regimes, transitions, inflation, shocks, glide paths and withdrawal behaviour |
 
-## Recommended path
-
-```text
-Operational Configuration
-          ↓
-Financial Rules
-          ↓
-FIRE Configuration
-```
-
-The long-term configuration philosophy is:
+## Configuration principle
 
 > **Parameters belong in configuration. Genuinely different behaviour belongs behind adapters or strategies.**
 
-Not every difference should become another TOML key. Source parsers, jurisdictional tax behaviour, and fundamentally different analytical logic are better represented through explicit extension boundaries.
+A YAML/TOML/Pydantic model should not become a programming language merely to avoid introducing a proper behavioural boundary.
 
 [← Documentation Home](../README.md)

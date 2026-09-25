@@ -1,42 +1,66 @@
 # Architecture
 
-This section explains **how Personal Finance ETL is constructed, how financial state moves through the platform, and why the major architectural boundaries exist**.
+This section explains **how Personal Finance ETL is put together and why those boundaries exist**.
 
-The architecture is intentionally local-first and separates raw evidence, ingestion state, canonical financial semantics, analytical computation, warehouse serving, and application consumption.
+The current architecture separates operational truth from analytical state:
 
-> **Start here:** [System Architecture](system-architecture.md) gives the complete end-to-end view.
-
-## Guides
-
-| Guide | Purpose |
-| --- | --- |
-| [System Architecture](system-architecture.md) | Understand the major planes, components, engine boundaries, technologies, and runtime relationships |
-| [Data Lifecycle](data-lifecycle.md) | Trace data from source discovery through Raw, Bronze, canonical transformation, analytics, and serving |
-| [Warehouse Architecture](warehouse-architecture.md) | Understand Bronze, Silver, Gold, and Meta responsibilities and persistence semantics |
-| [Data Model](data-model.md) | Understand canonical dimensions, facts, relationships, and analytical grains |
-| [Reliability & Recovery](reliability-and-recovery.md) | Understand transactions, failure handling, persisted raw state, reconstruction, and operational recovery |
-| [Design Decisions](design-decisions.md) | Understand the trade-offs behind SQLite + DuckDB, deterministic rebuilds, raw BLOB persistence, process isolation, and other choices |
-
-## Recommended path
-
-```text
-System Architecture
-        ↓
-Data Lifecycle
-        ↓
-Warehouse Architecture
-        ↓
-Data Model
-        ↓
-Reliability & Recovery
-        ↓
-Design Decisions
+```mermaid
+flowchart LR
+    SRC["Sources"] --> CP["SQLite Control Plane<br/>evidence · runs · failures · provenance"]
+    CP --> BR["DuckDB Bronze"]
+    BR --> CAN["Canonical Polars Model"]
+    CAN --> ENG["Investment + Wealth Engines"]
+    ENG --> SG["Silver + Gold"]
+    CP -. projection .-> META["Lean DuckDB Meta"]
 ```
 
-The recurring architectural principle is:
+> **SQLite owns operational truth and raw evidence. DuckDB owns analytical state.**
 
-> **Preserve raw evidence, model financial meaning explicitly, reconstruct derived state deterministically, and publish analytics at the grain required by the decision.**
+## Production boundary
 
-The architecture documentation focuses on the *why* as much as the *what*. A component diagram is useful; understanding why that component exists is better.
+The Control Plane exposes focused repositories rather than leaking SQLite mechanics into orchestration:
+
+```python
+class ControlPlane:
+    def __init__(self, base_path: str, db_name: str = "Raw_Documents.sqlite"):
+        self.db = SQLiteManager(base_path, db_name)
+        self.artifacts = ArtifactRepository(self.db)
+        self.runs = RunRepository(self.db)
+        self.file_sync = FileSyncService(self.artifacts)
+```
+
+That boundary now anchors artifact lifecycle, run lifecycle, configuration provenance, failure history and recovery.
+
+## Read in this order
+
+| Guide | Question |
+| --- | --- |
+| [System Architecture](system-architecture.md) | What are the major planes, components and dependency directions? |
+| [Data Lifecycle](data-lifecycle.md) | How does a source artifact become decision-ready analytical state? |
+| [Warehouse Architecture](warehouse-architecture.md) | What belongs in SQLite, Bronze, Silver, Gold and Meta? |
+| [Data Model](data-model.md) | What are the canonical financial objects and grains? |
+| [Reliability & Recovery](reliability-and-recovery.md) | What happens when processing fails, state disappears or a rebuild is required? |
+| [Design Decisions](design-decisions.md) | Why these technologies and boundaries instead of plausible alternatives? |
+
+## Architecture through different lenses
+
+```text
+Operational
+→ Control Plane · transactions · failures · recovery
+
+Data Engineering
+→ discovery · hashing · Bronze synchronization · deterministic rebuild
+
+Software
+→ repositories · facade · contracts · strategies · process boundaries
+
+Finance
+→ canonical semantics · lot state · household state · analytical grain
+
+BI
+→ Silver contracts · Gold marts · Power BI serving
+```
+
+The substantive pages show the production code behind those claims.
 
 [← Documentation Home](../README.md)

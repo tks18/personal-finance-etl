@@ -1,46 +1,62 @@
-# Finance & Quantitative Methodology
+# Finance & Methodology
 
-This section documents the **financial meaning** of Personal Finance ETL.
+This section documents the **financial meaning implemented by the software**.
 
-It explains how the platform moves from canonical transactions and investment state to household accounting, wealth, tax, portfolio analytics, cash-flow reconciliation, and long-range FIRE planning.
+The financial model is not a layer of labels placed on top of ETL. It determines what the data means.
 
-These pages are methodology documentation, not financial advice.
-
-> **Start here:** [Financial Model](financial-model.md) establishes the household and investment concepts used throughout the analytical system.
-
-## Guides
-
-| Guide | Purpose |
-| --- | --- |
-| [Financial Model](financial-model.md) | Define the household ledger, income, expenses, transfers, assets, liabilities, investments, and wealth semantics |
-| [Metrics & Methodology](metrics-and-methodology.md) | Define published measures, formulas, grains, assumptions, interpretation, and limitations |
-| [Investment Analytics](investment-analytics.md) | Explain FIFO tax lots, broker reconciliation, shadow benchmarks, XIRR, after-tax performance, drawdown, and aggregation |
-| [Cash Flow & Wealth](cashflow-and-wealth.md) | Explain book vs market wealth, savings, liquidity, cash-flow activity, and reconciliation |
-| [Tax Methodology](tax-methodology.md) | Explain holding periods, realized/unrealized tax state, exemptions, harvesting logic, and jurisdiction-specific assumptions |
-| [FIRE Methodology](fire-methodology.md) | Explain current-state FIRE, deterministic planning, Monte Carlo mechanics, scenario outputs, and limitations |
-
-## Recommended path
-
-```text
-Financial Model
-      ↓
-Cash Flow & Wealth
-      ↓
-Investment Analytics
-      ↓
-Tax Methodology
-      ↓
-FIRE Methodology
-      ↓
-Metrics & Methodology
+```mermaid
+flowchart LR
+    EVID["Financial Evidence"] --> LEDGER["Household Ledger"]
+    INV["Investment Evidence"] --> LOT["FIFO / Tax Lots"]
+    LOT --> MKT["Market + Tax State"]
+    LEDGER --> WEALTH["Household Wealth"]
+    MKT --> WEALTH
+    WEALTH --> CF["Cash-Flow Reconciliation"]
+    WEALTH --> FIRE["Planning / FIRE"]
 ```
 
-A few rules apply throughout this section:
+## Methodology standard
 
-- **Grain matters.** A tax lot, ISIN, asset, household month, and portfolio are different analytical objects.
-- **Methodology matters.** Metric names are not substitutes for definitions.
-- **Assumptions are part of the model.** Tax rates, market regimes, inflation, and FIRE parameters must be interpreted in context.
-- **Scenario outputs are not predictions.** Monte Carlo results describe modelled outcomes under configured assumptions.
-- **Decision usefulness beats metric collecting.** The serving model intentionally exposes a curated analytical surface.
+Finance pages follow:
+
+```text
+Financial concept
+      ↓
+Definition / formula
+      ↓
+Grain
+      ↓
+Production implementation
+      ↓
+Interpretation
+      ↓
+Limitations
+```
+
+A mathematically valid calculation at the wrong grain is still financially wrong.
+
+## Read in this order
+
+| Guide | Focus |
+| --- | --- |
+| [Financial Model](financial-model.md) | Household ontology, balances, transactions, wealth and planning state |
+| [Metrics & Methodology](metrics-and-methodology.md) | Published metric definitions, grain, formulas and interpretation |
+| [Investment Analytics](investment-analytics.md) | FIFO, broker reconciliation, shadow benchmarks and return reconstruction |
+| [Cash Flow & Wealth](cashflow-and-wealth.md) | Ledger reconstruction, market overlay, liquidity and direct cash reconciliation |
+| [Tax Methodology](tax-methodology.md) | Holding periods, realized/unrealized tax state and tax-aware valuation |
+| [FIRE Methodology](fire-methodology.md) | Deterministic and stochastic long-range planning |
+
+## One important distinction
+
+```text
+Observed
+≠ Reconstructed
+≠ Modelled
+≠ Simulated
+```
+
+A broker-reported quantity, reconstructed FIFO lot, estimated tax liability and Monte Carlo terminal wealth are all valid financial states, but they are not the same kind of evidence.
+
+The detailed guides keep those boundaries explicit.
 
 [← Documentation Home](../README.md)
