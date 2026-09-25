@@ -2,6 +2,43 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [6.3.0](https://github.com/tks18/personal-finance-etl/compare/6.2.3...6.3.0) (2026-09-25)
+
+
+### Build System 🏗
+
+* **pyproject:** add filelock as dependency ([963001f](https://github.com/tks18/personal-finance-etl/commit/963001f45ec71eb434e4fba0591e016059aad4d8))
+
+
+### Bug Fixes 🛠
+
+* **backend/engines:** isin_pipeline: handle future pool failing and handle it properly ([8df9127](https://github.com/tks18/personal-finance-etl/commit/8df912797f9e5adc0f255e4eb3e7f97b1e4d57ad))
+
+
+### Code Refactoring 🖌
+
+* **backend/load:** database: remove stale backup method ([bc4aa33](https://github.com/tks18/personal-finance-etl/commit/bc4aa330b11813276844e4d5844ba3ef54477127))
+* initialize the variables for pylance ([d327c7f](https://github.com/tks18/personal-finance-etl/commit/d327c7fec445fea1f32d7795c4c0b70693bfdcd9))
+
+
+### Features 🔥
+
+* **backend/api:** use the new backup manager in the api facade ([0ee6ad6](https://github.com/tks18/personal-finance-etl/commit/0ee6ad62d212371fbeb025efbe0c3a9dd379daa5))
+* **backend/control_plane:** add a recovery mode for stale runs ([8469842](https://github.com/tks18/personal-finance-etl/commit/8469842df5b66d0643dc98afd05d1b3975b05f85))
+* **backend/control_plane:** file_sync: now checks for renames and updates automatically ([0fd860c](https://github.com/tks18/personal-finance-etl/commit/0fd860c6297249cb3ebf76fbcdd89a46e78db2d8))
+* **backend/control_plane:** implement filelock around the main sqlite ops database ([1554821](https://github.com/tks18/personal-finance-etl/commit/1554821858f060fca3a2c14925581be5e65ad8db))
+* **backend/load:** bronze: use the new data contracts in the bronze loading ([3960eb0](https://github.com/tks18/personal-finance-etl/commit/3960eb0e9e2f79ff315ee124a5872e33514c952a))
+* **backend/load:** introduce backup manager that will handle backup of both sqlite + duckdb ([38fe640](https://github.com/tks18/personal-finance-etl/commit/38fe64001ae24b63b1f75c0137a15b532bba98f6))
+* **backend/load:** introduce new data contract for bronze tables too ([0ee5ecb](https://github.com/tks18/personal-finance-etl/commit/0ee5ecb2fba602eb757ae365cdbdba96e109b992))
+* **backend/load:** metadata: use the new bronze registry and also check the synced files properly ([554dc09](https://github.com/tks18/personal-finance-etl/commit/554dc0989261d8cf35ef951e3e184112f1527142))
+* **backend/load:** registry: introduce a method to validate entire data registry ([612b722](https://github.com/tks18/personal-finance-etl/commit/612b722ae43e629fcd6726cb328a1b0a301d0fc8))
+* **backend/pipeline:** etl_pipeline: production hardening changes ([9981aa2](https://github.com/tks18/personal-finance-etl/commit/9981aa2f4f1581102b9065fc7e5c98e6ad66ca7f))
+
+
+### Docs 📃
+
+* mark completed against production hardening checks ([c2099a3](https://github.com/tks18/personal-finance-etl/commit/c2099a3d94af4dd6e39dde459ec7715c5df36e0e))
+
 ### [6.2.3](https://github.com/tks18/personal-finance-etl/compare/6.2.2...6.2.3) (2026-09-25)
 
 

@@ -30,5 +30,5 @@ __all__ = [
     "run_app",
 ]
 
-__version__ = "6.2.3"
+__version__ = "6.3.0"
 PACKAGE_NAME = "personal-finance-etl"
