@@ -46,17 +46,31 @@ class ArtifactRepository:
         new_file_name = os.path.basename(new_filepath)
         old_file_id = generate_file_id(old_rel_path)
 
-        # Update CP Registry
+        # 1. Fetch old registry row
+        row = self.db.conn.execute(
+            """
+            SELECT file_category, file_type, file_hash, file_size_bytes, 
+                   first_ingested, last_ingested, sync_status 
+            FROM cp_file_registry WHERE relative_path = ?
+            """,
+            (old_rel_path,),
+        ).fetchone()
+
+        if not row:
+            return
+
+        # 2. Insert new registry row
         self.db.conn.execute(
             """
-            UPDATE cp_file_registry 
-            SET relative_path = ?, file_name = ?, file_id = ? 
-            WHERE relative_path = ?
+            INSERT INTO cp_file_registry 
+            (file_id, file_name, relative_path, file_category, file_type, 
+             file_hash, file_size_bytes, first_ingested, last_ingested, sync_status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (new_rel_path, new_file_name, new_file_id, old_rel_path),
+            (new_file_id, new_file_name, new_rel_path, *row),
         )
 
-        # Update CP Payloads
+        # 3. Update payloads to point to new identity
         self.db.conn.execute(
             """
             UPDATE cp_file_payloads
@@ -64,6 +78,11 @@ class ArtifactRepository:
             WHERE file_id = ?
             """,
             (new_file_id, old_file_id),
+        )
+
+        # 4. Delete old registry row
+        self.db.conn.execute(
+            "DELETE FROM cp_file_registry WHERE relative_path = ?", (old_rel_path,)
         )
 
     def ingest_binaries(self, actionable_files: dict[str, list[str]]) -> None:
@@ -120,13 +139,16 @@ class ArtifactRepository:
                     success_files.append(filename)
                     total_count += 1
                 except Exception as e:
-                    logger.error(f"Raw Store: Failed to ingest {filepath}: {e}")
+                    logger.exception(f"[INGEST:ERROR] Failed to ingest {filepath}:")
                     raise e
 
             if success_files:
-                logger.info(
-                    f"  -> ArtifactRepo [{category}]: Ingested {len(success_files)} file(s)."
+                logger.debug(
+                    f"[INGEST:DETAIL] Vaulted {len(success_files)} file(s) into category '{category}'."
                 )
+
+        if total_count > 0:
+            logger.info(f"[INGEST] Safely vaulted {total_count} payloads into SQLite Raw Store.")
 
     def inject_virtual_file(self, filename: str, category: str, raw_bytes: bytes) -> str:
         now = datetime.now().isoformat()
