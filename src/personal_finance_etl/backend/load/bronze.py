@@ -77,8 +77,7 @@ class BronzeLayer:
     def load(
         self,
         extracted_data: ExtractionResult,
-        new_files: dict[str, list[str]],
-        changed_files: dict[str, list[str]],
+        actionable_files: dict[str, list[str]],
     ) -> None:
         """Writes all raw extracted dataframes to bronze.* via db_manager.conn."""
         logger.info("Loading raw datasets into Bronze layer...")
@@ -86,9 +85,7 @@ class BronzeLayer:
         for contract in BRONZE_CONTRACT_REGISTRY:
             df = getattr(extracted_data, contract.extraction_attribute, None)
             if df is not None:
-                actionable = new_files.get(contract.sync_category, []) + changed_files.get(
-                    contract.sync_category, []
-                )
+                actionable = actionable_files.get(contract.sync_category, [])
                 if actionable:
                     row_counts = self.upsert_table(
                         df,
@@ -113,6 +110,32 @@ class BronzeLayer:
                         )
 
         logger.info("Bronze layer load complete.")
+
+    def migrate_identity(self, renames: list[tuple[str, str, str]]) -> None:
+        """Migrates file identity (rename) in all Bronze tables without re-ingesting rows."""
+        if not renames:
+            return
+
+        cat_to_table = {
+            contract.sync_category: contract.physical_table for contract in BRONZE_CONTRACT_REGISTRY
+        }
+
+        for old_path, new_path, category in renames:
+            table = cat_to_table.get(category)
+            if not table:
+                continue
+
+            old_name = os.path.basename(old_path)
+            new_name = os.path.basename(new_path)
+
+            try:
+                # Some tables might not have __file_name__, so we ignore column missing errors
+                self.db_manager.conn.execute(
+                    f"UPDATE {table} SET __file_name__ = ? WHERE __file_name__ = ?",
+                    [new_name, old_name],
+                )
+            except Exception as e:
+                logger.debug(f"[Bronze] Could not rename {old_name} in {table}: {e}")
 
     def get_table(self, table_name: str) -> pl.DataFrame:
         """Reads a table from the Bronze schema. Returns empty DataFrame if it doesn't exist."""
