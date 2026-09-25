@@ -5,7 +5,7 @@ from collections.abc import Callable
 from typing import Any
 
 from personal_finance_etl.backend.config.settings import PreferencesManager, Settings
-from personal_finance_etl.backend.load.database import DuckDBManager
+from personal_finance_etl.backend.load.backup import SystemBackupManager
 from personal_finance_etl.backend.pipeline.etl_pipeline import process_wrapper
 from personal_finance_etl.backend.utils.models import EngineStatus, LogLevel
 
@@ -40,8 +40,12 @@ class PersonalFinanceEngine:
         """Creates a backup snapshot of the DuckDB instance."""
         try:
             cfg = Settings.from_toml(config_path)
-            db_manager = DuckDBManager(cfg.TARGET_DB_BASE_PATH, cfg.TARGET_DB_NAME)
-            return db_manager.snapshot()
+            backup_mgr = SystemBackupManager(
+                cfg.TARGET_DB_BASE_PATH,
+                sqlite_db_name=cfg.RAW_DOCUMENT_STORE_NAME,
+                duckdb_name=cfg.TARGET_DB_NAME,
+            )
+            return backup_mgr.create_snapshot()
         except Exception:
             return None
 
