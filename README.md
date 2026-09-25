@@ -1,4 +1,8 @@
-<img src="logo.png" alt="Personal Finance ETL logo" width="150"/>
+<img
+  src="https://raw.githubusercontent.com/tks18/personal-finance-etl/master/logo.png"
+  alt="Personal Finance ETL"
+  width="160"
+/>
 
 # Personal Finance ETL
 
