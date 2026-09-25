@@ -1,661 +1,504 @@
 # Adding a Gold Mart
 
-A Gold mart is a **published decision-support contract**.
+A Gold mart is not created because a useful DataFrame happens to exist.
 
-It is not simply an intermediate DataFrame that happened to be useful while developing a calculation.
+It is created because a **decision question deserves a stable serving contract**.
 
-Before adding one, I want to be able to answer:
-
-> **What financial or analytical question does this dataset support, and what does one row mean?**
-
-The extension path is:
-
-```text
-Business question
-      ↓
-Grain
-      ↓
-Dependencies
-      ↓
-Builder / computation
-      ↓
-Output contract
-      ↓
-DDL
-      ↓
-Publication mapping
-      ↓
-Meta / documentation / BI
-```
-
-This guide walks through that process.
-
----
-
-## Gold extension architecture
+The workflow is:
 
 ```mermaid
-flowchart TB
-    Q["Business Question"] --> G["Define Grain"]
-    G --> DEP["Identify Canonical / Analytical Dependencies"]
-    DEP --> BUILD["Builder / Computation"]
-    BUILD --> CONTRACT["Output Contract"]
-    CONTRACT --> DDL["DuckDB DDL"]
-    DDL --> MAP["Gold Publication Mapping"]
-    MAP --> META["Meta Row Counts / Lineage Context"]
-    MAP --> BI["Power BI / Application Consumption"]
-    CONTRACT --> DOC["Gold Contract Documentation"]
+flowchart LR
+    Q["Decision Question"] --> G["Define Grain"]
+    G --> B["Build Analytical Output"]
+    B --> REG["Register DataContract"]
+    REG --> DDL["Define DuckDB DDL"]
+    DDL --> LOAD["Gold Publication"]
+    LOAD --> META["Meta Row Count"]
+    META --> BI["Power BI / Consumer"]
 ```
+
+The grain comes before the schema.
 
 ---
 
-## Step 1 · Start with the decision
+## 1. Start with the decision
 
-Do not start with:
+Bad starting point:
 
-> I have a DataFrame; where can I save it?
+> I have a DataFrame. Should I save it?
 
-Start with:
+Better:
 
-> What question does this mart answer?
-
-Examples from the current model:
-
-```text
-Core_Monthly_Fact
-→ What is my household financial state this month?
-
-Wealth_Asset_Breakdown
-→ How did each asset contribute to wealth?
-
-Cashflow_Activity_Summary
-→ Does classified activity reconcile with actual cash movement?
-
-Investment_Portfolio_Summary
-→ Where is allocation drifting and what requires attention?
-
-Investment_By_ISIN
-→ How is each instrument performing and taxed?
-```
-
-A clear question usually leads to a clear grain.
-
----
-
-## Step 2 · Define grain
-
-Write the grain before writing the builder.
+> What recurring decision or analysis needs a stable physical contract?
 
 Examples:
 
 ```text
-Month
-Month × Asset
-Month × Expense Category
-Month × ISIN
-Date × ISIN
-Date × Class
-Date × Portfolio
+How is wealth distributed across assets?
+→ Month × Asset
+
+How is the portfolio allocated by ISIN?
+→ Month × ISIN
+
+How is investment performance evolving by class?
+→ Date × Class
 ```
 
-If the grain is ambiguous, the mart is not ready.
+Gold exists for consumption.
 
 ---
 
-## Why grain comes first
+## 2. Write the grain first
 
-Grain determines:
+Before code, write:
 
-- valid keys,
-- valid joins,
-- aggregation behaviour,
-- duplicate interpretation,
-- and metric meaning.
+```text
+One row represents...
+```
+
+Examples:
+
+```text
+one month
+one month × asset
+one month × ISIN
+one date × ISIN
+one date × portfolio
+```
+
+If the sentence is ambiguous, stop.
+
+The mart is not ready.
+
+---
+
+## 3. Decide whether Gold is actually necessary
+
+Ask whether the question can already be answered from:
+
+```text
+existing Gold mart
+existing Silver contract
+Power BI measure
+```
+
+Do not create a mart merely to avoid writing a measure.
+
+Likewise, do not force expensive financial methodology into Power BI when it belongs in Python.
+
+The correct layer depends on semantics.
+
+---
+
+## 4. Build the output at the intended grain
+
+A presentation builder should return a frame whose grain already matches the contract.
+
+For example, the current portfolio summary is explicitly:
+
+```text
+Month × ISIN
+```
+
+and includes descriptive context such as:
+
+```text
+ISIN
+instrument name
+class
+type
+subtype
+sector
+industry
+```
+
+plus portfolio-management state.
+
+Do not rely on the loader to fix grain.
+
+---
+
+## 5. Recompute non-additive metrics at target grain
+
+If the mart includes:
+
+```text
+XIRR
+CAGR
+drawdown
+weights
+rates
+```
+
+do not blindly aggregate child metrics.
+
+Example:
+
+```text
+Portfolio XIRR
+≠ average(ISIN XIRR)
+```
+
+The builder must construct the correct target-grain methodology.
+
+This is often the most important part of adding a Gold mart.
+
+---
+
+## 6. Register the contract
+
+Add a `DataContract`:
+
+```python
+DataContract(
+    contract_id="df_f_investment_analytics_isin",
+    layer="gold",
+    physical_table="gold.Investment_By_ISIN",
+    domain="Investments",
+    grain="Date-ISIN",
+    producer="InvestmentQuantEngine",
+    publication_order=200,
+)
+```
+
+For a new mart, choose values deliberately.
+
+### `contract_id`
+
+Must match the in-memory output key.
+
+### `layer`
+
+`gold`.
+
+### `physical_table`
+
+Fully qualified DuckDB table.
+
+### `domain`
+
+Business/analytical domain.
+
+### `grain`
+
+Human-readable row grain.
+
+### `producer`
+
+Actual component that builds the dataset.
+
+### `publication_order`
+
+Intentional publication sequence.
+
+---
+
+## 7. Do not infer layer/table identity
+
+The hardened publication path uses the registry:
+
+```python
+contracts = sorted(
+    (c for c in DATA_CONTRACT_REGISTRY if c.layer == "gold"),
+    key=lambda c: c.publication_order,
+)
+```
+
+Then:
+
+```python
+for contract in contracts:
+    if contract.contract_id in dfs:
+        self._write(
+            dfs[contract.contract_id],
+            contract.physical_table,
+        )
+```
+
+Do not add a parallel manual mapping dictionary.
+
+That would recreate the duplication the registry was introduced to remove.
+
+---
+
+## 8. Add physical DDL
+
+The Gold schema must match the builder output.
+
+Conceptually:
+
+```sql
+CREATE TABLE gold.My_New_Mart (
+    MONTH_START_DATE DATE,
+    DIMENSION_KEY TEXT,
+    METRIC_VALUE DOUBLE
+);
+```
+
+The actual schema should use the correct names/types for the mart.
+
+Treat DDL as part of the public analytical contract.
+
+---
+
+## 9. Builder output and DDL must agree
+
+Check:
+
+```text
+column names
+data types
+nullable behaviour
+grain
+descriptive dimensions
+metric semantics
+```
+
+A column present in DDL but omitted from builder output can quietly become null.
+
+The `INSTRUMENT_SUBTYPE` hardening fix in the portfolio summary is a good example of why this check matters.
+
+---
+
+## 10. Publication order should be meaningful
+
+`publication_order` is not decoration.
+
+The hardened loaders sort by it.
+
+Choose an order that reflects:
+
+- dependency where relevant,
+- logical grouping,
+- deterministic publication.
+
+Do not assign the same placeholder order to every new contract.
+
+---
+
+## 11. Meta row counts come from contract identity
+
+The hardened Meta path uses `DATA_CONTRACT_REGISTRY` rather than guessing:
+
+```text
+gold if name contains "p_tf_"
+```
+
+That matters because not every Gold output follows one internal naming pattern.
+
+When the mart is registered correctly, Meta can record:
+
+```text
+schema = gold
+table = physical table name
+row count = published frame height
+```
+
+without inference.
+
+---
+
+## 12. Decide what Power BI should consume
+
+A Gold mart should make the downstream semantic model simpler.
+
+Ask:
+
+```text
+What dimensions relate to this mart?
+Which fields are additive?
+Which are non-additive?
+What date grain exists?
+What measures should Power BI calculate?
+What methodology must remain upstream?
+```
+
+Do not push Python-only financial methodology into DAX merely because the final consumer is Power BI.
+
+---
+
+## 13. Document metric semantics
+
+For each important measure, capture:
+
+```text
+definition
+grain
+inputs
+additivity
+interpretation
+limitations
+```
 
 For example:
 
 ```text
-XIRR at ISIN grain
+Monthly_Market_Value_Change_Pct
 ```
 
-and:
+must not be documented as a cash-flow-adjusted monthly investment return.
+
+Names are part of the contract.
+
+---
+
+## 14. Decide whether historical snapshots are required
+
+Some Gold marts are monthly.
+
+Some are date-grain investment analytics.
+
+The time grain should match the decision.
 
 ```text
-XIRR at portfolio grain
+monthly management view
+→ Month × ...
+
+historical investment path
+→ Date × ...
 ```
 
-require different cash-flow construction.
-
-They cannot be treated as the same measure copied upward.
+Do not downsample merely to make every Gold table look alike.
 
 ---
 
-## Step 3 · Identify domain ownership
+## 15. Validate row uniqueness at grain
 
-The current Gold domains are:
+If grain is:
 
 ```text
-Wealth
-Cash Flow
-Planning
-Portfolio Management
-Investment Analytics
+Month × ISIN
 ```
 
-Choose the domain that owns the decision.
+then the output should not contain duplicate rows for that key unless the contract explicitly includes another dimension.
 
-Do not create a new domain merely to avoid deciding where the mart belongs.
+Validation can conceptually check:
 
----
+```python
+# Conceptual validation example.
+duplicates = (
+    df.group_by(["MONTH_START_DATE", "ISIN"])
+      .len()
+      .filter(pl.col("len") > 1)
+)
+```
 
-## Step 4 · Identify dependencies
-
-Gold should depend on canonical/analytical state, not raw source layouts.
-
-Possible dependencies include:
-
-- Silver household facts,
-- Silver investment facts,
-- lot analytics,
-- investment quant outputs,
-- wealth-engine state,
-- FinancialRules,
-- macro context,
-- and other stable analytical builders.
-
-If the mart needs a broker worksheet column directly, the canonical boundary has leaked.
+This snippet is conceptual, not a claim that every mart currently runs this exact validation.
 
 ---
 
-## Step 5 · Decide producer ownership
+## 16. Validate reconciliation
 
-The current Gold surface is produced primarily by two analytical families.
-
-## Investment Quant Engine
-
-Produces the hierarchical investment analytics marts.
-
-## Wealth Analytics Engine
-
-Produces household, cash-flow, planning, and portfolio-management marts.
-
-A new mart should have a clear producer.
-
-Avoid a generic "presentation utils" dumping ground with unclear domain ownership.
-
----
-
-## Step 6 · Design measures by aggregation type
-
-Classify each measure.
-
-## Additive
+Where the mart is an aggregation of deeper state, reconcile totals.
 
 Examples:
 
-- income,
-- expense,
-- current value,
-- realized gain/loss.
-
-## Semi-additive
-
-A balance may be additive across assets but not across time.
-
-## Non-additive
-
-Examples:
-
-- XIRR,
-- CAGR,
-- allocation weight,
-- drawdown,
-- ratios.
-
-Non-additive measures require explicit methodology at the target grain.
-
----
-
-## Step 7 · Build the analytical computation
-
-Use the appropriate engine/builder.
-
-The computation should:
-
-- operate on canonical state,
-- preserve grain,
-- use explicit financial methodology,
-- and produce a stable output contract.
-
-Avoid embedding physical DuckDB concerns deeply into the financial calculation if they can remain at the publication boundary.
-
----
-
-## Step 8 · Define the output contract
-
-Before DDL, define the logical output.
-
-For each field, understand:
-
 ```text
-name
-financial meaning
-type
-nullability expectation
-unit / scale
-aggregation behaviour
-source methodology
+sum(ISIN market value)
+= portfolio market value
+
+sum(asset balances)
+= monthly wealth total
+
+category expense
+= total expense
 ```
 
-This is where semantic naming matters.
+Allow for methodology-specific exclusions where documented.
 
-A field called `Probability` should actually be probabilistic.
-
----
-
-## Step 9 · Review naming
-
-Names become part of the public analytical contract.
-
-Avoid names that:
-
-- overstate methodology,
-- hide units,
-- blur observed and modelled state,
-- or imply a different grain.
-
-The v6 audit identified examples such as:
-
-```text
-Outperformance_Probability
-ISIN_Monthly_Return
-```
-
-where future semantic cleanup would improve clarity.
-
-Use those as warnings when naming new fields.
+A Gold mart should not become a new source of truth disconnected from its underlying financial state.
 
 ---
 
-## Step 10 · Add DuckDB DDL
+## 17. Update reference documentation
 
-Create the physical Gold table with types matching the output contract.
-
-The DDL is not the business definition.
-
-It is the persistence representation of the business definition.
-
-Keep the methodology documented separately.
-
----
-
-## Step 11 · Add publication mapping
-
-Gold publication is explicit.
-
-Map the analytical output to the physical table.
-
-This boundary is valuable because it prevents every intermediate frame from becoming a persistent mart.
-
-Conceptually:
-
-```text
-calculation exists
-      ↓
-explicit publication decision
-      ↓
-Gold contract
-```
-
----
-
-## Step 12 · Preserve dependency order
-
-If a new mart depends on another published/derived state, ensure the builder and publication order respect that dependency.
-
-Avoid hidden ordering assumptions.
-
-If the dependency is conceptual rather than physical, prefer passing the required analytical state explicitly.
-
----
-
-## Step 13 · Integrate Meta
-
-The current Meta layer records table row counts and operational context.
-
-A new Gold mart should participate in row-count/observability mechanisms where applicable.
-
-Long term, an explicit data-contract registry could make layer/domain/producer metadata less dependent on naming conventions.
-
----
-
-## Step 14 · Update reference documentation
-
-Add the mart to:
+A new Gold mart should be added to:
 
 ```text
 reference/gold-data-contracts.md
 ```
 
-Document:
-
-- purpose,
-- layer,
-- domain,
-- grain,
-- producer,
-- major inputs,
-- key fields,
-- downstream consumers,
-- assumptions/caveats.
-
-If the mart introduces a new methodology, update the relevant Finance guide too.
-
----
-
-## Step 15 · Update BI intentionally
-
-A Gold mart exists to be consumed.
-
-When adding it to Power BI, decide:
-
-- relationship direction,
-- date relationship,
-- grain compatibility,
-- measure ownership,
-- and drill-down behaviour.
-
-Do not recreate the financial methodology in DAX if the mart already publishes it.
-
----
-
-## Step 16 · Validate row uniqueness
-
-For the declared grain, verify that the physical output does not contain accidental duplicates.
-
-Examples:
+Document at minimum:
 
 ```text
-Month
-→ one row per month
-
-Month × ISIN
-→ one row per month/instrument
-
-Date × Class
-→ one row per date/class
+purpose
+domain
+grain
+producer
+major inputs
+key fields
+consumers
+caveats
 ```
 
-If duplicates are legitimate, then the stated grain is incomplete.
+Under Documentation v2, include the real registry declaration and selected DDL.
 
 ---
 
-## Step 17 · Validate reconciliation
+## 18. Update architecture only if architecture changed
 
-A mart should reconcile with its upstream state where meaningful.
+Do not edit `system-architecture.md` because one mart was added.
 
-Examples:
+Architecture docs should change when:
 
 ```text
-asset breakdown total
-→ household total
-
-ISIN current value total
-→ portfolio current value
-
-income category total
-→ monthly total income
+ownership
+dependency direction
+lifecycle
+major contract families
 ```
 
-Reconciliation is one of the best ways to detect grain or filtering mistakes.
+change.
+
+Reference docs should absorb routine contract additions.
+
+This keeps architecture documentation stable.
 
 ---
 
-## Step 18 · Validate null semantics
+## 19. Gold-mart checklist
 
-A null can mean:
-
-- unavailable,
-- not applicable,
-- not yet observed,
-- calculation failure,
-- or missing data.
-
-Those are different states.
-
-Do not replace every null with zero unless zero is financially correct.
-
----
-
-## Step 19 · Validate time semantics
-
-For time-based marts, decide:
-
-- observation date,
-- month start/end convention,
-- fiscal-year context,
-- trailing-window behaviour,
-- and whether values are point-in-time or period flows.
-
-A monthly balance and monthly expense are not the same temporal type.
+- [ ] Decision question defined
+- [ ] Gold justified over Silver/Power BI
+- [ ] Grain written explicitly
+- [ ] Builder produces that grain
+- [ ] Non-additive metrics recomputed correctly
+- [ ] `DataContract` registered
+- [ ] Producer metadata accurate
+- [ ] `publication_order` intentional
+- [ ] DuckDB DDL added
+- [ ] Builder columns match DDL
+- [ ] Meta row count resolves through registry
+- [ ] Row uniqueness checked
+- [ ] Aggregated totals reconciled
+- [ ] Power BI semantics considered
+- [ ] Reference docs updated
+- [ ] Packaged docs still render
 
 ---
 
-## Step 20 · Validate observed versus modelled fields
-
-A Gold mart can contain both.
-
-For example:
+## End-to-end extension path
 
 ```text
-Current Market Value
-→ observed/derived from market state
-
-Projected Tax Bill
-→ modelled planning output
-
-Probability of Success
-→ stochastic model output
+Decision
+   ↓
+Grain
+   ↓
+Builder
+   ↓
+DataContract
+   ↓
+DDL
+   ↓
+GoldLayer
+   ↓
+Meta
+   ↓
+Power BI
+   ↓
+Reference Documentation
 ```
 
-Naming and documentation should make the distinction clear.
-
----
-
-## Example: adding a new household mart
-
-Suppose I want a mart answering:
-
-> How resilient is household liquidity by month?
-
-I would first define:
-
-```text
-Domain: Wealth / Planning
-Grain: Month
-```
-
-Then identify dependencies:
-
-```text
-cash-pool balances
-liquid asset classifications
-core spending
-total spending
-```
-
-Then define measures:
-
-```text
-liquid wealth
-core-spend runway
-total-spend runway
-emergency-fund coverage
-```
-
-Then decide whether those measures already belong in existing marts.
-
-If `Core_Monthly_Fact` or `Cashflow_Efficiency_Analytics` already answers the question cleanly, I should **not** create another mart.
-
-Avoiding redundant marts is part of good Gold design.
-
----
-
-## Example: adding a new investment classification mart
-
-Suppose a new meaningful classification becomes necessary.
-
-The path is:
-
-```text
-canonical instrument classification
-        ↓
-lot / ISIN analytical state
-        ↓
-classification aggregation
-        ↓
-cash-flow-aware return recomputation
-        ↓
-Gold mart
-```
-
-Do not simply average ISIN XIRR into the new classification.
-
----
-
-## When to add a field instead of a mart
-
-Add a field to an existing mart when:
-
-- the grain is identical,
-- the domain/question is the same,
-- and the field belongs naturally to the existing contract.
-
-Add a new mart when:
-
-- the grain differs,
-- the decision/question differs,
-- or combining the data would create ambiguous duplication.
-
----
-
-## When not to publish
-
-Do not publish a calculation merely because:
-
-- it was difficult to compute,
-- it looks sophisticated,
-- it exists in an intermediate builder,
-- or another finance application displays it.
-
-The v6 metric pruning is an important precedent.
-
-The serving contract should remain decision-oriented.
-
----
-
-## Gold quality checklist
-
-```text
-[ ] Business question defined
-[ ] Domain defined
-[ ] Grain defined
-[ ] Stable identifiers defined
-[ ] Dependencies are canonical / analytical
-[ ] Producer ownership defined
-[ ] Measures classified as additive / non-additive
-[ ] Non-additive methodology defined
-[ ] Output names semantically accurate
-[ ] Observed vs modelled state clear
-[ ] DDL added
-[ ] Publication mapping added
-[ ] Row uniqueness validated
-[ ] Reconciliation validated
-[ ] Null semantics reviewed
-[ ] Time semantics reviewed
-[ ] Meta/row-count integration reviewed
-[ ] Gold contract documentation updated
-[ ] BI relationship impact reviewed
-```
-
----
-
-## Gold extension anti-patterns
-
-## DataFrame dumping
-
-"I already have the frame" is not a business reason.
-
-## Grain mixing
-
-Do not mix Month and Month × Asset state in one table through duplication.
-
-## Averaging returns
-
-Non-additive financial metrics require methodology.
-
-## Report-specific hidden semantics
-
-If an important financial definition only exists in DAX, consider whether it belongs upstream.
-
-## Metric bloat
-
-Do not recreate the old risk-metric wall.
-
-## Duplicate marts
-
-Prefer extending an existing contract when grain and purpose match.
-
----
-
-## Future data-contract registry
-
-A future shared registry could describe publication metadata:
-
-```yaml
-Core_Monthly_Fact:
-  layer: gold
-  domain: wealth
-  grain:
-    - MONTH_START_DATE
-  producer: WealthPresentationEngine
-```
-
-Such a registry could potentially drive:
-
-- loader mappings,
-- Meta lineage,
-- schema validation,
-- documentation generation,
-- and application navigation.
-
-That is an attractive future architecture.
-
-It should be introduced only after the physical contracts are stable enough to justify making the registry authoritative.
-
----
-
-## Gold-mart invariants
-
-1. **Every mart answers a decision-support question.**
-2. **Every mart has an explicit grain.**
-3. **Canonical/source boundaries remain intact.**
-4. **Non-additive measures use explicit financial methodology.**
-5. **Physical publication is deliberate.**
-6. **Names describe actual methodology.**
-7. **Observed and modelled state remain distinguishable.**
-8. **New marts reconcile with upstream state where meaningful.**
-9. **Power BI consumes semantics rather than inventing them.**
-10. **Decision usefulness matters more than mart count.**
-
----
-
-## Related documentation
-
-- [Development Guide](development-guide.md)
-- [Gold Data Contracts](../reference/gold-data-contracts.md)
-- [Warehouse Architecture](../architecture/warehouse-architecture.md)
-- [Data Model](../architecture/data-model.md)
-- [Metrics & Methodology](../finance/metrics-and-methodology.md)
+If any one of those steps is unclear, the contract probably needs more thought before publication.
 
 [← Developer Home](README.md) · [← Documentation Home](../README.md)

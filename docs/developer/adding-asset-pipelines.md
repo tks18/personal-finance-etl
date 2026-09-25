@@ -1,597 +1,451 @@
 # Adding an Asset Pipeline
 
-Asset pipelines are the primary extension seam for investment types that require different upstream processing but should converge into the same downstream investment engine.
+An asset pipeline exists to absorb **asset-specific upstream behaviour** before data enters the shared investment engine.
 
-The current v6 implementation includes pipelines for:
-
-- stocks,
-- mutual funds.
-
-The architectural objective is:
-
-```text
-asset-specific source behaviour
-        ↓
-asset pipeline
-        ↓
-canonical investment contracts
-        ↓
-shared FIFO / tax / benchmark / portfolio engine
-```
-
-A new asset type should not require every downstream calculation to learn another source format.
-
----
-
-## Asset-pipeline architecture
+The target architecture is:
 
 ```mermaid
-flowchart TB
-    SRC["Asset-Specific Bronze / Reference State"] --> PIPE["Asset Pipeline"]
-
-    PIPE --> MASTER["Investment Master"]
-    PIPE --> BUY["Purchase Data"]
-    PIPE --> SELL["Sale Data"]
-    PIPE --> MARKET["Market Data"]
-
-    MASTER --> ENGINE["Shared Investment Engine"]
-    BUY --> ENGINE
-    SELL --> ENGINE
-    MARKET --> ENGINE
-
-    BM["Benchmark Contracts"] --> ENGINE
-    RULES["FinancialRules"] -. tax / class / policy .-> ENGINE
-
-    ENGINE --> LOT["Silver Lot Analytics"]
-    ENGINE --> GOLD["Gold Investment Marts"]
+flowchart LR
+    RAW["Asset-Specific Source State"] --> PIPE["Asset Pipeline"]
+    PIPE --> CAN["Canonical Investment Contracts"]
+    CAN --> ENG["Shared Investment Engine"]
+    ENG --> GOLD["Shared Analytical Marts"]
 ```
 
-The pipeline boundary exists to absorb asset-specific upstream differences.
+If a new asset type can produce the canonical contracts, FIFO/benchmark/tax/aggregation should remain reusable where the financial methodology is compatible.
 
 ---
 
-## When to add an asset pipeline
+## 1. Decide whether you need a new asset pipeline
 
-Add a new asset pipeline when:
+A new label is not automatically a new pipeline.
 
-- the asset has materially different source/extraction/transformation behaviour,
-- but it can still satisfy the shared investment analytical concepts.
+Ask:
 
-Examples could include future support for:
+```text
+Does the source shape differ?
+Does transaction normalization differ?
+Does market-data preparation differ?
+Does instrument identity differ?
+Does tax behaviour differ only by policy?
+Does the downstream investment state machine remain valid?
+```
 
-- ETFs,
-- bonds,
-- pensions,
-- or other instrument types.
+If only values/classifications differ, configuration may be enough.
 
-Do not create a new pipeline merely because an existing asset has another broker.
-
-A broker/source difference is usually a source-adapter problem.
-
----
-
-## First question: can the shared engine model it?
-
-Before implementing a pipeline, determine whether the asset can meaningfully support the downstream contract.
-
-The current investment engine expects concepts around:
-
-- instrument identity,
-- purchases,
-- sales,
-- market valuation,
-- benchmark mapping,
-- tax treatment,
-- and quantity/cost state.
-
-If an asset fundamentally does not behave like this, forcing it through the current contract may be worse than introducing a new analytical model.
+If upstream behaviour differs materially, an asset pipeline is appropriate.
 
 ---
 
-## Canonical result contract
+## 2. The pipeline's job
 
-An asset pipeline should converge toward common downstream outputs.
+An asset pipeline should translate asset-specific inputs into shared contracts.
 
 Conceptually:
 
 ```text
-Investment Master
-Purchase Data
-Sale Data
-Market Data
+asset-specific transactions
+asset-specific market data
+asset master/reference
+        ↓
+Asset Pipeline
+        ↓
+canonical purchases
+canonical sales
+canonical market observations
+canonical investment master context
 ```
 
-These outputs allow the shared engine to reconstruct and value investment state.
-
-The exact Python result structures should be taken from the live codebase when implementing the extension.
-
-This documentation intentionally describes the semantic contract rather than inventing class signatures that may drift.
+The shared engine should not know whether those contracts came from stocks, mutual funds, or a future asset family.
 
 ---
 
-## Investment master requirements
+## 3. Keep tax policy separate where possible
 
-The master should provide stable instrument identity and analytical classification.
+A different tax rate or holding threshold does not necessarily require a new analytical engine.
 
-Important concepts include:
+The investment engine already receives tax classification context.
 
-- ISIN or equivalent stable instrument identity,
-- instrument type,
-- subtype,
-- class,
-- sector,
-- industry,
-- benchmark mapping,
-- and tax type.
+The production sale path asks the tax table:
 
-Not every asset will use every classification equally.
+```python
+holding_type = self.fy_table.get_holding_type(
+    age_sale,
+    self.tax_type,
+    self.tax_subtype,
+    lot.date,
+    sell_date,
+)
+```
 
-But downstream analytics require enough identity to group and interpret the instrument correctly.
+So:
+
+```text
+different tax parameters
+→ policy/reference data
+
+different transaction/market behaviour
+→ asset pipeline
+
+different lot accounting methodology
+→ potentially new strategy/engine behaviour
+```
+
+This distinction prevents unnecessary engine forks.
 
 ---
 
-## Purchase contract
+## 4. Preserve canonical grain
 
-Purchase data should provide the information needed to create tax lots.
+The shared investment engine expects meaningful grains.
+
+Typical contracts include:
+
+```text
+purchase
+→ transaction / lot-creation event
+
+sale
+→ disposal event
+
+market data
+→ Date × ISIN observation
+
+investment master
+→ ISIN identity / classification
+```
+
+Do not silently aggregate away acquisition history before FIFO receives it.
+
+---
+
+## 5. Canonical purchase contract
+
+A purchase must provide enough information to create economic lot state.
 
 Conceptually:
-
-```text
-instrument identity
-purchase date
-quantity
-purchase value / cost basis
-```
-
-Additional source fields can exist upstream, but the lot engine needs stable economic meaning.
-
----
-
-## Sale contract
-
-Sale data should provide the information needed to consume FIFO inventory.
-
-Conceptually:
-
-```text
-instrument identity
-sale date
-quantity
-sale proceeds / value
-```
-
-The engine determines lot matching and realized tax state.
-
-The source adapter should not precompute a competing lot methodology unless that is an intentional architecture change.
-
----
-
-## Market-data contract
-
-Market data provides dated valuation state.
-
-Conceptually:
-
-```text
-instrument identity
-observation date
-market price / value basis
-```
-
-The historical snapshot engine uses market observations to value active lots through time.
-
----
-
-## Benchmark relationship
-
-The asset should map to an appropriate benchmark if benchmark-relative analytics are expected.
-
-The benchmark pipeline is shared.
-
-The asset pipeline should provide/reference the benchmark identity rather than implement another benchmark-history subsystem.
-
----
-
-## Tax classification
-
-The investment master needs enough tax classification for the shared tax engine.
-
-Current methodology contains jurisdiction-specific equity/debt treatment.
-
-If a new asset introduces genuinely new tax behaviour, decide whether:
-
-```text
-new parameter
-```
-
-is sufficient or whether:
-
-```text
-new tax strategy
-```
-
-is required.
-
-Do not encode complex behavioural differences as arbitrary strings and giant `if` blocks.
-
----
-
-## FIFO compatibility
-
-The current engine uses FIFO tax-lot accounting.
-
-A new asset pipeline should not silently implement average cost or another disposal method while publishing into the same downstream contract.
-
-If the asset requires another accounting methodology, that is a deeper investment-engine design decision.
-
----
-
-## Broker/current-state reconciliation
-
-The shared investment engine can reconcile transaction-derived state with broker-reported current state.
-
-For a new asset type, determine:
-
-- what quantity represents,
-- what current cost/buy value represents,
-- whether the external provider reports authoritative current state,
-- and whether reconciliation is financially meaningful.
-
-Not every asset source will have identical reconciliation semantics.
-
----
-
-## Partial disposals
-
-If the asset supports partial sale/redemption, the canonical sale contract should allow the FIFO engine to consume part of a lot while retaining the remaining inventory.
-
-This behaviour already exists in the shared lot engine.
-
----
-
-## Historical snapshots
-
-Once the canonical contract is satisfied, the shared engine can evolve state through market observations.
-
-A new asset pipeline should not need to recreate the snapshot engine.
-
-That is the benefit of the boundary.
-
----
-
-## Return methodology
-
-The shared engine calculates measures such as:
-
-- CAGR,
-- XIRR,
-- after-tax XIRR,
-- benchmark XIRR,
-- active return,
-- and max drawdown.
-
-A new asset type should inherit those methodologies only if they are financially meaningful for that asset.
-
-Do not publish XIRR merely because the engine can calculate it.
-
----
-
-## Hierarchical classification
-
-The current Gold model supports analytical views such as:
 
 ```text
 ISIN
-Subtype
-Class
-Instrument Type
-Sector
-Industry
-Portfolio
+purchase date
+quantity
+purchase price / capital
+instrument context
 ```
 
-A new asset pipeline should populate classifications that are meaningful.
+If the source expresses this differently, the asset pipeline normalizes it.
 
-For example, sector may be meaningful for equities but less useful for another asset type.
-
-Missing semantics should be handled intentionally rather than populated with misleading placeholders.
+Do not make FIFO parse provider-specific fields.
 
 ---
 
-## Process-pool execution
+## 6. Canonical sale contract
 
-The investment engine partitions work by instrument identity.
+A sale must provide enough information to consume inventory.
 
-A new asset pipeline should preserve stable instrument keys so per-instrument worker execution remains valid.
+Conceptually:
 
-Avoid pipeline output that requires global mutable asset state inside worker processes.
+```text
+ISIN
+sale date
+quantity
+sale price / proceeds
+```
+
+The shared engine determines which historical lots are consumed.
+
+The source should not pre-assign average-cost history if the project methodology is FIFO.
 
 ---
 
-## Adding a new asset: workflow
+## 7. Canonical market contract
+
+Market observations provide valuation state:
+
+```text
+Date × ISIN
+→ market price / value context
+```
+
+The engine uses those observations to mark active lots and construct historical analytical state.
+
+A new asset pipeline must ensure dates and identity align with transaction state.
+
+---
+
+## 8. Benchmark mapping
+
+If the asset participates in benchmark-relative analytics, it needs benchmark identity/context.
+
+```text
+Investment Master
+      ↓
+benchmark mapping
+      ↓
+benchmark market history
+      ↓
+shadow benchmark lots
+```
+
+The asset pipeline should not implement its own unrelated benchmark methodology if the existing shadow-portfolio model applies.
+
+---
+
+## 9. Shared FIFO should remain shared
+
+The core sale algorithm consumes active lots:
+
+```python
+while rem > 0 and self._active_lots:
+    lot = self._active_lots[0]
+    consumed = min(rem, lot.qty)
+
+    # holding classification
+    # realized state
+    # remaining lot state
+```
+
+A new asset pipeline is successful when this engine can remain unchanged.
+
+If the new asset genuinely does not use FIFO, that is a behavioural difference and should be modelled explicitly rather than hidden in pipeline conditionals.
+
+---
+
+## 10. Broker/current-state reconciliation
+
+If the new asset provider exposes authoritative current quantity/cost state, decide whether the existing reconciliation methodology applies.
+
+The current principle is:
+
+> **Transactions explain history; broker state anchors current truth.**
+
+If the new asset does not have a comparable authoritative state, do not invent one simply to satisfy the interface.
+
+The pipeline/strategy boundary should reflect the actual evidence.
+
+---
+
+## 11. Shadow benchmark compatibility
+
+The current benchmark model creates benchmark-equivalent exposure when capital is deployed.
+
+```text
+real capital
+      ↓
+real lot
++
+shadow benchmark lot
+```
+
+A new asset can reuse this if:
+
+- capital deployment is meaningful,
+- benchmark price history exists,
+- proportional disposal remains meaningful.
+
+If not, benchmark behaviour may need its own strategy.
+
+---
+
+## 12. Output into the shared per-ISIN engine
+
+Once canonical state exists, the common engine can isolate work by ISIN.
 
 ```mermaid
 flowchart TB
-    Q["Can shared investment semantics model this asset?"] -->|"No"| NEW["Design deeper analytical boundary"]
-    Q -->|"Yes"| SRC["Identify source-specific behaviour"]
-    SRC --> PIPE["Implement asset pipeline"]
-    PIPE --> CAN["Produce canonical master / buy / sell / market contracts"]
-    CAN --> TAX["Validate tax / benchmark mapping"]
-    TAX --> ENG["Run shared investment engine"]
-    ENG --> REC["Validate broker reconciliation"]
-    REC --> OUT["Validate Silver / Gold outputs"]
+    CAN["Canonical Asset State"] --> A["ISIN A"]
+    CAN --> B["ISIN B"]
+    CAN --> C["ISIN C"]
+    A --> LOT["Lot Analytics"]
+    B --> LOT
+    C --> LOT
+    LOT --> HIER["Hierarchy / Portfolio Analytics"]
 ```
 
----
-
-## Step 1 · Define the asset semantics
-
-Document:
-
-- what one instrument is,
-- what quantity means,
-- what a purchase means,
-- what a sale/redemption means,
-- how market value is observed,
-- and how tax treatment works.
-
-Do this before coding.
+This is where asset-specific processing should largely disappear.
 
 ---
 
-## Step 2 · Identify source inputs
+## 13. Failure propagation is mandatory
 
-List the Bronze/reference datasets needed.
+A new asset pipeline must not convert analytical failures into empty frames that look successful.
 
-Do not mix source discovery with the asset-pipeline contract.
-
-If the asset comes from a new source format, complete [Adding a Data Source](adding-data-sources.md) first.
-
----
-
-## Step 3 · Build canonical master
-
-Produce stable instrument identity and classifications.
-
-Validate required downstream fields.
-
-The current production load path already treats important investment identity/tax fields as critical quality requirements.
-
----
-
-## Step 4 · Build purchases
-
-Normalize purchase/acquisition events into the shared economic contract.
-
-Check:
-
-- dates,
-- quantities,
-- values,
-- duplicates,
-- and instrument identity.
-
----
-
-## Step 5 · Build sales
-
-Normalize disposals/redemptions.
-
-Check:
-
-- dates,
-- quantities,
-- proceeds,
-- and identity.
-
-The shared engine should own FIFO matching.
-
----
-
-## Step 6 · Build market data
-
-Normalize dated valuation observations.
-
-Check that market dates and instrument identities align with transaction state.
-
----
-
-## Step 7 · Configure benchmark mapping
-
-Map the asset/instrument to the appropriate benchmark if benchmark-relative analytics are desired.
-
-Validate required benchmark coverage.
-
----
-
-## Step 8 · Configure tax type
-
-Map the instrument to the appropriate current tax methodology.
-
-If existing tax types are insufficient, stop and design the tax extension explicitly.
-
-Do not fake a new tax regime by choosing the closest existing label.
-
----
-
-## Step 9 · Run lot reconstruction
-
-Validate:
-
-- lot creation,
-- FIFO consumption,
-- partial sales,
-- remaining quantity,
-- realized state,
-- and unrealized state.
-
-Use simple hand-checkable examples before trusting portfolio-scale output.
-
----
-
-## Step 10 · Validate reconciliation
-
-Compare reconstructed state with external current state.
-
-Investigate any adjustment inventory or cost scaling.
-
-A reconciliation that "makes the totals match" can still hide incorrect financial interpretation.
-
----
-
-## Step 11 · Validate benchmark shadow state
-
-Confirm that:
-
-- purchases create benchmark-equivalent exposure,
-- partial disposals reduce shadow exposure,
-- and benchmark history covers the required dates.
-
----
-
-## Step 12 · Validate returns
-
-Check:
-
-- XIRR cash-flow construction,
-- after-tax terminal state,
-- benchmark cash-flow construction,
-- and portfolio aggregation.
-
-Do not validate returns only by comparing them with another opaque application number.
-
-Use small transparent examples too.
-
----
-
-## Step 13 · Validate publication
-
-Confirm that the new asset appears correctly in:
-
-- Silver lot analytics,
-- ISIN analytics,
-- classification marts,
-- portfolio analytics,
-- and portfolio-management outputs
-
-where those contracts are applicable.
-
----
-
-## Step 14 · Validate household integration
-
-The asset should also flow into:
-
-- market net worth,
-- after-tax wealth,
-- portfolio allocation,
-- and FIRE
-
-if it belongs in those household concepts.
-
-This catches a common architecture mistake: adding an investment type that exists in the investment dashboard but disappears from household wealth.
-
----
-
-## Data-quality checklist
+For an investment asset:
 
 ```text
-[ ] Stable instrument identity
-[ ] Purchase dates valid
-[ ] Sale dates valid
-[ ] Quantities valid
-[ ] Cost/proceeds semantics understood
-[ ] Market history available
-[ ] Benchmark mapping valid
-[ ] Tax type valid
-[ ] FIFO behaviour verified
-[ ] Partial disposal verified
-[ ] Broker reconciliation reviewed
-[ ] XIRR cash flows reviewed
-[ ] After-tax state reviewed
-[ ] Classification marts reviewed
-[ ] Household wealth integration reviewed
+one failed ISIN
+→ fail analytical stage
+→ rollback
+→ Control Plane failure history
+```
+
+If partial success is ever introduced, it should be an explicit product mode with explicit downstream semantics.
+
+Not an exception-handling accident.
+
+---
+
+## 14. Instrument master quality
+
+The shared model depends on identity/classification.
+
+Important fields can include:
+
+```text
+ISIN
+instrument name
+type
+subtype
+class
+sector
+industry
+benchmark
+tax type
+```
+
+The Silver loader already performs quality checks for critical fields such as ISIN/tax classification.
+
+A new asset pipeline must satisfy the downstream contract rather than weakening validation.
+
+---
+
+## 15. Hierarchical analytics
+
+Once the asset reaches shared investment state, the existing engine can publish:
+
+```text
+Date × ISIN
+Date × Subtype
+Date × Class
+Date × Instrument Type
+Date × Sector
+Date × Industry
+Date × Portfolio
+```
+
+If a hierarchy does not make sense for the new asset, define the semantic treatment explicitly.
+
+Do not fill meaningless categories merely to satisfy a schema.
+
+---
+
+## 16. Portfolio-management integration
+
+The monthly portfolio summary can use:
+
+```text
+actual market value
+target allocation
+allocation drift
+rebalance tolerance
+```
+
+If the new asset participates in target allocation, update FinancialRules/reference classification accordingly.
+
+That is policy, not asset-pipeline algorithm.
+
+---
+
+## 17. Contract registry implications
+
+A new asset type usually does **not** need a new Gold table if it fits existing analytical contracts.
+
+Ideal path:
+
+```text
+new asset
+→ canonical contracts
+→ existing Investment_By_ISIN / Class / Portfolio
+```
+
+Create a new contract only if the decision question/grain is genuinely different.
+
+---
+
+## 18. Validation strategy
+
+Validate at several levels.
+
+### Canonical
+
+```text
+transaction counts
+quantities
+dates
+prices
+identity
+```
+
+### Lot state
+
+```text
+active quantity
+realized quantity
+cost basis
+holding classification
+```
+
+### Reconciliation
+
+```text
+reconstructed vs authoritative current quantity/cost
+```
+
+where available.
+
+### Analytics
+
+```text
+market value
+tax state
+XIRR
+benchmark state
+hierarchical totals
+```
+
+### Portfolio
+
+```text
+existing asset totals remain coherent
+new asset integrates without double counting
 ```
 
 ---
 
-## What not to put in an asset pipeline
+## 19. Asset-pipeline checklist
 
-## Gold calculations
-
-The pipeline should not build Power BI marts.
-
-## FIRE logic
-
-FIRE consumes household state downstream.
-
-## Source discovery
-
-Source discovery belongs in ingestion.
-
-## Universal tax logic
-
-The pipeline can supply tax classification; the shared tax methodology belongs downstream.
-
-## Report formatting
-
-Presentation is not part of the asset contract.
+- [ ] Real behavioural variation identified
+- [ ] Source/asset-specific logic isolated upstream
+- [ ] Canonical purchase contract produced
+- [ ] Canonical sale contract produced
+- [ ] Canonical market contract produced
+- [ ] Instrument master context produced
+- [ ] Tax classification supplied
+- [ ] Benchmark behaviour decided
+- [ ] FIFO compatibility confirmed or explicit alternative designed
+- [ ] Reconciliation policy decided
+- [ ] Worker failure propagation preserved
+- [ ] Hierarchical semantics defined
+- [ ] FinancialRules updated only where policy changes
+- [ ] Existing contracts reused where possible
+- [ ] Financial outputs reconciled
+- [ ] Docs/reference updated
 
 ---
 
-## When the shared engine is not enough
+## Extension test
 
-A new asset may require deeper architecture if it has fundamentally different economics.
+The strongest sign that the architecture is working is:
 
-Examples could include instruments where:
+```text
+I added a new asset family
+and did not rewrite
+portfolio XIRR,
+cash-flow reconciliation,
+FIRE,
+or the Control Plane.
+```
 
-- quantity is not a meaningful state,
-- valuation is not market-observation driven,
-- cash flows are contractual rather than trade-based,
-- or disposal accounting cannot use FIFO.
-
-In that case, do not contort the existing pipeline.
-
-Document the new financial model first.
-
----
-
-## Documentation updates
-
-A new asset pipeline can require updates to:
-
-- [Financial Model](../finance/financial-model.md)
-- [Investment Analytics](../finance/investment-analytics.md)
-- [Tax Methodology](../finance/tax-methodology.md)
-- [Data Model](../architecture/data-model.md)
-- Silver/Gold contract reference
-- configuration docs
-
-depending on whether the canonical or serving contracts change.
-
----
-
-## Asset-pipeline invariants
-
-1. **Asset-specific behaviour remains upstream of the shared engine.**
-2. **Canonical investment contracts remain stable where financially valid.**
-3. **FIFO methodology is not silently changed per asset.**
-4. **Tax classification remains explicit.**
-5. **Benchmark semantics remain explicit.**
-6. **Per-instrument identity remains stable.**
-7. **Return methodology remains appropriate to the asset.**
-8. **Broker reconciliation is reviewed rather than blindly accepted.**
-9. **New assets flow into household wealth where applicable.**
-10. **A fundamentally different asset model gets a deliberate new boundary rather than a forced fit.**
-
----
-
-## Related documentation
-
-- [Development Guide](development-guide.md)
-- [Adding a Data Source](adding-data-sources.md)
-- [Investment Analytics](../finance/investment-analytics.md)
-- [Tax Methodology](../finance/tax-methodology.md)
-- [Data Model](../architecture/data-model.md)
+That is what the canonical boundary is for.
 
 [← Developer Home](README.md) · [← Documentation Home](../README.md)

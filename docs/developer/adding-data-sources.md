@@ -1,598 +1,540 @@
 # Adding a Data Source
 
-Adding a data source to Personal Finance ETL is not simply "read another CSV."
+A new data source should enter the platform without teaching every downstream engine about its original shape.
 
-A source participates in a lifecycle:
-
-```text
-Discovery
-   ↓
-Raw persistence
-   ↓
-Change / synchronization state
-   ↓
-Extraction
-   ↓
-Bronze persistence
-   ↓
-Canonical transformation
-   ↓
-Financial analytics
-```
-
-The correct extension point depends on where the new source differs from existing behaviour.
-
-> The goal is to contain source-specific complexity upstream and preserve stable downstream financial contracts.
-
----
-
-## Extension architecture
+The target lifecycle is:
 
 ```mermaid
-flowchart TB
+flowchart LR
     SRC["New Source"] --> DISC["Discovery"]
-    DISC --> RAW["Raw Store Registration"]
-    RAW --> EXT["Extractor / Adapter"]
+    DISC --> CP["Control Plane"]
+    CP --> EXT["Extractor"]
     EXT --> BR["Bronze"]
-    BR --> MAP["Canonical Transformation"]
-    MAP --> CAN["Canonical Financial Contract"]
-    CAN --> ENG["Reusable Analytics"]
-    ENG --> GOLD["Decision-Support Marts"]
+    BR --> CAN["Canonical Contract"]
+    CAN --> ENG["Existing Engines"]
 ```
 
-A new source should not require the wealth engine to learn a new worksheet name.
+The key design question is:
+
+> **Where does source-specific behaviour stop?**
+
+The answer should usually be: **before canonical finance begins.**
 
 ---
 
-## Step 1 · Define the financial purpose
+## 1. Decide what kind of source this is
 
-Before writing parsing code, answer:
+Before writing code, classify the source.
 
-- What financial concept does this source represent?
-- Is it reference/current-state data or historical/event data?
-- Which canonical contract should it eventually populate?
-- Is there already an existing canonical concept for it?
-- Is this a new source for an existing concept or a genuinely new domain concept?
+### Historical/event source
 
 Examples:
 
 ```text
-new broker purchase statement
-→ existing investment purchase concept
-
-new bank transaction export
-→ existing household transaction concept
-
-new tax authority dataset
-→ possibly new canonical/reference concept
+daily broker snapshot
+transaction export
+historical market file
 ```
 
-This distinction determines whether you need a source adapter or a deeper data-model change.
+Typical Bronze behaviour:
+
+```text
+file-aware replacement
+```
+
+### Current/reference source
+
+Examples:
+
+```text
+mapping
+master
+opening-state reference
+```
+
+Typical Bronze behaviour:
+
+```text
+full replacement
+```
+
+Do not choose append/upsert mechanics before understanding source semantics.
 
 ---
 
-## Step 2 · Decide source identity
+## 2. Give the source a discovery category
 
-The Raw Store needs a stable identity for the artifact.
+The orchestrator builds a categorized source map.
 
-Current source identity includes concepts such as:
+Some sources come from folder discovery:
 
-- file name,
-- relative path,
-- category,
-- physical type,
-- hash,
-- size,
-- and ingestion timestamps.
+```python
+discovered_files = categorize_statement_files(
+    self.cfg.STATEMENTS_FOLDER,
+    strict=True,
+)
+```
 
-For a new source family, define:
+Others are explicit configured inputs:
+
+```python
+discovered_files["opening_balances"] = [
+    self.cfg.OPENING_BALANCE_CSV_PATH
+]
+```
+
+A new source needs a stable category because that category participates in:
+
+- file-type policy,
+- Control Plane registration,
+- Bronze mapping,
+- full-replace policy,
+- extraction routing.
+
+Choose the category as a semantic identifier, not a display label.
+
+---
+
+## 3. Add file-type/hash policy where required
+
+`FileSyncService` maps categories to physical types:
+
+```python
+file_type = FILE_TYPE_MAP.get(
+    category,
+    "csv",
+)
+
+should_check_hash = getattr(
+    hash_policy,
+    file_type,
+    False,
+)
+```
+
+If the new source introduces a new physical type, make sure the hash policy understands it.
+
+The question is:
+
+> **For an already-known path, should content identity be rechecked?**
+
+That is an ingestion policy decision.
+
+---
+
+## 4. Let the Control Plane own artifact identity
+
+Do not create a second source registry.
+
+The existing lifecycle already handles:
+
+```text
+relative path
+file category
+physical type
+SHA-256
+size
+payload bytes
+sync status
+first / last ingestion
+```
+
+New/changed artifacts should flow through `ArtifactRepository` and `FileSyncService`.
+
+That keeps:
+
+```text
+what exists?
+what changed?
+what bytes were ingested?
+has it reached Bronze?
+```
+
+inside one authority.
+
+---
+
+## 5. Persist evidence before analytical processing
+
+The Control Plane stores actionable source bytes.
+
+Conceptually:
+
+```python
+with open(filepath, "rb") as file:
+    raw_bytes = file.read()
+
+# registry + payload persistence happens in the
+# Control Plane before Bronze synchronization
+```
+
+Do not bypass raw persistence for convenience unless the source genuinely cannot be represented as an artifact.
+
+External/API data can use virtual artifacts instead.
+
+---
+
+## 6. For API/provider data, use virtual artifacts
+
+The current benchmark lifecycle demonstrates the pattern.
+
+Virtual identity uses:
+
+```text
+virtual://<category>/<filename>
+```
+
+The artifact still receives:
+
+```text
+deterministic identity
+content hash
+payload
+sync status
+```
+
+So external acquisition does not become provenance-free data merely because it was not discovered in a local folder.
+
+---
+
+## 7. Implement extraction at the source boundary
+
+The extractor should convert persisted source evidence into a source-shaped analytical frame.
+
+Its job is not to calculate household net worth or XIRR.
+
+Keep the responsibility narrow:
+
+```text
+bytes / file
+      ↓
+parse
+      ↓
+source-shaped typed frame
+```
+
+Source-specific cleanup belongs here when it is truly about physical/source representation.
+
+Financial meaning belongs later.
+
+---
+
+## 8. Register Bronze persistence
+
+The new extracted dataset needs a Bronze destination.
+
+Conceptually:
 
 ```text
 source category
-physical type
-discovery location
-identity rules
+      ↓
+Bronze table mapping
+      ↓
+persistence behaviour
 ```
 
-Do not use an unstable temporary path as the only identity if the source lifecycle requires persistence across runs.
-
----
-
-## Step 3 · Choose physical or virtual artifact
-
-Most local sources are physical artifacts such as:
-
-```text
-CSV
-Excel
-SQLite
-```
-
-But the architecture also supports virtual artifacts.
-
-Benchmark history is the current example:
-
-```text
-external API response
-    ↓
-Parquet bytes
-    ↓
-virtual:// identity
-    ↓
-Raw Store
-```
-
-If the source is acquired dynamically, consider whether persisting a virtual artifact improves provenance and recovery.
-
----
-
-## Step 4 · Define change-detection policy
-
-The Raw Store can fingerprint artifacts using SHA-256.
-
-Existing-file rehash policy is configurable by physical type.
-
-When adding a source, decide:
-
-- should existing artifacts be rehashed?
-- is file identity enough?
-- can the source mutate in place?
-- is append-only behaviour expected?
-- is source modification rare or common?
-
-Change detection is a policy decision.
-
-Do not assume every source should be reprocessed on every run.
-
----
-
-## Step 5 · Register raw evidence
-
-Actionable source bytes should enter the Raw Store before becoming derived analytical state.
-
-The Raw Store provides:
-
-- durable payload persistence,
-- source registry metadata,
-- and synchronization state.
-
-The source should become:
-
-```text
-PENDING_BRONZE
-```
-
-until Bronze persistence succeeds.
-
----
-
-## Step 6 · Implement extraction
-
-The extractor understands the source format.
-
-Its job is:
-
-```text
-persisted source bytes
-        ↓
-source-aware parsing
-        ↓
-source-shaped frame
-```
-
-The extractor may need to handle:
-
-- worksheet selection,
-- column names,
-- date parsing,
-- numeric parsing,
-- source-specific null conventions,
-- or embedded database queries.
-
-Keep that knowledge here.
-
-Do not let it leak into the household or investment engines.
-
----
-
-## Step 7 · Preserve source context
-
-Bronze should retain enough source identity to support traceability and replacement.
-
-The current historical pattern includes:
+For historical sources, preserve source identity such as:
 
 ```text
 __file_name__
 ```
 
-For a future generalized adapter model, richer lineage might include:
-
-```text
-source_file_id
-source_adapter
-source_record_id
-ingestion_run_id
-```
-
-Those are future possibilities.
-
-Use the current contract unless intentionally evolving the architecture.
+so changed artifacts can replace only their own Bronze partition.
 
 ---
 
-## Step 8 · Choose Bronze persistence strategy
+## 9. Choose replacement semantics deliberately
 
-This is one of the most important decisions.
-
-## Reference / current-state source
-
-Use full replacement when the complete current source state is the useful contract.
-
-Examples can include:
-
-- mappings,
-- masters,
-- macro/reference data.
-
-Conceptually:
-
-```text
-source changed
-    ↓
-replace Bronze representation
-```
-
-## Historical / event source
-
-Use file-aware replacement when multiple source artifacts form persistent history.
+### Historical
 
 Conceptually:
 
 ```text
 changed source file
-    ↓
-delete old rows owned by that file
-    ↓
-insert new extracted rows
-    ↓
-preserve unrelated history
+      ↓
+DELETE Bronze rows owned by that source
+      ↓
+INSERT replacement rows
 ```
 
-Do not select the strategy based on which implementation is shorter.
+### Full replacement
 
-Select it based on source semantics.
+Conceptually:
+
+```text
+DELETE current reference state
+      ↓
+INSERT complete replacement
+```
+
+The decision should be based on what the source represents.
+
+Not on which SQL statement is easiest.
 
 ---
 
-## Step 9 · Define Bronze schema
+## 10. Mark the artifact synced only after Bronze succeeds
 
-Bronze can remain source-shaped.
+The lifecycle is:
 
-It does not need to be the final canonical model.
+```text
+Raw persisted
+→ PENDING_BRONZE
+→ extraction
+→ Bronze write
+→ SYNCED
+```
 
-Define:
+Do not mark the source synchronized before analytical persistence completes.
 
-- physical table,
-- required source fields,
-- lineage field,
-- source partition semantics,
-- and replacement behaviour.
-
-Avoid unnecessary transformations in Bronze that erase useful source evidence before canonical mapping.
+That state transition is what makes interrupted ingestion recoverable.
 
 ---
 
-## Step 10 · Mark synchronization
+## 11. Add the source to complete Bronze reconstruction
 
-Only after successful extraction and Bronze persistence should the Raw artifact transition to:
+After actionable synchronization, the pipeline reads complete Bronze state.
 
-```text
-SYNCED
+The source must become part of the returned `ExtractionResult` or equivalent canonical input surface.
+
+Conceptually:
+
+```python
+return ExtractionResult(
+    existing_source_a=_get_lf(...),
+    existing_source_b=_get_lf(...),
+    new_source=_get_lf("bronze.r_New_Source"),
+)
 ```
 
-This preserves the distinction between:
-
-```text
-source was discovered
-```
-
-and:
-
-```text
-source is represented in Bronze
-```
+The exact field should represent the source's role clearly.
 
 ---
 
-## Step 11 · Map to canonical contracts
+## 12. Transform into canonical finance
 
-Now convert source-shaped Bronze data into stable financial concepts.
+This is the most important step.
 
-Examples:
-
-```text
-bank-specific debit record
-        ↓
-canonical expense / transfer
-
-broker-specific order row
-        ↓
-canonical investment purchase / sale
-
-provider-specific benchmark row
-        ↓
-canonical benchmark observation
-```
-
-This is the boundary where source vocabulary should disappear.
-
----
-
-## Step 12 · Use mappings and FinancialRules correctly
-
-Not every transformation belongs in code.
-
-Use reference mappings for source-to-canonical identity where appropriate.
-
-Use `FinancialRules` for financial policy.
-
-Use code for behavioural transformation.
-
-A useful distinction is:
+Do not expose:
 
 ```text
-source label → canonical category
-= mapping
-
-is this category core?
-= FinancialRules
-
-how do I parse this proprietary statement?
-= extractor / adapter code
+ProviderColumnA
+ProviderColumnB
+SheetName
+VendorStatus
 ```
 
----
+to downstream financial engines.
 
-## Step 13 · Validate canonical grain
-
-Before connecting the source downstream, state the resulting grain.
-
-Examples:
-
-```text
-income transaction
-expense transaction
-investment purchase
-investment sale
-market observation
-benchmark observation
-opening balance
-```
-
-If you cannot describe one row, the canonical contract is not ready.
-
----
-
-## Step 14 · Connect downstream dependencies
-
-Once the canonical contract is satisfied, downstream analytics should require minimal or no source-specific change.
-
-That is the success criterion.
+Map them into stable concepts.
 
 For example:
 
 ```text
-new broker source
+vendor transaction code
         ↓
-canonical purchase/sale/master contracts
+canonical purchase / sale
+
+vendor account label
         ↓
-existing FIFO engine
-        ↓
-existing investment marts
+canonical asset identity
 ```
 
-If adding a broker requires rewriting XIRR, the source boundary has leaked.
+The canonical contract is the anti-corruption layer.
 
 ---
 
-## Step 15 · Update Silver publication
+## 13. Use mapping/reference configuration where values vary
 
-If the source feeds an existing canonical Silver fact, update the transformation/loading path appropriately.
+If the source uses different labels for an existing financial concept, prefer mapping/configuration.
 
-If it introduces a genuinely new canonical concept:
+If the source requires fundamentally different parsing or behaviour, use an adapter/extractor boundary.
 
-1. define the financial meaning,
-2. define the grain,
-3. define the physical contract,
-4. define dependencies,
-5. update DDL/loading,
-6. update reference documentation.
-
-Do not create a Silver table solely because a source contains a table.
-
-Silver is a financial model, not a source mirror.
-
----
-
-## Step 16 · Decide whether Gold changes
-
-A new source does **not** automatically require a new Gold mart.
-
-If it populates existing canonical concepts, existing decision-support outputs may already be sufficient.
-
-Add Gold only when the new source enables a new decision/question that deserves a serving contract.
-
-See [Adding a Gold Mart](adding-gold-marts.md).
-
----
-
-## Source-extension example
-
-Conceptually, a second broker might look like:
-
-```mermaid
-flowchart LR
-    B1["Existing Broker"] --> A1["Existing Broker Adapter"]
-    B2["New Broker"] --> A2["New Broker Adapter"]
-
-    A1 --> CAN["Canonical Investment Contracts"]
-    A2 --> CAN
-
-    CAN --> FIFO["FIFO / Tax / Benchmark Engine"]
-    FIFO --> GOLD["Existing Gold Investment Marts"]
-```
-
-The desired change is upstream.
-
-The downstream engine remains stable.
-
----
-
-## Data-quality responsibilities
-
-A source adapter should validate what it can know.
-
-Examples:
-
-- required source columns,
-- parseable dates,
-- numeric fields,
-- instrument identity availability.
-
-Canonical transformation should validate financial requirements.
-
-Examples:
-
-- valid category mapping,
-- required investment master fields,
-- tax classification,
-- stable identifiers.
-
-Do not push every validation into one generic ingestion layer.
-
----
-
-## Error handling
-
-If extraction fails:
-
-- surface source identity,
-- preserve enough context to diagnose the parser,
-- do not mark the artifact `SYNCED`.
-
-If canonical transformation fails:
-
-- treat it as a semantic/data-contract problem,
-- not merely a file-read problem.
-
-The stage of failure matters.
-
----
-
-## Idempotency and replacement
-
-A source extension should preserve the existing lifecycle property:
-
-> Re-running the same unchanged source should not blindly duplicate Bronze history.
-
-Historical replacement should remove the old source-owned partition before reinserting changed data.
-
-Reference replacement should replace the current representation.
-
----
-
-## External provider sources
-
-For external APIs/providers, consider:
-
-- acquisition range,
-- cache coverage,
-- retry/failure behaviour,
-- persisted virtual artifacts,
-- and provider-specific identity.
-
-The benchmark pipeline is the current reference pattern.
-
----
-
-## Sensitive sources
-
-Financial source adapters can expose:
-
-- account numbers,
-- holdings,
-- transaction history,
-- income,
-- spending,
-- and tax information.
-
-Do not add real production statements to public fixtures or documentation.
-
-Use sanitized/synthetic examples when documentation requires sample structure.
-
----
-
-## Documentation changes for a new source
-
-Update:
-
-- [Data Lifecycle](../architecture/data-lifecycle.md) if lifecycle semantics change,
-- [Data Model](../architecture/data-model.md) if canonical concepts change,
-- Silver contracts if physical canonical schema changes,
-- configuration docs if new paths/settings are required,
-- and this guide if the extension workflow changes.
-
-A source-specific README can be appropriate if the adapter has substantial operational requirements.
-
----
-
-## New-source checklist
+Decision test:
 
 ```text
-[ ] Financial purpose defined
-[ ] Source category defined
-[ ] Stable identity defined
-[ ] Physical / virtual artifact decision made
-[ ] Change-detection policy defined
-[ ] Raw registration implemented
-[ ] Extractor / adapter implemented
-[ ] Bronze schema defined
-[ ] Bronze persistence strategy selected
-[ ] Source lineage preserved
-[ ] PENDING_BRONZE → SYNCED lifecycle respected
-[ ] Canonical mapping implemented
-[ ] Canonical grain documented
-[ ] FinancialRules / mappings updated where appropriate
-[ ] Downstream analytics validated
-[ ] Silver contract updated if needed
-[ ] Gold impact assessed
-[ ] Documentation updated
+same behaviour, different value
+→ mapping/configuration
+
+different parsing / behaviour
+→ adapter/extractor
+```
+
+Avoid giant source-specific conditional blocks in the transformation DAG.
+
+---
+
+## 14. Preserve grain
+
+Write the source grain before implementing transformations.
+
+Examples:
+
+```text
+one row per bank transaction
+one row per broker order
+one row per ISIN-date market observation
+one row per month-account balance
+```
+
+Then write the target canonical grain.
+
+If the transformation changes grain, document exactly how and why.
+
+---
+
+## 15. Define data-quality checks
+
+Ask what must be true for the source to be financially usable.
+
+Examples:
+
+```text
+transaction date present
+amount parseable
+instrument identity present
+currency valid
+duplicate identity understood
+tax classification available downstream
+```
+
+A parser that returns rows is not necessarily a valid financial ingestion path.
+
+---
+
+## 16. Decide failure semantics
+
+Should one malformed file:
+
+```text
+fail the run?
+be skipped with explicit failure state?
+quarantine the artifact?
+```
+
+The current production system generally prefers explicit failure over silently incomplete financial state.
+
+Do not add `except Exception: pass` around source errors.
+
+---
+
+## 17. Update operational configuration
+
+If the source introduces:
+
+- a new path,
+- a new file category,
+- a new hash policy,
+- a new source toggle,
+
+update the operational Settings model.
+
+Do not place source locations in FinancialRules.
+
+Remember:
+
+```text
+Settings
+→ operational environment
+
+FinancialRules
+→ financial semantics
 ```
 
 ---
 
-## Source-extension invariants
+## 18. Update the Data Contract Registry only if persistence contracts change
 
-1. **Raw evidence enters before derived state.**
-2. **Source-specific parsing remains upstream.**
-3. **Bronze strategy follows source semantics.**
-4. **Historical replacement preserves unrelated history.**
-5. **Synchronization state remains explicit.**
-6. **Canonical contracts hide source-specific structure downstream.**
-7. **A new source does not automatically imply a new financial concept.**
-8. **A new source does not automatically imply a new Gold mart.**
-9. **Financial policy remains separate from parsing logic.**
-10. **Downstream engines should remain stable when an equivalent new source is added.**
+Adding a source does **not** automatically require a new Silver/Gold contract.
+
+If the source feeds an existing canonical contract:
+
+```text
+new source
+→ existing canonical finance
+→ existing Silver/Gold
+```
+
+that is ideal.
+
+Create a new persistent analytical contract only when the downstream financial object is genuinely new.
 
 ---
 
-## Related documentation
+## 19. Reconcile downstream outputs
 
-- [Development Guide](development-guide.md)
-- [Adding an Asset Pipeline](adding-asset-pipelines.md)
-- [Adding a Gold Mart](adding-gold-marts.md)
-- [Data Lifecycle](../architecture/data-lifecycle.md)
-- [Warehouse Architecture](../architecture/warehouse-architecture.md)
-- [Financial Rules](../configuration/financial-rules.md)
+A new source can change financial truth intentionally.
+
+Validation should therefore answer:
+
+```text
+What new evidence entered?
+Which canonical state changed?
+Which household/investment totals changed?
+Can the change be explained from the source?
+```
+
+If the source is merely an alternative provider for the same evidence, stronger equivalence may be expected.
+
+---
+
+## 20. Update documentation
+
+At minimum inspect:
+
+```text
+getting-started/configuration.md
+architecture/data-lifecycle.md
+architecture/data-model.md
+developer/adding-data-sources.md
+reference contracts
+manifest.json if a new guide was added
+```
+
+Use real implementation excerpts once the source path is stable.
+
+---
+
+## 21. Source-extension checklist
+
+- [ ] Source semantics classified
+- [ ] Discovery category added
+- [ ] Physical type/hash policy handled
+- [ ] Control Plane lifecycle reused
+- [ ] Raw payload persisted
+- [ ] Extractor implemented
+- [ ] Bronze destination defined
+- [ ] Replacement semantics defined
+- [ ] Source identity preserved where historical
+- [ ] `PENDING_BRONZE → SYNCED` lifecycle respected
+- [ ] Complete Bronze reconstruction updated
+- [ ] Canonical mapping implemented
+- [ ] Grain documented
+- [ ] Data-quality checks defined
+- [ ] Failure semantics explicit
+- [ ] Settings updated if required
+- [ ] FinancialRules changed only for financial policy
+- [ ] Downstream financial outputs reconciled
+- [ ] Docs updated
+
+---
+
+## Example extension shape
+
+```text
+New Broker
+   │
+   ├── discovery category
+   ├── hash / artifact lifecycle
+   ├── broker extractor
+   ├── Bronze source table
+   └── canonical mapping
+            ↓
+     Existing Purchase / Sale / Market contracts
+            ↓
+     Existing FIFO / Tax / Benchmark engine
+```
+
+That is the architecture working correctly.
 
 [← Developer Home](README.md) · [← Documentation Home](../README.md)
