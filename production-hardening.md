@@ -18,7 +18,7 @@ The goal of v6.4.0 is to make the existing architecture more
 deterministic under failure, replay, corruption, rename, restore, and
 concurrent execution.
 
-------------------------------------------------------------------------
+---
 
 ## 1. Make `PENDING_BRONZE` Replay Part of the Normal Pipeline
 
@@ -54,16 +54,16 @@ normal extraction / Bronze synchronization
 
 Do not create a separate recovery pipeline.
 
-### Done when
+### Done when [IMPLEMENTED]
 
--   A `SYNCED` artifact is manually/self-healed to `PENDING_BRONZE`.
--   Its source file is unchanged.
--   The next normal production run replays it.
--   Bronze is restored.
--   The artifact returns to `SYNCED`.
--   Financial outputs remain unchanged.
+- A `SYNCED` artifact is manually/self-healed to `PENDING_BRONZE`.
+- Its source file is unchanged.
+- The next normal production run replays it.
+- Bronze is restored.
+- The artifact returns to `SYNCED`.
+- Financial outputs remain unchanged.
 
-------------------------------------------------------------------------
+---
 
 ## 2. Make `PENDING_BRONZE` Replay Idempotent
 
@@ -94,13 +94,13 @@ prepare replacement successfully
 
 Only mark the artifact `SYNCED` after successful Bronze persistence.
 
-### Done when
+### Done when [IMPLEMENTED]
 
 A forced failure during Bronze synchronization followed by a rerun
 produces exactly the same Bronze and downstream financial state as a
 clean run.
 
-------------------------------------------------------------------------
+---
 
 ## 3. Fix Rename Identity Migration
 
@@ -142,19 +142,19 @@ Perform the migration inside the existing Control Plane transaction.
 
 Do not update `relative_path` alone.
 
-### Done when
+### Done when [IMPLEMENTED]
 
 After a rename:
 
--   `file_id` matches the new normalized path,
--   raw payload remains accessible,
--   no duplicate artifact exists,
--   old identity is gone,
--   new identity is present,
--   Bronze ownership remains correct,
--   downstream financial state does not change.
+- `file_id` matches the new normalized path,
+- raw payload remains accessible,
+- no duplicate artifact exists,
+- old identity is gone,
+- new identity is present,
+- Bronze ownership remains correct,
+- downstream financial state does not change.
 
-------------------------------------------------------------------------
+---
 
 ## 4. Scope Rename Detection by Source Category
 
@@ -185,12 +185,12 @@ content hash only
 Optionally include other existing identity context if already available,
 but avoid overengineering.
 
-### Done when
+### Done when [IMPLEMENTED]
 
 Identical files in different source categories cannot be classified as
 renames of one another.
 
-------------------------------------------------------------------------
+---
 
 ## 5. Define Rename Behaviour in Bronze and Meta
 
@@ -208,23 +208,23 @@ financial-data change.
 
 For historical/file-owned Bronze:
 
--   migrate the ownership marker such as `__file_name__`, or
--   deliberately replay the artifact while removing the old owned
-    partition.
+- migrate the ownership marker such as `__file_name__`, or
+- deliberately replay the artifact while removing the old owned
+  partition.
 
 For DuckDB Meta/current registry projection:
 
--   update the path/name/file identity consistently.
+- update the path/name/file identity consistently.
 
 Choose one deterministic approach and use it everywhere.
 
-### Done when
+### Done when [IMPLEMENTED]
 
 A rename changes only provenance/identity metadata.
 
 Row counts and financial outputs remain identical.
 
-------------------------------------------------------------------------
+---
 
 ## 6. Make Delete Semantics Explicit
 
@@ -246,18 +246,18 @@ financial deletion.
 For current/reference sources, explicitly choose whether disappearance
 means:
 
--   retain last known state,
--   clear current state,
--   or fail the run.
+- retain last known state,
+- clear current state,
+- or fail the run.
 
 Do not let filesystem absence accidentally decide financial meaning.
 
-### Done when
+### Done when [IMPLEMENTED]
 
 Delete tests for each source class have deterministic outcomes and
 cannot silently erase or duplicate financial history.
 
-------------------------------------------------------------------------
+---
 
 ## 7. Strengthen Control Plane ↔ Bronze Self-Healing
 
@@ -292,13 +292,13 @@ no  → PENDING_BRONZE
 For current/reference tables where artifact-level ownership does not
 apply, retain table/state-level checks.
 
-### Done when
+### Done when [IMPLEMENTED]
 
 Deleting one historical artifact's Bronze rows, while leaving the table
 itself intact, causes that artifact to be requeued and restored
 automatically.
 
-------------------------------------------------------------------------
+---
 
 ## 8. Harden the SQLite ↔ DuckDB Commit Window
 
@@ -332,18 +332,18 @@ requeue/rebuild analytical state as needed
 
 Also ensure:
 
--   original exceptions survive cleanup,
--   rollback failures are logged separately,
--   `SUCCESS` is impossible before required finalization succeeds,
--   stale `COMMITTING` runs are recoverable.
+- original exceptions survive cleanup,
+- rollback failures are logged separately,
+- `SUCCESS` is impossible before required finalization succeeds,
+- stale `COMMITTING` runs are recoverable.
 
-### Done when
+### Done when [IMPLEMENTED]
 
 Injected failures around each final commit never produce a false
 successful run, and the next execution reaches the same correct state
 without manual database surgery.
 
-------------------------------------------------------------------------
+---
 
 ## 9. Strengthen Interrupted-Run Recovery
 
@@ -372,12 +372,12 @@ start new run
 
 Never mutate completed `SUCCESS`/`FAILED` history.
 
-### Done when
+### Done when [IMPLEMENTED]
 
 Hard-killing the process at different lifecycle stages and restarting
 always produces an explainable previous run plus a clean new run.
 
-------------------------------------------------------------------------
+---
 
 ## 10. Harden Worker Process-Boundary Failures
 
@@ -388,10 +388,10 @@ Normal per-ISIN exceptions now propagate correctly.
 The remaining risk is abnormal process behaviour outside the normal
 result path:
 
--   worker termination,
--   serialization/deserialization failure,
--   pool failure,
--   cleanup failure.
+- worker termination,
+- serialization/deserialization failure,
+- pool failure,
+- cleanup failure.
 
 ### Simple resolution
 
@@ -410,12 +410,12 @@ abnormal worker
 
 Never infer success from the workers that did return.
 
-### Done when
+### Done when [IMPLEMENTED]
 
 Force-killing one worker cannot result in a successfully published
 partial portfolio.
 
-------------------------------------------------------------------------
+---
 
 ## 11. Make Single-Run Protection Crash-Safe
 
@@ -431,21 +431,21 @@ production entry point uses the same lock.
 
 Verify that:
 
--   CLI uses the lock,
--   GUI uses the lock,
--   headless/backend production entry points use the lock,
--   backup/snapshot uses the same lock where required,
--   stale locks recover according to the file-lock library's actual
-    semantics.
+- CLI uses the lock,
+- GUI uses the lock,
+- headless/backend production entry points use the lock,
+- backup/snapshot uses the same lock where required,
+- stale locks recover according to the file-lock library's actual
+  semantics.
 
 Keep one lock identity for the production database pair.
 
-### Done when
+### Done when [IMPLEMENTED]
 
 Two live runs cannot overlap, but a dead process does not permanently
 block future execution.
 
-------------------------------------------------------------------------
+---
 
 ## 12. Make SQLite + DuckDB Snapshot Actually Consistent
 
@@ -472,20 +472,20 @@ Use the same production lock before snapshotting.
 
 Then:
 
--   create SQLite copy using SQLite's backup API,
--   create DuckDB copy only while no production writer is active,
--   package the two copies into one snapshot,
--   record enough metadata to identify the pair.
+- create SQLite copy using SQLite's backup API,
+- create DuckDB copy only while no production writer is active,
+- package the two copies into one snapshot,
+- record enough metadata to identify the pair.
 
 No elaborate backup framework is required.
 
-### Done when
+### Done when [IMPLEMENTED]
 
 A snapshot restored into a clean location contains both operational and
 analytical state and can successfully run/reconcile without needing the
 original databases.
 
-------------------------------------------------------------------------
+---
 
 ## 13. Add Snapshot Restore Verification
 
@@ -513,11 +513,11 @@ optionally execute production pipeline
 
 This can be a test/tool rather than part of every production run.
 
-### Done when
+### Done when [IMPLEMENTED]
 
 A real snapshot has been restored and proven usable.
 
-------------------------------------------------------------------------
+---
 
 ## 14. Complete DataContract Registry Validation
 
@@ -532,13 +532,13 @@ Silver/Gold.
 
 Validate across the relevant registry:
 
--   unique `contract_id`,
--   valid layer,
--   unique physical table where required,
--   non-empty grain,
--   non-empty producer,
--   deterministic publication order,
--   expected contract counts.
+- unique `contract_id`,
+- valid layer,
+- unique physical table where required,
+- non-empty grain,
+- non-empty producer,
+- deterministic publication order,
+- expected contract counts.
 
 For the current baseline:
 
@@ -551,12 +551,12 @@ For the current baseline:
 If duplicate publication order is not intentionally supported within a
 layer, reject it.
 
-### Done when
+### Done when [IMPLEMENTED]
 
 A deliberately duplicated physical table, contract ID, or invalid
 publication order fails before pipeline execution.
 
-------------------------------------------------------------------------
+---
 
 ## 15. Validate Builder Output Against Persisted Contract
 
@@ -574,20 +574,20 @@ Builder ↔ DDL drift can therefore surface late.
 Before publication, perform a lightweight contract check where
 practical:
 
--   required columns present,
--   unexpected/missing persisted columns handled intentionally,
--   physical table exists,
--   types are compatible enough for the current loader.
+- required columns present,
+- unexpected/missing persisted columns handled intentionally,
+- physical table exists,
+- types are compatible enough for the current loader.
 
 Do not build a second schema framework if DuckDB/loader metadata can
 provide the check.
 
-### Done when
+### Done when [IMPLEMENTED]
 
 A deliberately broken builder output fails with a clear contract error
 before partial publication.
 
-------------------------------------------------------------------------
+---
 
 ## 16. Validate Meta Projection From the Same Contract Authority
 
@@ -606,12 +606,12 @@ resolves identity through `DataContract`.
 
 Remove or avoid parallel manual mapping tables for the same identity.
 
-### Done when
+### Done when [IMPLEMENTED]
 
 Renaming a physical table in the registry produces one obvious set of
 required changes rather than hidden secondary mappings.
 
-------------------------------------------------------------------------
+---
 
 ## 17. Prove Raw-Payload Recovery End-to-End
 
@@ -636,12 +636,12 @@ If the normal production pipeline intentionally requires source presence
 for some categories, document that boundary explicitly rather than
 claiming universal raw replay.
 
-### Done when
+### Done when [IMPLEMENTED]
 
 The supported raw-evidence recovery path has been demonstrated
 end-to-end.
 
-------------------------------------------------------------------------
+---
 
 ## 18. Check Resource Cleanup Under Failure and Repeated Runs
 
@@ -659,10 +659,10 @@ at least one worker/stage failure.
 
 Observe:
 
--   worker processes,
--   database connections/transactions,
--   temporary files,
--   memory trend.
+- worker processes,
+- database connections/transactions,
+- temporary files,
+- memory trend.
 
 Do not chase normal allocator caching; look for clear monotonic leakage
 or orphaned resources.
@@ -672,7 +672,7 @@ or orphaned resources.
 Repeated successful/failed runs do not accumulate orphan workers, open
 transactions, or obvious unbounded memory.
 
-------------------------------------------------------------------------
+---
 
 ## 19. Final Clean-Rebuild Equivalence
 
@@ -697,7 +697,7 @@ Compare financial outputs, not only row counts.
 
 Both paths converge to the same deterministic financial truth.
 
-------------------------------------------------------------------------
+---
 
 ## 20. Final Production Regression
 
@@ -711,24 +711,24 @@ After all v6.4.0 hardening is complete:
 
 Verify:
 
--   no duplicate Control Plane artifacts,
--   no duplicate Bronze history,
--   no stranded `PENDING_BRONZE`,
--   no stale unfinished runs,
--   no partial portfolio publication,
--   expected **15 Bronze / 20 Silver / 17 Gold** contracts,
--   investment quantities reconcile,
--   FIFO lots reconcile,
--   tax state reconciles,
--   benchmark state reconciles,
--   ISIN/portfolio XIRR reconciles,
--   book/market/after-tax wealth reconciles,
--   cash-flow reconciliation remains correct,
--   FIRE outputs remain consistent with the existing methodology.
+- no duplicate Control Plane artifacts,
+- no duplicate Bronze history,
+- no stranded `PENDING_BRONZE`,
+- no stale unfinished runs,
+- no partial portfolio publication,
+- expected **15 Bronze / 20 Silver / 17 Gold** contracts,
+- investment quantities reconcile,
+- FIFO lots reconcile,
+- tax state reconciles,
+- benchmark state reconciles,
+- ISIN/portfolio XIRR reconciles,
+- book/market/after-tax wealth reconciles,
+- cash-flow reconciliation remains correct,
+- FIRE outputs remain consistent with the existing methodology.
 
 Runtime is an observation, not the correctness criterion.
 
-------------------------------------------------------------------------
+---
 
 # Recommended Implementation Order
 
@@ -755,7 +755,7 @@ Runtime is an observation, not the correctness criterion.
 20. full production regression
 ```
 
-------------------------------------------------------------------------
+---
 
 # What v6.4.0 Is Not
 
@@ -764,40 +764,40 @@ unless testing exposes an actual defect.
 
 Keep stable:
 
--   FIFO methodology,
--   XIRR methodology,
--   shadow benchmark methodology,
--   tax methodology,
--   household wealth methodology,
--   cash-flow methodology,
--   FIRE methodology,
--   Control Plane ownership model,
--   persistent Bronze + rebuilt Silver/Gold architecture.
+- FIFO methodology,
+- XIRR methodology,
+- shadow benchmark methodology,
+- tax methodology,
+- household wealth methodology,
+- cash-flow methodology,
+- FIRE methodology,
+- Control Plane ownership model,
+- persistent Bronze + rebuilt Silver/Gold architecture.
 
 This release should strengthen the shell around those systems.
 
-------------------------------------------------------------------------
+---
 
 # Definition of Done
 
 v6.4.0 is hardened when:
 
--   recovery work always re-enters the normal pipeline,
--   replay is idempotent,
--   rename/delete behaviour is deterministic,
--   path-derived identity remains internally consistent,
--   Control Plane can repair missing artifact-level Bronze state,
--   commit-window failures are recoverable,
--   stale runs are explainable,
--   abnormal worker failure cannot publish partial finance,
--   concurrent execution is safely rejected,
--   snapshots are consistent and proven restorable,
--   analytical contracts fail fast when broken,
--   raw-evidence recovery has been demonstrated,
--   repeated runs do not leak operational resources,
--   incremental/self-healed state converges with clean rebuild state,
--   and the full production corpus preserves the known-good financial
-    truth.
+- recovery work always re-enters the normal pipeline,
+- replay is idempotent,
+- rename/delete behaviour is deterministic,
+- path-derived identity remains internally consistent,
+- Control Plane can repair missing artifact-level Bronze state,
+- commit-window failures are recoverable,
+- stale runs are explainable,
+- abnormal worker failure cannot publish partial finance,
+- concurrent execution is safely rejected,
+- snapshots are consistent and proven restorable,
+- analytical contracts fail fast when broken,
+- raw-evidence recovery has been demonstrated,
+- repeated runs do not leak operational resources,
+- incremental/self-healed state converges with clean rebuild state,
+- and the full production corpus preserves the known-good financial
+  truth.
 
 > **v6.4.0 target:** no clever new architecture; just make the existing
 > architecture boringly difficult to break.
