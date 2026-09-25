@@ -1,6 +1,7 @@
 import concurrent.futures
 import multiprocessing
 import os
+import time
 import traceback
 from datetime import date
 from typing import Any
@@ -60,7 +61,16 @@ def _process_isin_worker(
 
     processor = IsinProcessor(fy_table, start_date, end_date, rules)
     try:
+        worker_id = multiprocessing.current_process().name
+        logger.debug(f"[ENGINE:POOL] {worker_id} started processing ISIN '{isin}'")
+        t0 = time.perf_counter()
+
         res = processor.process(isin, p_inst, s_inst, m_inst, master_row, bm_map)
+
+        logger.debug(
+            f"[ENGINE:POOL] {worker_id} finished ISIN '{isin}' in {(time.perf_counter() - t0) * 1000:.2f}ms"
+        )
+
         if res is not None:
             df = res.df_snapshots
             isin_cf = [c.model_dump(mode="python") for c in res.cashflows]

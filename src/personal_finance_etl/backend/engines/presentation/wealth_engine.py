@@ -50,6 +50,11 @@ class WealthPresentationEngine:
         Takes collected DataFrames from the primary ETL, converts them to LazyFrames,
         performs presentation-tier aggregations, and returns them to be collected.
         """
+        logger.debug("[ENGINE:PRESENTATION] Starting Wealth Engine presentation layer builds...")
+        logger.debug(
+            "[ENGINE:PRESENTATION] Imputing missing data (NaN) with 0.0 for BI Engine compatibility..."
+        )
+
         # 1. Core Builders (Inflation, Ledger, Net Worth)
         inflation_res = InflationBuilder(dfs, rules=self.rules).build()
         if not inflation_res:

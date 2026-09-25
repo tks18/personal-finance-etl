@@ -44,7 +44,13 @@ class FIFOPortfolio:
                 age_sale, self.tax_type, self.tax_subtype, lbd or sell_date, sell_date
             )
 
-            pnl = (price - lot.price) * consumed if lot.price > 0 else 0.0
+            if lot.price <= 0:
+                logger.debug(
+                    f"[QUANT:WARN] Tax lot acquired on {lbd} has zero-cost basis! PNL will be 0."
+                )
+                pnl = 0.0
+            else:
+                pnl = (price - lot.price) * consumed
 
             realized_events.append(
                 {
