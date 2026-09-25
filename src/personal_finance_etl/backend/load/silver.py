@@ -12,12 +12,12 @@ class SilverLayer:
     def __init__(self, db_manager: DuckDBManager):
         self.db_manager = db_manager
 
-    def _write(self, df: pl.DataFrame | pl.LazyFrame, table_name: str) -> None:
+    def _write(self, df: pl.DataFrame | pl.LazyFrame, table_name: str) -> int:
         if isinstance(df, pl.LazyFrame):
             df = df.collect()
 
         if df.height == 0:
-            return
+            return 0
 
         # Clean empty strings into true nulls only for dimension tables
         if "d_" in table_name:
@@ -59,9 +59,10 @@ class SilverLayer:
                         logger.error(f"-> {row}")
 
         self.db_manager.conn.register("temp_df", df)
-        logger.debug(f"[Silver] Replacing {df.height} rows into {table_name}")
+        logger.debug(f"[SILVER:DETAIL] Rebuilt {table_name}: {df.height} rows processed.")
         self.db_manager.conn.execute(f"INSERT INTO {table_name} BY NAME SELECT * FROM temp_df")
         self.db_manager.conn.unregister("temp_df")
+        return df.height
 
     def load(self, dfs: dict[str, pl.DataFrame]) -> None:
         """Truncates all silver.* tables and re-inserts via db_manager.conn."""
@@ -78,11 +79,19 @@ class SilverLayer:
         self.db_manager.conn.execute(SILVER_DDL)
 
         # Phase 2: Insert all data in forward topological order (Dimensions -> Facts)
+        total_rows = 0
+        tables_built = 0
+
         for contract in contracts:
             if contract.contract_id in dfs:
-                self._write(
+                rows = self._write(
                     dfs[contract.contract_id],
                     contract.physical_table,
                 )
+                if rows > 0:
+                    tables_built += 1
+                    total_rows += rows
 
-        logger.info("Silver layer load complete.")
+        logger.info(
+            f"[SILVER] Rebuilt {tables_built} analytical tables ({total_rows:,} total rows)."
+        )

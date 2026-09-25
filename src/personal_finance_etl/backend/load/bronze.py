@@ -49,21 +49,23 @@ class BronzeLayer:
             self.db_manager.conn.execute(f"CREATE TABLE {table_name} AS SELECT * FROM schema_df")
             logger.debug(f"[Bronze] Re-created {table_name} for full replacement.")
         else:
-            self.db_manager.conn.execute(
-                f"CREATE TABLE IF NOT EXISTS {table_name} AS SELECT * FROM schema_df"
-            )
+            create_query = f"CREATE TABLE IF NOT EXISTS {table_name} AS SELECT * FROM schema_df"
+            self.db_manager.conn.execute(create_query)
             placeholders = ", ".join(["?"] * len(filenames))
             delete_query = f"DELETE FROM {table_name} WHERE __file_name__ IN ({placeholders})"
+            logger.debug(f"[BRONZE:DETAIL] Executing SQL: {delete_query}")
             self.db_manager.conn.execute(delete_query, filenames)
 
         self.db_manager.conn.unregister("schema_df")
 
         # Insert new rows
         self.db_manager.conn.register("temp_df", df_filtered)
-        logger.debug(
-            f"[Bronze] Upserting {df_filtered.height} rows into {table_name} from {len(filenames)} files."
-        )
-        self.db_manager.conn.execute(f"INSERT INTO {table_name} BY NAME SELECT * FROM temp_df")
+
+        insert_query = f"INSERT INTO {table_name} BY NAME SELECT * FROM temp_df"
+        logger.debug(f"[BRONZE:DETAIL] Executing SQL: {insert_query}")
+        self.db_manager.conn.execute(insert_query)
+
+        logger.debug(f"[BRONZE:DETAIL] Upserted {table_name}: {df_filtered.height} rows processed.")
         self.db_manager.conn.unregister("temp_df")
 
         # Calculate per-file row count
@@ -80,13 +82,18 @@ class BronzeLayer:
         actionable_files: dict[str, list[str]],
     ) -> None:
         """Writes all raw extracted dataframes to bronze.* via db_manager.conn."""
-        logger.info("Loading raw datasets into Bronze layer...")
+
+        total_upserts = 0
+        total_rows = 0
 
         for contract in BRONZE_CONTRACT_REGISTRY:
             df = getattr(extracted_data, contract.extraction_attribute, None)
             if df is not None:
                 actionable = actionable_files.get(contract.sync_category, [])
                 if actionable:
+                    logger.debug(
+                        f"[SCHEMA] {contract.physical_table} Schema: {df.collect_schema()}"
+                    )
                     row_counts = self.upsert_table(
                         df,
                         contract.physical_table,
@@ -101,6 +108,11 @@ class BronzeLayer:
                             [contract.sync_category],
                         )
 
+                    rows_added = sum(row_counts.values())
+                    if rows_added > 0:
+                        total_upserts += 1
+                        total_rows += rows_added
+
                     for filepath in actionable:
                         filename = os.path.basename(filepath)
                         count = row_counts.get(filename, 0)
@@ -109,7 +121,9 @@ class BronzeLayer:
                             filepath, contract.sync_category, count, self.cp
                         )
 
-        logger.info("Bronze layer load complete.")
+        logger.info(
+            f"[BRONZE] Synchronized {total_upserts} source datasets ({total_rows:,} new rows)."
+        )
 
     def migrate_identity(self, renames: list[tuple[str, str, str]]) -> None:
         """Migrates file identity (rename) in all Bronze tables without re-ingesting rows."""

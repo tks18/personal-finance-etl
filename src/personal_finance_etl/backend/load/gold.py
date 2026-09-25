@@ -12,17 +12,18 @@ class GoldLayer:
     def __init__(self, db_manager: DuckDBManager):
         self.db_manager = db_manager
 
-    def _write(self, df: pl.DataFrame | pl.LazyFrame, table_name: str) -> None:
+    def _write(self, df: pl.DataFrame | pl.LazyFrame, table_name: str) -> int:
         if isinstance(df, pl.LazyFrame):
             df = df.collect()
 
         if df.height == 0:
-            return
+            return 0
 
         self.db_manager.conn.register("temp_df", df)
-        logger.debug(f"[Gold] Replacing {df.height} rows into {table_name}")
+        logger.debug(f"[GOLD:DETAIL] Rebuilt {table_name}: {df.height} rows processed.")
         self.db_manager.conn.execute(f"INSERT INTO {table_name} BY NAME SELECT * FROM temp_df")
         self.db_manager.conn.unregister("temp_df")
+        return df.height
 
     def load(self, dfs: dict[str, pl.DataFrame]) -> None:
         """Truncates all gold.* tables and re-inserts presentation DataFrames."""
@@ -39,11 +40,19 @@ class GoldLayer:
         self.db_manager.conn.execute(GOLD_DDL)
 
         # Phase 2: Insert all data
+        total_rows = 0
+        tables_built = 0
+
         for contract in contracts:
             if contract.contract_id in dfs:
-                self._write(
+                rows = self._write(
                     dfs[contract.contract_id],
                     contract.physical_table,
                 )
+                if rows > 0:
+                    tables_built += 1
+                    total_rows += rows
 
-        logger.info("Gold layer load complete.")
+        logger.info(
+            f"[GOLD] Rebuilt {tables_built} presentation tables ({total_rows:,} total rows)."
+        )

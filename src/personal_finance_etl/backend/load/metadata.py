@@ -33,8 +33,11 @@ class MetaLayer:
 
     def heal_duckdb_registry(self, cp: "ControlPlane") -> None:
         """Self-heals DuckDB file registry if items in SQLite control plane are missing."""
-        duckdb_rows = self.conn.execute("SELECT relative_path FROM meta.m_File_Registry").fetchall()
+        duckdb_rows = self.conn.execute(
+            "SELECT relative_path, row_count FROM meta.m_File_Registry"
+        ).fetchall()
         duckdb_paths = {str(r[0]) for r in duckdb_rows}
+        duckdb_row_counts = {str(r[0]): (r[1] or 0) for r in duckdb_rows}
 
         # We only care about checking files that CP thinks are SYNCED
         synced_registry = cp.artifacts.get_all_registry()
@@ -80,10 +83,10 @@ class MetaLayer:
                             [path],
                         )
                         missing_count += 1
-                    # Or if it's an event source and its specific rows are missing
                     elif (
                         contract
                         and not contract.is_full_replace
+                        and duckdb_row_counts.get(path, 0) > 0
                         and os.path.basename(path) not in files_in_table
                     ):
                         cp.artifacts.db.conn.execute(

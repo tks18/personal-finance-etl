@@ -1,6 +1,7 @@
 from personal_finance_etl.backend.config.settings import FileHashPolicy
 from personal_finance_etl.backend.load.control_plane.artifact_repo import ArtifactRepository
 from personal_finance_etl.backend.load.control_plane.utils import FILE_TYPE_MAP, compute_file_hash
+from personal_finance_etl.backend.utils.logger import logger
 
 
 class FileSyncService:
@@ -54,20 +55,28 @@ class FileSyncService:
                                 # No need to ingest binary, it's just a rename
                                 is_rename = True
                                 renames.append((old_path, filepath, category))
+                                logger.debug(f"[SYNC:RENAME] Migrating identity from '{old_path}' to '{filepath}'.")
                                 break
 
                     if not is_rename:
+                        logger.debug(f"[SYNC:NEW] {rel_path} discovered (Hash: {disk_hash}).")
                         new_files[category].append(rel_path)
                 elif should_check_hash:
                     disk_hash = compute_file_hash(filepath)
-                    if disk_hash != registry[rel_path][0]:
+                    registry_hash = registry[rel_path][0]
+                    if disk_hash != registry_hash:
+                        logger.debug(
+                            f"[SYNC:DRIFT] {rel_path} changed! Disk: {disk_hash} | Registry: {registry_hash}"
+                        )
                         changed_files[category].append(rel_path)
 
             if category in full_replace_categories:
                 self.artifact_repo.prune_category(category, filepaths)
 
         files_skipped = sum(len(f) for f in discovered_files.values()) - (
-            sum(len(f) for f in new_files.values()) + sum(len(f) for f in changed_files.values())
+            sum(len(f) for f in new_files.values())
+            + sum(len(f) for f in changed_files.values())
+            + len(renames)
         )
 
         actionable_files: dict[str, list[str]] = {}
@@ -77,5 +86,15 @@ class FileSyncService:
                 actionable_files[cat] = merged
 
         self.artifact_repo.ingest_binaries(actionable_files)
+
+        new_count = sum(len(f) for f in new_files.values())
+        changed_count = sum(len(f) for f in changed_files.values())
+        rename_count = len(renames)
+
+        rename_str = f" | {rename_count} Renamed" if rename_count > 0 else ""
+
+        logger.info(
+            f"[SYNC] Delta identified: {new_count} New | {changed_count} Changed{rename_str} | {files_skipped} Skipped"
+        )
 
         return new_files, changed_files, files_skipped, renames
