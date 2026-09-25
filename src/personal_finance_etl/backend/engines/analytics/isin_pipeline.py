@@ -205,9 +205,12 @@ class IsinPipeline:
             with concurrent.futures.ProcessPoolExecutor(
                 max_workers=min(4, os.cpu_count() or 1)
             ) as executor:
-                futures = [executor.submit(_process_isin_worker, task) for task in tasks]
+                future_to_isin = {
+                    executor.submit(_process_isin_worker, task): task[0] for task in tasks
+                }
 
-                for i, future in enumerate(concurrent.futures.as_completed(futures)):
+                for i, future in enumerate(concurrent.futures.as_completed(future_to_isin)):
+                    isin = future_to_isin[future]
                     if self.status_queue:
                         self.status_queue.put(
                             EngineStatus(
@@ -218,10 +221,18 @@ class IsinPipeline:
                             )
                         )
 
-                    success, isin_cf, isin_pt, isin_re, tags, error_info = future.result()
+                    try:
+                        success, isin_cf, isin_pt, isin_re, tags, error_info = future.result()
+                    except Exception as e:
+                        # Catch BrokenProcessPool, CancelledError, PicklingError, etc.
+                        error_msg = f"Process-boundary failure: {type(e).__name__} - {str(e)}"
+                        logger.error(
+                            f"ISIN Processing Failed for {isin}: {error_msg}\n{traceback.format_exc()}"
+                        )
+                        raise RuntimeError(f"ISIN_FAILURE|{isin}|{error_msg}") from e
 
                     if error_info is not None:
-                        failed_isin = error_info.get("isin", "Unknown")
+                        failed_isin = error_info.get("isin", isin)
                         error_msg = error_info.get("error", "Unknown Error")
                         tb = error_info.get("traceback", "")
 
