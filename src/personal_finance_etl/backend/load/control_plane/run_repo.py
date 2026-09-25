@@ -74,3 +74,33 @@ class RunRepository:
             "INSERT INTO cp_run_failures (run_id, failed_isin, stage, error_type, error_message, traceback_log, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
             (run_id, failed_isin, stage, error_type, error_message, traceback_log, now),
         )
+
+    def recover_stale_runs(self) -> None:
+        """
+        Transitions any run in an unfinished state (STARTED, RUNNING, COMMITTING)
+        to FAILED, indicating the previous process was interrupted.
+        """
+        now = datetime.now().isoformat()
+
+        # Log failure for all stale runs
+        cursor = self.db.conn.execute(
+            "SELECT run_id, status FROM cp_runs WHERE status IN ('STARTED', 'RUNNING', 'COMMITTING')"
+        )
+        stale_runs = cursor.fetchall()
+
+        for row in stale_runs:
+            run_id = row[0]
+            status = row[1]
+            self.log_run_failure(
+                run_id=run_id,
+                failed_isin=None,
+                stage="RECOVERY",
+                error_type="InterruptedRunError",
+                error_message=f"Run was left in {status} state and recovered as FAILED on startup.",
+            )
+
+            self.db.conn.execute(
+                "UPDATE cp_runs SET status = 'FAILED', finished_at = ? WHERE run_id = ?",
+                (now, run_id),
+            )
+        self.db.commit()
