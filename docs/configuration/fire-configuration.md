@@ -1,213 +1,91 @@
 # FIRE Configuration
 
-The FIRE configuration controls how Personal Finance ETL turns current household state into deterministic and stochastic planning scenarios.
+The FIRE engine separates **simulation mechanics** from **financial assumptions**.
 
-This is not a list of "best" values.
+That is the entire point of this configuration layer.
 
-The purpose of this guide is to explain:
+```text
+Simulation kernel
+→ how paths are generated
 
-- what each parameter family controls,
-- which direction it pushes the model,
-- how parameters interact,
-- and what assumptions a reader should understand before changing them.
+FIRE configuration
+→ what financial world those paths represent
+```
 
-> FIRE configuration defines a scenario model. It does not encode a guaranteed future or a universally correct retirement strategy.
-
-For the calculation methodology, read [FIRE Methodology](../finance/fire-methodology.md) first.
+The kernel should not contain hidden opinions about expected returns, inflation, employment shocks, or withdrawal behaviour.
 
 ---
 
-## Configuration architecture
+## 1. Configuration flow
 
 ```mermaid
-flowchart TB
-    STATE["Current Household State<br/>after-tax wealth · spending · savings"] --> FIRE["FIRE Engine"]
-
-    BASE["Base Planning Assumptions"] --> FIRE
-    REG["Market Regimes"] --> FIRE
-    INF["Inflation Process"] --> FIRE
-    HC["Human-Capital Shocks"] --> FIRE
-    GL["Glide Path"] --> FIRE
-    JMP["Jump Events"] --> FIRE
-    WD["Withdrawal Policy"] --> FIRE
-    COST["Portfolio Drag"] --> FIRE
-
-    FIRE --> DET["Deterministic Outputs"]
-    FIRE --> MC["Monte Carlo Distribution"]
+flowchart LR
+    CFG["FIRE Configuration"] --> PYD["Pydantic Validation"]
+    PYD --> DET["Deterministic FIRE"]
+    PYD --> MC["Monte Carlo Kernel"]
+    MC --> OUT["Scenario Distribution"]
+    OUT --> GOLD["Curated Gold Outputs"]
+    PYD --> SNAP["FinancialRules Snapshot"]
 ```
 
-Configuration determines the scenario environment in which the financial state is evaluated.
+The same validated assumptions are therefore:
+
+- consumed by the engine,
+- persisted in run provenance,
+- explainable in documentation.
 
 ---
 
-## Start with methodology, not tuning
+## 2. Configuration families
 
-Before changing FIRE parameters, establish that the upstream model is trustworthy.
-
-Recommended order:
+The FIRE policy surface can be understood as several families:
 
 ```text
-Household transactions
-      ↓
-Cash / non-cash semantics
-      ↓
-Asset balances
-      ↓
-Investment market / tax state
-      ↓
-After-tax wealth
-      ↓
-Spending / savings bases
-      ↓
-FIRE configuration
+Current-State Policy
+Market Regimes
+Regime Transitions
+Inflation
+Jump / Tail Behaviour
+Human Capital
+Glide Path
+Portfolio Drag
+Withdrawal Policy
+Simulation Controls
 ```
 
-A perfectly tuned Monte Carlo model on top of incorrect household state is still incorrect.
+Each family changes a different part of the state transition.
 
 ---
 
-## Parameter families
+## 3. Current-state policy
 
-The current FIRE policy spans several conceptual groups:
+Before simulation begins, the model needs to know how to interpret current finances.
+
+Important assumptions include:
 
 ```text
-Core FIRE assumptions
-Simulation controls
-Market regimes
-Regime transitions
-Return distributions
-Jump / crash process
-Inflation process
-Human-capital shocks
-Glide path
-Portfolio drag
-Withdrawal rules
+eligible wealth
+core spending
+withdrawal rate
+savings/contribution behaviour
+tax-aware vs pre-tax wealth basis
 ```
 
-These families interact.
-
-Changing one number in isolation can have effects that depend strongly on the rest of the configuration.
-
----
-
-## Core FIRE assumptions
-
-Core assumptions define the deterministic planning baseline.
-
-They can include concepts such as:
-
-- sustainable withdrawal rate,
-- expected/real return assumptions,
-- planning horizon,
-- and FI target behaviour.
-
----
-
-## Sustainable withdrawal assumption
-
-A withdrawal-rate assumption influences the capital required to support spending.
-
-Conceptually:
+For a deterministic target:
 
 ```text
-FI Target
-    ≈
-Annual Spending
-    /
-Withdrawal Rate
+FI Target = Annual Core Expense / Withdrawal Rate
 ```
 
-All else equal:
+Changing the withdrawal rate changes the target even if current wealth is unchanged.
 
-```text
-lower withdrawal rate
-→ higher FI target
-
-higher withdrawal rate
-→ lower FI target
-```
-
-That does not mean a higher configured rate is "better."
-
-It means the model is assuming less capital is required per unit of spending.
+That is policy.
 
 ---
 
-## Return assumptions
+## 4. Market regimes
 
-Expected return assumptions influence:
-
-- Coast FI,
-- deterministic FI timing,
-- future wealth,
-- and stochastic scenario outcomes.
-
-All else equal:
-
-```text
-higher assumed return
-→ faster modelled wealth growth
-
-lower assumed return
-→ slower modelled wealth growth
-```
-
-But expected return should not be tuned merely to obtain a desired FI date.
-
----
-
-## Real versus nominal assumptions
-
-The model uses both nominal and inflation-aware concepts.
-
-When configuring returns and inflation, ensure they are economically compatible.
-
-A nominal return assumption should not be interpreted as a real return without accounting for inflation.
-
-Long-range FIRE is ultimately about purchasing power.
-
----
-
-## Simulation controls
-
-Simulation controls define the computational experiment.
-
-Conceptual parameters include:
-
-- number of simulation paths,
-- horizon,
-- time-step behaviour,
-- and random-process configuration.
-
-## Number of simulations
-
-More paths generally provide a more stable empirical distribution at the cost of compute time.
-
-They do **not** make incorrect assumptions more correct.
-
-```text
-more simulations
-→ less Monte Carlo sampling noise
-
-not
-→ less model risk
-```
-
----
-
-## Simulation horizon
-
-The horizon determines how long paths are evolved.
-
-It should be long enough to represent the planning question.
-
-A horizon that ends too early can make survival/terminal-wealth outputs misleading.
-
----
-
-## Market regimes
-
-The current stochastic model supports regimes such as:
+The simulation can represent states such as:
 
 ```text
 Bull
@@ -215,645 +93,518 @@ Bear
 Stagflation
 ```
 
-Each regime can have different return/volatility behaviour.
+A regime can define a bundle of assumptions:
 
-This is more expressive than assuming one stationary return distribution for the entire horizon.
+```text
+expected return
+volatility
+inflation tendency
+```
+
+Conceptually:
+
+```mermaid
+flowchart LR
+    STATE["Current Regime"] --> PARAM["Regime Parameters"]
+    PARAM --> RET["Return Process"]
+    PARAM --> INF["Inflation Process"]
+```
+
+This is more expressive than assuming one stationary market distribution forever.
 
 ---
 
-## Regime return assumptions
+## 5. Regime transition matrix
 
-Each regime can define its own expected return and volatility characteristics.
+Regimes evolve according to configured transition probabilities.
 
 Conceptually:
 
 ```text
-Bull
-→ stronger expected growth / regime-specific volatility
-
-Bear
-→ weaker or negative expected growth / regime-specific volatility
-
-Stagflation
-→ weaker real-growth environment with inflation interaction
+P_ij = P(next regime = j | current regime = i)
 ```
 
-The exact production values belong in the rules file.
-
-This guide deliberately does not prescribe "correct" market numbers.
-
----
-
-## Markov transition matrix
-
-Regime changes follow configured transition probabilities.
-
-A transition matrix conceptually looks like:
+Each row should represent a valid probability distribution:
 
 ```text
-             Next Regime
-Current      Bull   Bear   Stagflation
-Bull          p      p          p
-Bear          p      p          p
-Stagflation   p      p          p
+For each current regime i:
+
+Σ_j P_ij = 1
 ```
 
-Each row should represent a valid probability distribution.
+A conceptual matrix:
 
-Conceptually:
+| From \ To | Bull | Bear | Stagflation |
+| --- | ---: | ---: | ---: |
+| Bull | \(p_{BB}\) | \(p_{BBe}\) | \(p_{BS}\) |
+| Bear | \(p_{BeB}\) | \(p_{BeBe}\) | \(p_{BeS}\) |
+| Stagflation | \(p_{SB}\) | \(p_{SBe}\) | \(p_{SS}\) |
+
+The exact values belong in configuration.
+
+The simulation kernel only consumes them.
+
+---
+
+## 6. Why transitions matter
+
+Without transition state:
 
 ```text
-row probabilities sum to 1
+every period
+→ independent regime draw
 ```
 
-The matrix controls regime persistence and switching behaviour.
+With a Markov transition model:
+
+```text
+current regime
+→ influences next-regime probabilities
+```
+
+That allows persistence:
+
+```text
+bull markets can remain bull
+bear markets can cluster
+stagflation can persist
+```
+
+without deterministically scripting a future path.
 
 ---
 
-## Why transition assumptions matter
+## 7. Return assumptions
 
-A model where Bear regimes almost always immediately return to Bull behaves very differently from one where adverse regimes persist.
+Each regime can carry assumptions around:
 
-The transition matrix therefore affects:
+```text
+expected return
+volatility
+```
 
-- drawdown persistence,
-- FI timing,
-- runway,
-- and sequence risk.
+The simulation then adds stochastic shocks around the configured regime state.
 
-It should be reviewed as an economic assumption, not merely a technical matrix.
+The values are model inputs.
+
+They are not forecasts generated by the ETL pipeline.
+
+That distinction should remain explicit whenever FIRE results are interpreted.
 
 ---
 
-## Fat-tailed shocks
+## 8. Fat-tail configuration
 
-The model can use Student-t-style return shocks.
+The stochastic process can use heavier-tailed shocks.
 
-A degrees-of-freedom parameter controls tail heaviness.
+A tail parameter controls how much probability mass the model places away from the center relative to a Gaussian assumption.
 
 Conceptually:
 
 ```text
 lower degrees of freedom
-→ heavier tails / more extreme shocks
-
-higher degrees of freedom
-→ distribution approaches Gaussian behaviour
+→ heavier tails
+→ more extreme simulated shocks
 ```
 
-This parameter changes the shape of scenario risk.
-
-It does not "predict" extreme events.
+The parameter should be chosen deliberately because it materially changes stress behaviour.
 
 ---
 
-## Jump / crash process
+## 9. Jump-event configuration
 
-The model can include discrete jump events beyond ordinary return shocks.
-
-Conceptual parameters can include:
-
-- event probability,
-- negative jump magnitude/distribution,
-- positive jump behaviour,
-- and regime interaction.
-
-All else equal:
-
-```text
-higher negative-jump probability
-→ more adverse tail scenarios
-```
-
-but the impact depends on timing and portfolio state.
-
----
-
-## Why jump timing matters
-
-A crash early in accumulation and a crash immediately after retirement can have very different consequences.
-
-The model's pathwise evolution allows timing to affect outcomes rather than only changing average return.
-
-This is one way the simulation captures sequence risk.
-
----
-
-## Stochastic inflation
-
-Inflation can evolve as a stochastic process rather than one fixed constant.
-
-Conceptual parameters can control:
-
-- long-run inflation level,
-- persistence,
-- volatility,
-- and shock behaviour.
-
----
-
-## Inflation mean reversion
-
-A mean-reverting inflation process conceptually pulls inflation toward a long-run level over time.
-
-Stronger mean reversion:
-
-```text
-→ inflation shocks dissipate faster
-```
-
-Weaker mean reversion:
-
-```text
-→ inflation shocks persist longer
-```
-
----
-
-## Inflation volatility
-
-Higher inflation volatility widens the range of future spending and purchasing-power outcomes.
-
-This can materially affect FI targets and withdrawal sustainability.
-
----
-
-## Human-capital shocks
-
-The model can represent uncertainty in future earning capacity.
-
-This is especially important before FI.
-
-Conceptual parameters can describe:
-
-- unemployment probability,
-- unemployment duration,
-- income shock severity,
-- recovery behaviour,
-- and related human-capital state.
-
----
-
-## Why human capital belongs in FIRE
-
-Pre-FI wealth depends on both:
-
-```text
-portfolio returns
-```
-
-and:
-
-```text
-continued ability to save
-```
-
-A market-only model ignores one of the largest risks during accumulation.
-
----
-
-## Unemployment probability
-
-Higher unemployment probability generally increases the frequency of simulated income interruptions.
-
-The effect on FI timing depends on:
-
-- current wealth,
-- savings rate,
-- duration,
-- recovery,
-- and market state.
-
----
-
-## Unemployment duration
-
-Longer unemployment episodes reduce cumulative savings and can require additional withdrawals from liquid assets.
-
-This can create path dependence even before retirement.
-
----
-
-## Glide path
-
-The model can evolve asset allocation over time.
-
-A glide path can define how exposure changes as:
-
-- FI approaches,
-- retirement begins,
-- or time advances.
+Jump/crash behaviour can be configured separately from ordinary volatility.
 
 Conceptually:
 
 ```text
-Current allocation
-        ↓
-transition through configured path
-        ↓
-later allocation
+jump probability
+jump magnitude distribution
 ```
 
+The period return process becomes:
+
+```text
+regime return
++
+ordinary stochastic shock
++
+optional jump shock
+```
+
+This avoids asking one volatility parameter to represent every form of market stress.
+
 ---
 
-## Glide-path interaction with sequence risk
+## 10. Inflation configuration
 
-Reducing risky-asset exposure can reduce some downside paths but can also reduce expected growth.
+Inflation affects both:
 
-The effect is not unidirectional.
+```text
+future spending
+and
+real purchasing power
+```
 
-That is exactly why the parameter belongs in scenario analysis rather than being labelled automatically conservative or aggressive.
+The configuration can describe inflation dynamics rather than fixing one scalar forever.
+
+```mermaid
+flowchart LR
+    INF["Inflation State"] --> SPEND["Future Expense"]
+    INF --> REAL["Real Wealth"]
+    SPEND --> FI["FI Requirement"]
+```
+
+The relationship is important because a high nominal terminal value can still represent weak real purchasing power.
 
 ---
 
-## Portfolio drag
+## 11. Human-capital configuration
 
-Portfolio drag represents recurring costs/expenses that reduce investment returns.
+During accumulation, the ability to keep contributing matters.
+
+The model can configure events such as:
+
+```text
+employment shock probability
+income reduction
+shock duration
+recovery behaviour
+```
 
 Conceptually:
 
 ```text
-Gross Return
-   -
-Portfolio Drag
-   =
-Net Modelled Return
+employed
+   ↓ shock
+reduced / lost contribution
+   ↓ recovery
+normal contribution state
 ```
 
-Small annual differences can compound materially over long horizons.
+This lets FIRE modelling include household earning capacity rather than modelling only financial capital.
 
 ---
 
-## Dynamic withdrawal policy
+## 12. Contribution assumptions
 
-The model supports dynamic withdrawal behaviour rather than only a fixed inflation-adjusted withdrawal.
-
-Current methodology includes Guyton-Klinger-style concepts.
-
-Dynamic withdrawal rules can adjust spending based on portfolio state.
-
----
-
-## Why dynamic withdrawals matter
-
-A fixed withdrawal rule assumes household spending never responds to financial conditions.
-
-A dynamic rule can model behavioural adaptation.
-
-That can materially change:
-
-- survival probability,
-- terminal wealth,
-- and stressed runway.
-
----
-
-## Withdrawal guardrails
-
-Dynamic withdrawal systems can use thresholds/guardrails to determine when spending is increased, frozen, or reduced.
-
-The exact parameters should be interpreted as policy assumptions.
-
-They are not universal retirement rules.
-
----
-
-## Spending scope
-
-The FIRE model supports more than one spending perspective.
-
-The current Gold contract includes paired total-spend variants for several measures.
-
-This means configuration should be reviewed together with the financial model's definitions of:
-
-- core/lean spending,
-- broader total spending,
-- and cash/non-cash expense treatment.
-
----
-
-## Savings scope
-
-Likewise, the model can distinguish:
-
-- cash-oriented savings,
-- broader total savings.
-
-A simulation funded by deployable savings should not silently use a savings concept dominated by non-cash accounting activity.
-
----
-
-## Tax-aware wealth basis
-
-FIRE uses tax-aware household wealth where appropriate.
-
-This connects FIRE assumptions with tax configuration.
-
-Changing tax rates or holding treatment can therefore change:
-
-- after-tax wealth,
-- FI coverage,
-- FI gap,
-- runway,
-- and simulated outcomes.
-
-Configuration families are not independent islands.
-
----
-
-## Configuration interactions
-
-Several important interactions deserve explicit attention.
-
-## Returns × inflation
-
-High nominal return with high inflation may produce weak real progress.
-
-## Market regimes × transition matrix
-
-Regime assumptions mean little without understanding persistence/switching probabilities.
-
-## Returns × portfolio drag
-
-Gross expected return should not be interpreted as net return if drag is modelled separately.
-
-## Human capital × savings
-
-Income shocks matter more when the plan depends heavily on continued contributions.
-
-## Glide path × sequence risk
-
-Allocation changes alter both expected growth and downside sensitivity.
-
-## Withdrawal policy × terminal wealth
-
-More adaptive spending can preserve capital at the cost of consumption variability.
-
-## Tax × wealth basis
-
-Tax assumptions can change the capital considered available to FIRE.
-
----
-
-## Direction-of-effect map
-
-This table describes broad model tendencies, not guaranteed outcomes.
-
-| Parameter change | Typical model effect, all else equal |
-| --- | --- |
-| Higher spending | Higher FI target, lower runway, later FI |
-| Higher savings | Faster accumulation, earlier FI |
-| Higher expected return | Faster modelled growth, but not necessarily lower path risk |
-| Higher inflation | Higher future spending needs, weaker real outcomes |
-| Higher negative-jump frequency | Worse tail outcomes |
-| Heavier return tails | Wider/extremer scenario distribution |
-| Higher unemployment risk | Slower accumulation / wider FI timing |
-| Longer unemployment duration | Greater savings interruption |
-| Higher portfolio drag | Lower long-run wealth |
-| Lower withdrawal rate | Higher FI target, potentially stronger retirement resilience |
-| More flexible withdrawals | Potentially stronger survival with more spending variability |
-
-Real outcomes can differ because parameters interact.
-
----
-
-## Parameter validation
-
-Pydantic validation can ensure configuration structure is valid.
-
-For example:
-
-- numeric fields are numeric,
-- nested sections exist,
-- lists/matrices have expected structure.
-
-The model should also validate logical constraints where implemented, such as probability shapes.
-
-But schema validity is only the first level.
-
----
-
-## Economic validation
-
-Before trusting a rules file, ask:
-
-### Are probabilities coherent?
-
-Transition rows should represent valid distributions.
-
-### Are return and inflation assumptions internally compatible?
-
-Do not mix real and nominal concepts casually.
-
-### Are shocks plausible for the scenario purpose?
-
-Extreme assumptions can be useful for stress testing, but should be labelled as such.
-
-### Does the horizon match the planning question?
-
-### Are savings/spending bases the intended financial definitions?
-
-### Does the tax-aware wealth basis match the planning intent?
-
----
-
-## Behavioural validation
-
-A useful FIRE configuration should produce directionally sensible responses.
-
-Examples:
+Savings/contributions can depend on:
 
 ```text
-increase spending
-→ FI generally becomes harder
-
-increase savings
-→ FI generally becomes easier
-
-increase portfolio drag
-→ long-run wealth generally falls
-
-increase adverse shocks
-→ tail outcomes generally worsen
+income
+expense
+inflation
+employment state
 ```
 
-If those relationships fail unexpectedly, investigate the model before tuning parameters further.
-
----
-
-## Sensitivity analysis mindset
-
-I prefer comparing scenarios over declaring one parameter set "correct."
-
-For example:
+That means contribution policy is not merely:
 
 ```text
-Base assumptions
-vs
-Lower-return assumptions
-vs
-Higher-inflation assumptions
-vs
-Employment-shock assumptions
+add fixed ₹X every month forever
 ```
 
-The purpose is to understand what drives the plan.
-
-A model is more useful when it reveals sensitivity than when it produces one beautifully precise date.
+unless that is intentionally the configured scenario.
 
 ---
 
-## Avoid false precision
+## 13. Glide-path configuration
 
-A P50 FI date with day-level formatting can look more certain than the model deserves.
+A glide path describes how target asset allocation changes through time or FI proximity.
 
-Interpret the output as:
-
-> median timing under the configured simulation
-
-not:
-
-> scheduled retirement appointment.
-
-The same caution applies to terminal wealth and probability-of-success percentages.
-
----
-
-## Scenario profiles
-
-It can be useful to maintain multiple named configuration profiles for analysis.
-
-For example:
+Conceptually:
 
 ```text
-base
-stress-return
-stress-inflation
-stress-employment
+Accumulation Allocation
+        ↓
+Transition
+        ↓
+Near-FI Allocation
+        ↓
+Post-FI Allocation
 ```
 
-Those names should describe the assumption being changed rather than label one profile "safe" or "optimal."
+This can reduce reliance on one fixed allocation assumption across decades.
 
-The purpose is comparison.
-
----
-
-## What not to do
-
-## Do not tune until the answer looks comforting
-
-That converts scenario analysis into confirmation bias.
-
-## Do not copy market assumptions without understanding units
-
-Real versus nominal mistakes can dominate long-horizon results.
-
-## Do not treat probability of success as objective truth
-
-It is conditional on the model.
-
-## Do not hide extreme assumptions behind neutral names
-
-A stress scenario should look like a stress scenario.
-
-## Do not compensate for bad upstream data with FIRE parameters
-
-Fix the financial state first.
+The path is policy, not market prediction.
 
 ---
 
-## Recommended FIRE configuration workflow
+## 14. Portfolio drag
+
+Portfolio drag can represent recurring implementation friction such as:
 
 ```text
-1. Validate household state
-        ↓
-2. Validate after-tax wealth
-        ↓
-3. Validate trailing spending / savings
-        ↓
-4. Set deterministic FIRE assumptions
-        ↓
-5. Validate deterministic outputs
-        ↓
-6. Configure market regimes
-        ↓
-7. Configure inflation
-        ↓
-8. Configure human-capital shocks
-        ↓
-9. Configure jumps / tails
-        ↓
-10. Configure glide path / drag
-        ↓
-11. Configure withdrawal policy
-        ↓
-12. Run scenario comparisons
-        ↓
-13. Review sensitivity, not just headline P50
+fees
+costs
+other return drag assumptions
 ```
 
----
-
-## Configuration provenance
-
-FIRE outputs can change materially when the rules change.
-
-For strong reproducibility, a future Meta model should capture:
+The simulation should distinguish:
 
 ```text
-financial_rules_hash
-rules_schema_version
-application_version
-simulation configuration fingerprint
+gross market process
+from
+net investor process
 ```
 
-The current Meta layer captures rules context, but this is an area worth hardening further.
+That keeps the model interpretable.
 
 ---
 
-## Current model boundaries
+## 15. Withdrawal policy
 
-The FIRE configuration is sophisticated, but it remains a model.
+Post-FI spending behaviour can be configured separately from the market process.
 
-It does not fully represent:
+A simple policy might use inflation-adjusted withdrawals.
 
-- every future tax-law change,
-- every household behaviour change,
-- every asset class,
-- every macroeconomic regime,
-- every employment event,
-- every medical/family shock,
-- or every market structure change.
+A dynamic policy can use guardrails.
 
-The purpose is not completeness.
+Conceptually:
 
-The purpose is structured uncertainty.
+```mermaid
+flowchart LR
+    BASE["Baseline Spending"] --> RULE["Withdrawal Rule"]
+    PORT["Portfolio State"] --> RULE
+    MARKET["Market State"] --> RULE
+    RULE --> DRAW["Actual Withdrawal"]
+```
 
----
-
-## FIRE configuration invariants
-
-1. **Configuration describes assumptions, not predictions.**
-2. **Real and nominal quantities remain distinguishable.**
-3. **Transition probabilities remain coherent.**
-4. **Market and human-capital risk remain separate concepts.**
-5. **Inflation remains part of long-range interpretation.**
-6. **Tax-aware wealth remains connected to tax policy.**
-7. **Spending and savings scopes remain explicit.**
-8. **Simulation count reduces sampling noise, not model risk.**
-9. **Scenario profiles remain descriptive rather than prescriptive.**
-10. **Sensitivity matters more than false precision.**
-11. **Complex behaviour remains in code rather than exploding configuration.**
-12. **Upstream financial correctness comes before stochastic sophistication.**
+The kernel executes the configured policy.
 
 ---
 
-## Related documentation
+## 16. Dynamic withdrawal guardrails
+
+A guardrail policy can reduce/increase withdrawals when portfolio state crosses configured conditions.
+
+The important architecture is:
+
+```text
+thresholds
+→ configuration
+
+decision algorithm
+→ strategy / simulation code
+```
+
+If a future withdrawal methodology is fundamentally different, it should become a strategy rather than an explosion of boolean configuration flags.
+
+---
+
+## 17. Simulation controls
+
+Not every configuration value is financial policy.
+
+Some values control execution:
+
+```text
+number of simulations
+time horizon
+random seed / reproducibility controls
+```
+
+These affect numerical execution rather than household finance.
+
+They should still be validated and documented because they affect the output distribution and runtime.
+
+---
+
+## 18. Number of paths
+
+More paths can reduce Monte Carlo sampling noise, but they also increase compute.
+
+```text
+more paths
+→ more numerical work
+→ generally smoother estimated distribution
+```
+
+There is no universally correct number independent of model complexity and decision use.
+
+The configured value is a numerical trade-off.
+
+---
+
+## 19. Horizon
+
+The simulation horizon must be long enough to answer the planning question.
+
+Too short:
+
+```text
+successful path may simply outlive the simulation window
+```
+
+Too long:
+
+```text
+more compute
++
+greater dependence on assumptions far beyond what can be meaningfully calibrated
+```
+
+Again, configuration expresses the scenario.
+
+---
+
+## 20. Reproducibility controls
+
+Where a random seed is configurable, it can help distinguish:
+
+```text
+model change
+from
+different random draw
+```
+
+That is useful during development and comparison.
+
+But one seed is not evidence that the model is correct.
+
+It is an execution reproducibility tool.
+
+---
+
+## 21. Validation
+
+Pydantic is the first line of defence against structurally invalid configuration.
+
+Examples of useful validation classes include:
+
+```text
+probabilities within [0, 1]
+positive horizons
+non-negative volatility
+valid allocation ranges
+valid transition rows
+valid withdrawal rates
+```
+
+Validation answers:
+
+> **Can the engine safely interpret this configuration?**
+
+It does not answer:
+
+> **Are these assumptions economically correct?**
+
+That remains a modelling judgement.
+
+---
+
+## 22. Configuration provenance
+
+FIRE assumptions live inside the broader FinancialRules payload.
+
+That payload is content-addressed by the Control Plane.
+
+```text
+FIRE assumptions
+      ↓
+FinancialRules serialization
+      ↓
+SHA-256 snapshot
+      ↓
+run_id
+```
+
+So a run can identify which stochastic policy produced its outputs.
+
+That is particularly important for simulation because small assumption changes can materially alter the distribution.
+
+---
+
+## 23. Sensitivity matters more than false precision
+
+A stochastic model can produce many decimal places.
+
+That does not mean the assumptions deserve that precision.
+
+For planning, I care more about:
+
+```text
+How does the conclusion move when assumptions change?
+```
+
+than:
+
+```text
+What is the 8th decimal place of one scenario output?
+```
+
+The configuration architecture makes sensitivity analysis possible because assumptions are explicit.
+
+---
+
+## 24. Gold intentionally curates simulation output
+
+The engine can generate more internal state than Power BI needs.
+
+The Gold contract exposes selected planning measures such as:
+
+```text
+P10 / P50 / P90 months to FI
+modelled probability of success
+P50 FI date
+base runway
+stressed runway
+P50 nominal terminal wealth
+```
+
+That keeps the serving layer decision-oriented.
+
+---
+
+## 25. Configuration example: conceptual only
+
+The exact production model should remain the source of truth, but conceptually the structure resembles:
+
+```yaml
+# Conceptual example, not a verbatim production file.
+fire:
+  withdrawal_rate: ...
+  simulation:
+    paths: ...
+    horizon_months: ...
+  regimes:
+    bull:
+      expected_return: ...
+      volatility: ...
+    bear:
+      expected_return: ...
+      volatility: ...
+  human_capital:
+    shock_probability: ...
+  glide_path:
+    enabled: ...
+```
+
+This example is deliberately labelled conceptual.
+
+Production configuration fields should be taken from the current Pydantic models.
+
+---
+
+## 26. FIRE configuration invariants
+
+1. Assumptions do not hide inside numerical kernels.
+2. Financial policy and simulation controls remain distinguishable.
+3. Transition probabilities must form valid distributions.
+4. Model parameters are assumptions, not forecasts.
+5. Human capital belongs in accumulation modelling.
+6. Inflation affects spending and real wealth.
+7. Withdrawal policy is independent from market-return generation.
+8. Fundamentally different behaviour should become a strategy, not configuration spaghetti.
+9. FinancialRules snapshots preserve assumption provenance.
+10. Simulation output remains conditional on the configured model.
+
+---
+
+## Go deeper
 
 - [FIRE Methodology](../finance/fire-methodology.md)
 - [Financial Rules](financial-rules.md)
-- [Financial Model](../finance/financial-model.md)
-- [Tax Methodology](../finance/tax-methodology.md)
 - [Metrics & Methodology](../finance/metrics-and-methodology.md)
+- [Reliability & Recovery](../architecture/reliability-and-recovery.md)
 
 [← Configuration Home](README.md) · [← Documentation Home](../README.md)
