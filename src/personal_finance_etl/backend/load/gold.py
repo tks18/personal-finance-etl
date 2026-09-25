@@ -14,6 +14,8 @@ class GoldLayer:
 
     def _write(self, df: pl.DataFrame | pl.LazyFrame, table_name: str) -> int:
         if isinstance(df, pl.LazyFrame):
+            compact_plan = df.explain().replace("\n", " | ")
+            logger.debug(f"[DAG:OPTIMIZER] Physical Plan for Gold '{table_name}': {compact_plan}")
             df = df.collect()
 
         if df.height == 0:

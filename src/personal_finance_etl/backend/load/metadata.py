@@ -145,6 +145,9 @@ class MetaLayer:
                 """,
                 [new_rel_path, new_name, new_file_id, old_rel_path],
             )
+            logger.debug(
+                f"[METADATA:QUERY] Migrated DuckDB identity from '{old_rel_path}' to '{new_rel_path}'."
+            )
 
     def register_file(
         self, filepath: str, category: str, row_count: int, cp: "ControlPlane"

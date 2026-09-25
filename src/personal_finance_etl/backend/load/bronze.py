@@ -30,6 +30,8 @@ class BronzeLayer:
         Otherwise, deletes existing rows matching __file_name__ then re-inserts.
         Returns dict mapping filename to row count."""
         if isinstance(df, pl.LazyFrame):
+            compact_plan = df.explain().replace("\n", " | ")
+            logger.debug(f"[DAG:OPTIMIZER] Physical Plan for Bronze '{table_name}': {compact_plan}")
             df = df.collect()
 
         if df.height == 0 or not actionable_files:
@@ -109,6 +111,9 @@ class BronzeLayer:
                         )
 
                     rows_added = sum(row_counts.values())
+                    logger.debug(
+                        f"[BRONZE:TRACE] Table '{contract.physical_table}': Upserted {rows_added} rows from {len(actionable)} files."
+                    )
                     if rows_added > 0:
                         total_upserts += 1
                         total_rows += rows_added

@@ -6,6 +6,7 @@ import psutil
 from personal_finance_etl.backend.load.schema.gold import GOLD_DDL
 from personal_finance_etl.backend.load.schema.meta import META_DDL
 from personal_finance_etl.backend.load.schema.silver import SILVER_DDL
+from personal_finance_etl.backend.utils.logger import logger
 
 
 class DuckDBManager:
@@ -28,18 +29,24 @@ class DuckDBManager:
         """Opens the single long-lived connection. Called once at pipeline start."""
         if self._conn is not None:
             return self._conn
+        logger.debug(f"[DATABASE:DUCKDB] Opening connection to {self.db_path}")
         self._conn = duckdb.connect(self.db_path)
         mem_gb = max(4, int(psutil.virtual_memory().total / (1024**3) * 0.75))
         self._conn.execute(f"PRAGMA memory_limit='{mem_gb}GB'")
         self._conn.execute("PRAGMA threads=4")
+        logger.debug(f"[DATABASE:DUCKDB] Connection configured: memory_limit={mem_gb}GB, threads=4")
         return self._conn
 
     def close(self) -> None:
         """Checkpoints and closes the connection. Called once at pipeline end."""
         if self._conn is not None:
+            logger.debug("[DATABASE:DUCKDB] Commencing VACUUM and CHECKPOINT sequence...")
             try:
                 self._conn.execute("VACUUM")
                 self._conn.execute("CHECKPOINT")
+                logger.debug("[DATABASE:DUCKDB] Checkpoint successful. Closing connection.")
+            except Exception as e:
+                logger.error(f"[DATABASE:DUCKDB] Error during cleanup: {e}")
             finally:
                 self._conn.close()
                 self._conn = None
