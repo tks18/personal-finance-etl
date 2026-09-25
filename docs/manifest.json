@@ -235,38 +235,6 @@
           "order": 7010
         }
       ]
-    },
-    {
-      "id": "legacy",
-      "title": "Legacy",
-      "order": 8000,
-      "pages": [
-        {
-          "title": "About",
-          "path": "legacy/About.md",
-          "order": 8010
-        },
-        {
-          "title": "Fire Configuration Guide",
-          "path": "legacy/FIRE_Configuration_Guide.md",
-          "order": 8010
-        },
-        {
-          "title": "Metrics Guide",
-          "path": "legacy/Metrics_Guide.md",
-          "order": 8010
-        },
-        {
-          "title": "New Data Source Guide",
-          "path": "legacy/New_Data_Source_Guide.md",
-          "order": 8010
-        },
-        {
-          "title": "New Presentation Table Guide",
-          "path": "legacy/New_Presentation_Table_Guide.md",
-          "order": 8010
-        }
-      ]
     }
   ]
 }
