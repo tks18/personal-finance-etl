@@ -129,24 +129,6 @@ module.exports = {
     {
       filename: 'version_info.txt',
       updater: versionInfoTracker,
-    },
-    {
-      filename: 'docs/About.md',
-      updater: {
-        readVersion: function (contents) {
-          const match = contents.match(/<p><b>Version ([^<]+)<\/b><\/p>/);
-          if (!match) return null;
-          // Strip prefix 'v' if present for SemVer compatibility
-          return match[1].replace(/^v/, '');
-        },
-        writeVersion: function (contents, version) {
-          // Re-insert version
-          return contents.replace(
-            /<p><b>Version [^<]+<\/b><\/p>/,
-            `<p><b>Version ${version}</b></p>`
-          );
-        }
-      }
-    },
+    }
   ],
 };
