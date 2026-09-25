@@ -216,6 +216,13 @@ class DataExtractor:
 
         try:
             t0 = time.perf_counter()
+            for lf in validation_frames:
+                schema = lf.collect_schema()
+                if len(schema.names()) > 0:
+                    logger.debug(
+                        f"[QUALITY:GATEKEEPER] Validating schema constraints: {schema.names()}"
+                    )
+
             pl.collect_all([lf.head(1) for lf in validation_frames])
             logger.info(
                 f"[QUALITY] Gatekeeper validated 16 schemas with 0 violations in {(time.perf_counter() - t0) * 1000:.2f}ms."

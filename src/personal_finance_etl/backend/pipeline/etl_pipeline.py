@@ -179,6 +179,7 @@ class ETLOrchestrator:
 
         try:
             # Start ACID Transaction for the entire ETL run
+            logger.debug("[DATABASE:DUCKDB] BEGIN TRANSACTION")
             self.db_manager.conn.execute("BEGIN TRANSACTION")
             cp.begin_transaction()
 
@@ -321,6 +322,7 @@ class ETLOrchestrator:
 
             # Commit the ACID Transaction
             try:
+                logger.debug("[DATABASE:DUCKDB] COMMIT")
                 self.db_manager.conn.execute("COMMIT")
             except Exception as duckdb_commit_err:
                 raise RuntimeError(
@@ -347,6 +349,7 @@ class ETLOrchestrator:
             logger.exception("CRITICAL PIPELINE FAILURE:")
             # Rollback all changes if any phase fails
             try:
+                logger.debug("[DATABASE:DUCKDB] ROLLBACK")
                 self.db_manager.conn.execute("ROLLBACK")
                 logger.warning("DuckDB transaction rolled back.")
             except Exception as rollback_err:

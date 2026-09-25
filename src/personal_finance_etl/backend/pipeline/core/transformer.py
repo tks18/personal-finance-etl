@@ -146,6 +146,9 @@ class TransformationDAG:
         )
         d_calendar_lazy = transform_d_calendar(df_bounds_lazy)
 
+        compact_cal = d_calendar_lazy.explain().replace("\n", " | ")
+        logger.debug(f"[DAG:OPTIMIZER] Physical Plan for Master Calendar: {compact_cal}")
+
         logger.debug("Executing Base Transformation DAG in Parallel...")
         self.status_queue.put(
             EngineStatus(
@@ -155,54 +158,46 @@ class TransformationDAG:
                 level=LogLevel.STEP,
             )
         )
-        results = pl.collect_all(
-            [
-                d_income_category_lazy,
-                d_income_subcategory_lazy,
-                d_expense_category_lazy,
-                d_expense_subcategory_lazy,
-                d_asset_category_lazy,
-                d_asset_subcategory_lazy,
-                d_currency_lazy,
-                d_benchmark_master_lazy,
-                d_macro_parameters_lazy,
-                f_income_transactions_lazy,
-                f_expense_transactions_lazy,
-                f_transfer_transactions_lazy,
-                f_opening_balances_lazy,
-                stg_investment_market_data_lazy,
-                f_tf_inv_purchase_data_lazy,
-                f_tf_inv_sale_data_lazy,
-                d_tf_investment_master_lazy,
-            ],
-            engine="streaming",
-        )
+        dag_nodes = {
+            "df_d_income_category": d_income_category_lazy,
+            "df_d_income_subcategory": d_income_subcategory_lazy,
+            "df_d_expense_category": d_expense_category_lazy,
+            "df_d_expense_subcategory": d_expense_subcategory_lazy,
+            "df_d_asset_category": d_asset_category_lazy,
+            "df_d_asset_subcategory": d_asset_subcategory_lazy,
+            "df_d_currency": d_currency_lazy,
+            "df_d_benchmark_master": d_benchmark_master_lazy,
+            "df_d_macro_parameters": d_macro_parameters_lazy,
+            "df_f_income_transactions": f_income_transactions_lazy,
+            "df_f_expense_transactions": f_expense_transactions_lazy,
+            "df_f_transfer_transactions": f_transfer_transactions_lazy,
+            "df_f_opening_balances": f_opening_balances_lazy,
+            "df_f_investment_market_data": stg_investment_market_data_lazy,
+            "df_f_tf_inv_purchase": f_tf_inv_purchase_data_lazy,
+            "df_f_tf_inv_sale": f_tf_inv_sale_data_lazy,
+            "df_d_investment_master": d_tf_investment_master_lazy,
+        }
+
+        for name, node in dag_nodes.items():
+            compact_plan = node.explain().replace("\n", " | ")
+            logger.debug(f"[DAG:OPTIMIZER] Physical Plan for Silver '{name}': {compact_plan}")
+
+        results = pl.collect_all(list(dag_nodes.values()), engine="streaming")
 
         logger.debug(
             f"  -> Base Transformation DAG successfully mapped {len(results)} core tables."
         )
 
+        final_dfs: dict[str, pl.DataFrame] = {}
+        for (name, _), df in zip(dag_nodes.items(), results, strict=True):
+            logger.debug(
+                f"[DAG:TRACE] Node '{name}': Output materialized -> ({df.height} rows, {df.width} cols)"
+            )
+            final_dfs[name] = df
+
         logger.debug("Executing Calendar Generation DAG...")
         calendar_result = d_calendar_lazy.collect(engine="streaming")
         logger.debug(f"  -> Generated {calendar_result.height} rows for Master Calendar.")
+        final_dfs["df_d_calendar"] = calendar_result
 
-        return {
-            "df_d_income_category": results[0],
-            "df_d_income_subcategory": results[1],
-            "df_d_expense_category": results[2],
-            "df_d_expense_subcategory": results[3],
-            "df_d_asset_category": results[4],
-            "df_d_asset_subcategory": results[5],
-            "df_d_currency": results[6],
-            "df_d_benchmark_master": results[7],
-            "df_d_macro_parameters": results[8],
-            "df_f_income_transactions": results[9],
-            "df_f_expense_transactions": results[10],
-            "df_f_transfer_transactions": results[11],
-            "df_f_opening_balances": results[12],
-            "df_f_investment_market_data": results[13],
-            "df_f_tf_inv_purchase": results[14],
-            "df_f_tf_inv_sale": results[15],
-            "df_d_investment_master": results[16],
-            "df_d_calendar": calendar_result,
-        }
+        return final_dfs
