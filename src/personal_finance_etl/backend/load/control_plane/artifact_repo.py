@@ -101,7 +101,7 @@ class ArtifactRepository:
 
     def inject_virtual_file(self, filename: str, category: str, raw_bytes: bytes) -> str:
         now = datetime.now().isoformat()
-        filepath = f"virtual/{category}/{filename}"
+        filepath = f"virtual://{category}/{filename}"
         file_id = generate_file_id(filepath)
         file_hash = hashlib.sha256(raw_bytes).hexdigest()
         file_type = FILE_TYPE_MAP.get(category, "csv")
