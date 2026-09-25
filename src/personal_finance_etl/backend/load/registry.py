@@ -382,3 +382,59 @@ def get_contract_by_table(physical_table: str) -> DataContract | None:
         if contract.physical_table.lower() == physical_table.lower():
             return contract
     return None
+
+
+def validate_registry() -> None:
+    seen_ids: set[str] = set()
+    silver_count = 0
+    gold_count = 0
+
+    for contract in DATA_CONTRACT_REGISTRY:
+        if not contract.contract_id:
+            raise ValueError("Contract ID cannot be empty.")
+        if contract.contract_id in seen_ids:
+            raise ValueError(f"Duplicate contract_id found: {contract.contract_id}")
+        seen_ids.add(contract.contract_id)
+
+        if contract.layer not in ("silver", "gold"):
+            raise ValueError(
+                f"Invalid layer '{contract.layer}' for contract {contract.contract_id}"
+            )
+
+        if not contract.physical_table:
+            raise ValueError(f"Empty physical_table for contract {contract.contract_id}")
+
+        if not contract.grain:
+            raise ValueError(f"Empty grain for contract {contract.contract_id}")
+
+        if not contract.producer:
+            raise ValueError(f"Empty producer for contract {contract.contract_id}")
+
+        if contract.layer == "silver":
+            silver_count += 1
+        elif contract.layer == "gold":
+            gold_count += 1
+
+    if silver_count != 20:
+        raise ValueError(f"Expected 20 Silver contracts, found {silver_count}")
+
+    if gold_count != 17:
+        raise ValueError(f"Expected 17 Gold contracts, found {gold_count}")
+
+    bronze_tables: set[str] = set()
+    for contract in BRONZE_CONTRACT_REGISTRY:
+        if not contract.extraction_attribute:
+            raise ValueError("Bronze extraction_attribute cannot be empty.")
+        if not contract.sync_category:
+            raise ValueError(f"Bronze sync_category empty for {contract.extraction_attribute}")
+        if not contract.physical_table:
+            raise ValueError(f"Bronze physical_table empty for {contract.extraction_attribute}")
+        if not contract.physical_table.startswith("bronze."):
+            raise ValueError(f"Bronze table must start with 'bronze.': {contract.physical_table}")
+
+        if contract.physical_table in bronze_tables:
+            raise ValueError(f"Duplicate Bronze table mapping: {contract.physical_table}")
+        bronze_tables.add(contract.physical_table)
+
+    if len(BRONZE_CONTRACT_REGISTRY) != 15:
+        raise ValueError(f"Expected 15 Bronze contracts, found {len(BRONZE_CONTRACT_REGISTRY)}")
