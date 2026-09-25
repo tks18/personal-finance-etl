@@ -181,6 +181,7 @@ class InvestmentAnalyticsBuilder:
                 "INSTRUMENT_NAME",
                 "INSTRUMENT_CLASS",
                 "INSTRUMENT_TYPE",
+                "INSTRUMENT_SUBTYPE",
                 "SECTOR",
                 "ISIN_Market_Value",
                 "ISIN_Book_Value",
