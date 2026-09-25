@@ -2,6 +2,37 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [6.4.0](https://github.com/tks18/personal-finance-etl/compare/6.3.0...6.4.0) (2026-09-25)
+
+
+### Bug Fixes 🛠
+
+* **backend/load:** registry: benchmark data was missing in the bronze contractt ([3056667](https://github.com/tks18/personal-finance-etl/commit/3056667e82706f9c3dd03ec26843c88e39729b18))
+* **backend/pipeline:** remove dead rules meta table from the code, now control plane handles that ([0f43982](https://github.com/tks18/personal-finance-etl/commit/0f43982c7aec866b95d79974090dbe9eed3aced2))
+
+
+### Features 🔥
+
+* **backend/control_plane:** artifact_repo: this is truly category resilient, update_identity method ([9ff7e6b](https://github.com/tks18/personal-finance-etl/commit/9ff7e6b8dea33c896ca01d81aba1d05a0d1ac6ab))
+* **backend/control_plane:** file_sync: now the migrate identities are real ([c085c16](https://github.com/tks18/personal-finance-etl/commit/c085c164fe2d5bd74b4412d8ea65e049151bfe22))
+* **backend/load/schema:** add schema for new data contract meta table ([fa062be](https://github.com/tks18/personal-finance-etl/commit/fa062bea6e86a571130da1a507704b3b05139025))
+* **backend/load:** backup manager: this is truly enterprise grade ([2461468](https://github.com/tks18/personal-finance-etl/commit/2461468126e528e1358748fbf3ca9c8351e8a1a7))
+* **backend/load:** bronze: implement migrate identity method ([9ad658a](https://github.com/tks18/personal-finance-etl/commit/9ad658a814d3f02f554dc564992e0b132417cbb1))
+* **backend/load:** metadata: heal duck_db method is truly now heals duckdb ([feca1a0](https://github.com/tks18/personal-finance-etl/commit/feca1a09ef4e3fbaa36cc4cfbfa6f0754c07db20))
+* **backend/load:** metadata: introduce new meta table for explicit data contracts ([ef93b03](https://github.com/tks18/personal-finance-etl/commit/ef93b0385f29cd8098a2a70604c7ec0d26b4f4bd))
+* **backend/pipeline:** etl_pipeline: now the entire pipeline is disaster recoverable ([cff8fd1](https://github.com/tks18/personal-finance-etl/commit/cff8fd14e67e16e92843a23939c581af7c8ecd97))
+
+
+### Styling 🎨
+
+* lint fixes across files ([576b439](https://github.com/tks18/personal-finance-etl/commit/576b43986101165c65ed259522de308dff7fe417))
+
+
+### Docs 📃
+
+* add production hardening edge cases doc ([41ef20d](https://github.com/tks18/personal-finance-etl/commit/41ef20dd21a8648049598437530e0594d829abe7))
+* mark completed against the production hardening checklist ([9cab094](https://github.com/tks18/personal-finance-etl/commit/9cab094e9bb1db889f4ce4651257e8fbe2fe4179))
+
 ## [6.3.0](https://github.com/tks18/personal-finance-etl/compare/6.2.3...6.3.0) (2026-09-25)
 
 
