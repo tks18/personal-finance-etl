@@ -346,6 +346,15 @@ wheels = [
 ]
 
 [[package]]
+name = "filelock"
+version = "4.0.3"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/4f/b8/9ba8f569df649beb7058db5eb392a5f779bdbc3b82cf3942f0be439fb99e/filelock-4.0.3.tar.gz", hash = "sha256:87296d60478e14204fd9406e79831400fef76693bae2895deec236c98e87a8aa", size = 244309, upload-time = "2026-09-23T23:40:22.569Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7a/6d/db8b86e168fef0cf904737e275bccb683558088ef971e92d3b41ce980699/filelock-4.0.3-py3-none-any.whl", hash = "sha256:30cd166e2aee2c7534ce2c33c6367c4cd051b8368e20e2c4eb0c34f699bacfab", size = 108444, upload-time = "2026-09-23T23:40:20.819Z" },
+]
+
+[[package]]
 name = "idna"
 version = "3.18"
 source = { registry = "https://pypi.org/simple" }
@@ -701,6 +710,7 @@ dependencies = [
     { name = "customtkinter" },
     { name = "duckdb" },
     { name = "fastexcel" },
+    { name = "filelock" },
     { name = "markdown" },
     { name = "numba" },
     { name = "pillow" },
@@ -735,6 +745,7 @@ requires-dist = [
     { name = "customtkinter", specifier = ">=6.0.0" },
     { name = "duckdb", specifier = ">=1.5.5" },
     { name = "fastexcel", specifier = ">=0.20.2" },
+    { name = "filelock", specifier = ">=4.0.3" },
     { name = "markdown", specifier = ">=3.7" },
     { name = "numba", specifier = ">=0.66.0" },
     { name = "pillow", specifier = ">=12.3.0" },
