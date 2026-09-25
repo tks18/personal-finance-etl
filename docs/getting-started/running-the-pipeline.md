@@ -1,619 +1,522 @@
 # Running the Pipeline
 
-This guide covers the application surfaces and operational lifecycle used to run Personal Finance ETL.
-
-The same backend financial engine can be reached through:
-
-- the Rich CLI,
-- the desktop application,
-- automated/headless execution,
-- and scheduled/cron-style workflows.
-
-Power BI is a consumer of the resulting analytical warehouse rather than a pipeline execution surface.
-
----
-
-## Before running
-
-A successful run assumes:
-
-- Python 3.13+ and the package are installed,
-- operational configuration is valid,
-- `FinancialRules` are valid,
-- configured source/reference paths are accessible,
-- and the source contracts are compatible with the current extractors.
-
-If those conditions are not established yet, start with:
-
-- [Installation](installation.md)
-- [Configuration](configuration.md)
-- [Financial Rules](../configuration/financial-rules.md)
-
----
-
-## Application entry points
-
-The package exposes:
+A production run is more than:
 
 ```text
-shan-fin
-shan-fin-gui
+read files
+→ transform
+→ save database
 ```
 
-### CLI
-
-Start the terminal application with:
-
-```bash
-shan-fin
-```
-
-The CLI uses Rich for the interactive terminal experience.
-
-### Desktop
-
-Start the graphical application with:
-
-```bash
-shan-fin-gui
-```
-
-The GUI is a frontend over the same backend engine.
-
-It does not implement a separate financial calculation path.
-
----
-
-## Launcher capabilities
-
-The current application launcher supports operational options around concepts such as:
-
-```text
---config
---rules
---snapshot
---auto
---cron
---docs
-```
-
-These options allow the application to select configuration/rules, create snapshots, execute without the normal interactive path, support scheduled operation, and surface packaged documentation.
-
-Exact CLI behaviour should always be checked against the installed version's help output because command-line interfaces can evolve.
-
-Use:
-
-```bash
-shan-fin --help
-```
-
-as the authoritative runtime reference for available flags in the installed build.
-
----
-
-## Runtime architecture
-
-Interactive execution is separated from heavy pipeline work.
+It is a tracked lifecycle across an authoritative SQLite Control Plane and a DuckDB analytical warehouse.
 
 ```mermaid
 flowchart LR
-    USER["User / Scheduler"] --> FRONT["CLI / Desktop / Headless"]
-    FRONT --> API["PersonalFinanceEngine<br/>Backend Facade"]
-    API --> PROC["Pipeline Child Process"]
-    PROC --> ETL["ETLOrchestrator"]
-    ETL --> RAW["SQLite Raw Store"]
-    ETL --> DUCK["DuckDB Warehouse"]
-    ETL --> ENG["Transform + Analytics Engines"]
-    PROC --> Q["Status Queue"]
-    Q --> MON["Monitor Thread"]
-    MON --> FRONT
-```
-
-This keeps the frontend from owning the analytical lifecycle.
-
----
-
-## Backend facade
-
-`PersonalFinanceEngine` acts as the application-facing boundary.
-
-It handles responsibilities around:
-
-- configuration validation,
-- financial-rules selection,
-- recent configuration/rules state,
-- snapshot operations,
-- pipeline launch,
-- and execution communication.
-
-The frontend therefore asks the backend to run the system rather than directly orchestrating DuckDB, Polars, or financial engines.
-
----
-
-## Child-process execution
-
-Heavy ETL/analytics work runs in a child process.
-
-This is particularly important for the desktop application.
-
-Long-running workloads can include:
-
-- Polars transformations,
-- DuckDB loading,
-- per-instrument investment processing,
-- portfolio aggregation,
-- and Numba Monte Carlo simulation.
-
-Keeping those workloads outside the GUI event loop improves responsiveness and creates a cleaner failure boundary.
-
----
-
-## Pipeline lifecycle
-
-A normal successful run follows this broad lifecycle:
-
-```mermaid
-flowchart TB
-    START["Start Run"] --> CFG["Validate Settings + FinancialRules"]
-    CFG --> OPEN["Open SQLite Raw Store + DuckDB"]
-    OPEN --> LOG["Start Run Telemetry"]
-    LOG --> TX["Begin Local Transactions"]
-    TX --> ING["Discover + Synchronize Sources"]
-    ING --> BR["Persistent Bronze"]
-    BR --> CAN["Canonical Transformation"]
-    CAN --> BENCH["Benchmark Coverage / Delta Fetch"]
-    BENCH --> INV["Investment Quant Engine"]
-    INV --> WEALTH["Wealth Analytics Engine"]
-    WEALTH --> SILVER["Rebuild Silver"]
-    SILVER --> GOLD["Rebuild Gold"]
-    GOLD --> META["Capture Meta"]
+    START["Start Run"] --> DISC["Discover / Sync Sources"]
+    DISC --> BR["Bronze"]
+    BR --> CAN["Canonical Transform"]
+    CAN --> INV["Investment Analytics"]
+    CAN --> WEALTH["Wealth Analytics"]
+    INV --> WEALTH
+    INV --> PUB["Silver / Gold"]
+    WEALTH --> PUB
+    PUB --> META["Lean Meta"]
     META --> COMMIT["Commit"]
-    COMMIT --> OK["Mark Run Successful"]
+    COMMIT --> OK["SUCCESS"]
 ```
 
-For the detailed state transitions, see [Data Lifecycle](../architecture/data-lifecycle.md).
-
 ---
 
-## What happens during ingestion
+## 1. Launch options
 
-The pipeline:
+### CLI
 
-1. discovers configured source artifacts,
-2. compares them with the Raw Store registry,
-3. applies configured change/hash policy,
-4. persists actionable raw bytes,
-5. marks required artifacts `PENDING_BRONZE`,
-6. extracts from persisted bytes,
-7. synchronizes Bronze using the appropriate source strategy,
-8. and marks successfully synchronized artifacts `SYNCED`.
-
-Downstream transformation then operates from complete persistent Bronze state.
-
----
-
-## What happens during analytics
-
-After canonical transformation, the run can execute:
-
-### Investment analytics
-
-- asset-specific normalization,
-- FIFO tax-lot reconstruction,
-- broker reconciliation,
-- benchmark shadow state,
-- return/tax calculations,
-- and hierarchical portfolio aggregation.
-
-### Wealth analytics
-
-- unified household ledger,
-- asset-month balances,
-- book/market/after-tax wealth,
-- cash-flow reconciliation,
-- budgets,
-- tax forecasts,
-- portfolio-management analytics,
-- and FIRE.
-
-The resulting state is published through Silver and Gold.
-
----
-
-## Successful completion
-
-A successful run ends only after the local persistence work completes.
-
-Conceptually:
-
-```text
-Build analytical state
-        ↓
-Commit DuckDB
-        ↓
-Commit Raw Store
-        ↓
-Mark run successful
+```bash
+shan-fin
 ```
 
-The transaction coordination is application-managed rather than distributed two-phase commit.
+### Desktop
 
-See [Reliability & Recovery](../architecture/reliability-and-recovery.md).
-
----
-
-## Failure behaviour
-
-If the pipeline raises an exception during the coordinated transaction scope, the intended lifecycle is:
-
-```text
-Exception
-   ↓
-Rollback DuckDB
-   ↓
-Rollback SQLite Raw transaction
-   ↓
-Record failed run telemetry
+```bash
+shan-fin-gui
 ```
 
-The existence of a failed run does not imply that all persisted raw evidence has been lost.
+The application also supports backend/headless execution paths used by automation.
 
-The Raw Store remains the upstream recovery boundary.
+The financial engine remains shared across surfaces.
 
 ---
 
-## CLI workflow
+## 2. Run lifecycle
 
-A typical interactive CLI workflow is:
+A run is created in the Control Plane before the main analytical transaction.
 
-```text
-Launch
-  ↓
-Select / resolve configuration
-  ↓
-Select / resolve FinancialRules
-  ↓
-Run
-  ↓
-Observe progress
-  ↓
-Review completion / failure
-  ↓
-Consume DuckDB / Power BI outputs
+```python
+run_id = cp.runs.start_run(
+    cfg_json=self.cfg.model_dump_json(),
+    rules_json=self.rules.model_dump_json() if self.rules else None,
+)
 ```
 
-The exact menus and prompts are application-version details.
-
-This guide focuses on the stable operational model rather than duplicating every UI label.
-
----
-
-## Desktop workflow
-
-The desktop application provides a graphical surface over the backend.
-
-The important architectural point is that the UI does not become the pipeline.
-
-Conceptually:
+The lifecycle is:
 
 ```text
-Desktop action
-     ↓
-Backend request
-     ↓
-Child-process pipeline
-     ↓
-Status messages
-     ↓
-Desktop progress / result
+STARTED
+→ RUNNING
+→ COMMITTING
+→ SUCCESS
 ```
 
-This separation allows the same financial engine to support both interactive and unattended execution.
-
----
-
-## Automated / headless execution
-
-The launcher supports non-interactive execution paths for automation and scheduling.
-
-This is useful when I want the same configured pipeline to run without manually navigating the interactive UI.
-
-A headless run still uses the same backend analytical lifecycle.
-
-Automation does not imply a simplified calculation path.
-
----
-
-## Scheduled / cron-style operation
-
-Scheduled operation is useful when the source environment and configuration are stable enough for unattended execution.
-
-Before scheduling, I recommend verifying:
-
-- source paths are deterministic,
-- configuration/rules paths are deterministic,
-- no interactive source selection is required,
-- local permissions are correct,
-- and failure telemetry is being reviewed.
-
-Automation should come after a reliable manual run, not before it.
-
----
-
-## Snapshots
-
-The application supports DuckDB snapshot workflows.
-
-A snapshot protects a point-in-time analytical database state.
-
-That is different from the Raw Store.
+or:
 
 ```text
-Raw Store
-→ protects source evidence / supports reconstruction
-
-DuckDB snapshot
-→ protects a point-in-time analytical warehouse
+RUNNING / COMMITTING
+→ FAILED
 ```
 
-Both can be useful.
-
-Neither replaces a proper local backup strategy.
+The run record carries configuration provenance and execution history.
 
 ---
 
-## Documentation access
+## 3. Source discovery
 
-The package includes documentation access through the application surface.
+The run discovers the configured source environment.
 
-The long-term direction is for the Markdown under `docs/` to remain the single maintained technical documentation source across:
+Some inputs come from statement-folder discovery:
 
-- GitHub,
-- packaged distribution,
-- CLI,
-- desktop,
-- and the project Wiki.
-
-This prevents application help text and repository documentation from becoming separate universes.
-
----
-
-## Consuming the output
-
-### Power BI
-
-Power BI consumes the published analytical warehouse.
-
-Gold is the primary decision-support layer, with Silver available where canonical detail is appropriate.
-
-### DuckDB
-
-The warehouse can also be queried directly for analytical exploration.
-
-### CLI / Desktop
-
-Application surfaces can expose execution state and selected analytical/application functions.
-
-The important boundary is:
-
-> **Pipeline execution creates analytical state; consumption reads that state.**
-
----
-
-## Run telemetry
-
-Meta captures operational context such as:
-
-- run status,
-- file registry state,
-- output row counts,
-- settings,
-- and financial rules.
-
-This helps answer:
-
-```text
-What ran?
-What sources participated?
-What was produced?
-Under which settings?
-Under which financial rules?
+```python
+discovered_files = categorize_statement_files(
+    self.cfg.STATEMENTS_FOLDER,
+    strict=True,
+)
 ```
 
-The current Meta layer is useful but is not yet a complete immutable historical lineage system.
+Others are explicit configured sources:
+
+```python
+discovered_files["opening_balances"] = [
+    self.cfg.OPENING_BALANCE_CSV_PATH
+]
+```
+
+Discovery does not mean every artifact is reparsed.
 
 ---
 
-## Re-running the pipeline
+## 4. Change-aware synchronization
 
-A re-run does not blindly append another copy of every source.
+The Control Plane compares discovered state with its registry:
 
-The ingestion lifecycle compares current sources with Raw state and synchronizes actionable changes.
+```python
+new_files, changed_files, _ = cp.file_sync.sync_with_disk(
+    discovered_files,
+    self.cfg.FILE_HASH_POLICY,
+    full_replace_categories,
+)
+```
 
-Then downstream canonical/analytical state is rebuilt from complete Bronze state.
-
-That means a run can be triggered for reasons including:
-
-- new source artifacts,
-- changed source artifacts,
-- changed mappings/reference data,
-- changed FinancialRules,
-- changed analytical code,
-- or intentional reconstruction.
-
----
-
-## What configuration changes can do
-
-Because Silver and Gold are rebuilt, changing rules can restate historical analytical outputs.
-
-Examples include changing:
-
-- income classification,
-- expense semantics,
-- asset classifications,
-- tax parameters,
-- target allocations,
-- FIRE assumptions,
-- or macro/planning assumptions.
-
-This is expected.
-
-The analytical warehouse represents current methodology applied to current upstream evidence.
-
----
-
-## Operational checks after a run
-
-After a successful run, useful checks include:
-
-### Run status
-
-Confirm the run is marked successful.
-
-### Source synchronization
-
-Unexpected pending artifacts can indicate incomplete Bronze synchronization.
-
-### Row counts
-
-Large unexpected changes can indicate source, mapping, or transformation issues.
-
-### Cash-flow reconciliation
-
-Review unreconciled cash movement where relevant.
-
-### Investment reconciliation
-
-Review instrument/broker mismatches or unexpected position adjustments.
-
-### BI sanity
-
-Validate that major household totals and investment positions align with expected current state.
-
-A successful transaction commit is necessary, but financial plausibility still matters.
-
----
-
-## Troubleshooting failed runs
-
-### Failure during source discovery
-
-Check:
-
-- configured paths,
-- permissions,
-- expected files,
-- and source categories.
-
-### Failure during extraction
-
-The source may not match the current extractor contract.
-
-See [Adding a Data Source](../developer/adding-data-sources.md).
-
-### Failure during Bronze synchronization
-
-Check source lineage, table expectations, and whether the dataset follows reference-replacement or historical file-aware semantics.
-
-### Failure during canonical transformation
-
-Check mappings/reference inputs and financial semantic assumptions.
-
-### Failure during investment analytics
-
-Check:
-
-- investment master identity,
-- tax classification,
-- purchase/sale history,
-- market data,
-- benchmark mapping/history,
-- and broker reconciliation inputs.
-
-### Failure during FIRE/planning
-
-Verify that upstream wealth, spending, savings, macro context, and FinancialRules are valid before debugging the simulation itself.
-
----
-
-## When not to automate
-
-Do not schedule the pipeline merely because a cron option exists.
-
-Keep execution manual while:
-
-- source formats are still changing,
-- mappings are unstable,
-- reconciliation differences are unexplained,
-- rules are under active redesign,
-- or failures require interactive interpretation.
-
-Automation is the final layer of a reliable workflow.
-
----
-
-## Recovery after analytical database loss
-
-If the DuckDB warehouse is recreated but the Raw Store survives, the system can return missing raw artifacts to the Bronze synchronization lifecycle and reconstruct downstream state.
-
-Conceptually:
+Only:
 
 ```text
-Raw Store survives
-      ↓
-new DuckDB
-      ↓
-registry gap
-      ↓
+new
++
+changed
+```
+
+artifacts become actionable.
+
+This matters in the current production environment, which contained **1,608 source artifacts as of 24 September 2026** and grows by roughly **two broker snapshot files per day**.
+
+---
+
+## 5. Raw evidence is persisted
+
+Actionable source bytes are stored in the SQLite Control Plane.
+
+The artifact state becomes:
+
+```text
 PENDING_BRONZE
-      ↓
-Bronze
-      ↓
-Silver
-      ↓
-Gold
 ```
 
-See [Reliability & Recovery](../architecture/reliability-and-recovery.md) for the full caveats.
+until successful Bronze synchronization.
+
+This means the run has durable evidence before derived analytical state is complete.
 
 ---
 
-## Recommended operating sequence
+## 6. Bronze synchronization
 
-For a new environment:
+Historical/event sources use file-aware replacement.
+
+Reference/current-state sources can use full replacement.
+
+After successful Bronze persistence:
 
 ```text
-Install
-   ↓
-Configure
-   ↓
-Validate FinancialRules
-   ↓
-Run manually
-   ↓
-Reconcile outputs
-   ↓
-Stabilize source contracts
-   ↓
-Create snapshot / backup practice
-   ↓
-Automate if useful
+PENDING_BRONZE
+→ SYNCED
 ```
 
-That order matters.
-
-I would rather automate a boring reliable pipeline than schedule an exciting mystery. 😄
+The run then reads complete Bronze state.
 
 ---
 
-## Related documentation
+## 7. Canonical transformation
 
-- [Installation](installation.md)
-- [Configuration](configuration.md)
-- [Financial Rules](../configuration/financial-rules.md)
+Complete Bronze enters the Polars transformation DAG.
+
+```text
+source-shaped state
+      ↓
+canonical financial contracts
+```
+
+Downstream engines should no longer need to understand source worksheets/provider labels.
+
+---
+
+## 8. Investment analytics
+
+The investment engine reconstructs:
+
+```text
+FIFO lots
+realized/unrealized state
+holding classification
+broker reconciliation
+shadow benchmark
+tax-aware values
+XIRR
+After-Tax XIRR
+benchmark returns
+drawdown
+hierarchical analytics
+```
+
+Per-ISIN work can run in parallel.
+
+A failed ISIN is fatal to the investment stage rather than silently omitted.
+
+---
+
+## 9. Wealth and planning analytics
+
+The wealth/presentation engine reconstructs:
+
+```text
+household ledger
+book wealth
+market wealth
+after-tax wealth
+cash-flow reconciliation
+budget/tax planning
+portfolio-management view
+FIRE
+```
+
+Independent LazyFrame outputs can be collected together:
+
+```python
+results = pl.collect_all(
+    lazy_frames,
+    engine="streaming",
+)
+```
+
+---
+
+## 10. Silver and Gold publication
+
+The current system publishes:
+
+```text
+20 Silver contracts
+17 Gold marts
+```
+
+Publication is driven by `DATA_CONTRACT_REGISTRY`.
+
+Conceptually:
+
+```python
+contracts = sorted(
+    (c for c in DATA_CONTRACT_REGISTRY if c.layer == "gold"),
+    key=lambda c: c.publication_order,
+)
+```
+
+This keeps physical identity, grain, producer and order explicit.
+
+---
+
+## 11. Meta publication
+
+DuckDB Meta receives current analytical context:
+
+```text
+m_File_Registry
+m_Table_Row_Counts
+m_Financial_Rules
+m_Settings
+```
+
+Historical run state remains in SQLite.
+
+Meta is not the authoritative run log.
+
+---
+
+## 12. Commit
+
+Once analytical publication is ready:
+
+```python
+cp.runs.update_run_status(
+    run_id,
+    "COMMITTING",
+)
+
+self.db_manager.conn.execute("COMMIT")
+cp.commit()
+
+cp.runs.finish_run(
+    run_id,
+    "SUCCESS",
+)
+```
+
+The databases are coordinated by the application.
+
+This is not distributed two-phase commit.
+
+---
+
+## 13. Failure behaviour
+
+On failure, the orchestrator rolls back analytical work:
+
+```python
+self.db_manager.conn.execute("ROLLBACK")
+cp.rollback()
+```
+
+Then persists structured failure state and closes the run as failed.
+
+```text
+failed run
+≠ vanished run
+```
+
+The complete execution log is also attached to run history.
+
+---
+
+## 14. Reading a failed run
+
+Start with the Control Plane.
+
+Useful run context includes:
+
+```text
+run_id
+status
+started / finished time
+application version
+schema version
+Settings snapshot
+FinancialRules snapshot
+failure stage
+failed ISIN where relevant
+error type
+error message
+traceback
+execution log
+```
+
+That should usually tell you whether the problem belongs to:
+
+```text
+source ingestion
+canonical transformation
+investment analytics
+wealth/planning
+persistence
+```
+
+---
+
+## 15. Do not debug from Gold backward by guesswork
+
+Use the lineage of responsibilities:
+
+```text
+Raw Evidence
+→ Bronze
+→ Canonical
+→ Engine
+→ Silver / Gold
+```
+
+For example:
+
+### Wrong source count
+
+Inspect:
+
+```text
+Control Plane registry
+hash/change classification
+Bronze synchronization
+```
+
+### Wrong investment value
+
+Inspect:
+
+```text
+canonical transactions
+market data
+FIFO/reconciliation state
+lot analytics
+```
+
+### Wrong cash flow
+
+Inspect:
+
+```text
+canonical income/expense/transfer
+FinancialRules classifications
+cash pool
+reconciliation
+```
+
+### Wrong FIRE output
+
+Inspect upstream state first:
+
+```text
+wealth
+core spending
+savings
+FinancialRules
+```
+
+before blaming Monte Carlo.
+
+---
+
+## 16. Current production runtime context
+
+On my current production environment:
+
+```text
+1,608 source artifacts
+~2 additional broker snapshots/day
+```
+
+the hardened end-to-end pipeline currently runs at roughly:
+
+```text
+~14–17 seconds
+```
+
+compared with approximately:
+
+```text
+~23 seconds
+```
+
+before the production-hardening cycle.
+
+Those numbers are environment-specific.
+
+They are not universal package benchmarks.
+
+The architectural reasons matter more:
+
+```text
+change-aware synchronization
+persistent Bronze
+Polars lazy/vectorized execution
+parallel per-ISIN work
+removed unused analytical processing
+```
+
+---
+
+## 17. Output validation
+
+After meaningful refactoring or configuration changes, validate:
+
+```text
+Silver row counts
+Gold row counts
+investment positions
+FIFO/tax state
+household net worth
+cash-flow reconciliation
+FIRE outputs
+Power BI consumption
+```
+
+For infrastructure-only refactors, financial-output equivalence is the target.
+
+For intentional methodology changes, document and explain the expected differences.
+
+---
+
+## 18. Documentation browser
+
+The CLI/desktop docs surface uses the same packaged Markdown tree as the repository:
+
+```text
+manifest.json
+→ DocsCatalog
+→ DocsRenderer
+```
+
+So the application can be used to browse operational, architecture, finance and developer guidance without maintaining a second help system.
+
+---
+
+## 19. Snapshots and backup boundary
+
+The current snapshot utility protects the DuckDB analytical database.
+
+Because SQLite now owns authoritative operational history, the stronger future backup model is a coordinated bundle containing:
+
+```text
+DuckDB warehouse
++
+SQLite Control Plane
+```
+
+Do not interpret a DuckDB-only snapshot as a complete backup of all operational provenance.
+
+---
+
+## 20. Successful run checklist
+
+A healthy production run should leave:
+
+- Control Plane run status = `SUCCESS`,
+- actionable artifacts synchronized,
+- complete Bronze state available,
+- Silver rebuilt,
+- Gold rebuilt,
+- Meta refreshed,
+- financial outputs reconciled,
+- execution log persisted.
+
+---
+
+## Next
+
 - [Data Lifecycle](../architecture/data-lifecycle.md)
 - [Reliability & Recovery](../architecture/reliability-and-recovery.md)
-- [Meta Data Contracts](../reference/meta-data-contracts.md)
+- [Financial Model](../finance/financial-model.md)
+- [Developer Guide](../developer/development-guide.md)
 
-[← Getting Started](README.md) · [← Documentation Home](../README.md)
+[← Getting Started Home](README.md) · [← Documentation Home](../README.md)

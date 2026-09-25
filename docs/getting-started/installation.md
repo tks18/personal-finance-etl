@@ -1,100 +1,64 @@
 # Installation
 
-This guide covers installing Personal Finance ETL and preparing the local Python environment required to run it.
+Personal Finance ETL is a local-first Python application.
 
-The package is built for **Python 3.13+** and is designed as a local application. Installing the package gives you the runtime, CLI, desktop entry point, and packaged documentation, but it does **not** make an arbitrary financial environment compatible automatically.
+Installing the package gives you the software.
 
-A usable deployment also requires valid operational configuration, financial rules, mappings/reference inputs, and source contracts that the current extractors understand.
+It does **not** automatically give you a compatible financial environment.
 
-> If you are evaluating the repository rather than running it against compatible financial sources, the [System Architecture](../architecture/system-architecture.md) and [Project Overview](../about/project.md) are better starting points.
+The current production system still expects source contracts, mappings, reference inputs, Settings, and FinancialRules compatible with the implementation.
 
 ---
 
-## Prerequisites
+## 1. Requirements
 
-### Python
-
-Personal Finance ETL requires:
+The project requires:
 
 ```text
-Python >= 3.13
+Python 3.13+
 ```
 
-Check the active interpreter:
+The runtime is designed for a local workstation and uses embedded databases rather than external database servers.
 
-```bash
-python --version
-```
+Core technology ownership is:
 
-On systems where multiple Python installations coexist, use the Python 3.13+ interpreter explicitly.
-
-### Local filesystem access
-
-The application needs access to the configured locations used for:
-
-- source financial data,
-- statement files,
-- reference/mapping inputs,
-- DuckDB analytical storage,
-- SQLite Raw Document Store storage,
-- and snapshots or related local outputs.
-
-Because the project is local-first, filesystem permissions are part of the runtime environment.
-
-### Compatible financial inputs
-
-The current v6 implementation is purpose-built around my source environment.
-
-Installation alone does not provide universal adapters for arbitrary banks or brokers.
-
-Before expecting a successful pipeline run, review:
-
-- [Configuration](configuration.md)
-- [Financial Rules](../configuration/financial-rules.md)
-- [Adding a Data Source](../developer/adding-data-sources.md)
+| Technology | Responsibility |
+| --- | --- |
+| Python | Application/runtime |
+| SQLite | Authoritative Control Plane and raw evidence |
+| DuckDB | Analytical warehouse |
+| Polars | Transformation/analytical dataframe execution |
+| Pydantic | Settings and financial-policy validation |
+| NumPy / Numba | FIRE simulation |
+| Rich | CLI |
+| CustomTkinter | Desktop application |
+| Power BI | BI consumption |
 
 ---
 
-## Install from PyPI
-
-For a normal package installation:
+## 2. Install from PyPI
 
 ```bash
 pip install personal-finance-etl
 ```
 
-This installs the package and its declared runtime dependencies.
-
-After installation, the application exposes two primary entry points:
-
-```text
-shan-fin
-shan-fin-gui
-```
-
-### CLI
-
-Launch the terminal application:
+Then launch the CLI:
 
 ```bash
 shan-fin
 ```
 
-### Desktop application
-
-Launch the graphical application:
+or desktop application:
 
 ```bash
 shan-fin-gui
 ```
 
-The desktop frontend is an application surface over the same backend engine rather than a separate analytical implementation.
+The package includes the application documentation used by the docs browser.
 
 ---
 
-## Install from source
-
-For development or repository exploration:
+## 3. Install for development
 
 ```bash
 git clone https://github.com/tks18/personal-finance-etl.git
@@ -102,214 +66,267 @@ cd personal-finance-etl
 pip install -e .
 ```
 
-Editable installation keeps the active package linked to the working source tree.
+Use the repository's configured development dependencies/tooling for contribution work.
 
-That is the preferred setup when modifying:
+The project uses strict static-quality tooling including:
 
-- extractors,
-- transformations,
-- analytical engines,
-- schemas,
-- configuration models,
-- application code,
-- or documentation integration.
-
-For development conventions and static-analysis tooling, see [Development Guide](../developer/development-guide.md).
-
----
-
-## Recommended isolated environment
-
-I recommend using a dedicated virtual environment rather than installing into a shared global Python environment.
-
-A standard Python workflow is:
-
-```bash
-python -m venv .venv
+```text
+Ruff
+mypy
+Pyright
 ```
 
-Activate it using the mechanism appropriate to your shell, then install the package:
+Run the exact commands configured by the repository rather than maintaining a parallel local quality workflow.
 
-```bash
-python -m pip install --upgrade pip
-pip install -e .
+---
+
+## 4. What installation creates conceptually
+
+Installation provides the application code.
+
+A working financial environment provides the state it operates on.
+
+```mermaid
+flowchart LR
+    PKG["Installed Package"] --> APP["Personal Finance ETL"]
+    SET["Settings"] --> APP
+    RULE["FinancialRules"] --> APP
+    SRC["Financial Sources"] --> APP
+    REF["Mappings / Reference Inputs"] --> APP
+
+    APP --> CP["SQLite Control Plane"]
+    APP --> WH["DuckDB Warehouse"]
 ```
 
-The exact activation command is shell/platform-specific, so this documentation avoids pretending one command is universal.
+The package alone cannot infer another person's financial semantics.
 
 ---
 
-## What gets installed
+## 5. Runtime databases
 
-The package includes the production Python application and packaged documentation.
+A configured production run uses two embedded databases with different ownership.
 
-At a high level, the runtime includes components for:
+### SQLite Control Plane
 
-- configuration validation,
-- source ingestion,
-- SQLite Raw Store persistence,
-- DuckDB analytical storage,
-- Polars transformations,
-- investment analytics,
-- wealth and cash-flow analytics,
-- FIRE simulation,
-- CLI operation,
-- desktop operation,
-- and documentation access.
+Owns:
 
-The application is not notebook-driven.
-
-It is installed and executed as a Python package with application entry points.
-
----
-
-## Core technology stack
-
-The package uses several technologies for distinct workloads.
-
-| Technology | Runtime role |
-| --- | --- |
-| Python 3.13+ | Application runtime |
-| SQLite | Raw/control persistence |
-| DuckDB | Analytical warehouse |
-| Polars | Transformation and analytical compute |
-| Pydantic | Configuration and financial-policy validation |
-| NumPy / Numba | Numerical simulation |
-| PyXIRR | Irregular cash-flow returns |
-| Rich | CLI |
-| CustomTkinter | Desktop UI |
-| Power BI | External BI consumption |
-
-For the architectural reasoning behind these choices, see [Design Decisions](../architecture/design-decisions.md).
-
----
-
-## Installation is not configuration
-
-A successful package installation only proves that Python can import and launch the application.
-
-It does not prove that the pipeline can process a financial environment.
-
-The runtime still needs operational settings describing locations such as:
-
-- source database folders,
-- statement folders,
-- reference/mapping files,
-- and local persistence targets.
-
-It also needs `FinancialRules` describing financial semantics such as:
-
-- income and expense treatment,
-- asset classifications,
-- investment classifications,
-- tax parameters,
-- budgets,
-- target allocations,
-- and FIRE assumptions.
-
-The next step after installation is therefore [Configuration](configuration.md).
-
----
-
-## Validate the application surface
-
-After installation, confirm that the entry point resolves:
-
-```bash
-shan-fin
+```text
+raw artifacts
+raw payloads
+sync state
+runs
+failures
+Settings snapshots
+FinancialRules snapshots
+execution logs
 ```
 
-or launch the desktop interface:
+### DuckDB
 
-```bash
-shan-fin-gui
+Owns:
+
+```text
+Bronze
+Silver
+Gold
+lean Meta
 ```
 
-A successful launch verifies the application surface.
-
-A successful **pipeline run** requires the configured data environment described in the next guides.
+No external database server is required for the current architecture.
 
 ---
 
-## Local-first implications
+## 6. Source environment
 
-The architecture intentionally avoids requiring a hosted application backend or cloud analytical warehouse.
+My production environment includes source families such as:
 
-That means installation remains relatively self-contained, but I also retain responsibility for:
+```text
+stock broker snapshots
+mutual-fund broker snapshots
+historical transactions
+market/reference files
+masters and mappings
+opening-state inputs
+personal-finance SQLite data
+```
 
-- protecting local financial data,
-- backing up important local files,
-- maintaining source/configuration paths,
-- and managing the local Python environment.
+As of **24 September 2026**, that environment contains **1,608 source artifacts** and grows by roughly **two broker snapshot files per day**.
 
-The [Reliability & Recovery](../architecture/reliability-and-recovery.md) guide explains what the software can reconstruct and what still requires sound local backup practice.
+That is context for the architecture, not a requirement that another deployment contain the same number of files.
 
 ---
 
-## Troubleshooting installation
+## 7. Source compatibility
 
-### `shan-fin` is not found
+A source is not compatible merely because it is:
 
-Confirm that:
-
-1. the package installed successfully,
-2. you are using the environment into which it was installed,
-3. the environment's executable/script directory is on the active shell path.
-
-You can also verify package installation with:
-
-```bash
-python -m pip show personal-finance-etl
+```text
+CSV
+Excel
+SQLite
 ```
 
-### Python version is too old
+Compatibility depends on:
 
-Use Python 3.13 or newer.
+```text
+physical format
+expected columns
+semantic meaning
+mapping/reference rules
+asset behaviour
+tax assumptions
+```
 
-Do not work around the declared version requirement by forcing installation into an older interpreter and assuming runtime compatibility.
+The current implementation is purpose-built around my source environment.
 
-### The application launches but the pipeline fails
-
-That is usually no longer an installation problem.
-
-Move to:
-
-- [Configuration](configuration.md)
-- [Running the Pipeline](running-the-pipeline.md)
-- [Adding a Data Source](../developer/adding-data-sources.md)
-
-depending on the failure.
-
-### A source is unsupported
-
-The current implementation is not a universal parser.
-
-Supporting a materially different source can require an extractor/adapter and canonical transformation work.
+Another user should expect meaningful customization.
 
 See [Adding a Data Source](../developer/adding-data-sources.md).
 
 ---
 
-## Next steps
+## 8. Local-first implications
 
-Recommended order:
+The application is designed so core financial processing remains local.
+
+That gives:
 
 ```text
-Install
-   ↓
-Configure operational settings
-   ↓
-Configure financial rules
-   ↓
-Validate source compatibility
-   ↓
-Run the pipeline
+financial evidence
++
+analytical warehouse
++
+simulation
++
+application surfaces
 ```
 
-Continue with:
+one local execution environment.
+
+This reduces operational infrastructure and keeps sensitive personal-finance data out of cloud dependencies by default.
+
+It does not mean every external reference input is inherently offline; provider/API data can still be acquired and persisted as controlled evidence where configured.
+
+---
+
+## 9. Documentation is packaged too
+
+The docs runtime follows:
+
+```text
+docs/*.md
+→ manifest.json
+→ DocsCatalog
+→ DocsRenderer
+→ CLI / Desktop
+```
+
+So installation includes the same versioned documentation structure used by the repository.
+
+The application does not maintain a separate hard-coded guide list.
+
+---
+
+## 10. Before the first run
+
+You need:
+
+- valid operational Settings,
+- valid FinancialRules,
+- accessible source locations,
+- required mapping/reference files,
+- compatible source schemas,
+- writable database/output locations.
+
+Then continue to:
+
+1. [Configuration](configuration.md)
+2. [Running the Pipeline](running-the-pipeline.md)
+
+---
+
+## 11. What a successful installation does not prove
+
+A successful:
+
+```bash
+pip install personal-finance-etl
+```
+
+proves that the package can be installed.
+
+It does not prove:
+
+```text
+your source contracts match
+your mappings are complete
+your tax jurisdiction matches
+your financial classifications match
+your Power BI model matches
+```
+
+Those are deployment/model concerns.
+
+The project roadmap aims to move more of that variation behind explicit adapters, strategies and configuration while preserving the current production behaviour.
+
+---
+
+## Troubleshooting direction
+
+### Package imports fail
+
+Verify:
+
+```text
+Python version
+virtual environment
+installed package/version
+```
+
+### Application starts but pipeline configuration fails
+
+Inspect:
+
+```text
+Settings
+FinancialRules
+paths
+reference inputs
+```
+
+### Pipeline starts but source ingestion fails
+
+Inspect:
+
+```text
+source compatibility
+artifact path
+hash policy
+extractor expectations
+```
+
+### Pipeline runs but financial output is unexpected
+
+Do not start with the UI.
+
+Trace:
+
+```text
+source evidence
+→ Bronze
+→ canonical state
+→ analytical engine
+→ Gold
+```
+
+and use the Control Plane/run logs for operational context.
+
+---
+
+## Next
 
 - [Configuration](configuration.md)
 - [Running the Pipeline](running-the-pipeline.md)
-- [Financial Rules](../configuration/financial-rules.md)
+- [System Architecture](../architecture/system-architecture.md)
 
-[← Getting Started](README.md) · [← Documentation Home](../README.md)
+[← Getting Started Home](README.md) · [← Documentation Home](../README.md)
