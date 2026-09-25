@@ -11,7 +11,10 @@ from personal_finance_etl.backend.load.control_plane.utils import (
     generate_file_id,
 )
 from personal_finance_etl.backend.load.database import DuckDBManager
-from personal_finance_etl.backend.load.registry import DATA_CONTRACT_REGISTRY
+from personal_finance_etl.backend.load.registry import (
+    BRONZE_CONTRACT_REGISTRY,
+    DATA_CONTRACT_REGISTRY,
+)
 from personal_finance_etl.backend.utils.logger import logger
 
 
@@ -32,17 +35,40 @@ class MetaLayer:
         """Self-heals DuckDB file registry if items in SQLite control plane are missing."""
         duckdb_rows = self.conn.execute("SELECT relative_path FROM meta.m_File_Registry").fetchall()
         duckdb_paths = {str(r[0]) for r in duckdb_rows}
-        raw_all: dict[str, list[str]] = cp.artifacts.get_all_paths_by_category()
+
+        # We only care about checking files that CP thinks are SYNCED
+        synced_registry = cp.artifacts.get_all_registry()
+
+        cat_to_table = {
+            contract.sync_category: contract.physical_table for contract in BRONZE_CONTRACT_REGISTRY
+        }
+
+        # Pre-check which tables actually exist in DuckDB
+        tables_exist: dict[str, bool] = {}
+        for table in cat_to_table.values():
+            try:
+                self.conn.execute(f"SELECT 1 FROM {table} LIMIT 1")
+                tables_exist[table] = True
+            except Exception:
+                tables_exist[table] = False
 
         missing_count = 0
-        for _cat, paths in raw_all.items():
+        raw_all: dict[str, list[str]] = cp.artifacts.get_all_paths_by_category()
+
+        for cat, paths in raw_all.items():
+            table = cat_to_table.get(cat)
+            table_exists = tables_exist.get(table, False) if table else True
+
             for path in paths:
-                if path not in duckdb_paths:
-                    cp.artifacts.db.conn.execute(
-                        "UPDATE cp_file_registry SET sync_status = 'PENDING_BRONZE' WHERE relative_path = ?",
-                        [path],
-                    )
-                    missing_count += 1
+                status = synced_registry.get(path)
+                if status == "SYNCED":
+                    # If it's missing from meta OR the physical bronze table is gone
+                    if path not in duckdb_paths or not table_exists:
+                        cp.artifacts.db.conn.execute(
+                            "UPDATE cp_file_registry SET sync_status = 'PENDING_BRONZE' WHERE relative_path = ?",
+                            [path],
+                        )
+                        missing_count += 1
 
         if missing_count > 0:
             logger.info(
