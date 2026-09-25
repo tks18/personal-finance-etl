@@ -71,7 +71,7 @@ Silver publication uses the registry rather than inferring physical identity fro
 | `silver.d_Currency` | Shared | Currency reference |
 | `silver.d_Investment_Benchmark_Master` | Investments | Benchmark identity/mapping |
 | `silver.d_Investment_Master` | Investments | Instrument identity and analytical/tax classification |
-| `silver.d_Macro_Parameters` | Planning | Macro/reference parameters |
+| `silver.d_Macro_Parameters` | Investments | Macro/reference parameters |
 
 ## Facts
 

@@ -96,7 +96,7 @@ Excel, Power Query, Power BI, Python, and databases often live in the same real 
 
 So several projects explore how those worlds can cooperate rather than compete.
 
-For example, **`xlwings-excel-api`** is a modular Python–Excel–VBA automation framework that centralizes UDFs, Power Query helpers, and reusable transformation utilities across Excel/Power Query/Power BI. Its repository structure includes separate API, helper, and Power Query components rather than treating Excel automation as one monolithic macro.
+For example, **[`xlwings-excel-api`](https://github.com/tks18/xlwings-excel-api)** is a modular Python–Excel–VBA automation framework that centralizes UDFs, Power Query helpers, and reusable transformation utilities across Excel/Power Query/Power BI. Its repository structure includes separate API, helper, and Power Query components rather than treating Excel automation as one monolithic macro.
 
 That kind of work shaped an instinct I still use:
 
@@ -111,7 +111,7 @@ Over time, the projects moved closer to reusable data infrastructure.
 The repositories I consider important in that journey include work around:
 
 ```text
-PyQuery Core / PyQuery Legacy
+PyQuery Core / [PyQuery Legacy](https://github.com/PyQuery-HQ/pyquery-legacy)
 Power BI → SQL workflows
 Excel / Power Query handling
 xlwings-based Excel APIs
