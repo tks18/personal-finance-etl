@@ -48,9 +48,9 @@ class RunRepository:
     def update_run_status(self, run_id: str, status: str) -> None:
         self.db.conn.execute("UPDATE cp_runs SET status = ? WHERE run_id = ?", (status, run_id))
 
-    def save_execution_log(self, run_id: str, log_text: str) -> None:
+    def save_execution_log(self, run_id: str, log_data: bytes) -> None:
         self.db.conn.execute(
-            "UPDATE cp_runs SET execution_log = ? WHERE run_id = ?", (log_text, run_id)
+            "UPDATE cp_runs SET execution_log = ? WHERE run_id = ?", (log_data, run_id)
         )
 
     def finish_run(self, run_id: str, status: str) -> None:

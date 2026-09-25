@@ -4,6 +4,7 @@ import os
 import sys
 import time
 import traceback
+import zlib
 from typing import Any, cast
 
 import polars as pl
@@ -395,11 +396,12 @@ class ETLOrchestrator:
             remove_file_handlers()
             try:
                 if os.path.exists(log_file_path):
-                    with open(log_file_path, encoding="utf-8") as f:
-                        log_text = f.read()
-                    cp.runs.save_execution_log(run_id, log_text)
+                    with open(log_file_path, "rb") as f:
+                        log_bytes = f.read()
+                    compressed_log = zlib.compress(log_bytes, level=9)
+                    cp.runs.save_execution_log(run_id, compressed_log)
             except Exception as log_err:
-                print(f"Failed to save execution log to Raw Store: {log_err}")
+                logger.error(f"Failed to save compressed execution log to Raw Store: {log_err}")
 
             self.db_manager.close()
             cp.close()
