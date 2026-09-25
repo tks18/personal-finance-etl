@@ -340,7 +340,6 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_ISIN (
     BM_XIRR DOUBLE,
     Active_Return DOUBLE,
     Is_Lagging_Benchmark BIGINT,
-    -- Risk
     Outperforming_Lot_Ratio DOUBLE,
     Max_Drawdown DOUBLE,
     -- Tax Exposure
@@ -379,7 +378,7 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_Subtype (
     After_Tax_XIRR DOUBLE,
     BM_XIRR DOUBLE,
     Active_Return DOUBLE,
-    -- Risk-Adjusted (Portfolio)
+    -- Drawdown Tracking
     Max_Drawdown DOUBLE,
     -- Tax Exposure
     Unrealized_Gain DOUBLE,
@@ -406,7 +405,7 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_Class (
     After_Tax_XIRR DOUBLE,
     BM_XIRR DOUBLE,
     Active_Return DOUBLE,
-    -- Risk-Adjusted (Portfolio)
+    -- Drawdown Tracking
     Max_Drawdown DOUBLE,
     -- Tax Exposure
     Unrealized_Gain DOUBLE,
@@ -433,7 +432,7 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_Instrument_Type (
     After_Tax_XIRR DOUBLE,
     BM_XIRR DOUBLE,
     Active_Return DOUBLE,
-    -- Risk-Adjusted (Portfolio)
+    -- Drawdown Tracking
     Max_Drawdown DOUBLE,
     -- Tax Exposure
     Unrealized_Gain DOUBLE,
@@ -460,7 +459,7 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_Sector (
     After_Tax_XIRR DOUBLE,
     BM_XIRR DOUBLE,
     Active_Return DOUBLE,
-    -- Risk-Adjusted (Portfolio)
+    -- Drawdown Tracking
     Max_Drawdown DOUBLE,
     -- Tax Exposure
     Unrealized_Gain DOUBLE,
@@ -487,7 +486,7 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_Industry (
     After_Tax_XIRR DOUBLE,
     BM_XIRR DOUBLE,
     Active_Return DOUBLE,
-    -- Risk-Adjusted (Portfolio)
+    -- Drawdown Tracking
     Max_Drawdown DOUBLE,
     -- Tax Exposure
     Unrealized_Gain DOUBLE,
@@ -513,7 +512,7 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_Portfolio (
     After_Tax_XIRR DOUBLE,
     BM_XIRR DOUBLE,
     Active_Return DOUBLE,
-    -- Risk-Adjusted (Portfolio)
+    -- Drawdown Tracking
     Max_Drawdown DOUBLE,
     -- Tax Exposure
     Unrealized_Gain DOUBLE,

@@ -83,7 +83,7 @@ class SnapshotRecord(BaseModel):
     Lot_Alpha: float
     Is_Lagging_Benchmark: bool
 
-    # Per-ISIN risk
+    # Drawdown
     Max_Drawdown: float = 0.0
 
     Tax_Rate: float
