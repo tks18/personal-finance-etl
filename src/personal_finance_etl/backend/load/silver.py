@@ -68,17 +68,21 @@ class SilverLayer:
 
         logger.info("Loading transformed datasets into Silver layer...")
 
-        table_mappings = {
-            c.contract_id: c.physical_table for c in DATA_CONTRACT_REGISTRY if c.layer == "silver"
-        }
+        contracts = sorted(
+            (c for c in DATA_CONTRACT_REGISTRY if c.layer == "silver"),
+            key=lambda c: c.publication_order,
+        )
         # Phase 1: Cleanly wipe the entire schema and its foreign keys
         self.db_manager.conn.execute("DROP SCHEMA IF EXISTS silver CASCADE")
         self.db_manager.conn.execute("CREATE SCHEMA silver")
         self.db_manager.conn.execute(SILVER_DDL)
 
         # Phase 2: Insert all data in forward topological order (Dimensions -> Facts)
-        for df_key, table_name in table_mappings.items():
-            if df_key in dfs:
-                self._write(dfs[df_key], table_name)
+        for contract in contracts:
+          if contract.contract_id in dfs:
+              self._write(
+                  dfs[contract.contract_id],
+                  contract.physical_table,
+              )
 
         logger.info("Silver layer load complete.")
