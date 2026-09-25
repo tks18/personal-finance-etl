@@ -41,10 +41,7 @@ class SnapshotGenerator:
         bm_xirr_val = inst_metrics.get("bm_xirr", 0.0)
         inst_active_return = inst_metrics.get("active_return", 0.0)
         is_lagging = inst_metrics.get("is_lagging", False)
-        # Risk-adjusted ratios
         inst_max_dd = inst_metrics.get("max_drawdown", 0.0)
-
-        # Time ranges logic removed
 
         outperform_cnt = 0
         lot_count = len(fifo.active_lots)

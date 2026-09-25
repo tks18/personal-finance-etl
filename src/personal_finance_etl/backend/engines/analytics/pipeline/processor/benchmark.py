@@ -6,6 +6,8 @@ from personal_finance_etl.backend.utils.helpers import to_date_obj
 
 
 class BenchmarkPriceProvider:
+    bm_price_map: dict[date, float]
+
     def __init__(
         self,
         bench_id: str | None,
@@ -16,7 +18,7 @@ class BenchmarkPriceProvider:
             self.bm_price_map = prebuilt_map
             return
 
-        self.bm_price_map: dict[date, float] = {}
+        self.bm_price_map = {}
         if df_b is not None and bench_id and str(bench_id).strip():
             try:
                 b_subset = df_b.filter(pl.col("ID").cast(pl.String) == str(bench_id).strip()).sort(

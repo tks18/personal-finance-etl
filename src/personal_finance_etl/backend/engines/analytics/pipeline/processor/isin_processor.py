@@ -9,9 +9,6 @@ from personal_finance_etl.backend.engines.analytics.core.math import calculate_c
 from personal_finance_etl.backend.engines.analytics.pipeline.processor.benchmark import (
     BenchmarkPriceProvider,
 )
-from personal_finance_etl.backend.engines.analytics.pipeline.processor.risk import (
-    RiskMetricsProvider,
-)
 from personal_finance_etl.backend.engines.analytics.pipeline.processor.snapshot import (
     SnapshotGenerator,
 )
@@ -59,7 +56,6 @@ class IsinProcessor:
         bench_id = master_row.get("BENCHMARK_ID")
 
         bm_provider = BenchmarkPriceProvider(bench_id, None, prebuilt_map=bm_map)
-        risk_provider = RiskMetricsProvider(m_inst, bm_provider, self.fy_table)
         snapshot_generator = SnapshotGenerator(self.fy_table, self.rules, isin, master_row)
 
         fifo = FIFOPortfolio(tax_type, tax_subtype, self.fy_table)
@@ -79,6 +75,8 @@ class IsinProcessor:
         isin_terminals: dict[date, TerminalValueRecord] = {}
         isin_realized: list[dict[str, float | date]] = []
         isin_snapshots: list[SnapshotRecord] = []
+        running_peak_price = 0.0
+        running_max_dd = 0.0
 
         for m_row in m_inst:
             m_date = to_date_obj(m_row["Date"])
@@ -211,9 +209,15 @@ class IsinProcessor:
                 if avg_bm_cost > 0:
                     inst_bm_cagr = calculate_cagr(avg_bm_cost, m_bm_price, inst_age)
 
-            res = risk_provider.calculate_risk(first_p_date, m_date)
-            # res returns a 14-tuple. Index 8 is inst_max_dd.
-            inst_max_dd = res[8]
+            if m_price > running_peak_price:
+                running_peak_price = m_price
+
+            if running_peak_price > 0:
+                current_dd = (m_price - running_peak_price) / running_peak_price
+                if current_dd < running_max_dd:
+                    running_max_dd = current_dd
+
+            inst_max_dd = running_max_dd
 
             inst_metrics = {
                 "cagr": inst_cagr,

@@ -9,7 +9,7 @@ from personal_finance_etl.backend.utils.helpers import to_date_obj
 
 
 class AdvancedAnalyticsCalculator:
-    """Calculates Sharpe, Sortino, Calmar, MDD ratios for portfolio and its benchmark."""
+    """Calculates Max Drawdown (MDD) tracking and portfolio baseline returns."""
 
     def __init__(self, fy_table: FYMacroParametersTable, rules: FinancialRules | None) -> None:
         self.fy_table = fy_table

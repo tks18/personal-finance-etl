@@ -21,7 +21,7 @@ PORTFOLIO_COL_RENAMES = {
 
 class GroupProcessor:
     """
-    Computes XIRR, Sharpe, and other metrics at arbitrary group levels (Class, Subtype).
+    Computes XIRR, MDD, and other core metrics at arbitrary group levels (Class, Subtype).
     """
 
     def __init__(self, analytics_calc: AdvancedAnalyticsCalculator):
