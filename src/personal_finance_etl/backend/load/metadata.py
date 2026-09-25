@@ -10,6 +10,7 @@ from personal_finance_etl.backend.load.control_plane.utils import (
     compute_file_hash,
     generate_file_id,
 )
+from personal_finance_etl.backend.load.registry import DATA_CONTRACT_REGISTRY
 from personal_finance_etl.backend.load.database import DuckDBManager
 from personal_finance_etl.backend.utils.logger import logger
 
@@ -114,20 +115,32 @@ class MetaLayer:
         self.conn.execute("DELETE FROM meta.m_Financial_Rules")
         self.conn.execute("DELETE FROM meta.m_Settings")
 
-        for table_name, df in dfs.items():
+        contract_by_id = {c.contract_id: c for c in DATA_CONTRACT_REGISTRY}
+
+        for contract_id, df in dfs.items():
+            contract = contract_by_id.get(contract_id)
+
+            if contract is None:
+                continue
+
             try:
                 count = df.height
             except Exception:
                 count = 0
 
-            schema = "gold" if "p_tf_" in table_name else "silver"
+            physical_table = contract.physical_table.split(".", maxsplit=1)[-1]
+
             self.conn.execute(
                 """
-                INSERT INTO meta.m_Table_Row_Counts 
-                (schema_name, table_name, row_count, generated_at) 
+                INSERT INTO meta.m_Table_Row_Counts
+                (schema_name, table_name, row_count, generated_at)
                 VALUES (?, ?, ?, CURRENT_TIMESTAMP)
                 """,
-                [schema, table_name, count],
+                [
+                    contract.layer,
+                    physical_table,
+                    count,
+                ],
             )
 
         if self.rules is not None:
