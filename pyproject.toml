@@ -1,14 +1,44 @@
 [project]
 name = "personal-finance-etl"
 version = "6.2.2"
-description = "An institutional-grade, hyper-optimized Quantitative Master Engine built to absolutely dominate personal net worth"
+description = "Local-first financial data platform for evidence-aware ETL, investment analytics, tax-aware wealth modelling, FIRE simulation, and BI."
 authors = [
   { name="Shan", email="tksudharshan@gmail.com" },
 ]
-license = "GPL-3.0-only"
+license = "GPL-3.0-or-later"
 license-files = ["LICENSE"]
 readme = "README.md"
+
 requires-python = ">=3.13"
+
+keywords = [
+    "personal-finance",
+    "data-engineering",
+    "etl",
+    "analytics-engineering",
+    "financial-analytics",
+    "investment-analysis",
+    "portfolio-analysis",
+    "duckdb",
+    "polars",
+    "sqlite",
+    "power-bi",
+    "fire",
+    "monte-carlo",
+]
+
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
+    "Intended Audience :: Financial and Insurance Industry",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.13",
+    "Typing :: Typed",
+]
+
 dependencies = [
     "customtkinter>=6.0.0",
     "duckdb>=1.5.5",
@@ -32,7 +62,7 @@ dependencies = [
 ]
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.27.0"]
 build-backend = "hatchling.build"
 
 [project.scripts]
@@ -89,10 +119,11 @@ ignore = ["src/personal_finance_etl/frontend/desktop"]
 
 [project.urls]
 Homepage = "https://github.com/tks18/personal-finance-etl"
-Documentation = "https://github.com/tks18/personal-finance-etl#readme"
+Documentation = "https://github.com/tks18/personal-finance-etl/blob/master/docs/README.md"
 Repository = "https://github.com/tks18/personal-finance-etl"
 Issues = "https://github.com/tks18/personal-finance-etl/issues"
 Changelog = "https://github.com/tks18/personal-finance-etl/blob/master/CHANGELOG.md"
+Wiki = "https://github.com/tks18/personal-finance-etl/wiki"
 
 [tool.pyrefly]
 search-path = ["."]

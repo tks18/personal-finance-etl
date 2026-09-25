@@ -1,6 +1,6 @@
 {
   "name": "personal-finance-etl",
-  "description": "An institutional-grade, hyper-optimized Quantitative Master Engine built to absolutely dominate personal net worth",
+  "description": "Local-first financial data platform for evidence-aware ETL, investment analytics, tax-aware wealth modelling, FIRE simulation, and BI.",
   "version": "6.2.2",
   "repository": "https://github.com/tks18/personal-finance-etl",
   "author": "tks18 <tksudharshan@gmail.com>",
