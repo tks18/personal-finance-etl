@@ -1,6 +1,7 @@
 import base64
 import json
 import os
+import posixpath
 
 import markdown  # type: ignore[import-untyped]
 
@@ -28,9 +29,14 @@ class DocsRenderer:
         docs_dir = self.catalog.docs_dir
 
         for entry in self.catalog.get_all_docs():
-            full_path = os.path.join(docs_dir, entry.path)
-            # Normalize path for matching in browser (forward slashes)
-            norm_path = entry.path.replace("\\", "/")
+            full_path = os.path.normpath(os.path.join(docs_dir, entry.path))
+            # Canonical document identity is repository/package-root relative.
+            # Manifest entries are relative to docs/, so prefix with docs/ first:
+            #   ../README.md -> README.md
+            #   README.md    -> docs/README.md
+            #   finance/x.md -> docs/finance/x.md
+            manifest_path = entry.path.replace("\\", "/")
+            norm_path = posixpath.normpath(posixpath.join("docs", manifest_path))
 
             if os.path.exists(full_path):
                 with open(full_path, encoding="utf-8") as f:
@@ -359,7 +365,12 @@ class DocsRenderer:
             </div>
 
             <script>
-                mermaid.initialize({{ startOnLoad: false, theme: 'dark' }});
+                const mermaidAvailable = typeof window.mermaid !== 'undefined';
+                if (mermaidAvailable) {{
+                    mermaid.initialize({{ startOnLoad: false, theme: 'dark' }});
+                }} else {{
+                    console.warn('Mermaid unavailable; diagram source will remain visible.');
+                }}
 
                 {js_docs_data}
                 {js_path_map}
@@ -391,14 +402,16 @@ class DocsRenderer:
                     container.innerHTML = doc.html;
                     document.getElementById('main-content').scrollTop = 0;
 
-                    const mermaidCodes = document.querySelectorAll('code.language-mermaid');
-                    mermaidCodes.forEach(codeBlock => {{
-                        const pre = codeBlock.parentElement;
-                        const div = document.createElement('div');
-                        div.className = 'mermaid';
-                        div.textContent = codeBlock.textContent;
-                        pre.replaceWith(div);
-                    }});
+                    if (mermaidAvailable) {{
+                        const mermaidCodes = document.querySelectorAll('code.language-mermaid');
+                        mermaidCodes.forEach(codeBlock => {{
+                            const pre = codeBlock.parentElement;
+                            const div = document.createElement('div');
+                            div.className = 'mermaid';
+                            div.textContent = codeBlock.textContent;
+                            pre.replaceWith(div);
+                        }});
+                    }}
                     
                     // Fix links
                     container.querySelectorAll('a').forEach(a => {{
@@ -421,7 +434,9 @@ class DocsRenderer:
                         }}
                     }});
                     
-                    mermaid.run();
+                    if (mermaidAvailable) {{
+                        mermaid.run().catch(err => console.error('Mermaid render failed:', err));
+                    }}
                     buildTableOfContents();
                 }}
 
