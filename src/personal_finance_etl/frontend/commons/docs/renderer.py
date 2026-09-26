@@ -2,6 +2,7 @@ import base64
 import json
 import os
 import posixpath
+from importlib.resources import files
 
 import markdown  # type: ignore[import-untyped]
 
@@ -21,12 +22,30 @@ class DocsRenderer:
                 return text.replace(src_pattern, f'src="data:image/png;base64,{b64_logo}"')
         return text
 
+    @staticmethod
+    def _load_mermaid_js() -> str:
+        """Load the bundled Mermaid runtime."""
+
+        try:
+            asset = (
+                files("personal_finance_etl.frontend.commons.docs")
+                .joinpath("assets")
+                .joinpath("mermaid")
+                .joinpath("mermaid.min.js")
+            )
+            return asset.read_text(encoding="utf-8")
+
+        except (FileNotFoundError, OSError):
+            print("Bundled Mermaid runtime could not be loaded.")
+            return ""
+
     def build_html_app(self) -> str:
         """Read all markdown docs and compile them into a single HTML web app string."""
         docs_to_render: dict[str, dict[str, str]] = {}
         path_to_title: dict[str, str] = {}
 
         docs_dir = self.catalog.docs_dir
+        mermaid_js = self._load_mermaid_js()
 
         for entry in self.catalog.get_all_docs():
             full_path = os.path.normpath(os.path.join(docs_dir, entry.path))
@@ -112,7 +131,9 @@ class DocsRenderer:
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>Guides & About</title>
-            <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+            <script>
+              {mermaid_js}
+            </script>
             <style>
                 :root {{
                     --bg-main: #0D1117;
@@ -366,10 +387,18 @@ class DocsRenderer:
 
             <script>
                 const mermaidAvailable = typeof window.mermaid !== 'undefined';
+
                 if (mermaidAvailable) {{
-                    mermaid.initialize({{ startOnLoad: false, theme: 'dark' }});
+                  mermaid.initialize({{
+                      startOnLoad: false,
+                      theme: 'dark',
+                      securityLevel: 'strict'
+                  }});
                 }} else {{
-                    console.warn('Mermaid unavailable; diagram source will remain visible.');
+                  console.warn(
+                      'Bundled Mermaid runtime unavailable; '
+                      + 'diagram source will remain visible.'
+                  );
                 }}
 
                 {js_docs_data}
