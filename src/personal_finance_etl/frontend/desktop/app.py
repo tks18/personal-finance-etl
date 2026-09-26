@@ -215,6 +215,18 @@ class UnifiedETLTab(BaseEngineTab):
         )
         self.snapshot_btn.grid(row=1, column=0, sticky="ew", pady=(8, 0))
 
+        self.restore_btn = ctk.CTkButton(
+            btn_frame,
+            text="♻️ Restore DB",
+            height=32,
+            font=ctk.CTkFont(family="Segoe UI", size=13, weight="bold"),
+            fg_color="#1F2937",
+            hover_color="#374151",
+            corner_radius=6,
+            command=self._restore_db,
+        )
+        self.restore_btn.grid(row=2, column=0, sticky="ew", pady=(8, 0))
+
         # ── 4. Helper Info Box (Row 3) ──────────────────────────────
         info_block = ctk.CTkFrame(hdr, fg_color="transparent")
         info_block.grid(row=3, column=0, columnspan=2, padx=(16, 16), pady=(4, 16), sticky="ew")
@@ -324,6 +336,67 @@ class UnifiedETLTab(BaseEngineTab):
                     level=LogLevel.ERROR,
                 ),
             )
+
+    def _restore_db(self) -> None:
+        zip_path = filedialog.askopenfilename(
+            title="Select Snapshot ZIP",
+            filetypes=[("Zip files", "*.zip")],
+        )
+        if not zip_path:
+            return
+
+        # Disable buttons
+        self.run_btn.configure(state="disabled")
+        self.snapshot_btn.configure(state="disabled")
+        self.restore_btn.configure(state="disabled", text="Restoring...")
+
+        # Run safely
+        try:
+            success = self.engine.restore_database(self.config_path_var.get(), zip_path)
+            if success:
+                self.handle_status(
+                    self.run_btn,
+                    EngineStatus(
+                        msg="Database snapshot restored successfully.",
+                        data=None,
+                        progress=1.0,
+                        level=LogLevel.SUCCESS,
+                    ),
+                )
+            else:
+                self.handle_status(
+                    self.run_btn,
+                    EngineStatus(
+                        msg="Failed to restore snapshot.",
+                        data=None,
+                        progress=0.0,
+                        level=LogLevel.ERROR,
+                    ),
+                )
+        except PermissionError as pe:
+            self.handle_status(
+                self.run_btn,
+                EngineStatus(
+                    msg=str(pe),
+                    data=None,
+                    progress=0.0,
+                    level=LogLevel.ERROR,
+                ),
+            )
+        except Exception as e:
+            self.handle_status(
+                self.run_btn,
+                EngineStatus(
+                    msg=f"Unexpected error restoring snapshot: {e}",
+                    data=None,
+                    progress=0.0,
+                    level=LogLevel.ERROR,
+                ),
+            )
+        finally:
+            self.run_btn.configure(state="normal")
+            self.snapshot_btn.configure(state="normal")
+            self.restore_btn.configure(state="normal", text="♻️ Restore DB")
 
 
 class DesktopApp(ctk.CTk):  # type: ignore
