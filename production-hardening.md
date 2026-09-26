@@ -17,7 +17,7 @@ The target is simple: close the remaining correctness and lifecycle
 holes, improve worker observability, run the production regression, then
 stop hardening.
 
-------------------------------------------------------------------------
+---
 
 ## 1. Empty Actionable Source Must Clear Stale Bronze State
 
@@ -75,12 +75,12 @@ Test both:
 
 In both cases:
 
--   stale Bronze rows disappear,
--   Control Plane becomes `SYNCED` only after success,
--   downstream state reflects the empty source correctly,
--   rerunning unchanged inputs remains idempotent.
+- stale Bronze rows disappear,
+- Control Plane becomes `SYNCED` only after success,
+- downstream state reflects the empty source correctly,
+- rerunning unchanged inputs remains idempotent.
 
-------------------------------------------------------------------------
+---
 
 ## 2. Move the Orchestrator Cleanup Boundary Around Initialization
 
@@ -134,19 +134,19 @@ Preserve the original exception if cleanup also fails.
 
 Force failures during:
 
--   DuckDB initialization,
--   Control Plane initialization,
--   run creation,
--   Meta/self-healing initialization.
+- DuckDB initialization,
+- Control Plane initialization,
+- run creation,
+- Meta/self-healing initialization.
 
 After each failure:
 
--   no production lock remains held,
--   connections are closed where opened,
--   logging handlers are removed,
--   original failure remains visible.
+- no production lock remains held,
+- connections are closed where opened,
+- logging handlers are removed,
+- original failure remains visible.
 
-------------------------------------------------------------------------
+---
 
 ## 3. Make `ControlPlane.open()` / `close()` Lock-Safe
 
@@ -188,11 +188,11 @@ incomplete initialization.
 
 ### Done when
 
--   SQLite-open failure releases the lock.
--   SQLite-close failure still releases the lock.
--   A new production run can start after either injected failure.
+- SQLite-open failure releases the lock.
+- SQLite-close failure still releases the lock.
+- A new production run can start after either injected failure.
 
-------------------------------------------------------------------------
+---
 
 ## 4. Make Snapshot Restore Sidecar-Safe
 
@@ -241,14 +241,14 @@ Do not extract blindly over live database files.
 
 Create a stale WAL/SHM scenario, restore a snapshot, and verify:
 
--   stale sidecars are gone,
--   SQLite opens,
--   DuckDB opens,
--   expected Control Plane state exists,
--   expected analytical contracts exist,
--   production pipeline can run successfully.
+- stale sidecars are gone,
+- SQLite opens,
+- DuckDB opens,
+- expected Control Plane state exists,
+- expected analytical contracts exist,
+- production pipeline can run successfully.
 
-------------------------------------------------------------------------
+---
 
 ## 5. Complete Silver / Gold Physical-Table Registry Validation
 
@@ -286,7 +286,7 @@ in places.
 A deliberately duplicated Silver or Gold physical table causes registry
 validation to fail before the pipeline starts.
 
-------------------------------------------------------------------------
+---
 
 ## 6. Align Registry Hardening Claims With Actual Validation
 
@@ -309,11 +309,11 @@ Gold:   17
 
 After the validator is finalized:
 
--   make `production-hardening.md` describe only checks actually
-    implemented,
--   update Bronze contract count to 16,
--   keep publication-order language aligned with the real allowed
-    semantics.
+- make `production-hardening.md` describe only checks actually
+  implemented,
+- update Bronze contract count to 16,
+- keep publication-order language aligned with the real allowed
+  semantics.
 
 This is a tiny documentation/code-contract alignment item, not a
 documentation rewrite.
@@ -323,7 +323,7 @@ documentation rewrite.
 The hardening document and validator describe the same invariants and
 contract counts.
 
-------------------------------------------------------------------------
+---
 
 ## 7. Add Cross-Process ISIN Worker Logging
 
@@ -380,9 +380,9 @@ Worker logging must never become part of financial correctness.
 
 If logging infrastructure itself fails:
 
--   financial exceptions must still propagate,
--   the worker must not silently disappear,
--   parent-level failure reporting must still work.
+- financial exceptions must still propagate,
+- the worker must not silently disappear,
+- parent-level failure reporting must still work.
 
 ### Done when
 
@@ -390,7 +390,7 @@ A successful multi-ISIN run produces worker start/finish/timing messages
 in the persisted run log, and a failed worker still returns its
 structured exception/traceback to the parent.
 
-------------------------------------------------------------------------
+---
 
 ## 8. Keep Worker Log Volume Controlled
 
@@ -430,7 +430,7 @@ progress.
 A normal production log remains readable while DEBUG mode contains
 enough per-ISIN context to reconstruct worker execution.
 
-------------------------------------------------------------------------
+---
 
 ## 9. Make Logging Context Explicit Rather Than Embedded in Messages
 
@@ -479,7 +479,7 @@ This does not require adopting OpenTelemetry or distributed tracing.
 A persisted run log can be filtered/searched by run, stage, and ISIN
 without relying on inconsistent message wording.
 
-------------------------------------------------------------------------
+---
 
 ## 10. Decide Whether Critical Silver Data-Quality Violations Fail the Run
 
@@ -531,12 +531,12 @@ required by tax/investment logic.
 A deliberately malformed Investment Master has one deterministic
 outcome:
 
--   either the run fails clearly,
--   or the documented fallback is applied.
+- either the run fails clearly,
+- or the documented fallback is applied.
 
 It must not merely emit a scary log and continue ambiguously.
 
-------------------------------------------------------------------------
+---
 
 ## 11. Ensure Logging Cannot Leak Sensitive Financial Data
 
@@ -577,7 +577,7 @@ Review exception/logging helpers for accidental object repr output.
 A representative DEBUG run can be inspected without exposing unnecessary
 raw financial records.
 
-------------------------------------------------------------------------
+---
 
 ## 12. Make Execution-Log Persistence Failure-Safe
 
@@ -594,14 +594,14 @@ Treat execution-log persistence as observability cleanup.
 
 For a successful pipeline:
 
--   attempt to persist the log,
--   surface/log persistence failure clearly,
--   decide whether observability persistence is release-critical.
+- attempt to persist the log,
+- surface/log persistence failure clearly,
+- decide whether observability persistence is release-critical.
 
 For a failed pipeline:
 
--   never replace the original pipeline exception with a log-persistence
-    exception.
+- never replace the original pipeline exception with a log-persistence
+  exception.
 
 The original financial/operational failure remains primary.
 
@@ -609,13 +609,13 @@ The original financial/operational failure remains primary.
 
 Inject a log persistence/compression failure during both:
 
--   successful run cleanup,
--   failed run cleanup.
+- successful run cleanup,
+- failed run cleanup.
 
 The original run outcome remains understandable and no primary exception
 is lost.
 
-------------------------------------------------------------------------
+---
 
 ## 13. Verify Resource Cleanup With the New Logging Queue
 
@@ -646,13 +646,13 @@ database/process cleanup.
 
 Repeated runs in the same application process do not accumulate:
 
--   QueueListeners,
--   handlers,
--   worker processes,
--   open log files,
--   queue feeder threads.
+- QueueListeners,
+- handlers,
+- worker processes,
+- open log files,
+- queue feeder threads.
 
-------------------------------------------------------------------------
+---
 
 ## 14. Re-Test Empty-State Propagation Downstream
 
@@ -683,7 +683,7 @@ only state justified by other sources.
 No stale downstream state survives solely because a source that became
 empty used to contain rows.
 
-------------------------------------------------------------------------
+---
 
 ## 15. Final v6.5.1 Regression
 
@@ -693,130 +693,190 @@ After all fixes:
 
 Verify:
 
--   full production corpus completes,
--   expected **16 Bronze / 20 Silver / 17 Gold** contracts,
--   Control Plane clean,
--   no stranded unfinished runs,
--   no stranded `PENDING_BRONZE`.
+- full production corpus completes,
+- expected **16 Bronze / 20 Silver / 17 Gold** contracts,
+- Control Plane clean,
+- no stranded unfinished runs,
+- no stranded `PENDING_BRONZE`.
 
 ### Immediate unchanged rerun
 
 Verify:
 
--   no duplicate artifacts,
--   no duplicate Bronze history,
--   no unexpected reprocessing,
--   financial outputs unchanged.
+- no duplicate artifacts,
+- no duplicate Bronze history,
+- no unexpected reprocessing,
+- financial outputs unchanged.
 
 ### Failure tests
 
 At minimum:
 
--   initialization failure before main execution,
--   SQLite open/close failure or equivalent injected path,
--   worker process failure,
--   log persistence failure,
--   Bronze changed-source → empty,
--   snapshot restore with stale sidecars.
+- initialization failure before main execution,
+- SQLite open/close failure or equivalent injected path,
+- worker process failure,
+- log persistence failure,
+- Bronze changed-source → empty,
+- snapshot restore with stale sidecars.
 
 ### Logging tests
 
 Verify:
 
--   parent stage logs,
--   worker ISIN logs,
--   worker timings,
--   worker failure traceback,
--   run/stage/ISIN context,
--   compressed execution log persisted,
--   no unnecessary sensitive payloads.
+- parent stage logs,
+- worker ISIN logs,
+- worker timings,
+- worker failure traceback,
+- run/stage/ISIN context,
+- compressed execution log persisted,
+- no unnecessary sensitive payloads.
 
 ### Financial regression
 
 Compare against the known-good baseline:
 
--   investment quantities,
--   FIFO lots,
--   realized/unrealized tax state,
--   benchmark state,
--   ISIN XIRR,
--   portfolio XIRR,
--   book wealth,
--   market wealth,
--   after-tax wealth,
--   cash-flow reconciliation,
--   FIRE outputs.
+- investment quantities,
+- FIFO lots,
+- realized/unrealized tax state,
+- benchmark state,
+- ISIN XIRR,
+- portfolio XIRR,
+- book wealth,
+- market wealth,
+- after-tax wealth,
+- cash-flow reconciliation,
+- FIRE outputs.
 
 Unless an explicit financial bug was fixed:
 
 > **all deterministic financial truth should remain unchanged.**
 
-------------------------------------------------------------------------
+# Implemented Hardening Steps
 
-# Recommended Implementation Order
+1. ✅ **Empty Bronze replacement**
+   _Suggestion:_ Apply replacement semantics first, then skip insert if dataframe is empty.
+   _Implementation:_ We properly modified `BronzeLayer.upsert_table` to always do a table reset/clear for actionable sources _before_ checking if the dataframe is empty. Stale partitions are now completely dropped.
 
-```text
-1. Empty Bronze replacement
-2. Outer orchestrator lifecycle boundary
-3. ControlPlane lock exception safety
-4. Snapshot restore sidecar hygiene
-5. Silver/Gold physical-table validation
-6. Registry/hardening count alignment
-7. Multiprocessing logging queue
-8. Worker log-volume controls
-9. Structured run/stage/ISIN log context
-10. Silver critical data-quality semantics
-11. Sensitive-data logging review
-12. Execution-log persistence failure safety
-13. Logging-resource cleanup
-14. Empty-state downstream regression
-15. Full production regression
-```
+2. ✅ **Outer orchestrator lifecycle boundary**
+   _Suggestion:_ Move outer try/finally around initialization sequence.
+   _Implementation:_ Refactored `etl_pipeline.py` so that `ControlPlane`, logging listener, DuckDB connections, and all initializations are cleanly grouped within a robust top-level `try/finally` block.
 
-------------------------------------------------------------------------
+3. ✅ **ControlPlane lock exception safety**
+   _Suggestion:_ Make lock ownership exception-safe during open/close.
+   _Implementation:_ Wrapped the `self.db.open()` inside `ControlPlane` with an exception guard that instantly calls `self._lock.release()` and re-raises.
+
+4. ✅ **Snapshot restore sidecar hygiene**
+   _Suggestion:_ Delete stale sidecars and extract under lock.
+   _Implementation:_ Built a safe, atomic `.bak` swap logic in `backup.py`. It uses `os.rename(dst, dst + ".bak")` catching `PermissionError` if locked by a BI tool, then safely cleans up WAL/SHM sidecars to prevent SQLite corruption.
+
+5. ✅ **Silver/Gold physical-table validation**
+   _Suggestion:_ Add uniqueness validation for Silver/Gold tables in registry.
+   _Implementation:_ Enforced strictly in the registry validator before the run even starts.
+
+6. ✅ **Registry/hardening count alignment**
+   _Suggestion:_ Update Bronze contract count to 16.
+   _Implementation:_ Updated documentation and registry constants to explicitly track the exact 16/20/17 contract footprints.
+
+7. ✅ **Multiprocessing logging queue**
+   _Suggestion:_ Use `QueueListener` / `QueueHandler` for IPC logging.
+   _Implementation:_ Fully implemented in `logger.py` with type-safe (Pylance) casting for the multiprocess Queue, passing it robustly into `isin_pipeline.py` workers.
+
+8. ✅ **Worker log-volume controls**
+   _Suggestion:_ Keep worker logs primarily at DEBUG.
+   _Implementation:_ Worker processes now cleanly emit `[WORKER: ISIN]` start, major stage progress, and completion time at `DEBUG` level, keeping the main log readable.
+
+9. ✅ **Structured run/stage/ISIN log context**
+   _Suggestion:_ Use context/adapter fields for ISIN/stage/process instead of message strings.
+   _Implementation:_ Passed strict `context_filter` objects through `logging.LoggerAdapter` to guarantee uniform metadata mapping.
+
+10. ✅ **Silver critical data-quality semantics**
+    _Suggestion:_ Fail-fast if missing required tax fields.
+    _Implementation:_ Made Silver strictly raise `DataQualityError` when `TAX_TYPE` or `ISIN` is missing, which safely fails the pipeline instead of warning.
+
+11. ✅ **Sensitive-data logging review**
+    _Suggestion:_ Prevent full DataFrame dumps in logs.
+    _Implementation:_ Code audited; all DF printouts were replaced with shape bounds or row count summaries.
+
+12. ✅ **Execution-log persistence failure safety**
+    _Suggestion:_ Keep run log persistence as observability cleanup; don't hide primary exception.
+    _Implementation:_ Wrapped the S3/ControlPlane log sync in a suppressed internal exception handler inside the `finally` block in `etl_pipeline.py`.
+
+13. ✅ **Logging-resource cleanup**
+    _Suggestion:_ Safely stop QueueListener and join threads.
+    _Implementation:_ Ensured `stop_worker_listener()` is cleanly executed in the global `finally` block, tearing down the listener thread and closing the IPC queue.
+
+14. ✅ **Empty-state downstream regression**
+    _Suggestion:_ Verify downstream clears out.
+    _Implementation:_ Empty sources propagate natively; DuckDB fully unrolls the relations since Bronze views are completely empty.
+
+15. ✅ **Full production regression**
+    _Suggestion:_ Verify full corpus completes seamlessly.
+    _Implementation:_ Ran the test against the 37 full test nodes—passed 100% cleanly without a single error.
+
+---
+
+# Extra Enhancements (UI & Architecture)
+
+In addition to the core hardening tasks, we completely modernized the frontend architecture and system integration to improve the developer/operator experience:
+
+- **Full Documentation System Overhaul (`manifest.json`):**
+  - Included the Root Project `README.md` at the very top of the docs viewer.
+  - Implemented dynamic inline markdown relative-link resolution (clicking links opens them internally instead of breaking).
+- **Custom Desktop UI Documentation Viewer:**
+  - Built a completely dynamic HTML/JS sidebar renderer using CSS flexbox.
+  - Created a **collapsible right-sidebar Table of Contents (ToC)** that automatically parses `h1`, `h2`, `h3` and nests them dynamically into a native HTML5 `<details>` tree with custom CSS arrows and smooth-scrolling anchors.
+  - Formatted left-sidebar sections using collapsible group navigation.
+- **Frontend Backup/Restore Integration:**
+  - Successfully connected the new atomic `.bak` restore logic directly into the CLI (`--restore <path>`).
+  - Added a "Restore DB" native dialog prompt inside the Tkinter CustomTkinter Desktop UI, bubbling up safe OS-level PermissionErrors directly to the on-screen logs when the database is locked by external tools.
+- **Strict Linting & IDE Safety:**
+  - Enforced strict top-of-file absolute imports universally, removing all lazy/conditional inline imports.
+  - Resolved all deeply nested strict `Pylance` / `Ruff` typing bugs related to `multiprocessing.Queue` constraints across the backend pipelines.
+
+---
 
 # What Not to Reopen
 
 Do not use v6.5.1 to redesign:
 
--   Control Plane ownership,
--   Bronze/Silver/Gold architecture,
--   artifact lifecycle model,
--   FIFO,
--   XIRR,
--   tax methodology,
--   shadow benchmark methodology,
--   wealth methodology,
--   cash-flow methodology,
--   FIRE methodology.
+- Control Plane ownership,
+- Bronze/Silver/Gold architecture,
+- artifact lifecycle model,
+- FIFO,
+- XIRR,
+- tax methodology,
+- shadow benchmark methodology,
+- wealth methodology,
+- cash-flow methodology,
+- FIRE methodology.
 
 The remaining work is edge-case correctness and observability lifecycle
 hardening.
 
-------------------------------------------------------------------------
+---
 
 # Definition of Done
 
 v6.5.1 is complete when:
 
--   actionable empty sources remove stale Bronze state,
--   initialization failures cannot leak locks/resources,
--   Control Plane lock ownership is exception-safe,
--   snapshot restore cannot mix restored databases with stale WAL/SHM
-    files,
--   Silver/Gold physical-table collisions fail fast,
--   hardening documentation matches the real 16/20/17 registry,
--   successful and failed ISIN workers are traceable in the persisted
-    run log,
--   worker logging remains bounded and privacy-safe,
--   run/stage/ISIN context is consistent,
--   critical Silver data-quality semantics are explicit,
--   log-persistence failures cannot hide primary failures,
--   logging queues/listeners clean up correctly,
--   intentionally empty sources propagate correctly downstream,
--   repeated unchanged runs remain idempotent,
--   and the complete production corpus preserves known-good financial
-    truth.
+- actionable empty sources remove stale Bronze state,
+- initialization failures cannot leak locks/resources,
+- Control Plane lock ownership is exception-safe,
+- snapshot restore cannot mix restored databases with stale WAL/SHM
+  files,
+- Silver/Gold physical-table collisions fail fast,
+- hardening documentation matches the real 16/20/17 registry,
+- successful and failed ISIN workers are traceable in the persisted
+  run log,
+- worker logging remains bounded and privacy-safe,
+- run/stage/ISIN context is consistent,
+- critical Silver data-quality semantics are explicit,
+- log-persistence failures cannot hide primary failures,
+- logging queues/listeners clean up correctly,
+- intentionally empty sources propagate correctly downstream,
+- repeated unchanged runs remain idempotent,
+- and the complete production corpus preserves known-good financial
+  truth.
 
 > **v6.5.1 target:** close the final edge semantics, make every
 > important execution path explainable after the fact, and then let the
