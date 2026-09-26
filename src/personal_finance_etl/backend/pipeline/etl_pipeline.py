@@ -35,6 +35,7 @@ from personal_finance_etl.backend.utils.logger import (
     add_queue_handler,
     logger,
     remove_file_handlers,
+    stop_worker_listener,
 )
 from personal_finance_etl.backend.utils.models import EngineStatus, ExtractionResult, LogLevel
 
@@ -136,48 +137,50 @@ class ETLOrchestrator:
 
         start_time = time.perf_counter()
 
-        add_queue_handler(cast("multiprocessing.Queue[Any]", self.status_queue))
-
+        run_id = None
+        cp = None
         log_file_path = self.db_manager.db_path.replace(".duckdb", ".log")
-        add_file_handler(log_file_path)
-
-        logger.debug("=== ETL CONFIGURATION DUMP ===")
-        if hasattr(self.cfg, "model_dump_json"):
-            logger.debug(self.cfg.model_dump_json(indent=2))
-        else:
-            logger.debug(str(self.cfg))
-
-        logger.debug("=== FINANCIAL RULES DUMP ===")
-        if self.rules is not None and hasattr(self.rules, "model_dump_json"):
-            logger.debug(self.rules.model_dump_json(indent=2))
-        else:
-            logger.debug(str(self.rules))
-        logger.debug("==============================")
-
-        logger.info("Initializing Quantitative Master Engine...")
-        self.status_queue.put(EngineStatus(msg="", data=None, progress=0.0))
-
-        logger.info(f"Target Database: {self.cfg.TARGET_DB_BASE_PATH}")
-        logger.info(f"Source Extractor Folder: {self.cfg.STATEMENTS_FOLDER}")
-
-        self.db_manager.open()
-        self.db_manager.ensure_schemas()
-
-        cp = ControlPlane(self.cfg.TARGET_DB_BASE_PATH, self.cfg.RAW_DOCUMENT_STORE_NAME)
-        cp.open()
-        cp.ensure_schema()
-
-        # 1. Authoritative SQLite State
-        run_id = cp.runs.start_run(
-            cfg_json=self.cfg.model_dump_json(),
-            rules_json=self.rules.model_dump_json() if self.rules else None,
-        )
-
-        # 2. Mirror to DuckDB Analytics
-        meta_layer = MetaLayer(self.db_manager, self.cfg, self.rules)
-        meta_layer.heal_duckdb_registry(cp)
 
         try:
+            add_queue_handler(cast("multiprocessing.Queue[Any]", self.status_queue))
+            add_file_handler(log_file_path)
+
+            logger.debug("=== ETL CONFIGURATION DUMP ===")
+            if hasattr(self.cfg, "model_dump_json"):
+                logger.debug(self.cfg.model_dump_json(indent=2))
+            else:
+                logger.debug(str(self.cfg))
+
+            logger.debug("=== FINANCIAL RULES DUMP ===")
+            if self.rules is not None and hasattr(self.rules, "model_dump_json"):
+                logger.debug(self.rules.model_dump_json(indent=2))
+            else:
+                logger.debug(str(self.rules))
+            logger.debug("==============================")
+
+            logger.info("Initializing Quantitative Master Engine...")
+            self.status_queue.put(EngineStatus(msg="", data=None, progress=0.0))
+
+            logger.info(f"Target Database: {self.cfg.TARGET_DB_BASE_PATH}")
+            logger.info(f"Source Extractor Folder: {self.cfg.STATEMENTS_FOLDER}")
+
+            self.db_manager.open()
+            self.db_manager.ensure_schemas()
+
+            cp = ControlPlane(self.cfg.TARGET_DB_BASE_PATH, self.cfg.RAW_DOCUMENT_STORE_NAME)
+            cp.open()
+            cp.ensure_schema()
+
+            # 1. Authoritative SQLite State
+            run_id = cp.runs.start_run(
+                cfg_json=self.cfg.model_dump_json(),
+                rules_json=self.rules.model_dump_json() if self.rules else None,
+            )
+
+            # 2. Mirror to DuckDB Analytics
+            meta_layer = MetaLayer(self.db_manager, self.cfg, self.rules)
+            meta_layer.heal_duckdb_registry(cp)
+
             # Start ACID Transaction for the entire ETL run
             logger.debug("[DATABASE:DUCKDB] BEGIN TRANSACTION")
             self.db_manager.conn.execute("BEGIN TRANSACTION")
@@ -356,7 +359,8 @@ class ETLOrchestrator:
                 logger.error(f"Failed to rollback DuckDB transaction: {rollback_err}")
 
             try:
-                cp.rollback()
+                if cp is not None:
+                    cp.rollback()
             except Exception as rollback_err:
                 logger.error(f"Failed to rollback SQLite Raw Store transaction: {rollback_err}")
 
@@ -366,39 +370,42 @@ class ETLOrchestrator:
 
             # Persist failure details
             try:
-                if "ISIN_FAILURE" in str(e):
-                    parts = str(e).split("|")
-                    if len(parts) >= 3:
-                        failed_isin = parts[1]
-                        error_msg = parts[2]
+                if cp is not None and run_id is not None:
+                    if "ISIN_FAILURE" in str(e):
+                        parts = str(e).split("|")
+                        if len(parts) >= 3:
+                            failed_isin = parts[1]
+                            error_msg = parts[2]
+                            cp.runs.log_run_failure(
+                                run_id=run_id,
+                                failed_isin=failed_isin,
+                                stage="InvestmentQuantEngine",
+                                error_type="RuntimeError",
+                                error_message=error_msg,
+                                traceback_log=traceback.format_exc(),
+                            )
+                    else:
                         cp.runs.log_run_failure(
                             run_id=run_id,
-                            failed_isin=failed_isin,
-                            stage="InvestmentQuantEngine",
-                            error_type="RuntimeError",
-                            error_message=error_msg,
+                            failed_isin=None,
+                            stage="Pipeline",
+                            error_type=type(e).__name__,
+                            error_message=str(e),
                             traceback_log=traceback.format_exc(),
                         )
-                else:
-                    cp.runs.log_run_failure(
-                        run_id=run_id,
-                        failed_isin=None,
-                        stage="Pipeline",
-                        error_type=type(e).__name__,
-                        error_message=str(e),
-                        traceback_log=traceback.format_exc(),
-                    )
             except Exception as failure_log_err:
                 logger.error(f"Failed to log run_failure to Control Plane: {failure_log_err}")
 
-            cp.runs.finish_run(run_id, "FAILED")
+            if cp is not None and run_id is not None:
+                cp.runs.finish_run(run_id, "FAILED")
 
             raise e
         finally:
             logger.info("Cleaning up database connections and WAL sidecars...")
+            stop_worker_listener()
             remove_file_handlers()
             try:
-                if os.path.exists(log_file_path):
+                if cp is not None and run_id is not None and os.path.exists(log_file_path):
                     with open(log_file_path, "rb") as f:
                         log_bytes = f.read()
                     compressed_log = zlib.compress(log_bytes, level=9)
@@ -407,7 +414,8 @@ class ETLOrchestrator:
                 logger.error(f"Failed to save compressed execution log to Raw Store: {log_err}")
 
             self.db_manager.close()
-            cp.close()
+            if cp is not None:
+                cp.close()
             gc.collect()
 
 
