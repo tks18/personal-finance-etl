@@ -35,11 +35,18 @@ class ControlPlane:
             raise RuntimeError(
                 "Another instance of the production pipeline is currently running."
             ) from None
-        self.db.open()
+
+        try:
+            self.db.open()
+        except Exception:
+            self._lock.release()
+            raise
 
     def close(self) -> None:
-        self.db.close()
-        self._lock.release()
+        try:
+            self.db.close()
+        finally:
+            self._lock.release()
 
     def ensure_schema(self) -> None:
         self.db.ensure_schema()
