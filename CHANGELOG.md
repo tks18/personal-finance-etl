@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [6.5.2](https://github.com/tks18/personal-finance-etl/compare/6.5.1...6.5.2) (2026-09-26)
+
+
+### Bug Fixes 🛠
+
+* **frontend/commons:** docs_renderer: fix offset slightly to make up for header bar ([74d3ae1](https://github.com/tks18/personal-finance-etl/commit/74d3ae18f5f7cf84a4213ad11d2f0e137a426fae))
+
 ### [6.5.1](https://github.com/tks18/personal-finance-etl/compare/6.5.0...6.5.1) (2026-09-26)
 
 

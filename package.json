@@ -1,7 +1,7 @@
 {
   "name": "personal-finance-etl",
   "description": "Local-first financial data platform for evidence-aware ETL, investment analytics, tax-aware wealth modelling, FIRE simulation, and BI.",
-  "version": "6.5.1",
+  "version": "6.5.2",
   "repository": "https://github.com/tks18/personal-finance-etl",
   "author": "tks18 <tksudharshan@gmail.com>",
   "license": "GPL-3.0-only",
