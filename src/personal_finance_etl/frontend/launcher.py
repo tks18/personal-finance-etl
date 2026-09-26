@@ -21,6 +21,12 @@ def main() -> None:
         help="Snapshot the DuckDB database instead of running ETL",
     )
     cli_parser.add_argument(
+        "--restore",
+        type=str,
+        help="Path to backup zip file to restore (requires --config)",
+        default=None,
+    )
+    cli_parser.add_argument(
         "--auto",
         action="store_true",
         help="Bypass confirmation prompts and automatically start the pipeline",
