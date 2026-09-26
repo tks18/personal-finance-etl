@@ -34,14 +34,11 @@ class BronzeLayer:
             logger.debug(f"[DAG:OPTIMIZER] Physical Plan for Bronze '{table_name}': {compact_plan}")
             df = df.collect()
 
-        if df.height == 0 or not actionable_files:
+        if not actionable_files:
             return {}
 
         filenames = [os.path.basename(f) for f in actionable_files]
         df_filtered = df.filter(pl.col("__file_name__").is_in(filenames))
-
-        if df_filtered.height == 0:
-            return {}
 
         # Dynamically create table schema if it doesn't exist or drop if full_replace
         schema_df = df.head(0)
@@ -60,22 +57,29 @@ class BronzeLayer:
 
         self.db_manager.conn.unregister("schema_df")
 
-        # Insert new rows
-        self.db_manager.conn.register("temp_df", df_filtered)
-
-        insert_query = f"INSERT INTO {table_name} BY NAME SELECT * FROM temp_df"
-        logger.debug(f"[BRONZE:DETAIL] Executing SQL: {insert_query}")
-        self.db_manager.conn.execute(insert_query)
-
-        logger.debug(f"[BRONZE:DETAIL] Upserted {table_name}: {df_filtered.height} rows processed.")
-        self.db_manager.conn.unregister("temp_df")
-
-        # Calculate per-file row count
-        counts = df_filtered.group_by("__file_name__").len()
-        # Polars group_by returns a dataframe, we convert it to dict
         result: dict[str, int] = {}
-        for row in counts.iter_rows():
-            result[row[0]] = row[1]
+
+        if df_filtered.height > 0:
+            # Insert new rows
+            self.db_manager.conn.register("temp_df", df_filtered)
+
+            insert_query = f"INSERT INTO {table_name} BY NAME SELECT * FROM temp_df"
+            logger.debug(f"[BRONZE:DETAIL] Executing SQL: {insert_query}")
+            self.db_manager.conn.execute(insert_query)
+
+            logger.debug(
+                f"[BRONZE:DETAIL] Upserted {table_name}: {df_filtered.height} rows processed."
+            )
+            self.db_manager.conn.unregister("temp_df")
+
+            # Calculate per-file row count
+            counts = df_filtered.group_by("__file_name__").len()
+            # Polars group_by returns a dataframe, we convert it to dict
+            for row in counts.iter_rows():
+                result[row[0]] = row[1]
+        else:
+            logger.debug(f"[BRONZE:DETAIL] Upserted {table_name}: 0 rows processed (empty source).")
+
         return result
 
     def load(
