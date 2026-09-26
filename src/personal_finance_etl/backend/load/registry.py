@@ -389,6 +389,7 @@ def get_contract_by_table(physical_table: str) -> DataContract | None:
 
 def validate_registry() -> None:
     seen_ids: set[str] = set()
+    seen_tables: set[str] = set()
     silver_count = 0
     gold_count = 0
 
@@ -398,6 +399,13 @@ def validate_registry() -> None:
         if contract.contract_id in seen_ids:
             raise ValueError(f"Duplicate contract_id found: {contract.contract_id}")
         seen_ids.add(contract.contract_id)
+
+        table_lower = contract.physical_table.lower()
+        if table_lower in seen_tables:
+            raise ValueError(
+                f"Duplicate Silver/Gold physical table mapping: {contract.physical_table}"
+            )
+        seen_tables.add(table_lower)
 
         if contract.layer not in ("silver", "gold"):
             raise ValueError(
