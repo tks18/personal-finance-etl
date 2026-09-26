@@ -89,14 +89,19 @@ def remove_file_handlers() -> None:
 
 # Global reference to listener so it can be stopped
 _listener: logging.handlers.QueueListener | None = None
+_worker_manager: typing.Any | None = None
 _worker_queue: "multiprocessing.Queue[logging.LogRecord] | None" = None
 
 
 def start_worker_listener() -> "multiprocessing.Queue[logging.LogRecord]":
     """Starts a QueueListener in the parent process to receive logs from workers."""
-    global _listener, _worker_queue
+    global _listener, _worker_manager, _worker_queue
 
-    q = typing.cast("multiprocessing.Queue[logging.LogRecord]", multiprocessing.Manager().Queue(-1))
+    # Defensive cleanup if a previous run did not stop cleanly.
+    stop_worker_listener()
+
+    _worker_manager = multiprocessing.Manager()
+    q = typing.cast("multiprocessing.Queue[logging.LogRecord]", _worker_manager.Queue(-1))
     _worker_queue = q
 
     # Send logs received on the queue to all handlers currently attached to the parent logger
@@ -111,11 +116,21 @@ def start_worker_listener() -> "multiprocessing.Queue[logging.LogRecord]":
 
 def stop_worker_listener() -> None:
     """Stops the QueueListener in the parent process."""
-    global _listener, _worker_queue
+    global _listener, _worker_manager, _worker_queue
+
     if _listener is not None:
-        _listener.stop()
-        _listener = None
+        try:
+            _listener.stop()
+        finally:
+            _listener = None
+
     _worker_queue = None
+
+    if _worker_manager is not None:
+        try:
+            _worker_manager.shutdown()
+        finally:
+            _worker_manager = None
 
 
 def setup_worker_logging(queue: "multiprocessing.Queue[logging.LogRecord]") -> None:
