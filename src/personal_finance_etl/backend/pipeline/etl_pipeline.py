@@ -413,10 +413,12 @@ class ETLOrchestrator:
             except Exception as log_err:
                 logger.error(f"Failed to save compressed execution log to Raw Store: {log_err}")
 
-            self.db_manager.close()
-            if cp is not None:
-                cp.close()
-            gc.collect()
+            try:
+                self.db_manager.close()
+            finally:
+                if cp is not None:
+                    cp.close()
+                gc.collect()
 
 
 def process_wrapper(
