@@ -35,6 +35,7 @@ class SilverLayer:
                 )
 
         if table_name == "silver.d_Investment_Master":
+            critical_errors: list[str] = []
             if "ISIN" in df.columns:
                 missing_isin = df.filter(pl.col("ISIN").is_null())
                 if missing_isin.height > 0:
@@ -46,6 +47,7 @@ class SilverLayer:
                     )
                     for row in missing_isin.to_dicts():
                         logger.error(f"-> {row}")
+                    critical_errors.append("ISIN")
             if "TAX_TYPE" in df.columns:
                 missing_tax = df.filter(pl.col("TAX_TYPE").is_null())
                 if missing_tax.height > 0:
@@ -57,6 +59,12 @@ class SilverLayer:
                     )
                     for row in missing_tax.to_dicts():
                         logger.error(f"-> {row}")
+                    critical_errors.append("TAX_TYPE")
+
+            if critical_errors:
+                raise ValueError(
+                    f"Critical data-quality violation in d_Investment_Master: Missing {', '.join(critical_errors)}"
+                )
 
         self.db_manager.conn.register("temp_df", df)
         logger.debug(f"[SILVER:DETAIL] Rebuilt {table_name}: {df.height} rows processed.")
