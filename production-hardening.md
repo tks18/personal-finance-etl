@@ -1,803 +1,824 @@
-# Personal Finance ETL --- v6.4.0 Production Hardening
+# Personal Finance ETL --- v6.5.1 Edge-Case Hardening
 
-> **Purpose:** consolidate the remaining runtime and recovery weaknesses
-> found during the v6.3.0 archaeology into one deliberate hardening
-> release.
+> **Purpose:** close the remaining concrete edge-case bugs found during
+> the v6.5.0 adversarial code audit.
 >
-> This is not another architecture redesign. The current Control Plane,
-> Bronze/Silver/Gold model, and financial engines remain the baseline.
+> This is a focused patch-hardening release. The architecture, financial
+> methodology, Control Plane ownership model, and Bronze/Silver/Gold
+> design remain unchanged.
 
 ## Non-Negotiable Rule
 
-Unless a change intentionally fixes a proven financial-methodology
-defect:
+Unless one of these fixes exposes a genuine methodology defect:
 
 > **Financial truth must remain unchanged.**
 
-The goal of v6.4.0 is to make the existing architecture more
-deterministic under failure, replay, corruption, rename, restore, and
-concurrent execution.
+The target is simple: close the remaining correctness and lifecycle
+holes, improve worker observability, run the production regression, then
+stop hardening.
 
----
+------------------------------------------------------------------------
 
-## 1. Make `PENDING_BRONZE` Replay Part of the Normal Pipeline
+## 1. Empty Actionable Source Must Clear Stale Bronze State
 
-### Quirk found
+### Bug found
 
-The v6.3.0 self-healing path can change an artifact from `SYNCED` to
-`PENDING_BRONZE`.
+`BronzeLayer.upsert_table()` can return early when the extracted
+DataFrame is empty.
 
-However, normal discovery primarily builds actionable work from **new +
-changed files**.
+That means an actionable source that previously contained rows but now
+legitimately contains zero rows can leave its old Bronze state behind.
 
-An unchanged file that was requeued to `PENDING_BRONZE` can therefore
-remain pending without being picked up by the normal execution path.
+Possible result:
+
+```text
+source        → 0 rows
+Control Plane → SYNCED
+Meta          → 0 rows
+Bronze        → stale old rows
+```
+
+This is a real correctness bug.
 
 ### Simple resolution
 
-After discovery, merge Control Plane pending artifacts into the
-actionable set before extraction/Bronze synchronization.
+Do not treat an empty extracted DataFrame as "nothing to do" when the
+source is actionable.
 
-Conceptually:
-
-```text
-new files
-+
-changed files
-+
-Control Plane PENDING_BRONZE
-        ↓
-deduplicate
-        ↓
-normal extraction / Bronze synchronization
-```
-
-Do not create a separate recovery pipeline.
-
-### Done when [IMPLEMENTED]
-
-- A `SYNCED` artifact is manually/self-healed to `PENDING_BRONZE`.
-- Its source file is unchanged.
-- The next normal production run replays it.
-- Bronze is restored.
-- The artifact returns to `SYNCED`.
-- Financial outputs remain unchanged.
-
----
-
-## 2. Make `PENDING_BRONZE` Replay Idempotent
-
-### Quirk found
-
-Once pending artifacts are replayed normally, the replay itself must be
-proven safe after partial Bronze failures.
-
-The risk is duplicate historical rows or mixed old/new state.
-
-### Simple resolution
-
-Use the existing Bronze ownership semantics.
-
-For historical/file-owned sources:
+First apply the source's replacement semantics:
 
 ```text
-remove/replace that artifact's owned Bronze partition
-→ write current artifact state
+historical/file-owned source
+→ remove that artifact's old Bronze partition
+
+current/reference source
+→ clear/replace the current Bronze table
 ```
-
-For current/reference sources:
-
-```text
-prepare replacement successfully
-→ replace current state
-```
-
-Only mark the artifact `SYNCED` after successful Bronze persistence.
-
-### Done when [IMPLEMENTED]
-
-A forced failure during Bronze synchronization followed by a rerun
-produces exactly the same Bronze and downstream financial state as a
-clean run.
-
----
-
-## 3. Fix Rename Identity Migration
-
-### Quirk found
-
-Artifact identity is path-derived:
-
-```text
-file_id = SHA256(relative_path)
-```
-
-v6.3.0 rename handling updates the path/name but can leave the original
-`file_id`.
-
-That breaks the identity invariant and can disconnect the registry
-record from payload lookup.
-
-### Simple resolution
-
-Make rename a first-class `ArtifactRepository` operation.
-
-A rename should migrate all path-derived identity consistently:
-
-```text
-old relative path
-old file_id
-old payload relationship
-old analytical registry identity
-
-        ↓ rename
-
-new relative path
-new file_id
-payload preserved
-analytical identity updated
-```
-
-Perform the migration inside the existing Control Plane transaction.
-
-Do not update `relative_path` alone.
-
-### Done when [IMPLEMENTED]
-
-After a rename:
-
-- `file_id` matches the new normalized path,
-- raw payload remains accessible,
-- no duplicate artifact exists,
-- old identity is gone,
-- new identity is present,
-- Bronze ownership remains correct,
-- downstream financial state does not change.
-
----
-
-## 4. Scope Rename Detection by Source Category
-
-### Quirk found
-
-Rename detection can match files primarily by content hash across the
-wider registry.
-
-Two unrelated source categories can legitimately contain identical
-bytes.
-
-That creates a theoretical false-rename path.
-
-### Simple resolution
-
-Match rename candidates by:
-
-```text
-(source category, content hash)
-```
-
-rather than:
-
-```text
-content hash only
-```
-
-Optionally include other existing identity context if already available,
-but avoid overengineering.
-
-### Done when [IMPLEMENTED]
-
-Identical files in different source categories cannot be classified as
-renames of one another.
-
----
-
-## 5. Define Rename Behaviour in Bronze and Meta
-
-### Quirk found
-
-A filesystem rename is the same evidence with a different location/name.
-
-Historical Bronze ownership and analytical registry state may still
-reference the old filename/path even after the Control Plane rename.
-
-### Simple resolution
-
-Treat a pure same-content rename as an identity migration, not a
-financial-data change.
-
-For historical/file-owned Bronze:
-
-- migrate the ownership marker such as `__file_name__`, or
-- deliberately replay the artifact while removing the old owned
-  partition.
-
-For DuckDB Meta/current registry projection:
-
-- update the path/name/file identity consistently.
-
-Choose one deterministic approach and use it everywhere.
-
-### Done when [IMPLEMENTED]
-
-A rename changes only provenance/identity metadata.
-
-Row counts and financial outputs remain identical.
-
----
-
-## 6. Make Delete Semantics Explicit
-
-### Quirk found
-
-Rename work exposes the related question of source deletion.
-
-The correct behaviour is not necessarily the same for historical
-evidence and current/reference state.
-
-### Simple resolution
-
-Define deletion by source semantics.
-
-For historical/event evidence, prefer preserving already-ingested valid
-history unless the domain explicitly says source deletion means
-financial deletion.
-
-For current/reference sources, explicitly choose whether disappearance
-means:
-
-- retain last known state,
-- clear current state,
-- or fail the run.
-
-Do not let filesystem absence accidentally decide financial meaning.
-
-### Done when [IMPLEMENTED]
-
-Delete tests for each source class have deterministic outcomes and
-cannot silently erase or duplicate financial history.
-
----
-
-## 7. Strengthen Control Plane ↔ Bronze Self-Healing
-
-### Quirk found
-
-v6.3.0 self-healing primarily checks registry/table presence.
-
-A Bronze table can exist while one specific historical artifact's rows
-are missing.
-
-That means table-level presence is weaker than artifact-level integrity.
-
-### Simple resolution
-
-For historical/file-owned Bronze contracts, validate that each `SYNCED`
-artifact has its expected ownership marker represented in Bronze, where
-the contract supports such a marker.
-
-Conceptually:
-
-```text
-Control Plane says artifact = SYNCED
-        ↓
-Bronze table exists?
-        ↓
-artifact-owned partition exists?
-        ↓
-yes → healthy
-no  → PENDING_BRONZE
-```
-
-For current/reference tables where artifact-level ownership does not
-apply, retain table/state-level checks.
-
-### Done when [IMPLEMENTED]
-
-Deleting one historical artifact's Bronze rows, while leaving the table
-itself intact, causes that artifact to be requeued and restored
-automatically.
-
----
-
-## 8. Harden the SQLite ↔ DuckDB Commit Window
-
-### Quirk found
-
-SQLite and DuckDB remain independent databases.
-
-The current orchestrator coordinates their transactions, but a process
-failure between final commits can still leave operational and analytical
-state temporarily inconsistent.
-
-This is an architectural limitation, not a reason to introduce
-distributed transactions.
-
-### Simple resolution
-
-Keep the current application-coordinated transaction model.
-
-Harden it by making the recovery contract explicit:
-
-```text
-DuckDB commit succeeds
-SQLite finalization fails
-        ↓
-next startup/run detects inconsistency
-        ↓
-Control Plane remains operational authority
-        ↓
-requeue/rebuild analytical state as needed
-```
-
-Also ensure:
-
-- original exceptions survive cleanup,
-- rollback failures are logged separately,
-- `SUCCESS` is impossible before required finalization succeeds,
-- stale `COMMITTING` runs are recoverable.
-
-### Done when [IMPLEMENTED]
-
-Injected failures around each final commit never produce a false
-successful run, and the next execution reaches the same correct state
-without manual database surgery.
-
----
-
-## 9. Strengthen Interrupted-Run Recovery
-
-### Quirk found
-
-v6.3.0 added stale-run recovery, which is good.
-
-The remaining hardening is to make the recovery decision fully
-deterministic across all unfinished states and related artifact state.
-
-### Simple resolution
-
-At startup:
-
-```text
-find stale STARTED / RUNNING / COMMITTING
-        ↓
-close them explicitly as interrupted/failed
-        ↓
-record recovery reason
-        ↓
-reconcile pending analytical work
-        ↓
-start new run
-```
-
-Never mutate completed `SUCCESS`/`FAILED` history.
-
-### Done when [IMPLEMENTED]
-
-Hard-killing the process at different lifecycle stages and restarting
-always produces an explainable previous run plus a clean new run.
-
----
-
-## 10. Harden Worker Process-Boundary Failures
-
-### Quirk found
-
-Normal per-ISIN exceptions now propagate correctly.
-
-The remaining risk is abnormal process behaviour outside the normal
-result path:
-
-- worker termination,
-- serialization/deserialization failure,
-- pool failure,
-- cleanup failure.
-
-### Simple resolution
-
-Treat any missing/abnormal worker result as fatal.
-
-The parent should retain as much context as possible and propagate
-failure to the orchestrator.
-
-```text
-abnormal worker
-→ investment stage fails
-→ rollback
-→ persisted failure
-→ run FAILED
-```
-
-Never infer success from the workers that did return.
-
-### Done when [IMPLEMENTED]
-
-Force-killing one worker cannot result in a successfully published
-partial portfolio.
-
----
-
-## 11. Make Single-Run Protection Crash-Safe
-
-### Quirk found
-
-v6.3.0 introduced a production `FileLock`, which closes the normal
-overlapping-run problem.
-
-The remaining concern is stale/crash behaviour and ensuring every
-production entry point uses the same lock.
-
-### Simple resolution
-
-Verify that:
-
-- CLI uses the lock,
-- GUI uses the lock,
-- headless/backend production entry points use the lock,
-- backup/snapshot uses the same lock where required,
-- stale locks recover according to the file-lock library's actual
-  semantics.
-
-Keep one lock identity for the production database pair.
-
-### Done when [IMPLEMENTED]
-
-Two live runs cannot overlap, but a dead process does not permanently
-block future execution.
-
----
-
-## 12. Make SQLite + DuckDB Snapshot Actually Consistent
-
-### Quirk found
-
-v6.3.0 correctly recognizes that the recoverable system is now:
-
-```text
-Raw_Documents.sqlite
-+
-Personal_Finance_DB.duckdb
-```
-
-But copying live database files directly is not enough.
-
-SQLite uses WAL mode, so committed state can exist in the WAL rather
-than only in the main `.sqlite` file.
-
-A snapshot can also race a production writer.
-
-### Simple resolution
-
-Use the same production lock before snapshotting.
 
 Then:
 
-- create SQLite copy using SQLite's backup API,
-- create DuckDB copy only while no production writer is active,
-- package the two copies into one snapshot,
-- record enough metadata to identify the pair.
+```text
+new DataFrame has rows?
+├── yes → insert
+└── no  → leave Bronze correctly empty
+```
 
-No elaborate backup framework is required.
+Only mark the artifact synchronized after the replacement operation
+succeeds.
 
-### Done when [IMPLEMENTED]
+### Done when
 
-A snapshot restored into a clean location contains both operational and
-analytical state and can successfully run/reconcile without needing the
-original databases.
+Test both:
 
----
+1.  changed historical source: rows → empty,
+2.  changed current/reference source: rows → empty.
 
-## 13. Add Snapshot Restore Verification
+In both cases:
 
-### Quirk found
+-   stale Bronze rows disappear,
+-   Control Plane becomes `SYNCED` only after success,
+-   downstream state reflects the empty source correctly,
+-   rerunning unchanged inputs remains idempotent.
 
-Creating a ZIP proves files were copied, not that the system is
-recoverable.
+------------------------------------------------------------------------
 
-### Simple resolution
+## 2. Move the Orchestrator Cleanup Boundary Around Initialization
 
-Add a simple verification path/test:
+### Bug found
+
+Some setup work occurs before the main `try/finally` lifecycle boundary.
+
+For example:
 
 ```text
-create coordinated snapshot
-        ↓
-restore into clean temp location
-        ↓
-open SQLite
 open DuckDB
-        ↓
-run basic integrity/contract checks
-        ↓
-optionally execute production pipeline
+open Control Plane
+start run
+heal registry
+...
+enter main try/finally
 ```
 
-This can be a test/tool rather than part of every production run.
-
-### Done when [IMPLEMENTED]
-
-A real snapshot has been restored and proven usable.
-
----
-
-## 14. Complete DataContract Registry Validation
-
-### Quirk found
-
-v6.3.0 added useful fail-fast registry validation.
-
-The remaining gap is that some invariants are stronger for Bronze than
-Silver/Gold.
+If initialization/self-healing fails before the `try`, database
+connections, logging handlers, or the production lock may not be cleaned
+up deterministically.
 
 ### Simple resolution
 
-Validate across the relevant registry:
+Move the outer lifecycle `try/finally` around the entire initialization
+sequence.
 
-- unique `contract_id`,
-- valid layer,
-- unique physical table where required,
-- non-empty grain,
-- non-empty producer,
-- deterministic publication order,
-- expected contract counts.
-
-For the current baseline:
+Conceptually:
 
 ```text
-15 Bronze
-20 Silver
-17 Gold
+initialize variables to None
+
+try:
+    open DuckDB
+    open Control Plane
+    ensure schemas
+    start run
+    initialize logging
+    heal registry
+    begin transactions
+    execute pipeline
+finally:
+    clean up whatever was successfully initialized
 ```
 
-If duplicate publication order is not intentionally supported within a
-layer, reject it.
+Cleanup must tolerate partially initialized state.
 
-### Done when [IMPLEMENTED]
-
-A deliberately duplicated physical table, contract ID, or invalid
-publication order fails before pipeline execution.
-
----
-
-## 15. Validate Builder Output Against Persisted Contract
-
-### Quirk found
-
-Registry validation proves metadata consistency.
-
-It does not necessarily prove that the DataFrame a producer emits still
-matches the physical table contract.
-
-Builder ↔ DDL drift can therefore surface late.
-
-### Simple resolution
-
-Before publication, perform a lightweight contract check where
-practical:
-
-- required columns present,
-- unexpected/missing persisted columns handled intentionally,
-- physical table exists,
-- types are compatible enough for the current loader.
-
-Do not build a second schema framework if DuckDB/loader metadata can
-provide the check.
-
-### Done when [IMPLEMENTED]
-
-A deliberately broken builder output fails with a clear contract error
-before partial publication.
-
----
-
-## 16. Validate Meta Projection From the Same Contract Authority
-
-### Quirk found
-
-The system has intentionally made `DataContract` the authority for
-analytical identity.
-
-Any remaining Meta/row-count logic that derives layer/table identity
-from names or parallel mappings would reintroduce drift.
-
-### Simple resolution
-
-Ensure all Silver/Gold row-count and current analytical projection logic
-resolves identity through `DataContract`.
-
-Remove or avoid parallel manual mapping tables for the same identity.
-
-### Done when [IMPLEMENTED]
-
-Renaming a physical table in the registry produces one obvious set of
-required changes rather than hidden secondary mappings.
-
----
-
-## 17. Prove Raw-Payload Recovery End-to-End
-
-### Quirk found
-
-Raw payload persistence is a core recovery feature, but design intent is
-weaker than a proven recovery test.
-
-### Simple resolution
-
-Use a synthetic source:
-
-```text
-ingest file
-→ payload persisted
-→ remove original source
-→ invalidate/requeue analytical state
-→ recover from Control Plane evidence
-```
-
-If the normal production pipeline intentionally requires source presence
-for some categories, document that boundary explicitly rather than
-claiming universal raw replay.
-
-### Done when [IMPLEMENTED]
-
-The supported raw-evidence recovery path has been demonstrated
-end-to-end.
-
----
-
-## 18. Check Resource Cleanup Under Failure and Repeated Runs
-
-### Quirk found
-
-v6.3.0 focuses correctly on logical recovery.
-
-The final operational concern is whether failure paths leave worker
-pools, transactions, large frames, or temporary resources alive.
-
-### Simple resolution
-
-Run repeated executions in the same process where supported and inject
-at least one worker/stage failure.
-
-Observe:
-
-- worker processes,
-- database connections/transactions,
-- temporary files,
-- memory trend.
-
-Do not chase normal allocator caching; look for clear monotonic leakage
-or orphaned resources.
+Preserve the original exception if cleanup also fails.
 
 ### Done when
 
-Repeated successful/failed runs do not accumulate orphan workers, open
-transactions, or obvious unbounded memory.
+Force failures during:
 
----
+-   DuckDB initialization,
+-   Control Plane initialization,
+-   run creation,
+-   Meta/self-healing initialization.
 
-## 19. Final Clean-Rebuild Equivalence
+After each failure:
 
-### Quirk found
+-   no production lock remains held,
+-   connections are closed where opened,
+-   logging handlers are removed,
+-   original failure remains visible.
 
-Self-healing and incremental replay are only trustworthy if they
-converge to the same result as a clean analytical rebuild.
+------------------------------------------------------------------------
+
+## 3. Make `ControlPlane.open()` / `close()` Lock-Safe
+
+### Bug found
+
+The production lock can be acquired before SQLite successfully opens.
+
+Likewise, if database close raises, lock release can be skipped.
 
 ### Simple resolution
 
-For a representative production state, compare:
+Make lock ownership exception-safe.
 
-```text
-incremental/self-healed execution
-        vs
-clean Bronze-derived downstream rebuild
+Conceptually:
+
+```python
+def open(self):
+    self._lock.acquire(timeout=0)
+
+    try:
+        self.db.open()
+    except Exception:
+        self._lock.release()
+        raise
 ```
 
-Compare financial outputs, not only row counts.
+and:
+
+```python
+def close(self):
+    try:
+        self.db.close()
+    finally:
+        self._lock.release()
+```
+
+Also make repeated/partial cleanup safe if `close()` can be called after
+incomplete initialization.
 
 ### Done when
 
-Both paths converge to the same deterministic financial truth.
+-   SQLite-open failure releases the lock.
+-   SQLite-close failure still releases the lock.
+-   A new production run can start after either injected failure.
 
----
+------------------------------------------------------------------------
 
-## 20. Final Production Regression
+## 4. Make Snapshot Restore Sidecar-Safe
 
-After all v6.4.0 hardening is complete:
+### Bug found
 
-1.  Run the complete production corpus.
-2.  Immediately rerun with unchanged inputs.
-3.  Exercise at least one recovery scenario.
-4.  Restore at least one coordinated snapshot.
-5.  Compare against the known-good financial baseline.
+Snapshot creation is now coordinated correctly, but restore can extract
+database files over an existing environment while old sidecar files
+remain.
+
+Potential stale files include:
+
+```text
+Raw_Documents.sqlite-wal
+Raw_Documents.sqlite-shm
+Personal_Finance_DB.duckdb.wal
+```
+
+A restored main database combined with an old WAL can produce
+inconsistent state.
+
+### Simple resolution
+
+Perform restore under the same production lock.
+
+Prefer:
+
+```text
+acquire production lock
+        ↓
+extract snapshot into temporary directory
+        ↓
+validate expected snapshot files
+        ↓
+remove target database sidecars
+        ↓
+replace target database files
+        ↓
+restore only sidecars that belong to the snapshot
+        ↓
+open/validate restored databases
+```
+
+Do not extract blindly over live database files.
+
+### Done when
+
+Create a stale WAL/SHM scenario, restore a snapshot, and verify:
+
+-   stale sidecars are gone,
+-   SQLite opens,
+-   DuckDB opens,
+-   expected Control Plane state exists,
+-   expected analytical contracts exist,
+-   production pipeline can run successfully.
+
+------------------------------------------------------------------------
+
+## 5. Complete Silver / Gold Physical-Table Registry Validation
+
+### Gap found
+
+`validate_registry()` now checks many useful invariants, but
+physical-table uniqueness is stronger for Bronze than for Silver/Gold.
+
+Two analytical contracts pointing to the same physical table should fail
+before execution.
+
+### Simple resolution
+
+Add Silver/Gold physical-table uniqueness validation.
+
+Conceptually:
+
+```text
+(layer, physical_table)
+→ must resolve to one intended contract
+```
+
+Use case-insensitive normalized comparison if table identity is treated
+case-insensitively elsewhere.
+
+Do **not** reject duplicate `publication_order` merely because the
+numbers repeat if the current design intentionally allows equal
+ordering.
+
+The existing Gold registry already uses shared publication-order values
+in places.
+
+### Done when
+
+A deliberately duplicated Silver or Gold physical table causes registry
+validation to fail before the pipeline starts.
+
+------------------------------------------------------------------------
+
+## 6. Align Registry Hardening Claims With Actual Validation
+
+### Gap found
+
+The hardening narrative can overstate what the validator guarantees.
+
+The current code and documentation should describe the same invariants.
+
+There is also current contract-count drift from the earlier hardening
+baseline:
+
+```text
+Bronze: 16
+Silver: 20
+Gold:   17
+```
+
+### Simple resolution
+
+After the validator is finalized:
+
+-   make `production-hardening.md` describe only checks actually
+    implemented,
+-   update Bronze contract count to 16,
+-   keep publication-order language aligned with the real allowed
+    semantics.
+
+This is a tiny documentation/code-contract alignment item, not a
+documentation rewrite.
+
+### Done when
+
+The hardening document and validator describe the same invariants and
+contract counts.
+
+------------------------------------------------------------------------
+
+## 7. Add Cross-Process ISIN Worker Logging
+
+### Gap found
+
+Parent-process logging is now strong and failed worker tracebacks are
+explicitly returned to the parent.
+
+However, normal DEBUG/INFO logs emitted inside Windows
+`ProcessPoolExecutor` workers do not automatically flow into the
+parent's dynamically configured run log.
+
+That means successful per-ISIN worker traces can be missing from the
+persisted execution log.
+
+### Simple resolution
+
+If v6.5.1 is intended to provide complete worker-level forensic tracing,
+use a multiprocessing-safe logging queue.
+
+Recommended shape:
+
+```text
+parent process
+    │
+    ├── QueueListener
+    │      ↓
+    │   run FileHandler
+    │
+    └── multiprocessing queue
+              ↑
+        QueueHandler
+              ↑
+        ISIN workers
+```
+
+Initialize worker logging once when each worker process starts.
+
+Include useful context in worker records:
+
+```text
+run_id
+ISIN
+stage
+process id/name
+```
+
+Do not create one log file per ISIN unless there is a strong operational
+reason.
+
+### Important guardrail
+
+Worker logging must never become part of financial correctness.
+
+If logging infrastructure itself fails:
+
+-   financial exceptions must still propagate,
+-   the worker must not silently disappear,
+-   parent-level failure reporting must still work.
+
+### Done when
+
+A successful multi-ISIN run produces worker start/finish/timing messages
+in the persisted run log, and a failed worker still returns its
+structured exception/traceback to the parent.
+
+------------------------------------------------------------------------
+
+## 8. Keep Worker Log Volume Controlled
+
+### Risk introduced by Item 7
+
+Per-ISIN tracing can turn one useful forensic log into a wall of noise.
+
+### Simple resolution
+
+Keep worker-level output primarily at `DEBUG`.
+
+Suggested events:
+
+```text
+worker start
+ISIN
+major internal stage transition where useful
+worker complete
+duration
+failure + traceback
+```
+
+Avoid:
+
+```text
+per-row logs
+per-lot logs
+large DataFrame dumps
+raw financial payloads
+```
+
+The parent process should remain responsible for high-level stage
+progress.
+
+### Done when
+
+A normal production log remains readable while DEBUG mode contains
+enough per-ISIN context to reconstruct worker execution.
+
+------------------------------------------------------------------------
+
+## 9. Make Logging Context Explicit Rather Than Embedded in Messages
+
+### Hardening opportunity
+
+The new logging stack already provides source module/function/line
+context.
+
+With worker tracing, correlation becomes more important.
+
+### Simple resolution
+
+Where practical, use logging context/adapter/filter fields for:
+
+```text
+run_id
+stage
+ISIN
+process
+```
+
+rather than manually formatting those values differently in every
+message.
+
+Keep the human-readable message short.
+
+Conceptually:
+
+```text
+timestamp
+level
+run_id
+stage
+ISIN
+process
+module
+function
+line
+message
+```
+
+This does not require adopting OpenTelemetry or distributed tracing.
+
+### Done when
+
+A persisted run log can be filtered/searched by run, stage, and ISIN
+without relying on inconsistent message wording.
+
+------------------------------------------------------------------------
+
+## 10. Decide Whether Critical Silver Data-Quality Violations Fail the Run
+
+### Gap found
+
+Silver currently detects important investment-master quality violations
+such as missing:
+
+```text
+ISIN
+TAX_TYPE
+```
+
+and logs them as critical/error-level conditions.
+
+But the pipeline can continue.
+
+That creates an ambiguous contract:
+
+```text
+critical financial-data violation
+→ log
+→ continue
+→ SUCCESS
+```
+
+### Simple resolution
+
+Make the semantics explicit.
+
+If these fields are truly mandatory for downstream financial
+correctness:
+
+```text
+collect violations
+→ log concise diagnostics
+→ raise data-quality exception
+→ rollback
+```
+
+If they are intentionally tolerated, downgrade the log level and
+document the fallback semantics.
+
+For the current financial model, fail-fast is preferable for fields
+required by tax/investment logic.
+
+### Done when
+
+A deliberately malformed Investment Master has one deterministic
+outcome:
+
+-   either the run fails clearly,
+-   or the documented fallback is applied.
+
+It must not merely emit a scary log and continue ambiguously.
+
+------------------------------------------------------------------------
+
+## 11. Ensure Logging Cannot Leak Sensitive Financial Data
+
+### Risk introduced by deeper tracing
+
+More forensic logging increases the chance of accidentally persisting:
+
+```text
+raw rows
+account identifiers
+broker payloads
+personal data
+large DataFrame representations
+```
+
+The execution log itself is now durable Control Plane evidence.
+
+### Simple resolution
+
+Keep logs structural:
+
+```text
+row counts
+contract names
+ISIN where operationally required
+stage
+duration
+exception metadata
+paths where acceptable
+```
+
+Avoid dumping full DataFrames or raw source payloads.
+
+Review exception/logging helpers for accidental object repr output.
+
+### Done when
+
+A representative DEBUG run can be inspected without exposing unnecessary
+raw financial records.
+
+------------------------------------------------------------------------
+
+## 12. Make Execution-Log Persistence Failure-Safe
+
+### Edge case
+
+The run log is compressed and persisted back into the Control Plane.
+
+If final log compression/persistence fails, it should not rewrite the
+actual pipeline outcome.
+
+### Simple resolution
+
+Treat execution-log persistence as observability cleanup.
+
+For a successful pipeline:
+
+-   attempt to persist the log,
+-   surface/log persistence failure clearly,
+-   decide whether observability persistence is release-critical.
+
+For a failed pipeline:
+
+-   never replace the original pipeline exception with a log-persistence
+    exception.
+
+The original financial/operational failure remains primary.
+
+### Done when
+
+Inject a log persistence/compression failure during both:
+
+-   successful run cleanup,
+-   failed run cleanup.
+
+The original run outcome remains understandable and no primary exception
+is lost.
+
+------------------------------------------------------------------------
+
+## 13. Verify Resource Cleanup With the New Logging Queue
+
+### Risk introduced by worker logging
+
+Adding `QueueListener` / worker handlers introduces new process/thread
+resources.
+
+### Simple resolution
+
+Make logging lifecycle explicit:
+
+```text
+initialize queue/listener
+        ↓
+run
+        ↓
+stop listener
+remove handlers
+close queue
+join queue thread/process resources
+```
+
+Cleanup belongs in the same outer lifecycle `finally` as
+database/process cleanup.
+
+### Done when
+
+Repeated runs in the same application process do not accumulate:
+
+-   QueueListeners,
+-   handlers,
+-   worker processes,
+-   open log files,
+-   queue feeder threads.
+
+------------------------------------------------------------------------
+
+## 14. Re-Test Empty-State Propagation Downstream
+
+### Related correctness check
+
+Fixing empty Bronze replacement changes a previously incorrect edge
+path.
+
+The downstream rebuild should also correctly represent an intentionally
+empty source.
+
+### Simple resolution
+
+After fixing Item 1, run a synthetic empty-source scenario through:
+
+```text
+Bronze
+→ Silver
+→ financial engines
+→ Gold
+```
+
+Verify that downstream tables either become correctly empty or retain
+only state justified by other sources.
+
+### Done when
+
+No stale downstream state survives solely because a source that became
+empty used to contain rows.
+
+------------------------------------------------------------------------
+
+## 15. Final v6.5.1 Regression
+
+After all fixes:
+
+### Normal production run
 
 Verify:
 
-- no duplicate Control Plane artifacts,
-- no duplicate Bronze history,
-- no stranded `PENDING_BRONZE`,
-- no stale unfinished runs,
-- no partial portfolio publication,
-- expected **15 Bronze / 20 Silver / 17 Gold** contracts,
-- investment quantities reconcile,
-- FIFO lots reconcile,
-- tax state reconciles,
-- benchmark state reconciles,
-- ISIN/portfolio XIRR reconciles,
-- book/market/after-tax wealth reconciles,
-- cash-flow reconciliation remains correct,
-- FIRE outputs remain consistent with the existing methodology.
+-   full production corpus completes,
+-   expected **16 Bronze / 20 Silver / 17 Gold** contracts,
+-   Control Plane clean,
+-   no stranded unfinished runs,
+-   no stranded `PENDING_BRONZE`.
 
-Runtime is an observation, not the correctness criterion.
+### Immediate unchanged rerun
 
----
+Verify:
+
+-   no duplicate artifacts,
+-   no duplicate Bronze history,
+-   no unexpected reprocessing,
+-   financial outputs unchanged.
+
+### Failure tests
+
+At minimum:
+
+-   initialization failure before main execution,
+-   SQLite open/close failure or equivalent injected path,
+-   worker process failure,
+-   log persistence failure,
+-   Bronze changed-source → empty,
+-   snapshot restore with stale sidecars.
+
+### Logging tests
+
+Verify:
+
+-   parent stage logs,
+-   worker ISIN logs,
+-   worker timings,
+-   worker failure traceback,
+-   run/stage/ISIN context,
+-   compressed execution log persisted,
+-   no unnecessary sensitive payloads.
+
+### Financial regression
+
+Compare against the known-good baseline:
+
+-   investment quantities,
+-   FIFO lots,
+-   realized/unrealized tax state,
+-   benchmark state,
+-   ISIN XIRR,
+-   portfolio XIRR,
+-   book wealth,
+-   market wealth,
+-   after-tax wealth,
+-   cash-flow reconciliation,
+-   FIRE outputs.
+
+Unless an explicit financial bug was fixed:
+
+> **all deterministic financial truth should remain unchanged.**
+
+------------------------------------------------------------------------
 
 # Recommended Implementation Order
 
 ```text
-1. PENDING_BRONZE normal replay
-2. PENDING_BRONZE idempotency
-3. rename identity migration
-4. category-scoped rename detection
-5. Bronze/Meta rename ownership
-6. explicit delete semantics
-7. artifact-level Bronze self-healing
-8. commit-window recovery
-9. stale-run recovery verification
-10. abnormal worker failure handling
-11. crash-safe single-run protection
-12. consistent coordinated snapshots
-13. snapshot restore verification
-14. complete DataContract validation
-15. builder ↔ persisted-contract validation
-16. Meta contract-authority cleanup
-17. raw-payload recovery proof
-18. resource cleanup tests
-19. clean-rebuild equivalence
-20. full production regression
+1. Empty Bronze replacement
+2. Outer orchestrator lifecycle boundary
+3. ControlPlane lock exception safety
+4. Snapshot restore sidecar hygiene
+5. Silver/Gold physical-table validation
+6. Registry/hardening count alignment
+7. Multiprocessing logging queue
+8. Worker log-volume controls
+9. Structured run/stage/ISIN log context
+10. Silver critical data-quality semantics
+11. Sensitive-data logging review
+12. Execution-log persistence failure safety
+13. Logging-resource cleanup
+14. Empty-state downstream regression
+15. Full production regression
 ```
 
----
+------------------------------------------------------------------------
 
-# What v6.4.0 Is Not
+# What Not to Reopen
 
-Do **not** use this release to redesign working financial methodology
-unless testing exposes an actual defect.
+Do not use v6.5.1 to redesign:
 
-Keep stable:
+-   Control Plane ownership,
+-   Bronze/Silver/Gold architecture,
+-   artifact lifecycle model,
+-   FIFO,
+-   XIRR,
+-   tax methodology,
+-   shadow benchmark methodology,
+-   wealth methodology,
+-   cash-flow methodology,
+-   FIRE methodology.
 
-- FIFO methodology,
-- XIRR methodology,
-- shadow benchmark methodology,
-- tax methodology,
-- household wealth methodology,
-- cash-flow methodology,
-- FIRE methodology,
-- Control Plane ownership model,
-- persistent Bronze + rebuilt Silver/Gold architecture.
+The remaining work is edge-case correctness and observability lifecycle
+hardening.
 
-This release should strengthen the shell around those systems.
-
----
+------------------------------------------------------------------------
 
 # Definition of Done
 
-v6.4.0 is hardened when:
+v6.5.1 is complete when:
 
-- recovery work always re-enters the normal pipeline,
-- replay is idempotent,
-- rename/delete behaviour is deterministic,
-- path-derived identity remains internally consistent,
-- Control Plane can repair missing artifact-level Bronze state,
-- commit-window failures are recoverable,
-- stale runs are explainable,
-- abnormal worker failure cannot publish partial finance,
-- concurrent execution is safely rejected,
-- snapshots are consistent and proven restorable,
-- analytical contracts fail fast when broken,
-- raw-evidence recovery has been demonstrated,
-- repeated runs do not leak operational resources,
-- incremental/self-healed state converges with clean rebuild state,
-- and the full production corpus preserves the known-good financial
-  truth.
+-   actionable empty sources remove stale Bronze state,
+-   initialization failures cannot leak locks/resources,
+-   Control Plane lock ownership is exception-safe,
+-   snapshot restore cannot mix restored databases with stale WAL/SHM
+    files,
+-   Silver/Gold physical-table collisions fail fast,
+-   hardening documentation matches the real 16/20/17 registry,
+-   successful and failed ISIN workers are traceable in the persisted
+    run log,
+-   worker logging remains bounded and privacy-safe,
+-   run/stage/ISIN context is consistent,
+-   critical Silver data-quality semantics are explicit,
+-   log-persistence failures cannot hide primary failures,
+-   logging queues/listeners clean up correctly,
+-   intentionally empty sources propagate correctly downstream,
+-   repeated unchanged runs remain idempotent,
+-   and the complete production corpus preserves known-good financial
+    truth.
 
-> **v6.4.0 target:** no clever new architecture; just make the existing
-> architecture boringly difficult to break.
+> **v6.5.1 target:** close the final edge semantics, make every
+> important execution path explainable after the fact, and then let the
+> application get back to calculating finances instead of auditioning
+> for a distributed-systems conference. 😄
