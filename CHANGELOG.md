@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [6.5.1](https://github.com/tks18/personal-finance-etl/compare/6.5.0...6.5.1) (2026-09-26)
+
+
+### Bug Fixes 🛠
+
+* **backend/control_plane:** more concrete try / catch for db ops ([fceb4c3](https://github.com/tks18/personal-finance-etl/commit/fceb4c3f13cc8697bef43c5138cd7c29d2c9c2f1))
+* **backend/load:** bronze: `upsert_table()` can return early when the extractedDataFrame is empty ([58a64b9](https://github.com/tks18/personal-finance-etl/commit/58a64b9329a525693c5e4e1d724cbd1a9f8d8389))
+* **backend/load:** registry: Add Silver/Gold physical-table uniqueness validation ([bbc715e](https://github.com/tks18/personal-finance-etl/commit/bbc715ed41346d5a77c80a9bb29e60ecb15c1f67))
+* **backend/load:** silver: raise critical errors and fail the pipeline ([b13d6b0](https://github.com/tks18/personal-finance-etl/commit/b13d6b066e81da2b52ca43b9d51d2e56bf06096b))
+* **backend/pipeline:** completely hardened the try catch blocks, clean up everything ([5790a31](https://github.com/tks18/personal-finance-etl/commit/5790a31a23dc73ccad0e0ffcace5a07f4766e1b1))
+
+
+### Features 🔥
+
+* **backend/api:** implement restore db in the facade ([1bae0bf](https://github.com/tks18/personal-finance-etl/commit/1bae0bf474ae3a2674bc0e04675bb5ccf165a3e2))
+* **backend/engines:** isin_pipeline: implement logging that propogates diff workers ([9fa1840](https://github.com/tks18/personal-finance-etl/commit/9fa18406e9a954d18324171aad2a599a10d6966d))
+* **backend/load:** backup: now backend supports complete db restore feature ([196b36a](https://github.com/tks18/personal-finance-etl/commit/196b36a03a2b482d9ec5e9c669054d142da8648e))
+* **backend/utils:** logger: significantly improve logging to support worker pools ([1c491ad](https://github.com/tks18/personal-finance-etl/commit/1c491adea528eceb41c8c43e63980f2548030471))
+* **frontend/cli:** implement restore functionality in cli ([a1e25af](https://github.com/tks18/personal-finance-etl/commit/a1e25afdab2070584047bf1851af3db3864e4915))
+* **frontend/commons:** doc_renderer: completely overhaul and give a new look ([e88c007](https://github.com/tks18/personal-finance-etl/commit/e88c007dc3cd130530cd0da4dab72931faefe075))
+* **frontend/gui:** implement restore functionality in GUI ([464a484](https://github.com/tks18/personal-finance-etl/commit/464a48436ae2f7ef22657fa5bc6bb51cde08dbb6))
+* **frontend/launcher:** add argument for restore functionality ([0c17ba3](https://github.com/tks18/personal-finance-etl/commit/0c17ba3078b79d1788b61280c2ecc394f77bab68))
+
+
+### Docs 📃
+
+* add production hardening edge cases doc 6.5.1 ([9c9be31](https://github.com/tks18/personal-finance-etl/commit/9c9be310f7abb9cec583660f016338e745adffd7))
+* **manifest.json:** add root readme to the manifest ([30ba7e0](https://github.com/tks18/personal-finance-etl/commit/30ba7e0c730838f900a06afc09e8d160a6de5834))
+* update production hardening checklist ([ca8ea34](https://github.com/tks18/personal-finance-etl/commit/ca8ea34fe4572f48c1e007249ac777ffc38bf892))
+
 ## [6.5.0](https://github.com/tks18/personal-finance-etl/compare/6.4.2...6.5.0) (2026-09-25)
 
 
