@@ -15,7 +15,12 @@ from personal_finance_etl.backend.engines.analytics.pipeline.processor.benchmark
 )
 from personal_finance_etl.backend.types.pipeline import PipelineExecutionResult
 from personal_finance_etl.backend.utils.interfaces import ILogger
-from personal_finance_etl.backend.utils.logger import logger
+from personal_finance_etl.backend.utils.logger import (
+    logger,
+    setup_worker_logging,
+    start_worker_listener,
+    stop_worker_listener,
+)
 from personal_finance_etl.backend.utils.models import EngineStatus, LogLevel
 
 
@@ -56,19 +61,24 @@ def _process_isin_worker(
     ) = task
 
     logger.debug(
-        f"[Worker] Starting processing for ISIN: {isin} with {len(p_inst)} purchases, {len(s_inst)} sales, and {len(m_inst)} market quotes"
+        f"[Worker] Starting processing for ISIN: {isin} with {len(p_inst)} purchases, {len(s_inst)} sales, and {len(m_inst)} market quotes",
+        extra={"isin": isin, "stage": "QuantWorker"},
     )
 
     processor = IsinProcessor(fy_table, start_date, end_date, rules)
     try:
         worker_id = multiprocessing.current_process().name
-        logger.debug(f"[ENGINE:POOL] {worker_id} started processing ISIN '{isin}'")
+        logger.debug(
+            f"[ENGINE:POOL] {worker_id} started processing ISIN '{isin}'",
+            extra={"isin": isin, "stage": "QuantWorker"},
+        )
         t0 = time.perf_counter()
 
         res = processor.process(isin, p_inst, s_inst, m_inst, master_row, bm_map)
 
         logger.debug(
-            f"[ENGINE:POOL] {worker_id} finished ISIN '{isin}' in {(time.perf_counter() - t0) * 1000:.2f}ms"
+            f"[ENGINE:POOL] {worker_id} finished ISIN '{isin}' in {(time.perf_counter() - t0) * 1000:.2f}ms",
+            extra={"isin": isin, "stage": "QuantWorker"},
         )
 
         if res is not None:
@@ -210,10 +220,13 @@ class IsinPipeline:
         current_process = multiprocessing.current_process()
         is_daemon = current_process.daemon
         current_process.daemon = False
+        worker_queue = start_worker_listener()
 
         try:
             with concurrent.futures.ProcessPoolExecutor(
-                max_workers=min(4, os.cpu_count() or 1)
+                max_workers=min(4, os.cpu_count() or 1),
+                initializer=setup_worker_logging,
+                initargs=(worker_queue,),
             ) as executor:
                 future_to_isin = {
                     executor.submit(_process_isin_worker, task): task[0] for task in tasks
@@ -314,6 +327,7 @@ class IsinPipeline:
                     _update_group(sector, sector_cf, sector_pt, isin_cf, isin_pt)
                     _update_group(industry, industry_cf, industry_pt, isin_cf, isin_pt)
         finally:
+            stop_worker_listener()
             current_process.daemon = is_daemon
 
         logger.info(
