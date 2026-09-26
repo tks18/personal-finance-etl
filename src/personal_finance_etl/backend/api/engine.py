@@ -49,6 +49,23 @@ class PersonalFinanceEngine:
         except Exception:
             return None
 
+    def restore_database(self, config_path: str, backup_zip_path: str) -> bool:
+        """Restores the DuckDB and SQLite Raw Store from a coordinated backup zip."""
+        try:
+            cfg = Settings.from_toml(config_path)
+            backup_mgr = SystemBackupManager(
+                cfg.TARGET_DB_BASE_PATH,
+                sqlite_db_name=cfg.RAW_DOCUMENT_STORE_NAME,
+                duckdb_name=cfg.TARGET_DB_NAME,
+            )
+            backup_mgr.restore_snapshot(backup_zip_path)
+            return True
+        except PermissionError as pe:
+            # We want to bubble up the detailed PermissionError for UI to show
+            raise pe
+        except Exception:
+            return False
+
     # --- Pipeline Execution ---
 
     def run_pipeline_async(
