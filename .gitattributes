@@ -2,3 +2,10 @@
 /.yarn/releases/*    binary
 /.yarn/plugins/**/*  binary
 /.pnp.*              binary linguist-generated
+
+# ---------------------------------------------------------------------------
+# Vendored third-party documentation assets
+# ---------------------------------------------------------------------------
+
+src/personal_finance_etl/frontend/commons/docs/assets/mermaid/** linguist-vendored
+src/personal_finance_etl/frontend/commons/docs/assets/mermaid/*.min.js linguist-generated=true
