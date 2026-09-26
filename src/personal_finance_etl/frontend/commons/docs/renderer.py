@@ -454,7 +454,7 @@ class DocsRenderer:
                             e.preventDefault();
                             e.stopPropagation(); // prevent toggling the details
                             document.getElementById('main-content').scrollTo({{
-                                top: heading.offsetTop - 20,
+                                top: heading.offsetTop - 60,
                                 behavior: 'smooth'
                             }});
                         }};
