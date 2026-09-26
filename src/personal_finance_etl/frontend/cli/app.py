@@ -132,6 +132,31 @@ def main_cli(args: argparse.Namespace) -> None:
             )
         sys.exit(0)
 
+    if getattr(args, "restore", None):
+        if not config_path:
+            console.print("\n[bold]Restore requires a config file.[/bold]")
+            config_path = get_file_interactive("Config TOML", engine.get_recent_configs())
+
+        console.print(
+            "\n[bold yellow]⚠️  WARNING: Restoring will overwrite the current database.[/bold yellow]"
+        )
+        if not Confirm.ask("[bold red]Are you sure you want to proceed?[/bold red]"):
+            console.print("[yellow]Restore aborted by user.[/yellow]")
+            sys.exit(0)
+
+        console.print(f"\n[bold green]♻️ Restoring Database from: {args.restore}[/bold green]")
+        try:
+            success = engine.restore_database(config_path, args.restore)
+            if success:
+                console.print("[bold green]✓ Snapshot successfully restored.[/bold green]")
+            else:
+                console.print("[bold red]✗ Failed to restore snapshot.[/bold red]")
+        except PermissionError as pe:
+            console.print(f"[bold red]✗ {pe}[/bold red]")
+        except Exception as e:
+            console.print(f"[bold red]✗ Unexpected error: {e}[/bold red]")
+        sys.exit(0)
+
     while True:
         if not config_path:
             config_path = get_file_interactive("Config TOML", engine.get_recent_configs())
