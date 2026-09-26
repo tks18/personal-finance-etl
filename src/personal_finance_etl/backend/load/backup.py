@@ -1,4 +1,5 @@
 import os
+import shutil
 import sqlite3
 import zipfile
 from datetime import datetime
@@ -82,7 +83,8 @@ class SystemBackupManager:
 
     def restore_snapshot(self, zip_path: str) -> None:
         """
-        Restores both databases from a coordinated snapshot zip.
+        Restores both databases from a coordinated snapshot zip safely,
+        preventing stale sidecar conflicts.
         """
         if not os.path.exists(zip_path):
             raise FileNotFoundError(f"Backup file not found: {zip_path}")
@@ -91,8 +93,69 @@ class SystemBackupManager:
         try:
             lock = FileLock(lock_path, timeout=0)
             with lock:
-                with zipfile.ZipFile(zip_path, "r") as zipf:
-                    zipf.extractall(self.base_path)
+                temp_extract_dir = os.path.join(get_temp_dir(), "snapshot_restore")
+                os.makedirs(temp_extract_dir, exist_ok=True)
+
+                try:
+                    with zipfile.ZipFile(zip_path, "r") as zipf:
+                        zipf.extractall(temp_extract_dir)
+
+                    target_items = os.listdir(temp_extract_dir)
+
+                    # 1. Pre-flight check / Rename existing active databases to .bak
+                    backed_up_files: list[tuple[str, str]] = []
+                    try:
+                        for item in target_items:
+                            dst = os.path.join(self.base_path, item)
+                            if os.path.exists(dst):
+                                bak_path = dst + ".bak"
+                                if os.path.exists(bak_path):
+                                    os.remove(bak_path)
+                                os.rename(dst, bak_path)
+                                backed_up_files.append((bak_path, dst))
+
+                        # Now remove stale sidecars since main files are successfully detached
+                        sidecars = [
+                            self.sqlite_path + "-wal",
+                            self.sqlite_path + "-shm",
+                            self.duckdb_path + ".wal",
+                        ]
+                        for sc in sidecars:
+                            if os.path.exists(sc):
+                                os.remove(sc)
+
+                        # 2. Move new files into place
+                        for item in target_items:
+                            src = os.path.join(temp_extract_dir, item)
+                            dst = os.path.join(self.base_path, item)
+                            if os.path.isfile(src):
+                                shutil.move(src, dst)
+
+                        # 3. Clean up .bak files
+                        for bak_path, _ in backed_up_files:
+                            try:
+                                os.remove(bak_path)
+                            except OSError:
+                                pass
+
+                    except PermissionError as pe:
+                        # Rollback
+                        for bak_path, orig_path in backed_up_files:
+                            if os.path.exists(bak_path):
+                                os.rename(bak_path, orig_path)
+                        raise PermissionError(
+                            "Cannot restore snapshot: The database is currently being read by another program. "
+                            "Please close all active dashboards or tools and try again."
+                        ) from pe
+                    except Exception as e:
+                        # Rollback on other errors too
+                        for bak_path, orig_path in backed_up_files:
+                            if os.path.exists(bak_path) and not os.path.exists(orig_path):
+                                os.rename(bak_path, orig_path)
+                        raise e
+                finally:
+                    if os.path.exists(temp_extract_dir):
+                        shutil.rmtree(temp_extract_dir)
 
                 logger.info(f"Coordinated snapshot restored from {zip_path} to {self.base_path}")
         except Timeout as err:
