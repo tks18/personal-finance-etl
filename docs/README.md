@@ -1,8 +1,12 @@
 # Personal Finance ETL Documentation
 
-This is the technical knowledge base for **Personal Finance ETL**.
+This is the canonical technical reference for **Personal Finance ETL**.
 
-The documentation follows the same rule as the codebase:
+Its job is to **specify** the system: architecture, financial methodology, contracts, configuration, failure semantics, and extension boundaries.
+
+> **README shows. Wiki teaches. `/docs` specifies. Code proves.**
+
+Inside `/docs`, I still follow the original documentation rule:
 
 > **Show the system. Show the code. Show the financial meaning. Explain the decisions. Expose the trade-offs. Let the work speak for the skill.**
 
@@ -10,12 +14,14 @@ The repository documentation is version-controlled, packaged with the applicatio
 
 ```mermaid
 flowchart LR
-    MD["Markdown Source<br/>docs/*.md"] --> MAN["manifest.json"]
+    MD["README + docs/*.md"] --> MAN["manifest.json"]
     MAN --> CAT["DocsCatalog"]
     CAT --> RENDER["DocsRenderer"]
-    RENDER --> GH["GitHub"]
-    RENDER --> CLI["CLI"]
-    RENDER --> GUI["Desktop"]
+    MER["Bundled Mermaid"] --> RENDER
+    RENDER --> NAV["Navigation + TOC"]
+    NAV --> GH["GitHub"]
+    NAV --> CLI["CLI"]
+    NAV --> GUI["Desktop"]
     MD --> WIKI["GitHub Wiki<br/>guided exploration layer"]
 ```
 
