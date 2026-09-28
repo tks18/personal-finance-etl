@@ -14,6 +14,18 @@ Decision-oriented Gold
 
 A bank column, broker worksheet or vendor label should disappear before it becomes a permanent downstream financial concept.
 
+The physical analytical contract surface behind that model is currently:
+
+```text
+Bronze   16 source contracts
+Silver   20 canonical contracts
+Gold     17 decision marts
+Meta      5 current-state tables
+```
+
+Bronze preserves source identity. Silver introduces canonical financial identity. Gold publishes only decision-serving grains.
+
+
 ---
 
 ## Model overview
