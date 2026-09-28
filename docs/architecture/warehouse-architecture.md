@@ -316,6 +316,7 @@ m_File_Registry
 m_Table_Row_Counts
 m_Financial_Rules
 m_Settings
+m_Data_Contracts
 ```
 
 For example:
