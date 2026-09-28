@@ -35,6 +35,18 @@ FinancialRules
 
 The distinction is fundamental. A database path is operational configuration. A rebalance tolerance, tax parameter, or cash-pool classification is financial policy.
 
+## Current application surfaces
+
+The same backend engine is exposed through:
+
+```text
+CLI
+Desktop
+Headless / automation
+```
+
+The CLI and Desktop also expose coordinated Snapshot/Restore and the packaged documentation browser. Those are application capabilities, not separate financial engines.
+
 ## Current portability boundary
 
 Installing the package is not sufficient to run it against an arbitrary user's financial data.
