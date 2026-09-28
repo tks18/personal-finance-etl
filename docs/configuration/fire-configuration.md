@@ -555,33 +555,61 @@ That keeps the serving layer decision-oriented.
 
 ---
 
-## 25. Configuration example: conceptual only
+## 25. Configuration shape
 
-The exact production model should remain the source of truth, but conceptually the structure resembles:
+FIRE configuration is part of the `FinancialRules` TOML payload rather than a separate configuration file.
 
-```yaml
-# Conceptual example, not a verbatim production file.
-fire:
-  withdrawal_rate: ...
-  simulation:
-    paths: ...
-    horizon_months: ...
-  regimes:
-    bull:
-      expected_return: ...
-      volatility: ...
-    bear:
-      expected_return: ...
-      volatility: ...
-  human_capital:
-    shock_probability: ...
-  glide_path:
-    enabled: ...
+A trimmed shape matching the current model looks like:
+
+```toml
+[assumptions.fire]
+swr_multiplier = 25.0
+coast_fi_real_return = 0.05
+coast_fi_years = 20
+lean_fi_ratio = 0.75
+fallback_trailing_return = 0.10
+cape_swr_floor = 0.03
+cape_swr_ceiling = 0.05
+cape_swr_base = 0.04
+human_capital_max_age = 60
+human_capital_discount_rate = 0.05
+
+[assumptions.monte_carlo]
+iterations = 10000
+max_months = 600
+annual_volatility = 0.15
+real_return_floor = -0.50
+sorr_cagr_window_months = 60
+desired_target_age = 45
+date_of_birth = "YYYY-MM-DD"
+
+[assumptions.monte_carlo.markov_regime]
+transition_matrix = [
+  [0.90, 0.08, 0.02],
+  [0.15, 0.80, 0.05],
+  [0.10, 0.15, 0.75],
+]
+
+[assumptions.monte_carlo.human_capital]
+shock_probability = 0.20
+shock_duration_min = 6
+shock_duration_max = 12
+
+[assumptions.monte_carlo.glide_path]
+derisk_start_months_prior = 60
+post_fi_re_risk_months = 120
+base_equity_weight = 0.70
+fi_target_equity_weight = 0.40
+
+[assumptions.monte_carlo.jump_diffusion]
+jump_probability_annual = 0.05
+jump_magnitude = -0.20
+expense_ratio_drag = 0.005
 ```
 
-This example is deliberately labelled conceptual.
+This is intentionally trimmed rather than a second copy of the entire production configuration.
 
-Production configuration fields should be taken from the current Pydantic models.
+The current Pydantic models remain authoritative for field names, defaults and validation.
 
 ---
 
