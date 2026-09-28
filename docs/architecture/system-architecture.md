@@ -282,7 +282,7 @@ CREATE TABLE IF NOT EXISTS cp_runs (
     schema_version TEXT,
     settings_snapshot_id TEXT,
     rules_snapshot_id TEXT,
-    execution_log TEXT
+    execution_log BLOB
 );
 ```
 
@@ -375,6 +375,8 @@ That separation matters for recovery and reproducibility.
 ---
 
 ## 7. Bronze is persistent source-shaped state
+
+Bronze is governed by **16 registry contracts**. Eleven reference/current-state contracts use full replacement; five historical contracts preserve file-owned partitions and replace only the actionable artifact state.
 
 Bronze is where extracted source state becomes analytically persistent without pretending to be canonical finance.
 
@@ -591,6 +593,7 @@ m_File_Registry
 m_Table_Row_Counts
 m_Financial_Rules
 m_Settings
+m_Data_Contracts
 ```
 
 It exists beside the analytical warehouse because those current-state values are useful to BI/query consumers.
@@ -612,6 +615,19 @@ DuckDB Meta
 ---
 
 ## 14. Reliability is part of the architecture
+
+Current reliability includes:
+
+```text
+single-run production lock
+stale-run recovery
+structured run failures
+run-scoped compressed execution logs
+cross-process ISIN worker tracing
+PENDING_BRONZE replay
+artifact-level Bronze self-healing
+coordinated Snapshot + Restore
+```
 
 A successful run transitions to `COMMITTING` before persistence is finalized:
 
@@ -665,7 +681,9 @@ flowchart LR
 
 The Meta layer also performs a self-healing check.
 
-If an artifact exists in the Control Plane but is missing from the DuckDB registry, it is returned to `PENDING_BRONZE`.
+If an artifact is `SYNCED` in the Control Plane but its DuckDB state is incomplete, it is returned to `PENDING_BRONZE`.
+
+The current check covers Meta identity, required Bronze-table existence, and artifact-owned `__file_name__` partitions for historical sources.
 
 The Control Plane therefore anchors recovery.
 
