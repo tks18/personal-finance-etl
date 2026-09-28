@@ -623,6 +623,30 @@ It should not be documented as row-level or graph-complete lineage.
 
 ---
 
+## 23. Recovery reuses the same lifecycle
+
+A previously `SYNCED` artifact can be returned to `PENDING_BRONZE` when Meta or Bronze no longer contains the state required by the Control Plane.
+
+The next run does not enter a special repair mode:
+
+```text
+new
++
+changed
++
+PENDING_BRONZE
+        ↓
+normal extraction
+        ↓
+normal Bronze synchronization
+        ↓
+SYNCED
+```
+
+A pure rename is also handled as identity migration rather than financial change: Control Plane identity, raw-payload ownership, Bronze `__file_name__`, and Meta identity move together while the underlying evidence remains unchanged.
+
+---
+
 ## Lifecycle invariants
 
 1. Raw evidence exists before derived analytical state.
