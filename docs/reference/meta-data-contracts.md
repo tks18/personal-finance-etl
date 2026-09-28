@@ -209,7 +209,7 @@ CREATE TABLE IF NOT EXISTS cp_runs (
     schema_version TEXT,
     settings_snapshot_id TEXT,
     rules_snapshot_id TEXT,
-    execution_log TEXT
+    execution_log BLOB
 );
 ```
 
@@ -343,6 +343,7 @@ m_File_Registry
 m_Table_Row_Counts
 m_Financial_Rules
 m_Settings
+m_Data_Contracts
 ```
 
 It exists to put useful current-state context beside the analytical warehouse.
@@ -434,6 +435,39 @@ Meta
 
 ---
 
+## `meta.m_Data_Contracts`
+
+This table is the current analytical contract projection.
+
+```sql
+CREATE TABLE IF NOT EXISTS meta.m_Data_Contracts (
+    contract_id       TEXT NOT NULL,
+    layer             TEXT NOT NULL,
+    physical_table    TEXT NOT NULL,
+    domain            TEXT,
+    grain             TEXT,
+    producer          TEXT,
+    is_full_replace   BOOLEAN,
+    publication_order INTEGER
+);
+```
+
+It publishes all three analytical layers:
+
+```text
+16 Bronze contracts
+20 Silver contracts
+17 Gold contracts
+```
+
+For Bronze, `contract_id` is the extraction attribute and the Meta projection uses `domain = Raw`, `grain = File`, `producer = ControlPlane`, plus the registry's actual `is_full_replace` value.
+
+For Silver and Gold, the values come directly from `DATA_CONTRACT_REGISTRY`; those layers are full-replace.
+
+Meta therefore exposes the contract authority without becoming the authority itself.
+
+---
+
 ## 8. Control Plane vs Meta query guide
 
 | Question | Query surface |
@@ -501,21 +535,33 @@ That trade-off is documented explicitly.
 
 ## 11. Recovery implications
 
-If DuckDB is lost while SQLite survives:
+The Control Plane and DuckDB Meta have different durability roles, but SQLite and DuckDB are backed up and restored as one logical recovery unit.
 
 ```text
-Control Plane evidence
+SQLite Control Plane
++
+DuckDB analytical warehouse
         ↓
-rebuild Bronze
+coordinated Snapshot
         ↓
-rebuild Silver
-        ↓
-rebuild Gold
+single recovery archive
 ```
 
-If SQLite is lost while DuckDB survives, current analytics can remain available but authoritative raw/run provenance is gone.
+Restore validates the archive, preserves the current database pair and sidecars, installs the snapshot, and rolls back to the complete previous pair if replacement fails.
 
-That is why the stronger future backup model should snapshot both databases as one system bundle.
+That does not turn DuckDB Meta into operational history.
+
+After restore:
+
+```text
+SQLite
+→ authoritative operational state
+
+DuckDB Meta
+→ restored current analytical projection
+```
+
+Normal self-healing remains available on subsequent runs if analytical state is incomplete.
 
 ---
 
