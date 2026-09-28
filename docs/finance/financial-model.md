@@ -306,6 +306,8 @@ This distinction is important.
 
 A simulation percentile should never visually acquire the same status as a bank transaction merely because both appear in Gold.
 
+The same principle applies inside reconstructed investment state: a broker-reconciliation adjustment can make current quantity/cost coherent without becoming newly observed historical acquisition evidence.
+
 ---
 
 ## 11. FinancialRules carries semantics
