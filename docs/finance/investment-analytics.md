@@ -193,7 +193,7 @@ That is why lot grain survives deep into the analytical model.
 
 Historical transactions can be incomplete.
 
-The broker can still report authoritative current quantity/cost.
+The broker can still report the current quantity/cost state used as the reconciliation anchor.
 
 The engine reconciles reconstructed inventory against reported state.
 
@@ -213,6 +213,8 @@ if broker_qty > current_units + 1e-8:
 ```
 
 If reconstructed quantity is too high, excess inventory is consumed until it matches broker state.
+
+When broker quantity is higher, the current implementation creates reconciliation inventory at zero purchase cost because the missing acquisition evidence is unavailable to the pipeline. That makes the current position reconcilable, but it does **not** establish a tax-quality historical acquisition basis.
 
 The principle is:
 
@@ -289,9 +291,11 @@ tax classification
 benchmark result
 ```
 
-Realized return and tax state are historical facts/derivations tied to the sale event.
+Realized return and tax state are sale-linked reconstructed outputs.
 
-They should not be mixed with active-lot unrealized state.
+When the consumed lot came directly from observed purchase history, the reconstruction retains that evidence. When reconciliation created or adjusted the active inventory, the resulting basis inherits that weaker evidentiary status.
+
+They should not be mixed with active-lot unrealized state or presented as stronger evidence than the inputs that produced them.
 
 ---
 
@@ -348,6 +352,8 @@ def calculate_xirr(
 ```
 
 The financial work happens before that call.
+
+The low-level helper preserves numerical failure as `NaN`. The current portfolio-level wrapper is more permissive and can fall back to `0.0` when `pyxirr` returns no value or raises. That is a current implementation boundary: normal XIRR results remain cash-flow reconstructed, while degenerate/non-convergent portfolio cases should not be interpreted as evidence of an economically meaningful 0% return.
 
 At ISIN grain:
 
@@ -573,8 +579,9 @@ That policy protects the portfolio from silent incompleteness.
 
 ## 24. What the investment engine does not claim
 
-- Broker reconciliation does not recreate missing historical evidence.
-- Estimated tax is not an observed tax payment.
+- Broker reconciliation does not recreate missing historical acquisition evidence.
+- Zero-cost reconciliation inventory represents missing basis evidence, not proof that economic/tax cost was zero.
+- Estimated tax is decision-support state, not an observed tax payment or final filing liability.
 - Benchmark relative performance is not a forecast.
 - XIRR can be unstable/undefined for degenerate cash-flow patterns.
 - Max Drawdown describes historical path, not future risk.
