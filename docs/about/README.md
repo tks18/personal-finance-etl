@@ -14,7 +14,7 @@ flowchart LR
 | --- | --- |
 | [Project Overview](project.md) | Why did a personal-finance workflow become a full financial platform? |
 | [About Me](about-me.md) | How did web development, Python, data engineering, BI and Chartered Accountancy converge into work like this? |
-| [Roadmap](roadmap.md) | How does the working vertical system become more portable without sacrificing financial behaviour? |
+| [Roadmap](roadmap.md) | What maturity work comes next after the v6.5.3 architecture/reliability foundation? |
 
 These pages are intentionally more narrative than the technical documentation.
 
