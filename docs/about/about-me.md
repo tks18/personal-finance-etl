@@ -385,6 +385,8 @@ If a refactor makes the class diagram prettier but changes the month-end answer 
 
 ## What I am building toward
 
+I want the project to mature by making already-useful financial behaviour more explicit, testable and extensible, not by continuously adding architecture for its own sake.
+
 The longer-term direction across my work is increasingly about systems that are:
 
 ```text
