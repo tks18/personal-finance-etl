@@ -2,6 +2,8 @@
 
 Gold is the decision-support serving layer.
 
+The current registry contains exactly **17 Gold contracts**. `validate_registry()` treats that count, unique physical-table identity, non-empty grain and non-empty producer as runtime invariants.
+
 A Gold mart exists because a recurring analytical question deserves a stable physical contract.
 
 The current architecture publishes **17 Gold marts** across five domains.
