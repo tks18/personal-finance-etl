@@ -361,36 +361,60 @@ run → artifact → Bronze partition → Silver contract → Gold contract
 
 edge into dedicated lineage tables.
 
-### Complete system snapshots
+### Coordinated recovery-unit snapshots
 
-The current DuckDB snapshot utility protects the analytical database.
+The current system snapshots the two persistence planes together:
 
-Now that SQLite is authoritative for operational history, the stronger future backup model is a coordinated bundle containing both databases.
+```text
+Raw_Documents.sqlite
++
+Personal_Finance_DB.duckdb
+```
 
-These are known boundaries.
+Snapshot creation requires both databases, runs under the production lock, uses SQLite's backup API to consolidate SQLite state safely, and packages the DuckDB recovery state into the same archive.
+
+This is a recovery snapshot, not an immutable historical replay guarantee. Restoring an old database pair does not make newer application code, configuration or methodology disappear.
 
 ---
 
-## Snapshot architecture: current vs stronger future model
+## Snapshot and Restore architecture
 
-### Current
+Snapshot/Restore treats SQLite and DuckDB as one logical recovery unit.
 
-```text
-DuckDB snapshot
-→ analytical state protected
+```mermaid
+flowchart LR
+    LOCK["Production Lock"] --> SQL["SQLite Backup API"]
+    LOCK --> DUCK["DuckDB + WAL if present"]
+    SQL --> ZIP["Single Snapshot ZIP"]
+    DUCK --> ZIP
+
+    ZIP --> VALIDATE["Validate Required Files"]
+    VALIDATE --> PRESERVE["Preserve Current DBs + Sidecars"]
+    PRESERVE --> INSTALL["Install Snapshot Pair"]
+    INSTALL --> OK{"Complete?"}
+    OK -->|"Yes"| KEEP["Keep Restored Pair"]
+    OK -->|"No"| ROLLBACK["Remove Partial Restore"]
+    ROLLBACK --> OLD["Restore Complete Previous Pair"]
 ```
 
-### Stronger future model
+Restore rejects incomplete, nested or unexpected snapshot contents before replacing production databases.
+
+Before installation it preserves the current recovery unit, including SQLite WAL/SHM and DuckDB WAL sidecars when present.
+
+The invariant is:
 
 ```text
-Snapshot Bundle
-├── Personal_Finance_DB.duckdb
-└── Raw_Documents.sqlite
+restore succeeds
+→ complete snapshot pair
+
+restore fails
+→ complete previous pair
+
+never
+→ mixed SQLite / DuckDB generations
 ```
 
-The second model better matches current ownership.
-
-It is a future hardening opportunity rather than a requirement for the current pipeline to operate correctly.
+Snapshot and Restore are available through the shared backend facade and exposed by both CLI and Desktop surfaces.
 
 ---
 
