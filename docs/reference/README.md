@@ -22,15 +22,17 @@ Consumers
 
 | Layer | Current scope |
 | --- | ---: |
-| Silver | **20 contracts** |
-| Gold | **17 marts** |
-| DuckDB Meta | **lean latest-run analytical projection** |
-| SQLite Control Plane | **authoritative operational history and provenance** |
+| SQLite Control Plane | **6 authoritative operational tables** |
+| DuckDB Bronze | **16 source contracts** |
+| DuckDB Silver | **20 canonical contracts** |
+| DuckDB Gold | **17 decision marts** |
+| DuckDB Meta | **5 current-state projection tables** |
 
 ## Guides
 
 | Reference | Focus |
 | --- | --- |
+| [Bronze Data Contracts](bronze-data-contracts.md) | Source synchronization contracts, physical Bronze tables and replacement semantics |
 | [Silver Data Contracts](silver-data-contracts.md) | Canonical dimensions/reference models, facts and lot analytics |
 | [Gold Data Contracts](gold-data-contracts.md) | Decision-support marts, grains, producers and key measures |
 | [Meta Data Contracts](meta-data-contracts.md) | Lean DuckDB Meta plus its relationship to the authoritative Control Plane |
