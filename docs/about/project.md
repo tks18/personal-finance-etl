@@ -85,9 +85,12 @@ content hashing
 an authoritative SQLite Control Plane
 persistent raw payloads
 change-aware synchronization
-persistent Bronze
+16-contract persistent Bronze
 file-aware replacement
+PENDING_BRONZE replay / self-healing
 deterministic downstream rebuilds
+cross-process forensic logging
+coordinated Snapshot / Restore
 ```
 
 Those mechanisms were not added to decorate an architecture diagram.
@@ -101,12 +104,12 @@ The workload made them useful.
 ```mermaid
 flowchart TB
     SRC["Financial Evidence"] --> CP["SQLite Control Plane<br/>artifacts · runs · failures · provenance"]
-    CP --> BR["DuckDB Bronze"]
+    CP --> BR["DuckDB Bronze<br/>16 contracts"]
     BR --> CAN["Canonical Financial Model"]
     CAN --> INV["Investment Quant Engine"]
     CAN --> HH["Wealth Analytics Engine"]
     INV --> HH
-    INV --> SG["Silver + Gold"]
+    INV --> SG["20 Silver + 17 Gold"]
     HH --> SG
     SG --> BI["Power BI / Decision Support"]
 ```
@@ -225,7 +228,7 @@ Local-first is therefore both a privacy choice and an architectural fit.
 
 ---
 
-## Why the project is not "fully configurable" yet
+## Current portability boundary
 
 The current system is production software for my financial environment.
 
@@ -253,13 +256,13 @@ tax jurisdiction
 reconciliation policy
 ```
 
-Another developer can extend the system, but should expect meaningful customization.
+Another developer can extend the system, but should expect meaningful customization around real source and domain differences.
 
-I prefer documenting that boundary explicitly over calling the current vertical implementation universal.
+I prefer documenting that boundary explicitly over calling the current vertical implementation universal. Portability should expand only when a real new environment or financial scenario provides the variation worth abstracting.
 
 ---
 
-## The long-term direction
+## How I want the project to evolve
 
 The goal is not to discard the working system and design a framework from scratch.
 
@@ -287,7 +290,7 @@ One of the most useful phases of the project came from documenting it deeply.
 
 The first documentation archaeology exposed places where the implementation could become cleaner.
 
-That fed directly into the 6.2.x hardening cycle:
+That fed into a sequence of hardening cycles from the 6.2.x Control Plane redesign through the current v6.5.3 baseline:
 
 ```text
 code
@@ -308,8 +311,11 @@ The result included:
 - lean DuckDB Meta,
 - explicit Data Contract Registry,
 - hardened worker failure semantics,
+- artifact-level self-healing and rename migration,
+- run-scoped cross-process forensic logging,
+- coordinated Snapshot/Restore,
 - pruned unused metrics,
-- manifest-driven documentation.
+- a manifest-driven offline documentation runtime with bundled Mermaid.
 
 The production workload also moved from roughly **23 seconds** end-to-end to approximately **14–17 seconds** on my environment while preserving the financial outputs I rely on.
 
