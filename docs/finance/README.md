@@ -2,7 +2,9 @@
 
 This section documents the **financial meaning implemented by the software**.
 
-The financial model is not a layer of labels placed on top of ETL. It determines what the data means.
+The financial model is not a layer of labels placed on top of ETL. It determines what the data means, at what grain the meaning exists, and which outputs are observed, reconstructed, modelled or simulated.
+
+The current model is production-used decision support. Tax-oriented outputs support planning and filing review; they do not replace final filing due diligence.
 
 ```mermaid
 flowchart LR
@@ -55,7 +57,7 @@ Observed
 ≠ Simulated
 ```
 
-A broker-reported quantity, reconstructed FIFO lot, estimated tax liability and Monte Carlo terminal wealth are all valid financial states, but they are not the same kind of evidence.
+A broker-reported quantity, reconstructed FIFO lot, estimated portfolio tax exposure and Monte Carlo terminal wealth are all useful financial states, but they are not the same kind of evidence.
 
 The detailed guides keep those boundaries explicit.
 
