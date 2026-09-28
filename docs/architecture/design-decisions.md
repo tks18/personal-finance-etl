@@ -643,6 +643,58 @@ I do not consider that a missing feature for this workload.
 
 ---
 
+## 21. Recovery re-enters the normal pipeline
+
+### Problem
+
+A repair-only execution path would duplicate ingestion semantics and create a second system to maintain.
+
+### Decision
+
+Analytical drift returns the affected artifact to `PENDING_BRONZE`.
+
+The next normal run merges pending artifacts with new and changed artifacts and sends them through the same extraction and Bronze synchronization path.
+
+### Benefit
+
+Recovery exercises production ingestion semantics instead of a parallel repair implementation.
+
+### Trade-off
+
+Recovery depends on the normal pipeline remaining deterministic and idempotent.
+
+---
+
+## 22. Snapshot SQLite and DuckDB as one recovery unit
+
+### Problem
+
+The Control Plane and analytical warehouse are physically separate databases but represent one application state.
+
+Backing up or restoring only one side can create mismatched generations.
+
+### Decision
+
+Snapshot and Restore operate under the production lock and treat SQLite + DuckDB as one coordinated recovery unit.
+
+Restore validates the archive before replacement and rolls back to the complete previous pair if installation fails.
+
+### Benefit
+
+The recovery contract is simple:
+
+```text
+complete new pair
+or
+complete old pair
+```
+
+### Trade-off
+
+This is application-coordinated recovery, not distributed transactional replication or point-in-time replay.
+
+---
+
 ## Decision filter
 
 When considering a new abstraction or dependency, I ask:
