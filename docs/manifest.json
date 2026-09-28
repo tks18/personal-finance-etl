@@ -6,7 +6,7 @@
       "order": 0,
       "pages": [
         {
-          "title": "Project README",
+          "title": "Project Overview",
           "path": "../README.md",
           "order": -1
         },
@@ -35,12 +35,12 @@
         {
           "title": "Installation",
           "path": "getting-started/installation.md",
-          "order": 1010
+          "order": 1020
         },
         {
           "title": "Running The Pipeline",
           "path": "getting-started/running-the-pipeline.md",
-          "order": 1010
+          "order": 1030
         }
       ]
     },
@@ -62,27 +62,27 @@
         {
           "title": "Financial Model",
           "path": "finance/financial-model.md",
-          "order": 2010
+          "order": 2020
         },
         {
           "title": "Fire Methodology",
           "path": "finance/fire-methodology.md",
-          "order": 2010
+          "order": 2030
         },
         {
           "title": "Investment Analytics",
           "path": "finance/investment-analytics.md",
-          "order": 2010
+          "order": 2040
         },
         {
           "title": "Metrics And Methodology",
           "path": "finance/metrics-and-methodology.md",
-          "order": 2010
+          "order": 2050
         },
         {
           "title": "Tax Methodology",
           "path": "finance/tax-methodology.md",
-          "order": 2010
+          "order": 2060
         }
       ]
     },
@@ -104,27 +104,27 @@
         {
           "title": "Data Model",
           "path": "architecture/data-model.md",
-          "order": 3010
+          "order": 3020
         },
         {
           "title": "Design Decisions",
           "path": "architecture/design-decisions.md",
-          "order": 3010
+          "order": 3030
         },
         {
           "title": "Reliability And Recovery",
           "path": "architecture/reliability-and-recovery.md",
-          "order": 3010
+          "order": 3040
         },
         {
           "title": "System Architecture",
           "path": "architecture/system-architecture.md",
-          "order": 3010
+          "order": 3050
         },
         {
           "title": "Warehouse Architecture",
           "path": "architecture/warehouse-architecture.md",
-          "order": 3010
+          "order": 3060
         }
       ]
     },
@@ -146,7 +146,7 @@
         {
           "title": "Fire Configuration",
           "path": "configuration/fire-configuration.md",
-          "order": 4010
+          "order": 4020
         }
       ]
     },
@@ -168,17 +168,17 @@
         {
           "title": "Adding Data Sources",
           "path": "developer/adding-data-sources.md",
-          "order": 5010
+          "order": 5020
         },
         {
           "title": "Adding Gold Marts",
           "path": "developer/adding-gold-marts.md",
-          "order": 5010
+          "order": 5030
         },
         {
           "title": "Development Guide",
           "path": "developer/development-guide.md",
-          "order": 5010
+          "order": 5040
         }
       ]
     },
@@ -193,24 +193,29 @@
           "order": 6000
         },
         {
+          "title": "Bronze Data Contracts",
+          "path": "reference/bronze-data-contracts.md",
+          "order": 6010
+        },
+        {
           "title": "Glossary",
           "path": "reference/glossary.md",
-          "order": 6010
+          "order": 6020
         },
         {
           "title": "Gold Data Contracts",
           "path": "reference/gold-data-contracts.md",
-          "order": 6010
+          "order": 6030
         },
         {
           "title": "Meta Data Contracts",
           "path": "reference/meta-data-contracts.md",
-          "order": 6010
+          "order": 6040
         },
         {
           "title": "Silver Data Contracts",
           "path": "reference/silver-data-contracts.md",
-          "order": 6010
+          "order": 6050
         }
       ]
     },
@@ -232,12 +237,12 @@
         {
           "title": "Project",
           "path": "about/project.md",
-          "order": 7010
+          "order": 7020
         },
         {
           "title": "Roadmap",
           "path": "about/roadmap.md",
-          "order": 7010
+          "order": 7030
         }
       ]
     }

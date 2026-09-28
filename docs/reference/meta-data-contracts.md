@@ -125,6 +125,14 @@ so API-acquired benchmark history does not bypass provenance.
 
 ## 2. Configuration snapshots
 
+Configuration provenance is stored in two physical Control Plane tables:
+
+```text
+cp_settings_snapshots
+cp_rules_snapshots
+```
+
+
 The Control Plane stores Settings and FinancialRules by content identity.
 
 Conceptually:

@@ -431,7 +431,7 @@ consumers
 caveats
 ```
 
-Under Documentation v2, include the real registry declaration and selected DDL.
+Under Documentation Rubric v3, include the real registry declaration and selected DDL in `/docs`; keep the Wiki conceptual.
 
 ---
 
