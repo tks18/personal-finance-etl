@@ -14,6 +14,8 @@ flowchart LR
 
 If a new asset type can produce the canonical contracts, FIFO/benchmark/tax/aggregation should remain reusable where the financial methodology is compatible.
 
+Do not add an asset family merely because the taxonomy can imagine one. Add it when real source evidence and a real financial scenario require the semantics.
+
 ---
 
 ## 1. Decide whether you need a new asset pipeline
@@ -213,7 +215,7 @@ If the new asset genuinely does not use FIFO, that is a behavioural difference a
 
 ## 10. Broker/current-state reconciliation
 
-If the new asset provider exposes authoritative current quantity/cost state, decide whether the existing reconciliation methodology applies.
+If the new asset provider exposes current quantity/cost state suitable for reconciliation, decide whether the existing reconciliation methodology applies and what evidentiary status any synthetic adjustment should carry.
 
 The current principle is:
 
