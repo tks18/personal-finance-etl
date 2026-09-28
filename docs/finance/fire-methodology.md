@@ -52,6 +52,8 @@ FIRE therefore inherits the quality of:
 
 A simulation cannot repair bad financial semantics.
 
+It also cannot upgrade reconstructed or modelled inputs into observed evidence; the planning layer inherits the certainty and assumptions of the financial state beneath it.
+
 ---
 
 ## 2. Deterministic FI target
