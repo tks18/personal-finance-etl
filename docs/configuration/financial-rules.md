@@ -290,15 +290,16 @@ without hard-coding the answers.
 
 ## 10. Tax parameters belong in the financial policy plane
 
-Tax treatment can depend on:
+Tax-oriented guidance can depend on:
 
 ```text
 asset tax type
 asset tax subtype
 holding period
 financial year
-rates
-exemptions
+configured rates
+configured exemptions
+macro/reference state
 ```
 
 Not every part of that state necessarily lives in one Pydantic class; some rules can come from reference tables.
@@ -315,11 +316,42 @@ Lot Dates
 Tax Methodology
 ```
 
-This keeps tax assumptions inspectable.
+This keeps the assumptions used by the current planning model inspectable.
+
+`FinancialRules` is not intended to encode the whole Indian Income-tax Act. It carries the policy needed by the current financial model; final filing treatment remains a review decision outside configuration alone.
 
 ---
 
-## 11. FIRE assumptions are financial policy
+## 11. Macro/reference state is not operational Settings
+
+The current `Settings` model points to one consolidated macro/reference input:
+
+```text
+MACRO_PARAMETERS_CSV_PATH
+```
+
+That source is ingested into Bronze and then canonicalized into the macro-parameter Silver contract.
+
+It can provide contextual values used by financial logic, while `FinancialRules` supplies configured fallbacks and behavioural assumptions.
+
+Conceptually:
+
+```text
+Settings
+→ where macro data lives
+
+Macro Parameters
+→ contextual financial values
+
+FinancialRules
+→ policy, fallbacks and modelling assumptions
+```
+
+Keeping those responsibilities separate prevents a file path from becoming methodology and prevents time-varying reference data from being hard-coded into Pydantic defaults.
+
+---
+
+## 12. FIRE assumptions are financial policy
 
 The FIRE engine depends on assumptions around:
 
@@ -345,7 +377,7 @@ The detailed stochastic configuration is documented in [FIRE Configuration](fire
 
 ---
 
-## 12. Validation prevents impossible policy
+## 13. Validation prevents impossible policy
 
 Pydantic fields can enforce basic admissibility.
 
@@ -377,7 +409,7 @@ That distinction matters.
 
 ---
 
-## 13. Configuration snapshots are part of run provenance
+## 14. Configuration snapshots are part of run provenance
 
 The Control Plane stores FinancialRules by content identity.
 
@@ -413,7 +445,7 @@ Identical policy can be referenced by multiple runs without storing duplicate pa
 
 ---
 
-## 14. Settings and FinancialRules are deliberately separate
+## 15. Settings and FinancialRules are deliberately separate
 
 This is one of the most important configuration boundaries.
 
@@ -449,9 +481,47 @@ A change to a withdrawal rule should.
 
 Keeping the models separate makes that distinction visible.
 
+The current operational `Settings` surface is intentionally compact:
+
+```text
+SOURCE_DB_FOLDER
+TARGET_DB_BASE_PATH
+TARGET_DB_NAME
+
+DISABLE_FILE_DISCOVERER
+RAW_DOCUMENT_STORE_NAME
+
+COLUMN_MASTER_PATH
+MF_ISIN_CSV_PATH
+BENCHMARK_MAPPING_CSV_PATH
+BENCHMARK_MASTER_CSV_PATH
+MACRO_PARAMETERS_CSV_PATH
+OPENING_BALANCE_CSV_PATH
+
+STATEMENTS_FOLDER
+
+FILE_HASH_POLICY
+├── csv
+├── excel
+└── sqlite
+```
+
+`validate_config()` requires the source/statements directories and the six dependency files to exist. `TARGET_DB_BASE_PATH` must be configured but can be created by the application.
+
+`FILE_HASH_POLICY` controls which physical source types use content hashing during discovery:
+
+```python
+class FileHashPolicy(BaseModel):
+    csv: bool = True
+    excel: bool = False
+    sqlite: bool = False
+```
+
+That is an ingestion identity/performance policy. It is not a financial rule.
+
 ---
 
-## 15. Configuration is not universalization
+## 16. Configuration is not universalization
 
 Moving a value into configuration does not automatically make the platform generic.
 
@@ -479,7 +549,7 @@ This is the guardrail against configuration maximalism.
 
 ---
 
-## 16. A practical decision test
+## 17. A practical decision test
 
 When I find a hard-coded assumption, I ask:
 
@@ -501,7 +571,7 @@ That test is more useful than trying to make everything configurable.
 
 ---
 
-## 17. Configuration change implications
+## 18. Configuration change implications
 
 A FinancialRules change can affect:
 
@@ -521,7 +591,7 @@ The content-addressed snapshots help preserve that provenance.
 
 ---
 
-## 18. What configuration does not guarantee
+## 19. What configuration does not guarantee
 
 Configuration snapshots do not make historical runs perfectly replayable forever.
 
@@ -540,7 +610,7 @@ It does not independently recreate the entire historical software environment.
 
 ---
 
-## 19. FinancialRules design principles
+## 20. FinancialRules design principles
 
 1. Financial meaning should not hide in presentation literals.
 2. Operational Settings and financial policy remain separate.
