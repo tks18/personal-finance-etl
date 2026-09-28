@@ -7,14 +7,27 @@ The current architecture separates operational truth from analytical state:
 ```mermaid
 flowchart LR
     SRC["Sources"] --> CP["SQLite Control Plane<br/>evidence · runs · failures · provenance"]
-    CP --> BR["DuckDB Bronze"]
+    CP --> BR["DuckDB Bronze<br/>16 contracts"]
     BR --> CAN["Canonical Polars Model"]
     CAN --> ENG["Investment + Wealth Engines"]
-    ENG --> SG["Silver + Gold"]
-    CP -. projection .-> META["Lean DuckDB Meta"]
+    ENG --> SG["Silver + Gold<br/>20 Silver · 17 Gold"]
+    CP -. projection .-> META["Lean DuckDB Meta<br/>5 tables"]
 ```
 
 > **SQLite owns operational truth and raw evidence. DuckDB owns analytical state.**
+
+The current physical contract surface is:
+
+```text
+SQLite Control Plane   6 tables
+DuckDB Bronze         16 contracts
+DuckDB Silver         20 contracts
+DuckDB Gold           17 marts
+DuckDB Meta            5 tables
+```
+
+Reliability is part of the architecture rather than an operational afterthought: stale-run recovery, `PENDING_BRONZE` replay, artifact-level Bronze healing, cross-process forensic logging, and coordinated Snapshot/Restore all reuse the same ownership boundaries described in this section.
+
 
 ## Production boundary
 
