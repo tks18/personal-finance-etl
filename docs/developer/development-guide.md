@@ -12,13 +12,16 @@ The main dependency direction is:
 
 ```mermaid
 flowchart LR
-    SRC["Source-Specific Code"] --> CAN["Canonical Contracts"]
+    SRC["Source-Specific Code"] --> CP["Control Plane + Raw Evidence"]
+    CP --> BR["Bronze Contracts"]
+    BR --> CAN["Canonical Contracts"]
     CAN --> ENG["Reusable Financial Engines"]
     ENG --> PUB["Silver / Gold Contracts"]
     PUB --> APP["Power BI / Application"]
 
     RULES["FinancialRules"] --> CAN
     RULES --> ENG
+    BREG["Bronze Contract Registry"] --> BR
     REG["DataContract Registry"] --> PUB
 ```
 
@@ -151,9 +154,37 @@ That prevents `FinancialRules` from becoming an enormous switchboard for fundame
 
 ---
 
-## 5. Data contracts are explicit
+## 5. Persistence contracts are explicit
 
-Serving-layer identity lives in `DATA_CONTRACT_REGISTRY`.
+v6.5.3 uses two registries because source synchronization and canonical analytical publication have different contracts.
+
+### Bronze source contracts
+
+`BRONZE_CONTRACT_REGISTRY` defines the relationship between extraction output, Control Plane sync category, physical Bronze table, and replacement semantics:
+
+```python
+@dataclass
+class BronzeDataContract:
+    extraction_attribute: str
+    sync_category: str
+    physical_table: str
+    is_full_replace: bool
+```
+
+There are currently **16 Bronze contracts**.
+
+A new Bronze source must answer:
+
+```text
+Which extraction attribute carries it?
+Which sync category owns artifact state?
+Which physical Bronze table stores it?
+Is the table full-replace or file-owned historical state?
+```
+
+### Silver / Gold analytical contracts
+
+`DATA_CONTRACT_REGISTRY` defines canonical publication identity:
 
 ```python
 @dataclass
@@ -167,6 +198,8 @@ class DataContract:
     publication_order: int
 ```
 
+There are currently **20 Silver contracts and 17 Gold contracts**.
+
 A new persistent analytical output should define:
 
 ```text
@@ -178,7 +211,9 @@ Which component produces it?
 When should it publish?
 ```
 
-before writing the loader code.
+before writing loader code.
+
+The registries are runtime contracts, not documentation catalogs. Registry validation checks uniqueness and expected contract counts before the analytical run proceeds.
 
 ---
 
@@ -316,6 +351,21 @@ The worker error must propagate.
 
 The orchestrator owns rollback and run failure persistence.
 
+Worker observability is also part of the interface. Per-ISIN workers attach `run_id`, stage and ISIN context and emit through the multiprocessing logging queue into the parent listener.
+
+Do not make successful logging a prerequisite for propagating the real worker failure.
+
+```text
+worker failure
+→ parent receives structured error
+→ analytical stage fails
+→ rollback / run failure
+
+worker log
+→ forensic context
+→ useful, but not the correctness channel
+```
+
 ---
 
 ## 12. Persistence changes require contract thinking
@@ -323,10 +373,11 @@ The orchestrator owns rollback and run failure persistence.
 A schema change can affect:
 
 ```text
-builder output
-DataContract registry
+extraction / builder output
+BronzeDataContract or DataContract registry
 DuckDB DDL
-Meta row counts
+Meta projection / row counts
+Control Plane sync semantics where applicable
 Power BI
 documentation
 ```
@@ -388,10 +439,12 @@ Documentation is packaged application content.
 The manifest drives discovery:
 
 ```text
-docs/*.md
+README + docs/*.md
 → manifest.json
 → DocsCatalog
 → DocsRenderer
+→ canonical navigation + H1/H2/H3 TOC
+→ bundled Mermaid
 → CLI / Desktop
 ```
 
@@ -409,7 +462,7 @@ Do not hard-code new filenames in the UI.
 
 ## 16. Renderer compatibility matters
 
-The current renderer does not provide a MathJax/KaTeX mathematics stage.
+The current renderer provides Markdown, canonical internal navigation, generated H1/H2/H3 TOC, and bundled Mermaid rendering. It does not provide a MathJax/KaTeX mathematics stage.
 
 Therefore documentation should prefer renderer-safe equations:
 
@@ -425,12 +478,32 @@ The docs must render consistently across:
 GitHub
 packaged application
 CLI / GUI docs browser
-future Wiki
 ```
+
+The GitHub Wiki is a separate guided-learning surface. It may link into `/docs`, but it is not another renderer target for the same technical page.
 
 ---
 
-## 17. Static quality tools
+## 17. Recovery boundaries are extension contracts
+
+Snapshot/Restore treats SQLite Control Plane state and DuckDB analytical state as one recovery unit.
+
+Code that writes either persistence plane must respect the same production lock and must not introduce side effects that make an all-new-or-all-old restore impossible.
+
+Likewise, Bronze recovery should continue to reuse normal ingestion:
+
+```text
+analytical drift
+→ PENDING_BRONZE
+→ normal extraction / Bronze synchronization
+→ SYNCED
+```
+
+Do not add a parallel "repair loader" unless the normal lifecycle genuinely cannot express the recovery semantics.
+
+---
+
+## 18. Static quality tools
 
 The project uses strict quality tooling.
 
@@ -454,7 +527,7 @@ Typing is especially useful at boundaries:
 
 ---
 
-## 18. Financial-output equivalence is a refactoring gate
+## 19. Financial-output equivalence is a refactoring gate
 
 Infrastructure refactors can be large while financial truth remains stable.
 
@@ -476,7 +549,7 @@ This is one of the most important development disciplines in the repository.
 
 ---
 
-## 19. Performance work starts by removing useless work
+## 20. Performance work starts by removing useless work
 
 The production-hardening cycle reduced the current end-to-end workload from roughly:
 
@@ -500,25 +573,27 @@ Before micro-optimizing a slow computation, ask:
 
 ---
 
-## 20. Development workflow
+## 21. Development workflow
 
-A safe change generally follows:
+A safe change currently follows:
 
 ```mermaid
 flowchart LR
     Q["Define financial / engineering question"] --> B["Identify owning boundary"]
     B --> C["Implement smallest coherent change"]
-    C --> STATIC["Static checks"]
-    STATIC --> RUN["Production / representative run"]
+    C --> STATIC["Ruff · mypy · Pyright"]
+    STATIC --> RUN["Headless / representative run"]
     RUN --> REC["Reconcile financial outputs"]
     REC --> DOC["Update contracts + docs"]
 ```
+
+The repository does not yet have a broad automated unit/component/integration suite. Production reconciliation and the headless harness are therefore current validation signals, not substitutes for the planned QA expansion.
 
 For methodology changes, the reconciliation step becomes an intentional before/after explanation rather than an equivalence check.
 
 ---
 
-## 21. Extension checklist
+## 22. Extension checklist
 
 Before merging an extension, ask:
 
@@ -527,8 +602,10 @@ Before merging an extension, ask:
 - Is policy in FinancialRules rather than hidden literals?
 - Does genuinely new behaviour have a proper strategy/pipeline boundary?
 - Are failures explicit?
-- Is publication registered?
-- Does physical DDL match builder output?
+- If Bronze persistence changed, is `BRONZE_CONTRACT_REGISTRY` correct?
+- If Silver/Gold persistence changed, is `DATA_CONTRACT_REGISTRY` correct?
+- Are `PENDING_BRONZE` replay/self-healing semantics preserved where applicable?
+- Does physical DDL match extraction/builder output?
 - Do Meta row counts use contract identity?
 - Do existing financial outputs reconcile where expected?
 - Does documentation show the real implementation?
