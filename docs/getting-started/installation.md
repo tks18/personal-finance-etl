@@ -25,8 +25,8 @@ Core technology ownership is:
 | Technology | Responsibility |
 | --- | --- |
 | Python | Application/runtime |
-| SQLite | Authoritative Control Plane and raw evidence |
-| DuckDB | Analytical warehouse |
+| SQLite | Authoritative Control Plane and raw evidence: 6 operational tables |
+| DuckDB | Analytical warehouse: 16 Bronze + 20 Silver + 17 Gold + 5 Meta tables |
 | Polars | Transformation/analytical dataframe execution |
 | Pydantic | Settings and financial-policy validation |
 | NumPy / Numba | FIRE simulation |
@@ -45,14 +45,22 @@ pip install personal-finance-etl
 Then launch the CLI:
 
 ```bash
+shan-fin cli
+```
+
+or the desktop application:
+
+```bash
 shan-fin
 ```
 
-or desktop application:
+The explicit desktop subcommand is also available:
 
 ```bash
-shan-fin-gui
+shan-fin tkinter
 ```
+
+`shan-fin-gui` remains the dedicated desktop entry point.
 
 The package includes the application documentation used by the docs browser.
 
