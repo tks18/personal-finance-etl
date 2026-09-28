@@ -666,6 +666,22 @@ Recoverability is not the same as immutable historical replay.
 
 ---
 
+## Coordinated Snapshot
+
+A locked recovery archive containing both SQLite Control Plane state and the DuckDB analytical warehouse.
+
+Snapshot/Restore treats the pair as one logical recovery unit.
+
+---
+
+## Forensic execution log
+
+The complete run-scoped DEBUG log persisted in compressed form in `cp_runs.execution_log`.
+
+It carries run/stage/ISIN/process/source-location context and complements the structured rows in `cp_run_failures`.
+
+---
+
 ## Historical reproducibility
 
 Ability to recreate a past result using the same evidence, configuration, code, schema, and external assumptions.
@@ -696,11 +712,22 @@ Shared rendering layer used by the application's documentation surfaces.
 
 ---
 
-## Documentation v2
+## Documentation Rubric v3
 
-Current editorial philosophy:
+The documentation-surface contract:
+
+```text
+README  → SHOW
+Wiki    → TEACH
+/docs   → SPECIFY
+Code    → PROVE
+```
+
+Inside `/docs`, the editorial philosophy remains:
 
 > **Explain less. Show more. Prove the architecture with production code. Connect the pieces with diagrams. Use prose for reasoning code cannot communicate.**
+
+The same concept may appear across surfaces, but not at the same depth or for the same job.
 
 ---
 
