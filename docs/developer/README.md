@@ -14,7 +14,22 @@ flowchart LR
     CONTRACT --> APP["BI / Application"]
 ```
 
-## The publication seam
+## The extension seams
+
+```text
+Source extension
+→ Control Plane + BRONZE_CONTRACT_REGISTRY
+
+Canonical analytical extension
+→ DATA_CONTRACT_REGISTRY
+
+Financial behaviour extension
+→ canonical model / engine / FinancialRules
+
+Documentation extension
+→ /docs + manifest
+```
+
 
 A lightweight registry makes analytical publication explicit:
 
