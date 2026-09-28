@@ -117,6 +117,8 @@ The wrapper is not the interesting part.
 
 The difficult part is constructing the correct cash-flow series.
 
+The low-level helper returns `NaN` when no result is available or solving fails. The current portfolio-level wrapper can instead fall back to `0.0` in those edge cases. I therefore treat a portfolio 0% result from a degenerate cash-flow pattern as a review case rather than automatically interpreting it as a valid zero return.
+
 ---
 
 ## 4. XIRR is non-additive
