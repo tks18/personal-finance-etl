@@ -1,478 +1,531 @@
 # Roadmap
 
-The roadmap is not a promise to turn Personal Finance ETL into every possible finance product.
+The roadmap is intentionally smaller than the application.
 
-The direction is narrower:
+Personal Finance ETL already has the architecture and reliability foundation I wanted from the recent hardening cycles. The next work is about **formalizing financial semantics, building executable regression protection, and then evolving only when real new scenarios justify it**.
 
-> **Preserve the working financial system, make its assumptions increasingly explicit, and extract portability only where the production behaviour supports it.**
-
-The current system is the behavioural baseline.
+```text
+v6.5.3
+│
+├── Architecture / reliability foundation
+│   └── current baseline
+│
+├── Financial Domain Freeze
+│   └── next maturity sprint
+│
+├── QA Expansion
+│   └── executable regression protection
+│
+└── Feature-Driven Evolution
+    └── new evidence / scenario / asset / question
+```
 
 ---
 
 ## Where the project is now
 
-The current architecture already has:
+The current baseline already includes:
 
 ```text
 authoritative SQLite Control Plane
-raw evidence persistence
-change-aware source synchronization
-persistent Bronze
-canonical financial contracts
-FIFO / tax / benchmark analytics
-household wealth and cash reconciliation
-FIRE modelling
+persistent raw payloads
+16 Bronze contracts
 20 Silver contracts
 17 Gold marts
-lean DuckDB Meta
-CLI + desktop + Power BI
-manifest-driven packaged documentation
+5-table DuckDB Meta projection
+
+change-aware synchronization
+PENDING_BRONZE replay
+artifact-level self-healing
+rename identity migration
+
+run lifecycle + structured failures
+cross-process forensic logging
+compressed execution history
+
+coordinated Snapshot + Restore
+
+FIFO investment lots
+broker reconciliation
+shadow benchmark portfolios
+XIRR / after-tax XIRR
+tax-oriented planning state
+cash-flow reconciliation
+wealth analytics
+deterministic + Monte Carlo FIRE
+
+CLI
+Desktop
+Power BI
+offline packaged documentation
 ```
 
-The 6.2.x production-hardening cycle materially strengthened the operating shell without changing the financial truth I rely on.
+That is the starting point for this roadmap, not unfinished work.
 
 ---
 
 ## Roadmap philosophy
 
-```mermaid
-flowchart LR
-    PROD["Working Behaviour"] --> OBS["Characterize"]
-    OBS --> ASSUME["Identify Hidden Assumption"]
-    ASSUME --> BOUND["Extract Boundary"]
-    BOUND --> ROUTE["Route Current Environment Through It"]
-    ROUTE --> REC["Reconcile Financial Truth"]
-    REC --> ADOPT["Adopt Generalized Path"]
-```
-
-I do not want to replace a working vertical system with a theoretically elegant framework whose behaviour is harder to trust.
-
----
-
-## 1. Complete the Documentation v2 knowledge system
-
-The repository documentation is being rebased around a stronger editorial model:
-
-> **Explain less. Show more. Prove the architecture with production code. Connect the pieces with diagrams. Use prose for reasoning code cannot communicate.**
-
-The remaining documentation programme is:
-
 ```text
-Documentation v2
+Working behaviour
       ↓
-full cross-document QA
+Understand the real boundary
       ↓
-GitHub Wiki
+Formalize it
       ↓
-repository metadata polish
+Protect it with tests
+      ↓
+Extend only when new evidence demands it
 ```
 
-The Markdown docs remain authoritative.
+I do not want roadmap items merely because a larger platform might contain them.
 
-The Wiki will become a guided exploration layer rather than a second competing knowledge base.
+This remains a personal-finance system that I actually use.
+
+Complexity has to earn its electricity bill. 😄
 
 ---
 
-## 2. Build the Wiki as a knowledge layer
+## 1. Financial Domain Freeze
 
-The Wiki should answer journeys such as:
+The next domain sprint will formalize selected financial semantics that are already exercised in production but deserve clearer boundaries and deterministic treatment.
+
+The scope stays intentionally close to the current portfolio and source evidence.
+
+### Holding and tax classification
+
+I want explicit, tested semantics around the asset classes the application actually needs today, particularly equity/equity-oriented investments and the currently represented debt-oriented cases.
+
+The goal is not to model every Indian financial instrument.
+
+It is to make the current classification path explicit:
 
 ```text
-How does one source artifact become a dashboard?
-How does a purchase become a tax lot?
-How does broker reconciliation affect current state?
-How does investment tax flow into household wealth?
-How does household wealth flow into FIRE?
+Instrument
+    ↓
+Tax type / subtype
+    ↓
+Holding treatment
+    ↓
+Realized / unrealized state
+    ↓
+Planning guidance
 ```
 
-It should use:
+Boundary-day behavior and acquisition/realization dates should be deterministic.
+
+### Realized-event durability
+
+Today FIFO creates sale-linked realized state during analytical reconstruction.
+
+The next maturity step is to decide how realized financial/tax history should remain independently queryable when active lots later disappear.
+
+The design should preserve the distinction between:
 
 ```text
-visual explanations
-selected production evidence
-guided reading paths
-links into canonical /docs
+source transaction evidence
+reconstructed lot state
+sale-linked realized state
+current active inventory
 ```
 
-rather than copying the entire docs tree.
+without turning the application into a statutory tax ledger.
+
+### Loss treatment
+
+STCL/LTCL treatment should become an explicit state calculation where the current planning model needs it.
+
+That includes supported set-off ordering and any carry-forward behavior that the project intentionally chooses to represent.
+
+The scope should remain guidance-oriented and limited to semantics that materially improve my planning/filing workflow.
+
+### Tax-guidance composition
+
+The current portfolio tax forecast already publishes useful tax-oriented state.
+
+The sprint should reconcile the complete intended composition, including the known current boundary where `Taxable_Interest` is calculated but not included in `Projected_Tax_Bill`.
+
+The output remains:
+
+> **planning and filing guidance**
+
+not:
+
+> **authoritative final tax-return liability**
+
+### XIRR edge semantics
+
+Normal XIRR behavior is already production-used.
+
+The edge contract should distinguish:
+
+```text
+valid numerical result
+undefined cash-flow pattern
+solver/non-convergence failure
+```
+
+rather than allowing every edge state to look like an economically meaningful `0%`.
+
+### Reconciliation provenance
+
+Broker reconciliation is valuable because it anchors reconstructed state to current broker state.
+
+The next domain pass should make the evidence boundary even clearer where reconciliation:
+
+```text
+creates missing quantity
+removes excess quantity
+adjusts active cost basis
+```
+
+The objective is explainability, not removal of reconciliation.
+
+### Corporate actions
+
+I do not plan to build a general corporate-actions engine without reliable source evidence.
+
+Supported behavior should be documented and tested where current broker data makes it deterministic.
+
+Unsupported or ambiguous events should remain explicit review boundaries.
 
 ---
 
-## 3. Repository information polish
+## 2. QA Expansion
 
-After the Wiki, the surrounding repository metadata should catch up with the maturity of the implementation.
+The current repository uses production reconciliation, static analysis and a headless execution harness as important validation signals.
 
-Targets include:
+The next QA sprint should convert the behaviors I already rely on into repeatable automated protection.
+
+The target is broader than finance alone.
+
+### Financial golden scenarios
+
+Build deterministic synthetic scenarios covering:
 
 ```text
-pyproject.toml
-package.json
-version_info.txt
-GitHub repository description
-topics / package metadata
-other distribution-facing text
+buys
+multiple FIFO lots
+partial sells
+full liquidation
+holding boundaries
+realized / unrealized state
+tax-guidance cases
+broker reconciliation
+XIRR
+after-tax return
+cash flow
+wealth
+FIRE inputs
 ```
 
-Older "hyper-optimized quant engine" style descriptions should give way to language that accurately represents the current financial/data platform.
+The exact suite should be driven by the final Financial Domain Freeze rather than written against assumptions that are still moving.
+
+### Financial invariants
+
+Examples include:
+
+```text
+opening quantity
++ buys
+- sells
+± supported adjustments
+=
+closing quantity
+```
+
+and:
+
+```text
+sale proceeds
+- disposed basis
+=
+realized P&L
+```
+
+plus appropriate lineage/rebuild invariants.
+
+### Component tests
+
+Protect important boundaries independently:
+
+```text
+Control Plane repositories
+file synchronization
+Bronze replacement
+contract registries
+canonical transformation
+FIFO
+investment aggregation
+wealth builders
+configuration validation
+docs catalog / renderer
+```
+
+### Integration tests
+
+Exercise complete workflows such as:
+
+```text
+source evidence
+→ Control Plane
+→ Bronze
+→ canonical model
+→ engines
+→ Silver / Gold
+→ Meta
+```
+
+with deterministic fixture data.
+
+### Reliability and recovery tests
+
+The hardening work should become permanent regression coverage:
+
+```text
+stale run recovery
+PENDING_BRONZE replay
+missing Bronze table
+missing artifact partition
+rename migration
+worker failure propagation
+transaction rollback
+Snapshot
+Restore
+failed Restore rollback
+```
+
+### Interface and packaging tests
+
+Protect the user-facing shell:
+
+```text
+CLI argument paths
+configuration loading
+headless execution
+packaged documentation assets
+bundled Mermaid resource
+build/package smoke tests
+```
+
+GUI logic should be tested where it can be isolated without turning the suite into brittle pixel automation.
+
+### Test fixtures
+
+The current `tests/` configuration fixtures predate parts of the v6.5.x configuration model.
+
+The QA sprint should replace them with intentional fixtures derived from the current `Settings` and `FinancialRules` contracts rather than carrying legacy keys forward.
 
 ---
 
-## 4. Coordinated system snapshots
+## 3. Reconciliation report
 
-The current snapshot utility protects DuckDB.
-
-The architecture now has two important persistence planes:
+After the financial and QA work, I want one inspectable reconciliation path that can answer:
 
 ```text
-SQLite Control Plane
-+
-DuckDB analytical warehouse
+source evidence
+      ↓
+investment / household state
+      ↓
+realized financial state
+      ↓
+tax-oriented classification
+      ↓
+planning guidance
 ```
 
-A stronger backup/snapshot model would protect them as one coordinated bundle.
+For a financial result, I should be able to move backward toward the evidence that produced it.
 
-Conceptually:
-
-```text
-snapshot/
-├── Raw_Documents.sqlite
-└── Personal_Finance_DB.duckdb
-```
-
-This better reflects current ownership.
+This is decision-support provenance, not a claim that the application replaces filing records or broker/legal documentation.
 
 ---
 
-## 5. Deeper normalized lineage
+## 4. Feature-driven evolution
 
-The Control Plane already tracks:
-
-```text
-artifacts
-payloads
-sync state
-runs
-failures
-configuration provenance
-execution logs
-```
-
-A future lineage expansion could normalize relationships such as:
+After the Domain and QA freezes, the default roadmap becomes intentionally boring:
 
 ```text
-run
-→ source artifacts
-→ Bronze partitions
-→ Silver contracts
-→ Gold contracts
+new real source
+        ↓
+new adapter / mapping
+
+new real asset scenario
+        ↓
+new domain semantics
+
+new financial question
+        ↓
+new analytical contract
+
+new reliability failure
+        ↓
+new regression test
 ```
 
-Potential structures might include:
-
-```text
-run_artifacts
-run_stages
-run_outputs
-lineage_edges
-```
-
-This should be added only if the operational value justifies the extra state.
-
-The current system already has strong provenance; it should not be mislabelled as graph-complete lineage before that work exists.
+I do not want speculative extensibility to outrun actual use.
 
 ---
 
-## 6. Stronger cross-database recovery semantics
+## 5. Portability when real variation appears
 
-SQLite and DuckDB commits are currently coordinated by the application.
-
-That is appropriate for the current local workload.
-
-Future hardening can explore recovery markers/commit reconciliation around the narrow case where one database commits and the other does not.
-
-I do **not** currently see a need to introduce distributed transaction infrastructure.
-
-The goal would be better local recovery semantics, not architectural theatre.
-
----
-
-## 7. Continue extracting source adapters
-
-The largest portability constraint remains source specificity.
-
-The long-term direction is:
+The architecture already has reusable seams:
 
 ```text
-Source
-   ↓
-Adapter / Extractor
-   ↓
-Canonical Financial Contract
+Control Plane
+Bronze registry
+canonical contracts
+FinancialRules
+investment engine
+wealth engine
+DataContract registry
+application facade
+documentation runtime
 ```
 
-New source support should increasingly require:
+Source-specific assumptions still exist around broker/bank formats, mappings, asset behavior, jurisdiction and reconciliation.
 
-```text
-new adapter
-new mapping/reference state
-```
-
-rather than downstream engine changes.
-
-The canonical financial model should remain stable.
-
----
-
-## 8. Continue extracting behavioural strategies
-
-Some variation is not configuration.
-
-Examples can include:
-
-```text
-different asset accounting behaviour
-different tax jurisdiction methodology
-different reconciliation policy
-different withdrawal methodology
-```
-
-Those should become explicit strategies/pipelines when real variation exists.
+Those should become more portable when a second real environment demonstrates the variation.
 
 The rule remains:
 
-```text
-same algorithm, different value
-→ configuration
-
-different algorithm
-→ strategy
-```
+> **Generalize from working behavior, not imagined universality.**
 
 ---
 
-## 9. Preserve the current environment as the regression oracle
+## 6. Performance only where it matters
 
-Generalization should always route the current production environment through the new abstraction.
+The current production workload is already operationally comfortable.
 
-Then compare:
+Future optimization should begin with:
 
-```text
-positions
-tax lots
-XIRR
-wealth
-cash flow
-FIRE
-Gold contracts
-```
+> **Should this computation exist?**
 
-If behaviour was not intentionally changed, outputs should reconcile.
+before:
 
-This is the main guardrail against "generalization" becoming a rewrite.
+> **How do I make it 8% faster?**
+
+Performance work remains evidence-driven and must preserve intended financial outputs.
 
 ---
 
-## 10. Broader configuration-led deployment
+## 7. Keep the serving layer curated
 
-The eventual target is a user who can describe more of their environment through:
+Gold should remain decision-oriented.
 
-```text
-source definitions
-mappings
-financial classifications
-asset behaviour
-tax strategy
-planning assumptions
-```
-
-without editing core pipeline code.
-
-That does not mean zero customization.
-
-A genuinely different institution/jurisdiction can still require a new adapter or strategy.
-
-The goal is **controlled extensibility**, not magical universality.
-
----
-
-## 11. Improve assumption provenance
-
-A useful future semantic layer could classify analytical values by provenance:
-
-```text
-OBSERVED
-CONFIGURED
-REFERENCE
-FALLBACK
-RECONCILED
-ESTIMATED
-SIMULATED
-```
-
-That could be especially valuable in:
-
-```text
-tax
-broker reconciliation
-market/reference state
-FIRE
-```
-
-because it would make epistemic status easier to inspect.
-
-This is a future enhancement, not current behaviour.
-
----
-
-## 12. Continue performance work only where useful
-
-The 6.2.x hardening cycle already demonstrated a useful rule:
-
-```text
-delete unnecessary work
-before
-micro-optimizing unnecessary work
-```
-
-The current production workload moved from roughly **23 seconds** to **14–17 seconds** end-to-end while preserving financial outputs.
-
-Future optimization should remain evidence-driven.
-
-If 17 seconds is operationally fine, complexity added solely to chase a benchmark number needs a strong reason.
-
----
-
-## 13. Keep the serving layer curated
-
-Gold should not grow because new metrics are easy to calculate.
-
-A new mart/metric should answer:
+A new metric should answer:
 
 ```text
 What decision does this support?
 What is its grain?
-What methodology does it require?
-Can the consumer interpret it safely?
+Is it additive?
+Can Power BI consume it safely?
+Does it justify its production cost?
 ```
 
-The removal of unused legacy risk metrics is the model for future pruning.
+If not, it probably does not belong in Gold.
 
 ---
 
-## 14. Maintain local-first architecture
+## 8. Local-first remains the default
 
-The current workload does not require cloud infrastructure for core execution.
-
-Local-first remains the default direction because it fits:
+The core system remains local because that fits:
 
 ```text
-privacy
-workload scale
-Power BI / desktop integration
-operational simplicity
+financial privacy
+embedded databases
+desktop / CLI workflows
+Power BI
+offline documentation
+low operating cost
 ```
 
-Cloud services can be introduced when a concrete capability requires them.
-
-Not because architecture diagrams look more impressive with more boxes.
+Cloud infrastructure should enter only if a future requirement actually needs it.
 
 ---
 
-## 15. AI/semantic extensions should remain downstream of trustworthy data
+## 9. Semantic / AI extensions remain downstream
 
-My broader engineering interests include semantic/local-AI systems.
+Local semantic or agentic capabilities remain interesting future possibilities, but they are downstream consumers of trustworthy financial state.
 
-For Personal Finance ETL, any future agentic/semantic layer should consume:
-
-```text
-reconciled canonical financial state
-+
-explicit provenance
-```
-
-rather than bypassing the financial model and reasoning directly over messy source files.
-
-The order matters:
+The order stays:
 
 ```text
-trustworthy data
+evidence
+→ canonical finance
+→ reconciled analytics
+→ tested contracts
 → semantic layer
 → AI interaction
 ```
 
-not:
+Not the reverse.
 
-```text
-AI first
-→ hope it reconstructs finance correctly
-```
+There is no reason to give an agent a beautifully conversational interface to financially ambiguous data. 😄
 
 ---
 
-## 16. What is intentionally not on the roadmap
+## What is intentionally not on the roadmap
 
-I am not currently optimizing for:
+I am not currently planning to turn Personal Finance ETL into:
 
-- cloud-native multi-tenancy,
-- institutional trading execution,
-- a universal global tax engine,
-- every possible risk metric,
-- microservice decomposition,
-- distributed processing for its own sake.
+```text
+a universal tax-return engine
+a brokerage execution platform
+a cloud data platform
+an institutional risk system
+a general accounting ERP
+a framework for every asset class
+```
 
-Those could be valid goals for a different product.
-
-They are not requirements of this one.
+Those would be different products.
 
 ---
 
 ## Roadmap success criteria
 
-The project is moving in the right direction when:
+The next maturity cycle is successful when:
 
-1. Financial truth remains trustworthy.
-2. New sources require less downstream change.
-3. Financial policy becomes more explicit.
-4. Behavioural variation has clean boundaries.
-5. Provenance improves.
-6. Documentation stays synchronized with implementation.
-7. BI contracts remain stable and interpretable.
-8. Performance remains operationally comfortable.
-9. Complexity is added because the workload needs it.
-10. The system remains useful to me while becoming easier for others to extend.
+1. Current financial semantics are explicit at the boundaries that matter.
+2. Known guidance limitations are narrow and explainable.
+3. Golden financial scenarios protect the intended behavior.
+4. System/recovery regressions are automated.
+5. Rebuilds from the same evidence and rule version are deterministic where expected.
+6. Financial results can be traced backward through the model.
+7. `/docs`, Wiki and README remain synchronized without duplicating jobs.
+8. New features can return to being driven by real scenarios rather than hardening debt.
 
 ---
 
 ## Near-term sequence
 
 ```text
-Documentation v2
+v6.5.3 documentation rebase
         ↓
-Full docs QA
+Wiki 2.0 guided-learning rebase
         ↓
-GitHub Wiki
+Financial Domain Freeze
         ↓
-Repository metadata polish
+QA Expansion
         ↓
-Broader portfolio/profile documentation
+final methodology / documentation delta
         ↓
-Next production evolution
+feature-driven evolution
 ```
 
-The roadmap remains subordinate to the working system.
+That sequence is intentionally finite.
 
-The system exists to improve financial understanding and decisions.
+The goal is not permanent hardening.
 
-Everything else is engineering in service of that.
+The goal is to reach a point where the architecture, domain model and tests are stable enough that future releases mostly exist because **something genuinely new happened**.
 
 ---
 
 ## Related documentation
 
 - [Project Overview](project.md)
-- [About Me](about-me.md)
-- [Design Decisions](../architecture/design-decisions.md)
-- [Developer Guide](../developer/development-guide.md)
+- [Financial Model](../finance/financial-model.md)
+- [Tax Methodology](../finance/tax-methodology.md)
+- [Reliability & Recovery](../architecture/reliability-and-recovery.md)
+- [Development Guide](../developer/development-guide.md)
 
 [← About Home](README.md) · [← Documentation Home](../README.md)
