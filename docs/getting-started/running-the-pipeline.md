@@ -32,14 +32,34 @@ flowchart LR
 ### CLI
 
 ```bash
-shan-fin
+shan-fin cli
 ```
+
+Useful CLI modes include:
+
+```bash
+shan-fin cli --config <config.toml> --rules <rules.toml>
+shan-fin cli --config <config.toml> --rules <rules.toml> --auto
+shan-fin cli --config <config.toml> --snapshot
+shan-fin cli --config <config.toml> --restore <snapshot.zip>
+shan-fin cli --docs
+```
+
+`--cron` runs unattended and implies automatic execution.
 
 ### Desktop
 
 ```bash
-shan-fin-gui
+shan-fin
 ```
+
+or explicitly:
+
+```bash
+shan-fin tkinter
+```
+
+The Desktop surface exposes Run Pipeline, Snapshot DB, Restore DB and Documentation.
 
 The application also supports backend/headless execution paths used by automation.
 
@@ -308,7 +328,7 @@ failed run
 ≠ vanished run
 ```
 
-The complete execution log is also attached to run history.
+The complete run-scoped execution log is compressed and persisted in `cp_runs.execution_log`. Worker logs carry run/stage/ISIN/process context into the same forensic history.
 
 ---
 
@@ -472,28 +492,51 @@ For intentional methodology changes, document and explain the expected differenc
 The CLI/desktop docs surface uses the same packaged Markdown tree as the repository:
 
 ```text
-manifest.json
+README + docs/*.md
+→ manifest.json
 → DocsCatalog
 → DocsRenderer
+→ navigation + H1/H2/H3 TOC
+→ bundled Mermaid
 ```
 
 So the application can be used to browse operational, architecture, finance and developer guidance without maintaining a second help system.
 
 ---
 
-## 19. Snapshots and backup boundary
+## 19. Snapshot and Restore
 
-The current snapshot utility protects the DuckDB analytical database.
-
-Because SQLite now owns authoritative operational history, the stronger future backup model is a coordinated bundle containing:
+The current application treats SQLite and DuckDB as one logical recovery unit:
 
 ```text
-DuckDB warehouse
+Raw_Documents.sqlite
 +
-SQLite Control Plane
+Personal_Finance_DB.duckdb
 ```
 
-Do not interpret a DuckDB-only snapshot as a complete backup of all operational provenance.
+A coordinated snapshot:
+
+1. acquires the production lock,
+2. requires both databases,
+3. uses SQLite's backup API,
+4. captures the DuckDB recovery state,
+5. packages the pair into one ZIP.
+
+Restore validates the archive before replacing production state.
+
+Its user-facing invariant is simple:
+
+```text
+restore succeeds
+→ complete snapshot pair
+
+restore fails
+→ complete previous pair
+```
+
+The restore path preserves the current database files and relevant sidecars before installation so a partial replacement can be rolled back.
+
+For implementation-level recovery semantics, see [Reliability & Recovery](../architecture/reliability-and-recovery.md).
 
 ---
 
