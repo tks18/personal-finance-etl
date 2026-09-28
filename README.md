@@ -25,12 +25,12 @@ It now powers my month-end close, investment accounting, portfolio analysis, cas
 flowchart TB
     SRC["Financial Sources<br/>Bank · Broker · Excel · CSV · SQLite · Market Data"]
     CP["SQLite Control Plane<br/>Artifacts · Payloads · Sync State<br/>Runs · Failures · Logs · Config Provenance"]
-    BR["DuckDB Bronze<br/>Persistent Source-Shaped State"]
+    BR["DuckDB Bronze<br/>16 Source Contracts · Persistent State"]
     CAN["Canonical Financial Model<br/>Polars Lazy DAG · FinancialRules"]
     IQ["Investment Quant Engine<br/>FIFO · Broker Reconciliation · Shadow Benchmark<br/>Tax State · XIRR · Drawdown"]
     WA["Wealth Analytics Engine<br/>Ledger · Cash Flow · Net Worth<br/>Tax · Budget · FIRE · Monte Carlo"]
-    SG["DuckDB Silver + Gold<br/>Canonical Contracts · Decision Marts"]
-    META["Lean DuckDB Meta<br/>Latest-Run Analytical Projection"]
+    SG["DuckDB Silver + Gold<br/>20 Silver Contracts · 17 Gold Marts"]
+    META["Lean DuckDB Meta<br/>Current Projection · Data Contracts"]
     APP["Power BI · CLI · Desktop"]
 
     SRC --> CP
@@ -67,8 +67,9 @@ This repository is one production system, but its implementation crosses several
 | **Finance** | Household ledger, transfers, cash/non-cash semantics, FIFO tax lots, holding periods, tax-aware wealth |
 | **Investment Analytics** | Broker reconciliation, shadow benchmarks, XIRR, after-tax XIRR, active return, drawdown |
 | **Quantitative Engineering** | Numba Monte Carlo, market regimes, fat tails, jumps, stochastic inflation, human-capital shocks |
-| **Reliability** | Run lifecycle, failure persistence, rollback, raw-state recovery, configuration fingerprints |
-| **Product Engineering** | Backend facade, Rich CLI, desktop GUI, packaged documentation, manifest-driven docs runtime |
+| **Reliability** | Run lifecycle, stale-run recovery, replay/self-healing, failure persistence, coordinated Snapshot/Restore |
+| **Observability** | Run-scoped logs, stage/ISIN/process context, worker tracing, structured failures, compressed execution history |
+| **Product Engineering** | Backend facade, Rich CLI, desktop GUI, packaged offline documentation, manifest-driven docs runtime |
 
 The implementation is the evidence; the rest of this README shows where those disciplines meet in production.
 
@@ -407,9 +408,19 @@ The registry makes analytical identity inspectable before a frame ever reaches D
 
 ---
 
-## 5 · Silver and Gold
+## 5 · Bronze, Silver, and Gold contracts
 
-The warehouse is Medallion-inspired, but the layers have precise responsibilities.
+The warehouse is Medallion-inspired, but each layer has a precise contract boundary.
+
+The current analytical surface is:
+
+```text
+16 Bronze contracts
+20 Silver contracts
+17 Gold marts
+```
+
+Bronze is no longer an implicit staging area. Its registry declares source category, physical table, and replacement semantics before canonical reconstruction begins.
 
 ```mermaid
 flowchart LR
@@ -419,9 +430,9 @@ flowchart LR
     CP["Control Plane"] -. latest-run projection .-> META["DuckDB Meta"]
 ```
 
-## Silver
+### Silver
 
-The current architecture publishes **20 Silver contracts**:
+The current architecture publishes **20 canonical Silver contracts**:
 
 ```text
 11 dimensions / reference models
@@ -800,13 +811,11 @@ These are **scenario distributions under configured assumptions**, not predictio
 
 ---
 
-## 14 · Failure is part of the architecture
+## 14 · Failure, recovery, and observability are part of the architecture
 
 Per-instrument investment work runs in parallel.
 
-A failed worker is not allowed to disappear from a successful portfolio.
-
-The failure propagates through the investment engine into the orchestrator, where it becomes Control Plane history:
+A failed worker is not allowed to disappear from a successful portfolio. The failure propagates into the orchestrator, becomes structured Control Plane history, and prevents partial analytical state from being published as success.
 
 ```python
 cp.runs.log_run_failure(
@@ -819,118 +828,135 @@ cp.runs.log_run_failure(
 )
 ```
 
-The analytical transactions are rolled back:
+The system also keeps a complete run-scoped forensic log:
 
-```python
-self.db_manager.conn.execute("ROLLBACK")
-cp.rollback()
+```text
+run_id
+  ├── stage
+  ├── ISIN
+  ├── process
+  ├── module
+  ├── function
+  ├── source line
+  └── traceback / message
+          ↓
+cross-process logging queue
+          ↓
+compressed execution log
+          ↓
+cp_runs.execution_log
 ```
 
-and the run is finalized as failed:
+Structured failures answer **what failed**. The execution log preserves **what happened around it**.
 
-```python
-cp.runs.finish_run(run_id, "FAILED")
-```
+### Recovery follows the normal pipeline
 
-The complete execution log is persisted afterward.
-
-This is intentionally described as **application-coordinated transactional consistency across two local databases**.
-
-It is not distributed two-phase commit.
-
----
-
-## 15 · Recoverability
-
-Raw evidence survives independently from derived analytical state.
-
-That creates a recovery path:
+The Control Plane can challenge the analytical plane rather than blindly trusting a previous `SYNCED` state.
 
 ```mermaid
 flowchart LR
-    RAW["SQLite Raw Evidence"] --> BR["Rebuild Bronze"]
-    BR --> SIL["Rebuild Silver"]
-    SIL --> GOLD["Rebuild Gold"]
+    CP["Control Plane<br/>Artifact = SYNCED"] --> CHECK["Validate DuckDB State"]
+    CHECK --> OK{"Registry, table and<br/>artifact state healthy?"}
+    OK -->|"Yes"| KEEP["Keep SYNCED"]
+    OK -->|"No"| PEND["PENDING_BRONZE"]
+    PEND --> REPLAY["Normal Bronze Replay"]
+    REPLAY --> SYNC["SYNCED"]
 ```
 
-The Control Plane can also compare its artifact state with DuckDB registry state and return missing analytical artifacts to the Bronze synchronization path.
+Normal discovery merges:
 
-Recoverability and immutable historical replay are different concepts.
+```text
+new
++
+changed
++
+PENDING_BRONZE
+```
 
-A future rebuild can still use newer:
+into one actionable path.
 
-- application code,
-- schemas,
-- financial rules,
-- or tax behaviour.
+A pure source rename is treated as provenance migration across the Control Plane, raw payload relationship, Bronze ownership, and DuckDB Meta projection. Financial state does not change merely because a file moved.
 
-That is why configuration and run provenance matter.
+---
+
+## 15 · Coordinated Snapshot + Restore
+
+SQLite and DuckDB are treated as one logical recovery unit:
+
+```text
+Raw_Documents.sqlite
++
+Personal_Finance_DB.duckdb
+```
+
+Snapshot creation runs under the production lock, uses SQLite's backup API, preserves the DuckDB recovery state, and packages the pair into one archive.
+
+Restore validates the archive before touching production state and follows an **all-new or all-old** rule:
+
+```mermaid
+flowchart LR
+    ZIP["Validated Snapshot"] --> LOCK["Production Lock"]
+    LOCK --> OLD["Preserve Current Recovery Unit"]
+    OLD --> NEW["Install Snapshot Pair"]
+    NEW --> OK{"Complete?"}
+    OK -->|"Yes"| KEEP["Keep Restored Pair"]
+    OK -->|"No"| ROLL["Remove Partial Restore"]
+    ROLL --> BACK["Restore Complete Previous Pair"]
+```
+
+This is still a local-first application. The reliability model is deliberately application-coordinated rather than distributed.
 
 ---
 
 ## 16 · Lean DuckDB Meta
 
-DuckDB Meta is intentionally no longer the historical operational authority.
+DuckDB Meta is intentionally not the historical operational authority.
 
-It contains only analytical context useful beside the latest warehouse state:
+It contains current analytical context beside the warehouse:
 
 ```text
 m_File_Registry
 m_Table_Row_Counts
 m_Financial_Rules
 m_Settings
+m_Data_Contracts
 ```
 
-Historical execution truth lives in SQLite.
+`m_Data_Contracts` exposes the current analytical registry itself: contract identity, layer, physical table, domain, grain, producer, replacement semantics, and publication order.
 
-The Control Plane is authoritative.
+Historical execution truth remains in SQLite.
 
-DuckDB Meta is a projection.
-
-That keeps Power BI/query consumers close to useful operational context without duplicating the full control system.
+> **The Control Plane is authoritative. DuckDB Meta is the current analytical projection.**
 
 ---
 
-## 17 · Documentation has an architecture too
+## 17 · Documentation is a local application too
 
-The documentation is packaged with the application and discovered through a manifest.
+The documentation is packaged with the application and discovered through one manifest.
 
 ```mermaid
 flowchart LR
-    MD["docs/*.md"] --> MAN["manifest.json"]
+    MD["README + docs/*.md"] --> MAN["manifest.json"]
     MAN --> CAT["DocsCatalog"]
     CAT --> RENDER["DocsRenderer"]
-    RENDER --> CLI["CLI"]
-    RENDER --> GUI["Desktop"]
+    MER["Bundled Mermaid"] --> RENDER
+    RENDER --> NAV["Navigation + TOC"]
+    NAV --> CLI["CLI Docs"]
+    NAV --> GUI["Desktop Docs"]
 ```
 
-The catalog does not hard-code individual pages:
+The renderer provides manifest-driven discovery, canonical internal navigation, Markdown rendering, a generated H1/H2/H3 table of contents, and bundled Mermaid rendering without a CDN dependency.
 
-```python
-for section_data in manifest_data.get("sections", []):
-    section_title = section_data.get("title", "")
+One documentation tree therefore serves GitHub, CLI, Desktop, and the packaged distribution.
 
-    for page in section_data.get("pages", []):
-        catalog.append(
-            DocEntry(
-                section=section_title,
-                title=page.get("title", ""),
-                path=page.get("path", ""),
-                order=page.get("order", 9999),
-            )
-        )
-```
-
-One documentation tree therefore serves:
+The [GitHub Wiki](https://github.com/tks18/personal-finance-etl/wiki) has a different job:
 
 ```text
-GitHub
-CLI
-Desktop
-Packaged distribution
+README  → SHOW
+Wiki    → TEACH
+/docs   → SPECIFY
+Code    → PROVE
 ```
-
-The [GitHub Wiki](https://github.com/tks18/personal-finance-etl/wiki) now sits above this source of truth as the guided exploration layer rather than becoming a competing copy.
 
 Yes, the documentation explaining the architecture now has an architecture. 😅
 
@@ -951,9 +977,9 @@ The financial logic sits behind a backend facade rather than being implemented s
                       Power BI
 ```
 
-The surfaces have different jobs.
+The shared application surface includes pipeline execution, coordinated Snapshot/Restore, configuration, and packaged documentation.
 
-The engine remains shared.
+The surfaces have different jobs. The engine remains shared.
 
 That principle dates back to much earlier projects in my engineering journey and remains one of the architectural instincts I keep returning to.
 
@@ -1040,8 +1066,8 @@ The stack is deliberately heterogeneous.
 
 | Technology | Responsibility |
 | --- | --- |
-| **SQLite** | Authoritative Control Plane, raw artifacts, payloads, run history, failures, configuration provenance |
-| **DuckDB** | Persistent Bronze/Silver/Gold analytical warehouse and lean current-state Meta |
+| **SQLite** | Authoritative Control Plane, raw artifacts/payloads, run history, failures, compressed execution logs, configuration provenance |
+| **DuckDB** | 16 Bronze + 20 Silver + 17 Gold analytical contracts and lean current-state Meta |
 | **Polars** | Lazy/vectorized transformation and analytical computation |
 | **Pydantic** | Operational and financial-policy contracts |
 | **PyXIRR** | Irregular dated return solving |
@@ -1075,11 +1101,15 @@ pip install personal-finance-etl
 shan-fin
 ```
 
+The CLI exposes pipeline execution, documentation, coordinated snapshot creation, and restore workflows.
+
 ### Desktop
 
 ```bash
 shan-fin-gui
 ```
+
+The desktop surface shares the same backend engine and exposes pipeline execution, Snapshot/Restore, configuration, and the packaged documentation portal.
 
 ### Development
 
@@ -1140,43 +1170,40 @@ I would rather make that boundary explicit than call a purpose-built system "ful
 
 ---
 
-## 23 · Where the architecture is going
+## 23 · What comes next
 
-The long-term direction is not a rewrite.
+The platform architecture is now intentionally stable.
 
-It is controlled extraction of the assumptions embedded in the working vertical system.
-
-```text
-Working Production System
-        ↓
-Harden semantics & provenance
-        ↓
-Formalize contracts
-        ↓
-Extract source adapters
-        ↓
-Extract behavioural strategies
-        ↓
-Preserve canonical financial contracts
-        ↓
-Broader configuration-led deployment
-```
-
-The migration rule is:
+The next maturity work is about formalizing and protecting the financial behavior already exercised against production data.
 
 ```text
-characterize current behaviour
-        ↓
-extract assumption
-        ↓
-route current environment through new boundary
-        ↓
-reconcile financial outputs
-        ↓
-adopt generalized path
+v6.5.3
+│
+├── Architecture / reliability foundation
+│   └── mature
+│
+├── Financial Domain Freeze
+│   ├── formalize selected edge semantics
+│   ├── strengthen tax-guidance boundaries
+│   ├── preserve realized financial history
+│   └── freeze financial invariants
+│
+├── QA Expansion
+│   ├── golden financial scenarios
+│   ├── component / integration tests
+│   ├── failure-injection regression coverage
+│   └── build / package validation
+│
+└── Feature-Driven Evolution
+    ├── new source
+    ├── new asset
+    ├── new financial scenario
+    └── new analytical question
 ```
 
-The current production system remains the behavioural baseline.
+The current financial model remains the production baseline.
+
+The next step is to convert that practical confidence into more explicit domain contracts and executable regression protection.
 
 See the full [Roadmap](docs/about/roadmap.md).
 
@@ -1184,65 +1211,31 @@ See the full [Roadmap](docs/about/roadmap.md).
 
 ## 24 · Explore the project
 
-The repository now has two complementary knowledge surfaces built on top of the source code.
+The project has intentionally different knowledge surfaces.
 
-| I want to... | Go here |
+| Surface | Job | Start here |
+| --- | --- | --- |
+| **README** | **SHOW** — what the system is and why it is interesting | You are here |
+| **Wiki** | **TEACH** — guided mental models and system journeys | [Explore the Wiki](https://github.com/tks18/personal-finance-etl/wiki) |
+| **`/docs`** | **SPECIFY** — architecture, methodology, contracts, configuration, and developer reference | [Open `/docs`](docs/README.md) |
+| **Code** | **PROVE** — implementation authority | [Browse `src/`](src/personal_finance_etl) |
+
+### Go straight to the technical reference
+
+| Interest | Start here |
 | --- | --- |
-| 🧭 **Understand the system as a guided journey** | [Explore the Wiki](https://github.com/tks18/personal-finance-etl/wiki) |
-| 📚 **Inspect the canonical technical specification** | [Open `/docs`](https://github.com/tks18/personal-finance-etl/blob/master/docs/README.md) |
-| 🔬 **Verify the implementation itself** | [Browse the source](https://github.com/tks18/personal-finance-etl) |
+| 🚀 Getting started | [Installation](docs/getting-started/installation.md) |
+| 🏗️ Architecture | [System Architecture](docs/architecture/system-architecture.md) |
+| 💰 Financial methodology | [Financial Model](docs/finance/financial-model.md) |
+| 📈 Investment analytics | [Investment Analytics](docs/finance/investment-analytics.md) |
+| ⚙️ Financial policy | [Financial Rules](docs/configuration/financial-rules.md) |
+| 🧑‍💻 Development | [Development Guide](docs/developer/development-guide.md) |
+| 📖 Data contracts | [Reference](docs/reference/README.md) |
+| 🧭 Project journey | [Project Overview](docs/about/project.md) |
 
-```text
-README
-   ↓
-choose the depth you need
-   ├── Wiki   → guided exploration
-   ├── /docs  → canonical technical knowledge
-   └── source → implementation ground truth
-```
+The Wiki and `/docs` deliberately overlap in **concept**, not in **job**.
 
-The Wiki connects the architecture, data lifecycle, financial model, investment engine, tax, wealth, FIRE, BI, reliability, and project journey as one guided tour.
-
-`/docs` remains the authoritative technical documentation. The source code remains the implementation ground truth.
-
-### Explore the canonical docs
-
-| Section | Start here |
-| --- | --- |
-| 🚀 **Getting Started** | [Installation](docs/getting-started/installation.md) |
-| 🏗️ **Architecture** | [System Architecture](docs/architecture/system-architecture.md) |
-| 💰 **Finance & Methodology** | [Financial Model](docs/finance/financial-model.md) |
-| ⚙️ **Configuration** | [Financial Rules](docs/configuration/financial-rules.md) |
-| 🧑‍💻 **Developer** | [Development Guide](docs/developer/development-guide.md) |
-| 📖 **Reference** | [Gold Data Contracts](docs/reference/gold-data-contracts.md) |
-| 🧭 **About** | [Project Overview](docs/about/project.md) |
-
-Or open the complete **[Documentation Portal](docs/README.md)**.
-
-### Choose by interest
-
-**Data Engineering**  
-→ [Data Lifecycle](docs/architecture/data-lifecycle.md)  
-→ [Warehouse Architecture](docs/architecture/warehouse-architecture.md)
-
-**Python / Software Architecture**  
-→ [System Architecture](docs/architecture/system-architecture.md)  
-→ [Development Guide](docs/developer/development-guide.md)
-
-**BI / Data Modelling**  
-→ [Data Model](docs/architecture/data-model.md)  
-→ [Gold Data Contracts](docs/reference/gold-data-contracts.md)
-
-**Investment Engineering**  
-→ [Investment Analytics](docs/finance/investment-analytics.md)  
-→ [Tax Methodology](docs/finance/tax-methodology.md)
-
-**FIRE / Quantitative Planning**  
-→ [FIRE Methodology](docs/finance/fire-methodology.md)  
-→ [FIRE Configuration](docs/configuration/fire-configuration.md)
-
-**The engineering journey behind the project**  
-→ [About Me](docs/about/about-me.md)
+The Wiki helps a reader understand the system. `/docs` shows exactly how it works.
 
 ---
 
@@ -1310,18 +1303,19 @@ It now has:
 
 ```text
 an authoritative SQLite Control Plane
-a DuckDB analytical warehouse
+a DuckDB warehouse with 16 Bronze / 20 Silver / 17 Gold contracts
 a Polars canonical transformation DAG
 FIFO tax-lot accounting
 broker reconciliation
 shadow benchmark portfolios
 cash-flow reconciliation
 tax-aware wealth
-contract-driven Silver / Gold publication
 Numba Monte Carlo
+run-scoped cross-process forensic logging
+coordinated Snapshot + Restore
 Power BI
 CLI + desktop surfaces
-and a manifest-driven documentation runtime
+and a fully local manifest-driven documentation application
 ```
 
 Is that a lot of engineering for personal finance?
