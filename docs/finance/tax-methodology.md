@@ -1,6 +1,8 @@
 # Tax Methodology
 
-Tax in Personal Finance ETL is modelled at **lot grain before portfolio aggregation**.
+Tax-oriented state in Personal Finance ETL is modelled at **lot grain before portfolio aggregation**.
+
+The purpose is planning and filing guidance from the evidence available to the application, not authoritative return preparation.
 
 That is necessary because tax treatment can depend on:
 
@@ -127,6 +129,8 @@ pnl = (
 
 The realized state is then classified using sale-date holding treatment.
 
+For ordinary observed lots this follows the reconstructed FIFO acquisition history. If reconciliation created inventory because broker state could not be explained from available transactions, the resulting basis has weaker evidence and should be reviewed before filing.
+
 ---
 
 ## 5. Realized and unrealized tax are different states
@@ -197,9 +201,9 @@ net taxable gain
 
 depending on the configured jurisdictional methodology.
 
-The current implementation is built around the Indian tax environment represented in the project's FinancialRules/reference state.
+The current implementation is built around the Indian tax environment represented in the project's `FinancialRules` and macro/reference state.
 
-That behaviour is not yet jurisdiction-neutral.
+It intentionally models the tax-oriented behavior needed by the current portfolio rather than attempting to be a general Indian income-tax engine. That behaviour is not jurisdiction-neutral.
 
 ---
 
@@ -215,7 +219,7 @@ Tax Rules
 ├── STCG rate
 ├── LTCG rate
 ├── exemptions
-└── effective-date behaviour
+└── configured date / FY behaviour
 ```
 
 The investment engine consumes those rules at lot grain.
@@ -318,7 +322,28 @@ This is why tax is not an isolated investment-report feature.
 
 ---
 
-## 14. Tax methodology boundaries
+## 14. Portfolio tax guidance
+
+The household tax forecast currently combines the tax-oriented components explicitly implemented by the model.
+
+At a high level:
+
+```text
+realized STCG estimate
++
+taxable LTCG estimate after configured exemption
++
+taxable dividend estimate
+→ Projected_Tax_Bill
+```
+
+`Taxable_Interest` is also calculated and published in the current analytical state, but it is not presently included in `Projected_Tax_Bill`.
+
+That is why I treat the output as **portfolio tax guidance**, not a complete tax-return liability. It does not claim to incorporate every income head, deduction, credit, filing condition or taxpayer-specific adjustment.
+
+---
+
+## 15. Tax methodology boundaries
 
 The current implementation does **not** claim:
 
@@ -328,11 +353,13 @@ The current implementation does **not** claim:
 - that unrealized tax estimates are payable tax,
 - that future tax regimes are known.
 
-The methodology is a decision-support model under explicit current rules.
+The methodology is a decision-support model under explicit current rules and available evidence.
+
+A narrow limitation in one guidance component does not invalidate the broader financial model; it defines where filing review remains necessary.
 
 ---
 
-## 15. Tax invariants
+## 16. Tax invariants
 
 1. Tax classification occurs before aggregation destroys lot history.
 2. FIFO determines which acquisition history is realized.
