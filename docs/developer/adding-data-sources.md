@@ -221,7 +221,20 @@ Financial meaning belongs later.
 
 ## 8. Register Bronze persistence
 
-The new extracted dataset needs a Bronze destination.
+The new extracted dataset needs a Bronze destination and a `BronzeDataContract`.
+
+The current registry contains **16 Bronze contracts**:
+
+```python
+@dataclass
+class BronzeDataContract:
+    extraction_attribute: str
+    sync_category: str
+    physical_table: str
+    is_full_replace: bool
+```
+
+The registry is the source-sync contract, not merely a table-name lookup.
 
 Conceptually:
 
@@ -488,7 +501,9 @@ architecture/data-lifecycle.md
 architecture/data-model.md
 developer/adding-data-sources.md
 reference contracts
-manifest.json if a new guide was added
+`manifest.json` if a new `/docs` technical guide was added
+
+Wiki only if the new source changes the guided conceptual story; do not duplicate the technical source contract there
 ```
 
 Use real implementation excerpts once the source path is stable.
