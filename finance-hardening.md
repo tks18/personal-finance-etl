@@ -1,679 +1,498 @@
-# Financial Domain Freeze Sprint
+# Financial Domain Freeze
 
 ## Goal
+Harden the financial model around investment lots, realized gains/losses, broker reconciliation, household income, capital-loss treatment, estimated tax preparation, and year-end review.
 
-Harden the financial model around the scenarios I actually use: investment lots, realized gains/losses, household income, estimated tax preparation, and year-end review.
+The application remains a financial/tax guidance system, not a complete ITR engine.
 
-The output remains financial and tax guidance. It does not replace final filing due diligence or become a general Indian tax-return engine.
-
-## 1. Lock supported holding-period semantics
-
+## 1. Calendar-month holding periods
 ### Change
-
-Make holding classification deterministic for the investment types currently supported and actually used.
-
+Replace approximate day-based holding thresholds with calendar-month semantics.
 ### Impact
-
-Boundary dates, partial lots, and sale-date treatment stop depending on implicit assumptions.
-
+Leap years and different month lengths cannot distort ST/LT classification.
 ### Implementation
-
-For each supported tax type/subtype, define and test:
-
+For each supported tax type/subtype:
 ```text
-acquisition date
-disposal/reference date
-holding threshold
-exact threshold behavior
-STCG / LTCG result
-partial FIFO disposal
-```
-
-Keep the current FinancialRules approach unless a real scenario requires another model.
-
-## 2. Persist realized investment events
-
-### Change
-
-Create durable canonical realized events when FIFO disposes a lot.
-
-```text
-Sale → FIFO disposal → Realized Investment Event
-```
-
-### Impact
-
-Realized history survives full portfolio liquidation and becomes independently queryable.
-
-It also separates financial history from later tax interpretation.
-
-### Implementation
-
-Persist useful financial facts:
-
-```text
-event_id
-instrument / ISIN
 acquisition_date
-disposal_date
-quantity
-sale_proceeds
-disposed_cost_basis
-realized_gain_loss
-source lineage
++ configured threshold months
+→ boundary date
 ```
+Compare the actual disposal/reference date to the boundary. Lock exact-boundary behavior with tests.
+### Done when
+One day before, exact boundary, and one day after classify deterministically.
 
-Tax treatment is derived downstream from the event plus rules/macro context.
-
-## 3. Add a minimal `taxconfig` to FinancialRules
-
+## 2. Lot-level realized investment events
 ### Change
+Create `silver.f_Investment_Realized_Events`.
 
-Map the existing household Category/Subcategory taxonomy into tax heads.
+Grain:
+```text
+one disposed FIFO lot segment per sale
+```
+A sale consuming three buy lots creates three rows.
+### Impact
+FIFO becomes canonical realized gain/loss history while the existing sale-level weighted-average P&L can remain.
+### Implementation
+Suggested fields:
+```text
+Realized_Event_ID
+Sale_ID / Transaction_ID
+ISIN
+Lot_ID
+Lot_Sequence
+Acquisition_Date
+Disposal_Date
+FY
+Quantity_Disposed
+Acquisition_Price
+Disposed_Cost_Basis
+Sale_Price
+Sale_Proceeds
+Realized_Gain_Loss
+Holding_Type
+Tax_Type
+Tax_Subtype
+source / lineage identifiers
+reconciliation indicator where relevant
+```
+### Done when
+Multi-lot sales preserve exact lot-level realization and full liquidation never removes realized history.
 
-Each section key is the stable tax-head ID.
-
+## 3. TaxConfig at Head → Tax Sub-Head
+### Change
+Add TaxConfig inside FinancialRules:
+```text
+Head of Income
+→ Tax Sub-Head
+→ cat_ids[]
+→ sub_cat_ids[]
+→ tax_credit_sub_cat_ids[]
+→ taxability
+→ tax_method
+```
 Example:
-
 ```toml
-[taxconfig.income_from_salary]
-display_name = "Income from Salary"
+[taxconfig.income_from_salary.salary]
+display_name = "Salary"
 cat_ids = ["SALARY"]
 sub_cat_ids = []
 tax_credit_sub_cat_ids = ["SALARY_TDS"]
 taxability = "taxable"
 tax_method = "ordinary_rate"
 ```
-
 ### Impact
-
-Adding a new income stream later normally means adding its Category/Subcategory ID to an existing list, not creating new Python/config structures.
-
+New income streams normally require only adding IDs to an existing sub-head.
 ### Implementation
-
-Use one uniform schema for every tax head:
-
+Use one uniform schema. Suggested enums:
 ```text
-display_name
-cat_ids[]
-sub_cat_ids[]
-tax_credit_sub_cat_ids[]
-taxability
-tax_method
+taxability: taxable | non_taxable | review
+tax_method: ordinary_rate | capital_gains | exempt | review
 ```
+`cat_ids` claims the whole category. `sub_cat_ids` claims only exact subcategories. No override/exclusion semantics. Effective overlaps are configuration errors.
+### Done when
+Income taxonomy changes normally require FinancialRules changes only.
 
-Keep enums small:
-
-```text
-taxability:
-taxable
-exempt
-review
-
-tax_method:
-ordinary_rate
-capital_gains
-exempt
-review
-```
-
-Matching rules:
-
-```text
-cat_ids
-→ claims the complete category and all its subcategories
-
-sub_cat_ids
-→ claims only those specific subcategories
-```
-
-Do not support overrides/exclusions.
-
-A Category/Subcategory must resolve to at most one tax head. Overlap is a configuration error.
-
-## 4. Keep tax credits simple
-
+## 4. Tax credits at Subcategory level only
 ### Change
-
-Use only:
-
-```text
-tax_credit_sub_cat_ids
-```
-
+Use only `tax_credit_sub_cat_ids`.
 ### Impact
-
-TDS stays explicit without introducing unnecessary category inheritance.
-
-The household ledger can still represent:
-
+TDS remains explicit and simple.
+### Implementation
+For mapped tax-credit subcategories, use the absolute ledger amount as observed tax already withheld/credited.
 ```text
 Gross income +100
 TDS -20
 Cash received 80
+
+Tax model:
+Gross income 100
+Observed tax credit 20
 ```
+### Done when
+Cash and tax-credit views both reconcile.
 
-while the tax model sees gross income of 100 and observed tax credit of 20.
-
-### Implementation
-
-For mapped tax-credit subcategories, use the absolute ledger amount as observed tax already withheld/credited.
-
-Gold should show:
-
-```text
-Estimated Gross Tax
-Observed Tax Credits
-Estimated Net Tax Payable
-```
-
-## 5. Define tax-event ownership
-
+## 5. Tax-event ownership
 ### Change
-
-Every canonical tax event has exactly one financial producer.
-
+Every canonical TaxEvent has exactly one producer.
 ### Impact
-
-Capital gains cannot be double counted between the household ledger and Investment Engine.
-
+Investment capital gains cannot be double counted between the ledger and FIFO.
 ### Implementation
-
-Use this precedence:
-
+Use:
 ```text
 specialized Investment Engine
 >
 generic ledger classification
 ```
-
-For configured investment activity:
-
+Reuse the existing investment-category configuration to identify investment-related activity.
 ```text
-Investment Engine
-→ Realized Investment Event
-→ Capital Gain Tax Event
+investment disposal
+→ f_Investment_Realized_Events
+→ f_Tax_Events
 ```
+Suppress generic ledger-derived capital gains for those investment categories.
+### Done when
+One economic investment gain appears exactly once in TaxEvents.
 
-Suppress the generic ledger-derived gain for the same investment activity.
-
-Reuse the existing investment-category rules to identify investment activity. Do not duplicate those IDs inside `taxconfig`.
-
-## 6. Support non-investment capital gains from the ledger
-
+## 6. Non-investment capital gains
 ### Change
-
-Allow `income_from_capital_gains` to also map household Category/Subcategory IDs.
-
-Example:
-
-```toml
-[taxconfig.income_from_capital_gains]
-display_name = "Capital Gains"
-cat_ids = ["CAPITAL_GAINS"]
-sub_cat_ids = []
-tax_credit_sub_cat_ids = []
-taxability = "taxable"
-tax_method = "capital_gains"
-```
-
+Allow the Capital Gains head to map non-investment capital-asset income from the ledger, with separate ST/LT sub-heads where the taxonomy can identify them.
 ### Impact
-
-Broker-managed investment gains and other capital-asset gains can flow into one tax head without sharing the same producer.
-
+Investment and other capital assets can share the tax model while keeping different producers.
 ### Implementation
-
-Investment gains come from Realized Investment Events.
-
-Non-investment mapped ledger amounts may create capital-gain TaxEvents.
-
-For ledger-derived capital gains, the mapped amount must already represent gain/loss, not gross sale proceeds, unless richer cost-basis evidence exists.
-
-If holding treatment cannot be determined, mark it for review instead of inventing STCG/LTCG.
-
-## 7. Extend Macro Parameters minimally
-
-### Change
-
-The existing `silver.d_Macro_Parameters` already has FY grain and owns tax-rate assumptions.
-
-Add:
-
+For mapped non-investment gains/losses:
 ```text
-Estimated_Ordinary_Income_Tax_Rate
+positive ST → STCG
+negative ST → STCL
+positive LT → LTCG
+negative LT → LTCL
 ```
+The mapped amount must already represent gain/loss, not gross sale proceeds, unless richer cost-basis evidence exists.
 
-Deprecate/replace:
+Use `Default_STCG` / `Default_LTCG` from Macro Parameters for the supported default calculation. Insufficient classification becomes `CHECK_REQUIRED`.
+### Done when
+Non-investment capital gains/losses flow correctly without affecting investment ownership.
 
+## 7. Rename ordinary-income macro rate
+### Change
+Rename:
 ```text
 Dividend_Income_Tax_Rate
-```
-
-once dividends use the common ordinary-income path.
-
-### Impact
-
-Salary, interest, and dividend can share one explicit planning rate instead of creating separate tax-rate columns.
-
-### Implementation
-
-Route:
-
-```text
-ordinary_rate
 → Estimated_Ordinary_Income_Tax_Rate
 ```
-
-Keep the existing equity/gold/debt/default capital-gain rates and Equity LTCG exemption.
-
-Do not add:
-
+in `silver.d_Macro_Parameters`.
+### Impact
+Salary, interest, dividend, and other supported ordinary taxable streams share one explicit FY planning assumption.
+### Implementation
 ```text
-salary rate
-interest rate
-dividend rate
-slab calculator
-basic exemption
-standard deduction
-rebate
-cess/surcharge model
+tax_method = ordinary_rate
+→ Estimated_Ordinary_Income_Tax_Rate
 ```
+Keep existing equity/gold/debt/default capital-gain rates and exemptions. Do not add a slab engine or separate ordinary-income rates.
+### Done when
+A new FY ordinary-rate assumption is a macro-data change.
 
-unless a real future use case requires it.
-
-## 8. Freeze tax responsibility boundaries
-
-Use this ownership model:
-
-```text
-FinancialRules.taxconfig
-→ maps financial taxonomy to tax heads
-
-d_Macro_Parameters
-→ FY-specific numeric assumptions
-
-Python tax domain
-→ calculation algorithms
-
-Tax Events / FY Tax State
-→ derived financial interpretation
-
-Gold
-→ filing-preparation presentation
-```
-
-Never put these into `taxconfig`:
-
-```text
-tax rates
-slabs
-cess/surcharge
-rebates/deductions
-holding periods
-set-off rules
-carry-forward years
-ITR schedule/field numbers
-tax-law formulas
-```
-
-## 9. Create a canonical Tax Event stream
-
+## 8. Keep non-taxable income outside TaxEvents
 ### Change
-
-Create a Silver fact such as:
-
+Configured non-taxable streams such as cashback/digital-wallet income do not enter `silver.f_Tax_Events`.
+### Impact
+TaxEvents remains a tax-relevant fact rather than a duplicate income fact.
+### Implementation
 ```text
-silver.f_Tax_Events
+taxability = non_taxable
+→ classify intentionally
+→ exclude before f_Tax_Events
 ```
+Reconcile at a higher level:
+```text
+Gross Income Ledger
+- Explicitly Non-Taxable / Excluded Income
+= Tax Model Income Universe
+```
+### Done when
+Non-taxable income remains in normal financial reporting but not TaxEvents.
+
+## 9. Canonical TaxEvents
+### Change
+Create `silver.f_Tax_Events`.
 
 Grain:
-
 ```text
 one tax-relevant financial event
 ```
-
 ### Impact
-
-Household income and investment gains reach the tax engine through one inspectable contract.
-
+Ledger-derived taxable income and FIFO realized investment events share one canonical tax input.
 ### Implementation
-
-Keep the fields practical:
-
-```text
-tax_event_id
-event_date
-FY
-source_type
-source_id
-tax_head_id
-taxability
-tax_method
-gross_amount
-taxable_amount
-gain_type
-realized_gain_loss
-applied_rate
-estimated_tax
-evidence_quality
-requires_review
-review_reason
-rules_snapshot_id
-```
-
-Use a small evidence-quality set:
-
-```text
-OBSERVED
-RECONSTRUCTED
-RECONCILED
-MODELLED
-```
-
-Use the normal reproducibility envelope for macro/reference provenance rather than copying the whole macro row.
-
-## 10. Add review flags
-
-### Change
-
-Tax events can explicitly require manual review.
-
-### Impact
-
-Weak or incomplete evidence becomes visible instead of silently becoming a confident tax answer.
-
-### Implementation
-
-Use:
-
-```text
-requires_review
-review_reason
-```
-
-Examples:
-
-```text
-missing acquisition basis
-reconciliation affected basis
-unknown tax subtype
-unmapped classification
-insufficient holding evidence
-fallback treatment used
-```
-
-Unmapped/ambiguous activity should become `review`, not automatically non-taxable.
-
-## 11. Implement explicit capital-loss set-off
-
-### Change
-
-Calculate STCL/LTCL set-off explicitly instead of using aggregate loss arithmetic.
-
-### Impact
-
-The FY tax state can explain where every supported capital loss was used.
-
-### Implementation
-
-Track separately:
-
-```text
-STCL
-LTCL
-STCG
-LTCG
-```
-
-Apply the supported set-off rules in Python domain code, not user configuration.
-
-Return:
-
-```text
-loss_used
-remaining_STCL
-remaining_LTCL
-net_taxable_STCG
-net_taxable_LTCG
-```
-
-## 12. Add carry-forward state where required
-
-### Change
-
-Represent remaining STCL/LTCL across FYs.
-
-### Impact
-
-Supported brought-forward losses do not disappear between snapshots/FYs.
-
-### Implementation
-
-Use:
-
-```text
-Opening Tax Loss State
-+
-Current FY Tax Events
-→ Set-Off Engine
-→ Closing Tax Loss State
-```
-
-Keep STCL and LTCL separate.
-
-If history begins after an existing brought-forward loss, allow a small explicit opening state rather than inventing old transactions.
-
-Keep this in financial analytical state, not the Control Plane.
-
-## 13. Build FY Tax State
-
-### Change
-
-Aggregate Tax Events into one annual calculation state.
-
 Suggested fields:
+```text
+Tax_Event_ID
+Event_Date
+FY
+Source_Type
+Source_ID
+Income_Head
+Tax_Sub_Head
+Taxability
+Tax_Method
+Gross_Amount
+Taxable_Amount
+Gain_Type
+Realized_Gain_Loss
+Applied_Rate
+Estimated_Tax
+Tax_Status
+Tax_Status_Reason
+Rules_Snapshot_ID
+```
+Suggested Source Types:
+```text
+LEDGER
+INVESTMENT_REALIZED
+```
+Keep Tax Status minimal:
+```text
+READY
+CHECK_REQUIRED
+```
+This is calculation status, not a review workflow.
+### Done when
+Every supported tax-relevant event enters the tax engine through this fact.
 
+## 10. Capital-loss set-off + carry-forward
+### Change
+Replace aggregate loss arithmetic with explicit ST/LT state.
+### Impact
+Net gains/losses and estimated tax remain correct when capital losses exist.
+### Implementation
+Track:
+```text
+Current STCG / LTCG / STCL / LTCL
+Brought-Forward STCL / LTCL
+```
+Apply supported set-off rules in Python domain code and return:
+```text
+STCL utilized
+LTCL utilized
+Net taxable STCG
+Net taxable LTCG
+Closing STCL
+Closing LTCL
+```
+Carry-forward remains financial analytical state. If history starts with an existing brought-forward loss, support a small explicit opening loss state.
+### Done when
+Full, partial, no-utilization, and multi-FY scenarios reconcile.
+
+## 11. FY Tax State in Silver
+### Change
+Create `silver.f_Tax_FY_State`.
+
+Grain:
+```text
+one row per FY
+```
+### Impact
+This becomes the canonical annual calculation state between TaxEvents and Gold.
+### Implementation
+Suggested fields:
 ```text
 FY
-gross_income
-ordinary_taxable_income
+Gross_Income
+Excluded_Non_Taxable_Income
+Tax_Relevant_Income
+Ordinary_Taxable_Income
 STCG
 LTCG
 STCL
 LTCL
-loss_utilized
-loss_carried_forward
-exemptions
-estimated_ordinary_tax
-estimated_capital_gains_tax
-estimated_gross_tax
-observed_tax_credits
-estimated_net_tax_payable
-review_item_count
+Brought_Forward_STCL
+Brought_Forward_LTCL
+STCL_Utilized
+LTCL_Utilized
+Closing_STCL
+Closing_LTCL
+Net_Taxable_STCG
+Net_Taxable_LTCG
+Estimated_Ordinary_Tax
+Estimated_Capital_Gains_Tax
+Estimated_Gross_Tax
+Observed_Tax_Credits
+Estimated_Net_Tax_Payable
+Check_Required_Count
 ```
+### Done when
+Every material Gold tax value reconciles through FY Tax State to TaxEvents.
 
-### Impact
+## 12. Three Gold tax marts
+### `gold.Tax_Year_Summary`
+Grain: FY.
 
-This becomes the reconciliation point between Tax Events and Gold.
+Purpose: one-row year-end tax picture.
 
-## 14. Create two Gold tax-preparation marts
-
-### Tax Year Summary
-
+### `gold.Tax_Income_Breakdown`
 Grain:
-
 ```text
-FY
+FY × Income Head × Tax Sub-Head × Source Type
 ```
+Purpose: detailed tax-preparation breakdown. Investment and other capital gains remain distinguishable.
 
-Show:
-
-```text
-gross income
-taxable income
-estimated ordinary tax
-estimated capital-gains tax
-estimated gross tax
-observed tax credits
-estimated net tax payable
-loss carry-forward
-review count
-```
-
-### Tax Income Breakdown
-
+### `gold.Tax_Reconciliation`
 Grain:
-
 ```text
-FY × Tax Head × Source Type
+FY × Tax Sub-Head × Source Type
 ```
+Purpose: trace financial amounts through the tax calculation.
 
-Show:
-
+Suggested reconciliation measures:
 ```text
-tax head
-source type
-gross amount
-taxable amount
-estimated tax
-tax credits
-evidence quality
-review state
+Gross_Source_Amount
+Excluded_Non_Taxable_Amount
+Tax_Event_Amount
+Realized_Investment_Gain_Loss
+Set_Off_Amount
+Net_Taxable_Amount
+Estimated_Tax
+Tax_Credits
+Estimated_Net_Tax
+Event_Count
+Check_Required_Count
 ```
-
-For Capital Gains, allow:
-
-```text
-Investment Realized
-Other Capital Assets
-→ Total Capital Gains
-```
-
 ### Impact
+Gold answers:
+```text
+Tax_Year_Summary → What is the FY tax picture?
+Tax_Income_Breakdown → Where did it come from?
+Tax_Reconciliation → Can I trace it?
+```
+### Done when
+All three reconcile to the same FY Tax State.
 
-The year-end dashboard becomes a filing-preparation aid without mirroring the full ITR schema.
-
-## 15. Fix XIRR edge states
-
+## 13. Keep and rename investment tax forecast
 ### Change
+Rename the existing Tax Liability Forecast to:
+```text
+gold.Investment_Tax_Liability_Forecast
+```
+### Impact
+It remains clearly separate from realized FY tax reporting:
+```text
+Investment_Tax_Liability_Forecast
+→ current/hypothetical investment tax exposure
 
-Do not convert every invalid/non-convergent portfolio XIRR into a meaningful `0%`.
-
+Tax_Year_Summary
+→ realized FY tax preparation
+```
 ### Implementation
+Keep the useful forecast behavior but fix its capital-loss set-off logic. Reuse shared tax-domain functions where practical.
+### Done when
+Investment tax forecasting and FY tax reporting are semantically separate but use consistent tax logic.
 
-Return an explicit result such as:
+## 14. Persist broker/FIFO reconciliation events
+### Change
+Create `silver.f_Investment_Reconciliation_Events`.
 
+Grain:
+```text
+one reconciliation adjustment event
+```
+### Impact
+Broker reconciliation becomes explainable instead of silently changing active quantity/basis.
+### Implementation
+Suggested fields:
+```text
+Reconciliation_Event_ID
+Run_ID
+ISIN
+Reconciliation_Date
+Lot_ID               # nullable
+Acquisition_Date     # nullable
+Adjustment_Type
+Reason
+Broker_Quantity
+Reconstructed_Quantity
+Quantity_Adjustment
+Broker_Cost_Basis
+Reconstructed_Cost_Basis
+Cost_Basis_Adjustment
+Original_Unit_Cost
+Adjusted_Unit_Cost
+Related_Lot_ID
+source / lineage identifiers
+```
+Keep adjustment types limited to what the engine actually performs, e.g.:
+```text
+QUANTITY_ADD
+QUANTITY_REMOVE
+COST_BASIS_ADJUSTMENT
+```
+### Done when
+A broker/FIFO mismatch can be explained by ISIN/date/lot/quantity/basis/reason.
+
+## 15. Fix XIRR failure semantics
+### Change
+Do not emit a meaningful `0%` when XIRR is undefined or the solver fails.
+### Impact
+A real 0% return is distinguishable from calculation failure.
+### Implementation
+Return:
 ```text
 value
 status
 reason
 ```
-
-Possible statuses:
-
+Statuses:
 ```text
 VALID
-UNDEFINED_CASH_FLOWS
+UNDEFINED
 NON_CONVERGENT
 INVALID_INPUT
 ```
+Use nullable value for non-valid results.
+### Done when
+All XIRR consumers preserve the distinction.
 
-### Impact
+## Final contract changes
+Assuming the current 20 Silver / 17 Gold baseline and no removals:
 
-A genuine 0% return is distinguishable from an XIRR that could not be calculated.
-
-## 16. Make reconciliation adjustments explainable
-
-### Change
-
-Keep broker reconciliation but preserve adjustment provenance.
-
-### Implementation
-
-Expose enough information to explain:
-
+New Silver:
 ```text
-adjustment_type
-reason
-quantity_impact
-basis_impact
-evidence_quality
+silver.f_Investment_Realized_Events
+silver.f_Investment_Reconciliation_Events
+silver.f_Tax_Events
+silver.f_Tax_FY_State
+```
+Planning expectation:
+```text
+20 → 24 Silver
 ```
 
-### Impact
-
-Current-state reconciliation remains useful without making synthetic adjustments look like observed historical acquisition evidence.
-
-## 17. Keep corporate actions limited
-
-### Change
-
-Support/test only cases that current source evidence can determine reliably.
-
-### Impact
-
-The application avoids a large corporate-actions framework built on incomplete broker evidence.
-
-### Implementation
-
-Test deterministic supported behavior.
-
-Anything ambiguous becomes a documented review boundary.
-
-## 18. Build one financial/tax reconciliation view
-
-The final trace should be:
-
+New Gold:
 ```text
-Source Evidence
-→ Financial Event
-→ Realized / Income Event
-→ Tax Event
-→ FY Tax State
-→ Set-Off / Carry-Forward
-→ Tax Preparation Gold
-→ Review Items
+gold.Tax_Year_Summary
+gold.Tax_Income_Breakdown
+gold.Tax_Reconciliation
+```
+Planning expectation:
+```text
+17 → 20 Gold
 ```
 
-### Impact
+Renamed Gold:
+```text
+Tax_Liability_Forecast
+→ Investment_Tax_Liability_Forecast
+```
 
-A material estimated-tax number can be traced back to the financial evidence that produced it.
+Freeze actual counts from the implemented registry.
 
 ## Explicitly out of scope
-
-Do not build:
-
 ```text
+corporate-actions framework
 complete ITR preparation
 ITR schedule/field emulator
 tax-regime optimizer
 slab engine
-TDS/TCS reconciliation platform
 AIS / 26AS ingestion
 deduction engine
 Form 16 reconstruction
 house-property tax engine
 business/profession tax
 foreign-asset reporting
-universal corporate-actions engine
 every Indian asset class
+review-workflow system
 ```
 
-## Sprint completion
-
-The domain is frozen when:
-
-1. Holding boundaries are deterministic.
-2. Realized investment events survive liquidation.
-3. Tax heads use simple Category/Subcategory mappings.
-4. Tax credits use only explicit Subcategory IDs.
-5. Investment gains cannot double-count ledger activity.
-6. Non-investment capital gains can enter with review boundaries.
-7. Macro Parameters provide one estimated ordinary-income rate.
-8. Tax Events unify supported income/gain streams.
-9. Loss set-off/carry-forward is explicit where supported.
-10. FY Tax State reconciles the calculation.
-11. Gold provides Tax Summary and Income Breakdown.
-12. XIRR edge states are explicit.
-13. Reconciliation provenance is visible.
-14. Unknown/weak evidence becomes reviewable rather than silently assumed.
+## Domain freeze checklist
+- Calendar-month holding semantics.
+- Lot-level FIFO realized history.
+- Head → Tax Sub-Head config.
+- Tax credits at Subcategory level.
+- Single producer per TaxEvent.
+- Non-investment ST/LT gains/losses supported.
+- Ordinary-rate macro renamed.
+- Non-taxable income excluded from TaxEvents.
+- Minimal Tax Status.
+- Correct loss set-off/carry-forward.
+- FY Tax State in Silver.
+- Three reconciling Gold tax marts.
+- Investment tax forecast renamed/corrected.
+- Broker/FIFO reconciliation events persisted.
+- XIRR failure states explicit.
