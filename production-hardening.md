@@ -1,66 +1,28 @@
-# Architecture & Reproducibility Sprint
+# Architecture & Reproducibility Freeze
 
 ## Goal
+Extend v6.5.3 with better lineage and replayability without redesigning the architecture that already works.
 
-Extend v6.5.3 with better lineage and replayability without redesigning the Control Plane, warehouse, recovery model, or orchestration.
-
-Each item below states the change, why it matters, and the simplest implementation.
-
-## 1. Track artifact lifecycle against runs
-
+## 1. Artifact lifecycle against runs
 ### Change
-
-Extend the current file registry with:
-
+Extend the file registry with:
 ```text
-first_seen_run_id
-first_seen_at
-last_seen_run_id
-last_seen_at
-last_changed_run_id
-last_changed_at
-last_synced_run_id
-last_synced_at
+first_seen_run_id / first_seen_at
+last_seen_run_id / last_seen_at
+last_changed_run_id / last_changed_at
+last_synced_run_id / last_synced_at
 ```
-
 ### Impact
-
-The registry can directly answer when an artifact entered the system, when it was last observed, when its content last changed, and which run last synchronized it.
-
-`seen`, `changed`, and `synced` remain different events.
-
+The registry directly explains when an artifact entered, was observed, changed, and synchronized.
 ### Implementation
+New artifact sets first/last seen. Unchanged updates last seen only. Changed updates last seen + last changed. Successful Bronze sync/replay updates last synced. A PENDING_BRONZE replay without source modification must not update last changed.
+### Done when
+Current artifact lifecycle is understandable without reading execution logs.
 
-During discovery:
-
-```text
-new artifact
-→ set first_seen + last_seen
-
-unchanged artifact
-→ update last_seen only
-
-changed artifact
-→ update last_seen + last_changed
-
-successful Bronze sync/replay
-→ update last_synced
-```
-
-A `PENDING_BRONZE` replay without source modification must update `last_synced`, not `last_changed`.
-
-## 2. Add historical artifact-run lineage
-
+## 2. Historical artifact-run lineage
 ### Change
-
-Add a small Control Plane history table such as:
-
-```text
-cp_artifact_run_events
-```
-
+Add `cp_artifact_run_events`.
 Suggested fields:
-
 ```text
 run_id
 file_id
@@ -71,9 +33,7 @@ content_hash
 previous_status
 new_status
 ```
-
 Suggested events:
-
 ```text
 DISCOVERED
 CHANGED
@@ -83,51 +43,26 @@ SYNCED
 HEALED
 REMOVED
 ```
-
 ### Impact
-
-The system can answer:
-
-```text
-Run X → which artifacts participated?
-Artifact Y → which runs touched it?
-```
-
+Supports Run → Artifacts and Artifact → Runs queries.
 ### Implementation
-
-Write rows only for meaningful artifact lifecycle transitions. Keep detailed diagnostics in the existing execution log.
-
-Do not turn `cp_file_registry` into a history table.
+Write only meaningful lifecycle transitions. Detailed debugging remains in execution logs.
+### Done when
+Run-to-artifact history is directly queryable.
 
 ## 3. Preserve rename semantics
-
 ### Change
-
-Record rename history without treating a path change as new financial evidence.
-
+Record rename history without treating a path change as new evidence.
 ### Impact
-
-Lineage improves without creating duplicate ingestion or duplicate financial history.
-
+Lineage improves without duplicate financial state.
 ### Implementation
+Write `RENAMED` and preserve existing identity migration across Control Plane, raw payload ownership, Bronze `__file_name__`, and Meta. Mark changed only when content changes.
+### Done when
+Pure renames never cause duplicate ingestion.
 
-On a pure rename, write a `RENAMED` event and keep the existing identity migration across:
-
-```text
-Control Plane
-raw payload ownership
-Bronze __file_name__
-DuckDB Meta
-```
-
-Only mark the artifact changed if the content actually changed.
-
-## 4. Make FIRE / Monte Carlo runs reproducible
-
+## 4. Reproducible FIRE / Monte Carlo
 ### Change
-
-Create a minimal simulation-run context:
-
+Persist a minimal simulation context:
 ```text
 simulation_id
 run_id
@@ -141,90 +76,42 @@ rules_snapshot_id
 input_fingerprint
 model_fingerprint
 status
-result_fingerprint   # optional
+result_fingerprint  # optional
 ```
-
 ### Impact
-
-FIRE stops being a stochastic black box. A historical simulation can be explained and replayed.
-
+Historical FIRE simulations become explainable and replayable.
 ### Implementation
+Persist one root seed and derive deterministic random streams for market regimes, returns, jumps, inflation, human-capital shocks, etc. Do not persist every random draw.
+### Done when
+Same inputs + model + seed reproduce the same material result.
 
-Persist one root seed per simulation and derive deterministic random streams from it for the stochastic components such as:
-
-```text
-market regime
-returns
-jump events
-inflation
-human-capital shocks
-```
-
-Do not persist every random draw.
-
-## 5. Add simulation fingerprints
-
+## 5. Simulation fingerprints
 ### Change
-
-Create:
-
-```text
-input_fingerprint
-model_fingerprint
-```
-
-Optionally add a material `result_fingerprint`.
-
+Add `input_fingerprint` and `model_fingerprint`.
 ### Impact
-
-If a replay differs, I can tell whether inputs, model configuration, rules, or stochastic context changed.
-
+A changed replay can be attributed to changed inputs/model rather than unexplained randomness.
 ### Implementation
+Hash canonicalized simulation inputs and behavior-controlling model configuration. Optionally hash material results.
+### Done when
+Ordering-only differences do not change fingerprints.
 
-Hash canonicalized simulation inputs for `input_fingerprint`.
-
-Hash the FIRE / Monte Carlo configuration that controls behavior for `model_fingerprint`.
-
-Ordering-only differences must not change the hashes.
-
-## 6. Persist simulation history in SQLite
-
+## 6. Historical simulation provenance in SQLite
 ### Change
-
-Add a Control Plane table such as:
-
-```text
-cp_simulation_runs
-```
-
+Add `cp_simulation_runs`.
 ### Impact
-
-Historical simulation provenance follows the existing rule that SQLite owns operational history.
-
+Simulation history follows the existing SQLite historical-authority model.
 ### Implementation
+Link simulation context to pipeline run and Settings/FinancialRules snapshots. Do not persist the full Monte Carlo distribution here.
+### Done when
+Historical simulation executions can be inspected/replayed.
 
-Persist the simulation context above and link it to the pipeline run plus Settings/FinancialRules snapshots.
-
-Do not store the complete Monte Carlo distribution in the Control Plane.
-
-## 7. Project the latest simulation context into DuckDB Meta
-
+## 7. Latest simulation context in DuckDB Meta
 ### Change
-
-Add a lean table such as:
-
-```text
-meta.m_Simulation_Run
-```
-
+Add `meta.m_Simulation_Run`.
 ### Impact
-
-The latest published FIRE output can be connected to its simulation context from the analytical database.
-
+Latest FIRE output can be traced from the analytical database.
 ### Implementation
-
-Keep only the latest successful context required for inspection:
-
+Keep only the latest successful context needed for inspection:
 ```text
 simulation_id
 run_id
@@ -234,58 +121,61 @@ horizon
 input_fingerprint
 model_fingerprint
 ```
-
-Preserve the existing ownership rule:
-
+Preserve:
 ```text
 SQLite → historical authority
 DuckDB Meta → latest analytical projection
 ```
+### Done when
+Latest FIRE output connects to its simulation context.
 
-## 8. Introduce the Reproducibility Envelope
-
+## 8. Reproducibility Envelope including finance/tax
 ### Change
-
-Make this a system invariant, not a new framework.
-
-An important analytical output should be explainable by:
-
+Extend the existing provenance model to the new financial-domain contracts.
+Important outputs should be explainable by:
 ```text
 source evidence
 run identity
 Settings snapshot
-FinancialRules snapshot
-macro/reference state
+FinancialRules / TaxConfig snapshot
+Macro FY parameters
 model/algorithm context
 random seed where stochastic
 ```
-
+Investment/tax lineage should preserve:
+```text
+source transaction
+→ FIFO lot
+→ realized investment event
+→ tax event
+→ FY tax state
+→ Gold tax output
+```
 ### Impact
-
-The project gets one consistent definition of reproducibility.
-
+Finance, tax, and FIRE share one reproducibility model. No separate tax-lineage system is required.
 ### Implementation
+Preserve stable IDs such as Sale/Transaction ID, Lot ID, Realized Event ID, Tax Event ID, Source Type/ID, and FY through the new Silver contracts.
 
-Reuse existing provenance plus the new artifact/simulation lineage.
+Macro Parameters remain FY-grain analytical reference state; they do not move into the Control Plane.
 
-For deterministic outputs:
-
+Deterministic invariant:
 ```text
-same envelope → same material output
+same evidence
++ same Settings
++ same FinancialRules/TaxConfig
++ same Macro Parameters
++ same implementation
+→ same material output
 ```
-
-For stochastic outputs:
-
+Stochastic invariant:
 ```text
-same envelope + same seed → same material output
+same envelope + same seed
+→ same material output
 ```
-
-The QA sprint will make this invariant executable.
+### Done when
+Investment realization, tax calculation, and FIRE outputs can all be traced/reproduced through one provenance model.
 
 ## Do not build
-
-Do not add:
-
 ```text
 new orchestration framework
 new warehouse layer
@@ -293,18 +183,17 @@ event-sourcing rewrite
 distributed transactions
 cloud infrastructure
 generic lineage platform
+separate tax-lineage platform
 persistence of every Monte Carlo draw
 ```
 
-## Sprint completion
-
-The sprint is complete when:
-
-1. Current artifact lifecycle pointers are available.
-2. Artifact-to-run history is queryable.
-3. Rename remains an identity migration.
-4. FIRE runs persist replay context and root seed.
-5. Input/model fingerprints exist.
-6. Historical simulation provenance lives in SQLite.
-7. Latest simulation context is projected into DuckDB Meta.
-8. The Reproducibility Envelope is ready for automated testing.
+## Freeze checklist
+- Artifact lifecycle pointers exist.
+- Artifact-run history is queryable.
+- Rename remains identity migration.
+- FIRE persists replay context/seed.
+- Simulation fingerprints exist.
+- Simulation history lives in SQLite.
+- Latest simulation context lives in Meta.
+- Financial/tax contracts preserve downstream lineage IDs.
+- Reproducibility Envelope covers finance, tax, and FIRE.
