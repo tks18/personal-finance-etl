@@ -1,52 +1,48 @@
-# Final QA & Regression Freeze
+# Final QA & Regression Implementation Freeze
+
+> **Status: FROZEN FOR IMPLEMENTATION AFTER ARCHITECTURE + DOMAIN SPRINTS**
+>
+> Tests freeze the implemented contracts. They do not introduce new behavior.
 
 ## Goal
 
-Turn the finalized Architecture and Financial Domain behavior into repeatable automated protection.
+Protect:
 
-Build this sprint after the Architecture and Financial Domain freezes are implemented so tests freeze the final behavior rather than a moving design.
+```text
+financial correctness
+deterministic identity
+tax semantics
+lineage
+recovery
+reproducibility
+idempotency
+CLI/docs/package surfaces
+full-system behavior
+```
 
 ---
 
-## 1. Replace stale test fixtures
+## 1. Final fixtures
 
-### Change
+Use final Settings, FinancialRules/TaxConfig, Macro Parameters, Contract Registry, ledger UID, and canonical investment facts.
 
-Replace legacy fixtures with final:
-
-```text
-Settings
-FinancialRules / TaxConfig
-Macro Parameters
-contract registries
-investment canonical facts
-```
-
-### Implementation
-
-Include fixtures for:
+Include:
 
 ```text
-ordinary taxable income
-non-taxable income
-tax-credit subcategory
-investment-category mapping
-non-investment ST/LT capital gains
-FY macro row
+taxable ordinary income
+non-taxable cashback/wallet income
+tax credit
+non-investment ST/LT gain/loss
 same-day different-price purchases
-reconciliation-created lot
+multi-lot sale
+synthetic reconciliation lot
 basis-adjusted lot
+FY macro/loss state
 ```
-
-### Done when
-
-All tests represent final production contracts.
 
 ---
 
-## 2. Organize tests by failure scope
-
-Use a simple structure such as:
+## 2. Test structure
 
 ```text
 unit/
@@ -58,13 +54,47 @@ reproducibility/
 packaging/
 ```
 
-Do not start with one giant E2E test.
+---
+
+## 3. Canonical ID Serialization v1
+
+Test:
+
+```text
+UTF-8
+Unicode NFC
+outer-whitespace normalization
+null representation
+date/datetime format
+booleans
+numeric normalization
+negative zero
+field order
+namespace
+hash stability
+```
+
+Assert:
+
+```text
+10 = 10.0 = 10.00
+-0 = -0.0 = 0.00 = 0
+```
+
+Identity-version/hash changes must be explicit.
 
 ---
 
-## 3. Test deterministic ID generation
+## 4. Identity precedence
 
-### Cover
+Verify native identity:
+
+```text
+ISIN
+ledger UID
+```
+
+and generated identity only where needed:
 
 ```text
 Purchase_ID
@@ -76,818 +106,453 @@ Reconciliation_Event_ID
 Tax_Event_ID
 ```
 
-### Verify
+---
 
-Same canonical inputs produce the same ID across runs.
+## 5. Purchase_ID / Sale_ID
 
-Changed defining attributes change the ID.
+Same defining inputs → same ID.
 
-Changed derived fields do not change Purchase_ID/Sale_ID.
-
-Volatile provenance does not affect IDs:
+Changing:
 
 ```text
-run_id
-timestamp
-path
-hostname
+ISIN
+Date
+Price/Sell_Price
+Quantity
+Currency
 ```
 
-Numeric canonicalization must prevent float-formatting differences from changing IDs.
+→ changed ID.
+
+Changing derived values or volatile provenance → unchanged ID.
+
+Explicitly test quantity correction → new canonical ID.
 
 ---
 
-## 4. Test canonical Purchase/Sale grain
+## 6. Canonical investment grain
 
-### Cover
-
-Existing aggregation behavior:
+Verify current aggregation remains:
 
 ```text
-same ISIN + date + price
-→ quantity aggregation
-
-different price
-→ separate canonical row
-
-different date
-→ separate canonical row
+same ISIN + date + price → aggregated quantity
+different price → separate event
+different date → separate event
 ```
 
-### Verify
-
-Adding IDs does not change the current financial grain.
-
-Source broker rows are not accidentally exposed as new Silver transaction facts.
+IDs must not expose source broker rows as new Silver facts.
 
 ---
 
-## 5. Golden FIFO / realized-event scenarios
+## 7. FIFO golden scenarios
 
 Cover:
 
 ```text
 single buy
 multiple buys
-multiple FIFO lots
+multiple lots
 partial sell
 full sell
 multiple partial sells
-one sale consuming multiple lots
+sale across multiple lots
 remaining inventory
 full liquidation
 ```
 
-Verify:
-
-```text
-Lot_ID
-Purchase_ID
-Sale_ID
-Realized_Event_ID
-disposed quantity
-disposed basis
-sale proceeds allocation
-realized gain/loss
-holding classification
-```
+Verify IDs, quantities, basis, proceeds, realized P&L, and holding type.
 
 Invariant:
 
 ```text
-sum(lot-level realized P&L for sale)
+sum(lot realized P&L for Sale_ID)
 =
-sale-level FIFO realized P&L
+sale FIFO realized P&L
 ```
-
-Full liquidation must not remove realized history.
 
 ---
 
-## 6. Test Lot identity persistence
+## 8. Lot identity persistence
 
-### Cover
+Partial sale, quantity reduction, and basis adjustment preserve Lot_ID/Purchase_ID/source type for surviving economic lots.
 
-```text
-partial sale
-quantity reduction reconciliation
-cost-basis adjustment
-```
-
-### Verify
-
-The surviving economic lot retains the same:
-
-```text
-Lot_ID
-Purchase_ID
-Lot_Source_Type
-```
-
-A new Lot_ID is created only for a genuinely new reconciliation-created lot.
+Only synthetic reconciliation quantity creates a new Lot_ID.
 
 ---
 
-## 7. Test deterministic same-day FIFO ordering
+## 9. Same-day FIFO ordering
 
-### Cover
-
-Multiple purchases on the same date with different prices.
-
-Multiple sales on the same date with different prices.
-
-### Verify
-
-Purchase order:
+Assert:
 
 ```text
-Date ASC
-Price ASC
-Purchase_ID ASC
+Purchase: Date → Price → Purchase_ID
+Sale: Date → Sell_Price → Sale_ID
 ```
 
-Sale order:
+Repeated rebuilds must consume identical lots in identical order.
 
-```text
-Date ASC
-Sell_Price ASC
-Sale_ID ASC
-```
-
-Run the same input repeatedly and assert identical lot consumption and realized events.
-
-Also verify different-price purchases are not collapsed into a weighted-average lot.
+Different-price same-day purchases remain separate.
 
 ---
 
-## 8. Test calendar-month holding boundaries
+## 10. Holding boundaries
 
-For every supported threshold test:
+Test one day before / exact / one day after for every supported threshold.
 
-```text
-one day before boundary
-exact boundary
-one day after boundary
-```
+Include month-end, February, leap-year cases.
 
-Include:
+Assert:
 
 ```text
-31 January
-28/29 February
-31 March
-leap year
+date > boundary → LT
+date <= boundary → ST
 ```
 
-Verify the same holding utility is used for realized and unrealized classification.
+Realized and unrealized paths must share the same utility.
 
 ---
 
-## 9. Test realized-event uniqueness
+## 11. Realized events
 
-### Verify
-
-Business uniqueness:
+Assert:
 
 ```text
-Sale_ID + Lot_ID
+UNIQUE(Sale_ID, Lot_ID)
 ```
 
-and deterministic:
+Multi-lot sale → one event per consumed lot.
 
-```text
-Realized_Event_ID
-```
+Same evidence rebuild → same IDs/material attributes.
 
-A sale consuming three lots must produce exactly three realized rows.
-
-A partial sale followed by a later sale from the same lot must create different realized IDs because Sale_ID differs.
+Later active-lot reconciliation must not rewrite earlier realized events.
 
 ---
 
-## 10. Test reconciliation groups and events
+## 12. Reconciliation identity
 
-### Cover
+Same canonical reconciliation → same Group/Event IDs.
 
-```text
-QUANTITY_ADD
-QUANTITY_REMOVE
-COST_BASIS_ADJUSTMENT
-```
+Run_ID must not affect IDs.
 
-### Verify
+One group affecting multiple lots → one group, multiple event rows.
 
-One reconciliation operation has one:
+Where repeated same-lot mutation is impossible, assert:
 
 ```text
-Reconciliation_Group_ID
+UNIQUE(Group_ID, Lot_ID, Adjustment_Type)
 ```
-
-Each affected lot mutation has one:
-
-```text
-Reconciliation_Event_ID
-```
-
-Cost-basis scaling across three lots must produce three event rows tied to one group.
 
 ---
 
-## 11. Test synthetic reconciliation lots
+## 13. Reconciliation Run_ID
 
-### Quantity add
-
-Verify:
+Rebuild identical evidence in another run:
 
 ```text
-Purchase_ID = NULL
-Lot_Source_Type = RECONCILIATION
+same financial reconciliation IDs
+new producing Run_ID
+```
+
+Silver remains the current projection; historical run observations remain in Control Plane.
+
+---
+
+## 14. Synthetic reconciliation lots
+
+QUANTITY_ADD:
+
+```text
+Purchase_ID NULL
+Lot_Source_Type RECONCILIATION
 deterministic Lot_ID
 ```
 
-The lot participates in portfolio/wealth/FIRE analytics.
-
-If later sold:
+If sold:
 
 ```text
 Realized Event exists
-TaxEvent exists
-Tax_Status = CHECK_REQUIRED
-Taxable_Amount = NULL
-Applied_Rate = NULL
-Estimated_Tax = NULL
+TaxEvent CHECK_REQUIRED
+Taxable_Amount NULL
+Applied_Rate NULL
+Estimated_Tax NULL
 ```
 
-### Quantity remove
+QUANTITY_REMOVE preserves surviving lot identity.
 
-Verify surviving normal purchase lots retain identity and do not automatically become check-required if basis/acquisition evidence remains unchanged.
-
-### Cost-basis adjustment
-
-Verify active basis changes and future FIFO uses adjusted basis.
-
-Historical realized events must remain byte-for-byte/materially unchanged.
-
-Future realization from a materially basis-adjusted lot must be `CHECK_REQUIRED`.
+COST_BASIS_ADJUSTMENT changes future basis, preserves earlier realized events, and makes future affected realization CHECK_REQUIRED.
 
 ---
 
-## 12. Test TaxConfig resolution
+## 15. Ledger UID
 
-Cover:
+Assert relevant income UID is non-null and unique.
 
-```text
-category-level match
-subcategory-level match
-tax-credit subcategory
-non-taxable sub-head
-unmapped income
-overlapping configuration
-```
-
-Verify:
+Tax source:
 
 ```text
-cat_id claims complete category
-sub_cat_id claims exact subcategory
-overlap raises configuration error
-tax-credit IDs do not behave as income
+Source_Type = LEDGER
+Source_ID = UID
 ```
+
+Changing amount while preserving UID keeps Source_ID and same Tax_Event_ID for the same Tax Sub-Head while recalculating amounts.
 
 ---
 
-## 13. Test tax-credit sign convention
+## 16. TaxConfig
 
-Source examples:
-
-```text
-TDS = -20,000
-TDS = -5,000
-```
-
-Verify canonical:
-
-```text
-Observed_Tax_Credits = 25,000
-Observed_Tax_Credits >= 0
-```
-
-Verify:
-
-```text
-Estimated_Net_Tax_Position
-=
-Estimated_Gross_Tax
--
-Observed_Tax_Credits
-```
-
-and allow negative tax position without clamping.
+Test category match, exact subcategory match, tax credit, non-taxable stream, unmapped stream, and overlap error.
 
 ---
 
-## 14. Test tax-event ownership
+## 17. Tax-credit sign
+
+Negative source TDS normalizes to positive credits.
 
 Invariant:
 
 ```text
-Every canonical TaxEvent
-→ exactly one producer
+Observed_Tax_Credits >= 0
 ```
 
-Cover:
-
-```text
-ordinary ledger income
-investment capital gain
-non-investment capital gain
-```
-
-Investment-related ledger activity must not duplicate FIFO realized gains.
+Net tax position may be negative.
 
 ---
 
-## 15. Test TaxEvent identity and uniqueness
+## 18. TaxEvent ownership
 
-Verify:
+Every Source_Type has one producer.
 
-```text
-UNIQUE(Source_Type, Source_ID, Tax_Sub_Head)
-```
-
-and deterministic Tax_Event_ID.
-
-Investment case:
+Assert:
 
 ```text
-Source_Type = INVESTMENT_REALIZED
-Source_ID = Realized_Event_ID
+Source_Type + Source_ID + Tax_Sub_Head
+→ emitted at most once
 ```
 
-Ledger case uses stable ledger transaction identity.
-
-If one source legitimately maps to multiple Tax Sub-Heads, each must receive a distinct TaxEvent.
+Investment ledger activity must not duplicate FIFO realized gains.
 
 ---
 
-## 16. Test non-investment capital gains
+## 19. TaxEvent identity
 
-Cover:
-
-```text
-positive ST → STCG
-negative ST → STCL
-positive LT → LTCG
-negative LT → LTCL
-```
-
-Verify default ST/LT rate resolution and:
+Assert deterministic:
 
 ```text
-CHECK_REQUIRED
+Tax_Event_ID(Source_Type, Source_ID, Tax_Sub_Head)
 ```
 
-for insufficient classification.
+and unique natural key.
+
+Cover LEDGER/UID and INVESTMENT_REALIZED/Realized_Event_ID.
 
 ---
 
-## 17. Test non-taxable income exclusion
-
-Create:
-
-```text
-taxable salary/interest/dividend
-non-taxable cashback/wallet income
-```
-
-Verify non-taxable rows:
-
-```text
-remain in normal income facts
-do not enter f_Tax_Events
-```
-
-and:
-
-```text
-Gross Income
-- Excluded Non-Taxable Income
-= Tax Model Income Universe
-```
-
----
-
-## 18. Test TaxEvent contract
-
-Verify:
-
-```text
-Source_Type
-Source_ID
-Income_Head
-Tax_Sub_Head
-Tax_Method
-Gross_Amount
-Taxable_Amount
-Applied_Rate
-Estimated_Tax
-Tax_Status
-Tax_Status_Reason
-```
-
-Cover:
-
-```text
-LEDGER
-INVESTMENT_REALIZED
-READY
-CHECK_REQUIRED
-```
-
-No test depends on a manual Reviewed workflow.
-
----
-
-## 19. Test capital-loss set-off priority
-
-Cover exact ordered behavior:
-
-```text
-1. STCL → STCG
-2. remaining STCL → LTCG
-3. LTCL → remaining LTCG
-4. LTCL never → STCG
-```
+## 20. Non-investment capital gains
 
 Test:
 
 ```text
-full utilization
-partial utilization
-no utilization
-mixed STCL + LTCL + STCG + LTCG
++ST → STCG
+-ST → STCL
++LT → LTCG
+-LT → LTCL
 ```
 
-Assert:
+Test default rate resolution and CHECK_REQUIRED when classification is insufficient.
+
+---
+
+## 21. Non-taxable exclusion
+
+Non-taxable income remains in normal income facts and does not enter TaxEvents.
+
+Reconcile:
 
 ```text
-stcl_used_against_stcg
-stcl_used_against_ltcg
-ltcl_used_against_ltcg
-net_stcg
-net_ltcg
-closing_stcl
-closing_ltcl
+Gross Income - Excluded = Tax Model Income Universe
 ```
 
 ---
 
-## 20. Test carry-forward across FYs
+## 22. TaxEvent status/contract
 
-Cover:
+Validate all canonical fields and READY/CHECK_REQUIRED behavior.
+
+No manual Reviewed workflow.
+
+---
+
+## 23. Loss set-off priority
+
+Exact order:
 
 ```text
-no opening loss
-opening STCL
-opening LTCL
-full utilization
-partial utilization
-multiple FYs
+STCL → STCG
+remaining STCL → LTCG
+LTCL → remaining LTCG
+LTCL never → STCG
 ```
+
+Cover full/partial/no utilization and mixed gain/loss states.
+
+---
+
+## 24. Carry-forward
+
+Cover opening STCL/LTCL, full/partial utilization, and multiple FYs.
 
 Invariant:
 
 ```text
-Opening Loss
-+ Current Loss
-- Utilized
-=
-Closing Loss
+Opening + Current Loss - Utilized = Closing
 ```
-
-separately for STCL/LTCL.
 
 ---
 
-## 21. Test FY Tax State
+## 25. FY Tax State
 
-Verify:
-
-```text
-Gross Income
-- Excluded Non-Taxable Income
-= Tax-Relevant Income
-```
+Reconcile:
 
 ```text
-Estimated Ordinary Tax
-+ Estimated Capital-Gains Tax
-= Estimated Gross Tax
+Gross - Excluded = Tax-Relevant Income
+Ordinary Tax + Capital-Gains Tax = Gross Tax
+Gross Tax - Credits = Net Tax Position
 ```
 
-```text
-Estimated Gross Tax
-- Observed Tax Credits
-= Estimated Net Tax Position
-```
-
-Also reconcile every capital-loss movement.
+Reconcile all loss movements.
 
 ---
 
-## 22. Test all three Gold tax marts
+## 26. Gold tax marts
 
-### `gold.Tax_Year_Summary`
-
-Verify one row per FY and exact reconciliation to FY Tax State.
-
-### `gold.Tax_Income_Breakdown`
-
-Verify grain:
+Test:
 
 ```text
-FY × Income Head × Tax Sub-Head × Source Type
+Tax_Year_Summary
+Tax_Income_Breakdown
+Tax_Reconciliation
 ```
 
-Investment/non-investment capital gains remain distinguishable.
-
-### `gold.Tax_Reconciliation`
-
-Verify source amounts, excluded income, TaxEvents, set-off, net taxable amounts, tax, credits, and net position reconcile through the complete chain.
+against their declared grains and FY Tax State.
 
 ---
 
-## 23. Test Investment Tax Liability Forecast semantics
+## 27. Investment Tax Liability Forecast
 
-### Scenario definition
+Start from actual FY realized/loss state + brought-forward losses.
 
-Start with:
+Add hypothetical liquidation only for tax-ready lots.
 
-```text
-current FY realized gains/losses
-+ brought-forward losses
-```
+Use shared set-off engine.
 
-then add hypothetical liquidation gains/losses from current open lots.
+Never mutate actual realized events, TaxEvents, or FY state.
 
-Run the same set-off engine.
-
-### Verify
-
-Hypothetical events do not write into actual:
-
-```text
-f_Investment_Realized_Events
-f_Tax_Events
-f_Tax_FY_State
-```
-
-Check-required reconciliation lots do not generate falsely precise forecast tax.
+CHECK_REQUIRED lots are excluded from precise tax and separately summarized.
 
 ---
 
-## 24. Test investment invariants
-
-### Quantity
+## 28. Investment invariants
 
 ```text
-Opening Quantity
-+ Buys
-- Sells
-± Reconciliation Adjustments
-=
-Closing Quantity
-```
+Opening Qty + Buys - Sells ± Reconciliation = Closing Qty
 
-### Cost basis
+Opening Basis + Purchases ± Basis Adjustments - Disposed Basis = Closing Basis
 
-```text
-Opening Basis
-+ Purchases
-± Basis Adjustments
-- Disposed FIFO Basis
-=
-Closing Basis
-```
+Sale Proceeds - Disposed Basis = Realized P&L
 
-### Realized P&L
-
-```text
-Sale Proceeds
-- Disposed FIFO Basis
-=
-Realized P&L
-```
-
-### Lot grain
-
-```text
 UNIQUE(Lot_ID, Closing_Date)
 ```
 
-Every FIFO disposal produces the expected realized-event rows.
+---
+
+## 29. XIRR propagation
+
+Test valid, valid 0%, undefined, non-convergent, invalid.
+
+Non-valid value remains NULL through math → Quant → Silver → Gold.
 
 ---
 
-## 25. Test XIRR status propagation
+## 30. Artifact lifecycle
 
-Cover:
+Test discovery, unchanged, changed, rename, pending replay, heal, sync, removal.
 
-```text
-normal XIRR
-multiple cash flows
-valid 0% return
-undefined cash-flow pattern
-non-convergence
-invalid input
-```
-
-Verify non-valid states remain distinguishable through:
-
-```text
-math result
-→ Quant Engine
-→ lot/instrument analytics
-→ Gold consumers
-```
-
-No layer may silently convert failure to meaningful `0%`.
+Validate pointers, run IDs, event IDs/reasons.
 
 ---
 
-## 26. Test artifact lifecycle provenance
+## 31. Bronze synchronization
 
-Cover:
-
-```text
-first discovery
-unchanged rediscovery
-content change
-rename
-PENDING_BRONZE replay
-self-heal
-successful sync
-removal
-```
-
-Verify lifecycle pointers, run IDs, historical events, event IDs, and event reasons.
+Test full replace, file-owned replace, source becomes empty, missing table/partition, orphan cleanup, pending replay.
 
 ---
 
-## 27. Test Bronze synchronization
+## 32. Contract Registry fingerprint
 
-Cover:
+Validate registry integrity and deterministic fingerprint.
 
-```text
-full replacement
-file-owned historical replacement
-changed source becomes empty
-missing Bronze table
-missing artifact partition
-orphan cleanup
-PENDING_BRONZE replay
-```
+Same registry → same fingerprint.
 
-The empty-source case must remove stale owned rows.
+Material contract change → changed fingerprint.
+
+Exact layer counts derive from registry.
 
 ---
 
-## 28. Test contract registry
+## 33. Control Plane
 
-Validate:
-
-```text
-unique contract IDs
-unique physical tables
-valid layers
-non-empty grain
-non-empty producer
-valid publication order
-```
-
-After implementation, derive exact Bronze/Silver/Gold counts from the registry.
-
-Do not maintain approximate counts as release truth.
-
-Verify the old Tax Liability Forecast name is not accidentally retained after rename.
+Test run lifecycle, stale recovery, config/rules snapshots, failures, compressed logs, artifact-run lineage, simulation provenance, registry fingerprint linkage.
 
 ---
 
-## 29. Test Control Plane behavior
+## 34. Worker failure propagation
 
-Cover:
-
-```text
-run lifecycle
-stale-run recovery
-Settings snapshots
-FinancialRules snapshots
-structured failures
-compressed execution logs
-artifact-run lineage
-simulation-run provenance
-```
-
-Failed runs must never become successful history.
+Forced ISIN worker failure must fail stage/run and prevent partial publication while preserving failure context.
 
 ---
 
-## 30. Test worker failure propagation
+## 35. Snapshot / Restore
 
-Force one deterministic ISIN worker failure.
-
-Assert:
-
-```text
-one worker fails
-→ investment stage fails
-→ run fails
-→ partial portfolio is not published
-```
-
-Verify run/stage/ISIN context remains available.
-
----
-
-## 31. Test Snapshot / Restore
-
-Cover:
-
-```text
-successful snapshot
-missing SQLite
-missing DuckDB
-unexpected archive member
-nested/path-traversal member
-successful restore
-failed installation
-rollback
-sidecar preservation
-production lock
-```
+Test success, missing DBs, unsafe archive members, failed installation, rollback, sidecars, production lock.
 
 Invariant:
 
 ```text
-complete new pair
-OR
-complete old pair
-
+complete new pair OR complete old pair
 never mixed generations
 ```
 
 ---
 
-## 32. Test Monte Carlo replay and fingerprint scope
+## 36. Monte Carlo replay
 
-Given:
-
-```text
-same canonical inputs
-same model fingerprint
-same implementation version
-same Settings/FinancialRules
-same macro/reference state
-same root seed
-```
-
-assert the same material simulation output.
-
-Verify:
+Given same:
 
 ```text
-changed financial input
-→ input_fingerprint changes
-
-changed assumption/config
-→ model_fingerprint changes
-
-changed implementation version
-→ model_implementation_version changes
-
-different seed
-→ stochastic result may differ
+inputs
+model fingerprint
+implementation version
+settings/rules
+macro/reference state
+registry fingerprint
+root seed
 ```
 
-Verify volatile metadata does not affect fingerprints.
+compare:
+
+```text
+discrete → exact
+floating scalar → centralized abs/rel tolerance
+floating arrays → element-wise centralized abs/rel tolerance
+```
+
+Test fingerprint changes for input/model/implementation changes.
 
 ---
 
-## 33. Test the complete Reproducibility Envelope
+## 37. Reproducibility Envelope
 
-### Deterministic finance/tax
-
-Given:
-
-```text
-same source evidence
-same Settings
-same FinancialRules/TaxConfig
-same Macro Parameters
-same implementation
-```
-
-verify the same:
+Same deterministic envelope must reproduce:
 
 ```text
 Purchase_ID / Sale_ID
@@ -899,36 +564,23 @@ FY Tax State
 Gold tax marts
 ```
 
-### Stochastic FIRE
-
-Add the same root seed and verify the same material FIRE output.
-
-Ignore operational run IDs/timestamps that are expected to change.
+FIRE additionally uses the same seed/tolerance contract.
 
 ---
 
-## 34. Test pipeline idempotency
+## 38. Pipeline idempotency
 
-Run identical synthetic evidence twice.
+Run identical evidence twice.
 
-Verify:
+Assert no duplicate state/events and identical deterministic IDs/material Silver/Gold outputs.
 
-```text
-no duplicate artifact state
-no duplicate Bronze history
-same deterministic IDs
-no duplicate realized events
-no duplicate reconciliation events
-no duplicate TaxEvents
-same material Silver outputs
-same material Gold outputs
-```
+Operational run IDs/timestamps may differ.
 
 ---
 
-## 35. Test CLI behavior
+## 39. CLI
 
-Cover:
+Test behavior/error paths for:
 
 ```text
 cli
@@ -942,141 +594,108 @@ tkinter
 --docs
 ```
 
-Test behavior/error paths, not terminal pixels.
+---
+
+## 40. Docs runtime
+
+Test manifest, path resolution, navigation, TOC, bundled Mermaid, package resources, README/docs availability.
 
 ---
 
-## 36. Test documentation runtime
+## 41. Packaging smoke
 
-Protect:
-
-```text
-manifest coverage
-path resolution
-internal navigation
-TOC generation
-bundled Mermaid resource
-package-resource loading
-README/docs availability
-```
+Verify wheel/sdist, install, CLI, Desktop import, docs/Mermaid packaging, config imports.
 
 ---
 
-## 37. Add packaging smoke tests
+## 42. Performance guard
 
-Verify:
-
-```text
-wheel builds
-sdist builds
-package installs
-CLI entry point starts
-Desktop entry point imports
-docs are packaged
-Mermaid asset is packaged
-configuration models import
-```
-
----
-
-## 38. Add a generous performance regression guard
-
-Do not assert an exact runtime.
-
-Only fail on a material slowdown large enough to indicate a real regression.
+Use a generous material-regression threshold, not exact runtime.
 
 Never trade financial correctness for benchmark speed.
 
 ---
 
-## 39. Build one full synthetic E2E test
-
-Final system scenario:
+## 43. Full synthetic E2E
 
 ```text
-Synthetic Source Evidence
+Synthetic Evidence
 → Discovery
 → Control Plane
 → Bronze
-→ Canonical Purchase/Sale IDs
-→ FIFO / Lot IDs
+→ Purchase/Sale IDs
+→ FIFO/Lot IDs
 → Realized Events
-→ Broker Reconciliation
+→ Reconciliation
 → TaxEvents
-→ Capital-Loss Set-Off
+→ Loss Set-Off
 → FY Tax State
-→ Silver / Gold
+→ Silver/Gold
 → FIRE
 → Snapshot
 → Restore
 → Rebuild
 ```
 
-Verify:
+Verify financial/tax outputs, deterministic identities, lineage, registry identity, reproducibility, and recovery.
+
+---
+
+## Suggested order
 
 ```text
-financial outputs
-tax outputs
-deterministic identities
-lineage
-reproducibility
-recovery
+1 Fixtures
+2 Canonical serialization + ID utility
+3 Purchase/Sale identity
+4 FIFO/Lot identity
+5 Same-day ordering
+6 Holding boundaries
+7 Realized events
+8 Reconciliation
+9 Ledger UID + TaxConfig + TaxEvents
+10 Loss set-off/carry-forward
+11 FY Tax State + Gold
+12 Investment forecast
+13 XIRR
+14 Artifact/Control Plane
+15 Registry fingerprint
+16 Bronze/recovery
+17 Monte Carlo replay
+18 Integration/reproducibility
+19 CLI/docs/package
+20 Full E2E
 ```
 
 ---
 
-## Suggested implementation order
+## Final QA Implementation Freeze checklist
 
-```text
-1. Replace fixtures
-2. Deterministic ID utility/tests
-3. Canonical Purchase/Sale ID tests
-4. FIFO + Lot identity tests
-5. Same-day ordering
-6. Holding boundaries
-7. Realized-event golden scenarios
-8. Reconciliation groups/events
-9. TaxConfig + TaxEvents
-10. Loss set-off / carry-forward
-11. FY Tax State + Gold
-12. Investment tax forecast
-13. XIRR propagation
-14. Artifact / Control Plane
-15. Bronze / recovery
-16. Monte Carlo replay
-17. Integration / reproducibility
-18. CLI / docs / package
-19. Full synthetic E2E
-```
-
----
-
-## Final QA Freeze completion
-
-The QA freeze is complete when:
-
-1. Final fixtures match production contracts.
-2. Every deterministic financial ID is tested.
-3. Canonical Purchase/Sale grain remains unchanged.
-4. Lot identity survives all FIFO/reconciliation mutations.
-5. Same-day FIFO ordering is deterministic.
-6. Calendar-month holding boundaries are tested.
-7. Lot-level realized events are golden-tested.
-8. Reconciliation groups/events are tested at lot-mutation grain.
-9. Synthetic reconciliation lots have safe tax behavior.
-10. TaxConfig ownership and non-taxable exclusions are tested.
-11. Tax credits are non-negative by contract.
-12. TaxEvent identity/uniqueness is enforced.
-13. Capital gains cannot double count across producers.
-14. Loss set-off priority and carry-forward reconcile.
-15. FY Tax State and all three Gold tax marts reconcile.
-16. Investment forecast uses actual FY state plus hypothetical liquidation without mutation.
-17. XIRR status propagates correctly.
-18. Artifact lifecycle and self-healing are protected.
-19. Snapshot/Restore rollback is protected.
-20. Monte Carlo fingerprint/replay semantics are protected.
-21. The complete Reproducibility Envelope is executable.
-22. Pipeline idempotency is protected.
-23. Contract counts come from the registry.
-24. CLI/docs/package surfaces have smoke coverage.
-25. One complete synthetic E2E scenario passes.
+1. Final fixtures.
+2. Canonical serialization.
+3. Identity precedence.
+4. Purchase/Sale IDs.
+5. Existing canonical grain preserved.
+6. Lot identity persistence.
+7. Same-day deterministic FIFO.
+8. Strict calendar-month boundary.
+9. Realized-event identity/immutability.
+10. Reconciliation identity + Run_ID semantics.
+11. Synthetic-lot safe tax behavior.
+12. Ledger UID contract.
+13. TaxConfig ownership.
+14. Non-negative tax credits.
+15. TaxEvent identity/uniqueness.
+16. No capital-gain double counting.
+17. Ordered loss set-off/carry-forward.
+18. FY Tax State + three Gold marts.
+19. Forecast precise-vs-CHECK_REQUIRED separation.
+20. XIRR propagation.
+21. Artifact/self-healing protection.
+22. Registry fingerprint.
+23. Snapshot/Restore.
+24. Monte Carlo replay tolerance.
+25. Complete Reproducibility Envelope.
+26. Idempotency.
+27. Registry-derived contract counts.
+28. CLI/docs/package smoke.
+29. Full synthetic E2E.
