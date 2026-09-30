@@ -1,124 +1,67 @@
-# Financial Domain Freeze
+# Financial Domain Implementation Freeze
+
+> **Status: FROZEN FOR IMPLEMENTATION**
+>
+> This is the implementation authority for the Financial Domain Sprint. The application provides financial/tax guidance and filing-preparation support, not authoritative ITR computation.
 
 ## Goal
 
-Harden the financial model around the scenarios I actually use:
+Harden:
 
 ```text
-canonical investment purchases/sales
+canonical investment identity
 FIFO lots
-realized gains/losses
+realized events
 broker reconciliation
-household income
-capital-loss treatment
-estimated tax preparation
-year-end review
+holding periods
+household tax classification
+capital-loss set-off/carry-forward
+FY tax state
+tax-preparation Gold
+investment tax forecast
+XIRR semantics
 ```
-
-The application remains a financial/tax guidance system. It does not replace final filing due diligence or become a complete Indian tax-return engine.
 
 ---
 
-## 1. Add deterministic IDs to canonical investment facts
-
-### Change
+## 1. Canonical Purchase_ID / Sale_ID
 
 Add:
 
 ```text
-Purchase_ID
+Purchase_ID → silver.f_Investment_Purchase_Data
+Sale_ID     → silver.f_Investment_Sale_Data
 ```
 
-to:
+These identify canonical aggregated financial events, not broker transactions.
+
+Use Canonical ID Serialization v1.
 
 ```text
-silver.f_Investment_Purchase_Data
+Purchase_ID defining fields:
+PURCHASE + ISIN + Date + Price + Quantity + CURRENCY_ID
+
+Sale_ID defining fields:
+SALE + ISIN + Date + Sell_Price + Quantity + CURRENCY_ID
 ```
 
-and:
+Quantity is intentionally part of identity:
 
 ```text
-Sale_ID
+quantity correction
+→ canonical event changed
+→ ID changes
 ```
 
-to:
+Exclude derived fields (`Value`, P&L, weighted-average buy fields) and file/folder paths.
 
-```text
-silver.f_Investment_Sale_Data
-```
-
-### Impact
-
-The current Purchase/Sale tables intentionally contain canonical aggregated financial events rather than source broker transactions.
-
-Stable IDs allow the Quant Engine and new durable facts to reference those events across complete Silver rebuilds.
-
-### Implementation
-
-Do not change Bronze or restore source-order granularity.
-
-Define:
-
-```text
-Purchase_ID
-→ one canonical aggregated purchase row
-
-Sale_ID
-→ one canonical aggregated sale row
-```
-
-Suggested defining attributes:
-
-```text
-Purchase_ID:
-PURCHASE
-+ ISIN
-+ Date
-+ normalized Price
-+ normalized Quantity
-+ Currency
-
-Sale_ID:
-SALE
-+ ISIN
-+ Date
-+ normalized Sell_Price
-+ normalized Quantity
-+ Currency
-```
-
-Do not include derived fields such as:
-
-```text
-Value
-Buy_Value
-Unit_PnL
-Total_PnL
-```
-
-because correcting a derived calculation must not change entity identity.
-
-Do not include file/folder paths because rename/path changes are provenance changes, not financial identity changes.
-
-Generate IDs only after the canonical aggregation has established the final row.
-
-### Done when
-
-The same canonical Purchase/Sale rows receive the same IDs on every rebuild.
+Generate IDs after canonical aggregation.
 
 ---
 
-## 2. Add deterministic Lot identity
+## 2. Lot_ID
 
-### Change
-
-Extend the Quant Engine `TaxLot` concept and:
-
-```text
-silver.f_Investment_Analytics_Lot
-```
-
-with:
+Extend Quant `TaxLot` and `silver.f_Investment_Analytics_Lot`:
 
 ```text
 Lot_ID
@@ -126,146 +69,65 @@ Purchase_ID
 Lot_Source_Type
 ```
 
-### Impact
-
-The current lot fact is effectively identified by `ISIN + Buy_Date + Closing_Date`, which cannot distinguish all acquisition lots reliably.
-
-`Lot_ID` becomes the stable identity of the economic FIFO lot.
-
-### Implementation
-
-For normal purchase-derived lots:
+Normal lot:
 
 ```text
-Lot_ID = deterministic_id("LOT", Purchase_ID)
+Lot_ID = deterministic_id(LOT, Purchase_ID)
+Purchase_ID = populated
 Lot_Source_Type = PURCHASE
 ```
 
-The lot fact grain becomes:
+Lot fact grain:
 
 ```text
 Lot_ID × Closing_Date
 ```
 
-and should be unique at that grain.
-
-Do not add Lot_ID to:
-
-```text
-f_Investment_Market_Data
-f_Investment_Benchmark_Data
-```
-
-Those tables represent market/benchmark state, not reconstructed FIFO lots.
-
-### Done when
-
-Every active FIFO lot has stable identity across analytical rebuilds.
+Do not add Lot_ID to Market or Benchmark facts.
 
 ---
 
-## 3. Preserve Lot identity through FIFO mutation
+## 3. Preserve Lot identity
 
-### Change
+Partial sale, quantity reduction, and cost-basis adjustment preserve the existing Lot_ID.
 
-Whenever the Quant Engine creates a replacement `TaxLot` during partial sale or reconciliation, preserve the existing lot identity unless a genuinely new lot is being created.
-
-### Impact
-
-Python object replacement no longer looks like economic lot replacement.
-
-### Implementation
-
-Partial sale:
-
-```text
-Lot L001: 100 units
-sell 30
-→ realized event references L001
-→ remaining 70 units remain L001
-```
-
-Quantity reduction:
-
-```text
-existing lot reduced
-→ same Lot_ID
-```
-
-Cost-basis adjustment:
-
-```text
-active lot basis changed
-→ same Lot_ID
-```
-
-Only a reconciliation-created missing-quantity lot receives a new synthetic Lot_ID.
-
-### Done when
-
-Lot identity survives all state mutations correctly.
+Only a genuinely new reconciliation-created lot receives a new synthetic Lot_ID.
 
 ---
 
-## 4. Define deterministic same-day FIFO ordering
+## 4. Same-day FIFO ordering
 
-### Change
-
-Make same-day purchase/sale processing deterministic where unified canonical source evidence no longer preserves intra-day chronology.
-
-### Impact
-
-Multiple different-price events on the same date can otherwise enter FIFO in unstable dataframe order and change realized basis.
-
-### Implementation
-
-Canonical purchase ordering:
+Where intra-day chronology is unavailable:
 
 ```text
+Purchases:
 Date ASC
 Price ASC
 Purchase_ID ASC
-```
 
-Canonical sale ordering:
-
-```text
+Sales:
 Date ASC
 Sell_Price ASC
 Sale_ID ASC
 ```
 
-Use numeric normalized price ordering, not formatted text.
+Use numeric normalized prices.
 
-This is a reproducibility convention when finer intra-day chronology is unavailable. It must not be described as recovered broker chronology.
+This is a deterministic canonical convention, not claimed broker chronology.
 
-Do not collapse different-price same-day purchases into weighted-average lots.
-
-### Done when
-
-Identical canonical inputs always produce the same FIFO ordering and realized output.
+Do not merge different-price same-day purchases into weighted-average lots.
 
 ---
 
-## 5. Fix holding periods to use calendar-month semantics
+## 5. Calendar-month holding periods
 
-### Change
-
-Replace approximate day-based holding thresholds with one shared calendar-month utility.
-
-### Impact
-
-Leap years and different month lengths no longer distort ST/LT classification.
-
-### Implementation
-
-Use one domain function:
+Use one shared utility:
 
 ```text
-holding_boundary(acquisition_date, threshold_months)
+boundary_date = acquisition_date + threshold_months
 ```
 
-Month addition follows end-of-month clamping:
+Month addition uses end-of-month clamping:
 
 ```text
 31 Jan + 1 month → 28/29 Feb
@@ -273,27 +135,25 @@ Month addition follows end-of-month clamping:
 31 Mar + 1 month → 30 Apr
 ```
 
-Then apply the explicitly configured boundary comparison consistently.
-
-Use the same utility for:
+Classification:
 
 ```text
-realized sale classification
-unrealized lot classification
-days/months-to-LTCG presentation where relevant
+disposal_date > boundary_date
+→ LTCG / LTCL
+
+disposal_date <= boundary_date
+→ STCG / STCL
 ```
 
-Do not maintain separate day-based holding logic in FIFO and snapshot generation.
+Exact boundary is short-term.
 
-### Done when
+FinancialRules supplies threshold months. The comparison operator is domain logic, not configurable.
 
-One day before, exact boundary, and one day after classify consistently everywhere.
+Use the same utility for realized and unrealized classifications.
 
 ---
 
-## 6. Persist lot-level realized investment events
-
-### Change
+## 6. Lot-level realized events
 
 Create:
 
@@ -304,18 +164,10 @@ silver.f_Investment_Realized_Events
 Grain:
 
 ```text
-one disposed FIFO lot segment per canonical sale
+one disposed FIFO lot segment per Sale_ID
 ```
 
-A sale consuming three lots creates three rows.
-
-### Impact
-
-The Quant Engine already calculates lot-level realized events in memory. This change makes them durable and identifiable.
-
-### Implementation
-
-Extend `fifo.sell()` to accept `Sale_ID` and emit:
+Contract:
 
 ```text
 Realized_Event_ID
@@ -323,54 +175,35 @@ Sale_ID
 Lot_ID
 Purchase_ID
 ISIN
-
 Acquisition_Date
 Disposal_Date
 FY
-
 Quantity_Disposed
 Acquisition_Price
 Disposed_Cost_Basis
-
 Sale_Price
 Sale_Proceeds
 Realized_Gain_Loss
-
 Holding_Type
 Tax_Type
 Tax_Subtype
-
 Lot_Source_Type
 ```
 
-For normal FIFO realization:
+Identity:
 
 ```text
-Realized_Event_ID =
-deterministic_id(
-    "REALIZED",
-    Sale_ID,
-    Lot_ID
-)
+Realized_Event_ID = deterministic_id(REALIZED, Sale_ID, Lot_ID)
+UNIQUE(Sale_ID, Lot_ID)
 ```
 
-Business uniqueness:
+Logical immutability means the same reproducible source/rule state rebuilds the same event ID and material attributes.
 
-```text
-Sale_ID + Lot_ID
-```
-
-Historical realized events are immutable after creation.
-
-### Done when
-
-Multi-lot sales persist exact lot-level realization and full liquidation never removes realized history.
+Later reconciliation of an active lot must not rewrite an earlier realized event.
 
 ---
 
-## 7. Persist broker/FIFO reconciliation at lot-mutation grain
-
-### Change
+## 7. Lot-level reconciliation events
 
 Create:
 
@@ -378,73 +211,62 @@ Create:
 silver.f_Investment_Reconciliation_Events
 ```
 
-with two identities:
+Two identities:
 
 ```text
 Reconciliation_Group_ID
 Reconciliation_Event_ID
 ```
 
-### Impact
-
-The current Quant Engine can:
+Group:
 
 ```text
-add missing quantity as a synthetic lot
-remove quantity from FIFO lots
-scale active lot cost basis
+deterministic_id(
+  RECON_GROUP,
+  ISIN,
+  Reconciliation_Date,
+  Adjustment_Type,
+  canonical pre-adjustment state,
+  canonical target state
+)
 ```
 
-These are financially material mutations and should be explainable.
-
-### Implementation
-
-`Reconciliation_Group_ID` represents one reconciliation operation, for example:
+Event, where one group/type mutates a lot at most once:
 
 ```text
-ISIN + Market_Date + Adjustment_Type + canonical pre/target state
+deterministic_id(
+  RECON_EVENT,
+  Reconciliation_Group_ID,
+  Lot_ID,
+  Adjustment_Type
+)
 ```
 
-It must be deterministic and must not include Run_ID.
+Only introduce a deterministic mutation ordinal if implementation proves repeated same-lot mutation is legitimate.
 
-`Reconciliation_Event_ID` represents one affected lot mutation.
-
-Grain:
-
-```text
-one affected lot mutation
-```
-
-Suggested fields:
+Contract includes:
 
 ```text
 Reconciliation_Group_ID
 Reconciliation_Event_ID
 Run_ID
-
 ISIN
 Reconciliation_Date
 Lot_ID
 Purchase_ID
-
 Adjustment_Type
 Reason
-
 Broker_Quantity
 Reconstructed_Quantity
 Quantity_Adjustment
-
 Broker_Cost_Basis
 Reconstructed_Cost_Basis
 Cost_Basis_Adjustment
-
 Original_Unit_Cost
 Adjusted_Unit_Cost
-
-source / lineage identifiers
 ```
 
-Keep adjustment types limited to actual behavior:
+Adjustment types:
 
 ```text
 QUANTITY_ADD
@@ -452,92 +274,67 @@ QUANTITY_REMOVE
 COST_BASIS_ADJUSTMENT
 ```
 
-### Done when
+`Run_ID` is producing-run provenance only. It never participates in financial identity.
 
-Every material broker/FIFO mutation can be explained by ISIN/date/lot/quantity/basis/reason.
+Silver is a rebuilt projection; repeated historical run observations remain a Control Plane responsibility.
 
 ---
 
-## 8. Define reconciliation effects on lots and tax
+## 8. Reconciliation financial/tax semantics
 
-### Change
+### QUANTITY_ADD
 
-Make reconciliation consequences explicit.
-
-### Impact
-
-Portfolio reconstruction can remain useful without synthetic evidence silently becoming tax-quality evidence.
-
-### Implementation
-
-#### Quantity add
-
-When broker quantity exceeds reconstructed FIFO quantity:
+Create:
 
 ```text
-create synthetic Lot_ID
+synthetic deterministic Lot_ID
 Purchase_ID = NULL
 Lot_Source_Type = RECONCILIATION
 ```
 
-The reconciliation date is an operational anchor, not asserted true acquisition evidence.
+The reconciliation date is an operational anchor, not asserted acquisition evidence.
 
-The lot participates in:
+The lot participates in portfolio/wealth/FIRE analytics.
 
-```text
-portfolio state
-wealth analytics
-FIRE
-market analytics
-```
-
-If later sold:
+If sold:
 
 ```text
-Realized Event → persisted
-TaxEvent → CHECK_REQUIRED
-Taxable_Amount → NULL
-Applied_Rate → NULL
-Estimated_Tax → NULL
+Realized Event → persisted with modelled P&L
+
+TaxEvent:
+Tax_Status = CHECK_REQUIRED
+Taxable_Amount = NULL
+Applied_Rate = NULL
+Estimated_Tax = NULL
 ```
 
-The modelled realized P&L may remain in the realized-event fact, but tax treatment must not pretend the synthetic date/basis is authoritative.
+### QUANTITY_REMOVE
 
-#### Quantity remove
+Reduce/remove affected lots and persist lot-level events.
 
-Reduce/remove the affected FIFO lots and record lot-level reconciliation events.
+Surviving purchase lots retain identity.
 
-Surviving purchase-derived lots retain their Lot_ID.
+Quantity removal alone does not make the surviving lot CHECK_REQUIRED if its acquisition/basis evidence remains unchanged.
 
-If their acquisition date/basis is otherwise unchanged, they do not automatically become tax-check-required merely because quantity was removed.
+### COST_BASIS_ADJUSTMENT
 
-#### Cost-basis adjustment
+Adjust active basis.
 
-Change active lot basis.
+Future FIFO uses adjusted basis.
 
-Future FIFO disposals use the adjusted basis.
+Earlier realized events remain logically immutable.
 
-Historical realized events remain immutable.
-
-A future disposal from a materially basis-adjusted lot becomes:
+Future realization from a materially basis-adjusted lot:
 
 ```text
 Tax_Status = CHECK_REQUIRED
 ```
 
-because its gain depends on reconstructed basis.
-
-### Done when
-
-Reconciliation affects current/future state without rewriting realized history or manufacturing false tax certainty.
-
 ---
 
-## 9. Add TaxConfig at Head → Tax Sub-Head level
+## 9. TaxConfig: Head → Tax Sub-Head
 
-### Change
-
-Add TaxConfig inside FinancialRules:
+Inside FinancialRules:
 
 ```text
 Head of Income
@@ -549,58 +346,35 @@ Head of Income
 → tax_method
 ```
 
-Example:
-
-```toml
-[taxconfig.income_from_salary.salary]
-display_name = "Salary"
-cat_ids = ["SALARY"]
-sub_cat_ids = []
-tax_credit_sub_cat_ids = ["SALARY_TDS"]
-taxability = "taxable"
-tax_method = "ordinary_rate"
-```
-
-### Impact
-
-New income streams normally require only adding IDs to an existing tax sub-head.
-
-### Implementation
-
-Use one uniform schema.
-
-Suggested enums:
+Uniform metadata:
 
 ```text
-taxability:
-taxable
-non_taxable
-review
-
-tax_method:
-ordinary_rate
-capital_gains
-exempt
-review
+display_name
+cat_ids[]
+sub_cat_ids[]
+tax_credit_sub_cat_ids[]
+taxability
+tax_method
 ```
 
-`cat_ids` claims the complete category.
+Enums:
 
-`sub_cat_ids` claims exact subcategories only.
+```text
+taxability: taxable | non_taxable | review
+tax_method: ordinary_rate | capital_gains | exempt | review
+```
 
-No category override/exclusion semantics.
+`cat_ids` claims the full category.
 
-Effective overlaps across tax sub-heads are configuration errors.
+`sub_cat_ids` claims exact subcategories.
 
-### Done when
+No override/exclusion semantics.
 
-Income taxonomy changes normally require FinancialRules changes only.
+Effective overlaps are configuration errors.
 
 ---
 
-## 10. Keep tax credits at Subcategory level only
-
-### Change
+## 10. Tax credits
 
 Use only:
 
@@ -608,143 +382,95 @@ Use only:
 tax_credit_sub_cat_ids
 ```
 
-### Impact
-
-TDS/tax-credit mapping remains explicit and simple.
-
-### Implementation
-
-Source ledger entries may be negative:
+Normalize ledger sign:
 
 ```text
-TDS = -20,000
+source TDS = -20,000
+→ Observed_Tax_Credits = 20,000
 ```
 
-Canonical tax state must normalize:
-
-```text
-Observed_Tax_Credits = 20,000
-```
-
-Contract:
+Invariant:
 
 ```text
 Observed_Tax_Credits >= 0
 ```
 
-Do not add category-level tax-credit inheritance.
+---
 
-### Done when
+## 11. TaxEvent ownership
 
-Cash and tax-credit views both reconcile and tax credits are always non-negative.
+Every Source_Type has one declared producer.
+
+```text
+Investment Engine
+→ owns investment realized capital gains
+
+Ledger classification
+→ owns configured ledger tax streams
+```
+
+Investment-category ledger capital-gain emission is suppressed when Investment Engine owns the economic event.
+
+Freeze:
+
+```text
+same Source_Type + Source_ID + Tax_Sub_Head
+→ emitted at most once
+```
 
 ---
 
-## 11. Define tax-event ownership
+## 12. TaxEvent identity
 
-### Change
+### Ledger
 
-Every canonical TaxEvent must have exactly one producer.
-
-### Impact
-
-Investment capital gains cannot be double counted between household income mappings and FIFO realized events.
-
-### Implementation
-
-Use:
+The household source already supplies stable native:
 
 ```text
-specialized Investment Engine
->
-generic ledger classification
+UID
 ```
 
-Reuse the existing investment-category configuration to identify investment-related activity.
+which survives into `f_Income_Transactions`.
 
-For investment activity:
+Therefore:
 
 ```text
-FIFO
-→ f_Investment_Realized_Events
-→ f_Tax_Events
+Source_Type = LEDGER
+Source_ID = UID
 ```
 
-Suppress generic ledger-derived capital gains for those investment categories.
+Do not generate another ledger ID.
 
-### Done when
-
-One economic investment gain appears exactly once in TaxEvents.
-
----
-
-## 12. Define TaxEvent identity and uniqueness
-
-### Change
-
-Give every TaxEvent a deterministic identity and explicit natural uniqueness.
-
-### Impact
-
-Tax events remain stable across full Silver rebuilds and cannot duplicate silently.
-
-### Implementation
-
-Business uniqueness:
-
-```text
-Source_Type
-+ Source_ID
-+ Tax_Sub_Head
-```
-
-Deterministic ID:
-
-```text
-Tax_Event_ID =
-deterministic_id(
-    "TAX",
-    Source_Type,
-    Source_ID,
-    Tax_Sub_Head
-)
-```
-
-For investment realization:
+### Investment
 
 ```text
 Source_Type = INVESTMENT_REALIZED
 Source_ID = Realized_Event_ID
 ```
 
-For ledger income:
+### Tax event
 
 ```text
-Source_Type = LEDGER
-Source_ID = stable ledger transaction identity
+Tax_Event_ID =
+deterministic_id(
+  TAX,
+  Source_Type,
+  Source_ID,
+  Tax_Sub_Head
+)
 ```
 
-Including `Tax_Sub_Head` allows one source event to produce multiple legitimate tax interpretations if that is ever supported.
+Business uniqueness:
 
-### Done when
-
-TaxEvent rebuilds are stable and the natural uniqueness constraint is enforceable.
+```text
+Source_Type + Source_ID + Tax_Sub_Head
+```
 
 ---
 
-## 13. Support non-investment capital gains
+## 13. Non-investment capital gains
 
-### Change
-
-Allow the Capital Gains head to map non-investment capital-asset income from the ledger, with separate ST/LT sub-heads where the taxonomy can identify them.
-
-### Impact
-
-Investment and other capital assets can share the tax model while keeping different producers.
-
-### Implementation
-
-For mapped non-investment gains/losses:
+TaxConfig may map non-investment capital-asset gain/loss ledger streams.
 
 ```text
 positive ST → STCG
@@ -753,7 +479,7 @@ positive LT → LTCG
 negative LT → LTCL
 ```
 
-The mapped amount must already represent gain/loss, not gross sale proceeds, unless richer evidence exists.
+Mapped amount must already represent gain/loss unless richer evidence exists.
 
 Use:
 
@@ -762,47 +488,24 @@ Default_STCG
 Default_LTCG
 ```
 
-from Macro Parameters for the supported default calculation.
+for supported default treatment.
 
-Insufficient classification becomes:
+Insufficient classification:
 
 ```text
 CHECK_REQUIRED
 ```
 
-### Done when
-
-Non-investment capital gains/losses flow correctly without affecting investment ownership.
-
 ---
 
-## 14. Rename the ordinary-income macro parameter
-
-### Change
+## 14. Ordinary-income macro rate
 
 Rename:
 
 ```text
 Dividend_Income_Tax_Rate
+→ Estimated_Ordinary_Income_Tax_Rate
 ```
-
-to:
-
-```text
-Estimated_Ordinary_Income_Tax_Rate
-```
-
-in:
-
-```text
-silver.d_Macro_Parameters
-```
-
-### Impact
-
-Salary, interest, dividend, and other supported ordinary taxable streams share one explicit FY planning assumption.
-
-### Implementation
 
 Route:
 
@@ -811,39 +514,19 @@ tax_method = ordinary_rate
 → Estimated_Ordinary_Income_Tax_Rate
 ```
 
-Keep existing capital-gain rate fields and exemptions.
+Use for supported salary/interest/dividend/ordinary streams.
 
-Do not add separate salary/interest/dividend rates or a slab engine.
+Keep existing capital-gain rate/exemption fields.
 
-### Done when
-
-A new FY ordinary-rate assumption is a macro-data change.
+Do not build a slab engine.
 
 ---
 
-## 15. Keep non-taxable income outside TaxEvents
+## 15. Non-taxable income
 
-### Change
+Configured non-taxable streams such as cashback/digital-wallet income do **not** enter `silver.f_Tax_Events`.
 
-Configured non-taxable streams such as cashback/digital-wallet income do not enter:
-
-```text
-silver.f_Tax_Events
-```
-
-### Impact
-
-TaxEvents remains a tax-relevant fact rather than a duplicate income fact.
-
-### Implementation
-
-```text
-taxability = non_taxable
-→ classify intentionally
-→ exclude before f_Tax_Events
-```
-
-Reconcile at a higher level:
+Reconcile:
 
 ```text
 Gross Income Ledger
@@ -851,15 +534,9 @@ Gross Income Ledger
 = Tax Model Income Universe
 ```
 
-### Done when
-
-Non-taxable income remains in normal financial reporting but not TaxEvents.
-
 ---
 
-## 16. Create canonical TaxEvents
-
-### Change
+## 16. Canonical TaxEvents
 
 Create:
 
@@ -870,151 +547,97 @@ silver.f_Tax_Events
 Grain:
 
 ```text
-one Source_Type + Source_ID + Tax_Sub_Head
+Source_Type + Source_ID + Tax_Sub_Head
 ```
 
-### Impact
-
-Ledger-derived taxable income and FIFO realized investment events share one canonical tax input.
-
-### Implementation
-
-Suggested fields:
+Contract:
 
 ```text
 Tax_Event_ID
 Event_Date
 FY
-
 Source_Type
 Source_ID
-
 Income_Head
 Tax_Sub_Head
-
 Taxability
 Tax_Method
-
 Gross_Amount
 Taxable_Amount
-
 Gain_Type
 Realized_Gain_Loss
-
 Applied_Rate
 Estimated_Tax
-
 Tax_Status
 Tax_Status_Reason
-
 Rules_Snapshot_ID
 ```
 
-Suggested Source Types:
+Initial Source Types:
 
 ```text
 LEDGER
 INVESTMENT_REALIZED
 ```
 
-Tax Status remains descriptive, not workflow:
+Status:
 
 ```text
 READY
 CHECK_REQUIRED
 ```
 
-### Done when
-
-Every supported tax-relevant event enters the tax engine through one inspectable Silver fact.
+Status is calculation confidence/eligibility, not a manual review workflow.
 
 ---
 
-## 17. Fix capital-loss set-off with explicit priority
+## 17. Capital-loss set-off
 
-### Change
-
-Replace aggregate loss arithmetic with one explicit ordered ST/LT set-off function.
-
-### Impact
-
-Net gains/losses and estimated tax remain correct and explainable when capital losses exist.
-
-### Implementation
-
-Use this supported order:
+One domain function owns the exact order:
 
 ```text
-1. STCL against STCG
-2. remaining STCL against LTCG
-3. LTCL against remaining LTCG
-4. LTCL cannot offset STCG
+1. STCL → STCG
+2. remaining STCL → LTCG
+3. LTCL → remaining LTCG
+4. LTCL cannot → STCG
 ```
 
-One tested domain function owns the ordering.
-
-Return an explicit result:
+Return:
 
 ```text
 original_stcg
 original_ltcg
 available_stcl
 available_ltcl
-
 stcl_used_against_stcg
 stcl_used_against_ltcg
 ltcl_used_against_ltcg
-
 net_stcg
 net_ltcg
-
 closing_stcl
 closing_ltcl
 ```
 
-### Done when
-
-Every loss movement can be explained from the returned state.
-
 ---
 
-## 18. Add carry-forward state
-
-### Change
-
-Represent brought-forward and closing STCL/LTCL across FYs.
-
-### Impact
-
-Supported capital losses do not disappear between FYs.
-
-### Implementation
-
-Use:
+## 18. Carry-forward
 
 ```text
-Opening Tax Loss State
-+
-Current FY Capital Gains/Losses
-→ ordered Set-Off Engine
-→ Closing Tax Loss State
+Opening STCL/LTCL
++ Current FY gain/loss state
+→ ordered set-off
+→ Closing STCL/LTCL
 ```
 
-Keep STCL and LTCL separate.
+Keep ST/LT separately.
 
-If application history begins with an existing brought-forward loss, allow a small explicit opening state instead of inventing historical transactions.
+Allow explicit opening loss state if application history begins after the loss originated.
 
-Carry-forward remains financial analytical state, not Control Plane state.
-
-### Done when
-
-Full, partial, no-utilization, and multi-FY scenarios reconcile deterministically.
+This is financial analytical state, not Control Plane state.
 
 ---
 
-## 19. Add FY Tax State in Silver
-
-### Change
+## 19. FY Tax State
 
 Create:
 
@@ -1025,54 +648,37 @@ silver.f_Tax_FY_State
 Grain:
 
 ```text
-one row per FY
+FY
 ```
 
-### Impact
-
-This becomes the canonical annual calculation state between TaxEvents and Gold.
-
-### Implementation
-
-Suggested fields:
+Contract:
 
 ```text
 FY
-
 Gross_Income
 Excluded_Non_Taxable_Income
 Tax_Relevant_Income
 Ordinary_Taxable_Income
-
 STCG
 LTCG
 STCL
 LTCL
-
 Brought_Forward_STCL
 Brought_Forward_LTCL
-
 STCL_Used_Against_STCG
 STCL_Used_Against_LTCG
 LTCL_Used_Against_LTCG
-
 Closing_STCL
 Closing_LTCL
-
 Net_Taxable_STCG
 Net_Taxable_LTCG
-
 Estimated_Ordinary_Tax
 Estimated_Capital_Gains_Tax
 Estimated_Gross_Tax
-
 Observed_Tax_Credits
 Estimated_Net_Tax_Position
-
 Check_Required_Count
 ```
-
-Use:
 
 ```text
 Estimated_Net_Tax_Position
@@ -1082,68 +688,33 @@ Estimated_Gross_Tax
 Observed_Tax_Credits
 ```
 
-Do not clamp to zero.
-
-A negative value represents an estimated excess-credit/refund position rather than a payable amount.
-
-### Done when
-
-Every material Gold tax value reconciles through FY Tax State to TaxEvents.
+Do not clamp to zero. Negative means estimated excess-credit/refund position.
 
 ---
 
-## 20. Add three Gold tax marts
+## 20. Gold tax marts
 
-### A. `gold.Tax_Year_Summary`
+### `gold.Tax_Year_Summary`
 
-Grain:
+Grain: FY.
 
-```text
-FY
-```
-
-Purpose:
-
-```text
-one-row year-end tax picture
-```
-
-### B. `gold.Tax_Income_Breakdown`
+### `gold.Tax_Income_Breakdown`
 
 Grain:
 
 ```text
-FY
-× Income Head
-× Tax Sub-Head
-× Source Type
+FY × Income Head × Tax Sub-Head × Source Type
 ```
 
-Purpose:
-
-```text
-detailed tax-preparation breakdown
-```
-
-Investment and other capital gains remain distinguishable.
-
-### C. `gold.Tax_Reconciliation`
+### `gold.Tax_Reconciliation`
 
 Grain:
 
 ```text
-FY
-× Tax Sub-Head
-× Source Type
+FY × Tax Sub-Head × Source Type
 ```
 
-Purpose:
-
-```text
-trace financial amounts through tax calculation
-```
-
-Suggested measures:
+Suggested reconciliation measures:
 
 ```text
 Gross_Source_Amount
@@ -1159,65 +730,49 @@ Event_Count
 Check_Required_Count
 ```
 
-### Impact
-
-Gold answers:
-
-```text
-Tax_Year_Summary
-→ What is the FY tax picture?
-
-Tax_Income_Breakdown
-→ Where did it come from?
-
-Tax_Reconciliation
-→ Can I trace the calculation?
-```
-
-### Done when
-
-All three marts reconcile to the same FY Tax State.
+All three reconcile to FY Tax State.
 
 ---
 
-## 21. Keep and rename the investment tax forecast
+## 21. Investment Tax Liability Forecast
 
-### Change
-
-Rename the existing Tax Liability Forecast to:
+Rename:
 
 ```text
-gold.Investment_Tax_Liability_Forecast
+Tax_Liability_Forecast
+→ gold.Investment_Tax_Liability_Forecast
 ```
 
-### Impact
+Question answered:
 
-It remains clearly separate from realized FY tax reporting.
+> If tax-ready current open investments were liquidated on the forecast date, what incremental capital-gain tax exposure would they create given current FY tax state?
 
-### Forecast definition
-
-The forecast asks:
-
-> If the current open investment portfolio were liquidated as of the forecast date, what incremental capital-gain tax exposure would those hypothetical disposals create given the current FY tax state?
-
-### Implementation
-
-Start from a copy of actual tax state:
+Start from:
 
 ```text
 current FY realized gain/loss state
 + brought-forward STCL/LTCL
 ```
 
-Then add:
+Add hypothetical gains/losses from **tax-ready** open lots, then run the shared set-off engine.
+
+### CHECK_REQUIRED exposure
+
+Uncertain reconciliation-derived/check-required lots are excluded from precise tax.
+
+Report separately at minimum:
 
 ```text
-hypothetical gains/losses from liquidation of current open lots
+Check_Required_Lot_Count
+Check_Required_Market_Value
+Check_Required_Unrealized_PL
 ```
 
-Run the same ordered capital-loss set-off logic.
+No lower/upper-bound tax scenarios in this sprint.
 
-Do not write hypothetical disposals back into:
+### Non-mutation
+
+Forecast never writes hypothetical events into:
 
 ```text
 f_Investment_Realized_Events
@@ -1225,27 +780,9 @@ f_Tax_Events
 f_Tax_FY_State
 ```
 
-This is a read-only scenario calculation.
-
-Reconciliation-created/check-required lots must not generate falsely precise forecast tax. Surface their uncertainty according to the final forecast presentation design.
-
-### Done when
-
-Investment tax forecasting is scenario-based, uses actual FY loss state, and never mutates realized tax state.
-
 ---
 
-## 22. Fix XIRR failure semantics
-
-### Change
-
-Do not emit a meaningful `0%` when XIRR is undefined or the solver fails.
-
-### Impact
-
-A real 0% return is distinguishable from calculation failure.
-
-### Implementation
+## 22. XIRR semantics
 
 Return:
 
@@ -1264,48 +801,43 @@ NON_CONVERGENT
 INVALID_INPUT
 ```
 
-Use nullable value for non-valid results.
+Non-valid:
 
-Propagate status through the Quant Engine, lot/instrument analytics, and Gold consumers rather than fixing only the lowest-level solver.
+```text
+value = NULL
+```
 
-### Done when
+Propagate through math → Quant → Silver → Gold.
 
-All XIRR consumers preserve the distinction between valid zero and failure.
+Never convert failure to meaningful 0%.
 
 ---
 
 ## Final contract changes
 
-Existing Silver changes:
+Existing Silver:
 
 ```text
-f_Investment_Purchase_Data
-+ Purchase_ID
-
-f_Investment_Sale_Data
-+ Sale_ID
-
-f_Investment_Analytics_Lot
-+ Lot_ID
-+ Purchase_ID
-+ Lot_Source_Type
+f_Investment_Purchase_Data + Purchase_ID
+f_Investment_Sale_Data + Sale_ID
+f_Investment_Analytics_Lot + Lot_ID + Purchase_ID + Lot_Source_Type
 ```
 
 New Silver:
 
 ```text
-silver.f_Investment_Realized_Events
-silver.f_Investment_Reconciliation_Events
-silver.f_Tax_Events
-silver.f_Tax_FY_State
+f_Investment_Realized_Events
+f_Investment_Reconciliation_Events
+f_Tax_Events
+f_Tax_FY_State
 ```
 
 New Gold:
 
 ```text
-gold.Tax_Year_Summary
-gold.Tax_Income_Breakdown
-gold.Tax_Reconciliation
+Tax_Year_Summary
+Tax_Income_Breakdown
+Tax_Reconciliation
 ```
 
 Renamed Gold:
@@ -1315,71 +847,11 @@ Tax_Liability_Forecast
 → Investment_Tax_Liability_Forecast
 ```
 
-Do not freeze handwritten total counts here.
-
-After implementation:
-
-```text
-Data Contract Registry = source of truth
-```
-
-for exact Bronze/Silver/Gold inventory.
-
----
-
-## Final financial flow
-
-```text
-CANONICAL PURCHASE
-      ↓
-Purchase_ID
-      ↓
-Lot_ID [PURCHASE]
-      │
-      ├───────────────┐
-      │               │
-      ▼               ▼
-LOT ANALYTICS    RECONCILIATION
-                     │
-                     └─ may create Lot_ID [RECONCILIATION]
-
-CANONICAL SALE
-      ↓
-Sale_ID
-      ↓
-FIFO consumes Lot_ID(s)
-      ↓
-f_Investment_Realized_Events
-      ↓
-f_Tax_Events
-      ↓
-ordered capital-loss set-off
-      ↓
-carry-forward
-      ↓
-f_Tax_FY_State
-      ↓
-┌──────────────┬──────────────────┬──────────────────┐
-▼              ▼                  ▼
-Tax_Year_      Tax_Income_        Tax_
-Summary        Breakdown          Reconciliation
-```
-
-Market/benchmark state remain separate:
-
-```text
-Market Data
-→ broker/current-state reconciliation anchor
-
-Benchmark Data
-→ reference market series
-```
+Exact inventory/counts come from the Data Contract Registry.
 
 ---
 
 ## Explicitly out of scope
-
-Do not build:
 
 ```text
 source-row broker transaction redesign
@@ -1396,33 +868,36 @@ business/profession tax
 foreign-asset reporting
 every Indian asset class
 manual review-workflow system
+tax forecast confidence intervals
 ```
 
 ---
 
-## Financial Domain Freeze completion
+## Financial Domain Implementation Freeze checklist
 
-The domain is frozen when:
-
-1. Canonical purchases/sales have deterministic IDs.
-2. FIFO lots have deterministic Lot_ID and explicit source type.
-3. Lot identity survives partial sales and reconciliation mutations.
-4. Same-day FIFO ordering is deterministic and documented.
-5. Holding periods use one calendar-month utility.
-6. Lot-level realized events are durable and immutable.
-7. Broker/FIFO reconciliation is persisted at lot-mutation grain.
-8. Synthetic reconciliation lots cannot masquerade as tax-ready purchase evidence.
-9. TaxConfig uses Head → Tax Sub-Head mappings.
-10. Tax credits use Subcategory IDs and normalize to non-negative values.
-11. Investment capital gains have one canonical producer.
-12. TaxEvents have deterministic identity and uniqueness.
-13. Non-investment ST/LT capital gains/losses are supported.
-14. The ordinary-income macro rate is generalized.
-15. Non-taxable income stays outside TaxEvents.
-16. Capital-loss set-off uses one explicit priority function.
-17. Carry-forward state is explicit.
-18. FY Tax State reconciles annual calculation.
-19. Three Gold tax marts reconcile to FY Tax State.
-20. Investment tax forecasting uses actual FY state plus hypothetical liquidation without mutating actual tax state.
-21. XIRR failure states propagate explicitly.
-22. Contract inventory is frozen from the implemented registry.
+1. Deterministic canonical Purchase/Sale identity.
+2. Quantity is a defining Purchase/Sale attribute.
+3. Deterministic Lot_ID.
+4. Lot identity survives mutation.
+5. Deterministic same-day FIFO ordering.
+6. Calendar-month holding period with strict `>` LT boundary.
+7. Durable lot-level realized events.
+8. Logical realized-event immutability.
+9. Lot-mutation reconciliation events.
+10. Reconciliation identity excludes Run_ID.
+11. Synthetic reconciliation lots have safe tax semantics.
+12. Head → Tax Sub-Head TaxConfig.
+13. Non-negative tax credits.
+14. Single TaxEvent producer ownership.
+15. Ledger TaxEvents use native UID.
+16. Deterministic TaxEvent identity/uniqueness.
+17. Non-investment ST/LT gains/losses.
+18. General ordinary-income macro rate.
+19. Non-taxable income excluded from TaxEvents.
+20. Ordered capital-loss set-off.
+21. Explicit carry-forward state.
+22. FY Tax State.
+23. Three reconciling Gold tax marts.
+24. Forecast separates precise tax from CHECK_REQUIRED exposure.
+25. Explicit XIRR failure state.
+26. Registry owns exact final inventory.
