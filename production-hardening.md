@@ -1,87 +1,59 @@
-# Architecture & Reproducibility Freeze
+# Architecture & Reproducibility Implementation Freeze
+
+> **Status: FROZEN FOR IMPLEMENTATION**
+>
+> This is the implementation authority for the Architecture & Reproducibility Sprint. New capabilities belong in a future sprint unless required to implement a frozen contract correctly.
 
 ## Goal
 
-Extend the current architecture with better lineage, deterministic analytical identity, and replayability without redesigning the Control Plane, Bronze/Silver/Gold model, recovery model, or orchestration.
-
-This sprint adds:
+Extend the current architecture with:
 
 ```text
 Artifact ↔ Run lineage
-Deterministic analytical IDs
+Deterministic analytical identity
 FIRE / Monte Carlo replayability
-One Reproducibility Envelope across finance, tax, and simulation
+Contract Registry fingerprinting
+One Reproducibility Envelope
 ```
+
+Do not redesign the Control Plane, Bronze/Silver/Gold architecture, recovery model, or orchestration.
 
 ---
 
-## 1. Track artifact lifecycle against runs
+## 1. Artifact lifecycle against runs
 
 ### Change
 
-Extend the current file registry with:
+Extend the file registry:
 
 ```text
-first_seen_run_id
-first_seen_at
-last_seen_run_id
-last_seen_at
-last_changed_run_id
-last_changed_at
-last_synced_run_id
-last_synced_at
+first_seen_run_id / first_seen_at
+last_seen_run_id / last_seen_at
+last_changed_run_id / last_changed_at
+last_synced_run_id / last_synced_at
 ```
-
-### Impact
-
-The registry can directly answer:
-
-```text
-When did this artifact first enter the system?
-Which run last observed it?
-Which run last changed its content?
-Which run last synchronized it to Bronze?
-```
-
-`seen`, `changed`, and `synced` remain separate events.
 
 ### Implementation
 
-During discovery:
-
 ```text
-new artifact
-→ set first_seen + last_seen
-
-unchanged artifact
-→ update last_seen only
-
-changed artifact
-→ update last_seen + last_changed
-
-successful Bronze sync/replay
-→ update last_synced
+new artifact      → first_seen + last_seen
+unchanged         → last_seen only
+changed           → last_seen + last_changed
+successful sync   → last_synced
+PENDING_BRONZE replay without source change → last_synced only
 ```
-
-A `PENDING_BRONZE` replay without source modification updates `last_synced`, not `last_changed`.
 
 ### Done when
 
-The current lifecycle of an artifact can be understood from the registry without reading execution logs.
+Current artifact lifecycle is understandable without execution logs.
 
 ---
 
-## 2. Add historical artifact-run lineage
+## 2. Historical artifact-run lineage
 
 ### Change
 
-Add:
-
-```text
-cp_artifact_run_events
-```
-
-Suggested fields:
+Add `cp_artifact_run_events`:
 
 ```text
 event_id
@@ -96,7 +68,7 @@ new_status
 event_reason
 ```
 
-Recommended event vocabulary:
+Event vocabulary:
 
 ```text
 DISCOVERED
@@ -108,224 +80,157 @@ HEALED
 REMOVED
 ```
 
-### Impact
+### Implementation
 
-The system can answer both:
+`event_id` identifies the operational occurrence. `event_reason` is short explanatory context. Detailed errors/stacks remain in execution logs.
+
+### Done when
+
+Run → artifacts and artifact → runs are directly queryable.
+
+---
+
+## 3. Rename semantics
+
+Pure rename:
 
 ```text
-Run X → which artifacts participated?
-Artifact Y → which runs touched it?
+write RENAMED
+preserve file identity
+migrate path-dependent Bronze/Meta identity
+do not mark content changed
 ```
 
-`event_reason` explains the lifecycle transition without turning this table into another execution log.
+A rename must never create duplicate financial state.
+
+---
+
+## 4. Identity precedence
+
+Freeze:
+
+```text
+stable native identity exists
+→ use it
+
+no stable native identity
+→ generate deterministic canonical analytical identity
+```
 
 Examples:
 
 ```text
-HEALED  → "Bronze partition rebuilt"
-RENAMED → "Path changed; content hash unchanged"
-REMOVED → "Full-replace source no longer discovered"
+Investment instrument → ISIN
+Household transaction → UID
+Canonical purchase → Purchase_ID
+Canonical sale → Sale_ID
+FIFO lot → Lot_ID
+Realized disposal → Realized_Event_ID
+Reconciliation → Reconciliation_Group_ID / Reconciliation_Event_ID
+Tax event → Tax_Event_ID
 ```
 
-### Implementation
-
-`event_id` is the row identity of the operational event and does not need to be a deterministic financial ID.
-
-Write rows only for meaningful lifecycle transitions.
-
-Keep parser errors, stack traces, and detailed debugging in the existing execution logs.
-
-### Done when
-
-Run-to-artifact and artifact-to-run history are directly queryable and lifecycle events are understandable without reading stack traces.
+Do not create unnecessary surrogate IDs.
 
 ---
 
-## 3. Preserve rename semantics
+## 5. Canonical ID Serialization v1
 
-### Change
-
-Record rename history without treating a path change as new financial evidence.
-
-### Impact
-
-Lineage improves without duplicate ingestion or duplicate financial history.
-
-### Implementation
-
-On a pure rename:
+All generated deterministic IDs use one shared serialization contract.
 
 ```text
-write RENAMED event
-preserve file identity
-migrate path-dependent Bronze / Meta identity
-do not mark content changed
+Encoding: UTF-8
+Field order: explicitly defined by each ID contract
+Strings: Unicode NFC; trim outer whitespace; preserve internal whitespace
+Case: preserve unless field domain explicitly defines case-insensitivity
+Null: <NULL>
+Date: YYYY-MM-DD
+Datetime: ISO-8601 using application timezone convention
+Integer: base-10, no unnecessary leading zeros
+Boolean: true / false
+Currency: canonical CURRENCY_ID
+Numeric: canonical decimal notation; no grouping/exponent; strip insignificant trailing zeros; -0 → 0
+Structured serialization: unambiguous field-name + canonical-value representation
 ```
 
-Keep the existing migration across:
+Therefore:
 
 ```text
-Control Plane
-raw payload ownership
-Bronze __file_name__
-DuckDB Meta
+10 = 10.0 = 10.00
+-0 = -0.0 = 0.00 = 0
 ```
 
-### Done when
+Use one stable cryptographic hash policy and namespaces such as:
 
-A rename remains an identity migration and never creates duplicate financial state.
+```text
+PURCHASE
+SALE
+LOT
+REALIZED
+RECON_GROUP
+RECON_EVENT
+TAX
+CONTRACT_REGISTRY
+```
+
+### Identity contract rule
+
+Changing serialization version, defining attributes, field order, namespace, normalization, or hash policy is an **analytical identity contract change**.
 
 ---
 
-## 4. Add deterministic analytical identity
+## 6. Identity is not provenance
 
-### Change
-
-Introduce one shared deterministic-ID mechanism for rebuild-derived financial entities.
-
-The first identity chain is:
-
-```text
-Canonical Purchase
-→ Purchase_ID
-→ Lot_ID
-
-Canonical Sale
-→ Sale_ID
-
-Sale_ID + Lot_ID
-→ Realized_Event_ID
-
-Source_Type + Source_ID + Tax_Sub_Head
-→ Tax_Event_ID
-```
-
-Reconciliation adds:
-
-```text
-Reconciliation_Group_ID
-→ one reconciliation operation
-
-Reconciliation_Event_ID
-→ one affected lot mutation
-```
-
-### Impact
-
-Silver and Gold are fully replaced on every analytical rebuild. Random UUIDs, run IDs, timestamps, or dataframe row positions would therefore destroy stable lineage even when the financial evidence is unchanged.
-
-Deterministic IDs make the rebuilt analytical state referentially stable.
-
-### Implementation
-
-Create one shared utility for:
-
-```text
-Purchase_ID
-Sale_ID
-Lot_ID
-Realized_Event_ID
-Reconciliation_Group_ID
-Reconciliation_Event_ID
-Tax_Event_ID
-```
-
-Use:
-
-```text
-fixed namespace/prefix
-canonical value serialization
-stable cryptographic hash
-```
-
-Example prefixes may be:
-
-```text
-PUR_
-SALE_
-LOT_
-REAL_
-RECON_GRP_
-RECON_
-TAX_
-```
-
-The exact digest length is an implementation choice, but it must have an intentionally chosen collision policy.
-
-### Canonical values
-
-Use stable representations:
-
-```text
-ISO dates
-normalized strings
-canonical numeric/decimal representation
-stable IDs
-```
-
-Do not hash display formatting or arbitrary float string representations.
-
-### Identity is not provenance
-
-Never include volatile execution metadata in deterministic financial identity:
+Never use these in deterministic financial identity:
 
 ```text
 run_id
 run timestamp
-machine hostname
+hostname
 temporary path
 working directory
 process ID
-log path
+log/output path
 ```
 
-Those remain provenance attributes.
-
-### Done when
-
-The same canonical financial evidence rebuilt twice produces the same analytical IDs.
+They remain provenance.
 
 ---
 
-## 5. Keep source and canonical grains separate
+## 7. Keep existing canonical investment grain
 
-### Change
-
-Do not redesign Bronze or preserve every broker order merely to create IDs.
-
-### Impact
-
-The current transformation model intentionally creates canonical aggregated purchase/sale facts before the Quant Engine. The identity layer should identify those entities rather than inventing a new transaction grain.
-
-### Implementation
-
-Keep existing source transformations and canonical aggregation.
-
-Define:
+Do not redesign Bronze or restore source broker-order grain.
 
 ```text
-Purchase_ID
-→ one canonical aggregated row in f_Investment_Purchase_Data
-
-Sale_ID
-→ one canonical aggregated row in f_Investment_Sale_Data
+Purchase_ID → canonical aggregated f_Investment_Purchase_Data row
+Sale_ID     → canonical aggregated f_Investment_Sale_Data row
 ```
 
-Do not call them broker transaction IDs.
-
-Market and benchmark data keep their existing grains and do not receive Lot_ID merely for consistency.
-
-### Done when
-
-Identity hardening does not change the existing financial grain.
+Market and benchmark facts keep their existing grains and do not receive Lot_ID.
 
 ---
 
-## 6. Make FIRE / Monte Carlo runs reproducible
+## 8. Logical immutability under full rebuild
 
-### Change
+Silver/Gold may be physically replaced.
 
-Create a minimal simulation-run context:
+Logical immutability means:
+
+```text
+same reproducible evidence
++ same rules/reference state
++ same implementation contract
+→ same deterministic ID
++ same material attributes
+```
+
+It does **not** require append-only Silver storage.
+
+---
+
+## 9. FIRE / Monte Carlo reproducibility
+
+Persist:
 
 ```text
 simulation_id
@@ -341,130 +246,46 @@ input_fingerprint
 model_fingerprint
 model_implementation_version
 status
-result_fingerprint   # optional
+result_fingerprint  # optional
 ```
 
-### Impact
-
-Historical FIRE simulations become explainable and replayable.
-
-### Implementation
-
-Persist one root seed per simulation and derive deterministic random streams from it.
-
-Do not persist every generated random number.
-
-### Done when
-
-The same inputs, model configuration, implementation version, and seed reproduce the same material result.
+Persist one root seed. Derive deterministic stochastic streams. Do not persist every random draw.
 
 ---
 
-## 7. Define simulation fingerprint scope
-
-### Change
-
-Separate:
+## 10. Fingerprint scope
 
 ```text
 input_fingerprint
+→ canonical financial inputs
+
 model_fingerprint
+→ assumptions + configuration + behavior-controlling parameters
+
 model_implementation_version
+→ algorithm/model implementation compatibility boundary
+
 root_seed
+→ stochastic context
 ```
 
-### Impact
-
-A changed simulation can be diagnosed cleanly:
-
-```text
-financial inputs changed?     → input_fingerprint
-assumptions/config changed?    → model_fingerprint
-implementation changed?        → model_implementation_version
-randomness changed?            → root_seed
-```
-
-### Implementation
-
-`input_fingerprint` includes canonical simulation inputs.
-
-`model_fingerprint` includes:
-
-```text
-simulation assumptions
-model configuration
-behavior-controlling parameters
-```
-
-`model_implementation_version` identifies the relevant model/algorithm implementation version.
-
-Exclude volatile values from fingerprints:
-
-```text
-run timestamp
-run_id
-temporary paths
-machine hostname
-working directory
-output/log paths
-process ID
-```
-
-### Done when
-
-A replay difference can be attributed to input, assumptions, implementation, or seed.
+Exclude volatile execution metadata.
 
 ---
 
-## 8. Persist simulation history in SQLite
+## 11. Simulation persistence
 
-### Change
-
-Add:
+Historical authority:
 
 ```text
 cp_simulation_runs
 ```
 
-### Impact
-
-Simulation provenance follows the existing ownership model: SQLite owns historical operational truth.
-
-### Implementation
-
-Persist the simulation context and link it to:
-
-```text
-pipeline run
-Settings snapshot
-FinancialRules snapshot
-```
-
-Do not store the complete Monte Carlo result distribution in the Control Plane.
-
-### Done when
-
-Historical simulation executions can be inspected and replayed.
-
----
-
-## 9. Project latest simulation context into DuckDB Meta
-
-### Change
-
-Add:
+Latest DuckDB projection:
 
 ```text
 meta.m_Simulation_Run
 ```
-
-### Impact
-
-The latest published FIRE output can be connected to its simulation context from DuckDB.
-
-### Implementation
-
-Keep only the latest successful context needed for inspection.
 
 Preserve:
 
@@ -473,19 +294,41 @@ SQLite → historical authority
 DuckDB Meta → latest analytical projection
 ```
 
-### Done when
+---
 
-The latest FIRE result can be traced to its simulation context.
+## 12. Contract Registry fingerprint
+
+The Data Contract Registry is the inventory SSOT.
+
+Create deterministic:
+
+```text
+Contract_Registry_Fingerprint
+```
+
+from canonical, deterministically sorted contract definitions including material contract attributes such as:
+
+```text
+contract_id
+layer
+physical table
+grain
+producer
+publication order
+schema/contract definition where available
+```
+
+Persist the fingerprint with run/reproducibility metadata.
+
+Do **not** maintain a manual registry version counter.
+
+Exact Bronze/Silver/Gold counts always come from the registry.
 
 ---
 
-## 10. Extend the Reproducibility Envelope to finance and tax
+## 13. Reproducibility Envelope
 
-### Change
-
-Make the new financial-domain contracts part of the same reproducibility invariant.
-
-Important outputs should be explainable by:
+Important outputs are explainable by:
 
 ```text
 source evidence
@@ -493,129 +336,80 @@ run identity
 Settings snapshot
 FinancialRules / TaxConfig snapshot
 Macro FY parameters
+Contract Registry fingerprint
 model/algorithm implementation
-random seed where stochastic
+root seed where stochastic
 ```
 
-Investment/tax lineage should preserve:
+Investment/tax lineage:
 
 ```text
 canonical purchase / sale
 → Lot_ID
-→ realized event
-→ tax event
-→ FY tax state
-→ Gold tax output
-```
-
-### Impact
-
-Finance, tax, and FIRE share one provenance model. No separate tax-lineage platform is required.
-
-### Implementation
-
-Preserve stable IDs through downstream contracts:
-
-```text
-Purchase_ID
-Sale_ID
-Lot_ID
-Realized_Event_ID
-Reconciliation_Group_ID
-Reconciliation_Event_ID
-Tax_Event_ID
-Source_Type
-Source_ID
-FY
+→ Realized_Event_ID
+→ Tax_Event_ID
+→ FY Tax State
+→ Gold
 ```
 
 Deterministic invariant:
 
 ```text
-same evidence
-+ same Settings
-+ same FinancialRules/TaxConfig
-+ same Macro Parameters
-+ same implementation
+same evidence + settings + rules + macro + registry + implementation
 → same material output
 ```
 
-Stochastic invariant:
-
-```text
-same envelope
-+ same seed
-→ same material output
-```
-
-### Done when
-
-Investment realization, reconciliation, tax calculation, and FIRE outputs can all be traced/reproduced through one provenance model.
+Stochastic invariant adds the same root seed.
 
 ---
 
-## 11. Make the contract registry the inventory SSOT
+## 14. Simulation replay numerical contract
 
-### Change
-
-Treat the Data Contract Registry as the only authoritative source for final Bronze/Silver/Gold contract inventory and counts.
-
-### Impact
-
-Release counts cannot drift between code, README, docs, and tests.
-
-### Implementation
-
-Planning documents may describe expected additions, but after implementation:
+Within the supported `model_implementation_version` boundary:
 
 ```text
-registry
-→ exact contract inventory
-→ exact release counts
+discrete outputs → exact equality
+floating scalars → approved abs_tol + rel_tol
+floating arrays/distributions → element-wise approved abs_tol + rel_tol
 ```
 
-Tests should validate the implemented registry rather than manually repeated approximate counts.
+Keep tolerance constants centralized.
 
-Documentation should be updated from the final registry during the documentation pass.
-
-### Done when
-
-There is one authoritative contract inventory.
+Relevant runtime/library versions may be emitted in replay-test diagnostics.
 
 ---
 
 ## Do not build
-
-Do not add:
 
 ```text
 new orchestration framework
 new warehouse layer
 event-sourcing rewrite
 distributed transactions
-cloud infrastructure
 generic lineage platform
 separate tax-lineage platform
-source-row transaction redesign
+source-row broker transaction redesign
 random analytical UUIDs
+manual registry version counter
 persistence of every Monte Carlo draw
 ```
 
 ---
 
-## Architecture freeze completion
+## Architecture Implementation Freeze checklist
 
-The architecture freeze is complete when:
-
-1. Artifact lifecycle pointers are available.
-2. Artifact-run history is queryable with event reasons.
-3. Rename remains an identity migration.
-4. Deterministic analytical IDs are generated by one shared utility.
-5. Identity and provenance are kept separate.
-6. Current canonical investment grains remain unchanged.
-7. FIRE persists seed, fingerprints, and implementation version.
-8. Historical simulation provenance lives in SQLite.
-9. Latest simulation context is projected into DuckDB Meta.
-10. Financial/tax contracts preserve stable lineage IDs.
-11. The Reproducibility Envelope covers finance, tax, and FIRE.
-12. The contract registry is the inventory SSOT.
+1. Artifact lifecycle pointers.
+2. Artifact-run event history with reason.
+3. Rename remains identity migration.
+4. Native identity precedence.
+5. Canonical ID Serialization v1.
+6. Identity/provenance separation.
+7. Existing canonical investment grain preserved.
+8. Logical immutability compatible with full rebuild.
+9. FIRE seed/fingerprints/implementation version persisted.
+10. Historical simulation provenance in SQLite.
+11. Latest simulation context in Meta.
+12. Contract Registry fingerprint.
+13. Finance/tax stable lineage IDs.
+14. One Reproducibility Envelope.
+15. One replay numerical tolerance contract.
