@@ -4,7 +4,14 @@ from PyInstaller.utils.hooks import copy_metadata, collect_data_files, collect_s
 
 PyInstaller.config.CONF['upx_dir'] = r"C:\Tools\_bins_\upx"
 
-datas = [('logo.ico', '.'), ('logo.png', '.'), ('README.md', '.'), ('docs', 'docs')]
+datas = [
+    ('logo.ico', '.'),
+    ('logo.png', '.'),
+    ('README.md', '.'),
+    ('docs', 'docs'),
+    ('src/personal_finance_etl/frontend/commons/docs/assets', 'personal_finance_etl/frontend/commons/docs/assets'),
+]
+datas += collect_data_files('personal_finance_etl')
 binaries = []
 
 hiddenimports = [
@@ -18,29 +25,16 @@ hiddenimports = [
     'pandas',
     'tomllib',
     'rich',
-    'webview',
-    'markdown',
-    'personal_finance_etl.frontend.cli.app',
-    'personal_finance_etl.frontend.app',
-    'personal_finance_etl.frontend.base_tab',
-    'personal_finance_etl.backend.engines.tax_engine',
-    'personal_finance_etl.backend.engines.benchmark_engine',
-    'personal_finance_etl.backend.engines.pipeline.context',
-    'personal_finance_etl.backend.engines.pipeline.processor',
-    'personal_finance_etl.backend.engines.pipeline.postprocessor',
-    'personal_finance_etl.backend.load.database',
-    'personal_finance_etl.backend.utils.helpers',
-    'personal_finance_etl.backend.utils.models',
-    'personal_finance_etl.backend.utils.theme',
-    'personal_finance_etl.backend.utils.logger',
-    'personal_finance_etl.backend.extract.excel_parser',
-    'personal_finance_etl.backend.extract.sqlite_extractor',
-    'personal_finance_etl.backend.transform.core',
-    'personal_finance_etl.backend.transform.stocks',
-    'personal_finance_etl.backend.transform.mutual_funds',
-    'personal_finance_etl.backend.pipeline.etl_pipeline',
-    'personal_finance_etl.backend.config.settings',
+    'duckdb',
+    'fastexcel',
+    'filelock',
+    'numba',
+    'PIL',
 ]
+hiddenimports += collect_submodules('personal_finance_etl')
+hiddenimports += collect_submodules('webview')
+hiddenimports += collect_submodules('markdown.extensions')
+
 
 a = Analysis(
     ['main.py'],
