@@ -2,6 +2,86 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [6.5.3](https://github.com/tks18/personal-finance-etl/compare/6.5.2...6.5.3) (2026-10-05)
+
+
+### CI 🛠
+
+* **.gitattributes:** include mermaid js under vendor ([7b3ec77](https://github.com/tks18/personal-finance-etl/commit/7b3ec77a956ce6081244a9a2d454c92f215d5996))
+
+
+### Build System 🏗
+
+* include mermaid.min.js under build ([1200bf2](https://github.com/tks18/personal-finance-etl/commit/1200bf2783cd0f46776be1b2bcd9e8d52a6c0c36))
+
+
+### Docs 📃
+
+* add code-of-conduct.md ([1ab9e55](https://github.com/tks18/personal-finance-etl/commit/1ab9e55e24d02e6f3f4af47d6f6d4fe08004b3a7))
+* add docs/getting-started/configuration ([a2a7170](https://github.com/tks18/personal-finance-etl/commit/a2a717087d760169877b761951d59b1580f73de0))
+* add docs/getting-started/installation ([7de1aca](https://github.com/tks18/personal-finance-etl/commit/7de1aca813ec7d60d515813bfba0a457da88da01))
+* add docs/getting-started/readme ([4be0e13](https://github.com/tks18/personal-finance-etl/commit/4be0e135c910514d1c13dc3e1462925ca6109f05))
+* add docs/getting-started/running-the-pipeline ([c817cbe](https://github.com/tks18/personal-finance-etl/commit/c817cbe6c74c5f3b35cc586a5c6323ca06a774db))
+* add docs/reference/bronze-data-contracts ([ea43ebb](https://github.com/tks18/personal-finance-etl/commit/ea43ebb4be57dc126cfacc5492d3e74cb28409f1))
+* add docs/reference/glossary ([99efe52](https://github.com/tks18/personal-finance-etl/commit/99efe5217d735c59a1a92588b8059bdb7d2b9f4e))
+* add domain hardening doc ([5569a63](https://github.com/tks18/personal-finance-etl/commit/5569a634da69b343f4688b12a648279d054a021e))
+* add production hardening doc ([e16cd8b](https://github.com/tks18/personal-finance-etl/commit/e16cd8bd60c8c1cecd44910d369902222046f1dd))
+* add qa hardening doc ([60efa55](https://github.com/tks18/personal-finance-etl/commit/60efa5589547e494ff79cd33d1edc25f36ed9fa8))
+* docs/about/readme ([5c959dd](https://github.com/tks18/personal-finance-etl/commit/5c959dde72306767aac1f0ade1c40bbfb4a94c5f))
+* redefine finance hardening to a finite goal ([1889019](https://github.com/tks18/personal-finance-etl/commit/1889019ba1ddc2c19708a0834f001b036fa0d745))
+* redefine production hardening to a finite goal ([929e00f](https://github.com/tks18/personal-finance-etl/commit/929e00f7471e8349c569ff8e16b421608ac2682c))
+* redefine qa hardening to a finite goal ([67aec15](https://github.com/tks18/personal-finance-etl/commit/67aec1532821206253a70c086962f3e0d3afa553))
+* remove ambiguities from finance hardening ([218fb15](https://github.com/tks18/personal-finance-etl/commit/218fb154b08e5eeb66f3cffd1c47b8d29678e05a))
+* remove ambiguities from production hardening ([1e19a29](https://github.com/tks18/personal-finance-etl/commit/1e19a29bd7ce706181e3cc591fcc8463fe822e66))
+* remove ambiguities from qa hardening ([94cfec1](https://github.com/tks18/personal-finance-etl/commit/94cfec189507d3f965e4482512d1277d4e63365c))
+* some minor updations to manifest, other md files ([c6c0e5d](https://github.com/tks18/personal-finance-etl/commit/c6c0e5d470372988eb920e3257857677a5ba552b))
+* update docs/about/about-me ([0bdd169](https://github.com/tks18/personal-finance-etl/commit/0bdd16945a9fb21ed4f18b44df08b47e39349dbe))
+* update docs/about/project ([3b95a9c](https://github.com/tks18/personal-finance-etl/commit/3b95a9c084a1ddfb19fdad35a2707aeb3d367963))
+* update docs/about/roadmap ([ec7abe6](https://github.com/tks18/personal-finance-etl/commit/ec7abe6335847a0d8a38bddf3b3cb53c14acb5fe))
+* update docs/architecture/data-lifecycle ([f4fd8a3](https://github.com/tks18/personal-finance-etl/commit/f4fd8a37cef21730260001b55a96779bee5908f3))
+* update docs/architecture/data-model ([06315ed](https://github.com/tks18/personal-finance-etl/commit/06315edabee0a3b39cc2fdada80f337819ba4236))
+* update docs/architecture/design-decisions ([0c0fc13](https://github.com/tks18/personal-finance-etl/commit/0c0fc13c8fb75144e29053664a79f2599b5db52f))
+* update docs/architecture/readme ([29cef6b](https://github.com/tks18/personal-finance-etl/commit/29cef6b3e24c10c4669426d3945ab2b07b12df3c))
+* update docs/architecture/reliability and recovery ([0de72cb](https://github.com/tks18/personal-finance-etl/commit/0de72cb29b409233285f356bb107368f4679288f))
+* update docs/architecture/system-architecture ([669f4fb](https://github.com/tks18/personal-finance-etl/commit/669f4fb7f86855788abfa216e3ddff128ead6ad2))
+* update docs/architecture/warehouse-architecture ([ddcd07e](https://github.com/tks18/personal-finance-etl/commit/ddcd07e002fa041e005ef72d9fece4e756d1cc95))
+* update docs/configuration/financial-rules ([aaca10f](https://github.com/tks18/personal-finance-etl/commit/aaca10f145d68ce89f2a5d12edda64ee2d77e1ab))
+* update docs/configuration/fire-configuration ([eb39807](https://github.com/tks18/personal-finance-etl/commit/eb3980773ff41a8cf220e524cc8ae740f1a923b6))
+* update docs/developer/adding-asset-pipelines ([21f1191](https://github.com/tks18/personal-finance-etl/commit/21f119152d746dc09b9cd6b9e1d8473b6c0831de))
+* update docs/developer/adding-data-sources ([4d6e2b1](https://github.com/tks18/personal-finance-etl/commit/4d6e2b12496da17fad8335fb80928eba1d640d8c))
+* update docs/developer/development-guide ([a864c2a](https://github.com/tks18/personal-finance-etl/commit/a864c2a8745915a9c7db9ddd1109b5233d729d6b))
+* update docs/developer/readme ([aeabc97](https://github.com/tks18/personal-finance-etl/commit/aeabc973d51532a5faee715ba009c03282a86c11))
+* update docs/finance/financial-model ([fe1de32](https://github.com/tks18/personal-finance-etl/commit/fe1de32a07750d012d061193ac79d7d482b908f2))
+* update docs/finance/fire-methodology ([a4ed476](https://github.com/tks18/personal-finance-etl/commit/a4ed476bbba262359fc54df6e0c72c293751aca5))
+* update docs/finance/investment-analytics ([b44e06a](https://github.com/tks18/personal-finance-etl/commit/b44e06a1913cdf313e61be99273dc6b9b1aab3d0))
+* update docs/finance/metrics-and-methodology ([2ebeeb9](https://github.com/tks18/personal-finance-etl/commit/2ebeeb9856e7ef24335d1c0411f341f218928095))
+* update docs/finance/readme ([0f23123](https://github.com/tks18/personal-finance-etl/commit/0f231231d6f08b79bb898fa679cb8600d7640958))
+* update docs/finance/tax-methodology ([92eb0fa](https://github.com/tks18/personal-finance-etl/commit/92eb0fa75023f9d45cdd1c05f525ba9f64ac90e4))
+* update docs/readme ([f31afab](https://github.com/tks18/personal-finance-etl/commit/f31afabf935b39100ac636c286d557ac5f310abe))
+* update docs/reference/gold-data-contracts ([951b655](https://github.com/tks18/personal-finance-etl/commit/951b655e0fcf8c7fbd7c331f086037f3ab24efee))
+* update docs/reference/meta-data-contracts ([ea7423f](https://github.com/tks18/personal-finance-etl/commit/ea7423fb8985bcc8a1fe9cb181106fae1eedd706))
+* update docs/reference/readme ([2a27fdb](https://github.com/tks18/personal-finance-etl/commit/2a27fdb64d97ab1034f80d1a313ca2949201f8bd))
+* update finance hardening, now more focussed ([a723673](https://github.com/tks18/personal-finance-etl/commit/a723673aa9fc03562bad2075fea10e2ad44eb6ea))
+* update manifest ([4589ee5](https://github.com/tks18/personal-finance-etl/commit/4589ee523ed5e6c6544b640e7528fa1debdabdab))
+* update production hardening ([1505f29](https://github.com/tks18/personal-finance-etl/commit/1505f295730a47877127970dd5ddf5707a6ff40f))
+* update qa hardening ([66cf126](https://github.com/tks18/personal-finance-etl/commit/66cf126c68f2008d0bd83588c15095b7ca9ea2a9))
+
+
+### Bug Fixes 🛠
+
+* **backend/backup:** fix restore not working across drives ([f718363](https://github.com/tks18/personal-finance-etl/commit/f71836386fe6825db10e092c6471859c330f7b9e))
+* **backend/etl_pipeline:** harden the try catch for final close ([f799895](https://github.com/tks18/personal-finance-etl/commit/f7998956e978471dcdc171264101f52914a25da0))
+* **backend/load:** fix backup manager to handle snapshots and restores properly ([254ba19](https://github.com/tks18/personal-finance-etl/commit/254ba195b9c1b1782797510fba16eabb38849531))
+* **backend/utils:** logger: production hardening ([ed367ea](https://github.com/tks18/personal-finance-etl/commit/ed367eabd58c863af973ed7b595d8838874780ba))
+* **frontend/commons:** fix base readme not rendering which is not in docs folder context, harden mermaid rendering ([b8948a3](https://github.com/tks18/personal-finance-etl/commit/b8948a35e4d106fc49317396e9f74bb0c15d8521))
+
+
+### Features 🔥
+
+* **frontend/commons:** doc_renderer: include mermaid.js in the offline build ([d00c717](https://github.com/tks18/personal-finance-etl/commit/d00c717aca5fb6db4d998a141a16ec318862755b))
+* **frontend/commons:** include svg-pan-zoom for better mermaid experience ([81f1f0b](https://github.com/tks18/personal-finance-etl/commit/81f1f0b933c1b3e47a8030fdd2eaad3e06b64b3f))
+* **frontend/docs:** mermaid diagrams get pan, zoom features with full modal zoom ([52e0d66](https://github.com/tks18/personal-finance-etl/commit/52e0d66c16f48e9cb78a2c3ba605359cfe23a386))
+
 ### [6.5.2](https://github.com/tks18/personal-finance-etl/compare/6.5.1...6.5.2) (2026-09-26)
 
 
