@@ -39,6 +39,23 @@ class DocsRenderer:
             print("Bundled Mermaid runtime could not be loaded.")
             return ""
 
+    @staticmethod
+    def _load_svg_pan_zoom_js() -> str:
+        """Load the bundled svg-pan-zoom runtime."""
+
+        try:
+            asset = (
+                files("personal_finance_etl.frontend.commons.docs")
+                .joinpath("assets")
+                .joinpath("svg-pan-zoom")
+                .joinpath("svg-pan-zoom.min.js")
+            )
+            return asset.read_text(encoding="utf-8")
+
+        except (FileNotFoundError, OSError):
+            print("Bundled svg-pan-zoom runtime could not be loaded.")
+            return ""
+
     def build_html_app(self) -> str:
         """Read all markdown docs and compile them into a single HTML web app string."""
         docs_to_render: dict[str, dict[str, str]] = {}
@@ -46,6 +63,7 @@ class DocsRenderer:
 
         docs_dir = self.catalog.docs_dir
         mermaid_js = self._load_mermaid_js()
+        svg_pan_zoom_js = self._load_svg_pan_zoom_js()
 
         for entry in self.catalog.get_all_docs():
             full_path = os.path.normpath(os.path.join(docs_dir, entry.path))
@@ -133,6 +151,9 @@ class DocsRenderer:
             <title>Guides & About</title>
             <script>
               {mermaid_js}
+            </script>
+            <script>
+              {svg_pan_zoom_js}
             </script>
             <style>
                 :root {{
@@ -366,6 +387,124 @@ class DocsRenderer:
                 th {{ background-color: var(--bg-sidebar); }}
                 img {{ max-width: 100%; height: auto; }}
                 hr {{ border: 0; border-top: 1px solid var(--border); margin: 2em 0; }}
+
+                /* Mermaid diagram interactive container */
+                .mermaid-wrapper {{
+                    position: relative;
+                    background: #0d1117;
+                    border: 1px solid var(--border);
+                    border-radius: 8px;
+                    margin: 1.5em 0;
+                    overflow: hidden;
+                }}
+                .mermaid-diagram {{
+                    width: 100%;
+                    height: 420px;
+                    cursor: grab;
+                    display: block;
+                    position: relative;
+                }}
+                .mermaid-diagram:active {{ cursor: grabbing; }}
+                /* The inner .mermaid div mermaid renders into must fill the viewport */
+                .mermaid-diagram .mermaid,
+                #diagram-modal-content .mermaid {{
+                    width: 100%;
+                    height: 100%;
+                    display: block;
+                }}
+                /* Ensure the SVG mermaid outputs also fills the space */
+                .mermaid-diagram svg,
+                #diagram-modal-content svg {{
+                    display: block;
+                    width: 100% !important;
+                    height: 100% !important;
+                    max-width: none !important;
+                }}
+                .mermaid-controls {{
+                    position: absolute;
+                    bottom: 10px;
+                    right: 10px;
+                    display: flex;
+                    gap: 6px;
+                    z-index: 10;
+                }}
+                .mermaid-btn {{
+                    background: rgba(15,23,42,0.85);
+                    border: 1px solid var(--border);
+                    color: var(--text-dim);
+                    border-radius: 6px;
+                    width: 32px;
+                    height: 32px;
+                    font-size: 1rem;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    transition: all 0.15s;
+                    backdrop-filter: blur(4px);
+                }}
+                .mermaid-btn:hover {{ background: rgba(37,99,235,0.3); color: #60A5FA; border-color: #60A5FA; }}
+                .mermaid-hint {{
+                    position: absolute;
+                    top: 8px;
+                    left: 10px;
+                    font-size: 0.75em;
+                    color: var(--text-dim);
+                    opacity: 0.7;
+                    pointer-events: none;
+                }}
+
+                /* Fullscreen modal */
+                #diagram-modal {{
+                    display: none;
+                    position: fixed;
+                    inset: 0;
+                    background: rgba(0,0,0,0.85);
+                    z-index: 9999;
+                    align-items: center;
+                    justify-content: center;
+                }}
+                #diagram-modal.open {{ display: flex; }}
+                #diagram-modal-inner {{
+                    background: #0d1117;
+                    border: 1px solid var(--border);
+                    border-radius: 12px;
+                    width: 90vw;
+                    height: 88vh;
+                    position: relative;
+                    overflow: hidden;
+                }}
+                #diagram-modal-content {{
+                    width: 100%;
+                    height: 100%;
+                    cursor: grab;
+                    display: block;
+                    position: relative;
+                }}
+                #diagram-modal-content:active {{ cursor: grabbing; }}
+                .modal-controls {{
+                    bottom: 16px;
+                    right: 16px;
+                    gap: 8px;
+                }}
+                #modal-close {{
+                    position: absolute;
+                    top: 12px;
+                    right: 12px;
+                    background: rgba(15,23,42,0.9);
+                    border: 1px solid var(--border);
+                    color: var(--text-main);
+                    border-radius: 6px;
+                    width: 36px;
+                    height: 36px;
+                    font-size: 1.2rem;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    z-index: 10;
+                }}
+                #modal-close:hover {{ background: rgba(220,38,38,0.3); border-color: #f87171; color: #f87171; }}
             </style>
         </head>
         <body>
@@ -382,6 +521,19 @@ class DocsRenderer:
                 <div id="right-sidebar">
                     <div class="sidebar-header">📑 On This Page</div>
                     <div id="toc-container"></div>
+                </div>
+            </div>
+
+            <!-- Fullscreen diagram modal -->
+            <div id="diagram-modal">
+                <div id="diagram-modal-inner">
+                    <button id="modal-close" onclick="closeDiagramModal()" title="Close (Esc)">✕</button>
+                    <div id="diagram-modal-content"></div>
+                    <div class="mermaid-controls modal-controls">
+                        <button class="mermaid-btn" title="Zoom in" onclick="_modalPz && _modalPz.zoomIn()">+</button>
+                        <button class="mermaid-btn" title="Zoom out" onclick="_modalPz && _modalPz.zoomOut()">−</button>
+                        <button class="mermaid-btn" title="Reset" onclick="_modalPz && (_modalPz.reset(), _modalPz.fit(), _modalPz.center())">⟳</button>
+                    </div>
                 </div>
             </div>
 
@@ -435,10 +587,39 @@ class DocsRenderer:
                         const mermaidCodes = document.querySelectorAll('code.language-mermaid');
                         mermaidCodes.forEach(codeBlock => {{
                             const pre = codeBlock.parentElement;
-                            const div = document.createElement('div');
-                            div.className = 'mermaid';
-                            div.textContent = codeBlock.textContent;
-                            pre.replaceWith(div);
+                            const source = codeBlock.textContent || '';
+
+                            // Create the interactive wrapper
+                            const wrapper = document.createElement('div');
+                            wrapper.className = 'mermaid-wrapper';
+
+                            const hint = document.createElement('div');
+                            hint.className = 'mermaid-hint';
+                            hint.textContent = 'Scroll to zoom · Drag to pan · Double-click to fullscreen';
+                            wrapper.appendChild(hint);
+
+                            const diagramDiv = document.createElement('div');
+                            diagramDiv.className = 'mermaid-diagram';
+
+                            const mermaidDiv = document.createElement('div');
+                            mermaidDiv.className = 'mermaid';
+                            mermaidDiv.textContent = source;
+                            diagramDiv.appendChild(mermaidDiv);
+                            wrapper.appendChild(diagramDiv);
+
+                            // Controls
+                            const controls = document.createElement('div');
+                            controls.className = 'mermaid-controls';
+                            controls.innerHTML = `
+                                <button class="mermaid-btn" title="Zoom in" onclick="this.closest('.mermaid-wrapper')._pz && this.closest('.mermaid-wrapper')._pz.zoomIn()">+</button>
+                                <button class="mermaid-btn" title="Zoom out" onclick="this.closest('.mermaid-wrapper')._pz && this.closest('.mermaid-wrapper')._pz.zoomOut()">−</button>
+                                <button class="mermaid-btn" title="Reset" onclick="this.closest('.mermaid-wrapper')._pz && this.closest('.mermaid-wrapper')._pz.resetZoom()">⟳</button>
+                                <button class="mermaid-btn" title="Fullscreen" onclick="openDiagramModal(this.closest('.mermaid-wrapper')._svgSource)">⛶</button>
+                            `;
+                            wrapper.appendChild(controls);
+
+                            wrapper._svgSource = source;
+                            pre.replaceWith(wrapper);
                         }});
                     }}
                     
@@ -464,10 +645,128 @@ class DocsRenderer:
                     }});
                     
                     if (mermaidAvailable) {{
-                        mermaid.run().catch(err => console.error('Mermaid render failed:', err));
+                        mermaid.run().then(() => {{
+                            // After mermaid renders SVGs, attach svg-pan-zoom to each
+                            document.querySelectorAll('.mermaid-diagram').forEach(diagramDiv => {{
+                                const svg = diagramDiv.querySelector('svg');
+                                if (!svg || !window.svgPanZoom) return;
+
+                                // Ensure viewBox exists BEFORE stripping w/h attributes.
+                                // Without this, removing width/height causes the SVG to
+                                // collapse to 0×0 and svg-pan-zoom has no geometry to work with.
+                                if (!svg.getAttribute('viewBox')) {{
+                                    const w = parseFloat(svg.getAttribute('width')) || svg.getBoundingClientRect().width || 800;
+                                    const h = parseFloat(svg.getAttribute('height')) || svg.getBoundingClientRect().height || 600;
+                                    svg.setAttribute('viewBox', `0 0 ${{w}} ${{h}}`);
+                                }}
+
+                                svg.setAttribute('width', '100%');
+                                svg.setAttribute('height', '100%');
+                                svg.style.width = '100%';
+                                svg.style.height = '100%';
+                                svg.style.maxWidth = 'none';
+
+                                const pz = svgPanZoom(svg, {{
+                                    zoomEnabled: true,
+                                    panEnabled: true,
+                                    controlIconsEnabled: false,
+                                    fit: true,
+                                    center: true,
+                                    contain: false,
+                                    minZoom: 0.1,
+                                    maxZoom: 15,
+                                    mouseWheelZoomEnabled: true,
+                                }});
+
+                                const wrapper = diagramDiv.closest('.mermaid-wrapper');
+                                if (wrapper) wrapper._pz = pz;
+
+                                // Double-click to fullscreen
+                                diagramDiv.addEventListener('dblclick', () => {{
+                                    const svgSource = wrapper && wrapper._svgSource;
+                                    if (svgSource) openDiagramModal(svgSource);
+                                }});
+                            }});
+                        }}).catch(err => console.error('Mermaid render failed:', err));
                     }}
                     buildTableOfContents();
                 }}
+
+                let _modalPz = null;
+
+                function openDiagramModal(svgSource) {{
+                    const modal = document.getElementById('diagram-modal');
+                    const content = document.getElementById('diagram-modal-content');
+                    content.innerHTML = '';
+
+                    const tempDiv = document.createElement('div');
+                    tempDiv.className = 'mermaid';
+                    tempDiv.textContent = svgSource;
+                    tempDiv.style.width = '100%';
+                    tempDiv.style.height = '100%';
+                    content.appendChild(tempDiv);
+
+                    modal.classList.add('open');
+
+                    mermaid.run({{ nodes: [tempDiv] }}).then(() => {{
+                        const svg = content.querySelector('svg');
+                        if (svg && window.svgPanZoom) {{
+                            if (!svg.getAttribute('viewBox')) {{
+                                const w = parseFloat(svg.getAttribute('width')) || svg.getBoundingClientRect().width || 1000;
+                                const h = parseFloat(svg.getAttribute('height')) || svg.getBoundingClientRect().height || 800;
+                                svg.setAttribute('viewBox', `0 0 ${{w}} ${{h}}`);
+                            }}
+
+                            svg.setAttribute('width', '100%');
+                            svg.setAttribute('height', '100%');
+                            svg.style.width = '100%';
+                            svg.style.height = '100%';
+                            svg.style.maxWidth = 'none';
+
+                            _modalPz = svgPanZoom(svg, {{
+                                zoomEnabled: true,
+                                panEnabled: true,
+                                controlIconsEnabled: false,
+                                fit: true,
+                                center: true,
+                                contain: false,
+                                minZoom: 0.1,
+                                maxZoom: 20,
+                                mouseWheelZoomEnabled: true,
+                            }});
+
+                            requestAnimationFrame(() => {{
+                                if (_modalPz) {{
+                                    _modalPz.resize();
+                                    _modalPz.fit();
+                                    _modalPz.center();
+                                }}
+                            }});
+                            setTimeout(() => {{
+                                if (_modalPz) {{
+                                    _modalPz.resize();
+                                    _modalPz.fit();
+                                    _modalPz.center();
+                                }}
+                            }}, 100);
+                        }}
+                    }}).catch(err => console.error('Modal mermaid render failed:', err));
+                }}
+
+                function closeDiagramModal() {{
+                    const modal = document.getElementById('diagram-modal');
+                    modal.classList.remove('open');
+                    if (_modalPz) {{ _modalPz.destroy(); _modalPz = null; }}
+                    document.getElementById('diagram-modal-content').innerHTML = '';
+                }}
+
+                // Close modal on Escape key or backdrop click
+                document.addEventListener('keydown', e => {{ if (e.key === 'Escape') closeDiagramModal(); }});
+                document.getElementById('diagram-modal').addEventListener('click', e => {{
+                    if (e.target === document.getElementById('diagram-modal')) closeDiagramModal();
+                }});
+
+
 
                 function buildTableOfContents() {{
                     const tocContainer = document.getElementById('toc-container');
