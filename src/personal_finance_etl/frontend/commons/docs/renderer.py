@@ -35,7 +35,16 @@ class DocsRenderer:
             )
             return asset.read_text(encoding="utf-8")
 
-        except (FileNotFoundError, OSError):
+        except Exception:
+            fallback = resource_path(
+                "personal_finance_etl/frontend/commons/docs/assets/mermaid/mermaid.min.js"
+            )
+            if os.path.exists(fallback):
+                try:
+                    with open(fallback, encoding="utf-8") as f:
+                        return f.read()
+                except OSError:
+                    pass
             print("Bundled Mermaid runtime could not be loaded.")
             return ""
 
@@ -52,7 +61,16 @@ class DocsRenderer:
             )
             return asset.read_text(encoding="utf-8")
 
-        except (FileNotFoundError, OSError):
+        except Exception:
+            fallback = resource_path(
+                "personal_finance_etl/frontend/commons/docs/assets/svg-pan-zoom/svg-pan-zoom.min.js"
+            )
+            if os.path.exists(fallback):
+                try:
+                    with open(fallback, encoding="utf-8") as f:
+                        return f.read()
+                except OSError:
+                    pass
             print("Bundled svg-pan-zoom runtime could not be loaded.")
             return ""
 
