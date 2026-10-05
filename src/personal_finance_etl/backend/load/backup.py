@@ -182,10 +182,14 @@ class SystemBackupManager:
                         # Install only files belonging to this snapshot. SQLite snapshots
                         # are consolidated by sqlite3.backup(), so no SQLite sidecars are
                         # expected in the archive.
+                        # Use shutil.move() instead of os.replace() so this works across
+                        # drive letters (e.g. temp on C:\ → outputs on D:\).
                         for name in restore_names:
                             src = os.path.join(temp_extract_dir, name)
                             dst = os.path.join(self.base_path, name)
-                            os.replace(src, dst)
+                            if os.path.exists(dst):
+                                os.remove(dst)
+                            shutil.move(src, dst)
 
                         # Restore succeeded: discard the old recovery unit.
                         for _, backup_path in backed_up_files:
