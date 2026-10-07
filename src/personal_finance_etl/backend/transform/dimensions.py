@@ -441,7 +441,11 @@ def transform_d_asset_subcategory(
     return df_transformed
 
 
-def transform_d_currency(df_lazy: pl.LazyFrame, column_mapping: dict[str, str]) -> pl.LazyFrame:
+def transform_d_currency(
+    df_lazy: pl.LazyFrame,
+    column_mapping: dict[str, str],
+    mapping_lazy: pl.LazyFrame | None = None,
+) -> pl.LazyFrame:
     """Executes the PQ logic for the Currency Master table."""
 
     df_transformed = (
@@ -471,19 +475,35 @@ def transform_d_currency(df_lazy: pl.LazyFrame, column_mapping: dict[str, str]) 
         )
     )
 
+    if mapping_lazy is not None:
+        mapping_lazy = mapping_lazy.select(
+            ["UID", "Target_Currency_Code", "yF_Ticker", "Is_Active"]
+        )
+        if "Is_Active" in mapping_lazy.collect_schema().names():
+            mapping_lazy = mapping_lazy.with_columns(
+                pl.col("Is_Active").cast(pl.Boolean).fill_null(False)
+            )
+        df_transformed = df_transformed.join(mapping_lazy, on="UID", how="left")
+    else:
+        df_transformed = df_transformed.with_columns(
+            pl.lit(None).cast(pl.String).alias("Target_Currency_Code"),
+            pl.lit(None).cast(pl.String).alias("yF_Ticker"),
+            pl.lit(False).alias("Is_Active"),
+        )
+
     return df_transformed
 
 
 def transform_d_investment_benchmark_master(raw_data: pl.LazyFrame) -> pl.LazyFrame:
     """Executes the PQ logic for the Benchmark Master table."""
-    return raw_data.select(
+    return raw_data.rename({"Currency": "CURRENCY_ID"}).select(
         [
             "__file_name__",
             "__folder_path__",
             "ID",
             "Benchmark_Name",
             "yF_Ticker",
-            "Currency",
+            "CURRENCY_ID",
         ]
     )
 
