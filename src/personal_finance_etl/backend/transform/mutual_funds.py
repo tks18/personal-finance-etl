@@ -43,6 +43,7 @@ def get_stg_mf_market_data(
             [
                 "__file_name__",
                 "__folder_path__",
+                "FILE_CATEGORY",
                 "Month Date",
                 "Scheme Name",
                 "AMC",
@@ -77,6 +78,7 @@ def get_stg_mf_market_data_ref(stg_mf_market_data_lazy: pl.LazyFrame) -> pl.Lazy
             [
                 "__file_name__",
                 "__folder_path__",
+                "FILE_CATEGORY",
                 pl.col("Month Date").alias("Date"),
                 "ISIN",
                 pl.col("Scheme Name").alias("Instrument Name"),
@@ -120,6 +122,7 @@ def get_base_mf_transactions(raw_data: pl.LazyFrame) -> pl.LazyFrame:
         [
             "__file_name__",
             "__folder_path__",
+            "FILE_CATEGORY",
             "Month Date",
             "Scheme Name",
             "Transaction Type",

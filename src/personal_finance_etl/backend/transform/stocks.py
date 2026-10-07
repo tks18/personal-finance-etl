@@ -72,6 +72,7 @@ def get_stg_stock_market_data(raw_data: pl.LazyFrame, default_currency_id: str) 
             [
                 "__file_name__",
                 "__folder_path__",
+                "FILE_CATEGORY",
                 "Month Date",
                 "Stock name",
                 "ISIN",
@@ -106,6 +107,7 @@ def get_stg_stock_market_data_ref(stg_stock_market_data_lazy: pl.LazyFrame) -> p
             [
                 "__file_name__",
                 "__folder_path__",
+                "FILE_CATEGORY",
                 pl.col("Month Date").alias("Date"),
                 "ISIN",
                 pl.col("Stock name").alias("Instrument Name"),
@@ -144,6 +146,7 @@ def get_base_stock_transactions(raw_data: pl.LazyFrame) -> pl.LazyFrame:
             [
                 "__file_name__",
                 "__folder_path__",
+                "FILE_CATEGORY",
                 "Stock name",
                 "Symbol",
                 "ISIN",
@@ -211,12 +214,12 @@ def get_stg_stock_master_ref(
 
     df_grouped = (
         stg_stock_market_data_lazy
-        # SUMMARIZE equivalent (distinct)
         .select(
             [
                 "ISIN",
                 pl.col("Stock name").alias("INSTRUMENT_NAME"),
                 pl.col("STOCKS_CLASS").alias("INSTRUMENT_CLASS"),
+                "CURRENCY_ID",
             ]
         )
         .unique()
