@@ -72,7 +72,7 @@ class BenchmarkTransformer:
                 pl.col("ID").forward_fill().backward_fill(),
                 pl.col("Benchmark_Name").forward_fill().backward_fill(),
                 pl.col("yF_Ticker").fill_null(pl.lit(ticker)),
-                pl.col("Currency").forward_fill().backward_fill(),
+                pl.col("CURRENCY_ID").forward_fill().backward_fill(),
             )
 
             transformed_dfs.append(df_filled)
