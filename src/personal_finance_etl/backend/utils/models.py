@@ -56,6 +56,10 @@ class TaxLot:
     price: float
     bm_buy: float | None
     shadow_qty: float
+    price_local: float = 0.0
+    fx_rate_buy: float = 1.0
+    currency_id: str = "INR_INR"
+    bm_buy_local: float | None = None
 
 
 @dataclass
