@@ -10,6 +10,7 @@ class CashflowRecord(BaseModel):
     model_config = ConfigDict(strict=True, populate_by_name=True)
     date: datetime.date
     amount: float
+    amount_local: float = 0.0
 
 
 class TerminalValueRecord(BaseModel):
@@ -19,6 +20,8 @@ class TerminalValueRecord(BaseModel):
     val: float = 0.0
     shadow_val: float = 0.0
     after_tax_val: float = 0.0
+    val_local: float = 0.0
+    shadow_val_local: float = 0.0
 
 
 class RealizedEventRecord(BaseModel):
@@ -43,6 +46,9 @@ class ISINTags(BaseModel):
     instrument_type: str = "Unknown"
     sector: str = "Unknown"
     industry: str = "Unknown"
+    geo: str = "Unknown"
+    country: str = "Unknown"
+    currency: str = "INR_INR"
 
 
 class SnapshotRecord(BaseModel):
@@ -52,6 +58,7 @@ class SnapshotRecord(BaseModel):
 
     Closing_Date: datetime.date
     ISIN: str
+    CURRENCY_ID: str
     BENCHMARK_ID: str | None
     TAX_TYPE: str
     TAX_SUBTYPE: str
@@ -77,11 +84,16 @@ class SnapshotRecord(BaseModel):
     BM_Market_Price: float
     Lot_BM_Return: float = 0.0
     Lot_BM_CAGR: float
+    Lot_BM_CAGR_Local: float = 0.0
     BM_CAGR: float
     BM_XIRR: float
+    BM_XIRR_Local: float = 0.0
     Active_Return: float
+    Active_Return_Local: float = 0.0
     Lot_Alpha: float
     Is_Lagging_Benchmark: bool
+    XIRR_Local: float = 0.0
+    FX_XIRR_Impact: float = 0.0
 
     # Drawdown
     Max_Drawdown: float = 0.0
@@ -99,6 +111,17 @@ class SnapshotRecord(BaseModel):
     After_Tax_Close_Value: float
     Dietz_Day_Weight: float
     Outperforming_Lot_Ratio: float = 0.0
+    Buy_Value_Local: float = 0.0
+    Close_Value_Local: float = 0.0
+    Asset_PnL: float = 0.0
+    Forex_PnL: float = 0.0
+    Forex_Contribution_Pct: float = 0.0
+    Lot_CAGR_Local: float = 0.0
+    Absolute_Return_Local: float = 0.0
+    Asset_Return_Pct: float = 0.0
+    Forex_Return_Pct: float = 0.0
+    Blended_FX_Buy_Rate: float = 0.0
+    Currency_Appreciation_Pct: float = 0.0
 
 
 class ISINProcessResult(BaseModel):
