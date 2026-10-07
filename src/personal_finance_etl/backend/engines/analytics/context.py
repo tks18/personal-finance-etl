@@ -22,6 +22,7 @@ class AnalyticsContextManager:
         df_i: pl.DataFrame,
         df_b: pl.DataFrame,
         df_t: pl.DataFrame,
+        df_fx: pl.DataFrame,
         start_date: date | None,
         end_date: date | None,
         rules: FinancialRules | None,
@@ -35,7 +36,7 @@ class AnalyticsContextManager:
             raise ValueError("Financial rules must be provided")
 
         ctx = RunContext.from_dataframes(
-            df_p, df_s, df_m, df_i, df_b, df_t, rules, start_date, end_date
+            df_p, df_s, df_m, df_i, df_b, df_t, rules, df_fx, start_date, end_date
         )
 
         if self.status_queue:
