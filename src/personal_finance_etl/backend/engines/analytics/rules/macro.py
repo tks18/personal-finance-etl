@@ -28,6 +28,10 @@ def get_ltcg_threshold(tax_type: str, tax_subtype: str, rules: FinancialRules | 
     tt = tax_type.strip().lower()
     tst = tax_subtype.strip().lower()
 
+    # Foreign equities are treated as unlisted
+    if tt == "equity" and tst in ("us_listed", "us_stocks", "foreign"):
+        tst = "unlisted"
+
     thresholds = (
         rules.assumptions.tax.ltcg_thresholds if rules and hasattr(rules, "assumptions") else {}
     )
@@ -112,7 +116,10 @@ class FYMacroParametersTable:
         return None
 
     _CLASSIFICATION_RULES: dict[str, Callable[[str, dict[str, Any]], tuple[str, str]]] = {
-        "equity": lambda tst, _: ("equity", "unlisted" if tst == "unlisted" else "listed"),
+        "equity": lambda tst, _: (
+            "equity",
+            "unlisted" if tst in ("unlisted", "us_listed", "us_stocks", "foreign") else "listed",
+        ),
         "reit": lambda tst, _: ("reit", "unlisted" if tst == "unlisted" else "listed"),
         "invit": lambda tst, _: ("invit", "unlisted" if tst == "unlisted" else "listed"),
         "gold": lambda tst, _: ("gold", ""),
