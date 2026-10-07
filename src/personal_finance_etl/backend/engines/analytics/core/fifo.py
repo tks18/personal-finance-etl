@@ -22,14 +22,40 @@ class FIFOPortfolio:
         return list(self._active_lots)
 
     def buy(
-        self, buy_date: date, qty: float, price: float, shadow_qty: float, bm_price: float
+        self,
+        buy_date: date,
+        qty: float,
+        price: float,
+        shadow_qty: float,
+        bm_price: float,
+        price_local: float = 0.0,
+        fx_rate_buy: float = 1.0,
+        currency_id: str = "INR_INR",
+        bm_buy_local: float | None = None,
     ) -> None:
         """Register a new buy lot."""
         self._active_lots.append(
-            TaxLot(date=buy_date, qty=qty, price=price, shadow_qty=shadow_qty, bm_buy=bm_price)
+            TaxLot(
+                date=buy_date,
+                qty=qty,
+                price=price,
+                shadow_qty=shadow_qty,
+                bm_buy=bm_price,
+                price_local=price_local,
+                fx_rate_buy=fx_rate_buy,
+                currency_id=currency_id,
+                bm_buy_local=bm_buy_local,
+            )
         )
 
-    def sell(self, sell_date: date, qty: float, price: float) -> list[dict[str, Any]]:
+    def sell(
+        self,
+        sell_date: date,
+        qty: float,
+        price: float,
+        price_local: float = 0.0,
+        fx_rate_sell: float = 1.0,
+    ) -> list[dict[str, Any]]:
         """Process a sale via FIFO and return the realized gain events."""
         rem = qty
         realized_events: list[dict[str, Any]] = []
@@ -49,8 +75,16 @@ class FIFOPortfolio:
                     f"[QUANT:WARN] Tax lot acquired on {lbd} has zero-cost basis! PNL will be 0."
                 )
                 pnl = 0.0
+                asset_pnl_local = 0.0
+                forex_pnl = 0.0
             else:
                 pnl = (price - lot.price) * consumed
+                if lot.currency_id and lot.currency_id != "INR_INR":
+                    asset_pnl_local = (price_local - lot.price_local) * consumed
+                    forex_pnl = (lot.price_local * (fx_rate_sell - lot.fx_rate_buy)) * consumed
+                else:
+                    asset_pnl_local = pnl
+                    forex_pnl = 0.0
 
             realized_events.append(
                 {
@@ -59,6 +93,9 @@ class FIFOPortfolio:
                     "gain_type": ht_sale,
                     "is_loss": pnl < 0,
                     "tax_type": self.tax_type.strip().lower(),
+                    "asset_pnl_local": asset_pnl_local,
+                    "forex_pnl": forex_pnl,
+                    "currency_id": lot.currency_id,
                 }
             )
 
@@ -75,6 +112,10 @@ class FIFOPortfolio:
                     price=lot.price,
                     shadow_qty=new_shadow_qty,
                     bm_buy=lot.bm_buy,
+                    price_local=lot.price_local,
+                    fx_rate_buy=lot.fx_rate_buy,
+                    currency_id=lot.currency_id,
+                    bm_buy_local=lot.bm_buy_local,
                 )
                 rem = 0
 
@@ -135,6 +176,10 @@ class FIFOPortfolio:
                         price=lot.price,
                         shadow_qty=new_shadow_qty,
                         bm_buy=lot.bm_buy,
+                        price_local=lot.price_local,
+                        fx_rate_buy=lot.fx_rate_buy,
+                        currency_id=lot.currency_id,
+                        bm_buy_local=lot.bm_buy_local,
                     )
                     diff = 0
         return cf
@@ -162,4 +207,8 @@ class FIFOPortfolio:
                     price=lot.price * r,
                     shadow_qty=lot.shadow_qty,
                     bm_buy=lot.bm_buy,
+                    price_local=lot.price_local * r if lot.price_local else 0.0,
+                    fx_rate_buy=lot.fx_rate_buy,
+                    currency_id=lot.currency_id,
+                    bm_buy_local=lot.bm_buy_local,
                 )
