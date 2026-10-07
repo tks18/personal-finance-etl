@@ -399,6 +399,33 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
         "InvestmentQuantEngine",
         260,
     ),
+    DataContract(
+        "df_f_investment_analytics_geo",
+        "gold",
+        "gold.Investment_By_Geo",
+        "Investments",
+        "Date-Geo",
+        "InvestmentQuantEngine",
+        270,
+    ),
+    DataContract(
+        "df_f_investment_analytics_country",
+        "gold",
+        "gold.Investment_By_Country",
+        "Investments",
+        "Date-Country",
+        "InvestmentQuantEngine",
+        280,
+    ),
+    DataContract(
+        "df_f_investment_analytics_currency",
+        "gold",
+        "gold.Investment_By_Currency",
+        "Investments",
+        "Date-Currency",
+        "InvestmentQuantEngine",
+        290,
+    ),
 ]
 
 
@@ -451,8 +478,8 @@ def validate_registry() -> None:
     if silver_count != 21:
         raise ValueError(f"Expected 21 Silver contracts, found {silver_count}")
 
-    if gold_count != 17:
-        raise ValueError(f"Expected 17 Gold contracts, found {gold_count}")
+    if gold_count != 20:
+        raise ValueError(f"Expected 20 Gold contracts, found {gold_count}")
 
     bronze_tables: set[str] = set()
     for contract in BRONZE_CONTRACT_REGISTRY:
