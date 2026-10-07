@@ -8,6 +8,7 @@ import polars as pl
 from personal_finance_etl.backend.config.settings import Settings
 from personal_finance_etl.backend.extract.csv_extractor import (
     extract_benchmark_master_raw,
+    extract_currency_mapping_raw,
     extract_macro_parameters_raw,
     extract_opening_balances_raw,
     extract_stg_benchmark_mapping,
@@ -18,6 +19,7 @@ from personal_finance_etl.backend.extract.excel_extractor import (
     extract_mf_transactions_raw,
     extract_stock_market_data_raw,
     extract_stock_transactions_raw,
+    extract_us_stock_transactions_raw,
 )
 from personal_finance_etl.backend.extract.sqlite_extractor import SQLiteExtractor
 from personal_finance_etl.backend.load.control_plane import ControlPlane
@@ -124,13 +126,23 @@ class DataExtractor:
         raw_macro_parameters = get_csv_lazy(
             self.cfg.MACRO_PARAMETERS_CSV_PATH, extract_macro_parameters_raw, "macro_parameters"
         )
+        currency_mapping_raw = get_csv_lazy(
+            self.cfg.CURRENCY_MAPPING_CSV_PATH, extract_currency_mapping_raw, "currency_mapping"
+        )
 
         mf_holdings = pending_files.get("mf_holdings", [])
         mf_orders = pending_files.get("mf_orders", [])
         stock_pl = pending_files.get("stock_pl", [])
         stock_orders = pending_files.get("stock_orders", [])
+        us_stock_transactions = pending_files.get("us_stock_transactions", [])
 
-        excel_count = len(mf_holdings) + len(mf_orders) + len(stock_pl) + len(stock_orders)
+        excel_count = (
+            len(mf_holdings)
+            + len(mf_orders)
+            + len(stock_pl)
+            + len(stock_orders)
+            + len(us_stock_transactions)
+        )
         csv_count = sum(
             len(pending_files.get(k, []))
             for k in [
@@ -140,6 +152,7 @@ class DataExtractor:
                 "benchmark_master",
                 "macro_parameters",
                 "column_master",
+                "currency_mapping",
             ]
         )
         sqlite_count = len(pending_files.get("sqlite_source", []))
@@ -162,11 +175,15 @@ class DataExtractor:
             stock_transactions_raw = extract_stock_transactions_raw(
                 self._get_file_list_with_bytes(stock_orders)
             )
+            us_stock_transactions_raw = extract_us_stock_transactions_raw(
+                self._get_file_list_with_bytes(us_stock_transactions)
+            )
         else:
             mf_market_data_raw = pl.LazyFrame()
             mf_transactions_raw = pl.LazyFrame()
             stock_market_data_raw = pl.LazyFrame()
             stock_transactions_raw = pl.LazyFrame()
+            us_stock_transactions_raw = pl.LazyFrame()
 
         result = ExtractionResult(
             zcategory=zcategory_lazy,
@@ -185,9 +202,11 @@ class DataExtractor:
             raw_benchmark_master=raw_benchmark_master,
             raw_macro_parameters=raw_macro_parameters,
             column_master=df_column_master,
+            us_stock_transactions_raw=us_stock_transactions_raw,
+            currency_mapping_raw=currency_mapping_raw,
         )
 
-        logger.info("[QUALITY] Running Gatekeeper Schema Validation on 16 active streams...")
+        logger.info("[QUALITY] Running Gatekeeper Schema Validation on 18 active streams...")
         self.status_queue.put(
             EngineStatus(
                 msg="",
@@ -212,6 +231,8 @@ class DataExtractor:
             result.raw_opening_balances,
             result.raw_benchmark_master,
             result.raw_macro_parameters,
+            result.us_stock_transactions_raw,
+            result.currency_mapping_raw,
         ]
 
         try:
@@ -225,7 +246,7 @@ class DataExtractor:
 
             pl.collect_all([lf.head(1) for lf in validation_frames])
             logger.info(
-                f"[QUALITY] Gatekeeper validated 16 schemas with 0 violations in {(time.perf_counter() - t0) * 1000:.2f}ms."
+                f"[QUALITY] Gatekeeper validated 18 schemas with 0 violations in {(time.perf_counter() - t0) * 1000:.2f}ms."
             )
         except Exception as e:
             self.status_queue.put(
