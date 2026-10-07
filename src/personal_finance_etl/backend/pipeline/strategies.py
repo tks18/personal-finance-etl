@@ -22,6 +22,11 @@ from personal_finance_etl.backend.transform.stocks import (
     get_stg_stock_master_ref,
     transform_stg_stock_trades,
 )
+from personal_finance_etl.backend.transform.us_stocks import (
+    get_base_us_stock_transactions,
+    get_stg_us_stock_master_ref,
+    transform_stg_us_stock_trades,
+)
 from personal_finance_etl.backend.utils.models import AssetPipelineResult, ExtractionResult
 
 
@@ -74,6 +79,80 @@ class StockPipeline:
         return AssetPipelineResult(
             market_data=market_data,
             market_data_ref=market_data_ref,
+            purchase_ref=purchase_ref,
+            sale_ref=sale_ref,
+            master_ref=master_ref,
+        )
+
+
+class USStockPipeline:
+    def process(
+        self,
+        extracted: ExtractionResult,
+        d_asset_subcategory_lazy: pl.LazyFrame,
+        rules: FinancialRules,
+        logger: logging.Logger,
+    ) -> AssetPipelineResult:
+
+        logger.debug("Parsing US Stock Trade Orders...")
+        base_orders = get_base_us_stock_transactions(extracted.us_stock_transactions_raw)
+        purchase_trans = transform_stg_us_stock_trades(base_orders, trade_type="BUY")
+        sale_trans = transform_stg_us_stock_trades(base_orders, trade_type="SELL")
+
+        logger.debug("Aggregating US Stock Purchases...")
+        purchase_ref = get_purchase_reference(
+            purchase_trans,
+            "Instrument Name",
+            "Date",
+            "Price",
+            "Quantity",
+            extra_group_cols=["Price_Local", "FX_Rate", "CURRENCY_ID"],
+        ).with_columns((pl.col("Quantity") * pl.col("Price_Local")).alias("Value_Local"))
+
+        logger.debug("Processing US Stock Sales...")
+        sale_ref = (
+            get_sale_reference(
+                sale_trans,
+                purchase_ref,
+                "Instrument Name",
+                "Date",
+                "Price",
+                "Quantity",
+                extra_group_cols=["Price_Local", "FX_Rate", "CURRENCY_ID"],
+            )
+            .with_columns((pl.col("Quantity") * pl.col("Price_Local")).alias("Sell_Value_Local"))
+            .rename({"Price_Local": "Sell_Price_Local"})
+        )
+
+        master_ref = get_stg_us_stock_master_ref(base_orders, d_asset_subcategory_lazy)
+
+        # We return empty market data here, it will be populated in Phase 3
+        empty_market_data = pl.LazyFrame(
+            schema={
+                "__file_name__": pl.String,
+                "__folder_path__": pl.String,
+                "Date": pl.Date,
+                "ISIN": pl.String,
+                "FILE_CATEGORY": pl.String,
+                "Quantity": pl.Float64,
+                "Closing_Price_Local": pl.Float64,
+                "Buy_Price_Local": pl.Float64,
+                "Closing_Value_Local": pl.Float64,
+                "Buy_Value_Local": pl.Float64,
+                "FX_Rate": pl.Float64,
+                "Closing_Price": pl.Float64,
+                "Buy_Price": pl.Float64,
+                "Closing_Value": pl.Float64,
+                "Buy_Value": pl.Float64,
+                "Unit_PnL": pl.Float64,
+                "Total_PnL": pl.Float64,
+                "CURRENCY_ID": pl.String,
+            }
+        )
+
+        return AssetPipelineResult(
+            market_data=empty_market_data,
+            market_data_ref=empty_market_data,
             purchase_ref=purchase_ref,
             sale_ref=sale_ref,
             master_ref=master_ref,
