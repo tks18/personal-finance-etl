@@ -17,6 +17,25 @@ def extract_stg_mf_isin_mapping(filename: str, folder_path: str, raw_bytes: byte
     )
 
 
+def extract_currency_mapping_raw(filename: str, folder_path: str, raw_bytes: bytes) -> pl.LazyFrame:
+    schema_overrides = {
+        "UID": pl.String,
+        "Currency_Code": pl.String,
+        "Target_Currency_Code": pl.String,
+        "yF_Ticker": pl.String,
+        "Currency_Name": pl.String,
+        "Is_Active": pl.Boolean,
+    }
+    logger.debug(f"[EXTRACT:CSV] Building lazy frame for Currency mapping: {filename}")
+    return (
+        pl.read_csv(io.BytesIO(raw_bytes), schema_overrides=schema_overrides)
+        .lazy()
+        .with_columns(
+            pl.lit(filename).alias("__file_name__"), pl.lit(folder_path).alias("__folder_path__")
+        )
+    )
+
+
 def extract_stg_benchmark_mapping(
     filename: str, folder_path: str, raw_bytes: bytes
 ) -> pl.LazyFrame:
@@ -25,6 +44,12 @@ def extract_stg_benchmark_mapping(
         "Sector": pl.String,
         "Industry": pl.String,
         "Benchmark_ID": pl.String,
+        "Yahoo_Ticker": pl.String,
+        "Tax_Instrument_Type": pl.String,
+        "Tax_Instrument_Subtype": pl.String,
+        "Country": pl.String,
+        "Geo": pl.String,
+        "Geo_Subtype": pl.String,
     }
     logger.debug(f"[EXTRACT:CSV] Building lazy frame for Benchmark mapping: {filename}")
     return (
