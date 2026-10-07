@@ -31,11 +31,13 @@ class IsinProcessor:
         start_date: date | None,
         end_date: date | None,
         rules: FinancialRules | None,
+        fx_provider: Any = None,
     ) -> None:
         self.fy_table = fy_table
         self.start_date = start_date
         self.end_date = end_date
         self.rules = rules
+        self.fx_provider = fx_provider
 
     def process(
         self,
@@ -94,15 +96,38 @@ class IsinProcessor:
                 v_val = row.get("Value")
                 buy_val = float(v_val) if v_val is not None else float(qty * b_price)
 
-                bm_p = bm_provider.get_bm_price(row_dt_obj)
-                if not bm_p or bm_p <= 0:
-                    bm_p = b_price
-                shadow_q = buy_val / bm_p if bm_p > 0 else 0.0
+                bm_p_raw = bm_provider.get_bm_price(row_dt_obj)
+                if not bm_p_raw or bm_p_raw <= 0:
+                    bm_p_raw = b_price
 
-                fifo.buy(row_dt_obj, qty, b_price, shadow_q, float(bm_p))
+                _pl_val = row.get("Price_Local")
+                price_local = float(_pl_val) if _pl_val is not None else b_price
+                currency_id = row.get("Currency_ID", "INR_INR")
+                fx_rate_buy = (
+                    self.fx_provider.get_rate(row_dt_obj, currency_id) if self.fx_provider else 1.0
+                )
+
+                # Assume bm_p_raw is in local currency (e.g. USD). Then INR value is bm_p_raw * fx_rate_buy.
+                bm_buy_local = float(bm_p_raw)
+                bm_buy_inr = float(bm_p_raw * fx_rate_buy)
+
+                shadow_q = buy_val / bm_buy_inr if bm_buy_inr > 0 else 0.0
+
+                fifo.buy(
+                    row_dt_obj,
+                    qty,
+                    b_price,
+                    shadow_q,
+                    bm_buy_inr,
+                    price_local=price_local,
+                    fx_rate_buy=fx_rate_buy,
+                    currency_id=currency_id,
+                    bm_buy_local=bm_buy_local,
+                )
                 cf_dates.append(row_dt_obj)
                 cf_amounts.append(-buy_val)
-                isin_cashflows.append(CashflowRecord(date=row_dt_obj, amount=-buy_val))
+                buy_val_local = float(qty * price_local)
+                isin_cashflows.append(CashflowRecord(date=row_dt_obj, amount=-buy_val, amount_local=-buy_val_local))
                 p_idx += 1
 
             while s_idx < len(s_inst):
@@ -123,12 +148,22 @@ class IsinProcessor:
                     s_price = float(m_row.get("Closing_Price", 0.0))
 
                 s_val = float(sv_val) if sv_val is not None else float(s_qty * s_price)
+                
+                _spl_val = row.get("Sell_Price_Local")
+                s_price_local = float(_spl_val) if _spl_val is not None else s_price
+                s_val_local = float(s_qty * s_price_local)
+                currency_id = row.get("Currency_ID", "INR_INR")
+                fx_rate_sell = (
+                    self.fx_provider.get_rate(row_dt_obj, currency_id) if self.fx_provider else 1.0
+                )
 
                 cf_dates.append(row_dt_obj)
                 cf_amounts.append(s_val)
-                isin_cashflows.append(CashflowRecord(date=row_dt_obj, amount=s_val))
+                isin_cashflows.append(CashflowRecord(date=row_dt_obj, amount=s_val, amount_local=s_val_local))
 
-                events = fifo.sell(row_dt_obj, s_qty, s_price)
+                events = fifo.sell(
+                    row_dt_obj, s_qty, s_price, price_local=s_price_local, fx_rate_sell=fx_rate_sell
+                )
                 isin_realized.extend(events)
                 s_idx += 1
 
@@ -155,13 +190,31 @@ class IsinProcessor:
             if not m_bm_price or m_bm_price <= 0:
                 m_bm_price = m_price
 
+            fx_rate_snap = 1.0
+            if fifo.active_lots and fifo.active_lots[0].currency_id and fifo.active_lots[0].currency_id != "INR_INR" and self.fx_provider:
+                fx_rate_snap = self.fx_provider.get_rate(m_date, fifo.active_lots[0].currency_id)
+            
+            m_bm_price_inr = m_bm_price * fx_rate_snap
+
             closing_units = fifo.get_closing_units()
             terminal_val = fifo.get_terminal_value(m_price)
-            shadow_terminal_val = fifo.get_shadow_terminal_value(m_bm_price)
+            shadow_terminal_val = fifo.get_shadow_terminal_value(m_bm_price_inr)
+            shadow_terminal_val_local = fifo.get_shadow_terminal_value(m_bm_price)
+            
+            terminal_val_local = 0.0
+            for lot in fifo.active_lots:
+                if lot.currency_id and lot.currency_id != "INR_INR" and self.fx_provider:
+                    fx_rate_snap_lot = self.fx_provider.get_rate(m_date, lot.currency_id)
+                    m_price_local = m_price / fx_rate_snap_lot if fx_rate_snap_lot > 0 else m_price
+                    terminal_val_local += lot.qty * m_price_local
+                else:
+                    terminal_val_local += lot.qty * m_price
 
             pt = isin_terminals.setdefault(m_date, TerminalValueRecord())
             pt.val += terminal_val
             pt.shadow_val += shadow_terminal_val
+            pt.val_local += terminal_val_local
+            pt.shadow_val_local += shadow_terminal_val_local
 
             after_tax_terminal_val = 0.0
             for lot in fifo.active_lots:
@@ -207,7 +260,7 @@ class IsinProcessor:
                 if avg_cost > 0:
                     inst_cagr = calculate_cagr(avg_cost, m_price, inst_age)
                 if avg_bm_cost > 0:
-                    inst_bm_cagr = calculate_cagr(avg_bm_cost, m_bm_price, inst_age)
+                    inst_bm_cagr = calculate_cagr(avg_bm_cost, m_bm_price_inr, inst_age)
 
             if m_price > running_peak_price:
                 running_peak_price = m_price
@@ -230,7 +283,19 @@ class IsinProcessor:
                 "max_drawdown": inst_max_dd,
             }
 
-            snapshots = snapshot_generator.generate(fifo, m_date, m_price, m_bm_price, inst_metrics)
+            # Local XIRR Calculation
+            cf_dates_local = [c.date for c in isin_cashflows if c.date <= m_date]
+            cf_amounts_local = [c.amount_local for c in isin_cashflows if c.date <= m_date]
+            inst_xirr_local = calculate_xirr(cf_dates_local + [m_date], cf_amounts_local + [terminal_val_local])
+            inst_bm_xirr_local = calculate_xirr(cf_dates_local + [m_date], cf_amounts_local + [shadow_terminal_val_local])
+            inst_metrics["xirr_local"] = inst_xirr_local
+            inst_metrics["bm_xirr_local"] = inst_bm_xirr_local
+            inst_metrics["active_return_local"] = inst_xirr_local - inst_bm_xirr_local
+            inst_metrics["fx_xirr_impact"] = inst_xirr - inst_xirr_local
+
+            snapshots = snapshot_generator.generate(
+                fifo, m_date, m_price, m_bm_price, inst_metrics, fx_provider=self.fx_provider
+            )
             isin_snapshots.extend(snapshots)
 
         while p_idx < len(p_inst):
@@ -244,15 +309,38 @@ class IsinProcessor:
             v_val = row.get("Value")
             buy_val = float(v_val) if v_val is not None else float(qty * b_price)
 
-            bm_p = bm_provider.get_bm_price(row_dt_obj)
-            if not bm_p or bm_p <= 0:
-                bm_p = b_price
-            shadow_q = buy_val / bm_p if bm_p > 0 else 0.0
+            bm_p_raw = bm_provider.get_bm_price(row_dt_obj)
+            if not bm_p_raw or bm_p_raw <= 0:
+                bm_p_raw = b_price
 
-            fifo.buy(row_dt_obj, qty, b_price, shadow_q, float(bm_p))
+            _pl_val = row.get("Price_Local")
+            price_local = float(_pl_val) if _pl_val is not None else b_price
+            currency_id = row.get("Currency_ID", "INR_INR")
+            fx_rate_buy = (
+                self.fx_provider.get_rate(row_dt_obj, currency_id) if self.fx_provider else 1.0
+            )
+
+            # Assume bm_p_raw is in local currency (e.g. USD). Then INR value is bm_p_raw * fx_rate_buy.
+            bm_buy_local = float(bm_p_raw)
+            bm_buy_inr = float(bm_p_raw * fx_rate_buy)
+
+            shadow_q = buy_val / bm_buy_inr if bm_buy_inr > 0 else 0.0
+
+            fifo.buy(
+                row_dt_obj,
+                qty,
+                b_price,
+                shadow_q,
+                bm_buy_inr,
+                price_local=price_local,
+                fx_rate_buy=fx_rate_buy,
+                currency_id=currency_id,
+                bm_buy_local=bm_buy_local,
+            )
             cf_dates.append(row_dt_obj)
             cf_amounts.append(-buy_val)
-            isin_cashflows.append(CashflowRecord(date=row_dt_obj, amount=-buy_val))
+            buy_val_local = float(qty * price_local)
+            isin_cashflows.append(CashflowRecord(date=row_dt_obj, amount=-buy_val, amount_local=-buy_val_local))
             p_idx += 1
 
         while s_idx < len(s_inst):
@@ -274,11 +362,21 @@ class IsinProcessor:
 
             s_val = float(sv_val) if sv_val is not None else float(s_qty * s_price)
 
+            _spl_val = row.get("Sell_Price_Local")
+            s_price_local = float(_spl_val) if _spl_val is not None else s_price
+            s_val_local = float(s_qty * s_price_local)
+            currency_id = row.get("Currency_ID", "INR_INR")
+            fx_rate_sell = (
+                self.fx_provider.get_rate(row_dt_obj, currency_id) if self.fx_provider else 1.0
+            )
+
             cf_dates.append(row_dt_obj)
             cf_amounts.append(s_val)
-            isin_cashflows.append(CashflowRecord(date=row_dt_obj, amount=s_val))
+            isin_cashflows.append(CashflowRecord(date=row_dt_obj, amount=s_val, amount_local=s_val_local))
 
-            events = fifo.sell(row_dt_obj, s_qty, s_price)
+            events = fifo.sell(
+                row_dt_obj, s_qty, s_price, price_local=s_price_local, fx_rate_sell=fx_rate_sell
+            )
             isin_realized.extend(events)
             s_idx += 1
 
@@ -303,6 +401,9 @@ class IsinProcessor:
                 "instrument_type": str(master_row.get("INSTRUMENT_TYPE", "Unknown")),
                 "sector": str(master_row.get("SECTOR", "Unknown")),
                 "industry": str(master_row.get("INDUSTRY", "Unknown")),
+                "geo": str(master_row.get("GEO", "Unknown")),
+                "country": str(master_row.get("COUNTRY", "Unknown")),
+                "currency": str(master_row.get("CURRENCY_ID", "INR_INR")),
             }
         )
         return ISINProcessResult(
