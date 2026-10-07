@@ -26,6 +26,7 @@ class InvestmentQuantEngine:
         df_i: pl.DataFrame,
         df_b: pl.DataFrame | None,
         df_t: pl.DataFrame,
+        df_fx: pl.DataFrame | None = None,
         status_queue: ILogger | None = None,
         rules: "FinancialRules | None" = None,
         start_date: date | None = None,
@@ -37,6 +38,7 @@ class InvestmentQuantEngine:
         self.df_i = df_i
         self.df_b = df_b if df_b is not None else pl.DataFrame()
         self.df_t = df_t
+        self.df_fx = df_fx if df_fx is not None else pl.DataFrame()
         self.status_queue = status_queue
         self.rules = rules
         self.start_date = start_date
@@ -66,6 +68,7 @@ class InvestmentQuantEngine:
             self.df_i,
             self.df_b,
             self.df_t,
+            self.df_fx,
             self.start_date,
             self.end_date,
             self.rules,
