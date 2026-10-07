@@ -2,6 +2,68 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [6.6.0](https://github.com/tks18/personal-finance-etl/compare/6.5.3...6.6.0) (2026-10-07)
+
+
+### Bug Fixes 🛠
+
+* **frontend/docs:** fix renderer for pyinstaller builds for local js files ([6935240](https://github.com/tks18/personal-finance-etl/commit/6935240c117fffd79a619dc4a2c0f2380aea0330))
+
+
+### Build System 🏗
+
+* **main.spec:** pyinstaller: remove legacy artifacts, include .js files for local ([dc105d4](https://github.com/tks18/personal-finance-etl/commit/dc105d4342dfa77a52168504627006e39cc722bc))
+
+
+### Code Refactoring 🖌
+
+* **backend/engines:** add fx rate table to parameter ([fbe2cc8](https://github.com/tks18/personal-finance-etl/commit/fbe2cc80b09c57cb7a1b39bd93834ca182372817))
+* **backend/extract:** minor col rename ([1105156](https://github.com/tks18/personal-finance-etl/commit/11051564d03938382d07660bd64f335089dfcb14))
+* **backend/transform:** minor col rename ([7b1d96b](https://github.com/tks18/personal-finance-etl/commit/7b1d96b0a33a7c01c095545a2389d645db21c3a1))
+
+
+### Features 🔥
+
+* **backend/engine:** fifo: update for forex tracking ([4ed9bca](https://github.com/tks18/personal-finance-etl/commit/4ed9bcac7132322f6279f5069680efae5752c365))
+* **backend/engines:** add fx rates to context ([2b5382e](https://github.com/tks18/personal-finance-etl/commit/2b5382e24c09bea8e6c5fb1636ca9fae57f9a385))
+* **backend/engines:** introduce new metrics for forex tracking ([1107901](https://github.com/tks18/personal-finance-etl/commit/1107901bbaadc90c9d495064acc28fd395033020))
+* **backend/engines:** presentation: introduce new forex metrics in networth table ([ab56847](https://github.com/tks18/personal-finance-etl/commit/ab5684787f696d944ef5c45b72b66209f51cf5d8))
+* **backend/engines:** presentation: introduce new metrics in investment portfolio analytics ([1d07454](https://github.com/tks18/personal-finance-etl/commit/1d074544bae6eb2bf44806c2203bba679e0303ae))
+* **backend/engines:** quant: introduce new grains for analytics, update for forex ([938e857](https://github.com/tks18/personal-finance-etl/commit/938e8575bd9e098421e63b6ce0ed9e1c97c02cdd))
+* **backend/engines:** quant: new context table for forex rates ([fb7711d](https://github.com/tks18/personal-finance-etl/commit/fb7711d77b0bb76843ce0dafc57b33d3f1c1372f))
+* **backend/engines:** quant: new fx table for quant engine ([eba9dca](https://github.com/tks18/personal-finance-etl/commit/eba9dcaf6a6474fd75a4696555d11b9015f221cc))
+* **backend/engines:** quant: new metrics in the lot snapshot ([d53833d](https://github.com/tks18/personal-finance-etl/commit/d53833d2b189059ce92de3144e5196d49cfb7533))
+* **backend/engines:** quant: orchestrate the isin level pipeline ([6c2fff7](https://github.com/tks18/personal-finance-etl/commit/6c2fff76aab5d1ca4d540f85b5adbe7607a73ab5))
+* **backend/engines:** quant: update xirr calculator for forex ([bf34238](https://github.com/tks18/personal-finance-etl/commit/bf34238334c4caa9cc4217ae105f9c33216af300))
+* **backend/engines:** rules: update for us stocks ([a9eda6f](https://github.com/tks18/personal-finance-etl/commit/a9eda6f897f3342229b6d77df118025d79197230))
+* **backend/extract:** csv: add currency mapping + benchmark mapping extra fields ([fa2eddd](https://github.com/tks18/personal-finance-etl/commit/fa2eddd5e430629d26664cafe15d5ac955ffa4b2))
+* **backend/extract:** excel_extractor: add fns for us stock transactions ([5ee2319](https://github.com/tks18/personal-finance-etl/commit/5ee2319ed8391d8f8155a20b2a8d9edb40f5d1f6))
+* **backend/extract:** introduce currency fx rates fetch service ([3deef07](https://github.com/tks18/personal-finance-etl/commit/3deef0726c8e737aa0d1fac6a63d9e11146409c6))
+* **backend/extract:** introduce us market data fetcher service ([4fcb258](https://github.com/tks18/personal-finance-etl/commit/4fcb2584b3ed1e5e90e1d91603a7d487455ab551))
+* **backend/extract:** statement_locator: add new us stocks category ([ab7f69e](https://github.com/tks18/personal-finance-etl/commit/ab7f69e44432ba93ad6c4ffe79563497f7af3589))
+* **backend/load/bronze:** add new tables to the bronze layer ([09e315e](https://github.com/tks18/personal-finance-etl/commit/09e315ea903bc52c3aa69d971b28dd070d573d16))
+* **backend/load/registry:** add new bronze, silver contracts update validations ([5e37dbd](https://github.com/tks18/personal-finance-etl/commit/5e37dbdc1e918941e26704133e101608bd082ff8))
+* **backend/load/registry:** update registry with new gold tables ([3cd2692](https://github.com/tks18/personal-finance-etl/commit/3cd269243f34128f982a78e73d7c6e8dfa9ff235))
+* **backend/load/schema:** silver: reorganize the cols for sense, introduce new tables ([5bf387a](https://github.com/tks18/personal-finance-etl/commit/5bf387afc0cba356606c95048ed6d4f0948a5a56))
+* **backend/load:** gold: reorganize col for sense, also add new grain invest analytics ([3d398ac](https://github.com/tks18/personal-finance-etl/commit/3d398ac8f5e22868a4c36937c7b16b12c314a7a6))
+* **backend/models:** add currency mapping and us stock reports to extraction result ([7034767](https://github.com/tks18/personal-finance-etl/commit/7034767a4b83172d2495ae04fef14ce112d388ff))
+* **backend/pipeline:** create asset strategy for us stocks ([5fdf703](https://github.com/tks18/personal-finance-etl/commit/5fdf703479bc0e6854e585f5d61c668ed59e05b8))
+* **backend/pipeline:** create full currency fx pipeline ([fabd047](https://github.com/tks18/personal-finance-etl/commit/fabd04743d589483d8d380fc25ceb70abdc91b25))
+* **backend/pipeline:** create pipeline for us market data ([f8e2e53](https://github.com/tks18/personal-finance-etl/commit/f8e2e5313b0f658767458df9f753c7c1af8bccae))
+* **backend/pipeline:** etL_pipeline: orchestrate the full pipeline ([ae8719d](https://github.com/tks18/personal-finance-etl/commit/ae8719d05be5a64ac5dc47be40f7f9b349d57576))
+* **backend/pipeline:** extractor: integrate us stocks in the extraction dag ([d79f4b0](https://github.com/tks18/personal-finance-etl/commit/d79f4b0c747c9d18683e2aadc76a5eed0aad5863))
+* **backend/pipeline:** integrate us stocks in transformation dag ([8c90687](https://github.com/tks18/personal-finance-etl/commit/8c90687653b419fc100379e8d301ed0095fd5152))
+* **backend/settings:** add new data source for currency mapping ([f6aaf55](https://github.com/tks18/personal-finance-etl/commit/f6aaf557c8110083446d5ff87f1e3b04c71308de))
+* **backend/transform:** add file category for mutual funds and stocks transform ([d6711a3](https://github.com/tks18/personal-finance-etl/commit/d6711a382822c445527656bdfccfe1ee1cb509de))
+* **backend/transform:** merge currency mapping to currency master, minor change to benchmark master ([6a1f2da](https://github.com/tks18/personal-finance-etl/commit/6a1f2da2520284aa3e8a9de8386ded92d1b884da))
+* **backend/transform:** restructure investment transformation to accomodate us stocks ([c0e851f](https://github.com/tks18/personal-finance-etl/commit/c0e851f07cc184ff8aec19fe0efe06758e49833e))
+* **backend/transform:** transform currency fx rates ([92ef9bc](https://github.com/tks18/personal-finance-etl/commit/92ef9bcda3f85e01d54c8475ff8cbf982a2f13d8))
+* **backend/transform:** transformation fn for us market data ([e344068](https://github.com/tks18/personal-finance-etl/commit/e344068403c990004404bb1bd8aba17170c7d373))
+* **backend/transform:** us_stocks: add transformer dag for us stocks ([e1d79cf](https://github.com/tks18/personal-finance-etl/commit/e1d79cf57ce1a86cee29ca849d844930ec722a9b))
+* **backend/types:** analytics: introduce new metrics for tracking fx exposure ([b08d7d5](https://github.com/tks18/personal-finance-etl/commit/b08d7d53f1da24557c954d0f2ce34ce9b803b7e4))
+* **backend/types:** pipeline: introduce new grains for investment analytics in gold ([cc4fae7](https://github.com/tks18/personal-finance-etl/commit/cc4fae7f2d615307ac1cc4266ce99249035d97a2))
+* **backend/utils:** models: add new metrics to model to track fx position ([6f222e8](https://github.com/tks18/personal-finance-etl/commit/6f222e833b85120f02ce0678953a910492608042))
+
 ### [6.5.3](https://github.com/tks18/personal-finance-etl/compare/6.5.2...6.5.3) (2026-10-05)
 
 
