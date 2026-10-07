@@ -36,6 +36,7 @@ def _process_isin_worker(
         Any,
         Any,
         Any,
+        Any,
         str,
     ],
 ) -> tuple[
@@ -57,6 +58,7 @@ def _process_isin_worker(
         start_date,
         end_date,
         rules,
+        fx_provider,
         tmp_dir,
     ) = task
 
@@ -65,7 +67,7 @@ def _process_isin_worker(
         extra={"isin": isin, "stage": "QuantWorker"},
     )
 
-    processor = IsinProcessor(fy_table, start_date, end_date, rules)
+    processor = IsinProcessor(fy_table, start_date, end_date, rules, fx_provider)
     try:
         worker_id = multiprocessing.current_process().name
         logger.debug(
@@ -131,6 +133,16 @@ class IsinPipeline:
         industry_cf: dict[str, list[dict[str, Any]]] = {}
         industry_pt: dict[str, dict[date, dict[str, float]]] = {}
 
+        geo_cf: dict[str, list[dict[str, Any]]] = {}
+        geo_pt: dict[str, dict[date, dict[str, float]]] = {}
+
+        country_cf: dict[str, list[dict[str, Any]]] = {}
+        country_pt: dict[str, dict[date, dict[str, float]]] = {}
+
+        currency_cf: dict[str, list[dict[str, Any]]] = {}
+        currency_pt: dict[str, dict[date, dict[str, float]]] = {}
+        currency_re: dict[str, list[dict[str, Any]]] = {}
+
         has_data = False
         total_inst = len(self.isins)
 
@@ -179,6 +191,7 @@ class IsinPipeline:
                 Any,
                 Any,
                 Any,
+                Any,
                 str,
             ]
         ] = []
@@ -212,6 +225,7 @@ class IsinPipeline:
                     self.ctx.start_date,
                     self.ctx.end_date,
                     self.ctx.rules,
+                    self.ctx.fx_provider,
                     self.tmp_dir,
                 )
             )
@@ -269,11 +283,12 @@ class IsinPipeline:
                     global_cashflows.extend(isin_cf)
                     for d, vals in isin_pt.items():
                         pt = portfolio_terminals.setdefault(
-                            d, {"val": 0.0, "shadow_val": 0.0, "after_tax_val": 0.0}
+                            d, {"val": 0.0, "shadow_val": 0.0, "after_tax_val": 0.0, "val_local": 0.0}
                         )
                         pt["val"] += vals["val"]
                         pt["shadow_val"] += vals["shadow_val"]
                         pt["after_tax_val"] += vals.get("after_tax_val", 0.0)
+                        pt["val_local"] += vals.get("val_local", 0.0)
                     realized_events.extend(isin_re)
 
                     if not tags:
@@ -284,25 +299,30 @@ class IsinPipeline:
                     inst_type = tags.get("instrument_type", "Unknown")
                     sector = tags.get("sector", "Unknown")
                     industry = tags.get("industry", "Unknown")
+                    geo = tags.get("geo", "Unknown")
+                    country = tags.get("country", "Unknown")
+                    currency = tags.get("currency", "INR_INR")
 
                     class_cf.setdefault(cls, []).extend(isin_cf)
                     class_re.setdefault(cls, []).extend(isin_re)
                     cp = class_pt.setdefault(cls, {})
                     for d, vals in isin_pt.items():
-                        pt = cp.setdefault(d, {"val": 0.0, "shadow_val": 0.0, "after_tax_val": 0.0})
+                        pt = cp.setdefault(d, {"val": 0.0, "shadow_val": 0.0, "after_tax_val": 0.0, "val_local": 0.0})
                         pt["val"] += vals["val"]
                         pt["shadow_val"] += vals["shadow_val"]
                         pt["after_tax_val"] += vals.get("after_tax_val", 0.0)
+                        pt["val_local"] += vals.get("val_local", 0.0)
 
                     sub_key = f"{cls}___{sub}"
                     subtype_cf.setdefault(sub_key, []).extend(isin_cf)
                     subtype_re.setdefault(sub_key, []).extend(isin_re)
                     sp = subtype_pt.setdefault(sub_key, {})
                     for d, vals in isin_pt.items():
-                        pt = sp.setdefault(d, {"val": 0.0, "shadow_val": 0.0, "after_tax_val": 0.0})
+                        pt = sp.setdefault(d, {"val": 0.0, "shadow_val": 0.0, "after_tax_val": 0.0, "val_local": 0.0})
                         pt["val"] += vals["val"]
                         pt["shadow_val"] += vals["shadow_val"]
                         pt["after_tax_val"] += vals.get("after_tax_val", 0.0)
+                        pt["val_local"] += vals.get("val_local", 0.0)
 
                     def _update_group(  # type: ignore[no-untyped-def]
                         group_key: str,
@@ -315,17 +335,23 @@ class IsinPipeline:
                         gp = pt_dict.setdefault(group_key, {})
                         for d, vals in current_pt.items():
                             pt = gp.setdefault(
-                                d, {"val": 0.0, "shadow_val": 0.0, "after_tax_val": 0.0}
+                                d, {"val": 0.0, "shadow_val": 0.0, "after_tax_val": 0.0, "val_local": 0.0}
                             )
                             pt["val"] += vals["val"]
                             pt["shadow_val"] += vals["shadow_val"]
                             pt["after_tax_val"] += vals.get("after_tax_val", 0.0)
+                            pt["val_local"] += vals.get("val_local", 0.0)
 
                     _update_group(
                         inst_type, instrument_type_cf, instrument_type_pt, isin_cf, isin_pt
                     )
                     _update_group(sector, sector_cf, sector_pt, isin_cf, isin_pt)
                     _update_group(industry, industry_cf, industry_pt, isin_cf, isin_pt)
+                    _update_group(geo, geo_cf, geo_pt, isin_cf, isin_pt)
+                    _update_group(country, country_cf, country_pt, isin_cf, isin_pt)
+                    
+                    currency_re.setdefault(currency, []).extend(isin_re)
+                    _update_group(currency, currency_cf, currency_pt, isin_cf, isin_pt)
         finally:
             stop_worker_listener()
             current_process.daemon = is_daemon
@@ -351,4 +377,11 @@ class IsinPipeline:
             sector_pt=sector_pt,
             industry_cf=industry_cf,
             industry_pt=industry_pt,
+            geo_cf=geo_cf,
+            geo_pt=geo_pt,
+            country_cf=country_cf,
+            country_pt=country_pt,
+            currency_cf=currency_cf,
+            currency_pt=currency_pt,
+            currency_re=currency_re,
         )
