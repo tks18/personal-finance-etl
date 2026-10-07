@@ -43,6 +43,16 @@ BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
     ),
     BronzeDataContract("column_master", "column_master", "bronze.r_Column_Master", True),
     BronzeDataContract("mf_market_data_raw", "mf_holdings", "bronze.r_MF_Market_Data", False),
+    BronzeDataContract(
+        "us_stock_transactions_raw",
+        "us_stock_transactions",
+        "bronze.r_US_Stock_Transactions",
+        False,
+    ),
+    BronzeDataContract(
+        "currency_mapping_raw", "currency_mapping", "bronze.r_Currency_Mapping", True
+    ),
+    BronzeDataContract("currency_fx_raw", "currency_history", "bronze.r_Currency_FX_Data", False),
     BronzeDataContract("mf_transactions_raw", "mf_orders", "bronze.r_MF_Transactions", False),
     BronzeDataContract("stock_market_data_raw", "stock_pl", "bronze.r_Stock_Market_Data", False),
     BronzeDataContract(
@@ -50,6 +60,9 @@ BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
     ),
     BronzeDataContract(
         "benchmark_history_raw", "benchmark_history", "bronze.r_Benchmark_Data", False
+    ),
+    BronzeDataContract(
+        "us_stock_market_data_raw", "us_stock_market", "bronze.r_US_Stock_Prices", False
     ),
 ]
 
@@ -122,6 +135,15 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
         "Benchmark",
         "CoreEngine",
         90,
+    ),
+    DataContract(
+        "df_f_currency_fx_rates",
+        "silver",
+        "silver.f_Currency_FX_Rates",
+        "Common",
+        "Date-Currency",
+        "CoreEngine",
+        95,
     ),
     DataContract(
         "df_d_investment_master",
@@ -426,8 +448,8 @@ def validate_registry() -> None:
         elif contract.layer == "gold":
             gold_count += 1
 
-    if silver_count != 20:
-        raise ValueError(f"Expected 20 Silver contracts, found {silver_count}")
+    if silver_count != 21:
+        raise ValueError(f"Expected 21 Silver contracts, found {silver_count}")
 
     if gold_count != 17:
         raise ValueError(f"Expected 17 Gold contracts, found {gold_count}")
@@ -447,5 +469,5 @@ def validate_registry() -> None:
             raise ValueError(f"Duplicate Bronze table mapping: {contract.physical_table}")
         bronze_tables.add(contract.physical_table)
 
-    if len(BRONZE_CONTRACT_REGISTRY) != 16:
-        raise ValueError(f"Expected 16 Bronze contracts, found {len(BRONZE_CONTRACT_REGISTRY)}")
+    if len(BRONZE_CONTRACT_REGISTRY) != 20:
+        raise ValueError(f"Expected 20 Bronze contracts, found {len(BRONZE_CONTRACT_REGISTRY)}")
