@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import os
 import tomllib
@@ -115,6 +117,7 @@ class Settings(BaseModel):
     BENCHMARK_MASTER_CSV_PATH: str = ""
     MACRO_PARAMETERS_CSV_PATH: str = ""
     OPENING_BALANCE_CSV_PATH: str = ""
+    CURRENCY_MAPPING_CSV_PATH: str = ""
 
     # Statements
     STATEMENTS_FOLDER: str = ""
@@ -122,7 +125,7 @@ class Settings(BaseModel):
     FILE_HASH_POLICY: FileHashPolicy = Field(default_factory=FileHashPolicy)
 
     @classmethod
-    def from_toml(cls, filepath: str) -> "Settings":
+    def from_toml(cls, filepath: str) -> Settings:
         """Loads a TOML configuration and returns a Settings instance."""
         if not os.path.exists(filepath):
             return cls()
@@ -148,6 +151,7 @@ class Settings(BaseModel):
             ("BENCHMARK_MASTER_CSV_PATH", self.BENCHMARK_MASTER_CSV_PATH),
             ("MACRO_PARAMETERS_CSV_PATH", self.MACRO_PARAMETERS_CSV_PATH),
             ("OPENING_BALANCE_CSV_PATH", self.OPENING_BALANCE_CSV_PATH),
+            ("CURRENCY_MAPPING_CSV_PATH", self.CURRENCY_MAPPING_CSV_PATH),
         ]
 
         errors: list[str] = []
