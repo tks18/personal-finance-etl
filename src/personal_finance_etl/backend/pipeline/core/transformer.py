@@ -6,6 +6,7 @@ from personal_finance_etl.backend.pipeline.strategies import (
     AssetPipeline,
     MutualFundPipeline,
     StockPipeline,
+    USStockPipeline,
 )
 from personal_finance_etl.backend.transform.calendar import (
     get_stg_calendar_ref,
@@ -73,7 +74,9 @@ class TransformationDAG:
         d_asset_subcategory_lazy = transform_d_asset_subcategory(
             extracted.assets, mappings["assets"], self.rules
         )
-        d_currency_lazy = transform_d_currency(extracted.currency, mappings["currency"])
+        d_currency_lazy = transform_d_currency(
+            extracted.currency, mappings["currency"], extracted.currency_mapping_raw
+        )
 
         # Load mapping dependencies
         logger.debug("Transforming Macro Parameters and Opening Balances...")
@@ -105,7 +108,11 @@ class TransformationDAG:
             f_tf_inv_sale_data_lazy = pl.LazyFrame()
             d_tf_investment_master_lazy = pl.LazyFrame()
         else:
-            asset_pipelines: list[AssetPipeline] = [MutualFundPipeline(), StockPipeline()]
+            asset_pipelines: list[AssetPipeline] = [
+                MutualFundPipeline(),
+                StockPipeline(),
+                USStockPipeline(),
+            ]
 
             asset_results: list[AssetPipelineResult] = []
             for pipeline in asset_pipelines:
