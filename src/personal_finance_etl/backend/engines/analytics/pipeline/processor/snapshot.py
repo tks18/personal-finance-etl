@@ -33,6 +33,7 @@ class SnapshotGenerator:
         m_price: float,
         m_bm_price: float,
         inst_metrics: dict[str, Any],
+        fx_provider: Any = None,
     ) -> list[SnapshotRecord]:
         inst_cagr = inst_metrics.get("cagr", 0.0)
         inst_bm_cagr = inst_metrics.get("bm_cagr", 0.0)
@@ -42,6 +43,8 @@ class SnapshotGenerator:
         inst_active_return = inst_metrics.get("active_return", 0.0)
         is_lagging = inst_metrics.get("is_lagging", False)
         inst_max_dd = inst_metrics.get("max_drawdown", 0.0)
+        inst_xirr_local = inst_metrics.get("xirr_local", 0.0)
+        fx_xirr_impact = inst_metrics.get("fx_xirr_impact", 0.0)
 
         outperform_cnt = 0
         lot_count = len(fifo.active_lots)
@@ -71,14 +74,27 @@ class SnapshotGenerator:
             else:
                 day_weight = 1.0
 
+            if lot.currency_id and lot.currency_id != "INR_INR" and fx_provider:
+                fx_rate_snap_lot = fx_provider.get_rate(m_date, lot.currency_id)
+            else:
+                fx_rate_snap_lot = 1.0
+
+            m_bm_price_inr = m_bm_price * fx_rate_snap_lot
+
             lbm_buy = lot.bm_buy
             if lbm_buy and lbm_buy > 0:
-                lot_bm_ret = (m_bm_price - lbm_buy) / lbm_buy
-                lot_bm_cagr = calculate_cagr(lbm_buy, m_bm_price, age)
+                lot_bm_ret = (m_bm_price_inr - lbm_buy) / lbm_buy
+                lot_bm_cagr = calculate_cagr(lbm_buy, m_bm_price_inr, age)
             else:
                 lbm_buy = None
                 lot_bm_ret = 0.0
                 lot_bm_cagr = 0.0
+
+            lbm_buy_local = lot.bm_buy_local
+            if lbm_buy_local and lbm_buy_local > 0:
+                lot_bm_cagr_local = calculate_cagr(lbm_buy_local, m_bm_price, age)
+            else:
+                lot_bm_cagr_local = lot_bm_cagr
 
             lot_alpha = lot_cagr - lot_bm_cagr
             if lot_alpha > 0:
@@ -100,10 +116,44 @@ class SnapshotGenerator:
             after_tax_pl = pnl - (ltcg_tax + stcg_tax)
             after_tax_cv = close_val - (ltcg_tax + stcg_tax)
 
+            if lot.currency_id and lot.currency_id != "INR_INR" and fx_provider:
+                fx_rate_snap = fx_provider.get_rate(m_date, lot.currency_id)
+                m_price_local = m_price / fx_rate_snap if fx_rate_snap > 0 else m_price
+
+                buy_val_local = lot.qty * lot.price_local
+                close_val_local = lot.qty * m_price_local
+
+                asset_pnl_local = (m_price_local - lot.price_local) * lot.qty
+                asset_pnl = asset_pnl_local * fx_rate_snap
+                forex_pnl = lot.price_local * (fx_rate_snap - lot.fx_rate_buy) * lot.qty
+                
+                lot_cagr_local = calculate_cagr(lot.price_local, m_price_local, age)
+                absolute_return_local = (m_price_local - lot.price_local) / lot.price_local if lot.price_local > 0 else 0.0
+                asset_return_pct = asset_pnl / buy_val_lot if buy_val_lot != 0 else 0.0
+                forex_return_pct = forex_pnl / buy_val_lot if buy_val_lot != 0 else 0.0
+                blended_fx_buy_rate = buy_val_lot / buy_val_local if buy_val_local != 0 else lot.fx_rate_buy
+                curr_fx_rate = fx_rate_snap
+                currency_appreciation_pct = (curr_fx_rate / blended_fx_buy_rate) - 1.0 if blended_fx_buy_rate > 0 else 0.0
+            else:
+                buy_val_local = buy_val_lot
+                close_val_local = close_val
+                asset_pnl = pnl
+                forex_pnl = 0.0
+                lot_cagr_local = lot_cagr
+                absolute_return_local = lot_return
+                asset_return_pct = lot_return
+                forex_return_pct = 0.0
+                blended_fx_buy_rate = 1.0
+                curr_fx_rate = 1.0
+                currency_appreciation_pct = 0.0
+
+            forex_contrib = forex_pnl / pnl if pnl != 0 else 0.0
+
             buffer.append(
                 SnapshotRecord(
                     Closing_Date=m_date,
                     ISIN=self.isin,
+                    CURRENCY_ID=fifo.active_lots[0].currency_id if fifo.active_lots else "INR_INR",
                     BENCHMARK_ID=self.bench_id,
                     TAX_TYPE=self.tax_type,
                     TAX_SUBTYPE=self.tax_subtype,
@@ -121,9 +171,12 @@ class SnapshotGenerator:
                     CAGR=round(inst_cagr, 8),
                     XIRR=round(inst_xirr, 8),
                     After_Tax_XIRR=round(inst_after_tax_xirr, 8),
+                    XIRR_Local=round(inst_xirr_local, 8),
+                    FX_XIRR_Impact=round(fx_xirr_impact, 8),
                     BM_Buy_Price=round(lbm_buy, 4) if lbm_buy else None,
                     BM_Market_Price=round(m_bm_price, 4),
                     Lot_BM_CAGR=round(lot_bm_cagr, 8),
+                    Lot_BM_CAGR_Local=round(lot_bm_cagr_local, 8),
                     BM_CAGR=round(inst_bm_cagr, 8),
                     **{
                         "P/L": round(pnl, 4),
@@ -131,7 +184,9 @@ class SnapshotGenerator:
                     Absolute_Return=round(lot_return, 8),
                     Lot_BM_Return=round(lot_bm_ret, 8),
                     BM_XIRR=round(bm_xirr_val, 8),
+                    BM_XIRR_Local=round(inst_metrics.get("bm_xirr_local", 0.0), 8),
                     Active_Return=round(inst_active_return, 8),
+                    Active_Return_Local=round(inst_metrics.get("active_return_local", 0.0), 8),
                     Lot_Alpha=round(lot_alpha, 8),
                     Is_Lagging_Benchmark=is_lagging,
                     Max_Drawdown=round(inst_max_dd, 8),
@@ -147,6 +202,17 @@ class SnapshotGenerator:
                     After_Tax_PL=round(after_tax_pl, 4),
                     After_Tax_Close_Value=round(after_tax_cv, 4),
                     Dietz_Day_Weight=round(day_weight, 6),
+                    Buy_Value_Local=round(buy_val_local, 4),
+                    Close_Value_Local=round(close_val_local, 4),
+                    Asset_PnL=round(asset_pnl, 4),
+                    Forex_PnL=round(forex_pnl, 4),
+                    Forex_Contribution_Pct=round(forex_contrib, 6),
+                    Lot_CAGR_Local=round(lot_cagr_local, 8),
+                    Absolute_Return_Local=round(absolute_return_local, 8),
+                    Asset_Return_Pct=round(asset_return_pct, 6),
+                    Forex_Return_Pct=round(forex_return_pct, 6),
+                    Blended_FX_Buy_Rate=round(blended_fx_buy_rate, 6),
+                    Currency_Appreciation_Pct=round(currency_appreciation_pct, 6),
                 )
             )
 
