@@ -76,6 +76,8 @@ class ExtractionResult:
     raw_benchmark_master: pl.LazyFrame
     raw_macro_parameters: pl.LazyFrame
     column_master: pl.DataFrame | pl.LazyFrame
+    us_stock_transactions_raw: pl.LazyFrame
+    currency_mapping_raw: pl.LazyFrame
 
     def __init__(
         self,
@@ -95,6 +97,8 @@ class ExtractionResult:
         raw_benchmark_master: pl.LazyFrame,
         raw_macro_parameters: pl.LazyFrame,
         column_master: pl.DataFrame | pl.LazyFrame,
+        us_stock_transactions_raw: pl.LazyFrame,
+        currency_mapping_raw: pl.LazyFrame,
     ):
         self.zcategory = zcategory
         self.assetgroup = assetgroup
@@ -112,7 +116,8 @@ class ExtractionResult:
         self.raw_benchmark_master = raw_benchmark_master
         self.raw_macro_parameters = raw_macro_parameters
         self.column_master = column_master
-
+        self.us_stock_transactions_raw = us_stock_transactions_raw
+        self.currency_mapping_raw = currency_mapping_raw
 
 
 @dataclass
