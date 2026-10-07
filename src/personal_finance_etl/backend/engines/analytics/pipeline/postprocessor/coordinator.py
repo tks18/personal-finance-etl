@@ -82,6 +82,16 @@ class PostProcessor:
         df_industry = self.group_calc.run(
             unique_dates, pipeline_res.industry_cf, pipeline_res.industry_pt, "INDUSTRY"
         )
+        # 6. Process Geo Level
+        df_geo = self.group_calc.run(unique_dates, pipeline_res.geo_cf, pipeline_res.geo_pt, "GEO")
+        # 7. Process Country Level
+        df_country = self.group_calc.run(
+            unique_dates, pipeline_res.country_cf, pipeline_res.country_pt, "COUNTRY"
+        )
+        # 8. Process Currency Level
+        df_currency = self.group_calc.run(
+            unique_dates, pipeline_res.currency_cf, pipeline_res.currency_pt, "CURRENCY_ID"
+        )
 
         # 3. Create the Port, Class, and Subtype final aggregated tables
         # Since df_port doesn't have the standard columns (Total_Invested_Value, etc)
@@ -99,12 +109,16 @@ class PostProcessor:
                     "INSTRUMENT_TYPE",
                     "SECTOR",
                     "INDUSTRY",
+                    "GEO",
+                    "COUNTRY",
                 ]
             )
             .with_columns(
                 pl.col("INSTRUMENT_TYPE").fill_null("Unknown"),
                 pl.col("SECTOR").fill_null("Unknown"),
                 pl.col("INDUSTRY").fill_null("Unknown"),
+                pl.col("GEO").fill_null("Unknown"),
+                pl.col("COUNTRY").fill_null("Unknown"),
             )
         )
         lazy_df_agg = lazy_df.join(master_cols, on="ISIN", how="left")
@@ -120,6 +134,10 @@ class PostProcessor:
                                 "Quantity",
                                 "Buy_Value",
                                 "Close_Value",
+                                "Buy_Value_Local",
+                                "Close_Value_Local",
+                                "Asset_PnL",
+                                "Forex_PnL",
                                 "Unrealized_Gain",
                                 "Unrealized_Loss",
                                 "FY_Realized_Gain",
@@ -133,6 +151,10 @@ class PostProcessor:
                 .agg(
                     pl.col("Buy_Value").sum().alias("Total_Invested_Value"),
                     pl.col("Close_Value").sum().alias("Total_Current_Value"),
+                    pl.col("Buy_Value_Local").sum().alias("Total_Invested_Value_Local"),
+                    pl.col("Close_Value_Local").sum().alias("Total_Current_Value_Local"),
+                    pl.col("Asset_PnL").sum().alias("Asset_PnL"),
+                    pl.col("Forex_PnL").sum().alias("Forex_PnL"),
                     pl.col("Quantity").sum().alias("Total_Quantity"),
                     pl.col("ISIN").n_unique().alias("Total_Stocks"),
                     pl.col("Unrealized_Gain").sum().alias("Unrealized_Gain"),
@@ -150,7 +172,25 @@ class PostProcessor:
                     pl.when(pl.col("Total_Invested_Value") > 0)
                     .then(pl.col("Unrealized_PL") / pl.col("Total_Invested_Value"))
                     .otherwise(0.0)
-                    .alias("Absolute_Return")
+                    .alias("Absolute_Return"),
+                    pl.when(pl.col("Unrealized_PL") != 0.0)
+                    .then(pl.col("Forex_PnL") / pl.col("Unrealized_PL"))
+                    .otherwise(0.0)
+                    .alias("Forex_Contribution_Pct"),
+                    pl.when(pl.col("Total_Invested_Value_Local") > 0)
+                    .then(pl.col("Total_Invested_Value") / pl.col("Total_Invested_Value_Local"))
+                    .otherwise(1.0)
+                    .alias("Blended_FX_Buy_Rate"),
+                    pl.when(pl.col("Total_Current_Value_Local") > 0)
+                    .then(pl.col("Total_Current_Value") / pl.col("Total_Current_Value_Local"))
+                    .otherwise(1.0)
+                    .alias("Current_FX_Rate"),
+                )
+                .with_columns(
+                    pl.when(pl.col("Blended_FX_Buy_Rate") > 0)
+                    .then((pl.col("Current_FX_Rate") / pl.col("Blended_FX_Buy_Rate")) - 1.0)
+                    .otherwise(0.0)
+                    .alias("Currency_Appreciation_Pct")
                 )
             )
 
@@ -167,6 +207,10 @@ class PostProcessor:
                     "BM_CAGR",
                     "Is_Lagging_Benchmark",
                     "Max_Drawdown",
+                    "XIRR_Local",
+                    "FX_XIRR_Impact",
+                    "BM_XIRR_Local",
+                    "Active_Return_Local",
                 ]
             ).unique(),
             on=["Closing_Date", "ISIN"],
@@ -210,6 +254,27 @@ class PostProcessor:
             if not df_industry.is_empty()
             else _aggregate_level(["Closing_Date", "INDUSTRY"])
         )
+        f_tf_geo = (
+            _aggregate_level(["Closing_Date", "GEO"]).join(
+                df_geo.lazy(), on=["Closing_Date", "GEO"], how="left"
+            )
+            if not df_geo.is_empty()
+            else _aggregate_level(["Closing_Date", "GEO"])
+        )
+        f_tf_country = (
+            _aggregate_level(["Closing_Date", "COUNTRY"]).join(
+                df_country.lazy(), on=["Closing_Date", "COUNTRY"], how="left"
+            )
+            if not df_country.is_empty()
+            else _aggregate_level(["Closing_Date", "COUNTRY"])
+        )
+        f_tf_currency = (
+            _aggregate_level(["Closing_Date", "CURRENCY_ID"]).join(
+                df_currency.lazy(), on=["Closing_Date", "CURRENCY_ID"], how="left"
+            )
+            if not df_currency.is_empty()
+            else _aggregate_level(["Closing_Date", "CURRENCY_ID"])
+        )
         f_tf_port = _aggregate_level(["Closing_Date"]).join(
             df_port.lazy().rename(PORTFOLIO_COL_RENAMES),
             on=["Closing_Date"],
@@ -224,6 +289,9 @@ class PostProcessor:
             (f_tf_inst_type, "INSTRUMENT_TYPE"),
             (f_tf_sector, "SECTOR"),
             (f_tf_industry, "INDUSTRY"),
+            (f_tf_geo, "GEO"),
+            (f_tf_country, "COUNTRY"),
+            (f_tf_currency, "CURRENCY_ID"),
         ]:
             lf = lf.with_columns(
                 (
@@ -243,6 +311,12 @@ class PostProcessor:
                 f_tf_sector = lf
             elif g == "INDUSTRY":
                 f_tf_industry = lf
+            elif g == "GEO":
+                f_tf_geo = lf
+            elif g == "COUNTRY":
+                f_tf_country = lf
+            elif g == "CURRENCY_ID":
+                f_tf_currency = lf
 
         f_tf_port = f_tf_port.with_columns(pl.lit(1.0).alias("Weight"))
 
@@ -254,5 +328,8 @@ class PostProcessor:
             "df_f_investment_analytics_instrument_type": f_tf_inst_type,
             "df_f_investment_analytics_sector": f_tf_sector,
             "df_f_investment_analytics_industry": f_tf_industry,
+            "df_f_investment_analytics_geo": f_tf_geo,
+            "df_f_investment_analytics_country": f_tf_country,
+            "df_f_investment_analytics_currency": f_tf_currency,
             "df_f_investment_analytics_portfolio": f_tf_port,
         }
