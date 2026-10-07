@@ -47,8 +47,14 @@ class TaxDataLoader:
         df_m: pl.DataFrame,
         df_i: pl.DataFrame | None,
         df_b: pl.DataFrame | None,
+        df_fx: pl.DataFrame | None = None,
     ) -> tuple[
-        pl.DataFrame, pl.DataFrame, pl.DataFrame, dict[str, dict[str, Any]], pl.DataFrame | None
+        pl.DataFrame,
+        pl.DataFrame,
+        pl.DataFrame,
+        dict[str, dict[str, Any]],
+        pl.DataFrame | None,
+        pl.DataFrame | None,
     ]:
         df_p = parse_date_col(df_p)
         df_s = parse_date_col(df_s)
@@ -61,20 +67,34 @@ class TaxDataLoader:
         if df_b is not None:
             df_b = parse_date_col(df_b)
 
+        if df_fx is not None:
+            df_fx = parse_date_col(df_fx)
+
         for c in ["Quantity", "Price", "Value"]:
             df_p = clean_numeric_col(df_p, c)
-        for c in ["Quantity", "Price", "Sell_Value"]:
+        for c in ["Quantity", "Sell_Price", "Sell_Value"]:
             df_s = clean_numeric_col(df_s, c)
         for c in ["Quantity", "Closing_Price", "Buy_Value"]:
             df_m = clean_numeric_col(df_m, c)
 
-        return df_p, df_s, df_m, isin_master, df_b
+        return df_p, df_s, df_m, isin_master, df_b, df_fx
 
     @classmethod
     def load_all(
-        cls, p_path: str, s_path: str, m_path: str, i_path: str | None, b_path: str | None
+        cls,
+        p_path: str,
+        s_path: str,
+        m_path: str,
+        i_path: str | None,
+        b_path: str | None,
+        fx_path: str | None = None,
     ) -> tuple[
-        pl.DataFrame, pl.DataFrame, pl.DataFrame, dict[str, dict[str, Any]], pl.DataFrame | None
+        pl.DataFrame,
+        pl.DataFrame,
+        pl.DataFrame,
+        dict[str, dict[str, Any]],
+        pl.DataFrame | None,
+        pl.DataFrame | None,
     ]:
 
         df_p = pl.read_csv(p_path, infer_schema_length=500_000)
@@ -87,7 +107,11 @@ class TaxDataLoader:
         if b_path and os.path.exists(b_path):
             df_b = pl.read_csv(b_path, infer_schema_length=500_000)
 
-        return cls._normalize(df_p, df_s, df_m, df_i, df_b)
+        df_fx = None
+        if fx_path and os.path.exists(fx_path):
+            df_fx = pl.read_csv(fx_path, infer_schema_length=500_000)
+
+        return cls._normalize(df_p, df_s, df_m, df_i, df_b, df_fx)
 
     @classmethod
     def load_from_dataframes(
@@ -97,8 +121,14 @@ class TaxDataLoader:
         df_m: pl.DataFrame,
         df_i: pl.DataFrame | None,
         df_b: pl.DataFrame | None,
+        df_fx: pl.DataFrame | None = None,
     ) -> tuple[
-        pl.DataFrame, pl.DataFrame, pl.DataFrame, dict[str, dict[str, Any]], pl.DataFrame | None
+        pl.DataFrame,
+        pl.DataFrame,
+        pl.DataFrame,
+        dict[str, dict[str, Any]],
+        pl.DataFrame | None,
+        pl.DataFrame | None,
     ]:
 
-        return cls._normalize(df_p, df_s, df_m, df_i, df_b)
+        return cls._normalize(df_p, df_s, df_m, df_i, df_b, df_fx)
