@@ -202,4 +202,6 @@ class BronzeLayer:
             raw_benchmark_master=_get_lf("bronze.r_Benchmark_Master"),
             raw_macro_parameters=_get_lf("bronze.r_Macro_Parameters"),
             column_master=_get_df("bronze.r_Column_Master"),
+            us_stock_transactions_raw=_get_lf("bronze.r_US_Stock_Transactions"),
+            currency_mapping_raw=_get_lf("bronze.r_Currency_Mapping"),
         )
