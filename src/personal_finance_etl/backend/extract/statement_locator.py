@@ -8,7 +8,9 @@ def categorize_statement_files(folder_path: str, strict: bool = True) -> dict[st
     """Does a single directory traversal to categorize all statement files."""
     all_files = glob.glob(os.path.join(folder_path, "**", "*.*"), recursive=True)
     all_files = [f.replace("\\", "/") for f in all_files if not os.path.basename(f).startswith("~")]
-    logger.debug(f"[DISCOV:TRACE] Scanning directory: {folder_path} - Found {len(all_files)} total blobs.")
+    logger.debug(
+        f"[DISCOV:TRACE] Scanning directory: {folder_path} - Found {len(all_files)} total blobs."
+    )
 
     categories = {
         "stock_pl": [f for f in all_files if f.endswith(".xlsx") and "Stock PL Statements" in f],
@@ -17,12 +19,17 @@ def categorize_statement_files(folder_path: str, strict: bool = True) -> dict[st
         ],
         "stock_orders": [f for f in all_files if f.endswith(".xlsx") and "Stock - Orders" in f],
         "mf_orders": [f for f in all_files if f.endswith(".xlsx") and "Mutual Funds - Orders" in f],
+        "us_stock_transactions": [
+            f
+            for f in all_files
+            if f.endswith(".xlsx") and "IND Money (US Stocks)" in f and "Transaction Reports" in f
+        ],
     }
 
     total_files = sum(len(f) for f in categories.values())
 
     for cat, files in categories.items():
-        if not files and strict:
+        if not files and strict and cat != "us_stock_transactions":
             raise FileNotFoundError(
                 f"No files found for category: '{cat}'. Please ensure statements are present."
             )
