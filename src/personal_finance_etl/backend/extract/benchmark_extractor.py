@@ -82,7 +82,7 @@ class BenchmarkExtractor:
             pl.lit(row["ID"]).alias("ID"),
             pl.lit(row["Benchmark_Name"]).alias("Benchmark_Name"),
             pl.lit(ticker).alias("yF_Ticker"),
-            pl.lit(row["Currency"]).alias("Currency"),
+            pl.lit(row["CURRENCY_ID"]).alias("CURRENCY_ID"),
         )
 
         logger.debug(f"[Benchmark Extractor] Parsed {df_new.height} new records for {ticker}.")
@@ -92,7 +92,7 @@ class BenchmarkExtractor:
         huge_drops = pct_drops[pct_drops < -0.4]  # pyright: ignore
         if not huge_drops.empty:  # pyright: ignore
             drop_dts = [d.strftime("%Y-%m-%d") for d in huge_drops.index]  # pyright: ignore
-            warn_msg = f"⚠ Anomalous drops (>40%) in {ticker} on {', '.join(drop_dts)}"
+            warn_msg = f"⚠ Anomalous drops (>40%) in {ticker} on {', '.join(drop_dts)}"  # pyright: ignore
             logger.warning(f"[Benchmark Extractor] {warn_msg}")
 
         msg = f"✓ API Fetched {ticker} ({fetch_start} to {end_dt}) - {df_new.height} rows"
@@ -112,7 +112,7 @@ class BenchmarkExtractor:
         Executes parallel fetching, chunks results by year, injects Parquet bytes to Raw Store,
         and returns a list of injected virtual file paths to be passed to BronzeLayer.load.
         """
-        required_cols = ["ID", "Benchmark_Name", "yF_Ticker", "Currency"]
+        required_cols = ["ID", "Benchmark_Name", "yF_Ticker", "CURRENCY_ID"]
         missing_cols = [c for c in required_cols if c not in df_m.columns]
         if missing_cols:
             raise ValueError(f"Missing columns in Benchmark Master: {missing_cols}")
