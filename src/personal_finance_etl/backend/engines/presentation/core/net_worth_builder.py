@@ -287,9 +287,28 @@ class NetWorthBuilder:
                         pl.col("Total_Invested_Value").alias("Closing_Investment_Book_Value"),
                         pl.col("XIRR").alias("Closing_Investment_XIRR"),
                         pl.col("Unrealized_PL").alias("Closing_Unrealized_PL"),
+                        pl.col("Asset_PnL").alias("Closing_Asset_PnL"),
+                        pl.col("Forex_PnL").alias("Closing_Forex_PnL"),
+                        pl.col("Total_Current_Value_Local").alias("Closing_Investment_Market_Value_Local"),
+                        pl.col("Total_Invested_Value_Local").alias("Closing_Investment_Book_Value_Local"),
                     ]
                 )
             )
+
+            df_inv_curr = self.dfs.get("df_f_investment_analytics_currency")
+            if df_inv_curr is not None:
+                lf_inv_curr = df_inv_curr.lazy() if isinstance(df_inv_curr, pl.DataFrame) else df_inv_curr
+                lf_foreign_exposure = (
+                    lf_inv_curr.with_columns(pl.col("Closing_Date").dt.month_end().alias("MONTH_END_DATE"))
+                    .filter(pl.col("CURRENCY_ID") != "INR_INR")
+                    .group_by("MONTH_END_DATE")
+                    .agg(pl.col("Total_Current_Value").sum().fill_null(0.0).alias("Total_Foreign_Currency_Exposure"))
+                )
+                lf_inv_port_agg = lf_inv_port_agg.join(lf_foreign_exposure, on="MONTH_END_DATE", how="left").with_columns(
+                    pl.col("Total_Foreign_Currency_Exposure").fill_null(0.0)
+                )
+            else:
+                lf_inv_port_agg = lf_inv_port_agg.with_columns(pl.lit(0.0).alias("Total_Foreign_Currency_Exposure"))
 
             lf_monthly_totals = (
                 lf_monthly_totals.join(
@@ -302,6 +321,17 @@ class NetWorthBuilder:
                     pl.col("Closing_Investment_Book_Value").fill_null(0.0),
                     pl.col("Closing_Investment_XIRR").fill_null(0.0),
                     pl.col("Closing_Unrealized_PL").fill_null(0.0),
+                    pl.col("Closing_Asset_PnL").fill_null(0.0),
+                    pl.col("Closing_Forex_PnL").fill_null(0.0),
+                    pl.col("Closing_Investment_Market_Value_Local").fill_null(0.0),
+                    pl.col("Closing_Investment_Book_Value_Local").fill_null(0.0),
+                    pl.col("Total_Foreign_Currency_Exposure").fill_null(0.0),
+                )
+                .with_columns(
+                    pl.when(pl.col("Total_Net_Worth") > 0)
+                    .then(pl.col("Total_Foreign_Currency_Exposure") / pl.col("Total_Net_Worth"))
+                    .otherwise(0.0)
+                    .alias("Foreign_Exposure_Pct")
                 )
                 .with_columns(
                     pl.when(pl.col("Closing_Investment_Book_Value") > 0)
@@ -339,6 +369,12 @@ class NetWorthBuilder:
                 pl.lit(0.0).alias("Closing_Investment_Book_Value"),
                 pl.lit(0.0).alias("Closing_Investment_XIRR"),
                 pl.lit(0.0).alias("Closing_Unrealized_PL"),
+                pl.lit(0.0).alias("Closing_Asset_PnL"),
+                pl.lit(0.0).alias("Closing_Forex_PnL"),
+                pl.lit(0.0).alias("Closing_Investment_Market_Value_Local"),
+                pl.lit(0.0).alias("Closing_Investment_Book_Value_Local"),
+                pl.lit(0.0).alias("Total_Foreign_Currency_Exposure"),
+                pl.lit(0.0).alias("Foreign_Exposure_Pct"),
             )
 
         lf_monthly_totals = (
