@@ -74,6 +74,7 @@ class InvestmentAnalyticsBuilder:
                 "MONTH_START_DATE",
                 "Max_Closing_Date",
                 "ISIN",
+                "CURRENCY_ID",
                 "INSTRUMENT_NAME",
                 "INSTRUMENT_CLASS",
                 "INSTRUMENT_TYPE",
@@ -84,6 +85,10 @@ class InvestmentAnalyticsBuilder:
             pl.col("Close_Value").sum().fill_null(0.0).alias("ISIN_Market_Value"),
             pl.col("Buy_Value").sum().fill_null(0.0).alias("ISIN_Book_Value"),
             pl.col("P/L").sum().fill_null(0.0).alias("ISIN_Unrealized_PnL"),
+            pl.col("Close_Value_Local").sum().fill_null(0.0).alias("ISIN_Market_Value_Local"),
+            pl.col("Buy_Value_Local").sum().fill_null(0.0).alias("ISIN_Book_Value_Local"),
+            pl.col("Asset_PnL").sum().fill_null(0.0).alias("ISIN_Asset_PnL"),
+            pl.col("Forex_PnL").sum().fill_null(0.0).alias("ISIN_Forex_PnL"),
             pl.when(pl.col("P/L") < 0)
             .then(pl.col("P/L"))
             .otherwise(0.0)
@@ -173,11 +178,45 @@ class InvestmentAnalyticsBuilder:
             .alias("Tax_Harvesting_Priority_Score")
         )
 
+        lf_isin_agg = lf_isin_agg.with_columns(
+            pl.when(pl.col("ISIN_Unrealized_PnL") != 0.0)
+            .then(pl.col("ISIN_Forex_PnL") / pl.col("ISIN_Unrealized_PnL"))
+            .otherwise(0.0)
+            .alias("ISIN_Forex_Contribution_Pct")
+        )
+
+        df_inv_isin = self.dfs.get("df_f_investment_analytics_isin")
+        if df_inv_isin is not None:
+            lf_inv_isin = df_inv_isin.lazy() if isinstance(df_inv_isin, pl.DataFrame) else df_inv_isin
+            lf_inv_isin_latest = (
+                lf_inv_isin.with_columns(pl.col("Closing_Date").dt.month_start().alias("MONTH_START_DATE"))
+                .filter(pl.col("Closing_Date") == pl.col("Closing_Date").max().over("MONTH_START_DATE"))
+                .select(["MONTH_START_DATE", "ISIN", "FX_XIRR_Impact", "XIRR_Local", "BM_XIRR", "BM_XIRR_Local", "Active_Return", "Active_Return_Local"])
+            )
+            lf_isin_agg = lf_isin_agg.join(lf_inv_isin_latest, on=["MONTH_START_DATE", "ISIN"], how="left").with_columns(
+                pl.col("FX_XIRR_Impact").fill_null(0.0).alias("ISIN_FX_XIRR_Impact"),
+                pl.col("XIRR_Local").fill_null(0.0).alias("ISIN_XIRR_Local"),
+                pl.col("BM_XIRR").fill_null(0.0).alias("ISIN_BM_XIRR"),
+                pl.col("BM_XIRR_Local").fill_null(0.0).alias("ISIN_BM_XIRR_Local"),
+                pl.col("Active_Return").fill_null(0.0).alias("ISIN_Active_Return"),
+                pl.col("Active_Return_Local").fill_null(0.0).alias("ISIN_Active_Return_Local"),
+            )
+        else:
+            lf_isin_agg = lf_isin_agg.with_columns(
+                pl.lit(0.0).alias("ISIN_FX_XIRR_Impact"),
+                pl.lit(0.0).alias("ISIN_XIRR_Local"),
+                pl.lit(0.0).alias("ISIN_BM_XIRR"),
+                pl.lit(0.0).alias("ISIN_BM_XIRR_Local"),
+                pl.lit(0.0).alias("ISIN_Active_Return"),
+                pl.lit(0.0).alias("ISIN_Active_Return_Local"),
+            )
+
         return lf_isin_agg.select(
             [
                 "MONTH_START_DATE",
                 "Max_Closing_Date",
                 "ISIN",
+                "CURRENCY_ID",
                 "INSTRUMENT_NAME",
                 "INSTRUMENT_CLASS",
                 "INSTRUMENT_TYPE",
@@ -185,7 +224,12 @@ class InvestmentAnalyticsBuilder:
                 "SECTOR",
                 "ISIN_Market_Value",
                 "ISIN_Book_Value",
+                "ISIN_Market_Value_Local",
+                "ISIN_Book_Value_Local",
                 "ISIN_Unrealized_PnL",
+                "ISIN_Asset_PnL",
+                "ISIN_Forex_PnL",
+                "ISIN_Forex_Contribution_Pct",
                 "ISIN_Harvestable_Loss",
                 "ISIN_Weight",
                 "Class_Weight",
@@ -195,5 +239,11 @@ class InvestmentAnalyticsBuilder:
                 "Sector_Weight",
                 "Monthly_Market_Value_Change_Pct",
                 "Tax_Harvesting_Priority_Score",
+                "ISIN_FX_XIRR_Impact",
+                "ISIN_XIRR_Local",
+                "ISIN_BM_XIRR",
+                "ISIN_BM_XIRR_Local",
+                "ISIN_Active_Return",
+                "ISIN_Active_Return_Local",
             ]
         )
