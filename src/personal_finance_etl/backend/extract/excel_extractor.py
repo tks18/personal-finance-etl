@@ -83,6 +83,7 @@ def extract_mf_market_data_raw(valid_files: list[tuple[str, str, bytes]]) -> pl.
             pl.lit(filename).alias("__file_name__"),
             pl.lit(folder_path).alias("__folder_path__"),
             pl.lit(month_date).alias("Month Date"),
+            pl.lit("Indian MF").alias("FILE_CATEGORY"),
         )
         all_dfs.append(df_processed)
     if not all_dfs:
@@ -142,6 +143,7 @@ def extract_mf_transactions_raw(valid_files: list[tuple[str, str, bytes]]) -> pl
             pl.lit(filename).alias("__file_name__"),
             pl.lit(folder_path).alias("__folder_path__"),
             pl.lit(month_date).alias("Month Date"),
+            pl.lit("Indian MF").alias("FILE_CATEGORY"),
         )
         all_dfs.append(df_processed)
     if not all_dfs:
@@ -206,6 +208,7 @@ def extract_stock_market_data_raw(valid_files: list[tuple[str, str, bytes]]) -> 
             pl.lit(filename).alias("__file_name__"),
             pl.lit(folder_path).alias("__folder_path__"),
             pl.lit(month_date).alias("Month Date"),
+            pl.lit("Indian Stocks").alias("FILE_CATEGORY"),
         )
         all_dfs.append(df_processed)
     if not all_dfs:
@@ -243,6 +246,38 @@ def extract_stock_transactions_raw(valid_files: list[tuple[str, str, bytes]]) ->
         df_processed = df_processed.with_columns(
             pl.lit(filename).alias("__file_name__"),
             pl.lit(folder_path).alias("__folder_path__"),
+            pl.lit("Indian Stocks").alias("FILE_CATEGORY"),
+        )
+        all_dfs.append(df_processed)
+    if not all_dfs:
+        return pl.LazyFrame()
+    return pl.concat(all_dfs, how="diagonal").lazy()
+
+def _process_us_stock_transactions(filename: str, raw_bytes: bytes) -> pl.DataFrame:
+    t0 = time.perf_counter()
+    logger.debug(f"[EXTRACT:EXCEL] Starting parse for US Stock Transaction Statement: {filename}")
+    excel_reader = fastexcel.read_excel(raw_bytes)
+    sheet_name = excel_reader.sheet_names[0]
+    df_raw = excel_reader.load_sheet(sheet_name, header_row=0).to_polars()
+    if "Stock Name" in df_raw.columns:
+        final_df = df_raw.filter(pl.col("Stock Name").is_not_null())
+        logger.debug(
+            f"[EXTRACT:EXCEL] Parsed {filename} in {time.perf_counter() - t0:.2f}s - {final_df.height} rows extracted"
+        )
+        return final_df
+    logger.debug(f"[EXTRACT:EXCEL] Skipped {filename}: Could not find 'Stock Name' column")
+    return pl.DataFrame()
+
+def extract_us_stock_transactions_raw(valid_files: list[tuple[str, str, bytes]]) -> pl.LazyFrame:
+    all_dfs = []
+    for filename, folder_path, raw_bytes in valid_files:
+        df_processed = _process_us_stock_transactions(filename, raw_bytes)
+        if df_processed.is_empty():
+            continue
+        df_processed = df_processed.with_columns(
+            pl.lit(filename).alias("__file_name__"),
+            pl.lit(folder_path).alias("__folder_path__"),
+            pl.lit("US Stocks").alias("FILE_CATEGORY"),
         )
         all_dfs.append(df_processed)
     if not all_dfs:
