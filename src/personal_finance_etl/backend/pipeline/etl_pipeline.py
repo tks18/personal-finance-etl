@@ -5,6 +5,7 @@ import sys
 import time
 import traceback
 import zlib
+from datetime import date
 from typing import Any, cast
 
 import polars as pl
@@ -29,6 +30,8 @@ from personal_finance_etl.backend.load.silver import SilverLayer
 from personal_finance_etl.backend.pipeline.benchmark_pipeline import BenchmarkPipeline
 from personal_finance_etl.backend.pipeline.core.extractor import DataExtractor
 from personal_finance_etl.backend.pipeline.core.transformer import TransformationDAG
+from personal_finance_etl.backend.pipeline.currency_pipeline import CurrencyPipeline
+from personal_finance_etl.backend.pipeline.us_market_pipeline import USMarketPipeline
 from personal_finance_etl.backend.utils.interfaces import ILogger
 from personal_finance_etl.backend.utils.logger import (
     add_file_handler,
@@ -69,6 +72,80 @@ class ETLOrchestrator:
             df_master=self.dfs["df_d_benchmark_master"],
         )
 
+    def _process_currency(self, cp: ControlPlane, bronze: BronzeLayer) -> None:
+        pipeline = CurrencyPipeline(cp, bronze, self.status_queue, max_workers=8)
+
+        # Start Date: Earliest date in Calendar
+        cal_pd = self.dfs["df_d_calendar"]
+        if cal_pd.is_empty():
+            global_start_date = date.today()
+        else:
+            sd = cal_pd.select(pl.min("Date")).item()
+            global_start_date = sd if sd is not None else date.today()
+
+        # End Date: Max date of Indian Market Data
+        df_market = self.dfs.get("df_f_investment_market_data")
+        global_end_date = date.today()
+        if df_market is not None and not df_market.is_empty():
+            ed = df_market.select(pl.col("Date").drop_nulls().max()).item()
+            if ed is not None:
+                global_end_date = ed
+
+        self.dfs["df_f_currency_fx_rates"] = pipeline.run(
+            df_currency=self.dfs["df_d_currency"],
+            global_start_date=global_start_date,
+            global_end_date=global_end_date,
+        )
+
+    def _process_us_market_data(self, cp: ControlPlane, bronze: BronzeLayer) -> None:
+        pipeline = USMarketPipeline(cp, bronze, self.status_queue, max_workers=8)
+
+        # Start Date: Earliest US Stock transaction
+        df_purchase = self.dfs.get("df_f_tf_inv_purchase")
+        df_sale = self.dfs.get("df_f_tf_inv_sale")
+
+        valid_starts: list[date] = []
+        if df_purchase is not None and not df_purchase.is_empty():
+            us_p = df_purchase.filter(pl.col("FILE_CATEGORY") == "US Stocks")
+            if not us_p.is_empty():
+                d = us_p.select(pl.col("Date").drop_nulls().min()).item()
+                if isinstance(d, date):
+                    valid_starts.append(d)
+
+        if df_sale is not None and not df_sale.is_empty():
+            us_s = df_sale.filter(pl.col("FILE_CATEGORY") == "US Stocks")
+            if not us_s.is_empty():
+                d = us_s.select(pl.col("Date").drop_nulls().min()).item()
+                if isinstance(d, date):
+                    valid_starts.append(d)
+        global_start_date = min(valid_starts) if valid_starts else date.today()
+
+        # End Date: Max date of Indian Market Data
+        df_market = self.dfs.get("df_f_investment_market_data")
+        global_end_date = date.today()
+        if df_market is not None and not df_market.is_empty():
+            ed = df_market.select(pl.col("Date").drop_nulls().max()).item()
+            if ed is not None:
+                global_end_date = ed
+
+        df_us_market = pipeline.run(
+            df_purchase=self.dfs["df_f_tf_inv_purchase"],
+            df_sale=self.dfs["df_f_tf_inv_sale"],
+            df_master=self.dfs["df_d_investment_master"],
+            df_fx=self.dfs["df_f_currency_fx_rates"],
+            global_start_date=global_start_date,
+            global_end_date=global_end_date,
+        )
+
+        if not df_us_market.is_empty():
+            # Union into f_Investment_Market_Data
+            df_market_existing = self.dfs.get("df_f_investment_market_data")
+            if df_market_existing is not None and not df_market_existing.is_empty():
+                df_combined = pl.concat([df_market_existing, df_us_market], how="diagonal_relaxed")
+                self.dfs["df_f_investment_market_data"] = df_combined
+            else:
+                self.dfs["df_f_investment_market_data"] = df_us_market
+
     def _run_engines(self) -> None:
 
         logger.info("Starting Investment Quant Engine...")
@@ -81,6 +158,7 @@ class ETLOrchestrator:
             df_i=self.dfs["df_d_investment_master"],
             df_b=self.dfs["df_f_investment_benchmark_data"],
             df_t=self.dfs["df_d_macro_parameters"],
+            df_fx=self.dfs.get("df_f_currency_fx_rates"),
             status_queue=self.status_queue,
             rules=self.rules,
             start_date=None,
@@ -214,6 +292,9 @@ class ETLOrchestrator:
                 discovered_files["macro_parameters"] = [
                     self.cfg.MACRO_PARAMETERS_CSV_PATH.replace("\\", "/")
                 ]
+                discovered_files["currency_mapping"] = [
+                    self.cfg.CURRENCY_MAPPING_CSV_PATH.replace("\\", "/")
+                ]
                 discovered_files["column_master"] = [self.cfg.COLUMN_MASTER_PATH.replace("\\", "/")]
                 logger.info(
                     "[DISCOV] Injected 8 dynamic configuration assets (7 CSV, 1 SQLite DB)."
@@ -284,6 +365,8 @@ class ETLOrchestrator:
             )
 
             # Phase 3.5 Dynamic Extraction
+            self._process_currency(cp, bronze)
+            self._process_us_market_data(cp, bronze)
             self._process_benchmark(cp, bronze)
 
             # Analytics Phase
