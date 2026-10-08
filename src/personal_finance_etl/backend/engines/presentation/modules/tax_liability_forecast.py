@@ -47,15 +47,15 @@ class TaxLiabilityForecastBuilder:
         )
         # Fallback dividend rate from TOML — live value joined from macro table below
         fallback_div_rate = (
-            self.rules.assumptions.macro.fallback_dividend_income_rate if self.rules else 0.30
+            self.rules.assumptions.macro.fallback_ordinary_income_rate if self.rules else 0.30
         )
 
-        # Join Dividend_Income_Tax_Rate from d_macro_parameters using the same asof pattern
+        # Join Ordinary Income Tax Rate from d_macro_parameters using the same asof pattern
         df_macro = self.dfs.get("df_d_macro_parameters")
         if df_macro is not None:
             lf_macro = (df_macro.lazy() if isinstance(df_macro, pl.DataFrame) else df_macro).select(
                 pl.col("FY_Start_Date").cast(pl.Date),
-                pl.col("Dividend_Income_Tax_Rate").cast(pl.Float64),
+                pl.col("Estimated_Ordinary_Income_Tax_Rate").cast(pl.Float64),
             )
             df_monthly_tax = (
                 df_monthly_tax.sort("Closing_Date")
@@ -65,11 +65,13 @@ class TaxLiabilityForecastBuilder:
                     right_on="FY_Start_Date",
                     strategy="backward",
                 )
-                .with_columns(pl.col("Dividend_Income_Tax_Rate").fill_null(fallback_div_rate))
+                .with_columns(
+                    pl.col("Estimated_Ordinary_Income_Tax_Rate").fill_null(fallback_div_rate)
+                )
             )
         else:
             df_monthly_tax = df_monthly_tax.with_columns(
-                pl.lit(fallback_div_rate).alias("Dividend_Income_Tax_Rate")
+                pl.lit(fallback_div_rate).alias("Estimated_Ordinary_Income_Tax_Rate")
             )
 
         lf_inc_agg = self.base_lf.get("lf_inc_agg")
@@ -117,8 +119,10 @@ class TaxLiabilityForecastBuilder:
                 .otherwise(0.0)
                 .sum()
                 .alias("Unrealized_Losses"),
-                # Carry forward the FY-specific dividend tax rate (last observation in month)
-                pl.col("Dividend_Income_Tax_Rate").last().alias("Dividend_Income_Tax_Rate"),
+                # Carry forward the FY-specific ordinary tax rate (last observation in month)
+                pl.col("Estimated_Ordinary_Income_Tax_Rate")
+                .last()
+                .alias("Estimated_Ordinary_Income_Tax_Rate"),
             )
             .join(df_inc_tax, on="MONTH_START_DATE", how="left")
             .with_columns(
@@ -138,10 +142,10 @@ class TaxLiabilityForecastBuilder:
                         )
                         * eq_ltcg
                     )
-                    # Dividend rate sourced from macro table (individual marginal slab)
+                    # Estimated_Ordinary_Income_Tax_Rate sourced from macro table (individual marginal slab)
                     + (
                         pl.col("Taxable_Dividends").clip(lower_bound=0.0)
-                        * pl.col("Dividend_Income_Tax_Rate")
+                        * pl.col("Estimated_Ordinary_Income_Tax_Rate")
                     )
                 ).alias("Projected_Tax_Bill"),
                 (pl.col("Unrealized_Losses").abs()).alias("Harvesting_Offset_Remaining"),
