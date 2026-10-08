@@ -1,3 +1,6 @@
+from datetime import datetime, timezone
+from typing import Any
+
 import polars as pl
 
 
@@ -121,7 +124,9 @@ def get_sale_reference(
     return df_final
 
 
-def transform_stg_investment_market_data(refs: list[pl.LazyFrame], default_currency_id: str) -> pl.LazyFrame:
+def transform_stg_investment_market_data(
+    refs: list[pl.LazyFrame], default_currency_id: str
+) -> pl.LazyFrame:
     """
     Translates DAX UNION + SUMMARIZE.
     Concatenates the aggregated tables and selects the final columns.
@@ -162,6 +167,24 @@ def transform_stg_investment_market_data(refs: list[pl.LazyFrame], default_curre
         df_union = df_union.with_columns(pl.lit(default_currency_id).alias("CURRENCY_ID"))
     else:
         df_union = df_union.with_columns(pl.col("CURRENCY_ID").fill_null(default_currency_id))
+
+    if "Data_Provider" not in cols:
+        df_union = df_union.with_columns(pl.lit("Broker Statement").alias("Data_Provider"))
+    else:
+        df_union = df_union.with_columns(pl.col("Data_Provider").fill_null("Broker Statement"))
+
+    if "Extraction_Time" not in cols:
+        # Use a placeholder timestamp for local files/broker statements
+        default_time = datetime(2000, 1, 1, tzinfo=timezone.utc)  # noqa: UP017
+        df_union = df_union.with_columns(pl.lit(default_time).alias("Extraction_Time"))
+    else:
+        default_time = datetime(2000, 1, 1, tzinfo=timezone.utc)  # noqa: UP017
+        df_union = df_union.with_columns(pl.col("Extraction_Time").fill_null(default_time))
+
+    if "Is_Imputed" not in cols:
+        df_union = df_union.with_columns(pl.lit(False).alias("Is_Imputed"))
+    else:
+        df_union = df_union.with_columns(pl.col("Is_Imputed").fill_null(False))
 
     select_cols = [
         "__file_name__",
