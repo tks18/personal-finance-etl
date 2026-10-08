@@ -15,7 +15,8 @@ from personal_finance_etl.backend.engines.analytics.rules.macro import FYMacroPa
 
 
 class FXRateProvider:
-    def __init__(self, df_fx: pl.DataFrame | None):
+    def __init__(self, df_fx: pl.DataFrame | None, default_currency_id: str):
+        self.default_currency_id = default_currency_id
         self.fx_map: dict[tuple[date, str], float] = {}
         if df_fx is not None and not df_fx.is_empty():
             # Fast O(1) dictionary
@@ -27,7 +28,7 @@ class FXRateProvider:
                 self.fx_map[(d, row["Currency_ID"])] = float(row["FX_Rate"])
 
     def get_rate(self, d: date, currency_id: str) -> float:
-        if currency_id == "INR_INR" or not currency_id:
+        if currency_id == self.default_currency_id or not currency_id:
             return 1.0
 
         rate = self.fx_map.get((d, currency_id))
@@ -59,7 +60,7 @@ class RunContext:
     df_fx: pl.DataFrame | None = None
 
     def __post_init__(self):
-        self.fx_provider = FXRateProvider(self.df_fx)
+        self.fx_provider = FXRateProvider(self.df_fx, self.rules.DEFAULT_CURRENCY_ID)
 
     @classmethod
     def load(
