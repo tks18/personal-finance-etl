@@ -1,3 +1,4 @@
+import zlib
 from collections.abc import Mapping
 from typing import Any
 
@@ -24,10 +25,12 @@ class WealthRiskAnalyticsBuilder:
         dfs: Mapping[str, pl.DataFrame | pl.LazyFrame],
         base_lf: dict[str, Any],
         rules: FinancialRules,
+        root_seed: str = "default_seed",
     ) -> None:
         self.dfs = dfs
         self.base_lf = base_lf
         self.rules = rules
+        self.root_seed = root_seed
         # Cache DOB parts once to avoid repeated string splits in LazyFrame expressions
         dob_parts = rules.assumptions.monte_carlo.date_of_birth.split("-")
         self._dob_year = int(dob_parts[0])
@@ -163,10 +166,14 @@ class WealthRiskAnalyticsBuilder:
                 )
                 .cast(pl.Int32)
                 .alias("Age_Months"),
-                # Month-year derived seed: same month always produces identical MC paths,
-                # large integer gap between adjacent months prevents RNG correlation.
-                # e.g. Jan 2025 = 2025*12+1 = 24301, Feb 2025 = 24302
-                (pl.col("_temp_year") * 12 + pl.col("_temp_month"))
+                # Month-year derived seed + deterministic run hash:
+                # Same month + same run produces identical MC paths,
+                # gap prevents correlation.
+                (
+                    pl.col("_temp_year") * 12
+                    + pl.col("_temp_month")
+                    + (zlib.crc32(self.root_seed.encode("utf-8")) % 1_000_000)
+                )
                 .cast(pl.Int32)
                 .alias("Seed_Int"),
             )
