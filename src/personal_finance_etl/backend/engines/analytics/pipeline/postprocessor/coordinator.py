@@ -23,6 +23,7 @@ from personal_finance_etl.backend.engines.analytics.pipeline.postprocessor.xirr 
     PortfolioXIRRCalculator,
 )
 from personal_finance_etl.backend.types.pipeline import PipelineExecutionResult
+from personal_finance_etl.backend.utils.identity import generate_deterministic_id
 
 
 class PostProcessor:
@@ -301,17 +302,20 @@ class PostProcessor:
             ).drop(["annualized_twr", "bm_annualized_twr"], strict=False)
 
             if g not in ["ISIN", "CURRENCY_ID"]:
-                lf = lf.drop([
-                    "Total_Invested_Value_Local", 
-                    "Total_Current_Value_Local", 
-                    "Blended_FX_Buy_Rate", 
-                    "Current_FX_Rate", 
-                    "Currency_Appreciation_Pct", 
-                    "XIRR_Local", 
-                    "BM_XIRR_Local", 
-                    "Active_Return_Local", 
-                    "FX_XIRR_Impact"
-                ], strict=False)
+                lf = lf.drop(
+                    [
+                        "Total_Invested_Value_Local",
+                        "Total_Current_Value_Local",
+                        "Blended_FX_Buy_Rate",
+                        "Current_FX_Rate",
+                        "Currency_Appreciation_Pct",
+                        "XIRR_Local",
+                        "BM_XIRR_Local",
+                        "Active_Return_Local",
+                        "FX_XIRR_Impact",
+                    ],
+                    strict=False,
+                )
 
             if g == "ISIN":
                 f_tf_isin = lf
@@ -332,20 +336,96 @@ class PostProcessor:
             elif g == "CURRENCY_ID":
                 f_tf_currency = lf
 
-        f_tf_port = f_tf_port.with_columns(pl.lit(1.0).alias("Weight")).drop([
-            "Total_Invested_Value_Local", 
-            "Total_Current_Value_Local", 
-            "Blended_FX_Buy_Rate", 
-            "Current_FX_Rate", 
-            "Currency_Appreciation_Pct", 
-            "XIRR_Local", 
-            "BM_XIRR_Local", 
-            "Active_Return_Local", 
-            "FX_XIRR_Impact"
-        ], strict=False)
+        f_tf_port = f_tf_port.with_columns(pl.lit(1.0).alias("Weight")).drop(
+            [
+                "Total_Invested_Value_Local",
+                "Total_Current_Value_Local",
+                "Blended_FX_Buy_Rate",
+                "Current_FX_Rate",
+                "Currency_Appreciation_Pct",
+                "XIRR_Local",
+                "BM_XIRR_Local",
+                "Active_Return_Local",
+                "FX_XIRR_Impact",
+            ],
+            strict=False,
+        )
+
+        df_re = (
+            pl.LazyFrame(pipeline_res.global_re)
+            if pipeline_res.global_re
+            else pl.LazyFrame(
+                schema={
+                    "date": pl.Date,
+                    "gain": pl.Float64,
+                    "gain_type": pl.String,
+                    "is_loss": pl.Boolean,
+                    "tax_type": pl.String,
+                    "asset_pnl_local": pl.Float64,
+                    "asset_pnl": pl.Float64,
+                    "forex_pnl": pl.Float64,
+                    "currency_id": pl.String,
+                    "shadow_qty_sold": pl.Float64,
+                    "sale_id": pl.String,
+                    "purchase_id": pl.String,
+                    "lot_id": pl.String,
+                }
+            )
+        )
+
+        for re_event in pipeline_res.global_recon_events:
+            re_event["Run_ID"] = "UNKNOWN"
+            re_event["Reconciliation_Group_ID"] = generate_deterministic_id(
+                "RECON_GROUP",
+                {
+                    "ISIN": re_event.get("ISIN"),
+                    "Reconciliation_Date": re_event.get("Reconciliation_Date"),
+                    "Adjustment_Type": re_event.get("Adjustment_Type"),
+                    "Broker_Quantity": re_event.get("Broker_Quantity"),
+                    "Reconstructed_Quantity": re_event.get("Reconstructed_Quantity"),
+                    "Broker_Cost_Basis": re_event.get("Broker_Cost_Basis"),
+                    "Reconstructed_Cost_Basis": re_event.get("Reconstructed_Cost_Basis"),
+                },
+            )
+            re_event["Reconciliation_Event_ID"] = generate_deterministic_id(
+                "RECON_EVENT",
+                {
+                    "Reconciliation_Group_ID": re_event["Reconciliation_Group_ID"],
+                    "Lot_ID": re_event.get("Lot_ID"),
+                    "Adjustment_Type": re_event.get("Adjustment_Type"),
+                },
+            )
+
+        df_recon = (
+            pl.LazyFrame(pipeline_res.global_recon_events)
+            if pipeline_res.global_recon_events
+            else pl.LazyFrame(
+                schema={
+                    "Reconciliation_Group_ID": pl.String,
+                    "Reconciliation_Event_ID": pl.String,
+                    "Run_ID": pl.String,
+                    "ISIN": pl.String,
+                    "Reconciliation_Date": pl.Date,
+                    "Lot_ID": pl.String,
+                    "Purchase_ID": pl.String,
+                    "Adjustment_Type": pl.String,
+                    "Reason": pl.String,
+                    "Broker_Quantity": pl.Float64,
+                    "Reconstructed_Quantity": pl.Float64,
+                    "Quantity_Adjustment": pl.Float64,
+                    "Broker_Cost_Basis": pl.Float64,
+                    "Reconstructed_Cost_Basis": pl.Float64,
+                    "Cost_Basis_Adjustment": pl.Float64,
+                    "Original_Unit_Cost": pl.Float64,
+                    "Adjusted_Unit_Cost": pl.Float64,
+                }
+            )
+        )
 
         return {
             "df_f_investment_analytics_lot": lazy_df,
+            "df_f_investment_realized_events": df_re,
+            "df_f_investment_reconciliation_events": df_recon,
             "df_f_investment_analytics_isin": f_tf_isin,
             "df_f_investment_analytics_subtype": f_tf_subtype,
             "df_f_investment_analytics_class": f_tf_class,
