@@ -1,30 +1,46 @@
 # Financial Domain Implementation Freeze
 
-> **Status: FROZEN FOR IMPLEMENTATION**
+> **Status: REBASED IMPLEMENTATION FREEZE | Baseline: v6.6.1**
 >
 > This is the implementation authority for the Financial Domain Sprint. The application provides financial/tax guidance and filing-preparation support, not authoritative ITR computation.
 
-## Goal
+## 1. Transaction currency, FX and INR basis contract
 
-Harden:
+### Change
+US investments introduce local execution currency, INR execution amounts, and dated FX conversions.
 
-```text
-canonical investment identity
-FIFO lots
-realized events
-broker reconciliation
-holding periods
-household tax classification
-capital-loss set-off/carry-forward
-FY tax state
-tax-preparation Gold
-investment tax forecast
-XIRR semantics
-```
+### Impact
+Price, cost basis, proceeds and P&L can be numerically plausible while referring to different currencies.
 
----
+### Implementation
+- Document the unit of every relevant Silver and Quant price/value field: local currency or INR reporting currency. Keep the existing `CURRENCY_ID` reference.
+- Freeze `FX_Rate` quote direction as INR per one unit of local currency for INR reporting. INR investments use identity FX = 1.
+- Use distinct acquisition, disposal and valuation FX observations. The applicable rate date must be explicit and consistent with existing broker/extractor evidence.
+- Preserve both broker-reported INR execution value and local transaction amount where present. If they disagree with local × FX, expose the difference; do not silently replace broker execution evidence.
+- Verify whether brokerage is included in or excluded from canonical basis/proceeds, and apply one documented rule consistently to buys, sales and realized events. Do not silently change legacy INR investment outputs.
 
-## 1. Canonical Purchase_ID / Sale_ID
+### Done when
+Each investment measure has an unambiguous currency and source, and broker INR values reconcile or show an explainable residual.
+
+## 2. Historical FX and market price availability
+
+### Change
+Current historical series may forward/back-fill and use 1.0 FX or zero price fallbacks.
+
+### Impact
+A foreign investment can acquire false INR value, return or basis when an observation is unavailable.
+
+### Implementation
+- Use FX = 1 only for an actual base-currency identity conversion. For missing USD/INR or other foreign FX, return an explicit missing/blocked calculation state.
+- Forward-fill within a series only from a prior valid observed value under a documented as-of policy; retain the effective observation date. Do not back-fill a historical date from a future observation for tax/basis calculations.
+- Distinguish market holidays/weekends from an unexplained interior cache gap. A missing price should not become a valid zero valuation.
+- Preserve valid portfolio outputs for unaffected instruments; prevent invalid affected calculations from being presented as precise, and respect the existing pipeline's atomic publication policy.
+- Do not create a new data-quality ontology: use concise calculation status/reason where a downstream financial result cannot be computed.
+
+### Done when
+No foreign-currency transaction or valuation silently treats missing FX as 1.0 or missing market price as an observed zero.
+
+## 3. Canonical Purchase_ID / Sale_ID
 
 Add:
 
@@ -59,7 +75,7 @@ Generate IDs after canonical aggregation.
 
 ---
 
-## 2. Lot_ID
+## 4. Lot_ID
 
 Extend Quant `TaxLot` and `silver.f_Investment_Analytics_Lot`:
 
@@ -87,7 +103,7 @@ Do not add Lot_ID to Market or Benchmark facts.
 
 ---
 
-## 3. Preserve Lot identity
+## 5. Preserve Lot identity
 
 Partial sale, quantity reduction, and cost-basis adjustment preserve the existing Lot_ID.
 
@@ -95,7 +111,7 @@ Only a genuinely new reconciliation-created lot receives a new synthetic Lot_ID.
 
 ---
 
-## 4. Same-day FIFO ordering
+## 6. Same-day FIFO ordering
 
 Where intra-day chronology is unavailable:
 
@@ -119,7 +135,21 @@ Do not merge different-price same-day purchases into weighted-average lots.
 
 ---
 
-## 5. Calendar-month holding periods
+## 7. Consistent FIFO order across US market and Quant
+
+### Change
+The US market-history spine and main Quant FIFO both consume purchase/sale history.
+
+### Implementation
+- Apply the existing frozen order in both paths: purchases `(Date, numeric Price, Purchase_ID)`; sales `(Date, numeric Sell_Price, Sale_ID)`.
+- Ensure the sort key refers to the same economic price unit in both paths. If a US local price and INR price imply different ordering, choose one documented canonical unit and use it in both.
+- Compare common-date quantity and comparable remaining-basis outputs. Do not make the market-history spine a second realized-tax authority.
+- Preserve the existing canonical aggregation unless a concrete counterexample proves loss of tax-relevant attributes.
+
+### Done when
+Reordering input frames cannot change either engine's comparable FIFO state.
+
+## 8. Calendar-month holding periods
 
 Use one shared utility:
 
@@ -153,7 +183,7 @@ Use the same utility for realized and unrealized classifications.
 
 ---
 
-## 6. Lot-level realized events
+## 9. Lot-level realized events
 
 Create:
 
@@ -203,7 +233,39 @@ Later reconciliation of an active lot must not rewrite an earlier realized event
 
 ---
 
-## 7. Lot-level reconciliation events
+## 10. Currency-aware lot basis and realized-event contract
+
+### Change
+Extend the frozen lot and realized-event contracts without changing their grain.
+
+### Implementation
+- Preserve `Purchase_ID`, `Sale_ID`, `Lot_ID`, `Realized_Event_ID`, `CURRENCY_ID` and `Lot_Source_Type`.
+- Carry the local acquisition unit price, INR acquisition basis, acquisition FX, local disposal unit price, INR proceeds and disposal FX through FIFO where source evidence supports them.
+- `Disposed_Cost_Basis`, `Sale_Proceeds` and `Realized_Gain_Loss` in the canonical tax-oriented event must be explicitly INR-denominated. Local-currency counterparts may be included for analytical attribution.
+- Allocate aggregate sale proceeds to consumed lots consistently; sums across lot events must equal the canonical sale's INR proceeds and realized FIFO result within documented rounding tolerance.
+- Keep `Realized_Event_ID = deterministic(Sale_ID, Lot_ID)` and logical immutability under full Silver rebuild.
+- Do not automatically equate the asset-return/FX-return decomposition with the statutory taxable gain calculation.
+
+### Done when
+A USD multi-lot sale produces stable lot events whose INR totals reconcile to the sale and whose local/FX attributes remain interpretable.
+
+## 11. Asset and FX P&L reconciliation
+
+### Change
+Unrealized and realized analytics now separate asset and currency effects.
+
+### Implementation
+- Define total INR P&L as INR proceeds/current value minus INR acquisition basis.
+- Reconcile `Asset_PnL + Forex_PnL + Execution_or_Basis_Residual = Total_INR_PnL` using a consistent decomposition convention.
+- A nonzero residual can reflect broker execution FX, charges or corrected INR basis. Do not silently discard it.
+- For INR investments, FX contribution should be zero under identity conversion.
+- Do not sum unconverted local-currency values across different currencies in Gold. Use INR-converted measures for cross-currency totals and preserve `CURRENCY_ID` for local-currency breakdowns.
+- Apply equivalent reconciliation checks to realized sales and open-lot snapshots.
+
+### Done when
+INR total P&L always reconciles and FX-only versus asset-only movement can be explained.
+
+## 12. Lot-level reconciliation events
 
 Create:
 
@@ -280,7 +342,7 @@ Silver is a rebuilt projection; repeated historical run observations remain a Co
 
 ---
 
-## 8. Reconciliation financial/tax semantics
+## 13. Reconciliation financial/tax semantics
 
 ### QUANTITY_ADD
 
@@ -332,7 +394,25 @@ Tax_Status = CHECK_REQUIRED
 
 ---
 
-## 9. TaxConfig: Head → Tax Sub-Head
+## 14. Currency-specific basis reconciliation
+
+### Change
+Current cost-basis reconciliation can scale INR and local unit prices together.
+
+### Impact
+An INR-only broker correction could incorrectly change local acquisition economics and historical return attribution.
+
+### Implementation
+- Keep the existing lot-mutation event grain and group/event deterministic IDs.
+- Record the affected basis currency and original/adjusted local and INR amounts when available.
+- Apply INR-only basis corrections to INR basis without automatically changing local price or original FX; adjust local basis only when evidence actually supports a local-price correction.
+- Future FIFO disposals use corrected active basis; earlier realized events remain logically immutable.
+- Preserve the existing `CHECK_REQUIRED` treatment for materially basis-adjusted lots and synthetic reconciliation lots.
+
+### Done when
+A correction in one currency cannot silently rewrite a different currency's source economics.
+
+## 15. TaxConfig: Head → Tax Sub-Head
 
 Inside FinancialRules:
 
@@ -374,7 +454,7 @@ Effective overlaps are configuration errors.
 
 ---
 
-## 10. Tax credits
+## 16. Tax credits
 
 Use only:
 
@@ -397,7 +477,7 @@ Observed_Tax_Credits >= 0
 
 ---
 
-## 11. TaxEvent ownership
+## 17. TaxEvent ownership
 
 Every Source_Type has one declared producer.
 
@@ -420,7 +500,7 @@ same Source_Type + Source_ID + Tax_Sub_Head
 
 ---
 
-## 12. TaxEvent identity
+## 18. TaxEvent identity
 
 ### Ledger
 
@@ -468,7 +548,7 @@ Source_Type + Source_ID + Tax_Sub_Head
 
 ---
 
-## 13. Non-investment capital gains
+## 19. Non-investment capital gains
 
 TaxConfig may map non-investment capital-asset gain/loss ledger streams.
 
@@ -498,7 +578,7 @@ CHECK_REQUIRED
 
 ---
 
-## 14. Ordinary-income macro rate
+## 20. Ordinary-income macro rate
 
 Rename:
 
@@ -522,7 +602,7 @@ Do not build a slab engine.
 
 ---
 
-## 15. Non-taxable income
+## 21. Non-taxable income
 
 Configured non-taxable streams such as cashback/digital-wallet income do **not** enter `silver.f_Tax_Events`.
 
@@ -536,7 +616,7 @@ Gross Income Ledger
 
 ---
 
-## 16. Canonical TaxEvents
+## 22. Canonical TaxEvents
 
 Create:
 
@@ -591,7 +671,22 @@ Status is calculation confidence/eligibility, not a manual review workflow.
 
 ---
 
-## 17. Capital-loss set-off
+## 23. US-stock classification in estimated tax
+
+### Change
+The new US-stock path flows into the same Indian tax-preparation model.
+
+### Implementation
+- Use INR-denominated realized gains as the tax-model input and retain the existing instrument `TAX_TYPE`/`TAX_SUBTYPE` classification chain.
+- Do not assume a US-listed stock is an Indian listed-equity tax subtype merely because it is an equity instrument. Resolve it through the supported FinancialRules classification; use `CHECK_REQUIRED` when the existing model cannot classify it safely.
+- Preserve the same TaxEvent uniqueness, investment-versus-ledger ownership, set-off/carry-forward and FY state contracts.
+- Keep foreign withholding, treaty credits, special filing schedules and comprehensive foreign-asset tax reporting outside this sprint. They must not be silently modeled as domestic TDS.
+- For foreign lots with unavailable basis/FX, do not generate a precise taxable amount or tax forecast.
+
+### Done when
+US stock activity participates in INR planning and tax guidance without being assigned an unjustified domestic equity tax rate.
+
+## 24. Capital-loss set-off
 
 One domain function owns the exact order:
 
@@ -620,7 +715,7 @@ closing_ltcl
 
 ---
 
-## 18. Carry-forward
+## 25. Carry-forward
 
 ```text
 Opening STCL/LTCL
@@ -637,7 +732,7 @@ This is financial analytical state, not Control Plane state.
 
 ---
 
-## 19. FY Tax State
+## 26. FY Tax State
 
 Create:
 
@@ -692,7 +787,7 @@ Do not clamp to zero. Negative means estimated excess-credit/refund position.
 
 ---
 
-## 20. Gold tax marts
+## 27. Gold tax marts
 
 ### `gold.Tax_Year_Summary`
 
@@ -734,7 +829,7 @@ All three reconcile to FY Tax State.
 
 ---
 
-## 21. Investment Tax Liability Forecast
+## 28. Investment Tax Liability Forecast
 
 Rename:
 
@@ -782,7 +877,21 @@ f_Tax_FY_State
 
 ---
 
-## 22. XIRR semantics
+## 29. Currency-aware investment tax forecast
+
+### Change
+The existing hypothetical liquidation forecast must use the same FX/basis eligibility rules.
+
+### Implementation
+- For tax-ready open foreign lots, calculate hypothetical INR proceeds using the forecast-date market price and FX rate, then use the shared loss set-off engine.
+- Exclude missing-FX, missing-price, synthetic and otherwise `CHECK_REQUIRED` lots from precise tax.
+- Report excluded count, INR market exposure where calculable, and modeled unrealized P&L separately without treating it as tax-ready.
+- Do not mutate realized events, TaxEvents or FY Tax State.
+
+### Done when
+The investment forecast clearly separates supported foreign-stock tax exposure from uncertain currency/basis exposure.
+
+## 30. XIRR semantics
 
 Return:
 
@@ -810,6 +919,26 @@ value = NULL
 Propagate through math → Quant → Silver → Gold.
 
 Never convert failure to meaningful 0%.
+
+---
+
+## Goal
+
+Harden:
+
+```text
+canonical investment identity
+FIFO lots
+realized events
+broker reconciliation
+holding periods
+household tax classification
+capital-loss set-off/carry-forward
+FY tax state
+tax-preparation Gold
+investment tax forecast
+XIRR semantics
+```
 
 ---
 
@@ -851,7 +980,7 @@ Exact inventory/counts come from the Data Contract Registry.
 
 ---
 
-## Explicitly out of scope
+## Out of scope
 
 ```text
 source-row broker transaction redesign
@@ -870,6 +999,9 @@ every Indian asset class
 manual review-workflow system
 tax forecast confidence intervals
 ```
+
+---
+
 
 ---
 
