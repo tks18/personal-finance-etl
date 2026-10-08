@@ -7,6 +7,7 @@ from personal_finance_etl.backend.utils.logger import logger
 class FileSyncService:
     def __init__(self, artifact_repo: ArtifactRepository):
         self.artifact_repo = artifact_repo
+        self.active_run_id: str | None = None
 
     def sync_with_disk(
         self,
@@ -55,7 +56,9 @@ class FileSyncService:
                                 # No need to ingest binary, it's just a rename
                                 is_rename = True
                                 renames.append((old_path, filepath, category))
-                                logger.debug(f"[SYNC:RENAME] Migrating identity from '{old_path}' to '{filepath}'.")
+                                logger.debug(
+                                    f"[SYNC:RENAME] Migrating identity from '{old_path}' to '{filepath}'."
+                                )
                                 break
 
                     if not is_rename:
@@ -85,7 +88,9 @@ class FileSyncService:
             if merged:
                 actionable_files[cat] = merged
 
-        self.artifact_repo.ingest_binaries(actionable_files)
+        self.artifact_repo.ingest_binaries(
+            actionable_files, new_files=new_files, changed_files=changed_files
+        )
 
         new_count = sum(len(f) for f in new_files.values())
         changed_count = sum(len(f) for f in changed_files.values())
