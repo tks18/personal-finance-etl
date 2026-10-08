@@ -11,9 +11,6 @@ CREATE TABLE IF NOT EXISTS gold.Wealth_Asset_Breakdown (
     All_Time_High_Balance DOUBLE,
     Liquid_Assets DOUBLE,
     Liquid_Assets_Market DOUBLE,
-    -- Local/FX Values
-    Closing_Investment_Market_Value_Local DOUBLE,
-    Closing_Investment_Book_Value_Local DOUBLE,
     -- Absolute Returns
     Closing_Asset_PnL DOUBLE,
     Closing_Forex_PnL DOUBLE,
@@ -80,8 +77,6 @@ CREATE TABLE IF NOT EXISTS gold.Core_Monthly_Fact (
     Total_Net_Worth DOUBLE,
     Total_Net_Worth_Market DOUBLE,
     -- Local/FX Values
-    Closing_Investment_Market_Value_Local DOUBLE,
-    Closing_Investment_Book_Value_Local DOUBLE,
     Total_Foreign_Currency_Exposure DOUBLE,
     -- Absolute Returns
     Opening_Unrealized_PL DOUBLE,
@@ -402,12 +397,6 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_Subtype (
     Total_Current_Value DOUBLE,
     Total_Quantity DOUBLE,
     Total_Stocks DOUBLE,
-    -- Local/FX Values
-    Total_Invested_Value_Local DOUBLE,
-    Total_Current_Value_Local DOUBLE,
-    Current_FX_Rate DOUBLE,
-    Blended_FX_Buy_Rate DOUBLE,
-    Currency_Appreciation_Pct DOUBLE,
     -- Absolute Returns
     Unrealized_PL DOUBLE,
     Asset_PnL DOUBLE,
@@ -416,14 +405,10 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_Subtype (
     Absolute_Return DOUBLE,
     -- Performance Returns
     XIRR DOUBLE,
-    XIRR_Local DOUBLE,
-    FX_XIRR_Impact DOUBLE,
     After_Tax_XIRR DOUBLE,
     -- Benchmark Comparisons
     BM_XIRR DOUBLE,
-    BM_XIRR_Local DOUBLE,
     Active_Return DOUBLE,
-    Active_Return_Local DOUBLE,
     -- Risk & Weights
     Max_Drawdown DOUBLE,
     Weight DOUBLE,
@@ -444,12 +429,6 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_Class (
     Total_Current_Value DOUBLE,
     Total_Quantity DOUBLE,
     Total_Stocks DOUBLE,
-    -- Local/FX Values
-    Total_Invested_Value_Local DOUBLE,
-    Total_Current_Value_Local DOUBLE,
-    Current_FX_Rate DOUBLE,
-    Blended_FX_Buy_Rate DOUBLE,
-    Currency_Appreciation_Pct DOUBLE,
     -- Absolute Returns
     Unrealized_PL DOUBLE,
     Asset_PnL DOUBLE,
@@ -458,14 +437,10 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_Class (
     Absolute_Return DOUBLE,
     -- Performance Returns
     XIRR DOUBLE,
-    XIRR_Local DOUBLE,
-    FX_XIRR_Impact DOUBLE,
     After_Tax_XIRR DOUBLE,
     -- Benchmark Comparisons
     BM_XIRR DOUBLE,
-    BM_XIRR_Local DOUBLE,
     Active_Return DOUBLE,
-    Active_Return_Local DOUBLE,
     -- Risk & Weights
     Max_Drawdown DOUBLE,
     Weight DOUBLE,
@@ -486,12 +461,6 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_Instrument_Type (
     Total_Current_Value DOUBLE,
     Total_Quantity DOUBLE,
     Total_Stocks DOUBLE,
-    -- Local/FX Values
-    Total_Invested_Value_Local DOUBLE,
-    Total_Current_Value_Local DOUBLE,
-    Current_FX_Rate DOUBLE,
-    Blended_FX_Buy_Rate DOUBLE,
-    Currency_Appreciation_Pct DOUBLE,
     -- Absolute Returns
     Unrealized_PL DOUBLE,
     Asset_PnL DOUBLE,
@@ -500,14 +469,10 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_Instrument_Type (
     Absolute_Return DOUBLE,
     -- Performance Returns
     XIRR DOUBLE,
-    XIRR_Local DOUBLE,
-    FX_XIRR_Impact DOUBLE,
     After_Tax_XIRR DOUBLE,
     -- Benchmark Comparisons
     BM_XIRR DOUBLE,
-    BM_XIRR_Local DOUBLE,
     Active_Return DOUBLE,
-    Active_Return_Local DOUBLE,
     -- Risk & Weights
     Max_Drawdown DOUBLE,
     Weight DOUBLE,
@@ -528,12 +493,6 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_Sector (
     Total_Current_Value DOUBLE,
     Total_Quantity DOUBLE,
     Total_Stocks DOUBLE,
-    -- Local/FX Values
-    Total_Invested_Value_Local DOUBLE,
-    Total_Current_Value_Local DOUBLE,
-    Current_FX_Rate DOUBLE,
-    Blended_FX_Buy_Rate DOUBLE,
-    Currency_Appreciation_Pct DOUBLE,
     -- Absolute Returns
     Unrealized_PL DOUBLE,
     Asset_PnL DOUBLE,
@@ -542,14 +501,10 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_Sector (
     Absolute_Return DOUBLE,
     -- Performance Returns
     XIRR DOUBLE,
-    XIRR_Local DOUBLE,
-    FX_XIRR_Impact DOUBLE,
     After_Tax_XIRR DOUBLE,
     -- Benchmark Comparisons
     BM_XIRR DOUBLE,
-    BM_XIRR_Local DOUBLE,
     Active_Return DOUBLE,
-    Active_Return_Local DOUBLE,
     -- Risk & Weights
     Max_Drawdown DOUBLE,
     Weight DOUBLE,
@@ -570,12 +525,6 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_Industry (
     Total_Current_Value DOUBLE,
     Total_Quantity DOUBLE,
     Total_Stocks DOUBLE,
-    -- Local/FX Values
-    Total_Invested_Value_Local DOUBLE,
-    Total_Current_Value_Local DOUBLE,
-    Current_FX_Rate DOUBLE,
-    Blended_FX_Buy_Rate DOUBLE,
-    Currency_Appreciation_Pct DOUBLE,
     -- Absolute Returns
     Unrealized_PL DOUBLE,
     Asset_PnL DOUBLE,
@@ -584,14 +533,10 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_Industry (
     Absolute_Return DOUBLE,
     -- Performance Returns
     XIRR DOUBLE,
-    XIRR_Local DOUBLE,
-    FX_XIRR_Impact DOUBLE,
     After_Tax_XIRR DOUBLE,
     -- Benchmark Comparisons
     BM_XIRR DOUBLE,
-    BM_XIRR_Local DOUBLE,
     Active_Return DOUBLE,
-    Active_Return_Local DOUBLE,
     -- Risk & Weights
     Max_Drawdown DOUBLE,
     Weight DOUBLE,
@@ -611,12 +556,6 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_Portfolio (
     Total_Current_Value DOUBLE,
     Total_Quantity DOUBLE,
     Total_Stocks DOUBLE,
-    -- Local/FX Values
-    Total_Invested_Value_Local DOUBLE,
-    Total_Current_Value_Local DOUBLE,
-    Current_FX_Rate DOUBLE,
-    Blended_FX_Buy_Rate DOUBLE,
-    Currency_Appreciation_Pct DOUBLE,
     -- Absolute Returns
     Unrealized_PL DOUBLE,
     Asset_PnL DOUBLE,
@@ -625,14 +564,10 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_Portfolio (
     Absolute_Return DOUBLE,
     -- Performance Returns
     XIRR DOUBLE,
-    XIRR_Local DOUBLE,
-    FX_XIRR_Impact DOUBLE,
     After_Tax_XIRR DOUBLE,
     -- Benchmark Comparisons
     BM_XIRR DOUBLE,
-    BM_XIRR_Local DOUBLE,
     Active_Return DOUBLE,
-    Active_Return_Local DOUBLE,
     -- Risk & Weights
     Max_Drawdown DOUBLE,
     Weight DOUBLE,
@@ -653,12 +588,6 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_Geo (
     Total_Current_Value DOUBLE,
     Total_Quantity DOUBLE,
     Total_Stocks DOUBLE,
-    -- Local/FX Values
-    Total_Invested_Value_Local DOUBLE,
-    Total_Current_Value_Local DOUBLE,
-    Current_FX_Rate DOUBLE,
-    Blended_FX_Buy_Rate DOUBLE,
-    Currency_Appreciation_Pct DOUBLE,
     -- Absolute Returns
     Unrealized_PL DOUBLE,
     Asset_PnL DOUBLE,
@@ -667,14 +596,10 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_Geo (
     Absolute_Return DOUBLE,
     -- Performance Returns
     XIRR DOUBLE,
-    XIRR_Local DOUBLE,
-    FX_XIRR_Impact DOUBLE,
     After_Tax_XIRR DOUBLE,
     -- Benchmark Comparisons
     BM_XIRR DOUBLE,
-    BM_XIRR_Local DOUBLE,
     Active_Return DOUBLE,
-    Active_Return_Local DOUBLE,
     -- Risk & Weights
     Max_Drawdown DOUBLE,
     Weight DOUBLE,
@@ -695,12 +620,6 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_Country (
     Total_Current_Value DOUBLE,
     Total_Quantity DOUBLE,
     Total_Stocks DOUBLE,
-    -- Local/FX Values
-    Total_Invested_Value_Local DOUBLE,
-    Total_Current_Value_Local DOUBLE,
-    Current_FX_Rate DOUBLE,
-    Blended_FX_Buy_Rate DOUBLE,
-    Currency_Appreciation_Pct DOUBLE,
     -- Absolute Returns
     Unrealized_PL DOUBLE,
     Asset_PnL DOUBLE,
@@ -709,14 +628,10 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_Country (
     Absolute_Return DOUBLE,
     -- Performance Returns
     XIRR DOUBLE,
-    XIRR_Local DOUBLE,
-    FX_XIRR_Impact DOUBLE,
     After_Tax_XIRR DOUBLE,
     -- Benchmark Comparisons
     BM_XIRR DOUBLE,
-    BM_XIRR_Local DOUBLE,
     Active_Return DOUBLE,
-    Active_Return_Local DOUBLE,
     -- Risk & Weights
     Max_Drawdown DOUBLE,
     Weight DOUBLE,
