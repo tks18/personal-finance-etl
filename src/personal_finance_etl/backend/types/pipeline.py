@@ -26,6 +26,7 @@ class PipelineExecutionResult(BaseModel):
     global_cf: list[dict[str, Any]]
     global_pt: dict[date, dict[str, float]]
     global_re: list[dict[str, Any]]
+    global_recon_events: list[dict[str, Any]]
     class_cf: dict[str, list[dict[str, Any]]]
     class_pt: dict[str, dict[date, dict[str, float]]]
     class_re: dict[str, list[dict[str, Any]]]
