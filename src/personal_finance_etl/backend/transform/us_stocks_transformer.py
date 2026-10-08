@@ -5,6 +5,8 @@ from typing import Any
 
 import polars as pl
 
+from personal_finance_etl.backend.utils.ordering import sort_purchases, sort_sales
+
 
 def transform_us_market_data(
     df_bronze_prices_lazy: pl.LazyFrame,
@@ -31,9 +33,9 @@ def transform_us_market_data(
     active_isins = us_purchases["ISIN"].unique().to_list()
 
     # --- Phase 1: Reconstruct FIFO Spine ---
-    df_p_us = us_purchases.select(["ISIN", "Date", "Quantity", "Value_Local", "Value", "CURRENCY_ID"]).sort(
-        ["ISIN", "Date"]
-    )
+    df_p_us = us_purchases.select(
+        ["ISIN", "Date", "Quantity", "Value_Local", "Value", "CURRENCY_ID"]
+    ).sort(["ISIN", "Date"])
     df_s_us = (
         df_sale.filter(pl.col("__file_category__") == "US Stocks")
         .select(["ISIN", "Date", "Quantity"])
@@ -75,7 +77,8 @@ def transform_us_market_data(
 
         while current_date <= global_end_date:
             # Apply buys
-            for b in buys[isin].get(current_date, []):
+            day_buys = buys[isin].get(current_date, [])
+            for b in sort_purchases(day_buys):
                 qty = float(b["Quantity"])
                 if qty > 0:
                     lots.append(
@@ -87,7 +90,8 @@ def transform_us_market_data(
                     )
 
             # Apply sells
-            for s in sells[isin].get(current_date, []):
+            day_sells = sells[isin].get(current_date, [])
+            for s in sort_sales(day_sells):
                 sqty = float(s["Quantity"])
                 while sqty > 0 and lots:
                     if lots[0].qty > sqty:
@@ -135,32 +139,60 @@ def transform_us_market_data(
 
     if df_spine_eager.is_empty():
         return pl.DataFrame().lazy()
-        
+
     df_spine = df_spine_eager.lazy()
 
-    # --- Phase 2: Price Enrichment (using ASOF Join) ---
-    # Note: df_bronze_prices_lazy stays lazy to leverage Polars query optimization
-    # Assuming df_bronze_prices_lazy can be empty, though normally we don't check is_empty() on lazy frames easily.
-    # We will just do the join.
     df_prices = df_bronze_prices_lazy.sort("Date")
     df_spine = df_spine.sort("Date")
-    df_spine = df_spine.join_asof(
-        df_prices.select(["Date", "ISIN", "Closing_Price_Local"]), 
-        on="Date", 
-        by="ISIN", 
-        strategy="backward"
-    ).sort(["ISIN", "Date"]).with_columns(
-        pl.col("Closing_Price_Local").backward_fill().fill_null(0.0).over("ISIN")
+    df_spine = (
+        df_spine.join_asof(
+            df_prices.select(
+                [
+                    "Date",
+                    "ISIN",
+                    "Closing_Price_Local",
+                    "Data_Provider",
+                    "Extraction_Time",
+                    "Is_Closure_Gap",
+                ]
+            ),
+            on="Date",
+            by="ISIN",
+            strategy="backward",
+        )
+        .sort(["ISIN", "Date"])
+        .with_columns(
+            pl.col("Is_Closure_Gap").fill_null(True).alias("Is_Imputed"),
+            pl.col("Closing_Price_Local").backward_fill().fill_null(0.0).over("ISIN"),
+            pl.col("Data_Provider").backward_fill().over("ISIN"),
+            pl.col("Extraction_Time").backward_fill().over("ISIN"),
+        )
     )
 
     # --- Phase 3: FX Translation ---
-    df_fx_sorted = df_fx_lazy.select(["Date", "Currency_ID", "FX_Rate"]).rename({"Currency_ID": "CURRENCY_ID"}).sort("Date")
-    df_spine = df_spine.sort("Date")
-    df_spine = df_spine.join_asof(
-        df_fx_sorted, on="Date", by="CURRENCY_ID", strategy="backward"
-    ).sort(["ISIN", "Date"]).with_columns(
-        pl.col("FX_Rate").backward_fill().fill_null(1.0).over("ISIN")
+    df_fx_sorted = (
+        df_fx_lazy.select(["Date", "Currency_ID", "FX_Rate"])
+        .rename({"Currency_ID": "CURRENCY_ID"})
+        .sort("Date")
     )
+    df_spine = df_spine.sort("Date")
+    df_spine = (
+        df_spine.join_asof(df_fx_sorted, on="Date", by="CURRENCY_ID", strategy="backward")
+        .sort(["ISIN", "Date"])
+        .with_columns(pl.col("FX_Rate").backward_fill().over("ISIN"))
+    )
+
+    missing_fx = (
+        df_spine.filter(pl.col("FX_Rate").is_null() & pl.col("CURRENCY_ID").is_not_null())
+        .select("CURRENCY_ID")
+        .unique()
+        .collect()
+    )
+    if not missing_fx.is_empty():
+        missing_ids = missing_fx["CURRENCY_ID"].to_list()
+        raise ValueError(
+            f"FATAL: Missing FX mapping for CURRENCY_IDs: {missing_ids}. Halting pipeline."
+        )
 
     df_spine = df_spine.with_columns(
         [
@@ -202,9 +234,11 @@ def transform_us_market_data(
         "Unit_PnL",
         "Total_PnL",
         "CURRENCY_ID",
+        "Data_Provider",
+        "Extraction_Time",
+        "Is_Imputed",
     ]
 
     df_spine = df_spine.filter(pl.col("Quantity") >= 0)
-    
-    return df_spine.select(select_cols).lazy()
 
+    return df_spine.select(select_cols).lazy()
