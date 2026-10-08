@@ -126,7 +126,7 @@ class TransformationDAG:
             master_ref_lazy_list = [res.master_ref for res in asset_results]
 
             stg_investment_market_data_lazy = transform_stg_investment_market_data(
-                market_data_ref_lazy_list
+                market_data_ref_lazy_list, self.rules.DEFAULT_CURRENCY_ID
             )
             f_tf_inv_purchase_data_lazy = get_f_tf_investment_purchase_data(
                 purchase_ref_lazy_list, self.rules.DEFAULT_CURRENCY_ID
@@ -137,7 +137,7 @@ class TransformationDAG:
 
             logger.debug("Building Investment Master...")
             d_tf_investment_master_lazy = get_d_investment_master(
-                master_ref_lazy_list, extracted.stg_benchmark_mapping
+                master_ref_lazy_list, extracted.stg_benchmark_mapping, self.rules.DEFAULT_CURRENCY_ID
             )
 
         logger.debug("Generating Master Calendar...")
