@@ -433,7 +433,7 @@ CREATE TABLE IF NOT EXISTS silver.f_Investment_Market_Data (
     ISIN TEXT NOT NULL,
     CURRENCY_ID TEXT,
     -- Descriptors/Classifications
-    FILE_CATEGORY TEXT,
+    __file_category__ TEXT,
     -- Position Values
     Quantity DOUBLE,
     Closing_Price DOUBLE,
@@ -462,7 +462,7 @@ CREATE TABLE IF NOT EXISTS silver.f_Investment_Purchase_Data (
     ISIN TEXT NOT NULL,
     CURRENCY_ID TEXT,
     -- Descriptors/Classifications
-    FILE_CATEGORY TEXT,
+    __file_category__ TEXT,
     -- Position Values
     Quantity DOUBLE,
     Price DOUBLE,
@@ -484,7 +484,7 @@ CREATE TABLE IF NOT EXISTS silver.f_Investment_Sale_Data (
     ISIN TEXT NOT NULL,
     CURRENCY_ID TEXT,
     -- Descriptors/Classifications
-    FILE_CATEGORY TEXT,
+    __file_category__ TEXT,
     -- Position Values
     Quantity DOUBLE,
     Sell_Price DOUBLE,
