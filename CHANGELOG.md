@@ -2,6 +2,40 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [6.6.1](https://github.com/tks18/personal-finance-etl/compare/6.6.0...6.6.1) (2026-10-08)
+
+
+### Features 🔥
+
+* **backend/extract:** add currency id to us stocks, rename in transform ([68f2072](https://github.com/tks18/personal-finance-etl/commit/68f20722078621fbe5e4bb0244b16045785c16c3))
+
+
+### Code Refactoring 🖌
+
+* **backend/load:** rename schema to __file_category_) ([d77a183](https://github.com/tks18/personal-finance-etl/commit/d77a1836e718cf7f2e52d0363ed38580ee062d72))
+* **backend/pipeline:** rename __file_category__ ([8d9f898](https://github.com/tks18/personal-finance-etl/commit/8d9f89888a3e5f5ad47f1c7de3e066e78e10a363))
+* **backend/pipeline:** rename __file_category__ ([744afb9](https://github.com/tks18/personal-finance-etl/commit/744afb9618229715800c914308f1fa4675f67295))
+* **backend/pipeline:** rename to __file_cateogory__ ([4f214aa](https://github.com/tks18/personal-finance-etl/commit/4f214aa190b3664716bee7ac44598434f9f99cd1))
+* **backend/transform:** rename FILE_CATEGORY to __file_category__ ([b537325](https://github.com/tks18/personal-finance-etl/commit/b537325ffe010c944fa668a60a5923f085fca500))
+
+
+### Styling 🎨
+
+* linting ([3c0caec](https://github.com/tks18/personal-finance-etl/commit/3c0caec73523f4383bb66c16b99396763b36f35c))
+
+
+### Bug Fixes 🛠
+
+* **backend/engines:** fix the benchmark shadow lots calculation, use default currency from rules ([14a3f1a](https://github.com/tks18/personal-finance-etl/commit/14a3f1a08cdb6cfbaf71f249f66ee889510aebda))
+* **backend/engines:** presentation: fix the liquid vs illiquid in the net worth table ([1e0e745](https://github.com/tks18/personal-finance-etl/commit/1e0e74525e971db7683b5469c01540bef9e2d16d))
+* **backend/engines:** presentation: use default currency from ruels ([cfc20c2](https://github.com/tks18/personal-finance-etl/commit/cfc20c2f72873ec17199f31c121108a6d898f8a8))
+* **backend/engines:** quant: pass rules for default currency instead of hardcoding ([d8fd636](https://github.com/tks18/personal-finance-etl/commit/d8fd636a4b89a4e03b7fb30b05f91317203c85c3))
+* **backend/engines:** quant: remove _local values for sector and other agg tables ([84965a2](https://github.com/tks18/personal-finance-etl/commit/84965a2479b5202805086a6301f0907247fe9860))
+* **backend/engines:** quant: use rules for default currency in fifo and snapshot ([67cd3ed](https://github.com/tks18/personal-finance-etl/commit/67cd3ed038da4af5faf74dd5554aaaed30c87cb0))
+* **backend/load:** gold: cleanup schema ([04ef51c](https://github.com/tks18/personal-finance-etl/commit/04ef51cc5dcedce3529bbd4b3b31d1edf40a6757))
+* **backend/models:** remove INR_INR hardcodings ([99b1c33](https://github.com/tks18/personal-finance-etl/commit/99b1c330e920df606e8b52a8d190ceb4ca1072d2))
+* **backend/pipeline:** pass rules for default currency ([150502c](https://github.com/tks18/personal-finance-etl/commit/150502c71563d6ff940f74bcd4b504ed1307facc))
+
 ## [6.6.0](https://github.com/tks18/personal-finance-etl/compare/6.5.3...6.6.0) (2026-10-07)
 
 
