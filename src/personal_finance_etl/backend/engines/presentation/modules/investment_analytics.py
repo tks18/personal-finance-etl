@@ -4,6 +4,7 @@ from typing import Any
 import polars as pl
 
 from personal_finance_etl.backend.config.financial_rules import FinancialRules
+from personal_finance_etl.backend.utils.polars_expressions import safe_divide
 
 
 class InvestmentAnalyticsBuilder:
@@ -179,9 +180,7 @@ class InvestmentAnalyticsBuilder:
         )
 
         lf_isin_agg = lf_isin_agg.with_columns(
-            pl.when(pl.col("ISIN_Unrealized_PnL") != 0.0)
-            .then(pl.col("ISIN_Forex_PnL") / pl.col("ISIN_Unrealized_PnL"))
-            .otherwise(0.0)
+            safe_divide(pl.col("ISIN_Forex_PnL"), pl.col("ISIN_Unrealized_PnL"))
             .alias("ISIN_Forex_Contribution_Pct")
         )
 
