@@ -26,18 +26,18 @@ def transform_us_market_data(
     if df_purchase.is_empty():
         return pl.DataFrame().lazy()
 
-    us_purchases = df_purchase.filter(pl.col("FILE_CATEGORY") == "US Stocks")
+    us_purchases = df_purchase.filter(pl.col("__file_category__") == "US Stocks")
     if us_purchases.is_empty():
         return pl.DataFrame().lazy()
 
     active_isins = us_purchases["ISIN"].unique().to_list()
 
     # --- Phase 1: Reconstruct FIFO Spine ---
-    df_p_us = us_purchases.select(["ISIN", "Date", "Quantity", "Value_Local", "Value"]).sort(
+    df_p_us = us_purchases.select(["ISIN", "Date", "Quantity", "Value_Local", "Value", "CURRENCY_ID"]).sort(
         ["ISIN", "Date"]
     )
     df_s_us = (
-        df_sale.filter(pl.col("FILE_CATEGORY") == "US Stocks")
+        df_sale.filter(pl.col("__file_category__") == "US Stocks")
         .select(["ISIN", "Date", "Quantity"])
         .sort(["ISIN", "Date"])
     )
@@ -45,10 +45,12 @@ def transform_us_market_data(
     buys: defaultdict[str, defaultdict[date, list[dict[str, Any]]]] = defaultdict(
         lambda: defaultdict(list)
     )
+    currency_map: dict[str, str] = {}
     for row in df_p_us.iter_rows(named=True):
         dt = row["Date"]
         if isinstance(dt, date):
             buys[str(row["ISIN"])][dt].append(row)
+            currency_map[str(row["ISIN"])] = row["CURRENCY_ID"]
 
     sells: defaultdict[str, defaultdict[date, list[dict[str, Any]]]] = defaultdict(
         lambda: defaultdict(list)
@@ -69,6 +71,9 @@ def transform_us_market_data(
     for isin in active_isins:
         current_date = global_start_date
         lots: list[Lot] = []
+        curr_id = currency_map.get(isin)
+        if not curr_id:
+            raise ValueError(f"Missing CURRENCY_ID for US Stock ISIN: {isin}")
 
         while current_date <= global_end_date:
             # Apply buys
@@ -105,6 +110,7 @@ def transform_us_market_data(
                         {
                             "Date": current_date,
                             "ISIN": isin,
+                            "CURRENCY_ID": curr_id,
                             "Quantity": qty,
                             "Buy_Value_Local": qty * price_local,
                             "Buy_Value_INR": qty * price_inr,
@@ -120,6 +126,7 @@ def transform_us_market_data(
         schema={
             "Date": pl.Date,
             "ISIN": pl.String,
+            "CURRENCY_ID": pl.String,
             "Quantity": pl.Float64,
             "Buy_Value_Local": pl.Float64,
             "Buy_Value_INR": pl.Float64,
@@ -148,10 +155,10 @@ def transform_us_market_data(
 
     # --- Phase 3: FX Translation ---
     if not df_fx.is_empty():
-        df_fx_us = df_fx.filter(pl.col("Currency_ID") == "INR_USD").select(["Date", "FX_Rate"]).sort("Date")
+        df_fx_sorted = df_fx.select(["Date", "Currency_ID", "FX_Rate"]).rename({"Currency_ID": "CURRENCY_ID"}).sort("Date")
         df_spine = df_spine.sort("Date")
         df_spine = df_spine.join_asof(
-            df_fx_us, on="Date", strategy="backward"
+            df_fx_sorted, on="Date", by="CURRENCY_ID", strategy="backward"
         ).sort(["ISIN", "Date"]).with_columns(
             pl.col("FX_Rate").backward_fill().fill_null(1.0).over("ISIN")
         )
@@ -177,15 +184,14 @@ def transform_us_market_data(
     df_spine = df_spine.with_columns(
         [
             (pl.col("Unit_PnL") * pl.col("Quantity")).alias("Total_PnL"),
-            pl.lit("US Stocks").alias("FILE_CATEGORY"),
-            pl.lit("INR_USD").alias("CURRENCY_ID"),
+            pl.lit("US Stocks").alias("__file_category__"),
         ]
     )
 
     select_cols = [
         "Date",
         "ISIN",
-        "FILE_CATEGORY",
+        "__file_category__",
         "Quantity",
         "Closing_Price_Local",
         "Buy_Price_Local",

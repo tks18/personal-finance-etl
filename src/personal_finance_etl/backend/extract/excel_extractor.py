@@ -83,7 +83,7 @@ def extract_mf_market_data_raw(valid_files: list[tuple[str, str, bytes]]) -> pl.
             pl.lit(filename).alias("__file_name__"),
             pl.lit(folder_path).alias("__folder_path__"),
             pl.lit(month_date).alias("Month Date"),
-            pl.lit("Indian MF").alias("FILE_CATEGORY"),
+            pl.lit("Indian MF").alias("__file_category__"),
         )
         all_dfs.append(df_processed)
     if not all_dfs:
@@ -143,7 +143,7 @@ def extract_mf_transactions_raw(valid_files: list[tuple[str, str, bytes]]) -> pl
             pl.lit(filename).alias("__file_name__"),
             pl.lit(folder_path).alias("__folder_path__"),
             pl.lit(month_date).alias("Month Date"),
-            pl.lit("Indian MF").alias("FILE_CATEGORY"),
+            pl.lit("Indian MF").alias("__file_category__"),
         )
         all_dfs.append(df_processed)
     if not all_dfs:
@@ -208,7 +208,7 @@ def extract_stock_market_data_raw(valid_files: list[tuple[str, str, bytes]]) -> 
             pl.lit(filename).alias("__file_name__"),
             pl.lit(folder_path).alias("__folder_path__"),
             pl.lit(month_date).alias("Month Date"),
-            pl.lit("Indian Stocks").alias("FILE_CATEGORY"),
+            pl.lit("Indian Stocks").alias("__file_category__"),
         )
         all_dfs.append(df_processed)
     if not all_dfs:
@@ -246,7 +246,7 @@ def extract_stock_transactions_raw(valid_files: list[tuple[str, str, bytes]]) ->
         df_processed = df_processed.with_columns(
             pl.lit(filename).alias("__file_name__"),
             pl.lit(folder_path).alias("__folder_path__"),
-            pl.lit("Indian Stocks").alias("FILE_CATEGORY"),
+            pl.lit("Indian Stocks").alias("__file_category__"),
         )
         all_dfs.append(df_processed)
     if not all_dfs:
@@ -277,7 +277,7 @@ def extract_us_stock_transactions_raw(valid_files: list[tuple[str, str, bytes]])
         df_processed = df_processed.with_columns(
             pl.lit(filename).alias("__file_name__"),
             pl.lit(folder_path).alias("__folder_path__"),
-            pl.lit("US Stocks").alias("FILE_CATEGORY"),
+            pl.lit("US Stocks").alias("__file_category__"),
         )
         all_dfs.append(df_processed)
     if not all_dfs:
