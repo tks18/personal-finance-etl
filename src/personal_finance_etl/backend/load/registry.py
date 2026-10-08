@@ -245,6 +245,24 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
         "InvestmentQuantEngine",
         200,
     ),
+    DataContract(
+        "df_f_investment_realized_events",
+        "silver",
+        "silver.f_Investment_Realized_Events",
+        "Investments",
+        "RealizedEvent",
+        "InvestmentQuantEngine",
+        205,
+    ),
+    DataContract(
+        "df_f_investment_reconciliation_events",
+        "silver",
+        "silver.f_Investment_Reconciliation_Events",
+        "Investments",
+        "ReconEvent",
+        "InvestmentQuantEngine",
+        206,
+    ),
     # --- Gold Presentation ---
     DataContract(
         "df_p_tf_wealth_monthly_totals",
@@ -475,8 +493,8 @@ def validate_registry() -> None:
         elif contract.layer == "gold":
             gold_count += 1
 
-    if silver_count != 21:
-        raise ValueError(f"Expected 21 Silver contracts, found {silver_count}")
+    if silver_count != 23:
+        raise ValueError(f"Expected 23 Silver contracts, found {silver_count}")
 
     if gold_count != 20:
         raise ValueError(f"Expected 20 Gold contracts, found {gold_count}")
