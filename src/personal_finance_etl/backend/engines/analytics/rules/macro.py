@@ -3,6 +3,7 @@ Macro Parameters Rules Module.
 Defines holding period thresholds and FY-specific rate lookups (tax, inflation, risk-free).
 """
 
+import calendar
 from collections.abc import Callable
 from datetime import date
 from typing import Any, TypedDict
@@ -23,17 +24,27 @@ class FYMapEntry(TypedDict):
     raw: dict[str, float | str | date | None]
 
 
-def get_ltcg_threshold(tax_type: str, tax_subtype: str, rules: FinancialRules | None) -> int:
-    """Return holding period threshold for LTCG in days based on declarative rules."""
+def add_months(d: date, months: int) -> date:
+    """Add months with end-of-month clamping."""
+    month = d.month - 1 + months
+    year = d.year + month // 12
+    month = month % 12 + 1
+    day = min(d.day, calendar.monthrange(year, month)[1])
+    return date(year, month, day)
+
+
+def get_ltcg_threshold_months(tax_type: str, tax_subtype: str, rules: FinancialRules | None) -> int:
+    """Return holding period threshold for LTCG in calendar months based on declarative rules."""
     tt = tax_type.strip().lower()
     tst = tax_subtype.strip().lower()
 
-    # Foreign equities are treated as unlisted
     if tt == "equity" and tst in ("us_listed", "us_stocks", "foreign"):
         tst = "unlisted"
 
     thresholds = (
-        rules.assumptions.tax.ltcg_thresholds if rules and hasattr(rules, "assumptions") else {}
+        rules.assumptions.tax.ltcg_threshold_months
+        if rules and hasattr(rules, "assumptions")
+        else {}
     )
 
     key = f"{tt}_{tst}"
@@ -43,7 +54,7 @@ def get_ltcg_threshold(tax_type: str, tax_subtype: str, rules: FinancialRules | 
     if key_base in thresholds:
         return thresholds[key_base]
 
-    return 730
+    return 24  # Default 24 months
 
 
 class FYMacroParametersTable:
@@ -185,16 +196,18 @@ class FYMacroParametersTable:
             return fallback
 
     def get_holding_type(
-        self, age_days: int, tax_type: str, tax_subtype: str, lot_buy_date: date, ref_date: date
+        self, tax_type: str, tax_subtype: str, lot_buy_date: date, ref_date: date
     ) -> str:
         tt = tax_type.strip().lower()
         tst = tax_subtype.strip().lower()
         cutoff = self.get_debt_mf_cutoff(ref_date)
         if tt == "debt" and tst in ("mf", "mutual_fund", "debt_mf") and lot_buy_date >= cutoff:
             return "STCG"
-        return (
-            "LTCG" if age_days > get_ltcg_threshold(tax_type, tax_subtype, self.rules) else "STCG"
-        )
+
+        threshold_months = get_ltcg_threshold_months(tax_type, tax_subtype, self.rules)
+        boundary_date = add_months(lot_buy_date, threshold_months)
+
+        return "LTCG" if ref_date > boundary_date else "STCG"
 
     def get_risk_free_rate(self, ref_date: date) -> float:
         fallback = (
@@ -224,6 +237,22 @@ class FYMacroParametersTable:
         raw = entry["raw"]
         try:
             val = raw.get("Inflation_Rate")
+            return float(str(val)) if val is not None and str(val).strip() != "" else fallback
+        except (ValueError, TypeError):
+            return fallback
+
+    def get_ordinary_income_rate(self, ref_date: date) -> float:
+        fallback = (
+            self.rules.assumptions.macro.fallback_ordinary_income_rate
+            if self.rules and hasattr(self.rules, "assumptions")
+            else 0.30
+        )
+        entry = self._find_entry(ref_date)
+        if entry is None:
+            return fallback
+        raw = entry["raw"]
+        try:
+            val = raw.get("Estimated_Ordinary_Income_Tax_Rate")
             return float(str(val)) if val is not None and str(val).strip() != "" else fallback
         except (ValueError, TypeError):
             return fallback
