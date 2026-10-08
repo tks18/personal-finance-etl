@@ -60,6 +60,35 @@ class RunRepository:
             (status.upper(), now, run_id),
         )
 
+    def log_simulation_run(
+        self,
+        run_id: str,
+        root_seed: str,
+        iterations: int,
+        horizon: int,
+        settings_snapshot_id: str | None = None,
+        rules_snapshot_id: str | None = None,
+    ) -> None:
+        sim_id = f"sim_{run_id}"
+        now = datetime.now().isoformat()
+        try:
+            app_version = f"v{importlib.metadata.version('personal-finance-etl')}"
+        except importlib.metadata.PackageNotFoundError:
+            app_version = "v-unknown"
+        
+        self.db.conn.execute(
+            """
+            INSERT OR IGNORE INTO cp_simulation_runs (
+                simulation_id, run_id, created_at, root_seed, iterations, horizon,
+                settings_snapshot_id, rules_snapshot_id, model_implementation_version, status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'SUCCESS')
+            """,
+            (
+                sim_id, run_id, now, root_seed, iterations, horizon,
+                settings_snapshot_id, rules_snapshot_id, app_version
+            )
+        )
+
     def log_run_failure(
         self,
         run_id: str,
