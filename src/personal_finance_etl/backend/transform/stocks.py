@@ -72,7 +72,7 @@ def get_stg_stock_market_data(raw_data: pl.LazyFrame, default_currency_id: str) 
             [
                 "__file_name__",
                 "__folder_path__",
-                "FILE_CATEGORY",
+                "__file_category__",
                 "Month Date",
                 "Stock name",
                 "ISIN",
@@ -107,7 +107,7 @@ def get_stg_stock_market_data_ref(stg_stock_market_data_lazy: pl.LazyFrame) -> p
             [
                 "__file_name__",
                 "__folder_path__",
-                "FILE_CATEGORY",
+                "__file_category__",
                 pl.col("Month Date").alias("Date"),
                 "ISIN",
                 pl.col("Stock name").alias("Instrument Name"),
@@ -146,7 +146,7 @@ def get_base_stock_transactions(raw_data: pl.LazyFrame) -> pl.LazyFrame:
             [
                 "__file_name__",
                 "__folder_path__",
-                "FILE_CATEGORY",
+                "__file_category__",
                 "Stock name",
                 "Symbol",
                 "ISIN",

@@ -17,7 +17,7 @@ def get_purchase_reference(
     group_cols = [
         "__file_name__",
         "__folder_path__",
-        "FILE_CATEGORY",
+        "__file_category__",
         "ISIN",
         pl.col(instrument_col).alias("Instrument name"),
         pl.col(date_col).alias("Date"),
@@ -55,7 +55,7 @@ def get_sale_reference(
     group_cols = [
         "__file_name__",
         "__folder_path__",
-        "FILE_CATEGORY",
+        "__file_category__",
         "ISIN",
         pl.col(instrument_col).alias("Instrument name"),
         pl.col(date_col).alias("Date"),
@@ -121,7 +121,7 @@ def get_sale_reference(
     return df_final
 
 
-def transform_stg_investment_market_data(refs: list[pl.LazyFrame]) -> pl.LazyFrame:
+def transform_stg_investment_market_data(refs: list[pl.LazyFrame], default_currency_id: str) -> pl.LazyFrame:
     """
     Translates DAX UNION + SUMMARIZE.
     Concatenates the aggregated tables and selects the final columns.
@@ -129,10 +129,10 @@ def transform_stg_investment_market_data(refs: list[pl.LazyFrame]) -> pl.LazyFra
     df_union = pl.concat(refs, how="diagonal_relaxed")
 
     cols = df_union.collect_schema().names()
-    if "FILE_CATEGORY" not in cols:
-        df_union = df_union.with_columns(pl.lit("Indian").alias("FILE_CATEGORY"))
+    if "__file_category__" not in cols:
+        df_union = df_union.with_columns(pl.lit("Indian").alias("__file_category__"))
     else:
-        df_union = df_union.with_columns(pl.col("FILE_CATEGORY").fill_null("Indian"))
+        df_union = df_union.with_columns(pl.col("__file_category__").fill_null("Indian"))
     if "Closing_Price_Local" not in cols:
         df_union = df_union.with_columns(pl.col("Closing_Price").alias("Closing_Price_Local"))
     else:
@@ -159,16 +159,16 @@ def transform_stg_investment_market_data(refs: list[pl.LazyFrame]) -> pl.LazyFra
         df_union = df_union.with_columns(pl.col("FX_Rate").fill_null(1.0))
 
     if "CURRENCY_ID" not in cols:
-        df_union = df_union.with_columns(pl.lit("INR_INR").alias("CURRENCY_ID"))
+        df_union = df_union.with_columns(pl.lit(default_currency_id).alias("CURRENCY_ID"))
     else:
-        df_union = df_union.with_columns(pl.col("CURRENCY_ID").fill_null("INR_INR"))
+        df_union = df_union.with_columns(pl.col("CURRENCY_ID").fill_null(default_currency_id))
 
     select_cols = [
         "__file_name__",
         "__folder_path__",
         "Date",
         "ISIN",
-        "FILE_CATEGORY",
+        "__file_category__",
         "Quantity",
         "Closing_Price_Local",
         "Buy_Price_Local",
@@ -198,10 +198,10 @@ def get_f_tf_investment_purchase_data(
     df_union = pl.concat(refs, how="diagonal_relaxed")
 
     cols = df_union.collect_schema().names()
-    if "FILE_CATEGORY" not in cols:
-        df_union = df_union.with_columns(pl.lit("Indian").alias("FILE_CATEGORY"))
+    if "__file_category__" not in cols:
+        df_union = df_union.with_columns(pl.lit("Indian").alias("__file_category__"))
     else:
-        df_union = df_union.with_columns(pl.col("FILE_CATEGORY").fill_null("Indian"))
+        df_union = df_union.with_columns(pl.col("__file_category__").fill_null("Indian"))
     if "Price_Local" not in cols:
         df_union = df_union.with_columns(pl.col("Price").alias("Price_Local"))
     else:
@@ -224,7 +224,7 @@ def get_f_tf_investment_purchase_data(
         "__folder_path__",
         "ISIN",
         "Date",
-        "FILE_CATEGORY",
+        "__file_category__",
         "Price_Local",
         "Value_Local",
         "FX_Rate",
@@ -244,10 +244,10 @@ def get_f_tf_investment_sale_data(
     df_union = pl.concat(refs, how="diagonal_relaxed")
 
     cols = df_union.collect_schema().names()
-    if "FILE_CATEGORY" not in cols:
-        df_union = df_union.with_columns(pl.lit("Indian").alias("FILE_CATEGORY"))
+    if "__file_category__" not in cols:
+        df_union = df_union.with_columns(pl.lit("Indian").alias("__file_category__"))
     else:
-        df_union = df_union.with_columns(pl.col("FILE_CATEGORY").fill_null("Indian"))
+        df_union = df_union.with_columns(pl.col("__file_category__").fill_null("Indian"))
     if "Sell_Price_Local" not in cols:
         df_union = df_union.with_columns(pl.col("Sell_Price").alias("Sell_Price_Local"))
     else:
@@ -278,7 +278,7 @@ def get_f_tf_investment_sale_data(
         "__folder_path__",
         "ISIN",
         "Date",
-        "FILE_CATEGORY",
+        "__file_category__",
         "Quantity",
         "Sell_Price_Local",
         "Sell_Value_Local",
@@ -298,7 +298,7 @@ def get_f_tf_investment_sale_data(
 
 
 def get_d_investment_master(
-    master_refs: list[pl.LazyFrame], stg_benchmark_mapping_lazy: pl.LazyFrame
+    master_refs: list[pl.LazyFrame], stg_benchmark_mapping_lazy: pl.LazyFrame, default_currency_id: str
 ) -> pl.LazyFrame:
     """
     Translates d_InvestmentMaster.
@@ -309,9 +309,9 @@ def get_d_investment_master(
 
     cols = df_master_union.collect_schema().names()
     if "CURRENCY_ID" not in cols:
-        df_master_union = df_master_union.with_columns(pl.lit("INR_INR").alias("CURRENCY_ID"))
+        df_master_union = df_master_union.with_columns(pl.lit(default_currency_id).alias("CURRENCY_ID"))
     else:
-        df_master_union = df_master_union.with_columns(pl.col("CURRENCY_ID").fill_null("INR_INR"))
+        df_master_union = df_master_union.with_columns(pl.col("CURRENCY_ID").fill_null(default_currency_id))
 
     df_final = df_master_union.join(stg_benchmark_mapping_lazy, on="ISIN", how="left").select(
         [

@@ -31,12 +31,12 @@ def get_base_us_stock_transactions(raw_data: pl.LazyFrame) -> pl.LazyFrame:
                 pl.col("Exch Rate").cast(pl.Float64).alias("FX_Rate"),
                 pl.col("Order Amount (INR)").cast(pl.Float64).alias("Value"),
                 pl.col("Brokerage (INR)").cast(pl.Float64).alias("Brokerage_INR"),
+                pl.col("Currency").alias("CURRENCY_ID"),
             ]
         )
         .with_columns(
             [
-                pl.lit("US Stocks").alias("FILE_CATEGORY"),
-                pl.lit("INR_USD").alias("CURRENCY_ID"),
+                pl.lit("US Stocks").alias("__file_category__"),
                 (pl.col("Price_Local") * pl.col("FX_Rate")).alias("Price"),
             ]
         )
