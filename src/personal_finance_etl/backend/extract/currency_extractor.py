@@ -3,7 +3,7 @@ import concurrent.futures
 import io
 import time
 import uuid
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 import polars as pl
 import yfinance as yf  # type: ignore[import-untyped]
@@ -72,9 +72,14 @@ class CurrencyExtractor:
         if "Date" not in hist_pl.columns:
             hist_pl = hist_pl.rename({"index": "Date"})
 
-        df_new = hist_pl.select(
-            [pl.col("Date").cast(pl.Date), pl.col("Close").cast(pl.Float64)]
-        ).filter(pl.col("Close").is_not_null())
+        df_api = hist_pl.select([pl.col("Date").cast(pl.Date), pl.col("Close").cast(pl.Float64)])
+
+        # Create a continuous spine to handle closures (weekends/holidays) without re-fetching
+        df_spine = pl.DataFrame(
+            {"Date": pl.date_range(start=fetch_start, end=end_dt, interval="1d", eager=True)}
+        )
+
+        df_new = df_spine.join(df_api, on="Date", how="left")
 
         df_new = df_new.with_columns(
             pl.lit(row["UID"]).alias("Currency_ID"),
@@ -83,9 +88,16 @@ class CurrencyExtractor:
             pl.lit(row["Target_Currency_Code"]).alias("Target_Currency_Code"),
             pl.lit(ticker).alias("yF_Ticker"),
             pl.col("Close").alias("FX_Rate"),
+            pl.lit("Yahoo Finance").alias("Data_Provider"),
+            pl.lit(datetime.now().isoformat()).alias("Extraction_Time"),
+            pl.lit(fetch_start).alias("Requested_Start"),
+            pl.lit(end_dt).alias("Requested_End"),
+            pl.col("Close").is_null().alias("Is_Closure_Gap"),
         ).drop("Close")
 
-        logger.debug(f"[Currency Extractor] Parsed {df_new.height} new records for {ticker}.")
+        logger.debug(
+            f"[Currency Extractor] Parsed {df_new.height} records (including gaps) for {ticker}."
+        )
 
         msg = f"✓ API Fetched {ticker} ({fetch_start} to {end_dt}) - {df_new.height} rows"
 
@@ -202,4 +214,3 @@ class CurrencyExtractor:
             else pl.DataFrame()
         )
         return df_out, injected_files
-
