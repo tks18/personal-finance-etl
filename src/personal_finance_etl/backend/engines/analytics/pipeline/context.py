@@ -27,7 +27,7 @@ class FXRateProvider:
                     d = date.fromisoformat(d)
                 self.fx_map[(d, row["Currency_ID"])] = float(row["FX_Rate"])
 
-    def get_rate(self, d: date, currency_id: str) -> float:
+    def get_rate(self, d: date, currency_id: str) -> float | None:
         if currency_id == self.default_currency_id or not currency_id:
             return 1.0
 
@@ -43,7 +43,7 @@ class FXRateProvider:
             if rate is not None:
                 return rate
 
-        return 1.0
+        return None
 
 
 @dataclass
