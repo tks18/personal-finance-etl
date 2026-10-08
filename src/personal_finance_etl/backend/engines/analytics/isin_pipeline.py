@@ -44,6 +44,7 @@ def _process_isin_worker(
     list[dict[str, Any]],
     dict[date, dict[str, Any]],
     list[dict[str, Any]],
+    list[dict[str, Any]],
     dict[str, Any],
     dict[str, Any] | None,
 ]:
@@ -89,15 +90,16 @@ def _process_isin_worker(
             isin_pt = {d: pt.model_dump(mode="python") for d, pt in res.terminals.items()}
             tags = res.tags.model_dump(by_alias=True)
             isin_re = res.realized_events
+            isin_recon = res.recon_events
 
             if df is not None and not df.is_empty():
                 df.write_parquet(os.path.join(tmp_dir, f"{isin.replace('/', '_')}.parquet"))
-                return True, isin_cf, isin_pt, isin_re, tags, None
-            return False, isin_cf, isin_pt, isin_re, tags, None
-        return False, [], {}, [], {}, None
+                return True, isin_cf, isin_pt, isin_re, isin_recon, tags, None
+            return False, isin_cf, isin_pt, isin_re, isin_recon, tags, None
+        return False, [], {}, [], [], {}, None
     except Exception as e:
         tb = traceback.format_exc()
-        return False, [], {}, [], {}, {"isin": isin, "error": str(e), "traceback": tb}
+        return False, [], {}, [], [], {}, {"isin": isin, "error": str(e), "traceback": tb}
 
 
 class IsinPipeline:
@@ -235,6 +237,7 @@ class IsinPipeline:
         is_daemon = current_process.daemon
         current_process.daemon = False
         worker_queue = start_worker_listener()
+        global_recon_events: list[dict[str, Any]] = []
 
         try:
             with concurrent.futures.ProcessPoolExecutor(
@@ -259,7 +262,7 @@ class IsinPipeline:
                         )
 
                     try:
-                        success, isin_cf, isin_pt, isin_re, tags, error_info = future.result()
+                        success, isin_cf, isin_pt, isin_re, isin_recon, tags, error_info = future.result()
                     except Exception as e:
                         # Catch BrokenProcessPool, CancelledError, PicklingError, etc.
                         error_msg = f"Process-boundary failure: {type(e).__name__} - {str(e)}"
@@ -291,6 +294,7 @@ class IsinPipeline:
                         pt["after_tax_val"] += vals.get("after_tax_val", 0.0)
                         pt["val_local"] += vals.get("val_local", 0.0)
                     realized_events.extend(isin_re)
+                    global_recon_events.extend(isin_recon)
 
                     if not tags:
                         continue
@@ -378,6 +382,7 @@ class IsinPipeline:
             global_cf=global_cashflows,
             global_pt=portfolio_terminals,
             global_re=realized_events,
+            global_recon_events=global_recon_events,
             class_cf=class_cf,
             class_pt=class_pt,
             class_re=class_re,
