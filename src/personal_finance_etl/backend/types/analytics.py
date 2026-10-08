@@ -48,7 +48,7 @@ class ISINTags(BaseModel):
     industry: str = "Unknown"
     geo: str = "Unknown"
     country: str = "Unknown"
-    currency: str = "INR_INR"
+    currency: str = ""
 
 
 class SnapshotRecord(BaseModel):
