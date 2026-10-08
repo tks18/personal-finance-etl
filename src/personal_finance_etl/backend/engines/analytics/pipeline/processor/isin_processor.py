@@ -30,7 +30,7 @@ class IsinProcessor:
         fy_table: FYMacroParametersTable,
         start_date: date | None,
         end_date: date | None,
-        rules: FinancialRules | None,
+        rules: FinancialRules,
         fx_provider: Any = None,
     ) -> None:
         self.fy_table = fy_table
@@ -60,9 +60,12 @@ class IsinProcessor:
         bm_provider = BenchmarkPriceProvider(bench_id, None, prebuilt_map=bm_map)
         snapshot_generator = SnapshotGenerator(self.fy_table, self.rules, isin, master_row)
 
-        fifo = FIFOPortfolio(tax_type, tax_subtype, self.fy_table)
+        default_curr = getattr(self.rules, "DEFAULT_CURRENCY_ID", "INR_INR")
+        fifo = FIFOPortfolio(tax_type, tax_subtype, self.fy_table, default_curr)
         cf_dates: list[date] = []
         cf_amounts: list[float] = []
+        bm_cf_amounts: list[float] = []
+        bm_cf_amounts_local: list[float] = []
 
         first_p_date = (
             to_date_obj(p_inst[0]["Date"])
@@ -102,7 +105,7 @@ class IsinProcessor:
 
                 _pl_val = row.get("Price_Local")
                 price_local = float(_pl_val) if _pl_val is not None else b_price
-                currency_id = row.get("Currency_ID", "INR_INR")
+                currency_id = row.get("CURRENCY_ID") or master_row.get("CURRENCY_ID") or getattr(self.rules, "DEFAULT_CURRENCY_ID", "INR_INR")
                 fx_rate_buy = (
                     self.fx_provider.get_rate(row_dt_obj, currency_id) if self.fx_provider else 1.0
                 )
@@ -126,7 +129,9 @@ class IsinProcessor:
                 )
                 cf_dates.append(row_dt_obj)
                 cf_amounts.append(-buy_val)
+                bm_cf_amounts.append(-buy_val)
                 buy_val_local = float(qty * price_local)
+                bm_cf_amounts_local.append(-buy_val_local)
                 isin_cashflows.append(CashflowRecord(date=row_dt_obj, amount=-buy_val, amount_local=-buy_val_local))
                 p_idx += 1
 
@@ -152,7 +157,7 @@ class IsinProcessor:
                 _spl_val = row.get("Sell_Price_Local")
                 s_price_local = float(_spl_val) if _spl_val is not None else s_price
                 s_val_local = float(s_qty * s_price_local)
-                currency_id = row.get("Currency_ID", "INR_INR")
+                currency_id = row.get("CURRENCY_ID") or master_row.get("CURRENCY_ID") or getattr(self.rules, "DEFAULT_CURRENCY_ID", "INR_INR")
                 fx_rate_sell = (
                     self.fx_provider.get_rate(row_dt_obj, currency_id) if self.fx_provider else 1.0
                 )
@@ -164,6 +169,14 @@ class IsinProcessor:
                 events = fifo.sell(
                     row_dt_obj, s_qty, s_price, price_local=s_price_local, fx_rate_sell=fx_rate_sell
                 )
+                
+                # Calculate benchmark sell value
+                bm_sell_price_local = bm_provider.get_bm_price(row_dt_obj) or 1.0
+                bm_sell_price_inr = bm_sell_price_local * fx_rate_sell
+                shadow_qty_sold = sum(e.get("shadow_qty_sold", 0.0) for e in events)
+                bm_cf_amounts.append(shadow_qty_sold * bm_sell_price_inr)
+                bm_cf_amounts_local.append(shadow_qty_sold * bm_sell_price_local)
+
                 isin_realized.extend(events)
                 s_idx += 1
 
@@ -172,8 +185,12 @@ class IsinProcessor:
                 m_recon_bm_price = float(m_row.get("Closing_Price", 1.0))
             cf_recon = fifo.reconcile_quantity(m_row.get("Quantity"), m_date, m_recon_bm_price)
             for cf in cf_recon:
+                amt = cast(float, cf["amount"])
                 cf_dates.append(cast(date, cf["date"]))
-                cf_amounts.append(cast(float, cf["amount"]))
+                cf_amounts.append(amt)
+                bm_cf_amounts.append(amt)
+                bm_cf_amounts_local.append(amt)
+                isin_cashflows.append(CashflowRecord(date=cast(date, cf["date"]), amount=amt, amount_local=amt))
 
             fifo.reconcile_cost_basis(m_row.get("Buy_Value"))
 
@@ -191,7 +208,7 @@ class IsinProcessor:
                 m_bm_price = m_price
 
             fx_rate_snap = 1.0
-            if fifo.active_lots and fifo.active_lots[0].currency_id and fifo.active_lots[0].currency_id != "INR_INR" and self.fx_provider:
+            if fifo.active_lots and fifo.active_lots[0].currency_id and fifo.active_lots[0].currency_id != getattr(self.rules, "DEFAULT_CURRENCY_ID", "INR_INR") and self.fx_provider:
                 fx_rate_snap = self.fx_provider.get_rate(m_date, fifo.active_lots[0].currency_id)
             
             m_bm_price_inr = m_bm_price * fx_rate_snap
@@ -203,7 +220,7 @@ class IsinProcessor:
             
             terminal_val_local = 0.0
             for lot in fifo.active_lots:
-                if lot.currency_id and lot.currency_id != "INR_INR" and self.fx_provider:
+                if lot.currency_id and lot.currency_id != getattr(self.rules, "DEFAULT_CURRENCY_ID", "INR_INR") and self.fx_provider:
                     fx_rate_snap_lot = self.fx_provider.get_rate(m_date, lot.currency_id)
                     m_price_local = m_price / fx_rate_snap_lot if fx_rate_snap_lot > 0 else m_price
                     terminal_val_local += lot.qty * m_price_local
@@ -238,7 +255,7 @@ class IsinProcessor:
             pt.after_tax_val += after_tax_terminal_val
 
             inst_xirr = calculate_xirr(cf_dates + [m_date], cf_amounts + [terminal_val])
-            bm_xirr_val = calculate_xirr(cf_dates + [m_date], cf_amounts + [shadow_terminal_val])
+            bm_xirr_val = calculate_xirr(cf_dates + [m_date], bm_cf_amounts + [shadow_terminal_val])
             inst_after_tax_xirr = calculate_xirr(
                 cf_dates + [m_date], cf_amounts + [after_tax_terminal_val]
             )
@@ -287,7 +304,11 @@ class IsinProcessor:
             cf_dates_local = [c.date for c in isin_cashflows if c.date <= m_date]
             cf_amounts_local = [c.amount_local for c in isin_cashflows if c.date <= m_date]
             inst_xirr_local = calculate_xirr(cf_dates_local + [m_date], cf_amounts_local + [terminal_val_local])
-            inst_bm_xirr_local = calculate_xirr(cf_dates_local + [m_date], cf_amounts_local + [shadow_terminal_val_local])
+            
+            bm_cf_dates_local = cf_dates_local
+            bm_cf_local = bm_cf_amounts_local[:len(cf_dates_local)]
+            inst_bm_xirr_local = calculate_xirr(bm_cf_dates_local + [m_date], bm_cf_local + [shadow_terminal_val_local])
+            
             inst_metrics["xirr_local"] = inst_xirr_local
             inst_metrics["bm_xirr_local"] = inst_bm_xirr_local
             inst_metrics["active_return_local"] = inst_xirr_local - inst_bm_xirr_local
@@ -315,7 +336,7 @@ class IsinProcessor:
 
             _pl_val = row.get("Price_Local")
             price_local = float(_pl_val) if _pl_val is not None else b_price
-            currency_id = row.get("Currency_ID", "INR_INR")
+            currency_id = row.get("CURRENCY_ID") or master_row.get("CURRENCY_ID") or getattr(self.rules, "DEFAULT_CURRENCY_ID", "INR_INR")
             fx_rate_buy = (
                 self.fx_provider.get_rate(row_dt_obj, currency_id) if self.fx_provider else 1.0
             )
@@ -339,7 +360,9 @@ class IsinProcessor:
             )
             cf_dates.append(row_dt_obj)
             cf_amounts.append(-buy_val)
+            bm_cf_amounts.append(-buy_val)
             buy_val_local = float(qty * price_local)
+            bm_cf_amounts_local.append(-buy_val_local)
             isin_cashflows.append(CashflowRecord(date=row_dt_obj, amount=-buy_val, amount_local=-buy_val_local))
             p_idx += 1
 
@@ -365,7 +388,7 @@ class IsinProcessor:
             _spl_val = row.get("Sell_Price_Local")
             s_price_local = float(_spl_val) if _spl_val is not None else s_price
             s_val_local = float(s_qty * s_price_local)
-            currency_id = row.get("Currency_ID", "INR_INR")
+            currency_id = row.get("CURRENCY_ID") or master_row.get("CURRENCY_ID") or getattr(self.rules, "DEFAULT_CURRENCY_ID", "INR_INR")
             fx_rate_sell = (
                 self.fx_provider.get_rate(row_dt_obj, currency_id) if self.fx_provider else 1.0
             )
@@ -377,6 +400,14 @@ class IsinProcessor:
             events = fifo.sell(
                 row_dt_obj, s_qty, s_price, price_local=s_price_local, fx_rate_sell=fx_rate_sell
             )
+            
+            # Calculate benchmark sell value
+            bm_sell_price_local = bm_provider.get_bm_price(row_dt_obj) or 1.0
+            bm_sell_price_inr = bm_sell_price_local * fx_rate_sell
+            shadow_qty_sold = sum(e.get("shadow_qty_sold", 0.0) for e in events)
+            bm_cf_amounts.append(shadow_qty_sold * bm_sell_price_inr)
+            bm_cf_amounts_local.append(shadow_qty_sold * bm_sell_price_local)
+
             isin_realized.extend(events)
             s_idx += 1
 
@@ -403,7 +434,7 @@ class IsinProcessor:
                 "industry": str(master_row.get("INDUSTRY", "Unknown")),
                 "geo": str(master_row.get("GEO", "Unknown")),
                 "country": str(master_row.get("COUNTRY", "Unknown")),
-                "currency": str(master_row.get("CURRENCY_ID", "INR_INR")),
+                "currency": str(master_row.get("CURRENCY_ID") or getattr(self.rules, "DEFAULT_CURRENCY_ID", "INR_INR")),
             }
         )
         return ISINProcessResult(
@@ -413,3 +444,4 @@ class IsinProcessor:
             realized_events=isin_realized,
             tags=tags,
         )
+
