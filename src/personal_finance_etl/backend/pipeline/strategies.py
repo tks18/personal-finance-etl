@@ -133,7 +133,7 @@ class USStockPipeline:
                 "__folder_path__": pl.String,
                 "Date": pl.Date,
                 "ISIN": pl.String,
-                "FILE_CATEGORY": pl.String,
+                "__file_category__": pl.String,
                 "Quantity": pl.Float64,
                 "Closing_Price_Local": pl.Float64,
                 "Buy_Price_Local": pl.Float64,
