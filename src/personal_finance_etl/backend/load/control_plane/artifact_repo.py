@@ -1,5 +1,6 @@
 import hashlib
 import os
+import uuid
 from datetime import datetime
 
 from personal_finance_etl.backend.load.control_plane.connection import SQLiteManager
@@ -14,6 +15,7 @@ from personal_finance_etl.backend.utils.logger import logger
 class ArtifactRepository:
     def __init__(self, db: SQLiteManager):
         self.db = db
+        self.active_run_id: str | None = None
 
     def get_registry(self) -> dict[str, tuple[str, str]]:
         cursor = self.db.conn.execute(
@@ -50,7 +52,7 @@ class ArtifactRepository:
         row = self.db.conn.execute(
             """
             SELECT file_category, file_type, file_hash, file_size_bytes, 
-                   first_ingested, last_ingested, sync_status 
+                   first_seen_run_id, first_seen_at, last_seen_run_id, last_seen_at, sync_status 
             FROM cp_file_registry WHERE relative_path = ?
             """,
             (old_rel_path,),
@@ -64,8 +66,9 @@ class ArtifactRepository:
             """
             INSERT INTO cp_file_registry 
             (file_id, file_name, relative_path, file_category, file_type, 
-             file_hash, file_size_bytes, first_ingested, last_ingested, sync_status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             file_hash, file_size_bytes, first_seen_run_id, first_seen_at, 
+             last_seen_run_id, last_seen_at, sync_status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (new_file_id, new_file_name, new_rel_path, *row),
         )
@@ -80,12 +83,36 @@ class ArtifactRepository:
             (new_file_id, old_file_id),
         )
 
+        now = datetime.now().isoformat()
+        if self.active_run_id:
+            self.db.conn.execute(
+                """
+                INSERT INTO cp_artifact_run_events 
+                (event_id, run_id, file_id, event_type, event_at, observed_path, content_hash, event_reason)
+                VALUES (?, ?, ?, 'RENAMED', ?, ?, ?, ?)
+                """,
+                (
+                    str(uuid.uuid4()),
+                    self.active_run_id,
+                    new_file_id,
+                    now,
+                    new_rel_path,
+                    row[2],
+                    f"Migrated from {old_rel_path}",
+                ),
+            )
+
         # 4. Delete old registry row
         self.db.conn.execute(
             "DELETE FROM cp_file_registry WHERE relative_path = ?", (old_rel_path,)
         )
 
-    def ingest_binaries(self, actionable_files: dict[str, list[str]]) -> None:
+    def ingest_binaries(
+        self,
+        actionable_files: dict[str, list[str]],
+        new_files: dict[str, list[str]] | None = None,
+        changed_files: dict[str, list[str]] | None = None,
+    ) -> None:
         now = datetime.now().isoformat()
         total_count = 0
 
@@ -107,12 +134,18 @@ class ArtifactRepository:
 
                     self.db.conn.execute(
                         """
-                        INSERT INTO cp_file_registry (file_id, file_name, relative_path, file_category, file_type, file_hash, file_size_bytes, first_ingested, last_ingested)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        INSERT INTO cp_file_registry (
+                            file_id, file_name, relative_path, file_category, file_type, file_hash, file_size_bytes, 
+                            first_seen_run_id, first_seen_at, last_seen_run_id, last_seen_at, last_changed_run_id, last_changed_at
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         ON CONFLICT(relative_path) DO UPDATE SET
                             file_hash = excluded.file_hash,
                             file_size_bytes = excluded.file_size_bytes,
-                            last_ingested = excluded.last_ingested,
+                            last_seen_run_id = excluded.last_seen_run_id,
+                            last_seen_at = excluded.last_seen_at,
+                            last_changed_run_id = excluded.last_changed_run_id,
+                            last_changed_at = excluded.last_changed_at,
                             sync_status = 'PENDING_BRONZE'
                         """,
                         (
@@ -123,7 +156,11 @@ class ArtifactRepository:
                             file_type,
                             file_hash,
                             file_size,
+                            self.active_run_id,
                             now,
+                            self.active_run_id,
+                            now,
+                            self.active_run_id,
                             now,
                         ),
                     )
@@ -136,6 +173,27 @@ class ArtifactRepository:
                         """,
                         (file_id, raw_bytes),
                     )
+
+                    if self.active_run_id:
+                        rel_path = filepath.replace("\\", "/")
+                        is_new = rel_path in (new_files or {}).get(category, [])
+                        event_type = "DISCOVERED" if is_new else "CHANGED"
+                        self.db.conn.execute(
+                            """
+                            INSERT INTO cp_artifact_run_events 
+                            (event_id, run_id, file_id, event_type, event_at, observed_path, content_hash)
+                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                            """,
+                            (
+                                str(uuid.uuid4()),
+                                self.active_run_id,
+                                file_id,
+                                event_type,
+                                now,
+                                rel_path,
+                                file_hash,
+                            ),
+                        )
                     logger.debug(
                         f"[SQLITE:QUERY] Upserted binary payload for '{filename}' ({file_size} bytes)."
                     )
@@ -162,12 +220,18 @@ class ArtifactRepository:
 
         self.db.conn.execute(
             """
-            INSERT INTO cp_file_registry (file_id, file_name, relative_path, file_category, file_type, file_hash, file_size_bytes, first_ingested, last_ingested)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO cp_file_registry (
+                file_id, file_name, relative_path, file_category, file_type, file_hash, file_size_bytes, 
+                first_seen_run_id, first_seen_at, last_seen_run_id, last_seen_at, last_changed_run_id, last_changed_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(relative_path) DO UPDATE SET
                 file_hash = excluded.file_hash,
                 file_size_bytes = excluded.file_size_bytes,
-                last_ingested = excluded.last_ingested,
+                last_seen_run_id = excluded.last_seen_run_id,
+                last_seen_at = excluded.last_seen_at,
+                last_changed_run_id = excluded.last_changed_run_id,
+                last_changed_at = excluded.last_changed_at,
                 sync_status = 'PENDING_BRONZE'
             """,
             (
@@ -178,7 +242,11 @@ class ArtifactRepository:
                 file_type,
                 file_hash,
                 len(raw_bytes),
+                self.active_run_id,
                 now,
+                self.active_run_id,
+                now,
+                self.active_run_id,
                 now,
             ),
         )
@@ -226,7 +294,20 @@ class ArtifactRepository:
             return
         unique_paths = [p.replace("\\", "/") for p in filepaths]
         placeholders = ",".join("?" * len(unique_paths))
+        now = datetime.now().isoformat()
+        if self.active_run_id:
+            for p in unique_paths:
+                file_id = generate_file_id(p)
+                self.db.conn.execute(
+                    """
+                    INSERT INTO cp_artifact_run_events 
+                    (event_id, run_id, file_id, event_type, event_at, observed_path, event_reason)
+                    VALUES (?, ?, ?, 'SYNCED', ?, ?, 'Bronze Sync Successful')
+                    """,
+                    (str(uuid.uuid4()), self.active_run_id, file_id, now, p),
+                )
+
         self.db.conn.execute(
-            f"UPDATE cp_file_registry SET sync_status = 'SYNCED' WHERE relative_path IN ({placeholders})",
-            unique_paths,
+            f"UPDATE cp_file_registry SET sync_status = 'SYNCED', last_synced_run_id = ?, last_synced_at = ? WHERE relative_path IN ({placeholders})",
+            [self.active_run_id, now] + unique_paths,
         )
