@@ -671,5 +671,52 @@ CREATE TABLE IF NOT EXISTS silver.f_Investment_Reconciliation_Events (
     Original_Unit_Cost DOUBLE,
     Adjusted_Unit_Cost DOUBLE
 );
+
+CREATE TABLE IF NOT EXISTS silver.f_Tax_Events (
+    Tax_Event_ID TEXT PRIMARY KEY,
+    Event_Date DATE NOT NULL,
+    FY TEXT NOT NULL,
+    Source_Type TEXT NOT NULL,
+    Source_ID TEXT NOT NULL,
+    Income_Head TEXT,
+    Tax_Sub_Head TEXT,
+    Taxability TEXT,
+    Tax_Method TEXT,
+    Gross_Amount DOUBLE,
+    Taxable_Amount DOUBLE,
+    Gain_Type TEXT,
+    Realized_Gain_Loss DOUBLE,
+    Applied_Rate DOUBLE,
+    Estimated_Tax DOUBLE,
+    Tax_Status TEXT,
+    Tax_Status_Reason TEXT,
+    Rules_Snapshot_ID TEXT
+);
+
+CREATE TABLE IF NOT EXISTS silver.f_Tax_FY_State (
+    FY TEXT PRIMARY KEY,
+    Gross_Income DOUBLE,
+    Excluded_Non_Taxable_Income DOUBLE,
+    Tax_Relevant_Income DOUBLE,
+    Ordinary_Taxable_Income DOUBLE,
+    STCG DOUBLE,
+    LTCG DOUBLE,
+    STCL DOUBLE,
+    LTCL DOUBLE,
+    Brought_Forward_STCL DOUBLE,
+    Brought_Forward_LTCL DOUBLE,
+    STCL_Used_Against_STCG DOUBLE,
+    STCL_Used_Against_LTCG DOUBLE,
+    LTCL_Used_Against_LTCG DOUBLE,
+    Closing_STCL DOUBLE,
+    Closing_LTCL DOUBLE,
+    Net_Taxable_STCG DOUBLE,
+    Net_Taxable_LTCG DOUBLE,
+    Estimated_Ordinary_Tax DOUBLE,
+    Estimated_Capital_Gains_Tax DOUBLE,
+    Estimated_Gross_Tax DOUBLE,
+    Observed_Tax_Credits DOUBLE,
+    Estimated_Net_Tax_Position DOUBLE,
+    Check_Required_Count BIGINT
 );
 """
