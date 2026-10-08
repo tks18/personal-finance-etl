@@ -15,7 +15,7 @@ class SnapshotGenerator:
     def __init__(
         self,
         fy_table: FYMacroParametersTable,
-        rules: FinancialRules | None,
+        rules: FinancialRules,
         isin: str,
         master_row: dict[str, Any],
     ) -> None:
@@ -74,7 +74,7 @@ class SnapshotGenerator:
             else:
                 day_weight = 1.0
 
-            if lot.currency_id and lot.currency_id != "INR_INR" and fx_provider:
+            if lot.currency_id and lot.currency_id != (getattr(self.rules, "DEFAULT_CURRENCY_ID", "INR_INR")) and fx_provider:
                 fx_rate_snap_lot = fx_provider.get_rate(m_date, lot.currency_id)
             else:
                 fx_rate_snap_lot = 1.0
@@ -116,7 +116,7 @@ class SnapshotGenerator:
             after_tax_pl = pnl - (ltcg_tax + stcg_tax)
             after_tax_cv = close_val - (ltcg_tax + stcg_tax)
 
-            if lot.currency_id and lot.currency_id != "INR_INR" and fx_provider:
+            if lot.currency_id and lot.currency_id != (getattr(self.rules, "DEFAULT_CURRENCY_ID", "INR_INR")) and fx_provider:
                 fx_rate_snap = fx_provider.get_rate(m_date, lot.currency_id)
                 m_price_local = m_price / fx_rate_snap if fx_rate_snap > 0 else m_price
 
@@ -153,7 +153,7 @@ class SnapshotGenerator:
                 SnapshotRecord(
                     Closing_Date=m_date,
                     ISIN=self.isin,
-                    CURRENCY_ID=fifo.active_lots[0].currency_id if fifo.active_lots else "INR_INR",
+                    CURRENCY_ID=(fifo.active_lots[0].currency_id if fifo.active_lots and fifo.active_lots[0].currency_id else getattr(self.rules, "DEFAULT_CURRENCY_ID", "INR_INR")),
                     BENCHMARK_ID=self.bench_id,
                     TAX_TYPE=self.tax_type,
                     TAX_SUBTYPE=self.tax_subtype,

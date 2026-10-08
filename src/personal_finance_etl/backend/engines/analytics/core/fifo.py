@@ -10,11 +10,12 @@ from personal_finance_etl.backend.utils.models import TaxLot
 class FIFOPortfolio:
     """Manages the FIFO tracking of a single instrument's lots."""
 
-    def __init__(self, tax_type: str, tax_subtype: str, fy_table: FYMacroParametersTable):
+    def __init__(self, tax_type: str, tax_subtype: str, fy_table: FYMacroParametersTable, default_currency_id: str):
         self._active_lots: deque[TaxLot] = deque()
         self.tax_type = tax_type
         self.tax_subtype = tax_subtype
         self.fy_table = fy_table
+        self.default_currency_id = default_currency_id
 
     @property
     def active_lots(self) -> list[TaxLot]:
@@ -30,10 +31,13 @@ class FIFOPortfolio:
         bm_price: float,
         price_local: float = 0.0,
         fx_rate_buy: float = 1.0,
-        currency_id: str = "INR_INR",
+        currency_id: str | None = None,
         bm_buy_local: float | None = None,
     ) -> None:
         """Register a new buy lot."""
+        if currency_id is None:
+            currency_id = self.default_currency_id
+
         self._active_lots.append(
             TaxLot(
                 date=buy_date,
@@ -79,7 +83,7 @@ class FIFOPortfolio:
                 forex_pnl = 0.0
             else:
                 pnl = (price - lot.price) * consumed
-                if lot.currency_id and lot.currency_id != "INR_INR":
+                if lot.currency_id and lot.currency_id != self.default_currency_id:
                     asset_pnl_local = (price_local - lot.price_local) * consumed
                     forex_pnl = (lot.price_local * (fx_rate_sell - lot.fx_rate_buy)) * consumed
                 else:
@@ -96,6 +100,7 @@ class FIFOPortfolio:
                     "asset_pnl_local": asset_pnl_local,
                     "forex_pnl": forex_pnl,
                     "currency_id": lot.currency_id,
+                    "shadow_qty_sold": lot.shadow_qty if lot.qty <= rem + 1e-8 else (lot.shadow_qty * (rem / lot.qty)) if lot.shadow_qty else 0.0,
                 }
             )
 
