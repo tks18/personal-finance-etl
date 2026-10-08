@@ -6,7 +6,8 @@ from personal_finance_etl.backend.engines.analytics.core.fifo import FIFOPortfol
 from personal_finance_etl.backend.engines.analytics.core.math import calculate_cagr
 from personal_finance_etl.backend.engines.analytics.rules.macro import (
     FYMacroParametersTable,
-    get_ltcg_threshold,
+    add_months,
+    get_ltcg_threshold_months,
 )
 from personal_finance_etl.backend.types.analytics import SnapshotRecord
 
@@ -57,11 +58,14 @@ class SnapshotGenerator:
             lbd = lot.date
             age = max((m_date - lbd).days, 1) if lbd else 1
 
-            ltcg_thr = get_ltcg_threshold(self.tax_type, self.tax_subtype, self.rules)
+            threshold_months = get_ltcg_threshold_months(self.tax_type, self.tax_subtype, self.rules)
+            boundary_date = add_months(lbd or m_date, threshold_months)
+            ltcg_thr = (boundary_date - (lbd or m_date)).days
+            
             holding_type = self.fy_table.get_holding_type(
-                age, self.tax_type, self.tax_subtype, lbd or m_date, m_date
+                self.tax_type, self.tax_subtype, lbd or m_date, m_date
             )
-            days_to_ltcg = max(0, ltcg_thr - age) if holding_type == "STCG" else 0
+            days_to_ltcg = max(0, (boundary_date - m_date).days) if holding_type == "STCG" else 0
             ltcg_rate, stcg_rate = self.fy_table.get_tax_rates(
                 self.tax_type, self.tax_subtype, lbd or m_date, m_date
             )
