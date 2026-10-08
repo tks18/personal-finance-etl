@@ -1,5 +1,5 @@
 import dataclasses
-from collections import defaultdict
+from collections import defaultdict, deque
 from datetime import date, timedelta
 from typing import Any
 
@@ -18,10 +18,8 @@ def transform_us_market_data(
     Transforms bronze raw US stock prices into a continuous silver daily series,
     builds the FIFO spine, joins FX rates, and calculates PnL.
     """
-    df_prices = df_bronze_prices_lazy.collect()
     df_purchase = df_purchase_lazy.collect()
     df_sale = df_sale_lazy.collect()
-    df_fx = df_fx_lazy.collect()
 
     if df_purchase.is_empty():
         return pl.DataFrame().lazy()
@@ -70,7 +68,7 @@ def transform_us_market_data(
 
     for isin in active_isins:
         current_date = global_start_date
-        lots: list[Lot] = []
+        lots: deque[Lot] = deque()
         curr_id = currency_map.get(isin)
         if not curr_id:
             raise ValueError(f"Missing CURRENCY_ID for US Stock ISIN: {isin}")
@@ -97,7 +95,7 @@ def transform_us_market_data(
                         sqty = 0
                     else:
                         sqty -= lots[0].qty
-                        lots.pop(0)
+                        lots.popleft()
 
             # Group by Buy Price to match the main Indian stock market data lot-level granularity
             lots_by_price: dict[tuple[float, float], float] = defaultdict(float)
@@ -121,7 +119,7 @@ def transform_us_market_data(
 
             current_date += timedelta(days=1)
 
-    df_spine = pl.DataFrame(
+    df_spine_eager = pl.DataFrame(
         spine_records,
         schema={
             "Date": pl.Date,
@@ -135,35 +133,34 @@ def transform_us_market_data(
         },
     )
 
-    if df_spine.is_empty():
+    if df_spine_eager.is_empty():
         return pl.DataFrame().lazy()
+        
+    df_spine = df_spine_eager.lazy()
 
     # --- Phase 2: Price Enrichment (using ASOF Join) ---
-    if not df_prices.is_empty():
-        df_prices = df_prices.sort("Date")
-        df_spine = df_spine.sort("Date")
-        df_spine = df_spine.join_asof(
-            df_prices.select(["Date", "ISIN", "Closing_Price_Local"]), 
-            on="Date", 
-            by="ISIN", 
-            strategy="backward"
-        ).sort(["ISIN", "Date"]).with_columns(
-            pl.col("Closing_Price_Local").backward_fill().fill_null(0.0).over("ISIN")
-        )
-    else:
-        df_spine = df_spine.with_columns(pl.lit(0.0).alias("Closing_Price_Local"))
+    # Note: df_bronze_prices_lazy stays lazy to leverage Polars query optimization
+    # Assuming df_bronze_prices_lazy can be empty, though normally we don't check is_empty() on lazy frames easily.
+    # We will just do the join.
+    df_prices = df_bronze_prices_lazy.sort("Date")
+    df_spine = df_spine.sort("Date")
+    df_spine = df_spine.join_asof(
+        df_prices.select(["Date", "ISIN", "Closing_Price_Local"]), 
+        on="Date", 
+        by="ISIN", 
+        strategy="backward"
+    ).sort(["ISIN", "Date"]).with_columns(
+        pl.col("Closing_Price_Local").backward_fill().fill_null(0.0).over("ISIN")
+    )
 
     # --- Phase 3: FX Translation ---
-    if not df_fx.is_empty():
-        df_fx_sorted = df_fx.select(["Date", "Currency_ID", "FX_Rate"]).rename({"Currency_ID": "CURRENCY_ID"}).sort("Date")
-        df_spine = df_spine.sort("Date")
-        df_spine = df_spine.join_asof(
-            df_fx_sorted, on="Date", by="CURRENCY_ID", strategy="backward"
-        ).sort(["ISIN", "Date"]).with_columns(
-            pl.col("FX_Rate").backward_fill().fill_null(1.0).over("ISIN")
-        )
-    else:
-        df_spine = df_spine.with_columns(pl.lit(1.0).alias("FX_Rate"))
+    df_fx_sorted = df_fx_lazy.select(["Date", "Currency_ID", "FX_Rate"]).rename({"Currency_ID": "CURRENCY_ID"}).sort("Date")
+    df_spine = df_spine.sort("Date")
+    df_spine = df_spine.join_asof(
+        df_fx_sorted, on="Date", by="CURRENCY_ID", strategy="backward"
+    ).sort(["ISIN", "Date"]).with_columns(
+        pl.col("FX_Rate").backward_fill().fill_null(1.0).over("ISIN")
+    )
 
     df_spine = df_spine.with_columns(
         [
