@@ -101,6 +101,7 @@ def extract_macro_parameters_raw(filename: str, folder_path: str, raw_bytes: byt
         "Default_LTCG": pl.Float64,
         "Default_STCG": pl.Float64,
         "Equity_LTCG_Exemption": pl.Int64,
+        "Estimated_Ordinary_Income_Tax_Rate": pl.Float64,
         "Remarks": pl.String,
     }
     return (
