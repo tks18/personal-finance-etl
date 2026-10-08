@@ -42,8 +42,9 @@ class WealthPresentationEngine:
     Consumes LazyFrames and produces aggregated summary tables suitable for BI dashboards.
     """
 
-    def __init__(self, rules: FinancialRules) -> None:
+    def __init__(self, rules: FinancialRules, root_seed: str = "default_seed") -> None:
         self.rules = rules
+        self.root_seed = root_seed
 
     def run(self, dfs: Mapping[str, pl.DataFrame | pl.LazyFrame]) -> dict[str, pl.LazyFrame]:
         """
@@ -101,7 +102,7 @@ class WealthPresentationEngine:
 
         # 9. Wealth Risk Analytics (FIRE Forecasting)
         results["df_p_tf_wealth_risk_analytics"] = WealthRiskAnalyticsBuilder(
-            dfs, base_lf, rules=self.rules
+            dfs, base_lf, rules=self.rules, root_seed=self.root_seed
         ).build()
 
         # 10. Monthly Cashflow Summary (now includes Financial Ratios)
