@@ -283,7 +283,8 @@ class IsinPipeline:
                     global_cashflows.extend(isin_cf)
                     for d, vals in isin_pt.items():
                         pt = portfolio_terminals.setdefault(
-                            d, {"val": 0.0, "shadow_val": 0.0, "after_tax_val": 0.0, "val_local": 0.0}
+                            d,
+                            {"val": 0.0, "shadow_val": 0.0, "after_tax_val": 0.0, "val_local": 0.0},
                         )
                         pt["val"] += vals["val"]
                         pt["shadow_val"] += vals["shadow_val"]
@@ -301,13 +302,16 @@ class IsinPipeline:
                     industry = tags.get("industry", "Unknown")
                     geo = tags.get("geo", "Unknown")
                     country = tags.get("country", "Unknown")
-                    currency = tags.get("currency", "INR_INR")
+                    currency = tags.get("currency", (self.ctx.rules.DEFAULT_CURRENCY_ID))
 
                     class_cf.setdefault(cls, []).extend(isin_cf)
                     class_re.setdefault(cls, []).extend(isin_re)
                     cp = class_pt.setdefault(cls, {})
                     for d, vals in isin_pt.items():
-                        pt = cp.setdefault(d, {"val": 0.0, "shadow_val": 0.0, "after_tax_val": 0.0, "val_local": 0.0})
+                        pt = cp.setdefault(
+                            d,
+                            {"val": 0.0, "shadow_val": 0.0, "after_tax_val": 0.0, "val_local": 0.0},
+                        )
                         pt["val"] += vals["val"]
                         pt["shadow_val"] += vals["shadow_val"]
                         pt["after_tax_val"] += vals.get("after_tax_val", 0.0)
@@ -318,7 +322,10 @@ class IsinPipeline:
                     subtype_re.setdefault(sub_key, []).extend(isin_re)
                     sp = subtype_pt.setdefault(sub_key, {})
                     for d, vals in isin_pt.items():
-                        pt = sp.setdefault(d, {"val": 0.0, "shadow_val": 0.0, "after_tax_val": 0.0, "val_local": 0.0})
+                        pt = sp.setdefault(
+                            d,
+                            {"val": 0.0, "shadow_val": 0.0, "after_tax_val": 0.0, "val_local": 0.0},
+                        )
                         pt["val"] += vals["val"]
                         pt["shadow_val"] += vals["shadow_val"]
                         pt["after_tax_val"] += vals.get("after_tax_val", 0.0)
@@ -335,7 +342,13 @@ class IsinPipeline:
                         gp = pt_dict.setdefault(group_key, {})
                         for d, vals in current_pt.items():
                             pt = gp.setdefault(
-                                d, {"val": 0.0, "shadow_val": 0.0, "after_tax_val": 0.0, "val_local": 0.0}
+                                d,
+                                {
+                                    "val": 0.0,
+                                    "shadow_val": 0.0,
+                                    "after_tax_val": 0.0,
+                                    "val_local": 0.0,
+                                },
                             )
                             pt["val"] += vals["val"]
                             pt["shadow_val"] += vals["shadow_val"]
@@ -349,7 +362,7 @@ class IsinPipeline:
                     _update_group(industry, industry_cf, industry_pt, isin_cf, isin_pt)
                     _update_group(geo, geo_cf, geo_pt, isin_cf, isin_pt)
                     _update_group(country, country_cf, country_pt, isin_cf, isin_pt)
-                    
+
                     currency_re.setdefault(currency, []).extend(isin_re)
                     _update_group(currency, currency_cf, currency_pt, isin_cf, isin_pt)
         finally:
