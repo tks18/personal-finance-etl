@@ -146,7 +146,7 @@ class ETLOrchestrator:
             else:
                 self.dfs["df_f_investment_market_data"] = df_us_market
 
-    def _run_engines(self) -> None:
+    def _run_engines(self, run_id: str) -> None:
 
         logger.info("Starting Investment Quant Engine...")
         self.status_queue.put(EngineStatus(msg="", data=None, progress=0.6, level=LogLevel.STEP))
@@ -187,7 +187,7 @@ class ETLOrchestrator:
         if self.rules is None:
             raise ValueError("FinancialRules must be provided to ETL pipeline")
 
-        wealth_engine = WealthPresentationEngine(rules=self.rules)
+        wealth_engine = WealthPresentationEngine(rules=self.rules, root_seed=run_id)
         wealth_lazy = wealth_engine.run(self.dfs)
 
         presentation_lazy = wealth_lazy
@@ -254,6 +254,9 @@ class ETLOrchestrator:
                 cfg_json=self.cfg.model_dump_json(),
                 rules_json=self.rules.model_dump_json() if self.rules else None,
             )
+            cp.active_run_id = run_id
+            cp.artifacts.active_run_id = run_id
+            cp.file_sync.active_run_id = run_id
 
             # 2. Mirror to DuckDB Analytics
             meta_layer = MetaLayer(self.db_manager, self.cfg, self.rules)
@@ -372,7 +375,23 @@ class ETLOrchestrator:
             # Analytics Phase
             t_eng_start = time.perf_counter()
             logger.info("[PHASE] --- 4/5: Executing Advanced Analytics & Monte Carlo engines ---")
-            self._run_engines()
+            self._run_engines(str(run_id))
+            
+            if cp and self.rules:
+                cursor = cp.db.conn.execute(
+                    "SELECT settings_snapshot_id, rules_snapshot_id FROM cp_runs WHERE run_id = ?",
+                    (str(run_id),)
+                )
+                row = cursor.fetchone()
+                if row:
+                    cp.runs.log_simulation_run(
+                        run_id=str(run_id),
+                        root_seed=str(run_id),
+                        iterations=self.rules.assumptions.monte_carlo.iterations,
+                        horizon=self.rules.assumptions.monte_carlo.max_months,
+                        settings_snapshot_id=row[0],
+                        rules_snapshot_id=row[1],
+                    )
 
             # Strict DataContract Validation
 
