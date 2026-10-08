@@ -3,6 +3,8 @@ from typing import Any
 
 import polars as pl
 
+from personal_finance_etl.backend.utils.identity import generate_deterministic_id
+
 
 def get_purchase_reference(
     df_lazy: pl.LazyFrame,
@@ -205,6 +207,9 @@ def transform_stg_investment_market_data(
         "Unit_PnL",
         "Total_PnL",
         "CURRENCY_ID",
+        "Data_Provider",
+        "Extraction_Time",
+        "Is_Imputed",
     ]
     df_final = (
         df_union.select(select_cols)
@@ -212,6 +217,28 @@ def transform_stg_investment_market_data(
         .sort(["ISIN", "Date", "Quantity", "Buy_Price", "Closing_Price"])
     )
     return df_final
+
+
+def _compute_purchase_id(row: dict[str, Any]) -> str:
+    fields = {
+        "ISIN": row["ISIN"],
+        "Date": row["Date"],
+        "Price": row["Price"],
+        "Quantity": row["Quantity"],
+        "CURRENCY_ID": row["CURRENCY_ID"],
+    }
+    return generate_deterministic_id("PURCHASE", fields)
+
+
+def _compute_sale_id(row: dict[str, Any]) -> str:
+    fields = {
+        "ISIN": row["ISIN"],
+        "Date": row["Date"],
+        "Sell_Price": row["Sell_Price"],
+        "Quantity": row["Quantity"],
+        "CURRENCY_ID": row["CURRENCY_ID"],
+    }
+    return generate_deterministic_id("SALE", fields)
 
 
 def get_f_tf_investment_purchase_data(
@@ -257,6 +284,11 @@ def get_f_tf_investment_purchase_data(
         "CURRENCY_ID",
     ]
     df_final = df_union.select(select_cols).unique().sort(["ISIN", "Date", "Quantity", "Price"])
+    df_final = df_final.with_columns(
+        pl.struct(["ISIN", "Date", "Price", "Quantity", "CURRENCY_ID"])
+        .map_elements(_compute_purchase_id, return_dtype=pl.String)
+        .alias("Purchase_ID")
+    )
     return df_final
 
 
@@ -317,11 +349,18 @@ def get_f_tf_investment_sale_data(
     df_final = (
         df_union.select(select_cols).unique().sort(["ISIN", "Date", "Quantity", "Sell_Price"])
     )
+    df_final = df_final.with_columns(
+        pl.struct(["ISIN", "Date", "Sell_Price", "Quantity", "CURRENCY_ID"])
+        .map_elements(_compute_sale_id, return_dtype=pl.String)
+        .alias("Sale_ID")
+    )
     return df_final
 
 
 def get_d_investment_master(
-    master_refs: list[pl.LazyFrame], stg_benchmark_mapping_lazy: pl.LazyFrame, default_currency_id: str
+    master_refs: list[pl.LazyFrame],
+    stg_benchmark_mapping_lazy: pl.LazyFrame,
+    default_currency_id: str,
 ) -> pl.LazyFrame:
     """
     Translates d_InvestmentMaster.
@@ -332,9 +371,13 @@ def get_d_investment_master(
 
     cols = df_master_union.collect_schema().names()
     if "CURRENCY_ID" not in cols:
-        df_master_union = df_master_union.with_columns(pl.lit(default_currency_id).alias("CURRENCY_ID"))
+        df_master_union = df_master_union.with_columns(
+            pl.lit(default_currency_id).alias("CURRENCY_ID")
+        )
     else:
-        df_master_union = df_master_union.with_columns(pl.col("CURRENCY_ID").fill_null(default_currency_id))
+        df_master_union = df_master_union.with_columns(
+            pl.col("CURRENCY_ID").fill_null(default_currency_id)
+        )
 
     df_final = df_master_union.join(stg_benchmark_mapping_lazy, on="ISIN", how="left").select(
         [
