@@ -68,12 +68,19 @@ class BenchmarkTransformer:
 
             # We must carry forward the static metadata columns, then fill the Close price
             df_filled = df_filled.with_columns(
+                pl.col("Is_Closure_Gap").fill_null(True).alias("Is_Imputed"),
                 pl.col("Close").forward_fill().backward_fill(),
+                pl.col("Data_Provider").forward_fill().backward_fill(),
+                pl.col("Extraction_Time").forward_fill().backward_fill(),
                 pl.col("ID").forward_fill().backward_fill(),
                 pl.col("Benchmark_Name").forward_fill().backward_fill(),
                 pl.col("yF_Ticker").fill_null(pl.lit(ticker)),
                 pl.col("CURRENCY_ID").forward_fill().backward_fill(),
             )
+            
+            missing_check = df_filled.filter(pl.col("Close").is_null())
+            if not missing_check.is_empty():
+                raise ValueError(f"FATAL: Missing Benchmark data for ticker: {ticker}. Halting pipeline.")
 
             transformed_dfs.append(df_filled)
 
