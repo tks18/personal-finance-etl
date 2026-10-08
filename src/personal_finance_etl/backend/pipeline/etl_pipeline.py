@@ -106,14 +106,14 @@ class ETLOrchestrator:
 
         valid_starts: list[date] = []
         if df_purchase is not None and not df_purchase.is_empty():
-            us_p = df_purchase.filter(pl.col("FILE_CATEGORY") == "US Stocks")
+            us_p = df_purchase.filter(pl.col("__file_category__") == "US Stocks")
             if not us_p.is_empty():
                 d = us_p.select(pl.col("Date").drop_nulls().min()).item()
                 if isinstance(d, date):
                     valid_starts.append(d)
 
         if df_sale is not None and not df_sale.is_empty():
-            us_s = df_sale.filter(pl.col("FILE_CATEGORY") == "US Stocks")
+            us_s = df_sale.filter(pl.col("__file_category__") == "US Stocks")
             if not us_s.is_empty():
                 d = us_s.select(pl.col("Date").drop_nulls().min()).item()
                 if isinstance(d, date):
