@@ -134,4 +134,5 @@ class ISINProcessResult(BaseModel):
     cashflows: list[CashflowRecord]
     terminals: dict[datetime.date, TerminalValueRecord]
     realized_events: list[dict[str, Any]]  # Flexibility for FIFO outputs before full enforcement
+    recon_events: list[dict[str, Any]] = Field(default_factory=lambda: [])
     tags: ISINTags
