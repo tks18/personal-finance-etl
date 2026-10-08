@@ -212,6 +212,10 @@ CREATE TABLE IF NOT EXISTS silver.f_Currency_FX_Rates (
     yF_Ticker TEXT NOT NULL,
     -- Local/FX Values
     FX_Rate DOUBLE NOT NULL,
+    -- Provenance
+    Data_Provider TEXT,
+    Extraction_Time TEXT,
+    Is_Imputed BOOLEAN,
     FOREIGN KEY(Date) REFERENCES silver.d_Calendar(Date),
     FOREIGN KEY(Currency_ID) REFERENCES silver.d_Currency(UID)
 );
@@ -419,7 +423,7 @@ CREATE TABLE IF NOT EXISTS silver.d_Macro_Parameters (
     Other_Debt_STCG DOUBLE,
     Default_LTCG DOUBLE,
     Default_STCG DOUBLE,
-    Dividend_Income_Tax_Rate DOUBLE,
+    Estimated_Ordinary_Income_Tax_Rate DOUBLE,
     -- Descriptors/Classifications
     Remarks TEXT,
     __file_name__ TEXT,
@@ -449,6 +453,10 @@ CREATE TABLE IF NOT EXISTS silver.f_Investment_Market_Data (
     -- Absolute Returns
     Unit_PnL DOUBLE,
     Total_PnL DOUBLE,
+    -- Provenance
+    Data_Provider TEXT,
+    Extraction_Time TEXT,
+    Is_Imputed BOOLEAN,
     __file_name__ TEXT,
     __folder_path__ TEXT,
     FOREIGN KEY(Date) REFERENCES silver.d_Calendar(Date),
@@ -458,6 +466,7 @@ CREATE TABLE IF NOT EXISTS silver.f_Investment_Market_Data (
 
 CREATE TABLE IF NOT EXISTS silver.f_Investment_Purchase_Data (
     -- Identifiers
+    Purchase_ID TEXT PRIMARY KEY,
     Date DATE NOT NULL,
     ISIN TEXT NOT NULL,
     CURRENCY_ID TEXT,
@@ -480,6 +489,7 @@ CREATE TABLE IF NOT EXISTS silver.f_Investment_Purchase_Data (
 
 CREATE TABLE IF NOT EXISTS silver.f_Investment_Sale_Data (
     -- Identifiers
+    Sale_ID TEXT PRIMARY KEY,
     Date DATE NOT NULL,
     ISIN TEXT NOT NULL,
     CURRENCY_ID TEXT,
@@ -517,17 +527,24 @@ CREATE TABLE IF NOT EXISTS silver.f_Investment_Benchmark_Data (
     yF_Ticker TEXT,
     -- Position Values
     Close DOUBLE,
+    -- Provenance
+    Data_Provider TEXT,
+    Extraction_Time TEXT,
+    Is_Imputed BOOLEAN,
     FOREIGN KEY(Date) REFERENCES silver.d_Calendar(Date),
     FOREIGN KEY(ID) REFERENCES silver.d_Investment_Benchmark_Master(ID)
 );
 
 CREATE TABLE IF NOT EXISTS silver.f_Investment_Analytics_Lot (
     -- Identifiers
+    Lot_ID TEXT NOT NULL,
     Closing_Date DATE NOT NULL,
     ISIN TEXT NOT NULL,
     CURRENCY_ID TEXT,
     Buy_Date DATE,
+    Purchase_ID TEXT,
     -- Descriptors/Classifications
+    Lot_Source_Type TEXT NOT NULL,
     BENCHMARK_ID TEXT,
     TAX_TYPE TEXT,
     TAX_SUBTYPE TEXT,
@@ -605,6 +622,54 @@ CREATE TABLE IF NOT EXISTS silver.f_Investment_Analytics_Lot (
     Equity_LTCG_Exemption BIGINT,
     Stepup_Eligible BIGINT,
     Can_Harvest_Loss BOOLEAN,
-    Harvest_Recommendation TEXT
+    Harvest_Recommendation TEXT,
+    PRIMARY KEY (Lot_ID, Closing_Date)
+);
+
+CREATE TABLE IF NOT EXISTS silver.f_Investment_Realized_Events (
+    Realized_Event_ID TEXT PRIMARY KEY,
+    Sale_ID TEXT NOT NULL,
+    Lot_ID TEXT NOT NULL,
+    Purchase_ID TEXT,
+    ISIN TEXT,
+    Acquisition_Date DATE,
+    Disposal_Date DATE,
+    FY TEXT,
+    Quantity_Disposed DOUBLE,
+    Acquisition_Price DOUBLE,
+    Disposed_Cost_Basis DOUBLE,
+    Sale_Price DOUBLE,
+    Sale_Proceeds DOUBLE,
+    Realized_Gain_Loss DOUBLE,
+    Holding_Type TEXT,
+    Tax_Type TEXT,
+    Tax_Subtype TEXT,
+    Lot_Source_Type TEXT,
+    Currency_ID TEXT,
+    Asset_PnL_Local DOUBLE,
+    Asset_PnL DOUBLE,
+    Forex_PnL DOUBLE,
+    UNIQUE(Sale_ID, Lot_ID)
+);
+
+CREATE TABLE IF NOT EXISTS silver.f_Investment_Reconciliation_Events (
+    Reconciliation_Group_ID TEXT NOT NULL,
+    Reconciliation_Event_ID TEXT PRIMARY KEY,
+    Run_ID TEXT,
+    ISIN TEXT NOT NULL,
+    Reconciliation_Date DATE NOT NULL,
+    Lot_ID TEXT,
+    Purchase_ID TEXT,
+    Adjustment_Type TEXT,
+    Reason TEXT,
+    Broker_Quantity DOUBLE,
+    Reconstructed_Quantity DOUBLE,
+    Quantity_Adjustment DOUBLE,
+    Broker_Cost_Basis DOUBLE,
+    Reconstructed_Cost_Basis DOUBLE,
+    Cost_Basis_Adjustment DOUBLE,
+    Original_Unit_Cost DOUBLE,
+    Adjusted_Unit_Cost DOUBLE
+);
 );
 """
