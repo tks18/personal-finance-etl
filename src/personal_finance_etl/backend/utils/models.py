@@ -60,6 +60,8 @@ class TaxLot:
     fx_rate_buy: float = 1.0
     currency_id: str | None = None
     bm_buy_local: float | None = None
+    purchase_id: str | None = None
+    lot_id: str | None = None
 
 
 @dataclass
