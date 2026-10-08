@@ -10,10 +10,12 @@ class NetWorthBuilder:
         dfs: Mapping[str, pl.DataFrame | pl.LazyFrame],
         inflation_res: dict[str, Any],
         ledger_res: dict[str, Any],
+        default_currency_id: str,
     ):
         self.dfs = dfs
         self.inflation_res = inflation_res
         self.ledger_res = ledger_res
+        self.default_currency_id = default_currency_id
 
     def build(self) -> dict[str, Any]:
         d_asset = self.dfs.get("df_d_asset_subcategory")
@@ -198,6 +200,8 @@ class NetWorthBuilder:
                 .agg(
                     pl.col("Total_Current_Value").sum().fill_null(0.0).alias("Asset_Market_Value"),
                     pl.col("Total_Invested_Value").sum().fill_null(0.0).alias("Asset_Book_Value"),
+                    pl.col("Asset_PnL").sum().fill_null(0.0).alias("Closing_Asset_PnL"),
+                    pl.col("Forex_PnL").sum().fill_null(0.0).alias("Closing_Forex_PnL"),
                 )
                 .rename({"CATEGORY_ID": "ASSET_SUBCATEGORY_ID"})
             )
@@ -209,6 +213,8 @@ class NetWorthBuilder:
                 .with_columns(
                     pl.col("Asset_Market_Value").fill_null(0.0),
                     pl.col("Asset_Book_Value").fill_null(0.0),
+                    pl.col("Closing_Asset_PnL").fill_null(0.0),
+                    pl.col("Closing_Forex_PnL").fill_null(0.0),
                 )
                 .with_columns(
                     pl.when(pl.col("Asset_Book_Value") > 0)
@@ -220,11 +226,31 @@ class NetWorthBuilder:
                     .otherwise(pl.col("Closing_Balance"))
                     .alias("Closing_Balance_Market")
                 )
+                .with_columns(
+                    pl.when(pl.col("Is_Liquid"))
+                    .then(pl.col("Closing_Balance"))
+                    .otherwise(0.0)
+                    .alias("Liquid_Assets"),
+                    pl.when(pl.col("Is_Liquid"))
+                    .then(pl.col("Closing_Balance_Market"))
+                    .otherwise(0.0)
+                    .alias("Liquid_Assets_Market"),
+                )
                 .drop(["Asset_Market_Value", "Asset_Book_Value"])
             )
         else:
             lf_nw_summary = lf_nw_summary.with_columns(
-                pl.col("Closing_Balance").alias("Closing_Balance_Market")
+                pl.col("Closing_Balance").alias("Closing_Balance_Market"),
+                pl.lit(0.0).alias("Closing_Asset_PnL"),
+                pl.lit(0.0).alias("Closing_Forex_PnL"),
+                pl.when(pl.col("Is_Liquid"))
+                .then(pl.col("Closing_Balance"))
+                .otherwise(0.0)
+                .alias("Liquid_Assets"),
+                pl.when(pl.col("Is_Liquid"))
+                .then(pl.col("Closing_Balance"))
+                .otherwise(0.0)
+                .alias("Liquid_Assets_Market"),
             )
 
         lf_monthly_totals = (
@@ -289,8 +315,6 @@ class NetWorthBuilder:
                         pl.col("Unrealized_PL").alias("Closing_Unrealized_PL"),
                         pl.col("Asset_PnL").alias("Closing_Asset_PnL"),
                         pl.col("Forex_PnL").alias("Closing_Forex_PnL"),
-                        pl.col("Total_Current_Value_Local").alias("Closing_Investment_Market_Value_Local"),
-                        pl.col("Total_Invested_Value_Local").alias("Closing_Investment_Book_Value_Local"),
                     ]
                 )
             )
@@ -300,7 +324,7 @@ class NetWorthBuilder:
                 lf_inv_curr = df_inv_curr.lazy() if isinstance(df_inv_curr, pl.DataFrame) else df_inv_curr
                 lf_foreign_exposure = (
                     lf_inv_curr.with_columns(pl.col("Closing_Date").dt.month_end().alias("MONTH_END_DATE"))
-                    .filter(pl.col("CURRENCY_ID") != "INR_INR")
+                    .filter(pl.col("CURRENCY_ID") != self.default_currency_id)
                     .group_by("MONTH_END_DATE")
                     .agg(pl.col("Total_Current_Value").sum().fill_null(0.0).alias("Total_Foreign_Currency_Exposure"))
                 )
@@ -323,8 +347,6 @@ class NetWorthBuilder:
                     pl.col("Closing_Unrealized_PL").fill_null(0.0),
                     pl.col("Closing_Asset_PnL").fill_null(0.0),
                     pl.col("Closing_Forex_PnL").fill_null(0.0),
-                    pl.col("Closing_Investment_Market_Value_Local").fill_null(0.0),
-                    pl.col("Closing_Investment_Book_Value_Local").fill_null(0.0),
                     pl.col("Total_Foreign_Currency_Exposure").fill_null(0.0),
                 )
                 .with_columns(
@@ -371,8 +393,6 @@ class NetWorthBuilder:
                 pl.lit(0.0).alias("Closing_Unrealized_PL"),
                 pl.lit(0.0).alias("Closing_Asset_PnL"),
                 pl.lit(0.0).alias("Closing_Forex_PnL"),
-                pl.lit(0.0).alias("Closing_Investment_Market_Value_Local"),
-                pl.lit(0.0).alias("Closing_Investment_Book_Value_Local"),
                 pl.lit(0.0).alias("Total_Foreign_Currency_Exposure"),
                 pl.lit(0.0).alias("Foreign_Exposure_Pct"),
             )
