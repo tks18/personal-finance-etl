@@ -35,7 +35,7 @@ class USMarketPipeline:
         if df_purchase.is_empty():
             return pl.DataFrame()
 
-        us_purchases = df_purchase.filter(pl.col("FILE_CATEGORY") == "US Stocks")
+        us_purchases = df_purchase.filter(pl.col("__file_category__") == "US Stocks")
         if us_purchases.is_empty():
             return pl.DataFrame()
 
