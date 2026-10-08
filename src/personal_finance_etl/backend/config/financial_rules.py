@@ -1,6 +1,6 @@
 import os
 import tomllib
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 from pydantic import BaseModel, Field
 
@@ -121,9 +121,9 @@ class MacroAssumptions(BaseModel):
         ...,
         description="Fallback annualized risk-free rate if historical macro data is unavailable.",
     )
-    fallback_dividend_income_rate: float = Field(
+    fallback_ordinary_income_rate: float = Field(
         default=0.30,
-        description="Fallback dividend income tax rate (marginal slab) if not found in macro table.",
+        description="Fallback ordinary income tax rate (marginal slab) if not found in macro table.",
     )
 
 
@@ -304,6 +304,23 @@ class TaxRates(BaseModel):
     gold_stcg: float = Field(0.30, description="STCG tax rate for gold.")
 
 
+TaxabilityType = Literal["taxable", "non_taxable", "review"]
+TaxMethodType = Literal["ordinary_rate", "capital_gains", "exempt", "review"]
+
+
+class TaxSubHeadConfig(BaseModel):
+    display_name: str
+    cat_ids: list[str] = Field(default_factory=list)
+    sub_cat_ids: list[str] = Field(default_factory=list)
+    tax_credit_sub_cat_ids: list[str] = Field(default_factory=list)
+    taxability: TaxabilityType = "review"
+    tax_method: TaxMethodType = "review"
+
+
+class TaxHeadConfig(BaseModel):
+    sub_heads: dict[str, TaxSubHeadConfig] = Field(default_factory=dict)
+
+
 class TaxAssumptions(BaseModel):
     debt_mf_cutoff_date: str = Field(
         ..., description="Date before which debt mutual funds have indexation benefits."
@@ -312,9 +329,9 @@ class TaxAssumptions(BaseModel):
         ...,
         description="Minimum days to wait before re-buying a harvested instrument to avoid wash-sale rules.",
     )
-    ltcg_thresholds: dict[str, int] = Field(
+    ltcg_threshold_months: dict[str, int] = Field(
         ...,
-        description="Holding period thresholds in days for Long Term Capital Gains across asset classes.",
+        description="Holding period thresholds in calendar months for Long Term Capital Gains across asset classes.",
     )
     fallback_equity_ltcg_exemption: float = Field(
         ..., description="Annual tax-free exemption limit for equity Long Term Capital Gains."
@@ -329,6 +346,7 @@ class TaxAssumptions(BaseModel):
             gold_stcg=0.30,
         )
     )
+    heads_of_income: dict[str, TaxHeadConfig] = Field(default_factory=dict)
 
 
 class CMAAssumptions(BaseModel):
