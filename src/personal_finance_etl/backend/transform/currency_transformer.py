@@ -33,19 +33,37 @@ def transform_currency_fx_rates(
     df_spine_full = df_spine.join(df_active_tickers, how="cross")
 
     # 4. Aggregate bronze data to daily level (in case of duplicates)
-    df_bronze_agg = df_bronze_lazy.group_by(["Date", "Currency_ID"]).agg(pl.col("FX_Rate").last())
+    df_bronze_agg = df_bronze_lazy.group_by(["Date", "Currency_ID"]).agg([
+        pl.col("FX_Rate").last(),
+        pl.col("Data_Provider").last(),
+        pl.col("Extraction_Time").last(),
+        pl.col("Is_Closure_Gap").last(),
+    ])
 
     # 5. Left join continuous spine with actual rates
     df_continuous = df_spine_full.join(df_bronze_agg, on=["Date", "Currency_ID"], how="left")
 
     # 6. Fill missing values (ffill then bfill) over each Currency_ID window
+    # Track which values were imputed vs actual
     df_filled = df_continuous.sort(["Currency_ID", "Date"]).with_columns(
-        pl.col("FX_Rate").forward_fill().backward_fill().over("Currency_ID")
+        pl.col("Is_Closure_Gap").fill_null(True).alias("Is_Imputed"),
+        pl.col("FX_Rate").forward_fill().backward_fill().over("Currency_ID"),
+        pl.col("Data_Provider").forward_fill().backward_fill().over("Currency_ID"),
+        pl.col("Extraction_Time").forward_fill().backward_fill().over("Currency_ID"),
     )
+
+    # Validate that no FX rates are completely missing for any active currency
+    missing_fx = df_filled.filter(pl.col("FX_Rate").is_null()).collect()
+    if not missing_fx.is_empty():
+        bad_currencies = missing_fx["Currency_Code"].unique().to_list()
+        raise ValueError(f"FATAL: Missing FX data for active currencies: {bad_currencies}. Halting pipeline to prevent silent corruption.")
 
     # 7. Final Projection
     df_final = df_filled.select(
-        ["Date", "Currency_ID", "Currency_Code", "Target_Currency_Code", "FX_Rate", "yF_Ticker"]
-    ).filter(pl.col("FX_Rate").is_not_null())
+        [
+            "Date", "Currency_ID", "Currency_Code", "Target_Currency_Code", 
+            "FX_Rate", "yF_Ticker", "Data_Provider", "Extraction_Time", "Is_Imputed"
+        ]
+    )
 
     return df_final
