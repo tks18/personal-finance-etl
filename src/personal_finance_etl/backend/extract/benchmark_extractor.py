@@ -2,7 +2,7 @@ import concurrent.futures
 import io
 import time
 import uuid
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 import polars as pl
 import yfinance as yf  # type: ignore[import-untyped]
@@ -74,15 +74,25 @@ class BenchmarkExtractor:
         if "Date" not in hist_pl.columns:
             hist_pl = hist_pl.rename({"index": "Date"})
 
-        df_new = hist_pl.select(
-            [pl.col("Date").cast(pl.Date), pl.col("Close").cast(pl.Float64)]
-        ).filter(pl.col("Close").is_not_null())
+        df_api = hist_pl.select([pl.col("Date").cast(pl.Date), pl.col("Close").cast(pl.Float64)])
+
+        df_spine = pl.DataFrame(
+            {"Date": pl.date_range(start=fetch_start, end=end_dt, interval="1d", eager=True)}
+        )
+
+        df_new = df_spine.join(df_api, on="Date", how="left")
 
         df_new = df_new.with_columns(
             pl.lit(row["ID"]).alias("ID"),
             pl.lit(row["Benchmark_Name"]).alias("Benchmark_Name"),
             pl.lit(ticker).alias("yF_Ticker"),
             pl.lit(row["CURRENCY_ID"]).alias("CURRENCY_ID"),
+            pl.col("Close").alias("Close"),
+            pl.lit("Yahoo Finance").alias("Data_Provider"),
+            pl.lit(datetime.now().isoformat()).alias("Extraction_Time"),
+            pl.lit(fetch_start).alias("Requested_Start"),
+            pl.lit(end_dt).alias("Requested_End"),
+            pl.col("Close").is_null().alias("Is_Closure_Gap"),
         )
 
         logger.debug(f"[Benchmark Extractor] Parsed {df_new.height} new records for {ticker}.")
