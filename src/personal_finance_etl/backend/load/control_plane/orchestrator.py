@@ -24,6 +24,7 @@ class ControlPlane:
         self.file_sync = FileSyncService(self.artifacts)
         self.lock_path = os.path.join(base_path, "pipeline.lock")
         self._lock: Any = FileLock(self.lock_path)
+        self.active_run_id: str | None = None
 
     # ---------------------------------------------------------
     # Connection Lifecycle Wrappers
