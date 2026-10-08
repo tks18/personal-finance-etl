@@ -299,6 +299,20 @@ class PostProcessor:
                     / pl.col("Total_Current_Value").sum().over("Closing_Date")
                 ).alias("Weight")
             ).drop(["annualized_twr", "bm_annualized_twr"], strict=False)
+
+            if g not in ["ISIN", "CURRENCY_ID"]:
+                lf = lf.drop([
+                    "Total_Invested_Value_Local", 
+                    "Total_Current_Value_Local", 
+                    "Blended_FX_Buy_Rate", 
+                    "Current_FX_Rate", 
+                    "Currency_Appreciation_Pct", 
+                    "XIRR_Local", 
+                    "BM_XIRR_Local", 
+                    "Active_Return_Local", 
+                    "FX_XIRR_Impact"
+                ], strict=False)
+
             if g == "ISIN":
                 f_tf_isin = lf
             elif g == "INSTRUMENT_SUBTYPE":
@@ -318,7 +332,17 @@ class PostProcessor:
             elif g == "CURRENCY_ID":
                 f_tf_currency = lf
 
-        f_tf_port = f_tf_port.with_columns(pl.lit(1.0).alias("Weight"))
+        f_tf_port = f_tf_port.with_columns(pl.lit(1.0).alias("Weight")).drop([
+            "Total_Invested_Value_Local", 
+            "Total_Current_Value_Local", 
+            "Blended_FX_Buy_Rate", 
+            "Current_FX_Rate", 
+            "Currency_Appreciation_Pct", 
+            "XIRR_Local", 
+            "BM_XIRR_Local", 
+            "Active_Return_Local", 
+            "FX_XIRR_Impact"
+        ], strict=False)
 
         return {
             "df_f_investment_analytics_lot": lazy_df,
