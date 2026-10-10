@@ -1033,3 +1033,40 @@ tax forecast confidence intervals
 24. Forecast separates precise tax from CHECK_REQUIRED exposure.
 25. Explicit XIRR failure state.
 26. Registry owns exact final inventory.
+
+---
+
+## Implementation Audit Status
+
+| # | Item | Status | Implementation |
+|---|------|--------|---------------|
+| 1 | Transaction currency / FX / INR basis | ✅ Robust | `FX_Rate_Buy`, `FX_Rate_Snap`, `Buy_Price_Local`, `Market_Price_Local` in silver; `Asset_PnL + Forex_PnL` decomposition in `fifo.py` |
+| 2 | Historical FX / market price availability | ✅ Robust | Foreign instruments keep `NULL` FX (not 1.0) in `investments.py`; FX validation gate warns before Quant in `isin_processor.py` |
+| 3 | Canonical Purchase_ID / Sale_ID | ✅ Robust + Perf | `generate_deterministic_id(PURCHASE/SALE, {ISIN,Date,Price,Qty,Currency})` — batched list-comprehension, not per-row `map_elements` |
+| 4 | Lot_ID | ✅ Robust | `generate_deterministic_id(LOT, {ISIN,Purchase_ID,Qty,Date})` in `fifo.py`; `Lot_Source_Type` tracks PURCHASE vs RECONCILIATION |
+| 5 | Preserve Lot identity | ✅ Robust | Partial sells rebuild residual lot with original `lot_id=lot.lot_id`; only `QUANTITY_ADD` creates a new synthetic lot |
+| 6 | Same-day FIFO ordering | ✅ Robust + Perf | `Decimal(str(price))` sort in `ordering.py` — eliminates IEEE-754 non-determinism; frozen contract documented |
+| 7 | Consistent FIFO order across US market and Quant | ✅ Robust | Both paths use `sort_purchases`/`sort_sales` from shared `ordering.py`; realized-tax exclusively in Quant FIFO |
+| 8 | Calendar-month holding periods | ✅ Robust | `add_months()` with end-of-month clamping + strict `>` (not `>=`) in `macro.py`; same function for realized and unrealized |
+| 9 | Lot-level realized events | ✅ Robust | `f_Investment_Realized_Events` with `Realized_Event_ID PRIMARY KEY` + `UNIQUE(Sale_ID, Lot_ID)`; full field contract emitted by `fifo.py` |
+| 10 | Currency-aware lot basis and realized-event contract | ✅ Robust | INR `Disposed_Cost_Basis`/`Sale_Proceeds`/`Realized_Gain_Loss` canonical; local-currency counterparts carried separately |
+| 11 | Asset and FX P&L reconciliation | ✅ Robust | `asset_pnl_local + asset_pnl + forex_pnl` decomposition per disposal; `Execution_Residual` in `SnapshotRecord` for open lots |
+| 12 | Lot-level reconciliation events | ✅ Robust | All three types (`QUANTITY_ADD/REMOVE`, `COST_BASIS_ADJUSTMENT`) emitted by `fifo.py`; `Run_ID` is provenance-only |
+| 13 | Reconciliation financial/tax semantics | ✅ Robust | RECONCILIATION lots → `CHECK_REQUIRED` + `Applied_Rate=NULL` + `Estimated_Tax=NULL` in `base_events.py` |
+| 14 | Currency-specific basis reconciliation | ✅ Robust | `Original_Unit_Cost`/`Adjusted_Unit_Cost` stored; INR-only correction does not overwrite local price fields |
+| 15 | TaxConfig: Head → Tax Sub-Head | ✅ Robust | `TaxHeadConfig → TaxSubHeadConfig` in `financial_rules.py`; `@model_validator` raises `ValueError` on overlap at load time |
+| 16 | Tax credits | ✅ Robust | `fy_state.py` aggregates `tax_credit_sub_cat_ids` with `.abs()` — `Observed_Tax_Credits >= 0` structurally enforced |
+| 17 | TaxEvent ownership | ✅ Robust | Ledger CG suppressed for investment sub-heads; `Tax_Event_ID PRIMARY KEY` enforces at-most-once uniqueness |
+| 18 | TaxEvent identity | ✅ Robust | `Source_ID = pl.col("UID")` for LEDGER (no surrogate); `Tax_Event_ID = generate_deterministic_id(TAX, {Source_Type,Source_ID,Tax_Sub_Head})` |
+| 19 | Non-investment capital gains | ✅ Robust | `Default_STCG`/`Default_LTCG` sub-heads; sign-preserved; unclassifiable → `CHECK_REQUIRED` with `Applied_Rate=NULL` |
+| 20 | Ordinary-income macro rate | ✅ Robust | Macro CSV primary; TOML fallback; joined by FY in `base_events.py`; no slab engine |
+| 21 | Non-taxable income | ✅ Robust | `filter(Taxability != "non_taxable")` before TaxEvent construction; tracked as `Excluded_Non_Taxable_Income` in FY State |
+| 22 | Canonical TaxEvents | ✅ Robust | `f_Tax_Events` with full 18-field contract; both source types; `CHECK_REQUIRED` is calculation confidence, not a review workflow |
+| 23 | US-stock classification in estimated tax | ✅ Robust | `(equity, foreign) → Default_LTCG/STCG` at 12.5%/slab; Section 112A exemption excluded for foreign equity |
+| 24 | Capital-loss set-off | ✅ Robust + Perf | `LossSetOffProcessor` 4-step frozen contract; collected eagerly once — not `map_batches` per-chunk |
+| 25 | Carry-forward | ✅ Robust | `CarryForwardLoss` dataclass; ST/LT strictly separate; 8-year expiry per FY; opening BF tracked independently |
+| 26 | FY Tax State | ✅ Robust | All 24 columns in `f_Tax_FY_State`; `Estimated_Net_Tax_Position` not clamped (negative = refund position) |
+| 27 | Gold tax marts | ✅ Robust | All three marts in `gold_formatter.py`; `Set_Off_Amount` is real data joined from set-offs (not placeholder 0.0) |
+| 28 | Investment Tax Liability Forecast | ✅ Robust | CHECK_REQUIRED lots excluded from `Projected_Tax_Bill`; `Check_Required_*` columns separate; no silver table mutations |
+| 29 | Currency-aware investment tax forecast | ✅ Robust | Forecast-date FX via `fy_table.get_tax_rates()`; missing-FX/synthetic lots excluded via CHECK_REQUIRED filter |
+| 30 | XIRR semantics | ✅ Robust | `XirrResult` with 4 typed statuses; `XIRR_Status` in silver/gold; `as_float()` returns NaN not 0% for non-VALID |

@@ -483,3 +483,28 @@ persistence of every Monte Carlo draw
 13. Finance/tax stable lineage IDs.
 14. One Reproducibility Envelope.
 15. One replay numerical tolerance contract.
+
+---
+
+## Implementation Audit Status
+
+| # | Item | Status | Implementation |
+|---|------|--------|---------------|
+| 1 | Artifact lifecycle pointers | ✅ Robust | All four dimensions (`first/last_seen/changed/synced`) in `cp_file_registry`; updated per event type in `artifact_repo.py` |
+| 2 | Artifact-run event history with reason | ✅ Robust | `cp_artifact_run_events` with all 7 event types; `event_reason` on every write; `mark_healed()`/`mark_removed()` present |
+| 3 | Rename remains identity migration | ✅ Robust | `migrate_identity()` atomic: preserves lifecycle history, migrates `cp_file_payloads`, writes `RENAMED` event, deletes old row |
+| 4 | Dynamic FX and US market source provenance | ✅ Robust | FX/US market data fetched into Bronze caches (`r_Currency_FX_Data`, `r_US_Stock_Prices`); content hash in `cp_file_registry` |
+| 5 | Currency reference validation and pipeline ordering | ✅ Robust | `CurrencyPipeline` and `USMarketPipeline` run before `InvestmentQuantEngine` in `etl_pipeline.py`; FX gate warns on missing rate |
+| 6 | Identity precedence | ✅ Robust | Native `ISIN`/`UID` used where available; deterministic SHA-256 for generated IDs; no random surrogates for financial identity |
+| 7 | Canonical ID Serialization v1 | ✅ Robust | `generate_deterministic_id()` in `utils/identity.py`; NFC, `<NULL>`, `Decimal`, ISO-8601, SHA-256 — named v1 in docstring |
+| 8 | Identity is not provenance | ✅ Robust | `Run_ID` is nullable provenance annotation on events; never participates in any deterministic hash |
+| 9 | Keep existing canonical investment grain | ✅ Robust | Bronze grain unchanged; `Purchase_ID`/`Sale_ID` PKs; market/benchmark tables carry no `Lot_ID` |
+| 10 | Currency-aware analytical identity | ✅ Robust | `CURRENCY_ID` is a defining field in `Purchase_ID`/`Sale_ID` hashes; FX rates are non-identity attributes stored separately |
+| 11 | Logical immutability under full rebuild | ✅ Robust | Silver/Gold fully replaced per run; same inputs → same deterministic IDs; ACID transaction wraps entire ETL |
+| 12 | Consistent reconstruction across US market and Quant FIFO | ✅ Robust | Both paths use `sort_purchases`/`sort_sales` from `ordering.py`; realized-tax exclusively in Quant FIFO |
+| 13 | FIRE / Monte Carlo reproducibility | ✅ Robust | `cp_simulation_runs` with all specified fields; `model_fingerprint` (SHA-256 of rules), `input_fingerprint`, `model_implementation_version = "v1.0-gbm-fire"`, PCG64 PRNG |
+| 14 | Fingerprint scope | ✅ Robust | `model_fingerprint` hashes only `{monte_carlo, fire, cma}` rules; volatile runtime metadata excluded |
+| 15 | Simulation persistence | ✅ Robust | SQLite `cp_simulation_runs` (`INSERT OR IGNORE`); `meta.m_Latest_Simulation` DuckDB mirror populated per run via `metadata.py load(cp=cp)` |
+| 16 | Contract Registry fingerprint | ✅ Robust | `generate_contract_registry_fingerprint()` SHA-256 of sorted `DATA_CONTRACT_REGISTRY`; persisted to `meta.m_Latest_Simulation`; no manual counter |
+| 17 | Reproducibility Envelope | ✅ Robust | `generate_reproducibility_envelope()` ties `input_fingerprint, rules_hash, macro_settings_hash, registry_fingerprint, root_seed, model_version` into one SHA-256 |
+| 18 | Simulation replay numerical contract | ✅ Robust | `assert_simulation_replay()` — `rel_tol=1e-5`, `abs_tol=1e-4`; single centralized contract; raises `ValueError` with context on breach |
