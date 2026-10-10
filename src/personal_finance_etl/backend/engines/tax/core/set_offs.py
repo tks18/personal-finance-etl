@@ -118,9 +118,16 @@ class LossSetOffProcessor:
             # whose cost basis is unknown.  Including them would distort the
             # set-off math with unreliable figures.  They remain in the gold
             # reconciliation table for human review and resolution.
+            # Use Tax_Status as the eligibility gate — not Tax_Sub_Head.
+            # RECONCILIATION lots and UNKNOWN classifications are excluded via Tax_Status=CHECK_REQUIRED.
+            _status_col = "Tax_Status" if "Tax_Status" in df_events.columns else None
             df_cg = df_events.filter(
                 (pl.col("Tax_Method") == "capital_gains")
-                & (pl.col("Tax_Sub_Head") != "CHECK_REQUIRED")
+                & (
+                    pl.col(_status_col) == "READY"
+                    if _status_col
+                    else pl.col("Tax_Sub_Head") != "CHECK_REQUIRED"
+                )
             )
             df_ordinary = df_events.filter(pl.col("Tax_Method") != "capital_gains")
 
@@ -145,24 +152,41 @@ class LossSetOffProcessor:
             if df_cg.is_empty():
                 return df_ord_results
 
-            # Aggregate raw CG per FY and Gain_Type into signed amounts
-            # Positive = gain, negative = loss (using Realized_Gain_Loss)
+            # Aggregate gains and losses separately to preserve gross pools.
+            # Summing to a single signed value before splitting loses the breakdown.
             df_cg_agg = (
                 df_cg.group_by(["FY", "Gain_Type"])
-                .agg([pl.col("Realized_Gain_Loss").sum().alias("Net_Gain_Loss")])
+                .agg(
+                    [
+                        pl.col("Realized_Gain_Loss")
+                        .filter(pl.col("Realized_Gain_Loss") > 0)
+                        .sum()
+                        .fill_null(0.0)
+                        .alias("Gross_Gain"),
+                        pl.col("Realized_Gain_Loss")
+                        .filter(pl.col("Realized_Gain_Loss") < 0)
+                        .sum()
+                        .abs()
+                        .fill_null(0.0)
+                        .alias("Gross_Loss"),
+                    ]
+                )
                 .sort("FY")
             )
 
-            # Build per-FY dict: {fy: {"ST": signed_float, "LT": signed_float}}
+            # Build per-FY dict: {fy: {"ST_G": gain, "ST_L": loss, "LT_G": gain, "LT_L": loss}}
             cg_dict: dict[str, dict[str, float]] = {}
             for row in df_cg_agg.iter_rows(named=True):
                 fy = str(row["FY"])
                 gt = str(row["Gain_Type"])
-                val = float(row["Net_Gain_Loss"] or 0.0)
                 if fy not in cg_dict:
-                    cg_dict[fy] = {"ST": 0.0, "LT": 0.0}
-                if gt in ("ST", "LT"):
-                    cg_dict[fy][gt] += val
+                    cg_dict[fy] = {"ST_G": 0.0, "ST_L": 0.0, "LT_G": 0.0, "LT_L": 0.0}
+                if gt == "ST":
+                    cg_dict[fy]["ST_G"] += float(row["Gross_Gain"] or 0.0)
+                    cg_dict[fy]["ST_L"] += float(row["Gross_Loss"] or 0.0)
+                elif gt == "LT":
+                    cg_dict[fy]["LT_G"] += float(row["Gross_Gain"] or 0.0)
+                    cg_dict[fy]["LT_L"] += float(row["Gross_Loss"] or 0.0)
 
             fys = sorted(cg_dict.keys(), key=self._get_fy_start_year)
 
@@ -172,14 +196,12 @@ class LossSetOffProcessor:
             results: list[dict[str, object]] = []
 
             for fy in fys:
-                raw_st = cg_dict[fy]["ST"]  # signed: positive=STCG, negative=STCL
-                raw_lt = cg_dict[fy]["LT"]  # signed: positive=LTCG, negative=LTCL
+                # Gross pools: already non-negative, separately aggregated.
+                cy_stcg = cg_dict[fy]["ST_G"]
+                cy_stcl = cg_dict[fy]["ST_L"]
+                cy_ltcg = cg_dict[fy]["LT_G"]
+                cy_ltcl = cg_dict[fy]["LT_L"]
 
-                # Decompose into gains and losses (always non-negative).
-                cy_stcg = max(0.0, raw_st)
-                cy_stcl = abs(min(0.0, raw_st))
-                cy_ltcg = max(0.0, raw_lt)
-                cy_ltcl = abs(min(0.0, raw_lt))
 
                 # --- Intra-year set-offs (current FY, frozen 4-step order) ---
 
