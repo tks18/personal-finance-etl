@@ -38,4 +38,3 @@ class XirrResult:
         silently treating it as a zero return.
         """
         return self.value if self.value is not None else fallback
-
