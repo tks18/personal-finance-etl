@@ -62,7 +62,9 @@ class WealthPresentationEngine:
         if not ledger_res:
             return {}
 
-        net_worth_res = NetWorthBuilder(dfs, inflation_res, ledger_res, self.rules.DEFAULT_CURRENCY_ID).build()
+        net_worth_res = NetWorthBuilder(
+            dfs, inflation_res, ledger_res, self.rules.DEFAULT_CURRENCY_ID
+        ).build()
 
         base_lf = {**inflation_res, **ledger_res, **net_worth_res}
 
@@ -92,9 +94,10 @@ class WealthPresentationEngine:
         ).build()
 
         # 9. Wealth Risk Analytics (FIRE Forecasting)
-        results["df_p_tf_wealth_risk_analytics"] = WealthRiskAnalyticsBuilder(
+        wealth_risk_res = WealthRiskAnalyticsBuilder(
             dfs, base_lf, rules=self.rules, root_seed=self.root_seed
         ).build()
+        results.update(wealth_risk_res)
 
         # 10. Monthly Cashflow Summary (now includes Financial Ratios)
         results["df_p_tf_monthly_cashflow_summary"] = MonthlyCashflowSummaryBuilder(

@@ -37,7 +37,7 @@ class WealthRiskAnalyticsBuilder:
         self._dob_month = int(dob_parts[1])
         self._tax_rate = rules.assumptions.tax.rates.equity_ltcg
 
-    def build(self) -> pl.LazyFrame:
+    def build(self) -> dict[str, pl.LazyFrame]:
         lf_monthly_totals = self.base_lf["lf_monthly_totals"]
 
         lf_fire_base = (
@@ -154,6 +154,21 @@ class WealthRiskAnalyticsBuilder:
                 ),
             )
         )
+        
+        lf_fire_inputs = lf_fire_forecast.select(
+            [
+                "MONTH_START_DATE",
+                "Total_Net_Worth_Market_Af_Tax",
+                "Trailing_12M_Avg_Savings",
+                "Trailing_12M_Avg_Spend",
+                "Trailing_12M_Avg_Total_Spend",
+                "Target_FI_Today",
+                "Trailing_12M_Avg_Total_Savings",
+                "Target_FI_Today_Total",
+                "INFLATION_YOY_PCT",
+            ]
+        )
+
         lf_fire_forecast = (
             lf_fire_forecast.with_columns(
                 pl.col("MONTH_START_DATE").dt.year().alias("_temp_year"),
@@ -381,4 +396,7 @@ class WealthRiskAnalyticsBuilder:
                 "Terminal_Wealth_Nominal_P50",
             ]
         )
-        return lf_fire_forecast  # type: ignore[no-any-return]
+        return {
+            "df_p_tf_wealth_risk_analytics_inputs": lf_fire_inputs,
+            "df_p_tf_wealth_risk_analytics": lf_fire_forecast  # type: ignore[no-any-return]
+        }
