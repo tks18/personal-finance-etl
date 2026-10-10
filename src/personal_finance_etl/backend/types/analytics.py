@@ -13,6 +13,10 @@ class CashflowRecord(BaseModel):
     date: datetime.date
     amount: float
     amount_local: float = 0.0
+    # Benchmark counterfactual cashflows: same initial capital outlay, benchmark-
+    # valued proceeds for disposals. None means benchmark coverage is unavailable.
+    benchmark_amount: float | None = None
+    benchmark_amount_local: float | None = None
 
 
 class TerminalValueRecord(BaseModel):
@@ -84,9 +88,9 @@ class SnapshotRecord(BaseModel):
     Lot_CAGR: float
 
     CAGR: float
-    XIRR: float
-    XIRR_Status: str = "VALID"  # VALID | INVALID_INPUT | UNDEFINED | NON_CONVERGENT
-    After_Tax_XIRR: float
+    XIRR: float | None
+    XIRR_Status: str = "INVALID_INPUT"  # VALID | INVALID_INPUT | UNDEFINED | NON_CONVERGENT
+    After_Tax_XIRR: float | None
 
     BM_Buy_Price: float | None
     BM_Market_Price: float
@@ -94,14 +98,14 @@ class SnapshotRecord(BaseModel):
     Lot_BM_CAGR: float
     Lot_BM_CAGR_Local: float = 0.0
     BM_CAGR: float
-    BM_XIRR: float
-    BM_XIRR_Local: float = 0.0
-    Active_Return: float
-    Active_Return_Local: float = 0.0
+    BM_XIRR: float | None
+    BM_XIRR_Local: float | None = None
+    Active_Return: float | None
+    Active_Return_Local: float | None = None
     Lot_Alpha: float
-    Is_Lagging_Benchmark: bool
-    XIRR_Local: float = 0.0
-    FX_XIRR_Impact: float = 0.0
+    Is_Lagging_Benchmark: bool | None
+    XIRR_Local: float | None = None
+    FX_XIRR_Impact: float | None = None
 
     # Drawdown
     Max_Drawdown: float = 0.0
@@ -129,10 +133,12 @@ class SnapshotRecord(BaseModel):
     Asset_Return_Pct: float = 0.0
     Forex_Return_Pct: float = 0.0
     Blended_FX_Buy_Rate: float = 0.0
-    Buy_Price_Local: float = 0.0    # Acquisition price in the instrument's native currency
-    Market_Price_Local: float = 0.0 # Market price in the instrument's native currency at snapshot date
-    FX_Rate_Buy: float = 0.0        # FX rate (native → INR) at acquisition date
-    FX_Rate_Snap: float = 0.0       # FX rate (native → INR) at snapshot date
+    Buy_Price_Local: float = 0.0  # Acquisition price in the instrument's native currency
+    Market_Price_Local: float = (
+        0.0  # Market price in the instrument's native currency at snapshot date
+    )
+    FX_Rate_Buy: float = 0.0  # FX rate (native → INR) at acquisition date
+    FX_Rate_Snap: float = 0.0  # FX rate (native → INR) at snapshot date
     Currency_Appreciation_Pct: float = 0.0
 
 
