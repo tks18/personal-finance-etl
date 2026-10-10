@@ -1,4 +1,42 @@
 GOLD_DDL = """
+CREATE TABLE IF NOT EXISTS gold.Tax_Year_Summary (
+    FY TEXT PRIMARY KEY,
+    Total_Gross_Income DOUBLE,
+    Total_Excluded_Non_Taxable DOUBLE,
+    Total_Taxable_Income DOUBLE,
+    Estimated_Tax_Liability DOUBLE,
+    Effective_Tax_Rate_Pct DOUBLE
+);
+
+CREATE TABLE IF NOT EXISTS gold.Tax_Income_Breakdown (
+    FY TEXT,
+    Income_Head TEXT,
+    Tax_Sub_Head TEXT,
+    Source_Type TEXT,
+    Gross_Amount DOUBLE,
+    Taxable_Amount DOUBLE,
+    Estimated_Tax DOUBLE,
+    PRIMARY KEY(FY, Income_Head, Tax_Sub_Head, Source_Type)
+);
+
+CREATE TABLE IF NOT EXISTS gold.Tax_Reconciliation (
+    FY TEXT,
+    Tax_Sub_Head TEXT,
+    Source_Type TEXT,
+    Gross_Source_Amount DOUBLE,
+    Excluded_Non_Taxable_Amount DOUBLE,
+    Tax_Event_Amount DOUBLE,
+    Realized_Investment_Gain_Loss DOUBLE,
+    Set_Off_Amount DOUBLE,
+    Net_Taxable_Amount DOUBLE,
+    Estimated_Tax DOUBLE,
+    Tax_Credits DOUBLE,
+    Estimated_Net_Tax_Position DOUBLE,
+    Event_Count BIGINT,
+    Check_Required_Count BIGINT,
+    PRIMARY KEY(FY, Tax_Sub_Head, Source_Type)
+);
+
 CREATE TABLE IF NOT EXISTS gold.Wealth_Asset_Breakdown (
     -- Identifiers
     MONTH_START_DATE DATE,
@@ -176,7 +214,7 @@ CREATE TABLE IF NOT EXISTS gold.Wealth_FIRE_Analytics (
     FI_Velocity DOUBLE
 );
 
-CREATE TABLE IF NOT EXISTS gold.Forecast_Tax_Liability (
+CREATE TABLE IF NOT EXISTS gold.Investment_Tax_Liability_Forecast (
     -- Identifiers
     MONTH_START_DATE DATE,
     Financial_Year TEXT,
@@ -196,7 +234,11 @@ CREATE TABLE IF NOT EXISTS gold.Forecast_Tax_Liability (
     Projected_Tax_Bill DOUBLE,
     Effective_Tax_Rate_Pct DOUBLE,
     Harvesting_Offset_Remaining DOUBLE,
-    Tax_Harvesting_Capacity DOUBLE
+    Tax_Harvesting_Capacity DOUBLE,
+    -- CHECK_REQUIRED Exposure
+    Check_Required_Lot_Count BIGINT,
+    Check_Required_Market_Value DOUBLE,
+    Check_Required_Unrealized_PL DOUBLE
 );
 
 CREATE TABLE IF NOT EXISTS gold.Forecast_Budget_Variance (
@@ -620,6 +662,12 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_Country (
     Total_Current_Value DOUBLE,
     Total_Quantity DOUBLE,
     Total_Stocks DOUBLE,
+    -- Local/FX Values
+    Total_Invested_Value_Local DOUBLE,
+    Total_Current_Value_Local DOUBLE,
+    Current_FX_Rate DOUBLE,
+    Blended_FX_Buy_Rate DOUBLE,
+    Currency_Appreciation_Pct DOUBLE,
     -- Absolute Returns
     Unrealized_PL DOUBLE,
     Asset_PnL DOUBLE,
@@ -632,6 +680,10 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_Country (
     -- Benchmark Comparisons
     BM_XIRR DOUBLE,
     Active_Return DOUBLE,
+    XIRR_Local DOUBLE,
+    BM_XIRR_Local DOUBLE,
+    Active_Return_Local DOUBLE,
+    FX_XIRR_Impact DOUBLE,
     -- Risk & Weights
     Max_Drawdown DOUBLE,
     Weight DOUBLE,
