@@ -12,11 +12,12 @@ CREATE TABLE IF NOT EXISTS gold.Tax_Income_Breakdown (
     FY TEXT,
     Income_Head TEXT,
     Tax_Sub_Head TEXT,
+    Capital_Gains_Group TEXT,
     Source_Type TEXT,
     Gross_Amount DOUBLE,
     Taxable_Amount DOUBLE,
     Estimated_Tax DOUBLE,
-    PRIMARY KEY(FY, Income_Head, Tax_Sub_Head, Source_Type)
+    PRIMARY KEY(FY, Income_Head, Tax_Sub_Head, Capital_Gains_Group, Source_Type)
 );
 
 CREATE TABLE IF NOT EXISTS gold.Tax_Reconciliation (
@@ -238,7 +239,8 @@ CREATE TABLE IF NOT EXISTS gold.Investment_Tax_Liability_Forecast (
     -- CHECK_REQUIRED Exposure
     Check_Required_Lot_Count BIGINT,
     Check_Required_Market_Value DOUBLE,
-    Check_Required_Unrealized_PL DOUBLE
+    Check_Required_Unrealized_PL DOUBLE,
+    Forecast_Basis TEXT
 );
 
 CREATE TABLE IF NOT EXISTS gold.Forecast_Budget_Variance (
