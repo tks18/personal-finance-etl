@@ -153,6 +153,8 @@ def transform_us_market_data(
                     "Closing_Price_Local",
                     "Data_Provider",
                     "Extraction_Time",
+                    "Requested_Start",
+                    "Requested_End",
                     "Is_Closure_Gap",
                 ]
             ),
@@ -166,6 +168,9 @@ def transform_us_market_data(
             pl.col("Closing_Price_Local").backward_fill().fill_null(0.0).over("ISIN"),
             pl.col("Data_Provider").backward_fill().over("ISIN"),
             pl.col("Extraction_Time").backward_fill().over("ISIN"),
+            pl.col("Requested_Start").backward_fill().over("ISIN"),
+            pl.col("Requested_End").backward_fill().over("ISIN"),
+            pl.col("Is_Closure_Gap").backward_fill().over("ISIN"),
         )
     )
 
@@ -236,6 +241,9 @@ def transform_us_market_data(
         "CURRENCY_ID",
         "Data_Provider",
         "Extraction_Time",
+        "Requested_Start",
+        "Requested_End",
+        "Is_Closure_Gap",
         "Is_Imputed",
     ]
 
