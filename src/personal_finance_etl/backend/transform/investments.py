@@ -174,12 +174,13 @@ def transform_stg_investment_market_data(
         # Only fill null FX_Rate with 1.0 for instruments whose CURRENCY_ID is the base
         # currency. Foreign instruments keep null to signal a missing observation.
         df_union = df_union.with_columns(
-            pl.when(pl.col("FX_Rate").is_null() & (pl.col("CURRENCY_ID") == pl.lit(default_currency_id)))
+            pl.when(
+                pl.col("FX_Rate").is_null() & (pl.col("CURRENCY_ID") == pl.lit(default_currency_id))
+            )
             .then(pl.lit(1.0))
             .otherwise(pl.col("FX_Rate"))
             .alias("FX_Rate")
         )
-
 
     if "CURRENCY_ID" not in cols:
         df_union = df_union.with_columns(pl.lit(default_currency_id).alias("CURRENCY_ID"))
@@ -303,7 +304,9 @@ def get_f_tf_investment_purchase_data(
         )
     else:
         df_union = df_union.with_columns(
-            pl.when(pl.col("FX_Rate").is_null() & (pl.col("CURRENCY_ID") == pl.lit(default_currency_id)))
+            pl.when(
+                pl.col("FX_Rate").is_null() & (pl.col("CURRENCY_ID") == pl.lit(default_currency_id))
+            )
             .then(pl.lit(1.0))
             .otherwise(pl.col("FX_Rate"))
             .alias("FX_Rate")
@@ -373,7 +376,9 @@ def get_f_tf_investment_sale_data(
         )
     else:
         df_union = df_union.with_columns(
-            pl.when(pl.col("FX_Rate").is_null() & (pl.col("CURRENCY_ID") == pl.lit(default_currency_id)))
+            pl.when(
+                pl.col("FX_Rate").is_null() & (pl.col("CURRENCY_ID") == pl.lit(default_currency_id))
+            )
             .then(pl.lit(1.0))
             .otherwise(pl.col("FX_Rate"))
             .alias("FX_Rate")
@@ -407,9 +412,7 @@ def get_f_tf_investment_sale_data(
     )
     _df_eager = df_final.collect()
     _sale_ids = [_compute_sale_id(r) for r in _df_eager.iter_rows(named=True)]
-    df_final = _df_eager.with_columns(
-        pl.Series("Sale_ID", _sale_ids, dtype=pl.String)
-    ).lazy()
+    df_final = _df_eager.with_columns(pl.Series("Sale_ID", _sale_ids, dtype=pl.String)).lazy()
     return df_final
 
 
