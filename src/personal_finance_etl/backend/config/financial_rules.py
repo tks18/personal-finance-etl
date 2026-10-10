@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 import os
 import tomllib
 from typing import Any, Literal, cast
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class ActiveIncomeRules(BaseModel):
@@ -296,8 +298,22 @@ class MonteCarloAssumptions(BaseModel):
 
 
 class TaxRates(BaseModel):
-    equity_ltcg: float = Field(0.125, description="LTCG tax rate for equity.")
-    equity_stcg: float = Field(0.20, description="STCG tax rate for equity.")
+    equity_ltcg: float = Field(
+        0.125, description="LTCG tax rate for listed Indian equity (Section 112A)."
+    )
+    equity_stcg: float = Field(
+        0.20, description="STCG tax rate for listed Indian equity (Section 111A)."
+    )
+    # Foreign listed equity (US stocks via LRS) — post-Budget 2024:
+    #   LTCG (> 24 months): 12.5% concessional rate (same as Default_LTCG).
+    #   STCG (≤ 24 months): investor's income-tax slab rate (same as Default_STCG).
+    foreign_equity_ltcg: float = Field(
+        0.125,
+        description="LTCG tax rate for foreign listed equity (US stocks via LRS) — 12.5% post-Budget 2024.",
+    )
+    foreign_equity_stcg: float = Field(
+        0.30, description="STCG tax rate for foreign listed equity (US stocks via LRS) — slab rate."
+    )
     debt_ltcg: float = Field(0.20, description="LTCG tax rate for debt.")
     debt_stcg: float = Field(0.30, description="STCG tax rate for debt.")
     gold_ltcg: float = Field(0.20, description="LTCG tax rate for gold.")
@@ -315,6 +331,24 @@ class TaxSubHeadConfig(BaseModel):
     tax_credit_sub_cat_ids: list[str] = Field(default_factory=list)
     taxability: TaxabilityType = "review"
     tax_method: TaxMethodType = "review"
+
+
+class CapitalGainsGroupConfig(BaseModel):
+    """Groups Tax_Sub_Head codes under a named capital-gains category.
+
+    Unlike TaxHeadConfig (which uses cat_ids/sub_cat_ids for LEDGER category
+    matching), this config is purely sub-head-code-based — investment CG events
+    come from the FIFO engine, not from ledger categories.
+
+    Putting the grouping in config means:
+    - New asset classes can be added via TOML without Python code changes.
+    - The gold layer and reporting can filter events by group name.
+    - The valid sub-head set in base_events.py is derived from config, not hardcoded.
+    """
+
+    display_name: str
+    gain_type: Literal["ST", "LT"]
+    sub_head_codes: list[str] = Field(default_factory=list)
 
 
 class TaxHeadConfig(BaseModel):
@@ -340,6 +374,8 @@ class TaxAssumptions(BaseModel):
         default_factory=lambda: TaxRates(
             equity_ltcg=0.125,
             equity_stcg=0.20,
+            foreign_equity_ltcg=0.125,
+            foreign_equity_stcg=0.30,
             debt_ltcg=0.20,
             debt_stcg=0.30,
             gold_ltcg=0.20,
@@ -347,6 +383,37 @@ class TaxAssumptions(BaseModel):
         )
     )
     heads_of_income: dict[str, TaxHeadConfig] = Field(default_factory=dict)
+    residual_income: TaxHeadConfig = Field(default_factory=TaxHeadConfig)
+    exempt_income: TaxHeadConfig = Field(default_factory=TaxHeadConfig)
+    # Investment CG groupings: maps a group name → list of Tax_Sub_Head codes.
+    # Replaces the hardcoded _INVESTMENT_SUB_HEADS set in base_events.py when configured.
+    capital_gains_groups: dict[str, CapitalGainsGroupConfig] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def validate_mutual_exclusivity(self) -> TaxAssumptions:
+        seen_sub_cats: set[str] = set()
+        seen_cats: set[str] = set()
+
+        # Combine all heads for global mutual exclusivity check
+        all_heads = list(self.heads_of_income.items())
+        all_heads.append(("Residual", self.residual_income))
+        all_heads.append(("Exempt", self.exempt_income))
+
+        for head_name, head_config in all_heads:
+            for sub_name, sub_config in head_config.sub_heads.items():
+                for sub_cat in sub_config.sub_cat_ids:
+                    if sub_cat in seen_sub_cats:
+                        raise ValueError(
+                            f"Duplicate sub_cat_id {sub_cat} found in {head_name}.{sub_name}"
+                        )
+                    seen_sub_cats.add(sub_cat)
+
+                for cat in sub_config.cat_ids:
+                    if cat in seen_cats:
+                        raise ValueError(f"Duplicate cat_id {cat} found in {head_name}.{sub_name}")
+                    seen_cats.add(cat)
+
+        return self
 
 
 class CMAAssumptions(BaseModel):
@@ -390,7 +457,7 @@ class FinancialRules(BaseModel):
     MF_SCHEME_MAPPINGS: dict[str, str] = Field(default_factory=dict)
 
     @classmethod
-    def from_toml(cls, filepath: str) -> "FinancialRules":
+    def from_toml(cls, filepath: str) -> FinancialRules:
         if not filepath or not os.path.exists(filepath):
             raise FileNotFoundError(f"Financial rules config not found at {filepath}")
 
