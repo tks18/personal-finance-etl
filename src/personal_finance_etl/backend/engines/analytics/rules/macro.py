@@ -63,6 +63,11 @@ class FYMacroParametersTable:
     _COL_MAP = {
         ("equity", "listed"): ("Equity_Listed_LTCG", "Equity_Listed_STCG"),
         ("equity", "unlisted"): ("Equity_Unlisted_LTCG", "Equity_Unlisted_STCG"),
+        # Foreign listed equity (US stocks via LRS) — post-Budget 2024 treatment:
+        #   LTCG (> 24 months): 12.5% concessional rate  → reuses Default_LTCG
+        #   STCG (≤ 24 months): investor's income-tax slab rate → reuses Default_STCG
+        # No dedicated CSV columns needed; Default_LTCG/STCG already carry these values.
+        ("equity", "foreign"): ("Default_LTCG", "Default_STCG"),
         ("debt", "mf_pre"): ("Debt_MF_Pre_Cutoff_LTCG", "Debt_MF_Pre_Cutoff_STCG"),
         ("debt", "mf_post"): ("Debt_MF_Post_Cutoff_LTCG", "Debt_MF_Post_Cutoff_STCG"),
         ("debt", "other"): ("Other_Debt_LTCG", "Other_Debt_STCG"),
@@ -129,7 +134,14 @@ class FYMacroParametersTable:
     _CLASSIFICATION_RULES: dict[str, Callable[[str, dict[str, Any]], tuple[str, str]]] = {
         "equity": lambda tst, _: (
             "equity",
-            "unlisted" if tst in ("unlisted", "us_listed", "us_stocks", "foreign") else "listed",
+            # Foreign equity subtypes get their own classification so they can be taxed
+            # at slab rates via the dedicated Foreign_Equity_LTCG/STCG macro columns.
+            # Domestically unlisted equity retains the "unlisted" classification.
+            "foreign"
+            if tst in ("us_listed", "us_stocks", "foreign", "us_equity")
+            else "unlisted"
+            if tst == "unlisted"
+            else "listed",
         ),
         "reit": lambda tst, _: ("reit", "unlisted" if tst == "unlisted" else "listed"),
         "invit": lambda tst, _: ("invit", "unlisted" if tst == "unlisted" else "listed"),
@@ -155,6 +167,10 @@ class FYMacroParametersTable:
 
         return ("default", "")
 
+    def get_fy_string(self, ref_date: date) -> str:
+        entry = self._find_entry(ref_date)
+        return str(entry["raw"].get("FY", "UNKNOWN")) if entry else "UNKNOWN"
+
     def get_debt_mf_cutoff(self, ref_date: date) -> date:
         entry = self._find_entry(ref_date)
         return entry["debt_cutoff"] if entry else _DEFAULT_DEBT_MF_CUTOFF
@@ -172,7 +188,9 @@ class FYMacroParametersTable:
         ltcg_col, stcg_col = self._COL_MAP.get(key, ("Default_LTCG", "Default_STCG"))
         raw = entry["raw"]
         try:
-            return float(str(raw[ltcg_col])), float(str(raw[stcg_col]))
+            ltcg_val = float(str(raw[ltcg_col]))
+            stcg_val = float(str(raw[stcg_col]))
+            return ltcg_val, stcg_val
         except (KeyError, TypeError, ValueError) as e:
             raise ValueError(
                 f"Missing or invalid tax rate data for columns: {ltcg_col}, {stcg_col}"
