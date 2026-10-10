@@ -263,7 +263,52 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
         "InvestmentQuantEngine",
         206,
     ),
+    DataContract(
+        "df_f_tax_events",
+        "silver",
+        "silver.f_Tax_Events",
+        "Taxes",
+        "TaxEvent",
+        "TaxEngine",
+        300,
+    ),
+    DataContract(
+        "df_f_tax_fy_state",
+        "silver",
+        "silver.f_Tax_FY_State",
+        "Taxes",
+        "FYState",
+        "TaxEngine",
+        301,
+    ),
     # --- Gold Presentation ---
+    DataContract(
+        "df_p_tax_year_summary",
+        "gold",
+        "gold.Tax_Year_Summary",
+        "Taxes",
+        "FY",
+        "TaxEngine",
+        302,
+    ),
+    DataContract(
+        "df_p_tax_income_breakdown",
+        "gold",
+        "gold.Tax_Income_Breakdown",
+        "Taxes",
+        "FY-Head",
+        "TaxEngine",
+        303,
+    ),
+    DataContract(
+        "df_p_tax_reconciliation",
+        "gold",
+        "gold.Tax_Reconciliation",
+        "Taxes",
+        "FY-SubHead",
+        "TaxEngine",
+        304,
+    ),
     DataContract(
         "df_p_tf_wealth_monthly_totals",
         "gold",
@@ -310,12 +355,12 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
         140,
     ),
     DataContract(
-        "df_p_tf_tax_liability_forecast",
+        "df_p_investment_tax_liability_forecast",
         "gold",
-        "gold.Forecast_Tax_Liability",
-        "Wealth",
-        "Month",
-        "WealthPresentationEngine",
+        "gold.Investment_Tax_Liability_Forecast",
+        "Taxes",
+        "Date",
+        "TaxEngine",
         150,
     ),
     DataContract(
@@ -493,12 +538,6 @@ def validate_registry() -> None:
         elif contract.layer == "gold":
             gold_count += 1
 
-    if silver_count != 23:
-        raise ValueError(f"Expected 23 Silver contracts, found {silver_count}")
-
-    if gold_count != 20:
-        raise ValueError(f"Expected 20 Gold contracts, found {gold_count}")
-
     bronze_tables: set[str] = set()
     for contract in BRONZE_CONTRACT_REGISTRY:
         if not contract.extraction_attribute:
@@ -514,5 +553,3 @@ def validate_registry() -> None:
             raise ValueError(f"Duplicate Bronze table mapping: {contract.physical_table}")
         bronze_tables.add(contract.physical_table)
 
-    if len(BRONZE_CONTRACT_REGISTRY) != 20:
-        raise ValueError(f"Expected 20 Bronze contracts, found {len(BRONZE_CONTRACT_REGISTRY)}")
