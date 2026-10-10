@@ -227,6 +227,7 @@ CREATE TABLE IF NOT EXISTS silver.f_Currency_FX_Rates (
     Requested_End DATE,
     Is_Closure_Gap BOOLEAN,
     Is_Imputed BOOLEAN,
+    First_Observation_Date DATE,
     FOREIGN KEY(Date) REFERENCES silver.d_Calendar(Date),
     FOREIGN KEY(Currency_ID) REFERENCES silver.d_Currency(UID)
 );
@@ -707,6 +708,7 @@ CREATE TABLE IF NOT EXISTS silver.f_Tax_Events (
     Source_ID TEXT NOT NULL,
     Income_Head TEXT,
     Tax_Sub_Head TEXT,
+    Capital_Gains_Group TEXT,
     Taxability TEXT,
     Tax_Method TEXT,
     Gross_Amount DOUBLE,
@@ -717,6 +719,7 @@ CREATE TABLE IF NOT EXISTS silver.f_Tax_Events (
     Estimated_Tax DOUBLE,
     Tax_Status TEXT,
     Tax_Status_Reason TEXT,
+    _Is_Recon BOOLEAN,
     Rules_Snapshot_ID TEXT
 );
 
