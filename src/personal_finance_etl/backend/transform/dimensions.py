@@ -90,25 +90,8 @@ def transform_d_income_category(
         pl.col("Tax_Method").fill_null("review"),
     )
 
-    # Capital_Gains_Group: reverse-map Tax_Sub_Head → group name from config.
-    # LEDGER category sub-heads are not CG group codes, so most rows will be null.
-    cg_groups = rules.assumptions.tax.capital_gains_groups if rules else {}
-    _sub_head_to_cg_group: dict[str, str] = {
-        code: gname for gname, grp in cg_groups.items() for code in grp.sub_head_codes
-    }
-    if _sub_head_to_cg_group:
-        df_transformed = df_transformed.with_columns(
-            pl.col("Tax_Sub_Head")
-            .replace(_sub_head_to_cg_group, default=None)
-            .cast(pl.Utf8)
-            .alias("Capital_Gains_Group")
-        )
-    else:
-        df_transformed = df_transformed.with_columns(
-            pl.lit(None).cast(pl.Utf8).alias("Capital_Gains_Group")
-        )
-
     return df_transformed
+
 
 
 
@@ -227,26 +210,8 @@ def transform_d_income_subcategory(
         pl.coalesce(["Tax_Method", "cat_Tax_Method"]).fill_null("review").alias("Tax_Method")
     ).drop(["cat_Tax_Income_Head", "cat_Tax_Sub_Head", "cat_Taxability", "cat_Tax_Method"])
 
-    # Capital_Gains_Group: reverse-map Tax_Sub_Head → group name from config.
-    # Investment CG sub-heads live in f_Tax_Events (not the ledger), so LEDGER subcategory
-    # rows will be null. The column is present here for a uniform join surface.
-    cg_groups = rules.assumptions.tax.capital_gains_groups if rules else {}
-    _sub_head_to_cg_group: dict[str, str] = {
-        code: gname for gname, grp in cg_groups.items() for code in grp.sub_head_codes
-    }
-    if _sub_head_to_cg_group:
-        df_transformed = df_transformed.with_columns(
-            pl.col("Tax_Sub_Head")
-            .replace(_sub_head_to_cg_group, default=None)
-            .cast(pl.Utf8)
-            .alias("Capital_Gains_Group")
-        )
-    else:
-        df_transformed = df_transformed.with_columns(
-            pl.lit(None).cast(pl.Utf8).alias("Capital_Gains_Group")
-        )
-
     return df_transformed
+
 
 
 
