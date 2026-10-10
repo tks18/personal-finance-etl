@@ -27,9 +27,6 @@ from personal_finance_etl.backend.engines.presentation.modules.monthly_cashflow_
 from personal_finance_etl.backend.engines.presentation.modules.spend_analytics import (
     SpendAnalyticsBuilder,
 )
-from personal_finance_etl.backend.engines.presentation.modules.tax_liability_forecast import (
-    TaxLiabilityForecastBuilder,
-)
 from personal_finance_etl.backend.engines.presentation.modules.wealth_risk_analytics import (
     WealthRiskAnalyticsBuilder,
 )
@@ -84,12 +81,6 @@ class WealthPresentationEngine:
         results["df_p_tf_income_streams_monthly"] = IncomeStreamsBuilder(
             dfs, base_lf, rules=self.rules
         ).build()
-
-        # 6. Tax Liability Forecast
-        results["df_p_tf_tax_liability_forecast"] = TaxLiabilityForecastBuilder(
-            dfs, base_lf, rules=self.rules
-        ).build()
-
         # 7. Budget Forecast
         results["df_p_tf_budget_forecast_monthly"] = BudgetForecastBuilder(
             dfs, base_lf, rules=self.rules
