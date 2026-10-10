@@ -154,7 +154,7 @@ class WealthRiskAnalyticsBuilder:
                 ),
             )
         )
-        
+
         lf_fire_inputs = lf_fire_forecast.select(
             [
                 "MONTH_START_DATE",
@@ -398,5 +398,5 @@ class WealthRiskAnalyticsBuilder:
         )
         return {
             "df_p_tf_wealth_risk_analytics_inputs": lf_fire_inputs,
-            "df_p_tf_wealth_risk_analytics": lf_fire_forecast  # type: ignore[no-any-return]
+            "df_p_tf_wealth_risk_analytics": lf_fire_forecast,  # type: ignore[no-any-return]
         }
