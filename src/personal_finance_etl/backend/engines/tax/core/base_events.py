@@ -1,40 +1,41 @@
+from __future__ import annotations
+
+import math
+from datetime import date, datetime
 from typing import Any
 
 import polars as pl
 
 from personal_finance_etl.backend.config.financial_rules import FinancialRules
-from personal_finance_etl.backend.engines.tax.utils.date_utils import add_fy_if_missing
+from personal_finance_etl.backend.engines.analytics.rules.macro import FYMacroParametersTable
 from personal_finance_etl.backend.utils.identity import generate_deterministic_id
 
-# Fallback investment CG sub-head set — used only when capital_gains_groups is not
-# configured in the TOML.  Prefer configuring capital_gains_groups so new asset
-# classes can be added without code changes.
-_INVESTMENT_SUB_HEADS: frozenset[str] = frozenset(
-    {
-        "Equity_Listed_STCG",
-        "Equity_Listed_LTCG",
-        "Equity_Unlisted_STCG",
-        "Equity_Unlisted_LTCG",
-        "Debt_MF_Pre_Cutoff_STCG",
-        "Debt_MF_Pre_Cutoff_LTCG",
-        "Debt_MF_Post_Cutoff_STCG",
-        "Debt_MF_Post_Cutoff_LTCG",
-        "Other_Debt_STCG",
-        "Other_Debt_LTCG",
-        "REIT_STCG",
-        "REIT_LTCG",
-        "Gold_STCG",
-        "Gold_LTCG",
-        "SGB_STCG",
-        "SGB_LTCG",
-        "Default_STCG",
-        "Default_LTCG",
-    }
-)
+TAX_EVENT_SCHEMA: dict[str, pl.DataType] = {
+    "Tax_Event_ID": pl.String(),
+    "FY": pl.String(),
+    "Event_Date": pl.Date(),
+    "Source_Type": pl.String(),
+    "Source_ID": pl.String(),
+    "Income_Head": pl.String(),
+    "Tax_Sub_Head": pl.String(),
+    "Amount_INR": pl.Float64(),
+    "Applied_Rate": pl.Float64(),
+    "Estimated_Tax": pl.Float64(),
+    "CURRENCY_ID": pl.String(),
+    "Tax_Status": pl.String(),
+    "Tax_Status_Reason": pl.String(),
+    "ISIN": pl.String(),
+    "Lot_ID": pl.String(),
+}
 
 
 class BaseEventsBuilder:
-    """Builds the base silver tax events by consolidating ledger and investment data."""
+    """Normalize ledger, tax-credit and Quant FIFO evidence into canonical TaxEvents.
+
+    The builder carries FIFO-provided investment estimates and calculates indicative
+    ledger estimates using the configured ordinary-income rate. It does not calculate
+    final statutory liability or apply annual set-off/credit rules.
+    """
 
     def __init__(
         self,
@@ -42,416 +43,467 @@ class BaseEventsBuilder:
         df_realized_events: pl.DataFrame,
         df_subcategory: pl.DataFrame,
         rules: FinancialRules | None,
-        rules_snapshot_id: str,
-        df_macro: pl.DataFrame | None = None,
-    ):
+        df_macro_parameters: pl.DataFrame | None = None,
+    ) -> None:
         self.df_income = df_income
         self.df_realized_events = df_realized_events
         self.df_subcategory = df_subcategory
         self.rules = rules
-        self.rules_snapshot_id = rules_snapshot_id
-        self.df_macro = df_macro if df_macro is not None else pl.DataFrame()
-
-    def build(self) -> pl.LazyFrame:
-        """Build the canonical silver tax events table."""
-        if not self.rules:
-            return pl.LazyFrame()
-
-        fallback_ord = self.rules.assumptions.macro.fallback_ordinary_income_rate
-
-        # Derive valid investment CG sub-heads from capital_gains_groups config if present;
-        # fall back to the hardcoded registry for backward compatibility.
-        cg_groups = self.rules.assumptions.tax.capital_gains_groups
-        if cg_groups:
-            valid_inv_sub_heads: frozenset[str] = frozenset(
-                code for group in cg_groups.values() for code in group.sub_head_codes
-            )
-            # Reverse lookup: Tax_Sub_Head code → group name (for Capital_Gains_Group column)
-            sub_head_to_cg_group: dict[str, str] = {
-                code: group_name
-                for group_name, group in cg_groups.items()
-                for code in group.sub_head_codes
-            }
-        else:
-            valid_inv_sub_heads = _INVESTMENT_SUB_HEADS
-            sub_head_to_cg_group = {}
-
-        # 1. LEDGER TAX EVENTS
-        df_ledger = self.df_income.lazy().join(
-            self.df_subcategory.lazy().select(
-                ["UID", "Tax_Income_Head", "Tax_Sub_Head", "Taxability", "Tax_Method"]
-            ),
-            left_on="CATEGORY_ID",
-            right_on="UID",
-            how="left",
-        )
-
-        # Exclude non-taxable
-        df_ledger = df_ledger.filter(pl.col("Taxability") != "non_taxable")
-
-        # Exclude Investment-category ledger capital gains (keep only Default_STCG/LTCG)
-        df_ledger = df_ledger.filter(
-            ~(
-                (pl.col("Tax_Method") == "capital_gains")
-                & ~pl.col("Tax_Sub_Head").is_in(["Default_STCG", "Default_LTCG"])
-            )
-        )
-
-        df_ledger = add_fy_if_missing(df_ledger, "DATE")
-
-        # Map Ledger
-        df_ledger_mapped = df_ledger.select(
-            [
-                pl.col("DATE").cast(pl.Date).alias("Event_Date"),
-                pl.col("FY"),
-                pl.lit("LEDGER").alias("Source_Type"),
-                pl.col("UID").cast(pl.Utf8).alias("Source_ID"),
-                pl.col("Tax_Income_Head").alias("Income_Head"),
-                pl.col("Tax_Sub_Head"),
-                pl.col("Taxability"),
-                pl.col("Tax_Method"),
-                pl.col("BASE_AMOUNT").cast(pl.Float64).alias("Gross_Amount"),
-            ]
-        ).with_columns(
-            pl.col("Gross_Amount").alias("Taxable_Amount"),
-            pl.when(pl.col("Tax_Sub_Head") == "Default_STCG")
-            .then(pl.lit("ST"))
-            .when(pl.col("Tax_Sub_Head") == "Default_LTCG")
-            .then(pl.lit("LT"))
-            .otherwise(pl.lit(None))
-            .cast(pl.Utf8)
-            .alias("Gain_Type"),
-            pl.when(pl.col("Tax_Method") == "capital_gains")
-            .then(pl.col("Gross_Amount"))
-            .otherwise(pl.lit(None))
-            .cast(pl.Float64)
-            .alias("Realized_Gain_Loss"),
-        )
-
-        df_ledger_mapped = df_ledger_mapped.with_columns(
-            pl.lit(False).alias("_Is_Recon"),
-            pl.lit(None).cast(pl.Utf8).alias("Capital_Gains_Group"),
-        ).select(
-            [
-                "Event_Date",
-                "FY",
-                "Source_Type",
-                "Source_ID",
-                "Income_Head",
-                "Tax_Sub_Head",
-                "Capital_Gains_Group",
-                "Taxability",
-                "Tax_Method",
-                "Gross_Amount",
-                "Taxable_Amount",
-                "Gain_Type",
-                "Realized_Gain_Loss",
-                "_Is_Recon",
-            ]
-        )
-
-        # 2. INVESTMENT REALIZED EVENTS
-        df_inv = self.df_realized_events.lazy()
-        schema_cols = df_inv.collect_schema().names()
-
-        # NOTE: RECONCILIATION-lot disposals (Lot_Source_Type == "RECONCILIATION") are
-        # intentionally NOT filtered out here.
-        #
-        # These events arise when a real broker sale disposes a synthetic lot created by
-        # QUANTITY_ADD reconciliation.  The *sale* is real and authoritative — the
-        # proceeds appear in the demat / bank statement.  Omitting them from the tax
-        # pipeline would cause a silent mismatch during IT scrutiny.
-        #
-        # Instead: Tax_Sub_Head is preserved (real classification), _Is_Recon=True is
-        # stamped, Applied_Rate/Estimated_Tax are nulled out, and Tax_Status is set to
-        # CHECK_REQUIRED.  This forces a human to supply the original acquisition evidence
-        # before filing.  Only then will FIFO reprocess the lot as PURCHASE type and
-        # produce a READY event.
-
-        date_col = "Disposal_Date" if "Disposal_Date" in schema_cols else "date"
-        gain_col = "Realized_Gain_Loss" if "Realized_Gain_Loss" in schema_cols else "gain"
-        proceeds_col = "Sale_Proceeds" if "Sale_Proceeds" in schema_cols else gain_col
-
-        df_inv = add_fy_if_missing(df_inv, date_col)
-
-        df_inv_mapped = df_inv.with_columns(
-            pl.col(date_col).cast(pl.Date).alias("Event_Date"),
-            pl.lit("INVESTMENT_REALIZED").alias("Source_Type"),
-        )
-
-        if "Realized_Event_ID" in schema_cols:
-            df_inv_mapped = df_inv_mapped.with_columns(
-                pl.col("Realized_Event_ID").alias("Source_ID")
-            )
-        else:
-            df_inv_mapped = df_inv_mapped.with_columns(
-                pl.concat_str(
-                    [pl.lit("REALIZED_"), pl.col("sale_id"), pl.lit("_"), pl.col("lot_id")]
-                ).alias("Source_ID")
-            )
-
-        df_inv_mapped = df_inv_mapped.with_columns(
-            pl.lit("Capital_Gains").alias("Income_Head"),
-            pl.lit("taxable").alias("Taxability"),
-            pl.lit("capital_gains").alias("Tax_Method"),
-        )
-
-        type_col = "Tax_Type" if "Tax_Type" in schema_cols else "tax_type"
-        subtype_col = "Tax_Subtype" if "Tax_Subtype" in schema_cols else "tax_subtype"
-        holding_col = "Holding_Type" if "Holding_Type" in schema_cols else "gain_type"
-
-        def _build_sub_head_raw(row: dict[str, Any]) -> str:
-            tt = (row.get(type_col) or "").strip().lower()
-            tst = (row.get(subtype_col) or "").strip().lower()
-            ht = (row.get(holding_col) or "STCG").strip().upper()
-            # Normalize holding type: strip CL suffix that may appear in older data
-            ht_clean = ht.replace("CL", "").replace("CG", "")
-            suffix = ht_clean + "CG"  # → "STCG" or "LTCG"
-            # Determine column prefix from composite key
-            if tt == "equity" and tst in ("listed", "direct", "direct_equity", ""):
-                prefix = "Equity_Listed"
-            elif tt == "equity" and tst == "unlisted":
-                prefix = "Equity_Unlisted"
-            elif tt == "equity" and tst in (
-                "foreign",
-                "us_listed",
-                "us_stocks",
-                "us_equity",
-                "international",
-            ):
-                prefix = "Default"  # (equity, foreign) → reuses Default_LTCG/Default_STCG
-            elif tt == "debt" and tst in ("mf_pre", "mf", "mutual_fund", "debt_mf"):
-                prefix = "Debt_MF_Pre_Cutoff"  # pre-cutoff; post-cutoff lots become STCG at runtime
-            elif tt == "debt" and tst == "mf_post":
-                prefix = "Debt_MF_Post_Cutoff"
-            elif tt == "debt":
-                prefix = "Other_Debt"
-            elif tt == "reit":
-                prefix = "REIT"
-            elif tt == "gold":
-                prefix = "Gold"
-            elif tt == "sgb":
-                prefix = "SGB"
-            else:
-                prefix = "Default"
-            return f"{prefix}_{suffix}"
-
-        df_inv_mapped = df_inv_mapped.with_columns(
-            pl.struct([type_col, subtype_col, holding_col])
-            .map_elements(_build_sub_head_raw, return_dtype=pl.Utf8)
-            .alias("Tax_Sub_Head_Raw"),
-            pl.col(holding_col)
-            .str.replace("CG", "", literal=True)
-            .str.replace("CL", "", literal=True)
-            .alias("Gain_Type"),
-        )
-
-        # Preserve real Tax_Sub_Head even for RECONCILIATION lots.
-        # Eligibility is tracked separately via Tax_Status (see below).
-        reconciliation_col = "Lot_Source_Type" if "Lot_Source_Type" in schema_cols else None
-
-        is_unknown_sub_head = ~pl.col("Tax_Sub_Head_Raw").is_in(list(valid_inv_sub_heads))
-
-        # For unknown sub-head: use "UNKNOWN" sentinel (not a status string).
-        # For known sub-head (including RECONCILIATION lots): preserve the real code.
-        df_inv_mapped = df_inv_mapped.with_columns(
-            pl.when(is_unknown_sub_head)
-            .then(pl.lit("UNKNOWN"))
-            .otherwise(pl.col("Tax_Sub_Head_Raw"))
-            .alias("Tax_Sub_Head")
-        ).drop("Tax_Sub_Head_Raw")
-
-        # Carry reconciliation flag for Tax_Status assignment after concat.
-        if reconciliation_col:
-            df_inv_mapped = df_inv_mapped.with_columns(
-                (pl.col(reconciliation_col) == pl.lit("RECONCILIATION")).alias("_Is_Recon")
-            )
-        else:
-            df_inv_mapped = df_inv_mapped.with_columns(pl.lit(False).alias("_Is_Recon"))
-
-        # Attach CG group name for downstream filtering and reporting.
-        if sub_head_to_cg_group:
-            df_inv_mapped = df_inv_mapped.with_columns(
-                pl.col("Tax_Sub_Head")
-                .replace(sub_head_to_cg_group, default=None)
-                .cast(pl.Utf8)
-                .alias("Capital_Gains_Group")
-            )
-        else:
-            df_inv_mapped = df_inv_mapped.with_columns(
-                pl.lit(None).cast(pl.Utf8).alias("Capital_Gains_Group")
-            )
-
-        # Ensure correct assignment: Proceeds -> Gross_Amount, Gain -> Taxable_Amount & Realized_Gain_Loss
-        if proceeds_col in schema_cols:
-            df_inv_mapped = df_inv_mapped.with_columns(
-                pl.col(proceeds_col).cast(pl.Float64).alias("Gross_Amount")
-            )
-        else:
-            df_inv_mapped = df_inv_mapped.with_columns(
-                pl.lit(0.0).cast(pl.Float64).alias("Gross_Amount")
-            )
-
-        df_inv_mapped = df_inv_mapped.with_columns(
-            pl.col(gain_col).cast(pl.Float64).alias("Taxable_Amount"),
-            pl.col(gain_col).cast(pl.Float64).alias("Realized_Gain_Loss"),
-        ).select(
-            [
-                "Event_Date",
-                "FY",
-                "Source_Type",
-                "Source_ID",
-                "Income_Head",
-                "Tax_Sub_Head",
-                "Capital_Gains_Group",
-                "Taxability",
-                "Tax_Method",
-                "Gross_Amount",
-                "Taxable_Amount",
-                "Gain_Type",
-                "Realized_Gain_Loss",
-                "_Is_Recon",
-            ]
-        )
-
-        # 3. CONSOLIDATE
-        df_tax_events = pl.concat([df_ledger_mapped, df_inv_mapped], how="vertical_relaxed")
-
-        # 4. TAX ESTIMATION
-        # Rate resolution: INVESTMENT_REALIZED events use FIFO's pre-computed rates; LEDGER events use macro CSV or TOML fallback.
-
-        # Build a lookup: Source_ID → (Applied_Rate, Estimated_Tax) from realized events.
-        # Only INVESTMENT_REALIZED rows have Source_IDs that exist in df_realized_events.
-        _rate_cols_present = (
-            "Applied_Rate" in self.df_realized_events.columns
-            and "Estimated_Tax" in self.df_realized_events.columns
-            and "Realized_Event_ID" in self.df_realized_events.columns
-        )
-
-        if _rate_cols_present and not self.df_realized_events.is_empty():
-            lf_inv_rates = self.df_realized_events.lazy().select(
-                [
-                    pl.col("Realized_Event_ID").cast(pl.Utf8).alias("Source_ID"),
-                    pl.col("Applied_Rate").cast(pl.Float64),
-                    pl.col("Estimated_Tax").cast(pl.Float64),
-                ]
-            )
-            # Left-join: INVESTMENT_REALIZED rows match on Source_ID; LEDGER rows get nulls
-            df_tax_events = df_tax_events.join(lf_inv_rates, on="Source_ID", how="left")
-        else:
-            df_tax_events = df_tax_events.with_columns(
-                pl.lit(None).cast(pl.Float64).alias("Applied_Rate"),
-                pl.lit(None).cast(pl.Float64).alias("Estimated_Tax"),
-            )
-
-        # For LEDGER events: resolve ordinary income rate from macro CSV → TOML fallback
-        _ord_col_in_macro: str | None = (
-            "Estimated_Ordinary_Income_Tax_Rate"
-            if not self.df_macro.is_empty()
-            and "Estimated_Ordinary_Income_Tax_Rate" in self.df_macro.columns
-            and "FY" in self.df_macro.columns
+        self.macro_table = (
+            FYMacroParametersTable(df_macro_parameters, rules=rules)
+            if rules is not None
+            and df_macro_parameters is not None
+            and not df_macro_parameters.is_empty()
             else None
         )
 
-        if _ord_col_in_macro:
-            lf_ord_rates = self.df_macro.lazy().select(
-                [
-                    pl.col("FY").cast(pl.Utf8),
-                    pl.col(_ord_col_in_macro).cast(pl.Float64).alias("_Ord_Rate_Macro"),
-                ]
+    def build(self) -> pl.LazyFrame:
+        """Return validated, deterministic TaxEvents as a LazyFrame."""
+        if self.rules is None:
+            raise ValueError("FinancialRules are required to build canonical TaxEvents.")
+
+        self._validate_subcategory_dimension()
+        self.rules.validate_investment_exclusion_uids(self.df_subcategory)
+        credit_subheads = self._tax_credit_subhead_map()
+        self._validate_tax_credit_uids(credit_subheads)
+        configured_exclusions = set(
+            self.rules.assumptions.tax.investment_exclusions.stcg_sub_cat_ids
+            + self.rules.assumptions.tax.investment_exclusions.ltcg_sub_cat_ids
+        )
+        credit_overlap = sorted(configured_exclusions.intersection(credit_subheads))
+        if credit_overlap:
+            raise ValueError(
+                "A subcategory UID cannot be both an investment-gain exclusion and a tax credit: "
+                f"{credit_overlap}"
             )
-            df_tax_events = df_tax_events.join(lf_ord_rates, on="FY", how="left")
+
+        records = (
+            self._normalize_ledger_income(credit_subheads)
+            + self._normalize_tax_credits(credit_subheads)
+            + self._normalize_quant_realized_events()
+        )
+        if not records:
+            return pl.DataFrame(schema=TAX_EVENT_SCHEMA).lazy()
+
+        for record in records:
+            record["Tax_Event_ID"] = generate_deterministic_id(
+                "TAX",
+                {
+                    "Source_Type": record["Source_Type"],
+                    "Source_ID": record["Source_ID"],
+                    "Tax_Sub_Head": record["Tax_Sub_Head"],
+                },
+            )
+
+        df = pl.DataFrame(records, schema=TAX_EVENT_SCHEMA, strict=False)
+        self._validate_event_keys(df)
+        return df.sort(["FY", "Event_Date", "Source_Type", "Source_ID", "Tax_Sub_Head"]).lazy()
+
+    def _tax_credit_subhead_map(self) -> dict[str, str]:
+        """Map configured tax-credit subcategory UIDs to their declared tax sub-head."""
+        assert self.rules is not None
+        mapping: dict[str, str] = {}
+        all_heads = list(self.rules.assumptions.tax.heads_of_income.items())
+        all_heads.extend(
+            [
+                ("Residual", self.rules.assumptions.tax.residual_income),
+                ("Exempt_Income", self.rules.assumptions.tax.exempt_income),
+            ]
+        )
+        for head_name, head_config in all_heads:
+            for sub_head, config in head_config.sub_heads.items():
+                for uid in config.tax_credit_sub_cat_ids:
+                    if uid in mapping:
+                        raise ValueError(
+                            f"Tax-credit subcategory UID {uid!r} is configured more than once."
+                        )
+                    mapping[uid] = sub_head or head_name
+        return mapping
+
+    def _validate_tax_credit_uids(self, credit_subheads: dict[str, str]) -> None:
+        available = {
+            str(uid).strip()
+            for uid in self.df_subcategory.get_column("UID").drop_nulls().to_list()
+            if str(uid).strip()
+        }
+        unknown = sorted(set(credit_subheads) - available)
+        if unknown:
+            raise ValueError(
+                "Configured tax-credit subcategory UID(s) do not exist in "
+                f"silver.d_Income_Subcategory: {unknown}"
+            )
+
+    def _normalize_ledger_income(self, credit_subheads: dict[str, str]) -> list[dict[str, Any]]:
+        required = {"UID", "DATE", "CATEGORY_ID", "BASE_AMOUNT"}
+        missing = sorted(required - set(self.df_income.columns))
+        if missing:
+            raise ValueError(f"Income transactions missing required columns: {missing}")
+        if self.df_income.is_empty():
+            return []
+
+        sub_cols = [
+            c
+            for c in ("UID", "Tax_Income_Head", "Tax_Sub_Head", "Taxability", "Tax_Method")
+            if c in self.df_subcategory.columns
+        ]
+        if "UID" not in sub_cols:
+            raise ValueError("Income subcategory dimension must contain UID.")
+
+        sub_lookup = {
+            str(row["UID"]).strip(): row
+            for row in self.df_subcategory.select(sub_cols).iter_rows(named=True)
+            if row.get("UID") is not None and str(row["UID"]).strip()
+        }
+        excluded: set[str] = set()
+        if self.rules is not None:
+            exclusions = self.rules.assumptions.tax.investment_exclusions
+            excluded.update(exclusions.stcg_sub_cat_ids)
+            excluded.update(exclusions.ltcg_sub_cat_ids)
+
+        records: list[dict[str, Any]] = []
+        for row in self.df_income.iter_rows(named=True):
+            category_id = self._clean_text(row.get("CATEGORY_ID")) or ""
+            # Investment STCG/LTCG entered in the ledger remains in the household income
+            # fact but is excluded from TaxEvents because Quant FIFO is authoritative.
+            if category_id in excluded or category_id in credit_subheads:
+                continue
+
+            category = sub_lookup.get(category_id, {})
+            taxability = str(category.get("Taxability") or "review").strip().lower()
+            if taxability == "non_taxable":
+                continue
+
+            event_date = self._as_date(row.get("DATE"), "income DATE", row.get("UID"))
+            amount = self._required_amount(row.get("BASE_AMOUNT"), "BASE_AMOUNT", row.get("UID"))
+            source_id = self._required_id(row.get("UID"), "income UID")
+            income_head = self._clean_text(category.get("Tax_Income_Head"))
+            tax_sub_head = self._clean_text(category.get("Tax_Sub_Head"))
+            classification_incomplete = (
+                not income_head or not tax_sub_head or taxability != "taxable"
+            )
+            applied_rate: float | None = None
+            estimated_tax: float | None = None
+            if not classification_incomplete:
+                applied_rate = self._ordinary_income_rate(event_date)
+                if applied_rate is not None:
+                    # This is an estimate on positive taxable ledger income only, not
+                    # final annual liability or a tax-credit netting calculation.
+                    estimated_tax = max(0.0, amount) * applied_rate
+            if not classification_incomplete and applied_rate is None:
+                classification_incomplete = True
+            records.append(
+                {
+                    "FY": self._financial_year(event_date),
+                    "Event_Date": event_date,
+                    "Source_Type": "LEDGER",
+                    "Source_ID": source_id,
+                    "Income_Head": income_head or "CHECK_REQUIRED",
+                    "Tax_Sub_Head": tax_sub_head or "CHECK_REQUIRED",
+                    "Amount_INR": amount,
+                    "Applied_Rate": applied_rate,
+                    "Estimated_Tax": estimated_tax,
+                    "CURRENCY_ID": self._clean_text(row.get("CURRENCY_ID")),
+                    "Tax_Status": "CHECK_REQUIRED" if classification_incomplete else "READY",
+                    "Tax_Status_Reason": (
+                        "Income classification is missing, non-taxable/review-only, or the ordinary tax rate is invalid."
+                        if classification_incomplete
+                        else None
+                    ),
+                    "ISIN": None,
+                    "Lot_ID": None,
+                }
+            )
+        return records
+
+    def _ordinary_income_rate(self, event_date: date) -> float | None:
+        """Resolve a configured ordinary-income estimate rate for the event date."""
+        if self.macro_table is not None:
+            rate = self.macro_table.get_ordinary_income_rate(event_date)
+        elif self.rules is not None:
+            rate = self.rules.assumptions.macro.fallback_ordinary_income_rate
         else:
-            df_tax_events = df_tax_events.with_columns(
-                pl.lit(None).cast(pl.Float64).alias("_Ord_Rate_Macro")
-            )
+            return None
+        try:
+            rate = float(rate)
+        except (TypeError, ValueError, OverflowError):
+            return None
+        return rate if math.isfinite(rate) and 0.0 <= rate <= 1.0 else None
 
-        # Fill LEDGER capital gains and ordinary income rates (investment events already set)
-        df_tax_events = (
-            df_tax_events.with_columns(
-                pl.when(pl.col("Source_Type") == "LEDGER")
-                .then(
-                    pl.when(pl.col("Tax_Method") == "ordinary_rate")
-                    .then(
-                        pl.when(pl.col("_Ord_Rate_Macro").is_not_null())
-                        .then(pl.col("_Ord_Rate_Macro"))
-                        .otherwise(pl.lit(fallback_ord))
+    def _normalize_tax_credits(self, credit_subheads: dict[str, str]) -> list[dict[str, Any]]:
+        """Keep observed tax-credit transactions separate from taxable income."""
+        if not credit_subheads or self.df_income.is_empty():
+            return []
+        records: list[dict[str, Any]] = []
+        for row in self.df_income.iter_rows(named=True):
+            category_id = self._clean_text(row.get("CATEGORY_ID")) or ""
+            if category_id not in credit_subheads:
+                continue
+            event_date = self._as_date(row.get("DATE"), "tax-credit DATE", row.get("UID"))
+            source_id = self._required_id(row.get("UID"), "tax-credit income UID")
+            amount = self._required_amount(
+                row.get("BASE_AMOUNT"), "tax-credit BASE_AMOUNT", source_id
+            )
+            records.append(
+                {
+                    "FY": self._financial_year(event_date),
+                    "Event_Date": event_date,
+                    "Source_Type": "TAX_CREDIT",
+                    "Source_ID": source_id,
+                    "Income_Head": "TAX_CREDIT",
+                    "Tax_Sub_Head": credit_subheads[category_id],
+                    "Amount_INR": amount,
+                    "CURRENCY_ID": self._clean_text(row.get("CURRENCY_ID")),
+                    "Tax_Status": "READY",
+                    "Tax_Status_Reason": None,
+                    "ISIN": None,
+                    "Lot_ID": None,
+                }
+            )
+        return records
+
+    @staticmethod
+    def _optional_finite_number(value: Any) -> float | None:
+        """Return a finite numeric value, preserving missing/invalid values as null."""
+        if value is None or isinstance(value, bool):
+            return None
+        try:
+            number = float(value)
+        except (TypeError, ValueError, OverflowError):
+            return None
+        return number if math.isfinite(number) else None
+
+    def _normalize_quant_realized_events(self) -> list[dict[str, Any]]:
+        """Normalize authoritative Quant FIFO realized gains/losses."""
+        df = self.df_realized_events
+        if df.is_empty():
+            return []
+        required = {"Realized_Event_ID", "Disposal_Date", "Realized_Gain_Loss"}
+        missing = sorted(required - set(df.columns))
+        if missing:
+            raise ValueError(f"Quant realized events missing required columns: {missing}")
+
+        records: list[dict[str, Any]] = []
+        for row in df.iter_rows(named=True):
+            source_id = self._required_id(row.get("Realized_Event_ID"), "Realized_Event_ID")
+            event_date = self._as_date(row.get("Disposal_Date"), "Quant Disposal_Date", source_id)
+            amount = self._required_amount(
+                row.get("Realized_Gain_Loss"), "Realized_Gain_Loss", source_id
+            )
+            sub_head, classification_known = self._quant_sub_head(row)
+            is_reconciliation = str(row.get("Lot_Source_Type") or "").upper() == "RECONCILIATION"
+            status_reasons: list[str] = []
+            if is_reconciliation:
+                status_reasons.append(
+                    "Reconciliation lot: original acquisition evidence requires review."
+                )
+            if not classification_known:
+                status_reasons.append("Investment tax classification is unmapped or invalid.")
+            if not self._clean_text(row.get("ISIN")):
+                status_reasons.append("ISIN is missing.")
+            if not self._clean_text(row.get("Lot_ID")):
+                status_reasons.append("Lot_ID is missing.")
+            if not self._clean_text(
+                row.get("Currency_ID") if "Currency_ID" in df.columns else row.get("CURRENCY_ID")
+            ):
+                status_reasons.append("Currency_ID is missing.")
+
+            applied_rate = self._optional_finite_number(row.get("Applied_Rate"))
+            estimated_tax = self._optional_finite_number(row.get("Estimated_Tax"))
+            if applied_rate is not None and not 0.0 <= applied_rate <= 1.0:
+                applied_rate = None
+            if estimated_tax is not None and estimated_tax < 0:
+                estimated_tax = None
+            if not is_reconciliation and (applied_rate is None or estimated_tax is None):
+                status_reasons.append(
+                    "Applied tax rate or estimated tax is unavailable or invalid."
+                )
+            # Missing identifiers/currency trigger review but do not erase an otherwise
+            # valid FIFO tax estimate. Reconciliation lots and invalid calculations do.
+            if is_reconciliation or applied_rate is None or estimated_tax is None:
+                applied_rate = None
+                estimated_tax = None
+
+            records.append(
+                {
+                    "FY": self._financial_year(event_date),
+                    "Event_Date": event_date,
+                    "Source_Type": "QUANT",
+                    "Source_ID": source_id,
+                    "Income_Head": "Capital_Gains",
+                    "Tax_Sub_Head": sub_head,
+                    "Amount_INR": amount,
+                    "Applied_Rate": applied_rate,
+                    "Estimated_Tax": estimated_tax,
+                    "CURRENCY_ID": self._clean_text(
+                        row.get("Currency_ID")
+                        if "Currency_ID" in df.columns
+                        else row.get("CURRENCY_ID")
+                    ),
+                    "Tax_Status": "CHECK_REQUIRED" if status_reasons else "READY",
+                    "Tax_Status_Reason": " ".join(status_reasons) or None,
+                    "ISIN": self._clean_text(row.get("ISIN")),
+                    "Lot_ID": self._clean_text(row.get("Lot_ID")),
+                }
+            )
+        return records
+
+    def _quant_sub_head(self, row: dict[str, Any]) -> tuple[str, bool]:
+        """Map Quant instrument/holding metadata to the configured evidence sub-head.
+
+        This is classification only. It deliberately does not calculate tax rates or
+        liability. Generic debt mutual-fund subtypes require acquisition-date evidence
+        to determine which configured cutoff bucket applies.
+        """
+        tax_type = str(row.get("Tax_Type") or row.get("tax_type") or "").strip().lower()
+        subtype = str(row.get("Tax_Subtype") or row.get("tax_subtype") or "").strip().lower()
+        holding_raw = str(row.get("Holding_Type") or row.get("gain_type") or "").strip().upper()
+        holding = {"STCG": "ST", "LTCG": "LT", "ST": "ST", "LT": "LT"}.get(holding_raw)
+        if holding is None:
+            return "CHECK_REQUIRED", False
+
+        if tax_type == "equity" and subtype in {"listed", "direct", "direct_equity", ""}:
+            prefix = "Equity_Listed"
+        elif tax_type == "equity" and subtype == "unlisted":
+            prefix = "Equity_Unlisted"
+        elif tax_type == "equity" and subtype in {
+            "foreign",
+            "us_listed",
+            "us_stocks",
+            "us_equity",
+            "international",
+        }:
+            prefix = "Default"
+        elif tax_type == "debt":
+            if subtype == "mf_pre":
+                prefix = "Debt_MF_Pre_Cutoff"
+            elif subtype == "mf_post":
+                prefix = "Debt_MF_Post_Cutoff"
+            elif subtype in {"mf", "mutual_fund", "debt_mf"}:
+                acquisition_date = row.get("Acquisition_Date")
+                if isinstance(acquisition_date, datetime):
+                    acquisition_date = acquisition_date.date()
+                elif acquisition_date is not None and not isinstance(acquisition_date, date):
+                    try:
+                        acquisition_date = self._as_date(
+                            acquisition_date, "Quant Acquisition_Date", row.get("Realized_Event_ID")
+                        )
+                    except ValueError:
+                        acquisition_date = None
+                try:
+                    cutoff = (
+                        self._as_date(
+                            self.rules.assumptions.tax.debt_mf_cutoff_date,
+                            "configured debt mutual-fund cutoff date",
+                            "FinancialRules",
+                        )
+                        if self.rules
+                        else None
                     )
-                    .when(pl.col("Tax_Method") == "capital_gains")
-                    .then(
-                        # Default_LTCG/STCG from ledger use the ordinary income rate
-                        # (non-investment property/other CG — slab rate applies)
-                        pl.when(pl.col("_Ord_Rate_Macro").is_not_null())
-                        .then(pl.col("_Ord_Rate_Macro"))
-                        .otherwise(pl.lit(fallback_ord))
-                    )
-                    .otherwise(pl.lit(0.0))
+                except ValueError:
+                    cutoff = None
+                if acquisition_date is None or cutoff is None:
+                    return "CHECK_REQUIRED", False
+                prefix = (
+                    "Debt_MF_Pre_Cutoff" if acquisition_date < cutoff else "Debt_MF_Post_Cutoff"
                 )
-                .otherwise(pl.col("Applied_Rate"))  # INVESTMENT_REALIZED: use FIFO's rate as-is
-                .alias("Applied_Rate_Resolved")
-            )
-            .with_columns(
-                pl.when(pl.col("Source_Type") == "LEDGER")
-                .then(
-                    pl.when(pl.col("Taxable_Amount") > 0)
-                    .then(pl.col("Taxable_Amount") * pl.col("Applied_Rate_Resolved"))
-                    .otherwise(pl.lit(0.0))
-                )
-                .otherwise(pl.col("Estimated_Tax"))  # INVESTMENT_REALIZED: use FIFO's estimate
-                .alias("Estimated_Tax_Resolved")
-            )
-            .with_columns(
-                # Null out for CHECK_REQUIRED rows — no precise tax should be reported
-                pl.when(
-                    pl.col("_Is_Recon").fill_null(False) | (pl.col("Tax_Sub_Head") == "UNKNOWN")
-                )
-                .then(pl.lit(None).cast(pl.Float64))
-                .otherwise(pl.col("Applied_Rate_Resolved"))
-                .alias("Applied_Rate"),
-                pl.when(
-                    pl.col("_Is_Recon").fill_null(False) | (pl.col("Tax_Sub_Head") == "UNKNOWN")
-                )
-                .then(pl.lit(None).cast(pl.Float64))
-                .otherwise(pl.col("Estimated_Tax_Resolved"))
-                .alias("Estimated_Tax"),
-            )
-            .drop(["Applied_Rate_Resolved", "Estimated_Tax_Resolved", "_Ord_Rate_Macro"])
-        )
+            elif subtype in {"bond", "debenture", "other_debt", "direct_debt"}:
+                prefix = "Other_Debt"
+            else:
+                return "CHECK_REQUIRED", False
+        elif tax_type == "reit":
+            prefix = "REIT"
+        elif tax_type == "gold":
+            prefix = "Gold"
+        elif tax_type == "sgb":
+            prefix = "SGB"
+        else:
+            return "CHECK_REQUIRED", False
+        return f"{prefix}_{holding}CG", True
 
-        # Set Tax Status
-        df_tax_events = df_tax_events.with_columns(
-            pl.when(pl.col("_Is_Recon").fill_null(False) | (pl.col("Tax_Sub_Head") == "UNKNOWN"))
-            .then(pl.lit("CHECK_REQUIRED"))
-            .otherwise(pl.lit("READY"))
-            .alias("Tax_Status"),
-            pl.when(pl.col("Tax_Sub_Head") == "UNKNOWN")
-            .then(pl.lit("Unrecognized tax classification — review tax_type/tax_subtype"))
-            .when(pl.col("_Is_Recon").fill_null(False))
-            .then(pl.lit("RECONCILIATION synthetic lot — original acquisition evidence required"))
-            .otherwise(pl.lit(None))
-            .cast(pl.Utf8)
-            .alias("Tax_Status_Reason"),
-            pl.lit(self.rules_snapshot_id).alias("Rules_Snapshot_ID"),
-        )
-
-        # 5. TAX EVENT IDENTITY
-        # Use a deterministic hash so Tax_Event_ID is stable across re-runs.
-        # Inputs: Source_Type + Source_ID + Tax_Sub_Head uniquely identify one tax event.
-        df_tax_events = df_tax_events.with_columns(
-            pl.struct(["Source_Type", "Source_ID", "Tax_Sub_Head"])
-            .map_elements(
-                lambda row: generate_deterministic_id(
-                    "TAX",
-                    {
-                        "Source_Type": row["Source_Type"],
-                        "Source_ID": row["Source_ID"],
-                        "Tax_Sub_Head": row["Tax_Sub_Head"],
-                    },
-                ),
-                return_dtype=pl.Utf8,
+    def _validate_subcategory_dimension(self) -> None:
+        """Reject ambiguous dimension keys before building the lookup map."""
+        if "UID" not in self.df_subcategory.columns:
+            raise ValueError("Income subcategory dimension must contain UID.")
+        uids = [
+            str(uid).strip()
+            for uid in self.df_subcategory.get_column("UID").drop_nulls().to_list()
+            if str(uid).strip()
+        ]
+        seen: set[str] = set()
+        duplicates: set[str] = set()
+        for uid in uids:
+            if uid in seen:
+                duplicates.add(uid)
+            seen.add(uid)
+        if duplicates:
+            raise ValueError(
+                f"Income subcategory dimension contains duplicate UID(s): {sorted(duplicates)}"
             )
-            .alias("Tax_Event_ID")
-        )
 
-        df_tax_events = df_tax_events.drop("_Is_Recon")
-        return df_tax_events
+    def _validate_event_keys(self, df: pl.DataFrame) -> None:
+        key_columns = ["Source_Type", "Source_ID", "Tax_Sub_Head"]
+        duplicates = df.group_by(key_columns).len().filter(pl.col("len") > 1)
+        if not duplicates.is_empty():
+            keys = duplicates.select(key_columns).to_dicts()
+            raise ValueError(
+                "Duplicate canonical TaxEvent natural key(s) detected "
+                f"(Source_Type, Source_ID, Tax_Sub_Head): {keys[:10]}"
+            )
+
+    @staticmethod
+    def _required_id(value: Any, field_name: str) -> str:
+        if value is None or not str(value).strip():
+            raise ValueError(f"Required identity field {field_name} is missing.")
+        return str(value).strip()
+
+    @staticmethod
+    def _required_amount(value: Any, field_name: str, source_id: Any) -> float:
+        if value is None:
+            raise ValueError(f"Required amount {field_name} is null for source {source_id!r}.")
+        if isinstance(value, bool):
+            raise ValueError(
+                f"Required amount {field_name} cannot be boolean for source {source_id!r}."
+            )
+        try:
+            amount = float(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f"Required amount {field_name} is invalid for source {source_id!r}: {value!r}"
+            ) from exc
+        import math
+
+        if not math.isfinite(amount):
+            raise ValueError(
+                f"Required amount {field_name} must be finite for source {source_id!r}."
+            )
+        return amount
+
+    @staticmethod
+    def _as_date(value: Any, field_name: str, source_id: Any) -> date:
+        if value is None:
+            raise ValueError(f"Required date {field_name} is null for source {source_id!r}.")
+        if isinstance(value, datetime):
+            return value.date()
+        if isinstance(value, date):
+            return value
+        try:
+            parsed = pl.Series([value]).cast(pl.Date, strict=True).item()
+        except Exception as exc:
+            raise ValueError(
+                f"Required date {field_name} is invalid for source {source_id!r}: {value!r}"
+            ) from exc
+        if parsed is None:
+            raise ValueError(f"Required date {field_name} is null for source {source_id!r}.")
+        return parsed
+
+    @staticmethod
+    def _financial_year(event_date: date) -> str:
+        start_year = event_date.year if event_date.month >= 4 else event_date.year - 1
+        return f"{start_year}-{str(start_year + 1)[-2:]}"
+
+    @staticmethod
+    def _clean_text(value: Any) -> str | None:
+        if value is None:
+            return None
+        text = str(value).strip()
+        return text or None
