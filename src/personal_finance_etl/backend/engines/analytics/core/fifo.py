@@ -17,12 +17,14 @@ class FIFOPortfolio:
         tax_subtype: str,
         fy_table: FYMacroParametersTable,
         default_currency_id: str,
+        isin: str,
     ):
         self._active_lots: deque[TaxLot] = deque()
         self.tax_type = tax_type
         self.tax_subtype = tax_subtype
         self.fy_table = fy_table
         self.default_currency_id = default_currency_id
+        self.isin = isin
 
     @property
     def active_lots(self) -> list[TaxLot]:
@@ -41,20 +43,31 @@ class FIFOPortfolio:
         currency_id: str | None = None,
         bm_buy_local: float | None = None,
         purchase_id: str | None = None,
+        lot_source_type: str = "PURCHASE",
     ) -> None:
         """Register a new buy lot."""
 
         if currency_id is None:
             currency_id = self.default_currency_id
 
-        lot_id = None
         if purchase_id:
             # Deterministically generate Lot_ID using the unique purchase_id and current qty in this execution context
             # (as partial executions or splits might happen).
             lot_fields = {
+                "ISIN": self.isin,
                 "Purchase_ID": purchase_id,
                 "Quantity": qty,
                 "Date": buy_date,
+            }
+            lot_id = generate_deterministic_id("LOT", lot_fields)
+        else:
+            lot_fields = {
+                "ISIN": self.isin,
+                "Date": buy_date,
+                "Quantity": qty,
+                "Price": price,
+                "Currency": currency_id,
+                "Event": lot_source_type,
             }
             lot_id = generate_deterministic_id("LOT", lot_fields)
 
@@ -71,6 +84,7 @@ class FIFOPortfolio:
                 bm_buy_local=bm_buy_local,
                 purchase_id=purchase_id,
                 lot_id=lot_id,
+                lot_source_type=lot_source_type,
             )
         )
 
@@ -115,25 +129,58 @@ class FIFOPortfolio:
                     asset_pnl = pnl
                     forex_pnl = 0.0
 
+            realized_event_id = generate_deterministic_id(
+                "REALIZED",
+                {
+                    "Sale_ID": sale_id,
+                    "Lot_ID": lot.lot_id,
+                }
+            )
+
+            # Resolve the applicable rate from the macro CSV at disposal time.
+            # fy_table.get_tax_rates() is the same macro-primary lookup that snapshot.py
+            # uses for LTCG_Tax_If_Sold — reuse it so there is one source of truth.
+            _ltcg_rate, _stcg_rate = self.fy_table.get_tax_rates(
+                self.tax_type, self.tax_subtype, lbd or sell_date, sell_date
+            )
+            _applied_rate = _ltcg_rate if ht_sale == "LTCG" else _stcg_rate
+            _estimated_tax = max(0.0, pnl) * _applied_rate if pnl > 0 else 0.0
+
             realized_events.append(
                 {
-                    "date": sell_date,
-                    "gain": pnl,
-                    "gain_type": ht_sale,
+                    "Realized_Event_ID": realized_event_id,
+                    "Sale_ID": sale_id,
+                    "Lot_ID": lot.lot_id,
+                    "Purchase_ID": lot.purchase_id,
+                    "ISIN": self.isin,
+                    "Acquisition_Date": lbd,
+                    "Disposal_Date": sell_date,
+                    "FY": self.fy_table.get_fy_string(sell_date),
+                    "Quantity_Disposed": consumed,
+                    "Acquisition_Price": lot.price,
+                    "Disposed_Cost_Basis": lot.price * consumed,
+                    "Sale_Price": price,
+                    "Sale_Proceeds": price * consumed,
+                    "Realized_Gain_Loss": pnl,
+                    "Holding_Type": ht_sale,
                     "is_loss": pnl < 0,
-                    "tax_type": self.tax_type.strip().lower(),
-                    "asset_pnl_local": asset_pnl_local,
-                    "asset_pnl": asset_pnl,
-                    "forex_pnl": forex_pnl,
-                    "currency_id": lot.currency_id,
+                    "Tax_Type": self.tax_type.strip().lower(),
+                    "Tax_Subtype": self.tax_subtype.strip().lower(),
+                    "Lot_Source_Type": lot.lot_source_type,
+                    "Currency_ID": lot.currency_id,
+                    "Asset_PnL_Local": asset_pnl_local,
+                    "Asset_PnL": asset_pnl,
+                    "Forex_PnL": forex_pnl,
+                    # Rate resolved from macro CSV at disposal time (same source as snapshot.py).
+                    # CHECK_REQUIRED lots (RECONCILIATION source) carry the rate as-is;
+                    # base_events.py nulls out Applied_Rate/Estimated_Tax for CHECK_REQUIRED rows.
+                    "Applied_Rate": _applied_rate,
+                    "Estimated_Tax": _estimated_tax,
                     "shadow_qty_sold": lot.shadow_qty
                     if lot.qty <= rem + 1e-8
                     else (lot.shadow_qty * (rem / lot.qty))
                     if lot.shadow_qty
                     else 0.0,
-                    "sale_id": sale_id,
-                    "purchase_id": lot.purchase_id,
-                    "lot_id": lot.lot_id,
                 }
             )
 
@@ -156,6 +203,7 @@ class FIFOPortfolio:
                     bm_buy_local=lot.bm_buy_local,
                     purchase_id=lot.purchase_id,
                     lot_id=lot.lot_id,
+                    lot_source_type=lot.lot_source_type,
                 )
                 rem = 0
 
@@ -199,7 +247,14 @@ class FIFOPortfolio:
 
         if m_qty > current_units + 1e-8:
             diff = m_qty - current_units
-            self.buy(m_date, diff, 0.0, 0.0, bm_price)
+            self.buy(
+                m_date,
+                diff,
+                0.0,
+                0.0,
+                bm_price,
+                lot_source_type="RECONCILIATION",
+            )
             cf.append({"date": m_date, "amount": 0.0})
 
             # The newly added lot is at the end of the deque
@@ -246,6 +301,7 @@ class FIFOPortfolio:
                         bm_buy_local=lot.bm_buy_local,
                         purchase_id=lot.purchase_id,
                         lot_id=lot.lot_id,
+                        lot_source_type=lot.lot_source_type,
                     )
                     diff = 0
 
@@ -338,5 +394,6 @@ class FIFOPortfolio:
                     bm_buy_local=lot.bm_buy_local,
                     purchase_id=lot.purchase_id,
                     lot_id=lot.lot_id,
+                    lot_source_type=lot.lot_source_type,
                 )
         return recon_events
