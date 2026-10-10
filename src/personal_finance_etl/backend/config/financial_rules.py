@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 import tomllib
-from typing import Any, Literal, cast
+from typing import Any, Literal, Self, cast
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -457,7 +457,7 @@ class FinancialRules(BaseModel):
     MF_SCHEME_MAPPINGS: dict[str, str] = Field(default_factory=dict)
 
     @classmethod
-    def from_toml(cls, filepath: str) -> FinancialRules:
+    def from_toml(cls, filepath: str) -> Self:
         if not filepath or not os.path.exists(filepath):
             raise FileNotFoundError(f"Financial rules config not found at {filepath}")
 
