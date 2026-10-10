@@ -57,7 +57,7 @@ class TransformationDAG:
         logger.debug("Transforming Base Dimensions...")
         mappings = extracted.mappings
         d_income_category_lazy = transform_d_income_category(
-            extracted.zcategory, mappings["category"]
+            extracted.zcategory, mappings["category"], self.rules
         )
         d_income_subcategory_lazy = transform_d_income_subcategory(
             extracted.zcategory, mappings["category"], d_income_category_lazy, self.rules
