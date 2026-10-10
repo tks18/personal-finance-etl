@@ -3,6 +3,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from personal_finance_etl.backend.types.calculation import XirrResult as XirrResult
+
 
 class CashflowRecord(BaseModel):
     """Represents a single cashflow event for an asset."""
@@ -60,6 +62,9 @@ class SnapshotRecord(BaseModel):
     ISIN: str
     CURRENCY_ID: str
     BENCHMARK_ID: str | None
+    Lot_ID: str
+    Purchase_ID: str | None
+    Lot_Source_Type: str
     TAX_TYPE: str
     TAX_SUBTYPE: str
     Buy_Date: datetime.date | None
@@ -68,6 +73,7 @@ class SnapshotRecord(BaseModel):
     Days_To_LTCG: int
     Holding_Type: str
     Quantity: float
+    Execution_Residual: float = 0.0  # Units pending execution (qty ordered but not yet settled)
     Buy_Price: float
     Market_Price: float
     Buy_Value: float
@@ -79,7 +85,9 @@ class SnapshotRecord(BaseModel):
 
     CAGR: float
     XIRR: float
+    XIRR_Status: str = "VALID"  # VALID | INVALID_INPUT | UNDEFINED | NON_CONVERGENT
     After_Tax_XIRR: float
+
     BM_Buy_Price: float | None
     BM_Market_Price: float
     Lot_BM_Return: float = 0.0
@@ -121,6 +129,10 @@ class SnapshotRecord(BaseModel):
     Asset_Return_Pct: float = 0.0
     Forex_Return_Pct: float = 0.0
     Blended_FX_Buy_Rate: float = 0.0
+    Buy_Price_Local: float = 0.0    # Acquisition price in the instrument's native currency
+    Market_Price_Local: float = 0.0 # Market price in the instrument's native currency at snapshot date
+    FX_Rate_Buy: float = 0.0        # FX rate (native → INR) at acquisition date
+    FX_Rate_Snap: float = 0.0       # FX rate (native → INR) at snapshot date
     Currency_Appreciation_Pct: float = 0.0
 
 
