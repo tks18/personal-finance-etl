@@ -69,7 +69,9 @@ class RealizedGainsCalculator:
                 .with_columns(pl.col("Tax_Type").fill_null("equity").str.to_lowercase())
                 .with_columns(pl.col("Tax_Subtype").fill_null(""))
                 .with_columns(
-                    pl.when((pl.col("Holding_Type") == "LTCG") & (pl.col("Realized_Gain_Loss") >= 0))
+                    pl.when(
+                        (pl.col("Holding_Type") == "LTCG") & (pl.col("Realized_Gain_Loss") >= 0)
+                    )
                     .then(pl.col("Realized_Gain_Loss"))
                     .otherwise(0.0)
                     .alias("is_ltcg"),
@@ -80,21 +82,20 @@ class RealizedGainsCalculator:
                         # Section 112A exemption applies ONLY to listed Indian equity.
                         # Foreign equity (us_listed, us_stocks, foreign) is taxed at
                         # slab rates and must NOT consume the Rs 1.25L exemption budget.
-                        & ~pl.col("Tax_Subtype").str.to_lowercase().is_in(
-                            ["us_listed", "us_stocks", "foreign", "us_equity"]
-                        )
+                        & ~pl.col("Tax_Subtype")
+                        .str.to_lowercase()
+                        .is_in(["us_listed", "us_stocks", "foreign", "us_equity"])
                     )
                     .then(pl.col("Realized_Gain_Loss"))
                     .otherwise(0.0)
                     .alias("is_eq_ltcg"),
-                    pl.when((pl.col("Holding_Type") == "STCG") & (pl.col("Realized_Gain_Loss") >= 0))
+                    pl.when(
+                        (pl.col("Holding_Type") == "STCG") & (pl.col("Realized_Gain_Loss") >= 0)
+                    )
                     .then(pl.col("Realized_Gain_Loss"))
                     .otherwise(0.0)
                     .alias("is_stcg"),
-                    pl.when(
-                        (pl.col("Holding_Type") == "LTCG")
-                        & (pl.col("Realized_Gain_Loss") < 0)
-                    )
+                    pl.when((pl.col("Holding_Type") == "LTCG") & (pl.col("Realized_Gain_Loss") < 0))
                     .then(pl.col("Realized_Gain_Loss"))
                     .otherwise(0.0)
                     .alias("is_ltcl"),
@@ -103,17 +104,14 @@ class RealizedGainsCalculator:
                         & (pl.col("Realized_Gain_Loss") < 0)
                         & (pl.col("Tax_Type") == "equity")
                         # Same foreign-equity exclusion for loss tracking
-                        & ~pl.col("Tax_Subtype").str.to_lowercase().is_in(
-                            ["us_listed", "us_stocks", "foreign", "us_equity"]
-                        )
+                        & ~pl.col("Tax_Subtype")
+                        .str.to_lowercase()
+                        .is_in(["us_listed", "us_stocks", "foreign", "us_equity"])
                     )
                     .then(pl.col("Realized_Gain_Loss"))
                     .otherwise(0.0)
                     .alias("is_eq_ltcl"),
-                    pl.when(
-                        (pl.col("Holding_Type") == "STCG")
-                        & (pl.col("Realized_Gain_Loss") < 0)
-                    )
+                    pl.when((pl.col("Holding_Type") == "STCG") & (pl.col("Realized_Gain_Loss") < 0))
                     .then(pl.col("Realized_Gain_Loss"))
                     .otherwise(0.0)
                     .alias("is_stcl"),
