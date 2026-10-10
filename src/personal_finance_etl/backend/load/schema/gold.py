@@ -1,41 +1,62 @@
 GOLD_DDL = """
 CREATE TABLE IF NOT EXISTS gold.Tax_Year_Summary (
     FY TEXT PRIMARY KEY,
-    Total_Gross_Income DOUBLE,
-    Total_Excluded_Non_Taxable DOUBLE,
-    Total_Taxable_Income DOUBLE,
-    Estimated_Tax_Liability DOUBLE,
-    Effective_Tax_Rate_Pct DOUBLE
+    Total_Ledger_Income DOUBLE,
+    Total_Investment_Gain_Loss DOUBLE,
+    Total_Tax_Credits DOUBLE,
+    Total_Estimated_Investment_Tax DOUBLE,
+    Investment_Tax_Estimate_Count BIGINT,
+    Investment_Tax_Estimate_Missing_Count BIGINT,
+    Investment_Tax_Estimate_Complete BOOLEAN,
+    Total_Estimated_Ledger_Tax DOUBLE,
+    Ledger_Tax_Estimate_Count BIGINT,
+    Ledger_Tax_Estimate_Missing_Count BIGINT,
+    Ledger_Tax_Estimate_Complete BOOLEAN,
+    Total_Event_Count BIGINT,
+    Ready_Count BIGINT,
+    Check_Required_Count BIGINT
 );
 
 CREATE TABLE IF NOT EXISTS gold.Tax_Income_Breakdown (
     FY TEXT,
     Income_Head TEXT,
     Tax_Sub_Head TEXT,
-    Capital_Gains_Group TEXT,
     Source_Type TEXT,
-    Gross_Amount DOUBLE,
-    Taxable_Amount DOUBLE,
-    Estimated_Tax DOUBLE,
-    PRIMARY KEY(FY, Income_Head, Tax_Sub_Head, Capital_Gains_Group, Source_Type)
+    Event_Amount_INR DOUBLE,
+    Estimated_Tax_INR DOUBLE,
+    Estimated_Tax_Event_Count BIGINT,
+    Estimated_Tax_Missing_Count BIGINT,
+    Estimated_Tax_Complete BOOLEAN,
+    Event_Count BIGINT,
+    Ready_Count BIGINT,
+    Check_Required_Count BIGINT
 );
 
 CREATE TABLE IF NOT EXISTS gold.Tax_Reconciliation (
     FY TEXT,
     Tax_Sub_Head TEXT,
-    Source_Type TEXT,
-    Gross_Source_Amount DOUBLE,
+    Ledger_Tax_Event_Amount DOUBLE,
     Excluded_Non_Taxable_Amount DOUBLE,
+    Excluded_Non_Taxable_Event_Count BIGINT,
+    Excluded_Investment_Ledger_Amount DOUBLE,
+    Excluded_Investment_Ledger_Event_Count BIGINT,
+    Quant_Realized_Gain_Loss DOUBLE,
+    Estimated_Investment_Tax DOUBLE,
+    Estimated_Tax_Event_Count BIGINT,
+    Estimated_Tax_Missing_Count BIGINT,
+    Estimated_Investment_Tax_Complete BOOLEAN,
+    Estimated_Ledger_Tax DOUBLE,
+    Ledger_Tax_Estimate_Count BIGINT,
+    Ledger_Tax_Estimate_Missing_Count BIGINT,
+    Estimated_Ledger_Tax_Complete BOOLEAN,
+    Tax_Credit_Amount DOUBLE,
     Tax_Event_Amount DOUBLE,
-    Realized_Investment_Gain_Loss DOUBLE,
-    Set_Off_Amount DOUBLE,
-    Net_Taxable_Amount DOUBLE,
-    Estimated_Tax DOUBLE,
-    Tax_Credits DOUBLE,
-    Estimated_Net_Tax_Position DOUBLE,
-    Event_Count BIGINT,
+    Investment_Source_Difference_INR DOUBLE,
+    Ledger_Event_Count BIGINT,
+    Quant_Event_Count BIGINT,
+    Tax_Credit_Event_Count BIGINT,
     Check_Required_Count BIGINT,
-    PRIMARY KEY(FY, Tax_Sub_Head, Source_Type)
+    PRIMARY KEY(FY, Tax_Sub_Head)
 );
 
 CREATE TABLE IF NOT EXISTS gold.Wealth_Asset_Breakdown (
@@ -215,33 +236,7 @@ CREATE TABLE IF NOT EXISTS gold.Wealth_FIRE_Analytics (
     FI_Velocity DOUBLE
 );
 
-CREATE TABLE IF NOT EXISTS gold.Investment_Tax_Liability_Forecast (
-    -- Identifiers
-    MONTH_START_DATE DATE,
-    Financial_Year TEXT,
-    -- Absolute Returns
-    Realized_STCG DOUBLE,
-    Realized_LTCG DOUBLE,
-    Realized_Gain DOUBLE,
-    Realized_STCL DOUBLE,
-    Realized_LTCL DOUBLE,
-    Realized_Loss DOUBLE,
-    Realized_Net_PnL DOUBLE,
-    Taxable_Dividends DOUBLE,
-    Taxable_Interest DOUBLE,
-    -- Tax & Harvesting
-    LTCG_Exemption_Used DOUBLE,
-    LTCG_Exemption_Remaining DOUBLE,
-    Projected_Tax_Bill DOUBLE,
-    Effective_Tax_Rate_Pct DOUBLE,
-    Harvesting_Offset_Remaining DOUBLE,
-    Tax_Harvesting_Capacity DOUBLE,
-    -- CHECK_REQUIRED Exposure
-    Check_Required_Lot_Count BIGINT,
-    Check_Required_Market_Value DOUBLE,
-    Check_Required_Unrealized_PL DOUBLE,
-    Forecast_Basis TEXT
-);
+
 
 CREATE TABLE IF NOT EXISTS gold.Forecast_Budget_Variance (
     -- Identifiers
@@ -767,4 +762,17 @@ CREATE TABLE IF NOT EXISTS gold.Cashflow_Activity_Summary (
     Calculated_Net_Cashflow DOUBLE,
     Unreconciled_Difference DOUBLE
 );
+
+-- Additive migrations for tax estimate coverage fields.
+ALTER TABLE gold.Tax_Year_Summary ADD COLUMN IF NOT EXISTS Total_Estimated_Ledger_Tax DOUBLE;
+ALTER TABLE gold.Tax_Year_Summary ADD COLUMN IF NOT EXISTS Ledger_Tax_Estimate_Count BIGINT;
+ALTER TABLE gold.Tax_Year_Summary ADD COLUMN IF NOT EXISTS Ledger_Tax_Estimate_Missing_Count BIGINT;
+ALTER TABLE gold.Tax_Year_Summary ADD COLUMN IF NOT EXISTS Investment_Tax_Estimate_Complete BOOLEAN;
+ALTER TABLE gold.Tax_Year_Summary ADD COLUMN IF NOT EXISTS Ledger_Tax_Estimate_Complete BOOLEAN;
+ALTER TABLE gold.Tax_Income_Breakdown ADD COLUMN IF NOT EXISTS Estimated_Tax_Complete BOOLEAN;
+ALTER TABLE gold.Tax_Reconciliation ADD COLUMN IF NOT EXISTS Estimated_Investment_Tax_Complete BOOLEAN;
+ALTER TABLE gold.Tax_Reconciliation ADD COLUMN IF NOT EXISTS Estimated_Ledger_Tax DOUBLE;
+ALTER TABLE gold.Tax_Reconciliation ADD COLUMN IF NOT EXISTS Ledger_Tax_Estimate_Count BIGINT;
+ALTER TABLE gold.Tax_Reconciliation ADD COLUMN IF NOT EXISTS Ledger_Tax_Estimate_Missing_Count BIGINT;
+ALTER TABLE gold.Tax_Reconciliation ADD COLUMN IF NOT EXISTS Estimated_Ledger_Tax_Complete BOOLEAN;
 """
