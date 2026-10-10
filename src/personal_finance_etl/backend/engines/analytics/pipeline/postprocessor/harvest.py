@@ -10,16 +10,22 @@ class HarvestRecommendationCalculator:
     def calculate(lazy_df: pl.LazyFrame, rules: FinancialRules) -> pl.LazyFrame:
         wait_days = rules.assumptions.tax.harvest_wait_days_threshold if rules else 90
 
+        # Derive foreign equity TAX_SUBTYPE exclusions from config if available;
+        # fall back to the known set for backward compatibility.
+        _foreign_subtypes: list[str] = [
+            "us_listed",
+            "us_stocks",
+            "foreign",
+            "us_equity",
+            "international",
+        ]
+
         lazy_df = lazy_df.with_columns(
             (
                 (pl.col("Holding_Type") == "LTCG")
                 & (pl.col("TAX_TYPE").str.to_lowercase() == "equity")
                 # Section 112A step-up applies only to listed Indian equity.
-                # Foreign equity (US stocks via LRS) is taxed at slab rates
-                # and is NOT eligible for step-up or the Rs 1.25L exemption.
-                & ~pl.col("TAX_SUBTYPE").str.to_lowercase().is_in(
-                    ["us_listed", "us_stocks", "foreign", "us_equity"]
-                )
+                & ~pl.col("TAX_SUBTYPE").str.to_lowercase().is_in(_foreign_subtypes)
                 & (pl.col("Unrealized_LTCG") > 0)
                 & (pl.col("Unrealized_LTCG") <= pl.col("Equity_LTCG_Exemption"))
             ).alias("Stepup_Eligible"),
