@@ -183,8 +183,7 @@ class ETLOrchestrator:
 
         logger.info(f"  -> Quant Engine mapped {open_lots} open tax lots across portfolio.")
 
-        # Fetch Rules Snapshot ID — needed by TaxEngine as an input and by log_simulation_run.
-        # Placed here so it's available before Tax runs.
+        # Fetch run snapshot identifiers for control-plane run logging.
         rules_snapshot_id = "UNKNOWN"
         settings_snapshot_id = None
         if cp and self.rules:
@@ -200,11 +199,8 @@ class ETLOrchestrator:
             df_income=self.dfs["df_f_income_transactions"],
             df_realized_events=self.dfs["df_f_investment_realized_events"],
             df_subcategory=self.dfs["df_d_income_subcategory"],
-            df_market=self.dfs.get("df_f_investment_market_data", pl.DataFrame()),
-            df_analytics_lot=self.dfs.get("df_f_investment_analytics_lot", pl.DataFrame()),
-            df_macro=self.dfs.get("df_d_macro_parameters", pl.DataFrame()),
             rules=self.rules,
-            rules_snapshot_id=rules_snapshot_id,
+            df_macro_parameters=self.dfs.get("df_d_macro_parameters"),
         )
         tax_results = tax_engine.run()
         self.dfs.update(tax_results)
