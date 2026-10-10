@@ -166,6 +166,9 @@ class IsinPipeline:
                         pl.col("Quantity").sum().alias("Quantity"),
                         pl.col("Closing_Price").last().alias("Closing_Price"),
                         pl.col("Buy_Value").sum().alias("Buy_Value"),
+                        pl.col("Buy_Value_Local").sum().alias("Buy_Value_Local")
+                        if "Buy_Value_Local" in self.ctx.df_m.columns
+                        else pl.lit(None).cast(pl.Float64).alias("Buy_Value_Local"),
                     ]
                 )
             )

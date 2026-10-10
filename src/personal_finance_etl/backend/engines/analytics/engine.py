@@ -31,6 +31,7 @@ class InvestmentQuantEngine:
         rules: "FinancialRules | None" = None,
         start_date: date | None = None,
         end_date: date | None = None,
+        run_id: str = "UNKNOWN",
     ):
         self.df_p = df_p
         self.df_s = df_s
@@ -43,6 +44,7 @@ class InvestmentQuantEngine:
         self.rules = rules
         self.start_date = start_date
         self.end_date = end_date
+        self.run_id = run_id
 
     def run(self) -> dict[str, pl.DataFrame]:
         try:
@@ -72,6 +74,7 @@ class InvestmentQuantEngine:
             self.start_date,
             self.end_date,
             self.rules,
+            run_id=self.run_id,
         )
 
         min_market = ctx.df_m.select(pl.min("Date")).item() if not ctx.df_m.is_empty() else None
