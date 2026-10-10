@@ -122,7 +122,9 @@ class PostProcessor:
                 pl.col("COUNTRY").fill_null("Unknown"),
             )
         )
-        lazy_df_agg = lazy_df.join(master_cols, on="ISIN", how="left")
+        # Materialise once so that the 9 _aggregate_level calls below all scan in-memory data
+        # instead of each replanning the full lazy pipeline from source (join + scan × 9).
+        lazy_df_agg = lazy_df.join(master_cols, on="ISIN", how="left").collect().lazy()
 
         def _aggregate_level(group_cols: list[str]) -> pl.LazyFrame:
             return (
@@ -212,8 +214,36 @@ class PostProcessor:
                     "FX_XIRR_Impact",
                     "BM_XIRR_Local",
                     "Active_Return_Local",
+                    # Tax harvesting metrics aggregated to ISIN level
+                    "LTCG_Tax_If_Sold",
+                    "STCG_Tax_If_Sold",
+                    "Unrealized_LTCG",
+                    "Unrealized_STCG",
+                    "Unrealized_LTCL",
+                    "Unrealized_STCL",
+                    "Outperforming_Lot_Ratio",
                 ]
-            ).unique(),
+            ).group_by(["Closing_Date", "ISIN"]).agg(
+                pl.col("XIRR").first(),
+                pl.col("After_Tax_XIRR").first(),
+                pl.col("BM_XIRR").first(),
+                pl.col("Active_Return").first(),
+                pl.col("CAGR").first(),
+                pl.col("BM_CAGR").first(),
+                pl.col("Is_Lagging_Benchmark").first(),
+                pl.col("Max_Drawdown").first(),
+                pl.col("XIRR_Local").first(),
+                pl.col("FX_XIRR_Impact").first(),
+                pl.col("BM_XIRR_Local").first(),
+                pl.col("Active_Return_Local").first(),
+                pl.col("LTCG_Tax_If_Sold").sum(),
+                pl.col("STCG_Tax_If_Sold").sum(),
+                pl.col("Unrealized_LTCG").sum(),
+                pl.col("Unrealized_STCG").sum(),
+                pl.col("Unrealized_LTCL").sum(),
+                pl.col("Unrealized_STCL").sum(),
+                pl.col("Outperforming_Lot_Ratio").first(),
+            ),
             on=["Closing_Date", "ISIN"],
             how="left",
         )
@@ -301,7 +331,7 @@ class PostProcessor:
                 ).alias("Weight")
             ).drop(["annualized_twr", "bm_annualized_twr"], strict=False)
 
-            if g not in ["ISIN", "CURRENCY_ID"]:
+            if g not in ["ISIN", "CURRENCY_ID", "COUNTRY"]:
                 lf = lf.drop(
                     [
                         "Total_Invested_Value_Local",
@@ -351,30 +381,41 @@ class PostProcessor:
             strict=False,
         )
 
+        # Realized events are already correctly formatted by fifo.py
+
+        re_schema = {
+            "Realized_Event_ID": pl.String,
+            "Sale_ID": pl.String,
+            "Lot_ID": pl.String,
+            "Purchase_ID": pl.String,
+            "ISIN": pl.String,
+            "Acquisition_Date": pl.Date,
+            "Disposal_Date": pl.Date,
+            "FY": pl.String,
+            "Quantity_Disposed": pl.Float64,
+            "Acquisition_Price": pl.Float64,
+            "Disposed_Cost_Basis": pl.Float64,
+            "Sale_Price": pl.Float64,
+            "Sale_Proceeds": pl.Float64,
+            "Realized_Gain_Loss": pl.Float64,
+            "Holding_Type": pl.String,
+            "Tax_Type": pl.String,
+            "Tax_Subtype": pl.String,
+            "Lot_Source_Type": pl.String,
+            "Currency_ID": pl.String,
+            "Asset_PnL_Local": pl.Float64,
+            "Asset_PnL": pl.Float64,
+            "Forex_PnL": pl.Float64,
+        }
+
         df_re = (
-            pl.LazyFrame(pipeline_res.global_re)
+            pl.LazyFrame(pipeline_res.global_re, schema_overrides=re_schema).select(list(re_schema.keys()))
             if pipeline_res.global_re
-            else pl.LazyFrame(
-                schema={
-                    "date": pl.Date,
-                    "gain": pl.Float64,
-                    "gain_type": pl.String,
-                    "is_loss": pl.Boolean,
-                    "tax_type": pl.String,
-                    "asset_pnl_local": pl.Float64,
-                    "asset_pnl": pl.Float64,
-                    "forex_pnl": pl.Float64,
-                    "currency_id": pl.String,
-                    "shadow_qty_sold": pl.Float64,
-                    "sale_id": pl.String,
-                    "purchase_id": pl.String,
-                    "lot_id": pl.String,
-                }
-            )
+            else pl.LazyFrame(schema=re_schema)
         )
 
         for re_event in pipeline_res.global_recon_events:
-            re_event["Run_ID"] = "UNKNOWN"
+            re_event["Run_ID"] = self.ctx.run_id
             re_event["Reconciliation_Group_ID"] = generate_deterministic_id(
                 "RECON_GROUP",
                 {
