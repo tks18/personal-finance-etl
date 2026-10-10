@@ -45,16 +45,19 @@ class SnapshotGenerator:
     ) -> list[SnapshotRecord]:
         inst_cagr = inst_metrics.get("cagr", 0.0)
         inst_bm_cagr = inst_metrics.get("bm_cagr", 0.0)
-        inst_xirr = inst_metrics.get("xirr", 0.0)
-        inst_xirr_status = inst_metrics.get("xirr_status", "VALID")
-        inst_after_tax_xirr = inst_metrics.get("after_tax_xirr", 0.0)
-
-        bm_xirr_val = inst_metrics.get("bm_xirr", 0.0)
-        inst_active_return = inst_metrics.get("active_return", 0.0)
-        is_lagging = inst_metrics.get("is_lagging", False)
+        inst_xirr = inst_metrics.get("xirr")
+        inst_xirr_status = inst_metrics.get("xirr_status", "INVALID_INPUT")
+        inst_after_tax_xirr = inst_metrics.get("after_tax_xirr")
+        bm_xirr_val = inst_metrics.get("bm_xirr")
+        inst_active_return = inst_metrics.get("active_return")
+        is_lagging = inst_metrics.get("is_lagging")
         inst_max_dd = inst_metrics.get("max_drawdown", 0.0)
-        inst_xirr_local = inst_metrics.get("xirr_local", 0.0)
-        fx_xirr_impact = inst_metrics.get("fx_xirr_impact", 0.0)
+        inst_xirr_local = inst_metrics.get("xirr_local")
+        bm_xirr_local = inst_metrics.get("bm_xirr_local")
+        fx_xirr_impact = inst_metrics.get("fx_xirr_impact")
+
+        def rounded_optional(value: float | None, digits: int = 8) -> float | None:
+            return round(value, digits) if value is not None else None
 
         outperform_cnt = 0
         lot_count = len(fifo.active_lots)
@@ -67,10 +70,12 @@ class SnapshotGenerator:
             lbd = lot.date
             age = max((m_date - lbd).days, 1) if lbd else 1
 
-            threshold_months = get_ltcg_threshold_months(self.tax_type, self.tax_subtype, self.rules)
+            threshold_months = get_ltcg_threshold_months(
+                self.tax_type, self.tax_subtype, self.rules
+            )
             boundary_date = add_months(lbd or m_date, threshold_months)
             ltcg_thr = (boundary_date - (lbd or m_date)).days
-            
+
             holding_type = self.fy_table.get_holding_type(
                 self.tax_type, self.tax_subtype, lbd or m_date, m_date
             )
@@ -87,7 +92,11 @@ class SnapshotGenerator:
             else:
                 day_weight = 1.0
 
-            if lot.currency_id and lot.currency_id != (getattr(self.rules, "DEFAULT_CURRENCY_ID", "INR_INR")) and fx_provider:
+            if (
+                lot.currency_id
+                and lot.currency_id != (getattr(self.rules, "DEFAULT_CURRENCY_ID", "INR_INR"))
+                and fx_provider
+            ):
                 fx_rate_snap_lot = fx_provider.get_rate(m_date, lot.currency_id)
             else:
                 fx_rate_snap_lot = 1.0
@@ -133,7 +142,11 @@ class SnapshotGenerator:
             after_tax_pl = pnl - (ltcg_tax + stcg_tax)
             after_tax_cv = close_val - (ltcg_tax + stcg_tax)
 
-            if lot.currency_id and lot.currency_id != (getattr(self.rules, "DEFAULT_CURRENCY_ID", "INR_INR")) and fx_provider:
+            if (
+                lot.currency_id
+                and lot.currency_id != (getattr(self.rules, "DEFAULT_CURRENCY_ID", "INR_INR"))
+                and fx_provider
+            ):
                 fx_rate_snap = fx_provider.get_rate(m_date, lot.currency_id)
                 m_price_local = m_price / fx_rate_snap if fx_rate_snap > 0 else m_price
 
@@ -143,17 +156,25 @@ class SnapshotGenerator:
                 asset_pnl_local = (m_price_local - lot.price_local) * lot.qty
                 asset_pnl = asset_pnl_local * fx_rate_snap
                 forex_pnl = lot.price_local * (fx_rate_snap - lot.fx_rate_buy) * lot.qty
-                
+
                 lot_cagr_local = calculate_cagr(lot.price_local, m_price_local, age)
-                absolute_return_local = (m_price_local - lot.price_local) / lot.price_local if lot.price_local > 0 else 0.0
+                absolute_return_local = (
+                    (m_price_local - lot.price_local) / lot.price_local
+                    if lot.price_local > 0
+                    else 0.0
+                )
                 asset_return_pct = asset_pnl / buy_val_lot if buy_val_lot != 0 else 0.0
                 forex_return_pct = forex_pnl / buy_val_lot if buy_val_lot != 0 else 0.0
-                blended_fx_buy_rate = buy_val_lot / buy_val_local if buy_val_local != 0 else lot.fx_rate_buy
+                blended_fx_buy_rate = (
+                    buy_val_lot / buy_val_local if buy_val_local != 0 else lot.fx_rate_buy
+                )
                 curr_fx_rate = fx_rate_snap
                 fx_rate_buy = lot.fx_rate_buy if lot.fx_rate_buy else 0.0
                 buy_price_local = lot.price_local if lot.price_local else 0.0
                 market_price_local = m_price_local
-                currency_appreciation_pct = (curr_fx_rate / blended_fx_buy_rate) - 1.0 if blended_fx_buy_rate > 0 else 0.0
+                currency_appreciation_pct = (
+                    (curr_fx_rate / blended_fx_buy_rate) - 1.0 if blended_fx_buy_rate > 0 else 0.0
+                )
             else:
                 buy_val_local = buy_val_lot
                 close_val_local = close_val
@@ -176,9 +197,15 @@ class SnapshotGenerator:
                 SnapshotRecord(
                     Closing_Date=m_date,
                     ISIN=self.isin,
-                    CURRENCY_ID=(fifo.active_lots[0].currency_id if fifo.active_lots and fifo.active_lots[0].currency_id else getattr(self.rules, "DEFAULT_CURRENCY_ID", "INR_INR")),
+                    CURRENCY_ID=(
+                        fifo.active_lots[0].currency_id
+                        if fifo.active_lots and fifo.active_lots[0].currency_id
+                        else getattr(self.rules, "DEFAULT_CURRENCY_ID", "INR_INR")
+                    ),
                     BENCHMARK_ID=self.bench_id,
-                    Lot_ID=lot.lot_id if lot.lot_id is not None else _raise_invariant(
+                    Lot_ID=lot.lot_id
+                    if lot.lot_id is not None
+                    else _raise_invariant(
                         f"[SNAPSHOT] FIFO invariant: lot_id is None — "
                         f"ISIN={self.isin}, Buy_Date={lbd}, qty={lot.qty}. "
                         "lot_id must always be set inside fifo.buy()."
@@ -200,12 +227,11 @@ class SnapshotGenerator:
                     Close_Value=round(close_val, 4),
                     Lot_CAGR=round(lot_cagr, 8),
                     CAGR=round(inst_cagr, 8),
-                    XIRR=round(inst_xirr, 8),
+                    XIRR=rounded_optional(inst_xirr),
                     XIRR_Status=inst_xirr_status,
-                    After_Tax_XIRR=round(inst_after_tax_xirr, 8),
-
-                    XIRR_Local=round(inst_xirr_local, 8),
-                    FX_XIRR_Impact=round(fx_xirr_impact, 8),
+                    After_Tax_XIRR=rounded_optional(inst_after_tax_xirr),
+                    XIRR_Local=rounded_optional(inst_xirr_local),
+                    FX_XIRR_Impact=rounded_optional(fx_xirr_impact),
                     BM_Buy_Price=round(lbm_buy, 4) if lbm_buy else None,
                     BM_Market_Price=round(m_bm_price, 4),
                     Lot_BM_CAGR=round(lot_bm_cagr, 8),
@@ -216,10 +242,10 @@ class SnapshotGenerator:
                     },
                     Absolute_Return=round(lot_return, 8),
                     Lot_BM_Return=round(lot_bm_ret, 8),
-                    BM_XIRR=round(bm_xirr_val, 8),
-                    BM_XIRR_Local=round(inst_metrics.get("bm_xirr_local", 0.0), 8),
-                    Active_Return=round(inst_active_return, 8),
-                    Active_Return_Local=round(inst_metrics.get("active_return_local", 0.0), 8),
+                    BM_XIRR=rounded_optional(bm_xirr_val),
+                    BM_XIRR_Local=rounded_optional(bm_xirr_local),
+                    Active_Return=rounded_optional(inst_active_return),
+                    Active_Return_Local=rounded_optional(inst_metrics.get("active_return_local")),
                     Lot_Alpha=round(lot_alpha, 8),
                     Is_Lagging_Benchmark=is_lagging,
                     Max_Drawdown=round(inst_max_dd, 8),
