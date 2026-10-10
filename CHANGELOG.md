@@ -2,6 +2,63 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [8.1.0](https://github.com/tks18/personal-finance-etl/compare/8.0.0...8.1.0) (2026-10-10)
+
+
+### Docs 📃
+
+* update priorities for production hardening ([40d3588](https://github.com/tks18/personal-finance-etl/commit/40d358842921917013ec18c900a9551ebc8a3e21))
+* update priorities for production hardening ([0fbe8f0](https://github.com/tks18/personal-finance-etl/commit/0fbe8f007820f35fa7590cd62e3ed482856adbc1))
+
+
+### Styling 🎨
+
+* **backend/quant:** lint fixes ([95317c9](https://github.com/tks18/personal-finance-etl/commit/95317c964f7e67c93ae10fc62f30a70442218205))
+* comment edits ([a3ea6b9](https://github.com/tks18/personal-finance-etl/commit/a3ea6b95fe0b090d518f84f46ce07a47cc363c66))
+* lint fixes ([be500d3](https://github.com/tks18/personal-finance-etl/commit/be500d3c5f49fbfa17547b01632e93f25ea97249))
+* lint fixes ([9fd0518](https://github.com/tks18/personal-finance-etl/commit/9fd05181102a45f6aefb2c47222b7fc93b3c2454))
+* lint fixes ([ef7a596](https://github.com/tks18/personal-finance-etl/commit/ef7a596fac2fc049c3dc85b560b31915dbbf488a))
+* lint fixes ([c7cce96](https://github.com/tks18/personal-finance-etl/commit/c7cce960bd86924701a193c660c1e414c9d1b229))
+* lint fixes ([50a5b31](https://github.com/tks18/personal-finance-etl/commit/50a5b319d43414ac43d0305768c90dfbdf32f593))
+* lint fixes ([42decb6](https://github.com/tks18/personal-finance-etl/commit/42decb6b508b078ab1d7a66c4b452746ba4cd22a))
+* lint fixes ([9e30971](https://github.com/tks18/personal-finance-etl/commit/9e309718e31246ef03a28936914b213efc1b975b))
+* lint fixes ([630bb44](https://github.com/tks18/personal-finance-etl/commit/630bb44053cef927f4fb4910a59a9e9de96accb1))
+
+
+### Bug Fixes 🛠
+
+* **backend/engines/quant:** fix the isin pipeline ([d8d15af](https://github.com/tks18/personal-finance-etl/commit/d8d15af2a5ed2661e2848c910b04cac99efd9b93))
+* **backend/engines/quant:** fx_gate: add math module for finite check ([d8f0f7e](https://github.com/tks18/personal-finance-etl/commit/d8f0f7e904ba0481d7b13a990ec8bfb0e8e96f4a))
+* **backend/engines/quant:** implement xirr properly for both benchmark and isin ([6fb81de](https://github.com/tks18/personal-finance-etl/commit/6fb81defc0cceac37b07fff4bd028eb9257e264a))
+* **backend/engines/quant:** implement xirrresult properly ([f346048](https://github.com/tks18/personal-finance-etl/commit/f346048100724769158406cd53a8a9c842245927))
+* **backend/engines/quant:** implemetn snapshot using new results ([a28b33b](https://github.com/tks18/personal-finance-etl/commit/a28b33bdf4600e49f0a2d06f23bfce2a09fb0d2e))
+* **backend/engines/quant:** orchestrate isin properly ([f37c22c](https://github.com/tks18/personal-finance-etl/commit/f37c22cb8ccf66dc902a6852783f4d01602904c5))
+* **backend/engines:** presentation: handle xirr nan cases to null properly ([3ba2030](https://github.com/tks18/personal-finance-etl/commit/3ba2030892c3da306b985a73aaab2d147c342bdc))
+* **backend/engines:** quant: fix det ids incase of recon events ([6e81fdd](https://github.com/tks18/personal-finance-etl/commit/6e81fdd3802ceaef0c2df095b4a1543bdf1e6608))
+* **backend/engines:** quant: fix realized events tax rate and amount ([8a8eac8](https://github.com/tks18/personal-finance-etl/commit/8a8eac8a2329b1e5073cd246d5152ebeef68cc14))
+* **backend/load/schema:** gold: simply tax gold marts ([80b9891](https://github.com/tks18/personal-finance-etl/commit/80b9891660b0fb50f69764192dda3a1107c74ddf))
+* **backend/load/schema:** silver: simplify tax ddl ([d9932d2](https://github.com/tks18/personal-finance-etl/commit/d9932d2f916ceceadf6c54652238c20ecb02e936))
+* **backend/load:** registry: remove stale contracts ([329ed9e](https://github.com/tks18/personal-finance-etl/commit/329ed9e6c0fc9bed5d9cf21d2920fc18bce1ca34))
+* **backend/transform:** add validation to income transactions for tax events table ([c9abc08](https://github.com/tks18/personal-finance-etl/commit/c9abc08ac4728f2d91793edb227966c2abca6dfe))
+* **backend/transform:** benchmark: restrict backfill and forward fill for restricted timeline ([f13696e](https://github.com/tks18/personal-finance-etl/commit/f13696e880e00b43274b61fefac020c995f7f63c))
+* **backend/transform:** currency: restrict backfill and forward fill for restricted timeline ([77ff720](https://github.com/tks18/personal-finance-etl/commit/77ff720ba9a966f514e2f5179ddb9adf597ec64b))
+* **backend/transform:** us_stocks: restrict backfill and forward fill for restricted timeline ([9e9c192](https://github.com/tks18/personal-finance-etl/commit/9e9c1920a37d8d8952f5705891407c8f777427e2))
+* **backend/types:** analytics: integrate new xirr result and benchmark cashflows ([8399590](https://github.com/tks18/personal-finance-etl/commit/8399590bca1a3a48fa2ddb6a515ac42197adaa26))
+* **backend/utils:** identity: implement det order for det ids ([b8d6716](https://github.com/tks18/personal-finance-etl/commit/b8d671606fc747d3f18ba253ca9f43dfa6ca92a9))
+* remove stale files ([55e7fc0](https://github.com/tks18/personal-finance-etl/commit/55e7fc0a9b14ea9ffcf98f540a87cb30fe6945f4))
+
+
+### Features 🔥
+
+* **backend/config:** rules: remove capital gains group and add a more less cumbersome way ([8da21ac](https://github.com/tks18/personal-finance-etl/commit/8da21aca16c3abfb3e4c8e5172530d35c6108b9f))
+* **backend/engines/tax:** base_events: complete rebase ([5e8317d](https://github.com/tks18/personal-finance-etl/commit/5e8317dcf7c4928c691d4e5df71b2018294d436e))
+* **backend/engines/tax:** simplify gold aggregations ([8b603bf](https://github.com/tks18/personal-finance-etl/commit/8b603bffc2f589ce73baa16be803ff35fff70ab3))
+* **backend/engines/tax:** simplify tax engine orchestration ([dbd00be](https://github.com/tks18/personal-finance-etl/commit/dbd00be2bd13653354ac290a3f2d3866a1716590))
+* **backend/engines:** quant: implement benchmark data validation for isin ([25ab5bb](https://github.com/tks18/personal-finance-etl/commit/25ab5bb2d511f4cf28e77e1a988630ada4e518a6))
+* **backend/load/backup:** rewrite backup to implement it properly ([7e8f4c1](https://github.com/tks18/personal-finance-etl/commit/7e8f4c14c14649adf538804357797f12dc5cc13f))
+* **backend/pipeline:** simplify tax engine ([81d7ce7](https://github.com/tks18/personal-finance-etl/commit/81d7ce744686846cc77f6e5bf0600208a1a37ea8))
+* **backend/types:** add isin cf to types ([f3c7b87](https://github.com/tks18/personal-finance-etl/commit/f3c7b87db50770bed42b3b76ca54b5a4019e6b3d))
+
 ## [8.0.0](https://github.com/tks18/personal-finance-etl/compare/7.0.0...8.0.0) (2026-10-10)
 
 
