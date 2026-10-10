@@ -83,33 +83,34 @@ class WealthPresentationEngine:
         results["df_p_tf_income_streams_monthly"] = IncomeStreamsBuilder(
             dfs, base_lf, rules=self.rules
         ).build()
-        # 7. Budget Forecast
+
+        # 6. Budget Forecast
         results["df_p_tf_budget_forecast_monthly"] = BudgetForecastBuilder(
             dfs, base_lf, rules=self.rules
         ).build()
 
-        # 8. Investment Analytics (Merged Sector, Rebalancing, Attribution, Tax Harvesting)
+        # 7. Investment Analytics (Merged Sector, Rebalancing, Attribution, Tax Harvesting)
         results["df_p_tf_investment_analytics"] = InvestmentAnalyticsBuilder(
             dfs, base_lf, rules=self.rules
         ).build()
 
-        # 9. Wealth Risk Analytics (FIRE Forecasting)
+        # 8. Wealth Risk Analytics (FIRE Forecasting)
         wealth_risk_res = WealthRiskAnalyticsBuilder(
             dfs, base_lf, rules=self.rules, root_seed=self.root_seed
         ).build()
         results.update(wealth_risk_res)
 
-        # 10. Monthly Cashflow Summary (now includes Financial Ratios)
+        # 9. Monthly Cashflow Summary (now includes Financial Ratios)
         results["df_p_tf_monthly_cashflow_summary"] = MonthlyCashflowSummaryBuilder(
             dfs, base_lf, rules=self.rules
         ).build()
 
-        # 11. Direct Method Cashflow Statement
+        # 10. Direct Method Cashflow Statement
         results["df_p_tf_cashflow_activity_summary"] = CashflowStatementBuilder(
             dfs, base_lf, rules=self.rules
         ).build()
 
         logger.debug(f"  -> Built {len(results)} BI presentation tables in DAG.")
 
-        # 8. Post-Processing: Clean NaN values for BI compatibility (DuckDB / Power BI)
+        # 11. Post-Processing: Clean NaN values for BI compatibility (DuckDB / Power BI)
         return {key: lf.with_columns(cs.float().fill_nan(None)) for key, lf in results.items()}
