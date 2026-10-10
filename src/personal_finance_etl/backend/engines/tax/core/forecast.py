@@ -169,17 +169,17 @@ class TaxLiabilityForecastBuilder:
                 .last()
                 .alias("Estimated_Ordinary_Income_Tax_Rate"),
                 # Extract CHECK_REQUIRED metrics from the monthly slice
-                pl.when(pl.col("TAX_SUBTYPE") == "CHECK_REQUIRED")
+                pl.when(pl.col("Lot_Source_Type") == "RECONCILIATION")
                 .then(1)
                 .otherwise(0)
                 .sum()
                 .alias("Check_Required_Lot_Count"),
-                pl.when(pl.col("TAX_SUBTYPE") == "CHECK_REQUIRED")
+                pl.when(pl.col("Lot_Source_Type") == "RECONCILIATION")
                 .then(pl.col("Close_Value"))
                 .otherwise(0.0)
                 .sum()
                 .alias("Check_Required_Market_Value"),
-                pl.when(pl.col("TAX_SUBTYPE") == "CHECK_REQUIRED")
+                pl.when(pl.col("Lot_Source_Type") == "RECONCILIATION")
                 .then(pl.col("P/L"))
                 .otherwise(0.0)
                 .sum()
@@ -262,6 +262,7 @@ class TaxLiabilityForecastBuilder:
                     "Check_Required_Lot_Count",
                     "Check_Required_Market_Value",
                     "Check_Required_Unrealized_PL",
+                    pl.lit("REALIZED_ONLY").alias("Forecast_Basis"),
                 ]
             )
             .sort("MONTH_START_DATE")

@@ -71,7 +71,7 @@ class LiabilityCalculator:
         # Weighted Applied_Rate per FY × Gain_Type (larger gains drive the rate)
         lf_weighted_rates = (
             self.lf_tax_events.filter(
-                (pl.col("Tax_Sub_Head") != "CHECK_REQUIRED")
+                (pl.col("Tax_Status").fill_null("READY") == "READY")
                 & pl.col("Applied_Rate").is_not_null()
                 & (pl.col("Taxable_Amount").abs() > 0)
             )

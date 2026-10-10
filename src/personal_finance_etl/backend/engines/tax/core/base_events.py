@@ -64,9 +64,7 @@ class BaseEventsBuilder:
         cg_groups = self.rules.assumptions.tax.capital_gains_groups
         if cg_groups:
             valid_inv_sub_heads: frozenset[str] = frozenset(
-                code
-                for group in cg_groups.values()
-                for code in group.sub_head_codes
+                code for group in cg_groups.values() for code in group.sub_head_codes
             )
             # Reverse lookup: Tax_Sub_Head code → group name (for Capital_Gains_Group column)
             sub_head_to_cg_group: dict[str, str] = {
@@ -130,6 +128,28 @@ class BaseEventsBuilder:
             .alias("Realized_Gain_Loss"),
         )
 
+        df_ledger_mapped = df_ledger_mapped.with_columns(
+            pl.lit(False).alias("_Is_Recon"),
+            pl.lit(None).cast(pl.Utf8).alias("Capital_Gains_Group"),
+        ).select(
+            [
+                "Event_Date",
+                "FY",
+                "Source_Type",
+                "Source_ID",
+                "Income_Head",
+                "Tax_Sub_Head",
+                "Capital_Gains_Group",
+                "Taxability",
+                "Tax_Method",
+                "Gross_Amount",
+                "Taxable_Amount",
+                "Gain_Type",
+                "Realized_Gain_Loss",
+                "_Is_Recon",
+            ]
+        )
+
         # 2. INVESTMENT REALIZED EVENTS
         df_inv = self.df_realized_events.lazy()
         schema_cols = df_inv.collect_schema().names()
@@ -142,10 +162,11 @@ class BaseEventsBuilder:
         # proceeds appear in the demat / bank statement.  Omitting them from the tax
         # pipeline would cause a silent mismatch during IT scrutiny.
         #
-        # Instead they are classified as CHECK_REQUIRED (see below), Applied_Rate and
-        # Estimated_Tax are nulled out, and Tax_Status is set to CHECK_REQUIRED.  This
-        # forces a human to supply the original acquisition evidence before filing.
-        # Only then will FIFO reprocess the lot as PURCHASE type and produce a READY event.
+        # Instead: Tax_Sub_Head is preserved (real classification), _Is_Recon=True is
+        # stamped, Applied_Rate/Estimated_Tax are nulled out, and Tax_Status is set to
+        # CHECK_REQUIRED.  This forces a human to supply the original acquisition evidence
+        # before filing.  Only then will FIFO reprocess the lot as PURCHASE type and
+        # produce a READY event.
 
         date_col = "Disposal_Date" if "Disposal_Date" in schema_cols else "date"
         gain_col = "Realized_Gain_Loss" if "Realized_Gain_Loss" in schema_cols else "gain"
@@ -225,22 +246,28 @@ class BaseEventsBuilder:
             .alias("Gain_Type"),
         )
 
-        # CHECK_REQUIRED: unknown sub-head prefix OR RECONCILIATION synthetic lot (no cost basis evidence).
+        # Preserve real Tax_Sub_Head even for RECONCILIATION lots.
+        # Eligibility is tracked separately via Tax_Status (see below).
         reconciliation_col = "Lot_Source_Type" if "Lot_Source_Type" in schema_cols else None
 
         is_unknown_sub_head = ~pl.col("Tax_Sub_Head_Raw").is_in(list(valid_inv_sub_heads))
-        is_reconciliation_lot = (
-            (pl.col(reconciliation_col) == pl.lit("RECONCILIATION"))
-            if reconciliation_col
-            else pl.lit(False)
-        )
 
+        # For unknown sub-head: use "UNKNOWN" sentinel (not a status string).
+        # For known sub-head (including RECONCILIATION lots): preserve the real code.
         df_inv_mapped = df_inv_mapped.with_columns(
-            pl.when(is_unknown_sub_head | is_reconciliation_lot)
-            .then(pl.lit("CHECK_REQUIRED"))
+            pl.when(is_unknown_sub_head)
+            .then(pl.lit("UNKNOWN"))
             .otherwise(pl.col("Tax_Sub_Head_Raw"))
             .alias("Tax_Sub_Head")
         ).drop("Tax_Sub_Head_Raw")
+
+        # Carry reconciliation flag for Tax_Status assignment after concat.
+        if reconciliation_col:
+            df_inv_mapped = df_inv_mapped.with_columns(
+                (pl.col(reconciliation_col) == pl.lit("RECONCILIATION")).alias("_Is_Recon")
+            )
+        else:
+            df_inv_mapped = df_inv_mapped.with_columns(pl.lit(False).alias("_Is_Recon"))
 
         # Attach CG group name for downstream filtering and reporting.
         if sub_head_to_cg_group:
@@ -283,6 +310,7 @@ class BaseEventsBuilder:
                 "Taxable_Amount",
                 "Gain_Type",
                 "Realized_Gain_Loss",
+                "_Is_Recon",
             ]
         )
 
@@ -373,12 +401,16 @@ class BaseEventsBuilder:
                 .alias("Estimated_Tax_Resolved")
             )
             .with_columns(
-                # Null out for CHECK_REQUIRED — no precise tax should be reported
-                pl.when(pl.col("Tax_Sub_Head") == pl.lit("CHECK_REQUIRED"))
+                # Null out for CHECK_REQUIRED rows — no precise tax should be reported
+                pl.when(
+                    pl.col("_Is_Recon").fill_null(False) | (pl.col("Tax_Sub_Head") == "UNKNOWN")
+                )
                 .then(pl.lit(None).cast(pl.Float64))
                 .otherwise(pl.col("Applied_Rate_Resolved"))
                 .alias("Applied_Rate"),
-                pl.when(pl.col("Tax_Sub_Head") == pl.lit("CHECK_REQUIRED"))
+                pl.when(
+                    pl.col("_Is_Recon").fill_null(False) | (pl.col("Tax_Sub_Head") == "UNKNOWN")
+                )
                 .then(pl.lit(None).cast(pl.Float64))
                 .otherwise(pl.col("Estimated_Tax_Resolved"))
                 .alias("Estimated_Tax"),
@@ -388,12 +420,14 @@ class BaseEventsBuilder:
 
         # Set Tax Status
         df_tax_events = df_tax_events.with_columns(
-            pl.when(pl.col("Tax_Sub_Head") == "CHECK_REQUIRED")
+            pl.when(pl.col("_Is_Recon").fill_null(False) | (pl.col("Tax_Sub_Head") == "UNKNOWN"))
             .then(pl.lit("CHECK_REQUIRED"))
             .otherwise(pl.lit("READY"))
             .alias("Tax_Status"),
-            pl.when(pl.col("Tax_Sub_Head") == "CHECK_REQUIRED")
-            .then(pl.lit("RECONCILIATION lot or unrecognized tax classification"))
+            pl.when(pl.col("Tax_Sub_Head") == "UNKNOWN")
+            .then(pl.lit("Unrecognized tax classification — review tax_type/tax_subtype"))
+            .when(pl.col("_Is_Recon").fill_null(False))
+            .then(pl.lit("RECONCILIATION synthetic lot — original acquisition evidence required"))
             .otherwise(pl.lit(None))
             .cast(pl.Utf8)
             .alias("Tax_Status_Reason"),
@@ -419,4 +453,5 @@ class BaseEventsBuilder:
             .alias("Tax_Event_ID")
         )
 
+        df_tax_events = df_tax_events.drop("_Is_Recon")
         return df_tax_events
