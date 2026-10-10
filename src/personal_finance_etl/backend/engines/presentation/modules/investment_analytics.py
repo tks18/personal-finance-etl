@@ -180,34 +180,60 @@ class InvestmentAnalyticsBuilder:
         )
 
         lf_isin_agg = lf_isin_agg.with_columns(
-            safe_divide(pl.col("ISIN_Forex_PnL"), pl.col("ISIN_Unrealized_PnL"))
-            .alias("ISIN_Forex_Contribution_Pct")
+            safe_divide(pl.col("ISIN_Forex_PnL"), pl.col("ISIN_Unrealized_PnL")).alias(
+                "ISIN_Forex_Contribution_Pct"
+            )
         )
 
         df_inv_isin = self.dfs.get("df_f_investment_analytics_isin")
         if df_inv_isin is not None:
-            lf_inv_isin = df_inv_isin.lazy() if isinstance(df_inv_isin, pl.DataFrame) else df_inv_isin
-            lf_inv_isin_latest = (
-                lf_inv_isin.with_columns(pl.col("Closing_Date").dt.month_start().alias("MONTH_START_DATE"))
-                .filter(pl.col("Closing_Date") == pl.col("Closing_Date").max().over("MONTH_START_DATE"))
-                .select(["MONTH_START_DATE", "ISIN", "FX_XIRR_Impact", "XIRR_Local", "BM_XIRR", "BM_XIRR_Local", "Active_Return", "Active_Return_Local"])
+            lf_inv_isin = (
+                df_inv_isin.lazy() if isinstance(df_inv_isin, pl.DataFrame) else df_inv_isin
             )
-            lf_isin_agg = lf_isin_agg.join(lf_inv_isin_latest, on=["MONTH_START_DATE", "ISIN"], how="left").with_columns(
-                pl.col("FX_XIRR_Impact").fill_null(0.0).alias("ISIN_FX_XIRR_Impact"),
-                pl.col("XIRR_Local").fill_null(0.0).alias("ISIN_XIRR_Local"),
-                pl.col("BM_XIRR").fill_null(0.0).alias("ISIN_BM_XIRR"),
-                pl.col("BM_XIRR_Local").fill_null(0.0).alias("ISIN_BM_XIRR_Local"),
-                pl.col("Active_Return").fill_null(0.0).alias("ISIN_Active_Return"),
-                pl.col("Active_Return_Local").fill_null(0.0).alias("ISIN_Active_Return_Local"),
+            lf_inv_isin_latest = (
+                lf_inv_isin.with_columns(
+                    pl.col("Closing_Date").dt.month_start().alias("MONTH_START_DATE")
+                )
+                .filter(
+                    pl.col("Closing_Date") == pl.col("Closing_Date").max().over("MONTH_START_DATE")
+                )
+                .select(
+                    [
+                        "MONTH_START_DATE",
+                        "ISIN",
+                        "FX_XIRR_Impact",
+                        "XIRR_Local",
+                        "BM_XIRR",
+                        "BM_XIRR_Local",
+                        "Active_Return",
+                        "Active_Return_Local",
+                    ]
+                )
+            )
+            # Return metrics are non-additive and may be undefined. Preserve nulls
+            # from the analytics fact instead of turning unavailable returns into 0%.
+            lf_isin_agg = lf_isin_agg.join(
+                lf_inv_isin_latest,
+                on=["MONTH_START_DATE", "ISIN"],
+                how="left",
+            ).with_columns(
+                pl.col("FX_XIRR_Impact").alias("ISIN_FX_XIRR_Impact"),
+                pl.col("XIRR_Local").alias("ISIN_XIRR_Local"),
+                pl.col("BM_XIRR").alias("ISIN_BM_XIRR"),
+                pl.col("BM_XIRR_Local").alias("ISIN_BM_XIRR_Local"),
+                pl.col("Active_Return").alias("ISIN_Active_Return"),
+                pl.col("Active_Return_Local").alias("ISIN_Active_Return_Local"),
             )
         else:
+            # Missing analytics input means the return metrics are unavailable,
+            # not that their calculated return is zero.
             lf_isin_agg = lf_isin_agg.with_columns(
-                pl.lit(0.0).alias("ISIN_FX_XIRR_Impact"),
-                pl.lit(0.0).alias("ISIN_XIRR_Local"),
-                pl.lit(0.0).alias("ISIN_BM_XIRR"),
-                pl.lit(0.0).alias("ISIN_BM_XIRR_Local"),
-                pl.lit(0.0).alias("ISIN_Active_Return"),
-                pl.lit(0.0).alias("ISIN_Active_Return_Local"),
+                pl.lit(None, dtype=pl.Float64).alias("ISIN_FX_XIRR_Impact"),
+                pl.lit(None, dtype=pl.Float64).alias("ISIN_XIRR_Local"),
+                pl.lit(None, dtype=pl.Float64).alias("ISIN_BM_XIRR"),
+                pl.lit(None, dtype=pl.Float64).alias("ISIN_BM_XIRR_Local"),
+                pl.lit(None, dtype=pl.Float64).alias("ISIN_Active_Return"),
+                pl.lit(None, dtype=pl.Float64).alias("ISIN_Active_Return_Local"),
             )
 
         return lf_isin_agg.select(
