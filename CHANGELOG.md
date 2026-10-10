@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [8.1.1](https://github.com/tks18/personal-finance-etl/compare/8.1.0...8.1.1) (2026-10-10)
+
+
+### Features 🔥
+
+* **backend/control_plane:** connection: now robust control plane table validations ([8b81014](https://github.com/tks18/personal-finance-etl/commit/8b810143f477b6d0462d23d2be61faba3de08ab3))
+* **backend/control_plane:** file_sync: use the upgraded methods from artifact_repo ([87cb588](https://github.com/tks18/personal-finance-etl/commit/87cb58800f6853f970839b6c2f7e114212c015ff))
+* **backend/control_plane:** overhaul artifact_repo for complete artifact lifecycle ([4b170ac](https://github.com/tks18/personal-finance-etl/commit/4b170ac75e0a0fec2f43123f9f064229ac617e74))
+* **backend/control_plane:** overhaul orchestrator ([6c4806a](https://github.com/tks18/personal-finance-etl/commit/6c4806aca202c6483736bf66b43fec1949d639b0))
+* **backend/control_plane:** run_repo: fix all edge cases possible ([4600e5b](https://github.com/tks18/personal-finance-etl/commit/4600e5b67032af6a5c38b8a13ff78e860c16f75a))
+* **backend/control_plane:** utils: bulletproof hashing and other common helpers ([6ef319e](https://github.com/tks18/personal-finance-etl/commit/6ef319edc9c0e34d189c5e8c1cf8794d704e88d4))
+
 ## [8.1.0](https://github.com/tks18/personal-finance-etl/compare/8.0.0...8.1.0) (2026-10-10)
 
 
