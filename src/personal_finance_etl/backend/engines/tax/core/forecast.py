@@ -43,10 +43,45 @@ class TaxLiabilityForecastBuilder:
         tax_rates = self.rules.assumptions.tax.rates if self.rules else None
         eq_ltcg = tax_rates.equity_ltcg if tax_rates else 0.125
         eq_stcg = tax_rates.equity_stcg if tax_rates else 0.20
-        # Fallback dividend rate from TOML — live value joined from macro table below
         fallback_div_rate = (
             self.rules.assumptions.macro.fallback_ordinary_income_rate if self.rules else 0.30
         )
+
+        # Derive blended CG rates from all configured groups.
+        # Falls back to equity-only rates when capital_gains_groups is not configured.
+        cg_groups = self.rules.assumptions.tax.capital_gains_groups if self.rules else {}
+        if cg_groups:
+            _st_rates: list[float] = []
+            _lt_rates: list[float] = []
+            for key, grp in cg_groups.items():
+                k = key.lower()
+                if grp.gain_type == "ST":
+                    if "equity" in k and "foreign" not in k:
+                        _st_rates.append(tax_rates.equity_stcg if tax_rates else 0.20)
+                    elif "foreign" in k or "default" in k:
+                        _st_rates.append(tax_rates.foreign_equity_stcg if tax_rates else 0.30)
+                    elif "debt" in k:
+                        _st_rates.append(tax_rates.debt_stcg if tax_rates else 0.30)
+                    elif "gold" in k or "other_assets" in k or "reit" in k or "sgb" in k:
+                        _st_rates.append(tax_rates.gold_stcg if tax_rates else 0.30)
+                    else:
+                        _st_rates.append(eq_stcg)
+                else:  # LT
+                    if "equity" in k and "foreign" not in k:
+                        _lt_rates.append(tax_rates.equity_ltcg if tax_rates else 0.125)
+                    elif "foreign" in k or "default" in k:
+                        _lt_rates.append(tax_rates.foreign_equity_ltcg if tax_rates else 0.125)
+                    elif "debt" in k:
+                        _lt_rates.append(tax_rates.debt_ltcg if tax_rates else 0.20)
+                    elif "gold" in k or "other_assets" in k or "reit" in k or "sgb" in k:
+                        _lt_rates.append(tax_rates.gold_ltcg if tax_rates else 0.20)
+                    else:
+                        _lt_rates.append(eq_ltcg)
+            blended_stcg_rate = sum(_st_rates) / len(_st_rates) if _st_rates else eq_stcg
+            blended_ltcg_rate = sum(_lt_rates) / len(_lt_rates) if _lt_rates else eq_ltcg
+        else:
+            blended_stcg_rate = eq_stcg
+            blended_ltcg_rate = eq_ltcg
 
         # Join Ordinary Income Tax Rate from d_macro_parameters using the same asof pattern
         df_macro = self.dfs.get("df_d_macro_parameters")
@@ -186,8 +221,8 @@ class TaxLiabilityForecastBuilder:
             )
             .with_columns(
                 (
-                    (pl.col("Net_STCG") * eq_stcg)
-                    + ((pl.col("Net_LTCG") - pl.col("LTCG_Exemption_Used")) * eq_ltcg)
+                    (pl.col("Net_STCG") * pl.lit(blended_stcg_rate))
+                    + ((pl.col("Net_LTCG") - pl.col("LTCG_Exemption_Used")) * pl.lit(blended_ltcg_rate))
                     + (
                         pl.col("Taxable_Dividends").clip(lower_bound=0.0)
                         * pl.col("Estimated_Ordinary_Income_Tax_Rate")

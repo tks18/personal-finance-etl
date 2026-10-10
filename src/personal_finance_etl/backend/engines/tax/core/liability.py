@@ -56,6 +56,17 @@ class LiabilityCalculator:
             return pl.LazyFrame(schema=schema)
 
         ltcg_exemption = self.rules.assumptions.tax.fallback_equity_ltcg_exemption
+        # Section 112A exemption applies only to listed domestic equity LTCG.
+        cg_groups = self.rules.assumptions.tax.capital_gains_groups
+        if cg_groups:
+            listed_equity_ltcg_sub_heads: frozenset[str] = frozenset(
+                code
+                for key, grp in cg_groups.items()
+                if grp.gain_type == "LT" and "equity" in key.lower() and "foreign" not in key.lower()
+                for code in grp.sub_head_codes
+            )
+        else:
+            listed_equity_ltcg_sub_heads = frozenset({"Equity_Listed_LTCG"})
 
         # Weighted Applied_Rate per FY × Gain_Type (larger gains drive the rate)
         lf_weighted_rates = (
@@ -73,6 +84,16 @@ class LiabilityCalculator:
                     ).alias("Applied_Rate"),
                 ]
             )
+        )
+
+        # Listed-equity LTCG eligible for Section 112A exemption — aggregated per FY.
+        lf_listed_eq_ltcg = (
+            self.lf_tax_events.filter(
+                pl.col("Tax_Sub_Head").is_in(list(listed_equity_ltcg_sub_heads))
+                & (pl.col("Taxable_Amount") > 0)
+            )
+            .group_by("FY")
+            .agg(pl.col("Taxable_Amount").sum().alias("Listed_Eq_LTCG_Gross"))
         )
 
         # Post-netting Net_Taxable_Income from set-off processor
@@ -93,17 +114,39 @@ class LiabilityCalculator:
             how="left",
         )
 
-        # Apply LTCG exemption and compute Gross_Tax → Cess → Net_Tax
+        # Join listed-equity gross LTCG for exemption allocation
+        lf_joined = lf_joined.join(lf_listed_eq_ltcg, on="FY", how="left").with_columns(
+            pl.col("Listed_Eq_LTCG_Gross").fill_null(0.0)
+        )
+
+        # Apply Section 112A LTCG exemption only to listed equity LTCG rows.
+        # Non-equity LTCG (debt, gold, foreign) is not eligible for Section 112A.
         lf_liability = lf_joined.with_columns(
-            # Deduct LTCG exemption before computing tax (Section 112A threshold)
             pl.when(
-                (pl.col("Tax_Method") == "capital_gains") & (pl.col("Gain_Type") == "LT")
+                (pl.col("Tax_Method") == "capital_gains")
+                & (pl.col("Gain_Type") == "LT")
+                & pl.col("Income_Head").is_not_null()
             )
             .then(
-                pl.max_horizontal(
-                    pl.lit(0.0),
-                    pl.col("Net_Taxable_Income") - pl.lit(ltcg_exemption),
+                pl.when(
+                    # Only apply exemption if this FY has listed-equity LTCG events
+                    pl.col("Listed_Eq_LTCG_Gross") > 0
                 )
+                .then(
+                    pl.max_horizontal(
+                        pl.lit(0.0),
+                        pl.col("Net_Taxable_Income")
+                        # Prorate exemption: this row's share of total listed-eq LTCG
+                        * pl.max_horizontal(
+                            pl.lit(0.0),
+                            pl.lit(1.0)
+                            - (pl.lit(ltcg_exemption) / pl.col("Listed_Eq_LTCG_Gross")).clip(
+                                upper_bound=1.0
+                            ),
+                        ),
+                    )
+                )
+                .otherwise(pl.col("Net_Taxable_Income"))
             )
             .otherwise(pl.col("Net_Taxable_Income"))
             .alias("Taxable_After_Exemption")

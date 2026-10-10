@@ -61,14 +61,22 @@ class BaseEventsBuilder:
 
         # Derive valid investment CG sub-heads from capital_gains_groups config if present;
         # fall back to the hardcoded registry for backward compatibility.
-        if self.rules.assumptions.tax.capital_gains_groups:
+        cg_groups = self.rules.assumptions.tax.capital_gains_groups
+        if cg_groups:
             valid_inv_sub_heads: frozenset[str] = frozenset(
                 code
-                for group in self.rules.assumptions.tax.capital_gains_groups.values()
+                for group in cg_groups.values()
                 for code in group.sub_head_codes
             )
+            # Reverse lookup: Tax_Sub_Head code → group name (for Capital_Gains_Group column)
+            sub_head_to_cg_group: dict[str, str] = {
+                code: group_name
+                for group_name, group in cg_groups.items()
+                for code in group.sub_head_codes
+            }
         else:
             valid_inv_sub_heads = _INVESTMENT_SUB_HEADS
+            sub_head_to_cg_group = {}
 
         # 1. LEDGER TAX EVENTS
         df_ledger = self.df_income.lazy().join(
@@ -217,17 +225,7 @@ class BaseEventsBuilder:
             .alias("Gain_Type"),
         )
 
-        # Investment Engine owns the classification — validate against the code-owned
-        # _INVESTMENT_SUB_HEADS set, NOT valid_sub_heads from TaxConfig/TOML.
-        #
-        # TaxConfig sub-heads (heads_of_income keys) are exclusively for LEDGER events.
-        # _INVESTMENT_SUB_HEADS entries like "Equity_Listed_LTCG" are macro column-name
-        # suffixes — a completely different namespace from TOML keys.
-        #
-        # CHECK_REQUIRED fires when:
-        #   (a) the (Tax_Type, Tax_Subtype) combo produces an unknown prefix → unknown asset class
-        #   (b) the lot is a RECONCILIATION synthetic lot (no acquisition evidence)
-        #       The sale is real but cost basis is unknown — forces human resolution before filing.
+        # CHECK_REQUIRED: unknown sub-head prefix OR RECONCILIATION synthetic lot (no cost basis evidence).
         reconciliation_col = "Lot_Source_Type" if "Lot_Source_Type" in schema_cols else None
 
         is_unknown_sub_head = ~pl.col("Tax_Sub_Head_Raw").is_in(list(valid_inv_sub_heads))
@@ -243,6 +241,19 @@ class BaseEventsBuilder:
             .otherwise(pl.col("Tax_Sub_Head_Raw"))
             .alias("Tax_Sub_Head")
         ).drop("Tax_Sub_Head_Raw")
+
+        # Attach CG group name for downstream filtering and reporting.
+        if sub_head_to_cg_group:
+            df_inv_mapped = df_inv_mapped.with_columns(
+                pl.col("Tax_Sub_Head")
+                .replace(sub_head_to_cg_group, default=None)
+                .cast(pl.Utf8)
+                .alias("Capital_Gains_Group")
+            )
+        else:
+            df_inv_mapped = df_inv_mapped.with_columns(
+                pl.lit(None).cast(pl.Utf8).alias("Capital_Gains_Group")
+            )
 
         # Ensure correct assignment: Proceeds -> Gross_Amount, Gain -> Taxable_Amount & Realized_Gain_Loss
         if proceeds_col in schema_cols:
@@ -265,6 +276,7 @@ class BaseEventsBuilder:
                 "Source_ID",
                 "Income_Head",
                 "Tax_Sub_Head",
+                "Capital_Gains_Group",
                 "Taxability",
                 "Tax_Method",
                 "Gross_Amount",

@@ -59,11 +59,21 @@ class TaxGoldFormatter:
             "FY": pl.Utf8,
             "Income_Head": pl.Utf8,
             "Tax_Sub_Head": pl.Utf8,
+            "Capital_Gains_Group": pl.Utf8,
             "Source_Type": pl.Utf8,
             "Gross_Amount": pl.Float64,
             "Taxable_Amount": pl.Float64,
         }
-        df = self.lf_events.group_by(["FY", "Income_Head", "Tax_Sub_Head", "Source_Type"]).agg(
+        # Capital_Gains_Group may not exist in older pipeline outputs — coalesce to null.
+        _schema_names = self.lf_events.collect_schema().names()
+        _cg_group_col = (
+            pl.col("Capital_Gains_Group")
+            if "Capital_Gains_Group" in _schema_names
+            else pl.lit(None).cast(pl.Utf8).alias("Capital_Gains_Group")
+        )
+        df = self.lf_events.with_columns(_cg_group_col.alias("Capital_Gains_Group")).group_by(
+            ["FY", "Income_Head", "Tax_Sub_Head", "Capital_Gains_Group", "Source_Type"]
+        ).agg(
             [
                 pl.col("Gross_Amount").sum().alias("Gross_Amount"),
                 pl.col("Taxable_Amount").sum().alias("Taxable_Amount"),
@@ -73,6 +83,7 @@ class TaxGoldFormatter:
 
         df = df.cast(schema)  # type: ignore[arg-type]
         return df
+
 
     def format_tax_reconciliation(self) -> pl.LazyFrame:
         schema = {
