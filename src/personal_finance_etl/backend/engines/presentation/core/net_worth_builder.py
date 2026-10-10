@@ -321,18 +321,29 @@ class NetWorthBuilder:
 
             df_inv_curr = self.dfs.get("df_f_investment_analytics_currency")
             if df_inv_curr is not None:
-                lf_inv_curr = df_inv_curr.lazy() if isinstance(df_inv_curr, pl.DataFrame) else df_inv_curr
+                lf_inv_curr = (
+                    df_inv_curr.lazy() if isinstance(df_inv_curr, pl.DataFrame) else df_inv_curr
+                )
                 lf_foreign_exposure = (
-                    lf_inv_curr.with_columns(pl.col("Closing_Date").dt.month_end().alias("MONTH_END_DATE"))
+                    lf_inv_curr.with_columns(
+                        pl.col("Closing_Date").dt.month_end().alias("MONTH_END_DATE")
+                    )
                     .filter(pl.col("CURRENCY_ID") != self.default_currency_id)
                     .group_by("MONTH_END_DATE")
-                    .agg(pl.col("Total_Current_Value").sum().fill_null(0.0).alias("Total_Foreign_Currency_Exposure"))
+                    .agg(
+                        pl.col("Total_Current_Value")
+                        .sum()
+                        .fill_null(0.0)
+                        .alias("Total_Foreign_Currency_Exposure")
+                    )
                 )
-                lf_inv_port_agg = lf_inv_port_agg.join(lf_foreign_exposure, on="MONTH_END_DATE", how="left").with_columns(
-                    pl.col("Total_Foreign_Currency_Exposure").fill_null(0.0)
-                )
+                lf_inv_port_agg = lf_inv_port_agg.join(
+                    lf_foreign_exposure, on="MONTH_END_DATE", how="left"
+                ).with_columns(pl.col("Total_Foreign_Currency_Exposure").fill_null(0.0))
             else:
-                lf_inv_port_agg = lf_inv_port_agg.with_columns(pl.lit(0.0).alias("Total_Foreign_Currency_Exposure"))
+                lf_inv_port_agg = lf_inv_port_agg.with_columns(
+                    pl.lit(0.0).alias("Total_Foreign_Currency_Exposure")
+                )
 
             lf_monthly_totals = (
                 lf_monthly_totals.join(
