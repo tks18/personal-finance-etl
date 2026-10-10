@@ -26,6 +26,7 @@ class AnalyticsContextManager:
         start_date: date | None,
         end_date: date | None,
         rules: FinancialRules | None,
+        run_id: str = "UNKNOWN",
     ) -> tuple[RunContext, list[str]]:
         if self.status_queue:
             self.status_queue.put(
@@ -36,7 +37,8 @@ class AnalyticsContextManager:
             raise ValueError("Financial rules must be provided")
 
         ctx = RunContext.from_dataframes(
-            df_p, df_s, df_m, df_i, df_b, df_t, rules, df_fx, start_date, end_date
+            df_p, df_s, df_m, df_i, df_b, df_t, rules, df_fx, start_date, end_date,
+            run_id=run_id,
         )
 
         if self.status_queue:

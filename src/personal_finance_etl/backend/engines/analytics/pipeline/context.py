@@ -58,6 +58,7 @@ class RunContext:
     end_date: date | None
     rules: FinancialRules
     df_fx: pl.DataFrame | None = None
+    run_id: str = "UNKNOWN"  # ETL pipeline run ID for lineage tracking in recon events
 
     def __post_init__(self):
         self.fx_provider = FXRateProvider(self.df_fx, self.rules.DEFAULT_CURRENCY_ID)
@@ -111,6 +112,7 @@ class RunContext:
         df_fx: pl.DataFrame | None = None,
         start_date: date | None = None,
         end_date: date | None = None,
+        run_id: str = "UNKNOWN",
     ) -> "RunContext":
         loaded_p, loaded_s, loaded_m, is_m, loaded_b, loaded_fx = (
             TaxDataLoader.load_from_dataframes(df_p, df_s, df_m, df_i, df_b, df_fx=df_fx)
@@ -128,4 +130,5 @@ class RunContext:
             end_date=end_date,
             rules=rules,
             df_fx=loaded_fx,
+            run_id=run_id,
         )
