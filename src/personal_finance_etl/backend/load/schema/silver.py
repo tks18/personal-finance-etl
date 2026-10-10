@@ -79,7 +79,11 @@ CREATE TABLE IF NOT EXISTS silver.d_Income_Category (
     __file_name__ TEXT,
     __folder_path__ TEXT,
     S_NO BIGINT,
-    MODIFY_DATE BIGINT
+    MODIFY_DATE BIGINT,
+    Tax_Income_Head TEXT,
+    Tax_Sub_Head TEXT,
+    Taxability TEXT,
+    Tax_Method TEXT
 );
 
 CREATE TABLE IF NOT EXISTS silver.d_Income_Subcategory (
@@ -99,6 +103,10 @@ CREATE TABLE IF NOT EXISTS silver.d_Income_Subcategory (
     __folder_path__ TEXT,
     S_NO BIGINT,
     MODIFY_DATE BIGINT,
+    Tax_Income_Head TEXT,
+    Tax_Sub_Head TEXT,
+    Taxability TEXT,
+    Tax_Method TEXT,
     FOREIGN KEY (CATEGORY_ID) REFERENCES silver.d_Income_Category(UID)
 );
 
@@ -215,6 +223,9 @@ CREATE TABLE IF NOT EXISTS silver.f_Currency_FX_Rates (
     -- Provenance
     Data_Provider TEXT,
     Extraction_Time TEXT,
+    Requested_Start DATE,
+    Requested_End DATE,
+    Is_Closure_Gap BOOLEAN,
     Is_Imputed BOOLEAN,
     FOREIGN KEY(Date) REFERENCES silver.d_Calendar(Date),
     FOREIGN KEY(Currency_ID) REFERENCES silver.d_Currency(UID)
@@ -456,6 +467,9 @@ CREATE TABLE IF NOT EXISTS silver.f_Investment_Market_Data (
     -- Provenance
     Data_Provider TEXT,
     Extraction_Time TEXT,
+    Requested_Start DATE,
+    Requested_End DATE,
+    Is_Closure_Gap BOOLEAN,
     Is_Imputed BOOLEAN,
     __file_name__ TEXT,
     __folder_path__ TEXT,
@@ -530,6 +544,9 @@ CREATE TABLE IF NOT EXISTS silver.f_Investment_Benchmark_Data (
     -- Provenance
     Data_Provider TEXT,
     Extraction_Time TEXT,
+    Requested_Start DATE,
+    Requested_End DATE,
+    Is_Closure_Gap BOOLEAN,
     Is_Imputed BOOLEAN,
     FOREIGN KEY(Date) REFERENCES silver.d_Calendar(Date),
     FOREIGN KEY(ID) REFERENCES silver.d_Investment_Benchmark_Master(ID)
@@ -550,6 +567,7 @@ CREATE TABLE IF NOT EXISTS silver.f_Investment_Analytics_Lot (
     TAX_SUBTYPE TEXT,
     -- Position Values
     Quantity DOUBLE,
+    Execution_Residual DOUBLE,  -- Units ordered but not yet settled at this snapshot date
     Buy_Price DOUBLE,
     Market_Price DOUBLE,
     Buy_Value DOUBLE,
@@ -558,6 +576,10 @@ CREATE TABLE IF NOT EXISTS silver.f_Investment_Analytics_Lot (
     Buy_Value_Local DOUBLE,
     Close_Value_Local DOUBLE,
     Blended_FX_Buy_Rate DOUBLE,
+    Buy_Price_Local DOUBLE,          -- Acquisition price in instrument native currency
+    Market_Price_Local DOUBLE,       -- Market price in instrument native currency at snapshot
+    FX_Rate_Buy DOUBLE,              -- FX rate (native → INR) at acquisition date
+    FX_Rate_Snap DOUBLE,             -- FX rate (native → INR) at snapshot date
     Currency_Appreciation_Pct DOUBLE,
     -- Absolute Returns
     "P/L" DOUBLE,
@@ -573,6 +595,7 @@ CREATE TABLE IF NOT EXISTS silver.f_Investment_Analytics_Lot (
     Lot_CAGR_Local DOUBLE,
     CAGR DOUBLE,
     XIRR DOUBLE,
+    XIRR_Status TEXT,           -- VALID | INVALID_INPUT | UNDEFINED | NON_CONVERGENT
     XIRR_Local DOUBLE,
     FX_XIRR_Impact DOUBLE,
     After_Tax_XIRR DOUBLE,
@@ -649,6 +672,10 @@ CREATE TABLE IF NOT EXISTS silver.f_Investment_Realized_Events (
     Asset_PnL_Local DOUBLE,
     Asset_PnL DOUBLE,
     Forex_PnL DOUBLE,
+    -- Rate resolved from macro CSV at disposal time (same source as snapshot.py LTCG_Tax_If_Sold).
+    -- NULL for CHECK_REQUIRED (RECONCILIATION) lots — no reliable rate can be assigned.
+    Applied_Rate DOUBLE,
+    Estimated_Tax DOUBLE,
     UNIQUE(Sale_ID, Lot_ID)
 );
 
