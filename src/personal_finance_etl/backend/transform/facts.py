@@ -35,16 +35,55 @@ def get_base_transactions(df_lazy: pl.LazyFrame, column_mapping: dict[str, str])
     Acts as the TRANSACTIONS helper query.
     Reads INOUTCOME once, renames columns, and filters deleted rows.
     """
+    df_renamed = df_lazy.rename(column_mapping)
+    raw_columns = set(df_renamed.collect_schema().names())
+    required_columns = {"IS_DEL", "UID", "BASE_AMOUNT"}
+    missing_columns = sorted(required_columns - raw_columns)
+    if missing_columns:
+        raise ValueError(f"INOUTCOME is missing required transaction columns: {missing_columns}")
+
+    # Validate source monetary values before casting. A malformed amount must not
+    # become a valid-looking zero, while genuinely absent optional local/account
+    # amounts remain null and can be handled explicitly by downstream consumers.
+    active_row = pl.col("IS_DEL").cast(pl.String).fill_null("0") == "0"
+    base_amount = pl.col("BASE_AMOUNT").cast(pl.Float64, strict=False)
+    invalid_conditions = [base_amount.is_null() | ~base_amount.is_finite()]
+    for optional_field in ("LOCAL_AMOUNT", "AMOUNT_ACCOUNT"):
+        if optional_field not in raw_columns:
+            continue
+        raw_value = pl.col(optional_field)
+        raw_text = raw_value.cast(pl.String).str.strip_chars()
+        populated = raw_value.is_not_null() & (raw_text != "")
+        parsed = raw_value.cast(pl.Float64, strict=False)
+        invalid_conditions.append(populated & (parsed.is_null() | ~parsed.is_finite()))
+
+    invalid_rows = (
+        df_renamed.filter(active_row & pl.any_horizontal(invalid_conditions))
+        .select(
+            [
+                c
+                for c in ("UID", "DATE", "BASE_AMOUNT", "LOCAL_AMOUNT", "AMOUNT_ACCOUNT")
+                if c in raw_columns
+            ]
+        )
+        .limit(20)
+        .collect()
+    )
+    if not invalid_rows.is_empty():
+        raise ValueError(
+            "Invalid required or populated monetary value(s) in active INOUTCOME "
+            "transaction(s). BASE_AMOUNT is required; populated LOCAL_AMOUNT and "
+            "AMOUNT_ACCOUNT values must be finite numbers. "
+            f"Examples: {invalid_rows.to_dicts()}"
+        )
+
     df_base = (
-        df_lazy.rename(column_mapping)
-        # Power Query used IS_DEL <> "1" (String comparison).
-        # We cast to string first to be safe, then filter.
-        .with_columns(
+        df_renamed.with_columns(
             [
                 pl.col("IS_DEL").cast(pl.String),
-                pl.col("BASE_AMOUNT").cast(pl.Float64, strict=False).fill_null(0.0),
-                pl.col("LOCAL_AMOUNT").cast(pl.Float64, strict=False).fill_null(0.0),
-                pl.col("AMOUNT_ACCOUNT").cast(pl.Float64, strict=False).fill_null(0.0),
+                pl.col("BASE_AMOUNT").cast(pl.Float64, strict=False),
+                pl.col("LOCAL_AMOUNT").cast(pl.Float64, strict=False),
+                pl.col("AMOUNT_ACCOUNT").cast(pl.Float64, strict=False),
                 pl.col("TRANSACTION_TYPE").cast(pl.Int64, strict=False),
                 pl.col("CARDDIVIDMONTH").cast(pl.Int64, strict=False),
                 pl.col("TIMESTAMP").cast(pl.Int64, strict=False),
@@ -57,7 +96,6 @@ def get_base_transactions(df_lazy: pl.LazyFrame, column_mapping: dict[str, str])
             pl.when(pl.col("LOCAL_AMOUNT").abs() < 1e-10)
             .then(0.0)
             .otherwise(pl.col("BASE_AMOUNT") / pl.col("LOCAL_AMOUNT"))
-            .fill_nan(0.0)
             .alias("EXCH_RATE")
         )
     )
