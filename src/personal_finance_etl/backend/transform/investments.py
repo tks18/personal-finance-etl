@@ -161,9 +161,25 @@ def transform_stg_investment_market_data(
     else:
         df_union = df_union.with_columns(pl.col("Buy_Value_Local").fill_null(pl.col("Buy_Value")))
     if "FX_Rate" not in cols:
-        df_union = df_union.with_columns(pl.lit(1.0).alias("FX_Rate"))
+        # INR instruments use identity FX = 1.0. Foreign instruments will have FX_Rate
+        # populated by the currency pipeline; null here means the rate is genuinely missing
+        # and must NOT be silently converted to 1.0.
+        df_union = df_union.with_columns(
+            pl.when(pl.col("CURRENCY_ID") == pl.lit(default_currency_id))
+            .then(pl.lit(1.0))
+            .otherwise(pl.lit(None).cast(pl.Float64))
+            .alias("FX_Rate")
+        )
     else:
-        df_union = df_union.with_columns(pl.col("FX_Rate").fill_null(1.0))
+        # Only fill null FX_Rate with 1.0 for instruments whose CURRENCY_ID is the base
+        # currency. Foreign instruments keep null to signal a missing observation.
+        df_union = df_union.with_columns(
+            pl.when(pl.col("FX_Rate").is_null() & (pl.col("CURRENCY_ID") == pl.lit(default_currency_id)))
+            .then(pl.lit(1.0))
+            .otherwise(pl.col("FX_Rate"))
+            .alias("FX_Rate")
+        )
+
 
     if "CURRENCY_ID" not in cols:
         df_union = df_union.with_columns(pl.lit(default_currency_id).alias("CURRENCY_ID"))
@@ -188,6 +204,21 @@ def transform_stg_investment_market_data(
     else:
         df_union = df_union.with_columns(pl.col("Is_Imputed").fill_null(False))
 
+    if "Requested_Start" not in cols:
+        df_union = df_union.with_columns(pl.col("Date").alias("Requested_Start"))
+    else:
+        df_union = df_union.with_columns(pl.col("Requested_Start").fill_null(pl.col("Date")))
+
+    if "Requested_End" not in cols:
+        df_union = df_union.with_columns(pl.col("Date").alias("Requested_End"))
+    else:
+        df_union = df_union.with_columns(pl.col("Requested_End").fill_null(pl.col("Date")))
+
+    if "Is_Closure_Gap" not in cols:
+        df_union = df_union.with_columns(pl.lit(False).alias("Is_Closure_Gap"))
+    else:
+        df_union = df_union.with_columns(pl.col("Is_Closure_Gap").fill_null(False))
+
     select_cols = [
         "__file_name__",
         "__folder_path__",
@@ -209,6 +240,9 @@ def transform_stg_investment_market_data(
         "CURRENCY_ID",
         "Data_Provider",
         "Extraction_Time",
+        "Requested_Start",
+        "Requested_End",
+        "Is_Closure_Gap",
         "Is_Imputed",
     ]
     df_final = (
@@ -261,9 +295,20 @@ def get_f_tf_investment_purchase_data(
     else:
         df_union = df_union.with_columns(pl.col("Value_Local").fill_null(pl.col("Value")))
     if "FX_Rate" not in cols:
-        df_union = df_union.with_columns(pl.lit(1.0).alias("FX_Rate"))
+        df_union = df_union.with_columns(
+            pl.when(pl.col("CURRENCY_ID") == pl.lit(default_currency_id))
+            .then(pl.lit(1.0))
+            .otherwise(pl.lit(None).cast(pl.Float64))
+            .alias("FX_Rate")
+        )
     else:
-        df_union = df_union.with_columns(pl.col("FX_Rate").fill_null(1.0))
+        df_union = df_union.with_columns(
+            pl.when(pl.col("FX_Rate").is_null() & (pl.col("CURRENCY_ID") == pl.lit(default_currency_id)))
+            .then(pl.lit(1.0))
+            .otherwise(pl.col("FX_Rate"))
+            .alias("FX_Rate")
+        )
+
     if "CURRENCY_ID" not in cols:
         df_union = df_union.with_columns(pl.lit(default_currency_id).alias("CURRENCY_ID"))
     else:
@@ -284,11 +329,11 @@ def get_f_tf_investment_purchase_data(
         "CURRENCY_ID",
     ]
     df_final = df_union.select(select_cols).unique().sort(["ISIN", "Date", "Quantity", "Price"])
-    df_final = df_final.with_columns(
-        pl.struct(["ISIN", "Date", "Price", "Quantity", "CURRENCY_ID"])
-        .map_elements(_compute_purchase_id, return_dtype=pl.String)
-        .alias("Purchase_ID")
-    )
+    _df_eager = df_final.collect()
+    _purchase_ids = [_compute_purchase_id(r) for r in _df_eager.iter_rows(named=True)]
+    df_final = _df_eager.with_columns(
+        pl.Series("Purchase_ID", _purchase_ids, dtype=pl.String)
+    ).lazy()
     return df_final
 
 
@@ -320,9 +365,20 @@ def get_f_tf_investment_sale_data(
     else:
         df_union = df_union.with_columns(pl.col("Buy_Value_Local").fill_null(pl.col("Buy_Value")))
     if "FX_Rate" not in cols:
-        df_union = df_union.with_columns(pl.lit(1.0).alias("FX_Rate"))
+        df_union = df_union.with_columns(
+            pl.when(pl.col("CURRENCY_ID") == pl.lit(default_currency_id))
+            .then(pl.lit(1.0))
+            .otherwise(pl.lit(None).cast(pl.Float64))
+            .alias("FX_Rate")
+        )
     else:
-        df_union = df_union.with_columns(pl.col("FX_Rate").fill_null(1.0))
+        df_union = df_union.with_columns(
+            pl.when(pl.col("FX_Rate").is_null() & (pl.col("CURRENCY_ID") == pl.lit(default_currency_id)))
+            .then(pl.lit(1.0))
+            .otherwise(pl.col("FX_Rate"))
+            .alias("FX_Rate")
+        )
+
     if "CURRENCY_ID" not in cols:
         df_union = df_union.with_columns(pl.lit(default_currency_id).alias("CURRENCY_ID"))
     else:
@@ -349,11 +405,11 @@ def get_f_tf_investment_sale_data(
     df_final = (
         df_union.select(select_cols).unique().sort(["ISIN", "Date", "Quantity", "Sell_Price"])
     )
-    df_final = df_final.with_columns(
-        pl.struct(["ISIN", "Date", "Sell_Price", "Quantity", "CURRENCY_ID"])
-        .map_elements(_compute_sale_id, return_dtype=pl.String)
-        .alias("Sale_ID")
-    )
+    _df_eager = df_final.collect()
+    _sale_ids = [_compute_sale_id(r) for r in _df_eager.iter_rows(named=True)]
+    df_final = _df_eager.with_columns(
+        pl.Series("Sale_ID", _sale_ids, dtype=pl.String)
+    ).lazy()
     return df_final
 
 
