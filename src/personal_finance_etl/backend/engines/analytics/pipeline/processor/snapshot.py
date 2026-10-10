@@ -12,6 +12,11 @@ from personal_finance_etl.backend.engines.analytics.rules.macro import (
 from personal_finance_etl.backend.types.analytics import SnapshotRecord
 
 
+def _raise_invariant(msg: str) -> str:
+    """Raise a ValueError from inside an expression (e.g. a dataclass field assignment)."""
+    raise ValueError(msg)
+
+
 class SnapshotGenerator:
     def __init__(
         self,
@@ -35,11 +40,15 @@ class SnapshotGenerator:
         m_bm_price: float,
         inst_metrics: dict[str, Any],
         fx_provider: Any = None,
+        execution_residual: float = 0.0,
+        remaining_ltcg_exemption: float = 0.0,
     ) -> list[SnapshotRecord]:
         inst_cagr = inst_metrics.get("cagr", 0.0)
         inst_bm_cagr = inst_metrics.get("bm_cagr", 0.0)
         inst_xirr = inst_metrics.get("xirr", 0.0)
+        inst_xirr_status = inst_metrics.get("xirr_status", "VALID")
         inst_after_tax_xirr = inst_metrics.get("after_tax_xirr", 0.0)
+
         bm_xirr_val = inst_metrics.get("bm_xirr", 0.0)
         inst_active_return = inst_metrics.get("active_return", 0.0)
         is_lagging = inst_metrics.get("is_lagging", False)
@@ -115,7 +124,11 @@ class SnapshotGenerator:
             unreal_stcl = min(0.0, pnl) if holding_type == "STCG" else 0.0
             unreal_loss = min(0.0, pnl)
 
-            ltcg_tax = unreal_ltcg * ltcg_rate
+            # Deduct remaining LTCG exemption before computing tax-if-sold.
+            # Only Indian listed equity is eligible for the Rs 1.25L exemption (Section 112A).
+            # Foreign equity and other asset classes retain full tax on LTCG.
+            taxable_ltcg = max(0.0, unreal_ltcg - remaining_ltcg_exemption)
+            ltcg_tax = taxable_ltcg * ltcg_rate
             stcg_tax = unreal_stcg * stcg_rate
             after_tax_pl = pnl - (ltcg_tax + stcg_tax)
             after_tax_cv = close_val - (ltcg_tax + stcg_tax)
@@ -137,6 +150,9 @@ class SnapshotGenerator:
                 forex_return_pct = forex_pnl / buy_val_lot if buy_val_lot != 0 else 0.0
                 blended_fx_buy_rate = buy_val_lot / buy_val_local if buy_val_local != 0 else lot.fx_rate_buy
                 curr_fx_rate = fx_rate_snap
+                fx_rate_buy = lot.fx_rate_buy if lot.fx_rate_buy else 0.0
+                buy_price_local = lot.price_local if lot.price_local else 0.0
+                market_price_local = m_price_local
                 currency_appreciation_pct = (curr_fx_rate / blended_fx_buy_rate) - 1.0 if blended_fx_buy_rate > 0 else 0.0
             else:
                 buy_val_local = buy_val_lot
@@ -150,6 +166,9 @@ class SnapshotGenerator:
                 blended_fx_buy_rate = 1.0
                 curr_fx_rate = 1.0
                 currency_appreciation_pct = 0.0
+                fx_rate_buy = 1.0
+                buy_price_local = lot.price
+                market_price_local = m_price
 
             forex_contrib = forex_pnl / pnl if pnl != 0 else 0.0
 
@@ -159,6 +178,13 @@ class SnapshotGenerator:
                     ISIN=self.isin,
                     CURRENCY_ID=(fifo.active_lots[0].currency_id if fifo.active_lots and fifo.active_lots[0].currency_id else getattr(self.rules, "DEFAULT_CURRENCY_ID", "INR_INR")),
                     BENCHMARK_ID=self.bench_id,
+                    Lot_ID=lot.lot_id if lot.lot_id is not None else _raise_invariant(
+                        f"[SNAPSHOT] FIFO invariant: lot_id is None — "
+                        f"ISIN={self.isin}, Buy_Date={lbd}, qty={lot.qty}. "
+                        "lot_id must always be set inside fifo.buy()."
+                    ),
+                    Purchase_ID=lot.purchase_id,
+                    Lot_Source_Type=lot.lot_source_type,
                     TAX_TYPE=self.tax_type,
                     TAX_SUBTYPE=self.tax_subtype,
                     Buy_Date=lbd,
@@ -167,6 +193,7 @@ class SnapshotGenerator:
                     Days_To_LTCG=days_to_ltcg,
                     Holding_Type=holding_type,
                     Quantity=lot.qty,
+                    Execution_Residual=execution_residual,
                     Buy_Price=lot.price,
                     Market_Price=m_price,
                     Buy_Value=round(buy_val_lot, 4),
@@ -174,7 +201,9 @@ class SnapshotGenerator:
                     Lot_CAGR=round(lot_cagr, 8),
                     CAGR=round(inst_cagr, 8),
                     XIRR=round(inst_xirr, 8),
+                    XIRR_Status=inst_xirr_status,
                     After_Tax_XIRR=round(inst_after_tax_xirr, 8),
+
                     XIRR_Local=round(inst_xirr_local, 8),
                     FX_XIRR_Impact=round(fx_xirr_impact, 8),
                     BM_Buy_Price=round(lbm_buy, 4) if lbm_buy else None,
@@ -216,6 +245,10 @@ class SnapshotGenerator:
                     Asset_Return_Pct=round(asset_return_pct, 6),
                     Forex_Return_Pct=round(forex_return_pct, 6),
                     Blended_FX_Buy_Rate=round(blended_fx_buy_rate, 6),
+                    Buy_Price_Local=round(buy_price_local, 6),
+                    Market_Price_Local=round(market_price_local, 6),
+                    FX_Rate_Buy=round(fx_rate_buy, 6),
+                    FX_Rate_Snap=round(curr_fx_rate, 6),
                     Currency_Appreciation_Pct=round(currency_appreciation_pct, 6),
                 )
             )
