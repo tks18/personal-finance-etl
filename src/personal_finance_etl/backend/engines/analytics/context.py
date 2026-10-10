@@ -37,7 +37,16 @@ class AnalyticsContextManager:
             raise ValueError("Financial rules must be provided")
 
         ctx = RunContext.from_dataframes(
-            df_p, df_s, df_m, df_i, df_b, df_t, rules, df_fx, start_date, end_date,
+            df_p,
+            df_s,
+            df_m,
+            df_i,
+            df_b,
+            df_t,
+            rules,
+            df_fx,
+            start_date,
+            end_date,
             run_id=run_id,
         )
 
