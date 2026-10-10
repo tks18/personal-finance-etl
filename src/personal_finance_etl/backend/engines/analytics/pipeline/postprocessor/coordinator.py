@@ -56,6 +56,12 @@ class PostProcessor:
         lazy_df = self.gains_calc.calculate(lazy_df, unique_dates, pipeline_res.global_re)
         lazy_df = self.harvest_calc.calculate(lazy_df, rules=self.ctx.rules)
 
+        # Recompute non-additive ISIN metrics from ISIN-level cashflows and terminal values.
+        # Taking .first() from lot XIRRs is not financially valid when an ISIN has multiple lots.
+        df_isin = self.group_calc.run(
+            unique_dates, pipeline_res.isin_cf, pipeline_res.isin_pt, "ISIN"
+        )
+
         # 1. Process Class Level
         df_class = self.group_calc.run(
             unique_dates, pipeline_res.class_cf, pipeline_res.class_pt, "INSTRUMENT_CLASS"
@@ -197,55 +203,43 @@ class PostProcessor:
                 )
             )
 
-        f_tf_isin = _aggregate_level(["Closing_Date", "ISIN"]).join(
-            lazy_df_agg.select(
-                [
-                    "Closing_Date",
-                    "ISIN",
-                    "XIRR",
-                    "After_Tax_XIRR",
-                    "BM_XIRR",
-                    "Active_Return",
-                    "CAGR",
-                    "BM_CAGR",
-                    "Is_Lagging_Benchmark",
-                    "Max_Drawdown",
-                    "XIRR_Local",
-                    "FX_XIRR_Impact",
-                    "BM_XIRR_Local",
-                    "Active_Return_Local",
-                    # Tax harvesting metrics aggregated to ISIN level
-                    "LTCG_Tax_If_Sold",
-                    "STCG_Tax_If_Sold",
-                    "Unrealized_LTCG",
-                    "Unrealized_STCG",
-                    "Unrealized_LTCL",
-                    "Unrealized_STCL",
-                    "Outperforming_Lot_Ratio",
-                ]
-            ).group_by(["Closing_Date", "ISIN"]).agg(
-                pl.col("XIRR").first(),
-                pl.col("After_Tax_XIRR").first(),
-                pl.col("BM_XIRR").first(),
-                pl.col("Active_Return").first(),
-                pl.col("CAGR").first(),
-                pl.col("BM_CAGR").first(),
-                pl.col("Is_Lagging_Benchmark").first(),
-                pl.col("Max_Drawdown").first(),
-                pl.col("XIRR_Local").first(),
-                pl.col("FX_XIRR_Impact").first(),
-                pl.col("BM_XIRR_Local").first(),
-                pl.col("Active_Return_Local").first(),
-                pl.col("LTCG_Tax_If_Sold").sum(),
-                pl.col("STCG_Tax_If_Sold").sum(),
-                pl.col("Unrealized_LTCG").sum(),
-                pl.col("Unrealized_STCG").sum(),
-                pl.col("Unrealized_LTCL").sum(),
-                pl.col("Unrealized_STCL").sum(),
-                pl.col("Outperforming_Lot_Ratio").first(),
-            ),
-            on=["Closing_Date", "ISIN"],
-            how="left",
+        f_tf_isin = (
+            _aggregate_level(["Closing_Date", "ISIN"])
+            .join(
+                lazy_df_agg.select(
+                    [
+                        "Closing_Date",
+                        "ISIN",
+                        "CAGR",
+                        "BM_CAGR",
+                        "Is_Lagging_Benchmark",
+                        # Tax harvesting metrics aggregated to ISIN level.
+                        "LTCG_Tax_If_Sold",
+                        "STCG_Tax_If_Sold",
+                        "Unrealized_LTCG",
+                        "Unrealized_STCG",
+                        "Unrealized_LTCL",
+                        "Unrealized_STCL",
+                        "Outperforming_Lot_Ratio",
+                    ]
+                )
+                .group_by(["Closing_Date", "ISIN"])
+                .agg(
+                    pl.col("CAGR").first(),
+                    pl.col("BM_CAGR").first(),
+                    pl.col("Is_Lagging_Benchmark").first(),
+                    pl.col("LTCG_Tax_If_Sold").sum(),
+                    pl.col("STCG_Tax_If_Sold").sum(),
+                    pl.col("Unrealized_LTCG").sum(),
+                    pl.col("Unrealized_STCG").sum(),
+                    pl.col("Unrealized_LTCL").sum(),
+                    pl.col("Unrealized_STCL").sum(),
+                    pl.col("Outperforming_Lot_Ratio").first(),
+                ),
+                on=["Closing_Date", "ISIN"],
+                how="left",
+            )
+            .join(df_isin.lazy(), on=["Closing_Date", "ISIN"], how="left")
         )
 
         f_tf_class = (
@@ -406,10 +400,27 @@ class PostProcessor:
             "Asset_PnL_Local": pl.Float64,
             "Asset_PnL": pl.Float64,
             "Forex_PnL": pl.Float64,
+            "Applied_Rate": pl.Float64,
+            "Estimated_Tax": pl.Float64,
         }
 
         df_re = (
-            pl.LazyFrame(pipeline_res.global_re, schema_overrides=re_schema).select(list(re_schema.keys()))
+            pl.LazyFrame(pipeline_res.global_re, schema_overrides=re_schema)
+            .select(list(re_schema.keys()))
+            .with_columns(
+                pl.when(
+                    pl.col("Lot_Source_Type").cast(pl.String).str.to_uppercase() == "RECONCILIATION"
+                )
+                .then(pl.lit(None, dtype=pl.Float64))
+                .otherwise(pl.col("Applied_Rate"))
+                .alias("Applied_Rate"),
+                pl.when(
+                    pl.col("Lot_Source_Type").cast(pl.String).str.to_uppercase() == "RECONCILIATION"
+                )
+                .then(pl.lit(None, dtype=pl.Float64))
+                .otherwise(pl.col("Estimated_Tax"))
+                .alias("Estimated_Tax"),
+            )
             if pipeline_res.global_re
             else pl.LazyFrame(schema=re_schema)
         )
