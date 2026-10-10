@@ -43,26 +43,48 @@ def transform_currency_fx_rates(
     # 5. Left join continuous spine with actual rates
     df_continuous = df_spine_full.join(df_bronze_agg, on=["Date", "Currency_ID"], how="left")
 
-    # 6. Fill missing values (ffill then bfill) over each Currency_ID window
-    # Track which values were imputed vs actual
-    df_filled = df_continuous.sort(["Currency_ID", "Date"]).with_columns(
+    # 6. Forward-fill only over each Currency_ID window; track imputed vs actual
+    df_sorted = df_continuous.sort(["Currency_ID", "Date"])
+
+    df_filled = df_sorted.with_columns(
         pl.col("Is_Closure_Gap").fill_null(True).alias("Is_Imputed"),
-        pl.col("FX_Rate").forward_fill().backward_fill().over("Currency_ID"),
-        pl.col("Data_Provider").forward_fill().backward_fill().over("Currency_ID"),
-        pl.col("Extraction_Time").forward_fill().backward_fill().over("Currency_ID"),
+        # Forward-fill only: use last known rate for weekends/holidays.
+        # No backward-fill: dates before the first observation stay null.
+        # A future observation must never be used to value a past date.
+        pl.col("FX_Rate").forward_fill().over("Currency_ID"),
+        pl.col("Data_Provider").forward_fill().over("Currency_ID"),
+        pl.col("Extraction_Time").forward_fill().over("Currency_ID"),
+    ).with_columns(
+        # First_Observation_Date: earliest date with a real (non-imputed) rate per currency.
+        pl.col("Date")
+        .filter(~pl.col("Is_Imputed"))
+        .min()
+        .over("Currency_ID")
+        .alias("First_Observation_Date"),
     )
 
-    # Validate that no FX rates are completely missing for any active currency
+    # Null FX rates after forward-fill mean no observation exists on or before that date.
+    # The FX validation gate (FXValidationGate.validate) will raise at the ISIN level.
     missing_fx = df_filled.filter(pl.col("FX_Rate").is_null()).collect()
     if not missing_fx.is_empty():
         bad_currencies = missing_fx["Currency_Code"].unique().to_list()
-        raise ValueError(f"FATAL: Missing FX data for active currencies: {bad_currencies}. Halting pipeline to prevent silent corruption.")
+        min_dates = (
+            missing_fx.group_by("Currency_Code")
+            .agg(pl.col("Date").min().alias("Earliest_Missing"))
+            .to_dicts()
+        )
+        raise ValueError(
+            f"Missing FX history before first observation for currencies: {bad_currencies}. "
+            f"Earliest missing dates: {min_dates}. "
+            "Add earlier FX data or restrict the pipeline start date."
+        )
 
     # 7. Final Projection
     df_final = df_filled.select(
         [
-            "Date", "Currency_ID", "Currency_Code", "Target_Currency_Code", 
-            "FX_Rate", "yF_Ticker", "Data_Provider", "Extraction_Time", "Is_Imputed"
+            "Date", "Currency_ID", "Currency_Code", "Target_Currency_Code",
+            "FX_Rate", "yF_Ticker", "Data_Provider", "Extraction_Time",
+            "Is_Imputed", "First_Observation_Date",
         ]
     )
 
