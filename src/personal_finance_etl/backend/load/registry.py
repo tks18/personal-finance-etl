@@ -272,15 +272,6 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
         "TaxEngine",
         300,
     ),
-    DataContract(
-        "df_f_tax_fy_state",
-        "silver",
-        "silver.f_Tax_FY_State",
-        "Taxes",
-        "FYState",
-        "TaxEngine",
-        301,
-    ),
     # --- Gold Presentation ---
     DataContract(
         "df_p_tax_year_summary",
@@ -296,7 +287,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
         "gold",
         "gold.Tax_Income_Breakdown",
         "Taxes",
-        "FY-Head",
+        "FY-Head-SubHead-Source",
         "TaxEngine",
         303,
     ),
@@ -353,15 +344,6 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
         "Month",
         "WealthPresentationEngine",
         140,
-    ),
-    DataContract(
-        "df_p_investment_tax_liability_forecast",
-        "gold",
-        "gold.Investment_Tax_Liability_Forecast",
-        "Taxes",
-        "Date",
-        "TaxEngine",
-        150,
     ),
     DataContract(
         "df_p_tf_budget_forecast_monthly",
@@ -552,4 +534,3 @@ def validate_registry() -> None:
         if contract.physical_table in bronze_tables:
             raise ValueError(f"Duplicate Bronze table mapping: {contract.physical_table}")
         bronze_tables.add(contract.physical_table)
-
