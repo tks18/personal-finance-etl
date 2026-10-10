@@ -1,6 +1,9 @@
 import hashlib
 import json
+import math
 from typing import Any
+
+import numpy as np
 
 
 def generate_contract_registry_fingerprint(tables_metadata: list[dict[str, Any]]) -> str:
@@ -49,8 +52,6 @@ def get_standard_prng(seed_string: str) -> Any:
     for financial Monte Carlo simulations. Uses NumPy's PCG64 (Permuted Congruential Generator).
     The string seed is hashed into a deterministically derived integer seed.
     """
-    import numpy as np
-    
     # Deterministically convert the string seed into an integer suitable for PCG64
     seed_int = int(hashlib.sha256(seed_string.encode('utf-8')).hexdigest()[:15], 16)
     
@@ -64,7 +65,6 @@ def assert_simulation_replay(actual_val: float, expected_val: float, context: st
     Standardizes strict numerical tolerances for asserting simulation equivalence 
     across rebuilds or version upgrades.
     """
-    import math
     # rel_tol of 1e-5 (0.001%) and abs_tol of 1e-4
     if not math.isclose(actual_val, expected_val, rel_tol=1e-5, abs_tol=1e-4):
         raise ValueError(
