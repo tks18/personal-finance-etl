@@ -126,7 +126,6 @@ class USStockPipeline:
 
         master_ref = get_stg_us_stock_master_ref(base_orders, d_asset_subcategory_lazy)
 
-        # We return empty market data here, it will be populated in Phase 3
         empty_market_data = pl.LazyFrame(
             schema={
                 "__file_name__": pl.String,
