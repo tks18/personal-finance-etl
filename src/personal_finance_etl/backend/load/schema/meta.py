@@ -47,4 +47,24 @@ CREATE TABLE IF NOT EXISTS meta.m_Data_Contracts (
     is_full_replace   BOOLEAN,
     publication_order INTEGER
 );
+
+-- Latest simulation provenance mirror (Latest Run Only)
+-- Mirrors the most recent successful cp_simulation_runs row from SQLite into DuckDB
+-- so simulation fingerprints and model versions are queryable without cross-store joins.
+CREATE TABLE IF NOT EXISTS meta.m_Latest_Simulation (
+    simulation_id              TEXT NOT NULL,
+    run_id                     TEXT NOT NULL,
+    created_at                 TIMESTAMP NOT NULL,
+    root_seed                  TEXT NOT NULL,
+    iterations                 INTEGER,
+    horizon                    INTEGER,
+    model_implementation_version TEXT,
+    model_fingerprint          TEXT,
+    input_fingerprint          TEXT,
+    result_fingerprint         TEXT,
+    contract_registry_fingerprint TEXT,  -- SHA-256 of sorted DATA_CONTRACT_REGISTRY structural metadata
+    settings_snapshot_id       TEXT,
+    rules_snapshot_id          TEXT,
+    status                     TEXT
+);
 """
