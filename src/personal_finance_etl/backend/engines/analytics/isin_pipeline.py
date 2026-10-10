@@ -117,6 +117,8 @@ class IsinPipeline:
         global_cashflows: list[dict[str, Any]] = []
         portfolio_terminals: dict[date, dict[str, float]] = {}
         realized_events: list[dict[str, Any]] = []
+        isin_cashflows: dict[str, list[dict[str, Any]]] = {}
+        isin_terminals: dict[str, dict[date, dict[str, Any]]] = {}
 
         class_cf: dict[str, list[dict[str, Any]]] = {}
         class_pt: dict[str, dict[date, dict[str, float]]] = {}
@@ -265,7 +267,9 @@ class IsinPipeline:
                         )
 
                     try:
-                        success, isin_cf, isin_pt, isin_re, isin_recon, tags, error_info = future.result()
+                        success, isin_cf, isin_pt, isin_re, isin_recon, tags, error_info = (
+                            future.result()
+                        )
                     except Exception as e:
                         # Catch BrokenProcessPool, CancelledError, PicklingError, etc.
                         error_msg = f"Process-boundary failure: {type(e).__name__} - {str(e)}"
@@ -285,17 +289,27 @@ class IsinPipeline:
 
                     if success:
                         has_data = True
+                    if isin_cf or isin_pt:
+                        isin_cashflows[isin] = isin_cf
+                        isin_terminals[isin] = isin_pt
 
                     global_cashflows.extend(isin_cf)
                     for d, vals in isin_pt.items():
                         pt = portfolio_terminals.setdefault(
                             d,
-                            {"val": 0.0, "shadow_val": 0.0, "after_tax_val": 0.0, "val_local": 0.0},
+                            {
+                                "val": 0.0,
+                                "shadow_val": 0.0,
+                                "after_tax_val": 0.0,
+                                "val_local": 0.0,
+                                "shadow_val_local": 0.0,
+                            },
                         )
                         pt["val"] += vals["val"]
                         pt["shadow_val"] += vals["shadow_val"]
                         pt["after_tax_val"] += vals.get("after_tax_val", 0.0)
                         pt["val_local"] += vals.get("val_local", 0.0)
+                        pt["shadow_val_local"] += vals["shadow_val_local"]
                     realized_events.extend(isin_re)
                     global_recon_events.extend(isin_recon)
 
@@ -317,12 +331,19 @@ class IsinPipeline:
                     for d, vals in isin_pt.items():
                         pt = cp.setdefault(
                             d,
-                            {"val": 0.0, "shadow_val": 0.0, "after_tax_val": 0.0, "val_local": 0.0},
+                            {
+                                "val": 0.0,
+                                "shadow_val": 0.0,
+                                "after_tax_val": 0.0,
+                                "val_local": 0.0,
+                                "shadow_val_local": 0.0,
+                            },
                         )
                         pt["val"] += vals["val"]
                         pt["shadow_val"] += vals["shadow_val"]
                         pt["after_tax_val"] += vals.get("after_tax_val", 0.0)
                         pt["val_local"] += vals.get("val_local", 0.0)
+                        pt["shadow_val_local"] += vals["shadow_val_local"]
 
                     sub_key = f"{cls}___{sub}"
                     subtype_cf.setdefault(sub_key, []).extend(isin_cf)
@@ -331,12 +352,19 @@ class IsinPipeline:
                     for d, vals in isin_pt.items():
                         pt = sp.setdefault(
                             d,
-                            {"val": 0.0, "shadow_val": 0.0, "after_tax_val": 0.0, "val_local": 0.0},
+                            {
+                                "val": 0.0,
+                                "shadow_val": 0.0,
+                                "after_tax_val": 0.0,
+                                "val_local": 0.0,
+                                "shadow_val_local": 0.0,
+                            },
                         )
                         pt["val"] += vals["val"]
                         pt["shadow_val"] += vals["shadow_val"]
                         pt["after_tax_val"] += vals.get("after_tax_val", 0.0)
                         pt["val_local"] += vals.get("val_local", 0.0)
+                        pt["shadow_val_local"] += vals["shadow_val_local"]
 
                     def _update_group(  # type: ignore[no-untyped-def]
                         group_key: str,
@@ -355,12 +383,14 @@ class IsinPipeline:
                                     "shadow_val": 0.0,
                                     "after_tax_val": 0.0,
                                     "val_local": 0.0,
+                                    "shadow_val_local": 0.0,
                                 },
                             )
                             pt["val"] += vals["val"]
                             pt["shadow_val"] += vals["shadow_val"]
                             pt["after_tax_val"] += vals.get("after_tax_val", 0.0)
                             pt["val_local"] += vals.get("val_local", 0.0)
+                            pt["shadow_val_local"] += vals["shadow_val_local"]
 
                     _update_group(
                         inst_type, instrument_type_cf, instrument_type_pt, isin_cf, isin_pt
@@ -386,6 +416,8 @@ class IsinPipeline:
             global_pt=portfolio_terminals,
             global_re=realized_events,
             global_recon_events=global_recon_events,
+            isin_cf=isin_cashflows,
+            isin_pt=isin_terminals,
             class_cf=class_cf,
             class_pt=class_pt,
             class_re=class_re,
