@@ -16,6 +16,9 @@ from personal_finance_etl.backend.load.registry import (
     DATA_CONTRACT_REGISTRY,
 )
 from personal_finance_etl.backend.utils.logger import logger
+from personal_finance_etl.backend.utils.reproducibility import (
+    generate_contract_registry_fingerprint,
+)
 
 
 class MetaLayer:
@@ -208,8 +211,13 @@ class MetaLayer:
                 ],
             )
 
-    def load(self, dfs: dict[str, pl.DataFrame]) -> None:
-        """Truncates and records the latest table sizes and financial rules into the meta schema."""
+    def load(self, dfs: dict[str, pl.DataFrame], cp: "ControlPlane | None" = None) -> None:
+        """Truncates and records the latest table sizes and financial rules into the meta schema.
+
+        When *cp* is provided, also mirrors the most recent successful simulation run from SQLite
+        into ``meta.m_Latest_Simulation`` so simulation provenance is queryable from DuckDB
+        without a cross-store join to SQLite (Production §11).
+        """
         logger.info("Recording current table metrics and configurations to Meta Layer...")
 
         self.conn.execute("DELETE FROM meta.m_Table_Row_Counts")
@@ -330,5 +338,55 @@ class MetaLayer:
             if full_table_name not in valid_physical_tables:
                 logger.warning(f"MetaLayer: Dropping orphaned physical table {full_table_name}")
                 self.conn.execute(f"DROP TABLE IF EXISTS {full_table_name} CASCADE")
+
+        # --- Production §11 + §12: Mirror latest simulation run + Contract Registry Fingerprint ---
+        # Compute contract registry fingerprint from live registry (§12).
+        # This is the SHA-256 of sorted structural metadata — no manual counter needed.
+        tables_metadata = [
+            {
+                "table_name": c.physical_table,
+                "grain": c.grain,
+                "producer": c.producer,
+            }
+            for c in DATA_CONTRACT_REGISTRY
+        ]
+        contract_registry_fingerprint = generate_contract_registry_fingerprint(tables_metadata)
+
+        if cp is not None:
+            # Read the most recent successful simulation run from SQLite ControlPlane (§11).
+            try:
+                sim_row = cp.db.conn.execute(
+                    """
+                    SELECT simulation_id, run_id, created_at, root_seed, iterations, horizon,
+                           model_implementation_version, model_fingerprint, input_fingerprint,
+                           result_fingerprint, settings_snapshot_id, rules_snapshot_id, status
+                    FROM cp_simulation_runs
+                    WHERE status = 'SUCCESS'
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                    """
+                ).fetchone()
+
+                if sim_row is not None:
+                    self.conn.execute("DELETE FROM meta.m_Latest_Simulation")
+                    self.conn.execute(
+                        """
+                        INSERT INTO meta.m_Latest_Simulation (
+                            simulation_id, run_id, created_at, root_seed, iterations, horizon,
+                            model_implementation_version, model_fingerprint, input_fingerprint,
+                            result_fingerprint, contract_registry_fingerprint,
+                            settings_snapshot_id, rules_snapshot_id, status
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        list(sim_row[:10]) + [contract_registry_fingerprint] + list(sim_row[10:]),
+                    )
+                    logger.info(
+                        f"[META] Mirrored latest simulation run '{sim_row[0]}' into meta.m_Latest_Simulation "
+                        f"(contract_registry_fingerprint={contract_registry_fingerprint[:12]}...)."
+                    )
+            except Exception as mirror_err:
+                logger.warning(
+                    f"[META] Could not mirror simulation run into DuckDB meta: {mirror_err}"
+                )
 
         logger.info("Meta layer load complete. DuckDB snapshot represents the latest active state.")
