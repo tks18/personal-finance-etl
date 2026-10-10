@@ -1,13 +1,6 @@
-"""FX rate validation gate for the per-ISIN analytics pipeline.
+"""FX rate validation gate for the per-ISIN analytics pipeline."""
 
-The :class:`FXValidationGate` performs a pre-flight check before the main
-market-data loop: it raises when a foreign-currency instrument has no FX
-provider or when the provider cannot supply a rate for the first purchase date.
-
-Separating this from :class:`IsinProcessor` keeps each class focused and makes
-the validation independently testable.
-"""
-
+import math
 from datetime import date
 from typing import Any
 
@@ -75,7 +68,7 @@ class FXValidationGate:
 
         # Spot-check: verify at least one rate is available for the first purchase date.
         spot_rate = self.fx_provider.get_rate(first_p_date, instrument_currency)
-        if spot_rate is None or spot_rate <= 0:
+        if spot_rate is None or not math.isfinite(float(spot_rate)) or spot_rate <= 0:
             raise FXRateUnavailableError(
                 f"ISIN={isin} ({instrument_currency}): FX provider returned no valid rate "
                 f"for {first_p_date}. Cannot compute INR values — review FX data coverage."
