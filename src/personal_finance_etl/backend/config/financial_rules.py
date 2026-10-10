@@ -332,27 +332,52 @@ class TaxSubHeadConfig(BaseModel):
     taxability: TaxabilityType = "review"
     tax_method: TaxMethodType = "review"
 
-
-class CapitalGainsGroupConfig(BaseModel):
-    """Groups Tax_Sub_Head codes under a named capital-gains category.
-
-    Unlike TaxHeadConfig (which uses cat_ids/sub_cat_ids for LEDGER category
-    matching), this config is purely sub-head-code-based — investment CG events
-    come from the FIFO engine, not from ledger categories.
-
-    Putting the grouping in config means:
-    - New asset classes can be added via TOML without Python code changes.
-    - The gold layer and reporting can filter events by group name.
-    - The valid sub-head set in base_events.py is derived from config, not hardcoded.
-    """
-
-    display_name: str
-    gain_type: Literal["ST", "LT"]
-    sub_head_codes: list[str] = Field(default_factory=list)
+    @model_validator(mode="after")
+    def validate_tax_credit_ids(self) -> Self:
+        income_ids = set(self.sub_cat_ids)
+        credit_ids = set(self.tax_credit_sub_cat_ids)
+        if len(income_ids) != len(self.sub_cat_ids):
+            raise ValueError("Duplicate sub_cat_ids configured for a tax sub-head.")
+        if len(credit_ids) != len(self.tax_credit_sub_cat_ids):
+            raise ValueError("Duplicate tax_credit_sub_cat_ids configured for a tax sub-head.")
+        overlap = income_ids.intersection(credit_ids)
+        if overlap:
+            raise ValueError(
+                "A subcategory UID cannot be configured as both income and tax credit: "
+                f"{sorted(overlap)}"
+            )
+        return self
 
 
 class TaxHeadConfig(BaseModel):
     sub_heads: dict[str, TaxSubHeadConfig] = Field(default_factory=dict)
+
+
+class InvestmentExclusionsConfig(BaseModel):
+    stcg_sub_cat_ids: list[str] = Field(default_factory=list)
+    ltcg_sub_cat_ids: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_exclusions(self) -> Self:
+        for field_name, values in (
+            ("stcg_sub_cat_ids", self.stcg_sub_cat_ids),
+            ("ltcg_sub_cat_ids", self.ltcg_sub_cat_ids),
+        ):
+            if any(not uid or not uid.strip() for uid in values):
+                raise ValueError(f"{field_name} cannot contain blank UIDs.")
+            if any(uid != uid.strip() for uid in values):
+                raise ValueError(f"{field_name} cannot contain UIDs with surrounding whitespace.")
+            if len(set(values)) != len(values):
+                raise ValueError(f"Duplicate UIDs found in {field_name}.")
+
+        stcg = set(self.stcg_sub_cat_ids)
+        ltcg = set(self.ltcg_sub_cat_ids)
+        overlap = stcg.intersection(ltcg)
+        if overlap:
+            raise ValueError(
+                f"Overlapping sub_cat_ids between STCG and LTCG exclusions: {sorted(overlap)}"
+            )
+        return self
 
 
 class TaxAssumptions(BaseModel):
@@ -385,13 +410,14 @@ class TaxAssumptions(BaseModel):
     heads_of_income: dict[str, TaxHeadConfig] = Field(default_factory=dict)
     residual_income: TaxHeadConfig = Field(default_factory=TaxHeadConfig)
     exempt_income: TaxHeadConfig = Field(default_factory=TaxHeadConfig)
-    # Investment CG groupings: maps a group name → list of Tax_Sub_Head codes.
-    # Replaces the hardcoded _INVESTMENT_SUB_HEADS set in base_events.py when configured.
-    capital_gains_groups: dict[str, CapitalGainsGroupConfig] = Field(default_factory=dict)
+    investment_exclusions: InvestmentExclusionsConfig = Field(
+        default_factory=InvestmentExclusionsConfig
+    )
 
     @model_validator(mode="after")
     def validate_mutual_exclusivity(self) -> TaxAssumptions:
         seen_sub_cats: set[str] = set()
+        seen_credit_sub_cats: set[str] = set()
         seen_cats: set[str] = set()
 
         # Combine all heads for global mutual exclusivity check
@@ -406,7 +432,23 @@ class TaxAssumptions(BaseModel):
                         raise ValueError(
                             f"Duplicate sub_cat_id {sub_cat} found in {head_name}.{sub_name}"
                         )
+                    if sub_cat in seen_credit_sub_cats:
+                        raise ValueError(
+                            f"Subcategory UID {sub_cat} is configured as both income and tax credit."
+                        )
                     seen_sub_cats.add(sub_cat)
+
+                for credit_sub_cat in sub_config.tax_credit_sub_cat_ids:
+                    if credit_sub_cat in seen_credit_sub_cats:
+                        raise ValueError(
+                            f"Duplicate tax_credit_sub_cat_id {credit_sub_cat} found in "
+                            f"{head_name}.{sub_name}"
+                        )
+                    if credit_sub_cat in seen_sub_cats:
+                        raise ValueError(
+                            f"Subcategory UID {credit_sub_cat} is configured as both income and tax credit."
+                        )
+                    seen_credit_sub_cats.add(credit_sub_cat)
 
                 for cat in sub_config.cat_ids:
                     if cat in seen_cats:
@@ -455,6 +497,34 @@ class FinancialRules(BaseModel):
     # Transactional rules
     DEFAULT_CURRENCY_ID: str = "INR_INR"
     MF_SCHEME_MAPPINGS: dict[str, str] = Field(default_factory=dict)
+
+    def validate_investment_exclusion_uids(self, df_subcategory: Any) -> None:
+        """Validate configured investment exclusions against the actual subcategory dimension.
+
+        Pydantic can validate duplicate/overlapping configuration values, but only the
+        materialized dimension can establish whether a UID exists in the current source data.
+        """
+        if "UID" not in df_subcategory.columns:
+            raise ValueError(
+                "Income subcategory dimension must contain UID to validate investment exclusions."
+            )
+
+        configured = set(self.assumptions.tax.investment_exclusions.stcg_sub_cat_ids)
+        configured.update(self.assumptions.tax.investment_exclusions.ltcg_sub_cat_ids)
+        if not configured:
+            return
+
+        available = {
+            str(uid).strip()
+            for uid in df_subcategory.get_column("UID").drop_nulls().to_list()
+            if str(uid).strip()
+        }
+        unknown = sorted(configured - available)
+        if unknown:
+            raise ValueError(
+                "Configured STCG/LTCG investment exclusion UID(s) do not exist in "
+                f"silver.d_Income_Subcategory: {unknown}"
+            )
 
     @classmethod
     def from_toml(cls, filepath: str) -> Self:
