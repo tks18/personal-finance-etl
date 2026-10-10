@@ -9,6 +9,9 @@ from personal_finance_etl.backend.engines.analytics.core.math import calculate_c
 from personal_finance_etl.backend.engines.analytics.pipeline.processor.benchmark import (
     BenchmarkPriceProvider,
 )
+from personal_finance_etl.backend.engines.analytics.pipeline.processor.fx_gate import (
+    FXValidationGate,
+)
 from personal_finance_etl.backend.engines.analytics.pipeline.processor.snapshot import (
     SnapshotGenerator,
 )
@@ -61,7 +64,7 @@ class IsinProcessor:
         snapshot_generator = SnapshotGenerator(self.fy_table, self.rules, isin, master_row)
 
         default_curr = getattr(self.rules, "DEFAULT_CURRENCY_ID", "INR_INR")
-        fifo = FIFOPortfolio(tax_type, tax_subtype, self.fy_table, default_curr)
+        fifo = FIFOPortfolio(tax_type, tax_subtype, self.fy_table, default_curr, isin)
         cf_dates: list[date] = []
         cf_amounts: list[float] = []
         bm_cf_amounts: list[float] = []
@@ -83,6 +86,22 @@ class IsinProcessor:
         isin_snapshots: list[SnapshotRecord] = []
         running_peak_price = 0.0
         running_max_dd = 0.0
+
+        # Pre-Quant FX gate: warn when an instrument is in a foreign currency but has no
+        # FX provider or when the provider cannot supply a rate. Without a valid FX rate,
+        # all INR-denominated values (Buy_Value, Close_Value, PnL) will be silently wrong.
+        FXValidationGate(self.rules, self.fx_provider).validate(isin, master_row, first_p_date)
+
+        # FX cache: keyed by (date, currency_id) so that the same rate is not fetched more
+        # than once per unique date × currency pair within this ISIN's processing pass.
+        # The inner lot loop (hottest path) and the market-date snap all share this cache.
+        _fx_cache: dict[tuple[date, str], float | None] = {}
+
+        def _get_fx(d: date, curr: str) -> float | None:
+            key = (d, curr)
+            if key not in _fx_cache:
+                _fx_cache[key] = self.fx_provider.get_rate(d, curr) if self.fx_provider else None
+            return _fx_cache[key]
 
         for m_row in m_inst:
             m_date = to_date_obj(m_row["Date"])
@@ -111,9 +130,7 @@ class IsinProcessor:
                     or master_row.get("CURRENCY_ID")
                     or getattr(self.rules, "DEFAULT_CURRENCY_ID", "INR_INR")
                 )
-                fx_rate_buy = (
-                    self.fx_provider.get_rate(row_dt_obj, currency_id) if self.fx_provider else 1.0
-                )
+                fx_rate_buy = _get_fx(row_dt_obj, currency_id) if self.fx_provider else 1.0
                 fx_rate_buy = fx_rate_buy if fx_rate_buy is not None else float("nan")
 
                 # Assume bm_p_raw is in local currency (e.g. USD). Then INR value is bm_p_raw * fx_rate_buy.
@@ -173,9 +190,7 @@ class IsinProcessor:
                     or master_row.get("CURRENCY_ID")
                     or getattr(self.rules, "DEFAULT_CURRENCY_ID", "INR_INR")
                 )
-                fx_rate_sell = (
-                    self.fx_provider.get_rate(row_dt_obj, currency_id) if self.fx_provider else 1.0
-                )
+                fx_rate_sell = _get_fx(row_dt_obj, currency_id) if self.fx_provider else 1.0
                 fx_rate_sell = fx_rate_sell if fx_rate_sell is not None else float("nan")
 
                 cf_dates.append(row_dt_obj)
@@ -211,7 +226,9 @@ class IsinProcessor:
             m_recon_bm_price = bm_provider.get_bm_price(m_date)
             if not m_recon_bm_price or m_recon_bm_price <= 0:
                 m_recon_bm_price = float("nan")
-            cf_recon, qty_recon_events = fifo.reconcile_quantity(m_row.get("Quantity"), m_date, m_recon_bm_price)
+            cf_recon, qty_recon_events = fifo.reconcile_quantity(
+                m_row.get("Quantity"), m_date, m_recon_bm_price
+            )
             for re in qty_recon_events:
                 re["ISIN"] = isin
             isin_recon_events.extend(qty_recon_events)
@@ -225,7 +242,9 @@ class IsinProcessor:
                     CashflowRecord(date=cast(date, cf["date"]), amount=amt, amount_local=amt)
                 )
 
-            cb_recon_events = fifo.reconcile_cost_basis(m_row.get("Buy_Value"), m_row.get("Buy_Value_Local"), m_date)
+            cb_recon_events = fifo.reconcile_cost_basis(
+                m_row.get("Buy_Value"), m_row.get("Buy_Value_Local"), m_date
+            )
             for re in cb_recon_events:
                 re["ISIN"] = isin
             isin_recon_events.extend(cb_recon_events)
@@ -239,6 +258,7 @@ class IsinProcessor:
                 continue
 
             m_price = float(m_row["Closing_Price"])
+            remaining_ltcg_exemption = float(m_row.get("Equity_LTCG_Exemption") or 0.0)
             m_bm_price = bm_provider.get_bm_price(m_date)
             if not m_bm_price or m_bm_price <= 0:
                 m_bm_price = float("nan")
@@ -251,7 +271,7 @@ class IsinProcessor:
                 != getattr(self.rules, "DEFAULT_CURRENCY_ID", "INR_INR")
                 and self.fx_provider
             ):
-                fx_rate_snap = self.fx_provider.get_rate(m_date, fifo.active_lots[0].currency_id)
+                fx_rate_snap = _get_fx(m_date, fifo.active_lots[0].currency_id)
                 fx_rate_snap = fx_rate_snap if fx_rate_snap is not None else float("nan")
 
             m_bm_price_inr = m_bm_price * fx_rate_snap
@@ -268,7 +288,7 @@ class IsinProcessor:
                     and lot.currency_id != getattr(self.rules, "DEFAULT_CURRENCY_ID", "INR_INR")
                     and self.fx_provider
                 ):
-                    fx_rate_snap_lot = self.fx_provider.get_rate(m_date, lot.currency_id)
+                    fx_rate_snap_lot = _get_fx(m_date, lot.currency_id)
                     m_price_local = (
                         m_price / fx_rate_snap_lot
                         if (fx_rate_snap_lot is not None and fx_rate_snap_lot > 0)
@@ -298,17 +318,23 @@ class IsinProcessor:
                 pnl = (m_price - lot.price) * lot.qty
                 unreal_ltcg = max(0.0, pnl) if holding_type == "LTCG" else 0.0
                 unreal_stcg = max(0.0, pnl) if holding_type == "STCG" else 0.0
-                ltcg_tax = unreal_ltcg * ltcg_rate
+                taxable_ltcg = max(0.0, unreal_ltcg - remaining_ltcg_exemption)
+                ltcg_tax = taxable_ltcg * ltcg_rate
                 stcg_tax = unreal_stcg * stcg_rate
                 after_tax_terminal_val += (lot.qty * m_price) - (ltcg_tax + stcg_tax)
 
             pt.after_tax_val += after_tax_terminal_val
 
-            inst_xirr = calculate_xirr(cf_dates + [m_date], cf_amounts + [terminal_val])
-            bm_xirr_val = calculate_xirr(cf_dates + [m_date], bm_cf_amounts + [shadow_terminal_val])
-            inst_after_tax_xirr = calculate_xirr(
+            inst_xirr_result = calculate_xirr(cf_dates + [m_date], cf_amounts + [terminal_val])
+            bm_xirr_result = calculate_xirr(
+                cf_dates + [m_date], bm_cf_amounts + [shadow_terminal_val]
+            )
+            inst_after_tax_xirr_result = calculate_xirr(
                 cf_dates + [m_date], cf_amounts + [after_tax_terminal_val]
             )
+            inst_xirr = inst_xirr_result.as_float()
+            bm_xirr_val = bm_xirr_result.as_float()
+            inst_after_tax_xirr = inst_after_tax_xirr_result.as_float()
 
             inst_active_return = inst_xirr - bm_xirr_val
             is_lagging = inst_xirr < bm_xirr_val
@@ -343,6 +369,7 @@ class IsinProcessor:
                 "cagr": inst_cagr,
                 "bm_cagr": inst_bm_cagr,
                 "xirr": inst_xirr,
+                "xirr_status": inst_xirr_result.status,
                 "bm_xirr": bm_xirr_val,
                 "after_tax_xirr": inst_after_tax_xirr,
                 "active_return": inst_active_return,
@@ -355,23 +382,32 @@ class IsinProcessor:
             cf_amounts_local = [c.amount_local for c in isin_cashflows if c.date <= m_date]
             inst_xirr_local = calculate_xirr(
                 cf_dates_local + [m_date], cf_amounts_local + [terminal_val_local]
-            )
+            ).as_float()
 
             bm_cf_dates_local = cf_dates_local
             bm_cf_local = bm_cf_amounts_local[: len(cf_dates_local)]
             inst_bm_xirr_local = calculate_xirr(
                 bm_cf_dates_local + [m_date], bm_cf_local + [shadow_terminal_val_local]
-            )
+            ).as_float()
 
             inst_metrics["xirr_local"] = inst_xirr_local
             inst_metrics["bm_xirr_local"] = inst_bm_xirr_local
             inst_metrics["active_return_local"] = inst_xirr_local - inst_bm_xirr_local
             inst_metrics["fx_xirr_impact"] = inst_xirr - inst_xirr_local
 
-            snapshots = snapshot_generator.generate(
-                fifo, m_date, m_price, m_bm_price, inst_metrics, fx_provider=self.fx_provider
+            exec_res_raw = m_row.get("Execution_Residual")
+            execution_residual = float(exec_res_raw) if exec_res_raw is not None else 0.0
+            new_snapshots = snapshot_generator.generate(
+                fifo,
+                m_date,
+                m_price,
+                m_bm_price,
+                inst_metrics,
+                fx_provider=self.fx_provider,
+                execution_residual=execution_residual,
+                remaining_ltcg_exemption=remaining_ltcg_exemption,
             )
-            isin_snapshots.extend(snapshots)
+            isin_snapshots.extend(new_snapshots)
 
         while p_idx < len(p_inst):
             row_dt_obj = to_date_obj(p_inst[p_idx]["Date"])
@@ -495,6 +531,9 @@ class IsinProcessor:
         schema_overrides = {
             "BM_Buy_Price": pl.Float64,
             "BENCHMARK_ID": pl.String,
+            "Lot_ID": pl.String,
+            "Purchase_ID": pl.String,
+            "Lot_Source_Type": pl.String,
             "Buy_Date": pl.Date,
         }
         df = (
@@ -526,5 +565,6 @@ class IsinProcessor:
             cashflows=isin_cashflows,
             terminals=isin_terminals,
             realized_events=isin_realized,
+            recon_events=isin_recon_events,
             tags=tags,
         )
