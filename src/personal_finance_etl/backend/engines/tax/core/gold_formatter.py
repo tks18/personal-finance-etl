@@ -71,7 +71,9 @@ class TaxGoldFormatter:
             if "Capital_Gains_Group" in _schema_names
             else pl.lit(None).cast(pl.Utf8).alias("Capital_Gains_Group")
         )
-        df = self.lf_events.with_columns(_cg_group_col.alias("Capital_Gains_Group")).group_by(
+        df = self.lf_events.with_columns(
+            _cg_group_col.fill_null("").alias("Capital_Gains_Group")
+        ).group_by(
             ["FY", "Income_Head", "Tax_Sub_Head", "Capital_Gains_Group", "Source_Type"]
         ).agg(
             [
