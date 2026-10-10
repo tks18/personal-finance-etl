@@ -44,6 +44,7 @@ class FIFOPortfolio:
         bm_buy_local: float | None = None,
         purchase_id: str | None = None,
         lot_source_type: str = "PURCHASE",
+        reconciliation_group_id: str | None = None,
     ) -> None:
         """Register a new buy lot."""
 
@@ -61,7 +62,7 @@ class FIFOPortfolio:
             }
             lot_id = generate_deterministic_id("LOT", lot_fields)
         else:
-            lot_fields = {
+            lot_fields: dict[str, Any] = {
                 "ISIN": self.isin,
                 "Date": buy_date,
                 "Quantity": qty,
@@ -69,6 +70,8 @@ class FIFOPortfolio:
                 "Currency": currency_id,
                 "Event": lot_source_type,
             }
+            if reconciliation_group_id is not None:
+                lot_fields["Recon_Group"] = reconciliation_group_id
             lot_id = generate_deterministic_id("LOT", lot_fields)
 
         self._active_lots.append(
@@ -247,6 +250,9 @@ class FIFOPortfolio:
 
         if m_qty > current_units + 1e-8:
             diff = m_qty - current_units
+            # Stable reconciliation group ID: ISIN + date + direction + diff quantity.
+            # Ensures two different RECONCILIATION operations never share a Lot_ID.
+            _recon_gid = f"{self.isin}|RECON_ADD|{m_date}|{diff}"
             self.buy(
                 m_date,
                 diff,
@@ -254,6 +260,7 @@ class FIFOPortfolio:
                 0.0,
                 bm_price,
                 lot_source_type="RECONCILIATION",
+                reconciliation_group_id=_recon_gid,
             )
             cf.append({"date": m_date, "amount": 0.0})
 
