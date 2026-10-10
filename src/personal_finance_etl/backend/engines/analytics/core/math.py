@@ -2,9 +2,28 @@ from datetime import date
 
 from pyxirr import xirr
 
+from personal_finance_etl.backend.types.calculation import XirrResult
+
 
 def calculate_cagr(start_value: float, end_value: float, days: int) -> float:
-    """Calculate annualized CAGR. Returns 0.0 if inputs are invalid."""
+    """Calculate annualised Compound Annual Growth Rate (CAGR).
+
+    CAGR = (end_value / start_value) ^ (365 / days) − 1
+
+    Returns 0.0 for degenerate inputs (non-positive values or zero duration).
+    Returns NaN on arithmetic overflow (e.g. astronomical synthetic returns)
+    so that the bad value propagates visibly through aggregations rather than
+    being silently clamped.
+
+    Parameters
+    ----------
+    start_value:
+        Cost basis or opening value. Must be > 0.
+    end_value:
+        Current market value. Must be > 0.
+    days:
+        Holding duration in calendar days. Must be > 0.
+    """
     if start_value <= 0 or end_value <= 0 or days <= 0:
         return 0.0
     try:
@@ -15,15 +34,33 @@ def calculate_cagr(start_value: float, end_value: float, days: int) -> float:
         )  # Astronomical return — NaN is safer than a sentinel to avoid polluting aggregations
 
 
-def calculate_xirr(dates: list[date], amounts: list[float]) -> float:
-    """Calculate XIRR strictly from a list of dates and cashflows.
+def calculate_xirr(dates: list[date], amounts: list[float]) -> XirrResult:
+    """Calculate XIRR from a list of dates and cashflows.
 
-    Returns NaN on convergence failure or degenerate cashflows so that downstream
-    aggregations (averages, ratios) can distinguish a failed computation from a
-    genuine 0% return.
+    Returns an XirrResult with explicit status instead of bare float | NaN so that
+    downstream aggregations can distinguish a failed computation from a genuine 0% return.
+
+    Statuses:
+        VALID           — solver converged, value is reliable.
+        INVALID_INPUT   — degenerate cashflows (all same sign, empty, < 2 entries).
+        UNDEFINED       — solver returned None (e.g. zero-length holding).
+        NON_CONVERGENT  — Newton's method did not converge within tolerance.
     """
+    if len(dates) < 2:
+        return XirrResult(None, "INVALID_INPUT", "Fewer than 2 cashflow dates")
+
+    has_negative = any(a < 0 for a in amounts)
+    has_positive = any(a > 0 for a in amounts)
+    if not has_negative or not has_positive:
+        return XirrResult(None, "INVALID_INPUT", "Cashflows must have both outflows and inflows")
+
     try:
         result = xirr(dates, amounts)
-        return float(result) if result is not None else float("nan")
-    except Exception:
-        return float("nan")
+        if result is None:
+            return XirrResult(None, "UNDEFINED", "Solver returned None")
+        return XirrResult(float(result), "VALID")
+    except Exception as exc:
+        msg = str(exc).lower()
+        if "converge" in msg or "iteration" in msg or "newton" in msg:
+            return XirrResult(None, "NON_CONVERGENT", str(exc))
+        return XirrResult(None, "INVALID_INPUT", str(exc))
