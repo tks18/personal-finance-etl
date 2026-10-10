@@ -62,16 +62,24 @@ class FIFOPortfolio:
             }
             lot_id = generate_deterministic_id("LOT", lot_fields)
         else:
-            lot_fields: dict[str, Any] = {
-                "ISIN": self.isin,
-                "Date": buy_date,
-                "Quantity": qty,
-                "Price": price,
-                "Currency": currency_id,
-                "Event": lot_source_type,
-            }
             if reconciliation_group_id is not None:
-                lot_fields["Recon_Group"] = reconciliation_group_id
+                # The reconciliation operation ID already captures the canonical
+                # ISIN/date/direction/quantity. Do not re-hash raw float quantity,
+                # which can vary by harmless floating-point representation.
+                lot_fields = {
+                    "ISIN": self.isin,
+                    "Event": lot_source_type,
+                    "Recon_Group": reconciliation_group_id,
+                }
+            else:
+                lot_fields = {
+                    "ISIN": self.isin,
+                    "Date": buy_date,
+                    "Quantity": qty,
+                    "Price": price,
+                    "Currency": currency_id,
+                    "Event": lot_source_type,
+                }
             lot_id = generate_deterministic_id("LOT", lot_fields)
 
         self._active_lots.append(
@@ -137,7 +145,7 @@ class FIFOPortfolio:
                 {
                     "Sale_ID": sale_id,
                     "Lot_ID": lot.lot_id,
-                }
+                },
             )
 
             # Resolve the applicable rate from the macro CSV at disposal time.
@@ -250,9 +258,18 @@ class FIFOPortfolio:
 
         if m_qty > current_units + 1e-8:
             diff = m_qty - current_units
-            # Stable reconciliation group ID: ISIN + date + direction + diff quantity.
-            # Ensures two different RECONCILIATION operations never share a Lot_ID.
-            _recon_gid = f"{self.isin}|RECON_ADD|{m_date}|{diff}"
+            # Stable operation identity. Round only the identity quantity to the
+            # same 1e-8 tolerance used by reconciliation comparisons; retain the
+            # actual quantity for the financial state mutation.
+            _recon_gid = generate_deterministic_id(
+                "RECON_LOT_GROUP",
+                {
+                    "ISIN": self.isin,
+                    "Reconciliation_Date": m_date,
+                    "Adjustment_Type": "QUANTITY_ADD",
+                    "Quantity": round(diff, 8),
+                },
+            )
             self.buy(
                 m_date,
                 diff,

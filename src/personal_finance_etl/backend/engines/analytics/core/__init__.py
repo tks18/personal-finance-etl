@@ -18,4 +18,3 @@ __all__ = [
     "calculate_xirr",
     "XirrResult",
 ]
-
