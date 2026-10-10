@@ -23,6 +23,18 @@ class ArtifactRepository:
         )
         return {row[0]: (row[1], row[2]) for row in cursor.fetchall()}
 
+    def get_registry_with_status(self) -> dict[str, tuple[str, str, str]]:
+        """Return ``{path: (hash, category, sync_status)}`` for all registered files.
+
+        Used by :class:`FileSyncService` to detect HEALED (previously REMOVED
+        files that reappeared) and newly REMOVED files.
+        """
+        cursor = self.db.conn.execute(
+            "SELECT relative_path, file_hash, file_category, sync_status FROM cp_file_registry"
+        )
+        return {row[0]: (row[1], row[2], row[3]) for row in cursor.fetchall()}
+
+
     def prune_category(self, category: str, keep_filepaths: list[str]) -> None:
         keep_paths = [p.replace("\\", "/") for p in keep_filepaths]
         cursor = self.db.conn.execute(
@@ -311,3 +323,48 @@ class ArtifactRepository:
             f"UPDATE cp_file_registry SET sync_status = 'SYNCED', last_synced_run_id = ?, last_synced_at = ? WHERE relative_path IN ({placeholders})",
             [self.active_run_id, now] + unique_paths,
         )
+
+    def mark_healed(self, filepaths: list[str]) -> None:
+        """Record a HEALED event for files that re-appeared after a prior REMOVED/MISSING state."""
+        if not filepaths:
+            return
+        now = datetime.now().isoformat()
+        for p in [fp.replace("\\", "/") for fp in filepaths]:
+            file_id = generate_file_id(p)
+            if self.active_run_id:
+                self.db.conn.execute(
+                    """
+                    INSERT INTO cp_artifact_run_events
+                    (event_id, run_id, file_id, event_type, event_at, observed_path, event_reason)
+                    VALUES (?, ?, ?, 'HEALED', ?, ?, 'File re-appeared after prior removal')
+                    """,
+                    (str(uuid.uuid4()), self.active_run_id, file_id, now, p),
+                )
+            self.db.conn.execute(
+                "UPDATE cp_file_registry SET sync_status = 'PENDING_BRONZE' WHERE relative_path = ?",
+                (p,),
+            )
+        logger.info(f"[ARTIFACT] Marked {len(filepaths)} file(s) as HEALED.")
+
+    def mark_removed(self, filepaths: list[str]) -> None:
+        """Record a REMOVED event for files that are no longer present on disk."""
+        if not filepaths:
+            return
+        now = datetime.now().isoformat()
+        for p in [fp.replace("\\", "/") for fp in filepaths]:
+            file_id = generate_file_id(p)
+            if self.active_run_id:
+                self.db.conn.execute(
+                    """
+                    INSERT INTO cp_artifact_run_events
+                    (event_id, run_id, file_id, event_type, event_at, observed_path, event_reason)
+                    VALUES (?, ?, ?, 'REMOVED', ?, ?, 'File no longer present on disk')
+                    """,
+                    (str(uuid.uuid4()), self.active_run_id, file_id, now, p),
+                )
+            self.db.conn.execute(
+                "UPDATE cp_file_registry SET sync_status = 'REMOVED' WHERE relative_path = ?",
+                (p,),
+            )
+        logger.info(f"[ARTIFACT] Marked {len(filepaths)} file(s) as REMOVED.")
+
