@@ -1,4 +1,5 @@
 import hashlib
+import json
 import unicodedata
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
@@ -30,23 +31,24 @@ def canonicalize_value(val: Any) -> str:
 
 
 def generate_deterministic_id(namespace: str, fields: dict[str, Any]) -> str:
-    """
-    Generates a Canonical ID using Canonical ID Serialization v1.
+    """Generate a stable deterministic ID using Canonical ID Serialization v2.
+
+    v2 serializes fields as a JSON array of [key, canonical_value] pairs.
+    This eliminates the v1 ambiguity where delimiter characters in values
+    could produce identical pre-hash payloads for distinct field maps.
+
+    The "v2" tag in the payload ensures v2 IDs never collide with v1 IDs
+    even when the namespace and field values are identical.
 
     Args:
-        namespace: The ID namespace (e.g., 'PURCHASE', 'SALE', 'LOT')
-        fields: An ordered dictionary of fields defining the identity.
-                The insertion order dictates the field order in serialization.
+        namespace: ID namespace string (e.g. 'PURCHASE', 'LOT', 'TAX').
+        fields: Ordered dict of identity fields. Insertion order is canonical.
 
     Returns:
-        The deterministic ID string.
+        Deterministic ID string of the form ``{NAMESPACE}_{16-hex-chars}``.
     """
-    canonical_parts: list[str] = []
-    for key, val in fields.items():
-        k_canon = canonicalize_value(key)
-        v_canon = canonicalize_value(val)
-        canonical_parts.append(f"{k_canon}={v_canon}")
-
-    payload = "|".join([namespace] + canonical_parts).encode("utf-8")
+    pairs = [[canonicalize_value(k), canonicalize_value(v)] for k, v in fields.items()]
+    payload = json.dumps([namespace, "v2", pairs], ensure_ascii=False, separators=(",", ":")
+                         ).encode("utf-8")
     hash_str = hashlib.sha256(payload).hexdigest()
     return f"{namespace}_{hash_str[:16]}"
