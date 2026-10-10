@@ -1,3 +1,4 @@
+import math
 from datetime import date
 
 from pyxirr import xirr
@@ -46,8 +47,21 @@ def calculate_xirr(dates: list[date], amounts: list[float]) -> XirrResult:
         UNDEFINED       — solver returned None (e.g. zero-length holding).
         NON_CONVERGENT  — Newton's method did not converge within tolerance.
     """
+    if len(dates) != len(amounts):
+        return XirrResult(None, "INVALID_INPUT", "Date and amount counts do not match")
     if len(dates) < 2:
         return XirrResult(None, "INVALID_INPUT", "Fewer than 2 cashflow dates")
+
+    try:
+        if any(not math.isfinite(float(a)) for a in amounts):
+            return XirrResult(
+                None, "INVALID_INPUT", "Cashflows contain null, NaN, or infinite amounts"
+            )
+    except (TypeError, ValueError):
+        return XirrResult(None, "INVALID_INPUT", "Cashflows contain non-numeric amounts")
+
+    if any(not d for d in dates):
+        return XirrResult(None, "INVALID_INPUT", "Cashflow dates must be date values")
 
     has_negative = any(a < 0 for a in amounts)
     has_positive = any(a > 0 for a in amounts)
@@ -58,7 +72,10 @@ def calculate_xirr(dates: list[date], amounts: list[float]) -> XirrResult:
         result = xirr(dates, amounts)
         if result is None:
             return XirrResult(None, "UNDEFINED", "Solver returned None")
-        return XirrResult(float(result), "VALID")
+        value = float(result)
+        if not math.isfinite(value):
+            return XirrResult(None, "UNDEFINED", "Solver returned a non-finite result")
+        return XirrResult(value, "VALID")
     except Exception as exc:
         msg = str(exc).lower()
         if "converge" in msg or "iteration" in msg or "newton" in msg:
