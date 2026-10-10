@@ -1,7 +1,9 @@
 import hashlib
 import importlib.metadata
+import json
 import uuid
 from datetime import datetime
+from typing import Any
 
 from personal_finance_etl.backend.load.control_plane.connection import SQLiteManager
 
@@ -45,6 +47,16 @@ class RunRepository:
         )
         return run_id
 
+    def get_run_metadata(self, run_id: str) -> dict[str, str | None]:
+        cursor = self.db.conn.execute(
+            "SELECT settings_snapshot_id, rules_snapshot_id FROM cp_runs WHERE run_id = ?",
+            (run_id,),
+        )
+        row = cursor.fetchone()
+        if row:
+            return {"settings_snapshot_id": row[0], "rules_snapshot_id": row[1]}
+        return {}
+
     def update_run_status(self, run_id: str, status: str) -> None:
         self.db.conn.execute("UPDATE cp_runs SET status = ? WHERE run_id = ?", (status, run_id))
 
@@ -64,8 +76,8 @@ class RunRepository:
         self,
         run_id: str,
         root_seed: str,
-        iterations: int,
-        horizon: int,
+        rules: Any,
+        input_df: Any | None = None,
         settings_snapshot_id: str | None = None,
         rules_snapshot_id: str | None = None,
     ) -> None:
@@ -75,18 +87,56 @@ class RunRepository:
             app_version = f"v{importlib.metadata.version('personal-finance-etl')}"
         except importlib.metadata.PackageNotFoundError:
             app_version = "v-unknown"
-        
+
+        model_implementation_version = "v1.0-gbm-fire"
+
+        # Model Fingerprint
+        combined_rules = {
+            "monte_carlo": rules.assumptions.monte_carlo.model_dump(),
+            "fire": rules.assumptions.fire.model_dump(),
+            "cma": rules.assumptions.cma.model_dump(),
+        }
+        model_fingerprint = hashlib.sha256(
+            json.dumps(combined_rules, sort_keys=True).encode("utf-8")
+        ).hexdigest()
+
+        # Input Fingerprint
+        input_fingerprint = "empty"
+        if input_df is not None and not input_df.is_empty():
+            last_row = input_df.tail(1).to_dicts()[0]
+            # Convert values to str for reliable hashing
+            safe_row = {k: str(v) for k, v in last_row.items()}
+            input_fingerprint = hashlib.sha256(
+                json.dumps(safe_row, sort_keys=True).encode("utf-8")
+            ).hexdigest()
+
+        iterations = rules.assumptions.monte_carlo.iterations
+        horizon = rules.assumptions.monte_carlo.max_months
+
+        if not model_implementation_version:
+            model_implementation_version = app_version
+
         self.db.conn.execute(
             """
             INSERT OR IGNORE INTO cp_simulation_runs (
                 simulation_id, run_id, created_at, root_seed, iterations, horizon,
-                settings_snapshot_id, rules_snapshot_id, model_implementation_version, status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'SUCCESS')
+                settings_snapshot_id, rules_snapshot_id, model_implementation_version, 
+                input_fingerprint, model_fingerprint, status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'SUCCESS')
             """,
             (
-                sim_id, run_id, now, root_seed, iterations, horizon,
-                settings_snapshot_id, rules_snapshot_id, app_version
-            )
+                sim_id,
+                run_id,
+                now,
+                root_seed,
+                iterations,
+                horizon,
+                settings_snapshot_id,
+                rules_snapshot_id,
+                model_implementation_version,
+                input_fingerprint,
+                model_fingerprint,
+            ),
         )
 
     def log_run_failure(
