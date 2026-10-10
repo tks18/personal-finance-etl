@@ -62,6 +62,7 @@ class TaxLot:
     bm_buy_local: float | None = None
     purchase_id: str | None = None
     lot_id: str | None = None
+    lot_source_type: str = "PURCHASE"
 
 
 @dataclass
