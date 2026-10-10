@@ -34,7 +34,6 @@ class ArtifactRepository:
         )
         return {row[0]: (row[1], row[2], row[3]) for row in cursor.fetchall()}
 
-
     def prune_category(self, category: str, keep_filepaths: list[str]) -> None:
         keep_paths = [p.replace("\\", "/") for p in keep_filepaths]
         cursor = self.db.conn.execute(
@@ -367,4 +366,3 @@ class ArtifactRepository:
                 (p,),
             )
         logger.info(f"[ARTIFACT] Marked {len(filepaths)} file(s) as REMOVED.")
-
