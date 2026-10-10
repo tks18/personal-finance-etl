@@ -1,510 +1,110 @@
-# Architecture & Reproducibility Implementation Freeze
+# Personal Finance ETL v7.0.0 — Targeted Code Hardening
 
-> **Status: REBASED IMPLEMENTATION FREEZE | Baseline: v6.6.1**
->
-> This is the implementation authority for the Architecture & Reproducibility Sprint. New capabilities belong in a future sprint unless required to implement a frozen contract correctly.
+**Baseline:** uploaded v7.0.0 source ZIP  
+**Purpose:** close implementation defects and frozen-contract mismatches before documentation.  
+**Excluded:** test-suite construction, golden scenarios, QA backlog, documentation polishing, speculative features.
 
-## 1. Artifact lifecycle against runs
+This is a source-code review, not a successful production execution. **Confirmed** means the implementation issue is visible in code; **conditional** means the effect depends on actual data or the intended business contract. Make focused corrections, preserving the current architecture and existing valid outputs.
 
-### Change
+## 1. P1 — Ambiguous deterministic ID serialization
 
-Extend the file registry:
+**Where:** `backend/utils/identity.py`, `generate_deterministic_id()`.
 
-```text
-first_seen_run_id / first_seen_at
-last_seen_run_id / last_seen_at
-last_changed_run_id / last_changed_at
-last_synced_run_id / last_synced_at
-```
+**Problem:** Canonical fields are serialized as `key=value` joined with `|`, without escaping or length framing. Distinct field maps can produce identical pre-hash payloads, for example `{"a":"x|b=y"}` and `{"a":"x","b":"y"}`. SHA-256 cannot distinguish equal input bytes.
 
-### Implementation
+**Impact:** The v1 identity contract is not unambiguous. Affected IDs could collide logically before hashing if delimiters appear in real identity fields.
 
-```text
-new artifact      → first_seen + last_seen
-unchanged         → last_seen only
-changed           → last_seen + last_changed
-successful sync   → last_synced
-PENDING_BRONZE replay without source change → last_synced only
-```
+**Implementation:** Use a versioned, unambiguous serialization (for example, UTF-8 canonical JSON array of ordered `[field_name, normalized_value]` pairs with an explicit namespace/version). Preserve numeric equivalence, NFC, null/date/currency rules. Do not silently change IDs: treat this as **Identity Serialization v2** and update every dependent producer together, including references across rebuilt Silver tables. Avoid a second independent hashing helper.
 
-### Done when
+**Close when:** Every distinct typed field sequence has an unambiguous encoded payload and the identity-version transition is deliberate.
 
-Current artifact lifecycle is understandable without execution logs.
+## 2. P1 — Gross capital gains and losses are netted before set-off reporting
 
----
+**Where:** `backend/engines/tax/core/set_offs.py`, `_eager_process()`.
 
-## 2. Historical artifact-run lineage
+**Problem:** Events are grouped by `FY, Gain_Type` and `Realized_Gain_Loss` is summed to one signed value. The code then derives either gains or losses using `max(0, raw)` and `abs(min(0, raw))`. A FY containing both ST gains and ST losses loses the separate gross amounts before the detailed set-off fields are computed.
 
-### Change
+**Impact:** Even when net taxable gains happen to be correct, `STCL_Used_Against_STCG`, gross STCG/STCL, and downstream FY reconciliation can be understated or zeroed. The set-off engine cannot explain the actual flow of losses.
 
-Add `cp_artifact_run_events`:
+**Implementation:** Aggregate positive and negative events separately by FY and Gain_Type, producing independent non-negative `STCG`, `STCL`, `LTCG`, `LTCL` pools. Apply the existing ordered set-off and brought-forward logic to those pools. Keep the existing tax state schema and avoid creating a new tax subsystem.
 
-```text
-event_id
-run_id
-file_id
-event_type
-event_at
-observed_path
-content_hash
-previous_status
-new_status
-event_reason
-```
+**Close when:** Set-off output preserves gross gains, gross losses, amounts utilized and remaining balances rather than reconstructing them from a net signed number.
 
-Event vocabulary:
+## 3. P1 — Tax classification is overwritten with calculation eligibility
 
-```text
-DISCOVERED
-CHANGED
-RENAMED
-PENDING_BRONZE
-SYNCED
-HEALED
-REMOVED
-```
+**Where:** `backend/engines/tax/core/base_events.py`, `set_offs.py`, `liability.py`; forecast classification consumers.
 
-### Implementation
+**Problem:** For an unknown classification **or a synthetic reconciliation lot**, `base_events.py` replaces `Tax_Sub_Head` with `CHECK_REQUIRED`. Other processors then exclude these events by comparing `Tax_Sub_Head` to that string. The code already has a separate `Tax_Status` column.
 
-`event_id` identifies the operational occurrence. `event_reason` is short explanatory context. Detailed errors/stacks remain in execution logs.
+**Impact:** Known tax classifications are lost for uncertain lots, while eligibility checks are coupled to a category label. This can distort breakdowns, reconciliation and future rules.
 
-### Done when
+**Implementation:** Preserve the resolved `Tax_Sub_Head` when known. Set `Tax_Status=CHECK_REQUIRED` and a precise `Tax_Status_Reason` independently. Use `Tax_Status == READY` (plus valid amounts) as the tax-calculation eligibility gate in set-off, liability and Gold. If classification itself is unknown, keep a consistent unknown/null classification rather than inventing a tax sub-head named after status. Do not treat all reconciliation mutations as equivalent: retain the existing distinctions between synthetic lots, basis-adjusted lots and quantity-only removals.
 
-Run → artifacts and artifact → runs are directly queryable.
+**Close when:** Classification and eligibility are independent fields throughout tax calculation and presentation.
 
----
+## 4. P1 — Missing foreign FX can proceed with invalid identity conversion
 
-## 3. Rename semantics
+**Where:** `backend/engines/analytics/pipeline/processor/fx_gate.py` and its caller; downstream FX provider fallback.
 
-Pure rename:
+**Problem:** `FXValidationGate.validate()` explicitly logs a warning and returns when a foreign-currency instrument has no FX provider. Its warning states that calculations can continue with `FX_Rate=1.0`, producing incorrect INR values. This is a direct conflict with the frozen foreign-FX safety contract.
 
-```text
-write RENAMED
-preserve file identity
-migrate path-dependent Bronze/Meta identity
-do not mark content changed
-```
+**Impact:** Foreign asset values, cost basis, realized P&L and tax estimates can be materially wrong without a hard failure or an explicit non-calculable result.
 
-A rename must never create duplicate financial state.
+**Implementation:** For non-base currencies, make missing/invalid FX a blocking condition for precise INR calculations. Prefer a domain-specific error or explicit unavailable status propagated through the existing worker/pipeline failure boundary. Reserve FX=1 exclusively for the configured base-currency identity pair. Do not silently publish precise foreign INR values after this gate fails.
 
----
+**Close when:** No missing foreign FX provider/rate path can publish a precise value calculated with identity FX.
 
-## 4. Dynamic FX and US market source provenance
+## 5. P1 — Future-looking FX backfill in historical dates
 
-### Change
-Treat fetched currency rates and US market prices as versioned analytical input evidence, not invisible runtime dependencies.
+**Where:** `backend/transform/currency_transformer.py`.
 
-### Impact
-An unchanged broker statement can produce different financial results if historical Yahoo Finance data, mappings, or caches change. Existing run and artifact provenance alone cannot explain that difference.
+**Problem:** The historical currency spine applies `.forward_fill().backward_fill().over("Currency_ID")`. If the first observation is later than the requested start date, the earlier dates inherit a future rate. `Is_Imputed` marks imputation but does not stop this rate from being consumed as historical evidence.
 
-### Implementation
-- Reuse existing Currency and US Market extractors, Bronze caches and pipeline orchestration. Do not introduce a new data platform.
-- For each refresh, record provider/source, currency pair or ticker, requested range, actual observed range, extraction time, refresh outcome and content fingerprint. Keep historical run provenance in the existing Control Plane, and current data in Bronze/Silver.
-- Include the materialized FX and market series actually consumed, currency mappings, and as-of cutoff in the Reproducibility Envelope. A model replay must be able to use cached evidence without requiring a fresh network response.
-- Define explicit cache-gap detection for missing interior dates, not merely the latest cached date. Distinguish market closures from missing observations; do not require trading prices on weekends.
-- Never label an incomplete fetch as complete merely because a cache file exists. Preserve prior valid cache data on partial fetch failure.
+**Impact:** Acquisition-date basis, early valuations and tax-related FX conversion may use information unavailable on the relevant date.
 
-### Done when
-A run can explain exactly which FX/US-price observations produced its investment outputs; identical cached inputs reproduce identical outputs offline.
+**Implementation:** Keep backward-as-of/forward-fill from the latest **earlier** valid observation where the supported policy permits it. Do not backfill from future observations for historical financial calculations. Preserve an effective source observation date (or equivalent existing metadata). If no prior rate exists, leave it unavailable and let the FX eligibility boundary handle it. Avoid turning weekend/holiday gaps into errors when a valid preceding observation exists.
 
-## 5. Currency reference validation and pipeline ordering
-
-### Change
-Make currency normalization and historical conversion inputs explicit prerequisites of investment analytics.
-
-### Impact
-A missing currency mapping or FX observation can otherwise propagate into FIFO, valuation and Gold as a plausible-looking INR result.
-
-### Implementation
-- Preserve the existing `CURRENCY_ID` foreign-key relationship to the currency master across investment facts.
-- Define one base/reporting currency, one explicit FX quote direction (reporting-currency units per one local-currency unit), and one identity conversion for genuine base-currency assets only.
-- Validate currency IDs, ticker-to-currency mapping, required FX coverage and price coverage before publishing dependent analytical outputs.
-- Keep the current order: currency data and US market data prepared before Quant. Ensure failure propagates through the current atomic publication boundary.
-- Do not generate `Lot_ID` for source market/benchmark rows. Lot identity remains Quant-owned.
+**Close when:** Every filled historical FX rate is traceable to an observation on or before its reporting date.
 
-### Done when
-Missing or invalid foreign FX data cannot silently publish as a valid 1.0 conversion and currency references are consistent throughout the investment pipeline.
+## 6. P1 — Investment tax forecast diverges from frozen hypothetical-liquidation semantics
 
-## 6. Identity precedence
+**Where:** `backend/engines/tax/core/forecast.py`, `TaxLiabilityForecastBuilder.build()`.
 
-Freeze:
+**Problem:** The current table constructs a monthly projected tax bill from aggregated realized metrics and **blended rates** across configured capital-gains groups. It recomputes a simplified ST/LT set-off locally instead of using the dedicated set-off processor. `CHECK_REQUIRED` exposure is detected using `TAX_SUBTYPE == "CHECK_REQUIRED"`, which is not the independent tax-status contract.
 
-```text
-stable native identity exists
-→ use it
+**Impact:** Different tax classes can receive an artificial average rate; brought-forward losses and hypothetical open-lot liquidation may not be represented as frozen. Forecast totals may disagree with the FY tax engine.
 
-no stable native identity
-→ generate deterministic canonical analytical identity
-```
+**Implementation:** First preserve the useful existing monthly tax-planning behavior if it is a genuine supported consumer requirement. For the frozen `Investment_Tax_Liability_Forecast`, compute the **incremental hypothetical liquidation** of tax-ready open lots as of each forecast date, using each lot's actual tax classification, INR basis, forecast-date price/FX, and a copy of actual FY/carry-forward state. Reuse the common set-off methodology; do not write hypothetical events to actual Silver tax facts. Report uncertain lots separately by eligibility/status, not by overloading `TAX_SUBTYPE`. If the monthly cash-planning metric remains, give it a distinct semantic label rather than presenting it as hypothetical liquidation tax.
 
-Examples:
+**Close when:** The forecast's title, inputs, rates, loss state and output all describe the same calculation, and uncertain lots never enter precise tax.
 
-```text
-Investment instrument → ISIN
-Household transaction → UID
-Canonical purchase → Purchase_ID
-Canonical sale → Sale_ID
-FIFO lot → Lot_ID
-Realized disposal → Realized_Event_ID
-Reconciliation → Reconciliation_Group_ID / Reconciliation_Event_ID
-Tax event → Tax_Event_ID
-```
+## 7. P2 — Synthetic reconciliation Lot_ID is not tied to its operation
 
-Do not create unnecessary surrogate IDs.
+**Where:** `backend/engines/analytics/core/fifo.py`, `buy()`.
 
----
+**Problem:** For a lot without `purchase_id`, the generated Lot_ID hashes ISIN, date, quantity, price, currency and source type. It does not include the deterministic reconciliation group/event that created the synthetic quantity. Two distinct operations with identical values can generate the same Lot_ID.
 
-## 7. Canonical ID Serialization v1
+**Impact:** Lot identity may be ambiguous, undermining lot-level reconciliation and realized-event uniqueness.
 
-All generated deterministic IDs use one shared serialization contract.
+**Implementation:** Derive reconciliation-created Lot_ID from the deterministic `Reconciliation_Group_ID` and a stable within-group lot discriminator. Carry that identity through partial sale and basis/quantity mutations. Keep ordinary purchase-derived Lot_ID stable from `Purchase_ID`; do not use producing `Run_ID`, dataframe position or timestamp. Since existing IDs may change, coordinate with the identity-version change in item 1.
 
-```text
-Encoding: UTF-8
-Field order: explicitly defined by each ID contract
-Strings: Unicode NFC; trim outer whitespace; preserve internal whitespace
-Case: preserve unless field domain explicitly defines case-insensitivity
-Null: <NULL>
-Date: YYYY-MM-DD
-Datetime: ISO-8601 using application timezone convention
-Integer: base-10, no unnecessary leading zeros
-Boolean: true / false
-Currency: canonical CURRENCY_ID
-Numeric: canonical decimal notation; no grouping/exponent; strip insignificant trailing zeros; -0 → 0
-Structured serialization: unambiguous field-name + canonical-value representation
-```
+**Close when:** Separate reconciliation operations cannot create indistinguishable Lot_IDs, and one economic surviving lot retains its identity.
 
-Therefore:
+## Implementation order
 
-```text
-10 = 10.0 = 10.00
--0 = -0.0 = 0.00 = 0
-```
+1. **Identity:** Correct canonical serialization and synthetic lot derivation together as one intentional identity-contract migration.
+2. **FX safety:** Remove missing-foreign-FX identity fallback and future-looking backfill.
+3. **Tax correctness:** Preserve gross gain/loss pools, then separate Tax_Sub_Head from Tax_Status in all consumers.
+4. **Forecast:** Align its meaning and calculations with the agreed investment liquidation contract, preserving distinct existing planning functionality if needed.
+5. **Release closure:** Review changed contract schemas and producer/consumer interfaces for consistency; do not start the full QA sprint here.
 
-Use one stable cryptographic hash policy and namespaces such as:
+## Explicitly not included
 
-```text
-PURCHASE
-SALE
-LOT
-REALIZED
-RECON_GROUP
-RECON_EVENT
-TAX
-CONTRACT_REGISTRY
-```
+- Golden datasets, automated tests, full regression-suite construction, coverage targets or benchmark tasks.
+- Documentation/README/Wiki updates.
+- General refactoring, new tax-law engines, new asset classes, UI redesign or additional metrics.
+- Unverified concerns such as performance, broker charges, and full FX P&L decomposition: investigate only if a concrete production mismatch is found.
 
-### Identity contract rule
+## Release decision
 
-Changing serialization version, defining attributes, field order, namespace, normalization, or hash policy is an **analytical identity contract change**.
-
----
-
-## 8. Identity is not provenance
-
-Never use these in deterministic financial identity:
-
-```text
-run_id
-run timestamp
-hostname
-temporary path
-working directory
-process ID
-log/output path
-```
-
-They remain provenance.
-
----
-
-## 9. Keep existing canonical investment grain
-
-Do not redesign Bronze or restore source broker-order grain.
-
-```text
-Purchase_ID → canonical aggregated f_Investment_Purchase_Data row
-Sale_ID     → canonical aggregated f_Investment_Sale_Data row
-```
-
-Market and benchmark facts keep their existing grains and do not receive Lot_ID.
-
----
-
-## 10. Currency-aware analytical identity
-
-### Change
-Extend existing deterministic analytical IDs to multi-currency canonical facts.
-
-### Implementation
-- Continue to use the native `ISIN` and currency-master `CURRENCY_ID`.
-- Canonical Purchase/Sale IDs already include `CURRENCY_ID`; keep it in the defining tuple and do not include volatile FX refresh timestamps.
-- A changed broker execution INR amount or revised historical FX observation changes calculated attributes and reproducibility fingerprints, but not Purchase/Sale ID unless a frozen defining attribute changes.
-- If actual canonical purchase price is denominated in INR, document that clearly and preserve the local price as a separate nonidentity attribute; do not mix currencies in one Price column without an explicit unit.
-
-### Done when
-IDs remain stable for unchanged economic defining attributes while FX-dependent financial outputs can be replayed and explained.
-
-## 11. Logical immutability under full rebuild
-
-Silver/Gold may be physically replaced.
-
-Logical immutability means:
-
-```text
-same reproducible evidence
-+ same rules/reference state
-+ same implementation contract
-→ same deterministic ID
-+ same material attributes
-```
-
-It does **not** require append-only Silver storage.
-
----
-
-## 12. Consistent reconstruction across US market and Quant FIFO
-
-### Change
-The US historical market transformer reconstructs a holding spine, while the Quant Engine independently reconstructs tax/analytics lots.
-
-### Impact
-Two independently ordered same-day purchases or sales can produce different holdings/basis even with identical input data.
-
-### Implementation
-- Reuse the frozen canonical same-day purchase/sale ordering in both consumers, using a shared ordering helper or shared canonical ordered input.
-- Preserve the existing market table's aggregate grain; do not add transaction IDs to market snapshots.
-- Add a cross-engine checkpoint at common ISIN/date points for total quantity and comparable cost-basis measures, with documented differences where the engines use different definitions.
-- Keep realized-tax ownership exclusively in the main Quant FIFO, not the market-history spine.
-
-### Done when
-Both reconstruction paths agree on the financial state they are intended to share, independently of input row order.
-
-## 13. FIRE / Monte Carlo reproducibility
-
-Persist:
-
-```text
-simulation_id
-run_id
-created_at
-root_seed
-iterations
-horizon
-input_as_of_date
-settings_snapshot_id
-rules_snapshot_id
-input_fingerprint
-model_fingerprint
-model_implementation_version
-status
-result_fingerprint  # optional
-```
-
-Persist one root seed. Derive deterministic stochastic streams. Do not persist every random draw.
-
----
-
-## 14. Fingerprint scope
-
-```text
-input_fingerprint
-→ canonical financial inputs
-
-model_fingerprint
-→ assumptions + configuration + behavior-controlling parameters
-
-model_implementation_version
-→ algorithm/model implementation compatibility boundary
-
-root_seed
-→ stochastic context
-```
-
-Exclude volatile execution metadata.
-
----
-
-## 15. Simulation persistence
-
-Historical authority:
-
-```text
-cp_simulation_runs
-```
-
-Latest DuckDB projection:
-
-```text
-meta.m_Simulation_Run
-```
-
-Preserve:
-
-```text
-SQLite → historical authority
-DuckDB Meta → latest analytical projection
-```
-
----
-
-## 16. Contract Registry fingerprint
-
-The Data Contract Registry is the inventory SSOT.
-
-Create deterministic:
-
-```text
-Contract_Registry_Fingerprint
-```
-
-from canonical, deterministically sorted contract definitions including material contract attributes such as:
-
-```text
-contract_id
-layer
-physical table
-grain
-producer
-publication order
-schema/contract definition where available
-```
-
-Persist the fingerprint with run/reproducibility metadata.
-
-Do **not** maintain a manual registry version counter.
-
-Exact Bronze/Silver/Gold counts always come from the registry.
-
----
-
-## 17. Reproducibility Envelope
-
-Important outputs are explainable by:
-
-```text
-source evidence
-run identity
-Settings snapshot
-FinancialRules / TaxConfig snapshot
-Macro FY parameters
-Contract Registry fingerprint
-model/algorithm implementation
-root seed where stochastic
-```
-
-Investment/tax lineage:
-
-```text
-canonical purchase / sale
-→ Lot_ID
-→ Realized_Event_ID
-→ Tax_Event_ID
-→ FY Tax State
-→ Gold
-```
-
-Deterministic invariant:
-
-```text
-same evidence + settings + rules + macro + registry + implementation
-→ same material output
-```
-
-Stochastic invariant adds the same root seed.
-
----
-
-## 18. Simulation replay numerical contract
-
-Within the supported `model_implementation_version` boundary:
-
-```text
-discrete outputs → exact equality
-floating scalars → approved abs_tol + rel_tol
-floating arrays/distributions → element-wise approved abs_tol + rel_tol
-```
-
-Keep tolerance constants centralized.
-
-Relevant runtime/library versions may be emitted in replay-test diagnostics.
-
----
-
-## Goal
-
-Extend the current architecture with:
-
-```text
-Artifact ↔ Run lineage
-Deterministic analytical identity
-FIRE / Monte Carlo replayability
-Contract Registry fingerprinting
-One Reproducibility Envelope
-```
-
-Do not redesign the Control Plane, Bronze/Silver/Gold architecture, recovery model, or orchestration.
-
----
-
-## Out of scope
-
-```text
-new orchestration framework
-new warehouse layer
-event-sourcing rewrite
-distributed transactions
-generic lineage platform
-separate tax-lineage platform
-source-row broker transaction redesign
-random analytical UUIDs
-manual registry version counter
-persistence of every Monte Carlo draw
-```
-
----
-
-
----
-
-## Architecture Implementation Freeze checklist
-
-1. Artifact lifecycle pointers.
-2. Artifact-run event history with reason.
-3. Rename remains identity migration.
-4. Native identity precedence.
-5. Canonical ID Serialization v1.
-6. Identity/provenance separation.
-7. Existing canonical investment grain preserved.
-8. Logical immutability compatible with full rebuild.
-9. FIRE seed/fingerprints/implementation version persisted.
-10. Historical simulation provenance in SQLite.
-11. Latest simulation context in Meta.
-12. Contract Registry fingerprint.
-13. Finance/tax stable lineage IDs.
-14. One Reproducibility Envelope.
-15. One replay numerical tolerance contract.
-
----
-
-## Implementation Audit Status
-
-| # | Item | Status | Implementation |
-|---|------|--------|---------------|
-| 1 | Artifact lifecycle pointers | ✅ Robust | All four dimensions (`first/last_seen/changed/synced`) in `cp_file_registry`; updated per event type in `artifact_repo.py` |
-| 2 | Artifact-run event history with reason | ✅ Robust | `cp_artifact_run_events` with all 7 event types; `event_reason` on every write; `mark_healed()`/`mark_removed()` present |
-| 3 | Rename remains identity migration | ✅ Robust | `migrate_identity()` atomic: preserves lifecycle history, migrates `cp_file_payloads`, writes `RENAMED` event, deletes old row |
-| 4 | Dynamic FX and US market source provenance | ✅ Robust | FX/US market data fetched into Bronze caches (`r_Currency_FX_Data`, `r_US_Stock_Prices`); content hash in `cp_file_registry` |
-| 5 | Currency reference validation and pipeline ordering | ✅ Robust | `CurrencyPipeline` and `USMarketPipeline` run before `InvestmentQuantEngine` in `etl_pipeline.py`; FX gate warns on missing rate |
-| 6 | Identity precedence | ✅ Robust | Native `ISIN`/`UID` used where available; deterministic SHA-256 for generated IDs; no random surrogates for financial identity |
-| 7 | Canonical ID Serialization v1 | ✅ Robust | `generate_deterministic_id()` in `utils/identity.py`; NFC, `<NULL>`, `Decimal`, ISO-8601, SHA-256 — named v1 in docstring |
-| 8 | Identity is not provenance | ✅ Robust | `Run_ID` is nullable provenance annotation on events; never participates in any deterministic hash |
-| 9 | Keep existing canonical investment grain | ✅ Robust | Bronze grain unchanged; `Purchase_ID`/`Sale_ID` PKs; market/benchmark tables carry no `Lot_ID` |
-| 10 | Currency-aware analytical identity | ✅ Robust | `CURRENCY_ID` is a defining field in `Purchase_ID`/`Sale_ID` hashes; FX rates are non-identity attributes stored separately |
-| 11 | Logical immutability under full rebuild | ✅ Robust | Silver/Gold fully replaced per run; same inputs → same deterministic IDs; ACID transaction wraps entire ETL |
-| 12 | Consistent reconstruction across US market and Quant FIFO | ✅ Robust | Both paths use `sort_purchases`/`sort_sales` from `ordering.py`; realized-tax exclusively in Quant FIFO |
-| 13 | FIRE / Monte Carlo reproducibility | ✅ Robust | `cp_simulation_runs` with all specified fields; `model_fingerprint` (SHA-256 of rules), `input_fingerprint`, `model_implementation_version = "v1.0-gbm-fire"`, PCG64 PRNG |
-| 14 | Fingerprint scope | ✅ Robust | `model_fingerprint` hashes only `{monte_carlo, fire, cma}` rules; volatile runtime metadata excluded |
-| 15 | Simulation persistence | ✅ Robust | SQLite `cp_simulation_runs` (`INSERT OR IGNORE`); `meta.m_Latest_Simulation` DuckDB mirror populated per run via `metadata.py load(cp=cp)` |
-| 16 | Contract Registry fingerprint | ✅ Robust | `generate_contract_registry_fingerprint()` SHA-256 of sorted `DATA_CONTRACT_REGISTRY`; persisted to `meta.m_Latest_Simulation`; no manual counter |
-| 17 | Reproducibility Envelope | ✅ Robust | `generate_reproducibility_envelope()` ties `input_fingerprint, rules_hash, macro_settings_hash, registry_fingerprint, root_seed, model_version` into one SHA-256 |
-| 18 | Simulation replay numerical contract | ✅ Robust | `assert_simulation_replay()` — `rel_tol=1e-5`, `abs_tol=1e-4`; single centralized contract; raises `ValueError` with context on breach |
+**Needs targeted code hardening before documentation freeze.** Items 1–5 and 7 are directly supported by source inspection. Item 6 is a demonstrated mismatch with the previously frozen forecast contract, but its final change should preserve any intentional existing monthly planning use case. This is not a claim that the entire v7.0.0 application is broken, nor a certification of paths that have not been executed.
