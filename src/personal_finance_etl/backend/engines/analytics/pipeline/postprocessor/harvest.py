@@ -14,6 +14,12 @@ class HarvestRecommendationCalculator:
             (
                 (pl.col("Holding_Type") == "LTCG")
                 & (pl.col("TAX_TYPE").str.to_lowercase() == "equity")
+                # Section 112A step-up applies only to listed Indian equity.
+                # Foreign equity (US stocks via LRS) is taxed at slab rates
+                # and is NOT eligible for step-up or the Rs 1.25L exemption.
+                & ~pl.col("TAX_SUBTYPE").str.to_lowercase().is_in(
+                    ["us_listed", "us_stocks", "foreign", "us_equity"]
+                )
                 & (pl.col("Unrealized_LTCG") > 0)
                 & (pl.col("Unrealized_LTCG") <= pl.col("Equity_LTCG_Exemption"))
             ).alias("Stepup_Eligible"),
