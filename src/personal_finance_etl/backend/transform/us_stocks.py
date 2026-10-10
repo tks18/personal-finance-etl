@@ -74,7 +74,9 @@ def get_stg_us_stock_master_ref(
     ).select(pl.col("UID").alias("CATEGORY_ID"))
 
     df_grouped = (
-        base_orders_lazy.select(["ISIN", pl.col("Instrument Name").alias("INSTRUMENT_NAME"), "CURRENCY_ID"])
+        base_orders_lazy.select(
+            ["ISIN", pl.col("Instrument Name").alias("INSTRUMENT_NAME"), "CURRENCY_ID"]
+        )
         .unique()
         .with_columns(
             [
