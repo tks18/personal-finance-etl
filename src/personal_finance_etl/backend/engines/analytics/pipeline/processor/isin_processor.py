@@ -1,3 +1,4 @@
+import math
 from datetime import date
 from typing import Any, cast
 
@@ -10,6 +11,7 @@ from personal_finance_etl.backend.engines.analytics.pipeline.processor.benchmark
     BenchmarkPriceProvider,
 )
 from personal_finance_etl.backend.engines.analytics.pipeline.processor.fx_gate import (
+    FXRateUnavailableError,
     FXValidationGate,
 )
 from personal_finance_etl.backend.engines.analytics.pipeline.processor.snapshot import (
@@ -25,6 +27,43 @@ from personal_finance_etl.backend.types.analytics import (
 )
 from personal_finance_etl.backend.utils.helpers import to_date_obj
 from personal_finance_etl.backend.utils.logger import logger
+
+
+def is_indian_rights_entitlement_isin(isin: str | None) -> bool:
+    """Return whether an Indian ISIN matches the observed RE code pattern.
+
+    The ``20`` substring is a candidate classifier (Python slice [7:9]), not
+    proof of an expiry event. Transaction-level checks are still required.
+    """
+    if not isin:
+        return False
+
+    normalized = isin.strip().upper()
+    return len(normalized) == 12 and normalized.startswith("INE") and normalized[7:9] == "20"
+
+
+def _is_zero_proceeds_re_adjustment(
+    isin: str,
+    quantity: float,
+    price: float,
+    proceeds: float | None,
+) -> bool:
+    """Recognize a zero-proceeds adjustment for a candidate Indian RE ISIN.
+
+    Require an explicit zero proceeds value. Missing proceeds are not enough
+    evidence to bypass normal sale-price validation.
+    """
+    if not is_indian_rights_entitlement_isin(isin) or quantity <= 0:
+        return False
+    if not math.isfinite(price) or price != 0.0 or proceeds is None:
+        return False
+
+    try:
+        proceeds_value = float(proceeds)
+    except (TypeError, ValueError):
+        return False
+
+    return math.isfinite(proceeds_value) and proceeds_value == 0.0
 
 
 class IsinProcessor:
@@ -100,7 +139,17 @@ class IsinProcessor:
         def _get_fx(d: date, curr: str) -> float | None:
             key = (d, curr)
             if key not in _fx_cache:
-                _fx_cache[key] = self.fx_provider.get_rate(d, curr) if self.fx_provider else None
+                rate = self.fx_provider.get_rate(d, curr) if self.fx_provider else None
+                if rate is not None:
+                    rate = float(rate)
+                if curr == default_curr:
+                    rate = 1.0
+                if rate is None or not math.isfinite(rate) or rate <= 0:
+                    raise FXRateUnavailableError(
+                        f"ISIN={isin} ({curr}): no valid FX rate available on {d}. "
+                        "Refusing to continue with a fabricated or non-finite conversion."
+                    )
+                _fx_cache[key] = rate
             return _fx_cache[key]
 
         for m_row in m_inst:
@@ -159,7 +208,13 @@ class IsinProcessor:
                 buy_val_local = float(qty * price_local)
                 bm_cf_amounts_local.append(-buy_val_local)
                 isin_cashflows.append(
-                    CashflowRecord(date=row_dt_obj, amount=-buy_val, amount_local=-buy_val_local)
+                    CashflowRecord(
+                        date=row_dt_obj,
+                        amount=-buy_val,
+                        amount_local=-buy_val_local,
+                        benchmark_amount=-buy_val,
+                        benchmark_amount_local=-buy_val_local,
+                    )
                 )
                 p_idx += 1
 
@@ -178,13 +233,39 @@ class IsinProcessor:
                 elif sv_val is not None and s_qty > 0:
                     s_price = float(sv_val) / s_qty
                 else:
-                    s_price = float(m_row.get("Closing_Price", 0.0))
+                    raise ValueError(
+                        f"Sale price and proceeds are both missing for ISIN={isin} "
+                        f"on {row_dt_obj}; refusing to substitute the market close."
+                    )
 
-                s_val = float(sv_val) if sv_val is not None else float(s_qty * s_price)
+                s_price = float(s_price)
+                is_re_adjustment = _is_zero_proceeds_re_adjustment(
+                    isin=isin,
+                    quantity=s_qty,
+                    price=s_price,
+                    proceeds=sv_val,
+                )
+                if (not math.isfinite(s_price) or s_price <= 0) and not is_re_adjustment:
+                    raise ValueError(
+                        f"Invalid sale price for ISIN={isin} on {row_dt_obj}: {s_price!r}"
+                    )
+                s_val = (
+                    0.0
+                    if is_re_adjustment
+                    else float(sv_val)
+                    if sv_val is not None
+                    else float(s_qty * s_price)
+                )
 
                 _spl_val = row.get("Sell_Price_Local")
-                s_price_local = float(_spl_val) if _spl_val is not None else s_price
-                s_val_local = float(s_qty * s_price_local)
+                s_price_local = (
+                    0.0
+                    if is_re_adjustment
+                    else float(_spl_val)
+                    if _spl_val is not None
+                    else s_price
+                )
+                s_val_local = 0.0 if is_re_adjustment else float(s_qty * s_price_local)
                 currency_id = (
                     row.get("CURRENCY_ID")
                     or master_row.get("CURRENCY_ID")
@@ -195,12 +276,8 @@ class IsinProcessor:
 
                 cf_dates.append(row_dt_obj)
                 cf_amounts.append(s_val)
-                isin_cashflows.append(
-                    CashflowRecord(date=row_dt_obj, amount=s_val, amount_local=s_val_local)
-                )
 
                 sale_id = row.get("Sale_ID")
-
                 events = fifo.sell(
                     row_dt_obj,
                     s_qty,
@@ -210,15 +287,28 @@ class IsinProcessor:
                     sale_id=sale_id,
                 )
 
-                # Calculate benchmark sell value
+                # Benchmark proceeds must use the benchmark units attributable to
+                # the lots sold, valued at the benchmark close for this sale date.
                 bm_sell_price_local = bm_provider.get_bm_price(row_dt_obj)
                 bm_sell_price_local = (
-                    bm_sell_price_local if bm_sell_price_local is not None else float("nan")
+                    float(bm_sell_price_local) if bm_sell_price_local is not None else float("nan")
                 )
                 bm_sell_price_inr = bm_sell_price_local * fx_rate_sell
-                shadow_qty_sold = sum(e.get("shadow_qty_sold", 0.0) for e in events)
-                bm_cf_amounts.append(shadow_qty_sold * bm_sell_price_inr)
-                bm_cf_amounts_local.append(shadow_qty_sold * bm_sell_price_local)
+                shadow_qty_sold = float(sum(e.get("shadow_qty_sold", 0.0) or 0.0 for e in events))
+                bm_sell_value_inr = shadow_qty_sold * bm_sell_price_inr
+                bm_sell_value_local = shadow_qty_sold * bm_sell_price_local
+
+                bm_cf_amounts.append(bm_sell_value_inr)
+                bm_cf_amounts_local.append(bm_sell_value_local)
+                isin_cashflows.append(
+                    CashflowRecord(
+                        date=row_dt_obj,
+                        amount=s_val,
+                        amount_local=s_val_local,
+                        benchmark_amount=bm_sell_value_inr,
+                        benchmark_amount_local=bm_sell_value_local,
+                    )
+                )
 
                 isin_realized.extend(events)
                 s_idx += 1
@@ -239,7 +329,13 @@ class IsinProcessor:
                 bm_cf_amounts.append(amt)
                 bm_cf_amounts_local.append(amt)
                 isin_cashflows.append(
-                    CashflowRecord(date=cast(date, cf["date"]), amount=amt, amount_local=amt)
+                    CashflowRecord(
+                        date=cast(date, cf["date"]),
+                        amount=amt,
+                        amount_local=amt,
+                        benchmark_amount=0.0,
+                        benchmark_amount_local=0.0,
+                    )
                 )
 
             cb_recon_events = fifo.reconcile_cost_basis(
@@ -332,12 +428,20 @@ class IsinProcessor:
             inst_after_tax_xirr_result = calculate_xirr(
                 cf_dates + [m_date], cf_amounts + [after_tax_terminal_val]
             )
-            inst_xirr = inst_xirr_result.as_float()
-            bm_xirr_val = bm_xirr_result.as_float()
-            inst_after_tax_xirr = inst_after_tax_xirr_result.as_float()
+            inst_xirr = inst_xirr_result.value
+            bm_xirr_val = bm_xirr_result.value
+            inst_after_tax_xirr = inst_after_tax_xirr_result.value
 
-            inst_active_return = inst_xirr - bm_xirr_val
-            is_lagging = inst_xirr < bm_xirr_val
+            inst_active_return = (
+                inst_xirr - bm_xirr_val
+                if inst_xirr is not None and bm_xirr_val is not None
+                else None
+            )
+            is_lagging = (
+                inst_xirr < bm_xirr_val
+                if inst_xirr is not None and bm_xirr_val is not None
+                else None
+            )
 
             inst_cagr = inst_bm_cagr = 0.0
             if closing_units > 0:
@@ -371,7 +475,9 @@ class IsinProcessor:
                 "xirr": inst_xirr,
                 "xirr_status": inst_xirr_result.status,
                 "bm_xirr": bm_xirr_val,
+                "bm_xirr_status": bm_xirr_result.status,
                 "after_tax_xirr": inst_after_tax_xirr,
+                "after_tax_xirr_status": inst_after_tax_xirr_result.status,
                 "active_return": inst_active_return,
                 "is_lagging": is_lagging,
                 "max_drawdown": inst_max_dd,
@@ -380,20 +486,32 @@ class IsinProcessor:
             # Local XIRR Calculation
             cf_dates_local = [c.date for c in isin_cashflows if c.date <= m_date]
             cf_amounts_local = [c.amount_local for c in isin_cashflows if c.date <= m_date]
-            inst_xirr_local = calculate_xirr(
+            inst_xirr_local_result = calculate_xirr(
                 cf_dates_local + [m_date], cf_amounts_local + [terminal_val_local]
-            ).as_float()
+            )
 
             bm_cf_dates_local = cf_dates_local
             bm_cf_local = bm_cf_amounts_local[: len(cf_dates_local)]
-            inst_bm_xirr_local = calculate_xirr(
+            inst_bm_xirr_local_result = calculate_xirr(
                 bm_cf_dates_local + [m_date], bm_cf_local + [shadow_terminal_val_local]
-            ).as_float()
+            )
+            inst_xirr_local = inst_xirr_local_result.value
+            inst_bm_xirr_local = inst_bm_xirr_local_result.value
 
             inst_metrics["xirr_local"] = inst_xirr_local
+            inst_metrics["xirr_local_status"] = inst_xirr_local_result.status
             inst_metrics["bm_xirr_local"] = inst_bm_xirr_local
-            inst_metrics["active_return_local"] = inst_xirr_local - inst_bm_xirr_local
-            inst_metrics["fx_xirr_impact"] = inst_xirr - inst_xirr_local
+            inst_metrics["bm_xirr_local_status"] = inst_bm_xirr_local_result.status
+            inst_metrics["active_return_local"] = (
+                inst_xirr_local - inst_bm_xirr_local
+                if inst_xirr_local is not None and inst_bm_xirr_local is not None
+                else None
+            )
+            inst_metrics["fx_xirr_impact"] = (
+                inst_xirr - inst_xirr_local
+                if inst_xirr is not None and inst_xirr_local is not None
+                else None
+            )
 
             exec_res_raw = m_row.get("Execution_Residual")
             execution_residual = float(exec_res_raw) if exec_res_raw is not None else 0.0
@@ -462,7 +580,13 @@ class IsinProcessor:
             buy_val_local = float(qty * price_local)
             bm_cf_amounts_local.append(-buy_val_local)
             isin_cashflows.append(
-                CashflowRecord(date=row_dt_obj, amount=-buy_val, amount_local=-buy_val_local)
+                CashflowRecord(
+                    date=row_dt_obj,
+                    amount=-buy_val,
+                    amount_local=-buy_val_local,
+                    benchmark_amount=-buy_val,
+                    benchmark_amount_local=-buy_val_local,
+                )
             )
             p_idx += 1
 
@@ -481,13 +605,33 @@ class IsinProcessor:
             elif sv_val is not None and s_qty > 0:
                 s_price = float(sv_val) / s_qty
             else:
-                s_price = 0.0
+                raise ValueError(
+                    f"Sale price and proceeds are both missing for ISIN={isin} "
+                    f"on {row_dt_obj}; refusing to create a zero-price sale."
+                )
 
-            s_val = float(sv_val) if sv_val is not None else float(s_qty * s_price)
+            s_price = float(s_price)
+            is_re_adjustment = _is_zero_proceeds_re_adjustment(
+                isin=isin,
+                quantity=s_qty,
+                price=s_price,
+                proceeds=sv_val,
+            )
+            if (not math.isfinite(s_price) or s_price <= 0) and not is_re_adjustment:
+                raise ValueError(f"Invalid sale price for ISIN={isin} on {row_dt_obj}: {s_price!r}")
+            s_val = (
+                0.0
+                if is_re_adjustment
+                else float(sv_val)
+                if sv_val is not None
+                else float(s_qty * s_price)
+            )
 
             _spl_val = row.get("Sell_Price_Local")
-            s_price_local = float(_spl_val) if _spl_val is not None else s_price
-            s_val_local = float(s_qty * s_price_local)
+            s_price_local = (
+                0.0 if is_re_adjustment else float(_spl_val) if _spl_val is not None else s_price
+            )
+            s_val_local = 0.0 if is_re_adjustment else float(s_qty * s_price_local)
             currency_id = (
                 row.get("CURRENCY_ID")
                 or master_row.get("CURRENCY_ID")
@@ -500,12 +644,8 @@ class IsinProcessor:
 
             cf_dates.append(row_dt_obj)
             cf_amounts.append(s_val)
-            isin_cashflows.append(
-                CashflowRecord(date=row_dt_obj, amount=s_val, amount_local=s_val_local)
-            )
 
             sale_id = row.get("Sale_ID")
-
             events = fifo.sell(
                 row_dt_obj,
                 s_qty,
@@ -515,31 +655,57 @@ class IsinProcessor:
                 sale_id=sale_id,
             )
 
-            # Calculate benchmark sell value
+            # Benchmark proceeds must use the benchmark units attributable to
+            # the lots sold, valued at the benchmark close for this sale date.
             bm_sell_price_local = bm_provider.get_bm_price(row_dt_obj)
             bm_sell_price_local = (
-                bm_sell_price_local if bm_sell_price_local is not None else float("nan")
+                float(bm_sell_price_local) if bm_sell_price_local is not None else float("nan")
             )
             bm_sell_price_inr = bm_sell_price_local * fx_rate_sell
-            shadow_qty_sold = sum(e.get("shadow_qty_sold", 0.0) for e in events)
-            bm_cf_amounts.append(shadow_qty_sold * bm_sell_price_inr)
-            bm_cf_amounts_local.append(shadow_qty_sold * bm_sell_price_local)
+            shadow_qty_sold = float(sum(e.get("shadow_qty_sold", 0.0) or 0.0 for e in events))
+            bm_sell_value_inr = shadow_qty_sold * bm_sell_price_inr
+            bm_sell_value_local = shadow_qty_sold * bm_sell_price_local
+
+            bm_cf_amounts.append(bm_sell_value_inr)
+            bm_cf_amounts_local.append(bm_sell_value_local)
+            isin_cashflows.append(
+                CashflowRecord(
+                    date=row_dt_obj,
+                    amount=s_val,
+                    amount_local=s_val_local,
+                    benchmark_amount=bm_sell_value_inr,
+                    benchmark_amount_local=bm_sell_value_local,
+                )
+            )
 
             isin_realized.extend(events)
             s_idx += 1
 
         schema_overrides = {
+            # Keep nullable fields typed even when every value for this ISIN is None.
+            # Otherwise Polars can infer Null for one worker's parquet file, then fail
+            # when scan_parquet combines it with another file containing real values.
             "BM_Buy_Price": pl.Float64,
             "BENCHMARK_ID": pl.String,
             "Lot_ID": pl.String,
             "Purchase_ID": pl.String,
             "Lot_Source_Type": pl.String,
             "Buy_Date": pl.Date,
+            "XIRR": pl.Float64,
+            "After_Tax_XIRR": pl.Float64,
+            "BM_XIRR": pl.Float64,
+            "BM_XIRR_Local": pl.Float64,
+            "Active_Return": pl.Float64,
+            "Active_Return_Local": pl.Float64,
+            "Is_Lagging_Benchmark": pl.Boolean,
+            "XIRR_Local": pl.Float64,
+            "FX_XIRR_Impact": pl.Float64,
         }
         df = (
             pl.DataFrame(
                 [s.model_dump(by_alias=True) for s in isin_snapshots],
                 schema_overrides=schema_overrides,
+                infer_schema_length=None,
             )
             if isin_snapshots
             else None
