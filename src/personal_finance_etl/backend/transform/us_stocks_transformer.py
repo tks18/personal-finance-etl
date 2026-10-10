@@ -142,61 +142,116 @@ def transform_us_market_data(
 
     df_spine = df_spine_eager.lazy()
 
-    df_prices = df_bronze_prices_lazy.sort("Date")
+    # Historical prices may only flow forward from an observation on or before the
+    # valuation date. Keep the source observation date long enough to enforce a
+    # bounded staleness policy; never backward-fill a missing historical price.
+    max_price_staleness_days = 7
+    invalid_source_prices = (
+        df_bronze_prices_lazy.filter(
+            pl.col("Closing_Price_Local").is_not_null()
+            & (~pl.col("Closing_Price_Local").is_finite() | (pl.col("Closing_Price_Local") <= 0))
+            & ~pl.col("Is_Closure_Gap").fill_null(False)
+        )
+        .select(["ISIN", "Date", "Closing_Price_Local"])
+        .limit(10)
+        .collect()
+    )
+    if not invalid_source_prices.is_empty():
+        raise ValueError(
+            "Bronze contains non-positive or non-finite US stock prices not marked as "
+            f"closure gaps: {invalid_source_prices.to_dicts()}"
+        )
+
+    df_prices = (
+        df_bronze_prices_lazy.filter(
+            pl.col("Closing_Price_Local").is_not_null()
+            & pl.col("Closing_Price_Local").is_finite()
+            & (pl.col("Closing_Price_Local") > 0)
+            & ~pl.col("Is_Closure_Gap").fill_null(False)
+        )
+        .select(
+            [
+                "Date",
+                "ISIN",
+                "Closing_Price_Local",
+                "Data_Provider",
+                "Extraction_Time",
+                "Requested_Start",
+                "Requested_End",
+                "Is_Closure_Gap",
+            ]
+        )
+        .with_columns(pl.col("Date").alias("Price_Observation_Date"))
+        .sort("Date")
+    )
     df_spine = df_spine.sort("Date")
     df_spine = (
         df_spine.join_asof(
-            df_prices.select(
-                [
-                    "Date",
-                    "ISIN",
-                    "Closing_Price_Local",
-                    "Data_Provider",
-                    "Extraction_Time",
-                    "Requested_Start",
-                    "Requested_End",
-                    "Is_Closure_Gap",
-                ]
-            ),
+            df_prices,
             on="Date",
             by="ISIN",
             strategy="backward",
         )
         .sort(["ISIN", "Date"])
         .with_columns(
-            pl.col("Is_Closure_Gap").fill_null(True).alias("Is_Imputed"),
-            pl.col("Closing_Price_Local").backward_fill().fill_null(0.0).over("ISIN"),
-            pl.col("Data_Provider").backward_fill().over("ISIN"),
-            pl.col("Extraction_Time").backward_fill().over("ISIN"),
-            pl.col("Requested_Start").backward_fill().over("ISIN"),
-            pl.col("Requested_End").backward_fill().over("ISIN"),
-            pl.col("Is_Closure_Gap").backward_fill().over("ISIN"),
+            (pl.col("Date") - pl.col("Price_Observation_Date"))
+            .dt.total_days()
+            .alias("Price_Age_Days"),
+            pl.col("Is_Closure_Gap").fill_null(False).alias("Is_Closure_Gap"),
+        )
+        .with_columns(
+            (
+                pl.col("Price_Observation_Date").is_null()
+                | (pl.col("Price_Observation_Date") != pl.col("Date"))
+                | pl.col("Is_Closure_Gap")
+            ).alias("Is_Imputed")
         )
     )
 
+    invalid_prices = (
+        df_spine.filter(
+            pl.col("Closing_Price_Local").is_null()
+            | ~pl.col("Closing_Price_Local").is_finite()
+            | (pl.col("Closing_Price_Local") <= 0)
+            | pl.col("Price_Age_Days").is_null()
+            | (pl.col("Price_Age_Days") > max_price_staleness_days)
+        )
+        .select(["ISIN", "Date", "Price_Observation_Date", "Price_Age_Days", "Closing_Price_Local"])
+        .limit(10)
+        .collect()
+    )
+    if not invalid_prices.is_empty():
+        raise ValueError(
+            "Missing, non-positive, non-finite, or stale US stock prices. "
+            f"Maximum permitted observation age is {max_price_staleness_days} calendar days. "
+            f"Examples: {invalid_prices.to_dicts()}"
+        )
+
     # --- Phase 3: FX Translation ---
+    # CurrencyTransformer has already forward-filled only from prior observations
+    # and enforced the same staleness boundary. Do not fill missing FX from future rows.
     df_fx_sorted = (
         df_fx_lazy.select(["Date", "Currency_ID", "FX_Rate"])
         .rename({"Currency_ID": "CURRENCY_ID"})
         .sort("Date")
     )
     df_spine = df_spine.sort("Date")
-    df_spine = (
-        df_spine.join_asof(df_fx_sorted, on="Date", by="CURRENCY_ID", strategy="backward")
-        .sort(["ISIN", "Date"])
-        .with_columns(pl.col("FX_Rate").backward_fill().over("ISIN"))
-    )
+    df_spine = df_spine.join_asof(
+        df_fx_sorted, on="Date", by="CURRENCY_ID", strategy="backward"
+    ).sort(["ISIN", "Date"])
 
-    missing_fx = (
-        df_spine.filter(pl.col("FX_Rate").is_null() & pl.col("CURRENCY_ID").is_not_null())
-        .select("CURRENCY_ID")
-        .unique()
+    invalid_fx = (
+        df_spine.filter(
+            pl.col("FX_Rate").is_null() | ~pl.col("FX_Rate").is_finite() | (pl.col("FX_Rate") <= 0)
+        )
+        .select(["ISIN", "Date", "CURRENCY_ID", "FX_Rate"])
+        .limit(10)
         .collect()
     )
-    if not missing_fx.is_empty():
-        missing_ids = missing_fx["CURRENCY_ID"].to_list()
+    if not invalid_fx.is_empty():
         raise ValueError(
-            f"FATAL: Missing FX mapping for CURRENCY_IDs: {missing_ids}. Halting pipeline."
+            "Missing, non-positive, or non-finite FX rates for US stock valuation. "
+            f"Examples: {invalid_fx.to_dicts()}"
         )
 
     df_spine = df_spine.with_columns(
