@@ -58,53 +58,70 @@ class RealizedGainsCalculator:
             )
 
             df_events = (
-                df_events.with_columns(pl.col("date").cast(pl.Date))
+                df_events.with_columns(pl.col("Disposal_Date").cast(pl.Date))
                 .with_columns(
-                    pl.when(pl.col("date").dt.month() >= 4)
-                    .then(pl.col("date").dt.year())
-                    .otherwise(pl.col("date").dt.year() - 1)
+                    pl.when(pl.col("Disposal_Date").dt.month() >= 4)
+                    .then(pl.col("Disposal_Date").dt.year())
+                    .otherwise(pl.col("Disposal_Date").dt.year() - 1)
                     .cast(pl.Int64)
                     .alias("event_fy_sy")
                 )
-                .with_columns(pl.col("tax_type").fill_null("equity").str.to_lowercase())
+                .with_columns(pl.col("Tax_Type").fill_null("equity").str.to_lowercase())
+                .with_columns(pl.col("Tax_Subtype").fill_null(""))
                 .with_columns(
-                    pl.when((pl.col("gain_type") == "LTCG") & (pl.col("gain") >= 0))
-                    .then(pl.col("gain"))
+                    pl.when((pl.col("Holding_Type") == "LTCG") & (pl.col("Realized_Gain_Loss") >= 0))
+                    .then(pl.col("Realized_Gain_Loss"))
                     .otherwise(0.0)
                     .alias("is_ltcg"),
                     pl.when(
-                        (pl.col("gain_type") == "LTCG")
-                        & (pl.col("gain") >= 0)
-                        & (pl.col("tax_type") == "equity")
+                        (pl.col("Holding_Type") == "LTCG")
+                        & (pl.col("Realized_Gain_Loss") >= 0)
+                        & (pl.col("Tax_Type") == "equity")
+                        # Section 112A exemption applies ONLY to listed Indian equity.
+                        # Foreign equity (us_listed, us_stocks, foreign) is taxed at
+                        # slab rates and must NOT consume the Rs 1.25L exemption budget.
+                        & ~pl.col("Tax_Subtype").str.to_lowercase().is_in(
+                            ["us_listed", "us_stocks", "foreign", "us_equity"]
+                        )
                     )
-                    .then(pl.col("gain"))
+                    .then(pl.col("Realized_Gain_Loss"))
                     .otherwise(0.0)
                     .alias("is_eq_ltcg"),
-                    pl.when((pl.col("gain_type") == "STCG") & (pl.col("gain") >= 0))
-                    .then(pl.col("gain"))
+                    pl.when((pl.col("Holding_Type") == "STCG") & (pl.col("Realized_Gain_Loss") >= 0))
+                    .then(pl.col("Realized_Gain_Loss"))
                     .otherwise(0.0)
                     .alias("is_stcg"),
-                    pl.when((pl.col("gain_type") == "LTCG") & pl.col("is_loss"))
-                    .then(pl.col("gain"))
+                    pl.when(
+                        (pl.col("Holding_Type") == "LTCG")
+                        & (pl.col("Realized_Gain_Loss") < 0)
+                    )
+                    .then(pl.col("Realized_Gain_Loss"))
                     .otherwise(0.0)
                     .alias("is_ltcl"),
                     pl.when(
-                        (pl.col("gain_type") == "LTCG")
-                        & pl.col("is_loss")
-                        & (pl.col("tax_type") == "equity")
+                        (pl.col("Holding_Type") == "LTCG")
+                        & (pl.col("Realized_Gain_Loss") < 0)
+                        & (pl.col("Tax_Type") == "equity")
+                        # Same foreign-equity exclusion for loss tracking
+                        & ~pl.col("Tax_Subtype").str.to_lowercase().is_in(
+                            ["us_listed", "us_stocks", "foreign", "us_equity"]
+                        )
                     )
-                    .then(pl.col("gain"))
+                    .then(pl.col("Realized_Gain_Loss"))
                     .otherwise(0.0)
                     .alias("is_eq_ltcl"),
-                    pl.when((pl.col("gain_type") == "STCG") & pl.col("is_loss"))
-                    .then(pl.col("gain"))
+                    pl.when(
+                        (pl.col("Holding_Type") == "STCG")
+                        & (pl.col("Realized_Gain_Loss") < 0)
+                    )
+                    .then(pl.col("Realized_Gain_Loss"))
                     .otherwise(0.0)
                     .alias("is_stcl"),
                 )
             )
 
             df_daily_events = (
-                df_events.group_by(["date", "event_fy_sy"])
+                df_events.group_by(["Disposal_Date", "event_fy_sy"])
                 .agg(
                     [
                         pl.col("is_ltcg").sum().alias("daily_ltcg"),
@@ -115,35 +132,35 @@ class RealizedGainsCalculator:
                         pl.col("is_stcl").sum().alias("daily_stcl"),
                     ]
                 )
-                .sort(["event_fy_sy", "date"])
-                .with_columns(pl.col("date").set_sorted())
+                .sort(["event_fy_sy", "Disposal_Date"])
+                .with_columns(pl.col("Disposal_Date").set_sorted())
             )
 
             df_daily_events = df_daily_events.with_columns(
                 [
                     pl.col("daily_ltcg")
                     .cum_sum()
-                    .over("event_fy_sy", order_by="date")
+                    .over("event_fy_sy", order_by="Disposal_Date")
                     .alias("cum_ltcg"),
                     pl.col("daily_eq_ltcg")
                     .cum_sum()
-                    .over("event_fy_sy", order_by="date")
+                    .over("event_fy_sy", order_by="Disposal_Date")
                     .alias("cum_eq_ltcg"),
                     pl.col("daily_stcg")
                     .cum_sum()
-                    .over("event_fy_sy", order_by="date")
+                    .over("event_fy_sy", order_by="Disposal_Date")
                     .alias("cum_stcg"),
                     pl.col("daily_ltcl")
                     .cum_sum()
-                    .over("event_fy_sy", order_by="date")
+                    .over("event_fy_sy", order_by="Disposal_Date")
                     .alias("cum_ltcl"),
                     pl.col("daily_eq_ltcl")
                     .cum_sum()
-                    .over("event_fy_sy", order_by="date")
+                    .over("event_fy_sy", order_by="Disposal_Date")
                     .alias("cum_eq_ltcl"),
                     pl.col("daily_stcl")
                     .cum_sum()
-                    .over("event_fy_sy", order_by="date")
+                    .over("event_fy_sy", order_by="Disposal_Date")
                     .alias("cum_stcl"),
                 ]
             )
@@ -152,7 +169,7 @@ class RealizedGainsCalculator:
                 df_dates.join_asof(
                     df_daily_events,
                     left_on="Date_Obj",
-                    right_on="date",
+                    right_on="Disposal_Date",
                     by="event_fy_sy",
                     strategy="backward",
                 )
