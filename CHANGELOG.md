@@ -2,6 +2,116 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [7.0.0](https://github.com/tks18/personal-finance-etl/compare/6.6.1...7.0.0) (2026-10-10)
+
+
+### Styling 🎨
+
+* lint fix ([3927624](https://github.com/tks18/personal-finance-etl/commit/392762453716ae5fb709ca9c93ac012d9cc760ce))
+* linting ([894e39b](https://github.com/tks18/personal-finance-etl/commit/894e39b8b3c4bb135b57ed3006b853bd2954d774))
+
+
+### Code Refactoring 🖌
+
+* **backend/engines/presentation:** tax: use the new income tax rate from rules for fallback ([cba3f24](https://github.com/tks18/personal-finance-etl/commit/cba3f24ec2c10a390d16a7703656e929cc585c63))
+* **backend/extract:** change dividend income tax rate to Estimated_Ordinary_Income_Tax_Rate ([4299fe8](https://github.com/tks18/personal-finance-etl/commit/4299fe8d6555f8e6d99dcfa73be7d2a8f3cb4eb6))
+* **backend/transform:** change dividend income tax rate to Estimated_Ordinary_Income_Tax_Rate ([21ed193](https://github.com/tks18/personal-finance-etl/commit/21ed193d1fcd3ebffc45896c3d5d038ff4e7b47b))
+* minor col add ([8d4f6b0](https://github.com/tks18/personal-finance-etl/commit/8d4f6b05e02d3ad37e074789726fa9fd9923976e))
+* minor refactor ([ff386b1](https://github.com/tks18/personal-finance-etl/commit/ff386b127375513eb679d9f4d86fe8e9ba1a87f4))
+* pass run id ([e926873](https://github.com/tks18/personal-finance-etl/commit/e9268734b0f7adf84d5805d10218238e5b23b00e))
+
+
+### Docs 📃
+
+* update implementation notes ([fa84d2f](https://github.com/tks18/personal-finance-etl/commit/fa84d2f9965b6c6b3c3bf23c22ebe34fa21327a7))
+* update priorities for finance hardening ([d393e52](https://github.com/tks18/personal-finance-etl/commit/d393e5273c4ddf44f871996a1ff747831d0d6963))
+* update priorities for production hardening ([2e4ce02](https://github.com/tks18/personal-finance-etl/commit/2e4ce02d84a4d5f1c7b212c87f2e637c314173c4))
+* update priorities for qa hardening ([65e168f](https://github.com/tks18/personal-finance-etl/commit/65e168f05e56887e702e34faef7cfcfa8b07ad05))
+
+
+### Bug Fixes 🛠
+
+* **backend/engines/quant:** fx_rate: do not return 1 for not known currencies ([e7a9f43](https://github.com/tks18/personal-finance-etl/commit/e7a9f436578c804befc27805dbf5d48d9c38ae7f))
+* **backend/engines/quant:** implement month based ltcg check instead of days ([cbb1107](https://github.com/tks18/personal-finance-etl/commit/cbb1107da3cefe8277236484f04ee9bac83f70e3))
+* **backend/engines:** coordinator: fix realized events ([a4a8b2e](https://github.com/tks18/personal-finance-etl/commit/a4a8b2e7ec09334439d197d8964b85b276850069))
+* **backend/engines:** fifo: implement fifo properly ([b58f814](https://github.com/tks18/personal-finance-etl/commit/b58f8148844fc36df1ab4816df5ef046afe5a54f))
+* **backend/engines:** fix rules for foreign equity ([17208b9](https://github.com/tks18/personal-finance-etl/commit/17208b94d604d62db550210e0cdc86f329bee79b))
+* **backend/engines:** quant: update harvest for foreign equities ([8891ea8](https://github.com/tks18/personal-finance-etl/commit/8891ea80a475fe148f44928dcdfbd45cbd997789))
+* **backend/engines:** remove tax liability forecast from presentation engine ([6645d7b](https://github.com/tks18/personal-finance-etl/commit/6645d7b3822c71b7d189be9d4ee501e07f775443))
+* **backend/engines:** use safe divide helper ([bdb1d11](https://github.com/tks18/personal-finance-etl/commit/bdb1d1181b2b054f32ccaf378fe1d5f1e79f2b3f))
+* **backend/transform:** use deque for lot tracking for us stocks market data ([7439245](https://github.com/tks18/personal-finance-etl/commit/7439245925813317256722a88e7cab303e34fba1))
+
+
+### Features 🔥
+
+* **backend/config:** add new config parameters for tax related assumptions, ids and tracking ([40f3a3a](https://github.com/tks18/personal-finance-etl/commit/40f3a3a2bfed76b37df8d929dfe068815ce21bb4))
+* **backend/config:** add type for xirr result ([f291ff4](https://github.com/tks18/personal-finance-etl/commit/f291ff444f0958eacc2413e7b0a2c63a8ec9adad))
+* **backend/config:** financial_rules: add config for capital gains ([0b4f859](https://github.com/tks18/personal-finance-etl/commit/0b4f8592189abaf6d5b484b35af84b0a02d033ba))
+* **backend/control_plane:** add more file tracking methods ([0b6f2cd](https://github.com/tks18/personal-finance-etl/commit/0b6f2cd8e4bbb78cdda8d1128a6f8d92a6d4c78a))
+* **backend/control_plane:** artifact_repo: implement full file lineage and prevenance ([4168a5a](https://github.com/tks18/personal-finance-etl/commit/4168a5a1663a84b055a895e73675f509473ed58c))
+* **backend/control_plane:** file_sync: now use new improved methods for file tracking ([e852129](https://github.com/tks18/personal-finance-etl/commit/e8521296e766aa72faf60ffb1b0267903c85c1f6))
+* **backend/control_plane:** implement model and input fingerprinting ([92b11ac](https://github.com/tks18/personal-finance-etl/commit/92b11ac6e46efb8c9e8fbbec1b811d66f2da3d12))
+* **backend/control_plane:** pass run id across ([93dd381](https://github.com/tks18/personal-finance-etl/commit/93dd3813d32a2452f4010ac37d6187cadfac0302))
+* **backend/control_plane:** run_repo: create method for simulations tracking ([835f61b](https://github.com/tks18/personal-finance-etl/commit/835f61b56f71dd548f91285668c517fffe89d579))
+* **backend/control_plane:** track run_id fully ([4a21bc9](https://github.com/tks18/personal-finance-etl/commit/4a21bc9e2e25fec94ba7146caa2193bf4abdef92))
+* **backend/engines/presentation:** wealth: pass root seed from control_plane ([dea62a4](https://github.com/tks18/personal-finance-etl/commit/dea62a4ad25fe8057ed14856f9c310fbcf760798))
+* **backend/engines/presentation:** wealth: use the new root seed for sub seeds ([0c34623](https://github.com/tks18/personal-finance-etl/commit/0c346239efabaaece0d58d25a3f9b32a1a598a99))
+* **backend/engines/quant:** expose realized events, reconciliation events to outputs ([6c346e0](https://github.com/tks18/personal-finance-etl/commit/6c346e02289c496348e52c50856237d28f3541e0))
+* **backend/engines/quant:** fifo: implement robust determ. id tracking, recon events for trace ([2227a3a](https://github.com/tks18/personal-finance-etl/commit/2227a3a7eaf02ad2b5de932b175bdf147e380b37))
+* **backend/engines/quant:** isin: track ids and recon events at isin level ([3ba1146](https://github.com/tks18/personal-finance-etl/commit/3ba114640b1c7bc8a4e720ee7d2fc66a5f0f3172))
+* **backend/engines/quant:** macro: now use month based validation instead of days, fallback rate ([46e0b44](https://github.com/tks18/personal-finance-etl/commit/46e0b44bfa3eea99750da587283314badde7059b))
+* **backend/engines/quant:** pass recon events ([2d0d3e9](https://github.com/tks18/personal-finance-etl/commit/2d0d3e9d94f68e36e0d6b9f725ff08e443f61840))
+* **backend/engines/quant:** use common ordering for fifo ordering purch, sales ([acdd68e](https://github.com/tks18/personal-finance-etl/commit/acdd68e755e5a34def6cdcc4c2e65016e542916b))
+* **backend/engines:** add a fx_gate to check it before running analytics ([b0aaed8](https://github.com/tks18/personal-finance-etl/commit/b0aaed8a62abbb811d4e2e0663b3b24d3c81c0cb))
+* **backend/engines:** add fx gate to the isin flow ([1d6c1b6](https://github.com/tks18/personal-finance-etl/commit/1d6c1b654e9fcbccfdf33461d9bda1efb56c7f4e))
+* **backend/engines:** context: pass run id ([b0fb6ba](https://github.com/tks18/personal-finance-etl/commit/b0fb6ba387844b6d3d475a9d8116480722315485))
+* **backend/engines:** export monte carlo inputs for model fingerprinting ([6c75be4](https://github.com/tks18/personal-finance-etl/commit/6c75be482dc5980505cbac9a79e7704d926b1b5a))
+* **backend/engines:** macro: add rules for foreign equity ([e609d45](https://github.com/tks18/personal-finance-etl/commit/e609d45db02be0225f205fefd7e3b5959ecbc24c))
+* **backend/engines:** math: use new xirr result, update doc strings ([2e87cde](https://github.com/tks18/personal-finance-etl/commit/2e87cdeda24cece17fcf99d4c65b8fc6a7d87435))
+* **backend/engines:** rename cols for recon events and realized events ([c4f13bc](https://github.com/tks18/personal-finance-etl/commit/c4f13bc9dfdc790e93ed4793ed8255f4e513bbb8))
+* **backend/engines:** snapshot: add provenance fields ([8f4208d](https://github.com/tks18/personal-finance-etl/commit/8f4208d52c165db5067d2630fcd3a2e24391f13a))
+* **backend/engines:** tax: add date utils ([4843310](https://github.com/tks18/personal-finance-etl/commit/4843310a30b821b93448da5aca7d0467b8b861e8))
+* **backend/engines:** tax: add fy level tax builder ([0874ff3](https://github.com/tks18/personal-finance-etl/commit/0874ff3ed9c59aeed07fea3adfea13ac562d7b77))
+* **backend/engines:** tax: create base tax events ledger ([e73c072](https://github.com/tks18/personal-finance-etl/commit/e73c072b028d730a60447d1852dbda45707d8f1b))
+* **backend/engines:** tax: create investment tax forecast table ([c59a486](https://github.com/tks18/personal-finance-etl/commit/c59a486e48ccf35ab047d9e3cb5dd774fa90ef66))
+* **backend/engines:** tax: create tax engine orchestrator ([cd52c2a](https://github.com/tks18/personal-finance-etl/commit/cd52c2a71f646753dc4342978c530d0248e4c010))
+* **backend/engines:** tax: final gold level tax formatter ([9bf3e22](https://github.com/tks18/personal-finance-etl/commit/9bf3e22f73c0eaba5fc330112836115ab047a3cf))
+* **backend/engines:** tax: loss set off logic ([62ad917](https://github.com/tks18/personal-finance-etl/commit/62ad917a246434768810d56f49b07d496ac92db4))
+* **backend/engines:** tax: loss set off logic ([6164582](https://github.com/tks18/personal-finance-etl/commit/6164582bd750007504ac2424e1b3aff9c305e079))
+* **backend/engines:** tax: use the new capital groups for all tax ops ([debba5d](https://github.com/tks18/personal-finance-etl/commit/debba5dc8544021b0689d6457f58b297443236a3))
+* **backend/extract:** benchmark: add new provenance tracking cols ([82de38f](https://github.com/tks18/personal-finance-etl/commit/82de38ffcc783697dffac9fa8856530509e0d172))
+* **backend/extract:** currency: add new provenance tracking cols ([c309432](https://github.com/tks18/personal-finance-etl/commit/c3094325318230775ec9c72079209a02b622f71c))
+* **backend/extract:** us_market: add new provenance tracking cols ([484623b](https://github.com/tks18/personal-finance-etl/commit/484623ba0d18245a20eaaae8c063af562c913acf))
+* **backend/load/schema:** gold: add new tax gold tables ([aa7ec16](https://github.com/tks18/personal-finance-etl/commit/aa7ec166ccec367356949607db756bab4de365b9))
+* **backend/load/schema:** meta: add latest sim run to duckdb meta ([3b4e7e6](https://github.com/tks18/personal-finance-etl/commit/3b4e7e632a1810d6ba2449f249aa2896315da718))
+* **backend/load/schema:** silver: add new tables for future implementation ([2e839a5](https://github.com/tks18/personal-finance-etl/commit/2e839a580c78356b5907f6bfa3d58feceda715fe))
+* **backend/load/schema:** silver: add update ddl ([9d42403](https://github.com/tks18/personal-finance-etl/commit/9d424034097ad42a9b0c6e143366d3f7a861c241))
+* **backend/load/schema:** update silver ddl to include provenance, determ. id cols ([3385bfd](https://github.com/tks18/personal-finance-etl/commit/3385bfde9e885a95aa18f39ab1c8abfe8ff41841))
+* **backend/load:** control_plane: new meta tables for data lineage, provenance and sim tracking ([4ce6659](https://github.com/tks18/personal-finance-etl/commit/4ce6659dcf8f1cb661450c48f288eecc73c7ac1f))
+* **backend/load:** metadata: implement input hash for sim run ([54744a6](https://github.com/tks18/personal-finance-etl/commit/54744a6b8855dca89f56542c6e82210090ed7577))
+* **backend/load:** registry: add contracts to registry ([7005849](https://github.com/tks18/personal-finance-etl/commit/700584928851de6dc37e7052321083ec586265a2))
+* **backend/load:** registry: add new silver tables for realized events, recon events ([e7fdf3f](https://github.com/tks18/personal-finance-etl/commit/e7fdf3ffc7b801cd97fa8c0f2a60266107679f70))
+* **backend/pipeline:** etl_pipeline: track lineage using new features ([a371ffa](https://github.com/tks18/personal-finance-etl/commit/a371ffa0b41a15f6ad7b36710b1787c43a34878a))
+* **backend/pipeline:** wire in the main pipeline ([e34c0ef](https://github.com/tks18/personal-finance-etl/commit/e34c0efb6867af1eceebc53f79062bc6ad0f52cf))
+* **backend/transform:** add capital group config to income sub category ([bf57eac](https://github.com/tks18/personal-finance-etl/commit/bf57eac13c6469bc15a62b88d665710c36302055))
+* **backend/transform:** benchmark: extend provenance tracking across transform ([3000c75](https://github.com/tks18/personal-finance-etl/commit/3000c755a47ae47ef5a986cce5fab81cc1c9588c))
+* **backend/transform:** currency: extend provenance tracking across transform ([ce3b658](https://github.com/tks18/personal-finance-etl/commit/ce3b65818ca63a2cd73fa4cc733cb11184f20d81))
+* **backend/transform:** integrate tax config inside income sub category ([1b30e12](https://github.com/tks18/personal-finance-etl/commit/1b30e12edd626e003c41be4e6e1aa81538a005fc))
+* **backend/transform:** investments: add fx rate to the market data table ([4834d0a](https://github.com/tks18/personal-finance-etl/commit/4834d0a2c4558d0abc8b1d2c22271d0be3e0ded6))
+* **backend/transform:** investments: extend provenance tracking across transform ([a181ae5](https://github.com/tks18/personal-finance-etl/commit/a181ae5349362c72e06d7a9f2ccb703bca097fb0))
+* **backend/transform:** investments: implement deterministic ids for purchase and sale ([06b1916](https://github.com/tks18/personal-finance-etl/commit/06b1916c0652d214ca6cf33cb90c86fc1627d8fb))
+* **backend/transform:** us_market: extend provenance tracking across transform ([71fdd52](https://github.com/tks18/personal-finance-etl/commit/71fdd529d8388ab04ec8ec783190009923911a83))
+* **backend/transform:** us_stocks: add provenance cols ([dc5d2ca](https://github.com/tks18/personal-finance-etl/commit/dc5d2caf95ce3e1e895f3f05b4f23aea04f4a569))
+* **backend/types:** analytics: add types for all new cols ([4986024](https://github.com/tks18/personal-finance-etl/commit/498602406571134f7db0fd4d221e4567daa71233))
+* **backend/types:** analytics: extend isin model to have recon events ([91a7dda](https://github.com/tks18/personal-finance-etl/commit/91a7dda0ad3ef77cb80c164185f7c5e31323b1cd))
+* **backend/types:** pipeline: extend global result with recon events result ([65f3839](https://github.com/tks18/personal-finance-etl/commit/65f38396a297b93ac19a8906041bde465c487dac))
+* **backend/utils:** fx: add result type ([1b284a4](https://github.com/tks18/personal-finance-etl/commit/1b284a43728f69b9de0795c02acb29495253ce01))
+* **backend/utils:** implement identity utils for canonical id creations across various services ([72b6a53](https://github.com/tks18/personal-finance-etl/commit/72b6a5346ddc67a9c6e3d010bd19e7b8db1dc026))
+* **backend/utils:** introduce reproducability utils for simulation tracking ([5eb8422](https://github.com/tks18/personal-finance-etl/commit/5eb8422b1c6c9121588fde777678e7b4344794cd))
+* **backend/utils:** models: add purchase id and lot id to the taxlot model ([e11a4a3](https://github.com/tks18/personal-finance-etl/commit/e11a4a3eacf2de343c6e05a961c8c399a254c777))
+* **backend/utils:** ordering: add a common sort method for buy, sell across us and quant engines ([472b862](https://github.com/tks18/personal-finance-etl/commit/472b86298a50d1e0b417c557cbb08c18915609cd))
+* **backend/utils:** ordering: fix the ordering for purchase and sales ([6c12327](https://github.com/tks18/personal-finance-etl/commit/6c12327ae2cd6e38198cf0cb72bbfc50385962ad))
+
 ### [6.6.1](https://github.com/tks18/personal-finance-etl/compare/6.6.0...6.6.1) (2026-10-08)
 
 
