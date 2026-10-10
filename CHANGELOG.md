@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [8.0.0](https://github.com/tks18/personal-finance-etl/compare/7.0.0...8.0.0) (2026-10-10)
+
+
+### Docs 📃
+
+* remove finance hardening as its closed ([76408b2](https://github.com/tks18/personal-finance-etl/commit/76408b2ac0dc98cd686af149843a3841c2277d5c))
+* update priorities for production hardening ([0c204ab](https://github.com/tks18/personal-finance-etl/commit/0c204ab84564af4a27dc46c22de543f53f89ac16))
+
+
+### Bug Fixes 🛠
+
+* **backend/engines/quant:** add recon id to lot id for sythetic lots ([389b99c](https://github.com/tks18/personal-finance-etl/commit/389b99c4bad9fc7896493628e1e107888dfbd742))
+* **backend/engines/quant:** fx gate: raise error if rate missing ([879b7f1](https://github.com/tks18/personal-finance-etl/commit/879b7f1a8efd70417a534f2bc65055f0945d7002))
+* **backend/engines/tax:** fix gold formatter ([067d352](https://github.com/tks18/personal-finance-etl/commit/067d3528f1abe594baa8d90318147b86cee78d27))
+* **backend/engines/tax:** gross capital gains and losses are netted before set-off reporting ([c7ae75c](https://github.com/tks18/personal-finance-etl/commit/c7ae75c811086d7ef25a401c3383a2557b42fc85))
+* **backend/engines/tax:** tax classification is overwritten with calculation eligibility ([15e6e2b](https://github.com/tks18/personal-finance-etl/commit/15e6e2b18e31d7b72b138d7ec10a6c2e82743b7f))
+* **backend/load/schema:** add new ddl ([a905a4b](https://github.com/tks18/personal-finance-etl/commit/a905a4b156277827ebca9ee9401405bb92052275))
+* **backend/transform:** currency_fx: Future-looking FX backfill in historical dates ([f3d56b6](https://github.com/tks18/personal-finance-etl/commit/f3d56b638840bceaaa01c341490f1918674b5fda))
+* **backend/transform:** dim: remove unwanted capital gain group from master ([5b84b18](https://github.com/tks18/personal-finance-etl/commit/5b84b182fd26b34fc830647d5f2f0069b9b42032))
+* pylance fix ([7b7b43c](https://github.com/tks18/personal-finance-etl/commit/7b7b43c9daab28ae92d8a9d59486823b34d0c0aa))
+
+
+### Features 🔥
+
+* **backend/load/schema:** fix gold ddl ([a39df55](https://github.com/tks18/personal-finance-etl/commit/a39df55d81fa94b3b95c2bb2ccba1e72eb0e7637))
+* **backend/utils:** identity: fix Ambiguous deterministic ID serialization ([4bc97c5](https://github.com/tks18/personal-finance-etl/commit/4bc97c58d59a6a852eee8d149bdf19532e87eb59))
+
 ## [7.0.0](https://github.com/tks18/personal-finance-etl/compare/6.6.1...7.0.0) (2026-10-10)
 
 
