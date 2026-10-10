@@ -14,6 +14,7 @@ from personal_finance_etl.backend.config.financial_rules import FinancialRules
 from personal_finance_etl.backend.config.settings import Settings
 from personal_finance_etl.backend.engines.analytics import InvestmentQuantEngine
 from personal_finance_etl.backend.engines.presentation.wealth_engine import WealthPresentationEngine
+from personal_finance_etl.backend.engines.tax.tax_engine import TaxEngine
 from personal_finance_etl.backend.extract.sqlite_extractor import SQLiteExtractor
 from personal_finance_etl.backend.extract.statement_locator import categorize_statement_files
 from personal_finance_etl.backend.load.bronze import BronzeLayer
@@ -146,7 +147,7 @@ class ETLOrchestrator:
             else:
                 self.dfs["df_f_investment_market_data"] = df_us_market
 
-    def _run_engines(self, run_id: str) -> None:
+    def _run_engines(self, cp: "ControlPlane | None", run_id: str) -> None:
 
         logger.info("Starting Investment Quant Engine...")
         self.status_queue.put(EngineStatus(msg="", data=None, progress=0.6, level=LogLevel.STEP))
@@ -163,6 +164,7 @@ class ETLOrchestrator:
             rules=self.rules,
             start_date=None,
             end_date=None,
+            run_id=run_id,
         )
         analytics_results = quant_engine.run()
         self.dfs.update(analytics_results)
@@ -180,6 +182,32 @@ class ETLOrchestrator:
             open_lots = 0
 
         logger.info(f"  -> Quant Engine mapped {open_lots} open tax lots across portfolio.")
+
+        # Fetch Rules Snapshot ID — needed by TaxEngine as an input and by log_simulation_run.
+        # Placed here so it's available before Tax runs.
+        rules_snapshot_id = "UNKNOWN"
+        settings_snapshot_id = None
+        if cp and self.rules:
+            metadata = cp.runs.get_run_metadata(run_id)
+            settings_snapshot_id = metadata.get("settings_snapshot_id")
+            rules_snapshot_id = metadata.get("rules_snapshot_id") or "UNKNOWN"
+
+        # Tax Engine — runs AFTER Quant (needs df_f_investment_realized_events produced by FIFO)
+        # and BEFORE Presentation so that tax outputs land in self.dfs and are available to
+        # WealthPresentationEngine for any current or future tax-aware presentation tables.
+        logger.info("Executing Tax Engine...")
+        tax_engine = TaxEngine(
+            df_income=self.dfs["df_f_income_transactions"],
+            df_realized_events=self.dfs["df_f_investment_realized_events"],
+            df_subcategory=self.dfs["df_d_income_subcategory"],
+            df_market=self.dfs.get("df_f_investment_market_data", pl.DataFrame()),
+            df_analytics_lot=self.dfs.get("df_f_investment_analytics_lot", pl.DataFrame()),
+            df_macro=self.dfs.get("df_d_macro_parameters", pl.DataFrame()),
+            rules=self.rules,
+            rules_snapshot_id=rules_snapshot_id,
+        )
+        tax_results = tax_engine.run()
+        self.dfs.update(tax_results)
 
         logger.info("Starting Presentation Layer Engines...")
         self.status_queue.put(EngineStatus(msg="", data=None, progress=0.8, level=LogLevel.STEP))
@@ -207,6 +235,19 @@ class ETLOrchestrator:
             results = pl.collect_all(lazy_frames, engine="streaming")
             for k, res in zip(keys, results, strict=True):
                 self.dfs[k] = res
+
+        if cp and self.rules:
+            cp.runs.log_simulation_run(
+                run_id=str(run_id),
+                root_seed=str(run_id),
+                rules=self.rules,
+                input_df=self.dfs.get("df_p_tf_wealth_risk_analytics_inputs"),
+                settings_snapshot_id=settings_snapshot_id,
+                rules_snapshot_id=rules_snapshot_id if rules_snapshot_id != "UNKNOWN" else None,
+            )
+
+        if "df_p_tf_wealth_risk_analytics_inputs" in self.dfs:
+            self.dfs.pop("df_p_tf_wealth_risk_analytics_inputs")
 
     def run(self) -> None:
         self.cfg.validate_config()
@@ -303,8 +344,6 @@ class ETLOrchestrator:
                     "[DISCOV] Injected 8 dynamic configuration assets (7 CSV, 1 SQLite DB)."
                 )
 
-                # ControlPlane is the single source of truth for all Phase 1 logic:
-                # file change detection, pruning of obsolete blobs, and binary ingestion.
                 full_replace_categories = list(
                     set(
                         contract.sync_category
@@ -339,7 +378,6 @@ class ETLOrchestrator:
                 f"Phase 1 Complete [{time.perf_counter() - t_ext_start:.2f}s] - Actionable streams loaded into memory."
             )
 
-            # Bronze Phase
             t_bronze_start = time.perf_counter()
             logger.info("[PHASE] --- 2/5: Upserting new datasets into Bronze Lakehouse ---")
 
@@ -353,13 +391,11 @@ class ETLOrchestrator:
                 f"Phase 2 Complete [{time.perf_counter() - t_bronze_start:.2f}s] - Bronze layer synchronized."
             )
 
-            # Full Dataset Read
             logger.debug(
                 "[ENGINE:READ] Fetching complete dataset from Bronze Lakehouse for Transformation..."
             )
             full_dataset = bronze.get_full_dataset(extracted_data.mappings)
 
-            # Transformation Phase
             t_trans_start = time.perf_counter()
             logger.info("[PHASE] --- 3/5: Transforming and harmonizing data streams ---")
             self._transform(full_dataset)
@@ -367,31 +403,13 @@ class ETLOrchestrator:
                 f"[PHASE] 3/5 Complete [{time.perf_counter() - t_trans_start:.2f}s] - DAG mapped {len(self.dfs)} base tables."
             )
 
-            # Phase 3.5 Dynamic Extraction
             self._process_currency(cp, bronze)
             self._process_us_market_data(cp, bronze)
             self._process_benchmark(cp, bronze)
 
-            # Analytics Phase
             t_eng_start = time.perf_counter()
             logger.info("[PHASE] --- 4/5: Executing Advanced Analytics & Monte Carlo engines ---")
-            self._run_engines(str(run_id))
-            
-            if cp and self.rules:
-                cursor = cp.db.conn.execute(
-                    "SELECT settings_snapshot_id, rules_snapshot_id FROM cp_runs WHERE run_id = ?",
-                    (str(run_id),)
-                )
-                row = cursor.fetchone()
-                if row:
-                    cp.runs.log_simulation_run(
-                        run_id=str(run_id),
-                        root_seed=str(run_id),
-                        iterations=self.rules.assumptions.monte_carlo.iterations,
-                        horizon=self.rules.assumptions.monte_carlo.max_months,
-                        settings_snapshot_id=row[0],
-                        rules_snapshot_id=row[1],
-                    )
+            self._run_engines(cp, str(run_id))
 
             # Strict DataContract Validation
 
@@ -421,7 +439,7 @@ class ETLOrchestrator:
 
             # Write ETL metadata to DB
             meta_layer = MetaLayer(self.db_manager, self.cfg, self.rules)
-            meta_layer.load(self.dfs)
+            meta_layer.load(self.dfs, cp=cp)
 
             cp.runs.update_run_status(run_id, "COMMITTING")
 
