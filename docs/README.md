@@ -1,302 +1,224 @@
-# Personal Finance ETL Documentation
+# Personal Finance ETL | Technical Documentation
 
-This is the canonical technical reference for **Personal Finance ETL**.
+I use this documentation as the **canonical technical specification** of my local-first personal finance data platform. I explain not just *what* the application produces, but how I designed its boundaries, how data and financial state move through it, which contracts constrain those movements, and where the implementation deliberately trades complexity for traceability.
 
-Its job is to **specify** the system: architecture, financial methodology, contracts, configuration, failure semantics, and extension boundaries.
+**README = SHOW · Wiki = TEACH · `/docs` = SPECIFY · Code = PROVE.**
 
-> **README shows. Wiki teaches. `/docs` specifies. Code proves.**
+This is the deep implementation layer. For a faster showcase, see the [repository README](../README.md). For a conceptual learning path, visit the [GitHub Wiki](https://github.com/tks18/personal-finance-etl/wiki).
 
-Inside `/docs`, I still follow the original documentation rule:
-
-> **Show the system. Show the code. Show the financial meaning. Explain the decisions. Expose the trade-offs. Let the work speak for the skill.**
-
-The repository documentation is version-controlled, packaged with the application, and discovered through `docs/manifest.json`.
-
-```mermaid
-flowchart LR
-    MD["README + docs/*.md"] --> MAN["manifest.json"]
-    MAN --> CAT["DocsCatalog"]
-    CAT --> RENDER["DocsRenderer"]
-    MER["Bundled Mermaid"] --> RENDER
-    RENDER --> NAV["Navigation + TOC"]
-    NAV --> GH["GitHub"]
-    NAV --> CLI["CLI"]
-    NAV --> GUI["Desktop"]
-    MD --> WIKI["GitHub Wiki<br/>guided exploration layer"]
-```
-
-The Markdown files remain the authoritative source.
-
-> 🧭 **Prefer a guided tour?** Start with the [GitHub Wiki](https://github.com/tks18/personal-finance-etl/wiki). It walks through the project from why it exists → architecture → data lifecycle → Control Plane → financial model → investments → tax → wealth → FIRE → warehouse/BI → reliability → extensibility. Come back to `/docs` whenever you want the canonical technical depth.
-
-```text
-Wiki
-→ guided exploration
-
-/docs
-→ canonical technical documentation
-
-source code
-→ implementation ground truth
-```
-
-[← Back to the repository README](../README.md) · [Explore the Wiki →](https://github.com/tks18/personal-finance-etl/wiki)
-
----
-
-## Documentation runtime
-
-The application does not hard-code a list of guide files.
-
-The manifest describes sections and pages:
-
-```json
-{
-  "id": "architecture",
-  "title": "Architecture",
-  "order": 3000,
-  "pages": [
-    {
-      "title": "System Architecture",
-      "path": "architecture/system-architecture.md",
-      "order": 3010
-    }
-  ]
-}
-```
-
-`DocsCatalog` turns that manifest into application navigation:
-
-```python
-for section_data in manifest_data.get("sections", []):
-    section_title = section_data.get("title", "")
-
-    for page in section_data.get("pages", []):
-        catalog.append(
-            DocEntry(
-                section=section_title,
-                title=page.get("title", ""),
-                path=page.get("path", ""),
-                order=page.get("order", 9999),
-            )
-        )
-```
-
-One documentation structure therefore serves the repository, packaged distribution, CLI, and desktop application.
-
----
-
-## Choose your route
-
-| If you want to understand... | Start here |
-| --- | --- |
-| **Why the project exists** | [Project Overview](about/project.md) |
-| **The whole platform** | [System Architecture](architecture/system-architecture.md) |
-| **How 1,608+ source artifacts move through it** | [Data Lifecycle](architecture/data-lifecycle.md) |
-| **SQLite Control Plane vs DuckDB warehouse** | [Warehouse Architecture](architecture/warehouse-architecture.md) |
-| **Canonical finance and analytical grain** | [Data Model](architecture/data-model.md) |
-| **FIFO, broker reconciliation and benchmarks** | [Investment Analytics](finance/investment-analytics.md) |
-| **Household cash flow and wealth** | [Cash Flow & Wealth](finance/cashflow-and-wealth.md) |
-| **Tax-aware investment state** | [Tax Methodology](finance/tax-methodology.md) |
-| **FIRE and stochastic planning** | [FIRE Methodology](finance/fire-methodology.md) |
-| **Financial policy** | [Financial Rules](configuration/financial-rules.md) |
-| **How to extend the codebase** | [Development Guide](developer/development-guide.md) |
-| **Physical Silver/Gold contracts** | [Reference](reference/README.md) |
-| **How I ended up building this** | [About Me](about/about-me.md) |
-
----
-
-## The documentation map
+## The system at a glance
 
 ```mermaid
 flowchart TB
-    ABOUT["About<br/>why · who · where next"]
-    START["Getting Started<br/>install · configure · run"]
-    ARCH["Architecture<br/>control · lifecycle · warehouse · reliability"]
-    FIN["Finance<br/>model · investments · tax · FIRE"]
-    CFG["Configuration<br/>financial policy · stochastic assumptions"]
-    DEV["Developer<br/>extension seams · implementation workflow"]
-    REF["Reference<br/>contracts · schemas · glossary"]
-
-    ABOUT --> ARCH
-    START --> ARCH
-    ARCH --> FIN
-    FIN --> CFG
-    ARCH --> DEV
-    FIN --> REF
-    DEV --> REF
+    SRC["Financial sources and market data"] --> DE["Data engineering: discover, ingest, transform"]
+    CP["SQLite Control Plane: identity, lineage, runs"] <--> DE
+    DE --> BR["DuckDB Bronze"]
+    BR --> FIN["Financial engines: investment, tax, wealth"]
+    FIN --> PUB["Contract-validated Silver and Gold"]
+    PUB --> BI["Local analytical consumption"]
+    CFG["Configuration and financial policy"] --> DE
+    CFG --> FIN
+    CLI["CLI"] --> API["Shared application facade"]
+    GUI["Desktop GUI"] --> API
+    API --> DE
+    OPS["Operations: backup, recovery, observability"] --- CP
+    OPS --- PUB
 ```
 
----
+The diagram is a navigation model, not a claim that every component communicates directly or shares one transaction. The detailed execution, producer dependencies and database boundaries live in their respective specifications.
 
-## Sections
+## Choose a route
 
-### 🚀 Getting Started
+| I want to understand... | Start here |
+| --- | --- |
+| The whole system and why I split responsibilities | [Architecture](architecture/README.md) |
+| How source artifacts are identified, retained and healed | [Control Plane](control-plane/README.md) |
+| How source files become Bronze, Silver and Gold | [Data Engineering](data-engineering/README.md) |
+| How financial positions, gains, tax and FIRE are calculated | [Financial Engineering](finance/README.md) |
+| Which settings and financial rules control execution | [Configuration](configuration/README.md) |
+| The exact schemas, contracts, fields and identities | [Technical Reference](reference/README.md) |
+| How CLI, desktop and the shared backend interact | [Interfaces](interfaces/README.md) |
+| What happens on failure, backup and recovery | [Operations](operations/README.md) |
+| How I extend and verify the application | [Developer](developer/README.md) |
+| How to install and run it | [Getting Started](getting-started/README.md) |
+| Why I built it and where it is going | [About](about/README.md) |
 
-Operate the current production application.
+## How the documentation is organized
 
-- [Getting Started Overview](getting-started/README.md)
-- [Installation](getting-started/installation.md)
-- [Configuration](getting-started/configuration.md)
-- [Running the Pipeline](getting-started/running-the-pipeline.md)
+Each domain has a focused responsibility. I use **architecture** for global boundaries, **control-plane** for operational state, **data-engineering** for movement and publication, **finance** for algorithms and mathematics, and **reference** for exact physical contracts. Related pages cross-link rather than reprinting the same specification.
 
-### 🏗️ Architecture
+```mermaid
+flowchart LR
+    START["Getting Started"] --> ARCH["Architecture"]
+    ARCH --> CP["Control Plane"]
+    ARCH --> DE["Data Engineering"]
+    DE --> FIN["Finance"]
+    FIN --> CFG["Configuration"]
+    DE --> REF["Reference"]
+    FIN --> REF
+    ARCH --> UI["Interfaces"]
+    CP --> OPS["Operations"]
+    ARCH --> DEV["Developer"]
+    ABOUT["About"] --> ARCH
+```
 
-Understand the system boundaries and execution model.
+## Complete documentation directory
 
-- [Architecture Overview](architecture/README.md)
-- [System Architecture](architecture/system-architecture.md)
+The following is the human-readable directory index. The application's navigable catalog is generated from `manifest.json`, which I reconcile separately after the documentation tree is finalized.
+
+### [Architecture](architecture/README.md)
+
+The system-wide design, dependency boundaries, execution lifecycle and analytical architecture.
+
+- [Overview](architecture/README.md)
 - [Data Lifecycle](architecture/data-lifecycle.md)
-- [Warehouse Architecture](architecture/warehouse-architecture.md)
 - [Data Model](architecture/data-model.md)
-- [Reliability & Recovery](architecture/reliability-and-recovery.md)
+- [Dependency Architecture](architecture/dependency-architecture.md)
 - [Design Decisions](architecture/design-decisions.md)
+- [Execution Lifecycle](architecture/execution-lifecycle.md)
+- [Reliability And Recovery](architecture/reliability-and-recovery.md)
+- [System Architecture](architecture/system-architecture.md)
+- [Warehouse Architecture](architecture/warehouse-architecture.md)
 
-### 💰 Finance & Methodology
+### [Control Plane](control-plane/README.md)
 
-Understand the financial state the software reconstructs.
+Operational authority, artifact identities, retained payloads, synchronization, healing and run provenance.
 
-- [Finance Overview](finance/README.md)
+- [Overview](control-plane/README.md)
+- [Artifact Identity And Lineage](control-plane/artifact-identity-and-lineage.md)
+- [Artifact Lifecycle](control-plane/artifact-lifecycle.md)
+- [Configuration Provenance](control-plane/configuration-provenance.md)
+- [Control Plane Architecture](control-plane/control-plane-architecture.md)
+- [Run Lifecycle](control-plane/run-lifecycle.md)
+- [Simulation Provenance](control-plane/simulation-provenance.md)
+- [Synchronization And Healing](control-plane/synchronization-and-healing.md)
+
+### [Data Engineering](data-engineering/README.md)
+
+Source discovery, Bronze ingestion, transformations, market data and analytical publication.
+
+- [Overview](data-engineering/README.md)
+- [Artifact Ingestion](data-engineering/artifact-ingestion.md)
+- [Bronze Processing](data-engineering/bronze-processing.md)
+- [Data Quality And Validation](data-engineering/data-quality-and-validation.md)
+- [Market Data And Benchmarks](data-engineering/market-data-and-benchmarks.md)
+- [Silver Gold Publication](data-engineering/silver-gold-publication.md)
+- [Source Discovery](data-engineering/source-discovery.md)
+- [Transformation Pipeline](data-engineering/transformation-pipeline.md)
+
+### [Financial Engineering](finance/README.md)
+
+Canonical financial facts, FIFO, reconciliation, FX, benchmark attribution, tax, wealth and FIRE.
+
+- [Overview](finance/README.md)
+- [Benchmark Attribution](finance/benchmark-attribution.md)
+- [Cashflow And Wealth](finance/cashflow-and-wealth.md)
+- [Fifo And Lot Accounting](finance/fifo-and-lot-accounting.md)
 - [Financial Model](finance/financial-model.md)
-- [Metrics & Methodology](finance/metrics-and-methodology.md)
+- [Fire Methodology](finance/fire-methodology.md)
+- [Fire Simulation And Reproducibility](finance/fire-simulation-and-reproducibility.md)
+- [Fx Methodology](finance/fx-methodology.md)
 - [Investment Analytics](finance/investment-analytics.md)
-- [Cash Flow & Wealth](finance/cashflow-and-wealth.md)
+- [Metrics And Methodology](finance/metrics-and-methodology.md)
+- [Reconciliation And Cost Basis](finance/reconciliation-and-cost-basis.md)
+- [Tax Event Provenance](finance/tax-event-provenance.md)
 - [Tax Methodology](finance/tax-methodology.md)
-- [FIRE Methodology](finance/fire-methodology.md)
 
-### ⚙️ Configuration
+### [Configuration](configuration/README.md)
 
-Understand what is policy rather than code.
+Runtime settings, financial policy, validation, defaults, configuration snapshots and reproducibility.
 
-- [Configuration Overview](configuration/README.md)
+- [Overview](configuration/README.md)
+- [Configuration Architecture](configuration/configuration-architecture.md)
+- [Configuration Snapshots](configuration/configuration-snapshots.md)
 - [Financial Rules](configuration/financial-rules.md)
-- [FIRE Configuration](configuration/fire-configuration.md)
+- [Fire Configuration](configuration/fire-configuration.md)
+- [Validation And Defaults](configuration/validation-and-defaults.md)
 
-### 🧑‍💻 Developer
+### [Technical Reference](reference/README.md)
 
-Extend the platform without leaking source-specific behaviour downstream.
+Exact Bronze/Silver/Gold/Meta contracts, Control Plane schemas, identity rules and application interfaces.
 
-- [Developer Overview](developer/README.md)
-- [Development Guide](developer/development-guide.md)
-- [Adding a Data Source](developer/adding-data-sources.md)
-- [Adding an Asset Pipeline](developer/adding-asset-pipelines.md)
-- [Adding a Gold Mart](developer/adding-gold-marts.md)
-
-### 📖 Reference
-
-Inspect the physical analytical contracts.
-
-- [Reference Overview](reference/README.md)
-- [Silver Data Contracts](reference/silver-data-contracts.md)
-- [Gold Data Contracts](reference/gold-data-contracts.md)
-- [Meta Data Contracts](reference/meta-data-contracts.md)
+- [Overview](reference/README.md)
+- [Api And Cli Reference](reference/api-and-cli-reference.md)
+- [Bronze Data Contracts](reference/bronze-data-contracts.md)
+- [Configuration Schema Reference](reference/configuration-schema-reference.md)
+- [Control Plane Schema](reference/control-plane-schema.md)
 - [Glossary](reference/glossary.md)
+- [Gold Data Contracts](reference/gold-data-contracts.md)
+- [Identity Contracts](reference/identity-contracts.md)
+- [Meta Data Contracts](reference/meta-data-contracts.md)
+- [Silver Data Contracts](reference/silver-data-contracts.md)
 
-### 🧭 About
+### [Application Interfaces](interfaces/README.md)
 
-Understand the project, the engineering journey, and the roadmap.
+Application facade, CLI, desktop GUI, multiprocessing, progress and the documentation renderer.
 
-- [About Overview](about/README.md)
-- [Project Overview](about/project.md)
+- [Overview](interfaces/README.md)
+- [Application Facade](interfaces/application-facade.md)
+- [Cli Architecture](interfaces/cli-architecture.md)
+- [Desktop Gui Architecture](interfaces/desktop-gui-architecture.md)
+- [Documentation Renderer](interfaces/documentation-renderer.md)
+- [Multiprocessing And Progress](interfaces/multiprocessing-and-progress.md)
+
+### [Operations & Reliability](operations/README.md)
+
+Transactions, failure boundaries, backups, recovery, observability and performance.
+
+- [Overview](operations/README.md)
+- [Backup And Restore](operations/backup-and-restore.md)
+- [Failure Scenarios](operations/failure-scenarios.md)
+- [Observability And Run History](operations/observability-and-run-history.md)
+- [Performance And Benchmarking](operations/performance-and-benchmarking.md)
+- [Reliability And Recovery](operations/reliability-and-recovery.md)
+- [Transaction Boundaries](operations/transaction-boundaries.md)
+
+### [Developer Guide](developer/README.md)
+
+Engineering workflows, extension seams, testing strategy, debugging and maintenance.
+
+- [Overview](developer/README.md)
+- [Adding Asset Pipelines](developer/adding-asset-pipelines.md)
+- [Adding Data Sources](developer/adding-data-sources.md)
+- [Adding Gold Marts](developer/adding-gold-marts.md)
+- [Debugging And Observability](developer/debugging-and-observability.md)
+- [Development Guide](developer/development-guide.md)
+- [Extension Contracts](developer/extension-contracts.md)
+- [Testing And Regression](developer/testing-and-regression.md)
+
+### [Getting Started](getting-started/README.md)
+
+Installation, initial setup, running the pipeline and the daily operating workflow.
+
+- [Overview](getting-started/README.md)
+- [Configuration](getting-started/configuration.md)
+- [Daily Workflow](getting-started/daily-workflow.md)
+- [Installation](getting-started/installation.md)
+- [Running The Pipeline](getting-started/running-the-pipeline.md)
+
+### [About & Roadmap](about/README.md)
+
+Project purpose, personal engineering journey, development history and roadmap.
+
+- [Overview](about/README.md)
 - [About Me](about/about-me.md)
+- [Project](about/project.md)
 - [Roadmap](about/roadmap.md)
 
----
+## Implementation-oriented reading paths
 
-## Reading by discipline
+| Discipline | Suggested sequence |
+| --- | --- |
+| Data engineering | [System architecture](architecture/system-architecture.md) → [Source discovery](data-engineering/source-discovery.md) → [Bronze processing](data-engineering/bronze-processing.md) → [Silver/Gold publication](data-engineering/silver-gold-publication.md) → [Data contracts](reference/README.md) |
+| Financial engineering | [Financial model](finance/financial-model.md) → [FIFO](finance/fifo-and-lot-accounting.md) → [FX](finance/fx-methodology.md) → [Tax](finance/tax-methodology.md) → [FIRE](finance/fire-methodology.md) |
+| Software architecture | [Dependency architecture](architecture/dependency-architecture.md) → [Control Plane](control-plane/control-plane-architecture.md) → [Facade](interfaces/application-facade.md) → [Extension contracts](developer/extension-contracts.md) |
+| Operational reliability | [Execution lifecycle](architecture/execution-lifecycle.md) → [Transaction boundaries](operations/transaction-boundaries.md) → [Failure scenarios](operations/failure-scenarios.md) → [Backup and restore](operations/backup-and-restore.md) |
+| Analytics and BI | [Data model](architecture/data-model.md) → [Silver contracts](reference/silver-data-contracts.md) → [Gold contracts](reference/gold-data-contracts.md) → [Warehouse architecture](architecture/warehouse-architecture.md) |
 
-### Data Engineering
+## How I keep specifications trustworthy
 
-```text
-System Architecture
-→ Data Lifecycle
-→ Warehouse Architecture
-→ Reliability & Recovery
-→ Silver / Gold Contracts
-```
+I ground technical claims in implementation modules, schemas, financial formulas and real execution paths. I keep code excerpts short so they explain an invariant or a boundary without duplicating entire modules. I use Mermaid where relationships, state transitions or execution order are easier to understand visually. I distinguish modeled estimates from accounting facts and state precisely where cross-database consistency depends on reconciliation rather than global atomicity.
 
-### Python / Software Architecture
+For the executable truth, follow the source locations cited in each domain. For operating procedures, start with [Getting Started](getting-started/README.md); for historical context, use [About](about/README.md).
 
-```text
-System Architecture
-→ Design Decisions
-→ Development Guide
-→ extension guides
-```
-
-### BI Engineering
-
-```text
-Data Model
-→ Metrics & Methodology
-→ Gold Data Contracts
-```
-
-### Finance & Investment Analytics
-
-```text
-Financial Model
-→ Investment Analytics
-→ Tax Methodology
-→ Cash Flow & Wealth
-```
-
-### Quantitative Planning
-
-```text
-Financial Model
-→ FIRE Methodology
-→ FIRE Configuration
-```
-
----
-
-## Documentation contract
-
-Across the substantive guides, expect a consistent pattern:
-
-```text
-Concept
-   ↓
-Focused architecture diagram
-   ↓
-Real production implementation
-   ↓
-How it works
-   ↓
-Why I designed it this way
-   ↓
-Financial / analytical implications
-   ↓
-Failure modes and trade-offs
-```
-
-Production code is preferred over illustrative code.
-
-When pseudocode is useful, it is labelled as conceptual.
-
-The docs do not assign adjectives to the architecture. They expose the implementation and let the reader inspect it.
-
----
-
-## Source of truth
-
-The hierarchy is:
-
-```text
-Production code
-      ↓
-Persisted schema / contract
-      ↓
-Validated configuration
-      ↓
-Documentation
-      ↓
-Wiki / presentation layers
-```
-
-If documentation and implementation disagree, the implementation wins and the documentation should be corrected.
-
----
-
-[← Repository README](../README.md)
+[← Repository README](../README.md) · [GitHub Wiki →](https://github.com/tks18/personal-finance-etl/wiki)
