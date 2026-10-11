@@ -54,7 +54,7 @@ That progression remains the project's core.
 
 ## The production workload changed the engineering problem
 
-As of **24 September 2026**, my production source environment contains **1,608 source artifacts**.
+On **24 September 2026**, my production source environment contained **1,608 source artifacts**. A later operational observation records **1,629 artifacts**. I preserve both figures as historical workload snapshots rather than hard-coding an artifact count into the architecture.
 
 It includes:
 
@@ -85,7 +85,7 @@ content hashing
 an authoritative SQLite Control Plane
 persistent raw payloads
 change-aware synchronization
-16-contract persistent Bronze
+20-contract persistent Bronze
 file-aware replacement
 PENDING_BRONZE replay / self-healing
 deterministic downstream rebuilds
@@ -109,7 +109,7 @@ flowchart TB
     CAN --> INV["Investment Quant Engine"]
     CAN --> HH["Wealth Analytics Engine"]
     INV --> HH
-    INV --> SG["20 Silver + 17 Gold"]
+    INV --> SG["24 Silver + 22 Gold"]
     HH --> SG
     SG --> BI["Power BI / Decision Support"]
 ```
@@ -290,7 +290,7 @@ One of the most useful phases of the project came from documenting it deeply.
 
 The first documentation archaeology exposed places where the implementation could become cleaner.
 
-That fed into a sequence of hardening cycles from the 6.2.x Control Plane redesign through the current v6.5.3 baseline:
+That fed into successive hardening cycles, beginning with the Control Plane redesign and continuing through changes to identity, financial engines, schemas, and recovery:
 
 ```text
 code
@@ -317,7 +317,7 @@ The result included:
 - pruned unused metrics,
 - a manifest-driven offline documentation runtime with bundled Mermaid.
 
-The production workload also moved from roughly **23 seconds** end-to-end to approximately **14–17 seconds** on my environment while preserving the financial outputs I rely on.
+Earlier refactors reduced an approximately **23-second** end-to-end workload to **14–17 seconds** under the conditions measured at that time. In my more recent daily workload, I observe approximately **20 seconds for a cached run** and **40 seconds for a fresh run** across **1,629 artifacts**. These measurements describe different workloads and should not be compared as a controlled benchmark.
 
 The benchmark is environment-specific.
 
@@ -423,3 +423,25 @@ I would rather extract an abstraction from a system I use than design a universa
 - [Roadmap](roadmap.md)
 
 [← About Home](README.md) · [← Documentation Home](../README.md)
+
+
+## Why I keep the platform local and single-user
+
+I built this system for a real operating need, not to simulate enterprise scale. The single-user constraint lets me prioritize reproducible financial state, detailed provenance and predictable local execution over multi-tenant access control or distributed infrastructure.
+
+```mermaid
+flowchart TD
+    A["My financial evidence"] --> B["SQLite Control Plane"]
+    B --> C["DuckDB Bronze"]
+    C --> D["Canonical transformations"]
+    D --> E["Investment and tax engines"]
+    E --> F["Wealth and FIRE analytics"]
+    F --> G["Silver and Gold contracts"]
+    G --> H["My reporting and decisions"]
+```
+
+This is intentionally sophisticated for a single user. The sophistication earns its place when it makes reconciliation, traceability, financial calculations or recovery easier to reason about. I do not claim that a local two-database pipeline provides distributed transaction atomicity, nor that every modeled tax estimate is a filing-ready tax determination.
+
+For implementation details, I use the [architecture](../architecture/README.md), [Control Plane](../control-plane/README.md), [finance](../finance/README.md), and [operations](../operations/README.md) specifications as the canonical sources.
+
+---
