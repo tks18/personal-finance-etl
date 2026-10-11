@@ -1,44 +1,38 @@
-# Meta & Control-Plane Data Contracts
+# Meta and Control Plane Data Contracts
 
-The current architecture has **two metadata surfaces with different ownership**.
+I separate historical operational authority in SQLite from the current analytical projection in DuckDB. Their tables have different retention and transaction semantics.
 
 ```mermaid
 flowchart LR
-    CP["SQLite Control Plane<br/>authoritative operational history"] -. current projection .-> META["DuckDB Meta<br/>latest/current analytical context"]
+A["Artifact / run lifecycle"] --> CP["SQLite Control Plane"]
+CP -. "current projection" .-> M["DuckDB Meta"]
+M --> BI["Current analytical context"]
 ```
 
-This distinction is one of the major architectural changes in the hardened system.
+## SQLite Control Plane physical inventory
 
-> **Control Plane is authoritative. DuckDB Meta is a projection.**
+Source: `src/personal_finance_etl/backend/load/schema/control_plane.py`
 
----
+### `cp_file_registry`
 
-## 1. SQLite Control Plane
-
-The Control Plane owns:
-
-```text
-raw artifact registry
-raw payload bytes
-sync state
-Settings snapshots
-FinancialRules snapshots
-run lifecycle
-run failures
-execution logs
-```
-
-It is not merely another warehouse schema.
-
-It is operational state.
-
----
-
-## `cp_file_registry`
-
-**Purpose:** authoritative artifact identity and synchronization state.
-
-Representative production DDL:
+| Column | Type |
+| --- | --- |
+| `file_id` | `TEXT` |
+| `file_name` | `TEXT` |
+| `relative_path` | `TEXT` |
+| `file_category` | `TEXT` |
+| `file_type` | `TEXT` |
+| `file_hash` | `TEXT` |
+| `file_size_bytes` | `BIGINT` |
+| `sync_status` | `TEXT` |
+| `first_seen_run_id` | `TEXT` |
+| `first_seen_at` | `TIMESTAMP` |
+| `last_seen_run_id` | `TEXT` |
+| `last_seen_at` | `TIMESTAMP` |
+| `last_changed_run_id` | `TEXT` |
+| `last_changed_at` | `TIMESTAMP` |
+| `last_synced_run_id` | `TEXT` |
+| `last_synced_at` | `TIMESTAMP` |
 
 ```sql
 CREATE TABLE IF NOT EXISTS cp_file_registry (
@@ -50,162 +44,85 @@ CREATE TABLE IF NOT EXISTS cp_file_registry (
     file_hash TEXT NOT NULL,
     file_size_bytes BIGINT,
     sync_status TEXT DEFAULT 'PENDING_BRONZE',
-    first_ingested TIMESTAMP NOT NULL,
-    last_ingested TIMESTAMP NOT NULL
+    first_seen_run_id TEXT,
+    first_seen_at TIMESTAMP NOT NULL,
+    last_seen_run_id TEXT,
+    last_seen_at TIMESTAMP NOT NULL,
+    last_changed_run_id TEXT,
+    last_changed_at TIMESTAMP,
+    last_synced_run_id TEXT,
+    last_synced_at TIMESTAMP,
+    FOREIGN KEY(first_seen_run_id) REFERENCES cp_runs(run_id),
+    FOREIGN KEY(last_seen_run_id) REFERENCES cp_runs(run_id),
+    FOREIGN KEY(last_changed_run_id) REFERENCES cp_runs(run_id),
+    FOREIGN KEY(last_synced_run_id) REFERENCES cp_runs(run_id)
 );
 ```
 
-### Key semantics
+### `cp_file_payloads`
 
-| Field | Meaning |
+| Column | Type |
 | --- | --- |
-| `file_id` | Stable artifact identity derived by the application |
-| `relative_path` | Canonical source/virtual identity |
-| `file_category` | Source semantic category |
-| `file_type` | Physical type used by ingestion policy |
-| `file_hash` | Content identity |
-| `sync_status` | Relationship to Bronze lifecycle |
-| `first_ingested` | First Control Plane observation |
-| `last_ingested` | Latest ingestion/update |
-
-### Sync state
-
-```text
-PENDING_BRONZE
-→ raw evidence exists but Bronze synchronization is incomplete
-
-SYNCED
-→ artifact has successfully reached Bronze
-```
-
-That state is operationally meaningful.
-
----
-
-## `cp_file_payloads`
-
-**Purpose:** durable raw evidence.
+| `file_id` | `TEXT` |
+| `file_bytes` | `BLOB` |
 
 ```sql
 CREATE TABLE IF NOT EXISTS cp_file_payloads (
     file_id TEXT PRIMARY KEY,
     file_bytes BLOB,
-    FOREIGN KEY(file_id)
-        REFERENCES cp_file_registry(file_id)
-        ON DELETE CASCADE
+    FOREIGN KEY(file_id) REFERENCES cp_file_registry(file_id) ON DELETE CASCADE
 );
 ```
 
-The payload is separate from registry metadata.
+### `cp_settings_snapshots`
 
-This allows the system to retain the actual source bytes rather than relying only on a filesystem path.
-
----
-
-## Virtual artifacts
-
-External/provider data can enter the same evidence model through virtual identity:
-
-```text
-virtual://<category>/<filename>
-```
-
-A virtual artifact still receives:
-
-```text
-file identity
-content hash
-payload
-sync state
-```
-
-so API-acquired benchmark history does not bypass provenance.
-
----
-
-## 2. Configuration snapshots
-
-Configuration provenance is stored in two physical Control Plane tables:
-
-```text
-cp_settings_snapshots
-cp_rules_snapshots
-```
-
-
-The Control Plane stores Settings and FinancialRules by content identity.
-
-Conceptually:
-
-```text
-canonical serialized payload
-        ↓
-SHA-256
-        ↓
-snapshot_id
-```
-
-Production code follows this pattern:
-
-```python
-cfg_hash = hashlib.sha256(
-    cfg_json.encode("utf-8")
-).hexdigest()
-
-settings_id = f"snap_set_{cfg_hash[:12]}"
-```
-
-Then:
+| Column | Type |
+| --- | --- |
+| `snapshot_id` | `TEXT` |
+| `content_hash` | `TEXT` |
+| `canonical_payload` | `TEXT` |
+| `created_at` | `TIMESTAMP` |
 
 ```sql
-INSERT OR IGNORE
+CREATE TABLE IF NOT EXISTS cp_settings_snapshots (
+    snapshot_id TEXT PRIMARY KEY,
+    content_hash TEXT NOT NULL,
+    canonical_payload TEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL
+);
 ```
 
-avoids duplicate snapshots for identical content.
+### `cp_rules_snapshots`
 
----
+| Column | Type |
+| --- | --- |
+| `snapshot_id` | `TEXT` |
+| `content_hash` | `TEXT` |
+| `canonical_payload` | `TEXT` |
+| `created_at` | `TIMESTAMP` |
 
-## Settings snapshot
-
-**Purpose:** identify the operational configuration used by a run.
-
-Examples of operational concerns:
-
-```text
-source paths
-database paths
-reference-file paths
-hash policy
+```sql
+CREATE TABLE IF NOT EXISTS cp_rules_snapshots (
+    snapshot_id TEXT PRIMARY KEY,
+    content_hash TEXT NOT NULL,
+    canonical_payload TEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL
+);
 ```
 
-Settings are not financial policy.
+### `cp_runs`
 
----
-
-## FinancialRules snapshot
-
-**Purpose:** identify the financial policy used by a run.
-
-Examples:
-
-```text
-income semantics
-expense semantics
-cash pools
-tax assumptions
-target allocation
-FIRE assumptions
-```
-
-A rules snapshot is part of financial provenance.
-
----
-
-## 3. `cp_runs`
-
-**Purpose:** authoritative run lifecycle.
-
-Representative structure:
+| Column | Type |
+| --- | --- |
+| `run_id` | `TEXT` |
+| `started_at` | `TIMESTAMP` |
+| `finished_at` | `TIMESTAMP` |
+| `status` | `TEXT` |
+| `application_version` | `TEXT` |
+| `schema_version` | `TEXT` |
+| `settings_snapshot_id` | `TEXT` |
+| `rules_snapshot_id` | `TEXT` |
+| `execution_log` | `BLOB` |
 
 ```sql
 CREATE TABLE IF NOT EXISTS cp_runs (
@@ -217,50 +134,24 @@ CREATE TABLE IF NOT EXISTS cp_runs (
     schema_version TEXT,
     settings_snapshot_id TEXT,
     rules_snapshot_id TEXT,
-    execution_log BLOB
+    execution_log BLOB,
+    FOREIGN KEY(settings_snapshot_id) REFERENCES cp_settings_snapshots(snapshot_id),
+    FOREIGN KEY(rules_snapshot_id) REFERENCES cp_rules_snapshots(snapshot_id)
 );
 ```
 
-The lifecycle is:
+### `cp_run_failures`
 
-```mermaid
-stateDiagram-v2
-    [*] --> STARTED
-    STARTED --> RUNNING
-    RUNNING --> COMMITTING
-    COMMITTING --> SUCCESS
-    RUNNING --> FAILED
-    COMMITTING --> FAILED
-```
-
-A run is created before analytical work so failure does not erase the fact that execution occurred.
-
----
-
-## Run provenance
-
-A run connects:
-
-```text
-run identity
-application version
-schema version
-Settings snapshot
-FinancialRules snapshot
-execution log
-status
-timestamps
-```
-
-That is much stronger than a simple start/end log row.
-
----
-
-## 4. `cp_run_failures`
-
-**Purpose:** structured failure history.
-
-Representative DDL:
+| Column | Type |
+| --- | --- |
+| `id` | `INTEGER` |
+| `run_id` | `TEXT` |
+| `failed_isin` | `TEXT` |
+| `stage` | `TEXT` |
+| `error_type` | `TEXT` |
+| `error_message` | `TEXT` |
+| `traceback_log` | `TEXT` |
+| `created_at` | `TIMESTAMP` |
 
 ```sql
 CREATE TABLE IF NOT EXISTS cp_run_failures (
@@ -271,181 +162,182 @@ CREATE TABLE IF NOT EXISTS cp_run_failures (
     error_type TEXT,
     error_message TEXT,
     traceback_log TEXT,
-    created_at TIMESTAMP NOT NULL
+    created_at TIMESTAMP NOT NULL,
+    FOREIGN KEY(run_id) REFERENCES cp_runs(run_id)
 );
 ```
 
-The contract supports both:
+### `cp_artifact_run_events`
 
-```text
-pipeline-level failure
-and
-instrument-specific failure
+| Column | Type |
+| --- | --- |
+| `event_id` | `TEXT` |
+| `run_id` | `TEXT` |
+| `file_id` | `TEXT` |
+| `event_type` | `TEXT` |
+| `event_at` | `TIMESTAMP` |
+| `observed_path` | `TEXT` |
+| `content_hash` | `TEXT` |
+| `previous_status` | `TEXT` |
+| `new_status` | `TEXT` |
+| `event_reason` | `TEXT` |
+
+```sql
+CREATE TABLE IF NOT EXISTS cp_artifact_run_events (
+    event_id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL,
+    file_id TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    event_at TIMESTAMP NOT NULL,
+    observed_path TEXT,
+    content_hash TEXT,
+    previous_status TEXT,
+    new_status TEXT,
+    event_reason TEXT,
+    FOREIGN KEY(run_id) REFERENCES cp_runs(run_id),
+    FOREIGN KEY(file_id) REFERENCES cp_file_registry(file_id)
+);
 ```
 
-For investment failures, `failed_isin` can preserve the instrument boundary that failed.
+### `cp_simulation_runs`
 
----
+| Column | Type |
+| --- | --- |
+| `simulation_id` | `TEXT` |
+| `run_id` | `TEXT` |
+| `created_at` | `TIMESTAMP` |
+| `root_seed` | `TEXT` |
+| `iterations` | `INTEGER` |
+| `horizon` | `INTEGER` |
+| `input_as_of_date` | `DATE` |
+| `settings_snapshot_id` | `TEXT` |
+| `rules_snapshot_id` | `TEXT` |
+| `input_fingerprint` | `TEXT` |
+| `model_fingerprint` | `TEXT` |
+| `model_implementation_version` | `TEXT` |
+| `status` | `TEXT` |
+| `result_fingerprint` | `TEXT` |
 
-## Why failures are separate from run status
-
-`cp_runs.status = FAILED` answers:
-
-> Did the run fail?
-
-`cp_run_failures` answers:
-
-> What failed, where, and with what context?
-
-Those are different operational questions.
-
----
-
-## 5. Execution log
-
-The complete execution log is persisted against the run.
-
-Structured fields provide machine-queryable failure state.
-
-The log preserves chronological context.
-
-```text
-structured failure
-+
-execution narrative
+```sql
+CREATE TABLE IF NOT EXISTS cp_simulation_runs (
+    simulation_id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL,
+    root_seed TEXT NOT NULL,
+    iterations INTEGER,
+    horizon INTEGER,
+    input_as_of_date DATE,
+    settings_snapshot_id TEXT,
+    rules_snapshot_id TEXT,
+    input_fingerprint TEXT,
+    model_fingerprint TEXT,
+    model_implementation_version TEXT,
+    status TEXT,
+    result_fingerprint TEXT,
+    FOREIGN KEY(run_id) REFERENCES cp_runs(run_id),
+    FOREIGN KEY(settings_snapshot_id) REFERENCES cp_settings_snapshots(snapshot_id),
+    FOREIGN KEY(rules_snapshot_id) REFERENCES cp_rules_snapshots(snapshot_id)
+);
 ```
 
-is more useful than either alone.
+## DuckDB Meta physical inventory
 
----
+Source: `src/personal_finance_etl/backend/load/schema/meta.py`
 
-## 6. What the Control Plane does not yet model
+### `meta.m_File_Registry`
 
-The current Control Plane provides strong operational provenance.
+| Column | Type |
+| --- | --- |
+| `file_id` | `TEXT` |
+| `file_name` | `TEXT` |
+| `relative_path` | `TEXT` |
+| `file_category` | `TEXT` |
+| `file_type` | `TEXT` |
+| `file_hash` | `TEXT` |
+| `file_size_bytes` | `BIGINT` |
+| `first_ingested` | `TIMESTAMP` |
+| `last_ingested` | `TIMESTAMP` |
+| `row_count` | `BIGINT` |
 
-It is not yet a complete normalized lineage graph.
-
-There are no dedicated contracts equivalent to:
-
-```text
-cp_run_artifacts
-cp_run_stages
-cp_run_outputs
-cp_lineage_edges
+```sql
+CREATE TABLE IF NOT EXISTS meta.m_File_Registry (
+    file_id         TEXT PRIMARY KEY,   -- deterministic: SHA-256(relative_path)
+    file_name       TEXT NOT NULL,
+    relative_path   TEXT NOT NULL UNIQUE,
+    file_category   TEXT NOT NULL,      -- 'mf_holdings', 'stock_pl', 'sqlite_source', etc.
+    file_type       TEXT,               -- 'excel', 'csv', 'sqlite', 'parquet', 'virtual'
+    file_hash       TEXT NOT NULL,      -- SHA-256 of file content
+    file_size_bytes BIGINT,
+    first_ingested  TIMESTAMP NOT NULL,
+    last_ingested   TIMESTAMP NOT NULL,
+    row_count       BIGINT
+);
 ```
 
-connecting every run/artifact/analytical contract.
+### `meta.m_Table_Row_Counts`
 
-Do not describe the current implementation as row-level or graph-complete lineage.
-
----
-
-## 7. DuckDB Meta
-
-DuckDB Meta is intentionally lean.
-
-Current tables:
-
-```text
-m_File_Registry
-m_Table_Row_Counts
-m_Financial_Rules
-m_Settings
-m_Data_Contracts
-```
-
-It exists to put useful current-state context beside the analytical warehouse.
-
-Historical operational truth stays in SQLite.
-
----
-
-## `meta.m_File_Registry`
-
-**Purpose:** current analytical projection of source registry state.
-
-This is useful for warehouse/BI inspection.
-
-It is not authoritative when it conflicts with the Control Plane.
-
-The self-healing path uses SQLite to repair missing DuckDB registry state, not the reverse.
-
----
-
-## `meta.m_Table_Row_Counts`
-
-**Purpose:** current publication row-count telemetry.
-
-Representative DDL:
+| Column | Type |
+| --- | --- |
+| `schema_name` | `TEXT` |
+| `table_name` | `TEXT` |
+| `row_count` | `BIGINT` |
+| `generated_at` | `TIMESTAMP` |
 
 ```sql
 CREATE TABLE IF NOT EXISTS meta.m_Table_Row_Counts (
     schema_name TEXT NOT NULL,
-    table_name TEXT NOT NULL,
-    row_count BIGINT,
+    table_name  TEXT NOT NULL,
+    row_count   BIGINT,
     generated_at TIMESTAMP
 );
 ```
 
-The hardened implementation resolves layer/table identity through `DATA_CONTRACT_REGISTRY`.
+### `meta.m_Financial_Rules`
 
-Conceptually:
+| Column | Type |
+| --- | --- |
+| `Rule_Domain` | `TEXT` |
+| `Rule_Type` | `TEXT` |
+| `Target_Level` | `TEXT` |
+| `Target_ID` | `TEXT` |
 
-```python
-contract_by_id = {
-    contract.contract_id: contract
-    for contract in DATA_CONTRACT_REGISTRY
-}
-
-contract = contract_by_id.get(contract_id)
-
-physical_table = contract.physical_table.split(
-    ".",
-    maxsplit=1,
-)[-1]
+```sql
+CREATE TABLE IF NOT EXISTS meta.m_Financial_Rules (
+    Rule_Domain  TEXT NOT NULL,
+    Rule_Type    TEXT NOT NULL,
+    Target_Level TEXT NOT NULL,
+    Target_ID    TEXT NOT NULL
+);
 ```
 
-This replaces brittle inference from internal frame names.
+### `meta.m_Settings`
 
----
+| Column | Type |
+| --- | --- |
+| `Setting_Group` | `TEXT` |
+| `Setting_Key` | `TEXT` |
+| `Setting_Value` | `TEXT` |
 
-## `meta.m_Financial_Rules`
-
-**Purpose:** current financial-policy projection useful beside analytical state.
-
-Historical FinancialRules provenance remains in Control Plane snapshots.
-
-Think:
-
-```text
-SQLite
-→ which rules did historical run X use?
-
-DuckDB Meta
-→ which rules describe the current analytical state?
+```sql
+CREATE TABLE IF NOT EXISTS meta.m_Settings (
+    Setting_Group TEXT NOT NULL,
+    Setting_Key   TEXT NOT NULL,
+    Setting_Value TEXT NOT NULL
+);
 ```
 
----
+### `meta.m_Data_Contracts`
 
-## `meta.m_Settings`
-
-**Purpose:** current operational-settings projection useful to analytical consumers.
-
-Again:
-
-```text
-Control Plane
-→ historical authority
-
-Meta
-→ current analytical context
-```
-
----
-
-## `meta.m_Data_Contracts`
-
-This table is the current analytical contract projection.
+| Column | Type |
+| --- | --- |
+| `contract_id` | `TEXT` |
+| `layer` | `TEXT` |
+| `physical_table` | `TEXT` |
+| `domain` | `TEXT` |
+| `grain` | `TEXT` |
+| `producer` | `TEXT` |
+| `is_full_replace` | `BOOLEAN` |
+| `publication_order` | `INTEGER` |
 
 ```sql
 CREATE TABLE IF NOT EXISTS meta.m_Data_Contracts (
@@ -460,139 +352,97 @@ CREATE TABLE IF NOT EXISTS meta.m_Data_Contracts (
 );
 ```
 
-It publishes all three analytical layers:
+### `meta.m_Latest_Simulation`
 
-```text
-16 Bronze contracts
-20 Silver contracts
-17 Gold contracts
+| Column | Type |
+| --- | --- |
+| `simulation_id` | `TEXT` |
+| `run_id` | `TEXT` |
+| `created_at` | `TIMESTAMP` |
+| `root_seed` | `TEXT` |
+| `iterations` | `INTEGER` |
+| `horizon` | `INTEGER` |
+| `model_implementation_version` | `TEXT` |
+| `model_fingerprint` | `TEXT` |
+| `input_fingerprint` | `TEXT` |
+| `result_fingerprint` | `TEXT` |
+| `contract_registry_fingerprint` | `TEXT` |
+| `settings_snapshot_id` | `TEXT` |
+| `rules_snapshot_id` | `TEXT` |
+| `status` | `TEXT` |
+
+```sql
+CREATE TABLE IF NOT EXISTS meta.m_Latest_Simulation (
+    simulation_id              TEXT NOT NULL,
+    run_id                     TEXT NOT NULL,
+    created_at                 TIMESTAMP NOT NULL,
+    root_seed                  TEXT NOT NULL,
+    iterations                 INTEGER,
+    horizon                    INTEGER,
+    model_implementation_version TEXT,
+    model_fingerprint          TEXT,
+    input_fingerprint          TEXT,
+    result_fingerprint         TEXT,
+    contract_registry_fingerprint TEXT,  -- SHA-256 of sorted DATA_CONTRACT_REGISTRY structural metadata
+    settings_snapshot_id       TEXT,
+    rules_snapshot_id          TEXT,
+    status                     TEXT
+);
 ```
 
-For Bronze, `contract_id` is the extraction attribute and the Meta projection uses `domain = Raw`, `grain = File`, `producer = ControlPlane`, plus the registry's actual `is_full_replace` value.
+## Lifecycle and transaction semantics
 
-For Silver and Gold, the values come directly from `DATA_CONTRACT_REGISTRY`; those layers are full-replace.
+### Implementation anchor: Scoped SQLite transaction
 
-Meta therefore exposes the contract authority without becoming the authority itself.
-
----
-
-## 8. Control Plane vs Meta query guide
-
-| Question | Query surface |
-| --- | --- |
-| Which artifacts exist historically/currently? | Control Plane |
-| What raw bytes were stored? | Control Plane |
-| Which artifact is `PENDING_BRONZE`? | Control Plane |
-| What runs occurred? | Control Plane |
-| What failed in run X? | Control Plane |
-| Which FinancialRules snapshot did run X use? | Control Plane |
-| What is the latest warehouse file registry projection? | DuckDB Meta |
-| How many rows were published to current Silver/Gold tables? | DuckDB Meta |
-| What current rules/settings should BI inspect? | DuckDB Meta |
-
-This table is the easiest way to avoid confusing the two surfaces.
-
----
-
-## 9. Self-healing direction
-
-If a Control Plane artifact is missing from DuckDB's registry, Meta can requeue it:
+Source: `src/personal_finance_etl/backend/load/control_plane/connection.py`
 
 ```python
-cp.artifacts.db.conn.execute(
-    """
-    UPDATE cp_file_registry
-    SET sync_status = 'PENDING_BRONZE'
-    WHERE relative_path = ?
-    """,
-    [path],
-)
+
+    @contextmanager
+    def atomic(self) -> Generator[None]:
+        """Atomic scope that works both standalone and nested in a pipeline transaction."""
+        savepoint = f"cp_scope_{uuid.uuid4().hex}"
+        self.conn.execute(f"SAVEPOINT {savepoint}")
+        try:
+            yield
+            self.conn.execute(f"RELEASE SAVEPOINT {savepoint}")
+        except Exception:
+            try:
+                self.conn.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+            finally:
+                self.conn.execute(f"RELEASE SAVEPOINT {savepoint}")
+            raise
+
+    @property
+    def is_open(self) -> bool:
+        """Whether the SQLite connection is currently open."""
+        return self._conn is not None
+
+    def ensure_schema(self) -> None:
+        """Create the current schema on a new database; never migrate existing data.
+
+        Existing databases must be upgraded by the project's explicit migration
 ```
 
-The direction is:
+The Control Plane retains run and artifact history independently of the analytical warehouse. A savepoint protects scoped SQLite mutations; it does not make the SQLite and DuckDB commits a distributed atomic transaction.
 
-```text
-authoritative SQLite
-        ↓
-repair analytical DuckDB state
+```mermaid
+sequenceDiagram
+    participant O as Orchestrator
+    participant D as DuckDB
+    participant C as SQLite Control Plane
+    O->>D: Publish Silver/Gold/Meta
+    D-->>O: Commit
+    O->>C: Finalize run and artifact state
+    C-->>O: Commit or recovery path
 ```
 
-That direction should not be inverted.
+## Historical identity and payload retention
 
----
+Artifact-run events can preserve the history of removed files even when full-replace cleanup removes obsolete payload bytes. Historical identity, source availability and restorable binary payload are separate guarantees.
 
-## 10. Run/warehouse consistency boundary
+## Reproducibility context
 
-SQLite and DuckDB use separate local transactions coordinated by the application.
+Configuration snapshots, run provenance and simulation metadata are operational evidence. Current DuckDB Meta is a convenience projection, not a substitute for the SQLite history.
 
-So the metadata architecture should be understood with that limitation.
-
-```text
-DuckDB COMMIT
-then
-SQLite COMMIT
-```
-
-is not distributed 2PC.
-
-The Control Plane is still the authoritative operational system, but there is a narrow theoretical cross-database failure window.
-
-That trade-off is documented explicitly.
-
----
-
-## 11. Recovery implications
-
-The Control Plane and DuckDB Meta have different durability roles, but SQLite and DuckDB are backed up and restored as one logical recovery unit.
-
-```text
-SQLite Control Plane
-+
-DuckDB analytical warehouse
-        ↓
-coordinated Snapshot
-        ↓
-single recovery archive
-```
-
-Restore validates the archive, preserves the current database pair and sidecars, installs the snapshot, and rolls back to the complete previous pair if replacement fails.
-
-That does not turn DuckDB Meta into operational history.
-
-After restore:
-
-```text
-SQLite
-→ authoritative operational state
-
-DuckDB Meta
-→ restored current analytical projection
-```
-
-Normal self-healing remains available on subsequent runs if analytical state is incomplete.
-
----
-
-## 12. Metadata design rules
-
-1. One system owns historical operational truth.
-2. Raw evidence and payloads live with operational authority.
-3. Run state is durable and explicit.
-4. Configuration/rules are content-addressed.
-5. Failures are structured and queryable.
-6. Execution logs complement structured state.
-7. DuckDB Meta remains lean.
-8. Meta identity comes from explicit contracts where possible.
-9. Recovery flows from Control Plane to analytical state.
-10. Current provenance is strong but not graph-complete lineage.
-
----
-
-## Related documentation
-
-- [System Architecture](../architecture/system-architecture.md)
-- [Data Lifecycle](../architecture/data-lifecycle.md)
-- [Reliability & Recovery](../architecture/reliability-and-recovery.md)
-- [Financial Rules](../configuration/financial-rules.md)
-
-[← Reference Home](README.md) · [← Documentation Home](../README.md)
+[← Reference index](README.md)
