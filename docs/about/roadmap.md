@@ -2,13 +2,13 @@
 
 The roadmap is intentionally smaller than the application.
 
-Personal Finance ETL already has the architecture and reliability foundation I wanted from the recent hardening cycles. The next work is about **formalizing financial semantics, building executable regression protection, and then evolving only when real new scenarios justify it**.
+Personal Finance ETL already has the architecture and reliability foundation I wanted from the recent hardening cycles. My priority is to **keep financial semantics explicit, add executable regression protection where it is missing, and evolve the system only when real scenarios justify the complexity**.
 
 ```text
-v6.5.3
+Implemented architecture and reliability foundation
 │
-├── Architecture / reliability foundation
-│   └── current baseline
+├── Financial and tax semantics
+│   └── clarify behavior against current implementation
 │
 ├── Financial Domain Freeze
 │   └── next maturity sprint
@@ -24,15 +24,15 @@ v6.5.3
 
 ## Where the project is now
 
-The current baseline already includes:
+The implementation already includes:
 
 ```text
 authoritative SQLite Control Plane
 persistent raw payloads
-16 Bronze contracts
-20 Silver contracts
-17 Gold marts
-5-table DuckDB Meta projection
+20 Bronze contracts
+24 Silver contracts
+22 Gold marts
+6-table DuckDB Meta projection
 
 change-aware synchronization
 PENDING_BRONZE replay
@@ -88,7 +88,7 @@ Complexity has to earn its electricity bill. 😄
 
 ## 1. Financial Domain Freeze
 
-The next domain sprint will formalize selected financial semantics that are already exercised in production but deserve clearer boundaries and deterministic treatment.
+A future domain review can formalize selected financial semantics that are already exercised in production but deserve clearer boundaries and deterministic treatment.
 
 The scope stays intentionally close to the current portfolio and source evidence.
 
@@ -118,7 +118,7 @@ Boundary-day behavior and acquisition/realization dates should be deterministic.
 
 Today FIFO creates sale-linked realized state during analytical reconstruction.
 
-The next maturity step is to decide how realized financial/tax history should remain independently queryable when active lots later disappear.
+A useful maturity step is to decide how realized financial/tax history should remain independently queryable when active lots later disappear.
 
 The design should preserve the distinction between:
 
@@ -143,7 +143,7 @@ The scope should remain guidance-oriented and limited to semantics that material
 
 The current portfolio tax forecast already publishes useful tax-oriented state.
 
-The sprint should reconcile the complete intended composition, including the known current boundary where `Taxable_Interest` is calculated but not included in `Projected_Tax_Bill`.
+A domain review should reconcile the complete intended composition, including the known current boundary where `Taxable_Interest` is calculated but not included in `Projected_Tax_Bill`.
 
 The output remains:
 
@@ -195,7 +195,7 @@ Unsupported or ambiguous events should remain explicit review boundaries.
 
 The current repository uses production reconciliation, static analysis and a headless execution harness as important validation signals.
 
-The next QA sprint should convert the behaviors I already rely on into repeatable automated protection.
+A QA expansion should convert the behaviors I already rely on into repeatable automated protection.
 
 The target is broader than finance alone.
 
@@ -312,7 +312,7 @@ GUI logic should be tested where it can be isolated without turning the suite in
 
 ### Test fixtures
 
-The current `tests/` configuration fixtures predate parts of the v6.5.x configuration model.
+Some test configuration fixtures may lag the current configuration contracts and should be checked against the active models.
 
 The QA sprint should replace them with intentional fixtures derived from the current `Settings` and `FinancialRules` contracts rather than carrying legacy keys forward.
 
@@ -483,7 +483,7 @@ Those would be different products.
 
 ## Roadmap success criteria
 
-The next maturity cycle is successful when:
+I will consider the next maturity cycle successful when:
 
 1. Current financial semantics are explicit at the boundaries that matter.
 2. Known guidance limitations are narrow and explainable.
@@ -499,17 +499,15 @@ The next maturity cycle is successful when:
 ## Near-term sequence
 
 ```text
-v6.5.3 documentation rebase
+Implementation-grounded technical documentation
         ↓
-Wiki 2.0 guided-learning rebase
+Financial-domain regression protection
         ↓
-Financial Domain Freeze
+Reliability and recovery verification
         ↓
-QA Expansion
+Guided-learning Wiki and project showcase
         ↓
-final methodology / documentation delta
-        ↓
-feature-driven evolution
+Scenario-driven evolution
 ```
 
 That sequence is intentionally finite.
