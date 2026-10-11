@@ -1,58 +1,35 @@
 # Reference
 
-Reference documentation describes **what the persisted analytical contracts actually are**.
+I use this section as the physical and semantic contract catalog for my financial platform. Each page links registry ownership to real SQL schemas, producer identity, declared grain and downstream interpretation.
 
-Minimal storytelling. Maximum inspectability.
-
-```text
-Logical contract
-      ↓
-DataContract registry
-      ↓
-Physical schema
-      ↓
-Producer
-      ↓
-Grain
-      ↓
-Consumers
+```mermaid
+flowchart LR
+    R["DataContract registry"] --> S["Physical SQL schemas"]
+    S --> P["Producer output"]
+    P --> G["Declared grain and identity"]
+    G --> C["Downstream consumers"]
 ```
 
-## Current physical contract surface
+## Contract surfaces
 
-| Layer | Current scope |
-| --- | ---: |
-| SQLite Control Plane | **6 authoritative operational tables** |
-| DuckDB Bronze | **16 source contracts** |
-| DuckDB Silver | **20 canonical contracts** |
-| DuckDB Gold | **17 decision marts** |
-| DuckDB Meta | **5 current-state projection tables** |
+| Surface | Current inventory | Source of truth |
+| --- | ---: | --- |
+| Bronze | 20 | `BRONZE_CONTRACT_REGISTRY` |
+| Silver | 24 | `DATA_CONTRACT_REGISTRY` |
+| Gold | 22 | `DATA_CONTRACT_REGISTRY` |
+| Control Plane and Meta | Schema-defined | `schema/control_plane.py`, `schema/meta.py` |
 
-## Guides
+## Reference guides
 
-| Reference | Focus |
+| Guide | Scope |
 | --- | --- |
-| [Bronze Data Contracts](bronze-data-contracts.md) | Source synchronization contracts, physical Bronze tables and replacement semantics |
-| [Silver Data Contracts](silver-data-contracts.md) | Canonical dimensions/reference models, facts and lot analytics |
-| [Gold Data Contracts](gold-data-contracts.md) | Decision-support marts, grains, producers and key measures |
-| [Meta Data Contracts](meta-data-contracts.md) | Lean DuckDB Meta plus its relationship to the authoritative Control Plane |
-| [Glossary](glossary.md) | Project-specific architecture, finance and analytical terminology |
+| [Bronze contracts](bronze-data-contracts.md) | Extraction categories, replacement policies and source-shaped tables |
+| [Silver contracts](silver-data-contracts.md) | Canonical financial dimensions, transactions, FX, FIFO and tax events |
+| [Gold contracts](gold-data-contracts.md) | Analytical marts, grains, tax summaries and financial presentation |
+| [Meta and Control Plane](meta-data-contracts.md) | Historical operational authority and current metadata projection |
+| [Identity and grain](identity-and-grain-contracts.md) | Financial entity identity, row grain, additivity and lineage |
+| [Glossary](glossary.md) | Consistent architecture and finance terminology |
 
-## What a contract should tell you
+The registry is the inventory authority. I do not hardcode table counts into implementation logic; this index is a snapshot of the currently registered contracts.
 
-```text
-Layer
-Domain
-Physical table
-Grain
-Producer
-Major inputs
-Key fields
-Aggregation semantics
-Consumers
-Caveats
-```
-
-The substantive reference pages pair registry declarations with physical schema and methodology where useful.
-
-[← Documentation Home](../README.md)
+[← Documentation home](../README.md)
