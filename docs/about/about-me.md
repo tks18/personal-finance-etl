@@ -223,7 +223,7 @@ strict typing
 canonical semantics
 explicit grain
 Silver contracts
-17 Gold marts
+22 Gold marts
 Power BI serving
 ```
 
