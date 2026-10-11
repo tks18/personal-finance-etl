@@ -8,241 +8,504 @@
         {
           "title": "Project Overview",
           "path": "../README.md",
-          "order": -1
-        },
-        {
-          "title": "Docs Overview",
-          "path": "README.md",
           "order": 0
-        }
-      ]
-    },
-    {
-      "id": "getting-started",
-      "title": "Getting-Started",
-      "order": 1000,
-      "pages": [
-        {
-          "title": "Getting-Started Overview",
-          "path": "getting-started/README.md",
-          "order": 1000
         },
         {
-          "title": "Configuration",
-          "path": "getting-started/configuration.md",
-          "order": 1010
-        },
-        {
-          "title": "Installation",
-          "path": "getting-started/installation.md",
-          "order": 1020
-        },
-        {
-          "title": "Running The Pipeline",
-          "path": "getting-started/running-the-pipeline.md",
-          "order": 1030
-        }
-      ]
-    },
-    {
-      "id": "finance",
-      "title": "Finance",
-      "order": 2000,
-      "pages": [
-        {
-          "title": "Finance Overview",
-          "path": "finance/README.md",
-          "order": 2000
-        },
-        {
-          "title": "Cashflow And Wealth",
-          "path": "finance/cashflow-and-wealth.md",
-          "order": 2010
-        },
-        {
-          "title": "Financial Model",
-          "path": "finance/financial-model.md",
-          "order": 2020
-        },
-        {
-          "title": "Fire Methodology",
-          "path": "finance/fire-methodology.md",
-          "order": 2030
-        },
-        {
-          "title": "Investment Analytics",
-          "path": "finance/investment-analytics.md",
-          "order": 2040
-        },
-        {
-          "title": "Metrics And Methodology",
-          "path": "finance/metrics-and-methodology.md",
-          "order": 2050
-        },
-        {
-          "title": "Tax Methodology",
-          "path": "finance/tax-methodology.md",
-          "order": 2060
+          "title": "Documentation Overview",
+          "path": "README.md",
+          "order": 10
         }
       ]
     },
     {
       "id": "architecture",
       "title": "Architecture",
-      "order": 3000,
+      "order": 1000,
       "pages": [
         {
           "title": "Architecture Overview",
           "path": "architecture/README.md",
-          "order": 3000
+          "order": 1000
         },
         {
           "title": "Data Lifecycle",
           "path": "architecture/data-lifecycle.md",
-          "order": 3010
+          "order": 1010
         },
         {
           "title": "Data Model",
           "path": "architecture/data-model.md",
-          "order": 3020
+          "order": 1020
+        },
+        {
+          "title": "Dependency Architecture",
+          "path": "architecture/dependency-architecture.md",
+          "order": 1030
         },
         {
           "title": "Design Decisions",
           "path": "architecture/design-decisions.md",
-          "order": 3030
+          "order": 1040
         },
         {
-          "title": "Reliability And Recovery",
-          "path": "architecture/reliability-and-recovery.md",
-          "order": 3040
+          "title": "Execution Lifecycle",
+          "path": "architecture/execution-lifecycle.md",
+          "order": 1050
         },
         {
           "title": "System Architecture",
           "path": "architecture/system-architecture.md",
-          "order": 3050
+          "order": 1070
         },
         {
           "title": "Warehouse Architecture",
           "path": "architecture/warehouse-architecture.md",
+          "order": 1080
+        }
+      ]
+    },
+    {
+      "id": "control-plane",
+      "title": "Control Plane",
+      "order": 2000,
+      "pages": [
+        {
+          "title": "Control Plane Overview",
+          "path": "control-plane/README.md",
+          "order": 2000
+        },
+        {
+          "title": "Artifact Identity And Lineage",
+          "path": "control-plane/artifact-identity-and-lineage.md",
+          "order": 2010
+        },
+        {
+          "title": "Artifact Lifecycle",
+          "path": "control-plane/artifact-lifecycle.md",
+          "order": 2020
+        },
+        {
+          "title": "Configuration Provenance",
+          "path": "control-plane/configuration-provenance.md",
+          "order": 2030
+        },
+        {
+          "title": "Control Plane Architecture",
+          "path": "control-plane/control-plane-architecture.md",
+          "order": 2040
+        },
+        {
+          "title": "Run Lifecycle",
+          "path": "control-plane/run-lifecycle.md",
+          "order": 2050
+        },
+        {
+          "title": "Simulation Provenance",
+          "path": "control-plane/simulation-provenance.md",
+          "order": 2060
+        },
+        {
+          "title": "Synchronization And Healing",
+          "path": "control-plane/synchronization-and-healing.md",
+          "order": 2070
+        }
+      ]
+    },
+    {
+      "id": "data-engineering",
+      "title": "Data Engineering",
+      "order": 3000,
+      "pages": [
+        {
+          "title": "Data Engineering Overview",
+          "path": "data-engineering/README.md",
+          "order": 3000
+        },
+        {
+          "title": "Artifact Ingestion",
+          "path": "data-engineering/artifact-ingestion.md",
+          "order": 3010
+        },
+        {
+          "title": "Bronze Processing",
+          "path": "data-engineering/bronze-processing.md",
+          "order": 3020
+        },
+        {
+          "title": "Data Quality And Validation",
+          "path": "data-engineering/data-quality-and-validation.md",
+          "order": 3030
+        },
+        {
+          "title": "Market Data And Benchmarks",
+          "path": "data-engineering/market-data-and-benchmarks.md",
+          "order": 3040
+        },
+        {
+          "title": "Silver Gold Publication",
+          "path": "data-engineering/silver-gold-publication.md",
+          "order": 3050
+        },
+        {
+          "title": "Source Discovery",
+          "path": "data-engineering/source-discovery.md",
           "order": 3060
+        },
+        {
+          "title": "Transformation Pipeline",
+          "path": "data-engineering/transformation-pipeline.md",
+          "order": 3070
+        }
+      ]
+    },
+    {
+      "id": "finance",
+      "title": "Financial Engineering",
+      "order": 4000,
+      "pages": [
+        {
+          "title": "Financial Engineering Overview",
+          "path": "finance/README.md",
+          "order": 4000
+        },
+        {
+          "title": "Benchmark Attribution",
+          "path": "finance/benchmark-attribution.md",
+          "order": 4010
+        },
+        {
+          "title": "Cashflow And Wealth",
+          "path": "finance/cashflow-and-wealth.md",
+          "order": 4020
+        },
+        {
+          "title": "FIFO And Lot Accounting",
+          "path": "finance/fifo-and-lot-accounting.md",
+          "order": 4030
+        },
+        {
+          "title": "Financial Model",
+          "path": "finance/financial-model.md",
+          "order": 4040
+        },
+        {
+          "title": "Fire Methodology",
+          "path": "finance/fire-methodology.md",
+          "order": 4050
+        },
+        {
+          "title": "FIRE Simulation And Reproducibility",
+          "path": "finance/fire-simulation-and-reproducibility.md",
+          "order": 4060
+        },
+        {
+          "title": "FX Methodology",
+          "path": "finance/fx-methodology.md",
+          "order": 4070
+        },
+        {
+          "title": "Investment Analytics",
+          "path": "finance/investment-analytics.md",
+          "order": 4080
+        },
+        {
+          "title": "Metrics And Methodology",
+          "path": "finance/metrics-and-methodology.md",
+          "order": 4090
+        },
+        {
+          "title": "Reconciliation And Cost Basis",
+          "path": "finance/reconciliation-and-cost-basis.md",
+          "order": 4100
+        },
+        {
+          "title": "Tax Event Provenance",
+          "path": "finance/tax-event-provenance.md",
+          "order": 4110
+        },
+        {
+          "title": "Tax Methodology",
+          "path": "finance/tax-methodology.md",
+          "order": 4120
         }
       ]
     },
     {
       "id": "configuration",
       "title": "Configuration",
-      "order": 4000,
+      "order": 5000,
       "pages": [
         {
           "title": "Configuration Overview",
           "path": "configuration/README.md",
-          "order": 4000
+          "order": 5000
+        },
+        {
+          "title": "Configuration Architecture",
+          "path": "configuration/configuration-architecture.md",
+          "order": 5010
+        },
+        {
+          "title": "Configuration Snapshots",
+          "path": "configuration/configuration-snapshots.md",
+          "order": 5020
         },
         {
           "title": "Financial Rules",
           "path": "configuration/financial-rules.md",
-          "order": 4010
+          "order": 5030
         },
         {
           "title": "Fire Configuration",
           "path": "configuration/fire-configuration.md",
-          "order": 4020
+          "order": 5040
+        },
+        {
+          "title": "Validation And Defaults",
+          "path": "configuration/validation-and-defaults.md",
+          "order": 5050
+        }
+      ]
+    },
+    {
+      "id": "reference",
+      "title": "Technical Reference",
+      "order": 6000,
+      "pages": [
+        {
+          "title": "Technical Reference Overview",
+          "path": "reference/README.md",
+          "order": 6000
+        },
+        {
+          "title": "API And CLI Reference",
+          "path": "reference/api-and-cli-reference.md",
+          "order": 6010
+        },
+        {
+          "title": "Bronze Data Contracts",
+          "path": "reference/bronze-data-contracts.md",
+          "order": 6020
+        },
+        {
+          "title": "Configuration Schema Reference",
+          "path": "reference/configuration-schema-reference.md",
+          "order": 6030
+        },
+        {
+          "title": "Control Plane Schema",
+          "path": "reference/control-plane-schema.md",
+          "order": 6040
+        },
+        {
+          "title": "Glossary",
+          "path": "reference/glossary.md",
+          "order": 6050
+        },
+        {
+          "title": "Gold Data Contracts",
+          "path": "reference/gold-data-contracts.md",
+          "order": 6060
+        },
+        {
+          "title": "Identity Contracts",
+          "path": "reference/identity-contracts.md",
+          "order": 6070
+        },
+        {
+          "title": "Meta Data Contracts",
+          "path": "reference/meta-data-contracts.md",
+          "order": 6080
+        },
+        {
+          "title": "Silver Data Contracts",
+          "path": "reference/silver-data-contracts.md",
+          "order": 6090
+        }
+      ]
+    },
+    {
+      "id": "interfaces",
+      "title": "Application Interfaces",
+      "order": 7000,
+      "pages": [
+        {
+          "title": "Application Interfaces Overview",
+          "path": "interfaces/README.md",
+          "order": 7000
+        },
+        {
+          "title": "Application Facade",
+          "path": "interfaces/application-facade.md",
+          "order": 7010
+        },
+        {
+          "title": "CLI Architecture",
+          "path": "interfaces/cli-architecture.md",
+          "order": 7020
+        },
+        {
+          "title": "Desktop GUI Architecture",
+          "path": "interfaces/desktop-gui-architecture.md",
+          "order": 7030
+        },
+        {
+          "title": "Documentation Renderer",
+          "path": "interfaces/documentation-renderer.md",
+          "order": 7040
+        },
+        {
+          "title": "Multiprocessing And Progress",
+          "path": "interfaces/multiprocessing-and-progress.md",
+          "order": 7050
+        }
+      ]
+    },
+    {
+      "id": "operations",
+      "title": "Operations & Reliability",
+      "order": 8000,
+      "pages": [
+        {
+          "title": "Operations & Reliability Overview",
+          "path": "operations/README.md",
+          "order": 8000
+        },
+        {
+          "title": "Backup And Restore",
+          "path": "operations/backup-and-restore.md",
+          "order": 8010
+        },
+        {
+          "title": "Failure Scenarios",
+          "path": "operations/failure-scenarios.md",
+          "order": 8020
+        },
+        {
+          "title": "Observability And Run History",
+          "path": "operations/observability-and-run-history.md",
+          "order": 8030
+        },
+        {
+          "title": "Performance And Benchmarking",
+          "path": "operations/performance-and-benchmarking.md",
+          "order": 8040
+        },
+        {
+          "title": "Reliability And Recovery",
+          "path": "operations/reliability-and-recovery.md",
+          "order": 8050
+        },
+        {
+          "title": "Transaction Boundaries",
+          "path": "operations/transaction-boundaries.md",
+          "order": 8060
         }
       ]
     },
     {
       "id": "developer",
       "title": "Developer",
-      "order": 5000,
+      "order": 9000,
       "pages": [
         {
           "title": "Developer Overview",
           "path": "developer/README.md",
-          "order": 5000
+          "order": 9000
         },
         {
           "title": "Adding Asset Pipelines",
           "path": "developer/adding-asset-pipelines.md",
-          "order": 5010
+          "order": 9010
         },
         {
           "title": "Adding Data Sources",
           "path": "developer/adding-data-sources.md",
-          "order": 5020
+          "order": 9020
         },
         {
           "title": "Adding Gold Marts",
           "path": "developer/adding-gold-marts.md",
-          "order": 5030
+          "order": 9030
+        },
+        {
+          "title": "Debugging And Observability",
+          "path": "developer/debugging-and-observability.md",
+          "order": 9040
         },
         {
           "title": "Development Guide",
           "path": "developer/development-guide.md",
-          "order": 5040
+          "order": 9050
+        },
+        {
+          "title": "Extension Contracts",
+          "path": "developer/extension-contracts.md",
+          "order": 9060
+        },
+        {
+          "title": "Testing And Regression",
+          "path": "developer/testing-and-regression.md",
+          "order": 9070
         }
       ]
     },
     {
-      "id": "reference",
-      "title": "Reference",
-      "order": 6000,
+      "id": "getting-started",
+      "title": "Getting Started",
+      "order": 10000,
       "pages": [
         {
-          "title": "Reference Overview",
-          "path": "reference/README.md",
-          "order": 6000
+          "title": "Getting Started Overview",
+          "path": "getting-started/README.md",
+          "order": 10000
         },
         {
-          "title": "Bronze Data Contracts",
-          "path": "reference/bronze-data-contracts.md",
-          "order": 6010
+          "title": "Configuration",
+          "path": "getting-started/configuration.md",
+          "order": 10010
         },
         {
-          "title": "Glossary",
-          "path": "reference/glossary.md",
-          "order": 6020
+          "title": "Daily Workflow",
+          "path": "getting-started/daily-workflow.md",
+          "order": 10020
         },
         {
-          "title": "Gold Data Contracts",
-          "path": "reference/gold-data-contracts.md",
-          "order": 6030
+          "title": "Installation",
+          "path": "getting-started/installation.md",
+          "order": 10030
         },
         {
-          "title": "Meta Data Contracts",
-          "path": "reference/meta-data-contracts.md",
-          "order": 6040
-        },
-        {
-          "title": "Silver Data Contracts",
-          "path": "reference/silver-data-contracts.md",
-          "order": 6050
+          "title": "Running The Pipeline",
+          "path": "getting-started/running-the-pipeline.md",
+          "order": 10040
         }
       ]
     },
     {
       "id": "about",
-      "title": "About",
-      "order": 7000,
+      "title": "About & Roadmap",
+      "order": 11000,
       "pages": [
         {
-          "title": "About Overview",
+          "title": "About & Roadmap Overview",
           "path": "about/README.md",
-          "order": 7000
+          "order": 11000
         },
         {
           "title": "About Me",
           "path": "about/about-me.md",
-          "order": 7010
+          "order": 11010
         },
         {
           "title": "Project",
           "path": "about/project.md",
-          "order": 7020
+          "order": 11020
         },
         {
           "title": "Roadmap",
           "path": "about/roadmap.md",
-          "order": 7030
+          "order": 11030
         }
       ]
     }
