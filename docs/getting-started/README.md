@@ -21,7 +21,8 @@ flowchart LR
 | ---: | --- | --- |
 | 1 | [Installation](installation.md) | Install Python/package and prepare the environment |
 | 2 | [Configuration](configuration.md) | Configure paths, mappings, databases and financial policy |
-| 3 | [Running the Pipeline](running-the-pipeline.md) | Run CLI, desktop or automated execution and understand outputs |
+| 3 | [Running the Pipeline](running-the-pipeline.md) | Run CLI, desktop or unattended one-shot execution and understand outputs |
+| 4 | [Daily Workflow](daily-workflow.md) | Check sources, execute, reconcile and investigate results |
 
 ## Two configuration planes
 
