@@ -25,8 +25,8 @@ Core technology ownership is:
 | Technology | Responsibility |
 | --- | --- |
 | Python | Application/runtime |
-| SQLite | Authoritative Control Plane and raw evidence: 6 operational tables |
-| DuckDB | Analytical warehouse: 16 Bronze + 20 Silver + 17 Gold + 5 Meta tables |
+| SQLite | Authoritative Control Plane and raw evidence: 8 operational tables |
+| DuckDB | Analytical warehouse: 20 Bronze + 24 Silver + 22 Gold + 6 Meta tables |
 | Polars | Transformation/analytical dataframe execution |
 | Pydantic | Settings and financial-policy validation |
 | NumPy / Numba | FIRE simulation |
@@ -158,7 +158,7 @@ opening-state inputs
 personal-finance SQLite data
 ```
 
-As of **24 September 2026**, that environment contains **1,608 source artifacts** and grows by roughly **two broker snapshot files per day**.
+The historical workload contained **1,608 source artifacts on 24 September 2026**. The maintainer subsequently reported **1,629 artifacts**; these are operational observations rather than fixed application limits.
 
 That is context for the architecture, not a requirement that another deployment contain the same number of files.
 
