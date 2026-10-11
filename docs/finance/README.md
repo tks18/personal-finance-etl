@@ -1,64 +1,25 @@
-# Finance & Methodology
+# Finance · Technical specifications
 
-This section documents the **financial meaning implemented by the software**.
+I document the financial semantics of my data platform here: how source events become lots, realized gains, tax events, net-worth series, and financial-independence scenarios. These specifications describe the algorithms and their assumptions; physical schemas live in `reference/`.
 
-The financial model is not a layer of labels placed on top of ETL. It determines what the data means, at what grain the meaning exists, and which outputs are observed, reconstructed, modelled or simulated.
+## Core financial models
 
-The current model is production-used decision support. Tax-oriented outputs support planning and filing review; they do not replace final filing due diligence.
+- [Financial Model](financial-model.md)
+- [Investment Analytics](investment-analytics.md)
+- [Metrics And Methodology](metrics-and-methodology.md)
+- [Tax Methodology](tax-methodology.md)
+- [Cashflow And Wealth](cashflow-and-wealth.md)
+- [Fire Methodology](fire-methodology.md)
 
-```mermaid
-flowchart LR
-    EVID["Financial Evidence"] --> LEDGER["Household Ledger"]
-    INV["Investment Evidence"] --> LOT["FIFO / Tax Lots"]
-    LOT --> MKT["Market + Tax State"]
-    LEDGER --> WEALTH["Household Wealth"]
-    MKT --> WEALTH
-    WEALTH --> CF["Cash-Flow Reconciliation"]
-    WEALTH --> FIRE["Planning / FIRE"]
-```
+## Deep implementation specifications
 
-## Methodology standard
+- [FIFO lot accounting and disposal events](fifo-and-lot-accounting.md)
+- [Reconciliation and cost-basis provenance](reconciliation-and-cost-basis.md)
+- [Foreign-exchange handling and valuation](fx-methodology.md)
+- [Lot-aware benchmark attribution](benchmark-attribution.md)
+- [Tax-event provenance and classification](tax-event-provenance.md)
+- [FIRE simulations and reproducibility](fire-simulation-and-reproducibility.md)
 
-Finance pages follow:
+## How I use these documents
 
-```text
-Financial concept
-      ↓
-Definition / formula
-      ↓
-Grain
-      ↓
-Production implementation
-      ↓
-Interpretation
-      ↓
-Limitations
-```
-
-A mathematically valid calculation at the wrong grain is still financially wrong.
-
-## Read in this order
-
-| Guide | Focus |
-| --- | --- |
-| [Financial Model](financial-model.md) | Household ontology, balances, transactions, wealth and planning state |
-| [Metrics & Methodology](metrics-and-methodology.md) | Published metric definitions, grain, formulas and interpretation |
-| [Investment Analytics](investment-analytics.md) | FIFO, broker reconciliation, shadow benchmarks and return reconstruction |
-| [Cash Flow & Wealth](cashflow-and-wealth.md) | Ledger reconstruction, market overlay, liquidity and direct cash reconciliation |
-| [Tax Methodology](tax-methodology.md) | Holding periods, realized/unrealized tax state and tax-aware valuation |
-| [FIRE Methodology](fire-methodology.md) | Deterministic and stochastic long-range planning |
-
-## One important distinction
-
-```text
-Observed
-≠ Reconstructed
-≠ Modelled
-≠ Simulated
-```
-
-A broker-reported quantity, reconstructed FIFO lot, estimated portfolio tax exposure and Monte Carlo terminal wealth are all useful financial states, but they are not the same kind of evidence.
-
-The detailed guides keep those boundaries explicit.
-
-[← Documentation Home](../README.md)
+I start with the financial model for the vocabulary and then follow the lot-accounting, FX, benchmark, tax, and FIRE pages for execution-level behavior. For exact output grains and field types I cross-reference the data-contract registry.
