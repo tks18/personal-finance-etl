@@ -45,7 +45,7 @@ shan-fin cli --config <config.toml> --restore <snapshot.zip>
 shan-fin cli --docs
 ```
 
-`--cron` runs unattended and implies automatic execution.
+`--cron` runs the pipeline once without interactive configuration prompts; it does not schedule recurring execution. An external scheduler must invoke the command for recurring runs. Do not rely solely on its current process exit status to detect child-process failure; inspect the authoritative run record.
 
 ### Desktop
 
@@ -251,8 +251,8 @@ results = pl.collect_all(
 The current system publishes:
 
 ```text
-20 Silver contracts
-17 Gold marts
+24 Silver contracts
+22 Gold marts
 ```
 
 Publication is driven by `DATA_CONTRACT_REGISTRY`.
