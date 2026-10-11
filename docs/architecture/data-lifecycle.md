@@ -10,7 +10,29 @@ That split is what lets the system handle a growing source history without makin
 
 ---
 
-## 1. A run is an observable lifecycle, not a script
+## Lifecycle at a glance
+
+```mermaid
+flowchart LR
+    SRC["Source Artifact"] --> DISC["Discover"]
+    DISC --> DIFF["Compare with Control Plane"]
+    DIFF --> RAW["Persist Raw Evidence"]
+    RAW --> PEND["PENDING_BRONZE"]
+    PEND --> EXT["Extract"]
+    EXT --> BR["Bronze Upsert"]
+    BR --> SYNC["SYNCED"]
+    SYNC --> FULL["Read Complete Bronze"]
+    FULL --> CAN["Canonical Transform"]
+    CAN --> ENG["Analytics"]
+    ENG --> SIL["Silver Rebuild"]
+    ENG --> GOLD["Gold Rebuild"]
+    SIL --> META["Lean Meta Projection"]
+    GOLD --> META
+```
+
+---
+
+## 1. A run starts before data processing
 
 The Control Plane creates a durable run identity before the main analytical transaction:
 
@@ -42,38 +64,7 @@ A failed analytical run therefore still has an operational identity.
 
 ---
 
-**Implementation:** `src/personal_finance_etl/backend/pipeline/etl_pipeline.py` (lines 248–273).
-
-```python
-    def run(self) -> None:
-        self.cfg.validate_config()
-
-        validate_registry()
-
-        start_time = time.perf_counter()
-
-        run_id = None
-        cp = None
-        log_file_path = self.db_manager.db_path.replace(".duckdb", ".log")
-
-        try:
-            add_queue_handler(cast("multiprocessing.Queue[Any]", self.status_queue))
-            add_file_handler(log_file_path)
-
-            logger.debug("=== ETL CONFIGURATION DUMP ===")
-            if hasattr(self.cfg, "model_dump_json"):
-                logger.debug(self.cfg.model_dump_json(indent=2))
-            else:
-                logger.debug(str(self.cfg))
-
-            logger.debug("=== FINANCIAL RULES DUMP ===")
-            if self.rules is not None and hasattr(self.rules, "model_dump_json"):
-                logger.debug(self.rules.model_dump_json(indent=2))
-            else:
-                logger.debug(str(self.rules))
-```
-
-## 2. Discovery and artifact decisions
+## 2. Source discovery describes the current filesystem
 
 The orchestrator discovers statement files and then adds explicit configured sources:
 
@@ -103,50 +94,7 @@ That belongs to synchronization state.
 
 ---
 
-**Implementation:** `src/personal_finance_etl/backend/load/control_plane/file_sync.py` (lines 30–67).
-
-```python
-    def sync_with_disk(
-        self,
-        discovered_files: dict[str, list[str]],
-        hash_policy: FileHashPolicy,
-        full_replace_categories: list[str],
-    ) -> tuple[dict[str, list[str]], dict[str, list[str]], int, list[tuple[str, str, str]]]:
-        """Synchronize the scan as one atomic control-plane operation."""
-        with self.artifact_repo.db.atomic():
-            return self._sync_with_disk(discovered_files, hash_policy, full_replace_categories)
-
-    def _sync_with_disk(
-        self,
-        discovered_files: dict[str, list[str]],
-        hash_policy: FileHashPolicy,
-        full_replace_categories: list[str],
-    ) -> tuple[dict[str, list[str]], dict[str, list[str]], int, list[tuple[str, str, str]]]:
-        registry_with_status = self.artifact_repo.get_registry_with_status()
-        registry: dict[str, tuple[str, str]] = {
-            path: (digest, category)
-            for path, (digest, category, _status) in registry_with_status.items()
-        }
-
-        hash_to_paths: dict[str, dict[str, list[str]]] = {}
-        for path, (digest, category, status) in registry_with_status.items():
-            if status != "REMOVED" and digest:
-                hash_to_paths.setdefault(category, {}).setdefault(digest, []).append(path)
-
-        new_files: dict[str, list[str]] = {}
-        changed_files: dict[str, list[str]] = {}
-        renames: list[tuple[str, str, str]] = []
-        renamed_old_paths: set[str] = set()
-        all_active_paths: set[str] = set()
-        seen_path_categories: dict[str, str] = {}
-        unique_input_count = 0
-        full_replace = set(full_replace_categories)
-
-        # Canonicalize/deduplicate before any destructive pruning. A path assigned to
-        # multiple categories is a contract error and must not silently change identity.
-```
-
-## 3. Registry state and content fingerprints
+## 3. The Control Plane decides what changed
 
 `FileSyncService` compares discovered paths with the artifact registry:
 
@@ -176,51 +124,35 @@ from
 actionable
 ```
 
-With 1,608 artifacts in the production source environment, that distinction is fundamental.
+With 1,608 artifacts (historical snapshot, 24 September 2026) in the production source environment, that distinction is fundamental.
 
 ---
 
-**Implementation:** `src/personal_finance_etl/backend/load/control_plane/artifact_repo.py` (lines 237–271).
+## 4. Hash policy is configurable by physical type
+
+Not every file type needs the same change-detection cost.
+
+The synchronization service asks:
 
 ```python
-    def _upsert_registry(
-        self,
-        *,
-        filepath: str,
-        filename: str,
-        category: str,
-        file_type: str,
-        file_hash: str,
-        file_size: int,
-        now: str,
-    ) -> tuple[str, str | None]:
-        """Upsert metadata without assuming the persisted ID is path-derived."""
-        path = normalize_path(filepath)
-        existing = self.db.conn.execute(
-            "SELECT file_id, sync_status FROM cp_file_registry WHERE relative_path = ?", (path,)
-        ).fetchone()
-        if existing:
-            file_id, previous_status = existing
-            self.db.conn.execute(
-                """UPDATE cp_file_registry
-                   SET file_name = ?, file_category = ?, file_type = ?, file_hash = ?,
-                       file_size_bytes = ?, last_seen_run_id = COALESCE(?, last_seen_run_id), last_seen_at = ?,
-                       last_changed_run_id = COALESCE(?, last_changed_run_id), last_changed_at = ?, sync_status = 'PENDING_BRONZE'
-                   WHERE relative_path = ?""",
-                (
-                    filename,
-                    category,
-                    file_type,
-                    file_hash,
-                    file_size,
-                    self.active_run_id,
-                    now,
-                    self.active_run_id,
-                    now,
-                    path,
+should_check_hash = getattr(hash_policy, file_type, False)
 ```
 
-## 4. Source bytes, history and retention
+That allows the application to choose when an existing artifact should be rehashed.
+
+The lifecycle therefore distinguishes:
+
+```text
+path identity
++
+optional content identity
+```
+
+rather than blindly hashing every artifact on every run.
+
+---
+
+## 5. Raw evidence is persisted before Bronze
 
 Actionable files are stored as binary evidence:
 
@@ -248,8 +180,8 @@ category
 physical type
 SHA-256
 size
-first_ingested
-last_ingested
+first_seen_at
+last_seen_at
 sync_status
 ```
 
@@ -259,46 +191,57 @@ New or changed artifacts become:
 PENDING_BRONZE
 ```
 
-**Implementation:** `src/personal_finance_etl/backend/load/control_plane/artifact_repo.py` (lines 301–334).
+Raw evidence therefore exists before analytical persistence succeeds.
+
+---
+
+## 6. Full-replace sources prune obsolete evidence
+
+Some source categories represent current reference state rather than historical event history.
+
+For those categories, the synchronizer prunes artifacts no longer present:
 
 ```python
-    def ingest_binaries(
-        self,
-        actionable_files: dict[str, list[str]],
-        new_files: dict[str, list[str]] | None = None,
-        changed_files: dict[str, list[str]] | None = None,
-    ) -> None:
-        new_paths = {normalize_path(path) for paths in (new_files or {}).values() for path in paths}
-        changed_paths = {
-            normalize_path(path) for paths in (changed_files or {}).values() for path in paths
-        }
-        total_count = 0
-        for category, filepaths in actionable_files.items():
-            file_type = FILE_TYPE_MAP.get(category, "csv")
-            for filepath in filepaths:
-                path = normalize_path(filepath)
-                try:
-                    # Read once so the persisted bytes and their hash always describe the same content.
-                    with open(filepath, "rb") as file_handle:
-                        raw_bytes = file_handle.read()
-                    digest = hash_bytes(raw_bytes)
-                    size = len(raw_bytes)
-                    now = self._now()
-                    filename = os.path.basename(path)
-                    with self.db.atomic():
-                        file_id, previous_status = self._upsert_registry(
-                            filepath=path,
-                            filename=filename,
-                            category=category,
-                            file_type=file_type,
-                            file_hash=digest,
-                            file_size=size,
-                            now=now,
-                        )
-                        self.db.conn.execute(
+if category in full_replace_categories:
+    self.artifact_repo.prune_category(
+        category,
+        filepaths,
+    )
 ```
 
-## 5. Bronze synchronization semantics
+That behaviour follows source semantics.
+
+A current mapping/master is not necessarily useful as an indefinitely accumulating sequence of historical files.
+
+---
+
+## 7. Extraction operates on the actionable subset
+
+The orchestrator constructs:
+
+```python
+actionable_all = {
+    key: new_files.get(key, []) + changed_files.get(key, [])
+    for key in discovered_files.keys()
+}
+```
+
+Then:
+
+```python
+extracted_data = self._extract(
+    cp,
+    actionable_files=actionable_all,
+)
+```
+
+The extractor does not need to parse every unchanged historical source on every run.
+
+That is one of the main reasons persistent Bronze and the Control Plane exist.
+
+---
+
+## 8. Bronze synchronization follows source semantics
 
 Bronze has two broad persistence behaviours.
 
@@ -326,35 +269,86 @@ This is more precise than describing Bronze as simply "incremental."
 
 ---
 
-**Implementation:** `src/personal_finance_etl/backend/load/registry.py` (lines 15–37).
+## 9. Source identity survives into Bronze
 
-```python
-@dataclass
-class BronzeDataContract:
-    """Defines the relationship between raw extraction attributes, control plane sync categories, and physical DuckDB tables."""
+Historical Bronze rows carry source context such as:
 
-    extraction_attribute: str
-    sync_category: str
-    physical_table: str
-    is_full_replace: bool
-
-
-BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
-    BronzeDataContract("zcategory", "sqlite_source", "bronze.r_SQLite_ZCategory", True),
-    BronzeDataContract("assetgroup", "sqlite_source", "bronze.r_SQLite_AssetGroup", True),
-    BronzeDataContract("assets", "sqlite_source", "bronze.r_SQLite_Assets", True),
-    BronzeDataContract("currency", "sqlite_source", "bronze.r_SQLite_Currency", True),
-    BronzeDataContract("inoutcome", "sqlite_source", "bronze.r_SQLite_InOutcome", True),
-    BronzeDataContract("stg_mf_isin_mapping", "mf_isin", "bronze.r_MF_ISIN_Mapping", True),
-    BronzeDataContract(
-        "stg_benchmark_mapping", "benchmark_mapping", "bronze.r_Benchmark_Mapping", True
-    ),
-    BronzeDataContract(
-        "raw_opening_balances", "opening_balances", "bronze.r_Opening_Balances", True
-    ),
+```text
+__file_name__
 ```
 
-## 6. Canonical transformations from complete evidence
+That identity allows changed source partitions to be replaced without rebuilding unrelated history.
+
+The Control Plane remains the authoritative artifact registry; Bronze keeps enough source identity to support analytical synchronization.
+
+This is **artifact/partition lineage**, not row-level enterprise lineage.
+
+---
+
+## 10. Successful Bronze persistence closes the sync loop
+
+After a source has been persisted successfully:
+
+```python
+self.cp.artifacts.mark_synced([filepath])
+```
+
+The registry transitions:
+
+```text
+PENDING_BRONZE
+      ↓
+SYNCED
+```
+
+DuckDB Meta also receives a current-state registry projection for analytical consumers.
+
+The distinction is important:
+
+```text
+artifact discovered
+≠
+artifact persisted as Bronze
+```
+
+---
+
+## 11. The complete Bronze dataset is then read
+
+After synchronizing only what changed, the pipeline deliberately reads complete Bronze state:
+
+```python
+full_dataset = bronze.get_full_dataset(
+    extracted_data.mappings,
+)
+```
+
+The returned `ExtractionResult` reconstructs the complete input surface:
+
+```python
+return ExtractionResult(
+    zcategory=_get_lf("bronze.r_SQLite_ZCategory"),
+    assetgroup=_get_lf("bronze.r_SQLite_AssetGroup"),
+    assets=_get_lf("bronze.r_SQLite_Assets"),
+    mf_market_data_raw=_get_lf("bronze.r_MF_Market_Data"),
+    mf_transactions_raw=_get_lf("bronze.r_MF_Transactions"),
+    stock_market_data_raw=_get_lf("bronze.r_Stock_Market_Data"),
+    stock_transactions_raw=_get_lf("bronze.r_Stock_Transactions"),
+    ...
+)
+```
+
+This is the pivot point in the lifecycle:
+
+```text
+incremental synchronization
+        ↓
+complete analytical state
+```
+
+---
+
+## 12. Canonical transformation starts from complete state
 
 The orchestrator passes complete Bronze into the transformation DAG:
 
@@ -380,45 +374,7 @@ That simplifies analytical correctness.
 
 ---
 
-**Implementation:** `src/personal_finance_etl/backend/pipeline/core/transformer.py` (lines 1–33).
-
-```python
-import polars as pl
-
-from personal_finance_etl.backend.config.financial_rules import FinancialRules
-from personal_finance_etl.backend.config.settings import Settings
-from personal_finance_etl.backend.pipeline.strategies import (
-    AssetPipeline,
-    MutualFundPipeline,
-    StockPipeline,
-    USStockPipeline,
-)
-from personal_finance_etl.backend.transform.calendar import (
-    get_stg_calendar_ref,
-    transform_d_calendar,
-)
-from personal_finance_etl.backend.transform.dimensions import (
-    transform_d_asset_category,
-    transform_d_asset_subcategory,
-    transform_d_currency,
-    transform_d_expense_category,
-    transform_d_expense_subcategory,
-    transform_d_income_category,
-    transform_d_income_subcategory,
-    transform_d_investment_benchmark_master,
-    transform_d_macro_parameters,
-)
-from personal_finance_etl.backend.transform.facts import (
-    get_base_transactions,
-    transform_f_expense_transactions,
-    transform_f_income_transactions,
-    transform_f_opening_balances,
-    transform_f_transfer_transactions,
-)
-from personal_finance_etl.backend.transform.investments import (
-```
-
-## 7. Currency and dynamic evidence lifecycle
+## 13. Benchmark history uses virtual raw artifacts
 
 External benchmark data follows the same evidence philosophy even though it is not discovered as a normal local file.
 
@@ -441,47 +397,7 @@ So external acquisition does not bypass provenance merely because it originated 
 
 ---
 
-**Implementation:** `src/personal_finance_etl/backend/pipeline/currency_pipeline.py` (lines 1–35).
-
-```python
-import os
-from datetime import date
-
-import polars as pl
-
-from personal_finance_etl.backend.extract.currency_extractor import CurrencyExtractor
-from personal_finance_etl.backend.load.bronze import BronzeLayer
-from personal_finance_etl.backend.load.control_plane import ControlPlane
-from personal_finance_etl.backend.transform.currency_transformer import transform_currency_fx_rates
-from personal_finance_etl.backend.utils.interfaces import ILogger
-from personal_finance_etl.backend.utils.logger import logger
-from personal_finance_etl.backend.utils.models import EngineStatus, LogLevel
-
-
-class CurrencyPipeline:
-    def __init__(
-        self, cp: ControlPlane, bronze: BronzeLayer, status_queue: ILogger, max_workers: int = 8
-    ):
-        self.cp = cp
-        self.bronze = bronze
-        self.status_queue = status_queue
-        self.max_workers = max_workers
-
-    def run(
-        self,
-        df_currency: pl.DataFrame,
-        global_start_date: date,
-        global_end_date: date,
-    ) -> pl.DataFrame:
-        """Runs the Currency FX pipeline."""
-
-        logger.info("Phase 3.6: Dynamic Currency FX Extraction & Transformation...")
-        logger.info(f"  -> Target Global Range: {global_start_date} to {global_end_date}")
-
-        self.status_queue.put(
-```
-
-## 8. Quant, tax and presentation dependencies
+## 14. Analytics consume canonical state
 
 The canonical frames feed:
 
@@ -512,48 +428,26 @@ The two engines meet through shared financial state.
 
 ---
 
-**Implementation:** `src/personal_finance_etl/backend/pipeline/etl_pipeline.py` (lines 150–185).
+## 15. Independent presentation graphs are collected together
+
+The wealth engine returns LazyFrames.
+
+The orchestrator executes them together:
 
 ```python
-    def _run_engines(self, cp: "ControlPlane | None", run_id: str) -> None:
+lazy_frames = [presentation_lazy[key] for key in keys]
 
-        logger.info("Starting Investment Quant Engine...")
-        self.status_queue.put(EngineStatus(msg="", data=None, progress=0.6, level=LogLevel.STEP))
-
-        quant_engine = InvestmentQuantEngine(
-            df_p=self.dfs["df_f_tf_inv_purchase"],
-            df_s=self.dfs["df_f_tf_inv_sale"],
-            df_m=self.dfs["df_f_investment_market_data"],
-            df_i=self.dfs["df_d_investment_master"],
-            df_b=self.dfs["df_f_investment_benchmark_data"],
-            df_t=self.dfs["df_d_macro_parameters"],
-            df_fx=self.dfs.get("df_f_currency_fx_rates"),
-            status_queue=self.status_queue,
-            rules=self.rules,
-            start_date=None,
-            end_date=None,
-            run_id=run_id,
-        )
-        analytics_results = quant_engine.run()
-        self.dfs.update(analytics_results)
-        lot_df = analytics_results.get("df_f_investment_analytics_lot", pl.DataFrame())
-        if (
-            not lot_df.is_empty()
-            and "Quantity" in lot_df.columns
-            and "Closing_Date" in lot_df.columns
-        ):
-            max_date = lot_df.select(pl.col("Closing_Date").max()).item()
-            open_lots = lot_df.filter(
-                (pl.col("Closing_Date") == max_date) & (pl.col("Quantity") > 0)
-            ).height
-        else:
-            open_lots = 0
-
-        logger.info(f"  -> Quant Engine mapped {open_lots} open tax lots across portfolio.")
-
+results = pl.collect_all(
+    lazy_frames,
+    engine="streaming",
+)
 ```
 
-## 9. Contract publication and run finalization
+This keeps the presentation model composable while allowing Polars to execute independent graphs efficiently.
+
+---
+
+## 16. Silver and Gold rebuild from the complete run state
 
 The serving layers are not incrementally patched:
 
@@ -582,45 +476,105 @@ Incrementalizing every financial dependency would add complexity where the curre
 
 ---
 
-**Implementation:** `src/personal_finance_etl/backend/pipeline/etl_pipeline.py` (lines 400–432).
+## 17. Publication identity comes from the contract registry
+
+The hardened loaders use `DATA_CONTRACT_REGISTRY` and `publication_order`.
+
+Conceptually:
 
 ```python
-            )
-
-            self._process_currency(cp, bronze)
-            self._process_us_market_data(cp, bronze)
-            self._process_benchmark(cp, bronze)
-
-            t_eng_start = time.perf_counter()
-            logger.info("[PHASE] --- 4/5: Executing Advanced Analytics & Monte Carlo engines ---")
-            self._run_engines(cp, str(run_id))
-
-            # Strict DataContract Validation
-
-            registered_contracts = {c.contract_id for c in DATA_CONTRACT_REGISTRY}
-            for df_key in self.dfs.keys():
-                if df_key not in registered_contracts:
-                    raise RuntimeError(
-                        f"Engine produced unregistered table '{df_key}'. All analytical tables must be defined in DATA_CONTRACT_REGISTRY."
-                    )
-
-            missing_contracts = registered_contracts - set(self.dfs.keys())
-            if missing_contracts:
-                raise RuntimeError(f"Engine failed to produce required tables: {missing_contracts}")
-
-            logger.info(
-                f"[PHASE] 4/5 Complete [{time.perf_counter() - t_eng_start:.2f}s] - Presentation logic built {len(self.dfs)} total tables."
-            )
-
-            # Load Phase (Silver & Gold)
-            t_load_start = time.perf_counter()
-            logger.info("[PHASE] --- 5/5: Fully replacing Silver and Gold analytical layers ---")
-            SilverLayer(self.db_manager).load(self.dfs)
-            GoldLayer(self.db_manager).load(self.dfs)
-            logger.info(
+contracts = sorted(
+    (c for c in DATA_CONTRACT_REGISTRY if c.layer == "gold"),
+    key=lambda c: c.publication_order,
+)
 ```
 
-## 10. Recovery and invariants
+That makes publication explicit rather than inferred from internal DataFrame names.
+
+Meta row-count tracking uses the same registry identity.
+
+---
+
+## 18. Run success happens after publication
+
+The run moves to:
+
+```text
+COMMITTING
+```
+
+only after Silver, Gold and Meta have been prepared.
+
+Then:
+
+```python
+self.db_manager.conn.execute("COMMIT")
+cp.commit()
+
+cp.runs.finish_run(run_id, "SUCCESS")
+```
+
+The run lifecycle therefore reflects the execution lifecycle rather than merely logging a start/end timestamp.
+
+---
+
+## 19. Failure reverses analytical work but preserves failure history
+
+If any phase raises:
+
+```python
+self.db_manager.conn.execute("ROLLBACK")
+cp.rollback()
+```
+
+Then structured failure context is written:
+
+```python
+cp.runs.log_run_failure(
+    run_id=run_id,
+    failed_isin=None,
+    stage="Pipeline",
+    error_type=type(exc).__name__,
+    error_message=str(exc),
+    traceback_log=traceback.format_exc(),
+)
+```
+
+Finally:
+
+```python
+cp.runs.finish_run(run_id, "FAILED")
+```
+
+A failed run therefore does not disappear merely because its analytical transaction was rolled back.
+
+---
+
+## 20. Per-ISIN failure is intentionally fatal
+
+Investment processing uses per-instrument isolation, but a failed ISIN cannot silently vanish from a successful portfolio.
+
+The worker error propagates through:
+
+```text
+ISIN worker
+    ↓
+ISIN pipeline
+    ↓
+Investment Quant Engine
+    ↓
+ETLOrchestrator
+    ↓
+rollback + cp_run_failures
+```
+
+For this financial workload, an incomplete portfolio is worse than a failed run.
+
+That is a correctness decision, not just an exception-handling preference.
+
+---
+
+## 21. Recovery starts from authoritative evidence
 
 If DuckDB analytical state is lost or inconsistent while the Control Plane survives:
 
@@ -648,30 +602,73 @@ not the reverse.
 
 ---
 
-**Implementation:** `src/personal_finance_etl/backend/load/control_plane/connection.py` (lines 71–85).
+## 22. What the lifecycle does not claim
 
-```python
-    def atomic(self) -> Generator[None]:
-        """Atomic scope that works both standalone and nested in a pipeline transaction."""
-        savepoint = f"cp_scope_{uuid.uuid4().hex}"
-        self.conn.execute(f"SAVEPOINT {savepoint}")
-        try:
-            yield
-            self.conn.execute(f"RELEASE SAVEPOINT {savepoint}")
-        except Exception:
-            try:
-                self.conn.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
-            finally:
-                self.conn.execute(f"RELEASE SAVEPOINT {savepoint}")
-            raise
+The current lifecycle provides strong operational provenance, but it is not a full normalized lineage graph.
 
-    @property
+There are not yet dedicated structures such as:
+
+```text
+run_artifacts
+run_stages
+run_outputs
+lineage_edges
 ```
 
-## Integration and related specifications
+linking every run to every downstream contract.
 
-- [System architecture](system-architecture.md)
-- [Artifact lifecycle](control-plane-artifact-lifecycle.md)
-- [Identity and replay](deterministic-identity-and-replay.md)
-- [Backup and restore](backup-and-restore.md)
+The current system can answer a great deal through artifact state, run history, logs, snapshots and publication contracts.
 
+It should not be documented as row-level or graph-complete lineage.
+
+---
+
+## 23. Recovery reuses the same lifecycle
+
+A previously `SYNCED` artifact can be returned to `PENDING_BRONZE` when Meta or Bronze no longer contains the state required by the Control Plane.
+
+The next run does not enter a special repair mode:
+
+```text
+new
++
+changed
++
+PENDING_BRONZE
+        ↓
+normal extraction
+        ↓
+normal Bronze synchronization
+        ↓
+SYNCED
+```
+
+A pure rename is also handled as identity migration rather than financial change: Control Plane identity, raw-payload ownership, Bronze `__file_name__`, and Meta identity move together while the underlying evidence remains unchanged.
+
+---
+
+## Lifecycle invariants
+
+1. Raw evidence exists before derived analytical state.
+2. New/changed source artifacts become actionable; unchanged history is preserved.
+3. Bronze synchronization follows source semantics.
+4. `PENDING_BRONZE` and `SYNCED` are different operational states.
+5. Complete Bronze feeds deterministic downstream reconstruction.
+6. Canonical finance hides source-specific structure.
+7. Silver/Gold publication is contract-driven.
+8. A failed ISIN cannot silently disappear.
+9. Failed analytical work rolls back.
+10. Failure history survives.
+11. SQLite is authoritative for operational state.
+12. DuckDB Meta is a current-state projection.
+
+---
+
+## Go deeper
+
+- [System Architecture](system-architecture.md)
+- [Warehouse Architecture](warehouse-architecture.md)
+- [Reliability & Recovery](reliability-and-recovery.md)
+- [Adding a Data Source](../developer/adding-data-sources.md)
+
+[← Architecture Home](README.md) · [← Documentation Home](../README.md)
