@@ -197,30 +197,6 @@ virtual://<category>/<filename>
 
 ---
 
-## Canonical identity serialization
-
-A versioned, ordered encoding of defining financial attributes before deterministic hashing. Identity is stable for unchanged canonical inputs and a compatible identity contract. See [identity and grain contracts](identity-and-grain-contracts.md).
-
-## Artifact-run event
-
-A Control Plane record connecting an artifact lifecycle observation or mutation to a run. Event identity is distinct from artifact identity and financial transaction identity.
-
-## Historical market reconstruction
-
-Derived daily holdings and valuations built from transactions and observed market/FX evidence when broker daily snapshots are unavailable. It is not independent broker confirmation.
-
-## Indicative tax estimate
-
-A planning-oriented tax estimate attached to tax-relevant evidence. It is not statutory tax payable; `CHECK_REQUIRED` may coexist with a numeric estimate.
-
-## TaxEvent
-
-A canonical event from household ledger income/credits or Quant realized investment evidence. Investment capital gains recorded in the ledger are excluded where configured to prevent double counting.
-
-## Financial identity versus observation provenance
-
-Financial IDs represent canonical economic entities; run IDs and artifact events represent observations and processing history. The latter must not arbitrarily redefine the former.
-
 ## Software architecture
 
 ## Adapter
@@ -763,3 +739,17 @@ The same concept may appear across surfaces, but not at the same depth or for th
 - [Meta & Control-Plane Data Contracts](meta-data-contracts.md)
 
 [← Reference Home](README.md) · [← Documentation Home](../README.md)
+
+## Additional platform terminology
+
+**Control Plane authority:** The SQLite operational history and provenance layer; DuckDB Meta is a projection, not the authority.
+
+**Contract key:** The registered logical identifier for an analytical output, distinct from its physical DuckDB table name.
+
+**File-incremental Bronze:** A replacement strategy scoped to a changed source file rather than to the entire Bronze table.
+
+**Canonical identity:** A namespace-specific deterministic identifier derived from ordered, normalized event fields.
+
+**Shadow benchmark units:** Benchmark units associated with acquisition lots and consumed alongside realized disposals.
+
+**Run snapshot:** A content-addressed copy of serialized operational settings or financial rules associated with a Control Plane run.
