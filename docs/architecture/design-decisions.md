@@ -18,7 +18,7 @@ They are the choices that fit this workload.
 
 ---
 
-## 1. Operational history in SQLite
+## 1. SQLite for the Control Plane
 
 ### Problem
 
@@ -58,52 +58,11 @@ One local transactional system owns operational truth.
 
 The application now coordinates two databases.
 
-**Implementation:** `src/personal_finance_etl/backend/load/control_plane/connection.py` (lines 13–52).
+That creates a small cross-database commit window that does not exist in a single-database design.
 
-```python
-class SQLiteManager:
-    """SQLite connection owner for the durable ETL control plane."""
+---
 
-    SCHEMA_VERSION = 2
-
-    def __init__(self, base_path: str, db_name: str = "Raw_Documents.sqlite"):
-        self.db_path = os.path.join(base_path or ".", db_name)
-        self._conn: sqlite3.Connection | None = None
-
-    @property
-    def conn(self) -> sqlite3.Connection:
-        if self._conn is None:
-            raise RuntimeError("SQLiteManager connection not opened.")
-        return self._conn
-
-    def open(self) -> None:
-        if self._conn is not None:
-            return
-        parent = os.path.dirname(os.path.abspath(self.db_path))
-        os.makedirs(parent, exist_ok=True)
-        logger.debug("[DATABASE:SQLITE] Opening connection to %s", self.db_path)
-        connection: sqlite3.Connection | None = None
-        try:
-            connection = sqlite3.connect(
-                self.db_path,
-                timeout=30.0,
-                isolation_level=None,
-            )
-            connection.execute("PRAGMA foreign_keys = ON;")
-            connection.execute("PRAGMA busy_timeout = 30000;")
-            connection.execute("PRAGMA journal_mode = WAL;")
-            connection.execute("PRAGMA synchronous = NORMAL;")
-            connection.execute("PRAGMA cache_size = -64000;")
-            connection.execute("PRAGMA mmap_size = 2147483648;")
-            connection.execute("PRAGMA temp_store = MEMORY;")
-            if connection.execute("PRAGMA foreign_keys;").fetchone()[0] != 1:
-                raise RuntimeError("SQLite foreign-key enforcement could not be enabled.")
-            self._conn = connection
-        except Exception:
-            if connection is not None:
-```
-
-## 2. Analytical state in DuckDB
+## 2. DuckDB for analytical state
 
 ### Problem
 
@@ -143,52 +102,7 @@ That is acceptable because the workload is local-first by design.
 
 ---
 
-**Implementation:** `src/personal_finance_etl/backend/load/database.py` (lines 1–40).
-
-```python
-import os
-
-import duckdb
-import psutil
-
-from personal_finance_etl.backend.load.schema.gold import GOLD_DDL
-from personal_finance_etl.backend.load.schema.meta import META_DDL
-from personal_finance_etl.backend.load.schema.silver import SILVER_DDL
-from personal_finance_etl.backend.utils.logger import logger
-
-
-class DuckDBManager:
-    """Owns the single persistent DuckDB file and its long-lived connection."""
-
-    def __init__(self, base_path: str, db_name: str = "Personal_Finance_DB.duckdb"):
-        self.base_path = base_path
-        self.db_path = os.path.join(base_path, db_name)
-        os.makedirs(base_path, exist_ok=True)
-        self._conn: duckdb.DuckDBPyConnection | None = None
-
-    @property
-    def conn(self) -> duckdb.DuckDBPyConnection:
-        """Returns the active connection. Raises if not opened."""
-        if self._conn is None:
-            raise RuntimeError("DuckDBManager.open() must be called before accessing conn.")
-        return self._conn
-
-    def open(self) -> duckdb.DuckDBPyConnection:
-        """Opens the single long-lived connection. Called once at pipeline start."""
-        if self._conn is not None:
-            return self._conn
-        logger.debug(f"[DATABASE:DUCKDB] Opening connection to {self.db_path}")
-        self._conn = duckdb.connect(self.db_path)
-        mem_gb = max(4, int(psutil.virtual_memory().total / (1024**3) * 0.75))
-        self._conn.execute(f"PRAGMA memory_limit='{mem_gb}GB'")
-        self._conn.execute("PRAGMA threads=4")
-        logger.debug(f"[DATABASE:DUCKDB] Connection configured: memory_limit={mem_gb}GB, threads=4")
-        return self._conn
-
-    def close(self) -> None:
-```
-
-## 3. Distinct authority boundaries
+## 3. Separate operational truth from analytical truth
 
 ### Problem
 
@@ -221,50 +135,7 @@ That is a good trade for clearer ownership.
 
 ---
 
-**Implementation:** `src/personal_finance_etl/backend/load/metadata.py` (lines 1–38).
-
-```python
-import os
-
-import polars as pl
-
-from personal_finance_etl.backend.config.financial_rules import FinancialRules
-from personal_finance_etl.backend.config.settings import Settings
-from personal_finance_etl.backend.load.control_plane.orchestrator import ControlPlane
-from personal_finance_etl.backend.load.control_plane.utils import (
-    FILE_TYPE_MAP,
-    compute_file_hash,
-    generate_file_id,
-)
-from personal_finance_etl.backend.load.database import DuckDBManager
-from personal_finance_etl.backend.load.registry import (
-    BRONZE_CONTRACT_REGISTRY,
-    DATA_CONTRACT_REGISTRY,
-)
-from personal_finance_etl.backend.utils.logger import logger
-from personal_finance_etl.backend.utils.reproducibility import (
-    generate_contract_registry_fingerprint,
-)
-
-
-class MetaLayer:
-    """
-    Manages all DuckDB analytical telemetry schemas.
-    Maintains a strictly lean, "current-state" snapshot of the Lakehouse.
-    Run tracking and historical lineages are deferred to the SQLite ControlPlane.
-    """
-
-    def __init__(self, db_manager: DuckDBManager, cfg: Settings, rules: FinancialRules | None):
-        self.db_manager = db_manager
-        self.cfg = cfg
-        self.rules = rules
-        self.conn = self.db_manager.conn
-
-    def heal_duckdb_registry(self, cp: "ControlPlane") -> None:
-        """Self-heals DuckDB file registry if items in SQLite control plane are missing."""
-```
-
-## 4. Retaining raw source evidence
+## 4. Persist raw payload bytes
 
 ### Problem
 
@@ -296,52 +167,42 @@ For personal financial evidence, recoverability is worth more to me than minimiz
 
 ---
 
-**Implementation:** `src/personal_finance_etl/backend/load/control_plane/artifact_repo.py` (lines 301–333).
+## 5. Content-address configuration snapshots
+
+### Problem
+
+A run needs reproducibility context, but copying the same configuration payload every run creates unnecessary duplication.
+
+### Decision
+
+Hash canonical Settings and FinancialRules payloads.
 
 ```python
-    def ingest_binaries(
-        self,
-        actionable_files: dict[str, list[str]],
-        new_files: dict[str, list[str]] | None = None,
-        changed_files: dict[str, list[str]] | None = None,
-    ) -> None:
-        new_paths = {normalize_path(path) for paths in (new_files or {}).values() for path in paths}
-        changed_paths = {
-            normalize_path(path) for paths in (changed_files or {}).values() for path in paths
-        }
-        total_count = 0
-        for category, filepaths in actionable_files.items():
-            file_type = FILE_TYPE_MAP.get(category, "csv")
-            for filepath in filepaths:
-                path = normalize_path(filepath)
-                try:
-                    # Read once so the persisted bytes and their hash always describe the same content.
-                    with open(filepath, "rb") as file_handle:
-                        raw_bytes = file_handle.read()
-                    digest = hash_bytes(raw_bytes)
-                    size = len(raw_bytes)
-                    now = self._now()
-                    filename = os.path.basename(path)
-                    with self.db.atomic():
-                        file_id, previous_status = self._upsert_registry(
-                            filepath=path,
-                            filename=filename,
-                            category=category,
-                            file_type=file_type,
-                            file_hash=digest,
-                            file_size=size,
-                            now=now,
-                        )
+rules_hash = hashlib.sha256(
+    rules_json.encode("utf-8")
+).hexdigest()
+
+rules_id = f"snap_rule_{rules_hash[:12]}"
 ```
 
-## 5. Rebuilding canonical financial state
+### Benefit
+
+Identical policy maps to identical snapshot identity.
+
+### Trade-off
+
+The snapshot proves configuration identity, not full historical replay if code/schema later changes.
+
+---
+
+## 6. Persistent Bronze, rebuilt Silver/Gold
 
 ### Problem
 
 The production source population is large and continuously growing:
 
 ```text
-1,608 artifacts as of 24 Sep 2026
+1,608 artifacts (historical snapshot, 24 September 2026) as of 24 Sep 2026
 + ~2 broker snapshots/day
 ```
 
@@ -367,60 +228,11 @@ The expensive/growing source side is incrementalized while downstream financial 
 
 Derived analytics recompute every run.
 
-At the current workload, the full pipeline still completes in roughly **14–17 seconds**, so the correctness trade remains attractive.
+In the historical v6.x workload, the full pipeline completed in roughly **14–17 seconds**, so the correctness trade remains attractive.
 
 ---
 
-**Implementation:** `src/personal_finance_etl/backend/load/silver.py` (lines 1–44).
-
-```python
-import polars as pl
-
-from personal_finance_etl.backend.load.database import DuckDBManager
-from personal_finance_etl.backend.load.registry import DATA_CONTRACT_REGISTRY
-from personal_finance_etl.backend.load.schema.silver import SILVER_DDL
-from personal_finance_etl.backend.utils.logger import logger
-
-
-class SilverLayer:
-    """Full-replace layer for engine-computed analytics and reference data."""
-
-    def __init__(self, db_manager: DuckDBManager):
-        self.db_manager = db_manager
-
-    def _write(self, df: pl.DataFrame | pl.LazyFrame, table_name: str) -> int:
-        if isinstance(df, pl.LazyFrame):
-            df = df.collect()
-
-        if df.height == 0:
-            return 0
-
-        # Clean empty strings into true nulls only for dimension tables
-        if "d_" in table_name:
-            string_cols = [
-                c
-                for c, d in zip(df.columns, df.dtypes, strict=True)
-                if d in (getattr(pl, "Utf8", None), getattr(pl, "String", None))
-            ]
-            if string_cols:
-                df = df.with_columns(
-                    [
-                        pl.when(pl.col(c) == "").then(None).otherwise(pl.col(c)).alias(c)
-                        for c in string_cols
-                    ]
-                )
-
-        if table_name == "silver.d_Investment_Master":
-            critical_errors: list[str] = []
-            if "ISIN" in df.columns:
-                missing_isin = df.filter(pl.col("ISIN").is_null())
-                if missing_isin.height > 0:
-                    logger.error(
-                        f"CRITICAL: Found {missing_isin.height} rows with missing ISIN in d_Investment_Master."
-                    )
-```
-
-## 6. Source-dependent Bronze replacement
+## 7. Source semantics decide Bronze replacement
 
 ### Problem
 
@@ -452,43 +264,39 @@ That complexity is justified because the alternatives would either duplicate his
 
 ---
 
-**Implementation:** `src/personal_finance_etl/backend/load/registry.py` (lines 15–45).
+## 8. Canonical finance before analytics
 
-```python
-@dataclass
-class BronzeDataContract:
-    """Defines the relationship between raw extraction attributes, control plane sync categories, and physical DuckDB tables."""
+### Problem
 
-    extraction_attribute: str
-    sync_category: str
-    physical_table: str
-    is_full_replace: bool
+Bank/broker/source schemas change and differ.
 
+Financial engines should not encode every source vocabulary.
 
-BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
-    BronzeDataContract("zcategory", "sqlite_source", "bronze.r_SQLite_ZCategory", True),
-    BronzeDataContract("assetgroup", "sqlite_source", "bronze.r_SQLite_AssetGroup", True),
-    BronzeDataContract("assets", "sqlite_source", "bronze.r_SQLite_Assets", True),
-    BronzeDataContract("currency", "sqlite_source", "bronze.r_SQLite_Currency", True),
-    BronzeDataContract("inoutcome", "sqlite_source", "bronze.r_SQLite_InOutcome", True),
-    BronzeDataContract("stg_mf_isin_mapping", "mf_isin", "bronze.r_MF_ISIN_Mapping", True),
-    BronzeDataContract(
-        "stg_benchmark_mapping", "benchmark_mapping", "bronze.r_Benchmark_Mapping", True
-    ),
-    BronzeDataContract(
-        "raw_opening_balances", "opening_balances", "bronze.r_Opening_Balances", True
-    ),
-    BronzeDataContract(
-        "raw_benchmark_master", "benchmark_master", "bronze.r_Benchmark_Master", True
-    ),
-    BronzeDataContract(
-        "raw_macro_parameters", "macro_parameters", "bronze.r_Macro_Parameters", True
-    ),
-    BronzeDataContract("column_master", "column_master", "bronze.r_Column_Master", True),
-    BronzeDataContract("mf_market_data_raw", "mf_holdings", "bronze.r_MF_Market_Data", False),
+### Decision
+
+Resolve source structure into canonical financial contracts before downstream analytics.
+
+```text
+source adapter / mapping
+        ↓
+canonical finance
+        ↓
+shared engine
 ```
 
-## 7. Polars and stateful Quant
+### Benefit
+
+Investment/wealth engines depend on stable concepts.
+
+### Trade-off
+
+The transformation layer must carry the burden of semantic normalization.
+
+That is exactly where I want that complexity to live.
+
+---
+
+## 9. Polars LazyFrames for dataframe work
 
 ### Problem
 
@@ -519,210 +327,396 @@ I materialize at persistence/algorithm boundaries where explicit state matters.
 
 ---
 
-**Implementation:** `src/personal_finance_etl/backend/engines/analytics/engine.py` (lines 16–55).
-
-```python
-class InvestmentQuantEngine:
-    """
-    Orchestrates the quantitative engine pipeline.
-    """
-
-    def __init__(
-        self,
-        df_p: pl.DataFrame,
-        df_s: pl.DataFrame,
-        df_m: pl.DataFrame,
-        df_i: pl.DataFrame,
-        df_b: pl.DataFrame | None,
-        df_t: pl.DataFrame,
-        df_fx: pl.DataFrame | None = None,
-        status_queue: ILogger | None = None,
-        rules: "FinancialRules | None" = None,
-        start_date: date | None = None,
-        end_date: date | None = None,
-        run_id: str = "UNKNOWN",
-    ):
-        self.df_p = df_p
-        self.df_s = df_s
-        self.df_m = df_m
-        self.df_i = df_i
-        self.df_b = df_b if df_b is not None else pl.DataFrame()
-        self.df_t = df_t
-        self.df_fx = df_fx if df_fx is not None else pl.DataFrame()
-        self.status_queue = status_queue
-        self.rules = rules
-        self.start_date = start_date
-        self.end_date = end_date
-        self.run_id = run_id
-
-    def run(self) -> dict[str, pl.DataFrame]:
-        try:
-            return self._run()
-        except Exception as e:
-            if self.status_queue is not None:
-                self.status_queue.put(
-                    EngineStatus(
-```
-
-## 8. Deterministic financial identity
-
-**Implementation:** `src/personal_finance_etl/backend/utils/identity.py` (lines 63–89).
-
-```python
-def _ordered_identity_fields(namespace: str, fields: dict[str, Any]) -> list[tuple[str, Any]]:
-    """Return identity fields in a contract-defined, caller-order-independent order."""
-    keys = set(fields)
-    for field_order in _IDENTITY_FIELD_ORDERS.get(namespace, ()):
-        if keys == set(field_order):
-            return [(key, fields[key]) for key in field_order]
-
-    # Unknown/new contracts remain deterministic rather than inheriting insertion
-    # order. Add a namespace contract above if its field order must be semantic.
-    return [(key, fields[key]) for key in sorted(fields)]
-
-
-def generate_deterministic_id(namespace: str, fields: dict[str, Any]) -> str:
-    """Generate a stable deterministic ID using Canonical ID Serialization v2.
-
-    Known namespaces retain their established field order and hashes. New or
-    changed field sets use sorted keys until an explicit order is registered.
-    """
-    pairs = [
-        [canonicalize_value(key), canonicalize_value(value)]
-        for key, value in _ordered_identity_fields(namespace, fields)
-    ]
-    payload = json.dumps(
-        [namespace, "v2", pairs], ensure_ascii=False, separators=(",", ":")
-    ).encode("utf-8")
-    hash_str = hashlib.sha256(payload).hexdigest()
-    return f"{namespace}_{hash_str[:16]}"
-```
-
-## 9. Configuration and reproducibility
+## 10. Do not force FIFO into dataframe vectorization
 
 ### Problem
 
-A run needs reproducibility context, but copying the same configuration payload every run creates unnecessary duplication.
+Tax-lot disposal is stateful.
+
+Each sale changes the inventory available to the next sale.
 
 ### Decision
 
-Hash canonical Settings and FinancialRules payloads.
+Use explicit stateful lot objects/queues.
 
-```python
-rules_hash = hashlib.sha256(
-    rules_json.encode("utf-8")
-).hexdigest()
+```text
+purchase
+→ create lot
 
-rules_id = f"snap_rule_{rules_hash[:12]}"
+sale
+→ consume oldest active lot
+→ possibly retain remainder
 ```
 
 ### Benefit
 
-Identical policy maps to identical snapshot identity.
+The implementation maps directly to the financial methodology.
 
 ### Trade-off
 
-The snapshot proves configuration identity, not full historical replay if code/schema later changes.
+This part is less naturally vectorized.
+
+Correct state semantics matter more than forcing every workload into the same compute style.
 
 ---
 
-**Implementation:** `src/personal_finance_etl/backend/utils/reproducibility.py` (lines 9–48).
+## 11. Per-ISIN multiprocessing
 
-```python
-def generate_contract_registry_fingerprint(tables_metadata: list[dict[str, Any]]) -> str:
-    """
-    Computes a deterministic fingerprint of the active table grains and publishers.
-    Avoids using a manual registry version counter by hashing the actual structural metadata.
-    """
-    sorted_metadata = sorted(tables_metadata, key=lambda x: str(x.get("table_name", "")))
-    payload = json.dumps(sorted_metadata, sort_keys=True).encode("utf-8")
-    return hashlib.sha256(payload).hexdigest()
+### Problem
 
+Instrument calculations are naturally separable, but each instrument has stateful lot history.
 
-def generate_reproducibility_envelope(
-    input_fingerprint: str,
-    rules_hash: str,
-    macro_settings_hash: str,
-    registry_fingerprint: str,
-    root_seed: str,
-    model_version: str,
-) -> dict[str, str]:
-    """
-    Ties the inputs, rules, macro settings, registry, and seed into the final unified envelope.
-    This guarantees that if the envelope hash matches, the simulation is mathematically guaranteed
-    to reproduce the exact same Monte Carlo distributions and projections.
-    """
-    envelope_data = {
-        "input_fingerprint": input_fingerprint,
-        "rules_hash": rules_hash,
-        "macro_settings_hash": macro_settings_hash,
-        "registry_fingerprint": registry_fingerprint,
-        "root_seed": root_seed,
-        "model_version": model_version,
-    }
-    envelope_payload = json.dumps(envelope_data, sort_keys=True).encode("utf-8")
-    envelope_hash = hashlib.sha256(envelope_payload).hexdigest()
+### Decision
 
-    return {
-        "envelope_hash": envelope_hash,
-        **envelope_data,
-    }
+Use ISIN as a process-isolation boundary.
 
+### Benefit
 
+Parallelism without sharing mutable lot inventory across instruments.
+
+### Trade-off
+
+Worker inputs/results must remain serializable and failures need explicit propagation.
+
+The latter is now enforced: a failed ISIN fails the analytical stage.
+
+---
+
+## 12. Broker state anchors current truth
+
+### Problem
+
+Transaction history can be incomplete while the broker still reports authoritative current position state.
+
+### Decision
+
+Reconcile reconstructed inventory against broker-reported current quantity/cost.
+
+> **Transactions explain history; broker state anchors current truth.**
+
+### Benefit
+
+Current portfolio state can reconcile even when source history has gaps.
+
+### Trade-off
+
+Adjustment/reconciliation inventory can complicate historical tax interpretation.
+
+The docs therefore distinguish reconstructed history from reconciled current state.
+
+---
+
+## 13. Shadow benchmark portfolios
+
+### Problem
+
+Comparing an investment return with an unrelated index CAGR ignores the timing of actual capital deployment.
+
+### Decision
+
+Create benchmark-equivalent exposure when real capital is invested and reduce it proportionally when real lots are disposed.
+
+```mermaid
+flowchart LR
+    CASH["Investment Cash Flow"] --> REAL["Real Lot"]
+    CASH --> BM["Benchmark Shadow Lot"]
+    REAL --> R["Actual Return"]
+    BM --> B["Benchmark Return"]
+    R --> ACTIVE["Active Return"]
+    B --> ACTIVE
 ```
 
-## 10. Coordinated recovery
+### Benefit
 
-**Implementation:** `src/personal_finance_etl/backend/load/backup.py` (lines 17–57).
+Benchmark comparison respects cash-flow timing.
 
-```python
-class SystemBackupManager:
-    """Coordinate SQLite Control Plane and DuckDB state as one recovery unit."""
+### Trade-off
 
-    def __init__(
-        self,
-        base_path: str,
-        sqlite_db_name: str = "Raw_Documents.sqlite",
-        duckdb_name: str = "Personal_Finance_DB.duckdb",
-    ):
-        self.base_path = base_path
-        self.sqlite_path = os.path.join(base_path, sqlite_db_name)
-        self.duckdb_path = os.path.join(base_path, duckdb_name)
-        self.backup_dir = os.path.join(base_path, "backups")
-        os.makedirs(self.backup_dir, exist_ok=True)
+Benchmark state becomes another lot-like state machine to maintain.
 
-    @staticmethod
-    def _checkpoint_duckdb(db_path: str) -> None:
-        """Flush committed DuckDB state before a filesystem-level snapshot."""
+That complexity buys a financially better comparison.
 
-        connection = duckdb.connect(db_path)
-        try:
-            connection.execute("CHECKPOINT")
-        finally:
-            connection.close()
+---
 
-    @staticmethod
-    def _validate_sqlite(db_path: str) -> None:
-        connection = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
-        try:
-            result = connection.execute("PRAGMA integrity_check").fetchone()
-            if not result or result[0] != "ok":
-                raise ValueError(f"Snapshot SQLite integrity check failed: {result!r}")
-        finally:
-            connection.close()
+## 14. XIRR is recomputed at target grain
 
-    @classmethod
-    def _validate_duckdb(cls, db_path: str) -> None:
-        """Open and checkpoint an extracted copy before production files are touched."""
-        cls._checkpoint_duckdb(db_path)
+### Problem
 
-    def create_snapshot(self) -> str | None:
+Returns are non-additive.
+
+### Decision
+
+Reconstruct cash flows at ISIN/class/portfolio grain rather than averaging child XIRRs.
+
+```text
+Portfolio XIRR
+≠ average(ISIN XIRR)
 ```
 
-## Integration and related specifications
+### Benefit
 
-- [System architecture](system-architecture.md)
-- [Artifact lifecycle](control-plane-artifact-lifecycle.md)
-- [Identity and replay](deterministic-identity-and-replay.md)
-- [Backup and restore](backup-and-restore.md)
+Return methodology matches the analytical object.
 
+### Trade-off
+
+Aggregation is more expensive than a simple group-by average.
+
+Correct finance wins.
+
+---
+
+## 15. Financial policy belongs in `FinancialRules`
+
+### Problem
+
+Thresholds and classifications that affect financial meaning become invisible if scattered through analytical code.
+
+### Decision
+
+Use validated Pydantic policy.
+
+```python
+class PortfolioManagementRules(BaseModel):
+    rebalance_tolerance_pct_points: float = Field(
+        default=5.0,
+        ge=0.0,
+    )
+```
+
+### Benefit
+
+Policy is inspectable, validated and snapshot-able.
+
+### Trade-off
+
+Configuration grows.
+
+The guardrail is:
+
+> **Parameters belong in configuration. Different behaviour belongs behind strategies.**
+
+---
+
+## 16. Explicit Data Contract Registry
+
+### Problem
+
+Layer/table identity becomes brittle if inferred from internal DataFrame names.
+
+### Decision
+
+Register analytical contracts explicitly.
+
+```python
+@dataclass
+class DataContract:
+    contract_id: str
+    layer: str
+    physical_table: str
+    domain: str
+    grain: str
+    producer: str
+    publication_order: int
+```
+
+### Benefit
+
+One compact source describes publication identity.
+
+### Trade-off
+
+Registry metadata must be maintained accurately.
+
+That is still preferable to hidden naming conventions.
+
+---
+
+## 17. Curated Gold instead of metric accumulation
+
+### Problem
+
+A calculation can be mathematically interesting while providing no useful decision support.
+
+Earlier versions accumulated more institutional-style risk metrics than the personal decision workflow needed.
+
+### Decision
+
+Remove unused metrics and their processing.
+
+The current serving model retains measures such as:
+
+```text
+XIRR
+After-Tax XIRR
+Benchmark XIRR
+Active Return
+Max Drawdown
+tax-aware state
+```
+
+### Benefit
+
+Smaller conceptual surface and less compute.
+
+The production-hardening cycle reduced the current end-to-end runtime from roughly **23 seconds** to **14–17 seconds (historical v6.x benchmark)** on my workload while preserving financial outputs.
+
+### Trade-off
+
+The platform intentionally does not attempt to be a general institutional quant library.
+
+Good.
+
+---
+
+## 18. Application-coordinated transactions instead of distributed 2PC
+
+### Problem
+
+SQLite and DuckDB are independent embedded databases.
+
+### Decision
+
+Coordinate begin/commit/rollback from the orchestrator.
+
+### Benefit
+
+Simple local operational model.
+
+### Trade-off
+
+No formal atomic commit across both databases.
+
+The docs say exactly that.
+
+Adding distributed transaction infrastructure would be disproportionate to the current single-user local workload.
+
+---
+
+## 19. Documentation is manifest-driven
+
+### Problem
+
+Hard-coded guide lists became brittle once the documentation tree grew.
+
+### Decision
+
+Use:
+
+```text
+manifest.json
+→ DocsCatalog
+→ DocsRenderer
+→ CLI / GUI
+```
+
+### Benefit
+
+One authoritative documentation tree can serve several application surfaces.
+
+### Trade-off
+
+The manifest becomes another small contract to maintain.
+
+That is preferable to hard-coded UI navigation.
+
+---
+
+## 20. Local-first by default
+
+### Problem
+
+Financial data is sensitive, and the workload does not require cloud-scale infrastructure.
+
+### Decision
+
+Keep ingestion, persistence, analytics, simulation and application surfaces local.
+
+### Benefit
+
+Privacy, portability, low operational overhead, direct access to local business tools.
+
+### Trade-off
+
+The system does not gain cloud-native multi-user scalability by default.
+
+I do not consider that a missing feature for this workload.
+
+---
+
+## 21. Recovery re-enters the normal pipeline
+
+### Problem
+
+A repair-only execution path would duplicate ingestion semantics and create a second system to maintain.
+
+### Decision
+
+Analytical drift returns the affected artifact to `PENDING_BRONZE`.
+
+The next normal run merges pending artifacts with new and changed artifacts and sends them through the same extraction and Bronze synchronization path.
+
+### Benefit
+
+Recovery exercises production ingestion semantics instead of a parallel repair implementation.
+
+### Trade-off
+
+Recovery depends on the normal pipeline remaining deterministic and idempotent.
+
+---
+
+## 22. Snapshot SQLite and DuckDB as one recovery unit
+
+### Problem
+
+The Control Plane and analytical warehouse are physically separate databases but represent one application state.
+
+Backing up or restoring only one side can create mismatched generations.
+
+### Decision
+
+Snapshot and Restore operate under the production lock and treat SQLite + DuckDB as one coordinated recovery unit.
+
+Restore validates the archive before replacement and rolls back to the complete previous pair if installation fails.
+
+### Benefit
+
+The recovery contract is simple:
+
+```text
+complete new pair
+or
+complete old pair
+```
+
+### Trade-off
+
+This is application-coordinated recovery, not distributed transactional replication or point-in-time replay.
+
+---
+
+## Decision filter
+
+When considering a new abstraction or dependency, I ask:
+
+```text
+Does the current workload require it?
+Does it make financial behaviour clearer?
+Does it reduce hidden assumptions?
+Does it improve recovery / correctness?
+Does it preserve a useful boundary?
+```
+
+If not, it probably does not belong yet.
+
+---
+
+## Related documentation
+
+- [System Architecture](system-architecture.md)
+- [Data Lifecycle](data-lifecycle.md)
+- [Warehouse Architecture](warehouse-architecture.md)
+- [Reliability & Recovery](reliability-and-recovery.md)
+- [Roadmap](../about/roadmap.md)
+
+[← Architecture Home](README.md) · [← Documentation Home](../README.md)
