@@ -1,266 +1,257 @@
 # Bronze Data Contracts
 
-Bronze is the persistent source-shaped analytical boundary between durable raw evidence and canonical financial reconstruction.
+I use Bronze to retain source-shaped evidence and synchronize it under explicit ingestion policies. Bronze identity is defined by the extraction registry, while the SQLite Control Plane owns artifact history.
 
-The current layer is governed by `BRONZE_CONTRACT_REGISTRY`.
+```mermaid
+flowchart LR
+A["Source artifacts"] --> B["Control Plane discovery"] --> C["Bronze synchronization"] --> D["Canonical Silver"]
+```
+
+## Registry authority and synchronization policies
+
+### Implementation anchor: Bronze registry
+
+Source: `src/personal_finance_etl/backend/load/registry.py`
 
 ```python
-@dataclass
-class BronzeDataContract:
-    extraction_attribute: str
-    sync_category: str
-    physical_table: str
-    is_full_replace: bool
+
+
+BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
+    BronzeDataContract("zcategory", "sqlite_source", "bronze.r_SQLite_ZCategory", True),
+    BronzeDataContract("assetgroup", "sqlite_source", "bronze.r_SQLite_AssetGroup", True),
+    BronzeDataContract("assets", "sqlite_source", "bronze.r_SQLite_Assets", True),
+    BronzeDataContract("currency", "sqlite_source", "bronze.r_SQLite_Currency", True),
+    BronzeDataContract("inoutcome", "sqlite_source", "bronze.r_SQLite_InOutcome", True),
+    BronzeDataContract("stg_mf_isin_mapping", "mf_isin", "bronze.r_MF_ISIN_Mapping", True),
+    BronzeDataContract(
+        "stg_benchmark_mapping", "benchmark_mapping", "bronze.r_Benchmark_Mapping", True
+    ),
+    BronzeDataContract(
+        "raw_opening_balances", "opening_balances", "bronze.r_Opening_Balances", True
+    ),
+    BronzeDataContract(
+        "raw_benchmark_master", "benchmark_master", "bronze.r_Benchmark_Master", True
+    ),
+    BronzeDataContract(
+        "raw_macro_parameters", "macro_parameters", "bronze.r_Macro_Parameters", True
+    ),
+    BronzeDataContract("column_master", "column_master", "bronze.r_Column_Master", True),
+    BronzeDataContract("mf_market_data_raw", "mf_holdings", "bronze.r_MF_Market_Data", False),
+    BronzeDataContract(
 ```
 
-There are exactly **16 Bronze contracts** in v6.5.3.
+The `is_full_replace` flag is a synchronization policy, not an instruction to erase historical Control Plane events. File-owned sources and full-replace sources have different deletion/reconciliation semantics.
 
-The registry is executable architecture: it connects extraction output, Control Plane sync categories, physical DuckDB tables, replacement semantics, self-healing, Meta publication, and orphan cleanup.
+## Complete Bronze contract inventory
 
----
-
-## Contract model
-
-A Bronze contract answers four questions:
-
-| Field | Meaning |
-| --- | --- |
-| `extraction_attribute` | Attribute on the extraction result carrying the source-shaped frame |
-| `sync_category` | Control Plane artifact category governing synchronization |
-| `physical_table` | DuckDB Bronze table |
-| `is_full_replace` | Whether each synchronization replaces the whole table or only artifact-owned history |
-
-The two replacement modes are:
-
-```text
-is_full_replace = True
-→ current/reference state
-→ replace complete Bronze table
-
-is_full_replace = False
-→ historical/file-owned state
-→ replace only rows owned by actionable source artifact
-```
-
-Historical tables retain `__file_name__` ownership so one changed artifact can replace its own partition without rebuilding all synchronized history.
-
----
-
-## Contract catalog
-
-| Extraction attribute | Sync category | Physical table | Replacement |
+| Extraction attribute | Sync category | Physical table | Full replace |
 | --- | --- | --- | --- |
-| `zcategory` | `sqlite_source` | `bronze.r_SQLite_ZCategory` | Full replace |
-| `assetgroup` | `sqlite_source` | `bronze.r_SQLite_AssetGroup` | Full replace |
-| `assets` | `sqlite_source` | `bronze.r_SQLite_Assets` | Full replace |
-| `currency` | `sqlite_source` | `bronze.r_SQLite_Currency` | Full replace |
-| `inoutcome` | `sqlite_source` | `bronze.r_SQLite_InOutcome` | Full replace |
-| `stg_mf_isin_mapping` | `mf_isin` | `bronze.r_MF_ISIN_Mapping` | Full replace |
-| `stg_benchmark_mapping` | `benchmark_mapping` | `bronze.r_Benchmark_Mapping` | Full replace |
-| `raw_opening_balances` | `opening_balances` | `bronze.r_Opening_Balances` | Full replace |
-| `raw_benchmark_master` | `benchmark_master` | `bronze.r_Benchmark_Master` | Full replace |
-| `raw_macro_parameters` | `macro_parameters` | `bronze.r_Macro_Parameters` | Full replace |
-| `column_master` | `column_master` | `bronze.r_Column_Master` | Full replace |
-| `mf_market_data_raw` | `mf_holdings` | `bronze.r_MF_Market_Data` | File-owned historical |
-| `mf_transactions_raw` | `mf_orders` | `bronze.r_MF_Transactions` | File-owned historical |
-| `stock_market_data_raw` | `stock_pl` | `bronze.r_Stock_Market_Data` | File-owned historical |
-| `stock_transactions_raw` | `stock_orders` | `bronze.r_Stock_Transactions` | File-owned historical |
-| `benchmark_history_raw` | `benchmark_history` | `bronze.r_Benchmark_Data` | File-owned historical |
+| `zcategory` | `sqlite_source` | `bronze.r_SQLite_ZCategory` | Yes |
+| `assetgroup` | `sqlite_source` | `bronze.r_SQLite_AssetGroup` | Yes |
+| `assets` | `sqlite_source` | `bronze.r_SQLite_Assets` | Yes |
+| `currency` | `sqlite_source` | `bronze.r_SQLite_Currency` | Yes |
+| `inoutcome` | `sqlite_source` | `bronze.r_SQLite_InOutcome` | Yes |
+| `stg_mf_isin_mapping` | `mf_isin` | `bronze.r_MF_ISIN_Mapping` | Yes |
+| `stg_benchmark_mapping` | `benchmark_mapping` | `bronze.r_Benchmark_Mapping` | Yes |
+| `raw_opening_balances` | `opening_balances` | `bronze.r_Opening_Balances` | Yes |
+| `raw_benchmark_master` | `benchmark_master` | `bronze.r_Benchmark_Master` | Yes |
+| `raw_macro_parameters` | `macro_parameters` | `bronze.r_Macro_Parameters` | Yes |
+| `column_master` | `column_master` | `bronze.r_Column_Master` | Yes |
+| `mf_market_data_raw` | `mf_holdings` | `bronze.r_MF_Market_Data` | No |
+| `us_stock_transactions_raw` | `us_stock_transactions` | `bronze.r_US_Stock_Transactions` | No |
+| `currency_mapping_raw` | `currency_mapping` | `bronze.r_Currency_Mapping` | Yes |
+| `currency_fx_raw` | `currency_history` | `bronze.r_Currency_FX_Data` | No |
+| `mf_transactions_raw` | `mf_orders` | `bronze.r_MF_Transactions` | No |
+| `stock_market_data_raw` | `stock_pl` | `bronze.r_Stock_Market_Data` | No |
+| `stock_transactions_raw` | `stock_orders` | `bronze.r_Stock_Transactions` | No |
+| `benchmark_history_raw` | `benchmark_history` | `bronze.r_Benchmark_Data` | No |
+| `us_stock_market_data_raw` | `us_stock_market` | `bronze.r_US_Stock_Prices` | No |
 
-That gives:
+## Source-family contracts
 
-```text
-11 full-replace contracts
-5 file-owned historical contracts
-=
-16 Bronze contracts
+### `bronze.r_SQLite_ZCategory`
+
+- **Extractor attribute:** `zcategory`
+- **Synchronization category:** `sqlite_source`
+- **Replacement policy:** full replacement of the category snapshot
+- **Authority:** Bronze holds normalized source-shaped data; the Control Plane retains the artifact lifecycle and hashes.
+
+### `bronze.r_SQLite_AssetGroup`
+
+- **Extractor attribute:** `assetgroup`
+- **Synchronization category:** `sqlite_source`
+- **Replacement policy:** full replacement of the category snapshot
+- **Authority:** Bronze holds normalized source-shaped data; the Control Plane retains the artifact lifecycle and hashes.
+
+### `bronze.r_SQLite_Assets`
+
+- **Extractor attribute:** `assets`
+- **Synchronization category:** `sqlite_source`
+- **Replacement policy:** full replacement of the category snapshot
+- **Authority:** Bronze holds normalized source-shaped data; the Control Plane retains the artifact lifecycle and hashes.
+
+### `bronze.r_SQLite_Currency`
+
+- **Extractor attribute:** `currency`
+- **Synchronization category:** `sqlite_source`
+- **Replacement policy:** full replacement of the category snapshot
+- **Authority:** Bronze holds normalized source-shaped data; the Control Plane retains the artifact lifecycle and hashes.
+
+### `bronze.r_SQLite_InOutcome`
+
+- **Extractor attribute:** `inoutcome`
+- **Synchronization category:** `sqlite_source`
+- **Replacement policy:** full replacement of the category snapshot
+- **Authority:** Bronze holds normalized source-shaped data; the Control Plane retains the artifact lifecycle and hashes.
+
+### `bronze.r_MF_ISIN_Mapping`
+
+- **Extractor attribute:** `stg_mf_isin_mapping`
+- **Synchronization category:** `mf_isin`
+- **Replacement policy:** full replacement of the category snapshot
+- **Authority:** Bronze holds normalized source-shaped data; the Control Plane retains the artifact lifecycle and hashes.
+
+### `bronze.r_Benchmark_Mapping`
+
+- **Extractor attribute:** `stg_benchmark_mapping`
+- **Synchronization category:** `benchmark_mapping`
+- **Replacement policy:** full replacement of the category snapshot
+- **Authority:** Bronze holds normalized source-shaped data; the Control Plane retains the artifact lifecycle and hashes.
+
+### `bronze.r_Opening_Balances`
+
+- **Extractor attribute:** `raw_opening_balances`
+- **Synchronization category:** `opening_balances`
+- **Replacement policy:** full replacement of the category snapshot
+- **Authority:** Bronze holds normalized source-shaped data; the Control Plane retains the artifact lifecycle and hashes.
+
+### `bronze.r_Benchmark_Master`
+
+- **Extractor attribute:** `raw_benchmark_master`
+- **Synchronization category:** `benchmark_master`
+- **Replacement policy:** full replacement of the category snapshot
+- **Authority:** Bronze holds normalized source-shaped data; the Control Plane retains the artifact lifecycle and hashes.
+
+### `bronze.r_Macro_Parameters`
+
+- **Extractor attribute:** `raw_macro_parameters`
+- **Synchronization category:** `macro_parameters`
+- **Replacement policy:** full replacement of the category snapshot
+- **Authority:** Bronze holds normalized source-shaped data; the Control Plane retains the artifact lifecycle and hashes.
+
+### `bronze.r_Column_Master`
+
+- **Extractor attribute:** `column_master`
+- **Synchronization category:** `column_master`
+- **Replacement policy:** full replacement of the category snapshot
+- **Authority:** Bronze holds normalized source-shaped data; the Control Plane retains the artifact lifecycle and hashes.
+
+### `bronze.r_MF_Market_Data`
+
+- **Extractor attribute:** `mf_market_data_raw`
+- **Synchronization category:** `mf_holdings`
+- **Replacement policy:** file-owned historical synchronization
+- **Authority:** Bronze holds normalized source-shaped data; the Control Plane retains the artifact lifecycle and hashes.
+
+### `bronze.r_US_Stock_Transactions`
+
+- **Extractor attribute:** `us_stock_transactions_raw`
+- **Synchronization category:** `us_stock_transactions`
+- **Replacement policy:** file-owned historical synchronization
+- **Authority:** Bronze holds normalized source-shaped data; the Control Plane retains the artifact lifecycle and hashes.
+
+### `bronze.r_Currency_Mapping`
+
+- **Extractor attribute:** `currency_mapping_raw`
+- **Synchronization category:** `currency_mapping`
+- **Replacement policy:** full replacement of the category snapshot
+- **Authority:** Bronze holds normalized source-shaped data; the Control Plane retains the artifact lifecycle and hashes.
+
+### `bronze.r_Currency_FX_Data`
+
+- **Extractor attribute:** `currency_fx_raw`
+- **Synchronization category:** `currency_history`
+- **Replacement policy:** file-owned historical synchronization
+- **Authority:** Bronze holds normalized source-shaped data; the Control Plane retains the artifact lifecycle and hashes.
+
+### `bronze.r_MF_Transactions`
+
+- **Extractor attribute:** `mf_transactions_raw`
+- **Synchronization category:** `mf_orders`
+- **Replacement policy:** file-owned historical synchronization
+- **Authority:** Bronze holds normalized source-shaped data; the Control Plane retains the artifact lifecycle and hashes.
+
+### `bronze.r_Stock_Market_Data`
+
+- **Extractor attribute:** `stock_market_data_raw`
+- **Synchronization category:** `stock_pl`
+- **Replacement policy:** file-owned historical synchronization
+- **Authority:** Bronze holds normalized source-shaped data; the Control Plane retains the artifact lifecycle and hashes.
+
+### `bronze.r_Stock_Transactions`
+
+- **Extractor attribute:** `stock_transactions_raw`
+- **Synchronization category:** `stock_orders`
+- **Replacement policy:** file-owned historical synchronization
+- **Authority:** Bronze holds normalized source-shaped data; the Control Plane retains the artifact lifecycle and hashes.
+
+### `bronze.r_Benchmark_Data`
+
+- **Extractor attribute:** `benchmark_history_raw`
+- **Synchronization category:** `benchmark_history`
+- **Replacement policy:** file-owned historical synchronization
+- **Authority:** Bronze holds normalized source-shaped data; the Control Plane retains the artifact lifecycle and hashes.
+
+### `bronze.r_US_Stock_Prices`
+
+- **Extractor attribute:** `us_stock_market_data_raw`
+- **Synchronization category:** `us_stock_market`
+- **Replacement policy:** file-owned historical synchronization
+- **Authority:** Bronze holds normalized source-shaped data; the Control Plane retains the artifact lifecycle and hashes.
+
+## Artifact synchronization and recovery boundaries
+
+```mermaid
+sequenceDiagram
+    participant F as File discovery
+    participant CP as SQLite Control Plane
+    participant B as Bronze
+    F->>CP: Compare identity and hash
+    CP-->>F: Pending, changed, removed or unchanged
+    F->>B: Synchronize actionable sources
+    B-->>CP: Record synchronized state and event
 ```
 
----
+A rename is not automatically a financial transaction correction. Likewise, historical event retention is not proof that the original binary payload remains retained forever. See [artifact lifecycle](../architecture/control-plane-artifact-lifecycle.md).
 
-## Synchronization lifecycle
+### Implementation anchor: Registry validation
 
-Artifact state is owned by the SQLite Control Plane.
+Source: `src/personal_finance_etl/backend/load/registry.py`
 
-```text
-discovered / changed
-        ↓
-PENDING_BRONZE
-        ↓
-extract actionable evidence
-        ↓
-apply Bronze replacement semantics
-        ↓
-register current analytical identity in Meta
-        ↓
-SYNCED
+```python
+            gold_count += 1
+
+    bronze_tables: set[str] = set()
+    for contract in BRONZE_CONTRACT_REGISTRY:
+        if not contract.extraction_attribute:
+            raise ValueError("Bronze extraction_attribute cannot be empty.")
+        if not contract.sync_category:
+            raise ValueError(f"Bronze sync_category empty for {contract.extraction_attribute}")
+        if not contract.physical_table:
+            raise ValueError(f"Bronze physical_table empty for {contract.extraction_attribute}")
+        if not contract.physical_table.startswith("bronze."):
+            raise ValueError(f"Bronze table must start with 'bronze.': {contract.physical_table}")
+
+        if contract.physical_table in bronze_tables:
+            raise ValueError(f"Duplicate Bronze table mapping: {contract.physical_table}")
+        bronze_tables.add(contract.physical_table)
 ```
 
-`SYNCED` means the artifact completed Bronze synchronization. It is not an irreversible claim.
+## Operational invariants
 
----
+- I keep one physical table mapping per Bronze contract.
+- A source change must be evaluated through the Control Plane, not inferred from a Gold aggregate.
+- Full replacement and file-owned synchronization must remain distinct.
+- A successful analytical rebuild is not proof that all historical payload bytes remain recoverable.
 
-## Full-replace contracts
-
-Full-replace contracts represent current/reference state.
-
-For these contracts, Bronze synchronization replaces the complete table.
-
-Examples include:
-
-```text
-SQLite reference state
-ISIN mapping
-benchmark mapping
-opening balances
-benchmark master
-macro parameters
-column master
-```
-
-The replacement boundary is the dataset, not the individual source file.
-
----
-
-## File-owned historical contracts
-
-Historical contracts preserve synchronized history across source artifacts.
-
-Rows retain source ownership through:
-
-```text
-__file_name__
-```
-
-A changed artifact follows:
-
-```text
-delete old rows owned by artifact
-        ↓
-insert current artifact rows
-```
-
-If the current artifact produces zero rows, the delete still occurs. That prevents stale historical state from surviving when a previously non-empty source becomes empty.
-
----
-
-## Self-healing
-
-Bronze participates in active consistency checking.
-
-For each artifact the Control Plane considers `SYNCED`, the Meta layer checks:
-
-```text
-Meta registry identity exists?
-        ↓
-required Bronze table exists?
-        ↓
-historical contract:
-expected __file_name__ partition exists?
-```
-
-If required analytical state is missing:
-
-```text
-SYNCED
-→ PENDING_BRONZE
-```
-
-The next normal run merges pending artifacts with new and changed artifacts and replays the same Bronze synchronization path.
-
-Recovery therefore uses production ingestion semantics rather than a separate repair loader.
-
----
-
-## Rename semantics
-
-Artifact identity is path-derived.
-
-A pure rename therefore migrates identity across:
-
-```text
-Control Plane registry
-raw payload foreign key
-Bronze __file_name__ ownership
-DuckDB Meta registry
-```
-
-The underlying financial evidence does not become new merely because its path changed.
-
----
-
-## Meta projection
-
-`meta.m_Data_Contracts` publishes Bronze contracts alongside Silver and Gold.
-
-For Bronze, the current Meta projection uses:
-
-```text
-contract_id
-→ extraction_attribute
-
-layer
-→ bronze
-
-domain
-→ Raw
-
-grain
-→ File
-
-producer
-→ ControlPlane
-
-is_full_replace
-→ BronzeDataContract.is_full_replace
-
-publication_order
-→ 0
-```
-
-This is a current contract projection. It does not attempt to describe the deeper financial grain of source rows.
-
----
-
-## Registry validation
-
-`validate_registry()` verifies the Bronze registry before analytical execution.
-
-The current invariants include:
-
-```text
-extraction_attribute is non-empty
-sync_category is non-empty
-physical_table is non-empty
-physical Bronze tables are unique
-contract count = 16
-```
-
-Silver and Gold have their own validation in the same registry module.
-
----
-
-## Bronze design rules
-
-1. Raw evidence and Bronze state are different durability boundaries.
-2. Every persisted Bronze source has one registry contract.
-3. Replacement semantics are explicit.
-4. Historical replacement is artifact-owned.
-5. Empty changed sources remove stale owned state.
-6. `SYNCED` is challengeable by self-healing.
-7. Recovery reuses normal ingestion.
-8. Rename changes identity, not financial evidence.
-9. Bronze remains source-shaped; canonical financial meaning begins downstream.
-10. Meta reflects the contract registry rather than rediscovering it from table names.
-
----
-
-## Related documentation
-
-- [Data Lifecycle](../architecture/data-lifecycle.md)
-- [Warehouse Architecture](../architecture/warehouse-architecture.md)
-- [Meta & Control Plane Contracts](meta-data-contracts.md)
-- [Silver Data Contracts](silver-data-contracts.md)
-- [Adding a Data Source](../developer/adding-data-sources.md)
-
-[← Reference Home](README.md) · [← Documentation Home](../README.md)
+[← Reference index](README.md)
