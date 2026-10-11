@@ -23,7 +23,7 @@ flowchart TB
 
 The arrows show major dependencies, not an exhaustive table-level lineage. Some engines also consume upstream facts directly.
 
-## Physical surface at v8.1.1
+## Physical surface
 
 | Store / layer | Registered surface | Authority |
 | --- | ---: | --- |
