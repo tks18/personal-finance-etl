@@ -633,3 +633,8 @@ It does not independently recreate the entire historical software environment.
 - [Roadmap](../about/roadmap.md)
 
 [← Configuration Home](README.md) · [← Documentation Home](../README.md)
+
+
+## Configuration implementation and provenance
+
+I treat this document as the financial-policy specification. For the exact distinction between settings and rules, I use [Configuration Architecture](configuration-architecture.md); for typed and dimension-aware checks, [Validation and Defaults](validation-and-defaults.md); and for immutable run linkage, [Configuration Snapshots](configuration-snapshots.md).
