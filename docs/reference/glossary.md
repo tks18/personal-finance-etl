@@ -197,6 +197,30 @@ virtual://<category>/<filename>
 
 ---
 
+## Canonical identity serialization
+
+A versioned, ordered encoding of defining financial attributes before deterministic hashing. Identity is stable for unchanged canonical inputs and a compatible identity contract. See [identity and grain contracts](identity-and-grain-contracts.md).
+
+## Artifact-run event
+
+A Control Plane record connecting an artifact lifecycle observation or mutation to a run. Event identity is distinct from artifact identity and financial transaction identity.
+
+## Historical market reconstruction
+
+Derived daily holdings and valuations built from transactions and observed market/FX evidence when broker daily snapshots are unavailable. It is not independent broker confirmation.
+
+## Indicative tax estimate
+
+A planning-oriented tax estimate attached to tax-relevant evidence. It is not statutory tax payable; `CHECK_REQUIRED` may coexist with a numeric estimate.
+
+## TaxEvent
+
+A canonical event from household ledger income/credits or Quant realized investment evidence. Investment capital gains recorded in the ledger are excluded where configured to prevent double counting.
+
+## Financial identity versus observation provenance
+
+Financial IDs represent canonical economic entities; run IDs and artifact events represent observations and processing history. The latter must not arbitrarily redefine the former.
+
 ## Software architecture
 
 ## Adapter
