@@ -6,16 +6,18 @@
 
 # Personal Finance ETL
 
-**A local-first financial data engineering, BI, and quantitative decision-support platform.**
+**A local-first financial data engineering, accounting, BI, and quantitative decision-support platform.**
 
 I built Personal Finance ETL to turn fragmented financial evidence into one reconciled, tax-aware, decision-ready financial state.
 
-It now powers my month-end close, investment accounting, portfolio analysis, cash-flow reconciliation, wealth tracking, tax planning, and FIRE modelling through one connected data lineage.
+It powers my daily financial workflow and month-end close: investment accounting, portfolio analysis, cash-flow reconciliation, wealth tracking, tax estimates, and FIRE modelling through one connected data lineage.
 
 [![PyPI](https://img.shields.io/pypi/v/personal-finance-etl?label=PyPI)](https://pypi.org/project/personal-finance-etl/)
 ![Python](https://img.shields.io/badge/Python-3.13%2B-3776AB?logo=python&logoColor=white)
 ![Local First](https://img.shields.io/badge/Architecture-Local--First-2F855A)
 ![Typed](https://img.shields.io/badge/Typing-mypy%20%2B%20Pyright-4B5563)
+
+**Explore:** [Architecture](#the-system) · [Financial engines](#6--fifo-tax-lot-accounting) · [Performance](#19--performance) · [11-domain technical docs](#explore-the-11-domain-technical-universe) · [Wiki](https://github.com/tks18/personal-finance-etl/wiki)
 
 ---
 
@@ -25,11 +27,12 @@ It now powers my month-end close, investment accounting, portfolio analysis, cas
 flowchart TB
     SRC["Financial Sources<br/>Bank · Broker · Excel · CSV · SQLite · Market Data"]
     CP["SQLite Control Plane<br/>Artifacts · Payloads · Sync State<br/>Runs · Failures · Logs · Config Provenance"]
-    BR["DuckDB Bronze<br/>16 Source Contracts · Persistent State"]
+    BR["DuckDB Bronze<br/>20 Source Contracts · Persistent State"]
     CAN["Canonical Financial Model<br/>Polars Lazy DAG · FinancialRules"]
     IQ["Investment Quant Engine<br/>FIFO · Broker Reconciliation · Shadow Benchmark<br/>Tax State · XIRR · Drawdown"]
-    WA["Wealth Analytics Engine<br/>Ledger · Cash Flow · Net Worth<br/>Tax · Budget · FIRE · Monte Carlo"]
-    SG["DuckDB Silver + Gold<br/>20 Silver Contracts · 17 Gold Marts"]
+    TAX["Tax Engine<br/>Classifications · Tax Events · Evidence Quality"]
+    WA["Wealth Presentation Engine<br/>Ledger · Cash Flow · Net Worth<br/>Budget · FIRE · Monte Carlo"]
+    SG["DuckDB Silver + Gold<br/>24 Silver Contracts · 22 Gold Marts"]
     META["Lean DuckDB Meta<br/>Current Projection · Data Contracts"]
     APP["Power BI · CLI · Desktop"]
 
@@ -38,8 +41,11 @@ flowchart TB
     BR --> CAN
     CAN --> IQ
     CAN --> WA
+    IQ --> TAX
+    TAX --> WA
     IQ --> WA
     IQ --> SG
+    TAX --> SG
     WA --> SG
     CP -. current-state mirror .-> META
     SG --> APP
@@ -105,7 +111,7 @@ That is why this repository grew from an ETL workflow into a financial platform.
 
 The architecture is not built around a toy folder containing a handful of sample statements.
 
-As of **24 September 2026**, my production source environment contains **1,608 source artifacts** participating in the pipeline.
+My earlier **24 September 2026** snapshot contained **1,608 source artifacts**. My more recent operating workload contains **1,629 artifacts**; both numbers describe actual points in the project’s evolution.
 
 The source population includes:
 
@@ -160,6 +166,58 @@ The scale therefore shaped the architecture:
 > **Incrementalize expensive source synchronization. Rebuild derived financial truth from a complete canonical state.**
 
 The figures above describe my production environment at that date, not a benchmark dataset bundled with the repository.
+
+---
+
+## The architecture at a glance
+
+I intentionally chose a two-database, multi-engine architecture for a single-user product. The unusual part is not the database count; it is the separation of **evidence, computation, and decision surfaces**.
+
+```mermaid
+flowchart LR
+    subgraph Evidence["Evidence and operational authority"]
+        F["Financial files and databases"] --> CP["SQLite Control Plane"]
+        CP --> B["Persistent DuckDB Bronze"]
+    end
+    subgraph Compute["Canonical computation"]
+        B --> P["Polars transformation DAG"]
+        P --> I["Investment Quant"]
+        I --> T["Tax Engine"]
+        T --> W["Wealth / FIRE"]
+    end
+    subgraph Serve["Contracted serving"]
+        I --> S["Silver + Gold"]
+        T --> S
+        W --> S
+        S --> BI["Power BI and local consumers"]
+    end
+```
+
+### Different kinds of state, different owners
+
+```mermaid
+classDiagram
+    class SQLiteControlPlane {
+      +artifact identities
+      +retained payloads
+      +run history
+      +configuration provenance
+    }
+    class DuckDBWarehouse {
+      +Bronze source state
+      +Silver canonical state
+      +Gold decision marts
+      +Meta projections
+    }
+    class PersonalFinanceEngine {
+      +run pipeline
+      +backup / restore
+    }
+    PersonalFinanceEngine --> SQLiteControlPlane
+    PersonalFinanceEngine --> DuckDBWarehouse
+```
+
+These diagrams are architectural views, not claims of distributed atomicity. The cross-database commit boundary and healing strategy are described in [Transaction Boundaries](docs/operations/transaction-boundaries.md).
 
 ---
 
@@ -415,9 +473,9 @@ The warehouse is Medallion-inspired, but each layer has a precise contract bound
 The current analytical surface is:
 
 ```text
-16 Bronze contracts
-20 Silver contracts
-17 Gold marts
+20 Bronze contracts
+24 Silver contracts
+22 Gold marts
 ```
 
 Bronze is no longer an implicit staging area. Its registry declares source category, physical table, and replacement semantics before canonical reconstruction begins.
@@ -432,28 +490,20 @@ flowchart LR
 
 ### Silver
 
-The current architecture publishes **20 canonical Silver contracts**:
+The current architecture publishes **24 canonical Silver contracts**:
 
 ```text
-11 dimensions / reference models
- 9 facts
+24 registered canonical datasets
+(dimension, reference, and fact grains)
 ```
 
 Silver includes canonical household activity, investment transactions, market/reference state, and deep lot-level investment analytics.
 
-## Gold
+### Gold
 
-The current architecture publishes **17 Gold marts** across:
+The contract registry declares **22 Gold marts** across:
 
-| Domain | Marts |
-| --- | ---: |
-| Wealth | 2 |
-| Cash Flow | 4 |
-| Planning | 3 |
-| Portfolio Management | 1 |
-| Investment Analytics | 7 |
-
-Gold is intentionally multi-grain.
+Gold is intentionally multi-grain. The authoritative inventory of all 22 outputs, including their declared grains and physical schemas, lives in [Gold Data Contracts](docs/reference/gold-data-contracts.md).
 
 ```text
 Month
@@ -471,6 +521,29 @@ Date × Portfolio
 ```
 
 A number does not have complete analytical meaning without its grain.
+
+---
+
+## Financial events are not just rows
+
+My financial engine distinguishes source transactions, canonical events, lot inventory, tax classifications, and analytical summaries. Each stage answers a different question.
+
+```mermaid
+sequenceDiagram
+    participant S as Source evidence
+    participant C as Canonical model
+    participant F as FIFO engine
+    participant T as Tax engine
+    participant G as Silver / Gold
+    S->>C: Normalize transactions and identities
+    C->>F: Purchases and disposals
+    F->>F: Consume chronological acquisition lots
+    F-->>T: Realized events and provenance
+    T-->>G: Classified tax estimates and review flags
+    F-->>G: Lot and return analytics
+```
+
+The detailed lot rules live in [FIFO and Lot Accounting](docs/finance/fifo-and-lot-accounting.md); the tax evidence boundary lives in [Tax Event Provenance](docs/finance/tax-event-provenance.md).
 
 ---
 
@@ -879,6 +952,24 @@ A pure source rename is treated as provenance migration across the Control Plane
 
 ---
 
+### The operational lifecycle is explicit
+
+```mermaid
+stateDiagram-v2
+    [*] --> Created
+    Created --> Running
+    Running --> Completed: successful publication and finalization
+    Running --> Failed: exception or unsuccessful execution
+    Running --> Interrupted: abnormal termination / stale run
+    Failed --> [*]
+    Completed --> [*]
+    Interrupted --> [*]
+```
+
+This is a conceptual lifecycle summary. The precise persisted status values and recovery transitions are specified in [Run Lifecycle](docs/control-plane/run-lifecycle.md).
+
+---
+
 ## 15 · Coordinated Snapshot + Restore
 
 SQLite and DuckDB are treated as one logical recovery unit:
@@ -908,7 +999,7 @@ This is still a local-first application. The reliability model is deliberately a
 
 ---
 
-## 16 · Lean DuckDB Meta
+## 16 · Lean DuckDB Meta (six physical tables)
 
 DuckDB Meta is intentionally not the historical operational authority.
 
@@ -991,72 +1082,51 @@ The production-hardening cycle also removed analytical work that no longer suppo
 
 That included legacy risk calculations and associated presentation processing.
 
-### Production snapshot
+### Daily operating snapshot
 
-The timing below is measured against my real source environment, not a synthetic benchmark:
+This is a real personal-finance workload, not a synthetic stress-test dataset. I currently use the platform with the following observed characteristics:
 
-| Production context | Snapshot |
+| Operating characteristic | My observation |
 | --- | ---: |
-| Source artifacts | **1,608** |
-| Snapshot date | **24 September 2026** |
-| Ongoing broker growth | **~2 files/day** |
-| Main daily additions | Stock snapshot + mutual-fund snapshot |
-| Other inputs | Transaction/history files, masters, mappings, personal-finance SQLite data, reference inputs |
-| Previous E2E runtime | **~23 sec** |
-| Hardened E2E runtime | **~14–17 sec** |
-| Financial outputs | **Reconciled unchanged** |
+| Source artifacts | **1,629** |
+| Cached end-to-end run | **~20 seconds** |
+| Fresh end-to-end run | **~40 seconds** |
+| Financial validation | Reconciled against my actual financial records, down to the paise |
+| Deployment model | Local-first, single-user |
 
-The runtime is possible because the pipeline does not confuse source discovery with source reprocessing.
+The cached and fresh timings describe different workloads. They are not directly comparable to the earlier hardening benchmarks, and I do not treat them as universal performance guarantees.
 
-```text
-1,608 discovered artifacts
-        ↓
-Control Plane identity + hash policy
-        ↓
-only new / changed artifacts become actionable
-        ↓
-persistent Bronze preserves synchronized history
-        ↓
-complete Bronze feeds deterministic analytics
+```mermaid
+xychart-beta
+    title "Observed end-to-end runtime (seconds)"
+    x-axis ["Cached", "Fresh"]
+    y-axis "Seconds" 0 --> 45
+    bar [20, 40]
 ```
 
-The hardening work also reduced the amount of downstream computation by removing metrics and presentation nodes that no longer served a decision.
+> The durations above are observed totals, not measured stage timings. The chart compares elapsed time only; it does not imply the two runs share identical internal stage boundaries.
 
-So the improvement is not a claim that Python can magically process arbitrary financial workloads in 14 seconds.
+### Why the pipeline stays responsive
 
-It is the result of several architectural choices working together:
-
-- change-aware source synchronization,
-- persistent Bronze,
-- file-aware historical replacement,
-- Polars lazy/vectorized execution,
-- concurrent collection of independent lazy outputs,
-- per-instrument parallelism where state boundaries allow it,
-- and removal of analytical work with no serving value.
-
-On this production workload, the end-to-end pipeline moved from roughly:
-
-```text
-~23 seconds
+```mermaid
+flowchart LR
+    DISC["Discover 1,629 artifacts"] --> HASH{"New or changed?"}
+    HASH -->|Yes| SYNC["Synchronize affected Bronze inputs"]
+    HASH -->|No| KEEP["Reuse persistent Bronze state"]
+    SYNC --> REBUILD["Rebuild canonical analytics"]
+    KEEP --> REBUILD
+    REBUILD --> CONTRACT["Validate and publish Silver / Gold"]
 ```
 
-to approximately:
+The key architectural distinction is **incremental source synchronization followed by a coherent analytical rebuild**. I do not advertise the entire pipeline as end-to-end incremental.
 
-```text
-~14–17 seconds
-```
+My earlier **24 September 2026** benchmark recorded 1,608 artifacts and a reduction from approximately 23 seconds to 14–17 seconds following a hardening cycle. That is a historical measurement, not today's baseline.
 
-while preserving the financial outputs I rely on.
-
-I treat those figures as an **environment-specific production snapshot**, not a universal benchmark.
-
-The more important result is architectural:
+The larger engineering lesson remains the same:
 
 > **Process what changed. Preserve what did not. Rebuild what must remain financially coherent.**
 
-And another lesson from the hardening cycle remains equally important:
-
-> Removing computation with no decision value can be a better optimization than making unnecessary computation faster.
+The platform is sophisticated because the financial semantics demand it, not because I need a distributed cluster to reconcile my own expenses. That would be a *very* expensive way to buy peace of mind. 😂
 
 ---
 
@@ -1067,7 +1137,7 @@ The stack is deliberately heterogeneous.
 | Technology | Responsibility |
 | --- | --- |
 | **SQLite** | Authoritative Control Plane, raw artifacts/payloads, run history, failures, compressed execution logs, configuration provenance |
-| **DuckDB** | 16 Bronze + 20 Silver + 17 Gold analytical contracts and lean current-state Meta |
+| **DuckDB** | 20 Bronze + 24 Silver + 22 Gold analytical contracts and lean current-state Meta |
 | **Polars** | Lazy/vectorized transformation and analytical computation |
 | **Pydantic** | Operational and financial-policy contracts |
 | **PyXIRR** | Irregular dated return solving |
@@ -1176,29 +1246,16 @@ The platform architecture is now intentionally stable.
 
 The next maturity work is about formalizing and protecting the financial behavior already exercised against production data.
 
-```text
-v6.5.3
-│
-├── Architecture / reliability foundation
-│   └── mature
-│
-├── Financial Domain Freeze
-│   ├── formalize selected edge semantics
-│   ├── strengthen tax-guidance boundaries
-│   ├── preserve realized financial history
-│   └── freeze financial invariants
-│
-├── QA Expansion
-│   ├── golden financial scenarios
-│   ├── component / integration tests
-│   ├── failure-injection regression coverage
-│   └── build / package validation
-│
-└── Feature-Driven Evolution
-    ├── new source
-    ├── new asset
-    ├── new financial scenario
-    └── new analytical question
+```mermaid
+flowchart TB
+    NOW["Operational platform in daily use"]
+    NOW --> DOMAIN["Formalize selected financial-domain invariants"]
+    NOW --> TEST["Expand executable financial regression fixtures"]
+    NOW --> OPS["Strengthen fault-injection and recovery coverage"]
+    DOMAIN --> EVOLVE["Feature-driven evolution"]
+    TEST --> EVOLVE
+    OPS --> EVOLVE
+    EVOLVE --> NEW["New sources · Assets · Models · Decision questions"]
 ```
 
 The current financial model remains the production baseline.
@@ -1220,18 +1277,25 @@ The project has intentionally different knowledge surfaces.
 | **`/docs`** | **SPECIFY** — architecture, methodology, contracts, configuration, and developer reference | [Open `/docs`](docs/README.md) |
 | **Code** | **PROVE** — implementation authority | [Browse `src/`](src/personal_finance_etl) |
 
-### Go straight to the technical reference
+### Explore the 11-domain technical universe
 
-| Interest | Start here |
-| --- | --- |
-| 🚀 Getting started | [Installation](docs/getting-started/installation.md) |
-| 🏗️ Architecture | [System Architecture](docs/architecture/system-architecture.md) |
-| 💰 Financial methodology | [Financial Model](docs/finance/financial-model.md) |
-| 📈 Investment analytics | [Investment Analytics](docs/finance/investment-analytics.md) |
-| ⚙️ Financial policy | [Financial Rules](docs/configuration/financial-rules.md) |
-| 🧑‍💻 Development | [Development Guide](docs/developer/development-guide.md) |
-| 📖 Data contracts | [Reference](docs/reference/README.md) |
-| 🧭 Project journey | [Project Overview](docs/about/project.md) |
+I organize the technical reference by ownership. Each domain goes deep on its own responsibility instead of reproducing the same architecture in eleven places.
+
+| Domain | What I document | Entry point |
+| --- | --- | --- |
+| Architecture | System boundaries, dependencies, execution | [Architecture](docs/architecture/README.md) |
+| Control Plane | Artifact identity, provenance, run lifecycle, healing | [Control Plane](docs/control-plane/README.md) |
+| Data Engineering | Discovery, Bronze, transformation, publication | [Data Engineering](docs/data-engineering/README.md) |
+| Finance | FIFO, FX, benchmarks, taxation, wealth, FIRE | [Finance](docs/finance/README.md) |
+| Configuration | Financial rules, validation, reproducibility | [Configuration](docs/configuration/README.md) |
+| Reference | Physical contracts, schemas, identities, API | [Reference](docs/reference/README.md) |
+| Interfaces | Application facade, CLI, desktop, docs renderer | [Interfaces](docs/interfaces/README.md) |
+| Operations | Recovery, transactions, performance, observability | [Operations](docs/operations/README.md) |
+| Developer | Extensions, testing, debugging, maintenance | [Developer](docs/developer/README.md) |
+| Getting Started | Installation and daily workflows | [Getting Started](docs/getting-started/README.md) |
+| About | Project evolution, roadmap, my engineering journey | [About](docs/about/README.md) |
+
+**Suggested deep dives:** [Execution Lifecycle](docs/architecture/execution-lifecycle.md) · [Identity Contracts](docs/reference/identity-contracts.md) · [Benchmark Attribution](docs/finance/benchmark-attribution.md) · [Backup and Restore](docs/operations/backup-and-restore.md) · [Documentation Renderer](docs/interfaces/documentation-renderer.md)
 
 The Wiki and `/docs` deliberately overlap in **concept**, not in **job**.
 
@@ -1303,7 +1367,7 @@ It now has:
 
 ```text
 an authoritative SQLite Control Plane
-a DuckDB warehouse with 16 Bronze / 20 Silver / 17 Gold contracts
+a DuckDB warehouse with 20 Bronze / 24 Silver / 22 Gold contracts and six Meta tables
 a Polars canonical transformation DAG
 FIFO tax-lot accounting
 broker reconciliation
