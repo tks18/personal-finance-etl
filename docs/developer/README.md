@@ -55,6 +55,9 @@ A developer adding analytical state should know the **grain, producer and public
 | [Adding a Data Source](adding-data-sources.md) | A new institution/file/provider must enter the ingestion lifecycle |
 | [Adding an Asset Pipeline](adding-asset-pipelines.md) | A new investment type can converge into the shared investment engine |
 | [Adding a Gold Mart](adding-gold-marts.md) | A new decision-support question deserves a physical serving contract |
+| [Extension Contracts](extension-contracts.md) | You need the exact registry, strategy, and persistence seams |
+| [Testing and Regression](testing-and-regression.md) | You need reproducible fixtures and verification boundaries |
+| [Debugging and Observability](debugging-and-observability.md) | You need to trace a run, logs, artifacts, and publication failures |
 
 ## Extension test
 
