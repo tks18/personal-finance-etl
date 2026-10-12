@@ -1,78 +1,81 @@
-# Developer
+# Developer Guide
 
-This section is for changing the system without dissolving its boundaries.
+Personal Finance ETL is extensible, but its extension seams are contracts rather than blank spaces in the package tree. A source, transformation, Gold mart, schema change, or financial rule becomes part of the system only when its producer, grain, identity, persistence contract, validation behavior, downstream consumers, and documentation agree.
 
-The central extension rule is:
-
-> **Source-specific behaviour should terminate before canonical finance. Decision-specific behaviour should not leak back into ingestion.**
+That sounds stricter than "add a function and see what happens." Good. Financial pipelines benefit from fewer surprise side quests.
 
 ```mermaid
 flowchart LR
-    SRC["Source Adapter"] --> CAN["Canonical Contract"]
-    CAN --> ENG["Reusable Engine"]
-    ENG --> CONTRACT["Silver / Gold Contract"]
-    CONTRACT --> APP["BI / Application"]
+    DEV[Developer change] --> OWN[Choose ownership boundary]
+    OWN --> SRC[Source / extraction]
+    OWN --> TR[Canonical transform]
+    OWN --> GOLD[Gold presentation]
+    OWN --> SCHEMA[Contract / schema]
+    SRC --> VERIFY[Validation + end-to-end run]
+    TR --> VERIFY
+    GOLD --> VERIFY
+    SCHEMA --> VERIFY
+    VERIFY --> DOCS[Reference + developer docs]
 ```
 
-## The extension seams
+## What this section owns
+
+| Specification | Question it answers |
+|---|---|
+| [Development Guide](development-guide.md) | How is the codebase organized and what development rules preserve its architecture? |
+| [Adding Data Sources](adding-data-sources.md) | How does new external evidence enter discovery, the Control Plane, Bronze, and canonical finance? |
+| [Adding Transformations](adding-transformations.md) | How is new canonical or analytical logic introduced without breaking grain and ownership? |
+| [Adding Gold Marts](adding-gold-marts.md) | How is a BI-facing dataset added to the contract-governed Gold publication? |
+| [Data Contract and Schema Evolution](data-contract-and-schema-evolution.md) | How do registry, DDL, grain, identity, producers, and consumers evolve together? |
+| [Testing and Validation](testing-and-validation.md) | What is actually tested, validated at runtime, smoke-tested, or still dependent on manual QA? |
+
+## The extension invariant
+
+A safe extension answers all of these before it is considered complete:
+
+1. **Authority:** which source or subsystem owns the fact?
+2. **Grain:** what does one row mean?
+3. **Identity:** how is the row or event recognized across rebuilds?
+4. **Producer:** which function or engine creates it?
+5. **Persistence:** Bronze, Silver, Gold, Meta, Control Plane, or no persistence?
+6. **Consumers:** what downstream logic assumes its shape or semantics?
+7. **Validation:** what fails when the contract is violated?
+8. **Recovery:** can a partial failure leave durable state inconsistent?
+9. **Documentation:** where is the contract specified?
+
+```mermaid
+flowchart TD
+    A[Authority] --> G[Grain]
+    G --> I[Identity]
+    I --> P[Producer]
+    P --> S[Storage contract]
+    S --> C[Consumers]
+    C --> V[Validation]
+    V --> R[Recovery]
+    R --> D[Documentation]
+```
+
+## Dependency direction
+
+Developer work should preserve the same dependency direction documented by the architecture layer:
 
 ```text
-Source extension
-→ Control Plane + BRONZE_CONTRACT_REGISTRY
-
-Canonical analytical extension
-→ DATA_CONTRACT_REGISTRY
-
-Financial behaviour extension
-→ canonical model / engine / FinancialRules
-
-Documentation extension
-→ /docs + manifest
+frontend -> backend API -> pipeline/orchestration
+                         -> extraction / transforms / engines
+                         -> load / Control Plane
+configuration ----------> financial and operational consumers
 ```
 
-
-A lightweight registry makes analytical publication explicit:
-
-```python
-@dataclass
-class DataContract:
-    contract_id: str
-    layer: str
-    physical_table: str
-    domain: str
-    grain: str
-    producer: str
-    publication_order: int
-```
-
-A developer adding analytical state should know the **grain, producer and publication contract** before deciding where to save a DataFrame.
+Presentation code should not become an alternative financial authority. Gold builders should not quietly reconstruct FIFO. Extractors should not decide tax treatment. The Control Plane should not become a financial model because it happens to have SQLite available.
 
 ## Read in this order
 
-| Guide | Use it when... |
-| --- | --- |
-| [Development Guide](development-guide.md) | You need package boundaries, engineering conventions and development workflow |
-| [Adding a Data Source](adding-data-sources.md) | A new institution/file/provider must enter the ingestion lifecycle |
-| [Adding an Asset Pipeline](adding-asset-pipelines.md) | A new investment type can converge into the shared investment engine |
-| [Adding a Gold Mart](adding-gold-marts.md) | A new decision-support question deserves a physical serving contract |
-| [Extension Contracts](extension-contracts.md) | You need the exact registry, strategy, and persistence seams |
-| [Testing and Regression](testing-and-regression.md) | You need reproducible fixtures and verification boundaries |
-| [Debugging and Observability](debugging-and-observability.md) | You need to trace a run, logs, artifacts, and publication failures |
+For general work, begin with [Development Guide](development-guide.md). Then choose the extension guide that matches the change. Read [Data Contract and Schema Evolution](data-contract-and-schema-evolution.md) before changing a persistent Silver or Gold shape, and finish with [Testing and Validation](testing-and-validation.md).
 
-## Extension test
+## Related specifications
 
-A good extension should usually look like:
-
-```text
-new variation
-      ↓
-appropriate adapter / pipeline / strategy
-      ↓
-existing canonical boundary
-      ↓
-existing downstream engine
-```
-
-If adding a new broker requires rewriting portfolio XIRR, the boundary is probably leaking.
-
-[← Documentation Home](../README.md)
+- [System Architecture](../architecture/system-architecture.md)
+- [Data Lifecycle](../architecture/data-lifecycle.md)
+- [Data Contract and Schema Evolution](data-contract-and-schema-evolution.md)
+- [Testing and Validation](testing-and-validation.md)
+- [Identity and Grain Contracts](../reference/identity-and-grain-contracts.md)
