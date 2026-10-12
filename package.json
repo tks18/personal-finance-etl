@@ -1,11 +1,24 @@
 {
   "name": "personal-finance-etl",
-  "description": "Local-first financial data platform for evidence-aware ETL, investment analytics, tax-aware wealth modelling, FIRE simulation, and BI.",
+  "description": "Local-first financial data engineering and quantitative decision-support platform for reconciled personal finance, investment analytics, tax evidence, FIRE simulation, and BI.",
   "version": "8.1.1",
   "repository": "https://github.com/tks18/personal-finance-etl",
   "author": "tks18 <tksudharshan@gmail.com>",
-  "license": "GPL-3.0-only",
+  "license": "GPL-3.0-or-later",
   "packageManager": "yarn@4.12.0",
+  "homepage": "https://github.com/tks18/personal-finance-etl",
+  "bugs": {
+    "url": "https://github.com/tks18/personal-finance-etl/issues"
+  },
+  "keywords": [
+    "personal-finance",
+    "data-engineering",
+    "financial-analytics",
+    "quantitative-finance",
+    "duckdb",
+    "polars",
+    "fire"
+  ],
   "scripts": {
     "git:stage": "git add",
     "git:commit": "cz",
