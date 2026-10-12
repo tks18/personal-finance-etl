@@ -1,229 +1,123 @@
-# Adding a Data Source
+# Adding Data Sources
 
-A new data source should enter the platform without teaching every downstream engine about its original shape.
+A new data source enters Personal Finance ETL through an operational evidence lifecycle before it becomes financial data. The safe extension path is therefore not "write an Excel reader." It is discovery -> Control Plane identity/payload -> extraction -> Bronze synchronization -> canonical transformation -> analytical consumers.
 
-The target lifecycle is:
+This guide describes that complete path.
+
+## 1. Classify the source first
+
+Decide whether the source is:
+
+- a physical file discovered from configured paths;
+- the household SQLite database;
+- a configuration/reference CSV;
+- provider/API evidence represented as a virtual artifact;
+- a new market/transaction source requiring historical synchronization.
+
+The category determines discovery, hashing, payload retention, and Bronze replacement semantics.
+
+```mermaid
+flowchart TD
+    S[New source] --> K{Physical artifact?}
+    K -->|Yes| D[File discovery + hash]
+    K -->|No| V[Virtual artifact identity]
+    D --> CP[Control Plane registry + payload]
+    V --> CP
+    CP --> E[Extractor]
+    E --> B[Bronze contract]
+    B --> T[Canonical transform]
+```
+
+## 2. Discovery category is an operational contract
+
+The Control Plane groups artifacts into synchronization categories such as `sqlite_source`, `mf_orders`, `stock_pl`, `currency_history`, or `us_stock_market`. A new source needs an unambiguous category before extraction.
+
+The category connects:
+
+```text
+artifact discovery
+    -> pending/actionable file set
+    -> extraction dispatch
+    -> Bronze sync category
+    -> mark_synced lifecycle
+```
+
+Do not overload an existing category simply because the files share an extension.
+
+## 3. File hashing and change detection
+
+Physical sources participate in content-based change detection according to `Settings.FILE_HASH_POLICY`. The Control Plane owns artifact identity/history; downstream extractors should not invent their own "last modified" cache.
+
+A file path is location, not identity. Rename handling and historical artifact continuity belong to the Control Plane.
+
+See [Control Plane Artifact Lifecycle](../architecture/control-plane-artifact-lifecycle.md).
+
+## 4. Evidence is persisted before extraction
+
+`DataExtractor` reads bytes from the Raw Store rather than reopening arbitrary source paths:
+
+```python
+def _get_bytes(self, filepath: str) -> bytes:
+    """Fetches bytes from Raw Store. Raises if missing."""
+    raw_bytes = self.cp.artifacts.get_file_bytes(filepath)
+    if raw_bytes is None:
+        raise FileNotFoundError(
+            f"Binary payload not found in Raw Store for: {filepath}"
+        )
+    return raw_bytes
+```
+
+This makes the operational sequence explicit:
+
+```mermaid
+sequenceDiagram
+    participant FS as Source
+    participant CP as Control Plane
+    participant EX as DataExtractor
+    participant B as Bronze
+    FS->>CP: discover + hash + retain payload
+    CP->>EX: actionable artifact paths
+    EX->>CP: fetch retained bytes
+    EX->>B: extracted frame
+    B->>CP: synchronization success
+```
+
+A new physical source should preserve this boundary rather than bypassing retained evidence.
+
+## 5. Implement extraction at the boundary
+
+Source-specific parsing belongs under `backend/extract/` or a dedicated pipeline adapter. Extraction should decode representation, normalize obvious technical types, and attach provenance columns where the existing source family does so.
+
+It should not decide:
+
+- FIFO ownership;
+- tax treatment;
+- portfolio classification that belongs to FinancialRules/master data;
+- Gold aggregation.
+
+## 6. Extend the extraction result deliberately
+
+The core `ExtractionResult` is the handoff from extraction into Bronze/core transformation. If the source is part of the primary extraction phase, add a clearly named attribute and update every construction/consumer site.
+
+Empty/non-actionable streams should follow existing empty-frame semantics rather than introducing `None` into paths that expect frames.
+
+## 7. Gatekeeper validation
+
+The core extractor performs schema validation across active extraction streams. New streams should define appropriate schema expectations and participate in the quality gate when their shape is required for safe downstream processing.
 
 ```mermaid
 flowchart LR
-    SRC["New Source"] --> DISC["Discovery"]
-    DISC --> CP["Control Plane"]
-    CP --> EXT["Extractor"]
-    EXT --> BR["Bronze"]
-    BR --> CAN["Canonical Contract"]
-    CAN --> ENG["Existing Engines"]
+    BYTES[Retained bytes] --> PARSE[Parse]
+    PARSE --> SCHEMA[Schema gate]
+    SCHEMA -->|valid| BRONZE[Bronze]
+    SCHEMA -->|invalid| FAIL[Fail run with source context]
 ```
 
-The key design question is:
-
-> **Where does source-specific behaviour stop?**
-
-The answer should usually be: **before canonical finance begins.**
-
----
-
-## 1. Decide what kind of source this is
-
-Before writing code, classify the source.
-
-### Historical/event source
-
-Examples:
-
-```text
-daily broker snapshot
-transaction export
-historical market file
-```
-
-Typical Bronze behaviour:
-
-```text
-file-aware replacement
-```
-
-### Current/reference source
-
-Examples:
-
-```text
-mapping
-master
-opening-state reference
-```
-
-Typical Bronze behaviour:
-
-```text
-full replacement
-```
-
-Do not choose append/upsert mechanics before understanding source semantics.
-
----
-
-## 2. Give the source a discovery category
-
-The orchestrator builds a categorized source map.
-
-Some sources come from folder discovery:
-
-```python
-discovered_files = categorize_statement_files(
-    self.cfg.STATEMENTS_FOLDER,
-    strict=True,
-)
-```
-
-Others are explicit configured inputs:
-
-```python
-discovered_files["opening_balances"] = [
-    self.cfg.OPENING_BALANCE_CSV_PATH
-]
-```
-
-A new source needs a stable category because that category participates in:
-
-- file-type policy,
-- Control Plane registration,
-- Bronze mapping,
-- full-replace policy,
-- extraction routing.
-
-Choose the category as a semantic identifier, not a display label.
-
----
-
-## 3. Add file-type/hash policy where required
-
-`FileSyncService` maps categories to physical types:
-
-```python
-file_type = FILE_TYPE_MAP.get(
-    category,
-    "csv",
-)
-
-should_check_hash = getattr(
-    hash_policy,
-    file_type,
-    False,
-)
-```
-
-If the new source introduces a new physical type, make sure the hash policy understands it.
-
-The question is:
-
-> **For an already-known path, should content identity be rechecked?**
-
-That is an ingestion policy decision.
-
----
-
-## 4. Let the Control Plane own artifact identity
-
-Do not create a second source registry.
-
-The existing lifecycle already handles:
-
-```text
-relative path
-file category
-physical type
-SHA-256
-size
-payload bytes
-sync status
-first / last ingestion
-```
-
-New/changed artifacts should flow through `ArtifactRepository` and `FileSyncService`.
-
-That keeps:
-
-```text
-what exists?
-what changed?
-what bytes were ingested?
-has it reached Bronze?
-```
-
-inside one authority.
-
----
-
-## 5. Persist evidence before analytical processing
-
-The Control Plane stores actionable source bytes.
-
-Conceptually:
-
-```python
-with open(filepath, "rb") as file:
-    raw_bytes = file.read()
-
-# registry + payload persistence happens in the
-# Control Plane before Bronze synchronization
-```
-
-Do not bypass raw persistence for convenience unless the source genuinely cannot be represented as an artifact.
-
-External/API data can use virtual artifacts instead.
-
----
-
-## 6. For API/provider data, use virtual artifacts
-
-The current benchmark lifecycle demonstrates the pattern.
-
-Virtual identity uses:
-
-```text
-virtual://<category>/<filename>
-```
-
-The artifact still receives:
-
-```text
-deterministic identity
-content hash
-payload
-sync status
-```
-
-So external acquisition does not become provenance-free data merely because it was not discovered in a local folder.
-
----
-
-## 7. Implement extraction at the source boundary
-
-The extractor should convert persisted source evidence into a source-shaped analytical frame.
-
-Its job is not to calculate household net worth or XIRR.
-
-Keep the responsibility narrow:
-
-```text
-bytes / file
-      ↓
-parse
-      ↓
-source-shaped typed frame
-```
-
-Source-specific cleanup belongs here when it is truly about physical/source representation.
-
-Financial meaning belongs later.
-
----
+Do not "fix" missing required columns by manufacturing null columns unless the source contract explicitly defines them as optional.
 
 ## 8. Register Bronze persistence
 
-The new extracted dataset needs a Bronze destination and a `BronzeDataContract`.
-
-The current registry contains **16 Bronze contracts**:
+Bronze source contracts live in `BRONZE_CONTRACT_REGISTRY`:
 
 ```python
 @dataclass
@@ -234,322 +128,220 @@ class BronzeDataContract:
     is_full_replace: bool
 ```
 
-The registry is the source-sync contract, not merely a table-name lookup.
+A new Bronze source needs all four decisions.
 
-Conceptually:
-
-```text
-source category
-      ↓
-Bronze table mapping
-      ↓
-persistence behaviour
-```
-
-For historical sources, preserve source identity such as:
-
-```text
-__file_name__
-```
-
-so changed artifacts can replace only their own Bronze partition.
-
----
+| Field | Meaning |
+|---|---|
+| `extraction_attribute` | attribute produced by extraction |
+| `sync_category` | Control Plane synchronization category |
+| `physical_table` | DuckDB Bronze table |
+| `is_full_replace` | replacement versus persistent incremental semantics |
 
 ## 9. Choose replacement semantics deliberately
 
-### Historical
+**Full replace** fits small authoritative reference/config datasets where the current file represents the whole state.
 
-Conceptually:
+**Incremental** fits accumulating evidence such as transaction/history files.
 
-```text
-changed source file
-      ↓
-DELETE Bronze rows owned by that source
-      ↓
-INSERT replacement rows
+```mermaid
+flowchart TD
+    N[New Bronze source] --> Q{Does each current source payload represent complete authoritative state?}
+    Q -->|Yes| F[Full replace]
+    Q -->|No| I[Incremental synchronization]
+    I --> H[Preserve artifact provenance/hash columns]
 ```
 
-### Full replacement
+Choosing the wrong mode can either retain obsolete rows or erase historical evidence. This flag is tiny. Its consequences are not.
 
-Conceptually:
+## 10. Dynamic Bronze schema behavior
 
-```text
-DELETE current reference state
-      ↓
-INSERT complete replacement
-```
+Bronze tables are created from extracted frame schemas. They are not governed by the fixed Silver/Gold DDL catalogs.
 
-The decision should be based on what the source represents.
+This means source-schema changes require careful compatibility review even when DuckDB can physically accept the frame. A technically writable Bronze table can still break canonical transformations downstream.
 
-Not on which SQL statement is easiest.
+## 11. Mark synchronization only after persistence
 
----
+The source should become synchronized only after its Bronze write succeeds. Do not advance Control Plane state before durable analytical ingestion.
 
-## 10. Mark the artifact synced only after Bronze succeeds
+That ordering supports healing after cross-store divergence.
 
-The lifecycle is:
+## 12. Complete Bronze reconstruction
 
-```text
-Raw persisted
-→ PENDING_BRONZE
-→ extraction
-→ Bronze write
-→ SYNCED
-```
+After synchronization, transformations read complete Bronze state, not only the files changed in the current run. New source extensions must be available to this reconstruction path.
 
-Do not mark the source synchronized before analytical persistence completes.
+Incremental ingestion therefore does not imply incremental canonical finance.
 
-That state transition is what makes interrupted ingestion recoverable.
+## 13. Transform into canonical finance
 
----
-
-## 11. Add the source to complete Bronze reconstruction
-
-After actionable synchronization, the pipeline reads complete Bronze state.
-
-The source must become part of the returned `ExtractionResult` or equivalent canonical input surface.
-
-Conceptually:
-
-```python
-return ExtractionResult(
-    existing_source_a=_get_lf(...),
-    existing_source_b=_get_lf(...),
-    new_source=_get_lf("bronze.r_New_Source"),
-)
-```
-
-The exact field should represent the source's role clearly.
-
----
-
-## 12. Transform into canonical finance
-
-This is the most important step.
-
-Do not expose:
-
-```text
-ProviderColumnA
-ProviderColumnB
-SheetName
-VendorStatus
-```
-
-to downstream financial engines.
-
-Map them into stable concepts.
-
-For example:
-
-```text
-vendor transaction code
-        ↓
-canonical purchase / sale
-
-vendor account label
-        ↓
-canonical asset identity
-```
-
-The canonical contract is the anti-corruption layer.
-
----
-
-## 13. Use mapping/reference configuration where values vary
-
-If the source uses different labels for an existing financial concept, prefer mapping/configuration.
-
-If the source requires fundamentally different parsing or behaviour, use an adapter/extractor boundary.
-
-Decision test:
-
-```text
-same behaviour, different value
-→ mapping/configuration
-
-different parsing / behaviour
-→ adapter/extractor
-```
-
-Avoid giant source-specific conditional blocks in the transformation DAG.
-
----
-
-## 14. Preserve grain
-
-Write the source grain before implementing transformations.
+Once source evidence is in Bronze, normalize it into existing canonical contracts where possible.
 
 Examples:
 
-```text
-one row per bank transaction
-one row per broker order
-one row per ISIN-date market observation
-one row per month-account balance
+- broker order -> canonical purchase/sale fact;
+- market file -> canonical market observation;
+- currency provider -> canonical Date-Currency FX observation;
+- reference file -> canonical dimension/master.
+
+If a new source needs a new canonical contract, follow [Adding Transformations](adding-transformations.md) and [Data Contract and Schema Evolution](data-contract-and-schema-evolution.md).
+
+## 14. Preserve source versus financial semantics
+
+Source columns can be messy. Canonical output should not preserve source ambiguity merely for convenience.
+
+For example, a broker field called `Value` is not a sufficient canonical semantic name if it might mean proceeds, market value, cost basis, or local-currency amount depending on file type.
+
+## 15. Provider/API sources and virtual artifacts
+
+Provider data without a physical source file should still have operational identity if it participates in incremental evidence history. Use the Control Plane's virtual-artifact pattern rather than inventing an untracked in-memory source.
+
+The same principles apply:
+
+- stable artifact identity;
+- content/version observation;
+- synchronization state;
+- event history;
+- Bronze persistence.
+
+## 16. Failure semantics
+
+Decide explicitly what happens when:
+
+| Condition | Typical response |
+|---|---|
+| payload missing from Raw Store | fail closed |
+| required source column missing | fail schema gate |
+| malformed optional row | source-specific reject/filter only if contract permits |
+| provider returns no data | distinguish valid empty result from failed acquisition |
+| stale market/FX observation | follow financial pipeline staleness rules |
+| duplicate financial identity | fail or reconcile according to canonical contract |
+
+Do not silently skip a source because the rest of the portfolio can still calculate. Partial financial truth is still partial.
+
+## 17. Operational configuration
+
+New physical locations or reference files may require `Settings` fields and `validate_config()` changes. New financial interpretation belongs in `FinancialRules`, not `Settings`.
+
+If configuration changes, update snapshot/fingerprint implications and [Configuration Reference](../configuration/configuration-reference.md).
+
+## 18. Downstream reconciliation
+
+Before calling the source complete, verify:
+
+- Bronze row counts and provenance;
+- canonical row counts;
+- deterministic IDs;
+- quantity/value reconciliation;
+- affected Quant outputs;
+- affected tax evidence;
+- affected Gold marts.
+
+A source extension is an end-to-end change even if most downstream code requires no modification.
+
+## 19. Example extension topology
+
+```mermaid
+flowchart TB
+    NEW[New broker statement]
+    DISC[Discovery category]
+    CP[Control Plane payload + history]
+    EX[New extractor]
+    BC[BronzeDataContract]
+    BR[bronze.r_New_Source]
+    TF[Canonical transform]
+    SF[Silver fact/master]
+    ENG[Quant / Tax / Wealth consumers]
+    GOLD[Gold]
+
+    NEW --> DISC --> CP --> EX --> BC --> BR --> TF --> SF --> ENG --> GOLD
 ```
 
-Then write the target canonical grain.
+Not every source requires every new box. Reuse existing canonical contracts whenever semantics genuinely match.
 
-If the transformation changes grain, document exactly how and why.
+## 20. Source-extension checklist
 
----
+- [ ] source authority and category defined;
+- [ ] discovery/hashing behavior defined;
+- [ ] payload retention path preserved;
+- [ ] extractor implemented from retained bytes;
+- [ ] extraction schema validated;
+- [ ] `ExtractionResult` updated if required;
+- [ ] Bronze contract registered;
+- [ ] full-replace/incremental semantics justified;
+- [ ] complete Bronze read path updated;
+- [ ] canonical transformation defined;
+- [ ] grain and identity verified;
+- [ ] downstream reconciliation completed;
+- [ ] failure behavior tested;
+- [ ] configuration/docs updated.
 
-## 15. Define data-quality checks
+## 21. Source provenance columns
 
-Ask what must be true for the source to be financially usable.
+Bronze evidence commonly carries technical provenance such as source filename/folder and artifact/hash context. Preserve provenance that is required for synchronization, audit, or later reconstruction, but avoid leaking technical source columns into canonical finance when they are no longer semantically required.
 
-Examples:
-
-```text
-transaction date present
-amount parseable
-instrument identity present
-currency valid
-duplicate identity understood
-tax classification available downstream
+```mermaid
+flowchart LR
+    A[Artifact identity] --> B[Bronze provenance]
+    B --> C[Canonical fact]
+    C --> D[Financial identity]
+    B -. audit trace .-> D
 ```
 
-A parser that returns rows is not necessarily a valid financial ingestion path.
+Operational provenance and financial identity are related but not interchangeable.
 
----
+## 22. Duplicate and overlap strategy
 
-## 16. Decide failure semantics
+New sources often overlap existing evidence. Decide whether overlap represents:
 
-Should one malformed file:
+- duplicate copies of the same artifact;
+- two brokers reporting the same economic event;
+- historical snapshots with repeated holdings;
+- complementary fields at different grains.
 
-```text
-fail the run?
-be skipped with explicit failure state?
-quarantine the artifact?
-```
+Do not deduplicate solely on amount/date when a deterministic transaction identity or stronger source key exists.
 
-The current production system generally prefers explicit failure over silently incomplete financial state.
+## 23. Historical-source backfills
 
-Do not add `except Exception: pass` around source errors.
+A backfill may cause large portions of Bronze history to become newly available. Because Silver/Gold rebuild from complete Bronze state, downstream analytics will naturally reconstruct against the expanded history.
 
----
+Validate that:
 
-## 17. Update operational configuration
+- deterministic IDs remain stable for unchanged facts;
+- historical valuations do not use future observations;
+- FIFO event order remains correct;
+- tax-year attribution does not drift unexpectedly;
+- Gold history changes only where new evidence justifies it.
 
-If the source introduces:
+## 24. Source replacement and retirement
 
-- a new path,
-- a new file category,
-- a new hash policy,
-- a new source toggle,
+Retiring a source adapter requires more than deleting its extractor. Review discovery categories, Bronze contracts, historical retained evidence, canonical consumers, configuration fields, and documentation.
 
-update the operational Settings model.
+Historical Control Plane events should remain interpretable even after a source family stops being actively discovered.
 
-Do not place source locations in FinancialRules.
+## 25. Security and privacy considerations
 
-Remember:
+Treat source files as sensitive financial evidence. Adapters should:
 
-```text
-Settings
-→ operational environment
+- avoid temporary plaintext copies when bytes can be processed in memory;
+- avoid verbose payload logging;
+- validate archive/file paths if introducing compressed sources;
+- keep credentials/tokens outside committed configuration;
+- minimize retained provider secrets.
 
-FinancialRules
-→ financial semantics
-```
+## 26. Source QA matrix
 
----
+| Scenario | Expected evidence behavior | Expected analytical behavior |
+|---|---|---|
+| unchanged file | no new ingestion work | outputs unchanged |
+| content changed, same path | artifact event + resync | affected analytics rebuild |
+| rename, same content | identity continuity/migration | financial outputs unchanged |
+| file removed | removal event | depends on retained/sync semantics |
+| malformed required schema | fail before canonicalization | no partial publication |
+| valid empty source | synchronized empty evidence | downstream contract-specific empty behavior |
 
-## 18. Update the Data Contract Registry only if persistence contracts change
+## Related specifications
 
-Adding a source does **not** automatically require a new Silver/Gold contract.
-
-If the source feeds an existing canonical contract:
-
-```text
-new source
-→ existing canonical finance
-→ existing Silver/Gold
-```
-
-that is ideal.
-
-Create a new persistent analytical contract only when the downstream financial object is genuinely new.
-
----
-
-## 19. Reconcile downstream outputs
-
-A new source can change financial truth intentionally.
-
-Validation should therefore answer:
-
-```text
-What new evidence entered?
-Which canonical state changed?
-Which household/investment totals changed?
-Can the change be explained from the source?
-```
-
-If the source is merely an alternative provider for the same evidence, stronger equivalence may be expected.
-
----
-
-## 20. Update documentation
-
-At minimum inspect:
-
-```text
-getting-started/configuration.md
-architecture/data-lifecycle.md
-architecture/data-model.md
-developer/adding-data-sources.md
-reference contracts
-`manifest.json` if a new `/docs` technical guide was added
-
-Wiki only if the new source changes the guided conceptual story; do not duplicate the technical source contract there
-```
-
-Use real implementation excerpts once the source path is stable.
-
----
-
-## 21. Source-extension checklist
-
-- [ ] Source semantics classified
-- [ ] Discovery category added
-- [ ] Physical type/hash policy handled
-- [ ] Control Plane lifecycle reused
-- [ ] Raw payload persisted
-- [ ] Extractor implemented
-- [ ] Bronze destination defined
-- [ ] Replacement semantics defined
-- [ ] Source identity preserved where historical
-- [ ] `PENDING_BRONZE → SYNCED` lifecycle respected
-- [ ] Complete Bronze reconstruction updated
-- [ ] Canonical mapping implemented
-- [ ] Grain documented
-- [ ] Data-quality checks defined
-- [ ] Failure semantics explicit
-- [ ] Settings updated if required
-- [ ] FinancialRules changed only for financial policy
-- [ ] Downstream financial outputs reconciled
-- [ ] Docs updated
-
----
-
-## Example extension shape
-
-```text
-New Broker
-   │
-   ├── discovery category
-   ├── hash / artifact lifecycle
-   ├── broker extractor
-   ├── Bronze source table
-   └── canonical mapping
-            ↓
-     Existing Purchase / Sale / Market contracts
-            ↓
-     Existing FIFO / Tax / Benchmark engine
-```
-
-That is the architecture working correctly.
-
-[← Developer Home](README.md) · [← Documentation Home](../README.md)
+- [Control Plane Artifact Lifecycle](../architecture/control-plane-artifact-lifecycle.md)
+- [Bronze Data Contracts](../reference/bronze-data-contracts.md)
+- [Adding Transformations](adding-transformations.md)
+- [Data Contract and Schema Evolution](data-contract-and-schema-evolution.md)
+- [Testing and Validation](testing-and-validation.md)
