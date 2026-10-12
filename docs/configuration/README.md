@@ -1,27 +1,39 @@
 # Configuration
 
-I use two independently loaded, typed configuration families: operational `Settings` for files, stores, and ingestion controls; and `FinancialRules` for the economic interpretation of my data, tax policy, wealth assumptions, and FIRE models. The separation keeps a path change from silently changing a financial definition.
+Personal Finance ETL treats configuration as executable context, not decorative preferences. Runtime settings decide where evidence is discovered and where state is persisted. Financial rules decide how that evidence is classified and interpreted. FIRE and Monte Carlo rules decide how current financial state is projected into uncertain futures. Those are different responsibilities and are documented separately.
 
 ```mermaid
 flowchart LR
- S[Operational Settings] --> ETL[ETL orchestration]
- R[FinancialRules] --> ENG[Financial engines]
- ETL --> CP[Run configuration provenance]
- ENG --> CP
+    TOML1[config.toml] --> S[Settings]
+    TOML2[financial_rules.toml] --> F[FinancialRules]
+    S --> O[Operational topology]
+    F --> C[Canonical classification]
+    F --> Q[Quant and Tax]
+    F --> W[Wealth analytics]
+    F --> MC[FIRE simulation]
+    S --> CP[Run snapshot]
+    F --> CP
+    MC --> SP[Simulation provenance]
 ```
 
-## Technical specifications
+## Reading map
 
-| Document | Responsibility |
-|---|---|
-| [Configuration Architecture](configuration-architecture.md) | Loading, operational settings, financial rules, and runtime handoff |
-| [Validation and Defaults](validation-and-defaults.md) | Pydantic checks, filesystem checks, cross-field constraints, materialized UID validation |
-| [Configuration Snapshots](configuration-snapshots.md) | Canonical JSON, content-addressed snapshots, run linkage |
-| [Financial Rules](financial-rules.md) | Detailed household, investment, allocation, and tax policy |
-| [FIRE Configuration](fire-configuration.md) | Return regimes, simulation controls, withdrawal assumptions, inflation, and model choices |
+| Specification | Question it owns |
+| --- | --- |
+| [Configuration Reference](configuration-reference.md) | Where does the application read, discover and persist data? |
+| [Financial Rules Reference](financial-rules-reference.md) | How is financial evidence classified and interpreted? |
+| [FIRE and Simulation Reference](fire-and-simulation-reference.md) | Which parameters control deterministic FI planning and stochastic simulation? |
 
-## Ownership
+The configuration layer deliberately fails early for missing required paths and structurally invalid rule mappings. A beautifully parameterized model fed by the wrong files is still just a beautifully parameterized wrong answer.
 
-I document *what settings mean and how they are validated* here. I document the actual financial calculations in [Finance](../finance/README.md), snapshot storage and operational lineage in [Control Plane](../control-plane/README.md), and precise physical tables in [Reference](../reference/README.md).
+## Configuration as provenance
 
-[← Documentation home](../README.md)
+Each ETL run snapshots Settings and FinancialRules into the SQLite Control Plane. Simulation provenance separately records the relevant rules/model/input fingerprints and stochastic seed context. Configuration therefore participates in auditability: a result is interpreted in the context of the rules under which it was produced.
+
+## Related specifications
+
+- [System Architecture](../architecture/system-architecture.md)
+- [Deterministic Identity and Replay](../architecture/deterministic-identity-and-replay.md)
+- [Financial Model](../finance/financial-model.md)
+- [FIRE Methodology](../finance/fire-methodology.md)
+- [Testing and Validation](../developer/testing-and-validation.md)
