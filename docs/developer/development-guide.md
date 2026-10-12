@@ -1,624 +1,366 @@
 # Development Guide
 
-Personal Finance ETL is a financial application first and a framework second.
+Personal Finance ETL is a local-first financial data system whose code is divided by authority rather than merely by technical convenience. Development work is safest when it preserves those boundaries: extraction owns source decoding, canonical transformations own normalized financial facts, Quant owns investment reconstruction, Tax owns tax-event normalization, presentation engines own analytical views, the Control Plane owns operational history, and DuckDB owns analytical publication.
 
-The development goal is therefore not maximum abstraction.
-
-It is:
-
-> **Preserve financial behaviour, keep ownership explicit, and introduce extension seams only where real variation exists.**
-
-The main dependency direction is:
-
-```mermaid
-flowchart LR
-    SRC["Source-Specific Code"] --> CP["Control Plane + Raw Evidence"]
-    CP --> BR["Bronze Contracts"]
-    BR --> CAN["Canonical Contracts"]
-    CAN --> ENG["Reusable Financial Engines"]
-    ENG --> PUB["Silver / Gold Contracts"]
-    PUB --> APP["Power BI / Application"]
-
-    RULES["FinancialRules"] --> CAN
-    RULES --> ENG
-    BREG["Bronze Contract Registry"] --> BR
-    REG["DataContract Registry"] --> PUB
-```
-
-Source-specific assumptions should disappear as early as practical.
-
-Decision-specific presentation logic should not leak backward into ingestion.
-
----
+This guide describes the development model that follows from the implementation itself.
 
 ## 1. Package responsibilities
 
-The codebase is organized around responsibilities rather than one giant ETL module.
-
-Conceptually:
-
-```text
-backend/
-├── load/
-│   ├── control_plane/
-│   ├── bronze.py
-│   ├── silver.py
-│   ├── gold.py
-│   ├── metadata.py
-│   └── registry.py
-│
-├── transform/
-│   └── canonical transformation DAG
-│
-├── engines/
-│   ├── analytics/
-│   │   └── investment / FIFO / returns
-│   └── presentation/
-│       └── wealth / cash flow / planning
-│
-└── orchestration
-    └── ETLOrchestrator
+```mermaid
+flowchart TB
+    API[backend/api] --> PIPE[backend/pipeline]
+    PIPE --> EXT[backend/extract]
+    PIPE --> TR[backend/transform]
+    PIPE --> ENG[backend/engines]
+    PIPE --> LOAD[backend/load]
+    CFG[backend/config] --> PIPE
+    CFG --> TR
+    CFG --> ENG
+    LOAD --> CP[load/control_plane]
+    FRONT[frontend] --> API
 ```
 
-The exact package tree can evolve.
+| Package | Primary responsibility | Should not become |
+|---|---|---|
+| `backend/config` | validated operational and financial configuration | hidden runtime state |
+| `backend/extract` | decode source payloads | financial interpretation layer |
+| `backend/pipeline` | orchestration and lifecycle | home for every calculation |
+| `backend/transform` | canonical facts/dimensions | BI presentation layer |
+| `backend/engines/analytics` | investment reconstruction and Quant | source adapter |
+| `backend/engines/tax` | tax-event normalization/presentation | independent FIFO engine |
+| `backend/engines/presentation` | wealth/FIRE/Gold-facing analytics | operational authority |
+| `backend/load` | persistence and contracts | financial policy engine |
+| `frontend` | user interaction | direct warehouse orchestrator |
 
-The responsibility boundaries matter more than folder aesthetics.
+## 2. Start from authority, not filename
 
----
+Before changing code, decide who owns the behavior. A common failure pattern in data systems is implementing logic where the data happens to be available rather than where the semantic authority belongs.
 
-## 2. The Control Plane boundary
+```mermaid
+flowchart LR
+    Q{What is changing?}
+    Q -->|source decoding| E[Extractor]
+    Q -->|canonical financial fact| T[Transform]
+    Q -->|FIFO / realized investment state| IQ[Quant]
+    Q -->|tax evidence| TX[Tax]
+    Q -->|BI / wealth / FIRE presentation| P[Presentation]
+    Q -->|persistence contract| L[Load / registry / DDL]
+    Q -->|operational history| C[Control Plane]
+```
 
-Operational persistence is hidden behind `ControlPlane`:
+A Gold builder having access to purchases does not make it the right place to calculate realized gain. The Quant Engine already owns that fact. Duplicate authority is how two dashboards eventually disagree while both look extremely confident.
+
+## 3. Configuration is a dependency
+
+`Settings` and `FinancialRules` are explicit constructor/runtime dependencies throughout the system. Do not replace them with module globals or hard-coded financial policy.
+
+`Settings` controls physical execution. `FinancialRules` controls financial semantics. Their snapshots are persisted with run provenance.
+
+See [Configuration Reference](../configuration/configuration-reference.md) and [Financial Rules Reference](../configuration/financial-rules-reference.md).
+
+## 4. Canonical facts are the anti-corruption layer
+
+Source formats are heterogeneous. Downstream engines should consume canonical tables rather than broker-specific spreadsheets or CSV column names.
+
+```mermaid
+flowchart LR
+    B1[Broker A] --> E[Extract]
+    B2[Broker B] --> E
+    H[Household DB] --> E
+    E --> B[Bronze]
+    B --> C[Canonical Silver facts]
+    C --> Q[Quant]
+    C --> T[Tax]
+    C --> W[Wealth]
+```
+
+If a new source requires downstream code to repeatedly ask which broker produced a row, the canonicalization boundary probably needs more work.
+
+## 5. Lazy versus stateful computation
+
+The codebase deliberately uses two compute styles.
+
+**Polars LazyFrames** fit relational transformations, joins, filters, projections, and aggregation DAGs.
+
+**Explicit Python state machines** fit FIFO lots, reconciliation, and stochastic simulation where ordered state mutation is the algorithm.
+
+Do not force stateful financial reconstruction into clever relational expressions merely to reduce Python lines. Equally, do not replace vectorized transformations with row loops because they are easier to sketch.
+
+```mermaid
+flowchart TD
+    OP{Does result depend on ordered mutable state?}
+    OP -->|No| POLARS[Polars expression / LazyFrame]
+    OP -->|Yes| STATE[Explicit stateful algorithm]
+    POLARS --> VALIDATE[Validate grain + semantics]
+    STATE --> VALIDATE
+```
+
+## 6. Grain is mandatory
+
+Every persistent analytical dataset needs a precise grain. The registry records grain for Silver and Gold contracts; documentation expands its semantic meaning.
+
+Examples include:
+
+- `Day`
+- `Date-Currency`
+- `Transaction`
+- `ISIN-Date-Lot`
+- `RealizedEvent`
+- `ReconciliationEvent`
+
+A table without a clear grain is not "flexible." It is an argument waiting for a future aggregation.
+
+## 7. Identity is semantic
+
+Deterministic identities are protocol contracts. When extending purchase, sale, lot, realized, reconciliation, or tax event semantics, inspect `backend/utils/identity.py` and [Deterministic Identity and Replay](../architecture/deterministic-identity-and-replay.md).
+
+Never change identity inputs casually. A deterministic identifier is useful precisely because identical financial facts reproduce the same identity across rebuilds.
+
+## 8. Registry-governed publication
+
+`backend/load/registry.py` is the publication catalog for Bronze and analytical contracts. Before Silver/Gold loading, the orchestrator checks both directions:
 
 ```python
-class ControlPlane:
-    def __init__(self, base_path: str, db_name: str = "Raw_Documents.sqlite"):
-        self.db = SQLiteManager(base_path, db_name)
-        self.artifacts = ArtifactRepository(self.db)
-        self.runs = RunRepository(self.db)
-        self.file_sync = FileSyncService(self.artifacts)
-```
-
-When adding operational behaviour, first ask which responsibility owns it:
-
-```text
-artifact identity / payload / sync
-→ ArtifactRepository
-
-run / failure / provenance
-→ RunRepository
-
-filesystem reconciliation
-→ FileSyncService
-
-cross-system coordination
-→ ETLOrchestrator
-```
-
-Avoid placing repository SQL directly in the orchestrator unless the boundary genuinely changes.
-
----
-
-## 3. Canonical contracts are the anti-corruption layer
-
-Source systems are allowed to be messy.
-
-Downstream financial engines should not be.
-
-```text
-Broker A vocabulary
-Bank B vocabulary
-Excel C vocabulary
-        ↓
-source extraction / mapping
-        ↓
-canonical financial contracts
-        ↓
-shared engines
-```
-
-If a new source requires adding source-specific `if` statements throughout FIFO, wealth, and FIRE, the source boundary is leaking.
-
-Fix the normalization boundary rather than teaching every engine about the new provider.
-
----
-
-## 4. FinancialRules is policy, not infrastructure
-
-Financial policy should enter engines through validated rules.
-
-For example:
-
-```python
-class PortfolioManagementRules(BaseModel):
-    rebalance_tolerance_pct_points: float = Field(
-        default=5.0,
-        ge=0.0,
-    )
-```
-
-A developer should distinguish:
-
-```text
-value varies
-→ configuration
-
-algorithm varies
-→ strategy / pipeline / adapter
-
-financial concept is stable
-→ canonical model
-```
-
-That prevents `FinancialRules` from becoming an enormous switchboard for fundamentally different behaviour.
-
----
-
-## 5. Persistence contracts are explicit
-
-v6.5.3 uses two registries because source synchronization and canonical analytical publication have different contracts.
-
-### Bronze source contracts
-
-`BRONZE_CONTRACT_REGISTRY` defines the relationship between extraction output, Control Plane sync category, physical Bronze table, and replacement semantics:
-
-```python
-@dataclass
-class BronzeDataContract:
-    extraction_attribute: str
-    sync_category: str
-    physical_table: str
-    is_full_replace: bool
-```
-
-There are currently **16 Bronze contracts**.
-
-A new Bronze source must answer:
-
-```text
-Which extraction attribute carries it?
-Which sync category owns artifact state?
-Which physical Bronze table stores it?
-Is the table full-replace or file-owned historical state?
-```
-
-### Silver / Gold analytical contracts
-
-`DATA_CONTRACT_REGISTRY` defines canonical publication identity:
-
-```python
-@dataclass
-class DataContract:
-    contract_id: str
-    layer: str
-    physical_table: str
-    domain: str
-    grain: str
-    producer: str
-    publication_order: int
-```
-
-There are currently **20 Silver contracts and 17 Gold contracts**.
-
-A new persistent analytical output should define:
-
-```text
-What is the dataset?
-Which layer owns it?
-What physical table receives it?
-What does one row mean?
-Which component produces it?
-When should it publish?
-```
-
-before writing loader code.
-
-The registries are runtime contracts, not documentation catalogs. Registry validation checks uniqueness and expected contract counts before the analytical run proceeds.
-
----
-
-## 6. Publication follows the registry
-
-Gold publication is intentionally simple:
-
-```python
-contracts = sorted(
-    (c for c in DATA_CONTRACT_REGISTRY if c.layer == "gold"),
-    key=lambda c: c.publication_order,
-)
-
-for contract in contracts:
-    if contract.contract_id in dfs:
-        self._write(
-            dfs[contract.contract_id],
-            contract.physical_table,
+registered_contracts = {c.contract_id for c in DATA_CONTRACT_REGISTRY}
+for df_key in self.dfs.keys():
+    if df_key not in registered_contracts:
+        raise RuntimeError(
+            f"Engine produced unregistered table '{df_key}'. "
+            "All analytical tables must be defined in DATA_CONTRACT_REGISTRY."
         )
+
+missing_contracts = registered_contracts - set(self.dfs.keys())
+if missing_contracts:
+    raise RuntimeError(f"Engine failed to produce required tables: {missing_contracts}")
 ```
 
-The loader should not rediscover analytical identity from naming conventions.
+That establishes the core publication invariant:
 
-The registry is the publication contract.
+$$\text{Produced analytical outputs} = \text{Registered analytical contracts}$$
 
----
+Neither side gets to ghost the other.
 
-## 7. Choose the compute model that matches the problem
+## 9. Silver and Gold are complete publications
 
-The project intentionally uses several execution styles.
+Silver and Gold loaders drop/recreate their schemas and publish all registered outputs in registry order. Development therefore targets complete analytical reconstruction, not incremental mutation of derived state.
 
-| Workload | Preferred model |
-| --- | --- |
-| Tabular transformation | Polars LazyFrames |
-| Stateful FIFO inventory | Python state objects |
-| Per-instrument isolation | multiprocessing |
-| Stochastic simulation | NumPy / Numba |
-| Analytical persistence | DuckDB |
-| Operational persistence | SQLite |
-
-Do not force a workload into a technology merely for consistency.
-
-Consistency of **semantics and boundaries** matters more.
-
----
-
-## 8. LazyFrames should remain lazy where useful
-
-Transformation/presentation logic should generally avoid premature collection.
-
-Independent presentation outputs can be executed together:
-
-```python
-results = pl.collect_all(
-    lazy_frames,
-    engine="streaming",
-)
-```
-
-Materialize where:
-
-- persistence requires it,
-- a stateful algorithm requires concrete rows,
-- debugging/validation requires explicit state,
-- an external API requires eager values.
-
-Do not collect merely because eager dataframes feel easier.
-
----
-
-## 9. Stateful algorithms should be explicit
-
-FIFO is a good example.
-
-A sale changes the state available to the next sale.
-
-That is naturally represented through state:
-
-```python
-while rem > 0 and self._active_lots:
-    lot = self._active_lots[0]
-    consumed = min(rem, lot.qty)
-    # realize consumed quantity
-    # retain any remaining inventory
-```
-
-Trying to hide that state transition inside increasingly clever dataframe expressions would make the financial methodology harder to inspect.
-
-Readable stateful code is preferable.
-
----
-
-## 10. Parallelism needs a safe boundary
-
-ISIN is a natural process boundary because one instrument's tax-lot queue does not need mutable state from another instrument.
+Bronze is different: it is persistent and synchronization-aware.
 
 ```mermaid
 flowchart LR
-    PORT["Canonical Portfolio"] --> A["ISIN A"]
-    PORT --> B["ISIN B"]
-    PORT --> C["ISIN C"]
-    A --> COMB["Combine"]
-    B --> COMB
-    C --> COMB
+    SRC[Changed evidence] --> BR[Incremental/full-replace Bronze]
+    BR --> FULL[Complete Bronze state]
+    FULL --> S[Rebuilt Silver]
+    S --> G[Rebuilt Gold]
 ```
 
-When adding parallel work, ask:
+This trade-off simplifies correctness at the current workload scale.
+
+## 10. Failure semantics are part of the interface
+
+An extension must decide whether malformed input:
+
+- fails the run;
+- produces null/undefined analytical state;
+- creates a review status;
+- is skipped as non-actionable evidence.
+
+The choice must match financial meaning. For example, invalid XIRR evidence is represented with typed statuses rather than silently becoming zero return.
+
+## 11. Cross-database boundaries
+
+DuckDB and SQLite participate in one logical run but do not form a distributed ACID transaction. Extensions touching both must respect the documented commit/healing model.
+
+Do not add a new cross-store write sequence that assumes atomicity the infrastructure does not provide.
+
+See [Reliability and Recovery](../architecture/reliability-and-recovery.md).
+
+## 12. Logging and operational context
+
+Use the project logger and status interfaces rather than ad-hoc prints in production paths. Errors should preserve stage/workload context where useful, especially for per-ISIN Quant work.
+
+A failure message that says only `ValueError` is technically honest and operationally useless.
+
+## 13. Development environment
+
+The project requires Python 3.13+ and is built with Hatchling. Dependency metadata lives in `pyproject.toml`. Development should use the package entry points rather than relying on accidental working-directory imports.
+
+Before structural changes, inspect:
 
 ```text
-Is state independent?
-Are inputs serializable?
-Are outputs deterministic enough to combine?
-How do failures propagate?
+pyproject.toml
+src/personal_finance_etl/
+tests/run_headless.py
+production-hardening.md
+qa-hardening.md
 ```
 
-The current investment policy is fail-fast: a failed ISIN fails the analytical stage.
+The hardening documents are useful QA intent, but production source remains the implementation authority.
 
----
+## 14. Static quality tools
 
-## 11. Failure semantics are part of the interface
+The repository configuration includes modern Python tooling. Run the configured formatter/linter/type checks appropriate to the project before treating a change as complete. Static tools catch structural defects; they do not validate financial semantics.
 
-Do not catch an exception merely to keep the pipeline moving.
+That distinction matters. A perfectly typed FIFO bug remains a FIFO bug, just with excellent autocomplete.
 
-Ask whether partial output is financially valid.
+## 15. Financial-output equivalence
 
-For investment analytics:
+Refactors that claim to preserve behavior should compare financial outputs, not merely code execution. Relevant comparisons include:
 
-```text
-19 successful instruments
-+ 1 missing instrument
-≠ successful portfolio
-```
+- row counts by registered contract;
+- deterministic identities;
+- aggregate balances;
+- investment quantities and cost basis;
+- realized-event totals;
+- tax-event totals;
+- Gold metric outputs;
+- simulation fingerprints where replay context is expected to match.
 
-The worker error must propagate.
+## 16. Performance work
 
-The orchestrator owns rollback and run failure persistence.
+Optimize after identifying the actual cost center. The architecture already separates persistent Bronze ingestion from full analytical rebuild, and uses Polars/streaming collection where useful.
 
-Worker observability is also part of the interface. Per-ISIN workers attach `run_id`, stage and ISIN context and emit through the multiprocessing logging queue into the parent listener.
+Prefer removing redundant work, unnecessary materialization, repeated scans, and avoidable conversions before introducing concurrency complexity.
 
-Do not make successful logging a prerequisite for propagating the real worker failure.
-
-```text
-worker failure
-→ parent receives structured error
-→ analytical stage fails
-→ rollback / run failure
-
-worker log
-→ forensic context
-→ useful, but not the correctness channel
-```
-
----
-
-## 12. Persistence changes require contract thinking
-
-A schema change can affect:
-
-```text
-extraction / builder output
-BronzeDataContract or DataContract registry
-DuckDB DDL
-Meta projection / row counts
-Control Plane sync semantics where applicable
-Power BI
-documentation
-```
-
-Treat persisted schemas as interfaces.
-
-A column rename is not "just refactoring" once a BI model consumes it.
-
----
-
-## 13. Grain is mandatory
-
-Before adding a mart or analytical frame, write the grain in plain language.
-
-Examples:
-
-```text
-Month
-Month × Asset
-Month × ISIN
-Date × ISIN
-Date × Class
-Date × ISIN × Lot
-```
-
-If the grain cannot be stated cleanly, the dataset probably is not ready to become a contract.
-
----
-
-## 14. Non-additive metrics require target-grain logic
-
-Do not aggregate:
-
-```text
-XIRR
-CAGR
-Max Drawdown
-allocation weights
-rates
-```
-
-by averaging child values unless the methodology explicitly supports it.
-
-For example:
-
-```text
-Portfolio XIRR
-≠ average(ISIN XIRR)
-```
-
-Reconstruct the target-grain cash flows and solve again.
-
----
-
-## 15. Keep documentation code-grounded
-
-Documentation is packaged application content.
-
-The manifest drives discovery:
-
-```text
-README + docs/*.md
-→ manifest.json
-→ DocsCatalog
-→ DocsRenderer
-→ canonical navigation + H1/H2/H3 TOC
-→ bundled Mermaid
-→ CLI / Desktop
-```
-
-When adding a substantive document:
-
-1. create the Markdown file,
-2. add it to `manifest.json`,
-3. assign intentional order,
-4. verify repository links,
-5. verify packaged renderer behaviour.
-
-Do not hard-code new filenames in the UI.
-
----
-
-## 16. Renderer compatibility matters
-
-The current renderer provides Markdown, canonical internal navigation, generated H1/H2/H3 TOC, and bundled Mermaid rendering. It does not provide a MathJax/KaTeX mathematics stage.
-
-Therefore documentation should prefer renderer-safe equations:
-
-```text
-FI Target = Annual Core Expense / Withdrawal Rate
-```
-
-rather than unsupported LaTeX display blocks.
-
-The docs must render consistently across:
-
-```text
-GitHub
-packaged application
-CLI / GUI docs browser
-```
-
-The GitHub Wiki is a separate guided-learning surface. It may link into `/docs`, but it is not another renderer target for the same technical page.
-
----
-
-## 17. Recovery boundaries are extension contracts
-
-Snapshot/Restore treats SQLite Control Plane state and DuckDB analytical state as one recovery unit.
-
-Code that writes either persistence plane must respect the same production lock and must not introduce side effects that make an all-new-or-all-old restore impossible.
-
-Likewise, Bronze recovery should continue to reuse normal ingestion:
-
-```text
-analytical drift
-→ PENDING_BRONZE
-→ normal extraction / Bronze synchronization
-→ SYNCED
-```
-
-Do not add a parallel "repair loader" unless the normal lifecycle genuinely cannot express the recovery semantics.
-
----
-
-## 18. Static quality tools
-
-The project uses strict quality tooling.
-
-Before committing meaningful code changes, run the project's configured checks, including:
-
-```text
-Ruff
-mypy
-Pyright
-```
-
-Use the commands configured by the repository rather than maintaining a second undocumented quality workflow.
-
-Typing is especially useful at boundaries:
-
-- configuration models,
-- engine interfaces,
-- repositories,
-- contract registries,
-- orchestration.
-
----
-
-## 19. Financial-output equivalence is a refactoring gate
-
-Infrastructure refactors can be large while financial truth remains stable.
-
-That was the rule during the 6.2.x Control Plane redesign.
-
-For a refactor that is not intentionally changing methodology:
-
-```text
-architecture can change
-performance can change
-observability can improve
-
-but
-
-financial outputs should reconcile
-```
-
-This is one of the most important development disciplines in the repository.
-
----
-
-## 20. Performance work starts by removing useless work
-
-The production-hardening cycle reduced the current end-to-end workload from roughly:
-
-```text
-~23 seconds
-```
-
-to:
-
-```text
-~14–17 seconds
-```
-
-on the current production environment while preserving financial outputs.
-
-A meaningful part of that work came from deleting analytics that no longer supported a decision.
-
-Before micro-optimizing a slow computation, ask:
-
-> **Should this computation exist at all?**
-
----
-
-## 21. Development workflow
-
-A safe change currently follows:
+## 17. Development workflow
 
 ```mermaid
-flowchart LR
-    Q["Define financial / engineering question"] --> B["Identify owning boundary"]
-    B --> C["Implement smallest coherent change"]
-    C --> STATIC["Ruff · mypy · Pyright"]
-    STATIC --> RUN["Headless / representative run"]
-    RUN --> REC["Reconcile financial outputs"]
-    REC --> DOC["Update contracts + docs"]
+flowchart TD
+    A[Define semantic change] --> B[Locate authority]
+    B --> C[Define grain + identity]
+    C --> D[Implement smallest coherent change]
+    D --> E[Update registry / DDL if persistent]
+    E --> F[Run targeted validation]
+    F --> G[Run headless end-to-end pipeline]
+    G --> H[Compare financial outputs]
+    H --> I[Update reference + developer docs]
 ```
 
-The repository does not yet have a broad automated unit/component/integration suite. Production reconciliation and the headless harness are therefore current validation signals, not substitutes for the planned QA expansion.
+### Before coding
 
-For methodology changes, the reconciliation step becomes an intentional before/after explanation rather than an equivalence check.
+- identify authority and consumers;
+- write down the intended grain;
+- identify whether deterministic identity changes;
+- determine persistence and migration implications;
+- identify recovery boundaries.
 
----
+### During coding
 
-## 22. Extension checklist
+- keep source-specific logic at source boundaries;
+- preserve canonical semantics;
+- fail closed for invalid financial evidence where the existing subsystem does;
+- avoid duplicate financial authorities;
+- keep registry/DDL/output keys synchronized.
 
-Before merging an extension, ask:
+### Before merge/release
 
-- Does source-specific logic terminate upstream of canonical finance?
-- Is the new grain explicit?
-- Is policy in FinancialRules rather than hidden literals?
-- Does genuinely new behaviour have a proper strategy/pipeline boundary?
-- Are failures explicit?
-- If Bronze persistence changed, is `BRONZE_CONTRACT_REGISTRY` correct?
-- If Silver/Gold persistence changed, is `DATA_CONTRACT_REGISTRY` correct?
-- Are `PENDING_BRONZE` replay/self-healing semantics preserved where applicable?
-- Does physical DDL match extraction/builder output?
-- Do Meta row counts use contract identity?
-- Do existing financial outputs reconcile where expected?
-- Does documentation show the real implementation?
-- Does the packaged docs renderer still work?
+- run static checks;
+- run targeted validation;
+- run the headless pipeline on representative data;
+- inspect contract row counts and financial reconciliation;
+- verify deterministic identities where relevant;
+- update docs from implementation, not from intention.
 
----
+## 18. Completion checklist
 
-## Go deeper
+A change is complete only when all applicable items are true:
 
-- [Adding a Data Source](adding-data-sources.md)
-- [Adding an Asset Pipeline](adding-asset-pipelines.md)
-- [Adding a Gold Mart](adding-gold-marts.md)
+- [ ] semantic owner is correct;
+- [ ] grain is explicit;
+- [ ] identity behavior is understood;
+- [ ] producer output exists;
+- [ ] persistence contract exists where required;
+- [ ] DDL and registry agree;
+- [ ] downstream consumers are updated;
+- [ ] failure behavior is intentional;
+- [ ] runtime validation exists where appropriate;
+- [ ] end-to-end pipeline succeeds;
+- [ ] financial outputs are reconciled;
+- [ ] documentation is updated.
+
+## 19. Reading the orchestration path
+
+When a change behaves unexpectedly, trace it from `ETLOrchestrator.run()` rather than guessing from package names. The orchestrator establishes schemas, opens the Control Plane, creates the run, snapshots configuration, discovers/synchronizes evidence, executes transforms/engines, validates contracts, publishes Silver/Gold, refreshes Meta, and commits.
+
+```mermaid
+sequenceDiagram
+    participant O as ETLOrchestrator
+    participant CP as Control Plane
+    participant B as Bronze
+    participant E as Engines
+    participant L as Silver/Gold
+    participant M as Meta
+    O->>CP: start run + snapshots
+    O->>B: synchronize evidence
+    O->>E: build canonical/analytical outputs
+    O->>O: validate contract completeness
+    O->>L: publish full analytical schemas
+    O->>M: refresh current analytical context
+    O->>O: commit DuckDB then SQLite
+```
+
+This sequence is the fastest way to answer "where should this hook live?". If a proposed extension needs to execute before canonical transformation, adding it to a Gold builder is structurally wrong even if it can technically access the required data.
+
+## 20. Reading the registry as architecture
+
+The registry is small enough to inspect directly and rich enough to reveal the analytical system's publication topology. During development, use it to answer:
+
+- which outputs are persistent;
+- which engine owns them;
+- which layer receives them;
+- what grain the system claims;
+- in what deterministic order they publish.
+
+When implementation and registry disagree, fix the disagreement rather than teaching documentation to explain around it.
+
+## 21. Local-first development implications
+
+Local-first changes should preserve:
+
+- no mandatory cloud control plane;
+- no source-data upload requirement;
+- deterministic local database locations from Settings;
+- backup/restore of the local recovery unit;
+- privacy-safe logging and fixtures.
+
+A convenience integration that requires transmitting raw financial evidence would be an architectural change, not merely another adapter.
+
+## 22. Concurrency boundaries
+
+Parallelism is useful only where state ownership remains clear. Per-ISIN analytical work and Polars collection can exploit concurrency; shared mutable portfolio/control-plane state requires stricter boundaries.
+
+Before parallelizing a loop, identify:
+
+1. mutable objects shared across tasks;
+2. database connection/thread-safety assumptions;
+3. deterministic ordering requirements;
+4. error propagation/cancellation behavior;
+5. whether result ordering affects identity.
+
+Speeding up nondeterministic financial state is an unusually efficient way to create faster bugs.
+
+## 23. Logging as an observability contract
+
+Use structured prefixes/stages already present in the pipeline so logs can be read as an execution trace. Useful logs identify phase, workload, and elapsed time without dumping sensitive payloads.
+
+Do not log full broker rows, tax evidence, account numbers, or retained payload bytes for convenience.
+
+## 24. Documentation is part of definition of done
+
+A code change that alters a contract but leaves `/docs` stale creates two implementations: the one Python executes and the one humans believe exists. The code will win eventually, usually after wasting someone's afternoon.
+
+Update the narrowest authoritative surface:
+
+- physical schema -> Reference;
+- algorithm/financial semantics -> Finance;
+- system boundary -> Architecture;
+- extension procedure -> Developer;
+- user operation -> Getting Started.
+
+## Related specifications
+
 - [System Architecture](../architecture/system-architecture.md)
-- [Design Decisions](../architecture/design-decisions.md)
-
-[← Developer Home](README.md) · [← Documentation Home](../README.md)
+- [Data Lifecycle](../architecture/data-lifecycle.md)
+- [Reliability and Recovery](../architecture/reliability-and-recovery.md)
+- [Data Contract and Schema Evolution](data-contract-and-schema-evolution.md)
+- [Testing and Validation](testing-and-validation.md)
