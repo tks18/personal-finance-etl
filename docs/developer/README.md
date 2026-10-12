@@ -18,6 +18,11 @@ flowchart LR
     VERIFY --> DOCS[Reference + developer docs]
 ```
 
+
+## Understand the extension model first
+
+The Developer section specifies how to change the implementation safely. The Wiki's **[Engineering Decisions](https://github.com/tks18/personal-finance-etl/wiki/13-Engineering-Decisions)** and **[Configuration & Customization](https://github.com/tks18/personal-finance-etl/wiki/14-Configuration-and-Customization)** explain the architectural reasoning behind those extension protocols before you touch producers, contracts, identities, or schemas.
+
 ## What this section owns
 
 | Specification | Question it answers |

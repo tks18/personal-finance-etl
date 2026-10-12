@@ -6,6 +6,13 @@ That is a lot of territory for something that started life as personal-finance a
 
 This `/docs` tree is the canonical **technical specification layer**. It explains the implementation deeply enough to reason about ownership, data grain, deterministic identity, algorithms, financial semantics, invariants, failure behavior, recovery, configuration, and safe extension.
 
+
+## Prefer a guided explanation?
+
+The technical documentation is intentionally the deepest specification layer. For a concept-first journey through the same system, use the **[GitHub Wiki](https://github.com/tks18/personal-finance-etl/wiki)**.
+
+Good starting points: [Architecture Tour](https://github.com/tks18/personal-finance-etl/wiki/02-Architecture-Tour) · [Evidence, Identity & Reconciliation](https://github.com/tks18/personal-finance-etl/wiki/05-Evidence-Identity-and-Reconciliation) · [Financial Model](https://github.com/tks18/personal-finance-etl/wiki/06-Financial-Model) · [Investment Engine](https://github.com/tks18/personal-finance-etl/wiki/07-Investment-Engine) · [Reliability & Recovery](https://github.com/tks18/personal-finance-etl/wiki/12-Reliability-and-Recovery).
+
 ## Documentation contract
 
 The repository uses four documentation surfaces with deliberately different jobs:

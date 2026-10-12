@@ -6,6 +6,11 @@ This section specifies that architecture from the outside in. It explains the ap
 
 > **Architecture rule:** a dataset is not authoritative merely because it is convenient to query. SQLite, Bronze, Silver, Gold, and DuckDB Meta deliberately own different kinds of state. DuckDB is excellent at analytics; it does not need a side hustle as the historical Control Plane.
 
+
+## Learn the architecture first
+
+These pages specify the architecture in implementation-level depth. For the guided mental model, start with the Wiki's **[Architecture Tour](https://github.com/tks18/personal-finance-etl/wiki/02-Architecture-Tour)**, then follow [Follow the Data](https://github.com/tks18/personal-finance-etl/wiki/03-Follow-the-Data), [Operational Truth](https://github.com/tks18/personal-finance-etl/wiki/04-Operational-Truth), and [Reliability & Recovery](https://github.com/tks18/personal-finance-etl/wiki/12-Reliability-and-Recovery).
+
 ## Reading map
 
 ```mermaid

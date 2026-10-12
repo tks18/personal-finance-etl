@@ -14,7 +14,7 @@ What started as a practical month-end ETL gradually became the system I use to r
 ![DuckDB](https://img.shields.io/badge/Analytics-DuckDB-FFF000?logo=duckdb&logoColor=000)
 ![Polars](https://img.shields.io/badge/Compute-Polars-CD792C)
 
-**Explore the project:** [Wiki Home](https://github.com/tks18/personal-finance-etl/wiki) · [Architecture Tour](https://github.com/tks18/personal-finance-etl/wiki/02-Architecture-Tour) · [Follow the Data](https://github.com/tks18/personal-finance-etl/wiki/03-Follow-the-Data) · [Investment Engine](https://github.com/tks18/personal-finance-etl/wiki/06-Investment-Engine) · [FIRE & Planning](https://github.com/tks18/personal-finance-etl/wiki/08-FIRE-and-Planning) · [Technical Docs](docs/README.md)
+**Explore the project:** [Wiki Home](https://github.com/tks18/personal-finance-etl/wiki) · [Architecture Tour](https://github.com/tks18/personal-finance-etl/wiki/02-Architecture-Tour) · [Follow the Data](https://github.com/tks18/personal-finance-etl/wiki/03-Follow-the-Data) · [Investment Engine](https://github.com/tks18/personal-finance-etl/wiki/07-Investment-Engine) · [FIRE & Planning](https://github.com/tks18/personal-finance-etl/wiki/10-FIRE-and-Planning) · [Technical Docs](docs/README.md)
 
 ## The system at a glance
 
@@ -1014,6 +1014,13 @@ flowchart TB
 ```
 
 The Gold layer therefore acts as a serving contract. It is not where source cleanup or core financial reconstruction should suddenly appear because a dashboard deadline got exciting.
+
+
+### Explore
+
+**Wiki:** [Home](https://github.com/tks18/personal-finance-etl/wiki) · [Architecture Tour](https://github.com/tks18/personal-finance-etl/wiki/02-Architecture-Tour) · [Follow the Data](https://github.com/tks18/personal-finance-etl/wiki/03-Follow-the-Data) · [Evidence, Identity & Reconciliation](https://github.com/tks18/personal-finance-etl/wiki/05-Evidence-Identity-and-Reconciliation) · [Investment Engine](https://github.com/tks18/personal-finance-etl/wiki/07-Investment-Engine) · [Tax Evidence & Planning](https://github.com/tks18/personal-finance-etl/wiki/09-Tax-Evidence-and-Planning) · [FIRE & Planning](https://github.com/tks18/personal-finance-etl/wiki/10-FIRE-and-Planning)
+
+**Technical reference:** [`/docs`](docs/README.md) · **Run it:** [Getting Started](docs/getting-started/README.md)
 
 ---
 

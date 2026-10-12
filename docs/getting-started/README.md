@@ -4,6 +4,11 @@ Personal Finance ETL is a local-first financial data platform. Getting Started i
 
 This section deliberately does **not** re-teach the architecture. It explains what must exist, which command actually launches what, what a first run creates, and where to go when the system refuses to proceed. That refusal is usually useful: financial pipelines should be slightly less trusting than a spreadsheet opened from an email attachment.
 
+
+## Want the guided operating tour?
+
+Use **[Running & Exploring](https://github.com/tks18/personal-finance-etl/wiki/15-Running-and-Exploring)** for the conceptual walkthrough of entry points, first-run behavior, outputs, automation, snapshots, and the local documentation portal. Use this section for the exact installation and operating steps.
+
 ## Journey
 
 ```mermaid

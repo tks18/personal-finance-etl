@@ -17,6 +17,11 @@ flowchart LR
     ID -. governs .-> G
 ```
 
+
+## Need the concepts before the contracts?
+
+Reference answers **exactly what the physical contract is**. The Wiki explains why those contracts exist and how they interact. Start with [Follow the Data](https://github.com/tks18/personal-finance-etl/wiki/03-Follow-the-Data), [Evidence, Identity & Reconciliation](https://github.com/tks18/personal-finance-etl/wiki/05-Evidence-Identity-and-Reconciliation), or [Warehouse & Power BI](https://github.com/tks18/personal-finance-etl/wiki/11-Warehouse-and-Power-BI) before returning here for exact schemas, grains, identities, and ownership.
+
 ## Contract inventory
 
 | Contract surface | Count | Authority | Primary role |

@@ -17,6 +17,11 @@ flowchart LR
     W --> F[FIRE / planning]
 ```
 
+
+## Learn the financial model as a journey
+
+This section specifies the financial algorithms and semantics. The Wiki teaches the same domain concept-first: [Financial Model](https://github.com/tks18/personal-finance-etl/wiki/06-Financial-Model) → [Investment Engine](https://github.com/tks18/personal-finance-etl/wiki/07-Investment-Engine) / [Cash Flow & Wealth](https://github.com/tks18/personal-finance-etl/wiki/08-Cash-Flow-and-Wealth) → [Tax Evidence & Planning](https://github.com/tks18/personal-finance-etl/wiki/09-Tax-Evidence-and-Planning) → [FIRE & Planning](https://github.com/tks18/personal-finance-etl/wiki/10-FIRE-and-Planning).
+
 ## Reading order
 
 | Specification | Question it owns |

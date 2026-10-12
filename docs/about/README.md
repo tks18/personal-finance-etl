@@ -13,6 +13,11 @@ flowchart LR
     NOW --> ROADMAP["Roadmap<br/>protect · validate · maintain"]
 ```
 
+
+## Prefer the guided story?
+
+The Wiki opens with **[Why This Exists](https://github.com/tks18/personal-finance-etl/wiki/01-Why-This-Exists)** and closes with **[Project Journey & What's Next](https://github.com/tks18/personal-finance-etl/wiki/16-Project-Journey-and-Whats-Next)**. Those pages teach the project's evolution as a narrative; the About documents here preserve the deeper project and creator context.
+
 ## Start here
 
 | Document | Question it answers |

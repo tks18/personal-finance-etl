@@ -16,6 +16,11 @@ flowchart LR
     MC --> SP[Simulation provenance]
 ```
 
+
+## Understand what the knobs mean
+
+For the conceptual boundary between runtime settings, financial policy, and stochastic assumptions, read **[Configuration & Customization](https://github.com/tks18/personal-finance-etl/wiki/14-Configuration-and-Customization)** first. Return here for the exact Pydantic-backed configuration contracts and validation behavior.
+
 ## Reading map
 
 | Specification | Question it owns |
