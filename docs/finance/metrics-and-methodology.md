@@ -1,479 +1,492 @@
-# Metrics & Methodology
+# Metrics and Methodology
 
-A financial metric is not fully defined by its formula.
+Personal Finance ETL uses a broad quantitative vocabulary across household finance, investment reconstruction, tax evidence and FIRE planning. This specification defines the formulas, grains and failure semantics behind those metrics so that a familiar label such as “return,” “runway,” or “tax” cannot quietly change meaning between layers.
 
-It also needs:
 
-```text
-grain
-cash-flow treatment
-time convention
-tax treatment
-benchmark convention
-aggregation behaviour
-interpretation
-```
+## Purpose and metric ownership
 
-This page documents the methodology principles behind the current serving model.
-
----
-
-## 1. The current metric surface is intentionally curated
-
-Earlier versions calculated a broader set of institutional-style risk measures.
-
-The production-hardening cycle removed metrics and processing that did not materially support my personal decision workflow.
-
-The current investment serving surface emphasizes:
-
-```text
-CAGR
-XIRR
-After-Tax XIRR
-Benchmark CAGR
-Benchmark XIRR
-Active Return
-Max Drawdown
-Outperforming Lot Ratio
-tax-aware position state
-```
-
-The principle is:
-
-> **Compute richly. Publish selectively.**
-
----
-
-## 2. CAGR
-
-For positive start/end values:
-
-```text
-CAGR = (V_end / V_start)^(365 / days) - 1
-```
-
-where:
-
-- \(V_{start}\) = starting value,
-- \(V_{end}\) = ending value,
-- \(d\) = elapsed days.
-
-The production helper is intentionally small:
-
-```python
-def calculate_cagr(
-    start_value: float,
-    end_value: float,
-    days: int,
-) -> float:
-    if start_value <= 0 or end_value <= 0 or days <= 0:
-        return 0.0
-
-    try:
-        return float(
-            ((end_value / start_value) ** (365.0 / days)) - 1
-        )
-    except OverflowError:
-        return float("nan")
-```
-
-### Interpretation
-
-CAGR is useful when a start/end value relationship is meaningful.
-
-It is not a substitute for cash-flow-aware performance when capital moves during the period.
-
----
-
-## 3. XIRR
-
-XIRR solves for \(r\):
-
-```text
-Find r such that:
-
-Σ [ CF_i / (1 + r)^((d_i - d_0) / 365) ] = 0
-```
-
-The production wrapper delegates numerical solving to `pyxirr`:
-
-```python
-def calculate_xirr(
-    dates: list[date],
-    amounts: list[float],
-) -> float:
-    try:
-        result = xirr(dates, amounts)
-        return (
-            float(result)
-            if result is not None
-            else float("nan")
-        )
-    except Exception:
-        return float("nan")
-```
-
-The wrapper is not the interesting part.
-
-The difficult part is constructing the correct cash-flow series.
-
-The low-level helper returns `NaN` when no result is available or solving fails. The current portfolio-level wrapper can instead fall back to `0.0` in those edge cases. I therefore treat a portfolio 0% result from a degenerate cash-flow pattern as a review case rather than automatically interpreting it as a valid zero return.
-
----
-
-## 4. XIRR is non-additive
-
-This is one of the most important methodology rules in the project:
-
-```text
-Portfolio XIRR
-≠ average(ISIN XIRR)
-
-Class XIRR
-≠ average(security XIRR)
-
-ISIN XIRR
-≠ average(lot XIRR)
-```
-
-At each analytical grain, the engine reconstructs dated cash flows and solves the return again.
+This specification defines the quantitative vocabulary used across household finance, investment analytics, tax presentation and FIRE. It does not replace subsystem documents. Instead, it answers a narrower question: **what exactly does a metric mean, at what grain is it valid, and what failure semantics does the implementation use?**
 
 ```mermaid
-flowchart TB
-    LOT["Lot Cash Flows"] --> ISIN["Reconstruct ISIN Cash Flows<br/>solve XIRR"]
-    ISIN --> CLASS["Reconstruct Class Cash Flows<br/>solve XIRR"]
-    CLASS --> PORT["Reconstruct Portfolio Cash Flows<br/>solve XIRR"]
+flowchart TD
+    H[Household metrics] --> M[Shared methodology]
+    I[Investment metrics] --> M
+    T[Tax metrics] --> M
+    F[FIRE metrics] --> M
+    M --> G[Gold presentation]
 ```
 
-This is why return aggregation is not a simple `group_by().mean()` problem.
+The same word can be dangerous at different grains. “Return” can mean lot CAGR, money-weighted XIRR, benchmark-relative return or FX contribution. This page keeps those concepts from becoming metric soup.
 
----
 
-## 5. After-Tax XIRR
+## CAGR
 
-After-tax performance uses tax-aware terminal state rather than pretending unrealized gains are fully spendable.
+The core implementation in `backend/engines/analytics/core/math.py` defines annualized CAGR as:
 
-Conceptually:
+$$
+\text{CAGR} = \left(\frac{V_1}{V_0}
+ight)^{365/d}-1
+$$
 
-```text
-historical dated investment cash flows
-        +
-after-tax terminal value
-        ↓
-After-Tax XIRR
-```
-
-The terminal value reflects estimated tax embedded in active lots.
-
-This is a modelled liquidation perspective, not an observed sale.
-
----
-
-## 6. Benchmark XIRR
-
-Benchmark return uses a shadow benchmark portfolio.
-
-Real investment cash flows create benchmark-equivalent exposure at matching dates.
-
-```text
-real purchase
-      ↓
-benchmark shadow purchase
-
-real disposal
-      ↓
-proportional benchmark shadow disposal
-```
-
-Benchmark XIRR therefore preserves capital-deployment timing.
-
-It is not simply an index CAGR copied beside the portfolio return.
-
----
-
-## 7. Active Return
-
-The current serving interpretation is benchmark-relative return difference at a comparable grain.
-
-Conceptually:
-
-```text
-Active Return = Portfolio Return - Benchmark Return
-```
-
-The exact return family should remain aligned:
-
-```text
-XIRR vs Benchmark XIRR
-CAGR vs Benchmark CAGR
-```
-
-Mixing incompatible return methodologies would create a mathematically valid subtraction with weak financial meaning.
-
----
-
-## 8. Max Drawdown
-
-For a value series \(V_t\):
-
-```text
-Peak_t        = max(V_0, ..., V_t)
-Drawdown_t    = (V_t / Peak_t) - 1
-Max Drawdown  = min(Drawdown_t)
-```
-
-Max Drawdown survives the metric-pruning cycle because it answers a useful behavioural question:
-
-> **How far did this investment/portfolio fall from a previous peak?**
-
-It describes realized historical path risk.
-
-It does not predict future drawdown.
-
----
-
-## 9. Outperforming Lot Ratio
-
-The metric previously named `Outperformance_Probability` was renamed because that label overstated the methodology.
-
-The current concept is:
-
-```text
-Outperforming Lot Ratio
-= Active Lots Outperforming Benchmark / Active Lots
-```
-
-This is a descriptive ratio of current lot state.
-
-It is **not** a probabilistic forecast.
-
-The rename is an example of a broader documentation rule:
-
-> **Metric names are part of the analytical contract.**
-
----
-
-## 10. Monthly market-value change
-
-The old `ISIN_Monthly_Return` name was also misleading.
-
-The current contract describes the quantity as:
-
-```text
-Monthly_Market_Value_Change_Pct
-```
-
-because the calculation represents percentage movement in market value rather than a fully cash-flow-adjusted investment return.
-
-That distinction prevents users from interpreting capital-flow-driven value movement as performance.
-
----
-
-## 11. Savings metrics
-
-Savings can be defined differently depending on whether non-cash items are included.
-
-Conceptually:
-
-```text
-Savings = Income - Expense
-```
-
-but the project can distinguish:
-
-```text
-economic savings
-cash savings
-core-spending-adjusted savings
-```
-
-The denominator and inclusion policy must therefore be documented with the metric.
-
-A "savings rate" without a definition of income/expense scope is incomplete.
-
----
-
-## 12. Net worth
-
-At minimum:
-
-```text
-Net Worth = Assets - Liabilities
-```
-
-But the project carries multiple valuation states.
-
-```text
-Book Net Worth
-→ reconstructed ledger values
-
-Market Net Worth
-→ market-valued investments
-
-After-Tax Wealth
-→ market wealth adjusted for estimated investment tax
-```
-
-Those are related metrics, not synonyms.
-
----
-
-## 13. Cash-flow reconciliation difference
-
-Conceptually:
-
-```text
-Calculated Closing Cash
-= Opening Cash
-+ Operating Cash Flow
-+ Investing Cash Flow
-+ Financing Cash Flow
-+ Transfer Treatment
-
-Unreconciled Difference
-= Actual Closing Cash - Calculated Closing Cash
-```
-
-A non-zero difference is not suppressed.
-
-It is a financial/data-quality signal.
-
----
-
-## 14. Allocation weight
-
-For a portfolio component \(i\):
-
-```text
-Weight_i = Market Value_i / Total Portfolio Market Value
-```
-
-Weights are non-additive across time.
-
-They should be interpreted at one valuation date.
-
----
-
-## 15. Allocation drift
-
-Conceptually:
-
-```text
-Drift_i = Actual Weight_i - Target Weight_i
-```
-
-Rebalance policy compares absolute drift with configured tolerance.
-
-The tolerance is now explicit FinancialRules policy rather than a hidden constant.
+where $V_0>0$, $V_1>0$ and $d>0$ calendar days.
 
 ```python
-class PortfolioManagementRules(BaseModel):
-    rebalance_tolerance_pct_points: float = Field(
-        default=5.0,
-        ge=0.0,
-    )
+if start_value <= 0 or end_value <= 0 or days <= 0:
+    return 0.0
+try:
+    return float(((end_value / start_value) ** (365.0 / days)) - 1)
+except OverflowError:
+    return float("nan")
 ```
 
-This is a good example of separating:
+Degenerate non-positive inputs return `0.0`; arithmetic overflow returns `NaN` so pathological values remain visible rather than being clamped into plausible fiction.
+
+
+## XIRR
+
+XIRR is the money-weighted return for irregular cashflows. The implementation delegates solving to `pyxirr` but wraps the result in a typed `XirrResult`.
+
+A valid XIRR requires at least two cashflows, valid dates, finite numeric amounts, and at least one positive and one negative amount.
+
+Statuses are:
+
+| Status | Meaning |
+|---|---|
+| `VALID` | solver returned a finite rate |
+| `INVALID_INPUT` | cashflow set cannot define the problem |
+| `UNDEFINED` | solver returned no finite solution |
+| `NON_CONVERGENT` | iterative solver failed to converge |
+
+```mermaid
+flowchart TD
+    C[Cashflows] --> V{Valid dates, finite amounts, both signs?}
+    V -- no --> I[INVALID_INPUT]
+    V -- yes --> X[pyxirr.xirr]
+    X --> R{Finite result?}
+    R -- yes --> OK[VALID]
+    R -- no --> U[UNDEFINED / NON_CONVERGENT]
+```
+
+A failed XIRR is **not 0%**. Zero is a real financial result; failure is missing/invalid evidence. The code preserves that distinction.
+
+
+## Why portfolio XIRR is recomputed
+
+Money-weighted returns are not additive and should not be averaged across lots or instruments. The post-processing pipeline reconstructs the portfolio/group cashflow stream and runs the same XIRR calculator again at the target aggregation grain.
+
+$$
+\text{Portfolio XIRR} \neq \sum_i w_i \cdot \text{XIRR}_i
+$$
+
+in general.
+
+This is one of the system's most important aggregation rules. Taking `.first()` or an arithmetic mean of lot XIRRs would produce a tidy number with weak financial meaning, which is exactly the sort of tidy number this project has learned to distrust.
+
+
+## Realized and unrealized gain
+
+Realized gain belongs to disposal evidence and is generated by FIFO lot consumption. Unrealized gain belongs to still-open state at a valuation date.
+
+For a consumed quantity $q$ in local currency:
+
+$$
+\text{Realized Asset PnL}_{local}=(P_s-P_b)q
+$$
+
+Unrealized gain is conceptually:
+
+$$
+\text{Unrealized Gain}=\text{Current Market Value}-\text{Remaining Acquisition Basis}
+$$
+
+Realized and unrealized amounts should never be merged merely because both are “gain.” One has crossed a disposal boundary; the other has not.
+
+
+## FX attribution
+
+Foreign investments distinguish asset economics from reporting-currency translation. Local-currency return measures the instrument; INR return includes currency movement.
+
+Attribution fields include local asset P&L and FX P&L. XIRR similarly exposes local XIRR and reporting-currency XIRR, with `FX_XIRR_Impact` representing their difference.
+
+```mermaid
+flowchart LR
+    A[Asset price movement] --> L[Local return]
+    F[FX movement] --> R[Reporting-currency return]
+    L --> R
+    R --> D[FX impact diagnostics]
+```
+
+Detailed attribution algebra and temporal FX semantics are specified in [Multi-Currency and FX](multi-currency-and-fx.md).
+
+
+## Maximum drawdown
+
+Drawdown measures decline from a prior peak rather than return from acquisition cost. Household net worth uses:
+
+$$
+\text{Drawdown From Peak}=\frac{V_t-V_{peak}}{V_{peak}}
+$$
+
+when the peak is positive.
+
+Investment analytics also compute portfolio maximum drawdown over the valuation path. Drawdown is path-dependent: two portfolios with identical start/end values can have radically different drawdown histories.
+
+
+## Savings rate and investment rate
+
+Monthly cashflow defines gross surplus as cash income minus total expense, then computes:
+
+$$
+\text{Savings Rate}=\frac{\text{Gross Surplus}}{\text{Total Cash Income}}
+$$
+
+and:
+
+$$
+\text{Investment Rate}=\frac{\text{Net Investment Flow}}{\text{Total Cash Income}}
+$$
+
+where net investment flow is deployed capital minus redeemed capital.
+
+These ratios answer different questions. Savings measures retained cashflow capacity; investment rate measures how much cashflow is being directed into investment activity.
+
+
+## Liquidity and runway
+
+Household liquidity metrics compare liquid market-valued assets with spending rates. Examples include:
+
+$$
+\text{Liquidity Ratio Months}=\frac{\text{Liquid Assets Market}}{\text{Trailing 3M Average Expense}}
+$$
+
+and asset-subcategory runway:
+
+$$
+\text{Months of Runway}=\frac{\text{Closing Balance}}{\text{3M Average Expense}}
+$$
+
+FIRE additionally computes linear runway from after-tax market net worth and trailing spend, while Monte Carlo produces stochastic runway percentiles. These are related but not interchangeable.
+
+
+## Net-worth growth and real growth
+
+Monthly cashflow presentation computes nominal year-over-year market net-worth growth and an inflation-adjusted form:
+
+$$
+1+r_{real}=\frac{1+r_{nominal}}{1+\pi}
+$$
+
+so:
+
+$$
+r_{real}=\frac{1+r_{nominal}}{1+\pi}-1
+$$
+
+The FIRE builder also computes a 3-year real net-worth CAGR using inflation-adjusted wealth history. “Real” therefore means inflation-adjusted purchasing-power growth, not merely “after fees.”
+
+
+## Debt and emergency-fund ratios
+
+Household presentation includes ratios such as:
+
+$$
+\text{Debt-to-Asset Ratio}=\frac{\text{Total Liabilities}}{\text{Total Assets Market}}
+$$
+
+and:
+
+$$
+\text{Emergency Fund Coverage}=\frac{\text{Liquid Assets Market}}{\text{12M Average Core Expense}}
+$$
+
+These metrics deliberately use market-valued assets where the implementation has them. Book balances and market values answer different questions and should not be swapped casually.
+
+
+## FI target and coverage
+
+For trailing annual spend $S$ and configured FI multiplier $m$:
+
+$$
+\text{Target FI Today}=S\times m
+$$
+
+Coverage is:
+
+$$
+\text{FI Coverage}=\frac{\text{After-tax Market Net Worth}}{\text{Target FI Today}}
+$$
+
+The FIRE layer maintains both core-spend and total-spend variants internally before selecting presentation fields. This distinction lets the model express lean/core financial independence separately from a broader lifestyle burn.
+
+
+## Coast FI and Lean FI
+
+Coast FI discounts the future FI target back using the configured real return over the configured coast horizon:
+
+$$
+\text{Coast FI Today}=\frac{\text{Target FI Today}}{(1+r_{real})^n}
+$$
+
+Lean FI applies a configured ratio:
+
+$$
+\text{Lean FI Today}=\text{Target FI Today}\times \lambda
+$$
+
+These are planning constructs, not accounting balances. They live downstream of canonical wealth state.
+
+
+## Withdrawal rate
+
+The immediate retirement withdrawal rate is:
+
+$$
+\text{Withdrawal Rate Now}=\frac{\text{Trailing Annual Spend}}{\text{After-tax Market Net Worth}}
+$$
+
+The Monte Carlo model can subsequently vary withdrawals through Guyton-Klinger guardrails. The point-in-time ratio and simulated dynamic withdrawal policy are therefore separate metrics.
+
+
+## Percentiles and directionality
+
+Monte Carlo percentiles must be interpreted according to metric direction.
+
+For months-to-FI, **larger is worse**, so P90 is conservative and P10 aggressive. For terminal wealth, **larger is better**, so downside analysis typically focuses on lower percentiles.
+
+```mermaid
+flowchart LR
+    D[Metric distribution] --> Q{Which direction is adverse?}
+    Q -- high is adverse --> H[Use high percentile for conservative case]
+    Q -- low is adverse --> L[Use low percentile for downside case]
+```
+
+A percentile label without directionality is not enough methodology.
+
+
+## Indicative tax metrics
+
+Tax estimates are evidence-linked indicative values, not statutory liability. Investment realization generally applies a configured rate only to positive realized gain. Tax Gold then aggregates canonical tax events.
+
+The methodology rule is simple: **never promote an indicative estimate into a stronger legal claim merely because it has two decimal places.** Precision of representation is not certainty of interpretation.
+
+
+## Null, zero and NaN semantics
+
+The project uses all three states deliberately.
+
+- **zero** can be a valid financial result;
+- **null/None** can mean unavailable or undefined evidence;
+- **NaN** can preserve pathological arithmetic conditions so they remain detectable.
+
+Examples include typed XIRR failures returning no value, CAGR returning zero for degenerate non-positive inputs, and overflow returning NaN. Downstream aggregation must preserve these semantics rather than blanket-filling every missing number with zero.
+
+
+## Metric grain
+
+A metric is only meaningful with its grain.
+
+| Metric | Typical grain |
+|---|---|
+| lot CAGR | acquisition lot × valuation date |
+| ISIN XIRR | instrument × valuation date |
+| portfolio XIRR | portfolio × valuation date |
+| realized P&L | sale × consumed lot |
+| savings rate | month |
+| FI coverage | month |
+| tax estimate | tax event or annual aggregate depending table |
+| Monte Carlo probability | monthly simulation input state |
+
+The Reference layer owns exact physical grains; this table highlights why formulas cannot be copied between levels without checking aggregation semantics.
+
+
+## Implementation map
+
+| Metric family | Main implementation |
+|---|---|
+| CAGR/XIRR primitives | `backend/engines/analytics/core/math.py` |
+| portfolio/group XIRR | analytics post-processing `xirr.py` / group processor |
+| investment drawdown | analytics post-processing `analytics.py` |
+| household net worth/runway | presentation `net_worth_builder.py` |
+| cashflow ratios | `monthly_cashflow_summary.py` |
+| FIRE ratios and simulation | `wealth_risk_analytics.py` + `fire_mc_sim.py` |
+| tax estimates | Quant realization + Tax Engine |
+
+Metrics remain owned by their producer; this page standardizes interpretation.
+
+
+
+## Organic growth and balance growth
+
+Household net worth distinguishes savings-driven balance change from organic asset growth. `Organic_Growth_Value` isolates change not explained by net savings, while `Organic_Yield_%` scales that amount by opening balance when the opening balance is non-zero.
+
+Monthly balance growth is:
+
+$$
+\text{MoM Balance Growth}=\frac{\text{Closing Balance}-\text{Opening Balance}}{\text{Opening Balance}}
+$$
+
+when opening balance is non-zero.
+
+This distinction matters because a rising balance can result from fresh contributions, investment/asset appreciation, or both.
+
+## Savings-to-net-worth ratio
+
+The net-worth model computes cumulative savings relative to closing balance when closing balance is positive:
+
+$$
+\text{Savings-to-NW Ratio}=\frac{\text{Cumulative Net Savings}}{\text{Closing Balance}}
+$$
+
+It is a decomposition aid, not a performance return. Treating it as return would mix cash contribution and asset appreciation into one misleading percentage.
+
+## Active and passive income shares
+
+Monthly cashflow presentation divides income composition by total cash income:
+
+$$
+\text{Active Income Share}=\frac{\text{Active Income}}{\text{Total Cash Income}}
+$$
+
+$$
+\text{Passive Income Share}=\frac{\text{Passive Income}}{\text{Total Cash Income}}
+$$
+
+The underlying active/passive classification comes from canonical income semantics and rules. These ratios therefore depend on classification quality upstream.
+
+## Core and non-core expense shares
+
+Expense composition similarly distinguishes core and non-core spending:
+
+$$
+\text{Core Expense Share}=\frac{\text{Core Expense}}{\text{Total Expense}}
+$$
+
+$$
+\text{Non-core Expense Share}=\frac{\text{Non-core Expense}}{\text{Total Expense}}
+$$
+
+These are composition measures. They should not be confused with budget variance or spending growth.
+
+## Month-over-month deltas and growth
+
+The presentation layer exposes absolute month-over-month deltas for income, expense and investment flow, plus percentage growth for selected measures. Absolute delta and percentage growth serve different purposes, particularly when the previous period is close to zero.
+
+Rolling averages are then used to reduce single-month noise. Examples include trailing three-month income, expense, investment flow, savings rate and investment rate.
+
+```mermaid
+flowchart LR
+    M[Monthly metric] --> D[Absolute MoM delta]
+    M --> P[MoM percentage growth]
+    M --> R[Rolling average]
+    D --> A[Trend interpretation]
+    P --> A
+    R --> A
+```
+
+## Benchmark-relative investment metrics
+
+Investment analytics preserve benchmark returns alongside portfolio returns. Relevant measures include benchmark CAGR/XIRR and active return differences. Benchmark comparison is only meaningful when benchmark evidence is aligned to the same economic period and currency semantics.
+
+A benchmark is a comparison path, not an alternative source of truth for the portfolio's own cashflows.
+
+## After-tax XIRR
+
+The Quant post-processing layer can construct after-tax cashflows and solve a separate after-tax XIRR. This is not obtained by subtracting a tax rate from pre-tax XIRR. Money-weighted return must be solved again from the modified cashflow stream.
 
 ```text
-metric
-from
-decision threshold
+After-tax XIRR = XIRR(after-tax cashflows)
+not
+Pre-tax XIRR - tax rate
 ```
 
----
+The same aggregation rule applies at portfolio/group grain: rebuild the relevant cashflow stream, then solve.
 
-## 16. FIRE target
+## Tax-if-sold exposure
 
-A simple deterministic FI target can be expressed as:
+Open-lot analytics can estimate LTCG/STCG tax exposure if the position were sold at the valuation date. This is a hypothetical exposure metric, not a realized tax event. Realized tax evidence appears only after an actual disposal crosses the FIFO realization boundary.
 
-```text
-FI Target = Annual Core Expense / Withdrawal Rate
+This distinction keeps “what would happen if sold” separate from “what happened.”
+
+## Investment allocation weights
+
+Portfolio weights are based on the relevant current-value denominator. Weighting is a presentation/aggregation operation; it does not change lot identity, cost basis or realized-event lineage.
+
+When denominators are zero or unavailable, safe division semantics apply rather than inventing infinite or nonsensical weights.
+
+## Inflation-adjusted methodology
+
+Real growth calculations use multiplicative inflation adjustment rather than simple subtraction:
+
+$$
+1+r_{real}=\frac{1+r_{nominal}}{1+\pi}
+$$
+
+For small rates, subtraction is an approximation. The implementation uses the multiplicative relationship where documented in the presentation layer.
+
+## Safe division
+
+Presentation modules frequently use a shared `safe_divide` expression for financial ratios. This avoids raw divide-by-zero behavior and centralizes ratio semantics. A ratio whose denominator is unavailable or zero should not explode into infinity and then wander into Power BI pretending everything is fine.
+
+## Rolling-window semantics
+
+Rolling measures depend on available historical observations. A 12-month trailing measure early in the dataset does not possess twelve months of evidence merely because the column name contains `12M`. Consumers should respect warm-up periods and null/incomplete history semantics.
+
+## Metric lineage
+
+```mermaid
+flowchart TD
+    E[Canonical evidence] --> S[State reconstruction]
+    S --> M[Base metrics]
+    M --> A[Aggregated metrics]
+    A --> G[Gold presentation]
+    M --> G
+    E --> T[Tax evidence]
+    T --> G
 ```
 
-But the useful model depends on policy around:
+The safest way to audit a metric is to walk this lineage backward until reaching the canonical evidence and the exact producer that owns the formula.
 
-- expense scope,
-- inflation,
-- investable wealth,
-- tax,
-- expected returns,
-- withdrawal behaviour.
+## Aggregation rules
 
-The deterministic target is therefore a planning construct, not a universal constant.
+Different metric families aggregate differently:
 
----
+| Metric family | Correct aggregation idea |
+|---|---|
+| currency amounts | often sum, subject to grain/currency |
+| ratios | usually recompute from aggregated numerator/denominator |
+| XIRR | reconstruct cashflows and solve again |
+| CAGR | recompute from appropriate opening/closing values and duration |
+| maximum drawdown | recompute from aggregated value path |
+| percentile | compute from distribution, do not average percentile labels |
+| deterministic identities | never aggregate; preserve lineage |
 
-## 17. Monte Carlo percentiles
+“Just average the percentages” is not a methodology. It is how financial dashboards develop folklore.
 
-Simulation outputs such as:
+## Interpretation hierarchy
 
-```text
-P10
-P50
-P90
-```
+When two metrics appear inconsistent, check in this order:
 
-describe the distribution produced by the configured stochastic model.
+1. Are they at the same grain?
+2. Are they using book or market value?
+3. Are they local-currency or INR/reporting-currency?
+4. Are they realized or unrealized?
+5. Are they pre-tax, after-tax, or hypothetical tax exposure?
+6. Are they point-in-time, trailing-window, or lifetime measures?
+7. Are null/failure states being preserved?
 
-For example:
+Most apparent contradictions disappear once the semantic axes are aligned.
 
-```text
-P50 months to FI
-```
+## Methodology guarantees and limits
 
-means the median simulated outcome under those assumptions.
+The metric layer aims for deterministic formulas over deterministic inputs, explicit missing-data semantics and financially valid aggregation. It does not guarantee that every metric is suitable for every decision, nor that a mathematically valid metric is economically meaningful outside its documented grain.
 
-It does **not** mean there is a 50% externally calibrated probability that the real world will exactly follow that path.
+Formulas are tools. Grain and provenance decide whether the tool is being used on the right problem.
 
----
+## Related specifications
 
-## 18. Additivity classification
-
-| Metric | Behaviour |
-| --- | --- |
-| Income | Additive across compatible categories |
-| Expense | Additive across compatible categories |
-| Market value | Additive across assets at one date |
-| Net worth | Semi-additive across time |
-| Cash balance | Semi-additive across time |
-| XIRR | Non-additive |
-| CAGR | Non-additive |
-| Max Drawdown | Non-additive |
-| Allocation weight | Non-additive |
-| Savings rate | Non-additive |
-| Tax rate | Non-additive |
-
-The target grain determines the correct aggregation method.
-
----
-
-## 19. Metric methodology checklist
-
-Before a new metric enters Gold, I want to be able to answer:
-
-```text
-What decision does it support?
-What is its grain?
-What inputs does it use?
-Is it observed, reconstructed, estimated or simulated?
-Is it additive?
-How is it aggregated?
-What assumptions does it depend on?
-What could a reader misinterpret?
-```
-
-If those questions are difficult to answer, the metric is probably not ready for the serving layer.
-
----
-
-## Go deeper
-
-- [Investment Analytics](investment-analytics.md)
-- [Cash Flow & Wealth](cashflow-and-wealth.md)
+- [Investment Performance and Risk](investment-performance-and-risk.md)
+- [Multi-Currency and FX](multi-currency-and-fx.md)
 - [Tax Methodology](tax-methodology.md)
 - [FIRE Methodology](fire-methodology.md)
+- [Cashflow and Wealth](cashflow-and-wealth.md)
 - [Gold Data Contracts](../reference/gold-data-contracts.md)
-
-[← Finance Home](README.md) · [← Documentation Home](../README.md)
