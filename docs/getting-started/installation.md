@@ -1,340 +1,170 @@
 # Installation
 
-Personal Finance ETL is a local-first Python application.
+## Purpose
 
-Installing the package gives you the software.
+Installation establishes a Python environment in which Personal Finance ETL can import its backend, launch its CLI and desktop interfaces, and execute the local data stack. It does **not** make the pipeline runnable by itself: source evidence and valid configuration are separate prerequisites.
 
-It does **not** automatically give you a compatible financial environment.
+The package requires **Python 3.13 or newer**. The project metadata in `pyproject.toml` is the installation authority.
 
-The current production system still expects source contracts, mappings, reference inputs, Settings, and FinancialRules compatible with the implementation.
+## Runtime stack
 
----
+```mermaid
+flowchart TB
+    PY[Python >= 3.13] --> PKG[personal-finance-etl]
+    PKG --> POLARS[Polars]
+    PKG --> DUCK[DuckDB]
+    PKG --> SQLITE[SQLite]
+    PKG --> NUMPY[NumPy / Numba]
+    PKG --> UI[Rich + CustomTkinter]
+    PKG --> FIN[pyxirr + finance engines]
+```
 
-## 1. Requirements
+The application is local-first. DuckDB and SQLite are local databases, source files remain local, and the desktop/CLI interfaces invoke the same local backend.
 
-The project requires:
+## Package metadata
+
+The project declares:
+
+```toml
+[project]
+name = "personal-finance-etl"
+requires-python = ">=3.13"
+
+[project.scripts]
+shan-fin = "personal_finance_etl.frontend.launcher:main"
+shan-fin-gui = "personal_finance_etl.frontend.desktop.app:main"
+```
+
+Source: `pyproject.toml`.
+
+These entry points are worth understanding because `shan-fin` is a launcher, not merely the CLI binary.
+
+## Install from the repository
+
+From a cloned repository, create or activate a Python 3.13+ environment and install the project using the package workflow appropriate to the checkout. The repository uses Hatchling as its build backend and includes a `uv.lock`, so `uv` is the natural project-development workflow.
+
+```bash
+uv sync
+```
+
+For an installed package rather than a development checkout, install the built/published package using the environment manager of choice.
+
+The documentation intentionally avoids pinning an installation command to a release artifact or index URL. Release distribution is package metadata; the runtime contract is Python 3.13+ plus the declared dependencies.
+
+## Development dependencies
+
+The project separates runtime dependencies from a development group. Development tooling includes static/type/lint and packaging utilities such as:
+
+- `mypy`;
+- `pyright`;
+- `ruff`;
+- `vulture`;
+- `pyinstaller`;
+- `poethepoet`.
+
+These are developer tools, not prerequisites for an ordinary end-user pipeline run.
+
+## Verify the installation
+
+### Launcher help
+
+```bash
+shan-fin --help
+```
+
+The launcher should expose the `cli` and `tkinter` subcommands.
+
+### CLI help
+
+```bash
+shan-fin cli --help
+```
+
+The CLI currently supports:
 
 ```text
-Python 3.13+
+--config PATH
+--rules PATH
+--snapshot
+--restore BACKUP_ZIP
+--auto
+--cron
+--docs
 ```
 
-The runtime is designed for a local workstation and uses embedded databases rather than external database servers.
+### Desktop
 
-Core technology ownership is:
-
-| Technology | Responsibility |
-| --- | --- |
-| Python | Application/runtime |
-| SQLite | Authoritative Control Plane and raw evidence: 8 operational tables |
-| DuckDB | Analytical warehouse: 20 Bronze + 24 Silver + 22 Gold + 6 Meta tables |
-| Polars | Transformation/analytical dataframe execution |
-| Pydantic | Settings and financial-policy validation |
-| NumPy / Numba | FIRE simulation |
-| Rich | CLI |
-| CustomTkinter | Desktop application |
-| Power BI | BI consumption |
-
----
-
-## 2. Install from PyPI
-
-```bash
-pip install personal-finance-etl
-```
-
-Then launch the CLI:
-
-```bash
-shan-fin cli
-```
-
-or the desktop application:
+Either command launches the desktop interface:
 
 ```bash
 shan-fin
 ```
 
-The explicit desktop subcommand is also available:
+or:
+
+```bash
+shan-fin-gui
+```
+
+The explicit launcher form also works:
 
 ```bash
 shan-fin tkinter
 ```
 
-`shan-fin-gui` remains the dedicated desktop entry point.
-
-The package includes the application documentation used by the docs browser.
-
----
-
-## 3. Install for development
-
-```bash
-git clone https://github.com/tks18/personal-finance-etl.git
-cd personal-finance-etl
-pip install -e .
-```
-
-Use the repository's configured development dependencies/tooling for contribution work.
-
-The project uses strict static-quality tooling including:
-
-```text
-Ruff
-mypy
-Pyright
-```
-
-Run the exact commands configured by the repository rather than maintaining a parallel local quality workflow.
-
----
-
-## 4. What installation creates conceptually
-
-Installation provides the application code.
-
-A working financial environment provides the state it operates on.
-
 ```mermaid
-flowchart LR
-    PKG["Installed Package"] --> APP["Personal Finance ETL"]
-    SET["Settings"] --> APP
-    RULE["FinancialRules"] --> APP
-    SRC["Financial Sources"] --> APP
-    REF["Mappings / Reference Inputs"] --> APP
-
-    APP --> CP["SQLite Control Plane"]
-    APP --> WH["DuckDB Warehouse"]
+sequenceDiagram
+    participant U as User
+    participant L as Launcher
+    participant D as DesktopApp
+    participant C as CLI
+    U->>L: shan-fin
+    L->>D: default route
+    U->>L: shan-fin cli
+    L->>C: terminal route
 ```
 
-The package alone cannot infer another person's financial semantics.
+## Windows behavior
 
----
+The application contains explicit Windows handling in the CLI, including UTF-8 stdout/stderr reconfiguration. The desktop application uses CustomTkinter and local file dialogs. Snapshot/restore and pipeline operations operate on local filesystem paths, so permissions and file locks remain relevant even when installation itself succeeded.
 
-## 5. Runtime databases
+## Installation is not configuration
 
-A configured production run uses two embedded databases with different ownership.
+A successful `shan-fin --help` proves that the package and launcher are available. It does **not** prove that the ETL can run.
 
-### SQLite Control Plane
+A runnable configuration additionally requires:
 
-Owns:
+- `SOURCE_DB_FOLDER`;
+- `STATEMENTS_FOLDER`;
+- `TARGET_DB_BASE_PATH`;
+- column master CSV;
+- MF ISIN mapping CSV;
+- benchmark mapping CSV;
+- benchmark master CSV;
+- macro parameters CSV;
+- opening-balance CSV;
+- currency mapping CSV;
+- a valid financial-rules TOML.
 
-```text
-raw artifacts
-raw payloads
-sync state
-runs
-failures
-Settings snapshots
-FinancialRules snapshots
-execution logs
-```
+That transition is covered in [Quick Start](quick-start.md).
 
-### DuckDB
+## Common installation failures
 
-Owns:
+| Failure | Meaning | Action |
+|---|---|---|
+| `shan-fin` not found | environment/script path is not active | activate the intended environment and verify installation |
+| Python version rejected | interpreter is below project minimum | use Python 3.13+ |
+| desktop import/display failure | GUI/runtime dependency or environment issue | verify project dependencies and desktop-capable environment |
+| pipeline later rejects paths | installation succeeded but configuration is invalid | continue with Quick Start |
 
-```text
-Bronze
-Silver
-Gold
-lean Meta
-```
+## Packaging boundary
 
-No external database server is required for the current architecture.
+Installation should not mutate financial data. The first financial state transition occurs when the configured pipeline runs. This separation is useful during troubleshooting: package/import problems and data/configuration problems are different classes of failure and should stay that way.
 
----
+## Related specifications
 
-## 6. Source environment
-
-My production environment includes source families such as:
-
-```text
-stock broker snapshots
-mutual-fund broker snapshots
-historical transactions
-market/reference files
-masters and mappings
-opening-state inputs
-personal-finance SQLite data
-```
-
-The historical workload contained **1,608 source artifacts on 24 September 2026**. The maintainer subsequently reported **1,629 artifacts**; these are operational observations rather than fixed application limits.
-
-That is context for the architecture, not a requirement that another deployment contain the same number of files.
-
----
-
-## 7. Source compatibility
-
-A source is not compatible merely because it is:
-
-```text
-CSV
-Excel
-SQLite
-```
-
-Compatibility depends on:
-
-```text
-physical format
-expected columns
-semantic meaning
-mapping/reference rules
-asset behaviour
-tax assumptions
-```
-
-The current implementation is purpose-built around my source environment.
-
-Another user should expect meaningful customization.
-
-See [Adding a Data Source](../developer/adding-data-sources.md).
-
----
-
-## 8. Local-first implications
-
-The application is designed so core financial processing remains local.
-
-That gives:
-
-```text
-financial evidence
-+
-analytical warehouse
-+
-simulation
-+
-application surfaces
-```
-
-one local execution environment.
-
-This reduces operational infrastructure and keeps sensitive personal-finance data out of cloud dependencies by default.
-
-It does not mean every external reference input is inherently offline; provider/API data can still be acquired and persisted as controlled evidence where configured.
-
----
-
-## 9. Documentation is packaged too
-
-The docs runtime follows:
-
-```text
-docs/*.md
-→ manifest.json
-→ DocsCatalog
-→ DocsRenderer
-→ CLI / Desktop
-```
-
-So installation includes the same versioned documentation structure used by the repository.
-
-The application does not maintain a separate hard-coded guide list.
-
----
-
-## 10. Before the first run
-
-You need:
-
-- valid operational Settings,
-- valid FinancialRules,
-- accessible source locations,
-- required mapping/reference files,
-- compatible source schemas,
-- writable database/output locations.
-
-Then continue to:
-
-1. [Configuration](configuration.md)
-2. [Running the Pipeline](running-the-pipeline.md)
-
----
-
-## 11. What a successful installation does not prove
-
-A successful:
-
-```bash
-pip install personal-finance-etl
-```
-
-proves that the package can be installed.
-
-It does not prove:
-
-```text
-your source contracts match
-your mappings are complete
-your tax jurisdiction matches
-your financial classifications match
-your Power BI model matches
-```
-
-Those are deployment/model concerns.
-
-The project roadmap aims to move more of that variation behind explicit adapters, strategies and configuration while preserving the current production behaviour.
-
----
-
-## Troubleshooting direction
-
-### Package imports fail
-
-Verify:
-
-```text
-Python version
-virtual environment
-installed package/version
-```
-
-### Application starts but pipeline configuration fails
-
-Inspect:
-
-```text
-Settings
-FinancialRules
-paths
-reference inputs
-```
-
-### Pipeline starts but source ingestion fails
-
-Inspect:
-
-```text
-source compatibility
-artifact path
-hash policy
-extractor expectations
-```
-
-### Pipeline runs but financial output is unexpected
-
-Do not start with the UI.
-
-Trace:
-
-```text
-source evidence
-→ Bronze
-→ canonical state
-→ analytical engine
-→ Gold
-```
-
-and use the Control Plane/run logs for operational context.
-
----
-
-## Next
-
-- [Configuration](configuration.md)
-- [Running the Pipeline](running-the-pipeline.md)
+- [Quick Start](quick-start.md)
+- [CLI and Desktop](cli-and-desktop.md)
+- [Configuration Reference](../configuration/configuration-reference.md)
+- [Development Guide](../developer/development-guide.md)
 - [System Architecture](../architecture/system-architecture.md)
-
-[← Getting Started Home](README.md) · [← Documentation Home](../README.md)
