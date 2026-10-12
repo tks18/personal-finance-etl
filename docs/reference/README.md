@@ -1,40 +1,60 @@
-# Reference: contracts, schemas, and interfaces
+# Reference
 
-I keep exact physical names, column definitions, declared grains, typed configuration fields, and callable entry points here. This is the lookup layer for my technical documentation, not a second narrative copy of Architecture, Finance, or Control Plane.
+The Reference section is the physical contract layer of Personal Finance ETL. Architecture explains why the system is shaped the way it is; Finance explains what the numbers mean. Reference answers the less philosophical question that eventually arrives during every serious data-engineering session: **what exactly is stored here?**
+
+The contracts below are reconstructed directly from the current registry and schema authorities. They describe physical table names, publication ownership, grains, synchronization modes, columns, identities, and the boundaries between operational history and analytical state. Where a layer is intentionally dynamic, the documentation says so rather than inventing a fixed schema for aesthetic comfort.
 
 ```mermaid
 flowchart LR
- R[Source registries] --> C[Logical contracts]
- D[Physical DDL] --> P[Persisted tables]
- C --> V[Publication validation]
- V --> P
- P --> BI[Consumers]
+    SRC[Source evidence] --> CP[SQLite Control Plane]
+    CP --> B[Bronze contracts]
+    B --> S[Silver contracts]
+    S --> G[Gold contracts]
+    CP --> M[DuckDB Meta]
+    S --> M
+    G --> M
+    ID[Identity and grain contracts] -. governs .-> S
+    ID -. governs .-> G
 ```
 
-## Canonical surface
+## Contract inventory
 
-| Layer | Registered contracts or tables | Source of authority |
-|---|---:|---|
-| Bronze | 0 | `backend/load/registry.py` |
-| Silver | 0 | `backend/load/registry.py` |
-| Gold | 0 | `backend/load/registry.py` |
-| DuckDB Meta | 6 | `backend/load/schema/meta.py` |
-| SQLite Control Plane | 8 | `backend/load/schema/control_plane.py` |
+| Contract surface | Count | Authority | Primary role |
+|---|---:|---|---|
+| Bronze | 20 | `BRONZE_CONTRACT_REGISTRY` + extracted frame schema | Persistent raw synchronization |
+| Silver | 24 | `DATA_CONTRACT_REGISTRY` + `SILVER_DDL` | Canonical analytical facts and dimensions |
+| Gold | 22 | `DATA_CONTRACT_REGISTRY` + `GOLD_DDL` | BI-facing analytical presentation |
+| DuckDB Meta | 6 tables | `META_DDL` | Current analytical context |
+| SQLite Control Plane | 8 tables | `RAW_DDL` | Historical operational provenance |
 
-## Reference index
+The 66 registered Bronze/Silver/Gold contracts are not interchangeable with the Meta and Control Plane tables. The former define the analytical publication surface; the latter describe the machinery that makes those publications observable and recoverable. Counting them together would produce a larger number and a smaller amount of understanding.
 
-- [Bronze source contracts and physical columns](bronze-data-contracts.md)
-- [Silver analytical contracts and physical columns](silver-data-contracts.md)
-- [Gold decision marts and physical columns](gold-data-contracts.md)
-- [DuckDB Meta projection schema](meta-data-contracts.md)
-- [SQLite Control Plane tables and relationships](control-plane-schema.md)
-- [Canonical deterministic financial identities](identity-contracts.md)
-- [Typed configuration models and fields](configuration-schema-reference.md)
-- [Application facade and CLI entry points](api-and-cli-reference.md)
-- [Project terminology](glossary.md)
+## How to use this section
 
-## Reference interpretation
+- Use [Bronze Data Contracts](bronze-data-contracts.md) when tracing source ingestion or synchronization behavior.
+- Use [Silver Data Contracts](silver-data-contracts.md) when consuming canonical financial facts.
+- Use [Gold Data Contracts](gold-data-contracts.md) when integrating BI or presentation workloads.
+- Use [Meta Data Contracts](meta-data-contracts.md) for DuckDB's current-state metadata projection.
+- Use [Control Plane Data Contracts](control-plane-data-contracts.md) for historical runs, artifacts, snapshots, failures, and simulation provenance.
+- Use [Identity and Grain Contracts](identity-and-grain-contracts.md) when a join, deduplication rule, or deterministic identifier needs to be understood before touching code.
+- Use the [Glossary](glossary.md) when terminology is doing its usual engineering trick of looking obvious until two subsystems use the same word differently.
 
-I distinguish a registry-declared grain from a physically enforced unique key, and a registered producer label from a runtime producer trace. The executable schema and implementation are authoritative whenever the two differ.
+## Source authorities
 
-[← Documentation home](../README.md)
+```text
+src/personal_finance_etl/backend/load/registry.py
+src/personal_finance_etl/backend/load/schema/bronze.py
+src/personal_finance_etl/backend/load/schema/silver.py
+src/personal_finance_etl/backend/load/schema/gold.py
+src/personal_finance_etl/backend/load/schema/meta.py
+src/personal_finance_etl/backend/load/schema/control_plane.py
+```
+
+The registry supplies ownership, grain, producer, publication order, synchronization category, and replacement mode. The DDL modules supply the fixed physical schemas where fixed DDL exists. Producer code remains authoritative for semantic derivation.
+
+## Related specifications
+
+- [System Architecture](../architecture/system-architecture.md)
+- [Warehouse Architecture](../architecture/warehouse-architecture.md)
+- [Data Model](../architecture/data-model.md)
+- [Data Contract and Schema Evolution](../developer/data-contract-and-schema-evolution.md)
