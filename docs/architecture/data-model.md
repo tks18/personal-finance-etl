@@ -1,615 +1,609 @@
 # Data Model
 
-The data model is built around **financial meaning and analytical grain**, not around the shape of source files.
+Personal Finance ETL models finance as a set of related evidence domains rather than one universal transaction table. Household cashflow, assets, currencies, investment trades, market observations, reconstructed lots, realized events, tax evidence, and wealth presentation have different grains and different authorities. The data model keeps those distinctions visible.
 
-The central modelling boundary is:
+This document describes the **logical model** and ownership boundaries. Exact physical columns and types belong in the Reference contracts.
 
-```text
-Source-shaped Bronze
-        ↓
-Canonical Silver
-        ↓
-Decision-oriented Gold
-```
-
-A bank column, broker worksheet or vendor label should disappear before it becomes a permanent downstream financial concept.
-
-The physical analytical contract surface behind that model is currently:
-
-```text
-Bronze   20 contracts
-Silver   24 contracts
-Gold     22 decision marts
-Meta      6 current-state tables
-```
-
-Bronze preserves source identity. Silver introduces canonical financial identity. Gold publishes only decision-serving grains.
-
-
----
-
-## Model overview
+## 1. Domain map
 
 ```mermaid
 flowchart TB
-    CAL["d_Calendar"]
-    INC["Income Dimensions"]
-    EXP["Expense Dimensions"]
-    AST["Asset Dimensions"]
-    INV["d_Investment_Master"]
-    BM["d_Investment_Benchmark_Master"]
-    MAC["d_Macro_Parameters"]
+    HH[Household Finance]
+    CUR[Currency / FX]
+    INV[Investments]
+    Q[Quant Reconstruction]
+    TAX[Tax Evidence]
+    WEALTH[Wealth / Cashflow]
+    FIRE[FIRE / Risk]
 
-    FI["f_Income_Transactions"]
-    FE["f_Expense_Transactions"]
-    FT["f_Transfer_Transactions"]
-    FO["f_Opening_Balances"]
-
-    FP["f_Investment_Purchase_Data"]
-    FS["f_Investment_Sale_Data"]
-    FM["f_Investment_Market_Data"]
-    FB["f_Investment_Benchmark_Data"]
-    LOT["f_Investment_Analytics_Lot"]
-
-    HHG["Household Gold Marts"]
-    IG["Investment Gold Marts"]
-
-    CAL --> FI
-    CAL --> FE
-    INC --> FI
-    EXP --> FE
-    AST --> FT
-    AST --> FO
-
-    INV --> FP
-    INV --> FS
-    INV --> FM
-    BM --> FB
-    FP --> LOT
-    FS --> LOT
-    FM --> LOT
-    FB --> LOT
-    MAC --> LOT
-
-    FI --> HHG
-    FE --> HHG
-    FT --> HHG
-    FO --> HHG
-    LOT --> HHG
-    LOT --> IG
+    HH --> WEALTH
+    CUR --> INV
+    INV --> Q
+    Q --> TAX
+    Q --> WEALTH
+    TAX --> WEALTH
+    WEALTH --> FIRE
 ```
 
-This is a conceptual relationship map, not a claim that every relationship is enforced as a physical foreign key.
+The model is intentionally directional. Tax consumes Quant realized events; it does not own investment lot reconstruction. Wealth consumes canonical and reconstructed facts; it does not become their source authority.
 
----
+## 2. Observed, canonical, reconstructed, reconciled, estimated
 
-## Grain is a first-class contract
+Financial meaning depends on provenance. The model uses several semantic classes:
 
-The registry encodes grain explicitly:
+| Semantic class | Meaning | Example |
+|---|---|---|
+| Observed evidence | supplied by an external/source artifact | broker transaction, household ledger row, market quote |
+| Canonical fact | normalized representation of evidence | canonical purchase/sale fact |
+| Reconstructed state | derived from evidence over time | historical US holding, FIFO lot state |
+| Reconciled state | explicit adjustment between reconstructed and observed state | quantity/cost-basis reconciliation event |
+| Estimated value | model-derived amount with bounded interpretation | indicative tax estimate, FIRE percentile |
+| Presentation | consumption-oriented aggregation | portfolio-by-sector, tax-year summary |
 
-```python
-@dataclass
-class DataContract:
-    contract_id: str
-    layer: str
-    physical_table: str
-    domain: str
-    grain: str
-    producer: str
-    publication_order: int
+A useful documentation invariant follows:
+
+> Derived convenience never upgrades provenance.
+
+A reconstructed holding remains reconstructed even if it is the best available historical state.
+
+## 3. Layered logical model
+
+```mermaid
+flowchart LR
+    B[Bronze source representations]
+    C[Canonical Silver facts]
+    R[Reconstructed Silver facts]
+    P[Gold presentation]
+
+    B --> C
+    C --> R
+    C --> P
+    R --> P
 ```
 
-Examples in the hardened registry include:
+Not all Silver facts are purely observed/canonical. Quant outputs such as lots, realized events, and reconciliation events are derived but remain Silver because they are canonical analytical facts consumed by multiple presentation outputs.
 
-```python
-DataContract(
-    "df_p_tf_net_worth_monthly_summary",
-    "gold",
-    "gold.Wealth_Asset_Breakdown",
-    "Wealth",
-    "Month-Asset",
-    "WealthPresentationEngine",
-    110,
-)
+## 4. Common dimensions
 
-DataContract(
-    "df_f_investment_analytics_isin",
-    "gold",
-    "gold.Investment_By_ISIN",
-    "Investments",
-    "Date-ISIN",
-    "InvestmentQuantEngine",
-    200,
-)
+The shared model includes:
+
+- `silver.d_Calendar` at day grain;
+- `silver.d_Currency` at currency grain;
+- `silver.f_Currency_FX_Rates` at date-currency grain.
+
+These dimensions/facts connect household and investment analytics to consistent time/currency semantics.
+
+```mermaid
+erDiagram
+    D_CALENDAR ||--o{ F_CURRENCY_FX_RATES : Date
+    D_CURRENCY ||--o{ F_CURRENCY_FX_RATES : Currency
 ```
 
-That matters because:
+## 5. Household finance model
 
-```text
-Month
-≠ Month × Asset
+Household finance is built around classification dimensions and transaction facts.
 
-Date × ISIN
-≠ Date × Class
+### Dimensions
 
-Date × ISIN × Lot
-≠ Date × Portfolio
-```
-
-A correct formula over the wrong grain is still the wrong financial answer.
-
----
-
-## Silver: canonical identity and activity
-
-The current Silver surface contains **24 contracts**.
-
-### Reference / dimensions
-
-```text
-d_Calendar
-d_Income_Category
-d_Income_Subcategory
-d_Expense_Category
-d_Expense_Subcategory
-d_Asset_Category
-d_Asset_SubCategory
-d_Currency
-d_Investment_Benchmark_Master
-d_Investment_Master
-d_Macro_Parameters
-```
+- income category;
+- income subcategory;
+- expense category;
+- expense subcategory;
+- asset category;
+- asset subcategory.
 
 ### Facts
 
-```text
-f_Income_Transactions
-f_Expense_Transactions
-f_Transfer_Transactions
-f_Opening_Balances
-f_Investment_Market_Data
-f_Investment_Purchase_Data
-f_Investment_Sale_Data
-f_Investment_Benchmark_Data
-f_Investment_Analytics_Lot
+- income transactions;
+- expense transactions;
+- transfer transactions;
+- opening balances.
+
+```mermaid
+erDiagram
+    D_INCOME_CATEGORY ||--o{ D_INCOME_SUBCATEGORY : contains
+    D_INCOME_SUBCATEGORY ||--o{ F_INCOME_TRANSACTIONS : classifies
+    D_EXPENSE_CATEGORY ||--o{ D_EXPENSE_SUBCATEGORY : contains
+    D_EXPENSE_SUBCATEGORY ||--o{ F_EXPENSE_TRANSACTIONS : classifies
+    D_ASSET_CATEGORY ||--o{ D_ASSET_SUBCATEGORY : contains
+    D_ASSET_SUBCATEGORY ||--o{ F_TRANSFER_TRANSACTIONS : participates
+    D_ASSET_SUBCATEGORY ||--o{ F_OPENING_BALANCES : opens
 ```
 
-Silver is where source vocabulary becomes stable financial vocabulary.
+The household model separates transfers from income/expense so movement between owned assets does not automatically become economic income or consumption.
 
----
+## 6. Household transaction derivation
 
-## Household model
-
-The household model distinguishes four fundamental activity/state types:
+`TransformationDAG` begins with a common base transaction representation from the source household ledger and then derives income, expense, and transfer facts through separate transformations.
 
 ```mermaid
 flowchart LR
-    OPEN["Opening Balance<br/>state initialization"] --> LEDGER["Unified Ledger"]
-    INC["Income<br/>external inflow"] --> LEDGER
-    EXP["Expense<br/>external outflow"] --> LEDGER
-    TR["Transfer<br/>internal movement"] --> LEDGER
-    LEDGER --> BAL["Asset Balance State"]
+    RAW[Source in/outcome] --> BASE[Base transactions]
+    BASE --> INC[Income facts]
+    BASE --> EXP[Expense facts]
+    BASE --> TR[Transfer facts]
+    RULES[FinancialRules] --> INC
+    RULES --> EXP
+    ASSET[Asset dimensions] --> TR
 ```
 
-These concepts are intentionally separate.
+This keeps financial classification rules explicit rather than encoding meaning solely in source labels.
 
-### Opening balance
+## 7. Investment evidence model
 
-Initializes state when complete lifetime history is unavailable.
-
-It is not income.
-
-### Income
-
-Represents household inflow under canonical classification.
-
-FinancialRules can further distinguish:
+The canonical investment model begins with five core evidence families:
 
 ```text
-cash
-non-cash
-active
-dividend
-interest
+instrument master
+purchase facts
+sale facts
+market observations
+benchmark observations
 ```
 
-### Expense
-
-Represents household outflow/consumption.
-
-FinancialRules can classify:
-
-```text
-cash
-non-cash
-core
-non-core
-```
-
-### Transfer
-
-Moves value between household-controlled assets.
-
-It must not manufacture income or expense.
-
----
-
-## Investment master is semantic infrastructure
-
-`d_Investment_Master` provides stable instrument identity and analytical classification.
-
-Important concepts include:
-
-```text
-ISIN
-instrument name
-instrument type
-subtype
-class
-sector
-industry
-benchmark
-tax type
-```
-
-The Silver loader performs quality checks for fields that downstream financial methodology requires.
-
-For example:
-
-```python
-if table_name == "silver.d_Investment_Master":
-    if "ISIN" in df.columns:
-        missing_isin = df.filter(
-            pl.col("ISIN").is_null()
-        )
-
-    if "TAX_TYPE" in df.columns:
-        missing_tax = df.filter(
-            pl.col("TAX_TYPE").is_null()
-        )
-```
-
-Those are not cosmetic dimensions.
-
-Missing identity or tax classification can invalidate downstream lot/tax analytics.
-
----
-
-## Investment transaction model
-
-The shared investment engine consumes canonical:
-
-```text
-Investment Master
-Purchase Data
-Sale Data
-Market Data
-Benchmark Data
-Macro / Tax Context
-```
-
-That lets stocks and mutual funds converge into one analytical model after asset-specific upstream transformation.
+Currency/FX and macro parameters provide additional interpretation context.
 
 ```mermaid
-flowchart LR
-    STOCK["Stock Pipeline"] --> CAN["Canonical Investment Contracts"]
-    MF["Mutual Fund Pipeline"] --> CAN
-    CAN --> FIFO["Shared FIFO / Tax / Benchmark Engine"]
+erDiagram
+    D_INVESTMENT_MASTER ||--o{ F_INVESTMENT_PURCHASE_DATA : instrument
+    D_INVESTMENT_MASTER ||--o{ F_INVESTMENT_SALE_DATA : instrument
+    D_INVESTMENT_MASTER ||--o{ F_INVESTMENT_MARKET_DATA : instrument
+    D_INVESTMENT_BENCHMARK_MASTER ||--o{ F_INVESTMENT_BENCHMARK_DATA : benchmark
+    D_CURRENCY ||--o{ F_CURRENCY_FX_RATES : currency
 ```
 
-The asset pipeline boundary absorbs source/asset variation.
+The common investment facts normalize mutual funds, Indian equities, and US equities into a shared downstream model.
 
-The investment engine should not need to know which source worksheet produced a purchase.
+## 8. Investment master
 
----
+`silver.d_Investment_Master` is at ISIN/instrument grain according to the registry. It provides the instrument attributes required by market, Quant, tax, and presentation processing.
 
-## Lot-level state is the deepest Silver analytical grain
+Source-specific master fragments are produced by asset pipelines and unified by `get_d_investment_master()`.
 
-`f_Investment_Analytics_Lot` is the deepest persistent investment analytical fact.
+The master is canonical metadata. It does not contain the temporal holding state of an instrument.
+
+## 9. Canonical purchase and sale facts
+
+`silver.f_Investment_Purchase_Data` and `silver.f_Investment_Sale_Data` are trade-grain canonical facts.
+
+Deterministic transaction identities are generated from semantic fields rather than row positions. Current identity namespaces include `PURCHASE` and `SALE`, with canonical field ordering defined in `backend/utils/identity.py`.
 
 Conceptually:
 
-```text
-Date × ISIN × Active Tax Lot
+```mermaid
+flowchart LR
+    SRC[Broker/source transaction] --> N[Normalize fields]
+    N --> ID[Deterministic transaction ID]
+    ID --> FACT[Canonical trade fact]
+    FACT --> FIFO[Quant FIFO]
 ```
 
-It carries state needed for:
+This stable identity is critical because downstream lot and realized-event identities build on transaction identity.
 
-- acquisition context,
-- quantity,
-- cost basis,
-- market value,
-- holding period,
-- tax classification,
-- benchmark state,
-- realized/unrealized state,
-- estimated tax,
-- after-tax value,
-- return context.
+## 10. Market-data model
 
-Gold aggregates from this deeper state where appropriate.
+`silver.f_Investment_Market_Data` is quote-grain canonical market state. It combines market representations across asset types, including reconstructed US historical state.
 
----
-
-## Why lot grain matters
-
-Suppose one ISIN has three purchases:
+That last clause matters: the physical table is canonical for analytics, but not every row has identical provenance.
 
 ```text
-Lot A → 2022
-Lot B → 2024
-Lot C → 2026
+Indian/MF market observations
+        +
+US reconstructed historical market state
+        ↓
+canonical investment market fact
 ```
 
-At one observation date, those lots can simultaneously have different:
+The Finance market-reconstruction specification documents this provenance in depth.
 
-- holding periods,
-- tax classifications,
-- cost bases,
-- unrealized gains/losses,
-- benchmark exposure.
+## 11. Currency model
 
-Collapsing them too early would destroy information required for tax-aware analytics.
-
-So:
-
-```text
-transaction history
-      ↓
-lot inventory
-      ↓
-lot analytical state
-      ↓
-ISIN / class / portfolio aggregation
-```
-
-not:
-
-```text
-transactions
-      ↓
-immediate security total
-```
-
----
-
-## Gold is intentionally multi-grain
-
-The 22 Gold contracts answer different decision questions.
-
-### Wealth
-
-```text
-Core_Monthly_Fact
-→ Month
-
-Wealth_Asset_Breakdown
-→ Month × Asset
-```
-
-### Cash Flow
-
-```text
-Cashflow_Expense_Breakdown
-→ Month × Expense Category
-
-Cashflow_Income_Breakdown
-→ Month × Income Category
-
-Cashflow_Efficiency_Analytics
-→ Month
-
-Cashflow_Activity_Summary
-→ Month
-```
-
-### Planning
-
-```text
-Wealth_FIRE_Analytics
-→ Month
-
-Forecast_Tax_Liability
-→ Month / planning context
-
-Forecast_Budget_Variance
-→ Month / budget context
-```
-
-### Portfolio management
-
-```text
-Investment_Portfolio_Summary
-→ Month × ISIN
-```
-
-### Investment analytics
-
-```text
-Investment_By_ISIN
-→ Date × ISIN
-
-Investment_By_Subtype
-→ Date × Subtype
-
-Investment_By_Class
-→ Date × Class
-
-Investment_By_Instrument_Type
-→ Date × Instrument Type
-
-Investment_By_Sector
-→ Date × Sector
-
-Investment_By_Industry
-→ Date × Industry
-
-Investment_By_Portfolio
-→ Date
-```
-
----
-
-## Additivity follows grain
-
-Not every numeric field can be summed.
-
-### Additive
-
-Often valid across compatible dimensions:
-
-```text
-income
-expense
-current value
-realized gain/loss
-```
-
-### Semi-additive
-
-Balances can aggregate across assets but generally not across time:
-
-```text
-cash balance
-market value
-net worth
-```
-
-### Non-additive
-
-Require target-grain methodology:
-
-```text
-XIRR
-CAGR
-max drawdown
-allocation weight
-rates / ratios
-```
-
-For example:
-
-```text
-Portfolio XIRR
-≠ average(ISIN XIRR)
-```
-
-The portfolio cash-flow series must be reconstructed at portfolio grain.
-
----
-
-## Observed, reconstructed and modelled state
-
-The data model intentionally contains several epistemic categories.
-
-| State | Example |
-| --- | --- |
-| **Observed** | Broker-reported quantity, market price |
-| **Reconstructed** | FIFO lot inventory, household book balance |
-| **Derived** | XIRR, savings rate, active return |
-| **Estimated** | Tax if sold |
-| **Modelled** | FI target |
-| **Simulated** | P50 months to FI |
-
-Those values can coexist in one analytical system without pretending they carry the same certainty.
-
----
-
-## Book, market and after-tax wealth are different states
+The currency model distinguishes local/instrument currency from reporting currency.
 
 ```mermaid
 flowchart LR
-    BOOK["Book Wealth<br/>ledger reconstruction"] --> MARKET["Market Wealth<br/>investment market overlay"]
-    MARKET --> AFTER["After-Tax Wealth<br/>estimated liquidation tax"]
+    LOCAL[Local acquisition / market value] --> FX[Historical FX]
+    FX --> REPORT[Reporting-currency value]
+    LOCAL --> ASSET[Asset return]
+    FX --> ATTR[FX attribution]
+    ASSET --> TOTAL[Combined economic return]
+    ATTR --> TOTAL
 ```
 
-The distinctions matter for planning.
+This enables the system to distinguish asset performance from currency translation effects rather than treating every INR movement as instrument alpha.
 
-A book balance can be internally coherent while differing from market value.
+## 12. Historical US reconstruction model
 
-Market value can be observable while after-tax liquidation value remains modelled.
+US broker evidence does not provide an equivalent reliable daily holdings history. The application therefore reconstructs historical holdings/market state from canonical transactions plus historical price/FX evidence.
 
----
+```mermaid
+flowchart TB
+    P[US purchases] --> R[Historical state reconstruction]
+    S[US sales] --> R
+    PRICE[Historical prices] --> R
+    FX[Historical FX] --> R
+    MASTER[Instrument master] --> R
+    R --> MARKET[Canonical market data]
+```
 
-## Cash flow has its own reconciliation grain
+This reconstruction is **not** the canonical acquisition-lot model. Its purpose is historical market/valuation state. `FIFOPortfolio` remains the canonical lot authority.
 
-Cash-flow classification is not inferred from net-worth movement.
+## 13. Quant reconstruction model
 
-The system separately reconstructs:
+The Quant Engine publishes three important Silver facts:
+
+- `f_Investment_Analytics_Lot` at ISIN-lot grain;
+- `f_Investment_Realized_Events` at realized-event grain;
+- `f_Investment_Reconciliation_Events` at reconciliation-event grain.
+
+```mermaid
+erDiagram
+    F_INVESTMENT_PURCHASE_DATA ||--o{ F_INVESTMENT_ANALYTICS_LOT : creates
+    F_INVESTMENT_SALE_DATA ||--o{ F_INVESTMENT_REALIZED_EVENTS : disposes
+    F_INVESTMENT_ANALYTICS_LOT ||--o{ F_INVESTMENT_REALIZED_EVENTS : consumed_by
+    F_INVESTMENT_ANALYTICS_LOT ||--o{ F_INVESTMENT_RECONCILIATION_EVENTS : adjusted_by
+```
+
+The exact physical relationships are identity/provenance relationships rather than necessarily enforced SQL foreign keys.
+
+## 14. Lot model
+
+`FIFOPortfolio` maintains active acquisition lots. A normal purchase creates a deterministic lot identity derived from purchase semantics. Sales consume oldest active lots first.
+
+```mermaid
+stateDiagram-v2
+    [*] --> OpenLot: purchase
+    OpenLot --> OpenLot: partial disposal
+    OpenLot --> ClosedLot: full disposal
+    OpenLot --> AdjustedLot: reconciliation
+    AdjustedLot --> OpenLot: continue processing
+```
+
+A lot is reconstructed financial state, not a direct broker row.
+
+## 15. Realized-event model
+
+A single sale can consume multiple lots. The model therefore represents realized disposal components rather than collapsing the entire sale into one opaque PnL number.
+
+Current realized identity semantics are based on sale and lot identity:
 
 ```text
-operating
-investing
-financing
-internal transfers
+REALIZED(Sale_ID, Lot_ID)
 ```
 
-and compares calculated movement against actual configured cash-pool movement.
+```mermaid
+flowchart LR
+    SALE[Sale] --> L1[Lot A]
+    SALE --> L2[Lot B]
+    L1 --> R1[Realized Event A]
+    L2 --> R2[Realized Event B]
+```
 
-That gives a monthly reconciliation signal rather than merely another categorized expense report.
+This preserves acquisition lineage for holding period, tax classification, local/INR gain, and reconciliation-aware analysis.
 
----
+## 16. Reconciliation model
 
-## Canonical model vs source model
+Reconciliation compares reconstructed portfolio state with externally observed state where such observations are available.
 
-A source may call the same concept:
+Two discrepancies are semantically different:
+
+### Quantity discrepancy
 
 ```text
-Txn Type
-Nature
-Movement
-Debit/Credit
-Order Type
+observed quantity != reconstructed quantity
 ```
 
-The downstream model should not care.
-
-Source adapters/mappings resolve those fields before canonical finance.
-
-This is the main reason the project can support multiple upstream shapes without forcing every analytical engine to become source-aware.
-
----
-
-## Contract evolution
-
-Changing a canonical or Gold contract can affect:
+### Cost-basis discrepancy
 
 ```text
-transformation
-engine builders
-DataContract registry
-DuckDB DDL
-Meta row counts
-Power BI
-documentation
+observed quantity == reconstructed quantity
+but
+observed cost basis != reconstructed cost basis
 ```
 
-That is why physical schemas are treated as interfaces inside the project.
+```mermaid
+flowchart TD
+    OBS[Observed state] --> CMP[Compare]
+    REC[Reconstructed FIFO state] --> CMP
+    CMP -->|quantity mismatch| Q[Quantity reconciliation]
+    CMP -->|basis mismatch| C[Cost-basis reconciliation]
+    Q --> EVT[Reconciliation event]
+    C --> EVT
+    EVT --> STATE[Explicit adjusted state]
+```
 
-A column rename is not merely cosmetic when external BI consumes it.
+The model records adjustment provenance instead of silently rewriting lot history.
 
----
+## 17. Benchmark model
 
-## Data-model invariants
+Benchmark data is canonicalized separately from investment market data and consumed by Quant for comparative analytics. This allows portfolio/instrument performance to be compared against configured benchmarks without embedding benchmark values directly into transaction facts.
 
-1. Source vocabulary terminates upstream of canonical finance.
-2. Every important analytical dataset has a defined grain.
-3. Transfers do not become income/expense.
-4. Opening balances initialize state rather than create activity.
-5. Tax-lot detail survives until tax-aware aggregation no longer requires it.
-6. Non-additive metrics are recomputed at target grain.
-7. Observed and modelled values remain distinguishable.
-8. Gold marts exist for decisions, not because intermediate frames exist.
-9. Physical contract changes are treated as interface changes.
+## 18. Macro-parameter model
 
----
+`silver.d_Macro_Parameters` is at financial-year grain according to the registry. It supplies time-sensitive financial interpretation such as holding-period/tax-rate context used by Quant and Tax.
 
-## Go deeper
+Keeping macro parameters in canonical data makes financial-year behavior inspectable rather than hiding it entirely inside Python constants.
 
-- [Silver Data Contracts](../reference/silver-data-contracts.md)
-- [Gold Data Contracts](../reference/gold-data-contracts.md)
+## 19. Tax evidence model
+
+`silver.f_Tax_Events` is the canonical tax-relevant evidence table.
+
+Its upstream evidence comes from:
+
+```mermaid
+flowchart LR
+    INC[Household income ledger] --> TAX[Tax event normalization]
+    REAL[Quant realized events] --> TAX
+    RULES[FinancialRules exclusions / classification] --> TAX
+    MAC[Macro parameters] --> TAX
+    TAX --> EVT[f_Tax_Events]
+```
+
+Investment-related ledger categories can be excluded when Quant already owns the realized economic event, preventing double counting.
+
+## 20. Tax presentation model
+
+Three Gold tables present tax evidence:
+
+- `Tax_Year_Summary`;
+- `Tax_Income_Breakdown`;
+- `Tax_Reconciliation`.
+
+These are presentation outputs over canonical tax events. They are not a statutory tax return model.
+
+Indicative estimates and evidence-quality status can coexist. `CHECK_REQUIRED` does not necessarily mean “no estimate can be calculated”; it means the evidence/classification requires review.
+
+## 21. Wealth model
+
+Wealth presentation combines household ledger state, asset balances, investment analytics, inflation, and tax-aware context into BI-facing measures.
+
+Core builders include:
+
+- `InflationBuilder`;
+- `LedgerBuilder`;
+- `NetWorthBuilder`.
+
+Presentation modules then derive spending, income streams, budget forecasts, investment presentation, cashflow, and wealth-risk analytics.
+
+```mermaid
+flowchart TB
+    HH[Household facts] --> LEDGER[Ledger]
+    INV[Investment analytics] --> NW[Net Worth]
+    LEDGER --> NW
+    INF[Inflation] --> NW
+    NW --> SPEND[Spend analytics]
+    NW --> INCOME[Income streams]
+    NW --> BUDGET[Budget variance]
+    NW --> CF[Cashflow]
+    NW --> WR[Wealth / FIRE]
+```
+
+## 22. FIRE model
+
+FIRE outputs are probabilistic presentation, not canonical evidence.
+
+The simulation incorporates configured components including:
+
+- expected real return and volatility;
+- Markov market regimes;
+- jump diffusion;
+- inflation mean reversion;
+- human-capital shocks;
+- glide paths;
+- debt allocation;
+- Guyton-Klinger withdrawal behavior;
+- sequence-of-returns risk;
+- lifespan/horizon assumptions.
+
+```mermaid
+flowchart LR
+    STATE[Current financial state] --> MC[Monte Carlo]
+    RULES[FinancialRules] --> MC
+    SEED[Run-specific seed] --> MC
+    MC --> P10[P10 / aggressive]
+    MC --> P50[P50 / base]
+    MC --> P90[P90 / conservative]
+    MC --> PROB[Success probability]
+```
+
+These outputs answer planning questions under uncertainty. They do not become historical facts simply because they live in Gold.
+
+## 23. Gold presentation domains
+
+Gold currently publishes 23 contracts across tax, wealth/cashflow, and investment presentation.
+
+Investment presentation includes aggregations by:
+
+- ISIN;
+- subtype;
+- class;
+- instrument type;
+- sector;
+- industry;
+- portfolio;
+- geography;
+- country;
+- currency.
+
+These views reuse canonical facts rather than introducing independent definitions of trades or lots.
+
+## 24. Identity model
+
+Deterministic identity namespaces currently include:
+
+```text
+PURCHASE
+SALE
+LOT
+REALIZED
+RECON_GROUP
+RECON_EVENT
+RECON_LOT_GROUP
+TAX
+```
+
+The identity protocol canonicalizes nulls, booleans, dates/datetimes, numeric values, and strings before hashing a versioned serialized payload.
+
+```mermaid
+flowchart LR
+    F[Semantic fields] --> O[Namespace field order]
+    O --> C[Canonical value serialization]
+    C --> J[Versioned canonical payload]
+    J --> H[SHA-256]
+    H --> ID[Stable financial ID]
+```
+
+Identity is therefore part of the data model, not merely a utility implementation detail.
+
+## 25. Grain model
+
+Grain is explicitly represented in `DataContract` and should be treated as a first-class contract.
+
+Examples from the current registry:
+
+| Table | Registry grain |
+|---|---|
+| `d_Calendar` | Day |
+| `d_Currency` | Currency |
+| `f_Currency_FX_Rates` | Date-Currency |
+| `d_Investment_Master` | ISIN |
+| `d_Macro_Parameters` | FinancialYear |
+| purchase/sale facts | Trade |
+| `f_Investment_Analytics_Lot` | ISIN-Lot |
+| `f_Investment_Realized_Events` | RealizedEvent |
+| `f_Investment_Reconciliation_Events` | ReconEvent |
+| `f_Tax_Events` | TaxEvent |
+| `Tax_Year_Summary` | FY |
+
+Exact grain/identity contracts are consolidated in Reference.
+
+## 26. Producer ownership
+
+The registry also records producer ownership:
+
+```mermaid
+flowchart TB
+    CORE[CoreEngine] --> CS[Canonical Silver]
+    Q[InvestmentQuantEngine] --> QS[Quant Silver]
+    Q --> QG[Investment Gold]
+    TAX[TaxEngine] --> TS[Tax Silver]
+    TAX --> TG[Tax Gold]
+    W[WealthPresentationEngine] --> WG[Wealth Gold]
+```
+
+This prevents physical tables from becoming ownerless shared mutable state.
+
+## 27. Null and missing-state semantics
+
+The model distinguishes several reasons a value can be absent:
+
+- source evidence genuinely missing;
+- not applicable for the instrument/domain;
+- derived metric unavailable because prerequisites are missing;
+- evidence quality requires review;
+- stochastic output not produced for an invalid/empty input state.
+
+Reference specifications must document column-specific null semantics. A generic “nullable” flag is not enough for financial data.
+
+## 28. Temporal semantics
+
+Dates mean different things across domains:
+
+- transaction date;
+- acquisition date;
+- disposal date;
+- market observation date;
+- valuation date;
+- FX observation date;
+- financial year;
+- simulation as-of date.
+
+US market reconstruction explicitly preserves price observation date/age and uses backward causal joins so a future quote does not leak into a historical valuation.
+
+## 29. Local currency versus reporting currency
+
+Foreign assets can carry both local-currency and INR/reporting-currency economics.
+
+The model must preserve:
+
+```text
+local acquisition basis
+local disposal / market value
+acquisition FX
+valuation/disposal FX
+reporting-currency basis
+reporting-currency value
+asset PnL
+FX PnL
+```
+
+Flattening those into a single gain number would destroy useful attribution.
+
+## 30. Evidence lineage across domains
+
+A representative investment lineage is:
+
+```mermaid
+flowchart LR
+    FILE[Broker artifact] --> BR[Bronze transaction]
+    BR --> TRADE[Canonical Purchase / Sale]
+    TRADE --> LOT[FIFO Lot]
+    TRADE --> REAL[Realized Event]
+    LOT --> REAL
+    REAL --> TAX[Tax Event]
+    REAL --> GOLD[Investment presentation]
+    TAX --> TG[Tax presentation]
+```
+
+This lineage is one reason deterministic identities matter: downstream facts can retain stable semantic relationships even when analytical schemas are rebuilt.
+
+## 31. Model invariants
+
+1. Household transfers are not automatically income/expense.
+2. Canonical investment trades are distinct from reconstructed holdings state.
+3. US historical reconstruction does not replace canonical Quant FIFO.
+4. Realized events retain acquisition-lot lineage.
+5. Reconciliation is explicit state/provenance.
+6. Quant owns realized investment economics.
+7. Tax consumes Quant realization rather than duplicating it.
+8. Gold is presentation, not evidence authority.
+9. Local-currency and reporting-currency values remain distinguishable.
+10. Stochastic FIRE outputs remain estimates/distributions, not historical facts.
+
+## 32. Model non-guarantees
+
+The data model does not imply:
+
+- every market-state row was directly observed from a broker;
+- every tax estimate is filing-ready statutory liability;
+- every reconciliation event represents an external transaction;
+- every Gold table can reconstruct source evidence;
+- every null has the same semantic cause;
+- every deterministic financial computation implies deterministic Monte Carlo paths across independent runs.
+
+## 33. Where physical detail lives
+
+This document intentionally avoids reproducing hundreds of physical columns. Exact contracts belong in:
+
+- `../reference/bronze-data-contracts.md`;
+- `../reference/silver-data-contracts.md`;
+- `../reference/gold-data-contracts.md`;
+- `../reference/meta-data-contracts.md`;
+- `../reference/control-plane-data-contracts.md`;
+- `../reference/identity-and-grain-contracts.md`.
+
+Architecture explains the model. Reference specifies the tables. Duplicating both would give us two sources of documentation truth, and this project already has enough databases to coordinate.
+
+## Related specifications
+
+- [System Architecture](system-architecture.md)
+- [Data Lifecycle](data-lifecycle.md)
+- [Warehouse Architecture](warehouse-architecture.md)
+- [Deterministic Identity and Replay](deterministic-identity-and-replay.md)
 - [Financial Model](../finance/financial-model.md)
-- [Investment Analytics](../finance/investment-analytics.md)
-- [Metrics & Methodology](../finance/metrics-and-methodology.md)
-
-[← Architecture Home](README.md) · [← Documentation Home](../README.md)
+- [Investment Data Model](../finance/investment-data-model.md)
+- [FIFO and Realized Events](../finance/fifo-and-realized-events.md)
+- [Investment Reconciliation](../finance/investment-reconciliation.md)
+- [Multi-Currency and FX](../finance/multi-currency-and-fx.md)
+- [Tax Methodology](../finance/tax-methodology.md)
+- [FIRE Methodology](../finance/fire-methodology.md)
