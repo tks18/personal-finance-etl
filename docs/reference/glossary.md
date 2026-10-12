@@ -1,755 +1,140 @@
 # Glossary
 
-This glossary defines project-specific terms as they are used in Personal Finance ETL.
+This glossary standardizes terms that cross architecture, finance, reference, and developer documentation. Definitions describe how Personal Finance ETL uses each term; they are not attempts to settle every possible industry definition.
 
-It is not intended to replace general finance, accounting, Python, or data-engineering references.
+## Core terms
 
----
+### Actionable artifact
 
-## Architecture & data engineering
+A discovered source artifact that requires Bronze work in the current run because it is new, changed, re-ingested, or otherwise requires synchronization.
 
-## Analytical plane
+### Artifact
 
-The DuckDB side of the architecture:
+A source or virtual input tracked by the SQLite Control Plane with stable identity, path/hash observations, synchronization state, and lifecycle events.
 
-```text
-Bronze
-Silver
-Gold
-Meta
-```
+### Bronze
 
-It owns persistent analytical state, not authoritative historical run state.
+Persistent source-near DuckDB layer synchronized at file/category level. Bronze preserves complete raw analytical state across runs.
 
----
+### Canonical fact
 
-## Artifact
+Normalized financial evidence or derived fact with stable semantics independent of a vendor/source layout.
 
-A source unit registered in the SQLite Control Plane.
+### Control Plane
 
-An artifact can be:
+SQLite operational authority for runs, artifacts, snapshots, failures, payloads, lifecycle events, and simulation provenance.
 
-```text
-physical file
-or
-virtual provider/API payload
-```
+### Data contract
 
-It has identity, hash, category, payload state, and Bronze synchronization state.
+Registry/schema agreement describing a published dataset: physical table, layer, domain, grain, producer, order, and fixed DDL where applicable.
 
----
+### Deterministic identity
 
-## Bronze
+Stable identifier derived from canonical serialization of semantically identifying fields.
 
-Persistent source-shaped analytical state in DuckDB.
+### Evidence
 
-Bronze avoids repeatedly extracting unchanged historical evidence while preserving enough source identity for file-aware replacement.
+Observed source information such as transactions, broker statements, market observations, FX observations, or configuration inputs.
 
-Bronze is **not** canonical finance.
+### Full replace
 
----
+Bronze synchronization mode that drops/recreates the physical table from the current extracted schema and loads the complete actionable dataset.
 
-## Canonical contract
+### Gold
 
-A stable downstream financial/data concept produced after source-specific normalization.
+BI-facing presentation layer rebuilt from current canonical analytical state.
 
-Examples:
+### Grain
 
-```text
-income transaction
-expense transaction
-investment purchase
-investment sale
-market observation
-```
+The semantic meaning of one row, such as Day, Trade, Date-Currency, ISIN-Lot, or FY-SubHead.
 
-Canonical contracts form the anti-corruption boundary between messy sources and reusable engines.
+### Healing
 
----
+Recovery behavior that reconciles DuckDB synchronization state with Control Plane authority after divergence or interrupted cross-store completion.
 
-## Control Plane
+### Incremental Bronze
 
-The authoritative SQLite subsystem owning:
+Synchronization mode that replaces rows associated with actionable source filenames while retaining rows from unchanged files.
 
-```text
-artifacts
-payloads
-sync state
-runs
-failures
-Settings snapshots
-FinancialRules snapshots
-execution logs
-```
+### Indicative tax estimate
 
-It is operational infrastructure, not a warehouse layer.
+Analytical estimate derived from available tax-relevant evidence and configured rates; not final statutory tax liability.
 
----
+### Local currency
 
-## Data Contract
+Instrument/economic currency in which acquisition, sale, or market value is observed before reporting-currency translation.
 
-Explicit metadata describing a persistent Silver/Gold analytical output.
+### Meta
 
-```python
-@dataclass
-class DataContract:
-    contract_id: str
-    layer: str
-    physical_table: str
-    domain: str
-    grain: str
-    producer: str
-    publication_order: int
-```
+DuckDB current-state metadata projection containing latest file, row-count, rules, settings, contract, and simulation context.
 
----
+### Observed state
 
-## Deterministic rebuild
+Financial/source state directly evidenced by an external or canonical source observation.
 
-Reconstructing derived analytical state from complete upstream state rather than incrementally patching every downstream dependency.
+### Publication order
 
-Silver and Gold use this approach.
+Registry integer controlling deterministic Silver/Gold table publication sequencing.
 
----
+### Reconstructed state
 
-## Gold
+Derived financial state calculated from evidence, such as historical US holdings or FIFO lot state; not independent broker observation.
 
-Decision-support serving layer in DuckDB.
+### Reconciliation
 
-Gold marts have explicit:
+Explicit comparison and adjustment provenance when reconstructed investment state differs from observed quantity or cost basis.
 
-```text
-purpose
-grain
-producer
-physical contract
-```
+### Realized event
 
-They exist for recurring analytical decisions, not merely because an intermediate DataFrame exists.
+Canonical Quant output representing the disposal of quantity from a specific acquisition lot by a specific sale.
 
----
+### Replay envelope
 
-## Grain
+Fingerprintable set of model/input/rules/registry/seed context used to reason about stochastic run reproducibility under compatible implementation.
 
-What one row represents.
+### Reporting currency
 
-Examples:
+Currency used for consolidated valuation/analytics, including translated INR values in the current financial model.
 
-```text
-Month
-Month × Asset
-Date × ISIN
-Date × ISIN × Lot
-```
+### Silver
 
-Grain is part of metric meaning.
+Canonical analytical layer containing normalized dimensions/facts plus Quant, reconciliation, and tax evidence.
 
----
+### Snapshot
 
-## Meta
+Content-addressed canonical settings or FinancialRules payload referenced by runs/simulations.
 
-Lean DuckDB schema containing current analytical telemetry:
+### Source evidence
 
-```text
-m_File_Registry
-m_Table_Row_Counts
-m_Financial_Rules
-m_Settings
-```
+Raw externally observed or configured information before canonical financial interpretation.
 
-Meta is a projection, not the historical operational authority.
+### Stochastic simulation
 
----
+Probabilistic FIRE/wealth modeling whose run provenance includes seed and fingerprints; distinct from deterministic financial reconstruction.
 
-## `PENDING_BRONZE`
+### Synchronization status
 
-Control Plane artifact state meaning:
+Control Plane state describing whether an artifact still requires Bronze synchronization or is aligned with analytical raw state.
 
-> raw evidence exists, but successful Bronze synchronization is not yet recorded.
+### Virtual artifact
 
----
+Control Plane artifact representing generated/configuration evidence that does not necessarily correspond to a conventional source file.
 
-## `SYNCED`
+## Semantic distinctions that matter
 
-Control Plane artifact state meaning:
+| Do not collapse | Why |
+|---|---|
+| Evidence vs reconstructed state | One is observed; the other is derived from observations and algorithms. |
+| Historical Control Plane vs DuckDB Meta | One retains operational history; the other projects current analytical context. |
+| Incremental ingestion vs incremental analytics | Bronze synchronizes incrementally; Silver/Gold rebuild from complete Bronze state. |
+| US market reconstruction vs canonical FIFO | Historical holdings reconstruction supports market state; Quant owns canonical acquisition lots and realized disposals. |
+| Realized gain vs tax liability | Quant establishes economic realization; Tax normalizes evidence and estimates, not final statutory liability. |
+| Deterministic reconstruction vs stochastic replay | Stable financial identity/reconstruction and probabilistic simulation provenance solve different problems. |
+| Artifact path vs artifact identity | Location can change; identity/history should survive legitimate renames. |
 
-> the artifact has successfully reached Bronze.
+## Related specifications
 
----
-
-## Silver
-
-Canonical financial/reference contract layer in DuckDB.
-
-Silver contains stable dimensions/reference models and facts consumed by analytical engines/Gold.
-
----
-
-## Virtual artifact
-
-Provider/API-derived evidence injected into the same Control Plane lifecycle as physical files.
-
-Canonical identity:
-
-```text
-virtual://<category>/<filename>
-```
-
----
-
-## Software architecture
-
-## Adapter
-
-A boundary that translates an external/source-specific interface into the application's expected form.
-
-Use an adapter when behaviour/shape differs, not merely when a value differs.
-
----
-
-## Facade
-
-A simplified interface over a subsystem.
-
-`ControlPlane` is a facade over:
-
-```text
-SQLiteManager
-ArtifactRepository
-RunRepository
-FileSyncService
-```
-
----
-
-## Repository
-
-A component that owns persistence access for a particular operational responsibility.
-
-Examples:
-
-```text
-ArtifactRepository
-RunRepository
-```
-
----
-
-## Strategy
-
-An interchangeable behavioural implementation.
-
-A strategy is appropriate when the algorithm genuinely differs.
-
-Do not replace behavioural variation with configuration spaghetti.
-
----
-
-## LazyFrame
-
-Polars deferred query representation.
-
-LazyFrames allow expressions to remain composable and optimizable before materialization.
-
----
-
-## Publication order
-
-Explicit integer ordering in `DataContract` used by Silver/Gold loaders to publish registered contracts deterministically.
-
----
-
-## Household finance
-
-## Book wealth
-
-Wealth reconstructed from household ledger/accounting state before market-value overlays.
-
----
-
-## Market wealth
-
-Household wealth after replacing/overlaying investment book state with market valuation.
-
----
-
-## After-tax wealth
-
-Market wealth adjusted for estimated embedded investment tax under the implemented liquidation assumptions.
-
-It is modelled economic state, not observed tax-paid state.
-
----
-
-## Cash pool
-
-FinancialRules-defined set of assets/accounts treated as cash for direct cash-flow reconciliation.
-
----
-
-## Core expense
-
-Expense classified as part of the sustainable/essential spending base used by selected planning/FIRE methodology.
-
-The exact classification is policy.
-
----
-
-## Non-cash activity
-
-Economic income/expense that does not directly move the configured cash pool in the same way as ordinary cash transactions.
-
----
-
-## Opening balance
-
-State initialization for an asset/account when complete lifetime transaction history is unavailable.
-
-An opening balance is not income.
-
----
-
-## Transfer
-
-Internal movement between household-controlled assets.
-
-A transfer does not create household income or expense by itself.
-
----
-
-## Investment analytics
-
-## Active lot
-
-FIFO tax lot with remaining quantity at the current valuation date.
-
----
-
-## FIFO
-
-First-In, First-Out lot-accounting methodology.
-
-Sales consume the oldest active acquisition inventory first.
-
----
-
-## Tax lot
-
-A quantity of an investment associated with acquisition state such as:
-
-```text
-purchase date
-quantity
-cost basis
-benchmark exposure
-```
-
-Lot state is necessary for holding-period and tax-aware analytics.
-
----
-
-## Broker reconciliation
-
-Adjustment of reconstructed current investment state against broker-reported authoritative current quantity/cost where transaction history is incomplete.
-
-It anchors current truth without pretending missing historical evidence was observed.
-
----
-
-## Shadow benchmark portfolio
-
-Benchmark-equivalent capital state created at the same timing as real investment capital.
-
-It preserves capital-deployment timing for benchmark comparison.
-
----
-
-## XIRR
-
-Cash-flow-aware annualized return for irregularly dated cash flows.
-
-XIRR is non-additive and should be reconstructed at the target analytical grain.
-
----
-
-## After-Tax XIRR
-
-XIRR using estimated after-tax terminal value instead of pre-tax market terminal value.
-
----
-
-## Benchmark XIRR
-
-XIRR reconstructed from the shadow benchmark capital history.
-
----
-
-## Active Return
-
-Benchmark-relative return difference using compatible return methodology.
-
-Descriptive, not a forecast of future alpha.
-
----
-
-## Max Drawdown
-
-Largest historical decline from a prior peak in a value series.
-
-A historical path metric, not a prediction of future loss.
-
----
-
-## Outperforming Lot Ratio
-
-```text
-Active Lots Outperforming Benchmark / Active Lots
-```
-
-Descriptive current lot ratio.
-
-Not a probability forecast.
-
----
-
-## Monthly Market Value Change
-
-Month-over-month percentage change in market value.
-
-It is intentionally not called monthly return because capital flows can affect market value.
-
----
-
-## Tax
-
-## Holding classification
-
-Tax treatment assigned from asset tax type/subtype, acquisition date, realization/valuation date, and holding duration under the implemented rules.
-
----
-
-## Realized tax state
-
-Tax-relevant state associated with an actual disposal.
-
----
-
-## Unrealized tax-if-sold
-
-Estimated tax state if an active lot were realized at the valuation date/price.
-
-Not an observed payable tax amount.
-
----
-
-## Reconciliation lot
-
-Inventory introduced/adjusted to reconcile current broker state when historical transactions are incomplete.
-
-Useful for current-state correctness but not equivalent to observed acquisition history.
-
----
-
-## BI & analytics
-
-## Additive measure
-
-Can be summed across compatible dimensions/grain.
-
-Example:
-
-```text
-transaction amount
-```
-
----
-
-## Semi-additive measure
-
-Can aggregate across some dimensions but not others.
-
-Example:
-
-```text
-balance across assets at one date
-```
-
-but not balance summed across time.
-
----
-
-## Non-additive measure
-
-Requires methodology at the target grain rather than simple summation/averaging.
-
-Examples:
-
-```text
-XIRR
-CAGR
-Max Drawdown
-weights
-rates
-```
-
----
-
-## Mart
-
-Decision-oriented physical analytical contract, usually in Gold.
-
-A mart should answer a recurring analytical question.
-
----
-
-## FIRE & quantitative planning
-
-## FIRE
-
-Financial Independence / Retire Early.
-
-In this project, FIRE is a planning methodology downstream of reconstructed household/investment state.
-
----
-
-## FI target
-
-Deterministic wealth target implied by configured expense and withdrawal assumptions.
-
-Renderer-safe conceptual equation:
-
-```text
-FI Target = Annual Core Expense / Withdrawal Rate
-```
-
----
-
-## Market regime
-
-Configured stochastic state such as:
-
-```text
-Bull
-Bear
-Stagflation
-```
-
-with associated return/volatility/inflation assumptions.
-
----
-
-## Markov transition
-
-Regime transition model where the probability of the next regime depends on the current regime.
-
----
-
-## Fat tail
-
-Return-distribution assumption that assigns more probability to extreme outcomes than a simple Gaussian model.
-
----
-
-## Jump event
-
-Discrete shock/crash component modelled separately from ordinary continuous volatility.
-
----
-
-## Human-capital shock
-
-Scenario affecting employment/income/contribution capacity during accumulation.
-
----
-
-## Glide path
-
-Configured evolution of target asset allocation through time or FI proximity.
-
----
-
-## Portfolio drag
-
-Configured reduction from gross market return to represent implementation frictions/costs.
-
----
-
-## Dynamic withdrawal
-
-Post-FI withdrawal policy that can adjust spending based on portfolio/market state rather than following one rigid path.
-
----
-
-## P10 / P50 / P90
-
-Percentiles of the simulation distribution.
-
-Their interpretation depends on the metric.
-
-For time to FI:
-
-```text
-lower
-→ earlier
-```
-
-For terminal wealth:
-
-```text
-higher
-→ more wealth
-```
-
----
-
-## Modelled probability of success
-
-```text
-Successful Simulation Paths / Total Simulation Paths
-```
-
-Probability inside the configured simulation model.
-
-Not an externally calibrated prediction of real-world success.
-
----
-
-## Provenance & reliability
-
-## Run
-
-One end-to-end pipeline execution registered in the Control Plane.
-
----
-
-## Run lifecycle
-
-```text
-STARTED
-→ RUNNING
-→ COMMITTING
-→ SUCCESS
-
-or
-
-RUNNING / COMMITTING
-→ FAILED
-```
-
----
-
-## Configuration snapshot
-
-Content-addressed immutable representation of operational Settings used by a run.
-
----
-
-## FinancialRules snapshot
-
-Content-addressed immutable representation of financial policy used by a run.
-
----
-
-## Application-coordinated transaction
-
-The orchestrator coordinates SQLite and DuckDB transaction boundaries.
-
-This is not distributed two-phase commit.
-
----
-
-## Recoverability
-
-Ability to reconstruct derived analytical state from surviving authoritative evidence.
-
-Recoverability is not the same as immutable historical replay.
-
----
-
-## Coordinated Snapshot
-
-A locked recovery archive containing both SQLite Control Plane state and the DuckDB analytical warehouse.
-
-Snapshot/Restore treats the pair as one logical recovery unit.
-
----
-
-## Forensic execution log
-
-The complete run-scoped DEBUG log persisted in compressed form in `cp_runs.execution_log`.
-
-It carries run/stage/ISIN/process/source-location context and complements the structured rows in `cp_run_failures`.
-
----
-
-## Historical reproducibility
-
-Ability to recreate a past result using the same evidence, configuration, code, schema, and external assumptions.
-
-The current system records strong provenance but does not claim fully immutable historical replay.
-
----
-
-## Documentation
-
-## Documentation manifest
-
-`docs/manifest.json`.
-
-Defines section/page discovery and order for packaged documentation.
-
----
-
-## `DocsCatalog`
-
-Application component that converts the documentation manifest into navigable entries.
-
----
-
-## `DocsRenderer`
-
-Shared rendering layer used by the application's documentation surfaces.
-
----
-
-## Documentation Rubric v3
-
-The documentation-surface contract:
-
-```text
-README  → SHOW
-Wiki    → TEACH
-/docs   → SPECIFY
-Code    → PROVE
-```
-
-Inside `/docs`, the editorial philosophy remains:
-
-> **Explain less. Show more. Prove the architecture with production code. Connect the pieces with diagrams. Use prose for reasoning code cannot communicate.**
-
-The same concept may appear across surfaces, but not at the same depth or for the same job.
-
----
-
-## Related documentation
-
-- [System Architecture](../architecture/system-architecture.md)
+- [Data Model](../architecture/data-model.md)
+- [Identity and Grain Contracts](identity-and-grain-contracts.md)
 - [Financial Model](../finance/financial-model.md)
-- [Metrics & Methodology](../finance/metrics-and-methodology.md)
-- [Meta & Control-Plane Data Contracts](meta-data-contracts.md)
-
-[← Reference Home](README.md) · [← Documentation Home](../README.md)
-
-## Additional platform terminology
-
-**Control Plane authority:** The SQLite operational history and provenance layer; DuckDB Meta is a projection, not the authority.
-
-**Contract key:** The registered logical identifier for an analytical output, distinct from its physical DuckDB table name.
-
-**File-incremental Bronze:** A replacement strategy scoped to a changed source file rather than to the entire Bronze table.
-
-**Canonical identity:** A namespace-specific deterministic identifier derived from ordered, normalized event fields.
-
-**Shadow benchmark units:** Benchmark units associated with acquisition lots and consumed alongside realized disposals.
-
-**Run snapshot:** A content-addressed copy of serialized operational settings or financial rules associated with a Control Plane run.
+- [System Architecture](../architecture/system-architecture.md)
