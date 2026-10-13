@@ -33,7 +33,8 @@ def resource_path(relative_path: str) -> str:
         pkg_path = importlib.resources.files("personal_finance_etl").joinpath(*parts)
         if pkg_path.is_file() or pkg_path.is_dir():
             return str(pkg_path)
-    except Exception:
+    except (TypeError, ModuleNotFoundError, FileNotFoundError):
+        # EXPECTED_FALLBACK: Package resource lookup not available in this installation layout
         pass
 
     return local_path

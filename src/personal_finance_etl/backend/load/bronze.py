@@ -67,8 +67,9 @@ class BronzeLayer:
                         logger.debug(
                             f"[Bronze] Evolved schema for {table_name}: added column '{col_name}' ({col_type})"
                         )
-            except Exception as e:
-                logger.debug(f"[Bronze] Schema evolution check skipped for {table_name}: {e}")
+            except duckdb.CatalogException as e:
+                # EXPECTED_FALLBACK: Table not yet created, skipping evolution
+                logger.debug(f"[Bronze] Table {table_name} not yet created, skipping evolution: {e}")
 
             placeholders = ", ".join(["?"] * len(filenames))
             delete_query = f"DELETE FROM {table_name} WHERE __file_name__ IN ({placeholders})"
@@ -177,7 +178,8 @@ class BronzeLayer:
                     f"UPDATE {table} SET __file_name__ = ? WHERE __file_name__ = ?",
                     [new_name, old_name],
                 )
-            except Exception as e:
+            except (duckdb.BinderException, duckdb.CatalogException) as e:
+                # EXPECTED_FALLBACK: Table lacks __file_name__ column or does not exist
                 logger.debug(f"[Bronze] Could not rename {old_name} in {table}: {e}")
 
     def get_table(self, table_name: str) -> pl.DataFrame:

@@ -45,8 +45,11 @@ class DuckDBManager:
                 self._conn.execute("VACUUM")
                 self._conn.execute("CHECKPOINT")
                 logger.debug("[DATABASE:DUCKDB] Checkpoint successful. Closing connection.")
-            except Exception as e:
-                logger.error(f"[DATABASE:DUCKDB] Error during cleanup: {e}")
+            except duckdb.Error as e:
+                # OPTIONAL_OPERATION: Best-effort cleanup sequence during connection shutdown
+                logger.warning(
+                    f"[DATABASE:DUCKDB:OPTIONAL_OPERATION] Cleanup VACUUM/CHECKPOINT failed: {e}"
+                )
             finally:
                 self._conn.close()
                 self._conn = None
