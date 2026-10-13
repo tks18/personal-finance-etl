@@ -1,9 +1,34 @@
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import date
+from enum import StrEnum
 from typing import Any
 
 import polars as pl
+
+
+class ExtractorEntityStatus(StrEnum):
+    """Categorical status for single-entity extraction outcomes."""
+
+    SUCCESS = "SUCCESS"
+    CACHED = "CACHED"
+    NO_NEW_DATA = "NO_NEW_DATA"
+    PARTIAL = "PARTIAL"
+    EMPTY_RESPONSE = "EMPTY_RESPONSE"
+    FAILED = "FAILED"
+    RETRY_EXHAUSTED = "RETRY_EXHAUSTED"
+    INVALID_PAYLOAD = "INVALID_PAYLOAD"
+
+
+@dataclass
+class ExtractorEntityResult:
+    """Structured extraction outcome for a single entity returned by worker tasks."""
+
+    entity: str
+    status: ExtractorEntityStatus
+    message: str
+    df: pl.DataFrame = field(default_factory=lambda: pl.DataFrame())
+    context: dict[str, Any] = field(default_factory=lambda: dict[str, Any]())
 
 
 class ExtractionCompletenessError(RuntimeError):
