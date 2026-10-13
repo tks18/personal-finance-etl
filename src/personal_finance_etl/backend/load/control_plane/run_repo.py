@@ -203,7 +203,8 @@ class RunRepository:
                                 else:
                                     input_as_of_date = str(max_val).split("T")[0].split(" ")[0]
                                 break
-                    except Exception:
+                    except (KeyError, TypeError, ValueError, AttributeError):
+                        # EXPECTED_FALLBACK: Column does not contain parseable date format or is non-tabular
                         pass
         elif isinstance(input_as_of_date, (date, datetime)):
             input_as_of_date = (
@@ -270,8 +271,74 @@ class RunRepository:
             (run_id, failed_isin, stage, error_type, error_message, traceback_log, now),
         )
 
+    def get_recovery_required_runs(self) -> list[str]:
+        """Return all run IDs currently marked RECOVERY_REQUIRED."""
+        cursor = self.db.conn.execute(
+            "SELECT run_id FROM cp_runs WHERE UPPER(status) = 'RECOVERY_REQUIRED' ORDER BY started_at"
+        )
+        return [str(row[0]) for row in cursor.fetchall()]
+
+    def mark_recovery_required(
+        self,
+        run_id: str,
+        error_message: str,
+        stage: str = "COMMIT",
+        traceback_log: str | None = None,
+    ) -> None:
+        """Atomically persist RECOVERY_REQUIRED status and CROSS_STORE_DIVERGENCE event."""
+        now = datetime.now().isoformat(timespec="seconds")
+        try:
+            with self.db.atomic():
+                self.db.conn.execute(
+                    "UPDATE cp_runs SET status = 'RECOVERY_REQUIRED', finished_at = ? WHERE run_id = ?",
+                    (now, run_id),
+                )
+                self.log_run_failure(
+                    run_id=run_id,
+                    failed_isin=None,
+                    stage=stage,
+                    error_type="CROSS_STORE_DIVERGENCE",
+                    error_message=error_message,
+                    traceback_log=traceback_log,
+                )
+        except Exception:
+            # Fallback to direct connection if main connection or savepoint failed
+            import sqlite3
+
+            conn = sqlite3.connect(self.db.db_path, timeout=30.0)
+            try:
+                conn.execute(
+                    "UPDATE cp_runs SET status = 'RECOVERY_REQUIRED', finished_at = ? WHERE run_id = ?",
+                    (now, run_id),
+                )
+                conn.execute(
+                    """INSERT INTO cp_run_failures
+                       (run_id, failed_isin, stage, error_type, error_message, traceback_log, created_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    (run_id, None, stage, "CROSS_STORE_DIVERGENCE", error_message, traceback_log, now),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
+    def mark_recovery_converged(self, recovered_run_id: str, reconciling_run_id: str) -> None:
+        """Mark a prior RECOVERY_REQUIRED run as CONVERGED after successful reconciliation."""
+        now = datetime.now().isoformat(timespec="seconds")
+        with self.db.atomic():
+            self.db.conn.execute(
+                "UPDATE cp_runs SET status = 'CONVERGED' WHERE run_id = ? AND UPPER(status) = 'RECOVERY_REQUIRED'",
+                (recovered_run_id,),
+            )
+            self.log_run_failure(
+                run_id=recovered_run_id,
+                failed_isin=None,
+                stage="RECOVERY_CONVERGENCE",
+                error_type="CONVERGED",
+                error_message=f"Cross-store divergence resolved and converged by run {reconciling_run_id} at {now}.",
+            )
+
     def recover_stale_runs(self) -> None:
-        """Atomically mark interrupted runs failed; safe to repeat after a crash."""
+        """Atomically recover interrupted runs; safe to repeat after a crash."""
         now = datetime.now().isoformat(timespec="seconds")
         recovered = 0
         with self.db.atomic():
@@ -279,10 +346,19 @@ class RunRepository:
                 "SELECT run_id, status FROM cp_runs WHERE UPPER(status) IN ('STARTED', 'RUNNING', 'COMMITTING')"
             ).fetchall()
             for run_id, status in stale_runs:
+                is_committing = str(status).upper() == "COMMITTING"
+                new_status = "RECOVERY_REQUIRED" if is_committing else "FAILED"
+                error_type = "CROSS_STORE_DIVERGENCE" if is_committing else "InterruptedRunError"
+                error_message = (
+                    "Run crashed while COMMITTING; cross-store commit state uncertain, recovery required."
+                    if is_committing
+                    else f"Run was left in {status} state and recovered as FAILED on startup."
+                )
+
                 cursor = self.db.conn.execute(
-                    "UPDATE cp_runs SET status = 'FAILED', finished_at = ? "
+                    "UPDATE cp_runs SET status = ?, finished_at = ? "
                     "WHERE run_id = ? AND UPPER(status) IN ('STARTED', 'RUNNING', 'COMMITTING')",
-                    (now, run_id),
+                    (new_status, now, run_id),
                 )
                 if cursor.rowcount != 1:
                     continue
@@ -290,8 +366,8 @@ class RunRepository:
                     run_id=run_id,
                     failed_isin=None,
                     stage="RECOVERY",
-                    error_type="InterruptedRunError",
-                    error_message=f"Run was left in {status} state and recovered as FAILED on startup.",
+                    error_type=error_type,
+                    error_message=error_message,
                 )
                 recovered += 1
         if recovered:
