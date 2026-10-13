@@ -358,8 +358,9 @@ class MetaLayer:
                 sim_row = cp.db.conn.execute(
                     """
                     SELECT simulation_id, run_id, created_at, root_seed, iterations, horizon,
-                           model_implementation_version, model_fingerprint, input_fingerprint,
-                           result_fingerprint, settings_snapshot_id, rules_snapshot_id, status
+                           input_as_of_date, model_implementation_version, model_fingerprint,
+                           input_fingerprint, result_fingerprint, settings_snapshot_id,
+                           rules_snapshot_id, status
                     FROM cp_simulation_runs
                     WHERE status = 'SUCCESS'
                     ORDER BY created_at DESC
@@ -373,12 +374,12 @@ class MetaLayer:
                         """
                         INSERT INTO meta.m_Latest_Simulation (
                             simulation_id, run_id, created_at, root_seed, iterations, horizon,
-                            model_implementation_version, model_fingerprint, input_fingerprint,
-                            result_fingerprint, contract_registry_fingerprint,
+                            input_as_of_date, model_implementation_version, model_fingerprint,
+                            input_fingerprint, result_fingerprint, contract_registry_fingerprint,
                             settings_snapshot_id, rules_snapshot_id, status
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
-                        list(sim_row[:10]) + [contract_registry_fingerprint] + list(sim_row[10:]),
+                        list(sim_row[:11]) + [contract_registry_fingerprint] + list(sim_row[11:]),
                     )
                     logger.info(
                         f"[META] Mirrored latest simulation run '{sim_row[0]}' into meta.m_Latest_Simulation "

@@ -58,6 +58,7 @@ CREATE TABLE IF NOT EXISTS meta.m_Latest_Simulation (
     root_seed                  TEXT NOT NULL,
     iterations                 INTEGER,
     horizon                    INTEGER,
+    input_as_of_date           DATE,
     model_implementation_version TEXT,
     model_fingerprint          TEXT,
     input_fingerprint          TEXT,
