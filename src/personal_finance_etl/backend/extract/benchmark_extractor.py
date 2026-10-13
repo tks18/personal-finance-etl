@@ -8,6 +8,7 @@ import polars as pl
 import yfinance as yf  # type: ignore[import-untyped]
 
 from personal_finance_etl.backend.load.control_plane import ControlPlane
+from personal_finance_etl.backend.types.batch_result import ExtractionBatchResult
 from personal_finance_etl.backend.utils.interfaces import ILogger
 from personal_finance_etl.backend.utils.logger import logger
 from personal_finance_etl.backend.utils.models import EngineStatus, LogLevel
@@ -117,10 +118,10 @@ class BenchmarkExtractor:
         global_start_date: date,
         global_end_date: date,
         df_bronze_cached: pl.DataFrame,
-    ) -> tuple[pl.DataFrame, list[str]]:
+    ) -> ExtractionBatchResult:
         """
         Executes parallel fetching, chunks results by year, injects Parquet bytes to Raw Store,
-        and returns a list of injected virtual file paths to be passed to BronzeLayer.load.
+        and returns ExtractionBatchResult enforcing full completeness.
         """
         required_cols = ["ID", "Benchmark_Name", "yF_Ticker", "CURRENCY_ID"]
         missing_cols = [c for c in required_cols if c not in df_m.columns]
@@ -130,6 +131,15 @@ class BenchmarkExtractor:
         tickers_df = df_m.to_dicts()
         total = len(tickers_df)
         all_new_data: list[pl.DataFrame] = []
+
+        batch_result = ExtractionBatchResult(
+            provider="Yahoo Finance",
+            start_date=global_start_date,
+            end_date=global_end_date,
+        )
+        batch_result.requested_entities = [
+            str(r.get("yF_Ticker", "")).strip() for r in tickers_df if str(r.get("yF_Ticker", "")).strip()
+        ]
 
         # Determine max cached date per ticker
         cache_map: dict[str, date] = {}
@@ -163,34 +173,45 @@ class BenchmarkExtractor:
             for future in concurrent.futures.as_completed(futures):
                 processed += 1
                 prog = 0.1 + 0.4 * (processed / total)
+                ticker = futures[future].get("yF_Ticker", "Unknown")
                 try:
                     df_pl, msg = future.result()
                     level = LogLevel.INFO
                     if "Error" in (msg or ""):
                         level = LogLevel.ERROR
+                        batch_result.failed_entities[ticker] = msg or "Unknown error"
                     elif "Warning" in (msg or "") or "⚠" in (msg or ""):
                         level = LogLevel.WARNING
+                        batch_result.no_new_data_entities.append(ticker)
+                    elif "fully cached" in (msg or ""):
+                        batch_result.cached_entities.append(ticker)
+                    elif not df_pl.is_empty():
+                        batch_result.successful_entities.append(ticker)
+                        all_new_data.append(df_pl)
+                    else:
+                        batch_result.no_new_data_entities.append(ticker)
 
                     if msg:
                         self.status_queue.put(
                             EngineStatus(msg=msg, data=None, progress=prog, level=level)
                         )
-
-                    if not df_pl.is_empty():
-                        all_new_data.append(df_pl)
                 except Exception as e:
-                    ticker = futures[future].get("yF_Ticker", "Unknown")
+                    err_msg = str(e)
+                    batch_result.failed_entities[ticker] = err_msg
                     self.status_queue.put(
                         EngineStatus(
-                            msg=f"Error: Critical thread failure on {ticker}: {str(e)}",
+                            msg=f"Error: Critical thread failure on {ticker}: {err_msg}",
                             data=None,
                             progress=prog,
                             level=LogLevel.ERROR,
                         )
                     )
 
+        # Enforce completeness policy before writing raw artifacts
+        batch_result.assert_complete("Benchmark Extractor")
+
         if not all_new_data:
-            return pl.DataFrame(), []
+            return batch_result
 
         df_combined = pl.concat(all_new_data, how="diagonal")
         df_combined = df_combined.with_columns(pl.col("Date").dt.year().alias("Year"))
@@ -225,5 +246,6 @@ class BenchmarkExtractor:
         logger.info(
             f"Benchmark Extractor injected {len(injected_files)} Parquet chunks into Raw Store."
         )
-        df_out = pl.concat(df_final_chunks, how="diagonal") if df_final_chunks else pl.DataFrame()
-        return df_out, injected_files
+        batch_result.frames = df_final_chunks
+        batch_result.injected_files = injected_files
+        return batch_result
