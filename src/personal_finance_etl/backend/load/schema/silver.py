@@ -472,8 +472,6 @@ CREATE TABLE IF NOT EXISTS silver.f_Investment_Market_Data (
     Requested_End DATE,
     Is_Closure_Gap BOOLEAN,
     Is_Imputed BOOLEAN,
-    __file_name__ TEXT,
-    __folder_path__ TEXT,
     FOREIGN KEY(Date) REFERENCES silver.d_Calendar(Date),
     FOREIGN KEY(ISIN) REFERENCES silver.d_Investment_Master(ISIN),
     FOREIGN KEY(CURRENCY_ID) REFERENCES silver.d_Currency(UID)

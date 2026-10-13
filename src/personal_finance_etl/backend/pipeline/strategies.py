@@ -128,8 +128,6 @@ class USStockPipeline:
 
         empty_market_data = pl.LazyFrame(
             schema={
-                "__file_name__": pl.String,
-                "__folder_path__": pl.String,
                 "Date": pl.Date,
                 "ISIN": pl.String,
                 "__file_category__": pl.String,

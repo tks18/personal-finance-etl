@@ -221,8 +221,6 @@ def transform_stg_investment_market_data(
         df_union = df_union.with_columns(pl.col("Is_Closure_Gap").fill_null(False))
 
     select_cols = [
-        "__file_name__",
-        "__folder_path__",
         "Date",
         "ISIN",
         "__file_category__",
