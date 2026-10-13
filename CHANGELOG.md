@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [8.2.1](https://github.com/tks18/personal-finance-etl/compare/8.2.0...8.2.1) (2026-10-13)
+
+
+### CI 🛠
+
+* add new gh release flow ([5c8fa8b](https://github.com/tks18/personal-finance-etl/commit/5c8fa8b72a607eab5b2d5b2e36474562daa143de))
+* **scripts/create_releases:** create script to publish package to github releases ([5b2630a](https://github.com/tks18/personal-finance-etl/commit/5b2630a56fd040e37f9577e5d528ffe7f658ad87))
+
 ## [8.2.0](https://github.com/tks18/personal-finance-etl/compare/8.1.2...8.2.0) (2026-10-13)
 
 
