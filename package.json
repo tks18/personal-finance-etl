@@ -22,7 +22,7 @@
   "scripts": {
     "git:stage": "git add",
     "git:commit": "cz",
-    "git:push": "git push --follow-tags origin master",
+    "git:push": "git push --follow-tags origin dev",
     "release": "standard-version --commit-all",
     "release:pre": "standard-version --commit-all --prerelease",
     "release:patch": "standard-version --commit-all --release-as patch",
