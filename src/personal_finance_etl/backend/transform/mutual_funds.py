@@ -1,5 +1,10 @@
 import polars as pl
 
+from personal_finance_etl.backend.utils.helpers import (
+    validate_and_parse_dates,
+    validate_and_parse_numerics,
+)
+
 
 def get_stg_mf_market_data(
     raw_data: pl.LazyFrame, stg_mf_isin_mapping_lazy: pl.LazyFrame, default_currency_id: str
@@ -10,27 +15,27 @@ def get_stg_mf_market_data(
     """
     df_combined = raw_data
 
-    # Apply PQ & DAX Transformations
+    # Filter out empty placeholder rows (e.g. "NO HOLDINGS FOUND", blank trailing rows)
+    # BEFORE running strict numeric validation on active holdings
+    scheme_clean = pl.col("Scheme Name").cast(pl.String).str.strip_chars()
+    df_transformed = df_combined.filter(
+        scheme_clean.is_not_null()
+        & (scheme_clean != "")
+        & (~scheme_clean.str.to_uppercase().is_in(["NO HOLDINGS FOUND", "NO DATA FOUND", "NO HOLDING FOUND"]))
+    ).with_columns(
+        pl.col("Folio No.").cast(pl.String),
+    )
+
+    num_cols = ["Units", "Invested Value", "Current Value", "Returns", "XIRR"]
+    df_transformed = validate_and_parse_numerics(
+        df_transformed,
+        num_cols,
+        optional_cols={"XIRR", "Returns"},
+        source_col="__file_name__",
+    )
+
     df_transformed = (
-        df_combined
-        # Replace "N/A" with "0" in XIRR before casting
-        .with_columns(
-            pl.col("XIRR").cast(pl.String).str.replace("N/A", "0", literal=True).fill_null("0")
-        )
-        # Power Query: Change Types
-        .with_columns(
-            [
-                # Usually better as string if leading zeros matter, but cast to Int64 if preferred
-                pl.col("Folio No.").cast(pl.String),
-                pl.col("Units").cast(pl.Float64),
-                pl.col("Invested Value").cast(pl.Float64),
-                pl.col("Current Value").cast(pl.Float64),
-                pl.col("Returns").cast(pl.Float64),
-                pl.col("XIRR").cast(pl.Float64),
-            ]
-        )
-        # Filter: Scheme Name <> "NO HOLDINGS FOUND"
-        .filter(pl.col("Scheme Name") != "NO HOLDINGS FOUND")
+        df_transformed
         # DAX: CURRENCY_ID
         .with_columns(pl.lit(default_currency_id).alias("CURRENCY_ID"))
         # DAX: LOOKUPVALUE for ISIN
@@ -76,8 +81,6 @@ def get_stg_mf_market_data_ref(stg_mf_market_data_lazy: pl.LazyFrame) -> pl.Lazy
         # SUMMARIZE (Group By)
         .group_by(
             [
-                "__file_name__",
-                "__folder_path__",
                 "__file_category__",
                 pl.col("Month Date").alias("Date"),
                 "ISIN",
@@ -118,7 +121,12 @@ def get_base_mf_transactions(raw_data: pl.LazyFrame) -> pl.LazyFrame:
     """
     df_combined = raw_data
 
-    df_transformed = df_combined.select(
+    scheme_clean = pl.col("Scheme Name").cast(pl.String).str.strip_chars()
+    df_transformed = df_combined.filter(
+        scheme_clean.is_not_null()
+        & (scheme_clean != "")
+        & (~scheme_clean.str.to_uppercase().is_in(["NO TRANSACTIONS FOUND", "NO DATA FOUND", "NO TRANSACTION FOUND"]))
+    ).select(
         [
             "__file_name__",
             "__folder_path__",
@@ -131,14 +139,17 @@ def get_base_mf_transactions(raw_data: pl.LazyFrame) -> pl.LazyFrame:
             "Amount",
             "Date",
         ]
-    ).with_columns(
-        [
-            pl.col("Units").cast(pl.Float64),
-            pl.col("NAV").cast(pl.Float64),
-            pl.col("Amount").cast(pl.Float64),
-            # Use strict=False as Excel dates might be dirty
-            pl.col("Date").str.to_date("%d %b %Y", strict=False),
-        ]
+    )
+
+    df_transformed = validate_and_parse_numerics(
+        df_transformed,
+        ["Units", "NAV", "Amount"],
+        source_col="__file_name__",
+    )
+    df_transformed = validate_and_parse_dates(
+        df_transformed,
+        {"Date": ["%d %b %Y", "%d-%b-%Y", "%d-%m-%Y", "%Y-%m-%d"]},
+        source_col="__file_name__",
     )
 
     return df_transformed
