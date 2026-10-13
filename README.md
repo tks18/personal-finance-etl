@@ -10,11 +10,12 @@ I built Personal Finance ETL because I wanted one answer to a deceptively simple
 
 The first version only needed to make month-end less annoying. Then the questions got harder.
 
-A balance needed evidence. Evidence needed identity. Investment history needed reconstruction. Reconstruction needed reconciliation. Realized gains needed tax context. Wealth needed both household and market state. FIRE needed all of that to be trustworthy *before* Monte Carlo was allowed anywhere near it.
+A balance needed evidence. Evidence needed identity. Investment history needed reconstruction. Reconstruction needed reconciliation. Realized gains needed tax context. Wealth needed both household and market state. FIRE needed all of that to be trustworthy _before_ Monte Carlo was allowed anywhere near it.
 
 So the project grew from ETL into the system I now use to **preserve financial evidence, reconstruct state, challenge that state against independent observations, and turn the result into decisions**.
 
 [![PyPI](https://img.shields.io/pypi/v/personal-finance-etl?label=PyPI)](https://pypi.org/project/personal-finance-etl/)
+[![PyPI Downloads](https://static.pepy.tech/personalized-badge/personal-finance-etl?period=total&units=INTERNATIONAL_SYSTEM&left_color=BLACK&right_color=GREEN&left_text=downloads)](https://pepy.tech/projects/personal-finance-etl)
 ![Python](https://img.shields.io/badge/Python-3.13%2B-3776AB?logo=python&logoColor=white)
 ![Local First](https://img.shields.io/badge/Architecture-Local--First-2F855A)
 ![DuckDB](https://img.shields.io/badge/Analytics-DuckDB-FFF000?logo=duckdb&logoColor=000)
@@ -22,40 +23,72 @@ So the project grew from ETL into the system I now use to **preserve financial e
 
 **Explore:** [Wiki](https://github.com/tks18/personal-finance-etl/wiki) · [Architecture Tour](https://github.com/tks18/personal-finance-etl/wiki/02-Architecture-Tour) · [Follow the Data](https://github.com/tks18/personal-finance-etl/wiki/03-Follow-the-Data) · [Investment Engine](https://github.com/tks18/personal-finance-etl/wiki/07-Investment-Engine) · [FIRE & Planning](https://github.com/tks18/personal-finance-etl/wiki/10-FIRE-and-Planning) · [Technical Docs](docs/README.md)
 
-
 ## 🧭 Table of contents
 
-- [The whole project in one thought](#the-whole-project-in-one-thought)
-- [It started as a month-end problem](#it-started-as-a-month-end-problem)
-- [Act I · From evidence to a financial system](#act-i-from-evidence-to-a-financial-system)
+- [Personal Finance ETL](#personal-finance-etl)
+  - [🧭 Table of contents](#-table-of-contents)
+  - [The whole project in one thought](#the-whole-project-in-one-thought)
+  - [It started as a month-end problem](#it-started-as-a-month-end-problem)
+- [Act I · From evidence to a financial system](#act-i--from-evidence-to-a-financial-system)
   - [The architecture that emerged](#the-architecture-that-emerged)
   - [One run, end to end](#one-run-end-to-end)
   - [Operational memory: the SQLite Control Plane](#operational-memory-the-sqlite-control-plane)
+    - [Path is not identity](#path-is-not-identity)
   - [The warehouse: 66 contracts, three different jobs](#the-warehouse-66-contracts-three-different-jobs)
-- [Act II · From canonical facts to financial truth](#act-ii-from-canonical-facts-to-financial-truth)
+    - [Bronze remembers synchronized source state](#bronze-remembers-synchronized-source-state)
+    - [Silver is where source vocabulary stops](#silver-is-where-source-vocabulary-stops)
+    - [Gold serves decisions](#gold-serves-decisions)
+- [Act II · From canonical facts to financial truth](#act-ii--from-canonical-facts-to-financial-truth)
   - [Investment evidence becomes state](#investment-evidence-becomes-state)
   - [FIFO: where transactions become acquisition history](#fifo-where-transactions-become-acquisition-history)
   - [Reconciliation: disagreement becomes evidence](#reconciliation-disagreement-becomes-evidence)
   - [Performance: the denominator is not the hard part](#performance-the-denominator-is-not-the-hard-part)
+    - [XIRR](#xirr)
+    - [Benchmark shadow portfolios](#benchmark-shadow-portfolios)
+    - [Multi-currency attribution](#multi-currency-attribution)
   - [Tax: consume realization, do not reinvent it](#tax-consume-realization-do-not-reinvent-it)
   - [Household finance: movement first, wealth second](#household-finance-movement-first-wealth-second)
-- [Act III · From current truth to uncertain futures](#act-iii-from-current-truth-to-uncertain-futures)
+    - [Cash-flow reconciliation](#cash-flow-reconciliation)
+- [Act III · From current truth to uncertain futures](#act-iii--from-current-truth-to-uncertain-futures)
   - [FIRE: Monte Carlo earns its inputs](#fire-monte-carlo-earns-its-inputs)
+    - [Regimes](#regimes)
+    - [Human-capital risk](#human-capital-risk)
+    - [Adaptive withdrawals](#adaptive-withdrawals)
+    - [Provenance](#provenance)
   - [Gold and Power BI: serve the answer, do not reconstruct it again](#gold-and-power-bi-serve-the-answer-do-not-reconstruct-it-again)
-- [Act IV · When reality attacks the pipeline](#act-iv-when-reality-attacks-the-pipeline)
+- [Act IV · When reality attacks the pipeline](#act-iv--when-reality-attacks-the-pipeline)
   - [Reliability is part of the financial model](#reliability-is-part-of-the-financial-model)
+    - [Bronze healing](#bronze-healing)
+    - [Stale runs](#stale-runs)
+    - [Worker failures](#worker-failures)
+    - [Snapshot and restore](#snapshot-and-restore)
   - [The product surface: one backend, several ways in](#the-product-surface-one-backend-several-ways-in)
-- [Act V · Evidence that this is not a five-row demo](#act-v-evidence-that-this-is-not-a-five-row-demo)
+    - [Install](#install)
+    - [Desktop](#desktop)
+    - [Terminal](#terminal)
+- [Act V · Evidence that this is not a five-row demo](#act-v--evidence-that-this-is-not-a-five-row-demo)
   - [Production shape](#production-shape)
   - [The stack, by responsibility](#the-stack-by-responsibility)
   - [What I trust, and what I deliberately do not claim](#what-i-trust-and-what-i-deliberately-do-not-claim)
+    - [The system does provide](#the-system-does-provide)
+    - [It deliberately does not claim](#it-deliberately-does-not-claim)
   - [Is it portable?](#is-it-portable)
-- [Act VI · Why the project looks like this](#act-vi-why-the-project-looks-like-this)
+- [Act VI · Why the project looks like this](#act-vi--why-the-project-looks-like-this)
   - [Engineering decisions that survived the refactors](#engineering-decisions-that-survived-the-refactors)
+    - [Preserve evidence before inference](#preserve-evidence-before-inference)
+    - [Give every truth an owner](#give-every-truth-an-owner)
+    - [Respect grain before calculating](#respect-grain-before-calculating)
+    - [Reconcile against independent observations](#reconcile-against-independent-observations)
+    - [Keep policy explicit](#keep-policy-explicit)
+    - [Use the compute model that fits the problem](#use-the-compute-model-that-fits-the-problem)
+    - [Compute richly, publish selectively](#compute-richly-publish-selectively)
+    - [Let complexity keep re-earning its place](#let-complexity-keep-re-earning-its-place)
   - [How the project evolved](#how-the-project-evolved)
-- [Go deeper](#go-deeper-without-making-this-readme-even-more-feral)
+- [Go deeper without making this README even more feral](#go-deeper-without-making-this-readme-even-more-feral)
+  - [Learn the system](#learn-the-system)
+  - [Inspect the implementation](#inspect-the-implementation)
 - [Final note](#final-note)
-- [License](#license)
+  - [License](#license)
 
 ---
 
@@ -249,7 +282,7 @@ The architectural bet is deliberate:
 
 I do not incrementally mutate every downstream analytical dependency simply because “incremental” sounds sophisticated. At this workload, persistent Bronze plus full Silver/Gold reconstruction is easier to reason about, easier to reproduce, and harder to corrupt subtly.
 
-But this raises another question: if Bronze can be reused across runs, how does the system know *what* changed?
+But this raises another question: if Bronze can be reused across runs, how does the system know _what_ changed?
 
 That is the Control Plane's job.
 
@@ -313,12 +346,12 @@ Once evidence has a durable operational identity, it can enter the analytical wa
 
 The documented registry baseline defines:
 
-| Layer | Contracts | Responsibility |
-| --- | ---: | --- |
-| **Bronze** | **20** | Persistent synchronized source-shaped state |
-| **Silver** | **24** | Canonical financial facts and reconstructed analytical evidence |
-| **Gold** | **22** | Decision-facing marts |
-| **Total** | **66** | Registered data contracts |
+| Layer      | Contracts | Responsibility                                                  |
+| ---------- | --------: | --------------------------------------------------------------- |
+| **Bronze** |    **20** | Persistent synchronized source-shaped state                     |
+| **Silver** |    **24** | Canonical financial facts and reconstructed analytical evidence |
+| **Gold**   |    **22** | Decision-facing marts                                           |
+| **Total**  |    **66** | Registered data contracts                                       |
 
 DuckDB Meta sits alongside those contracts as current analytical context.
 
@@ -543,7 +576,7 @@ flowchart LR
     BM --> COMP
 ```
 
-That means the benchmark comparison respects *when* money entered the portfolio rather than comparing unrelated point-to-point percentages.
+That means the benchmark comparison respects _when_ money entered the portfolio rather than comparing unrelated point-to-point percentages.
 
 ### Multi-currency attribution
 
@@ -888,14 +921,14 @@ pie showData
     "Gold" : 22
 ```
 
-| Surface | Current shape |
-| --- | --- |
-| Bronze | **20** registered source contracts |
-| Silver | **24** canonical / analytical contracts |
-| Gold | **22** decision marts |
-| Registered warehouse | **66** contracts |
-| Control Plane | historical operational state |
-| DuckDB Meta | current analytical context |
+| Surface              | Current shape                           |
+| -------------------- | --------------------------------------- |
+| Bronze               | **20** registered source contracts      |
+| Silver               | **24** canonical / analytical contracts |
+| Gold                 | **22** decision marts                   |
+| Registered warehouse | **66** contracts                        |
+| Control Plane        | historical operational state            |
+| DuckDB Meta          | current analytical context              |
 
 In one documented production baseline, my workload had grown beyond **1,600 source artifacts** and roughly **147 investment-instrument workloads**. In that environment, fresh ingestion plus complete analytical reconstruction was observed around **40–45 seconds**; a warm-cache run was observed around **23.95 seconds**, publishing roughly **449k Silver + Gold rows**.
 
@@ -920,18 +953,18 @@ Sometimes the fastest calculation is the one I stopped pretending I needed.
 
 ## The stack, by responsibility
 
-| Responsibility | Technology |
-| --- | --- |
-| Vectorized transformation | **Polars** |
-| Analytical warehouse | **DuckDB** |
-| Operational provenance | **SQLite** |
-| Configuration / contracts | **Pydantic** |
-| Irregular cash-flow returns | **PyXIRR** |
-| Numerical simulation | **NumPy / Numba** |
-| BI | **Power BI** |
-| Desktop | **CustomTkinter / Tkinter** |
-| Packaging | **Hatchling / PyPI** |
-| Interfaces | **CLI + Desktop** |
+| Responsibility              | Technology                  |
+| --------------------------- | --------------------------- |
+| Vectorized transformation   | **Polars**                  |
+| Analytical warehouse        | **DuckDB**                  |
+| Operational provenance      | **SQLite**                  |
+| Configuration / contracts   | **Pydantic**                |
+| Irregular cash-flow returns | **PyXIRR**                  |
+| Numerical simulation        | **NumPy / Numba**           |
+| BI                          | **Power BI**                |
+| Desktop                     | **CustomTkinter / Tkinter** |
+| Packaging                   | **Hatchling / PyPI**        |
+| Interfaces                  | **CLI + Desktop**           |
 
 The point is not the logo collection. Each tool owns a workload it is actually good at.
 
@@ -1092,21 +1125,21 @@ The [GitHub Wiki](https://github.com/tks18/personal-finance-etl/wiki) teaches th
 
 [`/docs`](docs/README.md) is the technical specification:
 
-| Question | Specification |
-| --- | --- |
-| How is the system structured? | [System Architecture](docs/architecture/system-architecture.md) |
-| How does evidence move? | [Data Lifecycle](docs/architecture/data-lifecycle.md) |
-| What does the Control Plane own? | [Artifact Lifecycle](docs/architecture/control-plane-artifact-lifecycle.md) |
-| How do deterministic IDs work? | [Identity & Replay](docs/architecture/deterministic-identity-and-replay.md) |
-| What are the exact schemas? | [Reference](docs/reference/README.md) |
-| How does investment evidence work? | [Investment Data Model](docs/finance/investment-data-model.md) |
-| How does FIFO work? | [FIFO & Realized Events](docs/finance/fifo-and-realized-events.md) |
-| How does reconciliation work? | [Investment Reconciliation](docs/finance/investment-reconciliation.md) |
-| How are returns/risk computed? | [Performance & Risk](docs/finance/investment-performance-and-risk.md) |
-| How does FX attribution work? | [Multi-Currency & FX](docs/finance/multi-currency-and-fx.md) |
-| How is Tax modeled? | [Tax Methodology](docs/finance/tax-methodology.md) |
-| How does FIRE work? | [FIRE Methodology](docs/finance/fire-methodology.md) |
-| How do I extend it? | [Developer Guide](docs/developer/README.md) |
+| Question                           | Specification                                                               |
+| ---------------------------------- | --------------------------------------------------------------------------- |
+| How is the system structured?      | [System Architecture](docs/architecture/system-architecture.md)             |
+| How does evidence move?            | [Data Lifecycle](docs/architecture/data-lifecycle.md)                       |
+| What does the Control Plane own?   | [Artifact Lifecycle](docs/architecture/control-plane-artifact-lifecycle.md) |
+| How do deterministic IDs work?     | [Identity & Replay](docs/architecture/deterministic-identity-and-replay.md) |
+| What are the exact schemas?        | [Reference](docs/reference/README.md)                                       |
+| How does investment evidence work? | [Investment Data Model](docs/finance/investment-data-model.md)              |
+| How does FIFO work?                | [FIFO & Realized Events](docs/finance/fifo-and-realized-events.md)          |
+| How does reconciliation work?      | [Investment Reconciliation](docs/finance/investment-reconciliation.md)      |
+| How are returns/risk computed?     | [Performance & Risk](docs/finance/investment-performance-and-risk.md)       |
+| How does FX attribution work?      | [Multi-Currency & FX](docs/finance/multi-currency-and-fx.md)                |
+| How is Tax modeled?                | [Tax Methodology](docs/finance/tax-methodology.md)                          |
+| How does FIRE work?                | [FIRE Methodology](docs/finance/fire-methodology.md)                        |
+| How do I extend it?                | [Developer Guide](docs/developer/README.md)                                 |
 
 The README can finally stop here without attempting to become a fourth documentation system. 😂
 
