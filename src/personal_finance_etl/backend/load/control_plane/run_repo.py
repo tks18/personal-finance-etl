@@ -155,6 +155,9 @@ class RunRepository:
         root_seed: str,
         rules: Any,
         input_df: Any | None = None,
+        result_df: Any | None = None,
+        input_as_of_date: date | str | None = None,
+        result_fingerprint: str | None = None,
         settings_snapshot_id: str | None = None,
         rules_snapshot_id: str | None = None,
     ) -> None:
@@ -175,6 +178,40 @@ class RunRepository:
             ).encode("utf-8")
         ).hexdigest()
         input_fingerprint = self._fingerprint_dataframe(input_df)
+        if result_fingerprint is None and result_df is not None:
+            result_fingerprint = self._fingerprint_dataframe(result_df)
+
+        if input_as_of_date is None and input_df is not None:
+            candidate_cols = [
+                "MONTH_START_DATE",
+                "MONTH_END_DATE",
+                "Date",
+                "DATE",
+                "as_of_date",
+                "Closing_Date",
+            ]
+            for col in candidate_cols:
+                if hasattr(input_df, "columns") and col in input_df.columns:
+                    try:
+                        if hasattr(input_df, "height") and input_df.height > 0:
+                            max_val = input_df[col].max()
+                            if max_val is not None:
+                                if isinstance(max_val, datetime):
+                                    input_as_of_date = max_val.date().isoformat()
+                                elif isinstance(max_val, date):
+                                    input_as_of_date = max_val.isoformat()
+                                else:
+                                    input_as_of_date = str(max_val).split("T")[0].split(" ")[0]
+                                break
+                    except Exception:
+                        pass
+        elif isinstance(input_as_of_date, (date, datetime)):
+            input_as_of_date = (
+                input_as_of_date.date().isoformat()
+                if isinstance(input_as_of_date, datetime)
+                else input_as_of_date.isoformat()
+            )
+
         iterations = rules.assumptions.monte_carlo.iterations
         horizon = rules.assumptions.monte_carlo.max_months
 
@@ -182,19 +219,22 @@ class RunRepository:
             self.db.conn.execute(
                 """INSERT INTO cp_simulation_runs (
                        simulation_id, run_id, created_at, root_seed, iterations, horizon,
-                       settings_snapshot_id, rules_snapshot_id, model_implementation_version,
-                       input_fingerprint, model_fingerprint, status)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'SUCCESS')
+                       input_as_of_date, settings_snapshot_id, rules_snapshot_id,
+                       model_implementation_version, input_fingerprint, model_fingerprint,
+                       result_fingerprint, status)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'SUCCESS')
                    ON CONFLICT(simulation_id) DO UPDATE SET
                        created_at = excluded.created_at,
                        root_seed = excluded.root_seed,
                        iterations = excluded.iterations,
                        horizon = excluded.horizon,
+                       input_as_of_date = excluded.input_as_of_date,
                        settings_snapshot_id = excluded.settings_snapshot_id,
                        rules_snapshot_id = excluded.rules_snapshot_id,
                        model_implementation_version = excluded.model_implementation_version,
                        input_fingerprint = excluded.input_fingerprint,
                        model_fingerprint = excluded.model_fingerprint,
+                       result_fingerprint = excluded.result_fingerprint,
                        status = excluded.status""",
                 (
                     sim_id,
@@ -203,11 +243,13 @@ class RunRepository:
                     str(root_seed),
                     iterations,
                     horizon,
+                    str(input_as_of_date) if input_as_of_date is not None else None,
                     settings_snapshot_id,
                     rules_snapshot_id,
                     "v1.0-gbm-fire",
                     input_fingerprint,
                     model_fingerprint,
+                    result_fingerprint,
                 ),
             )
 
