@@ -1,5 +1,10 @@
 import polars as pl
 
+from personal_finance_etl.backend.utils.helpers import (
+    validate_and_parse_dates,
+    validate_and_parse_numerics,
+)
+
 
 def get_stg_stock_market_data(raw_data: pl.LazyFrame, default_currency_id: str) -> pl.LazyFrame:
     """
@@ -10,15 +15,20 @@ def get_stg_stock_market_data(raw_data: pl.LazyFrame, default_currency_id: str) 
     available_cols = df_combined.collect_schema().names()
 
     # 3. Apply Final PQ & DAX Transformations
-    df_transformed = df_combined.filter(pl.col("Stock name").is_not_null())
+    stock_clean = pl.col("Stock name").cast(pl.String).str.strip_chars()
+    df_transformed = df_combined.filter(
+        stock_clean.is_not_null()
+        & (stock_clean != "")
+        & (~stock_clean.str.to_uppercase().is_in(["NO HOLDINGS FOUND", "NO DATA FOUND", "NO HOLDING FOUND"]))
+    )
 
     # Power Query: Handle the typo in "Unrealised P&L" vs "Unealised P&L" dynamically
     if "Unealised P&L" in available_cols and "Unrealised P&L" in available_cols:
         df_transformed = (
             df_transformed.with_columns(
                 [
-                    pl.col("Unealised P&L").cast(pl.Float64).fill_null(0.0),
-                    pl.col("Unrealised P&L").cast(pl.Float64).fill_null(0.0),
+                    pl.col("Unealised P&L").cast(pl.Float64, strict=False).fill_null(0.0),
+                    pl.col("Unrealised P&L").cast(pl.Float64, strict=False).fill_null(0.0),
                 ]
             )
             .with_columns(
@@ -30,7 +40,6 @@ def get_stg_stock_market_data(raw_data: pl.LazyFrame, default_currency_id: str) 
     elif "Unealised P&L" in available_cols and "Unrealised P&L" not in available_cols:
         df_transformed = df_transformed.rename({"Unealised P&L": "Unrealised P&L"})
 
-    current_cols = df_transformed.collect_schema().names()
     num_cols = [
         "Quantity",
         "Buy price",
@@ -40,25 +49,24 @@ def get_stg_stock_market_data(raw_data: pl.LazyFrame, default_currency_id: str) 
         "Unrealised P&L",
     ]
 
+    df_transformed = validate_and_parse_numerics(
+        df_transformed,
+        num_cols,
+        optional_cols={"Unrealised P&L", "Buy price", "Buy value"},
+        source_col="__file_name__",
+    )
+    df_transformed = validate_and_parse_dates(
+        df_transformed,
+        {
+            "Buy date": ["%d-%m-%Y", "%Y-%m-%d"],
+            "Closing date": ["%d-%m-%Y", "%Y-%m-%d"],
+        },
+        optional_cols={"Buy date"},
+        source_col="__file_name__",
+    )
+
     df_transformed = (
-        df_transformed.with_columns(  # Power Query: Change Types
-            [
-                pl.col(c)
-                .cast(pl.String)
-                .str.replace_all(",", "")
-                .cast(pl.Float64, strict=False)
-                .fill_null(0.0)
-                for c in num_cols
-                if c in current_cols
-            ]
-        )
-        .with_columns(
-            [
-                # Using try_parse_dates on the string dates from Excel
-                pl.col("Buy date").str.to_date("%d-%m-%Y", strict=False),
-                pl.col("Closing date").str.to_date("%d-%m-%Y", strict=False),
-            ]
-        )
+        df_transformed
         # DAX: Calculated Columns
         .with_columns(
             pl.when(pl.col("ISIN").str.contains("INF"))
@@ -105,8 +113,6 @@ def get_stg_stock_market_data_ref(stg_stock_market_data_lazy: pl.LazyFrame) -> p
         # SUMMARIZE (Group By)
         .group_by(
             [
-                "__file_name__",
-                "__folder_path__",
                 "__file_category__",
                 pl.col("Month Date").alias("Date"),
                 "ISIN",
@@ -135,12 +141,14 @@ def get_base_stock_transactions(raw_data: pl.LazyFrame) -> pl.LazyFrame:
     Acts as the STOCK_TRANSACTIONS helper query.
     Returns a single LazyFrame containing both Buys and Sells.
     """
-    df_combined = raw_data
-
+    stock_clean = pl.col("Stock name").cast(pl.String).str.strip_chars()
     df_transformed = (
-        df_combined
-        # Power Query: Filter out empty strings in Stock Name
-        .filter(pl.col("Stock name") != "")
+        raw_data
+        .filter(
+            stock_clean.is_not_null()
+            & (stock_clean != "")
+            & (~stock_clean.str.to_uppercase().is_in(["NO TRANSACTIONS FOUND", "NO DATA FOUND", "NO TRANSACTION FOUND"]))
+        )
         # Select required columns
         .select(
             [
@@ -159,18 +167,25 @@ def get_base_stock_transactions(raw_data: pl.LazyFrame) -> pl.LazyFrame:
                 "Order status",
             ]
         )
-        # Power Query: Type Casting & Date Conversion
-        .with_columns(
-            [
-                pl.col("Quantity").cast(pl.Float64),
-                pl.col("Value").cast(pl.Float64),
-                # PQ extracts just the Date from the DateTime string
-                pl.col("Execution date and time")
-                .str.to_datetime(format="%d-%m-%Y %I:%M %p", strict=False)
-                .dt.date()
-                .alias("Execution date and time"),
+    )
+
+    df_transformed = validate_and_parse_numerics(
+        df_transformed,
+        ["Quantity", "Value"],
+        source_col="__file_name__",
+    )
+    df_transformed = validate_and_parse_dates(
+        df_transformed,
+        {
+            "Execution date and time": [
+                "%d-%m-%Y %I:%M %p",
+                "%d-%m-%Y %H:%M:%S",
+                "%Y-%m-%d %H:%M:%S",
+                "%d-%m-%Y",
+                "%Y-%m-%d",
             ]
-        )
+        },
+        source_col="__file_name__",
     )
 
     return df_transformed

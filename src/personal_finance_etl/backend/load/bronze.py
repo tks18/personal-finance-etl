@@ -50,6 +50,27 @@ class BronzeLayer:
         else:
             create_query = f"CREATE TABLE IF NOT EXISTS {table_name} AS SELECT * FROM schema_df"
             self.db_manager.conn.execute(create_query)
+
+            # Ensure schema evolution: add any new lineage/metadata columns from schema_df to existing table
+            try:
+                table_cols = {
+                    str(row[0]).lower()
+                    for row in self.db_manager.conn.execute(f"DESCRIBE {table_name}").fetchall()
+                }
+                for col_info in self.db_manager.conn.execute("DESCRIBE schema_df").fetchall():
+                    col_name = str(col_info[0])
+                    col_type = str(col_info[1])
+                    if col_name.lower() not in table_cols:
+                        self.db_manager.conn.execute(
+                            f'ALTER TABLE {table_name} ADD COLUMN "{col_name}" {col_type}'
+                        )
+                        logger.debug(
+                            f"[Bronze] Evolved schema for {table_name}: added column '{col_name}' ({col_type})"
+                        )
+            except duckdb.CatalogException as e:
+                # EXPECTED_FALLBACK: Table not yet created, skipping evolution
+                logger.debug(f"[Bronze] Table {table_name} not yet created, skipping evolution: {e}")
+
             placeholders = ", ".join(["?"] * len(filenames))
             delete_query = f"DELETE FROM {table_name} WHERE __file_name__ IN ({placeholders})"
             logger.debug(f"[BRONZE:DETAIL] Executing SQL: {delete_query}")
@@ -157,7 +178,8 @@ class BronzeLayer:
                     f"UPDATE {table} SET __file_name__ = ? WHERE __file_name__ = ?",
                     [new_name, old_name],
                 )
-            except Exception as e:
+            except (duckdb.BinderException, duckdb.CatalogException) as e:
+                # EXPECTED_FALLBACK: Table lacks __file_name__ column or does not exist
                 logger.debug(f"[Bronze] Could not rename {old_name} in {table}: {e}")
 
     def get_table(self, table_name: str) -> pl.DataFrame:

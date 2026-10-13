@@ -443,7 +443,10 @@ class IsinProcessor:
                 else None
             )
 
-            inst_cagr = inst_bm_cagr = 0.0
+            inst_cagr: float | None = None
+            inst_cagr_status: str = "UNDEFINED"
+            inst_bm_cagr: float | None = None
+            inst_bm_cagr_status: str = "UNDEFINED"
             if closing_units > 0:
                 avg_cost = fifo.get_average_cost()
                 avg_bm_cost = fifo.get_average_bm_cost()
@@ -455,9 +458,13 @@ class IsinProcessor:
                 inst_age = max(int(weighted_days), 1)
 
                 if avg_cost > 0:
-                    inst_cagr = calculate_cagr(avg_cost, m_price, inst_age)
+                    inst_cagr_res = calculate_cagr(avg_cost, m_price, inst_age)
+                    inst_cagr = inst_cagr_res.value
+                    inst_cagr_status = inst_cagr_res.status
                 if avg_bm_cost > 0:
-                    inst_bm_cagr = calculate_cagr(avg_bm_cost, m_bm_price_inr, inst_age)
+                    inst_bm_cagr_res = calculate_cagr(avg_bm_cost, m_bm_price_inr, inst_age)
+                    inst_bm_cagr = inst_bm_cagr_res.value
+                    inst_bm_cagr_status = inst_bm_cagr_res.status
 
             if m_price > running_peak_price:
                 running_peak_price = m_price
@@ -471,7 +478,9 @@ class IsinProcessor:
 
             inst_metrics = {
                 "cagr": inst_cagr,
+                "cagr_status": inst_cagr_status,
                 "bm_cagr": inst_bm_cagr,
+                "bm_cagr_status": inst_bm_cagr_status,
                 "xirr": inst_xirr,
                 "xirr_status": inst_xirr_result.status,
                 "bm_xirr": bm_xirr_val,
@@ -691,6 +700,17 @@ class IsinProcessor:
             "Purchase_ID": pl.String,
             "Lot_Source_Type": pl.String,
             "Buy_Date": pl.Date,
+            "Lot_CAGR": pl.Float64,
+            "Lot_CAGR_Status": pl.String,
+            "Lot_CAGR_Local": pl.Float64,
+            "CAGR": pl.Float64,
+            "CAGR_Status": pl.String,
+            "Lot_BM_CAGR": pl.Float64,
+            "Lot_BM_CAGR_Status": pl.String,
+            "Lot_BM_CAGR_Local": pl.Float64,
+            "BM_CAGR": pl.Float64,
+            "BM_CAGR_Status": pl.String,
+            "Lot_Alpha": pl.Float64,
             "XIRR": pl.Float64,
             "After_Tax_XIRR": pl.Float64,
             "BM_XIRR": pl.Float64,

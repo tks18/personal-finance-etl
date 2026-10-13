@@ -85,9 +85,11 @@ class SnapshotRecord(BaseModel):
     P_L: float = Field(alias="P/L")
     Absolute_Return: float = 0.0
     Lot_Weight: float = 0.0
-    Lot_CAGR: float
+    Lot_CAGR: float | None = None
+    Lot_CAGR_Status: str = "UNDEFINED"
 
-    CAGR: float
+    CAGR: float | None = None
+    CAGR_Status: str = "UNDEFINED"
     XIRR: float | None
     XIRR_Status: str = "INVALID_INPUT"  # VALID | INVALID_INPUT | UNDEFINED | NON_CONVERGENT
     After_Tax_XIRR: float | None
@@ -95,14 +97,16 @@ class SnapshotRecord(BaseModel):
     BM_Buy_Price: float | None
     BM_Market_Price: float
     Lot_BM_Return: float = 0.0
-    Lot_BM_CAGR: float
-    Lot_BM_CAGR_Local: float = 0.0
-    BM_CAGR: float
+    Lot_BM_CAGR: float | None = None
+    Lot_BM_CAGR_Status: str = "UNDEFINED"
+    Lot_BM_CAGR_Local: float | None = None
+    BM_CAGR: float | None = None
+    BM_CAGR_Status: str = "UNDEFINED"
     BM_XIRR: float | None
     BM_XIRR_Local: float | None = None
     Active_Return: float | None
     Active_Return_Local: float | None = None
-    Lot_Alpha: float
+    Lot_Alpha: float | None = None
     Is_Lagging_Benchmark: bool | None
     XIRR_Local: float | None = None
     FX_XIRR_Impact: float | None = None
@@ -128,7 +132,7 @@ class SnapshotRecord(BaseModel):
     Asset_PnL: float = 0.0
     Forex_PnL: float = 0.0
     Forex_Contribution_Pct: float = 0.0
-    Lot_CAGR_Local: float = 0.0
+    Lot_CAGR_Local: float | None = None
     Absolute_Return_Local: float = 0.0
     Asset_Return_Pct: float = 0.0
     Forex_Return_Pct: float = 0.0

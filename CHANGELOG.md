@@ -2,6 +2,56 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [8.2.0](https://github.com/tks18/personal-finance-etl/compare/8.1.2...8.2.0) (2026-10-13)
+
+
+### Build System 🏗
+
+* checkout to dev branch ([399f50a](https://github.com/tks18/personal-finance-etl/commit/399f50a891cd64a6bc0886cfd4fb3f7de4d5c20d))
+
+
+### Docs 📃
+
+* few upcoming schema changes ([8c5d57d](https://github.com/tks18/personal-finance-etl/commit/8c5d57d77f3fbbfc2789f5a76fb197c4901165be))
+* update readme with downloads ([fb93865](https://github.com/tks18/personal-finance-etl/commit/fb938657b78bd67e2d6ad3d424a6478b6831371a))
+
+
+### Features 🔥
+
+* **backend/control_plane:** create methods to recover from failed states from previous run ([acaa3db](https://github.com/tks18/personal-finance-etl/commit/acaa3dbbafd49490005b8577de0df9967d6074df))
+* **backend/engines/quant:** integrate cagr struct result ([4941c82](https://github.com/tks18/personal-finance-etl/commit/4941c825d0151d4c15d4b06f221f8243594cb50b))
+* **backend/engines/quant:** integrate cagr structured result ([101b58d](https://github.com/tks18/personal-finance-etl/commit/101b58d817b3856ea8cfe0acbdcb99970b7ffb0c))
+* **backend/extract:** benchmark: use the new structure fetcher result ([bdfcd78](https://github.com/tks18/personal-finance-etl/commit/bdfcd786808221c0a2f7f7ea966828791ab0e5b3))
+* **backend/extract:** benchmark: use the new typed status result for logging ([ac249b7](https://github.com/tks18/personal-finance-etl/commit/ac249b72d2dc60c79527f3a12d315d3dd0ce28b7))
+* **backend/extract:** currency: use the new structure fetcher result ([7602b38](https://github.com/tks18/personal-finance-etl/commit/7602b383a88b28c83bf462ec546e0c510b9235a3))
+* **backend/extract:** currency: use the new typed status result for logging ([0fc4b2a](https://github.com/tks18/personal-finance-etl/commit/0fc4b2a909f4df1f1a8f697068f4d61b46b825f9))
+* **backend/extract:** us_market: use the new structure fetcher result ([faabf33](https://github.com/tks18/personal-finance-etl/commit/faabf3391ca277264ecfb855dee891991d8a231f))
+* **backend/extract:** us_market: use the new typed status result for logging ([185a272](https://github.com/tks18/personal-finance-etl/commit/185a27239f02daded29d70998ea86725507d071a))
+* **backend/load/schema:** silver: add cagr structured result ([8340c1b](https://github.com/tks18/personal-finance-etl/commit/8340c1b446aef1b62ed08e89dddbad12c5a5a047))
+* **backend/load:** bronze: update upsert function to adapt for new schemas if reqd ([604a083](https://github.com/tks18/personal-finance-etl/commit/604a083fce5c34a65333344ea590aa5c9db495f6))
+* **backend/pipeline:** currency: use validation gate ([0635c3b](https://github.com/tks18/personal-finance-etl/commit/0635c3b7061550595972f2491e2c303b7b10d5cb))
+* **backend/pipeline:** etl: integrate the entire commit tracking across both db and sync failures ([ff5a3c2](https://github.com/tks18/personal-finance-etl/commit/ff5a3c259479055303066492e22e07ca95bc09a1))
+* **backend/transform:** mutual_funds: use strict validation gate ([c19931d](https://github.com/tks18/personal-finance-etl/commit/c19931d9cfc8ccf6d17b44ea03a96c7148a01245))
+* **backend/transform:** stocks: use strict validation gate ([f695c13](https://github.com/tks18/personal-finance-etl/commit/f695c13eb1eb207f05a32e8465b6fa06308c8dbb))
+* **backend/transform:** us_market: use strict validation gate, add provenance fields ([e73019a](https://github.com/tks18/personal-finance-etl/commit/e73019ab098292ed9139591468249d26ee9fdb63))
+* **backend/types:** analytics: add cagr structured output to analytics ([b25205c](https://github.com/tks18/personal-finance-etl/commit/b25205c9cf6a734e5ca9b2ca9cb617de9713e3b5))
+* **backend/types:** batch_result: create a result class for concurrent fetchers ([1ab8e50](https://github.com/tks18/personal-finance-etl/commit/1ab8e50bfb21d8309f1ec835c6909f8d5187538c))
+* **backend/types:** batch_result: encode a structured message result ([cce7e7e](https://github.com/tks18/personal-finance-etl/commit/cce7e7eb6006751a9886d2a40cceea77dc715fd0))
+* **backend/types:** calculation: extend xirr structured result to cagr ([4d5b54d](https://github.com/tks18/personal-finance-etl/commit/4d5b54d2d84a72334138fcbe127c6841fb71d1ac))
+* **backend/types:** pipeline: create typed enum for db commit states tracking ([072f53f](https://github.com/tks18/personal-finance-etl/commit/072f53f3fdf814a698c351ce8ec6ea058f79593e))
+* **backend/types:** validation: create a validation class to check for mandatory cols ([cafd129](https://github.com/tks18/personal-finance-etl/commit/cafd129f7c6696ea006ff27eb1749c4df38dff12))
+* **backend/utils:** create shared helpers for data validation and robust date and num parsing ([04eda48](https://github.com/tks18/personal-finance-etl/commit/04eda488b1b7f639886d3128182e0b456dbd2f1a))
+
+
+### Bug Fixes 🛠
+
+* **backend/control_plane:** result fingerprint was not populated and input date not populated, fixed ([430df58](https://github.com/tks18/personal-finance-etl/commit/430df583d5c621550f373fcaaf8ab675b4ebcded))
+* **backend/engines/presentations:** fix cpi exception cases defaulting to 100 ([f7da546](https://github.com/tks18/personal-finance-etl/commit/f7da546a17c17406e917919d6dcb3f10b9b0ee01))
+* **backend/load:** extend input as of date to duckdb meta for completeness ([1599c4d](https://github.com/tks18/personal-finance-etl/commit/1599c4dac2023336826bcbacce85d10fab63f2ad))
+* **backend/pipeline:** etl: add result df for result fingerprinting of montecarlo ([2f120e0](https://github.com/tks18/personal-finance-etl/commit/2f120e07b3e5235b33d6b7dc2be80e05dff414c5))
+* **backend:** fix exception handling by checking specific errors and logging ([020e023](https://github.com/tks18/personal-finance-etl/commit/020e023c6e6f4f82a114d7852cb0d9f6af609867))
+* remove file_name and folder_path from imputed tables as its antipattern for medallian ([5a2e1c5](https://github.com/tks18/personal-finance-etl/commit/5a2e1c58726809d3860dc41fefbf679dfd521359))
+
 ### [8.1.2](https://github.com/tks18/personal-finance-etl/compare/8.1.1...8.1.2) (2026-10-13)
 
 

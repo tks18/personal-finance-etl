@@ -55,6 +55,11 @@ class CurrencyPipeline:
                     "Target_Currency_Code": pl.String,
                     "yF_Ticker": pl.String,
                     "FX_Rate": pl.Float64,
+                    "Data_Provider": pl.String,
+                    "Extraction_Time": pl.String,
+                    "Requested_Start": pl.Date,
+                    "Requested_End": pl.Date,
+                    "Is_Closure_Gap": pl.Boolean,
                 }
             )
 
@@ -67,9 +72,11 @@ class CurrencyPipeline:
 
         # 2. Extract Delta
         extractor = CurrencyExtractor(self.cp, self.status_queue, self.max_workers)
-        df_delta, new_files = extractor.extract_currency_delta(
+        batch_res = extractor.extract_currency_delta(
             df_currency, global_start_date, global_end_date, df_bronze_cached
         )
+        batch_res.assert_complete("Currency Extractor")
+        df_delta, new_files = batch_res.combined_frame, batch_res.injected_files
 
         self.status_queue.put(
             EngineStatus(
@@ -107,6 +114,11 @@ class CurrencyPipeline:
                     "Target_Currency_Code": pl.String,
                     "yF_Ticker": pl.String,
                     "FX_Rate": pl.Float64,
+                    "Data_Provider": pl.String,
+                    "Extraction_Time": pl.String,
+                    "Requested_Start": pl.Date,
+                    "Requested_End": pl.Date,
+                    "Is_Closure_Gap": pl.Boolean,
                 }
             )
         else:

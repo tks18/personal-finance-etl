@@ -1,36 +1,67 @@
 import polars as pl
 
+from personal_finance_etl.backend.utils.helpers import (
+    validate_and_parse_dates,
+    validate_and_parse_numerics,
+)
+
 
 def get_base_us_stock_transactions(raw_data: pl.LazyFrame) -> pl.LazyFrame:
     """
     Acts as the US_STOCK_TRANSACTIONS helper query.
     Returns a single LazyFrame containing both Buys and Sells with translation to INR.
     """
+    stock_clean = pl.col("Stock Name").cast(pl.String).str.strip_chars()
+    df_filtered = raw_data.filter(
+        stock_clean.is_not_null()
+        & (stock_clean != "")
+        & (~stock_clean.str.to_uppercase().is_in(["NO TRANSACTIONS FOUND", "NO DATA FOUND", "NO TRANSACTION FOUND", "NO HOLDINGS FOUND"]))
+    )
+
+    df_validated = validate_and_parse_dates(
+        df_filtered,
+        {
+            "Order Date": [
+                "%d-%b-%y",
+                "%Y-%m-%d %H:%M:%S",
+                "%Y-%m-%d",
+                "%d-%m-%Y",
+            ]
+        },
+        source_col="__file_name__",
+    )
+
+    numeric_cols = [
+        "Quantity",
+        "Price ($)",
+        "Order Amount ($)",
+        "Exch Rate",
+        "Order Amount (INR)",
+        "Brokerage (INR)",
+    ]
+    df_validated = validate_and_parse_numerics(
+        df_validated,
+        numeric_cols,
+        optional_cols={"Brokerage (INR)"},
+        source_col="__file_name__",
+    )
+
     df_transformed = (
-        raw_data.filter(pl.col("Stock Name").is_not_null() & (pl.col("Stock Name") != ""))
-        .select(
+        df_validated.select(
             [
                 "__file_name__",
                 "__folder_path__",
                 pl.col("Stock Name").alias("Instrument Name"),
                 "ISIN",
                 pl.col("Yahoo Ticker").alias("yF_Ticker"),
-                pl.coalesce(
-                    pl.col("Order Date").cast(pl.Date, strict=False),
-                    pl.col("Order Date").cast(pl.String).str.to_date("%d-%b-%y", strict=False),
-                    pl.col("Order Date")
-                    .cast(pl.String)
-                    .str.to_datetime("%Y-%m-%d %H:%M:%S", strict=False)
-                    .dt.date(),
-                    pl.col("Order Date").cast(pl.String).str.to_date("%Y-%m-%d", strict=False),
-                ).alias("Date"),
+                pl.col("Order Date").alias("Date"),
                 pl.col("Transaction Type").alias("Type"),
-                pl.col("Quantity").cast(pl.Float64),
-                pl.col("Price ($)").cast(pl.Float64).alias("Price_Local"),
-                pl.col("Order Amount ($)").cast(pl.Float64).alias("Value_Local"),
-                pl.col("Exch Rate").cast(pl.Float64).alias("FX_Rate"),
-                pl.col("Order Amount (INR)").cast(pl.Float64).alias("Value"),
-                pl.col("Brokerage (INR)").cast(pl.Float64).alias("Brokerage_INR"),
+                "Quantity",
+                pl.col("Price ($)").alias("Price_Local"),
+                pl.col("Order Amount ($)").alias("Value_Local"),
+                pl.col("Exch Rate").alias("FX_Rate"),
+                pl.col("Order Amount (INR)").alias("Value"),
+                pl.col("Brokerage (INR)").alias("Brokerage_INR"),
                 pl.col("Currency").alias("CURRENCY_ID"),
             ]
         )

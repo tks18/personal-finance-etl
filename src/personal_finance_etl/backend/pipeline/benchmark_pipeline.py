@@ -63,12 +63,14 @@ class BenchmarkPipeline:
 
         # 2. Extract Delta from external sources to Raw Store
         extractor = BenchmarkExtractor(self.cp, self.status_queue)
-        df_new_raw, virtual_files = extractor.extract_benchmark_delta(
+        batch_res = extractor.extract_benchmark_delta(
             df_m=df_master,
             global_start_date=start_date,
             global_end_date=end_date,
             df_bronze_cached=df_bronze_cached,
         )
+        batch_res.assert_complete("Benchmark Extractor")
+        df_new_raw, virtual_files = batch_res.combined_frame, batch_res.injected_files
 
         # 3. Load Delta directly into Bronze Layer
         if not df_new_raw.is_empty():

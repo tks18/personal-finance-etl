@@ -472,8 +472,6 @@ CREATE TABLE IF NOT EXISTS silver.f_Investment_Market_Data (
     Requested_End DATE,
     Is_Closure_Gap BOOLEAN,
     Is_Imputed BOOLEAN,
-    __file_name__ TEXT,
-    __folder_path__ TEXT,
     FOREIGN KEY(Date) REFERENCES silver.d_Calendar(Date),
     FOREIGN KEY(ISIN) REFERENCES silver.d_Investment_Master(ISIN),
     FOREIGN KEY(CURRENCY_ID) REFERENCES silver.d_Currency(UID)
@@ -593,8 +591,10 @@ CREATE TABLE IF NOT EXISTS silver.f_Investment_Analytics_Lot (
     Forex_Return_Pct DOUBLE,
     -- Performance Returns
     Lot_CAGR DOUBLE,
+    Lot_CAGR_Status TEXT,       -- VALID | INVALID_INPUT | UNDEFINED | COMPUTATION_ERROR
     Lot_CAGR_Local DOUBLE,
     CAGR DOUBLE,
+    CAGR_Status TEXT,           -- VALID | INVALID_INPUT | UNDEFINED | COMPUTATION_ERROR
     XIRR DOUBLE,
     XIRR_Status TEXT,           -- VALID | INVALID_INPUT | UNDEFINED | NON_CONVERGENT
     XIRR_Local DOUBLE,
@@ -605,8 +605,10 @@ CREATE TABLE IF NOT EXISTS silver.f_Investment_Analytics_Lot (
     BM_Market_Price DOUBLE,
     Lot_BM_Return DOUBLE,
     Lot_BM_CAGR DOUBLE,
+    Lot_BM_CAGR_Status TEXT,    -- VALID | INVALID_INPUT | UNDEFINED | COMPUTATION_ERROR
     Lot_BM_CAGR_Local DOUBLE,
     BM_CAGR DOUBLE,
+    BM_CAGR_Status TEXT,        -- VALID | INVALID_INPUT | UNDEFINED | COMPUTATION_ERROR
     BM_XIRR DOUBLE,
     BM_XIRR_Local DOUBLE,
     Active_Return DOUBLE,

@@ -1,3 +1,4 @@
+import math
 from collections.abc import Mapping
 from datetime import date
 from typing import Any
@@ -5,6 +6,8 @@ from typing import Any
 import polars as pl
 
 from personal_finance_etl.backend.config.financial_rules import FinancialRules
+from personal_finance_etl.backend.types.calculation import CalculationStatus, CpiResult
+from personal_finance_etl.backend.utils.logger import logger
 
 
 class InflationBuilder:
@@ -67,19 +70,41 @@ class InflationBuilder:
             .select(["MONTH_START_DATE", "INFLATION_YOY_PCT", "CPI_INDEX"])
         )
 
+        cpi_result: CpiResult
         try:
             cpi_latest_df = (
                 lf_inflation.sort("MONTH_START_DATE").tail(1).select("CPI_INDEX").collect()
             )
             if not cpi_latest_df.is_empty():
-                cpi_latest = cpi_latest_df.item()
+                val = cpi_latest_df.item()
+                if val is not None and isinstance(val, (int, float)) and not math.isnan(val) and not math.isinf(val):
+                    cpi_result = CpiResult(
+                        value=float(val),
+                        status=CalculationStatus.VALID,
+                    )
+                else:
+                    cpi_result = CpiResult(
+                        value=None,
+                        status=CalculationStatus.INVALID_INPUT,
+                        reason="Derived latest CPI_INDEX is null, NaN, or non-finite",
+                    )
             else:
-                cpi_latest = 100.0
-        except Exception:
-            cpi_latest = 100.0
+                cpi_result = CpiResult(
+                    value=None,
+                    status=CalculationStatus.NO_OBSERVATION,
+                    reason="No observations available in inflation series",
+                )
+        except Exception as err:
+            logger.error(f"[INFLATION] Unexpected failure computing latest CPI: {err}")
+            cpi_result = CpiResult(
+                value=None,
+                status=CalculationStatus.COMPUTATION_ERROR,
+                reason=str(err),
+            )
 
         return {
             "lf_months": lf_months,
             "lf_inflation": lf_inflation,
-            "cpi_latest": cpi_latest,
+            "cpi_latest": cpi_result.as_float(fallback=float("nan")),
+            "cpi_result": cpi_result,
         }
