@@ -43,8 +43,10 @@ class SnapshotGenerator:
         execution_residual: float = 0.0,
         remaining_ltcg_exemption: float = 0.0,
     ) -> list[SnapshotRecord]:
-        inst_cagr = inst_metrics.get("cagr", 0.0)
-        inst_bm_cagr = inst_metrics.get("bm_cagr", 0.0)
+        inst_cagr = inst_metrics.get("cagr")
+        inst_cagr_status = inst_metrics.get("cagr_status", "UNDEFINED")
+        inst_bm_cagr = inst_metrics.get("bm_cagr")
+        inst_bm_cagr_status = inst_metrics.get("bm_cagr_status", "UNDEFINED")
         inst_xirr = inst_metrics.get("xirr")
         inst_xirr_status = inst_metrics.get("xirr_status", "INVALID_INPUT")
         inst_after_tax_xirr = inst_metrics.get("after_tax_xirr")
@@ -85,7 +87,9 @@ class SnapshotGenerator:
             )
 
             lot_return = (m_price - lot.price) / lot.price if lot.price > 0 else 0.0
-            lot_cagr = calculate_cagr(lot.price, m_price, age)
+            lot_cagr_res = calculate_cagr(lot.price, m_price, age)
+            lot_cagr = lot_cagr_res.value
+            lot_cagr_status = lot_cagr_res.status
 
             if lbd and lbd.year == m_date.year and lbd.month == m_date.month:
                 day_weight = (m_date.day - lbd.day + 1) / max(1, m_date.day)
@@ -106,21 +110,27 @@ class SnapshotGenerator:
             lbm_buy = lot.bm_buy
             if lbm_buy and lbm_buy > 0:
                 lot_bm_ret = (m_bm_price_inr - lbm_buy) / lbm_buy
-                lot_bm_cagr = calculate_cagr(lbm_buy, m_bm_price_inr, age)
+                lot_bm_cagr_res = calculate_cagr(lbm_buy, m_bm_price_inr, age)
+                lot_bm_cagr = lot_bm_cagr_res.value
+                lot_bm_cagr_status = lot_bm_cagr_res.status
             else:
                 lbm_buy = None
                 lot_bm_ret = 0.0
-                lot_bm_cagr = 0.0
+                lot_bm_cagr = None
+                lot_bm_cagr_status = "UNDEFINED"
 
             lbm_buy_local = lot.bm_buy_local
             if lbm_buy_local and lbm_buy_local > 0:
-                lot_bm_cagr_local = calculate_cagr(lbm_buy_local, m_bm_price, age)
+                lot_bm_cagr_local = calculate_cagr(lbm_buy_local, m_bm_price, age).value
             else:
                 lot_bm_cagr_local = lot_bm_cagr
 
-            lot_alpha = lot_cagr - lot_bm_cagr
-            if lot_alpha > 0:
-                outperform_cnt += 1
+            if lot_cagr is not None and lot_bm_cagr is not None:
+                lot_alpha = lot_cagr - lot_bm_cagr
+                if lot_alpha > 0:
+                    outperform_cnt += 1
+            else:
+                lot_alpha = None
 
             pnl = (m_price - lot.price) * lot.qty
             close_val = lot.qty * m_price
@@ -157,7 +167,7 @@ class SnapshotGenerator:
                 asset_pnl = asset_pnl_local * fx_rate_snap
                 forex_pnl = lot.price_local * (fx_rate_snap - lot.fx_rate_buy) * lot.qty
 
-                lot_cagr_local = calculate_cagr(lot.price_local, m_price_local, age)
+                lot_cagr_local = calculate_cagr(lot.price_local, m_price_local, age).value
                 absolute_return_local = (
                     (m_price_local - lot.price_local) / lot.price_local
                     if lot.price_local > 0
@@ -225,8 +235,10 @@ class SnapshotGenerator:
                     Market_Price=m_price,
                     Buy_Value=round(buy_val_lot, 4),
                     Close_Value=round(close_val, 4),
-                    Lot_CAGR=round(lot_cagr, 8),
-                    CAGR=round(inst_cagr, 8),
+                    Lot_CAGR=rounded_optional(lot_cagr),
+                    Lot_CAGR_Status=lot_cagr_status,
+                    CAGR=rounded_optional(inst_cagr),
+                    CAGR_Status=inst_cagr_status,
                     XIRR=rounded_optional(inst_xirr),
                     XIRR_Status=inst_xirr_status,
                     After_Tax_XIRR=rounded_optional(inst_after_tax_xirr),
@@ -234,9 +246,11 @@ class SnapshotGenerator:
                     FX_XIRR_Impact=rounded_optional(fx_xirr_impact),
                     BM_Buy_Price=round(lbm_buy, 4) if lbm_buy else None,
                     BM_Market_Price=round(m_bm_price, 4),
-                    Lot_BM_CAGR=round(lot_bm_cagr, 8),
-                    Lot_BM_CAGR_Local=round(lot_bm_cagr_local, 8),
-                    BM_CAGR=round(inst_bm_cagr, 8),
+                    Lot_BM_CAGR=rounded_optional(lot_bm_cagr),
+                    Lot_BM_CAGR_Status=lot_bm_cagr_status,
+                    Lot_BM_CAGR_Local=rounded_optional(lot_bm_cagr_local),
+                    BM_CAGR=rounded_optional(inst_bm_cagr),
+                    BM_CAGR_Status=inst_bm_cagr_status,
                     **{
                         "P/L": round(pnl, 4),
                     },
@@ -246,7 +260,7 @@ class SnapshotGenerator:
                     BM_XIRR_Local=rounded_optional(bm_xirr_local),
                     Active_Return=rounded_optional(inst_active_return),
                     Active_Return_Local=rounded_optional(inst_metrics.get("active_return_local")),
-                    Lot_Alpha=round(lot_alpha, 8),
+                    Lot_Alpha=rounded_optional(lot_alpha),
                     Is_Lagging_Benchmark=is_lagging,
                     Max_Drawdown=round(inst_max_dd, 8),
                     Tax_Rate=ltcg_rate if holding_type == "LTCG" else stcg_rate,
@@ -266,7 +280,7 @@ class SnapshotGenerator:
                     Asset_PnL=round(asset_pnl, 4),
                     Forex_PnL=round(forex_pnl, 4),
                     Forex_Contribution_Pct=round(forex_contrib, 6),
-                    Lot_CAGR_Local=round(lot_cagr_local, 8),
+                    Lot_CAGR_Local=rounded_optional(lot_cagr_local),
                     Absolute_Return_Local=round(absolute_return_local, 8),
                     Asset_Return_Pct=round(asset_return_pct, 6),
                     Forex_Return_Pct=round(forex_return_pct, 6),
