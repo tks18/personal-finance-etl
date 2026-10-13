@@ -38,7 +38,7 @@ CAGR is calculated as:
 
 $$CAGR=\left(\frac{V_t}{V_0}\right)^{365/d}-1$$
 
-`calculate_cagr()` returns `0.0` for non-positive/degenerate inputs and `NaN` on arithmetic overflow so pathological synthetic values remain visible instead of contaminating aggregates with a plausible sentinel.
+`calculate_cagr()` returns typed `CagrResult(value, status, message)`: `INVALID_INPUT` (`value=None`) for non-positive or non-finite prices, `UNDEFINED` (`value=None`) for zero or negative holding periods, and `VALID` (`value: float`) for valid inputs. It never uses `0.0` as a sentinel for missing or invalid data, preserving true zero-return performance observations.
 
 ## Instrument CAGR
 

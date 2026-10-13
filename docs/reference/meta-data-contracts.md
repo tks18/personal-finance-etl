@@ -89,6 +89,7 @@ Latest contract-registry projection, including layer, grain, producer, replaceme
 | `root_seed` | `TEXT NOT NULL` |
 | `iterations` | `INTEGER` |
 | `horizon` | `INTEGER` |
+| `input_as_of_date` | `DATE` |
 | `model_implementation_version` | `TEXT` |
 | `model_fingerprint` | `TEXT` |
 | `input_fingerprint` | `TEXT` |

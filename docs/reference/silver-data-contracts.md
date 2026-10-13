@@ -588,10 +588,8 @@ The physical DDL defines **18 columns** for this table. The registry grain is th
 | `Requested_End` | `DATE` |
 | `Is_Closure_Gap` | `BOOLEAN` |
 | `Is_Imputed` | `BOOLEAN` |
-| `__file_name__` | `TEXT` |
-| `__folder_path__` | `TEXT` |
 
-The physical DDL defines **24 columns** for this table. The registry grain is the semantic row contract; it should be used when reasoning about joins and uniqueness rather than assuming the first ID-looking column is automatically the grain.
+The physical DDL defines **22 columns** for this table. The registry grain is the semantic row contract; it should be used when reasoning about joins and uniqueness rather than assuming the first ID-looking column is automatically the grain.
 
 ### `silver.f_Investment_Purchase_Data`
 
@@ -720,8 +718,10 @@ Canonical Quant lot/snapshot output. Grain is registry-defined as ISIN-Lot; fiel
 | `Asset_Return_Pct` | `DOUBLE` |
 | `Forex_Return_Pct` | `DOUBLE` |
 | `Lot_CAGR` | `DOUBLE` |
+| `Lot_CAGR_Status` | `TEXT` |
 | `Lot_CAGR_Local` | `DOUBLE` |
 | `CAGR` | `DOUBLE` |
+| `CAGR_Status` | `TEXT` |
 | `XIRR` | `DOUBLE` |
 | `XIRR_Status` | `TEXT` |
 | `XIRR_Local` | `DOUBLE` |
@@ -731,8 +731,10 @@ Canonical Quant lot/snapshot output. Grain is registry-defined as ISIN-Lot; fiel
 | `BM_Market_Price` | `DOUBLE` |
 | `Lot_BM_Return` | `DOUBLE` |
 | `Lot_BM_CAGR` | `DOUBLE` |
+| `Lot_BM_CAGR_Status` | `TEXT` |
 | `Lot_BM_CAGR_Local` | `DOUBLE` |
 | `BM_CAGR` | `DOUBLE` |
+| `BM_CAGR_Status` | `TEXT` |
 | `BM_XIRR` | `DOUBLE` |
 | `BM_XIRR_Local` | `DOUBLE` |
 | `Active_Return` | `DOUBLE` |
