@@ -30,6 +30,7 @@ from personal_finance_etl.backend.engines.presentation.modules.spend_analytics i
 from personal_finance_etl.backend.engines.presentation.modules.wealth_risk_analytics import (
     WealthRiskAnalyticsBuilder,
 )
+from personal_finance_etl.backend.types.calculation import CalculationStatus
 from personal_finance_etl.backend.utils.logger import logger
 
 
@@ -57,6 +58,13 @@ class WealthPresentationEngine:
         inflation_res = InflationBuilder(dfs, rules=self.rules).build()
         if not inflation_res:
             return {}
+
+        cpi_res = inflation_res.get("cpi_result")
+        if cpi_res and cpi_res.status == CalculationStatus.COMPUTATION_ERROR:
+            raise RuntimeError(
+                f"Inflation computation failed: {cpi_res.reason}. "
+                "Aborting presentation DAG to prevent corrupted downstream FIRE state."
+            )
 
         ledger_res = LedgerBuilder(dfs, rules=self.rules).build()
         if not ledger_res:
