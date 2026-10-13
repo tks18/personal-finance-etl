@@ -7,6 +7,31 @@ import polars as pl
 
 from personal_finance_etl.backend.utils.ordering import sort_purchases, sort_sales
 
+EMPTY_US_MARKET_SCHEMA: dict[str, type[pl.DataType] | pl.DataType] = {
+    "Date": pl.Date,
+    "ISIN": pl.String,
+    "__file_category__": pl.String,
+    "Quantity": pl.Float64,
+    "Closing_Price_Local": pl.Float64,
+    "Buy_Price_Local": pl.Float64,
+    "Closing_Value_Local": pl.Float64,
+    "Buy_Value_Local": pl.Float64,
+    "FX_Rate": pl.Float64,
+    "Closing_Price": pl.Float64,
+    "Buy_Price": pl.Float64,
+    "Closing_Value": pl.Float64,
+    "Buy_Value": pl.Float64,
+    "Unit_PnL": pl.Float64,
+    "Total_PnL": pl.Float64,
+    "CURRENCY_ID": pl.String,
+    "Data_Provider": pl.String,
+    "Extraction_Time": pl.String,
+    "Requested_Start": pl.Date,
+    "Requested_End": pl.Date,
+    "Is_Closure_Gap": pl.Boolean,
+    "Is_Imputed": pl.Boolean,
+}
+
 
 def transform_us_market_data(
     df_bronze_prices_lazy: pl.LazyFrame,
@@ -24,11 +49,11 @@ def transform_us_market_data(
     df_sale = df_sale_lazy.collect()
 
     if df_purchase.is_empty():
-        return pl.DataFrame().lazy()
+        return pl.DataFrame(schema=EMPTY_US_MARKET_SCHEMA).lazy()
 
     us_purchases = df_purchase.filter(pl.col("__file_category__") == "US Stocks")
     if us_purchases.is_empty():
-        return pl.DataFrame().lazy()
+        return pl.DataFrame(schema=EMPTY_US_MARKET_SCHEMA).lazy()
 
     active_isins = us_purchases["ISIN"].unique().to_list()
 
@@ -138,7 +163,7 @@ def transform_us_market_data(
     )
 
     if df_spine_eager.is_empty():
-        return pl.DataFrame().lazy()
+        return pl.DataFrame(schema=EMPTY_US_MARKET_SCHEMA).lazy()
 
     df_spine = df_spine_eager.lazy()
 

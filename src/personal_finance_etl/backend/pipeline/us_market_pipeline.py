@@ -72,14 +72,21 @@ class USMarketPipeline:
                     "ISIN": pl.String,
                     "yF_Ticker": pl.String,
                     "Closing_Price_Local": pl.Float64,
+                    "Data_Provider": pl.String,
+                    "Extraction_Time": pl.String,
+                    "Requested_Start": pl.Date,
+                    "Requested_End": pl.Date,
+                    "Is_Closure_Gap": pl.Boolean,
                 }
             )
 
         # 2. Extract Delta
         extractor = USMarketExtractor(self.cp, self.status_queue, self.max_workers)
-        df_delta, new_files = extractor.extract_us_market_delta(
+        batch_res = extractor.extract_us_market_delta(
             isin_ticker_map, global_start_date, global_end_date, df_bronze_cached
         )
+        batch_res.assert_complete("US Market Extractor")
+        df_delta, new_files = batch_res.combined_frame, batch_res.injected_files
 
         self.status_queue.put(
             EngineStatus(
@@ -115,6 +122,11 @@ class USMarketPipeline:
                     "ISIN": pl.String,
                     "yF_Ticker": pl.String,
                     "Closing_Price_Local": pl.Float64,
+                    "Data_Provider": pl.String,
+                    "Extraction_Time": pl.String,
+                    "Requested_Start": pl.Date,
+                    "Requested_End": pl.Date,
+                    "Is_Closure_Gap": pl.Boolean,
                 }
             )
         else:
@@ -140,15 +152,6 @@ class USMarketPipeline:
         )
 
         df_silver = df_silver_lazy.collect(engine="streaming")
-
-        # Re-attach file mapping if needed for downstream (though normally not strictly required for gold)
-        if not df_silver.is_empty() and "__folder_path__" not in df_silver.columns:
-            if not df_delta.is_empty() and "__folder_path__" in df_delta.columns:
-                # Add a dummy folder path just in case the schema expects it
-                df_silver = df_silver.with_columns(
-                    pl.lit("virtual://us_stock_market/silver_transformed.parquet").alias("__folder_path__"),
-                    pl.lit("silver_transformed.parquet").alias("__file_name__"),
-                )
 
         self.status_queue.put(
             EngineStatus(
