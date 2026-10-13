@@ -1,6 +1,7 @@
 import gc
 import multiprocessing
 import os
+import sqlite3
 import sys
 import time
 import traceback
@@ -33,6 +34,7 @@ from personal_finance_etl.backend.pipeline.core.extractor import DataExtractor
 from personal_finance_etl.backend.pipeline.core.transformer import TransformationDAG
 from personal_finance_etl.backend.pipeline.currency_pipeline import CurrencyPipeline
 from personal_finance_etl.backend.pipeline.us_market_pipeline import USMarketPipeline
+from personal_finance_etl.backend.types.pipeline import CommitState
 from personal_finance_etl.backend.utils.interfaces import ILogger
 from personal_finance_etl.backend.utils.logger import (
     add_file_handler,
@@ -256,6 +258,12 @@ class ETLOrchestrator:
         run_id = None
         cp = None
         log_file_path = self.db_manager.db_path.replace(".duckdb", ".log")
+        duckdb_started: bool = False
+        sqlite_started: bool = False
+        duckdb_committed: bool = False
+        sqlite_committed: bool = False
+        commit_state: CommitState = CommitState.NOT_STARTED
+        pending_recovery_runs: list[str] = []
 
         try:
             add_queue_handler(cast("multiprocessing.Queue[Any]", self.status_queue))
@@ -296,6 +304,15 @@ class ETLOrchestrator:
             cp.artifacts.active_run_id = run_id
             cp.file_sync.active_run_id = run_id
 
+            # Detect any prior runs left requiring recovery
+            pending_recovery_runs = cp.runs.get_recovery_required_runs()
+            if pending_recovery_runs:
+                logger.warning(
+                    "[RECOVERY] Found %d prior run(s) requiring convergence: %s. Initiating state reconciliation.",
+                    len(pending_recovery_runs),
+                    pending_recovery_runs,
+                )
+
             # 2. Mirror to DuckDB Analytics
             meta_layer = MetaLayer(self.db_manager, self.cfg, self.rules)
             meta_layer.heal_duckdb_registry(cp)
@@ -303,7 +320,11 @@ class ETLOrchestrator:
             # Start ACID Transaction for the entire ETL run
             logger.debug("[DATABASE:DUCKDB] BEGIN TRANSACTION")
             self.db_manager.conn.execute("BEGIN TRANSACTION")
+            duckdb_started = True
+
             cp.begin_transaction()
+            sqlite_started = True
+            commit_state = CommitState.STARTED
 
             cp.runs.update_run_status(run_id, "RUNNING")
 
@@ -444,6 +465,7 @@ class ETLOrchestrator:
             try:
                 logger.debug("[DATABASE:DUCKDB] COMMIT")
                 self.db_manager.conn.execute("COMMIT")
+                duckdb_committed = True
             except Exception as duckdb_commit_err:
                 raise RuntimeError(
                     f"DuckDB Commit Failed: {duckdb_commit_err}"
@@ -451,14 +473,24 @@ class ETLOrchestrator:
 
             try:
                 cp.commit()
+                sqlite_committed = True
+                commit_state = CommitState.FULLY_COMMITTED
             except Exception as sqlite_commit_err:
-                # DuckDB committed, but SQLite failed. The next run will rely on idempotency
-                # and Bronze self-healing to resolve this state mismatch.
+                commit_state = CommitState.DUCKDB_COMMITTED_SQLITE_FAILED
                 raise RuntimeError(
                     f"SQLite Commit Failed after DuckDB committed: {sqlite_commit_err}"
                 ) from sqlite_commit_err
 
             cp.runs.finish_run(run_id, "SUCCESS")
+
+            if pending_recovery_runs:
+                for rec_run_id in pending_recovery_runs:
+                    cp.runs.mark_recovery_converged(rec_run_id, run_id)
+                logger.info(
+                    "[RECOVERY] Successfully converged %d prior diverged run(s): %s.",
+                    len(pending_recovery_runs),
+                    pending_recovery_runs,
+                )
 
             self.status_queue.put(EngineStatus(msg="", data=None, progress=1.0))
             total_time = time.perf_counter() - start_time
@@ -467,32 +499,72 @@ class ETLOrchestrator:
             )
         except Exception as e:
             logger.exception("CRITICAL PIPELINE FAILURE:")
-            # Rollback all changes if any phase fails
-            try:
-                logger.debug("[DATABASE:DUCKDB] ROLLBACK")
-                self.db_manager.conn.execute("ROLLBACK")
-                logger.warning("DuckDB transaction rolled back.")
-            except Exception as rollback_err:
-                logger.error(f"Failed to rollback DuckDB transaction: {rollback_err}")
 
-            try:
-                if cp is not None:
+            # Derive explicit commit state
+            if duckdb_committed and not sqlite_committed:
+                commit_state = CommitState.DUCKDB_COMMITTED_SQLITE_FAILED
+            elif not duckdb_committed and not sqlite_committed:
+                commit_state = CommitState.ROLLED_BACK
+            elif duckdb_committed and sqlite_committed:
+                commit_state = CommitState.FULLY_COMMITTED
+            else:
+                commit_state = CommitState.COMMIT_STATE_UNKNOWN
+
+            # Rollback DuckDB only if started and not committed
+            if duckdb_started and not duckdb_committed:
+                try:
+                    logger.debug("[DATABASE:DUCKDB] ROLLBACK")
+                    self.db_manager.conn.execute("ROLLBACK")
+                    logger.warning("DuckDB transaction rolled back.")
+                except Exception as rollback_err:
+                    logger.error(f"Failed to rollback DuckDB transaction: {rollback_err}")
+            elif duckdb_committed:
+                logger.warning(
+                    "[DATABASE:DUCKDB] DuckDB is already committed; cannot rollback DuckDB."
+                )
+
+            # Rollback SQLite if started and not committed
+            if cp is not None and sqlite_started and not sqlite_committed:
+                try:
                     cp.rollback()
-            except Exception as rollback_err:
-                logger.error(f"Failed to rollback SQLite Raw Store transaction: {rollback_err}")
+                except Exception as rollback_err:
+                    logger.error(f"Failed to rollback SQLite Raw Store transaction: {rollback_err}")
 
-            logger.warning(
-                "Pipeline failed. Transactions completely rolled back to maintain ACID integrity."
-            )
+            # Emit truthful rollback language guarded strictly by commit_state
+            if commit_state == CommitState.ROLLED_BACK:
+                logger.warning(
+                    "Pipeline failed. All open transactions rolled back to maintain integrity (state: ROLLED_BACK)."
+                )
+            elif commit_state == CommitState.DUCKDB_COMMITTED_SQLITE_FAILED:
+                logger.error(
+                    "CRITICAL SPLIT-COMMIT DIVERGENCE: DuckDB committed successfully, but SQLite Raw Store commit failed. "
+                    "Transactions CANNOT be fully rolled back. DuckDB has durable changes. State: DUCKDB_COMMITTED_SQLITE_FAILED. "
+                    "RECOVERY_REQUIRED marker will be persisted."
+                )
+            elif commit_state == CommitState.FULLY_COMMITTED:
+                logger.warning(
+                    "Pipeline encountered post-commit failure. Transactions are already fully committed (state: FULLY_COMMITTED)."
+                )
+            else:
+                logger.error(
+                    "Pipeline failed with uncertain transaction commit state (state: COMMIT_STATE_UNKNOWN)."
+                )
 
-            # Persist failure details
+            # Persist failure details and recovery marker
             try:
                 if cp is not None and run_id is not None:
-                    if "ISIN_FAILURE" in str(e):
-                        parts = str(e).split("|")
-                        if len(parts) >= 3:
-                            failed_isin = parts[1]
-                            error_msg = parts[2]
+                    if commit_state == CommitState.DUCKDB_COMMITTED_SQLITE_FAILED:
+                        cp.runs.mark_recovery_required(
+                            run_id=run_id,
+                            error_message=f"Split-commit divergence: DuckDB committed, but SQLite commit failed: {e}. duckdb_commit_state=COMMITTED, sqlite_commit_state=FAILED",
+                            stage="COMMIT",
+                            traceback_log=traceback.format_exc(),
+                        )
+                    else:
+                        if "ISIN_FAILURE" in str(e):
+                            parts = str(e).split("|")
+                            failed_isin = parts[1] if len(parts) >= 3 else None
+                            error_msg = parts[2] if len(parts) >= 3 else str(e)
                             cp.runs.log_run_failure(
                                 run_id=run_id,
                                 failed_isin=failed_isin,
@@ -501,20 +573,18 @@ class ETLOrchestrator:
                                 error_message=error_msg,
                                 traceback_log=traceback.format_exc(),
                             )
-                    else:
-                        cp.runs.log_run_failure(
-                            run_id=run_id,
-                            failed_isin=None,
-                            stage="Pipeline",
-                            error_type=type(e).__name__,
-                            error_message=str(e),
-                            traceback_log=traceback.format_exc(),
-                        )
+                        else:
+                            cp.runs.log_run_failure(
+                                run_id=run_id,
+                                failed_isin=None,
+                                stage="Pipeline",
+                                error_type=type(e).__name__,
+                                error_message=str(e),
+                                traceback_log=traceback.format_exc(),
+                            )
+                        cp.runs.finish_run(run_id, "FAILED")
             except Exception as failure_log_err:
                 logger.error(f"Failed to log run_failure to Control Plane: {failure_log_err}")
-
-            if cp is not None and run_id is not None:
-                cp.runs.finish_run(run_id, "FAILED")
 
             raise e
         finally:
@@ -527,8 +597,11 @@ class ETLOrchestrator:
                         log_bytes = f.read()
                     compressed_log = zlib.compress(log_bytes, level=9)
                     cp.runs.save_execution_log(run_id, compressed_log)
-            except Exception as log_err:
-                logger.error(f"Failed to save compressed execution log to Raw Store: {log_err}")
+            except (sqlite3.Error, OSError, zlib.error) as log_err:
+                # OPTIONAL_OPERATION: Archiving compressed execution log into Control Plane
+                logger.warning(
+                    f"[PIPELINE:OPTIONAL_OPERATION] Failed to save compressed execution log to Raw Store: {log_err}"
+                )
 
             try:
                 self.db_manager.close()
