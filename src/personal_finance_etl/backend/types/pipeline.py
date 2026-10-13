@@ -1,7 +1,19 @@
 from datetime import date
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict
+
+
+class CommitState(StrEnum):
+    """Explicit cross-database transaction commit state."""
+
+    NOT_STARTED = "NOT_STARTED"
+    STARTED = "STARTED"
+    ROLLED_BACK = "ROLLED_BACK"
+    DUCKDB_COMMITTED_SQLITE_FAILED = "DUCKDB_COMMITTED_SQLITE_FAILED"
+    FULLY_COMMITTED = "FULLY_COMMITTED"
+    COMMIT_STATE_UNKNOWN = "COMMIT_STATE_UNKNOWN"
 
 
 class ISINTaskPayload(BaseModel):
