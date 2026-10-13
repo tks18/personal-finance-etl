@@ -91,6 +91,7 @@ dev = [
 [tool.poe.tasks]
 dev = "uv run python -c 'from scripts.tasks import dev; dev()'"
 build = "uv run python -c 'from scripts.tasks import build; build()'"
+release = "uv run python -c 'from scripts.tasks import release; release()'"
 
 [tool.uv]
 package = true

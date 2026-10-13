@@ -29,6 +29,7 @@
     "release:minor": "standard-version --commit-all --release-as minor",
     "release:major": "standard-version --commit-all --release-as major",
     "release:as": "standard-version --commit-all --release-as",
+    "gh:release": "uv run poe release",
     "dev": "uv run poe dev",
     "build": "uv run poe build",
     "lint": "uv run ruff check",
