@@ -238,6 +238,7 @@ class ETLOrchestrator:
                 root_seed=str(run_id),
                 rules=self.rules,
                 input_df=self.dfs.get("df_p_tf_wealth_risk_analytics_inputs"),
+                result_df=self.dfs.get("df_p_tf_wealth_risk_analytics"),
                 settings_snapshot_id=settings_snapshot_id,
                 rules_snapshot_id=rules_snapshot_id if rules_snapshot_id != "UNKNOWN" else None,
             )
