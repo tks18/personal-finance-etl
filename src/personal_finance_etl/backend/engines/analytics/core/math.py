@@ -3,18 +3,16 @@ from datetime import date
 
 from pyxirr import xirr
 
-from personal_finance_etl.backend.types.calculation import XirrResult
+from personal_finance_etl.backend.types.calculation import CagrResult, CalculationStatus, XirrResult
 
 
-def calculate_cagr(start_value: float, end_value: float, days: int) -> float:
+def calculate_cagr(start_value: float, end_value: float, days: int) -> CagrResult:
     """Calculate annualised Compound Annual Growth Rate (CAGR).
 
     CAGR = (end_value / start_value) ^ (365 / days) − 1
 
-    Returns 0.0 for degenerate inputs (non-positive values or zero duration).
-    Returns NaN on arithmetic overflow (e.g. astronomical synthetic returns)
-    so that the bad value propagates visibly through aggregations rather than
-    being silently clamped.
+    Returns CagrResult with explicit status instead of bare float 0.0 so callers
+    can distinguish genuine flat returns (0.0% with VALID) from invalid or undefined inputs.
 
     Parameters
     ----------
@@ -25,14 +23,45 @@ def calculate_cagr(start_value: float, end_value: float, days: int) -> float:
     days:
         Holding duration in calendar days. Must be > 0.
     """
-    if start_value <= 0 or end_value <= 0 or days <= 0:
-        return 0.0
+    if not math.isfinite(start_value) or not math.isfinite(end_value):
+        return CagrResult(
+            value=None,
+            status=CalculationStatus.INVALID_INPUT,
+            reason="Non-finite input values in CAGR calculation",
+        )
+    if start_value <= 0:
+        return CagrResult(
+            value=None,
+            status=CalculationStatus.INVALID_INPUT,
+            reason=f"Start value must be positive, got {start_value}",
+        )
+    if end_value <= 0:
+        return CagrResult(
+            value=None,
+            status=CalculationStatus.INVALID_INPUT,
+            reason=f"End value must be positive, got {end_value}",
+        )
+    if days <= 0:
+        return CagrResult(
+            value=None,
+            status=CalculationStatus.UNDEFINED,
+            reason=f"Holding duration must be positive days, got {days}",
+        )
     try:
-        return float(((end_value / start_value) ** (365.0 / days)) - 1)
+        val = float(((end_value / start_value) ** (365.0 / days)) - 1.0)
+        if not math.isfinite(val):
+            return CagrResult(
+                value=None,
+                status=CalculationStatus.COMPUTATION_ERROR,
+                reason="Calculated CAGR is non-finite",
+            )
+        return CagrResult(value=val, status=CalculationStatus.VALID)
     except OverflowError:
-        return float(
-            "nan"
-        )  # Astronomical return — NaN is safer than a sentinel to avoid polluting aggregations
+        return CagrResult(
+            value=None,
+            status=CalculationStatus.COMPUTATION_ERROR,
+            reason="Arithmetic overflow in CAGR calculation",
+        )
 
 
 def calculate_xirr(dates: list[date], amounts: list[float]) -> XirrResult:
