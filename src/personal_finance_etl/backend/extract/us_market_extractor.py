@@ -9,7 +9,11 @@ import polars as pl
 import yfinance as yf  # type: ignore[import-untyped]
 
 from personal_finance_etl.backend.load.control_plane import ControlPlane
-from personal_finance_etl.backend.types.batch_result import ExtractionBatchResult
+from personal_finance_etl.backend.types.batch_result import (
+    ExtractionBatchResult,
+    ExtractorEntityResult,
+    ExtractorEntityStatus,
+)
 from personal_finance_etl.backend.utils.interfaces import ILogger
 from personal_finance_etl.backend.utils.logger import logger
 from personal_finance_etl.backend.utils.models import EngineStatus, LogLevel
@@ -30,9 +34,14 @@ class USMarketExtractor:
 
     def _fetch_ticker_delta(
         self, isin: str, ticker: str, start_dt: date, end_dt: date, max_cached_date: date | None
-    ) -> tuple[pl.DataFrame, str | None]:
+    ) -> ExtractorEntityResult:
+        entity_label = f"{ticker} ({isin})" if ticker else isin
         if not ticker:
-            return pl.DataFrame(), f"Warning: Skipping empty ticker for ISIN {isin}"
+            return ExtractorEntityResult(
+                entity=entity_label,
+                status=ExtractorEntityStatus.INVALID_PAYLOAD,
+                message=f"Warning: Skipping empty ticker for ISIN {isin}",
+            )
 
         fetch_start = start_dt - timedelta(days=15)
         if max_cached_date and max_cached_date >= fetch_start:
@@ -42,7 +51,11 @@ class USMarketExtractor:
             logger.debug(
                 f"[US Market Extractor] {ticker} fully cached up to {end_dt}. Skipping API fetch."
             )
-            return pl.DataFrame(), f"✓ {ticker} fully cached up to {end_dt}"
+            return ExtractorEntityResult(
+                entity=entity_label,
+                status=ExtractorEntityStatus.CACHED,
+                message=f"✓ {ticker} fully cached up to {end_dt}",
+            )
 
         logger.debug(f"[US Market Extractor] API Fetching {ticker} from {fetch_start} to {end_dt}")
         hist_pd = None
@@ -58,12 +71,20 @@ class USMarketExtractor:
                     f"[US Market Extractor] Attempt {attempt + 1}/3 failed for {ticker}: {e}"
                 )
                 if attempt == 2:
-                    return pl.DataFrame(), f"Error on {ticker}: {str(e)}"
+                    return ExtractorEntityResult(
+                        entity=entity_label,
+                        status=ExtractorEntityStatus.RETRY_EXHAUSTED,
+                        message=f"Error on {ticker}: {str(e)}",
+                    )
                 time.sleep(1 + attempt * 2)
 
         if hist_pd is None or hist_pd.empty:
             logger.debug(f"[US Market Extractor] No data returned from API for {ticker}.")
-            return pl.DataFrame(), f"⚠ No new data fetched for {ticker}"
+            return ExtractorEntityResult(
+                entity=entity_label,
+                status=ExtractorEntityStatus.EMPTY_RESPONSE,
+                message=f"⚠ No new data fetched for {ticker}",
+            )
 
         hist_pd.index = hist_pd.index.tz_localize(None).normalize()  # pyright: ignore
         hist_pl = pl.from_pandas(hist_pd.reset_index())
@@ -93,7 +114,12 @@ class USMarketExtractor:
 
         msg = f"✓ API Fetched {ticker} ({fetch_start} to {end_dt}) - {df_new.height} rows"
 
-        return df_new, msg
+        return ExtractorEntityResult(
+            entity=entity_label,
+            status=ExtractorEntityStatus.SUCCESS,
+            message=msg,
+            df=df_new,
+        )
 
     def extract_us_market_delta(
         self,
@@ -147,25 +173,29 @@ class USMarketExtractor:
                 isin, ticker = futures[future]
                 entity_label = f"{ticker} ({isin})"
                 try:
-                    df_pl, msg = future.result()
+                    res = future.result()
                     level = LogLevel.INFO
-                    if "Error" in (msg or ""):
-                        level = LogLevel.ERROR
-                        batch_result.failed_entities[entity_label] = msg or "Unknown error"
-                    elif "Warning" in (msg or "") or "⚠" in (msg or ""):
+                    if res.status == ExtractorEntityStatus.SUCCESS:
+                        batch_result.successful_entities.append(res.entity)
+                        if not res.df.is_empty():
+                            all_new_data.append(res.df)
+                        level = LogLevel.INFO
+                    elif res.status == ExtractorEntityStatus.CACHED:
+                        batch_result.cached_entities.append(res.entity)
+                        level = LogLevel.INFO
+                    elif res.status in (
+                        ExtractorEntityStatus.NO_NEW_DATA,
+                        ExtractorEntityStatus.EMPTY_RESPONSE,
+                    ):
+                        batch_result.no_new_data_entities.append(res.entity)
                         level = LogLevel.WARNING
-                        batch_result.no_new_data_entities.append(entity_label)
-                    elif "fully cached" in (msg or ""):
-                        batch_result.cached_entities.append(entity_label)
-                    elif not df_pl.is_empty():
-                        batch_result.successful_entities.append(entity_label)
-                        all_new_data.append(df_pl)
-                    else:
-                        batch_result.no_new_data_entities.append(entity_label)
+                    else:  # FAILED, RETRY_EXHAUSTED, INVALID_PAYLOAD
+                        batch_result.failed_entities[res.entity] = res.message
+                        level = LogLevel.ERROR
 
-                    if msg:
+                    if res.message:
                         self.status_queue.put(
-                            EngineStatus(msg=msg, data=None, progress=prog, level=level)
+                            EngineStatus(msg=res.message, data=None, progress=prog, level=level)
                         )
                 except Exception as e:
                     err_msg = str(e)
