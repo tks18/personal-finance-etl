@@ -34,6 +34,7 @@ from personal_finance_etl.backend.pipeline.core.extractor import DataExtractor
 from personal_finance_etl.backend.pipeline.core.transformer import TransformationDAG
 from personal_finance_etl.backend.pipeline.currency_pipeline import CurrencyPipeline
 from personal_finance_etl.backend.pipeline.us_market_pipeline import USMarketPipeline
+from personal_finance_etl.backend.types.failure import FailureDomain, classify_failure_domain
 from personal_finance_etl.backend.types.pipeline import CommitState
 from personal_finance_etl.backend.utils.interfaces import ILogger
 from personal_finance_etl.backend.utils.logger import (
@@ -409,6 +410,46 @@ class ETLOrchestrator:
                 f"Phase 2 Complete [{time.perf_counter() - t_bronze_start:.2f}s] - Bronze layer synchronized."
             )
 
+            # Record run-level artifact synchronization completeness
+            actionable_paths = [p for paths in actionable_all.values() for p in paths]
+            actionable_cnt = len(actionable_paths)
+            if actionable_cnt == 0:
+                sync_summary = {
+                    "actionable_count": 0,
+                    "synced_count": 0,
+                    "healed_count": 0,
+                    "failed_count": 0,
+                    "deferred_count": 0,
+                    "sync_status": "NOT_REQUIRED",
+                }
+            else:
+                norm_actionable = {p.replace("\\", "/") for p in actionable_paths}
+                reg_with_status = cp.artifacts.get_registry_with_status()
+                synced_cnt = sum(
+                    1
+                    for p in norm_actionable
+                    if reg_with_status.get(p, (None, None, None))[2] == "SYNCED"
+                )
+                healed_cnt = cp.db.conn.execute(
+                    "SELECT COUNT(*) FROM cp_artifact_run_events WHERE run_id = ? AND event_type = 'HEALED'",
+                    (run_id,),
+                ).fetchone()[0]
+                failed_cnt = actionable_cnt - synced_cnt
+                status_str = (
+                    "COMPLETE"
+                    if failed_cnt == 0
+                    else ("PARTIAL" if synced_cnt > 0 else "FAILED")
+                )
+                sync_summary = {
+                    "actionable_count": actionable_cnt,
+                    "synced_count": synced_cnt,
+                    "healed_count": healed_cnt,
+                    "failed_count": failed_cnt,
+                    "deferred_count": 0,
+                    "sync_status": status_str,
+                }
+            cp.runs.log_sync_summary(run_id, sync_summary)
+
             logger.debug(
                 "[ENGINE:READ] Fetching complete dataset from Bronze Lakehouse for Transformation..."
             )
@@ -466,7 +507,11 @@ class ETLOrchestrator:
                 logger.debug("[DATABASE:DUCKDB] COMMIT")
                 self.db_manager.conn.execute("COMMIT")
                 duckdb_committed = True
+                commit_state = CommitState.DUCKDB_COMMITTED
+                cp.runs.update_commit_state(run_id, CommitState.DUCKDB_COMMITTED)
             except Exception as duckdb_commit_err:
+                commit_state = CommitState.ROLLED_BACK
+                cp.runs.update_commit_state(run_id, CommitState.ROLLED_BACK)
                 raise RuntimeError(
                     f"DuckDB Commit Failed: {duckdb_commit_err}"
                 ) from duckdb_commit_err
@@ -475,13 +520,15 @@ class ETLOrchestrator:
                 cp.commit()
                 sqlite_committed = True
                 commit_state = CommitState.FULLY_COMMITTED
+                cp.runs.update_commit_state(run_id, CommitState.FULLY_COMMITTED)
             except Exception as sqlite_commit_err:
-                commit_state = CommitState.DUCKDB_COMMITTED_SQLITE_FAILED
+                commit_state = CommitState.RECOVERY_REQUIRED
+                cp.runs.update_commit_state(run_id, CommitState.RECOVERY_REQUIRED)
                 raise RuntimeError(
                     f"SQLite Commit Failed after DuckDB committed: {sqlite_commit_err}"
                 ) from sqlite_commit_err
 
-            cp.runs.finish_run(run_id, "SUCCESS")
+            cp.runs.finish_run(run_id, "SUCCESS", commit_state=CommitState.FULLY_COMMITTED)
 
             if pending_recovery_runs:
                 for rec_run_id in pending_recovery_runs:
@@ -502,7 +549,7 @@ class ETLOrchestrator:
 
             # Derive explicit commit state
             if duckdb_committed and not sqlite_committed:
-                commit_state = CommitState.DUCKDB_COMMITTED_SQLITE_FAILED
+                commit_state = CommitState.RECOVERY_REQUIRED
             elif not duckdb_committed and not sqlite_committed:
                 commit_state = CommitState.ROLLED_BACK
             elif duckdb_committed and sqlite_committed:
@@ -535,10 +582,10 @@ class ETLOrchestrator:
                 logger.warning(
                     "Pipeline failed. All open transactions rolled back to maintain integrity (state: ROLLED_BACK)."
                 )
-            elif commit_state == CommitState.DUCKDB_COMMITTED_SQLITE_FAILED:
+            elif commit_state == CommitState.RECOVERY_REQUIRED:
                 logger.error(
                     "CRITICAL SPLIT-COMMIT DIVERGENCE: DuckDB committed successfully, but SQLite Raw Store commit failed. "
-                    "Transactions CANNOT be fully rolled back. DuckDB has durable changes. State: DUCKDB_COMMITTED_SQLITE_FAILED. "
+                    "Transactions CANNOT be fully rolled back. DuckDB has durable changes. State: RECOVERY_REQUIRED. "
                     "RECOVERY_REQUIRED marker will be persisted."
                 )
             elif commit_state == CommitState.FULLY_COMMITTED:
@@ -553,7 +600,7 @@ class ETLOrchestrator:
             # Persist failure details and recovery marker
             try:
                 if cp is not None and run_id is not None:
-                    if commit_state == CommitState.DUCKDB_COMMITTED_SQLITE_FAILED:
+                    if commit_state == CommitState.RECOVERY_REQUIRED:
                         cp.runs.mark_recovery_required(
                             run_id=run_id,
                             error_message=f"Split-commit divergence: DuckDB committed, but SQLite commit failed: {e}. duckdb_commit_state=COMMITTED, sqlite_commit_state=FAILED",
@@ -561,6 +608,7 @@ class ETLOrchestrator:
                             traceback_log=traceback.format_exc(),
                         )
                     else:
+                        cp.runs.update_commit_state(run_id, commit_state)
                         if "ISIN_FAILURE" in str(e):
                             parts = str(e).split("|")
                             failed_isin = parts[1] if len(parts) >= 3 else None
@@ -572,8 +620,10 @@ class ETLOrchestrator:
                                 error_type="RuntimeError",
                                 error_message=error_msg,
                                 traceback_log=traceback.format_exc(),
+                                failure_domain=FailureDomain.FINANCIAL_INVARIANT,
                             )
                         else:
+                            domain = classify_failure_domain("Pipeline", type(e).__name__ or str(e))
                             cp.runs.log_run_failure(
                                 run_id=run_id,
                                 failed_isin=None,
@@ -581,8 +631,9 @@ class ETLOrchestrator:
                                 error_type=type(e).__name__,
                                 error_message=str(e),
                                 traceback_log=traceback.format_exc(),
+                                failure_domain=domain,
                             )
-                        cp.runs.finish_run(run_id, "FAILED")
+                        cp.runs.finish_run(run_id, "FAILED", commit_state=commit_state)
             except Exception as failure_log_err:
                 logger.error(f"Failed to log run_failure to Control Plane: {failure_log_err}")
 
