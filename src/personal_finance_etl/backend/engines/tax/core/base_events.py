@@ -6,7 +6,7 @@ from typing import Any
 
 import polars as pl
 
-from personal_finance_etl.backend.config.financial_rules import FinancialRules
+from personal_finance_etl.backend.config.financial_rules import FinancialRules, TaxHeadConfig
 from personal_finance_etl.backend.engines.analytics.rules.macro import FYMacroParametersTable
 from personal_finance_etl.backend.utils.identity import generate_deterministic_id
 
@@ -27,6 +27,24 @@ TAX_EVENT_SCHEMA: dict[str, pl.DataType] = {
     "ISIN": pl.String(),
     "Lot_ID": pl.String(),
 }
+
+
+def _batch_compute_tax_event_ids(s: pl.Series) -> pl.Series:
+    source_types = s.struct.field("Source_Type")
+    source_ids = s.struct.field("Source_ID")
+    sub_heads = s.struct.field("Tax_Sub_Head")
+    ids = [
+        generate_deterministic_id(
+            "TAX",
+            {
+                "Source_Type": st,
+                "Source_ID": sid,
+                "Tax_Sub_Head": tsh,
+            },
+        )
+        for st, sid, tsh in zip(source_types, source_ids, sub_heads, strict=False)
+    ]
+    return pl.Series(ids, dtype=pl.String)
 
 
 class BaseEventsBuilder:
@@ -77,39 +95,41 @@ class BaseEventsBuilder:
                 f"{credit_overlap}"
             )
 
-        records = (
-            self._normalize_ledger_income(credit_subheads)
-            + self._normalize_tax_credits(credit_subheads)
-            + self._normalize_quant_realized_events()
+        df_ledger = self._normalize_ledger_income(credit_subheads)
+        df_credits = self._normalize_tax_credits(credit_subheads)
+        quant_records = self._normalize_quant_realized_events()
+        base_schema = {c: TAX_EVENT_SCHEMA[c] for c in TAX_EVENT_SCHEMA if c != "Tax_Event_ID"}
+        df_quant = (
+            pl.DataFrame(quant_records, schema=base_schema, strict=False)
+            if quant_records
+            else pl.DataFrame(schema=base_schema)
         )
-        if not records:
+
+        frames = [f for f in (df_ledger, df_credits, df_quant) if not f.is_empty()]
+        if not frames:
             return pl.DataFrame(schema=TAX_EVENT_SCHEMA).lazy()
 
-        for record in records:
-            record["Tax_Event_ID"] = generate_deterministic_id(
-                "TAX",
-                {
-                    "Source_Type": record["Source_Type"],
-                    "Source_ID": record["Source_ID"],
-                    "Tax_Sub_Head": record["Tax_Sub_Head"],
-                },
-            )
-
-        df = pl.DataFrame(records, schema=TAX_EVENT_SCHEMA, strict=False)
+        df = pl.concat(frames, how="vertical_relaxed")
+        df = df.with_columns(
+            pl.struct(["Source_Type", "Source_ID", "Tax_Sub_Head"])
+            .map_batches(_batch_compute_tax_event_ids, return_dtype=pl.String)
+            .alias("Tax_Event_ID")
+        )
         self._validate_event_keys(df)
-        return df.sort(["FY", "Event_Date", "Source_Type", "Source_ID", "Tax_Sub_Head"]).lazy()
+        return (
+            df.select(list(TAX_EVENT_SCHEMA.keys()))
+            .sort(["FY", "Event_Date", "Source_Type", "Source_ID", "Tax_Sub_Head"])
+            .lazy()
+        )
 
     def _tax_credit_subhead_map(self) -> dict[str, str]:
         """Map configured tax-credit subcategory UIDs to their declared tax sub-head."""
         assert self.rules is not None
         mapping: dict[str, str] = {}
-        all_heads = list(self.rules.assumptions.tax.heads_of_income.items())
-        all_heads.extend(
-            [
-                ("Residual", self.rules.assumptions.tax.residual_income),
-                ("Exempt_Income", self.rules.assumptions.tax.exempt_income),
-            ]
-        )
+        all_heads: list[tuple[str, TaxHeadConfig]] = []
+        all_heads.extend(self.rules.assumptions.tax.heads_of_income.items())
+        all_heads.extend(self.rules.assumptions.tax.exempt_income.items())
+        all_heads.extend(self.rules.assumptions.tax.residual_income.items())
         for head_name, head_config in all_heads:
             for sub_head, config in head_config.sub_heads.items():
                 for uid in config.tax_credit_sub_cat_ids:
@@ -117,7 +137,7 @@ class BaseEventsBuilder:
                         raise ValueError(
                             f"Tax-credit subcategory UID {uid!r} is configured more than once."
                         )
-                    mapping[uid] = sub_head or head_name
+                    mapping[uid] = config.sub_head_display_name or sub_head or head_name
         return mapping
 
     def _validate_tax_credit_uids(self, credit_subheads: dict[str, str]) -> None:
@@ -133,87 +153,209 @@ class BaseEventsBuilder:
                 f"silver.d_Income_Subcategory: {unknown}"
             )
 
-    def _normalize_ledger_income(self, credit_subheads: dict[str, str]) -> list[dict[str, Any]]:
+    def _normalize_ledger_income(self, credit_subheads: dict[str, str]) -> pl.DataFrame:
         required = {"UID", "DATE", "CATEGORY_ID", "BASE_AMOUNT"}
         missing = sorted(required - set(self.df_income.columns))
         if missing:
             raise ValueError(f"Income transactions missing required columns: {missing}")
         if self.df_income.is_empty():
-            return []
+            return pl.DataFrame(schema=TAX_EVENT_SCHEMA)
 
         sub_cols = [
             c
-            for c in ("UID", "Tax_Income_Head", "Tax_Sub_Head", "Taxability", "Tax_Method")
+            for c in (
+                "UID",
+                "Tax_Income_Head",
+                "Tax_Sub_Head",
+                "Taxability",
+                "Tax_Method",
+                "Is_Investment_Exclusion",
+                "Is_Tax_Credits",
+            )
             if c in self.df_subcategory.columns
         ]
         if "UID" not in sub_cols:
             raise ValueError("Income subcategory dimension must contain UID.")
 
-        sub_lookup = {
-            str(row["UID"]).strip(): row
-            for row in self.df_subcategory.select(sub_cols).iter_rows(named=True)
-            if row.get("UID") is not None and str(row["UID"]).strip()
-        }
         excluded: set[str] = set()
         if self.rules is not None:
             exclusions = self.rules.assumptions.tax.investment_exclusions
             excluded.update(exclusions.stcg_sub_cat_ids)
             excluded.update(exclusions.ltcg_sub_cat_ids)
 
-        records: list[dict[str, Any]] = []
-        for row in self.df_income.iter_rows(named=True):
-            category_id = self._clean_text(row.get("CATEGORY_ID")) or ""
-            # Investment STCG/LTCG entered in the ledger remains in the household income
-            # fact but is excluded from TaxEvents because Quant FIFO is authoritative.
-            if category_id in excluded or category_id in credit_subheads:
-                continue
+        df_sub = self.df_subcategory.select(sub_cols)
+        df_inc = self.df_income.with_columns(
+            pl.col("CATEGORY_ID")
+            .cast(pl.String)
+            .str.strip_chars()
+            .fill_null("")
+            .alias("_clean_cat_id"),
+            pl.col("UID").cast(pl.String).str.strip_chars().alias("Source_ID"),
+        )
+        if df_inc["Source_ID"].is_null().any() or (df_inc["Source_ID"] == "").any():
+            raise ValueError("Required identifier income UID is null or empty.")
 
-            category = sub_lookup.get(category_id, {})
-            taxability = str(category.get("Taxability") or "review").strip().lower()
-            if taxability == "non_taxable":
-                continue
+        df_joined = df_inc.join(
+            df_sub.with_columns(pl.col("UID").cast(pl.String).str.strip_chars()),
+            left_on="_clean_cat_id",
+            right_on="UID",
+            how="left",
+        )
 
-            event_date = self._as_date(row.get("DATE"), "income DATE", row.get("UID"))
-            amount = self._required_amount(row.get("BASE_AMOUNT"), "BASE_AMOUNT", row.get("UID"))
-            source_id = self._required_id(row.get("UID"), "income UID")
-            income_head = self._clean_text(category.get("Tax_Income_Head"))
-            tax_sub_head = self._clean_text(category.get("Tax_Sub_Head"))
-            classification_incomplete = (
-                not income_head or not tax_sub_head or taxability != "taxable"
+        is_inv_excl = (
+            pl.col("Is_Investment_Exclusion").fill_null(False)
+            if "Is_Investment_Exclusion" in df_joined.columns
+            else pl.lit(False)
+        )
+        is_tax_credit = (
+            pl.col("Is_Tax_Credits").fill_null(False)
+            if "Is_Tax_Credits" in df_joined.columns
+            else pl.lit(False)
+        )
+        taxability_clean = (
+            pl.col("Taxability")
+            .cast(pl.String)
+            .str.strip_chars()
+            .str.to_lowercase()
+            .fill_null("review")
+        )
+
+        df_filtered = df_joined.filter(
+            (~pl.col("_clean_cat_id").is_in(list(excluded)))
+            & (~pl.col("_clean_cat_id").is_in(list(credit_subheads.keys())))
+            & (~is_inv_excl)
+            & (~is_tax_credit)
+            & (taxability_clean != "non_taxable")
+        )
+        if df_filtered.is_empty():
+            return pl.DataFrame(schema=TAX_EVENT_SCHEMA)
+
+        amount_col = df_filtered.get_column("BASE_AMOUNT")
+        if amount_col.dtype == pl.Boolean:
+            bad_id = str(df_filtered.get_column("Source_ID")[0])
+            raise ValueError(f"Required amount BASE_AMOUNT cannot be boolean for source {bad_id!r}.")
+        try:
+            df_filtered = df_filtered.with_columns(
+                pl.col("BASE_AMOUNT").cast(pl.Float64, strict=True).alias("Amount_INR")
             )
-            applied_rate: float | None = None
-            estimated_tax: float | None = None
-            if not classification_incomplete:
-                applied_rate = self._ordinary_income_rate(event_date)
-                if applied_rate is not None:
-                    # This is an estimate on positive taxable ledger income only, not
-                    # final annual liability or a tax-credit netting calculation.
-                    estimated_tax = max(0.0, amount) * applied_rate
-            if not classification_incomplete and applied_rate is None:
-                classification_incomplete = True
-            records.append(
-                {
-                    "FY": self._financial_year(event_date),
-                    "Event_Date": event_date,
-                    "Source_Type": "LEDGER",
-                    "Source_ID": source_id,
-                    "Income_Head": income_head or "CHECK_REQUIRED",
-                    "Tax_Sub_Head": tax_sub_head or "CHECK_REQUIRED",
-                    "Amount_INR": amount,
-                    "Applied_Rate": applied_rate,
-                    "Estimated_Tax": estimated_tax,
-                    "CURRENCY_ID": self._clean_text(row.get("CURRENCY_ID")),
-                    "Tax_Status": "CHECK_REQUIRED" if classification_incomplete else "READY",
-                    "Tax_Status_Reason": (
-                        "Income classification is missing, non-taxable/review-only, or the ordinary tax rate is invalid."
-                        if classification_incomplete
-                        else None
-                    ),
-                    "ISIN": None,
-                    "Lot_ID": None,
-                }
+        except Exception as exc:
+            bad_id = str(df_filtered.get_column("Source_ID")[0])
+            raise ValueError(
+                f"Required amount BASE_AMOUNT is invalid for source {bad_id!r}: {exc}"
+            ) from exc
+
+        if (
+            df_filtered["Amount_INR"].is_nan().any()
+            or df_filtered["Amount_INR"].is_infinite().any()
+        ):
+            bad_idx = (
+                df_filtered["Amount_INR"].is_nan() | df_filtered["Amount_INR"].is_infinite()
+            ).arg_true()[0]
+            bad_id = str(df_filtered.get_column("Source_ID")[bad_idx])
+            raise ValueError(f"Required amount BASE_AMOUNT must be finite for source {bad_id!r}.")
+
+        if df_filtered["DATE"].is_null().any():
+            bad_idx = df_filtered["DATE"].is_null().arg_true()[0]
+            bad_id = str(df_filtered.get_column("Source_ID")[bad_idx])
+            raise ValueError(f"Required date income DATE is null for source {bad_id!r}.")
+
+        if df_filtered["DATE"].dtype == pl.Datetime:
+            df_filtered = df_filtered.with_columns(pl.col("DATE").dt.date().alias("Event_Date"))
+        elif df_filtered["DATE"].dtype == pl.Date:
+            df_filtered = df_filtered.with_columns(pl.col("DATE").alias("Event_Date"))
+        else:
+            try:
+                df_filtered = df_filtered.with_columns(
+                    pl.col("DATE").cast(pl.Date, strict=True).alias("Event_Date")
+                )
+            except Exception as exc:
+                bad_id = str(df_filtered.get_column("Source_ID")[0])
+                raise ValueError(
+                    f"Required date income DATE is invalid for source {bad_id!r}: {exc}"
+                ) from exc
+
+        fy_expr = (
+            pl.when(pl.col("Event_Date").dt.month() >= 4)
+            .then(
+                pl.col("Event_Date").dt.year().cast(pl.String)
+                + "-"
+                + ((pl.col("Event_Date").dt.year() + 1) % 100).cast(pl.String).str.zfill(2)
             )
-        return records
+            .otherwise(
+                (pl.col("Event_Date").dt.year() - 1).cast(pl.String)
+                + "-"
+                + (pl.col("Event_Date").dt.year() % 100).cast(pl.String).str.zfill(2)
+            )
+            .alias("FY")
+        )
+
+        unique_dates = df_filtered["Event_Date"].unique().to_list()
+        date_rate_map = {d: self._ordinary_income_rate(d) for d in unique_dates if d is not None}
+        applied_rate_expr = pl.col("Event_Date").replace_strict(
+            date_rate_map, default=None, return_dtype=pl.Float64
+        )
+
+        income_head_expr = pl.col("Tax_Income_Head").cast(pl.String).str.strip_chars()
+        tax_sub_head_expr = pl.col("Tax_Sub_Head").cast(pl.String).str.strip_chars()
+
+        is_incomplete = (
+            income_head_expr.is_null()
+            | (income_head_expr == "")
+            | (income_head_expr == "CHECK_REQUIRED")
+            | tax_sub_head_expr.is_null()
+            | (tax_sub_head_expr == "")
+            | (tax_sub_head_expr == "CHECK_REQUIRED")
+            | (taxability_clean != "taxable")
+            | applied_rate_expr.is_null()
+        )
+
+        estimated_tax_expr = (
+            pl.when(~is_incomplete & (pl.col("Amount_INR") > 0.0))
+            .then(pl.col("Amount_INR") * applied_rate_expr)
+            .when(~is_incomplete)
+            .then(0.0)
+            .otherwise(None)
+        )
+
+        currency_expr = (
+            pl.col("CURRENCY_ID").cast(pl.String).str.strip_chars().alias("CURRENCY_ID")
+            if "CURRENCY_ID" in df_filtered.columns
+            else pl.lit(None).cast(pl.String).alias("CURRENCY_ID")
+        )
+
+        df_result = df_filtered.select(
+            fy_expr,
+            pl.col("Event_Date"),
+            pl.lit("LEDGER").alias("Source_Type"),
+            pl.col("Source_ID"),
+            pl.when(income_head_expr.is_not_null() & (income_head_expr != ""))
+            .then(income_head_expr)
+            .otherwise(pl.lit("CHECK_REQUIRED"))
+            .alias("Income_Head"),
+            pl.when(tax_sub_head_expr.is_not_null() & (tax_sub_head_expr != ""))
+            .then(tax_sub_head_expr)
+            .otherwise(pl.lit("CHECK_REQUIRED"))
+            .alias("Tax_Sub_Head"),
+            pl.col("Amount_INR"),
+            pl.when(~is_incomplete).then(applied_rate_expr).otherwise(None).alias("Applied_Rate"),
+            estimated_tax_expr.alias("Estimated_Tax"),
+            currency_expr,
+            pl.when(is_incomplete)
+            .then(pl.lit("CHECK_REQUIRED"))
+            .otherwise(pl.lit("READY"))
+            .alias("Tax_Status"),
+            pl.when(is_incomplete)
+            .then(
+                pl.lit(
+                    "Income classification is missing, non-taxable/review-only, or the ordinary tax rate is invalid."
+                )
+            )
+            .otherwise(None)
+            .alias("Tax_Status_Reason"),
+            pl.lit(None).cast(pl.String).alias("ISIN"),
+            pl.lit(None).cast(pl.String).alias("Lot_ID"),
+        )
+        return df_result
 
     def _ordinary_income_rate(self, event_date: date) -> float | None:
         """Resolve a configured ordinary-income estimate rate for the event date."""
@@ -229,37 +371,114 @@ class BaseEventsBuilder:
             return None
         return rate if math.isfinite(rate) and 0.0 <= rate <= 1.0 else None
 
-    def _normalize_tax_credits(self, credit_subheads: dict[str, str]) -> list[dict[str, Any]]:
+    def _normalize_tax_credits(self, credit_subheads: dict[str, str]) -> pl.DataFrame:
         """Keep observed tax-credit transactions separate from taxable income."""
         if not credit_subheads or self.df_income.is_empty():
-            return []
-        records: list[dict[str, Any]] = []
-        for row in self.df_income.iter_rows(named=True):
-            category_id = self._clean_text(row.get("CATEGORY_ID")) or ""
-            if category_id not in credit_subheads:
-                continue
-            event_date = self._as_date(row.get("DATE"), "tax-credit DATE", row.get("UID"))
-            source_id = self._required_id(row.get("UID"), "tax-credit income UID")
-            amount = self._required_amount(
-                row.get("BASE_AMOUNT"), "tax-credit BASE_AMOUNT", source_id
+            return pl.DataFrame(schema=TAX_EVENT_SCHEMA)
+
+        df_inc = self.df_income.with_columns(
+            pl.col("CATEGORY_ID")
+            .cast(pl.String)
+            .str.strip_chars()
+            .fill_null("")
+            .alias("_clean_cat_id"),
+            pl.col("UID").cast(pl.String).str.strip_chars().alias("Source_ID"),
+        )
+        df_credits = df_inc.filter(pl.col("_clean_cat_id").is_in(list(credit_subheads.keys())))
+        if df_credits.is_empty():
+            return pl.DataFrame(schema=TAX_EVENT_SCHEMA)
+
+        if df_credits["Source_ID"].is_null().any() or (df_credits["Source_ID"] == "").any():
+            raise ValueError("Required identifier tax-credit income UID is null or empty.")
+
+        amount_col = df_credits.get_column("BASE_AMOUNT")
+        if amount_col.dtype == pl.Boolean:
+            bad_id = str(df_credits.get_column("Source_ID")[0])
+            raise ValueError(
+                f"Required amount tax-credit BASE_AMOUNT cannot be boolean for source {bad_id!r}."
             )
-            records.append(
-                {
-                    "FY": self._financial_year(event_date),
-                    "Event_Date": event_date,
-                    "Source_Type": "TAX_CREDIT",
-                    "Source_ID": source_id,
-                    "Income_Head": "TAX_CREDIT",
-                    "Tax_Sub_Head": credit_subheads[category_id],
-                    "Amount_INR": amount,
-                    "CURRENCY_ID": self._clean_text(row.get("CURRENCY_ID")),
-                    "Tax_Status": "READY",
-                    "Tax_Status_Reason": None,
-                    "ISIN": None,
-                    "Lot_ID": None,
-                }
+        try:
+            df_credits = df_credits.with_columns(
+                pl.col("BASE_AMOUNT").cast(pl.Float64, strict=True).alias("Amount_INR")
             )
-        return records
+        except Exception as exc:
+            bad_id = str(df_credits.get_column("Source_ID")[0])
+            raise ValueError(
+                f"Required amount tax-credit BASE_AMOUNT is invalid for source {bad_id!r}: {exc}"
+            ) from exc
+
+        if (
+            df_credits["Amount_INR"].is_nan().any()
+            or df_credits["Amount_INR"].is_infinite().any()
+        ):
+            bad_idx = (
+                df_credits["Amount_INR"].is_nan() | df_credits["Amount_INR"].is_infinite()
+            ).arg_true()[0]
+            bad_id = str(df_credits.get_column("Source_ID")[bad_idx])
+            raise ValueError(
+                f"Required amount tax-credit BASE_AMOUNT must be finite for source {bad_id!r}."
+            )
+
+        if df_credits["DATE"].is_null().any():
+            bad_idx = df_credits["DATE"].is_null().arg_true()[0]
+            bad_id = str(df_credits.get_column("Source_ID")[bad_idx])
+            raise ValueError(f"Required date tax-credit DATE is null for source {bad_id!r}.")
+
+        if df_credits["DATE"].dtype == pl.Datetime:
+            df_credits = df_credits.with_columns(pl.col("DATE").dt.date().alias("Event_Date"))
+        elif df_credits["DATE"].dtype == pl.Date:
+            df_credits = df_credits.with_columns(pl.col("DATE").alias("Event_Date"))
+        else:
+            try:
+                df_credits = df_credits.with_columns(
+                    pl.col("DATE").cast(pl.Date, strict=True).alias("Event_Date")
+                )
+            except Exception as exc:
+                bad_id = str(df_credits.get_column("Source_ID")[0])
+                raise ValueError(
+                    f"Required date tax-credit DATE is invalid for source {bad_id!r}: {exc}"
+                ) from exc
+
+        fy_expr = (
+            pl.when(pl.col("Event_Date").dt.month() >= 4)
+            .then(
+                pl.col("Event_Date").dt.year().cast(pl.String)
+                + "-"
+                + ((pl.col("Event_Date").dt.year() + 1) % 100).cast(pl.String).str.zfill(2)
+            )
+            .otherwise(
+                (pl.col("Event_Date").dt.year() - 1).cast(pl.String)
+                + "-"
+                + (pl.col("Event_Date").dt.year() % 100).cast(pl.String).str.zfill(2)
+            )
+            .alias("FY")
+        )
+
+        currency_expr = (
+            pl.col("CURRENCY_ID").cast(pl.String).str.strip_chars().alias("CURRENCY_ID")
+            if "CURRENCY_ID" in df_credits.columns
+            else pl.lit(None).cast(pl.String).alias("CURRENCY_ID")
+        )
+
+        df_result = df_credits.select(
+            fy_expr,
+            pl.col("Event_Date"),
+            pl.lit("TAX_CREDIT").alias("Source_Type"),
+            pl.col("Source_ID"),
+            pl.lit("TAX_CREDIT").alias("Income_Head"),
+            pl.col("_clean_cat_id")
+            .replace_strict(credit_subheads, return_dtype=pl.String)
+            .alias("Tax_Sub_Head"),
+            pl.col("Amount_INR"),
+            pl.lit(None).cast(pl.Float64).alias("Applied_Rate"),
+            pl.lit(None).cast(pl.Float64).alias("Estimated_Tax"),
+            currency_expr,
+            pl.lit("READY").alias("Tax_Status"),
+            pl.lit(None).cast(pl.String).alias("Tax_Status_Reason"),
+            pl.lit(None).cast(pl.String).alias("ISIN"),
+            pl.lit(None).cast(pl.String).alias("Lot_ID"),
+        )
+        return df_result
 
     @staticmethod
     def _optional_finite_number(value: Any) -> float | None:
@@ -283,7 +502,7 @@ class BaseEventsBuilder:
             raise ValueError(f"Quant realized events missing required columns: {missing}")
 
         records: list[dict[str, Any]] = []
-        for row in df.iter_rows(named=True):
+        for row in df.to_dicts():
             source_id = self._required_id(row.get("Realized_Event_ID"), "Realized_Event_ID")
             event_date = self._as_date(row.get("Disposal_Date"), "Quant Disposal_Date", source_id)
             amount = self._required_amount(
@@ -329,7 +548,7 @@ class BaseEventsBuilder:
                     "Event_Date": event_date,
                     "Source_Type": "QUANT",
                     "Source_ID": source_id,
-                    "Income_Head": "Capital_Gains",
+                    "Income_Head": "Capital Gains",
                     "Tax_Sub_Head": sub_head,
                     "Amount_INR": amount,
                     "Applied_Rate": applied_rate,
