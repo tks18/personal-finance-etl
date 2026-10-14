@@ -160,6 +160,11 @@ def transform_stg_investment_market_data(
         df_union = df_union.with_columns(pl.col("Buy_Value").alias("Buy_Value_Local"))
     else:
         df_union = df_union.with_columns(pl.col("Buy_Value_Local").fill_null(pl.col("Buy_Value")))
+    if "CURRENCY_ID" not in cols:
+        df_union = df_union.with_columns(pl.lit(default_currency_id).alias("CURRENCY_ID"))
+    else:
+        df_union = df_union.with_columns(pl.col("CURRENCY_ID").fill_null(default_currency_id))
+
     if "FX_Rate" not in cols:
         # INR instruments use identity FX = 1.0. Foreign instruments will have FX_Rate
         # populated by the currency pipeline; null here means the rate is genuinely missing
@@ -181,11 +186,6 @@ def transform_stg_investment_market_data(
             .otherwise(pl.col("FX_Rate"))
             .alias("FX_Rate")
         )
-
-    if "CURRENCY_ID" not in cols:
-        df_union = df_union.with_columns(pl.lit(default_currency_id).alias("CURRENCY_ID"))
-    else:
-        df_union = df_union.with_columns(pl.col("CURRENCY_ID").fill_null(default_currency_id))
 
     if "Data_Provider" not in cols:
         df_union = df_union.with_columns(pl.lit("Broker Statement").alias("Data_Provider"))
@@ -293,6 +293,11 @@ def get_f_tf_investment_purchase_data(
         df_union = df_union.with_columns(pl.col("Value").alias("Value_Local"))
     else:
         df_union = df_union.with_columns(pl.col("Value_Local").fill_null(pl.col("Value")))
+    if "CURRENCY_ID" not in cols:
+        df_union = df_union.with_columns(pl.lit(default_currency_id).alias("CURRENCY_ID"))
+    else:
+        df_union = df_union.with_columns(pl.col("CURRENCY_ID").fill_null(default_currency_id))
+
     if "FX_Rate" not in cols:
         df_union = df_union.with_columns(
             pl.when(pl.col("CURRENCY_ID") == pl.lit(default_currency_id))
@@ -309,11 +314,6 @@ def get_f_tf_investment_purchase_data(
             .otherwise(pl.col("FX_Rate"))
             .alias("FX_Rate")
         )
-
-    if "CURRENCY_ID" not in cols:
-        df_union = df_union.with_columns(pl.lit(default_currency_id).alias("CURRENCY_ID"))
-    else:
-        df_union = df_union.with_columns(pl.col("CURRENCY_ID").fill_null(default_currency_id))
 
     select_cols = [
         "__file_name__",
@@ -365,6 +365,11 @@ def get_f_tf_investment_sale_data(
         df_union = df_union.with_columns(pl.col("Buy_Value").alias("Buy_Value_Local"))
     else:
         df_union = df_union.with_columns(pl.col("Buy_Value_Local").fill_null(pl.col("Buy_Value")))
+    if "CURRENCY_ID" not in cols:
+        df_union = df_union.with_columns(pl.lit(default_currency_id).alias("CURRENCY_ID"))
+    else:
+        df_union = df_union.with_columns(pl.col("CURRENCY_ID").fill_null(default_currency_id))
+
     if "FX_Rate" not in cols:
         df_union = df_union.with_columns(
             pl.when(pl.col("CURRENCY_ID") == pl.lit(default_currency_id))
@@ -381,11 +386,6 @@ def get_f_tf_investment_sale_data(
             .otherwise(pl.col("FX_Rate"))
             .alias("FX_Rate")
         )
-
-    if "CURRENCY_ID" not in cols:
-        df_union = df_union.with_columns(pl.lit(default_currency_id).alias("CURRENCY_ID"))
-    else:
-        df_union = df_union.with_columns(pl.col("CURRENCY_ID").fill_null(default_currency_id))
 
     select_cols = [
         "__file_name__",
