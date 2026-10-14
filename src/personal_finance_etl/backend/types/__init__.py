@@ -12,6 +12,11 @@ from personal_finance_etl.backend.types.calculation import (
     CpiResult,
     XirrResult,
 )
+from personal_finance_etl.backend.types.failure import (
+    FailureDomain,
+    classify_failure_domain,
+)
+from personal_finance_etl.backend.types.pipeline import CommitState
 from personal_finance_etl.backend.types.validation import FinancialSourceValidationError
 
 __all__ = [
@@ -22,4 +27,7 @@ __all__ = [
     "ExtractionBatchResult",
     "ExtractionCompletenessError",
     "FinancialSourceValidationError",
+    "CommitState",
+    "FailureDomain",
+    "classify_failure_domain",
 ]
