@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [8.3.0](https://github.com/tks18/personal-finance-etl/compare/8.2.2...8.3.0) (2026-10-14)
+
+
+### Styling 🎨
+
+* lint fix ([d956caa](https://github.com/tks18/personal-finance-etl/commit/d956caa31568f48792d05f0fd0ae53a4f31e6d29))
+
+
+### Code Refactoring 🖌
+
+* **backend/api:** refactor backup and restore facade in api ([5b64e8b](https://github.com/tks18/personal-finance-etl/commit/5b64e8be736868e31f0d8151aa69093b2a0f68a9))
+
+
+### Features 🔥
+
+* **backend/control_plane:** artifact_repo: now more robust artifact lifecycle with proper healing ([adb66d4](https://github.com/tks18/personal-finance-etl/commit/adb66d402b9729aaed7e3452c90714fcf06b4825))
+* **backend/control_plane:** connection: update schema validation check for new tables ([a4e4c33](https://github.com/tks18/personal-finance-etl/commit/a4e4c33a5ce0d7a8c0b242ddc208bb9c321d55f4))
+* **backend/control_plane:** refactor to add new param for new update ([fde7c4c](https://github.com/tks18/personal-finance-etl/commit/fde7c4c0c8d7e952dcc15182742e5b73096cab46))
+* **backend/control_plane:** run_repo: support complete commit status tracking, run summaries ([baee057](https://github.com/tks18/personal-finance-etl/commit/baee0576e685441ee44e7e986cd22305b46b8d4a))
+* **backend/control_plane:** schema: introduce 2 new tables for more data lineage ([90147d1](https://github.com/tks18/personal-finance-etl/commit/90147d1ee86588367e9f0fcb1022e59c990d864c))
+* **backend/extract:** benchmark: add new structured provenance fields ([174175f](https://github.com/tks18/personal-finance-etl/commit/174175f25fe4c9f75d444b4c9ecc9e7cf3d84265))
+* **backend/extract:** currency: add new structured provenance fields ([54490a4](https://github.com/tks18/personal-finance-etl/commit/54490a40874a98b2e772fa7f3e0b87451b400cc7))
+* **backend/extract:** us_market: add new structured provenance fields ([5e94f0c](https://github.com/tks18/personal-finance-etl/commit/5e94f0c6aefecaf5f0d52d6e469ad00fa5fd6b5f))
+* **backend/load/backup:** rebase to use structure results and pass errors and logs ([df514b1](https://github.com/tks18/personal-finance-etl/commit/df514b1ef607e69d31bee000f586804e1c0b274c))
+* **backend/pipeline:** all fetchers now pass the provenance fields to control plane ([46a9987](https://github.com/tks18/personal-finance-etl/commit/46a99873c95ed013705c0c93559932fd933e2f93))
+* **backend/pipeline:** robust commit tracking across both database and logging ([1f36cd5](https://github.com/tks18/personal-finance-etl/commit/1f36cd5fca9df847234d3853b7462f4997c574e9))
+* **backend/types:** batch_result: add more provenance fields for fetcher results ([aaeea36](https://github.com/tks18/personal-finance-etl/commit/aaeea3608bf79812e3cce63926b07caec3a466e8))
+* **backend/types:** failures: structure common run fail domains ([f530035](https://github.com/tks18/personal-finance-etl/commit/f53003505e45de2202412b5b7d49c745ea6898f9))
+* **backend/types:** pipeline: introduce more commit states for better healing and convergence ([718dc66](https://github.com/tks18/personal-finance-etl/commit/718dc66767ab0a8d8c3692351ceac32cd4249aa9))
+
 ### [8.2.2](https://github.com/tks18/personal-finance-etl/compare/8.2.1...8.2.2) (2026-10-14)
 
 
