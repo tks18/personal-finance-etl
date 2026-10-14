@@ -168,6 +168,8 @@ The physical DDL defines **12 columns** for this table. The registry grain is th
 | `Is_Dividend_Income` | `BOOLEAN` |
 | `Is_Interest_Income` | `BOOLEAN` |
 | `Is_Non_Cash_Income` | `BOOLEAN` |
+| `Is_Investment_Exclusion` | `BOOLEAN` |
+| `Is_Tax_Credits` | `BOOLEAN` |
 | `__file_name__` | `TEXT` |
 | `__folder_path__` | `TEXT` |
 | `S_NO` | `BIGINT` |
@@ -177,7 +179,7 @@ The physical DDL defines **12 columns** for this table. The registry grain is th
 | `Taxability` | `TEXT` |
 | `Tax_Method` | `TEXT` |
 
-The physical DDL defines **18 columns** for this table. The registry grain is the semantic row contract; it should be used when reasoning about joins and uniqueness rather than assuming the first ID-looking column is automatically the grain.
+The physical DDL defines **20 columns** for this table. The registry grain is the semantic row contract; it should be used when reasoning about joins and uniqueness rather than assuming the first ID-looking column is automatically the grain.
 
 ### `silver.d_Expense_Category`
 
