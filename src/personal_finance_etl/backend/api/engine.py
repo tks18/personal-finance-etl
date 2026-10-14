@@ -5,7 +5,11 @@ from collections.abc import Callable
 from typing import Any
 
 from personal_finance_etl.backend.config.settings import PreferencesManager, Settings
-from personal_finance_etl.backend.load.backup import SystemBackupManager
+from personal_finance_etl.backend.load.backup import (
+    RestoreResult,
+    SnapshotResult,
+    SystemBackupManager,
+)
 from personal_finance_etl.backend.pipeline.etl_pipeline import process_wrapper
 from personal_finance_etl.backend.utils.models import EngineStatus, LogLevel
 
@@ -39,32 +43,43 @@ class PersonalFinanceEngine:
     def snapshot_database(self, config_path: str) -> str | None:
         """Creates a backup snapshot of the DuckDB instance."""
         try:
-            cfg = Settings.from_toml(config_path)
-            backup_mgr = SystemBackupManager(
-                cfg.TARGET_DB_BASE_PATH,
-                sqlite_db_name=cfg.RAW_DOCUMENT_STORE_NAME,
-                duckdb_name=cfg.TARGET_DB_NAME,
-            )
-            return backup_mgr.create_snapshot()
+            res = self.snapshot_database_detailed(config_path)
+            return res.zip_path if res.is_success else None
         except Exception:
             return None
+
+    def snapshot_database_detailed(self, config_path: str) -> SnapshotResult:
+        """Creates a backup snapshot, returning full outcome telemetry."""
+        cfg = Settings.from_toml(config_path)
+        backup_mgr = SystemBackupManager(
+            cfg.TARGET_DB_BASE_PATH,
+            sqlite_db_name=cfg.RAW_DOCUMENT_STORE_NAME,
+            duckdb_name=cfg.TARGET_DB_NAME,
+        )
+        return backup_mgr.create_snapshot()
 
     def restore_database(self, config_path: str, backup_zip_path: str) -> bool:
         """Restores the DuckDB and SQLite Raw Store from a coordinated backup zip."""
         try:
-            cfg = Settings.from_toml(config_path)
-            backup_mgr = SystemBackupManager(
-                cfg.TARGET_DB_BASE_PATH,
-                sqlite_db_name=cfg.RAW_DOCUMENT_STORE_NAME,
-                duckdb_name=cfg.TARGET_DB_NAME,
-            )
-            backup_mgr.restore_snapshot(backup_zip_path)
-            return True
+            res = self.restore_database_detailed(config_path, backup_zip_path)
+            if not res.is_success and res.error_message and "in use" in res.error_message.lower():
+                raise PermissionError(res.error_message)
+            return res.is_success
         except PermissionError as pe:
-            # We want to bubble up the detailed PermissionError for UI to show
+            # Bubble up the detailed PermissionError for UI to show
             raise pe
         except Exception:
             return False
+
+    def restore_database_detailed(self, config_path: str, backup_zip_path: str) -> RestoreResult:
+        """Restores the database pair, returning full outcome telemetry and active database state."""
+        cfg = Settings.from_toml(config_path)
+        backup_mgr = SystemBackupManager(
+            cfg.TARGET_DB_BASE_PATH,
+            sqlite_db_name=cfg.RAW_DOCUMENT_STORE_NAME,
+            duckdb_name=cfg.TARGET_DB_NAME,
+        )
+        return backup_mgr.restore_snapshot(backup_zip_path)
 
     # --- Pipeline Execution ---
 
