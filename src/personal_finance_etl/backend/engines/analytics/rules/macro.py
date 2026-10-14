@@ -85,35 +85,39 @@ class FYMacroParametersTable:
 
         for row in df.to_dicts():
             try:
-                start_d = to_date_obj(row.get("FY_Start_Date"))
-                end_d = to_date_obj(row.get("FY_End_Date"))
+                start_d = to_date_obj(row.get("FY_Start_Date"), strict=True)
+                end_d = to_date_obj(row.get("FY_End_Date"), strict=True)
+                if not start_d or not end_d:
+                    raise ValueError(f"FY_Start_Date and FY_End_Date are required for Financial Year row: {row}")
 
                 raw_cutoff = str(row.get("Debt_MF_Cutoff_Date", "")).strip()
 
                 default_cutoff = (
-                    to_date_obj(self.rules.assumptions.tax.debt_mf_cutoff_date)
+                    to_date_obj(self.rules.assumptions.tax.debt_mf_cutoff_date, strict=False)
                     if self.rules and hasattr(self.rules, "assumptions")
                     else _DEFAULT_DEBT_MF_CUTOFF
                 )
 
                 cutoff_d = (
-                    to_date_obj(raw_cutoff)
+                    to_date_obj(raw_cutoff, strict=True)
                     if raw_cutoff and raw_cutoff != "None"
                     else default_cutoff
                 )
 
-                if start_d and end_d:
-                    self.fy_map.append(
-                        {
-                            "start": start_d,
-                            "end": end_d,
-                            "debt_cutoff": cutoff_d or default_cutoff or _DEFAULT_DEBT_MF_CUTOFF,
-                            "raw": row,
-                        }
-                    )
+                self.fy_map.append(
+                    {
+                        "start": start_d,
+                        "end": end_d,
+                        "debt_cutoff": cutoff_d or default_cutoff or _DEFAULT_DEBT_MF_CUTOFF,
+                        "raw": row,
+                    }
+                )
             except Exception as e:
                 logger.error(f"Macro Parameters parsing error on row: {row}")
                 logger.error(f"Error details: {e}")
+                raise ValueError(
+                    f"Malformed financial year parameters in row: {row}. Details: {e}"
+                ) from e
 
         self.fy_map.sort(key=lambda x: x["start"])
 
@@ -207,10 +211,19 @@ class FYMacroParametersTable:
         if entry is None:
             return fallback
         raw = entry["raw"]
+        val = raw.get("Equity_LTCG_Exemption")
+        if val is None or str(val).strip() == "" or str(val).strip().lower() in ("none", "null"):
+            return fallback
         try:
-            val = raw.get("Equity_LTCG_Exemption")
-            return float(str(val)) if val is not None and str(val).strip() != "" else fallback
-        except (ValueError, TypeError):
+            return float(str(val).replace(",", "").strip())
+        except (ValueError, TypeError) as err:
+            logger.warning(
+                "[MACRO] Unparseable Equity_LTCG_Exemption %r for date %s; using fallback %s: %s",
+                val,
+                ref_date,
+                fallback,
+                err,
+            )
             return fallback
 
     def get_holding_type(
@@ -237,10 +250,19 @@ class FYMacroParametersTable:
         if entry is None:
             return fallback
         raw = entry["raw"]
+        val = raw.get("Risk_Free_Rate")
+        if val is None or str(val).strip() == "" or str(val).strip().lower() in ("none", "null"):
+            return fallback
         try:
-            val = raw.get("Risk_Free_Rate")
-            return float(str(val)) if val is not None and str(val).strip() != "" else fallback
-        except (ValueError, TypeError):
+            return float(str(val).replace(",", "").strip())
+        except (ValueError, TypeError) as err:
+            logger.warning(
+                "[MACRO] Unparseable Risk_Free_Rate %r for date %s; using fallback %s: %s",
+                val,
+                ref_date,
+                fallback,
+                err,
+            )
             return fallback
 
     def get_inflation_rate(self, ref_date: date) -> float:
@@ -253,10 +275,19 @@ class FYMacroParametersTable:
         if entry is None:
             return fallback
         raw = entry["raw"]
+        val = raw.get("Inflation_Rate")
+        if val is None or str(val).strip() == "" or str(val).strip().lower() in ("none", "null"):
+            return fallback
         try:
-            val = raw.get("Inflation_Rate")
-            return float(str(val)) if val is not None and str(val).strip() != "" else fallback
-        except (ValueError, TypeError):
+            return float(str(val).replace(",", "").strip())
+        except (ValueError, TypeError) as err:
+            logger.warning(
+                "[MACRO] Unparseable Inflation_Rate %r for date %s; using fallback %s: %s",
+                val,
+                ref_date,
+                fallback,
+                err,
+            )
             return fallback
 
     def get_ordinary_income_rate(self, ref_date: date) -> float:
@@ -269,8 +300,17 @@ class FYMacroParametersTable:
         if entry is None:
             return fallback
         raw = entry["raw"]
+        val = raw.get("Estimated_Ordinary_Income_Tax_Rate")
+        if val is None or str(val).strip() == "" or str(val).strip().lower() in ("none", "null"):
+            return fallback
         try:
-            val = raw.get("Estimated_Ordinary_Income_Tax_Rate")
-            return float(str(val)) if val is not None and str(val).strip() != "" else fallback
-        except (ValueError, TypeError):
+            return float(str(val).replace(",", "").strip())
+        except (ValueError, TypeError) as err:
+            logger.warning(
+                "[MACRO] Unparseable Estimated_Ordinary_Income_Tax_Rate %r for date %s; using fallback %s: %s",
+                val,
+                ref_date,
+                fallback,
+                err,
+            )
             return fallback
