@@ -470,7 +470,6 @@ class BaseEventsBuilder:
             raise ValueError(
                 f"Required amount {field_name} is invalid for source {source_id!r}: {value!r}"
             ) from exc
-        import math
 
         if not math.isfinite(amount):
             raise ValueError(
