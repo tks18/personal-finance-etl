@@ -325,7 +325,8 @@ TaxMethodType = Literal["ordinary_rate", "capital_gains", "exempt", "review"]
 
 
 class TaxSubHeadConfig(BaseModel):
-    display_name: str
+    tax_head_display_name: str
+    sub_head_display_name: str
     cat_ids: list[str] = Field(default_factory=list)
     sub_cat_ids: list[str] = Field(default_factory=list)
     tax_credit_sub_cat_ids: list[str] = Field(default_factory=list)
@@ -408,52 +409,86 @@ class TaxAssumptions(BaseModel):
         )
     )
     heads_of_income: dict[str, TaxHeadConfig] = Field(default_factory=dict)
-    residual_income: TaxHeadConfig = Field(default_factory=TaxHeadConfig)
-    exempt_income: TaxHeadConfig = Field(default_factory=TaxHeadConfig)
+    residual_income: dict[str, TaxHeadConfig] = Field(default_factory=dict)
+    exempt_income: dict[str, TaxHeadConfig] = Field(default_factory=dict)
     investment_exclusions: InvestmentExclusionsConfig = Field(
         default_factory=InvestmentExclusionsConfig
     )
 
+
     @model_validator(mode="after")
     def validate_mutual_exclusivity(self) -> TaxAssumptions:
-        seen_sub_cats: set[str] = set()
-        seen_credit_sub_cats: set[str] = set()
-        seen_cats: set[str] = set()
+        seen_sub_cats: dict[str, str] = {}
+        seen_credit_sub_cats: dict[str, str] = {}
+        seen_cats: dict[str, str] = {}
+        seen_head_subhead: set[tuple[str, str]] = set()
 
         # Combine all heads for global mutual exclusivity check
-        all_heads = list(self.heads_of_income.items())
-        all_heads.append(("Residual", self.residual_income))
-        all_heads.append(("Exempt", self.exempt_income))
+        all_heads: list[tuple[str, TaxHeadConfig]] = []
+        all_heads.extend(self.heads_of_income.items())
+        all_heads.extend(self.exempt_income.items())
+        all_heads.extend(self.residual_income.items())
 
         for head_name, head_config in all_heads:
             for sub_name, sub_config in head_config.sub_heads.items():
+                head_sub_key = (head_name.strip().lower(), sub_name.strip().lower())
+                if head_sub_key in seen_head_subhead:
+                    raise ValueError(
+                        f"Duplicate sub-head declaration '{sub_name}' found under head '{head_name}'."
+                    )
+                seen_head_subhead.add(head_sub_key)
+
                 for sub_cat in sub_config.sub_cat_ids:
                     if sub_cat in seen_sub_cats:
                         raise ValueError(
-                            f"Duplicate sub_cat_id {sub_cat} found in {head_name}.{sub_name}"
+                            f"Duplicate sub_cat_id {sub_cat} found in {head_name}.{sub_name} "
+                            f"(already configured in {seen_sub_cats[sub_cat]})"
                         )
                     if sub_cat in seen_credit_sub_cats:
                         raise ValueError(
-                            f"Subcategory UID {sub_cat} is configured as both income and tax credit."
+                            f"Subcategory UID {sub_cat} in {head_name}.{sub_name} is configured as both income and tax credit "
+                            f"(already in tax credit {seen_credit_sub_cats[sub_cat]})."
                         )
-                    seen_sub_cats.add(sub_cat)
+                    seen_sub_cats[sub_cat] = f"{head_name}.{sub_name}"
 
                 for credit_sub_cat in sub_config.tax_credit_sub_cat_ids:
                     if credit_sub_cat in seen_credit_sub_cats:
                         raise ValueError(
-                            f"Duplicate tax_credit_sub_cat_id {credit_sub_cat} found in "
-                            f"{head_name}.{sub_name}"
+                            f"Duplicate tax_credit_sub_cat_id {credit_sub_cat} found in {head_name}.{sub_name} "
+                            f"(already configured in {seen_credit_sub_cats[credit_sub_cat]})"
                         )
                     if credit_sub_cat in seen_sub_cats:
                         raise ValueError(
-                            f"Subcategory UID {credit_sub_cat} is configured as both income and tax credit."
+                            f"Subcategory UID {credit_sub_cat} in {head_name}.{sub_name} is configured as both income and tax credit "
+                            f"(already in income {seen_sub_cats[credit_sub_cat]})."
                         )
-                    seen_credit_sub_cats.add(credit_sub_cat)
+                    seen_credit_sub_cats[credit_sub_cat] = f"{head_name}.{sub_name}"
 
                 for cat in sub_config.cat_ids:
                     if cat in seen_cats:
-                        raise ValueError(f"Duplicate cat_id {cat} found in {head_name}.{sub_name}")
-                    seen_cats.add(cat)
+                        raise ValueError(
+                            f"Duplicate cat_id {cat} found in {head_name}.{sub_name} "
+                            f"(already configured in {seen_cats[cat]})"
+                        )
+                    seen_cats[cat] = f"{head_name}.{sub_name}"
+
+        # Ensure investment exclusions do not clash with ordinary income heads or tax credits
+        for exclusion_type, exclusion_uids in (
+            ("stcg", self.investment_exclusions.stcg_sub_cat_ids),
+            ("ltcg", self.investment_exclusions.ltcg_sub_cat_ids),
+        ):
+            for uid in exclusion_uids:
+                if uid in seen_sub_cats:
+                    raise ValueError(
+                        f"Subcategory UID {uid} in investment_exclusions.{exclusion_type} is already "
+                        f"configured in {seen_sub_cats[uid]}."
+                    )
+                if uid in seen_credit_sub_cats:
+                    raise ValueError(
+                        f"Subcategory UID {uid} in investment_exclusions.{exclusion_type} is configured "
+                        f"as a tax credit in {seen_credit_sub_cats[uid]}."
+                    )
+                seen_sub_cats[uid] = f"investment_exclusions.{exclusion_type}"
 
         return self
 
