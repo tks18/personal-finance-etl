@@ -1,48 +1,98 @@
 import polars as pl
 
-from personal_finance_etl.backend.config.financial_rules import FinancialRules
+from personal_finance_etl.backend.config.financial_rules import FinancialRules, TaxHeadConfig
 
 
 def _get_tax_maps(rules: FinancialRules | None):
-    schema = {"UID": pl.Utf8, "Tax_Income_Head": pl.Utf8, "Tax_Sub_Head": pl.Utf8, "Taxability": pl.Utf8, "Tax_Method": pl.Utf8}
+    schema = {
+        "UID": pl.Utf8,
+        "Tax_Income_Head": pl.Utf8,
+        "Tax_Sub_Head": pl.Utf8,
+        "Taxability": pl.Utf8,
+        "Tax_Method": pl.Utf8,
+    }
     if not rules:
         return pl.DataFrame(schema=schema).lazy(), pl.DataFrame(schema=schema).lazy()
-    
+
     cat_rows: list[dict[str, str]] = []
     sub_cat_rows: list[dict[str, str]] = []
-    
-    all_heads = list(rules.assumptions.tax.heads_of_income.items())
-    all_heads.append(("Residual", rules.assumptions.tax.residual_income))
-    all_heads.append(("Exempt_Income", rules.assumptions.tax.exempt_income))
-    
-    for head_name, head_config in all_heads:
-        for sub_name, sub_config in head_config.sub_heads.items():
+
+    all_heads: list[tuple[str, TaxHeadConfig]] = []
+    all_heads.extend(rules.assumptions.tax.heads_of_income.items())
+    all_heads.extend(rules.assumptions.tax.exempt_income.items())
+    all_heads.extend(rules.assumptions.tax.residual_income.items())
+
+    for _head_name, head_config in all_heads:
+        for _sub_name, sub_config in head_config.sub_heads.items():
             for cat_id in sub_config.cat_ids:
-                cat_rows.append({
-                    "UID": cat_id,
-                    "Tax_Income_Head": head_name,
-                    "Tax_Sub_Head": sub_name,
-                    "Taxability": sub_config.taxability,
-                    "Tax_Method": sub_config.tax_method
-                })
+                cat_rows.append(
+                    {
+                        "UID": cat_id,
+                        "Tax_Income_Head": sub_config.tax_head_display_name,
+                        "Tax_Sub_Head": sub_config.sub_head_display_name,
+                        "Taxability": sub_config.taxability,
+                        "Tax_Method": sub_config.tax_method,
+                    }
+                )
             for sub_cat_id in sub_config.sub_cat_ids:
-                sub_cat_rows.append({
-                    "UID": sub_cat_id,
-                    "Tax_Income_Head": head_name,
-                    "Tax_Sub_Head": sub_name,
-                    "Taxability": sub_config.taxability,
-                    "Tax_Method": sub_config.tax_method
-                })
-                
-    cat_df = pl.DataFrame(cat_rows, schema=schema).lazy() if cat_rows else pl.DataFrame(schema=schema).lazy()
-    sub_cat_df = pl.DataFrame(sub_cat_rows, schema=schema).lazy() if sub_cat_rows else pl.DataFrame(schema=schema).lazy()
-    
+                sub_cat_rows.append(
+                    {
+                        "UID": sub_cat_id,
+                        "Tax_Income_Head": sub_config.tax_head_display_name,
+                        "Tax_Sub_Head": sub_config.sub_head_display_name,
+                        "Taxability": sub_config.taxability,
+                        "Tax_Method": sub_config.tax_method,
+                    }
+                )
+            for credit_sub_cat_id in sub_config.tax_credit_sub_cat_ids:
+                sub_cat_rows.append(
+                    {
+                        "UID": credit_sub_cat_id,
+                        "Tax_Income_Head": sub_config.tax_head_display_name,
+                        "Tax_Sub_Head": sub_config.sub_head_display_name,
+                        "Taxability": sub_config.taxability,
+                        "Tax_Method": sub_config.tax_method,
+                    }
+                )
+
+    for uid in rules.assumptions.tax.investment_exclusions.stcg_sub_cat_ids:
+        sub_cat_rows.append(
+            {
+                "UID": uid,
+                "Tax_Income_Head": "Capital Gains",
+                "Tax_Sub_Head": "Investment STCG",
+                "Taxability": "taxable",
+                "Tax_Method": "capital_gains",
+            }
+        )
+    for uid in rules.assumptions.tax.investment_exclusions.ltcg_sub_cat_ids:
+        sub_cat_rows.append(
+            {
+                "UID": uid,
+                "Tax_Income_Head": "Capital Gains",
+                "Tax_Sub_Head": "Investment LTCG",
+                "Taxability": "taxable",
+                "Tax_Method": "capital_gains",
+            }
+        )
+
+    cat_df = (
+        pl.DataFrame(cat_rows, schema=schema).lazy()
+        if cat_rows
+        else pl.DataFrame(schema=schema).lazy()
+    )
+    sub_cat_df = (
+        pl.DataFrame(sub_cat_rows, schema=schema).lazy()
+        if sub_cat_rows
+        else pl.DataFrame(schema=schema).lazy()
+    )
+
     return cat_df, sub_cat_df
+
 
 def transform_d_income_category(
     df_lazy: pl.LazyFrame, column_mapping: dict[str, str], rules: FinancialRules | None = None
 ) -> pl.LazyFrame:
-
     """Executes the PQ and DAX logic using Polars LazyFrames."""
 
     df_transformed = (
@@ -72,7 +122,6 @@ def transform_d_income_category(
         )
         # DAX: CATEGORY_NAME_SHORT
         # Using string replacement to remove "Income from " if it exists
-
         .with_columns(
             pl.col("CATEGORY_NAME")
             .str.replace("Income from ", "", literal=True)
@@ -80,19 +129,7 @@ def transform_d_income_category(
         )
     )
 
-    cat_df, _ = _get_tax_maps(rules)
-    df_transformed = df_transformed.join(cat_df, on="UID", how="left")
-
-    df_transformed = df_transformed.with_columns(
-        pl.col("Tax_Income_Head").fill_null("CHECK_REQUIRED"),
-        pl.col("Tax_Sub_Head").fill_null("CHECK_REQUIRED"),
-        pl.col("Taxability").fill_null("review"),
-        pl.col("Tax_Method").fill_null("review"),
-    )
-
     return df_transformed
-
-
 
 
 def transform_d_income_subcategory(
@@ -165,6 +202,20 @@ def transform_d_income_subcategory(
         non_cash_cats = rules.income.non_cash.category_ids
         non_cash_subcats = rules.income.non_cash.sub_category_ids
 
+        inv_exclusions = (
+            rules.assumptions.tax.investment_exclusions.stcg_sub_cat_ids
+            + rules.assumptions.tax.investment_exclusions.ltcg_sub_cat_ids
+        )
+
+        tax_credit_subcats: list[str] = []
+        all_tax_heads: list[tuple[str, TaxHeadConfig]] = []
+        all_tax_heads.extend(rules.assumptions.tax.heads_of_income.items())
+        all_tax_heads.extend(rules.assumptions.tax.exempt_income.items())
+        all_tax_heads.extend(rules.assumptions.tax.residual_income.items())
+        for _h, head in all_tax_heads:
+            for _s, sub in head.sub_heads.items():
+                tax_credit_subcats.extend(sub.tax_credit_sub_cat_ids)
+
         df_transformed = df_transformed.with_columns(
             pl.when(pl.col("CATEGORY_ID").is_in(active_cats) | pl.col("UID").is_in(active_subcats))
             .then(pl.lit(True))
@@ -184,6 +235,14 @@ def transform_d_income_subcategory(
             .then(pl.lit(True))
             .otherwise(pl.lit(False))
             .alias("Is_Non_Cash_Income"),
+            pl.when(pl.col("UID").is_in(inv_exclusions))
+            .then(pl.lit(True))
+            .otherwise(pl.lit(False))
+            .alias("Is_Investment_Exclusion"),
+            pl.when(pl.col("UID").is_in(tax_credit_subcats))
+            .then(pl.lit(True))
+            .otherwise(pl.lit(False))
+            .alias("Is_Tax_Credits"),
         ).with_columns(
             (pl.col("Is_Dividend_Income") | pl.col("Is_Interest_Income")).alias("Is_Passive_Income")
         )
@@ -195,24 +254,28 @@ def transform_d_income_subcategory(
             pl.lit(False).alias("Is_Interest_Income"),
             pl.lit(False).alias("Is_Passive_Income"),
             pl.lit(False).alias("Is_Non_Cash_Income"),
+            pl.lit(False).alias("Is_Investment_Exclusion"),
+            pl.lit(False).alias("Is_Tax_Credits"),
         )
 
     cat_df, sub_cat_df = _get_tax_maps(rules)
     cat_df = cat_df.rename({c: f"cat_{c}" for c in cat_df.collect_schema().names() if c != "UID"})
-    
+
     df_transformed = df_transformed.join(sub_cat_df, on="UID", how="left")
     df_transformed = df_transformed.join(cat_df, left_on="CATEGORY_ID", right_on="UID", how="left")
-    
+
     df_transformed = df_transformed.with_columns(
-        pl.coalesce(["Tax_Income_Head", "cat_Tax_Income_Head"]).fill_null("CHECK_REQUIRED").alias("Tax_Income_Head"),
-        pl.coalesce(["Tax_Sub_Head", "cat_Tax_Sub_Head"]).fill_null("CHECK_REQUIRED").alias("Tax_Sub_Head"),
+        pl.coalesce(["Tax_Income_Head", "cat_Tax_Income_Head"])
+        .fill_null("CHECK_REQUIRED")
+        .alias("Tax_Income_Head"),
+        pl.coalesce(["Tax_Sub_Head", "cat_Tax_Sub_Head"])
+        .fill_null("CHECK_REQUIRED")
+        .alias("Tax_Sub_Head"),
         pl.coalesce(["Taxability", "cat_Taxability"]).fill_null("review").alias("Taxability"),
-        pl.coalesce(["Tax_Method", "cat_Tax_Method"]).fill_null("review").alias("Tax_Method")
+        pl.coalesce(["Tax_Method", "cat_Tax_Method"]).fill_null("review").alias("Tax_Method"),
     ).drop(["cat_Tax_Income_Head", "cat_Tax_Sub_Head", "cat_Taxability", "cat_Tax_Method"])
 
     return df_transformed
-
-
 
 
 def transform_d_expense_category(
@@ -580,7 +643,9 @@ def transform_d_macro_parameters(raw_data: pl.LazyFrame) -> pl.LazyFrame:
         (
             pl.col("FY").str.extract(r"(20\d{2})", 1).cast(pl.Int64).cast(pl.String)
             + "-"
-            + (pl.col("FY").str.extract(r"(20\d{2})", 1).cast(pl.Int64) + 1).cast(pl.String).str.slice(2, 2)
+            + (pl.col("FY").str.extract(r"(20\d{2})", 1).cast(pl.Int64) + 1)
+            .cast(pl.String)
+            .str.slice(2, 2)
         ).alias("FY")
     ).select(
         [
