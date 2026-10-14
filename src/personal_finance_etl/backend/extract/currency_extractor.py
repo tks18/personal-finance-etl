@@ -42,6 +42,11 @@ class CurrencyExtractor:
                 entity=row.get("UID", "Unknown"),
                 status=ExtractorEntityStatus.INVALID_PAYLOAD,
                 message=f"Warning: Skipping empty ticker {row.get('UID')}",
+                attempt_count=0,
+                requested_start=start_dt,
+                requested_end=end_dt,
+                failure_class="InvalidPayloadError",
+                final_error=f"Skipping empty ticker {row.get('UID')}",
             )
 
         fetch_start = start_dt - timedelta(days=15)
@@ -56,11 +61,16 @@ class CurrencyExtractor:
                 entity=ticker,
                 status=ExtractorEntityStatus.CACHED,
                 message=f"✓ {ticker} fully cached up to {end_dt}",
+                attempt_count=0,
+                requested_start=fetch_start,
+                requested_end=end_dt,
             )
 
         logger.debug(f"[Currency Extractor] API Fetching {ticker} from {fetch_start} to {end_dt}")
         hist_pd = None
+        attempts_done = 0
         for attempt in range(3):
+            attempts_done = attempt + 1
             try:
                 ticker_obj = yf.Ticker(ticker)
                 hist_pd = ticker_obj.history(  # pyright: ignore
@@ -76,6 +86,11 @@ class CurrencyExtractor:
                         entity=ticker,
                         status=ExtractorEntityStatus.RETRY_EXHAUSTED,
                         message=f"Error on {ticker}: {str(e)}",
+                        attempt_count=attempts_done,
+                        requested_start=fetch_start,
+                        requested_end=end_dt,
+                        failure_class=type(e).__name__,
+                        final_error=str(e),
                     )
                 time.sleep(1 + attempt * 2)
 
@@ -85,6 +100,11 @@ class CurrencyExtractor:
                 entity=ticker,
                 status=ExtractorEntityStatus.EMPTY_RESPONSE,
                 message=f"⚠ No new data fetched for {ticker}",
+                attempt_count=attempts_done,
+                requested_start=fetch_start,
+                requested_end=end_dt,
+                failure_class="EmptyResponse",
+                final_error=f"No new data fetched for {ticker}",
             )
 
         hist_pd.index = hist_pd.index.tz_localize(None).normalize()  # pyright: ignore
@@ -127,6 +147,9 @@ class CurrencyExtractor:
             status=ExtractorEntityStatus.SUCCESS,
             message=msg,
             df=df_new,
+            attempt_count=attempts_done,
+            requested_start=fetch_start,
+            requested_end=end_dt,
         )
 
     def extract_currency_delta(
@@ -185,6 +208,7 @@ class CurrencyExtractor:
                 ticker = futures[future].get("yF_Ticker", "Unknown")
                 try:
                     res = future.result()
+                    batch_result.entity_results.append(res)
                     level = LogLevel.INFO
                     if res.status == ExtractorEntityStatus.SUCCESS:
                         batch_result.successful_entities.append(res.entity)
@@ -211,6 +235,18 @@ class CurrencyExtractor:
                 except Exception as e:
                     err_msg = str(e)
                     batch_result.failed_entities[ticker] = err_msg
+                    batch_result.entity_results.append(
+                        ExtractorEntityResult(
+                            entity=ticker,
+                            status=ExtractorEntityStatus.FAILED,
+                            message=err_msg,
+                            attempt_count=1,
+                            requested_start=global_start_date,
+                            requested_end=global_end_date,
+                            failure_class=type(e).__name__,
+                            final_error=err_msg,
+                        )
+                    )
                     self.status_queue.put(
                         EngineStatus(
                             msg=f"Error: Critical thread failure on {ticker}: {err_msg}",
