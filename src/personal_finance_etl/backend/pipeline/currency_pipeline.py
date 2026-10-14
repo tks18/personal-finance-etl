@@ -75,6 +75,10 @@ class CurrencyPipeline:
         batch_res = extractor.extract_currency_delta(
             df_currency, global_start_date, global_end_date, df_bronze_cached
         )
+        if self.cp.active_run_id:
+            self.cp.runs.log_provider_requests(
+                self.cp.active_run_id, batch_res.to_provider_requests()
+            )
         batch_res.assert_complete("Currency Extractor")
         df_delta, new_files = batch_res.combined_frame, batch_res.injected_files
 

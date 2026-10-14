@@ -29,6 +29,11 @@ class ExtractorEntityResult:
     message: str
     df: pl.DataFrame = field(default_factory=lambda: pl.DataFrame())
     context: dict[str, Any] = field(default_factory=lambda: dict[str, Any]())
+    attempt_count: int = 1
+    requested_start: date | None = None
+    requested_end: date | None = None
+    failure_class: str | None = None
+    final_error: str | None = None
 
 
 class ExtractionCompletenessError(RuntimeError):
@@ -64,6 +69,9 @@ class ExtractionBatchResult:
     provider: str = "Yahoo Finance"
     start_date: date | None = None
     end_date: date | None = None
+    entity_results: list[ExtractorEntityResult] = field(
+        default_factory=lambda: list[ExtractorEntityResult]()
+    )
 
     @property
     def is_complete(self) -> bool:
@@ -79,7 +87,11 @@ class ExtractionBatchResult:
     def assert_complete(self, extractor_name: str = "Extractor") -> None:
         """Raise ExtractionCompletenessError if any entity failed."""
         if not self.is_complete:
-            interval = (self.start_date, self.end_date) if self.start_date and self.end_date else None
+            interval = (
+                (self.start_date, self.end_date)
+                if self.start_date and self.end_date
+                else None
+            )
             raise ExtractionCompletenessError(
                 f"{extractor_name} batch extraction failed completeness policy: "
                 f"{len(self.failed_entities)} required entity/entities failed",
@@ -87,6 +99,34 @@ class ExtractionBatchResult:
                 requested_interval=interval,
                 provider=self.provider,
             )
+
+    def to_provider_requests(self) -> list[dict[str, Any]]:
+        """Format entity outcomes into structured records for cp_external_provider_requests."""
+        records: list[dict[str, Any]] = []
+        for res in self.entity_results:
+            records.append(
+                {
+                    "provider": self.provider,
+                    "entity": res.entity,
+                    "requested_start": res.requested_start or self.start_date,
+                    "requested_end": res.requested_end or self.end_date,
+                    "attempt_count": res.attempt_count,
+                    "status": res.status.value,
+                    "failure_class": res.failure_class,
+                    "final_error": res.final_error
+                    or (
+                        res.message
+                        if res.status
+                        in (
+                            ExtractorEntityStatus.FAILED,
+                            ExtractorEntityStatus.RETRY_EXHAUSTED,
+                            ExtractorEntityStatus.INVALID_PAYLOAD,
+                        )
+                        else None
+                    ),
+                }
+            )
+        return records
 
     def __iter__(self) -> Iterator[Any]:
         """Support legacy tuple unpacking: (combined_df, injected_files) = batch_result."""

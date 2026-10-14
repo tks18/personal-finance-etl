@@ -13,7 +13,7 @@ from personal_finance_etl.backend.utils.logger import logger
 class SQLiteManager:
     """SQLite connection owner for the durable ETL control plane."""
 
-    SCHEMA_VERSION = 2
+    SCHEMA_VERSION = 3
 
     def __init__(self, base_path: str, db_name: str = "Raw_Documents.sqlite"):
         self.db_path = os.path.join(base_path or ".", db_name)
@@ -88,12 +88,7 @@ class SQLiteManager:
         return self._conn is not None
 
     def ensure_schema(self) -> None:
-        """Create the current schema on a new database; never migrate existing data.
-
-        Existing databases must be upgraded by the project's explicit migration
-        workflow before this method is called. We validate their shape first so
-        ``CREATE TABLE IF NOT EXISTS`` cannot disguise a stale or partial schema.
-        """
+        """Create or migrate the schema to current version and validate shape."""
         if self.conn.in_transaction:
             raise RuntimeError("ensure_schema() must run outside an active SQLite transaction.")
 
@@ -112,21 +107,17 @@ class SQLiteManager:
             "cp_run_failures",
             "cp_artifact_run_events",
             "cp_simulation_runs",
+            "cp_external_provider_requests",
+            "cp_run_sync_summaries",
         }
         present_control_tables = existing_tables & current_tables
         if present_control_tables:
-            missing_tables = current_tables - existing_tables
-            if missing_tables:
-                raise RuntimeError(
-                    "Control-plane database does not match the current schema. "
-                    f"Missing tables: {sorted(missing_tables)}. Run the project's "
-                    "explicit database migration procedure; automatic migrations are disabled."
-                )
-            self._validate_current_schema()
+            self._migrate_schema(existing_tables)
 
-        logger.debug("[DATABASE:SQLITE] Initializing current schema (no automatic migrations).")
+        logger.debug("[DATABASE:SQLITE] Initializing current schema.")
         self.conn.executescript(RAW_DDL)
         self._create_indexes()
+        self._validate_current_schema()
 
         violations = self.conn.execute("PRAGMA foreign_key_check").fetchmany(10)
         if violations:
@@ -136,8 +127,38 @@ class SQLiteManager:
             )
         logger.info("[DATABASE:SQLITE] Current schema ready (version %s).", self.SCHEMA_VERSION)
 
+    def _migrate_schema(self, existing_tables: set[str]) -> None:
+        """Apply non-destructive schema migrations to existing control plane tables."""
+        if "cp_runs" in existing_tables:
+            cols = {row[1] for row in self.conn.execute("PRAGMA table_info(cp_runs)").fetchall()}
+            if "commit_state" not in cols:
+                logger.info("[DATABASE:SQLITE] Migrating cp_runs: adding commit_state column.")
+                self.conn.execute(
+                    "ALTER TABLE cp_runs ADD COLUMN commit_state TEXT NOT NULL DEFAULT 'NOT_STARTED'"
+                )
+
+        if "cp_run_failures" in existing_tables:
+            cols = {row[1] for row in self.conn.execute("PRAGMA table_info(cp_run_failures)").fetchall()}
+            if "failure_domain" not in cols:
+                logger.info("[DATABASE:SQLITE] Migrating cp_run_failures: adding failure_domain column.")
+                self.conn.execute(
+                    "ALTER TABLE cp_run_failures ADD COLUMN failure_domain TEXT NOT NULL DEFAULT 'UNKNOWN'"
+                )
+
+        if "cp_artifact_run_events" in existing_tables:
+            cols = {row[1] for row in self.conn.execute("PRAGMA table_info(cp_artifact_run_events)").fetchall()}
+            if "affected_table" not in cols:
+                logger.info("[DATABASE:SQLITE] Migrating cp_artifact_run_events: adding lineage columns.")
+                self.conn.execute("ALTER TABLE cp_artifact_run_events ADD COLUMN affected_table TEXT")
+            if "detecting_run_id" not in cols:
+                self.conn.execute("ALTER TABLE cp_artifact_run_events ADD COLUMN detecting_run_id TEXT")
+            if "replay_run_id" not in cols:
+                self.conn.execute("ALTER TABLE cp_artifact_run_events ADD COLUMN replay_run_id TEXT")
+            if "convergence_result" not in cols:
+                self.conn.execute("ALTER TABLE cp_artifact_run_events ADD COLUMN convergence_result TEXT")
+
     def _validate_current_schema(self) -> None:
-        """Fail closed when an existing database is not already on the current schema."""
+        """Fail closed when an existing database is not on the current schema."""
         required_columns: dict[str, set[str]] = {
             "cp_settings_snapshots": {
                 "snapshot_id",
@@ -156,6 +177,7 @@ class SQLiteManager:
                 "started_at",
                 "finished_at",
                 "status",
+                "commit_state",
                 "application_version",
                 "schema_version",
                 "settings_snapshot_id",
@@ -189,6 +211,7 @@ class SQLiteManager:
                 "error_type",
                 "error_message",
                 "traceback_log",
+                "failure_domain",
                 "created_at",
             },
             "cp_artifact_run_events": {
@@ -202,6 +225,33 @@ class SQLiteManager:
                 "previous_status",
                 "new_status",
                 "event_reason",
+                "affected_table",
+                "detecting_run_id",
+                "replay_run_id",
+                "convergence_result",
+            },
+            "cp_external_provider_requests": {
+                "request_id",
+                "run_id",
+                "provider",
+                "entity",
+                "requested_start",
+                "requested_end",
+                "attempt_count",
+                "status",
+                "failure_class",
+                "final_error",
+                "created_at",
+            },
+            "cp_run_sync_summaries": {
+                "run_id",
+                "actionable_count",
+                "synced_count",
+                "healed_count",
+                "failed_count",
+                "deferred_count",
+                "sync_status",
+                "created_at",
             },
             "cp_simulation_runs": {
                 "simulation_id",
@@ -239,7 +289,9 @@ class SQLiteManager:
             "CREATE INDEX IF NOT EXISTS idx_cp_artifact_events_file_time ON cp_artifact_run_events(file_id, event_at)",
             "CREATE INDEX IF NOT EXISTS idx_cp_artifact_events_run ON cp_artifact_run_events(run_id)",
             "CREATE INDEX IF NOT EXISTS idx_cp_runs_status ON cp_runs(status)",
+            "CREATE INDEX IF NOT EXISTS idx_cp_runs_commit_state ON cp_runs(commit_state)",
             "CREATE INDEX IF NOT EXISTS idx_cp_run_failures_run ON cp_run_failures(run_id)",
+            "CREATE INDEX IF NOT EXISTS idx_cp_provider_requests_run ON cp_external_provider_requests(run_id)",
         )
         for statement in statements:
             self.conn.execute(statement)

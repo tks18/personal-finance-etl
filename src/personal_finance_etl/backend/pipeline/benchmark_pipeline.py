@@ -69,6 +69,10 @@ class BenchmarkPipeline:
             global_end_date=end_date,
             df_bronze_cached=df_bronze_cached,
         )
+        if self.cp.active_run_id:
+            self.cp.runs.log_provider_requests(
+                self.cp.active_run_id, batch_res.to_provider_requests()
+            )
         batch_res.assert_complete("Benchmark Extractor")
         df_new_raw, virtual_files = batch_res.combined_frame, batch_res.injected_files
 

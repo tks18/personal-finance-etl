@@ -97,7 +97,7 @@ class FileSyncService:
 
                 if previous_status == "REMOVED":
                     logger.info("[SYNC:HEALED] %s re-appeared after prior removal.", path)
-                    self.artifact_repo.mark_healed([path])
+                    self.artifact_repo.mark_healed([path], affected_table=category)
                     new_files[category].append(path)
                     continue
 

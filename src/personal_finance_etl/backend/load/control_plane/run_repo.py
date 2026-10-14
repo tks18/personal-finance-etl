@@ -4,11 +4,15 @@ import hashlib
 import importlib.metadata
 import json
 import math
+import sqlite3
 import uuid
 from datetime import date, datetime
 from typing import Any, cast
 
 from personal_finance_etl.backend.load.control_plane.connection import SQLiteManager
+from personal_finance_etl.backend.types.failure import FailureDomain, classify_failure_domain
+from personal_finance_etl.backend.types.pipeline import CommitState
+from personal_finance_etl.backend.utils.logger import logger
 
 
 class RunRepository:
@@ -55,9 +59,9 @@ class RunRepository:
                     rules_id = snapshot_id
             self.db.conn.execute(
                 """INSERT INTO cp_runs
-                   (run_id, started_at, status, application_version, schema_version,
+                   (run_id, started_at, status, commit_state, application_version, schema_version,
                     settings_snapshot_id, rules_snapshot_id)
-                   VALUES (?, ?, 'STARTED', ?, ?, ?, ?)""",
+                   VALUES (?, ?, 'STARTED', 'STARTED', ?, ?, ?, ?)""",
                 (
                     run_id,
                     now,
@@ -89,6 +93,19 @@ class RunRepository:
             if cursor.rowcount != 1:
                 raise KeyError(f"Cannot update unknown run ID: {run_id}")
 
+    def update_commit_state(self, run_id: str, commit_state: str | CommitState) -> None:
+        val = (
+            commit_state.value
+            if isinstance(commit_state, CommitState)
+            else str(commit_state).strip().upper()
+        )
+        with self.db.atomic():
+            cursor = self.db.conn.execute(
+                "UPDATE cp_runs SET commit_state = ? WHERE run_id = ?", (val, run_id)
+            )
+            if cursor.rowcount != 1:
+                raise KeyError(f"Cannot update commit state for unknown run ID: {run_id}")
+
     def save_execution_log(self, run_id: str, log_data: bytes) -> None:
         with self.db.atomic():
             cursor = self.db.conn.execute(
@@ -97,16 +114,29 @@ class RunRepository:
             if cursor.rowcount != 1:
                 raise KeyError(f"Cannot save execution log for unknown run ID: {run_id}")
 
-    def finish_run(self, run_id: str, status: str) -> None:
+    def finish_run(
+        self, run_id: str, status: str, commit_state: str | CommitState | None = None
+    ) -> None:
         normalized_status = status.strip().upper()
         if not normalized_status:
             raise ValueError("Run status must be a non-empty string.")
         now = datetime.now().isoformat(timespec="seconds")
         with self.db.atomic():
-            cursor = self.db.conn.execute(
-                "UPDATE cp_runs SET status = ?, finished_at = ? WHERE run_id = ?",
-                (normalized_status, now, run_id),
-            )
+            if commit_state is not None:
+                val = (
+                    commit_state.value
+                    if isinstance(commit_state, CommitState)
+                    else str(commit_state).strip().upper()
+                )
+                cursor = self.db.conn.execute(
+                    "UPDATE cp_runs SET status = ?, commit_state = ?, finished_at = ? WHERE run_id = ?",
+                    (normalized_status, val, now, run_id),
+                )
+            else:
+                cursor = self.db.conn.execute(
+                    "UPDATE cp_runs SET status = ?, finished_at = ? WHERE run_id = ?",
+                    (normalized_status, now, run_id),
+                )
             if cursor.rowcount != 1:
                 raise KeyError(f"Cannot finish unknown run ID: {run_id}")
 
@@ -262,13 +292,30 @@ class RunRepository:
         error_type: str,
         error_message: str,
         traceback_log: str | None = None,
+        failure_domain: FailureDomain | str | None = None,
     ) -> None:
         now = datetime.now().isoformat(timespec="seconds")
+        if failure_domain is None:
+            resolved_domain = classify_failure_domain(stage, error_type or error_message).value
+        elif isinstance(failure_domain, FailureDomain):
+            resolved_domain = failure_domain.value
+        else:
+            resolved_domain = str(failure_domain).upper()
+
         self.db.conn.execute(
             """INSERT INTO cp_run_failures
-               (run_id, failed_isin, stage, error_type, error_message, traceback_log, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
-            (run_id, failed_isin, stage, error_type, error_message, traceback_log, now),
+               (run_id, failed_isin, stage, error_type, error_message, traceback_log, failure_domain, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                run_id,
+                failed_isin,
+                stage,
+                error_type,
+                error_message,
+                traceback_log,
+                resolved_domain,
+                now,
+            ),
         )
 
     def get_recovery_required_runs(self) -> list[str]:
@@ -290,8 +337,8 @@ class RunRepository:
         try:
             with self.db.atomic():
                 self.db.conn.execute(
-                    "UPDATE cp_runs SET status = 'RECOVERY_REQUIRED', finished_at = ? WHERE run_id = ?",
-                    (now, run_id),
+                    "UPDATE cp_runs SET status = 'RECOVERY_REQUIRED', commit_state = ?, finished_at = ? WHERE run_id = ?",
+                    (CommitState.RECOVERY_REQUIRED.value, now, run_id),
                 )
                 self.log_run_failure(
                     run_id=run_id,
@@ -300,22 +347,30 @@ class RunRepository:
                     error_type="CROSS_STORE_DIVERGENCE",
                     error_message=error_message,
                     traceback_log=traceback_log,
+                    failure_domain=FailureDomain.RECOVERY,
                 )
         except Exception:
             # Fallback to direct connection if main connection or savepoint failed
-            import sqlite3
-
             conn = sqlite3.connect(self.db.db_path, timeout=30.0)
             try:
                 conn.execute(
-                    "UPDATE cp_runs SET status = 'RECOVERY_REQUIRED', finished_at = ? WHERE run_id = ?",
-                    (now, run_id),
+                    "UPDATE cp_runs SET status = 'RECOVERY_REQUIRED', commit_state = ?, finished_at = ? WHERE run_id = ?",
+                    (CommitState.RECOVERY_REQUIRED.value, now, run_id),
                 )
                 conn.execute(
                     """INSERT INTO cp_run_failures
-                       (run_id, failed_isin, stage, error_type, error_message, traceback_log, created_at)
-                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                    (run_id, None, stage, "CROSS_STORE_DIVERGENCE", error_message, traceback_log, now),
+                       (run_id, failed_isin, stage, error_type, error_message, traceback_log, failure_domain, created_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        run_id,
+                        None,
+                        stage,
+                        "CROSS_STORE_DIVERGENCE",
+                        error_message,
+                        traceback_log,
+                        FailureDomain.RECOVERY.value,
+                        now,
+                    ),
                 )
                 conn.commit()
             finally:
@@ -326,8 +381,8 @@ class RunRepository:
         now = datetime.now().isoformat(timespec="seconds")
         with self.db.atomic():
             self.db.conn.execute(
-                "UPDATE cp_runs SET status = 'CONVERGED' WHERE run_id = ? AND UPPER(status) = 'RECOVERY_REQUIRED'",
-                (recovered_run_id,),
+                "UPDATE cp_runs SET status = 'CONVERGED', commit_state = ? WHERE run_id = ? AND UPPER(status) = 'RECOVERY_REQUIRED'",
+                (CommitState.CONVERGED.value, recovered_run_id),
             )
             self.log_run_failure(
                 run_id=recovered_run_id,
@@ -335,6 +390,7 @@ class RunRepository:
                 stage="RECOVERY_CONVERGENCE",
                 error_type="CONVERGED",
                 error_message=f"Cross-store divergence resolved and converged by run {reconciling_run_id} at {now}.",
+                failure_domain=FailureDomain.RECOVERY,
             )
 
     def recover_stale_runs(self) -> None:
@@ -348,6 +404,11 @@ class RunRepository:
             for run_id, status in stale_runs:
                 is_committing = str(status).upper() == "COMMITTING"
                 new_status = "RECOVERY_REQUIRED" if is_committing else "FAILED"
+                new_commit_state = (
+                    CommitState.RECOVERY_REQUIRED.value
+                    if is_committing
+                    else CommitState.ROLLED_BACK.value
+                )
                 error_type = "CROSS_STORE_DIVERGENCE" if is_committing else "InterruptedRunError"
                 error_message = (
                     "Run crashed while COMMITTING; cross-store commit state uncertain, recovery required."
@@ -356,9 +417,9 @@ class RunRepository:
                 )
 
                 cursor = self.db.conn.execute(
-                    "UPDATE cp_runs SET status = ?, finished_at = ? "
+                    "UPDATE cp_runs SET status = ?, commit_state = ?, finished_at = ? "
                     "WHERE run_id = ? AND UPPER(status) IN ('STARTED', 'RUNNING', 'COMMITTING')",
-                    (new_status, now, run_id),
+                    (new_status, new_commit_state, now, run_id),
                 )
                 if cursor.rowcount != 1:
                     continue
@@ -368,9 +429,131 @@ class RunRepository:
                     stage="RECOVERY",
                     error_type=error_type,
                     error_message=error_message,
+                    failure_domain=FailureDomain.RECOVERY,
                 )
                 recovered += 1
         if recovered:
-            from personal_finance_etl.backend.utils.logger import logger
-
             logger.warning("[CONTROL_PLANE] Recovered %d interrupted run(s).", recovered)
+
+    def log_provider_requests(self, run_id: str, records: list[dict[str, Any]]) -> None:
+        """Persist batch of external provider requests with retry/status provenance."""
+        if not records:
+            return
+        now = datetime.now().isoformat(timespec="seconds")
+        params: list[
+            tuple[
+                str,
+                str,
+                str,
+                str,
+                str | None,
+                str | None,
+                int,
+                str,
+                str | None,
+                str | None,
+                str,
+            ]
+        ] = []
+        for rec in records:
+            req_id = rec.get("request_id") or str(uuid.uuid4())
+            provider = str(rec.get("provider", "UNKNOWN"))
+            entity = str(rec.get("entity", "UNKNOWN"))
+            req_start = rec.get("requested_start")
+            if isinstance(req_start, (date, datetime)):
+                req_start = req_start.isoformat()
+            elif req_start is not None:
+                req_start = str(req_start)
+            req_end = rec.get("requested_end")
+            if isinstance(req_end, (date, datetime)):
+                req_end = req_end.isoformat()
+            elif req_end is not None:
+                req_end = str(req_end)
+            attempt_count = int(rec.get("attempt_count", 1))
+            status = str(rec.get("status", "SUCCESS")).upper()
+            failure_class = rec.get("failure_class")
+            if failure_class is not None:
+                failure_class = str(failure_class)
+            final_error = rec.get("final_error")
+            if final_error is not None:
+                final_error = str(final_error)
+            created_at = rec.get("created_at") or now
+            if isinstance(created_at, (date, datetime)):
+                created_at = created_at.isoformat()
+            params.append(
+                (
+                    req_id,
+                    run_id,
+                    provider,
+                    entity,
+                    req_start,
+                    req_end,
+                    attempt_count,
+                    status,
+                    failure_class,
+                    final_error,
+                    str(created_at),
+                )
+            )
+        with self.db.atomic():
+            self.db.conn.executemany(
+                """INSERT INTO cp_external_provider_requests
+                   (request_id, run_id, provider, entity, requested_start, requested_end,
+                    attempt_count, status, failure_class, final_error, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                params,
+            )
+
+    def log_sync_summary(self, run_id: str, summary: dict[str, Any]) -> None:
+        """Persist authoritative file-sync summary metrics for a pipeline run."""
+        now = datetime.now().isoformat(timespec="seconds")
+        actionable_count = int(summary.get("actionable_count", 0))
+        synced_count = int(summary.get("synced_count", 0))
+        healed_count = int(summary.get("healed_count", 0))
+        failed_count = int(summary.get("failed_count", 0))
+        deferred_count = int(summary.get("deferred_count", 0))
+        sync_status = str(summary.get("sync_status", "COMPLETE")).upper()
+        with self.db.atomic():
+            self.db.conn.execute(
+                """INSERT INTO cp_run_sync_summaries
+                   (run_id, actionable_count, synced_count, healed_count, failed_count, deferred_count, sync_status, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(run_id) DO UPDATE SET
+                       actionable_count = excluded.actionable_count,
+                       synced_count = excluded.synced_count,
+                       healed_count = excluded.healed_count,
+                       failed_count = excluded.failed_count,
+                       deferred_count = excluded.deferred_count,
+                       sync_status = excluded.sync_status,
+                       created_at = excluded.created_at""",
+                (
+                    run_id,
+                    actionable_count,
+                    synced_count,
+                    healed_count,
+                    failed_count,
+                    deferred_count,
+                    sync_status,
+                    now,
+                ),
+            )
+
+    def get_sync_summary(self, run_id: str) -> dict[str, Any] | None:
+        """Retrieve file-sync summary metrics for a pipeline run."""
+        row = self.db.conn.execute(
+            """SELECT run_id, actionable_count, synced_count, healed_count, failed_count, deferred_count, sync_status, created_at
+               FROM cp_run_sync_summaries WHERE run_id = ?""",
+            (run_id,),
+        ).fetchone()
+        if not row:
+            return None
+        return {
+            "run_id": row[0],
+            "actionable_count": row[1],
+            "synced_count": row[2],
+            "healed_count": row[3],
+            "failed_count": row[4],
+            "deferred_count": row[5],
+            "sync_status": row[6],
+            "created_at": row[7],
+        }

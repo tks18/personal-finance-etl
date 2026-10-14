@@ -49,6 +49,7 @@ CREATE TABLE IF NOT EXISTS cp_runs (
     started_at TIMESTAMP NOT NULL,
     finished_at TIMESTAMP,
     status TEXT,
+    commit_state TEXT NOT NULL DEFAULT 'NOT_STARTED',
     application_version TEXT,
     schema_version TEXT,
     settings_snapshot_id TEXT,
@@ -66,6 +67,7 @@ CREATE TABLE IF NOT EXISTS cp_run_failures (
     error_type TEXT,
     error_message TEXT,
     traceback_log TEXT,
+    failure_domain TEXT NOT NULL DEFAULT 'UNKNOWN',
     created_at TIMESTAMP NOT NULL,
     FOREIGN KEY(run_id) REFERENCES cp_runs(run_id)
 );
@@ -81,8 +83,39 @@ CREATE TABLE IF NOT EXISTS cp_artifact_run_events (
     previous_status TEXT,
     new_status TEXT,
     event_reason TEXT,
+    affected_table TEXT,
+    detecting_run_id TEXT,
+    replay_run_id TEXT,
+    convergence_result TEXT,
     FOREIGN KEY(run_id) REFERENCES cp_runs(run_id),
     FOREIGN KEY(file_id) REFERENCES cp_file_registry(file_id)
+);
+
+CREATE TABLE IF NOT EXISTS cp_external_provider_requests (
+    request_id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL,
+    provider TEXT NOT NULL,
+    entity TEXT NOT NULL,
+    requested_start DATE,
+    requested_end DATE,
+    attempt_count INTEGER NOT NULL DEFAULT 1,
+    status TEXT NOT NULL,
+    failure_class TEXT,
+    final_error TEXT,
+    created_at TIMESTAMP NOT NULL,
+    FOREIGN KEY(run_id) REFERENCES cp_runs(run_id)
+);
+
+CREATE TABLE IF NOT EXISTS cp_run_sync_summaries (
+    run_id TEXT PRIMARY KEY,
+    actionable_count INTEGER NOT NULL,
+    synced_count INTEGER NOT NULL,
+    healed_count INTEGER NOT NULL,
+    failed_count INTEGER NOT NULL,
+    deferred_count INTEGER NOT NULL,
+    sync_status TEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL,
+    FOREIGN KEY(run_id) REFERENCES cp_runs(run_id)
 );
 
 CREATE TABLE IF NOT EXISTS cp_simulation_runs (

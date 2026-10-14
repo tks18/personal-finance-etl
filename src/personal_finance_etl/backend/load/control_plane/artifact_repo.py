@@ -11,6 +11,7 @@ from personal_finance_etl.backend.load.control_plane.utils import (
     hash_bytes,
     normalize_path,
 )
+from personal_finance_etl.backend.load.registry import BRONZE_CONTRACT_REGISTRY
 from personal_finance_etl.backend.utils.logger import logger
 
 
@@ -25,6 +26,17 @@ class ArtifactRepository:
     def _now() -> str:
         return datetime.now().isoformat(timespec="seconds")
 
+    @staticmethod
+    def _resolve_table(category: str | None) -> str | None:
+        if not category:
+            return None
+        if category == "sqlite_source":
+            return "bronze.r_SQLite_Sources"
+        for contract in BRONZE_CONTRACT_REGISTRY:
+            if contract.sync_category == category:
+                return contract.physical_table
+        return f"bronze.{category}"
+
     def _insert_event(
         self,
         *,
@@ -36,14 +48,38 @@ class ArtifactRepository:
         previous_status: str | None = None,
         new_status: str | None = None,
         reason: str | None = None,
+        affected_table: str | None = None,
+        detecting_run_id: str | None = None,
+        replay_run_id: str | None = None,
+        convergence_result: str | None = None,
     ) -> None:
         if not self.active_run_id:
             return
+
+        if not affected_table and file_id:
+            row = self.db.conn.execute(
+                "SELECT file_category FROM cp_file_registry WHERE file_id = ?",
+                (file_id,),
+            ).fetchone()
+            if row and row[0]:
+                affected_table = self._resolve_table(row[0])
+
+        effective_detecting = detecting_run_id or self.active_run_id
+        effective_replay = replay_run_id or (
+            self.active_run_id if event_type in ("SYNCED", "HEALED", "REINGESTED") else None
+        )
+        effective_convergence = convergence_result or (
+            "CONVERGED" if event_type in ("SYNCED", "HEALED") else (
+                "TOMBSTONED" if event_type == "REMOVED" else "PENDING"
+            )
+        )
+
         self.db.conn.execute(
             """INSERT INTO cp_artifact_run_events
                (event_id, run_id, file_id, event_type, event_at, observed_path,
-                content_hash, previous_status, new_status, event_reason)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                content_hash, previous_status, new_status, event_reason,
+                affected_table, detecting_run_id, replay_run_id, convergence_result)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 str(uuid.uuid4()),
                 self.active_run_id,
@@ -55,6 +91,10 @@ class ArtifactRepository:
                 previous_status,
                 new_status,
                 reason,
+                affected_table,
+                effective_detecting,
+                effective_replay,
+                effective_convergence,
             ),
         )
 
@@ -218,6 +258,7 @@ class ArtifactRepository:
                 (new_id, payload_row[0]),
             )
             self.db.conn.execute("DELETE FROM cp_file_payloads WHERE file_id = ?", (old_id,))
+            affected_table = self._resolve_table(category)
             self._insert_event(
                 file_id=new_id,
                 event_type="RENAMED",
@@ -227,6 +268,10 @@ class ArtifactRepository:
                 previous_status=old_status,
                 new_status=new_status,
                 reason=f"Migrated identity from {old_path}",
+                affected_table=affected_table,
+                detecting_run_id=self.active_run_id,
+                replay_run_id=None,
+                convergence_result="PENDING",
             )
             self.db.conn.execute(
                 "UPDATE cp_file_registry SET sync_status = 'REMOVED' WHERE file_id = ?",
@@ -342,6 +387,7 @@ class ArtifactRepository:
                             event_type = "CHANGED"
                         else:
                             event_type = "REINGESTED"
+                        affected_table = self._resolve_table(category)
                         self._insert_event(
                             file_id=file_id,
                             event_type=event_type,
@@ -351,6 +397,10 @@ class ArtifactRepository:
                             previous_status=previous_status,
                             new_status="PENDING_BRONZE",
                             reason="Binary payload stored in control-plane vault",
+                            affected_table=affected_table,
+                            detecting_run_id=self.active_run_id,
+                            replay_run_id=self.active_run_id if event_type == "REINGESTED" else None,
+                            convergence_result="PENDING",
                         )
                     total_count += 1
                 except Exception:
@@ -379,6 +429,7 @@ class ArtifactRepository:
                 "ON CONFLICT(file_id) DO UPDATE SET file_bytes = excluded.file_bytes",
                 (file_id, raw_bytes),
             )
+            affected_table = self._resolve_table(category)
             self._insert_event(
                 file_id=file_id,
                 event_type="VIRTUAL_UPDATED" if previous_status else "VIRTUAL_CREATED",
@@ -388,6 +439,10 @@ class ArtifactRepository:
                 previous_status=previous_status,
                 new_status="PENDING_BRONZE",
                 reason="Virtual configuration artifact injected",
+                affected_table=affected_table,
+                detecting_run_id=self.active_run_id,
+                replay_run_id=self.active_run_id if previous_status else None,
+                convergence_result="PENDING",
             )
         return path
 
@@ -431,15 +486,16 @@ class ArtifactRepository:
         with self.db.atomic():
             for path in dict.fromkeys(normalize_path(fp) for fp in filepaths):
                 row = self.db.conn.execute(
-                    "SELECT file_id, sync_status, last_synced_run_id, file_hash FROM cp_file_registry WHERE relative_path = ?",
+                    "SELECT file_id, sync_status, last_synced_run_id, file_hash, file_category FROM cp_file_registry WHERE relative_path = ?",
                     (path,),
                 ).fetchone()
                 if not row:
                     logger.warning("[ARTIFACT] Cannot mark unknown file as SYNCED: %s", path)
                     continue
-                file_id, previous_status, last_run, digest = row
+                file_id, previous_status, last_run, digest, file_cat = row
                 if previous_status == "SYNCED" and last_run == self.active_run_id:
                     continue
+                affected_table = self._resolve_table(file_cat)
                 self._insert_event(
                     file_id=file_id,
                     event_type="SYNCED",
@@ -449,6 +505,10 @@ class ArtifactRepository:
                     previous_status=previous_status,
                     new_status="SYNCED",
                     reason="Bronze Sync Successful",
+                    affected_table=affected_table,
+                    detecting_run_id=self.active_run_id,
+                    replay_run_id=self.active_run_id,
+                    convergence_result="CONVERGED",
                 )
                 self.db.conn.execute(
                     "UPDATE cp_file_registry SET sync_status = 'SYNCED', last_synced_run_id = COALESCE(?, last_synced_run_id), last_synced_at = ? WHERE relative_path = ?",
@@ -458,7 +518,15 @@ class ArtifactRepository:
         if marked:
             logger.debug("[ARTIFACT] Marked %d file(s) as SYNCED.", marked)
 
-    def mark_healed(self, filepaths: list[str]) -> None:
+    def mark_healed(
+        self,
+        filepaths: list[str],
+        *,
+        affected_table: str | None = None,
+        detecting_run_id: str | None = None,
+        replay_run_id: str | None = None,
+        convergence_result: str | None = "CONVERGED",
+    ) -> None:
         if not filepaths:
             return
         now = self._now()
@@ -466,12 +534,13 @@ class ArtifactRepository:
         with self.db.atomic():
             for path in dict.fromkeys(normalize_path(fp) for fp in filepaths):
                 row = self.db.conn.execute(
-                    "SELECT file_id, sync_status, file_hash FROM cp_file_registry WHERE relative_path = ?",
+                    "SELECT file_id, sync_status, file_hash, file_category FROM cp_file_registry WHERE relative_path = ?",
                     (path,),
                 ).fetchone()
                 if not row or row[1] != "REMOVED":
                     continue
-                file_id, previous_status, digest = row
+                file_id, previous_status, digest, file_cat = row
+                resolved_table = self._resolve_table(affected_table or file_cat)
                 self._insert_event(
                     file_id=file_id,
                     event_type="HEALED",
@@ -481,6 +550,10 @@ class ArtifactRepository:
                     previous_status=previous_status,
                     new_status="PENDING_BRONZE",
                     reason="File re-appeared after prior removal",
+                    affected_table=resolved_table,
+                    detecting_run_id=detecting_run_id or self.active_run_id,
+                    replay_run_id=replay_run_id or self.active_run_id,
+                    convergence_result=convergence_result,
                 )
                 self.db.conn.execute(
                     "UPDATE cp_file_registry SET sync_status = 'PENDING_BRONZE', last_seen_run_id = COALESCE(?, last_seen_run_id), last_seen_at = ? WHERE relative_path = ?",
@@ -490,6 +563,43 @@ class ArtifactRepository:
         if healed:
             logger.info("[ARTIFACT] Marked %d file(s) as HEALED.", healed)
 
+    def record_healing_event(
+        self,
+        filepath: str,
+        *,
+        affected_table: str | None = None,
+        detecting_run_id: str | None = None,
+        replay_run_id: str | None = None,
+        convergence_result: str | None = "CONVERGED",
+        reason: str | None = "Inconsistency healed",
+    ) -> None:
+        """Record an explicit healing lineage event for an artifact."""
+        path = normalize_path(filepath)
+        row = self.db.conn.execute(
+            "SELECT file_id, sync_status, file_hash, file_category FROM cp_file_registry WHERE relative_path = ?",
+            (path,),
+        ).fetchone()
+        if not row:
+            return
+        file_id, status, digest, file_cat = row
+        now = self._now()
+        resolved_table = self._resolve_table(affected_table or file_cat)
+        with self.db.atomic():
+            self._insert_event(
+                file_id=file_id,
+                event_type="HEALED",
+                event_at=now,
+                path=path,
+                content_hash=digest,
+                previous_status=status,
+                new_status=status,
+                reason=reason,
+                affected_table=resolved_table,
+                detecting_run_id=detecting_run_id or self.active_run_id,
+                replay_run_id=replay_run_id or self.active_run_id,
+                convergence_result=convergence_result,
+            )
+
     def mark_removed(self, filepaths: list[str]) -> None:
         if not filepaths:
             return
@@ -498,12 +608,13 @@ class ArtifactRepository:
         with self.db.atomic():
             for path in dict.fromkeys(normalize_path(fp) for fp in filepaths):
                 row = self.db.conn.execute(
-                    "SELECT file_id, sync_status, file_hash FROM cp_file_registry WHERE relative_path = ?",
+                    "SELECT file_id, sync_status, file_hash, file_category FROM cp_file_registry WHERE relative_path = ?",
                     (path,),
                 ).fetchone()
                 if not row or row[1] == "REMOVED":
                     continue
-                file_id, previous_status, digest = row
+                file_id, previous_status, digest, file_cat = row
+                affected_table = self._resolve_table(file_cat)
                 self._insert_event(
                     file_id=file_id,
                     event_type="REMOVED",
@@ -513,6 +624,10 @@ class ArtifactRepository:
                     previous_status=previous_status,
                     new_status="REMOVED",
                     reason="File no longer present on disk",
+                    affected_table=affected_table,
+                    detecting_run_id=self.active_run_id,
+                    replay_run_id=None,
+                    convergence_result="TOMBSTONED",
                 )
                 self.db.conn.execute(
                     "UPDATE cp_file_registry SET sync_status = 'REMOVED' WHERE relative_path = ?",
