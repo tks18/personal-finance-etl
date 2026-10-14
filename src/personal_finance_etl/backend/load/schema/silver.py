@@ -79,11 +79,7 @@ CREATE TABLE IF NOT EXISTS silver.d_Income_Category (
     __file_name__ TEXT,
     __folder_path__ TEXT,
     S_NO BIGINT,
-    MODIFY_DATE BIGINT,
-    Tax_Income_Head TEXT,
-    Tax_Sub_Head TEXT,
-    Taxability TEXT,
-    Tax_Method TEXT
+    MODIFY_DATE BIGINT
 );
 
 CREATE TABLE IF NOT EXISTS silver.d_Income_Subcategory (
@@ -99,6 +95,8 @@ CREATE TABLE IF NOT EXISTS silver.d_Income_Subcategory (
     Is_Dividend_Income BOOLEAN,
     Is_Interest_Income BOOLEAN,
     Is_Non_Cash_Income BOOLEAN,
+    Is_Investment_Exclusion BOOLEAN,
+    Is_Tax_Credits BOOLEAN,
     __file_name__ TEXT,
     __folder_path__ TEXT,
     S_NO BIGINT,
