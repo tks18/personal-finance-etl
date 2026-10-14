@@ -183,19 +183,19 @@ harvest_wait_days_threshold = 90
 # Annual tax-free exemption limit for equity Long Term Capital Gains.
 fallback_equity_ltcg_exemption = 125000.0
 
-[assumptions.tax.ltcg_thresholds]
-# Holding period thresholds in days for Long Term Capital Gains across asset classes.
-equity_listed = 365
-equity_unlisted = 730
-debt_mf = 1095
-debt_other = 1095
-debt_ = 1095
-gold_mf = 730
-gold_ = 365
-sgb_mf = 730
-sgb_ = 365
-silver_mf = 730
-silver_ = 365
+[assumptions.tax.ltcg_threshold_months]
+# Holding period thresholds in months for Long Term Capital Gains across asset classes.
+equity_listed = 12
+equity_unlisted = 24
+debt_mf = 36
+debt_other = 36
+debt_ = 36
+gold_mf = 24
+gold_ = 12
+sgb_mf = 24
+sgb_ = 12
+silver_mf = 24
+silver_ = 12
 
 [assumptions.tax.rates]
 equity_ltcg = 0.125
@@ -204,6 +204,32 @@ debt_ltcg = 0.20
 debt_stcg = 0.30
 gold_ltcg = 0.20
 gold_stcg = 0.30
+
+[assumptions.tax.heads_of_income.Salary.sub_heads.Base]
+tax_head_display_name = "Salary"
+sub_head_display_name = "Base Salary"
+sub_cat_ids = ["test-basic-salary-uid"]
+tax_credit_sub_cat_ids = ["test-tds-uid"]
+taxability = "taxable"
+tax_method = "ordinary_rate"
+
+[assumptions.tax.exempt_income.Salary.sub_heads.Leave_Encashment]
+tax_head_display_name = "Salary"
+sub_head_display_name = "Leave Encashment"
+sub_cat_ids = ["test-leave-encashment-uid"]
+taxability = "non_taxable"
+tax_method = "exempt"
+
+[assumptions.tax.residual_income.Salary.sub_heads.Other_Allowances]
+tax_head_display_name = "Salary"
+sub_head_display_name = "Salary Other Allowances"
+cat_ids = ["test-salary-cat-uid"]
+taxability = "taxable"
+tax_method = "ordinary_rate"
+
+[assumptions.tax.investment_exclusions]
+stcg_sub_cat_ids = ["test-stocks-stcg-uid"]
+ltcg_sub_cat_ids = ["test-stocks-ltcg-uid"]
 
 [assumptions.cma]
 expected_real_return = 0.05

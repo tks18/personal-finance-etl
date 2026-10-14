@@ -71,16 +71,16 @@ def transform_us_market_data(
         lambda: defaultdict(list)
     )
     currency_map: dict[str, str] = {}
-    for row in df_p_us.iter_rows(named=True):
+    for row in df_p_us.to_dicts():
         dt = row["Date"]
         if isinstance(dt, date):
             buys[str(row["ISIN"])][dt].append(row)
-            currency_map[str(row["ISIN"])] = row["CURRENCY_ID"]
+            currency_map[str(row["ISIN"])] = str(row["CURRENCY_ID"])
 
     sells: defaultdict[str, defaultdict[date, list[dict[str, Any]]]] = defaultdict(
         lambda: defaultdict(list)
     )
-    for row in df_s_us.iter_rows(named=True):
+    for row in df_s_us.to_dicts():
         dt = row["Date"]
         if isinstance(dt, date):
             sells[str(row["ISIN"])][dt].append(row)

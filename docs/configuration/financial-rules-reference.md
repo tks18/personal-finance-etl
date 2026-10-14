@@ -157,9 +157,9 @@ The model groups rules by domain rather than by consuming module. That is intent
 | ltcg_threshold_months | dict[str, int] | ... | Holding period thresholds in calendar months for Long Term Capital Gains across asset classes. |
 | fallback_equity_ltcg_exemption | float | ... | Annual tax-free exemption limit for equity Long Term Capital Gains. |
 | rates | TaxRates | factory |  |
-| heads_of_income | dict[str, TaxHeadConfig] | factory |  |
-| residual_income | TaxHeadConfig | factory |  |
-| exempt_income | TaxHeadConfig | factory |  |
+| heads_of_income | dict[str, TaxHeadConfig] | factory | Taxable income categories partitioned into heads of income and sub-heads. |
+| residual_income | dict[str, TaxHeadConfig] | factory | Residual taxable income heads and sub-heads (typically for parent category fallbacks). |
+| exempt_income | dict[str, TaxHeadConfig] | factory | Exempt / non-taxable income heads and sub-heads (defaults to non_taxable & exempt). |
 | investment_exclusions | InvestmentExclusionsConfig | factory |  |
 
 
@@ -321,7 +321,8 @@ Each `TaxSubHeadConfig` can map category IDs, income subcategory IDs and tax-cre
 
 ```python
 class TaxSubHeadConfig(BaseModel):
-    display_name: str
+    tax_head_display_name: str
+    sub_head_display_name: str
     cat_ids: list[str] = Field(default_factory=list)
     sub_cat_ids: list[str] = Field(default_factory=list)
     tax_credit_sub_cat_ids: list[str] = Field(default_factory=list)

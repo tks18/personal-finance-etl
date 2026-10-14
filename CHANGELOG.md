@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [8.3.1](https://github.com/tks18/personal-finance-etl/compare/8.3.0...8.3.1) (2026-10-14)
+
+
+### Bug Fixes 🛠
+
+* **backend/transform:** us_stocks: minor refactor ([7361835](https://github.com/tks18/personal-finance-etl/commit/7361835bff67c5e162754e0ed143c5db75baddfb))
+
+
+### Features 🔥
+
+* **backend/config:** financial_rules: allow multiple exempt income, residual income cats ([bfe89c9](https://github.com/tks18/personal-finance-etl/commit/bfe89c98405c1be4f1eb8b693270cf7fe53a4bb5))
+* **backend/engines/tax:** vectorize id generations and entire tax related operations possible ([1867352](https://github.com/tks18/personal-finance-etl/commit/1867352336c76c0a93abfdae7e3497c9610868fe))
+* **backend/load/schema:** silver: add new dim cols for income subcategory ([39462b6](https://github.com/tks18/personal-finance-etl/commit/39462b60e99271228c1438b671a2c0396db9e6a8))
+* **backend/transform:** dimensions: integrate new rules + add dim cols such as invt_excl, tax_cr ([563009a](https://github.com/tks18/personal-finance-etl/commit/563009ab89d11ece311a422835d0d6af6098e9ed))
+* **backend/transform:** investments: vectorize det ids generations without eager collect ([36e19ec](https://github.com/tks18/personal-finance-etl/commit/36e19ecd82ae196325ac46d8e3c75a25e45cd318))
+
+
+### Docs 📃
+
+* update silver and financial rules documentation based on new update ([9b0bcc8](https://github.com/tks18/personal-finance-etl/commit/9b0bcc8ee9ad5081ccf3cf031af86488019f6ba6))
+
+
+### Tests 🧪
+
+* update finance_rules.toml test config ([a8b77e3](https://github.com/tks18/personal-finance-etl/commit/a8b77e3287ff85c8f21e02ebdb7f42a1104ea65a))
+
 ## [8.3.0](https://github.com/tks18/personal-finance-etl/compare/8.2.2...8.3.0) (2026-10-14)
 
 

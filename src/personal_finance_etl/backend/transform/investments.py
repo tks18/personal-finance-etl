@@ -263,6 +263,27 @@ def _compute_purchase_id(row: dict[str, Any]) -> str:
     return generate_deterministic_id("PURCHASE", fields)
 
 
+def _batch_compute_purchase_ids(s: pl.Series) -> pl.Series:
+    isins = s.struct.field("ISIN")
+    dates = s.struct.field("Date")
+    prices = s.struct.field("Price")
+    qtys = s.struct.field("Quantity")
+    currencies = s.struct.field("CURRENCY_ID")
+    ids = [
+        _compute_purchase_id(
+            {
+                "ISIN": isin,
+                "Date": dt,
+                "Price": price,
+                "Quantity": qty,
+                "CURRENCY_ID": curr,
+            }
+        )
+        for isin, dt, price, qty, curr in zip(isins, dates, prices, qtys, currencies, strict=False)
+    ]
+    return pl.Series(ids, dtype=pl.String)
+
+
 def _compute_sale_id(row: dict[str, Any]) -> str:
     fields = {
         "ISIN": row["ISIN"],
@@ -272,6 +293,27 @@ def _compute_sale_id(row: dict[str, Any]) -> str:
         "CURRENCY_ID": row["CURRENCY_ID"],
     }
     return generate_deterministic_id("SALE", fields)
+
+
+def _batch_compute_sale_ids(s: pl.Series) -> pl.Series:
+    isins = s.struct.field("ISIN")
+    dates = s.struct.field("Date")
+    sell_prices = s.struct.field("Sell_Price")
+    qtys = s.struct.field("Quantity")
+    currencies = s.struct.field("CURRENCY_ID")
+    ids = [
+        _compute_sale_id(
+            {
+                "ISIN": isin,
+                "Date": dt,
+                "Sell_Price": sp,
+                "Quantity": qty,
+                "CURRENCY_ID": curr,
+            }
+        )
+        for isin, dt, sp, qty, curr in zip(isins, dates, sell_prices, qtys, currencies, strict=False)
+    ]
+    return pl.Series(ids, dtype=pl.String)
 
 
 def get_f_tf_investment_purchase_data(
@@ -329,12 +371,16 @@ def get_f_tf_investment_purchase_data(
         "Value",
         "CURRENCY_ID",
     ]
-    df_final = df_union.select(select_cols).unique().sort(["ISIN", "Date", "Quantity", "Price"])
-    _df_eager = df_final.collect()
-    _purchase_ids = [_compute_purchase_id(r) for r in _df_eager.iter_rows(named=True)]
-    df_final = _df_eager.with_columns(
-        pl.Series("Purchase_ID", _purchase_ids, dtype=pl.String)
-    ).lazy()
+    df_final = (
+        df_union.select(select_cols)
+        .unique()
+        .sort(["ISIN", "Date", "Quantity", "Price"])
+        .with_columns(
+            pl.struct(["ISIN", "Date", "Price", "Quantity", "CURRENCY_ID"])
+            .map_batches(_batch_compute_purchase_ids, return_dtype=pl.String)
+            .alias("Purchase_ID")
+        )
+    )
     return df_final
 
 
@@ -406,11 +452,15 @@ def get_f_tf_investment_sale_data(
         "CURRENCY_ID",
     ]
     df_final = (
-        df_union.select(select_cols).unique().sort(["ISIN", "Date", "Quantity", "Sell_Price"])
+        df_union.select(select_cols)
+        .unique()
+        .sort(["ISIN", "Date", "Quantity", "Sell_Price"])
+        .with_columns(
+            pl.struct(["ISIN", "Date", "Sell_Price", "Quantity", "CURRENCY_ID"])
+            .map_batches(_batch_compute_sale_ids, return_dtype=pl.String)
+            .alias("Sale_ID")
+        )
     )
-    _df_eager = df_final.collect()
-    _sale_ids = [_compute_sale_id(r) for r in _df_eager.iter_rows(named=True)]
-    df_final = _df_eager.with_columns(pl.Series("Sale_ID", _sale_ids, dtype=pl.String)).lazy()
     return df_final
 
 
