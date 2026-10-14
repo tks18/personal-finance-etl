@@ -5,13 +5,70 @@ import stat
 import tempfile
 import uuid
 import zipfile
+from dataclasses import dataclass
 from datetime import datetime
+from enum import StrEnum
 
 import duckdb
 from filelock import FileLock, Timeout
 
 from personal_finance_etl.backend.utils.helpers import get_temp_dir
 from personal_finance_etl.backend.utils.logger import logger
+
+
+class SnapshotOutcome(StrEnum):
+    SNAPSHOT_STARTED = "SNAPSHOT_STARTED"
+    SNAPSHOT_VALIDATED = "SNAPSHOT_VALIDATED"
+    SNAPSHOT_PUBLISHED = "SNAPSHOT_PUBLISHED"
+    SNAPSHOT_FAILED = "SNAPSHOT_FAILED"
+
+
+class RestoreOutcome(StrEnum):
+    RESTORE_VALIDATION_FAILED = "RESTORE_VALIDATION_FAILED"
+    RESTORE_INSTALL_STARTED = "RESTORE_INSTALL_STARTED"
+    RESTORE_SUCCEEDED = "RESTORE_SUCCEEDED"
+    RESTORE_INSTALL_FAILED_ROLLED_BACK = "RESTORE_INSTALL_FAILED_ROLLED_BACK"
+    RESTORE_STATE_UNCERTAIN = "RESTORE_STATE_UNCERTAIN"
+
+
+class ActiveDatabaseState(StrEnum):
+    PREVIOUS_PAIR_INTACT = "PREVIOUS_PAIR_INTACT"
+    NEW_PAIR_INSTALLED = "NEW_PAIR_INSTALLED"
+    INSPECTION_REQUIRED = "INSPECTION_REQUIRED"
+
+
+@dataclass
+class SnapshotResult:
+    outcome: SnapshotOutcome
+    zip_path: str | None = None
+    error_message: str | None = None
+
+    @property
+    def is_success(self) -> bool:
+        return self.outcome == SnapshotOutcome.SNAPSHOT_PUBLISHED and self.zip_path is not None
+
+    def __bool__(self) -> bool:
+        return self.is_success
+
+    def __str__(self) -> str:
+        return self.zip_path or self.error_message or self.outcome.value
+
+
+@dataclass
+class RestoreResult:
+    outcome: RestoreOutcome
+    active_database_state: ActiveDatabaseState
+    error_message: str | None = None
+
+    @property
+    def is_success(self) -> bool:
+        return (
+            self.outcome == RestoreOutcome.RESTORE_SUCCEEDED
+            and self.active_database_state == ActiveDatabaseState.NEW_PAIR_INSTALLED
+        )
+
+    def __bool__(self) -> bool:
+        return self.is_success
 
 
 class SystemBackupManager:
@@ -54,7 +111,7 @@ class SystemBackupManager:
         """Open and checkpoint an extracted copy before production files are touched."""
         cls._checkpoint_duckdb(db_path)
 
-    def create_snapshot(self) -> str | None:
+    def create_snapshot(self) -> SnapshotResult:
         """Create an atomic archive of a checkpointed, coordinated database pair."""
         missing = [
             os.path.basename(path)
@@ -62,11 +119,12 @@ class SystemBackupManager:
             if not os.path.isfile(path)
         ]
         if missing:
-            logger.error(
+            msg = (
                 "Cannot create coordinated snapshot. Missing required database(s): "
                 + ", ".join(missing)
             )
-            return None
+            logger.error(msg)
+            return SnapshotResult(outcome=SnapshotOutcome.SNAPSHOT_FAILED, error_message=msg)
 
         lock_path = os.path.join(self.base_path, "pipeline.lock")
         temp_sqlite: str | None = None
@@ -80,9 +138,13 @@ class SystemBackupManager:
                     if not os.path.isfile(path)
                 ]
                 if missing:
-                    raise FileNotFoundError(
+                    msg = (
                         "Cannot create coordinated snapshot. Missing required database(s): "
                         + ", ".join(missing)
+                    )
+                    logger.error(msg)
+                    return SnapshotResult(
+                        outcome=SnapshotOutcome.SNAPSHOT_FAILED, error_message=msg
                     )
 
                 ts = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
@@ -127,10 +189,18 @@ class SystemBackupManager:
                 os.replace(temp_zip, zip_path)
                 temp_zip = None
                 logger.info(f"Coordinated snapshot created at {zip_path}")
-                return zip_path
+                return SnapshotResult(
+                    outcome=SnapshotOutcome.SNAPSHOT_PUBLISHED,
+                    zip_path=zip_path,
+                )
         except Timeout:
-            logger.error("Cannot create snapshot: Pipeline is currently running.")
-            return None
+            msg = "Cannot create snapshot: Pipeline is currently running."
+            logger.error(msg)
+            return SnapshotResult(outcome=SnapshotOutcome.SNAPSHOT_FAILED, error_message=msg)
+        except Exception as e:
+            msg = f"Failed to create coordinated snapshot: {e}"
+            logger.error(msg)
+            return SnapshotResult(outcome=SnapshotOutcome.SNAPSHOT_FAILED, error_message=msg)
         finally:
             for path in (temp_sqlite, temp_zip):
                 if path and os.path.exists(path):
@@ -141,10 +211,16 @@ class SystemBackupManager:
                             f"Could not remove temporary snapshot file {path}: {cleanup_error}"
                         )
 
-    def restore_snapshot(self, zip_path: str) -> None:
-        """Restore the pair atomically, rolling back to the complete prior pair on failure."""
+    def restore_snapshot(self, zip_path: str) -> RestoreResult:
+        """Restore the pair atomically, reporting outcome and active database state."""
         if not os.path.isfile(zip_path):
-            raise FileNotFoundError(f"Backup file not found: {zip_path}")
+            msg = f"Backup file not found: {zip_path}"
+            logger.error(msg)
+            return RestoreResult(
+                outcome=RestoreOutcome.RESTORE_VALIDATION_FAILED,
+                active_database_state=ActiveDatabaseState.PREVIOUS_PAIR_INTACT,
+                error_message=msg,
+            )
 
         lock_path = os.path.join(self.base_path, "pipeline.lock")
         temp_root = get_temp_dir()
@@ -160,67 +236,82 @@ class SystemBackupManager:
                 duckdb_wal_name = os.path.basename(self.duckdb_path) + ".wal"
                 allowed_names = required_names | {duckdb_wal_name}
 
-                with zipfile.ZipFile(zip_path, "r") as archive:
-                    members = [item for item in archive.infolist() if not item.is_dir()]
-                    names = [item.filename.replace("\\", "/") for item in members]
-                    member_names = set(names)
+                # Validation phase
+                try:
+                    with zipfile.ZipFile(zip_path, "r") as archive:
+                        members = [item for item in archive.infolist() if not item.is_dir()]
+                        names = [item.filename.replace("\\", "/") for item in members]
+                        member_names = set(names)
 
-                    if len(names) != len(member_names):
-                        raise ValueError("Invalid coordinated snapshot: duplicate archive members.")
+                        if len(names) != len(member_names):
+                            raise ValueError(
+                                "Invalid coordinated snapshot: duplicate archive members."
+                            )
 
-                    invalid_paths = {
-                        name
-                        for name in names
-                        if name.startswith("/")
-                        or "/" in name
-                        or "\\" in name
-                        or name in {"", ".", ".."}
-                    }
-                    if invalid_paths:
-                        raise ValueError(
-                            "Invalid coordinated snapshot path(s): "
-                            + ", ".join(sorted(invalid_paths))
-                        )
+                        invalid_paths = {
+                            name
+                            for name in names
+                            if name.startswith("/")
+                            or "/" in name
+                            or "\\" in name
+                            or name in {"", ".", ".."}
+                        }
+                        if invalid_paths:
+                            raise ValueError(
+                                "Invalid coordinated snapshot path(s): "
+                                + ", ".join(sorted(invalid_paths))
+                            )
 
-                    symlinks = [
-                        item.filename for item in members if stat.S_ISLNK(item.external_attr >> 16)
-                    ]
-                    if symlinks:
-                        raise ValueError(
-                            "Invalid coordinated snapshot: symbolic links are not allowed."
-                        )
+                        symlinks = [
+                            item.filename
+                            for item in members
+                            if stat.S_ISLNK(item.external_attr >> 16)
+                        ]
+                        if symlinks:
+                            raise ValueError(
+                                "Invalid coordinated snapshot: symbolic links are not allowed."
+                            )
 
-                    missing = required_names - member_names
-                    if missing:
-                        raise ValueError(
-                            "Invalid coordinated snapshot. Missing required database(s): "
-                            + ", ".join(sorted(missing))
-                        )
+                        missing = required_names - member_names
+                        if missing:
+                            raise ValueError(
+                                "Invalid coordinated snapshot. Missing required database(s): "
+                                + ", ".join(sorted(missing))
+                            )
 
-                    unexpected = member_names - allowed_names
-                    if unexpected:
-                        raise ValueError(
-                            "Invalid coordinated snapshot. Unexpected file(s): "
-                            + ", ".join(sorted(unexpected))
-                        )
+                        unexpected = member_names - allowed_names
+                        if unexpected:
+                            raise ValueError(
+                                "Invalid coordinated snapshot. Unexpected file(s): "
+                                + ", ".join(sorted(unexpected))
+                            )
 
-                    bad_member = archive.testzip()
-                    if bad_member is not None:
-                        raise ValueError(f"Snapshot archive is corrupt: {bad_member}")
+                        bad_member = archive.testzip()
+                        if bad_member is not None:
+                            raise ValueError(f"Snapshot archive is corrupt: {bad_member}")
 
-                    archive.extractall(temp_extract_dir)
+                        archive.extractall(temp_extract_dir)
 
-                extracted_sqlite = os.path.join(
-                    temp_extract_dir, os.path.basename(self.sqlite_path)
-                )
-                extracted_duckdb = os.path.join(
-                    temp_extract_dir, os.path.basename(self.duckdb_path)
-                )
+                    extracted_sqlite = os.path.join(
+                        temp_extract_dir, os.path.basename(self.sqlite_path)
+                    )
+                    extracted_duckdb = os.path.join(
+                        temp_extract_dir, os.path.basename(self.duckdb_path)
+                    )
 
-                # Validate the extracted pair before moving any production file.
-                self._validate_sqlite(extracted_sqlite)
-                self._validate_duckdb(extracted_duckdb)
+                    # Validate the extracted pair before moving any production file.
+                    self._validate_sqlite(extracted_sqlite)
+                    self._validate_duckdb(extracted_duckdb)
+                except Exception as val_err:
+                    msg = f"Snapshot validation failed: {val_err}"
+                    logger.error(msg)
+                    return RestoreResult(
+                        outcome=RestoreOutcome.RESTORE_VALIDATION_FAILED,
+                        active_database_state=ActiveDatabaseState.PREVIOUS_PAIR_INTACT,
+                        error_message=msg,
+                    )
 
+                # Installation phase
                 restore_names = [
                     os.path.basename(self.sqlite_path),
                     os.path.basename(self.duckdb_path),
@@ -256,23 +347,46 @@ class SystemBackupManager:
                         dst = os.path.join(self.base_path, name)
                         shutil.move(src, dst)
                         installed_paths.append(dst)
-                except Exception:
-                    # Remove only files actually installed by this attempt. Never
-                    # delete an untouched old database if preserving it failed.
-                    for installed_path in reversed(installed_paths):
-                        if os.path.exists(installed_path):
-                            os.remove(installed_path)
+                except Exception as install_err:
+                    rollback_success = True
+                    try:
+                        for installed_path in reversed(installed_paths):
+                            if os.path.exists(installed_path):
+                                os.remove(installed_path)
 
-                    for original_path, backup_path in reversed(backed_up_files):
-                        if os.path.exists(backup_path):
-                            if os.path.exists(original_path):
-                                os.remove(original_path)
-                            os.replace(backup_path, original_path)
-                    raise
+                        for original_path, backup_path in reversed(backed_up_files):
+                            if os.path.exists(backup_path):
+                                if os.path.exists(original_path):
+                                    os.remove(original_path)
+                                os.replace(backup_path, original_path)
+                    except Exception as rb_err:
+                        rollback_success = False
+                        logger.critical(
+                            "RESTORE CRITICAL ERROR: Installation failed and rollback also failed: %s",
+                            rb_err,
+                        )
 
-                # Installation is complete. Backup cleanup is non-transactional:
-                # a cleanup failure must not trigger a rollback after some backups
-                # have already been deleted.
+                    if rollback_success:
+                        logger.warning(
+                            "Restore installation failed; successfully rolled back to intact previous database pair: %s",
+                            install_err,
+                        )
+                        return RestoreResult(
+                            outcome=RestoreOutcome.RESTORE_INSTALL_FAILED_ROLLED_BACK,
+                            active_database_state=ActiveDatabaseState.PREVIOUS_PAIR_INTACT,
+                            error_message=str(install_err),
+                        )
+                    else:
+                        logger.error(
+                            "Restore installation failed and rollback could not be guaranteed; operator inspection required."
+                        )
+                        return RestoreResult(
+                            outcome=RestoreOutcome.RESTORE_STATE_UNCERTAIN,
+                            active_database_state=ActiveDatabaseState.INSPECTION_REQUIRED,
+                            error_message=f"Installation failed ({install_err}); rollback failed. Inspection required.",
+                        )
+
+                # Installation is complete. Backup cleanup is non-transactional.
                 for _, backup_path in backed_up_files:
                     try:
                         if os.path.exists(backup_path):
@@ -284,14 +398,29 @@ class SystemBackupManager:
                         )
 
                 logger.info(f"Coordinated snapshot restored from {zip_path} to {self.base_path}")
-        except Timeout as err:
-            logger.error("Cannot restore snapshot: Pipeline is currently running.")
-            raise RuntimeError("Cannot restore snapshot: Pipeline is currently running.") from err
+                return RestoreResult(
+                    outcome=RestoreOutcome.RESTORE_SUCCEEDED,
+                    active_database_state=ActiveDatabaseState.NEW_PAIR_INSTALLED,
+                )
+        except Timeout:
+            msg = "Cannot restore snapshot: Pipeline is currently running."
+            logger.error(msg)
+            return RestoreResult(
+                outcome=RestoreOutcome.RESTORE_VALIDATION_FAILED,
+                active_database_state=ActiveDatabaseState.PREVIOUS_PAIR_INTACT,
+                error_message=msg,
+            )
         except PermissionError as pe:
-            raise PermissionError(
+            msg = (
                 "Cannot restore snapshot: A database or backup file is currently in use. "
                 "Close active dashboards or database tools and try again."
-            ) from pe
+            )
+            logger.error("%s (%s)", msg, pe)
+            return RestoreResult(
+                outcome=RestoreOutcome.RESTORE_VALIDATION_FAILED,
+                active_database_state=ActiveDatabaseState.PREVIOUS_PAIR_INTACT,
+                error_message=msg,
+            )
         finally:
             if os.path.exists(temp_extract_dir):
                 shutil.rmtree(temp_extract_dir, ignore_errors=True)
