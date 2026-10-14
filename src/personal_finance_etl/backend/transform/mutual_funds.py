@@ -85,6 +85,7 @@ def get_stg_mf_market_data_ref(stg_mf_market_data_lazy: pl.LazyFrame) -> pl.Lazy
                 pl.col("Month Date").alias("Date"),
                 "ISIN",
                 pl.col("Scheme Name").alias("Instrument Name"),
+                "CURRENCY_ID",
             ]
         )
         # CALCULATE(SUM(Units)), SUM(Current Value), SUM(Invested Value)

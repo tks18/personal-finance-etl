@@ -22,23 +22,11 @@ def get_stg_stock_market_data(raw_data: pl.LazyFrame, default_currency_id: str) 
         & (~stock_clean.str.to_uppercase().is_in(["NO HOLDINGS FOUND", "NO DATA FOUND", "NO HOLDING FOUND"]))
     )
 
-    # Power Query: Handle the typo in "Unrealised P&L" vs "Unealised P&L" dynamically
-    if "Unealised P&L" in available_cols and "Unrealised P&L" in available_cols:
-        df_transformed = (
-            df_transformed.with_columns(
-                [
-                    pl.col("Unealised P&L").cast(pl.Float64, strict=False).fill_null(0.0),
-                    pl.col("Unrealised P&L").cast(pl.Float64, strict=False).fill_null(0.0),
-                ]
-            )
-            .with_columns(
-                (pl.col("Unealised P&L") + pl.col("Unrealised P&L")).alias("Unrealised P&L_Final")
-            )
-            .drop(["Unealised P&L", "Unrealised P&L"])
-            .rename({"Unrealised P&L_Final": "Unrealised P&L"})
-        )
-    elif "Unealised P&L" in available_cols and "Unrealised P&L" not in available_cols:
-        df_transformed = df_transformed.rename({"Unealised P&L": "Unrealised P&L"})
+    # Power Query: Handle the typo in "Unrealised P&L" vs "Unealised P&L" dynamically.
+    # Route both aliases through strict validation first so malformed populated values
+    # cannot silently become 0.0 before validation.
+    has_typo = "Unealised P&L" in available_cols
+    has_proper = "Unrealised P&L" in available_cols
 
     num_cols = [
         "Quantity",
@@ -46,13 +34,18 @@ def get_stg_stock_market_data(raw_data: pl.LazyFrame, default_currency_id: str) 
         "Buy value",
         "Closing price",
         "Closing value",
-        "Unrealised P&L",
     ]
+    optional_cols = {"Buy price", "Buy value", "Unrealised P&L", "Unealised P&L"}
+
+    if has_proper:
+        num_cols.append("Unrealised P&L")
+    if has_typo:
+        num_cols.append("Unealised P&L")
 
     df_transformed = validate_and_parse_numerics(
         df_transformed,
         num_cols,
-        optional_cols={"Unrealised P&L", "Buy price", "Buy value"},
+        optional_cols=optional_cols,
         source_col="__file_name__",
     )
     df_transformed = validate_and_parse_dates(
@@ -64,6 +57,19 @@ def get_stg_stock_market_data(raw_data: pl.LazyFrame, default_currency_id: str) 
         optional_cols={"Buy date"},
         source_col="__file_name__",
     )
+
+    if has_typo and has_proper:
+        df_transformed = (
+            df_transformed.with_columns(
+                pl.coalesce([pl.col("Unrealised P&L"), pl.col("Unealised P&L")]).alias("Unrealised P&L")
+            ).drop("Unealised P&L")
+        )
+    elif has_typo and not has_proper:
+        df_transformed = df_transformed.rename({"Unealised P&L": "Unrealised P&L"})
+    elif not has_proper and not has_typo:
+        df_transformed = df_transformed.with_columns(
+            pl.lit(None).cast(pl.Float64).alias("Unrealised P&L")
+        )
 
     df_transformed = (
         df_transformed
@@ -119,6 +125,7 @@ def get_stg_stock_market_data_ref(stg_stock_market_data_lazy: pl.LazyFrame) -> p
                 pl.col("Stock name").alias("Instrument Name"),
                 pl.col("Closing price").alias("Closing_Price"),
                 pl.col("Buy price").alias("Buy_Price"),
+                "CURRENCY_ID",
             ]
         )
         # CALCULATE(SUM(Quantity))

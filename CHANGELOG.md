@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [8.2.2](https://github.com/tks18/personal-finance-etl/compare/8.2.1...8.2.2) (2026-10-14)
+
+
+### Docs 📃
+
+* add remaining hardening docs ([4cc15ab](https://github.com/tks18/personal-finance-etl/commit/4cc15ab1cbc0cde94500b960583041d04ed96db7))
+
+
+### Bug Fixes 🛠
+
+* **backend/engines/rules:** macro: add more verbose logging for various getters ([16e1efa](https://github.com/tks18/personal-finance-etl/commit/16e1efa5c0c89930139b7dcdae2b56ee135727ae))
+* **backend/transform:** facts: use strict validation gate ([185ea94](https://github.com/tks18/personal-finance-etl/commit/185ea94cc2429f93bde5c326017570f8449b373f))
+* **backend/transform:** investments: make fx_rate 1 for default currency ([217a879](https://github.com/tks18/personal-finance-etl/commit/217a87950782ead87411aac99db5ed4391d49138))
+* **backend/transform:** stocks: use strict validation gate ([1ad8f5b](https://github.com/tks18/personal-finance-etl/commit/1ad8f5b23eaa430778379820c27de7c09c8913bc))
+
 ### [8.2.1](https://github.com/tks18/personal-finance-etl/compare/8.2.0...8.2.1) (2026-10-13)
 
 

@@ -1,6 +1,10 @@
 import polars as pl
 
 from personal_finance_etl.backend.config.financial_rules import FinancialRules
+from personal_finance_etl.backend.utils.helpers import (
+    validate_and_parse_dates,
+    validate_and_parse_numerics,
+)
 
 BASE_TRANSACTION_COLS = [
     "__file_name__",
@@ -306,20 +310,33 @@ def transform_f_opening_balances(
                 "ZUID",
             ]
         )
-        # Enforce the strict types defined in your Power Query step.
-        # Note: If ZTXDATESTR is a non-standard datetime string, replace .cast(pl.Datetime)
-        # with .str.to_datetime(format="%Y-%m-%d %H:%M:%S") matching your CSV's exact format.
-        .with_columns(
+    )
+
+    df_transformed = validate_and_parse_numerics(
+        df_transformed,
+        ["ZAMOUNT", "ZAMOUNTACCOUNT", "ZAMOUNTSUB", "ZDATE"],
+        optional_cols={"ZAMOUNTACCOUNT", "ZAMOUNTSUB", "ZDATE"},
+        source_col="__file_name__",
+    )
+    df_transformed = validate_and_parse_dates(
+        df_transformed,
+        {
+            "ZTXDATESTR": [
+                "%Y-%m-%d %H:%M:%S",
+                "%Y-%m-%d",
+                "%d-%m-%Y %H:%M:%S",
+                "%d-%m-%Y",
+            ]
+        },
+        optional_cols={"ZTXDATESTR"},
+        source_col="__file_name__",
+    )
+    df_transformed = df_transformed.with_columns(
+        [
             pl.col("Z_PK").cast(pl.Int64),
             pl.col("ZUTIME").cast(pl.Int64),
-            # PQ 'type number' handles decimals
-            pl.col("ZDATE").cast(pl.Float64),
-            pl.col("ZAMOUNT").cast(pl.Float64),
-            pl.col("ZAMOUNTACCOUNT").cast(pl.Float64),
-            pl.col("ZAMOUNTSUB").cast(pl.Float64),
             pl.col("ZDO_TYPE").cast(pl.Int64),
-            pl.col("ZTXDATESTR").cast(pl.Datetime, strict=False).cast(pl.Date, strict=False),
-        )
+        ]
     )
 
     return df_transformed
