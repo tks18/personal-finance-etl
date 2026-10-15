@@ -292,8 +292,8 @@ KNOWN_COMMIT_MESSAGES: dict[str, str] = {
     "tests/test_phase8_household_wealth_fire.py": "test(presentation): add Phase 8 household wealth and fire tests",
     # Phase 9: Application Orchestration & Bootstrap Composition Root
     "src/personal_finance_etl/application/pipeline/lifecycle.py": "feat(application/pipeline): implement RunLifecycleCoordinator",
-    "src/personal_finance_etl/application/pipeline/execution.py": "feat(application/pipeline): implement PipelineExecutor",
-    "src/personal_finance_etl/application/pipeline/orchestrator.py": "refactor(application/pipeline): use NullStatusQueue default queue",
+    "src/personal_finance_etl/application/pipeline/execution.py": "refactor(application): deduplicate engine progress log events",
+    "src/personal_finance_etl/application/pipeline/orchestrator.py": "refactor(application): deduplicate orchestrator status messages",
     "src/personal_finance_etl/application/pipeline/worker.py": "feat(application/pipeline): implement WorkerPoolCoordinator",
     "src/personal_finance_etl/application/pipeline/__init__.py": "refactor(application/pipeline): export pipeline orchestration symbols",
     "src/personal_finance_etl/bootstrap/container.py": "feat(bootstrap): implement ServiceContainer composition root",
@@ -337,7 +337,7 @@ KNOWN_COMMIT_MESSAGES: dict[str, str] = {
     "pyproject.toml": "chore(config): ignore presentation desktop in pyright",
     "tests/test_phase10_presentation.py": "test(presentation): add Phase 10 presentation test suite",
     # Scripts & Tooling
-    "scripts/auto_commit.py": "chore(scripts): add Phase 10 presentation commit mappings",
+    "scripts/auto_commit.py": "chore(scripts): update auto_commit for log deduplication",
 }
 
 
