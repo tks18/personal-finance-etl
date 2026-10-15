@@ -35,5 +35,15 @@ class StatusQueue(Protocol):
         ...
 
 
+class NullStatusQueue:
+    """No-op status queue sink used when no external status queue is attached."""
+
+    def put(self, status: Any, block: bool = True, timeout: float | None = None) -> None:
+        """Discard status message."""
+        pass
+
+
 # Architectural alias for legacy ILogger protocol
 ILogger = StatusQueue
+
+__all__ = ["ILogger", "LogLevel", "NullStatusQueue", "StatusQueue"]
