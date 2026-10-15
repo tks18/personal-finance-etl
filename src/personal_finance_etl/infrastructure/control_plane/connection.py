@@ -22,7 +22,7 @@ import uuid
 from collections.abc import Generator
 from contextlib import contextmanager
 
-from personal_finance_etl.infrastructure.warehouse.schema.control_plane import RAW_DDL
+from personal_finance_etl.infrastructure.control_plane.schema import RAW_DDL
 
 logger = logging.getLogger("personal_finance_etl.control_plane")
 
