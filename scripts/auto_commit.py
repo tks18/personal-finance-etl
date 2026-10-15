@@ -287,10 +287,27 @@ KNOWN_COMMIT_MESSAGES: dict[str, str] = {
     "src/personal_finance_etl/backend/engines/presentation/modules/wealth_risk_analytics.py": "refactor(backend/presentation): shim wealth_risk_analytics to domain",
     "src/personal_finance_etl/backend/engines/presentation/wealth_engine.py": "refactor(backend/presentation): shim wealth_engine to application",
     "src/personal_finance_etl/backend/engines/presentation/__init__.py": "refactor(backend/presentation): deprecate and re-export WealthService",
-    "src/personal_finance_etl/backend/pipeline/etl_pipeline.py": "refactor(backend/pipeline): update WealthPresentationEngine import",
+    "src/personal_finance_etl/backend/pipeline/etl_pipeline.py": "refactor(legacy/pipeline): shim etl_pipeline to application",
     "tests/test_phase8_household_wealth_fire.py": "test(presentation): add Phase 8 household wealth and fire tests",
+    # Phase 9: Application Orchestration & Bootstrap Composition Root
+    "src/personal_finance_etl/application/pipeline/lifecycle.py": "feat(application/pipeline): implement RunLifecycleCoordinator",
+    "src/personal_finance_etl/application/pipeline/execution.py": "feat(application/pipeline): implement PipelineExecutor",
+    "src/personal_finance_etl/application/pipeline/orchestrator.py": "feat(application/pipeline): implement ETLOrchestrator coordinator",
+    "src/personal_finance_etl/application/pipeline/worker.py": "feat(application/pipeline): implement WorkerPoolCoordinator",
+    "src/personal_finance_etl/application/pipeline/__init__.py": "refactor(application/pipeline): export pipeline orchestration symbols",
+    "src/personal_finance_etl/bootstrap/container.py": "feat(bootstrap): implement ServiceContainer composition root",
+    "src/personal_finance_etl/bootstrap/__init__.py": "refactor(bootstrap): export ServiceContainer composition root",
+    "src/personal_finance_etl/application/facade.py": "feat(application): implement PersonalFinanceEngine public facade",
+    "src/personal_finance_etl/application/__init__.py": "refactor(application): export PersonalFinanceEngine facade",
+    "src/personal_finance_etl/backend/api/engine.py": "refactor(legacy/api): shim PersonalFinanceEngine to application facade",
+    "src/personal_finance_etl/contracts/logging.py": "refactor(contracts): add ILogger alias to StatusQueue",
+    "src/personal_finance_etl/contracts/application.py": "refactor(contracts): add compatibility aliases to EngineStatusMessage",
+    "src/personal_finance_etl/infrastructure/warehouse/bronze.py": "refactor(warehouse): guard ControlPlane import in bronze",
+    "src/personal_finance_etl/infrastructure/warehouse/connection.py": "refactor(warehouse): guard empty base_path in DuckDBManager",
+    "src/personal_finance_etl/infrastructure/logging/setup.py": "refactor(logging): guard empty dir_name in add_file_handler",
+    "tests/test_phase9_orchestration_and_bootstrap.py": "test(application): add Phase 9 orchestration and bootstrap tests",
     # Scripts & Tooling
-    "scripts/auto_commit.py": "chore(scripts): update auto_commit tool with Phase 8 mappings",
+    "scripts/auto_commit.py": "chore(scripts): update auto_commit tool with Phase 9 mappings",
 }
 
 
