@@ -118,19 +118,25 @@ def test_package_structure_exists():
 
 def test_numpy_docstrings_in_target_packages():
     """Verify that all target package __init__.py files have NumPy-style ownership docstrings."""
-    target_layers = ("application", "bootstrap", "config", "contracts", "domain", "infrastructure", "presentation")
+    target_layers = (
+        "application",
+        "bootstrap",
+        "config",
+        "contracts",
+        "domain",
+        "infrastructure",
+        "presentation",
+    )
     for init_path in SRC_ROOT.rglob("__init__.py"):
         rel_path = init_path.relative_to(SRC_ROOT)
         if rel_path.parts[0] not in target_layers:
             continue
 
         content = init_path.read_text(encoding="utf-8")
-        assert (
-            "Owns" in content
-        ), f"Missing 'Owns' section in docstring for {rel_path}"
-        assert (
-            "Does not own" in content
-        ), f"Missing 'Does not own' section in docstring for {rel_path}"
+        assert "Owns" in content, f"Missing 'Owns' section in docstring for {rel_path}"
+        assert "Does not own" in content, (
+            f"Missing 'Does not own' section in docstring for {rel_path}"
+        )
 
 
 def test_dependency_boundaries():
