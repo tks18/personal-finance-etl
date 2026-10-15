@@ -10,4 +10,3 @@ Does not own
 - Orchestration use cases (owned by application.pipeline).
 - Financial algorithms (owned by domain.*).
 """
-

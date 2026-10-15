@@ -11,4 +11,3 @@ Does not own
 - Portfolio snapshots (owned by domain.investments).
 - Desktop GUI rendering (owned by presentation.desktop).
 """
-

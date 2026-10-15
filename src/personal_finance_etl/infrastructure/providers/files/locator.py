@@ -68,4 +68,3 @@ def categorize_statement_files(folder_path: str, strict: bool = True) -> dict[st
 
     logger.info(f"[DISCOV] Scanned {total_files} active statement files from local disk.")
     return categories
-

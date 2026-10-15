@@ -18,4 +18,3 @@ PRAGMA temp_store = MEMORY;
 PRAGMA cache_size = -20000;
 PRAGMA mmap_size = 2147483648;
 """
-

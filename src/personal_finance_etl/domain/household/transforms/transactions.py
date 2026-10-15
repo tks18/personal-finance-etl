@@ -346,4 +346,3 @@ def transform_f_opening_balances(
     )
 
     return df_transformed
-

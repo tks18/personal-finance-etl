@@ -225,12 +225,7 @@ def validate_and_parse_numerics(
 
     invalid_checks: list[pl.Expr] = []
     for c in available_cols:
-        raw_text = (
-            pl.col(c)
-            .cast(pl.String)
-            .str.replace_all(",", "")
-            .str.strip_chars("% \t\r\n")
-        )
+        raw_text = pl.col(c).cast(pl.String).str.replace_all(",", "").str.strip_chars("% \t\r\n")
         is_populated = (
             pl.col(c).is_not_null()
             & (raw_text != "")
@@ -250,10 +245,7 @@ def validate_and_parse_numerics(
             select_cols.append(row_id_col)
 
         bad_rows = (
-            lf.filter(pl.any_horizontal(invalid_checks))
-            .select(select_cols)
-            .limit(10)
-            .collect()
+            lf.filter(pl.any_horizontal(invalid_checks)).select(select_cols).limit(10).collect()
         )
         if bad_rows.height > 0:
             row_dict = bad_rows.row(0, named=True)

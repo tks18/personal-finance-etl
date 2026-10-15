@@ -76,7 +76,9 @@ class BronzeLayer:
         """
         if isinstance(df, pl.LazyFrame):
             compact_plan = df.explain().replace("\n", " | ")
-            logger.debug("[DAG:OPTIMIZER] Physical Plan for Bronze '%s': %s", table_name, compact_plan)
+            logger.debug(
+                "[DAG:OPTIMIZER] Physical Plan for Bronze '%s': %s", table_name, compact_plan
+            )
             df = df.collect()
 
         if not actionable_files:
@@ -114,7 +116,9 @@ class BronzeLayer:
                             col_type,
                         )
             except duckdb.CatalogException as e:
-                logger.debug("[Bronze] Table %s not yet created, skipping evolution: %s", table_name, e)
+                logger.debug(
+                    "[Bronze] Table %s not yet created, skipping evolution: %s", table_name, e
+                )
 
             placeholders = ", ".join(["?"] * len(filenames))
             delete_query = f"DELETE FROM {table_name} WHERE __file_name__ IN ({placeholders})"
@@ -141,7 +145,9 @@ class BronzeLayer:
             for row in counts.iter_rows():
                 result[row[0]] = row[1]
         else:
-            logger.debug("[BRONZE:DETAIL] Upserted %s: 0 rows processed (empty source).", table_name)
+            logger.debug(
+                "[BRONZE:DETAIL] Upserted %s: 0 rows processed (empty source).", table_name
+            )
 
         return result
 
@@ -270,4 +276,3 @@ class BronzeLayer:
             us_stock_transactions_raw=_get_lf("bronze.r_US_Stock_Transactions"),
             currency_mapping_raw=_get_lf("bronze.r_Currency_Mapping"),
         )
-

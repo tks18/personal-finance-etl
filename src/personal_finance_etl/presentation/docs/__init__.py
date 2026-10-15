@@ -10,4 +10,3 @@ Does not own
 -------------
 - Financial domain semantics (documentation UI is strictly presentation).
 """
-

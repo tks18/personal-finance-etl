@@ -13,4 +13,3 @@ Does not own
 - Execution orchestration (owned by application.*).
 - Storage or persistence mechanisms (owned by infrastructure.*).
 """
-

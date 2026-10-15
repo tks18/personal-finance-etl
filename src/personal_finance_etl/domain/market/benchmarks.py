@@ -54,7 +54,9 @@ def transform_benchmark_data(
         df_bronze_benchmark = df_bronze_benchmark.collect()
 
     if df_bronze_benchmark.is_empty():
-        logger.warning("transform_benchmark_data received empty Bronze data. Returning empty frame.")
+        logger.warning(
+            "transform_benchmark_data received empty Bronze data. Returning empty frame."
+        )
         return pl.DataFrame()
 
     # Reject invalid published prices; explicit closure-gap/null rows are treated as
@@ -116,13 +118,10 @@ def transform_benchmark_data(
     df_observations = df_clean.with_columns(
         pl.col("Date").alias("Benchmark_Observation_Date")
     ).sort(["Date", "yF_Ticker"])
-    df_spine = (
-        df_full_idx.join(
-            pl.DataFrame({"yF_Ticker": tickers}),
-            how="cross",
-        )
-        .sort(["Date", "yF_Ticker"])
-    )
+    df_spine = df_full_idx.join(
+        pl.DataFrame({"yF_Ticker": tickers}),
+        how="cross",
+    ).sort(["Date", "yF_Ticker"])
 
     df_filled = df_spine.join_asof(
         df_observations,

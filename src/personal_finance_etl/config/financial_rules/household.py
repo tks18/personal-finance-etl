@@ -112,4 +112,3 @@ class AssetRules(BaseModel):
     illiquid: IlliquidAssetRules = Field(default_factory=IlliquidAssetRules)
     cashflow: CashflowAssetRules = Field(default_factory=CashflowAssetRules)
     digital: DigitalAssetRules = Field(default_factory=DigitalAssetRules)
-

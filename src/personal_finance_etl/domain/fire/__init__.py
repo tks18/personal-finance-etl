@@ -12,4 +12,3 @@ Does not own
 - Configuration loading (owned by config.financial_rules).
 - Gold FIRE table persistence (owned by infrastructure.warehouse).
 """
-

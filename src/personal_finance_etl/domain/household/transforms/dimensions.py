@@ -14,7 +14,6 @@ Does not own
 - Physical table insertion into DuckDB (owned by infrastructure.warehouse).
 """
 
-
 import polars as pl
 
 from personal_finance_etl.config.financial_rules import FinancialRules, TaxHeadConfig

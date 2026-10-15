@@ -63,4 +63,3 @@ class EngineExecutionResult:
     duration_seconds: float
     error_message: str | None = None
     failure_domain: FailureDomain | None = None
-

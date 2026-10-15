@@ -32,4 +32,3 @@ class StatusQueue(Protocol):
     def put(self, status: Any, block: bool = True, timeout: float | None = None) -> None:
         """Put a status item onto the queue."""
         ...
-

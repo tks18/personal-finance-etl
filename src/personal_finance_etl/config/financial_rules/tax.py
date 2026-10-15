@@ -213,4 +213,3 @@ class TaxAssumptions(BaseModel):
                 seen_sub_cats[uid] = f"investment_exclusions.{exclusion_type}"
 
         return self
-

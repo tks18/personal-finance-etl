@@ -36,4 +36,3 @@ def generate_contract_registry_fingerprint(tables_metadata: list[dict[str, Any]]
     sorted_metadata = sorted(tables_metadata, key=lambda x: str(x.get("table_name", "")))
     payload = json.dumps(sorted_metadata, sort_keys=True).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()
-

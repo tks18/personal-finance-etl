@@ -192,7 +192,9 @@ class CurrencyExtractor:
             end_date=global_end_date,
         )
         batch_result.requested_entities = [
-            str(r.get("yF_Ticker", "")).strip() for r in tickers_df if str(r.get("yF_Ticker", "")).strip()
+            str(r.get("yF_Ticker", "")).strip()
+            for r in tickers_df
+            if str(r.get("yF_Ticker", "")).strip()
         ]
 
         cache_map: dict[str, date] = {}
@@ -251,7 +253,9 @@ class CurrencyExtractor:
 
                     if res.message:
                         self.status_queue.put(
-                            EngineStatusMessage(msg=res.message, data=None, progress=prog, level=level)
+                            EngineStatusMessage(
+                                msg=res.message, data=None, progress=prog, level=level
+                            )
                         )
                 except Exception as e:
                     err_msg = str(e)

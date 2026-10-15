@@ -42,7 +42,9 @@ class GoldLayer:
         """Write DataFrame or LazyFrame into a Gold presentation table."""
         if isinstance(df, pl.LazyFrame):
             compact_plan = df.explain().replace("\n", " | ")
-            logger.debug("[DAG:OPTIMIZER] Physical Plan for Gold '%s': %s", table_name, compact_plan)
+            logger.debug(
+                "[DAG:OPTIMIZER] Physical Plan for Gold '%s': %s", table_name, compact_plan
+            )
             df = df.collect()
 
         if df.height == 0:
@@ -84,4 +86,3 @@ class GoldLayer:
             tables_built,
             f"{total_rows:,}",
         )
-

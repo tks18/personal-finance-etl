@@ -77,7 +77,12 @@ class InflationBuilder:
             )
             if not cpi_latest_df.is_empty():
                 val = cpi_latest_df.item()
-                if val is not None and isinstance(val, (int, float)) and not math.isnan(val) and not math.isinf(val):
+                if (
+                    val is not None
+                    and isinstance(val, (int, float))
+                    and not math.isnan(val)
+                    and not math.isinf(val)
+                ):
                     cpi_result = CpiResult(
                         value=float(val),
                         status=CalculationStatus.VALID,

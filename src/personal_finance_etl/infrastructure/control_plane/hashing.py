@@ -106,4 +106,3 @@ def generate_file_id(filepath: str) -> str:
         Hexadecimal SHA-256 digest string.
     """
     return hashlib.sha256(normalize_path(filepath).encode("utf-8")).hexdigest()
-

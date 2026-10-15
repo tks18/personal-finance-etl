@@ -76,9 +76,7 @@ def get_stg_stock_market_data(raw_data: pl.LazyFrame, default_currency_id: str) 
 
     if has_typo and has_proper:
         df_transformed = df_transformed.with_columns(
-            pl.coalesce([pl.col("Unrealised P&L"), pl.col("Unealised P&L")]).alias(
-                "Unrealised P&L"
-            )
+            pl.coalesce([pl.col("Unrealised P&L"), pl.col("Unealised P&L")]).alias("Unrealised P&L")
         ).drop("Unealised P&L")
     elif has_typo and not has_proper:
         df_transformed = df_transformed.rename({"Unealised P&L": "Unrealised P&L"})
@@ -273,4 +271,3 @@ def get_stg_stock_master_ref(
         .join(stock_category_lazy, how="cross")
     )
     return df_grouped
-

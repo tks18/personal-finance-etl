@@ -13,4 +13,3 @@ Does not own
 - Investment lot accounting (owned by domain.investments).
 - UI presentation or tab rendering (owned by presentation).
 """
-

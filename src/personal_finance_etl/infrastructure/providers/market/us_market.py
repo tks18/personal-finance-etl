@@ -239,7 +239,9 @@ class USMarketExtractor:
 
                     if res.message:
                         self.status_queue.put(
-                            EngineStatusMessage(msg=res.message, data=None, progress=prog, level=level)
+                            EngineStatusMessage(
+                                msg=res.message, data=None, progress=prog, level=level
+                            )
                         )
                 except Exception as e:
                     err_msg = str(e)

@@ -11,4 +11,3 @@ Does not own
 - Monte Carlo numerical kernel (owned by domain.fire.simulation).
 - UI reporting or charts (owned by presentation).
 """
-

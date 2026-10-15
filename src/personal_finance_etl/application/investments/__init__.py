@@ -12,4 +12,3 @@ Does not own
 - Pure mathematical formulas for XIRR/CAGR (owned by domain.investments.performance).
 - Physical warehouse tables (owned by infrastructure.warehouse).
 """
-

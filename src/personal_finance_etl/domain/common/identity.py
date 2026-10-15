@@ -124,4 +124,3 @@ def generate_deterministic_id(namespace: str, fields: dict[str, Any]) -> str:
     ).encode("utf-8")
     hash_str = hashlib.sha256(payload).hexdigest()
     return f"{namespace}_{hash_str[:16]}"
-

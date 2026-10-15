@@ -436,9 +436,7 @@ class ETLOrchestrator:
                 ).fetchone()[0]
                 failed_cnt = actionable_cnt - synced_cnt
                 status_str = (
-                    "COMPLETE"
-                    if failed_cnt == 0
-                    else ("PARTIAL" if synced_cnt > 0 else "FAILED")
+                    "COMPLETE" if failed_cnt == 0 else ("PARTIAL" if synced_cnt > 0 else "FAILED")
                 )
                 sync_summary = {
                     "actionable_count": actionable_cnt,

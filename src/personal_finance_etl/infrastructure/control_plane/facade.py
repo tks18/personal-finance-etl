@@ -114,4 +114,3 @@ class ControlPlane:
     def rollback(self) -> None:
         """Rollback the active SQLite transaction if one is open."""
         self.db.rollback()
-

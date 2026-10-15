@@ -175,4 +175,3 @@ def setup_worker_logging(queue: multiprocessing.Queue[logging.LogRecord]) -> Non
     handler = logging.handlers.QueueHandler(queue)
     logger.addHandler(handler)
     logger.setLevel(logging.DEBUG)
-

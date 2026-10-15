@@ -13,4 +13,3 @@ Does not own
 - Tax rules configuration models (owned by config.financial_rules).
 - Gold Tax table persistence (owned by infrastructure.warehouse).
 """
-

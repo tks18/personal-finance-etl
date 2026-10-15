@@ -11,4 +11,3 @@ Does not own
 - Stateful lot iteration (owned by domain.investments.lots).
 - Aggregation across multiprocessing batches (owned by application.investments).
 """
-

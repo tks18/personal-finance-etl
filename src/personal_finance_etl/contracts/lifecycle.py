@@ -136,4 +136,3 @@ def classify_failure_domain(
             return FailureDomain.WORKER
 
     return FailureDomain.UNKNOWN
-

@@ -625,4 +625,3 @@ class RunRepository:
             "sync_status": row[6],
             "created_at": row[7],
         }
-

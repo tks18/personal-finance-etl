@@ -11,4 +11,3 @@ Does not own
 - Pipeline execution or multi-process queue consumers (delegates to application.facade).
 - Warehouse persistence (owned by infrastructure.warehouse).
 """
-

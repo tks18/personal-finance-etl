@@ -56,8 +56,8 @@ def get_standard_prng(seed_string: str) -> Any:
     The string seed is hashed into a deterministically derived integer seed.
     """
     # Deterministically convert the string seed into an integer suitable for PCG64
-    seed_int = int(hashlib.sha256(seed_string.encode('utf-8')).hexdigest()[:15], 16)
-    
+    seed_int = int(hashlib.sha256(seed_string.encode("utf-8")).hexdigest()[:15], 16)
+
     # PCG64 is statistically excellent and highly performant for Monte Carlo simulations
     return np.random.Generator(np.random.PCG64(seed_int))
 
@@ -65,7 +65,7 @@ def get_standard_prng(seed_string: str) -> Any:
 def assert_simulation_replay(actual_val: float, expected_val: float, context: str = "") -> None:
     """
     Enforces the Simulation Replay Numerical Contract.
-    Standardizes strict numerical tolerances for asserting simulation equivalence 
+    Standardizes strict numerical tolerances for asserting simulation equivalence
     across rebuilds or version upgrades.
     """
     # rel_tol of 1e-5 (0.001%) and abs_tol of 1e-4
@@ -74,4 +74,3 @@ def assert_simulation_replay(actual_val: float, expected_val: float, context: st
             f"Simulation replay contract broken {context}: "
             f"expected {expected_val}, got {actual_val}."
         )
-

@@ -10,4 +10,3 @@ Does not own
 - Ingestion coordination policy or scheduling (owned by application.ingestion).
 - Semantic canonical transformations (owned by domain.*).
 """
-

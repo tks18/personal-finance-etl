@@ -14,4 +14,3 @@ Does not own
 - Concrete storage, DuckDB, SQLite, or network I/O (owned by infrastructure).
 - UI presentation, CLI commands, or plotting (owned by presentation).
 """
-

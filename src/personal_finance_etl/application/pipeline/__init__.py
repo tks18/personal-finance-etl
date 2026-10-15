@@ -12,4 +12,3 @@ Does not own
 - Domain transformations (owned by domain.*).
 - UI progress display (owned by presentation).
 """
-

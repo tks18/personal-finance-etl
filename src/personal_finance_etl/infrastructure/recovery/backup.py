@@ -105,9 +105,8 @@ class SystemBackupManager:
             if not os.path.isfile(path)
         ]
         if missing:
-            msg = (
-                "Cannot create coordinated snapshot. Missing required database(s): "
-                + ", ".join(missing)
+            msg = "Cannot create coordinated snapshot. Missing required database(s): " + ", ".join(
+                missing
             )
             logger.error(msg)
             return SnapshotResult(outcome=SnapshotOutcome.SNAPSHOT_FAILED, error_message=msg)

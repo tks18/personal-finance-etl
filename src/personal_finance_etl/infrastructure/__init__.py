@@ -14,4 +14,3 @@ Does not own
 - Use cases or orchestration workflows (owned by application).
 - User interface presentation (owned by presentation).
 """
-

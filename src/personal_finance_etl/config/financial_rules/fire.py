@@ -228,4 +228,3 @@ class AssumptionsRules(BaseModel):
         default_factory=lambda: CMAAssumptions(expected_real_return=0.05, fat_tail_multiplier=1.2)
     )
     target_allocations: dict[str, float] = Field(default_factory=dict)
-

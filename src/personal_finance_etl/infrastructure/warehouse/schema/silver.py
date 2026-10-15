@@ -735,4 +735,3 @@ CREATE TABLE IF NOT EXISTS silver.f_Tax_Events (
     UNIQUE(Source_Type, Source_ID, Tax_Sub_Head)
 );
 """
-

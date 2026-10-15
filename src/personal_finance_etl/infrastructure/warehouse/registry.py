@@ -556,4 +556,3 @@ def validate_registry() -> None:
         if contract.physical_table in bronze_tables:
             raise ValueError(f"Duplicate Bronze table mapping: {contract.physical_table}")
         bronze_tables.add(contract.physical_table)
-

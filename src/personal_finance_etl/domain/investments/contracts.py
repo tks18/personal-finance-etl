@@ -275,9 +275,7 @@ class ISINProcessResult(BaseModel):
     cashflows: list[CashflowRecord]
     terminals: dict[dt.date, TerminalValueRecord]
     realized_events: list[dict[str, Any]]
-    recon_events: list[dict[str, Any]] = Field(
-        default_factory=lambda: list[dict[str, Any]]()
-    )
+    recon_events: list[dict[str, Any]] = Field(default_factory=lambda: list[dict[str, Any]]())
     tags: ISINTags
 
 

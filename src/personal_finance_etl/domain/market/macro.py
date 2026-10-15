@@ -60,9 +60,7 @@ def add_months(d: date, months: int) -> date:
     return date(year, month, day)
 
 
-def get_ltcg_threshold_months(
-    tax_type: str, tax_subtype: str, rules: FinancialRules | None
-) -> int:
+def get_ltcg_threshold_months(tax_type: str, tax_subtype: str, rules: FinancialRules | None) -> int:
     """Return holding period threshold for LTCG in calendar months based on declarative rules.
 
     Parameters

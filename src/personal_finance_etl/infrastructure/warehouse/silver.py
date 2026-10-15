@@ -131,4 +131,3 @@ class SilverLayer:
             tables_built,
             f"{total_rows:,}",
         )
-

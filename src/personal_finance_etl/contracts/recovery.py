@@ -69,13 +69,10 @@ class SnapshotResult:
     @property
     def is_success(self) -> bool:
         """Return True if the snapshot archive completed and was published successfully."""
-        return (
-            self.outcome in (SnapshotOutcome.SNAPSHOT_PUBLISHED, SnapshotOutcome.SUCCESS)
-            and (
-                self.zip_path is not None
-                or self.archive_path is not None
-                or len(self.files_archived) > 0
-            )
+        return self.outcome in (SnapshotOutcome.SNAPSHOT_PUBLISHED, SnapshotOutcome.SUCCESS) and (
+            self.zip_path is not None
+            or self.archive_path is not None
+            or len(self.files_archived) > 0
         )
 
     def __bool__(self) -> bool:

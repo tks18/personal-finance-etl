@@ -25,4 +25,3 @@ class PortfolioManagementRules(BaseModel):
         default=5.0,
         description="Threshold (in percentage points) for triggering a rebalance requirement.",
     )
-

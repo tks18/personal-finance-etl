@@ -233,7 +233,9 @@ class BaseEventsBuilder:
         amount_col = df_filtered.get_column("BASE_AMOUNT")
         if amount_col.dtype == pl.Boolean:
             bad_id = str(df_filtered.get_column("Source_ID")[0])
-            raise ValueError(f"Required amount BASE_AMOUNT cannot be boolean for source {bad_id!r}.")
+            raise ValueError(
+                f"Required amount BASE_AMOUNT cannot be boolean for source {bad_id!r}."
+            )
         try:
             df_filtered = df_filtered.with_columns(
                 pl.col("BASE_AMOUNT").cast(pl.Float64, strict=True).alias("Amount_INR")
@@ -407,10 +409,7 @@ class BaseEventsBuilder:
                 f"Required amount tax-credit BASE_AMOUNT is invalid for source {bad_id!r}: {exc}"
             ) from exc
 
-        if (
-            df_credits["Amount_INR"].is_nan().any()
-            or df_credits["Amount_INR"].is_infinite().any()
-        ):
+        if df_credits["Amount_INR"].is_nan().any() or df_credits["Amount_INR"].is_infinite().any():
             bad_idx = (
                 df_credits["Amount_INR"].is_nan() | df_credits["Amount_INR"].is_infinite()
             ).arg_true()[0]

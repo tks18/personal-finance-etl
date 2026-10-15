@@ -148,7 +148,9 @@ class MetaLayer:
                                 f"DELETE FROM {table} WHERE __file_name__ = ?", [fname]
                             )
                         except (duckdb.CatalogException, duckdb.BinderException) as e:
-                            logger.debug("[Bronze] Could not delete %s from %s: %s", fname, table, e)
+                            logger.debug(
+                                "[Bronze] Could not delete %s from %s: %s", fname, table, e
+                            )
 
                     self.conn.execute(
                         "DELETE FROM meta.m_File_Registry WHERE relative_path = ?", [duckdb_path]
@@ -187,9 +189,7 @@ class MetaLayer:
                 new_rel_path,
             )
 
-    def register_file(
-        self, filepath: str, category: str, row_count: int, cp: ControlPlane
-    ) -> None:
+    def register_file(self, filepath: str, category: str, row_count: int, cp: ControlPlane) -> None:
         """Upsert a record into meta.m_File_Registry after successful Bronze ingestion."""
         unique_path = filepath.replace("\\", "/")
         file_name = os.path.basename(filepath)
@@ -411,4 +411,3 @@ class MetaLayer:
                 )
 
         logger.info("Meta layer load complete. DuckDB snapshot represents the latest active state.")
-

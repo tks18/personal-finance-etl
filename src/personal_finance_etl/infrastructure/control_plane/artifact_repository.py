@@ -98,9 +98,9 @@ class ArtifactRepository:
             self.active_run_id if event_type in ("SYNCED", "HEALED", "REINGESTED") else None
         )
         effective_convergence = convergence_result or (
-            "CONVERGED" if event_type in ("SYNCED", "HEALED") else (
-                "TOMBSTONED" if event_type == "REMOVED" else "PENDING"
-            )
+            "CONVERGED"
+            if event_type in ("SYNCED", "HEALED")
+            else ("TOMBSTONED" if event_type == "REMOVED" else "PENDING")
         )
 
         self.db.conn.execute(
@@ -430,7 +430,9 @@ class ArtifactRepository:
                             reason="Binary payload stored in control-plane vault",
                             affected_table=affected_table,
                             detecting_run_id=self.active_run_id,
-                            replay_run_id=self.active_run_id if event_type == "REINGESTED" else None,
+                            replay_run_id=self.active_run_id
+                            if event_type == "REINGESTED"
+                            else None,
                             convergence_result="PENDING",
                         )
                     total_count += 1
@@ -675,4 +677,3 @@ class ArtifactRepository:
                 removed += 1
         if removed:
             logger.info("[ARTIFACT] Marked %d file(s) as REMOVED.", removed)
-

@@ -255,9 +255,7 @@ def transform_us_market_data(
             | pl.col("Price_Age_Days").is_null()
             | (pl.col("Price_Age_Days") > max_price_staleness_days)
         )
-        .select(
-            ["ISIN", "Date", "Price_Observation_Date", "Price_Age_Days", "Closing_Price_Local"]
-        )
+        .select(["ISIN", "Date", "Price_Observation_Date", "Price_Age_Days", "Closing_Price_Local"])
         .limit(10)
         .collect()
     )
@@ -281,9 +279,7 @@ def transform_us_market_data(
 
     invalid_fx = (
         df_spine.filter(
-            pl.col("FX_Rate").is_null()
-            | ~pl.col("FX_Rate").is_finite()
-            | (pl.col("FX_Rate") <= 0)
+            pl.col("FX_Rate").is_null() | ~pl.col("FX_Rate").is_finite() | (pl.col("FX_Rate") <= 0)
         )
         .select(["ISIN", "Date", "CURRENCY_ID", "FX_Rate"])
         .limit(10)
@@ -346,4 +342,3 @@ def transform_us_market_data(
     df_spine = df_spine.filter(pl.col("Quantity") >= 0)
 
     return df_spine.select(select_cols).lazy()
-

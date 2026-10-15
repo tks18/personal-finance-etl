@@ -73,7 +73,9 @@ class DuckDBManager:
         mem_gb = max(4, int(psutil.virtual_memory().total / (1024**3) * 0.75))
         self._conn.execute(f"PRAGMA memory_limit='{mem_gb}GB'")
         self._conn.execute("PRAGMA threads=4")
-        logger.debug("[DATABASE:DUCKDB] Connection configured: memory_limit=%dGB, threads=4", mem_gb)
+        logger.debug(
+            "[DATABASE:DUCKDB] Connection configured: memory_limit=%dGB, threads=4", mem_gb
+        )
         return self._conn
 
     def close(self) -> None:
@@ -101,4 +103,3 @@ class DuckDBManager:
         self.conn.execute(META_DDL)
         self.conn.execute(SILVER_DDL)
         self.conn.execute(GOLD_DDL)
-

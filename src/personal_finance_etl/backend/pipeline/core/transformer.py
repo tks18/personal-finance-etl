@@ -137,7 +137,9 @@ class TransformationDAG:
 
             logger.debug("Building Investment Master...")
             d_tf_investment_master_lazy = get_d_investment_master(
-                master_ref_lazy_list, extracted.stg_benchmark_mapping, self.rules.DEFAULT_CURRENCY_ID
+                master_ref_lazy_list,
+                extracted.stg_benchmark_mapping,
+                self.rules.DEFAULT_CURRENCY_ID,
             )
 
         logger.debug("Generating Master Calendar...")

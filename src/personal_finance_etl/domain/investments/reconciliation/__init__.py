@@ -11,4 +11,3 @@ Does not own
 - Source extraction of statements (owned by infrastructure.providers).
 - Physical Gold reconciliation table writing (owned by infrastructure.warehouse).
 """
-

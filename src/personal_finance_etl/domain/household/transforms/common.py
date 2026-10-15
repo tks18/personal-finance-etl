@@ -35,4 +35,3 @@ def get_column_mapping(df_map: pl.DataFrame, table_name: str = "CATEGORY") -> di
         .rows()
     )
     return {old: new for old, new in mapping}
-

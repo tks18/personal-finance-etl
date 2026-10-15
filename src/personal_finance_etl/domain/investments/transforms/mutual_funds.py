@@ -264,4 +264,3 @@ def get_stg_mf_master_ref(
         .join(mf_category_lazy, how="cross")
     )
     return df_grouped
-

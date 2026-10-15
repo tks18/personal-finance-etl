@@ -204,9 +204,7 @@ def _diagnose_date_failure(
                 faulty_col, faulty_val = c, raw_v
                 break
             try:
-                parse_strict_date(
-                    raw_v, tuple(date_cols_formats[c]), optional=c in opt_set
-                )
+                parse_strict_date(raw_v, tuple(date_cols_formats[c]), optional=c in opt_set)
             except FinancialSourceValidationError:
                 faulty_col, faulty_val = c, raw_v
                 break
@@ -294,10 +292,7 @@ def validate_and_parse_dates(
             select_cols.append(row_id_col)
 
         bad_rows = (
-            lf.filter(pl.any_horizontal(invalid_checks))
-            .select(select_cols)
-            .limit(10)
-            .collect()
+            lf.filter(pl.any_horizontal(invalid_checks)).select(select_cols).limit(10).collect()
         )
         if bad_rows.height > 0:
             row_dict = bad_rows.row(0, named=True)

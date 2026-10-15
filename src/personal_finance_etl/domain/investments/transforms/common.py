@@ -98,9 +98,7 @@ def get_sale_reference(
         pl.col("Value").cum_sum().over("ISIN").alias("Cum_Buy_Val"),
     ]
     if "Value_Local" in df_purchase_ref_lazy.collect_schema().names():
-        rolling_cols.append(
-            pl.col("Value_Local").cum_sum().over("ISIN").alias("Cum_Buy_Val_Local")
-        )
+        rolling_cols.append(pl.col("Value_Local").cum_sum().over("ISIN").alias("Cum_Buy_Val_Local"))
 
     df_purchase_rolling = df_purchase_ref_lazy.sort(["ISIN", "Date"]).with_columns(rolling_cols)
 
@@ -320,7 +318,9 @@ def _batch_compute_sale_ids(s: pl.Series) -> pl.Series:
                 "CURRENCY_ID": curr,
             }
         )
-        for isin, dt, sp, qty, curr in zip(isins, dates, sell_prices, qtys, currencies, strict=False)
+        for isin, dt, sp, qty, curr in zip(
+            isins, dates, sell_prices, qtys, currencies, strict=False
+        )
     ]
     return pl.Series(ids, dtype=pl.String)
 

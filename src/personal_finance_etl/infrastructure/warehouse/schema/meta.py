@@ -85,4 +85,3 @@ CREATE TABLE IF NOT EXISTS meta.m_Latest_Simulation (
     status                     TEXT
 );
 """
-

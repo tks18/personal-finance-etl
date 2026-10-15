@@ -58,4 +58,3 @@ __all__ = [
     "StatusQueue",
     "classify_failure_domain",
 ]
-

@@ -165,7 +165,9 @@ class SQLiteManager:
     def _migrate_schema(self, existing_tables: set[str]) -> None:
         """Apply non-destructive schema migrations to existing control plane tables."""
         if "cp_runs" in existing_tables:
-            cols = {str(row[1]) for row in self.conn.execute("PRAGMA table_info(cp_runs)").fetchall()}
+            cols = {
+                str(row[1]) for row in self.conn.execute("PRAGMA table_info(cp_runs)").fetchall()
+            }
             if "commit_state" not in cols:
                 logger.info("[DATABASE:SQLITE] Migrating cp_runs: adding commit_state column.")
                 self.conn.execute(
@@ -173,9 +175,14 @@ class SQLiteManager:
                 )
 
         if "cp_run_failures" in existing_tables:
-            cols = {str(row[1]) for row in self.conn.execute("PRAGMA table_info(cp_run_failures)").fetchall()}
+            cols = {
+                str(row[1])
+                for row in self.conn.execute("PRAGMA table_info(cp_run_failures)").fetchall()
+            }
             if "failure_domain" not in cols:
-                logger.info("[DATABASE:SQLITE] Migrating cp_run_failures: adding failure_domain column.")
+                logger.info(
+                    "[DATABASE:SQLITE] Migrating cp_run_failures: adding failure_domain column."
+                )
                 self.conn.execute(
                     "ALTER TABLE cp_run_failures ADD COLUMN failure_domain TEXT NOT NULL DEFAULT 'UNKNOWN'"
                 )
@@ -186,14 +193,24 @@ class SQLiteManager:
                 for row in self.conn.execute("PRAGMA table_info(cp_artifact_run_events)").fetchall()
             }
             if "affected_table" not in cols:
-                logger.info("[DATABASE:SQLITE] Migrating cp_artifact_run_events: adding lineage columns.")
-                self.conn.execute("ALTER TABLE cp_artifact_run_events ADD COLUMN affected_table TEXT")
+                logger.info(
+                    "[DATABASE:SQLITE] Migrating cp_artifact_run_events: adding lineage columns."
+                )
+                self.conn.execute(
+                    "ALTER TABLE cp_artifact_run_events ADD COLUMN affected_table TEXT"
+                )
             if "detecting_run_id" not in cols:
-                self.conn.execute("ALTER TABLE cp_artifact_run_events ADD COLUMN detecting_run_id TEXT")
+                self.conn.execute(
+                    "ALTER TABLE cp_artifact_run_events ADD COLUMN detecting_run_id TEXT"
+                )
             if "replay_run_id" not in cols:
-                self.conn.execute("ALTER TABLE cp_artifact_run_events ADD COLUMN replay_run_id TEXT")
+                self.conn.execute(
+                    "ALTER TABLE cp_artifact_run_events ADD COLUMN replay_run_id TEXT"
+                )
             if "convergence_result" not in cols:
-                self.conn.execute("ALTER TABLE cp_artifact_run_events ADD COLUMN convergence_result TEXT")
+                self.conn.execute(
+                    "ALTER TABLE cp_artifact_run_events ADD COLUMN convergence_result TEXT"
+                )
 
     def _validate_current_schema(self) -> None:
         """Fail closed when an existing database is not on the current schema."""
@@ -357,4 +374,3 @@ class SQLiteManager:
         except sqlite3.Error:
             logger.exception("Failed to rollback SQLite control-plane transaction.")
             raise
-

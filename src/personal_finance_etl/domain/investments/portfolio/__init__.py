@@ -11,4 +11,3 @@ Does not own
 - Multiprocessing coordination (owned by application.investments).
 - UI reporting charts (owned by presentation).
 """
-

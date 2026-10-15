@@ -12,4 +12,3 @@ Does not own
 - Execution orchestration (owned by application.*).
 - Direct UI invocation or user handling (owned by presentation.*).
 """
-

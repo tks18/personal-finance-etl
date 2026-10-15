@@ -791,4 +791,3 @@ ALTER TABLE gold.Tax_Reconciliation ADD COLUMN IF NOT EXISTS Ledger_Tax_Estimate
 ALTER TABLE gold.Tax_Reconciliation ADD COLUMN IF NOT EXISTS Ledger_Tax_Estimate_Missing_Count BIGINT;
 ALTER TABLE gold.Tax_Reconciliation ADD COLUMN IF NOT EXISTS Estimated_Ledger_Tax_Complete BOOLEAN;
 """
-

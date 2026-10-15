@@ -155,4 +155,3 @@ def extract_opening_balances_raw(filename: str, folder_path: str, raw_bytes: byt
         pl.lit(filename).alias("__file_name__"),
         pl.lit(folder_path).alias("__folder_path__"),
     )
-

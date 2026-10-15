@@ -95,4 +95,3 @@ def sort_sales(sales: list[dict[str, Any]]) -> list[dict[str, Any]]:
     new code so the policy is explicit and testable.
     """
     return _default_policy.sort_sales(sales)
-

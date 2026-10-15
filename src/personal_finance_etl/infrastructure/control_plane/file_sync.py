@@ -253,4 +253,3 @@ class FileSyncService:
             files_skipped,
         )
         return new_files, changed_files, files_skipped, renames
-

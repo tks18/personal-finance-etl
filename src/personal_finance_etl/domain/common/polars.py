@@ -148,4 +148,3 @@ def rolling_sum(
     """
     expr = pl.col(col) if isinstance(col, str) else col
     return expr.rolling_sum_by(by_col, window_size=f"{window}mo")
-

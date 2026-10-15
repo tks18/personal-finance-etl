@@ -104,9 +104,7 @@ class ExtractionBatchResult:
         """Raise ExtractionCompletenessError if any required entity failed."""
         if not self.is_complete:
             interval = (
-                (self.start_date, self.end_date)
-                if self.start_date and self.end_date
-                else None
+                (self.start_date, self.end_date) if self.start_date and self.end_date else None
             )
             raise ExtractionCompletenessError(
                 f"{extractor_name} batch extraction failed completeness policy: "
@@ -182,5 +180,3 @@ class AssetPipelineResult:
     purchase_ref: pl.LazyFrame
     sale_ref: pl.LazyFrame
     master_ref: pl.LazyFrame
-
-
