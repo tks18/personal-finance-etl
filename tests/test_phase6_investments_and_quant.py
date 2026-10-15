@@ -118,9 +118,7 @@ def test_phase6_object_identity_equivalence() -> None:
     # Portfolio
     assert SnapshotGenerator is legacy_proc_snapshot.SnapshotGenerator
     assert AdvancedAnalyticsCalculator is legacy_post_analytics.AdvancedAnalyticsCalculator
-    assert (
-        HarvestRecommendationCalculator is legacy_post_harvest.HarvestRecommendationCalculator
-    )
+    assert HarvestRecommendationCalculator is legacy_post_harvest.HarvestRecommendationCalculator
     assert GroupProcessor is legacy_post_group.GroupProcessor
     assert PORTFOLIO_COL_RENAMES is legacy_post_group.PORTFOLIO_COL_RENAMES
     assert PortfolioWeightsCalculator is legacy_post_weights.PortfolioWeightsCalculator
@@ -133,14 +131,8 @@ def test_phase6_object_identity_equivalence() -> None:
     assert RunContext is legacy_pipe_context.RunContext
     assert AnalyticsContextManager is legacy_context.AnalyticsContextManager
     assert IsinProcessor is legacy_proc_isin.IsinProcessor
-    assert (
-        is_indian_rights_entitlement_isin
-        is legacy_proc_isin.is_indian_rights_entitlement_isin
-    )
-    assert (
-        _is_zero_proceeds_re_adjustment
-        is legacy_proc_isin._is_zero_proceeds_re_adjustment
-    )
+    assert is_indian_rights_entitlement_isin is legacy_proc_isin.is_indian_rights_entitlement_isin
+    assert _is_zero_proceeds_re_adjustment is legacy_proc_isin._is_zero_proceeds_re_adjustment
     assert IsinPipeline is legacy_isin_pipeline.IsinPipeline
     assert _process_isin_worker is legacy_isin_pipeline._process_isin_worker
     assert PostProcessor is legacy_coordinator.PostProcessor
@@ -293,9 +285,7 @@ def test_reconciliation_engine_quantity_and_basis() -> None:
     # Basis discrepancy above tolerance (0.01)
     assert ReconciliationEngine.should_reconcile_basis(5500.0, 50.0, 100.0) is True
     # Basis within tolerance -> False
-    assert (
-        ReconciliationEngine.should_reconcile_basis(5000.005, 50.0, 100.0) is False
-    )
+    assert ReconciliationEngine.should_reconcile_basis(5000.005, 50.0, 100.0) is False
 
 
 def test_investment_quant_engine_end_to_end() -> None:
