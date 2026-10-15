@@ -1,15 +1,10 @@
-"""
-Frontend Presentation Layer.
+"""Frontend presentation layer legacy shim delegating to presentation package.
 
-This package contains all user-facing interfaces (CustomTkinter Desktop GUI, Rich CLI,
-and Pywebview Documentation renderer).
-It is strictly isolated from the backend business logic and infrastructure.
-No module within this package should import from `personal_finance_etl.backend` except for
-the `personal_finance_etl.backend.api` facade and decoupled utility models.
+Preserves backward compatibility for DesktopApp, main_cli, and run_app.
 """
 
-from personal_finance_etl.frontend.cli.app import main_cli
-from personal_finance_etl.frontend.desktop import DesktopApp
-from personal_finance_etl.frontend.launcher import main as run_app
+from personal_finance_etl.presentation.cli.app import main_cli
+from personal_finance_etl.presentation.desktop.app import DesktopApp
+from personal_finance_etl.presentation.launcher import main as run_app
 
 __all__ = ["DesktopApp", "main_cli", "run_app"]
