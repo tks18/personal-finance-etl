@@ -31,6 +31,7 @@ from personal_finance_etl.contracts.application import EngineStatusMessage
 from personal_finance_etl.contracts.lifecycle import CommitState
 from personal_finance_etl.contracts.logging import LogLevel
 from personal_finance_etl.contracts.recovery import SnapshotOutcome
+from personal_finance_etl.infrastructure.warehouse.connection import DuckDBManager
 
 
 @pytest.fixture
@@ -126,8 +127,6 @@ def test_run_lifecycle_coordinator_transitions(tmp_path: Path) -> None:
             self.items.append(status)
 
     q = MockStatusQueue()
-    from personal_finance_etl.infrastructure.warehouse.connection import DuckDBManager
-
     db_manager = DuckDBManager(cfg.TARGET_DB_BASE_PATH, cfg.TARGET_DB_NAME)
     lifecycle = RunLifecycleCoordinator(cfg, q, db_manager, rules=None)
 
@@ -159,8 +158,6 @@ def test_run_lifecycle_rollback_on_failure(tmp_path: Path) -> None:
         def put(self, status: Any, block: bool = True, timeout: float | None = None) -> None:
             pass
 
-    from personal_finance_etl.infrastructure.warehouse.connection import DuckDBManager
-
     db_manager = DuckDBManager(cfg.TARGET_DB_BASE_PATH, cfg.TARGET_DB_NAME)
     lifecycle = RunLifecycleCoordinator(cfg, MockStatusQueue(), db_manager, rules=None)
 
@@ -191,8 +188,6 @@ def test_run_lifecycle_split_commit_recovery_marker(tmp_path: Path) -> None:
     class MockStatusQueue:
         def put(self, status: Any, block: bool = True, timeout: float | None = None) -> None:
             pass
-
-    from personal_finance_etl.infrastructure.warehouse.connection import DuckDBManager
 
     db_manager = DuckDBManager(cfg.TARGET_DB_BASE_PATH, cfg.TARGET_DB_NAME)
     lifecycle = RunLifecycleCoordinator(cfg, MockStatusQueue(), db_manager, rules=None)
