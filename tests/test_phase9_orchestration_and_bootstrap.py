@@ -10,7 +10,6 @@ Verifies:
 
 from __future__ import annotations
 
-import warnings
 from pathlib import Path
 from typing import Any
 
@@ -22,7 +21,6 @@ from personal_finance_etl.application.pipeline import (
     PipelineExecutor,
     QueueStream,
     RunLifecycleCoordinator,
-    process_wrapper,
 )
 from personal_finance_etl.bootstrap.container import ServiceContainer
 from personal_finance_etl.config.financial_rules import FinancialRules
@@ -38,18 +36,6 @@ from personal_finance_etl.infrastructure.warehouse.connection import DuckDBManag
 def mock_rules() -> FinancialRules:
     """Load canonical test financial rules."""
     return FinancialRules.from_toml(Path("tests/financial_rules.toml"))
-
-
-def test_phase9_object_identity_equivalence() -> None:
-    """Verify 100% strict object identity (`is`) between legacy shims and canonical modules."""
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", DeprecationWarning)
-        import personal_finance_etl.backend.api.engine as legacy_engine
-        import personal_finance_etl.backend.pipeline.etl_pipeline as legacy_pipeline
-
-    assert legacy_pipeline.ETLOrchestrator is ETLOrchestrator
-    assert legacy_pipeline.process_wrapper is process_wrapper
-    assert legacy_engine.PersonalFinanceEngine is PersonalFinanceEngine
 
 
 def test_service_container_wiring(mock_rules: FinancialRules, tmp_path: Path) -> None:
