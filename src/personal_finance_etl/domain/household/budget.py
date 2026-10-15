@@ -46,7 +46,7 @@ class SpendAnalyticsBuilder:
         pl.LazyFrame
             LazyFrame matching presentation Spend Analytics schema.
         """
-        lf_exp_agg = self.base_lf["lf_exp_agg"]
+        lf_exp_agg: pl.LazyFrame = self.base_lf["lf_exp_agg"]
 
         d_subcat = self.dfs.get("df_d_expense_subcategory")
         d_exp_cat = self.dfs.get("df_d_expense_category")
@@ -76,7 +76,7 @@ class SpendAnalyticsBuilder:
             )
         )
 
-        lf_months = self.base_lf["lf_months"]
+        lf_months: pl.LazyFrame = self.base_lf["lf_months"]
         lf_grid = lf_months.join(lf_exp_agg.select("CATEGORY_ID").unique(), how="cross")
 
         lf_cat_agg = (
@@ -308,9 +308,10 @@ class BudgetForecastBuilder:
         pl.LazyFrame
             LazyFrame matching presentation Budget Forecast schema.
         """
-        lf = self.base_lf.get("lf_monthly_totals")
-        if lf is None:
+        lf_raw = self.base_lf.get("lf_monthly_totals")
+        if not isinstance(lf_raw, pl.LazyFrame):
             return pl.LazyFrame()
+        lf: pl.LazyFrame = lf_raw
 
         # --- Config ---
         budget = self.rules.budget
@@ -536,4 +537,3 @@ class BudgetForecastBuilder:
                 "Is_Budget_Month_Healthy",
             ]
         )
-
