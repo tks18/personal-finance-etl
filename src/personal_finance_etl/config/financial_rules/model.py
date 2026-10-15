@@ -81,8 +81,7 @@ def _flatten_data_to_records(node: Any, path: list[str], records: list[dict[str,
         for k, v in dict_node.items():
             _flatten_data_to_records(v, path + [k], records)
     elif isinstance(node, list):
-        list_node = cast("list[Any]", node)
-        for item in list_node:  # pyright: ignore[reportUnknownVariableType]
+        for item in node:  # pyright: ignore[reportUnknownVariableType]
             record = _format_db_record(path, item)
             if record is not None:
                 records.append(record)
