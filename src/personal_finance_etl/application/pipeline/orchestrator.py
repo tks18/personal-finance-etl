@@ -90,7 +90,9 @@ class ETLOrchestrator:
     def run(self) -> None:
         """Run the end-to-end quantitative ETL pipeline."""
         start_time = time.perf_counter()
-        lifecycle = RunLifecycleCoordinator(self.cfg, self.status_queue, self.db_manager, self.rules)
+        lifecycle = RunLifecycleCoordinator(
+            self.cfg, self.status_queue, self.db_manager, self.rules
+        )
 
         try:
             cp, run_id, _ = lifecycle.initialize()
