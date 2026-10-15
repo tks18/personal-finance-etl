@@ -20,31 +20,31 @@ from typing import Protocol, runtime_checkable
 
 import polars as pl
 
-from personal_finance_etl.backend.transform.investments import (
+from personal_finance_etl.config.financial_rules import FinancialRules
+from personal_finance_etl.contracts.extraction import AssetPipelineResult, ExtractionResult
+from personal_finance_etl.domain.investments.transforms.common import (
     get_purchase_reference,
     get_sale_reference,
 )
-from personal_finance_etl.backend.transform.mutual_funds import (
-    get_base_mf_transactions,
-    get_stg_mf_market_data,
-    get_stg_mf_market_data_ref,
-    get_stg_mf_master_ref,
-    transform_stg_mf_trades,
-)
-from personal_finance_etl.backend.transform.stocks import (
+from personal_finance_etl.domain.investments.transforms.indian_equity import (
     get_base_stock_transactions,
     get_stg_stock_market_data,
     get_stg_stock_market_data_ref,
     get_stg_stock_master_ref,
     transform_stg_stock_trades,
 )
-from personal_finance_etl.backend.transform.us_stocks import (
+from personal_finance_etl.domain.investments.transforms.mutual_funds import (
+    get_base_mf_transactions,
+    get_stg_mf_market_data,
+    get_stg_mf_market_data_ref,
+    get_stg_mf_master_ref,
+    transform_stg_mf_trades,
+)
+from personal_finance_etl.domain.investments.transforms.us_equity import (
     get_base_us_stock_transactions,
     get_stg_us_stock_master_ref,
     transform_stg_us_stock_trades,
 )
-from personal_finance_etl.config.financial_rules import FinancialRules
-from personal_finance_etl.contracts.extraction import AssetPipelineResult, ExtractionResult
 
 __all__ = [
     "AssetPipeline",
