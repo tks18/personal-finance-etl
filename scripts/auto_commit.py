@@ -65,6 +65,8 @@ KNOWN_COMMIT_MESSAGES: dict[str, str] = {
     "src/personal_finance_etl/backend/utils/identity.py": "refactor(legacy): deactivate utils/identity and delegate",
     "src/personal_finance_etl/backend/utils/polars_expressions.py": "refactor(legacy): deactivate utils/polars_expressions and delegate",
     "src/personal_finance_etl/backend/engines/tax/utils/date_utils.py": "refactor(legacy): deactivate engines/tax date_utils and delegate",
+    # Scripts & Tooling
+    "scripts/auto_commit.py": "chore(scripts): add auto_commit tool for granular commits",
 }
 
 
