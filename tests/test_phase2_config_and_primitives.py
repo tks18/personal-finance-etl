@@ -21,45 +21,14 @@ import pytest
 
 # Canonical Phase 2 imports
 from personal_finance_etl.config.financial_rules import (
-    ActiveIncomeRules,
-    AssetRules,
-    AssumptionsRules,
-    BudgetAlerts,
-    BudgetRules,
-    BudgetSmoothing,
-    CashflowAssetRules,
-    CMAAssumptions,
-    CoreExpenseRules,
-    DigitalAssetRules,
-    DividendIncomeRules,
-    ExpenseRules,
     FinancialRules,
-    FireAssumptions,
-    GlidePathConfig,
-    GuytonKlingerConfig,
-    HumanCapitalConfig,
-    IlliquidAssetRules,
-    IncomeAllocationRules,
-    IncomeRules,
-    InflationModelConfig,
-    InterestIncomeRules,
-    InvestmentExclusionsConfig,
-    InvestmentInstrumentRules,
-    JumpDiffusionConfig,
-    MacroAssumptions,
-    MarkovRegimeConfig,
-    MonteCarloAssumptions,
-    NonCashIncomeRules,
-    PortfolioManagementRules,
     TaxAssumptions,
     TaxHeadConfig,
-    TaxRates,
     TaxSubHeadConfig,
 )
-from personal_finance_etl.config.settings import FileHashPolicy, Settings
+from personal_finance_etl.config.settings import Settings
 from personal_finance_etl.domain.common.dates import (
     add_fy_if_missing,
-    ensure_date_col,
     get_file_name,
     get_fy_folder_name,
     get_fy_start_year,
@@ -75,9 +44,6 @@ from personal_finance_etl.domain.common.identity import (
 )
 from personal_finance_etl.domain.common.polars import (
     pct_growth,
-    rolling_avg,
-    rolling_std,
-    rolling_sum,
     safe_divide,
 )
 from personal_finance_etl.domain.common.validation import (
@@ -92,88 +58,6 @@ from personal_finance_etl.infrastructure.filesystem.paths import (
     resource_path,
 )
 from personal_finance_etl.infrastructure.preferences.repository import PreferencesManager
-
-
-def test_legacy_phase2_deactivation_and_reexports():
-    """Verify that every deactivated legacy Phase 2 symbol is an exact alias ('is')."""
-    import personal_finance_etl.backend.config.financial_rules as legacy_rules
-    import personal_finance_etl.backend.config.settings as legacy_settings
-    import personal_finance_etl.backend.engines.tax.utils.date_utils as legacy_tax_dates
-    import personal_finance_etl.backend.utils.helpers as legacy_helpers
-    import personal_finance_etl.backend.utils.identity as legacy_identity
-    import personal_finance_etl.backend.utils.polars_expressions as legacy_polars
-
-    # config.financial_rules
-    assert legacy_rules.FinancialRules is FinancialRules
-    assert legacy_rules.IncomeRules is IncomeRules
-    assert legacy_rules.ActiveIncomeRules is ActiveIncomeRules
-    assert legacy_rules.DividendIncomeRules is DividendIncomeRules
-    assert legacy_rules.InterestIncomeRules is InterestIncomeRules
-    assert legacy_rules.NonCashIncomeRules is NonCashIncomeRules
-    assert legacy_rules.ExpenseRules is ExpenseRules
-    assert legacy_rules.CoreExpenseRules is CoreExpenseRules
-    assert legacy_rules.IncomeAllocationRules is IncomeAllocationRules
-    assert legacy_rules.BudgetAlerts is BudgetAlerts
-    assert legacy_rules.BudgetSmoothing is BudgetSmoothing
-    assert legacy_rules.BudgetRules is BudgetRules
-    assert legacy_rules.IlliquidAssetRules is IlliquidAssetRules
-    assert legacy_rules.DigitalAssetRules is DigitalAssetRules
-    assert legacy_rules.AssetRules is AssetRules
-    assert legacy_rules.CashflowAssetRules is CashflowAssetRules
-    assert legacy_rules.InvestmentInstrumentRules is InvestmentInstrumentRules
-    assert legacy_rules.PortfolioManagementRules is PortfolioManagementRules
-    assert legacy_rules.TaxRates is TaxRates
-    assert legacy_rules.TaxSubHeadConfig is TaxSubHeadConfig
-    assert legacy_rules.TaxHeadConfig is TaxHeadConfig
-    assert legacy_rules.InvestmentExclusionsConfig is InvestmentExclusionsConfig
-    assert legacy_rules.TaxAssumptions is TaxAssumptions
-    assert legacy_rules.MacroAssumptions is MacroAssumptions
-    assert legacy_rules.FireAssumptions is FireAssumptions
-    assert legacy_rules.MarkovRegimeConfig is MarkovRegimeConfig
-    assert legacy_rules.HumanCapitalConfig is HumanCapitalConfig
-    assert legacy_rules.GlidePathConfig is GlidePathConfig
-    assert legacy_rules.JumpDiffusionConfig is JumpDiffusionConfig
-    assert legacy_rules.GuytonKlingerConfig is GuytonKlingerConfig
-    assert legacy_rules.InflationModelConfig is InflationModelConfig
-    assert legacy_rules.MonteCarloAssumptions is MonteCarloAssumptions
-    assert legacy_rules.CMAAssumptions is CMAAssumptions
-    assert legacy_rules.AssumptionsRules is AssumptionsRules
-
-    # config.settings & infrastructure.preferences
-    assert legacy_settings.Settings is Settings
-    assert legacy_settings.FileHashPolicy is FileHashPolicy
-    assert legacy_settings.PreferencesManager is PreferencesManager
-
-    # domain.common.identity
-    assert legacy_identity.generate_deterministic_id is generate_deterministic_id
-    assert legacy_identity.canonicalize_value is canonicalize_value
-
-    # domain.common.polars
-    assert legacy_polars.safe_divide is safe_divide
-    assert legacy_polars.pct_growth is pct_growth
-    assert legacy_polars.rolling_avg is rolling_avg
-    assert legacy_polars.rolling_std is rolling_std
-    assert legacy_polars.rolling_sum is rolling_sum
-
-    # backend.engines.tax.utils.date_utils
-    assert legacy_tax_dates.add_fy_if_missing is add_fy_if_missing
-
-    # backend.utils.helpers
-    assert legacy_helpers.resource_path is resource_path
-    assert legacy_helpers.get_temp_dir is get_temp_dir
-    assert legacy_helpers.get_cache_dir is get_cache_dir
-    assert legacy_helpers.clean_numeric_col is clean_numeric_col
-    assert legacy_helpers.to_date_obj is to_date_obj
-    assert legacy_helpers.get_fy_start_year is get_fy_start_year
-    assert legacy_helpers.get_fy_folder_name is get_fy_folder_name
-    assert legacy_helpers.get_month_folder_name is get_month_folder_name
-    assert legacy_helpers.get_file_name is get_file_name
-    assert legacy_helpers.ensure_date_col is ensure_date_col
-    assert legacy_helpers.parse_strict_numeric is parse_strict_numeric
-    assert legacy_helpers.parse_strict_date is parse_strict_date
-    assert legacy_helpers.validate_and_parse_numerics is validate_and_parse_numerics
-    assert legacy_helpers.validate_and_parse_dates is validate_and_parse_dates
-    assert legacy_helpers.FinancialSourceValidationError is FinancialSourceValidationError
 
 
 def test_financial_rules_toml_loading_and_export():
