@@ -29,9 +29,7 @@ class ReconciliationEngine:
     """Coordinates broker-evidence reconciliation against internal reconstructed state."""
 
     @staticmethod
-    def should_reconcile_quantity(
-        broker_qty: float | None, reconstructed_qty: float
-    ) -> bool:
+    def should_reconcile_quantity(broker_qty: float | None, reconstructed_qty: float) -> bool:
         """Return whether a meaningful quantity discrepancy exists."""
         if broker_qty is None:
             return False
@@ -66,9 +64,7 @@ class ReconciliationEngine:
             (dummy_cashflows, recon_events)
         """
         dummy_cf, q_events = fifo.reconcile_quantity(broker_qty, m_date, bm_price)
-        cb_events = fifo.reconcile_cost_basis(
-            broker_buy_val, broker_buy_val_local, m_date
-        )
+        cb_events = fifo.reconcile_cost_basis(broker_buy_val, broker_buy_val_local, m_date)
         return dummy_cf, q_events + cb_events
 
 
