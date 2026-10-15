@@ -19,13 +19,13 @@ from __future__ import annotations
 import logging
 import os
 import sqlite3
-from typing import TYPE_CHECKING
 
 import duckdb
 import polars as pl
 
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
+from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
 from personal_finance_etl.infrastructure.control_plane.hashing import (
     FILE_TYPE_MAP,
     compute_file_hash,
@@ -39,9 +39,6 @@ from personal_finance_etl.infrastructure.warehouse.registry import (
     BRONZE_CONTRACT_REGISTRY,
     DATA_CONTRACT_REGISTRY,
 )
-
-if TYPE_CHECKING:
-    from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
 
 logger = logging.getLogger("personal_finance_etl.warehouse.meta")
 
