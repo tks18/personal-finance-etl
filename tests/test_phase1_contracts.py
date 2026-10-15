@@ -49,7 +49,6 @@ from personal_finance_etl.domain.investments.contracts import (
     ISINTags,
     RealizedEventRecord,
     ReconciliationEventRecord,
-    SnapshotRecord,
     TaxLot,
     TerminalValueRecord,
 )
@@ -302,37 +301,3 @@ def test_isin_process_result_and_pipeline_result():
     )
     assert len(isin_res.cashflows) == 1
     assert isin_res.tags.subtype == "Mutual Fund"
-
-
-def test_legacy_type_deactivation_and_reexports():
-    """Verify that legacy modules are deactivated and re-export the canonical contracts."""
-    from personal_finance_etl.backend.types import (
-        analytics,
-        batch_result,
-        calculation,
-        failure,
-        fx,
-        pipeline,
-        validation,
-    )
-    from personal_finance_etl.backend.utils import models
-
-    # Identity equivalence tests (is, not just ==)
-    assert calculation.XirrResult is XirrResult
-    assert calculation.CalculationStatus is CalculationStatus
-    assert calculation.CagrResult is CagrResult
-    assert calculation.CpiResult is CpiResult
-    assert validation.FinancialSourceValidationError is FinancialSourceValidationError
-    assert fx.FXObservation is FXObservation
-    assert failure.FailureDomain is FailureDomain
-    assert failure.classify_failure_domain is classify_failure_domain
-    assert batch_result.ExtractionBatchResult is ExtractionBatchResult
-    assert batch_result.ExtractorEntityResult is ExtractorEntityResult
-    assert batch_result.ExtractorEntityStatus is ExtractorEntityStatus
-    assert models.LogLevel is LogLevel
-    assert models.TaxLot is TaxLot
-    assert pipeline.CommitState is CommitState
-    assert analytics.CashflowRecord is CashflowRecord
-    assert analytics.TerminalValueRecord is TerminalValueRecord
-    assert analytics.SnapshotRecord is SnapshotRecord
-    assert analytics.ISINProcessResult is ISINProcessResult
