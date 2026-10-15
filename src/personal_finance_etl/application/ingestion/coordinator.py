@@ -23,11 +23,11 @@ from collections.abc import Callable
 
 import polars as pl
 
-from personal_finance_etl.backend.transform.helpers import get_column_mapping
 from personal_finance_etl.config.settings import Settings
 from personal_finance_etl.contracts.application import EngineStatusMessage
 from personal_finance_etl.contracts.extraction import ExtractionResult
 from personal_finance_etl.contracts.logging import LogLevel, StatusQueue
+from personal_finance_etl.domain.household.transforms.common import get_column_mapping
 from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
 from personal_finance_etl.infrastructure.logging import logger
 from personal_finance_etl.infrastructure.providers.files.csv import (
