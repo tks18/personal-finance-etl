@@ -44,8 +44,8 @@ class IncomeStreamsBuilder:
         pl.LazyFrame
             LazyFrame matching presentation Income Streams schema.
         """
-        lf_inc_agg = self.base_lf["lf_inc_agg"]
-        lf_months = self.base_lf["lf_months"]
+        lf_inc_agg: pl.LazyFrame = self.base_lf["lf_inc_agg"]
+        lf_months: pl.LazyFrame = self.base_lf["lf_months"]
 
         d_inc_subcat = self.dfs.get("df_d_income_subcategory")
         d_inc_cat = self.dfs.get("df_d_income_category")
@@ -255,7 +255,7 @@ class IncomeStreamsBuilder:
         )
 
         return lf_income_streams.select(
-            [
+            *[
                 "MONTH_START_DATE",
                 "MONTH_END_DATE",
                 "YEAR_MONTH",
