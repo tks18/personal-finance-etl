@@ -148,3 +148,39 @@ class ExtractionBatchResult:
         """Support legacy tuple unpacking: (combined_df, injected_files) = batch_result."""
         return iter((self.combined_frame, self.injected_files))
 
+
+@dataclass
+class ExtractionResult:
+    """Consolidated raw extracted evidence streams across all ingestion sources."""
+
+    zcategory: pl.LazyFrame
+    assetgroup: pl.LazyFrame
+    assets: pl.LazyFrame
+    currency: pl.LazyFrame
+    inoutcome: pl.LazyFrame
+    mappings: dict[str, dict[str, str]]
+    stg_mf_isin_mapping: pl.LazyFrame
+    stg_benchmark_mapping: pl.LazyFrame
+    mf_market_data_raw: pl.LazyFrame
+    mf_transactions_raw: pl.LazyFrame
+    stock_market_data_raw: pl.LazyFrame
+    stock_transactions_raw: pl.LazyFrame
+    raw_opening_balances: pl.LazyFrame
+    raw_benchmark_master: pl.LazyFrame
+    raw_macro_parameters: pl.LazyFrame
+    column_master: pl.DataFrame | pl.LazyFrame
+    us_stock_transactions_raw: pl.LazyFrame
+    currency_mapping_raw: pl.LazyFrame
+
+
+@dataclass
+class AssetPipelineResult:
+    """Standardized outcome for individual asset class extraction pipelines."""
+
+    market_data: pl.LazyFrame
+    market_data_ref: pl.LazyFrame
+    purchase_ref: pl.LazyFrame
+    sale_ref: pl.LazyFrame
+    master_ref: pl.LazyFrame
+
+
