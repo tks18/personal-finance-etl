@@ -14,3 +14,9 @@ Does not own
 - Concrete storage, DuckDB, SQLite, or provider mechanics (owned by infrastructure).
 - Human-facing rendering, CLI argument parsing, or Desktop UI (owned by presentation).
 """
+
+from __future__ import annotations
+
+from personal_finance_etl.application.facade import PersonalFinanceEngine
+
+__all__ = ["PersonalFinanceEngine"]
