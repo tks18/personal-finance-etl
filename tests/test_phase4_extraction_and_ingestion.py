@@ -25,65 +25,11 @@ from personal_finance_etl.application.ingestion.asset_strategies import (
     StockPipeline,
     USStockPipeline,
 )
-from personal_finance_etl.application.ingestion.coordinator import (
-    DataExtractor,
-)
-from personal_finance_etl.application.ingestion.market_sync import (
-    BenchmarkPipeline,
-    CurrencyPipeline,
-    USMarketPipeline,
-)
-
-# Legacy imports
-from personal_finance_etl.backend.extract import (
-    benchmark_extractor as legacy_benchmark_ext,
-)
-from personal_finance_etl.backend.extract import (
-    csv_extractor as legacy_csv,
-)
-from personal_finance_etl.backend.extract import (
-    currency_extractor as legacy_currency_ext,
-)
-from personal_finance_etl.backend.extract import (
-    excel_extractor as legacy_excel,
-)
-from personal_finance_etl.backend.extract import (
-    sqlite_extractor as legacy_sqlite,
-)
-from personal_finance_etl.backend.extract import (
-    statement_locator as legacy_locator,
-)
-from personal_finance_etl.backend.extract import (
-    us_market_extractor as legacy_us_market_ext,
-)
-from personal_finance_etl.backend.pipeline import (
-    benchmark_pipeline as legacy_benchmark_pipe,
-)
-from personal_finance_etl.backend.pipeline import (
-    currency_pipeline as legacy_currency_pipe,
-)
-from personal_finance_etl.backend.pipeline import (
-    strategies as legacy_strategies,
-)
-from personal_finance_etl.backend.pipeline import (
-    us_market_pipeline as legacy_us_market_pipe,
-)
-from personal_finance_etl.backend.pipeline.core import extractor as legacy_core_ext
 from personal_finance_etl.contracts.extraction import ExtractorEntityStatus
 from personal_finance_etl.infrastructure.providers.files.csv import (
     extract_benchmark_master_raw,
     extract_currency_mapping_raw,
-    extract_macro_parameters_raw,
-    extract_opening_balances_raw,
-    extract_stg_benchmark_mapping,
     extract_stg_mf_isin_mapping,
-)
-from personal_finance_etl.infrastructure.providers.files.excel import (
-    extract_mf_market_data_raw,
-    extract_mf_transactions_raw,
-    extract_stock_market_data_raw,
-    extract_stock_transactions_raw,
-    extract_us_stock_transactions_raw,
 )
 from personal_finance_etl.infrastructure.providers.files.locator import (
     categorize_statement_files,
@@ -100,39 +46,6 @@ from personal_finance_etl.infrastructure.providers.market.currency import (
 from personal_finance_etl.infrastructure.providers.market.us_market import (
     USMarketExtractor,
 )
-
-
-def test_phase4_legacy_identity_equivalence() -> None:
-    """Verify that every deactivated legacy module delegates to canonical targets with identity 'is'."""
-    # File Providers
-    assert legacy_locator.categorize_statement_files is categorize_statement_files
-    assert legacy_csv.extract_stg_mf_isin_mapping is extract_stg_mf_isin_mapping
-    assert legacy_csv.extract_currency_mapping_raw is extract_currency_mapping_raw
-    assert legacy_csv.extract_stg_benchmark_mapping is extract_stg_benchmark_mapping
-    assert legacy_csv.extract_benchmark_master_raw is extract_benchmark_master_raw
-    assert legacy_csv.extract_macro_parameters_raw is extract_macro_parameters_raw
-    assert legacy_csv.extract_opening_balances_raw is extract_opening_balances_raw
-    assert legacy_excel.extract_mf_market_data_raw is extract_mf_market_data_raw
-    assert legacy_excel.extract_mf_transactions_raw is extract_mf_transactions_raw
-    assert legacy_excel.extract_stock_market_data_raw is extract_stock_market_data_raw
-    assert legacy_excel.extract_stock_transactions_raw is extract_stock_transactions_raw
-    assert legacy_excel.extract_us_stock_transactions_raw is extract_us_stock_transactions_raw
-    assert legacy_sqlite.SQLiteExtractor is SQLiteExtractor
-
-    # Market Providers
-    assert legacy_currency_ext.CurrencyExtractor is CurrencyExtractor
-    assert legacy_benchmark_ext.BenchmarkExtractor is BenchmarkExtractor
-    assert legacy_us_market_ext.USMarketExtractor is USMarketExtractor
-
-    # Ingestion Coordinators & Strategies
-    assert legacy_core_ext.DataExtractor is DataExtractor
-    assert legacy_strategies.AssetPipeline is AssetPipeline
-    assert legacy_strategies.StockPipeline is StockPipeline
-    assert legacy_strategies.USStockPipeline is USStockPipeline
-    assert legacy_strategies.MutualFundPipeline is MutualFundPipeline
-    assert legacy_currency_pipe.CurrencyPipeline is CurrencyPipeline
-    assert legacy_benchmark_pipe.BenchmarkPipeline is BenchmarkPipeline
-    assert legacy_us_market_pipe.USMarketPipeline is USMarketPipeline
 
 
 def test_statement_locator_categorization(tmp_path: Any) -> None:
