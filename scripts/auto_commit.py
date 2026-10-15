@@ -366,7 +366,9 @@ KNOWN_COMMIT_MESSAGES: dict[str, str] = {
     "src/personal_finance_etl/domain/tax/reconciliation.py": "refactor(domain): specify explicit code on schema cast ignore",
     "src/personal_finance_etl/presentation/desktop/app.py": "refactor(presentation): specify misc code on DesktopApp ignore",
     "tests/test_phase12_constitutional_certification.py": "test(certification): add Phase 12 constitutional audit test suite",
-    "scripts/auto_commit.py": "chore(scripts): add Phase 12 commit messages mapping",
+    # Release & Build
+    "main.spec": "chore(build): update PyInstaller spec for presentation docs assets",
+    "scripts/auto_commit.py": "chore(scripts): add main.spec build commit mapping",
 }
 
 
