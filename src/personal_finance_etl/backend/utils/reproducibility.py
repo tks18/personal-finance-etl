@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import hashlib
 import json
 import math
@@ -5,15 +7,16 @@ from typing import Any
 
 import numpy as np
 
+from personal_finance_etl.infrastructure.warehouse.fingerprints import (
+    generate_contract_registry_fingerprint,
+)
 
-def generate_contract_registry_fingerprint(tables_metadata: list[dict[str, Any]]) -> str:
-    """
-    Computes a deterministic fingerprint of the active table grains and publishers.
-    Avoids using a manual registry version counter by hashing the actual structural metadata.
-    """
-    sorted_metadata = sorted(tables_metadata, key=lambda x: str(x.get("table_name", "")))
-    payload = json.dumps(sorted_metadata, sort_keys=True).encode("utf-8")
-    return hashlib.sha256(payload).hexdigest()
+__all__ = [
+    "assert_simulation_replay",
+    "generate_contract_registry_fingerprint",
+    "generate_reproducibility_envelope",
+    "get_standard_prng",
+]
 
 
 def generate_reproducibility_envelope(
