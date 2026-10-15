@@ -42,7 +42,8 @@ class DuckDBManager:
     def __init__(self, base_path: str, db_name: str = "Personal_Finance_DB.duckdb") -> None:
         self.base_path = base_path
         self.db_path = os.path.join(base_path, db_name)
-        os.makedirs(base_path, exist_ok=True)
+        if base_path:
+            os.makedirs(base_path, exist_ok=True)
         self._conn: duckdb.DuckDBPyConnection | None = None
 
     @property
