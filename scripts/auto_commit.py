@@ -28,8 +28,6 @@ KNOWN_COMMIT_MESSAGES: dict[str, str] = {
     "src/personal_finance_etl/contracts/application.py": "refactor(contracts): define engine execution and status contracts",
     "src/personal_finance_etl/domain/common/calculation.py": "refactor(domain/common): define financial calculation results",
     "src/personal_finance_etl/domain/common/validation.py": "refactor(domain/common): define validation exceptions and parsing",
-    "src/personal_finance_etl/domain/market/fx.py": "refactor(domain/market): define FXObservation data contract",
-    "src/personal_finance_etl/domain/investments/contracts.py": "refactor(domain/investments): define tax lot and realized records",
     "tests/test_phase1_contracts.py": "test(contracts): add Phase 1 contracts and re-export tests",
     # Phase 1 Legacy Deactivations
     "src/personal_finance_etl/backend/types/calculation.py": "refactor(legacy): deactivate types/calculation and delegate",
@@ -65,8 +63,6 @@ KNOWN_COMMIT_MESSAGES: dict[str, str] = {
     "src/personal_finance_etl/backend/utils/identity.py": "refactor(legacy): deactivate utils/identity and delegate",
     "src/personal_finance_etl/backend/utils/polars_expressions.py": "refactor(legacy): deactivate utils/polars_expressions and delegate",
     "src/personal_finance_etl/backend/engines/tax/utils/date_utils.py": "refactor(legacy): deactivate engines/tax date_utils and delegate",
-    # Phase 3 Infrastructure Contracts
-    "src/personal_finance_etl/contracts/recovery.py": "refactor(contracts): update backup and restore result contracts",
     # Phase 3 Control Plane
     "src/personal_finance_etl/infrastructure/control_plane/__init__.py": "refactor(infrastructure): export control plane repositories",
     "src/personal_finance_etl/infrastructure/control_plane/connection.py": "refactor(infrastructure): implement SQLiteManager connection",
@@ -123,9 +119,6 @@ KNOWN_COMMIT_MESSAGES: dict[str, str] = {
     "src/personal_finance_etl/backend/load/backup.py": "refactor(legacy): deactivate load backup manager",
     "src/personal_finance_etl/backend/utils/logger.py": "refactor(legacy): deactivate utils logger setup",
     "src/personal_finance_etl/backend/utils/reproducibility.py": "refactor(legacy): deactivate utils reproducibility",
-    # Phase 4 Ingestion Contracts
-    "src/personal_finance_etl/contracts/logging.py": "refactor(contracts): define StatusQueue cross-process protocol",
-    "src/personal_finance_etl/contracts/__init__.py": "refactor(contracts): export StatusQueue protocol",
     # Phase 4 File Providers
     "src/personal_finance_etl/infrastructure/providers/files/__init__.py": "refactor(providers): export statement and file adapters",
     "src/personal_finance_etl/infrastructure/providers/files/locator.py": "refactor(providers): implement statement locator adapter",
@@ -170,14 +163,12 @@ KNOWN_COMMIT_MESSAGES: dict[str, str] = {
     "src/personal_finance_etl/domain/market/__init__.py": "refactor(domain): export canonical market domain models",
     # Phase 5: Canonical Financial Domains (Investments)
     "src/personal_finance_etl/domain/investments/lots/ordering.py": "feat(domain): implement CanonicalOrderPolicy lot sorting",
-    "src/personal_finance_etl/domain/investments/lots/__init__.py": "refactor(domain): export investments lot ordering policy",
     "src/personal_finance_etl/domain/investments/transforms/common.py": "feat(domain): implement investment reference transformations",
     "src/personal_finance_etl/domain/investments/transforms/indian_equity.py": "feat(domain): implement Indian equity trade transformations",
     "src/personal_finance_etl/domain/investments/transforms/mutual_funds.py": "feat(domain): implement mutual fund trade transformations",
     "src/personal_finance_etl/domain/investments/transforms/us_equity.py": "feat(domain): implement US equity trade transformations",
     "src/personal_finance_etl/domain/investments/valuation/market_state.py": "feat(domain): implement US stock FIFO market valuation spine",
     "src/personal_finance_etl/domain/investments/transforms/__init__.py": "refactor(domain): export canonical investment transformations",
-    "src/personal_finance_etl/domain/investments/valuation/__init__.py": "refactor(domain): export investment valuation models",
     # Phase 5: Legacy Deactivations
     "src/personal_finance_etl/backend/transform/calendar.py": "refactor(legacy): deactivate transform calendar and delegate",
     "src/personal_finance_etl/backend/transform/helpers.py": "refactor(legacy): deactivate transform helpers and delegate",
@@ -192,10 +183,6 @@ KNOWN_COMMIT_MESSAGES: dict[str, str] = {
     "src/personal_finance_etl/backend/transform/stocks.py": "refactor(legacy): deactivate transform stocks and delegate",
     "src/personal_finance_etl/backend/transform/us_stocks.py": "refactor(legacy): deactivate transform US stocks and delegate",
     "src/personal_finance_etl/backend/transform/us_stocks_transformer.py": "refactor(legacy): deactivate US stocks transformer and delegate",
-    # Phase 5: Application Ingestion Updates
-    "src/personal_finance_etl/application/ingestion/coordinator.py": "refactor(application): import helpers from canonical domain",
-    "src/personal_finance_etl/application/ingestion/asset_strategies.py": "refactor(application): import strategies from canonical domain",
-    "src/personal_finance_etl/application/ingestion/market_sync.py": "refactor(application): import market sync from canonical domain",
     # Phase 5: Verification Suite
     "tests/test_phase5_canonical_domains.py": "test(domain): add Phase 5 canonical domain test suite",
     # Phase 6A: Investment Contracts & Typed Models
@@ -204,7 +191,6 @@ KNOWN_COMMIT_MESSAGES: dict[str, str] = {
     "src/personal_finance_etl/domain/investments/reconciliation/models.py": "feat(investments): define ReconciliationEvent typed model",
     "src/personal_finance_etl/domain/investments/reconciliation/__init__.py": "refactor(investments): export reconciliation models",
     "src/personal_finance_etl/domain/investments/__init__.py": "refactor(investments): export investment models and services",
-    "src/personal_finance_etl/backend/types/analytics.py": "refactor(legacy): deactivate analytics types and delegate",
     # Phase 6B: FIFO & Lot Accounting
     "src/personal_finance_etl/domain/investments/lots/fifo.py": "feat(investments): implement FIFOPortfolio queue and shadow units",
     "src/personal_finance_etl/backend/engines/analytics/core/fifo.py": "refactor(legacy): deactivate analytics fifo and delegate",
@@ -266,7 +252,6 @@ KNOWN_COMMIT_MESSAGES: dict[str, str] = {
     "src/personal_finance_etl/backend/engines/tax/tax_engine.py": "refactor(backend/tax): shim tax_engine to application.tax.tax_service",
     "src/personal_finance_etl/backend/engines/tax/core/__init__.py": "refactor(backend/tax): re-export canonical domain tax symbols in core",
     "src/personal_finance_etl/backend/engines/tax/__init__.py": "refactor(backend/tax): re-export TaxEngine in backend tax init",
-    "src/personal_finance_etl/backend/pipeline/etl_pipeline.py": "refactor(backend/pipeline): update TaxEngine import to application",
     "tests/test_phase7_tax_domain.py": "test(domain/tax): add Phase 7 tax domain and service test suite",
     # Phase 8: Household Analytics, Wealth, and FIRE
     "src/personal_finance_etl/domain/household/ledger.py": "feat(domain/household): add LedgerBuilder for monthly balances",
