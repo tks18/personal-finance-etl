@@ -337,7 +337,28 @@ KNOWN_COMMIT_MESSAGES: dict[str, str] = {
     "pyproject.toml": "chore(config): ignore presentation desktop in pyright",
     "tests/test_phase10_presentation.py": "test(presentation): add Phase 10 presentation test suite",
     # Scripts & Tooling
-    "scripts/auto_commit.py": "chore(scripts): update auto_commit for log deduplication",
+    "scripts/auto_commit.py": "chore(scripts): add Phase 11 commit messages mapping",
+    # Phase 11 Demolition and Clean Architecture Completion
+    "src/personal_finance_etl/application/pipeline/transformer.py": "refactor(application): canonicalize TransformationDAG pipeline",
+    "src/personal_finance_etl/application/pipeline/__init__.py": "refactor(application): export canonical TransformationDAG",
+    "src/personal_finance_etl/application/pipeline/execution.py": "refactor(application): import TransformationDAG canonically",
+    "src/personal_finance_etl/presentation/docs/renderer.py": "refactor(presentation): remove legacy doc assets fallbacks",
+    "src/personal_finance_etl/__init__.py": "refactor(root): declare canonical clean architecture facade exports",
+    "pyproject.toml": "chore(build): route CLI and GUI entry points to presentation",
+    ".gitattributes": "chore(git): remove obsolete frontend asset attributes",
+    "tests/run_headless.py": "test(headless): use canonical settings and orchestrator imports",
+    "tests/test_architecture_boundaries.py": "test(architecture): enforce legacy demolition boundary checks",
+    "tests/test_phase1_contracts.py": "test(contracts): remove obsolete legacy shim identity tests",
+    "tests/test_phase2_config_and_primitives.py": "test(config): remove obsolete legacy shim identity tests",
+    "tests/test_phase3_infrastructure.py": "test(infrastructure): remove obsolete legacy shim identity tests",
+    "tests/test_phase4_extraction_and_ingestion.py": "test(ingestion): remove obsolete legacy shim identity tests",
+    "tests/test_phase5_canonical_domains.py": "test(domains): remove obsolete legacy shim identity tests",
+    "tests/test_phase6_investments_and_quant.py": "test(investments): remove obsolete legacy shim identity tests",
+    "tests/test_phase7_tax_domain.py": "test(tax): remove obsolete legacy shim identity tests",
+    "tests/test_phase8_household_wealth_fire.py": "test(wealth): remove obsolete legacy shim identity tests",
+    "tests/test_phase9_orchestration_and_bootstrap.py": "test(bootstrap): remove obsolete legacy shim identity tests",
+    "tests/test_phase10_presentation.py": "test(presentation): remove obsolete legacy shim identity tests",
+    "tests/test_phase11_legacy_demolition.py": "test(demolition): add Phase 11 legacy demolition test suite",
 }
 
 
