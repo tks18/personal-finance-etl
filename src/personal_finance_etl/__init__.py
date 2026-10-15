@@ -1,6 +1,7 @@
 """Personal Finance ETL Engine.
 
-An institutional-grade wealth management pipeline and quantitative analytics engine.
+My local-first financial data engineering and quantitative decision-support platform for
+reconciled personal finance, investment analytics, tax evidence, FIRE simulation, and BI.
 This application strictly adheres to Clean Architecture and Domain-Driven Design (DDD),
 enforcing clean, unidirectional boundaries across layered subsystems:
 
@@ -12,7 +13,15 @@ Architecture Overview:
 4. `personal_finance_etl.infrastructure`: Database persistence (DuckDB + SQLite), logging, and external providers.
 5. `personal_finance_etl.application`: Application services, pipeline execution, and public façade.
 6. `personal_finance_etl.bootstrap`: Dependency injection and composition root.
-7. `personal_finance_etl.presentation`: Human-facing CLI, Desktop GUI, and Documentation browser.
+Owns
+----
+- Top-level public package facade and versioning.
+- Public exports of PersonalFinanceEngine, DesktopApp, main_cli, and run_app.
+
+Does not own
+-------------
+- Implementation of domain logic, infrastructure storage, or workflow orchestration.
+- Direct execution loops or database connections.
 
 Author: Sudharshan TK
 """
