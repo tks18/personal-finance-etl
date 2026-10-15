@@ -1,4 +1,4 @@
-"""Tax domain logic, normalization, and classification.
+"""Tax domain logic, normalization, classification, and presentation marts.
 
 Owns
 ----
@@ -13,3 +13,24 @@ Does not own
 - Tax rules configuration models (owned by config.financial_rules).
 - Gold Tax table persistence (owned by infrastructure.warehouse).
 """
+
+from personal_finance_etl.domain.tax.classification import TaxClassifier
+from personal_finance_etl.domain.tax.estimates import TaxEstimator
+from personal_finance_etl.domain.tax.events import (
+    TAX_EVENT_SCHEMA,
+    BaseEventsBuilder,
+    TaxEventNormalizer,
+    _batch_compute_tax_event_ids,
+)
+from personal_finance_etl.domain.tax.reconciliation import TaxGoldFormatter, TaxReconciler
+
+__all__ = [
+    "TAX_EVENT_SCHEMA",
+    "BaseEventsBuilder",
+    "TaxClassifier",
+    "TaxEstimator",
+    "TaxEventNormalizer",
+    "TaxGoldFormatter",
+    "TaxReconciler",
+    "_batch_compute_tax_event_ids",
+]
