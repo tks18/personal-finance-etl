@@ -198,8 +198,63 @@ KNOWN_COMMIT_MESSAGES: dict[str, str] = {
     "src/personal_finance_etl/application/ingestion/market_sync.py": "refactor(application): import market sync from canonical domain",
     # Phase 5: Verification Suite
     "tests/test_phase5_canonical_domains.py": "test(domain): add Phase 5 canonical domain test suite",
+    # Phase 6A: Investment Contracts & Typed Models
+    "src/personal_finance_etl/domain/investments/contracts.py": "refactor(investments): define investment contracts and typed models",
+    "src/personal_finance_etl/domain/investments/lots/models.py": "feat(investments): define TaxLot AcquisitionLot and LotAction",
+    "src/personal_finance_etl/domain/investments/reconciliation/models.py": "feat(investments): define ReconciliationEvent typed model",
+    "src/personal_finance_etl/domain/investments/reconciliation/__init__.py": "refactor(investments): export reconciliation models",
+    "src/personal_finance_etl/domain/investments/__init__.py": "refactor(investments): export investment models and services",
+    "src/personal_finance_etl/backend/types/analytics.py": "refactor(legacy): deactivate analytics types and delegate",
+    # Phase 6B: FIFO & Lot Accounting
+    "src/personal_finance_etl/domain/investments/lots/fifo.py": "feat(investments): implement FIFOPortfolio queue and shadow units",
+    "src/personal_finance_etl/backend/engines/analytics/core/fifo.py": "refactor(legacy): deactivate analytics fifo and delegate",
+    "src/personal_finance_etl/domain/investments/lots/__init__.py": "refactor(investments): export FIFOPortfolio and lot models",
+    # Phase 6C: Valuation, FX & Benchmark Context
+    "src/personal_finance_etl/domain/investments/valuation/fx.py": "feat(investments): implement FXValidationGate and error types",
+    "src/personal_finance_etl/domain/investments/valuation/benchmark.py": "feat(investments): implement BenchmarkPriceProvider with fallback",
+    "src/personal_finance_etl/domain/investments/valuation/__init__.py": "refactor(investments): export valuation gates and benchmark provider",
+    "src/personal_finance_etl/backend/engines/analytics/pipeline/processor/fx_gate.py": "refactor(legacy): deactivate fx_gate and delegate",
+    "src/personal_finance_etl/backend/engines/analytics/pipeline/processor/benchmark.py": "refactor(legacy): deactivate benchmark provider and delegate",
+    # Phase 6D: Performance & Mathematics
+    "src/personal_finance_etl/domain/investments/performance/returns.py": "feat(investments): implement calculate_cagr with typed status",
+    "src/personal_finance_etl/domain/investments/performance/xirr.py": "feat(investments): implement calculate_xirr and portfolio solver",
+    "src/personal_finance_etl/domain/investments/performance/attribution.py": "feat(investments): implement RealizedGainsCalculator",
+    "src/personal_finance_etl/domain/investments/performance/__init__.py": "refactor(investments): export performance and attribution metrics",
+    "src/personal_finance_etl/backend/engines/analytics/core/math.py": "refactor(legacy): deactivate analytics math and delegate",
+    "src/personal_finance_etl/backend/engines/analytics/pipeline/postprocessor/xirr.py": "refactor(legacy): deactivate postprocessor xirr and delegate",
+    "src/personal_finance_etl/backend/engines/analytics/pipeline/postprocessor/gains.py": "refactor(legacy): deactivate postprocessor gains and delegate",
+    # Phase 6E: Reconciliation Engine
+    "src/personal_finance_etl/domain/investments/reconciliation/engine.py": "feat(investments): implement ReconciliationEngine with tolerances",
+    # Phase 6F: Portfolio Snapshots & Aggregation
+    "src/personal_finance_etl/domain/investments/portfolio/snapshots.py": "feat(investments): implement SnapshotGenerator lot snapshots",
+    "src/personal_finance_etl/domain/investments/portfolio/analytics.py": "feat(investments): implement AdvancedAnalyticsCalculator",
+    "src/personal_finance_etl/domain/investments/portfolio/aggregation.py": "feat(investments): implement GroupProcessor and portfolio weights",
+    "src/personal_finance_etl/domain/investments/portfolio/__init__.py": "refactor(investments): export portfolio snapshots and aggregators",
+    "src/personal_finance_etl/backend/engines/analytics/pipeline/processor/snapshot.py": "refactor(legacy): deactivate snapshot generator and delegate",
+    "src/personal_finance_etl/backend/engines/analytics/pipeline/postprocessor/group_processor.py": "refactor(legacy): deactivate group_processor and delegate",
+    "src/personal_finance_etl/backend/engines/analytics/pipeline/postprocessor/weights.py": "refactor(legacy): deactivate portfolio weights and delegate",
+    "src/personal_finance_etl/backend/engines/analytics/pipeline/postprocessor/analytics.py": "refactor(legacy): deactivate postprocessor analytics and delegate",
+    "src/personal_finance_etl/backend/engines/analytics/pipeline/postprocessor/harvest.py": "refactor(legacy): deactivate harvest calculator and delegate",
+    # Phase 6G: Application ISIN & Quant Orchestration Services
+    "src/personal_finance_etl/application/investments/input_adapter.py": "feat(investments): implement TaxDataLoader and IsinDataExtractor",
+    "src/personal_finance_etl/application/investments/context.py": "feat(investments): implement RunContext and AnalyticsContextManager",
+    "src/personal_finance_etl/application/investments/isin_service.py": "feat(investments): implement IsinProcessor and IsinPipeline",
+    "src/personal_finance_etl/application/investments/aggregation_service.py": "feat(investments): implement PostProcessor and PostProcessingPipeline",
+    "src/personal_finance_etl/application/investments/quant_service.py": "feat(investments): implement InvestmentQuantEngine and QuantService",
+    "src/personal_finance_etl/application/investments/__init__.py": "refactor(investments): export investment application services",
+    "src/personal_finance_etl/backend/engines/analytics/context.py": "refactor(legacy): deactivate analytics context and delegate",
+    "src/personal_finance_etl/backend/engines/analytics/engine.py": "refactor(legacy): deactivate quant engine and delegate",
+    "src/personal_finance_etl/backend/engines/analytics/isin_pipeline.py": "refactor(legacy): deactivate isin_pipeline and delegate",
+    "src/personal_finance_etl/backend/engines/analytics/post_pipeline.py": "refactor(legacy): deactivate post_pipeline and delegate",
+    "src/personal_finance_etl/backend/engines/analytics/io/loader.py": "refactor(legacy): deactivate analytics loader and delegate",
+    "src/personal_finance_etl/backend/engines/analytics/pipeline/context.py": "refactor(legacy): deactivate pipeline context and delegate",
+    "src/personal_finance_etl/backend/engines/analytics/pipeline/processor/extractor.py": "refactor(legacy): deactivate data extractor and delegate",
+    "src/personal_finance_etl/backend/engines/analytics/pipeline/processor/isin_processor.py": "refactor(legacy): deactivate isin_processor and delegate",
+    "src/personal_finance_etl/backend/engines/analytics/pipeline/postprocessor/coordinator.py": "refactor(legacy): deactivate postprocessor coordinator and delegate",
+    # Phase 6H: Verification Suite
+    "tests/test_phase6_investments_and_quant.py": "test(investments): add Phase 6 investment and quant test suite",
     # Scripts & Tooling
-    "scripts/auto_commit.py": "chore(scripts): update auto_commit tool with Phase 5 mappings",
+    "scripts/auto_commit.py": "chore(scripts): update auto_commit tool with Phase 6 mappings",
 }
 
 
