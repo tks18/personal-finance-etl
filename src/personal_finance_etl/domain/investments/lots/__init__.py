@@ -33,4 +33,3 @@ __all__ = [
     "sort_purchases",
     "sort_sales",
 ]
-
