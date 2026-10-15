@@ -102,10 +102,12 @@ class MetaLayer:
         raw_all: dict[str, list[str]] = cp.artifacts.get_all_paths_by_category()
 
         for cat, paths in raw_all.items():
-            contract = cat_to_contract.get(cat)
-            table = contract.physical_table if contract else None
-            table_exists = tables_exist.get(table, False) if table else True
-            files_in_table: set[str] = table_files.get(table, set()) if table else set()
+            b_contract = cat_to_contract.get(cat)
+            target_table = b_contract.physical_table if b_contract else None
+            table_exists = tables_exist.get(target_table, False) if target_table else True
+            files_in_table: set[str] = (
+                table_files.get(target_table, set()) if target_table else set()
+            )
 
             for path in paths:
                 status = synced_registry.get(path)
@@ -117,8 +119,8 @@ class MetaLayer:
                         )
                         missing_count += 1
                     elif (
-                        contract
-                        and not contract.is_full_replace
+                        b_contract
+                        and not b_contract.is_full_replace
                         and duckdb_row_counts.get(path, 0) > 0
                         and os.path.basename(path) not in files_in_table
                     ):
@@ -138,15 +140,15 @@ class MetaLayer:
 
                 if row:
                     fname, cat = row
-                    table = cat_to_table.get(cat)
-                    if table and tables_exist.get(table, False):
+                    del_table = cat_to_table.get(cat)
+                    if del_table and tables_exist.get(del_table, False):
                         try:
                             self.conn.execute(
-                                f"DELETE FROM {table} WHERE __file_name__ = ?", [fname]
+                                f"DELETE FROM {del_table} WHERE __file_name__ = ?", [fname]
                             )
                         except (duckdb.CatalogException, duckdb.BinderException) as e:
                             logger.debug(
-                                "[Bronze] Could not delete %s from %s: %s", fname, table, e
+                                "[Bronze] Could not delete %s from %s: %s", fname, del_table, e
                             )
 
                     self.conn.execute(
