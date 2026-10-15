@@ -12,17 +12,15 @@ Verifies:
 
 from __future__ import annotations
 
-import warnings
 from datetime import date
 from pathlib import Path
 
 import polars as pl
 import pytest
 
-from personal_finance_etl.application.wealth import WealthPresentationEngine, WealthService
+from personal_finance_etl.application.wealth import WealthService
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.domain.common.calculation import CalculationStatus
-from personal_finance_etl.domain.fire.deterministic import WealthRiskAnalyticsBuilder
 from personal_finance_etl.domain.fire.forecasting import calculate_budget_forecast
 from personal_finance_etl.domain.fire.inflation import InflationBuilder
 from personal_finance_etl.domain.fire.reproducibility import (
@@ -30,24 +28,8 @@ from personal_finance_etl.domain.fire.reproducibility import (
     derive_monthly_seed,
     derive_simulation_seed_offset,
 )
-from personal_finance_etl.domain.fire.simulation import (
-    _run_mc_simulations_numba,
-    get_monte_carlo_fire_batch,
-)
-from personal_finance_etl.domain.household.budget import (
-    BudgetForecastBuilder,
-    SpendAnalyticsBuilder,
-)
-from personal_finance_etl.domain.household.cashflow import (
-    CashflowStatementBuilder,
-    MonthlyCashflowSummaryBuilder,
-)
-from personal_finance_etl.domain.household.income import IncomeStreamsBuilder
-from personal_finance_etl.domain.household.ledger import LedgerBuilder
 from personal_finance_etl.domain.wealth.analytics import InvestmentAnalyticsBuilder
-from personal_finance_etl.domain.wealth.net_worth import NetWorthBuilder
 from personal_finance_etl.domain.wealth.scoring import (
-    HealthScorer,
     calculate_budget_health_score,
 )
 
@@ -56,54 +38,6 @@ from personal_finance_etl.domain.wealth.scoring import (
 def mock_rules() -> FinancialRules:
     """Load canonical test financial rules."""
     return FinancialRules.from_toml(Path("tests/financial_rules.toml"))
-
-
-def test_phase8_object_identity_equivalence() -> None:
-    """Verify 100% strict object identity (`is`) between legacy shims and canonical modules."""
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", DeprecationWarning)
-        import personal_finance_etl.backend.engines.presentation as legacy_pres_pkg
-        import personal_finance_etl.backend.engines.presentation.core.inflation_builder as legacy_infl
-        import personal_finance_etl.backend.engines.presentation.core.ledger_builder as legacy_ledger
-        import personal_finance_etl.backend.engines.presentation.core.net_worth_builder as legacy_nw
-        import personal_finance_etl.backend.engines.presentation.helpers.fire_mc_sim as legacy_mc
-        import personal_finance_etl.backend.engines.presentation.helpers.forecasting as legacy_forecast
-        import personal_finance_etl.backend.engines.presentation.helpers.scoring as legacy_score
-        import personal_finance_etl.backend.engines.presentation.modules.budget_forecast as legacy_bf
-        import personal_finance_etl.backend.engines.presentation.modules.cashflow_statement_builder as legacy_cf
-        import personal_finance_etl.backend.engines.presentation.modules.income_streams as legacy_inc
-        import personal_finance_etl.backend.engines.presentation.modules.investment_analytics as legacy_ia
-        import personal_finance_etl.backend.engines.presentation.modules.monthly_cashflow_summary as legacy_mcs
-        import personal_finance_etl.backend.engines.presentation.modules.spend_analytics as legacy_sa
-        import personal_finance_etl.backend.engines.presentation.modules.wealth_risk_analytics as legacy_wra
-        import personal_finance_etl.backend.engines.presentation.wealth_engine as legacy_we
-
-    # Presentation Package & Engine
-    assert legacy_pres_pkg.WealthPresentationEngine is WealthPresentationEngine
-    assert legacy_pres_pkg.WealthService is WealthService
-    assert legacy_we.WealthPresentationEngine is WealthPresentationEngine
-    assert legacy_we.WealthService is WealthService
-
-    # Core Builders
-    assert legacy_infl.InflationBuilder is InflationBuilder
-    assert legacy_ledger.LedgerBuilder is LedgerBuilder
-    assert legacy_nw.NetWorthBuilder is NetWorthBuilder
-
-    # Helpers
-    assert legacy_score.HealthScorer is HealthScorer
-    assert legacy_score.calculate_budget_health_score is calculate_budget_health_score
-    assert legacy_forecast.calculate_budget_forecast is calculate_budget_forecast
-    assert legacy_mc._run_mc_simulations_numba is _run_mc_simulations_numba
-    assert legacy_mc.get_monte_carlo_fire_batch is get_monte_carlo_fire_batch
-
-    # Modules
-    assert legacy_cf.CashflowStatementBuilder is CashflowStatementBuilder
-    assert legacy_mcs.MonthlyCashflowSummaryBuilder is MonthlyCashflowSummaryBuilder
-    assert legacy_sa.SpendAnalyticsBuilder is SpendAnalyticsBuilder
-    assert legacy_bf.BudgetForecastBuilder is BudgetForecastBuilder
-    assert legacy_inc.IncomeStreamsBuilder is IncomeStreamsBuilder
-    assert legacy_ia.InvestmentAnalyticsBuilder is InvestmentAnalyticsBuilder
-    assert legacy_wra.WealthRiskAnalyticsBuilder is WealthRiskAnalyticsBuilder
 
 
 def test_simulation_reproducibility_seed_generation() -> None:
