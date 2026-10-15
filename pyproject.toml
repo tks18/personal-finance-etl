@@ -83,6 +83,7 @@ dev = [
     "poethepoet>=0.48.0",
     "pyinstaller>=6.21.0",
     "pyright>=1.1.411",
+    "pytest>=9.1.1",
     "ruff>=0.15.22",
     "tkreload>=1.0.4",
     "vulture>=2.16",
