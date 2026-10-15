@@ -181,9 +181,7 @@ def test_calculate_budget_forecast() -> None:
 def test_inflation_builder_execution(mock_rules: FinancialRules) -> None:
     """Verify InflationBuilder generates continuous monthly rates and valid CpiResult."""
     dfs = {
-        "df_f_opening_balances": pl.DataFrame(
-            {"ZTXDATESTR": [date(2023, 1, 1), date(2023, 1, 1)]}
-        ),
+        "df_f_opening_balances": pl.DataFrame({"ZTXDATESTR": [date(2023, 1, 1), date(2023, 1, 1)]}),
         "df_d_calendar": pl.DataFrame(
             {
                 "Date": [date(2023, 1, 1), date(2023, 1, 31), date(2023, 2, 1), date(2023, 2, 28)],
