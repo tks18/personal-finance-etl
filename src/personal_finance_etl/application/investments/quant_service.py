@@ -34,6 +34,7 @@ from personal_finance_etl.application.investments.isin_service import (
     IsinPipeline,
 )
 from personal_finance_etl.config.financial_rules import FinancialRules
+from personal_finance_etl.contracts.application import EngineStatusMessage
 from personal_finance_etl.contracts.logging import LogLevel, StatusQueue
 from personal_finance_etl.infrastructure.logging.setup import logger
 
@@ -79,18 +80,9 @@ class InvestmentQuantEngine:
         level: LogLevel,
     ) -> None:
         if self.status_queue is not None:
-            from personal_finance_etl.contracts.application import EngineStatusMessage
-
-            try:
-                self.status_queue.put(
-                    EngineStatusMessage(msg=msg, data=data, progress=progress, level=level)
-                )
-            except Exception:
-                from personal_finance_etl.backend.utils.models import EngineStatus
-
-                self.status_queue.put(
-                    EngineStatus(msg=msg, data=data, progress=progress, level=level)
-                )
+            self.status_queue.put(
+                EngineStatusMessage(msg=msg, data=data, progress=progress, level=level)
+            )
 
     def run(self) -> dict[str, pl.DataFrame]:
         """Execute the quantitative analysis engine.
