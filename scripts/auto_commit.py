@@ -253,8 +253,23 @@ KNOWN_COMMIT_MESSAGES: dict[str, str] = {
     "src/personal_finance_etl/backend/engines/analytics/pipeline/postprocessor/coordinator.py": "refactor(legacy): deactivate postprocessor coordinator and delegate",
     # Phase 6H: Verification Suite
     "tests/test_phase6_investments_and_quant.py": "test(investments): add Phase 6 investment and quant test suite",
+    # Phase 7: Tax Domain & Application Service
+    "src/personal_finance_etl/domain/tax/classification.py": "feat(domain/tax): add TaxClassifier for income heads and sub-heads",
+    "src/personal_finance_etl/domain/tax/estimates.py": "feat(domain/tax): add TaxEstimator for rate resolution and bounding",
+    "src/personal_finance_etl/domain/tax/events.py": "feat(domain/tax): add BaseEventsBuilder and canonical event schema",
+    "src/personal_finance_etl/domain/tax/reconciliation.py": "feat(domain/tax): add TaxGoldFormatter and audit reconciliation marts",
+    "src/personal_finance_etl/domain/tax/__init__.py": "feat(domain/tax): export canonical tax domain symbols",
+    "src/personal_finance_etl/application/tax/tax_service.py": "feat(application/tax): add TaxService application engine",
+    "src/personal_finance_etl/application/tax/__init__.py": "feat(application/tax): export TaxService and TaxEngine symbols",
+    "src/personal_finance_etl/backend/engines/tax/core/base_events.py": "refactor(backend/tax): shim base_events to domain.tax.events",
+    "src/personal_finance_etl/backend/engines/tax/core/gold_formatter.py": "refactor(backend/tax): shim gold_formatter to domain.tax.reconciliation",
+    "src/personal_finance_etl/backend/engines/tax/tax_engine.py": "refactor(backend/tax): shim tax_engine to application.tax.tax_service",
+    "src/personal_finance_etl/backend/engines/tax/core/__init__.py": "refactor(backend/tax): re-export canonical domain tax symbols in core",
+    "src/personal_finance_etl/backend/engines/tax/__init__.py": "refactor(backend/tax): re-export TaxEngine in backend tax init",
+    "src/personal_finance_etl/backend/pipeline/etl_pipeline.py": "refactor(backend/pipeline): update TaxEngine import to application",
+    "tests/test_phase7_tax_domain.py": "test(domain/tax): add Phase 7 tax domain and service test suite",
     # Scripts & Tooling
-    "scripts/auto_commit.py": "chore(scripts): update auto_commit tool with Phase 6 mappings",
+    "scripts/auto_commit.py": "chore(scripts): update auto_commit tool with Phase 7 mappings",
 }
 
 
