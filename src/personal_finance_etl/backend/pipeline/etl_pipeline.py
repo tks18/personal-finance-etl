@@ -12,10 +12,10 @@ from typing import Any, cast
 import polars as pl
 
 from personal_finance_etl.application.tax.tax_service import TaxEngine
+from personal_finance_etl.application.wealth import WealthPresentationEngine
 from personal_finance_etl.backend.config.financial_rules import FinancialRules
 from personal_finance_etl.backend.config.settings import Settings
 from personal_finance_etl.backend.engines.analytics import InvestmentQuantEngine
-from personal_finance_etl.backend.engines.presentation.wealth_engine import WealthPresentationEngine
 from personal_finance_etl.backend.extract.sqlite_extractor import SQLiteExtractor
 from personal_finance_etl.backend.extract.statement_locator import categorize_statement_files
 from personal_finance_etl.backend.load.bronze import BronzeLayer
