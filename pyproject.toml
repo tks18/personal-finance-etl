@@ -74,8 +74,8 @@ requires = ["hatchling>=1.27.0"]
 build-backend = "hatchling.build"
 
 [project.scripts]
-shan-fin = "personal_finance_etl.frontend.launcher:main"
-shan-fin-gui = "personal_finance_etl.frontend.desktop.app:main"
+shan-fin = "personal_finance_etl.presentation.launcher:main"
+shan-fin-gui = "personal_finance_etl.presentation.desktop.app:main"
 
 [dependency-groups]
 dev = [
@@ -126,7 +126,6 @@ strict = true
 [tool.pyright]
 typeCheckingMode = "strict"
 ignore = [
-    "src/personal_finance_etl/frontend/desktop",
     "src/personal_finance_etl/presentation/desktop",
 ]
 
