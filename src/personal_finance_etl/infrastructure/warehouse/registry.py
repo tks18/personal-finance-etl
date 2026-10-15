@@ -543,16 +543,16 @@ def validate_registry() -> None:
             raise ValueError(f"Empty producer for contract {contract.contract_id}")
 
     bronze_tables: set[str] = set()
-    for contract in BRONZE_CONTRACT_REGISTRY:
-        if not contract.extraction_attribute:
+    for b_contract in BRONZE_CONTRACT_REGISTRY:
+        if not b_contract.extraction_attribute:
             raise ValueError("Bronze extraction_attribute cannot be empty.")
-        if not contract.sync_category:
-            raise ValueError(f"Bronze sync_category empty for {contract.extraction_attribute}")
-        if not contract.physical_table:
-            raise ValueError(f"Bronze physical_table empty for {contract.extraction_attribute}")
-        if not contract.physical_table.startswith("bronze."):
-            raise ValueError(f"Bronze table must start with 'bronze.': {contract.physical_table}")
+        if not b_contract.sync_category:
+            raise ValueError(f"Bronze sync_category empty for {b_contract.extraction_attribute}")
+        if not b_contract.physical_table:
+            raise ValueError(f"Bronze physical_table empty for {b_contract.extraction_attribute}")
+        if not b_contract.physical_table.startswith("bronze."):
+            raise ValueError(f"Bronze table must start with 'bronze.': {b_contract.physical_table}")
 
-        if contract.physical_table in bronze_tables:
-            raise ValueError(f"Duplicate Bronze table mapping: {contract.physical_table}")
-        bronze_tables.add(contract.physical_table)
+        if b_contract.physical_table in bronze_tables:
+            raise ValueError(f"Duplicate Bronze table mapping: {b_contract.physical_table}")
+        bronze_tables.add(b_contract.physical_table)
