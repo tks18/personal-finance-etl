@@ -45,27 +45,26 @@ class DocsRenderer:
     @staticmethod
     def _load_mermaid_js() -> str:
         """Load the bundled Mermaid runtime."""
-        for pkg in [
-            "personal_finance_etl.presentation.docs",
-            "personal_finance_etl.frontend.commons.docs",
-        ]:
-            try:
-                asset = files(pkg).joinpath("assets").joinpath("mermaid").joinpath("mermaid.min.js")
-                return asset.read_text(encoding="utf-8")
-            except Exception:
-                pass
+        try:
+            asset = (
+                files("personal_finance_etl.presentation.docs")
+                .joinpath("assets")
+                .joinpath("mermaid")
+                .joinpath("mermaid.min.js")
+            )
+            return asset.read_text(encoding="utf-8")
+        except Exception:
+            pass
 
-        for rel in [
-            "personal_finance_etl/presentation/docs/assets/mermaid/mermaid.min.js",
-            "personal_finance_etl/frontend/commons/docs/assets/mermaid/mermaid.min.js",
-        ]:
-            fallback = resource_path(rel)
-            if os.path.exists(fallback):
-                try:
-                    with open(fallback, encoding="utf-8") as f:
-                        return f.read()
-                except OSError:
-                    pass
+        fallback = resource_path(
+            "personal_finance_etl/presentation/docs/assets/mermaid/mermaid.min.js"
+        )
+        if os.path.exists(fallback):
+            try:
+                with open(fallback, encoding="utf-8") as f:
+                    return f.read()
+            except OSError:
+                pass
 
         print("Bundled Mermaid runtime could not be loaded.")
         return ""
@@ -73,32 +72,26 @@ class DocsRenderer:
     @staticmethod
     def _load_svg_pan_zoom_js() -> str:
         """Load the bundled svg-pan-zoom runtime."""
-        for pkg in [
-            "personal_finance_etl.presentation.docs",
-            "personal_finance_etl.frontend.commons.docs",
-        ]:
-            try:
-                asset = (
-                    files(pkg)
-                    .joinpath("assets")
-                    .joinpath("svg-pan-zoom")
-                    .joinpath("svg-pan-zoom.min.js")
-                )
-                return asset.read_text(encoding="utf-8")
-            except Exception:
-                pass
+        try:
+            asset = (
+                files("personal_finance_etl.presentation.docs")
+                .joinpath("assets")
+                .joinpath("svg-pan-zoom")
+                .joinpath("svg-pan-zoom.min.js")
+            )
+            return asset.read_text(encoding="utf-8")
+        except Exception:
+            pass
 
-        for rel in [
-            "personal_finance_etl/presentation/docs/assets/svg-pan-zoom/svg-pan-zoom.min.js",
-            "personal_finance_etl/frontend/commons/docs/assets/svg-pan-zoom/svg-pan-zoom.min.js",
-        ]:
-            fallback = resource_path(rel)
-            if os.path.exists(fallback):
-                try:
-                    with open(fallback, encoding="utf-8") as f:
-                        return f.read()
-                except OSError:
-                    pass
+        fallback = resource_path(
+            "personal_finance_etl/presentation/docs/assets/svg-pan-zoom/svg-pan-zoom.min.js"
+        )
+        if os.path.exists(fallback):
+            try:
+                with open(fallback, encoding="utf-8") as f:
+                    return f.read()
+            except OSError:
+                pass
 
         print("Bundled svg-pan-zoom runtime could not be loaded.")
         return ""
