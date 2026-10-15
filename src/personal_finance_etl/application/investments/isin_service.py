@@ -202,7 +202,7 @@ class IsinProcessor:
 
                 _pl_val = row.get("Price_Local")
                 price_local = float(_pl_val) if _pl_val is not None else b_price
-                currency_id = (
+                currency_id = str(
                     row.get("CURRENCY_ID")
                     or master_row.get("CURRENCY_ID")
                     or getattr(self.rules, "DEFAULT_CURRENCY_ID", "INR_INR")
@@ -291,7 +291,7 @@ class IsinProcessor:
                     else s_price
                 )
                 s_val_local = 0.0 if is_re_adjustment else float(s_qty * s_price_local)
-                currency_id = (
+                currency_id = str(
                     row.get("CURRENCY_ID")
                     or master_row.get("CURRENCY_ID")
                     or getattr(self.rules, "DEFAULT_CURRENCY_ID", "INR_INR")
@@ -389,8 +389,8 @@ class IsinProcessor:
                 != getattr(self.rules, "DEFAULT_CURRENCY_ID", "INR_INR")
                 and self.fx_provider
             ):
-                fx_rate_snap = _get_fx(m_date, fifo.active_lots[0].currency_id)
-                fx_rate_snap = fx_rate_snap if fx_rate_snap is not None else float("nan")
+                fx_val = _get_fx(m_date, fifo.active_lots[0].currency_id)
+                fx_rate_snap = fx_val if fx_val is not None else float("nan")
 
             m_bm_price_inr = m_bm_price * fx_rate_snap
 
@@ -575,7 +575,7 @@ class IsinProcessor:
 
             _pl_val = row.get("Price_Local")
             price_local = float(_pl_val) if _pl_val is not None else b_price
-            currency_id = (
+            currency_id = str(
                 row.get("CURRENCY_ID")
                 or master_row.get("CURRENCY_ID")
                 or getattr(self.rules, "DEFAULT_CURRENCY_ID", "INR_INR")
@@ -660,7 +660,7 @@ class IsinProcessor:
                 0.0 if is_re_adjustment else float(_spl_val) if _spl_val is not None else s_price
             )
             s_val_local = 0.0 if is_re_adjustment else float(s_qty * s_price_local)
-            currency_id = (
+            currency_id = str(
                 row.get("CURRENCY_ID")
                 or master_row.get("CURRENCY_ID")
                 or getattr(self.rules, "DEFAULT_CURRENCY_ID", "INR_INR")
@@ -907,14 +907,10 @@ class IsinPipeline:
         total_inst = len(self.isins)
 
         p_dict_pl = (
-            self.ctx.df_p.partition_by("ISIN", as_dict=True)
-            if not self.ctx.df_p.is_empty()
-            else {}
+            self.ctx.df_p.partition_by("ISIN", as_dict=True) if not self.ctx.df_p.is_empty() else {}
         )
         s_dict_pl = (
-            self.ctx.df_s.partition_by("ISIN", as_dict=True)
-            if not self.ctx.df_s.is_empty()
-            else {}
+            self.ctx.df_s.partition_by("ISIN", as_dict=True) if not self.ctx.df_s.is_empty() else {}
         )
 
         m_grouped = (
@@ -938,9 +934,7 @@ class IsinPipeline:
             else pl.DataFrame()
         )
 
-        m_dict_pl = (
-            m_grouped.partition_by("ISIN", as_dict=True) if not m_grouped.is_empty() else {}
-        )
+        m_dict_pl = m_grouped.partition_by("ISIN", as_dict=True) if not m_grouped.is_empty() else {}
 
         bm_maps: dict[str, dict[date, float]] = {}
         for _isin, row in self.ctx.isin_master.items():
