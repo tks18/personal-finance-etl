@@ -284,6 +284,10 @@ class BudgetForecastBuilder:
       - Non-Core      = 20% of smoothed income (Total - Core)
       - Investment    = 30% of smoothed income (Net Transfers to investment accounts)
       - Buffer        = 10% implicit remainder
+
+    Produces actuals-vs-targets variance, Z-score anomaly detection,
+    trend/momentum signals, Lifestyle Creep Index, a 0-100 health score,
+    and a 3-month rolling income-weighted forward budget plan.
     """
 
     def __init__(
@@ -297,7 +301,7 @@ class BudgetForecastBuilder:
         self.rules = rules
 
     def build(self) -> pl.LazyFrame:
-        """Build the Budget Forecast LazyFrame.
+        """Build the Budget Forecast LazyFrame matching gold.Forecast_Budget_Variance.
 
         Returns
         -------
@@ -308,6 +312,7 @@ class BudgetForecastBuilder:
         if lf is None:
             return pl.LazyFrame()
 
+        # --- Config ---
         budget = self.rules.budget
         core_pct = budget.income_allocation.core_expense_pct
         non_core_pct = budget.income_allocation.non_core_expense_pct
@@ -315,9 +320,10 @@ class BudgetForecastBuilder:
         buffer_pct = 1.0 - core_pct - non_core_pct - investment_pct
         emergency_months = budget.alerts.emergency_fund_target_months
 
+        # Sort is MANDATORY before any window/rolling function (Polars join order is not stable)
         lf = lf.sort("MONTH_START_DATE")
 
-        # Step 1: Derive raw actuals
+        # ── Step 1: Derive raw actuals ───────────────────────────────────────────
         df_buys = self.dfs.get("df_f_tf_inv_purchase")
         df_sells = self.dfs.get("df_f_tf_inv_sale")
 
@@ -364,174 +370,170 @@ class BudgetForecastBuilder:
                 - pl.col("Actual_Core_Expense")
                 - pl.col("Actual_NonCore_Expense")
                 - pl.col("Actual_Investment")
-            ).alias("Actual_Buffer"),
+            ).alias("Actual_Savings"),
         )
 
-        # Step 2: Income smoothing
+        # ── Step 2: Rolling statistics ───────────────────────────────────────────
         lf = lf.with_columns(
-            rolling_avg("Actual_Income", 3).alias("Income_Smoothed_3M"),
-            rolling_avg("Actual_Income", 6).alias("Income_Smoothed_6M"),
+            pl.col("Actual_Income").shift(1).alias("Inc_T1"),
+            pl.col("Actual_Income").shift(2).alias("Inc_T2"),
+            pl.col("Actual_Income").shift(3).alias("Inc_T3"),
+            rolling_avg("Actual_Income", 3).alias("Income_3M_Mean"),
+            rolling_avg("Actual_Income", 6).alias("Income_6M_Mean"),
+            rolling_std("Actual_Income", 6).alias("Income_6M_Std"),
+            rolling_avg("Actual_Core_Expense", 3).alias("Core_3M_Mean"),
+            rolling_avg("Actual_Core_Expense", 6).alias("Core_6M_Mean"),
+            rolling_std("Actual_Core_Expense", 6).alias("Core_6M_Std"),
+            rolling_avg("Actual_NonCore_Expense", 3).alias("NonCore_3M_Mean"),
+            rolling_avg("Actual_NonCore_Expense", 6).alias("NonCore_6M_Mean"),
+            rolling_std("Actual_NonCore_Expense", 6).alias("NonCore_6M_Std"),
+        )
+
+        # ── Step 3: Smoothed budget base (recency-biased 3M weighted avg) ────────
+        # Weight: 3×T-1 + 2×T-2 + 1×T-3 / 6  →  falls back gracefully
+        lf = lf.with_columns(
+            pl.when(
+                pl.col("Inc_T1").is_not_null()
+                & pl.col("Inc_T2").is_not_null()
+                & pl.col("Inc_T3").is_not_null()
+            )
+            .then((3 * pl.col("Inc_T1") + 2 * pl.col("Inc_T2") + 1 * pl.col("Inc_T3")) / 6.0)
+            .when(pl.col("Inc_T1").is_not_null() & pl.col("Inc_T2").is_not_null())
+            .then((2 * pl.col("Inc_T1") + 1 * pl.col("Inc_T2")) / 3.0)
+            .when(pl.col("Inc_T1").is_not_null())
+            .then(pl.col("Inc_T1"))
+            .otherwise(pl.col("Actual_Income"))
+            .alias("Budget_Income"),
+        )
+
+        # ── Step 4: Income volatility & regime ───────────────────────────────────
+        lf = lf.with_columns(
+            safe_divide("Income_6M_Std", "Income_6M_Mean").alias("Income_Volatility_Pct"),
+            pl.col("Actual_Income").shift(1).alias("Prev_Income"),
         ).with_columns(
-            pl.coalesce(["Income_Smoothed_6M", "Income_Smoothed_3M", "Actual_Income"]).alias(
-                "Income_Baseline"
-            ),
+            pl.when(pl.col("Income_Volatility_Pct") > 0.20)
+            .then(pl.lit("Volatile"))
+            .when(
+                pl.col("Prev_Income").is_not_null()
+                & (pl.col("Actual_Income") > pl.col("Prev_Income") * 1.05)
+            )
+            .then(pl.lit("Growing"))
+            .otherwise(pl.lit("Stable"))
+            .alias("Income_Regime"),
         )
 
-        # Step 3: Compute targets
+        # ── Step 5: Rule-based budget targets ────────────────────────────────────
         lf = lf.with_columns(
-            (pl.col("Income_Baseline") * core_pct).alias("Target_Core_Expense"),
-            (pl.col("Income_Baseline") * non_core_pct).alias("Target_NonCore_Expense"),
-            (pl.col("Income_Baseline") * investment_pct).alias("Target_Investment"),
-            (pl.col("Income_Baseline") * buffer_pct).alias("Target_Buffer"),
-        )
-
-        # Step 4: Variances
-        lf = lf.with_columns(
-            (pl.col("Actual_Core_Expense") - pl.col("Target_Core_Expense")).alias(
-                "Variance_Core_Expense"
-            ),
-            (pl.col("Actual_NonCore_Expense") - pl.col("Target_NonCore_Expense")).alias(
-                "Variance_NonCore_Expense"
-            ),
-            (pl.col("Actual_Investment") - pl.col("Target_Investment")).alias(
-                "Variance_Investment"
-            ),
-            (pl.col("Actual_Buffer") - pl.col("Target_Buffer")).alias("Variance_Buffer"),
+            pl.lit(core_pct).alias("Rule_Core_Pct_Budget"),
+            pl.lit(non_core_pct).alias("Rule_NonCore_Pct_Budget"),
+            pl.lit(investment_pct).alias("Rule_Investment_Pct_Budget"),
+            (pl.col("Budget_Income") * core_pct).alias("Budget_Core_Expense_Target"),
+            (pl.col("Budget_Income") * non_core_pct).alias("Budget_NonCore_Expense_Target"),
+            (pl.col("Budget_Income") * investment_pct).alias("Budget_Investment_Target"),
         ).with_columns(
-            safe_divide("Variance_Core_Expense", "Target_Core_Expense").alias(
-                "Variance_Core_Expense_Pct"
+            (pl.col("Budget_Core_Expense_Target") + pl.col("Budget_NonCore_Expense_Target")).alias(
+                "Budget_Total_Expense_Target"
             ),
-            safe_divide("Variance_NonCore_Expense", "Target_NonCore_Expense").alias(
-                "Variance_NonCore_Expense_Pct"
-            ),
-            safe_divide("Variance_Investment", "Target_Investment").alias(
-                "Variance_Investment_Pct"
-            ),
+            (pl.col("Budget_Income") * buffer_pct).alias("Budget_Surplus_Buffer"),
         )
 
-        # Step 5: Rolling actuals & z-scores
+        # ── Step 6: Actuals vs targets (variance) ────────────────────────────────
         lf = lf.with_columns(
-            rolling_avg("Actual_Core_Expense", 12).alias("Rolling_12M_Mean_Core"),
-            rolling_std("Actual_Core_Expense", 12).alias("Rolling_12M_Std_Core"),
-            rolling_avg("Actual_NonCore_Expense", 12).alias("Rolling_12M_Mean_NonCore"),
-            rolling_std("Actual_NonCore_Expense", 12).alias("Rolling_12M_Std_NonCore"),
-            rolling_avg("Actual_Income", 12).alias("Rolling_12M_Mean_Income"),
-        ).with_columns(
-            safe_divide(
-                pl.col("Actual_Core_Expense") - pl.col("Rolling_12M_Mean_Core"),
-                "Rolling_12M_Std_Core",
-            ).alias("Z_Score_Core_Expense"),
-            safe_divide(
-                pl.col("Actual_NonCore_Expense") - pl.col("Rolling_12M_Mean_NonCore"),
-                "Rolling_12M_Std_NonCore",
-            ).alias("Z_Score_NonCore_Expense"),
-        )
-
-        # Step 6: Trend & lifestyle creep
-        lf = lf.with_columns(
+            (pl.col("Actual_Core_Expense") - pl.col("Budget_Core_Expense_Target")).alias(
+                "Core_Expense_Variance"
+            ),
+            (pl.col("Actual_NonCore_Expense") - pl.col("Budget_NonCore_Expense_Target")).alias(
+                "NonCore_Expense_Variance"
+            ),
+            (pl.col("Budget_Investment_Target") - pl.col("Actual_Investment")).alias(
+                "Investment_Shortfall"
+            ),
             (
-                safe_divide("Actual_NonCore_Expense", "Actual_Income")
-                / safe_divide("Rolling_12M_Mean_NonCore", "Rolling_12M_Mean_Income")
-            ).alias("Lifestyle_Creep_Index"),
-            safe_divide(
-                pl.col("Actual_Core_Expense") - pl.col("Actual_Core_Expense").shift(3),
-                pl.col("Actual_Core_Expense").shift(3),
-            ).alias("Core_Expense_3M_Trend_Pct"),
-            safe_divide(
-                pl.col("Actual_NonCore_Expense") - pl.col("Actual_NonCore_Expense").shift(3),
-                pl.col("Actual_NonCore_Expense").shift(3),
-            ).alias("NonCore_Expense_3M_Trend_Pct"),
-            safe_divide("Liquid_Assets_Market", pl.col("Actual_Core_Expense") * emergency_months).alias(
-                "Emergency_Fund_Health_Ratio"
+                (pl.col("Actual_Core_Expense") + pl.col("Actual_NonCore_Expense"))
+                - pl.col("Budget_Total_Expense_Target")
+            ).alias("Total_Budget_Variance"),
+        )
+
+        # ── Step 7: Actual allocation percentages ────────────────────────────────
+        lf = lf.with_columns(
+            safe_divide("Actual_Core_Expense", "Actual_Income").alias("Actual_Core_Pct_of_Income"),
+            safe_divide("Actual_NonCore_Expense", "Actual_Income").alias(
+                "Actual_NonCore_Pct_of_Income"
             ),
+            safe_divide("Actual_Investment", "Actual_Income").alias(
+                "Actual_Investment_Pct_of_Income"
+            ),
+            safe_divide("Actual_Savings", "Actual_Income").alias("Actual_Savings_Pct_of_Income"),
         )
 
-        # Step 7: Scoring
-        core_score = (
-            pl.when(pl.col("Variance_Core_Expense_Pct") <= 0.0)
-            .then(35.0)
-            .when(pl.col("Variance_Core_Expense_Pct") <= 0.10)
-            .then(25.0)
-            .when(pl.col("Variance_Core_Expense_Pct") <= 0.20)
-            .then(15.0)
-            .otherwise(0.0)
-        )
-        non_core_score = (
-            pl.when(pl.col("Variance_NonCore_Expense_Pct") <= 0.0)
-            .then(20.0)
-            .when(pl.col("Variance_NonCore_Expense_Pct") <= 0.15)
-            .then(12.0)
-            .when(pl.col("Variance_NonCore_Expense_Pct") <= 0.30)
-            .then(6.0)
-            .otherwise(0.0)
-        )
-        invest_score = (
-            pl.when(pl.col("Variance_Investment_Pct") >= 0.0)
-            .then(35.0)
-            .when(pl.col("Variance_Investment_Pct") >= -0.15)
-            .then(25.0)
-            .when(pl.col("Variance_Investment_Pct") >= -0.30)
-            .then(15.0)
-            .otherwise(0.0)
-        )
-        buffer_score = (
-            pl.when(pl.col("Actual_Buffer") >= 0.0).then(10.0).otherwise(0.0)
-        )
-
+        # ── Step 12: Runway metrics ───────────────────────────────────────────────
         lf = lf.with_columns(
-            (core_score + non_core_score + invest_score + buffer_score).alias("Budget_Health_Score")
+            safe_divide("Liquid_Assets_Market", "Actual_Core_Expense").alias(
+                "Zero_Income_Runway_Months"
+            ),
+            (
+                pl.col("Core_6M_Mean").fill_null(pl.col("Actual_Core_Expense")) * emergency_months
+                - pl.col("Liquid_Assets_Market")
+            ).alias("Emergency_Fund_Gap"),
+        )
+
+        # ── Step 14: Boolean flags ────────────────────────────────────────────────
+        lf = lf.with_columns(
+            (pl.col("Actual_Core_Expense") > pl.col("Budget_Core_Expense_Target")).alias(
+                "Is_Core_Overspent"
+            ),
+            (pl.col("Actual_NonCore_Expense") > pl.col("Budget_NonCore_Expense_Target")).alias(
+                "Is_NonCore_Overspent"
+            ),
+            (pl.col("Actual_Investment") < pl.col("Budget_Investment_Target")).alias(
+                "Is_Investment_Underfunded"
+            ),
+            (pl.col("Income_Volatility_Pct") > 0.20).alias("Is_Income_Volatile"),
         ).with_columns(
-            pl.when(pl.col("Budget_Health_Score") >= 80.0)
-            .then(pl.lit("EXCELLENT"))
-            .when(pl.col("Budget_Health_Score") >= 60.0)
-            .then(pl.lit("GOOD"))
-            .when(pl.col("Budget_Health_Score") >= 40.0)
-            .then(pl.lit("FAIR"))
-            .otherwise(pl.lit("POOR"))
-            .alias("Budget_Health_Tier")
+            (
+                ~(
+                    pl.col("Is_Core_Overspent")
+                    | pl.col("Is_NonCore_Overspent")
+                    | pl.col("Is_Investment_Underfunded")
+                )
+            ).alias("Is_Budget_Month_Healthy"),
         )
 
-        # Step 8: Forward budget plan
-        lf = lf.with_columns(
-            (pl.col("Income_Smoothed_3M") * core_pct).alias("Plan_Forward_Core_Expense"),
-            (pl.col("Income_Smoothed_3M") * non_core_pct).alias("Plan_Forward_NonCore_Expense"),
-            (pl.col("Income_Smoothed_3M") * investment_pct).alias("Plan_Forward_Investment"),
-            (pl.col("Income_Smoothed_3M") * buffer_pct).alias("Plan_Forward_Buffer"),
-        )
-
+        # ── Final select ──────────────────────────────────────────────────────────
         return lf.select(
             [
                 "MONTH_START_DATE",
                 "MONTH_END_DATE",
                 "YEAR_MONTH",
+                # Income anchor
+                "Total_Income",
                 "Actual_Income",
-                "Income_Baseline",
+                "Budget_Income",
+                # Rule targets
+                "Rule_Core_Pct_Budget",
+                "Rule_NonCore_Pct_Budget",
+                "Rule_Investment_Pct_Budget",
+                "Budget_Core_Expense_Target",
+                "Budget_NonCore_Expense_Target",
+                "Budget_Investment_Target",
+                "Budget_Surplus_Buffer",
+                "Budget_Total_Expense_Target",
+                # Actuals
                 "Actual_Core_Expense",
-                "Target_Core_Expense",
-                "Variance_Core_Expense",
-                "Variance_Core_Expense_Pct",
                 "Actual_NonCore_Expense",
-                "Target_NonCore_Expense",
-                "Variance_NonCore_Expense",
-                "Variance_NonCore_Expense_Pct",
+                "Investment_Deployed",
+                "Investment_Redeemed",
                 "Actual_Investment",
-                "Target_Investment",
-                "Variance_Investment",
-                "Variance_Investment_Pct",
-                "Actual_Buffer",
-                "Target_Buffer",
-                "Variance_Buffer",
-                "Z_Score_Core_Expense",
-                "Z_Score_NonCore_Expense",
-                "Lifestyle_Creep_Index",
-                "Core_Expense_3M_Trend_Pct",
-                "NonCore_Expense_3M_Trend_Pct",
-                "Emergency_Fund_Health_Ratio",
-                "Budget_Health_Score",
-                "Budget_Health_Tier",
-                "Plan_Forward_Core_Expense",
-                "Plan_Forward_NonCore_Expense",
-                "Plan_Forward_Investment",
-                "Plan_Forward_Buffer",
+                "Actual_Savings",
+                # Runway
+                "Zero_Income_Runway_Months",
+                "Emergency_Fund_Gap",
+                # Flags
+                "Is_Core_Overspent",
+                "Is_NonCore_Overspent",
+                "Is_Investment_Underfunded",
+                "Is_Income_Volatile",
+                "Is_Budget_Month_Healthy",
             ]
         )
+
