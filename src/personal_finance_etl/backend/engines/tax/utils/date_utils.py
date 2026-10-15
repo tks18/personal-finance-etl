@@ -1,24 +1,13 @@
-import polars as pl
+"""DEPRECATED - Legacy date utilities shim module.
 
+This module has been deactivated as part of Phase 2 of the Grand Refactor.
+Canonical date and fiscal year helpers now reside in:
+`personal_finance_etl.domain.common.dates`
 
-def add_fy_if_missing(df: pl.LazyFrame, date_col: str) -> pl.LazyFrame:
-    """Adds Financial Year (FY) column to a LazyFrame if missing."""
-    if "FY" not in df.collect_schema().names():
-        df = (
-            df.with_columns(
-                pl.col(date_col)
-                .cast(pl.Date, strict=False)
-                .dt.offset_by("-3mo")
-                .dt.year()
-                .alias("FY_Year")
-            )
-            .with_columns(
-                (
-                    pl.col("FY_Year").cast(pl.String)
-                    + "-"
-                    + (pl.col("FY_Year") + 1).cast(pl.String).str.slice(2, 2)
-                ).alias("FY")
-            )
-            .drop("FY_Year")
-        )
-    return df
+This file is maintained strictly as a backwards-compatible pass-through delegation shim.
+Do not edit or add logic here.
+"""
+
+from personal_finance_etl.domain.common.dates import add_fy_if_missing
+
+__all__ = ["add_fy_if_missing"]
