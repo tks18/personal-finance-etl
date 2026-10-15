@@ -154,4 +154,3 @@ CREATE TABLE IF NOT EXISTS cp_simulation_runs (
     FOREIGN KEY(rules_snapshot_id) REFERENCES cp_rules_snapshots(snapshot_id)
 );
 """
-
