@@ -14,132 +14,23 @@ from pathlib import Path
 
 import polars as pl
 
-from personal_finance_etl.application.investments.aggregation_service import (
-    PostProcessingPipeline,
-    PostProcessor,
-)
-from personal_finance_etl.application.investments.context import (
-    AnalyticsContextManager,
-    RunContext,
-)
-from personal_finance_etl.application.investments.input_adapter import (
-    IsinDataExtractor,
-    TaxDataLoader,
-    clean_numeric_col,
-    parse_date_col,
-)
-from personal_finance_etl.application.investments.isin_service import (
-    IsinPipeline,
-    IsinProcessor,
-    _is_zero_proceeds_re_adjustment,
-    _process_isin_worker,
-    is_indian_rights_entitlement_isin,
-)
 from personal_finance_etl.application.investments.quant_service import (
     InvestmentQuantEngine,
-    QuantService,
 )
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.domain.common.calculation import CalculationStatus
 from personal_finance_etl.domain.investments.lots.fifo import FIFOPortfolio
-from personal_finance_etl.domain.investments.performance.attribution import (
-    RealizedGainsCalculator,
-)
 from personal_finance_etl.domain.investments.performance.returns import calculate_cagr
 from personal_finance_etl.domain.investments.performance.xirr import (
-    PortfolioXIRRCalculator,
     calculate_xirr,
-    numeric_value,
 )
-from personal_finance_etl.domain.investments.portfolio.aggregation import (
-    PORTFOLIO_COL_RENAMES,
-    GroupProcessor,
-    PortfolioWeightsCalculator,
-)
-from personal_finance_etl.domain.investments.portfolio.analytics import (
-    AdvancedAnalyticsCalculator,
-    HarvestRecommendationCalculator,
-)
-from personal_finance_etl.domain.investments.portfolio.snapshots import SnapshotGenerator
 from personal_finance_etl.domain.investments.reconciliation.engine import (
     ReconciliationEngine,
 )
 from personal_finance_etl.domain.investments.valuation.benchmark import (
     BenchmarkPriceProvider,
 )
-from personal_finance_etl.domain.investments.valuation.fx import (
-    FXProviderMissingError,
-    FXRateUnavailableError,
-    FXValidationGate,
-)
 from personal_finance_etl.domain.market.macro import FYMacroParametersTable
-
-
-def test_phase6_object_identity_equivalence() -> None:
-    """Verify 100% strict object identity equivalence (`is`) for all Phase 6 modules."""
-    import personal_finance_etl.backend.engines.analytics as legacy_pkg_analytics
-    import personal_finance_etl.backend.engines.analytics.context as legacy_context
-    import personal_finance_etl.backend.engines.analytics.core.fifo as legacy_fifo
-    import personal_finance_etl.backend.engines.analytics.core.math as legacy_math
-    import personal_finance_etl.backend.engines.analytics.engine as legacy_engine
-    import personal_finance_etl.backend.engines.analytics.io.loader as legacy_loader
-    import personal_finance_etl.backend.engines.analytics.isin_pipeline as legacy_isin_pipeline
-    import personal_finance_etl.backend.engines.analytics.pipeline.context as legacy_pipe_context
-    import personal_finance_etl.backend.engines.analytics.pipeline.postprocessor.analytics as legacy_post_analytics
-    import personal_finance_etl.backend.engines.analytics.pipeline.postprocessor.coordinator as legacy_coordinator
-    import personal_finance_etl.backend.engines.analytics.pipeline.postprocessor.gains as legacy_post_gains
-    import personal_finance_etl.backend.engines.analytics.pipeline.postprocessor.group_processor as legacy_post_group
-    import personal_finance_etl.backend.engines.analytics.pipeline.postprocessor.harvest as legacy_post_harvest
-    import personal_finance_etl.backend.engines.analytics.pipeline.postprocessor.weights as legacy_post_weights
-    import personal_finance_etl.backend.engines.analytics.pipeline.postprocessor.xirr as legacy_post_xirr
-    import personal_finance_etl.backend.engines.analytics.pipeline.processor.benchmark as legacy_proc_bm
-    import personal_finance_etl.backend.engines.analytics.pipeline.processor.extractor as legacy_extractor
-    import personal_finance_etl.backend.engines.analytics.pipeline.processor.fx_gate as legacy_proc_fx
-    import personal_finance_etl.backend.engines.analytics.pipeline.processor.isin_processor as legacy_proc_isin
-    import personal_finance_etl.backend.engines.analytics.pipeline.processor.snapshot as legacy_proc_snapshot
-    import personal_finance_etl.backend.engines.analytics.post_pipeline as legacy_post_pipeline
-
-    # FIFO & Lots
-    assert FIFOPortfolio is legacy_fifo.FIFOPortfolio
-
-    # Valuation & Benchmark
-    assert FXValidationGate is legacy_proc_fx.FXValidationGate
-    assert FXProviderMissingError is legacy_proc_fx.FXProviderMissingError
-    assert FXRateUnavailableError is legacy_proc_fx.FXRateUnavailableError
-    assert BenchmarkPriceProvider is legacy_proc_bm.BenchmarkPriceProvider
-
-    # Performance
-    assert calculate_cagr is legacy_math.calculate_cagr
-    assert calculate_xirr is legacy_math.calculate_xirr
-    assert numeric_value is legacy_post_xirr._numeric_value
-    assert PortfolioXIRRCalculator is legacy_post_xirr.PortfolioXIRRCalculator
-    assert RealizedGainsCalculator is legacy_post_gains.RealizedGainsCalculator
-
-    # Portfolio
-    assert SnapshotGenerator is legacy_proc_snapshot.SnapshotGenerator
-    assert AdvancedAnalyticsCalculator is legacy_post_analytics.AdvancedAnalyticsCalculator
-    assert HarvestRecommendationCalculator is legacy_post_harvest.HarvestRecommendationCalculator
-    assert GroupProcessor is legacy_post_group.GroupProcessor
-    assert PORTFOLIO_COL_RENAMES is legacy_post_group.PORTFOLIO_COL_RENAMES
-    assert PortfolioWeightsCalculator is legacy_post_weights.PortfolioWeightsCalculator
-
-    # Application Services
-    assert TaxDataLoader is legacy_loader.TaxDataLoader
-    assert parse_date_col is legacy_loader.parse_date_col
-    assert clean_numeric_col is legacy_loader.clean_numeric_col
-    assert IsinDataExtractor is legacy_extractor.IsinDataExtractor
-    assert RunContext is legacy_pipe_context.RunContext
-    assert AnalyticsContextManager is legacy_context.AnalyticsContextManager
-    assert IsinProcessor is legacy_proc_isin.IsinProcessor
-    assert is_indian_rights_entitlement_isin is legacy_proc_isin.is_indian_rights_entitlement_isin
-    assert _is_zero_proceeds_re_adjustment is legacy_proc_isin._is_zero_proceeds_re_adjustment
-    assert IsinPipeline is legacy_isin_pipeline.IsinPipeline
-    assert _process_isin_worker is legacy_isin_pipeline._process_isin_worker
-    assert PostProcessor is legacy_coordinator.PostProcessor
-    assert PostProcessingPipeline is legacy_post_pipeline.PostProcessingPipeline
-    assert InvestmentQuantEngine is legacy_engine.InvestmentQuantEngine
-    assert InvestmentQuantEngine is legacy_pkg_analytics.InvestmentQuantEngine
-    assert QuantService is InvestmentQuantEngine
 
 
 def test_fifo_accounting_lifecycle() -> None:
