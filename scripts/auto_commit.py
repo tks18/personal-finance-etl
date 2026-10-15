@@ -359,6 +359,14 @@ KNOWN_COMMIT_MESSAGES: dict[str, str] = {
     "tests/test_phase9_orchestration_and_bootstrap.py": "test(bootstrap): remove obsolete legacy shim identity tests",
     "tests/test_phase10_presentation.py": "test(presentation): remove obsolete legacy shim identity tests",
     "tests/test_phase11_legacy_demolition.py": "test(demolition): add Phase 11 legacy demolition test suite",
+    # Phase 12 Constitutional Certification & Audit
+    "src/personal_finance_etl/__init__.py": "docs(root): add NumPy Owns and Does not own package docstrings",
+    "src/personal_finance_etl/application/investments/isin_service.py": "refactor(application): type partition dicts and eliminate type ignores",
+    "src/personal_finance_etl/domain/fire/simulation.py": "refactor(domain): specify explicit codes for numba prange ignore",
+    "src/personal_finance_etl/domain/tax/reconciliation.py": "refactor(domain): specify explicit code on schema cast ignore",
+    "src/personal_finance_etl/presentation/desktop/app.py": "refactor(presentation): specify misc code on DesktopApp ignore",
+    "tests/test_phase12_constitutional_certification.py": "test(certification): add Phase 12 constitutional audit test suite",
+    "scripts/auto_commit.py": "chore(scripts): add Phase 12 commit messages mapping",
 }
 
 
