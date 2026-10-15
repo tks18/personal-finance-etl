@@ -34,4 +34,3 @@ __all__ = [
     "FXValidationGate",
     "transform_us_market_data",
 ]
-
