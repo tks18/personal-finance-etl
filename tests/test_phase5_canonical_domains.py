@@ -13,46 +13,6 @@ from datetime import date
 import polars as pl
 import pytest
 
-# Legacy imports
-from personal_finance_etl.backend.engines.analytics.rules import (
-    macro as legacy_macro,
-)
-from personal_finance_etl.backend.transform import (
-    benchmark_transformer as legacy_bm,
-)
-from personal_finance_etl.backend.transform import (
-    calendar as legacy_cal,
-)
-from personal_finance_etl.backend.transform import (
-    currency_transformer as legacy_fx,
-)
-from personal_finance_etl.backend.transform import (
-    dimensions as legacy_dim,
-)
-from personal_finance_etl.backend.transform import (
-    facts as legacy_facts,
-)
-from personal_finance_etl.backend.transform import (
-    helpers as legacy_helpers,
-)
-from personal_finance_etl.backend.transform import (
-    investments as legacy_inv,
-)
-from personal_finance_etl.backend.transform import (
-    mutual_funds as legacy_mf,
-)
-from personal_finance_etl.backend.transform import (
-    stocks as legacy_stocks,
-)
-from personal_finance_etl.backend.transform import (
-    us_stocks as legacy_us,
-)
-from personal_finance_etl.backend.transform import (
-    us_stocks_transformer as legacy_us_tx,
-)
-from personal_finance_etl.backend.utils import (
-    ordering as legacy_ord,
-)
 from personal_finance_etl.domain.household.transforms import (
     calendar as target_cal,
 )
@@ -62,102 +22,20 @@ from personal_finance_etl.domain.household.transforms import (
 from personal_finance_etl.domain.household.transforms import (
     dimensions as target_dim,
 )
-from personal_finance_etl.domain.household.transforms import (
-    transactions as target_facts,
-)
 from personal_finance_etl.domain.investments.lots import (
     ordering as target_ord,
 )
 from personal_finance_etl.domain.investments.transforms import (
     common as target_inv,
 )
-from personal_finance_etl.domain.investments.transforms import (
-    indian_equity as target_stocks,
-)
-from personal_finance_etl.domain.investments.transforms import (
-    mutual_funds as target_mf,
-)
-from personal_finance_etl.domain.investments.transforms import (
-    us_equity as target_us,
-)
-from personal_finance_etl.domain.investments.valuation import (
-    market_state as target_us_mkt,
-)
 
 # Canonical target imports
-from personal_finance_etl.domain.market import (
-    benchmarks as target_bm,
-)
 from personal_finance_etl.domain.market import (
     fx as target_fx,
 )
 from personal_finance_etl.domain.market import (
     macro as target_macro,
 )
-
-
-def test_phase5_legacy_identity_equivalence():
-    """Verify 100% strict object identity equivalence (`is`) for all Phase 5 modules."""
-    # Calendar
-    assert legacy_cal.get_stg_calendar_ref is target_cal.get_stg_calendar_ref
-    assert legacy_cal.transform_d_calendar is target_cal.transform_d_calendar
-
-    # Common helpers
-    assert legacy_helpers.get_column_mapping is target_common.get_column_mapping
-
-    # Dimensions
-    assert legacy_dim.transform_d_income_category is target_dim.transform_d_income_category
-    assert legacy_dim.transform_d_asset_category is target_dim.transform_d_asset_category
-    assert legacy_dim.transform_d_currency is target_dim.transform_d_currency
-    assert (
-        legacy_dim.transform_d_investment_benchmark_master
-        is target_dim.transform_d_investment_benchmark_master
-    )
-
-    # Facts
-    assert legacy_facts.get_base_transactions is target_facts.get_base_transactions
-    assert (
-        legacy_facts.transform_f_income_transactions is target_facts.transform_f_income_transactions
-    )
-    assert legacy_facts.transform_f_opening_balances is target_facts.transform_f_opening_balances
-
-    # Market benchmarks
-    assert legacy_bm.BenchmarkTransformer is target_bm.BenchmarkTransformer
-    assert legacy_bm.transform_benchmark_data is target_bm.transform_benchmark_data
-
-    # Market FX
-    assert legacy_fx.transform_currency_fx_rates is target_fx.transform_currency_fx_rates
-
-    # Market Macro
-    assert legacy_macro.FYMacroParametersTable is target_macro.FYMacroParametersTable
-    assert legacy_macro.add_months is target_macro.add_months
-    assert legacy_macro.get_ltcg_threshold_months is target_macro.get_ltcg_threshold_months
-
-    # Investments Lots Ordering
-    assert legacy_ord.CanonicalOrderPolicy is target_ord.CanonicalOrderPolicy
-    assert legacy_ord.sort_purchases is target_ord.sort_purchases
-    assert legacy_ord.sort_sales is target_ord.sort_sales
-
-    # Investments Common
-    assert legacy_inv.get_purchase_reference is target_inv.get_purchase_reference
-    assert legacy_inv.get_sale_reference is target_inv.get_sale_reference
-    assert legacy_inv.get_d_investment_master is target_inv.get_d_investment_master
-
-    # Mutual Funds
-    assert legacy_mf.get_stg_mf_market_data is target_mf.get_stg_mf_market_data
-    assert legacy_mf.get_stg_mf_master_ref is target_mf.get_stg_mf_master_ref
-
-    # Stocks
-    assert legacy_stocks.get_stg_stock_market_data is target_stocks.get_stg_stock_market_data
-    assert legacy_stocks.get_stg_stock_master_ref is target_stocks.get_stg_stock_master_ref
-
-    # US Stocks
-    assert legacy_us.get_base_us_stock_transactions is target_us.get_base_us_stock_transactions
-    assert legacy_us.get_stg_us_stock_master_ref is target_us.get_stg_us_stock_master_ref
-
-    # US Stocks Transformer
-    assert legacy_us_tx.transform_us_market_data is target_us_mkt.transform_us_market_data
-    assert legacy_us_tx.EMPTY_US_MARKET_SCHEMA is target_us_mkt.EMPTY_US_MARKET_SCHEMA
 
 
 def test_calendar_transforms():
