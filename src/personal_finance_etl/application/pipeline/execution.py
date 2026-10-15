@@ -179,7 +179,7 @@ class PipelineExecutor:
             cast(
                 Any,
                 EngineStatusMessage(
-                    msg="Starting Investment Quant Engine...",
+                    msg="",
                     progress=0.6,
                     level=LogLevel.STEP,
                 ),
@@ -240,7 +240,7 @@ class PipelineExecutor:
             cast(
                 Any,
                 EngineStatusMessage(
-                    msg="Starting Presentation Layer Engines...",
+                    msg="",
                     progress=0.8,
                     level=LogLevel.STEP,
                 ),
@@ -260,7 +260,7 @@ class PipelineExecutor:
                 cast(
                     Any,
                     EngineStatusMessage(
-                        msg="Executing Presentation DAG in Parallel...",
+                        msg="",
                         progress=0.9,
                         level=LogLevel.STEP,
                     ),
