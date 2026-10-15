@@ -906,10 +906,10 @@ class IsinPipeline:
         has_data = False
         total_inst = len(self.isins)
 
-        p_dict_pl = (
+        p_dict_pl: dict[Any, pl.DataFrame] = (
             self.ctx.df_p.partition_by("ISIN", as_dict=True) if not self.ctx.df_p.is_empty() else {}
         )
-        s_dict_pl = (
+        s_dict_pl: dict[Any, pl.DataFrame] = (
             self.ctx.df_s.partition_by("ISIN", as_dict=True) if not self.ctx.df_s.is_empty() else {}
         )
 
@@ -934,7 +934,9 @@ class IsinPipeline:
             else pl.DataFrame()
         )
 
-        m_dict_pl = m_grouped.partition_by("ISIN", as_dict=True) if not m_grouped.is_empty() else {}
+        m_dict_pl: dict[Any, pl.DataFrame] = (
+            m_grouped.partition_by("ISIN", as_dict=True) if not m_grouped.is_empty() else {}
+        )
 
         bm_maps: dict[str, dict[date, float]] = {}
         for _isin, row in self.ctx.isin_master.items():
@@ -959,23 +961,17 @@ class IsinPipeline:
             ]
         ] = []
         for isin in self.isins:
-            p_df = (
-                p_dict_pl.get((isin,)) if (isin,) in p_dict_pl else p_dict_pl.get(isin)  # type: ignore
-            )
+            p_df = p_dict_pl.get((isin,)) if (isin,) in p_dict_pl else p_dict_pl.get(isin)
             p_inst = (
                 p_df.sort("Date").to_dicts() if p_df is not None and not p_df.is_empty() else []
             )
 
-            s_df = (
-                s_dict_pl.get((isin,)) if (isin,) in s_dict_pl else s_dict_pl.get(isin)  # type: ignore
-            )
+            s_df = s_dict_pl.get((isin,)) if (isin,) in s_dict_pl else s_dict_pl.get(isin)
             s_inst = (
                 s_df.sort("Date").to_dicts() if s_df is not None and not s_df.is_empty() else []
             )
 
-            m_df = (
-                m_dict_pl.get((isin,)) if (isin,) in m_dict_pl else m_dict_pl.get(isin)  # type: ignore
-            )
+            m_df = m_dict_pl.get((isin,)) if (isin,) in m_dict_pl else m_dict_pl.get(isin)
             m_inst = m_df.to_dicts() if m_df is not None and not m_df.is_empty() else []
 
             master_row = self.ctx.isin_master.get(isin, {})
