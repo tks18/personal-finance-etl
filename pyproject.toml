@@ -1,6 +1,6 @@
 [project]
 name = "personal-finance-etl"
-version = "8.3.1"
+version = "9.0.0"
 description = "Local-first financial data engineering and quantitative decision-support platform for reconciled personal finance, investment analytics, tax evidence, FIRE simulation, and BI."
 authors = [
   { name="Shan", email="tksudharshan@gmail.com" },
@@ -74,8 +74,8 @@ requires = ["hatchling>=1.27.0"]
 build-backend = "hatchling.build"
 
 [project.scripts]
-shan-fin = "personal_finance_etl.frontend.launcher:main"
-shan-fin-gui = "personal_finance_etl.frontend.desktop.app:main"
+shan-fin = "personal_finance_etl.presentation.launcher:main"
+shan-fin-gui = "personal_finance_etl.presentation.desktop.app:main"
 
 [dependency-groups]
 dev = [
@@ -83,6 +83,7 @@ dev = [
     "poethepoet>=0.48.0",
     "pyinstaller>=6.21.0",
     "pyright>=1.1.411",
+    "pytest>=9.1.1",
     "ruff>=0.15.22",
     "tkreload>=1.0.4",
     "vulture>=2.16",
@@ -124,7 +125,9 @@ strict = true
 
 [tool.pyright]
 typeCheckingMode = "strict"
-ignore = ["src/personal_finance_etl/frontend/desktop"]
+ignore = [
+    "src/personal_finance_etl/presentation/desktop",
+]
 
 [project.urls]
 Homepage = "https://github.com/tks18/personal-finance-etl"

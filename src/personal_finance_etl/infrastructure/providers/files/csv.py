@@ -1,0 +1,157 @@
+"""CSV parsing and evidence extraction adapter.
+
+Owns
+----
+- Parsing in-memory CSV binary payloads into Polars LazyFrames.
+- Applying source-level schema overrides for configuration and mapping assets.
+- Ingestion metadata tagging (__file_name__, __folder_path__).
+
+Does not own
+-------------
+- Validation of business logic (owned by domain.common.validation).
+- File reading from disk (payloads provided via Control Plane Raw Store).
+"""
+
+from __future__ import annotations
+
+import io
+
+import polars as pl
+
+from personal_finance_etl.infrastructure.logging import logger
+
+__all__ = [
+    "extract_benchmark_master_raw",
+    "extract_currency_mapping_raw",
+    "extract_macro_parameters_raw",
+    "extract_opening_balances_raw",
+    "extract_stg_benchmark_mapping",
+    "extract_stg_mf_isin_mapping",
+]
+
+
+def extract_stg_mf_isin_mapping(filename: str, folder_path: str, raw_bytes: bytes) -> pl.LazyFrame:
+    """Parse Mutual Fund ISIN mapping CSV bytes into a LazyFrame."""
+    schema_overrides = {"INSTRUMENT_NAME": pl.String, "ISIN": pl.String}
+    logger.debug(f"[EXTRACT:CSV] Building lazy frame for MF ISIN mapping: {filename}")
+    return (
+        pl.read_csv(io.BytesIO(raw_bytes), schema_overrides=schema_overrides)
+        .lazy()
+        .with_columns(
+            pl.lit(filename).alias("__file_name__"),
+            pl.lit(folder_path).alias("__folder_path__"),
+        )
+    )
+
+
+def extract_currency_mapping_raw(filename: str, folder_path: str, raw_bytes: bytes) -> pl.LazyFrame:
+    """Parse Currency mapping CSV bytes into a LazyFrame."""
+    schema_overrides = {
+        "UID": pl.String,
+        "Currency_Code": pl.String,
+        "Target_Currency_Code": pl.String,
+        "yF_Ticker": pl.String,
+        "Currency_Name": pl.String,
+        "Is_Active": pl.Boolean,
+    }
+    logger.debug(f"[EXTRACT:CSV] Building lazy frame for Currency mapping: {filename}")
+    return (
+        pl.read_csv(io.BytesIO(raw_bytes), schema_overrides=schema_overrides)
+        .lazy()
+        .with_columns(
+            pl.lit(filename).alias("__file_name__"),
+            pl.lit(folder_path).alias("__folder_path__"),
+        )
+    )
+
+
+def extract_stg_benchmark_mapping(
+    filename: str, folder_path: str, raw_bytes: bytes
+) -> pl.LazyFrame:
+    """Parse Benchmark mapping CSV bytes into a LazyFrame."""
+    schema_overrides = {
+        "ISIN": pl.String,
+        "Sector": pl.String,
+        "Industry": pl.String,
+        "Benchmark_ID": pl.String,
+        "Yahoo_Ticker": pl.String,
+        "Tax_Instrument_Type": pl.String,
+        "Tax_Instrument_Subtype": pl.String,
+        "Country": pl.String,
+        "Geo": pl.String,
+        "Geo_Subtype": pl.String,
+    }
+    logger.debug(f"[EXTRACT:CSV] Building lazy frame for Benchmark mapping: {filename}")
+    return (
+        pl.read_csv(io.BytesIO(raw_bytes), schema_overrides=schema_overrides)
+        .lazy()
+        .with_columns(
+            pl.lit(filename).alias("__file_name__"),
+            pl.lit(folder_path).alias("__folder_path__"),
+        )
+    )
+
+
+def extract_benchmark_master_raw(filename: str, folder_path: str, raw_bytes: bytes) -> pl.LazyFrame:
+    """Parse Benchmark master CSV bytes into a LazyFrame."""
+    schema_overrides = {
+        "ID": pl.String,
+        "Benchmark_Name": pl.String,
+        "yF_Ticker": pl.String,
+        "Currency": pl.String,
+    }
+    logger.debug(f"[EXTRACT:CSV] Building lazy frame for Benchmark master: {filename}")
+    return (
+        pl.read_csv(io.BytesIO(raw_bytes), schema_overrides=schema_overrides)
+        .lazy()
+        .with_columns(
+            pl.lit(filename).alias("__file_name__"),
+            pl.lit(folder_path).alias("__folder_path__"),
+        )
+    )
+
+
+def extract_macro_parameters_raw(filename: str, folder_path: str, raw_bytes: bytes) -> pl.LazyFrame:
+    """Parse Macro Parameters CSV bytes into a LazyFrame."""
+    schema_overrides = {
+        "FY": pl.String,
+        "FY_Start_Date": pl.Date,
+        "FY_End_Date": pl.Date,
+        "Debt_MF_Cutoff_Date": pl.Date,
+        "Inflation_Rate": pl.Float64,
+        "Risk_Free_Rate": pl.Float64,
+        "Equity_Listed_LTCG": pl.Float64,
+        "Equity_Listed_STCG": pl.Float64,
+        "Equity_Unlisted_LTCG": pl.Float64,
+        "Equity_Unlisted_STCG": pl.Float64,
+        "Gold_LTCG": pl.Float64,
+        "Gold_STCG": pl.Float64,
+        "Debt_MF_Pre_Cutoff_LTCG": pl.Float64,
+        "Debt_MF_Pre_Cutoff_STCG": pl.Float64,
+        "Debt_MF_Post_Cutoff_LTCG": pl.Float64,
+        "Debt_MF_Post_Cutoff_STCG": pl.Float64,
+        "Other_Debt_LTCG": pl.Float64,
+        "Other_Debt_STCG": pl.Float64,
+        "Default_LTCG": pl.Float64,
+        "Default_STCG": pl.Float64,
+        "Equity_LTCG_Exemption": pl.Int64,
+        "Estimated_Ordinary_Income_Tax_Rate": pl.Float64,
+        "Remarks": pl.String,
+    }
+    return (
+        pl.read_csv(io.BytesIO(raw_bytes), schema_overrides=schema_overrides, try_parse_dates=True)
+        .lazy()
+        .with_columns(
+            pl.lit(filename).alias("__file_name__"),
+            pl.lit(folder_path).alias("__folder_path__"),
+        )
+    )
+
+
+def extract_opening_balances_raw(filename: str, folder_path: str, raw_bytes: bytes) -> pl.LazyFrame:
+    """Parse Opening Balances CSV bytes into a LazyFrame."""
+    df = pl.read_csv(io.BytesIO(raw_bytes), try_parse_dates=True)
+    return df.lazy().with_columns(
+        pl.lit(filename).alias("__file_name__"),
+        pl.lit(folder_path).alias("__folder_path__"),
+    )
