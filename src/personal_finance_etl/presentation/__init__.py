@@ -13,3 +13,7 @@ Does not own
 - Execution orchestration (owned by application.*).
 - Storage or persistence mechanisms (owned by infrastructure.*).
 """
+
+from personal_finance_etl.presentation.launcher import build_argument_parser, main
+
+__all__ = ["build_argument_parser", "main"]
