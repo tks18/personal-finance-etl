@@ -93,7 +93,9 @@ def add_queue_handler(
 
 def add_file_handler(file_path: str) -> None:
     """Attach an enterprise-grade file handler to the application logger."""
-    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    dir_name = os.path.dirname(file_path)
+    if dir_name:
+        os.makedirs(dir_name, exist_ok=True)
 
     for h in logger.handlers[:]:
         if isinstance(h, logging.FileHandler):
