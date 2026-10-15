@@ -38,8 +38,8 @@ def _flatten_settings_to_records(node: Any, path: list[str], records: list[dict[
         for k, v in dict_node.items():
             _flatten_settings_to_records(v, path + [k], records)
     elif isinstance(node, list):
-        list_node = cast("list[Any]", node)
-        for i, v in enumerate(list_node):  # pyright: ignore[reportUnknownVariableType]
+        list_node = cast(list[object], node)
+        for i, v in enumerate(list_node):
             _flatten_settings_to_records(v, path + [str(i)], records)
     else:
         group = "General"
