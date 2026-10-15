@@ -32,7 +32,9 @@ __all__ = ["InflationBuilder"]
 class InflationBuilder:
     """Constructs monthly continuous inflation rates and cumulative CPI index series."""
 
-    def __init__(self, dfs: Mapping[str, pl.DataFrame | pl.LazyFrame], rules: FinancialRules) -> None:
+    def __init__(
+        self, dfs: Mapping[str, pl.DataFrame | pl.LazyFrame], rules: FinancialRules
+    ) -> None:
         self.dfs = dfs
         self.rules = rules
 
