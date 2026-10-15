@@ -14,12 +14,14 @@ Does not own
 - Physical table insertion into DuckDB (owned by infrastructure.warehouse).
 """
 
+from __future__ import annotations
+
 import polars as pl
 
 from personal_finance_etl.config.financial_rules import FinancialRules, TaxHeadConfig
 
 
-def _get_tax_maps(rules: FinancialRules | None):
+def _get_tax_maps(rules: FinancialRules | None) -> tuple[pl.LazyFrame, pl.LazyFrame]:
     schema = {
         "UID": pl.Utf8,
         "Tax_Income_Head": pl.Utf8,
