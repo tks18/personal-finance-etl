@@ -3,6 +3,7 @@
 Owns
 ----
 - LogLevel enumeration used across process boundaries and UI queues.
+- StatusQueue protocol for cross-process status sinks (with ILogger backward-compatibility alias).
 
 Does not own
 -------------
@@ -13,7 +14,7 @@ Does not own
 from enum import StrEnum
 from typing import Any, Protocol
 
-__all__ = ["LogLevel", "StatusQueue"]
+__all__ = ["ILogger", "LogLevel", "StatusQueue"]
 
 
 class LogLevel(StrEnum):
@@ -32,3 +33,7 @@ class StatusQueue(Protocol):
     def put(self, status: Any, block: bool = True, timeout: float | None = None) -> None:
         """Put a status item onto the queue."""
         ...
+
+
+# Architectural alias for legacy ILogger protocol
+ILogger = StatusQueue
