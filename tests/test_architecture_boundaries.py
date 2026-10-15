@@ -159,3 +159,9 @@ def test_dependency_boundaries():
                         )
 
     assert not violations, "Architectural boundary violations found:\n" + "\n".join(violations)
+
+
+def test_legacy_packages_demolished():
+    """Assert that legacy backend and frontend packages no longer exist under SRC_ROOT."""
+    assert not (SRC_ROOT / "backend").exists(), "Legacy 'backend' directory still exists in src"
+    assert not (SRC_ROOT / "frontend").exists(), "Legacy 'frontend' directory still exists in src"
