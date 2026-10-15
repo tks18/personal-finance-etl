@@ -157,8 +157,49 @@ KNOWN_COMMIT_MESSAGES: dict[str, str] = {
     "src/personal_finance_etl/backend/pipeline/currency_pipeline.py": "refactor(legacy): deactivate CurrencyPipeline and delegate",
     "src/personal_finance_etl/backend/pipeline/benchmark_pipeline.py": "refactor(legacy): deactivate BenchmarkPipeline and delegate",
     "src/personal_finance_etl/backend/pipeline/us_market_pipeline.py": "refactor(legacy): deactivate USMarketPipeline and delegate",
+    # Phase 5: Canonical Financial Domains (Household)
+    "src/personal_finance_etl/domain/household/transforms/calendar.py": "feat(domain): implement calendar time intelligence transform",
+    "src/personal_finance_etl/domain/household/transforms/common.py": "feat(domain): implement household mapping helpers",
+    "src/personal_finance_etl/domain/household/transforms/dimensions.py": "feat(domain): implement household dimension transformations",
+    "src/personal_finance_etl/domain/household/transforms/transactions.py": "feat(domain): implement transaction facts transformations",
+    "src/personal_finance_etl/domain/household/transforms/__init__.py": "refactor(domain): export canonical household transformations",
+    # Phase 5: Canonical Financial Domains (Market)
+    "src/personal_finance_etl/domain/market/benchmarks.py": "feat(domain): implement benchmark returns and staleness policy",
+    "src/personal_finance_etl/domain/market/fx.py": "feat(domain): implement FXRateProvider and daily FX series",
+    "src/personal_finance_etl/domain/market/macro.py": "feat(domain): implement FYMacroParametersTable and holding rules",
+    "src/personal_finance_etl/domain/market/__init__.py": "refactor(domain): export canonical market domain models",
+    # Phase 5: Canonical Financial Domains (Investments)
+    "src/personal_finance_etl/domain/investments/lots/ordering.py": "feat(domain): implement CanonicalOrderPolicy lot sorting",
+    "src/personal_finance_etl/domain/investments/lots/__init__.py": "refactor(domain): export investments lot ordering policy",
+    "src/personal_finance_etl/domain/investments/transforms/common.py": "feat(domain): implement investment reference transformations",
+    "src/personal_finance_etl/domain/investments/transforms/indian_equity.py": "feat(domain): implement Indian equity trade transformations",
+    "src/personal_finance_etl/domain/investments/transforms/mutual_funds.py": "feat(domain): implement mutual fund trade transformations",
+    "src/personal_finance_etl/domain/investments/transforms/us_equity.py": "feat(domain): implement US equity trade transformations",
+    "src/personal_finance_etl/domain/investments/valuation/market_state.py": "feat(domain): implement US stock FIFO market valuation spine",
+    "src/personal_finance_etl/domain/investments/transforms/__init__.py": "refactor(domain): export canonical investment transformations",
+    "src/personal_finance_etl/domain/investments/valuation/__init__.py": "refactor(domain): export investment valuation models",
+    # Phase 5: Legacy Deactivations
+    "src/personal_finance_etl/backend/transform/calendar.py": "refactor(legacy): deactivate transform calendar and delegate",
+    "src/personal_finance_etl/backend/transform/helpers.py": "refactor(legacy): deactivate transform helpers and delegate",
+    "src/personal_finance_etl/backend/transform/dimensions.py": "refactor(legacy): deactivate transform dimensions and delegate",
+    "src/personal_finance_etl/backend/transform/facts.py": "refactor(legacy): deactivate transform facts and delegate",
+    "src/personal_finance_etl/backend/transform/benchmark_transformer.py": "refactor(legacy): deactivate benchmark transformer and delegate",
+    "src/personal_finance_etl/backend/transform/currency_transformer.py": "refactor(legacy): deactivate currency transformer and delegate",
+    "src/personal_finance_etl/backend/engines/analytics/rules/macro.py": "refactor(legacy): deactivate macro parameters and delegate",
+    "src/personal_finance_etl/backend/utils/ordering.py": "refactor(legacy): deactivate ordering policy and delegate",
+    "src/personal_finance_etl/backend/transform/investments.py": "refactor(legacy): deactivate transform investments and delegate",
+    "src/personal_finance_etl/backend/transform/mutual_funds.py": "refactor(legacy): deactivate transform mutual funds and delegate",
+    "src/personal_finance_etl/backend/transform/stocks.py": "refactor(legacy): deactivate transform stocks and delegate",
+    "src/personal_finance_etl/backend/transform/us_stocks.py": "refactor(legacy): deactivate transform US stocks and delegate",
+    "src/personal_finance_etl/backend/transform/us_stocks_transformer.py": "refactor(legacy): deactivate US stocks transformer and delegate",
+    # Phase 5: Application Ingestion Updates
+    "src/personal_finance_etl/application/ingestion/coordinator.py": "refactor(application): import helpers from canonical domain",
+    "src/personal_finance_etl/application/ingestion/asset_strategies.py": "refactor(application): import strategies from canonical domain",
+    "src/personal_finance_etl/application/ingestion/market_sync.py": "refactor(application): import market sync from canonical domain",
+    # Phase 5: Verification Suite
+    "tests/test_phase5_canonical_domains.py": "test(domain): add Phase 5 canonical domain test suite",
     # Scripts & Tooling
-    "scripts/auto_commit.py": "chore(scripts): add auto_commit tool for granular commits",
+    "scripts/auto_commit.py": "chore(scripts): update auto_commit tool with Phase 5 mappings",
 }
 
 
