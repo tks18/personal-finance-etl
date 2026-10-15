@@ -110,9 +110,7 @@ class RealizedGainsCalculator:
                     .then(pl.col("Realized_Gain_Loss"))
                     .otherwise(0.0)
                     .alias("is_stcg"),
-                    pl.when(
-                        (pl.col("Holding_Type") == "LTCG") & (pl.col("Realized_Gain_Loss") < 0)
-                    )
+                    pl.when((pl.col("Holding_Type") == "LTCG") & (pl.col("Realized_Gain_Loss") < 0))
                     .then(pl.col("Realized_Gain_Loss"))
                     .otherwise(0.0)
                     .alias("is_ltcl"),
@@ -128,9 +126,7 @@ class RealizedGainsCalculator:
                     .then(pl.col("Realized_Gain_Loss"))
                     .otherwise(0.0)
                     .alias("is_eq_ltcl"),
-                    pl.when(
-                        (pl.col("Holding_Type") == "STCG") & (pl.col("Realized_Gain_Loss") < 0)
-                    )
+                    pl.when((pl.col("Holding_Type") == "STCG") & (pl.col("Realized_Gain_Loss") < 0))
                     .then(pl.col("Realized_Gain_Loss"))
                     .otherwise(0.0)
                     .alias("is_stcl"),
@@ -219,12 +215,7 @@ class RealizedGainsCalculator:
                 pl.col("cum_ltcl").round(4).alias("FY_Realized_LTCL"),
                 pl.col("cum_stcl").round(4).alias("FY_Realized_STCL"),
                 (pl.col("cum_ltcl") + pl.col("cum_stcl")).round(4).alias("FY_Realized_Loss"),
-                (
-                    pl.col("cum_ltcg")
-                    + pl.col("cum_stcg")
-                    + pl.col("cum_ltcl")
-                    + pl.col("cum_stcl")
-                )
+                (pl.col("cum_ltcg") + pl.col("cum_stcg") + pl.col("cum_ltcl") + pl.col("cum_stcl"))
                 .round(4)
                 .alias("FY_Realized_Net_PnL"),
                 pl.max_horizontal(
@@ -249,18 +240,14 @@ class RealizedGainsCalculator:
                 ]
             )
 
-            lazy_df = lazy_df.join(
-                df_fy_joined.lazy(), on="Closing_Date", how="left"
-            ).with_columns(
+            lazy_df = lazy_df.join(df_fy_joined.lazy(), on="Closing_Date", how="left").with_columns(
                 (pl.col("FY_Realized_LTCG") * pl.col("Lot_Weight")).alias("FY_Realized_LTCG"),
                 (pl.col("FY_Realized_STCG") * pl.col("Lot_Weight")).alias("FY_Realized_STCG"),
                 (pl.col("FY_Realized_Gain") * pl.col("Lot_Weight")).alias("FY_Realized_Gain"),
                 (pl.col("FY_Realized_LTCL") * pl.col("Lot_Weight")).alias("FY_Realized_LTCL"),
                 (pl.col("FY_Realized_STCL") * pl.col("Lot_Weight")).alias("FY_Realized_STCL"),
                 (pl.col("FY_Realized_Loss") * pl.col("Lot_Weight")).alias("FY_Realized_Loss"),
-                (pl.col("FY_Realized_Net_PnL") * pl.col("Lot_Weight")).alias(
-                    "FY_Realized_Net_PnL"
-                ),
+                (pl.col("FY_Realized_Net_PnL") * pl.col("Lot_Weight")).alias("FY_Realized_Net_PnL"),
             )
 
         else:
@@ -288,9 +275,7 @@ class RealizedGainsCalculator:
                 (pl.col("FY_Realized_LTCL") * pl.col("Lot_Weight")).alias("FY_Realized_LTCL"),
                 (pl.col("FY_Realized_STCL") * pl.col("Lot_Weight")).alias("FY_Realized_STCL"),
                 (pl.col("FY_Realized_Loss") * pl.col("Lot_Weight")).alias("FY_Realized_Loss"),
-                (pl.col("FY_Realized_Net_PnL") * pl.col("Lot_Weight")).alias(
-                    "FY_Realized_Net_PnL"
-                ),
+                (pl.col("FY_Realized_Net_PnL") * pl.col("Lot_Weight")).alias("FY_Realized_Net_PnL"),
             )
 
         return lazy_df
