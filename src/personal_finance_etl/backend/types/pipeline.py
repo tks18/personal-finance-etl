@@ -1,22 +1,9 @@
 from datetime import date
-from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
-
-class CommitState(StrEnum):
-    """Explicit cross-database transaction commit state."""
-
-    NOT_STARTED = "NOT_STARTED"
-    STARTED = "STARTED"
-    ROLLED_BACK = "ROLLED_BACK"
-    DUCKDB_COMMITTED = "DUCKDB_COMMITTED"
-    FULLY_COMMITTED = "FULLY_COMMITTED"
-    RECOVERY_REQUIRED = "RECOVERY_REQUIRED"
-    CONVERGED = "CONVERGED"
-    DUCKDB_COMMITTED_SQLITE_FAILED = "RECOVERY_REQUIRED"
-    COMMIT_STATE_UNKNOWN = "COMMIT_STATE_UNKNOWN"
+from personal_finance_etl.contracts.lifecycle import CommitState as CommitState
 
 
 class ISINTaskPayload(BaseModel):
