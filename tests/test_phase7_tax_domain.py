@@ -76,6 +76,7 @@ def test_tax_shims_object_identity() -> None:
 def mock_rules() -> FinancialRules:
     """Create a minimal FinancialRules instance for tax testing."""
     from pathlib import Path
+
     rules = FinancialRules.from_toml(Path("tests/financial_rules.toml"))
     rules.assumptions.tax.debt_mf_cutoff_date = "2023-03-31"
     rules.assumptions.tax.investment_exclusions = InvestmentExclusionsConfig(
@@ -101,9 +102,30 @@ def mock_rules() -> FinancialRules:
 def mock_subcategory_df() -> pl.DataFrame:
     return pl.DataFrame(
         {
-            "UID": ["CAT_SALARY", "CAT_INTEREST", "CAT_EXCL_STCG", "CAT_EXCL_LTCG", "CAT_CREDIT_TDS", "CAT_NON_TAXABLE"],
-            "Tax_Income_Head": ["Salary", "Income from Other Sources", "Capital Gains", "Capital Gains", "TAX_CREDIT", "Exempt"],
-            "Tax_Sub_Head": ["Basic Salary", "Interest", "Equity_Listed_STCG", "Equity_Listed_LTCG", "TDS Credit", "Exempt"],
+            "UID": [
+                "CAT_SALARY",
+                "CAT_INTEREST",
+                "CAT_EXCL_STCG",
+                "CAT_EXCL_LTCG",
+                "CAT_CREDIT_TDS",
+                "CAT_NON_TAXABLE",
+            ],
+            "Tax_Income_Head": [
+                "Salary",
+                "Income from Other Sources",
+                "Capital Gains",
+                "Capital Gains",
+                "TAX_CREDIT",
+                "Exempt",
+            ],
+            "Tax_Sub_Head": [
+                "Basic Salary",
+                "Interest",
+                "Equity_Listed_STCG",
+                "Equity_Listed_LTCG",
+                "TDS Credit",
+                "Exempt",
+            ],
             "Taxability": ["taxable", "taxable", "taxable", "taxable", "taxable", "non_taxable"],
             "Tax_Method": ["Slab", "Slab", "Special", "Special", "Credit", "None"],
             "Is_Investment_Exclusion": [False, False, True, True, False, False],
@@ -216,7 +238,9 @@ def test_tax_classifier_map_quant_sub_head() -> None:
     assert not ok and subhead == "CHECK_REQUIRED"
 
 
-def test_tax_classifier_validation(mock_rules: FinancialRules, mock_subcategory_df: pl.DataFrame) -> None:
+def test_tax_classifier_validation(
+    mock_rules: FinancialRules, mock_subcategory_df: pl.DataFrame
+) -> None:
     # Tax credit subhead map
     credit_map = TaxClassifier.build_tax_credit_subhead_map(mock_rules)
     assert credit_map == {"CAT_CREDIT_TDS": "Interest Income"}
@@ -319,7 +343,9 @@ def test_base_events_builder_exclusion_credit_overlap(
         df_subcategory=mock_subcategory_df,
         rules=mock_rules,
     )
-    with pytest.raises(ValueError, match="cannot be both an investment-gain exclusion and a tax credit"):
+    with pytest.raises(
+        ValueError, match="cannot be both an investment-gain exclusion and a tax credit"
+    ):
         builder.build()
 
 
