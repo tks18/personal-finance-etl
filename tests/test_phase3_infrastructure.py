@@ -19,112 +19,26 @@ import tempfile
 import duckdb
 import pytest
 
-# Legacy imports
-from personal_finance_etl.backend.load import backup as legacy_backup
-from personal_finance_etl.backend.load import bronze as legacy_bronze
-from personal_finance_etl.backend.load import database as legacy_database
-from personal_finance_etl.backend.load import gold as legacy_gold
-from personal_finance_etl.backend.load import metadata as legacy_metadata
-from personal_finance_etl.backend.load import registry as legacy_registry
-from personal_finance_etl.backend.load import schema as legacy_schema
-from personal_finance_etl.backend.load import silver as legacy_silver
-from personal_finance_etl.backend.load.control_plane import artifact_repo as legacy_artifact_repo
-from personal_finance_etl.backend.load.control_plane import connection as legacy_cp_conn
-from personal_finance_etl.backend.load.control_plane import file_sync as legacy_file_sync
-from personal_finance_etl.backend.load.control_plane import orchestrator as legacy_orchestrator
-from personal_finance_etl.backend.load.control_plane import run_repo as legacy_run_repo
-from personal_finance_etl.backend.load.control_plane import utils as legacy_cp_utils
-from personal_finance_etl.backend.utils import logger as legacy_logger
 from personal_finance_etl.contracts.lifecycle import CommitState
 from personal_finance_etl.contracts.recovery import SnapshotOutcome
 
 # Canonical targets
-from personal_finance_etl.infrastructure.control_plane.artifact_repository import (
-    ArtifactRepository,
-)
 from personal_finance_etl.infrastructure.control_plane.connection import SQLiteManager
-from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
-from personal_finance_etl.infrastructure.control_plane.file_sync import FileSyncService
 from personal_finance_etl.infrastructure.control_plane.hashing import (
-    FILE_TYPE_MAP,
-    compute_file_hash,
     generate_file_id,
     hash_bytes,
     normalize_path,
 )
 from personal_finance_etl.infrastructure.control_plane.run_repository import RunRepository
-from personal_finance_etl.infrastructure.logging.setup import (
-    ContextFilter,
-    QueueHandler,
-    logger,
-    setup_logger,
-)
 from personal_finance_etl.infrastructure.recovery.backup import SystemBackupManager
-from personal_finance_etl.infrastructure.warehouse.bronze import BronzeLayer
 from personal_finance_etl.infrastructure.warehouse.connection import DuckDBManager
 from personal_finance_etl.infrastructure.warehouse.fingerprints import (
     generate_contract_registry_fingerprint,
 )
-from personal_finance_etl.infrastructure.warehouse.gold import GoldLayer
-from personal_finance_etl.infrastructure.warehouse.meta import MetaLayer
 from personal_finance_etl.infrastructure.warehouse.registry import (
-    BRONZE_CONTRACT_REGISTRY,
-    DATA_CONTRACT_REGISTRY,
-    BronzeDataContract,
-    DataContract,
     get_contract_by_table,
     validate_registry,
 )
-from personal_finance_etl.infrastructure.warehouse.schema.bronze import BRONZE_DDL
-from personal_finance_etl.infrastructure.warehouse.schema.control_plane import RAW_DDL
-from personal_finance_etl.infrastructure.warehouse.schema.gold import GOLD_DDL
-from personal_finance_etl.infrastructure.warehouse.schema.meta import META_DDL
-from personal_finance_etl.infrastructure.warehouse.schema.pragmas import SQLITE_PRAGMAS
-from personal_finance_etl.infrastructure.warehouse.schema.silver import SILVER_DDL
-from personal_finance_etl.infrastructure.warehouse.silver import SilverLayer
-
-
-def test_phase3_object_identity_equivalence() -> None:
-    """Verify 100% object identity equivalence between legacy and canonical targets."""
-    # Control plane shims
-    assert legacy_cp_conn.SQLiteManager is SQLiteManager
-    assert legacy_run_repo.RunRepository is RunRepository
-    assert legacy_artifact_repo.ArtifactRepository is ArtifactRepository
-    assert legacy_file_sync.FileSyncService is FileSyncService
-    assert legacy_orchestrator.ControlPlane is ControlPlane
-    assert legacy_cp_utils.compute_file_hash is compute_file_hash
-    assert legacy_cp_utils.generate_file_id is generate_file_id
-    assert legacy_cp_utils.hash_bytes is hash_bytes
-    assert legacy_cp_utils.normalize_path is normalize_path
-    assert legacy_cp_utils.FILE_TYPE_MAP is FILE_TYPE_MAP
-
-    # Warehouse shims
-    assert legacy_database.DuckDBManager is DuckDBManager
-    assert legacy_registry.DataContract is DataContract
-    assert legacy_registry.BronzeDataContract is BronzeDataContract
-    assert legacy_registry.BRONZE_CONTRACT_REGISTRY is BRONZE_CONTRACT_REGISTRY
-    assert legacy_registry.DATA_CONTRACT_REGISTRY is DATA_CONTRACT_REGISTRY
-    assert legacy_registry.get_contract_by_table is get_contract_by_table
-    assert legacy_registry.validate_registry is validate_registry
-    assert legacy_bronze.BronzeLayer is BronzeLayer
-    assert legacy_silver.SilverLayer is SilverLayer
-    assert legacy_gold.GoldLayer is GoldLayer
-    assert legacy_metadata.MetaLayer is MetaLayer
-
-    # Schema shims
-    assert legacy_schema.BRONZE_DDL is BRONZE_DDL
-    assert legacy_schema.SILVER_DDL is SILVER_DDL
-    assert legacy_schema.GOLD_DDL is GOLD_DDL
-    assert legacy_schema.META_DDL is META_DDL
-    assert legacy_schema.RAW_DDL is RAW_DDL
-    assert legacy_schema.SQLITE_PRAGMAS is SQLITE_PRAGMAS
-
-    # Recovery and Logging shims
-    assert legacy_backup.SystemBackupManager is SystemBackupManager
-    assert legacy_logger.logger is logger
-    assert legacy_logger.setup_logger is setup_logger
-    assert legacy_logger.ContextFilter is ContextFilter
-    assert legacy_logger.QueueHandler is QueueHandler
 
 
 def test_sqlite_control_plane_lifecycle() -> None:
