@@ -1,8 +1,10 @@
-SQLITE_PRAGMAS = """
-PRAGMA journal_mode = WAL;
-PRAGMA synchronous = NORMAL;
-PRAGMA foreign_keys = ON;
-PRAGMA temp_store = MEMORY;
-PRAGMA cache_size = -20000;
-PRAGMA mmap_size = 2147483648;
+"""Pass-through delegation shim for SQLite PRAGMAs.
+
+Superseded by personal_finance_etl.infrastructure.warehouse.schema.pragmas.
 """
+
+from __future__ import annotations
+
+from personal_finance_etl.infrastructure.warehouse.schema.pragmas import SQLITE_PRAGMAS
+
+__all__ = ["SQLITE_PRAGMAS"]
