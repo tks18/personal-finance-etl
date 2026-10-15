@@ -9,7 +9,7 @@ datas = [
     ('logo.png', '.'),
     ('README.md', '.'),
     ('docs', 'docs'),
-    ('src/personal_finance_etl/frontend/commons/docs/assets', 'personal_finance_etl/frontend/commons/docs/assets'),
+    ('src/personal_finance_etl/presentation/docs/assets', 'personal_finance_etl/presentation/docs/assets'),
 ]
 datas += collect_data_files('personal_finance_etl')
 binaries = []
