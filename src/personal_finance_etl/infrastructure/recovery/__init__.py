@@ -12,3 +12,8 @@ Does not own
 - Control Plane run lifecycle updates (owned by infrastructure.control_plane).
 """
 
+from __future__ import annotations
+
+from personal_finance_etl.infrastructure.recovery.backup import SystemBackupManager
+
+__all__ = ["SystemBackupManager"]
