@@ -52,6 +52,16 @@ class EngineStatusMessage:
     failure_domain: FailureDomain | None = None
     timestamp: datetime = field(default_factory=datetime.now)
 
+    @property
+    def message(self) -> str:
+        """Alias for msg for backward compatibility."""
+        return self.msg
+
+    @property
+    def status(self) -> LogLevel:
+        """Alias for level for backward compatibility."""
+        return self.level
+
 
 @dataclass(frozen=True)
 class EngineExecutionResult:
