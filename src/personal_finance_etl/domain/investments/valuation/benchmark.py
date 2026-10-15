@@ -118,4 +118,3 @@ class BenchmarkPriceProvider:
 
 
 __all__ = ["BenchmarkPriceProvider"]
-
