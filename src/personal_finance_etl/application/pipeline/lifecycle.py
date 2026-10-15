@@ -263,9 +263,7 @@ class RunLifecycleCoordinator:
                             failure_domain=FailureDomain.FINANCIAL_INVARIANT,
                         )
                     else:
-                        domain = classify_failure_domain(
-                            "Pipeline", type(exc).__name__ or str(exc)
-                        )
+                        domain = classify_failure_domain("Pipeline", type(exc).__name__ or str(exc))
                         self.cp.runs.log_run_failure(
                             run_id=self.run_id,
                             failed_isin=None,
