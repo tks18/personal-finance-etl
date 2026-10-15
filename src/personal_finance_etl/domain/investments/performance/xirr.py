@@ -210,4 +210,3 @@ __all__ = [
     "calculate_xirr",
     "numeric_value",
 ]
-
