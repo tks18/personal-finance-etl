@@ -410,7 +410,7 @@ class TaxGoldFormatter:
         combined = combined.with_columns(
             [pl.col(column).fill_null(0).alias(column) for column in numeric_zero_defaults]
         )
-        return combined.select(list(schema)).cast(schema).sort(["FY", "Tax_Sub_Head"])  # type: ignore
+        return combined.select(list(schema)).cast(schema).sort(["FY", "Tax_Sub_Head"])  # type: ignore[arg-type]
 
     def _ledger_source_evidence(self) -> pl.LazyFrame:
         """Join ledger amounts to one validated subcategory row for reconciliation."""
