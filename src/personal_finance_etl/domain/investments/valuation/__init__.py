@@ -13,12 +13,25 @@ Does not own
 - Lot FIFO state (owned by domain.investments.lots).
 """
 
+from personal_finance_etl.domain.investments.valuation.benchmark import (
+    BenchmarkPriceProvider,
+)
+from personal_finance_etl.domain.investments.valuation.fx import (
+    FXProviderMissingError,
+    FXRateUnavailableError,
+    FXValidationGate,
+)
 from personal_finance_etl.domain.investments.valuation.market_state import (
     EMPTY_US_MARKET_SCHEMA,
     transform_us_market_data,
 )
 
 __all__ = [
+    "BenchmarkPriceProvider",
     "EMPTY_US_MARKET_SCHEMA",
+    "FXProviderMissingError",
+    "FXRateUnavailableError",
+    "FXValidationGate",
     "transform_us_market_data",
 ]
+
