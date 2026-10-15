@@ -16,13 +16,6 @@ from datetime import date
 import polars as pl
 import pytest
 
-# Legacy shims for identity testing
-import personal_finance_etl.backend.engines.tax as legacy_tax_pkg
-import personal_finance_etl.backend.engines.tax.core as legacy_tax_core
-import personal_finance_etl.backend.engines.tax.core.base_events as legacy_base_events
-import personal_finance_etl.backend.engines.tax.core.gold_formatter as legacy_gold_formatter
-import personal_finance_etl.backend.engines.tax.tax_engine as legacy_tax_engine
-
 # Canonical domain and application imports
 from personal_finance_etl.application.tax import TaxEngine as AppTaxEngine
 from personal_finance_etl.application.tax import TaxService as AppTaxService
@@ -41,30 +34,17 @@ from personal_finance_etl.domain.tax import (
     TaxEventNormalizer,
     TaxGoldFormatter,
     TaxReconciler,
-    _batch_compute_tax_event_ids,
 )
 
 
 # ---------------------------------------------------------------------------
-# 1. Strict Identity Equivalence Tests
+# 1. Canonical Aliases Tests
 # ---------------------------------------------------------------------------
-def test_tax_shims_object_identity() -> None:
-    """Verify 100% strict object identity equivalence on all legacy shims."""
-    assert legacy_base_events.BaseEventsBuilder is BaseEventsBuilder
-    assert legacy_base_events.TAX_EVENT_SCHEMA is TAX_EVENT_SCHEMA
-    assert legacy_base_events._batch_compute_tax_event_ids is _batch_compute_tax_event_ids
-
-    assert legacy_gold_formatter.TaxGoldFormatter is TaxGoldFormatter
-
-    assert legacy_tax_engine.TaxEngine is TaxEngine
-    assert legacy_tax_engine.TaxEngine is TaxService
+def test_tax_canonical_aliases() -> None:
+    """Verify canonical application and domain alias equivalence."""
     assert AppTaxEngine is TaxService
     assert AppTaxService is TaxService
-
-    assert legacy_tax_core.BaseEventsBuilder is BaseEventsBuilder
-    assert legacy_tax_core.TaxGoldFormatter is TaxGoldFormatter
-
-    assert legacy_tax_pkg.TaxEngine is TaxService
+    assert TaxEngine is TaxService
     assert TaxEventNormalizer is BaseEventsBuilder
     assert TaxReconciler is TaxGoldFormatter
 
