@@ -1,248 +1,28 @@
-import polars as pl
+"""Legacy deactivation shim for backend.transform.mutual_funds.
 
-from personal_finance_etl.backend.utils.helpers import (
-    validate_and_parse_dates,
-    validate_and_parse_numerics,
+Delegates completely to canonical domain.investments.transforms.mutual_funds.
+"""
+
+from personal_finance_etl.domain.investments.transforms.mutual_funds import (
+    get_base_mf_transactions as get_base_mf_transactions,
+)
+from personal_finance_etl.domain.investments.transforms.mutual_funds import (
+    get_stg_mf_market_data as get_stg_mf_market_data,
+)
+from personal_finance_etl.domain.investments.transforms.mutual_funds import (
+    get_stg_mf_market_data_ref as get_stg_mf_market_data_ref,
+)
+from personal_finance_etl.domain.investments.transforms.mutual_funds import (
+    get_stg_mf_master_ref as get_stg_mf_master_ref,
+)
+from personal_finance_etl.domain.investments.transforms.mutual_funds import (
+    transform_stg_mf_trades as transform_stg_mf_trades,
 )
 
-
-def get_stg_mf_market_data(
-    raw_data: pl.LazyFrame, stg_mf_isin_mapping_lazy: pl.LazyFrame, default_currency_id: str
-) -> pl.LazyFrame:
-    """
-    Applies final PQ & DAX transformations (including LOOKUPVALUE).
-    Returns a LazyFrame.
-    """
-    df_combined = raw_data
-
-    # Filter out empty placeholder rows (e.g. "NO HOLDINGS FOUND", blank trailing rows)
-    # BEFORE running strict numeric validation on active holdings
-    scheme_clean = pl.col("Scheme Name").cast(pl.String).str.strip_chars()
-    df_transformed = df_combined.filter(
-        scheme_clean.is_not_null()
-        & (scheme_clean != "")
-        & (~scheme_clean.str.to_uppercase().is_in(["NO HOLDINGS FOUND", "NO DATA FOUND", "NO HOLDING FOUND"]))
-    ).with_columns(
-        pl.col("Folio No.").cast(pl.String),
-    )
-
-    num_cols = ["Units", "Invested Value", "Current Value", "Returns", "XIRR"]
-    df_transformed = validate_and_parse_numerics(
-        df_transformed,
-        num_cols,
-        optional_cols={"XIRR", "Returns"},
-        source_col="__file_name__",
-    )
-
-    df_transformed = (
-        df_transformed
-        # DAX: CURRENCY_ID
-        .with_columns(pl.lit(default_currency_id).alias("CURRENCY_ID"))
-        # DAX: LOOKUPVALUE for ISIN
-        # This replicates DAX by joining the MF_ISIN_MAPPING table
-        .join(
-            stg_mf_isin_mapping_lazy, left_on="Scheme Name", right_on="INSTRUMENT_NAME", how="left"
-        )
-        # Final Select (Ensure output matches your expected schema)
-        .select(
-            [
-                "__file_name__",
-                "__folder_path__",
-                "__file_category__",
-                "Month Date",
-                "Scheme Name",
-                "AMC",
-                "Category",
-                "Sub-category",
-                "Folio No.",
-                "Source",
-                "Units",
-                "Invested Value",
-                "Current Value",
-                "Returns",
-                "XIRR",
-                "CURRENCY_ID",
-                "ISIN",
-            ]
-        )
-    )
-
-    return df_transformed
-
-
-def get_stg_mf_market_data_ref(stg_mf_market_data_lazy: pl.LazyFrame) -> pl.LazyFrame:
-    """
-    Translates DAX SUMMARIZE + CALCULATE(SUM) for Mutual Funds.
-    Groups by Date, ISIN, and Instrument Name, sums the Units and Values,
-    and back-calculates the implied prices.
-    """
-    df_grouped = (
-        stg_mf_market_data_lazy
-        # SUMMARIZE (Group By)
-        .group_by(
-            [
-                "__file_category__",
-                pl.col("Month Date").alias("Date"),
-                "ISIN",
-                pl.col("Scheme Name").alias("Instrument Name"),
-                "CURRENCY_ID",
-            ]
-        )
-        # CALCULATE(SUM(Units)), SUM(Current Value), SUM(Invested Value)
-        .agg(
-            [
-                pl.col("Units").sum().alias("Quantity"),
-                pl.col("Current Value").sum().alias("Closing_Value"),
-                pl.col("Invested Value").sum().alias("Buy_Value"),
-            ]
-        )
-        # Add DAX Calculated Columns (with division by zero protection)
-        .with_columns(
-            [
-                pl.when(pl.col("Quantity") == 0)
-                .then(0.0)
-                .otherwise(pl.col("Closing_Value") / pl.col("Quantity"))
-                .alias("Closing_Price"),
-                pl.when(pl.col("Quantity") == 0)
-                .then(0.0)
-                .otherwise(pl.col("Buy_Value") / pl.col("Quantity"))
-                .alias("Buy_Price"),
-            ]
-        )
-        .with_columns((pl.col("Closing_Price") - pl.col("Buy_Price")).alias("Unit_PnL"))
-        .with_columns((pl.col("Unit_PnL") * pl.col("Quantity")).alias("Total_PnL"))
-    )
-    return df_grouped
-
-
-def get_base_mf_transactions(raw_data: pl.LazyFrame) -> pl.LazyFrame:
-    """
-    Acts as the MF_TRANSACTIONS helper query.
-    Extracts complex dates, and parses binaries.
-    """
-    df_combined = raw_data
-
-    scheme_clean = pl.col("Scheme Name").cast(pl.String).str.strip_chars()
-    df_transformed = df_combined.filter(
-        scheme_clean.is_not_null()
-        & (scheme_clean != "")
-        & (~scheme_clean.str.to_uppercase().is_in(["NO TRANSACTIONS FOUND", "NO DATA FOUND", "NO TRANSACTION FOUND"]))
-    ).select(
-        [
-            "__file_name__",
-            "__folder_path__",
-            "__file_category__",
-            "Month Date",
-            "Scheme Name",
-            "Transaction Type",
-            "Units",
-            "NAV",
-            "Amount",
-            "Date",
-        ]
-    )
-
-    df_transformed = validate_and_parse_numerics(
-        df_transformed,
-        ["Units", "NAV", "Amount"],
-        source_col="__file_name__",
-    )
-    df_transformed = validate_and_parse_dates(
-        df_transformed,
-        {"Date": ["%d %b %Y", "%d-%b-%Y", "%d-%m-%Y", "%Y-%m-%d"]},
-        source_col="__file_name__",
-    )
-
-    return df_transformed
-
-
-def transform_stg_mf_trades(
-    base_mf_orders_lazy: pl.LazyFrame,
-    stg_mf_isin_mapping_lazy: pl.LazyFrame,
-    scheme_mapping: dict[str, str],
-    trade_type: str,
-) -> pl.LazyFrame:
-    """
-    Branches into Purchase or Sale tables, applies DAX SWITCH logic for old names,
-    and runs the ISIN LOOKUPVALUE join.
-    trade_type must be "PURCHASE" or "REDEEM".
-    """
-    # 1. Filter for the specific transaction type
-    df_filtered = base_mf_orders_lazy.filter(
-        pl.col("Transaction Type").str.contains(f"(?i){trade_type}")
-    )
-
-    # 2. DAX SWITCH Logic (Fixing old Scheme Names via configuration)
-    # The mapping is strictly provided via the config.toml file.
-    if not scheme_mapping:
-        scheme_mapping = {}
-
-    # Replace strings natively if they exist in the dictionary, otherwise keep original
-    df_mapped = df_filtered.with_columns(
-        pl.col("Scheme Name")
-        .replace_strict(scheme_mapping, default=pl.col("Scheme Name"))
-        .alias("Final Scheme Name")
-    )
-
-    # 3. DAX LOOKUPVALUE logic for ISIN
-    # Replicated by joining the ISIN mapping table
-    df_transformed = df_mapped.join(
-        stg_mf_isin_mapping_lazy,
-        left_on="Final Scheme Name",
-        right_on="INSTRUMENT_NAME",
-        how="left",
-    )
-
-    return df_transformed
-
-
-def get_stg_mf_master_ref(
-    stg_mf_market_data_lazy: pl.LazyFrame,
-    stg_mf_purchase_transactions_lazy: pl.LazyFrame,
-    stg_mf_sale_transactions_lazy: pl.LazyFrame,
-    d_asset_subcategory_lazy: pl.LazyFrame,
-) -> pl.LazyFrame:
-    """
-    Translates stg_MFMasterRef.
-    Unions unique ISINs across MF tables, then looks up attributes from Market Data.
-    """
-
-    mf_category_lazy = d_asset_subcategory_lazy.filter(
-        pl.col("ASSET_NAME") == "Mutual Funds"
-    ).select(pl.col("UID").alias("CATEGORY_ID"))
-
-    # Step 1: UNION of ISIN and Name across the 3 MF tables
-    df_union = pl.concat(
-        [
-            stg_mf_market_data_lazy.select(
-                ["ISIN", pl.col("Scheme Name").alias("INSTRUMENT_NAME")]
-            ),
-            stg_mf_purchase_transactions_lazy.select(
-                ["ISIN", pl.col("Final Scheme Name").alias("INSTRUMENT_NAME")]
-            ),
-            stg_mf_sale_transactions_lazy.select(
-                ["ISIN", pl.col("Final Scheme Name").alias("INSTRUMENT_NAME")]
-            ),
-        ]
-    ).unique()
-
-    # Step 2: To replicate the CALCULATE(MAX()) and LOOKUPVALUE from Market Data,
-    # we get a distinct list of attributes from the Market Data table and join them back.
-    mf_attributes = (
-        stg_mf_market_data_lazy.select(["ISIN", "AMC", "Category", "Sub-category"])
-        .group_by("ISIN")
-        .agg(
-            [
-                pl.col("AMC").first().alias("INSTRUMENT_HOUSE"),
-                pl.col("Category").max().alias("INSTRUMENT_TYPE"),
-                pl.col("Sub-category").max().alias("INSTRUMENT_SUBTYPE"),
-            ]
-        )
-    )
-
-    df_grouped = (
-        df_union.join(mf_attributes, on="ISIN", how="left")
-        .with_columns([pl.lit("Mutual Funds").alias("INSTRUMENT_CLASS")])
-        .join(mf_category_lazy, how="cross")
-    )
-    return df_grouped
+__all__ = [
+    "get_base_mf_transactions",
+    "get_stg_mf_market_data",
+    "get_stg_mf_market_data_ref",
+    "get_stg_mf_master_ref",
+    "transform_stg_mf_trades",
+]
