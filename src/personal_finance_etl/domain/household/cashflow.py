@@ -64,9 +64,15 @@ class CashflowStatementBuilder:
         lf_exp_df = self.dfs.get("df_f_expense_transactions")
         lf_trn_df = self.dfs.get("df_f_transfer_transactions")
 
-        lf_months = self.base_lf.get("lf_months")
-        if lf_inc_df is None or lf_exp_df is None or lf_trn_df is None or lf_months is None:
+        lf_months_raw = self.base_lf.get("lf_months")
+        if (
+            lf_inc_df is None
+            or lf_exp_df is None
+            or lf_trn_df is None
+            or not isinstance(lf_months_raw, pl.LazyFrame)
+        ):
             return pl.LazyFrame()
+        lf_months: pl.LazyFrame = lf_months_raw
 
         lf_inc = ensure_date_col(
             lf_inc_df.lazy() if isinstance(lf_inc_df, pl.DataFrame) else lf_inc_df, "DATE"
@@ -78,7 +84,10 @@ class CashflowStatementBuilder:
             lf_trn_df.lazy() if isinstance(lf_trn_df, pl.DataFrame) else lf_trn_df, "DATE"
         )
 
-        lf_balances = self.base_lf.get("lf_nw_summary")
+        lf_balances_raw = self.base_lf.get("lf_nw_summary")
+        lf_balances: pl.LazyFrame | None = (
+            lf_balances_raw if isinstance(lf_balances_raw, pl.LazyFrame) else None
+        )
 
         # 1. Opening and Closing Cash Balances
         if lf_balances is not None:
@@ -125,7 +134,10 @@ class CashflowStatementBuilder:
         )
 
         # Monthly expense totals
-        lf_monthly_totals = self.base_lf.get("lf_monthly_totals")
+        lf_monthly_totals_raw = self.base_lf.get("lf_monthly_totals")
+        lf_monthly_totals: pl.LazyFrame | None = (
+            lf_monthly_totals_raw if isinstance(lf_monthly_totals_raw, pl.LazyFrame) else None
+        )
         if lf_monthly_totals is not None:
             lf_expense_totals = lf_monthly_totals.select(
                 [
@@ -327,12 +339,16 @@ class MonthlyCashflowSummaryBuilder:
         pl.LazyFrame
             LazyFrame matching presentation Monthly Cashflow Summary schema.
         """
-        lf_monthly = self.base_lf.get("lf_monthly_totals")
-        if lf_monthly is None:
+        lf_monthly_raw = self.base_lf.get("lf_monthly_totals")
+        if not isinstance(lf_monthly_raw, pl.LazyFrame):
             return pl.LazyFrame()
+        lf_monthly: pl.LazyFrame = lf_monthly_raw
 
         # Step 1: Income bifurcation from lf_inc_agg
-        lf_inc_agg = self.base_lf.get("lf_inc_agg")
+        lf_inc_raw = self.base_lf.get("lf_inc_agg")
+        lf_inc_agg: pl.LazyFrame | None = (
+            lf_inc_raw if isinstance(lf_inc_raw, pl.LazyFrame) else None
+        )
 
         if lf_inc_agg is not None:
             lf_inc_split = (
