@@ -100,7 +100,7 @@ class ETLOrchestrator:
                 cast(
                     Any,
                     EngineStatusMessage(
-                        msg="Initializing Master Engine...",
+                        msg="",
                         progress=0.0,
                         level=LogLevel.STEP,
                     ),
@@ -114,7 +114,7 @@ class ETLOrchestrator:
                 cast(
                     Any,
                     EngineStatusMessage(
-                        msg="Pipeline Execution Successful",
+                        msg="",
                         progress=1.0,
                         level=LogLevel.SUCCESS,
                     ),
