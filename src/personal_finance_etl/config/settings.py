@@ -22,6 +22,8 @@ from typing import Any, cast
 
 from pydantic import BaseModel, Field
 
+from personal_finance_etl.infrastructure.preferences import PreferencesManager
+
 
 class FileHashPolicy(BaseModel):
     csv: bool = True
@@ -107,10 +109,6 @@ class Settings(BaseModel):
         cfg = cls(**data)
         if track_recent:
             try:
-                from personal_finance_etl.infrastructure.preferences.repository import (
-                    PreferencesManager,
-                )
-
                 PreferencesManager().add_recent_config(path_str)
             except Exception:
                 pass
