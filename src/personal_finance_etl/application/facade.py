@@ -18,9 +18,11 @@ from __future__ import annotations
 import multiprocessing
 import os
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
+from personal_finance_etl.application.pipeline.orchestrator import ETLOrchestrator
 from personal_finance_etl.application.pipeline.worker import WorkerPoolCoordinator
+from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
 from personal_finance_etl.contracts.logging import ILogger
 from personal_finance_etl.contracts.recovery import (
@@ -33,27 +35,15 @@ from personal_finance_etl.contracts.recovery import (
 from personal_finance_etl.infrastructure.preferences import PreferencesManager
 from personal_finance_etl.infrastructure.recovery.backup import SystemBackupManager
 
-if TYPE_CHECKING:
-    from personal_finance_etl.bootstrap.container import ServiceContainer
-
 __all__ = ["PersonalFinanceEngine"]
 
 
 class PersonalFinanceEngine:
     """Unified Façade for the entire Personal Finance Backend and Presentation boundary."""
 
-    def __init__(self, container: ServiceContainer | None = None) -> None:
-        self._container = container
+    def __init__(self, container: Any | None = None) -> None:
+        self.container = container
         self._prefs = PreferencesManager()
-
-    @property
-    def container(self) -> ServiceContainer:
-        """Active ServiceContainer composition root instance."""
-        if self._container is None:
-            from personal_finance_etl.bootstrap.container import ServiceContainer
-
-            self._container = ServiceContainer()
-        return self._container
 
     # --- Configuration Management ---
 
@@ -151,9 +141,14 @@ class PersonalFinanceEngine:
         status_queue: ILogger | None = None,
     ) -> None:
         """Execute the ETL pipeline synchronously in the current thread (ideal for profiling/testing)."""
-        orchestrator = self.container.create_orchestrator(
-            config_path=config_path,
-            rules_path=rules_path,
-            status_queue=status_queue,
-        )
+        if self.container is not None and hasattr(self.container, "create_orchestrator"):
+            orchestrator = self.container.create_orchestrator(
+                config_path=config_path,
+                rules_path=rules_path,
+                status_queue=status_queue,
+            )
+        else:
+            cfg = Settings.from_toml(config_path) if config_path else Settings()
+            rules = FinancialRules.from_toml(rules_path) if rules_path else None
+            orchestrator = ETLOrchestrator(cfg, status_queue, rules)
         orchestrator.run()
