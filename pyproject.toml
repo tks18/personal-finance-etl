@@ -125,7 +125,10 @@ strict = true
 
 [tool.pyright]
 typeCheckingMode = "strict"
-ignore = ["src/personal_finance_etl/frontend/desktop"]
+ignore = [
+    "src/personal_finance_etl/frontend/desktop",
+    "src/personal_finance_etl/presentation/desktop",
+]
 
 [project.urls]
 Homepage = "https://github.com/tks18/personal-finance-etl"
