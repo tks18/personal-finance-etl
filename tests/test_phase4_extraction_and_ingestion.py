@@ -226,7 +226,13 @@ def test_market_provider_caching_logic() -> None:
 
     # 1. Currency Extractor Caching
     curr_ext = CurrencyExtractor(mock_cp, mock_queue)
-    curr_row = {"UID": "USD", "yF_Ticker": "USDINR=X", "CURRENCY_NAME": "USD", "ISO": "USD", "Target_Currency_Code": "INR"}
+    curr_row = {
+        "UID": "USD",
+        "yF_Ticker": "USDINR=X",
+        "CURRENCY_NAME": "USD",
+        "ISO": "USD",
+        "Target_Currency_Code": "INR",
+    }
     res_curr = curr_ext._fetch_ticker_delta(
         row=curr_row,
         start_dt=date(2026, 1, 1),
@@ -238,7 +244,12 @@ def test_market_provider_caching_logic() -> None:
 
     # 2. Benchmark Extractor Caching
     bench_ext = BenchmarkExtractor(mock_cp, mock_queue)
-    bench_row = {"ID": "NIFTY", "yF_Ticker": "^NSEI", "Benchmark_Name": "Nifty 50", "CURRENCY_ID": "INR"}
+    bench_row = {
+        "ID": "NIFTY",
+        "yF_Ticker": "^NSEI",
+        "Benchmark_Name": "Nifty 50",
+        "CURRENCY_ID": "INR",
+    }
     res_bench = bench_ext._fetch_ticker_delta(
         row=bench_row,
         start_dt=date(2026, 1, 1),
