@@ -217,7 +217,7 @@ def run_git_commit(filepath: str, message: str, dry_run: bool = False) -> bool:
         print(f"FAILED git commit for {norm_path}: {commit_proc.stderr}")
         return False
 
-    print(f"✔ Committed {norm_path}: \"{message}\"")
+    print(f"[OK] Committed {norm_path}: \"{message}\"")
     return True
 
 
