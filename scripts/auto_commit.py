@@ -123,6 +123,40 @@ KNOWN_COMMIT_MESSAGES: dict[str, str] = {
     "src/personal_finance_etl/backend/load/backup.py": "refactor(legacy): deactivate load backup manager",
     "src/personal_finance_etl/backend/utils/logger.py": "refactor(legacy): deactivate utils logger setup",
     "src/personal_finance_etl/backend/utils/reproducibility.py": "refactor(legacy): deactivate utils reproducibility",
+    # Phase 4 Ingestion Contracts
+    "src/personal_finance_etl/contracts/logging.py": "refactor(contracts): define StatusQueue cross-process protocol",
+    "src/personal_finance_etl/contracts/__init__.py": "refactor(contracts): export StatusQueue protocol",
+    # Phase 4 File Providers
+    "src/personal_finance_etl/infrastructure/providers/files/__init__.py": "refactor(providers): export statement and file adapters",
+    "src/personal_finance_etl/infrastructure/providers/files/locator.py": "refactor(providers): implement statement locator adapter",
+    "src/personal_finance_etl/infrastructure/providers/files/csv.py": "refactor(providers): implement CSV evidence extraction adapters",
+    "src/personal_finance_etl/infrastructure/providers/files/excel.py": "refactor(providers): implement Excel evidence parsing adapters",
+    "src/personal_finance_etl/infrastructure/providers/files/sqlite.py": "refactor(providers): implement SQLite external source adapter",
+    # Phase 4 Market Providers
+    "src/personal_finance_etl/infrastructure/providers/market/__init__.py": "refactor(providers): export market series provider adapters",
+    "src/personal_finance_etl/infrastructure/providers/market/currency.py": "refactor(providers): implement CurrencyExtractor provider",
+    "src/personal_finance_etl/infrastructure/providers/market/benchmark.py": "refactor(providers): implement BenchmarkExtractor provider",
+    "src/personal_finance_etl/infrastructure/providers/market/us_market.py": "refactor(providers): implement USMarketExtractor provider",
+    # Phase 4 Application Ingestion
+    "src/personal_finance_etl/application/ingestion/__init__.py": "refactor(ingestion): export ingestion coordinators and strategies",
+    "src/personal_finance_etl/application/ingestion/asset_strategies.py": "refactor(ingestion): implement asset-specific ingestion pipelines",
+    "src/personal_finance_etl/application/ingestion/coordinator.py": "refactor(ingestion): implement DataExtractor coordinator",
+    "src/personal_finance_etl/application/ingestion/market_sync.py": "refactor(ingestion): implement MarketSyncService and pipelines",
+    # Phase 4 Tests
+    "tests/test_phase4_extraction_and_ingestion.py": "test(ingestion): add Phase 4 extraction and ingestion test suite",
+    # Phase 4 Legacy Deactivations
+    "src/personal_finance_etl/backend/extract/statement_locator.py": "refactor(legacy): deactivate statement_locator and delegate",
+    "src/personal_finance_etl/backend/extract/csv_extractor.py": "refactor(legacy): deactivate csv_extractor and delegate",
+    "src/personal_finance_etl/backend/extract/excel_extractor.py": "refactor(legacy): deactivate excel_extractor and delegate",
+    "src/personal_finance_etl/backend/extract/sqlite_extractor.py": "refactor(legacy): deactivate sqlite_extractor and delegate",
+    "src/personal_finance_etl/backend/extract/currency_extractor.py": "refactor(legacy): deactivate currency_extractor and delegate",
+    "src/personal_finance_etl/backend/extract/benchmark_extractor.py": "refactor(legacy): deactivate benchmark_extractor and delegate",
+    "src/personal_finance_etl/backend/extract/us_market_extractor.py": "refactor(legacy): deactivate us_market_extractor and delegate",
+    "src/personal_finance_etl/backend/pipeline/strategies.py": "refactor(legacy): deactivate pipeline strategies and delegate",
+    "src/personal_finance_etl/backend/pipeline/core/extractor.py": "refactor(legacy): deactivate DataExtractor and delegate",
+    "src/personal_finance_etl/backend/pipeline/currency_pipeline.py": "refactor(legacy): deactivate CurrencyPipeline and delegate",
+    "src/personal_finance_etl/backend/pipeline/benchmark_pipeline.py": "refactor(legacy): deactivate BenchmarkPipeline and delegate",
+    "src/personal_finance_etl/backend/pipeline/us_market_pipeline.py": "refactor(legacy): deactivate USMarketPipeline and delegate",
     # Scripts & Tooling
     "scripts/auto_commit.py": "chore(scripts): add auto_commit tool for granular commits",
 }
