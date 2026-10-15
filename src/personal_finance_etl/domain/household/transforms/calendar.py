@@ -405,3 +405,4 @@ def transform_d_calendar(df_bounds_lazy: pl.LazyFrame) -> pl.LazyFrame:
     )
 
     return df_transformed
+
