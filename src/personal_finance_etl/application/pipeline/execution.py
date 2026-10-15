@@ -30,9 +30,9 @@ from personal_finance_etl.application.ingestion.market_sync import (
     USMarketPipeline,
 )
 from personal_finance_etl.application.investments.quant_service import InvestmentQuantEngine
+from personal_finance_etl.application.pipeline.transformer import TransformationDAG
 from personal_finance_etl.application.tax.tax_service import TaxEngine
 from personal_finance_etl.application.wealth.wealth_service import WealthPresentationEngine
-from personal_finance_etl.backend.pipeline.core.transformer import TransformationDAG
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
 from personal_finance_etl.contracts.application import EngineStatusMessage
