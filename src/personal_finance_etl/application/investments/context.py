@@ -99,9 +99,7 @@ class RunContext:
         run_id: str = "UNKNOWN",
     ) -> "RunContext":
         loaded_p, loaded_s, loaded_m, is_m, loaded_b, loaded_fx = (
-            TaxDataLoader.load_from_dataframes(
-                df_p, df_s, df_m, df_i, df_b, df_fx=df_fx
-            )
+            TaxDataLoader.load_from_dataframes(df_p, df_s, df_m, df_i, df_b, df_fx=df_fx)
         )
         fy_table = FYMacroParametersTable(df_t, rules=rules)
 
@@ -128,9 +126,7 @@ class AnalyticsContextManager:
 
     def _report(self, msg: str, progress: float, level: LogLevel = LogLevel.INFO) -> None:
         if self.status_queue:
-            self.status_queue.put(
-                EngineStatusMessage(msg=msg, progress=progress, level=level)
-            )
+            self.status_queue.put(EngineStatusMessage(msg=msg, progress=progress, level=level))
 
     def initialize(
         self,
