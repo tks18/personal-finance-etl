@@ -24,6 +24,8 @@ import traceback
 from collections.abc import Callable
 from typing import Any, cast
 
+import polars as pl
+
 from personal_finance_etl.application.pipeline.orchestrator import ETLOrchestrator
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
@@ -44,7 +46,9 @@ def infer_log_level(msg: str, is_error: bool = False) -> LogLevel:
         return LogLevel.SUCCESS
     if "warning" in lw or is_error:
         return LogLevel.WARNING
-    if any(token in lw for token in ("fetching", "loading", "post-processing")) or msg.startswith("["):
+    if any(token in lw for token in ("fetching", "loading", "post-processing")) or msg.startswith(
+        "["
+    ):
         return LogLevel.STEP
     return LogLevel.INFO
 
@@ -113,8 +117,8 @@ def process_wrapper(
     if status_queue is None:
         status_queue = cast(ILogger, multiprocessing.Queue())
 
-    sys.stdout = QueueStream(status_queue, is_error=False)  # type: ignore[assignment]
-    sys.stderr = QueueStream(status_queue, is_error=True)  # type: ignore[assignment]
+    sys.stdout = QueueStream(status_queue, is_error=False)
+    sys.stderr = QueueStream(status_queue, is_error=True)
 
     try:
         cfg = Settings.from_toml(config_path) if config_path else Settings()
@@ -171,10 +175,18 @@ class WorkerPoolCoordinator:
                     item = status_queue.get(timeout=0.1)
 
                     if isinstance(item, tuple):
-                        t_item = cast(tuple[Any, ...], item)
+                        t_item = cast(tuple[object, ...], item)
                         t_msg = str(t_item[0]) if len(t_item) > 0 and t_item[0] else ""
-                        t_data = t_item[1] if len(t_item) > 1 else None
-                        t_prog = float(t_item[2]) if len(t_item) > 2 and t_item[2] is not None else None
+                        t_data = (
+                            t_item[1]
+                            if len(t_item) > 1 and isinstance(t_item[1], pl.DataFrame)
+                            else None
+                        )
+                        t_prog = (
+                            float(t_item[2])
+                            if len(t_item) > 2 and isinstance(t_item[2], (int, float))
+                            else None
+                        )
                         status = EngineStatusMessage(
                             msg=t_msg,
                             data=t_data,
@@ -184,9 +196,10 @@ class WorkerPoolCoordinator:
                     elif isinstance(item, EngineStatusMessage):
                         status = item
                     elif hasattr(item, "msg"):
+                        d_val = getattr(item, "data", None)
                         status = EngineStatusMessage(
                             msg=getattr(item, "msg", ""),
-                            data=getattr(item, "data", None),
+                            data=d_val if isinstance(d_val, pl.DataFrame) else None,
                             progress=getattr(item, "progress", None),
                             level=getattr(item, "level", LogLevel.INFO),
                         )
