@@ -119,9 +119,7 @@ def test_phase5_legacy_identity_equivalence():
     assert (
         legacy_facts.transform_f_income_transactions is target_facts.transform_f_income_transactions
     )
-    assert (
-        legacy_facts.transform_f_opening_balances is target_facts.transform_f_opening_balances
-    )
+    assert legacy_facts.transform_f_opening_balances is target_facts.transform_f_opening_balances
 
     # Market benchmarks
     assert legacy_bm.BenchmarkTransformer is target_bm.BenchmarkTransformer
@@ -154,9 +152,7 @@ def test_phase5_legacy_identity_equivalence():
     assert legacy_stocks.get_stg_stock_master_ref is target_stocks.get_stg_stock_master_ref
 
     # US Stocks
-    assert (
-        legacy_us.get_base_us_stock_transactions is target_us.get_base_us_stock_transactions
-    )
+    assert legacy_us.get_base_us_stock_transactions is target_us.get_base_us_stock_transactions
     assert legacy_us.get_stg_us_stock_master_ref is target_us.get_stg_us_stock_master_ref
 
     # US Stocks Transformer
