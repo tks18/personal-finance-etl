@@ -3,18 +3,12 @@ Shared dataclasses and enums for the App.
 """
 
 from dataclasses import dataclass
-from datetime import date
 from enum import StrEnum
 
 import polars as pl
 
-
-class LogLevel(StrEnum):
-    INFO = "info"
-    STEP = "step"
-    SUCCESS = "success"
-    WARNING = "warning"
-    ERROR = "error"
+from personal_finance_etl.contracts.logging import LogLevel as LogLevel
+from personal_finance_etl.domain.investments.contracts import TaxLot as TaxLot
 
 
 @dataclass
@@ -45,24 +39,6 @@ class AssetClass(StrEnum):
     EQUITY = "equity"
     DEBT = "debt"
     DEFAULT = "default"
-
-
-@dataclass(frozen=True, slots=True)
-class TaxLot:
-    """Represents a single active purchase lot."""
-
-    date: date | None
-    qty: float
-    price: float
-    bm_buy: float | None
-    shadow_qty: float
-    price_local: float = 0.0
-    fx_rate_buy: float = 1.0
-    currency_id: str | None = None
-    bm_buy_local: float | None = None
-    purchase_id: str | None = None
-    lot_id: str | None = None
-    lot_source_type: str = "PURCHASE"
 
 
 @dataclass
