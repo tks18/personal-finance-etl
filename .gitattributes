@@ -7,6 +7,12 @@
 # Vendored third-party documentation assets
 # ---------------------------------------------------------------------------
 
+src/personal_finance_etl/presentation/docs/assets/mermaid/** linguist-vendored
+src/personal_finance_etl/presentation/docs/assets/mermaid/*.min.js linguist-generated=true
+
+src/personal_finance_etl/presentation/docs/assets/svg-pan-zoom/** linguist-vendored
+src/personal_finance_etl/presentation/docs/assets/svg-pan-zoom/*.min.js linguist-generated=true
+
 src/personal_finance_etl/frontend/commons/docs/assets/mermaid/** linguist-vendored
 src/personal_finance_etl/frontend/commons/docs/assets/mermaid/*.min.js linguist-generated=true
 
