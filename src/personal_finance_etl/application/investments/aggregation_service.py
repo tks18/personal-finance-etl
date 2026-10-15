@@ -24,6 +24,7 @@ from typing import Any
 import polars as pl
 
 from personal_finance_etl.application.investments.context import RunContext
+from personal_finance_etl.contracts.application import EngineStatusMessage
 from personal_finance_etl.contracts.logging import LogLevel, StatusQueue
 from personal_finance_etl.domain.common.identity import generate_deterministic_id
 from personal_finance_etl.domain.investments.contracts import PipelineExecutionResult
@@ -541,16 +542,9 @@ class PostProcessingPipeline:
 
     def _report_step(self, progress: float) -> None:
         if self.status_queue:
-            from personal_finance_etl.contracts.application import EngineStatusMessage
-
-            try:
-                self.status_queue.put(
-                    EngineStatusMessage(msg="", progress=progress, level=LogLevel.STEP)
-                )
-            except Exception:
-                from personal_finance_etl.backend.utils.models import EngineStatus
-
-                self.status_queue.put(EngineStatus("", None, progress, LogLevel.STEP))
+            self.status_queue.put(
+                EngineStatusMessage(msg="", progress=progress, level=LogLevel.STEP)
+            )
 
     def run(
         self,
