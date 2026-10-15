@@ -11,6 +11,9 @@ Does not own
 """
 
 from enum import StrEnum
+from typing import Any, Protocol
+
+__all__ = ["LogLevel", "StatusQueue"]
 
 
 class LogLevel(StrEnum):
@@ -21,4 +24,12 @@ class LogLevel(StrEnum):
     SUCCESS = "success"
     WARNING = "warning"
     ERROR = "error"
+
+
+class StatusQueue(Protocol):
+    """Protocol for cross-process status queue sinks."""
+
+    def put(self, status: Any, block: bool = True, timeout: float | None = None) -> None:
+        """Put a status item onto the queue."""
+        ...
 
