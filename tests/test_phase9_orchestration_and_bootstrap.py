@@ -217,6 +217,7 @@ def test_run_lifecycle_split_commit_recovery_marker(tmp_path: Path) -> None:
 
 def test_queue_stream_and_log_level_inference() -> None:
     """Verify QueueStream captures stream writes and infers correct log levels."""
+
     class MockQueue:
         def __init__(self) -> None:
             self.messages: list[EngineStatusMessage] = []
