@@ -1,66 +1,10 @@
-import os
+"""Legacy delegation shim for post-processing pipeline.
 
-import polars as pl
+Superseded by personal_finance_etl.application.investments.aggregation_service.
+"""
 
-from personal_finance_etl.backend.engines.analytics.pipeline.context import RunContext
-from personal_finance_etl.backend.engines.analytics.pipeline.postprocessor import PostProcessor
-from personal_finance_etl.backend.types.pipeline import PipelineExecutionResult
-from personal_finance_etl.backend.utils.interfaces import ILogger
-from personal_finance_etl.backend.utils.logger import logger
-from personal_finance_etl.backend.utils.models import EngineStatus, LogLevel
+from personal_finance_etl.application.investments.aggregation_service import (
+    PostProcessingPipeline as PostProcessingPipeline,
+)
 
-
-class PostProcessingPipeline:
-    """Handles reading spilled parquet files and running final aggregations."""
-
-    def __init__(self, ctx: RunContext, tmp_dir: str, status_queue: ILogger | None = None):
-        self.ctx = ctx
-        self.tmp_dir = tmp_dir
-        self.status_queue = status_queue
-        self.postprocessor = PostProcessor(ctx)
-
-    def run(
-        self,
-        pipeline_res: PipelineExecutionResult,
-    ) -> dict[str, pl.DataFrame]:
-
-        if self.status_queue:
-            logger.debug("Post-processing: Scanning temporary parquet files...")
-            self.status_queue.put(
-                EngineStatus(
-                    msg="",
-                    data=None,
-                    progress=0.86,
-                    level=LogLevel.STEP,
-                )
-            )
-
-        lazy_df = pl.scan_parquet(os.path.join(self.tmp_dir, "*.parquet"))
-
-        unique_dates_df = lazy_df.select("Closing_Date").unique().collect()
-        unique_dates = unique_dates_df["Closing_Date"].sort().to_list()
-
-        if self.status_queue:
-            logger.debug("Post-processing: Aggregating portfolio metrics...")
-            self.status_queue.put(
-                EngineStatus(
-                    msg="",
-                    data=None,
-                    progress=0.90,
-                    level=LogLevel.STEP,
-                )
-            )
-        res_dict = self.postprocessor.run(lazy_df, unique_dates, pipeline_res)
-
-        if self.status_queue:
-            logger.debug("Post-processing: Collecting final output...")
-            self.status_queue.put(
-                EngineStatus(
-                    msg="",
-                    data=None,
-                    progress=0.95,
-                    level=LogLevel.STEP,
-                )
-            )
-        final_res: dict[str, pl.DataFrame] = {k: v.collect() for k, v in res_dict.items()}
-        return final_res
+__all__ = ["PostProcessingPipeline"]
