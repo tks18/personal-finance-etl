@@ -125,7 +125,7 @@ def _run_mc_simulations_numba(
         ]
     )
 
-    for i in prange(n_rows):  # type: ignore
+    for i in prange(n_rows):  # type: ignore[no-untyped-call,attr-defined]
         gen = gens[np.intp(i)]
 
         pv = pv_arr[i]
