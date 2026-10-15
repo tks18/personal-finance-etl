@@ -76,7 +76,7 @@ def _process_mf_statement(filename: str, raw_bytes: bytes) -> pl.DataFrame:
         )
         return pl.DataFrame()
 
-    header_idx = int(start_search["index"][0])  # type: ignore[index]
+    header_idx = int(start_search["index"][0])
     df_sliced = df_raw.slice(header_idx)
 
     df_data, first_col = _clean_excel_headers(df_sliced)
@@ -132,7 +132,7 @@ def _process_mf_transaction_statements(filename: str, raw_bytes: bytes) -> pl.Da
     if start_search.is_empty():
         logger.debug(f"[EXTRACT:EXCEL] Skipped {filename}: Could not find 'Scheme Name' anchor")
         return pl.DataFrame()
-    header_idx = int(start_search["index"][0])  # type: ignore[index]
+    header_idx = int(start_search["index"][0])
     df_sliced = df_raw.slice(header_idx)
 
     df_data, first_col = _clean_excel_headers(df_sliced)
@@ -196,13 +196,13 @@ def _process_stock_closing_statement(filename: str, raw_bytes: bytes) -> pl.Data
         )
         return pl.DataFrame()
 
-    header_idx = int(start_search["index"][0]) + 2  # type: ignore[index]
+    header_idx = int(start_search["index"][0]) + 2
     df_sliced = df_raw.slice(header_idx)
 
     df_data, first_col = _clean_excel_headers(df_sliced)
     null_search = df_data.with_row_index().filter(pl.col(first_col).is_null())
     if not null_search.is_empty():
-        end_idx = int(null_search["index"][0])  # type: ignore[index]
+        end_idx = int(null_search["index"][0])
         df_data = df_data.slice(0, end_idx)
 
     logger.debug(
