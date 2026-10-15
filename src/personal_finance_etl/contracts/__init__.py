@@ -32,7 +32,7 @@ from personal_finance_etl.contracts.lifecycle import (
     FailureDomain,
     classify_failure_domain,
 )
-from personal_finance_etl.contracts.logging import LogLevel
+from personal_finance_etl.contracts.logging import LogLevel, StatusQueue
 from personal_finance_etl.contracts.recovery import (
     RestoreOutcome,
     RestoreResult,
@@ -55,6 +55,7 @@ __all__ = [
     "RestoreResult",
     "SnapshotOutcome",
     "SnapshotResult",
+    "StatusQueue",
     "classify_failure_domain",
 ]
 
