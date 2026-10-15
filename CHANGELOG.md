@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [9.0.1](https://github.com/tks18/personal-finance-etl/compare/9.0.0...9.0.1) (2026-10-15)
+
+
+### Others 🔧
+
+* **build:** update PyInstaller spec for presentation docs assets ([dad604d](https://github.com/tks18/personal-finance-etl/commit/dad604dc655481ec94aa9b84d9e0c3918b41e248))
+* remove all planning docs as refactor is completed ([6d5bea8](https://github.com/tks18/personal-finance-etl/commit/6d5bea8611052c05b8e2d4d56b912e737ab186fa))
+* **scripts:** add main.spec build commit mapping ([716b725](https://github.com/tks18/personal-finance-etl/commit/716b7256619461b1b05b519a79bd611a80bc92b4))
+
 ## [9.0.0](https://github.com/tks18/personal-finance-etl/compare/8.3.1...9.0.0) (2026-10-15)
 
 
