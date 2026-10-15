@@ -34,6 +34,14 @@ class LotAction(StrEnum):
     RECONCILIATION = "RECONCILIATION"
 
 
+class ReconciliationAdjustmentType(StrEnum):
+    """Categorical types of lot adjustments during broker reconciliation."""
+
+    QUANTITY_ADD = "QUANTITY_ADD"
+    QUANTITY_REMOVE = "QUANTITY_REMOVE"
+    COST_BASIS_ADJUSTMENT = "COST_BASIS_ADJUSTMENT"
+
+
 @dataclass(frozen=True, slots=True)
 class TaxLot:
     """Represents a single active purchase lot in memory."""
@@ -50,6 +58,40 @@ class TaxLot:
     purchase_id: str | None = None
     lot_id: str | None = None
     lot_source_type: str = "PURCHASE"
+
+
+# Canonical alias for TaxLot
+AcquisitionLot = TaxLot
+
+
+class Purchase(BaseModel):
+    """Represents a purchase transaction record for an asset."""
+
+    model_config = ConfigDict(strict=False, populate_by_name=True)
+
+    isin: str = Field(alias="ISIN")
+    date: dt.date = Field(alias="Date")
+    quantity: float = Field(alias="Quantity")
+    price: float = Field(alias="Price")
+    value: float | None = Field(default=None, alias="Value")
+    price_local: float | None = Field(default=None, alias="Price_Local")
+    currency_id: str | None = Field(default=None, alias="CURRENCY_ID")
+    purchase_id: str | None = Field(default=None, alias="Purchase_ID")
+
+
+class Sale(BaseModel):
+    """Represents a sale or disposal transaction record for an asset."""
+
+    model_config = ConfigDict(strict=False, populate_by_name=True)
+
+    isin: str = Field(alias="ISIN")
+    date: dt.date = Field(alias="Date")
+    quantity: float = Field(alias="Quantity")
+    price: float | None = Field(default=None, alias="Price")
+    sell_value: float | None = Field(default=None, alias="Sell_Value")
+    sell_price_local: float | None = Field(default=None, alias="Sell_Price_Local")
+    currency_id: str | None = Field(default=None, alias="CURRENCY_ID")
+    sale_id: str | None = Field(default=None, alias="Sale_ID")
 
 
 class CashflowRecord(BaseModel):
@@ -133,6 +175,10 @@ class RealizedEventRecord(BaseModel):
         return self.realized_gain_loss
 
 
+# Canonical alias for RealizedEventRecord
+RealizedEvent = RealizedEventRecord
+
+
 class ReconciliationEventRecord(BaseModel):
     """Represents a discrepancy event between reconstructed lots and broker evidence."""
 
@@ -150,6 +196,10 @@ class ReconciliationEventRecord(BaseModel):
     reconstructed_cost_basis: float | None = Field(default=None, alias="Reconstructed_Cost_Basis")
     observed_cost_basis: float | None = Field(default=None, alias="Observed_Cost_Basis")
     delta_cost_basis: float | None = Field(default=None, alias="Delta_Cost_Basis")
+
+
+# Canonical alias for ReconciliationEventRecord
+ReconciliationEvent = ReconciliationEventRecord
 
 
 class ISINTags(BaseModel):
@@ -285,28 +335,53 @@ class PipelineExecutionResult(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True, strict=False)
 
     has_data: bool
-    global_cf: list[CashflowRecord | dict[str, Any]]
+    global_cf: list[dict[str, Any]]
     global_pt: dict[dt.date, dict[str, float]]
-    global_re: list[RealizedEventRecord | dict[str, Any]]
-    global_recon_events: list[ReconciliationEventRecord | dict[str, Any]]
-    isin_cf: dict[str, list[CashflowRecord | dict[str, Any]]]
+    global_re: list[dict[str, Any]]
+    global_recon_events: list[dict[str, Any]]
+    isin_cf: dict[str, list[dict[str, Any]]]
     isin_pt: dict[str, dict[dt.date, dict[str, Any]]]
-    class_cf: dict[str, list[CashflowRecord | dict[str, Any]]]
+    class_cf: dict[str, list[dict[str, Any]]]
     class_pt: dict[str, dict[dt.date, dict[str, float]]]
-    class_re: dict[str, list[RealizedEventRecord | dict[str, Any]]]
-    subtype_cf: dict[str, list[CashflowRecord | dict[str, Any]]]
+    class_re: dict[str, list[dict[str, Any]]]
+    subtype_cf: dict[str, list[dict[str, Any]]]
     subtype_pt: dict[str, dict[dt.date, dict[str, float]]]
-    subtype_re: dict[str, list[RealizedEventRecord | dict[str, Any]]]
-    instrument_type_cf: dict[str, list[CashflowRecord | dict[str, Any]]]
+    subtype_re: dict[str, list[dict[str, Any]]]
+    instrument_type_cf: dict[str, list[dict[str, Any]]]
     instrument_type_pt: dict[str, dict[dt.date, dict[str, float]]]
-    sector_cf: dict[str, list[CashflowRecord | dict[str, Any]]]
+    sector_cf: dict[str, list[dict[str, Any]]]
     sector_pt: dict[str, dict[dt.date, dict[str, float]]]
-    industry_cf: dict[str, list[CashflowRecord | dict[str, Any]]]
+    industry_cf: dict[str, list[dict[str, Any]]]
     industry_pt: dict[str, dict[dt.date, dict[str, float]]]
-    geo_cf: dict[str, list[CashflowRecord | dict[str, Any]]]
+    geo_cf: dict[str, list[dict[str, Any]]]
     geo_pt: dict[str, dict[dt.date, dict[str, float]]]
-    country_cf: dict[str, list[CashflowRecord | dict[str, Any]]]
+    country_cf: dict[str, list[dict[str, Any]]]
     country_pt: dict[str, dict[dt.date, dict[str, float]]]
-    currency_cf: dict[str, list[CashflowRecord | dict[str, Any]]]
+    currency_cf: dict[str, list[dict[str, Any]]]
     currency_pt: dict[str, dict[dt.date, dict[str, float]]]
-    currency_re: dict[str, list[RealizedEventRecord | dict[str, Any]]]
+    currency_re: dict[str, list[dict[str, Any]]]
+
+
+# Canonical alias for PipelineExecutionResult
+PortfolioResult = PipelineExecutionResult
+
+__all__ = [
+    "AcquisitionLot",
+    "CashflowRecord",
+    "ISINProcessResult",
+    "ISINTags",
+    "ISINTaskPayload",
+    "LotAction",
+    "PipelineExecutionResult",
+    "PortfolioResult",
+    "Purchase",
+    "RealizedEvent",
+    "RealizedEventRecord",
+    "ReconciliationAdjustmentType",
+    "ReconciliationEvent",
+    "ReconciliationEventRecord",
+    "Sale",
+    "SnapshotRecord",
+    "TaxLot",
+    "TerminalValueRecord",
+]
