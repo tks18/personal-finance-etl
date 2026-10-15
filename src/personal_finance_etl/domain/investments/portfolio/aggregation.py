@@ -57,9 +57,7 @@ class GroupProcessor:
 
             # Use the exact same PyXIRR calculator as the portfolio uses!
             df_group = self.xirr_calc.calculate(unique_dates, cashflows, terminals)
-            df_group = self.analytics_calc.calculate(
-                df_group, unique_dates, terminals, cashflows
-            )
+            df_group = self.analytics_calc.calculate(df_group, unique_dates, terminals, cashflows)
 
             df_group = df_group.rename(PORTFOLIO_COL_RENAMES)
 
@@ -97,9 +95,7 @@ class PortfolioWeightsCalculator:
         port_tot = instr_val.group_by("Closing_Date").agg(
             pl.col("Instrument_Close_Value").sum().alias("Total_Portfolio_Value")
         )
-        instr_val = instr_val.join(
-            port_tot, on="Closing_Date", how="left"
-        ).with_columns(
+        instr_val = instr_val.join(port_tot, on="Closing_Date", how="left").with_columns(
             (pl.col("Instrument_Close_Value") / pl.col("Total_Portfolio_Value"))
             .round(8)
             .alias("Portfolio_Weight")
