@@ -619,7 +619,7 @@ class BaseEventsBuilder:
             raise ValueError(
                 f"Required date {field_name} is invalid for source {source_id!r}: {value!r}"
             ) from exc
-        if parsed is None:
+        if not isinstance(parsed, date):
             raise ValueError(f"Required date {field_name} is null for source {source_id!r}.")
         return parsed
 
