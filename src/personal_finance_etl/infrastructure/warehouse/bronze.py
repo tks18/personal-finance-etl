@@ -18,15 +18,18 @@ from __future__ import annotations
 
 import logging
 import os
+from typing import TYPE_CHECKING
 
 import duckdb
 import polars as pl
 
 from personal_finance_etl.contracts.extraction import ExtractionResult
-from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
 from personal_finance_etl.infrastructure.warehouse.connection import DuckDBManager
 from personal_finance_etl.infrastructure.warehouse.meta import MetaLayer
 from personal_finance_etl.infrastructure.warehouse.registry import BRONZE_CONTRACT_REGISTRY
+
+if TYPE_CHECKING:
+    from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
 
 logger = logging.getLogger("personal_finance_etl.warehouse.bronze")
 
