@@ -92,7 +92,7 @@ class PreferencesManager:
         raw = data.get("recent_configs", [])
         if not isinstance(raw, list):
             return []
-        items = cast("list[Any]", raw)
+        items = cast(list[object], raw)
         return [str(p) for p in items if isinstance(p, str) and os.path.exists(p)]
 
     def add_recent_rules(self, filepath: str) -> None:
@@ -125,5 +125,5 @@ class PreferencesManager:
         raw = data.get("recent_rules", [])
         if not isinstance(raw, list):
             return []
-        items = cast("list[Any]", raw)
+        items = cast(list[object], raw)
         return [str(p) for p in items if isinstance(p, str) and os.path.exists(p)]
