@@ -21,6 +21,7 @@ import polars as pl
 
 from personal_finance_etl.application.investments.input_adapter import TaxDataLoader
 from personal_finance_etl.config.financial_rules import FinancialRules
+from personal_finance_etl.contracts.application import EngineStatusMessage
 from personal_finance_etl.contracts.logging import LogLevel, StatusQueue
 from personal_finance_etl.domain.market.fx import FXRateProvider
 from personal_finance_etl.domain.market.macro import FYMacroParametersTable
@@ -127,17 +128,9 @@ class AnalyticsContextManager:
 
     def _report(self, msg: str, progress: float, level: LogLevel = LogLevel.INFO) -> None:
         if self.status_queue:
-            from personal_finance_etl.contracts.application import EngineStatusMessage
-
-            try:
-                self.status_queue.put(
-                    EngineStatusMessage(msg=msg, progress=progress, level=level)
-                )
-            except Exception:
-                # Fallback for legacy status queue message structure
-                from personal_finance_etl.backend.utils.models import EngineStatus
-
-                self.status_queue.put(EngineStatus(msg, None, progress, level))
+            self.status_queue.put(
+                EngineStatusMessage(msg=msg, progress=progress, level=level)
+            )
 
     def initialize(
         self,
