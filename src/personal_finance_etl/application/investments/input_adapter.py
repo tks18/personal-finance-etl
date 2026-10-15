@@ -26,9 +26,7 @@ from personal_finance_etl.domain.investments.lots.ordering import (
 
 def parse_date_col(df: pl.DataFrame) -> pl.DataFrame:
     """Force parse the 'Date' column natively into pl.Date."""
-    if "Date" in df.columns and getattr(
-        df.schema["Date"], "base_type", df.schema["Date"]
-    ) in [
+    if "Date" in df.columns and getattr(df.schema["Date"], "base_type", df.schema["Date"]) in [
         pl.Utf8,
         pl.String,
     ]:
@@ -43,9 +41,7 @@ def parse_date_col(df: pl.DataFrame) -> pl.DataFrame:
 
 def clean_numeric_col(df: pl.DataFrame, col: str) -> pl.DataFrame:
     """Strip currency formatting from a string column and cast to Float64."""
-    if col in df.columns and getattr(
-        df.schema[col], "base_type", df.schema[col]
-    ) in [
+    if col in df.columns and getattr(df.schema[col], "base_type", df.schema[col]) in [
         pl.Utf8,
         pl.String,
     ]:
@@ -80,9 +76,7 @@ class TaxDataLoader:
         df_m = parse_date_col(df_m)
 
         isin_master: dict[str, dict[str, Any]] = (
-            {str(row["ISIN"]): row for row in df_i.to_dicts()}
-            if df_i is not None
-            else {}
+            {str(row["ISIN"]): row for row in df_i.to_dicts()} if df_i is not None else {}
         )
 
         if df_b is not None:
