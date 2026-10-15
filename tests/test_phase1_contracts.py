@@ -75,8 +75,14 @@ def test_classify_failure_domain():
     assert classify_failure_domain("EXTRACTION", comp_err) == FailureDomain.EXTERNAL_PROVIDER
 
     # Stage checks
-    assert classify_failure_domain("DUCKDB_COMMIT", Exception("Write error")) == FailureDomain.DUCKDB_COMMIT
-    assert classify_failure_domain("SQLITE_COMMIT", Exception("Lock error")) == FailureDomain.SQLITE_COMMIT
+    assert (
+        classify_failure_domain("DUCKDB_COMMIT", Exception("Write error"))
+        == FailureDomain.DUCKDB_COMMIT
+    )
+    assert (
+        classify_failure_domain("SQLITE_COMMIT", Exception("Lock error"))
+        == FailureDomain.SQLITE_COMMIT
+    )
     assert classify_failure_domain("DISCOVERY") == FailureDomain.SOURCE_DISCOVERY
     assert classify_failure_domain("BRONZE_SYNC") == FailureDomain.BRONZE_SYNC
     assert classify_failure_domain("RECOVERY_STAGE") == FailureDomain.RECOVERY
@@ -88,8 +94,12 @@ def test_extraction_batch_result_contract():
     df1 = pl.DataFrame({"a": [1, 2]})
     df2 = pl.DataFrame({"a": [3, 4]})
 
-    res1 = ExtractorEntityResult(entity="USD", status=ExtractorEntityStatus.SUCCESS, message="OK", df=df1)
-    res2 = ExtractorEntityResult(entity="EUR", status=ExtractorEntityStatus.CACHED, message="Cached", df=df2)
+    res1 = ExtractorEntityResult(
+        entity="USD", status=ExtractorEntityStatus.SUCCESS, message="OK", df=df1
+    )
+    res2 = ExtractorEntityResult(
+        entity="EUR", status=ExtractorEntityStatus.CACHED, message="Cached", df=df2
+    )
 
     batch = ExtractionBatchResult(
         requested_entities=["USD", "EUR"],
@@ -326,4 +336,3 @@ def test_legacy_type_deactivation_and_reexports():
     assert analytics.TerminalValueRecord is TerminalValueRecord
     assert analytics.SnapshotRecord is SnapshotRecord
     assert analytics.ISINProcessResult is ISINProcessResult
-
