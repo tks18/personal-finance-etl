@@ -27,9 +27,7 @@ from personal_finance_etl.domain.market.macro import FYMacroParametersTable
 class AdvancedAnalyticsCalculator:
     """Calculates Max Drawdown (MDD) tracking and portfolio baseline returns."""
 
-    def __init__(
-        self, fy_table: FYMacroParametersTable, rules: FinancialRules | None
-    ) -> None:
+    def __init__(self, fy_table: FYMacroParametersTable, rules: FinancialRules | None) -> None:
         self.fy_table = fy_table
         self.rules = rules
 
@@ -44,9 +42,7 @@ class AdvancedAnalyticsCalculator:
         for d in unique_dates:
             d_obj = to_date_obj(d)
             if d_obj:
-                pt_entry = portfolio_terminals.get(
-                    d_obj, portfolio_terminals.get(d, {})
-                )
+                pt_entry = portfolio_terminals.get(d_obj, portfolio_terminals.get(d, {}))
                 pt_records.append(
                     {
                         "Closing_Date": d,
@@ -66,9 +62,7 @@ class AdvancedAnalyticsCalculator:
                 d_obj = to_date_obj(cf["date"])
                 if d_obj:
                     # 'amount' is negative for buys (injections) and positive for sells (withdrawals)
-                    cf_records.append(
-                        {"Date_Obj": d_obj, "injection": -float(cf["amount"])}
-                    )
+                    cf_records.append({"Date_Obj": d_obj, "injection": -float(cf["amount"])})
 
             if cf_records:
                 df_cf = (
@@ -94,11 +88,7 @@ class AdvancedAnalyticsCalculator:
                         > 0
                     )
                     .then(
-                        (
-                            pl.col("val")
-                            - pl.col("val").shift(1)
-                            - pl.col("net_injection")
-                        )
+                        (pl.col("val") - pl.col("val").shift(1) - pl.col("net_injection"))
                         / (
                             pl.col("val").shift(1)
                             + pl.when(pl.col("net_injection") > 0)
@@ -109,18 +99,13 @@ class AdvancedAnalyticsCalculator:
                     .otherwise(0.0)
                     .alias("daily_return")
                 )
-                .with_columns(
-                    (pl.col("daily_return") + 1.0).cum_prod().alias("cum_return")
-                )
+                .with_columns((pl.col("daily_return") + 1.0).cum_prod().alias("cum_return"))
                 .with_columns(
                     pl.col("cum_return").cum_max().alias("peak_cum"),
                 )
                 .with_columns(
                     pl.when(pl.col("peak_cum") > 0)
-                    .then(
-                        (pl.col("cum_return") - pl.col("peak_cum"))
-                        / pl.col("peak_cum")
-                    )
+                    .then((pl.col("cum_return") - pl.col("peak_cum")) / pl.col("peak_cum"))
                     .otherwise(0.0)
                     .alias("Portfolio_Max_Drawdown")
                 )
