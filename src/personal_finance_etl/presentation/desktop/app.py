@@ -414,7 +414,7 @@ class UnifiedETLTab(BaseEngineTab):
             self.restore_btn.configure(state="normal", text="♻️ Restore DB")
 
 
-class DesktopApp(ctk.CTk):  # type: ignore
+class DesktopApp(ctk.CTk):  # type: ignore[misc]
     """Root application window."""
 
     def __init__(self) -> None:
