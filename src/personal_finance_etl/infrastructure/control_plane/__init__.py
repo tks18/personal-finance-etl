@@ -14,3 +14,30 @@ Does not own
 - Analytics warehouse tables (owned by infrastructure.warehouse).
 """
 
+from __future__ import annotations
+
+from personal_finance_etl.infrastructure.control_plane.artifact_repository import ArtifactRepository
+from personal_finance_etl.infrastructure.control_plane.connection import SQLiteManager
+from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
+from personal_finance_etl.infrastructure.control_plane.file_sync import FileSyncService
+from personal_finance_etl.infrastructure.control_plane.hashing import (
+    FILE_TYPE_MAP,
+    compute_file_hash,
+    generate_file_id,
+    hash_bytes,
+    normalize_path,
+)
+from personal_finance_etl.infrastructure.control_plane.run_repository import RunRepository
+
+__all__ = [
+    "FILE_TYPE_MAP",
+    "ArtifactRepository",
+    "ControlPlane",
+    "FileSyncService",
+    "RunRepository",
+    "SQLiteManager",
+    "compute_file_hash",
+    "generate_file_id",
+    "hash_bytes",
+    "normalize_path",
+]
