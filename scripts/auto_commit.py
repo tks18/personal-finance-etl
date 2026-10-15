@@ -381,7 +381,7 @@ def run_git_commit(filepath: str, message: str, dry_run: bool = False) -> bool:
 
     if dry_run:
         print(f"[DRY-RUN] git add {norm_path}")
-        print(f"[DRY-RUN] git commit -m \"{message}\" (len: {len(message)})")
+        print(f'[DRY-RUN] git commit -m "{message}" (len: {len(message)})')
         return True
 
     # 1. git add
@@ -396,13 +396,17 @@ def run_git_commit(filepath: str, message: str, dry_run: bool = False) -> bool:
         print(f"FAILED git commit for {norm_path}: {commit_proc.stderr}")
         return False
 
-    print(f"[OK] Committed {norm_path}: \"{message}\"")
+    print(f'[OK] Committed {norm_path}: "{message}"')
     return True
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Commit changes file-by-file following Commitlint standards.")
-    parser.add_argument("--dry-run", action="store_true", help="Preview commits without executing git commands.")
+    parser = argparse.ArgumentParser(
+        description="Commit changes file-by-file following Commitlint standards."
+    )
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Preview commits without executing git commands."
+    )
     parser.add_argument("--run", action="store_true", help="Execute the commits immediately.")
     parser.add_argument("--file", type=str, help="Commit only a single specific file.")
     args = parser.parse_args()
@@ -441,4 +445,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-
