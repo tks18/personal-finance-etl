@@ -26,7 +26,7 @@ from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
 from personal_finance_etl.contracts.application import EngineStatusMessage
 from personal_finance_etl.contracts.extraction import ExtractionResult
-from personal_finance_etl.contracts.logging import ILogger, LogLevel
+from personal_finance_etl.contracts.logging import ILogger, LogLevel, NullStatusQueue
 from personal_finance_etl.infrastructure.control_plane import ControlPlane
 from personal_finance_etl.infrastructure.logging.setup import logger
 from personal_finance_etl.infrastructure.warehouse.bronze import BronzeLayer
@@ -41,14 +41,14 @@ class ETLOrchestrator:
     def __init__(
         self,
         cfg: Settings,
-        status_queue: ILogger,
+        status_queue: ILogger | None = None,
         rules: FinancialRules | None = None,
     ) -> None:
         self.cfg = cfg
         self.rules = rules
-        self.status_queue = status_queue
+        self.status_queue = status_queue or NullStatusQueue()
         self.db_manager = DuckDBManager(cfg.TARGET_DB_BASE_PATH, cfg.TARGET_DB_NAME)
-        self.executor = PipelineExecutor(cfg, status_queue, self.db_manager, rules)
+        self.executor = PipelineExecutor(cfg, self.status_queue, self.db_manager, rules)
 
     @property
     def dfs(self) -> dict[str, pl.DataFrame]:
