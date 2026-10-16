@@ -16,7 +16,7 @@ import math
 from datetime import date, datetime
 from decimal import Decimal
 from numbers import Real
-from typing import Any
+from typing import Required
 
 import polars as pl
 from pyxirr import xirr
@@ -28,6 +28,7 @@ from personal_finance_etl.domain.common.calculation import (
     XirrResult as XirrResult,
 )
 from personal_finance_etl.domain.common.dates import to_date_obj
+from personal_finance_etl.domain.investments.contracts import CashflowDict, TerminalValueDict
 
 
 def calculate_xirr(dates: list[date], amounts: list[float]) -> XirrResult:
@@ -96,22 +97,25 @@ class PortfolioXIRRCalculator:
     @staticmethod
     def calculate(
         unique_dates: list[date],
-        global_cashflows: list[dict[str, Any]],
-        portfolio_terminals: dict[date, dict[str, float]],
+        global_cashflows: list[CashflowDict],
+        portfolio_terminals: dict[date, TerminalValueDict] | dict[date, dict[str, float]],
     ) -> pl.DataFrame:
+        class StoredCashflow(CashflowDict):
+            date_obj: Required[date]
+
         # Normalize once so every stored cashflow date is known to be a real date.
-        cashflows: list[dict[str, Any]] = []
+        cashflows: list[StoredCashflow] = []
         for cf in global_cashflows:
             parsed_cf_date = to_date_obj(cf.get("date"))
             if parsed_cf_date is None:
                 raise ValueError(
                     f"Portfolio cashflow has an invalid or missing date: {cf.get('date')!r}"
                 )
-            cashflows.append({**cf, "date_obj": parsed_cf_date})
+            cashflows.append(StoredCashflow(**cf, date_obj=parsed_cf_date))
         cashflows.sort(key=lambda item: item["date_obj"])
 
         cf_ptr = 0
-        port_rows: list[dict[str, Any]] = []
+        port_rows: list[dict[str, object]] = []
         port_dates: list[date] = []
         port_amounts: list[float] = []
         local_amounts: list[float] = []
@@ -158,7 +162,7 @@ class PortfolioXIRRCalculator:
                 else:
                     break
 
-            pt_entry = portfolio_terminals.get(d_obj, {})
+            pt_entry = portfolio_terminals.get(d_obj) or {}
             t_val = _numeric_value(pt_entry.get("val"))
             t_shadow = _numeric_value(pt_entry.get("shadow_val"))
             t_after_tax = _numeric_value(pt_entry.get("after_tax_val", t_val))
