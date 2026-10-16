@@ -61,6 +61,36 @@ class RunContext:
         start_date: date | None = None,
         end_date: date | None = None,
     ) -> "RunContext":
+        """Instantiate RunContext from file paths.
+
+        Parameters
+        ----------
+        p_path : str
+            Path to purchases parquet/csv.
+        s_path : str
+            Path to sales parquet/csv.
+        m_path : str
+            Path to market data parquet/csv.
+        i_path : str
+            Path to ISIN master parquet/csv.
+        b_path : str
+            Path to benchmark data parquet/csv.
+        t_path : str
+            Path to macro parameters CSV.
+        rules : FinancialRules
+            Active financial rules configuration.
+        fx_path : str | None, optional
+            Path to currency FX parquet/csv, by default None.
+        start_date : date | None, optional
+            Run analysis start boundary, by default None.
+        end_date : date | None, optional
+            Run analysis end boundary, by default None.
+
+        Returns
+        -------
+        RunContext
+            Initialized analytics run context.
+        """
         df_p, df_s, df_m, isin_master, df_b, df_fx = TaxDataLoader.load_all(
             p_path, s_path, m_path, i_path, b_path, fx_path=fx_path
         )
@@ -98,6 +128,38 @@ class RunContext:
         end_date: date | None = None,
         run_id: str = "UNKNOWN",
     ) -> "RunContext":
+        """Instantiate RunContext directly from in-memory DataFrames.
+
+        Parameters
+        ----------
+        df_p : pl.DataFrame
+            Purchases DataFrame.
+        df_s : pl.DataFrame
+            Sales DataFrame.
+        df_m : pl.DataFrame
+            Market data observations DataFrame.
+        df_i : pl.DataFrame
+            ISIN master DataFrame.
+        df_b : pl.DataFrame
+            Benchmark index DataFrame.
+        df_t : pl.DataFrame
+            Macro tax parameters DataFrame.
+        rules : FinancialRules
+            Active financial rules configuration.
+        df_fx : pl.DataFrame | None, optional
+            Currency FX rates DataFrame, by default None.
+        start_date : date | None, optional
+            Run start date boundary, by default None.
+        end_date : date | None, optional
+            Run end date boundary, by default None.
+        run_id : str, optional
+            Unique execution run identifier, by default "UNKNOWN".
+
+        Returns
+        -------
+        RunContext
+            Initialized analytics run context.
+        """
         loaded_p, loaded_s, loaded_m, is_m, loaded_b, loaded_fx = (
             TaxDataLoader.load_from_dataframes(df_p, df_s, df_m, df_i, df_b, df_fx=df_fx)
         )
@@ -142,6 +204,43 @@ class AnalyticsContextManager:
         rules: FinancialRules | None,
         run_id: str = "UNKNOWN",
     ) -> tuple[RunContext, list[str]]:
+        """Validate input dataframes, initialize RunContext, and extract actionable ISINs.
+
+        Parameters
+        ----------
+        df_p : pl.DataFrame
+            Purchases DataFrame.
+        df_s : pl.DataFrame
+            Sales DataFrame.
+        df_m : pl.DataFrame
+            Market data observations DataFrame.
+        df_i : pl.DataFrame
+            ISIN master DataFrame.
+        df_b : pl.DataFrame
+            Benchmark index DataFrame.
+        df_t : pl.DataFrame
+            Macro tax parameters DataFrame.
+        df_fx : pl.DataFrame
+            Currency FX rates DataFrame.
+        start_date : date | None
+            Execution start boundary.
+        end_date : date | None
+            Execution end boundary.
+        rules : FinancialRules | None
+            Active financial rules configuration.
+        run_id : str, optional
+            Execution run identifier, by default "UNKNOWN".
+
+        Returns
+        -------
+        tuple[RunContext, list[str]]
+            Initialized context and list of distinct ISINs to process.
+
+        Raises
+        ------
+        ValueError
+            If rules is None or required structures are missing.
+        """
         self._report("Loading DataFrame memory structures...", 0.01, LogLevel.STEP)
 
         if rules is None:
