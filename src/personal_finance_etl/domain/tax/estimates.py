@@ -66,10 +66,10 @@ class TaxEstimator:
     @staticmethod
     def clean_optional_finite_number(value: object) -> float | None:
         """Return a finite numeric value, preserving missing/invalid values as None."""
-        if value is None or isinstance(value, bool):
+        if value is None or isinstance(value, bool) or not isinstance(value, (int, float, str)):
             return None
         try:
-            number = float(value)  # type: ignore[arg-type]
+            number = float(value)
         except (TypeError, ValueError, OverflowError):
             return None
         return number if math.isfinite(number) else None
