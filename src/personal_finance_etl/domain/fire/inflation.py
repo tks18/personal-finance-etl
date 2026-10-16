@@ -122,42 +122,7 @@ class InflationBuilder:
             .select(["MONTH_START_DATE", "INFLATION_YOY_PCT", "CPI_INDEX"])
         )
 
-        cpi_result: CpiResult
-        try:
-            cpi_latest_df = (
-                lf_inflation.sort("MONTH_START_DATE").tail(1).select("CPI_INDEX").collect()
-            )
-            if not cpi_latest_df.is_empty():
-                val = cpi_latest_df.item()
-                if (
-                    val is not None
-                    and isinstance(val, (int, float))
-                    and not math.isnan(val)
-                    and not math.isinf(val)
-                ):
-                    cpi_result = CpiResult(
-                        value=float(val),
-                        status=CalculationStatus.VALID,
-                    )
-                else:
-                    cpi_result = CpiResult(
-                        value=None,
-                        status=CalculationStatus.INVALID_INPUT,
-                        reason="Derived latest CPI_INDEX is null, NaN, or non-finite",
-                    )
-            else:
-                cpi_result = CpiResult(
-                    value=None,
-                    status=CalculationStatus.NO_OBSERVATION,
-                    reason="No observations available in inflation series",
-                )
-        except Exception as err:
-            logger.error("[INFLATION] Unexpected failure computing latest CPI: %s", err)
-            cpi_result = CpiResult(
-                value=None,
-                status=CalculationStatus.COMPUTATION_ERROR,
-                reason=str(err),
-            )
+        cpi_result = self._resolve_latest_cpi(lf_inflation)
 
         return {
             "lf_months": lf_months,
@@ -165,3 +130,38 @@ class InflationBuilder:
             "cpi_latest": cpi_result.as_float(fallback=float("nan")),
             "cpi_result": cpi_result,
         }
+
+    def _resolve_latest_cpi(self, lf_inflation: pl.LazyFrame) -> CpiResult:
+        try:
+            cpi_latest_df = (
+                lf_inflation.sort("MONTH_START_DATE").tail(1).select("CPI_INDEX").collect()
+            )
+            if cpi_latest_df.is_empty():
+                return CpiResult(
+                    value=None,
+                    status=CalculationStatus.NO_OBSERVATION,
+                    reason="No observations available in inflation series",
+                )
+            val = cpi_latest_df.item()
+            if (
+                val is not None
+                and isinstance(val, (int, float))
+                and not math.isnan(val)
+                and not math.isinf(val)
+            ):
+                return CpiResult(
+                    value=float(val),
+                    status=CalculationStatus.VALID,
+                )
+            return CpiResult(
+                value=None,
+                status=CalculationStatus.INVALID_INPUT,
+                reason="Derived latest CPI_INDEX is null, NaN, or non-finite",
+            )
+        except Exception as err:
+            logger.error("[INFLATION] Unexpected failure computing latest CPI: %s", err)
+            return CpiResult(
+                value=None,
+                status=CalculationStatus.COMPUTATION_ERROR,
+                reason=str(err),
+            )
