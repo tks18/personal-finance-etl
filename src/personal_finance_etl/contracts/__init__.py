@@ -31,6 +31,7 @@ from personal_finance_etl.contracts.extraction import (
 from personal_finance_etl.contracts.lifecycle import (
     CommitState,
     FailureDomain,
+    SyncSummaryRecord,
     classify_failure_domain,
 )
 from personal_finance_etl.contracts.logging import ILogger, LogLevel, StatusQueue
@@ -59,5 +60,6 @@ __all__ = [
     "SnapshotOutcome",
     "SnapshotResult",
     "StatusQueue",
+    "SyncSummaryRecord",
     "classify_failure_domain",
 ]
