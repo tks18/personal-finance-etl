@@ -326,26 +326,32 @@ class RealizedEventRecord(BaseModel):
 
     @property
     def date(self) -> dt.date:
+        """Disposal date alias for chronological sorting and aggregation."""
         return self.disposal_date
 
     @property
     def sell_qty(self) -> float:
+        """Disposed quantity alias in instrument unit grain."""
         return self.quantity_disposed
 
     @property
     def sell_price(self) -> float:
+        """Realized sale price per unit in asset currency."""
         return self.sale_price
 
     @property
     def buy_date(self) -> dt.date | None:
+        """Original acquisition date of the matched FIFO tax lot."""
         return self.acquisition_date
 
     @property
     def buy_price(self) -> float:
+        """Acquisition price per unit of the matched FIFO tax lot."""
         return self.acquisition_price
 
     @property
     def realized_pnl(self) -> float:
+        """Net realized capital gain or loss from this disposal."""
         return self.realized_gain_loss
 
 
