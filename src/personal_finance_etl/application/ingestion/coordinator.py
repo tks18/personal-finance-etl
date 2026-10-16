@@ -71,6 +71,18 @@ class DataExtractor:
         return [(os.path.basename(f), os.path.dirname(f), self._get_bytes(f)) for f in filepaths]
 
     def run(self, actionable_files: dict[str, list[str]] | None = None) -> ExtractionResult:
+        """Extract and validate raw database, Excel, and CSV payloads into ExtractionResult.
+
+        Parameters
+        ----------
+        actionable_files : dict[str, list[str]] | None, optional
+            Dictionary mapping file categories to payload paths; if None, queries Control Plane.
+
+        Returns
+        -------
+        ExtractionResult
+            Container of extracted lazy frames, raw payloads, and mapping tables.
+        """
         logger.info("Initializing extraction from Raw Store payloads...")
         self.status_queue.put(
             EngineStatusMessage(
