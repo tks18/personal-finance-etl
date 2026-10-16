@@ -130,6 +130,29 @@ class IsinProcessor:
         master_row: IsinMasterRecord,
         bm_map: dict[date, float],
     ) -> ISINProcessResult | None:
+        """Execute chronological FIFO simulation, metrics, and lot snapshots for a single ISIN.
+
+        Parameters
+        ----------
+        isin : str
+            Unique instrument ISIN code.
+        p_inst : list[TradeRecord]
+            Sorted chronological purchase trade records.
+        s_inst : list[TradeRecord]
+            Sorted chronological sale trade records.
+        m_inst : list[TradeRecord]
+            Daily closing market observations.
+        master_row : IsinMasterRecord
+            Instrument master reference metadata.
+        bm_map : dict[date, float]
+            Pre-computed benchmark daily closing prices.
+
+        Returns
+        -------
+        ISINProcessResult | None
+            Computed cashflows, terminal values, realized events, snapshots, and tags,
+            or None if no market observations exist.
+        """
         if not m_inst:
             return None
 
@@ -897,6 +920,14 @@ class IsinPipeline:
             )
 
     def process_all(self) -> PipelineExecutionResult:
+        """Execute parallel multi-process simulation across all configured ISIN instruments.
+
+        Returns
+        -------
+        PipelineExecutionResult
+            Aggregated global, asset-class, subtype, sector, geography, and currency
+            cashflows, terminal values, realized disposal events, and reconciliation adjustments.
+        """
         global_cashflows: list[CashflowDict] = []
         portfolio_terminals: dict[date, dict[str, float]] = {}
         realized_events: list[RealizedEventDict] = []
