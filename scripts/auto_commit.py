@@ -487,8 +487,11 @@ V920_COMMIT_MESSAGES: dict[str, str] = {
     "src/personal_finance_etl/infrastructure/recovery/backup.py": "refactor(recovery): decompose snapshot restore validation steps",
     "src/personal_finance_etl/infrastructure/warehouse/meta.py": "refactor(warehouse): decompose DuckDB registry healing stages",
     "src/personal_finance_etl/presentation/cli/app.py": "refactor(cli): extract subcommands and status prefix dispatch",
-    ".planning/refactor_v910_v920/v9.2.0/07-v9.2.0-phase-tracker.md": "docs(v9.2.0): mark Phase 3 as completed in phase tracker",
-    "scripts/auto_commit.py": "chore(scripts): stage v9.2.0 Phase 3 commit mappings",
+    # v9.2.0 Phase 4 Polars Materialization Audit
+    ".planning/refactor_v910_v920/v9.2.0/05-materialization-map.csv": "docs(v9.2.0): classify 76 polars materialization boundaries",
+    ".planning/refactor_v910_v920/v9.2.0/04-polars-execution-evidence.md": "docs(v9.2.0): document Phase 4 polars materialization taxonomy",
+    ".planning/refactor_v910_v920/v9.2.0/07-v9.2.0-phase-tracker.md": "docs(v9.2.0): mark Phase 4 as completed in phase tracker",
+    "scripts/auto_commit.py": "chore(scripts): stage v9.2.0 Phase 4 commit mappings",
 }
 
 
