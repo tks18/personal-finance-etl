@@ -17,7 +17,7 @@ import calendar
 import logging
 from collections.abc import Callable
 from datetime import date
-from typing import Any, TypedDict
+from typing import TypedDict
 
 import polars as pl
 
@@ -25,6 +25,13 @@ from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.domain.common.dates import to_date_obj
 
 logger = logging.getLogger(__name__)
+
+__all__ = [
+    "FYMacroParametersTable",
+    "FYMapEntry",
+    "MacroClassificationContext",
+    "add_months",
+]
 
 _DEFAULT_DEBT_MF_CUTOFF = date(2023, 4, 1)
 
@@ -36,6 +43,13 @@ class FYMapEntry(TypedDict):
     end: date
     debt_cutoff: date
     raw: dict[str, float | str | date | None]
+
+
+class MacroClassificationContext(TypedDict):
+    """Context dictionary for macro tax classification rules."""
+
+    lot_buy_date: date
+    debt_cutoff: date
 
 
 def add_months(d: date, months: int) -> date:
@@ -179,7 +193,9 @@ class FYMacroParametersTable:
             return self.fy_map[0]
         return None
 
-    _CLASSIFICATION_RULES: dict[str, Callable[[str, dict[str, Any]], tuple[str, str]]] = {
+    _CLASSIFICATION_RULES: dict[
+        str, Callable[[str, MacroClassificationContext], tuple[str, str]]
+    ] = {
         "equity": lambda tst, _: (
             "equity",
             # Foreign equity subtypes get their own classification so they can be taxed
