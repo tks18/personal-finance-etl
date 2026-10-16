@@ -14,14 +14,27 @@ Does not own
 """
 
 import os
-from typing import Any
+from typing import Protocol, cast
 
 import polars as pl
 
+from personal_finance_etl.domain.investments.contracts import (
+    IsinMasterRecord,
+    TradeRecord,
+)
 from personal_finance_etl.domain.investments.lots.ordering import (
     sort_purchases,
     sort_sales,
 )
+
+
+class IsinContextProtocol(Protocol):
+    """Protocol for execution context supplying per-ISIN DataFrames and master metadata."""
+
+    df_p: pl.DataFrame
+    df_s: pl.DataFrame
+    df_m: pl.DataFrame
+    isin_master: dict[str, IsinMasterRecord]
 
 
 def parse_date_col(df: pl.DataFrame) -> pl.DataFrame:
@@ -67,7 +80,7 @@ class TaxDataLoader:
         pl.DataFrame,
         pl.DataFrame,
         pl.DataFrame,
-        dict[str, dict[str, Any]],
+        dict[str, IsinMasterRecord],
         pl.DataFrame | None,
         pl.DataFrame | None,
     ]:
@@ -75,8 +88,10 @@ class TaxDataLoader:
         df_s = parse_date_col(df_s)
         df_m = parse_date_col(df_m)
 
-        isin_master: dict[str, dict[str, Any]] = (
-            {str(row["ISIN"]): row for row in df_i.to_dicts()} if df_i is not None else {}
+        isin_master: dict[str, IsinMasterRecord] = (
+            {str(row["ISIN"]): cast(IsinMasterRecord, row) for row in df_i.to_dicts()}
+            if df_i is not None
+            else {}
         )
 
         if df_b is not None:
@@ -107,7 +122,7 @@ class TaxDataLoader:
         pl.DataFrame,
         pl.DataFrame,
         pl.DataFrame,
-        dict[str, dict[str, Any]],
+        dict[str, IsinMasterRecord],
         pl.DataFrame | None,
         pl.DataFrame | None,
     ]:
@@ -140,7 +155,7 @@ class TaxDataLoader:
         pl.DataFrame,
         pl.DataFrame,
         pl.DataFrame,
-        dict[str, dict[str, Any]],
+        dict[str, IsinMasterRecord],
         pl.DataFrame | None,
         pl.DataFrame | None,
     ]:
@@ -152,20 +167,21 @@ class IsinDataExtractor:
 
     @staticmethod
     def extract(
-        ctx: Any, isin: str
+        ctx: IsinContextProtocol, isin: str
     ) -> tuple[
-        list[dict[str, Any]],
-        list[dict[str, Any]],
-        list[dict[str, Any]],
-        dict[str, Any],
+        list[TradeRecord],
+        list[TradeRecord],
+        list[TradeRecord],
+        IsinMasterRecord,
     ]:
-        p_inst_raw = ctx.df_p.filter(pl.col("ISIN") == isin).to_dicts()
+        p_inst_raw = cast("list[TradeRecord]", ctx.df_p.filter(pl.col("ISIN") == isin).to_dicts())
         p_inst = sort_purchases(p_inst_raw)
 
-        s_inst_raw = ctx.df_s.filter(pl.col("ISIN") == isin).to_dicts()
+        s_inst_raw = cast("list[TradeRecord]", ctx.df_s.filter(pl.col("ISIN") == isin).to_dicts())
         s_inst = sort_sales(s_inst_raw)
 
-        m_inst = (
+        m_inst = cast(
+            "list[TradeRecord]",
             ctx.df_m.filter(pl.col("ISIN") == isin)
             .sort("Date")
             .group_by("Date", maintain_order=True)
@@ -176,13 +192,14 @@ class IsinDataExtractor:
                     pl.col("Buy_Value").sum().alias("Buy_Value"),
                 ]
             )
-            .to_dicts()
+            .to_dicts(),
         )
-        master_row = ctx.isin_master.get(isin, {})
+        master_row: IsinMasterRecord = ctx.isin_master.get(isin, {})
         return p_inst, s_inst, m_inst, master_row
 
 
 __all__ = [
+    "IsinContextProtocol",
     "IsinDataExtractor",
     "TaxDataLoader",
     "clean_numeric_col",
