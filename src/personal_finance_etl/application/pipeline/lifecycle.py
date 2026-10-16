@@ -328,4 +328,6 @@ class RunLifecycleCoordinator:
         finally:
             if self.cp is not None:
                 self.cp.close()
+            # Materialization Boundary: PROCESS_BOUNDARY
+            # Explicit Python runtime garbage collection invocation between execution stages
             gc.collect()
