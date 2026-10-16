@@ -84,6 +84,8 @@ def get_base_transactions(df_lazy: pl.LazyFrame, column_mapping: dict[str, str])
                 if c in raw_columns
             ]
         )
+        # Materialization Boundary: VALIDATION_DIAGNOSTIC
+        # Materialize bounded sample (max 20) of invalid transactions violating monetary invariants
         .limit(20)
         .collect()
     )
