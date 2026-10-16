@@ -56,6 +56,7 @@ class ETLOrchestrator:
 
     @dfs.setter
     def dfs(self, value: dict[str, pl.DataFrame]) -> None:
+        """Set the active collection of transformed datasets."""
         self.executor.dfs = value
 
     def _extract(
