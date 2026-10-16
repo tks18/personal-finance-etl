@@ -243,22 +243,62 @@ class FIFOPortfolio:
         return realized_events
 
     def get_closing_units(self) -> float:
+        """Return aggregate remaining physical units across all active tax lots."""
         return sum(lot.qty for lot in self._active_lots)
 
     def get_closing_shadow_units(self) -> float:
+        """Return aggregate benchmark counterfactual shadow units across active lots."""
         return sum(lot.shadow_qty for lot in self._active_lots)
 
     def get_terminal_value(self, m_price: float) -> float:
+        """Calculate mark-to-market valuation based on current market price.
+
+        Parameters
+        ----------
+        m_price : float
+            Current market price per unit.
+
+        Returns
+        -------
+        float
+            Total valuation of active lots.
+        """
         return self.get_closing_units() * m_price
 
     def get_shadow_terminal_value(self, m_bm_price: float) -> float:
+        """Calculate benchmark counterfactual valuation based on current benchmark price.
+
+        Parameters
+        ----------
+        m_bm_price : float
+            Current benchmark close price.
+
+        Returns
+        -------
+        float
+            Total shadow valuation of benchmark units.
+        """
         return self.get_closing_shadow_units() * m_bm_price
 
     def get_average_cost(self) -> float:
+        """Calculate volume-weighted average acquisition price of remaining active lots.
+
+        Returns
+        -------
+        float
+            Weighted average cost per unit, or 0.0 if zero units remain.
+        """
         units = self.get_closing_units()
         return sum(lot.qty * lot.price for lot in self._active_lots) / units if units > 0 else 0.0
 
     def get_average_bm_cost(self) -> float:
+        """Calculate volume-weighted average benchmark price at purchase across active lots.
+
+        Returns
+        -------
+        float
+            Weighted average benchmark acquisition price, or 0.0 if zero shadow units.
+        """
         s_units = self.get_closing_shadow_units()
         total_cost = 0.0
         for lot in self._active_lots:
