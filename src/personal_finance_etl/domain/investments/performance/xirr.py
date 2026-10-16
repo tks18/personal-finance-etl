@@ -100,6 +100,24 @@ class PortfolioXIRRCalculator:
         global_cashflows: list[CashflowDict],
         portfolio_terminals: dict[date, TerminalValueDict] | dict[date, dict[str, float]],
     ) -> pl.DataFrame:
+        """Calculate running portfolio, benchmark, after-tax, and local currency XIRR time-series.
+
+        Parameters
+        ----------
+        unique_dates : list[date]
+            Chronological evaluation dates.
+        global_cashflows : list[CashflowDict]
+            Chronological portfolio cashflows including purchase, sale, and distribution flows.
+        portfolio_terminals : dict[date, TerminalValueDict] | dict[date, dict[str, float]]
+            Mapping of closing date to mark-to-market terminal valuations.
+
+        Returns
+        -------
+        pl.DataFrame
+            DataFrame keyed by Closing_Date with Port_XIRR, BM_XIRR, Local_XIRR,
+            Local_BM_XIRR, After_Tax_XIRR, Active_Return, and FX_Impact metrics.
+        """
+
         class StoredCashflow(CashflowDict):
             date_obj: Required[date]
 
