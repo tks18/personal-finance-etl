@@ -437,6 +437,7 @@ class DesktopApp(ctk.CTk):  # type: ignore[misc]
 
 
 def main() -> None:
+    """Initialize and run the CustomTkinter desktop user interface."""
     app = DesktopApp()
     app.mainloop()
 
