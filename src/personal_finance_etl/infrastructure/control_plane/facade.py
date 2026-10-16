@@ -16,7 +16,6 @@ Does not own
 from __future__ import annotations
 
 import os
-from typing import Any
 
 from filelock import FileLock, Timeout
 
@@ -44,7 +43,7 @@ class ControlPlane:
         self.runs = RunRepository(self.db)
         self.file_sync = FileSyncService(self.artifacts)
         self.lock_path = os.path.join(base_path or ".", "pipeline.lock")
-        self._lock: Any = FileLock(self.lock_path)
+        self._lock: FileLock = FileLock(self.lock_path)
         self._lock_acquired = False
         self._active_run_id: str | None = None
 
