@@ -42,6 +42,8 @@ class SilverLayer:
     def _write(self, df: pl.DataFrame | pl.LazyFrame, table_name: str) -> int:
         """Write DataFrame or LazyFrame into a Silver table with quality checks."""
         if isinstance(df, pl.LazyFrame):
+            # Materialization Boundary: PUBLICATION_BOUNDARY
+            # Terminal execution of lazy transformation graph for DuckDB Silver table insertion
             df = df.collect()
 
         if df.height == 0:
