@@ -77,6 +77,7 @@ def main() -> None:
     else:
         # Default to tkinter if no command, or if command == "tkinter"
         app = DesktopApp()
+        # Exception TYP-003 [THIRD_PARTY_TYPING_GAP]: CustomTkinter untyped mainloop dispatch
         app.mainloop()  # pyright: ignore[reportUnknownMemberType]
 
 
