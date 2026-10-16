@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import os
 import tomllib
-from typing import Any, cast
+from typing import cast
 
 from pydantic import BaseModel, Field
 
@@ -26,15 +26,19 @@ from personal_finance_etl.infrastructure.preferences import PreferencesManager
 
 
 class FileHashPolicy(BaseModel):
+    """File content hashing policy flags for source deduplication across format categories."""
+
     csv: bool = True
     excel: bool = False
     sqlite: bool = False
 
 
-def _flatten_settings_to_records(node: Any, path: list[str], records: list[dict[str, str]]) -> None:
+def _flatten_settings_to_records(
+    node: object, path: list[str], records: list[dict[str, str]]
+) -> None:
     """Recursively traverse the settings tree to extract flat key-value pairs."""
     if isinstance(node, dict):
-        dict_node = cast("dict[str, Any]", node)
+        dict_node = cast("dict[str, object]", node)
         for k, v in dict_node.items():
             _flatten_settings_to_records(v, path + [k], records)
     elif isinstance(node, list):
@@ -61,6 +65,8 @@ def _flatten_settings_to_records(node: Any, path: list[str], records: list[dict[
 
 
 class Settings(BaseModel):
+    """Execution environment settings, warehouse paths, and dependency file locations."""
+
     SOURCE_DB_FOLDER: str = ""
     TARGET_DB_BASE_PATH: str = ""
     TARGET_DB_NAME: str = "Personal_Finance_DB.duckdb"

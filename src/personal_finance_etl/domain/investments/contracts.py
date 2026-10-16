@@ -16,8 +16,9 @@ Does not own
 import datetime as dt
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any
+from typing import Required, TypedDict
 
+import polars as pl
 from pydantic import BaseModel, ConfigDict, Field
 
 from personal_finance_etl.domain.common.calculation import XirrResult as XirrResult
@@ -40,6 +41,179 @@ class ReconciliationAdjustmentType(StrEnum):
     QUANTITY_ADD = "QUANTITY_ADD"
     QUANTITY_REMOVE = "QUANTITY_REMOVE"
     COST_BASIS_ADJUSTMENT = "COST_BASIS_ADJUSTMENT"
+
+
+class IsinMasterRecord(TypedDict, total=False):
+    """Normalized master metadata row for an investment instrument."""
+
+    ISIN: str
+    NAME: str
+    SYMBOL: str
+    CURRENCY_ID: str | None
+    BENCHMARK_ID: str | None
+    TAX_TYPE: str
+    TAX_SUBTYPE: str
+    INSTRUMENT_CLASS: str
+    INSTRUMENT_SUBTYPE: str
+    INSTRUMENT_TYPE: str
+    SECTOR: str
+    INDUSTRY: str
+    GEO: str
+    COUNTRY: str
+
+
+class TradeRecord(TypedDict, total=False):
+    """Normalized trade transaction record (purchases, sales, or mutual fund holdings)."""
+
+    ISIN: Required[str]
+    Date: Required[dt.date]
+    Quantity: Required[float]
+    Price: float | None
+    Value: float | None
+    Price_Local: float | None
+    Value_Local: float | None
+    Sell_Price: float | None
+    Sell_Value: float | None
+    Sell_Price_Local: float | None
+    Sell_Value_Local: float | None
+    Closing_Price: float | None
+    Buy_Value: float | None
+    Buy_Value_Local: float | None
+    CURRENCY_ID: str | None
+    Currency_ID: str | None
+    Purchase_ID: str | None
+    Sale_ID: str | None
+    Equity_LTCG_Exemption: float | None
+    Execution_Residual: float | None
+
+
+class CashflowDict(TypedDict, total=False):
+    """Dictionary representation of a cashflow event for serialization and fast aggregation."""
+
+    date: dt.date
+    amount: float
+    amount_local: float
+    benchmark_amount: float | None
+    benchmark_amount_local: float | None
+
+
+class TerminalValueDict(TypedDict, total=False):
+    """Dictionary representation of mark-to-market terminal valuations across time."""
+
+    val: Required[float]
+    shadow_val: Required[float]
+    after_tax_val: float
+    val_local: float
+    shadow_val_local: Required[float]
+
+
+class RealizedEventDict(TypedDict, total=False):
+    """Dictionary representation of a FIFO realized sale event."""
+
+    Realized_Event_ID: str
+    Sale_ID: str | None
+    Lot_ID: str | None
+    Purchase_ID: str | None
+    ISIN: str
+    Acquisition_Date: dt.date | None
+    Disposal_Date: dt.date
+    FY: str
+    Quantity_Disposed: float
+    Acquisition_Price: float
+    Disposed_Cost_Basis: float
+    Sale_Price: float
+    Sale_Proceeds: float
+    Realized_Gain_Loss: float
+    Holding_Type: str
+    is_loss: bool
+    Tax_Type: str
+    Tax_Subtype: str
+    Lot_Source_Type: str
+    Currency_ID: str | None
+    Asset_PnL_Local: float
+    Asset_PnL: float
+    Forex_PnL: float
+    Applied_Rate: float
+    Estimated_Tax: float
+    shadow_qty_sold: float
+
+
+class ReconciliationEventDict(TypedDict, total=False):
+    """Dictionary representation of a reconciliation discrepancy event."""
+
+    Reconciliation_Event_ID: str
+    Reconciliation_Group_ID: str | None
+    Lot_ID: str | None
+    Purchase_ID: str | None
+    ISIN: str
+    Reconciliation_Date: dt.date
+    Adjustment_Type: str
+    Reason: str
+    Reconstructed_Quantity: float
+    Observed_Quantity: float
+    Broker_Quantity: float
+    Delta_Quantity: float
+    Quantity_Adjustment: float
+    Reconstructed_Cost_Basis: float | None
+    Observed_Cost_Basis: float | None
+    Broker_Cost_Basis: float | None
+    Delta_Cost_Basis: float | None
+    Cost_Basis_Adjustment: float | None
+    Original_Unit_Cost: float | None
+    Adjusted_Unit_Cost: float | None
+    Run_ID: str
+
+
+class InstrumentMetricsRecord(TypedDict, total=False):
+    """Performance, XIRR, CAGR, and benchmark attribution metrics for an instrument."""
+
+    cagr: float | None
+    cagr_status: str
+    bm_cagr: float | None
+    bm_cagr_status: str
+    xirr: float | None
+    xirr_status: str
+    bm_xirr: float | None
+    bm_xirr_status: str
+    after_tax_xirr: float | None
+    after_tax_xirr_status: str
+    active_return: float | None
+    is_lagging: bool | None
+    max_drawdown: float
+    xirr_local: float | None
+    xirr_local_status: str
+    bm_xirr_local: float | None
+    bm_xirr_local_status: str
+    active_return_local: float | None
+    fx_xirr_impact: float | None
+    # Upper-case aliases for contract flexibility
+    CAGR: float | None
+    CAGR_Status: str
+    BM_CAGR: float | None
+    BM_CAGR_Status: str
+    XIRR: float | None
+    XIRR_Status: str
+    BM_XIRR: float | None
+    After_Tax_XIRR: float | None
+    Active_Return: float | None
+    Active_Return_Local: float | None
+    Is_Lagging_Benchmark: bool | None
+    Max_Drawdown: float
+    XIRR_Local: float | None
+    FX_XIRR_Impact: float | None
+
+
+class MarketSpineRecord(TypedDict, total=False):
+    """Valuation spine record for daily US market holdings."""
+
+    Date: dt.date
+    ISIN: str
+    CURRENCY_ID: str
+    Quantity: float
+    Buy_Value_Local: float
+    Buy_Value_INR: float
+    Buy_Price_Local: float
+    Buy_Price_INR: float
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,26 +326,32 @@ class RealizedEventRecord(BaseModel):
 
     @property
     def date(self) -> dt.date:
+        """Disposal date alias for chronological sorting and aggregation."""
         return self.disposal_date
 
     @property
     def sell_qty(self) -> float:
+        """Disposed quantity alias in instrument unit grain."""
         return self.quantity_disposed
 
     @property
     def sell_price(self) -> float:
+        """Realized sale price per unit in asset currency."""
         return self.sale_price
 
     @property
     def buy_date(self) -> dt.date | None:
+        """Original acquisition date of the matched FIFO tax lot."""
         return self.acquisition_date
 
     @property
     def buy_price(self) -> float:
+        """Acquisition price per unit of the matched FIFO tax lot."""
         return self.acquisition_price
 
     @property
     def realized_pnl(self) -> float:
+        """Net realized capital gain or loss from this disposal."""
         return self.realized_gain_loss
 
 
@@ -309,11 +489,11 @@ class ISINTaskPayload(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True, strict=False)
 
     isin: str
-    p_inst: list[dict[str, Any]]
-    s_inst: list[dict[str, Any]]
-    m_inst: list[dict[str, Any]]
-    master_row: dict[str, Any]
-    bm_map: dict[str, Any]
+    p_inst: list[TradeRecord]
+    s_inst: list[TradeRecord]
+    m_inst: list[TradeRecord]
+    master_row: IsinMasterRecord
+    bm_map: dict[str, float]
 
 
 class ISINProcessResult(BaseModel):
@@ -321,11 +501,13 @@ class ISINProcessResult(BaseModel):
 
     model_config = ConfigDict(arbitrary_types_allowed=True, populate_by_name=True)
 
-    df_snapshots: Any | None = None
+    df_snapshots: pl.DataFrame | None = None
     cashflows: list[CashflowRecord]
     terminals: dict[dt.date, TerminalValueRecord]
-    realized_events: list[dict[str, Any]]
-    recon_events: list[dict[str, Any]] = Field(default_factory=lambda: list[dict[str, Any]]())
+    realized_events: list[RealizedEventDict] | list[RealizedEventRecord]
+    recon_events: list[ReconciliationEventDict] | list[ReconciliationEventRecord] = Field(
+        default_factory=list[ReconciliationEventDict]
+    )
     tags: ISINTags
 
 
@@ -335,31 +517,31 @@ class PipelineExecutionResult(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True, strict=False)
 
     has_data: bool
-    global_cf: list[dict[str, Any]]
+    global_cf: list[CashflowDict]
     global_pt: dict[dt.date, dict[str, float]]
-    global_re: list[dict[str, Any]]
-    global_recon_events: list[dict[str, Any]]
-    isin_cf: dict[str, list[dict[str, Any]]]
-    isin_pt: dict[str, dict[dt.date, dict[str, Any]]]
-    class_cf: dict[str, list[dict[str, Any]]]
+    global_re: list[RealizedEventDict]
+    global_recon_events: list[ReconciliationEventDict]
+    isin_cf: dict[str, list[CashflowDict]]
+    isin_pt: dict[str, dict[dt.date, TerminalValueDict]]
+    class_cf: dict[str, list[CashflowDict]]
     class_pt: dict[str, dict[dt.date, dict[str, float]]]
-    class_re: dict[str, list[dict[str, Any]]]
-    subtype_cf: dict[str, list[dict[str, Any]]]
+    class_re: dict[str, list[RealizedEventDict]]
+    subtype_cf: dict[str, list[CashflowDict]]
     subtype_pt: dict[str, dict[dt.date, dict[str, float]]]
-    subtype_re: dict[str, list[dict[str, Any]]]
-    instrument_type_cf: dict[str, list[dict[str, Any]]]
+    subtype_re: dict[str, list[RealizedEventDict]]
+    instrument_type_cf: dict[str, list[CashflowDict]]
     instrument_type_pt: dict[str, dict[dt.date, dict[str, float]]]
-    sector_cf: dict[str, list[dict[str, Any]]]
+    sector_cf: dict[str, list[CashflowDict]]
     sector_pt: dict[str, dict[dt.date, dict[str, float]]]
-    industry_cf: dict[str, list[dict[str, Any]]]
+    industry_cf: dict[str, list[CashflowDict]]
     industry_pt: dict[str, dict[dt.date, dict[str, float]]]
-    geo_cf: dict[str, list[dict[str, Any]]]
+    geo_cf: dict[str, list[CashflowDict]]
     geo_pt: dict[str, dict[dt.date, dict[str, float]]]
-    country_cf: dict[str, list[dict[str, Any]]]
+    country_cf: dict[str, list[CashflowDict]]
     country_pt: dict[str, dict[dt.date, dict[str, float]]]
-    currency_cf: dict[str, list[dict[str, Any]]]
+    currency_cf: dict[str, list[CashflowDict]]
     currency_pt: dict[str, dict[dt.date, dict[str, float]]]
-    currency_re: dict[str, list[dict[str, Any]]]
+    currency_re: dict[str, list[RealizedEventDict]]
 
 
 # Canonical alias for PipelineExecutionResult
@@ -367,21 +549,29 @@ PortfolioResult = PipelineExecutionResult
 
 __all__ = [
     "AcquisitionLot",
+    "CashflowDict",
     "CashflowRecord",
     "ISINProcessResult",
     "ISINTags",
     "ISINTaskPayload",
+    "InstrumentMetricsRecord",
+    "IsinMasterRecord",
     "LotAction",
+    "MarketSpineRecord",
     "PipelineExecutionResult",
     "PortfolioResult",
     "Purchase",
     "RealizedEvent",
+    "RealizedEventDict",
     "RealizedEventRecord",
     "ReconciliationAdjustmentType",
     "ReconciliationEvent",
+    "ReconciliationEventDict",
     "ReconciliationEventRecord",
     "Sale",
     "SnapshotRecord",
     "TaxLot",
+    "TerminalValueDict",
     "TerminalValueRecord",
+    "TradeRecord",
 ]

@@ -50,6 +50,7 @@ class FileSyncService:
 
     @active_run_id.setter
     def active_run_id(self, value: str | None) -> None:
+        """Set the active run identifier and propagate it to the artifact repository."""
         self._active_run_id = value
         self.artifact_repo.active_run_id = value
 

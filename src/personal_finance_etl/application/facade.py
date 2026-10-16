@@ -18,12 +18,13 @@ from __future__ import annotations
 import multiprocessing
 import os
 from collections.abc import Callable
-from typing import Any
+from typing import Protocol
 
 from personal_finance_etl.application.pipeline.orchestrator import ETLOrchestrator
 from personal_finance_etl.application.pipeline.worker import WorkerPoolCoordinator
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
+from personal_finance_etl.contracts.application import EngineStatusMessage
 from personal_finance_etl.contracts.logging import ILogger
 from personal_finance_etl.contracts.recovery import (
     ActiveDatabaseState,
@@ -35,13 +36,44 @@ from personal_finance_etl.contracts.recovery import (
 from personal_finance_etl.infrastructure.preferences import PreferencesManager
 from personal_finance_etl.infrastructure.recovery.backup import SystemBackupManager
 
-__all__ = ["PersonalFinanceEngine"]
+__all__ = ["ContainerProtocol", "PersonalFinanceEngine"]
+
+
+class ContainerProtocol(Protocol):
+    """Structural protocol for bootstrap container dependency resolution."""
+
+    def create_orchestrator(
+        self,
+        config_path: str | None = None,
+        rules_path: str | None = None,
+        status_queue: ILogger | None = None,
+        settings: Settings | None = None,
+    ) -> ETLOrchestrator:
+        """Create and wire an ETLOrchestrator instance with configuration and logging.
+
+        Parameters
+        ----------
+        config_path : str | None, optional
+            Path to application settings YAML.
+        rules_path : str | None, optional
+            Path to financial rules YAML.
+        status_queue : ILogger | None, optional
+            Logger or queue for runtime status events.
+        settings : Settings | None, optional
+            Pre-loaded settings instance.
+
+        Returns
+        -------
+        ETLOrchestrator
+            Wired execution orchestrator.
+        """
+        ...
 
 
 class PersonalFinanceEngine:
     """Unified Façade for the entire Personal Finance Backend and Presentation boundary."""
 
-    def __init__(self, container: Any | None = None) -> None:
+    def __init__(self, container: ContainerProtocol | None = None) -> None:
         self.container = container
         self._prefs = PreferencesManager()
 
@@ -127,10 +159,10 @@ class PersonalFinanceEngine:
         self,
         config_path: str,
         rules_path: str,
-        on_status: Callable[[Any], None],
+        on_status: Callable[[EngineStatusMessage], None],
     ) -> None:
         """Spawn the multiprocessing ETL pipeline and stream status updates to on_status."""
-        status_queue: multiprocessing.Queue[Any] = multiprocessing.Queue()
+        status_queue: multiprocessing.Queue[EngineStatusMessage] = multiprocessing.Queue()
         process = WorkerPoolCoordinator.spawn_process(status_queue, config_path, rules_path)
         WorkerPoolCoordinator.monitor_queue(process, status_queue, on_status)
 

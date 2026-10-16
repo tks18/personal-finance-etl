@@ -16,12 +16,13 @@ Does not own
 from __future__ import annotations
 
 import queue
-from typing import Any, cast
+from typing import cast
 
 from personal_finance_etl.application.facade import PersonalFinanceEngine
 from personal_finance_etl.application.pipeline.orchestrator import ETLOrchestrator
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
+from personal_finance_etl.contracts.application import EngineStatusMessage
 from personal_finance_etl.contracts.logging import ILogger
 from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
 from personal_finance_etl.infrastructure.preferences import PreferencesManager
@@ -35,9 +36,15 @@ class _NullLoggerQueue:
     """Fallback in-memory queue satisfying ILogger protocol when no queue is provided."""
 
     def __init__(self) -> None:
-        self._q: queue.Queue[Any] = queue.Queue()
+        self._q: queue.Queue[EngineStatusMessage] = queue.Queue()
 
-    def put(self, status: Any, block: bool = True, timeout: float | None = None) -> None:
+    def put(
+        self,
+        status: EngineStatusMessage,
+        block: bool = True,
+        timeout: float | None = None,
+    ) -> None:
+        """Enqueue status message into fallback internal queue."""
         self._q.put(status, block=block, timeout=timeout)
 
 

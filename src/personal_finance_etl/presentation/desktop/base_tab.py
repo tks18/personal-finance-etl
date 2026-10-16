@@ -16,8 +16,8 @@ from __future__ import annotations
 
 import time
 from tkinter import messagebox
-from typing import Any
 
+# Exception TYP-003 [THIRD_PARTY_TYPING_GAP]: customtkinter lacks py.typed marker and complete stubs
 import customtkinter as ctk  # type: ignore[import-untyped]
 
 from personal_finance_etl.contracts.application import EngineStatusMessage
@@ -31,6 +31,7 @@ from personal_finance_etl.presentation.desktop.theme import (
 __all__ = ["BaseEngineTab"]
 
 
+# Exception TYP-003 [THIRD_PARTY_TYPING_GAP]: Subclassing untyped third-party ctk.CTkFrame base class
 class BaseEngineTab(ctk.CTkFrame):  # type: ignore[misc]
     """Base tab handling standard 2-column layout and log/queue operations."""
 
@@ -127,11 +128,11 @@ class BaseEngineTab(ctk.CTkFrame):  # type: ignore[misc]
         ).grid(row=row, column=0, padx=10, pady=(12, 4), sticky="w")
         return row + 1
 
-    def handle_status(self, run_btn: ctk.CTkButton, status: EngineStatusMessage | Any) -> None:
+    def handle_status(self, run_btn: ctk.CTkButton, status: EngineStatusMessage) -> None:
         """Handle status updates from the backend engine with thread-safe UI dispatch."""
         self.after(0, lambda: self._process_status(run_btn, status))
 
-    def _process_status(self, run_btn: ctk.CTkButton, status: EngineStatusMessage | Any) -> None:
+    def _process_status(self, run_btn: ctk.CTkButton, status: EngineStatusMessage) -> None:
         """Process status message on the Tkinter event loop thread."""
         if not self.winfo_exists():
             return

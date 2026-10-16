@@ -144,6 +144,18 @@ def _process_mf_transaction_statements(filename: str, raw_bytes: bytes) -> pl.Da
 
 
 def extract_mf_transactions_raw(valid_files: list[tuple[str, str, bytes]]) -> pl.LazyFrame:
+    """Parse raw Excel mutual fund transaction statements into a combined LazyFrame.
+
+    Parameters
+    ----------
+    valid_files : list[tuple[str, str, bytes]]
+        List of (filename, folder_path, raw_bytes) tuples.
+
+    Returns
+    -------
+    pl.LazyFrame
+        Combined lazy frame with metadata and month-date columns.
+    """
     all_dfs: list[pl.DataFrame] = []
     for filename, folder_path, raw_bytes in valid_files:
         try:
@@ -212,6 +224,18 @@ def _process_stock_closing_statement(filename: str, raw_bytes: bytes) -> pl.Data
 
 
 def extract_stock_market_data_raw(valid_files: list[tuple[str, str, bytes]]) -> pl.LazyFrame:
+    """Parse raw Excel domestic stock closing valuation statements into a combined LazyFrame.
+
+    Parameters
+    ----------
+    valid_files : list[tuple[str, str, bytes]]
+        List of (filename, folder_path, raw_bytes) tuples.
+
+    Returns
+    -------
+    pl.LazyFrame
+        Combined lazy frame with market valuation data and metadata.
+    """
     all_dfs: list[pl.DataFrame] = []
     for filename, folder_path, raw_bytes in valid_files:
         try:
@@ -259,6 +283,18 @@ def _process_stock_transactions(filename: str, raw_bytes: bytes) -> pl.DataFrame
 
 
 def extract_stock_transactions_raw(valid_files: list[tuple[str, str, bytes]]) -> pl.LazyFrame:
+    """Parse raw Excel domestic stock trade order statements into a combined LazyFrame.
+
+    Parameters
+    ----------
+    valid_files : list[tuple[str, str, bytes]]
+        List of (filename, folder_path, raw_bytes) tuples.
+
+    Returns
+    -------
+    pl.LazyFrame
+        Combined lazy frame of trade order transactions.
+    """
     all_dfs: list[pl.DataFrame] = []
     for filename, folder_path, raw_bytes in valid_files:
         df_processed = _process_stock_transactions(filename, raw_bytes)
@@ -292,6 +328,18 @@ def _process_us_stock_transactions(filename: str, raw_bytes: bytes) -> pl.DataFr
 
 
 def extract_us_stock_transactions_raw(valid_files: list[tuple[str, str, bytes]]) -> pl.LazyFrame:
+    """Parse raw Excel foreign/US stock trade transaction statements into a combined LazyFrame.
+
+    Parameters
+    ----------
+    valid_files : list[tuple[str, str, bytes]]
+        List of (filename, folder_path, raw_bytes) tuples.
+
+    Returns
+    -------
+    pl.LazyFrame
+        Combined lazy frame of US stock transactions.
+    """
     all_dfs: list[pl.DataFrame] = []
     for filename, folder_path, raw_bytes in valid_files:
         df_processed = _process_us_stock_transactions(filename, raw_bytes)

@@ -17,7 +17,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any
+from pathlib import Path
+
+__all__ = [
+    "ActiveDatabaseState",
+    "RestoreOutcome",
+    "RestoreResult",
+    "SnapshotOutcome",
+    "SnapshotResult",
+]
 
 
 class SnapshotOutcome(StrEnum):
@@ -62,7 +70,7 @@ class SnapshotResult:
     outcome: SnapshotOutcome
     zip_path: str | None = None
     error_message: str | None = None
-    archive_path: Any = None
+    archive_path: Path | str | None = None
     files_archived: list[str] = field(default_factory=lambda: list[str]())
     archive_size_bytes: int = 0
 
@@ -89,7 +97,7 @@ class RestoreResult:
     outcome: RestoreOutcome
     active_database_state: ActiveDatabaseState = ActiveDatabaseState.NEW_PAIR_INSTALLED
     error_message: str | None = None
-    source_archive: Any = None
+    source_archive: Path | str | None = None
     files_restored: list[str] = field(default_factory=lambda: list[str]())
 
     @property

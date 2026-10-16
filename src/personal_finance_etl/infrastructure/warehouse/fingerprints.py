@@ -15,18 +15,20 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import Any
+from collections.abc import Mapping, Sequence
 
 
-def generate_contract_registry_fingerprint(tables_metadata: list[dict[str, Any]]) -> str:
+def generate_contract_registry_fingerprint(
+    tables_metadata: Sequence[Mapping[str, object]],
+) -> str:
     """Compute a deterministic SHA-256 fingerprint of active table grains and publishers.
 
     Avoids using a manual registry version counter by hashing the actual structural metadata.
 
     Parameters
     ----------
-    tables_metadata : list[dict[str, Any]]
-        List of dictionaries containing table metadata attributes.
+    tables_metadata : Sequence[Mapping[str, object]]
+        Sequence of dictionaries containing table metadata attributes.
 
     Returns
     -------

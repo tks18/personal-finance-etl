@@ -11,10 +11,12 @@ Does not own
 - Desktop GUI log viewer widgets (owned by presentation.desktop).
 """
 
-from enum import StrEnum
-from typing import Any, Protocol
+from __future__ import annotations
 
-__all__ = ["ILogger", "LogLevel", "StatusQueue"]
+from enum import StrEnum
+from typing import Protocol
+
+__all__ = ["ILogger", "LogLevel", "NullStatusQueue", "StatusQueue"]
 
 
 class LogLevel(StrEnum):
@@ -30,7 +32,12 @@ class LogLevel(StrEnum):
 class StatusQueue(Protocol):
     """Protocol for cross-process status queue sinks."""
 
-    def put(self, status: Any, block: bool = True, timeout: float | None = None) -> None:
+    def put(
+        self,
+        status: object,
+        block: bool = True,
+        timeout: float | None = None,
+    ) -> None:
         """Put a status item onto the queue."""
         ...
 
@@ -38,12 +45,15 @@ class StatusQueue(Protocol):
 class NullStatusQueue:
     """No-op status queue sink used when no external status queue is attached."""
 
-    def put(self, status: Any, block: bool = True, timeout: float | None = None) -> None:
+    def put(
+        self,
+        status: object,
+        block: bool = True,
+        timeout: float | None = None,
+    ) -> None:
         """Discard status message."""
         pass
 
 
 # Architectural alias for legacy ILogger protocol
 ILogger = StatusQueue
-
-__all__ = ["ILogger", "LogLevel", "NullStatusQueue", "StatusQueue"]

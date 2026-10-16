@@ -19,6 +19,7 @@ from __future__ import annotations
 import os
 from tkinter import filedialog
 
+# Exception TYP-003 [THIRD_PARTY_TYPING_GAP]: customtkinter lacks py.typed marker and complete stubs
 import customtkinter as ctk  # type: ignore[import-untyped]
 from PIL import Image
 
@@ -99,7 +100,7 @@ class UnifiedETLTab(BaseEngineTab):
 
         ctk.CTkLabel(
             text_block,
-            text="Institutional Quantitative Master Engine & Personal Finance Orchestrator",
+            text="Local-First Financial Data Engineering & Quantitative Decision-Support Platform",
             font=ctk.CTkFont(family="Segoe UI", size=10),
             text_color=Color.DIM,
         ).pack(anchor="w")
@@ -251,7 +252,7 @@ class UnifiedETLTab(BaseEngineTab):
 
         ctk.CTkLabel(
             info,
-            text="Quant Engine fully autonomous: Automatically maps stochastic macro parameters, stress-tests FIRE survival via Monte Carlo regimes, and actively harvests tax-alpha.",
+            text="Preserve financial evidence → Canonicalize meaning → Reconstruct state → Reconcile against reality → Support decisions across Investments, Tax, Household, and FIRE.",
             font=ctk.CTkFont(family="Segoe UI", size=10),
             text_color=Color.DIM,
             justify="left",
@@ -414,6 +415,7 @@ class UnifiedETLTab(BaseEngineTab):
             self.restore_btn.configure(state="normal", text="♻️ Restore DB")
 
 
+# Exception TYP-003 [THIRD_PARTY_TYPING_GAP]: Subclassing untyped third-party ctk.CTk base class
 class DesktopApp(ctk.CTk):  # type: ignore[misc]
     """Root application window."""
 
@@ -435,6 +437,7 @@ class DesktopApp(ctk.CTk):  # type: ignore[misc]
 
 
 def main() -> None:
+    """Initialize and run the CustomTkinter desktop user interface."""
     app = DesktopApp()
     app.mainloop()
 

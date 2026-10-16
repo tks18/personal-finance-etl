@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import math
 from datetime import date
-from typing import Any
 
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.domain.market.macro import FYMacroParametersTable
@@ -65,9 +64,9 @@ class TaxEstimator:
         return rate_val if math.isfinite(rate_val) and 0.0 <= rate_val <= 1.0 else None
 
     @staticmethod
-    def clean_optional_finite_number(value: Any) -> float | None:
+    def clean_optional_finite_number(value: object) -> float | None:
         """Return a finite numeric value, preserving missing/invalid values as None."""
-        if value is None or isinstance(value, bool):
+        if value is None or isinstance(value, bool) or not isinstance(value, (int, float, str)):
             return None
         try:
             number = float(value)
@@ -76,13 +75,13 @@ class TaxEstimator:
         return number if math.isfinite(number) else None
 
     @classmethod
-    def clean_applied_rate(cls, value: Any) -> float | None:
+    def clean_applied_rate(cls, value: object) -> float | None:
         """Clean and bound a tax rate to [0.0, 1.0]."""
         num = cls.clean_optional_finite_number(value)
         return num if num is not None and 0.0 <= num <= 1.0 else None
 
     @classmethod
-    def clean_estimated_tax(cls, value: Any) -> float | None:
+    def clean_estimated_tax(cls, value: object) -> float | None:
         """Clean and bound an estimated tax amount to non-negative."""
         num = cls.clean_optional_finite_number(value)
         return num if num is not None and num >= 0.0 else None

@@ -212,6 +212,22 @@ class BenchmarkPipeline:
         df_purchase: pl.DataFrame | None,
         df_master: pl.DataFrame,
     ) -> pl.DataFrame:
+        """Extract missing benchmark index rates and produce continuous Silver benchmark table.
+
+        Parameters
+        ----------
+        df_market : pl.DataFrame | None
+            Combined market observations for bounds calculation.
+        df_purchase : pl.DataFrame | None
+            Trade purchase table for earliest investment bounds calculation.
+        df_master : pl.DataFrame
+            Instrument master reference table containing benchmark identifiers.
+
+        Returns
+        -------
+        pl.DataFrame
+            Continuous Silver benchmark price observation table.
+        """
         logger.info("Phase 3.5: Dynamic Benchmark Extraction & Transformation...")
 
         min_market, max_market, min_purch = None, None, None

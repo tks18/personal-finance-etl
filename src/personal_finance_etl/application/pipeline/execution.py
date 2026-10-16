@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import time
 from datetime import date
-from typing import Any, cast
 
 import polars as pl
 
@@ -176,13 +175,10 @@ class PipelineExecutor:
         """Run Quant, Tax, and Wealth Presentation engines with contract verification."""
         logger.info("Starting Investment Quant Engine...")
         self.status_queue.put(
-            cast(
-                Any,
-                EngineStatusMessage(
-                    msg="",
-                    progress=0.6,
-                    level=LogLevel.STEP,
-                ),
+            EngineStatusMessage(
+                msg="",
+                progress=0.6,
+                level=LogLevel.STEP,
             )
         )
 
@@ -237,13 +233,10 @@ class PipelineExecutor:
 
         logger.info("Starting Presentation Layer Engines...")
         self.status_queue.put(
-            cast(
-                Any,
-                EngineStatusMessage(
-                    msg="",
-                    progress=0.8,
-                    level=LogLevel.STEP,
-                ),
+            EngineStatusMessage(
+                msg="",
+                progress=0.8,
+                level=LogLevel.STEP,
             )
         )
 
@@ -257,13 +250,10 @@ class PipelineExecutor:
         if presentation_lazy:
             logger.info("Executing Presentation DAG in Parallel...")
             self.status_queue.put(
-                cast(
-                    Any,
-                    EngineStatusMessage(
-                        msg="",
-                        progress=0.9,
-                        level=LogLevel.STEP,
-                    ),
+                EngineStatusMessage(
+                    msg="",
+                    progress=0.9,
+                    level=LogLevel.STEP,
                 )
             )
             keys = list(presentation_lazy.keys())

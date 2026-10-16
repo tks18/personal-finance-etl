@@ -24,6 +24,8 @@ import uuid
 from datetime import date, datetime, timedelta
 
 import polars as pl
+
+# Exception TYP-002 [THIRD_PARTY_TYPING_GAP]: yfinance lacks py.typed marker and complete stubs
 import yfinance as yf  # type: ignore[import-untyped]
 
 from personal_finance_etl.contracts.application import EngineStatusMessage
@@ -171,6 +173,24 @@ class USMarketExtractor:
         global_end_date: date,
         df_bronze_cached: pl.DataFrame,
     ) -> ExtractionBatchResult:
+        """Extract incremental foreign/US stock market prices via Yahoo Finance.
+
+        Parameters
+        ----------
+        isin_ticker_map : dict[str, str]
+            Mapping of ISIN to external Yahoo Finance ticker symbols.
+        global_start_date : date
+            Extraction window start boundary.
+        global_end_date : date
+            Extraction window end boundary.
+        df_bronze_cached : pl.DataFrame
+            Existing Bronze cache to identify latest available prices per ISIN.
+
+        Returns
+        -------
+        ExtractionBatchResult
+            Container holding combined delta observations, status, and raw files.
+        """
         total = len(isin_ticker_map)
         all_new_data: list[pl.DataFrame] = []
 

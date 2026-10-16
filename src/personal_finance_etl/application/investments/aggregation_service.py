@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import os
 from datetime import date
-from typing import Any
 
 import polars as pl
 
@@ -533,7 +532,7 @@ class PostProcessingPipeline:
         self,
         ctx: RunContext,
         tmp_dir: str,
-        status_queue: StatusQueue | Any = None,
+        status_queue: StatusQueue | None = None,
     ) -> None:
         self.ctx = ctx
         self.tmp_dir = tmp_dir

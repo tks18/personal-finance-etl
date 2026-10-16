@@ -22,7 +22,7 @@ import os
 import sqlite3
 import traceback
 import zlib
-from typing import Any, cast
+from typing import cast
 
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
@@ -79,7 +79,12 @@ class RunLifecycleCoordinator:
         tuple[ControlPlane, str, list[str]]
             Tuple of active ControlPlane instance, unique run_id string, and pending recovery run IDs.
         """
-        add_queue_handler(cast("multiprocessing.Queue[Any]", self.status_queue))
+        add_queue_handler(
+            cast(
+                "multiprocessing.Queue[tuple[str, str | None, str | None]]",
+                self.status_queue,
+            )
+        )
         add_file_handler(self.log_file_path)
 
         logger.debug("=== ETL CONFIGURATION DUMP ===")

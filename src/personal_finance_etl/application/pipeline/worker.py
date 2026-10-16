@@ -22,7 +22,7 @@ import threading
 import time
 import traceback
 from collections.abc import Callable
-from typing import Any, cast
+from typing import cast
 
 import polars as pl
 
@@ -62,6 +62,7 @@ class QueueStream:
         self.is_error = is_error
 
     def write(self, msg: str) -> None:
+        """Buffer and parse streaming text output into structured status messages."""
         self.buffer += msg
         if "\n" in self.buffer:
             lines = self.buffer.split("\n")
@@ -69,30 +70,25 @@ class QueueStream:
                 if line.strip():
                     level = infer_log_level(line.strip(), is_error=self.is_error)
                     self.queue.put(
-                        cast(
-                            Any,
-                            EngineStatusMessage(
-                                msg=line.strip(),
-                                data=None,
-                                progress=None,
-                                level=level,
-                            ),
+                        EngineStatusMessage(
+                            msg=line.strip(),
+                            data=None,
+                            progress=None,
+                            level=level,
                         )
                     )
             self.buffer = lines[-1]
 
     def flush(self) -> None:
+        """Flush remaining buffered text as a status message."""
         if self.buffer.strip():
             level = infer_log_level(self.buffer.strip(), is_error=self.is_error)
             self.queue.put(
-                cast(
-                    Any,
-                    EngineStatusMessage(
-                        msg=self.buffer.strip(),
-                        data=None,
-                        progress=None,
-                        level=level,
-                    ),
+                EngineStatusMessage(
+                    msg=self.buffer.strip(),
+                    data=None,
+                    progress=None,
+                    level=level,
                 )
             )
             self.buffer = ""
@@ -129,14 +125,11 @@ def process_wrapper(
 
     except Exception as e:
         status_queue.put(
-            cast(
-                Any,
-                EngineStatusMessage(
-                    msg=f"Critical Pipeline Failure: {e}\n{traceback.format_exc()}",
-                    data=None,
-                    progress=0.0,
-                    level=LogLevel.ERROR,
-                ),
+            EngineStatusMessage(
+                msg=f"Critical Pipeline Failure: {e}\n{traceback.format_exc()}",
+                data=None,
+                progress=0.0,
+                level=LogLevel.ERROR,
             )
         )
         time.sleep(0.5)
@@ -148,7 +141,7 @@ class WorkerPoolCoordinator:
 
     @staticmethod
     def spawn_process(
-        status_queue: multiprocessing.Queue[Any],
+        status_queue: multiprocessing.Queue[EngineStatusMessage],
         config_path: str,
         rules_path: str,
     ) -> multiprocessing.Process:
@@ -164,7 +157,7 @@ class WorkerPoolCoordinator:
     @staticmethod
     def monitor_queue(
         process: multiprocessing.Process,
-        status_queue: multiprocessing.Queue[Any],
+        status_queue: multiprocessing.Queue[EngineStatusMessage],
         on_status: Callable[[EngineStatusMessage], None],
     ) -> threading.Thread:
         """Start a daemon thread monitoring status_queue until the child process terminates."""
@@ -175,7 +168,7 @@ class WorkerPoolCoordinator:
                     item = status_queue.get(timeout=0.1)
 
                     if isinstance(item, tuple):
-                        t_item = cast(tuple[object, ...], item)
+                        t_item = cast("tuple[object, ...]", item)
                         t_msg = str(t_item[0]) if len(t_item) > 0 and t_item[0] else ""
                         t_data = (
                             t_item[1]
@@ -193,18 +186,8 @@ class WorkerPoolCoordinator:
                             progress=t_prog,
                             level=infer_log_level(t_msg),
                         )
-                    elif isinstance(item, EngineStatusMessage):
-                        status = item
-                    elif hasattr(item, "msg"):
-                        d_val = getattr(item, "data", None)
-                        status = EngineStatusMessage(
-                            msg=getattr(item, "msg", ""),
-                            data=d_val if isinstance(d_val, pl.DataFrame) else None,
-                            progress=getattr(item, "progress", None),
-                            level=getattr(item, "level", LogLevel.INFO),
-                        )
                     else:
-                        status = EngineStatusMessage(msg=str(item))
+                        status = item
 
                     on_status(status)
                 except queue.Empty:

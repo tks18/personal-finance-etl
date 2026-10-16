@@ -12,3 +12,5 @@ Does not own
 - Control Plane schema (owned by infrastructure.warehouse.schema).
 - UI buttons or dialogs (owned by presentation).
 """
+
+__all__: list[str] = []

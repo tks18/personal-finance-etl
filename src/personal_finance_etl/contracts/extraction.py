@@ -17,7 +17,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import date
 from enum import StrEnum
-from typing import Any
+from typing import TypedDict
 
 import polars as pl
 
@@ -54,6 +54,19 @@ class ExtractionCompletenessError(RuntimeError):
         self.provider = provider
 
 
+class ExtractionProviderRequest(TypedDict, total=False):
+    """Normalized provider request audit log record for control plane."""
+
+    provider: str
+    entity: str
+    requested_start: date | None
+    requested_end: date | None
+    attempt_count: int
+    status: str
+    failure_class: str | None
+    final_error: str | None
+
+
 @dataclass
 class ExtractorEntityResult:
     """Structured extraction outcome for a single entity returned by worker tasks."""
@@ -62,7 +75,7 @@ class ExtractorEntityResult:
     status: ExtractorEntityStatus
     message: str
     df: pl.DataFrame = field(default_factory=lambda: pl.DataFrame())
-    context: dict[str, Any] = field(default_factory=lambda: dict[str, Any]())
+    context: dict[str, object] = field(default_factory=lambda: dict[str, object]())
     attempt_count: int = 1
     requested_start: date | None = None
     requested_end: date | None = None
@@ -114,9 +127,9 @@ class ExtractionBatchResult:
                 provider=self.provider,
             )
 
-    def to_provider_requests(self) -> list[dict[str, Any]]:
+    def to_provider_requests(self) -> list[ExtractionProviderRequest]:
         """Format entity outcomes into structured records for cp_external_provider_requests."""
-        records: list[dict[str, Any]] = []
+        records: list[ExtractionProviderRequest] = []
         for res in self.entity_results:
             records.append(
                 {
@@ -142,7 +155,7 @@ class ExtractionBatchResult:
             )
         return records
 
-    def __iter__(self) -> Iterator[Any]:
+    def __iter__(self) -> Iterator[pl.DataFrame | list[str]]:
         """Support legacy tuple unpacking: (combined_df, injected_files) = batch_result."""
         return iter((self.combined_frame, self.injected_files))
 

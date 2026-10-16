@@ -15,8 +15,8 @@ Does not own
 - Physical table insertion into DuckDB (owned by infrastructure.warehouse).
 """
 
+from collections.abc import Mapping
 from datetime import UTC, datetime
-from typing import Any
 
 import polars as pl
 
@@ -259,7 +259,7 @@ def transform_stg_investment_market_data(
     return df_final
 
 
-def _compute_purchase_id(row: dict[str, Any]) -> str:
+def _compute_purchase_id(row: Mapping[str, object]) -> str:
     fields = {
         "ISIN": row["ISIN"],
         "Date": row["Date"],
@@ -291,7 +291,7 @@ def _batch_compute_purchase_ids(s: pl.Series) -> pl.Series:
     return pl.Series(ids, dtype=pl.String)
 
 
-def _compute_sale_id(row: dict[str, Any]) -> str:
+def _compute_sale_id(row: Mapping[str, object]) -> str:
     fields = {
         "ISIN": row["ISIN"],
         "Date": row["Date"],

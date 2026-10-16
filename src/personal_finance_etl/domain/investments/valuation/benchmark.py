@@ -100,6 +100,19 @@ class BenchmarkPriceProvider:
         self._dates = sorted(self.bm_price_map)
 
     def get_bm_price(self, dt: date | datetime | str | None) -> float | None:
+        """Retrieve benchmark closing price for date with bounded prior-close fallback.
+
+        Parameters
+        ----------
+        dt : date | datetime | str | None
+            Requested evaluation date.
+
+        Returns
+        -------
+        float | None
+            Exact or nearest prior benchmark close within max_staleness_days,
+            or None if date is missing, invalid, or exceeds staleness bounds.
+        """
         if dt is None:
             return None
         dt_val = dt if isinstance(dt, date) and not isinstance(dt, datetime) else to_date_obj(dt)

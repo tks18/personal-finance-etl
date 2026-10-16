@@ -50,6 +50,7 @@ def show_guides_window() -> None:
 
         url = f"file:///{tmp_html.name.replace(os.sep, '/')}"
 
+        # Exception TYP-005 [THIRD_PARTY_TYPING_GAP]: pywebview window builder lacks static stubs
         webview.create_window(  # pyright: ignore[reportUnknownMemberType]
             "Shan's Personal Finance ETL - Guides & About",
             url=url,

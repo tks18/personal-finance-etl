@@ -16,7 +16,6 @@ Does not own
 from __future__ import annotations
 
 import time
-from typing import Any, cast
 
 import polars as pl
 
@@ -57,6 +56,7 @@ class ETLOrchestrator:
 
     @dfs.setter
     def dfs(self, value: dict[str, pl.DataFrame]) -> None:
+        """Set the active collection of transformed datasets."""
         self.executor.dfs = value
 
     def _extract(
@@ -97,13 +97,10 @@ class ETLOrchestrator:
         try:
             cp, run_id, _ = lifecycle.initialize()
             self.status_queue.put(
-                cast(
-                    Any,
-                    EngineStatusMessage(
-                        msg="",
-                        progress=0.0,
-                        level=LogLevel.STEP,
-                    ),
+                EngineStatusMessage(
+                    msg="",
+                    progress=0.0,
+                    level=LogLevel.STEP,
                 )
             )
 
@@ -111,13 +108,10 @@ class ETLOrchestrator:
             lifecycle.commit()
 
             self.status_queue.put(
-                cast(
-                    Any,
-                    EngineStatusMessage(
-                        msg="",
-                        progress=1.0,
-                        level=LogLevel.SUCCESS,
-                    ),
+                EngineStatusMessage(
+                    msg="",
+                    progress=1.0,
+                    level=LogLevel.SUCCESS,
                 )
             )
             total_time = time.perf_counter() - start_time

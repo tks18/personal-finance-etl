@@ -18,9 +18,13 @@ Does not own
 import logging
 from collections import deque
 from datetime import date
-from typing import Any
 
 from personal_finance_etl.domain.common.identity import generate_deterministic_id
+from personal_finance_etl.domain.investments.contracts import (
+    CashflowDict,
+    RealizedEventDict,
+    ReconciliationEventDict,
+)
 from personal_finance_etl.domain.investments.lots.models import TaxLot
 from personal_finance_etl.domain.market.macro import FYMacroParametersTable
 
@@ -125,10 +129,10 @@ class FIFOPortfolio:
         price_local: float = 0.0,
         fx_rate_sell: float = 1.0,
         sale_id: str | None = None,
-    ) -> list[dict[str, Any]]:
+    ) -> list[RealizedEventDict]:
         """Process a sale via FIFO and return the realized gain events."""
         rem = qty
-        realized_events: list[dict[str, Any]] = []
+        realized_events: list[RealizedEventDict] = []
 
         while rem > 0 and self._active_lots:
             lot = self._active_lots[0]
@@ -239,22 +243,62 @@ class FIFOPortfolio:
         return realized_events
 
     def get_closing_units(self) -> float:
+        """Return aggregate remaining physical units across all active tax lots."""
         return sum(lot.qty for lot in self._active_lots)
 
     def get_closing_shadow_units(self) -> float:
+        """Return aggregate benchmark counterfactual shadow units across active lots."""
         return sum(lot.shadow_qty for lot in self._active_lots)
 
     def get_terminal_value(self, m_price: float) -> float:
+        """Calculate mark-to-market valuation based on current market price.
+
+        Parameters
+        ----------
+        m_price : float
+            Current market price per unit.
+
+        Returns
+        -------
+        float
+            Total valuation of active lots.
+        """
         return self.get_closing_units() * m_price
 
     def get_shadow_terminal_value(self, m_bm_price: float) -> float:
+        """Calculate benchmark counterfactual valuation based on current benchmark price.
+
+        Parameters
+        ----------
+        m_bm_price : float
+            Current benchmark close price.
+
+        Returns
+        -------
+        float
+            Total shadow valuation of benchmark units.
+        """
         return self.get_closing_shadow_units() * m_bm_price
 
     def get_average_cost(self) -> float:
+        """Calculate volume-weighted average acquisition price of remaining active lots.
+
+        Returns
+        -------
+        float
+            Weighted average cost per unit, or 0.0 if zero units remain.
+        """
         units = self.get_closing_units()
         return sum(lot.qty * lot.price for lot in self._active_lots) / units if units > 0 else 0.0
 
     def get_average_bm_cost(self) -> float:
+        """Calculate volume-weighted average benchmark price at purchase across active lots.
+
+        Returns
+        -------
+        float
+            Weighted average benchmark acquisition price, or 0.0 if zero shadow units.
+        """
         s_units = self.get_closing_shadow_units()
         total_cost = 0.0
         for lot in self._active_lots:
@@ -264,15 +308,15 @@ class FIFOPortfolio:
 
     def reconcile_quantity(
         self, m_qty_val: float | None, m_date: date, bm_price: float
-    ) -> tuple[list[dict[str, date | float]], list[dict[str, Any]]]:
+    ) -> tuple[list[CashflowDict], list[ReconciliationEventDict]]:
         """Reconcile portfolio units with broker units. Returns (dummy_cashflows, recon_events)."""
         if m_qty_val is None or str(m_qty_val).strip() == "":
             return [], []
 
         m_qty = float(m_qty_val)
         current_units = self.get_closing_units()
-        cf: list[dict[str, date | float]] = []
-        recon_events: list[dict[str, Any]] = []
+        cf: list[CashflowDict] = []
+        recon_events: list[ReconciliationEventDict] = []
 
         if m_qty > current_units + 1e-8:
             diff = m_qty - current_units
@@ -368,7 +412,7 @@ class FIFOPortfolio:
 
     def reconcile_cost_basis(
         self, m_buy_val: float | None, m_buy_val_local: float | None, m_date: date
-    ) -> list[dict[str, Any]]:
+    ) -> list[ReconciliationEventDict]:
         """Reconcile internal average cost with broker average cost."""
         current_units = self.get_closing_units()
         if m_buy_val is None or str(m_buy_val).strip() == "" or current_units <= 0:
@@ -376,7 +420,7 @@ class FIFOPortfolio:
 
         target_avg = float(m_buy_val) / current_units
         our_avg = self.get_average_cost()
-        recon_events: list[dict[str, Any]] = []
+        recon_events: list[ReconciliationEventDict] = []
 
         if abs(our_avg - target_avg) > 0.01 and our_avg > 0:
             r = target_avg / our_avg

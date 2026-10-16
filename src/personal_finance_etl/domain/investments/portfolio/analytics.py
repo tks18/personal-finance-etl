@@ -15,12 +15,12 @@ Does not own
 """
 
 from datetime import date
-from typing import Any
 
 import polars as pl
 
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.domain.common.dates import to_date_obj
+from personal_finance_etl.domain.investments.contracts import CashflowDict, TerminalValueDict
 from personal_finance_etl.domain.market.macro import FYMacroParametersTable
 
 
@@ -35,10 +35,28 @@ class AdvancedAnalyticsCalculator:
         self,
         df_port: pl.DataFrame,
         unique_dates: list[date],
-        portfolio_terminals: dict[date, dict[str, Any]],
-        cashflows: list[dict[str, Any]],
+        portfolio_terminals: dict[date, TerminalValueDict] | dict[date, dict[str, float]],
+        cashflows: list[CashflowDict],
     ) -> pl.DataFrame:
-        pt_records: list[dict[str, Any]] = []
+        """Compute net-injection-adjusted returns and running Max Drawdown (MDD) tracking.
+
+        Parameters
+        ----------
+        df_port : pl.DataFrame
+            Portfolio time series dataframe containing Closing_Date.
+        unique_dates : list[date]
+            Chronological list of closing dates.
+        portfolio_terminals : dict[date, TerminalValueDict] | dict[date, dict[str, float]]
+            Daily terminal valuations mapping date to val and shadow_val.
+        cashflows : list[CashflowDict]
+            Raw cashflows used to calculate cumulative net capital injections.
+
+        Returns
+        -------
+        pl.DataFrame
+            Augmented dataframe with Portfolio_Max_Drawdown.
+        """
+        pt_records: list[dict[str, object]] = []
         for d in unique_dates:
             d_obj = to_date_obj(d)
             if d_obj:
@@ -57,12 +75,15 @@ class AdvancedAnalyticsCalculator:
             df_pt = pl.DataFrame(pt_records).sort("Date_Obj")
 
             # Aggregate cash flows by date to compute net injection
-            cf_records: list[dict[str, Any]] = []
+            cf_records: list[dict[str, object]] = []
             for cf in cashflows:
-                d_obj = to_date_obj(cf["date"])
+                cf_date = cf.get("date")
+                d_obj = to_date_obj(cf_date)
                 if d_obj:
                     # 'amount' is negative for buys (injections) and positive for sells (withdrawals)
-                    cf_records.append({"Date_Obj": d_obj, "injection": -float(cf["amount"])})
+                    cf_records.append(
+                        {"Date_Obj": d_obj, "injection": -float(cf.get("amount") or 0.0)}
+                    )
 
             if cf_records:
                 df_cf = (
@@ -134,6 +155,20 @@ class HarvestRecommendationCalculator:
 
     @staticmethod
     def calculate(lazy_df: pl.LazyFrame, rules: FinancialRules) -> pl.LazyFrame:
+        """Generate capital gains tax harvesting and step-up recommendations.
+
+        Parameters
+        ----------
+        lazy_df : pl.LazyFrame
+            Incoming daily snapshot lazy frame with unrealized gains and holding classification.
+        rules : FinancialRules
+            Configuration rules containing tax harvesting wait thresholds and exclusions.
+
+        Returns
+        -------
+        pl.LazyFrame
+            Augmented lazy frame with Stepup_Eligible, Can_Harvest_Loss, and Harvest_Recommendation.
+        """
         wait_days = rules.assumptions.tax.harvest_wait_days_threshold if rules else 90
 
         # Derive foreign equity TAX_SUBTYPE exclusions from config if available;

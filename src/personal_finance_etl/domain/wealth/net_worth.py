@@ -16,9 +16,11 @@ Does not own
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any
+from typing import cast
 
 import polars as pl
+
+from personal_finance_etl.domain.fire.inflation import InflationCalendarResult
 
 __all__ = ["NetWorthBuilder"]
 
@@ -29,8 +31,8 @@ class NetWorthBuilder:
     def __init__(
         self,
         dfs: Mapping[str, pl.DataFrame | pl.LazyFrame],
-        inflation_res: dict[str, Any],
-        ledger_res: dict[str, Any],
+        inflation_res: InflationCalendarResult | Mapping[str, object],
+        ledger_res: Mapping[str, pl.LazyFrame],
         default_currency_id: str,
     ) -> None:
         self.dfs = dfs
@@ -38,12 +40,12 @@ class NetWorthBuilder:
         self.ledger_res = ledger_res
         self.default_currency_id = default_currency_id
 
-    def build(self) -> dict[str, Any]:
+    def build(self) -> dict[str, pl.LazyFrame]:
         """Build Net Worth analytical LazyFrames.
 
         Returns
         -------
-        dict[str, Any]
+        dict[str, pl.LazyFrame]
             Dictionary containing:
             - lf_nw_summary: Monthly asset subcategory balances, market values, and organic yields.
             - lf_monthly_totals: Portfolio-level monthly total assets, liabilities, and market net worth.
@@ -54,7 +56,7 @@ class NetWorthBuilder:
 
         lf_asset = d_asset.lazy() if isinstance(d_asset, pl.DataFrame) else d_asset
 
-        lf_months = self.inflation_res["lf_months"]
+        lf_months = cast(pl.LazyFrame, self.inflation_res["lf_months"])
 
         lf_activity = self.ledger_res["lf_activity"]
         lf_balances = self.ledger_res["lf_balances"]
@@ -482,7 +484,9 @@ class NetWorthBuilder:
         )
 
         lf_monthly_totals = lf_monthly_totals.join(
-            self.inflation_res["lf_inflation"], on="MONTH_START_DATE", how="left"
+            cast(pl.LazyFrame, self.inflation_res["lf_inflation"]),
+            on="MONTH_START_DATE",
+            how="left",
         ).drop("Total_Liabilities_Negative", strict=False)
 
         return {

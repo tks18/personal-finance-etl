@@ -20,7 +20,6 @@ from __future__ import annotations
 import tempfile
 import traceback
 from datetime import date
-from typing import Any
 
 import polars as pl
 
@@ -53,7 +52,7 @@ class InvestmentQuantEngine:
         df_b: pl.DataFrame | None,
         df_t: pl.DataFrame,
         df_fx: pl.DataFrame | None = None,
-        status_queue: StatusQueue | Any = None,
+        status_queue: StatusQueue | None = None,
         rules: FinancialRules | None = None,
         start_date: date | None = None,
         end_date: date | None = None,

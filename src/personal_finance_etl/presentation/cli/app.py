@@ -54,6 +54,7 @@ except importlib.metadata.PackageNotFoundError:
 
 if sys.platform == "win32":
     try:
+        # Exception TYP-005 [UNTYPED_EXTERNAL_BOUNDARY]: Windows stdout/stderr TextIOWrapper dynamic reconfiguration
         if hasattr(sys.stdout, "reconfigure"):
             sys.stdout.reconfigure(encoding="utf-8")  # pyright: ignore[reportAttributeAccessIssue,reportUnknownMemberType]
         if hasattr(sys.stderr, "reconfigure"):
@@ -72,7 +73,7 @@ LOGO = f"""
 ███████║██║  ██║██║  ██║██║ ╚████║    ███████╗   ██║   ███████╗
 ╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝    ╚══════╝   ╚═╝   ╚══════╝
 [/bold cyan]
-[bold bright_black]INSTITUTIONAL QUANTITATIVE MASTER ENGINE v{__version__}[/bold bright_black]
+[bold bright_black]LOCAL-FIRST FINANCIAL DATA ENGINEERING & QUANTITATIVE PLATFORM v{__version__}[/bold bright_black]
 """
 
 
@@ -80,15 +81,15 @@ def print_bootloader() -> None:
     """Render terminal ASCII banner and staged initialization sequence."""
     console.print(LOGO)
     steps = [
-        "Initializing core quantum modules...",
-        "Bypassing mainframe security protocols...",
-        "Loading deep-learning heuristic matrices...",
-        "Engaging Numba JIT hyper-compilers...",
+        "Preserving source evidence & control plane integrity...",
+        "Loading canonical schemas and domain contracts...",
+        "Initializing FIFO reconstruction & reconciliation engines...",
+        "Warming analytical simulation & tax compute kernels...",
         "Synchronizing DuckDB lakehouse state...",
-        "[bold green]SYSTEM ONLINE. AWAITING COMMANDS.[/bold green]",
+        "[bold green]SYSTEM READY. AWAITING COMMANDS.[/bold green]",
     ]
     for step in steps:
-        time.sleep(0.15)
+        time.sleep(0.08)
         console.print(f"[dim]>[/dim] {step}")
     console.print()
 
@@ -207,11 +208,11 @@ def main_cli(args: argparse.Namespace) -> None:
         )
 
         if not auto_mode:
-            if not Confirm.ask("[bold red]Are you ready to IGNITE the pipeline?[/bold red]"):
+            if not Confirm.ask("[bold cyan]Execute financial ETL pipeline?[/bold cyan]"):
                 console.print("[yellow]Operation aborted by user.[/yellow]")
                 sys.exit(0)
 
-        console.print("\n[bold green]🚀 IGNITING ETL PIPELINE...[/bold green]\n")
+        console.print("\n[bold green]🚀 EXECUTING ETL PIPELINE...[/bold green]\n")
 
         completion_event = threading.Event()
 

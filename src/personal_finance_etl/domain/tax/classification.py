@@ -15,13 +15,14 @@ Does not own
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import date, datetime
-from typing import Any
 
 import polars as pl
 
 from personal_finance_etl.config.financial_rules import FinancialRules, TaxHeadConfig
 from personal_finance_etl.domain.common.dates import to_date_obj
+from personal_finance_etl.domain.investments.contracts import RealizedEventDict
 
 __all__ = ["TaxClassifier"]
 
@@ -31,14 +32,14 @@ class TaxClassifier:
 
     @staticmethod
     def map_quant_sub_head(
-        row: dict[str, Any],
+        row: RealizedEventDict | Mapping[str, object],
         debt_mf_cutoff_date: str | date | None = None,
     ) -> tuple[str, bool]:
         """Map Quant instrument/holding metadata to the configured evidence sub-head.
 
         Parameters
         ----------
-        row : dict[str, Any]
+        row : RealizedEventDict | Mapping[str, object]
             Realized event record dictionary.
         debt_mf_cutoff_date : str | date | None, optional
             Configured statutory cutoff date for debt mutual funds.
@@ -76,11 +77,13 @@ class TaxClassifier:
                 acquisition_date = row.get("Acquisition_Date")
                 if isinstance(acquisition_date, datetime):
                     acquisition_date = acquisition_date.date()
-                elif acquisition_date is not None and not isinstance(acquisition_date, date):
+                elif isinstance(acquisition_date, str):
                     try:
                         acquisition_date = to_date_obj(acquisition_date, strict=True)
                     except ValueError:
                         acquisition_date = None
+                elif not isinstance(acquisition_date, date):
+                    acquisition_date = None
 
                 cutoff = (
                     to_date_obj(debt_mf_cutoff_date, strict=False)

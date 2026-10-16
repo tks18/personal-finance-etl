@@ -13,8 +13,11 @@ Does not own
 """
 
 from datetime import date
-from typing import Any
 
+from personal_finance_etl.domain.investments.contracts import (
+    CashflowDict,
+    ReconciliationEventDict,
+)
 from personal_finance_etl.domain.investments.lots.fifo import FIFOPortfolio
 from personal_finance_etl.domain.investments.reconciliation.models import (
     ReconciliationAdjustmentType,
@@ -55,12 +58,12 @@ class ReconciliationEngine:
         broker_buy_val: float | None,
         broker_buy_val_local: float | None,
         bm_price: float,
-    ) -> tuple[list[dict[str, date | float]], list[dict[str, Any]]]:
+    ) -> tuple[list[CashflowDict], list[ReconciliationEventDict]]:
         """Perform full quantity and cost-basis reconciliation on a FIFOPortfolio.
 
         Returns
         -------
-        tuple[list[dict[str, date | float]], list[dict[str, Any]]]
+        tuple[list[CashflowDict], list[ReconciliationEventDict]]
             (dummy_cashflows, recon_events)
         """
         dummy_cf, q_events = fifo.reconcile_quantity(broker_qty, m_date, bm_price)

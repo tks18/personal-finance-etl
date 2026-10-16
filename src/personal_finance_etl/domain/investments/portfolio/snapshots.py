@@ -13,12 +13,16 @@ Does not own
 """
 
 from datetime import date
-from typing import Any
 
 from personal_finance_etl.config.financial_rules import FinancialRules
-from personal_finance_etl.domain.investments.contracts import SnapshotRecord
+from personal_finance_etl.domain.investments.contracts import (
+    InstrumentMetricsRecord,
+    IsinMasterRecord,
+    SnapshotRecord,
+)
 from personal_finance_etl.domain.investments.lots.fifo import FIFOPortfolio
 from personal_finance_etl.domain.investments.performance.returns import calculate_cagr
+from personal_finance_etl.domain.market.fx import FXRateProvider
 from personal_finance_etl.domain.market.macro import (
     FYMacroParametersTable,
     add_months,
@@ -39,7 +43,7 @@ class SnapshotGenerator:
         fy_table: FYMacroParametersTable,
         rules: FinancialRules,
         isin: str,
-        master_row: dict[str, Any],
+        master_row: IsinMasterRecord,
     ) -> None:
         self.rules = rules
         self.isin = isin
@@ -54,11 +58,37 @@ class SnapshotGenerator:
         m_date: date,
         m_price: float,
         m_bm_price: float,
-        inst_metrics: dict[str, Any],
-        fx_provider: Any = None,
+        inst_metrics: InstrumentMetricsRecord,
+        fx_provider: FXRateProvider | None = None,
         execution_residual: float = 0.0,
         remaining_ltcg_exemption: float = 0.0,
     ) -> list[SnapshotRecord]:
+        """Construct daily snapshot records for all active lots of an instrument.
+
+        Parameters
+        ----------
+        fifo : FIFOPortfolio
+            Active tax lots portfolio tracker.
+        m_date : date
+            Snapshot valuation date.
+        m_price : float
+            Closing market price per unit.
+        m_bm_price : float
+            Closing benchmark price.
+        inst_metrics : InstrumentMetricsRecord
+            Computed instrument-level CAGR, XIRR, drawdown, and relative performance metrics.
+        fx_provider : FXRateProvider | None, optional
+            FX lookup provider for foreign-currency instruments, by default None.
+        execution_residual : float, optional
+            Residual cash drag from unexecuted orders, by default 0.0.
+        remaining_ltcg_exemption : float, optional
+            Remaining Section 112A equity exemption for the current financial year, by default 0.0.
+
+        Returns
+        -------
+        list[SnapshotRecord]
+            List of strongly-typed per-lot snapshot records.
+        """
         inst_cagr = inst_metrics.get("cagr")
         inst_cagr_status = inst_metrics.get("cagr_status", "UNDEFINED")
         inst_bm_cagr = inst_metrics.get("bm_cagr")
@@ -117,7 +147,7 @@ class SnapshotGenerator:
                 and lot.currency_id != (getattr(self.rules, "DEFAULT_CURRENCY_ID", "INR_INR"))
                 and fx_provider
             ):
-                fx_rate_snap_lot = fx_provider.get_rate(m_date, lot.currency_id)
+                fx_rate_snap_lot = fx_provider.get_rate(m_date, lot.currency_id) or 1.0
             else:
                 fx_rate_snap_lot = 1.0
 
@@ -173,7 +203,7 @@ class SnapshotGenerator:
                 and lot.currency_id != (getattr(self.rules, "DEFAULT_CURRENCY_ID", "INR_INR"))
                 and fx_provider
             ):
-                fx_rate_snap = fx_provider.get_rate(m_date, lot.currency_id)
+                fx_rate_snap = fx_provider.get_rate(m_date, lot.currency_id) or 1.0
                 m_price_local = m_price / fx_rate_snap if fx_rate_snap > 0 else m_price
 
                 buy_val_local = lot.qty * lot.price_local

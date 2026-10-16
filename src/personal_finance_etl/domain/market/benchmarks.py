@@ -15,7 +15,6 @@ Does not own
 
 import logging
 from datetime import date
-from typing import Any
 
 import polars as pl
 
@@ -189,7 +188,7 @@ class BenchmarkTransformer:
     Encapsulates the stateful status queue notification around `transform_benchmark_data`.
     """
 
-    def __init__(self, status_queue: StatusQueue | Any | None = None) -> None:
+    def __init__(self, status_queue: StatusQueue | None = None) -> None:
         self.status_queue = status_queue
 
     def transform(

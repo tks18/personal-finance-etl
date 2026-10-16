@@ -24,12 +24,14 @@ from personal_finance_etl.contracts.application import (
 from personal_finance_etl.contracts.extraction import (
     ExtractionBatchResult,
     ExtractionCompletenessError,
+    ExtractionProviderRequest,
     ExtractorEntityResult,
     ExtractorEntityStatus,
 )
 from personal_finance_etl.contracts.lifecycle import (
     CommitState,
     FailureDomain,
+    SyncSummaryRecord,
     classify_failure_domain,
 )
 from personal_finance_etl.contracts.logging import ILogger, LogLevel, StatusQueue
@@ -47,6 +49,7 @@ __all__ = [
     "EngineStatusMessage",
     "ExtractionBatchResult",
     "ExtractionCompletenessError",
+    "ExtractionProviderRequest",
     "ExtractorEntityResult",
     "ExtractorEntityStatus",
     "FailureDomain",
@@ -57,5 +60,6 @@ __all__ = [
     "SnapshotOutcome",
     "SnapshotResult",
     "StatusQueue",
+    "SyncSummaryRecord",
     "classify_failure_domain",
 ]

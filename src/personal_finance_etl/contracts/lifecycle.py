@@ -13,7 +13,22 @@ Does not own
 """
 
 from enum import StrEnum
-from typing import Any
+from typing import TypedDict
+
+__all__ = ["CommitState", "FailureDomain", "SyncSummaryRecord", "classify_failure_domain"]
+
+
+class SyncSummaryRecord(TypedDict, total=False):
+    """Authoritative file-sync summary metrics for pipeline runs."""
+
+    run_id: str
+    actionable_count: int
+    synced_count: int
+    healed_count: int
+    failed_count: int
+    deferred_count: int
+    sync_status: str
+    created_at: str
 
 
 class CommitState(StrEnum):
@@ -52,7 +67,7 @@ class FailureDomain(StrEnum):
 
 def classify_failure_domain(
     stage: str | None = None,
-    error: Any = None,
+    error: BaseException | str | None = None,
 ) -> FailureDomain:
     """Classify failure deterministically into a standard FailureDomain.
 
@@ -60,7 +75,7 @@ def classify_failure_domain(
     ----------
     stage : str | None
         Name of the pipeline stage where the error occurred.
-    error : Any
+    error : BaseException | str | None
         The exception or error object raised during execution.
 
     Returns

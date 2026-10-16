@@ -40,6 +40,7 @@ def _run_mc_simulations_numba(
     burn_total_arr: npt.NDArray[np.float64],
     inf_rates: npt.NDArray[np.float64],
     seed_ints: npt.NDArray[np.int32],
+    # Exception TYP-001 [NUMBA_OR_LIBRARY_LIMITATION]: Numba compiled kernel requires untyped list of PRNG generators
     gens: Any,
     iterations: int,
     max_months: int,
@@ -125,6 +126,7 @@ def _run_mc_simulations_numba(
         ]
     )
 
+    # Exception TYP-001 [NUMBA_OR_LIBRARY_LIMITATION]: prange is dynamically injected by Numba compilation pass
     for i in prange(n_rows):  # type: ignore[no-untyped-call,attr-defined]
         gen = gens[np.intp(i)]
 
@@ -490,6 +492,7 @@ def get_monte_carlo_fire_batch(
         Polars batch function mapping a struct series of inputs to simulation distribution percentiles.
     """
 
+    # Exception TYP-001 [NUMBA_OR_LIBRARY_LIMITATION]: Polars UDF struct mapper accepts optional keyword arguments
     def monte_carlo_fire_batch(s: pl.Series, **kwargs: Any) -> pl.Series:
         df = s.struct.unnest()
         pv = df["Total_Net_Worth_Market_Af_Tax"].to_numpy().astype(float)
@@ -551,6 +554,7 @@ def get_monte_carlo_fire_batch(
 
         sorr_months = mc_rules.sorr_cagr_window_months
 
+        # Exception TYP-001 [NUMBA_OR_LIBRARY_LIMITATION]: numba.typed.List lacks static typing constructor stubs
         gens = numba.typed.List()  # pyright: ignore[reportCallIssue]
         for seed in seed_ints:
             gens.append(np.random.default_rng(seed))

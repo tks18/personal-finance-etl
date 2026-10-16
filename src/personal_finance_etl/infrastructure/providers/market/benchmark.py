@@ -22,10 +22,12 @@ import concurrent.futures
 import io
 import time
 import uuid
+from collections.abc import Mapping
 from datetime import date, datetime, timedelta
-from typing import Any
 
 import polars as pl
+
+# Exception TYP-002 [THIRD_PARTY_TYPING_GAP]: yfinance lacks py.typed marker and complete stubs
 import yfinance as yf  # type: ignore[import-untyped]
 
 from personal_finance_etl.contracts.application import EngineStatusMessage
@@ -55,7 +57,11 @@ class BenchmarkExtractor:
         self.max_workers = max_workers
 
     def _fetch_ticker_delta(
-        self, row: dict[str, Any], start_dt: date, end_dt: date, max_cached_date: date | None
+        self,
+        row: Mapping[str, object],
+        start_dt: date,
+        end_dt: date,
+        max_cached_date: date | None,
     ) -> ExtractorEntityResult:
         ticker = str(row.get("yF_Ticker", "")).strip()
         if not ticker:
@@ -189,6 +195,24 @@ class BenchmarkExtractor:
         global_end_date: date,
         df_bronze_cached: pl.DataFrame,
     ) -> ExtractionBatchResult:
+        """Extract incremental benchmark closing prices via Yahoo Finance for date window.
+
+        Parameters
+        ----------
+        df_m : pl.DataFrame
+            Benchmark master table containing tickers and currency identifiers.
+        global_start_date : date
+            Extraction window start boundary.
+        global_end_date : date
+            Extraction window end boundary.
+        df_bronze_cached : pl.DataFrame
+            Existing Bronze cache to identify latest available dates per ticker.
+
+        Returns
+        -------
+        ExtractionBatchResult
+            Container holding combined delta observations, status, and raw files.
+        """
         required_cols = ["ID", "Benchmark_Name", "yF_Ticker", "CURRENCY_ID"]
         missing_cols = [c for c in required_cols if c not in df_m.columns]
         if missing_cols:

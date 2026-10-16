@@ -16,7 +16,6 @@ Does not own
 from __future__ import annotations
 
 import os
-from typing import Any
 
 from filelock import FileLock, Timeout
 
@@ -44,7 +43,7 @@ class ControlPlane:
         self.runs = RunRepository(self.db)
         self.file_sync = FileSyncService(self.artifacts)
         self.lock_path = os.path.join(base_path or ".", "pipeline.lock")
-        self._lock: Any = FileLock(self.lock_path)
+        self._lock: FileLock = FileLock(self.lock_path)
         self._lock_acquired = False
         self._active_run_id: str | None = None
 
@@ -55,6 +54,7 @@ class ControlPlane:
 
     @active_run_id.setter
     def active_run_id(self, value: str | None) -> None:
+        """Set the active run identifier across repositories and file sync."""
         self._active_run_id = value
         self.artifacts.active_run_id = value
         self.file_sync.active_run_id = value

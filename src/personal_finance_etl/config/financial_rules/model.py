@@ -16,8 +16,10 @@ from __future__ import annotations
 
 import os
 import tomllib
-from typing import Any, Self, cast
+from collections.abc import Mapping
+from typing import Self, cast
 
+import polars as pl
 from pydantic import BaseModel, Field
 
 from personal_finance_etl.config.financial_rules.fire import AssumptionsRules
@@ -31,6 +33,8 @@ from personal_finance_etl.config.financial_rules.investments import (
     InvestmentInstrumentRules,
     PortfolioManagementRules,
 )
+
+__all__ = ["FinancialRules"]
 
 
 def _map_rule_domain(first_key: str) -> str:
@@ -62,7 +66,7 @@ def _map_target_level(last_key: str) -> str:
     return last_key
 
 
-def _format_db_record(path: list[str], val: Any) -> dict[str, str] | None:
+def _format_db_record(path: list[str], val: object) -> dict[str, str] | None:
     """Format a single leaf property into a database audit record."""
     if not path or val is None:
         return None
@@ -74,14 +78,15 @@ def _format_db_record(path: list[str], val: Any) -> dict[str, str] | None:
     }
 
 
-def _flatten_data_to_records(node: Any, path: list[str], records: list[dict[str, str]]) -> None:
+def _flatten_data_to_records(node: object, path: list[str], records: list[dict[str, str]]) -> None:
     """Recursively traverse a dictionary or list to extract leaf audit records."""
     if isinstance(node, dict):
-        dict_node = cast("dict[str, Any]", node)
+        dict_node = cast("dict[str, object]", node)
         for k, v in dict_node.items():
             _flatten_data_to_records(v, path + [k], records)
     elif isinstance(node, list):
-        for item in node:  # pyright: ignore[reportUnknownVariableType]
+        list_node = cast("list[object]", node)
+        for item in list_node:
             record = _format_db_record(path, item)
             if record is not None:
                 records.append(record)
@@ -92,6 +97,8 @@ def _flatten_data_to_records(node: Any, path: list[str], records: list[dict[str,
 
 
 class FinancialRules(BaseModel):
+    """Root configuration composed of domain policies, assumptions, and audit rules."""
+
     income: IncomeRules = Field(default_factory=IncomeRules)
     expense: ExpenseRules = Field(default_factory=ExpenseRules)
     assets: AssetRules = Field(default_factory=AssetRules)
@@ -104,13 +111,20 @@ class FinancialRules(BaseModel):
     DEFAULT_CURRENCY_ID: str = "INR_INR"
     MF_SCHEME_MAPPINGS: dict[str, str] = Field(default_factory=dict)
 
-    def validate_investment_exclusion_uids(self, df_subcategory: Any) -> None:
+    def validate_investment_exclusion_uids(
+        self, df_subcategory: pl.DataFrame | pl.LazyFrame
+    ) -> None:
         """Validate configured investment exclusions against the actual subcategory dimension.
 
         Pydantic can validate duplicate/overlapping configuration values, but only the
         materialized dimension can establish whether a UID exists in the current source data.
         """
-        if "UID" not in df_subcategory.columns:
+        if isinstance(df_subcategory, pl.LazyFrame):
+            df_materialized = df_subcategory.collect()
+        else:
+            df_materialized = df_subcategory
+
+        if "UID" not in df_materialized.columns:
             raise ValueError(
                 "Income subcategory dimension must contain UID to validate investment exclusions."
             )
@@ -122,7 +136,7 @@ class FinancialRules(BaseModel):
 
         available = {
             str(uid).strip()
-            for uid in df_subcategory.get_column("UID").drop_nulls().to_list()
+            for uid in df_materialized.get_column("UID").drop_nulls().to_list()
             if str(uid).strip()
         }
         unknown = sorted(configured - available)
@@ -141,12 +155,12 @@ class FinancialRules(BaseModel):
 
         with open(path_str, "rb") as f:
             data = tomllib.load(f)
-            return cls(**data)
+            return cls.model_validate(data)
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> Self:
+    def from_dict(cls, data: Mapping[str, object]) -> Self:
         """Instantiate FinancialRules directly from a raw configuration dictionary."""
-        return cls(**data)
+        return cls.model_validate(data)
 
     def export_to_db_records(self) -> list[dict[str, str]]:
         """Flatten the rules dynamically into records for database auditing.

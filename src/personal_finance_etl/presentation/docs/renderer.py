@@ -20,6 +20,7 @@ import os
 import posixpath
 from importlib.resources import files
 
+# Exception TYP-004 [THIRD_PARTY_TYPING_GAP]: markdown library lacks py.typed marker and stubs
 import markdown  # type: ignore[import-untyped]
 
 from personal_finance_etl.infrastructure.filesystem.paths import resource_path
