@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import os
 import tomllib
-from typing import Any, cast
+from typing import cast
 
 from pydantic import BaseModel, Field
 
@@ -31,10 +31,12 @@ class FileHashPolicy(BaseModel):
     sqlite: bool = False
 
 
-def _flatten_settings_to_records(node: Any, path: list[str], records: list[dict[str, str]]) -> None:
+def _flatten_settings_to_records(
+    node: object, path: list[str], records: list[dict[str, str]]
+) -> None:
     """Recursively traverse the settings tree to extract flat key-value pairs."""
     if isinstance(node, dict):
-        dict_node = cast("dict[str, Any]", node)
+        dict_node = cast("dict[str, object]", node)
         for k, v in dict_node.items():
             _flatten_settings_to_records(v, path + [k], records)
     elif isinstance(node, list):
