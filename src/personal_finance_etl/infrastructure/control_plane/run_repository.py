@@ -24,9 +24,11 @@ import logging
 import math
 import sqlite3
 import uuid
+from collections.abc import Mapping, Sequence
 from datetime import date, datetime
 from typing import Any, cast
 
+from personal_finance_etl.contracts.extraction import ExtractionProviderRequest
 from personal_finance_etl.contracts.lifecycle import (
     CommitState,
     FailureDomain,
@@ -503,7 +505,11 @@ class RunRepository:
         if recovered:
             logger.warning("[CONTROL_PLANE] Recovered %d interrupted run(s).", recovered)
 
-    def log_provider_requests(self, run_id: str, records: list[dict[str, Any]]) -> None:
+    def log_provider_requests(
+        self,
+        run_id: str,
+        records: Sequence[ExtractionProviderRequest] | Sequence[Mapping[str, object]],
+    ) -> None:
         """Persist batch of external provider requests with retry/status provenance."""
         if not records:
             return
@@ -524,7 +530,7 @@ class RunRepository:
             ]
         ] = []
         for rec in records:
-            req_id = rec.get("request_id") or str(uuid.uuid4())
+            req_id = str(rec.get("request_id") or uuid.uuid4())
             provider = str(rec.get("provider", "UNKNOWN"))
             entity = str(rec.get("entity", "UNKNOWN"))
             req_start = rec.get("requested_start")
@@ -537,7 +543,14 @@ class RunRepository:
                 req_end = req_end.isoformat()
             elif req_end is not None:
                 req_end = str(req_end)
-            attempt_count = int(rec.get("attempt_count", 1))
+            raw_attempts = rec.get("attempt_count", 1)
+            if isinstance(raw_attempts, (int, str, float)):
+                try:
+                    attempt_count = int(raw_attempts)
+                except (TypeError, ValueError):
+                    attempt_count = 1
+            else:
+                attempt_count = 1
             status = str(rec.get("status", "SUCCESS")).upper()
             failure_class = rec.get("failure_class")
             if failure_class is not None:
