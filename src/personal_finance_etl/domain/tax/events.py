@@ -17,21 +17,44 @@ Does not own
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping
 from datetime import date, datetime
-from typing import Any
+from typing import TypedDict
 
 import polars as pl
 
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.domain.common.dates import get_fy_string
 from personal_finance_etl.domain.common.identity import generate_deterministic_id
+from personal_finance_etl.domain.investments.contracts import RealizedEventDict
 from personal_finance_etl.domain.market.macro import FYMacroParametersTable
 from personal_finance_etl.domain.tax.classification import TaxClassifier
 from personal_finance_etl.domain.tax.estimates import TaxEstimator
 
+
+class TaxEventDict(TypedDict, total=False):
+    """Normalized tax event record dictionary."""
+
+    FY: str
+    Event_Date: date
+    Source_Type: str
+    Source_ID: str
+    Income_Head: str
+    Tax_Sub_Head: str
+    Amount_INR: float
+    Applied_Rate: float | None
+    Estimated_Tax: float | None
+    CURRENCY_ID: str | None
+    Tax_Status: str
+    Tax_Status_Reason: str | None
+    ISIN: str | None
+    Lot_ID: str | None
+
+
 __all__ = [
     "TAX_EVENT_SCHEMA",
     "BaseEventsBuilder",
+    "TaxEventDict",
     "TaxEventNormalizer",
     "_batch_compute_tax_event_ids",
 ]
@@ -480,11 +503,11 @@ class BaseEventsBuilder:
         return df_result
 
     @staticmethod
-    def _optional_finite_number(value: Any) -> float | None:
+    def _optional_finite_number(value: object) -> float | None:
         """Return a finite numeric value, preserving missing/invalid values as null."""
         return TaxEstimator.clean_optional_finite_number(value)
 
-    def _normalize_quant_realized_events(self) -> list[dict[str, Any]]:
+    def _normalize_quant_realized_events(self) -> list[TaxEventDict]:
         """Normalize authoritative Quant FIFO realized gains/losses."""
         df = self.df_realized_events
         if df.is_empty():
@@ -494,7 +517,7 @@ class BaseEventsBuilder:
         if missing:
             raise ValueError(f"Quant realized events missing required columns: {missing}")
 
-        records: list[dict[str, Any]] = []
+        records: list[TaxEventDict] = []
         for row in df.to_dicts():
             source_id = self._required_id(row.get("Realized_Event_ID"), "Realized_Event_ID")
             event_date = self._as_date(row.get("Disposal_Date"), "Quant Disposal_Date", source_id)
@@ -559,7 +582,7 @@ class BaseEventsBuilder:
             )
         return records
 
-    def _quant_sub_head(self, row: dict[str, Any]) -> tuple[str, bool]:
+    def _quant_sub_head(self, row: RealizedEventDict | Mapping[str, object]) -> tuple[str, bool]:
         """Map Quant instrument/holding metadata to the configured evidence sub-head."""
         cutoff = self.rules.assumptions.tax.debt_mf_cutoff_date if self.rules else None
         return TaxClassifier.map_quant_sub_head(row, debt_mf_cutoff_date=cutoff)
@@ -579,13 +602,13 @@ class BaseEventsBuilder:
             )
 
     @staticmethod
-    def _required_id(value: Any, field_name: str) -> str:
+    def _required_id(value: object, field_name: str) -> str:
         if value is None or not str(value).strip():
             raise ValueError(f"Required identity field {field_name} is missing.")
         return str(value).strip()
 
     @staticmethod
-    def _required_amount(value: Any, field_name: str, source_id: Any) -> float:
+    def _required_amount(value: object, field_name: str, source_id: object) -> float:
         if value is None:
             raise ValueError(f"Required amount {field_name} is null for source {source_id!r}.")
         if isinstance(value, bool):
@@ -593,7 +616,7 @@ class BaseEventsBuilder:
                 f"Required amount {field_name} cannot be boolean for source {source_id!r}."
             )
         try:
-            amount = float(value)
+            amount = float(value)  # type: ignore[arg-type]
         except (TypeError, ValueError) as exc:
             raise ValueError(
                 f"Required amount {field_name} is invalid for source {source_id!r}: {value!r}"
@@ -606,7 +629,7 @@ class BaseEventsBuilder:
         return amount
 
     @staticmethod
-    def _as_date(value: Any, field_name: str, source_id: Any) -> date:
+    def _as_date(value: object, field_name: str, source_id: object) -> date:
         if value is None:
             raise ValueError(f"Required date {field_name} is null for source {source_id!r}.")
         if isinstance(value, datetime):
@@ -628,7 +651,7 @@ class BaseEventsBuilder:
         return get_fy_string(event_date)
 
     @staticmethod
-    def _clean_text(value: Any) -> str | None:
+    def _clean_text(value: object) -> str | None:
         if value is None:
             return None
         text = str(value).strip()
