@@ -58,23 +58,25 @@ class TaxGoldFormatter:
         pl.LazyFrame
             LazyFrame for gold.Tax_Year_Summary.
         """
-        schema = {
-            "FY": pl.String,
-            "Total_Ledger_Income": pl.Float64,
-            "Total_Investment_Gain_Loss": pl.Float64,
-            "Total_Tax_Credits": pl.Float64,
-            "Total_Estimated_Investment_Tax": pl.Float64,
-            "Investment_Tax_Estimate_Count": pl.Int64,
-            "Investment_Tax_Estimate_Missing_Count": pl.Int64,
-            "Investment_Tax_Estimate_Complete": pl.Boolean,
-            "Total_Estimated_Ledger_Tax": pl.Float64,
-            "Ledger_Tax_Estimate_Count": pl.Int64,
-            "Ledger_Tax_Estimate_Missing_Count": pl.Int64,
-            "Ledger_Tax_Estimate_Complete": pl.Boolean,
-            "Total_Event_Count": pl.Int64,
-            "Ready_Count": pl.Int64,
-            "Check_Required_Count": pl.Int64,
-        }
+        schema = pl.Schema(
+            {
+                "FY": pl.String,
+                "Total_Ledger_Income": pl.Float64,
+                "Total_Investment_Gain_Loss": pl.Float64,
+                "Total_Tax_Credits": pl.Float64,
+                "Total_Estimated_Investment_Tax": pl.Float64,
+                "Investment_Tax_Estimate_Count": pl.Int64,
+                "Investment_Tax_Estimate_Missing_Count": pl.Int64,
+                "Investment_Tax_Estimate_Complete": pl.Boolean,
+                "Total_Estimated_Ledger_Tax": pl.Float64,
+                "Ledger_Tax_Estimate_Count": pl.Int64,
+                "Ledger_Tax_Estimate_Missing_Count": pl.Int64,
+                "Ledger_Tax_Estimate_Complete": pl.Boolean,
+                "Total_Event_Count": pl.Int64,
+                "Ready_Count": pl.Int64,
+                "Check_Required_Count": pl.Int64,
+            }
+        )
         aggregated = self.lf_events.group_by("FY").agg(
             pl.col("Amount_INR")
             .filter(pl.col("Source_Type") == "LEDGER")
@@ -158,7 +160,7 @@ class TaxGoldFormatter:
             )
             .drop("_Investment_Tax_Sum", "_Ledger_Tax_Sum")
             .select(list(schema))
-            .cast(schema)  # type: ignore[arg-type]
+            .cast(schema)
             .sort("FY")
         )
 
@@ -170,20 +172,22 @@ class TaxGoldFormatter:
         pl.LazyFrame
             LazyFrame for gold.Tax_Income_Breakdown.
         """
-        schema = {
-            "FY": pl.String,
-            "Income_Head": pl.String,
-            "Tax_Sub_Head": pl.String,
-            "Source_Type": pl.String,
-            "Event_Amount_INR": pl.Float64,
-            "Estimated_Tax_INR": pl.Float64,
-            "Estimated_Tax_Event_Count": pl.Int64,
-            "Estimated_Tax_Missing_Count": pl.Int64,
-            "Estimated_Tax_Complete": pl.Boolean,
-            "Event_Count": pl.Int64,
-            "Ready_Count": pl.Int64,
-            "Check_Required_Count": pl.Int64,
-        }
+        schema = pl.Schema(
+            {
+                "FY": pl.String,
+                "Income_Head": pl.String,
+                "Tax_Sub_Head": pl.String,
+                "Source_Type": pl.String,
+                "Event_Amount_INR": pl.Float64,
+                "Estimated_Tax_INR": pl.Float64,
+                "Estimated_Tax_Event_Count": pl.Int64,
+                "Estimated_Tax_Missing_Count": pl.Int64,
+                "Estimated_Tax_Complete": pl.Boolean,
+                "Event_Count": pl.Int64,
+                "Ready_Count": pl.Int64,
+                "Check_Required_Count": pl.Int64,
+            }
+        )
         # Tax credits remain a separate source category and do not receive tax estimates.
         aggregated = self.lf_events.group_by(
             ["FY", "Income_Head", "Tax_Sub_Head", "Source_Type"]
@@ -227,7 +231,7 @@ class TaxGoldFormatter:
             )
             .drop("_Estimated_Tax_Sum")
             .select(list(schema))
-            .cast(schema)  # type: ignore[arg-type]
+            .cast(schema)
             .sort(["FY", "Income_Head", "Tax_Sub_Head", "Source_Type"])
         )
 
@@ -242,31 +246,33 @@ class TaxGoldFormatter:
         pl.LazyFrame
             LazyFrame for gold.Tax_Reconciliation.
         """
-        schema = {
-            "FY": pl.String,
-            "Tax_Sub_Head": pl.String,
-            "Ledger_Tax_Event_Amount": pl.Float64,
-            "Excluded_Non_Taxable_Amount": pl.Float64,
-            "Excluded_Non_Taxable_Event_Count": pl.Int64,
-            "Excluded_Investment_Ledger_Amount": pl.Float64,
-            "Excluded_Investment_Ledger_Event_Count": pl.Int64,
-            "Quant_Realized_Gain_Loss": pl.Float64,
-            "Estimated_Investment_Tax": pl.Float64,
-            "Estimated_Tax_Event_Count": pl.Int64,
-            "Estimated_Tax_Missing_Count": pl.Int64,
-            "Estimated_Investment_Tax_Complete": pl.Boolean,
-            "Estimated_Ledger_Tax": pl.Float64,
-            "Ledger_Tax_Estimate_Count": pl.Int64,
-            "Ledger_Tax_Estimate_Missing_Count": pl.Int64,
-            "Estimated_Ledger_Tax_Complete": pl.Boolean,
-            "Tax_Credit_Amount": pl.Float64,
-            "Tax_Event_Amount": pl.Float64,
-            "Investment_Source_Difference_INR": pl.Float64,
-            "Ledger_Event_Count": pl.Int64,
-            "Quant_Event_Count": pl.Int64,
-            "Tax_Credit_Event_Count": pl.Int64,
-            "Check_Required_Count": pl.Int64,
-        }
+        schema = pl.Schema(
+            {
+                "FY": pl.String,
+                "Tax_Sub_Head": pl.String,
+                "Ledger_Tax_Event_Amount": pl.Float64,
+                "Excluded_Non_Taxable_Amount": pl.Float64,
+                "Excluded_Non_Taxable_Event_Count": pl.Int64,
+                "Excluded_Investment_Ledger_Amount": pl.Float64,
+                "Excluded_Investment_Ledger_Event_Count": pl.Int64,
+                "Quant_Realized_Gain_Loss": pl.Float64,
+                "Estimated_Investment_Tax": pl.Float64,
+                "Estimated_Tax_Event_Count": pl.Int64,
+                "Estimated_Tax_Missing_Count": pl.Int64,
+                "Estimated_Investment_Tax_Complete": pl.Boolean,
+                "Estimated_Ledger_Tax": pl.Float64,
+                "Ledger_Tax_Estimate_Count": pl.Int64,
+                "Ledger_Tax_Estimate_Missing_Count": pl.Int64,
+                "Estimated_Ledger_Tax_Complete": pl.Boolean,
+                "Tax_Credit_Amount": pl.Float64,
+                "Tax_Event_Amount": pl.Float64,
+                "Investment_Source_Difference_INR": pl.Float64,
+                "Ledger_Event_Count": pl.Int64,
+                "Quant_Event_Count": pl.Int64,
+                "Tax_Credit_Event_Count": pl.Int64,
+                "Check_Required_Count": pl.Int64,
+            }
+        )
         event_summary = (
             self.lf_events.group_by(["FY", "Tax_Sub_Head"])
             .agg(
@@ -410,7 +416,7 @@ class TaxGoldFormatter:
         combined = combined.with_columns(
             [pl.col(column).fill_null(0).alias(column) for column in numeric_zero_defaults]
         )
-        return combined.select(list(schema)).cast(schema).sort(["FY", "Tax_Sub_Head"])  # type: ignore[arg-type]
+        return combined.select(list(schema)).cast(schema).sort(["FY", "Tax_Sub_Head"])
 
     def _ledger_source_evidence(self) -> pl.LazyFrame:
         """Join ledger amounts to one validated subcategory row for reconciliation."""
