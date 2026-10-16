@@ -133,6 +133,8 @@ class InflationBuilder:
 
     def _resolve_latest_cpi(self, lf_inflation: pl.LazyFrame) -> CpiResult:
         try:
+            # Materialization Boundary: SCALAR_EXTRACTION
+            # Materialize single terminal row to extract scalar latest CPI index value
             cpi_latest_df = (
                 lf_inflation.sort("MONTH_START_DATE").tail(1).select("CPI_INDEX").collect()
             )
