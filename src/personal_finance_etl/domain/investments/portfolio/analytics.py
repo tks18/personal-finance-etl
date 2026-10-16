@@ -15,12 +15,12 @@ Does not own
 """
 
 from datetime import date
-from typing import Any
 
 import polars as pl
 
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.domain.common.dates import to_date_obj
+from personal_finance_etl.domain.investments.contracts import CashflowDict, TerminalValueDict
 from personal_finance_etl.domain.market.macro import FYMacroParametersTable
 
 
@@ -35,10 +35,10 @@ class AdvancedAnalyticsCalculator:
         self,
         df_port: pl.DataFrame,
         unique_dates: list[date],
-        portfolio_terminals: dict[date, dict[str, Any]],
-        cashflows: list[dict[str, Any]],
+        portfolio_terminals: dict[date, TerminalValueDict] | dict[date, dict[str, float]],
+        cashflows: list[CashflowDict],
     ) -> pl.DataFrame:
-        pt_records: list[dict[str, Any]] = []
+        pt_records: list[dict[str, object]] = []
         for d in unique_dates:
             d_obj = to_date_obj(d)
             if d_obj:
@@ -57,12 +57,15 @@ class AdvancedAnalyticsCalculator:
             df_pt = pl.DataFrame(pt_records).sort("Date_Obj")
 
             # Aggregate cash flows by date to compute net injection
-            cf_records: list[dict[str, Any]] = []
+            cf_records: list[dict[str, object]] = []
             for cf in cashflows:
-                d_obj = to_date_obj(cf["date"])
+                cf_date = cf.get("date")
+                d_obj = to_date_obj(cf_date)
                 if d_obj:
                     # 'amount' is negative for buys (injections) and positive for sells (withdrawals)
-                    cf_records.append({"Date_Obj": d_obj, "injection": -float(cf["amount"])})
+                    cf_records.append(
+                        {"Date_Obj": d_obj, "injection": -float(cf.get("amount") or 0.0)}
+                    )
 
             if cf_records:
                 df_cf = (
