@@ -16,11 +16,15 @@ from pydantic import BaseModel, Field
 
 
 class InvestmentInstrumentRules(BaseModel):
+    """Category and subcategory identifiers for marketable investment instruments."""
+
     category_ids: list[str] = Field(default_factory=list)
     sub_category_ids: list[str] = Field(default_factory=list)
 
 
 class PortfolioManagementRules(BaseModel):
+    """Portfolio management drift thresholds and rebalancing triggers."""
+
     rebalance_tolerance_pct_points: float = Field(
         default=5.0,
         description="Threshold (in percentage points) for triggering a rebalance requirement.",
