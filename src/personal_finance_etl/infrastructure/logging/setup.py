@@ -33,6 +33,7 @@ class QueueHandler(logging.Handler):
         self.log_queue = log_queue
 
     def emit(self, record: logging.LogRecord) -> None:
+        """Format log record and enqueue message tuple to multiprocessing queue."""
         try:
             msg = self.format(record)
             self.log_queue.put((msg, None, None))
@@ -44,6 +45,7 @@ class ContextFilter(logging.Filter):
     """Injects contextual attributes into log records if missing."""
 
     def filter(self, record: logging.LogRecord) -> bool:
+        """Inject default contextual attributes (run_id, stage, isin) into record if absent."""
         if not hasattr(record, "run_id"):
             record.run_id = "-"
         if not hasattr(record, "stage"):
