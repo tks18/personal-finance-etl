@@ -26,6 +26,8 @@ from personal_finance_etl.infrastructure.preferences import PreferencesManager
 
 
 class FileHashPolicy(BaseModel):
+    """File content hashing policy flags for source deduplication across format categories."""
+
     csv: bool = True
     excel: bool = False
     sqlite: bool = False
@@ -63,6 +65,8 @@ def _flatten_settings_to_records(
 
 
 class Settings(BaseModel):
+    """Execution environment settings, warehouse paths, and dependency file locations."""
+
     SOURCE_DB_FOLDER: str = ""
     TARGET_DB_BASE_PATH: str = ""
     TARGET_DB_NAME: str = "Personal_Finance_DB.duckdb"
