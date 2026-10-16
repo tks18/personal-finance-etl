@@ -1,7 +1,7 @@
 {
   "name": "personal-finance-etl",
   "description": "Local-first financial data engineering and quantitative decision-support platform for reconciled personal finance, investment analytics, tax evidence, FIRE simulation, and BI.",
-  "version": "9.0.1",
+  "version": "9.1.0",
   "repository": "https://github.com/tks18/personal-finance-etl",
   "author": "tks18 <tksudharshan@gmail.com>",
   "license": "GPL-3.0-or-later",
