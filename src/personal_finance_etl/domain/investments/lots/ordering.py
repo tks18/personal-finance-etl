@@ -13,7 +13,8 @@ Does not own
 """
 
 from decimal import Decimal
-from typing import Any
+
+from personal_finance_etl.domain.investments.contracts import TradeRecord
 
 
 class CanonicalOrderPolicy:
@@ -29,7 +30,7 @@ class CanonicalOrderPolicy:
     sorted_sales     = policy.sort_sales(raw_sales)
     """
 
-    def sort_purchases(self, purchases: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    def sort_purchases(self, purchases: list[TradeRecord]) -> list[TradeRecord]:
         """Sort purchase lots: Date ASC → Price ASC (Decimal) → Purchase_ID ASC.
 
         Parameters
@@ -39,7 +40,7 @@ class CanonicalOrderPolicy:
 
         Returns
         -------
-        list[dict]:
+        list[TradeRecord]:
             New list sorted according to the canonical ordering rule.
         """
         return sorted(
@@ -51,7 +52,7 @@ class CanonicalOrderPolicy:
             ),
         )
 
-    def sort_sales(self, sales: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    def sort_sales(self, sales: list[TradeRecord]) -> list[TradeRecord]:
         """Sort sale lots: Date ASC → Sell_Price ASC (Decimal) → Sale_ID ASC.
 
         Parameters
@@ -61,7 +62,7 @@ class CanonicalOrderPolicy:
 
         Returns
         -------
-        list[dict]:
+        list[TradeRecord]:
             New list sorted according to the canonical ordering rule.
         """
         return sorted(
@@ -77,7 +78,7 @@ class CanonicalOrderPolicy:
 _default_policy = CanonicalOrderPolicy()
 
 
-def sort_purchases(purchases: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def sort_purchases(purchases: list[TradeRecord]) -> list[TradeRecord]:
     """Sort purchases using the canonical ordering policy.
 
     Delegates to :class:`CanonicalOrderPolicy`. Preserved for backward
@@ -87,7 +88,7 @@ def sort_purchases(purchases: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return _default_policy.sort_purchases(purchases)
 
 
-def sort_sales(sales: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def sort_sales(sales: list[TradeRecord]) -> list[TradeRecord]:
     """Sort sales using the canonical ordering policy.
 
     Delegates to :class:`CanonicalOrderPolicy`. Preserved for backward
