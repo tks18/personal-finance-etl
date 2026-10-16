@@ -15,7 +15,6 @@ Does not own
 
 from dataclasses import dataclass
 from datetime import date
-from typing import Any
 
 import polars as pl
 
@@ -23,6 +22,7 @@ from personal_finance_etl.application.investments.input_adapter import TaxDataLo
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.contracts.application import EngineStatusMessage
 from personal_finance_etl.contracts.logging import LogLevel, StatusQueue
+from personal_finance_etl.domain.investments.contracts import IsinMasterRecord
 from personal_finance_etl.domain.market.fx import FXRateProvider
 from personal_finance_etl.domain.market.macro import FYMacroParametersTable
 
@@ -34,7 +34,7 @@ class RunContext:
     df_p: pl.DataFrame
     df_s: pl.DataFrame
     df_m: pl.DataFrame
-    isin_master: dict[str, dict[str, Any]]
+    isin_master: dict[str, IsinMasterRecord]
     df_b: pl.DataFrame | None
     fy_table: FYMacroParametersTable
     start_date: date | None
@@ -121,7 +121,7 @@ class RunContext:
 class AnalyticsContextManager:
     """Manages the initialization of the quantitative analytics engine context."""
 
-    def __init__(self, status_queue: StatusQueue | Any | None = None):
+    def __init__(self, status_queue: StatusQueue | None = None):
         self.status_queue = status_queue
 
     def _report(self, msg: str, progress: float, level: LogLevel = LogLevel.INFO) -> None:
