@@ -16,7 +16,8 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Any, cast
+from collections.abc import Mapping
+from typing import cast
 
 
 class PreferencesManager:
@@ -43,18 +44,18 @@ class PreferencesManager:
         os.makedirs(prefs_dir, exist_ok=True)
         self.prefs_path = os.path.join(prefs_dir, "prefs.json")
 
-    def _read_data(self) -> dict[str, Any]:
+    def _read_data(self) -> dict[str, object]:
         """Safely load JSON preferences from disk."""
         if not os.path.exists(self.prefs_path):
             return {}
         try:
             with open(self.prefs_path, encoding="utf-8") as f:
                 content = json.load(f)
-                return cast("dict[str, Any]", content) if isinstance(content, dict) else {}
+                return cast("dict[str, object]", content) if isinstance(content, dict) else {}
         except Exception:
             return {}
 
-    def _write_data(self, data: dict[str, Any]) -> None:
+    def _write_data(self, data: Mapping[str, object]) -> None:
         """Safely write JSON preferences to disk."""
         try:
             with open(self.prefs_path, "w", encoding="utf-8") as f:
