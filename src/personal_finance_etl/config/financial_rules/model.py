@@ -97,6 +97,8 @@ def _flatten_data_to_records(node: object, path: list[str], records: list[dict[s
 
 
 class FinancialRules(BaseModel):
+    """Root configuration composed of domain policies, assumptions, and audit rules."""
+
     income: IncomeRules = Field(default_factory=IncomeRules)
     expense: ExpenseRules = Field(default_factory=ExpenseRules)
     assets: AssetRules = Field(default_factory=AssetRules)
