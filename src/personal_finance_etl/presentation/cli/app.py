@@ -54,6 +54,7 @@ except importlib.metadata.PackageNotFoundError:
 
 if sys.platform == "win32":
     try:
+        # Exception TYP-005 [UNTYPED_EXTERNAL_BOUNDARY]: Windows stdout/stderr TextIOWrapper dynamic reconfiguration
         if hasattr(sys.stdout, "reconfigure"):
             sys.stdout.reconfigure(encoding="utf-8")  # pyright: ignore[reportAttributeAccessIssue,reportUnknownMemberType]
         if hasattr(sys.stderr, "reconfigure"):
