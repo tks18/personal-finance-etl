@@ -22,7 +22,7 @@ import os
 import time
 import traceback
 from datetime import date
-from typing import Any, cast
+from typing import cast
 
 import polars as pl
 
@@ -32,12 +32,19 @@ from personal_finance_etl.contracts.application import EngineStatusMessage
 from personal_finance_etl.contracts.logging import LogLevel, StatusQueue
 from personal_finance_etl.domain.common.dates import to_date_obj
 from personal_finance_etl.domain.investments.contracts import (
+    CashflowDict,
     CashflowRecord,
+    InstrumentMetricsRecord,
+    IsinMasterRecord,
     ISINProcessResult,
     ISINTags,
     PipelineExecutionResult,
+    RealizedEventDict,
+    ReconciliationEventDict,
     SnapshotRecord,
+    TerminalValueDict,
     TerminalValueRecord,
+    TradeRecord,
 )
 from personal_finance_etl.domain.investments.lots.fifo import FIFOPortfolio
 from personal_finance_etl.domain.investments.performance.returns import calculate_cagr
@@ -50,6 +57,7 @@ from personal_finance_etl.domain.investments.valuation.fx import (
     FXRateUnavailableError,
     FXValidationGate,
 )
+from personal_finance_etl.domain.market.fx import FXRateProvider
 from personal_finance_etl.domain.market.macro import FYMacroParametersTable
 from personal_finance_etl.infrastructure.logging.setup import (
     logger,
@@ -105,7 +113,7 @@ class IsinProcessor:
         start_date: date | None,
         end_date: date | None,
         rules: FinancialRules,
-        fx_provider: Any = None,
+        fx_provider: FXRateProvider | None = None,
     ) -> None:
         self.fy_table = fy_table
         self.start_date = start_date
@@ -116,10 +124,10 @@ class IsinProcessor:
     def process(
         self,
         isin: str,
-        p_inst: list[dict[str, Any]],
-        s_inst: list[dict[str, Any]],
-        m_inst: list[dict[str, Any]],
-        master_row: dict[str, Any],
+        p_inst: list[TradeRecord],
+        s_inst: list[TradeRecord],
+        m_inst: list[TradeRecord],
+        master_row: IsinMasterRecord,
         bm_map: dict[date, float],
     ) -> ISINProcessResult | None:
         if not m_inst:
@@ -152,8 +160,8 @@ class IsinProcessor:
         p_idx = s_idx = 0
         isin_cashflows: list[CashflowRecord] = []
         isin_terminals: dict[date, TerminalValueRecord] = {}
-        isin_realized: list[dict[str, Any]] = []
-        isin_recon_events: list[dict[str, Any]] = []
+        isin_realized: list[RealizedEventDict] = []
+        isin_recon_events: list[ReconciliationEventDict] = []
         isin_snapshots: list[SnapshotRecord] = []
         running_peak_price = 0.0
         running_max_dd = 0.0
@@ -191,7 +199,7 @@ class IsinProcessor:
                     break
                 row = p_inst[p_idx]
                 qty = float(row["Quantity"])
-                b_price = float(row["Price"])
+                b_price = float(row.get("Price") or 0.0)
 
                 v_val = row.get("Value")
                 buy_val = float(v_val) if v_val is not None else float(qty * b_price)
@@ -345,20 +353,23 @@ class IsinProcessor:
             isin_recon_events.extend(q_recon_events)
 
             for cf in q_cf:
-                cf_dates.append(cast(date, cf["date"]))
-                amt = float(cast(float, cf["amount"]))
+                cf_d = cf.get("date")
+                amt = float(cf.get("amount") or 0.0)
+                if cf_d:
+                    cf_dates.append(cf_d)
                 cf_amounts.append(amt)
                 bm_cf_amounts.append(amt)
                 bm_cf_amounts_local.append(amt)
-                isin_cashflows.append(
-                    CashflowRecord(
-                        date=cast(date, cf["date"]),
-                        amount=amt,
-                        amount_local=amt,
-                        benchmark_amount=0.0,
-                        benchmark_amount_local=0.0,
+                if cf_d:
+                    isin_cashflows.append(
+                        CashflowRecord(
+                            date=cf_d,
+                            amount=amt,
+                            amount_local=amt,
+                            benchmark_amount=0.0,
+                            benchmark_amount_local=0.0,
+                        )
                     )
-                )
 
             cb_recon_events = fifo.reconcile_cost_basis(
                 m_row.get("Buy_Value"), m_row.get("Buy_Value_Local"), m_date
@@ -375,7 +386,7 @@ class IsinProcessor:
             if self.end_date and m_date > self.end_date:
                 continue
 
-            m_price = float(m_row["Closing_Price"])
+            m_price = float(m_row.get("Closing_Price") or 0.0)
             remaining_ltcg_exemption = float(m_row.get("Equity_LTCG_Exemption") or 0.0)
             m_bm_price = bm_provider.get_bm_price(m_date)
             if not m_bm_price or m_bm_price <= 0:
@@ -498,7 +509,7 @@ class IsinProcessor:
 
             inst_max_dd = running_max_dd
 
-            inst_metrics = {
+            inst_metrics: InstrumentMetricsRecord = {
                 "cagr": inst_cagr,
                 "cagr_status": inst_cagr_status,
                 "bm_cagr": inst_bm_cagr,
@@ -544,8 +555,7 @@ class IsinProcessor:
                 else None
             )
 
-            exec_res_raw = m_row.get("Execution_Residual")
-            execution_residual = float(exec_res_raw) if exec_res_raw is not None else 0.0
+            execution_residual = float(m_row.get("Execution_Residual") or 0.0)
             new_snapshots = snapshot_generator.generate(
                 fifo,
                 m_date,
@@ -565,7 +575,7 @@ class IsinProcessor:
                 continue
             row = p_inst[p_idx]
             qty = float(row["Quantity"])
-            b_price = float(row["Price"])
+            b_price = float(row.get("Price") or 0.0)
             v_val = row.get("Value")
             buy_val = float(v_val) if v_val is not None else float(qty * b_price)
 
@@ -773,26 +783,26 @@ class IsinProcessor:
 def _process_isin_worker(
     task: tuple[
         str,
-        list[dict[str, Any]],
-        list[dict[str, Any]],
-        list[dict[str, Any]],
-        dict[str, Any],
+        list[TradeRecord],
+        list[TradeRecord],
+        list[TradeRecord],
+        IsinMasterRecord,
         dict[date, float],
-        Any,
-        Any,
-        Any,
-        Any,
-        Any,
+        FYMacroParametersTable,
+        date | None,
+        date | None,
+        FinancialRules,
+        FXRateProvider | None,
         str,
     ],
 ) -> tuple[
     bool,
-    list[dict[str, Any]],
-    dict[date, dict[str, Any]],
-    list[dict[str, Any]],
-    list[dict[str, Any]],
-    dict[str, Any],
-    dict[str, Any] | None,
+    list[CashflowDict],
+    dict[date, TerminalValueDict],
+    list[RealizedEventDict],
+    list[ReconciliationEventDict],
+    dict[str, str],
+    dict[str, str] | None,
 ]:
     (
         isin,
@@ -832,11 +842,28 @@ def _process_isin_worker(
 
         if res is not None:
             df = res.df_snapshots
-            isin_cf = [c.model_dump(mode="python") for c in res.cashflows]
-            isin_pt = {d: pt.model_dump(mode="python") for d, pt in res.terminals.items()}
-            tags = res.tags.model_dump(by_alias=True)
-            isin_re = res.realized_events
-            isin_recon = res.recon_events
+            isin_cf = cast(
+                "list[CashflowDict]", [c.model_dump(mode="python") for c in res.cashflows]
+            )
+            isin_pt = cast(
+                "dict[date, TerminalValueDict]",
+                {d: pt.model_dump(mode="python") for d, pt in res.terminals.items()},
+            )
+            tags = cast("dict[str, str]", res.tags.model_dump(by_alias=True))
+            isin_re = cast(
+                "list[RealizedEventDict]",
+                [
+                    r if isinstance(r, dict) else r.model_dump(by_alias=True)
+                    for r in res.realized_events
+                ],
+            )
+            isin_recon = cast(
+                "list[ReconciliationEventDict]",
+                [
+                    r if isinstance(r, dict) else r.model_dump(by_alias=True)
+                    for r in res.recon_events
+                ],
+            )
 
             if df is not None and not df.is_empty():
                 df.write_parquet(os.path.join(tmp_dir, f"{isin.replace('/', '_')}.parquet"))
@@ -856,7 +883,7 @@ class IsinPipeline:
         ctx: RunContext,
         isins: list[str],
         tmp_dir: str,
-        status_queue: StatusQueue | Any | None = None,
+        status_queue: StatusQueue | None = None,
     ):
         self.ctx = ctx
         self.isins = isins
@@ -870,47 +897,57 @@ class IsinPipeline:
             )
 
     def process_all(self) -> PipelineExecutionResult:
-        global_cashflows: list[dict[str, Any]] = []
+        global_cashflows: list[CashflowDict] = []
         portfolio_terminals: dict[date, dict[str, float]] = {}
-        realized_events: list[dict[str, Any]] = []
-        isin_cashflows: dict[str, list[dict[str, Any]]] = {}
-        isin_terminals: dict[str, dict[date, dict[str, Any]]] = {}
+        realized_events: list[RealizedEventDict] = []
+        isin_cashflows: dict[str, list[CashflowDict]] = {}
+        isin_terminals: dict[str, dict[date, TerminalValueDict]] = {}
 
-        class_cf: dict[str, list[dict[str, Any]]] = {}
+        class_cf: dict[str, list[CashflowDict]] = {}
         class_pt: dict[str, dict[date, dict[str, float]]] = {}
-        class_re: dict[str, list[dict[str, Any]]] = {}
+        class_re: dict[str, list[RealizedEventDict]] = {}
 
-        subtype_cf: dict[str, list[dict[str, Any]]] = {}
+        subtype_cf: dict[str, list[CashflowDict]] = {}
         subtype_pt: dict[str, dict[date, dict[str, float]]] = {}
-        subtype_re: dict[str, list[dict[str, Any]]] = {}
+        subtype_re: dict[str, list[RealizedEventDict]] = {}
 
-        instrument_type_cf: dict[str, list[dict[str, Any]]] = {}
+        instrument_type_cf: dict[str, list[CashflowDict]] = {}
         instrument_type_pt: dict[str, dict[date, dict[str, float]]] = {}
 
-        sector_cf: dict[str, list[dict[str, Any]]] = {}
+        sector_cf: dict[str, list[CashflowDict]] = {}
         sector_pt: dict[str, dict[date, dict[str, float]]] = {}
 
-        industry_cf: dict[str, list[dict[str, Any]]] = {}
+        industry_cf: dict[str, list[CashflowDict]] = {}
         industry_pt: dict[str, dict[date, dict[str, float]]] = {}
 
-        geo_cf: dict[str, list[dict[str, Any]]] = {}
+        geo_cf: dict[str, list[CashflowDict]] = {}
         geo_pt: dict[str, dict[date, dict[str, float]]] = {}
 
-        country_cf: dict[str, list[dict[str, Any]]] = {}
+        country_cf: dict[str, list[CashflowDict]] = {}
         country_pt: dict[str, dict[date, dict[str, float]]] = {}
 
-        currency_cf: dict[str, list[dict[str, Any]]] = {}
+        currency_cf: dict[str, list[CashflowDict]] = {}
         currency_pt: dict[str, dict[date, dict[str, float]]] = {}
-        currency_re: dict[str, list[dict[str, Any]]] = {}
+        currency_re: dict[str, list[RealizedEventDict]] = {}
 
         has_data = False
         total_inst = len(self.isins)
 
-        p_dict_pl: dict[Any, pl.DataFrame] = (
-            self.ctx.df_p.partition_by("ISIN", as_dict=True) if not self.ctx.df_p.is_empty() else {}
+        p_dict_pl: dict[tuple[object, ...] | str, pl.DataFrame] = (
+            cast(
+                dict[tuple[object, ...] | str, pl.DataFrame],
+                self.ctx.df_p.partition_by("ISIN", as_dict=True),
+            )
+            if not self.ctx.df_p.is_empty()
+            else {}
         )
-        s_dict_pl: dict[Any, pl.DataFrame] = (
-            self.ctx.df_s.partition_by("ISIN", as_dict=True) if not self.ctx.df_s.is_empty() else {}
+        s_dict_pl: dict[tuple[object, ...] | str, pl.DataFrame] = (
+            cast(
+                dict[tuple[object, ...] | str, pl.DataFrame],
+                self.ctx.df_s.partition_by("ISIN", as_dict=True),
+            )
+            if not self.ctx.df_s.is_empty()
+            else {}
         )
 
         m_grouped = (
@@ -934,8 +971,13 @@ class IsinPipeline:
             else pl.DataFrame()
         )
 
-        m_dict_pl: dict[Any, pl.DataFrame] = (
-            m_grouped.partition_by("ISIN", as_dict=True) if not m_grouped.is_empty() else {}
+        m_dict_pl: dict[tuple[object, ...] | str, pl.DataFrame] = (
+            cast(
+                dict[tuple[object, ...] | str, pl.DataFrame],
+                m_grouped.partition_by("ISIN", as_dict=True),
+            )
+            if not m_grouped.is_empty()
+            else {}
         )
 
         bm_maps: dict[str, dict[date, float]] = {}
@@ -947,34 +989,39 @@ class IsinPipeline:
         tasks: list[
             tuple[
                 str,
-                list[dict[str, Any]],
-                list[dict[str, Any]],
-                list[dict[str, Any]],
-                dict[str, Any],
+                list[TradeRecord],
+                list[TradeRecord],
+                list[TradeRecord],
+                IsinMasterRecord,
                 dict[date, float],
-                Any,
-                Any,
-                Any,
-                Any,
-                Any,
+                FYMacroParametersTable,
+                date | None,
+                date | None,
+                FinancialRules,
+                FXRateProvider | None,
                 str,
             ]
         ] = []
         for isin in self.isins:
             p_df = p_dict_pl.get((isin,)) if (isin,) in p_dict_pl else p_dict_pl.get(isin)
-            p_inst = (
-                p_df.sort("Date").to_dicts() if p_df is not None and not p_df.is_empty() else []
+            p_inst = cast(
+                "list[TradeRecord]",
+                p_df.sort("Date").to_dicts() if p_df is not None and not p_df.is_empty() else [],
             )
 
             s_df = s_dict_pl.get((isin,)) if (isin,) in s_dict_pl else s_dict_pl.get(isin)
-            s_inst = (
-                s_df.sort("Date").to_dicts() if s_df is not None and not s_df.is_empty() else []
+            s_inst = cast(
+                "list[TradeRecord]",
+                s_df.sort("Date").to_dicts() if s_df is not None and not s_df.is_empty() else [],
             )
 
             m_df = m_dict_pl.get((isin,)) if (isin,) in m_dict_pl else m_dict_pl.get(isin)
-            m_inst = m_df.to_dicts() if m_df is not None and not m_df.is_empty() else []
+            m_inst = cast(
+                "list[TradeRecord]",
+                m_df.to_dicts() if m_df is not None and not m_df.is_empty() else [],
+            )
 
-            master_row = self.ctx.isin_master.get(isin, {})
+            master_row: IsinMasterRecord = self.ctx.isin_master.get(isin, {})
             b_id = str(master_row.get("BENCHMARK_ID", ""))
             bm_map = bm_maps.get(b_id, {})
 
@@ -999,7 +1046,7 @@ class IsinPipeline:
         is_daemon = current_process.daemon
         current_process.daemon = False
         worker_queue = start_worker_listener()
-        global_recon_events: list[dict[str, Any]] = []
+        global_recon_events: list[ReconciliationEventDict] = []
 
         try:
             with concurrent.futures.ProcessPoolExecutor(
@@ -1051,11 +1098,11 @@ class IsinPipeline:
                                 "shadow_val_local": 0.0,
                             },
                         )
-                        pt["val"] += vals["val"]
-                        pt["shadow_val"] += vals["shadow_val"]
+                        pt["val"] += vals.get("val", 0.0)
+                        pt["shadow_val"] += vals.get("shadow_val", 0.0)
                         pt["after_tax_val"] += vals.get("after_tax_val", 0.0)
                         pt["val_local"] += vals.get("val_local", 0.0)
-                        pt["shadow_val_local"] += vals["shadow_val_local"]
+                        pt["shadow_val_local"] += vals.get("shadow_val_local", 0.0)
                     realized_events.extend(isin_re)
                     global_recon_events.extend(isin_recon)
 
@@ -1085,11 +1132,11 @@ class IsinPipeline:
                                 "shadow_val_local": 0.0,
                             },
                         )
-                        pt["val"] += vals["val"]
-                        pt["shadow_val"] += vals["shadow_val"]
+                        pt["val"] += vals.get("val", 0.0)
+                        pt["shadow_val"] += vals.get("shadow_val", 0.0)
                         pt["after_tax_val"] += vals.get("after_tax_val", 0.0)
                         pt["val_local"] += vals.get("val_local", 0.0)
-                        pt["shadow_val_local"] += vals["shadow_val_local"]
+                        pt["shadow_val_local"] += vals.get("shadow_val_local", 0.0)
 
                     sub_key = f"{cls}___{sub}"
                     subtype_cf.setdefault(sub_key, []).extend(isin_cf)
@@ -1107,18 +1154,18 @@ class IsinPipeline:
                                 "shadow_val_local": 0.0,
                             },
                         )
-                        pt["val"] += vals["val"]
-                        pt["shadow_val"] += vals["shadow_val"]
+                        pt["val"] += vals.get("val", 0.0)
+                        pt["shadow_val"] += vals.get("shadow_val", 0.0)
                         pt["after_tax_val"] += vals.get("after_tax_val", 0.0)
                         pt["val_local"] += vals.get("val_local", 0.0)
-                        pt["shadow_val_local"] += vals["shadow_val_local"]
+                        pt["shadow_val_local"] += vals.get("shadow_val_local", 0.0)
 
                     def _update_group(
                         group_key: str,
-                        cf_dict: dict[str, Any],
-                        pt_dict: dict[str, Any],
-                        current_cf: list[Any],
-                        current_pt: dict[date, Any],
+                        cf_dict: dict[str, list[CashflowDict]],
+                        pt_dict: dict[str, dict[date, dict[str, float]]],
+                        current_cf: list[CashflowDict],
+                        current_pt: dict[date, TerminalValueDict],
                     ) -> None:
                         cf_dict.setdefault(group_key, []).extend(current_cf)
                         gp = pt_dict.setdefault(group_key, {})
@@ -1133,11 +1180,11 @@ class IsinPipeline:
                                     "shadow_val_local": 0.0,
                                 },
                             )
-                            pt["val"] += vals["val"]
-                            pt["shadow_val"] += vals["shadow_val"]
+                            pt["val"] += vals.get("val", 0.0)
+                            pt["shadow_val"] += vals.get("shadow_val", 0.0)
                             pt["after_tax_val"] += vals.get("after_tax_val", 0.0)
                             pt["val_local"] += vals.get("val_local", 0.0)
-                            pt["shadow_val_local"] += vals["shadow_val_local"]
+                            pt["shadow_val_local"] += vals.get("shadow_val_local", 0.0)
 
                     _update_group(
                         inst_type, instrument_type_cf, instrument_type_pt, isin_cf, isin_pt
