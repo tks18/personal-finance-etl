@@ -15,8 +15,8 @@ Does not own
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import date, datetime
-from typing import Any
 
 import polars as pl
 
@@ -115,13 +115,13 @@ def ensure_date_col[T: (pl.DataFrame, pl.LazyFrame)](df: T, col_name: str = "DAT
 
 
 def parse_strict_date(
-    value: Any,
+    value: object,
     formats: tuple[str, ...] = DEFAULT_DATE_FORMATS,
     *,
     field_name: str = "date_field",
     source: str | None = None,
     sheet: str | None = None,
-    row_identifier: Any = None,
+    row_identifier: object = None,
     optional: bool = False,
 ) -> date | None:
     """Strictly parse a scalar financial date value.
@@ -182,7 +182,7 @@ def parse_strict_date(
 
 
 def _diagnose_date_failure(
-    row_dict: dict[str, Any],
+    row_dict: Mapping[str, object],
     available_cols: list[str],
     date_cols_formats: dict[str, list[str]],
     opt_set: set[str],
