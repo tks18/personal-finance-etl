@@ -244,6 +244,8 @@ def validate_and_parse_numerics(
         if has_row_id and row_id_col is not None:
             select_cols.append(row_id_col)
 
+        # Materialization Boundary: VALIDATION_DIAGNOSTIC
+        # Materialize bounded sample (max 10) of invalid numeric strings for structured diagnostics
         bad_rows = (
             lf.filter(pl.any_horizontal(invalid_checks)).select(select_cols).limit(10).collect()
         )

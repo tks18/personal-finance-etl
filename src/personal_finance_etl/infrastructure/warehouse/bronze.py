@@ -79,6 +79,8 @@ class BronzeLayer:
             logger.debug(
                 "[DAG:OPTIMIZER] Physical Plan for Bronze '%s': %s", table_name, compact_plan
             )
+            # Materialization Boundary: PUBLICATION_BOUNDARY
+            # Terminal execution of lazy ingestion graph for DuckDB Bronze table insertion
             df = df.collect()
 
         if not actionable_files:

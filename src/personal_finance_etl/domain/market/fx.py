@@ -137,6 +137,8 @@ def transform_currency_fx_rates(
             & ~pl.col("Is_Closure_Gap").fill_null(False)
         )
         .select(["Date", "Currency_ID", "FX_Rate"])
+        # Materialization Boundary: VALIDATION_DIAGNOSTIC
+        # Materialize bounded sample (max 10) of invalid source FX rates for error diagnostics
         .limit(10)
         .collect()
     )
@@ -220,6 +222,8 @@ def transform_currency_fx_rates(
                 "FX_Age_Days",
             ]
         )
+        # Materialization Boundary: VALIDATION_DIAGNOSTIC
+        # Materialize bounded sample (max 20) of missing or stale FX observations for error diagnostics
         .limit(20)
         .collect()
     )

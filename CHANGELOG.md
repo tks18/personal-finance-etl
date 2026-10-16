@@ -2,6 +2,79 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [9.2.0](https://github.com/tks18/personal-finance-etl/compare/9.1.0...9.2.0) (2026-10-16)
+
+
+### Code Refactoring 🖌
+
+* **cli:** extract subcommands and status prefix dispatch ([66b5daf](https://github.com/tks18/personal-finance-etl/commit/66b5dafa134438ce68d0c66687c214c2e56558bc))
+* **contracts:** simplify failure domain classification rules ([6ac512c](https://github.com/tks18/personal-finance-etl/commit/6ac512c82d27b665d4c1e827ff1af38bc598a486))
+* **control_plane:** decompose disk sync into discrete passes ([c86e894](https://github.com/tks18/personal-finance-etl/commit/c86e8942406aade35adc1cead60ca0639c599232))
+* **fire:** extract latest CPI resolution helper ([cddc3b6](https://github.com/tks18/personal-finance-etl/commit/cddc3b69c70f8de4c8ab20b2e79092495d127e34))
+* **household:** extract tax map row and head builders ([8b1cfb9](https://github.com/tks18/personal-finance-etl/commit/8b1cfb9608f5102fd29b306ca4d052c9505d1b63))
+* **identity:** simplify value canonicalization dispatch ([60fe191](https://github.com/tks18/personal-finance-etl/commit/60fe191494a557de5821c6e1c47efc8b6e052cfe))
+* **investments:** decompose IsinProcessor into linear stages ([ac44cfa](https://github.com/tks18/personal-finance-etl/commit/ac44cfaa7126a5ccf54ce5c459761937bd0312a6))
+* **investments:** decompose PostProcessor dimension aggregation ([b79c5f7](https://github.com/tks18/personal-finance-etl/commit/b79c5f7bd15a80f050c87285f73fb056c5420621))
+* **investments:** eliminate redundant eager join materialization ([885e135](https://github.com/tks18/personal-finance-etl/commit/885e135119fafeec62e93003d16a189b7f1ca897))
+* **lifecycle:** decompose failure rollback and transitions ([410269c](https://github.com/tks18/personal-finance-etl/commit/410269cc793bdfb8360bff5c1fb0215f69da2301))
+* **portfolio:** decompose SnapshotGenerator lot generation ([0e46be2](https://github.com/tks18/personal-finance-etl/commit/0e46be260858c49a6cc0391ddbadc51da571bf9a))
+* **providers:** eliminate redundant eager sqlite table collects ([186a9df](https://github.com/tks18/personal-finance-etl/commit/186a9df848f6b614ff2a033e7b6a90b31872b4af))
+* **recovery:** decompose snapshot restore validation steps ([e852673](https://github.com/tks18/personal-finance-etl/commit/e852673f2591db4e0d9df029f20da478b8f4b488))
+* **tax:** extract ledger validation and event builder helpers ([06da4e4](https://github.com/tks18/personal-finance-etl/commit/06da4e4d9a3c25a9670aa80ff792cd0301888383))
+* **tax:** simplify quant subhead classification dispatch ([17a91a2](https://github.com/tks18/personal-finance-etl/commit/17a91a2e99f46c91ba0eb8dea17ede2890091c29))
+* **warehouse:** decompose DuckDB registry healing stages ([449d182](https://github.com/tks18/personal-finance-etl/commit/449d182f508dad3391d0884511a65cdc2d5b254c))
+* **wealth:** decompose NetWorthBuilder into modular stages ([8f3e0b1](https://github.com/tks18/personal-finance-etl/commit/8f3e0b1058463c7f4d80116d4a7767065adc2259))
+
+
+### Docs 📃
+
+* **domain:** document validation diagnostic collect in dates ([6496f7e](https://github.com/tks18/personal-finance-etl/commit/6496f7e51ad35abc55633e2e501c1df15bd0f46d))
+* **domain:** document validation diagnostic collect in validation ([6d337be](https://github.com/tks18/personal-finance-etl/commit/6d337be66e936b1b9719a2baca192d913c8e836f))
+* **fire:** document CPI scalar extraction materialization bound ([bd02ba0](https://github.com/tks18/personal-finance-etl/commit/bd02ba09dc5e3cc72fdf89f676aa16beca1e5198))
+* **household:** document validation diagnostic collect in txn ([7de3753](https://github.com/tks18/personal-finance-etl/commit/7de375320c63db237549f8be412aef972d25e778))
+* **ingestion:** document silver publication materialization bounds ([4d00ec1](https://github.com/tks18/personal-finance-etl/commit/4d00ec12649627824abc0d7c016e3bd0347d4687))
+* **investments:** document materialization bounds in market state ([8bfcd31](https://github.com/tks18/personal-finance-etl/commit/8bfcd31be93b7557a6e48a62b837817cdad18e90))
+* **lifecycle:** document gc collect process materialization bound ([75fd191](https://github.com/tks18/personal-finance-etl/commit/75fd1911b38959087cf810f8ba6a12dddb961b39))
+* **market:** document stateful algorithm materialization in bench ([08018a1](https://github.com/tks18/personal-finance-etl/commit/08018a1b0a602b5deb7ae997010e85d8a9b2a33d))
+* **market:** document validation diagnostic materializations in fx ([0d422c3](https://github.com/tks18/personal-finance-etl/commit/0d422c35603b4746594d398661fcde3bfc3ba28d))
+* **pipeline:** document calendar publication materialization bound ([581dad3](https://github.com/tks18/personal-finance-etl/commit/581dad32206c7eded3f3df5ae26bf1cc64bbe47e))
+* **v9.2.0:** classify 101 complexity hotspots into taxonomy ([7df40af](https://github.com/tks18/personal-finance-etl/commit/7df40afde546e5ec14277dce6668c6300f7b4ff7))
+* **v9.2.0:** classify 76 polars materialization boundaries ([3b3a8dc](https://github.com/tks18/personal-finance-etl/commit/3b3a8dc7e6b74944fb0e5b9099a04997fe418255))
+* **v9.2.0:** document Phase 4 polars materialization taxonomy ([a57d1e6](https://github.com/tks18/personal-finance-etl/commit/a57d1e65e0bfe6268f30a58d6adf65342d0344ac))
+* **v9.2.0:** mark Phase 1 as completed in phase tracker ([4e21665](https://github.com/tks18/personal-finance-etl/commit/4e2166585736243e0d40983f8f9075cafbf34be0))
+* **v9.2.0:** mark Phase 2 as completed in phase tracker ([e0b68a2](https://github.com/tks18/personal-finance-etl/commit/e0b68a2454cebb7f188cc68910be6f346d3e2ce1))
+* **v9.2.0:** mark Phase 3 as completed in phase tracker ([ccbaa29](https://github.com/tks18/personal-finance-etl/commit/ccbaa290b1b35b24cfeeebae3066a23fcb056831))
+* **v9.2.0:** mark Phase 4 as completed in phase tracker ([e27963e](https://github.com/tks18/personal-finance-etl/commit/e27963e708da662a019c369d3a3c489e3362ee50))
+* **v9.2.0:** mark Phase 5 as completed in phase tracker ([8c3c7ea](https://github.com/tks18/personal-finance-etl/commit/8c3c7ea907dcaf2e4c5ece14f8b1874ac2fc7ccc))
+* **v9.2.0:** mark Phase 6 as completed in phase tracker ([7890e9a](https://github.com/tks18/personal-finance-etl/commit/7890e9a463e62dfcf5a2e7fd3f04b16f216dd775))
+* **v9.2.0:** record Phase 5 materialization optimization metrics ([ad51299](https://github.com/tks18/personal-finance-etl/commit/ad512990e2b23d6d4012c434c366af23279f627c))
+* **v9.2.0:** record Phase 6 benchmark results and certification ([3982ced](https://github.com/tks18/personal-finance-etl/commit/3982cede004407cf701c475edfacde30d9552003))
+* **v9.2.0:** summarize Phase 1 complexity classification metrics ([a1dccbe](https://github.com/tks18/personal-finance-etl/commit/a1dccbe7a31351c1fcb3a0428c943762a53c0503))
+* **v9.2.0:** update materialization map with Phase 5 eliminations ([ae3fd4c](https://github.com/tks18/personal-finance-etl/commit/ae3fd4c7d2c163b31ada8b9f00a8a20b24e32c2d))
+* **warehouse:** document publication materialization bound in gold ([e694a7a](https://github.com/tks18/personal-finance-etl/commit/e694a7a1d294b22a4ce3770d76d2de00c94febed))
+* **warehouse:** document publication materialization in bronze ([f324072](https://github.com/tks18/personal-finance-etl/commit/f324072a538851d427ec8a3e23e201bf4489d35e))
+* **warehouse:** document publication materialization in silver ([c985fcf](https://github.com/tks18/personal-finance-etl/commit/c985fcf42d092ebbbcb0d4cba294780a1252ab02))
+
+
+### Others 🔧
+
+* **scripts:** stage v9.2.0 Phase 1 commit mappings ([ac3c01b](https://github.com/tks18/personal-finance-etl/commit/ac3c01b8e983495c158373af1f039a70c02730d9))
+* **scripts:** stage v9.2.0 Phase 2 commit mappings ([977c756](https://github.com/tks18/personal-finance-etl/commit/977c7564b23478983b8e02b9f889bb264eb17697))
+* **scripts:** stage v9.2.0 Phase 3 commit mappings ([583a52d](https://github.com/tks18/personal-finance-etl/commit/583a52dff5bb197e52520b539b46b6b9b5751beb))
+* **scripts:** stage v9.2.0 Phase 4 commit mappings ([4ef54b8](https://github.com/tks18/personal-finance-etl/commit/4ef54b87234c409a6a593f9809c4dd2c4fbea2a3))
+* **scripts:** stage v9.2.0 Phase 5 commit mappings ([0e50273](https://github.com/tks18/personal-finance-etl/commit/0e50273989d0926b37b73f524256f18048b99f9a))
+* **scripts:** stage v9.2.0 Phase 6 commit mappings ([654881c](https://github.com/tks18/personal-finance-etl/commit/654881c692d47d28689a9457586b5cb055214538))
+
+
+### Styling 🎨
+
+* **cli:** conform interrupt handler print to ruff format ([4ceb731](https://github.com/tks18/personal-finance-etl/commit/4ceb731a2f32198c7684fa687c06396baddd6c45))
+
+
+### Build System 🏗
+
+* **main.spec:** remove gui build, only cli builds are enough ([5d70593](https://github.com/tks18/personal-finance-etl/commit/5d705935a20afae15ada8fb84ddba69324e681cf))
+
 ## [9.1.0](https://github.com/tks18/personal-finance-etl/compare/9.0.1...9.1.0) (2026-10-16)
 
 

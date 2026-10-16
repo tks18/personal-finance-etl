@@ -60,6 +60,8 @@ def transform_us_market_data(
     """Transforms bronze raw US stock prices into a continuous silver daily series,
     builds the FIFO spine, joins FX rates, and calculates PnL.
     """
+    # Materialization Boundary: STATEFUL_ALGORITHM_BOUNDARY
+    # Materialize purchase and sale transactions to resolve active US ticker universe and date boundaries
     df_purchase = df_purchase_lazy.collect()
     df_sale = df_sale_lazy.collect()
 
@@ -195,6 +197,8 @@ def transform_us_market_data(
             & ~pl.col("Is_Closure_Gap").fill_null(False)
         )
         .select(["ISIN", "Date", "Closing_Price_Local"])
+        # Materialization Boundary: VALIDATION_DIAGNOSTIC
+        # Materialize sample (max 10) of invalid source quotes for diagnostic error message
         .limit(10)
         .collect()
     )
@@ -259,6 +263,8 @@ def transform_us_market_data(
             | (pl.col("Price_Age_Days") > max_price_staleness_days)
         )
         .select(["ISIN", "Date", "Price_Observation_Date", "Price_Age_Days", "Closing_Price_Local"])
+        # Materialization Boundary: VALIDATION_DIAGNOSTIC
+        # Materialize sample (max 10) of stale or invalid prices for diagnostic error message
         .limit(10)
         .collect()
     )
@@ -285,6 +291,8 @@ def transform_us_market_data(
             pl.col("FX_Rate").is_null() | ~pl.col("FX_Rate").is_finite() | (pl.col("FX_Rate") <= 0)
         )
         .select(["ISIN", "Date", "CURRENCY_ID", "FX_Rate"])
+        # Materialization Boundary: VALIDATION_DIAGNOSTIC
+        # Materialize sample (max 10) of missing or invalid FX rates for diagnostic error message
         .limit(10)
         .collect()
     )

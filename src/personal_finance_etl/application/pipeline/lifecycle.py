@@ -17,6 +17,7 @@ Does not own
 from __future__ import annotations
 
 import gc
+import logging
 import multiprocessing
 import os
 import sqlite3
@@ -190,21 +191,20 @@ class RunLifecycleCoordinator:
                 self.pending_recovery_runs,
             )
 
-    def handle_failure(self, exc: Exception) -> None:
-        """Rollback open transactions and persist truthful error telemetry into Control Plane."""
-        logger.exception("CRITICAL PIPELINE FAILURE:")
+    def _resolve_commit_state(self) -> CommitState:
+        """Derive explicit commit state from component database transaction statuses."""
+        match (self.duckdb_committed, self.sqlite_committed):
+            case (True, False):
+                return CommitState.RECOVERY_REQUIRED
+            case (False, False):
+                return CommitState.ROLLED_BACK
+            case (True, True):
+                return CommitState.FULLY_COMMITTED
+            case _:
+                return CommitState.COMMIT_STATE_UNKNOWN
 
-        # Derive explicit commit state
-        if self.duckdb_committed and not self.sqlite_committed:
-            self.commit_state = CommitState.RECOVERY_REQUIRED
-        elif not self.duckdb_committed and not self.sqlite_committed:
-            self.commit_state = CommitState.ROLLED_BACK
-        elif self.duckdb_committed and self.sqlite_committed:
-            self.commit_state = CommitState.FULLY_COMMITTED
-        else:
-            self.commit_state = CommitState.COMMIT_STATE_UNKNOWN
-
-        # Rollback DuckDB only if started and not committed
+    def _rollback_open_transactions(self) -> None:
+        """Rollback open transactions across DuckDB and SQLite if not already committed."""
         if self.duckdb_started and not self.duckdb_committed:
             try:
                 logger.debug("[DATABASE:DUCKDB] ROLLBACK")
@@ -215,70 +215,90 @@ class RunLifecycleCoordinator:
         elif self.duckdb_committed:
             logger.warning("[DATABASE:DUCKDB] DuckDB is already committed; cannot rollback DuckDB.")
 
-        # Rollback SQLite if started and not committed
         if self.cp is not None and self.sqlite_started and not self.sqlite_committed:
             try:
                 self.cp.rollback()
             except Exception as rollback_err:
                 logger.error(f"Failed to rollback SQLite Raw Store transaction: {rollback_err}")
 
-        # Emit truthful rollback language guarded strictly by commit_state
-        if self.commit_state == CommitState.ROLLED_BACK:
-            logger.warning(
-                "Pipeline failed. All open transactions rolled back to maintain integrity (state: ROLLED_BACK)."
-            )
-        elif self.commit_state == CommitState.RECOVERY_REQUIRED:
-            logger.error(
+    def _log_failure_status(self) -> None:
+        """Emit truthful rollback logging guarded strictly by commit state."""
+        messages: dict[CommitState, tuple[int, str]] = {
+            CommitState.ROLLED_BACK: (
+                logging.WARNING,
+                "Pipeline failed. All open transactions rolled back to maintain integrity (state: ROLLED_BACK).",
+            ),
+            CommitState.RECOVERY_REQUIRED: (
+                logging.ERROR,
                 "CRITICAL SPLIT-COMMIT DIVERGENCE: DuckDB committed successfully, but SQLite Raw Store commit failed. "
                 "Transactions CANNOT be fully rolled back. DuckDB has durable changes. State: RECOVERY_REQUIRED. "
-                "RECOVERY_REQUIRED marker will be persisted."
+                "RECOVERY_REQUIRED marker will be persisted.",
+            ),
+            CommitState.FULLY_COMMITTED: (
+                logging.WARNING,
+                "Pipeline encountered post-commit failure. Transactions are already fully committed (state: FULLY_COMMITTED).",
+            ),
+            CommitState.COMMIT_STATE_UNKNOWN: (
+                logging.ERROR,
+                "Pipeline failed with uncertain transaction commit state (state: COMMIT_STATE_UNKNOWN).",
+            ),
+        }
+        level, msg = messages.get(
+            self.commit_state,
+            (logging.ERROR, f"Pipeline failed with unexpected commit state ({self.commit_state})."),
+        )
+        logger.log(level, msg)
+
+    def _persist_failure_telemetry(self, exc: Exception) -> None:
+        """Persist error telemetry, failure domains, and recovery markers into Control Plane."""
+        if self.cp is None or self.run_id is None:
+            return
+
+        if self.commit_state == CommitState.RECOVERY_REQUIRED:
+            self.cp.runs.mark_recovery_required(
+                run_id=self.run_id,
+                error_message=f"Split-commit divergence: DuckDB committed, but SQLite commit failed: {exc}. duckdb_commit_state=COMMITTED, sqlite_commit_state=FAILED",
+                stage="COMMIT",
+                traceback_log=traceback.format_exc(),
             )
-        elif self.commit_state == CommitState.FULLY_COMMITTED:
-            logger.warning(
-                "Pipeline encountered post-commit failure. Transactions are already fully committed (state: FULLY_COMMITTED)."
+            return
+
+        self.cp.runs.update_commit_state(self.run_id, self.commit_state)
+        exc_str = str(exc)
+        if "ISIN_FAILURE" in exc_str:
+            parts = exc_str.split("|")
+            failed_isin = parts[1] if len(parts) >= 3 else None
+            error_msg = parts[2] if len(parts) >= 3 else exc_str
+            self.cp.runs.log_run_failure(
+                run_id=self.run_id,
+                failed_isin=failed_isin,
+                stage="InvestmentQuantEngine",
+                error_type="RuntimeError",
+                error_message=error_msg,
+                traceback_log=traceback.format_exc(),
+                failure_domain=FailureDomain.FINANCIAL_INVARIANT,
             )
         else:
-            logger.error(
-                "Pipeline failed with uncertain transaction commit state (state: COMMIT_STATE_UNKNOWN)."
+            domain = classify_failure_domain("Pipeline", type(exc).__name__ or exc_str)
+            self.cp.runs.log_run_failure(
+                run_id=self.run_id,
+                failed_isin=None,
+                stage="Pipeline",
+                error_type=type(exc).__name__,
+                error_message=exc_str,
+                traceback_log=traceback.format_exc(),
+                failure_domain=domain,
             )
+        self.cp.runs.finish_run(self.run_id, "FAILED", commit_state=self.commit_state)
 
-        # Persist failure details and recovery marker
+    def handle_failure(self, exc: Exception) -> None:
+        """Rollback open transactions and persist truthful error telemetry into Control Plane."""
+        logger.exception("CRITICAL PIPELINE FAILURE:")
+        self.commit_state = self._resolve_commit_state()
+        self._rollback_open_transactions()
+        self._log_failure_status()
         try:
-            if self.cp is not None and self.run_id is not None:
-                if self.commit_state == CommitState.RECOVERY_REQUIRED:
-                    self.cp.runs.mark_recovery_required(
-                        run_id=self.run_id,
-                        error_message=f"Split-commit divergence: DuckDB committed, but SQLite commit failed: {exc}. duckdb_commit_state=COMMITTED, sqlite_commit_state=FAILED",
-                        stage="COMMIT",
-                        traceback_log=traceback.format_exc(),
-                    )
-                else:
-                    self.cp.runs.update_commit_state(self.run_id, self.commit_state)
-                    if "ISIN_FAILURE" in str(exc):
-                        parts = str(exc).split("|")
-                        failed_isin = parts[1] if len(parts) >= 3 else None
-                        error_msg = parts[2] if len(parts) >= 3 else str(exc)
-                        self.cp.runs.log_run_failure(
-                            run_id=self.run_id,
-                            failed_isin=failed_isin,
-                            stage="InvestmentQuantEngine",
-                            error_type="RuntimeError",
-                            error_message=error_msg,
-                            traceback_log=traceback.format_exc(),
-                            failure_domain=FailureDomain.FINANCIAL_INVARIANT,
-                        )
-                    else:
-                        domain = classify_failure_domain("Pipeline", type(exc).__name__ or str(exc))
-                        self.cp.runs.log_run_failure(
-                            run_id=self.run_id,
-                            failed_isin=None,
-                            stage="Pipeline",
-                            error_type=type(exc).__name__,
-                            error_message=str(exc),
-                            traceback_log=traceback.format_exc(),
-                            failure_domain=domain,
-                        )
-                    self.cp.runs.finish_run(self.run_id, "FAILED", commit_state=self.commit_state)
+            self._persist_failure_telemetry(exc)
         except Exception as failure_log_err:
             logger.error(f"Failed to log run_failure to Control Plane: {failure_log_err}")
 
@@ -308,4 +328,6 @@ class RunLifecycleCoordinator:
         finally:
             if self.cp is not None:
                 self.cp.close()
+            # Materialization Boundary: PROCESS_BOUNDARY
+            # Explicit Python runtime garbage collection invocation between execution stages
             gc.collect()

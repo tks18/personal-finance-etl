@@ -30,7 +30,6 @@ from rich.progress import (
     BarColumn,
     Progress,
     SpinnerColumn,
-    TaskID,
     TaskProgressColumn,
     TextColumn,
     TimeElapsedColumn,
@@ -123,6 +122,124 @@ def get_file_interactive(prompt_text: str, recents: list[str]) -> str:
             console.print("[red]Please enter a valid number.[/red]")
 
 
+_STATUS_PREFIX_MAP: dict[LogLevel, str] = {
+    LogLevel.SUCCESS: "[bold green]✓[/bold green]",
+    LogLevel.ERROR: "[bold red]✗ ERROR:[/bold red]",
+    LogLevel.WARNING: "[bold yellow]![/bold yellow]",
+    LogLevel.STEP: "[bold cyan]>>[/bold cyan]",
+}
+
+
+def _render_status_message(status: EngineStatusMessage, progress: Progress) -> None:
+    if not status.msg:
+        return
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    safe_msg = escape(status.msg)
+    prefix = _STATUS_PREFIX_MAP.get(status.level, "[dim]•[/dim]")
+    progress.console.print(f"[dim][{ts}][/dim] {prefix} {safe_msg}")
+
+
+def _handle_snapshot(engine: PersonalFinanceEngine, config_path: str | None) -> None:
+    if not config_path:
+        console.print("\n[bold]Snapshot requires a config file.[/bold]")
+        config_path = get_file_interactive("Config TOML", engine.get_recent_configs())
+
+    console.print(
+        f"\n[bold green]📸 Snapshotting Database based on config: {config_path}[/bold green]"
+    )
+    snap = engine.snapshot_database(config_path)
+    if snap:
+        console.print(
+            f"[bold green]✓ Snapshot successfully created at:[/bold green] [cyan]{snap}[/cyan]"
+        )
+    else:
+        console.print(
+            "[bold red]✗ Failed to create snapshot or DB does not exist. Run the pipeline first.[/bold red]"
+        )
+    sys.exit(0)
+
+
+def _handle_restore(
+    engine: PersonalFinanceEngine, config_path: str | None, restore_target: str
+) -> None:
+    if not config_path:
+        console.print("\n[bold]Restore requires a config file.[/bold]")
+        config_path = get_file_interactive("Config TOML", engine.get_recent_configs())
+
+    console.print(
+        "\n[bold yellow]⚠️  WARNING: Restoring will overwrite the current database.[/bold yellow]"
+    )
+    if not Confirm.ask("[bold red]Are you sure you want to proceed?[/bold red]"):
+        console.print("[yellow]Restore aborted by user.[/yellow]")
+        sys.exit(0)
+
+    console.print(f"\n[bold green]♻️ Restoring Database from: {restore_target}[/bold green]")
+    try:
+        success = engine.restore_database(config_path, restore_target)
+        if success:
+            console.print("[bold green]✓ Snapshot successfully restored.[/bold green]")
+        else:
+            console.print("[bold red]✗ Failed to restore snapshot.[/bold red]")
+    except PermissionError as pe:
+        console.print(f"[bold red]✗ {pe}[/bold red]")
+    except Exception as e:
+        console.print(f"[bold red]✗ Unexpected error: {e}[/bold red]")
+    sys.exit(0)
+
+
+def _run_etl_progress(engine: PersonalFinanceEngine, config_path: str, rules_path: str) -> None:
+    completion_event = threading.Event()
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(bar_width=None),
+        TaskProgressColumn(),
+        TimeElapsedColumn(),
+        console=console,
+        transient=False,
+        expand=True,
+    ) as progress:
+        main_task = progress.add_task("[cyan]ETL Pipeline Progress", total=100.0)
+
+        def on_status(status: EngineStatusMessage) -> None:
+            _render_status_message(status, progress)
+            if status.progress is not None:
+                progress.update(main_task, completed=status.progress * 100.0)
+
+            if (
+                status.msg in ("Process completed cleanly.", "Process exited abnormally.")
+                or "Critical Pipeline Failure" in status.msg
+            ):
+                completion_event.set()
+
+        engine.run_pipeline_async(config_path, rules_path, on_status)
+
+        try:
+            completion_event.wait()
+            progress.update(main_task, completed=100.0)
+        except KeyboardInterrupt:
+            progress.console.print("\n[bold red]Pipeline forcefully terminated by user.[/bold red]")
+            sys.exit(1)
+
+
+def _prompt_next_iteration(config_path: str, rules_path: str) -> tuple[str | None, str | None]:
+    console.print("\n[bold cyan]--- What would you like to do next? ---[/bold cyan]")
+    console.print("[1] Restart pipeline with PREVIOUS configuration")
+    console.print("[2] Restart pipeline with NEW configuration")
+    console.print("[3] Exit")
+
+    while True:
+        choice = str(Prompt.ask("[bold cyan]Select an option (1-3)[/bold cyan]", default="1"))
+        if choice == "1":
+            return config_path, rules_path
+        if choice == "2":
+            return None, None
+        if choice == "3":
+            sys.exit(0)
+        console.print("[red]Invalid selection.[/red]")
+
+
 def main_cli(args: argparse.Namespace) -> None:
     """CLI execution entrypoint evaluating parsed arguments and controlling runtime loop."""
     docs_mode = bool(getattr(args, "docs", False))
@@ -147,48 +264,10 @@ def main_cli(args: argparse.Namespace) -> None:
         auto_mode = True
 
     if snapshot_mode:
-        if not config_path:
-            console.print("\n[bold]Snapshot requires a config file.[/bold]")
-            config_path = get_file_interactive("Config TOML", engine.get_recent_configs())
-
-        console.print(
-            f"\n[bold green]📸 Snapshotting Database based on config: {config_path}[/bold green]"
-        )
-        snap = engine.snapshot_database(config_path)
-        if snap:
-            console.print(
-                f"[bold green]✓ Snapshot successfully created at:[/bold green] [cyan]{snap}[/cyan]"
-            )
-        else:
-            console.print(
-                "[bold red]✗ Failed to create snapshot or DB does not exist. Run the pipeline first.[/bold red]"
-            )
-        sys.exit(0)
+        _handle_snapshot(engine, config_path)
 
     if restore_target:
-        if not config_path:
-            console.print("\n[bold]Restore requires a config file.[/bold]")
-            config_path = get_file_interactive("Config TOML", engine.get_recent_configs())
-
-        console.print(
-            "\n[bold yellow]⚠️  WARNING: Restoring will overwrite the current database.[/bold yellow]"
-        )
-        if not Confirm.ask("[bold red]Are you sure you want to proceed?[/bold red]"):
-            console.print("[yellow]Restore aborted by user.[/yellow]")
-            sys.exit(0)
-
-        console.print(f"\n[bold green]♻️ Restoring Database from: {restore_target}[/bold green]")
-        try:
-            success = engine.restore_database(config_path, restore_target)
-            if success:
-                console.print("[bold green]✓ Snapshot successfully restored.[/bold green]")
-            else:
-                console.print("[bold red]✗ Failed to restore snapshot.[/bold red]")
-        except PermissionError as pe:
-            console.print(f"[bold red]✗ {pe}[/bold red]")
-        except Exception as e:
-            console.print(f"[bold red]✗ Unexpected error: {e}[/bold red]")
-        sys.exit(0)
+        _handle_restore(engine, config_path, restore_target)
 
     while True:
         if not config_path:
@@ -213,94 +292,11 @@ def main_cli(args: argparse.Namespace) -> None:
                 sys.exit(0)
 
         console.print("\n[bold green]🚀 EXECUTING ETL PIPELINE...[/bold green]\n")
-
-        completion_event = threading.Event()
-
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(bar_width=None),
-            TaskProgressColumn(),
-            TimeElapsedColumn(),
-            console=console,
-            transient=False,
-            expand=True,
-        ) as progress:
-            main_task = progress.add_task("[cyan]ETL Pipeline Progress", total=100.0)
-
-            def on_status(
-                status: EngineStatusMessage,
-                progress: Progress = progress,
-                main_task: TaskID = main_task,
-                completion_event: threading.Event = completion_event,
-            ) -> None:
-                if status.msg:
-                    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-                    # Escape the message so rich doesn't swallow tags like "[stock_pl]"
-                    safe_msg = escape(status.msg)
-
-                    if status.level == LogLevel.SUCCESS:
-                        progress.console.print(
-                            f"[dim][{ts}][/dim] [bold green]✓[/bold green] {safe_msg}"
-                        )
-                    elif status.level == LogLevel.ERROR:
-                        progress.console.print(
-                            f"[dim][{ts}][/dim] [bold red]✗ ERROR:[/bold red] {safe_msg}"
-                        )
-                    elif status.level == LogLevel.WARNING:
-                        progress.console.print(
-                            f"[dim][{ts}][/dim] [bold yellow]![/bold yellow] {safe_msg}"
-                        )
-                    elif status.level == LogLevel.STEP:
-                        progress.console.print(
-                            f"[dim][{ts}][/dim] [bold cyan]>>[/bold cyan] {safe_msg}"
-                        )
-                    else:
-                        progress.console.print(f"[dim][{ts}][/dim] [dim]•[/dim] {safe_msg}")
-
-                if status.progress is not None:
-                    # Update progress bar (0.0 to 1.0 -> 0.0 to 100.0)
-                    progress.update(main_task, completed=status.progress * 100.0)
-
-                if (
-                    status.msg in ("Process completed cleanly.", "Process exited abnormally.")
-                    or "Critical Pipeline Failure" in status.msg
-                ):
-                    completion_event.set()
-
-            engine.run_pipeline_async(config_path, rules_path, on_status)
-
-            try:
-                completion_event.wait()
-                progress.update(main_task, completed=100.0)
-            except KeyboardInterrupt:
-                progress.console.print(
-                    "\n[bold red]Pipeline forcefully terminated by user.[/bold red]"
-                )
-                sys.exit(1)
-
+        _run_etl_progress(engine, config_path, rules_path)
         console.print("\n[bold green]=== SYSTEM HALTED. OPERATION COMPLETE. ===[/bold green]\n")
 
         if cron_mode:
             sys.exit(0)
 
-        console.print("\n[bold cyan]--- What would you like to do next? ---[/bold cyan]")
-        console.print("[1] Restart pipeline with PREVIOUS configuration")
-        console.print("[2] Restart pipeline with NEW configuration")
-        console.print("[3] Exit")
-
-        while True:
-            choice = str(Prompt.ask("[bold cyan]Select an option (1-3)[/bold cyan]", default="1"))
-            if choice == "1":
-                auto_mode = False
-                break
-            elif choice == "2":
-                config_path = None
-                rules_path = None
-                auto_mode = False
-                break
-            elif choice == "3":
-                sys.exit(0)
-            else:
-                console.print("[red]Invalid selection.[/red]")
+        config_path, rules_path = _prompt_next_iteration(config_path, rules_path)
+        auto_mode = False

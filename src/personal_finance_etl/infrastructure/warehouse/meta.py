@@ -38,6 +38,7 @@ from personal_finance_etl.infrastructure.warehouse.fingerprints import (
 from personal_finance_etl.infrastructure.warehouse.registry import (
     BRONZE_CONTRACT_REGISTRY,
     DATA_CONTRACT_REGISTRY,
+    BronzeDataContract,
 )
 
 logger = logging.getLogger("personal_finance_etl.warehouse.meta")
@@ -67,21 +68,8 @@ class MetaLayer:
         self.rules = rules
         self.conn = self.db_manager.conn
 
-    def heal_duckdb_registry(self, cp: ControlPlane) -> None:
-        """Self-heal DuckDB file registry if items in SQLite control plane are missing."""
-        duckdb_rows = self.conn.execute(
-            "SELECT relative_path, row_count FROM meta.m_File_Registry"
-        ).fetchall()
-        duckdb_paths = {str(r[0]) for r in duckdb_rows}
-        duckdb_row_counts = {str(r[0]): (r[1] or 0) for r in duckdb_rows}
-
-        synced_registry = cp.artifacts.get_all_registry()
-
-        cat_to_contract = {
-            contract.sync_category: contract for contract in BRONZE_CONTRACT_REGISTRY
-        }
-        cat_to_table = {k: v.physical_table for k, v in cat_to_contract.items()}
-
+    def _inspect_bronze_table_files(self) -> tuple[dict[str, bool], dict[str, set[str]]]:
+        """Check presence of physical bronze tables and scan distinct loaded filenames."""
         tables_exist: dict[str, bool] = {}
         table_files: dict[str, set[str]] = {}
         for contract in BRONZE_CONTRACT_REGISTRY:
@@ -97,7 +85,19 @@ class MetaLayer:
             except duckdb.CatalogException:
                 tables_exist[table] = False
                 table_files[table] = set()
+        return tables_exist, table_files
 
+    def _heal_missing_sync_records(
+        self,
+        cp: ControlPlane,
+        duckdb_paths: set[str],
+        duckdb_row_counts: dict[str, int],
+        synced_registry: dict[str, str],
+        cat_to_contract: dict[str, BronzeDataContract],
+        tables_exist: dict[str, bool],
+        table_files: dict[str, set[str]],
+    ) -> int:
+        """Find registered SQLite files absent or dropped in DuckDB and re-mark as PENDING_BRONZE."""
         missing_count = 0
         raw_all: dict[str, list[str]] = cp.artifacts.get_all_paths_by_category()
 
@@ -112,24 +112,29 @@ class MetaLayer:
             for path in paths:
                 status = synced_registry.get(path)
                 if status == "SYNCED":
-                    if path not in duckdb_paths or not table_exists:
-                        cp.artifacts.db.conn.execute(
-                            "UPDATE cp_file_registry SET sync_status = 'PENDING_BRONZE' WHERE relative_path = ?",
-                            [path],
-                        )
-                        missing_count += 1
-                    elif (
-                        b_contract
+                    is_missing = path not in duckdb_paths or not table_exists
+                    is_file_dropped = (
+                        b_contract is not None
                         and not b_contract.is_full_replace
                         and duckdb_row_counts.get(path, 0) > 0
                         and os.path.basename(path) not in files_in_table
-                    ):
+                    )
+                    if is_missing or is_file_dropped:
                         cp.artifacts.db.conn.execute(
                             "UPDATE cp_file_registry SET sync_status = 'PENDING_BRONZE' WHERE relative_path = ?",
                             [path],
                         )
                         missing_count += 1
+        return missing_count
 
+    def _prune_dangling_duckdb_files(
+        self,
+        duckdb_paths: set[str],
+        synced_registry: dict[str, str],
+        cat_to_table: dict[str, str],
+        tables_exist: dict[str, bool],
+    ) -> int:
+        """Remove DuckDB registry entries and table rows for files no longer in control plane."""
         deleted_count = 0
         for duckdb_path in duckdb_paths:
             if duckdb_path not in synced_registry:
@@ -155,6 +160,36 @@ class MetaLayer:
                         "DELETE FROM meta.m_File_Registry WHERE relative_path = ?", [duckdb_path]
                     )
                     deleted_count += 1
+        return deleted_count
+
+    def heal_duckdb_registry(self, cp: ControlPlane) -> None:
+        """Self-heal DuckDB file registry if items in SQLite control plane are missing."""
+        duckdb_rows = self.conn.execute(
+            "SELECT relative_path, row_count FROM meta.m_File_Registry"
+        ).fetchall()
+        duckdb_paths = {str(r[0]) for r in duckdb_rows}
+        duckdb_row_counts = {str(r[0]): (r[1] or 0) for r in duckdb_rows}
+
+        synced_registry = cp.artifacts.get_all_registry()
+        cat_to_contract = {
+            contract.sync_category: contract for contract in BRONZE_CONTRACT_REGISTRY
+        }
+        cat_to_table = {k: v.physical_table for k, v in cat_to_contract.items()}
+
+        tables_exist, table_files = self._inspect_bronze_table_files()
+
+        missing_count = self._heal_missing_sync_records(
+            cp,
+            duckdb_paths,
+            duckdb_row_counts,
+            synced_registry,
+            cat_to_contract,
+            tables_exist,
+            table_files,
+        )
+        deleted_count = self._prune_dangling_duckdb_files(
+            duckdb_paths, synced_registry, cat_to_table, tables_exist
+        )
 
         if missing_count > 0 or deleted_count > 0:
             logger.info(

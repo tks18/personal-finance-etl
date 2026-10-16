@@ -184,6 +184,8 @@ class CurrencyPipeline:
             df_bronze_full_lazy, df_currency.lazy(), global_start_date, global_end_date
         )
 
+        # Materialization Boundary: PUBLICATION_BOUNDARY
+        # Materialize transformed FX series into in-memory DataFrame for downstream DuckDB persistence
         df_silver = df_silver_lazy.collect(engine="streaming")
 
         self.status_queue.put(
@@ -457,6 +459,8 @@ class USMarketPipeline:
             global_end_date=global_end_date,
         )
 
+        # Materialization Boundary: PUBLICATION_BOUNDARY
+        # Materialize transformed US market quotes into DataFrame for downstream DuckDB persistence
         df_silver = df_silver_lazy.collect(engine="streaming")
 
         self.status_queue.put(

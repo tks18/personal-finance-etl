@@ -465,10 +465,21 @@ V910_COMMIT_MESSAGES: dict[str, str] = {
     "src/personal_finance_etl/infrastructure/providers/files/excel.py": "docs(providers): document Excel transaction extraction functions",
 }
 
+# Dedicated v9.2.0 Implementation Hardening Commit Messages
+V920_COMMIT_MESSAGES: dict[str, str] = {
+    # v9.2.0 Phase 6 Benchmark & Certification
+    "src/personal_finance_etl/presentation/cli/app.py": "style(cli): conform interrupt handler print to ruff format",
+    ".planning/refactor_v910_v920/v9.2.0/06-performance-benchmark-protocol.md": "docs(v9.2.0): record Phase 6 benchmark results and certification",
+    ".planning/refactor_v910_v920/v9.2.0/07-v9.2.0-phase-tracker.md": "docs(v9.2.0): mark Phase 6 as completed in phase tracker",
+    "scripts/auto_commit.py": "chore(scripts): stage v9.2.0 Phase 6 commit mappings",
+}
+
 
 def _infer_commit_message(filepath: str, status: str) -> str:
     """Infer a Commitlint-compliant message (max 72 chars) based on path heuristics."""
     norm = filepath.replace("\\", "/")
+    if norm in V920_COMMIT_MESSAGES:
+        return V920_COMMIT_MESSAGES[norm]
     if norm in V910_COMMIT_MESSAGES:
         return V910_COMMIT_MESSAGES[norm]
     if norm in PHASE12_COMMIT_MESSAGES:

@@ -227,6 +227,8 @@ class TransformationDAG:
             final_dfs[name] = df
 
         logger.debug("Executing Calendar Generation DAG...")
+        # Materialization Boundary: PUBLICATION_BOUNDARY
+        # Materialize continuous calendar dimension into DataFrame for downstream analytical models
         calendar_result = d_calendar_lazy.collect(engine="streaming")
         logger.debug(f"  -> Generated {calendar_result.height} rows for Master Calendar.")
         final_dfs["df_d_calendar"] = calendar_result
