@@ -14,10 +14,13 @@ Does not own
 """
 
 from datetime import date
-from typing import Any
 
 import polars as pl
 
+from personal_finance_etl.domain.investments.contracts import (
+    CashflowDict,
+    TerminalValueDict,
+)
 from personal_finance_etl.domain.investments.performance.xirr import (
     PortfolioXIRRCalculator,
 )
@@ -44,8 +47,10 @@ class GroupProcessor:
     def run(
         self,
         unique_dates: list[date],
-        group_cashflows: dict[str, list[dict[str, Any]]],
-        group_terminals: dict[str, dict[date, dict[str, Any]]],
+        group_cashflows: dict[str, list[CashflowDict]],
+        group_terminals: (
+            dict[str, dict[date, TerminalValueDict]] | dict[str, dict[date, dict[str, float]]]
+        ),
         level_name: str,
         extra_key_col: str | None = None,
     ) -> pl.DataFrame:
