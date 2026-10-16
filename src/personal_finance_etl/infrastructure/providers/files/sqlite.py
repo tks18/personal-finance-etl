@@ -93,11 +93,12 @@ class SQLiteExtractor:
 
             logger.debug(f"[EXTRACT:SQLITE] Successfully extracted 5 base tables from {filename}")
 
-        # Eagerly collect to memory as LazyFrames defer execution and the memory db drops on exit
+        # Tables were read into memory DataFrames during SQLite connection lifecycle;
+        # returning LazyFrames directly without redundant collect().lazy() round-trips.
         return (
-            zcategory_lazy.collect().lazy(),
-            assetgroup_lazy.collect().lazy(),
-            assets_lazy.collect().lazy(),
-            currency_lazy.collect().lazy(),
-            inoutcome_lazy.collect().lazy(),
+            zcategory_lazy,
+            assetgroup_lazy,
+            assets_lazy,
+            currency_lazy,
+            inoutcome_lazy,
         )
