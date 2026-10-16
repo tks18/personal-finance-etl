@@ -17,7 +17,7 @@ import logging
 import math
 from collections.abc import Mapping
 from datetime import date
-from typing import Any
+from typing import TypedDict
 
 import polars as pl
 
@@ -26,7 +26,16 @@ from personal_finance_etl.domain.common.calculation import CalculationStatus, Cp
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["InflationBuilder"]
+__all__ = ["InflationBuilder", "InflationCalendarResult"]
+
+
+class InflationCalendarResult(TypedDict):
+    """Structured result dictionary for the continuous monthly inflation series."""
+
+    lf_months: pl.LazyFrame
+    lf_inflation: pl.LazyFrame
+    cpi_latest: float
+    cpi_result: CpiResult
 
 
 class InflationBuilder:
@@ -38,12 +47,12 @@ class InflationBuilder:
         self.dfs = dfs
         self.rules = rules
 
-    def build(self) -> dict[str, Any]:
+    def build(self) -> InflationCalendarResult:
         """Build continuous monthly calendar and inflation series.
 
         Returns
         -------
-        dict[str, Any]
+        InflationCalendarResult
             Dictionary containing:
             - lf_months: Monthly calendar boundaries from earliest opening date to today.
             - lf_inflation: Monthly continuous YoY inflation rate and cumulative CPI_INDEX.
@@ -55,7 +64,16 @@ class InflationBuilder:
         d_macro = self.dfs.get("df_d_macro_parameters")
 
         if f_open is None or d_cal is None or d_macro is None:
-            return {}
+            return {
+                "lf_months": pl.LazyFrame(),
+                "lf_inflation": pl.LazyFrame(),
+                "cpi_latest": float("nan"),
+                "cpi_result": CpiResult(
+                    value=None,
+                    status=CalculationStatus.MISSING_INPUT,
+                    reason="Required inputs missing (f_open, d_cal, or d_macro)",
+                ),
+            }
 
         lf_open = f_open.lazy() if isinstance(f_open, pl.DataFrame) else f_open
         lf_cal = (d_cal.lazy() if isinstance(d_cal, pl.DataFrame) else d_cal).rename(
