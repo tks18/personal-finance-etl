@@ -45,6 +45,8 @@ class GoldLayer:
             logger.debug(
                 "[DAG:OPTIMIZER] Physical Plan for Gold '%s': %s", table_name, compact_plan
             )
+            # Materialization Boundary: PUBLICATION_BOUNDARY
+            # Terminal execution of lazy presentation graph for DuckDB Gold table insertion
             df = df.collect()
 
         if df.height == 0:
