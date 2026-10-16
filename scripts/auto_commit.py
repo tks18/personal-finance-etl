@@ -470,8 +470,12 @@ V920_COMMIT_MESSAGES: dict[str, str] = {
     # v9.2.0 Phase 1 Complexity Baseline & Classification
     ".planning/refactor_v910_v920/v9.2.0/03-complexity-remediation-map.csv": "docs(v9.2.0): classify 101 complexity hotspots into taxonomy",
     ".planning/refactor_v910_v920/v9.2.0/02-complexity-evidence.md": "docs(v9.2.0): summarize Phase 1 complexity classification metrics",
-    ".planning/refactor_v910_v920/v9.2.0/07-v9.2.0-phase-tracker.md": "docs(v9.2.0): mark Phase 1 as completed in phase tracker",
-    "scripts/auto_commit.py": "chore(scripts): stage v9.2.0 Phase 1 commit mappings",
+    # v9.2.0 Phase 2 Quant Workflow Decomposition
+    "src/personal_finance_etl/application/investments/isin_service.py": "refactor(investments): decompose IsinProcessor into linear stages",
+    "src/personal_finance_etl/domain/investments/portfolio/snapshots.py": "refactor(portfolio): decompose SnapshotGenerator lot generation",
+    "src/personal_finance_etl/application/investments/aggregation_service.py": "refactor(investments): decompose PostProcessor dimension aggregation",
+    ".planning/refactor_v910_v920/v9.2.0/07-v9.2.0-phase-tracker.md": "docs(v9.2.0): mark Phase 2 as completed in phase tracker",
+    "scripts/auto_commit.py": "chore(scripts): stage v9.2.0 Phase 2 commit mappings",
 }
 
 
