@@ -83,6 +83,101 @@ class FileSyncService:
         with self.artifact_repo.db.atomic():
             return self._sync_with_disk(discovered_files, hash_policy, full_replace_categories)
 
+    def _normalize_discovered_files(
+        self,
+        discovered_files: dict[str, list[str]],
+    ) -> tuple[dict[str, list[str]], int]:
+        """Normalize discovered filepaths and validate uniqueness across categories."""
+        seen_path_categories: dict[str, str] = {}
+        normalized_by_category: dict[str, list[str]] = {}
+        unique_input_count = 0
+
+        for category, filepaths in discovered_files.items():
+            normalized_paths: list[str] = []
+            category_seen: set[str] = set()
+            for filepath in filepaths:
+                path = normalize_path(filepath)
+                prior_category = seen_path_categories.get(path)
+                if prior_category is not None and prior_category != category:
+                    raise ValueError(
+                        f"Discovered path {path!r} appears in both {prior_category!r} and {category!r}."
+                    )
+                seen_path_categories[path] = category
+                if path not in category_seen:
+                    normalized_paths.append(path)
+                    category_seen.add(path)
+            normalized_by_category[category] = normalized_paths
+            unique_input_count += len(normalized_paths)
+
+        return normalized_by_category, unique_input_count
+
+    def _try_migrate_rename(
+        self,
+        path: str,
+        category: str,
+        active_paths: set[str],
+        hash_to_paths: dict[str, dict[str, list[str]]],
+        registry: dict[str, tuple[str, str]],
+    ) -> tuple[str, str, str] | None:
+        """Attempt to migrate registered artifact identity when a single unambiguous same-hash candidate exists."""
+        disk_hash = compute_file_hash(path)
+        if not disk_hash:
+            raise FileNotFoundError(
+                f"Discovered file disappeared or could not be read during sync: {path}"
+            )
+        cat_hashes = hash_to_paths.get(category, {})
+        candidates = [p for p in cat_hashes.get(disk_hash, []) if p not in active_paths]
+        if len(candidates) == 1:
+            old_path = candidates[0]
+            try:
+                file_size = os.path.getsize(path)
+            except OSError:
+                file_size = None
+            migrated = self.artifact_repo.migrate_identity(
+                old_path, path, observed_hash=disk_hash, file_size_bytes=file_size
+            )
+            cat_hashes[disk_hash] = [p for p in cat_hashes[disk_hash] if p != old_path]
+            if migrated:
+                registry[path] = (disk_hash, category)
+                registry.pop(old_path, None)
+                logger.debug("[SYNC:RENAME] Migrated identity from '%s' to '%s'.", old_path, path)
+                return (old_path, path, category)
+            logger.warning(
+                "[SYNC:RENAME] Source identity %s has no payload; ingesting %s as new.",
+                old_path,
+                path,
+            )
+        elif len(candidates) > 1:
+            logger.warning(
+                "[SYNC:RENAME] Ambiguous rename for %s: %d same-hash candidates. Treating as new.",
+                path,
+                len(candidates),
+            )
+        return None
+
+    def _prune_removed_paths(
+        self,
+        registry_with_status: dict[str, tuple[str, str, str]],
+        discovered_categories: set[str],
+        all_active_paths: set[str],
+        renamed_old_paths: set[str],
+    ) -> list[str]:
+        """Detect and mark registered artifacts that no longer exist on disk as REMOVED."""
+        removed_paths: list[str] = [
+            registered_path
+            for registered_path, (_digest, category, status) in registry_with_status.items()
+            if (
+                category in discovered_categories
+                and status != "REMOVED"
+                and registered_path not in all_active_paths
+                and registered_path not in renamed_old_paths
+            )
+        ]
+        if removed_paths:
+            logger.info("[SYNC:REMOVED] %d file(s) no longer present on disk.", len(removed_paths))
+            self.artifact_repo.mark_removed(removed_paths)
+        return removed_paths
+
     def _sync_with_disk(
         self,
         discovered_files: dict[str, list[str]],
@@ -105,27 +200,11 @@ class FileSyncService:
         renames: list[tuple[str, str, str]] = []
         renamed_old_paths: set[str] = set()
         all_active_paths: set[str] = set()
-        seen_path_categories: dict[str, str] = {}
-        unique_input_count = 0
         full_replace = set(full_replace_categories)
 
-        normalized_by_category: dict[str, list[str]] = {}
-        for category, filepaths in discovered_files.items():
-            normalized_paths: list[str] = []
-            category_seen: set[str] = set()
-            for filepath in filepaths:
-                path = normalize_path(filepath)
-                prior_category = seen_path_categories.get(path)
-                if prior_category is not None and prior_category != category:
-                    raise ValueError(
-                        f"Discovered path {path!r} appears in both {prior_category!r} and {category!r}."
-                    )
-                seen_path_categories[path] = category
-                if path not in category_seen:
-                    normalized_paths.append(path)
-                    category_seen.add(path)
-            normalized_by_category[category] = normalized_paths
-            unique_input_count += len(normalized_paths)
+        normalized_by_category, unique_input_count = self._normalize_discovered_files(
+            discovered_files
+        )
 
         for category, filepaths in normalized_by_category.items():
             new_files[category] = []
@@ -146,45 +225,14 @@ class FileSyncService:
                     continue
 
                 if current is None:
-                    disk_hash = compute_file_hash(path)
-                    if not disk_hash:
-                        raise FileNotFoundError(
-                            f"Discovered file disappeared or could not be read during sync: {path}"
-                        )
-                    cat_hashes = hash_to_paths.get(category, {})
-                    candidates = [p for p in cat_hashes.get(disk_hash, []) if p not in active_paths]
-                    if len(candidates) == 1:
-                        old_path = candidates[0]
-                        try:
-                            file_size = os.path.getsize(path)
-                        except OSError:
-                            file_size = None
-                        migrated = self.artifact_repo.migrate_identity(
-                            old_path, path, observed_hash=disk_hash, file_size_bytes=file_size
-                        )
-                        cat_hashes[disk_hash] = [p for p in cat_hashes[disk_hash] if p != old_path]
-                        if migrated:
-                            registry[path] = (disk_hash, category)
-                            registry.pop(old_path, None)
-                            renamed_old_paths.add(old_path)
-                            renames.append((old_path, path, category))
-                            logger.debug(
-                                "[SYNC:RENAME] Migrated identity from '%s' to '%s'.", old_path, path
-                            )
-                            continue
-                        logger.warning(
-                            "[SYNC:RENAME] Source identity %s has no payload; ingesting %s as new.",
-                            old_path,
-                            path,
-                        )
-                    elif len(candidates) > 1:
-                        logger.warning(
-                            "[SYNC:RENAME] Ambiguous rename for %s: %d same-hash candidates. "
-                            "Treating as new.",
-                            path,
-                            len(candidates),
-                        )
-                    new_files[category].append(path)
+                    rename = self._try_migrate_rename(
+                        path, category, active_paths, hash_to_paths, registry
+                    )
+                    if rename:
+                        renamed_old_paths.add(rename[0])
+                        renames.append(rename)
+                    else:
+                        new_files[category].append(path)
                     continue
 
                 if not self.artifact_repo.has_payload(path):
@@ -211,19 +259,10 @@ class FileSyncService:
             if category in full_replace:
                 self.artifact_repo.prune_category(category, filepaths)
 
-        removed_paths: list[str] = []
         discovered_categories = set(normalized_by_category)
-        for registered_path, (_digest, category, status) in registry_with_status.items():
-            if (
-                category in discovered_categories
-                and status != "REMOVED"
-                and registered_path not in all_active_paths
-                and registered_path not in renamed_old_paths
-            ):
-                removed_paths.append(registered_path)
-        if removed_paths:
-            logger.info("[SYNC:REMOVED] %d file(s) no longer present on disk.", len(removed_paths))
-            self.artifact_repo.mark_removed(removed_paths)
+        removed_paths = self._prune_removed_paths(
+            registry_with_status, discovered_categories, all_active_paths, renamed_old_paths
+        )
 
         actionable_count = (
             sum(len(paths) for paths in new_files.values())
