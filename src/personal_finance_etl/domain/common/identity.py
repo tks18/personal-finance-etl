@@ -66,26 +66,28 @@ def canonicalize_value(val: object) -> str:
     str
         Deterministic string representation.
     """
-    if val is None:
-        return "<NULL>"
-    if isinstance(val, bool):
-        return "true" if val else "false"
-    if isinstance(val, datetime):
-        return val.isoformat()
-    if isinstance(val, date):
-        return val.strftime("%Y-%m-%d")
-    if isinstance(val, (int, float, Decimal)):
-        try:
-            d = Decimal(str(val)).normalize()
-            if d.is_zero():
-                return "0"
-            return format(d, "f")
-        except InvalidOperation:
-            return str(val)
-    if isinstance(val, str):
-        nfc = unicodedata.normalize("NFC", val)
-        return nfc.strip()
-    return str(val).strip()
+    match val:
+        case None:
+            return "<NULL>"
+        case bool():
+            return "true" if val else "false"
+        case datetime():
+            return val.isoformat()
+        case date():
+            return val.strftime("%Y-%m-%d")
+        case int() | float() | Decimal():
+            try:
+                d = Decimal(str(val)).normalize()
+                if d.is_zero():
+                    return "0"
+                return format(d, "f")
+            except InvalidOperation:
+                return str(val)
+        case str():
+            nfc = unicodedata.normalize("NFC", val)
+            return nfc.strip()
+        case _:
+            return str(val).strip()
 
 
 def _ordered_identity_fields(
