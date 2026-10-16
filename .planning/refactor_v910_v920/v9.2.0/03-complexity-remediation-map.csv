@@ -1,101 +1,101 @@
 file,callable,line,length,approx_cc,max_nesting,disposition,notes
-src/personal_finance_etl/contracts/lifecycle.py,classify_failure_domain,53,86,46,2,UNCLASSIFIED,
-src/personal_finance_etl/config/settings.py,_flatten_settings_to_records,34,27,8,4,UNCLASSIFIED,
-src/personal_finance_etl/presentation/docs/renderer.py,build_html_app,99,791,13,5,UNCLASSIFIED,
-src/personal_finance_etl/presentation/cli/app.py,get_file_interactive,96,27,8,4,UNCLASSIFIED,
-src/personal_finance_etl/presentation/cli/app.py,main_cli,125,181,33,7,UNCLASSIFIED,
-src/personal_finance_etl/presentation/cli/app.py,on_status,230,40,9,5,UNCLASSIFIED,
-src/personal_finance_etl/presentation/desktop/app.py,_build_header,54,225,9,2,UNCLASSIFIED,
-src/personal_finance_etl/application/ingestion/market_sync.py,run,68,131,6,2,UNCLASSIFIED,
-src/personal_finance_etl/application/ingestion/market_sync.py,process,209,89,16,2,UNCLASSIFIED,
-src/personal_finance_etl/application/ingestion/market_sync.py,run,311,145,10,2,UNCLASSIFIED,
-src/personal_finance_etl/application/ingestion/coordinator.py,run,73,214,12,3,UNCLASSIFIED,
-src/personal_finance_etl/application/wealth/wealth_service.py,run,57,86,6,1,UNCLASSIFIED,
-src/personal_finance_etl/application/pipeline/transformer.py,run,77,158,9,2,UNCLASSIFIED,
-src/personal_finance_etl/application/pipeline/lifecycle.py,handle_failure,188,91,29,4,UNCLASSIFIED,
-src/personal_finance_etl/application/pipeline/worker.py,infer_log_level,38,16,12,1,UNCLASSIFIED,
-src/personal_finance_etl/application/pipeline/worker.py,monitor_queue,165,73,18,5,UNCLASSIFIED,
-src/personal_finance_etl/application/pipeline/worker.py,_monitor,172,62,18,5,UNCLASSIFIED,
-src/personal_finance_etl/application/pipeline/execution.py,process_us_market_data,126,48,16,3,UNCLASSIFIED,
-src/personal_finance_etl/application/pipeline/execution.py,run_engines,175,114,15,2,UNCLASSIFIED,
-src/personal_finance_etl/application/pipeline/execution.py,execute_phases,290,172,18,3,UNCLASSIFIED,
-src/personal_finance_etl/application/investments/aggregation_service.py,run,70,457,24,10,UNCLASSIFIED,
-src/personal_finance_etl/application/investments/isin_service.py,process,116,655,129,4,UNCLASSIFIED,
-src/personal_finance_etl/application/investments/isin_service.py,process_all,872,316,34,4,UNCLASSIFIED,
-src/personal_finance_etl/domain/fire/simulation.py,_run_mc_simulations_numba,36,435,80,9,UNCLASSIFIED,
-src/personal_finance_etl/domain/fire/simulation.py,get_monte_carlo_fire_batch,473,146,2,1,UNCLASSIFIED,
-src/personal_finance_etl/domain/fire/simulation.py,monte_carlo_fire_batch,493,124,2,1,UNCLASSIFIED,
-src/personal_finance_etl/domain/fire/inflation.py,build,41,109,14,3,UNCLASSIFIED,
-src/personal_finance_etl/domain/fire/deterministic.py,build,50,363,3,1,UNCLASSIFIED,
-src/personal_finance_etl/domain/household/income.py,build,39,236,5,1,UNCLASSIFIED,
-src/personal_finance_etl/domain/household/ledger.py,build,35,226,15,1,UNCLASSIFIED,
-src/personal_finance_etl/domain/household/budget.py,build,41,236,5,1,UNCLASSIFIED,
-src/personal_finance_etl/domain/household/budget.py,build,303,237,6,1,UNCLASSIFIED,
-src/personal_finance_etl/domain/household/cashflow.py,build,46,269,14,1,UNCLASSIFIED,
-src/personal_finance_etl/domain/household/cashflow.py,build,334,312,10,1,UNCLASSIFIED,
-src/personal_finance_etl/domain/market/fx.py,transform_currency_fx_rates,85,166,3,1,UNCLASSIFIED,
-src/personal_finance_etl/domain/market/macro.py,__init__,122,45,13,3,UNCLASSIFIED,
-src/personal_finance_etl/domain/market/benchmarks.py,transform_benchmark_data,28,156,9,1,UNCLASSIFIED,
-src/personal_finance_etl/domain/wealth/analytics.py,build,44,256,12,1,UNCLASSIFIED,
-src/personal_finance_etl/domain/wealth/net_worth.py,build,41,451,11,2,UNCLASSIFIED,
-src/personal_finance_etl/domain/wealth/scoring.py,calculate_budget_health_score,22,101,1,0,UNCLASSIFIED,
-src/personal_finance_etl/domain/tax/classification.py,map_quant_sub_head,33,76,31,10,UNCLASSIFIED,
-src/personal_finance_etl/domain/tax/classification.py,build_tax_credit_subhead_map,111,16,7,4,UNCLASSIFIED,
-src/personal_finance_etl/domain/tax/events.py,_normalize_ledger_income,166,205,23,3,UNCLASSIFIED,
-src/personal_finance_etl/domain/tax/events.py,_normalize_tax_credits,376,105,17,3,UNCLASSIFIED,
-src/personal_finance_etl/domain/tax/events.py,_normalize_quant_realized_events,487,74,24,2,UNCLASSIFIED,
-src/personal_finance_etl/domain/tax/reconciliation.py,format_tax_year_summary,49,115,1,0,UNCLASSIFIED,
-src/personal_finance_etl/domain/tax/reconciliation.py,format_tax_reconciliation,234,180,2,0,UNCLASSIFIED,
-src/personal_finance_etl/domain/common/identity.py,canonicalize_value,56,33,11,3,UNCLASSIFIED,
-src/personal_finance_etl/domain/common/dates.py,to_date_obj,64,32,14,3,UNCLASSIFIED,
-src/personal_finance_etl/domain/common/dates.py,parse_strict_date,117,65,14,3,UNCLASSIFIED,
-src/personal_finance_etl/domain/common/dates.py,_diagnose_date_failure,184,39,10,3,UNCLASSIFIED,
-src/personal_finance_etl/domain/common/dates.py,validate_and_parse_dates,225,81,23,4,UNCLASSIFIED,
-src/personal_finance_etl/domain/common/validation.py,parse_strict_numeric,90,67,13,3,UNCLASSIFIED,
-src/personal_finance_etl/domain/common/validation.py,_diagnose_numeric_failure,159,41,13,4,UNCLASSIFIED,
-src/personal_finance_etl/domain/common/validation.py,validate_and_parse_numerics,202,78,16,2,UNCLASSIFIED,
-src/personal_finance_etl/domain/investments/portfolio/snapshots.py,generate,51,266,47,3,UNCLASSIFIED,
-src/personal_finance_etl/domain/investments/portfolio/analytics.py,calculate,34,96,7,3,UNCLASSIFIED,
-src/personal_finance_etl/domain/investments/performance/xirr.py,calculate_xirr,33,46,20,2,UNCLASSIFIED,
-src/personal_finance_etl/domain/investments/performance/xirr.py,calculate,97,107,14,3,UNCLASSIFIED,
-src/personal_finance_etl/domain/investments/performance/attribution.py,calculate,59,223,3,1,UNCLASSIFIED,
-src/personal_finance_etl/domain/investments/valuation/benchmark.py,__init__,35,49,14,2,UNCLASSIFIED,
-src/personal_finance_etl/domain/investments/valuation/market_state.py,transform_us_market_data,51,294,23,5,UNCLASSIFIED,
-src/personal_finance_etl/domain/investments/transforms/common.py,transform_stg_investment_market_data,142,118,14,1,UNCLASSIFIED,
-src/personal_finance_etl/domain/investments/transforms/indian_equity.py,get_stg_stock_market_data,23,100,9,3,UNCLASSIFIED,
-src/personal_finance_etl/domain/investments/lots/fifo.py,sell,120,120,14,3,UNCLASSIFIED,
-src/personal_finance_etl/domain/investments/lots/fifo.py,reconcile_quantity,265,103,9,4,UNCLASSIFIED,
-src/personal_finance_etl/domain/investments/lots/fifo.py,reconcile_cost_basis,369,73,14,3,UNCLASSIFIED,
-src/personal_finance_etl/domain/household/transforms/calendar.py,transform_d_calendar,92,316,1,0,UNCLASSIFIED,
-src/personal_finance_etl/domain/household/transforms/transactions.py,transform_f_income_transactions,124,66,11,1,UNCLASSIFIED,
-src/personal_finance_etl/domain/household/transforms/dimensions.py,_get_tax_maps,24,85,11,3,UNCLASSIFIED,
-src/personal_finance_etl/domain/household/transforms/dimensions.py,transform_d_income_subcategory,152,144,5,3,UNCLASSIFIED,
-src/personal_finance_etl/domain/household/transforms/dimensions.py,transform_d_asset_category,371,94,2,1,UNCLASSIFIED,
-src/personal_finance_etl/domain/household/transforms/dimensions.py,transform_d_asset_subcategory,467,117,2,1,UNCLASSIFIED,
-src/personal_finance_etl/config/financial_rules/model.py,_flatten_data_to_records,77,15,7,4,UNCLASSIFIED,
-src/personal_finance_etl/config/financial_rules/tax.py,validate_mutual_exclusivity,142,74,16,4,UNCLASSIFIED,
-src/personal_finance_etl/infrastructure/warehouse/meta.py,heal_duckdb_registry,70,95,32,5,UNCLASSIFIED,
-src/personal_finance_etl/infrastructure/warehouse/meta.py,load,246,167,18,3,UNCLASSIFIED,
-src/personal_finance_etl/infrastructure/warehouse/registry.py,validate_registry,506,53,15,2,UNCLASSIFIED,
-src/personal_finance_etl/infrastructure/warehouse/bronze.py,upsert_table,52,101,12,4,UNCLASSIFIED,
-src/personal_finance_etl/infrastructure/warehouse/bronze.py,load,154,54,7,4,UNCLASSIFIED,
-src/personal_finance_etl/infrastructure/warehouse/silver.py,_write,42,61,15,4,UNCLASSIFIED,
-src/personal_finance_etl/infrastructure/recovery/backup.py,create_snapshot,94,98,16,4,UNCLASSIFIED,
-src/personal_finance_etl/infrastructure/recovery/backup.py,restore_snapshot,193,219,40,7,UNCLASSIFIED,
-src/personal_finance_etl/infrastructure/control_plane/run_repository.py,_json_safe,210,15,10,1,UNCLASSIFIED,
-src/personal_finance_etl/infrastructure/control_plane/run_repository.py,log_simulation_run,250,104,18,8,UNCLASSIFIED,
-src/personal_finance_etl/infrastructure/control_plane/run_repository.py,log_provider_requests,506,68,12,3,UNCLASSIFIED,
-src/personal_finance_etl/infrastructure/control_plane/artifact_repository.py,_insert_event,68,61,12,2,UNCLASSIFIED,
-src/personal_finance_etl/infrastructure/control_plane/artifact_repository.py,migrate_identity,188,124,10,1,UNCLASSIFIED,
-src/personal_finance_etl/infrastructure/control_plane/artifact_repository.py,ingest_binaries,377,67,15,6,UNCLASSIFIED,
-src/personal_finance_etl/infrastructure/control_plane/artifact_repository.py,mark_healed,560,45,10,3,UNCLASSIFIED,
-src/personal_finance_etl/infrastructure/control_plane/connection.py,_migrate_schema,165,49,13,2,UNCLASSIFIED,
-src/personal_finance_etl/infrastructure/control_plane/connection.py,_validate_current_schema,215,124,4,2,UNCLASSIFIED,
-src/personal_finance_etl/infrastructure/control_plane/file_sync.py,_sync_with_disk,85,171,42,5,UNCLASSIFIED,
-src/personal_finance_etl/infrastructure/providers/market/benchmark.py,_fetch_ticker_delta,57,127,16,3,UNCLASSIFIED,
-src/personal_finance_etl/infrastructure/providers/market/benchmark.py,extract_benchmark_delta,185,154,17,6,UNCLASSIFIED,
-src/personal_finance_etl/infrastructure/providers/market/currency.py,_fetch_ticker_delta,56,119,12,3,UNCLASSIFIED,
-src/personal_finance_etl/infrastructure/providers/market/currency.py,extract_currency_delta,176,148,15,6,UNCLASSIFIED,
-src/personal_finance_etl/infrastructure/providers/market/us_market.py,_fetch_ticker_delta,55,111,13,3,UNCLASSIFIED,
-src/personal_finance_etl/infrastructure/providers/market/us_market.py,extract_us_market_delta,167,143,15,6,UNCLASSIFIED,
-src/personal_finance_etl/infrastructure/providers/files/locator.py,categorize_statement_files,25,46,18,2,UNCLASSIFIED,
+src/personal_finance_etl/contracts/lifecycle.py,classify_failure_domain,53,86,46,2,SIMPLIFY_BRANCHING,Simplify with exception type mapping dictionary and unified hierarchy
+src/personal_finance_etl/config/settings.py,_flatten_settings_to_records,34,27,8,4,KEEP_COHESIVE,Small recursive traversal helper; keep cohesive
+src/personal_finance_etl/presentation/docs/renderer.py,build_html_app,99,791,13,5,DECLARATIVE_EXCEPTION,Single-file documentation HTML/JS inline template assembly
+src/personal_finance_etl/presentation/cli/app.py,get_file_interactive,96,27,8,4,KEEP_COHESIVE,Linear CLI selection loop; keep cohesive
+src/personal_finance_etl/presentation/cli/app.py,main_cli,125,181,33,7,DECOMPOSE,Extract subcommand handlers (snapshot, restore, interactive run)
+src/personal_finance_etl/presentation/cli/app.py,on_status,230,40,9,5,SIMPLIFY_BRANCHING,Simplify status level styling with dictionary dispatch
+src/personal_finance_etl/presentation/desktop/app.py,_build_header,54,225,9,2,DECLARATIVE_EXCEPTION,Declarative CustomTkinter layout assembly
+src/personal_finance_etl/application/ingestion/market_sync.py,run,68,131,6,2,KEEP_COHESIVE,Linear market sync orchestration pipeline; keep cohesive
+src/personal_finance_etl/application/ingestion/market_sync.py,process,209,89,16,2,SIMPLIFY_BRANCHING,Simplify delta extraction conditions and logging
+src/personal_finance_etl/application/ingestion/market_sync.py,run,311,145,10,2,KEEP_COHESIVE,Sequential pipeline steps; keep cohesive
+src/personal_finance_etl/application/ingestion/coordinator.py,run,73,214,12,3,DECOMPOSE,Extract per-source extraction dispatch and validation helpers
+src/personal_finance_etl/application/wealth/wealth_service.py,run,57,86,6,1,KEEP_COHESIVE,Linear DAG execution over wealth domains; keep cohesive
+src/personal_finance_etl/application/pipeline/transformer.py,run,77,158,9,2,KEEP_COHESIVE,Linear stage orchestrator; keep cohesive
+src/personal_finance_etl/application/pipeline/lifecycle.py,handle_failure,188,91,29,4,SIMPLIFY_BRANCHING,Simplify failure rollback decisions and logging transitions
+src/personal_finance_etl/application/pipeline/worker.py,infer_log_level,38,16,12,1,SIMPLIFY_BRANCHING,Simplify keyword matching with prefix/pattern table
+src/personal_finance_etl/application/pipeline/worker.py,monitor_queue,165,73,18,5,SIMPLIFY_BRANCHING,Extract event dispatch and flatten queue sentinel check
+src/personal_finance_etl/application/pipeline/worker.py,_monitor,172,62,18,5,SIMPLIFY_BRANCHING,Consolidate loop error-handling and queue draining branches
+src/personal_finance_etl/application/pipeline/execution.py,process_us_market_data,126,48,16,3,SIMPLIFY_BRANCHING,Extract ticker validation and simplify status logging
+src/personal_finance_etl/application/pipeline/execution.py,run_engines,175,114,15,2,DECOMPOSE,Extract domain engine execution into typed stage runners
+src/personal_finance_etl/application/pipeline/execution.py,execute_phases,290,172,18,3,DECOMPOSE,Decompose stage setup, error boundary, and phase transition
+src/personal_finance_etl/application/investments/aggregation_service.py,run,70,457,24,10,DECOMPOSE,High priority: split asset-level, account-level, and portfolio-level passes
+src/personal_finance_etl/application/investments/isin_service.py,process,116,655,129,4,DECOMPOSE,Highest priority: decompose into context, FIFO, valuation, reconciliation, performance
+src/personal_finance_etl/application/investments/isin_service.py,process_all,872,316,34,4,DECOMPOSE,Extract batch partitioning and result accumulation into helper methods
+src/personal_finance_etl/domain/fire/simulation.py,_run_mc_simulations_numba,36,435,80,9,NUMERICAL_KERNEL_EXCEPTION,Numba JIT vectorized kernel; preserve monolithic loop for JIT performance
+src/personal_finance_etl/domain/fire/simulation.py,get_monte_carlo_fire_batch,473,146,2,1,KEEP_COHESIVE,Linear NumPy array packing for Numba kernel; keep cohesive
+src/personal_finance_etl/domain/fire/simulation.py,monte_carlo_fire_batch,493,124,2,1,KEEP_COHESIVE,Linear configuration unpacking and dispatch; keep cohesive
+src/personal_finance_etl/domain/fire/inflation.py,build,41,109,14,3,SIMPLIFY_BRANCHING,Simplify CPI fallback and extrapolation branches
+src/personal_finance_etl/domain/fire/deterministic.py,build,50,363,3,1,KEEP_COHESIVE,Linear Polars LazyFrame calculation chain; keep cohesive
+src/personal_finance_etl/domain/household/income.py,build,39,236,5,1,KEEP_COHESIVE,Linear Polars expressions for income rollups; keep cohesive
+src/personal_finance_etl/domain/household/ledger.py,build,35,226,15,1,KEEP_COHESIVE,Declarative join and transformation chain; keep cohesive
+src/personal_finance_etl/domain/household/budget.py,build,41,236,5,1,KEEP_COHESIVE,Linear monthly budget aggregations; keep cohesive
+src/personal_finance_etl/domain/household/budget.py,build,303,237,6,1,KEEP_COHESIVE,Linear target comparison expressions; keep cohesive
+src/personal_finance_etl/domain/household/cashflow.py,build,46,269,14,1,KEEP_COHESIVE,Linear cashflow projection and historical rollups; keep cohesive
+src/personal_finance_etl/domain/household/cashflow.py,build,334,312,10,1,KEEP_COHESIVE,Linear monthly cashflow reconciliation expressions; keep cohesive
+src/personal_finance_etl/domain/market/fx.py,transform_currency_fx_rates,85,166,3,1,KEEP_COHESIVE,Linear daily FX forward-fill and inversion; keep cohesive
+src/personal_finance_etl/domain/market/macro.py,__init__,122,45,13,3,SIMPLIFY_BRANCHING,Simplify default parameter assignment and rate validations
+src/personal_finance_etl/domain/market/benchmarks.py,transform_benchmark_data,28,156,9,1,KEEP_COHESIVE,Linear benchmark price normalization; keep cohesive
+src/personal_finance_etl/domain/wealth/analytics.py,build,44,256,12,1,KEEP_COHESIVE,Linear metrics calculation across portfolio; keep cohesive
+src/personal_finance_etl/domain/wealth/net_worth.py,build,41,451,11,2,DECOMPOSE,Decompose into liquid, illiquid, liability, and currency balance stages
+src/personal_finance_etl/domain/wealth/scoring.py,calculate_budget_health_score,22,101,1,0,KEEP_COHESIVE,Pure mathematical formula; keep cohesive
+src/personal_finance_etl/domain/tax/classification.py,map_quant_sub_head,33,76,31,10,EXTRACT_POLICY,High priority: extract (asset_class, term, sub_category) lookup table
+src/personal_finance_etl/domain/tax/classification.py,build_tax_credit_subhead_map,111,16,7,4,SIMPLIFY_BRANCHING,Replace nested ifs with dictionary get or match
+src/personal_finance_etl/domain/tax/events.py,_normalize_ledger_income,166,205,23,3,DECOMPOSE,Extract event filtering and tax attribute extraction helpers
+src/personal_finance_etl/domain/tax/events.py,_normalize_tax_credits,376,105,17,3,SIMPLIFY_BRANCHING,Simplify tax section matching with mapping dictionary
+src/personal_finance_etl/domain/tax/events.py,_normalize_quant_realized_events,487,74,24,2,SIMPLIFY_BRANCHING,Simplify tax-event type assignment and loss-offset tagging
+src/personal_finance_etl/domain/tax/reconciliation.py,format_tax_year_summary,49,115,1,0,DECLARATIVE_EXCEPTION,Declarative tabular display formatting
+src/personal_finance_etl/domain/tax/reconciliation.py,format_tax_reconciliation,234,180,2,0,DECLARATIVE_EXCEPTION,Declarative tabular report layout
+src/personal_finance_etl/domain/common/identity.py,canonicalize_value,56,33,11,3,SIMPLIFY_BRANCHING,Simplify type dispatch with pattern matching on instance type
+src/personal_finance_etl/domain/common/dates.py,to_date_obj,64,32,14,3,SIMPLIFY_BRANCHING,Simplify date type conversions with type pattern matching
+src/personal_finance_etl/domain/common/dates.py,parse_strict_date,117,65,14,3,SIMPLIFY_BRANCHING,Consolidate format try/except ladder
+src/personal_finance_etl/domain/common/dates.py,_diagnose_date_failure,184,39,10,3,KEEP_COHESIVE,Focused diagnostic helper for date errors; keep cohesive
+src/personal_finance_etl/domain/common/dates.py,validate_and_parse_dates,225,81,23,4,SIMPLIFY_BRANCHING,Consolidate column iteration and invalid-check expressions
+src/personal_finance_etl/domain/common/validation.py,parse_strict_numeric,90,67,13,3,SIMPLIFY_BRANCHING,Simplify string clean-up and decimal parsing branches
+src/personal_finance_etl/domain/common/validation.py,_diagnose_numeric_failure,159,41,13,4,KEEP_COHESIVE,Focused diagnostic helper; keep cohesive
+src/personal_finance_etl/domain/common/validation.py,validate_and_parse_numerics,202,78,16,2,SIMPLIFY_BRANCHING,Consolidate numeric parsing expressions
+src/personal_finance_etl/domain/investments/portfolio/snapshots.py,generate,51,266,47,3,DECOMPOSE,High priority: separate transaction rollups, market pricing, and state assembly
+src/personal_finance_etl/domain/investments/portfolio/analytics.py,calculate,34,96,7,3,KEEP_COHESIVE,Linear portfolio risk and return computations; keep cohesive
+src/personal_finance_etl/domain/investments/performance/xirr.py,calculate_xirr,33,46,20,2,STATEFUL_ALGORITHM_EXCEPTION,Iterative numerical root-finding algorithm; preserve stateful loop
+src/personal_finance_etl/domain/investments/performance/xirr.py,calculate,97,107,14,3,SIMPLIFY_BRANCHING,Simplify cashflow filtering and cashflow sign validation
+src/personal_finance_etl/domain/investments/performance/attribution.py,calculate,59,223,3,1,KEEP_COHESIVE,Linear Polars gains attribution expressions; keep cohesive
+src/personal_finance_etl/domain/investments/valuation/benchmark.py,__init__,35,49,14,2,SIMPLIFY_BRANCHING,Simplify benchmark series caching and validation
+src/personal_finance_etl/domain/investments/valuation/market_state.py,transform_us_market_data,51,294,23,5,DECOMPOSE,Decompose into quote alignment, FX backfill, and market spine generation
+src/personal_finance_etl/domain/investments/transforms/common.py,transform_stg_investment_market_data,142,118,14,1,KEEP_COHESIVE,Linear stage transformation chain; keep cohesive
+src/personal_finance_etl/domain/investments/transforms/indian_equity.py,get_stg_stock_market_data,23,100,9,3,KEEP_COHESIVE,Declarative market data selection and join; keep cohesive
+src/personal_finance_etl/domain/investments/lots/fifo.py,sell,120,120,14,3,STATEFUL_ALGORITHM_EXCEPTION,Core stateful FIFO lot consumption; preserve algorithm invariants
+src/personal_finance_etl/domain/investments/lots/fifo.py,reconcile_quantity,265,103,9,4,STATEFUL_ALGORITHM_EXCEPTION,Stateful lot balance adjustment loop; preserve algorithm
+src/personal_finance_etl/domain/investments/lots/fifo.py,reconcile_cost_basis,369,73,14,3,STATEFUL_ALGORITHM_EXCEPTION,Stateful lot cost basis adjustment; preserve algorithm
+src/personal_finance_etl/domain/household/transforms/calendar.py,transform_d_calendar,92,316,1,0,DECLARATIVE_EXCEPTION,Declarative date math and calendar attribute generation
+src/personal_finance_etl/domain/household/transforms/transactions.py,transform_f_income_transactions,124,66,11,1,KEEP_COHESIVE,Linear transaction classification expressions; keep cohesive
+src/personal_finance_etl/domain/household/transforms/dimensions.py,_get_tax_maps,24,85,11,3,EXTRACT_POLICY,Extract static category-to-tax mappings into dedicated policy tables
+src/personal_finance_etl/domain/household/transforms/dimensions.py,transform_d_income_subcategory,152,144,5,3,KEEP_COHESIVE,Linear dimension hierarchy builders; keep cohesive
+src/personal_finance_etl/domain/household/transforms/dimensions.py,transform_d_asset_category,371,94,2,1,KEEP_COHESIVE,Linear dimension table mapping; keep cohesive
+src/personal_finance_etl/domain/household/transforms/dimensions.py,transform_d_asset_subcategory,467,117,2,1,KEEP_COHESIVE,Linear dimension table mapping; keep cohesive
+src/personal_finance_etl/config/financial_rules/model.py,_flatten_data_to_records,77,15,7,4,KEEP_COHESIVE,Small recursive dictionary flattener; keep cohesive
+src/personal_finance_etl/config/financial_rules/tax.py,validate_mutual_exclusivity,142,74,16,4,SIMPLIFY_BRANCHING,Simplify regime option combinations with set operations
+src/personal_finance_etl/infrastructure/warehouse/meta.py,heal_duckdb_registry,70,95,32,5,SIMPLIFY_BRANCHING,Simplify healing decision tree and missing-table recovery branches
+src/personal_finance_etl/infrastructure/warehouse/meta.py,load,246,167,18,3,DECOMPOSE,Extract schema inspection and table registration helpers
+src/personal_finance_etl/infrastructure/warehouse/registry.py,validate_registry,506,53,15,2,SIMPLIFY_BRANCHING,Simplify table schema consistency checks
+src/personal_finance_etl/infrastructure/warehouse/bronze.py,upsert_table,52,101,12,4,SIMPLIFY_BRANCHING,Simplify append vs merge branching logic
+src/personal_finance_etl/infrastructure/warehouse/bronze.py,load,154,54,7,4,KEEP_COHESIVE,Standard table load with error handling; keep cohesive
+src/personal_finance_etl/infrastructure/warehouse/silver.py,_write,42,61,15,4,SIMPLIFY_BRANCHING,Simplify partition checking and table creation branches
+src/personal_finance_etl/infrastructure/recovery/backup.py,create_snapshot,94,98,16,4,SIMPLIFY_BRANCHING,Extract archive bundling and simplify path resolution
+src/personal_finance_etl/infrastructure/recovery/backup.py,restore_snapshot,193,219,40,7,DECOMPOSE,Extract archive unpack, database replacement, and registry validation
+src/personal_finance_etl/infrastructure/control_plane/run_repository.py,_json_safe,210,15,10,1,SIMPLIFY_BRANCHING,Simplify type serialization dispatch with match/case
+src/personal_finance_etl/infrastructure/control_plane/run_repository.py,log_simulation_run,250,104,18,8,SIMPLIFY_BRANCHING,Flatten nested payload serialization branches
+src/personal_finance_etl/infrastructure/control_plane/run_repository.py,log_provider_requests,506,68,12,3,KEEP_COHESIVE,Batch database insert with transaction management; keep cohesive
+src/personal_finance_etl/infrastructure/control_plane/artifact_repository.py,_insert_event,68,61,12,2,KEEP_COHESIVE,SQL statement execution with parameter binding; keep cohesive
+src/personal_finance_etl/infrastructure/control_plane/artifact_repository.py,migrate_identity,188,124,10,1,KEEP_COHESIVE,Sequential migration transaction; keep cohesive
+src/personal_finance_etl/infrastructure/control_plane/artifact_repository.py,ingest_binaries,377,67,15,6,SIMPLIFY_BRANCHING,Flatten nested directory walk and hash check branches
+src/personal_finance_etl/infrastructure/control_plane/artifact_repository.py,mark_healed,560,45,10,3,KEEP_COHESIVE,Targeted database update; keep cohesive
+src/personal_finance_etl/infrastructure/control_plane/connection.py,_migrate_schema,165,49,13,2,KEEP_COHESIVE,Linear DDL execution loop; keep cohesive
+src/personal_finance_etl/infrastructure/control_plane/connection.py,_validate_current_schema,215,124,4,2,DECLARATIVE_EXCEPTION,Declarative expected-schema verification table
+src/personal_finance_etl/infrastructure/control_plane/file_sync.py,_sync_with_disk,85,171,42,5,DECOMPOSE,Extract file discovery, hash computation, and status reconciliation
+src/personal_finance_etl/infrastructure/providers/market/benchmark.py,_fetch_ticker_delta,57,127,16,3,SIMPLIFY_BRANCHING,Simplify network retry and missing-data fallback logic
+src/personal_finance_etl/infrastructure/providers/market/benchmark.py,extract_benchmark_delta,185,154,17,6,DECOMPOSE,Separate ticker batching, range determination, and dataframe generation
+src/personal_finance_etl/infrastructure/providers/market/currency.py,_fetch_ticker_delta,56,119,12,3,SIMPLIFY_BRANCHING,Simplify response validation and missing ticker handling
+src/personal_finance_etl/infrastructure/providers/market/currency.py,extract_currency_delta,176,148,15,6,DECOMPOSE,Separate currency pair batching, date range alignment, and result mapping
+src/personal_finance_etl/infrastructure/providers/market/us_market.py,_fetch_ticker_delta,55,111,13,3,SIMPLIFY_BRANCHING,Simplify yfinance exception mapping and retry branches
+src/personal_finance_etl/infrastructure/providers/market/us_market.py,extract_us_market_delta,167,143,15,6,DECOMPOSE,Separate symbol scheduling, batch fetching, and delta schema framing
+src/personal_finance_etl/infrastructure/providers/files/locator.py,categorize_statement_files,25,46,18,2,EXTRACT_POLICY,Extract file pattern regex mapping to declarative dictionary
