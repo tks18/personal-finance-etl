@@ -44,6 +44,7 @@ class _NullLoggerQueue:
         block: bool = True,
         timeout: float | None = None,
     ) -> None:
+        """Enqueue status message into fallback internal queue."""
         self._q.put(status, block=block, timeout=timeout)
 
 
