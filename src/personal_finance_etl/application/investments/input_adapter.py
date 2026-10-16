@@ -126,6 +126,28 @@ class TaxDataLoader:
         pl.DataFrame | None,
         pl.DataFrame | None,
     ]:
+        """Read CSV files from disk, normalize date and numeric schemas, and return tuple.
+
+        Parameters
+        ----------
+        p_path : str
+            Filepath to purchases CSV.
+        s_path : str
+            Filepath to sales CSV.
+        m_path : str
+            Filepath to market data CSV.
+        i_path : str | None
+            Filepath to ISIN master CSV.
+        b_path : str | None
+            Filepath to benchmark index CSV.
+        fx_path : str | None, optional
+            Filepath to currency FX CSV, by default None.
+
+        Returns
+        -------
+        tuple
+            (df_p, df_s, df_m, isin_master_dict, df_b, df_fx) normalized structures.
+        """
         df_p = pl.read_csv(p_path, infer_schema_length=500_000)
         df_s = pl.read_csv(s_path, infer_schema_length=500_000)
         df_m = pl.read_csv(m_path, infer_schema_length=500_000)
@@ -159,6 +181,28 @@ class TaxDataLoader:
         pl.DataFrame | None,
         pl.DataFrame | None,
     ]:
+        """Normalize in-memory DataFrames, parse date/numeric columns, and build master mapping.
+
+        Parameters
+        ----------
+        df_p : pl.DataFrame
+            Purchases DataFrame.
+        df_s : pl.DataFrame
+            Sales DataFrame.
+        df_m : pl.DataFrame
+            Market data DataFrame.
+        df_i : pl.DataFrame | None
+            ISIN master DataFrame.
+        df_b : pl.DataFrame | None
+            Benchmark index DataFrame.
+        df_fx : pl.DataFrame | None, optional
+            Currency FX DataFrame, by default None.
+
+        Returns
+        -------
+        tuple
+            (df_p, df_s, df_m, isin_master_dict, df_b, df_fx) normalized structures.
+        """
         return cls._normalize(df_p, df_s, df_m, df_i, df_b, df_fx)
 
 
@@ -174,6 +218,20 @@ class IsinDataExtractor:
         list[TradeRecord],
         IsinMasterRecord,
     ]:
+        """Extract chronologically sorted purchases, sales, and market records for one ISIN.
+
+        Parameters
+        ----------
+        ctx : IsinContextProtocol
+            Context supplying raw purchases, sales, market, and master tables.
+        isin : str
+            Target instrument identifier.
+
+        Returns
+        -------
+        tuple
+            (sorted_purchases, sorted_sales, aggregated_market_records, master_metadata_record).
+        """
         p_inst_raw = cast("list[TradeRecord]", ctx.df_p.filter(pl.col("ISIN") == isin).to_dicts())
         p_inst = sort_purchases(p_inst_raw)
 
