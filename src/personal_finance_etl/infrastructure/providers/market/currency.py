@@ -21,10 +21,12 @@ import concurrent.futures
 import io
 import time
 import uuid
+from collections.abc import Mapping
 from datetime import date, datetime, timedelta
-from typing import Any
 
 import polars as pl
+
+# Exception TYP-002 [THIRD_PARTY_TYPING_GAP]: yfinance lacks py.typed marker and complete stubs
 import yfinance as yf  # type: ignore[import-untyped]
 
 from personal_finance_etl.contracts.application import EngineStatusMessage
@@ -54,7 +56,11 @@ class CurrencyExtractor:
         self.max_workers = max_workers
 
     def _fetch_ticker_delta(
-        self, row: dict[str, Any], start_dt: date, end_dt: date, max_cached_date: date | None
+        self,
+        row: Mapping[str, object],
+        start_dt: date,
+        end_dt: date,
+        max_cached_date: date | None,
     ) -> ExtractorEntityResult:
         ticker = str(row.get("yF_Ticker", "")).strip()
         if not ticker:
