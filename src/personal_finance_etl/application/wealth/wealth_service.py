@@ -92,7 +92,12 @@ class WealthService:
             dfs, inflation_res, ledger_res, self.rules.DEFAULT_CURRENCY_ID
         ).build()
 
-        base_lf = {**inflation_res, **ledger_res, **net_worth_res}
+        base_lf: dict[str, pl.LazyFrame] = {
+            "lf_months": inflation_res["lf_months"],
+            "lf_inflation": inflation_res["lf_inflation"],
+            **ledger_res,
+            **net_worth_res,
+        }
 
         results: dict[str, pl.LazyFrame] = {}
 
