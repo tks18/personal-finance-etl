@@ -18,9 +18,9 @@ from __future__ import annotations
 import hashlib
 import json
 import unicodedata
+from collections.abc import Mapping
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
-from typing import Any
 
 # Preserve the established v2 serialization order for known identity contracts.
 # This makes the output independent of caller dict construction order without
@@ -53,12 +53,12 @@ _IDENTITY_FIELD_ORDERS: dict[str, tuple[tuple[str, ...], ...]] = {
 }
 
 
-def canonicalize_value(val: Any) -> str:
+def canonicalize_value(val: object) -> str:
     """Normalize any Python value into a canonical string for deterministic hashing.
 
     Parameters
     ----------
-    val : Any
+    val : object
         The value to normalize.
 
     Returns
@@ -88,7 +88,9 @@ def canonicalize_value(val: Any) -> str:
     return str(val).strip()
 
 
-def _ordered_identity_fields(namespace: str, fields: dict[str, Any]) -> list[tuple[str, Any]]:
+def _ordered_identity_fields(
+    namespace: str, fields: Mapping[str, object]
+) -> list[tuple[str, object]]:
     """Return identity fields in a contract-defined, caller-order-independent order."""
     keys = set(fields)
     for field_order in _IDENTITY_FIELD_ORDERS.get(namespace, ()):
@@ -100,14 +102,14 @@ def _ordered_identity_fields(namespace: str, fields: dict[str, Any]) -> list[tup
     return [(key, fields[key]) for key in sorted(fields)]
 
 
-def generate_deterministic_id(namespace: str, fields: dict[str, Any]) -> str:
+def generate_deterministic_id(namespace: str, fields: Mapping[str, object]) -> str:
     """Generate a stable deterministic ID using Canonical ID Serialization v2.
 
     Parameters
     ----------
     namespace : str
         The entity namespace prefix (e.g., 'PURCHASE', 'SALE', 'LOT', 'TAX').
-    fields : dict[str, Any]
+    fields : Mapping[str, object]
         Dictionary of identifying fields for the entity.
 
     Returns
