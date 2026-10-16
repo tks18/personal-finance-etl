@@ -611,12 +611,12 @@ class BaseEventsBuilder:
     def _required_amount(value: object, field_name: str, source_id: object) -> float:
         if value is None:
             raise ValueError(f"Required amount {field_name} is null for source {source_id!r}.")
-        if isinstance(value, bool):
+        if isinstance(value, bool) or not isinstance(value, (int, float, str)):
             raise ValueError(
-                f"Required amount {field_name} cannot be boolean for source {source_id!r}."
+                f"Required amount {field_name} is invalid for source {source_id!r}: {value!r}"
             )
         try:
-            amount = float(value)  # type: ignore[arg-type]
+            amount = float(value)
         except (TypeError, ValueError) as exc:
             raise ValueError(
                 f"Required amount {field_name} is invalid for source {source_id!r}: {value!r}"
