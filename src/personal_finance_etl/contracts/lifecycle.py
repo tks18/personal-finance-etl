@@ -13,7 +13,8 @@ Does not own
 """
 
 from enum import StrEnum
-from typing import Any
+
+__all__ = ["CommitState", "FailureDomain", "classify_failure_domain"]
 
 
 class CommitState(StrEnum):
@@ -52,7 +53,7 @@ class FailureDomain(StrEnum):
 
 def classify_failure_domain(
     stage: str | None = None,
-    error: Any = None,
+    error: BaseException | str | None = None,
 ) -> FailureDomain:
     """Classify failure deterministically into a standard FailureDomain.
 
@@ -60,7 +61,7 @@ def classify_failure_domain(
     ----------
     stage : str | None
         Name of the pipeline stage where the error occurred.
-    error : Any
+    error : BaseException | str | None
         The exception or error object raised during execution.
 
     Returns
