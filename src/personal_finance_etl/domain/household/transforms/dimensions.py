@@ -21,6 +21,45 @@ import polars as pl
 from personal_finance_etl.config.financial_rules import FinancialRules, TaxHeadConfig
 
 
+def _build_tax_map_row(
+    uid: str,
+    head: str,
+    sub_head: str,
+    taxability: str,
+    tax_method: str,
+) -> dict[str, str]:
+    return {
+        "UID": uid,
+        "Tax_Income_Head": head,
+        "Tax_Sub_Head": sub_head,
+        "Taxability": taxability,
+        "Tax_Method": tax_method,
+    }
+
+
+def _extract_head_tax_mappings(
+    heads: list[TaxHeadConfig],
+) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
+    cat_rows: list[dict[str, str]] = []
+    sub_cat_rows: list[dict[str, str]] = []
+
+    for head_config in heads:
+        for sub_config in head_config.sub_heads.values():
+            head = sub_config.tax_head_display_name
+            sub = sub_config.sub_head_display_name
+            taxability = sub_config.taxability
+            method = sub_config.tax_method
+
+            for cid in sub_config.cat_ids:
+                cat_rows.append(_build_tax_map_row(cid, head, sub, taxability, method))
+            for scid in sub_config.sub_cat_ids:
+                sub_cat_rows.append(_build_tax_map_row(scid, head, sub, taxability, method))
+            for credit_scid in sub_config.tax_credit_sub_cat_ids:
+                sub_cat_rows.append(_build_tax_map_row(credit_scid, head, sub, taxability, method))
+
+    return cat_rows, sub_cat_rows
+
+
 def _get_tax_maps(rules: FinancialRules | None) -> tuple[pl.LazyFrame, pl.LazyFrame]:
     schema = {
         "UID": pl.Utf8,
@@ -32,66 +71,21 @@ def _get_tax_maps(rules: FinancialRules | None) -> tuple[pl.LazyFrame, pl.LazyFr
     if not rules:
         return pl.DataFrame(schema=schema).lazy(), pl.DataFrame(schema=schema).lazy()
 
-    cat_rows: list[dict[str, str]] = []
-    sub_cat_rows: list[dict[str, str]] = []
+    all_heads: list[TaxHeadConfig] = [
+        *rules.assumptions.tax.heads_of_income.values(),
+        *rules.assumptions.tax.exempt_income.values(),
+        *rules.assumptions.tax.residual_income.values(),
+    ]
 
-    all_heads: list[tuple[str, TaxHeadConfig]] = []
-    all_heads.extend(rules.assumptions.tax.heads_of_income.items())
-    all_heads.extend(rules.assumptions.tax.exempt_income.items())
-    all_heads.extend(rules.assumptions.tax.residual_income.items())
-
-    for _head_name, head_config in all_heads:
-        for _sub_name, sub_config in head_config.sub_heads.items():
-            for cat_id in sub_config.cat_ids:
-                cat_rows.append(
-                    {
-                        "UID": cat_id,
-                        "Tax_Income_Head": sub_config.tax_head_display_name,
-                        "Tax_Sub_Head": sub_config.sub_head_display_name,
-                        "Taxability": sub_config.taxability,
-                        "Tax_Method": sub_config.tax_method,
-                    }
-                )
-            for sub_cat_id in sub_config.sub_cat_ids:
-                sub_cat_rows.append(
-                    {
-                        "UID": sub_cat_id,
-                        "Tax_Income_Head": sub_config.tax_head_display_name,
-                        "Tax_Sub_Head": sub_config.sub_head_display_name,
-                        "Taxability": sub_config.taxability,
-                        "Tax_Method": sub_config.tax_method,
-                    }
-                )
-            for credit_sub_cat_id in sub_config.tax_credit_sub_cat_ids:
-                sub_cat_rows.append(
-                    {
-                        "UID": credit_sub_cat_id,
-                        "Tax_Income_Head": sub_config.tax_head_display_name,
-                        "Tax_Sub_Head": sub_config.sub_head_display_name,
-                        "Taxability": sub_config.taxability,
-                        "Tax_Method": sub_config.tax_method,
-                    }
-                )
+    cat_rows, sub_cat_rows = _extract_head_tax_mappings(all_heads)
 
     for uid in rules.assumptions.tax.investment_exclusions.stcg_sub_cat_ids:
         sub_cat_rows.append(
-            {
-                "UID": uid,
-                "Tax_Income_Head": "Capital Gains",
-                "Tax_Sub_Head": "Investment STCG",
-                "Taxability": "taxable",
-                "Tax_Method": "capital_gains",
-            }
+            _build_tax_map_row(uid, "Capital Gains", "Investment STCG", "taxable", "capital_gains")
         )
     for uid in rules.assumptions.tax.investment_exclusions.ltcg_sub_cat_ids:
         sub_cat_rows.append(
-            {
-                "UID": uid,
-                "Tax_Income_Head": "Capital Gains",
-                "Tax_Sub_Head": "Investment LTCG",
-                "Taxability": "taxable",
-                "Tax_Method": "capital_gains",
-            }
+            _build_tax_map_row(uid, "Capital Gains", "Investment LTCG", "taxable", "capital_gains")
         )
 
     cat_df = (
