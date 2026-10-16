@@ -66,29 +66,6 @@ a = Analysis(
 )
 pyz = PYZ(a.pure)
 
-exe_gui = EXE(
-    pyz,
-    a.scripts,
-    a.binaries,
-    a.datas,
-    [],
-    name='Shan\'s Personal Finance ETL',
-    debug=False,
-    bootloader_ignore_signals=False,
-    strip=False,
-    upx=True,
-    upx_exclude=[],
-    runtime_tmpdir=None,
-    console=False,
-    disable_windowed_traceback=False,
-    argv_emulation=False,
-    target_arch=None,
-    codesign_identity=None,
-    entitlements_file=None,
-    icon='logo.ico',
-    version='version_info.txt',
-)
-
 exe_cli = EXE(
     pyz,
     a.scripts,
