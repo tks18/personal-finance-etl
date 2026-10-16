@@ -54,6 +54,7 @@ class ControlPlane:
 
     @active_run_id.setter
     def active_run_id(self, value: str | None) -> None:
+        """Set the active run identifier across repositories and file sync."""
         self._active_run_id = value
         self.artifacts.active_run_id = value
         self.file_sync.active_run_id = value
