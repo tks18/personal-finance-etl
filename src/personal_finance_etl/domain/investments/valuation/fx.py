@@ -13,7 +13,10 @@ Does not own
 
 import math
 from datetime import date
-from typing import Any
+
+from personal_finance_etl.config.financial_rules import FinancialRules
+from personal_finance_etl.domain.investments.contracts import IsinMasterRecord
+from personal_finance_etl.domain.market.fx import FXRateProvider
 
 
 class FXProviderMissingError(RuntimeError):
@@ -36,12 +39,12 @@ class FXValidationGate:
         foreign currency, :meth:`validate` raises :exc:`FXProviderMissingError`.
     """
 
-    def __init__(self, rules: Any, fx_provider: Any):
+    def __init__(self, rules: FinancialRules, fx_provider: FXRateProvider | None):
         self.rules = rules
         self.fx_provider = fx_provider
         self._default_currency: str = getattr(rules, "DEFAULT_CURRENCY_ID", "INR_INR")
 
-    def validate(self, isin: str, master_row: dict[str, Any], first_p_date: date) -> None:
+    def validate(self, isin: str, master_row: IsinMasterRecord, first_p_date: date) -> None:
         """Raise if FX data is unavailable for *isin*.
 
         Parameters
