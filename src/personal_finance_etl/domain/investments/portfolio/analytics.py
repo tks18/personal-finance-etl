@@ -38,6 +38,24 @@ class AdvancedAnalyticsCalculator:
         portfolio_terminals: dict[date, TerminalValueDict] | dict[date, dict[str, float]],
         cashflows: list[CashflowDict],
     ) -> pl.DataFrame:
+        """Compute net-injection-adjusted returns and running Max Drawdown (MDD) tracking.
+
+        Parameters
+        ----------
+        df_port : pl.DataFrame
+            Portfolio time series dataframe containing Closing_Date.
+        unique_dates : list[date]
+            Chronological list of closing dates.
+        portfolio_terminals : dict[date, TerminalValueDict] | dict[date, dict[str, float]]
+            Daily terminal valuations mapping date to val and shadow_val.
+        cashflows : list[CashflowDict]
+            Raw cashflows used to calculate cumulative net capital injections.
+
+        Returns
+        -------
+        pl.DataFrame
+            Augmented dataframe with Portfolio_Max_Drawdown.
+        """
         pt_records: list[dict[str, object]] = []
         for d in unique_dates:
             d_obj = to_date_obj(d)
@@ -137,6 +155,20 @@ class HarvestRecommendationCalculator:
 
     @staticmethod
     def calculate(lazy_df: pl.LazyFrame, rules: FinancialRules) -> pl.LazyFrame:
+        """Generate capital gains tax harvesting and step-up recommendations.
+
+        Parameters
+        ----------
+        lazy_df : pl.LazyFrame
+            Incoming daily snapshot lazy frame with unrealized gains and holding classification.
+        rules : FinancialRules
+            Configuration rules containing tax harvesting wait thresholds and exclusions.
+
+        Returns
+        -------
+        pl.LazyFrame
+            Augmented lazy frame with Stepup_Eligible, Can_Harvest_Loss, and Harvest_Recommendation.
+        """
         wait_days = rules.assumptions.tax.harvest_wait_days_threshold if rules else 90
 
         # Derive foreign equity TAX_SUBTYPE exclusions from config if available;
