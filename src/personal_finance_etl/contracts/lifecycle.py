@@ -13,8 +13,22 @@ Does not own
 """
 
 from enum import StrEnum
+from typing import TypedDict
 
-__all__ = ["CommitState", "FailureDomain", "classify_failure_domain"]
+__all__ = ["CommitState", "FailureDomain", "SyncSummaryRecord", "classify_failure_domain"]
+
+
+class SyncSummaryRecord(TypedDict, total=False):
+    """Authoritative file-sync summary metrics for pipeline runs."""
+
+    run_id: str
+    actionable_count: int
+    synced_count: int
+    healed_count: int
+    failed_count: int
+    deferred_count: int
+    sync_status: str
+    created_at: str
 
 
 class CommitState(StrEnum):
