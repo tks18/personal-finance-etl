@@ -24,6 +24,8 @@ import uuid
 from datetime import date, datetime, timedelta
 
 import polars as pl
+
+# Exception TYP-002 [THIRD_PARTY_TYPING_GAP]: yfinance lacks py.typed marker and complete stubs
 import yfinance as yf  # type: ignore[import-untyped]
 
 from personal_finance_etl.contracts.application import EngineStatusMessage
