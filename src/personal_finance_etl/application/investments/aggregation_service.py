@@ -392,8 +392,8 @@ class PostProcessor:
         groups = self._compute_group_analytics(unique_dates, pipeline_res)
 
         master_cols = self._build_master_metadata()
-        # Materialize once so subsequent aggregation calls scan cached in-memory data
-        lazy_df_agg = lazy_df.join(master_cols, on="ISIN", how="left").collect().lazy()
+        # Compose master metadata join into lazy pipeline without eager round-trip materialization
+        lazy_df_agg = lazy_df.join(master_cols, on="ISIN", how="left")
 
         f_tf_isin = (
             self._aggregate_level(lazy_df_agg, ["Closing_Date", "ISIN"])
@@ -533,6 +533,8 @@ class PostProcessingPipeline:
 
         lazy_df = pl.scan_parquet(os.path.join(self.tmp_dir, "*.parquet"))
 
+        # Materialization Boundary: SCALAR_EXTRACTION
+        # Extract unique closing dates series to construct ordered temporal spine for group calculations
         unique_dates_df = lazy_df.select("Closing_Date").unique().collect()
         unique_dates = unique_dates_df["Closing_Date"].sort().to_list()
 
@@ -544,5 +546,7 @@ class PostProcessingPipeline:
         logger.debug("Post-processing: Collecting final output...")
         self._report_step(0.95)
 
+        # Materialization Boundary: PUBLICATION_BOUNDARY
+        # Materialize calculated presentation marts from Polars query graphs for DuckDB registration
         final_res: dict[str, pl.DataFrame] = {k: v.collect() for k, v in res_dict.items()}
         return final_res
