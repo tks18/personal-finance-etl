@@ -1,7 +1,0 @@
-stocks.py Unrealised P&L compatibility path, fix this. The dual Unealised P&L / Unrealised P&L compatibility branch still appeared to perform permissive casts/zero handling before the new common strict validator. That potentially recreates the exact bug you just fixed: malformed populated financial evidence can disappear before validation. Route both aliases through strict validation first, then coalesce the validated values. Priority: P1.
-
-Audit every remaining strict=False financial cast. Don't broadly eliminate strict=False, because it can be legitimate. Search specifically for financially meaningful quantity, price, basis, proceeds, P&L, FX, tax and monetary fields. For each one, verify that a malformed populated value cannot become null/zero before the strict validation boundary. Priority: P1 verification.
-
-Audit remaining financial fill_null(0) / fill_nan(0) paths. Zero is perfectly valid where the domain defines absence as zero, such as some additive aggregates. It is dangerous for observed evidence. The rule should be: zero-fill derived aggregation state when mathematically appropriate, never malformed source evidence. Priority: P2 verification.
-
-Audit broad exception-to-financial-default paths. CPI is fixed beautifully, but before the grand refactor I'd search the finance domain for except Exception followed by a numeric/default/null return. Confirm each is either an intentional domain fallback or convert it to the new CalculationStatus vocabulary. Priority: P2 verification.
