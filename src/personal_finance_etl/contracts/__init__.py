@@ -24,6 +24,7 @@ from personal_finance_etl.contracts.application import (
 from personal_finance_etl.contracts.extraction import (
     ExtractionBatchResult,
     ExtractionCompletenessError,
+    ExtractionProviderRequest,
     ExtractorEntityResult,
     ExtractorEntityStatus,
 )
@@ -47,6 +48,7 @@ __all__ = [
     "EngineStatusMessage",
     "ExtractionBatchResult",
     "ExtractionCompletenessError",
+    "ExtractionProviderRequest",
     "ExtractorEntityResult",
     "ExtractorEntityStatus",
     "FailureDomain",
