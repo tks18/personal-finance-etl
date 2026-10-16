@@ -100,7 +100,7 @@ class UnifiedETLTab(BaseEngineTab):
 
         ctk.CTkLabel(
             text_block,
-            text="Institutional Quantitative Master Engine & Personal Finance Orchestrator",
+            text="Local-First Financial Data Engineering & Quantitative Decision-Support Platform",
             font=ctk.CTkFont(family="Segoe UI", size=10),
             text_color=Color.DIM,
         ).pack(anchor="w")
@@ -252,7 +252,7 @@ class UnifiedETLTab(BaseEngineTab):
 
         ctk.CTkLabel(
             info,
-            text="Quant Engine fully autonomous: Automatically maps stochastic macro parameters, stress-tests FIRE survival via Monte Carlo regimes, and actively harvests tax-alpha.",
+            text="Preserve financial evidence → Canonicalize meaning → Reconstruct state → Reconcile against reality → Support decisions across Investments, Tax, Household, and FIRE.",
             font=ctk.CTkFont(family="Segoe UI", size=10),
             text_color=Color.DIM,
             justify="left",
