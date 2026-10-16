@@ -15,7 +15,6 @@ Does not own
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any
 
 import polars as pl
 
@@ -32,12 +31,12 @@ class LedgerBuilder:
         self.dfs = dfs
         self.rules = rules
 
-    def build(self) -> dict[str, Any]:
+    def build(self) -> dict[str, pl.LazyFrame]:
         """Build aggregated ledger structures.
 
         Returns
         -------
-        dict[str, Any]
+        dict[str, pl.LazyFrame]
             Dictionary containing:
             - lf_exp_agg: Aggregated expenses with core and non-cash tags.
             - lf_inc_agg: Aggregated income with stream classification tags.
