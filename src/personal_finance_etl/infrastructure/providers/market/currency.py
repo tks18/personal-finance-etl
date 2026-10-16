@@ -186,6 +186,24 @@ class CurrencyExtractor:
         global_end_date: date,
         df_bronze_cached: pl.DataFrame,
     ) -> ExtractionBatchResult:
+        """Extract incremental currency foreign exchange rates via Yahoo Finance.
+
+        Parameters
+        ----------
+        df_currency : pl.DataFrame
+            Currency reference table containing active foreign exchange tickers.
+        global_start_date : date
+            Extraction window start boundary.
+        global_end_date : date
+            Extraction window end boundary.
+        df_bronze_cached : pl.DataFrame
+            Existing Bronze cache to identify latest available exchange rates.
+
+        Returns
+        -------
+        ExtractionBatchResult
+            Container holding combined delta observations, status, and raw files.
+        """
         df_active = df_currency.filter(pl.col("Is_Active"))
 
         tickers_df = df_active.to_dicts()
