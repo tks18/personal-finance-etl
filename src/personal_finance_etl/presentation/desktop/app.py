@@ -19,6 +19,7 @@ from __future__ import annotations
 import os
 from tkinter import filedialog
 
+# Exception TYP-003 [THIRD_PARTY_TYPING_GAP]: customtkinter lacks py.typed marker and complete stubs
 import customtkinter as ctk  # type: ignore[import-untyped]
 from PIL import Image
 
@@ -414,6 +415,7 @@ class UnifiedETLTab(BaseEngineTab):
             self.restore_btn.configure(state="normal", text="♻️ Restore DB")
 
 
+# Exception TYP-003 [THIRD_PARTY_TYPING_GAP]: Subclassing untyped third-party ctk.CTk base class
 class DesktopApp(ctk.CTk):  # type: ignore[misc]
     """Root application window."""
 
