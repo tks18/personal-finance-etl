@@ -24,6 +24,8 @@ from personal_finance_etl.config.financial_rules.tax import TaxAssumptions
 
 
 class MacroAssumptions(BaseModel):
+    """Baseline macroeconomic parameter configuration for annualization and fallbacks."""
+
     default_trading_days: float = Field(
         ...,
         description="Default number of trading days in a year for annualized volatility calculations.",
@@ -43,6 +45,8 @@ class MacroAssumptions(BaseModel):
 
 
 class FireAssumptions(BaseModel):
+    """Financial Independence and Safe Withdrawal Rate forecasting rules."""
+
     swr_multiplier: float = Field(
         ..., description="Safe Withdrawal Rate multiplier (e.g., 25.0 for 4% rule)."
     )
@@ -70,6 +74,8 @@ class FireAssumptions(BaseModel):
 
 
 class MarkovRegimeConfig(BaseModel):
+    """Three-state Markov regime switching parameters (Bull, Bear, Stagflation)."""
+
     transition_matrix: list[list[float]] = Field(
         default=[
             [0.90, 0.08, 0.02],
@@ -93,6 +99,8 @@ class MarkovRegimeConfig(BaseModel):
 
 
 class HumanCapitalConfig(BaseModel):
+    """Human capital income shock probabilities and severance coverage parameters."""
+
     shock_probability: float = Field(
         default=0.20,
         description="Probability of an income shock (job loss, zero bonus) when in Bear or Stagflation states.",
@@ -110,6 +118,8 @@ class HumanCapitalConfig(BaseModel):
 
 
 class GlidePathConfig(BaseModel):
+    """Retirement asset allocation glide path, de-risking, and debt buffer rules."""
+
     derisk_start_months_prior: int = Field(
         default=60,
         description="Months prior to the FI target date to begin de-risking the portfolio.",
@@ -140,6 +150,8 @@ class GlidePathConfig(BaseModel):
 
 
 class JumpDiffusionConfig(BaseModel):
+    """Black Swan jump diffusion crash parameters and investment fee drag."""
+
     jump_probability_annual: float = Field(
         default=0.05, description="Annual probability of a Black Swan market crash (e.g., 5%)."
     )
@@ -153,6 +165,8 @@ class JumpDiffusionConfig(BaseModel):
 
 
 class GuytonKlingerConfig(BaseModel):
+    """Guyton-Klinger dynamic withdrawal rules and capital preservation guardrails."""
+
     withdrawal_upper_threshold: float = Field(
         default=1.2,
         description="Multiplier over initial SWR to trigger a lifestyle cut (e.g., 1.2 for +20%).",
@@ -172,6 +186,8 @@ class GuytonKlingerConfig(BaseModel):
 
 
 class InflationModelConfig(BaseModel):
+    """Ornstein-Uhlenbeck mean-reverting inflation process configuration."""
+
     mean_reversion_speed: float = Field(
         default=0.1,
         description="Speed of mean reversion (theta) for Ornstein-Uhlenbeck inflation process.",
@@ -186,6 +202,8 @@ class InflationModelConfig(BaseModel):
 
 
 class MonteCarloAssumptions(BaseModel):
+    """Monte Carlo multi-path simulation boundaries and embedded stochastic engines."""
+
     iterations: int = Field(..., description="Number of Monte Carlo paths/simulations to run.")
     max_months: int = Field(
         ..., description="Maximum duration of the Monte Carlo simulation in months."
@@ -211,6 +229,8 @@ class MonteCarloAssumptions(BaseModel):
 
 
 class CMAAssumptions(BaseModel):
+    """Capital Market Assumptions (CMA) for long-term real returns and tail risk."""
+
     expected_real_return: float = Field(
         0.05, description="Expected real return for long-term forecasting."
     )
@@ -220,6 +240,8 @@ class CMAAssumptions(BaseModel):
 
 
 class AssumptionsRules(BaseModel):
+    """Root configuration grouping macro, FIRE, Monte Carlo, tax, and CMA rules."""
+
     macro: MacroAssumptions = Field(...)
     fire: FireAssumptions = Field(...)
     monte_carlo: MonteCarloAssumptions = Field(...)
