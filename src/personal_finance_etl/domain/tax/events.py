@@ -186,6 +186,77 @@ class BaseEventsBuilder:
     def _validate_tax_credit_uids(self, credit_subheads: dict[str, str]) -> None:
         TaxClassifier.validate_tax_credit_uids(self.df_subcategory, credit_subheads)
 
+    @staticmethod
+    def _validate_and_prepare_ledger_frame(
+        df: pl.DataFrame,
+        source_label: str,
+    ) -> pl.DataFrame:
+        """Validate BASE_AMOUNT and DATE columns, casting to finite Amount_INR, Event_Date, and FY."""
+        if df.is_empty():
+            return df
+
+        amount_col = df.get_column("BASE_AMOUNT")
+        if amount_col.dtype == pl.Boolean:
+            bad_id = str(df.get_column("Source_ID")[0])
+            label_prefix = f"{source_label} " if source_label else ""
+            raise ValueError(
+                f"Required amount {label_prefix}BASE_AMOUNT cannot be boolean for source {bad_id!r}."
+            )
+        try:
+            df = df.with_columns(
+                pl.col("BASE_AMOUNT").cast(pl.Float64, strict=True).alias("Amount_INR")
+            )
+        except Exception as exc:
+            bad_id = str(df.get_column("Source_ID")[0])
+            label_prefix = f"{source_label} " if source_label else ""
+            raise ValueError(
+                f"Required amount {label_prefix}BASE_AMOUNT is invalid for source {bad_id!r}: {exc}"
+            ) from exc
+
+        if df["Amount_INR"].is_nan().any() or df["Amount_INR"].is_infinite().any():
+            bad_idx = (df["Amount_INR"].is_nan() | df["Amount_INR"].is_infinite()).arg_true()[0]
+            bad_id = str(df.get_column("Source_ID")[bad_idx])
+            label_prefix = f"{source_label} " if source_label else ""
+            raise ValueError(
+                f"Required amount {label_prefix}BASE_AMOUNT must be finite for source {bad_id!r}."
+            )
+
+        if df["DATE"].is_null().any():
+            bad_idx = df["DATE"].is_null().arg_true()[0]
+            bad_id = str(df.get_column("Source_ID")[bad_idx])
+            date_label = f"{source_label} DATE" if source_label else "income DATE"
+            raise ValueError(f"Required date {date_label} is null for source {bad_id!r}.")
+
+        if df["DATE"].dtype == pl.Datetime:
+            df = df.with_columns(pl.col("DATE").dt.date().alias("Event_Date"))
+        elif df["DATE"].dtype == pl.Date:
+            df = df.with_columns(pl.col("DATE").alias("Event_Date"))
+        else:
+            try:
+                df = df.with_columns(pl.col("DATE").cast(pl.Date, strict=True).alias("Event_Date"))
+            except Exception as exc:
+                bad_id = str(df.get_column("Source_ID")[0])
+                date_label = f"{source_label} DATE" if source_label else "income DATE"
+                raise ValueError(
+                    f"Required date {date_label} is invalid for source {bad_id!r}: {exc}"
+                ) from exc
+
+        fy_expr = (
+            pl.when(pl.col("Event_Date").dt.month() >= 4)
+            .then(
+                pl.col("Event_Date").dt.year().cast(pl.String)
+                + "-"
+                + ((pl.col("Event_Date").dt.year() + 1) % 100).cast(pl.String).str.zfill(2)
+            )
+            .otherwise(
+                (pl.col("Event_Date").dt.year() - 1).cast(pl.String)
+                + "-"
+                + (pl.col("Event_Date").dt.year() % 100).cast(pl.String).str.zfill(2)
+            )
+            .alias("FY")
+        )
+        return df.with_columns(fy_expr)
+
     def _normalize_ledger_income(self, credit_subheads: dict[str, str]) -> pl.DataFrame:
         required = {"UID", "DATE", "CATEGORY_ID", "BASE_AMOUNT"}
         missing = sorted(required - set(self.df_income.columns))
@@ -263,66 +334,7 @@ class BaseEventsBuilder:
         if df_filtered.is_empty():
             return pl.DataFrame(schema=TAX_EVENT_SCHEMA)
 
-        amount_col = df_filtered.get_column("BASE_AMOUNT")
-        if amount_col.dtype == pl.Boolean:
-            bad_id = str(df_filtered.get_column("Source_ID")[0])
-            raise ValueError(
-                f"Required amount BASE_AMOUNT cannot be boolean for source {bad_id!r}."
-            )
-        try:
-            df_filtered = df_filtered.with_columns(
-                pl.col("BASE_AMOUNT").cast(pl.Float64, strict=True).alias("Amount_INR")
-            )
-        except Exception as exc:
-            bad_id = str(df_filtered.get_column("Source_ID")[0])
-            raise ValueError(
-                f"Required amount BASE_AMOUNT is invalid for source {bad_id!r}: {exc}"
-            ) from exc
-
-        if (
-            df_filtered["Amount_INR"].is_nan().any()
-            or df_filtered["Amount_INR"].is_infinite().any()
-        ):
-            bad_idx = (
-                df_filtered["Amount_INR"].is_nan() | df_filtered["Amount_INR"].is_infinite()
-            ).arg_true()[0]
-            bad_id = str(df_filtered.get_column("Source_ID")[bad_idx])
-            raise ValueError(f"Required amount BASE_AMOUNT must be finite for source {bad_id!r}.")
-
-        if df_filtered["DATE"].is_null().any():
-            bad_idx = df_filtered["DATE"].is_null().arg_true()[0]
-            bad_id = str(df_filtered.get_column("Source_ID")[bad_idx])
-            raise ValueError(f"Required date income DATE is null for source {bad_id!r}.")
-
-        if df_filtered["DATE"].dtype == pl.Datetime:
-            df_filtered = df_filtered.with_columns(pl.col("DATE").dt.date().alias("Event_Date"))
-        elif df_filtered["DATE"].dtype == pl.Date:
-            df_filtered = df_filtered.with_columns(pl.col("DATE").alias("Event_Date"))
-        else:
-            try:
-                df_filtered = df_filtered.with_columns(
-                    pl.col("DATE").cast(pl.Date, strict=True).alias("Event_Date")
-                )
-            except Exception as exc:
-                bad_id = str(df_filtered.get_column("Source_ID")[0])
-                raise ValueError(
-                    f"Required date income DATE is invalid for source {bad_id!r}: {exc}"
-                ) from exc
-
-        fy_expr = (
-            pl.when(pl.col("Event_Date").dt.month() >= 4)
-            .then(
-                pl.col("Event_Date").dt.year().cast(pl.String)
-                + "-"
-                + ((pl.col("Event_Date").dt.year() + 1) % 100).cast(pl.String).str.zfill(2)
-            )
-            .otherwise(
-                (pl.col("Event_Date").dt.year() - 1).cast(pl.String)
-                + "-"
-                + (pl.col("Event_Date").dt.year() % 100).cast(pl.String).str.zfill(2)
-            )
-            .alias("FY")
-        )
+        df_filtered = self._validate_and_prepare_ledger_frame(df_filtered, source_label="")
 
         unique_dates = df_filtered["Event_Date"].unique().to_list()
         date_rate_map = {d: self._ordinary_income_rate(d) for d in unique_dates if d is not None}
@@ -359,7 +371,7 @@ class BaseEventsBuilder:
         )
 
         df_result = df_filtered.select(
-            fy_expr,
+            pl.col("FY"),
             pl.col("Event_Date"),
             pl.lit("LEDGER").alias("Source_Type"),
             pl.col("Source_ID"),
@@ -416,65 +428,7 @@ class BaseEventsBuilder:
         if df_credits["Source_ID"].is_null().any() or (df_credits["Source_ID"] == "").any():
             raise ValueError("Required identifier tax-credit income UID is null or empty.")
 
-        amount_col = df_credits.get_column("BASE_AMOUNT")
-        if amount_col.dtype == pl.Boolean:
-            bad_id = str(df_credits.get_column("Source_ID")[0])
-            raise ValueError(
-                f"Required amount tax-credit BASE_AMOUNT cannot be boolean for source {bad_id!r}."
-            )
-        try:
-            df_credits = df_credits.with_columns(
-                pl.col("BASE_AMOUNT").cast(pl.Float64, strict=True).alias("Amount_INR")
-            )
-        except Exception as exc:
-            bad_id = str(df_credits.get_column("Source_ID")[0])
-            raise ValueError(
-                f"Required amount tax-credit BASE_AMOUNT is invalid for source {bad_id!r}: {exc}"
-            ) from exc
-
-        if df_credits["Amount_INR"].is_nan().any() or df_credits["Amount_INR"].is_infinite().any():
-            bad_idx = (
-                df_credits["Amount_INR"].is_nan() | df_credits["Amount_INR"].is_infinite()
-            ).arg_true()[0]
-            bad_id = str(df_credits.get_column("Source_ID")[bad_idx])
-            raise ValueError(
-                f"Required amount tax-credit BASE_AMOUNT must be finite for source {bad_id!r}."
-            )
-
-        if df_credits["DATE"].is_null().any():
-            bad_idx = df_credits["DATE"].is_null().arg_true()[0]
-            bad_id = str(df_credits.get_column("Source_ID")[bad_idx])
-            raise ValueError(f"Required date tax-credit DATE is null for source {bad_id!r}.")
-
-        if df_credits["DATE"].dtype == pl.Datetime:
-            df_credits = df_credits.with_columns(pl.col("DATE").dt.date().alias("Event_Date"))
-        elif df_credits["DATE"].dtype == pl.Date:
-            df_credits = df_credits.with_columns(pl.col("DATE").alias("Event_Date"))
-        else:
-            try:
-                df_credits = df_credits.with_columns(
-                    pl.col("DATE").cast(pl.Date, strict=True).alias("Event_Date")
-                )
-            except Exception as exc:
-                bad_id = str(df_credits.get_column("Source_ID")[0])
-                raise ValueError(
-                    f"Required date tax-credit DATE is invalid for source {bad_id!r}: {exc}"
-                ) from exc
-
-        fy_expr = (
-            pl.when(pl.col("Event_Date").dt.month() >= 4)
-            .then(
-                pl.col("Event_Date").dt.year().cast(pl.String)
-                + "-"
-                + ((pl.col("Event_Date").dt.year() + 1) % 100).cast(pl.String).str.zfill(2)
-            )
-            .otherwise(
-                (pl.col("Event_Date").dt.year() - 1).cast(pl.String)
-                + "-"
-                + (pl.col("Event_Date").dt.year() % 100).cast(pl.String).str.zfill(2)
-            )
-            .alias("FY")
-        )
+        df_credits = self._validate_and_prepare_ledger_frame(df_credits, source_label="tax-credit")
 
         currency_expr = (
             pl.col("CURRENCY_ID").cast(pl.String).str.strip_chars().alias("CURRENCY_ID")
@@ -483,7 +437,7 @@ class BaseEventsBuilder:
         )
 
         df_result = df_credits.select(
-            fy_expr,
+            pl.col("FY"),
             pl.col("Event_Date"),
             pl.lit("TAX_CREDIT").alias("Source_Type"),
             pl.col("Source_ID"),
@@ -507,6 +461,67 @@ class BaseEventsBuilder:
         """Return a finite numeric value, preserving missing/invalid values as null."""
         return TaxEstimator.clean_optional_finite_number(value)
 
+    def _build_quant_tax_event(
+        self,
+        row: Mapping[str, object],
+        has_currency_id: bool,
+    ) -> TaxEventDict:
+        """Construct a strongly typed TaxEventDict from a Quant FIFO realized event row."""
+        source_id = self._required_id(row.get("Realized_Event_ID"), "Realized_Event_ID")
+        event_date = self._as_date(row.get("Disposal_Date"), "Quant Disposal_Date", source_id)
+        amount = self._required_amount(
+            row.get("Realized_Gain_Loss"), "Realized_Gain_Loss", source_id
+        )
+        sub_head, classification_known = self._quant_sub_head(row)
+        is_reconciliation = str(row.get("Lot_Source_Type") or "").upper() == "RECONCILIATION"
+
+        status_reasons: list[str] = []
+        if is_reconciliation:
+            status_reasons.append(
+                "Reconciliation lot: original acquisition evidence requires review."
+            )
+        if not classification_known:
+            status_reasons.append("Investment tax classification is unmapped or invalid.")
+        if not self._clean_text(row.get("ISIN")):
+            status_reasons.append("ISIN is missing.")
+        if not self._clean_text(row.get("Lot_ID")):
+            status_reasons.append("Lot_ID is missing.")
+
+        currency_val = row.get("Currency_ID") if has_currency_id else row.get("CURRENCY_ID")
+        clean_curr = self._clean_text(currency_val)
+        if not clean_curr:
+            status_reasons.append("Currency_ID is missing.")
+
+        applied_rate = self._optional_finite_number(row.get("Applied_Rate"))
+        estimated_tax = self._optional_finite_number(row.get("Estimated_Tax"))
+        if applied_rate is not None and not 0.0 <= applied_rate <= 1.0:
+            applied_rate = None
+        if estimated_tax is not None and estimated_tax < 0:
+            estimated_tax = None
+        if not is_reconciliation and (applied_rate is None or estimated_tax is None):
+            status_reasons.append("Applied tax rate or estimated tax is unavailable or invalid.")
+
+        if is_reconciliation or applied_rate is None or estimated_tax is None:
+            applied_rate = None
+            estimated_tax = None
+
+        return {
+            "FY": self._financial_year(event_date),
+            "Event_Date": event_date,
+            "Source_Type": "QUANT",
+            "Source_ID": source_id,
+            "Income_Head": "Capital Gains",
+            "Tax_Sub_Head": sub_head,
+            "Amount_INR": amount,
+            "Applied_Rate": applied_rate,
+            "Estimated_Tax": estimated_tax,
+            "CURRENCY_ID": clean_curr,
+            "Tax_Status": "CHECK_REQUIRED" if status_reasons else "READY",
+            "Tax_Status_Reason": " ".join(status_reasons) or None,
+            "ISIN": self._clean_text(row.get("ISIN")),
+            "Lot_ID": self._clean_text(row.get("Lot_ID")),
+        }
+
     def _normalize_quant_realized_events(self) -> list[TaxEventDict]:
         """Normalize authoritative Quant FIFO realized gains/losses."""
         df = self.df_realized_events
@@ -517,70 +532,8 @@ class BaseEventsBuilder:
         if missing:
             raise ValueError(f"Quant realized events missing required columns: {missing}")
 
-        records: list[TaxEventDict] = []
-        for row in df.to_dicts():
-            source_id = self._required_id(row.get("Realized_Event_ID"), "Realized_Event_ID")
-            event_date = self._as_date(row.get("Disposal_Date"), "Quant Disposal_Date", source_id)
-            amount = self._required_amount(
-                row.get("Realized_Gain_Loss"), "Realized_Gain_Loss", source_id
-            )
-            sub_head, classification_known = self._quant_sub_head(row)
-            is_reconciliation = str(row.get("Lot_Source_Type") or "").upper() == "RECONCILIATION"
-            status_reasons: list[str] = []
-            if is_reconciliation:
-                status_reasons.append(
-                    "Reconciliation lot: original acquisition evidence requires review."
-                )
-            if not classification_known:
-                status_reasons.append("Investment tax classification is unmapped or invalid.")
-            if not self._clean_text(row.get("ISIN")):
-                status_reasons.append("ISIN is missing.")
-            if not self._clean_text(row.get("Lot_ID")):
-                status_reasons.append("Lot_ID is missing.")
-            if not self._clean_text(
-                row.get("Currency_ID") if "Currency_ID" in df.columns else row.get("CURRENCY_ID")
-            ):
-                status_reasons.append("Currency_ID is missing.")
-
-            applied_rate = self._optional_finite_number(row.get("Applied_Rate"))
-            estimated_tax = self._optional_finite_number(row.get("Estimated_Tax"))
-            if applied_rate is not None and not 0.0 <= applied_rate <= 1.0:
-                applied_rate = None
-            if estimated_tax is not None and estimated_tax < 0:
-                estimated_tax = None
-            if not is_reconciliation and (applied_rate is None or estimated_tax is None):
-                status_reasons.append(
-                    "Applied tax rate or estimated tax is unavailable or invalid."
-                )
-            # Missing identifiers/currency trigger review but do not erase an otherwise
-            # valid FIFO tax estimate. Reconciliation lots and invalid calculations do.
-            if is_reconciliation or applied_rate is None or estimated_tax is None:
-                applied_rate = None
-                estimated_tax = None
-
-            records.append(
-                {
-                    "FY": self._financial_year(event_date),
-                    "Event_Date": event_date,
-                    "Source_Type": "QUANT",
-                    "Source_ID": source_id,
-                    "Income_Head": "Capital Gains",
-                    "Tax_Sub_Head": sub_head,
-                    "Amount_INR": amount,
-                    "Applied_Rate": applied_rate,
-                    "Estimated_Tax": estimated_tax,
-                    "CURRENCY_ID": self._clean_text(
-                        row.get("Currency_ID")
-                        if "Currency_ID" in df.columns
-                        else row.get("CURRENCY_ID")
-                    ),
-                    "Tax_Status": "CHECK_REQUIRED" if status_reasons else "READY",
-                    "Tax_Status_Reason": " ".join(status_reasons) or None,
-                    "ISIN": self._clean_text(row.get("ISIN")),
-                    "Lot_ID": self._clean_text(row.get("Lot_ID")),
-                }
-            )
-        return records
+        has_currency_id = "Currency_ID" in df.columns
+        return [self._build_quant_tax_event(row, has_currency_id) for row in df.to_dicts()]
 
     def _quant_sub_head(self, row: RealizedEventDict | Mapping[str, object]) -> tuple[str, bool]:
         """Map Quant instrument/holding metadata to the configured evidence sub-head."""
