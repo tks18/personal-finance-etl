@@ -26,12 +26,16 @@ import sqlite3
 import uuid
 from collections.abc import Mapping, Sequence
 from datetime import date, datetime
-from typing import Any, cast
+from typing import cast
 
+import polars as pl
+
+from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.contracts.extraction import ExtractionProviderRequest
 from personal_finance_etl.contracts.lifecycle import (
     CommitState,
     FailureDomain,
+    SyncSummaryRecord,
     classify_failure_domain,
 )
 from personal_finance_etl.infrastructure.control_plane.connection import SQLiteManager
@@ -226,16 +230,17 @@ class RunRepository:
         return str(value)
 
     @classmethod
-    def _fingerprint_dataframe(cls, input_df: Any | None) -> str:
+    def _fingerprint_dataframe(cls, input_df: pl.DataFrame | pl.LazyFrame | None) -> str:
         """Compute deterministic SHA-256 fingerprint of a tabular DataFrame."""
         if input_df is None:
             return "no-input"
-        if not hasattr(input_df, "to_dicts") or not hasattr(input_df, "columns"):
+        df = input_df.collect() if isinstance(input_df, pl.LazyFrame) else input_df
+        if not hasattr(df, "to_dicts") or not hasattr(df, "columns"):
             raise TypeError(
                 "Simulation input must expose Polars-compatible columns and to_dicts()."
             )
-        columns: list[str] = [str(column) for column in input_df.columns]
-        rows = cast(list[dict[str, object]], input_df.to_dicts())
+        columns: list[str] = [str(column) for column in df.columns]
+        rows = cast(list[dict[str, object]], df.to_dicts())
         digest = hashlib.sha256()
         header = json.dumps(columns, ensure_ascii=False, separators=(",", ":"))
         digest.update(header.encode("utf-8"))
@@ -253,9 +258,9 @@ class RunRepository:
         self,
         run_id: str,
         root_seed: str,
-        rules: Any,
-        input_df: Any | None = None,
-        result_df: Any | None = None,
+        rules: FinancialRules,
+        input_df: pl.DataFrame | pl.LazyFrame | None = None,
+        result_df: pl.DataFrame | pl.LazyFrame | None = None,
         input_as_of_date: date | str | None = None,
         result_fingerprint: str | None = None,
         settings_snapshot_id: str | None = None,
@@ -282,7 +287,7 @@ class RunRepository:
         if result_fingerprint is None and result_df is not None:
             result_fingerprint = self._fingerprint_dataframe(result_df)
 
-        if input_as_of_date is None and input_df is not None:
+        if input_as_of_date is None and isinstance(input_df, pl.DataFrame):
             candidate_cols = [
                 "MONTH_START_DATE",
                 "MONTH_END_DATE",
@@ -292,18 +297,17 @@ class RunRepository:
                 "Closing_Date",
             ]
             for col in candidate_cols:
-                if hasattr(input_df, "columns") and col in input_df.columns:
+                if col in input_df.columns and input_df.height > 0:
                     try:
-                        if hasattr(input_df, "height") and input_df.height > 0:
-                            max_val = input_df[col].max()
-                            if max_val is not None:
-                                if isinstance(max_val, datetime):
-                                    input_as_of_date = max_val.date().isoformat()
-                                elif isinstance(max_val, date):
-                                    input_as_of_date = max_val.isoformat()
-                                else:
-                                    input_as_of_date = str(max_val).split("T")[0].split(" ")[0]
-                                break
+                        max_val = input_df[col].max()
+                        if max_val is not None:
+                            if isinstance(max_val, datetime):
+                                input_as_of_date = max_val.date().isoformat()
+                            elif isinstance(max_val, date):
+                                input_as_of_date = max_val.isoformat()
+                            else:
+                                input_as_of_date = str(max_val).split("T")[0].split(" ")[0]
+                            break
                     except (KeyError, TypeError, ValueError, AttributeError):
                         pass
         elif isinstance(input_as_of_date, (date, datetime)):
@@ -585,14 +589,23 @@ class RunRepository:
                 params,
             )
 
-    def log_sync_summary(self, run_id: str, summary: dict[str, Any]) -> None:
+    def log_sync_summary(
+        self, run_id: str, summary: SyncSummaryRecord | Mapping[str, object]
+    ) -> None:
         """Persist authoritative file-sync summary metrics for a pipeline run."""
         now = datetime.now().isoformat(timespec="seconds")
-        actionable_count = int(summary.get("actionable_count", 0))
-        synced_count = int(summary.get("synced_count", 0))
-        healed_count = int(summary.get("healed_count", 0))
-        failed_count = int(summary.get("failed_count", 0))
-        deferred_count = int(summary.get("deferred_count", 0))
+        raw_actionable = summary.get("actionable_count", 0)
+        actionable_count = (
+            int(raw_actionable) if isinstance(raw_actionable, (int, float, str)) else 0
+        )
+        raw_synced = summary.get("synced_count", 0)
+        synced_count = int(raw_synced) if isinstance(raw_synced, (int, float, str)) else 0
+        raw_healed = summary.get("healed_count", 0)
+        healed_count = int(raw_healed) if isinstance(raw_healed, (int, float, str)) else 0
+        raw_failed = summary.get("failed_count", 0)
+        failed_count = int(raw_failed) if isinstance(raw_failed, (int, float, str)) else 0
+        raw_deferred = summary.get("deferred_count", 0)
+        deferred_count = int(raw_deferred) if isinstance(raw_deferred, (int, float, str)) else 0
         sync_status = str(summary.get("sync_status", "COMPLETE")).upper()
         with self.db.atomic():
             self.db.conn.execute(
@@ -619,7 +632,7 @@ class RunRepository:
                 ),
             )
 
-    def get_sync_summary(self, run_id: str) -> dict[str, Any] | None:
+    def get_sync_summary(self, run_id: str) -> SyncSummaryRecord | None:
         """Retrieve file-sync summary metrics for a pipeline run."""
         row = self.db.conn.execute(
             """SELECT run_id, actionable_count, synced_count, healed_count, failed_count, deferred_count, sync_status, created_at
@@ -629,12 +642,12 @@ class RunRepository:
         if not row:
             return None
         return {
-            "run_id": row[0],
-            "actionable_count": row[1],
-            "synced_count": row[2],
-            "healed_count": row[3],
-            "failed_count": row[4],
-            "deferred_count": row[5],
-            "sync_status": row[6],
-            "created_at": row[7],
+            "run_id": str(row[0]),
+            "actionable_count": int(row[1]),
+            "synced_count": int(row[2]),
+            "healed_count": int(row[3]),
+            "failed_count": int(row[4]),
+            "deferred_count": int(row[5]),
+            "sync_status": str(row[6]),
+            "created_at": str(row[7]),
         }
