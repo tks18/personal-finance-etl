@@ -13,25 +13,33 @@ Does not own
 
 import warnings
 from datetime import date
-from typing import Any
+from typing import Protocol
 
 import polars as pl
 
 from personal_finance_etl.domain.common.dates import get_fy_start_year, to_date_obj
+from personal_finance_etl.domain.investments.contracts import RealizedEventDict
+from personal_finance_etl.domain.market.macro import FYMacroParametersTable
 
 warnings.filterwarnings(
     "ignore", message="Sortedness of columns cannot be checked when 'by' groups provided"
 )
 
 
+class ContextWithFYTable(Protocol):
+    """Protocol for context providing financial year macro parameters table."""
+
+    fy_table: FYMacroParametersTable
+
+
 class RealizedGainsCalculator:
     """Calculates FY realized gains."""
 
-    def __init__(self, ctx: Any):
+    def __init__(self, ctx: ContextWithFYTable) -> None:
         self.ctx = ctx
 
     def _build_empty_fy_frame(self, unique_dates: list[date]) -> pl.DataFrame:
-        df_dates_list: list[dict[str, Any]] = []
+        df_dates_list: list[dict[str, object]] = []
         for d in unique_dates:
             d_obj = to_date_obj(d)
             if not d_obj:
@@ -60,7 +68,7 @@ class RealizedGainsCalculator:
         self,
         lazy_df: pl.LazyFrame,
         unique_dates: list[date],
-        realized_events: list[dict[str, Any]],
+        realized_events: list[RealizedEventDict],
     ) -> pl.LazyFrame:
         df_fy_empty = self._build_empty_fy_frame(unique_dates)
 
