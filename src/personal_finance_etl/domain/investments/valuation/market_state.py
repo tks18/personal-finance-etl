@@ -16,10 +16,11 @@ Does not own
 import dataclasses
 from collections import defaultdict, deque
 from datetime import date, timedelta
-from typing import Any
+from typing import cast
 
 import polars as pl
 
+from personal_finance_etl.domain.investments.contracts import MarketSpineRecord, TradeRecord
 from personal_finance_etl.domain.investments.lots.ordering import sort_purchases, sort_sales
 
 EMPTY_US_MARKET_SCHEMA: dict[str, type[pl.DataType] | pl.DataType] = {
@@ -81,25 +82,25 @@ def transform_us_market_data(
         .sort(["ISIN", "Date"])
     )
 
-    buys: defaultdict[str, defaultdict[date, list[dict[str, Any]]]] = defaultdict(
+    buys: defaultdict[str, defaultdict[date, list[TradeRecord]]] = defaultdict(
         lambda: defaultdict(list)
     )
     currency_map: dict[str, str] = {}
-    for row in df_p_us.to_dicts():
-        dt = row["Date"]
+    for raw_p in df_p_us.to_dicts():
+        dt = raw_p.get("Date")
         if isinstance(dt, date):
-            buys[str(row["ISIN"])][dt].append(row)
-            currency_map[str(row["ISIN"])] = str(row["CURRENCY_ID"])
+            buys[str(raw_p["ISIN"])][dt].append(cast(TradeRecord, raw_p))
+            currency_map[str(raw_p["ISIN"])] = str(raw_p["CURRENCY_ID"])
 
-    sells: defaultdict[str, defaultdict[date, list[dict[str, Any]]]] = defaultdict(
+    sells: defaultdict[str, defaultdict[date, list[TradeRecord]]] = defaultdict(
         lambda: defaultdict(list)
     )
-    for row in df_s_us.to_dicts():
-        dt = row["Date"]
+    for raw_s in df_s_us.to_dicts():
+        dt = raw_s.get("Date")
         if isinstance(dt, date):
-            sells[str(row["ISIN"])][dt].append(row)
+            sells[str(raw_s["ISIN"])][dt].append(cast(TradeRecord, raw_s))
 
-    spine_records: list[dict[str, Any]] = []
+    spine_records: list[MarketSpineRecord] = []
 
     @dataclasses.dataclass
     class Lot:
@@ -120,11 +121,13 @@ def transform_us_market_data(
             for b in sort_purchases(day_buys):
                 qty = float(b["Quantity"])
                 if qty > 0:
+                    b_val_local = float(b.get("Value_Local") or 0.0)
+                    b_val_inr = float(b.get("Value") or 0.0)
                     lots.append(
                         Lot(
                             qty=qty,
-                            price_local=float(b["Value_Local"]) / qty,
-                            price_inr=float(b["Value"]) / qty,
+                            price_local=b_val_local / qty,
+                            price_inr=b_val_inr / qty,
                         )
                     )
 
