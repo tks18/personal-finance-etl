@@ -15,7 +15,6 @@ Does not own
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any
 
 import polars as pl
 
@@ -36,7 +35,7 @@ class CashflowStatementBuilder:
     def __init__(
         self,
         dfs: Mapping[str, pl.DataFrame | pl.LazyFrame],
-        base_lf: dict[str, Any],
+        base_lf: Mapping[str, pl.LazyFrame],
         rules: FinancialRules,
     ) -> None:
         self.dfs = dfs
@@ -324,7 +323,7 @@ class MonthlyCashflowSummaryBuilder:
     def __init__(
         self,
         dfs: Mapping[str, pl.DataFrame | pl.LazyFrame],
-        base_lf: dict[str, Any],
+        base_lf: Mapping[str, pl.LazyFrame],
         rules: FinancialRules,
     ) -> None:
         self.dfs = dfs
