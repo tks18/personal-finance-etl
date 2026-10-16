@@ -62,6 +62,7 @@ class QueueStream:
         self.is_error = is_error
 
     def write(self, msg: str) -> None:
+        """Buffer and parse streaming text output into structured status messages."""
         self.buffer += msg
         if "\n" in self.buffer:
             lines = self.buffer.split("\n")
@@ -79,6 +80,7 @@ class QueueStream:
             self.buffer = lines[-1]
 
     def flush(self) -> None:
+        """Flush remaining buffered text as a status message."""
         if self.buffer.strip():
             level = infer_log_level(self.buffer.strip(), is_error=self.is_error)
             self.queue.put(
