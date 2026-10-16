@@ -219,9 +219,7 @@ def _run_etl_progress(engine: PersonalFinanceEngine, config_path: str, rules_pat
             completion_event.wait()
             progress.update(main_task, completed=100.0)
         except KeyboardInterrupt:
-            progress.console.print(
-                "\n[bold red]Pipeline forcefully terminated by user.[/bold red]"
-            )
+            progress.console.print("\n[bold red]Pipeline forcefully terminated by user.[/bold red]")
             sys.exit(1)
 
 
