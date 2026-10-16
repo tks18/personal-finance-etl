@@ -79,6 +79,24 @@ class StockPipeline:
         rules: FinancialRules,
         logger: logging.Logger,
     ) -> AssetPipelineResult:
+        """Process domestic stock market data, trade orders, and master references.
+
+        Parameters
+        ----------
+        extracted : ExtractionResult
+            Raw extracted workbook data.
+        d_asset_subcategory_lazy : pl.LazyFrame
+            Reference dimension for asset subcategories.
+        rules : FinancialRules
+            Financial rules and default currency configuration.
+        logger : logging.Logger
+            Pipeline execution logger.
+
+        Returns
+        -------
+        AssetPipelineResult
+            Normalized market data, purchases, sales, and master references.
+        """
         logger.debug("Parsing unstructured Stock Excel files...")
         market_data = get_stg_stock_market_data(
             extracted.stock_market_data_raw, rules.DEFAULT_CURRENCY_ID
@@ -121,6 +139,24 @@ class USStockPipeline:
         rules: FinancialRules,
         logger: logging.Logger,
     ) -> AssetPipelineResult:
+        """Process foreign stock trade transactions, multi-currency values, and FX rates.
+
+        Parameters
+        ----------
+        extracted : ExtractionResult
+            Raw extracted workbook data.
+        d_asset_subcategory_lazy : pl.LazyFrame
+            Reference dimension for asset subcategories.
+        rules : FinancialRules
+            Financial rules and default currency configuration.
+        logger : logging.Logger
+            Pipeline execution logger.
+
+        Returns
+        -------
+        AssetPipelineResult
+            Normalized purchases, sales, and master references for US equities.
+        """
         logger.debug("Parsing US Stock Trade Orders...")
         base_orders = get_base_us_stock_transactions(extracted.us_stock_transactions_raw)
         purchase_trans = transform_stg_us_stock_trades(base_orders, trade_type="BUY")
@@ -193,6 +229,24 @@ class MutualFundPipeline:
         rules: FinancialRules,
         logger: logging.Logger,
     ) -> AssetPipelineResult:
+        """Process domestic mutual fund market data, transactions, and ISIN mappings.
+
+        Parameters
+        ----------
+        extracted : ExtractionResult
+            Raw extracted workbook data.
+        d_asset_subcategory_lazy : pl.LazyFrame
+            Reference dimension for asset subcategories.
+        rules : FinancialRules
+            Financial rules and default currency configuration.
+        logger : logging.Logger
+            Pipeline execution logger.
+
+        Returns
+        -------
+        AssetPipelineResult
+            Normalized MF market data, purchases, sales, and master references.
+        """
         logger.debug("Parsing unstructured Mutual Fund Excel files...")
         mapping = extracted.stg_mf_isin_mapping
         market_data = get_stg_mf_market_data(
