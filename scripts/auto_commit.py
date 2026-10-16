@@ -467,26 +467,11 @@ V910_COMMIT_MESSAGES: dict[str, str] = {
 
 # Dedicated v9.2.0 Implementation Hardening Commit Messages
 V920_COMMIT_MESSAGES: dict[str, str] = {
-    # v9.2.0 Phase 5 Lazy/Intermediate Optimization
-    "src/personal_finance_etl/application/investments/aggregation_service.py": "refactor(investments): eliminate redundant eager join materialization",
-    "src/personal_finance_etl/infrastructure/providers/files/sqlite.py": "refactor(providers): eliminate redundant eager sqlite table collects",
-    "src/personal_finance_etl/application/ingestion/market_sync.py": "docs(ingestion): document silver publication materialization bounds",
-    "src/personal_finance_etl/application/pipeline/transformer.py": "docs(pipeline): document calendar publication materialization bound",
-    "src/personal_finance_etl/application/pipeline/lifecycle.py": "docs(lifecycle): document gc collect process materialization bound",
-    "src/personal_finance_etl/domain/fire/inflation.py": "docs(fire): document CPI scalar extraction materialization bound",
-    "src/personal_finance_etl/domain/market/fx.py": "docs(market): document validation diagnostic materializations in fx",
-    "src/personal_finance_etl/domain/market/benchmarks.py": "docs(market): document stateful algorithm materialization in bench",
-    "src/personal_finance_etl/domain/common/dates.py": "docs(domain): document validation diagnostic collect in dates",
-    "src/personal_finance_etl/domain/common/validation.py": "docs(domain): document validation diagnostic collect in validation",
-    "src/personal_finance_etl/domain/investments/valuation/market_state.py": "docs(investments): document materialization bounds in market state",
-    "src/personal_finance_etl/domain/household/transforms/transactions.py": "docs(household): document validation diagnostic collect in txn",
-    "src/personal_finance_etl/infrastructure/warehouse/gold.py": "docs(warehouse): document publication materialization bound in gold",
-    "src/personal_finance_etl/infrastructure/warehouse/bronze.py": "docs(warehouse): document publication materialization in bronze",
-    "src/personal_finance_etl/infrastructure/warehouse/silver.py": "docs(warehouse): document publication materialization in silver",
-    ".planning/refactor_v910_v920/v9.2.0/05-materialization-map.csv": "docs(v9.2.0): update materialization map with Phase 5 eliminations",
-    ".planning/refactor_v910_v920/v9.2.0/04-polars-execution-evidence.md": "docs(v9.2.0): record Phase 5 materialization optimization metrics",
-    ".planning/refactor_v910_v920/v9.2.0/07-v9.2.0-phase-tracker.md": "docs(v9.2.0): mark Phase 5 as completed in phase tracker",
-    "scripts/auto_commit.py": "chore(scripts): stage v9.2.0 Phase 5 commit mappings",
+    # v9.2.0 Phase 6 Benchmark & Certification
+    "src/personal_finance_etl/presentation/cli/app.py": "style(cli): conform interrupt handler print to ruff format",
+    ".planning/refactor_v910_v920/v9.2.0/06-performance-benchmark-protocol.md": "docs(v9.2.0): record Phase 6 benchmark results and certification",
+    ".planning/refactor_v910_v920/v9.2.0/07-v9.2.0-phase-tracker.md": "docs(v9.2.0): mark Phase 6 as completed in phase tracker",
+    "scripts/auto_commit.py": "chore(scripts): stage v9.2.0 Phase 6 commit mappings",
 }
 
 
