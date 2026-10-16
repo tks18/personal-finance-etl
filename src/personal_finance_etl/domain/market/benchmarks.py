@@ -50,6 +50,8 @@ def transform_benchmark_data(
         Daily continuous Silver benchmark series.
     """
     if isinstance(df_bronze_benchmark, pl.LazyFrame):
+        # Materialization Boundary: STATEFUL_ALGORITHM_BOUNDARY
+        # Materialize bronze benchmark frame for sequential price gap closure validation
         df_bronze_benchmark = df_bronze_benchmark.collect()
 
     if df_bronze_benchmark.is_empty():
