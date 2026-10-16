@@ -48,7 +48,26 @@ class ContainerProtocol(Protocol):
         rules_path: str | None = None,
         status_queue: ILogger | None = None,
         settings: Settings | None = None,
-    ) -> ETLOrchestrator: ...
+    ) -> ETLOrchestrator:
+        """Create and wire an ETLOrchestrator instance with configuration and logging.
+
+        Parameters
+        ----------
+        config_path : str | None, optional
+            Path to application settings YAML.
+        rules_path : str | None, optional
+            Path to financial rules YAML.
+        status_queue : ILogger | None, optional
+            Logger or queue for runtime status events.
+        settings : Settings | None, optional
+            Pre-loaded settings instance.
+
+        Returns
+        -------
+        ETLOrchestrator
+            Wired execution orchestrator.
+        """
+        ...
 
 
 class PersonalFinanceEngine:
