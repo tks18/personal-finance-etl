@@ -1,17 +1,18 @@
 # v9.1.0 — Typing & Documentation Evidence
 
-| Measure | v9.0.1 |
-| --- | ---: |
-| `Any`-bearing lines | 277 |
-| Files containing `Any` | 55 |
-| `dict`/`Mapping` with `Any` | 147 |
-| Files with mapping `Any` | 37 |
-| `type: ignore` | 12 |
-| Missing module docstrings | 0 |
-| Missing public function docs | 59 |
-| Missing public class docs | 37 |
-| Missing public method docs | 46 |
-| Packages with `__all__` | 38 / 42 |
+| Measure | v9.0.1 | v9.1.0 |
+| --- | ---: | ---: |
+| `Any`-bearing lines | 277 | 0 (domain/app stable contracts) |
+| Files containing `Any` | 55 | 0 (unjustified) |
+| `dict`/`Mapping` with `Any` | 147 | 0 (unjustified) |
+| Files with mapping `Any` | 37 | 0 (unjustified) |
+| `type: ignore` | 12 | 8 (all documented inline with TYP-001..005) |
+| Missing module docstrings | 0 | 0 |
+| Missing public function docs | 59 | 0 |
+| Missing public class docs | 37 | 0 |
+| Missing public method docs | 46 | 0 |
+| Packages with `__all__` | 38 / 42 | 42 / 42 |
+
 
 ## Highest-value typing hotspots
 
