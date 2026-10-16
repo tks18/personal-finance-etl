@@ -63,6 +63,32 @@ class SnapshotGenerator:
         execution_residual: float = 0.0,
         remaining_ltcg_exemption: float = 0.0,
     ) -> list[SnapshotRecord]:
+        """Construct daily snapshot records for all active lots of an instrument.
+
+        Parameters
+        ----------
+        fifo : FIFOPortfolio
+            Active tax lots portfolio tracker.
+        m_date : date
+            Snapshot valuation date.
+        m_price : float
+            Closing market price per unit.
+        m_bm_price : float
+            Closing benchmark price.
+        inst_metrics : InstrumentMetricsRecord
+            Computed instrument-level CAGR, XIRR, drawdown, and relative performance metrics.
+        fx_provider : FXRateProvider | None, optional
+            FX lookup provider for foreign-currency instruments, by default None.
+        execution_residual : float, optional
+            Residual cash drag from unexecuted orders, by default 0.0.
+        remaining_ltcg_exemption : float, optional
+            Remaining Section 112A equity exemption for the current financial year, by default 0.0.
+
+        Returns
+        -------
+        list[SnapshotRecord]
+            List of strongly-typed per-lot snapshot records.
+        """
         inst_cagr = inst_metrics.get("cagr")
         inst_cagr_status = inst_metrics.get("cagr_status", "UNDEFINED")
         inst_bm_cagr = inst_metrics.get("bm_cagr")
