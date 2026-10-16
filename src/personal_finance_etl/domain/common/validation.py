@@ -16,7 +16,7 @@ Does not own
 from __future__ import annotations
 
 import math
-from typing import Any
+from collections.abc import Mapping
 
 import polars as pl
 
@@ -35,8 +35,8 @@ class FinancialSourceValidationError(ValueError):
         source: str | None = None,
         sheet: str | None = None,
         field_name: str | None = None,
-        raw_value: Any = None,
-        row_identifier: Any = None,
+        raw_value: object = None,
+        row_identifier: object = None,
     ) -> None:
         context_parts: list[str] = []
         if source:
@@ -88,12 +88,12 @@ def clean_numeric_col(df: pl.DataFrame, col: str) -> pl.DataFrame:
 
 
 def parse_strict_numeric(
-    value: Any,
+    value: object,
     *,
     field_name: str = "numeric_field",
     source: str | None = None,
     sheet: str | None = None,
-    row_identifier: Any = None,
+    row_identifier: object = None,
     optional: bool = False,
 ) -> float | None:
     """Strictly parse a scalar financial numeric value.
@@ -157,7 +157,7 @@ def parse_strict_numeric(
 
 
 def _diagnose_numeric_failure(
-    row_dict: dict[str, Any],
+    row_dict: Mapping[str, object],
     available_cols: list[str],
     opt_set: set[str],
     source_val: str | None,
