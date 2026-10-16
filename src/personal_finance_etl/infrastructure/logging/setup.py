@@ -19,7 +19,8 @@ import logging
 import logging.handlers
 import multiprocessing
 import os
-from typing import Any, cast
+from multiprocessing.managers import SyncManager
+from typing import cast
 
 
 class QueueHandler(logging.Handler):
@@ -121,7 +122,7 @@ def remove_file_handlers() -> None:
 
 
 _listener: logging.handlers.QueueListener | None = None
-_worker_manager: Any | None = None
+_worker_manager: SyncManager | None = None
 _worker_queue: multiprocessing.Queue[logging.LogRecord] | None = None
 
 
