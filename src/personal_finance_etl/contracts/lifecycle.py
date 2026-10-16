@@ -65,6 +65,32 @@ class FailureDomain(StrEnum):
     UNKNOWN = "UNKNOWN"
 
 
+_ERROR_MATCH_RULES: tuple[tuple[tuple[str, ...], FailureDomain], ...] = (
+    (("FinancialSourceValidationError",), FailureDomain.SOURCE_VALIDATION),
+    (("ExtractionCompletenessError",), FailureDomain.EXTERNAL_PROVIDER),
+    (("DataContract", "DATA_CONTRACT_REGISTRY"), FailureDomain.FINANCIAL_INVARIANT),
+    (("DuckDB Commit Failed",), FailureDomain.DUCKDB_COMMIT),
+    (("SQLite Commit Failed",), FailureDomain.SQLITE_COMMIT),
+    (("ISIN_FAILURE", "BrokenProcessPool", "Process-boundary"), FailureDomain.WORKER),
+)
+
+_STAGE_MATCH_RULES: tuple[tuple[tuple[str, ...], FailureDomain], ...] = (
+    (("DISCOVERY",), FailureDomain.SOURCE_DISCOVERY),
+    (("VALIDATION",), FailureDomain.SOURCE_VALIDATION),
+    (("PROVIDER", "CURRENCY", "US_MARKET", "BENCHMARK"), FailureDomain.EXTERNAL_PROVIDER),
+    (("BRONZE", "SYNC"), FailureDomain.BRONZE_SYNC),
+    (("TRANSFORM", "ANALYTICS", "TAX", "PRESENTATION"), FailureDomain.TRANSFORMATION),
+    (("PUBLICATION", "LOAD", "METADATA", "SILVER", "GOLD"), FailureDomain.PUBLICATION),
+    (("DUCKDB_COMMIT",), FailureDomain.DUCKDB_COMMIT),
+    (("SQLITE_COMMIT",), FailureDomain.SQLITE_COMMIT),
+    (("RECOVERY", "CONVERGENCE"), FailureDomain.RECOVERY),
+    (("SNAPSHOT",), FailureDomain.SNAPSHOT),
+    (("RESTORE",), FailureDomain.RESTORE),
+    (("CONFIG",), FailureDomain.CONFIGURATION),
+    (("WORKER",), FailureDomain.WORKER),
+)
+
+
 def classify_failure_domain(
     stage: str | None = None,
     error: BaseException | str | None = None,
@@ -86,68 +112,29 @@ def classify_failure_domain(
     err_str = str(error) if error is not None else ""
     err_type = type(error).__name__ if isinstance(error, BaseException) else ""
 
-    # Exception-type or exact message classification
-    if "FinancialSourceValidationError" in err_type or "FinancialSourceValidationError" in err_str:
-        return FailureDomain.SOURCE_VALIDATION
+    for patterns, domain in _ERROR_MATCH_RULES:
+        if any(p in err_type or p in err_str for p in patterns):
+            return domain
 
-    if "ExtractionCompletenessError" in err_type or "ExtractionCompletenessError" in err_str:
-        return FailureDomain.EXTERNAL_PROVIDER
-
-    if "DataContract" in err_str or "DATA_CONTRACT_REGISTRY" in err_str:
-        return FailureDomain.FINANCIAL_INVARIANT
-
-    if "DuckDB Commit Failed" in err_str or "DUCKDB_COMMIT" in str(stage).upper():
+    stg_upper = str(stage).upper() if stage else ""
+    if "DUCKDB_COMMIT" in stg_upper:
         return FailureDomain.DUCKDB_COMMIT
-
-    if "SQLite Commit Failed" in err_str or "SQLITE_COMMIT" in str(stage).upper():
+    if "SQLITE_COMMIT" in stg_upper:
         return FailureDomain.SQLITE_COMMIT
-
-    if "ISIN_FAILURE" in err_str or "BrokenProcessPool" in err_str or "Process-boundary" in err_str:
-        return FailureDomain.WORKER
 
     if "Timeout" in err_type and "pipeline.lock" in err_str:
         return FailureDomain.CONFIGURATION
 
-    # Stage-based classification
     if stage:
         stg = stage.strip().upper()
-        if "DISCOVERY" in stg:
-            return FailureDomain.SOURCE_DISCOVERY
-        if "VALIDATION" in stg:
-            return FailureDomain.SOURCE_VALIDATION
-        if "PROVIDER" in stg or "CURRENCY" in stg or "US_MARKET" in stg or "BENCHMARK" in stg:
-            return FailureDomain.EXTERNAL_PROVIDER
-        if "BRONZE" in stg or "SYNC" in stg:
-            return FailureDomain.BRONZE_SYNC
-        if "TRANSFORM" in stg or "ANALYTICS" in stg or "TAX" in stg or "PRESENTATION" in stg:
-            return FailureDomain.TRANSFORMATION
-        if (
-            "PUBLICATION" in stg
-            or "LOAD" in stg
-            or "METADATA" in stg
-            or "SILVER" in stg
-            or "GOLD" in stg
-        ):
-            return FailureDomain.PUBLICATION
-        if "DUCKDB_COMMIT" in stg:
-            return FailureDomain.DUCKDB_COMMIT
-        if "SQLITE_COMMIT" in stg:
-            return FailureDomain.SQLITE_COMMIT
+        for patterns, domain in _STAGE_MATCH_RULES:
+            if any(p in stg for p in patterns):
+                return domain
         if "COMMIT" in stg:
             return (
                 FailureDomain.DUCKDB_COMMIT
                 if "DUCKDB" in err_str.upper()
                 else FailureDomain.SQLITE_COMMIT
             )
-        if "RECOVERY" in stg or "CONVERGENCE" in stg:
-            return FailureDomain.RECOVERY
-        if "SNAPSHOT" in stg:
-            return FailureDomain.SNAPSHOT
-        if "RESTORE" in stg:
-            return FailureDomain.RESTORE
-        if "CONFIG" in stg:
-            return FailureDomain.CONFIGURATION
-        if "WORKER" in stg:
-            return FailureDomain.WORKER
 
     return FailureDomain.UNKNOWN
