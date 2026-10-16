@@ -474,8 +474,21 @@ V920_COMMIT_MESSAGES: dict[str, str] = {
     "src/personal_finance_etl/application/investments/isin_service.py": "refactor(investments): decompose IsinProcessor into linear stages",
     "src/personal_finance_etl/domain/investments/portfolio/snapshots.py": "refactor(portfolio): decompose SnapshotGenerator lot generation",
     "src/personal_finance_etl/application/investments/aggregation_service.py": "refactor(investments): decompose PostProcessor dimension aggregation",
-    ".planning/refactor_v910_v920/v9.2.0/07-v9.2.0-phase-tracker.md": "docs(v9.2.0): mark Phase 2 as completed in phase tracker",
-    "scripts/auto_commit.py": "chore(scripts): stage v9.2.0 Phase 2 commit mappings",
+    # v9.2.0 Phase 3 Other Complexity Hotspots
+    "src/personal_finance_etl/application/pipeline/lifecycle.py": "refactor(lifecycle): decompose failure rollback and transitions",
+    "src/personal_finance_etl/contracts/lifecycle.py": "refactor(contracts): simplify failure domain classification rules",
+    "src/personal_finance_etl/domain/common/identity.py": "refactor(identity): simplify value canonicalization dispatch",
+    "src/personal_finance_etl/domain/fire/inflation.py": "refactor(fire): extract latest CPI resolution helper",
+    "src/personal_finance_etl/domain/household/transforms/dimensions.py": "refactor(household): extract tax map row and head builders",
+    "src/personal_finance_etl/domain/tax/classification.py": "refactor(tax): simplify quant subhead classification dispatch",
+    "src/personal_finance_etl/domain/tax/events.py": "refactor(tax): extract ledger validation and event builder helpers",
+    "src/personal_finance_etl/domain/wealth/net_worth.py": "refactor(wealth): decompose NetWorthBuilder into modular stages",
+    "src/personal_finance_etl/infrastructure/control_plane/file_sync.py": "refactor(control_plane): decompose disk sync into discrete passes",
+    "src/personal_finance_etl/infrastructure/recovery/backup.py": "refactor(recovery): decompose snapshot restore validation steps",
+    "src/personal_finance_etl/infrastructure/warehouse/meta.py": "refactor(warehouse): decompose DuckDB registry healing stages",
+    "src/personal_finance_etl/presentation/cli/app.py": "refactor(cli): extract subcommands and status prefix dispatch",
+    ".planning/refactor_v910_v920/v9.2.0/07-v9.2.0-phase-tracker.md": "docs(v9.2.0): mark Phase 3 as completed in phase tracker",
+    "scripts/auto_commit.py": "chore(scripts): stage v9.2.0 Phase 3 commit mappings",
 }
 
 
