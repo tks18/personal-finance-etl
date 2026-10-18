@@ -386,6 +386,7 @@ class SnapshotGenerator:
         )
 
         def rounded_optional(value: float | None, digits: int = 8) -> float | None:
+            """Safely round an optional float value to specified decimal digits."""
             return round(value, digits) if value is not None else None
 
         record = SnapshotRecord(
