@@ -237,6 +237,24 @@ def create_or_update_pr(
                 cmd.extend(["--add-label", "automerge"])
             subprocess.run(cmd, cwd=repo_dir, check=True)
             console.print(f"[bold green]✔ Successfully updated PR #{pr_number}:[/bold green] {pr_url}")
+
+            if automerge:
+                try:
+                    subprocess.run(
+                        ["gh", "pr", "merge", pr_number, "--auto", "--merge"],
+                        cwd=repo_dir,
+                        capture_output=True,
+                        text=True,
+                        check=True,
+                    )
+                    console.print(
+                        "[bold green]✔ Auto-merge armed:[/bold green] "
+                        "PR will merge automatically once all status checks pass (branch strictly preserved)."
+                    )
+                except subprocess.CalledProcessError as e:
+                    err = e.stderr.strip() if e.stderr else str(e)
+                    console.print(f"[dim yellow]Notice: Native auto-merge status: {err}[/dim yellow]")
+
             return 0
 
         console.print(f"[bold cyan]Creating new pull request from '{head}' into '{base}'...[/bold cyan]")
@@ -261,6 +279,24 @@ def create_or_update_pr(
         proc = subprocess.run(cmd, cwd=repo_dir, capture_output=True, text=True, check=True)
         new_url = proc.stdout.strip()
         console.print(f"[bold green]✔ Successfully created Pull Request:[/bold green] {new_url}")
+
+        if automerge:
+            try:
+                subprocess.run(
+                    ["gh", "pr", "merge", new_url, "--auto", "--merge"],
+                    cwd=repo_dir,
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+                console.print(
+                    "[bold green]✔ Auto-merge armed:[/bold green] "
+                    "PR will merge automatically once all status checks pass (branch strictly preserved)."
+                )
+            except subprocess.CalledProcessError as e:
+                err = e.stderr.strip() if e.stderr else str(e)
+                console.print(f"[dim yellow]Notice: Native auto-merge status: {err}[/dim yellow]")
+
         return 0
 
     except subprocess.CalledProcessError as e:
