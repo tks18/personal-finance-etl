@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [9.2.4](https://github.com/tks18/personal-finance-etl/compare/9.2.3...9.2.4) (2026-10-18)
+
+
+### Docs 📃
+
+* **readme:** add deepwiki badge ([6e060c1](https://github.com/tks18/personal-finance-etl/commit/6e060c12f882b7174f52f3b026d629c0bed67f5d))
+
+
+### CI 🛠
+
+* **ranger:** configure auto-merge and preserve branches ([2e940b6](https://github.com/tks18/personal-finance-etl/commit/2e940b6e5037a8477175a1a51949d140241c9f23))
+
+
+### Features 🔥
+
+* **ci:** attach automerge label in pr generation flow ([ab078de](https://github.com/tks18/personal-finance-etl/commit/ab078deeed284ae0f10f8df9e91b78dee123967d))
+
 ### [9.2.3](https://github.com/tks18/personal-finance-etl/compare/9.2.2...9.2.3) (2026-10-18)
 
 
