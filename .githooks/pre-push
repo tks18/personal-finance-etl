@@ -3,7 +3,7 @@
 # Runs Ruff, Format, Mypy, Pyright, Pylint, and Pytest (~40-70s).
 echo "[Quality Gate] Running Pre-Push Full Verification Suite..."
 
-uv run python scripts/quality_gate.py --tier full
+uv run poe audit-full
 EXIT_CODE=$?
 
 if [ $EXIT_CODE -ne 0 ]; then
