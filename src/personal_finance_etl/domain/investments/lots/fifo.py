@@ -445,8 +445,7 @@ class FIFOPortfolio:
                 if our_avg_local > 0:
                     r_local = target_avg_local / our_avg_local
 
-            for i in range(len(self._active_lots)):
-                lot = self._active_lots[i]
+            for i, lot in enumerate(self._active_lots):
                 new_price_local = lot.price_local * r_local if lot.price_local else 0.0
                 new_price = lot.price * r
 
