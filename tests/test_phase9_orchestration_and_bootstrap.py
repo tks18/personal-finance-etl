@@ -1,3 +1,5 @@
+# pylint: skip-file
+# flake8: noqa
 """Tests for Phase 9: Application Orchestration and Bootstrap Composition Root.
 
 Verifies:
