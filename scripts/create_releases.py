@@ -12,6 +12,14 @@ import sys
 import tempfile
 from pathlib import Path
 
+if sys.platform == "win32":
+    reconfig_out = getattr(sys.stdout, "reconfigure", None)
+    if callable(reconfig_out):
+        reconfig_out(encoding="utf-8", errors="replace")
+    reconfig_err = getattr(sys.stderr, "reconfigure", None)
+    if callable(reconfig_err):
+        reconfig_err(encoding="utf-8", errors="replace")
+
 
 def get_project_root() -> Path:
     """Finds project root by inspecting parents of this file for pyproject.toml."""
