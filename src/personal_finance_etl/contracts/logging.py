@@ -52,7 +52,6 @@ class NullStatusQueue:
         timeout: float | None = None,
     ) -> None:
         """Discard status message."""
-        pass
 
 
 # Architectural alias for legacy ILogger protocol
