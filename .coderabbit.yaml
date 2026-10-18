@@ -2,6 +2,12 @@
 # CodeRabbit AI Code Review Configuration
 # Repository: personal-finance-etl
 # Python: >=3.13 | Architecture: Clean Architecture & Modular Pipelines
+# Linked Tool Configs:
+#   - Ruff: ruff.toml
+#   - Pylint: .pylintrc
+#   - Mypy: mypy.ini
+#   - Flake8: .flake8
+#   - Codacy: .codacy.yml
 # ==============================================================================
 
 language: 'en-US'
@@ -26,11 +32,16 @@ reviews:
   tools:
     ruff:
       enabled: true
-      config_file: 'pyproject.toml'
+      config_file: 'ruff.toml'
     pylint:
       enabled: true
+      config_file: '.pylintrc'
+    mypy:
+      enabled: true
+      config_file: 'mypy.ini'
     flake8:
       enabled: false # Prefer Ruff to avoid redundant reports
+      config_file: '.flake8'
 
   path_instructions:
     - path: 'src/personal_finance_etl/domain/**/*.py'
@@ -50,18 +61,30 @@ reviews:
         - Verify robust exception handling and resource teardown (e.g., closing DuckDB/SQLite connections and WAL sidecars).
         - Ensure external data payloads are validated against strict contracts before ingestion.
 
-    - path: 'tests/**/*.py'
-      instructions: >
-        - Verify pytest conventions and assertion clarity.
-        - Ensure test suites validate both happy paths and boundary edge cases for financial calculations.
-
+# Review strictly files inside src/ and exclude every non-src folder/file
 path_filters:
-  - '.venv/**'
-  - 'build/**'
-  - 'dist/**'
-  - 'outputs/**'
-  - '.planning/**'
-  - '_df_cache/**'
-  - 'src/personal_finance_etl/presentation/docs/assets/**'
-  - '**.min.js'
-  - 'docs/**'
+  - 'src/**'
+  - '!src/personal_finance_etl/presentation/docs/assets/**'
+  - '!**.min.js'
+  - '!tests/**'
+  - '!scripts/**'
+  - '!docs/**'
+  - '!.planning/**'
+  - '!build/**'
+  - '!dist/**'
+  - '!outputs/**'
+  - '!backups/**'
+  - '!scratch/**'
+  - '!node_modules/**'
+  - '!.yarn/**'
+  - '!.github/**'
+  - '!.venv/**'
+  - '!_df_cache/**'
+  - '!main.py'
+  - '!main.spec'
+  - '!.versionrc.js'
+  - '!package.json'
+  - '!yarn.lock'
+  - '!uv.lock'
+  - '!CHANGELOG.md'
+  - '!README.md'
