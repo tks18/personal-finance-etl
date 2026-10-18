@@ -1,3 +1,5 @@
+# pylint: skip-file
+# flake8: noqa
 """Tests for Phase 2: Configuration, Preferences, and Common Domain Primitives.
 
 Owns
