@@ -107,6 +107,8 @@ def transform_us_market_data(
 
     @dataclasses.dataclass
     class Lot:
+        """Internal lot state tracking quantity and unit costs in local and base currency."""
+
         qty: float
         price_local: float
         price_inr: float
