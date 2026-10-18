@@ -65,6 +65,7 @@ class TaxClassifier:
             return "Other_Debt"
         if subtype in {"mf", "mutual_fund", "debt_mf"}:
             acquisition_date = row.get("Acquisition_Date")
+            acq_date: date | None
             if isinstance(acquisition_date, datetime):
                 acq_date = acquisition_date.date()
             elif isinstance(acquisition_date, str):
