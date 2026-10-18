@@ -95,8 +95,12 @@ shan-fin-gui = "personal_finance_etl.presentation.desktop.app:main"
 "docs" = "personal_finance_etl/docs"
 "logo.png" = "personal_finance_etl/logo.png"
 "logo.ico" = "personal_finance_etl/logo.ico"
-"social_preview.png" = "personal_finance_etl/social_preview.png"
-".github/assets/social_preview.png" = "personal_finance_etl/.github/assets/social_preview.png"
+
+[tool.hatch.build.targets.sdist]
+exclude = [
+    ".github",
+    "social_preview.png",
+]
 
 
 [project.urls]
