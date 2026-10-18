@@ -88,7 +88,7 @@ def transform_currency_fx_rates(
     global_start_date: date,
     global_end_date: date,
 ) -> pl.LazyFrame:
-    """Transforms Bronze FX observations into a daily Silver series.
+    """Transform Bronze FX observations into a daily Silver series.
 
     Missing dates may use the latest prior observation for up to seven calendar
     days (weekends and short market holidays). Rates before the first observation,
