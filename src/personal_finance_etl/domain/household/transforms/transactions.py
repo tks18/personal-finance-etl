@@ -290,7 +290,7 @@ def transform_f_transfer_transactions(
 def transform_f_opening_balances(
     raw_data: pl.LazyFrame, column_mapping: dict[str, str]
 ) -> pl.LazyFrame:
-    """Executes the PQ logic for Opening Balances."""
+    """Execute the PQ logic for Opening Balances."""
     df_transformed = (
         raw_data
         # Apply the dynamic column mapping first
