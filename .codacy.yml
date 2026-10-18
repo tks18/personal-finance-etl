@@ -1,0 +1,87 @@
+---
+# ==============================================================================
+# Codacy Static Code Analysis & Code Quality Configuration
+# Repository: personal-finance-etl
+# Python: >=3.13 | Architecture: Clean Architecture & Modular Pipelines
+# ==============================================================================
+
+engines:
+  # Python Linter & Modernizer (aligned with pyproject.toml line-length: 100)
+  ruff:
+    enabled: true
+    exclude_paths:
+      - 'tests/**'
+      - 'scripts/**'
+      - 'src/personal_finance_etl/presentation/docs/assets/**'
+      - '.planning/**'
+      - 'docs/**'
+
+  # Python Security Analysis (SAST)
+  bandit:
+    enabled: true
+    exclude_paths:
+      - 'tests/**' # Exclude pytest assert statements (B101) and test mocks
+      - 'scripts/**'
+      - '.planning/**'
+      - 'docs/**'
+
+  # Static Code Analyzer & Code Smell Detector
+  pylint:
+    enabled: true
+    exclude_paths:
+      - 'tests/**'
+      - 'scripts/**'
+      - 'src/personal_finance_etl/presentation/docs/assets/**'
+      - '.planning/**'
+      - 'docs/**'
+
+  # Code Duplication & Clone Detection (PMD-CPD)
+  duplication:
+    enabled: true
+    exclude_paths:
+      - 'tests/**' # Exclude test fixtures, assertions, and mock data repetition
+      - 'scripts/**' # Exclude commit registries and orchestration utilities
+      - '.planning/**' # Exclude historical analysis CSVs and phase trackers
+      - 'src/personal_finance_etl/presentation/docs/assets/**' # Exclude vendored minified JS
+      - '**.min.js'
+      - 'docs/**'
+
+  # Code Metrics Engine (Cyclomatic Complexity, Loc, Nesting)
+  metric:
+    enabled: true
+    exclude_paths:
+      - 'tests/**' # Prevent test matrices from skewing production complexity scores
+      - 'scripts/**'
+      - '.planning/**'
+      - 'src/personal_finance_etl/presentation/docs/assets/**'
+      - '**.min.js'
+      - 'docs/**'
+
+  # Markdown Linting
+  markdownlint:
+    enabled: true
+    exclude_paths:
+      - '.planning/**' # Exclude planning registers and large CSV audit files
+      - 'CHANGELOG.md' # Exclude standard-version generated changelog
+      - 'docs/**'
+
+languages:
+  python:
+    exclude_paths:
+      - 'outputs/**' # Local DuckDB/SQLite lakehouse data outputs
+      - 'build/**' # PyInstaller / Wheel build artifacts
+      - 'dist/**' # Release bundles
+      - '.venv/**' # Virtual environment
+      - '_df_cache/**' # Runtime DataFrame cache
+      - '.planning/**' # Planning and refactor documentation
+      - 'docs/**'
+  javascript:
+    exclude_paths:
+      - 'src/personal_finance_etl/presentation/docs/assets/**' # Vendored mermaid/svg-pan-zoom
+      - '**.min.js'
+      - 'docs/**'
+  markdown:
+    exclude_paths:
+      - '.planning/**'
+      - 'CHANGELOG.md'
+      - 'docs/**'
