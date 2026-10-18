@@ -1,3 +1,5 @@
+# pylint: skip-file
+# flake8: noqa
 """Phase 12 Architectural Certification & Constitutional Audit Test Suite.
 
 Owns
