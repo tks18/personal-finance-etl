@@ -29,8 +29,10 @@ audit-json = { cmd = "uv run python -c \"from scripts.tasks import audit_json; a
 install-hooks = { cmd = "uv run python -c \"from scripts.tasks import install_hooks; install_hooks()\"", help = "Install Git pre-commit and pre-push quality hooks" }
 
 # Automated Conventional Commits
-commit = { cmd = "uv run python -c \"from scripts.tasks import commit; commit()\"", help = "Run automated Conventional Commit tool (pass flags like --run, --dry-run, --file)" }
+commit = { cmd = "uv run python -c \"from scripts.tasks import commit; commit()\"", help = "Run automated Conventional Commit tool (supports flags: -i/--interactive, --run, --dry-run, --map, --file)" }
 "commit:preview" = { cmd = "uv run python -c \"from scripts.tasks import commit_preview; commit_preview()\"", help = "Preview automated Conventional Commits without staging or committing (dry-run)" }
-"commit:run" = { cmd = "uv run python -c \"from scripts.tasks import commit_run; commit_run()\"", help = "Execute automated Conventional Commits file-by-file immediately" }
+"commit:run" = { cmd = "uv run python -c \"from scripts.tasks import commit_run; commit_run()\"", help = "Execute automated Conventional Commits file-by-file immediately without prompting" }
+"commit:interactive" = { cmd = "uv run python -c \"from scripts.tasks import commit_interactive; commit_interactive()\"", help = "Interactive file-by-file Commitlint wizard with diff inspection and prompt choices" }
+"commit:i" = { cmd = "uv run python -c \"from scripts.tasks import commit_interactive; commit_interactive()\"", help = "Interactive file-by-file Commitlint wizard (alias for commit:interactive)" }
 
 
