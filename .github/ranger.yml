@@ -1,0 +1,13 @@
+# Configuration for Ranger (https://reporanger.com)
+# Documentation: https://mfix22.notion.site/Documentation-8d7627bb1f3c42b7b1820e8d6f157a57
+
+# Label mappings to automated actions
+# When an automerge label is applied, Ranger monitors the PR and merges once all checks pass.
+labels:
+  automerge: merge
+  'merge when passing': merge
+  'squash when passing': merge
+  'rebase when passing': merge
+
+# Branch preservation: Do NOT delete branches on merge.
+merges: []
