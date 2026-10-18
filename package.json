@@ -29,10 +29,26 @@
     "release:minor": "standard-version --commit-all --release-as minor",
     "release:major": "standard-version --commit-all --release-as major",
     "release:as": "standard-version --commit-all --release-as",
-    "gh:release": "uv run poe release",
+    "gh:release:preview": "uv run poe release:preview",
+    "gh:release:preview:all": "uv run poe release:preview:all",
+    "gh:release:dry-run": "uv run poe release:dry-run",
+    "gh:release:latest": "uv run poe release:latest",
+    "gh:release:latest:draft": "uv run poe release:latest:draft",
+    "gh:release:all": "uv run poe release:all",
+    "gh:release:all:draft": "uv run poe release:all:draft",
     "dev": "uv run poe dev",
     "build": "uv run poe build",
     "lint": "uv run ruff check",
-    "lint:fix": "uv run ruff check --fix"
+    "lint:fix": "uv run ruff check --fix",
+    "check": "uv run poe audit",
+    "check:fast": "uv run poe audit-fast",
+    "check:csv": "uv run poe audit-csv",
+    "audit": "uv run poe audit",
+    "typecheck": "uv run mypy && uv run pyright",
+    "install-hooks": "uv run poe install-hooks",
+    "prepare": "uv run poe install-hooks",
+    "commit:auto": "uv run poe commit",
+    "commit:preview": "uv run poe commit:preview",
+    "commit:run": "uv run poe commit:run"
   }
 }
