@@ -1,5 +1,7 @@
 # pylint: skip-file
 # flake8: noqa
+import os
+from pathlib import Path
 import subprocess
 import sys
 
@@ -179,11 +181,108 @@ def pr_create():
     sys.exit(create_pr_main(passed_args))
 
 
-def release_pipeline():
-    """Execute end-to-end post-tag release pipeline: git push -> create PR -> draft release."""
+def load_pypi_token(repo_dir: Path | None = None) -> str | None:
+    """Safely load PyPI token from .env or os.environ without leaking secrets."""
+    import os
+
+    # 1. Environment variable override
+    token = os.environ.get("UV_PUBLISH_TOKEN") or os.environ.get("PYPI_TOKEN")
+    if token:
+        return token.strip()
+
+    # 2. Parse root .env safely
+    if repo_dir is None:
+        from scripts.create_pr import get_project_root
+
+        repo_dir = get_project_root()
+
+    env_path = repo_dir / ".env"
+    if env_path.exists():
+        try:
+            for line in env_path.read_text(encoding="utf-8").splitlines():
+                stripped = line.strip()
+                if not stripped or stripped.startswith("#"):
+                    continue
+                if "=" in stripped:
+                    key, val = stripped.split("=", 1)
+                    key = key.strip()
+                    val = val.strip().strip("'\"")
+                    if key in ("UV_PUBLISH_TOKEN", "PYPI_TOKEN", "POETRY_PYPI_TOKEN_PYPI"):
+                        return val
+        except OSError:
+            pass
+
+    return None
+
+
+def publish_pypi(repo_dir: Path | None = None) -> int:
+    """Build distributions with uv build and publish them to PyPI using token from .env."""
+    import os
     from rich.console import Console
+    from scripts.create_pr import get_project_root
 
     console = Console()
+    if repo_dir is None:
+        repo_dir = get_project_root()
+
+    token = load_pypi_token(repo_dir)
+    if not token:
+        console.print(
+            "[bold red]✘ PyPI Publish Error: No UV_PUBLISH_TOKEN or PYPI_TOKEN found in .env or environment.[/bold red]\n"
+            "[dim]Please add UV_PUBLISH_TOKEN=pypi-... to your .env file.[/dim]"
+        )
+        return 1
+
+    dist_dir = repo_dir / "dist"
+    # Step A: Clean existing .whl and .tar.gz from dist to avoid duplicate upload collisions
+    if dist_dir.exists():
+        console.print("[dim]Cleaning existing distribution packages from dist/...[/dim]")
+        for pkg in list(dist_dir.glob("*.whl")) + list(dist_dir.glob("*.tar.gz")):
+            try:
+                pkg.unlink()
+            except OSError:
+                pass
+
+    # Step B: Build distribution packages using uv build
+    console.print("\n[bold cyan]Step 4A: Building distribution packages with 'uv build'...[/bold cyan]")
+    build_proc = subprocess.run(["uv", "build"], cwd=repo_dir, check=False)
+    if build_proc.returncode != 0:
+        console.print("[bold red]✘ uv build failed.[/bold red]")
+        return build_proc.returncode
+
+    # Identify built artifacts (.whl and .tar.gz)
+    new_packages = [str(p) for p in dist_dir.glob("*.whl")] + [str(p) for p in dist_dir.glob("*.tar.gz")]
+    if not new_packages:
+        console.print("[bold red]✘ Error: No packages found in dist/ after uv build.[/bold red]")
+        return 1
+
+    # Step C: Publish packages with uv publish using private environment token
+    console.print("\n[bold cyan]Step 4B: Publishing distribution packages to PyPI with 'uv publish'...[/bold cyan]")
+    publish_env = os.environ.copy()
+    publish_env["UV_PUBLISH_TOKEN"] = token
+
+    publish_cmd = ["uv", "publish"] + new_packages
+    publish_proc = subprocess.run(
+        publish_cmd,
+        cwd=repo_dir,
+        env=publish_env,
+        check=False,
+    )
+    if publish_proc.returncode != 0:
+        console.print("[bold red]✘ uv publish failed.[/bold red]")
+        return publish_proc.returncode
+
+    console.print("[bold green]✔ Successfully published release packages to PyPI![/bold green]")
+    return 0
+
+
+def release_pipeline():
+    """Execute end-to-end post-tag release pipeline: git push -> create PR -> draft release -> PyPI publish."""
+    from rich.console import Console
+    from scripts.create_pr import get_project_root
+
+    console = Console()
+    root_dir = get_project_root()
     console.print("\n[bold cyan]═════ Starting Automated Post-Release Pipeline ═════[/bold cyan]\n")
 
     # Step 1: Git Push with follow-tags (triggers pre-push hook running audit-full and saving audit_report.json)
@@ -206,6 +305,12 @@ def release_pipeline():
     rel_code = run_release_cli(["--latest", "--run", "--draft"])
     if rel_code != 0:
         console.print("[bold red]Pipeline warning: Draft release creation had errors.[/bold red]")
+
+    # Step 4: Build and publish to PyPI using token from .env
+    console.print("\n[bold yellow]Step 4: Building and publishing package to PyPI...[/bold yellow]")
+    pypi_code = publish_pypi(root_dir)
+    if pypi_code != 0:
+        console.print("[bold red]Pipeline warning: PyPI publishing had errors.[/bold red]")
 
     console.print("\n[bold green]═════ Automated Post-Release Pipeline Completed ═════[/bold green]\n")
     sys.exit(0)
