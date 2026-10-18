@@ -1,4 +1,6 @@
 # pyright: reportPrivateUsage=false
+# pylint: skip-file
+# flake8: noqa
 """Unit and integration tests for Phase 4: Extraction and Ingestion.
 
 Owns

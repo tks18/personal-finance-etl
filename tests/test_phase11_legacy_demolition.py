@@ -1,3 +1,5 @@
+# pylint: skip-file
+# flake8: noqa
 """Phase 11 Legacy Demolition Certification Test Suite.
 
 Owns

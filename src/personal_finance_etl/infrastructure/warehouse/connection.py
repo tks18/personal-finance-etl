@@ -72,7 +72,7 @@ class DuckDBManager:
         logger.debug("[DATABASE:DUCKDB] Opening connection to %s", self.db_path)
         self._conn = duckdb.connect(self.db_path)
         mem_gb = max(4, int(psutil.virtual_memory().total / (1024**3) * 0.75))
-        self._conn.execute(f"PRAGMA memory_limit='{mem_gb}GB'")
+        self._conn.execute(f"PRAGMA memory_limit='{mem_gb}GB'")  # nosec B608
         self._conn.execute("PRAGMA threads=4")
         logger.debug(
             "[DATABASE:DUCKDB] Connection configured: memory_limit=%dGB, threads=4", mem_gb

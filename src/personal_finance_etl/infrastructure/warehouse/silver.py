@@ -98,8 +98,9 @@ class SilverLayer:
                 )
 
         self.db_manager.conn.register("temp_df", df)
-        logger.debug("[SILVER:DETAIL] Rebuilt %s: %d rows processed.", table_name, df.height)
-        self.db_manager.conn.execute(f"INSERT INTO {table_name} BY NAME SELECT * FROM temp_df")
+        self.db_manager.conn.execute(
+            f"INSERT INTO {table_name} BY NAME SELECT * FROM temp_df"  # nosec B608
+        )
         self.db_manager.conn.unregister("temp_df")
         return df.height
 

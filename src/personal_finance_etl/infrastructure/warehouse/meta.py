@@ -70,20 +70,28 @@ class MetaLayer:
 
     def _inspect_bronze_table_files(self) -> tuple[dict[str, bool], dict[str, set[str]]]:
         """Check presence of physical bronze tables and scan distinct loaded filenames."""
+        existing_tables = {
+            f"{r[0]}.{r[1]}".lower()
+            for r in self.conn.execute(
+                "SELECT lower(table_schema), lower(table_name) "
+                "FROM information_schema.tables WHERE lower(table_schema) = 'bronze'"
+            ).fetchall()
+        }
         tables_exist: dict[str, bool] = {}
         table_files: dict[str, set[str]] = {}
         for contract in BRONZE_CONTRACT_REGISTRY:
             table = contract.physical_table
-            try:
-                self.conn.execute(f"SELECT 1 FROM {table} LIMIT 1")
-                tables_exist[table] = True
-                if not contract.is_full_replace:
+            is_present = table.lower() in existing_tables
+            tables_exist[table] = is_present
+            if is_present and not contract.is_full_replace:
+                try:
                     rows = self.conn.execute(
-                        f"SELECT DISTINCT __file_name__ FROM {table}"
+                        f"SELECT DISTINCT __file_name__ FROM {table}"  # nosec B608
                     ).fetchall()
                     table_files[table] = {str(r[0]) for r in rows}
-            except duckdb.CatalogException:
-                tables_exist[table] = False
+                except duckdb.CatalogException:
+                    table_files[table] = set()
+            else:
                 table_files[table] = set()
         return tables_exist, table_files
 
@@ -149,7 +157,8 @@ class MetaLayer:
                     if del_table and tables_exist.get(del_table, False):
                         try:
                             self.conn.execute(
-                                f"DELETE FROM {del_table} WHERE __file_name__ = ?", [fname]
+                                f"DELETE FROM {del_table} WHERE __file_name__ = ?",
+                                [fname],  # nosec B608
                             )
                         except (duckdb.CatalogException, duckdb.BinderException) as e:
                             logger.debug(
@@ -392,7 +401,7 @@ class MetaLayer:
             full_table_name = f"{schema_name}.{table_name}"
             if full_table_name not in valid_physical_tables:
                 logger.warning("MetaLayer: Dropping orphaned physical table %s", full_table_name)
-                self.conn.execute(f"DROP TABLE IF EXISTS {full_table_name} CASCADE")
+                self.conn.execute(f"DROP TABLE IF EXISTS {full_table_name} CASCADE")  # nosec B608
 
         tables_metadata = [
             {

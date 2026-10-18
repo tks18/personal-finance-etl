@@ -174,9 +174,9 @@ class ArtifactRepository:
         with self.db.atomic():
             for offset in range(0, len(obsolete_ids), 500):
                 batch = obsolete_ids[offset : offset + 500]
-                placeholders = ",".join("?" for _ in batch)
-                self.db.conn.execute(
-                    f"DELETE FROM cp_file_payloads WHERE file_id IN ({placeholders})", batch
+                self.db.conn.executemany(
+                    "DELETE FROM cp_file_payloads WHERE file_id = ?",
+                    [(fid,) for fid in batch],
                 )
         logger.info(
             "[ARTIFACT] Pruned payloads for %d obsolete files from category '%s'; "

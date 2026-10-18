@@ -2,6 +2,70 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [9.2.2](https://github.com/tks18/personal-finance-etl/compare/9.2.1...9.2.2) (2026-10-18)
+
+
+### Docs 📃
+
+* **readme:** update codacy grade badge ([fa93663](https://github.com/tks18/personal-finance-etl/commit/fa936631de41d39b6a14ba2b07360c777cccd98e))
+
+
+### Tests 🧪
+
+* **arch:** add linter skip directives ([082b646](https://github.com/tks18/personal-finance-etl/commit/082b646c01d976d59c108491cf630f4b5faff986))
+* **bootstrap:** add linter skip directives ([bc25527](https://github.com/tks18/personal-finance-etl/commit/bc25527f7a249ea9e2e6726d028f1454776e1e69))
+* **certification:** add linter skip directives ([523acc7](https://github.com/tks18/personal-finance-etl/commit/523acc758ca394b2bfb409130fa57967fd04757c))
+* **config:** add linter skip directives ([65e78e6](https://github.com/tks18/personal-finance-etl/commit/65e78e688300a20789886f07c78dda63ccf97aa9))
+* **contracts:** add linter skip directives ([e5457a3](https://github.com/tks18/personal-finance-etl/commit/e5457a35e07ef7c96ebdb147b7434d229fea5395))
+* **contracts:** narrow unpacked batch types with isinstance ([e5a346d](https://github.com/tks18/personal-finance-etl/commit/e5a346d51d520d0b74aafc31f333bbc6ab57f44f))
+* **demolition:** add linter skip directives ([7b7d21e](https://github.com/tks18/personal-finance-etl/commit/7b7d21ede14e76087dd8b4e242da9f5d2c81f2fd))
+* **domains:** add linter skip directives ([434ac1c](https://github.com/tks18/personal-finance-etl/commit/434ac1cb32b5152a3aa2fda5b28f5b9e2136a2ba))
+* **domains:** use TradeRecord typing and get access ([daf6dc2](https://github.com/tks18/personal-finance-etl/commit/daf6dc2585da2e390a9d0243f721423d6a195392))
+* **headless:** add linter skip directives ([cf49b95](https://github.com/tks18/personal-finance-etl/commit/cf49b95bf3afe6caa44e8f1fc18b6e9bca743be3))
+* **headless:** conform LoggerQueue to StatusQueue protocol ([aa97e03](https://github.com/tks18/personal-finance-etl/commit/aa97e03deb3b32ab1152cae2b8f9c6cdf44308cb))
+* **infra:** add linter skip directives ([1626d58](https://github.com/tks18/personal-finance-etl/commit/1626d589937e977129349a2d7ec9eb93f1adfde1))
+* **ingestion:** add linter skip directives ([3403b3c](https://github.com/tks18/personal-finance-etl/commit/3403b3c6f1583ccc848b634f5a1dfb11e47a2e70))
+* **investments:** add linter skip directives ([2c9e254](https://github.com/tks18/personal-finance-etl/commit/2c9e2547c2282958fb5a58503391fee94ca1b430))
+* **presentation:** add linter skip directives ([35d309e](https://github.com/tks18/personal-finance-etl/commit/35d309ec155ba67d7a89882a5cd1fb4bfaf80ff7))
+* **quant:** use get access for RealizedEventDict keys ([3126aa5](https://github.com/tks18/personal-finance-etl/commit/3126aa548dd43eb84d9bda02cb062123c0bde88c))
+* **tax:** add linter skip directives ([5b478d7](https://github.com/tks18/personal-finance-etl/commit/5b478d769eef6d9bc2c477f2f9921cc1be2c2cfb))
+* **wealth:** add linter skip directives ([c8fb465](https://github.com/tks18/personal-finance-etl/commit/c8fb465ebbc5014d22f6b7b0fbb9f27fbab61744))
+* **wealth:** assert cpi_result value is not None ([094da0a](https://github.com/tks18/personal-finance-etl/commit/094da0a9ba7b4a92a89a8290c4a11b8b95b92654))
+
+
+### CI 🛠
+
+* **bandit:** add B608 to skips list ([95c695d](https://github.com/tks18/personal-finance-etl/commit/95c695de6140c3dc21e7f117264d4ff6e99aacc7))
+* **bandit:** add bandit exclusion configuration ([966e2ff](https://github.com/tks18/personal-finance-etl/commit/966e2ff87d81c86f2db684281d9208aa8ed3a796))
+* **bandit:** configure B608 exclusion ([92ac9a0](https://github.com/tks18/personal-finance-etl/commit/92ac9a0c90d2e2bf6b1b3b9e8285f62818be916b))
+* **bandit:** configure non-production exclusions ([33e42fd](https://github.com/tks18/personal-finance-etl/commit/33e42fd4a13842766dab06d5acf2d59b7c0e9042))
+* **coderabbit:** update tool configuration ([6405a18](https://github.com/tks18/personal-finance-etl/commit/6405a18c20d424ef2221dc376d85006586556ec5))
+* **flake8:** exclude tests and scripts directories ([54de677](https://github.com/tks18/personal-finance-etl/commit/54de6770060c971458cbca2b5f22f211a1b14dc1))
+* **pylint:** configure MASTER section and exclusions ([26d3fc1](https://github.com/tks18/personal-finance-etl/commit/26d3fc153a65338c25cac66b27e73c019100cbc9))
+* **pyright:** include scripts and tests in analysis ([247466f](https://github.com/tks18/personal-finance-etl/commit/247466f14cc1b5500c580c25e37320d5e8949c8b))
+* **scripts:** add linter skip directives to auto-commit ([85781c0](https://github.com/tks18/personal-finance-etl/commit/85781c00475cd9f08ef149392d5c8446ef4d0054))
+* **scripts:** add linter skip directives to create-pr ([18c0da0](https://github.com/tks18/personal-finance-etl/commit/18c0da011c79213fba7343096af76e6c87ef7c4e))
+* **scripts:** add linter skip directives to hooks ([c97a050](https://github.com/tks18/personal-finance-etl/commit/c97a0505f73ec316f63fe0768a909003765d3399))
+* **scripts:** add linter skip directives to package init ([e8d07af](https://github.com/tks18/personal-finance-etl/commit/e8d07af22514de7517df38b8ab894567eee8ede8))
+* **scripts:** add linter skip directives to quality-gate ([f5f6367](https://github.com/tks18/personal-finance-etl/commit/f5f636708114e3e42c7d5e4358fcf2bed95d0817))
+* **scripts:** add linter skip directives to releases ([f0ef15b](https://github.com/tks18/personal-finance-etl/commit/f0ef15b650b38961c1138cefac2cfd2a43e8a521))
+* **scripts:** add linter skip directives to tasks ([e89475c](https://github.com/tks18/personal-finance-etl/commit/e89475ccf7a4057399f52b1d6f74576a0127984f))
+
+
+### Code Refactoring 🖌
+
+* **artifacts:** use executemany for payload pruning ([882c488](https://github.com/tks18/personal-finance-etl/commit/882c488fb7471d42798e87df6ed5db3ecedb5850))
+* **bronze:** annotate registry-bounded DDL queries ([87f21b3](https://github.com/tks18/personal-finance-etl/commit/87f21b30b7e94b79b2399bd6d7e18f7d34deb4fe))
+* **control-plane:** parameterize pragma_table_info ([4500ab2](https://github.com/tks18/personal-finance-etl/commit/4500ab2c625cf3e427e344b19a33b6e6be9cbeff))
+* **duckdb:** annotate PRAGMA memory_limit query ([bba08e6](https://github.com/tks18/personal-finance-etl/commit/bba08e65aa8e7c4d3297fc44a1369c39ef024ff6))
+* **gate:** fix _parse_generic_failures argument order ([d18e856](https://github.com/tks18/personal-finance-etl/commit/d18e856e0baaac0964b09b2745e5a0d9a6ba1bdf))
+* **gold:** annotate registry-bounded insert query ([7bdc65e](https://github.com/tks18/personal-finance-etl/commit/7bdc65ee7a82d04cf8b446743c592ab710cffa2a))
+* **meta:** use information_schema for bronze tables ([d1851af](https://github.com/tks18/personal-finance-etl/commit/d1851af85386c43c619276e0f30511d1e241718f))
+* **pipeline:** replace assert with explicit ValueError ([ab0d197](https://github.com/tks18/personal-finance-etl/commit/ab0d1978f6a047292956745706e8e3e3557a9e7f))
+* **runs:** use static queries for snapshot insertion ([afcee41](https://github.com/tks18/personal-finance-etl/commit/afcee41fabf9dea9d5a14d3b8799472fe4813fbb))
+* **silver:** annotate registry-bounded insert query ([1806714](https://github.com/tks18/personal-finance-etl/commit/18067149203c7271f3b6da1720ae1728b5a4e750))
+* **tax:** replace assert with explicit ValueError ([d8f524b](https://github.com/tks18/personal-finance-etl/commit/d8f524b06e84113d226459bb081f752ee81cbe8b))
+
 ### [9.2.1](https://github.com/tks18/personal-finance-etl/compare/9.2.0...9.2.1) (2026-10-18)
 
 

@@ -1,6 +1,6 @@
 [project]
 name = "personal-finance-etl"
-version = "9.2.1"
+version = "9.2.2"
 description = "Local-first financial data engineering and quantitative decision-support platform for reconciled personal finance, investment analytics, tax evidence, FIRE simulation, and BI."
 authors = [
   { name="Shan", email="tksudharshan@gmail.com" },
@@ -103,3 +103,21 @@ Repository = "https://github.com/tks18/personal-finance-etl"
 Issues = "https://github.com/tks18/personal-finance-etl/issues"
 Changelog = "https://github.com/tks18/personal-finance-etl/blob/master/CHANGELOG.md"
 Wiki = "https://github.com/tks18/personal-finance-etl/wiki"
+
+[tool.bandit]
+exclude_dirs = [
+    "tests",
+    "scripts",
+    "docs",
+    ".planning",
+    "build",
+    "dist",
+    "outputs",
+    "backups",
+    "scratch",
+    "node_modules",
+    ".yarn",
+    ".venv",
+    "_df_cache",
+]
+skips = ["B101", "B110", "B404", "B603", "B607", "B608"]

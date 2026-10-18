@@ -92,23 +92,24 @@ class RunRepository:
         settings_id: str | None = None
         rules_id: str | None = None
         with self.db.atomic():
-            for payload, prefix, table in (
-                (cfg_json, "snap_set_", "cp_settings_snapshots"),
-                (rules_json, "snap_rule_", "cp_rules_snapshots"),
-            ):
-                if not payload:
-                    continue
-                canonical = self._canonical_json(payload)
-                digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
-                snapshot_id = f"{prefix}{digest}"
+            if cfg_json:
+                canonical_cfg = self._canonical_json(cfg_json)
+                digest_cfg = hashlib.sha256(canonical_cfg.encode("utf-8")).hexdigest()
+                settings_id = f"snap_set_{digest_cfg}"
                 self.db.conn.execute(
-                    f"INSERT OR IGNORE INTO {table} (snapshot_id, content_hash, canonical_payload, created_at) VALUES (?, ?, ?, ?)",
-                    (snapshot_id, digest, canonical, now),
+                    "INSERT OR IGNORE INTO cp_settings_snapshots "
+                    "(snapshot_id, content_hash, canonical_payload, created_at) VALUES (?, ?, ?, ?)",
+                    (settings_id, digest_cfg, canonical_cfg, now),
                 )
-                if table == "cp_settings_snapshots":
-                    settings_id = snapshot_id
-                else:
-                    rules_id = snapshot_id
+            if rules_json:
+                canonical_rules = self._canonical_json(rules_json)
+                digest_rules = hashlib.sha256(canonical_rules.encode("utf-8")).hexdigest()
+                rules_id = f"snap_rule_{digest_rules}"
+                self.db.conn.execute(
+                    "INSERT OR IGNORE INTO cp_rules_snapshots "
+                    "(snapshot_id, content_hash, canonical_payload, created_at) VALUES (?, ?, ?, ?)",
+                    (rules_id, digest_rules, canonical_rules, now),
+                )
             self.db.conn.execute(
                 """INSERT INTO cp_runs
                    (run_id, started_at, status, commit_state, application_version, schema_version,

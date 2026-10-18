@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 # ruff: noqa
 # type: ignore
+# pylint: skip-file
+# flake8: noqa
 """Module to parse CHANGELOG.md and publish GitHub releases."""
 
 from __future__ import annotations

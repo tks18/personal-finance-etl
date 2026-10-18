@@ -327,7 +327,10 @@ class SQLiteManager:
         }
         for table, required in required_columns.items():
             actual = {
-                str(row[1]) for row in self.conn.execute(f"PRAGMA table_info({table})").fetchall()
+                str(row[0])
+                for row in self.conn.execute(
+                    "SELECT name FROM pragma_table_info(?)", (table,)
+                ).fetchall()
             }
             missing = required - actual
             if missing:

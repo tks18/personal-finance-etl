@@ -19,7 +19,7 @@ So the project grew from ETL into the system I now use to **preserve financial e
 ![Python](https://img.shields.io/badge/Python-3.13%2B-3776AB?logo=python&logoColor=white)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
-[![Codacy](https://img.shields.io/badge/Codacy-Analysis-0052CC?logo=codacy&logoColor=white)](https://app.codacy.com/gh/tks18/personal-finance-etl/dashboard)
+[![Codacy Badge](https://app.codacy.com/project/badge/Grade/49aca2f2e7d044a5916adc56beb4c7dd)](https://app.codacy.com/gh/tks18/personal-finance-etl/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_grade)
 [![CodeFactor](https://www.codefactor.io/repository/github/tks18/personal-finance-etl/badge)](https://www.codefactor.io/repository/github/tks18/personal-finance-etl)
 [![CodeRabbit Reviews](https://img.shields.io/coderabbit/prs/github/tks18/personal-finance-etl?label=CodeRabbit%20Reviews)](https://coderabbit.ai)
 

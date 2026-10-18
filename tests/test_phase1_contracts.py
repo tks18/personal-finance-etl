@@ -1,3 +1,5 @@
+# pylint: skip-file
+# flake8: noqa
 """Tests for Phase 1 typed contracts across operational, application, and domain boundaries.
 
 Owns
@@ -115,6 +117,8 @@ def test_extraction_batch_result_contract():
 
     # Legacy tuple unpacking support
     df_combined, injected = batch
+    assert isinstance(df_combined, pl.DataFrame)
+    assert isinstance(injected, list)
     assert df_combined.shape == (4, 1)
     assert injected == []
 

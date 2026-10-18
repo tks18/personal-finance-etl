@@ -180,7 +180,8 @@ class BaseEventsBuilder:
 
     def _tax_credit_subhead_map(self) -> dict[str, str]:
         """Map configured tax-credit subcategory UIDs to their declared tax sub-head."""
-        assert self.rules is not None
+        if self.rules is None:
+            raise ValueError("FinancialRules are required to build tax credit subhead map.")
         return TaxClassifier.build_tax_credit_subhead_map(self.rules)
 
     def _validate_tax_credit_uids(self, credit_subheads: dict[str, str]) -> None:
