@@ -1,7 +1,7 @@
 {
   "name": "personal-finance-etl",
   "description": "Local-first financial data engineering and quantitative decision-support platform for reconciled personal finance, investment analytics, tax evidence, FIRE simulation, and BI.",
-  "version": "9.2.5",
+  "version": "9.2.6",
   "repository": "https://github.com/tks18/personal-finance-etl",
   "author": "tks18 <tksudharshan@gmail.com>",
   "license": "GPL-3.0-or-later",
@@ -43,6 +43,7 @@
     "release:flow:patch": "standard-version --commit-all --release-as patch && uv run poe release:pipeline",
     "release:flow:minor": "standard-version --commit-all --release-as minor && uv run poe release:pipeline",
     "release:flow:major": "standard-version --commit-all --release-as major && uv run poe release:pipeline",
+    "pypi:publish": "uv run poe pypi:publish",
     "dev": "uv run poe dev",
     "build": "uv run poe build",
     "lint": "uv run ruff check",

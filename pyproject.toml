@@ -1,6 +1,6 @@
 [project]
 name = "personal-finance-etl"
-version = "9.2.5"
+version = "9.2.6"
 description = "Local-first financial data engineering and quantitative decision-support platform for reconciled personal finance, investment analytics, tax evidence, FIRE simulation, and BI."
 authors = [
   { name="Shan", email="tksudharshan@gmail.com" },
@@ -95,8 +95,12 @@ shan-fin-gui = "personal_finance_etl.presentation.desktop.app:main"
 "docs" = "personal_finance_etl/docs"
 "logo.png" = "personal_finance_etl/logo.png"
 "logo.ico" = "personal_finance_etl/logo.ico"
-"social_preview.png" = "personal_finance_etl/social_preview.png"
-".github/assets/social_preview.png" = "personal_finance_etl/.github/assets/social_preview.png"
+
+[tool.hatch.build.targets.sdist]
+exclude = [
+    ".github",
+    "social_preview.png",
+]
 
 
 [project.urls]
