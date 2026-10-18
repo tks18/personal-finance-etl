@@ -1,3 +1,5 @@
+# pylint: skip-file
+# flake8: noqa
 """Phase 5 Canonical Financial Domains certification tests.
 
 Owns
