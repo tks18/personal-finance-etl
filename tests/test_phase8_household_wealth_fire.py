@@ -1,3 +1,5 @@
+# pylint: skip-file
+# flake8: noqa
 """Tests for Phase 8: Household Analytics, Wealth, and FIRE domains and application services.
 
 Verifies:
