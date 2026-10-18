@@ -76,7 +76,8 @@ class TransformationDAG:
 
     def run(self, extracted: ExtractionResult) -> dict[str, pl.DataFrame]:
         """Execute parallel streaming transformation across dimensions, facts, and asset pipelines."""
-        assert self.rules is not None, "FinancialRules must be provided to TransformationDAG"
+        if self.rules is None:
+            raise ValueError("FinancialRules must be provided to TransformationDAG")
         logger.debug("Transforming Base Dimensions...")
         mappings = extracted.mappings
         d_income_category_lazy = transform_d_income_category(
