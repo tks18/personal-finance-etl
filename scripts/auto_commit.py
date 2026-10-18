@@ -405,6 +405,10 @@ def main() -> int:
         "--map", "--overrides", dest="map_path", type=str, default=None,
         help="Path to external gitignored JSON file containing custom commit message overrides."
     )
+    parser.add_argument(
+        "--only-mapped", "--only-overrides", dest="only_mapped", action="store_true",
+        help="Only commit files that are explicitly defined in the custom overrides map."
+    )
     args = parser.parse_args()
 
     # Load custom external overrides if present
@@ -421,6 +425,12 @@ def main() -> int:
         files = [("M", args.file)]
     else:
         files = get_changed_files()
+
+    if args.only_mapped:
+        files = [(s, f) for s, f in files if f.replace("\\", "/") in custom_overrides]
+        if not files:
+            console.print("[yellow]No changed files match the overrides in the mapping file.[/yellow]")
+            return 0
 
     if not files:
         console.print("[green]Working tree is completely clean. Nothing to commit.[/green]")
