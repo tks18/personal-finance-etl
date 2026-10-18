@@ -122,4 +122,15 @@ def commit_run():
     sys.exit(auto_commit_main())
 
 
+def commit_interactive():
+    """Run interactive file-by-file conventional commit wizard."""
+    from scripts.auto_commit import main as auto_commit_main
+
+    passed_args = sys.argv[1:]
+    if "-i" not in passed_args and "--interactive" not in passed_args:
+        passed_args.insert(0, "--interactive")
+    sys.argv = [sys.argv[0]] + passed_args
+    sys.exit(auto_commit_main())
+
+
 
