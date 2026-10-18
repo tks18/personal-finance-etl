@@ -1,0 +1,145 @@
+# ==============================================================================
+# Pylint Configuration
+# Repository: personal-finance-etl
+# Python: >=3.13 | Architecture: Clean Architecture & Modular Pipelines
+# Linked Companion Configs:
+#   - Ruff: ruff.toml
+#   - Mypy: mypy.ini
+#   - Flake8: .flake8
+#   - Codacy: .codacy.yml
+#   - CodeRabbit: .coderabbit.yaml
+# ==============================================================================
+
+[MAIN]
+py-version = 3.13
+jobs = 0
+source-roots = src
+init-hook = 'import sys; sys.path.insert(0, "src")'
+extension-pkg-allow-list =
+    pyxirr,
+    duckdb,
+    fastexcel,
+    polars,
+    psutil,
+    numba
+
+# Exclude every folder and file outside src/, plus vendored assets
+ignore-paths =
+    ^tests/.*$,
+    ^scripts/.*$,
+    ^docs/.*$,
+    ^\.planning/.*$,
+    ^build/.*$,
+    ^dist/.*$,
+    ^outputs/.*$,
+    ^backups/.*$,
+    ^scratch/.*$,
+    ^node_modules/.*$,
+    ^\.yarn/.*$,
+    ^\.venv/.*$,
+    ^_df_cache/.*$,
+    ^main\.py$,
+    ^main\.spec$,
+    ^src/personal_finance_etl/presentation/docs/assets/.*$
+
+[MESSAGES CONTROL]
+# Disable checks that are:
+# 1. Delegated to Ruff (line-length, docstrings via pydocstyle numpy, import ordering)
+# 2. Incompatible with modern Python 3.13 typing & Clean Architecture:
+#    - generic queues, dataclasses with 0-1 methods
+#    - modern f-string logging (PEP 701)
+#    - top-level defensive fault barriers (broad-exception-caught, broad-exception-raised)
+#    - GUI inheritance depth and widget definition lifecycles from Tkinter/CustomTkinter
+#    - explicit PEP 484 re-export aliases in package __init__.py files (useless-import-alias)
+#    - module-level multiprocessing logging singleton (global-statement)
+#    - Numba JIT parallel range iterable detection (not-an-iterable)
+# 3. Duplicate code (delegated to Codacy CPD)
+disable =
+    line-too-long,
+    trailing-whitespace,
+    trailing-newlines,
+    missing-final-newline,
+    wrong-import-order,
+    wrong-import-position,
+    ungrouped-imports,
+    missing-module-docstring,
+    missing-class-docstring,
+    missing-function-docstring,
+    too-few-public-methods,
+    unsubscriptable-object,
+    duplicate-code,
+    fixme,
+    logging-fstring-interpolation,
+    broad-exception-caught,
+    broad-exception-raised,
+    too-many-ancestors,
+    protected-access,
+    useless-import-alias,
+    attribute-defined-outside-init,
+    global-statement,
+    invalid-name,
+    not-an-iterable,
+    consider-using-max-builtin,
+    consider-using-min-builtin,
+    chained-comparison,
+    consider-using-in,
+    unnecessary-lambda
+
+[FORMAT]
+max-line-length = 100
+max-module-lines = 1500
+
+[DESIGN]
+max-args = 15
+max-positional-arguments = 15
+max-locals = 65
+max-returns = 12
+max-branches = 30
+max-statements = 100
+max-attributes = 25
+max-nested-blocks = 8
+min-public-methods = 0
+
+[CLASSES]
+defining-attr-methods =
+    __init__,
+    __new__,
+    setUp,
+    __post_init__,
+    _build_ui,
+    build_ui,
+    _setup_ui,
+    _create_body
+
+[VARIABLES]
+ignored-argument-names = _.*|^rules$|^kwargs$|^args$
+
+[BASIC]
+good-names =
+    i,
+    j,
+    k,
+    ex,
+    Run,
+    _,
+    df,
+    ts,
+    dt,
+    id,
+    fp,
+    ws,
+    wb,
+    fy,
+    q,
+    tt,
+    tst,
+    bm,
+    mf,
+    pl,
+    np
+
+[SIMILARITIES]
+min-similarity-lines = 10
+ignore-comments = yes
+ignore-docstrings = yes
+ignore-imports = yes
