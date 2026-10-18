@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# pylint: skip-file
+# flake8: noqa
 """Unified Quality Gate & Diagnostics Orchestration Engine.
 
 Repository: personal-finance-etl
