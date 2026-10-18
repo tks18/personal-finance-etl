@@ -1,0 +1,13 @@
+# Astral UV Package Manager Configuration
+# Repository: personal-finance-etl
+# Standalone UV Configuration
+# Documentation: https://docs.astral.sh/uv/reference/settings/
+
+# Python runtime environment management and resolution preferences
+python-preference = "managed"
+
+# Concurrency thresholds for optimal IO and build throughput
+concurrent-downloads = 8
+concurrent-builds = 4
+concurrent-installs = 4
+
