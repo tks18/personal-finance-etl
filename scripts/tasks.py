@@ -64,11 +64,32 @@ def audit_fast():
     sys.exit(run_quality_gate(tier="fast", export="cli"))
 
 
+def audit_fast_fix():
+    """Run fast tier quality gate audit with auto-fix enabled."""
+    from scripts.quality_gate import run_quality_gate
+
+    sys.exit(run_quality_gate(tier="fast", export="cli", auto_fix=True))
+
+
+def audit_full():
+    """Run full tier quality gate audit (Ruff, Mypy, Pyright, Pylint, Pytest)."""
+    from scripts.quality_gate import run_quality_gate
+
+    sys.exit(run_quality_gate(tier="full", export="cli"))
+
+
 def audit_csv():
     """Run full tier quality gate audit and export structured CSV report."""
     from scripts.quality_gate import run_quality_gate
 
     sys.exit(run_quality_gate(tier="full", export="csv"))
+
+
+def audit_json():
+    """Run full tier quality gate audit and export structured JSON report."""
+    from scripts.quality_gate import run_quality_gate
+
+    sys.exit(run_quality_gate(tier="full", export="json"))
 
 
 def install_hooks():
