@@ -1,0 +1,28 @@
+{
+  "include": [
+    "src"
+  ],
+  "exclude": [
+    "**/node_modules",
+    "**/__pycache__",
+    ".git",
+    ".venv",
+    "build",
+    "dist",
+    "outputs"
+  ],
+  "ignore": [
+    "src/personal_finance_etl/presentation/desktop"
+  ],
+  "typeCheckingMode": "strict",
+  "pythonVersion": "3.13",
+  "pythonPlatform": "All",
+  "strictListInference": true,
+  "strictDictionaryInference": true,
+  "strictSetInference": true,
+  "reportMissingImports": "error",
+  "reportMissingTypeStubs": "none",
+  "reportUnusedImport": "error",
+  "reportUnusedVariable": "error",
+  "reportDuplicateImport": "error"
+}
