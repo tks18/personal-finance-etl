@@ -16,7 +16,8 @@ build = { cmd = "uv run python -c \"from scripts.tasks import build; build()\"",
 "release:latest:draft" = { cmd = "uv run python -c \"from scripts.tasks import release_latest_draft; release_latest_draft()\"", help = "Publish latest version as a GitHub draft release" }
 "release:all" = { cmd = "uv run python -c \"from scripts.tasks import release_all; release_all()\"", help = "Publish all unreleased tags interactively to GitHub" }
 "release:all:draft" = { cmd = "uv run python -c \"from scripts.tasks import release_all_draft; release_all_draft()\"", help = "Publish all unreleased tags as GitHub drafts" }
-"release:pipeline" = { cmd = "uv run python -c \"from scripts.tasks import release_pipeline; release_pipeline()\"", help = "Execute full post-release pipeline: git push (triggers audit) -> create PR -> draft release" }
+"release:pipeline" = { cmd = "uv run python -c \"from scripts.tasks import release_pipeline; release_pipeline()\"", help = "Execute full post-release pipeline: git push (triggers audit) -> create PR -> draft release -> PyPI publish" }
+"pypi:publish" = { cmd = "uv run python -c \"from scripts.tasks import publish_pypi; sys.exit(publish_pypi())\"", help = "Build and publish package to PyPI using token from .env" }
 
 # GitHub Pull Request Management
 "pr:preview" = { cmd = "uv run python -c \"from scripts.tasks import pr_preview; pr_preview()\"", help = "Preview PR title, changelog, and attached Quality Gate certification table" }
