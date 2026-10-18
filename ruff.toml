@@ -1,0 +1,50 @@
+# ==============================================================================
+# Ruff Configuration
+# Repository: personal-finance-etl
+# Python: >=3.13 | Convention: NumPy Docstrings | Line Length: 100
+# Linked Companion Configs:
+#   - Pylint: .pylintrc
+#   - Mypy: mypy.ini
+#   - Flake8: .flake8
+#   - Codacy: .codacy.yml
+#   - CodeRabbit: .coderabbit.yaml
+# ==============================================================================
+
+line-length = 100
+target-version = "py313"
+src = ["src"]
+
+# Exclude every directory and root script except src/
+extend-exclude = [
+    "tests",
+    "scripts",
+    ".planning",
+    "docs",
+    "outputs",
+    "backups",
+    "scratch",
+    "main.py",
+]
+
+[lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "I",   # isort
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "D",   # pydocstyle
+]
+extend-select = [
+    "D417",  # Enforce parameter documentation in docstrings
+]
+ignore = [
+    "E501",  # Line length handled exclusively by ruff format (avoids breaking multiline strings/templates)
+]
+
+[lint.pydocstyle]
+convention = "numpy"
+
+[lint.per-file-ignores]
+"tests/**" = ["D"]    # Tests are self-documenting via test function names
+"scripts/**" = ["D"]  # Local dev & release orchestration scripts
