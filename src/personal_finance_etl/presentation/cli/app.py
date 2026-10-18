@@ -114,10 +114,9 @@ def get_file_interactive(prompt_text: str, recents: list[str]) -> str:
             choice_idx = int(choice) - 1
             if 0 <= choice_idx < len(recents):
                 return recents[choice_idx]
-            elif choice_idx == len(recents):
+            if choice_idx == len(recents):
                 return str(Prompt.ask(f"[bold cyan]Enter new path for {prompt_text}[/bold cyan]"))
-            else:
-                console.print("[red]Invalid selection.[/red]")
+            console.print("[red]Invalid selection.[/red]")
         except ValueError:
             console.print("[red]Please enter a valid number.[/red]")
 
