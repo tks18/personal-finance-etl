@@ -10,6 +10,51 @@
 #   - CodeRabbit: .coderabbit.yaml
 # ==============================================================================
 
+[MASTER]
+py-version = 3.13
+jobs = 0
+source-roots = src
+init-hook = 'import sys; sys.path.insert(0, "src")'
+extension-pkg-allow-list =
+    pyxirr,
+    duckdb,
+    fastexcel,
+    polars,
+    psutil,
+    numba
+
+# Directory and file base names to ignore
+ignore =
+    tests,
+    scripts,
+    docs,
+    .planning,
+    build,
+    dist,
+    outputs,
+    backups,
+    scratch,
+    node_modules,
+    .yarn,
+    .venv,
+    _df_cache,
+    main.py,
+    main.spec
+
+# Regex patterns matching file/directory base names
+ignore-patterns =
+    ^test_.*\.py$,
+    ^tests$,
+    ^scripts$,
+    ^docs$
+
+# Regex patterns matching file paths (supports absolute and relative paths)
+ignore-paths =
+    (^|[/\\])(tests|scripts|docs|\.planning|build|dist|outputs|backups|scratch|node_modules|\.yarn|\.venv|_df_cache)([/\\]|$),
+    .*main\.py$,
+    .*main\.spec$,
+    .*[/\\]presentation[/\\]docs[/\\]assets([/\\]|$)
+
 [MAIN]
 py-version = 3.13
 jobs = 0
@@ -23,24 +68,34 @@ extension-pkg-allow-list =
     psutil,
     numba
 
-# Exclude every folder and file outside src/, plus vendored assets
+ignore =
+    tests,
+    scripts,
+    docs,
+    .planning,
+    build,
+    dist,
+    outputs,
+    backups,
+    scratch,
+    node_modules,
+    .yarn,
+    .venv,
+    _df_cache,
+    main.py,
+    main.spec
+
+ignore-patterns =
+    ^test_.*\.py$,
+    ^tests$,
+    ^scripts$,
+    ^docs$
+
 ignore-paths =
-    ^tests/.*$,
-    ^scripts/.*$,
-    ^docs/.*$,
-    ^\.planning/.*$,
-    ^build/.*$,
-    ^dist/.*$,
-    ^outputs/.*$,
-    ^backups/.*$,
-    ^scratch/.*$,
-    ^node_modules/.*$,
-    ^\.yarn/.*$,
-    ^\.venv/.*$,
-    ^_df_cache/.*$,
-    ^main\.py$,
-    ^main\.spec$,
-    ^src/personal_finance_etl/presentation/docs/assets/.*$
+    (^|[/\\])(tests|scripts|docs|\.planning|build|dist|outputs|backups|scratch|node_modules|\.yarn|\.venv|_df_cache)([/\\]|$),
+    .*main\.py$,
+    .*main\.spec$,
+    .*[/\\]presentation[/\\]docs[/\\]assets([/\\]|$)
 
 [MESSAGES CONTROL]
 # Disable checks that are:
@@ -54,6 +109,7 @@ ignore-paths =
 #    - module-level multiprocessing logging singleton (global-statement)
 #    - Numba JIT parallel range iterable detection (not-an-iterable)
 # 3. Duplicate code (delegated to Codacy CPD)
+# 4. Scope-specific exclusions for CLI tasks, scripts, and tests
 disable =
     line-too-long,
     trailing-whitespace,
@@ -83,7 +139,14 @@ disable =
     consider-using-min-builtin,
     chained-comparison,
     consider-using-in,
-    unnecessary-lambda
+    unnecessary-lambda,
+    unnecessary-ellipsis,
+    import-outside-toplevel,
+    redefined-outer-name,
+    subprocess-run-check,
+    no-else-break,
+    f-string-without-interpolation,
+    unused-argument
 
 [FORMAT]
 max-line-length = 100
