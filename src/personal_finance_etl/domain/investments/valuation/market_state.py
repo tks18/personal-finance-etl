@@ -57,8 +57,9 @@ def transform_us_market_data(
     global_start_date: date,
     global_end_date: date,
 ) -> pl.LazyFrame:
-    """Transforms bronze raw US stock prices into a continuous silver daily series,
-    builds the FIFO spine, joins FX rates, and calculates PnL.
+    """Transform bronze raw US stock prices into a continuous silver daily series.
+
+    Build the FIFO spine, join FX rates, and calculate PnL.
     """
     # Materialization Boundary: STATEFUL_ALGORITHM_BOUNDARY
     # Materialize purchase and sale transactions to resolve active US ticker universe and date boundaries
