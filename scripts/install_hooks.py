@@ -25,13 +25,13 @@ PRE_COMMIT_SCRIPT = """#!/usr/bin/env sh
 # Runs Ruff Check, Ruff Format Check, and Mypy Typecheck (< 2s).
 echo "[Quality Gate] Running Pre-Commit Fast Verification (Ruff + Mypy)..."
 
-uv run python scripts/quality_gate.py --tier fast
+uv run poe audit-fast
 EXIT_CODE=$?
 
 if [ $EXIT_CODE -ne 0 ]; then
     echo ""
     echo "[Quality Gate] [FAIL] Pre-commit checks failed."
-    echo "[Quality Gate] Fix the issues above or run 'uv run python scripts/quality_gate.py --tier fast --fix' to auto-fix formatting."
+    echo "[Quality Gate] Fix issues or run 'uv run poe audit-fast:fix' to auto-fix formatting."
     exit $EXIT_CODE
 fi
 
@@ -44,7 +44,7 @@ PRE_PUSH_SCRIPT = """#!/usr/bin/env sh
 # Runs Ruff, Format, Mypy, Pyright, Pylint, and Pytest (~40-70s).
 echo "[Quality Gate] Running Pre-Push Full Verification Suite..."
 
-uv run python scripts/quality_gate.py --tier full
+uv run poe audit-full
 EXIT_CODE=$?
 
 if [ $EXIT_CODE -ne 0 ]; then
