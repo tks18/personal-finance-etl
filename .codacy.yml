@@ -3,10 +3,40 @@
 # Codacy Static Code Analysis & Code Quality Configuration
 # Repository: personal-finance-etl
 # Python: >=3.13 | Architecture: Clean Architecture & Modular Pipelines
+# Linked Native Configurations:
+#   - Ruff Linter & Formatter: ruff.toml (automatically detected by Codacy)
+#   - Pylint Static Analysis: .pylintrc (automatically detected by Codacy)
+#   - Flake8 / CodeFactor: .flake8
+#   - Mypy Strict Type Checking: mypy.ini
+#   - CodeRabbit AI Review: .coderabbit.yaml
 # ==============================================================================
 
+# Global exclusions: exclude every folder and non-source root file except src/
+exclude_paths:
+  - 'tests/**'
+  - 'scripts/**'
+  - 'docs/**'
+  - '.planning/**'
+  - 'build/**'
+  - 'dist/**'
+  - 'outputs/**'
+  - 'backups/**'
+  - 'scratch/**'
+  - 'node_modules/**'
+  - '.yarn/**'
+  - '.github/**'
+  - 'main.py'
+  - 'main.spec'
+  - '.versionrc.js'
+  - 'package.json'
+  - 'yarn.lock'
+  - 'uv.lock'
+  - 'CHANGELOG.md'
+  - 'src/personal_finance_etl/presentation/docs/assets/**'
+  - '**.min.js'
+
 engines:
-  # Python Linter & Modernizer (aligned with pyproject.toml line-length: 100)
+  # Python Linter & Modernizer (aligned with line-length: 100)
   ruff:
     enabled: true
     exclude_paths:
