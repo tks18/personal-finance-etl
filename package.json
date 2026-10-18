@@ -56,6 +56,9 @@
     "commit:preview": "uv run poe commit:preview",
     "commit:run": "uv run poe commit:run",
     "commit:interactive": "uv run poe commit:interactive",
-    "commit:i": "uv run poe commit:interactive"
+    "commit:i": "uv run poe commit:interactive",
+    "commit:overrides": "uv run poe commit:overrides",
+    "commit:overrides:preview": "uv run poe commit:overrides:preview",
+    "commit:overrides:only": "uv run poe commit:overrides:only"
   }
 }
