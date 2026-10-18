@@ -1,3 +1,5 @@
+# pylint: skip-file
+# flake8: noqa
 """Comprehensive verification test suite for Phase 6: Investment & Quant Domain.
 
 Verifies:
