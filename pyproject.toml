@@ -103,3 +103,21 @@ Repository = "https://github.com/tks18/personal-finance-etl"
 Issues = "https://github.com/tks18/personal-finance-etl/issues"
 Changelog = "https://github.com/tks18/personal-finance-etl/blob/master/CHANGELOG.md"
 Wiki = "https://github.com/tks18/personal-finance-etl/wiki"
+
+[tool.bandit]
+exclude_dirs = [
+    "tests",
+    "scripts",
+    "docs",
+    ".planning",
+    "build",
+    "dist",
+    "outputs",
+    "backups",
+    "scratch",
+    "node_modules",
+    ".yarn",
+    ".venv",
+    "_df_cache",
+]
+skips = ["B101", "B110", "B404", "B603", "B607"]
