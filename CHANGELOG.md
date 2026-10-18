@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [9.2.5](https://github.com/tks18/personal-finance-etl/compare/9.2.4...9.2.5) (2026-10-18)
+
+
+### CI 🛠
+
+* **actions:** add native auto-merge workflow for pull requests ([57b0186](https://github.com/tks18/personal-finance-etl/commit/57b0186a5221c23e6daf4893feaa67249f7bd310))
+
+
+### Features 🔥
+
+* **ci:** arm native auto-merge on pull request creation ([6a2865a](https://github.com/tks18/personal-finance-etl/commit/6a2865ab3f63eb41ce2731242494b0097002e637))
+
 ### [9.2.4](https://github.com/tks18/personal-finance-etl/compare/9.2.3...9.2.4) (2026-10-18)
 
 
