@@ -415,9 +415,11 @@ def main() -> int:
     custom_overrides = load_custom_overrides(args.map_path)
 
     # Determine execution mode:
-    # If interactive, default is live commit (not dry run) unless --dry-run is passed
-    if args.interactive:
-        is_dry_run = args.dry_run
+    # --dry-run always takes precedence
+    if args.dry_run:
+        is_dry_run = True
+    elif args.interactive:
+        is_dry_run = False
     else:
         is_dry_run = not args.run
 
