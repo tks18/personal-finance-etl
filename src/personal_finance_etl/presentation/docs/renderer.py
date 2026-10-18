@@ -35,13 +35,16 @@ class DocsRenderer:
     def __init__(self, catalog: DocsCatalog) -> None:
         self.catalog = catalog
 
-    def _inject_logo(self, text: str, src_pattern: str) -> str:
-        logo_path = resource_path("logo.png")
-        if os.path.exists(logo_path):
-            with open(logo_path, "rb") as img_f:
-                b64_logo = base64.b64encode(img_f.read()).decode("utf-8")
-                return text.replace(src_pattern, f'src="data:image/png;base64,{b64_logo}"')
+    def _inject_image(self, text: str, src_pattern: str, image_rel_path: str = "logo.png") -> str:
+        img_path = resource_path(image_rel_path)
+        if os.path.exists(img_path):
+            with open(img_path, "rb") as img_f:
+                b64_img = base64.b64encode(img_f.read()).decode("utf-8")
+                return text.replace(src_pattern, f'src="data:image/png;base64,{b64_img}"')
         return text
+
+    def _inject_logo(self, text: str, src_pattern: str) -> str:
+        return self._inject_image(text, src_pattern, "logo.png")
 
     @staticmethod
     def _load_mermaid_js() -> str:
@@ -121,7 +124,26 @@ class DocsRenderer:
                     content = f.read()
 
                     if "README.md" in entry.path:
+                        content = self._inject_image(
+                            content,
+                            'src="https://raw.githubusercontent.com/tks18/personal-finance-etl/master/.github/assets/social_preview.png"',
+                            "social_preview.png",
+                        )
+                        content = self._inject_image(
+                            content,
+                            'src=".github/assets/social_preview.png"',
+                            "social_preview.png",
+                        )
+                        content = self._inject_image(
+                            content,
+                            'src="social_preview.png"',
+                            "social_preview.png",
+                        )
                         content = self._inject_logo(content, 'src="logo.png"')
+                        content = self._inject_logo(
+                            content,
+                            'src="https://raw.githubusercontent.com/tks18/personal-finance-etl/master/logo.png"',
+                        )
                     elif "about" in entry.path.lower():
                         content = self._inject_logo(content, 'src="../logo.png"')
 

@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [9.2.3](https://github.com/tks18/personal-finance-etl/compare/9.2.2...9.2.3) (2026-10-18)
+
+
+### Features 🔥
+
+* **docs:** support social preview banner rendering ([f546914](https://github.com/tks18/personal-finance-etl/commit/f5469143007c344e19842c1a8a4e1d49d7973b94))
+* **packaging:** include logo.ico and social preview in wheel ([de0ff75](https://github.com/tks18/personal-finance-etl/commit/de0ff75cb507acc82a5dd500f4495778613dd636))
+
+
+### Docs 📃
+
+* **assets:** add github repository social preview banner ([8587450](https://github.com/tks18/personal-finance-etl/commit/858745015798d441011e9f05fcf5a9f3276c2140))
+* **assets:** add root social preview image asset ([50087bf](https://github.com/tks18/personal-finance-etl/commit/50087bf81d347f3b12f7d99cea8cceabd3249a11))
+* **assets:** update multi-resolution logo icon ([0622a4c](https://github.com/tks18/personal-finance-etl/commit/0622a4cf6c4b2db7bbc1cf0b1eb41f1daeae6a46))
+* **assets:** update square application logo ([403ab35](https://github.com/tks18/personal-finance-etl/commit/403ab353af758e2c76c258f61c46274553ea407d))
+* **readme:** display social preview banner in header ([6336081](https://github.com/tks18/personal-finance-etl/commit/633608103dab80eb106f5bdacf6f8f04a31796d5))
+
 ### [9.2.2](https://github.com/tks18/personal-finance-etl/compare/9.2.1...9.2.2) (2026-10-18)
 
 
