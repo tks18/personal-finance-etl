@@ -1,0 +1,15 @@
+# Pyrefly Static Type Checker & Language Server Configuration
+# Repository: personal-finance-etl
+# Standalone Pyrefly Configuration
+# Documentation: https://pyrefly.org/
+
+search-path = [
+    "src",
+]
+
+site-package-path = [
+    ".venv/Lib/site-packages",
+]
+
+check-unannotated-defs = true
+
