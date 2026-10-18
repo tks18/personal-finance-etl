@@ -32,6 +32,7 @@ from personal_finance_etl.config.financial_rules import FinancialRules
 __all__ = ["_run_mc_simulations_numba", "get_monte_carlo_fire_batch"]
 
 
+# pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals,too-many-branches,too-many-statements,unused-argument
 @njit(fastmath=True, parallel=True, cache=True)
 def _run_mc_simulations_numba(
     pv_arr: npt.NDArray[np.float64],
@@ -493,6 +494,7 @@ def get_monte_carlo_fire_batch(
     """
 
     # Exception TYP-001 [NUMBA_OR_LIBRARY_LIMITATION]: Polars UDF struct mapper accepts optional keyword arguments
+    # pylint: disable=too-many-locals
     def monte_carlo_fire_batch(s: pl.Series, **kwargs: Any) -> pl.Series:
         df = s.struct.unnest()
         pv = df["Total_Net_Worth_Market_Af_Tax"].to_numpy().astype(float)
