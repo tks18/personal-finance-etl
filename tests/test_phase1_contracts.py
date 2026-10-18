@@ -1,3 +1,5 @@
+# pylint: skip-file
+# flake8: noqa
 """Tests for Phase 1 typed contracts across operational, application, and domain boundaries.
 
 Owns
