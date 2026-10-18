@@ -20,7 +20,10 @@ build = { cmd = "uv run python -c \"from scripts.tasks import build; build()\"",
 # Quality Gate & Diagnostics Tasks
 audit = { cmd = "uv run python -c \"from scripts.tasks import audit; audit()\"", help = "Run Full Quality Gate (Ruff, Mypy, Pyright, Pylint, Pytest)" }
 audit-fast = { cmd = "uv run python -c \"from scripts.tasks import audit_fast; audit_fast()\"", help = "Run Fast Quality Gate (< 2s: Ruff Lint, Ruff Format, Mypy)" }
+"audit-fast:fix" = { cmd = "uv run python -c \"from scripts.tasks import audit_fast_fix; audit_fast_fix()\"", help = "Run Fast Quality Gate with automatic Ruff lint and format fixing" }
+audit-full = { cmd = "uv run python -c \"from scripts.tasks import audit_full; audit_full()\"", help = "Run Full Quality Gate (all 6 engines: Ruff, Mypy, Pyright, Pylint, Pytest)" }
 audit-csv = { cmd = "uv run python -c \"from scripts.tasks import audit_csv; audit_csv()\"", help = "Run Full Quality Gate and export structured CSV report" }
+audit-json = { cmd = "uv run python -c \"from scripts.tasks import audit_json; audit_json()\"", help = "Run Full Quality Gate and export structured JSON report" }
 
 # Git Hooks Orchestration
 install-hooks = { cmd = "uv run python -c \"from scripts.tasks import install_hooks; install_hooks()\"", help = "Install Git pre-commit and pre-push quality hooks" }
