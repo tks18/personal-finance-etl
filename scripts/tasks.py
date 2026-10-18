@@ -1,6 +1,7 @@
 import subprocess
 import sys
 
+from scripts.create_pr import main as create_pr_main
 from scripts.create_releases import run_release_cli
 
 
@@ -162,8 +163,6 @@ def commit_overrides_only():
 
 def pr_preview():
     """Preview GitHub Pull Request title, changelog body, and quality gate audit table."""
-    from scripts.create_pr import main as create_pr_main
-
     passed_args = sys.argv[1:]
     if "--preview" not in passed_args and "--dry-run" not in passed_args:
         passed_args.insert(0, "--preview")
@@ -172,8 +171,6 @@ def pr_preview():
 
 def pr_create():
     """Create or update GitHub Pull Request from dev into master with quality gate audit."""
-    from scripts.create_pr import main as create_pr_main
-
     passed_args = sys.argv[1:]
     if "--run" not in passed_args:
         passed_args.insert(0, "--run")
@@ -182,7 +179,6 @@ def pr_create():
 
 def release_pipeline():
     """Execute end-to-end post-tag release pipeline: git push -> create PR -> draft release."""
-    import subprocess
     from rich.console import Console
 
     console = Console()
@@ -197,8 +193,6 @@ def release_pipeline():
 
     # Step 2: Create/update PR from dev into master with Quality Gate certification attached
     console.print("\n[bold yellow]Step 2: Creating/updating Pull Request into master with Quality Gate certification...[/bold yellow]")
-    from scripts.create_pr import main as create_pr_main
-
     pr_code = create_pr_main(["--run", "--head", "dev", "--base", "master"])
     if pr_code != 0:
         console.print("[bold red]Pipeline warning: PR creation had errors.[/bold red]")
