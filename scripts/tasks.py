@@ -133,4 +133,31 @@ def commit_interactive():
     sys.exit(auto_commit_main())
 
 
+def commit_overrides():
+    """Execute automated conventional commits using .commit_overrides.json directly."""
+    from scripts.auto_commit import main as auto_commit_main
+
+    passed_args = sys.argv[1:]
+    sys.argv = [sys.argv[0], "--map", ".commit_overrides.json", "--run"] + passed_args
+    sys.exit(auto_commit_main())
+
+
+def commit_overrides_preview():
+    """Preview automated conventional commits using .commit_overrides.json without committing."""
+    from scripts.auto_commit import main as auto_commit_main
+
+    passed_args = sys.argv[1:]
+    sys.argv = [sys.argv[0], "--map", ".commit_overrides.json", "--dry-run"] + passed_args
+    sys.exit(auto_commit_main())
+
+
+def commit_overrides_only():
+    """Execute commits ONLY for files explicitly listed in .commit_overrides.json."""
+    from scripts.auto_commit import main as auto_commit_main
+
+    passed_args = sys.argv[1:]
+    sys.argv = [sys.argv[0], "--map", ".commit_overrides.json", "--only-mapped", "--run"] + passed_args
+    sys.exit(auto_commit_main())
+
+
 
