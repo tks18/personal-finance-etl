@@ -1,6 +1,8 @@
 {
   "include": [
-    "src"
+    "src",
+    "scripts",
+    "tests"
   ],
   "extraPaths": [
     "."
