@@ -264,7 +264,7 @@ class FYMacroParametersTable:
             ) from e
 
     def get_equity_ltcg_exemption(self, ref_date: date) -> float:
-        """Returns the annual LTCG exemption limit specifically for equity."""
+        """Return the annual LTCG exemption limit specifically for equity."""
         fallback = (
             self.rules.assumptions.tax.fallback_equity_ltcg_exemption
             if self.rules and hasattr(self.rules, "assumptions")
@@ -292,7 +292,7 @@ class FYMacroParametersTable:
     def get_holding_type(
         self, tax_type: str, tax_subtype: str, lot_buy_date: date, ref_date: date
     ) -> str:
-        """Determines whether a holding period qualifies as 'LTCG' or 'STCG'."""
+        """Determine whether a holding period qualifies as 'LTCG' or 'STCG'."""
         tt = tax_type.strip().lower()
         tst = tax_subtype.strip().lower()
         cutoff = self.get_debt_mf_cutoff(ref_date)
