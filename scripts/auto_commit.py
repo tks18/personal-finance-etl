@@ -15,6 +15,14 @@ import subprocess
 import sys
 from pathlib import Path
 
+if sys.platform == "win32":
+    reconfig_out = getattr(sys.stdout, "reconfigure", None)
+    if callable(reconfig_out):
+        reconfig_out(encoding="utf-8", errors="replace")
+    reconfig_err = getattr(sys.stderr, "reconfigure", None)
+    if callable(reconfig_err):
+        reconfig_err(encoding="utf-8", errors="replace")
+
 # Explicit commit overrides for known files during the refactoring phases
 KNOWN_COMMIT_MESSAGES: dict[str, str] = {
     # Phase 0 Architecture
@@ -584,6 +592,8 @@ def get_changed_files() -> list[tuple[str, str]]:
         ["git", "status", "-s", "-uall"],
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         check=True,
     )
     results: list[tuple[str, str]] = []
@@ -612,13 +622,25 @@ def run_git_commit(filepath: str, message: str, dry_run: bool = False) -> bool:
         return True
 
     # 1. git add
-    add_proc = subprocess.run(["git", "add", norm_path], capture_output=True, text=True)
+    add_proc = subprocess.run(
+        ["git", "add", norm_path],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
     if add_proc.returncode != 0:
         print(f"FAILED git add {norm_path}: {add_proc.stderr}")
         return False
 
     # 2. git commit
-    commit_proc = subprocess.run(["git", "commit", "-m", message], capture_output=True, text=True)
+    commit_proc = subprocess.run(
+        ["git", "commit", "-m", message],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
     if commit_proc.returncode != 0:
         print(f"FAILED git commit for {norm_path}: {commit_proc.stderr}")
         return False
