@@ -18,11 +18,11 @@ from __future__ import annotations
 
 import gc
 import logging
-import multiprocessing
 import os
 import sqlite3
 import traceback
 import zlib
+from multiprocessing.queues import Queue as MpQueue
 from typing import cast
 
 from personal_finance_etl.config.financial_rules import FinancialRules
@@ -82,7 +82,7 @@ class RunLifecycleCoordinator:
         """
         add_queue_handler(
             cast(
-                "multiprocessing.Queue[tuple[str, str | None, str | None]]",
+                MpQueue[tuple[str, str | None, str | None]],
                 self.status_queue,
             )
         )
