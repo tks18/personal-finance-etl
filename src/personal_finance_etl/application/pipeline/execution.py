@@ -423,13 +423,13 @@ class PipelineExecutor:
 
         # Strict DataContract Validation
         registered_contracts = {c.contract_id for c in DATA_CONTRACT_REGISTRY}
-        for df_key in self.dfs.keys():
+        for df_key in self.dfs:
             if df_key not in registered_contracts:
                 raise RuntimeError(
                     f"Engine produced unregistered table '{df_key}'. All analytical tables must be defined in DATA_CONTRACT_REGISTRY."
                 )
 
-        missing_contracts = registered_contracts - set(self.dfs.keys())
+        missing_contracts = registered_contracts - set(self.dfs)
         if missing_contracts:
             raise RuntimeError(f"Engine failed to produce required tables: {missing_contracts}")
 
