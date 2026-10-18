@@ -1,3 +1,5 @@
+# pylint: skip-file
+# flake8: noqa
 """Unit and regression tests for Phase 7: Tax Domain & Application Service.
 
 Tests:
