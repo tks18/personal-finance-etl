@@ -1,3 +1,5 @@
+# pylint: skip-file
+# flake8: noqa
 """Phase 10 presentation layer verification test suite.
 
 Validates
