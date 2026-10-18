@@ -140,6 +140,7 @@ def test_inflation_builder_execution(mock_rules: FinancialRules) -> None:
     assert "lf_inflation" in res
     assert "cpi_result" in res
     assert res["cpi_result"].status == CalculationStatus.VALID
+    assert res["cpi_result"].value is not None
     assert res["cpi_result"].value > 0.0
 
 
