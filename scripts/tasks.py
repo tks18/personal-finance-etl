@@ -183,8 +183,6 @@ def pr_create():
 
 def load_pypi_token(repo_dir: Path | None = None) -> str | None:
     """Safely load PyPI token from .env or os.environ without leaking secrets."""
-    import os
-
     # 1. Environment variable override
     token = os.environ.get("UV_PUBLISH_TOKEN") or os.environ.get("PYPI_TOKEN")
     if token:
@@ -217,7 +215,6 @@ def load_pypi_token(repo_dir: Path | None = None) -> str | None:
 
 def publish_pypi(repo_dir: Path | None = None) -> int:
     """Build distributions with uv build and publish them to PyPI using token from .env."""
-    import os
     from rich.console import Console
     from scripts.create_pr import get_project_root
 
