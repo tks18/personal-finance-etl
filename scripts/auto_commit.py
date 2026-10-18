@@ -467,10 +467,14 @@ V910_COMMIT_MESSAGES: dict[str, str] = {
 
 # Dedicated v9.2.0 Implementation Hardening Commit Messages
 V920_COMMIT_MESSAGES: dict[str, str] = {
-    # v9.2.0 Release Documentation & Overview
+    # v9.2.0 Release Documentation, CI Quality & Badges
+    "README.md": "docs(readme): add Codacy, CodeFactor, and CodeRabbit badges",
+    ".codacy.yml": "ci(codacy): configure static analysis and quality engines",
+    ".coderabbit.yaml": "ci(coderabbit): configure AI code review and path rules",
+    ".flake8": "ci(codefactor): configure flake8 linter rules and exclusions",
     ".planning/refactor_v910_v920/RELEASE_NOTES_AND_PR_v9.1.0_v9.2.0.md": "docs(releases): add PR templates and release notes for v9.1 and v9.2",
     ".planning/refactor_v910_v920/00-HARDENING-PROGRAM-OVERVIEW.md": "docs(planning): update hardening program overview with release links",
-    "scripts/auto_commit.py": "chore(scripts): stage release notes and overview mappings",
+    "scripts/auto_commit.py": "chore(scripts): stage CI review and quality badge mappings",
 }
 
 
