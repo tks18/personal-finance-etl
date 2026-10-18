@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [9.2.6](https://github.com/tks18/personal-finance-etl/compare/9.2.5...9.2.6) (2026-10-18)
+
+
+### Features 🔥
+
+* **package:** add pypi:publish npm script ([7c0d81a](https://github.com/tks18/personal-finance-etl/commit/7c0d81a8e1d7cdab8726c31f9c64de1aa4238b20))
+* **release:** integrate uv build and publish into release pipeline ([ae48628](https://github.com/tks18/personal-finance-etl/commit/ae48628fbde6943b6507783d126beef75a108a20))
+* **tasks:** add pypi:publish task definition ([12fdae0](https://github.com/tks18/personal-finance-etl/commit/12fdae0cc55676bc24384362e35d3981e6e2af05))
+
+
+### Code Refactoring 🖌
+
+* **tasks:** remove redundant function-level import os ([840f6c1](https://github.com/tks18/personal-finance-etl/commit/840f6c12bc158c8d0d9113ffaeddb67cd7e6ee5e))
+
+
+### Performance Improvements 🏎
+
+* **assets:** compress logo to 512px with stripped metadata ([ca4acb6](https://github.com/tks18/personal-finance-etl/commit/ca4acb61fe3b5828a745a89676042dd7792042c6))
+* **assets:** optimize multi-resolution ico dimensions ([cba8d6a](https://github.com/tks18/personal-finance-etl/commit/cba8d6ade5af8299a6521336de3a2cdf96a5ffeb))
+* **packaging:** exclude social preview from wheel and sdist ([31e393f](https://github.com/tks18/personal-finance-etl/commit/31e393fcb82923fb65d0cd88022103c06afb71c4))
+
 ### [9.2.5](https://github.com/tks18/personal-finance-etl/compare/9.2.4...9.2.5) (2026-10-18)
 
 
