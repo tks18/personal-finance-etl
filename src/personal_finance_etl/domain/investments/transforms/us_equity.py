@@ -114,7 +114,7 @@ def transform_stg_us_stock_trades(base_orders_lazy: pl.LazyFrame, trade_type: st
 def get_stg_us_stock_master_ref(
     base_orders_lazy: pl.LazyFrame, d_asset_subcategory_lazy: pl.LazyFrame
 ) -> pl.LazyFrame:
-    """Translates stg_StockMasterRef for US Stocks from transactions."""
+    """Translate stg_StockMasterRef for US Stocks from transactions."""
     stock_category_lazy = d_asset_subcategory_lazy.filter(
         pl.col("ASSET_NAME") == "Stocks & ETFs"
     ).select(pl.col("UID").alias("CATEGORY_ID"))

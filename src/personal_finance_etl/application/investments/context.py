@@ -44,6 +44,7 @@ class RunContext:
     run_id: str = "UNKNOWN"
 
     def __post_init__(self) -> None:
+        """Initialize transient and computed attributes after dataclass creation."""
         default_curr = getattr(self.rules, "DEFAULT_CURRENCY_ID", "INR_INR")
         self.fx_provider = FXRateProvider(self.df_fx, default_curr)
 

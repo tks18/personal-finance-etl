@@ -23,7 +23,7 @@ __all__ = ["categorize_statement_files"]
 
 
 def categorize_statement_files(folder_path: str, strict: bool = True) -> dict[str, list[str]]:
-    """Does a single directory traversal to categorize all statement files.
+    """Perform a single directory traversal to categorize all statement files.
 
     Parameters
     ----------

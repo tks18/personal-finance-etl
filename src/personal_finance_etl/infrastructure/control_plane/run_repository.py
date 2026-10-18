@@ -146,7 +146,7 @@ class RunRepository:
             New status string (e.g., 'RUNNING', 'SUCCESS', 'FAILED').
 
         Raises
-        ----------
+        ------
         ValueError
             If status is empty.
         KeyError
@@ -306,7 +306,9 @@ class RunRepository:
                             elif isinstance(max_val, date):
                                 input_as_of_date = max_val.isoformat()
                             else:
-                                input_as_of_date = str(max_val).split("T")[0].split(" ")[0]
+                                input_as_of_date = (
+                                    str(max_val).split("T", maxsplit=1)[0].split(" ", maxsplit=1)[0]
+                                )
                             break
                     except (KeyError, TypeError, ValueError, AttributeError):
                         pass

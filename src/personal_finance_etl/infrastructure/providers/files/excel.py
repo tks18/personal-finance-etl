@@ -50,9 +50,7 @@ def _clean_excel_headers(df_sliced: pl.DataFrame) -> tuple[pl.DataFrame, str]:
             seen[header_str] = 0
         clean_headers.append(header_str)
 
-    df_data = df_sliced.slice(1).rename(
-        {old: new for old, new in zip(df_sliced.columns, clean_headers, strict=False)}
-    )
+    df_data = df_sliced.slice(1).rename(dict(zip(df_sliced.columns, clean_headers, strict=False)))
     first_col = clean_headers[0]
     return df_data, first_col
 
@@ -88,7 +86,7 @@ def _process_mf_statement(filename: str, raw_bytes: bytes) -> pl.DataFrame:
 
 
 def extract_mf_market_data_raw(valid_files: list[tuple[str, str, bytes]]) -> pl.LazyFrame:
-    """Expects list of (filename, folder_path, raw_bytes)."""
+    """Extract mutual fund market data from a list of raw statement payloads."""
     all_dfs: list[pl.DataFrame] = []
     for filename, folder_path, raw_bytes in valid_files:
         try:

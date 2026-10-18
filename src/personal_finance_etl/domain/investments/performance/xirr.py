@@ -119,6 +119,8 @@ class PortfolioXIRRCalculator:
         """
 
         class StoredCashflow(CashflowDict):
+            """Internal cashflow record with normalized native date representation."""
+
             date_obj: Required[date]
 
         # Normalize once so every stored cashflow date is known to be a real date.
@@ -141,11 +143,13 @@ class PortfolioXIRRCalculator:
         benchmark_local_amounts: list[float] = []
 
         def optional_difference(left: float | None, right: float | None) -> float | None:
+            """Compute arithmetic difference between two optional floats if both are present."""
             return left - right if left is not None and right is not None else None
 
         def terminal_result(
             dates: list[date], amounts: list[float], terminal: float | None, as_of: date
         ) -> float | None:
+            """Calculate portfolio XIRR including terminal valuation cashflow on closing date."""
             if terminal is None:
                 return None
             result = calculate_xirr(dates + [as_of], amounts + [terminal])

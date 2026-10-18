@@ -1,0 +1,37 @@
+# ==============================================================================
+# Flake8 Configuration (CodeFactor Static Analysis & Complexity)
+# Repository: personal-finance-etl
+# Python: >=3.13 | Line Length: 100 | Max Complexity: 15
+# Linked Companion Configs:
+#   - Ruff Linter & Formatter: ruff.toml
+#   - Pylint Semantic Analysis: .pylintrc
+#   - Mypy Strict Type Checking: mypy.ini
+#   - Codacy Platform Quality: .codacy.yml
+#   - CodeRabbit AI Review: .coderabbit.yaml
+# ==============================================================================
+
+[flake8]
+max-line-length = 100
+extend-ignore = E203, E501, W503
+exclude =
+    .git,
+    __pycache__,
+    .venv,
+    build,
+    dist,
+    outputs,
+    backups,
+    scratch,
+    node_modules,
+    .yarn,
+    .github,
+    _df_cache,
+    .planning,
+    tests,
+    scripts,
+    docs,
+    main.py,
+    main.spec,
+    src/personal_finance_etl/presentation/docs/assets
+max-complexity = 15
+

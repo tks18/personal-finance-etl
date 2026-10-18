@@ -31,7 +31,7 @@ def get_purchase_reference(
     qty_col: str,
     extra_group_cols: list[str] | None = None,
 ) -> pl.LazyFrame:
-    """Translates DAX SUMMARIZE + CALCULATE(SUM) for Purchases.
+    """Translate DAX SUMMARIZE + CALCULATE(SUM) for Purchases.
 
     Groups by Instrument, ISIN, Date, and Price, then sums the Quantity.
     Returns: ISIN, Date, Price, Quantity, Value
@@ -69,7 +69,7 @@ def get_sale_reference(
     qty_col: str,
     extra_group_cols: list[str] | None = None,
 ) -> pl.LazyFrame:
-    """Translates DAX SUMMARIZE + CALCULATE(SUM) for Sales.
+    """Translate DAX SUMMARIZE + CALCULATE(SUM) for Sales.
 
     Also calculates the Rolling Average Buy Price based on historical purchases.
     """
@@ -142,7 +142,7 @@ def get_sale_reference(
 def transform_stg_investment_market_data(
     refs: list[pl.LazyFrame], default_currency_id: str
 ) -> pl.LazyFrame:
-    """Translates DAX UNION + SUMMARIZE.
+    """Translate DAX UNION + SUMMARIZE for stage investment market data.
 
     Concatenates the aggregated tables and selects the final columns.
     """
@@ -328,7 +328,7 @@ def _batch_compute_sale_ids(s: pl.Series) -> pl.Series:
 def get_f_tf_investment_purchase_data(
     refs: list[pl.LazyFrame], default_currency_id: str
 ) -> pl.LazyFrame:
-    """Translates DAX UNION + SUMMARIZE for Purchases."""
+    """Translate DAX UNION + SUMMARIZE for Purchases."""
     df_union = pl.concat(refs, how="diagonal_relaxed")
 
     cols = df_union.collect_schema().names()
@@ -396,7 +396,7 @@ def get_f_tf_investment_purchase_data(
 def get_f_tf_investment_sale_data(
     refs: list[pl.LazyFrame], default_currency_id: str
 ) -> pl.LazyFrame:
-    """Translates DAX UNION + SUMMARIZE for Sales."""
+    """Translate DAX UNION + SUMMARIZE for Sales."""
     df_union = pl.concat(refs, how="diagonal_relaxed")
 
     cols = df_union.collect_schema().names()
@@ -478,7 +478,7 @@ def get_d_investment_master(
     stg_benchmark_mapping_lazy: pl.LazyFrame,
     default_currency_id: str,
 ) -> pl.LazyFrame:
-    """Translates d_InvestmentMaster.
+    """Translate d_InvestmentMaster dimensional data.
 
     Unions the References into a single distinct dimension table,
     then joins the Benchmark Mapping to pull in Sector, Industry, Tax flags, etc.

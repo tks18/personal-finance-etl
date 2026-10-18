@@ -1,0 +1,17 @@
+#!/usr/bin/env sh
+# Personal Finance ETL - Pre-Commit Quality Gate (Fast Tier)
+# Runs Ruff Check, Ruff Format Check, and Mypy Typecheck (< 2s).
+echo "[Quality Gate] Running Pre-Commit Fast Verification (Ruff + Mypy)..."
+
+uv run poe audit-fast
+EXIT_CODE=$?
+
+if [ $EXIT_CODE -ne 0 ]; then
+    echo ""
+    echo "[Quality Gate] [FAIL] Pre-commit checks failed."
+    echo "[Quality Gate] Fix issues or run 'uv run poe audit-fast:fix' to auto-fix formatting."
+    exit $EXIT_CODE
+fi
+
+echo "[Quality Gate] [PASS] Pre-commit checks passed cleanly."
+exit 0

@@ -17,6 +17,12 @@ So the project grew from ETL into the system I now use to **preserve financial e
 [![PyPI](https://img.shields.io/pypi/v/personal-finance-etl?label=PyPI)](https://pypi.org/project/personal-finance-etl/)
 [![PyPI Downloads](https://static.pepy.tech/personalized-badge/personal-finance-etl?period=total&units=INTERNATIONAL_SYSTEM&left_color=BLACK&right_color=GREEN&left_text=downloads)](https://pepy.tech/projects/personal-finance-etl)
 ![Python](https://img.shields.io/badge/Python-3.13%2B-3776AB?logo=python&logoColor=white)
+[![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+
+[![Codacy](https://img.shields.io/badge/Codacy-Analysis-0052CC?logo=codacy&logoColor=white)](https://app.codacy.com/gh/tks18/personal-finance-etl/dashboard)
+[![CodeFactor](https://www.codefactor.io/repository/github/tks18/personal-finance-etl/badge)](https://www.codefactor.io/repository/github/tks18/personal-finance-etl)
+[![CodeRabbit Reviews](https://img.shields.io/coderabbit/prs/github/tks18/personal-finance-etl?label=CodeRabbit%20Reviews)](https://coderabbit.ai)
+
 ![Local First](https://img.shields.io/badge/Architecture-Local--First-2F855A)
 ![DuckDB](https://img.shields.io/badge/Analytics-DuckDB-FFF000?logo=duckdb&logoColor=000)
 ![Polars](https://img.shields.io/badge/Compute-Polars-CD792C)

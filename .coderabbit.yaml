@@ -1,0 +1,90 @@
+# ==============================================================================
+# CodeRabbit AI Code Review Configuration
+# Repository: personal-finance-etl
+# Python: >=3.13 | Architecture: Clean Architecture & Modular Pipelines
+# Linked Tool Configs:
+#   - Ruff: ruff.toml
+#   - Pylint: .pylintrc
+#   - Mypy: mypy.ini
+#   - Flake8: .flake8
+#   - Codacy: .codacy.yml
+# ==============================================================================
+
+language: 'en-US'
+early_access: false
+
+tone_instructions: >
+  Act as a senior quantitative finance and data platform software architect.
+  Focus on mathematical precision, Clean Architecture boundary integrity,
+  zero financial drift, explicit static typing (avoiding Any), and idiomatic Polars streaming.
+
+reviews:
+  profile: 'chill'
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: false
+  auto_review:
+    enabled: true
+    drafts: false
+
+  tools:
+    ruff:
+      enabled: true
+      config_file: 'ruff.toml'
+    pylint:
+      enabled: true
+      config_file: '.pylintrc'
+    mypy:
+      enabled: true
+      config_file: 'mypy.ini'
+    flake8:
+      enabled: false # Prefer Ruff to avoid redundant reports
+      config_file: '.flake8'
+
+  path_instructions:
+    - path: 'src/personal_finance_etl/domain/**/*.py'
+      instructions: >
+        - Enforce mathematical precision and zero financial drift.
+        - Ensure all records and return types use strict TypedDicts or immutable contracts.
+        - Verify that financial calculations (FIFO matching, XIRR, CAGR, tax realization) preserve accounting invariants.
+        - Ensure complete NumPy-style docstrings with parameter types, returns, and raises.
+
+    - path: 'src/personal_finance_etl/application/**/*.py'
+      instructions: >
+        - Ensure adherence to Clean Architecture: application services orchestrate domain models without leaking infrastructure details.
+        - Verify that Polars operations remain lazy where possible, and any `.collect()` call is documented with its architectural boundary.
+
+    - path: 'src/personal_finance_etl/infrastructure/**/*.py'
+      instructions: >
+        - Verify robust exception handling and resource teardown (e.g., closing DuckDB/SQLite connections and WAL sidecars).
+        - Ensure external data payloads are validated against strict contracts before ingestion.
+
+# Review strictly files inside src/ and exclude every non-src folder/file
+path_filters:
+  - 'src/**'
+  - '!src/personal_finance_etl/presentation/docs/assets/**'
+  - '!**.min.js'
+  - '!tests/**'
+  - '!scripts/**'
+  - '!docs/**'
+  - '!.planning/**'
+  - '!build/**'
+  - '!dist/**'
+  - '!outputs/**'
+  - '!backups/**'
+  - '!scratch/**'
+  - '!node_modules/**'
+  - '!.yarn/**'
+  - '!.github/**'
+  - '!.venv/**'
+  - '!_df_cache/**'
+  - '!main.py'
+  - '!main.spec'
+  - '!.versionrc.js'
+  - '!package.json'
+  - '!yarn.lock'
+  - '!uv.lock'
+  - '!CHANGELOG.md'
+  - '!README.md'

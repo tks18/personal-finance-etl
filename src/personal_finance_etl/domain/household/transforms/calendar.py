@@ -26,7 +26,7 @@ def get_stg_calendar_ref(
     f_pur_lazy: pl.LazyFrame,
     f_sale_lazy: pl.LazyFrame,
 ) -> pl.LazyFrame:
-    """Translates stg_CalendarRef.
+    """Translate stg_CalendarRef.
 
     Unions the DATE columns from all 7 fact tables to find the min and max dates.
 
@@ -90,7 +90,7 @@ def get_stg_calendar_ref(
 
 
 def transform_d_calendar(df_bounds_lazy: pl.LazyFrame) -> pl.LazyFrame:
-    """Generates all 40 requested time-intelligence columns for the Calendar Master.
+    """Generate all 40 requested time-intelligence columns for the Calendar Master.
 
     Assumes an April 1st - March 31st Financial Year.
 

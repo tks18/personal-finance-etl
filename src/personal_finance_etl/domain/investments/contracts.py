@@ -21,8 +21,6 @@ from typing import Required, TypedDict
 import polars as pl
 from pydantic import BaseModel, ConfigDict, Field
 
-from personal_finance_etl.domain.common.calculation import XirrResult as XirrResult
-
 
 class LotAction(StrEnum):
     """Categorical actions applied to investment tax lots."""

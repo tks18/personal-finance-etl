@@ -23,7 +23,7 @@ from personal_finance_etl.domain.common.validation import validate_and_parse_num
 def get_stg_mf_market_data(
     raw_data: pl.LazyFrame, stg_mf_isin_mapping_lazy: pl.LazyFrame, default_currency_id: str
 ) -> pl.LazyFrame:
-    """Applies final PQ & DAX transformations (including LOOKUPVALUE).
+    """Apply final PQ & DAX transformations (including LOOKUPVALUE).
 
     Returns a LazyFrame.
     """
@@ -89,7 +89,7 @@ def get_stg_mf_market_data(
 
 
 def get_stg_mf_market_data_ref(stg_mf_market_data_lazy: pl.LazyFrame) -> pl.LazyFrame:
-    """Translates DAX SUMMARIZE + CALCULATE(SUM) for Mutual Funds.
+    """Translate DAX SUMMARIZE + CALCULATE(SUM) for Mutual Funds.
 
     Groups by Date, ISIN, and Instrument Name, sums the Units and Values,
     and back-calculates the implied prices.
@@ -184,9 +184,9 @@ def transform_stg_mf_trades(
     scheme_mapping: dict[str, str],
     trade_type: str,
 ) -> pl.LazyFrame:
-    """Branches into Purchase or Sale tables, applies DAX SWITCH logic for old names,
-    and runs the ISIN LOOKUPVALUE join.
+    """Branch into Purchase or Sale tables.
 
+    Apply DAX SWITCH logic for old names and run the ISIN LOOKUPVALUE join.
     trade_type must be "PURCHASE" or "REDEEM".
     """
     # 1. Filter for the specific transaction type
@@ -222,7 +222,7 @@ def get_stg_mf_master_ref(
     stg_mf_sale_transactions_lazy: pl.LazyFrame,
     d_asset_subcategory_lazy: pl.LazyFrame,
 ) -> pl.LazyFrame:
-    """Translates stg_MFMasterRef.
+    """Translate stg_MFMasterRef.
 
     Unions unique ISINs across MF tables, then looks up attributes from Market Data.
     """

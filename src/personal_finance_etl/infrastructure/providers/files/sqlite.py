@@ -58,6 +58,7 @@ class SQLiteExtractor:
         """Deserialize in-memory bytes, extract tables into Polars LazyFrames, and tag file info."""
 
         def add_file_info(lf: pl.LazyFrame) -> pl.LazyFrame:
+            """Append source file name and folder metadata columns to table LazyFrame."""
             return lf.with_columns(
                 pl.lit(filename).alias("__file_name__"),
                 pl.lit(folder_path).alias("__folder_path__"),

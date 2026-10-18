@@ -2,6 +2,124 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [9.2.1](https://github.com/tks18/personal-finance-etl/compare/9.2.0...9.2.1) (2026-10-18)
+
+
+### Bug Fixes 🛠
+
+* **scripts:** support utf-8 stdout encoding on windows ([e9e0740](https://github.com/tks18/personal-finance-etl/commit/e9e0740ff78680fe79b24bab4dcfe46b08fc3ce6))
+* **tax:** type annotate acquisition date in tax classifier ([e384d54](https://github.com/tks18/personal-finance-etl/commit/e384d5426f67ef8a55fd1600f630d6e1fb70dfd2))
+
+
+### Features 🔥
+
+* **ci:** implement unified two-tier quality gate orchestrator ([bf7660a](https://github.com/tks18/personal-finance-etl/commit/bf7660a0ecf8bf59115cd679b9cdedf4bdce0b94))
+* **scripts:** add --only-mapped commit support ([07021b5](https://github.com/tks18/personal-finance-etl/commit/07021b5239b734dc9e6de923c4184a7da758da5c))
+* **scripts:** add automated PR generator with audit certification ([03ae3ff](https://github.com/tks18/personal-finance-etl/commit/03ae3ff9aeaf2ba9ad0e2379a24e6520031f56fe))
+* **scripts:** add interactive commit wizard and gitignored mapping ([bf70f99](https://github.com/tks18/personal-finance-etl/commit/bf70f9970a20e6ff981fd14ec09ada2241750cdb))
+
+
+### CI 🛠
+
+* **codacy:** configure static analysis and quality engines ([a1018b2](https://github.com/tks18/personal-finance-etl/commit/a1018b2f75933b7913cb095b28d52aac7884e6a3))
+* **codacy:** configure static analysis and quality engines ([5345f40](https://github.com/tks18/personal-finance-etl/commit/5345f407bb6d166999a833bb378afec3a3042877))
+* **codefactor:** configure flake8 linter rules and exclusions ([71fd1b9](https://github.com/tks18/personal-finance-etl/commit/71fd1b91c321fb5416e87f102a6d610cef43900c))
+* **codefactor:** configure flake8 linter rules and exclusions ([3c16a32](https://github.com/tks18/personal-finance-etl/commit/3c16a327331ecf209ff989009ee1bb4262167861))
+* **coderabbit:** configure AI code review and path rules ([29f1364](https://github.com/tks18/personal-finance-etl/commit/29f136454e4ab8f6a8de27dd585f5ec20d22d9d4))
+* **coderabbit:** configure AI code review and path rules ([218891c](https://github.com/tks18/personal-finance-etl/commit/218891cf7f3e5a0500f7b03df4871f7e5d559f5a))
+* **hooks:** add fast tier pre-commit git hook ([7ef916f](https://github.com/tks18/personal-finance-etl/commit/7ef916f92f137747e71400e1c5d625420d9eef34))
+* **hooks:** add full tier pre-push git hook ([fb1f49b](https://github.com/tks18/personal-finance-etl/commit/fb1f49bf4999595badca18400e70ae95bf13567b))
+* **mypy:** configure standalone strict mypy type checking ([883d816](https://github.com/tks18/personal-finance-etl/commit/883d816ebd798e7e133174a1bfe4c86e5c771b9c))
+* **poe_tasks:** update tool configuration ([c0ef2e3](https://github.com/tks18/personal-finance-etl/commit/c0ef2e364792c6a49358583b41a07bbef4929ffb))
+* **poe_tasks:** update tool configuration ([120ea5f](https://github.com/tks18/personal-finance-etl/commit/120ea5fb34f06a5107c2778266f3f7efe9b8c890))
+* **poe:** add commit:overrides tasks ([8387f07](https://github.com/tks18/personal-finance-etl/commit/8387f0707cdc2b65c779fefad91c7d817384a075))
+* **poe:** add pr and release:pipeline task definitions ([3d14bc7](https://github.com/tks18/personal-finance-etl/commit/3d14bc701052f089968b2280aadbf9646b7354f6))
+* **poe:** configure standalone poe tasks runner config ([415d8da](https://github.com/tks18/personal-finance-etl/commit/415d8da12a0a1b2a974c6060b84598a24a86ba60))
+* **pre-commit:** update git hook ([533f299](https://github.com/tks18/personal-finance-etl/commit/533f2995c7b33f5373253b27897f6f2b0327db77))
+* **pre-push:** update git hook ([13c5e8d](https://github.com/tks18/personal-finance-etl/commit/13c5e8dee7df52e6320fb540c27b441f60a4b38e))
+* **pylint:** configure standalone pylint with 10/10 standard ([92b3435](https://github.com/tks18/personal-finance-etl/commit/92b3435f82dfb67f484975ace790d0d5e7b2a949))
+* **pyrefly:** configure standalone pyrefly type checker ([dcd597b](https://github.com/tks18/personal-finance-etl/commit/dcd597b3205dd62ff8451fee60ee4075df87b616))
+* **pyright:** add root extraPaths for scripts resolution ([b68698e](https://github.com/tks18/personal-finance-etl/commit/b68698e6e42a5363305a3eb791234284d4aacdfc))
+* **pyright:** configure standalone pyright strict mode ([9378ab1](https://github.com/tks18/personal-finance-etl/commit/9378ab1a4f89059abd9851abc5e13cd7ebd56d57))
+* **ruff:** configure standalone ruff with numpy docstring standards ([7190a5c](https://github.com/tks18/personal-finance-etl/commit/7190a5ccbad0c6acd6a75dbf4a31604f76a754f9))
+* **uv:** configure standalone astral uv package manager ([db427b7](https://github.com/tks18/personal-finance-etl/commit/db427b7f1001356db4bc33965270faf769dbe7ff))
+
+
+### Code Refactoring 🖌
+
+* **dates:** bound split count on date string parsing ([f0a9ce1](https://github.com/tks18/personal-finance-etl/commit/f0a9ce105b368114bf77b213f241015480c45375))
+* **pipeline:** fix iteration unpacking and date parsing ([09d321d](https://github.com/tks18/personal-finance-etl/commit/09d321d62b718ca4bf337265a55c1c9e9284f498))
+* **pipeline:** type cast multiprocessing queue safely ([3395ffd](https://github.com/tks18/personal-finance-etl/commit/3395ffd33382fb708372b0d83a435a1d441a394c))
+* **scripts:** declare scripts package boundary ([4587561](https://github.com/tks18/personal-finance-etl/commit/4587561921b52334e2908cfb4d0bf707d8b1f371))
+* **tasks:** clean up top-level create_pr import ([0e6f35f](https://github.com/tks18/personal-finance-etl/commit/0e6f35fef7928caeff43c9e55a484e239502c7d1))
+
+
+### Others 🔧
+
+* **auto_commit:** update development script ([3cc1e35](https://github.com/tks18/personal-finance-etl/commit/3cc1e359b83929aa33cd61abc2ce92fea8ae6619))
+* **build:** configure standalone linters and audit tasks ([baa8b9f](https://github.com/tks18/personal-finance-etl/commit/baa8b9f9aa8419efb757d9e50d3eeb331ff01e68))
+* **deps:** update uv lockfile for pylint and dev dependencies ([974e9fc](https://github.com/tks18/personal-finance-etl/commit/974e9fc0824e6324abadeea1866accdcee875132))
+* **install_hooks:** update development script ([13d54a8](https://github.com/tks18/personal-finance-etl/commit/13d54a8a6de51cce68005020fa91ec67e8aef823))
+* **package:** add audit and quality gate npm scripts ([358b4e0](https://github.com/tks18/personal-finance-etl/commit/358b4e0f76d278c4cdda961ab9acaf355a1e83b1))
+* **package:** add commit:overrides npm scripts ([9767693](https://github.com/tks18/personal-finance-etl/commit/976769320971c4852d42597871da8c77c18f9fe0))
+* **package:** add pr and release:pipeline npm scripts ([7fba4d5](https://github.com/tks18/personal-finance-etl/commit/7fba4d5d653f0d722b81e0e482d39fd2151f5a66))
+* **package:** update project configuration ([a0371ad](https://github.com/tks18/personal-finance-etl/commit/a0371adb3d44b7d70b06d96b2cb00988fe95ff11))
+* **package:** update project configuration ([5e6e83d](https://github.com/tks18/personal-finance-etl/commit/5e6e83d6710443057f5c23d416f0afd0a2567505))
+* **scripts:** add git pre-commit and pre-push hook installer ([8a88c09](https://github.com/tks18/personal-finance-etl/commit/8a88c090554468532d14a3dc091a0e8de881ef90))
+* **scripts:** format package docstring ([b2ed376](https://github.com/tks18/personal-finance-etl/commit/b2ed37699d76475688d418ca27c60710c947687a))
+* **scripts:** map v9.2.0 quality gate and audit files ([4daef49](https://github.com/tks18/personal-finance-etl/commit/4daef49fabf65887ee43d1c2dfbcf61a34057181))
+* **scripts:** map v9.2.0 quality gate and audit files ([5b43c14](https://github.com/tks18/personal-finance-etl/commit/5b43c146966b161417b0cd21267380b076c5272b))
+* **scripts:** prune legacy commit dictionaries ([87785b2](https://github.com/tks18/personal-finance-etl/commit/87785b2bfa40724523d2cb33f0b32a5bb53f0aae))
+* **scripts:** stage CI review and quality badge mappings ([97b1208](https://github.com/tks18/personal-finance-etl/commit/97b1208f3de316690211c249bf11b0a57cfaa227))
+* **scripts:** stage release notes and overview mappings ([ede46ce](https://github.com/tks18/personal-finance-etl/commit/ede46ce16461a5f4b2d6bc26ea92e084dd0026f5))
+* **tasks:** add audit tasks for two-tier quality gate ([5c1d755](https://github.com/tks18/personal-finance-etl/commit/5c1d7551ed5b18e3a342db5c171339d817bcaca1))
+* **tasks:** add commit_overrides task runners ([d6b62c7](https://github.com/tks18/personal-finance-etl/commit/d6b62c754ffead69da40a8a7192956877983a560))
+* **tasks:** add pr:create and release:pipeline task runners ([dab13a2](https://github.com/tks18/personal-finance-etl/commit/dab13a2c1912f67c509f198c6c0763a93e61e508))
+* **tasks:** update development script ([9aa9b82](https://github.com/tks18/personal-finance-etl/commit/9aa9b822fc76f604ce9614bb155727359fa5fcbe))
+* **tasks:** update development script ([c2ec278](https://github.com/tks18/personal-finance-etl/commit/c2ec278f1ecaf8d560864f91ac86b84f6eba9317))
+* update .gitignore ([4cc290a](https://github.com/tks18/personal-finance-etl/commit/4cc290aa454f50dcdce0a184bbf1242465f1270e))
+* **uv:** update project configuration ([a61feac](https://github.com/tks18/personal-finance-etl/commit/a61feac051393e1659f4080da68af7d5f37a6b8b))
+
+
+### Docs 📃
+
+* add minor refactor yet to be done ([dd72412](https://github.com/tks18/personal-finance-etl/commit/dd724120990f46a7fe679edcde89604671bb5f9c))
+* **cli:** standardize rich terminal cli app docstrings ([2960b1d](https://github.com/tks18/personal-finance-etl/commit/2960b1d3f5d9e97dd57cb0cb7c442e396a723cba))
+* **contracts:** standardize recovery contracts and magic docstrings ([4dd2368](https://github.com/tks18/personal-finance-etl/commit/4dd2368f32f369eadb30ceb546c7542bc2fddea3))
+* **control_plane:** standardize run repository docstrings ([5ccd51b](https://github.com/tks18/personal-finance-etl/commit/5ccd51ba665229594936a0346732e5a96093d8bb))
+* **desktop:** standardize base tab helper docstrings ([a6768c7](https://github.com/tks18/personal-finance-etl/commit/a6768c73e1f4c5cacba4828854b46f5a861e7627))
+* **docs:** standardize webview guides window docstrings ([9e4d385](https://github.com/tks18/personal-finance-etl/commit/9e4d385f1e32c2fb4c58a64d0941267cb8f81f0e))
+* **fire:** add numba simulation docstrings ([dd223af](https://github.com/tks18/personal-finance-etl/commit/dd223af0d548d76d69ca38e00169fc53e0cff05c))
+* **household:** standardize calendar transforms to numpy docstrings ([9bf4b7e](https://github.com/tks18/personal-finance-etl/commit/9bf4b7e704772dce89d192fd1ab92204b1415cc5))
+* **household:** standardize common transforms to numpy docstrings ([1c50ff5](https://github.com/tks18/personal-finance-etl/commit/1c50ff5f010f310b721fa27df5052e847cc19ff3))
+* **household:** standardize dimension transforms to numpy docstrings ([c32aabd](https://github.com/tks18/personal-finance-etl/commit/c32aabd979de842e1a52776bcdffe1da4e173e20))
+* **household:** standardize transaction transforms to numpy docstrings ([d550f7c](https://github.com/tks18/personal-finance-etl/commit/d550f7cf19a1259f32bcb950de813fe89062f7ac))
+* **ingestion:** document get_csv_lazy helper ([986d94a](https://github.com/tks18/personal-finance-etl/commit/986d94a432be13f385f482420d041a96db32edf4))
+* **investments:** add post-init docstring to investment context ([66ecd70](https://github.com/tks18/personal-finance-etl/commit/66ecd70c81c6f6cc938b290369640dd3c0493404))
+* **investments:** document local Lot dataclass helper ([82acaa7](https://github.com/tks18/personal-finance-etl/commit/82acaa727ffa2ca94066429ef9c645410c029a2a))
+* **investments:** document rounded_optional snapshot helper ([6bee84b](https://github.com/tks18/personal-finance-etl/commit/6bee84b96cda5061cadf32e33914af190b6461bf))
+* **investments:** document StoredCashflow and xirr helpers ([39bb59b](https://github.com/tks18/personal-finance-etl/commit/39bb59bb64bda470a73eb5456b41366c6bb1e3a9))
+* **investments:** standardize common investment transform docstrings ([a0195bf](https://github.com/tks18/personal-finance-etl/commit/a0195bf7d46325e111fdb0e6352c19f10793ab66))
+* **investments:** standardize fifo lot portfolio docstrings ([a4335b7](https://github.com/tks18/personal-finance-etl/commit/a4335b71af4fc3adbacfa15b7ac2536bdde5aabf))
+* **investments:** standardize indian equity transform docstrings ([6487c45](https://github.com/tks18/personal-finance-etl/commit/6487c459089a27d50a9a6e0435f28166cb55392d))
+* **investments:** standardize investment contract docstrings ([b195ddb](https://github.com/tks18/personal-finance-etl/commit/b195ddbbfb7f960614b938a575c442fd630bec79))
+* **investments:** standardize market state valuation docstrings ([1362e7f](https://github.com/tks18/personal-finance-etl/commit/1362e7f9835f5fbc6d6558ca680f40374823da9b))
+* **investments:** standardize mutual fund transform docstrings ([3438446](https://github.com/tks18/personal-finance-etl/commit/34384462b8ed638adbe93f95224dd6121e324675))
+* **investments:** standardize portfolio aggregation docstrings ([855f256](https://github.com/tks18/personal-finance-etl/commit/855f256c1c2966d0a17198d22a1730011bedcbc7))
+* **investments:** standardize us equity transform docstrings ([b1a44f3](https://github.com/tks18/personal-finance-etl/commit/b1a44f3736c747a97689b73bc925d749670fb76f))
+* **logging:** standardize NullStatusQueue numpy docstring ([ebaf257](https://github.com/tks18/personal-finance-etl/commit/ebaf25766110192e4e36f27fbd6a4504ff13fb19))
+* **market:** standardize benchmark transform docstrings ([be8abf1](https://github.com/tks18/personal-finance-etl/commit/be8abf11455779d9fb722773dff686c6f5582f32))
+* **market:** standardize currency fx transform docstrings ([e99a187](https://github.com/tks18/personal-finance-etl/commit/e99a187e367ec76c1efbeb0c5364920f66ff59ad))
+* **market:** standardize macro tax parameter docstrings ([372cb92](https://github.com/tks18/personal-finance-etl/commit/372cb92a0d0c8a232520b91cdf1f55f4dd091b0e))
+* **planning:** remove completed engineering guidelines tracker ([11046bc](https://github.com/tks18/personal-finance-etl/commit/11046bc394f0606a13b47b8ca9f26197de1855c3))
+* **planning:** update hardening program overview with release links ([875ef5f](https://github.com/tks18/personal-finance-etl/commit/875ef5f4a37fc1a9892eda103e84dbaf9013f1d3))
+* **providers:** document add_file_info sqlite helper ([4b8975e](https://github.com/tks18/personal-finance-etl/commit/4b8975e5dd8e93d0ffff908bf760bfd0baca65f9))
+* **providers:** standardize excel raw extraction docstrings ([82c5847](https://github.com/tks18/personal-finance-etl/commit/82c58477442c7af23a16d51fe2f5e77e0d867951))
+* **providers:** standardize statement locator docstring ([ffd3abd](https://github.com/tks18/personal-finance-etl/commit/ffd3abd87822dcce8bb732db4cd6a3532e57a591))
+* **readme:** add Codacy, CodeFactor, and CodeRabbit badges ([ed03c83](https://github.com/tks18/personal-finance-etl/commit/ed03c83a73740cb172d3f4fc8d9dd0fb24f82318))
+* remove completed refactor docs ([299e33e](https://github.com/tks18/personal-finance-etl/commit/299e33ecc5a5d8f50dfef0488d2893797e99c8be))
+* **tax:** standardize tax event builder docstrings ([8dc702f](https://github.com/tks18/personal-finance-etl/commit/8dc702f3f16aeab7a4d1fad28661741f4989229b))
+
 ## [9.2.0](https://github.com/tks18/personal-finance-etl/compare/9.1.0...9.2.0) (2026-10-16)
 
 

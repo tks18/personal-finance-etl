@@ -1,0 +1,46 @@
+# Poe the Poet Task Runner Configuration
+# Repository: personal-finance-etl
+# Standalone Task Definitions & Orchestration
+# Documentation: https://poethepoet.natn.io/index.html
+
+[tasks]
+
+dev = { cmd = "uv run python -c \"from scripts.tasks import dev; dev()\"", help = "Run desktop application in hot-reload development mode" }
+build = { cmd = "uv run python -c \"from scripts.tasks import build; build()\"", help = "Build standalone production binary using PyInstaller" }
+
+# GitHub Release Management
+"release:preview" = { cmd = "uv run python -c \"from scripts.tasks import release_preview; release_preview()\"", help = "Preview release notes for latest version in CHANGELOG.md" }
+"release:preview:all" = { cmd = "uv run python -c \"from scripts.tasks import release_preview_all; release_preview_all()\"", help = "Preview full release notes for all versions in CHANGELOG.md" }
+"release:dry-run" = { cmd = "uv run python -c \"from scripts.tasks import release_dry_run; release_dry_run()\"", help = "Display dry-run summary of matching Git tags and changelog entries" }
+"release:latest" = { cmd = "uv run python -c \"from scripts.tasks import release_latest; release_latest()\"", help = "Publish the latest version from CHANGELOG.md to GitHub" }
+"release:latest:draft" = { cmd = "uv run python -c \"from scripts.tasks import release_latest_draft; release_latest_draft()\"", help = "Publish latest version as a GitHub draft release" }
+"release:all" = { cmd = "uv run python -c \"from scripts.tasks import release_all; release_all()\"", help = "Publish all unreleased tags interactively to GitHub" }
+"release:all:draft" = { cmd = "uv run python -c \"from scripts.tasks import release_all_draft; release_all_draft()\"", help = "Publish all unreleased tags as GitHub drafts" }
+"release:pipeline" = { cmd = "uv run python -c \"from scripts.tasks import release_pipeline; release_pipeline()\"", help = "Execute full post-release pipeline: git push (triggers audit) -> create PR -> draft release" }
+
+# GitHub Pull Request Management
+"pr:preview" = { cmd = "uv run python -c \"from scripts.tasks import pr_preview; pr_preview()\"", help = "Preview PR title, changelog, and attached Quality Gate certification table" }
+"pr:create" = { cmd = "uv run python -c \"from scripts.tasks import pr_create; pr_create()\"", help = "Create or update PR from dev into master with Quality Gate certification" }
+
+# Quality Gate & Diagnostics Tasks
+audit = { cmd = "uv run python -c \"from scripts.tasks import audit; audit()\"", help = "Run Full Quality Gate (Ruff, Mypy, Pyright, Pylint, Pytest)" }
+audit-fast = { cmd = "uv run python -c \"from scripts.tasks import audit_fast; audit_fast()\"", help = "Run Fast Quality Gate (< 2s: Ruff Lint, Ruff Format, Mypy)" }
+"audit-fast:fix" = { cmd = "uv run python -c \"from scripts.tasks import audit_fast_fix; audit_fast_fix()\"", help = "Run Fast Quality Gate with automatic Ruff lint and format fixing" }
+audit-full = { cmd = "uv run python -c \"from scripts.tasks import audit_full; audit_full()\"", help = "Run Full Quality Gate (all 6 engines: Ruff, Mypy, Pyright, Pylint, Pytest)" }
+audit-csv = { cmd = "uv run python -c \"from scripts.tasks import audit_csv; audit_csv()\"", help = "Run Full Quality Gate and export structured CSV report" }
+audit-json = { cmd = "uv run python -c \"from scripts.tasks import audit_json; audit_json()\"", help = "Run Full Quality Gate and export structured JSON report" }
+
+# Git Hooks Orchestration
+install-hooks = { cmd = "uv run python -c \"from scripts.tasks import install_hooks; install_hooks()\"", help = "Install Git pre-commit and pre-push quality hooks" }
+
+# Automated Conventional Commits
+commit = { cmd = "uv run python -c \"from scripts.tasks import commit; commit()\"", help = "Run automated Conventional Commit tool (supports flags: -i/--interactive, --run, --dry-run, --map, --file)" }
+"commit:preview" = { cmd = "uv run python -c \"from scripts.tasks import commit_preview; commit_preview()\"", help = "Preview automated Conventional Commits without staging or committing (dry-run)" }
+"commit:run" = { cmd = "uv run python -c \"from scripts.tasks import commit_run; commit_run()\"", help = "Execute automated Conventional Commits file-by-file immediately without prompting" }
+"commit:interactive" = { cmd = "uv run python -c \"from scripts.tasks import commit_interactive; commit_interactive()\"", help = "Interactive file-by-file Commitlint wizard with diff inspection and prompt choices" }
+"commit:i" = { cmd = "uv run python -c \"from scripts.tasks import commit_interactive; commit_interactive()\"", help = "Interactive file-by-file Commitlint wizard (alias for commit:interactive)" }
+"commit:overrides" = { cmd = "uv run python -c \"from scripts.tasks import commit_overrides; commit_overrides()\"", help = "Execute automated commits directly using .commit_overrides.json" }
+"commit:overrides:preview" = { cmd = "uv run python -c \"from scripts.tasks import commit_overrides_preview; commit_overrides_preview()\"", help = "Preview automated commits using .commit_overrides.json without staging (dry-run)" }
+"commit:overrides:only" = { cmd = "uv run python -c \"from scripts.tasks import commit_overrides_only; commit_overrides_only()\"", help = "Execute commits ONLY for files explicitly defined in .commit_overrides.json" }
+
+

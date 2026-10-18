@@ -154,7 +154,7 @@ class BaseEventsBuilder:
         df_ledger = self._normalize_ledger_income(credit_subheads)
         df_credits = self._normalize_tax_credits(credit_subheads)
         quant_records = self._normalize_quant_realized_events()
-        base_schema = {c: TAX_EVENT_SCHEMA[c] for c in TAX_EVENT_SCHEMA if c != "Tax_Event_ID"}
+        base_schema = {k: v for k, v in TAX_EVENT_SCHEMA.items() if k != "Tax_Event_ID"}
         df_quant = (
             pl.DataFrame(quant_records, schema=base_schema, strict=False)
             if quant_records

@@ -122,6 +122,7 @@ class DataExtractor:
         def get_csv_lazy(
             filepath: str, func: Callable[[str, str, bytes], pl.LazyFrame], category: str
         ) -> pl.LazyFrame:
+            """Read a pending CSV configuration file as a Polars LazyFrame."""
             files = pending_files.get(category, [])
             normalized_filepath = filepath.replace("\\", "/")
             if files and normalized_filepath in files:

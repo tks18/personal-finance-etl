@@ -103,9 +103,9 @@ def _get_tax_maps(rules: FinancialRules | None) -> tuple[pl.LazyFrame, pl.LazyFr
 
 
 def transform_d_income_category(
-    df_lazy: pl.LazyFrame, column_mapping: dict[str, str], rules: FinancialRules | None = None
+    df_lazy: pl.LazyFrame, column_mapping: dict[str, str], _rules: FinancialRules | None = None
 ) -> pl.LazyFrame:
-    """Executes the PQ and DAX logic using Polars LazyFrames."""
+    """Execute the PQ and DAX logic using Polars LazyFrames."""
     df_transformed = (
         df_lazy
         # PQ: #"Renamed Columns"
@@ -149,7 +149,7 @@ def transform_d_income_subcategory(
     df_d_income_category_lazy: pl.LazyFrame,
     rules: FinancialRules | None = None,
 ) -> pl.LazyFrame:
-    """Executes the PQ and DAX logic for Income Subcategories.
+    """Execute the PQ and DAX logic for Income Subcategories.
 
     Requires the lazy frame of d_Income_Category to replicate DAX's RELATED().
     """
@@ -292,7 +292,7 @@ def transform_d_income_subcategory(
 def transform_d_expense_category(
     df_lazy: pl.LazyFrame, column_mapping: dict[str, str]
 ) -> pl.LazyFrame:
-    """Executes the PQ logic for Expense Categories (TYPE = 1)."""
+    """Execute the PQ logic for Expense Categories (TYPE = 1)."""
     df_transformed = (
         df_lazy.rename(column_mapping)
         .with_columns(pl.col("IS_DEL").cast(pl.String))
@@ -321,7 +321,7 @@ def transform_d_expense_category(
 def transform_d_expense_subcategory(
     df_lazy: pl.LazyFrame, column_mapping: dict[str, str], rules: FinancialRules | None = None
 ) -> pl.LazyFrame:
-    """Executes the PQ logic for Expense Subcategories."""
+    """Execute the PQ logic for Expense Subcategories."""
     df_transformed = (
         df_lazy.rename(column_mapping)
         .with_columns(pl.col("IS_DEL").cast(pl.String))
@@ -365,7 +365,7 @@ def transform_d_expense_subcategory(
 def transform_d_asset_category(
     df_lazy: pl.LazyFrame, column_mapping: dict[str, str], rules: FinancialRules | None = None
 ) -> pl.LazyFrame:
-    """Executes the PQ logic for Asset Categories (ASSETGROUP)."""
+    """Execute the PQ logic for Asset Categories (ASSETGROUP)."""
     df_transformed = (
         df_lazy.rename(column_mapping)
         # IS_DEL <> 1
@@ -461,7 +461,7 @@ def transform_d_asset_category(
 def transform_d_asset_subcategory(
     df_lazy: pl.LazyFrame, column_mapping: dict[str, str], rules: FinancialRules | None = None
 ) -> pl.LazyFrame:
-    """Executes the PQ logic for Asset Subcategories (ASSETS)."""
+    """Execute the PQ logic for Asset Subcategories (ASSETS)."""
     df_transformed = (
         df_lazy.rename(column_mapping)
         # IS_DEL = 0
@@ -582,7 +582,7 @@ def transform_d_currency(
     column_mapping: dict[str, str],
     mapping_lazy: pl.LazyFrame | None = None,
 ) -> pl.LazyFrame:
-    """Executes the PQ logic for the Currency Master table."""
+    """Execute the PQ logic for the Currency Master table."""
     df_transformed = (
         df_lazy.rename(column_mapping)
         # IS_DEL <> 1
@@ -630,7 +630,7 @@ def transform_d_currency(
 
 
 def transform_d_investment_benchmark_master(raw_data: pl.LazyFrame) -> pl.LazyFrame:
-    """Executes the PQ logic for the Benchmark Master table."""
+    """Execute the PQ logic for the Benchmark Master table."""
     return raw_data.rename({"Currency": "CURRENCY_ID"}).select(
         [
             "__file_name__",
@@ -644,7 +644,7 @@ def transform_d_investment_benchmark_master(raw_data: pl.LazyFrame) -> pl.LazyFr
 
 
 def transform_d_macro_parameters(raw_data: pl.LazyFrame) -> pl.LazyFrame:
-    """Executes the PQ logic for the Macro Parameters table."""
+    """Execute the PQ logic for the Macro Parameters table."""
     return raw_data.with_columns(
         (
             pl.col("FY").str.extract(r"(20\d{2})", 1).cast(pl.Int64).cast(pl.String)

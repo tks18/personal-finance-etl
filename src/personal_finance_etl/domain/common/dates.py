@@ -78,7 +78,7 @@ def to_date_obj(val: str | date | datetime | None, *, strict: bool = False) -> d
     if not val_clean or val_clean.lower() in ("null", "none"):
         return None
 
-    val_date_part = val_clean.split(" ")[0]
+    val_date_part = val_clean.split(" ", maxsplit=1)[0]
     for fmt in ("%Y-%m-%d", "%d-%m-%Y", "%d %b %Y", "%d-%b-%y"):
         try:
             return datetime.strptime(val_date_part, fmt).date()
@@ -159,7 +159,7 @@ def parse_strict_date(
             row_identifier=row_identifier,
         )
 
-    clean_val = val_str.split("T")[0]
+    clean_val = val_str.split("T", maxsplit=1)[0]
     for fmt in formats:
         try:
             return datetime.strptime(val_str, fmt).date()

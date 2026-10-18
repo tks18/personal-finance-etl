@@ -21,7 +21,7 @@ from personal_finance_etl.domain.common.validation import validate_and_parse_num
 
 
 def get_stg_stock_market_data(raw_data: pl.LazyFrame, default_currency_id: str) -> pl.LazyFrame:
-    """Applies the final PQ & DAX transformations.
+    """Apply final PQ and DAX transformations to raw stock market data.
 
     Returns a LazyFrame.
     """
@@ -123,7 +123,7 @@ def get_stg_stock_market_data(raw_data: pl.LazyFrame, default_currency_id: str) 
 
 
 def get_stg_stock_market_data_ref(stg_stock_market_data_lazy: pl.LazyFrame) -> pl.LazyFrame:
-    """Translates DAX SUMMARIZE + CALCULATE(SUM) for Stocks.
+    """Translate DAX SUMMARIZE + CALCULATE(SUM) for Stocks.
 
     Groups by Date, ISIN, Instrument Name, Closing Price, and Buy Price,
     then sums the Quantity and calculates the values.
@@ -241,7 +241,7 @@ def transform_stg_stock_trades(
 def get_stg_stock_master_ref(
     stg_stock_market_data_lazy: pl.LazyFrame, d_asset_subcategory_lazy: pl.LazyFrame
 ) -> pl.LazyFrame:
-    """Translates stg_StockMasterRef.
+    """Translate stg_StockMasterRef dimensional data.
 
     Groups by ISIN, Name, and Class, and adds static Stock attributes.
     """

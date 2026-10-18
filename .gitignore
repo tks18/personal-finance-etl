@@ -138,3 +138,7 @@ ui.lock
 tests/output/
 tests/samples/output
 outputs/
+
+# Local Commit Overrides & Custom Maps
+.commit_overrides.json
+.commit_map.json

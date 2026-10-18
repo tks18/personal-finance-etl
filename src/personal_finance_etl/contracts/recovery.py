@@ -84,9 +84,11 @@ class SnapshotResult:
         )
 
     def __bool__(self) -> bool:
+        """Return True if the snapshot operation was successful."""
         return self.is_success
 
     def __str__(self) -> str:
+        """Return human-readable string representation of the snapshot result."""
         return str(self.zip_path or self.archive_path or self.error_message or self.outcome.value)
 
 
@@ -109,4 +111,5 @@ class RestoreResult:
         )
 
     def __bool__(self) -> bool:
+        """Return True if the restore operation was successful."""
         return self.is_success

@@ -29,7 +29,7 @@ def transform_benchmark_data(
     global_start_date: date,
     global_end_date: date,
 ) -> pl.DataFrame:
-    """Transforms raw benchmark observations into a continuous daily Silver series.
+    """Transform raw benchmark observations into a continuous daily Silver series.
 
     Missing dates may inherit the latest prior observation for up to seven calendar
     days. Missing initial history, observations older than the staleness limit,
@@ -199,7 +199,7 @@ class BenchmarkTransformer:
         global_start_date: date,
         global_end_date: date,
     ) -> pl.DataFrame:
-        """Transforms Bronze benchmark observations into a continuous daily Silver series."""
+        """Transform Bronze benchmark observations into a continuous daily Silver series."""
         if self.status_queue is not None:
             self.status_queue.put(
                 EngineStatusMessage(
