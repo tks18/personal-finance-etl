@@ -54,6 +54,8 @@
     "prepare": "uv run poe install-hooks",
     "commit:auto": "uv run poe commit",
     "commit:preview": "uv run poe commit:preview",
-    "commit:run": "uv run poe commit:run"
+    "commit:run": "uv run poe commit:run",
+    "commit:interactive": "uv run poe commit:interactive",
+    "commit:i": "uv run poe commit:interactive"
   }
 }
