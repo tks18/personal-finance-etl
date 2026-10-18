@@ -24,6 +24,7 @@ So the project grew from ETL into the system I now use to **preserve financial e
 [![Codacy Badge](https://app.codacy.com/project/badge/Grade/49aca2f2e7d044a5916adc56beb4c7dd)](https://app.codacy.com/gh/tks18/personal-finance-etl/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_grade)
 [![CodeFactor](https://www.codefactor.io/repository/github/tks18/personal-finance-etl/badge)](https://www.codefactor.io/repository/github/tks18/personal-finance-etl)
 [![CodeRabbit Reviews](https://img.shields.io/coderabbit/prs/github/tks18/personal-finance-etl?label=CodeRabbit%20Reviews)](https://coderabbit.ai)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/tks18/personal-finance-etl)
 
 ![Local First](https://img.shields.io/badge/Architecture-Local--First-2F855A)
 ![DuckDB](https://img.shields.io/badge/Analytics-DuckDB-FFF000?logo=duckdb&logoColor=000)
