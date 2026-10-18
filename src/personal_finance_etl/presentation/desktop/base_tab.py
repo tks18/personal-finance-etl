@@ -118,7 +118,7 @@ class BaseEngineTab(ctk.CTkFrame):  # type: ignore[misc]
         self.status_log.configure(state="disabled")
 
     def _section_label(self, parent: ctk.CTkFrame, text: str, row: int) -> int:
-        """Helper to create a standard styled section header label."""
+        """Create a standard styled section header label."""
         ctk.CTkLabel(
             parent,
             text=text,
