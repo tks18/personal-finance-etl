@@ -54,7 +54,7 @@ class GroupProcessor:
         level_name: str,
         extra_key_col: str | None = None,
     ) -> pl.DataFrame:
-        """Runs the exact same portfolio-level metric calculations, but partitioned by a group key."""
+        """Run the exact same portfolio-level metric calculations, but partitioned by a group key."""
         all_group_dfs: list[pl.DataFrame] = []
 
         for key, cashflows in group_cashflows.items():
