@@ -72,10 +72,10 @@ def audit_fast_fix():
 
 
 def audit_full():
-    """Run full tier quality gate audit (Ruff, Mypy, Pyright, Pylint, Pytest)."""
+    """Run full tier quality gate audit (Ruff, Mypy, Pyright, Pylint, Pytest) and export reports."""
     from scripts.quality_gate import run_quality_gate
 
-    sys.exit(run_quality_gate(tier="full", export="cli"))
+    sys.exit(run_quality_gate(tier="full", export="all"))
 
 
 def audit_csv():
@@ -158,6 +158,61 @@ def commit_overrides_only():
     passed_args = sys.argv[1:]
     sys.argv = [sys.argv[0], "--map", ".commit_overrides.json", "--only-mapped", "--run"] + passed_args
     sys.exit(auto_commit_main())
+
+
+def pr_preview():
+    """Preview GitHub Pull Request title, changelog body, and quality gate audit table."""
+    from scripts.create_pr import main as create_pr_main
+
+    passed_args = sys.argv[1:]
+    if "--preview" not in passed_args and "--dry-run" not in passed_args:
+        passed_args.insert(0, "--preview")
+    sys.exit(create_pr_main(passed_args))
+
+
+def pr_create():
+    """Create or update GitHub Pull Request from dev into master with quality gate audit."""
+    from scripts.create_pr import main as create_pr_main
+
+    passed_args = sys.argv[1:]
+    if "--run" not in passed_args:
+        passed_args.insert(0, "--run")
+    sys.exit(create_pr_main(passed_args))
+
+
+def release_pipeline():
+    """Execute end-to-end post-tag release pipeline: git push -> create PR -> draft release."""
+    import subprocess
+    from rich.console import Console
+
+    console = Console()
+    console.print("\n[bold cyan]═════ Starting Automated Post-Release Pipeline ═════[/bold cyan]\n")
+
+    # Step 1: Git Push with follow-tags (triggers pre-push hook running audit-full and saving audit_report.json)
+    console.print("[bold yellow]Step 1: Pushing commits and release tags to origin dev...[/bold yellow]")
+    push_proc = subprocess.run(["git", "push", "--follow-tags", "origin", "dev"], check=False)
+    if push_proc.returncode != 0:
+        console.print("[bold red]Pipeline aborted: git push failed.[/bold red]")
+        sys.exit(push_proc.returncode)
+
+    # Step 2: Create/update PR from dev into master with Quality Gate certification attached
+    console.print("\n[bold yellow]Step 2: Creating/updating Pull Request into master with Quality Gate certification...[/bold yellow]")
+    from scripts.create_pr import main as create_pr_main
+
+    pr_code = create_pr_main(["--run", "--head", "dev", "--base", "master"])
+    if pr_code != 0:
+        console.print("[bold red]Pipeline warning: PR creation had errors.[/bold red]")
+
+    # Step 3: Create GitHub Draft Release for latest version
+    console.print("\n[bold yellow]Step 3: Creating GitHub Draft Release for latest version...[/bold yellow]")
+    from scripts.create_releases import run_release_cli
+
+    rel_code = run_release_cli(["--latest", "--run", "--draft"])
+    if rel_code != 0:
+        console.print("[bold red]Pipeline warning: Draft release creation had errors.[/bold red]")
+
+    console.print("\n[bold green]═════ Automated Post-Release Pipeline Completed ═════[/bold green]\n")
+    sys.exit(0)
 
 
 
