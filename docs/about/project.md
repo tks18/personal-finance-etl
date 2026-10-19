@@ -1,631 +1,438 @@
 # Project
 
-Personal Finance ETL began with a practical problem, not an architecture diagram.
+Personal Finance ETL did not begin as an architecture exercise.
 
-I wanted to answer a deceptively ordinary question:
+It began with a much less glamorous problem:
 
-> **Can I reconstruct my financial state well enough to trust it at month-end, understand what changed, and use that state for investment and long-term planning decisions?**
+> **My financial data was useful, but scattered.**
 
-A spreadsheet can answer parts of that question. A broker portal can answer other parts. A bank statement can show cash movement. Market data can show prices. None of those sources, by themselves, provide one reconciled financial model with stable history, investment cost basis, tax evidence, wealth analytics, and forward-looking planning.
+The project became interesting because solving that problem repeatedly kept exposing a deeper one.
 
-The project grew because each useful answer exposed the next missing layer.
+The history is therefore best understood as a sequence of **questions that the previous design could no longer answer cleanly**.
 
 ```mermaid
 flowchart LR
-    Q["Where do I stand?"] --> E["Collect evidence"]
-    E --> C["Canonicalize meaning"]
-    C --> R["Reconstruct state"]
-    R --> X["Reconcile"]
-    X --> A["Analyze"]
-    A --> T["Tax evidence"]
-    T --> W["Wealth planning"]
-    W --> F["FIRE simulation"]
+    CONSOLIDATE["Consolidate"]
+    REPEAT["Repeat reliably"]
+    TRACE["Trace evidence"]
+    MODEL["Model finance"]
+    RECON["Reconstruct state"]
+    RECONCILE["Reconcile"]
+    RECOVER["Recover"]
+    EXPLAIN["Explain"]
+
+    CONSOLIDATE --> REPEAT --> TRACE --> MODEL --> RECON --> RECONCILE --> RECOVER --> EXPLAIN
 ```
 
-There was no master plan to build a miniature financial data platform. That would make for a tidier origin story, but it would not be true.
+## The original problem was fragmentation
 
-The architecture emerged from repeated contact with real financial data.
+Household transactions, broker evidence, investment statements, market observations, configuration files, and BI outputs lived in different shapes.
 
----
-
-## 1. The original problem: useful data was scattered
-
-Personal finance evidence arrived through different systems and formats:
+The first useful objective was simple:
 
 ```text
-household transaction database
-broker transaction exports
-broker holdings / market snapshots
-mutual-fund data
-Indian equity data
-US equity transactions
-benchmark history
-FX history
-mapping files
-opening balances
-financial rules
+collect
+clean
+combine
+analyze
 ```
 
-The first engineering problem was therefore ordinary ETL:
+That already created value.
+
+But once the workflow became repeatable, manually stitching together one-off scripts became the next bottleneck.
+
+## Repeatability changed the problem
+
+A one-time analysis can tolerate assumptions that a recurring system cannot.
+
+Once the pipeline needed to run month after month, the questions changed:
 
 ```text
-extract → normalize → combine → report
+Have I processed this file before?
+Did the source change?
+What happened during the last run?
+Which output came from which evidence?
+Can I rebuild safely?
 ```
 
-That was useful, but usefulness raised the standard.
+That is where the project stopped being “a set of transformations” and became a data platform.
 
-Once a report starts influencing month-end closure or investment decisions, “the numbers look about right” stops being an acceptable data-quality strategy.
+## The Control Plane arrived because files have history
 
----
+Files are not just paths.
 
-## 2. Repeatability changed the problem
+They can be:
 
-A one-off transformation can tolerate assumptions living in notebooks, file names, or memory.
+- new;
+- modified;
+- renamed;
+- removed;
+- reappearing;
+- missing their retained payload;
+- associated with different runs.
 
-A recurring financial close cannot.
+The SQLite Control Plane emerged to retain that operational history separately from the analytical warehouse.
 
-The system gradually needed explicit answers to questions such as:
-
-- Which source files were already processed?
-- Did a file change without changing its name?
-- Did a source disappear or get renamed?
-- Which configuration and financial rules produced this run?
-- Can raw evidence be separated from analytical state?
-- Can derived outputs be rebuilt instead of manually repaired?
-
-Those questions pushed the project from scripts toward an application architecture.
-
-```mermaid
-flowchart TB
-    SRC["Financial evidence"] --> DISC["Discovery + hashing"]
-    DISC --> CP["SQLite Control Plane"]
-    CP --> BR["Persistent Bronze"]
-    BR --> CAN["Canonical financial facts"]
-    CAN --> ENG["Financial engines"]
-    ENG --> PUB["Silver / Gold publication"]
-    CP --> META["Current Meta projection"]
-```
-
-The important shift was conceptual:
-
-> **Derived analytical state should be rebuildable. Operational history and source evidence need stronger durability.**
-
-That principle now runs through the entire system.
-
----
-
-## 3. The Control Plane arrived because files have history
-
-As the source environment grew, a file was no longer just a path on disk.
-
-It had an identity, content, synchronization state, first-seen time, last-seen time, and event history.
-
-The SQLite Control Plane now owns that operational history.
-
-It records run lifecycle, configuration/rule snapshots, artifact registry state, retained payloads, artifact-run events, failures, and simulation provenance.
-
-DuckDB remains the analytical engine.
-
-```mermaid
-flowchart LR
-    CP["SQLite Control Plane<br/>historical operational authority"] -->|drives sync| DUCK["DuckDB<br/>analytical state"]
-    DUCK --> BI["BI / analysis"]
-    CP --> AUDIT["provenance / recovery"]
-```
-
-That split was not added because “two databases” sounds more architectural.
-
-SQLite and DuckDB have different jobs, and forcing one engine to perform both jobs made the ownership model worse.
-
-DuckDB is very good at analytical scans. It does not need a side hustle as an artifact historian.
-
----
-
-## 4. Incremental ingestion, complete analytical rebuild
-
-One of the most useful design decisions is the separation between **persistent incremental Bronze** and **rebuilt analytical publication**.
-
-Bronze synchronizes source evidence according to contract semantics. Silver and Gold are rebuilt from the complete canonical state.
-
-```mermaid
-flowchart LR
-    NEW["New / changed evidence"] --> B["Incremental Bronze sync"]
-    B --> ALL["Complete Bronze state"]
-    ALL --> S["Rebuild Silver"]
-    S --> G["Rebuild Gold"]
-```
-
-That trade-off is deliberately boring.
-
-The workload is small enough that full analytical reconstruction is affordable, and the design avoids a large class of incremental-state bugs downstream.
-
-Sometimes the sophisticated choice is refusing sophistication that the workload has not earned.
-
----
-
-## 5. Financial modeling became more important than ETL
-
-Once ingestion became reliable, the harder questions moved into financial semantics.
-
-A transaction is evidence of an event. It is not automatically a complete representation of financial state.
-
-The project had to distinguish:
+That decision eventually became one of the project’s strongest architectural boundaries:
 
 ```text
-observed evidence
-canonical facts
-reconstructed state
-reconciled state
-estimated values
-realized values
-unrealized values
-presentation metrics
+Control Plane
+    historical operational authority
+
+DuckDB
+    analytical state
 ```
 
-That distinction became especially important for investments.
+## Incremental ingestion, complete analytical rebuild
 
----
+The project deliberately separates incremental evidence synchronization from analytical reconstruction.
 
-## 6. Investments forced deterministic reconstruction
+Persistent Bronze avoids pretending every run discovered the world for the first time.
 
-Broker data is excellent evidence, but different brokers expose different historical views.
+But downstream analytical state can still be rebuilt from canonical evidence when that is the safer correctness model.
 
-The system therefore separates two responsibilities that are easy to confuse:
-
-1. **historical market-state reconstruction**, particularly for US holdings; and
-2. **canonical FIFO acquisition-lot reconstruction** in the Quant Engine.
-
-```mermaid
-flowchart TB
-    TX["Canonical purchases / sales"] --> MR["Historical market reconstruction"]
-    TX --> FIFO["Canonical FIFO"]
-    PRICE["Historical prices"] --> MR
-    FX["Historical FX"] --> MR
-    MR --> SNAP["Historical valuation state"]
-    FIFO --> LOTS["Acquisition lots"]
-    FIFO --> REAL["Realized events"]
-    SNAP --> QUANT["Performance analytics"]
-    LOTS --> QUANT
-    REAL --> QUANT
-```
-
-Historical US holdings are reconstructed state, not broker-certified daily holdings.
-
-FIFO lots are a different reconstruction with a different purpose: acquisition basis, disposal lineage, holding period, realized gains, and tax-relevant evidence.
-
-Keeping those responsibilities separate made the financial model much clearer.
-
----
-
-## 7. Reconciliation changed the meaning of “correct”
-
-A model can be internally consistent and still disagree with external evidence.
-
-That is why reconciliation became a first-class concept.
-
-For investments, the system can compare reconstructed quantity and basis with observed state. Quantity differences and cost-basis differences are treated separately.
-
-```mermaid
-flowchart LR
-    MODEL["Reconstructed state"] --> CMP["Compare"]
-    OBS["Observed broker state"] --> CMP
-    CMP -->|match| OK["Continue"]
-    CMP -->|quantity gap| Q["Quantity reconciliation"]
-    CMP -->|basis gap| C["Cost-basis reconciliation"]
-    Q --> EVENT["Explicit reconciliation event"]
-    C --> EVENT
-    EVENT --> FUTURE["Future canonical state"]
-```
-
-The principle is simple:
-
-> **A mismatch is information. Do not erase it merely because a clean dashboard would prefer fewer questions.**
-
-That principle is as much accounting instinct as software design.
-
----
-
-## 8. Deterministic identity became infrastructure
-
-As reconstructed state became richer, row identity could no longer depend on incidental order or database-generated keys.
-
-The application now uses canonical identity serialization and namespace-specific deterministic identifiers for financial events such as:
+This trade-off is practical for a local financial platform:
 
 ```text
-PURCHASE
-SALE
-LOT
-REALIZED
-RECON_GROUP
-RECON_EVENT
-RECON_LOT_GROUP
-TAX
+incremental where source history benefits
+rebuild where deterministic correctness benefits
 ```
 
-This gives rebuilds stable lineage across transactions, lots, disposals, reconciliation, and tax evidence.
+## Financial modelling became more important than ETL
+
+Once the ingestion architecture stabilized, the difficult questions became financial.
+
+What is the difference between:
+
+- activity and state?
+- cost basis and market value?
+- observed holdings and reconstructed holdings?
+- realized and unrealized return?
+- local-currency and INR outcome?
+- Tax evidence and Tax liability?
+- current wealth and future modeled wealth?
+
+The project’s center of gravity moved from moving data to **preserving financial meaning**.
+
+## Investments forced deterministic reconstruction
+
+Investment analytics exposed the limits of aggregate thinking.
+
+A sale is not simply:
+
+```text
+sale proceeds - average cost
+```
+
+The system needed:
+
+- ordered acquisition lots;
+- partial lot consumption;
+- realized disposal events;
+- holding periods;
+- benchmark shadow state;
+- deterministic identity;
+- future reconciliation compatibility.
+
+That is why the investment engine became one of the deepest domains in the codebase.
+
+## Reconciliation changed the meaning of “correct”
+
+This was an important conceptual shift.
+
+A deterministic reconstruction can still disagree with an independent broker observation.
+
+That does not automatically mean either side should be overwritten.
+
+The system instead models the disagreement:
 
 ```mermaid
 flowchart LR
-    F["Financial identity fields"] --> C["Canonical serialization"]
-    C --> H["SHA-256"]
-    H --> ID["Stable domain ID"]
-    ID --> R["Rebuild continuity"]
+    RECONSTRUCTED["Reconstructed state"]
+    OBSERVED["Broker observation"]
+    COMPARE["Compare"]
+    EVENT["Reconciliation event"]
+    CORRECTED["Corrected future state"]
+
+    RECONSTRUCTED --> COMPARE
+    OBSERVED --> COMPARE
+    COMPARE --> EVENT --> CORRECTED
 ```
 
-Deterministic IDs are not glamorous. Neither are primary keys until they fail. Then suddenly everyone develops strong opinions.
+The project became more honest when it stopped treating disagreement as an embarrassment to be hidden.
 
----
+## Deterministic identity became infrastructure
 
-## 9. Multi-currency investing added another dimension
+Once events/lots/reconciliations needed to survive replay, identity could no longer be ad hoc.
 
-US investments introduced more than currency conversion.
+Canonical normalization, ordered fields, namespace-specific identity, and deterministic serialization became shared infrastructure.
 
-The model needed to preserve both local-currency economics and reporting-currency economics:
+That decision now supports:
+
+- replay continuity;
+- deduplication;
+- stable joins;
+- financial lineage;
+- regression testing.
+
+## Multi-currency investing added another dimension
+
+Foreign assets made it impossible to treat one numeric “value” as sufficient.
+
+The system began carrying distinct concepts such as:
 
 ```text
 local acquisition basis
 local market value
-historical FX
-INR acquisition basis
-INR market value
-asset P&L
-FX P&L
-combined reporting-currency return
+reporting/base value
+FX rate
+FX contribution
 ```
 
-Historical valuation also needed temporal causality. Future prices and FX observations cannot leak backward into earlier portfolio state.
+That distinction matters because an asset can perform well locally while producing a different outcome after currency translation.
 
-That requirement led to explicit observation dates, backward-only joins, staleness gates, and separate FX attribution.
+Flattening the two stories would make the model simpler and the finance worse.
 
-The result is not merely “USD × exchange rate.” The model can explain whether a reporting-currency gain came from the asset, the currency, or both.
+## Tax became an evidence pipeline
 
----
+The Tax subsystem deliberately stops short of claiming statutory filing authority.
 
-## 10. Tax became an evidence pipeline, not a tax calculator
+Its role is to:
 
-Tax was another place where scope discipline mattered.
+- normalize Tax-relevant events;
+- classify them under configured policy;
+- produce indicative estimates;
+- surface review-required cases;
+- reconcile information into analytical presentation.
 
-The application has enough information to construct tax-relevant events and indicative estimates. It does not have a reason to impersonate an entire statutory tax-return engine.
+That boundary is stronger than pretending one application can infer every legal nuance from incomplete personal evidence.
 
-The Tax Engine therefore consumes two canonical evidence streams:
+## Wealth connected the domains
 
-```mermaid
-flowchart LR
-    LEDGER["Household income evidence"] --> TAX["f_Tax_Events"]
-    QUANT["Quant realized events"] --> TAX
-    TAX --> Y["Tax Year Summary"]
-    TAX --> B["Tax Income Breakdown"]
-    TAX --> R["Tax Reconciliation"]
-```
+Household cash flow, assets/liabilities, investment state, and Tax consequences eventually converge into wealth.
 
-Investment exclusions prevent the same economic event from being counted once through household income and again through Quant realized evidence.
+That made net worth and after-tax wealth useful cross-domain outputs rather than isolated calculations.
 
-The result is useful for preparation and analysis while keeping the boundary honest:
+The project now treats wealth as a state derived from multiple evidence systems, not just “sum assets, subtract liabilities, ship chart.”
 
-> **Indicative tax evidence is not final statutory liability.**
+## FIRE turned current state into future distributions
 
-That sentence saves a surprising amount of architectural nonsense.
+FIRE introduced a fundamentally different kind of output.
 
----
+Current financial state is evidence-backed.
 
-## 11. Wealth analytics connected the domains
+A simulated future is modeled.
 
-Household finance and investment analytics meet in the wealth layer.
+The architecture therefore preserves assumptions, seeds, model fingerprints, inputs, and outputs separately.
 
-The household ledger reconstructs book-state and cashflow. Investment analytics provides market-valued state. Wealth builders combine them without pretending those sources have the same semantics.
+That makes stochastic analysis reproducible without pretending the future itself is deterministic.
 
-```mermaid
-flowchart TB
-    HH["Household ledger"] --> NW["Net worth / cashflow"]
-    INV["Investment market state"] --> NW
-    TAX["Tax evidence"] --> NW
-    NW --> GOLD["Decision-oriented Gold"]
-    NW --> FIRE["FIRE planning"]
-```
+## Interfaces followed the workflow
 
-That separation matters because “cash moved through an account” and “this asset is worth X today” are different statements.
+The CLI came from operational convenience.
 
----
+The Desktop came from product usability.
 
-## 12. FIRE turned current state into a probability distribution
+Integrated docs came from repeatedly needing technical context while operating the application.
 
-Once current wealth, savings, spending, portfolio state, and financial rules were available, long-term planning became a natural downstream problem.
+The important architectural move was keeping all of them over one application façade rather than letting each surface accumulate its own financial logic.
 
-The FIRE engine evolved beyond a constant-return spreadsheet model. It now models interacting assumptions including:
+## Recovery became part of the application contract
+
+Once the system owned two databases and real operational history, backup/restore could not remain a manual file-copy suggestion.
+
+The application now models:
+
+- coordinated snapshots;
+- validation;
+- staged restore;
+- rollback;
+- active database state;
+- typed outcomes.
+
+Reliability became a user-visible feature rather than an infrastructure afterthought.
+
+## Documentation became an engineering feedback loop
+
+Deep documentation exposed inconsistencies that code review alone did not always reveal.
+
+Writing down:
 
 ```text
-capital-market assumptions
-Markov market regimes
-fat-tail volatility
-jump events
-inflation dynamics
-human-capital shocks
-glide paths
-debt allocation
-withdrawal guardrails
-sequence-of-returns risk
+who owns this?
+what is the grain?
+what happens on failure?
+what is actually atomic?
+what is observed vs reconstructed?
 ```
 
-The stochastic layer is deliberately downstream of reconciled financial state.
+forced the architecture to become more explicit.
+
+That is why the current documentation is designed as part of the system, not a marketing appendix.
+
+## What the project is today
+
+Today the repository is best described as a **local-first financial data engineering and quantitative decision-support platform**.
+
+It combines:
 
 ```mermaid
-flowchart LR
-    STATE["Current financial state"] --> DET["Deterministic FI metrics"]
-    DET --> MC["Monte Carlo"]
-    RULES["Financial / simulation rules"] --> MC
-    MC --> DIST["Outcome distributions"]
-    DIST --> PLAN["Planning analytics"]
+mindmap
+  root((Platform))
+    Evidence
+      household
+      statements
+      market
+      FX
+    Data engineering
+      Control Plane
+      Bronze
+      Polars
+      DuckDB
+    Finance
+      investments
+      reconciliation
+      Tax
+      wealth
+      FIRE
+    Reliability
+      snapshots
+      restore
+      deterministic identity
+      recovery
+    Product
+      CLI
+      Desktop
+      Power BI
+      docs portal
 ```
 
-There is little value in building a beautiful probability distribution on top of ambiguous current-state data.
+The word “ETL” remains in the name because ingestion/transformation are foundational, but the system now solves much broader problems.
 
-Garbage in, Monte Carlo out is still garbage. It just has percentiles now.
+## Why local-first remains the right fit
 
----
+The current problem does not require a distributed cloud architecture.
 
-## 13. Interfaces followed the workflow
+It benefits from:
 
-The project did not converge on one fashionable interface.
+- privacy;
+- predictable local files;
+- low operational overhead;
+- fast embedded databases;
+- direct Power BI access;
+- reproducible single-user workflows.
 
-It has:
+This is not a claim that local-first is universally superior.
 
-```text
-CLI
-Desktop application
-Power BI serving layer
-offline documentation runtime
-```
+It is a claim that architecture should earn its complexity.
 
-Both CLI and Desktop route through the same backend application façade.
+## Portability is a boundary, not a slogan
 
-That is a recurring preference in my work: build the engine once, then expose the interaction surface that fits the workflow.
+The codebase is configurable enough to support variation, but it is still grounded in real source families and real financial workflows.
 
-Not every useful local tool needs to become a SaaS dashboard with an authentication screen and a monthly infrastructure bill.
+I prefer adding portability when genuine new variation appears rather than generalizing every interface in anticipation of hypothetical users.
 
----
+That keeps the system understandable.
 
-## 14. Recovery became part of the application contract
+## What the repository should demonstrate
 
-Once SQLite and DuckDB together represented application state, backup could not mean “copy whichever database file is convenient.”
+The project should demonstrate skills indirectly through engineering evidence.
 
-Snapshot and restore now coordinate the pair, including locking, DuckDB checkpointing, SQLite's backup API, archive validation, staged replacement, and rollback.
+A reader should be able to infer competence in:
 
-The broader lesson is that recovery is part of data architecture.
+- Python architecture;
+- data engineering;
+- financial modelling;
+- quantitative methods;
+- database design;
+- reliability;
+- testing;
+- developer tooling;
+- product engineering;
+- technical documentation.
 
-If a system cannot explain how state is restored after failure, its happy-path diagram is only half an architecture.
+The documentation should never need to shout those claims. The implementation should make them obvious.
 
----
+## Project principles
 
-## 15. Documentation became an engineering feedback loop
-
-One of the stranger but more useful parts of the project's evolution is that documentation repeatedly exposed architectural weaknesses.
-
-Trying to explain ownership, lineage, failure behavior, and financial semantics forced unclear boundaries into the open.
-
-```mermaid
-flowchart LR
-    CODE["Implementation"] --> DOC["Explain it precisely"]
-    DOC --> GAP["Find ambiguity / stale boundary"]
-    GAP --> HARDEN["Harden implementation"]
-    HARDEN --> VERIFY["Reconcile outputs"]
-    VERIFY --> CODE
-```
-
-That loop is one reason the documentation is intentionally deep now.
-
-Documentation is not an appendix to the project. It is one of the tools used to understand whether the architecture actually makes sense.
-
----
-
-## 16. What the project is today
-
-The simplest accurate description is no longer “ETL pipeline.”
-
-Personal Finance ETL is a **local-first financial evidence, reconstruction, analytics, and planning system** built around:
-
-- an SQLite operational Control Plane;
-- a contract-governed DuckDB warehouse;
-- persistent Bronze synchronization;
-- rebuilt Silver and Gold analytical publication;
-- deterministic financial identities;
-- household cashflow and wealth modeling;
-- multi-geography investment evidence;
-- historical market reconstruction;
-- FIFO acquisition lots and realized events;
-- explicit investment reconciliation;
-- multi-currency performance and FX attribution;
-- evidence-first tax preparation;
-- deterministic and stochastic FIRE planning;
-- coordinated backup and restore;
-- CLI, desktop, BI, and offline documentation surfaces.
-
-That sounds excessive for “personal finance” until the word **personal** is remembered.
-
-The data may belong to one person. The financial questions are still real.
-
----
-
-## 17. Why local-first remains the right fit
-
-The application processes financially sensitive data and operates comfortably on a local workstation.
-
-The core stack therefore remains intentionally local:
-
-```text
-Python
-Polars
-SQLite
-DuckDB
-NumPy / Numba
-Power BI
-```
-
-This keeps privacy, operating cost, recovery, and deployment complexity aligned with the actual workload.
-
-Cloud infrastructure is not a maturity badge.
-
-It is infrastructure. It should arrive when a requirement asks for it.
-
----
-
-## 18. Portability is a boundary, not a marketing claim
-
-The architecture contains reusable seams, but the current system remains optimized for my financial environment.
-
-Reusable parts include:
-
-```text
-Control Plane
-Bronze lifecycle
-contract registry
-canonical publication
-financial-rule models
-Quant architecture
-wealth / FIRE engines
-application façade
-documentation runtime
-```
-
-Environment-specific assumptions still exist around:
-
-```text
-source formats
-broker semantics
-mappings
-asset behavior
-jurisdiction
-reconciliation policy
-```
-
-The preferred evolution path is therefore:
-
-```mermaid
-flowchart LR
-    REAL["Real second scenario"] --> DIFF["Observe genuine variation"]
-    DIFF --> BOUND["Extract boundary"]
-    BOUND --> ROUTE["Route existing behavior through it"]
-    ROUTE --> TEST["Reconcile + test"]
-    TEST --> GEN["Adopt generalized design"]
-```
-
-Generalize from working behavior, not imagined universality.
-
----
-
-## 19. What the repository should demonstrate
-
-I do not want the repository to repeatedly announce that it demonstrates finance, Python, data engineering, quantitative modeling, reliability, or architecture.
-
-The implementation should make those conclusions inspectable.
-
-That is why the technical documentation emphasizes:
-
-- real production code;
-- physical contracts and grains;
-- deterministic identity;
-- formulas and algorithms;
-- state transitions;
-- failure and recovery paths;
-- financial methodology;
-- explicit limitations;
-- design trade-offs.
-
-The work should carry the claim.
-
----
-
-## 20. Project principles
+A few principles now describe the system better than any feature list.
 
 ### Preserve evidence
 
-Derived analytical state can be rebuilt. Source and operational evidence deserve stronger durability boundaries.
+Do not destroy the distinction between observation and interpretation.
 
-### Respect grain
+### Make grain explicit
 
-A mathematically correct calculation at the wrong grain can still be financially wrong.
+Rows need semantic meaning, not merely columns.
 
-### Reconcile against independent truth
+### Reconcile disagreement
 
-A model becomes more trustworthy when something outside the model can challenge it.
+Independent evidence can conflict. Model the conflict.
 
-### Keep policy explicit
+### Keep policy separate from mechanics
 
-Financial assumptions belong in inspectable rules, not hidden presentation literals.
+Configuration may change assumptions; code retains invariant behavior.
 
-### Separate authority
+### Prefer deterministic replay where possible
 
-Historical market reconstruction, canonical FIFO, Tax, Control Plane, and presentation each own different truths.
+Rebuild should converge to the same result under the same evidence/policy.
 
-### Use the compute model that fits
+### Model uncertainty honestly
 
-Polars, stateful Python, multiprocessing, DuckDB, SQLite, and Numba solve different classes of problems.
+Tax review states and FIRE distributions should preserve uncertainty rather than decorate it away.
 
-### Prefer explicit failure to plausible fiction
+### Automate repeated engineering work
 
-Missing XIRR evidence, stale prices, invalid FX, or reconciliation gaps should remain visible rather than being massaged into friendly numbers.
+Quality gates, hooks, PR/release tooling, snapshots, and docs integration reduce dependence on memory.
 
-### Generalize from reality
+### Document what the code proves
 
-Abstraction should follow observed variation.
+Documentation cannot outrank implementation.
 
----
+## Why the project matters to me
 
-## 21. Why the project matters to me
+The repository matters because it is not a toy dataset.
 
-This system is not a portfolio application invented after deciding which technologies would look impressive together.
+It grew around financial questions I actually wanted answered and operational workflows I actually use.
 
-I use it for real financial work:
+That pressure made the engineering better.
 
-```text
-month-end closure
-cashflow analysis
-investment review
-portfolio reconciliation
-tax preparation support
-wealth tracking
-FIRE planning
-```
+It forced decisions about:
 
-That creates a useful engineering constraint:
+- correctness;
+- auditability;
+- failure;
+- recovery;
+- financial semantics;
+- maintainability.
 
-> **The architecture has to survive contact with my own financial truth.**
+Those are much more interesting than adding technologies for decoration.
 
-A broken demo is embarrassing.
+## The current phase
 
-A broken month-end close is immediate product feedback.
+The architecture is stable enough that the project no longer needs rapid structural reinvention.
 
-That feedback loop is probably the main reason the project kept getting better.
-
----
-
-## 22. The current phase
-
-The project is intentionally no longer in feature-sprint mode.
-
-The current priority is maturity:
+The highest-value work now is:
 
 ```text
-document deeply
-validate behavior
-expand executable QA
-protect financial invariants
-observe performance
-simplify where justified
-change only when real scenarios demand it
+stronger regression evidence
+continued documentation quality
+observed performance work
+targeted financial refinements
+selective new features when evidence justifies them
 ```
 
-The system has enough capability.
+That changes what a roadmap should look like.
 
-The next challenge is making that capability easier to understand, safer to change, and harder to regress.
+The next phase is not “add everything.”
 
-That is a much healthier problem to have.
+It is **protect what is now worth protecting**.
+
+That is where [Roadmap](../roadmap.md) continues.
 
 ## Related specifications
 
 - [System Architecture](../architecture/system-architecture.md)
-- [Data Lifecycle](../architecture/data-lifecycle.md)
 - [Financial Model](../finance/financial-model.md)
-- [FIFO and Realized Events](../finance/fifo-and-realized-events.md)
-- [Tax Methodology](../finance/tax-methodology.md)
-- [FIRE Methodology](../finance/fire-methodology.md)
-- [Roadmap](../roadmap.md)
+- [Reliability and Recovery](../architecture/reliability-and-recovery.md)
+- [Engineering Standards](../developer/engineering-standards.md)
