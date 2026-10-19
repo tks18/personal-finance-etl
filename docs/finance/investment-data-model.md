@@ -1,398 +1,505 @@
 # Investment Data Model
 
-The investment model separates instrument identity, transaction evidence, market observations, benchmark evidence, currency context and reconstructed analytical state. This page specifies the canonical evidence boundary that feeds both historical market reconstruction and the Quant Engine. FIFO mechanics themselves live in the dedicated FIFO specification.
+The investment engine cannot start with FIFO, XIRR, or Tax.
 
-## Implementation map
+It starts much earlier with a simpler question:
 
-```text
-backend/transform/investments.py
-backend/transform/mutual_funds.py
-backend/transform/stocks.py
-backend/transform/us_stocks.py
-backend/transform/us_stocks_transformer.py
-backend/transform/benchmark_transformer.py
-backend/pipeline/currency_pipeline.py
-backend/load/schema/silver.py
-backend/load/registry.py
-backend/utils/identity.py
-```
+> **What evidence do I actually have for an instrument, and what does each piece of evidence prove?**
 
-## Canonical investment contracts
+A purchase proves that an acquisition event was recorded. A market close proves a price observation for a date. An instrument master proves metadata. A broker holdings observation proves what the broker reported at that observation point. None of them alone proves the entire investment history.
 
-```mermaid
-erDiagram
-    INVESTMENT_MASTER ||--o{ PURCHASE_DATA : identifies
-    INVESTMENT_MASTER ||--o{ SALE_DATA : identifies
-    INVESTMENT_MASTER ||--o{ MARKET_DATA : identifies
-    INVESTMENT_MASTER }o--|| BENCHMARK_MASTER : classified_against
-    CURRENCY ||--o{ MARKET_DATA : translates
-    CURRENCY ||--o{ PURCHASE_DATA : denominates
-    CURRENCY ||--o{ SALE_DATA : denominates
-```
-
-The core Silver investment contracts include:
-
-- `d_Investment_Master`;
-- `d_Investment_Benchmark_Master`;
-- `d_Macro_Parameters`;
-- `f_Investment_Market_Data`;
-- `f_Investment_Purchase_Data`;
-- `f_Investment_Sale_Data`;
-- `f_Investment_Benchmark_Data`;
-- `f_Currency_FX_Rates`.
-
-Quant later adds lot, realized-event and reconciliation contracts. Those are reconstructed state, not source-normalization outputs.
-
-## Instrument master
-
-`get_d_investment_master()` consolidates instrument metadata into the canonical master. The master supplies the classification context needed by market, transaction, Quant and presentation logic.
-
-Instrument attributes can include:
-
-- ISIN/instrument identity;
-- name;
-- instrument type/subtype;
-- asset class;
-- sector/industry;
-- geography/country;
-- portfolio grouping;
-- currency;
-- benchmark mapping;
-- tax-related classification inputs.
-
-The exact columns are specified by the Silver DDL reference.
-
-## Purchase evidence
-
-`get_f_tf_investment_purchase_data()` creates canonical purchase facts. Source-specific orders are normalized into a common transaction grain before Quant sees them.
-
-```mermaid
-flowchart LR
-    MF[MF orders] --> N[Normalize purchases]
-    IN[Indian stock orders] --> N
-    US[US transactions] --> N
-    MAP[Investment master / currency] --> N
-    N --> ID[Deterministic Purchase_ID]
-    ID --> P[f_Investment_Purchase_Data]
-```
-
-### Deterministic purchase identity
-
-The producer computes `Purchase_ID` from financial fields rather than row position:
-
-```python
-def _compute_purchase_id(row: dict[str, Any]) -> str:
-    return make_id(
-        "PURCHASE",
-        ISIN=row.get("ISIN"),
-        Date=row.get("Date"),
-        Price=row.get("Price"),
-        Quantity=row.get("Quantity"),
-        CURRENCY_ID=row.get("CURRENCY_ID"),
-    )
-```
-
-This ID is later part of lot identity. Changing incidental file order should not create a new economic purchase.
-
-## Sale evidence
-
-`get_f_tf_investment_sale_data()` performs the corresponding normalization for disposals.
-
-```python
-def _compute_sale_id(row: dict[str, Any]) -> str:
-    return make_id(
-        "SALE",
-        ISIN=row.get("ISIN"),
-        Date=row.get("Date"),
-        Sell_Price=row.get("Sell_Price"),
-        Quantity=row.get("Quantity"),
-        CURRENCY_ID=row.get("CURRENCY_ID"),
-    )
-```
-
-A canonical sale is still evidence of disposal, not yet a realized-lot event. A single sale can consume multiple acquisition lots, so realized-event grain is downstream and finer.
-
-```mermaid
-flowchart LR
-    S[One canonical sale] --> F[FIFO]
-    F --> R1[Realized event: Lot A]
-    F --> R2[Realized event: Lot B]
-    F --> R3[Realized event: Lot C]
-```
-
-## Market observations
-
-`transform_stg_investment_market_data()` standardizes market observations from the supported investment sources. Market data provides valuation evidence; it does not define acquisition history.
-
-The distinction matters:
-
-```text
-transaction evidence -> how position quantity/basis changed
-market evidence      -> what the position can be valued at on a date
-```
-
-Mixing those roles would make missing prices mutate ownership history, which is exactly the sort of financial haunted house the architecture avoids.
-
-## Benchmark evidence
-
-Benchmark master/history contracts provide comparison context. Benchmark data is downstream analytical evidence, not a replacement for instrument market data. Quant can maintain benchmark shadow state so portfolio performance can be compared against an appropriate reference path.
-
-## Currency evidence
-
-`f_Currency_FX_Rates` supplies date/currency observations used to translate local-currency investment economics into INR. Currency is part of canonical transaction identity for purchases/sales, because otherwise economically different transactions could collide under one ID.
-
-## Source families and normalization
-
-The application supports multiple investment source families with different native shapes. The normalization boundary deliberately occurs before Quant:
-
-```mermaid
-flowchart TB
-    MF[Mutual fund source] --> C[Canonical investment facts]
-    IS[Indian equity source] --> C
-    US[US broker transactions] --> C
-    MP[Market / benchmark files] --> C
-    FX[Currency history] --> C
-    C --> Q[Quant Engine]
-```
-
-Quant therefore reasons about canonical purchases, sales and market state instead of carrying broker-specific parsing branches through FIFO logic.
-
-## Grain model
-
-| Contract | Financial grain |
-|---|---|
-| Investment master | one canonical instrument |
-| Purchase data | one canonical acquisition transaction |
-| Sale data | one canonical disposal transaction |
-| Market data | instrument × valuation date/observation |
-| Benchmark data | benchmark × date |
-| FX rates | currency × date |
-| Analytics lot | reconstructed acquisition lot state |
-| Realized event | sale × consumed lot |
-| Reconciliation event | explicit reconciliation mutation/event |
-
-Exact registry grain strings remain in Reference.
-
-## Evidence versus reconstructed state
+This document defines that evidence model.
 
 ```mermaid
 flowchart TD
-    E[Canonical transaction / market evidence] --> U[US historical market reconstruction]
-    E --> F[Canonical FIFO]
-    U --> V[Daily reconstructed valuation state]
-    F --> L[Lots]
-    F --> R[Realized events]
-    F --> X[Reconciliation events]
+    M["Instrument master"]
+    P["Purchase evidence"]
+    S["Sale evidence"]
+    PX["Market observations"]
+    BM["Benchmark observations"]
+    FX["FX observations"]
+    OBS["Holdings observations"]
+
+    M --> CAN["Canonical investment evidence"]
+    P --> CAN
+    S --> CAN
+    PX --> CAN
+    BM --> CAN
+    FX --> CAN
+    OBS --> CAN
+
+    CAN --> ENGINE["Reconstruction / valuation / performance"]
 ```
 
-US reconstruction and FIFO can both consume purchases/sales, but they do not share authority. US reconstruction needs daily quantity/value state. FIFO needs acquisition-lot lineage. The first may group remaining quantity by acquisition price for market-state reconstruction without becoming the canonical lot ledger.
+## Instrument identity is the join hub
 
-## Null and missing-data semantics
+The canonical investment master is organized around ISIN where available/appropriate in the current model.
 
-Missing financial evidence is not universally replaced with zero. A missing price, missing FX observation and zero quantity have different meanings. Transformations therefore validate required valuation inputs and fail where an economically meaningful value cannot be established under the accepted rules.
+`IsinMasterRecord` carries metadata such as:
 
-## Invariants
+```python
+# src/personal_finance_etl/domain/investments/contracts.py
+class IsinMasterRecord(TypedDict, total=False):
+    ISIN: str
+    NAME: str
+    SYMBOL: str
+    CURRENCY_ID: str | None
+    BENCHMARK_ID: str | None
+    TAX_TYPE: str
+    TAX_SUBTYPE: str
+    INSTRUMENT_CLASS: str
+    INSTRUMENT_SUBTYPE: str
+    INSTRUMENT_TYPE: str
+```
 
-- Canonical purchase and sale facts precede FIFO.
-- `Purchase_ID` and `Sale_ID` are deterministic financial identities.
-- Market observations value positions; they do not create acquisition lots.
-- Currency is part of the investment evidence model, not a final-report formatting choice.
-- Benchmark evidence is separate from instrument evidence.
-- Reconstructed US holdings are not broker-observed daily holdings.
-- Realized-event grain can be finer than sale grain.
+The master is not merely display metadata. Currency, benchmark, Tax classification, geography, class, sector, and instrument type affect downstream valuation and analytics.
 
-## Extension boundary
-
-Adding another broker/source should normally terminate at the canonical investment contracts. New source quirks belong in extraction/normalization, not in canonical FIFO. That boundary is what makes the Quant Engine reusable across source families.
-
-## Trade-off
-
-The model stores several forms of investment state instead of one all-purpose positions table. The extra structure is intentional: transaction identity, daily valuation, acquisition-lot provenance and reconciliation are different questions. One table could answer all of them only by becoming a very creative liar.
-
-## Canonical market-data normalization
-
-`transform_stg_investment_market_data()` is the common staging boundary for investment market observations. It standardizes source-specific market data into the canonical fields expected by Quant and downstream publication. The point of the stage is not to calculate every investment metric; it is to make market evidence comparable before the analytical engine starts.
+## One instrument can participate in many grains
 
 ```mermaid
 flowchart LR
-    MF[Mutual fund market files] --> S[Canonical market staging]
-    IN[Indian equity market files] --> S
-    US[Reconstructed US market state] --> S
-    S --> M[f_Investment_Market_Data]
-    M --> Q[Quant]
+    I["Instrument"]
+    T["transactions"]
+    D["daily market rows"]
+    L["lots"]
+    R["realized events"]
+    REC["reconciliation events"]
+    MET["metrics"]
+
+    I --> T
+    I --> D
+    I --> L
+    I --> R
+    I --> REC
+    I --> MET
 ```
 
-## Reference construction
+That is why “one investment table” would be a poor abstraction.
 
-`get_purchase_reference()` and `get_sale_reference()` prepare source transaction references before the canonical purchase/sale facts are built. This allows multiple source families to converge on the same financial contract while keeping extraction quirks upstream.
+## Canonical trade evidence
 
-The design is intentionally layered:
+`TradeRecord` defines the normalized trade vocabulary.
+
+```python
+# src/personal_finance_etl/domain/investments/contracts.py
+class TradeRecord(TypedDict, total=False):
+    ISIN: Required[str]
+    Date: Required[dt.date]
+    Quantity: Required[float]
+    Price: float | None
+    Value: float | None
+    Price_Local: float | None
+    Value_Local: float | None
+    Purchase_ID: str | None
+    Sale_ID: str | None
+```
+
+The contract can also carry sale-specific, closing-price, local/base-value, residual, and Tax-context fields where applicable.
+
+The key invariants are semantic:
 
 ```text
-source row
-  -> source-specific normalization
-  -> purchase/sale reference
-  -> canonical fact
-  -> deterministic identity
-  -> Quant reconstruction
+trade date is chronological evidence
+quantity is transaction quantity
+purchase/sale identity is deterministic where created
+local/base values are not interchangeable
 ```
 
-Each step narrows ambiguity. By the time FIFO executes, it should not need to know which broker column once contained the transaction price.
+## Purchases prove acquisition evidence, not surviving lots
 
-## Purchase identity collision semantics
+A canonical purchase tells the engine:
 
-The current `PURCHASE` identity contract uses ISIN, date, price, quantity and currency. That makes equivalent canonical financial fields produce the same ID. It also means two economically distinct purchases with exactly the same identity fields are indistinguishable to that identity protocol unless another contract field differentiates them upstream.
+```text
+instrument
+acquisition date
+quantity
+price/value
+currency context
+purchase identity
+```
 
-That is not something documentation should hide. Deterministic identity is a contract with chosen fields, not metaphysical proof of transaction uniqueness.
+It does **not** tell the engine how much of that quantity remains after later disposals.
 
-The same principle applies to `SALE`.
+That state belongs to FIFO/reconstruction.
 
-## Transaction-to-lot lineage
+The Pydantic `Purchase` model makes the transaction record explicit:
 
-Purchase IDs become inputs to deterministic lot identities. Sale IDs combine with consumed lot IDs to create realized-event identities.
+```python
+# src/personal_finance_etl/domain/investments/contracts.py
+class Purchase(BaseModel):
+    isin: str = Field(alias="ISIN")
+    date: dt.date = Field(alias="Date")
+    quantity: float = Field(alias="Quantity")
+    price: float = Field(alias="Price")
+    value: float | None = Field(default=None, alias="Value")
+    price_local: float | None = Field(default=None, alias="Price_Local")
+    currency_id: str | None = Field(default=None, alias="CURRENCY_ID")
+    purchase_id: str | None = Field(default=None, alias="Purchase_ID")
+```
+
+The model tolerates source/canonical alias forms through Pydantic configuration while exposing stable domain semantics.
+
+## Sales prove disposal evidence, not realized basis by themselves
+
+A sale records a disposal instruction/event.
+
+Realized cost basis depends on which acquisition lots are consumed according to the configured/implemented lot chronology.
+
+Therefore:
+
+```text
+Sale_Value - some average purchase value
+```
+
+is not automatically the authoritative realized gain.
+
+The FIFO engine must consume lots and produce explicit realized-event fragments.
+
+## Purchase and sale identities are lineage anchors
+
+Transaction identities allow later records to point back to the evidence that produced them.
+
+A realized event can carry:
+
+```text
+Sale_ID
+Lot_ID
+Purchase_ID
+```
+
+That creates a trace:
 
 ```mermaid
 flowchart LR
-    P[Purchase_ID] --> L[Lot_ID]
-    S[Sale_ID] --> R[REALIZED identity]
-    L --> R
+    P["Purchase_ID"] --> L["Lot_ID"] --> R["Realized_Event_ID"]
+    S["Sale_ID"] --> R
 ```
 
-This lineage allows a realized disposal component to point back to both the disposal evidence and acquisition state that produced it.
+This is more useful than a realized P/L number that cannot explain which acquisition history it consumed.
 
-## Investment master as semantic join hub
+## Identity collision semantics must be explicit
 
-The master is not merely a lookup table for display names. It is the semantic join hub through which instrument classification reaches analytics and presentation. Depending on the configured/source fields, classifications support grouping by instrument type, subtype, class, sector, industry, portfolio, geography, country and currency.
+Deterministic identity assumes the namespace fields distinguish economically distinct records.
 
-```mermaid
-flowchart TB
-    M[d_Investment_Master] --> Q[Quant context]
-    M --> G1[By instrument type]
-    M --> G2[By class]
-    M --> G3[By sector / industry]
-    M --> G4[By portfolio]
-    M --> G5[By geography / country]
-    M --> G6[By currency]
-```
+If two source records have identical identity fields but represent distinct real-world events, the namespace contract is insufficient.
 
-These classifications should be treated as dimensions over canonical instruments, not re-derived from free-form names in Gold.
+That is not a hashing problem. It is a grain/identity-model problem.
 
-## Macro parameters
+The correct fix is to revisit identity inputs, not lengthen the hash and hope economics becomes unique.
 
-`d_Macro_Parameters` carries financial-year/macro inputs used by investment analytics, including holding-period/tax interpretation. This keeps time-varying financial rules out of hard-coded FIFO branches.
+## Source families normalize into one canonical model
 
-The resulting dependency is:
+The project supports multiple investment source families, including Indian equities, mutual funds, and US equities.
+
+Source transforms live under:
 
 ```text
-transaction dates + instrument tax classification + macro parameters
-    -> holding-period classification
-    -> STCG/LTCG code
-    -> realized-event tax context
+src/personal_finance_etl/domain/investments/transforms/
+├── indian_equity.py
+├── mutual_funds.py
+└── us_equity.py
 ```
 
-## Benchmark master and history
-
-Benchmark evidence is split into master/mapping semantics and dated benchmark observations. Quant can therefore select a benchmark appropriate to an instrument and construct comparison analytics without treating the benchmark as if it were another owned holding.
-
-## Currency as a dimension and time series
-
-`d_Currency` describes currency identity; `f_Currency_FX_Rates` provides dated observations. A foreign instrument therefore joins two different concepts:
-
-```text
-what currency is this instrument denominated in?
-what was the relevant FX observation on this date?
-```
-
-The first is dimensional. The second is temporal evidence.
-
-## Multi-geography source semantics
-
-Indian mutual funds, Indian equities and US equities have different source characteristics. The canonical model deliberately converges them before Quant while preserving the fields required for local-currency and INR analytics.
-
-| Source family | Typical distinctive concern | Canonical destination |
-|---|---|---|
-| mutual funds | ISIN mapping, NAV/order sources | common purchase/sale/market facts |
-| Indian equities | exchange/broker market/order data | common purchase/sale/market facts |
-| US equities | transaction-led holdings reconstruction, FX | common investment/market facts |
-
-The goal is not to erase source differences. It is to stop those differences from infecting every downstream algorithm.
-
-## Publication contract
-
-The ETL pipeline validates engine-produced tables against the Data Contract Registry before Silver publication. Canonical investment outputs therefore have both financial semantics and a registry-backed physical publication contract.
+Each source family has different physical evidence, but downstream financial algorithms should consume stable canonical semantics.
 
 ```mermaid
 flowchart LR
-    P[Producer output] --> V{Registered?}
-    V -->|no| F[Fail publication]
-    V -->|yes| C{All required outputs present?}
-    C -->|no| F
-    C -->|yes| S[Publish Silver]
+    IN["Indian equity source"]
+    MF["Mutual fund source"]
+    US["US equity source"]
+    C["Canonical trade / master / market evidence"]
+    Q["Common investment engine"]
+
+    IN --> C
+    MF --> C
+    US --> C
+    C --> Q
 ```
 
-This is especially useful for finance because silently dropping a realized/reconciliation table would otherwise leave downstream dashboards looking healthy while financial lineage disappeared.
+That boundary prevents broker/source quirks from becoming FIFO policy.
 
-## Canonical evidence boundaries
+## Indian equity normalization
 
-### What purchases prove
+`indian_equity.py` provides transformations for:
 
-A purchase fact proves that canonical source evidence represents an acquisition transaction under the current normalization rules. It does not by itself prove current holdings quantity.
+- market data;
+- market-data reference;
+- base stock transactions;
+- staged stock trades;
+- stock master reference.
 
-### What sales prove
+The source adapter can therefore understand vendor-specific shape while the canonical engine sees stable investment semantics.
 
-A sale fact proves disposal evidence. It does not by itself specify which acquisition lot was disposed; FIFO supplies that lineage.
+## Mutual-fund normalization
 
-### What market data proves
+`mutual_funds.py` similarly creates:
 
-A market row supplies/reconstructs valuation state for a date. It does not prove transaction history.
+- staged MF market data;
+- market-data reference;
+- base transactions;
+- staged trades;
+- master reference.
 
-### What the master proves
+Mutual funds can differ from exchange-traded equities in evidence shape, but the canonical model still needs instrument identity, chronology, quantity/value, and valuation context.
 
-The master supplies canonical instrument metadata/classification. It does not prove market value or ownership.
+## US equity normalization
 
-Keeping those contracts narrow is a feature. Wide semantic claims are easy to write and painful to reconcile.
+US equity ingestion has its own transaction/master transformations and later participates in market-state reconstruction where direct historical holdings evidence may not exist at the same grain as required analytics.
 
-## Failure boundaries
+That is why the documentation describes reconstructed US historical state honestly rather than calling every historical row “broker holdings.”
 
-- missing instrument mappings can prevent canonical master/transaction joins;
-- malformed transaction fields can prevent deterministic identity generation;
-- invalid currency context can block foreign-currency analytics;
-- missing market evidence can block valuation while leaving transaction evidence intact;
-- registry mismatch blocks publication rather than silently publishing an undocumented shape.
+Reconstruction methodology belongs in the next investment-engine page, not in the source contract.
 
-A failure in valuation does not retroactively erase a valid purchase. The model's separation lets the failing layer be identified precisely.
+## Market observations prove prices, not positions
 
-## Downstream contract handoff
+A market row answers:
+
+```text
+What market value/price was observed for this instrument/date?
+```
+
+It does not tell the engine how many units the household owned.
+
+Ownership state comes from transactions/reconstruction/observations.
+
+Valuation combines the two.
 
 ```mermaid
-sequenceDiagram
-    participant T as Transform layer
-    participant S as Canonical Silver facts
-    participant U as US reconstruction
-    participant Q as Quant
-    participant X as Tax
-    participant P as Presentation
-    T->>S: publish master/purchase/sale/market/FX evidence
-    S->>U: US transaction + market evidence
-    U->>Q: reconstructed historical market state
-    S->>Q: canonical purchases/sales/master/benchmark/FX
-    Q->>X: realized events
-    Q->>P: investment analytics
+flowchart LR
+    Q["Quantity state"]
+    P["Market price"]
+    V["Market value"]
+
+    Q --> V
+    P --> V
 ```
 
-This handoff diagram is the investment model in one view: normalization first, specialized reconstruction second, canonical Quant third, tax/presentation later.
+Keeping quantity and price authorities separate is one of the most important investment-model boundaries.
+
+## Benchmark evidence is a parallel market series
+
+Benchmarks provide a comparison state for performance attribution.
+
+An instrument can carry `BENCHMARK_ID` in master metadata. Benchmark history then provides the observed/reference series used to construct shadow or comparative performance.
+
+Benchmark state should not be mixed with asset state merely because both have dates and prices.
+
+## Currency is both a dimension and a time series
+
+Investment currency has at least two roles:
+
+### Dimension
+
+Which currency does the instrument/trade use?
+
+### Time series
+
+What FX rate applied on a given financial date?
+
+That produces separate semantics for:
+
+```text
+Price_Local
+Value_Local
+base/INR values
+FX rate
+FX contribution
+```
+
+The multi-currency methodology page later explains how those pieces become attribution.
+
+## A `TaxLot` is reconstructed state, not raw evidence
+
+The investment contracts define immutable in-memory lot state:
+
+```python
+# src/personal_finance_etl/domain/investments/contracts.py
+@dataclass(frozen=True, slots=True)
+class TaxLot:
+    date: dt.date | None
+    qty: float
+    price: float
+    bm_buy: float | None
+    shadow_qty: float
+    price_local: float = 0.0
+    fx_rate_buy: float = 1.0
+    currency_id: str | None = None
+    purchase_id: str | None = None
+    lot_id: str | None = None
+    lot_source_type: str = "PURCHASE"
+```
+
+The type intentionally combines financial and lineage state needed by chronological processing.
+
+But its existence does not mean a source delivered “lots.” The engine reconstructed them.
+
+## Lot actions form a finite event vocabulary
+
+Lots can be affected by actions such as:
+
+```text
+BUY
+SELL
+SPLIT
+BONUS
+DIVIDEND_REINVEST
+RECONCILIATION
+```
+
+Those actions explain why investment history is better modeled as chronology than as one current-state table.
+
+## Realized events are disposal fragments
+
+A sale can consume more than one acquisition lot.
+
+Therefore one sale may produce multiple realized-event rows, each retaining acquisition lineage and cost basis.
+
+The natural realized-event grain is closer to:
+
+```text
+one disposal × consumed acquisition fragment
+```
+
+than simply “one row per sale.”
+
+That detail matters for holding-period classification, Tax evidence, and auditability.
+
+## Reconciliation events preserve disagreement
+
+The current model supports quantity and cost-basis adjustment types:
+
+```python
+# src/personal_finance_etl/domain/investments/contracts.py
+class ReconciliationAdjustmentType(StrEnum):
+    QUANTITY_ADD = "QUANTITY_ADD"
+    QUANTITY_REMOVE = "QUANTITY_REMOVE"
+    COST_BASIS_ADJUSTMENT = "COST_BASIS_ADJUSTMENT"
+```
+
+Reconciliation events retain reconstructed, observed/broker, delta, and adjustment values.
+
+That means later analytics can distinguish:
+
+```text
+position created by recorded purchase
+position created/adjusted because observation disagreed
+```
+
+Those are financially different provenance stories.
+
+## Cashflows and terminal values are separate contracts
+
+Performance calculations need cash-flow chronology and terminal valuation state.
+
+The contract layer therefore defines separate cashflow and terminal-value structures rather than overloading trade rows.
+
+This helps XIRR and benchmark logic consume the right economic events.
+
+## Market spine records are reconstruction inputs/state
+
+`MarketSpineRecord` carries fields such as:
+
+```text
+Date
+ISIN
+CURRENCY_ID
+Quantity
+Buy_Value_Local
+Buy_Value_INR
+Buy_Price_Local
+Buy_Price_INR
+```
+
+This is a valuation/reconstruction grain, not the original transaction grain.
+
+The distinction becomes especially important for reconstructed daily US holdings.
+
+## Instrument metrics are downstream
+
+`InstrumentMetricsRecord` includes:
+
+- CAGR and validity;
+- XIRR and validity;
+- benchmark equivalents;
+- after-Tax XIRR;
+- active return;
+- drawdown;
+- local-currency equivalents;
+- FX XIRR impact.
+
+Those measures depend on the evidence/reconstruction model defined here. They are not part of the canonical trade evidence itself.
+
+## Missing-data semantics
+
+Investment data has several dangerous missing cases:
+
+### Missing price
+
+May prevent valuation or require explicit fallback logic.
+
+### Missing FX
+
+May prevent base-currency valuation/attribution.
+
+### Missing benchmark
+
+May prevent comparative measures while leaving asset return valid.
+
+### Missing purchase basis
+
+Can affect realization and Tax interpretation.
+
+### Missing observed holdings
+
+Does not mean reconstructed quantity is zero.
+
+Each absence must be interpreted at the owning algorithm boundary.
+
+## Canonical publication boundary
+
+The warehouse persists canonical investment facts and later analytical outputs under explicit data contracts.
+
+The investment domain should not depend on table location for its financial meaning.
+
+Conceptually:
+
+```text
+source-specific shape
+    ↓
+canonical investment fact
+    ↓
+reconstruction / valuation
+    ↓
+warehouse publication
+```
+
+not:
+
+```text
+table name
+    ↓
+therefore meaning
+```
+
+## The downstream handoff
+
+Once canonical investment evidence exists, the next set of questions becomes algorithmic:
+
+- how do I reconstruct daily market state?;
+- how do sales consume acquisition lots?;
+- what if broker observation disagrees with reconstruction?;
+- how do I calculate performance and benchmark attribution?;
+- how do local currency and INR/base currency effects separate?;
+
+Those questions belong to the deeper investment-engine specifications.
+
+The immediate next page is [Investment Market Reconstruction](investment-market-reconstruction.md).
 
 ## Related specifications
 
 - [Financial Model](financial-model.md)
-- [Cashflow and Wealth](cashflow-and-wealth.md)
-- [Investment Data Model](investment-data-model.md)
 - [Investment Market Reconstruction](investment-market-reconstruction.md)
-- [FIFO and Realized Events](fifo-and-realized-events.md)
+- [FIFO & Realized Events](fifo-and-realized-events.md)
 - [Investment Reconciliation](investment-reconciliation.md)
-- [Investment Performance and Risk](investment-performance-and-risk.md)
-- [Multi-Currency and FX](multi-currency-and-fx.md)
-- [Tax Methodology](tax-methodology.md)
-- [FIRE Methodology](fire-methodology.md)
-- [Data Model](../architecture/data-model.md)
-- [Silver Data Contracts](../reference/silver-data-contracts.md)
+- [Multi-Currency & FX](multi-currency-and-fx.md)
+- [Identity & Grain Contracts](../reference/identity-and-grain-contracts.md)

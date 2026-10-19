@@ -1,392 +1,609 @@
 # Investment Reconciliation
 
-Personal Finance ETL treats disagreement between reconstructed investment state and broker-observed state as financial evidence, not an inconvenience to overwrite. This specification explains quantity and cost-basis reconciliation, synthetic lot provenance, deterministic reconciliation identities, future FIFO effects, and the limits of what reconciliation can legitimately claim.
+A deterministic model can still disagree with observed reality.
 
-## Scope and purpose
+That is not a bug in the idea of determinism. It is the exact situation reconciliation exists to expose.
 
-Reconciliation exists because deterministic reconstruction and broker-observed state can disagree. Personal Finance ETL does not hide that disagreement by overwriting source transactions. It records an explicit adjustment event and mutates the reconstructed lot state needed for future analytics.
+The investment engine reconstructs expected open quantity and basis from canonical transaction evidence. Broker snapshots provide an independent observation of position state. When those two paths disagree materially, the system does not quietly edit history until the numbers look friendly.
 
-Two independent discrepancies are modeled: **quantity** and **cost basis**. They are not interchangeable. A portfolio can have the correct number of units and the wrong acquisition basis, or the wrong number of units with no trustworthy basis for the missing quantity.
-
-## Where reconciliation sits
+It emits explicit reconciliation evidence and mutates the active lot state in a controlled, traceable way.
 
 ```mermaid
 flowchart LR
-    TX[Purchases and sales] --> FIFO[Reconstructed FIFO state]
-    OBS[Broker market/holding observation] --> CMP{Compare}
-    FIFO --> CMP
-    CMP -->|quantity mismatch| QR[Quantity reconciliation]
-    CMP -->|basis mismatch| CR[Cost-basis reconciliation]
-    QR --> EVENTS[Reconciliation events]
-    CR --> EVENTS
-    QR --> FIFO2[Adjusted future lot state]
-    CR --> FIFO2
-    EVENTS --> SILVER[f_Investment_Reconciliation_Events]
+    TX["Canonical transactions"] --> EXP["Reconstructed open state"]
+    OBS["Broker holding observation"] --> CMP["Reconciliation comparison"]
+    EXP --> CMP
+    CMP -->|quantity mismatch| Q["Quantity adjustment"]
+    CMP -->|basis mismatch| B["Basis adjustment"]
+    Q --> EVT["Reconciliation events"]
+    B --> EVT
+    Q --> STATE["Adjusted active lots"]
+    B --> STATE
 ```
 
-## Quantity comparison tolerance
+Reconciliation is therefore not “fixing the data.”
 
-`reconcile_quantity()` compares broker quantity to reconstructed closing units using a `1e-8` tolerance. The same scale is used when canonicalizing the quantity of an add operation for reconciliation identity. This keeps harmless floating-point representation differences from becoming financial events.
+It is **recording disagreement between two evidence paths and defining how the model continues afterward**.
 
-## Quantity additions
+## Implementation authority
+
+The high-level comparison logic lives in:
+
+```text
+src/personal_finance_etl/domain/investments/reconciliation/engine.py
+```
+
+The actual state mutation is delegated to:
+
+```text
+src/personal_finance_etl/domain/investments/lots/fifo.py
+```
+
+The event vocabulary and record models live in:
+
+```text
+src/personal_finance_etl/domain/investments/reconciliation/models.py
+src/personal_finance_etl/domain/investments/contracts.py
+```
+
+This separation is deliberate:
+
+- reconciliation decides whether an observed discrepancy is meaningful;
+- the FIFO portfolio remains the single owner of open lot state;
+- reconciliation events preserve the explanation of the correction.
+
+## Where reconciliation sits in the investment lifecycle
+
+Reconciliation runs after transaction-driven state has been reconstructed and broker holding evidence is available.
+
+```text
+purchases + sales
+    ↓
+FIFO open state
+    ↓
+independent broker observation
+    ↓
+reconciliation comparison
+    ↓
+explicit adjustment event(s)
+    ↓
+corrected open state
+    ↓
+future FIFO / snapshots / performance / Tax evidence
+```
+
+This position in the pipeline matters.
+
+Reconciliation is downstream of transaction reconstruction but upstream of later financial interpretation.
+
+## Two independent questions
+
+The engine separates:
+
+1. **Does reconstructed quantity match observed broker quantity?**
+2. **Given the quantity, does reconstructed cost basis match observed broker basis?**
+
+Those are different problems and produce different event semantics.
+
+## Quantity tolerance
+
+The comparison uses:
 
 ```python
-if m_qty > current_units + 1e-8:
-    diff = m_qty - current_units
-    _recon_gid = generate_deterministic_id(
-        "RECON_LOT_GROUP",
-        {
-            "ISIN": self.isin,
-            "Reconciliation_Date": m_date,
-            "Adjustment_Type": "QUANTITY_ADD",
-            "Quantity": round(diff, 8),
-        },
-    )
+QUANTITY_TOLERANCE: float = 1e-8
 ```
 
-An observed excess creates a stable reconciliation operation identity. FIFO then creates a zero-cost synthetic lot with `lot_source_type="RECONCILIATION"`. The lot is real reconstructed state, but it is not rewritten as an observed purchase.
+A quantity discrepancy is meaningful only when:
 
-## Why the synthetic lot has zero cost
+\[
+|Q_{broker} - Q_{reconstructed}| > 10^{-8}
+\]
 
-The quantity observation proves units exist; it does not necessarily prove their historical acquisition basis. Assigning a guessed cost would manufacture evidence. The synthetic lot therefore enters at zero cost until separate cost-basis evidence can reconcile it.
+The tolerance exists to absorb floating-point residue, not economically meaningful share differences.
 
-A zero-cost reconciliation lot can later participate in FIFO. Its source type remains visible so downstream tax preparation can treat it as review-required evidence.
+## Cost-basis tolerance
 
-## Quantity removals
-
-When broker quantity is below reconstructed quantity, the difference is removed from the oldest active lots, using the same FIFO orientation as disposals. Full lots are popped; partial removal reduces quantity and benchmark shadow quantity proportionally.
-
-Unlike an actual sale, quantity reconciliation does **not** create realized sale proceeds or realized gains. It is an adjustment to reconstructed state, not an invented market transaction.
-
-## Quantity removal flow
-
-```mermaid
-sequenceDiagram
-    participant O as Broker observation
-    participant F as FIFO state
-    participant L as Oldest lots
-    participant E as Recon events
-    O->>F: observed quantity < reconstructed quantity
-    loop until difference is removed
-        F->>L: remove oldest quantity
-        L-->>E: QUANTITY_REMOVE event
-    end
-    F-->>O: adjusted reconstructed quantity
-```
-
-## Reconciliation cashflow behavior
-
-Quantity additions return a dummy cashflow with amount `0.0`. This allows the surrounding analytics chronology to recognize the state change without pretending that unknown units required a known cash investment. Quantity removals likewise do not invent disposal cash proceeds.
-
-## Cost-basis reconciliation
-
-`reconcile_cost_basis()` runs only when units remain and broker cost-basis evidence exists. It compares broker target average cost with reconstructed average cost. A difference greater than `0.01`, with a positive reconstructed average, triggers proportional rescaling of every active lot.
-
-## Cost-basis scaling algorithm
+Basis comparison uses:
 
 ```python
-target_avg = float(m_buy_val) / current_units
-our_avg = self.get_average_cost()
-
-if abs(our_avg - target_avg) > 0.01 and our_avg > 0:
-    r = target_avg / our_avg
-    ...
-    new_price = lot.price * r
-    new_price_local = lot.price_local * r_local if lot.price_local else 0.0
+COST_BASIS_TOLERANCE: float = 0.01
 ```
 
-The proportional ratio preserves relative differences among active lots while bringing aggregate reconstructed basis to the observed target. If a local-currency broker basis is available, a separate local ratio is computed.
+The relevant comparison is average unit cost:
 
-## Why lot identity survives cost-basis adjustment
+\[
+P_{broker,avg} = \frac{B_{broker}}{Q}
+\]
 
-Cost-basis reconciliation changes the reconstructed financial attributes of an existing lot, not its historical identity. The `Lot_ID`, purchase reference, date, quantity, benchmark fields, currency, and source type remain unchanged while unit cost is adjusted.
+and reconciliation occurs when:
 
-This is a subtle but important model choice: **identity describes the lot lineage; reconciliation describes a later correction to reconstructed state**.
+\[
+|P_{reconstructed,avg} - P_{broker,avg}| > 0.01
+\]
 
-## Event grain
+subject to positive open quantity and positive reconstructed basis.
 
-Quantity-add can create one event for the synthetic lot. Quantity-remove can create multiple events when the correction spans multiple lots. Cost-basis reconciliation creates one event per active lot whose basis is scaled.
+## Missing broker evidence is not a discrepancy
 
-The Silver reconciliation fact therefore has event/affected-lot grain, not one-row-per-broker-observation grain.
+The engine explicitly treats absent broker quantity/basis as **no reconciliation evidence**, not as zero.
 
-## Event semantics
+That distinction prevents missing observations from being interpreted as a full liquidation.
 
-Reconciliation events preserve the date, adjustment type, reason, affected lot and purchase identities, broker and reconstructed quantities, quantity adjustment, broker and reconstructed cost basis, cost-basis adjustment, and original/adjusted unit cost.
+## Quantity-add reconciliation
 
-The event record is evidence *about the correction*. The mutated lot state is the reconstructed state *after the correction*. Keeping both prevents the classic “the number changed somehow” problem.
+If broker quantity is higher than reconstructed quantity:
 
-## Deterministic reconciliation identities
+\[
+\Delta Q = Q_{broker} - Q_{reconstructed} > 0
+\]
 
-```mermaid
-flowchart TD
-    D[ISIN + date + direction + canonical quantity] --> G[RECON_LOT_GROUP]
-    G --> L[Synthetic LOT identity]
-    OBS[Reconciliation observation] --> RG[RECON_GROUP]
-    RG --> RE[RECON_EVENT]
-    L --> RE
-    RE --> FACT[Silver reconciliation fact]
+The system needs to restore state continuity without inventing a historical purchase it cannot prove.
+
+The implementation creates a deterministic reconciliation group identity:
+
+```python
+_recon_gid = generate_deterministic_id(
+    "RECON_LOT_GROUP",
+    {
+        "ISIN": self.isin,
+        "Reconciliation_Date": m_date,
+        "Adjustment_Type": "QUANTITY_ADD",
+        "Quantity": round(diff, 8),
+    },
+)
 ```
 
-The exact namespace field orders are specified in [Identity and Grain Contracts](../reference/identity-and-grain-contracts.md). The key design principle is that reconciliation operations have stable identities independent of mutable row order.
+Then it adds a reconciliation-origin lot.
 
-## Observed evidence versus reconstructed correction
+## Why identity quantity is rounded but financial quantity is not rewritten
 
-A reconciliation event does not upgrade reconstructed state into broker-certified transaction history. The model retains three separate ideas:
+The deterministic ID uses quantity rounded to the same tolerance as the comparison.
 
-1. canonical purchase/sale evidence;
-2. broker-observed quantity/cost-basis state;
-3. reconstructed adjustments required to make future analytical state consistent.
+The financial mutation retains the actual quantity difference.
 
-That separation is why reconciliation is auditable instead of becoming an invisible `UPDATE lots SET ...` with good intentions.
+This protects identity stability from harmless floating-point representation differences while preserving the economic adjustment itself.
 
-## Effect on future FIFO
+That is a good example of identity semantics and financial semantics being related but not identical.
 
-After reconciliation, future sales consume the adjusted active-lot deque. Quantity-add synthetic lots can eventually be sold; quantity removals reduce what remains; cost-basis changes affect future realized gain calculations. This is why reconciliation provenance must survive alongside lot state: later realized events can inherit consequences from an earlier correction.
+## The synthetic lot has zero cost by design
 
-## Tax consequences
+A quantity-add reconciliation creates:
 
-Reconciliation-origin lots carry `Lot_Source_Type="RECONCILIATION"`. Realized events preserve that source. The Tax Engine can therefore distinguish ordinary purchase-backed realization from events whose acquisition basis or quantity lineage required reconstruction and mark evidence quality accordingly.
-
-Reconciliation is not a tax loophole generator. It is provenance for uncertainty.
-
-## Multi-currency cost-basis reconciliation
-
-When broker local-currency cost basis is available, the engine computes a separate local average and scaling ratio. Reporting-currency and local-currency lot prices can therefore be reconciled coherently rather than assuming one ratio is always sufficient across currency translation.
-
-## Failure and no-op cases
-
-Reconciliation is a no-op when broker quantity is missing, when quantity falls within tolerance, when cost basis is missing, when there are no active units, or when the cost-basis difference is within the implemented threshold. The algorithm does not fabricate adjustments merely to guarantee an event row.
-
-## Guarantees and limitations
-
-**Guarantees:** discrepancies are explicit; quantity and cost basis are separate; synthetic provenance survives; future FIFO uses adjusted state; deterministic operation identities are available.
-
-**Limitations:** reconciliation cannot recover unknown historical trades; zero-cost synthetic lots do not imply true zero acquisition cost; broker state itself can be wrong; proportional cost rescaling is a reconstruction strategy rather than proof of historical per-lot basis.
-
-## Source map
-
-Primary implementation authorities:
-
-- `backend/engines/analytics/core/fifo.py` — quantity and cost-basis mutation.
-- `backend/engines/analytics/pipeline/processor/isin_processor.py` — timing and orchestration.
-- `backend/utils/identity.py` — reconciliation namespaces.
-- `backend/load/schema/silver.py` — physical reconciliation fact schema.
-- `backend/engines/tax/base_events.py` — downstream treatment of reconciliation-origin realization.
-
-## Reconciliation trigger chronology
-
-Reconciliation is evaluated against the reconstructed state available on the broker observation date. It is not a periodic bulk overwrite performed after the entire history has been processed.
-
-```mermaid
-sequenceDiagram
-    participant P as ISIN processor
-    participant F as FIFO state
-    participant O as Broker observation
-    participant R as Recon event buffer
-    P->>F: replay transactions through date
-    O->>P: quantity / basis observation
-    P->>F: reconcile_quantity(...)
-    F-->>R: quantity events + zero cashflow if add
-    P->>F: reconcile_cost_basis(...)
-    F-->>R: basis events
-    P->>P: continue chronology with adjusted state
+```text
+quantity = observed difference
+cost basis = 0
+lot source = RECONCILIATION
 ```
 
-That chronology is what makes reconciliation consequential: later disposals consume the corrected reconstructed state.
+The zero basis does **not** mean the economic acquisition cost was truly zero.
 
-## Quantity-add state mutation in detail
+It means:
 
-When broker quantity exceeds reconstructed quantity, the engine computes `diff = broker - reconstructed`. A deterministic `RECON_LOT_GROUP` identifies the adjustment operation. `buy()` then creates a synthetic lot at the reconciliation date.
+> the system knows quantity is missing from reconstructed state, but does not have enough trusted transaction evidence to invent an acquisition basis.
 
-The synthetic lot uses:
+That uncertainty must survive downstream.
 
-- quantity equal to the observed difference;
-- reporting/local cost initially zero;
-- zero benchmark shadow quantity;
-- source type `RECONCILIATION`;
-- deterministic lot identity derived from the reconciliation group.
+## No invented economic cash flow
 
-This is intentionally conservative. The observation proves quantity, not acquisition history.
+The quantity-add path appends a dummy cash flow:
 
-## Quantity-add lineage
-
-```mermaid
-flowchart LR
-    O[Broker quantity] --> D[Difference]
-    R[Reconstructed quantity] --> D
-    D --> G[RECON_LOT_GROUP]
-    G --> L[Synthetic TaxLot]
-    L --> E[QUANTITY_ADD event]
-    L --> F[Future FIFO state]
+```python
+cf.append({"date": m_date, "amount": 0.0})
 ```
 
-## Quantity-remove mutation in detail
+This is important.
 
-A negative discrepancy removes quantity from the oldest reconstructed lots. The algorithm mirrors FIFO ordering for state reduction but does not call `sell()`. That difference is fundamental: reconciliation removal has no observed sale price or proceeds, so generating realized gain would fabricate a disposal.
+Reconciliation restores position state without fabricating invested capital.
 
-If the difference spans lots, each affected lot produces its own reconciliation event. Partial removal preserves the lot identity and reduces its benchmark shadow quantity proportionally.
+The event can affect holdings continuity without pretending a real purchase occurred on the reconciliation date.
+
+## Quantity-add event semantics
+
+The event records:
+
+```text
+Broker_Quantity
+Reconstructed_Quantity
+Quantity_Adjustment
+Lot_ID
+Purchase_ID
+Adjustment_Type = QUANTITY_ADD
+Reason = Broker quantity mismatch
+```
+
+The new lot ID makes future disposal traceable back to this correction.
+
+## Quantity-remove reconciliation
+
+If broker quantity is lower than reconstructed quantity:
+
+\[
+\Delta Q = Q_{reconstructed} - Q_{broker} > 0
+\]
+
+The engine removes units from the oldest open lots.
+
+```python
+while diff > 0 and self._active_lots:
+    lot = self._active_lots[0]
+    if lot.qty <= diff + 1e-8:
+        removed = lot.qty
+        diff -= lot.qty
+        self._active_lots.popleft()
+```
+
+A partial removal reduces the head lot while preserving its identity and other acquisition attributes.
 
 ## Why quantity removal uses oldest lots
 
-A broker quantity observation tells the engine *how many* units remain, not which historical acquisition lots disappeared. Removing oldest lots is a deterministic reconstruction policy consistent with FIFO orientation. It should not be read as broker evidence that those specific lots were transferred or otherwise removed.
+The system reuses FIFO ordering because the active lot queue already represents canonical disposal precedence.
 
-That distinction belongs in the documentation because deterministic does not mean historically omniscient.
+That keeps later state internally consistent with the same lot-ordering model used for real sales.
 
-## Cost-basis trigger conditions
+The event remains a reconciliation adjustment, not a realized sale.
 
-Cost-basis reconciliation requires:
+## Quantity removal is not realized P&L
 
-1. a non-empty broker cost-basis value;
-2. positive reconstructed closing units;
-3. positive reconstructed average cost;
-4. absolute difference between reconstructed and target average cost greater than `0.01`.
+A broker-observed lower quantity does not automatically prove an economic disposal price.
 
-If these conditions are not met, no basis mutation occurs.
+Therefore reconciliation removal does not invent sale proceeds or realized gains.
 
-## Proportional scaling rationale
+This protects the boundary between:
 
-Suppose surviving lots have different original unit costs. The engine computes:
+```text
+observed state difference
+```
 
-$$r = \frac{TargetAverageCost}{ReconstructedAverageCost}$$
+and:
 
-and scales every active lot price by $r$.
+```text
+proven economic transaction
+```
 
-This preserves relative lot structure while forcing the aggregate basis toward broker evidence. It is a reconstruction method, not proof that each historical lot was actually adjusted by that ratio.
+## Shadow benchmark state follows quantity mutation
 
-## Local-currency basis scaling
+When quantity is partially removed, benchmark shadow quantity is reduced proportionally.
 
-When local broker basis is present, a separate local ratio is derived:
+That keeps the counterfactual benchmark state aligned with the adjusted physical position.
 
-$$r_{local} = \frac{TargetAverageCost_{local}}{ReconstructedAverageCost_{local}}$$
+Otherwise later active-return calculations could compare mismatched actual and shadow capital histories.
 
-The reporting and local basis can therefore converge to their respective observations without assuming exchange-rate history can be reconstructed from one aggregate ratio.
+## Cost-basis reconciliation
+
+Quantity can match while broker-reported basis differs from reconstructed basis.
+
+The engine first computes:
+
+\[
+P_{target} = \frac{B_{broker}}{Q_{open}}
+\]
+
+and current reconstructed average cost:
+
+\[
+P_{current} = \frac{\sum_i Q_i P_i}{\sum_i Q_i}
+\]
+
+If the difference exceeds tolerance, all active lots are scaled proportionally.
+
+## Basis scaling ratio
+
+The base/reporting-currency scale factor is:
+
+\[
+r = \frac{P_{target}}{P_{current}}
+\]
+
+Each active lot receives:
+
+\[
+P_i' = P_i \times r
+\]
+
+This preserves relative basis distribution across lots while matching the broker aggregate basis.
+
+## Why proportional scaling instead of replacing every lot with one average
+
+Flattening all lots into one average would destroy:
+
+- acquisition identity;
+- acquisition date;
+- future holding-period classification;
+- lot-level realized-event lineage;
+- benchmark state.
+
+Proportional scaling changes the uncertain attribute that needs correction while preserving the rest of the lot model.
+
+## Local-currency basis is reconciled separately where available
+
+If broker local-currency basis exists, the engine computes a separate local average and scale ratio.
+
+Conceptually:
+
+\[
+r_{local} = \frac{P_{target,local}}{P_{current,local}}
+\]
+
+Then:
+
+\[
+P_{i,local}' = P_{i,local} \times r_{local}
+\]
+
+This prevents INR/base-currency correction from accidentally becoming the local-currency economic basis.
+
+## Lot identity survives cost-basis adjustment
+
+The implementation deliberately preserves:
+
+```text
+lot_id
+purchase_id
+acquisition date
+quantity
+lot source type
+```
+
+while updating price attributes.
+
+That reflects the semantics correctly:
+
+> the system is correcting what it believes about basis, not claiming a different acquisition event occurred.
 
 ## Cost-basis event grain
 
-Each active lot receives its own `COST_BASIS_ADJUSTMENT` event because each lot's original and adjusted unit costs differ. Aggregate broker and reconstructed basis are repeated as observation context, while `Cost_Basis_Adjustment` records the lot-level monetary change.
+One aggregate broker basis mismatch can create one event **per active lot** because each lot's basis is mutated.
 
-## Before/after example
-
-Consider two surviving lots:
+The event stores:
 
 ```text
-L1: 10 @ 100
-L2: 10 @ 200
-reconstructed average = 150
-broker target average = 165
+Original_Unit_Cost
+Adjusted_Unit_Cost
+Cost_Basis_Adjustment
+Lot_ID
+Purchase_ID
 ```
 
-The scaling ratio is `165 / 150 = 1.10`:
+This makes the mutation auditable at the same grain as the state it changed.
+
+## Worked basis example
+
+Suppose open lots are:
 
 ```text
-L1 adjusted basis = 110
-L2 adjusted basis = 220
-new average       = 165
+L1: 5 units @ 100
+L2: 5 units @ 120
 ```
 
-The relative basis structure survives while aggregate state reconciles.
+Current basis:
 
-## Identity versus mutable financial attributes
+\[
+B = 5(100) + 5(120) = 1100
+\]
 
-```mermaid
-flowchart TD
-    ID[Lot identity] --> STABLE[Stable lineage]
-    BASIS[Unit basis] --> MUT[Mutable reconstructed attribute]
-    QTY[Quantity] --> MUT
-    RECON[Reconciliation evidence] --> MUT
-    STABLE --> FUTURE[Future realized event lineage]
-    MUT --> FUTURE
+Current average:
+
+\[
+1100 / 10 = 110
+\]
+
+Broker basis says:
+
+```text
+1200 total
+10 units
 ```
 
-Changing basis does not create a new acquisition identity. The lot's lineage remains stable while reconstructed attributes are corrected.
+Target average:
 
-## Reconciliation event contract families
+\[
+120
+\]
 
-| Family | Key fields |
-|---|---|
-| identity | reconciliation event/group, lot, purchase, ISIN |
-| timing | reconciliation date |
-| classification | adjustment type, reason |
-| quantity | broker, reconstructed, adjustment |
-| basis | broker basis, reconstructed basis, adjustment |
-| unit cost | original and adjusted |
-| provenance | lot source and linked identities |
+Scale ratio:
+
+\[
+120 / 110 = 1.090909...
+\]
+
+Adjusted lots become approximately:
+
+```text
+L1: 5 @ 109.09
+L2: 5 @ 130.91
+```
+
+Total basis now equals the observed 1200 while lot identity/date remain intact.
+
+## Reconciliation event families
+
+The key adjustment types are:
+
+```text
+QUANTITY_ADD
+QUANTITY_REMOVE
+COST_BASIS_ADJUSTMENT
+```
+
+They represent different uncertainty and must not be collapsed into one generic “reconciled” flag.
+
+## Reconciliation is an uncertainty boundary
+
+This is one of the most important financial semantics in the investment engine.
+
+A reconciliation event says:
+
+> **the model had one state, an independent observation provided another, and the system explicitly adjusted the future model from this point.**
+
+It does not prove which historical source was wrong.
+
+That is why reconciliation evidence deserves first-class lineage.
 
 ## Relationship to canonical transactions
 
-Reconciliation never edits canonical purchase or sale facts. Those facts remain the normalized representation of source transaction evidence. The adjustment lives downstream in reconstructed state.
+Canonical purchases/sales remain the primary economic events.
 
-This separation is critical for auditability: a developer can compare what the source said with what reconstruction later needed to do.
+Reconciliation does not rewrite them.
+
+Instead it adds a separate correction layer.
+
+```mermaid
+flowchart TB
+    TX["Canonical transactions"] --> RECONSTRUCT["Reconstructed lots"]
+    OBS["Independent broker observation"] --> RECON["Reconciliation events"]
+    RECONSTRUCT --> RECON
+    RECON --> FUTURE["Corrected future lot state"]
+```
 
 ## Relationship to market reconstruction
 
-US market reconstruction can derive historical quantity state from transaction evidence for valuation. Quant reconciliation has a different purpose: it compares canonical FIFO state against available broker-observed holdings/basis and records corrections. The two should not be merged merely because both mention quantities.
+Market reconstruction creates expected position history from transactions.
 
-## Relationship to realized events
+Reconciliation consumes an independent holding observation and repairs the canonical open-lot state used by Quant processing.
 
-Reconciliation itself is not realization. However, it changes future lots. A later sale of an adjusted or synthetic lot can therefore produce a realized event whose economics depend on reconciliation. `Lot_Source_Type` and lot identity provide the bridge between those facts.
+The two mechanisms should agree where evidence is complete, but they are not the same contract.
 
-## Relationship to tax evidence
+## Relationship to future FIFO
 
-```mermaid
-flowchart LR
-    RECON[Reconciliation] --> LOT[Adjusted/synthetic lot]
-    LOT --> SALE[Later sale]
-    SALE --> REAL[Realized event]
-    REAL --> Q{Lot source?}
-    Q -->|Purchase| NORMAL[Normal tax evidence]
-    Q -->|Reconciliation| CHECK[Review-aware tax evidence]
+Once reconciliation mutates the active lot queue, future sales consume that corrected state.
+
+Therefore a later realized event can inherit:
+
+```text
+Lot_Source_Type = RECONCILIATION
 ```
 
-The Tax Engine does not need to guess why a basis is unusual; provenance travels with the lot.
+This preserves the fact that some acquisition lineage is uncertain.
 
-## No invented economic cashflow
+## Relationship to Tax evidence
 
-A quantity-add operation emits a zero-value dummy cashflow for chronology. This is not a claim that the units were free. It means the engine has evidence of state but lacks evidence of the corresponding historical cash movement.
+Reconciliation-origin disposals require caution.
 
-That difference is subtle and financially important.
+Downstream Tax logic can mark them `CHECK_REQUIRED` rather than treating zero/adjusted basis as statutory certainty.
 
-## Reconciliation as an uncertainty boundary
+This is exactly why uncertainty is preserved rather than hidden.
 
-The presence of a reconciliation event is itself information. It tells downstream consumers that canonical transaction replay alone was insufficient to match observed state. Hiding that fact would make aggregate outputs look cleaner while making the model less trustworthy.
+## Relationship to performance
+
+Reconciliation can affect:
+
+- open quantity;
+- open basis;
+- unrealized P&L;
+- benchmark shadow state;
+- future cash-flow/terminal state;
+- eventual realized events.
+
+Performance therefore consumes reconciled state, but should retain enough provenance to explain why that state differs from pure transaction replay.
+
+## No-op cases
+
+Reconciliation does nothing when:
+
+- broker quantity is missing;
+- quantity difference is within tolerance;
+- broker basis is missing;
+- no open units exist for basis reconciliation;
+- current reconstructed average basis is non-positive;
+- basis difference is within tolerance.
+
+No event is emitted merely to prove the function ran.
+
+## Failure cases
+
+### Broker quantity materially higher
+
+Quantity-add event + reconciliation-origin lot.
+
+### Broker quantity materially lower
+
+Oldest open quantity is removed through explicit events.
+
+### Basis mismatch with valid open state
+
+Proportional basis adjustment events.
+
+### Broker observation inconsistent beyond available lot state
+
+The mutation can only act on existing lots; unresolved inconsistencies remain a data-quality concern rather than generating negative lots.
 
 ## Operational invariants
 
-- canonical transaction rows remain unchanged;
-- quantity and basis discrepancies are modeled independently;
-- quantity additions create provenance-marked synthetic lots;
-- quantity removals do not invent sale proceeds;
-- basis adjustments retain lot identity;
-- each affected lot can be traced through an event;
-- tolerance prevents noise from becoming financial history;
-- future FIFO uses the reconciled state.
-
-## Edge-case matrix
-
-| Condition | Result |
-|---|---|
-| missing broker quantity | quantity reconciliation skipped |
-| quantity within tolerance | no event |
-| broker quantity higher | synthetic lot + add event |
-| broker quantity lower | oldest reconstructed lots reduced |
-| missing broker basis | basis reconciliation skipped |
-| no active units | basis reconciliation skipped |
-| basis within threshold | no event |
-| local basis available | local ratio reconciled separately |
+1. canonical transactions are never silently rewritten;
+2. missing broker evidence is not interpreted as zero;
+3. quantity adjustments use explicit event types;
+4. reconciliation additions have explicit reconciliation provenance;
+5. no fake purchase cash flow is created for quantity repair;
+6. cost-basis adjustment preserves lot identity;
+7. local and base basis can be reconciled separately;
+8. future FIFO sees the adjusted state;
+9. uncertainty survives into downstream Tax interpretation;
+10. tolerances are explicit and narrow.
 
 ## Audit workflow
 
-A reconciliation investigation can proceed from the Silver event to the affected `Lot_ID`, back to `Purchase_ID` where one exists, forward to later realized events, and sideways to the broker observation date. That graph is much more useful than a single `reconciled=true` flag.
+Given a discrepancy, I should be able to trace:
+
+```text
+broker observation
+    ↓
+reconstructed pre-adjustment state
+    ↓
+comparison tolerance
+    ↓
+adjustment type
+    ↓
+lot(s) affected
+    ↓
+post-adjustment state
+    ↓
+future realized/performance consequences
+```
+
+That is the difference between reconciliation and “making the totals match.”
 
 ## Design trade-off: explicit correction facts
 
-The architecture pays a storage and conceptual cost for reconciliation events. The benefit is that corrections become inspectable and downstream systems can treat them differently. In financial systems, invisible convenience mutations age badly.
+A simpler implementation could directly overwrite open quantity/basis.
+
+That would be shorter.
+
+It would also erase the most interesting question:
+
+> why did the state change?
+
+The explicit event model costs rows and code, but preserves causality.
+
+## Design trade-off: correct future state without fabricating past certainty
+
+Reconciliation is intentionally asymmetric.
+
+It updates the model so future analytics reflect observed state, while keeping the historical uncertainty visible.
+
+That is more honest than manufacturing a backdated purchase or sale simply to make the ledger prettier.
+
+## Handoff: once state is coherent, performance can finally be measured
+
+After market state reconstruction, FIFO accounting, and reconciliation, the engine has a coherent state model:
+
+- open positions;
+- acquisition lineage;
+- realized events;
+- corrected quantity/basis;
+- benchmark shadow state;
+- local/base currency context.
+
+Only then does it make sense to ask:
+
+> **How well did the capital actually perform?**
+
+That is the job of [Investment Performance & Risk](investment-performance-and-risk.md).
 
 ## Related specifications
 
-- [Investment Data Model](investment-data-model.md)
+- [FIFO & Realized Events](fifo-and-realized-events.md)
 - [Investment Market Reconstruction](investment-market-reconstruction.md)
-- [FIFO and Realized Events](fifo-and-realized-events.md)
-- [Multi-Currency and FX](multi-currency-and-fx.md)
+- [Investment Performance & Risk](investment-performance-and-risk.md)
+- [Multi-Currency & FX](multi-currency-and-fx.md)
 - [Tax Methodology](tax-methodology.md)
-- [Identity and Grain Contracts](../reference/identity-and-grain-contracts.md)
+- [Deterministic Identity & Replay](../architecture/deterministic-identity-and-replay.md)

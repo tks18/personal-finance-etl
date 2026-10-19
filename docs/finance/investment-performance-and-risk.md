@@ -1,398 +1,675 @@
-# Investment Performance and Risk
+# Investment Performance & Risk
 
-Personal Finance ETL derives investment performance only after canonical transactions have been reconstructed into auditable lot state. This specification covers lot and instrument returns, CAGR, typed XIRR, benchmark shadow performance, active return, drawdown, tax-if-sold exposure, aggregation, null semantics, and the boundaries between deterministic measurement and financial interpretation.
+A portfolio can be profitable and still have poor performance.
 
-## Scope and ownership
+A portfolio can also show an attractive return while hiding:
 
-Investment performance is produced after canonical transactions have been reconstructed into lot state. The analytics layer combines surviving FIFO lots, market prices, benchmark shadow state, cashflows, tax exposure, and FX evidence into lot-, instrument-, group-, and portfolio-level measures.
+- irregular cash-flow timing;
+- stale market observations;
+- Tax drag;
+- FX translation effects;
+- benchmark underperformance;
+- drawdown risk;
+- invalid or non-computable metrics.
 
-This page owns return/risk semantics and post-processing. It does not redefine FIFO, reconciliation, or physical table DDL.
+So the investment engine does not publish one magic percentage called `Return` and call it a day.
 
-## Analytics pipeline
+It builds a layered performance model from reconstructed position state, realized events, terminal values, and benchmark counterfactuals.
 
 ```mermaid
 flowchart LR
-    FIFO[FIFO lot state] --> SNAP[Lot snapshots]
-    MKT[Market prices] --> SNAP
-    BM[Benchmark state] --> SNAP
-    FX[FX evidence] --> SNAP
-    SNAP --> POST[Postprocessor coordinator]
-    CF[Cashflows] --> X[Portfolio XIRR]
-    SNAP --> X
-    X --> POST
-    POST --> G[Group processing]
-    POST --> W[Weights]
-    POST --> GAINS[Gain analytics]
-    G --> OUT[Silver/Gold analytics]
-    W --> OUT
-    GAINS --> OUT
+    CF["Cashflows"]
+    TV["Terminal values"]
+    LOT["Lot snapshots"]
+    BM["Benchmark shadow state"]
+
+    CF --> X["XIRR"]
+    TV --> X
+    LOT --> C["CAGR / lot analytics"]
+    BM --> X
+    X --> P["Portfolio + group metrics"]
+    C --> P
+    P --> R["Risk / attribution / recommendations"]
 ```
 
-## Lot return and CAGR
+The central rule is simple:
 
-For each active lot, absolute return is based on acquisition and current market price:
+> **invalid evidence must not become a convincing zero.**
 
-$$R_{lot}=\frac{P_t-P_0}{P_0}$$
+That rule shapes the entire analytics contract.
 
-CAGR is calculated as:
+## Implementation authority
 
-$$CAGR=\left(\frac{V_t}{V_0}\right)^{365/d}-1$$
+Performance logic is intentionally decomposed across:
 
-`calculate_cagr()` returns typed `CagrResult(value, status, message)`: `INVALID_INPUT` (`value=None`) for non-positive or non-finite prices, `UNDEFINED` (`value=None`) for zero or negative holding periods, and `VALID` (`value: float`) for valid inputs. It never uses `0.0` as a sentinel for missing or invalid data, preserving true zero-return performance observations.
+```text
+src/personal_finance_etl/domain/investments/performance/returns.py
+src/personal_finance_etl/domain/investments/performance/xirr.py
+src/personal_finance_etl/domain/investments/performance/attribution.py
+src/personal_finance_etl/domain/investments/portfolio/analytics.py
+src/personal_finance_etl/domain/investments/portfolio/aggregation.py
+src/personal_finance_etl/domain/investments/portfolio/snapshots.py
+```
 
-## Instrument CAGR
+Application-level post-processing lives under:
 
-Instrument CAGR uses quantity-weighted holding age across surviving lots and the FIFO portfolio average cost. Benchmark CAGR uses the corresponding benchmark shadow average cost. This is a state-based annualized measure and is distinct from money-weighted XIRR.
+```text
+src/personal_finance_etl/application/investments/aggregation_service.py
+```
 
-## Why CAGR and XIRR both exist
+The decomposition is meaningful:
 
-CAGR describes annualized change between a basis and terminal value. XIRR is money-weighted and incorporates irregular cashflow timing. With multiple purchases, sales, or reconciliation cashflows, the two answer different questions. Treating them as interchangeable would be mathematically tidy and financially wrong.
+- return solvers own return math;
+- snapshots own lot-level current state;
+- attribution owns realized/Tax-related interpretation;
+- portfolio analytics owns cross-date analytics such as drawdown;
+- aggregation reuses the same calculations at portfolio/group levels;
+- application code coordinates the sequence.
 
-## Typed XIRR contract
+## Measurement starts from the right question
+
+Different metrics answer different questions.
+
+| Metric | Question |
+| --- | --- |
+| absolute P&L | how many currency units did I gain/lose? |
+| CAGR | what annualized growth corresponds to start/end value over time? |
+| XIRR | what money-weighted return explains irregular dated cash flows? |
+| active return | how did I perform versus the shadow benchmark? |
+| FX impact | how much did currency translation change money-weighted return? |
+| max drawdown | how severe was the worst peak-to-trough decline? |
+| after-tax XIRR | what does return look like after estimated terminal Tax drag? |
+
+No single one can safely stand in for all the others.
+
+## CAGR has an explicit validity contract
+
+The implementation does not return a bare float unconditionally.
 
 ```python
+# src/personal_finance_etl/domain/investments/performance/returns.py
+
+if not math.isfinite(start_value) or not math.isfinite(end_value):
+    return CagrResult(
+        value=None,
+        status=CalculationStatus.INVALID_INPUT,
+        reason="Non-finite input values in CAGR calculation",
+    )
+if start_value <= 0:
+    return CagrResult(
+        value=None,
+        status=CalculationStatus.INVALID_INPUT,
+        reason=f"Start value must be positive, got {start_value}",
+    )
+```
+
+This matters because:
+
+```text
+0.0% valid CAGR
+```
+
+and:
+
+```text
+CAGR cannot be computed
+```
+
+are not the same financial statement.
+
+## CAGR formula
+
+For positive start/end values and positive holding duration:
+
+\[
+CAGR = \left(\frac{V_{end}}{V_{start}}\right)^{365/d} - 1
+\]
+
+where:
+
+- \(d\) is calendar days;
+- \(V_{start} > 0\);
+- \(V_{end} > 0\).
+
+The status model distinguishes:
+
+```text
+VALID
+INVALID_INPUT
+UNDEFINED
+COMPUTATION_ERROR
+```
+
+The exact vocabulary comes from the shared calculation contracts.
+
+## Why CAGR is useful but insufficient
+
+CAGR assumes a start value, end value, and duration.
+
+It does not naturally capture multiple contributions, withdrawals, dividends, or staged investments.
+
+That is where XIRR becomes the more appropriate money-weighted measure.
+
+## XIRR is a dated cash-flow equation
+
+The solver finds \(r\) such that:
+
+\[
+\sum_{i=0}^{n}\frac{C_i}{(1+r)^{(d_i-d_0)/365}} = 0
+\]
+
+with negative investment outflows and positive inflows/terminal value.
+
+The engine delegates numerical solving to `pyxirr`, but owns the validation semantics around it.
+
+## XIRR validity is explicit
+
+The pure solver rejects:
+
+- mismatched dates/amount counts;
+- fewer than two dated flows;
+- NaN/infinite/non-numeric cash flows;
+- missing/invalid dates;
+- all-positive flows;
+- all-negative flows.
+
+```python
+has_negative = any(a < 0 for a in amounts)
+has_positive = any(a > 0 for a in amounts)
 if not has_negative or not has_positive:
     return XirrResult(None, "INVALID_INPUT", "Cashflows must have both outflows and inflows")
-...
-result = xirr(dates, amounts)
-if result is None:
-    return XirrResult(None, "UNDEFINED", "Solver returned None")
-...
-return XirrResult(value, "VALID")
 ```
 
-The engine returns a typed `XirrResult`, not a bare float. Statuses include `VALID`, `INVALID_INPUT`, `UNDEFINED`, and `NON_CONVERGENT`. A failed solver is therefore not silently converted to a genuine `0%` return.
+Again, the engine refuses to turn “not a valid XIRR problem” into `0.0%`.
 
-## XIRR cashflow model
+## Solver outcomes remain typed
 
-```mermaid
-flowchart TD
-    BUY[Purchases / capital outflows] --> CF[Cashflow series]
-    SALE[Sales / realized inflows] --> CF
-    RECON[Zero-value reconciliation state events] --> CF
-    CF --> TERM[Append terminal market value]
-    TERM --> XIRR[calculate_xirr]
-    XIRR --> STATUS[Value + diagnostic status]
+Possible states include:
+
+```text
+VALID
+INVALID_INPUT
+UNDEFINED
+NON_CONVERGENT
 ```
+
+That status is financial metadata.
+
+A non-convergent return is not an investment with zero return.
+
+## Portfolio XIRR adds terminal state
+
+For each evaluation date, portfolio XIRR combines all cash flows observed up to that date with the current terminal value.
+
+Conceptually:
+
+```text
+historical dated cashflows
+    +
+terminal mark-to-market value at date t
+    ↓
+XIRR as of t
+```
+
+The calculator does this repeatedly across the analytical date series, producing a running performance history.
+
+## Cashflow normalization is strict
+
+Portfolio cash flows are normalized to real `date` objects once.
+
+Invalid/missing dates raise an error rather than being silently skipped into a misleading return series.
+
+This is a good example of the broader project rule:
+
+> **if a field is required to establish financial chronology, malformed populated evidence is an error, not a suggestion.**
+
+## Invalid amounts remain invalid through XIRR
+
+When a required amount is not numeric, the portfolio calculator stores `NaN` into the solver vector so the pure XIRR contract returns diagnostic null.
+
+It deliberately does not coerce malformed evidence to zero.
+
+That preserves the difference between:
+
+```text
+no economic cashflow
+```
+
+and:
+
+```text
+cashflow evidence is invalid
+```
+
+## The terminal-value family
+
+Portfolio performance can be computed from multiple terminal perspectives:
+
+```text
+val
+shadow_val
+after_tax_val
+val_local
+shadow_val_local
+```
+
+That produces multiple related but distinct return series.
 
 ## Portfolio XIRR
 
-`PortfolioXIRRCalculator` incrementally accumulates dated cashflows and appends each as-of-date terminal value. It calculates portfolio, after-tax, benchmark, local-currency, and benchmark-local XIRRs from parallel cashflow series.
+Uses reporting/base-currency cash flows and current portfolio value.
 
-## Invalid evidence propagation
+## Benchmark XIRR
 
-```python
-amount = _numeric_value(cf.get("amount"))
-...
-# Preserve invalid/missing evidence as NaN so XIRR returns a diagnostic null.
-port_amounts.append(amount if amount is not None else float("nan"))
-```
+Uses benchmark-shadow cash flows and shadow terminal value.
 
-This is an important reliability choice. Missing or invalid cashflow evidence is deliberately allowed to poison the calculation into a diagnostic null rather than being replaced with zero and quietly changing the economics.
+This represents the money-weighted counterfactual return from deploying equivalent capital into the benchmark.
 
-## After-tax XIRR
+## Active return
 
-The ISIN processor computes a terminal value after deducting indicative tax-if-sold from active lots. That terminal value feeds a separate XIRR. It is an analytical after-tax scenario, not a statutory filing calculation. The tax assumptions come from macro rules and current holding classification.
+At the portfolio level:
 
-## Benchmark comparison
+\[
+ActiveReturn = XIRR_{portfolio} - XIRR_{benchmark}
+\]
 
-Each lot maintains benchmark shadow state. The analytics layer computes benchmark CAGR and XIRR over economically aligned cashflows, then derives active return where both portfolio and benchmark metrics are valid.
+The code only computes this difference when both values exist.
 
-$$ActiveReturn = XIRR_{portfolio} - XIRR_{benchmark}$$
+A missing benchmark return does not become zero alpha.
 
-Local-currency active return is calculated separately when local benchmark evidence exists.
+## Local XIRR
+
+For foreign-currency assets, the engine can compute money-weighted return in local instrument currency.
+
+This removes reporting-currency translation from the return perspective.
 
 ## FX XIRR impact
 
-Portfolio XIRR is calculated in reporting currency and local currency. Where both are valid:
+Conceptually:
 
-$$FX\ XIRR\ Impact = XIRR_{reporting} - XIRR_{local}$$
+\[
+FXImpact = XIRR_{base} - XIRR_{local}
+\]
 
-This is a money-weighted attribution view. It complements, rather than replaces, the P&L attribution described in [Multi-Currency and FX](multi-currency-and-fx.md).
+This is not a pure algebraic decomposition of every path interaction, but it is an intuitive money-weighted diagnostic of reporting-currency effect.
 
-## Unrealized gains and losses
+The deeper currency semantics are specified in [Multi-Currency & FX](multi-currency-and-fx.md).
 
-At snapshot time, each lot computes reporting-currency P&L from current market price and acquisition basis. Positive and negative amounts are split into unrealized gain/loss fields and further classified into LTCG/STCG buckets according to current holding status.
+## After-tax XIRR
 
-## Tax-if-sold exposure
+The engine can replace the ordinary terminal value with an estimated after-tax terminal value.
 
-The snapshot resolves applicable LTCG/STCG rates from macro parameters. Positive unrealized gains produce indicative tax-if-sold. Eligible Indian listed-equity LTCG can consume remaining exemption before tax is estimated. Foreign equity and other asset classes do not inherit that exemption by accident.
+That produces:
 
-## Maximum drawdown
-
-The Quant pipeline maintains price/value history and exposes `Max_Drawdown` as a downside-risk measure. Drawdown is conceptually the decline from a prior running peak:
-
-$$DD_t = \frac{V_t}{\max_{u\le t}V_u}-1$$
-
-The reported maximum drawdown is the most negative observed drawdown over the evaluated history. It is path-dependent, unlike terminal return.
-
-## Lot alpha and outperforming-lot ratio
-
-Lot alpha is implemented as lot CAGR minus benchmark lot CAGR. The snapshot builder counts lots with positive alpha and assigns an `Outperforming_Lot_Ratio` across the instrument snapshot. This is a simple interpretability measure, not a statistical alpha regression.
-
-## Portfolio and group aggregation
-
-Post-processing aggregates analytics at portfolio and arbitrary group levels such as class/subtype. Critically, it does not take the first lot XIRR and call it portfolio XIRR. Group/portfolio XIRR is recalculated from grouped cashflows and terminal values using the same XIRR calculator.
-
-## Why XIRR is recomputed at group level
-
-Money-weighted returns are not additive and generally cannot be averaged across lots. The postprocessor therefore reconstructs the relevant grouped cashflow stream. This avoids a deceptively easy but financially invalid aggregation shortcut.
-
-## Weights and contribution
-
-Portfolio weights are derived from current close values at the relevant aggregation level. Contribution-style measures can then relate return/P&L to economic exposure. Weighting is performed after instrument analytics so that individual lot state remains available for drill-through.
-
-## Status and null semantics
-
-A missing metric is not automatically zero. XIRR has explicit diagnostic status; active return requires both portfolio and benchmark returns; FX impact requires both reporting and local XIRR; benchmark measures require benchmark evidence. The model uses nullability to represent unavailable financial meaning rather than cosmetically filling dashboards.
-
-## Risk boundaries
-
-The engine contains concrete risk/diagnostic measures such as drawdown, benchmark lagging, tax exposure, sequence of lot performance, and currency attribution. Documentation should not resurrect retired generic ratios merely because they sound quant-y. If a metric is not implemented, the docs do not get to cosplay it.
-
-## Output hierarchy
-
-```mermaid
-flowchart TD
-    LOT[Lot snapshot] --> ISIN[Instrument analytics]
-    ISIN --> SUB[Subtype / class / sector / geography groups]
-    ISIN --> PORT[Portfolio]
-    PORT --> GOLD[Gold presentation]
-    LOT --> SILVER[f_Investment_Analytics_Lot]
-    ISIN --> GOLD
-    SUB --> GOLD
+```text
+Portfolio_After_Tax_XIRR
 ```
 
-## Failure behavior
+The result is an analytical perspective, not statutory Tax liability.
 
-Invalid XIRR inputs produce diagnostic statuses. Invalid FX can block foreign-currency processing before publication. Missing benchmark evidence leaves benchmark-dependent metrics unavailable rather than synthesizing a benchmark. Invariant violations such as a missing `Lot_ID` raise rather than publishing anonymous lot analytics.
+Its quality depends on the Tax-if-sold estimates embedded in lot snapshots.
 
-## Guarantees and limitations
+## Lot snapshots are the bridge from state to analytics
 
-The analytics layer guarantees implementation-consistent calculations from canonical evidence, explicit null/status behavior, lot-level drill-through, and recomputed money-weighted returns at aggregation levels.
+`SnapshotGenerator` turns open lot state into dated analytical records.
 
-It does not guarantee future investment performance, statistical significance of alpha-like measures, statutory after-tax outcomes, or that every metric is meaningful for every instrument/date.
+The snapshot includes dimensions such as:
 
-## Source map
-
-Primary implementation authorities:
-
-- `backend/engines/analytics/core/math.py` — CAGR/XIRR primitives.
-- `pipeline/processor/isin_processor.py` — instrument analytics and cashflows.
-- `pipeline/processor/snapshot.py` — lot snapshot metrics.
-- `pipeline/postprocessor/xirr.py` — portfolio XIRR.
-- `pipeline/postprocessor/coordinator.py` — aggregation coordination.
-- `pipeline/postprocessor/group_processor.py` — grouped metrics.
-- `pipeline/postprocessor/weights.py`, `gains.py`, `analytics.py` — post-processing measures.
-
-## Measurement hierarchy
-
-Performance exists at several grains, and each grain answers a different question.
-
-```mermaid
-flowchart TD
-    L[Lot] --> I[Instrument]
-    I --> G[Class / subtype / sector / geography]
-    I --> P[Portfolio]
-    L --> LR[Lot return / CAGR / tax exposure]
-    I --> IX[Instrument XIRR / drawdown]
-    G --> GX[Recomputed group XIRR]
-    P --> PX[Portfolio XIRR / benchmark / weights]
+```text
+acquisition date
+holding age
+holding type
+current quantity
+cost basis
+current value
+unrealized gain/loss
+Tax-if-sold attributes
+benchmark attributes
+FX attribution
 ```
 
-The system preserves lot-level facts before aggregation so higher-level outputs remain explainable.
-
-## Snapshot grain
-
-`f_Investment_Analytics_Lot` is fundamentally a date × instrument × lot analytical fact. A surviving acquisition lot can therefore appear across many closing dates. This is a state-over-time table, not a transaction ledger.
-
-The grain allows a single acquisition lot to accumulate age, cross an LTCG threshold, change market value, change benchmark comparison, and change FX attribution without losing its identity.
+The lot remains the natural grain for many investment analytics because acquisition-specific meaning has not yet been averaged away.
 
 ## Weighted holding age
 
-Instrument CAGR uses quantity-weighted holding duration across active lots. This differs from simply using the oldest acquisition date or average calendar date. The weight reflects how much current position each lot contributes.
+At aggregated levels, holding age should respect economic weight rather than row count.
 
-## XIRR validity model
+A one-unit recent lot should not influence portfolio age as much as a large old position merely because each occupies one row.
 
-`calculate_xirr()` validates:
+Weighting should follow the intended measure, commonly current value or another explicit economic basis.
 
-- equal date and amount counts;
-- at least two cashflows;
-- finite numeric amounts;
-- valid dates;
-- at least one negative and one positive cashflow;
-- finite solver output.
+## Unrealized gain/loss
 
-The result carries both value and status. That lets presentation distinguish “not computable” from “computed return is exactly zero.”
+For an open lot:
 
-## XIRR status state machine
+\[
+UnrealizedPnL = V_{current} - B_{open}
+\]
 
-```mermaid
-stateDiagram-v2
-    [*] --> Validate
-    Validate --> INVALID_INPUT: malformed / one-sign / non-finite
-    Validate --> Solve: valid cashflow series
-    Solve --> VALID: finite result
-    Solve --> UNDEFINED: None / non-finite result
-    Solve --> NON_CONVERGENT: convergence failure
-```
+The engine retains Tax/holding classifications so unrealized state can be split into relevant buckets rather than one undifferentiated number.
 
-## Terminal-value construction
+## Tax-if-sold exposure
 
-For an as-of date, money-weighted return appends current terminal value to historical cashflows. Portfolio calculation repeats this for each closing date, producing a time series of XIRR rather than one timeless number.
+Open lots can carry an estimated Tax exposure based on current unrealized gains and applicable macro rates.
 
-The same pattern is used for:
+This supports after-tax wealth/performance analysis.
 
-- portfolio terminal value;
-- after-tax terminal value;
-- benchmark shadow terminal value;
-- local-currency terminal value;
-- benchmark local terminal value.
-
-## After-tax terminal value mechanics
-
-For each active lot, the engine estimates current tax-if-sold based on holding classification and applicable macro rates. The after-tax terminal value is current value less those indicative taxes. It then uses the same historical cashflows with this alternative terminal value to compute after-tax XIRR.
-
-This is scenario analytics. It is not a tax return calculation.
+It remains an **estimate under configured rules**, not a filing result.
 
 ## LTCG transition analytics
 
-Each lot snapshot records age, holding type, threshold days, and `Days_To_LTCG`. The analytics layer can therefore show not only current tax classification but proximity to a classification boundary.
+The snapshot layer can expose:
 
-That is particularly useful for planning because tax exposure is a state transition, not merely a static label.
+```text
+Holding_Type
+Days_To_LTCG
+```
 
-## Unrealized tax buckets
+This lets the application identify positions approaching a long-term holding threshold.
 
-Positive and negative P&L are separated into:
+The metric is not only descriptive. It becomes input to harvesting/step-up recommendations.
 
-- unrealized LTCG;
-- unrealized STCG;
-- unrealized LTCL;
-- unrealized STCL;
-- total unrealized gain;
-- total unrealized loss.
+## Harvesting recommendations are rule-driven
 
-Losses are not netted away prematurely because later tax methodology can require classification-aware treatment.
+The recommendation calculator can produce states such as:
 
-## Eligible LTCG exemption behavior
+```text
+HARVEST_LOSS
+HARVEST_LTCG_EXEMPT
+WAIT_FOR_LTCG
+HOLD
+```
 
-The snapshot implementation deducts remaining eligible LTCG exemption before calculating tax-if-sold for qualifying Indian listed equity. The exemption is not applied universally to foreign equity or unrelated asset classes.
+It considers:
 
-This is exactly the sort of rule that should live in implementation-backed documentation rather than a generic sentence saying “tax aware.”
+- unrealized loss;
+- holding type;
+- configured wait threshold;
+- asset/Tax subtype exclusions;
+- exemption context.
+
+This is planning guidance, not statutory Tax advice.
+
+## Maximum drawdown
+
+Portfolio drawdown is calculated from a return path rather than simply comparing first/last values.
+
+The implementation builds a cumulative return series and running peak.
+
+Conceptually:
+
+\[
+DD_t = \frac{C_t - Peak_t}{Peak_t}
+\]
+
+with:
+
+\[
+Peak_t = \max_{s \le t} C_s
+\]
+
+Maximum drawdown is the minimum/most negative drawdown observed over the series.
+
+## Net injections matter for daily-return construction
+
+A portfolio value increase caused by fresh capital is not investment performance.
+
+The analytics code adjusts daily return for net injection before compounding.
+
+That prevents contributions from being mistaken for alpha.
+
+## Group-level performance reuses portfolio logic
+
+`GroupProcessor` deliberately calls the same `PortfolioXIRRCalculator` and analytics calculator for arbitrary groups.
+
+```python
+# src/personal_finance_etl/domain/investments/portfolio/aggregation.py
+
+df_group = self.xirr_calc.calculate(unique_dates, cashflows, terminals)
+df_group = self.analytics_calc.calculate(df_group, unique_dates, terminals, cashflows)
+```
+
+This is an important design choice.
+
+Asset-class or geography return is not calculated with a cheaper approximation merely because it is a subgroup.
+
+## Why XIRR is recomputed at group level
+
+Money-weighted return is not safely additive or averageable.
+
+In general:
+
+\[
+XIRR(A \cup B) \ne w_A XIRR(A) + w_B XIRR(B)
+\]
+
+The correct group result requires that group's own cash flows and terminal value.
+
+The engine therefore recomputes rather than averaging instrument returns.
+
+## Portfolio weights
+
+Instrument-level portfolio weight:
+
+\[
+w_{instrument} = \frac{V_{instrument}}{V_{portfolio}}
+\]
+
+Lot-level weight:
+
+\[
+w_{lot} = \frac{V_{lot}}{V_{portfolio}}
+\]
+
+These weights support contribution/context, but they should not be used to manufacture group XIRR by weighted average.
 
 ## Benchmark shadow economics
 
-Benchmark comparison is constructed from shadow quantities/cashflows tied to actual capital timing. This avoids comparing a money-weighted portfolio return against a benchmark return that assumes one lump-sum investment on an unrelated date.
+Benchmark state follows the capital deployment history of the actual investment.
+
+At acquisition, equivalent benchmark units are created.
+
+At disposal/reconciliation, corresponding shadow state is consumed or adjusted.
+
+This creates a counterfactual that is economically aligned with the portfolio's timing.
 
 ## Active return semantics
 
-Active return is only emitted when both portfolio and benchmark XIRRs are available. Missing benchmark evidence produces missing active return rather than treating the benchmark as zero.
+The benchmark is not a generic market index series pasted beside portfolio value.
 
-The same principle applies to local active return.
+It represents:
 
-## Drawdown interpretation
+> what would have happened if equivalent dated capital flows had been deployed into the benchmark under the shadow-state rules.
 
-Maximum drawdown captures path risk. Two investments can have identical terminal CAGR and radically different drawdown histories. The metric therefore complements return rather than ranking as “another return number.”
+That is why benchmark XIRR is meaningful as a money-weighted comparator.
 
-## Lagging benchmark flag
+## Lot alpha
 
-`Is_Lagging_Benchmark` is computed only when both instrument and benchmark XIRRs are valid. It is a comparative diagnostic, not a prediction or recommendation.
+At lot level, performance can be compared against its corresponding benchmark state.
 
-## Lot alpha semantics
+This can support metrics such as:
 
-`Lot_Alpha = Lot_CAGR - Lot_BM_CAGR` is intentionally simple. It should not be described as CAPM alpha, factor alpha, or risk-adjusted excess return. The name represents CAGR spread against the lot-aligned benchmark shadow state.
-
-## Outperforming-lot ratio
-
-The snapshot builder counts lots whose lot alpha is positive and divides by active lot count. The resulting ratio describes breadth of outperformance across lots, which can differ from aggregate portfolio outperformance.
-
-## Money-weighted aggregation rule
-
-```mermaid
-flowchart LR
-    L1[Lot / instrument cashflows] --> MERGE[Merge dated cashflows]
-    L2[Additional cashflows] --> MERGE
-    TERM[Group terminal value] --> CALC[Recompute XIRR]
-    MERGE --> CALC
-    CALC --> GROUP[Group money-weighted return]
+```text
+lot alpha
+outperforming-lot ratio
 ```
 
-XIRR is recomputed, not averaged. This is a hard financial correctness rule.
+Those diagnostics answer distributional questions that portfolio XIRR alone cannot.
 
-## Group processor
+A portfolio can outperform overall while many lots underperform, or vice versa depending on capital weights and timing.
 
-`group_processor.py` applies the same portfolio XIRR calculator at arbitrary grouping levels. That keeps class/subtype analytics consistent with portfolio methodology instead of introducing a second formula for convenience.
+## Risk boundaries
 
-## Postprocessor coordinator
+The investment engine intentionally does not publish every academic risk metric available in finance textbooks.
 
-The coordinator joins instrument analytics with portfolio XIRR, gain analytics, group outputs, and weights. It also aggregates fields such as `Forex_PnL` and derives contribution-style ratios where denominators are meaningful.
+Risk measures are useful when they are interpretable for the actual data and decision context.
 
-## Weight semantics
+The current model emphasizes metrics such as drawdown and benchmark-relative outcomes that fit the reconstructed daily state.
 
-Weights describe current economic exposure based on close value. They are not transaction allocation percentages and should not be confused with target portfolio weights from configuration.
-
-## Local versus reporting performance
-
-For foreign assets, the analytics model exposes both local and reporting-currency CAGR/XIRR. The difference is economically meaningful because security selection and currency movement can push in opposite directions.
-
-## Risk and uncertainty matrix
-
-| Measure | What it captures | What it does not capture |
-|---|---|---|
-| CAGR | annualized state change | irregular cashflow timing |
-| XIRR | money-weighted return | statistical uncertainty |
-| Max drawdown | peak-to-trough path loss | probability of recurrence |
-| Active return | portfolio vs benchmark spread | factor attribution |
-| Tax-if-sold | indicative current exposure | final statutory liability |
-| FX impact | currency contribution | hedging strategy |
-| Outperforming-lot ratio | breadth across lots | magnitude of outperformance |
+More metrics do not automatically mean more insight. Sometimes they mean more decimals competing for emotional authority.
 
 ## Null semantics are financial semantics
 
-A null benchmark return means benchmark evidence is unavailable or computation is invalid. A zero benchmark return means a valid calculation produced zero. Those are different facts. The same distinction applies to XIRR, FX impact, active return, and local metrics.
+The performance layer distinguishes:
 
-## Publication invariants
+```text
+zero
+missing
+invalid
+undefined
+non-convergent
+```
 
-- lot analytics require deterministic `Lot_ID`;
-- XIRR failure remains diagnostic rather than becoming zero;
-- benchmark-dependent metrics require benchmark evidence;
-- FX-dependent metrics require valid FX evidence;
-- group XIRR is recomputed from grouped cashflows;
-- tax exposure remains indicative;
-- retired metrics are not documented as if they still exist.
+These states affect interpretation.
+
+Examples:
+
+- valid XIRR of `0.0` means flat money-weighted return;
+- `None` with invalid status means the return problem itself was invalid;
+- undefined CAGR may mean zero/negative duration;
+- missing benchmark result means active return is unavailable.
+
+Do not fill all of these with zero for chart convenience.
+
+## Risk and uncertainty matrix
+
+| Condition | Correct interpretation |
+| --- | --- |
+| stale but allowed price | valuation uses carried recent observation |
+| price outside staleness policy | valuation invalid/unavailable |
+| reconciliation-origin lot | acquisition certainty reduced |
+| invalid XIRR cash flows | XIRR unavailable, not 0% |
+| benchmark unavailable | active return unavailable |
+| Tax-if-sold estimate | analytical estimate, not statutory liability |
+| foreign asset | local and reporting returns may diverge |
+
+## Publication hierarchy
+
+Performance can exist at multiple grains:
+
+```text
+lot
+instrument
+asset class/subtype
+sector/industry
+geography/currency
+whole portfolio
+```
+
+The correct aggregation rule depends on the metric.
+
+### Additive values
+
+Examples:
+
+```text
+market value
+cost basis
+P&L
+```
+
+can often be summed across a compatible grain.
+
+### Non-additive values
+
+Examples:
+
+```text
+XIRR
+CAGR
+max drawdown
+ratios
+```
+
+must be recomputed or otherwise handled according to their own semantics.
 
 ## Analytical reproducibility
 
-Given the same canonical transactions, market/benchmark/FX evidence, macro rules, and implementation, deterministic Quant metrics rebuild consistently. This is separate from stochastic FIRE replay, which has seed/provenance semantics described elsewhere.
+Given the same:
+
+- canonical cash flows;
+- terminal states;
+- benchmark state;
+- FX state;
+- financial rules;
+- evaluation dates;
+
+the deterministic performance outputs should reproduce.
+
+Stochastic FIRE simulations are a different reproducibility contract and are documented separately.
+
+## Failure behavior
+
+The performance layer prefers visible invalidity over plausible fabrication.
+
+That means:
+
+- bad cash-flow dates can raise;
+- invalid numerical inputs produce typed invalid results;
+- solver non-convergence remains non-convergence;
+- unavailable terminal value produces unavailable return;
+- missing benchmark prevents active-return calculation.
 
 ## Worked interpretation example
 
-A foreign equity can show:
+Suppose a foreign-currency instrument shows:
 
 ```text
-Local CAGR            +12%
-Reporting CAGR         +7%
-Benchmark local CAGR   +9%
-Local active spread    +3%
-FX effect              negative
+Local XIRR = 10%
+Base-currency XIRR = 15%
+Benchmark XIRR = 12%
+After-tax XIRR = 13%
+Max drawdown = -18%
 ```
 
-The correct interpretation is not “the stock returned 7%.” The security outperformed locally while currency translation reduced the reporting-currency outcome. The data model preserves enough dimensions to say that explicitly.
+A reasonable interpretation is:
 
-## Design trade-off: rich lot fact
+- the asset itself earned approximately 10% money-weighted in local currency;
+- reporting-currency movement improved the observed base-currency return;
+- the portfolio beat its benchmark counterfactual by about 3 percentage points on the same return perspective;
+- estimated Tax drag reduced terminal money-weighted return;
+- path risk included an 18% peak-to-trough drawdown.
 
-The lot snapshot is wide. The alternative would be multiple narrowly normalized analytical facts requiring repeated joins for every portfolio view. The implementation chooses a rich analytical fact because lot-level finance questions frequently combine basis, holding age, benchmark, tax, and FX semantics.
+That is much richer than “return = 15%.”
+
+## Design trade-off: rich lot fact instead of early aggregation
+
+Keeping lot-level snapshots produces more data.
+
+It also preserves:
+
+- acquisition-specific holding period;
+- basis;
+- Tax status;
+- benchmark state;
+- FX state;
+- reconciliation provenance.
+
+Those are exactly the attributes later analytics need.
 
 ## Design trade-off: fail visible instead of fill zero
 
-Typed XIRR status and null propagation can make dashboards slightly less tidy. That is preferable to publishing plausible but false zeros. Financial analytics should optimize for meaning before cosmetics.
+Charts are easier when every metric is numeric.
+
+Financial interpretation is safer when invalid metrics stay invalid.
+
+The engine chooses the second.
+
+## Handoff: performance still needs a currency lens
+
+At this point the engine can calculate money-weighted returns, benchmark-relative outcomes, drawdown, Tax drag, and group metrics.
+
+For foreign assets, one question remains unavoidable:
+
+> **How much of the result came from the asset, and how much came from the currency translation?**
+
+That is the job of [Multi-Currency & FX](multi-currency-and-fx.md).
 
 ## Related specifications
 
-- [Investment Data Model](investment-data-model.md)
 - [Investment Market Reconstruction](investment-market-reconstruction.md)
-- [FIFO and Realized Events](fifo-and-realized-events.md)
+- [FIFO & Realized Events](fifo-and-realized-events.md)
 - [Investment Reconciliation](investment-reconciliation.md)
-- [Multi-Currency and FX](multi-currency-and-fx.md)
-- [Metrics and Methodology](metrics-and-methodology.md)
-- [Silver Data Contracts](../reference/silver-data-contracts.md)
+- [Multi-Currency & FX](multi-currency-and-fx.md)
+- [Metrics & Methodology](metrics-and-methodology.md)
+- [Tax Methodology](tax-methodology.md)

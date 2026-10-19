@@ -1,155 +1,327 @@
-# FIFO and Realized Events
+# FIFO & Realized Events
 
-Personal Finance ETL treats acquisition lots as reconstructed financial state with explicit provenance. This specification traces the canonical FIFO state machine from purchase identity through lot mutation and realized disposal events, including holding-period classification, benchmark shadow state, foreign-currency attribution, indicative tax, and the boundaries the algorithm deliberately does not cross.
+A sale is one row in a broker statement.
 
-## Scope and authority
+Economically, it can be several events at once.
 
-`FIFOPortfolio` in `backend/engines/analytics/core/fifo.py` is the canonical acquisition-lot state machine for one instrument. It consumes canonical purchase and sale evidence, maintains an ordered deque of active `TaxLot` objects, emits realized disposal events, and exposes the lot state used by daily analytics snapshots.
+A single disposal may consume:
 
-This is deliberately different from the transaction-derived US market reconstruction described in [Investment Market Reconstruction](investment-market-reconstruction.md). Market reconstruction answers *what historical position should be valued on a date?* FIFO answers *which acquisition lots remain, which lots were consumed by a disposal, and what financial consequences follow?*
+- part of one acquisition lot;
+- all of another;
+- a reconciliation-origin lot;
+- acquisition basis in one currency;
+- sale proceeds in another reporting perspective;
+- different holding-period classifications across consumed lots;
+- different benchmark shadow quantities;
+- different Tax outcomes.
 
-The distinction matters because reconstructed market state is derived valuation evidence; FIFO state is the canonical basis for realized investment events. Collapsing the two would make a convenient diagram and a terrible audit trail.
+If all of that is collapsed back into one aggregate row too early, the engine loses the ability to explain what actually happened.
 
-## Execution position inside the Quant Engine
+This specification describes the stateful FIFO engine that preserves that lineage.
 
 ```mermaid
 flowchart LR
-    P[Canonical purchases] --> E[ISIN processor]
-    S[Canonical sales] --> E
-    M[Market observations] --> E
-    B[Benchmark evidence] --> E
-    FX[FX provider] --> E
-    E --> F[FIFOPortfolio]
-    F --> L[Active TaxLot deque]
-    F --> R[Realized events]
-    L --> SNAP[Daily lot snapshots]
-    R --> TAX[Tax Engine]
-    SNAP --> POST[Post-processing and Gold]
+    BUY["Canonical purchases"]
+    SALE["Canonical sales"]
+    FIFO["FIFOPortfolio"]
+    LOTS["Open TaxLot queue"]
+    REAL["Realized events"]
+    TERM["Remaining open state"]
+
+    BUY --> FIFO
+    SALE --> FIFO
+    FIFO --> LOTS
+    FIFO --> REAL
+    FIFO --> TERM
 ```
 
-`InvestmentQuantEngine` creates per-ISIN workloads. The ISIN processor orders transactions and market dates, applies purchases and sales to `FIFOPortfolio`, reconciles state when broker observations are available, and asks the snapshot builder to materialize the surviving lots.
+The engine is deliberately replay-oriented: open lots are reconstructed from canonical evidence rather than persisted as mutable operational state that must be continuously patched.
 
-## The in-memory lot state
+## Implementation authority
 
-The core state is intentionally small: an ordered `deque[TaxLot]`. FIFO correctness comes from preserving acquisition order, not from maintaining a second relational mini-database inside the engine.
+The primary implementation lives in:
 
-A `TaxLot` carries acquisition date, quantity, INR/reporting-currency price, local price, acquisition FX, currency, benchmark shadow quantity and price, purchase identity, deterministic lot identity, and `lot_source_type`. The last field is especially important: an observed purchase and a reconciliation-created synthetic lot can participate in the same future FIFO mechanics without pretending to have the same provenance.
+```text
+src/personal_finance_etl/domain/investments/lots/fifo.py
+src/personal_finance_etl/domain/investments/lots/models.py
+src/personal_finance_etl/domain/investments/lots/ordering.py
+```
 
-## Creating deterministic lots
+The public state owner is `FIFOPortfolio`.
+
+Its responsibilities include:
+
+- maintaining open acquisition lots;
+- deterministic lot identity;
+- FIFO disposal;
+- realized gain/loss decomposition;
+- foreign-currency attribution;
+- holding-period classification;
+- disposal-time Tax-rate lookup;
+- benchmark shadow consumption;
+- quantity/basis reconciliation mutation.
+
+It does not own:
+
+- inter-process scheduling;
+- database persistence;
+- presentation;
+- external market/FX acquisition.
+
+## Why this algorithm is stateful
+
+A disposal cannot be calculated from the sale row alone.
+
+It depends on the ordered history of prior acquisitions and prior disposals.
+
+The core state is:
 
 ```python
-if purchase_id:
-    lot_fields = {
-        "ISIN": self.isin,
-        "Purchase_ID": purchase_id,
-        "Quantity": qty,
-        "Date": buy_date,
-    }
-    lot_id = generate_deterministic_id("LOT", lot_fields)
-elif reconciliation_group_id is not None:
-    lot_fields = {
-        "ISIN": self.isin,
-        "Event": lot_source_type,
-        "Recon_Group": reconciliation_group_id,
-    }
-    lot_id = generate_deterministic_id("LOT", lot_fields)
+class FIFOPortfolio:
+    """Manages the FIFO tracking of a single instrument's lots."""
+
+    def __init__(self, tax_type, tax_subtype, fy_table, default_currency_id, isin):
+        self._active_lots: deque[TaxLot] = deque()
+        self.tax_type = tax_type
+        self.tax_subtype = tax_subtype
+        self.fy_table = fy_table
+        self.default_currency_id = default_currency_id
+        self.isin = isin
 ```
 
-Normal purchase lots inherit continuity from `Purchase_ID`. Reconciliation lots instead derive identity from a stable reconciliation operation identity. This avoids re-hashing raw floating-point quantities when the reconciliation group has already canonicalized the adjustment.
+That queue is the economic state machine.
 
-## Lot identity lineage
+A pure vectorized expression is not the right abstraction here because each sale changes the state seen by the next sale.
 
-```mermaid
-flowchart TD
-    TX[Canonical purchase] --> PID[Purchase_ID]
-    PID --> LOTID[LOT identity]
-    LOTID --> LOT[TaxLot]
-    LOT --> SNAP[Daily lot snapshots]
-    SALE[Canonical sale] --> SID[Sale_ID]
-    SID --> REAL[REALIZED identity]
-    LOTID --> REAL
-    REAL --> EVENT[Realized disposal event]
+## Canonical chronology comes first
+
+Purchases and sales are sorted through explicit ordering helpers before mutation.
+
+Same-day event order is therefore deterministic.
+
+```text
+source order
+    ≠
+financial order
 ```
 
-The lineage is compositional. A realized event does not need row order, a mutable sequence, or an autoincrement key to identify the economic event. Its identity is derived from the canonical sale and the consumed lot.
+The engine should not depend on whichever row happened to appear first in a spreadsheet export.
 
-## FIFO sale algorithm
+## Lot creation
+
+A purchase creates a `TaxLot` with:
+
+- acquisition date;
+- quantity;
+- reporting/base price;
+- local-currency price;
+- acquisition FX;
+- benchmark shadow state;
+- purchase lineage;
+- deterministic lot identity;
+- lot source type.
+
+The lot is not merely `(qty, price)`.
+
+It is a compact unit of economic lineage.
+
+## Deterministic lot identity
+
+When a purchase ID exists, lot identity is derived from stable purchase lineage:
+
+```python
+lot_fields = {
+    "ISIN": self.isin,
+    "Purchase_ID": purchase_id,
+    "Quantity": qty,
+    "Date": buy_date,
+}
+lot_id = generate_deterministic_id("LOT", lot_fields)
+```
+
+For reconciliation-origin lots, the reconciliation group identity is used so harmless float representation differences do not perturb identity.
+
+That decision is subtle and important.
+
+A lot ID should represent the economic event, not the incidental binary formatting of `0.30000000000000004`.
+
+## Lot source type is part of meaning
+
+The lot records whether it came from:
+
+```text
+PURCHASE
+RECONCILIATION
+```
+
+That provenance changes downstream interpretation.
+
+A reconciliation-origin lot is not treated as equally certain acquisition evidence merely because it now occupies the same queue.
+
+## Benchmark shadow state begins at acquisition
+
+Each lot can carry:
+
+```text
+shadow_qty
+benchmark buy price
+benchmark local buy price
+```
+
+This creates a counterfactual economic state alongside the actual asset.
+
+The benchmark is not retrospectively attached at sale time. It begins with the acquisition event.
+
+That is how later active-return analysis can compare like-for-like capital deployment.
+
+## The FIFO sale algorithm
+
+A sale starts with requested disposal quantity `rem`.
+
+The engine repeatedly consumes from the oldest open lot:
 
 ```python
 while rem > 0 and self._active_lots:
     lot = self._active_lots[0]
     consumed = min(rem, lot.qty)
-    ...
-    if lot.qty <= rem + 1e-8:
-        rem -= lot.qty
-        self._active_lots.popleft()
-    else:
-        self._active_lots[0] = TaxLot(
-            date=lot.date,
-            qty=lot.qty - rem,
-            ...
-        )
-        rem = 0
 ```
 
-A disposal always starts at the oldest active lot. Full consumption removes that lot; partial consumption preserves the same `Lot_ID` and acquisition attributes while reducing quantity. The `1e-8` tolerance prevents harmless floating-point residue from creating phantom micro-lots.
-
-## Multi-lot disposals
+Then each consumed slice becomes its own realized event.
 
 ```mermaid
-sequenceDiagram
-    participant S as Sale Q
-    participant F as FIFOPortfolio
-    participant L1 as Oldest lot
-    participant L2 as Next lot
-    participant R as Realized events
-    S->>F: sell(date, Q, price, Sale_ID)
-    F->>L1: consume min(Q, lot.qty)
-    L1-->>R: REALIZED(Sale_ID, Lot_ID_1)
-    alt quantity remains
-        F->>L2: consume remainder
-        L2-->>R: REALIZED(Sale_ID, Lot_ID_2)
-    end
-    F-->>S: list of realized components
+flowchart TD
+    S["Sale quantity"]
+    L1["Oldest open lot"]
+    C["consume min(sale remaining, lot qty)"]
+    E["emit realized event"]
+    R{"sale quantity remains?"}
+    N["next oldest lot"]
+
+    S --> L1 --> C --> E --> R
+    R -->|yes| N --> C
+    R -->|no| END["sale complete"]
 ```
 
-One sale can therefore produce multiple realized-event rows. That is intentional. A single broker disposal can cross acquisition dates, holding classifications, currencies/bases, or reconciliation-origin lots. Aggregating those components too early would destroy provenance.
+## Multi-lot disposal is event decomposition
 
-## Holding-period classification
+Suppose a sale disposes 15 units while open lots are:
 
-For every consumed lot, `sell()` delegates classification to `FYMacroParametersTable.get_holding_type(tax_type, tax_subtype, acquisition_date, disposal_date)`. The FIFO container does not hard-code one universal LTCG threshold.
+```text
+Lot A: 10 units @ 100
+Lot B: 10 units @ 120
+```
 
-The applicable threshold is therefore a function of the financial-year macro table and the instrument tax classification. This makes holding status a rule-governed financial interpretation rather than a structural property of the lot.
+The engine does **not** emit one synthetic disposal with blended cost 110.
 
-## Realized gain and loss
+It emits:
 
-For a reporting-currency lot, realized gain/loss is:
+```text
+Event 1: consume 10 from Lot A
+Event 2: consume 5 from Lot B
+```
 
-$$G = (P_s - P_b) \times Q$$
+That preserves:
 
-where $P_s$ is disposal price, $P_b$ is lot acquisition price, and $Q$ is quantity consumed.
+- acquisition date;
+- holding period;
+- cost basis;
+- benchmark state;
+- FX basis;
+- lot provenance.
 
-The realized event also stores disposed cost basis and sale proceeds separately. A negative $G$ remains a realized loss; it is not clamped away. The `is_loss` flag makes that state explicit for downstream consumers.
+## Holding-period classification happens per consumed lot
+
+For each consumed slice, the engine asks the fiscal-year macro table for holding type:
+
+```python
+ht_sale = self.fy_table.get_holding_type(
+    self.tax_type, self.tax_subtype, lbd or sell_date, sell_date
+)
+```
+
+This means one broker sale can legitimately decompose into both LTCG and STCG realized events if it spans acquisitions with different holding durations.
+
+Aggregating first would destroy that distinction.
+
+## Realized gain/loss
+
+For base-currency assets:
+
+\[
+G = (P_s - P_b) \times Q_d
+\]
+
+where:
+
+- \(P_s\) is sale price;
+- \(P_b\) is acquisition price;
+- \(Q_d\) is disposed quantity.
+
+The event stores:
+
+```text
+Disposed_Cost_Basis
+Sale_Proceeds
+Realized_Gain_Loss
+```
+
+The gain/loss is therefore reproducible from the event itself.
+
+## Zero-cost reconciliation lots are deliberately special
+
+If a lot has zero cost basis, the engine does not manufacture a gain from uncertain acquisition evidence.
+
+```python
+if lot.price <= 0:
+    pnl = 0.0
+    asset_pnl_local = 0.0
+    asset_pnl = 0.0
+    forex_pnl = 0.0
+```
+
+That is conservative by design.
+
+The uncertainty remains visible through lot source provenance and later Tax-event handling.
+
+A zero-cost reconciliation lot is not “free shares” in the economic sense.
+
+It is a marker that the system had to repair quantity state without reliable acquisition-basis evidence.
 
 ## Foreign-currency realized decomposition
 
-For a foreign-currency lot, the engine keeps local-asset economics separate from FX translation. The implementation computes local asset P&L, translates that local asset P&L using disposal FX, and separately computes the FX movement on acquisition basis.
+For foreign-currency assets, the engine separates asset-price and FX effects.
 
-$$AssetPnL_{local} = (P_{s,local} - P_{b,local})Q$$
+Local asset P&L:
 
-$$AssetPnL_{INR} = AssetPnL_{local} \times FX_s$$
+\[
+G_{asset,local} = (P_{s,local} - P_{b,local}) \times Q_d
+\]
 
-$$FXPnL = P_{b,local}(FX_s-FX_b)Q$$
+Translated asset P&L at disposal FX:
 
-This is an attribution model, not an assertion that every rupee of total P&L can always be explained by two independently tradable legs. The purpose is to separate security movement from currency movement using the acquisition and disposal FX evidence retained by the lot.
+\[
+G_{asset,base} = G_{asset,local} \times FX_s
+\]
 
-## Realized-event contract
+FX component on acquisition basis:
 
-Each realized component includes `Realized_Event_ID`, `Sale_ID`, `Lot_ID`, `Purchase_ID`, ISIN, acquisition/disposal dates, financial year, disposed quantity, acquisition price, cost basis, sale price/proceeds, realized gain/loss, holding type, tax type/subtype, lot source, currency, asset/FX attribution, applied indicative rate, estimated tax, and benchmark shadow quantity sold.
+\[
+G_{FX} = P_{b,local} \times (FX_s - FX_b) \times Q_d
+\]
 
-The physical Silver schema is specified in [Silver Data Contracts](../reference/silver-data-contracts.md). This page owns the algorithm and financial semantics, not a second copy of the DDL.
+The realized event stores these separately:
+
+```text
+Asset_PnL_Local
+Asset_PnL
+Forex_PnL
+```
+
+This is intentionally more explicit than one opaque INR gain number.
 
 ## Realized-event identity
+
+Each consumed lot slice receives deterministic identity:
 
 ```python
 realized_event_id = generate_deterministic_id(
@@ -161,286 +333,403 @@ realized_event_id = generate_deterministic_id(
 )
 ```
 
-This identity makes a realized component stable across complete analytical rebuilds as long as the canonical sale and consumed lot identities remain stable. The identity protocol itself is specified in [Deterministic Identity and Replay](../architecture/deterministic-identity-and-replay.md).
+The pair `(Sale_ID, Lot_ID)` is the economic lineage.
 
-## Indicative tax at disposal
+This means replaying the same canonical transactions produces the same realized event identity.
 
-The FIFO engine resolves LTCG/STCG rates from the same macro table used by snapshot tax exposure. Positive realized gains receive an indicative estimate; losses produce zero estimated tax at this stage.
+## Why event grain matters
 
-$$EstimatedTax = max(0,G) \times r_{holding}$$
+The realized-event grain is approximately:
 
-This is not final statutory liability. The Tax Engine later converts realized evidence into canonical tax events and can mark reconciliation-origin evidence for review. Quant owns the economic realization; Tax owns tax-evidence normalization. Everybody gets one job. Nobody needs to become a surprise tax department.
+```text
+one sale × one consumed acquisition lot
+```
 
-## Benchmark shadow state
+not:
 
-Every lot can carry `shadow_qty`, benchmark acquisition price, and local benchmark acquisition price. When a sale consumes a lot, the corresponding benchmark shadow quantity is consumed proportionally. This preserves comparable benchmark capital through the same economic holding interval instead of comparing the portfolio against an unrelated benchmark snapshot.
+```text
+one broker sale
+```
 
-## Terminal state and average cost
+That grain is the reason the system can later answer:
 
-`get_closing_units()` and `get_terminal_value()` expose current quantity and valuation. `get_average_cost()` computes quantity-weighted cost across surviving lots. Benchmark equivalents use the shadow quantities and benchmark acquisition prices.
+- which acquisition generated this gain;
+- which holding period applied;
+- which Tax rate was relevant;
+- which benchmark quantity was consumed;
+- whether the lot came from purchase or reconciliation.
 
-These helpers are state views over the active deque. They do not alter provenance or collapse individual lots.
+## Disposal-time Tax-rate lookup
 
-## Zero-cost and reconciliation-origin lots
+The engine resolves the applicable macro Tax rate at disposal time:
 
-Quantity reconciliation can create zero-cost synthetic lots. `sell()` explicitly detects non-positive acquisition price and avoids manufacturing a gain from an unknown basis. The realized event still preserves `Lot_Source_Type`, allowing downstream Tax logic to treat reconciliation-derived evidence differently from ordinary purchase evidence.
+```python
+_ltcg_rate, _stcg_rate = self.fy_table.get_tax_rates(
+    self.tax_type, self.tax_subtype, lbd or sell_date, sell_date
+)
+_applied_rate = _ltcg_rate if ht_sale == "LTCG" else _stcg_rate
+_estimated_tax = max(0.0, pnl) * _applied_rate if pnl > 0 else 0.0
+```
 
-This is deliberately conservative. Unknown basis is not magically improved by multiplying it harder.
+This estimate is not the final statutory Tax liability.
+
+It is event-level financial evidence used by downstream Tax logic.
+
+Tax methodology later applies broader classification, exemption, residual-category, and `CHECK_REQUIRED` semantics.
+
+## Loss events remain events
+
+A negative realized result sets:
+
+```text
+is_loss = true
+Estimated_Tax = 0
+```
+
+The loss is preserved as economic evidence.
+
+It is not deleted because it produces no immediate estimated Tax.
+
+## Benchmark shadow consumption follows physical lot consumption
+
+The lot stores a benchmark shadow quantity representing what the same invested capital would have purchased in the benchmark.
+
+When a lot is fully disposed, the corresponding shadow quantity is consumed.
+
+When partially disposed, shadow quantity is reduced proportionally.
+
+This keeps actual and counterfactual capital histories aligned.
+
+## Full disposal mutation
+
+If the sale consumes the entire lot:
+
+```python
+if lot.qty <= rem + 1e-8:
+    rem -= lot.qty
+    self._active_lots.popleft()
+```
+
+The small tolerance protects against floating-point residue.
+
+The lot leaves open state completely.
+
+## Partial disposal mutation
+
+If only part of a lot is sold, the engine replaces the head lot with the remaining quantity while preserving identity and acquisition attributes.
+
+That is important:
+
+> a partial sale changes lot quantity, not lot identity.
+
+The acquisition event remains the same economic origin.
+
+## Worked example: partial disposal
+
+Open lot:
+
+```text
+Lot_ID = L1
+Acquired = 2024-01-10
+Qty = 10
+Price = 100
+```
+
+Sale:
+
+```text
+Qty = 4
+Price = 150
+```
+
+Realized event:
+
+```text
+Quantity_Disposed = 4
+Disposed_Cost_Basis = 400
+Sale_Proceeds = 600
+Realized_Gain_Loss = 200
+Lot_ID = L1
+```
+
+Remaining lot:
+
+```text
+Lot_ID = L1
+Qty = 6
+Price = 100
+```
+
+The lot's economic origin did not change merely because its open quantity did.
+
+## Worked example: cross-lot disposal
+
+Open state:
+
+```text
+L1: 3 @ 100
+L2: 5 @ 130
+L3: 4 @ 90
+```
+
+Sale:
+
+```text
+6 @ 150
+```
+
+Consumption:
+
+```text
+L1: 3 consumed
+L2: 3 consumed
+L3: untouched
+```
+
+Realized events:
+
+```text
+E1 = Sale × L1
+E2 = Sale × L2
+```
+
+Remaining:
+
+```text
+L2: 2 @ 130
+L3: 4 @ 90
+```
+
+That is why realized-event grain cannot be one row per sale.
 
 ## State-machine view
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Empty
-    Empty --> Open: buy
-    Open --> Open: buy additional lot
-    Open --> Open: partial sell
-    Open --> Open: reconcile quantity/cost
-    Open --> Empty: sell/reconcile removes all units
-    Empty --> Open: reconciliation add
-    Open --> [*]: terminal snapshot only observes state
+    [*] --> NoLots
+    NoLots --> OpenLots: purchase / reconciliation add
+    OpenLots --> OpenLots: partial sale
+    OpenLots --> OpenLots: additional purchase
+    OpenLots --> OpenLots: basis reconciliation
+    OpenLots --> NoLots: full disposal
+    NoLots --> OpenLots: later re-entry
 ```
 
-## Invariants
+The portfolio is intentionally ephemeral state reconstructed during the analytical run.
 
-The implementation relies on several invariants:
+## Terminal quantity
 
-- active lots remain acquisition ordered;
-- every normal lot has a deterministic `Lot_ID`;
-- realized events reference both a sale and a consumed lot;
-- partial consumption retains lot identity and acquisition attributes;
-- quantity comparisons use small tolerances to avoid floating-point dust;
-- reconciliation-origin lots remain distinguishable by source type;
-- holding classification and tax rates come from macro rules rather than being hard-coded into FIFO;
-- local and reporting-currency values are not silently interchanged.
+Open physical quantity is:
 
-## Failure and edge behavior
+\[
+Q_{open} = \sum_i q_i
+\]
 
-A sale can consume only the active lots available to the portfolio. The surrounding ISIN processor is responsible for supplying coherent transaction chronology and reconciling broker observations. Invalid/missing market and FX evidence is gated before snapshot publication by dedicated processors.
+The implementation exposes:
 
-The FIFO class itself is intentionally narrow: it is a deterministic state machine, not the universal validator for every upstream source. That separation keeps financial mutation logic inspectable.
-
-## What FIFO guarantees and what it does not
-
-**Guarantees within the implemented model:** ordered lot consumption, stable lot/realized identities, explicit holding classification, preserved source provenance, local/INR attribution fields, and deterministic reconstruction from the same canonical evidence/rules.
-
-**Does not guarantee:** broker certification of reconstructed lots, statutory tax liability, recovery of unknown historical cost basis, or equivalence between US market-reconstruction grouping and canonical acquisition lots.
-
-## Source map
-
-Primary implementation authorities:
-
-- `backend/engines/analytics/core/fifo.py` — lot state, buy/sell, reconciliation.
-- `backend/utils/models.py` — `TaxLot` model.
-- `backend/engines/analytics/rules/macro.py` — holding thresholds and tax rates.
-- `backend/engines/analytics/pipeline/processor/isin_processor.py` — transaction chronology and orchestration.
-- `backend/engines/analytics/pipeline/processor/snapshot.py` — surviving-lot analytics.
-- `backend/utils/identity.py` — deterministic `LOT` and `REALIZED` contracts.
-
-## Transaction chronology and mutation order
-
-Within an ISIN workload, transaction chronology is financially significant. Purchases create lots before later disposals can consume them; sales consume only state available at that point in time; reconciliation can then alter the surviving state when broker observations provide evidence that deterministic reconstruction and observed holdings diverge.
-
-```mermaid
-sequenceDiagram
-    participant I as ISIN processor
-    participant F as FIFOPortfolio
-    participant M as Macro rules
-    participant S as Snapshot builder
-    I->>F: buy canonical purchases through date
-    I->>F: sell canonical disposals through date
-    F->>M: resolve holding type and rates
-    M-->>F: classification / rates
-    I->>F: reconcile broker quantity / basis
-    I->>S: snapshot surviving active lots
-    F-->>S: active TaxLot state
+```python
+def get_closing_units(self) -> float:
+    return sum(lot.qty for lot in self._active_lots)
 ```
 
-The order matters. Reconciliation performed before a historical sale would alter which reconstructed lots the sale consumes. The surrounding processor therefore owns chronology while `FIFOPortfolio` owns mutation semantics.
+Benchmark shadow quantity is tracked separately.
 
-## Purchase mutation contract
+## Average cost is derived from open lots
 
-A call to `buy()` appends one `TaxLot` to the right side of the active deque. It does not merge lots merely because price/date happen to match. That preserves the canonical purchase lineage required for later `Purchase_ID` and `Lot_ID` drill-through.
+Average cost should come from remaining acquisition state, not from historical purchases that have already been disposed.
 
-| Input | Meaning | State effect |
-|---|---|---|
-| `buy_date` | acquisition/reconstruction date | becomes lot date |
-| `qty` | units introduced | increases closing units |
-| `price` | reporting-currency unit basis | future realized/unrealized basis |
-| `price_local` | local-currency basis | local performance basis |
-| `fx_rate_buy` | acquisition FX | later FX attribution anchor |
-| `shadow_qty` | benchmark-equivalent units | benchmark state |
-| `purchase_id` | canonical purchase lineage | normal lot identity input |
-| `lot_source_type` | purchase vs reconciliation | provenance |
+Conceptually:
 
-The method deliberately does not decide whether the input purchase is valid source evidence. That validation belongs upstream. FIFO receives canonical financial facts and turns them into state.
+\[
+\bar{P}_{open} = \frac{\sum_i q_i P_i}{\sum_i q_i}
+\]
 
-## Full-disposal worked state transition
+where only active lots participate.
 
-Assume active lots are ordered as:
+## Reconciliation can mutate open state without inventing a trade
 
-```text
-L1: 10 units @ 100
-L2:  5 units @ 120
-```
+The same `FIFOPortfolio` is the mutation target for reconciliation.
 
-A sale of 10 units consumes `L1` completely. The active state becomes:
+That design is deliberate:
 
-```text
-L2: 5 units @ 120
-```
+- the FIFO queue remains the single owner of open lot state;
+- reconciliation creates explicit adjustment events;
+- downstream sales see the corrected open state.
 
-The sale emits one realized component referencing `L1`. The lot disappears from active state, but its identity survives in the realized-event lineage. State removal is not provenance deletion.
+No second hidden lot ledger is created.
 
-## Partial-disposal worked state transition
+## Reconciliation-origin lots and future disposal
 
-For the same starting state, a sale of 4 units consumes part of `L1`:
+A quantity-add reconciliation can introduce an open lot without reliable purchase basis.
 
-```text
-before: L1 = 10 units @ 100
-sold:         4 units
-remain: L1 =  6 units @ 100
-```
+Later disposal of that lot remains traceable because `Lot_Source_Type` survives into realized events.
 
-`Lot_ID` remains unchanged. The lot is still the same acquisition lineage with a smaller surviving quantity. Creating a new lot identity for the residual would falsely imply a new acquisition event.
-
-## Cross-lot disposal worked state transition
-
-A sale of 12 units consumes all 10 units from `L1` and 2 units from `L2`:
-
-```mermaid
-flowchart LR
-    S[Sale: 12] --> A[L1: consume 10]
-    A --> E1[Realized component 1]
-    A --> B[L2: consume 2]
-    B --> E2[Realized component 2]
-    B --> R[L2 residual: 3]
-```
-
-Two realized rows are therefore correct even though the broker reports one sale. Each row has a different acquisition lineage and can have a different holding type or basis.
-
-## Shadow benchmark consumption
-
-Benchmark shadow quantity follows lot consumption. For a fully consumed lot, its shadow quantity is fully attributed to the disposal. For a partial sale, the implementation removes the proportional shadow quantity:
-
-$$ShadowSold = ShadowQty \times \frac{QtySold}{LotQty}$$
-
-This keeps benchmark capital aligned with the fraction of the actual lot that exited.
-
-## Disposal-time macro lookup
-
-Holding type and indicative rates are resolved at disposal time using the acquisition date, disposal date, tax type, and tax subtype. This allows macro parameters to vary across financial years without mutating the historical lot object itself.
-
-```mermaid
-flowchart LR
-    L[Lot acquisition date] --> H[Holding classification]
-    D[Disposal date] --> H
-    TT[Tax type/subtype] --> H
-    M[Macro parameter table] --> H
-    H --> C[LTCG / STCG]
-    C --> R[Applicable indicative rate]
-```
-
-## Realized-event field semantics
-
-The realized event intentionally mixes lineage, economics, classification, and attribution because it is the canonical disposal evidence consumed by Tax.
-
-| Field family | Examples | Purpose |
-|---|---|---|
-| Identity | `Realized_Event_ID`, `Sale_ID`, `Lot_ID`, `Purchase_ID` | deterministic lineage |
-| Dates | acquisition, disposal, FY | temporal/tax context |
-| Quantity | `Quantity_Disposed` | realized grain |
-| Basis/proceeds | acquisition price, disposed basis, sale price, proceeds | economic realization |
-| Gain | realized gain/loss, `is_loss` | outcome |
-| Tax context | holding type, tax type/subtype, rate, estimate | indicative classification |
-| Provenance | `Lot_Source_Type` | observed purchase vs reconciliation origin |
-| Currency | currency ID, asset/FX P&L | multi-currency attribution |
-| Benchmark | shadow quantity sold | comparative capital |
-
-## Lot snapshots versus realized events
-
-Lot snapshots and realized events are complementary facts:
-
-```mermaid
-flowchart TD
-    LOT[Acquisition lot] --> ACTIVE{Still active?}
-    ACTIVE -->|Yes| SNAP[Daily lot snapshot]
-    ACTIVE -->|Consumed| REAL[Realized event]
-    SNAP --> UNREAL[Unrealized analytics]
-    REAL --> TAX[Tax evidence]
-```
-
-A snapshot answers what remains and how it is performing. A realized event answers what exited and which acquisition basis produced that result.
+Downstream Tax logic can therefore mark the uncertainty instead of pretending the event came from a normal acquisition.
 
 ## Deterministic rebuild behavior
 
-Silver/Gold analytical layers rebuild from complete canonical Bronze state. FIFO therefore replays canonical transactions rather than loading yesterday's mutable lot deque. Stable purchase, sale, lot, and realized identities allow rebuilt facts to retain semantic continuity.
+Given the same:
 
-This is one reason deterministic identity is infrastructure rather than decoration: the warehouse can be rebuilt without every realized event waking up with a new name tag.
+- canonical purchase/sale evidence;
+- canonical order;
+- macro Tax rules;
+- benchmark prices;
+- FX observations;
+- reconciliation evidence;
+
+the engine reconstructs the same open lots and realized-event IDs.
+
+That is the key advantage of replay state.
+
+## Why open lots are not persisted as mutable authority
+
+Persisting mutable open lots would create synchronization problems:
+
+```text
+transaction corrected
+    ↓
+which historical lots must be patched?
+    ↓
+which realized events must be reversed?
+    ↓
+which downstream snapshots are now stale?
+```
+
+Replay makes the answer simpler:
+
+```text
+correct evidence
+    ↓
+rebuild deterministic lot state
+```
+
+The cost is computation. The benefit is much cleaner provenance.
 
 ## Floating-point tolerance boundaries
 
-Quantity mutation uses `1e-8` tolerance around exhaustion and reconciliation comparisons. This tolerance is intentionally applied to quantity-state mechanics, not as a universal financial rounding rule. Monetary outputs have their own rounding/publication behavior.
+The engine uses small quantity tolerance around depletion.
 
-## Empty portfolio behavior
+That tolerance is not permission to make financial identity fuzzy.
 
-When all lots are consumed, closing units and terminal value return zero. Average cost returns zero when no units remain. The portfolio can later reopen through a new purchase or reconciliation add; the new lot receives its own deterministic identity.
+It exists to prevent floating-point residue such as:
 
-## Reconciliation-origin disposal behavior
-
-If a synthetic reconciliation lot is later sold, the realized event retains `Lot_Source_Type="RECONCILIATION"`. Because its basis may be unknown or reconstructed, downstream tax evidence can distinguish it from an ordinary purchase-backed lot. The sale is economically real; the acquisition lineage remains lower-confidence.
-
-## Downstream consumer map
-
-```mermaid
-flowchart LR
-    FIFO[FIFO state] --> LOTS[f_Investment_Analytics_Lot]
-    FIFO --> REAL[f_Investment_Realized_Events]
-    FIFO --> RECON[f_Investment_Reconciliation_Events]
-    REAL --> TAX[f_Tax_Events]
-    LOTS --> GOLD[Investment Gold marts]
-    LOTS --> WEALTH[Wealth analytics]
+```text
+2.0000000000000004 - 2.0
 ```
+
+from leaving a ghost lot.
+
+Deterministic identities still rely on canonicalized fields rather than arbitrary approximate matching.
+
+## Failure and edge behavior
+
+### Sale with no active lots
+
+No realized event can be created from non-existent acquisition state.
+
+The surrounding application/reconciliation logic determines whether this reflects source incompleteness or another data-quality problem.
+
+### Sale quantity exceeds open quantity
+
+The FIFO loop can only consume available lots.
+
+Any mismatch remains a reconciliation/data-quality concern rather than silently inventing negative holdings.
+
+### Zero-cost lot
+
+Preserved as uncertainty with zero P&L attribution in FIFO.
+
+### Missing sale ID
+
+Realized identity loses some lineage strength; canonical processing should normally provide deterministic sale identity.
+
+### Foreign asset without valid FX
+
+The pre-Quant FX gate should fail before the engine is allowed to produce materially wrong INR results.
+
+## Invariants
+
+The lot engine is designed around these invariants:
+
+1. oldest eligible lot is consumed first;
+2. open lot quantity never becomes intentionally negative;
+3. partial disposal preserves lot identity;
+4. realized event identity is deterministic;
+5. each realized event points to exactly one consumed lot;
+6. realized-event quantity equals consumed lot quantity slice;
+7. benchmark shadow state is consumed consistently with physical state;
+8. local and base-currency attributes remain distinct;
+9. reconciliation-origin provenance survives later disposal;
+10. macro Tax lookup is performed at disposal time.
+
+## What FIFO guarantees
+
+It guarantees deterministic acquisition-lot consumption under the configured order and evidence set.
+
+It guarantees lot-level realized-event decomposition and remaining open state.
+
+## What FIFO does not guarantee
+
+It does not guarantee:
+
+- source evidence is complete;
+- reconciliation-origin basis is economically certain;
+- estimated event Tax equals statutory liability;
+- benchmark counterfactuals are actual holdings;
+- external broker Tax-lot methodology is identical unless configured evidence/rules match.
 
 ## Audit questions this model can answer
 
-The model is designed so a developer can trace:
+- Which lot generated this realized gain?
+- When was that lot acquired?
+- How much of it was disposed?
+- What basis was consumed?
+- Was the lot purchase-origin or reconciliation-origin?
+- What holding type applied?
+- What local asset gain occurred?
+- What FX effect occurred?
+- What benchmark shadow quantity was consumed?
+- What open lots remain after the sale?
 
-- which purchase lot generated a realized gain;
-- which sale consumed that lot;
-- whether the lot originated from observed purchase evidence or reconciliation;
-- what holding classification applied at disposal;
-- what local and FX components were calculated;
-- which benchmark shadow capital exited with the lot;
-- whether a future rebuild generates the same semantic identity.
-
-## Edge-case matrix
-
-| Condition | Implemented behavior |
-|---|---|
-| partial lot sale | residual retains lot identity |
-| sale spans lots | one realized component per consumed lot |
-| zero/unknown basis | P&L protected from fabricated basis result |
-| foreign currency | local asset and FX components retained |
-| reconciliation lot | source type preserved downstream |
-| no active units | terminal/average helpers return zero semantics |
-| tiny quantity residue | `1e-8` tolerance prevents phantom lots |
-| changing FY rules | lookup occurs through macro table |
-
-## Design trade-off: replay state instead of persisting mutable FIFO
-
-Persisting an operational lot ledger would make incremental execution tempting, but it would also create another state store requiring migration, correction, and recovery semantics. The current architecture reconstructs lot state deterministically from canonical evidence during analytical rebuilds. At this workload scale, recomputation buys simpler correctness boundaries.
+That level of traceability is the reason the engine emits events instead of only aggregate P&L.
 
 ## Design trade-off: event decomposition instead of sale aggregation
 
-Keeping one realized row per sale would be smaller. It would also erase acquisition-lot lineage when a sale crosses lots. The implementation chooses richer event grain because tax holding classification, basis, and provenance are lot-specific.
+More rows are produced.
+
+That is intentional.
+
+The alternative is fewer rows and weaker lineage.
+
+For financial auditability, preserving the lot boundary is worth the additional data volume.
+
+## Design trade-off: stateful Python instead of full vectorization
+
+FIFO is path-dependent.
+
+A sale mutates the state seen by the next sale.
+
+The state machine is clearer in an explicit queue than in a dense vectorized workaround whose primary accomplishment would be winning a benchmark while losing explainability.
+
+Fast wrong finance is still wrong finance, just with excellent throughput.
+
+## Handoff: deterministic lot state can still disagree with observed broker state
+
+The FIFO engine can be internally deterministic and still differ from an external holding observation.
+
+That does not automatically mean the engine is wrong or the broker is wrong.
+
+It means the two evidence paths disagree.
+
+The system needs a first-class way to represent that disagreement without rewriting history.
+
+That is the job of [Investment Reconciliation](investment-reconciliation.md).
 
 ## Related specifications
 
-- [Investment Data Model](investment-data-model.md)
 - [Investment Market Reconstruction](investment-market-reconstruction.md)
 - [Investment Reconciliation](investment-reconciliation.md)
-- [Investment Performance and Risk](investment-performance-and-risk.md)
-- [Multi-Currency and FX](multi-currency-and-fx.md)
-- [Deterministic Identity and Replay](../architecture/deterministic-identity-and-replay.md)
-- [Silver Data Contracts](../reference/silver-data-contracts.md)
+- [Investment Performance & Risk](investment-performance-and-risk.md)
+- [Multi-Currency & FX](multi-currency-and-fx.md)
+- [Tax Methodology](tax-methodology.md)
+- [Deterministic Identity & Replay](../architecture/deterministic-identity-and-replay.md)

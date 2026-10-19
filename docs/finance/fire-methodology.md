@@ -1,504 +1,696 @@
 # FIRE Methodology
 
-Personal Finance ETL models financial independence as a combination of observed household economics, market-valued wealth, deterministic planning ratios and a configuration-driven stochastic simulation. The model is deliberately richer than a single return assumption, while remaining explicit about the fact that simulation output is conditional planning evidence, not a forecast guarantee.
+Financial Independence modeling begins exactly where historical reconstruction stops.
 
+The current balance sheet is evidence-backed. The future is not.
 
-## Scope and model boundary
+That sounds obvious, but it is the most important methodological boundary in this document.
 
-The FIRE subsystem converts observed historical financial state into **planning metrics and stochastic future-state distributions**. It is downstream of household cashflow, market-valued net worth and investment analytics. It does not alter canonical financial evidence.
+> **FIRE outputs are model results conditioned on current state and configured assumptions. They are not forecasts with guaranteed outcomes.**
+
+The implementation therefore separates two layers:
+
+```text
+deterministic FI state
+    ↓
+stochastic future-path simulation
+```
+
+The first tells me where I stand. The second stress-tests where I might go.
+
+---
+
+## 1. FIRE is downstream of the financial system
+
+FIRE does not invent its own opening wealth, spending, savings, inflation, or portfolio values.
+
+It consumes state produced by the household, wealth, investment, and inflation domains.
 
 ```mermaid
 flowchart LR
-    H[Household cashflow] --> W[WealthRiskAnalyticsBuilder]
-    N[Market-valued net worth] --> W
-    I[Investment portfolio analytics] --> W
-    R[FinancialRules] --> W
-    W --> D[Deterministic FIRE metrics]
-    W --> M[Monte Carlo inputs]
-    M --> MC[Numba Monte Carlo kernel]
-    MC --> G[Wealth_FIRE_Analytics]
+    H["Household cash flow"]
+    W["Net worth / wealth"]
+    I["Investment portfolio"]
+    CPI["Inflation model"]
+
+    H --> D["Deterministic FI state"]
+    W --> D
+    I --> D
+    CPI --> D
+
+    D --> MC["Monte Carlo paths"]
+    MC --> G["FIRE analytics"]
 ```
 
-The distinction matters: FIFO reconstruction asks what happened; FIRE simulation asks what might happen. Deterministic financial history and stochastic planning should never be documented as the same kind of reproducibility.
+This ownership matters because FIRE should not quietly recalculate financial history with a different definition of net worth.
 
+---
 
-## Execution ownership
+## 2. Application orchestration remains outside the model
 
-`WealthRiskAnalyticsBuilder` in `backend/engines/presentation/modules/wealth_risk_analytics.py` prepares monthly planning inputs, deterministic FIRE metrics and the batch Monte Carlo call. `get_monte_carlo_fire_batch()` adapts Polars struct batches into NumPy arrays. `_run_mc_simulations_numba()` owns the simulation kernel.
+`WealthService` coordinates the full wealth presentation DAG.
 
-The builder receives `root_seed`, which the presentation engine supplies from run context. Month-specific integer seeds are derived from calendar month plus a CRC32 of that root seed.
+It invokes:
+
+```text
+InflationBuilder
+LedgerBuilder
+NetWorthBuilder
+SpendAnalyticsBuilder
+IncomeStreamsBuilder
+BudgetForecastBuilder
+InvestmentAnalyticsBuilder
+WealthRiskAnalyticsBuilder
+MonthlyCashflowSummaryBuilder
+CashflowStatementBuilder
+```
+
+The FIRE-specific financial logic lives in `domain.fire`.
+
+The application layer owns ordering and failure propagation.
+
+One particularly important guard is inflation computation failure:
 
 ```python
-(
-    pl.col("_temp_year") * 12
-    + pl.col("_temp_month")
-    + (zlib.crc32(self.root_seed.encode("utf-8")) % 1_000_000)
-)
-.cast(pl.Int32)
-.alias("Seed_Int")
+cpi_res = inflation_res.get("cpi_result")
+if cpi_res and cpi_res.status == CalculationStatus.COMPUTATION_ERROR:
+    raise RuntimeError(
+        f"Inflation computation failed: {cpi_res.reason}. "
+        "Aborting presentation DAG to prevent corrupted downstream FIRE state."
+    )
 ```
 
-Same month + same run context therefore reuses the same seed path. Different runs are intentionally not forced onto identical stochastic paths.
+A failed inflation model is not converted into “close enough, probably 6%.”
 
+That is the right kind of boring.
 
-## Financial inputs
+---
 
-The monthly FIRE base includes market-valued net worth, cash income, core and total expenses, inflation/CPI, liquid assets and investment portfolio values. When investment portfolio analytics are available, the builder adjusts market net worth for an indicative tax drag on positive investment appreciation using the configured equity LTCG rate.
+## 3. Deterministic FIRE begins with current financial state
 
-The simulation inputs are then built from trailing spending and savings measures rather than a single arbitrary month.
+`WealthRiskAnalyticsBuilder` consumes monthly wealth/cash-flow state and investment portfolio values.
 
-| Input family | Examples |
-|---|---|
-| wealth | `Total_Net_Worth_Market_Af_Tax` |
-| savings | trailing 12M average total savings |
-| burn | trailing 12M average total spend |
-| target | current FI target |
-| inflation | current YoY inflation |
-| demographic | age in months |
-| stochastic context | month/run-derived seed |
+Its inputs include:
 
-This design ties forward planning to the same monthly financial model used elsewhere in Gold.
-
-
-## Deterministic FIRE layer
-
-Before Monte Carlo, the builder computes deterministic planning metrics.
-
-For a configured FI multiplier $m$ and trailing annual spend $S$:
-
-$$
-\text{Target FI Today} = S \times m
-$$
-
-Coverage is:
-
-$$
-\text{FI Coverage} = \frac{\text{After-tax Market Net Worth}}{\text{Target FI Today}}
-$$
-
-Linear runway is:
-
-$$
-\text{Runway Months} = \frac{\text{After-tax Market Net Worth}}{\text{Trailing Monthly Spend}}
-$$
-
-The builder also computes FI gap, Coast-FI target, Lean-FI target, withdrawal rate if retired now, required savings rate and linear months-to-FI estimates.
-
-```mermaid
-flowchart TD
-    S[Trailing spend] --> T[Target FI Today]
-    NW[After-tax market net worth] --> C[Coverage]
-    T --> C
-    NW --> G[FI Gap]
-    T --> G
-    NW --> R[Linear runway]
-    S --> R
+```text
+Total_Net_Worth
+Total_Net_Worth_Market
+Total_Income
+Total_Cash_Income
+Total_Core_Expense
+Total_Expense
+INFLATION_YOY_PCT
+CPI_INDEX
+Liquid_Assets_Market
 ```
 
+It also derives:
 
-## Monte Carlo parameter surface
-
-The stochastic model is configuration-driven through `FinancialRules.assumptions.monte_carlo` and related FIRE/CMA assumptions. The parameter surface includes:
-
-- iterations and maximum horizon;
-- annual volatility and CMA expected real return;
-- fat-tail multiplier;
-- Markov regime transition matrix and state parameters;
-- human-capital shock probability/duration/coverage;
-- glide-path de-risking and post-FI re-risking;
-- equity/debt weights and debt return/volatility;
-- dynamic debt-first drawdown behavior;
-- jump probability and magnitude;
-- expense-ratio drag;
-- Guyton-Klinger thresholds and lifestyle adjustments;
-- inflation mean reversion, volatility, cap and floor;
-- sequence-of-returns diagnostic window;
-- desired target age/lifespan horizon.
-
-The simulation is therefore not “normal returns plus spending.” That ship sailed several configuration classes ago.
-
-
-## Return process and fat-tail adjustment
-
-The batch adapter derives monthly volatility from annual volatility and the configured fat-tail multiplier:
-
-$$
-\sigma_m = \frac{\sigma_a \times f_{tail}}{\sqrt{12}}
-$$
-
-The baseline monthly mean is derived from expected real return after expense drag and expected jump loss:
-
-$$
-\mu_m = (1+r_{real}-d-p_jJ)^{1/12}-1
-$$
-
-where $d$ is expense drag, $p_j$ annual jump probability and $J$ jump magnitude.
-
-This is not a claim that markets literally follow this exact process. It is the implemented planning model, with assumptions made explicit and configurable.
-
-
-## Markov market regimes
-
-The simulation supports three configured market states: bull, bear and stagnation. A transition matrix controls movement between regimes; each state supplies its own return/volatility characteristics.
-
-```mermaid
-stateDiagram-v2
-    Bull --> Bull
-    Bull --> Bear
-    Bull --> Stagnation
-    Bear --> Bear
-    Bear --> Bull
-    Bear --> Stagnation
-    Stagnation --> Bull
-    Stagnation --> Bear
-    Stagnation --> Stagnation
+```text
+Net_Savings = Cash_Income - Core_Expense
+Net_Savings_Total = Cash_Income - Total_Expense
 ```
 
-The purpose is to introduce serial market-state structure that a single stationary return distribution cannot express. Transition probabilities remain assumptions, not forecasts.
+The distinction between core and total expense lets deterministic FI metrics answer both a core-lifestyle and total-spend question.
 
+---
 
-## Jump diffusion
+## 4. After-tax market wealth is an analytical adjustment, not liquidation truth
 
-Jump-diffusion parameters add discrete tail events on top of ordinary monthly market movement. The model receives annual jump probability and jump magnitude, and the expected-return baseline is adjusted for expected jump loss.
-
-```mermaid
-flowchart LR
-    B[Baseline regime return] --> J{Jump event?}
-    J -- no --> R[Monthly risky-asset return]
-    J -- yes --> A[Apply jump magnitude]
-    A --> R
-```
-
-This provides a configurable stress mechanism for discontinuous losses rather than expecting a volatility scalar to carry every tail-risk story by itself.
-
-
-## Human-capital shocks
-
-Human-capital risk models temporary savings/income disruption. Configuration supplies shock probability, minimum/maximum duration and unemployment-benefit coverage.
-
-A shock can therefore alter the contribution path even when the portfolio itself behaves normally.
-
-```mermaid
-stateDiagram-v2
-    Employed --> Shocked: stochastic shock
-    Shocked --> Shocked: duration not exhausted
-    Shocked --> Employed: recovery
-```
-
-This is a meaningful FIRE distinction: portfolio risk is not the only risk to a savings plan. A model that assumes contributions arrive forever with Swiss-train punctuality is tidy, but life did not sign that SLA.
-
-
-## Glide path and debt sleeve
-
-The model supports a configurable equity glide path around FI. Parameters define when pre-FI de-risking begins, target equity weight at FI, post-FI re-risk duration, base equity weight, debt real return/volatility and optional debt-first drawdown behavior.
-
-```mermaid
-flowchart LR
-    A[Accumulation] --> D[Pre-FI de-risk]
-    D --> F[FI target allocation]
-    F --> R[Post-FI re-risk]
-    R --> L[Long-run allocation]
-```
-
-This allows sequence-risk management to be represented explicitly rather than assuming one static asset allocation throughout accumulation and retirement.
-
-
-## Guyton-Klinger withdrawal behavior
-
-Post-FI withdrawals can respond to portfolio conditions using configured Guyton-Klinger thresholds. The model includes upper/lower withdrawal thresholds plus lifestyle cut and raise multipliers.
+When investment market value exceeds book value, the deterministic builder applies the configured equity LTCG rate to the unrealized portfolio gain for its after-tax wealth proxy.
 
 Conceptually:
 
-```mermaid
-flowchart TD
-    W[Current withdrawal rate] --> U{Above upper guardrail?}
-    U -- yes --> C[Apply lifestyle cut]
-    U -- no --> L{Below lower guardrail?}
-    L -- yes --> R[Apply lifestyle raise]
-    L -- no --> K[Maintain planned withdrawal]
+\[
+NW_{after\ tax}
+=
+NW_{market}
+-
+\max(0, V_{portfolio} - B_{portfolio}) \times t
+\]
+
+The source implements the same idea with Polars:
+
+```python
+pl.when(pl.col("Port_Market_Value") > pl.col("Port_Book_Value"))
+.then(
+    pl.col("Total_Net_Worth_Market")
+    - (
+        (pl.col("Port_Market_Value") - pl.col("Port_Book_Value"))
+        * self._tax_rate
+    )
+)
+.otherwise(pl.col("Total_Net_Worth_Market"))
+.alias("Total_Net_Worth_Market_Af_Tax")
 ```
 
-The implementation therefore does not require a perfectly rigid real withdrawal path after FI.
+This is intentionally an analytical proxy.
 
+It is not a full liquidation-Tax engine across every asset class and holding-period rule.
 
-## Inflation process
+---
 
-Inflation is modeled dynamically with mean reversion, annual volatility, an upper cap and a deflation floor. Current observed inflation enters the simulation state rather than being discarded in favor of one eternal constant.
+## 5. Spending and savings are smoothed before planning
 
-The planning implication is important: nominal future FI targets and spending paths are stochastic because inflation itself moves.
-
-```mermaid
-flowchart LR
-    I0[Observed inflation] --> MR[Mean reversion]
-    V[Inflation volatility] --> MR
-    MR --> B[Apply cap/floor]
-    B --> I1[Next inflation state]
-```
-
-
-## Simulation lifecycle
-
-For each monthly observation, the Polars batch adapter converts financial inputs to NumPy arrays, constructs `np.random.default_rng(seed)` generators, and calls the Numba kernel across configured iterations and horizon.
-
-```mermaid
-sequenceDiagram
-    participant P as Polars LazyFrame
-    participant B as Batch adapter
-    participant N as Numba kernel
-    participant G as RNGs
-    P->>B: struct of monthly FIRE inputs
-    B->>G: default_rng per Seed_Int
-    B->>N: arrays + rules + generators
-    loop simulation paths
-      N->>N: evolve wealth, inflation, regime, shocks, withdrawals
-    end
-    N-->>B: distribution vectors
-    B-->>P: result struct
-```
-
-The kernel tracks both reaching FI and post-FI survival behavior, plus separate stress/runway trajectories and diagnostics.
-
-
-## Published Monte Carlo outputs
-
-The current Gold-facing result struct publishes eight headline metrics:
-
-- `Months_To_FI_Conservative_P90`
-- `Months_To_FI_Base_P50`
-- `Months_To_FI_Aggressive_P10`
-- `Probability_Of_Success_Pct`
-- `Target_FI_Future_Nominal_P50`
-- `Runway_Months_Stressed_P10`
-- `Runway_Months_Base_P50`
-- `Terminal_Wealth_Nominal_P50`
-
-Percentile naming is intentionally directional. For months-to-FI, higher months are worse, so P90 is conservative. P10 is aggressive. Median P50 is the base case.
-
-
-## Internal diagnostics beyond Gold
-
-The Numba core computes a wider result vector than the current Gold contract exposes. Internal outputs include additional runway percentiles, real terminal wealth percentiles, maximum drawdown, expected lost savings, peak inflation, sequence-of-returns CAGR and average withdrawal behavior.
-
-This distinction matters:
+The builder computes rolling spending/savings features:
 
 ```text
-model capability != current presentation contract
+Trailing 3M average spend
+Trailing 6M average spend
+Trailing 12M average spend
+Trailing 12M spend
+Trailing 6M / 12M average savings
+Trailing 12M savings
 ```
 
-Documentation should not infer that a metric is absent from the model merely because Gold does not publish it today. Conversely, an internal diagnostic should not be advertised as a stable public contract until the registry actually publishes it.
+A planning system should not let one unusually expensive month redefine lifetime FI needs.
 
+Rolling windows make current behavior more stable while still remaining responsive to regime changes in household spending.
 
-## Sequence-of-returns risk
+---
 
-The simulation tracks an explicit sequence-of-returns diagnostic window. Sequence risk matters because identical long-run average returns can produce very different retirement outcomes when losses occur near the beginning of withdrawals.
+## 6. Current FI target
 
-```mermaid
-flowchart LR
-    A[Same long-run average return] --> E[Early losses]
-    A --> L[Late losses]
-    E --> W1[Withdrawals consume depressed capital]
-    L --> W2[Capital compounds before losses]
-    W1 --> O1[Lower survival / terminal wealth]
-    W2 --> O2[Higher survival / terminal wealth]
+The configured `swr_multiplier` is used as a target multiple.
+
+\[
+TargetFI = Trailing12MSpend \times SWRMultiplier
+\]
+
+If the multiplier is 25, the implied withdrawal rate is 4%.
+
+The implementation keeps both core-spend and total-spend variants:
+
+```text
+Target_FI_Today
+Target_FI_Today_Total
 ```
 
-The model therefore evaluates path ordering, not only endpoint CAGR.
+This avoids pretending “essential independence” and “current total lifestyle independence” are the same target.
 
+---
 
-## Run-specific stochastic provenance
+## 7. Current FI coverage
 
-The stochastic seed is tied to run context. The broader application also records simulation provenance in the Control Plane, including root seed, iterations, horizon, input date, settings/rules snapshots, fingerprints, implementation version, status and result fingerprint.
+Coverage compares after-tax market wealth with the current FI target.
 
-The reproducibility contract is therefore:
+\[
+FICoverage = \frac{AfterTaxMarketNetWorth}{TargetFI}
+\]
 
-> a recorded simulation can be replayed from its saved context under a compatible implementation/runtime.
+The implementation uses `safe_divide()` instead of allowing zero denominators to produce mathematically decorative infinity.
 
-It is **not**:
+A coverage of 1.0 means current modeled wealth equals the target under current spending assumptions.
 
-> every independent run must generate the same Monte Carlo paths forever.
+It does not mean the future is guaranteed.
 
-That second rule would turn randomness into a decorative constant and defeat the point of run-specific simulation.
+---
 
+## 8. Linear runway
 
-## Failure and edge behavior
+A simple runway metric compares after-tax market wealth with recent spending.
 
-Important edge semantics include:
+\[
+RunwayMonths = \frac{AfterTaxMarketNetWorth}{Trailing3MAvgSpend}
+\]
 
-- safe division is used for coverage/runway ratios;
-- FI gaps are floored at zero;
-- insufficient trailing history naturally produces incomplete rolling metrics;
-- missing investment portfolio analytics bypass the after-tax investment adjustment rather than fabricating it;
-- stochastic output is conditional on configured assumptions, not a probability statement about objective reality;
-- model horizons are bounded by configured maximum months and target lifespan;
-- percentile outputs summarize simulated paths and should not be interpreted as guarantees.
+This is intentionally linear.
 
-The FIRE layer is a planning model, not a prophecy API.
+It ignores future returns, inflation dynamics, sequence risk, and spending changes.
 
+That makes it useful precisely because it is simple. It is a stress indicator, not a retirement simulation.
 
-## Implementation map
+---
 
-| Responsibility | Source authority |
-|---|---|
-| monthly FIRE model | `backend/engines/presentation/modules/wealth_risk_analytics.py` |
-| Monte Carlo batch adapter | `backend/engines/presentation/helpers/fire_mc_sim.py` |
-| Numba simulation kernel | same `fire_mc_sim.py` |
-| assumptions | `backend/config/financial_rules.py` |
-| simulation provenance | Control Plane run repository/schema |
-| Gold physical contract | `backend/load/schema/` + registry |
+## 9. Coast FI
 
-Configuration field-by-field details belong in [FIRE and Simulation Reference](../configuration/fire-and-simulation-reference.md).
+Coast FI asks whether current wealth could compound to the target over a configured horizon without future contributions.
 
+The model uses a configured real return and number of years.
 
+Conceptually:
 
-## State evolution inside a simulation path
+\[
+CoastFIToday = \frac{FutureFITarget}{(1+r_{real})^n}
+\]
 
-Each stochastic path evolves multiple coupled states rather than only portfolio wealth. At minimum the simulation has to carry financial wealth, inflation, market regime, contribution capacity, FI status and withdrawal behavior through time.
+The exact target semantics remain tied to the current deterministic FI policy.
+
+Coast FI is useful as a **capital sufficiency** lens, not as a statement that future savings are irrelevant in real life.
+
+---
+
+## 10. Lean FI
+
+Lean FI scales the primary FI target by a configured ratio.
+
+\[
+LeanFI = TargetFI \times LeanRatio
+\]
+
+This makes the alternative lifestyle target explicit instead of hiding a “reduced spend assumption” inside a chart.
+
+Policy belongs in `FinancialRules`; methodology belongs here.
+
+---
+
+## 11. Inflation is built as a continuous monthly series
+
+`InflationBuilder` creates a monthly calendar, performs a backward as-of join to macro inflation parameters, applies configured fallback inflation when required, and compounds a CPI-like index.
+
+```python
+lf_inflation = (
+    lf_months.sort("MONTH_START_DATE")
+    .join_asof(
+        lf_macro.sort("FY_Start_Date"),
+        left_on="MONTH_START_DATE",
+        right_on="FY_Start_Date",
+        strategy="backward",
+    )
+    .with_columns(
+        pl.col("Inflation_Rate")
+        .fill_null(self.rules.assumptions.macro.fallback_inflation_rate)
+        .alias("INFLATION_YOY_PCT")
+    )
+)
+```
+
+The important temporal rule is backward-looking policy assignment.
+
+Future macro values are not allowed to leak backwards into earlier months.
+
+---
+
+## 12. CPI validity is typed
+
+The latest CPI extraction returns a typed `CpiResult` with statuses such as:
+
+```text
+VALID
+NO_OBSERVATION
+INVALID_INPUT
+COMPUTATION_ERROR
+```
+
+That is better than returning `NaN` and hoping downstream FIRE math understands the emotional context.
+
+The application aborts on computation error because corrupted inflation contaminates every downstream real-value interpretation.
+
+---
+
+## 13. Deterministic state hands off to a stochastic model
+
+The deterministic builder constructs a feature vector containing values such as:
+
+```text
+After-tax market net worth
+Trailing savings
+Trailing spending
+Current FI target
+Inflation
+Age in months
+Deterministic monthly seed
+```
+
+Then Polars passes each monthly feature row into the Monte Carlo batch engine.
+
+This is a deliberate materialization/computation boundary: the high-level pipeline stays columnar, while the stateful simulation kernel runs in NumPy/Numba-oriented numerical code.
+
+---
+
+## 14. Reproducible randomness
+
+The root seed is not used directly for every month.
+
+`domain/fire/reproducibility.py` derives a deterministic offset from SHA-256 and combines it with year/month.
+
+```python
+def derive_monthly_seed(root_seed: str, year: int, month: int) -> int:
+    offset = derive_simulation_seed_offset(root_seed)
+    return year * 12 + month + offset
+```
+
+So the same root seed and evaluation month produce the same local seed.
+
+That gives the stochastic layer a reproducible envelope without pretending Monte Carlo is deterministic financial reconstruction.
+
+---
+
+## 15. Why reproducibility matters
+
+A simulation result can change for at least four legitimate reasons:
+
+```text
+financial input changed
+policy changed
+model changed
+random seed changed
+```
+
+If seed derivation is uncontrolled, it becomes impossible to tell the fourth reason from the first three.
+
+Reproducible seed derivation removes one source of unexplained drift.
+
+The Configuration documentation separately describes how rules/settings and simulation inputs are fingerprinted.
+
+---
+
+## 16. The return process is not one Gaussian draw
+
+The simulation engine deliberately models multiple sources of path risk.
+
+The batch wrapper extracts:
+
+```text
+expected real return
+fat-tail multiplier
+annual volatility
+expense drag
+jump probability
+jump magnitude
+Markov regime parameters
+human-capital shock parameters
+glide-path parameters
+Guyton-Klinger parameters
+inflation dynamics
+```
+
+The monthly return mean is adjusted for expense drag and expected jump drag before simulation.
+
+This is not a claim that the model predicts markets. It is an attempt to stress wealth under a richer set of plausible path dynamics than a single constant-return assumption.
+
+---
+
+## 17. Fat-tail adjustment
+
+The configured volatility is multiplied by a fat-tail factor before monthly scaling.
+
+Conceptually:
+
+\[
+\sigma_m = \frac{\sigma_{annual} \times FatTailMultiplier}{\sqrt{12}}
+\]
+
+This widens return dispersion relative to a plain Gaussian assumption.
+
+It is a modeling choice, not an empirical theorem.
+
+---
+
+## 18. Markov market regimes
+
+The model supports distinct market regimes with a configured transition matrix and state-specific parameters.
+
+A path can therefore move among states such as:
+
+```text
+bull
+bear
+stagnation
+```
+
+The important modeling idea is persistence.
+
+Bad months need not be independent coin flips. A bear regime can remain a bear regime with configured transition probability.
+
+---
+
+## 19. Jump diffusion
+
+Jump risk introduces discrete adverse return shocks with configured annual probability and magnitude.
+
+The model separately adjusts expected return for jump drag and simulates jump events along paths.
+
+This is useful for sequence-risk testing because a severe drawdown early in retirement is economically different from the same average return arriving smoothly.
+
+---
+
+## 20. Human-capital shocks
+
+The simulation can model temporary savings/income disruption through configured human-capital shock probability, duration range, and benefit coverage.
+
+That extends FIRE beyond “portfolio returns only.”
+
+For an accumulation-stage household, employment/savings interruption can matter as much as short-term portfolio volatility.
+
+---
+
+## 21. Glide path
+
+The model can alter equity/debt allocation as the FI date approaches and after FI.
+
+Configured parameters include:
+
+```text
+base equity weight
+FI-target equity weight
+derisk start horizon
+post-FI re-risk horizon
+debt real return
+debt volatility
+```
+
+This turns allocation into a path-dependent policy rather than a single static percentage.
+
+---
+
+## 22. Dynamic debt drawdown
+
+The model can prefer debt drawdown under configured conditions rather than liquidating assets uniformly.
+
+That behavior is part of the withdrawal policy, not an investment-return assumption.
+
+Keeping these dimensions separate makes sensitivity analysis more interpretable.
+
+---
+
+## 23. Guyton-Klinger style spending adjustments
+
+The simulation includes configurable withdrawal guardrails with upper/lower thresholds and lifestyle cut/raise multipliers.
+
+Conceptually:
+
+```text
+portfolio stress worsens
+    → spending can be cut
+
+portfolio strength improves
+    → spending can be raised within policy
+```
+
+This allows the model to represent adaptive retirement behavior rather than assuming a perfectly rigid real withdrawal path.
+
+---
+
+## 24. Inflation is stochastic inside future paths
+
+Historical/current inflation establishes the starting state.
+
+The future simulation can then evolve inflation using configured mean reversion, volatility, maximum inflation cap, and minimum deflation floor.
+
+This distinction is essential:
+
+```text
+observed / policy-assigned historical inflation
+≠
+stochastic future inflation path
+```
+
+One is reconstruction. The other is modeling.
+
+---
+
+## 25. Accumulation and post-FI are different regimes
+
+The simulation path changes behavior once FI is reached.
+
+Before FI, the central questions involve:
+
+- savings;
+- compounding;
+- income disruption;
+- evolving target;
+- asset allocation.
+
+After FI, the central questions become:
+
+- withdrawals;
+- sequence risk;
+- inflation;
+- guardrails;
+- portfolio survival.
+
+One model spans both stages, but it does not pretend they have identical cash-flow mechanics.
+
+---
+
+## 26. Sequence-of-returns risk
+
+Two paths can have the same long-run CAGR and radically different retirement outcomes.
+
+Why?
+
+Because withdrawals make return order matter.
 
 ```mermaid
 flowchart TD
-    W0[Opening wealth] --> R[Sample regime/market return]
-    I0[Opening inflation] --> I[Update inflation state]
-    H0[Human-capital state] --> H[Update shock state]
-    R --> A[Apply portfolio allocation]
-    H --> C[Determine contribution capacity]
-    I --> B[Inflate spending / target]
-    A --> W1[Pre-cashflow wealth]
-    C --> W2[Add savings or reduced savings]
-    B --> F{FI reached?}
-    W2 --> F
-    F -- no --> N[Next accumulation month]
-    F -- yes --> G[Withdrawal / guardrail logic]
-    G --> N2[Next post-FI month]
+    A["Same long-run average return"]
+    A --> B["Bad returns early"]
+    A --> C["Bad returns late"]
+    B --> D["Withdrawals consume depressed capital"]
+    C --> E["Capital had more time to compound"]
+    D --> F["Higher failure risk"]
 ```
 
-The coupling is the point. Inflation changes spending, human-capital shocks change savings, market regimes change returns, and the glide path changes the return exposure applied to wealth.
+This is why FIRE cannot be reduced to:
 
-## Accumulation versus post-FI phases
+\[
+FutureValue = PV(1+r)^n
+\]
 
-The model has two economically different phases.
+That formula is useful. It is not enough.
 
-### Accumulation
+---
 
-Before FI, savings contributions and market returns work together toward the target. Human-capital shocks can reduce contribution capacity. The glide path can begin de-risking as FI approaches.
+## 27. Success probability
 
-### Post-FI
+Monte Carlo success probability is the share of simulated paths satisfying the implemented survival/FI criteria.
 
-After FI, the model must test whether wealth survives withdrawals through the remaining horizon. Withdrawal guardrails, inflation, allocation and sequence risk become more important than the simple question of first hitting the target.
+It should be interpreted as:
 
-A path that reaches FI and then fails rapidly is not equivalent to a path that sustains the plan. `Probability_Of_Success_Pct` therefore carries a different meaning from `Months_To_FI_Base_P50`.
+> **model-conditioned success frequency under the configured assumptions**
 
-## Target evolution
+not:
 
-The current FI target starts from trailing spend and the configured multiplier. In stochastic simulation, future nominal requirements evolve with inflation. This produces `Target_FI_Future_Nominal_P50`, which is intentionally not the same number as today's target.
+> “the universe says I have an 87.4% chance of retiring successfully.”
 
-```mermaid
-flowchart LR
-    S0[Current trailing spend] --> T0[Target FI Today]
-    INF[Simulated inflation path] --> ST[Future nominal spending]
-    T0 --> TF[Future nominal target]
-    ST --> TF
+The decimal precision may be real. The metaphysical certainty is not.
+
+---
+
+## 28. Percentile semantics
+
+FIRE outputs include percentiles such as conservative/base/optimistic months-to-FI or wealth trajectories.
+
+Direction matters.
+
+For a “months to FI” metric:
+
+```text
+higher = worse / slower
 ```
 
-A nominal future target rising over time is not model failure. It is what happens when purchasing-power requirements are translated into future currency units.
+For terminal wealth:
 
-## Runway stress trajectory
-
-The simulation kernel tracks runway separately from the main FI path. This is useful because “how long can current resources sustain spending under stress?” is not the same question as “when will the portfolio reach FI?”
-
-The published fields include stressed P10 and base P50 runway months. Lower stressed percentiles represent downside liquidity resilience.
-
-## Probability of success
-
-`Probability_Of_Success_Pct` is the fraction of configured simulation paths satisfying the model's success condition over the relevant horizon. It is conditional on:
-
-- current financial inputs;
-- configured return/CMA assumptions;
-- volatility and tail assumptions;
-- regime transitions;
-- inflation process;
-- human-capital shocks;
-- glide path;
-- withdrawal rules;
-- simulation horizon and iterations.
-
-Changing those assumptions changes the probability. The percentage is therefore a model output, not an empirical frequency promised by the universe.
-
-## Percentile semantics
-
-| Metric | Adverse direction | Conservative view |
-|---|---|---|
-| months to FI | higher | P90 |
-| runway months | lower | P10 |
-| terminal wealth | lower | low percentile |
-| peak inflation | higher | high percentile |
-| max drawdown | more negative / larger loss | downside tail |
-
-Percentiles only become meaningful after defining which direction represents risk.
-
-## Deterministic seed derivation versus replay envelope
-
-The monthly seed integer is an execution mechanism. The broader replay envelope is an operational-provenance mechanism. They should not be conflated.
-
-```mermaid
-flowchart TD
-    RUN[Run identity/root seed] --> S[Month-specific Seed_Int]
-    S --> RNG[NumPy generator]
-    RNG --> PATH[Stochastic paths]
-    RUN --> CP[Simulation provenance]
-    CFG[Rules/settings fingerprints] --> CP
-    IN[Input fingerprint] --> CP
-    CP --> REPLAY[Replay context]
+```text
+higher = better / richer
 ```
 
-Replaying a simulation requires more than remembering one integer. It requires compatible model code and the financial/configuration context that integer was applied to.
+Percentile labels therefore must be interpreted in the context of the metric direction, not by assuming P90 always means “good.”
 
-## Numerical and runtime considerations
+---
 
-The simulation uses NumPy random generators and a Numba-compiled kernel for throughput. Reproducibility claims are therefore intentionally scoped to a compatible implementation/runtime. Numerical-library or PRNG changes can matter even when application-level fingerprints match.
+## 29. Simulation provenance
 
-The documentation does not promise eternal bitwise identity across arbitrary future environments. That would be a heroic guarantee for a Monte Carlo engine and a fairly unnecessary one.
+A meaningful FIRE result should be traceable to:
 
-## Configuration sensitivity
+```text
+financial inputs
+rules snapshot
+model assumptions
+seed/root seed
+simulation inputs
+result fingerprint / provenance
+```
 
-FIRE output is sensitive to assumptions. Important examples:
+The Control Plane stores simulation-run provenance separately from ordinary ETL history.
 
-| Parameter | Typical effect when increased, all else equal |
-|---|---|
-| expected real return | generally faster FI / higher terminal wealth |
-| volatility | wider outcome distribution and more sequence risk |
-| inflation | higher nominal spending/target pressure |
-| savings | faster accumulation |
-| spending | larger FI target and withdrawal burden |
-| jump probability/magnitude | heavier downside tail |
-| human-capital shock frequency | weaker contribution paths |
-| FI equity target | changes return/risk near FI |
+That is appropriate because a simulation can be rerun under the same source evidence but different assumptions.
 
-These are directional intuitions, not guaranteed monotonic relationships in every nonlinear path.
+---
 
-## Model limitations
+## 30. Numerical kernel exception
 
-The implementation is sophisticated, but its assumptions remain abstractions. It does not claim to model every asset class, every tax-law evolution, every labor-market state, every behavioral response or every macroeconomic dependency. Markov states and jump processes are configurable approximations, not hidden claims that markets have three literal moods stored in a database.
+The Monte Carlo kernel is intentionally a large, cohesive Numba numerical unit.
 
-The model is most useful as a consistent scenario engine anchored to the application's actual financial state.
+This is one of the places where “make every function tiny” would damage the implementation.
 
-## Audit workflow
+The kernel has high local complexity because it evolves path state under interacting rules.
 
-A FIRE result should be auditable through:
+The engineering control is not arbitrary decomposition. It is:
 
-1. the monthly financial input row;
-2. the applicable `FinancialRules` snapshot;
-3. CMA/macro assumptions;
-4. root seed and derived month seed;
-5. model implementation version/fingerprint;
-6. simulation result fingerprint;
-7. published Gold row.
+- typed/configured inputs;
+- a narrow wrapper;
+- deterministic seed derivation;
+- tested outputs/invariants;
+- documented model assumptions.
 
-This turns stochastic planning from an opaque chart into a recorded computational experiment.
+Complexity should earn its existence. Here, it does.
+
+---
+
+## 31. FIRE guarantees
+
+The FIRE layer guarantees reproducible **methodology** under the same inputs, rules, model implementation, and seed envelope.
+
+It provides:
+
+- deterministic FI metrics from current state;
+- explicit configured assumptions;
+- reproducible seed derivation;
+- stochastic path simulation;
+- percentile and probability outputs;
+- model/input/result provenance;
+- explicit separation between observed state and modeled future state.
+
+---
+
+## 32. FIRE does not guarantee the future
+
+The model does not know:
+
+- future market returns;
+- future inflation;
+- future employment;
+- future spending preferences;
+- future Tax law;
+- future asset allocation decisions;
+- future life events.
+
+Those uncertainties are exactly why a distribution is more honest than a single-point forecast.
+
+A sophisticated model can widen the questions I ask. It cannot abolish uncertainty with enough NumPy.
+
+---
+
+## 33. From FIRE to methodology language
+
+Tax and FIRE now give us two very different calculation worlds:
+
+```text
+Tax
+    evidence → classification → indicative estimate
+
+FIRE
+    current state → assumptions → stochastic distribution
+```
+
+Both still depend on a shared vocabulary:
+
+```text
+What does null mean?
+When is zero a valid result?
+When is a rate undefined?
+Which metrics can be aggregated?
+What grain does a metric live at?
+```
+
+That shared vocabulary is the final Finance specification: [Metrics & Methodology](metrics-and-methodology.md).
 
 ## Related specifications
 
-- [Cashflow and Wealth](cashflow-and-wealth.md)
-- [Metrics and Methodology](metrics-and-methodology.md)
-- [Deterministic Identity and Replay](../architecture/deterministic-identity-and-replay.md)
-- [FIRE and Simulation Reference](../configuration/fire-and-simulation-reference.md)
-- [Gold Data Contracts](../reference/gold-data-contracts.md)
+- [Cash Flow & Wealth](cashflow-and-wealth.md)
+- [Financial Rules Reference](../configuration/financial-rules-reference.md)
+- [FIRE & Simulation Reference](../configuration/fire-and-simulation-reference.md)
+- [Metrics & Methodology](metrics-and-methodology.md)
+- [Deterministic Identity & Replay](../architecture/deterministic-identity-and-replay.md)
