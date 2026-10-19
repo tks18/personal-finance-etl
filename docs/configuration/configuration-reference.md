@@ -1,65 +1,61 @@
 # Configuration Reference
 
-## Purpose
+`Settings` does not describe finance.
 
-`backend/config/settings.py` defines the operational configuration boundary. `Settings` answers a deliberately physical question: **where are source artifacts, dependency files, statements, and application databases located, and which file types participate in content hashing?** It does not contain tax policy, portfolio assumptions, or FIRE parameters. Those belong to `FinancialRules`.
+It describes the **physical world the finance engine is allowed to operate in**.
+
+That includes source locations, warehouse names, raw-store location, dependency files, statements, and file-hashing policy. This sounds mundane until one remembers that every later claim about lineage, replay, backup, and reproducibility depends on resolving those paths consistently.
+
+So the useful question is not “what keys exist in `config.toml`?”
+
+It is:
+
+> **How does a TOML file become a validated runtime topology, and what operational guarantees depend on that topology being correct?**
+
+## The runtime path begins before financial rules
+
+The physical configuration path is:
 
 ```mermaid
-flowchart TB
-    TOML[config.toml] --> LOAD[Settings.from_toml]
-    LOAD --> P[Path validation]
-    P --> DISC[Artifact discovery]
-    P --> SRC[SQLite source extraction]
-    P --> DEP[CSV dependency extraction]
-    P --> STMT[Statement discovery]
-    P --> DB[DuckDB + Raw Store paths]
-    LOAD --> PREF[PreferencesManager recent configs]
-    LOAD --> SNAP[Control Plane settings snapshot]
+flowchart LR
+    TOML["config.toml"] --> LOAD["Settings.from_toml"]
+    LOAD --> MODEL["Pydantic Settings"]
+    MODEL --> VALID["validate_config"]
+    VALID --> BOOT["ServiceContainer"]
+    BOOT --> DB["DuckDBManager"]
+    BOOT --> CP["ControlPlane"]
+    BOOT --> BK["SystemBackupManager"]
+    MODEL --> AUDIT["export_to_db_records"]
 ```
+
+The model therefore participates in both **construction** and **auditability**.
 
 ## Source authority
 
-- Model: `backend/config/settings.py::Settings`
-- Loader: `Settings.from_toml()`
-- Pre-run validation: `Settings.validate_config()`
-- Audit projection: `Settings.export_to_db_records()`
-- User preference helper: `PreferencesManager`
+The configuration contract is defined by:
 
-## Complete Settings contract
+```text
+src/personal_finance_etl/config/settings.py
+```
 
-| Field | Type | Default | Meaning |
-| --- | --- | --- | --- |
-| SOURCE_DB_FOLDER | str | '' |  |
-| TARGET_DB_BASE_PATH | str | '' |  |
-| TARGET_DB_NAME | str | 'Personal_Finance_DB.duckdb' |  |
-| DISABLE_FILE_DISCOVERER | bool | False |  |
-| RAW_DOCUMENT_STORE_NAME | str | 'Personal_Finance_DB_Raw_Store.sqlite' |  |
-| COLUMN_MASTER_PATH | str | '' |  |
-| MF_ISIN_CSV_PATH | str | '' |  |
-| BENCHMARK_MAPPING_CSV_PATH | str | '' |  |
-| BENCHMARK_MASTER_CSV_PATH | str | '' |  |
-| MACRO_PARAMETERS_CSV_PATH | str | '' |  |
-| OPENING_BALANCE_CSV_PATH | str | '' |  |
-| CURRENCY_MAPPING_CSV_PATH | str | '' |  |
-| STATEMENTS_FOLDER | str | '' |  |
-| FILE_HASH_POLICY | FileHashPolicy | factory |  |
+Sample TOML files are examples, not schema authority.
 
+That distinction matters because examples can lag implementation. Pydantic models are the contract actually instantiated by the runtime.
 
-`TARGET_DB_NAME` and `RAW_DOCUMENT_STORE_NAME` are filenames; `TARGET_DB_BASE_PATH` provides their physical base directory. `TARGET_DB_BASE_PATH` is intentionally not required to exist before validation because the application may create it, but an empty value is rejected.
+## The complete `Settings` contract
 
-## Loading semantics
+The current model is intentionally small:
 
 ```python
+# src/personal_finance_etl/config/settings.py
 class Settings(BaseModel):
     SOURCE_DB_FOLDER: str = ""
     TARGET_DB_BASE_PATH: str = ""
     TARGET_DB_NAME: str = "Personal_Finance_DB.duckdb"
 
-    # Raw Store Config
     DISABLE_FILE_DISCOVERER: bool = False
     RAW_DOCUMENT_STORE_NAME: str = "Personal_Finance_DB_Raw_Store.sqlite"
 
-    # Dependencies
     COLUMN_MASTER_PATH: str = ""
     MF_ISIN_CSV_PATH: str = ""
     BENCHMARK_MAPPING_CSV_PATH: str = ""
@@ -68,210 +64,478 @@ class Settings(BaseModel):
     OPENING_BALANCE_CSV_PATH: str = ""
     CURRENCY_MAPPING_CSV_PATH: str = ""
 
-    # Statements
     STATEMENTS_FOLDER: str = ""
-
     FILE_HASH_POLICY: FileHashPolicy = Field(default_factory=FileHashPolicy)
-
-    @classmethod
-    def from_toml(cls, filepath: str) -> Settings:
-        """Loads a TOML configuration and returns a Settings instance."""
-        if not os.path.exists(filepath):
-            return cls()
-
-        with open(filepath, "rb") as f:
-            data = tomllib.load(f)
-
-        cfg = cls(**data)
-        PreferencesManager().add_recent_config(filepath)
-        return cfg
 ```
 
-`from_toml()` has an intentionally permissive missing-file behavior: if the requested TOML path does not exist, it returns a default `Settings` instance. That does **not** make an absent configuration runnable. `validate_config()` subsequently rejects empty/missing required paths before execution. Loading and run-readiness are therefore separate states.
+These fields fall into five operational groups.
 
-```mermaid
-stateDiagram-v2
-    [*] --> Requested
-    Requested --> Defaults: TOML absent
-    Requested --> Parsed: TOML present
-    Defaults --> Invalid: validate_config
-    Parsed --> Valid: required paths exist
-    Parsed --> Invalid: missing path / empty base
-    Valid --> Runnable
-```
+## 1. Source discovery topology
 
-## Path validation
+### `SOURCE_DB_FOLDER`
 
-The current implementation validates two required directories and seven dependency files.
+Directory containing source databases/files discovered by the ingestion path.
 
-### Required directories
+This path must already exist when `validate_config()` runs.
 
-- `SOURCE_DB_FOLDER`
-- `STATEMENTS_FOLDER`
+### `STATEMENTS_FOLDER`
 
-### Required dependency files
+Directory containing statement artifacts used by the source pipeline.
 
-- `COLUMN_MASTER_PATH`
-- `MF_ISIN_CSV_PATH`
-- `BENCHMARK_MAPPING_CSV_PATH`
-- `BENCHMARK_MASTER_CSV_PATH`
-- `MACRO_PARAMETERS_CSV_PATH`
-- `OPENING_BALANCE_CSV_PATH`
-- `CURRENCY_MAPPING_CSV_PATH`
+It is also required to exist.
 
-```python
-def validate_config(self) -> None:
-        """Validates that all necessary files and folders exist before starting."""
-        required_dirs = [
-            ("SOURCE_DB_FOLDER", self.SOURCE_DB_FOLDER),
-            ("STATEMENTS_FOLDER", self.STATEMENTS_FOLDER),
-        ]
+### `DISABLE_FILE_DISCOVERER`
 
-        required_files = [
-            ("COLUMN_MASTER_PATH", self.COLUMN_MASTER_PATH),
-            ("MF_ISIN_CSV_PATH", self.MF_ISIN_CSV_PATH),
-            ("BENCHMARK_MAPPING_CSV_PATH", self.BENCHMARK_MAPPING_CSV_PATH),
-            ("BENCHMARK_MASTER_CSV_PATH", self.BENCHMARK_MASTER_CSV_PATH),
-            ("MACRO_PARAMETERS_CSV_PATH", self.MACRO_PARAMETERS_CSV_PATH),
-            ("OPENING_BALANCE_CSV_PATH", self.OPENING_BALANCE_CSV_PATH),
-            ("CURRENCY_MAPPING_CSV_PATH", self.CURRENCY_MAPPING_CSV_PATH),
-        ]
+Operational switch allowing discovery to be disabled.
 
-        errors: list[str] = []
-
-        # We don't validate TARGET_DB_BASE_PATH because it is created automatically if missing
-        if not self.TARGET_DB_BASE_PATH:
-            errors.append("TARGET_DB_BASE_PATH is empty in configuration.")
-
-        for name, path in required_dirs:
-            if not path or not os.path.isdir(path):
-                errors.append(f"Directory {name} not found: '{path}'")
-
-        for name, path in required_files:
-            if not path or not os.path.isfile(path):
-                errors.append(f"File {name} not found: '{path}'")
-
-        if errors:
-            raise FileNotFoundError(
-                "Configuration Validation Failed. The following paths are missing or invalid:\n"
-                + "\n".join(errors)
-            )
-```
-
-The validator aggregates failures and raises one `FileNotFoundError` containing every missing/invalid path. This is preferable to discovering configuration problems one artifact at a time halfway through a financial rebuild.
-
-## Source and dependency topology
-
-```mermaid
-flowchart LR
-    SDB[SOURCE_DB_FOLDER] --> EX[Source DB extraction]
-    STM[STATEMENTS_FOLDER] --> FD[File discovery]
-    CM[COLUMN_MASTER_PATH] --> MAP[Column standardization]
-    MF[MF_ISIN_CSV_PATH] --> IM[Instrument mapping]
-    BM[BENCHMARK_MAPPING_CSV_PATH] --> BENCH[Benchmark mapping]
-    BMM[BENCHMARK_MASTER_CSV_PATH] --> BENCH
-    MAC[MACRO_PARAMETERS_CSV_PATH] --> Q[Quant macro rules]
-    OB[OPENING_BALANCE_CSV_PATH] --> HH[Household opening state]
-    CUR[CURRENCY_MAPPING_CSV_PATH] --> FX[Currency semantics]
-```
-
-These files are operational dependencies but their contents have financial meaning. Settings owns *where to find them*; transformations and engines own *what they mean*. That boundary keeps path management from quietly becoming a finance engine in disguise.
-
-## File hashing policy
-
-`FILE_HASH_POLICY` is a nested `FileHashPolicy` model.
-
-| Field | Type | Default | Meaning |
-| --- | --- | --- | --- |
-| csv | bool | True |  |
-| excel | bool | False |  |
-| sqlite | bool | False |  |
-
-
-The defaults hash CSV content but do not hash Excel or SQLite sources. The policy affects changed-file detection cost and evidence sensitivity; it does not change canonical financial identities such as `PURCHASE`, `LOT`, or `TAX`. File identity/provenance and financial identity are separate contracts.
-
-```mermaid
-flowchart LR
-    FILE[Discovered artifact] --> TYPE{File type}
-    TYPE -->|policy enabled| HASH[Content hash]
-    TYPE -->|policy disabled| META[Metadata/path based handling]
-    HASH --> CP[Control Plane artifact state]
-    META --> CP
-```
-
-## File discoverer switch
-
-`DISABLE_FILE_DISCOVERER` controls whether normal source-file discovery participates in a run. It is an operational switch, not a request to erase historical Control Plane records. Existing artifact history remains operational provenance.
-
-## Database paths and authority
-
-Settings names two persistent stores:
-
-- DuckDB analytical warehouse: `TARGET_DB_BASE_PATH / TARGET_DB_NAME`
-- SQLite Control Plane / Raw Store: `TARGET_DB_BASE_PATH / RAW_DOCUMENT_STORE_NAME`
-
-The fact that both paths originate in one configuration object does not merge their responsibilities. SQLite remains historical operational authority; DuckDB remains analytical state. Two filenames, two jobs, zero identity crisis.
-
-## PreferencesManager is not financial configuration
-
-`PreferencesManager` stores recently used configuration/rules file paths under the user's application-data directory. It is UI convenience state. It does not participate in ETL financial semantics or reproducibility fingerprints. Invalid/missing recent paths are filtered when read.
-
-## Audit projection
-
-`export_to_db_records()` recursively flattens nested settings into `Setting_Group`, `Setting_Key`, and `Setting_Value` records. This is used for database-visible auditing/current analytical context.
-
-```mermaid
-flowchart LR
-    S[Settings model] --> D[model_dump]
-    D --> F[Recursive flatten]
-    F --> R[Setting_Group / Key / Value]
-    R --> META[DuckDB Meta]
-    S --> SNAP[Control Plane snapshot]
-```
-
-The flattened Meta projection and the immutable run snapshot answer different questions: current inspectable settings versus historical run context.
-
-## Configuration invariants
-
-1. A runnable configuration has a non-empty target base path.
-2. Required source directories exist before execution.
-3. Required dependency files exist before execution.
-4. Database filenames are interpreted relative to the configured target base path.
-5. Hash policy changes artifact-change detection behavior, not financial-row identity.
-6. Settings never owns financial classification policy.
-7. Recent-file preferences are convenience state, not run authority.
-
-## Failure matrix
-
-| Condition | Behavior |
-| --- | --- |
-| TOML path absent | `from_toml()` returns default Settings |
-| Target base path empty | validation failure |
-| Required source directory missing | validation failure |
-| Required dependency CSV missing | validation failure |
-| Recent preference file corrupt | ignored by preference helper |
-| Recent referenced path no longer exists | omitted from recent list |
-| Unknown TOML key | governed by Pydantic model behavior; do not rely on it as a supported contract |
-
-## Safe editing workflow
+This is not a financial rule. It changes whether a physical ingestion mechanism runs.
 
 ```mermaid
 flowchart TD
-    EDIT[Edit config.toml] --> LOAD[Parse Settings]
-    LOAD --> VALIDATE[validate_config]
-    VALIDATE -->|fail| FIX[Correct physical paths]
-    FIX --> LOAD
-    VALIDATE -->|pass| RUN[Start ETL run]
-    RUN --> SNAP[Snapshot settings]
-    SNAP --> EXEC[Execute pipeline]
+    RUN["Pipeline"] --> FLAG{"DISABLE_FILE_DISCOVERER?"}
+    FLAG -->|false| DISC["Discover evidence"]
+    FLAG -->|true| SKIP["Skip discovery path"]
+    DISC --> CP["Control Plane artifact lifecycle"]
 ```
 
-A configuration should be validated before a long rebuild, especially when moving the project between machines or changing source folders. Path configuration is wonderfully boring when correct and spectacularly annoying when discovered after ten transformation stages.
+The switch should therefore be understood in the context of artifact lifecycle and replay, not as a generic performance toggle.
+
+## 2. Persistence topology
+
+### `TARGET_DB_BASE_PATH`
+
+Directory that holds the runtime persistence pair.
+
+Unlike the source directories, this directory may be created automatically by downstream infrastructure. The validation rule therefore checks that the value is **non-empty**, not that the directory already exists.
+
+### `TARGET_DB_NAME`
+
+DuckDB analytical warehouse filename.
+
+Default:
+
+```text
+Personal_Finance_DB.duckdb
+```
+
+### `RAW_DOCUMENT_STORE_NAME`
+
+SQLite Control Plane filename.
+
+Default:
+
+```text
+Personal_Finance_DB_Raw_Store.sqlite
+```
+
+Those two names produce the local persistence pair:
+
+```mermaid
+flowchart LR
+    BASE["TARGET_DB_BASE_PATH"] --> D["DuckDB<br/>TARGET_DB_NAME"]
+    BASE --> S["SQLite<br/>RAW_DOCUMENT_STORE_NAME"]
+
+    D --> ANALYTICS["Analytical state"]
+    S --> HISTORY["Operational history"]
+```
+
+The names live together because they share a physical base path. Their **authority does not**.
+
+SQLite remains the Control Plane and historical operational authority. DuckDB remains the analytical warehouse.
+
+## 3. Dependency/master files
+
+Seven dependency paths are required:
+
+| Setting | Runtime role |
+| --- | --- |
+| `COLUMN_MASTER_PATH` | Column/schema mapping dependency |
+| `MF_ISIN_CSV_PATH` | Mutual-fund ISIN mapping |
+| `BENCHMARK_MAPPING_CSV_PATH` | Instrument-to-benchmark mapping |
+| `BENCHMARK_MASTER_CSV_PATH` | Benchmark master/reference data |
+| `MACRO_PARAMETERS_CSV_PATH` | Macro-parameter evidence |
+| `OPENING_BALANCE_CSV_PATH` | Opening-balance evidence |
+| `CURRENCY_MAPPING_CSV_PATH` | Currency mapping/reference |
+
+Every path must refer to an existing file during configuration validation.
+
+These files are physical dependencies, even when their content later affects financial calculations. `Settings` answers **where the evidence lives**. The domain answers **what that evidence means**.
+
+## 4. File hashing policy
+
+`FILE_HASH_POLICY` is a nested model:
+
+```python
+# src/personal_finance_etl/config/settings.py
+class FileHashPolicy(BaseModel):
+    csv: bool = True
+    excel: bool = False
+    sqlite: bool = False
+```
+
+The default policy hashes CSV content while leaving Excel and SQLite hashing disabled.
+
+That is an operational trade-off, not an identity contract.
+
+File hashes participate in discovery/deduplication/change detection. They do not replace deterministic financial identities.
+
+```mermaid
+flowchart LR
+    FILE["Physical artifact"] --> POLICY["FileHashPolicy"]
+    POLICY --> HASH{"Hash this format?"}
+    HASH -->|yes| CONTENT["Content hash"]
+    HASH -->|no| META["Other discovery metadata"]
+    CONTENT --> CP["Artifact lifecycle"]
+    META --> CP
+
+    CP -. does not define .-> FIN["Financial identity"]
+```
+
+That distinction prevents two very different “hash” concepts from being conflated:
+
+- **artifact hash**: physical evidence/change detection;
+- **deterministic ID**: canonical financial identity.
+
+## Loading semantics
+
+`Settings.from_toml()` is intentionally tolerant of a missing file:
+
+```python
+# src/personal_finance_etl/config/settings.py
+@classmethod
+def from_toml(cls, filepath: str | os.PathLike[str], track_recent: bool = True) -> Settings:
+    path_str = os.fspath(filepath)
+    if not os.path.exists(path_str):
+        return cls()
+
+    with open(path_str, "rb") as f:
+        data = tomllib.load(f)
+
+    cfg = cls(**data)
+```
+
+A missing file yields a default model containing empty paths.
+
+That does **not** mean execution can proceed successfully.
+
+The next validation boundary catches incomplete topology.
+
+## Validation is explicit and operational
+
+`validate_config()` divides requirements into directories and files:
+
+```python
+# src/personal_finance_etl/config/settings.py
+required_dirs = [
+    ("SOURCE_DB_FOLDER", self.SOURCE_DB_FOLDER),
+    ("STATEMENTS_FOLDER", self.STATEMENTS_FOLDER),
+]
+
+required_files = [
+    ("COLUMN_MASTER_PATH", self.COLUMN_MASTER_PATH),
+    ("MF_ISIN_CSV_PATH", self.MF_ISIN_CSV_PATH),
+    ("BENCHMARK_MAPPING_CSV_PATH", self.BENCHMARK_MAPPING_CSV_PATH),
+    ("BENCHMARK_MASTER_CSV_PATH", self.BENCHMARK_MASTER_CSV_PATH),
+    ("MACRO_PARAMETERS_CSV_PATH", self.MACRO_PARAMETERS_CSV_PATH),
+    ("OPENING_BALANCE_CSV_PATH", self.OPENING_BALANCE_CSV_PATH),
+    ("CURRENCY_MAPPING_CSV_PATH", self.CURRENCY_MAPPING_CSV_PATH),
+]
+```
+
+The method accumulates every missing/invalid path and raises one `FileNotFoundError` containing the full list.
+
+That is a useful UX choice: a bad configuration should not force seven separate run attempts just to discover seven missing dependencies.
+
+## Why the base path is validated differently
+
+The base output directory is special:
+
+```python
+# src/personal_finance_etl/config/settings.py
+if not self.TARGET_DB_BASE_PATH:
+    errors.append("TARGET_DB_BASE_PATH is empty in configuration.")
+```
+
+The application can create the target directory later, so validation requires a configured destination rather than pre-existing storage.
+
+This is a good example of validation reflecting **runtime ownership** instead of blindly calling `os.path.exists()` on everything.
+
+## Failure matrix
+
+| Situation | Model load | `validate_config()` | Meaning |
+| --- | --- | --- | --- |
+| TOML path absent | Returns default model | Fails on required paths | Configuration not yet resolved |
+| Source folder absent | Loads | Fails | Evidence topology invalid |
+| Statements folder absent | Loads | Fails | Statement topology invalid |
+| Dependency file absent | Loads | Fails | Required reference evidence unavailable |
+| Target base path empty | Loads | Fails | Persistence destination undefined |
+| Target base directory does not yet exist | Loads | Allowed | Infrastructure may create it |
+| Unknown TOML key | Pydantic default behavior applies | Not part of contract | Do not treat samples as authority |
+
+The last row deserves attention.
+
+A stale example file can contain keys that are no longer fields on `Settings`. That does not magically make those keys supported runtime configuration.
+
+The model is the contract.
+
+## Recent configuration history is a preference, not financial state
+
+When a configuration successfully loads, `Settings.from_toml()` attempts to add the path to recent preferences:
+
+```python
+# src/personal_finance_etl/config/settings.py
+if track_recent:
+    try:
+        PreferencesManager().add_recent_config(path_str)
+    except Exception:
+        pass
+```
+
+This operation is intentionally best-effort.
+
+A failure to update recent-file UI state must not invalidate a financially valid configuration.
+
+That gives us another clean ownership split:
+
+```text
+Settings
+    runtime topology
+
+PreferencesManager
+    user convenience / recent files
+```
+
+The latter lives in `infrastructure.preferences`, not in financial configuration.
+
+## Bootstrap turns topology into concrete infrastructure
+
+Once settings are resolved, the composition root binds the configured paths to concrete infrastructure:
+
+```python
+# src/personal_finance_etl/bootstrap/container.py
+def create_duckdb_manager(self, cfg: Settings) -> DuckDBManager:
+    return DuckDBManager(cfg.TARGET_DB_BASE_PATH, cfg.TARGET_DB_NAME)
+
+def create_control_plane(self, cfg: Settings) -> ControlPlane:
+    return ControlPlane(cfg.TARGET_DB_BASE_PATH, cfg.RAW_DOCUMENT_STORE_NAME)
+```
+
+The same settings also bind backup/restore to the active pair:
+
+```python
+# src/personal_finance_etl/bootstrap/container.py
+def create_backup_manager(self, cfg: Settings) -> SystemBackupManager:
+    return SystemBackupManager(
+        cfg.TARGET_DB_BASE_PATH,
+        sqlite_db_name=cfg.RAW_DOCUMENT_STORE_NAME,
+        duckdb_name=cfg.TARGET_DB_NAME,
+    )
+```
+
+So changing a database name changes more than “where a file gets written.” It changes the persistence pair that run, backup, restore, and recovery all refer to.
+
+## Configuration participates in backup semantics
+
+Because the persistence filenames come from `Settings`, snapshot/restore tooling can bind to the same pair used by execution.
+
+This avoids a dangerous class of mismatch where:
+
+```text
+pipeline writes A.duckdb
+backup snapshots B.duckdb
+```
+
+Both commands can succeed while protecting two different realities. Very efficient. Very cursed.
+
+Central path resolution prevents that architecture.
+
+## Audit projection
+
+`Settings` can flatten itself into database records:
+
+```python
+# src/personal_finance_etl/config/settings.py
+def export_to_db_records(self) -> list[dict[str, str]]:
+    records: list[dict[str, str]] = []
+    data = self.model_dump()
+    _flatten_settings_to_records(data, [], records)
+    return records
+```
+
+The recursive flattener converts nested structures such as `FILE_HASH_POLICY` into records carrying:
+
+```text
+Setting_Group
+Setting_Key
+Setting_Value
+```
+
+This matters because configuration can later be inspected as data instead of only reconstructed from a TOML file that may have changed.
+
+## Flattening semantics
+
+The flattener uses the first path component as a group and joins deeper components into a setting key.
+
+Conceptually:
+
+```text
+FILE_HASH_POLICY.csv = true
+```
+
+becomes an auditable record resembling:
+
+```text
+Setting_Group = File_hash_policy
+Setting_Key   = csv
+Setting_Value = True
+```
+
+The flattened representation is intentionally generic so new nested settings can participate without hand-maintained projection code.
+
+## Run snapshots preserve the exact settings payload
+
+At run creation, the Control Plane can snapshot the serialized settings payload.
+
+The repository canonicalizes the JSON, hashes it with SHA-256, and derives a content-addressed snapshot ID:
+
+```python
+# src/personal_finance_etl/infrastructure/control_plane/run_repository.py
+if cfg_json:
+    canonical_cfg = self._canonical_json(cfg_json)
+    digest_cfg = hashlib.sha256(canonical_cfg.encode("utf-8")).hexdigest()
+    settings_id = f"snap_set_{digest_cfg}"
+    self.db.conn.execute(
+        "INSERT OR IGNORE INTO cp_settings_snapshots "
+        "(snapshot_id, content_hash, canonical_payload, created_at) VALUES (?, ?, ?, ?)",
+        (settings_id, digest_cfg, canonical_cfg, now),
+    )
+```
+
+This gives the run a durable reference to **what the settings were**, not merely where the TOML file happened to be.
+
+Two runs with byte-different but canonically equivalent JSON payloads converge on the same snapshot content hash. A later edit to `config.toml` does not rewrite the historical snapshot attached to an earlier run.
+
+```mermaid
+flowchart LR
+    MODEL["Settings model"] --> JSON["Canonical JSON"]
+    JSON --> SHA["SHA-256"]
+    SHA --> SID["snap_set_<hash>"]
+    SID --> RUN["cp_runs.settings_snapshot_id"]
+```
+
+That makes configuration part of operational provenance rather than ephemeral process state.
+
+## `Settings` is not `FinancialRules`
+
+This boundary is worth repeating because many configuration systems eventually dissolve it.
+
+```mermaid
+flowchart TB
+    S["Settings"] --> PATH["Paths"]
+    S --> STORE["Database filenames"]
+    S --> HASH["Hashing policy"]
+    S --> DISC["Discovery switch"]
+
+    R["FinancialRules"] --> CLASS["Financial classification"]
+    R --> TAX["Tax policy"]
+    R --> FIRE["FIRE / simulation"]
+    R --> BUD["Budget / portfolio policy"]
+```
+
+A change to `TARGET_DB_NAME` should not require a Tax-engine regression review.
+
+A change to `equity_ltcg` absolutely should.
+
+Separate models make those risk boundaries visible.
+
+## Safe editing workflow
+
+A physical configuration change should follow this path:
+
+```mermaid
+flowchart TD
+    EDIT["Edit config.toml"] --> LOAD["Settings.from_toml"]
+    LOAD --> VALID["validate_config"]
+    VALID -->|fail| FIX["Fix topology"]
+    VALID -->|pass| BOOT["Construct runtime"]
+    BOOT --> RUN["Execute"]
+    RUN --> SNAP["Audit / snapshot context"]
+```
+
+Before running, verify:
+
+- source and statements directories exist;
+- every required master/reference path points to a file;
+- target base path is intentional;
+- DuckDB/SQLite names point to the expected persistence pair;
+- hashing changes are understood as ingestion-behavior changes;
+- discovery is not disabled accidentally.
+
+## Changing hashing policy
+
+Hashing can influence incremental discovery and deduplication behavior.
+
+Therefore a hash-policy change should be treated as an ingestion/replay concern rather than a harmless local preference.
+
+Ask:
+
+- Will previously discovered artifacts be re-evaluated?
+- Does the file format have unstable binary metadata?
+- Is content hashing worth the I/O cost for this source family?
+- Can a non-hashed source still be tracked reliably through other artifact metadata?
+
+The answer can differ by format, which is exactly why the policy is format-specific.
+
+## Changing persistence filenames
+
+Changing `TARGET_DB_NAME` or `RAW_DOCUMENT_STORE_NAME` points the runtime at different state.
+
+That can look like a fresh environment.
+
+Before changing either:
+
+1. decide whether the intention is migration, reset, or parallel environment;
+2. preserve/snapshot the existing pair if it matters;
+3. update automation/scripts that explicitly pass paths;
+4. validate that restore/backup operations target the same pair.
+
+A filename is small text with surprisingly large blast radius.
+
+## Configuration invariants
+
+The operational configuration should preserve these invariants:
+
+1. Source and statement roots exist before a pipeline starts.
+2. Required dependency/master files exist before domain work starts.
+3. A non-empty target base path exists conceptually before persistence is constructed.
+4. DuckDB and SQLite filenames are resolved from the same settings object used by execution.
+5. File-hash policy affects physical artifact handling, not financial identity.
+6. Recent-file preference failure cannot invalidate financial execution.
+7. Settings audit projection is derived from the typed model, not from hand-maintained key lists.
+
+## Where the story goes next
+
+At this point the runtime knows **where** everything lives.
+
+It still does not know:
+
+- which income categories are active income;
+- which assets are illiquid;
+- which accounts behave as cash pools;
+- which Tax sub-heads are taxable or exempt;
+- how long an investment must be held for long-term treatment;
+- what budget or portfolio thresholds should be used.
+
+Those are no longer topology questions.
+
+They are financial policy.
+
+Continue with [Financial Rules Reference](financial-rules-reference.md).
 
 ## Related specifications
 
-- [System Architecture](../architecture/system-architecture.md)
+- [Control Plane & Artifact Lifecycle](../architecture/control-plane-artifact-lifecycle.md)
+- [Backup & Restore](../architecture/backup-and-restore.md)
 - [Data Lifecycle](../architecture/data-lifecycle.md)
-- [Control Plane Artifact Lifecycle](../architecture/control-plane-artifact-lifecycle.md)
+- [Adding Data Sources](../developer/adding-data-sources.md)
 - [Financial Rules Reference](financial-rules-reference.md)
-- [Testing and Validation](../developer/testing-and-validation.md)

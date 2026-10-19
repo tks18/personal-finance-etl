@@ -1,394 +1,759 @@
-# FIRE and Simulation Reference
+# FIRE & Simulation Configuration
 
-## Purpose
+Historical finance asks:
 
-This specification is the configuration companion to [FIRE Methodology](../finance/fire-methodology.md). The methodology explains the financial model and stochastic mechanics; this page specifies the **actual Pydantic parameter surface** that controls those mechanics. The authority is `backend/config/financial_rules.py`, with consumption centered in `backend/engines/presentation/modules/wealth_risk_analytics.py` and `backend/engines/presentation/helpers/fire_mc_sim.py`.
+> What happened?
+
+Deterministic planning asks:
+
+> Given this state and these assumptions, what target follows?
+
+Monte Carlo asks something different:
+
+> **Across many modeled futures, how often and how quickly does this plan survive?**
+
+That difference is why the FIRE/Monte Carlo subtree cannot be documented as a flat table of knobs.
+
+Its parameters form a model.
+
+Changing one assumption can change the distribution of future wealth, the sequence of income shocks, withdrawal behavior, inflation, allocation glide path, or crash frequency. The correct unit of documentation is therefore the **mechanism each parameter controls**.
+
+## The configuration-to-simulation path
 
 ```mermaid
-flowchart TB
-    FIRE[FireAssumptions] --> DET[Deterministic FI metrics]
-    MC[MonteCarloAssumptions] --> SIM[Monte Carlo engine]
-    CMA[CMAAssumptions] --> SIM
-    MC --> MARKOV[Regime process]
-    MC --> HC[Human capital]
-    MC --> GP[Glide path]
-    MC --> JD[Jump diffusion]
-    MC --> GK[Guyton-Klinger]
-    MC --> INF[Inflation process]
-    SIM --> PROV[Simulation provenance]
+flowchart LR
+    R["FinancialRules"] --> DET["Deterministic FIRE builder"]
+    R --> MC["Monte Carlo factory"]
+    HIST["Historical wealth/cashflow inputs"] --> DET
+    DET --> VEC["Simulation input vector"]
+    VEC --> MC
+    SEED["Deterministic seed"] --> MC
+    MC --> NUMBA["Numerical kernel"]
+    NUMBA --> DIST["Outcome distribution"]
+    DIST --> PROV["Simulation fingerprints"]
 ```
 
-## Complete configuration surface
+The model has two tightly connected halves:
 
-### `FireAssumptions`
+- deterministic FI metrics derived from historical state;
+- stochastic simulation of future state.
 
-| Field | Type | Default | Meaning |
-| --- | --- | --- | --- |
-| swr_multiplier | float | ... | Safe Withdrawal Rate multiplier (e.g., 25.0 for 4% rule). |
-| coast_fi_real_return | float | ... | Assumed real (inflation-adjusted) return for Coast FI calculations. |
-| coast_fi_years | int | ... | Number of years to coast (compound) for Coast FI. |
-| lean_fi_ratio | float | ... | Ratio of Target FI considered sufficient for Lean FI. |
-| fallback_trailing_return | float | ... | Fallback nominal return to use for FIRE forecasting if historical returns are unavailable. |
-| cape_swr_floor | float | ... | Floor SWR during severe drawdown. |
-| cape_swr_ceiling | float | ... | Ceiling SWR during moderate drawdown. |
-| cape_swr_base | float | ... | Base SWR during normal markets. |
-| human_capital_max_age | float | ... | Maximum age until which you expect to be healthy and working. |
-| human_capital_discount_rate | float | ... | Discount rate for human capital. |
+## Configuration surface
 
+The root assumption graph is:
 
-### `MonteCarloAssumptions`
+```text
+AssumptionsRules
+├── macro
+├── fire
+├── monte_carlo
+│   ├── markov_regime
+│   ├── human_capital
+│   ├── glide_path
+│   ├── jump_diffusion
+│   ├── guyton_klinger
+│   └── inflation_model
+├── tax
+├── cma
+└── target_allocations
+```
 
-| Field | Type | Default | Meaning |
-| --- | --- | --- | --- |
-| iterations | int | ... | Number of Monte Carlo paths/simulations to run. |
-| max_months | int | ... | Maximum duration of the Monte Carlo simulation in months. |
-| annual_volatility | float | ... | Assumed annualized standard deviation (volatility) of returns. |
-| real_return_floor | float | ... | Absolute minimum annualized real return applied during forecasting. |
-| sorr_cagr_window_months | int | 60 | Months window used to evaluate Sequence of Returns Risk (SORR) CAGR. |
-| desired_target_age | int | ... | Desired target age for FIRE calculations. |
-| date_of_birth | str | ... | Date of birth in YYYY-MM-DD format. |
-| markov_regime | MarkovRegimeConfig | factory |  |
-| human_capital | HumanCapitalConfig | factory |  |
-| glide_path | GlidePathConfig | factory |  |
-| jump_diffusion | JumpDiffusionConfig | factory |  |
-| guyton_klinger | GuytonKlingerConfig | factory |  |
-| inflation_model | InflationModelConfig | factory |  |
-
-
-### `MarkovRegimeConfig`
-
-| Field | Type | Default | Meaning |
-| --- | --- | --- | --- |
-| transition_matrix | list[list[float]] | [[0.9, 0.08, 0.02], [0.15, 0.8, 0.05], [0.1, 0.15, 0.75]] | 3x3 Matrix for probabilities of transitioning between Bull, Bear, and Stagflation states. |
-| state_bull | tuple[float, float, float] | (0.1, 0.12, 0.04) | Bull Market parameters: (drift, volatility, inflation target) |
-| state_bear | tuple[float, float, float] | (-0.15, 0.25, 0.02) | Bear Market parameters: (drift, volatility, inflation target) |
-| state_stag | tuple[float, float, float] | (-0.05, 0.18, 0.08) | Stagflation parameters: (drift, volatility, inflation target) |
-
-
-### `HumanCapitalConfig`
-
-| Field | Type | Default | Meaning |
-| --- | --- | --- | --- |
-| shock_probability | float | 0.2 | Probability of an income shock (job loss, zero bonus) when in Bear or Stagflation states. |
-| shock_duration_min | int | 6 | Minimum duration (in months) of the income shock. |
-| shock_duration_max | int | 12 | Maximum duration (in months) of the income shock. |
-| unemployment_benefit_coverage_pct | float | 0.0 | Percentage of core expenses covered by unemployment benefits or severance during a shock. |
-
-
-### `GlidePathConfig`
-
-| Field | Type | Default | Meaning |
-| --- | --- | --- | --- |
-| derisk_start_months_prior | int | 60 | Months prior to the FI target date to begin de-risking the portfolio. |
-| post_fi_re_risk_months | int | 120 | Months after reaching FI to slowly re-risk the portfolio back to base. |
-| base_equity_weight | float | 0.7 | Base/maximum equity allocation weight (e.g., 70%). |
-| fi_target_equity_weight | float | 0.4 | Target minimum equity allocation weight upon reaching FI (e.g., 40%). |
-| debt_real_return | float | 0.02 | Expected real return for the non-equity (debt) portion of the glide path. |
-| debt_volatility | float | 0.04 | Expected volatility for the non-equity (debt) portion of the glide path. |
-| dynamic_debt_drawdown_first | bool | False | If True, during decumulation down-months, withdrawals are taken from debt, bypassing equity liquidation. |
-
-
-### `JumpDiffusionConfig`
-
-| Field | Type | Default | Meaning |
-| --- | --- | --- | --- |
-| jump_probability_annual | float | 0.05 | Annual probability of a Black Swan market crash (e.g., 5%). |
-| jump_magnitude | float | -0.2 | The magnitude of the crash when a jump occurs (e.g., -20%). |
-| expense_ratio_drag | float | 0.005 | Annual portfolio expense ratio or fee drag deducted from returns (e.g., 50 bps). |
-
-
-### `GuytonKlingerConfig`
-
-| Field | Type | Default | Meaning |
-| --- | --- | --- | --- |
-| withdrawal_upper_threshold | float | 1.2 | Multiplier over initial SWR to trigger a lifestyle cut (e.g., 1.2 for +20%). |
-| withdrawal_lower_threshold | float | 0.8 | Multiplier under initial SWR to trigger a lifestyle raise (e.g., 0.8 for -20%). |
-| lifestyle_cut_multiplier | float | 0.9 | Multiplier for withdrawal amount when cutting lifestyle (e.g., 0.90 for -10%). |
-| lifestyle_raise_multiplier | float | 1.1 | Multiplier for withdrawal amount when raising lifestyle (e.g., 1.10 for +10%). |
-
-
-### `InflationModelConfig`
-
-| Field | Type | Default | Meaning |
-| --- | --- | --- | --- |
-| mean_reversion_speed | float | 0.1 | Speed of mean reversion (theta) for Ornstein-Uhlenbeck inflation process. |
-| volatility_annual | float | 0.015 | Annual volatility of inflation. |
-| max_inflation_cap | float | 0.15 | Absolute maximum cap for inflation (e.g., 15%). |
-| min_deflation_floor | float | -0.02 | Absolute minimum floor for deflation (e.g., -2%). |
-
+This page focuses on `fire`, `monte_carlo`, `cma`, and the macro values consumed by planning.
 
 ## Deterministic FIRE assumptions
 
-`FireAssumptions` controls deterministic planning metrics before stochastic paths are simulated.
+`FireAssumptions` defines the deterministic planning frame:
 
-### `swr_multiplier`
+```python
+# src/personal_finance_etl/config/financial_rules/fire.py
+class FireAssumptions(BaseModel):
+    """Financial Independence and Safe Withdrawal Rate forecasting rules."""
 
-Multiplies annual spending to produce the base FI target. A value of 25 corresponds to a 4% withdrawal heuristic; larger multipliers imply a lower implied withdrawal rate and a larger target.
-
-### Coast and Lean FI
-
-`coast_fi_real_return`, `coast_fi_years`, and `lean_fi_ratio` govern alternative FI milestones. They do not alter source wealth; they alter the planning threshold against which wealth is compared.
-
-### CAPE-style withdrawal bounds
-
-`cape_swr_floor`, `cape_swr_ceiling`, and `cape_swr_base` provide configurable withdrawal-rate levels used by wealth/FIRE analytics. These are planning assumptions, not observed market facts.
-
-### Human-capital valuation
-
-`human_capital_max_age` and `human_capital_discount_rate` bound/discount future earning capacity. This deterministic human-capital view is distinct from the stochastic employment-shock process under Monte Carlo.
-
-## Monte Carlo envelope
-
-The top-level Monte Carlo model specifies simulation size, horizon, volatility, return floor, sequence-risk window and life-planning dates.
-
-```mermaid
-flowchart LR
-    ITER[iterations] --> PATHS[Path count]
-    H[max_months] --> PATHS
-    VOL[annual_volatility] --> RETURNS[Return process]
-    FLOOR[real_return_floor] --> RETURNS
-    AGE[desired_target_age + DOB] --> LIFE[Planning horizon]
-    SORR[sorr_cagr_window_months] --> DIAG[Sequence-risk diagnostic]
+    swr_multiplier: float = Field(
+        ..., description="Safe Withdrawal Rate multiplier (e.g., 25.0 for 4% rule)."
+    )
+    coast_fi_real_return: float = Field(
+        ..., description="Assumed real (inflation-adjusted) return for Coast FI calculations."
+    )
+    coast_fi_years: int = Field(
+        ..., description="Number of years to coast (compound) for Coast FI."
+    )
+    lean_fi_ratio: float = Field(
+        ..., description="Ratio of Target FI considered sufficient for Lean FI."
+    )
 ```
 
-### Iterations
+These fields are not all consumed by the same formula. They represent several planning concepts.
 
-More paths improve sampling stability at increased compute cost. The model treats this as an explicit configuration choice rather than hiding a hard-coded simulation budget.
+## Safe-withdrawal multiplier
 
-### `max_months`
+The deterministic builder computes current FI target as:
 
-Bounds the accumulation horizon used when searching for FI attainment. It is not a promise that FI will occur within that period. Paths that do not attain the target remain informative failures.
+\[
+\text{Target FI Today}
+= \text{Trailing 12M Spend} \times \text{SWR Multiplier}
+\]
 
-### `real_return_floor`
+The implementation is direct:
 
-Constrains the annualized real-return assumption applied in forecasting logic. It is a model guardrail, not an observed return.
+```python
+# src/personal_finance_etl/domain/fire/deterministic.py
+.with_columns(
+    (pl.col("Trailing_12M_Spend") * swr).alias("Target_FI_Today"),
+    (pl.col("Trailing_12M_Total_Spend") * swr).alias("Target_FI_Today_Total"),
+)
+```
+
+A multiplier of `25` corresponds to the reciprocal of a `4%` withdrawal rate:
+
+\[
+\frac{1}{0.04}=25
+\]
+
+The configuration stores the **multiplier**, not the percentage.
+
+That unit distinction prevents a very expensive typo.
+
+## Lean FI ratio
+
+`lean_fi_ratio` scales the full FI target into a lean target.
+
+Conceptually:
+
+\[
+\text{Lean FI} = \text{Target FI} \times \text{Lean Ratio}
+\]
+
+It is a planning preference, not a historical financial fact.
+
+## Coast FI
+
+Coast FI uses a configured real return and time horizon to reason about how much wealth needs to exist today if future contributions stop and compounding carries the portfolio toward the target.
+
+The configured pair is:
+
+```text
+coast_fi_real_return
+coast_fi_years
+```
+
+The return is explicitly **real**, so it should not be combined with nominal targets without consistent inflation treatment.
+
+## CAPE-style withdrawal boundaries
+
+Three configured rates define adaptive withdrawal levels:
+
+```text
+cape_swr_floor
+cape_swr_ceiling
+cape_swr_base
+```
+
+These are model assumptions used to represent different market/valuation conditions.
+
+They should not be interpreted as statutory or guaranteed safe withdrawal rates.
+
+A simulation can explore a policy. It cannot certify the future.
+
+## Human-capital valuation assumptions
+
+The deterministic FIRE configuration also includes:
+
+```text
+human_capital_max_age
+human_capital_discount_rate
+```
+
+These parameters govern how future earning capacity is bounded/discounted in planning analytics.
+
+They belong to FIRE assumptions because they model future economic capacity, not because the application has observed a future salary.
+
+## Macro fallbacks
+
+Planning consumes `MacroAssumptions` when observed macro evidence is unavailable:
+
+```text
+default_trading_days
+fallback_inflation_rate
+fallback_risk_free_rate
+fallback_ordinary_income_rate
+```
+
+Observed macro evidence remains preferred.
+
+Fallbacks are there to avoid turning a missing historical parameter into an accidental divide-by-nothing festival.
+
+## Capital Market Assumptions
+
+`CMAAssumptions` currently carries:
+
+```python
+class CMAAssumptions(BaseModel):
+    expected_real_return: float = Field(0.05, ...)
+    fat_tail_multiplier: float = Field(1.2, ...)
+```
+
+The expected real return anchors long-horizon forecasting.
+
+The fat-tail multiplier adjusts normal-volatility assumptions toward heavier-tail behavior.
+
+These values influence the stochastic engine, so they are included in the simulation model fingerprint.
+
+## The Monte Carlo envelope
+
+`MonteCarloAssumptions` establishes the global simulation frame:
+
+```python
+# src/personal_finance_etl/config/financial_rules/fire.py
+class MonteCarloAssumptions(BaseModel):
+    """Monte Carlo multi-path simulation boundaries and embedded stochastic engines."""
+
+    iterations: int = Field(..., description="Number of Monte Carlo paths/simulations to run.")
+    max_months: int = Field(
+        ..., description="Maximum duration of the Monte Carlo simulation in months."
+    )
+    annual_volatility: float = Field(
+        ..., description="Assumed annualized standard deviation (volatility) of returns."
+    )
+    real_return_floor: float = Field(
+        ..., description="Absolute minimum annualized real return applied during forecasting."
+    )
+```
+
+and embeds six stochastic submodels.
+
+## Iterations
+
+`iterations` controls the number of simulated paths.
+
+More paths reduce Monte Carlo sampling noise but increase execution cost.
+
+This is a performance/precision trade-off, not a “higher is always better” rule.
+
+If the simulation runs 10,000 paths where 2,000 already stabilizes the statistic being inspected, the extra 8,000 paths may mostly be exercising the CPU’s commitment to the project.
+
+## Maximum horizon
+
+`max_months` limits how far the simulation searches forward.
+
+A path that has not reached the modeled FI condition within the horizon must remain distinguishable from a path that reached it late.
+
+The configured horizon therefore affects interpretation of percentile outputs.
+
+## Annual volatility and real-return floor
+
+`annual_volatility` contributes to the return process.
+
+`real_return_floor` bounds the modeled annualized real return behavior where the engine applies that floor.
+
+Both are model assumptions, not empirical facts automatically estimated from the current portfolio.
+
+## Age and date of birth
+
+The deterministic builder derives age in months from `date_of_birth`:
+
+```python
+# src/personal_finance_etl/domain/fire/deterministic.py
+dob_parts = rules.assumptions.monte_carlo.date_of_birth.split("-")
+self._dob_year = int(dob_parts[0])
+self._dob_month = int(dob_parts[1])
+```
+
+Later it builds monthly age:
+
+```python
+((pl.col("_temp_year") - self._dob_year) * 12
+ + (pl.col("_temp_month") - self._dob_month))
+.cast(pl.Int32)
+.alias("Age_Months")
+```
+
+The current Pydantic field is a string. A malformed date can therefore survive type validation and fail when the consumer splits/casts it.
+
+That is an honest implementation boundary worth documenting.
+
+## Sequence-of-returns-risk window
+
+`sorr_cagr_window_months` defines the evaluation horizon for early-sequence return behavior.
+
+It affects how the simulation characterizes risk near the FI transition.
+
+A short horizon reacts quickly but may be noisy. A long horizon smooths more history but can dilute sharp early-retirement sequences.
 
 ## Markov regime model
 
-`MarkovRegimeConfig` supplies a 3x3 transition matrix and parameter tuples for Bull, Bear and Stagflation states. Each state tuple contains `(drift, volatility, inflation target)`.
+The market-regime configuration models three states:
 
-```mermaid
-stateDiagram-v2
-    Bull --> Bull
-    Bull --> Bear
-    Bull --> Stagflation
-    Bear --> Bull
-    Bear --> Bear
-    Bear --> Stagflation
-    Stagflation --> Bull
-    Stagflation --> Bear
-    Stagflation --> Stagflation
+```text
+Bull
+Bear
+Stagflation
 ```
 
-The implementation flattens the configured matrix and passes it into the simulation kernel. **The current Pydantic model does not validate matrix dimensions, probability bounds, or row sums.** Configuration authors must therefore preserve a valid transition matrix. The docs deliberately do not invent a validator because the code forgot to invite one to the party.
+A 3×3 transition matrix defines the probability of moving from the current state to the next state.
 
 ```python
-class MarkovRegimeConfig(BaseModel):
-    transition_matrix: list[list[float]] = Field(
-        default=[
-            [0.90, 0.08, 0.02],
-            [0.15, 0.80, 0.05],
-            [0.10, 0.15, 0.75],
-        ],
-        description="3x3 Matrix for probabilities of transitioning between Bull, Bear, and Stagflation states.",
-    )
-    state_bull: tuple[float, float, float] = Field(
-        default=(0.10, 0.12, 0.04),
-        description="Bull Market parameters: (drift, volatility, inflation target)",
-    )
-    state_bear: tuple[float, float, float] = Field(
-        default=(-0.15, 0.25, 0.02),
-        description="Bear Market parameters: (drift, volatility, inflation target)",
-    )
-    state_stag: tuple[float, float, float] = Field(
-        default=(-0.05, 0.18, 0.08),
-        description="Stagflation parameters: (drift, volatility, inflation target)",
-    )
+# src/personal_finance_etl/config/financial_rules/fire.py
+transition_matrix: list[list[float]] = Field(
+    default=[
+        [0.90, 0.08, 0.02],
+        [0.15, 0.80, 0.05],
+        [0.10, 0.15, 0.75],
+    ],
+    description="3x3 Matrix for probabilities of transitioning between Bull, Bear, and Stagflation states.",
+)
 ```
+
+Each state also carries a tuple:
+
+```text
+(drift, volatility, inflation target)
+```
+
+The simulation factory flattens these structures before entering the numerical kernel:
+
+```python
+# src/personal_finance_etl/domain/fire/simulation.py
+tm_flat = np.array(mc_rules.markov_regime.transition_matrix).flatten()
+st_bull = np.array(mc_rules.markov_regime.state_bull)
+st_bear = np.array(mc_rules.markov_regime.state_bear)
+st_stag = np.array(mc_rules.markov_regime.state_stag)
+```
+
+### What is not enforced at model load
+
+The Pydantic model currently does not prove that:
+
+- the matrix is exactly 3×3;
+- each row sums to one;
+- probabilities lie in `[0,1]`;
+- state tuples have economically sensible parameter ranges.
+
+The defaults have the intended shape, but custom values should be treated carefully.
+
+Documentation must not upgrade “expected shape” into “validated invariant.”
 
 ## Human-capital shocks
 
-The stochastic human-capital model controls income interruption in adverse regimes.
+`HumanCapitalConfig` controls income-shock behavior during adverse regimes:
 
-- `shock_probability`: probability of an employment/income shock under the modeled adverse-state logic;
-- `shock_duration_min` / `shock_duration_max`: duration bounds in months;
-- `unemployment_benefit_coverage_pct`: fraction of core expenses covered during a shock.
-
-```mermaid
-flowchart TD
-    REGIME[Bear / Stagflation state] --> DRAW{Shock draw}
-    DRAW -->|no shock| SAVE[Normal savings path]
-    DRAW -->|shock| ZERO[Income/savings interruption]
-    ZERO --> DUR[Duration min..max]
-    DUR --> BENEFIT[Apply configured benefit coverage]
-    BENEFIT --> PATH[Continue wealth path]
+```text
+shock_probability
+shock_duration_min
+shock_duration_max
+unemployment_benefit_coverage_pct
 ```
 
-The current model does not enforce `shock_duration_min <= shock_duration_max` or probability range constraints at Pydantic load time. Those values should be treated as configuration invariants.
+The model captures a financially important reality: investment returns and earning capacity can deteriorate together.
+
+A pure portfolio Monte Carlo that assumes salary continues serenely through every bear market can understate real household risk.
+
+The configuration lets the simulation couple those risks.
+
+### Cross-field expectations
+
+The model does not currently enforce:
+
+```text
+0 <= shock_probability <= 1
+shock_duration_min <= shock_duration_max
+0 <= unemployment_benefit_coverage_pct <= 1
+```
+
+Those are semantic validity expectations for safe customization.
 
 ## Glide path
 
-The glide-path model controls equity/debt weights around FI and the behavior of withdrawals during down markets.
+`GlidePathConfig` models portfolio de-risking around the FI transition:
+
+```text
+derisk_start_months_prior
+post_fi_re_risk_months
+base_equity_weight
+fi_target_equity_weight
+debt_real_return
+debt_volatility
+dynamic_debt_drawdown_first
+```
 
 ```mermaid
 flowchart LR
-    ACC[Accumulation] --> DERISK[derisk_start_months_prior]
-    DERISK --> FI[fi_target_equity_weight]
-    FI --> RERISK[post_fi_re_risk_months]
-    RERISK --> BASE[base_equity_weight]
-    DEBT[debt_real_return + volatility] --> PORT[Blended portfolio]
-    DDF[dynamic_debt_drawdown_first] --> WD[Withdrawal source]
+    ACC["Accumulation<br/>base equity weight"] --> DERISK["Pre-FI de-risk window"]
+    DERISK --> FI["FI target<br/>lower equity weight"]
+    FI --> RERISK["Post-FI re-risk window"]
+    RERISK --> LATE["Later retirement allocation"]
 ```
 
-`base_equity_weight` and `fi_target_equity_weight` are fractions. The current Pydantic schema does not enforce `0 <= weight <= 1` or target/base ordering. Those relationships are semantic configuration responsibilities.
+The two weights represent different points on the glide path.
+
+A coherent configuration would normally keep them in `[0,1]` and set the FI target weight no higher than the base weight when “de-risking” is intended. That relationship is not currently enforced by Pydantic.
+
+## Dynamic debt drawdown
+
+`dynamic_debt_drawdown_first` changes withdrawal behavior in down markets.
+
+When enabled, the simulation can draw from debt before equity under specified decumulation conditions.
+
+That is not merely an allocation parameter. It changes **path dependency** because the assets sold during a downturn influence future recovery potential.
 
 ## Jump diffusion
 
-`JumpDiffusionConfig` adds a discontinuous crash process and fee drag on top of ordinary return dynamics.
+`JumpDiffusionConfig` adds discrete crash behavior and fee drag:
 
-- annual jump probability;
-- jump magnitude;
-- annual expense-ratio drag.
-
-```mermaid
-flowchart LR
-    BASE[Regime return] --> J{Jump occurs?}
-    J -->|no| FEE[Subtract expense drag]
-    J -->|yes| CRASH[Apply jump magnitude]
-    CRASH --> FEE
-    FEE --> MONTH[Monthly portfolio return]
+```text
+jump_probability_annual
+jump_magnitude
+expense_ratio_drag
 ```
 
-This is a scenario model, not a claim that crashes follow a known annual Bernoulli process in the real world. Configuration makes the assumption explicit so it can be inspected, changed and fingerprinted.
+The simulation converts annual assumptions into monthly behavior and incorporates expected jump/fee effects into the return process.
 
-## Guyton-Klinger configuration
+The configuration intentionally separates:
 
-The four guardrail fields control withdrawal adjustments relative to the initial withdrawal-rate context. Upper-threshold breaches trigger lifestyle cuts; lower-threshold conditions permit raises, using the configured multipliers.
+- normal volatility;
+- regime behavior;
+- discrete jumps;
+- ongoing expense drag.
 
-```mermaid
-flowchart TD
-    WR[Current withdrawal rate] --> HIGH{Above upper threshold?}
-    HIGH -->|yes| CUT[Multiply withdrawal by lifestyle_cut_multiplier]
-    HIGH -->|no| LOW{Below lower threshold?}
-    LOW -->|yes| RAISE[Multiply by lifestyle_raise_multiplier]
-    LOW -->|no| HOLD[Hold planned withdrawal]
+That allows tail risk to be modeled explicitly instead of pretending every crash is just a large Gaussian Tuesday.
+
+## Guyton-Klinger withdrawal guardrails
+
+The withdrawal model defines:
+
+```text
+withdrawal_upper_threshold
+withdrawal_lower_threshold
+lifestyle_cut_multiplier
+lifestyle_raise_multiplier
 ```
 
-The model does not Pydantic-validate ordering between lower and upper thresholds or constrain multipliers. Treat these as model invariants during configuration review.
+These parameters introduce adaptive spending.
 
-## Inflation model
+A static withdrawal plan asks:
 
-The inflation configuration controls an Ornstein-Uhlenbeck-style mean-reverting stochastic process:
+> What if I spend the same policy amount regardless of portfolio state?
 
-- `mean_reversion_speed`;
-- annual inflation volatility;
-- maximum inflation cap;
-- minimum deflation floor.
+The guardrail model asks:
+
+> What if lifestyle adjusts when the withdrawal rate becomes too high or unusually low relative to its starting point?
 
 ```mermaid
-flowchart LR
-    PREV[Previous inflation] --> MR[Mean reversion]
-    TARGET[Regime inflation target] --> MR
-    NOISE[Stochastic shock] --> MR
-    MR --> CLIP[Apply floor/cap]
-    CLIP --> NEXT[Next inflation state]
+stateDiagram-v2
+    [*] --> Normal
+    Normal --> Cut : withdrawal rate > upper threshold
+    Normal --> Raise : withdrawal rate < lower threshold
+    Cut --> Normal : next evaluation
+    Raise --> Normal : next evaluation
 ```
 
-The cap/floor protect simulation paths from unconstrained extremes. They do not assert that actual inflation cannot exceed those levels.
+The exact multipliers control the size of those adjustments.
 
-## CMA assumptions
+## Mean-reverting inflation
 
-`CMAAssumptions.expected_real_return` and `fat_tail_multiplier` supply long-run capital-market assumptions used by FIRE analytics. The fat-tail multiplier increases effective volatility relative to the normal-volatility input. These assumptions are deliberately configuration-visible because long-horizon outputs are sensitive to them.
+`InflationModelConfig` describes an Ornstein-Uhlenbeck-style inflation process:
 
-## Seed and provenance relationship
+```text
+mean_reversion_speed
+volatility_annual
+max_inflation_cap
+min_deflation_floor
+```
 
-Configuration is only one part of stochastic reproducibility. The engine combines run-specific seed context with rule/model/input fingerprints.
+Mean reversion prevents inflation from behaving as an unconstrained random walk forever.
+
+The cap and floor bound extreme simulated values.
+
+Those bounds are model design choices. They should be stress-tested, not treated as predictions.
+
+## Historical inflation and simulated inflation are different
+
+Historical monthly inflation is built from observed macro evidence with a configured fallback.
+
+Future simulation uses stochastic inflation policy.
 
 ```mermaid
 flowchart TB
-    RULES[Fire + MC + CMA rules] --> RF[Rules/model fingerprint]
-    INPUT[Financial input state] --> IF[Input fingerprint]
-    RUN[Run identity] --> SEED[Root seed]
-    RF --> ENV[Simulation provenance]
-    IF --> ENV
-    SEED --> ENV
-    ENV --> CP[cp_simulation_runs]
+    HIST["Historical macro observations"] --> HB["InflationBuilder"]
+    FALL["fallback_inflation_rate"] --> HB
+    HB --> CPI["Historical CPI / inflation series"]
+
+    CPI --> SIM["Simulation starting context"]
+    OU["InflationModelConfig"] --> SIM
+    SIM --> FUT["Future stochastic inflation paths"]
 ```
 
-Matching configuration does not mean independent runs must produce identical paths because the run-specific seed is part of the context. Replay means preserving the recorded context under a compatible implementation/runtime.
+That distinction keeps “what happened” separate from “what future paths are modeled.”
 
-## Runtime consumer map
+## Seeds and reproducibility
 
-| Parameter family | Primary consumer | Financial effect |
-| --- | --- | --- |
-| FIRE target/SWR | `wealth_risk_analytics.py` | FI targets and milestone metrics |
-| Monte Carlo envelope | `fire_mc_sim.py` | path count, horizon, return process |
-| Markov regimes | `fire_mc_sim.py` | state-dependent return/inflation dynamics |
-| Human capital | `fire_mc_sim.py` | savings/income interruption |
-| Glide path | `fire_mc_sim.py` | equity/debt allocation over lifecycle |
-| Jump diffusion | `fire_mc_sim.py` | discontinuous crash events and fee drag |
-| Guyton-Klinger | `fire_mc_sim.py` | adaptive retirement withdrawals |
-| Inflation model | `fire_mc_sim.py` | stochastic spending/inflation path |
-| CMA | wealth/FIRE analytics | expected real return and fat-tail adjustment |
+The deterministic builder derives monthly seed expressions from a root seed:
+
+```python
+# src/personal_finance_etl/domain/fire/deterministic.py
+build_monthly_seed_expr(
+    self.root_seed, year_col="_temp_year", month_col="_temp_month"
+),
+```
+
+The simulation factory then constructs independent NumPy generators from those seed integers before entering the Numba kernel.
+
+Reusing seed lineage helps reproduce stochastic execution given the same model and inputs.
+
+But seed equality alone is not sufficient reproducibility.
+
+If rules or inputs changed, the same random stream is simulating a different model.
+
+## Simulation provenance fingerprints the model
+
+The Control Plane records a simulation run with:
+
+- root seed;
+- iterations;
+- horizon;
+- input as-of date;
+- settings snapshot ID;
+- rules snapshot ID;
+- model implementation identifier;
+- input fingerprint;
+- model fingerprint;
+- result fingerprint;
+- status.
+
+The model fingerprint is built from the exact rule subtrees relevant to simulation:
+
+```python
+# src/personal_finance_etl/infrastructure/control_plane/run_repository.py
+combined_rules = {
+    "monte_carlo": rules.assumptions.monte_carlo.model_dump(),
+    "fire": rules.assumptions.fire.model_dump(),
+    "cma": rules.assumptions.cma.model_dump(),
+}
+model_fingerprint = hashlib.sha256(
+    json.dumps(
+        self._json_safe(combined_rules),
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
+    ).encode("utf-8")
+).hexdigest()
+```
+
+That is the key reproducibility contract:
+
+```text
+seed
++ input fingerprint
++ model fingerprint
++ implementation identifier
+= explainable simulation context
+```
+
+## Input fingerprint
+
+Tabular simulation input is fingerprinted deterministically.
+
+The implementation serializes column order and JSON-safe rows into SHA-256:
+
+```python
+# src/personal_finance_etl/infrastructure/control_plane/run_repository.py
+columns: list[str] = [str(column) for column in df.columns]
+rows = cast(list[dict[str, object]], df.to_dicts())
+digest = hashlib.sha256()
+header = json.dumps(columns, ensure_ascii=False, separators=(",", ":"))
+digest.update(header.encode("utf-8"))
+```
+
+The method then updates the digest row by row.
+
+This means a later investigation can distinguish:
+
+```text
+same model + different financial input
+same input + different model assumptions
+same model/input + different result
+```
+
+That is much more useful than “I think I used the same TOML.”
+
+## Result fingerprint
+
+Where a result frame is available, the same deterministic table fingerprinting approach can record the output.
+
+The fingerprint is not a financial metric. It is an integrity/provenance token.
+
+A changed result fingerprint tells us the result changed. It does not tell us whether the change is correct.
+
+That still requires domain/regression analysis.
+
+## Simulation output interpretation
+
+The stochastic engine exposes percentile/probability-style outputs such as:
+
+```text
+Months_To_FI_Conservative_P90
+Months_To_FI_Base_P50
+Months_To_FI_Aggressive_P10
+Probability_Of_Success_Pct
+Target_FI_Future_Nominal_P50
+Runway_Months_Stressed_P10
+Runway_Months_Base_P50
+Terminal_Wealth_Nominal_P50
+```
+
+These are distribution summaries.
+
+They should never be described as predictions with certainty.
+
+The entire purpose of the stochastic model is to represent uncertainty rather than hide it.
 
 ## Configuration invariants not currently enforced by Pydantic
 
-This section is intentionally explicit because a reference should distinguish **model validation** from **model expectations**.
+The current model intentionally stays relatively lightweight. Safe customization should still respect several semantic relationships.
 
-| Relationship | Pydantic-enforced? | Expected for meaningful simulation |
-| --- | --- | --- |
-| Markov matrix is 3x3 | no | yes |
-| Markov rows sum to 1 | no | yes |
-| Probabilities in `[0,1]` | no | yes |
-| `shock_duration_min <= shock_duration_max` | no | yes |
-| Equity weights in `[0,1]` | no | yes |
-| FI target equity <= base equity | no | usually intended by current model design |
-| Inflation floor <= cap | no | yes |
-| GK lower threshold < upper threshold | no | yes |
-| Iterations > 0 | not constrained by `Field` | yes |
-| Max months > 0 | not constrained by `Field` | yes |
+### Probability/rate ranges
 
-This is not an invitation to add undocumented behavior. It is an audit map for configuration QA and future validator hardening.
+Normally expected in `[0,1]` where applicable:
 
-## Sensitivity and interpretation
+```text
+shock_probability
+unemployment_benefit_coverage_pct
+base_equity_weight
+fi_target_equity_weight
+jump_probability_annual
+```
 
-Several parameters have nonlinear interactions. Increasing volatility can affect FI timing and retirement survival differently. A lower FI equity target may reduce sequence risk near retirement while reducing expected growth. Higher inflation volatility can alter both spending paths and real wealth. Human-capital shocks matter most before FI when savings are still a major driver.
+### Duration ordering
 
-Therefore parameter changes should be evaluated as scenario/model changes, not one-dimensional “better/worse” sliders.
+Expected:
 
-## Safe change workflow
+```text
+shock_duration_min <= shock_duration_max
+```
+
+### Markov matrix
+
+Expected:
+
+- three rows;
+- three probabilities per row;
+- each probability non-negative;
+- each row approximately sums to `1.0`.
+
+### Inflation bounds
+
+Expected:
+
+```text
+min_deflation_floor < max_inflation_cap
+```
+
+### Withdrawal guardrails
+
+Expected:
+
+```text
+withdrawal_lower_threshold < withdrawal_upper_threshold
+lifestyle_cut_multiplier < 1
+lifestyle_raise_multiplier > 1
+```
+
+### Glide-path semantics
+
+For a conventional de-risking path:
+
+```text
+fi_target_equity_weight <= base_equity_weight
+```
+
+The code may accept configurations outside these expectations. Acceptance is not endorsement.
+
+## Sensitivity map
+
+Different parameter families alter different model mechanisms.
+
+| Family | Primary effect |
+| --- | --- |
+| `swr_multiplier` | deterministic FI target scale |
+| `coast_fi_*` | Coast FI compounding |
+| `lean_fi_ratio` | lean target |
+| CMA return | long-run return anchor |
+| CMA fat-tail multiplier | tail-risk scaling |
+| iterations | Monte Carlo sampling density |
+| max months | horizon/censoring |
+| volatility | dispersion |
+| Markov transitions | regime persistence/switching |
+| human-capital shock | income interruption risk |
+| glide path | allocation path around FI |
+| jump diffusion | crash/fee behavior |
+| Guyton-Klinger | adaptive spending |
+| inflation model | stochastic purchasing-power path |
+
+This is why changing five parameters at once makes interpretation difficult. If outcomes change, attribution becomes guesswork.
+
+## Safe simulation-change workflow
 
 ```mermaid
 flowchart TD
-    EDIT[Edit FIRE/MC rules] --> LOAD[Pydantic parse]
-    LOAD --> REVIEW[Review semantic invariants]
-    REVIEW --> RUN[Execute new run]
-    RUN --> SNAP[Snapshot rules]
-    RUN --> SIM[Create simulation provenance]
-    SIM --> COMPARE[Compare distributions, not one path]
+    Q["Which mechanism am I changing?"] --> ONE["Change one coherent parameter family"]
+    ONE --> VALID["Model-load + semantic validation"]
+    VALID --> FIXED["Run fixed-seed baseline"]
+    FIXED --> COMP["Compare distributions"]
+    COMP --> SENS["Sensitivity / reasonableness review"]
+    SENS --> PROV["Persist fingerprints + snapshots"]
 ```
 
-For stochastic settings, comparison should focus on distributions and diagnostics rather than demanding one path reproduce another unrelated run.
+A disciplined change should:
+
+1. identify the mechanism being changed;
+2. avoid bundling unrelated assumption edits;
+3. validate structural relationships manually where Pydantic does not;
+4. use fixed seeds when comparing model changes;
+5. compare percentile distributions rather than one path;
+6. inspect probability and terminal-wealth shifts;
+7. persist the resulting model/input fingerprints;
+8. describe the change as a model sensitivity, not as proof of future performance.
+
+## Deterministic and stochastic truths should not be conflated
+
+This separation is the final configuration invariant:
+
+```text
+historical evidence
+    observed / reconstructed
+
+deterministic FIRE
+    formula-driven planning under explicit assumptions
+
+Monte Carlo FIRE
+    distribution-driven planning under explicit assumptions + random paths
+```
+
+A deterministic FI target can be reproduced exactly from the same state and rules.
+
+A stochastic run can be reproduced when seed, inputs, model rules, and implementation context are held stable.
+
+Neither one certifies the future.
+
+## Where configuration hands off to finance methodology
+
+Configuration tells us **which assumptions the engine receives**.
+
+The finance documentation explains **what the engine does with them**.
+
+Continue with:
+
+- [FIRE Methodology](../finance/fire-methodology.md)
+- [Cashflow & Wealth](../finance/cashflow-and-wealth.md)
+- [Metrics & Methodology](../finance/metrics-and-methodology.md)
+
+That boundary keeps this page from becoming a second FIRE implementation spec.
 
 ## Related specifications
 
-- [FIRE Methodology](../finance/fire-methodology.md)
-- [Metrics and Methodology](../finance/metrics-and-methodology.md)
-- [Deterministic Identity and Replay](../architecture/deterministic-identity-and-replay.md)
 - [Financial Rules Reference](financial-rules-reference.md)
-- [Testing and Validation](../developer/testing-and-validation.md)
-
-## Source map
-
-| Concern | Implementation authority |
-| --- | --- |
-| Runtime model definitions | `backend/config/financial_rules.py` |
-| Household dimension classification | `backend/transform/dimensions.py` |
-| Household fact flags | `backend/transform/facts.py` |
-| Quant macro/tax interpretation | `backend/engines/analytics/rules/macro.py` |
-| Tax event construction | `backend/engines/tax/core/base_events.py` |
-| Budget analytics | `backend/engines/presentation/modules/budget_forecast.py` |
-| Portfolio allocation presentation | `backend/engines/presentation/modules/investment_analytics.py` |
-| Wealth/FIRE metrics | `backend/engines/presentation/modules/wealth_risk_analytics.py` |
-| Monte Carlo kernel/wrapper | `backend/engines/presentation/helpers/fire_mc_sim.py` |
-| Run/simulation provenance | `backend/load/control_plane/run_repo.py` |
+- [Deterministic Identity & Replay](../architecture/deterministic-identity-and-replay.md)
+- [Reliability & Recovery](../architecture/reliability-and-recovery.md)
+- [FIRE Methodology](../finance/fire-methodology.md)
+- [Testing & Validation](../developer/testing-and-validation.md)
