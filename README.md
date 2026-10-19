@@ -146,9 +146,9 @@ This is not a generic framework pretending every bank, broker, Tax system, and h
 
 ---
 
-# What the system actually proves
+## What the system actually proves
 
-## 1. Data engineering, but with evidence semantics
+### 1. Data engineering, but with evidence semantics
 
 The pipeline is not just `read_csv → clean → dashboard`.
 
@@ -180,7 +180,7 @@ SQLite remembers what happened operationally. DuckDB serves current analytical s
 
 ---
 
-## 2. Investment evidence becomes financial state
+### 2. Investment evidence becomes financial state
 
 Investment analytics starts with messy evidence:
 
@@ -203,7 +203,7 @@ trade evidence
 → performance / benchmark / FX attribution
 ```
 
-### FIFO is lineage, not just cost basis
+#### FIFO is lineage, not just cost basis
 
 The lot engine reconstructs acquisition history chronologically and carries that lineage into realized events.
 
@@ -215,7 +215,7 @@ sale proceeds - some cost number
 
 It is linked back to the actual consumed acquisition lots, holding periods, local/base currency basis, benchmark shadow state, and later Tax evidence.
 
-### Reconciliation is first-class evidence
+#### Reconciliation is first-class evidence
 
 A deterministic reconstruction can still disagree with an independent broker observation.
 
@@ -229,7 +229,7 @@ That gives future FIFO, performance, Tax, and audit logic a traceable explanatio
 
 ---
 
-## 3. Performance is allowed to say “I do not know”
+### 3. Performance is allowed to say “I do not know”
 
 The project calculates and interprets:
 
@@ -263,7 +263,7 @@ For foreign assets, missing FX also does **not** silently become `1.0`.
 
 ---
 
-## 4. Tax consumes financial truth, it does not rebuild it
+### 4. Tax consumes financial truth, it does not rebuild it
 
 Tax logic consumes canonical household evidence and realized investment events rather than creating its own parallel investment engine.
 
@@ -289,7 +289,7 @@ I would rather have a `CHECK_REQUIRED` state than a very confident lie with two 
 
 ---
 
-## 5. Household finance and investments meet at wealth, not upstream
+### 5. Household finance and investments meet at wealth, not upstream
 
 Household finance has its own semantics:
 
@@ -315,7 +315,7 @@ This sounds obvious until a data model accidentally disagrees.
 
 ---
 
-## 6. FIRE earns the right to be stochastic
+### 6. FIRE earns the right to be stochastic
 
 The planning engine does not begin with Monte Carlo.
 
@@ -346,7 +346,7 @@ A sophisticated model can widen the questions I ask. It cannot abolish uncertain
 
 ---
 
-# Reliability is part of the financial model
+## Reliability is part of the financial model
 
 A number is not trustworthy merely because the formula is correct.
 
@@ -362,19 +362,19 @@ I also need to know:
 
 That is why reliability is built into the architecture rather than parked in a `logging.py` file and wished good luck.
 
-## Deterministic identity
+### Deterministic identity
 
 Identity uses centralized canonical serialization with namespace-specific field ordering and normalization.
 
 That keeps replay, joins, lineage, realized-event continuity, and reconstruction stable across full analytical rebuilds.
 
-## Cross-store failure is represented truthfully
+### Cross-store failure is represented truthfully
 
 SQLite Control Plane and DuckDB warehouse operations are coordinated, but they are **not** described as one magical distributed ACID transaction.
 
 Commit state and recovery semantics distinguish clean rollback from partial/split outcomes that require repair.
 
-## Snapshot / restore distrusts the archive first
+### Snapshot / restore distrusts the archive first
 
 Backup and restore coordinate SQLite and DuckDB, stage validation before install, and retain rollback paths around replacement.
 
@@ -384,7 +384,7 @@ Backup and restore coordinate SQLite and DuckDB, stage validation before install
 
 ---
 
-# Software architecture that has to survive real finance
+## Software architecture that has to survive real finance
 
 The current package model separates seven responsibilities:
 
@@ -413,7 +413,7 @@ I am not trying to win OOP bingo. I am trying to make the ownership legible.
 
 ---
 
-# Performance without pretending every problem is vectorizable
+## Performance without pretending every problem is vectorizable
 
 The compute model follows the workload.
 
@@ -449,7 +449,7 @@ Those are workload-specific observations, not benchmark promises.
 
 ---
 
-# The engineering loop is part of the product
+## The engineering loop is part of the product
 
 The repository does not stop at “the code works on my machine.”
 
@@ -488,17 +488,17 @@ Release infrastructure powered by memory is a particularly brave architectural c
 
 ---
 
-# Product surface
+## Product surface
 
 The financial engine is exposed through one application-facing API and multiple presentation surfaces.
 
-## Install
+### Install
 
 ```bash
 pip install personal-finance-etl
 ```
 
-## Desktop
+### Desktop
 
 ```bash
 shan-fin
@@ -510,7 +510,7 @@ or:
 shan-fin-gui
 ```
 
-## Terminal
+### Terminal
 
 ```bash
 shan-fin cli
@@ -529,7 +529,7 @@ Start with:
 
 ---
 
-# Current production shape
+## Current production shape
 
 The project is large enough that architectural discipline is not hypothetical.
 
@@ -561,7 +561,7 @@ That is the standard I care about.
 
 ---
 
-# The stack, by responsibility
+## The stack, by responsibility
 
 | Responsibility | Technology |
 | --- | --- |
@@ -587,11 +587,11 @@ One abstraction does not need to win every argument.
 
 ---
 
-# What I trust, and what I deliberately do not claim
+## What I trust, and what I deliberately do not claim
 
 Sophisticated systems become suspicious when a README quietly upgrades implementation details into heroic guarantees.
 
-## The system does provide
+### The system does provide
 
 - deterministic identities for defined financial namespaces;
 - historical run and artifact provenance;
@@ -609,7 +609,7 @@ Sophisticated systems become suspicious when a README quietly upgrades implement
 - configuration and simulation provenance;
 - architecture and quality-gate enforcement.
 
-## It deliberately does not claim
+### It deliberately does not claim
 
 - SQLite + DuckDB form one distributed ACID database;
 - reconstructed holdings are independent broker-certified daily holdings where that evidence does not exist;
@@ -623,7 +623,7 @@ I would rather document a smaller guarantee accurately than a larger one poetica
 
 ---
 
-# How to explore the project
+## How to explore the project
 
 The repository now has four intentionally different knowledge surfaces.
 
@@ -636,14 +636,14 @@ The repository now has four intentionally different knowledge surfaces.
 
 If all four say exactly the same thing at exactly the same depth, I have successfully maintained four copies of one document. That would be impressive in the least useful possible way. 😄
 
-## I want the architecture
+### I want the architecture
 
 - [System Architecture](docs/architecture/system-architecture.md)
 - [Application & Dependency Architecture](docs/architecture/application-and-dependency-architecture.md)
 - [Data Lifecycle](docs/architecture/data-lifecycle.md)
 - [Reliability & Recovery](docs/architecture/reliability-and-recovery.md)
 
-## I want the finance
+### I want the finance
 
 - [Financial Model](docs/finance/financial-model.md)
 - [Investment Data Model](docs/finance/investment-data-model.md)
@@ -651,14 +651,14 @@ If all four say exactly the same thing at exactly the same depth, I have success
 - [Tax Methodology](docs/finance/tax-methodology.md)
 - [FIRE Methodology](docs/finance/fire-methodology.md)
 
-## I need exact contracts
+### I need exact contracts
 
 - [Reference](docs/reference/README.md)
 - [Silver Data Contracts](docs/reference/silver-data-contracts.md)
 - [Gold Data Contracts](docs/reference/gold-data-contracts.md)
 - [Identity & Grain Contracts](docs/reference/identity-and-grain-contracts.md)
 
-## I want to change the system
+### I want to change the system
 
 - [Developer Guide](docs/developer/README.md)
 - [Engineering Standards](docs/developer/engineering-standards.md)
@@ -666,7 +666,7 @@ If all four say exactly the same thing at exactly the same depth, I have success
 - [Schema Evolution](docs/developer/data-contract-and-schema-evolution.md)
 - [Testing & Validation](docs/developer/testing-and-validation.md)
 
-## I want the project story
+### I want the project story
 
 - [Project](docs/about/project.md)
 - [About Me](docs/about/about-me.md)
@@ -674,7 +674,7 @@ If all four say exactly the same thing at exactly the same depth, I have success
 
 ---
 
-# Why I keep building it this way
+## Why I keep building it this way
 
 The principles below were mostly learned because their opposites eventually hurt.
 
@@ -714,7 +714,7 @@ Sometimes the fastest function is the one I deleted.
 
 ---
 
-# Final note
+## Final note
 
 This project began as a personal month-end automation problem.
 

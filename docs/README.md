@@ -56,9 +56,9 @@ For implementation truth, stay here.
 
 ---
 
-# Start with the question, not the folder
+## Start with the question, not the folder
 
-## I want to run the application
+### I want to run the application
 
 Start with [Getting Started](getting-started/README.md).
 
@@ -76,7 +76,7 @@ Recommended path:
 
 You do not need to understand deterministic identity serialization before pressing Run. The rabbit hole will still be there when you are ready.
 
-## I want to understand the architecture
+### I want to understand the architecture
 
 Start with [Architecture](architecture/README.md).
 
@@ -100,7 +100,7 @@ This route explains:
 - deterministic identity;
 - failure, recovery, backup, and restore.
 
-## I want to understand the financial model
+### I want to understand the financial model
 
 Start with [Finance](finance/README.md).
 
@@ -128,7 +128,7 @@ This is the best path for understanding the distinction between:
 - indicative Tax outputs;
 - deterministic FI metrics and stochastic FIRE planning.
 
-## I need the exact schema, grain, identity, or producer
+### I need the exact schema, grain, identity, or producer
 
 Go directly to [Reference](reference/README.md).
 
@@ -146,7 +146,7 @@ Reference answers questions like:
 
 If you already know what you are looking for, Reference is the shortest route between curiosity and receipts.
 
-## I want to change the system safely
+### I want to change the system safely
 
 Start with [Developer Engineering](developer/README.md).
 
@@ -172,7 +172,7 @@ This route covers the complete change lifecycle:
 - using the repository quality gates;
 - moving verified code through PR, build, release, and publishing workflows.
 
-## I want to change financial assumptions or runtime behavior
+### I want to change financial assumptions or runtime behavior
 
 Start with [Configuration](configuration/README.md).
 
@@ -188,7 +188,7 @@ stochastic planning assumptions
 
 That distinction matters. Changing where a database lives is not the same category of change as changing Tax policy, an investment exclusion, or the return process used in FIRE simulations.
 
-## I want the project story rather than another technical specification
+### I want the project story rather than another technical specification
 
 Use [About](about/README.md).
 
@@ -198,7 +198,7 @@ Then use the [Roadmap](roadmap.md) for the current maturity philosophy: protect 
 
 ---
 
-# The knowledge map
+## The knowledge map
 
 The documentation domains are not independent silos. They answer different questions about the same system.
 
@@ -247,9 +247,9 @@ That is the point of the corpus. Depth should be available without being compuls
 
 ---
 
-# Recommended reading paths
+## Recommended reading paths
 
-## New user
+### New user
 
 ```mermaid
 flowchart LR
@@ -264,7 +264,7 @@ flowchart LR
 
 Goal: get the application running before learning why its recovery coordinator has opinions.
 
-## Data engineer / software architect
+### Data engineer / software architect
 
 ```mermaid
 flowchart LR
@@ -281,7 +281,7 @@ flowchart LR
 
 Goal: understand ownership, data movement, persistence, operational provenance, contracts, and safe extensibility.
 
-## Finance / Quant reader
+### Finance / Quant reader
 
 ```mermaid
 flowchart LR
@@ -301,7 +301,7 @@ flowchart LR
 
 Goal: follow evidence from observation through reconstruction, interpretation, Tax, and planning without collapsing those epistemic layers together.
 
-## Reliability / audit reader
+### Reliability / audit reader
 
 ```mermaid
 flowchart LR
@@ -317,7 +317,7 @@ flowchart LR
 
 Goal: understand what happened, what became durable, what can be replayed, what cannot be called atomic, and how recovery truth is preserved.
 
-## Contributor
+### Contributor
 
 ```mermaid
 flowchart LR
@@ -337,67 +337,67 @@ Goal: make the change, prove the change, and ship the change without moving fina
 
 ---
 
-# Architecture
+## Architecture
 
 [Architecture](architecture/README.md) specifies how the system divides responsibility, moves state, persists evidence, preserves identity, and recovers from failure.
 
 Its pages form one causal sequence.
 
-## [System Architecture](architecture/system-architecture.md)
+### [System Architecture](architecture/system-architecture.md)
 
 The whole system in one narrative: presentation, application, domain, infrastructure, configuration, contracts, composition, SQLite, DuckDB, Bronze, Silver, Gold, Meta, and operational history.
 
 Read this first when you need the complete mental model.
 
-## [Application and Dependency Architecture](architecture/application-and-dependency-architecture.md)
+### [Application and Dependency Architecture](architecture/application-and-dependency-architecture.md)
 
 Explains why responsibilities stay where they do: façade, orchestration, execution coordination, composition root, typed cross-boundary contracts, package APIs, and enforceable dependency direction.
 
 Read this when a change raises the question: *which layer should own this?*
 
-## [Data Lifecycle](architecture/data-lifecycle.md)
+### [Data Lifecycle](architecture/data-lifecycle.md)
 
 Follows evidence through discovery, acquisition, Control Plane registration, Bronze synchronization, canonical transformation, domain reconstruction, Gold publication, Meta projection, commit, and failure paths.
 
 Read this when you want to know *what happens next* during a run.
 
-## [Warehouse Architecture](architecture/warehouse-architecture.md)
+### [Warehouse Architecture](architecture/warehouse-architecture.md)
 
 Specifies the SQLite/DuckDB split, persistent Bronze, rebuilt Silver/Gold state, Meta projections, registry-driven publication, transaction boundaries, and analytical rebuild behavior.
 
 Read this when you want to know *where state lives and why*.
 
-## [Control Plane Artifact Lifecycle](architecture/control-plane-artifact-lifecycle.md)
+### [Control Plane Artifact Lifecycle](architecture/control-plane-artifact-lifecycle.md)
 
 Covers artifact identity, source payload retention, discovery, change detection, rename/removal behavior, event history, synchronization summaries, external-provider provenance, simulation provenance, and healing.
 
 Read this when you need historical operational truth rather than current analytical state.
 
-## [Deterministic Identity and Replay](architecture/deterministic-identity-and-replay.md)
+### [Deterministic Identity and Replay](architecture/deterministic-identity-and-replay.md)
 
 Specifies canonical normalization, namespace-specific ordered fields, versioned serialization, deterministic IDs, configuration fingerprints, replay boundaries, and simulation provenance.
 
 Read this when continuity matters more than row position.
 
-## [Reliability and Recovery](architecture/reliability-and-recovery.md)
+### [Reliability and Recovery](architecture/reliability-and-recovery.md)
 
 Explains savepoints, cross-database commit state, failure domains, stale runs, healing, rollback, convergence, locking, and the precise limits of what the system can call atomic.
 
 Read this when reality has ignored the happy path.
 
-## [Backup and Restore](architecture/backup-and-restore.md)
+### [Backup and Restore](architecture/backup-and-restore.md)
 
 Specifies coordinated SQLite/DuckDB snapshots, checkpointing, archive validation, staged extraction, pair installation, rollback, and restore outcomes.
 
 Read this before assuming a ZIP file automatically counts as a recovery strategy.
 
-## [Data Model](architecture/data-model.md)
+### [Data Model](architecture/data-model.md)
 
 Connects household, investment, currency, Tax, wealth, FIRE, operational, and analytical state through explicit grains and relationships.
 
 Read this when table names alone stop being enough.
 
-## [Design Decisions](architecture/design-decisions.md)
+### [Design Decisions](architecture/design-decisions.md)
 
 Closes the architecture story with the trade-offs behind local-first operation, SQLite + DuckDB, evidence retention, rebuilt analytical layers, explicit reconciliation, deterministic identity, typed contracts, functional/OOP boundaries, and constrained complexity.
 
@@ -405,103 +405,103 @@ Read this when you want the *why*, not just the topology.
 
 ---
 
-# Finance
+## Finance
 
 [Finance](finance/README.md) specifies what the numbers mean.
 
 This section is deliberately strict about the difference between observation, reconstruction, reconciliation, estimation, and simulation. A number can be precise and still answer the wrong question.
 
-## Foundations
+### Foundations
 
-### [Financial Model](finance/financial-model.md)
+#### [Financial Model](finance/financial-model.md)
 
 Defines the hierarchy of observed evidence, canonical facts, reconstructed state, reconciled state, analytical presentation, estimates, and simulations.
 
 Everything else in Finance depends on these categories staying separate.
 
-### [Cashflow and Wealth](finance/cashflow-and-wealth.md)
+#### [Cashflow and Wealth](finance/cashflow-and-wealth.md)
 
 Covers household ledger semantics, opening balances, income, expenses, transfers, book state, market-state injection, budget behavior, savings, liquidity, net worth, and wealth analytics.
 
-### [Investment Data Model](finance/investment-data-model.md)
+#### [Investment Data Model](finance/investment-data-model.md)
 
 Defines canonical purchases, sales, instruments, market observations, benchmarks, FX evidence, transaction grain, deterministic identity, and the handoff into reconstructed investment state.
 
-## Investment engine
+### Investment engine
 
-### [Investment Market Reconstruction](finance/investment-market-reconstruction.md)
+#### [Investment Market Reconstruction](finance/investment-market-reconstruction.md)
 
 Reconstructs daily US holding/valuation state from transaction evidence, backward as-of observations, price staleness, closure gaps, and temporally causal FX.
 
-### [FIFO and Realized Events](finance/fifo-and-realized-events.md)
+#### [FIFO and Realized Events](finance/fifo-and-realized-events.md)
 
 Specifies acquisition lots, chronological depletion, partial and multi-lot sales, holding period, realized-event grain, deterministic lineage, and benchmark shadow state.
 
-### [Investment Reconciliation](finance/investment-reconciliation.md)
+#### [Investment Reconciliation](finance/investment-reconciliation.md)
 
 Explains what happens when reconstructed portfolio state disagrees with independent broker evidence: additions, removals, basis adjustments, synthetic state, uncertainty, and future FIFO consequences.
 
-### [Investment Performance and Risk](finance/investment-performance-and-risk.md)
+#### [Investment Performance and Risk](finance/investment-performance-and-risk.md)
 
 Covers realized/unrealized performance, CAGR, XIRR, benchmark comparison, drawdown, grouping, aggregation, validity states, and risk semantics.
 
-### [Multi-Currency and FX](finance/multi-currency-and-fx.md)
+#### [Multi-Currency and FX](finance/multi-currency-and-fx.md)
 
 Specifies transaction currency, local market currency, reporting/base values, acquisition FX, valuation FX, temporal causality, asset-versus-FX attribution, and fail-closed foreign FX behavior.
 
-## Tax, planning, and metrics
+### Tax, planning, and metrics
 
-### [Tax Methodology](finance/tax-methodology.md)
+#### [Tax Methodology](finance/tax-methodology.md)
 
 Explains canonical TaxEvents, household versus investment evidence, Quant realized-event integration, double-count protection, indicative estimates, `READY` / `CHECK_REQUIRED` states, Tax Gold outputs, and statutory limitations.
 
-### [FIRE Methodology](finance/fire-methodology.md)
+#### [FIRE Methodology](finance/fire-methodology.md)
 
 Separates deterministic FI measures from stochastic future-path modelling and documents regimes, jumps, inflation, human-capital shocks, glide paths, debt, withdrawals, sequence risk, reproducibility, and simulation provenance.
 
-### [Metrics and Methodology](finance/metrics-and-methodology.md)
+#### [Metrics and Methodology](finance/metrics-and-methodology.md)
 
 The quantitative dictionary for XIRR, CAGR, drawdown, savings, liquidity, FI coverage, rolling measures, Tax metrics, null/zero/NaN semantics, additivity, validity, and metric lineage.
 
 ---
 
-# Reference
+## Reference
 
 [Reference](reference/README.md) is where narrative gives way to exact contracts.
 
 Architecture says *why* a layer exists. Finance says *what* it means. Reference says **exactly what the contract is**.
 
-## [Bronze Data Contracts](reference/bronze-data-contracts.md)
+### [Bronze Data Contracts](reference/bronze-data-contracts.md)
 
 Source-shaped persistent evidence contracts, synchronization categories, replacement behavior, provenance fields, dynamic-schema behavior, and registry metadata.
 
-## [Silver Data Contracts](reference/silver-data-contracts.md)
+### [Silver Data Contracts](reference/silver-data-contracts.md)
 
 Canonical physical schemas, grains, producers, and publication contracts.
 
-## [Gold Data Contracts](reference/gold-data-contracts.md)
+### [Gold Data Contracts](reference/gold-data-contracts.md)
 
 Decision-facing analytical schemas, BI grains, producers, and presentation contracts.
 
-## [Meta Data Contracts](reference/meta-data-contracts.md)
+### [Meta Data Contracts](reference/meta-data-contracts.md)
 
 Current analytical context in DuckDB: registry, row-count, settings, rules, data-contract, and simulation projections.
 
-## [Control Plane Data Contracts](reference/control-plane-data-contracts.md)
+### [Control Plane Data Contracts](reference/control-plane-data-contracts.md)
 
 SQLite operational history: runs, failures, snapshots, artifacts, payloads, artifact events, provider requests, synchronization summaries, and simulation runs.
 
-## [Identity and Grain Contracts](reference/identity-and-grain-contracts.md)
+### [Identity and Grain Contracts](reference/identity-and-grain-contracts.md)
 
 The compact authority map for dataset grain, deterministic identity, ownership, namespaces, and continuity rules.
 
-## [Glossary](reference/glossary.md)
+### [Glossary](reference/glossary.md)
 
 Shared vocabulary for evidence, reconstruction, reconciliation, publication, provenance, metrics, lifecycle, recovery, and financial state.
 
 ---
 
-# Configuration
+## Configuration
 
 [Configuration](configuration/README.md) explains which parts of system behavior are intentionally policy-driven.
 
@@ -517,95 +517,95 @@ What assumptions should modeled futures use?
 How is that configuration fingerprinted for provenance?
 ```
 
-## [Configuration Reference](configuration/configuration-reference.md)
+### [Configuration Reference](configuration/configuration-reference.md)
 
 Runtime Settings, source/target paths, validation, discovery, hashing policy, preferences boundaries, snapshots, and operational consequences.
 
-## [Financial Rules Reference](configuration/financial-rules-reference.md)
+### [Financial Rules Reference](configuration/financial-rules-reference.md)
 
 Household classification, assets, investments, Tax rules, macro assumptions, budgets, mappings, portfolio behavior, policy validation, and downstream consumers.
 
-## [FIRE and Simulation Reference](configuration/fire-and-simulation-reference.md)
+### [FIRE and Simulation Reference](configuration/fire-and-simulation-reference.md)
 
 Deterministic FIRE assumptions plus the stochastic parameter tree: regimes, jumps, inflation, human-capital shocks, glide paths, debt, withdrawals, fingerprints, and provenance.
 
 ---
 
-# Developer Engineering
+## Developer Engineering
 
 [Developer Engineering](developer/README.md) specifies how the system is changed without weakening the contracts documented above.
 
 The section treats a code change as another controlled state transition.
 
-## [Development Guide](developer/development-guide.md)
+### [Development Guide](developer/development-guide.md)
 
 The end-to-end development journey: find ownership, trace execution, identify the contract, preserve grain/identity, understand lazy/stateful boundaries, document the change, and choose the right verification level.
 
-## [Engineering Standards](developer/engineering-standards.md)
+### [Engineering Standards](developer/engineering-standards.md)
 
 The permanent source standard: package ownership, typed contracts, `Any` exceptions, public APIs, OOP vs functional transformations, complexity classification, materialization policy, financial semantics, documentation, and evidence-driven performance work.
 
-## [Adding Data Sources](developer/adding-data-sources.md)
+### [Adding Data Sources](developer/adding-data-sources.md)
 
 Extends the evidence boundary through provider mechanics, typed extraction outcomes, completeness policy, Control Plane provenance, Bronze persistence, normalization, failure handling, and testing.
 
-## [Adding Transformations](developer/adding-transformations.md)
+### [Adding Transformations](developer/adding-transformations.md)
 
 Extends canonical financial meaning while protecting input/output grain, deterministic identity, required-field validation, sign/currency semantics, temporal causality, lazy execution, and downstream equivalence.
 
-## [Adding Gold Marts](developer/adding-gold-marts.md)
+### [Adding Gold Marts](developer/adding-gold-marts.md)
 
 Publishes new analytical state without smuggling a second financial model into the warehouse. Covers decision purpose, grain, additivity, canonical inputs, schema/registry integration, validity, and publication tests.
 
-## [Data Contract and Schema Evolution](developer/data-contract-and-schema-evolution.md)
+### [Data Contract and Schema Evolution](developer/data-contract-and-schema-evolution.md)
 
 Handles the compatibility problem once a change touches durable shapes: grain, identity, schemas, registry, producers, consumers, replay, rebuilds, and downstream migration risk.
 
-## [Testing and Validation](developer/testing-and-validation.md)
+### [Testing and Validation](developer/testing-and-validation.md)
 
 Explains focused tests, domain/phase regression, architecture certification, contract tests, failure-path tests, static analysis, real pipeline verification, and documentation QA.
 
-## [Tooling, Quality and Release Engineering](developer/tooling-quality-and-release-engineering.md)
+### [Tooling, Quality and Release Engineering](developer/tooling-quality-and-release-engineering.md)
 
 Closes the change lifecycle: Poe task orchestration, fast/full quality gates, Ruff, Mypy, Pyright, Pylint, Pytest, Git hooks, structured audits, Conventional Commits, PR automation, builds, GitHub releases, PyInstaller, and PyPI publishing.
 
 ---
 
-# Getting Started
+## Getting Started
 
 [Getting Started](getting-started/README.md) is intentionally practical.
 
 It should get the system alive before asking the reader to study its internals.
 
-## [Installation](getting-started/installation.md)
+### [Installation](getting-started/installation.md)
 
 Environment, package installation, application entry points, filesystem prerequisites, and first verification.
 
-## [Quick Start](getting-started/quick-start.md)
+### [Quick Start](getting-started/quick-start.md)
 
 Initial Settings/rules setup, validation, first run, generated stores, expected outputs, and troubleshooting.
 
-## [CLI and Desktop](getting-started/cli-and-desktop.md)
+### [CLI and Desktop](getting-started/cli-and-desktop.md)
 
 Operational surfaces, CLI commands/options, Desktop behavior, asynchronous runs, preferences, docs integration, snapshots, restores, and interface-specific errors.
 
 ---
 
-# About
+## About
 
 [About](about/README.md) deliberately steps away from specification language and explains the system as an engineering journey.
 
-## [Project](about/project.md)
+### [Project](about/project.md)
 
 How fragmented finance evidence gradually forced stronger answers around repeatability, provenance, domain modelling, reconstruction, reconciliation, Tax evidence, multi-currency state, recovery, and documentation.
 
-## [About Me](about/about-me.md)
+### [About Me](about/about-me.md)
 
 How accounting, Tax, analytics, software engineering, data engineering, and quantitative finance converged in the way I designed and built the project.
 
 ---
 
-# Roadmap
+## Roadmap
 
 [Roadmap](roadmap.md) describes what maturity means now that the architecture is stable.
 
@@ -627,7 +627,7 @@ The parking lot remains free of charge. 😄
 
 ---
 
-# Authority map
+## Authority map
 
 When two parts of the system appear to say different things, start by asking **which kind of truth is involved**.
 
@@ -666,27 +666,27 @@ This map is intentionally compact. The moment it starts trying to replace [Syste
 
 ---
 
-# How to use these specifications
+## How to use these specifications
 
-## When you need meaning
+### When you need meaning
 
 Use **Finance** and **Architecture**.
 
 They explain why a concept exists, who owns it, and what invariants make it trustworthy.
 
-## When you need shape
+### When you need shape
 
 Use **Reference**.
 
 It is the shortest path to physical schemas, grains, identity, and producers.
 
-## When you need policy
+### When you need policy
 
 Use **Configuration**.
 
 It distinguishes operational settings from financial rules and model assumptions.
 
-## When you need to modify something
+### When you need to modify something
 
 Use **Developer Engineering** after reading the specification owned by the thing you are changing.
 
@@ -709,7 +709,7 @@ new recovery behavior
     → Testing and Validation
 ```
 
-## When you need proof
+### When you need proof
 
 Go to the source and tests.
 
@@ -717,11 +717,11 @@ Documentation is designed to make that proof easier to find, not to replace it.
 
 ---
 
-# Documentation principles
+## Documentation principles
 
 The corpus follows a few permanent rules.
 
-## Explain less, prove more
+### Explain less, prove more
 
 Generic prose is cheap. Source-backed implementation detail is useful.
 
@@ -736,7 +736,7 @@ The deeper specifications therefore favor:
 - failure paths;
 - explicit trade-offs.
 
-## Preserve epistemic boundaries
+### Preserve epistemic boundaries
 
 The documentation keeps these categories distinct:
 
@@ -753,13 +753,13 @@ Those words are not stylistic synonyms.
 
 They describe different kinds of financial truth.
 
-## Grain before aggregation
+### Grain before aggregation
 
 A metric without a grain is an invitation to create a correct-looking wrong number.
 
 The docs therefore describe row grain, identity, additivity, and temporal semantics wherever they affect interpretation.
 
-## Failure is part of the design
+### Failure is part of the design
 
 Happy paths are only half an architecture.
 
@@ -772,13 +772,13 @@ Reliability documentation therefore specifies:
 - what can only converge later;
 - what provenance remains after the failure.
 
-## Narrative flow matters
+### Narrative flow matters
 
 The documents are not collections of independent headings.
 
 Each substantial page is designed so one section creates the question answered by the next. If the H2 sections could be shuffled like a playlist without damaging comprehension, the narrative probably needs more work.
 
-## Character is allowed; ambiguity is not
+### Character is allowed; ambiguity is not
 
 A little Gen-Z sarcasm is welcome when it sharpens an engineering point.
 
@@ -788,7 +788,7 @@ The jokes can be loose. The contracts cannot. 😂
 
 ---
 
-# Where to go next
+## Where to go next
 
 If this is your first visit:
 
