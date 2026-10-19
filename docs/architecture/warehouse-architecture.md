@@ -1,193 +1,164 @@
 # Warehouse Architecture
 
-Personal Finance ETL uses **SQLite and DuckDB together**, but they are not interchangeable stores. SQLite owns historical operational provenance. DuckDB owns analytical persistence and publication. Inside DuckDB, Bronze, Silver, Gold, and Meta have different persistence and authority semantics.
+The analytical warehouse has four layers because four different persistence jobs exist.
 
-The architecture is easiest to understand by refusing the tempting shortcut of calling everything “the database.” There are two database engines and five logical persistence responsibilities. That distinction is the difference between a recoverable system and a folder containing files with impressive extensions.
+Bronze needs to preserve synchronized source-oriented evidence. Silver needs canonical analytical truth. Gold needs decision-ready presentation models. Meta needs current inspection context.
 
-## 1. Persistence topology
+Trying to make one layer do all four would blur grain, ownership, and recovery semantics.
+
+```mermaid
+flowchart LR
+    CP[SQLite Control Plane] --> B[Bronze]
+    B --> S[Silver]
+    S --> G[Gold]
+    S --> M[Meta context]
+    G --> M
+    CP -. current operational context .-> M
+```
+
+This specification defines those jobs, the contract registry that governs them, and the transaction/recovery model around publication.
+
+## Persistence topology
+
+The application persists two fundamentally different categories of state:
 
 ```mermaid
 flowchart TB
-    SRC[Source artifacts]
-
-    subgraph SQLite[SQLite Raw Store / Control Plane]
-        RUNS[Run history]
-        ART[Artifact registry + events]
-        PAY[Retained payloads]
-        SNAP[Settings / rules snapshots]
-        SIM[Simulation provenance]
+    subgraph Operational[Operational persistence]
+        C[(SQLite)]
+        CR[Run + artifact history]
+        CP[Raw payloads]
+        CF[Failures / provider / simulation provenance]
     end
 
-    subgraph DuckDB[DuckDB analytical warehouse]
-        B[Bronze]
-        S[Silver]
-        G[Gold]
-        M[Meta]
+    subgraph Analytical[Analytical persistence]
+        D[(DuckDB)]
+        B[bronze.*]
+        S[silver.*]
+        G[gold.*]
+        M[meta.*]
     end
-
-    SRC --> ART
-    SRC --> PAY
-    SRC --> B
-    ART <--> B
-    B --> S
-    S --> G
-    ART --> M
-    SNAP --> M
-    SIM --> M
 ```
 
-## 2. Ownership matrix
+SQLite answers historical lifecycle questions.
 
-| Store / layer | Persistence style | Primary authority | Rebuilt? |
-|---|---|---|---|
-| SQLite Control Plane | historical operational | runs, artifacts, events, payload/provenance, snapshots, simulations | no |
-| DuckDB Bronze | persistent source representation | synchronized extracted evidence | selectively synchronized |
-| DuckDB Silver | current canonical analytical | dimensions, canonical facts, Quant/Tax facts | yes, full schema publication |
-| DuckDB Gold | current presentation analytical | BI-facing financial analytics | yes, full schema publication |
-| DuckDB Meta | current analytical context | registry projection, settings/rules, row counts, latest simulation | refreshed |
+DuckDB answers analytical questions.
 
-The word **authority** is intentional. For example, `meta.m_File_Registry` is useful for analytics, but the historical artifact authority is SQLite's Control Plane.
+The separation is intentional even though both are local database files.
 
-## 3. DuckDB manager
+## DuckDBManager owns connection mechanics, not analytical meaning
 
-`backend/load/database.py` wraps the analytical database connection and schema initialization. `DuckDBManager.ensure_schemas()` creates the logical namespaces required by the warehouse.
+`DuckDBManager` creates and exposes the DuckDB connection and ensures the required schemas exist.
 
-The ETL opens DuckDB before the Control Plane because analytical connection setup is needed for subsequent healing and transactional work, but operational run authority begins in SQLite before transformations execute.
+Layer-specific classes then own the behavior of Bronze, Silver, Gold, and Meta.
 
-## 4. SQLite Control Plane
-
-The Control Plane schema currently contains eight tables:
+This keeps connection management separate from publication semantics.
 
 ```text
-cp_runs
-cp_run_failures
-cp_settings_snapshots
-cp_rules_snapshots
-cp_file_registry
-cp_file_payloads
-cp_artifact_run_events
-cp_simulation_runs
+DuckDBManager
+├── BronzeLayer
+├── SilverLayer
+├── GoldLayer
+└── MetaLayer
 ```
 
-At warehouse-architecture level, these can be grouped by responsibility:
+The manager is deliberately small because the warehouse layers have different persistence contracts.
+
+## Why SQLite remains outside the warehouse layer
+
+It would be technically possible to create operational tables in DuckDB and call the whole thing one warehouse.
+
+That would make the storage diagram shorter and the semantics worse.
+
+Operational state has different needs:
+
+- event-oriented history;
+- raw payload retention;
+- file registry mutation;
+- run lifecycle mutation;
+- savepoints for nested operations;
+- crash/stale-run recovery;
+- inter-process pipeline locking.
+
+Analytical state has different needs:
+
+- columnar scan performance;
+- Polars/DuckDB interchange;
+- schema recreation;
+- table publication order;
+- Power BI-friendly queryability.
+
+Choosing two engines is therefore a consequence of workload shape, not technology collecting.
+
+## Bronze is persistent analytical evidence
+
+Bronze tables retain source-oriented records after synchronization.
+
+They are not the canonical business model.
+
+That distinction lets Bronze preserve useful source fidelity while still giving the analytical pipeline a durable rebuild boundary.
 
 ```mermaid
-erDiagram
-    CP_RUNS ||--o{ CP_RUN_FAILURES : records
-    CP_RUNS ||--o{ CP_ARTIFACT_RUN_EVENTS : emits
-    CP_RUNS ||--o{ CP_SIMULATION_RUNS : owns
-    CP_SETTINGS_SNAPSHOTS ||--o{ CP_RUNS : configures
-    CP_RULES_SNAPSHOTS ||--o{ CP_RUNS : governs
-    CP_FILE_REGISTRY ||--o| CP_FILE_PAYLOADS : retains
-    CP_FILE_REGISTRY ||--o{ CP_ARTIFACT_RUN_EVENTS : histories
+flowchart LR
+    P[Captured payload] --> X[Extractor]
+    X --> B[Bronze table]
+    B --> T[Canonical transform]
+    T --> S[Silver]
 ```
 
-Exact columns, keys, event vocabulary, and retention semantics belong in the Control Plane Reference specification.
+The Control Plane owns the original payload bytes and operational event history. Bronze owns the synchronized analytical representation.
 
-## 5. Why SQLite owns operational history
+## Bronze contracts map extraction to persistence
 
-Operational state is transactional, relational, relatively small, and write-oriented around run/artifact events. SQLite is well suited to this workload and gives the application:
-
-- durable run lifecycle;
-- artifact identity independent of DuckDB analytical rebuilds;
-- retained payload support;
-- settings/rules snapshots;
-- savepoint-based nested atomic operations;
-- structured failure records;
-- simulation provenance.
-
-The Control Plane can therefore survive analytical schema replacement without losing the history of how that state was produced.
-
-## 6. Savepoint atomicity
-
-`SQLiteManager.atomic()` uses savepoints for scoped repository operations. This is distinct from the outer ETL transaction.
-
-Conceptually:
-
-```mermaid
-sequenceDiagram
-    participant ETL as Outer ETL transaction
-    participant Repo as Repository operation
-    participant DB as SQLite
-
-    ETL->>DB: BEGIN
-    Repo->>DB: SAVEPOINT
-    Repo->>DB: mutate registry/events
-    alt repository operation succeeds
-        Repo->>DB: RELEASE SAVEPOINT
-    else repository operation fails
-        Repo->>DB: ROLLBACK TO SAVEPOINT
-        Repo->>DB: RELEASE SAVEPOINT
-    end
-```
-
-Savepoints protect a repository operation without pretending to create distributed atomicity with DuckDB.
-
-## 7. Bronze: persistent evidence representation
-
-Bronze is the durable analytical representation of extracted source evidence. Its contract registry currently contains 20 entries.
-
-A Bronze contract connects four concepts:
+`BronzeDataContract` connects three concepts that otherwise tend to drift apart:
 
 ```python
+# src/personal_finance_etl/infrastructure/warehouse/registry.py
 @dataclass
 class BronzeDataContract:
+    """Relationship between extraction attributes, sync categories, and Bronze tables."""
+
     extraction_attribute: str
     sync_category: str
     physical_table: str
     is_full_replace: bool
 ```
 
-That is more useful than a simple table-name list because the warehouse needs to know how an extraction output maps to Control Plane synchronization semantics.
+The registry therefore answers:
 
-## 8. Bronze contract families
+- which field in `ExtractionResult` is being published;
+- which Control Plane synchronization category owns it;
+- which physical Bronze table receives it;
+- whether the category is full-replace or incremental.
 
-### Full-replace
+This is more robust than duplicating those mappings in discovery, extraction, and loading code independently.
 
-Current full-replace contracts include source/master/mapping datasets such as:
+## Bronze source families have different synchronization semantics
 
-- SQLite category/asset/currency/transaction source tables;
-- MF ISIN mapping;
-- benchmark mapping;
+The registry includes both full-replace and incremental families.
+
+Examples of full-replace state include reference/configuration-style sources such as:
+
+- SQLite base tables;
+- mappings;
 - opening balances;
 - benchmark master;
 - macro parameters;
-- column master;
-- currency mapping.
+- column master.
 
-### Incremental
+Historical evidence families such as holdings, orders, market history, and transactions can be synchronized incrementally.
 
-Current incremental contracts include:
+The architectural rule is not “Bronze is append-only.”
 
-- MF market data;
-- US stock transactions;
-- currency FX history;
-- MF transactions;
-- Indian stock market data;
-- stock transactions;
-- benchmark history;
-- US stock prices.
+It is:
 
-The exact physical contracts are documented in Reference.
+> persistence behavior follows source semantics declared by contract.
 
-## 9. Bronze synchronization model
+## Bronze identity survives rename migration
 
-```mermaid
-flowchart TD
-    CP[Control Plane pending state] --> EXT[Extract actionable evidence]
-    EXT --> C{Bronze contract mode}
-    C -->|full replace| FR[Replace current source representation]
-    C -->|incremental| IN[Upsert synchronized history]
-    FR --> MARK[Mark artifacts synced]
-    IN --> MARK
-    MARK --> FULL[Read complete Bronze state]
-```
+When the Control Plane identifies a rename rather than a new artifact, Bronze can migrate the associated path identity.
 
-Bronze therefore bridges operational artifact state and analytical reconstruction.
-
-## 10. Bronze identity migration
-
-Renames are propagated into Bronze provenance:
+The executor invokes:
 
 ```python
 if renames:
@@ -195,332 +166,502 @@ if renames:
     meta_layer.migrate_identity(renames)
 ```
 
-This keeps path-level changes from unnecessarily fragmenting analytical lineage.
+This prevents a path move from duplicating historical evidence or leaving stale current-context metadata behind.
 
-## 11. Silver: canonical analytical publication
+Artifact identity therefore crosses the operational/analytical boundary intentionally.
 
-Silver currently contains 24 registered contracts across Common, Wealth, Investments, and Taxes.
+## Bronze synchronization closes an operational loop
 
-Its responsibilities include:
+A successful Bronze write is not complete until the Control Plane knows the artifact has been synchronized.
 
-- canonical dimensions;
-- canonical household facts;
-- canonical investment market/trade facts;
-- Quant lot/realized/reconciliation facts;
-- canonical tax events.
-
-Silver is where heterogeneous evidence becomes a stable analytical model.
-
-## 12. Silver publication strategy
-
-`SilverLayer.load()` rebuilds the Silver schema and publishes registered Silver contracts in `publication_order`.
-
-```mermaid
-flowchart LR
-    DFS[In-memory canonical outputs] --> REG[Silver registry order]
-    REG --> DROP[Replace silver schema]
-    DROP --> WRITE[Write each registered table]
-    WRITE --> S[(silver.*)]
-```
-
-This makes Silver a **current complete publication**, not a mutation log.
-
-The trade-off is deliberate: recomputation costs time, but it avoids maintaining correction semantics for every possible upstream source change.
-
-## 13. Current Silver domains
-
-| Domain | Representative contracts |
-|---|---|
-| Common | `d_Calendar`, `d_Currency`, `f_Currency_FX_Rates` |
-| Wealth | income/expense/asset dimensions and transaction/opening-balance facts |
-| Investments | investment master, macro parameters, market, purchase, sale, benchmark, lot, realized, reconciliation |
-| Taxes | `f_Tax_Events` |
-
-Reference owns exact schemas and grains; Architecture owns why these facts sit in Silver.
-
-## 14. Gold: presentation publication
-
-Gold currently contains 22 registered contracts. It presents financial meaning for BI rather than introducing a second canonical transaction model.
-
-Its domains include:
-
-- tax summaries/reconciliation;
-- monthly core fact;
-- wealth/asset breakdown;
-- income/expense/cashflow analytics;
-- budget variance;
-- FIRE analytics;
-- investment aggregations by ISIN, subtype, class, instrument type, sector, industry, portfolio, geography, country, and currency.
-
-```mermaid
-flowchart TB
-    SILVER[Canonical Silver] --> Q[Quant]
-    SILVER --> T[Tax]
-    SILVER --> W[Wealth]
-    Q --> GOLD[(Gold)]
-    T --> GOLD
-    W --> GOLD
-```
-
-Gold is optimized for consumption. It should not be mistaken for the evidence layer simply because its tables are the ones most likely to appear in a dashboard.
-
-## 15. Meta: current analytical context
-
-DuckDB Meta currently publishes:
-
-```text
-m_File_Registry
-m_Table_Row_Counts
-m_Financial_Rules
-m_Settings
-m_Data_Contracts
-m_Latest_Simulation
-```
-
-These tables make the analytical database inspectable and self-describing without duplicating the full operational history.
-
-```mermaid
-flowchart LR
-    CP[(SQLite Control Plane)] --> META[MetaLayer]
-    REG[Data Contract Registry] --> META
-    SET[Settings] --> META
-    RULE[FinancialRules] --> META
-    S[(Silver)] --> META
-    G[(Gold)] --> META
-    META --> M[(DuckDB meta)]
-```
-
-## 16. Meta is a projection, not authority
-
-The most important Meta rule is negative:
-
-> `meta.m_File_Registry` does not become the historical artifact authority merely because it is convenient to query from DuckDB.
-
-The Control Plane remains authoritative. `MetaLayer.heal_duckdb_registry()` exists precisely because the projection can diverge from operational truth after an interrupted cross-database commit.
-
-## 17. Contract registry as warehouse control plane
-
-`DATA_CONTRACT_REGISTRY` defines:
-
-- logical contract ID;
-- layer;
-- physical table;
-- domain;
-- grain;
-- producer;
-- publication order.
-
-Example:
-
-```python
-DataContract(
-    "df_f_investment_realized_events",
-    "silver",
-    "silver.f_Investment_Realized_Events",
-    "Investments",
-    "RealizedEvent",
-    "InvestmentQuantEngine",
-    205,
-)
-```
-
-This connects an in-memory engine output to physical publication and domain ownership.
-
-## 18. Registry inventory
-
-| Registry | Count |
-|---|---:|
-| Bronze | 20 |
-| Silver | 24 |
-| Gold | 22 |
-| Total | 66 |
-
-Counts are implementation facts from `backend/load/registry.py`, not documentation constants to be manually maintained forever. Reference generation should always verify them against source.
-
-## 19. Publication completeness invariant
-
-The ETL enforces that the in-memory analytical dictionary equals the registered analytical contract set before writing Silver/Gold.
-
-```mermaid
-flowchart TB
-    PROD[Produced contract IDs] --> EQ{Equal sets?}
-    REG[Registered contract IDs] --> EQ
-    EQ -->|yes| S[Publish Silver]
-    EQ -->|yes| G[Publish Gold]
-    EQ -->|no: unregistered| F1[Fail]
-    EQ -->|no: missing| F2[Fail]
-```
-
-This prevents schema drift from being silently normalized into “whatever the engine returned today.”
-
-## 20. Transaction architecture
-
-Both stores begin transactions for the logical run:
-
-```python
-self.db_manager.conn.execute("BEGIN TRANSACTION")
-cp.begin_transaction()
-```
-
-But the commit sequence is not atomic across engines:
+The loop is:
 
 ```mermaid
 sequenceDiagram
-    participant E as ETL
+    participant CP as Control Plane
+    participant B as BronzeLayer
     participant D as DuckDB
-    participant S as SQLite
 
-    E->>D: COMMIT
-    D-->>E: success
-    E->>S: COMMIT
-    S-->>E: success / failure
+    CP->>B: actionable captured evidence
+    B->>D: upsert / replace Bronze table
+    D-->>B: persisted
+    B->>CP: mark artifact SYNCED
+    CP-->>B: operational state updated
 ```
 
-If DuckDB commit fails, the run fails before SQLite commit. If DuckDB commits and SQLite commit fails, the next run relies on idempotency and Bronze self-healing.
+If that final operational update cannot complete after DuckDB has changed, the lifecycle has a convergence problem rather than permission to pretend the two stores agree.
 
-That is a recovery protocol, not two-phase commit.
+## Bronze readback is complete-state reconstruction
 
-## 21. Why commit DuckDB first?
+After synchronization, downstream transformation reads the complete Bronze state.
 
-The implementation's recovery model treats analytical publication as recoverable from persistent evidence and operational authority. A post-DuckDB SQLite failure is explicitly recognized and handled through next-run convergence.
-
-The docs should describe the behavior, not invent a stronger guarantee than the code provides.
-
-## 22. Analytical rebuild semantics
-
-The warehouse separates two kinds of persistence:
+This is the key warehouse design choice that makes Silver/Gold full rebuild practical.
 
 ```text
-Bronze
-  persistent synchronized evidence
-
-Silver / Gold
-  replaceable derived publications
+small changed set
+    ↓
+Bronze synchronized incrementally
+    ↓
+full Bronze state read
+    ↓
+Silver/Gold rebuilt coherently
 ```
 
-This means source history survives analytical rebuilds, while derived schemas can evolve without accumulating mutation history.
+Bronze therefore functions as both a persistence layer and an incremental-to-full-rebuild adapter.
 
-## 23. Failure and rollback
+## Silver is canonical analytical publication
 
-Before successful DuckDB commit, pipeline failure attempts rollback on both stores. Because commit itself is sequential, rollback cannot undo a DuckDB commit that already succeeded before SQLite commit failure.
+Silver tables contain normalized dimensions and facts used across financial domains.
 
-This boundary is why healing exists and why documentation must avoid the phrase “fully atomic across both databases.”
+They are closer to semantic truth than source truth.
 
-## 24. Snapshot architecture
+Examples include:
 
-`SystemBackupManager` treats the SQLite and DuckDB files as a coordinated recovery pair.
+- shared dimensions;
+- canonical household transactions;
+- investment master;
+- canonical purchase/sale evidence;
+- market and currency state;
+- reconstructed/reconciled investment datasets;
+- Tax evidence;
+- wealth and FIRE analytical inputs/outputs.
 
-Snapshot creation includes:
+The exact table contracts live in the Reference section. The architectural point is that Silver is where shared financial vocabulary becomes persistent.
 
-1. application lock acquisition;
-2. DuckDB checkpoint;
-3. SQLite backup API;
-4. DuckDB database inclusion;
-5. DuckDB WAL inclusion if present;
-6. temporary ZIP creation;
-7. CRC verification;
-8. atomic `os.replace()` publication.
+## Silver publication is a full replacement
+
+`SilverLayer.load()` drops and recreates the `silver` schema, re-executes the declarative DDL, and publishes registered contracts in `publication_order`.
+
+```python
+# src/personal_finance_etl/infrastructure/warehouse/silver.py
+contracts = sorted(
+    (c for c in DATA_CONTRACT_REGISTRY if c.layer == "silver"),
+    key=lambda c: c.publication_order,
+)
+self.db_manager.conn.execute("DROP SCHEMA IF EXISTS silver CASCADE")
+self.db_manager.conn.execute("CREATE SCHEMA silver")
+self.db_manager.conn.execute(SILVER_DDL)
+```
+
+This is intentionally different from Bronze.
+
+Silver represents the current coherent analytical reconstruction, so full replacement avoids partially stale downstream relationships.
+
+## Publication order is part of the contract
+
+`DataContract` declares:
+
+```python
+@dataclass
+class DataContract:
+    contract_id: str
+    layer: str
+    physical_table: str
+    domain: str
+    grain: str
+    producer: str
+    publication_order: int
+```
+
+That single record carries several forms of architectural metadata:
+
+- in-memory dataset identity;
+- target layer/table;
+- financial domain;
+- grain;
+- producer ownership;
+- physical publication order.
+
+The registry therefore connects runtime completeness, documentation, physical persistence, and lineage.
+
+## Silver performs publication-time quality checks
+
+The investment master is one example where persistence refuses semantically dangerous nulls.
+
+Before insertion, `SilverLayer._write()` checks critical fields such as `ISIN` and `TAX_TYPE`.
+
+Missing values raise rather than silently publishing a dimension that would corrupt downstream identity or Tax logic.
+
+This quality gate belongs at publication because it validates a property of the canonical analytical model, not merely raw source shape.
+
+## Empty strings are normalized in dimensions
+
+For dimension tables, empty string values are normalized to null before publication.
+
+That may look like a small cleaning detail, but it protects analytical semantics:
+
+```text
+""   ≠ meaningful category
+NULL = missing / not supplied
+```
+
+Without normalization, BI layers can accidentally treat empty labels as valid members.
+
+## LazyFrames materialize at the publication boundary
+
+Silver accepts `DataFrame` or `LazyFrame`.
+
+If a lazy plan reaches publication, it is collected there with an explicit materialization annotation.
+
+```python
+if isinstance(df, pl.LazyFrame):
+    # Materialization Boundary: PUBLICATION_BOUNDARY
+    # Terminal execution of lazy transformation graph for DuckDB Silver table insertion
+    df = df.collect()
+```
+
+That boundary is intentional because DuckDB insertion needs concrete rows and publication is the terminal consumer of the transformation graph.
+
+The design does not optimize for the smallest possible count of `.collect()` calls. It optimizes for **classified eager boundaries**.
+
+## Gold is decision-ready presentation publication
+
+Gold tables are built for consumption rather than canonical reuse.
+
+Typical consumers include Power BI and human-facing analytical exploration.
+
+Gold is allowed to denormalize, aggregate, or reshape canonical state when that improves decision usability, provided the grain remains explicit.
 
 ```mermaid
 flowchart LR
-    L[Pipeline lock] --> C[DuckDB checkpoint]
-    C --> S[SQLite consistent backup]
-    S --> Z[Temporary ZIP]
-    Z --> V[CRC verification]
-    V --> A[Atomic snapshot publish]
+    S[Canonical Silver] --> G1[Portfolio views]
+    S --> G2[Cashflow views]
+    S --> G3[Tax views]
+    S --> G4[Wealth / FIRE views]
+    G1 --> BI[Power BI]
+    G2 --> BI
+    G3 --> BI
+    G4 --> BI
 ```
 
-## 25. Restore architecture
+Gold is therefore a presentation model, not a second canonical domain.
 
-Restore validates archive shape and database contents before replacing live files. It rejects unexpected/nested/path-traversal/symlink/duplicate members and CRC corruption.
+## Gold logs the optimized lazy plan before materialization
 
-Existing databases are renamed to recovery backups before the validated pair is installed. If installation fails, the previous pair is restored.
+Gold publication exposes Polars optimizer behavior in debug logs before terminal execution.
 
-The system therefore treats recovery as a state transition with rollback, not “unzip and pray.”
+```python
+if isinstance(df, pl.LazyFrame):
+    compact_plan = df.explain().replace("\n", " | ")
+    logger.debug(
+        "[DAG:OPTIMIZER] Physical Plan for Gold '%s': %s", table_name, compact_plan
+    )
+    df = df.collect()
+```
 
-## 26. File-lock boundary
+That is useful for performance archaeology because a slow Gold publication can be investigated using the actual optimized graph rather than inferred from source expressions alone.
 
-Backup and restore use the same conceptual pipeline lock as ETL-sensitive operations. If the lock cannot be acquired, the operation refuses to proceed rather than racing an active pipeline.
+## Meta is an inspection layer
 
-This is a local application, but local does not mean concurrency bugs receive diplomatic immunity.
+`meta.*` stores current analytical context such as:
 
-## 27. Data durability by layer
+- table row counts;
+- current settings;
+- current financial rules;
+- contract inventory;
+- current file state mirrored for convenience.
+
+`MetaLayer.load()` truncates and refreshes those current-state tables after publication.
+
+This makes Meta useful to BI, diagnostics, and human inspection without asking the Control Plane to become an analytical query model.
+
+## Meta does not own history
+
+A crucial authority rule:
+
+> Meta may mirror current facts from operational state; it does not become the historical source of truth by doing so.
+
+If a Meta row and the Control Plane disagree about a run/artifact history question, the Control Plane wins.
+
+Meta is optimized for current analytical context. SQLite retains the event history needed to explain how that context was reached.
+
+## The registry is the warehouse's contract spine
+
+`DATA_CONTRACT_REGISTRY` governs both Silver and Gold publication.
+
+It is used for more than loading.
+
+The executor compares the entire produced in-memory dataset set with the registry before publication.
 
 ```mermaid
-flowchart TB
-    E[External evidence]
-    E --> CP[(Control Plane)]
-    E --> B[(Bronze)]
-    B --> S[(Silver)]
-    S --> G[(Gold)]
-
-    CP:::durable
-    B:::durable
-    S:::replaceable
-    G:::replaceable
-
-    classDef durable stroke-width:3px
-    classDef replaceable stroke-dasharray:5 5
+flowchart TD
+    Engine[Engine outputs] --> SetA[Produced contract IDs]
+    Registry[DATA_CONTRACT_REGISTRY] --> SetB[Declared contract IDs]
+    SetA --> Compare{Exact declared surface?}
+    SetB --> Compare
+    Compare -->|No: extra| Fail1[Unregistered output]
+    Compare -->|No: missing| Fail2[Missing required output]
+    Compare -->|Yes| Publish[Silver / Gold publication]
 ```
 
-Operational history and Bronze evidence are designed to survive analytical replacement. Silver/Gold can be rebuilt from upstream state.
+This prevents quiet warehouse drift.
 
-## 28. Layer-specific failure semantics
+A developer cannot casually create a new output and assume persistence will pick it up. Nor can a registered table silently disappear because an engine stopped producing it.
 
-| Failure location | Expected architectural response |
-|---|---|
-| discovery / extraction | run fails; analytical publication not committed |
-| Bronze synchronization | transactional rollback where possible; pending state remains actionable |
-| transformation / engine | rollback; failure provenance recorded |
-| contract validation | fail before publication commit |
-| Silver / Gold load | rollback before commit |
-| DuckDB commit | run fails; SQLite not committed |
-| SQLite commit after DuckDB | temporary divergence; next-run healing/idempotency |
-| snapshot validation | snapshot not published |
-| restore validation | live databases untouched |
-| restore install failure | recovery backups restored |
+## Registry completeness is validated before execution
 
-## 29. Why not one database?
+`validate_registry()` checks structural integrity of the declared contracts before the pipeline proceeds.
 
-A single database could simplify the commit story, but it would force operational and analytical workloads into the same engine and lifecycle. The current design accepts a narrow coordination cost to preserve clear responsibilities:
+This catches registry-level defects independently of runtime data.
 
-- SQLite for small transactional operational history and payload/snapshot metadata;
-- DuckDB for columnar analytical processing and BI consumption.
+The contract system therefore has two validation layers:
 
-That trade-off is documented more fully in `design-decisions.md`.
+1. registry self-consistency;
+2. produced-output completeness against that registry.
 
-## 30. Warehouse invariants
+## Contract fingerprints make publication structure reproducible
 
-1. Control Plane historical state is authoritative over DuckDB Meta projections.
-2. Bronze is synchronized through registered source contracts.
-3. Silver/Gold publication is registry-governed.
-4. Analytical outputs must be complete before publication.
-5. Silver/Gold are replaceable derived state.
-6. Meta reflects current analytical context, not complete operational history.
-7. Cross-database consistency is coordinated/recoverable, not distributed-atomic.
-8. Snapshot/restore treats the database pair as one application recovery unit.
+`infrastructure/warehouse/fingerprints.py` generates a fingerprint of the contract registry.
 
-## 31. Warehouse non-guarantees
+That is useful for reproducibility because identical financial inputs under a materially different publication contract should not be assumed to represent an identical analytical environment.
 
-The architecture does not guarantee:
+The fingerprint can participate in simulation/replay provenance alongside settings, rules, and model fingerprints.
 
-- historical versions of every Silver/Gold publication inside DuckDB;
-- atomic commit across both database engines;
-- that every historical artifact event retains an original binary forever;
-- that Meta can independently reconstruct Control Plane history;
-- that Gold is a canonical transaction ledger;
-- that a renamed file represents new financial evidence.
+## Publication is topological, but finance determines topology
+
+`publication_order` is not merely a DDL convenience.
+
+It reflects dependencies between dimensions and facts.
+
+A dimension referenced by a downstream fact must exist before the fact is inserted if physical constraints require it.
+
+More broadly, the sequence encodes the shape of the analytical model.
+
+This is one reason the registry records both domain and grain rather than only a table name.
+
+## Grain matters more than layer labels
+
+A table being Gold does not make it safely additive.
+
+Additivity follows grain and measure semantics.
+
+For example:
+
+- a daily snapshot value cannot be blindly summed across dates;
+- a realized event can often be summed across events for compatible measures;
+- a balance is typically semi-additive over time;
+- a ratio such as XIRR is not additive at all.
+
+The Reference specifications document exact table grains. The architecture requires that grain be explicit because BI safety depends on it.
+
+## Physical schemas remain declarative
+
+DDL is owned under `infrastructure/warehouse/schema/`:
+
+```text
+schema/
+├── bronze.py
+├── silver.py
+├── gold.py
+├── meta.py
+├── control_plane.py
+└── pragmas.py
+```
+
+This keeps physical schema declaration separate from layer loading logic and from domain calculation code.
+
+The registry describes publication contracts; schema modules describe physical columns/constraints; domain/application code produces values.
+
+Those are three different responsibilities.
+
+## The warehouse transaction spans the analytical rebuild
+
+DuckDB runs inside the run-level transaction opened by `RunLifecycleCoordinator`.
+
+Bronze synchronization, Silver/Gold recreation, and Meta refresh happen before the final DuckDB commit.
+
+If the run fails before that commit, the lifecycle can roll back the open DuckDB transaction.
+
+Once DuckDB commits, however, its analytical state is durable even if SQLite subsequently fails to commit.
+
+That is where warehouse architecture meets reliability architecture.
+
+## Why DuckDB commits before SQLite
+
+The chosen commit order is:
+
+```text
+1. DuckDB COMMIT
+2. record DUCKDB_COMMITTED in Control Plane transaction
+3. SQLite COMMIT
+4. mark FULLY_COMMITTED / SUCCESS
+```
+
+If step 3 fails, DuckDB cannot be rolled back.
+
+The system therefore records `RECOVERY_REQUIRED` rather than claiming atomicity it does not have.
+
+The next successful rebuild can converge the Control Plane to the durable analytical state.
+
+See [Reliability and Recovery](reliability-and-recovery.md) for the state machine.
+
+## Healing handles expected divergence between stores
+
+`MetaLayer.heal_duckdb_registry(cp)` runs before the new transactions begin.
+
+Its job is to reconcile current DuckDB file-registry projections with authoritative Control Plane state.
+
+The healing path includes logic to:
+
+- inspect Bronze table file identities;
+- add missing sync records where analytical evidence exists;
+- prune dangling DuckDB registry rows;
+- reconcile current artifact state.
+
+This is not distributed rollback.
+
+It is explicit convergence based on declared authority.
+
+## Full analytical rebuild is a reliability strategy
+
+Silver and Gold full replacement is sometimes described only as an implementation simplification.
+
+It is also a recovery strategy.
+
+If derived analytical state becomes suspect, the system can reconstruct it from complete Bronze evidence rather than applying an unbounded sequence of compensating mutations.
+
+```mermaid
+flowchart LR
+    B[Trusted Bronze state] --> Rebuild[Recompute canonical + finance state]
+    Rebuild --> S[Fresh Silver]
+    Rebuild --> G[Fresh Gold]
+```
+
+That narrows the number of persistent mutable layers that must be reasoned about during recovery.
+
+## Row counts are telemetry, not correctness proof
+
+Meta stores row counts for current tables.
+
+Those counts are useful for:
+
+- regression detection;
+- quick diagnostics;
+- BI inspection;
+- release comparison.
+
+They do not prove financial correctness.
+
+A table can have the expected row count and still contain wrong values. Correctness requires domain invariants, identities, reconciliation, tests, and financial validation.
+
+This distinction prevents operational metrics from masquerading as finance assurance.
+
+## Fingerprints add stronger structural evidence
+
+Fingerprints can capture whether contract definitions, inputs, or outputs changed even when row counts did not.
+
+The architecture therefore uses row counts and fingerprints for different observability jobs:
+
+```text
+row count   → how much state exists?
+fingerprint → did the relevant state/contract change?
+```
+
+Neither replaces financial validation, but together they make drift easier to diagnose.
+
+## Snapshot architecture treats DuckDB and SQLite as one recovery unit
+
+A valid snapshot includes the analytical warehouse and operational Control Plane together.
+
+Capturing only DuckDB would preserve outputs while losing the run/artifact history that explains them.
+
+Capturing only SQLite would preserve evidence/history while requiring analytical rebuild before the previous decision surface reappears.
+
+Both recovery strategies are valid in different situations, but the coordinated snapshot manager intentionally captures the pair.
+
+## Durability differs by layer
+
+| State | Durable across runs? | Rebuilt routinely? | Primary authority |
+|---|---:|---:|---|
+| Control Plane payloads/events | yes | no | SQLite |
+| Bronze | yes | synchronized incrementally | DuckDB Bronze |
+| Silver | yes after successful commit | yes | current successful analytical rebuild |
+| Gold | yes after successful commit | yes | current successful presentation rebuild |
+| Meta | yes after successful commit | refreshed | current context only |
+| in-memory LazyFrames | no | every run | transient execution state |
+
+This table is more useful than simply saying “everything is persisted.” Persistence has different semantics by layer.
+
+## Failure semantics differ by layer
+
+### Control Plane failure
+
+Can compromise operational state update or create split-commit recovery needs.
+
+### Bronze write failure
+
+Stops synchronization and should prevent the run from claiming analytical completeness.
+
+### Silver/Gold publication failure
+
+Occurs inside the DuckDB transaction before final commit and can normally be rolled back if DuckDB has not committed.
+
+### Meta refresh failure
+
+Still prevents successful run completion because current-context publication is part of the run contract.
+
+### Post-DuckDB SQLite commit failure
+
+Creates durable analytical state plus incomplete operational commit: `RECOVERY_REQUIRED`.
+
+The architecture treats these failures differently because their rollback possibilities are different.
+
+## Why not one database?
+
+One database would remove a file and simplify backup diagrams.
+
+It would also force one engine to optimize for two unlike workloads.
+
+SQLite is a good fit for small, mutable, event-oriented operational state and raw binary payload storage.
+
+DuckDB is a good fit for local analytical scans, schema-based publication, and Power BI consumption.
+
+The cost of the split is coordinated commit/recovery complexity.
+
+The architecture accepts that cost because the responsibility boundary is valuable enough to justify it.
+
+## Warehouse invariants
+
+1. Control Plane history is not replaced by DuckDB Meta.
+2. Bronze represents synchronized source-oriented analytical evidence.
+3. Silver represents canonical/reconstructed analytical state.
+4. Gold represents decision-ready presentation state.
+5. Meta represents current analytical context.
+6. Bronze publication behavior is declared by `BRONZE_CONTRACT_REGISTRY`.
+7. Silver/Gold publication is declared by `DATA_CONTRACT_REGISTRY`.
+8. Produced analytical contracts must match declared contracts before publication.
+9. Publication follows explicit order.
+10. Lazy computation becomes eager only at justified boundaries.
+11. Silver/Gold are rebuildable from complete upstream state.
+12. split-commit truth is handled by the lifecycle, not hidden inside warehouse classes.
+
+## Warehouse non-guarantees
+
+The warehouse does not guarantee:
+
+- that every source dataset is append-only;
+- that every table is additive;
+- that current Meta reconstructs historical operational events;
+- that a row-count match proves value equality;
+- that a DuckDB commit can be undone after it succeeds;
+- that full replacement is the forever-optimal strategy at arbitrary scale;
+- that external market evidence is complete merely because a table exists.
+
+## Continue into operational history
+
+The warehouse explains what analytical state persists. The next question is how the system knows **why** that state changed.
+
+Continue with [Control Plane Artifact Lifecycle](control-plane-artifact-lifecycle.md), then [Deterministic Identity and Replay](deterministic-identity-and-replay.md).
 
 ## Related specifications
 
-- [System Architecture](system-architecture.md)
+- [Architecture](README.md)
 - [Data Lifecycle](data-lifecycle.md)
-- [Data Model](data-model.md)
 - [Control Plane Artifact Lifecycle](control-plane-artifact-lifecycle.md)
+- [Data Model](data-model.md)
+- [Deterministic Identity and Replay](deterministic-identity-and-replay.md)
 - [Reliability and Recovery](reliability-and-recovery.md)
-- [Backup and Restore](backup-and-restore.md)
-- [Bronze Data Contracts](../reference/bronze-data-contracts.md)
-- [Silver Data Contracts](../reference/silver-data-contracts.md)
-- [Gold Data Contracts](../reference/gold-data-contracts.md)
-- [Meta Data Contracts](../reference/meta-data-contracts.md)
-- [Control Plane Data Contracts](../reference/control-plane-data-contracts.md)
+- [Reference: Bronze Data Contracts](../reference/bronze-data-contracts.md)
+- [Reference: Silver Data Contracts](../reference/silver-data-contracts.md)
+- [Reference: Gold Data Contracts](../reference/gold-data-contracts.md)
+- [Reference: Meta Data Contracts](../reference/meta-data-contracts.md)

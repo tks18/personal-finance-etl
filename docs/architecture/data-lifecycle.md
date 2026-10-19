@@ -1,86 +1,117 @@
 # Data Lifecycle
 
-Personal Finance ETL treats data movement as a lifecycle of **evidence acquisition, operational registration, persistent synchronization, canonicalization, financial reconstruction, analytical publication, and provenance capture**. The lifecycle is intentionally more explicit than “read files → transform → save tables” because financial correctness depends on knowing what was observed, what changed, what was reconstructed, and which state can be rebuilt.
+The architecture becomes concrete when one question is followed all the way through the system:
 
-This document follows one run from source discovery to commit, including rename, healing, failure, and replay-relevant metadata paths.
+> How does a piece of financial evidence become decision-ready state without losing the ability to explain where it came from, what changed, and whether the run completed truthfully?
 
-## 1. Lifecycle overview
+The answer is not a single ETL arrow.
+
+The lifecycle is a sequence of state transitions across operational evidence, persistent Bronze, canonical financial models, reconstructed finance, publication contracts, and coordinated commit state.
+
+This specification follows that sequence in execution order.
+
+## The lifecycle has five application phases and more than five semantic transitions
+
+`PipelineExecutor.execute_phases()` names five runtime phases:
+
+1. discovery and synchronization;
+2. Bronze upsert;
+3. transformation and enrichment;
+4. advanced analytics and financial engines;
+5. Silver and Gold publication.
+
+But those five labels hide several distinct state transitions.
 
 ```mermaid
 flowchart LR
-    SRC[Source artifacts] --> DISC[Discover]
-    DISC --> CP[Register / compare]
-    CP --> ACT[Actionable artifacts]
-    ACT --> EXT[Extract]
-    EXT --> BR[Bronze sync]
-    BR --> FULL[Complete Bronze state]
-    FULL --> CORE[Canonical DAG]
-    CORE --> ENRICH[FX / US / Benchmark]
-    ENRICH --> Q[Quant]
-    Q --> T[Tax]
-    T --> W[Wealth / FIRE]
-    W --> VAL[Contract validation]
-    VAL --> PUB[Silver / Gold]
-    PUB --> META[Meta refresh]
-    META --> COMMIT[Coordinated commit]
+    A[Observed files / providers] --> B[Captured operational evidence]
+    B --> C[Persistent Bronze]
+    C --> D[Canonical financial state]
+    D --> E[Reconstructed / reconciled state]
+    E --> F[Decision-ready analytics]
+    F --> G[Committed persistent state]
+
+    B -. provenance .-> H[Control Plane]
+    C -. sync status .-> H
+    E -. simulation / failure evidence .-> H
+    G -. commit truth .-> H
 ```
 
-The key architectural split is between **actionable source changes** and **complete analytical state**. Only changed/pending evidence needs physical extraction, while transformations consume the full Bronze dataset.
+The runtime phases exist to move safely between those semantic states.
 
-## 2. Run creation precedes financial work
+## Run creation comes before financial work
 
-A run becomes an operational entity before discovery/transformation:
+A run is created before discovery and before any financial transformation.
 
-```python
-run_id = cp.runs.start_run(
-    cfg_json=self.cfg.model_dump_json(),
-    rules_json=self.rules.model_dump_json() if self.rules else None,
-)
-cp.active_run_id = run_id
-cp.artifacts.active_run_id = run_id
-cp.file_sync.active_run_id = run_id
-```
+`RunLifecycleCoordinator.initialize()`:
 
-`start_run()` captures settings/rules snapshots and establishes the run identity used throughout operational provenance. The run ID also becomes the root seed for stochastic wealth modelling later in the lifecycle.
-
-```mermaid
-flowchart TB
-    RUN[Run ID] --> ART[Artifact events]
-    RUN --> FAIL[Failure provenance]
-    RUN --> LOG[Execution log]
-    RUN --> SIM[Simulation provenance]
-    RUN --> SEED[FIRE root seed]
-```
-
-One identity therefore connects deterministic ETL history and stochastic model context without pretending those computations are identical.
-
-## 3. Pre-run convergence
-
-Before beginning the transactional analytical work, `MetaLayer.heal_duckdb_registry(cp)` compares Control Plane authority with DuckDB's registry projection.
-
-This matters because the previous run could have committed DuckDB and then failed to commit SQLite. The architecture accepts that narrow cross-database window and provides a convergence path on the next run.
+- attaches queue and file logging;
+- opens DuckDB;
+- ensures DuckDB schemas;
+- opens the SQLite Control Plane under the pipeline lock;
+- ensures Control Plane schema and recovers stale runs;
+- snapshots settings and financial rules through `start_run()`;
+- assigns the active run ID to all event-producing Control Plane services;
+- detects prior `RECOVERY_REQUIRED` runs;
+- heals DuckDB registry state from SQLite authority;
+- opens the DuckDB and SQLite transactions;
+- marks the current run `RUNNING`.
 
 ```mermaid
 sequenceDiagram
-    participant O as ETLOrchestrator
-    participant CP as SQLite Control Plane
-    participant M as DuckDB Meta
-    participant B as Bronze
+    participant L as RunLifecycleCoordinator
+    participant CP as Control Plane
+    participant DB as DuckDB
+    participant M as MetaLayer
 
-    O->>M: heal_duckdb_registry(CP)
-    M->>CP: compare authoritative registry state
-    M->>B: inspect analytical synchronization state
-    M-->>O: healed / actionable state established
+    L->>DB: open + ensure schemas
+    L->>CP: open + ensure schema
+    CP-->>L: recover stale runs
+    L->>CP: start_run(settings, rules)
+    CP-->>L: run_id
+    L->>CP: get RECOVERY_REQUIRED runs
+    L->>M: heal_duckdb_registry(cp)
+    L->>DB: BEGIN TRANSACTION
+    L->>CP: BEGIN IMMEDIATE
+    L->>CP: status = RUNNING
 ```
 
-The exact healing algorithm belongs in the reliability and Control Plane specifications; lifecycle-wise, the important rule is **converge before discovering new work**.
+The run therefore has provenance before it has results.
 
-## 4. Discovery
+## Pre-run convergence happens before new analytical work
 
-When file discovery is enabled, `categorize_statement_files()` scans the statements directory and classifies discovered artifacts. The orchestrator then injects eight configuration/source assets that do not originate from the statement directory:
+The lifecycle checks for previous split-commit runs before beginning the new workload.
 
-- source SQLite database;
-- MF ISIN mapping;
+Those run IDs are retained in `pending_recovery_runs`.
+
+The current run does not immediately rewrite their history. Instead, it rebuilds analytical state from authoritative evidence. Only after a later full commit succeeds are prior recovery-required runs marked converged.
+
+That produces an important temporal distinction:
+
+```text
+previous run diverged
+        ↓
+current run starts and knows divergence exists
+        ↓
+current run reconstructs and republishes complete state
+        ↓
+current run fully commits
+        ↓
+previous divergence may now be marked CONVERGED
+```
+
+Convergence is therefore evidence of a later successful state, not retroactive denial that the earlier split occurred.
+
+## Discovery asks what exists, not what it means
+
+Phase 1 begins by building the set of observable source artifacts.
+
+Configured assets are injected into discovery alongside statement files so the lifecycle treats configuration-driven data inputs as evidence too.
+
+The current execution path explicitly adds:
+
+- source SQLite backup;
+- mutual-fund ISIN mapping;
 - benchmark mapping;
 - opening balances;
 - benchmark master;
@@ -88,87 +119,37 @@ When file discovery is enabled, `categorize_statement_files()` scans the stateme
 - currency mapping;
 - column master.
 
-```python
-discovered_files["sqlite_source"] = [
-    SQLiteExtractor(self.cfg.SOURCE_DB_FOLDER)
-    .get_latest_sqlite_backup()
-    .replace("\\", "/")
-]
-discovered_files["mf_isin"] = [self.cfg.MF_ISIN_CSV_PATH.replace("\\", "/")]
-```
+The discovery result is a category-to-path mapping, not a financial model.
 
-Discovery answers **what exists now**, not yet **what must be reprocessed**.
+That separation matters because discovery should not need to understand whether a column represents Tax basis or benchmark metadata. It needs to know that an artifact exists and belongs to a synchronization category.
 
-## 5. Artifact comparison
+## Artifact comparison uses history, not only the current directory listing
 
-`FileSyncService.sync_with_disk()` compares discovered artifacts against the Control Plane registry using the configured hash policy and full-replace category semantics.
+`FileSyncService.sync_with_disk()` compares discovery against the Control Plane registry.
 
-Its outputs include:
-
-```text
-new files
-changed files
-removed files
-renames
-```
-
-Pending artifacts already retained in the Control Plane are then merged with new/changed paths:
-
-```python
-pending_files = cp.artifacts.get_pending_files()
-...
-paths = new_files.get(k, []) + changed_files.get(k, []) + pending_files.get(k, [])
-```
-
-Paths are normalized before de-duplication so slash differences do not manufacture duplicate work.
-
-## 6. Artifact lifecycle is not file-path identity
-
-A rename can preserve artifact continuity. The pipeline receives rename tuples and later migrates identity in Bronze and Meta:
-
-```python
-if renames:
-    bronze.migrate_identity(renames)
-    meta_layer.migrate_identity(renames)
-```
+The comparison can produce several operational interpretations:
 
 ```mermaid
-flowchart LR
-    OLD[Old path] --> DETECT[Rename detection]
-    DETECT --> CP[Control Plane identity migration]
-    CP --> BR[Bronze provenance migration]
-    CP --> META[Meta projection migration]
-    BR --> SAME[Same financial evidence continuity]
+stateDiagram-v2
+    [*] --> NEW: unseen path / identity
+    [*] --> UNCHANGED: known identity + same hash
+    [*] --> CHANGED: known identity + different hash
+    [*] --> RENAMED: content identity survives path move
+    [*] --> MISSING_PAYLOAD: registry exists but payload absent
+    [*] --> REMOVED: previously active path no longer observed
+    [*] --> HEALABLE: prior divergence can be repaired
 ```
 
-Without this behavior, moving a statement could look like deleting one piece of financial evidence and creating another. Filesystems care about paths; financial lineage cares about identity.
+The lifecycle therefore does not equate “file path” with “artifact identity.”
 
-## 7. Actionable extraction
+That distinction is essential on OneDrive/SharePoint-style working folders and for ordinary local reorganizations where content can survive a path change.
 
-`DataExtractor` receives only actionable paths. It returns an `ExtractionResult` containing source frames plus mappings used downstream.
+## Full-replace and incremental Bronze categories are known before synchronization
 
-```mermaid
-flowchart TB
-    ACTION[Actionable paths] --> DX[DataExtractor]
-    DX --> SQLITE[SQLiteExtractor]
-    DX --> CSV[CSVExtractor]
-    DX --> XLS[ExcelExtractor]
-    DX --> OTHER[Specialized acquisition]
-    SQLITE --> ER[ExtractionResult]
-    CSV --> ER
-    XLS --> ER
-    OTHER --> ER
-```
-
-If discovery is disabled, the system does not blindly read everything from disk. It asks the Control Plane for pending files and processes that retained operational state.
-
-## 8. Bronze synchronization
-
-`BronzeLayer.load()` maps extraction attributes to physical Bronze tables through `BRONZE_CONTRACT_REGISTRY`.
-
-Each Bronze contract defines:
+`BRONZE_CONTRACT_REGISTRY` tells the executor which source families represent full-replace state.
 
 ```python
+# src/personal_finance_etl/infrastructure/warehouse/registry.py
 @dataclass
 class BronzeDataContract:
     extraction_attribute: str
@@ -177,399 +158,551 @@ class BronzeDataContract:
     is_full_replace: bool
 ```
 
-This separates source/extraction names from synchronization categories and physical tables.
+The contract lets synchronization behavior be driven by source semantics instead of hard-coded table-name conditionals scattered through the pipeline.
 
-### Full-replace sources
+A configuration/master artifact can replace its current Bronze representation, while append-like historical statement evidence can be synchronized incrementally.
 
-Full-replace contracts represent current authoritative snapshots such as master/mapping/configuration assets.
+## Actionable evidence includes pending historical work
 
-### Incremental sources
+The executor does not use only `new_files` and `changed_files` from the current filesystem comparison.
 
-Incremental contracts represent accumulating history such as market data and transaction/order files.
+It also asks the Control Plane for pending artifacts and unions those paths into the actionable set.
 
-```mermaid
-flowchart TB
-    EX[Extracted source] --> MODE{Contract mode}
-    MODE -->|full replace| FR[Replace Bronze representation]
-    MODE -->|incremental| INCR[Upsert / append synchronized evidence]
-    FR --> SYNC[Mark artifact synchronized]
-    INCR --> SYNC
-```
+That matters because a prior run may have captured an artifact but failed before Bronze synchronization completed.
 
-The exact physical semantics are documented in the Bronze Reference specification.
-
-## 9. Complete Bronze state becomes transformation input
-
-After synchronizing only actionable evidence, the orchestrator reads the full Bronze dataset:
-
-```python
-bronze.load(extracted_data, actionable_all)
-full_dataset = bronze.get_full_dataset(extracted_data.mappings)
-self._transform(full_dataset)
-```
-
-This is the pivot between ingestion and analytics.
+The next run should not require the file to change again before retrying the unfinished work.
 
 ```text
-incremental source work
-        ↓
-persistent Bronze state
-        ↓
-complete analytical reconstruction
+new/changed now
+      +
+pending from prior run
+      =
+actionable evidence
 ```
 
-It means a run can ingest two changed files but still rebuild a portfolio using the entire financial history.
+This is a small design choice with large recovery value.
 
-## 10. Canonical transformation DAG
+## Extraction consumes captured bytes
 
-`TransformationDAG` creates normalized household and investment facts from complete Bronze state.
-
-Its base outputs include:
-
-- category/subcategory dimensions;
-- asset dimensions;
-- currency;
-- benchmark master;
-- macro parameters;
-- income/expense/transfer facts;
-- opening balances;
-- investment market data;
-- purchase/sale facts;
-- investment master;
-- calendar.
-
-```mermaid
-flowchart TB
-    B[Complete Bronze] --> MAP[Mappings]
-    B --> HH[Household transforms]
-    B --> AP[Asset pipelines]
-
-    MAP --> HH
-    MAP --> AP
-
-    HH --> INC[Income]
-    HH --> EXP[Expense]
-    HH --> TR[Transfer]
-    HH --> OB[Opening balances]
-
-    AP --> MF[Mutual funds]
-    AP --> ST[Indian stocks]
-    AP --> US[US stocks]
-
-    MF --> IM[Investment master]
-    ST --> IM
-    US --> IM
-
-    MF --> P[Purchases / Sales / Market]
-    ST --> P
-    US --> P
-
-    INC --> CAL[Calendar]
-    EXP --> CAL
-    TR --> CAL
-    OB --> CAL
-    P --> CAL
-```
-
-Polars LazyFrames allow independent nodes to be optimized before `pl.collect_all(..., engine="streaming")` materializes them.
-
-## 11. Asset-pipeline normalization
-
-Mutual funds, Indian stocks, and US stocks enter through different physical evidence, but `AssetPipeline` strategies normalize them into common intermediate shapes before shared investment transforms build canonical facts.
-
-This is an important dependency inversion in the data model:
-
-```text
-source-specific adapters
-        ↓
-common investment references
-        ↓
-canonical investment facts
-```
-
-The rest of the Quant stack should not need to know whether a purchase originated from an MF order workbook or a US transaction file.
-
-## 12. Currency lifecycle
-
-The currency pipeline runs after the base DAG because it requires the canonical currency dimension and date boundaries.
-
-The start date is derived from the calendar. The end date is aligned to available market data. The resulting `df_f_currency_fx_rates` is then available to US reconstruction and Quant.
-
-```mermaid
-flowchart LR
-    CAL[Calendar] --> RANGE[Global date range]
-    CUR[Currency dimension] --> FXP[CurrencyPipeline]
-    RANGE --> FXP
-    FXP --> FX[Canonical FX rates]
-    FX --> US[US reconstruction]
-    FX --> Q[Quant]
-```
-
-## 13. US historical market-state lifecycle
-
-The US market pipeline derives its start date from the earliest US purchase/sale and uses the broader market end date. It reconstructs US historical market state from:
-
-- canonical purchase/sale facts;
-- instrument master;
-- canonical FX;
-- acquired historical US prices.
-
-The result is unioned into canonical `df_f_investment_market_data`.
-
-```mermaid
-flowchart LR
-    TX[US transactions] --> U[USMarketPipeline]
-    MASTER[Investment master] --> U
-    FX[FX rates] --> U
-    PRICE[Historical prices] --> U
-    U --> USM[US reconstructed market state]
-    INDIAN[Existing market facts] --> UNION[Canonical market data]
-    USM --> UNION
-```
-
-This state is **reconstructed financial state**, not independent broker holdings evidence. Canonical FIFO lot ownership remains with Quant.
-
-## 14. Benchmark lifecycle
-
-`BenchmarkPipeline` aligns benchmark history/master evidence with canonical investment market/purchase context and publishes `df_f_investment_benchmark_data` for Quant comparison.
-
-Benchmarks therefore enter the financial model before post-processing rather than being attached only to final charts.
-
-## 15. Quant lifecycle
-
-`InvestmentQuantEngine` runs after all canonical market, FX, benchmark, and macro dependencies exist.
-
-```mermaid
-flowchart TB
-    P[Purchase facts] --> Q[Quant]
-    S[Sale facts] --> Q
-    M[Market facts] --> Q
-    I[Investment master] --> Q
-    B[Benchmark facts] --> Q
-    FX[FX facts] --> Q
-    MAC[Macro parameters] --> Q
-    Q --> LOT[Lot analytics]
-    Q --> REAL[Realized events]
-    Q --> RECON[Reconciliation events]
-    Q --> PORT[Portfolio presentation outputs]
-```
-
-The engine processes instrument workloads, reconstructs FIFO state, records realized disposal components, reconciles reconstructed state against observations where applicable, and performs post-processing such as XIRR/benchmark/weight analytics.
-
-## 16. Tax lifecycle
-
-Tax runs **after Quant** because realized investment events are canonical Tax inputs.
-
-```mermaid
-flowchart LR
-    LEDGER[Income ledger] --> TAX[TaxEngine]
-    REAL[Quant realized events] --> TAX
-    SUB[Income subcategories] --> TAX
-    MAC[Macro parameters] --> TAX
-    RULES[FinancialRules] --> TAX
-    TAX --> EVT[f_Tax_Events]
-    TAX --> Y[Tax Year Summary]
-    TAX --> B[Tax Income Breakdown]
-    TAX --> R[Tax Reconciliation]
-```
-
-FinancialRules provide investment-related STCG/LTCG ledger exclusions so the same economic gain is not counted once from household ledger evidence and again from Quant.
-
-## 17. Wealth and presentation lifecycle
-
-`WealthPresentationEngine` receives the complete analytical dictionary after Quant and Tax. It builds LazyFrame outputs for cashflow, wealth, investment presentation, budgeting, and FIRE/risk analytics.
-
-The orchestrator executes all presentation graphs together:
+The ingestion coordinator reads raw bytes from `ArtifactRepository` rather than reopening arbitrary source files for transformation.
 
 ```python
-keys = list(presentation_lazy.keys())
-lazy_frames = [presentation_lazy[k] for k in keys]
-results = pl.collect_all(lazy_frames, engine="streaming")
+# src/personal_finance_etl/application/ingestion/coordinator.py
+def _get_bytes(self, filepath: str) -> bytes:
+    raw_bytes = self.cp.artifacts.get_file_bytes(filepath)
+    if raw_bytes is None:
+        raise FileNotFoundError(f"Binary payload not found in Raw Store for: {filepath}")
+    return raw_bytes
 ```
 
-This is a presentation DAG, not a sequence of pandas-style table mutations.
-
-## 18. Simulation provenance lifecycle
-
-After presentation execution, the run records simulation provenance:
-
-```python
-cp.runs.log_simulation_run(
-    run_id=str(run_id),
-    root_seed=str(run_id),
-    rules=self.rules,
-    input_df=self.dfs.get("df_p_tf_wealth_risk_analytics_inputs"),
-    settings_snapshot_id=settings_snapshot_id,
-    rules_snapshot_id=rules_snapshot_id if rules_snapshot_id != "UNKNOWN" else None,
-)
-```
-
-The internal simulation input frame is then removed before contract validation/publication.
+This creates a defensible evidence chain:
 
 ```mermaid
 flowchart LR
-    RUN[Run ID] --> SEED[Root seed]
-    RULES[Rules snapshot] --> SIM[Simulation]
-    INPUT[Simulation input] --> SIM
-    SEED --> SIM
-    SIM --> GOLD[FIRE analytics]
-    SIM --> CP[Simulation provenance]
+    F[Observed source file] --> H[hash + registry event]
+    H --> P[stored payload bytes]
+    P --> X[extractor]
+    X --> R[typed ExtractionResult]
 ```
 
-This keeps transient model input separate from published warehouse contracts while preserving replay-relevant metadata.
+The bytes transformed in the run are the bytes retained by the operational evidence store.
 
-## 19. Contract completeness gate
+## Extraction keeps file-specific mess outside the financial model
 
-Before any Silver/Gold publication, the orchestrator verifies that:
+Excel, CSV, and SQLite extractors can understand vendor quirks and physical source shapes.
 
-1. every produced dataset is registered;
-2. every registered analytical dataset was produced.
+Their output is still not the final financial vocabulary.
 
-This creates a hard lifecycle gate:
+The ingestion coordinator assembles source streams and mappings into `ExtractionResult`, including raw investment evidence, base reference tables, configuration datasets, and column mappings.
 
-```mermaid
-flowchart LR
-    DFS[Produced datasets] --> CHECK{Produced = Registered?}
-    REG[Contract registry] --> CHECK
-    CHECK -->|yes| PUB[Publish]
-    CHECK -->|no| FAIL[Fail run]
-```
+This is the boundary where source variability is normalized enough for the canonical transformation DAG to take over.
 
-An engine cannot quietly create a new warehouse table by returning another DataFrame. Schema evolution must be intentional.
+## A schema gate fails early
 
-## 20. Silver and Gold publication
+Before the extraction result is trusted by deeper transforms, the coordinator asks Polars to resolve the schemas of active lazy streams and performs a small collection gate.
 
-`SilverLayer` and `GoldLayer` publish in registry `publication_order`. Their schemas are rebuilt for the run, making them current analytical publications rather than incremental histories.
-
-This design is especially useful for deterministic financial reconstruction: analytical tables do not need elaborate correction logic for every upstream change because they can be recomputed from complete Bronze evidence.
-
-## 21. Meta refresh
-
-After analytical publication, `MetaLayer.load()` updates current-state metadata such as:
-
-- file registry projection;
-- table row counts;
-- financial rules;
-- settings;
-- data contracts;
-- latest simulation.
-
-Meta is therefore the analytical database's current context, while historical operational context remains in SQLite.
-
-## 22. Commit lifecycle
-
-The run status transitions to `COMMITTING` before database commit.
-
-```mermaid
-sequenceDiagram
-    participant O as Orchestrator
-    participant CP as SQLite Control Plane
-    participant D as DuckDB
-
-    O->>CP: status = COMMITTING
-    O->>D: COMMIT
-    alt DuckDB commit fails
-        D-->>O: error
-        O->>CP: failure path
-    else DuckDB commits
-        D-->>O: committed
-        O->>CP: COMMIT
-        alt SQLite commit succeeds
-            CP-->>O: committed
-            O->>CP: finish_run(SUCCESS)
-        else SQLite commit fails
-            CP-->>O: error
-            Note over O,CP: next run relies on idempotency + healing
-        end
-    end
-```
-
-This ordering is a deliberate implementation fact. Documentation must not upgrade it into distributed atomicity merely because “ACID” sounds comforting.
-
-## 23. Failure lifecycle
-
-Any exception enters a rollback/failure path:
-
-1. attempt DuckDB rollback;
-2. attempt SQLite rollback;
-3. persist structured failure details where possible;
-4. mark the run failed;
-5. re-raise the exception;
-6. in `finally`, stop logging infrastructure, compress/persist execution log, close databases, collect garbage.
+That catches corrupted or structurally invalid source data close to the evidence boundary.
 
 ```mermaid
 flowchart TD
-    X[Exception] --> DBR[DuckDB rollback attempt]
-    X --> CPR[SQLite rollback attempt]
-    DBR --> RF[Run failure record]
-    CPR --> RF
-    RF --> STATUS[FAILED]
-    STATUS --> LOG[Compress execution log]
-    LOG --> CLOSE[Close stores]
+    E[Extracted lazy streams] --> S[collect_schema]
+    S --> P[small parallel collect]
+    P -->|valid| NEXT[Bronze / transform lifecycle]
+    P -->|invalid| FAIL[SOURCE_VALIDATION failure]
 ```
 
-A failure while logging failure metadata is itself caught so that provenance problems do not mask the original pipeline exception.
+The objective is not exhaustive financial validation at extraction time. It is to prevent malformed physical data from travelling deep into unrelated domain algorithms.
 
-## 24. Stale-run lifecycle
+## Phase 2 synchronizes Bronze
 
-The Control Plane can recover stale runs left in nonterminal states such as `STARTED`, `RUNNING`, or `COMMITTING`. This is operational recovery, not financial recomputation: it prevents abandoned process state from being mistaken for a completed run.
+`BronzeLayer` receives the extracted actionable state plus the Control Plane and current Meta layer.
 
-Detailed status semantics are specified in the Control Plane lifecycle document.
+If discovery detected renames, identity migration is applied before ordinary loading.
 
-## 25. Backup/restore lifecycle
+```python
+# src/personal_finance_etl/application/pipeline/execution.py
+meta_layer = MetaLayer(self.db_manager, self.cfg, self.rules)
+bronze = BronzeLayer(self.db_manager, cp, meta_layer)
+if renames:
+    bronze.migrate_identity(renames)
+    meta_layer.migrate_identity(renames)
 
-Backup and restore sit outside the ETL transformation path but inside the application data lifecycle.
+bronze.load(extracted_data, actionable_all)
+```
+
+The lifecycle therefore preserves artifact continuity across both operational and analytical representations.
+
+## Bronze is persistent because it is the rebuild boundary
+
+Silver and Gold are rebuilt. Bronze persists synchronized source-oriented state.
+
+This creates a recovery-friendly asymmetry:
+
+```text
+Control Plane payloads = operational evidence authority
+Bronze                 = persistent analytical evidence state
+Silver / Gold          = rebuildable derived state
+```
+
+If a run fails after Bronze synchronization but before analytical publication, the next run can reconstruct the complete analytical state without rereading every historical source file from disk.
+
+## Synchronization completeness is recorded per run
+
+After Bronze loading, the executor creates a run-level synchronization summary.
+
+It records:
+
+- actionable count;
+- synced count;
+- healed count;
+- failed count;
+- deferred count;
+- final sync status.
+
+A run with no actionable artifacts is recorded as `NOT_REQUIRED` rather than as an empty success that obscures what happened.
+
+If artifacts were actionable, the status becomes `COMPLETE`, `PARTIAL`, or `FAILED` based on actual registry state.
+
+This gives operational diagnostics a compact run-level view without discarding artifact-level events.
+
+## Complete Bronze state is reread before canonical transformation
+
+This is one of the lifecycle's most important transitions.
+
+Only changed evidence is synchronized, but **the full Bronze state** becomes the downstream transformation input.
+
+```mermaid
+flowchart TD
+    Changed[Changed/new evidence] --> Sync[Incremental Bronze sync]
+    Historical[Existing Bronze history] --> Full[Complete Bronze readback]
+    Sync --> Full
+    Full --> Transform[Canonical DAG]
+```
+
+That avoids a difficult class of incremental-invalidity bugs where a changed upstream record would require the pipeline to know every downstream table and calculation that must be selectively recomputed.
+
+For the current workload, deterministic full analytical rebuild is the safer strategy.
+
+## Phase 3 constructs canonical financial vocabulary
+
+`TransformationDAG` maps complete source-oriented state into canonical dimensions and facts.
+
+Its ownership includes:
+
+- 18 base Silver-oriented transformation outputs;
+- household dimensions and transactions;
+- investment asset pipelines;
+- calendar construction and date bounds.
+
+This transition is not merely column renaming.
+
+It decides which source distinctions are economically meaningful and which are source-specific noise.
 
 ```mermaid
 flowchart LR
-    LOCK[Acquire pipeline lock] --> CK[Checkpoint DuckDB]
-    CK --> SB[SQLite backup API]
-    SB --> ZIP[Build temporary snapshot]
-    ZIP --> CRC[Verify archive]
-    CRC --> PUB[Atomic snapshot publish]
+    Raw[Source-shaped Bronze] --> Canon[Canonical transforms]
+    Canon --> Dims[Shared dimensions]
+    Canon --> HH[Household facts]
+    Canon --> Inv[Investment master + trade facts]
 ```
 
-Restore performs the reverse only after archive and database validation, with recovery backups protecting the existing pair during replacement.
+The resulting frames become the shared vocabulary used by specialized domains.
 
-## 26. Lifecycle invariants
+## Asset pipelines normalize source-specific investment evidence
 
-The implementation establishes several lifecycle invariants:
+Mutual funds, local stocks, and US stocks do not arrive in the same physical form.
 
-- a run identity exists before artifact/financial processing;
-- source discovery and source extraction are separate concerns;
-- actionable extraction is driven by Control Plane state;
-- Bronze synchronization precedes analytical reconstruction;
-- transformations consume complete Bronze state;
-- Quant precedes Tax;
-- Tax precedes presentation;
-- all analytical outputs must match the registry;
-- Silver/Gold publication precedes Meta refresh;
-- DuckDB commits before SQLite;
-- simulation provenance is linked to run/snapshot context;
-- finalization attempts to preserve execution logs even on failure.
+The application layer uses asset strategies to coordinate source-specific normalization while domain transforms own the financial semantics.
 
-## 27. Lifecycle non-invariants
+This is the point where the lifecycle begins to unify different acquisition channels into comparable investment evidence.
+
+The later Quant engine should not care whether the purchase came from one Excel layout or another.
+
+## Currency evidence has its own lifecycle
+
+Currency is not a formatting concern.
+
+It participates in:
+
+- transaction value normalization;
+- local versus reporting-currency performance;
+- realized gain decomposition;
+- terminal valuation;
+- FX attribution;
+- benchmark comparison.
+
+The application therefore processes currency evidence after the base canonical DAG but before calculations that require complete FX context.
+
+External currency acquisition is tracked as provider evidence rather than appearing as an invisible network side effect.
+
+## US historical market state has its own lifecycle
+
+US investment reconstruction requires historical market and FX state that is not present in ordinary local broker transaction evidence.
+
+The lifecycle separates:
+
+```text
+canonical trade evidence
+        ↓
+market-history acquisition
+        ↓
+historical valuation spine
+        ↓
+investment reconstruction
+```
+
+Temporal joins must be backward-looking or otherwise explicitly causal. Future prices must not leak into historical state merely because they are easier to join.
+
+## Benchmark evidence is processed before benchmark-relative analytics
+
+Benchmark mappings identify the appropriate comparison series; benchmark history supplies the actual market path.
+
+Those are distinct evidence roles.
+
+The benchmark lifecycle prepares the state consumed later by CAGR/XIRR comparisons and attribution.
+
+A benchmark is therefore not a post-hoc chart label. It is part of the financial calculation graph.
+
+## Phase 4 reconstructs investment state
+
+The investment pipeline moves through several grains:
+
+```mermaid
+flowchart LR
+    P[Purchase] --> L[Acquisition lot]
+    S[Sale] --> F[FIFO disposal]
+    L --> F
+    F --> R[Realized event]
+    L --> OPEN[Open lot state]
+    OPEN --> REC[Reconciliation]
+    OBS[Observed holdings] --> REC
+    REC --> SNAP[Portfolio snapshots]
+    SNAP --> PERF[Performance]
+```
+
+These grains are intentionally not collapsed.
+
+A purchase can create a lot. One sale can consume several lots. Each sale-lot match can create a realized event. Reconciliation can then create synthetic adjustments when reconstructed book state does not agree with observed broker state.
+
+Stable identity across these transitions is covered in [Deterministic Identity and Replay](deterministic-identity-and-replay.md).
+
+## Reconciliation enters only after reconstruction has something to compare
+
+The system distinguishes observed broker state from reconstructed book state.
+
+If they disagree, the discrepancy itself becomes financial evidence.
+
+The reconciliation lifecycle can represent:
+
+- quantity additions;
+- quantity removals;
+- cost-basis adjustments.
+
+This prevents the pipeline from hiding upstream incompleteness by mutating reconstructed state with no trace of why it changed.
+
+## Performance consumes both book and market state
+
+Returns are not calculated from a single table.
+
+They combine:
+
+- cashflow timing;
+- realized events;
+- terminal valuation;
+- benchmark state;
+- local/reporting currency values;
+- Tax-aware terminal values where applicable.
+
+That is why performance lives after reconstruction and market enrichment rather than in the initial canonical transform.
+
+## Tax consumes evidence, not vendor layouts
+
+Tax calculation is downstream of the financial events it needs.
+
+Investment Tax evidence is derived from realized/reconciled financial state. Household income evidence comes from canonical household models. Financial rules provide policy.
+
+```mermaid
+flowchart TD
+    HI[Canonical household income] --> T[Tax domain]
+    RE[Realized investment events] --> T
+    IR[Investment income evidence] --> T
+    RULES[Tax rules] --> T
+    T --> EVT[Tax events]
+    EVT --> EST[Liability / presentation]
+```
+
+This prevents Tax code from becoming a second source parser or a second FIFO engine.
+
+## Wealth composes domains late
+
+Wealth and net-worth analytics combine household and investment state only after each source domain is coherent.
+
+This ordering keeps aggregate wealth from owning the semantics of its components.
+
+Typical inputs include:
+
+- cashflow and savings history;
+- asset and liability state;
+- investment market value;
+- after-Tax values;
+- macro parameters.
+
+The result becomes both a decision surface and an input to FIRE modelling.
+
+## FIRE provenance is part of the run lifecycle
+
+Stochastic output needs more provenance than a deterministic table.
+
+After FIRE risk analytics are produced, the executor logs a simulation run in the Control Plane with:
+
+- run ID;
+- root seed;
+- rules;
+- input frame;
+- result frame;
+- settings snapshot ID;
+- rules snapshot ID.
+
+The Control Plane schema also supports input fingerprint, model fingerprint, implementation version, and result fingerprint.
+
+This separates two questions:
+
+```text
+Can I rebuild the deterministic inputs?
+Can I reproduce the stochastic simulation from the same provenance?
+```
+
+They are related, but not identical.
+
+## Presentation graphs can execute in parallel
+
+The wealth presentation engine can return a mapping of independent `LazyFrame` graphs.
+
+The executor uses `pl.collect_all(..., engine="streaming")` to execute those terminal graphs together.
+
+This is a performance optimization with a clear architectural location: the application coordinates when independent presentation DAGs may be materialized; the domain still owns how each result is calculated.
+
+## The contract completeness gate comes before persistence
+
+The executor compares the set of produced analytical datasets with `DATA_CONTRACT_REGISTRY`.
+
+There are two symmetric failure modes:
+
+### Produced but unregistered
+
+A new dataset exists in memory but has no declared publication contract.
+
+### Registered but missing
+
+The contract says a dataset is required, but the engine failed to produce it.
+
+Both fail the run before Silver/Gold publication.
+
+```mermaid
+flowchart TD
+    DFS[Produced datasets] --> CMP{Compare with registry}
+    REG[DATA_CONTRACT_REGISTRY] --> CMP
+    CMP -->|extra output| X[Fail: unregistered table]
+    CMP -->|missing output| M[Fail: required table absent]
+    CMP -->|exact contract set| PUB[Publication allowed]
+```
+
+This turns the registry into a schema-evolution checkpoint.
+
+## Phase 5 replaces Silver and Gold
+
+Silver and Gold are recreated and repopulated in registry publication order.
+
+Silver performs physical quality checks such as critical `ISIN` and `TAX_TYPE` null validation on the investment master before insertion.
+
+Gold logs optimized lazy plans and materializes at the publication boundary.
+
+The full-replace strategy means a successful analytical publication represents one coherent rebuild rather than a collection of partially refreshed marts.
+
+## Meta refresh comes after analytical publication
+
+`MetaLayer.load()` refreshes current analytical context:
+
+- row counts;
+- current financial rules;
+- current settings;
+- Bronze and analytical contract inventory;
+- current file context.
+
+Meta exists for inspection and analytical convenience.
+
+Historical truth remains in the Control Plane.
+
+## The commit lifecycle starts only after all phase work succeeds
+
+The pipeline does not commit after each phase.
+
+The DuckDB analytical transaction and SQLite Control Plane transaction span the run-level workflow.
+
+The lifecycle coordinator then commits DuckDB first and SQLite second.
+
+```mermaid
+sequenceDiagram
+    participant L as Lifecycle
+    participant D as DuckDB
+    participant C as SQLite
+
+    L->>C: status = COMMITTING
+    L->>D: COMMIT
+    D-->>L: success
+    L->>C: commit_state = DUCKDB_COMMITTED
+    L->>C: COMMIT
+    alt SQLite succeeds
+        L->>C: commit_state = FULLY_COMMITTED
+        L->>C: finish_run(SUCCESS)
+    else SQLite fails
+        L->>C: commit_state = RECOVERY_REQUIRED
+        L-->>L: raise split-commit failure
+    end
+```
+
+The split state is explicit because the system cannot truthfully call it a rollback.
+
+## A successful run can close prior divergence
+
+Only after the current run reaches `FULLY_COMMITTED` does the lifecycle mark previously pending recovery runs as converged.
+
+That creates a lineage from the diverged run to the later replay/convergence run rather than rewriting the earlier state in isolation.
+
+Recovery becomes an event in history.
+
+## Failure lifecycle depends on commit progress
+
+If an exception occurs, `handle_failure()` classifies the failure and resolves the truthful commit state from the two component transaction flags.
+
+The practical cases are:
+
+| DuckDB committed | SQLite committed | Truth |
+|---:|---:|---|
+| no | no | rollback may return both stores to pre-run state |
+| yes | no | `RECOVERY_REQUIRED`; DuckDB cannot be uncommitted |
+| yes | yes | failure happened after durable commit; state remains committed |
+| unknown/inconsistent | unknown | `COMMIT_STATE_UNKNOWN` |
+
+The failure record includes stage/type/message/traceback and machine-readable `FailureDomain` where available.
+
+## Stale runs cover process death
+
+Normal exception handling cannot run if the process is killed or the machine stops.
+
+On a later Control Plane open, stale-run recovery identifies interrupted run records and moves them into a truthful recovery state.
+
+This ensures the run ledger does not depend on graceful Python teardown to remain interpretable.
+
+## Backup/restore is outside the ordinary run-replay path
+
+Coordinated snapshots are a separate lifecycle.
+
+They acquire the same pipeline lock so a snapshot or restore cannot race an active production run.
+
+Snapshot captures the SQLite + DuckDB pair. Restore distrusts the archive, validates it in a temporary area, and only then stages database replacement.
+
+This is covered in [Backup and Restore](backup-and-restore.md).
+
+## Lifecycle invariants
+
+The lifecycle is designed around the following invariants.
+
+### Evidence invariants
+
+1. source discovery is recorded before transformed state depends on it;
+2. extraction consumes captured payload bytes;
+3. path identity is not treated as immutable artifact identity;
+4. pending unsynchronized work survives into later runs;
+5. provider acquisition is operationally observable.
+
+### Analytical invariants
+
+6. complete Bronze state feeds the analytical rebuild;
+7. canonicalization precedes specialized finance;
+8. market/FX context precedes dependent valuation/performance;
+9. realized investment evidence precedes dependent Tax treatment;
+10. wealth composes mature upstream domains;
+11. registry completeness precedes Silver/Gold publication.
+
+### Reliability invariants
+
+12. run identity exists before financial execution;
+13. settings and financial rules are separately snapshotted;
+14. split commit is represented explicitly;
+15. prior recovery-required runs are only marked converged after a later successful full commit;
+16. backup/restore cannot race the active pipeline lock.
+
+## Lifecycle non-invariants
 
 The system does not promise that:
 
-- every run extracts every source artifact;
-- every source is incremental;
-- Silver/Gold preserve historical versions internally;
-- SQLite and DuckDB can never temporarily diverge;
-- reconstructed state is equivalent to observed source evidence;
-- a stochastic simulation from a different run will use the same random path.
+- every run has changed input evidence;
+- every source category is incremental;
+- every external provider request succeeds on the first attempt;
+- every domain uses the same compute abstraction;
+- every dataset remains lazy to the same point;
+- every failed run leaves both databases byte-for-byte unchanged;
+- every future workload size will justify full analytical replacement.
 
-## 28. Why this lifecycle works for the workload
+Those are intentionally not architectural contracts.
 
-The lifecycle trades some recomputation for simpler analytical correctness. Persistent Bronze absorbs incremental source growth. Silver and Gold are rebuilt from that stable base, which avoids carrying years of analytical mutation logic for a local workload that can be recomputed quickly.
+## Why this lifecycle fits the workload
 
-In other words, the system spends CPU to save state complexity. For personal finance scale, that is often a very good trade: silicon is cheap; debugging a subtly corrupted cost basis at 1:30 AM is not.
+The workload has three useful characteristics:
+
+1. source evidence grows incrementally;
+2. analytical dependency relationships are rich;
+3. the complete dataset remains practical to rebuild locally.
+
+That makes a hybrid strategy attractive:
+
+```text
+incremental operational capture
++ persistent Bronze synchronization
++ full deterministic analytical rebuild
++ explicit financial reconciliation
++ coordinated commit/recovery
+```
+
+The design avoids both extremes:
+
+- reparsing every historical file every run;
+- maintaining a fragile graph of partial analytical invalidations forever.
+
+## Continue into persistence
+
+The lifecycle has now reached durable analytical state. The next question is what each DuckDB layer stores and why publication is registry-governed.
+
+Continue with [Warehouse Architecture](warehouse-architecture.md), then [Control Plane Artifact Lifecycle](control-plane-artifact-lifecycle.md) for the operational history behind the same run.
 
 ## Related specifications
 
+- [Architecture](README.md)
 - [System Architecture](system-architecture.md)
+- [Application and Dependency Architecture](application-and-dependency-architecture.md)
 - [Warehouse Architecture](warehouse-architecture.md)
-- [Data Model](data-model.md)
 - [Control Plane Artifact Lifecycle](control-plane-artifact-lifecycle.md)
 - [Deterministic Identity and Replay](deterministic-identity-and-replay.md)
 - [Reliability and Recovery](reliability-and-recovery.md)
+- [Data Model](data-model.md)
