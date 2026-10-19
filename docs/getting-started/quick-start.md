@@ -1,73 +1,64 @@
 # Quick Start
 
-## Goal
+The goal of a first run is not to exercise every feature.
 
-This guide takes a working installation to the first successful ETL run. The target state is not merely “the process exited.” A useful first run should establish:
+It is to establish one trustworthy end-to-end loop:
 
-1. valid physical configuration;
-2. valid financial rules;
-3. a SQLite Control Plane / Raw Store;
-4. a DuckDB warehouse with registered analytical outputs;
-5. a successful run record and usable Gold/Meta state.
-
-```mermaid
-flowchart TD
-    A[Installed package] --> B[Prepare source evidence]
-    B --> C[Create config.toml]
-    C --> D[Create financial rules TOML]
-    D --> E[Run CLI or Desktop]
-    E --> F{Validation passes?}
-    F -->|No| G[Fix paths / rules]
-    G --> E
-    F -->|Yes| H[Discover + synchronize evidence]
-    H --> I[Transform + Quant + Tax + Wealth]
-    I --> J[Publish Silver / Gold / Meta]
-    J --> K[Successful run]
+```text
+local evidence
+    → validated configuration
+    → validated financial policy
+    → coordinated run
+    → inspectable local state
 ```
+
+If that loop works, everything else becomes easier to reason about.
 
 ## 1. Prepare the physical inputs
 
-`Settings.validate_config()` requires two directories and seven dependency files.
+The canonical runtime settings model requires two directories and several dependency files.
 
-### Required directories
+`Settings.validate_config()` currently validates:
 
-| Setting | Role |
-|---|---|
-| `SOURCE_DB_FOLDER` | source database/input folder |
-| `STATEMENTS_FOLDER` | statement artifacts discovered by the pipeline |
+```python
+required_dirs = [
+    ("SOURCE_DB_FOLDER", self.SOURCE_DB_FOLDER),
+    ("STATEMENTS_FOLDER", self.STATEMENTS_FOLDER),
+]
 
-### Required dependency files
+required_files = [
+    ("COLUMN_MASTER_PATH", self.COLUMN_MASTER_PATH),
+    ("MF_ISIN_CSV_PATH", self.MF_ISIN_CSV_PATH),
+    ("BENCHMARK_MAPPING_CSV_PATH", self.BENCHMARK_MAPPING_CSV_PATH),
+    ("BENCHMARK_MASTER_CSV_PATH", self.BENCHMARK_MASTER_CSV_PATH),
+    ("MACRO_PARAMETERS_CSV_PATH", self.MACRO_PARAMETERS_CSV_PATH),
+    ("OPENING_BALANCE_CSV_PATH", self.OPENING_BALANCE_CSV_PATH),
+    ("CURRENCY_MAPPING_CSV_PATH", self.CURRENCY_MAPPING_CSV_PATH),
+]
+```
 
-| Setting | Role |
-|---|---|
-| `COLUMN_MASTER_PATH` | source-column normalization/mapping |
-| `MF_ISIN_CSV_PATH` | mutual-fund ISIN mapping |
-| `BENCHMARK_MAPPING_CSV_PATH` | instrument/benchmark mapping |
-| `BENCHMARK_MASTER_CSV_PATH` | benchmark master |
-| `MACRO_PARAMETERS_CSV_PATH` | financial-year/macro parameters |
-| `OPENING_BALANCE_CSV_PATH` | opening household balances |
-| `CURRENCY_MAPPING_CSV_PATH` | currency mapping |
+Source: `src/personal_finance_etl/config/settings.py`
 
-`TARGET_DB_BASE_PATH` must also be non-empty. The directory itself may be created by the application; the source directories/files above must already exist.
+That list is the current runtime contract. A historical example configuration is never more authoritative than the Pydantic model that actually loads today.
 
 ## 2. Create `config.toml`
 
-A minimal shape follows the current `Settings` model:
+A minimal shape follows the `Settings` fields:
 
 ```toml
-SOURCE_DB_FOLDER = "C:/path/to/source-db-folder"
-TARGET_DB_BASE_PATH = "C:/path/to/output"
+SOURCE_DB_FOLDER = "C:/Finance/source-db"
+TARGET_DB_BASE_PATH = "C:/Finance/output"
 TARGET_DB_NAME = "Personal_Finance_DB.duckdb"
 RAW_DOCUMENT_STORE_NAME = "Personal_Finance_DB_Raw_Store.sqlite"
-STATEMENTS_FOLDER = "C:/path/to/statements"
 
-COLUMN_MASTER_PATH = "C:/path/to/column_master.csv"
-MF_ISIN_CSV_PATH = "C:/path/to/mf_isin.csv"
-BENCHMARK_MAPPING_CSV_PATH = "C:/path/to/benchmark_mapping.csv"
-BENCHMARK_MASTER_CSV_PATH = "C:/path/to/benchmark_master.csv"
-MACRO_PARAMETERS_CSV_PATH = "C:/path/to/macro_parameters.csv"
-OPENING_BALANCE_CSV_PATH = "C:/path/to/opening_balances.csv"
-CURRENCY_MAPPING_CSV_PATH = "C:/path/to/currency_mapping.csv"
+COLUMN_MASTER_PATH = "C:/Finance/config/column_master.csv"
+MF_ISIN_CSV_PATH = "C:/Finance/config/mf_isin.csv"
+BENCHMARK_MAPPING_CSV_PATH = "C:/Finance/config/benchmark_mapping.csv"
+BENCHMARK_MASTER_CSV_PATH = "C:/Finance/config/benchmark_master.csv"
+MACRO_PARAMETERS_CSV_PATH = "C:/Finance/config/macro_parameters.csv"
+OPENING_BALANCE_CSV_PATH = "C:/Finance/config/opening_balance.csv"
+CURRENCY_MAPPING_CSV_PATH = "C:/Finance/config/currency_mapping.csv"
+STATEMENTS_FOLDER = "C:/Finance/statements"
 
 [FILE_HASH_POLICY]
 csv = true
@@ -75,190 +66,254 @@ excel = false
 sqlite = false
 ```
 
-The paths above are placeholders, not repository defaults.
+Use local paths appropriate to the actual environment.
 
-### Important loading behavior
+The destination directory may be created automatically, but `TARGET_DB_BASE_PATH` itself cannot be blank.
 
-The source implementation is intentionally permissive at parse time:
+## 3. Understand hashing before changing it
 
-```python
-@classmethod
-def from_toml(cls, filepath: str) -> Settings:
-    if not os.path.exists(filepath):
-        return cls()
+`FILE_HASH_POLICY` controls content hashing by file category.
 
-    with open(filepath, "rb") as f:
-        data = tomllib.load(f)
+Hashing participates in incremental evidence identity and deduplication.
 
-    cfg = cls(**data)
-    PreferencesManager().add_recent_config(filepath)
-    return cfg
-```
+Do not disable or alter hashing casually to “make the run faster” without understanding the artifact lifecycle documented in [Control Plane and Artifact Lifecycle](../architecture/control-plane-artifact-lifecycle.md).
 
-A missing TOML can therefore produce a default `Settings` object. That does **not** make it runnable.
+## 4. Validate the runtime settings
 
-## Configuration validation
+`Settings.validate_config()` raises a `FileNotFoundError` containing all missing/invalid required paths.
 
-The pipeline calls the stronger validation contract:
+That is deliberate.
 
-```python
-def validate_config(self) -> None:
-    ...
-    if errors:
-        raise FileNotFoundError(
-            "Configuration Validation Failed. The following paths are missing or invalid:\n"
-            + "\n".join(errors)
-        )
-```
+A failed config should be fixed before ETL begins rather than converted into a collection of downstream “file not found” surprises.
 
-```mermaid
-flowchart LR
-    TOML[config.toml] --> PARSE[Settings.from_toml]
-    PARSE --> MODEL[Pydantic Settings]
-    MODEL --> VALIDATE[validate_config]
-    VALIDATE -->|valid| RUN[Pipeline]
-    VALIDATE -->|invalid| FAIL[Aggregated path errors]
-```
-
-This distinction matters during troubleshooting: **parseable is not runnable**.
-
-## 3. Prepare financial rules
-
-The financial-rules TOML is a separate configuration authority. It controls classification, financial assumptions, tax interpretation, portfolio behavior, and FIRE/stochastic parameters.
-
-Do not copy an old rules file blindly. The Pydantic models in `backend/config/financial_rules.py` are the current schema authority, and historical example files can lag the implementation.
-
-Use:
-
-- [Financial Rules Reference](../configuration/financial-rules-reference.md) for the general rule tree;
-- [FIRE and Simulation Reference](../configuration/fire-and-simulation-reference.md) for stochastic configuration.
-
-## 4. Run interactively
-
-```bash
-shan-fin cli --config "C:/path/config.toml" --rules "C:/path/financial_rules.toml"
-```
-
-The CLI displays the selected configuration/rules pair and asks for confirmation before starting.
-
-If paths are omitted, the CLI presents recent paths when available or prompts for new ones.
-
-```mermaid
-sequenceDiagram
-    participant U as User
-    participant CLI as CLI
-    participant E as PersonalFinanceEngine
-    participant P as ETL process
-    U->>CLI: config + rules
-    CLI->>E: run_pipeline_async(...)
-    E->>P: spawn process_wrapper
-    P-->>E: EngineStatus queue
-    E-->>CLI: status callback
-    CLI-->>U: progress + logs
-```
-
-## 5. Run without confirmation
-
-For scripted-but-observed execution:
-
-```bash
-shan-fin cli --config "C:/path/config.toml" --rules "C:/path/financial_rules.toml" --auto
-```
-
-For unattended execution that exits after completion:
-
-```bash
-shan-fin cli --config "C:/path/config.toml" --rules "C:/path/financial_rules.toml" --cron
-```
-
-`--cron` implies `--auto` in the launcher logic.
-
-## 6. Understand what the run does
-
-At a high level:
-
-```mermaid
-flowchart LR
-    SRC[Evidence] --> CP[Control Plane]
-    SRC --> B[Bronze]
-    B --> T[Canonical transforms]
-    T --> Q[Quant]
-    Q --> TAX[Tax]
-    TAX --> W[Wealth / FIRE]
-    T --> S[Silver]
-    Q --> S
-    TAX --> S
-    Q --> G[Gold]
-    TAX --> G
-    W --> G
-    CP --> M[Meta]
-    S --> M
-    G --> M
-```
-
-The first run is usually the broadest because the Control Plane has not previously synchronized the source artifacts. Later runs use artifact identity/hash/synchronization state to decide what needs ingestion, while Silver and Gold remain complete analytical publications from current Bronze state.
-
-## 7. Expected database outputs
-
-Under `TARGET_DB_BASE_PATH`, the configured names default to:
+The model itself separates configuration loading from path validation:
 
 ```text
-Personal_Finance_DB.duckdb
-Personal_Finance_DB_Raw_Store.sqlite
+from_toml()
+    parses typed settings
+
+validate_config()
+    proves required local resources exist
 ```
 
-The SQLite file is not disposable cache. It contains Control Plane state and retained source/provenance data. Do not back up only DuckDB and assume the application has been fully preserved.
+## 5. Prepare financial rules
 
-## 8. What success means
+The financial-rules TOML is a separate contract.
 
-A clean CLI run ends with the backend status message:
+This separation prevents runtime topology from becoming mixed with financial meaning.
 
-```text
-Process completed cleanly.
-```
+Configuration answers:
 
-The process lifecycle also records run status in the Control Plane. For a more defensible validation than “green text appeared,” inspect:
+> Where are my files and databases?
 
-- the latest Control Plane run state;
-- expected Silver/Gold contracts;
-- Meta row counts;
-- application logs for warnings/errors;
-- key financial reconciliation outputs relevant to the changed evidence.
+Financial rules answer:
 
-See [Testing and Validation](../developer/testing-and-validation.md).
+> How should my evidence be classified and modeled?
 
-## 9. First snapshot
+Before changing rules, read:
 
-After establishing a trusted baseline, create a coordinated snapshot:
+- [Financial Rules Reference](../configuration/financial-rules-reference.md)
+- [FIRE and Simulation Reference](../configuration/fire-and-simulation-reference.md)
+
+A first run should use a rules file whose semantics are understood, not one generated by filling every field with something that “looks reasonable.” Finance has enough ways to be wrong without configuration cosplay.
+
+## 6. Launch the CLI interactively
 
 ```bash
-shan-fin cli --config "C:/path/config.toml" --snapshot
+shan-fin cli --config "C:/Finance/config.toml" --rules "C:/Finance/rules.toml"
 ```
 
-The snapshot operation uses the configured target directory/database names and coordinates the DuckDB + SQLite pair. Detailed recovery semantics belong in [Backup and Restore](../architecture/backup-and-restore.md).
+Without `--auto`, the CLI keeps the human confirmation step.
 
-## Failure guide
+That is useful during setup because it gives one last boundary between configuration selection and pipeline mutation.
 
-| Failure | Likely layer | Response |
-|---|---|---|
-| configuration validation failed | Settings / filesystem | fix every listed missing path |
-| financial-rules parse/validation failure | FinancialRules | compare against current Pydantic schema |
-| source extraction/schema error | Extract/Bronze | inspect source artifact and mapping contract |
-| missing/unregistered analytical output | registry/publication | inspect producer + Data Contract Registry |
-| Quant/Tax financial invariant failure | financial engine | inspect the named instrument/event and source evidence |
-| abnormal process exit | execution | inspect emitted status/log/failure record |
+## 7. Launch the Desktop
 
-## What not to do
+Either:
 
-Do not “fix” a failed first run by deleting one database at random. DuckDB and the SQLite Control Plane have different responsibilities and coordinated recovery semantics.
+```bash
+shan-fin
+```
 
-Do not suppress a validation failure merely to reach Gold. A financial warehouse that finishes by ignoring its own evidence gates is not a successful pipeline; it is a very fast rumor generator.
+or:
+
+```bash
+shan-fin-gui
+```
+
+The Desktop uses the same application façade and pipeline as the CLI.
+
+Choose based on workflow, not financial behavior.
+
+## 8. Unattended execution
+
+Once the environment is stable:
+
+```bash
+shan-fin cli \
+  --config "C:/Finance/config.toml" \
+  --rules "C:/Finance/rules.toml" \
+  --cron
+```
+
+`--cron` implies unattended/automatic execution and exits after completion.
+
+Use it only after interactive runs have established that:
+
+- configuration is valid;
+- rules are valid;
+- source discovery is stable;
+- the pipeline completes cleanly.
+
+Automation should remove repetitive interaction, not remove understanding.
+
+## 9. What the first run actually does
+
+A high-level lifecycle is:
+
+```mermaid
+flowchart TB
+    LOAD["Load settings + rules"]
+    LIFE["Start run lifecycle"]
+    EVID["Discover / acquire evidence"]
+    BRONZE["Synchronize persistent Bronze"]
+    CANON["Build canonical Silver/domain state"]
+    FIN["Run investment / Tax / wealth / FIRE workflows"]
+    GOLD["Publish Gold + Meta"]
+    COMMIT["Resolve coordinated commit state"]
+    END["Finish operational run"]
+
+    LOAD --> LIFE --> EVID --> BRONZE --> CANON --> FIN --> GOLD --> COMMIT --> END
+```
+
+The full sequence is specified in [Data Lifecycle](../architecture/data-lifecycle.md).
+
+## 10. Expected outputs
+
+Under `TARGET_DB_BASE_PATH`, expect the configured database pair:
+
+```text
+DuckDB warehouse
+SQLite Raw Store / Control Plane
+```
+
+The warehouse contains the analytical layers:
+
+```text
+Bronze
+Silver
+Gold
+Meta
+```
+
+The Control Plane retains operational history and evidence metadata.
+
+Do not inspect one store and assume it tells the whole story.
+
+## 11. What success looks like
+
+A successful run should give you confidence in three dimensions.
+
+### Operational
+
+The run reached a clean lifecycle outcome.
+
+### Analytical
+
+Expected contracts were published and can be queried.
+
+### Financial
+
+The resulting measures/reconciliations are plausible and consistent with known evidence.
+
+The third step matters. A technically successful pipeline can still reveal a financially meaningful discrepancy that deserves investigation.
+
+## 12. Inspect before automating
+
+After the first run:
+
+- inspect Control Plane run history;
+- inspect expected Gold tables;
+- review reconciliation outputs;
+- check high-level cashflow/wealth/investment values against known reality;
+- verify any foreign-currency positions have valid FX evidence;
+- review Tax/FIRE outputs as evidence/decision support, not statutory prophecy.
+
+The system is designed to surface disagreement. Do not treat every reconciliation warning as a software defect.
+
+## 13. Create the first snapshot
+
+Once the state is trusted:
+
+```bash
+shan-fin cli --config "C:/Finance/config.toml" --snapshot
+```
+
+Snapshots coordinate the DuckDB and SQLite application state.
+
+For restore semantics and validation, see [Backup and Restore](../architecture/backup-and-restore.md).
+
+## 14. Open the integrated docs
+
+```bash
+shan-fin cli --docs
+```
+
+The package includes the documentation tree and loads it through the documentation manifest/rendering layer.
+
+This is useful for a local-first project: operational documentation travels with the application instead of requiring a browser tab scavenger hunt.
+
+## 15. Common first-run failures
+
+### Configuration validation fails
+
+Fix all missing/invalid paths reported by `Settings.validate_config()`.
+
+### Financial rules fail to load
+
+Validate the rules model and semantic invariants. Do not bypass policy validation simply to reach the pipeline.
+
+### Provider/source extraction is incomplete
+
+Inspect typed extraction outcomes and Control Plane provider-request history where applicable.
+
+### Warehouse publication fails
+
+Use the contract/schema and testing documentation to identify whether the failure is physical, semantic, or lifecycle-related.
+
+### Reconciliation shows differences
+
+That may be the system doing its job.
+
+Compare reconstructed state with the independent observation and inspect the reconciliation event before deciding which side is wrong.
+
+### Foreign values look suspicious
+
+Check FX evidence and local-vs-base currency semantics. The system intentionally does not treat missing foreign FX as `1.0`.
+
+## 16. What not to do
+
+Do not:
+
+- run against copied configuration without reviewing local paths;
+- treat a sample TOML as more authoritative than current models;
+- change identity/hash behavior during first setup;
+- use `--cron` before interactive behavior is trusted;
+- restore one database manually from a coordinated backup;
+- “fix” reconciliation by editing outputs until they agree;
+- interpret stochastic FIRE percentiles as deterministic forecasts.
+
+## The next question
+
+Once a first run works, the interesting operational question becomes:
+
+> **Which interface should I use for daily work, and how do snapshots, restore, status, preferences, and integrated docs behave?**
+
+That is [CLI and Desktop](cli-and-desktop.md).
 
 ## Related specifications
 
 - [Configuration Reference](../configuration/configuration-reference.md)
-- [Financial Rules Reference](../configuration/financial-rules-reference.md)
 - [Data Lifecycle](../architecture/data-lifecycle.md)
-- [Warehouse Architecture](../architecture/warehouse-architecture.md)
-- [Testing and Validation](../developer/testing-and-validation.md)
+- [Control Plane and Artifact Lifecycle](../architecture/control-plane-artifact-lifecycle.md)
 - [Backup and Restore](../architecture/backup-and-restore.md)

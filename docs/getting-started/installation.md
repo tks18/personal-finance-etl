@@ -1,170 +1,301 @@
 # Installation
 
-## Purpose
+Installation is the smallest technical step in the project, but it establishes an important boundary:
 
-Installation establishes a Python environment in which Personal Finance ETL can import its backend, launch its CLI and desktop interfaces, and execute the local data stack. It does **not** make the pipeline runnable by itself: source evidence and valid configuration are separate prerequisites.
+> **The Python environment should come from the same package metadata that builds and publishes the application.**
 
-The package requires **Python 3.13 or newer**. The project metadata in `pyproject.toml` is the installation authority.
+The project does not maintain a parallel universe of hand-edited dependency lists. Runtime, development, build, and publishing behavior are all anchored in `pyproject.toml`.
 
-## Runtime stack
+## Runtime contract
+
+The package requires modern Python and is installed as `personal-finance-etl`.
+
+The runtime stack includes:
+
+- Polars for transformation execution;
+- DuckDB for analytical persistence;
+- SQLite for the Control Plane;
+- Pydantic for validated configuration;
+- Rich for the terminal interface;
+- CustomTkinter / Tkinter surfaces for Desktop;
+- Numba for selected numerical kernels;
+- PyXIRR for cash-flow return calculations;
+- yfinance for supported market acquisition paths;
+- pywebview + Markdown for integrated documentation rendering.
+
+The important point is not the list. It is that each dependency belongs to a clear boundary in the architecture.
 
 ```mermaid
-flowchart TB
-    PY[Python >= 3.13] --> PKG[personal-finance-etl]
-    PKG --> POLARS[Polars]
-    PKG --> DUCK[DuckDB]
-    PKG --> SQLITE[SQLite]
-    PKG --> NUMPY[NumPy / Numba]
-    PKG --> UI[Rich + CustomTkinter]
-    PKG --> FIN[pyxirr + finance engines]
+flowchart LR
+    PY["Python environment"]
+    PKG["personal-finance-etl"]
+    CLI["shan-fin"]
+    GUI["shan-fin-gui"]
+    CORE["application/domain/infrastructure"]
+
+    PY --> PKG --> CLI
+    PKG --> GUI
+    CLI --> CORE
+    GUI --> CORE
 ```
 
-The application is local-first. DuckDB and SQLite are local databases, source files remain local, and the desktop/CLI interfaces invoke the same local backend.
+## Install from the repository
 
-## Package metadata
+For active development, use the repository environment and development dependency group managed through `uv`.
+
+A normal workflow is:
+
+```bash
+uv sync --group dev
+```
+
+Then verify the installed entry points:
+
+```bash
+uv run shan-fin --help
+uv run shan-fin cli --help
+```
+
+The exact dependency set comes from `pyproject.toml`, not from this page. Documentation should explain the contract; package metadata should own exact versions.
+
+## Install the published package
+
+For normal package installation:
+
+```bash
+uv pip install personal-finance-etl
+```
+
+or use the equivalent installer for the active Python environment.
+
+After installation:
+
+```bash
+shan-fin --help
+shan-fin cli --help
+```
+
+A successful import alone is useful, but the console entry points verify the package metadata as well.
+
+## What the package installs
 
 The project declares:
 
 ```toml
-[project]
-name = "personal-finance-etl"
-requires-python = ">=3.13"
-
 [project.scripts]
-shan-fin = "personal_finance_etl.frontend.launcher:main"
-shan-fin-gui = "personal_finance_etl.frontend.desktop.app:main"
+shan-fin = "personal_finance_etl.presentation.launcher:main"
+shan-fin-gui = "personal_finance_etl.presentation.desktop.app:main"
 ```
 
-Source: `pyproject.toml`.
+Source: `pyproject.toml`
 
-These entry points are worth understanding because `shan-fin` is a launcher, not merely the CLI binary.
+Those scripts deliberately terminate in the presentation layer. They do not point directly into the ETL orchestrator.
 
-## Install from the repository
+That preserves the dependency story:
 
-From a cloned repository, create or activate a Python 3.13+ environment and install the project using the package workflow appropriate to the checkout. The repository uses Hatchling as its build backend and includes a `uv.lock`, so `uv` is the natural project-development workflow.
-
-```bash
-uv sync
+```text
+console script
+    → presentation
+    → application façade
+    → application orchestration
+    → domain / infrastructure
 ```
 
-For an installed package rather than a development checkout, install the built/published package using the environment manager of choice.
+## Why the launcher owns process bootstrap
 
-The documentation intentionally avoids pinning an installation command to a release artifact or index URL. Release distribution is package metadata; the runtime contract is Python 3.13+ plus the declared dependencies.
+The canonical launcher calls:
+
+```python
+def main() -> None:
+    """Canonical entrypoint function for both terminal and desktop interfaces."""
+    multiprocessing.freeze_support()
+
+    parser = build_argument_parser()
+    args = parser.parse_args()
+```
+
+Source: `src/personal_finance_etl/presentation/launcher.py`
+
+`multiprocessing.freeze_support()` matters because the application supports both ordinary Python execution and packaged Desktop execution.
+
+It is a small line with an architectural job: process bootstrap belongs at the presentation/application boundary, not scattered through financial modules.
 
 ## Development dependencies
 
-The project separates runtime dependencies from a development group. Development tooling includes static/type/lint and packaging utilities such as:
-
-- `mypy`;
-- `pyright`;
-- `ruff`;
-- `vulture`;
-- `pyinstaller`;
-- `poethepoet`.
-
-These are developer tools, not prerequisites for an ordinary end-user pipeline run.
-
-## Verify the installation
-
-### Launcher help
-
-```bash
-shan-fin --help
-```
-
-The launcher should expose the `cli` and `tkinter` subcommands.
-
-### CLI help
-
-```bash
-shan-fin cli --help
-```
-
-The CLI currently supports:
+The development group includes the repository's quality and delivery tooling:
 
 ```text
---config PATH
---rules PATH
+Mypy
+Poe the Poet
+PyInstaller
+Pylint
+Pyright
+Pytest
+Ruff
+tkreload
+Vulture
+```
+
+These are not runtime requirements for every user. They support development, certification, packaging, and local feedback loops.
+
+The complete engineering workflow is documented in [Tooling, Quality and Release Engineering](../developer/tooling-quality-and-release-engineering.md).
+
+## Verify imports
+
+For a quick package sanity check:
+
+```bash
+python -c "import personal_finance_etl; print(personal_finance_etl.__name__)"
+```
+
+Then verify both entry points.
+
+The useful hierarchy is:
+
+```text
+package imports
+    ↓
+entry points resolve
+    ↓
+configuration loads
+    ↓
+real pipeline runs
+```
+
+Do not jump from “import works” to “production financial state is safe.” Those are wildly different certifications.
+
+## Verify the CLI parser
+
+The launcher exposes two subcommands:
+
+```text
+cli
+    Rich terminal control surface
+
+tkinter
+    Desktop application
+```
+
+`cli` additionally supports:
+
+```text
+--config
+--rules
 --snapshot
---restore BACKUP_ZIP
+--restore
 --auto
 --cron
 --docs
 ```
 
-### Desktop
+Those options are specified in [CLI and Desktop](cli-and-desktop.md).
 
-Either command launches the desktop interface:
+## Windows and packaged execution
 
-```bash
-shan-fin
+The application is intentionally friendly to Windows/Desktop workflows because its real operating environment includes local files, Excel/Power BI adjacency, and a Desktop surface.
+
+That does not mean the architecture is Windows-only.
+
+The distinction is:
+
+```text
+financial/domain model
+    platform-neutral Python
+
+presentation / packaging choices
+    optimized for the actual operating environment
 ```
 
-or:
+PyInstaller packaging is handled through the repository's developer tooling rather than being part of the normal source-install path.
 
-```bash
-shan-fin-gui
-```
+## Package contents
 
-The explicit launcher form also works:
+The build configuration intentionally includes:
 
-```bash
-shan-fin tkinter
-```
+- root `README.md`;
+- the `docs/` tree;
+- logo assets.
 
-```mermaid
-sequenceDiagram
-    participant U as User
-    participant L as Launcher
-    participant D as DesktopApp
-    participant C as CLI
-    U->>L: shan-fin
-    L->>D: default route
-    U->>L: shan-fin cli
-    L->>C: terminal route
-```
+That supports integrated documentation rendering from the installed application.
 
-## Windows behavior
-
-The application contains explicit Windows handling in the CLI, including UTF-8 stdout/stderr reconfiguration. The desktop application uses CustomTkinter and local file dialogs. Snapshot/restore and pipeline operations operate on local filesystem paths, so permissions and file locks remain relevant even when installation itself succeeded.
+The docs are therefore not merely repository decoration. They are part of the product surface.
 
 ## Installation is not configuration
 
-A successful `shan-fin --help` proves that the package and launcher are available. It does **not** prove that the ETL can run.
+A perfectly installed package can still be unrunnable.
 
-A runnable configuration additionally requires:
+The application requires real local paths and policy inputs:
 
-- `SOURCE_DB_FOLDER`;
-- `STATEMENTS_FOLDER`;
-- `TARGET_DB_BASE_PATH`;
-- column master CSV;
-- MF ISIN mapping CSV;
-- benchmark mapping CSV;
-- benchmark master CSV;
-- macro parameters CSV;
-- opening-balance CSV;
-- currency mapping CSV;
-- a valid financial-rules TOML.
+```text
+SOURCE_DB_FOLDER
+STATEMENTS_FOLDER
+TARGET_DB_BASE_PATH
+dependency CSV paths
+financial rules TOML
+```
 
-That transition is covered in [Quick Start](quick-start.md).
+Those belong to configuration, not installation.
+
+The next question is therefore:
+
+> **What evidence and configuration do I need before I run the engine for real?**
+
+That is the purpose of [Quick Start](quick-start.md).
 
 ## Common installation failures
 
-| Failure | Meaning | Action |
-|---|---|---|
-| `shan-fin` not found | environment/script path is not active | activate the intended environment and verify installation |
-| Python version rejected | interpreter is below project minimum | use Python 3.13+ |
-| desktop import/display failure | GUI/runtime dependency or environment issue | verify project dependencies and desktop-capable environment |
-| pipeline later rejects paths | installation succeeded but configuration is invalid | continue with Quick Start |
+### `shan-fin` is not found
 
-## Packaging boundary
+Confirm the environment containing the package is active and that its scripts directory is on the shell path.
 
-Installation should not mutate financial data. The first financial state transition occurs when the configured pipeline runs. This separation is useful during troubleshooting: package/import problems and data/configuration problems are different classes of failure and should stay that way.
+With `uv`, prefer `uv run shan-fin ...` while diagnosing.
+
+### Python requirement mismatch
+
+Use the Python requirement declared in `pyproject.toml`.
+
+Do not “solve” an incompatible interpreter by gradually downgrading random dependencies until something imports. That is dependency Jenga.
+
+### Desktop cannot start
+
+First verify:
+
+1. the package imports;
+2. `shan-fin --help` works;
+3. the CLI starts;
+4. then diagnose the Desktop/Tk environment.
+
+That isolates packaging from presentation issues.
+
+### Development tooling is missing
+
+Install the development dependency group rather than manually adding one tool at a time.
+
+The repository quality gate assumes a coherent toolchain.
+
+## Installation boundary
+
+Installation proves:
+
+```text
+Python can resolve the package
+console scripts exist
+dependencies can be imported
+```
+
+It does **not** prove:
+
+```text
+local evidence exists
+financial rules are correct
+warehouse state is valid
+recovery is healthy
+```
+
+That boundary keeps the next guide honest.
 
 ## Related specifications
 
 - [Quick Start](quick-start.md)
 - [CLI and Desktop](cli-and-desktop.md)
-- [Configuration Reference](../configuration/configuration-reference.md)
-- [Development Guide](../developer/development-guide.md)
-- [System Architecture](../architecture/system-architecture.md)
+- [Tooling, Quality and Release Engineering](../developer/tooling-quality-and-release-engineering.md)
