@@ -1,346 +1,687 @@
 # Adding Transformations
 
-Transformations are where retained evidence becomes canonical financial meaning. That makes transformation work more sensitive than ordinary dataframe plumbing: a join can change grain, a default can create false financial facts, and a convenient aggregation can destroy identity needed by Quant or Tax.
+A transformation is the first place evidence becomes *meaning*.
 
-This guide covers additions to core canonical transforms and analytical transformation stages without violating ownership boundaries.
+That makes this layer deceptively dangerous.
 
-## 1. Choose the transformation layer
+Renaming a source column is easy. Deciding that a cash movement is income rather than transfer is not. Joining market data to holdings is easy. Preserving the intended row grain after that join is not. Casting a string to a number is easy. Proving that an invalid populated value did not silently become zero is not.
+
+This guide follows a new transformation from source authority to canonical output, then into publication and downstream consumption.
+
+> **The governing rule is simple: a transformation may change representation freely, but it may change financial meaning only when the owning domain explicitly says so.**
+
+```mermaid
+flowchart LR
+    IN[Validated input]
+    SEM[Financial semantics]
+    G[Output grain]
+    ID[Identity]
+    PLAN[Lazy transformation plan]
+    VAL[Validation]
+    OUT[Canonical output]
+    CONS[Consumers]
+
+    IN --> SEM --> G --> ID --> PLAN --> VAL --> OUT --> CONS
+```
+
+The order matters. I want to know what the result *means* before I write expressions that happen to produce it.
+
+## First decide whether this is actually a domain transformation
+
+Not every dataframe operation belongs in the financial domain.
+
+Ask what the operation knows.
+
+### Source adaptation
+
+If it knows vendor column names, sheet layout, transport details, or raw provider quirks, it belongs near the provider/source boundary.
+
+### Canonical financial transformation
+
+If it decides:
+
+- transaction type;
+- financial classification;
+- sign semantics;
+- currency meaning;
+- canonical date/value interpretation;
+- asset/liability/income/expense semantics;
+
+then it belongs in the relevant domain transformation package.
+
+### Workflow sequencing
+
+If it only decides *when* transformations run or which outputs feed the next phase, that belongs in `application/`.
+
+### Analytical shaping
+
+If the financial meaning is already canonical and the job is to shape a BI-facing dataset, that belongs in the Gold publication path.
 
 ```mermaid
 flowchart TD
-    N[New calculation] --> Q{What does it produce?}
-    Q -->|canonical fact/dimension| CORE[backend/transform or core transformer]
-    Q -->|investment reconstruction| QUANT[engines/analytics]
-    Q -->|tax event| TAX[engines/tax]
-    Q -->|wealth/FIRE/presentation| PRES[engines/presentation]
-    Q -->|BI-only aggregation| GOLD[Gold builder]
+    OP[Proposed transformation]
+    SRC{Knows source/vendor shape?}
+    FIN{Defines financial meaning?}
+    FLOW{Only sequences work?}
+    ANA{Only presents canonical state?}
+
+    OP --> SRC
+    SRC -->|yes| ADAPT[provider / ingestion adaptation]
+    SRC -->|no| FIN
+    FIN -->|yes| DOM[domain transform]
+    FIN -->|no| FLOW
+    FLOW -->|yes| APP[application]
+    FLOW -->|no| ANA
+    ANA -->|yes| GOLD[Gold builder / publication]
 ```
 
-Do not add a transformation to the nearest file merely because its inputs are available there.
+This classification prevents a common failure mode: every Polars expression ending up in the same `transforms.py` file regardless of meaning.
 
-## 2. Define input authority
+## Input authority comes before input schema
 
-List every input contract and why it is authoritative. Distinguish:
+A transform should identify which input is authoritative for each fact it consumes.
 
-- observed source evidence;
-- canonical facts;
-- reconstructed state;
-- configuration/rules;
-- derived analytics.
+Suppose I need:
 
-A transformation should not accidentally replace a stronger authority with a weaker one.
-
-## 3. Write the grain before the code
-
-State one sentence:
-
-> One row represents ...
-
-Then define uniqueness keys. If the output is persistent, the registry grain should agree with the implementation and Reference docs.
-
-```mermaid
-flowchart LR
-    INPUT[Input grains] --> JOIN[Join / transform]
-    JOIN --> ASSERT[Expected output grain]
-    ASSERT --> OUT[Output contract]
+```text
+transaction quantity
+instrument currency
+valuation price
+observed holding
 ```
 
-Many transformation bugs are grain bugs wearing arithmetic costumes.
+Those may come from four different authorities.
 
-## 4. Decide identity behavior
+The transformation must not accidentally prefer whichever table has the most convenient column.
 
-Ask whether output rows need deterministic identity across rebuilds.
+A good input contract says:
 
-If yes:
+```text
+quantity       <- canonical transaction evidence
+currency       <- instrument/currency master
+valuation      <- market observation
+observed qty   <- broker holding evidence
+```
 
-- reuse an existing namespace where semantics match;
-- add an explicit identity contract where a new financial event truly exists;
-- never use row order as financial identity;
-- document null/canonicalization semantics.
+That makes later reconciliation possible.
 
-See [Deterministic Identity and Replay](../architecture/deterministic-identity-and-replay.md).
+## Write the output grain before code
 
-## 5. Preserve LazyFrames where useful
+Before adding a transformation, I state one sentence:
 
-Relational transformations should generally remain lazy until the pipeline intentionally collects them. This lets Polars optimize projections, filters, joins, and streaming execution.
+> One output row represents ...
 
-Avoid premature `.collect()` simply to inspect intermediate state in production code.
+That sentence governs nearly every later design choice.
 
-Use explicit materialization when an algorithm genuinely requires in-memory ordered state.
+For example:
 
-## 6. Join semantics are financial semantics
+```text
+one canonical transaction
+one instrument x date valuation
+one disposal event
+one disposal x acquisition-lot consumption
+one household ledger posting
+```
 
-For every join, document:
+The grain determines:
 
-- key columns;
-- expected cardinality;
-- left/inner/as-of semantics;
-- null behavior;
-- temporal direction where applicable.
+- uniqueness;
+- deterministic identity;
+- valid joins;
+- aggregation semantics;
+- downstream BI relationships;
+- whether the output is a fact, event, snapshot, or dimension.
 
-The US market pipeline's backward `join_asof` is a good example: join direction enforces temporal causality. Replacing it with nearest-neighbor matching would be a financial-model change, not a harmless optimization.
+A transformation with an unclear grain is not ready to be persisted.
 
-## 7. Null is not zero
+## Decide identity behavior explicitly
 
-A missing value may mean:
+A transformation can:
 
-- evidence unavailable;
-- calculation undefined;
-- not applicable;
-- not yet observable.
+1. preserve upstream identity;
+2. derive a deterministic new identity at a new grain;
+3. produce non-identity analytical state;
+4. expand one identity into several child identities.
 
-Zero means the quantity is known to be zero.
+Those are different contracts.
 
-Do not fill null financial metrics with zero for presentation convenience unless the metric contract explicitly defines that equivalence.
+For identity-bearing outputs, use the centralized deterministic identity machinery rather than constructing local hashes.
 
-## 8. Stateful transformations
+Identity semantics are part of [Deterministic Identity and Replay](../architecture/deterministic-identity-and-replay.md).
 
-FIFO, reconciliation, and stochastic simulation are explicit stateful algorithms. Extensions to these areas must preserve event ordering and mutation semantics.
+## Preserve source provenance where the financial story needs it
+
+Canonicalization should remove source-specific *vocabulary*, not necessarily all source provenance.
+
+A downstream reconciliation, Tax audit, or forensic investigation may need to know:
+
+- source artifact;
+- source row/reference;
+- provider entity;
+- original transaction identifier;
+- run context.
+
+If provenance is useful to explain why a canonical fact exists, preserve it intentionally.
+
+Do not keep every raw column forever, but do not erase the receipt just because the ledger entry is cleaner.
+
+## Use LazyFrame as the default broad transformation surface
+
+The codebase uses Polars lazy execution heavily because it allows transformation chains to remain optimizable.
+
+A canonical transformation normally wants this shape:
+
+```python
+def transform(source: pl.LazyFrame, ...) -> pl.LazyFrame:
+    return (
+        source
+        .with_columns(...)
+        .filter(...)
+        .join(...)
+        .select(...)
+    )
+```
+
+This preserves optimizer visibility across the plan.
+
+A new `.collect()` should correspond to a real boundary:
+
+```text
+stateful algorithm
+third-party API
+publication
+process boundary
+scalar extraction
+validation / diagnostic need
+```
+
+## Stateful finance is allowed to be stateful
+
+Not every financial algorithm should be vectorized.
+
+FIFO is the obvious example.
+
+A lot book evolves as ordered transactions are processed. Remaining quantity and cost basis are state.
+
+That algorithm should not be forced into a single dataframe expression merely to maintain aesthetic purity.
 
 ```mermaid
 stateDiagram-v2
-    [*] --> PriorState
-    PriorState --> EventApplied
-    EventApplied --> ValidatedState
-    ValidatedState --> NextEvent
-    NextEvent --> EventApplied
+    [*] --> EmptyLotBook
+    EmptyLotBook --> OpenLots: purchase
+    OpenLots --> OpenLots: additional purchase
+    OpenLots --> OpenLots: partial disposal
+    OpenLots --> ClosedOrReduced: full/large disposal
+    ClosedOrReduced --> OpenLots: later purchase
 ```
 
-For Quant changes, validate lot quantities, cost basis, realized-event lineage, and reconciliation effects after every relevant mutation.
+The engineering standard is not "vectorize everything."
 
-## 9. FinancialRules belong at the policy boundary
+It is "keep eager/stateful execution at the boundary where state is the actual model."
 
-If behavior varies by user financial policy, classification, tax treatment, or planning assumption, consume `FinancialRules` rather than embedding constants in the transformation.
+## Join cardinality is part of financial correctness
 
-If the value is an invariant of the algorithm itself, keep it in code and document it.
+Every join should have an expected cardinality.
 
-## 10. Output naming and pipeline dictionary
+### Many-to-one enrichment
 
-Analytical outputs are passed through the pipeline's dataframe dictionary using registry `contract_id` keys. A persistent output key must exactly match its registered contract.
+Example: transactions joined to a unique instrument master.
 
-The orchestrator enforces produced/registered equality before publication.
+The master side must be unique at the key.
 
-## 11. Adding a Silver output
+### One-to-many expansion
 
-A new persistent Silver transformation requires, at minimum:
+Example: a disposal expanded into consumed acquisition lots.
 
-1. producer logic;
-2. stable output key;
-3. Silver DDL;
-4. `DataContract` entry;
-5. publication order;
-6. grain/domain/producer metadata;
-7. downstream consumers;
-8. Reference documentation;
-9. validation/reconciliation.
+The output grain changes intentionally.
+
+### Many-to-many
+
+This should trigger a review.
+
+Many-to-many joins can multiply value while preserving column types and producing perfectly valid-looking output.
+
+A before/after row-count assertion is useful but not sufficient. Validate the key cardinality itself.
+
+## Null semantics are part of the algorithm
+
+A transformation should define what null means for important fields.
+
+Examples:
+
+```text
+market price null       -> no valid observation available
+xirr null               -> return not computable under current cash-flow structure
+fx rate null            -> conversion evidence missing
+cost basis null         -> basis unavailable, not zero
+```
+
+Do not fill nulls simply to make a column numeric.
+
+## Invalid populated values should fail before defaulting
+
+The dangerous path remains:
+
+```text
+bad source value
+  -> permissive cast
+  -> null
+  -> default
+  -> plausible financial output
+```
+
+Validation should distinguish:
+
+```text
+missing
+invalid
+zero
+not applicable
+not computable
+```
+
+This is particularly important for dates, quantities, prices, FX, and Tax-relevant amounts.
+
+## Sign conventions must be explicit
+
+Different parts of finance use different sign conventions.
+
+A cashflow convention might represent outflows as negative.
+
+A purchase quantity may remain positive while cash consideration is negative.
+
+A liability may be modeled as a positive balance but subtract from net worth.
+
+The transformation contract should state the chosen convention instead of expecting downstream code to infer it from field names.
+
+## Currency-aware transforms need multiple named values
+
+A multi-currency transformation should distinguish, where relevant:
+
+```text
+transaction currency
+instrument / local market currency
+base / INR value
+FX rate
+FX gain/loss or attribution
+```
+
+Do not overwrite local values with base-currency values.
+
+Both can be legitimate analytical facts.
 
 ```mermaid
 flowchart LR
-    P[Producer] --> K[df_key]
-    K --> R[DATA_CONTRACT_REGISTRY]
-    R --> D[SILVER_DDL]
-    D --> L[SilverLayer]
-    L --> M[Meta row counts/contracts]
+    LOCAL[Local currency amount]
+    FX[FX observation]
+    BASE[Base / INR amount]
+    ATTR[FX attribution]
+
+    LOCAL --> BASE
+    FX --> BASE
+    LOCAL --> ATTR
+    FX --> ATTR
 ```
 
-## 12. Modifying an existing Silver output
+## FinancialRules belongs at the policy boundary
 
-Schema evolution is more dangerous than adding a new isolated column might suggest. Check:
+A transformation may need configurable financial policy.
 
-- DDL type/nullability;
-- producer expression type;
-- grain and uniqueness;
-- identity inputs;
-- Gold consumers;
-- Power BI/report consumers;
-- contract fingerprints/replay implications;
-- docs.
+That policy should come through validated configuration/rules rather than hard-coded literals scattered through expressions.
 
-Use [Data Contract and Schema Evolution](data-contract-and-schema-evolution.md).
+Examples include:
 
-## 13. Aggregation rules
+- classification thresholds;
+- Tax parameters;
+- planning assumptions;
+- domain cutoffs.
 
-Additive values may be summed at a higher grain when semantics permit.
+A constant that changes financial meaning should be discoverable as policy.
 
-Non-additive metrics generally must be recomputed:
+## The application DAG owns ordering
 
-- XIRR from cashflows;
-- CAGR from start/end state and time;
-- drawdown from the value path;
-- ratios from aggregated numerators/denominators;
-- percentiles from the distribution.
+Canonical transforms often depend on other canonical outputs.
 
-Do not average a metric because SQL makes `AVG()` emotionally available.
+The application transformation layer coordinates that ordering.
 
-## 14. Temporal transformations
+A transform should own its meaning.
 
-When using historical prices, FX, benchmarks, or macro parameters, specify causality:
-
-- can future observations ever be used?
-- how stale can the last observation become?
-- what happens on weekends/market closures?
-- what date is the observation versus valuation date?
-
-## 15. Validation inside the transformation
-
-Fail close to the defect when possible. Examples:
-
-- duplicate deterministic identity;
-- negative quantity where contract forbids it;
-- missing required currency;
-- non-positive FX rate;
-- impossible date ordering;
-- unsupported classification.
-
-Errors should preserve enough context to locate the affected source/ISIN/stage.
-
-## 16. Consumer analysis
-
-Before changing an output, search for every consumer. A canonical fact may feed:
+The DAG/executor should own when it runs.
 
 ```mermaid
 flowchart LR
-    FACT[Canonical fact] --> Q[Quant]
-    FACT --> T[Tax]
-    FACT --> W[Wealth]
-    Q --> T
-    Q --> W
-    T --> W
-    W --> G[Gold]
+    MASTER[Canonical masters]
+    LEDGER[Ledger transforms]
+    INV[Investment canonical facts]
+    QUANT[Reconstruction / Quant]
+    TAX[Tax]
+    WEALTH[Wealth]
+    GOLD[Gold]
+
+    MASTER --> LEDGER
+    MASTER --> INV
+    INV --> QUANT
+    LEDGER --> TAX
+    QUANT --> TAX
+    LEDGER --> WEALTH
+    QUANT --> WEALTH
+    TAX --> GOLD
+    WEALTH --> GOLD
 ```
 
-A locally correct transformation can still be globally incompatible.
+Do not hide ordering dependencies inside a transform by having it reach out and run another engine itself.
 
-## 17. Worked extension pattern
+## Output naming should reflect meaning, not processing history
 
-Suppose a new canonical financial event is required.
+Prefer names that describe financial state:
 
-### Step A: semantics
+```text
+investment_transactions
+realized_events
+reconciliation_events
+net_worth
+```
 
-Define evidence source, grain, dates, amounts, currency, and ownership.
+Avoid pipeline-history names such as:
 
-### Step B: identity
+```text
+step4_output_final_v2
+```
 
-Define stable identity fields only if the event must survive rebuilds as the same fact.
+The canonical layer is a model, not a scrapbook of implementation phases.
 
-### Step C: producer
+## Adding a Silver output is a contract change
 
-Implement source-independent canonical logic.
+If a transformation creates a new persistent Silver dataset, it needs more than code.
 
-### Step D: persistence
+Review:
 
-Add DDL and registry if persistent.
+- schema catalog;
+- registry entry;
+- grain;
+- identity;
+- producer;
+- publication order;
+- downstream Gold/domain consumers;
+- documentation/reference contract.
 
-### Step E: consumers
+A DataFrame becoming durable changes the compatibility surface.
 
-Update engines that require the event.
+## Modifying an existing Silver output is even more sensitive
 
-### Step F: validation
+An existing Silver contract may already feed:
 
-Reconcile event counts and financial totals against source evidence.
+- Quant;
+- Tax;
+- wealth;
+- Gold;
+- Power BI;
+- identity/reference joins.
 
-## 18. Refactoring existing transformations
-
-For behavior-preserving refactors, establish a financial equivalence baseline before modifying code. Compare:
-
-- schema;
-- row count;
-- identities;
-- sums/quantities;
-- relevant metrics;
-- null patterns;
-- ordering only where semantically meaningful.
-
-Byte-identical parquet/dataframe representation is not the goal. Financially identical contracts are.
-
-## 19. Transformation completion checklist
-
-- [ ] correct semantic owner chosen;
-- [ ] authoritative inputs identified;
-- [ ] output grain written down;
-- [ ] identity behavior defined;
-- [ ] join cardinalities understood;
-- [ ] null/zero semantics defined;
-- [ ] rules/config dependencies explicit;
-- [ ] persistent contract registered if required;
-- [ ] DDL matches produced schema;
-- [ ] consumers updated;
-- [ ] targeted validation added;
-- [ ] end-to-end reconciliation passes;
-- [ ] docs updated.
-
-## 20. Mapping and classification changes
-
-A transformation that maps source labels into financial categories should prefer explicit configuration/master mappings over fuzzy inference. Unknown values should fail or surface as unmapped according to the existing contract rather than being silently assigned to a convenient default.
-
-## 21. Currency-aware transformations
-
-For monetary fields, document the currency of every input and output. If conversion occurs, identify:
-
-- observation date;
-- FX source;
-- join direction;
-- stale/missing behavior;
-- local versus INR/reporting values.
-
-Never add two monetary columns merely because both are numeric.
-
-## 22. Transformation ordering
-
-Pipeline ordering is semantic. Currency and US market processing happen before Quant because Quant requires normalized market/FX evidence. Quant runs before Tax because Tax consumes realized events. Tax runs before presentation because presentation may consume tax-aware state.
+Before changing it, build a consumer map.
 
 ```mermaid
-flowchart LR
-    CORE[Core transforms] --> FX[Currency]
-    FX --> US[US market reconstruction]
-    US --> Q[Quant]
-    Q --> T[Tax]
-    T --> P[Presentation]
+flowchart TD
+    S[Silver contract]
+    Q[Quant]
+    T[Tax]
+    W[Wealth]
+    G[Gold]
+    BI[Power BI]
+
+    S --> Q
+    S --> T
+    S --> W
+    S --> G --> BI
 ```
 
-When adding a stage, justify its dependency position rather than inserting it where orchestration code is easiest to edit.
+A harmless-looking rename can have a large blast radius.
 
-## 23. Idempotency expectations
+## Aggregation rules must match grain
 
-A deterministic transformation over the same canonical inputs/rules should reproduce equivalent outputs. Sources of accidental nondeterminism include:
+Before aggregating, define which measures are:
 
-- unordered iteration affecting IDs;
-- current wall-clock time used as business data;
-- random values without recorded seeds;
-- unstable floating serialization in identity inputs.
+- additive;
+- semi-additive;
+- non-additive.
 
-## 24. Empty-frame semantics
+Transactions may aggregate over time.
 
-The pipeline uses empty frames for absent/non-actionable source streams in several places. New transformations must distinguish:
+Point-in-time balances often should not.
 
-- no source evidence;
-- valid source with zero rows;
-- transformation failure.
+Ratios, XIRR, CAGR, and many percentages are non-additive.
 
-Do not catch exceptions and return empty output unless emptiness is genuinely the contract.
+Do not let `group_by().agg(pl.sum(...))` decide semantics by default.
 
-## 25. Performance review
+## Temporal transformations need explicit clocks
 
-Before optimizing, inspect the lazy plan and materialization boundaries. Common improvement targets include redundant collects, repeated joins/scans, wide frames carried too long, and Python loops over relational operations.
+Financial data can contain several dates:
 
-Stateful finance algorithms remain exceptions where explicit iteration is the correct representation.
+```text
+transaction date
+settlement date
+valuation date
+statement date
+Tax period date
+run timestamp
+```
 
-## 26. Transformation QA matrix
+A transformation should document which date drives:
 
-| Risk | Validation |
+- ordering;
+- period classification;
+- market lookup;
+- Tax classification;
+- snapshot grain.
+
+Using the wrong clock can preserve values while changing meaning.
+
+## Reconciliation transforms preserve disagreement
+
+When observed evidence and reconstruction disagree, the transform should not make the problem disappear.
+
+The correct output may be a reconciliation event or adjustment record that preserves:
+
+- observed quantity/value;
+- reconstructed quantity/value;
+- delta;
+- reason/classification;
+- provenance;
+- synthetic adjustment where policy allows it.
+
+Reconciliation is evidence about disagreement.
+
+## Mapping/classification changes are financial changes
+
+Mappings can look like configuration housekeeping.
+
+But a category mapping can affect:
+
+- income/expense classification;
+- Tax treatment;
+- wealth grouping;
+- BI totals.
+
+Treat mapping changes as semantic changes when they alter classification.
+
+They deserve regression review.
+
+## Empty-frame behavior must be explicit
+
+A transform may receive no rows legitimately.
+
+Decide whether it should:
+
+```text
+return an empty frame with the correct schema
+skip publication
+raise because evidence was required
+emit a typed no-data state
+```
+
+Do not let empty behavior depend on accidental Polars inference.
+
+## Idempotency expectations should be stated
+
+For deterministic canonical transforms, equivalent input evidence and configuration should produce equivalent output.
+
+If state outside the declared inputs affects the result, identify it.
+
+For stochastic simulation, reproducibility semantics differ and are documented separately.
+
+For deterministic finance, hidden time/random dependencies are usually bugs.
+
+## Validation belongs around meaning, not only syntax
+
+A transformation's validation may include:
+
+### Structural
+
+- required columns;
+- expected types;
+- grain/uniqueness.
+
+### Financial
+
+- non-negative quantities where required;
+- allowed categorical vocabulary;
+- date ordering;
+- currency availability;
+- reconciliation constraints;
+- conservation relationships.
+
+### Operational
+
+- lazy plan executes;
+- output can be published;
+- required downstream contract exists.
+
+## A worked change pattern
+
+Suppose I add a canonical fee allocation to investment transactions.
+
+### 1. Define semantics
+
+Is the fee part of acquisition cost, disposal proceeds adjustment, or a separate expense fact?
+
+### 2. Define grain
+
+Does the fee remain one value per transaction, or can one transaction have multiple fee components?
+
+### 3. Define identity
+
+If the grain changes, existing transaction identity may no longer be sufficient.
+
+### 4. Define currency
+
+Is the fee in transaction currency, local market currency, or base currency?
+
+### 5. Implement the transform
+
+Keep it lazy if the logic is columnar.
+
+### 6. Update contract/persistence
+
+If Silver shape changes, evolve the schema/registry.
+
+### 7. Review consumers
+
+FIFO cost basis, Tax, performance, and Gold may all depend on fee treatment.
+
+### 8. Test financial regression
+
+Known purchase/sale cases should demonstrate the intended basis/proceeds effect.
+
+That is a transformation change. The Polars expression is the smallest part of it.
+
+## Performance review comes after semantics
+
+Once the output is correct:
+
+- inspect query plan/materialization;
+- reduce duplicate joins/sorts;
+- avoid repeated expensive expressions;
+- remove unnecessary Python round-trips;
+- benchmark meaningful workloads.
+
+Do not micro-optimize before the financial model is stable.
+
+Fast wrong finance is still wrong finance, just with excellent throughput.
+
+## Refactoring an existing transformation is still contract work
+
+A refactor that claims no semantic change should prove exactly that.
+
+I compare:
+
+```text
+output grain
+schema
+identity
+row counts at meaningful grains
+financial totals / metrics
+null behavior
+currency/sign semantics
+```
+
+Then I review execution behavior separately:
+
+```text
+lazy plan/materialization
+join strategy
+sorts
+Python round-trips
+performance
+```
+
+The goal is to allow internal decomposition to change freely while keeping the canonical contract stable.
+
+Do not use a refactor as an excuse to "clean up" financial semantics invisibly. If meaning changes, call it a behavior change and test/document it as one.
+## Transformation QA matrix
+
+| Scenario | What to prove |
 |---|---|
-| join explosion | assert expected grain/row cardinality |
-| dropped evidence | reconcile source/canonical counts or totals |
-| duplicated identity | uniqueness check |
-| temporal leakage | assert observation date <= valuation date |
-| currency mixing | reconcile local/reporting values |
-| null-to-zero corruption | assert undefined metrics remain null/statused |
-| aggregation drift | recompute from authoritative lower grain |
+| normal input | expected canonical output |
+| missing optional field | explicit null/default semantics |
+| malformed required field | validation failure |
+| duplicate key | intentional duplicate/grain behavior |
+| empty input | correct empty/failure semantics |
+| currency conversion | local/base values preserved correctly |
+| reconciliation case | observed and reconstructed state remain distinct |
+| historical input | deterministic temporal behavior |
+| rebuild | identity and output remain stable |
+| performance-sensitive path | no accidental eager regression |
+
+## Transformation completion checklist
+
+- [ ] I classified the correct layer.
+- [ ] Input authority is explicit.
+- [ ] Output grain is explicit.
+- [ ] Identity behavior is explicit.
+- [ ] Join cardinality is reviewed.
+- [ ] Missing/invalid/zero semantics are explicit.
+- [ ] Sign and currency conventions are documented.
+- [ ] Lazy execution is preserved until a justified boundary.
+- [ ] Stateful behavior lives in a stateful owner.
+- [ ] DAG/application ordering is explicit.
+- [ ] Silver contract/registry is updated if persistence changed.
+- [ ] Consumers are mapped.
+- [ ] Financial and structural validation exists.
+- [ ] Performance is measured after correctness.
+- [ ] Canonical docs/reference contracts are updated.
+
+Once canonical meaning is stable, the next question is not how to compute more finance.
+
+It is:
+
+> **How do I publish that meaning as a decision-ready analytical surface without accidentally creating a second financial model?**
+
+That is the job of [Adding Gold Marts](adding-gold-marts.md).
 
 ## Related specifications
 
-- [Financial Model](../finance/financial-model.md)
-- [Identity and Grain Contracts](../reference/identity-and-grain-contracts.md)
-- [Silver Data Contracts](../reference/silver-data-contracts.md)
+- [Adding Data Sources](adding-data-sources.md)
+- [Data Model](../architecture/data-model.md)
+- [Deterministic Identity and Replay](../architecture/deterministic-identity-and-replay.md)
 - [Data Contract and Schema Evolution](data-contract-and-schema-evolution.md)
-- [Testing and Validation](testing-and-validation.md)
+- [Adding Gold Marts](adding-gold-marts.md)
