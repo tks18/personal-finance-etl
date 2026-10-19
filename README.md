@@ -12,12 +12,14 @@ I built this because I wanted one answer to a deceptively simple question:
 
 The first version only needed to make month-end less annoying. Then the questions got harder.
 
-A balance needed evidence. Evidence needed identity. Investment history needed reconstruction. Reconstruction needed reconciliation. Realized gains needed Tax context. Wealth needed both household and market state. FIRE needed all of that to be trustworthy *before* Monte Carlo was allowed anywhere near it.
+A balance needed evidence. Evidence needed identity. Investment history needed reconstruction. Reconstruction needed reconciliation. Realized gains needed Tax context. Wealth needed both household and market state. FIRE needed all of that to be trustworthy _before_ Monte Carlo was allowed anywhere near it.
 
 So the project grew from ETL into the system I now use to **preserve financial evidence, reconstruct state, challenge that state against independent observations, and turn the result into decisions**.
 
 <p align="center">
-    <a href="https://pypi.org/project/personal-finance-etl/"><img src="https://img.shields.io/pypi/v/personal-finance-etl?label=PyPI" alt="PyPI"></a>
+    <a href="https://pypi.org/project/personal-finance-etl/">
+        <img src="https://img.shields.io/pypi/v/personal-finance-etl?label=PyPI" alt="PyPI">
+    </a>
     <a href="https://pepy.tech/projects/personal-finance-etl"><img src="https://static.pepy.tech/personalized-badge/personal-finance-etl?period=total&amp;units=INTERNATIONAL_SYSTEM&amp;left_color=BLACK&amp;right_color=GREEN&amp;left_text=downloads" alt="PyPI Downloads"></a>
     <img src="https://img.shields.io/badge/Python-3.13%2B-3776AB?logo=python&amp;logoColor=white" alt="Python">
     <a href="https://www.gnu.org/licenses/gpl-3.0"><img src="https://img.shields.io/badge/License-GPL--3.0-blue.svg" alt="License: GPL-3.0"></a>
@@ -154,23 +156,23 @@ The pipeline is not just `read_csv → clean → dashboard`.
 
 The system separates **source evidence**, **canonical financial facts**, **reconstructed state**, **analytical presentation**, and **operational history** because they answer different questions.
 
-| Layer | What it owns |
-| --- | --- |
+| Layer             | What it owns                                                                                |
+| ----------------- | ------------------------------------------------------------------------------------------- |
 | **Control Plane** | historical operational truth, run lifecycle, artifacts, provider requests, recovery context |
-| **Bronze** | synchronized source-shaped evidence |
-| **Silver** | canonical financial facts and dimensions |
-| **Gold** | decision-ready analytical marts |
-| **Meta** | current analytical context |
+| **Bronze**        | synchronized source-shaped evidence                                                         |
+| **Silver**        | canonical financial facts and dimensions                                                    |
+| **Gold**          | decision-ready analytical marts                                                             |
+| **Meta**          | current analytical context                                                                  |
 
 Current registered analytical shape:
 
-| Surface | Contracts / tables |
-| --- | ---: |
-| Bronze | **20** |
-| Silver | **24** |
-| Gold | **22** |
-| Meta | **6** |
-| Control Plane | **10** |
+| Surface       | Contracts / tables |
+| ------------- | -----------------: |
+| Bronze        |             **20** |
+| Silver        |             **24** |
+| Gold          |             **22** |
+| Meta          |              **6** |
+| Control Plane |             **10** |
 
 The important bit is not the count. It is the ownership.
 
@@ -417,14 +419,14 @@ I am not trying to win OOP bingo. I am trying to make the ownership legible.
 
 The compute model follows the workload.
 
-| Workload | Primary model |
-| --- | --- |
-| canonical table transformations | **Polars LazyFrame** |
-| analytical persistence / SQL | **DuckDB** |
-| operational provenance | **SQLite** |
-| irregular cash-flow returns | **PyXIRR** |
-| numerical simulation | **NumPy / Numba** |
-| stateful lot reconstruction | **Python objects / ordered state** |
+| Workload                        | Primary model                      |
+| ------------------------------- | ---------------------------------- |
+| canonical table transformations | **Polars LazyFrame**               |
+| analytical persistence / SQL    | **DuckDB**                         |
+| operational provenance          | **SQLite**                         |
+| irregular cash-flow returns     | **PyXIRR**                         |
+| numerical simulation            | **NumPy / Numba**                  |
+| stateful lot reconstruction     | **Python objects / ordered state** |
 
 The codebase contains hundreds of lazy-frame interactions, but `.collect()` is not treated as a moral failure.
 
@@ -533,16 +535,16 @@ Start with:
 
 The project is large enough that architectural discipline is not hypothetical.
 
-| Surface | Current repository shape |
-| --- | ---: |
-| Production Python modules | **156** |
-| Production Python LOC | **~32k** |
-| Bronze contracts | **20** |
-| Silver contracts | **24** |
-| Gold contracts | **22** |
-| Meta tables | **6** |
-| Control Plane tables | **10** |
-| Canonical technical docs | **53** |
+| Surface                   | Current repository shape |
+| ------------------------- | -----------------------: |
+| Production Python modules |                  **156** |
+| Production Python LOC     |                 **~32k** |
+| Bronze contracts          |                   **20** |
+| Silver contracts          |                   **24** |
+| Gold contracts            |                   **22** |
+| Meta tables               |                    **6** |
+| Control Plane tables      |                   **10** |
+| Canonical technical docs  |                   **53** |
 
 The counts are useful context, not trophies.
 
@@ -563,19 +565,19 @@ That is the standard I care about.
 
 ## The stack, by responsibility
 
-| Responsibility | Technology |
-| --- | --- |
-| Vectorized transformation | **Polars** |
-| Analytical warehouse | **DuckDB** |
-| Operational provenance | **SQLite** |
-| Configuration / validation | **Pydantic** |
-| Irregular cash-flow returns | **PyXIRR** |
-| Numerical simulation | **NumPy / Numba** |
-| Market data | **yfinance + provider adapters** |
-| BI | **Power BI** |
-| Desktop | **CustomTkinter / Tkinter / pywebview** |
-| CLI | **Rich + application façade** |
-| Build / package | **Hatchling · uv · PyInstaller** |
+| Responsibility              | Technology                              |
+| --------------------------- | --------------------------------------- |
+| Vectorized transformation   | **Polars**                              |
+| Analytical warehouse        | **DuckDB**                              |
+| Operational provenance      | **SQLite**                              |
+| Configuration / validation  | **Pydantic**                            |
+| Irregular cash-flow returns | **PyXIRR**                              |
+| Numerical simulation        | **NumPy / Numba**                       |
+| Market data                 | **yfinance + provider adapters**        |
+| BI                          | **Power BI**                            |
+| Desktop                     | **CustomTkinter / Tkinter / pywebview** |
+| CLI                         | **Rich + application façade**           |
+| Build / package             | **Hatchling · uv · PyInstaller**        |
 
 The point is not the logo collection.
 
@@ -627,12 +629,12 @@ I would rather document a smaller guarantee accurately than a larger one poetica
 
 The repository now has four intentionally different knowledge surfaces.
 
-| Surface | Job | Start here |
-| --- | --- | --- |
-| **README** | **SHOW** the project quickly | you are here |
-| **Wiki** | **TEACH** the mental model | [GitHub Wiki](https://github.com/tks18/personal-finance-etl/wiki) |
-| **`/docs`** | **SPECIFY** implementation and finance deeply | [Technical Docs](docs/README.md) |
-| **Code** | **PROVE** the behavior | `src/personal_finance_etl/` |
+| Surface     | Job                                           | Start here                                                        |
+| ----------- | --------------------------------------------- | ----------------------------------------------------------------- |
+| **README**  | **SHOW** the project quickly                  | you are here                                                      |
+| **Wiki**    | **TEACH** the mental model                    | [GitHub Wiki](https://github.com/tks18/personal-finance-etl/wiki) |
+| **`/docs`** | **SPECIFY** implementation and finance deeply | [Technical Docs](docs/README.md)                                  |
+| **Code**    | **PROVE** the behavior                        | `src/personal_finance_etl/`                                       |
 
 If all four say exactly the same thing at exactly the same depth, I have successfully maintained four copies of one document. That would be impressive in the least useful possible way. 😄
 
