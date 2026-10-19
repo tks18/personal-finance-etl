@@ -1,398 +1,540 @@
 # Reliability and Recovery
 
-Personal Finance ETL is local-first, but local does not mean casual. The pipeline coordinates a SQLite operational authority, a DuckDB analytical warehouse, filesystem source evidence, retained payloads, and long-running financial transformations. Reliability therefore comes from **explicit boundaries, idempotent reconstruction, validation, and recovery**, not from pretending the entire machine is one giant ACID transaction.
+Reliability starts where the happy-path architecture stops being honest.
 
-This document defines those boundaries precisely.
+The system writes to two different databases, calls external providers, executes process-boundary workers, reconstructs financial state from imperfect evidence, and includes a stochastic simulation kernel. None of those mechanisms share one global transaction.
 
-## Source authority
+So the reliability model does not begin with “everything is atomic.”
 
-Primary implementation:
+It begins with a harder promise:
 
-- `backend/pipeline/etl_pipeline.py`
-- `backend/load/control_plane/connection.py`
-- `backend/load/control_plane/orchestrator.py`
-- `backend/load/control_plane/run_repo.py`
-- `backend/load/control_plane/artifact_repo.py`
-- `backend/load/metadata.py`
-- `backend/load/bronze.py`
-- `backend/load/database.py`
-- `backend/load/backup.py`
+> when the system cannot guarantee atomicity, it records the strongest truthful state it can prove and provides a deterministic path toward convergence.
 
-## Reliability model
+This specification defines that promise.
+
+## Reliability is a state model, not an exception handler
+
+A broad `try/except` can stop a traceback from escaping.
+
+It cannot tell me whether:
+
+- DuckDB committed;
+- SQLite committed;
+- a stale run died before commit;
+- Bronze synchronized only some actionable artifacts;
+- a provider failed before market evidence became complete;
+- a worker process died independently of the parent;
+- a later run actually repaired the divergence.
+
+Those questions require explicit state.
 
 ```mermaid
-flowchart TB
-    LOCK[Single pipeline lock]
-    CP[SQLite Control Plane]
-    DUCK[DuckDB warehouse]
-    BR[Persistent Bronze]
-    REBUILD[Full Silver/Gold rebuild]
-    VALID[Runtime validation]
-    HEAL[Cross-store healing]
-    SNAP[Coordinated snapshot]
-
-    LOCK --> CP
-    LOCK --> DUCK
-    CP --> HEAL
-    DUCK --> HEAL
-    HEAL --> BR
-    BR --> REBUILD
-    VALID --> REBUILD
-    CP --> SNAP
-    DUCK --> SNAP
+flowchart TD
+    EXEC[Execution] --> STATE[Commit / sync / provider state]
+    STATE --> FAIL[Failure classification]
+    FAIL --> ROLLBACK[Rollback if still possible]
+    FAIL --> MARK[Persist uncertainty if rollback is impossible]
+    MARK --> REPLAY[Later deterministic rebuild]
+    REPLAY --> CONV[Convergence evidence]
 ```
 
-No single mechanism carries the entire reliability story. The system is resilient because the mechanisms compose.
+## The single-writer lock is the first reliability boundary
 
-## Single-writer pipeline lock
+The Control Plane acquires `pipeline.lock` before opening the production SQLite connection.
 
-`ControlPlane.open()` acquires `pipeline.lock` with `timeout=0`. A competing production pipeline instance fails immediately.
+This prevents two pipeline instances from concurrently mutating the same operational and analytical state.
 
-```python
-try:
-    self._lock.acquire(timeout=0)
-    self._lock_acquired = True
-except Timeout:
-    raise RuntimeError(
-        "Another instance of the production pipeline is currently running."
-    ) from None
-```
-
-The same lock concept is used by coordinated backup/restore. This prevents a snapshot or restore from racing a live ETL mutation.
-
-## SQLite connection safety
-
-The Control Plane enables:
-
-- foreign keys;
-- 30-second busy timeout;
-- WAL journal mode;
-- `synchronous=NORMAL`;
-- memory-oriented cache/temp settings.
-
-On close, any still-open SQLite transaction is rolled back before the connection is released.
-
-## Schema validation before execution
-
-`SQLiteManager.ensure_schema()` does not blindly rely on `CREATE TABLE IF NOT EXISTS`. If any current Control Plane tables already exist, the complete required table set must be present.
-
-This prevents a stale/partial database from quietly looking "initialized" because SQLite was willing to create only the missing pieces.
-
-Explicit migration is therefore a separate responsibility.
-
-## Stale run recovery
-
-When the Control Plane schema is ensured, `RunRepository.recover_stale_runs()` examines runs left in:
-
-```text
-STARTED
-RUNNING
-COMMITTING
-```
-
-from a previous interrupted process and marks them as failed/recovered according to repository behavior.
-
-A dead process should not leave a run permanently masquerading as active.
+The same lock is also used by snapshot and restore operations.
 
 ```mermaid
 stateDiagram-v2
-    [*] --> STARTED
-    STARTED --> RUNNING
-    RUNNING --> COMMITTING
-    COMMITTING --> SUCCESS
-
-    STARTED --> FAILED: exception / stale recovery
-    RUNNING --> FAILED: exception / stale recovery
-    COMMITTING --> FAILED: interrupted / stale recovery
+    [*] --> Free
+    Free --> Pipeline: pipeline acquires lock
+    Free --> Snapshot: snapshot acquires lock
+    Free --> Restore: restore acquires lock
+    Pipeline --> Free: teardown
+    Snapshot --> Free: publish / fail
+    Restore --> Free: install / fail
 ```
 
-## The two-database transaction boundary
+The lock is process-level coordination, not database transaction isolation.
 
-The pipeline begins transactions in both persistence systems:
+Both are needed because a database transaction cannot stop another process from replacing the database file itself during restore.
+
+## SQLite validates its schema before the run transaction starts
+
+`SQLiteManager.ensure_schema()` refuses to run inside an active transaction, applies non-destructive migrations, creates current DDL, creates indexes, validates shape, and checks foreign keys.
 
 ```python
-self.db_manager.conn.execute("BEGIN TRANSACTION")
-cp.begin_transaction()
+# src/personal_finance_etl/infrastructure/control_plane/connection.py
+violations = self.conn.execute("PRAGMA foreign_key_check").fetchmany(10)
+if violations:
+    raise RuntimeError(
+        "Control-plane database contains foreign-key violations; refusing to continue. "
+        f"First violations: {violations!r}"
+    )
 ```
 
-All main ETL phases then execute before commit.
+This is fail-closed infrastructure behavior.
 
-However, DuckDB and SQLite do not participate in a distributed transaction coordinator.
+A structurally invalid Control Plane is not allowed to host a new financial run just because SQLite can open the file.
 
-## Commit order
+## Stale-run recovery handles failures that Python never caught
 
-The implementation commits **DuckDB first, SQLite second**:
+A process can terminate without executing `handle_failure()` or `teardown()`.
+
+On the next Control Plane initialization, `recover_stale_runs()` inspects runs left in `STARTED`, `RUNNING`, or `COMMITTING`.
+
+The distinction between those states matters.
 
 ```python
-self.db_manager.conn.execute("COMMIT")
-try:
-    cp.commit()
-except Exception as sqlite_commit_err:
-    # DuckDB committed, but SQLite failed. The next run will rely on idempotency
-    # and Bronze self-healing to resolve this state mismatch.
-    raise RuntimeError(...) from sqlite_commit_err
+# src/personal_finance_etl/infrastructure/control_plane/run_repository.py
+is_committing = str(status).upper() == "COMMITTING"
+new_status = "RECOVERY_REQUIRED" if is_committing else "FAILED"
+new_commit_state = (
+    CommitState.RECOVERY_REQUIRED.value
+    if is_committing
+    else CommitState.ROLLED_BACK.value
+)
 ```
+
+A run that died during ordinary execution can be treated as failed/rolled back if no commit had begun.
+
+A run that died during `COMMITTING` has uncertain cross-store durability and is escalated to recovery-required state.
+
+The system stores uncertainty instead of guessing.
+
+## The two-database transaction boundary is intentionally explicit
+
+The run opens:
+
+- one DuckDB transaction;
+- one SQLite `BEGIN IMMEDIATE` transaction.
+
+These are independent ACID systems.
+
+There is no XA coordinator and no distributed prepare phase.
+
+That means the phrase “two-phase commit” would be misleading if interpreted as a formal distributed transaction protocol.
+
+The actual mechanism is **coordinated ordered commit with explicit split-state handling**.
+
+## Commit state is a typed contract
+
+`CommitState` provides the vocabulary used across application and infrastructure:
+
+```python
+# src/personal_finance_etl/contracts/lifecycle.py
+class CommitState(StrEnum):
+    NOT_STARTED = "NOT_STARTED"
+    STARTED = "STARTED"
+    ROLLED_BACK = "ROLLED_BACK"
+    DUCKDB_COMMITTED = "DUCKDB_COMMITTED"
+    FULLY_COMMITTED = "FULLY_COMMITTED"
+    RECOVERY_REQUIRED = "RECOVERY_REQUIRED"
+    CONVERGED = "CONVERGED"
+    COMMIT_STATE_UNKNOWN = "COMMIT_STATE_UNKNOWN"
+```
+
+`DUCKDB_COMMITTED_SQLITE_FAILED` exists as a compatibility alias to `RECOVERY_REQUIRED`; the canonical semantic state is recovery required.
+
+The important improvement over a boolean is that each state implies different rollback possibilities.
+
+## Commit order encodes the failure asymmetry
+
+The lifecycle commits DuckDB first.
 
 ```mermaid
 sequenceDiagram
-    participant P as ETLOrchestrator
+    participant L as RunLifecycleCoordinator
     participant D as DuckDB
-    participant S as SQLite Control Plane
+    participant C as SQLite Control Plane
 
-    P->>D: BEGIN
-    P->>S: BEGIN
-    P->>D: Bronze + Silver + Gold + Meta mutations
-    P->>S: artifact/run/provenance mutations
-    P->>S: status = COMMITTING
-    P->>D: COMMIT
-    alt DuckDB commit fails
-        D-->>P: error
-        P->>S: rollback
-    else DuckDB commits
-        P->>S: COMMIT
-        alt SQLite commit fails
-            S-->>P: error
-            Note over D,S: Cross-store divergence exists
-            Note over P: Next run relies on idempotency + healing
+    L->>C: status = COMMITTING
+    L->>D: COMMIT
+    alt DuckDB fails
+        L->>C: commit_state = ROLLED_BACK
+        L-->>L: raise DUCKDB_COMMIT failure
+    else DuckDB succeeds
+        L->>C: commit_state = DUCKDB_COMMITTED
+        L->>C: COMMIT
+        alt SQLite succeeds
+            L->>C: FULLY_COMMITTED + SUCCESS
+        else SQLite fails
+            L->>C: RECOVERY_REQUIRED
+            L-->>L: split-commit failure
         end
     end
 ```
 
-This is the most important reliability non-guarantee in the architecture:
+Why this order?
 
-> SQLite and DuckDB are coordinated, but they are **not distributed-atomic**.
+Because after DuckDB commits, the analytical state that users query is durable. If SQLite then fails, operational history can be reconstructed/converged against a known analytical outcome.
 
-## Why commit DuckDB first matters
+Committing SQLite first would risk the opposite lie: operational history could say the run's state changes were committed while the analytical warehouse never made them durable.
 
-Once DuckDB commits, a later SQLite failure cannot be undone by issuing a DuckDB rollback. The exception handler may attempt rollback calls, but a committed transaction is already durable.
+The chosen order does not remove risk. It chooses the more recoverable truth model.
 
-The architecture therefore depends on convergence during the next run rather than impossible time travel.
+## Failure before DuckDB commit can still be rolled back
 
-That is not a flaw hidden under the rug. It is the explicit recovery model.
+If neither store has committed, `handle_failure()` resolves the state as `ROLLED_BACK` and attempts to roll back open transactions.
 
-## Nested SQLite savepoints
+```python
+# src/personal_finance_etl/application/pipeline/lifecycle.py
+match (self.duckdb_committed, self.sqlite_committed):
+    case (True, False):
+        return CommitState.RECOVERY_REQUIRED
+    case (False, False):
+        return CommitState.ROLLED_BACK
+    case (True, True):
+        return CommitState.FULLY_COMMITTED
+    case _:
+        return CommitState.COMMIT_STATE_UNKNOWN
+```
 
-Repository operations use savepoints so a smaller Control Plane mutation can roll back without inventing a nested top-level transaction.
+This mapping is deliberately derived from component truth rather than from the exception location alone.
+
+An exception raised during a logging call after commit should not make the lifecycle pretend the databases rolled back.
+
+## An already committed DuckDB is never described as rolled back
+
+`_rollback_open_transactions()` explicitly refuses to claim rollback for a durable DuckDB commit.
+
+```python
+elif self.duckdb_committed:
+    logger.warning(
+        "[DATABASE:DUCKDB] DuckDB is already committed; cannot rollback DuckDB."
+    )
+```
+
+That line captures an important reliability philosophy: **truthful observability is part of correctness**.
+
+A soothing “everything rolled back” log message would be operationally worse than a loud recovery-required state.
+
+## Split commit becomes durable recovery evidence
+
+If SQLite commit fails after DuckDB commit, the lifecycle moves to `RECOVERY_REQUIRED` and persists a recovery marker with traceback context where possible.
+
+The failure message explicitly states that DuckDB is committed and SQLite failed.
+
+A later run sees that marker during initialization.
+
+```mermaid
+stateDiagram-v2
+    DUCKDB_COMMITTED --> RECOVERY_REQUIRED: SQLite commit fails
+    RECOVERY_REQUIRED --> REPLAYING: later run starts
+    REPLAYING --> FULLY_COMMITTED: deterministic rebuild + both commits succeed
+    FULLY_COMMITTED --> CONVERGED: prior run linked to reconciling run
+```
+
+The previous run is not overwritten into `SUCCESS`.
+
+It can later be marked `CONVERGED`, preserving the fact that divergence actually happened.
+
+## Convergence has lineage
+
+`RunRepository.mark_recovery_converged()` updates the prior run and writes a recovery event explaining which later run resolved the divergence.
+
+```python
+def mark_recovery_converged(self, recovered_run_id: str, reconciling_run_id: str) -> None:
+    self.db.conn.execute(
+        "UPDATE cp_runs SET status = 'CONVERGED', commit_state = ? "
+        "WHERE run_id = ? AND UPPER(status) = 'RECOVERY_REQUIRED'",
+        (CommitState.CONVERGED.value, recovered_run_id),
+    )
+```
+
+It also records a recovery-domain failure/event message identifying the reconciling run.
+
+This gives recovery an audit trail rather than merely a final state.
+
+## Bronze is the convergence layer for analytical reconstruction
+
+Why can a later run repair a split state at all?
+
+Because the architecture does not rely on incremental mutation of every derived table.
+
+Persistent Bronze retains synchronized analytical evidence. Silver and Gold are rebuilt from complete Bronze state.
 
 ```mermaid
 flowchart LR
-    TX[Outer SQLite transaction] --> SP1[SAVEPOINT file sync]
-    SP1 --> A[Registry updates]
-    SP1 --> E[Artifact events]
-    SP1 --> P[Payload changes]
-    A --> REL[RELEASE]
-    E --> REL
-    P --> REL
+    CP[Operational evidence] --> BR[Persistent Bronze]
+    BR --> REBUILD[Full analytical rebuild]
+    REBUILD --> S[Silver]
+    REBUILD --> G[Gold]
+    G --> COMMIT[New successful commit]
+    COMMIT --> CONV[Converge prior divergence]
 ```
 
-A savepoint is scoped SQLite atomicity. It does not extend across DuckDB.
+A later run can therefore replace suspect derived state with a complete reconstruction instead of calculating a fragile compensation patch.
 
-## Failure before commit
+## DuckDB registry healing repairs current-context drift
 
-For exceptions before durable commit, the pipeline attempts rollback in both systems:
+`MetaLayer.heal_duckdb_registry(cp)` executes before the new run transaction.
+
+Its direction of authority is explicit: SQLite Control Plane state informs DuckDB current-context repair.
+
+This can repair missing sync records and remove dangling analytical file-registry state.
+
+Healing is not generic “make databases equal.”
+
+It is a specific convergence algorithm based on which store owns which truth.
+
+## SQLite savepoints isolate repository-level operations
+
+Inside the outer SQLite run transaction, repository methods can use `SQLiteManager.atomic()`.
+
+That context manager creates a unique savepoint, releases it on success, or rolls back to it on failure.
 
 ```python
-try:
-    self.db_manager.conn.execute("ROLLBACK")
-except Exception as rollback_err:
-    logger.error(...)
-
-try:
-    if cp is not None:
-        cp.rollback()
-except Exception as rollback_err:
-    logger.error(...)
+@contextmanager
+def atomic(self) -> Generator[None]:
+    savepoint = f"cp_scope_{uuid.uuid4().hex}"
+    self.conn.execute(f"SAVEPOINT {savepoint}")
+    try:
+        yield
+        self.conn.execute(f"RELEASE SAVEPOINT {savepoint}")
+    except Exception:
+        try:
+            self.conn.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+        finally:
+            self.conn.execute(f"RELEASE SAVEPOINT {savepoint}")
+        raise
 ```
 
-Rollback failures are themselves logged rather than masking the original pipeline failure.
+This lets an operation remain internally atomic without committing the outer pipeline transaction prematurely.
 
-## Failure provenance
+## Failure domains make errors queryable
 
-When possible, the pipeline persists structured failure details through `cp_run_failures`.
+`FailureDomain` classifies operational failures into a stable taxonomy:
 
-Failure metadata can include:
+```text
+CONFIGURATION
+SOURCE_DISCOVERY
+SOURCE_VALIDATION
+EXTERNAL_PROVIDER
+BRONZE_SYNC
+TRANSFORMATION
+FINANCIAL_INVARIANT
+PUBLICATION
+DUCKDB_COMMIT
+SQLITE_COMMIT
+RECOVERY
+SNAPSHOT
+RESTORE
+WORKER
+UNKNOWN
+```
 
-- `run_id`;
-- failed ISIN;
-- pipeline stage;
-- exception type;
-- message;
-- traceback;
-- creation timestamp.
+The classifier uses exception names/messages and stage names.
 
-Investment Quant failures can preserve the failing ISIN context rather than reducing the incident to "something broke in analytics."
+This is useful because a traceback is excellent for debugging one event and poor for aggregating many runs.
 
-## Execution log retention
+Machine-readable failure domains and human-readable tracebacks serve different observability needs.
 
-`cp_runs.execution_log` can retain compressed execution-log bytes. This places run diagnostics beside operational run identity rather than relying only on ephemeral console output.
+## Financial invariant failures are not ordinary transform failures
 
-## Bronze as the convergence layer
+Some failures indicate that the pipeline executed technically but encountered financially invalid state.
 
-Bronze is persistent and synchronization-aware. Silver and Gold are rebuilt from complete Bronze state.
+Investment processing can surface ISIN-specific failures; lifecycle telemetry classifies those under `FINANCIAL_INVARIANT` when appropriate.
 
-That split is central to recovery:
+That separation matters because remediation differs:
+
+```text
+SOURCE_VALIDATION    → inspect source structure
+EXTERNAL_PROVIDER    → retry/repair market evidence
+FINANCIAL_INVARIANT  → inspect economic state/rules/reconciliation
+PUBLICATION          → inspect warehouse contract/DDL
+```
+
+Reliability is improved when failures point toward the correct kind of repair.
+
+## Data contracts fail closed before publication
+
+The pipeline refuses to publish when the produced dataset set does not exactly satisfy `DATA_CONTRACT_REGISTRY`.
+
+This is a reliability control because partial publication can be more dangerous than total failure in finance analytics.
+
+A missing table should stop the run before a new Silver/Gold surface appears to be complete.
+
+## Source validation also fails closed
+
+The ingestion gatekeeper resolves source schemas and performs a small collection before deep financial work.
+
+Likewise, Silver publication rejects missing critical investment master fields such as `ISIN` or `TAX_TYPE`.
+
+These checks occur at different semantic boundaries:
 
 ```mermaid
 flowchart LR
-    SRC[Source evidence] --> CP[Control Plane]
-    CP --> BR[Persistent Bronze]
-    BR --> S[Rebuilt Silver]
-    S --> G[Rebuilt Gold]
-
-    CP -. heal/requeue .-> BR
+    Raw[Raw source] --> SG[Source schema gate]
+    SG --> Canon[Canonical finance]
+    Canon --> FG[Financial/domain invariants]
+    FG --> PG[Publication contract gate]
+    PG --> Silver[Silver quality gate]
 ```
 
-If current analytical publication fails, the next successful run can reconstruct Silver/Gold from persistent Bronze rather than incrementally repairing hundreds of derived tables.
+Reliability comes from layered validation rather than one giant validator at the end.
 
-## DuckDB registry healing
+## Temporal causality is a correctness boundary
 
-`MetaLayer.heal_duckdb_registry()` executes before the main ETL transaction.
+Market and benchmark reconstruction must not silently use future information to value historical state.
 
-For artifacts the Control Plane believes are `SYNCED`, it verifies current DuckDB state. Missing Meta ownership, missing Bronze tables, or missing incremental-source rows can move the artifact back to `PENDING_BRONZE`.
+Backward-looking joins and date-aware evidence selection are therefore correctness mechanisms, not merely query techniques.
 
-Conversely, DuckDB registry rows with no corresponding Control Plane artifact are purged from current analytical state.
+A pipeline can be perfectly transaction-safe and still be financially wrong if historical calculations leak future market evidence.
 
-```mermaid
-flowchart TD
-    A[Control Plane current state] --> CMP[Compare]
-    D[DuckDB Meta + Bronze] --> CMP
-    CMP --> M{CP says SYNCED but DuckDB missing?}
-    M -- yes --> R[Requeue PENDING_BRONZE]
-    M -- no --> X{DuckDB entry absent from CP?}
-    X -- yes --> P[Purge current DuckDB ownership]
-    X -- no --> OK[No repair]
+Reliability in this project includes temporal correctness.
+
+## Provider completeness is observable
+
+External market requests have dedicated Control Plane provenance.
+
+Request history records provider, entity, date range, attempts, status, failure class, and error.
+
+This lets the system distinguish:
+
+```text
+no market row because provider never returned it
 ```
 
-This is eventual convergence between two stores with different responsibilities.
+from:
 
-## Full analytical rebuild as reliability strategy
+```text
+provider returned evidence but downstream transformation dropped it
+```
 
-Silver and Gold are dropped/recreated as complete publications in registry order. The architecture deliberately avoids carrying incremental mutation history into derived analytical layers.
+Those two failures require different investigation paths.
 
-Advantages:
+## Worker failures must cross the process boundary
 
-- deterministic reconstruction from current Bronze state;
-- fewer partial-update edge cases;
-- easier schema conformance;
-- stale derived rows cannot survive simply because no incremental delete found them.
+Asynchronous execution creates another reliability boundary: a child process can fail independently of the presentation process.
 
-Trade-off:
+The worker coordination layer uses typed status messages and parent monitoring so child failure becomes visible application state.
 
-- every analytical run recomputes the full publication surface.
+A Desktop UI should not hang forever because the engine crashed in another process.
 
-At this workload, correctness and simplicity win over clever incrementalism. Sometimes the least exciting state machine is the one with fewer states.
+The process boundary therefore belongs in the reliability model alongside database and provider boundaries.
 
-## Data Contract enforcement
+## Execution logs are retained as run evidence
 
-Before Silver/Gold publication, the pipeline compares engine outputs with `DATA_CONTRACT_REGISTRY`.
+During teardown, the lifecycle coordinator reads the run log, compresses it with zlib, and stores it in the Control Plane when possible.
 
 ```python
-registered_contracts = {c.contract_id for c in DATA_CONTRACT_REGISTRY}
-for df_key in self.dfs.keys():
-    if df_key not in registered_contracts:
-        raise RuntimeError(...)
-
-missing_contracts = registered_contracts - set(self.dfs.keys())
-if missing_contracts:
-    raise RuntimeError(...)
+with open(self.log_file_path, "rb") as f:
+    log_bytes = f.read()
+compressed_log = zlib.compress(log_bytes, level=9)
+self.cp.runs.save_execution_log(self.run_id, compressed_log)
 ```
 
-The required relationship is effectively:
+Log archival is treated as an optional operation during teardown. Failure to archive the log should be reported, but it should not rewrite the truth of an already completed database commit.
 
-```text
-Produced analytical contract IDs = Registered analytical contract IDs
-```
+Again, failure semantics depend on what is actually authoritative.
 
-This catches both accidental extra outputs and missing required outputs before publication.
+## Garbage collection is a process boundary, not a finance step
 
-## Fail-closed financial validation
+Teardown explicitly calls `gc.collect()` and labels it as a process-boundary materialization/runtime operation.
 
-The implementation contains numerous domain gates beyond storage transactions. Examples include:
+That is a small example of a broader engineering discipline: performance and runtime hygiene operations are documented as such rather than being mixed into financial semantics.
 
-- missing or invalid market prices;
-- stale US price observations;
-- missing/non-positive FX;
-- invalid deterministic identities;
-- tax evidence validation;
-- registry/schema mismatches;
-- restore database validation.
+## Snapshots solve a different recovery problem
 
-Reliability is therefore not just "database commit succeeded." A perfectly committed nonsense valuation would still be nonsense.
+Run-level recovery assumes authoritative evidence still exists and deterministic reconstruction is desirable.
 
-## Temporal causality as correctness
+Snapshot restore answers a different question:
 
-US historical price and FX reconstruction uses backward-looking observations. Future evidence is not used to fill earlier valuation dates.
+> How do I return the operational + analytical database pair to a previously captured state?
 
-This is a financial correctness boundary, but it also belongs to reliability: a pipeline that succeeds while leaking future prices into history is operationally successful and analytically wrong.
+That is useful for:
 
-## Coordinated snapshots
+- corruption;
+- destructive manual changes;
+- operator error;
+- migration rollback scenarios;
+- cases where replaying forward is not the desired recovery path.
 
-`SystemBackupManager` treats SQLite and DuckDB as one application recovery unit. Snapshot mechanics are specified in [`backup-and-restore.md`](backup-and-restore.md), but their architectural role is broader:
-
-```text
-transaction/rebuild mechanisms = recover within normal execution
-snapshot/restore mechanisms    = recover persisted application state
-```
+Snapshot mechanics are covered in [Backup and Restore](backup-and-restore.md).
 
 ## Recovery hierarchy
 
+The system therefore has several recovery levels rather than one universal “restore” button.
+
 ```mermaid
 flowchart TD
-    F[Failure] --> Q{Where?}
-    Q -->|Nested SQLite mutation| SP[Rollback savepoint]
-    Q -->|Pre-commit pipeline| TX[Rollback DuckDB + SQLite]
-    Q -->|Cross-store commit window| H[Next-run healing + idempotency]
-    Q -->|Interrupted prior process| SR[Stale run recovery]
-    Q -->|Corrupt/missing persisted pair| REST[Restore coordinated snapshot]
+    F[Failure detected] --> Q{What is damaged?}
+    Q -->|open uncommitted transaction| R1[Rollback]
+    Q -->|cross-store metadata divergence| R2[Heal / replay / converge]
+    Q -->|derived analytics suspect| R3[Full analytical rebuild]
+    Q -->|database pair needs historical rollback| R4[Coordinated snapshot restore]
+    Q -->|restore rollback uncertain| R5[Operator inspection required]
 ```
 
-Different failures have different recovery tools. There is intentionally no universal `recover_everything()` button with suspicious confidence.
+The least destructive mechanism that can restore a truthful state should be preferred.
 
-## Guarantees
+## Recovery guarantees
 
-The implementation supports the following defensible guarantees:
+Within the implemented boundaries, the system aims to guarantee that:
 
-1. One production pipeline instance owns the Control Plane lock at a time.
-2. SQLite foreign keys are enabled and verified.
-3. Nested Control Plane operations can roll back to savepoints.
-4. Pre-commit failures trigger rollback attempts in both databases.
-5. Stale active runs are detected on Control Plane initialization.
-6. Control Plane and DuckDB state can converge through healing/requeue behavior.
-7. Silver/Gold publication is reconstructed from current upstream state.
-8. Analytical outputs are checked against the registered contract set.
-9. Structured failure context is persisted when the Control Plane is available.
-10. Coordinated snapshots provide an external recovery point for the database pair.
+1. concurrent production pipeline instances are rejected;
+2. SQLite schema integrity is checked before use;
+3. interrupted runs are reclassified on startup;
+4. open uncommitted transactions are rolled back on handled failure;
+5. an already committed DuckDB transaction is never falsely described as rolled back;
+6. split commit becomes `RECOVERY_REQUIRED`;
+7. later successful runs can mark prior divergence `CONVERGED`;
+8. run failures retain machine-readable domain plus human diagnostics;
+9. complete Bronze state can drive full analytical reconstruction;
+10. coordinated snapshots/restore use the same pipeline exclusion lock.
 
-## Non-guarantees
+## Explicit non-guarantees
 
-The architecture does **not** guarantee:
+The system does not guarantee:
 
-- distributed ACID across SQLite and DuckDB;
-- zero failure window between the two commits;
-- rollback of a DuckDB transaction after it has already committed;
-- permanent retention of every source payload;
-- perfect replay across incompatible numerical runtimes;
-- that runtime validation substitutes for a comprehensive automated test suite;
-- that reconstructed or estimated financial state is equivalent to source-certified evidence.
+- distributed atomicity between SQLite and DuckDB;
+- automatic recovery from every filesystem or hardware failure;
+- that every external provider is complete or immutable;
+- that deterministic reconstruction can compensate for missing source evidence;
+- that reconciliation means the broker is always correct;
+- that a failed restore can always return to a known pair if filesystem replacement and rollback both fail;
+- that stochastic results are replayable without matching provenance;
+- that business correctness follows automatically from transaction correctness.
 
-## QA boundary
+The last point matters most.
 
-The production code contains substantial runtime assertions and fail-closed checks, but the repository currently has limited conventional automated test coverage under `tests/` relative to the breadth of the system.
+Reliability protects the execution and evidence model. Financial correctness still depends on the domain model, rules, invariants, and tests.
 
-That distinction matters:
+## The reliability model is convergence-oriented
+
+A useful way to summarize the architecture is:
 
 ```text
-runtime validation != regression test suite
-QA specification   != executable coverage
+prevent what can be prevented
+        ↓
+rollback what is still reversible
+        ↓
+record what became irreversible
+        ↓
+reconstruct from authoritative evidence
+        ↓
+prove later convergence without erasing the failure
 ```
 
-The architecture is defensively coded, but documentation should not manufacture test guarantees the repository does not currently prove.
+That model is less magical than “atomic ETL.”
+
+It is also much easier to trust because every claim corresponds to a state the code can observe.
+
+## Continue with captured-state recovery
+
+The reliability model prefers rollback and deterministic convergence during ordinary run failure. The next specification covers the separate case where both databases must be restored from a coordinated historical snapshot.
+
+Continue with [Backup and Restore](backup-and-restore.md).
 
 ## Related specifications
 
+- [Architecture](README.md)
+- [Data Lifecycle](data-lifecycle.md)
 - [Control Plane Artifact Lifecycle](control-plane-artifact-lifecycle.md)
 - [Deterministic Identity and Replay](deterministic-identity-and-replay.md)
 - [Backup and Restore](backup-and-restore.md)
 - [Warehouse Architecture](warehouse-architecture.md)
-- [Data Lifecycle](data-lifecycle.md)
-- [Testing and Validation](../developer/testing-and-validation.md)
+- [Developer: Testing and Validation](../developer/testing-and-validation.md)

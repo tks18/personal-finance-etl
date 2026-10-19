@@ -6,8 +6,7 @@
       "order": 0,
       "pages": [
         {"title": "Project Overview", "path": "../README.md", "order": -10},
-        {"title": "Technical Documentation", "path": "README.md", "order": 0},
-        {"title": "Roadmap", "path": "roadmap.md", "order": 10}
+        {"title": "Technical Documentation", "path": "README.md", "order": 0}
       ]
     },
     {
@@ -15,7 +14,7 @@
       "title": "Getting Started",
       "order": 1000,
       "pages": [
-        {"title": "Getting Started Overview", "path": "getting-started/README.md", "order": 1000},
+        {"title": "Getting Started", "path": "getting-started/README.md", "order": 1000},
         {"title": "Installation", "path": "getting-started/installation.md", "order": 1010},
         {"title": "Quick Start", "path": "getting-started/quick-start.md", "order": 1020},
         {"title": "CLI and Desktop", "path": "getting-started/cli-and-desktop.md", "order": 1030}
@@ -26,16 +25,17 @@
       "title": "Architecture",
       "order": 2000,
       "pages": [
-        {"title": "Architecture Overview", "path": "architecture/README.md", "order": 2000},
+        {"title": "Architecture", "path": "architecture/README.md", "order": 2000},
         {"title": "System Architecture", "path": "architecture/system-architecture.md", "order": 2010},
-        {"title": "Data Lifecycle", "path": "architecture/data-lifecycle.md", "order": 2020},
-        {"title": "Warehouse Architecture", "path": "architecture/warehouse-architecture.md", "order": 2030},
-        {"title": "Data Model", "path": "architecture/data-model.md", "order": 2040},
+        {"title": "Application and Dependency Architecture", "path": "architecture/application-and-dependency-architecture.md", "order": 2020},
+        {"title": "Data Lifecycle", "path": "architecture/data-lifecycle.md", "order": 2030},
+        {"title": "Warehouse Architecture", "path": "architecture/warehouse-architecture.md", "order": 2040},
         {"title": "Control Plane Artifact Lifecycle", "path": "architecture/control-plane-artifact-lifecycle.md", "order": 2050},
         {"title": "Deterministic Identity and Replay", "path": "architecture/deterministic-identity-and-replay.md", "order": 2060},
         {"title": "Reliability and Recovery", "path": "architecture/reliability-and-recovery.md", "order": 2070},
         {"title": "Backup and Restore", "path": "architecture/backup-and-restore.md", "order": 2080},
-        {"title": "Design Decisions", "path": "architecture/design-decisions.md", "order": 2090}
+        {"title": "Data Model", "path": "architecture/data-model.md", "order": 2090},
+        {"title": "Design Decisions", "path": "architecture/design-decisions.md", "order": 2100}
       ]
     },
     {
@@ -43,7 +43,7 @@
       "title": "Finance",
       "order": 3000,
       "pages": [
-        {"title": "Finance Overview", "path": "finance/README.md", "order": 3000},
+        {"title": "Finance", "path": "finance/README.md", "order": 3000},
         {"title": "Financial Model", "path": "finance/financial-model.md", "order": 3010},
         {"title": "Cashflow and Wealth", "path": "finance/cashflow-and-wealth.md", "order": 3020},
         {"title": "Investment Data Model", "path": "finance/investment-data-model.md", "order": 3030},
@@ -62,7 +62,7 @@
       "title": "Reference",
       "order": 4000,
       "pages": [
-        {"title": "Reference Overview", "path": "reference/README.md", "order": 4000},
+        {"title": "Reference Contracts", "path": "reference/README.md", "order": 4000},
         {"title": "Bronze Data Contracts", "path": "reference/bronze-data-contracts.md", "order": 4010},
         {"title": "Silver Data Contracts", "path": "reference/silver-data-contracts.md", "order": 4020},
         {"title": "Gold Data Contracts", "path": "reference/gold-data-contracts.md", "order": 4030},
@@ -77,10 +77,10 @@
       "title": "Configuration",
       "order": 5000,
       "pages": [
-        {"title": "Configuration Overview", "path": "configuration/README.md", "order": 5000},
+        {"title": "Configuration", "path": "configuration/README.md", "order": 5000},
         {"title": "Configuration Reference", "path": "configuration/configuration-reference.md", "order": 5010},
         {"title": "Financial Rules Reference", "path": "configuration/financial-rules-reference.md", "order": 5020},
-        {"title": "FIRE and Simulation Reference", "path": "configuration/fire-and-simulation-reference.md", "order": 5030}
+        {"title": "FIRE and Simulation Configuration", "path": "configuration/fire-and-simulation-reference.md", "order": 5030}
       ]
     },
     {
@@ -88,13 +88,15 @@
       "title": "Developer",
       "order": 6000,
       "pages": [
-        {"title": "Developer Overview", "path": "developer/README.md", "order": 6000},
+        {"title": "Developer Engineering", "path": "developer/README.md", "order": 6000},
         {"title": "Development Guide", "path": "developer/development-guide.md", "order": 6010},
-        {"title": "Adding Data Sources", "path": "developer/adding-data-sources.md", "order": 6020},
-        {"title": "Adding Transformations", "path": "developer/adding-transformations.md", "order": 6030},
-        {"title": "Adding Gold Marts", "path": "developer/adding-gold-marts.md", "order": 6040},
-        {"title": "Data Contract and Schema Evolution", "path": "developer/data-contract-and-schema-evolution.md", "order": 6050},
-        {"title": "Testing and Validation", "path": "developer/testing-and-validation.md", "order": 6060}
+        {"title": "Engineering Standards", "path": "developer/engineering-standards.md", "order": 6020},
+        {"title": "Adding Data Sources", "path": "developer/adding-data-sources.md", "order": 6030},
+        {"title": "Adding Transformations", "path": "developer/adding-transformations.md", "order": 6040},
+        {"title": "Adding Gold Marts", "path": "developer/adding-gold-marts.md", "order": 6050},
+        {"title": "Data Contract and Schema Evolution", "path": "developer/data-contract-and-schema-evolution.md", "order": 6060},
+        {"title": "Testing and Validation", "path": "developer/testing-and-validation.md", "order": 6070},
+        {"title": "Tooling, Quality, and Release Engineering", "path": "developer/tooling-quality-and-release-engineering.md", "order": 6080}
       ]
     },
     {
@@ -102,9 +104,10 @@
       "title": "About",
       "order": 7000,
       "pages": [
-        {"title": "About Overview", "path": "about/README.md", "order": 7000},
+        {"title": "About", "path": "about/README.md", "order": 7000},
         {"title": "Project", "path": "about/project.md", "order": 7010},
-        {"title": "About Me", "path": "about/about-me.md", "order": 7020}
+        {"title": "About Me", "path": "about/about-me.md", "order": 7020},
+        {"title": "Roadmap", "path": "roadmap.md", "order": 7030}
       ]
     }
   ]

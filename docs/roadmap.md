@@ -1,681 +1,451 @@
 # Roadmap
 
-Personal Finance ETL has reached an unusual and healthy point for a personal project:
+The project has reached an important maturity point:
 
-> **The roadmap is intentionally smaller than the system.**
+> **Capability is no longer the main bottleneck. Confidence, evidence, and selective evolution matter more.**
 
-The major architectural and financial capabilities already exist. The current priority is not another feature sprint. It is to make the existing behavior easier to prove, harder to regress, safer to maintain, and clearer to future readers, including future-me, who is statistically the developer most likely to ask “why did this work this way?” six months later.
+That changes the shape of the roadmap.
+
+Earlier phases benefited from large architectural changes because the system was still discovering its natural boundaries. The current architecture is stable enough that another broad refactor would need a very strong reason to exist.
+
+The roadmap is therefore **trigger-based rather than novelty-based**.
 
 ```mermaid
-flowchart LR
-    NOW["Current mature feature set"] --> DOC["Documentation freeze"]
-    DOC --> QA["Executable QA expansion"]
-    QA --> OBS["Observe real usage"]
-    OBS --> FIX["Correct / simplify where evidence justifies it"]
-    FIX --> EVOLVE["Feature-driven evolution only when needed"]
+flowchart TD
+    IDEA["New idea"]
+    EVID{"Real need / evidence?"}
+    OWNER{"Clear architectural owner?"}
+    CONTRACT{"Contract impact understood?"}
+    VALUE{"Material financial / engineering value?"}
+    BUILD["Implement"]
+    PARK["Park / document"]
+
+    IDEA --> EVID
+    EVID -->|no| PARK
+    EVID -->|yes| OWNER
+    OWNER -->|no| PARK
+    OWNER -->|yes| CONTRACT
+    CONTRACT -->|no| PARK
+    CONTRACT -->|yes| VALUE
+    VALUE -->|no| PARK
+    VALUE -->|yes| BUILD
 ```
 
-This roadmap is therefore a **maturity roadmap**, not a feature catalog.
+## 1. Current baseline: protect the architecture that earned its stability
 
----
+The current system already has mature boundaries for:
 
-## 1. Current baseline: capability is not the bottleneck
+- evidence acquisition;
+- Control Plane history;
+- Bronze persistence;
+- canonical transformation;
+- investment reconstruction;
+- reconciliation;
+- Tax evidence;
+- wealth/FIRE;
+- recovery;
+- CLI/Desktop;
+- quality/release engineering.
 
-The system already contains the major capabilities required for its real workload:
+That means future work should default to **using existing boundaries**, not inventing new top-level architecture.
 
-```text
-SQLite Control Plane
-artifact identity and event history
-run lifecycle and failure provenance
-configuration / rule snapshots
-persistent Bronze synchronization
-Control Plane → Bronze healing
-contract-governed Silver / Gold publication
-DuckDB Meta projection
-
-deterministic transaction identities
-historical US market reconstruction
-canonical FIFO lots
-realized disposal events
-quantity reconciliation
-cost-basis reconciliation
-multi-currency valuation and FX attribution
-XIRR / benchmark / risk analytics
-
-evidence-first TaxEvents
-three Tax Gold views
-household cashflow and wealth analytics
-deterministic FI metrics
-stochastic FIRE simulation
-simulation provenance / replay context
-
-CLI
-desktop application
-Power BI serving
-offline documentation
-coordinated snapshot / restore
-```
-
-That is the starting point.
-
-The roadmap should not list existing architecture as if it were aspirational. Software has enough identity crises already.
-
----
+A new package layer, database, service, or framework should need a concrete problem that the current design cannot solve cleanly.
 
 ## 2. Roadmap philosophy
 
-The governing loop is now:
+Future changes should satisfy at least one of these conditions:
 
 ```text
-understand current behavior
-        ↓
-document the contract
-        ↓
-protect it with executable checks
-        ↓
-observe real failures / new scenarios
-        ↓
-change only what evidence justifies
+correctness gap
+reliability gap
+observed performance bottleneck
+real new financial requirement
+real new source/provider variation
+meaningful product workflow improvement
+maintainability problem backed by evidence
 ```
 
-The project remains personal software that is actually used.
+“Could be cool” is allowed in a notebook.
 
-Complexity therefore has to earn its electricity bill.
+It is not automatically a production roadmap criterion.
 
----
+## 3. Finish the documentation knowledge system
 
-## 3. Documentation freeze and integration
+The immediate documentation work is part of the engineering roadmap, not housekeeping.
 
-The immediate work is the documentation program already in progress.
-
-The target is a synchronized knowledge system with deliberately different responsibilities:
+The target knowledge system is:
 
 ```text
+Code = PROVE
+/docs = SPECIFY
+Wiki = TEACH
 README = SHOW
-Wiki   = TEACH
-/docs  = SPECIFY
-Code   = PROVE
+profile README = contextualize the flagship project
 ```
 
-### `/docs`
+The near-term documentation sequence is:
 
-The technical specification layer is being rebuilt from current source with:
+1. finish the canonical `/docs` rebase;
+2. rebuild the Wiki ground-up against the finished docs and current source;
+3. rebuild the root README with the SHOW rubric;
+4. perform final cross-link/navigation integration;
+5. update the GitHub profile README last.
 
-- implementation-grounded narratives;
-- authentic code excerpts;
-- Mermaid architecture and state diagrams;
-- physical contracts and grains;
-- financial formulas;
-- explicit invariants;
-- failure/recovery semantics;
-- honest limitations;
-- standardized cross-links.
-
-### Root README
-
-The repository README will be rebuilt only after `/docs` is internally coherent so it can showcase the current system without becoming another specification manual.
-
-### Documentation manifest
-
-The runtime documentation manifest will be updated after the final `/docs` structure is complete. Navigation should reflect the knowledge base that actually exists, not the knowledge base that existed three architectures ago.
-
-### Wiki
-
-The Wiki will then be reimagined as the guided learning layer, teaching the mental model without duplicating `/docs`.
-
-### Profile README
-
-Finally, the GitHub profile can present Personal Finance ETL as the flagship convergence project using the finished repository as evidence rather than marketing copy.
-
-```mermaid
-flowchart LR
-    DOCS["/docs"] --> ROOT["Root README"]
-    ROOT --> MAN["Docs manifest"]
-    MAN --> WIKI["Wiki"]
-    WIKI --> PROFILE["Profile README"]
-```
-
----
+Canonical docs remain release-agnostic so they describe the system rather than the release that introduced it.
 
 ## 4. QA expansion is the main engineering frontier
 
-The largest current maturity gap is conventional automated regression coverage.
+The system already has strong targeted and architectural tests, but the highest-value maturity work is broader **behavioral regression confidence**.
 
-The production code contains substantial runtime validation and hardening, but the repository does not yet have a broad automated unit/integration suite proportional to the sophistication of the implementation.
+The goal is not “maximize test count.”
 
-That is the most valuable next engineering investment.
+It is to protect the contracts that would hurt most if they drifted silently.
 
-### 4.1 Deterministic identity tests
+### Financial regression fixtures
 
-Protect canonical identity serialization and namespace contracts.
+Build/retain representative deterministic fixtures for:
 
-High-value cases include:
+- household cash flow;
+- net worth;
+- FIFO lots;
+- realized events;
+- reconciliation;
+- multi-currency valuations;
+- XIRR/CAGR validity;
+- TaxEvents;
+- deterministic FIRE metrics.
 
-```text
-null normalization
-boolean normalization
-date / datetime normalization
-Decimal normalization
-Unicode NFC normalization
-field-order stability
-PURCHASE / SALE identity
-LOT identity variants
-REALIZED identity
-reconciliation identities
-TAX identity
-```
+### Cross-domain regression
 
-A deterministic identifier is infrastructure. Silent identity drift would ripple through lineage, FIFO, Tax, and reconciliation.
-
-### 4.2 FIFO golden scenarios
-
-Build small deterministic portfolios that cover:
+Protect flows where multiple domains interact:
 
 ```text
-single purchase
-multiple purchases
-partial disposal
-full disposal
-one sale consuming multiple lots
-holding-period boundary
-foreign-currency disposal
-reconciliation-created lot
-post-reconciliation disposal
+investment realized event
+    → TaxEvent
+    → Tax Gold
+
+reconciliation
+    → corrected lot state
+    → future sale
+    → realized event
+
+wealth state
+    → FIRE inputs
+    → simulation outputs
 ```
 
-Expected lot state and realized-event state should be asserted exactly.
-
-```mermaid
-flowchart LR
-    FIX["Synthetic transactions"] --> FIFO["FIFOPortfolio"]
-    FIFO --> LOT["Expected active lots"]
-    FIFO --> REAL["Expected realized events"]
-    FIFO --> REC["Expected reconciliation state"]
-    LOT --> ASSERT["Golden assertions"]
-    REAL --> ASSERT
-    REC --> ASSERT
-```
-
-### 4.3 Reconciliation tests
-
-Quantity and cost-basis reconciliation deserve independent scenarios because they mutate financial state differently.
-
-Tests should protect:
-
-- positive quantity gaps;
-- negative quantity gaps;
-- zero-quantity edge cases;
-- proportional cost-basis scaling;
-- local/reporting basis consistency;
-- deterministic reconciliation IDs;
-- future FIFO behavior after correction.
-
-### 4.4 Temporal-causality tests
-
-Historical US valuation has a particularly valuable invariant:
-
-> **Future market or FX observations must never leak into earlier valuation state.**
-
-Regression tests should cover:
-
-```text
-same-day observation
-prior-day observation
-weekend / market closure
-stale price > allowed threshold
-missing FX
-future-only price
-future-only FX
-position close / re-entry
-```
-
-### 4.5 Tax evidence tests
-
-Protect the ownership boundary between household ledger and Quant realized events.
-
-Scenarios should include:
-
-- non-investment income;
-- STCG/LTCG Quant events;
-- investment ledger exclusions;
-- tax credits with signed values;
-- `CHECK_REQUIRED` evidence retaining indicative estimates;
-- deterministic `TAX` identity;
-- Gold aggregation/reconciliation.
-
-### 4.6 Wealth and cashflow tests
-
-Golden household scenarios should assert:
-
-```text
-opening balance
-+ income
-- expense
-± transfer
-= expected book state
-```
-
-Then separately validate market-value injection, savings metrics, liquidity, runway, and net-worth aggregation.
-
-### 4.7 FIRE reproducibility tests
-
-The stochastic layer should be tested at the contract level rather than by expecting different runs to generate identical paths.
-
-Useful checks include:
-
-- same recorded seed + same compatible inputs → repeatable output;
-- changed rule fingerprint → changed replay envelope;
-- Markov transition behavior under controlled seeds;
-- percentile ordering;
-- zero/edge horizons;
-- human-capital shock duration boundaries;
-- inflation floor/cap behavior;
-- output fingerprint stability under identical context.
-
----
+These are places where locally correct modules can still produce globally wrong behavior.
 
 ## 5. Reliability and recovery regression coverage
 
-The operational hardening deserves permanent executable protection.
+Recovery deserves scenario-based testing because happy-path tests cannot prove failure semantics.
 
-Priority scenarios include:
+High-value scenarios include:
 
-```text
-stale run recovery
-changed artifact
-removed artifact
-successful rename migration
-ambiguous rename
-PENDING_BRONZE replay
-missing Bronze table
-Control Plane / DuckDB divergence
-worker failure propagation
-DuckDB transaction rollback
-SQLite transaction rollback
-DuckDB-committed / SQLite-failed healing path
-snapshot creation
-corrupt snapshot rejection
-restore validation
-failed restore rollback
-```
+- DuckDB work fails before SQLite commit;
+- SQLite work fails after DuckDB commit;
+- stale run detection;
+- snapshot validation failure;
+- staged restore failure;
+- rollback success;
+- rollback failure / uncertain active state;
+- missing retained Bronze payload;
+- artifact rename/removal transitions.
 
-```mermaid
-flowchart TB
-    FAIL["Injected failure"] --> RUN["Run / restore workflow"]
-    RUN --> STATE["Inspect SQLite + DuckDB state"]
-    STATE --> INV["Assert invariants"]
-    INV --> NEXT["Execute recovery / next run"]
-    NEXT --> CONV["Assert convergence"]
-```
+The target is not to pretend every cross-store failure is atomic.
 
-These tests matter because reliability behavior is easiest to trust immediately after writing it and hardest to trust a year later when nobody remembers the exact failure window.
-
----
+The target is to prove that the system **reports truthfully what state it reached and how it can converge again**.
 
 ## 6. Contract and schema regression protection
 
-The Data Contract Registry is now central enough to deserve machine-checkable regression protection.
+The Data Contract Registry is mature enough to support stronger automated checks around:
 
-Useful checks include:
+- complete registry coverage;
+- declared vs actual schemas;
+- grain uniqueness;
+- deterministic identity fields;
+- nullable/required semantics;
+- producer ownership;
+- Gold additivity metadata where useful.
 
-- registry uniqueness;
-- expected contract counts as derived assertions, not magic documentation constants;
-- publication-order consistency;
-- producer/registry completeness;
-- DDL/contract alignment;
-- grain metadata presence;
-- Meta contract projection;
-- docs contract inventory generated/checked against source where practical.
-
-The objective is not to make documentation executable at all costs.
-
-It is to eliminate avoidable drift between the implementation authority and the specification layer.
-
----
+Schema drift is cheaper to catch before Power BI discovers it through interpretive dance.
 
 ## 7. Configuration fixture modernization
 
-Some historical test/sample configuration material predates the current Pydantic models.
+Configuration is now a first-class policy surface.
 
-The QA phase should replace stale fixtures with intentionally current examples generated or validated against:
+Future QA should include representative fixtures for:
 
-```text
-Settings
-FinancialRules
-FireAssumptions
-MonteCarloAssumptions
-```
+- minimal valid settings;
+- invalid/missing runtime paths;
+- financial-rule boundary conditions;
+- Tax policy exclusivity;
+- FIRE simulation combinations;
+- model fingerprints;
+- rules/settings snapshot stability.
 
-Fixtures should be small enough to understand and complete enough to exercise the actual validation paths.
-
-A configuration fixture should not become an archaeological site that the tests politely avoid looking at.
-
----
+Historical sample TOMLs should never become de facto contracts when the Pydantic models have moved on.
 
 ## 8. Static quality and type discipline
 
-The project already benefits from explicit models and typed contracts, but maturity work should keep tightening static feedback where it produces real value.
+The current type/quality system should remain strict but pragmatic.
 
-Potential focus areas:
+Priorities:
 
-- type-checking critical financial paths;
-- linting and formatting consistency;
-- dead-code detection;
-- import/dependency hygiene;
-- Pydantic model coverage;
-- explicit enum use where strings currently encode domain states;
-- documentation/source-path validation.
+```text
+keep stable shapes typed
+keep dynamic-library exceptions explicit
+avoid expanding Any across boundaries
+preserve public APIs
+keep architecture tests enforceable
+```
 
-The goal is not a perfect score from every tool in the Python ecosystem.
-
-The goal is shorter feedback loops for mistakes that machines can detect cheaply.
-
----
+Future typing work should reduce real ambiguity, not create abstraction noise to satisfy a metric.
 
 ## 9. Performance becomes observational, not aspirational
 
-The current workload is operationally comfortable.
+The system is already fast enough for its local operating model that performance work should be evidence-driven.
 
-Future performance work should therefore start with profiling and evidence.
+The approach is:
 
-The decision sequence should be:
+```mermaid
+flowchart LR
+    MEASURE["Representative workload"]
+    PROFILE["Find dominant path"]
+    CLASSIFY["Algorithm / I/O / materialization / DB"]
+    CHANGE["Small targeted change"]
+    COMPARE["Benchmark + financial regression"]
 
-```text
-Is this computation needed?
-        ↓
-Is the grain correct?
-        ↓
-Is the algorithm appropriate?
-        ↓
-Is the bottleneck material?
-        ↓
-Optimize
-        ↓
-Reconcile financial outputs
+    MEASURE --> PROFILE --> CLASSIFY --> CHANGE --> COMPARE
 ```
 
-An 8% speed improvement that changes a financial answer is not an optimization. It is a very efficient bug.
+Do not optimize a 2 ms function because it offended a profiler aesthetically.
 
-### Performance evidence worth retaining
+### Continue watching Polars boundaries
 
-When profiling is performed, capture:
+Materialization boundaries should remain classified and intentional.
 
-- source-artifact count;
-- instrument workload count;
-- Bronze rows;
-- Silver/Gold rows;
-- stage timings;
-- warm/cold context;
-- hardware/environment;
-- financial output reconciliation.
+New `.collect()`, `.to_dicts()`, `.rows()`, or Python loops in hot analytical paths deserve review.
 
-Benchmarks without workload context age badly.
+### Preserve stateful exceptions
 
----
+FIFO and selected numerical kernels are stateful/algorithmic for real reasons.
 
-## 10. Documentation QA becomes part of release hygiene
+Not everything becomes better because it fits inside one heroic Polars expression.
 
-Once the rebase is complete, documentation should receive lightweight regression checks alongside code.
+## 10. Documentation QA becomes release hygiene
 
-Useful automated checks include:
+Documentation should be validated like code where practical.
 
-```text
-relative links
-code-fence balance
-Mermaid fence syntax
-manifest completeness
-source-path existence
-registry counts
-contract names
-release-label leakage
-Related Specifications formatting
-```
+Future release hygiene should include checks for:
 
-More semantic checks, such as whether a formula still matches implementation, remain review work unless a practical source-derived mechanism exists.
+- broken relative links;
+- stale source paths;
+- manifest coverage;
+- unbalanced fences;
+- Mermaid syntax where feasible;
+- formula rendering;
+- schema/table count drift;
+- version/release leakage into canonical docs;
+- stale Wiki links.
 
-Documentation should be protected from obvious drift without pretending prose can be unit-tested into truth.
-
----
+The docs are large enough that manual memory is not a sustainable QA strategy.
 
 ## 11. Maintainability and simplification
 
-A mature codebase should occasionally become smaller.
+Future simplification should target **real cognitive load**.
 
-Future maintenance should look for:
+Good candidates include:
 
-- duplicate transformation logic;
-- stale compatibility paths;
-- obsolete configuration keys;
-- redundant metrics;
-- dead documentation branches;
-- unnecessary abstractions;
-- expensive calculations with no decision consumer;
-- interfaces that expose implementation detail without user value.
+- duplicated orchestration;
+- repeated policy checks;
+- unclear status/result vocabulary;
+- private helpers that became de facto public contracts;
+- unnecessary wrapper layers;
+- duplicated schema declarations.
 
-The test for simplification is the same as the test for refactoring:
+Bad candidates include:
 
-> **Can the behavior be made easier to understand without losing required financial semantics or recovery guarantees?**
+- cohesive numerical kernels that are only “too long” by style metric;
+- declarative catalogs whose size reflects legitimate domain breadth;
+- stateful financial algorithms split solely to reduce line count.
 
-If yes, deletion is a feature.
-
----
+The objective is fewer concepts, not merely fewer lines.
 
 ## 12. Gold remains curated
 
-Gold should continue to be decision-oriented rather than becoming a landfill for every calculated column.
+Gold should grow only when a new dataset supports a real analytical decision.
 
-Before adding a metric or mart, ask:
+Before adding a mart, require:
 
 ```text
-What decision does this support?
-What is its grain?
-Is it additive?
-Can the consumer aggregate it safely?
-Does it duplicate an existing contract?
-Does it justify its compute and maintenance cost?
+decision purpose
+grain
+canonical upstream owner
+additivity semantics
+currency semantics
+BI use case
+contract + tests
 ```
 
-If the answer is vague, the metric probably belongs upstream, in ad-hoc analysis, or nowhere.
-
-A warehouse is not improved by collecting every number it has ever thought about.
-
----
+A table is not automatically useful because DuckDB can create it quickly.
 
 ## 13. Financial-domain changes require real evidence
 
-The application should not broaden into every asset class, jurisdiction, or tax rule because those domains exist in the world.
+Future changes to FIFO, Tax, FX, reconciliation, or FIRE should start from a concrete financial need or correctness issue.
 
-New financial semantics should be triggered by actual evidence such as:
+Examples that justify change:
 
-```text
-new asset actually held
-new broker actually used
-new jurisdiction actually relevant
-new corporate action actually encountered
-new reporting requirement actually needed
-```
+- a new broker/source behavior;
+- a new statutory treatment relevant to actual evidence;
+- a real asset type with different economic semantics;
+- a known reconciliation class not currently represented;
+- a material modelling limitation observed in actual planning use.
 
-Then the workflow becomes:
+The project should resist speculative feature accumulation in financially sensitive areas.
 
-```mermaid
-flowchart LR
-    REAL["Real scenario"] --> EVID["Collect evidence"]
-    EVID --> MODEL["Define financial semantics"]
-    MODEL --> CONTRACT["Define grain / identity / contract"]
-    CONTRACT --> CODE["Implement"]
-    CODE --> TEST["Golden scenario"]
-    TEST --> DOC["Document"]
-```
+## 14. Portability grows when variation appears
 
-That keeps domain growth evidence-led rather than encyclopedic.
+The current architecture supports extension, but portability should be earned by real examples.
 
----
+A future new broker/source should first be integrated cleanly.
 
-## 14. Portability grows only when variation appears
+If multiple sources reveal a stable common capability, extract the abstraction then.
 
-The architecture already contains reusable seams.
-
-Source-specific and jurisdiction-specific assumptions should become more portable when a second real environment demonstrates the variation.
-
-The rule remains:
-
-> **Generalize from working behavior, not imagined universality.**
-
-Possible future portability work may include adapters or strategies for genuinely different:
-
-- broker formats;
-- source databases;
-- currency conventions;
-- tax jurisdictions;
-- reconciliation policies;
-- investment classifications.
-
-But none of those abstractions need to exist merely because they can be drawn.
-
----
+This is preferable to designing an “universal broker interface” based on imagination and vibes.
 
 ## 15. Local-first remains the default
 
-The current architecture fits the workload:
+There is currently no strong reason to replace the local architecture with cloud services.
+
+Local-first remains appropriate because of:
+
+- privacy;
+- source locality;
+- embedded database performance;
+- low operational overhead;
+- single-user workflows;
+- Power BI adjacency.
+
+Cloud/server architecture should appear only if a real requirement introduces:
 
 ```text
-financial privacy
-single-user operation
-embedded databases
-local Power BI
-CLI / desktop workflows
-offline documentation
-explicit backup / restore
-low operating cost
+multi-user concurrency
+remote access
+shared service ownership
+large-scale compute
+cross-device synchronization
 ```
 
-Cloud infrastructure should enter only when a requirement changes those assumptions.
-
-Examples that could justify reconsideration include:
-
-- multiple concurrent users;
-- remote shared access;
-- server-side scheduling requirements;
-- device-independent operation;
-- scale that no longer fits the workstation model.
-
-Until then, “put it in the cloud” is not a roadmap item. It is a sentence looking for a requirement.
-
----
+Until then, complexity does not get points for distance traveled over the network.
 
 ## 16. Semantic and AI capabilities remain downstream
 
-Semantic search, local agents, and richer AI interaction remain interesting possibilities across my broader work.
+AI/semantic features remain interesting, but they should consume the stable system rather than reshape it prematurely.
 
-For Personal Finance ETL, the dependency order stays strict:
+A sensible future sequence is:
 
-```mermaid
-flowchart LR
-    E["Evidence"] --> C["Canonical finance"]
-    C --> R["Reconciled analytics"]
-    R --> Q["Executable QA"]
-    Q --> S["Semantic layer"]
-    S --> AI["AI interaction"]
+```text
+stable canonical contracts
+    ↓
+semantic metadata
+    ↓
+read-only retrieval / explanation
+    ↓
+agentic workflows only with explicit authority boundaries
 ```
 
-The financial model should become more trustworthy before it becomes more conversational.
+Potential future uses include:
 
-There is no prize for giving an agent beautifully phrased access to an ambiguous cost basis.
+- natural-language explanation of financial state;
+- semantic navigation of lineage/contracts;
+- read-only portfolio/Tax/FIRE Q&A;
+- anomaly explanation;
+- documentation-aware local assistants.
 
----
+The prerequisite is trustworthy structured state.
+
+An AI layer over ambiguous data simply automates confidence.
 
 ## 17. What is intentionally not on the roadmap
 
-Personal Finance ETL is not currently trying to become:
+Unless a real requirement emerges, the project does not need:
 
-```text
-a universal tax-return engine
-a brokerage execution platform
-a multi-tenant SaaS product
-a cloud data platform
-an institutional risk engine
-a general accounting ERP
-a framework for every asset class
-a generic financial-data framework before a second real environment exists
-```
+- microservices;
+- Kubernetes;
+- distributed orchestration;
+- event streaming infrastructure;
+- a generic plugin marketplace;
+- multi-tenant cloud hosting;
+- blockchain anything;
+- a second warehouse because one database looked lonely.
 
-Those are different products with different risk, compliance, operational, and architectural requirements.
+This is not anti-technology.
 
-Not building them is scope discipline, not missing ambition.
-
----
+It is pro-problem.
 
 ## 18. Trigger-based future evolution
 
-After documentation and QA maturity, the default roadmap becomes intentionally event-driven.
+The roadmap can be summarized as a set of triggers.
 
-```text
-new source appears
-→ add / adapt source contract
+| Trigger | Likely response |
+| --- | --- |
+| recurring financial mismatch | investigate domain/reconciliation model |
+| new provider/source family | add infrastructure adapter + evidence contract |
+| observed hot path | benchmark and optimize targeted path |
+| schema drift risk | strengthen registry/contract tests |
+| repeated manual release step | automate tooling |
+| real portability variation | extract common interface |
+| stable AI use case | add downstream semantic capability |
+| recovery ambiguity | strengthen lifecycle/recovery model |
 
-new financial scenario appears
-→ formalize domain semantics
-
-new decision question appears
-→ consider analytical contract
-
-new failure appears
-→ add regression protection
-
-new performance bottleneck appears
-→ profile and optimize
-
-new portability variation appears
-→ extract abstraction
-```
-
-That is the maintenance model I want: **real event → justified change**.
-
----
+This keeps change tied to evidence.
 
 ## 19. Success criteria for the maturity phase
 
-The current phase is successful when:
+The next phase is successful if:
 
-1. The rebuilt `/docs` accurately specifies the current implementation.
-2. The root README showcases the system without duplicating the specifications.
-3. The docs manifest matches the final catalog.
-4. The Wiki teaches the current mental model with valid navigation.
-5. High-value financial algorithms have deterministic golden tests.
-6. Reliability and recovery paths have executable regression coverage.
-7. Current configuration fixtures match the Pydantic authorities.
-8. Contract/registry drift is detectable earlier.
-9. Performance changes remain evidence-driven and financially reconciled.
-10. Future changes are triggered by real scenarios rather than roadmap anxiety.
+- architecture remains stable;
+- financial outputs remain explainable;
+- regression confidence increases;
+- releases become more boring;
+- documentation stays synchronized;
+- performance changes are measured;
+- new features are selective;
+- the project remains enjoyable to maintain.
 
----
+That last criterion matters more than most roadmaps admit.
+
+A personal flagship system should become more useful as it matures, not become a full-time unpaid platform team.
 
 ## 20. Near-term sequence
 
-The immediate sequence is finite:
+The immediate sequence is intentionally simple:
 
-```mermaid
-flowchart LR
-    DOCS["Finish /docs"] --> ROOT["Root README glow-up"]
-    ROOT --> MAN["Docs manifest"]
-    MAN --> QA["Cross-doc QA"]
-    QA --> WIKI["Wiki glow-up"]
-    WIKI --> PROFILE["Profile README"]
-    PROFILE --> TEST["Gradual executable QA expansion"]
-    TEST --> STEADY["Feature-driven steady state"]
+```text
+finish canonical docs
+    ↓
+rebuild Wiki
+    ↓
+rebuild root README
+    ↓
+cross-link the knowledge system
+    ↓
+refresh profile README
+    ↓
+use the system
+    ↓
+let real needs determine what comes next
 ```
 
-The goal is not permanent hardening.
+That is the roadmap’s central idea:
 
-The goal is to reach a steady state where the architecture, financial semantics, documentation, and regression protection are stable enough that future changes mostly happen because **something genuinely new happened**.
-
-That is a good place for a personal project to arrive.
+> **The next architecture should be discovered by the next real problem, not scheduled because the current one finally became stable.**
 
 ## Related specifications
 
-- [Project](about/project.md)
-- [About Me](about/about-me.md)
+- [Engineering Standards](developer/engineering-standards.md)
 - [Testing and Validation](developer/testing-and-validation.md)
 - [Reliability and Recovery](architecture/reliability-and-recovery.md)
-- [Data Contract and Schema Evolution](developer/data-contract-and-schema-evolution.md)
 - [Financial Model](finance/financial-model.md)
+- [About the Project](about/project.md)

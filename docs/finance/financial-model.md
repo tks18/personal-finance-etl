@@ -1,409 +1,457 @@
 # Financial Model
 
-Personal Finance ETL models personal finance as a lineage of evidence and state transitions rather than as a single giant ledger. Household cashflow, investment evidence, market reconstruction, canonical FIFO, tax preparation and stochastic planning deliberately have different authorities. That separation is the core financial design: a number can be mathematically correct and still be semantically wrong if it is presented as the wrong kind of fact.
+A financial platform becomes much easier to reason about once every number has to answer two questions:
 
-## Scope and source authorities
+1. **What kind of truth am I?**
+2. **Who is allowed to create me?**
 
-Primary implementation anchors:
+I use that discipline throughout Personal Finance ETL. The result is not one monolithic “finance table.” It is a chain from evidence to canonical facts to reconstructed state to measures to presentation.
 
-```text
-backend/transform/facts.py
-backend/transform/investments.py
-backend/transform/currency_transformer.py
-backend/transform/us_stocks_transformer.py
-backend/engines/analytics/
-backend/engines/tax/
-backend/engines/presentation/
-backend/config/financial_rules.py
+```mermaid
+flowchart LR
+    OBS["Observed\nexternal / household evidence"]
+    CAN["Canonical\nnormalized facts"]
+    REC["Reconstructed\nstate"]
+    ANA["Analytical\nmeasures"]
+    PRE["Presentation /\nplanning"]
+
+    OBS --> CAN --> REC --> ANA --> PRE
 ```
 
-The physical Silver and Gold schemas are specified in Reference. This page owns the logical financial ontology and subsystem authority.
+The sequence is simple. The semantics are not.
 
-## The five levels of financial truth
+## 1. Observed evidence: what a source actually said
+
+Observed evidence is the least interpreted layer of the financial model.
+
+Examples include:
+
+- household income, expense, transfer, and opening-balance records;
+- broker purchase/sale exports;
+- observed broker holdings where available;
+- market closing prices;
+- benchmark levels;
+- FX observations;
+- configuration inputs.
+
+Observation does not imply completeness or correctness. It means the system preserves the source claim before replacing it with a model conclusion.
 
 ```mermaid
 flowchart TD
-    E[Observed evidence] --> C[Canonical financial facts]
-    C --> R[Reconstructed financial state]
-    R --> A[Analytical measures]
-    A --> P[Presentation / planning]
-    C --> X[Reconciliation events]
-    R --> X
+    SRC["Source"]
+    RAW["Raw / Bronze evidence"]
+    VAL{"Valid enough to accept?"}
+    CAN["Canonical fact"]
+    REJ["Reject / classify failure"]
+
+    SRC --> RAW --> VAL
+    VAL -->|yes| CAN
+    VAL -->|no| REJ
 ```
 
-### 1. Observed evidence
-
-Observed evidence enters from household databases, broker exports, market files, currency histories, mappings and configured rules. Observation describes provenance, not correctness. A broker row can still require normalization, mapping, deduplication or reconciliation.
-
-### 2. Canonical facts
-
-Canonical facts are stable normalized records such as income transactions, expense transactions, transfers, opening balances, purchases, sales and market observations. Their job is to remove source-specific shape before financial engines reason about them.
-
-### 3. Reconstructed state
-
-Some financially useful state is not supplied directly. Historical US holdings are reconstructed from transactions; FIFO acquisition lots are reconstructed from purchase/sale evidence. These are deterministic derivatives of evidence, not new observations.
-
-### 4. Analytical measures
-
-Return, XIRR, benchmark comparison, risk, realized/unrealized gain, FX attribution, net worth and cashflow efficiency are calculations over canonical or reconstructed state.
-
-### 5. Presentation and planning
-
-Gold marts and FIRE simulations consume the analytical model. A Monte Carlo percentile is intentionally farther from source evidence than a purchase transaction. That is fine, provided the lineage remains explicit.
-
-## Household financial ontology
-
-Household finance starts from four canonical fact families:
-
-```mermaid
-erDiagram
-    INCOME_TRANSACTION }o--|| INCOME_CATEGORY : classified_as
-    EXPENSE_TRANSACTION }o--|| EXPENSE_CATEGORY : classified_as
-    TRANSFER_TRANSACTION }o--|| ASSET : moves_between
-    OPENING_BALANCE }o--|| ASSET : initializes
-```
-
-Income and expense facts describe economic inflow/outflow. Transfers describe movement between balance-sheet locations and must not automatically become income or expense. Opening balances establish the starting state required to reconstruct balances before the transaction history.
-
-This distinction prevents a transfer from being counted as household earnings merely because cash arrived in one account. Money changing pockets is not magically a salary.
-
-## Canonical transaction normalization
-
-`backend/transform/facts.py` centralizes common transaction cleanup through `get_base_transactions()`. Source columns are mapped to canonical names, dates and amounts are normalized, and category/subcategory relationships are prepared before fact-specific logic executes.
-
-The specialized producers are:
+A malformed populated numeric is therefore not equivalent to a missing optional numeric. `domain/common/validation.py` treats that difference as an explicit source-quality concern.
 
 ```python
-def transform_f_income_transactions(...):
-    ...
+# src/personal_finance_etl/domain/common/validation.py
+NULL_SENTINELS = ["null", "none", "nan", "-", "--", "n/a", "na"]
 
-def transform_f_expense_transactions(...):
-    ...
-
-def transform_f_transfer_transactions(...):
-    ...
-
-def transform_f_opening_balances(...):
-    ...
+class FinancialSourceValidationError(ValueError):
+    """Raised when a populated financial source value cannot be parsed safely."""
 ```
 
-The functions share infrastructure but preserve distinct financial semantics. That is preferable to one generic transaction fact whose meaning depends on a mysterious `Type` column three joins later.
+The key idea is that plausibility is not evidence quality. Turning an invalid value into zero may make a pipeline green while making the financial output less trustworthy.
 
-## Investment financial ontology
+## 2. Canonical facts: normalize meaning, not history
+
+Canonicalization removes vendor/source representation differences while preserving economic meaning.
+
+A broker can call quantity `Qty`, `Units`, or something much more creative. The canonical investment model wants `Quantity` with a known grain and meaning.
+
+Likewise, household transactions are normalized into stable dimensions such as:
+
+- date;
+- account/asset identity;
+- category;
+- base amount;
+- cash/non-cash semantics;
+- income/expense classification.
+
+Canonical facts should be reusable by multiple downstream models. If a transformation is specific to one chart, it probably does not belong here.
+
+## 3. Reconstructed state: what follows from accepted facts
+
+Reconstructed state is calculated, but it is not arbitrary.
+
+Examples include:
+
+- household monthly balances;
+- active acquisition lots;
+- realized disposal events;
+- reconstructed daily holdings;
+- reconciliation adjustments;
+- monthly net worth;
+- investment terminal state.
+
+The distinction between fact and reconstruction is crucial.
+
+A purchase transaction says an acquisition occurred. It does **not** by itself say which lot remains open after three later sales. FIFO reconstruction produces that state.
 
 ```mermaid
 flowchart LR
-    MASTER[Investment master] --> PURCHASE[Purchase facts]
-    MASTER --> SALE[Sale facts]
-    MASTER --> MARKET[Market observations]
-    PURCHASE --> FIFO[Canonical FIFO]
-    SALE --> FIFO
-    MARKET --> VAL[Valuation]
-    PURCHASE --> US[US market reconstruction]
-    SALE --> US
-    US --> VAL
-    FIFO --> REAL[Realized events]
-    FIFO --> RECON[Reconciliation events]
+    P["Canonical purchases"]
+    S["Canonical sales"]
+    F["FIFO chronology"]
+    L["Active lots"]
+    R["Realized events"]
+
+    P --> F
+    S --> F
+    F --> L
+    F --> R
 ```
 
-The investment model deliberately separates:
+## 4. Analytical measures: questions asked of state
 
-- instrument identity and classification;
-- transaction evidence;
-- market observations;
-- reconstructed historical holdings;
-- canonical acquisition lots;
-- realized disposals;
-- reconciliation events.
+Measures answer questions about facts/state:
 
-The distinction between historical US holdings reconstruction and canonical FIFO is especially important. Both process transactions, but they answer different questions. The former creates a daily market-state spine for valuation. The latter owns acquisition-lot provenance and disposal realization.
+- XIRR;
+- CAGR;
+- benchmark-relative performance;
+- unrealized/realized P/L;
+- FX attribution;
+- savings rate;
+- liquidity/runway;
+- budget-health scores;
+- Tax estimates.
 
-## Identity as a financial contract
+Measures should carry validity semantics where a result can be unavailable or not computable.
 
-Purchases and sales receive deterministic IDs in `backend/transform/investments.py`. Those identities become upstream anchors for lots and realized events.
+`0.0` is a financial value. “Not computable” is a state. Those are not synonyms.
 
-```python
-def _compute_purchase_id(row: dict[str, Any]) -> str:
-    return make_id(
-        "PURCHASE",
-        ISIN=row.get("ISIN"),
-        Date=row.get("Date"),
-        Price=row.get("Price"),
-        Quantity=row.get("Quantity"),
-        CURRENCY_ID=row.get("CURRENCY_ID"),
-    )
+## 5. Presentation and planning: decision surfaces
+
+Gold marts, Power BI, CLI/Desktop summaries, and FIRE scenarios live downstream of the model.
+
+Presentation may aggregate or reshape canonical state. It should not silently redefine the underlying financial semantics.
+
+Planning goes one step further: it introduces assumptions about the future.
+
+That creates a separate epistemic category:
+
+```text
+historical evidence        != reconstructed history
+reconstructed history      != analytical measure
+analytical measure         != forecast
+forecast                   != stochastic scenario
 ```
 
-The exact serialization protocol belongs to Deterministic Identity and Replay. Financially, the important property is continuity: downstream lot/event identities do not depend on incidental DataFrame row order.
+## Household ontology: activity, balances, wealth
 
-## Currency model
+The household model separates **activity** from **state**.
 
-Investment economics are modeled in both local/instrument currency and INR reporting currency where applicable. The system does not treat currency translation as decorative formatting. Historical FX participates in acquisition basis, valuation and return attribution.
+Activity includes:
+
+```text
+income
+expense
+transfer
+```
+
+State includes:
+
+```text
+opening balance
+closing balance
+market-adjusted asset value
+liability value
+net worth
+```
+
+Transfers deserve their own semantics because they move value between owned accounts without necessarily creating income or expense.
+
+If I transfer ₹100,000 from bank to brokerage, household wealth did not increase by ₹100,000. The money changed location. Calling that income would make savings analytics absolutely shredded and completely wrong.
+
+## Canonical household flags are part of the model
+
+Household source transformations produce classifications used downstream, including concepts such as:
+
+- active income;
+- dividend income;
+- interest income;
+- non-cash income;
+- core expense;
+- cash-pool membership;
+- non-cash P/L;
+- cash-flow activity type.
+
+These flags are semantic contracts because cash-flow, budget, FIRE, and wealth models use them differently.
+
+## Investment ontology: instrument, trade, market, lot, event
+
+Investments require more distinct grains:
 
 ```mermaid
-flowchart LR
-    L[Local acquisition / value] --> FX[Historical FX]
-    FX --> INR[INR acquisition / value]
-    L --> AR[Asset return]
-    FX --> FR[FX contribution]
-    AR --> TR[Reporting-currency return]
-    FR --> TR
+flowchart TD
+    MASTER["Instrument master\n1 row / instrument"]
+    TRADE["Trade evidence\n1 row / transaction"]
+    MARKET["Market observation\n1 row / instrument × date"]
+    LOT["Acquisition lot\n1 row / lot"]
+    REAL["Realized event\n1 row / disposal fragment"]
+    REC["Reconciliation event\n1 row / discrepancy event"]
+
+    MASTER --> TRADE
+    MASTER --> MARKET
+    TRADE --> LOT
+    LOT --> REAL
+    LOT --> REC
 ```
 
-This is why a foreign asset can appreciate locally while producing a different INR outcome. Conflating those effects would erase economically meaningful information.
+The data model deliberately does not force these into one universal “investment row.” Different economic concepts deserve different grains.
 
-## Financial rules as semantic configuration
+## The investment contract layer makes the vocabulary explicit
 
-`FinancialRules` does not merely hold UI preferences. It controls financial interpretation including classifications, investment mappings, tax exclusions, macro assumptions and FIRE model parameters. Rules therefore participate in reproducibility and should be treated as model inputs.
-
-## Authority matrix
-
-| Financial question | Authority |
-|---|---|
-| What source artifact was observed? | Control Plane/source evidence |
-| What canonical household transaction occurred? | Silver household facts |
-| What canonical investment purchase/sale occurred? | Silver investment facts |
-| What was reconstructed US historical market state? | US market transformer |
-| Which acquisition lot funded a disposal? | Quant `FIFOPortfolio` |
-| What realized investment event occurred? | Quant realized events |
-| Why does reconstructed investment state differ from observation? | Quant reconciliation events |
-| What tax-preparation evidence exists? | Tax Engine |
-| What is current analytical wealth/cashflow state? | Presentation Engine / Gold |
-| What does a stochastic future distribution look like? | FIRE simulation |
-
-## Invariants
-
-1. Observed evidence and reconstructed state must remain distinguishable.
-2. Transfers must not silently become income/expense.
-3. Canonical purchase/sale identities must be deterministic for equivalent financial evidence.
-4. Quant owns canonical FIFO and realized investment gains.
-5. Historical market reconstruction must not be described as broker-certified holdings evidence.
-6. Tax estimates remain indicative, not statutory liability.
-7. Currency translation must preserve the distinction between local economics and INR reporting.
-8. Stochastic planning output must not be confused with deterministic financial reconstruction.
-
-## Failure philosophy
-
-The finance layer generally prefers explicit failure over silently manufacturing financial state when critical inputs are invalid. Examples include stale US prices, invalid FX observations and missing contract outputs. Where approximation is accepted, the approximation is surfaced through fields such as price age/imputation or evidence status rather than being hidden.
-
-## Trade-offs
-
-The model carries more tables and more explicit state than a single-ledger design. That complexity buys clearer ownership, deterministic reconstruction, reconciliation provenance and the ability to distinguish accounting movement from market economics. For this workload, semantic clarity is worth a few extra joins.
-
-## Canonical household classification flags
-
-The household model carries analytical classification into canonical facts instead of repeatedly re-deriving it in every Gold builder. Income classification can mark active income, dividends, interest and non-cash income from configured category/subcategory sets. Expense classification can mark core expenses. The rules are applied after category hierarchy resolution, so either a configured parent category or a configured subcategory can drive the flag.
+`domain/investments/contracts.py` contains the in-memory typed vocabulary used across the investment engine.
 
 ```python
-active_cat = [uid.upper() for uid in rules.income.active.category_ids]
-active_sub = [uid.upper() for uid in rules.income.active.sub_category_ids]
-...
-pl.when(
-    pl.col("CATEGORY_ID").str.to_uppercase().is_in(active_sub)
-    | pl.col("PARENT_ID").str.to_uppercase().is_in(active_cat)
-).then(True).otherwise(False).alias("Is_Active_Income")
+# src/personal_finance_etl/domain/investments/contracts.py
+class LotAction(StrEnum):
+    BUY = "BUY"
+    SELL = "SELL"
+    SPLIT = "SPLIT"
+    BONUS = "BONUS"
+    DIVIDEND_REINVEST = "DIVIDEND_REINVEST"
+    RECONCILIATION = "RECONCILIATION"
 ```
 
-This is a semantic contract: later analytics consume an explicit classification rather than embedding private copies of category logic.
+A lot action is not a random string scattered through the pipeline. It is a finite domain vocabulary.
 
-```mermaid
-flowchart LR
-    C[Canonical category] --> H[Resolve parent hierarchy]
-    R[FinancialRules] --> H
-    H --> A[Active income]
-    H --> D[Dividend]
-    H --> I[Interest]
-    H --> N[Non-cash]
-    H --> E[Core expense]
+The same module separates master metadata, trades, cashflows, terminal values, realized events, reconciliation events, metrics, lots, snapshots, and per-instrument processing results.
+
+That separation is not ceremony. It makes chronology and ownership reviewable.
+
+## Identity is a financial contract
+
+Deterministic identity is centralized under `domain/common/identity.py`.
+
+```python
+# src/personal_finance_etl/domain/common/identity.py
+def generate_deterministic_id(namespace: str, fields: Mapping[str, object]) -> str:
+    ordered = _ordered_identity_fields(namespace, fields)
+    normalized = [(key, canonicalize_value(value)) for key, value in ordered]
+    payload = json.dumps([namespace, "v2", normalized], separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:32]
 ```
 
-## Financial time
+Identity is therefore defined by:
 
-The model contains several notions of time that must not be casually collapsed:
+- namespace;
+- ordered identity fields;
+- canonical value normalization;
+- serialization protocol;
+- hash/truncation.
 
-| Time concept | Meaning |
-|---|---|
-| transaction date | when household/investment evidence is effective |
-| valuation date | date for which market state is calculated |
-| observation date | date on which a price/FX observation actually exists |
-| acquisition date | start of lot holding period |
-| disposal date | realization date |
-| financial year | tax/macro classification period |
-| month start/end | presentation and wealth aggregation boundaries |
+Changing those is a data-contract change even if no monetary formula changes.
 
-The US market transformer makes observation time visible because a valuation on a weekend may legitimately use Friday's observation. FIFO uses acquisition/disposal dates for holding-period classification. Wealth builders aggregate to calendar-month state. Same `Date` datatype, very different semantics.
+## Time has several meanings
+
+Finance uses multiple dates:
+
+- transaction date;
+- acquisition date;
+- disposal date;
+- valuation date;
+- reconciliation date;
+- month start/end;
+- financial year;
+- simulation horizon date.
+
+A date column should therefore describe which clock it belongs to.
+
+Chronology matters especially for FIFO and market reconstruction. Monthly household analytics can often aggregate activity by month while still preserving transaction-level evidence upstream.
+
+## Currency is not decoration
+
+A multi-currency investment can simultaneously have:
+
+```text
+transaction price in local currency
+book value in local currency
+book value in INR/base currency
+market value in local currency
+market value in INR/base currency
+asset P/L
+forex P/L
+```
+
+Collapsing these to `Value` destroys attribution.
+
+The model instead preserves local/base values and later decomposes performance into asset and FX effects.
 
 ## Book state versus market state
 
-Household ledger reconstruction is primarily a book-state problem. Investment valuation is a market-state problem. The two meet in wealth analytics but should not be merged prematurely.
-
-```mermaid
-flowchart TD
-    HT[Household transactions] --> BS[Book / ledger state]
-    IT[Investment transactions] --> QS[Quantity / lot state]
-    MP[Market prices] --> MS[Market state]
-    FX[FX] --> MS
-    QS --> MS
-    BS --> NW[Net worth]
-    MS --> NW
-```
-
-An investment purchase can reduce cash and increase investment exposure on the same economic day. Household cashflow records the movement; Quant/market analytics determine the investment's current value. This avoids deriving market wealth from historical cash paid.
-
-## Realization boundary
-
-A market-value change is not automatically realized income. The Quant Engine creates realized events only when disposal consumes acquisition lots. This boundary matters downstream for tax evidence.
-
-```mermaid
-stateDiagram-v2
-    [*] --> OpenLot: purchase
-    OpenLot --> OpenLot: market value changes
-    OpenLot --> Realized: sale consumes quantity
-    Realized --> TaxEvidence: Tax Engine consumes realized event
-```
-
-Unrealized appreciation can affect wealth without becoming a realized disposal event. That is an elementary finance distinction, but encoding it structurally prevents a surprisingly non-elementary class of reporting bugs.
-
-## Reconciliation as a first-class financial fact
-
-Reconciliation does not mutate history invisibly. When reconstructed investment quantity or basis disagrees with an accepted observation, Quant can create explicit reconciliation evidence and synthetic/adjusted lot state. The model therefore distinguishes:
+Household balances and investment cost bases answer a different question from market value.
 
 ```text
-observed state
-reconstructed state
-reconciliation event
-post-reconciliation state
+book / reconstructed balance:
+    what amount follows from recorded activity?
+
+market value:
+    what is the position worth under current/observed market prices?
 ```
 
-This is intentionally more verbose than simply overwriting quantity. Financial systems tend to become very confident once the evidence of their own corrections has been deleted.
+Net worth uses market values where the financial model has a valid market-valued representation. It does not rewrite ledger history to achieve that presentation.
 
-## Tax boundary
+## Realization is an event boundary
 
-Tax is downstream of canonical household income and Quant realized events. The Tax Engine does not independently rebuild investment FIFO. FinancialRules contains investment-related exclusion lists so household ledger categories already represented by Quant gains can be omitted from the tax ledger path and avoid double counting.
+Unrealized P/L belongs to open state.
 
-```mermaid
-flowchart LR
-    L[Household income evidence] --> X[Investment exclusions]
-    Q[Quant realized events] --> T[f_Tax_Events]
-    X --> T
-    T --> G[Tax Gold marts]
+Realized P/L exists when a disposal consumes acquisition basis.
+
+That is why the investment model creates explicit realized-event records rather than simply subtracting two portfolio snapshots.
+
+A realized event can retain:
+
+- acquisition date;
+- disposal date;
+- quantity disposed;
+- disposed cost basis;
+- proceeds;
+- realized gain/loss;
+- holding classification;
+- currency/FX attribution;
+- estimated Tax context;
+- lineage back to sale, purchase, and lot identifiers.
+
+That structure becomes critical later for Tax methodology.
+
+## Reconciliation is a financial fact, not an embarrassment
+
+Reconstruction can disagree with an independent broker observation.
+
+The system does not erase that disagreement.
+
+`ReconciliationEventDict` preserves both sides:
+
+```python
+# src/personal_finance_etl/domain/investments/contracts.py
+class ReconciliationEventDict(TypedDict, total=False):
+    Reconstructed_Quantity: float
+    Observed_Quantity: float
+    Broker_Quantity: float
+    Delta_Quantity: float
+    Quantity_Adjustment: float
+    Reconstructed_Cost_Basis: float | None
+    Observed_Cost_Basis: float | None
+    Delta_Cost_Basis: float | None
 ```
 
-`f_Tax_Events` is therefore a normalized tax-preparation evidence layer, not a declaration that the application has calculated final statutory liability.
+The discrepancy itself becomes evidence about model-vs-observation convergence.
 
-## Planning boundary
+## Tax is downstream of financial events
 
-FIRE consumes current financial state and configured stochastic assumptions. It is intentionally downstream from deterministic accounting/reconstruction.
+The Tax domain consumes Tax-relevant events and classifications. It does not become the source of FIFO realization.
+
+This preserves a useful authority chain:
 
 ```text
-financial evidence -> deterministic state -> planning inputs -> stochastic paths
+trades
+→ lots / realized financial events
+→ Tax classification
+→ indicative Tax estimates
+→ Tax presentation
 ```
 
-A Monte Carlo result is not allowed to flow backward and alter historical financial facts. The future can be simulated; the past does not get a rewrite because one random path looked nicer.
+The Tax engine therefore does not need to independently reinvent investment chronology.
 
-## Data quality semantics
+## Planning is downstream of present-state finance
 
-The model uses several strategies depending on what missingness means:
+FIRE and Monte Carlo consume present financial state plus assumptions.
 
-- missing optional classification can become a conservative default flag;
-- missing critical valuation price/FX can fail;
-- a non-trading-day price may be backward-filled within an accepted staleness window;
-- a reconciliation discrepancy becomes explicit evidence;
-- an unavailable optional presentation input can cause a builder to return an empty result rather than invent data.
+They do not change historical truth.
 
-The important principle is that `null`, zero, unavailable, imputed and reconciled are not synonyms.
+A simulation result is reproducible under its model/input fingerprints, but stochastic output remains modeled uncertainty.
 
-## Producer/consumer boundaries
+That distinction prevents a common analytical category error: treating a percentile path as if it were an account balance that already exists.
 
-| Producer | Produces | Principal consumers |
-|---|---|---|
-| household transformations | canonical household facts | presentation, tax |
-| investment transformations | canonical investment facts | market reconstruction, Quant |
-| currency pipeline | canonical FX | reconstruction, Quant |
-| US market transformer | reconstructed historical market state | Quant/analytics |
-| Quant | lots, realized events, reconciliation, analytics | tax, presentation |
-| Tax Engine | tax events and tax Gold | presentation/BI |
-| Presentation Engine | wealth/cashflow/investment Gold | BI/decision use |
+## Financial rules are semantic configuration
 
-This ownership map is more important than package layout. Moving a Python file should not change which subsystem is financially authoritative.
+`FinancialRules` separates policy from mechanics.
 
-## What this model deliberately does not claim
+Household rules define classifications and budget behavior. Investment rules define portfolio policy. Tax rules define configured assumptions. FIRE rules define future-model assumptions.
 
-- A reconstructed holding is not an independently observed broker holding.
-- An indicative tax estimate is not final statutory liability.
-- A Gold aggregation is not more authoritative than its canonical evidence merely because it is easier to chart.
-- A stochastic percentile is not a deterministic forecast.
-- INR translation does not erase local-currency economics.
-- Reconciliation does not prove which upstream source was objectively correct; it records how the system resolved the accepted state difference.
+The code can therefore answer:
 
-## Analytical lineage examples
+> Which policy produced this result?
 
-### Household salary to wealth
+without embedding the answer inside twenty separate modules.
+
+## Failure philosophy: reject ambiguity before it compounds
+
+Financial failure handling follows a few strong rules:
+
+1. malformed required evidence fails early;
+2. missing/invalid/zero remain distinguishable;
+3. incomplete provider evidence is not silently complete;
+4. observed/reconstructed disagreement is modeled explicitly;
+5. unsupported Tax certainty is not claimed;
+6. stochastic outputs are not described as deterministic truth.
+
+The objective is not to make every run succeed. It is to avoid producing believable nonsense.
+
+## Analytical lineage example: salary to net worth
 
 ```mermaid
 flowchart LR
-    S[Source salary transaction] --> I[f_Income_Transactions]
-    I --> L[LedgerBuilder]
-    L --> N[NetWorthBuilder]
-    N --> C[Core monthly fact]
-    C --> G[Gold cashflow / wealth views]
+    SRC["Income transaction"]
+    CAN["Canonical income"]
+    LED["Ledger activity"]
+    BAL["Monthly balances"]
+    NW["Net worth"]
+    CF["Cash-flow / budget analytics"]
+
+    SRC --> CAN --> LED --> BAL --> NW
+    CAN --> CF
 ```
 
-At no point does the Gold layer need to rediscover whether the source row was active income if that classification has already been made canonically.
+The income remains a transaction fact. The balance is reconstructed state. Net worth is a monthly valuation/aggregation. Budget metrics are measures.
 
-### Investment sale to tax evidence
+## Analytical lineage example: investment sale to Tax evidence
 
 ```mermaid
 flowchart LR
-    S[Canonical sale] --> F[FIFOPortfolio]
-    P[Canonical purchases] --> F
-    F --> R[f_Investment_Realized_Events]
-    R --> T[Tax Engine]
-    T --> E[f_Tax_Events]
-    E --> G[Tax Gold]
+    SALE["Canonical sale"]
+    FIFO["FIFO engine"]
+    REAL["Realized event"]
+    TAXE["Tax event"]
+    EST["Indicative estimate"]
+
+    SALE --> FIFO --> REAL --> TAXE --> EST
 ```
 
-This lineage is intentionally longer than `sale amount × tax rate`. The extra stages preserve acquisition provenance, holding period, realized gain and tax evidence quality.
+Each step adds meaning without pretending to be the earlier step.
 
-## Financial sign conventions
+## What the model deliberately does not claim
 
-Sign is part of a contract, not presentation decoration. Transfer transformation explicitly creates a signed `AMOUNT_PROPER`; tax credits can retain negative household-ledger conventions; local and INR P&L fields preserve economic direction. Downstream consumers should use documented field semantics rather than normalize every negative number into an absolute value for visual convenience.
+It does not claim that:
 
-## Configuration provenance
+- reconstructed holdings are independently broker-certified;
+- indicative Tax estimates are statutory Tax liability;
+- one database table is authoritative for all finance;
+- all missing financial data can be safely defaulted;
+- stochastic FIRE outputs predict the future;
+- reconciliation disagreement should be hidden.
 
-Because `FinancialRules` and runtime settings materially affect classification and planning, the Control Plane snapshots them per run. That connects the finance model back to reproducibility: a historical result is interpreted in the context of the rules that produced it, not whatever configuration happens to be on disk today.
+Those limitations are part of the model, not documentation disclaimers stapled on afterward.
 
-```mermaid
-flowchart LR
-    R[FinancialRules snapshot] --> RUN[Run]
-    S[Settings snapshot] --> RUN
-    RUN --> F[Financial outputs]
-    F --> REP[Replay / audit context]
-```
+## The next question
 
-## Model review checklist
+Once the truth categories are clear, household finance becomes the simplest place to watch the model operate end-to-end: transactions become monthly activity, monthly activity becomes balances, and balances become wealth state.
 
-When adding a new financial concept, the implementation should answer five questions before a new column appears in Gold:
-
-1. What evidence supports the concept?
-2. Is it canonical, reconstructed, reconciled, estimated or stochastic?
-3. What is its grain and deterministic identity, if any?
-4. Which subsystem owns the calculation?
-5. What failure or missing-data behavior is financially honest?
-
-If those questions cannot be answered, the model is not ready for another metric, no matter how attractive the dashboard card would look.
+That is the subject of [Cashflow & Wealth](cashflow-and-wealth.md).
 
 ## Related specifications
 
-- [Financial Model](financial-model.md)
-- [Cashflow and Wealth](cashflow-and-wealth.md)
+- [Cashflow & Wealth](cashflow-and-wealth.md)
 - [Investment Data Model](investment-data-model.md)
-- [Investment Market Reconstruction](investment-market-reconstruction.md)
-- [FIFO and Realized Events](fifo-and-realized-events.md)
-- [Investment Reconciliation](investment-reconciliation.md)
-- [Investment Performance and Risk](investment-performance-and-risk.md)
-- [Multi-Currency and FX](multi-currency-and-fx.md)
-- [Tax Methodology](tax-methodology.md)
-- [FIRE Methodology](fire-methodology.md)
-- [Data Model](../architecture/data-model.md)
-- [Silver Data Contracts](../reference/silver-data-contracts.md)
+- [Deterministic Identity & Replay](../architecture/deterministic-identity-and-replay.md)
+- [Financial Rules Reference](../configuration/financial-rules-reference.md)

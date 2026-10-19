@@ -1,242 +1,392 @@
 # Architecture
 
-Personal Finance ETL is not organized as a single extract-transform-load script. The application separates **source evidence**, **operational provenance**, **canonical financial facts**, **reconstructed financial state**, and **analytical presentation** so that each layer has a clear authority and failure boundary.
+Personal Finance ETL is not one database with a collection of scripts around it. It is a local financial system that has to keep several kinds of truth separate long enough to make them useful.
 
-This section specifies that architecture from the outside in. It explains the application boundary, execution lifecycle, persistence model, logical data model, identity model, and recovery design before the finance-specific documents descend into FIFO lots, FX attribution, tax evidence, or stochastic wealth modelling.
+A broker statement tells me what was observed. A canonical transaction model tells me what that observation means. A reconstructed lot book tells me what follows from those transactions. A run ledger tells me how the system got there. A BI table tells me what I want to analyze.
 
-> **Architecture rule:** a dataset is not authoritative merely because it is convenient to query. SQLite, Bronze, Silver, Gold, and DuckDB Meta deliberately own different kinds of state. DuckDB is excellent at analytics; it does not need a side hustle as the historical Control Plane.
+Those are related, but they are not interchangeable.
 
-
-## Learn the architecture first
-
-These pages specify the architecture in implementation-level depth. For the guided mental model, start with the Wiki's **[Architecture Tour](https://github.com/tks18/personal-finance-etl/wiki/02-Architecture-Tour)**, then follow [Follow the Data](https://github.com/tks18/personal-finance-etl/wiki/03-Follow-the-Data), [Operational Truth](https://github.com/tks18/personal-finance-etl/wiki/04-Operational-Truth), and [Reliability & Recovery](https://github.com/tks18/personal-finance-etl/wiki/12-Reliability-and-Recovery).
-
-## Reading map
+This architecture exists to preserve that distinction.
 
 ```mermaid
 flowchart LR
-    SA[System Architecture] --> DL[Data Lifecycle]
-    DL --> WA[Warehouse Architecture]
-    WA --> DM[Data Model]
-    DM --> CP[Control Plane Artifact Lifecycle]
-    CP --> ID[Deterministic Identity & Replay]
-    ID --> RR[Reliability & Recovery]
-    RR --> BR[Backup & Restore]
-    BR --> DD[Design Decisions]
+    E[Observed evidence] --> C[Canonical financial state]
+    C --> R[Reconstructed / reconciled state]
+    R --> A[Decision-ready analytics]
+
+    E -. operational provenance .-> O[Operational history]
+    C -. run context .-> O
+    R -. recovery / convergence .-> O
+    A -. publication evidence .-> O
 ```
 
-| Document | Question it owns |
-|---|---|
-| [System architecture](system-architecture.md) | What are the major components and dependency boundaries? |
-| [Data lifecycle](data-lifecycle.md) | How does evidence move from discovery to analytical publication? |
-| [Warehouse architecture](warehouse-architecture.md) | Where does persistent state live, and which layer owns it? |
-| [Data model](data-model.md) | What are the canonical financial domains and relationships? |
-| `control-plane-artifact-lifecycle.md` | How are artifacts discovered, identified, synchronized, renamed, removed, and healed? |
-| `deterministic-identity-and-replay.md` | How are stable financial identities, fingerprints, and replay context produced? |
-| `reliability-and-recovery.md` | What happens when execution fails or persistence layers diverge? |
-| `backup-and-restore.md` | How are SQLite and DuckDB snapshotted and restored as one application unit? |
-| `design-decisions.md` | Why does the system use these boundaries and trade-offs? |
+The rest of this section explains how the codebase enforces that separation, how a run moves through it, and what happens when reality refuses to be atomic.
 
-The latter five specifications are authored in Architecture Batch 1B. Their filenames are already part of the frozen documentation catalog.
+## The architecture starts with four different kinds of truth
 
-## Architecture at a glance
+The easiest way to misunderstand this system is to treat every persisted value as equally authoritative.
 
-```mermaid
-flowchart TB
-    subgraph Sources[Source evidence]
-        HH[Household SQLite]
-        ST[Broker statements]
-        CFG[CSV configuration assets]
-        MK[Market / benchmark / FX observations]
-    end
+It is not.
 
-    subgraph Operational[Operational authority]
-        CP[(SQLite Control Plane)]
-    end
+| Truth | Question it answers | Primary owner |
+|---|---|---|
+| **Observed evidence** | What bytes or external values did the system actually receive? | Control Plane payloads + Bronze |
+| **Canonical financial truth** | What does that evidence mean in the application's vocabulary? | Domain transforms + Silver |
+| **Reconstructed / reconciled truth** | What economic state follows from the evidence, and where does it disagree with observation? | Investment, Tax, wealth, FIRE domains |
+| **Operational truth** | What happened during execution, synchronization, failure, recovery, and replay? | SQLite Control Plane |
 
-    subgraph Warehouse[DuckDB analytical warehouse]
-        B[(Bronze)]
-        S[(Silver)]
-        G[(Gold)]
-        M[(Meta)]
-    end
+Gold is intentionally not another source of truth. Gold is a decision surface built from canonical and reconstructed state.
 
-    subgraph Engines[Financial engines]
-        CORE[Core Transformation DAG]
-        FX[Currency Pipeline]
-        US[US Market Reconstruction]
-        BM[Benchmark Pipeline]
-        Q[Investment Quant]
-        T[Tax]
-        W[Wealth / FIRE]
-    end
+That distinction is small on paper and enormous in practice.
 
-    Sources --> CP
-    Sources --> B
-    CP <--> B
-    B --> CORE
-    CORE --> FX
-    CORE --> US
-    CORE --> BM
-    FX --> Q
-    US --> Q
-    BM --> Q
-    Q --> T
-    Q --> W
-    T --> W
-    CORE --> S
-    Q --> S
-    T --> S
-    Q --> G
-    T --> G
-    W --> G
-    CP --> M
-    S --> M
-    G --> M
+A missing broker row should not silently become a financial assumption. A reconciliation adjustment should not overwrite the evidence that made it necessary. A failed SQLite commit after a successful DuckDB commit should not be reported as a generic rollback. A stochastic FIRE result should not be confused with deterministic investment reconstruction.
+
+The architecture gives each of those facts a home.
+
+## Seven packages own seven different questions
+
+The production package is organized by responsibility rather than by technical convenience.
+
+```text
+personal_finance_etl/
+├── application/      # Which use case runs, and in what order?
+├── bootstrap/        # How are concrete dependencies assembled?
+├── config/           # What runtime settings and financial policy are valid?
+├── contracts/        # What typed messages cross architectural boundaries?
+├── domain/           # What does the finance mean?
+├── infrastructure/   # How are files, stores, providers, recovery, and logs implemented?
+└── presentation/     # How does a human invoke and inspect the application?
 ```
 
-The diagram intentionally separates **operational authority** from **analytical storage**. Source lifecycle, run history, payload retention, artifact events, and simulation provenance belong to the SQLite Control Plane. DuckDB owns persistent Bronze evidence, rebuilt Silver/Gold analytical publications, and a current-state Meta projection.
-
-## Four forms of truth
-
-The architecture becomes much easier to reason about once “truth” is split into four categories.
-
-### 1. Source evidence
-
-Source evidence is what entered the system: household transactions, broker files, market observations, FX observations, mapping/configuration files, and the source SQLite database. The Control Plane records the lifecycle of these artifacts; Bronze persists their extracted analytical representation.
-
-### 2. Canonical financial facts
-
-Core transformations normalize heterogeneous sources into common dimensions and facts such as income, expenses, transfers, purchases, sales, instruments, currencies, benchmarks, and macro parameters.
-
-These facts deliberately remove source-specific shape without pretending that derived state was directly observed.
-
-### 3. Reconstructed financial state
-
-Some financially useful state cannot be read directly from a source artifact. It must be reconstructed. Examples include historical US holdings, FIFO acquisition lots, realized disposal components, reconciliation adjustments, and derived valuations.
-
-Reconstructed state remains distinguishable from source evidence. A reconstructed US holding is useful financial state; it is not magically transformed into a broker-certified daily holdings statement.
-
-### 4. Financial presentation
-
-Gold tables convert canonical and reconstructed facts into BI-facing analytical products: tax summaries, portfolio aggregations, cashflow analytics, wealth metrics, budget variance, and FIRE analytics.
-
-Gold is presentation, not source authority.
-
-## Primary implementation boundaries
-
-| Boundary | Primary implementation |
-|---|---|
-| Backend façade | `backend/api/engine.py` |
-| Runtime settings | `backend/config/settings.py` |
-| Financial semantics | `backend/config/financial_rules.py` |
-| ETL orchestration | `backend/pipeline/etl_pipeline.py` |
-| Core Polars DAG | `backend/pipeline/core/transformer.py` |
-| Source extraction | `backend/extract/` |
-| Control Plane | `backend/load/control_plane/` |
-| Bronze persistence | `backend/load/bronze.py` |
-| Contract registry | `backend/load/registry.py` |
-| Silver publication | `backend/load/silver.py` |
-| Gold publication | `backend/load/gold.py` |
-| DuckDB Meta | `backend/load/metadata.py` |
-| Quant | `backend/engines/analytics/` |
-| Tax | `backend/engines/tax/` |
-| Wealth / FIRE | `backend/engines/presentation/` |
-| Identity | `backend/utils/identity.py` |
-| Reproducibility | `backend/utils/reproducibility.py` |
-| Backup / restore | `backend/load/backup.py` |
-| CLI | `frontend/cli/` |
-| Desktop | `frontend/desktop/` |
-| Integrated docs | `frontend/commons/docs/` |
-
-## Dependency direction
-
-```mermaid
-flowchart LR
-    UI[CLI / Desktop] --> API[PersonalFinanceEngine]
-    API --> PIPE[ETLOrchestrator]
-    PIPE --> CONFIG[Settings + FinancialRules]
-    PIPE --> CP[Control Plane]
-    PIPE --> EXT[Extractors]
-    PIPE --> LOAD[Warehouse loaders]
-    PIPE --> ENGINES[Financial engines]
-    ENGINES --> TYPES[Shared types / utilities]
-    LOAD --> TYPES
-```
-
-The frontend does not directly orchestrate financial engines or persistence. `PersonalFinanceEngine` is the façade presented to UI surfaces, while `ETLOrchestrator` owns execution order and cross-subsystem coordination.
-
-## Configuration is split by responsibility
-
-Two Pydantic configuration trees deliberately answer different questions:
-
-- `Settings`: **where and how does the application run?** Paths, database names, source locations, discovery behavior, and file-hash policy live here.
-- `FinancialRules`: **how should financial evidence be interpreted?** Classification, tax exclusions, investment semantics, portfolio rules, macro assumptions, FIRE, Monte Carlo, regime models, human-capital shocks, glide paths, and withdrawal rules live here.
-
-This split prevents infrastructure configuration from quietly becoming financial policy.
-
-## Contract-governed analytical publication
-
-`backend/load/registry.py` defines two registries:
-
-- `BRONZE_CONTRACT_REGISTRY`: 20 extraction/synchronization contracts.
-- `DATA_CONTRACT_REGISTRY`: 24 Silver + 22 Gold analytical contracts.
-
-Before publication, the orchestrator enforces equality between the registered analytical contract set and the datasets actually produced by the engines:
+The package docstrings make those ownership rules explicit. For example, the application package says what it owns and, equally importantly, what it refuses to own:
 
 ```python
-registered_contracts = {c.contract_id for c in DATA_CONTRACT_REGISTRY}
-for df_key in self.dfs.keys():
-    if df_key not in registered_contracts:
-        raise RuntimeError(
-            f"Engine produced unregistered table '{df_key}'. "
-            "All analytical tables must be defined in DATA_CONTRACT_REGISTRY."
-        )
+# src/personal_finance_etl/application/__init__.py
+"""Application orchestration, use cases, and public façade.
 
-missing_contracts = registered_contracts - set(self.dfs.keys())
-if missing_contracts:
-    raise RuntimeError(f"Engine failed to produce required tables: {missing_contracts}")
+Owns
+----
+- Use cases and workflow orchestration.
+- Execution lifecycle coordination.
+- Ingestion coordination between providers and Bronze persistence.
+- Post-ISIN portfolio aggregation and performance coordination.
+- High-level application façade for CLI and Desktop presentation.
+
+Does not own
+-------------
+- Financial algorithms and mathematical formulas (owned by domain).
+- Concrete storage, DuckDB, SQLite, or provider mechanics (owned by infrastructure).
+- Human-facing rendering, CLI argument parsing, or Desktop UI (owned by presentation).
+"""
 ```
 
-This turns the registry into an executable publication boundary rather than a decorative catalog.
+That pattern is repeated across the target packages and is tested as architecture, not left as documentation etiquette.
 
-## Deterministic versus stochastic computation
+## Ownership is more important than layering vocabulary
 
-Two very different forms of reproducibility coexist:
+The package names look familiar, but the design is not trying to perform clean-architecture cosplay.
+
+The useful rule is simpler:
+
+> Put a responsibility where its meaning is stable, and make dependencies point toward that meaning rather than toward the mechanism that happens to implement it today.
+
+That produces a dependency shape like this:
+
+```mermaid
+flowchart TD
+    P[presentation] --> A[application]
+    P --> B[bootstrap]
+    B --> A
+    B --> I[infrastructure]
+    A --> D[domain]
+    A --> C[contracts]
+    A --> I
+    I --> C
+    I --> CFG[config]
+    D --> CFG
+    D --> C
+    P --> C
+
+    classDef core stroke-width:2px;
+    class D,C,CFG core;
+```
+
+The exact legal import rules are narrower than this conceptual graph and are enforced by AST-based architecture tests. The important direction is that financial meaning does not depend on DuckDB, SQLite, presentation widgets, or orchestration timing.
+
+## The composition root is deliberately boring
+
+Concrete wiring is centralized in `bootstrap/container.py`.
+
+That file is not a service locator scattered through the runtime. It is the place where configured infrastructure and application objects are assembled.
+
+```python
+# src/personal_finance_etl/bootstrap/container.py
+class ServiceContainer:
+    """Composition Root responsible for resolving and instantiating application dependencies."""
+
+    def create_orchestrator(
+        self,
+        config_path: str | None = None,
+        rules_path: str | None = None,
+        status_queue: ILogger | None = None,
+        settings: Settings | None = None,
+    ) -> ETLOrchestrator:
+        cfg = settings or self.create_settings(config_path)
+        rules = self.create_rules(rules_path)
+        active_queue: ILogger = status_queue or cast(ILogger, _NullLoggerQueue())
+        return ETLOrchestrator(cfg, active_queue, rules)
+
+    def create_engine(self) -> PersonalFinanceEngine:
+        return PersonalFinanceEngine(container=self)
+```
+
+That boringness is useful. Presentation code does not need to know how a Control Plane, backup manager, DuckDB connection, rules model, or orchestrator is constructed. Tests can substitute the seam. Runtime wiring stays visible in one place.
+
+## The façade is the human-facing application boundary
+
+Both CLI and Desktop presentation surfaces should enter through application use cases rather than reaching directly into persistence or finance internals.
+
+`PersonalFinanceEngine` provides that boundary for configuration history, validation, pipeline execution, and coordinated database snapshot/restore.
+
+```mermaid
+flowchart LR
+    CLI[CLI] --> F[PersonalFinanceEngine]
+    UI[Desktop] --> F
+    F --> O[ETLOrchestrator]
+    F --> BK[SystemBackupManager]
+    F --> PREF[PreferencesManager]
+    O --> D[Domain services]
+    O --> INF[Infrastructure]
+```
+
+This keeps a presentation redesign from becoming a financial-engine rewrite.
+
+## Cross-boundary contracts are selective
+
+`contracts/` is not a universal home for every type.
+
+That would merely move coupling into a different folder.
+
+Instead, the package owns messages whose meaning genuinely crosses an architectural or process boundary:
+
+- `EngineStatusMessage` and execution results;
+- extraction outcomes and completeness errors;
+- `CommitState` and `FailureDomain`;
+- logging protocols;
+- snapshot and restore result types.
+
+Domain-native concepts remain with their domain. A `TaxLot`, realized event, reconciliation event, wealth model, or FIRE model does not become an architectural contract merely because several functions use it.
+
+That distinction keeps `contracts/` small enough to mean something.
+
+## Two databases exist because there are two persistence jobs
+
+The system deliberately uses SQLite and DuckDB for different jobs.
 
 ```mermaid
 flowchart TB
-    E[Canonical evidence]
-    E --> D[Deterministic reconstruction]
-    D --> LOT[FIFO lots]
-    D --> REAL[Realized events]
-    D --> RECON[Reconciliation events]
+    subgraph SQLite[SQLite Control Plane]
+        RUN[Runs]
+        ART[Artifact registry + payloads]
+        EVT[Artifact events]
+        FAIL[Failures]
+        PROV[Provider + simulation provenance]
+    end
 
-    E --> S[Stochastic modelling]
-    S --> FIRE[FIRE Monte Carlo]
-    FIRE --> PROV[Seed + fingerprints + snapshots]
+    subgraph DuckDB[DuckDB Warehouse]
+        B[Bronze]
+        S[Silver]
+        G[Gold]
+        M[Meta]
+    end
+
+    ART --> B
+    B --> S --> G
+    RUN -. current context .-> M
+    EVT -. healing / provenance .-> M
 ```
 
-FIFO and identity generation are deterministic given canonical inputs and compatible implementation semantics. FIRE simulation is stochastic but records the seed and replay context. Treating those as the same kind of “reproducibility” would make the documentation simpler and the architecture less true, so the system does not do that.
+SQLite owns historical operational truth because its job is lifecycle, provenance, raw payload retention, and run recovery.
 
-## Reliability boundary
+DuckDB owns analytical state because its job is columnar transformation, publication, querying, and BI consumption.
 
-SQLite and DuckDB participate in one logical run, but they do not form a distributed ACID database. The pipeline begins transactions in both, commits DuckDB first, then commits SQLite. If the second commit fails, the next run relies on idempotency and Bronze/registry healing to converge state.
+`meta.*` in DuckDB is a projection of current analytical context. It does not compete with the Control Plane for historical authority.
 
-That is a deliberate recovery model, not a claim of two-phase commit.
+## Bronze is the convergence boundary
 
-## Where to continue
+Persistent Bronze is the hinge between operational evidence and rebuildable analytics.
 
-Start with [System Architecture](system-architecture.md) for the component model, then follow [Data Lifecycle](data-lifecycle.md), [Warehouse Architecture](warehouse-architecture.md), and [Data Model](data-model.md). The Batch 1B specifications then descend into the Control Plane, identity/replay, recovery, backup/restore, and design rationale.
+The Control Plane can tell me that a file changed, disappeared, was renamed, or needs healing. Bronze gives the analytical side a synchronized persistent representation of those payloads. Silver and Gold can then be rebuilt from complete Bronze state.
 
-## Related specifications
+This is why the architecture does not try to make every analytical table incrementally mutable forever.
 
-- [System Architecture](system-architecture.md)
-- [Data Lifecycle](data-lifecycle.md)
-- [Warehouse Architecture](warehouse-architecture.md)
-- [Data Model](data-model.md)
-- [Control Plane Artifact Lifecycle](control-plane-artifact-lifecycle.md)
-- [Deterministic Identity and Replay](deterministic-identity-and-replay.md)
-- [Reliability and Recovery](reliability-and-recovery.md)
-- [Backup and Restore](backup-and-restore.md)
-- [Design Decisions](design-decisions.md)
+```mermaid
+flowchart LR
+    CP[Control Plane payloads] --> BR[Persistent Bronze]
+    BR --> TR[Canonical transformations]
+    TR --> SI[Rebuilt Silver]
+    SI --> FI[Financial engines]
+    FI --> GO[Rebuilt Gold]
+```
+
+Incremental synchronization is used where it reduces repeated evidence work. Full replacement is used where deterministic rebuilding is simpler and safer.
+
+## Financial domains are allowed to have different compute models
+
+A household transaction transform and a Monte Carlo simulation are both financial computation, but forcing them through one abstraction would make both worse.
+
+The codebase therefore uses several compute styles deliberately:
+
+| Workload | Primary style |
+|---|---|
+| tabular canonical transforms | Polars expressions / `LazyFrame` DAGs |
+| stateful FIFO and reconciliation | typed Python domain models and services |
+| portfolio aggregation | Polars + application coordination |
+| deterministic FIRE projection | Polars / deterministic domain functions |
+| stochastic FIRE simulation | NumPy + Numba kernel |
+| publication/query | DuckDB |
+
+The architecture standardizes **ownership, contracts, identity, and publication**, not every internal algorithm.
+
+## Materialization is an architectural boundary
+
+Lazy execution is useful only if materialization happens intentionally.
+
+The warehouse writers document terminal publication as a materialization boundary:
+
+```python
+# src/personal_finance_etl/infrastructure/warehouse/silver.py
+if isinstance(df, pl.LazyFrame):
+    # Materialization Boundary: PUBLICATION_BOUNDARY
+    # Terminal execution of lazy transformation graph for DuckDB Silver table insertion
+    df = df.collect()
+```
+
+Gold does the same and logs the optimized physical plan before collection.
+
+The objective is not “never call `collect()`.” The objective is to know **why** execution becomes eager at each boundary.
+
+## Reliability begins where atomicity ends
+
+The hardest operational edge is the coordinated commit across two different databases.
+
+There is no distributed transaction manager pretending SQLite and DuckDB share one ACID transaction.
+
+The application tracks the truth explicitly:
+
+```text
+NOT_STARTED
+    ↓
+STARTED
+    ↓
+DUCKDB_COMMITTED
+    ├── SQLite commit succeeds → FULLY_COMMITTED
+    └── SQLite commit fails    → RECOVERY_REQUIRED
+```
+
+That state is represented by `CommitState`, persisted in the Control Plane, and used during future convergence.
+
+The important architectural guarantee is therefore not “failure cannot create divergence.”
+
+It is:
+
+> divergence is represented explicitly, previous uncertainty is preserved, and a later successful run can converge the system without rewriting history.
+
+## Public APIs are intentional boundaries
+
+The top-level packages expose small public surfaces through `__all__` where a stable entry point is useful:
+
+```python
+# src/personal_finance_etl/contracts/__init__.py
+__all__ = [
+    "CommitState",
+    "EngineExecutionResult",
+    "EngineStage",
+    "EngineStatusMessage",
+    "ExtractionBatchResult",
+    "FailureDomain",
+    "RestoreResult",
+    "SnapshotResult",
+    "classify_failure_domain",
+]
+```
+
+Internal implementation remains importable Python, but documented public surfaces make ownership visible and reduce accidental coupling.
+
+## Architecture rules are executable
+
+The codebase includes AST-based tests that reject forbidden import arrows and verify the target package structure.
+
+```python
+# tests/test_architecture_boundaries.py
+FORBIDDEN_IMPORTS = {
+    "contracts": [
+        "personal_finance_etl.domain",
+        "personal_finance_etl.application",
+        "personal_finance_etl.infrastructure",
+        "personal_finance_etl.presentation",
+    ],
+    "domain": [
+        "personal_finance_etl.application",
+        "personal_finance_etl.infrastructure",
+        "personal_finance_etl.presentation",
+        "duckdb",
+        "sqlite3",
+    ],
+}
+```
+
+The same suite checks that the expected package tree exists and that ownership docstrings are present.
+
+Documentation explains the rule. Tests make regression noisy.
+
+## Read this section as one connected argument
+
+The architecture pages are ordered deliberately.
+
+```mermaid
+flowchart TD
+    R[Architecture README<br/>Kinds of truth + ownership] --> S[System Architecture<br/>Follow one complete run]
+    S --> A[Application & Dependency Architecture<br/>Why ownership stays legal]
+    A --> L[Data Lifecycle<br/>Follow evidence through execution]
+    L --> W[Warehouse Architecture<br/>Understand analytical persistence]
+    W --> C[Control Plane Artifact Lifecycle<br/>Understand operational history]
+    C --> I[Deterministic Identity & Replay<br/>Understand continuity]
+    I --> RR[Reliability & Recovery<br/>Understand disagreement]
+    RR --> B[Backup & Restore<br/>Recover captured state]
+    B --> D[Data Model<br/>Formalize financial grains]
+    D --> DD[Design Decisions<br/>Close with trade-offs]
+```
+
+### Start with the runtime
+
+Read [System Architecture](system-architecture.md) if you want to see the whole application execute before studying individual boundaries.
+
+Then read [Application & Dependency Architecture](application-and-dependency-architecture.md) to understand why the seven packages depend on one another the way they do.
+
+### Follow the data and state
+
+Use [Data Lifecycle](data-lifecycle.md) for the run sequence, then [Warehouse Architecture](warehouse-architecture.md) and [Control Plane Artifact Lifecycle](control-plane-artifact-lifecycle.md) for the two persistence models.
+
+### Follow identity and failure
+
+Use [Deterministic Identity & Replay](deterministic-identity-and-replay.md) for stable economic identity, then [Reliability & Recovery](reliability-and-recovery.md) and [Backup & Restore](backup-and-restore.md) for convergence and captured-state recovery.
+
+### Follow the financial model
+
+Use [Data Model](data-model.md) for grains and domain relationships, then continue into the [Finance specifications](../finance/README.md) for methodology.
+
+### Understand why it looks this way
+
+Finish with [Design Decisions](design-decisions.md). It records the tensions behind the architecture, including the alternatives deliberately not chosen.
+
+## What this section does not try to be
+
+These pages do not replace:
+
+- the [Reference specifications](../reference/README.md) for exact physical contracts;
+- the [Finance specifications](../finance/README.md) for formula and methodology depth;
+- the [Developer guide](../developer/README.md) for extension workflows;
+- the source code and tests as implementation authority.
+
+The architecture section sits between mental model and source detail. Its job is to make the system legible enough that the deeper specifications and code have somewhere coherent to land.

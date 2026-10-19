@@ -1,431 +1,807 @@
 # Testing and Validation
 
-Personal Finance ETL has meaningful runtime validation, hardening rules, and an end-to-end headless execution path, but its conventional automated test suite is currently thin. This document deliberately separates those facts.
+A financial data system can be wrong in several different ways while still looking healthy.
 
-Calling every runtime guard a "test" would make the quality story sound nicer and the engineering story less accurate. The latter wins.
+The code can type-check and calculate the wrong Tax classification. A unit test can pass while a join duplicates portfolio value. A full pipeline can finish successfully while one provider silently returned incomplete evidence. A schema can match perfectly while its grain changed. A stochastic simulation can vary exactly as designed and still fail a brittle snapshot test.
 
-## 1. Quality layers
+That is why testing here is not one pyramid.
+
+It is a **proof system** built around different kinds of risk.
 
 ```mermaid
-flowchart TB
-    STATIC[Static checks]
-    CONFIG[Pydantic/config validation]
-    EXTRACT[Extraction schema gates]
-    CONTRACT[Registry/publication validation]
-    DOMAIN[Financial-domain invariants]
-    DB[Persistence/recovery validation]
-    SMOKE[Headless end-to-end run]
-    MANUAL[Financial reconciliation/manual QA]
-
-    STATIC --> CONFIG --> EXTRACT --> CONTRACT --> DOMAIN --> DB --> SMOKE --> MANUAL
+mindmap
+  root((Proof))
+    Source evidence
+      completeness
+      parsing
+      provenance
+    Contracts
+      schema
+      grain
+      identity
+    Domain
+      FIFO
+      performance
+      Tax
+      wealth
+      FIRE
+    Architecture
+      dependency direction
+      public API
+      package boundaries
+    Operations
+      lifecycle
+      recovery
+      Control Plane
+    Integration
+      phase ordering
+      warehouse publication
+    Production
+      headless run
+      financial regression
 ```
 
-These layers catch different defect classes. None replaces all the others.
+The governing rule is:
 
-## 2. Conventional test surface
+> **Use the smallest proof that matches the risk, then escalate until the affected contract is covered end to end.**
 
-The repository's `tests/` directory currently contains:
+## Start by asking what can be wrong
+
+Before writing a test, classify the failure mode.
+
+| Risk | Best first proof |
+|---|---|
+| formula/financial rule | focused domain test |
+| schema/grain/identity | contract test |
+| wrong package dependency | architecture test |
+| workflow order | application/phase test |
+| provider completeness | extraction integration test |
+| cross-store failure | lifecycle/recovery test |
+| real installation/runtime wiring | headless pipeline/smoke run |
+| performance regression | representative benchmark |
+
+A test is useful when it proves a specific contract.
+
+"Coverage went up" is not a contract.
+
+## The repository has an intentionally layered test surface
+
+The current tests encode several scopes:
 
 ```text
-tests/
-├── config.toml
-├── financial_rules.toml
-└── run_headless.py
+contracts
+configuration and primitives
+infrastructure
+extraction and ingestion
+canonical domains
+investments and Quant
+Tax
+household / wealth / FIRE
+orchestration and bootstrap
+presentation
+legacy-boundary demolition
+constitutional / architecture certification
 ```
 
-There is not currently a broad pytest-style unit/integration suite covering every engine and financial invariant.
+The phase naming reflects the history of how the architecture was hardened, but the permanent value is present-day regression coverage.
 
-The existing headless runner executes the real orchestrator:
+Those tests protect boundaries that ordinary local unit tests could miss.
 
-```python
-cfg = Settings.from_toml("config.toml")
+## Architecture tests make package rules executable
 
-# Run in main thread for profiling
-orchestrator = ETLOrchestrator(cfg, q)
-orchestrator.run()
+Architecture is not only described in Markdown.
+
+Tests should fail when illegal dependencies return.
+
+Examples of high-value architecture assertions:
+
+```text
+domain does not import concrete persistence or presentation
+presentation enters through application-facing surfaces
+retired package topology does not reappear
+public package exports remain intentional
+composition/bootstrap ownership stays bounded
 ```
 
-That is valuable smoke/integration coverage, but it is not fine-grained regression coverage.
+This matters because architecture drift usually arrives as a useful one-line import.
 
-## 3. QA specifications versus executable tests
+The test is there to make that convenience expensive immediately instead of after six months.
 
-`qa-hardening.md` and `production-hardening.md` contain valuable requirements, defect history, and validation intent. They should inform test design.
+## Contract tests prove more than column presence
 
-They do not become executable tests merely by being detailed Markdown.
+For a durable/canonical dataset, a meaningful contract test can include:
 
-Use this vocabulary consistently:
+- exact schema;
+- field types;
+- grain/key uniqueness;
+- deterministic identity;
+- null/required semantics;
+- allowed categorical vocabulary;
+- producer/registry presence;
+- relationship/cardinality assumptions.
 
-| Term | Meaning |
-|---|---|
-| unit test | isolated executable test of a small behavior |
-| integration test | executable test across multiple components/persistence boundaries |
-| smoke test | broad run proving the main path can execute |
-| runtime validation | production code rejects invalid state during normal execution |
-| manual QA | human comparison/inspection |
-| QA specification | documented requirement/check that may or may not be automated |
+A table with the right columns at the wrong grain is not valid.
 
-## 4. Configuration validation
+A row with the right values under a new random ID may not be valid either.
 
-Pydantic models validate types and selected field/cross-field constraints. `Settings.validate_config()` validates required paths/files before execution.
+## Configuration validation is its own proof layer
 
-Configuration validation answers:
+Settings and financial rules are executable dependencies. Tests should prove invalid configuration fails before deep pipeline execution.
 
-> Is this configuration structurally and operationally acceptable?
+Useful cases include:
 
-It does not answer:
-
-> Are all financial assumptions economically sensible?
-
-The Configuration docs explicitly list semantic invariants not currently enforced by Pydantic.
-
-## 5. Extraction Gatekeeper
-
-`DataExtractor` runs schema validation on active extraction streams before canonical transformation.
-
-```python
-logger.info("[QUALITY] Running Gatekeeper Schema Validation on 18 active streams...")
-...
-schema = lf.collect_schema()
-if len(schema.names()) > 0:
-    logger.debug(
-        f"[QUALITY:GATEKEEPER] Validating schema constraints: {schema.names()}"
-    )
+```text
+missing required paths/settings
+invalid enum/vocabulary values
+out-of-range financial assumptions
+inconsistent date/rate inputs
+alias/default parsing behavior
 ```
 
-This catches source-shape failures close to the evidence boundary.
+Configuration tests are especially valuable because they turn user-facing mistakes into early, local failures instead of downstream financial anomalies.
 
-## 6. Registry validation
+## QA specifications and executable tests are different evidence
 
-`validate_registry()` protects structural contract consistency. Before publication, the orchestrator additionally enforces produced/registered equality.
+Not every quality assertion belongs in Pytest.
 
-```mermaid
-flowchart LR
-    REG[Registry valid] --> OUT[Engine outputs]
-    OUT --> EQ{Produced == Registered?}
-    EQ -->|No| FAIL[Fail before load]
-    EQ -->|Yes| LOAD[Silver/Gold publication]
+Some checks are better expressed as:
+
+```text
+manual visual review
+real production run comparison
+performance benchmark
+BI refresh / model inspection
+documentation rendering QA
 ```
 
-This is runtime contract enforcement, not a substitute for unit tests of individual builders.
+The important rule is to label the evidence honestly.
 
-## 7. Silver/Gold persistence validation
+A Markdown checklist is not an automated test. A one-time successful smoke run is not a regression suite. An architecture test that runs on every gate is stronger evidence for that specific invariant.
 
-Silver and Gold are rebuilt from fixed DDL and registered outputs. Load failures catch type/shape mismatches that survive earlier checks.
+The documentation should never blur those maturity levels.
+## Extraction tests prove evidence completeness
 
-After load, Meta records current row counts and contract metadata, supporting operational inspection.
+Provider/entity extraction should test categorical outcomes, not merely whether a DataFrame was returned.
 
-## 8. Control Plane schema validation
+The extraction vocabulary includes states such as:
 
-The Control Plane validates existing SQLite schema against the current expected schema and fails closed on stale/partial structures. It does not silently "upgrade" an incompatible historical database with `CREATE TABLE IF NOT EXISTS`.
-
-This is an important operational safety property.
-
-## 9. Artifact lifecycle validation
-
-Control Plane logic validates artifact states, payload availability, synchronization transitions, rename behavior, and scoped SQLite savepoint operations.
-
-When extending artifact behavior, tests should cover state transitions, not only final rows.
-
-```mermaid
-stateDiagram-v2
-    [*] --> Discovered
-    Discovered --> Pending
-    Pending --> Synced
-    Synced --> Changed
-    Changed --> Pending
-    Synced --> Removed
-    Pending --> Healed
+```text
+SUCCESS
+CACHED
+NO_NEW_DATA
+PARTIAL
+EMPTY_RESPONSE
+FAILED
+RETRY_EXHAUSTED
+INVALID_PAYLOAD
 ```
 
-## 10. Quant financial gates
+Tests should prove the application distinguishes them correctly.
 
-Quant code contains financial validation around:
+For example:
 
-- transaction ordering/state;
-- FIFO quantity availability;
-- lot mutation;
-- reconciliation quantities/cost basis;
-- FX validity;
-- XIRR input/status behavior;
-- benchmark/market state;
-- deterministic identities.
-
-A robust automated suite should eventually target these as isolated invariants because they carry high financial consequence.
-
-## 11. XIRR validation philosophy
-
-XIRR failure does not silently become `0%`. Typed statuses distinguish invalid input, undefined economics, non-convergence, and valid results.
-
-Tests should preserve those distinctions.
-
-A test asserting only "function returns a float" would actively weaken the contract.
-
-## 12. Tax validation
-
-Tax event construction validates required source IDs, tax classification context, event identities, and monetary fields. Tests should verify:
-
-- ledger/Quant double-count exclusions;
-- signed tax credits;
-- `CHECK_REQUIRED` semantics;
-- indicative estimate retention;
-- three Gold outputs reconciling to canonical TaxEvents.
-
-Tax tests must not assert statutory behaviors the engine intentionally does not implement.
-
-## 13. FIRE validation
-
-FIRE testing has two dimensions.
-
-### Deterministic mechanics
-
-Test formulas, seed derivation, configuration mapping, percentile selection, and output mapping deterministically.
-
-### Stochastic behavior
-
-Replay a recorded seed/context and compare results under a compatible runtime/model implementation. Do not require unrelated runs to produce identical Monte Carlo paths.
-
-```mermaid
-flowchart LR
-    RULES[Rules] --> ENV[Replay envelope]
-    INPUT[Inputs] --> ENV
-    SEED[Root seed] --> ENV
-    MODEL[Model version] --> ENV
-    ENV --> RUN[Simulation]
-    RUN --> FP[Result fingerprint]
+```text
+one required entity -> RETRY_EXHAUSTED
 ```
 
-## 14. Backup/restore validation
+should not become:
 
-The backup manager performs runtime checks for:
-
-- pipeline lock acquisition;
-- DuckDB checkpoint;
-- SQLite backup consistency;
-- ZIP CRC;
-- archive member safety;
-- duplicate/unexpected members;
-- path traversal/symlinks;
-- extracted SQLite/DuckDB validity;
-- rollback on replacement failure.
-
-Automated tests should exercise failure injection around these boundaries where feasible.
-
-## 15. Cross-database failure testing
-
-Because DuckDB commits before SQLite, reliability testing should explicitly cover the acknowledged failure window:
-
-```mermaid
-sequenceDiagram
-    participant D as DuckDB
-    participant S as SQLite
-    participant N as Next run
-    D->>D: COMMIT succeeds
-    S--xS: COMMIT fails
-    N->>S: inspect Control Plane state
-    N->>D: inspect Bronze/Meta state
-    N->>N: idempotency + healing convergence
+```text
+batch complete with fewer rows
 ```
 
-The desired property is recoverable convergence, not impossible distributed atomicity.
+The `ExtractionBatchResult` completeness contract is the thing being tested.
 
-## 16. Source-adapter tests
+## Source-adapter tests need ugly inputs
 
-For every extractor/source family, useful fixtures include:
+Happy files are useful but insufficient.
 
-- valid minimal file;
-- missing required column;
-- extra harmless column;
-- malformed numeric/date;
-- duplicate source rows;
-- empty-but-valid source;
-- renamed artifact;
-- changed content at same path.
+A file/provider test matrix should include:
 
-Fixtures should avoid real personal financial data.
+```text
+valid complete input
+valid empty input where allowed
+missing required columns
+invalid populated dates/numerics
+duplicate keys
+unexpected sheet/table
+partial provider batch
+retry exhaustion
+missing retained payload
+renamed/overlapping evidence where relevant
+```
 
-## 17. Transformation tests
+Source code is supposed to protect the financial model from messy evidence.
 
-At transformation boundaries, assert:
+If the tests only contain pristine fixtures, they are testing a world the source boundary was invented to handle already.
 
-- expected grain uniqueness;
-- canonical dtypes;
-- null semantics;
-- deterministic IDs;
-- join cardinality;
-- temporal causality;
-- reconciliation totals.
+## Gatekeeper validation should fail before finance becomes plausible
 
-For financial transformations, property/invariant assertions are often more valuable than snapshotting every output cell.
+Gatekeeper tests should prove malformed required data is rejected before transformations can default it into apparently valid values.
 
-## 18. Gold tests
+A useful negative test is often:
 
-Gold tests should compare analytical reconciliation, not only schema.
+```text
+populated invalid numeric
+    -> validation error
+```
+
+rather than:
+
+```text
+populated invalid numeric
+    -> null
+    -> zero
+```
+
+That difference is financial correctness.
+
+## Transformation tests should state grain and authority
+
+A canonical transformation test should normally specify:
+
+```text
+input authority
+input grain
+expected output grain
+identity behavior
+currency/sign/null semantics
+```
+
+Then assert the transformation.
+
+This makes the fixture explain the contract rather than merely exercise expressions.
+
+## Join tests should prove cardinality
+
+When a transformation introduces a join, test the relationship that makes the join safe.
+
+For a many-to-one enrichment:
+
+- lookup key is unique;
+- output row count remains at left grain;
+- no amount/quantity duplication occurs.
+
+For an intentional one-to-many expansion:
+
+- child grain is explicit;
+- parent identity remains traceable;
+- aggregates reconcile back when appropriate.
+
+A row-count assertion by itself is helpful but can miss value duplication inside equal counts.
+
+## Identity tests protect replay continuity
+
+For deterministic identities, tests should use known canonical values and prove stable output.
+
+When a refactor changes implementation but not semantics, IDs should remain the same.
+
+If IDs intentionally change because the namespace/protocol changed, the test should change *with explicit migration intent*.
+
+Identity snapshots are one of the few places where exact string values can be highly valuable regression evidence.
+
+## FIFO tests should exercise the lot state machine
+
+FIFO needs more than one purchase and one sale.
+
+Useful cases include:
+
+```text
+single purchase, partial sale
+multiple purchases, sale spans lots
+full lot consumption
+remaining quantity/cost basis
+same-day ordering rules where defined
+multi-currency basis semantics
+reconciliation-created adjustments where applicable
+```
+
+The test should assert both realized output and remaining lot state.
+
+That proves the state transition, not only the immediate sale gain.
+
+## Reconciliation tests preserve both sides of disagreement
+
+A reconciliation test should not assert only that the final quantity matches observation.
+
+It should prove the system preserved:
+
+- observed state;
+- reconstructed state;
+- delta;
+- event/adjustment classification;
+- resulting synthetic/adjustment state where policy allows it;
+- provenance.
+
+The whole point of reconciliation is that disagreement remains explainable.
+
+## Performance metric tests need validity cases
+
+XIRR/CAGR/risk metrics have domains where they are valid and domains where they are not computable.
+
+Tests should distinguish:
+
+```text
+valid result
+insufficient cash-flow structure
+missing evidence
+invalid input
+edge periods
+```
+
+Do not assert `0.0` for every unavailable case merely to simplify expected values.
+
+Zero return and unavailable return are different financial facts.
+
+## Tax tests should focus on classification and reconciliation
+
+Tax tests should prove the rule path that creates an output.
+
+Depending on implemented methodology, useful cases include:
+
+- income-category classification;
+- capital-gain holding-period logic;
+- exemption/residual handling;
+- Tax credits/adjustments;
+- annual aggregation;
+- informational reconciliation;
+- cases that require review rather than false certainty.
+
+The goal is not to test a statutory universe the application does not claim to implement.
+
+The goal is to prove the implemented indicative methodology exactly.
+
+## Wealth tests prove accounting relationships
+
+Useful wealth invariants include relationships such as:
+
+```text
+net worth = assets - liabilities
+```
+
+where those are the application's defined semantics.
+
+Also test:
+
+- period snapshots;
+- asset/liability classifications;
+- household cash-flow relationships;
+- integration of investment value into total wealth;
+- missing/invalid source handling.
+
+The best wealth tests often verify relationships rather than one hard-coded table dump.
+
+## FIRE testing separates deterministic and stochastic behavior
+
+FIRE contains two different testing problems.
+
+### Deterministic planning mechanics
+
+These can be tested with exact expectations:
+
+- real/nominal conversions;
+- savings/investment inputs;
+- target formulas;
+- scenario configuration;
+- deterministic FI metrics.
+
+### Stochastic simulation
+
+Do not require one universal random path unless the seed/provenance contract makes that the point.
+
+Instead test:
+
+- seeded reproducibility where supported;
+- output shape;
+- probability bounds;
+- scenario input capture;
+- sensible monotonic relationships where mathematically justified;
+- invalid configuration rejection.
+
+Stochastic output varying is not a regression by itself.
+
+## Control Plane tests protect operational history
+
+Control Plane tests should cover more than schema creation.
+
+Important behavior includes:
+
+```text
+run lifecycle
+artifact registration
+payload retention
+artifact-run events
+provider request history
+sync summaries
+failure records
+simulation provenance
+savepoint behavior
+```
+
+Because the Control Plane is historical authority, accidental destructive behavior deserves especially strong tests.
+
+## Savepoint tests are scoped atomicity tests
+
+SQLite savepoints can provide scoped atomicity within the Control Plane transaction.
+
+Tests should prove:
+
+```text
+nested operation fails
+    -> scoped rollback occurs
+    -> surrounding valid transaction state remains correct
+```
+
+Do not extend the test claim into distributed atomicity with DuckDB.
+
+That is not what a SQLite savepoint proves.
+
+## Cross-database failure tests should assert commit state
+
+The pipeline coordinates DuckDB and SQLite, but they commit independently.
+
+Failure tests should therefore assert typed commit/failure state.
+
+Interesting scenarios include:
+
+```text
+failure before either store begins
+failure with both transactions open
+DuckDB rollback succeeds
+SQLite rollback succeeds
+DuckDB commits, SQLite fails
+recovery required after irreversible split state
+```
+
+The expected result is not always "rolled back."
+
+Sometimes the truthful result is "partial commit / recovery required."
+
+That is exactly why the state model exists.
+
+## Recovery tests should prove convergence, not optimistic logging
+
+A recovery test should verify the durable state after recovery actions.
 
 Examples:
 
-- grouped market value equals authoritative lower-grain total;
-- income/expense breakdowns reconcile to core monthly facts;
-- Tax Gold sums reconcile to `f_Tax_Events`;
-- allocation weights reconcile to expected denominator;
-- non-additive metrics are recomputed correctly.
+- stale/incomplete run detection;
+- warehouse rollback/rebuild behavior;
+- Control Plane recovery marking;
+- snapshot fallback where applicable;
+- uncertainty surfaced rather than hidden.
 
-## 19. Headless smoke run
+The test should assert the recovery result/state, not only that the function returned without raising.
 
-`tests/run_headless.py` is the current broad smoke path. It should be run with representative configuration/data after material changes.
+## Backup and restore tests have several boundaries
 
-The smoke run proves that the integrated pipeline can execute. It does not prove every edge case.
-
-## 20. Financial regression baseline
-
-For high-impact changes, capture a baseline of:
-
-- contract row counts;
-- key deterministic IDs;
-- household balances/net worth;
-- investment quantities and basis;
-- realized P&L;
-- reconciliation events;
-- tax-event totals;
-- Gold headline metrics;
-- simulation fingerprints/context where applicable.
-
-Then compare after the change.
-
-## 21. Test data privacy
-
-Personal Finance ETL is local-first and processes sensitive financial data. Automated fixtures should use synthetic/minimized data. Never commit personal broker statements, database backups, account identifiers, or real tax evidence merely to make a regression test convenient.
-
-## 22. Suggested future test architecture
-
-The current maturity gap is a conventional automated regression suite. A sensible future structure would mirror architectural boundaries:
+A restore path can fail during:
 
 ```text
-tests/
-├── unit/
-│   ├── config/
-│   ├── identity/
-│   ├── transform/
-│   ├── quant/
-│   ├── tax/
-│   └── fire/
-├── integration/
-│   ├── control_plane/
-│   ├── bronze/
-│   ├── warehouse/
-│   └── backup_restore/
-├── fixtures/
-└── smoke/
+archive validation
+extraction
+snapshot/database validation
+installation/replacement
+post-install verification
+rollback
 ```
 
-This is a recommendation, not a claim about current repository contents.
+Tests should isolate those phases.
 
-## 23. Definition of tested
+A good restore test suite proves the original databases survive a failed restore where rollback guarantees exist.
 
-When documentation says behavior is "tested," it should identify the evidence:
+Backup/restore is one of the places where filesystem-level testing is worth the effort.
 
-- executable test path/name;
-- runtime assertion/validator;
-- headless smoke run;
-- manual QA procedure.
+## Gold tests combine structure and financial semantics
 
-Avoid unqualified "well tested" language. Precision is cheaper than confidence theater.
+A Gold mart test should include:
 
-## 24. Validation checklist for a change
+### Structural proof
 
-- [ ] static checks pass;
-- [ ] configuration validates;
-- [ ] relevant extraction schemas validate;
-- [ ] registry validates;
-- [ ] targeted domain invariants checked;
-- [ ] persistent schemas load successfully;
-- [ ] headless end-to-end run succeeds;
-- [ ] financial reconciliation compared to baseline;
-- [ ] recovery behavior tested if persistence boundaries changed;
-- [ ] no personal data added to fixtures/logs;
-- [ ] docs describe the actual level of test evidence.
+- schema matches contract;
+- target grain is satisfied;
+- registered table is produced;
+- required keys are unique.
 
-## 25. High-value automated-test priorities
+### Financial proof
 
-Given the current thin conventional suite, the highest-value future tests are those protecting irreversible or financially consequential boundaries:
+- aggregations reconcile to upstream state;
+- snapshot/flow semantics are correct;
+- non-additive metrics are not accidentally aggregated in builder logic;
+- local/base currency fields reconcile.
 
-1. deterministic identity canonicalization;
-2. FIFO partial/multi-lot sales;
-3. quantity and cost-basis reconciliation;
-4. temporal price/FX causality;
-5. tax double-count exclusions;
-6. cross-database healing after commit-window failure;
-7. backup/restore rollback;
-8. simulation seed/replay context.
+A BI-friendly table with wrong finance is still wrong finance, just easier to chart.
 
-These provide more risk reduction than chasing raw test-count vanity metrics.
+## Registry tests protect publication completeness
 
-## 26. Property-style invariants
+The registry is a good candidate for equality-style tests:
 
-Many financial algorithms have useful properties independent of one fixture:
-
-- total remaining lot quantity = purchases - disposals +/- reconciliation adjustments;
-- realized sale quantity cannot exceed consumed lot quantity;
-- Gold grouped market value reconciles to lower-grain market value;
-- future observations never satisfy historical as-of joins;
-- deterministic identity is stable under dictionary insertion order;
-- same replay envelope/compatible implementation reproduces stochastic result fingerprint.
-
-Property tests are especially suitable for these invariants.
-
-## 27. Failure-injection testing
-
-Reliability code should be tested at failure boundaries, not only happy paths. Useful injection points include:
-
-- payload missing after discovery;
-- Bronze write failure before `mark_synced`;
-- DuckDB commit succeeds / SQLite commit fails;
-- restore fails after old files are renamed;
-- corrupt ZIP member;
-- stale Control Plane schema;
-- Quant workload raises for one ISIN.
-
-```mermaid
-flowchart TD
-    NORMAL[Normal operation] --> INJECT[Inject failure at boundary]
-    INJECT --> OBS[Observe durable state]
-    OBS --> REC[Run recovery / next run]
-    REC --> ASSERT[Assert convergence + provenance]
+```text
+expected contracts == registered contracts
+registered contracts == producers / published outputs
 ```
 
-## 28. Performance regression testing
+Where exact sets are intentionally dynamic, validate the invariant appropriate to that layer.
 
-Performance observations should be measured on representative workloads and reported as observations, not guarantees. Record:
+The point is to prevent silent contract drift.
 
-- source artifact count;
-- row volumes;
-- cache state;
-- machine/runtime context;
-- phase timings.
+## Phase/application tests protect sequencing
 
-A faster run that changes financial outputs is not a performance improvement.
+Application orchestration tests should prove:
 
-## 29. Documentation QA as engineering QA
+- required phase order;
+- failure stops/cleanup behavior;
+- dependency handoff;
+- status/lifecycle integration;
+- commit/teardown semantics.
 
-Because `/docs` contains source paths, contracts, formulas, and invariants, documentation QA should verify those references against code. Broken docs can misdirect future development even when production execution remains correct.
+Avoid asserting every private helper call unless helper order is itself the contract.
 
-The final project QA pass should therefore validate source references, registry counts, schema names, formulas, Mermaid, links, and release-agnostic wording.
+The executor/lifecycle decomposition should remain refactorable.
 
-## 30. Test evidence maturity labels
+## Presentation tests stop at the application boundary
 
-For internal documentation/reviews, it can be useful to classify critical behavior as:
+CLI/Desktop tests should prove:
 
-- **Runtime-enforced**
-- **Smoke-covered**
-- **Automated regression-covered**
-- **Manually reconciled**
-- **Specified but not yet automated**
+- arguments/actions map to application use cases;
+- status/results are rendered correctly;
+- configuration/user input is validated appropriately;
+- presentation does not become financial authority.
 
-This makes quality gaps visible without pretending the system is less mature than its runtime hardening actually is, or more tested than its executable suite actually proves.
+Do not duplicate domain finance tests inside the GUI suite.
+
+That would make UI refactoring needlessly expensive.
+
+## Static quality is verification too
+
+Runtime tests cannot prove:
+
+- type consistency;
+- illegal imports;
+- lint/style rules;
+- dead/unreachable patterns detectable statically.
+
+The repository's main quality gate uses:
+
+```text
+Ruff
+Ruff format check
+Mypy
+Pyright
+Pylint
+Pytest
+```
+
+These are complementary proof layers.
+
+The quality gate encodes those tiers directly instead of reconstructing them from shell folklore:
+
+```python
+# scripts/quality_gate.py
+engine_specs: list[tuple[str, str, list[str], Any]] = [
+    ("Ruff Check", "Fast", ["uv", "run", "ruff", "check", "."], _parse_ruff_output),
+    (
+        "Ruff Format",
+        "Fast",
+        ["uv", "run", "ruff", "format", "--check", "src/"],
+        _parse_generic_failures,
+    ),
+    ("Mypy Typecheck", "Fast", ["uv", "run", "mypy"], _parse_mypy_output),
+]
+```
+
+The full tier then extends that catalog with Pyright, Pylint, and Pytest. This matters because the fast/full distinction is executable repository behavior, not only advice in this document.
+## Fast gate and full gate serve different feedback loops
+
+The tracked pre-commit hook runs the fast tier:
+
+```sh
+# .githooks/pre-commit
+uv run poe audit-fast
+```
+
+The tracked pre-push hook runs the full tier:
+
+```sh
+# .githooks/pre-push
+uv run poe audit-full
+```
+
+The distinction is intentional.
+
+Fast feedback belongs in the tight edit loop.
+
+The broader gate belongs before code leaves the machine or before certification artifacts are generated.
+
+## Headless smoke runs prove assembly
+
+A real headless pipeline run proves things unit tests cannot:
+
+- actual dependency assembly;
+- actual files/databases;
+- orchestration order;
+- provider/runtime integration;
+- warehouse publication;
+- lifecycle teardown.
+
+Use a smoke run for high-risk changes.
+
+Do not require a full production run for every typo fix.
+
+## Financial regression compares outputs, not implementation shape
+
+For large refactors/performance work, compare trusted financial outputs before and after.
+
+Useful regression surfaces can include:
+
+```text
+row counts by contract
+deterministic IDs
+portfolio quantities
+cost basis
+realized events
+performance metrics
+Tax summaries
+net worth
+FI deterministic outputs
+```
+
+The exact set should match the change's blast radius.
+
+A successful refactor is allowed to change logs, helper structure, and timings.
+
+It is not allowed to change finance accidentally.
+
+## Property-style invariants are powerful
+
+Some financial truths are better expressed as relationships than fixtures.
+
+Examples:
+
+```text
+remaining quantity cannot be negative after valid FIFO processing
+realized lot consumptions sum to disposed quantity
+allocation percentages sum to approximately 1 within a snapshot
+net worth reconciles to asset/liability definition
+successful required extraction batch has no failed entities
+Gold target key is unique
+```
+
+Property-style tests make good guardrails against unexpected inputs.
+
+## Failure injection deserves deliberate coverage
+
+For reliability paths, inject failures at boundaries:
+
+```text
+provider failure
+Bronze persistence failure
+Silver/Gold publication failure
+SQLite commit failure
+DuckDB commit failure
+snapshot write failure
+restore install failure
+```
+
+Then assert the typed state and durable aftermath.
+
+This is much stronger than hoping production will eventually test the branch for us. 😭
+
+## Performance regression tests need representative workloads
+
+Microbenchmarks are useful for local algorithms.
+
+Pipeline performance claims require realistic scale and comparable conditions.
+
+Record:
+
+```text
+workload
+cache state
+input scale
+baseline timing
+new timing
+output equivalence
+```
+
+Avoid hard thresholds so tight that normal machine variance makes the suite flaky.
+
+Use performance evidence to detect material regression, not to turn CI into a stopwatch contest.
+
+## Test data must protect privacy
+
+Real personal financial data should not become committed test fixtures.
+
+Prefer:
+
+- synthetic transactions;
+- minimal anonymized structures only when safe/necessary;
+- generated market sequences;
+- temporary databases/files.
+
+A test suite does not need my actual holdings to prove FIFO.
+
+## Documentation QA is engineering QA
+
+Canonical documentation makes precise implementation claims.
+
+Those claims can drift.
+
+Documentation QA should validate:
+
+- source paths;
+- class/function names;
+- authentic code excerpts;
+- schema/table counts;
+- Markdown links;
+- anchors;
+- Mermaid syntax where tooling allows;
+- formulas;
+- release-agnostic language;
+- cross-document consistency.
+
+A stale technical document is a failed contract between the codebase and the reader.
+
+## Test evidence has maturity levels
+
+Not every claim has the same proof strength.
+
+A useful mental model is:
+
+| Level | Evidence |
+|---|---|
+| 1 | code inspection / local assertion |
+| 2 | focused automated test |
+| 3 | contract/domain regression test |
+| 4 | architecture/full-suite certification |
+| 5 | real pipeline / representative workload |
+| 6 | production-use observation / long-term monitoring where relevant |
+
+Do not describe a behavior as fully proven when the only evidence is that the code path looks right.
+
+## Definition of tested
+
+I call a non-trivial change tested when the relevant combination of these has been demonstrated:
+
+```text
+behavior
+contract
+grain
+identity
+failure
+architecture
+integration
+financial regression
+performance, when material
+```
+
+Not every change needs all nine.
+
+The risk model decides.
+
+## Change validation checklist
+
+Before merge/release:
+
+- [ ] Focused tests cover the changed behavior.
+- [ ] Contract/grain/identity tests were updated where relevant.
+- [ ] Failure paths are tested where lifecycle/recovery changed.
+- [ ] Architecture boundary tests still pass.
+- [ ] Fast/full static quality gates pass at the appropriate stage.
+- [ ] Financial regression covers the affected domain.
+- [ ] A real pipeline run was used when assembly/persistence risk warrants it.
+- [ ] Performance was measured when the change claims performance impact.
+- [ ] Test fixtures protect personal data.
+- [ ] Documentation QA covers changed technical claims.
+
+At this point the Developer loop is complete. Ownership was located, standards constrained the implementation, repository tooling enforced the baseline, extension guides changed evidence/meaning/publication, contract evolution handled compatibility, and this specification established the proof model.
+
+The next documentation question is no longer *how to change the code*. It is **which runtime settings and financial policy the code is designed to accept**. That handoff belongs to the Configuration specifications.
 
 ## Related specifications
 
+- [Engineering Standards](engineering-standards.md)
 - [Reliability and Recovery](../architecture/reliability-and-recovery.md)
 - [Backup and Restore](../architecture/backup-and-restore.md)
 - [Data Contract and Schema Evolution](data-contract-and-schema-evolution.md)
-- [Development Guide](development-guide.md)
-- [Configuration Reference](../configuration/configuration-reference.md)
+- [Tooling, Quality, and Release Engineering](tooling-quality-and-release-engineering.md)

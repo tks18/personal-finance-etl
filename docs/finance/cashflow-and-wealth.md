@@ -1,427 +1,552 @@
-# Cashflow and Wealth
+# Cashflow & Wealth
 
-Household finance in Personal Finance ETL is reconstructed from transaction evidence into a monthly analytical state. The implementation deliberately separates ledger movement from balance-sheet valuation: household transactions explain how money moved, while investment analytics later contribute market-valued investment state. That prevents transaction cashflow from being mistaken for current asset value.
+Household finance looks simple until one tries to answer three questions at once:
 
-## Implementation map
+1. **What happened this month?**
+2. **Where did the money move?**
+3. **What is the household worth now?**
 
-```text
-backend/transform/facts.py
-backend/engines/presentation/core/ledger_builder.py
-backend/engines/presentation/core/inflation_builder.py
-backend/engines/presentation/core/net_worth_builder.py
-backend/engines/presentation/modules/monthly_cashflow_summary.py
-backend/engines/presentation/modules/cashflow_statement_builder.py
-backend/engines/presentation/modules/spend_analytics.py
-backend/engines/presentation/modules/income_streams.py
-backend/engines/presentation/modules/budget_forecast.py
-```
-
-## Canonical household facts
+Those questions operate on different grains. I keep them separate and connect them through a monthly state transition rather than forcing everything into one “cash flow” number.
 
 ```mermaid
-flowchart TB
-    RAW[Household source tables] --> BASE[get_base_transactions]
-    BASE --> I[f_Income_Transactions]
-    BASE --> E[f_Expense_Transactions]
-    BASE --> T[f_Transfer_Transactions]
-    RAW --> O[f_Opening_Balances]
-    I --> LEDGER[LedgerBuilder]
-    E --> LEDGER
-    T --> LEDGER
-    O --> LEDGER
+flowchart LR
+    TX["Canonical transactions"]
+    LED["Ledger activity"]
+    BAL["Monthly balances"]
+    CASH["Cash-flow statement"]
+    NW["Net worth"]
+    WEALTH["Wealth analytics"]
+
+    TX --> LED --> BAL --> NW --> WEALTH
+    TX --> CASH
+    BAL --> CASH
 ```
 
-### Income
+## Start with four evidence families
 
-`transform_f_income_transactions()` produces canonical income rows with mapped income category/subcategory semantics. Income represents economic inflow, not every positive account movement.
+The household ledger consumes four canonical inputs:
 
-### Expense
+```text
+opening balances
+income transactions
+expense transactions
+transfer transactions
+```
 
-`transform_f_expense_transactions()` produces canonical household outflow with expense category/subcategory semantics. Classification is later used by spending, budget and cashflow analytics.
-
-### Transfer
-
-`transform_f_transfer_transactions()` models movement between financial locations. The distinction matters because a transfer changes where wealth sits without inherently changing household wealth.
+They are not interchangeable.
 
 ### Opening balances
 
-`transform_f_opening_balances()` establishes the initial state from which transaction accumulation can reconstruct balances. Without an opening state, a perfectly correct transaction history can still produce the wrong absolute balance.
+Opening balances establish state at the beginning of tracked history.
 
-## Base normalization
+They are not income. They are not a transaction-created gain. They are the starting point from which later movement is reconstructed.
 
-The shared normalizer in `facts.py` maps source-specific columns before specialized facts are built. This creates a controlled boundary between messy household source shape and canonical analytical shape.
+### Income
+
+Income increases household resources, but income classification matters downstream.
+
+The model distinguishes categories such as:
+
+- active income;
+- dividend income;
+- interest income;
+- non-cash income.
+
+That matters because a non-cash financial gain should not automatically become available spending cash.
+
+### Expense
+
+Expenses reduce resources, but the model also distinguishes:
+
+- core expenses;
+- non-core expenses;
+- cash expenses;
+- non-cash P/L-like expenses.
+
+Budget and FIRE models care about those distinctions differently.
+
+### Transfers
+
+Transfers move value between owned locations.
+
+They can be operational, investing, financing, or internal according to asset metadata.
+
+A transfer can change one account balance while leaving household net worth unchanged.
+
+## `LedgerBuilder` is the state bridge
+
+`domain/household/ledger.py` combines the canonical streams.
 
 ```python
-def get_base_transactions(df_lazy: pl.LazyFrame, column_mapping: dict[str, str]) -> pl.LazyFrame:
-    df_renamed = df_lazy.rename(column_mapping)
-    raw_columns = set(df_renamed.collect_schema().names())
-    required_columns = {"IS_DEL", "UID", "BASE_AMOUNT"}
-    missing_columns = sorted(required_columns - raw_columns)
-    if missing_columns:
-        raise ValueError(f"INOUTCOME is missing required transaction columns: {missing_columns}")
+# src/personal_finance_etl/domain/household/ledger.py
+class LedgerBuilder:
+    """Combines raw transaction streams into structured monthly ledger balances and activities."""
+
+    def __init__(self, dfs: Mapping[str, pl.DataFrame | pl.LazyFrame], rules: FinancialRules):
+        self.dfs = dfs
+        self.rules = rules
 ```
 
-The shared stage is intentionally structural. Financial meaning remains in the specialized transformations and configured mappings.
+The builder returns four important lazy structures:
 
-## Ledger reconstruction
-
-`LedgerBuilder` consumes the canonical household facts and `FinancialRules`. Its output becomes the common monthly ledger state used by downstream presentation builders.
-
-```mermaid
-flowchart LR
-    O[Opening balances] --> L[LedgerBuilder]
-    I[Income] --> L
-    E[Expense] --> L
-    T[Transfers] --> L
-    R[FinancialRules] --> L
-    L --> M[Monthly ledger state]
+```text
+lf_exp_agg
+lf_inc_agg
+lf_activity
+lf_balances
 ```
 
-The ledger is therefore reconstructed analytical state. It is not another raw transaction table.
+That separation is deliberate. Aggregated income/expense retain classification detail, while activity/balances model monthly state movement.
 
-## Why transfers need their own semantics
+## The ledger normalizes activity before aggregating it
 
-Suppose cash moves from a bank account to an investment account. Treating the receiving leg as income would inflate earnings; treating the sending leg as expense would inflate consumption. The transfer fact exists so balance movement can be represented without inventing economic profit or loss.
+Opening, income, expense, and transfer streams are projected into a common representation with:
 
-```mermaid
-flowchart LR
-    A[Asset A - 10,000] -->|transfer 2,000| B[Asset B + 2,000]
-    A -. no household expense .-> NW[Net worth unchanged]
-    B -. no household income .-> NW
+```text
+ASSET_SUBCATEGORY_ID
+AMOUNT
+DATE
+TYPE
 ```
 
-## Net-worth construction
+plus semantic flags where relevant.
 
-`NetWorthBuilder` sits downstream of the ledger and investment analytics. This is where book-oriented household state and market-oriented investment state meet.
+They are then concatenated into a unified ledger stream.
 
 ```mermaid
 flowchart TD
-    LEDGER[Household ledger state] --> NW[NetWorthBuilder]
-    INV[Investment market-valued analytics] --> NW
-    RULES[FinancialRules] --> NW
-    NW --> CORE[Core monthly fact]
-    NW --> ASSET[Wealth asset breakdown]
-    NW --> FIRE[Wealth / FIRE inputs]
+    O["Opening"]
+    I["Income"]
+    E["Expense"]
+    T["Transfer"]
+    U["Unified ledger stream"]
+
+    O --> U
+    I --> U
+    E --> U
+    T --> U
 ```
 
-This late integration is a useful boundary. A purchase transaction explains a cash movement and acquisition event; current market value comes from investment analytics. The model does not pretend acquisition cost and current value are the same thing just because both are denominated in currency.
+The important part is not the concat. It is that each source enters with preserved semantics.
 
-## Inflation context
+## Monthly activity answers “what happened?”
 
-`InflationBuilder` prepares inflation context used by wealth/planning analytics. Inflation is a model input, not a retroactive mutation of canonical transaction evidence. Nominal facts remain nominal facts; inflation-adjusted measures are analytical derivatives.
+`lf_activity` groups by:
 
-## Monthly cashflow
+```text
+MONTH_START_DATE
+MONTH_END_DATE
+ASSET_SUBCATEGORY_ID
+```
 
-At monthly grain, the presentation layer can derive concepts such as:
+and calculates measures such as:
 
-- income;
-- expense;
-- net cashflow;
-- savings;
-- cashflow efficiency;
-- activity summaries;
-- budget variance.
+- cash income inflow;
+- non-cash income inflow;
+- total income inflow;
+- core expense outflow;
+- cash expense outflow;
+- non-cash expense outflow;
+- total expense outflow;
+- net transfers;
+- opening balance.
 
-The exact Gold physical columns are defined in the Gold contract reference. The important semantic relationship is:
+That grain is monthly activity by asset subcategory.
 
-$$
-	ext{Net Cashflow} = 	ext{Income} - 	ext{Expense}
-$$
+It is not yet household net worth.
 
-Transfers are not inserted into that equation as household income or consumption merely because they move cash.
+## Balance reconstruction answers “what state follows?”
 
-## Wealth state
+The ledger creates a signed `NET_AMOUNT` where expenses reduce state and other activity follows the canonical amount semantics.
+
+Monthly balance reconstruction then carries activity through time by asset subcategory.
 
 Conceptually:
 
-$$
-	ext{Net Worth}_t = \sum 	ext{Asset Value}_t - \sum 	ext{Liability Value}_t
-$$
-
-But the implementation's asset values can come from different evidence paths. Cash/balance-sheet assets may be ledger-reconstructed, while investments are market-valued through the Quant/presentation path. The formula is simple; the provenance is the interesting part.
-
-## Presentation modules
-
-The Wealth Presentation Engine delegates to focused builders rather than putting every household metric into one mega-function:
-
-| Builder | Responsibility |
-|---|---|
-| `SpendAnalyticsBuilder` | spending/category analytics |
-| `IncomeStreamsBuilder` | income stream analytics |
-| `BudgetForecastBuilder` | budget/forecast comparison |
-| `MonthlyCashflowSummaryBuilder` | monthly cashflow summaries |
-| `CashflowStatementBuilder` | activity-oriented cashflow presentation |
-| `WealthRiskAnalyticsBuilder` | wealth/FIRE/risk presentation |
-
-This modularity keeps presentation concerns downstream of canonical facts. Gold can evolve without rewriting what an income transaction means.
-
-## Grain boundaries
-
-| State | Typical grain |
-|---|---|
-| Income/expense/transfer facts | transaction |
-| Opening balance | asset/account opening observation |
-| Ledger state | asset/account × period |
-| Core wealth | month |
-| Asset breakdown | month × asset grouping |
-| Cashflow breakdown | month × category/group |
-
-Reference remains authoritative for exact physical grain strings.
-
-## Invariants
-
-- Transfers preserve balance movement without becoming household earnings/consumption.
-- Opening balances participate in absolute balance reconstruction.
-- Canonical transaction facts are not overwritten by inflation-adjusted presentation measures.
-- Investment market value enters wealth downstream of canonical household transactions.
-- Gold presentation does not redefine canonical transaction semantics.
-
-## Edge cases
-
-### Incomplete history
-
-A transaction history beginning after an account already held value requires an opening balance. Otherwise cumulative flow can be correct while ending balance is wrong.
-
-### Internal movement
-
-Transfers can create large gross flows with no change in household wealth. Analytics that ignore transaction type can therefore produce spectacularly confident nonsense. The dedicated transfer fact prevents that class of mistake.
-
-### Market-valued investments
-
-Investment wealth can move without any household transaction on that day. Net worth therefore cannot be reconstructed from household cashflow alone.
-
-### Inflation
-
-Inflation-adjusted measures are model-dependent analytical views. They should not be confused with the nominal amounts originally recorded.
-
-## Failure and validation
-
-Household transformations depend on configured column/category mappings. Missing required mappings or malformed canonical fields should fail during transformation/contract validation rather than quietly shifting rows into an undefined financial category. Downstream publication also verifies that registered outputs are present.
-
-## Design trade-off
-
-A single universal ledger could reduce table count, but it would push semantic branching into every downstream query. Personal Finance ETL instead pays the up-front cost of distinct income, expense, transfer and opening-balance facts so later financial logic can rely on stronger meaning. Fewer clever `CASE` statements, fewer opportunities for a transfer to cosplay as income.
-
-## LedgerBuilder in detail
-
-`LedgerBuilder.build()` first requires all four canonical household inputs. If any is absent, it returns an empty result rather than attempting a partial household ledger whose omissions would be hard to detect later.
-
-Opening balances are reduced to the latest row per asset using `ZUTIME` and mapped into the common ledger shape:
-
-```python
-lf_open_agg = (
-    lf_open.sort("ZUTIME")
-    .group_by("ZASSETUID")
-    .last()
-    .select([
-        pl.col("ZASSETUID").alias("ASSET_SUBCATEGORY_ID"),
-        pl.col("ZAMOUNTACCOUNT").alias("AMOUNT"),
-        pl.col("ZTXDATESTR").alias("DATE"),
-    ])
-)
+```text
+closing_balance(t)
+    = opening_state
+    + cumulative income
+    - cumulative expense
+    + cumulative transfers
 ```
 
-Income, expense and transfer facts are then projected into the same event shape with a `TYPE` discriminator. This common ledger event stream is a downstream analytical representation; the separate canonical facts remain intact.
+The implementation has additional classification/market-value behavior, but this is the state transition being modeled.
 
-```mermaid
-flowchart TB
-    O[Latest opening per asset] --> U[Unified ledger event stream]
-    I[Income + flags] --> U
-    E[Expense + core/non-cash flags] --> U
-    T[Signed transfer] --> U
-    U --> A[Monthly activity]
-    U --> B[Balance reconstruction]
+## Why transfers cannot be folded into income/expense
+
+Consider:
+
+```text
+Bank → Brokerage      ₹100,000
 ```
 
-## Income semantics
+If treated as expense from bank and income to brokerage, household income/expense both inflate while wealth stays unchanged.
 
-Income transformation filters canonical base transactions where `TRANSACTION_TYPE == 0`. With rules and income subcategory hierarchy available, it derives:
-
-- `Is_Active_Income`;
-- `Is_Dividend_Income`;
-- `Is_Interest_Income`;
-- `Is_Non_Cash_Income`.
-
-If the rules/hierarchy are unavailable, the implementation falls back to `False` flags rather than guessing categories.
-
-These flags matter because gross income, cash income and non-cash income can answer different questions in wealth analytics.
-
-## Expense semantics
-
-Expense transformation filters `TRANSACTION_TYPE == 1` and can derive `Is_Core_Expense` from configured category/subcategory sets. `LedgerBuilder` also joins asset-subcategory metadata to identify `is_non_cash_pnl`, allowing non-cash expense/P&L effects to be separated from cash consumption.
+The transfer model instead preserves internal movement.
 
 ```mermaid
 flowchart LR
-    E[Expense fact] --> C{Classification}
-    C --> CORE[Core expense]
-    C --> DISC[Other expense]
-    C --> NC[Non-cash P&L]
-    CORE --> CF[Cashflow / FIRE burn analytics]
-    NC --> NW[Wealth accounting without fake cash burn]
+    B["Bank -100k"]
+    T["Internal transfer"]
+    BR["Brokerage +100k"]
+    NW["Household net worth unchanged"]
+
+    B --> T --> BR
+    T --> NW
 ```
 
-## Transfer semantics and analysis date
+This becomes especially important when cash-flow activities classify transfers into operating/investing/financing contexts.
 
-Transfers are filtered from transaction types 3/4. The transformation resolves the asset hierarchy, labels the direction and creates signed `AMOUNT_PROPER`:
+## Cash and non-cash activity are separate on purpose
+
+The cash-flow model should answer liquidity questions. Wealth should answer economic-value questions.
+
+A non-cash gain can affect wealth without increasing cash available to pay next month's rent.
+
+Therefore the model carries both:
+
+```text
+Cash_Income_Inflow
+Non_Cash_Income_Inflow
+Cash_Expense_Outflow
+Non_Cash_Expense_Outflow
+```
+
+rather than collapsing everything into one monthly net figure.
+
+## The cash-flow statement reconciles cash-pool movement
+
+`CashflowStatementBuilder` constructs a direct-method statement around assets flagged as `is_cash_pool`.
 
 ```python
-pl.when(pl.col("TRANSFER_TYPE") == "Out")
-.then(pl.col("BASE_AMOUNT") * -1)
-.otherwise(pl.col("BASE_AMOUNT"))
-.alias("AMOUNT_PROPER")
+# src/personal_finance_etl/domain/household/cashflow.py
+class CashflowStatementBuilder:
+    """Constructs the Cashflow_Statement presentation model.
+
+    Direct Method cash flow statement that reconciles opening and closing
+    balances of CASH_POOL assets.
+    """
 ```
 
-For transfers associated with the `Investments` asset group, `ADJUSTED_DATE_FOR_ANALYSIS` shifts the date by one month in the current implementation. This is a domain-specific analytical timing rule and should be treated as such, not generalized into universal transfer accounting.
+The builder combines:
 
-## Monthly activity
+- opening/closing cash balances;
+- operating income;
+- operating expenses;
+- classified transfers;
+- monthly cash/non-cash totals.
 
-The ledger event stream is aggregated into monthly activity fields such as income inflow, expense outflow, core expense, cash/non-cash components and net transfers. These measures then join the month × asset lattice used by `NetWorthBuilder`.
+## Transfer counterparties determine cash-flow activity
 
-The lattice matters because months with no activity still need an explicit state if balances are to form a continuous time series.
+Transfer destination metadata can classify movement as:
+
+```text
+OPERATING
+INVESTING
+FINANCING
+INTERNAL_TRANSFER
+```
+
+The builder aggregates positive/negative transfer amounts into inflow/outflow measures for those classes.
+
+This produces a cash-flow statement that is derived from owned-account movement instead of manually tagging every report row after the fact.
+
+## Net cash movement is a reconciliation target
+
+The cash-flow statement calculates operating, investing, financing, and internal-transfer net movement and compares that analytical movement with opening/closing cash-pool balances.
+
+That reconciliation is more useful than a report that merely lists inflows and outflows because it exposes when classification or source coverage does not explain observed state movement.
+
+## Income has more structure than “money received”
+
+`IncomeStreamsBuilder` produces income-stream analytics using the canonical income classifications.
+
+This allows downstream questions such as:
+
+- how concentrated is active income?;
+- how much income is dividend/interest driven?;
+- what portion is non-cash?;
+- how stable is the income base?;
+- how much spending is supported by recurring/active income?
+
+The exact metrics belong to their analytical output, but the important model decision is earlier: the canonical transaction carries enough semantics to make those questions possible.
+
+## Budgeting is policy applied to canonical activity
+
+`domain/household/budget.py` contains separate builders for spend analytics and budget forecasting.
+
+Budget logic consumes real expense/income state plus `FinancialRules` policy.
+
+That means:
+
+```text
+what happened?
+    comes from canonical transactions
+
+what target should I compare it with?
+    comes from configured policy
+```
+
+Those authorities should not be merged.
+
+## Budget-health scoring is derived, not observed
+
+`domain/wealth/scoring.py` calculates health scores from analytical state.
+
+That score is not a transaction fact. It is a measure derived from defined rules/weights.
+
+This matters when presenting it: scores summarize the model; they do not replace underlying financial evidence.
+
+## Net worth begins with the ledger, then changes valuation basis where justified
+
+`NetWorthBuilder` receives:
+
+- canonical/warehouse datasets;
+- inflation calendar context;
+- ledger results;
+- default currency.
+
+```python
+# src/personal_finance_etl/domain/wealth/net_worth.py
+class NetWorthBuilder:
+    """Calculates monthly asset balances, market valuations, liabilities, and net worth."""
+
+    def build(self) -> dict[str, pl.LazyFrame]:
+        ...
+        return {
+            "lf_nw_summary": lf_nw_summary.drop("Is_Liquid"),
+            "lf_monthly_totals": lf_monthly_totals,
+        }
+```
+
+The output therefore separates asset-subcategory monthly detail from household-level monthly totals.
+
+## Book state and market state meet at the wealth boundary
+
+For many household assets, reconstructed ledger balance is the useful state.
+
+For investments with valid market valuations, current market value is more relevant to economic net worth.
+
+That produces a deliberate merge:
 
 ```mermaid
 flowchart LR
-    MONTHS[Calendar months] --> X[Cross join]
-    ASSETS[Asset subcategories] --> X
-    X --> J[Join monthly activity]
-    J --> B[Join balances]
-    B --> Z[Fill absent flow with zero]
-    Z --> NW[Continuous monthly state]
+    LED["Ledger/book state"]
+    MKT["Market-valued investment state"]
+    CLASS["Asset classification"]
+    NW["Monthly net-worth state"]
+
+    LED --> NW
+    MKT --> NW
+    CLASS --> NW
 ```
 
-## Balance reconstruction
+The merge does **not** rewrite the ledger. It chooses the appropriate valuation basis for wealth presentation.
 
-`NetWorthBuilder` computes closing balance as a cumulative sum of monthly net changes over each asset subcategory:
+## Net worth is a monthly state, not a transaction sum
 
-```python
-pl.col("MONTHLY_NET_CHANGE")
-.cum_sum()
-.over("ASSET_SUBCATEGORY_ID")
-.alias("Closing_Balance")
+At household level:
+
+```text
+Net Worth = Total Assets - Total Liabilities
 ```
 
-Opening balance for a month is based on the prior closing balance plus the database opening-balance contribution.
+But producing a meaningful monthly series also requires:
 
-This creates a stateful monthly series from event evidence.
+- aligned month calendars;
+- opening/closing balances;
+- market-value injection;
+- liability classification;
+- liquidity flags;
+- investment values;
+- inflation context.
 
-## Cashflow formulas implemented downstream
+The formula is the easy part. The grain and valuation authority are the engineering.
 
-The builder derives:
+## Liquidity is not wealth
 
-$$
-\text{NetCashflowMonth} = \text{IncomeInflow} - \text{ExpenseOutflow} + \text{NetTransfers}
-$$
+A household can have high net worth and poor liquidity.
+
+The model therefore tracks liquidity-oriented state separately, including cash-pool assets and runway-style measures.
+
+`NetWorthBuilder` computes a `Months_of_Runway` metric from closing balance relative to a trailing expense average where the denominator is positive.
+
+That makes the difference between:
+
+```text
+wealthy
+```
 
 and:
 
-$$
-\text{SurplusDeficitMonth} = \text{IncomeInflow} - \text{ExpenseOutflow}
-$$
-
-The difference is deliberate. Transfers affect an asset's balance path, while household surplus/deficit focuses on income versus expense.
-
-## Organic growth
-
-`Organic_Growth_Value` is calculated as:
-
-$$
-\text{ClosingBalance} - (\text{OpeningBalance} + \text{NetCashflowMonth})
-$$
-
-This isolates balance change not explained by recorded monthly cashflow, which can capture market/value effects depending on the asset context.
-
-`Organic_Yield_%` then divides that value by opening balance when the opening balance is non-zero.
-
-## Savings and drawdown context
-
-The builder also calculates cumulative net savings and an all-time-high balance per asset. Those stateful measures support ratios and drawdown-style wealth analytics without recomputing the full history in every Gold query.
-
-```mermaid
-flowchart TD
-    NC[Monthly net cashflow] --> CS[Cumulative net savings]
-    CB[Closing balance] --> ATH[Cumulative max / all-time high]
-    CB --> R[Savings-to-net-worth ratio]
-    CS --> R
-    ATH --> DD[Balance drawdown context]
+```text
+able to fund near-term obligations
 ```
 
-## Investment contribution ratio
+visible in the model.
 
-When monthly surplus is positive, `Investment_Contribution_Pct` relates net transfers to the surplus. The denominator guard avoids division by non-positive surplus and returns zero in those cases. This is an analytical convention, not a claim that every transfer is an investment contribution in every possible source model.
+## Organic growth is different from contributions
 
-## Cash versus non-cash
+A balance can increase because:
 
-The implementation carries explicit non-cash flags because cashflow and wealth are not identical. A non-cash income/expense can change analytical profit/wealth without creating bank cash. FIRE burn-rate logic and liquidity analysis should not blindly consume non-cash P&L as if it were grocery spending.
+- new savings/contributions were added;
+- market value increased;
+- non-cash gains occurred;
+- transfers moved money between owned assets.
 
-## Asset liquidity
+Wealth analytics should distinguish these drivers where the evidence/model permits it.
 
-`NetWorthBuilder` brings `Is_Liquid` from asset-subcategory metadata into the month × asset state. Liquidity classification therefore belongs to asset semantics and can be used by runway/FIRE analytics downstream.
+Otherwise a savings metric can accidentally take credit for a market rally. Finance Twitter would approve. The ledger should not.
 
-## Failure boundaries
+## Inflation adds real-value context, not historical rewriting
 
-- Missing one of the four canonical ledger inputs causes `LedgerBuilder` to return no ledger result.
-- Missing asset dimension prevents `NetWorthBuilder` from constructing net-worth state.
-- Missing category dimensions reduces available classification enrichment rather than fabricating hierarchy.
-- Division metrics explicitly guard zero denominators.
+Inflation calendars are owned under `domain/fire/inflation.py` and feed wealth analysis.
 
-These are intentionally different responses because not every missing input has the same financial severity.
+Inflation-adjusted context answers a different question from nominal balance:
+
+```text
+nominal wealth:
+    current currency amount
+
+real wealth:
+    purchasing-power-adjusted context
+```
+
+Both can be useful. Neither should silently replace the other.
+
+## Investment contribution ratio connects household and portfolio models
+
+Household savings and investment funding eventually connect to the investment engine.
+
+That connection is analytical, not a collapse of domains.
+
+The household side asks how much capital is being directed toward investment. The investment side asks what happened to capital after it entered investment instruments.
+
+This boundary is where the next document becomes necessary.
+
+## Portfolio-management analytics remain downstream
+
+`InvestmentAnalyticsBuilder` in `domain/wealth/analytics.py` combines ISIN-level market/book values, allocation, drift, performance context, and harvesting priority.
+
+```python
+# src/personal_finance_etl/domain/wealth/analytics.py
+class InvestmentAnalyticsBuilder:
+    """Constructs p_Portfolio_Management_Analytics.
+
+    Unifies Rebalancing (drift), Sector Allocation (weights), Performance Attribution (returns),
+    and Tax Harvesting (unrealized losses) into a single cohesive ISIN-level table.
+    """
+```
+
+Notice the ownership boundary: this is portfolio/wealth decision support built from canonical investment state. It does not own FIFO or realized gain calculation.
+
+## Target allocation is policy, actual allocation is state
+
+The builder can join configured target allocations onto actual portfolio values.
+
+That creates:
+
+```text
+actual class weight
+configured target weight
+class drift
+rebalance requirement
+```
+
+Again, observation/state and policy remain distinct.
+
+## Tax-harvesting priority is a score, not Tax advice
+
+The portfolio analytics layer can prioritize unrealized losses using a scoring formula.
+
+That result is decision support. Tax methodology and statutory treatment remain separate concerns.
+
+The model intentionally avoids turning one heuristic score into legal certainty.
+
+## Household failure boundaries
+
+Important failure/edge cases include:
+
+### Missing required household datasets
+
+Builders can return empty structures when required inputs are absent. Upstream contract/validation should make truly required absence visible rather than allowing a polished empty report to masquerade as a healthy household.
+
+### Incomplete history
+
+Opening balances are critical when transaction history begins after the economic life of an account.
+
+Without them, cumulative activity cannot reconstruct the pre-history state.
+
+### Internal movement
+
+Transfers must not inflate income/expense.
+
+### Non-cash activity
+
+Non-cash P/L can affect wealth while remaining outside liquidity/cash-flow measures.
+
+### Market-valued investments
+
+Investment market state can override ledger-style book balance for wealth valuation without changing underlying household transaction evidence.
+
+### Zero denominators
+
+Runway, growth, ratios, and scores must handle zero/negative denominators deliberately.
+
+## Worked monthly transition
+
+Suppose a household begins a month with:
+
+```text
+cash                         200,000
+investment market value    1,000,000
+liability                    300,000
+```
+
+During the month:
+
+```text
+salary income                +150,000
+cash expense                  -80,000
+bank → brokerage transfer     -50,000 cash / +50,000 brokerage funding
+market movement              +40,000 investment value
+```
+
+A useful model should conclude:
+
+```text
+income                      150,000
+expense                      80,000
+internal investment funding  50,000 transfer, not expense
+cash closing                220,000
+investment market value   1,090,000  # funding + market movement
+liability                   300,000
+net worth                 1,010,000
+```
+
+The exact portfolio bookkeeping depends on investment evidence, but the semantic point is stable: the same ₹50,000 must not be counted as both household consumption and new wealth.
 
 ## What Gold is allowed to do
 
-Gold builders can aggregate, rank, compare and present the reconstructed monthly state. They should not reinterpret transfer direction, redefine core expense or alter canonical transaction amounts. Presentation can reshape truth; it should not quietly renegotiate it.
+Gold can reshape this state into decision-friendly marts:
 
-## Worked monthly state transition
+- monthly cash-flow statement;
+- budget/spend analytics;
+- net-worth series;
+- investment management analytics.
 
-For one asset subcategory, suppose the month begins at 100, receives 50 of cash income, records 20 of expense and transfers 10 outward. Ignoring other non-cash effects, the event-driven net change is 20:
+Gold should not invent new transaction classifications that contradict canonical household facts.
 
-$$
-50 - 20 - 10 = 20
-$$
+## The next question
 
-The closing state becomes 120. The example is intentionally simple; the implementation generalizes the same state-transition idea across every asset and month while retaining separate cash/non-cash classifications.
+Household wealth eventually depends on investment state, but investments need a richer evidence model: instrument identity, trade chronology, market prices, benchmarks, currency, and source-specific normalization.
 
-```mermaid
-flowchart LR
-    O[Opening 100] --> I[+ Income 50]
-    I --> E[- Expense 20]
-    E --> T[- Transfer 10]
-    T --> C[Closing 120]
-```
-
-The important point is not arithmetic difficulty. It is that every component retains its semantic type so downstream analytics can calculate both balance movement and household surplus correctly.
-
-## Household classification and FIRE
-
-Core-expense and active-income flags become especially useful downstream in planning. FIRE burn assumptions should be based on financially meaningful spending/income categories rather than every ledger movement. A transfer to an investment account is not burn; a non-cash P&L expense is not necessarily monthly cash consumption.
-
-This is why classification belongs upstream of FIRE rather than inside the Monte Carlo simulator.
-
-## Wealth versus liquidity
-
-Net worth and liquid runway answer different questions. `Is_Liquid` allows the presentation layer to distinguish assets that contribute to total wealth from assets realistically available for near-term spending/runway analysis.
-
-```text
-net worth: broad balance-sheet value
-liquid wealth: accessible subset used for liquidity/runway reasoning
-```
-
-A household can therefore be wealthy on paper and still have limited liquid runway. The model has enough structure to avoid pretending those are the same condition.
-
-## Presentation grain discipline
-
-Monthly Gold outputs aggregate canonical facts for BI use, but drill-down semantics remain anchored in Silver. If a monthly total appears surprising, the correct audit path is Gold -> monthly reconstructed state -> canonical household facts -> source evidence. Gold should never become the only surviving explanation of a number.
+That is the subject of [Investment Data Model](investment-data-model.md).
 
 ## Related specifications
 
 - [Financial Model](financial-model.md)
-- [Cashflow and Wealth](cashflow-and-wealth.md)
 - [Investment Data Model](investment-data-model.md)
-- [Investment Market Reconstruction](investment-market-reconstruction.md)
-- [FIFO and Realized Events](fifo-and-realized-events.md)
-- [Investment Reconciliation](investment-reconciliation.md)
-- [Investment Performance and Risk](investment-performance-and-risk.md)
-- [Multi-Currency and FX](multi-currency-and-fx.md)
-- [Tax Methodology](tax-methodology.md)
-- [FIRE Methodology](fire-methodology.md)
+- [Financial Rules Reference](../configuration/financial-rules-reference.md)
 - [Data Model](../architecture/data-model.md)
-- [Silver Data Contracts](../reference/silver-data-contracts.md)

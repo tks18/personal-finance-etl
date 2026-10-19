@@ -1,45 +1,133 @@
 # Deterministic Identity and Replay
 
-Personal Finance ETL uses deterministic identity to make reconstructed financial facts stable across complete analytical rebuilds. It separately records reproducibility context for stochastic simulations. Both mechanisms use canonicalization and hashing, but they solve different problems and must not be collapsed into one vague claim that "the pipeline is deterministic."
+A run ID can tell me **which execution** produced a result.
 
-Deterministic finance answers **which fact is this?** Replay provenance answers **which stochastic experiment produced this result?**
+It cannot tell me whether a purchase, sale, lot, realized event, reconciliation event, or Tax event is the **same economic entity** after a complete analytical rebuild.
 
-## Source authority
+That requires a different identity model.
 
-Primary implementation:
+The system therefore separates operational identity from economic identity and gives deterministic entities a canonical serialization protocol.
 
-- `backend/utils/identity.py`
-- `backend/utils/reproducibility.py`
-- `backend/transform/investment.py` and investment transformation producers
-- `backend/engines/analytics/core/fifo.py`
-- `backend/engines/tax/core/base_events.py`
-- `backend/load/control_plane/run_repo.py`
-- `backend/engines/presentation/wealth_engine.py`
-- `backend/load/registry.py`
+## There are two different reproducibility problems
 
-## Two different reproducibility problems
+The architecture deals with two broad categories of reproducibility:
+
+### Deterministic reconstruction
+
+Given equivalent canonical evidence and rules, economic entities such as purchases, sales, lots, realized events, and reconciliation events should receive stable identities and reconstruct consistently.
+
+### Stochastic simulation
+
+Given the same deterministic inputs, financial rules, model fingerprint, and root seed, a stochastic simulation should be reproducible within the model's stated boundaries.
+
+These problems share provenance, but they do not use the same identity mechanism.
 
 ```mermaid
-flowchart TB
-    E[Canonical financial evidence]
-    ID[Deterministic identity protocol]
-    FACT[Stable purchase / sale / lot / realized / reconciliation / tax IDs]
+flowchart LR
+    E[Canonical evidence] --> ID[Deterministic entity identity]
+    ID --> REPLAY[Deterministic reconstruction]
 
-    RUN[Pipeline run + financial state]
-    SEED[Root stochastic seed]
-    FP[Input / model / registry fingerprints]
-    SIM[Simulation provenance]
-
-    E --> ID --> FACT
-    RUN --> SEED --> SIM
-    RUN --> FP --> SIM
+    E --> INPUT[Simulation inputs]
+    RULES[Rules] --> INPUT
+    SEED[Root seed] --> RNG[Derived seeds]
+    INPUT --> MC[Stochastic simulation]
+    RNG --> MC
 ```
 
-The left side is deterministic financial reconstruction. The right side records a stochastic experiment.
+## Positional identity is not stable enough
 
-## Canonical ID Serialization v2
+Row numbers, DataFrame offsets, and database insertion order are convenient identifiers only until a rebuild changes ordering.
 
-`backend/utils/identity.py` defines explicit field-order contracts for known namespaces. This removes caller dictionary construction order from identity semantics.
+A stable financial identity must be based on the economic fields that define the entity.
+
+For example:
+
+```text
+Purchase identity
+≈ instrument + date + price + quantity + currency
+```
+
+That does not mean those exact fields are universally correct for every future product. It means identity is a declared contract rather than an accident of row order.
+
+## Canonical ID Serialization defines the byte-level contract
+
+`domain/common/identity.py` owns deterministic ID generation.
+
+The protocol has four steps:
+
+1. choose a namespace;
+2. order the namespace's defining fields deterministically;
+3. canonicalize each key and value;
+4. serialize `[namespace, "v2", pairs]` as compact UTF-8 JSON and hash it with SHA-256.
+
+```python
+# src/personal_finance_etl/domain/common/identity.py
+def generate_deterministic_id(namespace: str, fields: Mapping[str, object]) -> str:
+    pairs = [
+        [canonicalize_value(key), canonicalize_value(value)]
+        for key, value in _ordered_identity_fields(namespace, fields)
+    ]
+    payload = json.dumps(
+        [namespace, "v2", pairs], ensure_ascii=False, separators=(",", ":")
+    ).encode("utf-8")
+    hash_str = hashlib.sha256(payload).hexdigest()
+    return f"{namespace}_{hash_str[:16]}"
+```
+
+The returned ID is readable enough to expose its namespace while remaining compact.
+
+## Value canonicalization removes irrelevant representation differences
+
+Hashing raw Python representations would make equivalent values diverge for reasons that have nothing to do with economics.
+
+`canonicalize_value()` handles several classes explicitly:
+
+| Input | Canonical form |
+|---|---|
+| `None` | `<NULL>` |
+| boolean | `true` / `false` |
+| `date` | `YYYY-MM-DD` |
+| `datetime` | ISO 8601 |
+| integer / float / `Decimal` | normalized decimal string |
+| string | Unicode NFC + trimmed whitespace |
+| other | trimmed `str()` fallback |
+
+The numeric normalization is particularly important:
+
+```python
+case int() | float() | Decimal():
+    try:
+        d = Decimal(str(val)).normalize()
+        if d.is_zero():
+            return "0"
+        return format(d, "f")
+    except InvalidOperation:
+        return str(val)
+```
+
+This prevents superficial representation differences such as `1`, `1.0`, and compatible decimal forms from generating different identities when they canonicalize to the same numeric value.
+
+## Unicode normalization is part of identity correctness
+
+Two visually identical strings can have different underlying Unicode code-point sequences.
+
+The identity layer normalizes strings to NFC before trimming:
+
+```python
+case str():
+    nfc = unicodedata.normalize("NFC", val)
+    return nfc.strip()
+```
+
+That makes text identity less dependent on how upstream software encoded accented or composed characters.
+
+For financial IDs, this is not a typography concern. It is a determinism concern.
+
+## Field order is contract-defined where semantics are established
+
+A Python mapping should not gain identity semantics from insertion order.
+
+The module therefore declares stable field-order alternatives per known namespace.
 
 ```python
 _IDENTITY_FIELD_ORDERS = {
@@ -51,365 +139,420 @@ _IDENTITY_FIELD_ORDERS = {
 }
 ```
 
-Some namespaces, especially `LOT`, accept multiple legitimate field sets because normal acquisition lots and reconciliation-created synthetic lots have different evidence contracts.
+`LOT` supports multiple established defining-field shapes because not every lot originates from the same event type.
 
-## Value canonicalization
+Unknown/new contracts fall back to sorted key order so they remain deterministic, but a namespace whose field order is semantically important should be explicitly added to the contract map.
 
-Before hashing, values are converted into stable textual representations.
+## The namespace is part of the hash payload
 
-| Input type | Canonical representation |
-|---|---|
-| `None` | `<NULL>` |
-| Boolean | `true` / `false` |
-| `datetime` | ISO-8601 string |
-| `date` | `YYYY-MM-DD` |
-| Numeric | normalized `Decimal` fixed notation |
-| Zero | `0` |
-| String | Unicode NFC normalized and stripped |
-| Other | stripped string representation |
+A purchase and a sale with coincidentally identical field values must not share identity.
 
-```python
-def canonicalize_value(val: Any) -> str:
-    if val is None:
-        return "<NULL>"
-    elif isinstance(val, bool):
-        return "true" if val else "false"
-    elif isinstance(val, datetime):
-        return val.isoformat()
-    elif isinstance(val, str):
-        return unicodedata.normalize("NFC", val).strip()
-```
-
-Unicode normalization matters because visually equivalent strings can otherwise have different byte representations. Financial identity should not change because Unicode decided to bring multiple spellings of the same glyph to the party.
-
-## Ordered fields
-
-For known contracts, the exact key set is matched against registered field orders. If no explicit contract matches, keys are sorted.
-
-```python
-for field_order in _IDENTITY_FIELD_ORDERS.get(namespace, ()):
-    if keys == set(field_order):
-        return [(key, fields[key]) for key in field_order]
-return [(key, fields[key]) for key in sorted(fields)]
-```
-
-The fallback remains deterministic, but a namespace whose field order is semantically significant should be registered explicitly.
-
-## Payload and hash
-
-The serializer hashes a compact JSON payload containing:
+The namespace participates in both the returned prefix and the hash payload.
 
 ```text
-[
-  namespace,
-  "v2",
-  ordered canonical key/value pairs
-]
+PURCHASE_...
+SALE_...
+LOT_...
+REALIZED_...
+RECON_GROUP_...
+RECON_EVENT_...
+TAX_...
 ```
 
-```python
-payload = json.dumps(
-    [namespace, "v2", pairs],
-    ensure_ascii=False,
-    separators=(",", ":"),
-).encode("utf-8")
-hash_str = hashlib.sha256(payload).hexdigest()
-return f"{namespace}_{hash_str[:16]}"
-```
+This creates a lightweight type boundary in identifiers themselves.
+
+## Purchase and sale identities anchor later reconstruction
+
+Canonical purchase and sale IDs are upstream identity anchors.
+
+They survive complete analytical rebuilds because they are derived from economic defining fields rather than runtime sequence.
 
 ```mermaid
 flowchart LR
-    F[Defining fields] --> O[Namespace field order]
-    O --> C[Canonicalize keys + values]
-    C --> J[Compact JSON payload + v2 marker]
-    J --> H[SHA-256]
-    H --> T[First 16 hex characters]
-    T --> ID[Namespace-prefixed ID]
+    P[Purchase fields] --> PID[PURCHASE_xxx]
+    S[Sale fields] --> SID[SALE_xxx]
+    PID --> LOT[Lot identity]
+    SID --> REAL[Realized event identity]
+    LOT --> REAL
 ```
 
-The 16-character digest suffix is a compact application identifier, not a claim that SHA-256 itself has only 64 bits of output.
+That continuity matters because later entities can reference earlier IDs rather than repeating every original field.
 
-## Identity namespaces
+## Lot identity reflects how the lot came into existence
 
-Current explicit namespaces are:
+Not every lot is a simple purchase lot.
 
-- `PURCHASE`
-- `SALE`
-- `LOT`
-- `REALIZED`
-- `RECON_GROUP`
-- `RECON_EVENT`
-- `RECON_LOT_GROUP`
-- `TAX`
+The domain supports lot sources/actions such as:
 
-Each namespace describes a different semantic entity. Reusing a hash function does not make the entities interchangeable.
+- purchase;
+- split;
+- bonus;
+- dividend reinvestment;
+- reconciliation.
 
-## Purchase and sale identities
+Identity therefore has to preserve the event semantics that created the lot.
 
-Canonical transaction identities derive from economic transaction fields rather than row number or load order.
+The `LOT` namespace allows several explicit field signatures, including purchase-linked and reconciliation-linked forms.
+
+This is a good example of why a generic “hash the whole row” strategy would be wrong. A row contains many values that can change during valuation without changing the lot's economic identity.
+
+## Realized-event identity is sale-lot identity
+
+FIFO creates one realized event for each economically relevant sale/lot match.
+
+One sale can consume multiple lots, so `Sale_ID` alone is not enough.
+
+The canonical identity is:
 
 ```text
-PURCHASE = ISIN + Date + Price + Quantity + CURRENCY_ID
-SALE     = ISIN + Date + Sell_Price + Quantity + CURRENCY_ID
+REALIZED(Sale_ID, Lot_ID)
 ```
-
-This means a complete Silver rebuild can reproduce transaction identity when the canonical evidence is unchanged.
-
-## Lot identity
-
-A normal acquisition lot can be defined from:
-
-```text
-ISIN + Purchase_ID + Quantity + Date
-```
-
-Reconciliation-created lots use alternate registered field sets including event/reconciliation context. This is deliberate: synthetic state must not masquerade as a broker-observed purchase.
-
-```mermaid
-flowchart LR
-    P[Canonical purchase] --> PID[PURCHASE ID]
-    PID --> L[LOT ID]
-    R[Reconciliation discrepancy] --> RG[RECON group]
-    RG --> SL[Synthetic LOT ID]
-```
-
-## Realized-event identity
-
-A realized disposal component is identified by:
-
-```text
-REALIZED = Sale_ID + Lot_ID
-```
-
-A sale that consumes three acquisition lots therefore has three stable realized-event identities rather than one opaque aggregate row.
-
-This preserves disposal lineage:
 
 ```mermaid
 flowchart TD
-    S[Sale_ID] --> R1[REALIZED: Sale + Lot A]
-    S --> R2[REALIZED: Sale + Lot B]
-    S --> R3[REALIZED: Sale + Lot C]
-    L1[Lot A] --> R1
-    L2[Lot B] --> R2
-    L3[Lot C] --> R3
+    SALE[Sale S1] --> R1[REALIZED(S1, L1)]
+    SALE --> R2[REALIZED(S1, L2)]
+    L1[Lot L1] --> R1
+    L2[Lot L2] --> R2
 ```
 
-## Reconciliation identities
+This grain preserves the actual FIFO matching result.
 
-Reconciliation uses three dedicated namespaces:
+## Reconciliation identities model discrepancy evidence
 
-### `RECON_GROUP`
+Reconciliation has at least two useful identity levels.
 
-Defines the discrepancy context from ISIN, reconciliation date, adjustment type, broker/reconstructed quantities and broker/reconstructed cost bases.
+### Reconciliation group
 
-### `RECON_EVENT`
+A group identifies the observed disagreement context for an instrument/date/adjustment type and observed/reconstructed values.
 
-Defines an event within the group from:
+### Reconciliation event
+
+An event can then identify the specific lot-level adjustment inside that group.
+
+This produces a hierarchy:
 
 ```text
-Reconciliation_Group_ID + Lot_ID + Adjustment_Type
+RECON_GROUP
+    ├── RECON_EVENT lot A
+    ├── RECON_EVENT lot B
+    └── RECON_EVENT synthetic adjustment
 ```
 
-### `RECON_LOT_GROUP`
+The model preserves both the discrepancy as a whole and the concrete adjustments used to converge state.
 
-Defines grouped synthetic lot context from ISIN, date, adjustment type and quantity.
+## Tax identity attaches Tax evidence to source evidence
 
-These IDs keep corrective state explicit and traceable. A reconciliation is not an excuse to quietly rewrite history until the numbers stop complaining.
+The Tax namespace uses source type, source ID, and Tax sub-head.
 
-## Tax event identity
-
-Tax events derive identity from:
-
-```text
-TAX = Source_Type + Source_ID + Tax_Sub_Head
-```
-
-The tax layer therefore preserves the evidence lineage of the event it classifies instead of depending on output row order.
-
-## Identity continuity across full analytical rebuilds
-
-Silver and Gold are fully rebuilt. Stable financial identity is what allows complete reconstruction without treating every run as a new universe.
-
-```mermaid
-sequenceDiagram
-    participant B as Bronze evidence
-    participant T as Transform
-    participant I as Identity v2
-    participant S as Silver
-
-    B->>T: same canonical evidence
-    T->>I: defining fields
-    I-->>T: same deterministic ID
-    T->>S: rebuilt fact with stable identity
-```
-
-The guarantee depends on the identity-defining evidence and serialization contract remaining compatible.
-
-## Identity protocol evolution
-
-The literal `"v2"` marker is part of the hash payload. It prevents a serialization change from silently pretending to be the same protocol.
-
-Changing:
-
-- namespace field definitions;
-- canonicalization behavior;
-- serialization version;
-- hash truncation;
-
-can change persisted IDs and therefore requires deliberate migration reasoning.
-
-This is why identity code belongs to architecture, not to the "tiny helper, probably harmless" drawer.
-
-## Run configuration snapshots
-
-`RunRepository.start_run()` canonicalizes Settings and FinancialRules JSON and stores content-addressed snapshots.
-
-Snapshot IDs are based on SHA-256 digests:
-
-```text
-snap_set_<digest>
-snap_rule_<digest>
-```
-
-Runs reference those snapshots rather than embedding mutable configuration semantics in prose logs.
+That architecture is important because Tax events should remain traceable to the financial evidence that created them.
 
 ```mermaid
 flowchart LR
-    S[Settings JSON] --> C1[Canonical JSON] --> H1[SHA-256] --> SS[Settings snapshot]
-    R[Rules JSON] --> C2[Canonical JSON] --> H2[SHA-256] --> RS[Rules snapshot]
-    SS --> RUN[cp_runs]
-    RS --> RUN
+    SRC[Income / realized event / other source] --> SID[Source_ID]
+    SID --> TAX[TAX(Source_Type, Source_ID, Tax_Sub_Head)]
 ```
 
-Identical canonical payloads reuse snapshot identities through `INSERT OR IGNORE`.
+Tax classification can evolve while provenance still points to the underlying financial event.
 
-## Simulation provenance
+## Stable IDs survive full analytical rebuilds
 
-`cp_simulation_runs` records the stochastic context separately from ordinary run metadata. Fields include:
+Silver and Gold are rebuilt from complete upstream state.
 
-- `simulation_id`
-- `run_id`
-- `root_seed`
-- `iterations`
-- `horizon`
-- `input_as_of_date`
-- settings/rules snapshot IDs
-- `input_fingerprint`
-- `model_fingerprint`
-- `model_implementation_version`
-- status and result fingerprint
+Without deterministic identity, every rebuild could create new surrogate identifiers even when the economics were unchanged.
 
-The simulation therefore has an operational identity of its own.
+That would break:
 
-## Input fingerprinting
+- cross-run comparison;
+- reconciliation lineage;
+- event-level Tax traceability;
+- debugging;
+- result diffing;
+- downstream analytical references.
 
-`RunRepository._fingerprint_dataframe()` normalizes simulation input into a deterministic representation before hashing. The goal is to identify the input state that entered the stochastic model, not merely the filename or in-memory object identity.
+Deterministic IDs turn a full rebuild from “new rows” into “reconstructed representations of the same economic entities.”
 
-## Model fingerprinting
+## Identity stability does not mean row equality
 
-`log_simulation_run()` hashes model context separately from input context. This separation is useful because:
+An entity can preserve identity while non-identifying attributes change.
+
+For example, a lot's market value changes over time without changing which lot it is.
+
+This distinction is essential:
 
 ```text
-same input + changed model != same experiment
-same model + changed input != same experiment
+identity fields     → define sameness
+state attributes    → describe current/derived condition
 ```
 
-## Contract registry fingerprint
+Hashing an entire evolving record would confuse state change with entity replacement.
 
-`generate_contract_registry_fingerprint()` derives a deterministic fingerprint from active table metadata, including contract/grain/publisher information supplied by the caller.
+## Identity protocol evolution is explicit
 
-The registry fingerprint lets reproducibility context include the analytical contract surface, not just model parameters.
+The serialized payload includes the literal protocol marker `"v2"`.
 
-## Reproducibility envelope
+That prevents future identity changes from being silent.
 
-`generate_reproducibility_envelope()` combines:
+If identity semantics must change, the protocol version can change with a deliberate migration/replay strategy.
 
-- input fingerprint;
-- financial-rules hash;
-- macro-parameter hash;
-- registry fingerprint;
-- root seed;
-- model version.
+The architecture does not assume that an identity contract can evolve invisibly while preserving all previous hashes.
+
+## Run IDs solve a different problem
+
+`RunRepository.start_run()` uses a UUID for execution identity.
+
+```python
+run_id = str(uuid.uuid4())
+```
+
+That is correct because a run is a unique occurrence, not a deterministic economic entity.
+
+Two executions over identical inputs should still have different run IDs.
+
+This creates a useful separation:
+
+```text
+run_id                 → which execution?
+deterministic entity ID → which economic entity?
+```
+
+Conflating them would make replay either operationally ambiguous or economically unstable.
+
+## Configuration snapshots are content-addressed
+
+Settings and rules use another identity strategy: content hashing.
+
+`start_run()` canonicalizes the JSON payload and stores a SHA-256 digest-derived snapshot ID.
+
+```python
+canonical_cfg = self._canonical_json(cfg_json)
+digest_cfg = hashlib.sha256(canonical_cfg.encode("utf-8")).hexdigest()
+settings_id = f"snap_set_{digest_cfg}"
+```
+
+The same pattern applies to financial rules.
+
+This means two runs with semantically identical canonical configuration content can point to the same snapshot identity even if they occurred at different times.
+
+## Content-addressed config identity helps answer replay questions
+
+A replay investigation can distinguish:
+
+```text
+same evidence + same settings + same rules
+same evidence + different settings
+same evidence + different financial rules
+```
+
+Those scenarios should not be interpreted as equivalent simply because the source files did not change.
+
+The snapshot IDs make the differences queryable.
+
+## Contract registry fingerprinting adds structural provenance
+
+Warehouse contract structure is fingerprinted from metadata rather than from a manually incremented counter.
+
+```python
+# src/personal_finance_etl/infrastructure/warehouse/fingerprints.py
+def generate_contract_registry_fingerprint(
+    tables_metadata: Sequence[Mapping[str, object]],
+) -> str:
+    sorted_metadata = sorted(tables_metadata, key=lambda x: str(x.get("table_name", "")))
+    payload = json.dumps(sorted_metadata, sort_keys=True).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+```
+
+This captures meaningful structural drift even if somebody forgets to bump a version field.
+
+It is a different fingerprint from economic entity identity because it answers a different question: **did the publication contract change?**
+
+## Simulation reproducibility uses deterministic seed derivation
+
+FIRE simulation owns a separate reproducibility mechanism.
+
+The root seed is converted into a bounded CRC-based offset:
+
+```python
+# src/personal_finance_etl/domain/fire/reproducibility.py
+def derive_simulation_seed_offset(root_seed: str) -> int:
+    return zlib.crc32(root_seed.encode("utf-8")) % 1_000_000
+
+
+def derive_monthly_seed(root_seed: str, year: int, month: int) -> int:
+    offset = derive_simulation_seed_offset(root_seed)
+    return year * 12 + month + offset
+```
+
+A Polars expression provides the same derivation across temporal rows.
+
+This gives each year/month a stable integer seed relative to the root seed.
+
+## The root seed is isolated by run
+
+The pipeline uses the run ID as the root seed when invoking the wealth/FIRE presentation engine.
+
+That means independent production runs naturally get independent stochastic paths.
+
+The seed is then recorded in `cp_simulation_runs` so the simulation can be investigated later.
+
+If an exact stochastic replay is desired, reproducing the root seed is part of the provenance envelope.
+
+## Simulation provenance fingerprints inputs and model assumptions
+
+`RunRepository.log_simulation_run()` derives a model fingerprint from Monte Carlo, FIRE, and capital-market-assumption rule content.
+
+It also fingerprints input and result DataFrames.
+
+```python
+combined_rules = {
+    "monte_carlo": rules.assumptions.monte_carlo.model_dump(),
+    "fire": rules.assumptions.fire.model_dump(),
+    "cma": rules.assumptions.cma.model_dump(),
+}
+model_fingerprint = hashlib.sha256(
+    json.dumps(
+        self._json_safe(combined_rules),
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
+    ).encode("utf-8")
+).hexdigest()
+```
+
+This makes simulation reproducibility a multi-part contract rather than “same seed equals same meaning.”
+
+## The reproducibility envelope is wider than the seed
+
+A meaningful stochastic replay requires alignment across several dimensions:
 
 ```mermaid
 flowchart TD
-    I[Input fingerprint] --> E[Reproducibility envelope]
-    R[Rules hash] --> E
-    M[Macro hash] --> E
-    C[Contract registry fingerprint] --> E
-    S[Root seed] --> E
-    V[Model version] --> E
-    E --> H[Envelope SHA-256]
+    E[Deterministic input evidence] --> F[Input fingerprint]
+    R[Financial rules] --> M[Model fingerprint]
+    C[Settings / contract context] --> P[Provenance]
+    S[Root seed] --> RNG[Derived PRNG seeds]
+    F --> SIM[Simulation replay]
+    M --> SIM
+    P --> SIM
+    RNG --> SIM
 ```
 
-The envelope is a compact statement of *what must agree for the recorded experiment context to agree*.
+A matching seed with different rules or inputs does not prove reproducibility.
 
-## Standard PRNG derivation
+## Deterministic versus stochastic replay
 
-`get_standard_prng(seed_string)` hashes an arbitrary seed string with SHA-256, takes the first 15 hexadecimal characters as an integer seed, and initializes NumPy's `PCG64` generator.
+| Property | Deterministic financial reconstruction | Stochastic FIRE simulation |
+|---|---|---|
+| primary continuity mechanism | canonical economic IDs | root seed + model/input provenance |
+| expected same result with same inputs | yes, within deterministic boundaries | yes only with equivalent stochastic envelope |
+| run ID stable across executions | no | no |
+| entity IDs stable across rebuilds | yes where identity contract applies | not the primary mechanism |
+| fingerprints important | yes for config/contracts/results | essential for inputs/model/results |
+| randomness involved | no | yes |
 
-This provides stable application-level seed derivation from string context.
+This distinction prevents “reproducible” from becoming one vague promise across unrelated compute models.
 
-## FIRE root seed
+## Replay is enabled by more than IDs
 
-The presentation engine receives the pipeline `run_id` as the root stochastic seed. Simulation-specific seeds are derived from that context.
+Deterministic identity is necessary for useful replay but not sufficient.
 
-This intentionally means two independent runs need not produce the same Monte Carlo paths simply because the financial inputs happen to match.
+A faithful replay also depends on:
 
-The reproducibility target is:
+- retained/canonical evidence;
+- settings and financial-rules snapshots;
+- deterministic transformation code;
+- contract structure;
+- temporal-causality rules;
+- provider evidence completeness;
+- simulation provenance where randomness is involved.
 
-> replay the recorded run using its saved context and a compatible implementation.
+Identity tells me whether reconstructed entities line up. It does not recreate missing evidence by itself.
 
-It is **not**:
+## Replay and reconciliation are related but not identical
 
-> force every future run to walk the same random path forever.
+Replay asks:
 
-That latter design would be deterministic, but it would also be a rather strange Monte Carlo simulation.
+> If I rebuild from the same authoritative evidence and policy, do I reconstruct the same economic entities/state?
 
-## Replay assertion
+Reconciliation asks:
 
-`assert_simulation_replay()` compares actual and expected values using a strict numerical tolerance and raises on mismatch. It is a verification helper, not proof of environment-independent bitwise identity.
+> Does reconstructed state agree with independently observed external state?
+
+A pipeline can replay perfectly and still reproduce the same disagreement with the broker.
+
+That is why reconciliation events are explicit domain evidence rather than treated as failures of deterministic identity.
+
+## Identity and provenance answer different questions
+
+Another useful distinction:
+
+```text
+identity   → what is this?
+provenance → where did it come from and under what run/policy?
+```
+
+A realized event can have stable identity and still be associated with different run provenance if it is reconstructed again.
+
+The architecture keeps both because auditability needs both.
 
 ## Reproducibility boundaries
 
-Exact replay can depend on more than application inputs:
+The system can make strong deterministic claims only inside declared boundaries.
 
-- model implementation compatibility;
-- NumPy/Numba behavior;
-- numerical library versions;
-- floating-point/runtime characteristics;
-- PRNG compatibility.
+Potential sources of variation include:
 
-The defensible guarantee is therefore **application-level replay under compatible implementation/runtime conditions**.
+- changed input evidence;
+- changed financial rules;
+- changed settings affecting acquisition/processing;
+- changed contract structure;
+- provider revisions;
+- intentional stochastic variation;
+- floating-point/library behavior at implementation boundaries;
+- model implementation changes.
 
-## Determinism matrix
-
-| Concern | Deterministic? | Mechanism |
-|---|---|---|
-| Purchase identity | Yes for unchanged defining evidence | Canonical ID v2 |
-| Sale identity | Yes | Canonical ID v2 |
-| Lot identity | Yes for matching lot contract | Canonical ID v2 |
-| Realized event identity | Yes | Sale + Lot identity |
-| Reconciliation identity | Yes | Dedicated reconciliation namespaces |
-| Tax event identity | Yes | Source identity + tax sub-head |
-| Settings/rules snapshot identity | Yes | Canonical JSON + SHA-256 |
-| Contract registry fingerprint | Yes for matching metadata | Sorted canonical payload + SHA-256 |
-| Monte Carlo path across independent runs | No requirement | Run-specific seed context |
-| Replay of recorded stochastic context | Intended under compatible runtime | Saved seed + fingerprints + model context |
+The provenance system exists to make those differences diagnosable, not to pretend they do not exist.
 
 ## What deterministic identity does not solve
 
-It does not make incorrect source evidence correct. It does not make reconstructed holdings broker-certified. It does not make tax estimates statutory. It does not turn stochastic forecasts into facts.
+Deterministic IDs do not prove:
 
-Identity answers **which thing**. It does not magically upgrade **what kind of thing** it is.
+- that the underlying source evidence is correct;
+- that the chosen identifying fields are economically sufficient forever;
+- that two semantically different source records cannot share identical defining fields;
+- that provider data is immutable;
+- that reconciliation is unnecessary;
+- that every analytical metric is deterministic;
+- that schema evolution can never require an identity protocol change.
+
+Identity is one reliability mechanism inside a broader model.
+
+## Identity invariants
+
+1. known economic identity namespaces use explicit field-order contracts;
+2. unknown mappings remain deterministic through sorted-key fallback;
+3. values are canonicalized before hashing;
+4. namespace and serialization version participate in the hash payload;
+5. IDs are derived from identity-defining fields, not row position;
+6. run identity remains unique rather than deterministic;
+7. configuration/rules snapshots are content-addressed;
+8. stochastic seed derivation is deterministic relative to root seed and month;
+9. simulation provenance includes model/input context beyond the seed;
+10. reconciliation remains independent evidence even under perfect replay.
+
+## Continue into failure truth
+
+Stable identity makes reconstruction meaningful. The next question is what the system can truthfully claim when reconstruction and persistence are interrupted.
+
+Continue with [Reliability and Recovery](reliability-and-recovery.md).
 
 ## Related specifications
 
-- [Data Model](data-model.md)
+- [Architecture](README.md)
 - [Control Plane Artifact Lifecycle](control-plane-artifact-lifecycle.md)
 - [Reliability and Recovery](reliability-and-recovery.md)
-- [FIFO and Realized Events](../finance/fifo-and-realized-events.md)
-- [Investment Reconciliation](../finance/investment-reconciliation.md)
-- [FIRE Methodology](../finance/fire-methodology.md)
-- [Identity and Grain Contracts](../reference/identity-and-grain-contracts.md)
+- [Data Model](data-model.md)
+- [Finance: FIFO and Realized Events](../finance/fifo-and-realized-events.md)
+- [Finance: Investment Reconciliation](../finance/investment-reconciliation.md)
+- [Finance: FIRE Methodology](../finance/fire-methodology.md)
+- [Reference: Identity and Grain Contracts](../reference/identity-and-grain-contracts.md)

@@ -1,582 +1,752 @@
 # System Architecture
 
-Personal Finance ETL is a local-first financial data platform whose architecture grew beyond a conventional ETL pipeline. It ingests heterogeneous financial evidence, preserves operational provenance, normalizes canonical facts, reconstructs investment state, executes deterministic and stochastic financial models, and publishes a contract-governed DuckDB warehouse for analytics.
+A useful architecture diagram should answer more than “what packages exist?”
 
-The architecture is deliberately layered because the system answers several different questions at once:
+For this system, the harder question is:
 
-- What evidence entered the system?
-- Has that evidence changed since the previous run?
-- What are the canonical financial facts?
-- What state must be reconstructed rather than directly observed?
-- Which engine owns each derived financial meaning?
-- What is safe to publish to BI?
-- What happened operationally if a run fails?
-- Can the persistence pair be recovered without guessing which database was newer?
+> What actually happens from the moment a run starts until financial state becomes queryable, and which component is allowed to claim authority at each step?
 
-A single “ETL box” cannot answer those questions honestly. This document maps the major components, dependency boundaries, execution topology, and ownership rules that make the system coherent.
+The cleanest way to understand the architecture is therefore to follow one complete run.
 
-## 1. System context
+## Start with the runtime boundary
+
+The application is local-first. Source evidence, financial rules, operational history, warehouse state, logs, and presentation all live on the local machine unless an external market-data provider is explicitly queried.
 
 ```mermaid
 flowchart LR
-    USER[User] --> CLI[CLI]
-    USER --> GUI[Desktop]
+    User[User] --> P[CLI / Desktop]
+    P --> F[PersonalFinanceEngine]
+    F --> O[ETLOrchestrator]
 
-    CLI --> API[PersonalFinanceEngine]
-    GUI --> API
-
-    API --> ETL[ETLOrchestrator]
-    API --> BK[SystemBackupManager]
-
-    SOURCES[Financial source evidence] --> ETL
-    RULES[Settings + FinancialRules] --> ETL
-
-    ETL --> CP[(SQLite Control Plane)]
-    ETL --> DDB[(DuckDB Warehouse)]
-
-    DDB --> BI[Power BI / analytical consumers]
+    Files[Local evidence] --> CP[SQLite Control Plane]
+    APIs[Market providers] --> APP[Application services]
+    CP --> APP
+    O --> APP
+    APP --> DOM[Financial domains]
+    DOM --> WH[DuckDB Warehouse]
+    WH --> BI[Power BI / inspection]
 ```
 
-`PersonalFinanceEngine` in `backend/api/engine.py` is the backend façade exposed to application surfaces. It validates configuration, launches the pipeline asynchronously, and coordinates snapshot/restore operations. The frontend therefore does not need to know how FIFO, Bronze synchronization, or database recovery works.
+This local boundary is a product decision, not merely a deployment default. It shapes storage, backup, locking, recovery, and provider design throughout the codebase.
 
-The façade launches the ETL in a separate process:
+## Presentation does not own execution
+
+CLI and Desktop surfaces enter through `PersonalFinanceEngine`.
+
+The façade exposes configuration history, validation, synchronous/asynchronous execution, and coordinated snapshot/restore without exposing UI code to financial internals.
 
 ```python
-process = multiprocessing.Process(
-    target=process_wrapper,
-    args=(status_queue, config_path, rules_path),
-    daemon=True,
-)
-process.start()
+# src/personal_finance_etl/application/facade.py
+def run_pipeline_sync(
+    self,
+    config_path: str = "config.toml",
+    rules_path: str = "",
+    status_queue: ILogger | None = None,
+) -> None:
+    if self.container is not None and hasattr(self.container, "create_orchestrator"):
+        orchestrator = self.container.create_orchestrator(
+            config_path=config_path,
+            rules_path=rules_path,
+            status_queue=status_queue,
+        )
+    else:
+        cfg = Settings.from_toml(config_path) if config_path else Settings()
+        rules = FinancialRules.from_toml(rules_path) if rules_path else None
+        orchestrator = ETLOrchestrator(cfg, status_queue, rules)
+    orchestrator.run()
 ```
 
-A monitoring thread converts process messages into `EngineStatus` events for the UI. Heavy analytical execution is therefore isolated from the interface process while still streaming progress and failure information back to the caller.
+The façade is deliberately application-facing rather than storage-facing. A presentation surface asks to run, validate, snapshot, or restore. It does not directly coordinate Control Plane repositories or DuckDB transactions.
 
-## 2. Package topology
+## Bootstrap assembles the runtime
 
-```text
-src/personal_finance_etl/
-├── backend/
-│   ├── api/                  # application-facing façade
-│   ├── config/               # runtime settings + financial rules
-│   ├── extract/              # physical source adapters
-│   ├── pipeline/             # orchestration + specialized pipelines
-│   ├── transform/            # canonical transformations
-│   ├── engines/
-│   │   ├── analytics/        # investment Quant / FIFO
-│   │   ├── tax/              # tax evidence normalization
-│   │   └── presentation/     # wealth, cashflow, FIRE, BI presentation
-│   ├── load/
-│   │   ├── control_plane/    # SQLite operational authority
-│   │   └── schema/           # physical DDL contracts
-│   ├── types/                # shared typed models
-│   └── utils/                # identity, replay, logging, helpers
-└── frontend/
-    ├── cli/
-    ├── desktop/
-    └── commons/docs/
-```
+`ServiceContainer` is the composition root.
 
-The directory layout mostly follows dependency responsibility rather than financial subject. Finance-specific meaning becomes concentrated in transformation and engine layers, while persistence, identity, and orchestration remain reusable infrastructure.
-
-## 3. Top-level component model
+It knows concrete configuration and infrastructure types because that is the responsibility of a composition root.
 
 ```mermaid
-flowchart TB
-    subgraph Interface
-        CLI[CLI]
-        GUI[Desktop]
-        DOCS[Integrated Docs Renderer]
-    end
-
-    subgraph Application
-        API[PersonalFinanceEngine]
-        ORCH[ETLOrchestrator]
-    end
-
-    subgraph Configuration
-        SETTINGS[Settings]
-        FR[FinancialRules]
-    end
-
-    subgraph Evidence
-        DISC[Discovery]
-        EXT[DataExtractor]
-        CP[SQLite Control Plane]
-        BR[Bronze]
-    end
-
-    subgraph Canonicalization
-        TDAG[TransformationDAG]
-        CUR[CurrencyPipeline]
-        US[USMarketPipeline]
-        BENCH[BenchmarkPipeline]
-    end
-
-    subgraph FinancialEngines
-        Q[InvestmentQuantEngine]
-        TAX[TaxEngine]
-        WEALTH[WealthPresentationEngine]
-    end
-
-    subgraph Publication
-        SILVER[SilverLayer]
-        GOLD[GoldLayer]
-        META[MetaLayer]
-    end
-
-    CLI --> API
-    GUI --> API
-    DOCS -. documentation only .-> Interface
-    API --> ORCH
-    SETTINGS --> ORCH
-    FR --> ORCH
-    ORCH --> DISC
-    DISC --> CP
-    ORCH --> EXT
-    EXT --> BR
-    CP <--> BR
-    BR --> TDAG
-    TDAG --> CUR
-    TDAG --> US
-    TDAG --> BENCH
-    CUR --> Q
-    US --> Q
-    BENCH --> Q
-    Q --> TAX
-    Q --> WEALTH
-    TAX --> WEALTH
-    TDAG --> SILVER
-    Q --> SILVER
-    TAX --> SILVER
-    Q --> GOLD
-    TAX --> GOLD
-    WEALTH --> GOLD
-    CP --> META
-    SILVER --> META
-    GOLD --> META
+flowchart TD
+    SC[ServiceContainer] --> CFG[Settings]
+    SC --> RULES[FinancialRules]
+    SC --> DB[DuckDBManager]
+    SC --> CP[ControlPlane]
+    SC --> BK[SystemBackupManager]
+    SC --> ORCH[ETLOrchestrator]
+    SC --> ENG[PersonalFinanceEngine]
 ```
 
-## 4. Application façade
+The container does not run financial algorithms and does not own pipeline sequencing. It constructs the objects that do.
 
-`PersonalFinanceEngine` intentionally exposes a narrow set of operations:
+## The orchestrator is deliberately small
 
-- recent configuration/rules history;
-- configuration validation;
-- asynchronous pipeline execution;
-- coordinated database snapshot;
-- coordinated database restore.
-
-It does **not** expose individual transformation functions or financial engines. This prevents UI code from becoming a second orchestrator with subtly different execution order.
-
-Snapshot and restore also live behind the same façade:
+The end-to-end `run()` method has one job: coordinate lifecycle and phase execution.
 
 ```python
-backup_mgr = SystemBackupManager(
-    cfg.TARGET_DB_BASE_PATH,
-    sqlite_db_name=cfg.RAW_DOCUMENT_STORE_NAME,
-    duckdb_name=cfg.TARGET_DB_NAME,
-)
-return backup_mgr.create_snapshot()
+# src/personal_finance_etl/application/pipeline/orchestrator.py
+def run(self) -> None:
+    start_time = time.perf_counter()
+    lifecycle = RunLifecycleCoordinator(
+        self.cfg, self.status_queue, self.db_manager, self.rules
+    )
+
+    try:
+        cp, run_id, _ = lifecycle.initialize()
+        self.executor.execute_phases(cp, run_id)
+        lifecycle.commit()
+    except Exception as e:
+        lifecycle.handle_failure(e)
+        raise e
+    finally:
+        lifecycle.teardown()
 ```
 
-The architectural implication is important: the application treats the SQLite Control Plane and DuckDB warehouse as one recoverable system even though they remain separate database engines.
+That decomposition is one of the central architectural moves in the runtime:
 
-## 5. Orchestration authority
+- `ETLOrchestrator` owns use-case coordination;
+- `PipelineExecutor` owns the five phase sequence;
+- `RunLifecycleCoordinator` owns run state, transactions, commit truth, failure recording, and teardown.
 
-`ETLOrchestrator` in `backend/pipeline/etl_pipeline.py` is the execution authority. It owns ordering between persistence and financial subsystems.
+The result is not fewer moving parts. It is fewer mixed responsibilities.
 
-Its high-level phases are:
+## A run begins with operational truth
 
-```mermaid
-flowchart LR
-    P1[1. Discovery & extraction] --> P2[2. Bronze synchronization]
-    P2 --> P3[3. Canonical transformation]
-    P3 --> P4[4. Financial engines]
-    P4 --> P5[5. Silver / Gold publication]
-    P5 --> META[Meta refresh]
-    META --> COMMIT[Coordinated commit]
-```
+Before financial work starts, the lifecycle coordinator opens both persistence systems and creates a run in the Control Plane.
 
-The apparent five phases contain important internal dependencies. Currency, US market reconstruction, and benchmark processing occur after the base transformation DAG but before Quant. Tax executes after Quant because it consumes realized investment events. Wealth presentation executes after Tax so tax outputs are available to downstream presentation logic.
-
-## 6. Engine ordering is a financial contract
-
-The order is not arbitrary orchestration plumbing:
-
-```mermaid
-flowchart LR
-    BASE[Canonical facts] --> Q[Investment Quant]
-    Q -->|realized events| T[Tax Engine]
-    BASE --> W[Wealth Presentation]
-    Q --> W
-    T --> W
-```
-
-The source makes the Quant → Tax dependency explicit:
-
-```python
-# Tax Engine — runs AFTER Quant (needs df_f_investment_realized_events produced by FIFO)
-# and BEFORE Presentation so that tax outputs land in self.dfs and are available to
-# WealthPresentationEngine for any current or future tax-aware presentation tables.
-tax_engine = TaxEngine(
-    df_income=self.dfs["df_f_income_transactions"],
-    df_realized_events=self.dfs["df_f_investment_realized_events"],
-    ...
-)
-```
-
-This establishes domain ownership:
-
-- Quant owns realized investment economics.
-- Tax consumes realized events and normalizes tax-relevant evidence.
-- Presentation consumes canonical/Quant/Tax outputs for BI-facing analytics.
-
-Tax does not quietly rebuild FIFO because that would create two competing definitions of realized gain.
-
-## 7. Configuration boundary
-
-### `Settings`
-
-`backend/config/settings.py` defines runtime and physical configuration: source locations, target paths, database names, discovery controls, mapping assets, and hashing behavior.
-
-### `FinancialRules`
-
-`backend/config/financial_rules.py` defines financial interpretation and model parameters: categories, investment semantics, tax exclusions, macro assumptions, portfolio rules, FIRE configuration, Monte Carlo parameters, regime models, shocks, glide paths, and withdrawal behavior.
-
-```mermaid
-flowchart TB
-    S[Settings] -->|physical execution| ETL[ETLOrchestrator]
-    F[FinancialRules] -->|financial semantics| TDAG[TransformationDAG]
-    F --> Q[Quant]
-    F --> T[Tax]
-    F --> W[Wealth / FIRE]
-```
-
-This boundary prevents a path/configuration object from becoming a dumping ground for financial policy.
-
-## 8. Evidence acquisition architecture
-
-Physical extraction is adapter-based under `backend/extract/`:
-
-- SQLite extraction;
-- CSV extraction;
-- Excel extraction;
-- currency acquisition;
-- benchmark acquisition;
-- US market acquisition;
-- statement location/categorization.
-
-`DataExtractor` coordinates actionable files supplied by the Control Plane. Discovery and extraction are therefore separate concerns:
+The sequence is deliberate:
 
 ```mermaid
 sequenceDiagram
     participant O as ETLOrchestrator
-    participant D as Statement discovery
-    participant CP as Control Plane
-    participant E as DataExtractor
-    participant B as Bronze
+    participant L as RunLifecycleCoordinator
+    participant D as DuckDB
+    participant C as SQLite Control Plane
+    participant M as DuckDB Meta
 
-    O->>D: categorize source artifacts
-    D-->>O: discovered paths by category
-    O->>CP: sync_with_disk(...)
-    CP-->>O: new / changed / renamed / pending
-    O->>E: run(actionable_files)
-    E-->>O: ExtractionResult
-    O->>B: load(extracted_data, actionable_all)
+    O->>L: initialize()
+    L->>D: open + ensure schemas
+    L->>C: open + ensure Control Plane schema
+    L->>C: start_run(settings snapshot, rules snapshot)
+    C-->>L: run_id
+    L->>C: find RECOVERY_REQUIRED runs
+    L->>M: heal DuckDB registry from Control Plane
+    L->>D: BEGIN TRANSACTION
+    L->>C: BEGIN IMMEDIATE
+    L->>C: mark RUNNING
+    L-->>O: ControlPlane, run_id, pending recovery runs
 ```
 
-The pipeline does not need to re-extract every artifact merely because Silver/Gold are rebuilt. Incremental acquisition and full analytical reconstruction are deliberately decoupled.
+This order makes the run itself part of the evidence.
 
-## 9. Control Plane boundary
+If the process fails later, the system can still reason about what it attempted because run identity and configuration provenance already exist.
 
-The SQLite Control Plane is created before analytical processing:
+## Configuration and financial policy are snapshotted separately
 
-```python
-cp = ControlPlane(self.cfg.TARGET_DB_BASE_PATH, self.cfg.RAW_DOCUMENT_STORE_NAME)
-cp.open()
-cp.ensure_schema()
-run_id = cp.runs.start_run(
-    cfg_json=self.cfg.model_dump_json(),
-    rules_json=self.rules.model_dump_json() if self.rules else None,
-)
-```
+The Control Plane stores canonical snapshots of runtime settings and financial rules.
 
-It owns historical operational state including run lifecycle, failures, settings/rules snapshots, artifact registry/payloads, artifact-run events, and simulation runs.
+This matters because replay questions have at least two dimensions:
 
-DuckDB Meta mirrors current analytical context. It is not the historical authority.
+1. was the runtime environment the same?
+2. was the financial policy the same?
 
-## 10. Persistent Bronze versus rebuilt analytics
+A path change and a Tax-rule change are not equivalent sources of variation.
 
-Bronze contracts encode whether a source is full-replace or incremental. Examples of full-replace sources include SQLite master tables and mapping/configuration assets. Transaction/market history sources are generally incremental.
+The architecture keeps them separable all the way into simulation provenance and run history.
 
-After Bronze synchronization, the pipeline reads the **complete Bronze dataset** and rebuilds canonical analytics:
+## Phase 1 asks what evidence changed
 
-```python
-bronze.load(extracted_data, actionable_all)
-full_dataset = bronze.get_full_dataset(extracted_data.mappings)
-self._transform(full_dataset)
-```
+`PipelineExecutor` starts by validating configuration and the publication registry, then discovers configured evidence.
 
-This yields an important architectural property:
+The discovered set includes statement files plus configured assets such as:
 
-> Incremental ingestion does not require incremental analytical mutation.
+- the latest SQLite source backup;
+- ISIN mapping;
+- benchmark mapping;
+- opening balances;
+- benchmark master;
+- macro parameters;
+- currency mapping;
+- column master.
 
-Silver and Gold can be deterministically reconstructed from the current persistent Bronze state.
-
-## 11. Core Polars transformation DAG
-
-`TransformationDAG` builds canonical household and investment facts as Polars LazyFrames, then executes independent nodes together:
-
-```python
-results = pl.collect_all(list(dag_nodes.values()), engine="streaming")
-```
-
-Its base nodes include category dimensions, asset dimensions, currency, benchmark master, macro parameters, household facts, investment market data, purchase/sale facts, and investment master.
-
-```mermaid
-flowchart TB
-    RAW[Complete Bronze dataset] --> DIM[Dimensions]
-    RAW --> HH[Household facts]
-    RAW --> INV[Investment source pipelines]
-
-    DIM --> CAL[Master Calendar]
-    HH --> CAL
-    INV --> CAL
-
-    INV --> MASTER[Investment Master]
-    INV --> PURCHASE[Purchase Facts]
-    INV --> SALE[Sale Facts]
-    INV --> MARKET[Market Facts]
-```
-
-Asset-specific adapters (`MutualFundPipeline`, `StockPipeline`, `USStockPipeline`) normalize source differences before the shared investment transforms create canonical outputs.
-
-## 12. Specialized enrichment pipelines
-
-Three pipelines run after the base DAG:
-
-### Currency
-
-`CurrencyPipeline` builds canonical historical FX rates over the relevant global date range.
-
-### US market reconstruction
-
-`USMarketPipeline` reconstructs historical US holdings/market state from transactions, historical prices, instrument master data, and FX evidence. This is derived state, not broker-certified daily holdings evidence.
-
-### Benchmark
-
-`BenchmarkPipeline` aligns benchmark observations with the investment universe for Quant comparison.
-
-These enrichments feed Quant rather than bypassing canonical processing.
-
-## 13. Investment Quant architecture
-
-`InvestmentQuantEngine` receives canonical purchases, sales, market data, instrument master, benchmark data, macro parameters, FX, rules, and the run ID.
-
-```mermaid
-flowchart TB
-    P[Purchases] --> Q[InvestmentQuantEngine]
-    S[Sales] --> Q
-    M[Market data] --> Q
-    I[Investment master] --> Q
-    B[Benchmark data] --> Q
-    FX[FX] --> Q
-    MAC[Macro parameters] --> Q
-    RULES[FinancialRules] --> Q
-
-    Q --> LOT[Investment Analytics Lot]
-    Q --> REAL[Realized Events]
-    Q --> RECON[Reconciliation Events]
-    Q --> PG[Portfolio Gold outputs]
-```
-
-The engine's internal `FIFOPortfolio` owns canonical lot reconstruction and realized disposal events. Reconciliation is explicit financial provenance rather than a silent mutation of inconvenient state.
-
-Detailed financial semantics belong in the Finance specifications.
-
-## 14. Tax architecture
-
-`TaxEngine` consumes household income evidence and Quant realized events. It publishes canonical `f_Tax_Events` plus three Gold outputs:
-
-- `Tax_Year_Summary`;
-- `Tax_Income_Breakdown`;
-- `Tax_Reconciliation`.
-
-The engine is evidence-first and produces indicative tax estimates. It is not a complete statutory tax-liability calculator.
-
-## 15. Wealth and FIRE architecture
-
-`WealthPresentationEngine` composes core builders and presentation modules around canonical/Quant/Tax inputs. Its output is a set of LazyFrames collected concurrently by the orchestrator.
-
-```python
-keys = list(presentation_lazy.keys())
-lazy_frames = [presentation_lazy[k] for k in keys]
-results = pl.collect_all(lazy_frames, engine="streaming")
-```
-
-The engine includes inflation, ledger, net-worth, spending, income-stream, budget, investment-presentation, cashflow, wealth-risk, and FIRE logic.
-
-The root stochastic seed is the run ID:
-
-```python
-wealth_engine = WealthPresentationEngine(rules=self.rules, root_seed=run_id)
-```
-
-Simulation provenance is subsequently recorded in the Control Plane.
-
-## 16. Contract registry
-
-The analytical registry is not optional metadata. It controls publication order and expected outputs.
-
-Current inventory:
-
-| Layer | Registered contracts |
-|---|---:|
-| Bronze | 20 |
-| Silver | 24 |
-| Gold | 22 |
-| Silver + Gold | 46 |
-| Total physical contract registry | 66 |
-
-`DataContract` records:
-
-```python
-@dataclass
-class DataContract:
-    contract_id: str
-    layer: str
-    physical_table: str
-    domain: str
-    grain: str
-    producer: str
-    publication_order: int
-```
-
-The registry therefore connects logical engine outputs to physical warehouse publication.
-
-## 17. Publication topology
+The Control Plane then compares discovery against historical artifact state.
 
 ```mermaid
 flowchart LR
-    DFS[Validated analytical datasets] --> S[SilverLayer]
-    DFS --> G[GoldLayer]
-    S --> DS[(DuckDB silver)]
-    G --> DG[(DuckDB gold)]
-    DS --> M[MetaLayer]
-    DG --> M
-    CP[(Control Plane)] --> M
-    M --> DM[(DuckDB meta)]
+    DISC[Discovered paths] --> HASH[Hash policy]
+    HASH --> SYNC[FileSyncService]
+    REG[Artifact registry] --> SYNC
+    SYNC --> N[New]
+    SYNC --> C[Changed]
+    SYNC --> R[Renamed]
+    SYNC --> M[Missing / removed]
+    PAY[Missing payload state] --> SYNC
 ```
 
-Silver and Gold rebuild their analytical schemas. They are current publications, not append-only historical ledgers.
+The important distinction is that path comparison is not enough. Artifact identity, content hash, payload presence, category, and prior status participate in the decision.
 
-## 18. Transaction boundary
+## Extraction reads from the Raw Store, not from arbitrary live paths
 
-The run begins transactions in both databases:
+Once an artifact is actionable, the ingestion coordinator reads bytes from the Control Plane payload store.
 
 ```python
-self.db_manager.conn.execute("BEGIN TRANSACTION")
-cp.begin_transaction()
+# src/personal_finance_etl/application/ingestion/coordinator.py
+def _get_bytes(self, filepath: str) -> bytes:
+    """Fetch bytes from Raw Store. Raise FileNotFoundError if missing."""
+    raw_bytes = self.cp.artifacts.get_file_bytes(filepath)
+    if raw_bytes is None:
+        raise FileNotFoundError(f"Binary payload not found in Raw Store for: {filepath}")
+    return raw_bytes
 ```
 
-The successful commit path is intentionally ordered:
+This is a subtle but important architecture choice.
 
-```mermaid
-sequenceDiagram
-    participant E as ETLOrchestrator
-    participant D as DuckDB
-    participant S as SQLite Control Plane
+Discovery observes the filesystem. Extraction consumes captured evidence.
 
-    E->>D: COMMIT
-    D-->>E: committed
-    E->>S: COMMIT
-    S-->>E: committed
-    E->>S: finish_run(SUCCESS)
-```
+That reduces the chance that a file changes between discovery and transformation without the operational record knowing about it.
 
-If SQLite commit fails after DuckDB commits, the databases can temporarily diverge. The code explicitly relies on idempotency and Bronze self-healing on the next run. This is coordinated recovery, not distributed ACID.
+## Extraction is typed and completeness-aware
 
-## 19. Failure topology
+The ingestion layer does more than parse files.
 
-Before commit, failures attempt rollback in both stores and record operational failure details:
+It constructs `ExtractionResult` and related typed contracts, records external provider requests, and runs a schema gate across active lazy streams before transformation proceeds.
+
+The extraction gate uses `collect_schema()` and a small materialization to surface malformed source structure early rather than allowing invalid state to fail deep inside finance engines.
 
 ```mermaid
 flowchart TD
-    ERR[Exception] --> DR[Attempt DuckDB rollback]
-    ERR --> SR[Attempt SQLite rollback]
-    DR --> LOG[Log run failure]
-    SR --> LOG
-    LOG --> FAIL[Finish run FAILED]
-    FAIL --> CLEAN[Close connections / persist compressed log]
+    Bytes[Captured bytes] --> Extract[File-specific extractors]
+    Extract --> Lazy[LazyFrames / raw records]
+    Lazy --> Gate[Schema gatekeeper]
+    Gate -->|pass| ER[ExtractionResult]
+    Gate -->|fail| F[FailureDomain.SOURCE_VALIDATION]
 ```
 
-Investment workload failures can preserve the failed ISIN and stage. Other exceptions are recorded as pipeline failures with type, message, and traceback.
+## Phase 2 synchronizes persistent Bronze
 
-The finalizer persists a compressed execution log into the Control Plane where possible.
+Bronze is not merely a staging schema rebuilt every run.
 
-## 20. Recovery and backup boundary
+It is the analytical persistence boundary for synchronized raw evidence.
 
-`SystemBackupManager` coordinates snapshots and restores for the SQLite/DuckDB pair. It uses the application lock, checkpoints DuckDB, uses SQLite's backup API, validates archives/databases, and performs rollback-aware pair replacement during restore.
+`BronzeLayer.load()` applies the registered Bronze contract model, upserts or full-replaces according to contract semantics, and then marks Control Plane artifacts synchronized.
 
-The detailed protocol belongs in `backup-and-restore.md`; the important system-level rule is that the two databases are **separate transaction engines but one application recovery unit**.
-
-## 21. Frontend and documentation integration
-
-CLI and desktop interfaces are adapters over the backend façade. Documentation rendering is centralized under `frontend/commons/docs/`, allowing the same documentation catalog to be surfaced inside application interfaces rather than maintaining a second hard-coded guide list.
-
-That is why the documentation manifest is updated only after the new catalog is complete: navigation is part of the application surface, not an afterthought stapled to Markdown.
-
-## 22. Architectural guarantees
-
-The implementation supports the following defensible guarantees:
-
-1. Analytical publication is contract-governed.
-2. Bronze persists synchronized source state across runs.
-3. Silver and Gold rebuild from current complete Bronze state.
-4. The Control Plane preserves historical run/artifact provenance.
-5. Canonical financial identities are deterministic under their serialization contracts.
-6. Quant owns canonical FIFO realization and reconciliation.
-7. Tax consumes realized evidence rather than independently reconstructing investment gains.
-8. Historical US price/FX joins are causal rather than future-looking.
-9. Simulation context records seeds, snapshots, and fingerprints.
-10. Backup/restore treats the persistence pair as one recoverable application unit.
-
-## 23. Explicit non-guarantees
-
-The architecture does **not** claim:
-
-- distributed ACID across SQLite and DuckDB;
-- broker certification of reconstructed US historical holdings;
-- statutory final tax liability;
-- eternal binary retention for every historical artifact event;
-- environment-independent bit-for-bit Monte Carlo replay forever;
-- incremental Silver/Gold mutation;
-- comprehensive conventional automated test coverage for every runtime invariant.
-
-These boundaries are features of honest architecture documentation, not disclaimers to hide in tiny print.
-
-## 24. Architectural character
-
-The most important design characteristic is not the number of engines. It is **ownership discipline**:
+Rename migrations can update Bronze identity without treating a path move as new economic evidence.
 
 ```mermaid
 flowchart LR
-    SOURCE[Evidence] --> CP[Operational provenance]
-    SOURCE --> CANON[Canonical facts]
-    CANON --> RECON[Reconstructed state]
-    RECON --> PRESENT[Financial presentation]
+    CP[Raw Store + registry] --> EX[ExtractionResult]
+    EX --> B[BronzeLayer]
+    REG[BRONZE_CONTRACT_REGISTRY] --> B
+    B --> DB[(bronze.*)]
+    B --> CP2[mark synced / healed]
 ```
 
-A source observation remains evidence. A reconstruction remains a reconstruction. A presentation table remains presentation. The system becomes sophisticated precisely because it avoids flattening all four into one giant “finance dataframe” and hoping future Shan can remember what each column meant.
+After synchronization, the executor logs a run-level sync summary: actionable, synced, healed, failed, deferred, and final sync status.
+
+That makes Bronze completeness inspectable per run.
+
+## Complete Bronze state becomes the transformation input
+
+The system does not transform only the changed fragments and hope the rest of the analytical state still lines up.
+
+After incremental synchronization, `BronzeLayer.get_full_dataset()` reconstructs the complete input state for downstream transformation.
+
+That gives the architecture a useful split:
+
+```text
+incremental evidence synchronization
+             +
+complete deterministic analytical rebuild
+```
+
+The approach fits a personal-finance workload where input history grows gradually but the total dataset remains small enough for full analytical recomputation to be cheap and safer than complex partial dependency invalidation.
+
+## Phase 3 changes vocabulary
+
+The base transformation DAG converts source-oriented shapes into canonical financial tables and dimensions.
+
+`TransformationDAG` coordinates household dimensions, transactions, investment input tables, and the calendar.
+
+The important architectural transition is semantic:
+
+```mermaid
+flowchart LR
+    SRC[Source vocabulary] --> CAN[Canonical vocabulary]
+    CAN --> DIM[Dimensions]
+    CAN --> FACT[Transactions / balances]
+    CAN --> INV[Investment master + trade evidence]
+```
+
+A broker field becomes useful only after the system decides what it means in the canonical model.
+
+This is the first major point where observed evidence becomes financial interpretation.
+
+## Market evidence is enriched after the base DAG
+
+Currency, US market history, and benchmarks have separate application services because their completeness and temporal rules differ from local file transformation.
+
+The architecture keeps provider acquisition in infrastructure and orchestration in application.
+
+```mermaid
+flowchart TB
+    APP[Application market sync] --> FXP[Currency provider]
+    APP --> USP[US market provider]
+    APP --> BMP[Benchmark provider]
+    FXP --> DM[domain/market]
+    USP --> IV[domain/investments/valuation]
+    BMP --> BENCH[domain/market + valuation]
+    APP --> BR[Bronze / Control Plane provenance]
+```
+
+External evidence is not allowed to appear as an untracked side effect. Provider request provenance belongs to the same operational history as file evidence.
+
+## Phase 4 reconstructs economic state
+
+The financial engines consume canonical state and produce reconstructed, reconciled, and analytical datasets.
+
+The investment domain is the largest example.
+
+```mermaid
+flowchart TD
+    Trades[Canonical purchases + sales] --> FIFO[FIFO lot engine]
+    Market[Market / FX state] --> VAL[Valuation]
+    FIFO --> REAL[Realized events]
+    FIFO --> LOTS[Open lots]
+    Broker[Observed holdings] --> RECON[Reconciliation]
+    LOTS --> RECON
+    RECON --> PORT[Portfolio snapshots]
+    VAL --> PORT
+    REAL --> PERF[Performance + attribution]
+    PORT --> PERF
+    PERF --> TAX[Tax evidence]
+```
+
+The architecture separates **book state**, **market state**, **realized state**, and **reconciliation evidence** because collapsing them would destroy useful explanations for why a value exists.
+
+## Reconciliation is not an error-correction delete
+
+When reconstructed holdings disagree with observed broker evidence, the system records reconciliation semantics rather than silently mutating history to force equality.
+
+That distinction allows two different discrepancies to remain visible:
+
+- quantity difference;
+- cost-basis difference.
+
+They are economically different and can require different synthetic adjustments.
+
+The data model and identity specifications define those grains in detail.
+
+## Tax consumes evidence produced by upstream domains
+
+The Tax domain does not parse broker statement formats directly.
+
+It consumes canonical income evidence and investment events after those events have acquired stable identity and financial meaning.
+
+That architecture prevents Tax rules from duplicating source-specific parsing or FIFO logic.
+
+```mermaid
+flowchart LR
+    Income[Canonical income] --> TAX[Tax domain]
+    Realized[Realized investment events] --> TAX
+    Rules[FinancialRules.tax] --> TAX
+    TAX --> TE[Tax evidence]
+    TE --> TP[Tax presentation]
+```
+
+Investment-income exclusions are explicit where needed to avoid double counting income already represented by investment evidence.
+
+## Wealth combines domains late
+
+Wealth is intentionally downstream.
+
+It combines household, investment, and Tax state after those domains have established their own semantics.
+
+This avoids making the wealth model an accidental owner of source parsing, investment reconstruction, or Tax classification.
+
+```mermaid
+flowchart TD
+    HH[Household cashflow] --> W[Wealth]
+    INV[Investment state] --> W
+    TAX[Tax state] --> W
+    W --> NW[Net worth]
+    W --> SCORE[Wealth analytics / scoring]
+    W --> FIRE[FIRE inputs]
+```
+
+Late composition is one of the main ways the architecture prevents circular financial ownership.
+
+## FIRE has deterministic and stochastic halves
+
+The FIRE domain intentionally distinguishes deterministic forecast construction from stochastic simulation.
+
+The deterministic side prepares FI targets, savings/spend history, inflation context, age, and seeded monthly inputs.
+
+The stochastic side uses a Numba-compiled Monte Carlo kernel for computationally heavy path simulation.
+
+This is an example of the architecture allowing different compute models inside one domain while keeping shared provenance explicit.
+
+```mermaid
+flowchart LR
+    W[Wealth / cashflow inputs] --> D[Deterministic FIRE forecast]
+    D --> I[Simulation inputs]
+    I --> S[Seed derivation]
+    S --> MC[Numba Monte Carlo]
+    MC --> R[Risk analytics]
+```
+
+## Lazy execution remains lazy until a justified boundary
+
+Polars `LazyFrame` is used extensively for transformations and presentation calculations.
+
+The architecture does not treat laziness as ideology. It treats materialization as something that must have a reason.
+
+Examples of legitimate boundaries include:
+
+- validation that requires seeing schema/data;
+- parallel terminal collection of independent presentation graphs;
+- final Silver or Gold publication;
+- algorithmic boundaries requiring concrete arrays or Python records.
+
+Gold publication logs the optimized plan before terminal collection:
+
+```python
+# src/personal_finance_etl/infrastructure/warehouse/gold.py
+if isinstance(df, pl.LazyFrame):
+    compact_plan = df.explain().replace("\n", " | ")
+    logger.debug(
+        "[DAG:OPTIMIZER] Physical Plan for Gold '%s': %s", table_name, compact_plan
+    )
+    # Materialization Boundary: PUBLICATION_BOUNDARY
+    df = df.collect()
+```
+
+That turns execution boundaries into inspectable design decisions rather than accidental eager computation.
+
+## Contract completeness closes the financial loop
+
+Before publication, the executor compares produced datasets with `DATA_CONTRACT_REGISTRY`.
+
+```python
+registered_contracts = {c.contract_id for c in DATA_CONTRACT_REGISTRY}
+for df_key in self.dfs:
+    if df_key not in registered_contracts:
+        raise RuntimeError(
+            f"Engine produced unregistered table '{df_key}'. "
+            "All analytical tables must be defined in DATA_CONTRACT_REGISTRY."
+        )
+
+missing_contracts = registered_contracts - set(self.dfs)
+if missing_contracts:
+    raise RuntimeError(f"Engine failed to produce required tables: {missing_contracts}")
+```
+
+The registry is therefore not only documentation metadata. It is an execution gate.
+
+A table cannot quietly appear or disappear from the analytical contract without the pipeline noticing.
+
+## Phase 5 publishes rebuilt analytical state
+
+Silver and Gold are recreated from the current successful in-memory analytical state.
+
+Silver publication is ordered by `publication_order` from the registry and recreates the schema before insertion.
+
+Gold does the same for presentation tables.
+
+```mermaid
+sequenceDiagram
+    participant E as PipelineExecutor
+    participant S as SilverLayer
+    participant G as GoldLayer
+    participant M as MetaLayer
+    participant D as DuckDB
+
+    E->>S: load(dfs)
+    S->>D: recreate silver schema + publish contracts
+    E->>G: load(dfs)
+    G->>D: recreate gold schema + publish contracts
+    E->>M: load(dfs, ControlPlane)
+    M->>D: refresh row counts, config, rules, contracts, current context
+```
+
+The full-replace strategy is possible because Bronze preserves evidence and the analytical state is deterministic enough to rebuild cheaply.
+
+## Meta is current context, not historical authority
+
+`meta.*` records useful inspection state such as:
+
+- table row counts;
+- current settings;
+- current financial rules;
+- data-contract inventory;
+- current file context.
+
+It is intentionally convenient for analytics and diagnostics.
+
+But run history, artifact events, failures, raw payloads, provider requests, and simulation history remain in SQLite.
+
+This avoids two competing histories.
+
+## The runtime has two transaction systems, not one distributed transaction
+
+DuckDB and SQLite each have a local transaction.
+
+The lifecycle coordinator starts both and commits them in a deliberate order.
+
+```mermaid
+stateDiagram-v2
+    [*] --> NOT_STARTED
+    NOT_STARTED --> STARTED: both transactions opened
+    STARTED --> ROLLED_BACK: failure before DuckDB commit
+    STARTED --> DUCKDB_COMMITTED: DuckDB COMMIT succeeds
+    DUCKDB_COMMITTED --> FULLY_COMMITTED: SQLite COMMIT succeeds
+    DUCKDB_COMMITTED --> RECOVERY_REQUIRED: SQLite COMMIT fails
+    RECOVERY_REQUIRED --> CONVERGED: later successful run heals state
+```
+
+This is not atomic two-phase commit in the distributed-systems sense. There is no transaction coordinator capable of rolling back a committed DuckDB transaction after SQLite fails.
+
+The architecture instead models that uncomfortable truth explicitly.
+
+## DuckDB commits first because the failure asymmetry is understood
+
+The chosen commit order means the dangerous split state is:
+
+```text
+DuckDB = committed analytical state
+SQLite = not committed operational state
+```
+
+That state is detectable and marked `RECOVERY_REQUIRED`.
+
+If SQLite committed first and DuckDB then failed, the operational authority could claim events and success metadata for analytical state that never became durable. The chosen order keeps recovery centered on reconciling operational metadata to analytical reality.
+
+The trade-off is documented rather than hidden.
+
+## Stale runs preserve uncertainty
+
+A process can die without running normal failure handling.
+
+When the Control Plane opens, schema initialization triggers stale-run recovery logic. Interrupted runs are not silently relabeled as success.
+
+The operational record retains uncertainty so a later run can reason about convergence.
+
+This is another recurring architectural principle:
+
+> when the system cannot prove a stronger claim, store the weaker truthful claim.
+
+## Failure is classified as data
+
+`FailureDomain` gives failures a machine-readable taxonomy:
+
+```text
+CONFIGURATION
+SOURCE_DISCOVERY
+SOURCE_VALIDATION
+EXTERNAL_PROVIDER
+BRONZE_SYNC
+TRANSFORMATION
+FINANCIAL_INVARIANT
+PUBLICATION
+DUCKDB_COMMIT
+SQLITE_COMMIT
+RECOVERY
+SNAPSHOT
+RESTORE
+WORKER
+UNKNOWN
+```
+
+The classifier uses error type/message patterns and stage names to assign a domain deterministically.
+
+That supports operational analysis without making the user parse free-form tracebacks to understand where a run failed.
+
+## Worker failure is a process-boundary problem
+
+Asynchronous execution runs the pipeline in a separate process and streams typed status messages back to presentation.
+
+A worker crash must therefore become a parent-visible application outcome, not disappear as a child-process traceback.
+
+That requirement is why worker coordination and status contracts live at the application/process boundary rather than inside the Desktop UI.
+
+## Recovery has two different strategies
+
+The architecture separates **reconstruction** from **restoration**.
+
+### Reconstruction / convergence
+
+Use retained evidence and deterministic rebuilding to converge the analytical and operational stores.
+
+This is the default recovery philosophy for run-level failures.
+
+### Snapshot restore
+
+Use a coordinated archive to return both database files to a previously captured state.
+
+This is appropriate for database corruption, destructive operator mistakes, or cases where reconstruction is not the desired recovery path.
+
+The distinction prevents backup from becoming the normal answer to every failed run.
+
+## Snapshots treat both databases as one recovery unit
+
+`SystemBackupManager` coordinates SQLite and DuckDB capture under the same pipeline lock.
+
+It checkpoints DuckDB, uses SQLite's backup API for a consistent SQLite copy, optionally includes DuckDB WAL state, validates the archive, and publishes only after verification.
+
+Restore validates the archive before production files are moved.
+
+That design is described in [Backup and Restore](backup-and-restore.md).
+
+## The Control Plane and Warehouse solve different persistence problems
+
+```mermaid
+flowchart TB
+    subgraph Operational[Operational authority]
+        CP[(SQLite Control Plane)]
+        CP1[artifact registry + payloads]
+        CP2[run lifecycle + failures]
+        CP3[event history]
+        CP4[provider + simulation provenance]
+    end
+
+    subgraph Analytical[Analytical state]
+        DB[(DuckDB)]
+        BR[Bronze]
+        SI[Silver]
+        GO[Gold]
+        ME[Meta]
+    end
+
+    CP1 --> BR
+    BR --> SI --> GO
+    CP2 -. current context .-> ME
+    CP3 -. healing context .-> ME
+```
+
+The architecture deliberately resists the temptation to make one engine perform both jobs simply to reduce the number of files on disk.
+
+## The complete runtime in one view
+
+```mermaid
+flowchart TB
+    subgraph Human[Human surfaces]
+        CLI[CLI]
+        GUI[Desktop]
+        DOCS[Embedded docs]
+    end
+
+    subgraph App[Application]
+        F[PersonalFinanceEngine]
+        O[ETLOrchestrator]
+        E[PipelineExecutor]
+        L[RunLifecycleCoordinator]
+        ING[Ingestion services]
+        AIS[Investment services]
+        TAXS[Tax service]
+        WS[Wealth service]
+    end
+
+    subgraph Meaning[Financial domains]
+        HH[Household]
+        MK[Market]
+        INV[Investments]
+        TAX[Tax]
+        WEALTH[Wealth]
+        FIRE[FIRE]
+    end
+
+    subgraph Infra[Infrastructure]
+        CP[(SQLite Control Plane)]
+        DUCK[(DuckDB Warehouse)]
+        PF[File providers]
+        PM[Market providers]
+        BK[Backup / restore]
+        LOG[Logging]
+    end
+
+    CLI --> F
+    GUI --> F
+    DOCS -. human guidance .-> GUI
+    F --> O
+    O --> E
+    O --> L
+    E --> ING
+    E --> AIS
+    E --> TAXS
+    E --> WS
+    ING --> PF
+    ING --> CP
+    AIS --> INV
+    AIS --> MK
+    TAXS --> TAX
+    WS --> WEALTH
+    WEALTH --> FIRE
+    HH --> DUCK
+    INV --> DUCK
+    TAX --> DUCK
+    WEALTH --> DUCK
+    FIRE --> DUCK
+    L --> CP
+    L --> DUCK
+    PM --> MK
+    BK --> CP
+    BK --> DUCK
+    LOG -. telemetry .-> O
+```
+
+The diagram is large because the runtime is real. The purpose of the architecture is not to make it look small. It is to make each arrow explainable.
+
+## What the architecture guarantees
+
+The implementation is designed to maintain these properties:
+
+1. financial-domain code does not depend on DuckDB or SQLite;
+2. presentation does not own financial calculation or persistence;
+3. operational run history remains in the Control Plane;
+4. analytical publication is registry-governed;
+5. persistent Bronze retains synchronized analytical evidence;
+6. Silver and Gold can be rebuilt from complete state;
+7. economic entities use deterministic identity where stable replay matters;
+8. reconciliation remains explicit evidence rather than destructive correction;
+9. cross-database split commit is represented as a real state;
+10. backup/restore coordinates both database files as one recovery unit;
+11. stochastic simulation provenance is distinguishable from deterministic reconstruction;
+12. architecture import rules are executable tests.
+
+## What the architecture does not guarantee
+
+It does **not** claim:
+
+- distributed atomic commit across SQLite and DuckDB;
+- perfect external provider availability;
+- automatic correction of semantically wrong source evidence;
+- deterministic equality for intentionally stochastic simulation without matching seed/provenance;
+- zero-cost full analytical rebuilds at arbitrary future scale;
+- that every source can be generalized before its variation has actually been observed;
+- that a snapshot taken outside the coordinated manager is a valid recovery unit.
+
+These are explicit boundaries, not embarrassing footnotes.
+
+## The architecture is stable because the contracts are clearer than the components
+
+The strongest sign of architectural maturity is not that files stop changing.
+
+It is that new work has an obvious place to go.
+
+A new broker source should fit the provider/ingestion boundary. A new financial model should fit a domain. A new cross-boundary outcome should become a contract only if the boundary genuinely needs it. A new presentation should enter through the façade. A new persistence mechanism should remain infrastructure. A new orchestration step should not migrate formulas into application code.
+
+That is the practical payoff of the architecture.
+
+## Continue with dependency legality
+
+Now that the runtime is visible, the next question is why these components are allowed to depend on one another in this particular shape.
+
+Read [Application and Dependency Architecture](application-and-dependency-architecture.md), then follow one run in finer detail through [Data Lifecycle](data-lifecycle.md).
 
 ## Related specifications
 
+- [Architecture](README.md)
+- [Application and Dependency Architecture](application-and-dependency-architecture.md)
 - [Data Lifecycle](data-lifecycle.md)
 - [Warehouse Architecture](warehouse-architecture.md)
-- [Data Model](data-model.md)
 - [Control Plane Artifact Lifecycle](control-plane-artifact-lifecycle.md)
-- [Deterministic Identity and Replay](deterministic-identity-and-replay.md)
 - [Reliability and Recovery](reliability-and-recovery.md)
 - [Backup and Restore](backup-and-restore.md)
-- [Design Decisions](design-decisions.md)
+- [Data Model](data-model.md)

@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [9.2.7](https://github.com/tks18/personal-finance-etl/compare/9.2.6...9.2.7) (2026-10-19)
+
+
+### Docs 📃
+
+* **readme:** lint fix ([27b6b3b](https://github.com/tks18/personal-finance-etl/commit/27b6b3babb3d55a1fcc6b41af3c76c8c0f9dffcc))
+* update docs for heading tags ([6b63656](https://github.com/tks18/personal-finance-etl/commit/6b63656a18f992928b0eb8f82123163449d3cc79))
+* update docs/about for latest version ([a0fbdb5](https://github.com/tks18/personal-finance-etl/commit/a0fbdb5c5ad0b4e362ce15858be42cd017978e5a))
+* update docs/architecture for latest version ([7a0cbf1](https://github.com/tks18/personal-finance-etl/commit/7a0cbf14917bd5d1c73953ce367a0a20a6a041cd))
+* update docs/configuration for latest version ([46fe505](https://github.com/tks18/personal-finance-etl/commit/46fe505d5c7416a7b7af58d473d90f3c773cbd04))
+* update docs/developer for latest version ([f2411f0](https://github.com/tks18/personal-finance-etl/commit/f2411f0447224642f10d0fd1d19f44cffcf1325e))
+* update docs/finance for latest version ([57e66de](https://github.com/tks18/personal-finance-etl/commit/57e66de41efcf85fa6def4e29553903c87b02e4e))
+* update docs/getting-started for latest version ([0cad663](https://github.com/tks18/personal-finance-etl/commit/0cad663106943e636d5e9912cf7a7af4329dc35a))
+* update docs/manifest for latest version ([37b403d](https://github.com/tks18/personal-finance-etl/commit/37b403d5cd46a825495655df4a63221f1b996fbf))
+* update docs/readme for latest version ([0f50bd8](https://github.com/tks18/personal-finance-etl/commit/0f50bd899c16f54cd3c9f7f838dd04f498df0298))
+* update docs/reference for latest version ([b3eba78](https://github.com/tks18/personal-finance-etl/commit/b3eba78a6ae3eedd4b770bb82e7f913c7ad420e7))
+* update docs/roadmap for latest version ([ea8179d](https://github.com/tks18/personal-finance-etl/commit/ea8179dd6ff2094252217ed23d59f6e9e8826d97))
+* update root readme for latest version ([3648413](https://github.com/tks18/personal-finance-etl/commit/3648413e042ca128511e13d06532c91d6a5c02bd))
+
 ### [9.2.6](https://github.com/tks18/personal-finance-etl/compare/9.2.5...9.2.6) (2026-10-18)
 
 

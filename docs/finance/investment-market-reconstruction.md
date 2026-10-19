@@ -1,515 +1,698 @@
 # Investment Market Reconstruction
 
-Historical market reconstruction exists because the US broker source does not provide a reliable daily holdings history equivalent to the available transaction evidence. Personal Finance ETL therefore reconstructs historical US position state from canonical transactions and historical market/FX observations. The result is derived financial state for valuation and analytics, not independent broker-certified holdings evidence.
+A market-price table is not yet a market state.
 
-This distinction is non-negotiable: reconstruction can be deterministic and useful without pretending it was observed.
+For an investment engine, a valuation date only becomes meaningful when the application can answer four questions together:
+
+1. **What quantity was economically open on that date?**
+2. **Which acquisition basis still belonged to that open quantity?**
+3. **Which market observation was actually available by that date?**
+4. **Which FX observation was valid for the same economic instant?**
+
+This specification explains how I reconstruct that state, especially for US equities where historical broker holdings are not always available as a complete daily series.
+
+The reconstruction is deliberately conservative. It never treats a later quote as if it existed earlier, never invents a missing FX rate, and never lets a stale market observation quietly masquerade as current value.
+
+```mermaid
+flowchart LR
+    P["Canonical purchases"]
+    S["Canonical sales"]
+    PX["Observed market prices"]
+    FX["Observed FX rates"]
+
+    P --> H["Daily holding spine"]
+    S --> H
+    PX --> J["Backward as-of valuation join"]
+    H --> J
+    FX --> F["FX resolution"]
+    J --> F
+    F --> V["Local + INR valuation state"]
+```
+
+The result is **reconstructed analytical state**, not a claim that a broker independently certified every historical daily holding.
 
 ## Implementation authority
 
-The primary implementation is:
+The core implementation lives in:
 
 ```text
-backend/transform/us_stocks_transformer.py::transform_us_market_data
+src/personal_finance_etl/domain/investments/valuation/market_state.py
 ```
 
-with upstream evidence from canonical purchase/sale transformations and historical US price/currency sources. Canonical FIFO remains owned by `backend/engines/analytics/core/fifo.py`; this transformer does not replace it.
+The module owns:
 
-## Why reconstruction is necessary
+- the continuous US market-state spine;
+- FIFO-like daily quantity reconstruction;
+- backward as-of price selection;
+- a bounded seven-day price staleness rule;
+- FX translation;
+- local and INR valuation/P&L fields.
 
-A daily valuation series requires daily position quantity and a valid market observation. When a broker supplies transactions but not reliable downloadable daily holdings, there are two choices:
+It explicitly does **not** own:
 
-1. abandon historical position analytics; or
-2. reconstruct state from the evidence that does exist.
+- Yahoo Finance acquisition;
+- FX API acquisition;
+- warehouse persistence;
+- canonical Tax-lot accounting.
 
-The implementation chooses reconstruction and makes the derivation explicit.
+That separation matters because market reconstruction answers **“what did the position look like on this date?”**, while canonical lot accounting answers **“which economic acquisition lots are still open, and what happens when they are disposed?”**
 
-```mermaid
-flowchart LR
-    TX[Canonical buys / sells] --> POS[Reconstructed daily position]
-    PX[Historical US prices] --> VAL[Daily valuation]
-    FX[Historical FX] --> VAL
-    POS --> VAL
-    VAL --> M[f_Investment_Market_Data]
+## Why a reconstruction layer exists
+
+A daily valuation series needs a daily position state.
+
+For some source families, broker statements already expose sufficiently direct holdings evidence. For US equities, the available evidence can be more transaction-centric. The engine therefore reconstructs a daily state from purchases and sales, then combines that state with market observations.
+
+The resulting hierarchy is:
+
+```text
+transaction evidence
+    ↓
+reconstructed daily quantity + acquisition basis
+    ↓
+causally valid market observation
+    ↓
+causally valid FX observation
+    ↓
+valuation state
 ```
 
-## Inputs
+This is not a cosmetic staging step. It protects temporal causality.
 
-The transformer consumes the evidence required to establish:
+## Inputs and their authority
 
-- canonical US purchases;
-- canonical US sales;
-- instrument identity;
-- historical price observations;
-- historical FX observations;
-- the date range over which position state must be reconstructed.
-
-The exact function signature should remain the code authority, but the semantic inputs above define the financial contract.
-
-## Step 1: transaction events
-
-Purchases add quantity; sales remove quantity. The transformer converts transaction evidence into a dated position-change stream.
-
-Conceptually:
-
-$$
-\Delta Q_t = Q_{buy,t} - Q_{sell,t}
-$$
-
-The outstanding quantity at date $t$ is the cumulative state after applying transaction events through that date.
-
-```mermaid
-sequenceDiagram
-    participant B as Buy evidence
-    participant S as Sale evidence
-    participant R as Reconstruction
-    participant D as Daily state
-    B->>R: +quantity on transaction date
-    S->>R: -quantity on transaction date
-    R->>D: carry resulting state through dates
-```
-
-## Step 2: holdings spine
-
-The implementation maintains remaining quantities using transaction chronology so the daily market state can retain acquisition-price context. This is FIFO-like state for valuation reconstruction, but it is deliberately not the canonical acquisition-lot ledger.
-
-Why not? Because the Quant Engine already owns lot identities, realized events, holding-period classification and reconciliation. Duplicating canonical lot authority here would create two answers to “which lot was sold?”, which is one answer too many.
-
-```mermaid
-flowchart TD
-    P[Purchase events] --> H[Historical holdings spine]
-    S[Sale events] --> H
-    H --> G[Remaining quantity grouped for market state]
-    G --> D[Expand to valuation dates]
-    D --> J[Join price + FX]
-```
-
-## Step 3: daily date expansion
-
-Transaction events occur sparsely; valuation is needed at daily analytical dates. The reconstructed state is therefore carried across the relevant date domain until the next transaction changes quantity.
-
-A date with no transaction is not a date with zero holdings. It is a date where the previous position state continues.
-
-## Step 4: historical price selection
-
-Historical US price observations are joined using backward as-of semantics. The valuation date may consume an observation from the same day or an earlier day, but never a later day.
+The function signature makes the required evidence explicit:
 
 ```python
-df_spine = (
-    df_spine.join_asof(
-        df_prices,
-        on="Date",
-        by="ISIN",
-        strategy="backward",
-    )
-    .sort(["ISIN", "Date"])
-    .with_columns(
-        (pl.col("Date") - pl.col("Price_Observation_Date"))
-        .dt.total_days()
-        .alias("Price_Age_Days")
-    )
-)
+# src/personal_finance_etl/domain/investments/valuation/market_state.py
+
+def transform_us_market_data(
+    df_bronze_prices_lazy: pl.LazyFrame,
+    df_purchase_lazy: pl.LazyFrame,
+    df_sale_lazy: pl.LazyFrame,
+    df_fx_lazy: pl.LazyFrame,
+    global_start_date: date,
+    global_end_date: date,
+) -> pl.LazyFrame:
 ```
 
-The exact surrounding expression can evolve, but the semantic guarantee is stable: **no future price is used to value the past**.
+Each input has a different meaning:
 
-```mermaid
-flowchart LR
-    P1[Price: Jan 5] --> V[Valuation: Jan 7]
-    P2[Price: Jan 8] -. forbidden future observation .-> V
+| Input | Meaning | Authority |
+| --- | --- | --- |
+| purchases | canonical acquisition events | economic transaction evidence |
+| sales | canonical disposal events | economic transaction evidence |
+| Bronze prices | observed market quotes | market evidence |
+| FX series | observed/continuous currency conversion | currency evidence |
+| date bounds | requested analytical horizon | application context |
+
+None of these inputs can substitute for another.
+
+A later observed holding cannot retroactively create an earlier trade. A later quote cannot value an earlier date. An FX rate cannot be inferred from a stock price.
+
+## The first materialization boundary is intentional
+
+The reconstruction starts by collecting purchase and sale frames:
+
+```python
+# Materialization Boundary: STATEFUL_ALGORITHM_BOUNDARY
+# Materialize purchase and sale transactions to resolve active US ticker universe and date boundaries
+df_purchase = df_purchase_lazy.collect()
+df_sale = df_sale_lazy.collect()
 ```
 
-## Price provenance
+This is one of the legitimate eager boundaries in the codebase.
 
-The reconstructed market state retains fields including:
+The reason is not convenience. The algorithm that follows maintains mutable lot state over chronological dates. That is fundamentally stateful.
 
-- `Price_Observation_Date`;
-- `Price_Age_Days`;
-- `Is_Imputed`.
+Keeping a `LazyFrame` around a Python `deque` would not make the algorithm more “Polars-native”; it would merely hide the point at which lazy relational execution stops being the correct model.
 
-Those fields make the difference between valuation date and source observation date visible. An imputed value is therefore not silently dressed up as a same-day quote.
+## Active instrument resolution
 
-## Seven-day staleness gate
+The reconstruction only considers US-stock purchases:
 
-Backward filling is bounded. The implementation enforces a maximum accepted price age of **7 calendar days**.
+```python
+us_purchases = df_purchase.filter(pl.col("__file_category__") == "US Stocks")
+if us_purchases.is_empty():
+    return pl.DataFrame(schema=EMPTY_US_MARKET_SCHEMA).lazy()
 
-Conceptually:
-
-$$
-	ext{PriceAgeDays} = 	ext{ValuationDate} - 	ext{PriceObservationDate}
-$$
-
-with:
-
-$$
-0 \leq 	ext{PriceAgeDays} \leq 7
-$$
-
-for accepted reconstructed valuations.
-
-A stale price beyond the accepted window is not quietly stretched forward because “close enough” becomes very expensive once it enters return analytics.
-
-## Step 5: FX selection
-
-Foreign-currency valuation requires historical FX. FX observations follow the same causal principle: the valuation path must not use future FX to translate past values.
-
-```mermaid
-flowchart TD
-    LOCAL[Local-currency market value] --> FX[Historical FX observation]
-    FX --> INR[INR market value]
-    FX --> AGE[FX observation provenance]
+active_isins = us_purchases["ISIN"].unique().to_list()
 ```
 
-Invalid, missing, non-finite or non-positive FX observations fail validation rather than manufacturing a translated value.
+This gives the algorithm a bounded instrument universe.
 
-## Step 6: valuation
+An instrument with no canonical US purchase evidence is not introduced merely because a price provider knows its ticker.
 
-At a high level:
+That is an important causal rule:
 
-$$
-	ext{MarketValue}_{local,t} = Q_t 	imes P_t
-$$
+> **market availability does not create ownership.**
 
-For a foreign-currency position:
+## Step 1: normalize transaction chronology
 
-$$
-	ext{MarketValue}_{INR,t} = 	ext{MarketValue}_{local,t} 	imes FX_t
-$$
+Purchases and sales are projected into the fields required by the state machine and sorted by instrument/date.
 
-The exact FX quote orientation is governed by the canonical currency pipeline. Documentation should follow the implemented field semantics rather than assume every external feed quotes the same direction.
-
-## Acquisition context
-
-The reconstructed state can retain acquisition-price context so local/INR acquisition value can be compared with current market value. This supports performance analytics without granting the market transformer ownership of canonical FIFO lots.
-
-```mermaid
-flowchart LR
-    ACQ[Acquisition context] --> L[Local basis]
-    L --> FXL[Acquisition-date FX]
-    FXL --> I[INR basis]
-    MKT[Current historical market price] --> MV[Local market value]
-    FXM[Valuation-date FX] --> MVI[INR market value]
-```
-
-## Reconstruction versus canonical FIFO
-
-| Concern | Market reconstruction | Quant FIFO |
-|---|---|---|
-| Purpose | daily historical holdings/valuation state | acquisition-lot and disposal authority |
-| Grain | reconstructed daily market state | lot / realized event |
-| Uses transactions | yes | yes |
-| Owns `Lot_ID` | no | yes |
-| Owns realized disposal events | no | yes |
-| Owns reconciliation mutations | no | yes |
-| Broker-certified daily holdings | no | no claim |
-
-The shared input does not imply shared authority. Two functions can read the same purchase without becoming co-owners of its financial meaning.
-
-## Causality guarantees
-
-The reconstruction path is designed around temporal causality:
-
-1. a transaction affects state on/after its effective date;
-2. a historical valuation cannot use a future price;
-3. a historical translation cannot use a future FX observation;
-4. stale price observations beyond the accepted window fail;
-5. observation dates remain available for provenance.
-
-```mermaid
-sequenceDiagram
-    participant T as Transactions
-    participant H as Holdings state
-    participant P as Price history
-    participant F as FX history
-    participant V as Valuation date t
-    T->>H: apply events <= t
-    P->>V: latest acceptable observation <= t
-    F->>V: latest acceptable observation <= t
-    H->>V: quantity at t
-    V->>V: calculate local + INR state
-```
-
-## Failure modes
-
-### Missing price
-
-If no acceptable historical price can be established, valuation cannot be produced honestly. The path fails rather than substituting an arbitrary future/latest quote.
-
-### Stale price
-
-A backward observation older than seven calendar days breaches the accepted staleness contract.
-
-### Invalid FX
-
-Missing, non-finite or non-positive FX invalidates translated valuation.
-
-### Transaction inconsistency
-
-A transaction stream that implies impossible quantity state is a financial-data problem, not something the market transformer should disguise with a clamp-to-zero. Canonical reconciliation belongs downstream in Quant where provenance can be recorded.
-
-## Edge cases
-
-### Weekends and holidays
-
-Backward price selection allows a valuation date to use the latest acceptable prior observation, which is necessary across non-trading days. `Price_Age_Days` keeps that substitution visible.
-
-### Long market closure or missing feed
-
-The seven-day gate bounds how far the system is willing to carry an observation. Beyond that, the correct result is a validation problem, not increasingly fictional certainty.
-
-### Position closes
-
-Once transaction state reaches zero, future valuation state should not continue carrying an economic position merely because old prices remain available. Quantity state controls whether a holding exists.
-
-### Re-entry
-
-A later purchase can create a new outstanding position after a prior position was fully sold. Transaction chronology, not stale prior market state, establishes that new state.
-
-## Downstream consumers
-
-The reconstructed market data feeds canonical market/Quant analytics, which then produce valuation, performance and presentation outputs. It should be read as a reconstructed evidence-backed market state, not as a broker statement in disguise.
-
-## Invariants
-
-- transaction chronology controls quantity state;
-- valuation never uses future price observations;
-- FX translation never intentionally uses future observations;
-- price observation provenance is retained;
-- accepted price age is bounded;
-- reconstructed holdings do not become canonical FIFO lots;
-- canonical realized events remain Quant-owned.
-
-## Trade-offs
-
-Reconstruction is more complex than ingesting a broker daily-holdings file, but the latter is not reliably available for this source. The implementation chooses transparent deterministic reconstruction over pretending the missing evidence exists. It also avoids overloading the reconstruction with canonical lot responsibilities already owned by Quant. One reconstruction engine doing two jobs would look simpler right up until the two definitions of FIFO disagree.
-
-## Source chronology and event ordering
-
-Reconstruction depends on deterministic transaction chronology. Purchases and sales are applied in date order so outstanding quantity reflects only events effective by the valuation date. When multiple events share a date, the implementation's ordering and canonical source shape become part of the reconstruction behavior; this is one reason canonical transaction normalization happens before the transformer.
-
-A daily state is therefore a fold over transaction history:
-
-$$
-Q_t = Q_{t-1} + Q_{buy,t} - Q_{sell,t}
-$$
-
-subject to the transformer's handling of remaining acquisition-price groups.
-
-## Why acquisition-price groups exist here
-
-The transformer can retain remaining quantities grouped by acquisition price because historical market analytics may need acquisition-value context. That grouping is a valuation convenience, not the canonical lot identity protocol.
-
-Canonical Quant lots additionally carry deterministic `Lot_ID`, transaction lineage, realization behavior, holding-period classification and reconciliation state. The market transformer deliberately stops short of those responsibilities.
-
-```mermaid
-flowchart TB
-    TX[Transactions] --> HG[Holdings groups for valuation]
-    TX --> QL[Quant canonical lots]
-    HG --> DV[Daily valuation state]
-    QL --> RE[Realized events]
-    QL --> RC[Reconciliation]
-```
-
-## Observation age is part of financial meaning
-
-Consider a Sunday valuation using Friday's closing price. The numeric price may be perfectly acceptable, but the source observation is two days old. Retaining `Price_Observation_Date` and `Price_Age_Days` lets downstream users distinguish:
+The code then groups events into:
 
 ```text
-valuation date = Sunday
-price observation = Friday
-price age = 2 days
-imputed = true
+ISIN
+    → date
+        → ordered transaction events
 ```
 
-Without those fields, the same number would look indistinguishable from a Sunday market observation that never existed.
-
-## Price-age validation sequence
-
-```mermaid
-flowchart TD
-    V[Valuation date] --> J[Backward as-of join]
-    P[Historical prices] --> J
-    J --> O{Observation found?}
-    O -->|no| F[Fail]
-    O -->|yes| A[Compute Price_Age_Days]
-    A --> S{Age <= 7?}
-    S -->|no| F
-    S -->|yes| I[Set Is_Imputed from date difference]
-    I --> M[Calculate market value]
-```
-
-The staleness rule converts what could have been an implicit data-quality assumption into an explicit validation contract.
-
-## FX validation sequence
-
-FX has its own validity requirements. A numerically present observation can still be unusable if it is non-finite or non-positive.
-
-```mermaid
-flowchart TD
-    D[Valuation / acquisition date] --> A[Backward FX lookup]
-    H[Historical FX] --> A
-    A --> M{Observation exists?}
-    M -->|no| F[Fail]
-    M -->|yes| N{Finite and > 0?}
-    N -->|no| F
-    N -->|yes| T[Translate local value]
-```
-
-This matters because replacing invalid FX with `1.0` would produce a very tidy number and a very fictional INR portfolio.
-
-## Local acquisition value
-
-For remaining reconstructed quantity associated with an acquisition price:
-
-$$
-\text{AcquisitionValue}_{local} = Q_{remaining} \times P_{acquisition}
-$$
-
-Historical acquisition-date FX can then translate that basis to INR, while valuation-date FX translates market value. Using different dates is essential for separating asset and currency effects later.
-
-## Local market value
-
-For valuation date $t$:
-
-$$
-\text{MarketValue}_{local,t} = Q_t \times P_{market,t}
-$$
-
-The quantity comes from transaction reconstruction; the price comes from the latest acceptable causal observation.
-
-## Reporting-currency value
-
-The INR translation uses the relevant historical FX observation for the valuation date:
-
-$$
-\text{MarketValue}_{INR,t} = \text{MarketValue}_{local,t} \times FX_t
-$$
-
-The Multi-Currency and FX specification owns the precise attribution formulas. This page owns how the required dated evidence is selected and validated.
-
-## Temporal leakage threat model
-
-Historical analytics are particularly vulnerable to accidental look-ahead. Three common leakage paths are explicitly avoided here:
-
-1. using the next available market price when the current date has none;
-2. using the latest/current FX rate for all history;
-3. reconstructing quantity with transactions that occur after the valuation date.
-
-```mermaid
-flowchart LR
-    FUTURE[Future evidence] -. blocked .-> PAST[Historical valuation]
-    PAST --> VALID[Only evidence effective/observed <= valuation date]
-```
-
-The rule is intentionally boring: the past only gets to know what the past could know.
-
-## Weekend/holiday example
-
-Assume:
+Canonical ordering helpers are reused:
 
 ```text
-Friday: price observation = 100
-Saturday: no market observation
-Sunday: no market observation
-Monday: price observation = 103
+domain/investments/lots/ordering.py
 ```
 
-For Sunday, backward as-of selection yields Friday's `100`, `Price_Age_Days = 2`, and `Is_Imputed = true`. Monday's `103` cannot leak backward into Sunday.
+This ensures that same-day event order is not left to arbitrary source ordering.
 
-This is a small example, but the same rule protects long historical series from systematic look-ahead bias.
+### Why same-day order matters
 
-## Missing-price example
+If a purchase and sale occur on the same day, state depends on which event is applied first.
 
-If an instrument has reconstructed quantity on a date but no prior acceptable price observation, the system cannot honestly calculate market value. Transaction evidence remains valid; valuation state fails. The architecture's separation of evidence from valuation makes that partial failure intelligible.
+Canonical ordering therefore belongs to financial determinism, not just tidy sorting.
 
-## Closed-position behavior
+## Step 2: construct the daily holdings spine
 
-A zero outstanding quantity terminates economic exposure. Price history can continue indefinitely, but a price observation alone cannot resurrect a sold position.
+For each active ISIN, the algorithm walks one calendar day at a time from the requested global start to end date.
+
+It maintains an in-memory queue of simplified acquisition lots:
+
+```python
+@dataclasses.dataclass
+class Lot:
+    """Internal lot state tracking quantity and unit costs in local and base currency."""
+
+    qty: float
+    price_local: float
+    price_inr: float
+```
+
+These lots are intentionally narrower than canonical Tax lots.
+
+They exist only to reconstruct daily open quantity and acquisition basis for valuation.
+
+## Daily state transition
+
+Each date applies:
+
+```text
+opening lots
+    ↓
+that day's purchases
+    ↓
+that day's sales
+    ↓
+remaining lots
+    ↓
+valuation rows for the date
+```
+
+Purchases append new state.
+
+Sales consume the oldest open state first.
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Open: buy
-    Open --> Open: price / FX changes
-    Open --> Closed: cumulative sales consume quantity
-    Closed --> Open: later new buy
+    [*] --> OpeningState
+    OpeningState --> AfterBuys: apply ordered purchases
+    AfterBuys --> AfterSales: deplete oldest lots
+    AfterSales --> DailySnapshot: group remaining basis
+    DailySnapshot --> OpeningState: next calendar date
 ```
 
-This state machine is quantity-driven. Market observations enrich an existing position; they do not create ownership.
+This produces a continuous state even when the market itself is closed on a date.
+
+That distinction becomes important later: **holding state can exist on a day with no fresh market quote.**
+
+## Step 3: group acquisition state by price
+
+The daily spine groups remaining lots by `(price_local, price_inr)` before emitting records.
+
+The purpose is analytical granularity compatibility with the main lot-level market data shape.
+
+For each group:
+
+\[
+\text{Buy Value Local} = Q \times P_{buy,local}
+\]
+
+\[
+\text{Buy Value INR} = Q \times P_{buy,INR}
+\]
+
+The output therefore retains acquisition context rather than collapsing each instrument/date into one blended row too early.
+
+## Reconstruction FIFO is not canonical FIFO
+
+This point is important enough to repeat.
+
+The daily market spine uses FIFO-like depletion to recover open position state.
+
+The canonical `FIFOPortfolio` later owns:
+
+- deterministic lot identity;
+- holding-period classification;
+- realized-event decomposition;
+- benchmark shadow lots;
+- Tax-rate lookup;
+- reconciliation mutation.
+
+The reconstruction spine does **not** replace that engine.
+
+```mermaid
+flowchart TB
+    T["Purchase / sale evidence"]
+    M["Market reconstruction FIFO-like state"]
+    C["Canonical FIFOPortfolio"]
+
+    T --> M
+    T --> C
+
+    M --> MV["Historical daily valuation"]
+    C --> RE["Realized events / open Tax lots"]
+```
+
+The algorithms share chronological consumption logic because the economics require it, but their contracts are different.
+
+## Step 4: validate observed prices before using them
+
+The source does not simply filter invalid quotes away and hope the remainder is enough.
+
+It first identifies non-positive or non-finite quotes that are not explicitly marked as closure gaps:
+
+```python
+invalid_source_prices = (
+    df_bronze_prices_lazy.filter(
+        pl.col("Closing_Price_Local").is_not_null()
+        & (~pl.col("Closing_Price_Local").is_finite() | (pl.col("Closing_Price_Local") <= 0))
+        & ~pl.col("Is_Closure_Gap").fill_null(False)
+    )
+    .select(["ISIN", "Date", "Closing_Price_Local"])
+    .limit(10)
+    .collect()
+)
+```
+
+That diagnostic materialization is deliberate.
+
+Invalid populated evidence is not the same as missing market data during a closure.
+
+### Closure gap versus invalid quote
+
+| State | Interpretation |
+| --- | --- |
+| no quote because market closed | expected observational gap |
+| null quote marked closure gap | allowed evidence gap |
+| zero quote not marked gap | malformed evidence |
+| negative/non-finite quote | malformed evidence |
+
+The engine fails on malformed populated evidence because silently accepting it would create financially plausible but false valuations.
+
+## Step 5: backward as-of price selection
+
+Historical prices are resolved using a **backward** temporal join.
+
+Conceptually:
+
+\[
+P_t = P_{s^*}
+\]
+
+where:
+
+\[
+s^* = \max\{s \mid s \le t\}
+\]
+
+The selected source quote must therefore come from the valuation date or an earlier date.
+
+Never from the future.
+
+### Why backward fill is allowed but backward-looking future fill is not
+
+Weekend example:
+
+```text
+Friday quote = 100
+Saturday valuation
+Sunday valuation
+Monday quote = 103
+```
+
+Saturday and Sunday may use Friday's quote, subject to staleness policy.
+
+They may **not** use Monday's quote.
+
+That would leak future information into historical state.
+
+## The observation date remains part of the calculation
+
+The implementation deliberately retains the source observation date long enough to measure quote age.
+
+This is important because a value without observation age can look current when it is not.
+
+```text
+valuation date = 2026-10-10
+price observation = 2026-10-03
+price = 100
+```
+
+The price value alone does not tell the whole story.
+
+The age does.
+
+## Seven-day staleness gate
+
+The market reconstruction enforces:
+
+```python
+max_price_staleness_days = 7
+```
+
+The policy is intentionally bounded.
+
+A recent prior quote can bridge weekends or short market closures.
+
+An ancient quote cannot be carried indefinitely simply because it is the latest thing available.
+
+### Interpretation
+
+If:
+
+\[
+\Delta t = t_{valuation} - t_{price\_observation}
+\]
+
+then the quote is accepted only when:
+
+\[
+0 \le \Delta t \le 7
+\]
+
+subject to the implementation's explicit closure/imputation semantics.
+
+This protects valuation continuity without pretending stale evidence is fresh.
+
+## Temporal leakage threat model
+
+The reconstruction explicitly guards against three leakage paths:
+
+### Future price leakage
+
+A quote after the valuation date must never flow backward.
+
+### Future transaction leakage
+
+A later purchase/sale must not alter an earlier holding state.
+
+### Future FX leakage
+
+A later currency rate must not translate an earlier valuation.
+
+These are not academic concerns. Any one of them can make backtested performance look cleaner than the information actually available at the time.
+
+## Step 6: resolve FX only after local state exists
+
+Local valuation remains conceptually prior to reporting-currency translation.
+
+For a foreign-currency instrument:
+
+\[
+\text{Closing Value}_{local} = Q_t \times P_{t,local}
+\]
+
+Then:
+
+\[
+\text{Closing Value}_{INR} = \text{Closing Value}_{local} \times FX_t
+\]
+
+The same separation applies to acquisition basis.
+
+This lets the system later distinguish asset return from currency translation.
+
+## Local acquisition value
+
+For each reconstructed open-lot group:
+
+\[
+B_{local} = Q \times P_{buy,local}
+\]
+
+This is the economic basis in the instrument's own currency.
+
+## INR acquisition value
+
+The engine also retains the original INR/base acquisition basis:
+
+\[
+B_{INR} = Q \times P_{buy,INR}
+\]
+
+That distinction matters because today's FX rate should not rewrite yesterday's acquisition basis.
+
+## Local market value
+
+At valuation date `t`:
+
+\[
+V_{local,t} = Q_t \times P_{local,t}
+\]
+
+## Reporting-currency market value
+
+\[
+V_{INR,t} = V_{local,t} \times FX_t
+\]
+
+## Local asset P&L
+
+\[
+PnL_{asset,local} = V_{local,t} - B_{local}
+\]
+
+## Reporting-currency P&L
+
+\[
+PnL_{total,INR} = V_{INR,t} - B_{INR}
+\]
+
+These quantities are deliberately not collapsed into one opaque “gain”.
+
+## Acquisition-price groups preserve explanatory power
+
+Grouping open state by acquisition price means downstream analytics can still answer:
+
+- which basis groups remain open;
+- which positions are above/below their acquisition level;
+- how current value relates to historical basis.
+
+Prematurely averaging everything into one row would lose that explanatory power.
+
+## Closed-position behavior
+
+Once all reconstructed lots are depleted, the instrument no longer emits open-position rows for later dates.
+
+Market quotes can continue to exist after the position closes.
+
+Again:
+
+> **market availability does not imply ownership.**
 
 ## Re-entry behavior
 
-When a position is fully closed and later purchased again, reconstruction begins a new period of exposure from the later transaction evidence. Canonical FIFO will separately create new deterministic lot state for the new acquisition.
+If an instrument is fully closed and later purchased again, new acquisition state begins from the later purchase.
+
+The reconstructed daily history therefore reflects separate holding episodes naturally.
+
+No synthetic continuity is invented across a zero-position interval.
 
 ## Relationship to reconciliation
 
-Market reconstruction should not silently manufacture quantity to match an external holdings observation. Quantity/basis discrepancy resolution belongs to Quant reconciliation, where an event can preserve the fact that reconstructed and observed state differed.
+Market reconstruction explains expected position state from transaction evidence.
 
-That division keeps this transformer deterministic with respect to transaction evidence and prevents valuation logic from becoming an undocumented correction engine.
+Reconciliation compares reconstructed state with independent broker-observed holdings/basis.
+
+```mermaid
+flowchart LR
+    TX["Transaction reconstruction"] --> EXP["Expected state"]
+    BROKER["Broker observation"] --> COMP["Reconciliation"]
+    EXP --> COMP
+    COMP --> EVT["Explicit adjustment / uncertainty event"]
+```
+
+If the two disagree, the correct response is not to rewrite history until the difference disappears.
+
+The difference itself is evidence.
+
+## Relationship to benchmark state
+
+Benchmark comparison uses a separate shadow economic state.
+
+The market spine supplies instrument valuation context; benchmark logic maintains the counterfactual benchmark units/value required for active-return analysis.
+
+The two should never be confused as if the benchmark were an actual holding.
 
 ## Relationship to performance analytics
 
-The reconstructed series supplies daily quantity, price and translated value context. Performance analytics can then calculate returns over a causally valid historical state. The reconstruction itself should not own XIRR, portfolio weights or tax classification; those are downstream responsibilities.
+Performance consumes valuation state after:
 
-## Relationship to benchmarks
+- holdings have been reconstructed;
+- price age has been validated;
+- FX has been resolved;
+- current local and INR values are known.
 
-Benchmark history is independent market evidence. A reconstructed holding can be compared with a benchmark downstream, but benchmark prices never substitute for missing instrument prices in this reconstruction path.
-
-## Validation matrix
-
-| Condition | Accepted? | Behavior |
-|---|---:|---|
-| same-day price | yes | direct observation |
-| prior price within 7 days | yes | backward-filled, provenance retained |
-| future price only | no | not used |
-| prior price older than 7 days | no | validation failure |
-| valid historical FX | yes | translate value |
-| missing/non-finite/non-positive FX | no | validation failure |
-| price exists but quantity is zero | no holding value | position remains closed |
-| transaction exists but price unavailable | transaction remains evidence | valuation fails |
+This is why performance sits downstream of market-state reconstruction in the documentation narrative.
 
 ## Observability fields
 
-`Price_Observation_Date`, `Price_Age_Days` and `Is_Imputed` are more than debugging fields. They are financial data-quality metadata. They allow a downstream analyst to distinguish exact market observations from bounded carry-forward valuation.
+The output schema retains source/provenance context such as:
 
-## Non-guarantees
+```text
+Data_Provider
+Extraction_Time
+Requested_Start
+Requested_End
+Is_Closure_Gap
+Is_Imputed
+```
 
-The reconstruction does not guarantee:
+Those fields make it possible to inspect **how** a value was obtained, not merely the final number.
 
-- independent broker confirmation of every daily quantity;
-- canonical tax-lot grain;
-- perfect valuation on dates where the market evidence is absent;
-- that every accepted prior price is economically ideal, only that it satisfies the implemented causality/staleness contract;
-- that transaction evidence itself is error-free.
+## Failure modes
 
-Those limits are why reconciliation and provenance exist elsewhere in the architecture.
+### Missing `CURRENCY_ID`
+
+The reconstruction refuses to proceed for a US instrument without currency identity.
+
+### Invalid populated market quote
+
+Fails validation.
+
+### No valid quote within staleness policy
+
+The valuation cannot be treated as valid current state.
+
+### Missing/invalid FX
+
+Foreign-currency valuation is not silently converted at identity FX.
+
+### Sales exceeding reconstructed open quantity
+
+The simplified spine depletes available state; canonical economic disposal integrity belongs to the canonical FIFO engine, where the lot contract is richer.
+
+## Invariants
+
+The reconstruction is designed to preserve:
+
+1. no ownership before purchase;
+2. no sale effect before sale date;
+3. no future quote leakage;
+4. bounded quote age;
+5. local and INR basis remain distinct;
+6. open quantity never comes from market data;
+7. market evidence never creates a transaction;
+8. closed positions stop emitting open-state rows;
+9. missing/invalid evidence remains visible rather than becoming zero.
+
+## What this model guarantees
+
+It guarantees a deterministic reconstruction from the same canonical transactions, price evidence, FX evidence, date horizon, and ordering rules.
+
+It provides a causally ordered valuation spine suitable for downstream analytics.
+
+## What this model does not guarantee
+
+It does not claim:
+
+- every historical daily holding was independently broker-certified;
+- a stale quote is equivalent to a fresh observation;
+- provider data is economically perfect;
+- reconstructed market state replaces canonical Tax lots;
+- market reconstruction can resolve transaction evidence that never existed.
+
+## Design trade-off: daily reconstruction instead of persisted mutable history
+
+The daily spine is rebuilt from evidence rather than treated as manually maintained state.
+
+Benefits:
+
+- deterministic replay;
+- no mutable historical position table to keep synchronized;
+- changes in corrected source evidence can propagate naturally.
+
+Cost:
+
+- reconstruction work must be repeated;
+- historical state quality depends directly on source completeness and temporal joins.
+
+That is a trade I prefer because the evidence remains primary.
+
+## Design trade-off: bounded forward carry instead of interpolation
+
+The engine carries the last known quote only backward-as-of and only within a bounded age.
+
+It does not interpolate an imagined market price between observations.
+
+That keeps the distinction clear between:
+
+```text
+observed
+carried recent observation
+invented estimate
+```
+
+The first two are allowed under explicit semantics. The third is not part of this valuation contract.
 
 ## Testing implications
 
-High-value tests for this subsystem should cover at least:
+High-value tests include:
 
-- buy-only position accumulation;
-- partial and full sales;
-- close and re-entry;
-- weekend backward fill;
-- future-price rejection;
-- >7-day stale price rejection;
-- missing FX;
-- non-positive FX;
-- local versus INR valuation;
-- no accidental lot-authority leakage into the market transformer.
+- purchase before first quote;
+- weekend/holiday forward carry;
+- quote older than seven days;
+- invalid non-closure price;
+- full close then re-entry;
+- same-day purchase/sale ordering;
+- foreign currency with valid FX;
+- foreign currency with missing FX;
+- local and INR basis preservation;
+- no future price leakage.
 
-The current repository's broader QA program should distinguish these executable cases from documentation claims; specifying a test is not the same thing as having run it.
+## Audit questions this page should let me answer
+
+- Why did this instrument have this quantity on this date?
+- Which acquisitions contributed to that open state?
+- Which market observation was selected?
+- How old was that observation?
+- Was the quote imputed or closure-related?
+- Which FX rate translated the local value?
+- Is the value observed, carried, or reconstructed?
+- Could any later information have leaked backward?
+
+If those questions cannot be answered, the valuation spine is not sufficiently explainable.
+
+## Handoff: state is reconstructed, but economic ownership still needs lot identity
+
+At this point the engine knows what the historical position looked like and how to value it.
+
+It still needs a stronger contract for disposals:
+
+- which specific acquisition lot was consumed;
+- how long it was held;
+- what gain/loss was realized;
+- which benchmark shadow state belongs to that lot;
+- how the event remains deterministic across replay.
+
+That is the job of [FIFO & Realized Events](fifo-and-realized-events.md).
 
 ## Related specifications
 
-- [Financial Model](financial-model.md)
-- [Cashflow and Wealth](cashflow-and-wealth.md)
 - [Investment Data Model](investment-data-model.md)
-- [Investment Market Reconstruction](investment-market-reconstruction.md)
-- [FIFO and Realized Events](fifo-and-realized-events.md)
+- [FIFO & Realized Events](fifo-and-realized-events.md)
 - [Investment Reconciliation](investment-reconciliation.md)
-- [Investment Performance and Risk](investment-performance-and-risk.md)
-- [Multi-Currency and FX](multi-currency-and-fx.md)
-- [Tax Methodology](tax-methodology.md)
-- [FIRE Methodology](fire-methodology.md)
-- [Data Model](../architecture/data-model.md)
-- [Silver Data Contracts](../reference/silver-data-contracts.md)
+- [Investment Performance & Risk](investment-performance-and-risk.md)
+- [Multi-Currency & FX](multi-currency-and-fx.md)
+- [Deterministic Identity & Replay](../architecture/deterministic-identity-and-replay.md)

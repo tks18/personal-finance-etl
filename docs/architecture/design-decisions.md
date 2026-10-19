@@ -1,400 +1,294 @@
 # Design Decisions
 
-Personal Finance ETL did not arrive at its current architecture by starting with a diagram full of boxes and then searching for problems worthy of them. The boundaries emerged from repeated financial and operational requirements: source evidence changes, brokers disagree with reconstructed state, historical US holdings are incomplete, analytical tables need deterministic rebuilds, stochastic forecasts need provenance, and local databases occasionally need to survive real-world failure.
+The architecture is easiest to evaluate by examining the alternatives it refuses. A single database, one generic transaction table, universal object orientation and fully incremental processing could all make particular diagrams smaller. They would also change which component owns financial truth, what can be replayed, and how failures can be explained.
 
-This document explains **why the major boundaries exist**, what each decision buys, and what complexity it deliberately refuses to buy.
+This document follows the decisions from the first boundary, local evidence, through financial reconstruction and finally the engineering controls that keep those decisions intact.
 
-## Decision map
+## Begin with local ownership
+
+The system keeps primary financial processing, storage, reconstruction and presentation local. External market providers enrich evidence; they do not become the financial ledger or the application runtime.
+
+**Why:** broker exports, household ledgers, policy files and analytical models are naturally local inputs; the workload fits local compute; and retaining control over sensitive financial evidence is valuable.
+
+**Cost:** the application must own file permissions, locking, backups, provider failures, and local environment management. Local-first reduces hosted dependencies, not the need for operational engineering.
+
+```mermaid
+flowchart LR
+    FILES[Local evidence] --> APP[Local financial engine]
+    API[Market providers] --> APP
+    APP --> SQLITE[(SQLite operational)]
+    APP --> DUCK[(DuckDB analytical)]
+    DUCK --> UI[Desktop / CLI / Power BI]
+```
+
+## Give operational history and analytics different databases
+
+SQLite is the historical Control Plane authority; DuckDB is the analytical warehouse. DuckDB Meta holds current analytical context, not the full operational history.
+
+**Rejected: everything in DuckDB.** That would mix append/history-oriented operational provenance with replaceable analytical publication and make recovery authority ambiguous.
+
+**Rejected: everything in SQLite.** That would give up DuckDB's columnar analytical execution and convenient BI access.
+
+**Accepted cost:** the two stores cannot form one distributed ACID transaction. The application therefore models split-commit state explicitly and provides convergence/healing rather than pretending rollback is universal.
+
+## Keep persistent evidence, rebuild derived state
+
+Bronze is persistent source evidence with incremental synchronization. Silver and Gold are reconstructed analytical layers rather than complex independently incremental stores.
+
+```mermaid
+flowchart LR
+    SRC[Sources] -->|hash / synchronize| BR[Persistent Bronze]
+    BR -->|canonical rebuild| SI[Silver]
+    SI -->|publication rebuild| GO[Gold]
+```
+
+**Why:** unchanged source files need not be reingested, while a full derived rebuild avoids invalidation rules spanning income, investments, Tax, wealth and FIRE.
+
+**Cost:** rebuild runtime grows with the current analytical workload. At this project's scale, deterministic simplicity is worth that cost. Incremental derived marts would require an explicit dependency/invalidation model before they could safely replace it.
+
+## Record artifacts, not just file paths
+
+Files can be renamed, removed, replaced, repaired or represented by virtual provider artifacts. A path alone cannot describe the source's history.
+
+The Control Plane records artifact identity, content fingerprints, payload state, run participation and synchronization outcomes. This supports rename detection, missing-payload repair and healing without losing lineage.
+
+**Rejected:** treat every discovered path as a new immutable source and reread everything each run. That would be simpler initially but would destroy useful idempotency and operational context.
+
+## Fail closed on incomplete required evidence
+
+A provider's partial success is not necessarily an acceptable input to financial reconstruction. The application uses typed extraction outcomes and completeness policy before downstream computation.
+
+**Why:** an incomplete benchmark, currency series or market state can produce plausible-looking but economically invalid returns.
+
+**Cost:** the system may refuse to publish when a less strict system would produce a partial result. The refusal is preferable to an unexplained financial approximation.
+
+## Make identity deterministic and namespace-specific
+
+Economic events use canonical serialization and stable namespace-specific field order. The identity implementation lives in `domain/common/identity.py`.
+
+```mermaid
+flowchart LR
+    KEY[Economic key fields] --> NORMAL[Normalize]
+    NORMAL --> SERIAL[Canonical serialization]
+    NS[Namespace] --> HASH[Digest]
+    SERIAL --> HASH --> ID[Stable ID]
+```
+
+**Rejected:** random UUIDs for reconstructed events, or row-position IDs. Those cannot establish equivalence between independently replayed financial histories.
+
+**Cost:** changing canonicalization or identity fields is a migration-level contract change, even if no calculation formula changes.
+
+## Separate observed evidence from reconstructed state
+
+A broker's reported holding and a FIFO-reconstructed holding are independent claims. Reconciliation should explain their difference, not erase one to force agreement.
+
+**Why:** quantity and cost-basis disagreements can have different economic and operational causes.
+
+**Rejected:** silently overwrite reconstructed positions from market observations or fabricate purchases to close a gap.
+
+**Cost:** the data model carries additional reconciliation events and validity semantics. Those are necessary complexity, not redundant tables.
+
+## Let FIFO own acquisition-lot truth
+
+`domain/investments/lots/` owns chronological acquisition/disposal accounting. The investment application service coordinates the work; Tax consumes the realized events.
+
+**Rejected:** recomputing lots in Tax, wealth or Gold builders. Multiple realizations of the same economic history would eventually disagree.
+
+**Cost:** downstream domains must accept canonical realized-event contracts rather than reaching directly into FIFO mutable state.
+
+## Keep market reconstruction distinct from lot accounting
+
+Historical US market/holding reconstruction addresses incomplete market-state evidence. FIFO addresses acquisition cost basis and disposals. They are not the same reconstruction problem.
+
+**Why:** a reconstructed daily position can be useful for valuation without being authoritative for acquisition-lot history.
+
+**Cost:** two related investment models must coexist with explicit provenance and reconciliation.
+
+## Make FX an economic dimension, not display formatting
+
+The application distinguishes instrument/local currency from reporting currency and separates asset-price effects from currency translation.
+
+**Rejected:** convert only the final Gold amount and call the difference asset performance.
+
+**Cost:** historical FX evidence, staleness/validity and attribution become part of the calculation contract.
+
+## Treat Tax as evidence-driven interpretation
+
+Tax consumes canonical income classification, realized investment events and separate credit/exemption evidence under `FinancialRules`.
+
+The income subcategory master can carry multiple exempt and residual categories. Tax rules own interpretation; they do not invent missing financial evidence.
+
+**Rejected:** reconstruct investments again inside Tax or convert missing Tax evidence into confident zero-valued estimates.
+
+**Cost:** explicit `CHECK_REQUIRED` and completeness states may be less convenient than a single number, but they are more truthful.
+
+## Keep stochastic futures outside canonical history
+
+FIRE modelling consumes current state and explicit assumptions. Deterministic projections and Monte Carlo simulations produce scenarios, not historical financial facts.
+
+**Why:** forecasts are conditional on inflation, return, spending, regime and other assumptions. They should not mutate actual balances or transactions.
+
+**Cost:** the system preserves simulation configuration and reproducibility/provenance separately from canonical identity.
+
+## Preserve a cohesive numerical kernel where it earns its size
+
+The Monte Carlo Numba kernel is intentionally treated differently from ordinary Python orchestration. Splitting a compiled numerical loop solely to satisfy a line-count rule can hurt clarity or performance.
+
+**Rejected:** mechanically applying “every function must be small” to performance-sensitive mathematical code.
+
+**Cost:** the exception must be documented, benchmarked and regression-protected rather than treated as a permanent exemption from review.
+
+## Use functional transforms and stateful objects where each fits
+
+Polars transformations are often pure `LazyFrame → LazyFrame` operations. FIFO, run lifecycle and recovery have meaningful mutable state.
+
+**Decision:** preserve functional data transforms; use classes for state, lifecycle, invariants and dependencies. The codebase is deliberately hybrid, not OOP for its own sake.
+
+**Rejected:** wrapping every expression in a class or replacing stateful FIFO with an unnatural vectorization.
+
+## Give every architectural layer one reason to change
 
 ```mermaid
 flowchart TB
-    LOCAL[Local-first financial system]
-    LOCAL --> CP[SQLite Control Plane]
-    LOCAL --> DUCK[DuckDB analytics]
-    CP --> BR[Persistent Bronze]
-    BR --> REBUILD[Rebuilt Silver + Gold]
-    REBUILD --> ID[Deterministic financial identity]
-    ID --> Q[Quant owns reconstruction]
-    Q --> TAX[Tax consumes realized evidence]
-    Q --> REC[Explicit reconciliation]
-    REBUILD --> FIRE[Stochastic planning + provenance]
-    CP --> RECOV[Healing + coordinated recovery]
+    PRES[Presentation] --> APP[Application]
+    APP --> DOM[Financial domain]
+    APP --> INF[Infrastructure capabilities]
+    BOOT[Bootstrap] --> APP
+    BOOT --> INF
+    CFG[Validated policy] --> DOM
 ```
 
-## 1. Local-first by default
+`application/` owns use-case sequence, `domain/` financial meaning, `infrastructure/` concrete mechanisms, `presentation/` human interaction, `config/` validated policy, `contracts/` cross-boundary messages and `bootstrap/` concrete assembly.
 
-Financial source evidence, reconstructed holdings, tax-preparation events, and wealth simulations remain on the local machine. The architecture does not require a cloud warehouse or hosted processing service for normal operation.
+**Rejected:** a single undifferentiated backend umbrella as an architectural description, or a universal `contracts/everything.py`.
 
-### Why
+**Cost:** more modules and explicit imports. The payoff is that new features have obvious ownership and dependency rules can be tested.
 
-- personal financial data is unusually sensitive;
-- the workload fits comfortably on local analytical engines;
-- offline execution is useful;
-- filesystem/broker exports are naturally local inputs;
-- operational complexity stays proportional to a personal system.
+## Use composition without hiding remaining concrete construction
 
-### Trade-off
+`ServiceContainer` assembles the application graph. Some runtime objects may still construct specific collaborators internally; documentation must describe actual construction, not claim universal dependency injection.
 
-Local-first shifts responsibility for backup, file access, locking and environment management into the application. That is why backup/restore and the Control Plane are first-class architecture rather than README footnotes.
+**Rejected:** a globally accessible container/service locator that every domain object consults at runtime.
 
-## 2. SQLite for operational authority, DuckDB for analytics
+**Cost:** composition wiring is explicit and must be maintained when dependencies evolve.
 
-SQLite and DuckDB are intentionally assigned different jobs.
+## Make stable boundaries typed, leave dynamic edges honest
+
+Cross-process status, extraction outcomes, lifecycle state and recovery results use named contracts. Domain-native records stay in their owning domains. Third-party or serialization edges are narrowed where possible and documented where genuinely dynamic.
+
+**Rejected:** `dict[str, Any]` as the default stable financial API, or changing `Any` to `object` merely to satisfy a checker without narrowing behavior.
+
+## Publish through explicit warehouse contracts
+
+Bronze/Silver/Gold/Meta schemas and the registry define table names, types, grain and publication expectations. Financial domains define meaning; warehouse schemas define storage.
+
+**Rejected:** dynamic table creation from whatever columns happened to appear in the current DataFrame.
+
+**Cost:** schema evolution requires deliberate compatibility and migration work. That is the point of a contract.
+
+## Use savepoints for nested operational units
+
+SQLite savepoints allow nested persistence operations to roll back their own changes without pretending that the outer workflow has not progressed.
+
+**Rejected:** ad hoc nested commits that break the enclosing lifecycle's ability to reason about transaction state.
+
+**Cost:** repository methods must respect transaction ownership and explicit savepoint scope.
+
+## Model cross-store commit truth instead of inventing atomicity
 
 ```mermaid
-flowchart LR
-    S[(SQLite)] -->|owns| O[Runs / artifacts / payloads / events / snapshots / simulation provenance]
-    D[(DuckDB)] -->|owns| A[Bronze / Silver / Gold / current Meta]
+stateDiagram-v2
+    [*] --> STARTED
+    STARTED --> DUCKDB_COMMITTED
+    DUCKDB_COMMITTED --> FULLY_COMMITTED
+    DUCKDB_COMMITTED --> RECOVERY_REQUIRED
+    RECOVERY_REQUIRED --> CONVERGED
 ```
 
-SQLite provides a durable transactional control store with foreign keys, WAL and a mature backup API. DuckDB provides high-performance columnar analytical execution and convenient SQL access for BI.
+**Why:** if DuckDB has committed but SQLite fails, claiming both stores rolled back is false. The lifecycle records the actual durable boundary and subsequent convergence.
 
-### Rejected alternative: everything in DuckDB
+**Cost:** additional state and recovery logic. This is a reliability feature, not architectural overengineering.
 
-That would simplify the file count but mix historical operational lifecycle with current analytical publication. It would also make operational provenance depend more tightly on warehouse replacement semantics.
+## Use one pipeline lock and explicit recovery ownership
 
-### Rejected alternative: everything in SQLite
+A local run should not compete with another run or restore for the same persistent stores. Locking and recovery are infrastructure/application concerns, not financial-domain concerns.
 
-That would sacrifice the analytical strengths that make DuckDB appropriate for large Polars-produced fact tables and BI queries.
+**Rejected:** optimistic simultaneous writers and raw file copying as a backup strategy.
 
-The split creates cross-database recovery complexity, but it keeps ownership clean.
+The backup path validates archives, stages replacement and distinguishes successful rollback from uncertain final state.
 
-## 3. Control Plane as historical operational authority
+## Keep the application façade stable across interfaces
 
-The Control Plane retains run identity, artifact lifecycle, payload relationships, configuration/rule snapshots, failures and simulation provenance.
+CLI and Desktop consume `PersonalFinanceEngine`, not internal repository or FIFO classes. The same application capabilities can therefore serve interactive and unattended execution.
 
-DuckDB Meta remains a **current analytical projection**.
+**Cost:** façade methods must remain intentional rather than becoming a grab bag of unrelated helpers.
 
-This prevents two databases from both claiming to be the historical source of truth. Two sources of truth are usually just two sources of future archaeology.
+## Preserve machine-readable failure truth
 
-## 4. Persistent Bronze, rebuilt Silver and Gold
+The lifecycle contract exposes states rather than asking callers to interpret a string message:
 
-Bronze synchronizes source evidence incrementally/full-replace according to contract. Silver and Gold are fully rebuilt.
+```python
+# contracts/lifecycle.py
+class CommitState(StrEnum):
+    """Explicit cross-database transaction commit state."""
 
-```mermaid
-flowchart LR
-    SRC[Sources] -->|incremental/full-replace sync| B[Bronze]
-    B -->|complete reconstruction| S[Silver]
-    S -->|complete presentation rebuild| G[Gold]
+    NOT_STARTED = "NOT_STARTED"
+    STARTED = "STARTED"
+    ROLLED_BACK = "ROLLED_BACK"
+    DUCKDB_COMMITTED = "DUCKDB_COMMITTED"
+    FULLY_COMMITTED = "FULLY_COMMITTED"
+    RECOVERY_REQUIRED = "RECOVERY_REQUIRED"
+    CONVERGED = "CONVERGED"
 ```
 
-### Why
+The contract also includes an unknown-state representation and compatibility alias. Those details matter because an exception can occur at a point where the application cannot prove which store committed.
 
-- source ingestion benefits from not rereading every unchanged artifact;
-- derived analytical state benefits from deterministic reconstruction;
-- full rebuild avoids stale derived rows and complicated incremental dependency invalidation;
-- current workload size makes the trade practical.
+**Rejected:** decide recovery from phrases such as `"success" in message.lower()` or classify all failures as the same Boolean. Logs are useful for people; state drives software.
 
-### Cost
+**Cost:** result and failure contracts must be evolved deliberately. The payoff is that CLI, Desktop, tests and recovery policy can all consume the same semantic outcome.
 
-Analytical runtime grows with total current state rather than only the latest delta.
+## Keep market evidence and provider behavior separate
 
-The architecture chooses a simpler correctness model over incremental cleverness downstream.
+External providers are adapters. They fetch or normalize source evidence and return typed extraction results; application ingestion owns completeness policy and operational provenance.
 
-## 5. Registry-driven publication
+**Rejected:** allowing each provider to directly decide whether an incomplete market series is good enough to publish or to own the entire Control Plane lifecycle.
 
-Every analytical output must be registered. The pipeline rejects unregistered engine outputs and missing registered outputs before publication.
+**Cost:** a few additional application-service boundaries. The benefit is consistent failure/completeness policy across file and market sources.
 
-This makes the contract registry an executable boundary rather than a documentation wish list.
+## Optimize execution at proven boundaries, not by slogan
 
-### Why
+Polars lazy plans are preserved where they permit optimizer pushdown and avoid Python round-trips. Materialization remains legitimate for stateful FIFO, publication, scalar diagnostics, schema inspection and third-party interfaces.
 
-Without a registry, producer code, DDL, BI expectations and documentation can drift independently. With one, drift can still happen, but at least the pipeline has somewhere concrete to complain.
+**Rejected:** either eager-convert every frame to dictionaries or ban `.collect()` categorically.
 
-## 6. Deterministic IDs instead of row-order identity
+**Cost:** developers must classify execution boundaries and benchmark meaningful changes. The same principle protects Numba numerical kernels from cosmetic decomposition.
 
-Financial facts use canonical field-based identities.
+## Make engineering standards executable
 
-### Why
+Architecture dependency checks, typed contracts, public package surfaces, source documentation, regression tests and release gates protect the design against gradual erosion.
 
-Silver and Gold rebuild completely. Auto-increment keys or row numbers would create artificial identity churn even when the economic fact did not change.
+**Rejected:** relying on future maintainers to remember a long architecture document when adding a new import.
 
-Deterministic IDs preserve continuity for:
+The development/release workflow belongs in the Developer specifications, not as a pile of tool badges in this page.
 
-- purchases;
-- sales;
-- lots;
-- realized disposal components;
-- reconciliation events;
-- tax events.
+## Treat documentation as an implementation companion
 
-### Trade-off
+The README showcases, the Wiki teaches, `/docs` specifies and code/tests prove. Those surfaces intentionally have different depths.
 
-Identity contracts become protocol. Changing defining fields requires migration reasoning rather than a casual refactor.
+**Rejected:** copying the same explanation across all four or letting a generated architecture diagram overrule current implementation.
 
-That is the correct cost for IDs that carry financial lineage.
+This separation makes it possible to improve the teaching experience without weakening the technical specification.
 
-## 7. Explicit identity serialization version
+## Accepted limitations
 
-Canonical ID payloads include `"v2"`.
+The design does not promise a distributed transaction, perfectly complete third-party market history, universal additive measures, zero materialization, or risk-free stochastic forecasts. It promises explicit ownership, validation, recoverability and honest semantics within those boundaries.
 
-### Why
-
-Serialization behavior itself affects identity. Versioning makes protocol changes visible instead of silently changing hashes under the same conceptual label.
-
-## 8. Separate observed evidence from reconstructed state
-
-The data model distinguishes broker/ledger observations from reconstructed holdings, lots, valuations and reconciliations.
-
-This is particularly important for US holdings, where reliable downloadable daily holdings evidence is unavailable.
-
-### Why
-
-A derived state can be financially useful without being source-certified. Documentation and schemas should preserve that epistemic boundary.
-
-```mermaid
-flowchart LR
-    OBS[Observed transactions + market/FX evidence] --> REC[Reconstructed historical holdings]
-    OBS --> FIFO[Canonical FIFO lots]
-    REC --> ANALYTICS[Valuation analytics]
-    FIFO --> ANALYTICS
-```
-
-## 9. US market reconstruction does not own canonical FIFO
-
-Historical US holdings reconstruction uses transaction evidence to construct a daily market-state spine. `FIFOPortfolio` separately owns canonical acquisition lots and realized disposals.
-
-### Why
-
-The two processes answer different questions:
-
-- market reconstruction: *what quantity/value should exist on this historical date?*
-- FIFO: *which acquisition lots were consumed by this disposal?*
-
-Merging them would couple valuation reconstruction to tax-lot semantics unnecessarily.
-
-## 10. Backward-only historical market joins
-
-Historical prices and FX use backward as-of semantics with explicit staleness checks.
-
-### Why
-
-Future observations cannot be allowed to leak backward into historical valuation. A future price makes a historical chart smoother and the model wrong. Smooth wrongness is still wrongness.
-
-The US price path additionally limits acceptable observation age.
-
-## 11. Quant owns realized investment economics
-
-The Quant Engine reconstructs FIFO lots and realized investment events. The Tax Engine consumes those events.
-
-```mermaid
-flowchart LR
-    BUY[Purchase facts] --> Q[Quant FIFO]
-    SALE[Sale facts] --> Q
-    Q --> R[Realized events]
-    R --> T[Tax Engine]
-```
-
-### Why
-
-Realized gain is an investment reconstruction concern. Tax classification/presentation is a tax concern. Recomputing FIFO inside Tax would create competing economic authorities.
-
-## 12. Reconciliation is explicit financial evidence
-
-When reconstructed quantity or cost basis disagrees with observed broker state, the discrepancy becomes a reconciliation group/event and can create synthetic/adjusted lot state.
-
-### Why
-
-Silently mutating lots would make the final number look tidy while destroying the reason it became tidy.
-
-Explicit reconciliation preserves:
-
-- discrepancy type;
-- observed value;
-- reconstructed value;
-- adjustment lineage;
-- effect on future FIFO state.
-
-## 13. Quantity and cost-basis reconciliation are separate
-
-A portfolio can agree on quantity and disagree on acquisition basis. Treating both discrepancies as the same problem loses financially important information.
-
-Therefore the implementation separates quantity correction from cost-basis correction.
-
-## 14. Multi-currency economics remain decomposable
-
-Foreign investments preserve local-currency and INR/reporting-currency values. Realized economics can distinguish asset PnL from FX PnL.
-
-### Why
-
-An INR gain can come from the asset, the currency, or both. Collapsing those effects too early makes performance attribution less meaningful.
-
-## 15. Evidence-first Tax Engine
-
-Tax consumes household income evidence and Quant realized events, normalizes them into `f_Tax_Events`, and produces three Gold views.
-
-It intentionally does not pretend to be a complete statutory income-tax engine.
-
-### Why
-
-Tax-preparation evidence and indicative estimates are useful even without implementing every loss-setoff, carry-forward, exemption and filing rule.
-
-The architecture chooses a narrower honest contract over a larger misleading one.
-
-## 16. Investment income exclusions prevent double counting
-
-FinancialRules contains STCG/LTCG ledger subcategory exclusions because Quant already owns realized investment gains.
-
-```mermaid
-flowchart TD
-    LEDGER[Household income ledger] --> FILTER[Exclude investment gain categories owned by Quant]
-    QUANT[Quant realized events] --> TAX[TaxEvents]
-    FILTER --> TAX
-```
-
-This is a domain ownership rule encoded as configuration.
-
-## 17. Stochastic FIRE is not deterministic financial reconstruction
-
-FIFO and canonical financial facts are deterministic for unchanged evidence/contracts. FIRE Monte Carlo intentionally samples future paths.
-
-### Why
-
-Uncertain future wealth should be represented as a distribution, not disguised as a deterministic forecast because deterministic numbers look reassuring in a dashboard.
-
-The system records seed and model/input provenance so a specific experiment can be revisited.
-
-## 18. Run-specific stochastic seed
-
-The run identity participates in stochastic seed context.
-
-### Why
-
-Independent runs are allowed to explore different Monte Carlo paths. Reproducibility means replaying the recorded context, not freezing all future runs onto one eternal random sequence.
-
-## 19. Configuration and financial rules are separate domains
-
-`Settings` controls physical/runtime behavior. `FinancialRules` controls financial interpretation and modeling assumptions.
-
-### Why
-
-Changing a source path is operational configuration. Changing LTCG exclusions, portfolio assumptions or FIRE parameters changes financial semantics. Those should not be conceptually indistinguishable just because both happen to be configuration files.
-
-## 20. Snapshot settings and rules by content
-
-Runs reference content-addressed snapshots of Settings and FinancialRules.
-
-### Why
-
-A future configuration file at the same path may contain different semantics. Provenance should point to what the run actually used, not where a mutable file happened to live.
-
-## 21. Coordinated transactions without distributed transaction machinery
-
-The pipeline begins transactions in SQLite and DuckDB but commits them sequentially.
-
-### Why not distributed transactions?
-
-The application is local, the databases are embedded, the workload is bounded, and Bronze/idempotent reconstruction provide a practical convergence mechanism. Introducing a distributed transaction coordinator would add significant machinery for a narrow commit window.
-
-### Cost
-
-A DuckDB-success/SQLite-failure window exists and must be healed on the next run.
-
-The architecture documents the window rather than naming it away.
-
-## 22. SQLite savepoints for nested atomic operations
-
-Repository-level operations use savepoints because they may run inside the larger pipeline transaction.
-
-### Why
-
-A helper that unconditionally starts/commits its own transaction would break the outer transaction boundary. Savepoints provide composable SQLite atomicity.
-
-## 23. Healing instead of assuming stores never diverge
-
-`MetaLayer.heal_duckdb_registry()` compares Control Plane state with current DuckDB ownership and requeues/purges inconsistencies.
-
-### Why
-
-Once two persistence engines exist, divergence is a state worth designing for rather than a state worth denying.
-
-## 24. One pipeline lock
-
-Pipeline, backup and restore coordinate through the same lock path.
-
-### Why
-
-A local embedded architecture benefits more from simple single-writer exclusion than from building a concurrent mutation protocol that the application does not need.
-
-## 25. Coordinated backup instead of raw file copying
-
-Snapshot creation checkpoints DuckDB and uses SQLite's backup API before publishing a validated ZIP.
-
-Restore validates and stages replacements before touching production files.
-
-### Why
-
-Two live database files copied independently are not automatically a coherent recovery point. File copying is easy; recovery semantics are the actual feature.
-
-## 26. Fail closed on stale or invalid market evidence
-
-US prices have an age limit and FX/price observations are validated.
-
-### Why
-
-For financial analytics, a missing valuation is often safer than a confidently fabricated one.
-
-This principle appears repeatedly throughout the codebase: invalid evidence tends to fail the run instead of being silently massaged into plausibility.
-
-## 27. Polars DAG for transformation, DuckDB for publication/query
-
-Polars performs transformation-heavy work and lazy/streaming collection. DuckDB persists/query-serves analytical layers.
-
-### Why
-
-The tools are used where their execution models are strongest instead of forcing one library to own every stage.
-
-## 28. API façade between frontend and backend
-
-CLI and desktop surfaces use `PersonalFinanceEngine` rather than reaching directly into ETL/recovery internals.
-
-### Why
-
-Presentation surfaces should not each invent pipeline lifecycle, error handling or backup semantics.
-
-## 29. Documentation is integrated but not authoritative over code
-
-CLI/desktop can render project documentation through a shared manifest/renderer. That makes docs part of the product experience.
-
-But implementation remains authoritative. A beautifully rendered stale contract is still stale, just with better typography.
-
-## 30. Deliberate limitations
-
-The architecture consciously accepts several boundaries:
-
-- local-first rather than multi-user distributed service;
-- sequential cross-database commit rather than distributed ACID;
-- full analytical rebuild rather than incremental Silver/Gold mutation;
-- reconstructed US holdings rather than broker-certified daily holdings;
-- indicative tax preparation rather than final statutory liability;
-- stochastic replay under compatible implementation rather than timeless bitwise reproducibility;
-- runtime validation with currently limited conventional automated test breadth.
-
-These are not all deficiencies waiting for a feature sprint. Many are scope choices that keep the system honest and maintainable.
-
-## Architectural character
-
-The codebase's sophistication comes less from any single algorithm than from repeated separation of concerns:
-
-```text
-source evidence          != reconstructed state
-operational provenance   != analytical presentation
-artifact identity        != filesystem path
-local asset return       != FX return
-realized economics       != tax interpretation
-financial determinism    != stochastic forecasting
-transaction coordination != distributed atomicity
-```
-
-Those inequalities are effectively the architecture in miniature.
+The next architectural question is no longer *why these choices?* It is *how do I change the system without violating them?* That leads naturally to [Development Guide](../developer/development-guide.md) and the engineering standards documentation.
 
 ## Related specifications
 
 - [System Architecture](system-architecture.md)
-- [Data Lifecycle](data-lifecycle.md)
-- [Warehouse Architecture](warehouse-architecture.md)
+- [Application & Dependency Architecture](application-and-dependency-architecture.md)
 - [Data Model](data-model.md)
-- [Control Plane Artifact Lifecycle](control-plane-artifact-lifecycle.md)
-- [Deterministic Identity and Replay](deterministic-identity-and-replay.md)
-- [Reliability and Recovery](reliability-and-recovery.md)
-- [Backup and Restore](backup-and-restore.md)
+- [Reliability & Recovery](reliability-and-recovery.md)
+- [Testing & Validation](../developer/testing-and-validation.md)

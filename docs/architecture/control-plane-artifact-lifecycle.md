@@ -1,411 +1,598 @@
 # Control Plane Artifact Lifecycle
 
-Personal Finance ETL treats source files as **operational artifacts with history**, not anonymous byte streams that happen to exist when a run starts. The SQLite Control Plane is the durable authority for that history. It records what was observed, what changed, what was retained, what was synchronized into Bronze, and which run made each transition visible.
+A file-based finance pipeline has a deceptively difficult question hiding underneath ordinary ingestion:
 
-That distinction matters because a financial pipeline must answer more than *what is in the warehouse now?* It also needs to answer *which evidence produced it, when did that evidence change, and what happened when the filesystem stopped agreeing with persisted state?*
+> What exactly is the identity and state of a piece of evidence when files can change, move, disappear, reappear, fail to synchronize, or survive a crashed run?
 
-> The Control Plane is an operational history system. DuckDB remains the analytical system. Asking either database to impersonate the other would make both worse at their actual jobs.
+A directory listing cannot answer that question.
 
-## Scope and source authority
+The SQLite Control Plane exists because operational truth needs its own durable model.
 
-This specification is grounded primarily in:
+It records what the system observed, what it captured, what changed, which run saw it, whether Bronze synchronized it, what failed, and how later runs converged state.
 
-- `backend/load/control_plane/orchestrator.py` — lifecycle façade and pipeline lock.
-- `backend/load/control_plane/connection.py` — SQLite connection, schema validation, transactions, nested savepoints.
-- `backend/load/control_plane/artifact_repo.py` — artifact persistence and lifecycle transitions.
-- `backend/load/control_plane/file_sync.py` — disk-to-registry synchronization and rename detection.
-- `backend/load/control_plane/run_repo.py` — run, failure, snapshot, and simulation provenance.
-- `backend/load/schema/control_plane.py` — physical Control Plane schema.
-- `backend/load/metadata.py` — reconciliation between Control Plane state and DuckDB Bronze/Meta state.
-- `backend/pipeline/etl_pipeline.py` — orchestration order and synchronization boundaries.
+## Operational state is not analytical state
 
-Physical column-by-column definitions belong in [`../reference/control-plane-data-contracts.md`](../reference/control-plane-data-contracts.md). This page owns lifecycle semantics.
+DuckDB answers questions such as:
 
-## Operational ownership
+- what is the current portfolio value?
+- what were realized gains?
+- what does the current Gold model contain?
+
+The Control Plane answers different questions:
+
+- which artifact did this run observe?
+- did its content change?
+- was the payload retained?
+- did it synchronize into Bronze?
+- was the path renamed?
+- did a provider request fail?
+- did this run split at the commit boundary?
+- which later run converged it?
 
 ```mermaid
 flowchart LR
-    FS[Filesystem / configuration assets] --> DISC[Discovery]
-    DISC --> SYNC[FileSyncService]
-    SYNC --> REG[(cp_file_registry)]
-    SYNC --> PAY[(cp_file_payloads)]
-    SYNC --> EVT[(cp_artifact_run_events)]
+    FS[Filesystem / providers] --> CP[(SQLite Control Plane)]
+    CP --> B[DuckDB Bronze]
+    B --> A[Analytics]
 
-    REG --> EXT[Extraction]
-    PAY --> EXT
-    EXT --> BR[DuckDB Bronze]
-    BR --> DONE[mark_synced]
-    DONE --> REG
-    DONE --> EVT
-
-    REG --> HEAL[MetaLayer healing]
-    BR --> HEAL
-    HEAL --> REG
+    CP -. explains .-> B
+    CP -. explains .-> A
 ```
 
-The Control Plane owns historical operational truth. Bronze owns persisted analytical source rows. DuckDB Meta projects current state. These roles overlap in information, but not in authority.
+That asymmetry is intentional. Operational history explains analytical state; analytical state does not replace operational history.
 
-## The eight Control Plane tables
+## The Control Plane has ten durable table families
 
-The current schema contains eight first-class tables:
+The schema declares ten tables, each with a different operational grain.
 
-| Table | Responsibility |
-|---|---|
-| `cp_file_registry` | Current artifact identity, location, content hash, category, size and synchronization state |
-| `cp_file_payloads` | Retained binary payload keyed by artifact identity |
-| `cp_settings_snapshots` | Content-addressed runtime configuration snapshots |
-| `cp_rules_snapshots` | Content-addressed financial-rule snapshots |
-| `cp_runs` | Run lifecycle and links to configuration/rule snapshots |
-| `cp_run_failures` | Structured execution failures |
-| `cp_artifact_run_events` | Append-style artifact lifecycle events associated with a run |
-| `cp_simulation_runs` | Stochastic simulation provenance and fingerprints |
+| Table | Grain | Purpose |
+|---|---|---|
+| `cp_file_registry` | one current row per artifact identity/path | current artifact state and synchronization metadata |
+| `cp_file_payloads` | one payload per `file_id` | captured raw bytes |
+| `cp_settings_snapshots` | one unique canonical settings content | reproducible runtime configuration |
+| `cp_rules_snapshots` | one unique canonical financial-rules content | reproducible financial policy |
+| `cp_runs` | one row per pipeline run | lifecycle and commit truth |
+| `cp_run_failures` | one row per recorded failure | stage/error/failure-domain provenance |
+| `cp_artifact_run_events` | one event per artifact/run transition | append-style artifact history |
+| `cp_external_provider_requests` | one request attempt context | market/provider completeness evidence |
+| `cp_run_sync_summaries` | one summary per run | Bronze synchronization completeness |
+| `cp_simulation_runs` | one simulation provenance record | stochastic reproducibility metadata |
+
+The current schema is explicit:
+
+```python
+# src/personal_finance_etl/infrastructure/control_plane/schema.py
+CREATE TABLE IF NOT EXISTS cp_runs (
+    run_id TEXT PRIMARY KEY,
+    started_at TIMESTAMP NOT NULL,
+    finished_at TIMESTAMP,
+    status TEXT,
+    commit_state TEXT NOT NULL DEFAULT 'NOT_STARTED',
+    application_version TEXT,
+    schema_version TEXT,
+    settings_snapshot_id TEXT,
+    rules_snapshot_id TEXT,
+    execution_log BLOB,
+    FOREIGN KEY(settings_snapshot_id) REFERENCES cp_settings_snapshots(snapshot_id),
+    FOREIGN KEY(rules_snapshot_id) REFERENCES cp_rules_snapshots(snapshot_id)
+);
+```
+
+The presence of version columns in the operational schema does not make canonical documentation release-specific. They are stored provenance fields for historical runs.
+
+## Current state and event history are deliberately separate
+
+`cp_file_registry` answers “what is the current operational state of this artifact?”
+
+`cp_artifact_run_events` answers “how did that state change over time?”
+
+Those are not the same data model.
 
 ```mermaid
-erDiagram
-    cp_settings_snapshots ||--o{ cp_runs : configures
-    cp_rules_snapshots ||--o{ cp_runs : governs
-    cp_runs ||--o{ cp_run_failures : records
-    cp_runs ||--o{ cp_artifact_run_events : emits
-    cp_runs ||--o{ cp_simulation_runs : contains
-    cp_file_registry ||--o| cp_file_payloads : retains
-    cp_file_registry ||--o{ cp_artifact_run_events : history
+flowchart TD
+    REG[cp_file_registry<br/>current state] -->|file_id| EVT[cp_artifact_run_events<br/>history]
+    REG -->|file_id| PAY[cp_file_payloads<br/>captured bytes]
+    RUN[cp_runs] --> EVT
+    RUN --> FAIL[cp_run_failures]
+    RUN --> SYNC[cp_run_sync_summaries]
+    RUN --> PROV[cp_external_provider_requests]
+    RUN --> SIM[cp_simulation_runs]
 ```
+
+Trying to store only events would make ordinary current-state queries expensive and awkward. Storing only current state would erase the evidence needed to explain changes.
+
+The Control Plane keeps both.
 
 ## Artifact identity is not path identity
 
-`cp_file_registry.relative_path` is unique and represents the artifact's current observed location. `file_id` is the persisted identity used by payload and event relationships.
+Paths are mutable operational labels.
 
-The implementation deliberately distinguishes:
+A file can move from one folder to another without becoming new financial evidence.
+
+The registry therefore has an explicit `file_id` primary key in addition to a unique `relative_path` and content hash.
 
 ```text
-artifact identity  !=  filesystem path  !=  content hash
+file_id          → durable artifact identity
+relative_path    → current observed location
+file_hash        → current content identity
+sync_status      → relationship to Bronze
+run IDs/times    → temporal operational provenance
 ```
 
-A path can change without the underlying evidence changing. A path can remain constant while content changes. A hash can match another historical artifact and still require ambiguity handling before identity migration.
+That separation makes rename migration possible.
 
-That separation is what makes rename handling possible without pretending every rename is a delete-plus-new financial event.
+## Discovery creates an observation set
 
-## Discovery and synchronization
+The pipeline first categorizes discovered source paths and injects configured artifacts.
 
-`FileSyncService.sync_with_disk()` wraps the complete synchronization pass in a nested atomic SQLite scope:
+`FileSyncService` then normalizes the discovery result before comparing it with the historical registry.
+
+The service owns comparison mechanics; it does not decide financial meaning.
 
 ```python
-with self.artifact_repo.db.atomic():
-    return self._sync_with_disk(
-        discovered_files,
-        hash_policy,
-        full_replace_categories,
-    )
+# src/personal_finance_etl/infrastructure/control_plane/file_sync.py
+class FileSyncService:
+    """Synchronize discovered filesystem state with persistent artifact state."""
+
+    def __init__(self, artifact_repo: ArtifactRepository) -> None:
+        self.artifact_repo = artifact_repo
+        self._active_run_id: str | None = None
 ```
 
-Before mutating registry state, the service normalizes and deduplicates paths. A single canonical path assigned to two categories is rejected because category is part of the ingestion contract.
+The active run ID is propagated into event-producing components so every operational mutation can be attached to the run that caused it.
 
-```mermaid
-flowchart TD
-    A[Discovered paths] --> B[Normalize paths]
-    B --> C{Same path in multiple categories?}
-    C -- yes --> X[Fail contract validation]
-    C -- no --> D[Compare with registry]
-    D --> E{Known path?}
-    E -- no --> F[Hash and evaluate rename candidates]
-    E -- yes --> G{Payload exists?}
-    G -- no --> H[Queue repair / re-ingestion]
-    G -- yes --> I{Hash checking enabled?}
-    I -- yes --> J[Compare disk and registered hash]
-    I -- no --> K[No content drift check]
-```
+## Comparison must account for more than four cases
 
-## New artifacts
+A simplistic synchronizer recognizes new, changed, unchanged, and deleted.
 
-A path absent from the registry is hashed. If it cannot be read after discovery, synchronization fails rather than silently losing evidence between discovery and ingestion.
-
-If no unambiguous rename candidate exists, the path is queued as new and `ArtifactRepository.ingest_binaries()` persists both metadata and payload.
-
-The registry transition is conceptually:
-
-```text
-not registered
-    -> binary ingested
-    -> PENDING_BRONZE
-    -> Bronze load
-    -> SYNCED
-```
-
-The event history records the transition under the active run.
-
-## Changed artifacts
-
-For file types enabled by `FILE_HASH_POLICY`, the disk hash is compared with the registered hash. Drift queues the artifact for re-ingestion.
+The actual lifecycle needs more nuance:
 
 ```mermaid
 stateDiagram-v2
-    [*] --> SYNCED
-    SYNCED --> PENDING_BRONZE: content hash changed
-    PENDING_BRONZE --> SYNCED: Bronze synchronization succeeds
-    PENDING_BRONZE --> PENDING_BRONZE: run fails before synchronization
+    [*] --> NEW: first observation
+    NEW --> SYNC_PENDING: payload captured
+    SYNC_PENDING --> SYNCED: Bronze write + CP update
+
+    SYNCED --> CHANGED: same artifact/path, new content
+    CHANGED --> SYNC_PENDING
+
+    SYNCED --> RENAMED: content identity found at new path
+    RENAMED --> SYNCED: identity migrated
+
+    SYNCED --> REMOVED: no longer observed
+    REMOVED --> HEALED: reappears / converges
+    HEALED --> SYNCED
+
+    SYNC_PENDING --> MISSING_PAYLOAD: registry exists, bytes unavailable
+    MISSING_PAYLOAD --> SYNC_PENDING: payload recaptured
 ```
 
-The pending state is useful precisely because a failed run does not need to invent what should happen next. The artifact remains actionable.
+The exact event vocabulary is implementation-owned, but the important architecture is that divergence is modelled rather than flattened into a single boolean.
 
-## Missing payload repair
+## New artifacts become operational evidence before Bronze evidence
 
-A registry row without a retained payload is treated as damaged operational state even if hash checking is disabled for that category:
+When a new file is discovered, the Control Plane can:
 
-```python
-if not self.artifact_repo.has_payload(path):
-    logger.warning("[SYNC:REPAIR] Registered artifact has no payload: %s", path)
-    new_files[category].append(path)
-    continue
-```
+1. assign artifact identity;
+2. hash content according to configured policy;
+3. capture raw bytes;
+4. record first-seen run/time;
+5. set a pending synchronization state;
+6. emit an artifact-run event.
 
-The source is re-ingested. Registry existence alone is therefore not considered sufficient evidence that the artifact vault is healthy.
+Only later does Bronze publication complete the analytical synchronization loop.
 
-## Rename detection
+This ordering preserves evidence even if the analytical run fails after discovery.
 
-Rename detection uses category-local content hashes. For a newly observed path, the synchronizer searches for active registry paths in the same category with the same hash that are no longer active in the current scan.
+## Changed content preserves identity while updating state
+
+A file at the same logical path with a different hash is not necessarily a new artifact identity.
+
+The current registry row can retain continuity while recording:
+
+- new content hash;
+- changed run/time;
+- pending Bronze state;
+- a `CHANGED` event;
+- replaced payload bytes.
+
+The event table preserves the transition so current state does not erase the previous observation.
+
+## Missing payload repair is distinct from content change
+
+A registry row can exist while its payload row is missing or incomplete.
+
+That is not the same condition as “the file changed.”
+
+The system can recapture the current bytes and restore the evidence store without inventing a content-change event when the hash is unchanged.
+
+This distinction protects provenance from operational repair noise.
+
+## Rename detection protects continuity
+
+`FileSyncService._try_migrate_rename()` attempts to recognize cases where content identity survives at a new path.
+
+The repository then migrates identity rather than creating duplicate historical artifacts.
 
 ```mermaid
-flowchart TD
-    NEW[New path] --> HASH[Compute content hash]
-    HASH --> CAND[Find same-category same-hash old paths]
-    CAND --> N{Candidate count}
-    N -- 0 --> INGEST[Ingest as new]
-    N -- 1 --> MIG[migrate_identity]
-    N -- many --> AMB[Ambiguous: ingest as new]
-    MIG --> P{Old payload retained?}
-    P -- no --> INGEST
-    P -- yes --> REN[Create new identity + transfer payload]
-    REN --> OLD[Mark old registry identity REMOVED]
-    REN --> EVT[Emit RENAMED event]
+sequenceDiagram
+    participant D as Discovery
+    participant S as FileSyncService
+    participant R as ArtifactRepository
+    participant B as Bronze / Meta
+
+    D->>S: old path absent, new path present
+    S->>R: compare content identity / registry state
+    R-->>S: rename candidate
+    S->>R: migrate_identity(old, new)
+    S-->>B: return rename tuple
+    B->>B: migrate analytical path identity
 ```
 
-Ambiguity is deliberately fail-safe. Two historical files with identical content are not enough evidence to guess which one was renamed.
+The application executor later applies the returned rename set to Bronze and Meta.
 
-### Identity migration
+Operational and analytical path identity therefore converge together.
 
-`ArtifactRepository.migrate_identity()` copies the historical timestamps and synchronization context into the destination identity, transfers the retained payload, emits a `RENAMED` event, and marks the old identity `REMOVED`.
+## Removal is a state transition, not immediate historical deletion
 
-```python
-self._insert_event(
-    file_id=new_id,
-    event_type="RENAMED",
-    event_at=now,
-    path=new_path,
-    content_hash=current_hash,
-    previous_status=old_status,
-    new_status=new_status,
-    reason=f"Migrated identity from {old_path}",
-)
+If an artifact disappears from the discovery set, the Control Plane can mark it removed and record the event.
+
+Historical evidence remains useful even when the current file is gone.
+
+This is especially important for explaining why Bronze or downstream state changed after a source cleanup.
+
+A removal event should not require deleting the run history that previously depended on the file.
+
+## Reappearance can be healing rather than new evidence
+
+An artifact that was previously removed or left in a divergent synchronization state may reappear with known identity/content.
+
+The lifecycle can record healing and restore synchronized status.
+
+The phrase **healing** is intentional:
+
+- the historical divergence remains recorded;
+- current state converges;
+- a later event records the repair.
+
+The system does not rewrite the past into a continuous success story.
+
+## Artifact events carry convergence lineage
+
+`cp_artifact_run_events` includes fields that allow an event to carry more than “what happened now”:
+
+```text
+detecting_run_id
+replay_run_id
+convergence_result
+affected_table
+previous_status
+new_status
+event_reason
 ```
 
-The old registry row is intentionally retained. Historical identity is not garbage-collected merely because the filesystem got reorganized.
+That makes operational recovery inspectable as a relationship between runs rather than a single status mutation.
 
-## Removal
+## Raw payloads make discovery replayable at the evidence boundary
 
-If a previously active artifact disappears from a category that was actually scanned, it is marked `REMOVED`.
+`cp_file_payloads` stores raw binary content keyed by `file_id`.
 
-An absent category is **not** automatically pruned. That distinction prevents incomplete discovery from being interpreted as mass deletion.
+The ingestion coordinator reads those bytes through `ArtifactRepository.get_file_bytes()`.
+
+This means downstream parsing depends on retained evidence, not only on the live file still being present at its original location.
 
 ```mermaid
 flowchart LR
-    REG[Registered artifact] --> SCAN{Category scanned?}
-    SCAN -- no --> KEEP[Preserve state]
-    SCAN -- yes --> PRESENT{Path present?}
-    PRESENT -- yes --> KEEP
-    PRESENT -- no --> REM[REMOVED]
+    REG[cp_file_registry] --> PAY[cp_file_payloads]
+    PAY --> ING[IngestionCoordinator]
+    ING --> BR[Bronze]
 ```
 
-`prune_category()` may delete obsolete payload bytes for full-replace categories, but it deliberately retains registry identities and historical events.
+For a local system, retaining raw payload bytes is a practical way to make operational evidence inspectable without a separate object store.
 
-That gives the retention contract an important boundary:
+## Virtual artifacts extend the same lifecycle grammar
 
-> Historical operational identity can survive even when the original binary payload no longer does.
+Not all evidence begins as a user-managed file.
 
-## Healing a reappearing artifact
+`ArtifactRepository.inject_virtual_file()` allows externally acquired or generated payloads to enter the artifact model with a filename/category/bytes representation.
 
-A path previously marked `REMOVED` that reappears is marked `HEALED`, which transitions it back to `PENDING_BRONZE` for synchronization.
+That is useful because the rest of the system can then apply the same operational vocabulary:
+
+```text
+identity
+payload
+category
+run provenance
+synchronization
+healing
+```
+
+External evidence does not need a second unrelated provenance model merely because it came from a provider rather than a folder.
+
+## External provider requests are first-class history
+
+`cp_external_provider_requests` records provider acquisition context:
+
+- provider;
+- entity;
+- requested start/end range;
+- attempt count;
+- status;
+- failure class;
+- final error;
+- creation time;
+- owning run.
+
+This makes market-data completeness auditable.
+
+A missing price series can be distinguished from a transformation bug because the provider request history explains what was attempted.
+
+## Sync summaries compress artifact-level state without replacing it
+
+`cp_run_sync_summaries` gives each run a compact synchronization result:
 
 ```python
-self._insert_event(
-    file_id=file_id,
-    event_type="HEALED",
-    event_at=now,
-    path=path,
-    content_hash=file_hash,
-    previous_status=previous_status,
-    new_status="PENDING_BRONZE",
-    reason="File re-appeared after prior removal",
-)
+# src/personal_finance_etl/contracts/lifecycle.py
+class SyncSummaryRecord(TypedDict, total=False):
+    run_id: str
+    actionable_count: int
+    synced_count: int
+    healed_count: int
+    failed_count: int
+    deferred_count: int
+    sync_status: str
+    created_at: str
 ```
 
-Healing is therefore not a mystical database self-repair spell. It is an explicit lifecycle transition backed by source evidence becoming observable again.
+The summary answers “did this run synchronize its actionable evidence?”
 
-## Synchronization into Bronze
+Artifact events answer “what happened to each artifact?”
 
-After extraction, Bronze consumes actionable artifacts. Successful synchronization calls `mark_synced()` and records both registry timestamps and a `SYNCED` event.
+Keeping both prevents dashboards from needing to reconstruct simple run-level status from a long event stream while preserving the detailed history for diagnosis.
+
+## Run identity propagates through the operational subsystem
+
+`ControlPlane.active_run_id` is propagated to artifact and file-sync components.
+
+The façade provides `set_active_run_id()` so event-producing repositories share one execution identity.
+
+```python
+# src/personal_finance_etl/infrastructure/control_plane/facade.py
+def set_active_run_id(self, run_id: str | None) -> None:
+    """Set the active run once and propagate it to every event-producing component."""
+    self.active_run_id = run_id
+```
+
+This avoids a common provenance failure where different subsystems invent or forget run identifiers independently.
+
+## `RunRepository` owns lifecycle persistence
+
+Run state is not mixed into artifact repository code.
+
+`RunRepository` owns operations such as:
+
+- starting a run;
+- updating status;
+- updating commit state;
+- recording failures;
+- recovering stale runs;
+- querying recovery-required runs;
+- marking convergence;
+- logging sync summaries;
+- recording provider requests;
+- logging simulation provenance;
+- storing compressed execution logs.
+
+That repository boundary separates artifact-history semantics from execution-history semantics inside the same SQLite database.
+
+## Settings and rules snapshots are content-addressed history
+
+Run rows reference settings and financial-rules snapshots rather than copying arbitrary mutable files into every run record.
+
+The snapshot model stores canonical payload plus content hash.
+
+This lets identical configuration content be recognized independently of path or formatting noise.
+
+It also keeps the run record compact while preserving the exact policy/environment state needed for later replay analysis.
+
+## Simulation runs add a second provenance layer
+
+A pipeline run can contain stochastic simulation.
+
+`cp_simulation_runs` records simulation-specific provenance including:
+
+- `simulation_id`;
+- parent `run_id`;
+- `root_seed`;
+- iterations and horizon;
+- input as-of date;
+- settings/rules snapshots;
+- input fingerprint;
+- model fingerprint;
+- model implementation version;
+- status;
+- result fingerprint.
+
+This is intentionally richer than ordinary table provenance because stochastic reproducibility has extra degrees of freedom.
+
+## SQLite savepoints provide nested atomicity
+
+The Control Plane runs inside a run-level SQLite transaction, but repositories may need smaller atomic operations.
+
+SQLite savepoints allow those nested operations to fail and roll back locally without forcing repository methods to own the outer transaction.
 
 ```mermaid
 sequenceDiagram
-    participant CP as Control Plane
-    participant EX as Extractor
-    participant B as Bronze
-    participant E as Artifact Events
+    participant L as RunLifecycleCoordinator
+    participant DB as SQLite transaction
+    participant R as Repository operation
 
-    CP->>EX: pending/actionable artifacts
-    EX->>B: extracted frames
-    B->>B: upsert or full replace
-    B->>CP: mark_synced(paths)
-    CP->>E: SYNCED event
-```
-
-The synchronization state belongs to the artifact registry because it describes the relationship between source evidence and Bronze persistence.
-
-## Virtual artifacts
-
-Not every configuration input needs to arrive as a conventional discovered statement. `inject_virtual_file()` persists generated/configuration evidence into the same artifact model and emits either:
-
-- `VIRTUAL_CREATED`, or
-- `VIRTUAL_UPDATED`.
-
-This keeps configuration-derived evidence inside the same provenance universe rather than creating a second unofficial lineage system in a utility function somewhere. One lineage model is plenty.
-
-## Artifact event vocabulary
-
-Current event types emitted by `ArtifactRepository` include:
-
-| Event | Meaning |
-|---|---|
-| `DISCOVERED` | A new artifact payload was registered |
-| `CHANGED` | Existing path received changed content |
-| `REINGESTED` | Existing evidence was ingested again for repair/recovery semantics |
-| `RENAMED` | Identity migrated to a new observed path |
-| `SYNCED` | Artifact successfully synchronized into Bronze |
-| `HEALED` | Previously removed artifact reappeared and was re-queued |
-| `REMOVED` | Artifact disappeared from a positively scanned category |
-| `VIRTUAL_CREATED` | Virtual/configuration artifact created |
-| `VIRTUAL_UPDATED` | Virtual/configuration artifact changed |
-
-The event row records `observed_path`, `content_hash`, `previous_status`, `new_status`, and a human-readable reason. Events are associated with the active `run_id`.
-
-## Run identity propagation
-
-`ControlPlane.active_run_id` propagates the active run to both `ArtifactRepository` and `FileSyncService`:
-
-```python
-@active_run_id.setter
-def active_run_id(self, value: str | None) -> None:
-    self._active_run_id = value
-    self.artifacts.active_run_id = value
-    self.file_sync.active_run_id = value
-```
-
-This prevents individual event-producing components from inventing their own run context.
-
-## Nested atomicity with SQLite savepoints
-
-File synchronization and repository mutations frequently use `SQLiteManager.atomic()`. The implementation uses a uniquely named savepoint, not a new independent transaction:
-
-```python
-savepoint = f"cp_scope_{uuid.uuid4().hex}"
-self.conn.execute(f"SAVEPOINT {savepoint}")
-try:
-    yield
-    self.conn.execute(f"RELEASE SAVEPOINT {savepoint}")
-except Exception:
-    self.conn.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
-    self.conn.execute(f"RELEASE SAVEPOINT {savepoint}")
-    raise
-```
-
-```mermaid
-sequenceDiagram
-    participant P as Pipeline SQLite transaction
-    participant S as SAVEPOINT scope
-    participant R as Repository mutation
-
-    P->>S: SAVEPOINT
-    S->>R: mutate registry/events/payloads
-    alt success
-        R-->>S: complete
-        S->>P: RELEASE SAVEPOINT
-    else failure
-        R-->>S: exception
-        S->>S: ROLLBACK TO SAVEPOINT
-        S->>P: RELEASE + rethrow
+    L->>DB: BEGIN IMMEDIATE
+    R->>DB: SAVEPOINT op
+    alt operation succeeds
+        R->>DB: RELEASE op
+    else operation fails
+        R->>DB: ROLLBACK TO op
+        R->>DB: RELEASE op
     end
+    L->>DB: later COMMIT / ROLLBACK
 ```
 
-A savepoint provides scoped atomicity **inside SQLite**. It does not create distributed atomicity with DuckDB.
+This is different from creating independent nested transactions, which SQLite does not provide in the same way.
 
-## Control Plane to DuckDB healing
+## The pipeline lock protects process-level ownership
 
-Before a new pipeline transaction begins, `MetaLayer.heal_duckdb_registry()` compares Control Plane artifacts marked `SYNCED` with DuckDB Meta and physical Bronze ownership.
+`ControlPlane.open()` acquires `pipeline.lock` with zero timeout before opening the SQLite connection.
 
-If Control Plane says an artifact is synchronized but its DuckDB representation is missing, the artifact is moved back to `PENDING_BRONZE`.
-
-For incremental Bronze contracts, the healer can also verify that an artifact expected to own rows actually appears in the physical Bronze table.
-
-```mermaid
-flowchart TD
-    CP[CP artifact marked SYNCED] --> META{Present in meta.m_File_Registry?}
-    META -- no --> PEND[Set PENDING_BRONZE]
-    META -- yes --> BT{Bronze table exists?}
-    BT -- no --> PEND
-    BT -- yes --> INC{Incremental contract?}
-    INC -- no --> OK[Keep SYNCED]
-    INC -- yes --> ROWS{Expected source rows present?}
-    ROWS -- no --> PEND
-    ROWS -- yes --> OK
+```python
+# src/personal_finance_etl/infrastructure/control_plane/facade.py
+try:
+    self._lock.acquire(timeout=0)
+    self._lock_acquired = True
+except Timeout:
+    raise RuntimeError(
+        "Another instance of the production pipeline is currently running."
+    ) from None
 ```
 
-The reverse direction is also handled: DuckDB registry entries no longer represented by Control Plane state are purged from current analytical state.
+The lock prevents concurrent production pipelines from mutating the same operational/analytical pair.
 
-## Lifecycle invariants
+The same lock is reused by snapshot/restore operations so database replacement cannot race a run.
 
-The implementation establishes several useful invariants:
+## Schema initialization also performs crash interpretation
 
-1. Canonical paths cannot silently belong to multiple source categories.
-2. Registry rows are historical identities and are not casually hard-deleted.
-3. Payload retention and identity retention are separate concerns.
-4. A registered artifact with a missing payload is actionable for repair.
-5. Rename migration requires unambiguous content evidence and a retained source payload.
-6. A removed artifact can re-enter the lifecycle through an explicit healing transition.
-7. Bronze synchronization is not considered complete until the artifact is marked `SYNCED`.
-8. Artifact events inherit one authoritative pipeline run identity.
-9. Nested repository operations use SQLite savepoints.
-10. Control Plane state can re-queue DuckDB state that no longer matches operational truth.
+`ControlPlane.ensure_schema()` does two things:
 
-## Failure semantics
+```python
+def ensure_schema(self) -> None:
+    self.db.ensure_schema()
+    self.runs.recover_stale_runs()
+```
 
-| Failure | Behavior |
-|---|---|
-| File disappears between discovery and hashing | Synchronization fails |
-| Same path discovered under two categories | Contract error |
-| Rename candidate ambiguous | Destination treated as new |
-| Rename source payload missing | Migration rejected; destination re-ingested |
-| Registry payload missing | Artifact queued for repair |
-| Bronze synchronization fails | Artifact remains actionable/pending under transaction rollback semantics |
-| SQLite nested mutation fails | Savepoint rolls back scoped changes |
-| Control Plane and DuckDB disagree on next run | Healing can re-queue or purge current analytical state |
+This is a meaningful lifecycle choice.
+
+A Control Plane that opens after an ungraceful termination should immediately interpret stale `RUNNING`/`COMMITTING` records rather than leaving them indefinitely ambiguous.
+
+Stale-run recovery belongs close to operational schema availability because that is the first point at which history can be safely inspected.
+
+## Control Plane to DuckDB healing is authority-driven
+
+Before new transactions begin, `MetaLayer.heal_duckdb_registry(cp)` reconciles current analytical file-registry projections against SQLite operational truth.
+
+The direction matters:
+
+```text
+SQLite Control Plane authority
+            ↓
+DuckDB current-context healing
+```
+
+not:
+
+```text
+whichever database has a row wins
+```
+
+Explicit authority is what makes healing deterministic.
+
+## The Control Plane participates in cross-store commit truth
+
+`cp_runs.commit_state` stores the coordinated state represented by `CommitState`.
+
+Possible states include:
+
+```text
+NOT_STARTED
+STARTED
+ROLLED_BACK
+DUCKDB_COMMITTED
+FULLY_COMMITTED
+RECOVERY_REQUIRED
+CONVERGED
+COMMIT_STATE_UNKNOWN
+```
+
+The run history therefore records more than `SUCCESS` or `FAILED`.
+
+A failed run can still have durable DuckDB state, and the Control Plane has a vocabulary for that reality.
+
+## Failure records keep both human and machine context
+
+`cp_run_failures` records:
+
+- `failed_isin` when relevant;
+- stage;
+- exception type;
+- error message;
+- traceback;
+- `failure_domain`;
+- timestamp;
+- owning run.
+
+The human-readable traceback helps debugging. The machine-readable failure domain supports aggregation and routing.
+
+Those are complementary observability surfaces.
+
+## Artifact lifecycle invariants
+
+The Control Plane is designed around these invariants:
+
+1. every current artifact has stable `file_id` identity separate from path;
+2. captured payload bytes are associated with artifact identity;
+3. current state and historical events are separate models;
+4. run identity propagates into event-producing repositories;
+5. pending Bronze work can survive a failed run;
+6. rename does not automatically become new evidence;
+7. removal does not erase historical provenance;
+8. healing records convergence rather than rewriting the prior divergence;
+9. provider requests are recorded as operational evidence;
+10. simulation provenance is attached to the parent run;
+11. current DuckDB registry state is healed from SQLite authority, not vice versa;
+12. commit state is richer than binary success/failure.
 
 ## What the lifecycle does not claim
 
-The implementation does **not** claim that:
+The Control Plane does not claim that:
 
-- every historical payload is retained forever;
-- path alone is immutable identity;
-- matching content hashes always prove a rename;
-- Control Plane events replace financial-domain lineage;
-- SQLite savepoints make DuckDB and SQLite one ACID database;
-- a reconstructed financial state becomes source evidence merely because its producing run is traceable.
+- content hashes prove financial correctness;
+- path rename detection can infer every possible semantic identity change;
+- retained payload bytes eliminate the need for source validation;
+- a `SYNCED` artifact guarantees every downstream financial calculation is correct;
+- SQLite and DuckDB can commit atomically as one distributed transaction;
+- stochastic outputs are reproducible without seed/model/input provenance;
+- historical events should be used as the primary BI model.
 
-Operational provenance and financial semantics intersect, but they are not interchangeable.
+These limits keep operational truth from being mistaken for analytical truth.
+
+## Why this subsystem deserves first-class architecture
+
+Without a Control Plane, a local ETL project can still produce correct numbers on a good day.
+
+What it cannot do reliably is explain:
+
+- why a source was or was not processed;
+- whether the bytes changed;
+- whether a rename duplicated state;
+- whether a crash left pending work;
+- whether Bronze actually synchronized;
+- whether a provider failure created missing market evidence;
+- whether a successful analytical commit lost its operational commit;
+- which later run converged the divergence.
+
+Those questions are where a pipeline becomes an operational system.
+
+## Continue into economic identity
+
+Artifact identity explains continuity of evidence. Financial entities need a different identity model that survives full analytical rebuilds.
+
+Continue with [Deterministic Identity and Replay](deterministic-identity-and-replay.md), then [Reliability and Recovery](reliability-and-recovery.md).
 
 ## Related specifications
 
+- [Architecture](README.md)
 - [Data Lifecycle](data-lifecycle.md)
 - [Warehouse Architecture](warehouse-architecture.md)
 - [Deterministic Identity and Replay](deterministic-identity-and-replay.md)
 - [Reliability and Recovery](reliability-and-recovery.md)
 - [Backup and Restore](backup-and-restore.md)
-- [Control Plane Data Contracts](../reference/control-plane-data-contracts.md)
+- [Reference: Control Plane Data Contracts](../reference/control-plane-data-contracts.md)

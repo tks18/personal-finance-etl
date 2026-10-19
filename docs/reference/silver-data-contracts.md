@@ -1,900 +1,962 @@
 # Silver Data Contracts
 
-Silver is the canonical analytical layer. It contains normalized household, currency, investment, Quant, reconciliation, and tax facts that downstream engines can consume without reinterpreting vendor/source layouts.
+Silver is the canonical analytical layer: dimensions, household facts, investment facts, reconstructed investment state, reconciliation events, and Tax events live here at explicit grains.
+
+The registry answers **what the dataset means operationally**. The DDL answers **what the dataset physically contains**. Both are part of the contract.
 
 ## Registry authority
 
-The current registry contains **24 Silver contracts**. Publication order is explicit metadata, not an accidental consequence of dictionary iteration or filename sorting. The ETL validates the registry before publication and rejects missing or unregistered analytical outputs.
-
-```mermaid
-flowchart LR
-    P[Engine output key] --> R[DataContract registry]
-    R --> G[Grain + producer + order]
-    R --> T[Physical table]
-    T --> D[DDL schema]
-    D --> V[Validated publication]
+```python
+@dataclass
+class DataContract:
+    contract_id: str
+    layer: str
+    physical_table: str
+    domain: str
+    grain: str
+    producer: str
+    publication_order: int
 ```
+
+Source: `src/personal_finance_etl/infrastructure/warehouse/registry.py`
 
 ## Contract catalog
 
-| Order | Contract ID | Physical table | Domain | Grain | Producer |
-|---:|---|---|---|---|---|
-| 10 | `df_d_calendar` | `silver.d_Calendar` | Common | Day | `CoreEngine` |
-| 20 | `df_d_income_category` | `silver.d_Income_Category` | Wealth | Category | `CoreEngine` |
-| 30 | `df_d_income_subcategory` | `silver.d_Income_Subcategory` | Wealth | Subcategory | `CoreEngine` |
-| 40 | `df_d_expense_category` | `silver.d_Expense_Category` | Wealth | Category | `CoreEngine` |
-| 50 | `df_d_expense_subcategory` | `silver.d_Expense_Subcategory` | Wealth | Subcategory | `CoreEngine` |
-| 60 | `df_d_asset_category` | `silver.d_Asset_Category` | Wealth | Category | `CoreEngine` |
-| 70 | `df_d_asset_subcategory` | `silver.d_Asset_SubCategory` | Wealth | Subcategory | `CoreEngine` |
-| 80 | `df_d_currency` | `silver.d_Currency` | Common | Currency | `CoreEngine` |
-| 90 | `df_d_benchmark_master` | `silver.d_Investment_Benchmark_Master` | Investments | Benchmark | `CoreEngine` |
-| 95 | `df_f_currency_fx_rates` | `silver.f_Currency_FX_Rates` | Common | Date-Currency | `CoreEngine` |
-| 100 | `df_d_investment_master` | `silver.d_Investment_Master` | Investments | ISIN | `CoreEngine` |
-| 110 | `df_d_macro_parameters` | `silver.d_Macro_Parameters` | Investments | FinancialYear | `CoreEngine` |
-| 120 | `df_f_income_transactions` | `silver.f_Income_Transactions` | Wealth | Transaction | `CoreEngine` |
-| 130 | `df_f_expense_transactions` | `silver.f_Expense_Transactions` | Wealth | Transaction | `CoreEngine` |
-| 140 | `df_f_transfer_transactions` | `silver.f_Transfer_Transactions` | Wealth | Transaction | `CoreEngine` |
-| 150 | `df_f_opening_balances` | `silver.f_Opening_Balances` | Wealth | Balance | `CoreEngine` |
-| 160 | `df_f_investment_market_data` | `silver.f_Investment_Market_Data` | Investments | Quote | `CoreEngine` |
-| 170 | `df_f_tf_inv_purchase` | `silver.f_Investment_Purchase_Data` | Investments | Trade | `CoreEngine` |
-| 180 | `df_f_tf_inv_sale` | `silver.f_Investment_Sale_Data` | Investments | Trade | `CoreEngine` |
-| 190 | `df_f_investment_benchmark_data` | `silver.f_Investment_Benchmark_Data` | Investments | Quote | `CoreEngine` |
-| 200 | `df_f_investment_analytics_lot` | `silver.f_Investment_Analytics_Lot` | Investments | ISIN-Lot | `InvestmentQuantEngine` |
-| 205 | `df_f_investment_realized_events` | `silver.f_Investment_Realized_Events` | Investments | RealizedEvent | `InvestmentQuantEngine` |
-| 206 | `df_f_investment_reconciliation_events` | `silver.f_Investment_Reconciliation_Events` | Investments | ReconEvent | `InvestmentQuantEngine` |
-| 300 | `df_f_tax_events` | `silver.f_Tax_Events` | Taxes | TaxEvent | `TaxEngine` |
+| Contract ID | Physical table | Domain | Grain | Producer | Order |
+|---|---|---|---|---|---:|
+| `df_d_calendar` | `silver.d_Calendar` | Common | `Day` | `CoreEngine` | 10 |
+| `df_d_income_category` | `silver.d_Income_Category` | Wealth | `Category` | `CoreEngine` | 20 |
+| `df_d_income_subcategory` | `silver.d_Income_Subcategory` | Wealth | `Subcategory` | `CoreEngine` | 30 |
+| `df_d_expense_category` | `silver.d_Expense_Category` | Wealth | `Category` | `CoreEngine` | 40 |
+| `df_d_expense_subcategory` | `silver.d_Expense_Subcategory` | Wealth | `Subcategory` | `CoreEngine` | 50 |
+| `df_d_asset_category` | `silver.d_Asset_Category` | Wealth | `Category` | `CoreEngine` | 60 |
+| `df_d_asset_subcategory` | `silver.d_Asset_SubCategory` | Wealth | `Subcategory` | `CoreEngine` | 70 |
+| `df_d_currency` | `silver.d_Currency` | Common | `Currency` | `CoreEngine` | 80 |
+| `df_d_benchmark_master` | `silver.d_Investment_Benchmark_Master` | Investments | `Benchmark` | `CoreEngine` | 90 |
+| `df_f_currency_fx_rates` | `silver.f_Currency_FX_Rates` | Common | `Date-Currency` | `CoreEngine` | 95 |
+| `df_d_investment_master` | `silver.d_Investment_Master` | Investments | `ISIN` | `CoreEngine` | 100 |
+| `df_d_macro_parameters` | `silver.d_Macro_Parameters` | Investments | `FinancialYear` | `CoreEngine` | 110 |
+| `df_f_income_transactions` | `silver.f_Income_Transactions` | Wealth | `Transaction` | `CoreEngine` | 120 |
+| `df_f_expense_transactions` | `silver.f_Expense_Transactions` | Wealth | `Transaction` | `CoreEngine` | 130 |
+| `df_f_transfer_transactions` | `silver.f_Transfer_Transactions` | Wealth | `Transaction` | `CoreEngine` | 140 |
+| `df_f_opening_balances` | `silver.f_Opening_Balances` | Wealth | `Balance` | `CoreEngine` | 150 |
+| `df_f_investment_market_data` | `silver.f_Investment_Market_Data` | Investments | `Quote` | `CoreEngine` | 160 |
+| `df_f_tf_inv_purchase` | `silver.f_Investment_Purchase_Data` | Investments | `Trade` | `CoreEngine` | 170 |
+| `df_f_tf_inv_sale` | `silver.f_Investment_Sale_Data` | Investments | `Trade` | `CoreEngine` | 180 |
+| `df_f_investment_benchmark_data` | `silver.f_Investment_Benchmark_Data` | Investments | `Quote` | `CoreEngine` | 190 |
+| `df_f_investment_analytics_lot` | `silver.f_Investment_Analytics_Lot` | Investments | `ISIN-Lot` | `InvestmentQuantEngine` | 200 |
+| `df_f_investment_realized_events` | `silver.f_Investment_Realized_Events` | Investments | `RealizedEvent` | `InvestmentQuantEngine` | 205 |
+| `df_f_investment_reconciliation_events` | `silver.f_Investment_Reconciliation_Events` | Investments | `ReconEvent` | `InvestmentQuantEngine` | 206 |
+| `df_f_tax_events` | `silver.f_Tax_Events` | Taxes | `TaxEvent` | `TaxEngine` | 300 |
+
 
 ## Physical schemas
+
+The following tables are generated directly from `schema/silver.py`. Column order therefore matches the declared warehouse contract.
 
 ### `silver.d_Calendar`
 
 **Contract ID:** `df_d_calendar`  
-**Domain:** Common  
-**Registry grain:** **Day**  
+**Grain:** `Day`  
+**Domain:** `Common`  
 **Producer:** `CoreEngine`  
 **Publication order:** `10`
 
-| Column | Physical type / constraint |
-|---|---|
-| `Date` | `DATE PRIMARY KEY` |
-| `Day` | `BIGINT` |
-| `Day_Name` | `TEXT` |
-| `Day_Name_Short` | `TEXT` |
-| `Day_Ordinal` | `BIGINT` |
-| `Day_Ordinal_Name` | `TEXT` |
-| `Weekday` | `BIGINT` |
-| `IS_WEEKEND` | `BIGINT` |
-| `Week` | `BIGINT` |
-| `Week_Ordinal` | `BIGINT` |
-| `Week_Ordinal_Name` | `TEXT` |
-| `Week_Name` | `TEXT` |
-| `Week_Year` | `TEXT` |
-| `Week_Name_Year` | `TEXT` |
-| `Start_of_Week` | `DATE` |
-| `End_of_Week` | `DATE` |
-| `Month` | `BIGINT` |
-| `Month_Name` | `TEXT` |
-| `Month_Name_Short` | `TEXT` |
-| `Month_Year` | `TEXT` |
-| `Short_Month_Year` | `TEXT` |
-| `V_Short_Month_Year` | `TEXT` |
-| `Month_Ordinal` | `BIGINT` |
-| `Start_of_Month` | `DATE` |
-| `End_of_Month` | `DATE` |
-| `Days_in_Month` | `BIGINT` |
-| `Month_Progress_Pct` | `DOUBLE` |
-| `Quarter` | `BIGINT` |
-| `Quarter_Name` | `TEXT` |
-| `Quarter_Year` | `TEXT` |
-| `Quarter_Ordinal` | `BIGINT` |
-| `Start_of_Quarter` | `DATE` |
-| `End_of_Quarter` | `DATE` |
-| `Year` | `BIGINT` |
-| `Days_in_Year` | `BIGINT` |
-| `Year_Progress_Pct` | `DOUBLE` |
-| `Financial_Year` | `TEXT` |
-| `FY_Year` | `BIGINT` |
-| `FY_Month` | `BIGINT` |
-| `FY_Month_Ordinal` | `BIGINT` |
-| `FY_Quarter` | `BIGINT` |
-| `FY_Quarter_Name` | `TEXT` |
-| `FY_Quarter_Year` | `TEXT` |
-| `FY_Quarter_Ordinal` | `BIGINT` |
-| `FY_Start_of_Month` | `DATE` |
-| `FY_End_of_Month` | `DATE` |
-| `FY_Start_of_Quarter` | `DATE` |
-| `FY_End_of_Quarter` | `DATE` |
-| `Is_Last_Day_Of_Month` | `BOOLEAN` |
-| `Is_Last_Day_Of_Quarter` | `BOOLEAN` |
-| `Is_Last_Day_Of_Year` | `BOOLEAN` |
-| `Is_Last_Day_Of_FY` | `BOOLEAN` |
-| `Is_Quarter_End_Month` | `BOOLEAN` |
-| `Is_Tax_Harvesting_Season` | `BOOLEAN` |
-| `Is_Current_Month` | `BOOLEAN` |
-| `Is_Previous_Month` | `BOOLEAN` |
-| `Is_Current_Quarter` | `BOOLEAN` |
-| `Is_Previous_Quarter` | `BOOLEAN` |
-| `Is_Current_Year` | `BOOLEAN` |
-| `Is_Previous_Year` | `BOOLEAN` |
-| `Is_Current_FY` | `BOOLEAN` |
-| `Is_YTD` | `BOOLEAN` |
-| `Is_FY_YTD` | `BOOLEAN` |
-| `Is_Future_Date` | `BOOLEAN` |
-
-The physical DDL defines **64 columns** for this table. The registry grain is the semantic row contract; it should be used when reasoning about joins and uniqueness rather than assuming the first ID-looking column is automatically the grain.
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `Date` | `DATE PRIMARY KEY` | Identifiers |
+| `Day` | `BIGINT` | Descriptors/Classifications |
+| `Day_Name` | `TEXT` | Descriptors/Classifications |
+| `Day_Name_Short` | `TEXT` | Descriptors/Classifications |
+| `Day_Ordinal` | `BIGINT` | Descriptors/Classifications |
+| `Day_Ordinal_Name` | `TEXT` | Descriptors/Classifications |
+| `Weekday` | `BIGINT` | Descriptors/Classifications |
+| `IS_WEEKEND` | `BIGINT` | Descriptors/Classifications |
+| `Week` | `BIGINT` | Descriptors/Classifications |
+| `Week_Ordinal` | `BIGINT` | Descriptors/Classifications |
+| `Week_Ordinal_Name` | `TEXT` | Descriptors/Classifications |
+| `Week_Name` | `TEXT` | Descriptors/Classifications |
+| `Week_Year` | `TEXT` | Descriptors/Classifications |
+| `Week_Name_Year` | `TEXT` | Descriptors/Classifications |
+| `Start_of_Week` | `DATE` | Descriptors/Classifications |
+| `End_of_Week` | `DATE` | Descriptors/Classifications |
+| `Month` | `BIGINT` | Descriptors/Classifications |
+| `Month_Name` | `TEXT` | Descriptors/Classifications |
+| `Month_Name_Short` | `TEXT` | Descriptors/Classifications |
+| `Month_Year` | `TEXT` | Descriptors/Classifications |
+| `Short_Month_Year` | `TEXT` | Descriptors/Classifications |
+| `V_Short_Month_Year` | `TEXT` | Descriptors/Classifications |
+| `Month_Ordinal` | `BIGINT` | Descriptors/Classifications |
+| `Start_of_Month` | `DATE` | Descriptors/Classifications |
+| `End_of_Month` | `DATE` | Descriptors/Classifications |
+| `Days_in_Month` | `BIGINT` | Descriptors/Classifications |
+| `Month_Progress_Pct` | `DOUBLE` | Descriptors/Classifications |
+| `Quarter` | `BIGINT` | Descriptors/Classifications |
+| `Quarter_Name` | `TEXT` | Descriptors/Classifications |
+| `Quarter_Year` | `TEXT` | Descriptors/Classifications |
+| `Quarter_Ordinal` | `BIGINT` | Descriptors/Classifications |
+| `Start_of_Quarter` | `DATE` | Descriptors/Classifications |
+| `End_of_Quarter` | `DATE` | Descriptors/Classifications |
+| `Year` | `BIGINT` | Descriptors/Classifications |
+| `Days_in_Year` | `BIGINT` | Descriptors/Classifications |
+| `Year_Progress_Pct` | `DOUBLE` | Descriptors/Classifications |
+| `Financial_Year` | `TEXT` | Descriptors/Classifications |
+| `FY_Year` | `BIGINT` | Descriptors/Classifications |
+| `FY_Month` | `BIGINT` | Descriptors/Classifications |
+| `FY_Month_Ordinal` | `BIGINT` | Descriptors/Classifications |
+| `FY_Quarter` | `BIGINT` | Descriptors/Classifications |
+| `FY_Quarter_Name` | `TEXT` | Descriptors/Classifications |
+| `FY_Quarter_Year` | `TEXT` | Descriptors/Classifications |
+| `FY_Quarter_Ordinal` | `BIGINT` | Descriptors/Classifications |
+| `FY_Start_of_Month` | `DATE` | Descriptors/Classifications |
+| `FY_End_of_Month` | `DATE` | Descriptors/Classifications |
+| `FY_Start_of_Quarter` | `DATE` | Descriptors/Classifications |
+| `FY_End_of_Quarter` | `DATE` | Descriptors/Classifications |
+| `Is_Last_Day_Of_Month` | `BOOLEAN` | Flags |
+| `Is_Last_Day_Of_Quarter` | `BOOLEAN` | Flags |
+| `Is_Last_Day_Of_Year` | `BOOLEAN` | Flags |
+| `Is_Last_Day_Of_FY` | `BOOLEAN` | Flags |
+| `Is_Quarter_End_Month` | `BOOLEAN` | Flags |
+| `Is_Tax_Harvesting_Season` | `BOOLEAN` | Flags |
+| `Is_Current_Month` | `BOOLEAN` | Flags |
+| `Is_Previous_Month` | `BOOLEAN` | Flags |
+| `Is_Current_Quarter` | `BOOLEAN` | Flags |
+| `Is_Previous_Quarter` | `BOOLEAN` | Flags |
+| `Is_Current_Year` | `BOOLEAN` | Flags |
+| `Is_Previous_Year` | `BOOLEAN` | Flags |
+| `Is_Current_FY` | `BOOLEAN` | Flags |
+| `Is_YTD` | `BOOLEAN` | Flags |
+| `Is_FY_YTD` | `BOOLEAN` | Flags |
+| `Is_Future_Date` | `BOOLEAN` | Flags |
 
 ### `silver.d_Income_Category`
 
 **Contract ID:** `df_d_income_category`  
-**Domain:** Wealth  
-**Registry grain:** **Category**  
+**Grain:** `Category`  
+**Domain:** `Wealth`  
 **Producer:** `CoreEngine`  
 **Publication order:** `20`
 
-| Column | Physical type / constraint |
-|---|---|
-| `UID` | `TEXT PRIMARY KEY` |
-| `CATEGORY_NAME` | `TEXT` |
-| `CATEGORY_NAME_SHORT` | `TEXT` |
-| `ORDER_SEQUENCE` | `BIGINT` |
-| `__file_name__` | `TEXT` |
-| `__folder_path__` | `TEXT` |
-| `S_NO` | `BIGINT` |
-| `MODIFY_DATE` | `BIGINT` |
-| `Tax_Income_Head` | `TEXT` |
-| `Tax_Sub_Head` | `TEXT` |
-| `Taxability` | `TEXT` |
-| `Tax_Method` | `TEXT` |
-
-The physical DDL defines **12 columns** for this table. The registry grain is the semantic row contract; it should be used when reasoning about joins and uniqueness rather than assuming the first ID-looking column is automatically the grain.
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `UID` | `TEXT PRIMARY KEY` | Identifiers |
+| `CATEGORY_NAME` | `TEXT` | Descriptors/Classifications |
+| `CATEGORY_NAME_SHORT` | `TEXT` | Descriptors/Classifications |
+| `ORDER_SEQUENCE` | `BIGINT` | Descriptors/Classifications |
+| `__file_name__` | `TEXT` | Descriptors/Classifications |
+| `__folder_path__` | `TEXT` | Descriptors/Classifications |
+| `S_NO` | `BIGINT` | Descriptors/Classifications |
+| `MODIFY_DATE` | `BIGINT` | Descriptors/Classifications |
 
 ### `silver.d_Income_Subcategory`
 
 **Contract ID:** `df_d_income_subcategory`  
-**Domain:** Wealth  
-**Registry grain:** **Subcategory**  
+**Grain:** `Subcategory`  
+**Domain:** `Wealth`  
 **Producer:** `CoreEngine`  
 **Publication order:** `30`
 
-| Column | Physical type / constraint |
-|---|---|
-| `UID` | `TEXT PRIMARY KEY` |
-| `CATEGORY_ID` | `TEXT` |
-| `CATEGORY_NAME` | `TEXT` |
-| `CATEGORY_GROUPS` | `TEXT` |
-| `ORDER_SEQUENCE` | `BIGINT` |
-| `Is_Active_Income` | `BOOLEAN` |
-| `Is_Passive_Income` | `BOOLEAN` |
-| `Is_Dividend_Income` | `BOOLEAN` |
-| `Is_Interest_Income` | `BOOLEAN` |
-| `Is_Non_Cash_Income` | `BOOLEAN` |
-| `Is_Investment_Exclusion` | `BOOLEAN` |
-| `Is_Tax_Credits` | `BOOLEAN` |
-| `__file_name__` | `TEXT` |
-| `__folder_path__` | `TEXT` |
-| `S_NO` | `BIGINT` |
-| `MODIFY_DATE` | `BIGINT` |
-| `Tax_Income_Head` | `TEXT` |
-| `Tax_Sub_Head` | `TEXT` |
-| `Taxability` | `TEXT` |
-| `Tax_Method` | `TEXT` |
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `UID` | `TEXT PRIMARY KEY` | Identifiers |
+| `CATEGORY_ID` | `TEXT` | Identifiers |
+| `CATEGORY_NAME` | `TEXT` | Descriptors/Classifications |
+| `CATEGORY_GROUPS` | `TEXT` | Descriptors/Classifications |
+| `ORDER_SEQUENCE` | `BIGINT` | Descriptors/Classifications |
+| `Is_Active_Income` | `BOOLEAN` | Descriptors/Classifications |
+| `Is_Passive_Income` | `BOOLEAN` | Descriptors/Classifications |
+| `Is_Dividend_Income` | `BOOLEAN` | Descriptors/Classifications |
+| `Is_Interest_Income` | `BOOLEAN` | Descriptors/Classifications |
+| `Is_Non_Cash_Income` | `BOOLEAN` | Descriptors/Classifications |
+| `Is_Investment_Exclusion` | `BOOLEAN` | Descriptors/Classifications |
+| `Is_Tax_Credits` | `BOOLEAN` | Descriptors/Classifications |
+| `__file_name__` | `TEXT` | Descriptors/Classifications |
+| `__folder_path__` | `TEXT` | Descriptors/Classifications |
+| `S_NO` | `BIGINT` | Descriptors/Classifications |
+| `MODIFY_DATE` | `BIGINT` | Descriptors/Classifications |
+| `Tax_Income_Head` | `TEXT` | Descriptors/Classifications |
+| `Tax_Sub_Head` | `TEXT` | Descriptors/Classifications |
+| `Taxability` | `TEXT` | Descriptors/Classifications |
+| `Tax_Method` | `TEXT` | Descriptors/Classifications |
 
-The physical DDL defines **20 columns** for this table. The registry grain is the semantic row contract; it should be used when reasoning about joins and uniqueness rather than assuming the first ID-looking column is automatically the grain.
+**Table constraints**
+
+- `FOREIGN KEY (CATEGORY_ID) REFERENCES silver.d_Income_Category(UID)`
 
 ### `silver.d_Expense_Category`
 
 **Contract ID:** `df_d_expense_category`  
-**Domain:** Wealth  
-**Registry grain:** **Category**  
+**Grain:** `Category`  
+**Domain:** `Wealth`  
 **Producer:** `CoreEngine`  
 **Publication order:** `40`
 
-| Column | Physical type / constraint |
-|---|---|
-| `UID` | `TEXT PRIMARY KEY` |
-| `CATEGORY_NAME` | `TEXT` |
-| `ORDER_SEQUENCE` | `BIGINT` |
-| `__file_name__` | `TEXT` |
-| `__folder_path__` | `TEXT` |
-| `S_NO` | `BIGINT` |
-| `MODIFY_DATE` | `BIGINT` |
-
-The physical DDL defines **7 columns** for this table. The registry grain is the semantic row contract; it should be used when reasoning about joins and uniqueness rather than assuming the first ID-looking column is automatically the grain.
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `UID` | `TEXT PRIMARY KEY` | Identifiers |
+| `CATEGORY_NAME` | `TEXT` | Descriptors/Classifications |
+| `ORDER_SEQUENCE` | `BIGINT` | Descriptors/Classifications |
+| `__file_name__` | `TEXT` | Descriptors/Classifications |
+| `__folder_path__` | `TEXT` | Descriptors/Classifications |
+| `S_NO` | `BIGINT` | Descriptors/Classifications |
+| `MODIFY_DATE` | `BIGINT` | Descriptors/Classifications |
 
 ### `silver.d_Expense_Subcategory`
 
 **Contract ID:** `df_d_expense_subcategory`  
-**Domain:** Wealth  
-**Registry grain:** **Subcategory**  
+**Grain:** `Subcategory`  
+**Domain:** `Wealth`  
 **Producer:** `CoreEngine`  
 **Publication order:** `50`
 
-| Column | Physical type / constraint |
-|---|---|
-| `UID` | `TEXT PRIMARY KEY` |
-| `CATEGORY_ID` | `TEXT` |
-| `CATEGORY_NAME` | `TEXT` |
-| `ORDER_SEQUENCE` | `BIGINT` |
-| `Is_Core_Expense` | `BOOLEAN` |
-| `__file_name__` | `TEXT` |
-| `__folder_path__` | `TEXT` |
-| `S_NO` | `BIGINT` |
-| `MODIFY_DATE` | `BIGINT` |
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `UID` | `TEXT PRIMARY KEY` | Identifiers |
+| `CATEGORY_ID` | `TEXT` | Identifiers |
+| `CATEGORY_NAME` | `TEXT` | Descriptors/Classifications |
+| `ORDER_SEQUENCE` | `BIGINT` | Descriptors/Classifications |
+| `Is_Core_Expense` | `BOOLEAN` | Descriptors/Classifications |
+| `__file_name__` | `TEXT` | Descriptors/Classifications |
+| `__folder_path__` | `TEXT` | Descriptors/Classifications |
+| `S_NO` | `BIGINT` | Descriptors/Classifications |
+| `MODIFY_DATE` | `BIGINT` | Descriptors/Classifications |
 
-The physical DDL defines **9 columns** for this table. The registry grain is the semantic row contract; it should be used when reasoning about joins and uniqueness rather than assuming the first ID-looking column is automatically the grain.
+**Table constraints**
+
+- `FOREIGN KEY(CATEGORY_ID) REFERENCES silver.d_Expense_Category(UID)`
 
 ### `silver.d_Asset_Category`
 
 **Contract ID:** `df_d_asset_category`  
-**Domain:** Wealth  
-**Registry grain:** **Category**  
+**Grain:** `Category`  
+**Domain:** `Wealth`  
 **Producer:** `CoreEngine`  
 **Publication order:** `60`
 
-| Column | Physical type / constraint |
-|---|---|
-| `UID` | `TEXT PRIMARY KEY` |
-| `ASSET_GROUP` | `TEXT` |
-| `TYPE` | `BIGINT` |
-| `ORDER_SEQUENCE` | `BIGINT` |
-| `ledger_role` | `TEXT` |
-| `cashflow_activity_type` | `TEXT` |
-| `settlement_timing` | `TEXT` |
-| `Is_Digital_Asset` | `BOOLEAN` |
-| `is_cash_pool` | `BOOLEAN` |
-| `is_non_cash_pnl` | `BOOLEAN` |
-| `__file_name__` | `TEXT` |
-| `__folder_path__` | `TEXT` |
-| `DEVICE_ID` | `BIGINT` |
-| `USE_TIME` | `BIGINT` |
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `UID` | `TEXT PRIMARY KEY` | Identifiers |
+| `ASSET_GROUP` | `TEXT` | Descriptors/Classifications |
+| `TYPE` | `BIGINT` | Descriptors/Classifications |
+| `ORDER_SEQUENCE` | `BIGINT` | Descriptors/Classifications |
+| `ledger_role` | `TEXT` | Descriptors/Classifications |
+| `cashflow_activity_type` | `TEXT` | Descriptors/Classifications |
+| `settlement_timing` | `TEXT` | Descriptors/Classifications |
+| `Is_Digital_Asset` | `BOOLEAN` | Descriptors/Classifications |
+| `is_cash_pool` | `BOOLEAN` | Descriptors/Classifications |
+| `is_non_cash_pnl` | `BOOLEAN` | Descriptors/Classifications |
+| `__file_name__` | `TEXT` | Descriptors/Classifications |
+| `__folder_path__` | `TEXT` | Descriptors/Classifications |
+| `DEVICE_ID` | `BIGINT` | Descriptors/Classifications |
+| `USE_TIME` | `BIGINT` | Descriptors/Classifications |
 
-The physical DDL defines **14 columns** for this table. The registry grain is the semantic row contract; it should be used when reasoning about joins and uniqueness rather than assuming the first ID-looking column is automatically the grain.
+### `silver.d_Asset_Subcategory`
 
-### `silver.d_Asset_SubCategory`
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `UID` | `TEXT PRIMARY KEY` | Identifiers |
+| `ASSET_GROUP_ID` | `TEXT` | Identifiers |
+| `CURRENCY_ID` | `TEXT` | Identifiers |
+| `AUTOPAY_ASSET_ID` | `TEXT` | Identifiers |
+| `ASSET_NAME` | `TEXT` | Descriptors/Classifications |
+| `ASSET_DESCRIPTION` | `TEXT` | Descriptors/Classifications |
+| `NOTES` | `TEXT` | Descriptors/Classifications |
+| `ORDER_SEQUENCE` | `BIGINT` | Descriptors/Classifications |
+| `ledger_role` | `TEXT` | Descriptors/Classifications |
+| `cashflow_activity_type` | `TEXT` | Descriptors/Classifications |
+| `settlement_timing` | `TEXT` | Descriptors/Classifications |
+| `TRANSFER_EXPENSE` | `BIGINT` | Descriptors/Classifications |
+| `CARD_AUTOPAY` | `BIGINT` | Descriptors/Classifications |
+| `CARD_STATEMENT_DATE` | `BIGINT` | Descriptors/Classifications |
+| `CARD_PAYMENT_DATE` | `BIGINT` | Descriptors/Classifications |
+| `Is_Liquid` | `BOOLEAN` | Descriptors/Classifications |
+| `Is_Illiquid` | `BOOLEAN` | Descriptors/Classifications |
+| `Is_Digital_Asset` | `BOOLEAN` | Descriptors/Classifications |
+| `is_cash_pool` | `BOOLEAN` | Descriptors/Classifications |
+| `is_non_cash_pnl` | `BOOLEAN` | Descriptors/Classifications |
+| `__file_name__` | `TEXT` | Descriptors/Classifications |
+| `__folder_path__` | `TEXT` | Descriptors/Classifications |
+| `S_NO` | `BIGINT` | Descriptors/Classifications |
+| `ADDED_TIME` | `BIGINT` | Descriptors/Classifications |
 
-**Contract ID:** `df_d_asset_subcategory`  
-**Domain:** Wealth  
-**Registry grain:** **Subcategory**  
-**Producer:** `CoreEngine`  
-**Publication order:** `70`
+**Table constraints**
 
-| Column | Physical type / constraint |
-|---|---|
-
-The physical DDL defines **0 columns** for this table. The registry grain is the semantic row contract; it should be used when reasoning about joins and uniqueness rather than assuming the first ID-looking column is automatically the grain.
+- `FOREIGN KEY(ASSET_GROUP_ID) REFERENCES silver.d_Asset_Category(UID)`
 
 ### `silver.d_Currency`
 
 **Contract ID:** `df_d_currency`  
-**Domain:** Common  
-**Registry grain:** **Currency**  
+**Grain:** `Currency`  
+**Domain:** `Common`  
 **Producer:** `CoreEngine`  
 **Publication order:** `80`
 
-| Column | Physical type / constraint |
-|---|---|
-| `UID` | `TEXT PRIMARY KEY` |
-| `CURRENCY_NAME` | `TEXT` |
-| `ISO` | `TEXT` |
-| `MAIN_ISO` | `TEXT` |
-| `Target_Currency_Code` | `TEXT` |
-| `yF_Ticker` | `TEXT` |
-| `SYMBOL` | `TEXT` |
-| `SYMBOL_POSITION` | `TEXT` |
-| `ORDER_SEQUENCE` | `BIGINT` |
-| `RATE` | `DOUBLE` |
-| `DECIMAL_POINT` | `BIGINT` |
-| `IS_MAIN_CURRENCY` | `BIGINT` |
-| `IS_SHOW` | `BIGINT` |
-| `Is_Active` | `BOOLEAN` |
-| `INSERT_TYPE` | `TEXT` |
-| `__file_name__` | `TEXT` |
-| `__folder_path__` | `TEXT` |
-| `S_NO` | `BIGINT` |
-| `MODIFY_DATE` | `BIGINT` |
-
-The physical DDL defines **19 columns** for this table. The registry grain is the semantic row contract; it should be used when reasoning about joins and uniqueness rather than assuming the first ID-looking column is automatically the grain.
-
-### `silver.d_Investment_Benchmark_Master`
-
-**Contract ID:** `df_d_benchmark_master`  
-**Domain:** Investments  
-**Registry grain:** **Benchmark**  
-**Producer:** `CoreEngine`  
-**Publication order:** `90`
-
-| Column | Physical type / constraint |
-|---|---|
-| `ID` | `TEXT PRIMARY KEY` |
-| `CURRENCY_ID` | `TEXT` |
-| `Benchmark_Name` | `TEXT` |
-| `yF_Ticker` | `TEXT` |
-| `__file_name__` | `TEXT` |
-| `__folder_path__` | `TEXT` |
-
-The physical DDL defines **6 columns** for this table. The registry grain is the semantic row contract; it should be used when reasoning about joins and uniqueness rather than assuming the first ID-looking column is automatically the grain.
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `UID` | `TEXT PRIMARY KEY` | Identifiers |
+| `CURRENCY_NAME` | `TEXT` | Descriptors/Classifications |
+| `ISO` | `TEXT` | Descriptors/Classifications |
+| `MAIN_ISO` | `TEXT` | Descriptors/Classifications |
+| `Target_Currency_Code` | `TEXT` | Descriptors/Classifications |
+| `yF_Ticker` | `TEXT` | Descriptors/Classifications |
+| `SYMBOL` | `TEXT` | Descriptors/Classifications |
+| `SYMBOL_POSITION` | `TEXT` | Descriptors/Classifications |
+| `ORDER_SEQUENCE` | `BIGINT` | Descriptors/Classifications |
+| `RATE` | `DOUBLE` | Descriptors/Classifications |
+| `DECIMAL_POINT` | `BIGINT` | Descriptors/Classifications |
+| `IS_MAIN_CURRENCY` | `BIGINT` | Descriptors/Classifications |
+| `IS_SHOW` | `BIGINT` | Descriptors/Classifications |
+| `Is_Active` | `BOOLEAN` | Descriptors/Classifications |
+| `INSERT_TYPE` | `TEXT` | Descriptors/Classifications |
+| `__file_name__` | `TEXT` | Descriptors/Classifications |
+| `__folder_path__` | `TEXT` | Descriptors/Classifications |
+| `S_NO` | `BIGINT` | Descriptors/Classifications |
+| `MODIFY_DATE` | `BIGINT` | Descriptors/Classifications |
 
 ### `silver.f_Currency_FX_Rates`
 
 **Contract ID:** `df_f_currency_fx_rates`  
-**Domain:** Common  
-**Registry grain:** **Date-Currency**  
+**Grain:** `Date-Currency`  
+**Domain:** `Common`  
 **Producer:** `CoreEngine`  
 **Publication order:** `95`
 
-| Column | Physical type / constraint |
-|---|---|
-| `Date` | `DATE NOT NULL` |
-| `Currency_ID` | `TEXT NOT NULL` |
-| `Currency_Code` | `TEXT NOT NULL` |
-| `Target_Currency_Code` | `TEXT NOT NULL` |
-| `yF_Ticker` | `TEXT NOT NULL` |
-| `FX_Rate` | `DOUBLE NOT NULL` |
-| `Data_Provider` | `TEXT` |
-| `Extraction_Time` | `TEXT` |
-| `Requested_Start` | `DATE` |
-| `Requested_End` | `DATE` |
-| `Is_Closure_Gap` | `BOOLEAN` |
-| `Is_Imputed` | `BOOLEAN` |
-| `First_Observation_Date` | `DATE` |
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `Date` | `DATE NOT NULL` | Identifiers |
+| `Currency_ID` | `TEXT NOT NULL` | Identifiers |
+| `Currency_Code` | `TEXT NOT NULL` | Descriptors/Classifications |
+| `Target_Currency_Code` | `TEXT NOT NULL` | Descriptors/Classifications |
+| `yF_Ticker` | `TEXT NOT NULL` | Descriptors/Classifications |
+| `FX_Rate` | `DOUBLE NOT NULL` | Local/FX Values |
+| `Data_Provider` | `TEXT` | Provenance |
+| `Extraction_Time` | `TEXT` | Provenance |
+| `Requested_Start` | `DATE` | Provenance |
+| `Requested_End` | `DATE` | Provenance |
+| `Is_Closure_Gap` | `BOOLEAN` | Provenance |
+| `Is_Imputed` | `BOOLEAN` | Provenance |
+| `First_Observation_Date` | `DATE` | Provenance |
 
-The physical DDL defines **13 columns** for this table. The registry grain is the semantic row contract; it should be used when reasoning about joins and uniqueness rather than assuming the first ID-looking column is automatically the grain.
+**Table constraints**
 
-### `silver.d_Investment_Master`
-
-**Contract ID:** `df_d_investment_master`  
-**Domain:** Investments  
-**Registry grain:** **ISIN**  
-**Producer:** `CoreEngine`  
-**Publication order:** `100`
-
-| Column | Physical type / constraint |
-|---|---|
-| `ISIN` | `TEXT PRIMARY KEY` |
-| `CATEGORY_ID` | `TEXT` |
-| `BENCHMARK_ID` | `TEXT` |
-| `CURRENCY_ID` | `TEXT` |
-| `INSTRUMENT_NAME` | `TEXT` |
-| `INSTRUMENT_HOUSE` | `TEXT` |
-| `INSTRUMENT_CLASS` | `TEXT NOT NULL` |
-| `INSTRUMENT_TYPE` | `TEXT` |
-| `INSTRUMENT_SUBTYPE` | `TEXT` |
-| `SECTOR` | `TEXT` |
-| `INDUSTRY` | `TEXT` |
-| `COUNTRY` | `TEXT` |
-| `GEO` | `TEXT` |
-| `GEO_SUBTYPE` | `TEXT` |
-| `YAHOO_TICKER` | `TEXT` |
-| `TAX_TYPE` | `TEXT NOT NULL` |
-| `TAX_SUBTYPE` | `TEXT` |
-
-The physical DDL defines **17 columns** for this table. The registry grain is the semantic row contract; it should be used when reasoning about joins and uniqueness rather than assuming the first ID-looking column is automatically the grain.
-
-### `silver.d_Macro_Parameters`
-
-**Contract ID:** `df_d_macro_parameters`  
-**Domain:** Investments  
-**Registry grain:** **FinancialYear**  
-**Producer:** `CoreEngine`  
-**Publication order:** `110`
-
-| Column | Physical type / constraint |
-|---|---|
-| `FY` | `TEXT PRIMARY KEY` |
-| `FY_Start_Date` | `DATE` |
-| `FY_End_Date` | `DATE` |
-| `Debt_MF_Cutoff_Date` | `DATE` |
-| `Inflation_Rate` | `DOUBLE` |
-| `Risk_Free_Rate` | `DOUBLE` |
-| `Equity_Listed_LTCG` | `DOUBLE` |
-| `Equity_Listed_STCG` | `DOUBLE` |
-| `Equity_Unlisted_LTCG` | `DOUBLE` |
-| `Equity_Unlisted_STCG` | `DOUBLE` |
-| `Equity_LTCG_Exemption` | `BIGINT` |
-| `Gold_LTCG` | `DOUBLE` |
-| `Gold_STCG` | `DOUBLE` |
-| `Debt_MF_Pre_Cutoff_LTCG` | `DOUBLE` |
-| `Debt_MF_Pre_Cutoff_STCG` | `DOUBLE` |
-| `Debt_MF_Post_Cutoff_LTCG` | `DOUBLE` |
-| `Debt_MF_Post_Cutoff_STCG` | `DOUBLE` |
-| `Other_Debt_LTCG` | `DOUBLE` |
-| `Other_Debt_STCG` | `DOUBLE` |
-| `Default_LTCG` | `DOUBLE` |
-| `Default_STCG` | `DOUBLE` |
-| `Estimated_Ordinary_Income_Tax_Rate` | `DOUBLE` |
-| `Remarks` | `TEXT` |
-| `__file_name__` | `TEXT` |
-| `__folder_path__` | `TEXT` |
-
-The physical DDL defines **25 columns** for this table. The registry grain is the semantic row contract; it should be used when reasoning about joins and uniqueness rather than assuming the first ID-looking column is automatically the grain.
+- `FOREIGN KEY(Date) REFERENCES silver.d_Calendar(Date)`
+- `FOREIGN KEY(Currency_ID) REFERENCES silver.d_Currency(UID)`
 
 ### `silver.f_Income_Transactions`
 
 **Contract ID:** `df_f_income_transactions`  
-**Domain:** Wealth  
-**Registry grain:** **Transaction**  
+**Grain:** `Transaction`  
+**Domain:** `Wealth`  
 **Producer:** `CoreEngine`  
 **Publication order:** `120`
 
-| Column | Physical type / constraint |
-|---|---|
-| `UID` | `TEXT PRIMARY KEY` |
-| `DATE` | `DATE NOT NULL` |
-| `ASSET_ID` | `TEXT NOT NULL` |
-| `CATEGORY_ID` | `TEXT NOT NULL` |
-| `CURRENCY_ID` | `TEXT` |
-| `TO_ASSET_ID` | `TEXT` |
-| `TRANSFER_UID` | `TEXT` |
-| `TIME` | `TEXT` |
-| `DESCRIPTION` | `TEXT` |
-| `PAID` | `TEXT` |
-| `TRANSACTION_TYPE` | `BIGINT` |
-| `FEES_NOTES` | `TEXT` |
-| `MARK` | `TEXT` |
-| `TRANSFER_FEES` | `TEXT` |
-| `CARDDIVIDMONTH` | `BIGINT` |
-| `Is_Active_Income` | `BOOLEAN` |
-| `Is_Dividend_Income` | `BOOLEAN` |
-| `Is_Interest_Income` | `BOOLEAN` |
-| `Is_Non_Cash_Income` | `BOOLEAN` |
-| `BASE_AMOUNT` | `DOUBLE` |
-| `AMOUNT_ACCOUNT` | `DOUBLE` |
-| `LOCAL_AMOUNT` | `DOUBLE` |
-| `EXCH_RATE` | `DOUBLE` |
-| `__file_name__` | `TEXT` |
-| `__folder_path__` | `TEXT` |
-| `S_NO` | `BIGINT` |
-| `TIMESTAMP` | `BIGINT` |
-| `UPDATED_TIME` | `BIGINT` |
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `UID` | `TEXT PRIMARY KEY` | Identifiers |
+| `DATE` | `DATE NOT NULL` | Identifiers |
+| `ASSET_ID` | `TEXT NOT NULL` | Identifiers |
+| `CATEGORY_ID` | `TEXT NOT NULL` | Identifiers |
+| `CURRENCY_ID` | `TEXT` | Identifiers |
+| `TO_ASSET_ID` | `TEXT` | Identifiers |
+| `TRANSFER_UID` | `TEXT` | Identifiers |
+| `TIME` | `TEXT` | Descriptors/Classifications |
+| `DESCRIPTION` | `TEXT` | Descriptors/Classifications |
+| `PAID` | `TEXT` | Descriptors/Classifications |
+| `TRANSACTION_TYPE` | `BIGINT` | Descriptors/Classifications |
+| `FEES_NOTES` | `TEXT` | Descriptors/Classifications |
+| `MARK` | `TEXT` | Descriptors/Classifications |
+| `TRANSFER_FEES` | `TEXT` | Descriptors/Classifications |
+| `CARDDIVIDMONTH` | `BIGINT` | Descriptors/Classifications |
+| `Is_Active_Income` | `BOOLEAN` | Descriptors/Classifications |
+| `Is_Dividend_Income` | `BOOLEAN` | Descriptors/Classifications |
+| `Is_Interest_Income` | `BOOLEAN` | Descriptors/Classifications |
+| `Is_Non_Cash_Income` | `BOOLEAN` | Descriptors/Classifications |
+| `BASE_AMOUNT` | `DOUBLE` | Position Values |
+| `AMOUNT_ACCOUNT` | `DOUBLE` | Position Values |
+| `LOCAL_AMOUNT` | `DOUBLE` | Local/FX Values |
+| `EXCH_RATE` | `DOUBLE` | Local/FX Values |
+| `__file_name__` | `TEXT` | Local/FX Values |
+| `__folder_path__` | `TEXT` | Local/FX Values |
+| `S_NO` | `BIGINT` | Local/FX Values |
+| `TIMESTAMP` | `BIGINT` | Local/FX Values |
+| `UPDATED_TIME` | `BIGINT` | Local/FX Values |
 
-The physical DDL defines **28 columns** for this table. The registry grain is the semantic row contract; it should be used when reasoning about joins and uniqueness rather than assuming the first ID-looking column is automatically the grain.
+**Table constraints**
+
+- `FOREIGN KEY(CATEGORY_ID) REFERENCES silver.d_Income_Subcategory(UID)`
+- `FOREIGN KEY(ASSET_ID) REFERENCES silver.d_Asset_Subcategory(UID)`
+- `FOREIGN KEY(CURRENCY_ID) REFERENCES silver.d_Currency(UID)`
+- `FOREIGN KEY(DATE) REFERENCES silver.d_Calendar(Date)`
 
 ### `silver.f_Expense_Transactions`
 
 **Contract ID:** `df_f_expense_transactions`  
-**Domain:** Wealth  
-**Registry grain:** **Transaction**  
+**Grain:** `Transaction`  
+**Domain:** `Wealth`  
 **Producer:** `CoreEngine`  
 **Publication order:** `130`
 
-| Column | Physical type / constraint |
-|---|---|
-| `UID` | `TEXT PRIMARY KEY` |
-| `DATE` | `DATE NOT NULL` |
-| `ASSET_ID` | `TEXT NOT NULL` |
-| `CATEGORY_ID` | `TEXT NOT NULL` |
-| `CURRENCY_ID` | `TEXT` |
-| `TO_ASSET_ID` | `TEXT` |
-| `TRANSFER_UID` | `TEXT` |
-| `TIME` | `TEXT` |
-| `DESCRIPTION` | `TEXT` |
-| `PAID` | `TEXT` |
-| `TRANSACTION_TYPE` | `BIGINT` |
-| `FEES_NOTES` | `TEXT` |
-| `MARK` | `TEXT` |
-| `TRANSFER_FEES` | `TEXT` |
-| `CARDDIVIDMONTH` | `BIGINT` |
-| `Is_Core_Expense` | `BOOLEAN` |
-| `BASE_AMOUNT` | `DOUBLE` |
-| `AMOUNT_ACCOUNT` | `DOUBLE` |
-| `LOCAL_AMOUNT` | `DOUBLE` |
-| `EXCH_RATE` | `DOUBLE` |
-| `__file_name__` | `TEXT` |
-| `__folder_path__` | `TEXT` |
-| `S_NO` | `BIGINT` |
-| `TIMESTAMP` | `BIGINT` |
-| `UPDATED_TIME` | `BIGINT` |
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `UID` | `TEXT PRIMARY KEY` | Identifiers |
+| `DATE` | `DATE NOT NULL` | Identifiers |
+| `ASSET_ID` | `TEXT NOT NULL` | Identifiers |
+| `CATEGORY_ID` | `TEXT NOT NULL` | Identifiers |
+| `CURRENCY_ID` | `TEXT` | Identifiers |
+| `TO_ASSET_ID` | `TEXT` | Identifiers |
+| `TRANSFER_UID` | `TEXT` | Identifiers |
+| `TIME` | `TEXT` | Descriptors/Classifications |
+| `DESCRIPTION` | `TEXT` | Descriptors/Classifications |
+| `PAID` | `TEXT` | Descriptors/Classifications |
+| `TRANSACTION_TYPE` | `BIGINT` | Descriptors/Classifications |
+| `FEES_NOTES` | `TEXT` | Descriptors/Classifications |
+| `MARK` | `TEXT` | Descriptors/Classifications |
+| `TRANSFER_FEES` | `TEXT` | Descriptors/Classifications |
+| `CARDDIVIDMONTH` | `BIGINT` | Descriptors/Classifications |
+| `Is_Core_Expense` | `BOOLEAN` | Descriptors/Classifications |
+| `BASE_AMOUNT` | `DOUBLE` | Position Values |
+| `AMOUNT_ACCOUNT` | `DOUBLE` | Position Values |
+| `LOCAL_AMOUNT` | `DOUBLE` | Local/FX Values |
+| `EXCH_RATE` | `DOUBLE` | Local/FX Values |
+| `__file_name__` | `TEXT` | Local/FX Values |
+| `__folder_path__` | `TEXT` | Local/FX Values |
+| `S_NO` | `BIGINT` | Local/FX Values |
+| `TIMESTAMP` | `BIGINT` | Local/FX Values |
+| `UPDATED_TIME` | `BIGINT` | Local/FX Values |
 
-The physical DDL defines **25 columns** for this table. The registry grain is the semantic row contract; it should be used when reasoning about joins and uniqueness rather than assuming the first ID-looking column is automatically the grain.
+**Table constraints**
+
+- `FOREIGN KEY(CATEGORY_ID) REFERENCES silver.d_Expense_Subcategory(UID)`
+- `FOREIGN KEY(ASSET_ID) REFERENCES silver.d_Asset_Subcategory(UID)`
+- `FOREIGN KEY(CURRENCY_ID) REFERENCES silver.d_Currency(UID)`
+- `FOREIGN KEY(DATE) REFERENCES silver.d_Calendar(Date)`
 
 ### `silver.f_Transfer_Transactions`
 
 **Contract ID:** `df_f_transfer_transactions`  
-**Domain:** Wealth  
-**Registry grain:** **Transaction**  
+**Grain:** `Transaction`  
+**Domain:** `Wealth`  
 **Producer:** `CoreEngine`  
 **Publication order:** `140`
 
-| Column | Physical type / constraint |
-|---|---|
-| `UID` | `TEXT PRIMARY KEY` |
-| `DATE` | `DATE NOT NULL` |
-| `ADJUSTED_DATE_FOR_ANALYSIS` | `DATE` |
-| `ASSET_ID` | `TEXT NOT NULL` |
-| `TO_ASSET_ID` | `TEXT` |
-| `CATEGORY_ID` | `TEXT` |
-| `CURRENCY_ID` | `TEXT` |
-| `TRANSFER_UID` | `TEXT` |
-| `TIME` | `TEXT` |
-| `DESCRIPTION` | `TEXT` |
-| `PAID` | `TEXT` |
-| `TRANSACTION_TYPE` | `BIGINT` |
-| `TRANSFER_TYPE` | `TEXT` |
-| `FEES_NOTES` | `TEXT` |
-| `MARK` | `TEXT` |
-| `TRANSFER_FEES` | `TEXT` |
-| `CARDDIVIDMONTH` | `BIGINT` |
-| `BASE_AMOUNT` | `DOUBLE` |
-| `AMOUNT_ACCOUNT` | `DOUBLE` |
-| `AMOUNT_PROPER` | `DOUBLE` |
-| `LOCAL_AMOUNT` | `DOUBLE` |
-| `EXCH_RATE` | `DOUBLE` |
-| `__file_name__` | `TEXT` |
-| `__folder_path__` | `TEXT` |
-| `S_NO` | `BIGINT` |
-| `TIMESTAMP` | `BIGINT` |
-| `UPDATED_TIME` | `BIGINT` |
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `UID` | `TEXT PRIMARY KEY` | Identifiers |
+| `DATE` | `DATE NOT NULL` | Identifiers |
+| `ADJUSTED_DATE_FOR_ANALYSIS` | `DATE` | Identifiers |
+| `ASSET_ID` | `TEXT NOT NULL` | Identifiers |
+| `TO_ASSET_ID` | `TEXT` | Identifiers |
+| `CATEGORY_ID` | `TEXT` | Identifiers |
+| `CURRENCY_ID` | `TEXT` | Identifiers |
+| `TRANSFER_UID` | `TEXT` | Identifiers |
+| `TIME` | `TEXT` | Descriptors/Classifications |
+| `DESCRIPTION` | `TEXT` | Descriptors/Classifications |
+| `PAID` | `TEXT` | Descriptors/Classifications |
+| `TRANSACTION_TYPE` | `BIGINT` | Descriptors/Classifications |
+| `TRANSFER_TYPE` | `TEXT` | Descriptors/Classifications |
+| `FEES_NOTES` | `TEXT` | Descriptors/Classifications |
+| `MARK` | `TEXT` | Descriptors/Classifications |
+| `TRANSFER_FEES` | `TEXT` | Descriptors/Classifications |
+| `CARDDIVIDMONTH` | `BIGINT` | Descriptors/Classifications |
+| `BASE_AMOUNT` | `DOUBLE` | Position Values |
+| `AMOUNT_ACCOUNT` | `DOUBLE` | Position Values |
+| `AMOUNT_PROPER` | `DOUBLE` | Position Values |
+| `LOCAL_AMOUNT` | `DOUBLE` | Local/FX Values |
+| `EXCH_RATE` | `DOUBLE` | Local/FX Values |
+| `__file_name__` | `TEXT` | Local/FX Values |
+| `__folder_path__` | `TEXT` | Local/FX Values |
+| `S_NO` | `BIGINT` | Local/FX Values |
+| `TIMESTAMP` | `BIGINT` | Local/FX Values |
+| `UPDATED_TIME` | `BIGINT` | Local/FX Values |
 
-The physical DDL defines **27 columns** for this table. The registry grain is the semantic row contract; it should be used when reasoning about joins and uniqueness rather than assuming the first ID-looking column is automatically the grain.
+**Table constraints**
+
+- `FOREIGN KEY(CURRENCY_ID) REFERENCES silver.d_Currency(UID)`
+- `FOREIGN KEY(ASSET_ID) REFERENCES silver.d_Asset_Subcategory(UID)`
+- `FOREIGN KEY(TO_ASSET_ID) REFERENCES silver.d_Asset_Subcategory(UID)`
+- `FOREIGN KEY(DATE) REFERENCES silver.d_Calendar(Date)`
+- `FOREIGN KEY(ADJUSTED_DATE_FOR_ANALYSIS) REFERENCES silver.d_Calendar(Date)`
 
 ### `silver.f_Opening_Balances`
 
 **Contract ID:** `df_f_opening_balances`  
-**Domain:** Wealth  
-**Registry grain:** **Balance**  
+**Grain:** `Balance`  
+**Domain:** `Wealth`  
 **Producer:** `CoreEngine`  
 **Publication order:** `150`
 
-| Column | Physical type / constraint |
-|---|---|
-| `Z_PK` | `BIGINT PRIMARY KEY` |
-| `ZTXDATESTR` | `DATE` |
-| `ZASSETUID` | `TEXT` |
-| `ZCATEGORYUID` | `TEXT` |
-| `ZCURRENCYUID` | `TEXT` |
-| `ZTOASSETUID` | `TEXT` |
-| `ZTXUIDFEE` | `TEXT` |
-| `ZTXUIDTRANS` | `TEXT` |
-| `ZUID` | `TEXT` |
-| `ZCONTENT` | `TEXT` |
-| `ZDO_TYPE` | `BIGINT` |
-| `ZAMOUNT` | `DOUBLE` |
-| `ZAMOUNTACCOUNT` | `DOUBLE` |
-| `ZAMOUNTSUB` | `DOUBLE` |
-| `ZDATE` | `DOUBLE` |
-| `ZUTIME` | `BIGINT` |
-| `__file_name__` | `TEXT` |
-| `__folder_path__` | `TEXT` |
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `Z_PK` | `BIGINT PRIMARY KEY` | Identifiers |
+| `ZTXDATESTR` | `DATE` | Identifiers |
+| `ZASSETUID` | `TEXT` | Identifiers |
+| `ZCATEGORYUID` | `TEXT` | Identifiers |
+| `ZCURRENCYUID` | `TEXT` | Identifiers |
+| `ZTOASSETUID` | `TEXT` | Identifiers |
+| `ZTXUIDFEE` | `TEXT` | Identifiers |
+| `ZTXUIDTRANS` | `TEXT` | Identifiers |
+| `ZUID` | `TEXT` | Identifiers |
+| `ZCONTENT` | `TEXT` | Descriptors/Classifications |
+| `ZDO_TYPE` | `BIGINT` | Descriptors/Classifications |
+| `ZAMOUNT` | `DOUBLE` | Position Values |
+| `ZAMOUNTACCOUNT` | `DOUBLE` | Position Values |
+| `ZAMOUNTSUB` | `DOUBLE` | Position Values |
+| `ZDATE` | `DOUBLE` | Position Values |
+| `ZUTIME` | `BIGINT` | Position Values |
+| `__file_name__` | `TEXT` | Position Values |
+| `__folder_path__` | `TEXT` | Position Values |
 
-The physical DDL defines **18 columns** for this table. The registry grain is the semantic row contract; it should be used when reasoning about joins and uniqueness rather than assuming the first ID-looking column is automatically the grain.
+**Table constraints**
+
+- `FOREIGN KEY(ZCURRENCYUID) REFERENCES silver.d_Currency(UID)`
+- `FOREIGN KEY(ZASSETUID) REFERENCES silver.d_Asset_Subcategory(UID)`
+- `FOREIGN KEY(ZTXDATESTR) REFERENCES silver.d_Calendar(Date)`
+
+### `silver.d_Investment_Benchmark_Master`
+
+**Contract ID:** `df_d_benchmark_master`  
+**Grain:** `Benchmark`  
+**Domain:** `Investments`  
+**Producer:** `CoreEngine`  
+**Publication order:** `90`
+
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `ID` | `TEXT PRIMARY KEY` | Identifiers |
+| `CURRENCY_ID` | `TEXT` | Identifiers |
+| `Benchmark_Name` | `TEXT` | Descriptors/Classifications |
+| `yF_Ticker` | `TEXT` | Descriptors/Classifications |
+| `__file_name__` | `TEXT` | Descriptors/Classifications |
+| `__folder_path__` | `TEXT` | Descriptors/Classifications |
+
+### `silver.d_Investment_Master`
+
+**Contract ID:** `df_d_investment_master`  
+**Grain:** `ISIN`  
+**Domain:** `Investments`  
+**Producer:** `CoreEngine`  
+**Publication order:** `100`
+
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `ISIN` | `TEXT PRIMARY KEY` | Identifiers |
+| `CATEGORY_ID` | `TEXT` | Identifiers |
+| `BENCHMARK_ID` | `TEXT` | Identifiers |
+| `CURRENCY_ID` | `TEXT` | Identifiers |
+| `INSTRUMENT_NAME` | `TEXT` | Descriptors/Classifications |
+| `INSTRUMENT_HOUSE` | `TEXT` | Descriptors/Classifications |
+| `INSTRUMENT_CLASS` | `TEXT NOT NULL` | Descriptors/Classifications |
+| `INSTRUMENT_TYPE` | `TEXT` | Descriptors/Classifications |
+| `INSTRUMENT_SUBTYPE` | `TEXT` | Descriptors/Classifications |
+| `SECTOR` | `TEXT` | Descriptors/Classifications |
+| `INDUSTRY` | `TEXT` | Descriptors/Classifications |
+| `COUNTRY` | `TEXT` | Descriptors/Classifications |
+| `GEO` | `TEXT` | Descriptors/Classifications |
+| `GEO_SUBTYPE` | `TEXT` | Descriptors/Classifications |
+| `YAHOO_TICKER` | `TEXT` | Descriptors/Classifications |
+| `TAX_TYPE` | `TEXT NOT NULL` | Tax & Harvesting |
+| `TAX_SUBTYPE` | `TEXT` | Tax & Harvesting |
+
+**Table constraints**
+
+- `FOREIGN KEY(CATEGORY_ID) REFERENCES silver.d_Asset_Subcategory(UID)`
+- `FOREIGN KEY(BENCHMARK_ID) REFERENCES silver.d_Investment_Benchmark_Master(ID)`
+- `FOREIGN KEY(CURRENCY_ID) REFERENCES silver.d_Currency(UID)`
+
+### `silver.d_Macro_Parameters`
+
+**Contract ID:** `df_d_macro_parameters`  
+**Grain:** `FinancialYear`  
+**Domain:** `Investments`  
+**Producer:** `CoreEngine`  
+**Publication order:** `110`
+
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `FY` | `TEXT PRIMARY KEY` | Identifiers |
+| `FY_Start_Date` | `DATE` | Identifiers |
+| `FY_End_Date` | `DATE` | Identifiers |
+| `Debt_MF_Cutoff_Date` | `DATE` | Identifiers |
+| `Inflation_Rate` | `DOUBLE` | Risk & Weights |
+| `Risk_Free_Rate` | `DOUBLE` | Risk & Weights |
+| `Equity_Listed_LTCG` | `DOUBLE` | Tax & Harvesting |
+| `Equity_Listed_STCG` | `DOUBLE` | Tax & Harvesting |
+| `Equity_Unlisted_LTCG` | `DOUBLE` | Tax & Harvesting |
+| `Equity_Unlisted_STCG` | `DOUBLE` | Tax & Harvesting |
+| `Equity_LTCG_Exemption` | `BIGINT` | Tax & Harvesting |
+| `Gold_LTCG` | `DOUBLE` | Tax & Harvesting |
+| `Gold_STCG` | `DOUBLE` | Tax & Harvesting |
+| `Debt_MF_Pre_Cutoff_LTCG` | `DOUBLE` | Tax & Harvesting |
+| `Debt_MF_Pre_Cutoff_STCG` | `DOUBLE` | Tax & Harvesting |
+| `Debt_MF_Post_Cutoff_LTCG` | `DOUBLE` | Tax & Harvesting |
+| `Debt_MF_Post_Cutoff_STCG` | `DOUBLE` | Tax & Harvesting |
+| `Other_Debt_LTCG` | `DOUBLE` | Tax & Harvesting |
+| `Other_Debt_STCG` | `DOUBLE` | Tax & Harvesting |
+| `Default_LTCG` | `DOUBLE` | Tax & Harvesting |
+| `Default_STCG` | `DOUBLE` | Tax & Harvesting |
+| `Estimated_Ordinary_Income_Tax_Rate` | `DOUBLE` | Tax & Harvesting |
+| `Remarks` | `TEXT` | Descriptors/Classifications |
+| `__file_name__` | `TEXT` | Descriptors/Classifications |
+| `__folder_path__` | `TEXT` | Descriptors/Classifications |
+
+**Table constraints**
+
+- `FOREIGN KEY(FY_Start_Date) REFERENCES silver.d_Calendar(Date)`
 
 ### `silver.f_Investment_Market_Data`
 
 **Contract ID:** `df_f_investment_market_data`  
-**Domain:** Investments  
-**Registry grain:** **Quote**  
+**Grain:** `Quote`  
+**Domain:** `Investments`  
 **Producer:** `CoreEngine`  
 **Publication order:** `160`
 
-| Column | Physical type / constraint |
-|---|---|
-| `Date` | `DATE NOT NULL` |
-| `ISIN` | `TEXT NOT NULL` |
-| `CURRENCY_ID` | `TEXT` |
-| `__file_category__` | `TEXT` |
-| `Quantity` | `DOUBLE` |
-| `Closing_Price` | `DOUBLE` |
-| `Buy_Price` | `DOUBLE` |
-| `Closing_Value` | `DOUBLE` |
-| `Buy_Value` | `DOUBLE` |
-| `Closing_Price_Local` | `DOUBLE` |
-| `Buy_Price_Local` | `DOUBLE` |
-| `Closing_Value_Local` | `DOUBLE` |
-| `Buy_Value_Local` | `DOUBLE` |
-| `FX_Rate` | `DOUBLE` |
-| `Unit_PnL` | `DOUBLE` |
-| `Total_PnL` | `DOUBLE` |
-| `Data_Provider` | `TEXT` |
-| `Extraction_Time` | `TEXT` |
-| `Requested_Start` | `DATE` |
-| `Requested_End` | `DATE` |
-| `Is_Closure_Gap` | `BOOLEAN` |
-| `Is_Imputed` | `BOOLEAN` |
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `Date` | `DATE NOT NULL` | Identifiers |
+| `ISIN` | `TEXT NOT NULL` | Identifiers |
+| `CURRENCY_ID` | `TEXT` | Identifiers |
+| `__file_category__` | `TEXT` | Descriptors/Classifications |
+| `Quantity` | `DOUBLE` | Position Values |
+| `Closing_Price` | `DOUBLE` | Position Values |
+| `Buy_Price` | `DOUBLE` | Position Values |
+| `Closing_Value` | `DOUBLE` | Position Values |
+| `Buy_Value` | `DOUBLE` | Position Values |
+| `Closing_Price_Local` | `DOUBLE` | Local/FX Values |
+| `Buy_Price_Local` | `DOUBLE` | Local/FX Values |
+| `Closing_Value_Local` | `DOUBLE` | Local/FX Values |
+| `Buy_Value_Local` | `DOUBLE` | Local/FX Values |
+| `FX_Rate` | `DOUBLE` | Local/FX Values |
+| `Unit_PnL` | `DOUBLE` | Absolute Returns |
+| `Total_PnL` | `DOUBLE` | Absolute Returns |
+| `Data_Provider` | `TEXT` | Provenance |
+| `Extraction_Time` | `TEXT` | Provenance |
+| `Requested_Start` | `DATE` | Provenance |
+| `Requested_End` | `DATE` | Provenance |
+| `Is_Closure_Gap` | `BOOLEAN` | Provenance |
+| `Is_Imputed` | `BOOLEAN` | Provenance |
 
-The physical DDL defines **22 columns** for this table. The registry grain is the semantic row contract; it should be used when reasoning about joins and uniqueness rather than assuming the first ID-looking column is automatically the grain.
+**Table constraints**
+
+- `FOREIGN KEY(Date) REFERENCES silver.d_Calendar(Date)`
+- `FOREIGN KEY(ISIN) REFERENCES silver.d_Investment_Master(ISIN)`
+- `FOREIGN KEY(CURRENCY_ID) REFERENCES silver.d_Currency(UID)`
 
 ### `silver.f_Investment_Purchase_Data`
 
 **Contract ID:** `df_f_tf_inv_purchase`  
-**Domain:** Investments  
-**Registry grain:** **Trade**  
+**Grain:** `Trade`  
+**Domain:** `Investments`  
 **Producer:** `CoreEngine`  
 **Publication order:** `170`
 
-| Column | Physical type / constraint |
-|---|---|
-| `Purchase_ID` | `TEXT PRIMARY KEY` |
-| `Date` | `DATE NOT NULL` |
-| `ISIN` | `TEXT NOT NULL` |
-| `CURRENCY_ID` | `TEXT` |
-| `__file_category__` | `TEXT` |
-| `Quantity` | `DOUBLE` |
-| `Price` | `DOUBLE` |
-| `Value` | `DOUBLE` |
-| `Price_Local` | `DOUBLE` |
-| `Value_Local` | `DOUBLE` |
-| `FX_Rate` | `DOUBLE` |
-| `__file_name__` | `TEXT` |
-| `__folder_path__` | `TEXT` |
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `Purchase_ID` | `TEXT PRIMARY KEY` | Identifiers |
+| `Date` | `DATE NOT NULL` | Identifiers |
+| `ISIN` | `TEXT NOT NULL` | Identifiers |
+| `CURRENCY_ID` | `TEXT` | Identifiers |
+| `__file_category__` | `TEXT` | Descriptors/Classifications |
+| `Quantity` | `DOUBLE` | Position Values |
+| `Price` | `DOUBLE` | Position Values |
+| `Value` | `DOUBLE` | Position Values |
+| `Price_Local` | `DOUBLE` | Local/FX Values |
+| `Value_Local` | `DOUBLE` | Local/FX Values |
+| `FX_Rate` | `DOUBLE` | Local/FX Values |
+| `__file_name__` | `TEXT` | Local/FX Values |
+| `__folder_path__` | `TEXT` | Local/FX Values |
 
-The physical DDL defines **13 columns** for this table. The registry grain is the semantic row contract; it should be used when reasoning about joins and uniqueness rather than assuming the first ID-looking column is automatically the grain.
+**Table constraints**
+
+- `FOREIGN KEY(Date) REFERENCES silver.d_Calendar(Date)`
+- `FOREIGN KEY(ISIN) REFERENCES silver.d_Investment_Master(ISIN)`
+- `FOREIGN KEY(CURRENCY_ID) REFERENCES silver.d_Currency(UID)`
 
 ### `silver.f_Investment_Sale_Data`
 
 **Contract ID:** `df_f_tf_inv_sale`  
-**Domain:** Investments  
-**Registry grain:** **Trade**  
+**Grain:** `Trade`  
+**Domain:** `Investments`  
 **Producer:** `CoreEngine`  
 **Publication order:** `180`
 
-| Column | Physical type / constraint |
-|---|---|
-| `Sale_ID` | `TEXT PRIMARY KEY` |
-| `Date` | `DATE NOT NULL` |
-| `ISIN` | `TEXT NOT NULL` |
-| `CURRENCY_ID` | `TEXT` |
-| `__file_category__` | `TEXT` |
-| `Quantity` | `DOUBLE` |
-| `Sell_Price` | `DOUBLE` |
-| `Sell_Value` | `DOUBLE` |
-| `Buy_Price` | `DOUBLE` |
-| `Buy_Value` | `DOUBLE` |
-| `Sell_Price_Local` | `DOUBLE` |
-| `Sell_Value_Local` | `DOUBLE` |
-| `Buy_Price_Local` | `DOUBLE` |
-| `Buy_Value_Local` | `DOUBLE` |
-| `FX_Rate` | `DOUBLE` |
-| `Unit_PnL` | `DOUBLE` |
-| `Total_PnL` | `DOUBLE` |
-| `__file_name__` | `TEXT` |
-| `__folder_path__` | `TEXT` |
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `Sale_ID` | `TEXT PRIMARY KEY` | Identifiers |
+| `Date` | `DATE NOT NULL` | Identifiers |
+| `ISIN` | `TEXT NOT NULL` | Identifiers |
+| `CURRENCY_ID` | `TEXT` | Identifiers |
+| `__file_category__` | `TEXT` | Descriptors/Classifications |
+| `Quantity` | `DOUBLE` | Position Values |
+| `Sell_Price` | `DOUBLE` | Position Values |
+| `Sell_Value` | `DOUBLE` | Position Values |
+| `Buy_Price` | `DOUBLE` | Position Values |
+| `Buy_Value` | `DOUBLE` | Position Values |
+| `Sell_Price_Local` | `DOUBLE` | Local/FX Values |
+| `Sell_Value_Local` | `DOUBLE` | Local/FX Values |
+| `Buy_Price_Local` | `DOUBLE` | Local/FX Values |
+| `Buy_Value_Local` | `DOUBLE` | Local/FX Values |
+| `FX_Rate` | `DOUBLE` | Local/FX Values |
+| `Unit_PnL` | `DOUBLE` | Absolute Returns |
+| `Total_PnL` | `DOUBLE` | Absolute Returns |
+| `__file_name__` | `TEXT` | Absolute Returns |
+| `__folder_path__` | `TEXT` | Absolute Returns |
 
-The physical DDL defines **19 columns** for this table. The registry grain is the semantic row contract; it should be used when reasoning about joins and uniqueness rather than assuming the first ID-looking column is automatically the grain.
+**Table constraints**
+
+- `FOREIGN KEY(Date) REFERENCES silver.d_Calendar(Date)`
+- `FOREIGN KEY(ISIN) REFERENCES silver.d_Investment_Master(ISIN)`
+- `FOREIGN KEY(CURRENCY_ID) REFERENCES silver.d_Currency(UID)`
 
 ### `silver.f_Investment_Benchmark_Data`
 
 **Contract ID:** `df_f_investment_benchmark_data`  
-**Domain:** Investments  
-**Registry grain:** **Quote**  
+**Grain:** `Quote`  
+**Domain:** `Investments`  
 **Producer:** `CoreEngine`  
 **Publication order:** `190`
 
-| Column | Physical type / constraint |
-|---|---|
-| `Date` | `DATE` |
-| `ID` | `TEXT` |
-| `CURRENCY_ID` | `TEXT` |
-| `Benchmark_Name` | `TEXT` |
-| `yF_Ticker` | `TEXT` |
-| `Close` | `DOUBLE` |
-| `Data_Provider` | `TEXT` |
-| `Extraction_Time` | `TEXT` |
-| `Requested_Start` | `DATE` |
-| `Requested_End` | `DATE` |
-| `Is_Closure_Gap` | `BOOLEAN` |
-| `Is_Imputed` | `BOOLEAN` |
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `Date` | `DATE` | Identifiers |
+| `ID` | `TEXT` | Identifiers |
+| `CURRENCY_ID` | `TEXT` | Identifiers |
+| `Benchmark_Name` | `TEXT` | Descriptors/Classifications |
+| `yF_Ticker` | `TEXT` | Descriptors/Classifications |
+| `Close` | `DOUBLE` | Position Values |
+| `Data_Provider` | `TEXT` | Provenance |
+| `Extraction_Time` | `TEXT` | Provenance |
+| `Requested_Start` | `DATE` | Provenance |
+| `Requested_End` | `DATE` | Provenance |
+| `Is_Closure_Gap` | `BOOLEAN` | Provenance |
+| `Is_Imputed` | `BOOLEAN` | Provenance |
 
-The physical DDL defines **12 columns** for this table. The registry grain is the semantic row contract; it should be used when reasoning about joins and uniqueness rather than assuming the first ID-looking column is automatically the grain.
+**Table constraints**
+
+- `FOREIGN KEY(Date) REFERENCES silver.d_Calendar(Date)`
+- `FOREIGN KEY(ID) REFERENCES silver.d_Investment_Benchmark_Master(ID)`
 
 ### `silver.f_Investment_Analytics_Lot`
 
 **Contract ID:** `df_f_investment_analytics_lot`  
-**Domain:** Investments  
-**Registry grain:** **ISIN-Lot**  
+**Grain:** `ISIN-Lot`  
+**Domain:** `Investments`  
 **Producer:** `InvestmentQuantEngine`  
 **Publication order:** `200`
 
-Canonical Quant lot/snapshot output. Grain is registry-defined as ISIN-Lot; fields carry reconstructed holdings, valuation, performance, benchmark, FX, and tax-relevant state.
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `Lot_ID` | `TEXT NOT NULL` | Identifiers |
+| `Closing_Date` | `DATE NOT NULL` | Identifiers |
+| `ISIN` | `TEXT NOT NULL` | Identifiers |
+| `CURRENCY_ID` | `TEXT` | Identifiers |
+| `Buy_Date` | `DATE` | Identifiers |
+| `Purchase_ID` | `TEXT` | Identifiers |
+| `Lot_Source_Type` | `TEXT NOT NULL` | Descriptors/Classifications |
+| `BENCHMARK_ID` | `TEXT` | Descriptors/Classifications |
+| `TAX_TYPE` | `TEXT` | Descriptors/Classifications |
+| `TAX_SUBTYPE` | `TEXT` | Descriptors/Classifications |
+| `Quantity` | `DOUBLE` | Position Values |
+| `Execution_Residual` | `DOUBLE,  -- Units ordered but not yet settled at this snapshot date` | Position Values |
+| `Buy_Price` | `DOUBLE` | Position Values |
+| `Market_Price` | `DOUBLE` | Position Values |
+| `Buy_Value` | `DOUBLE` | Position Values |
+| `Close_Value` | `DOUBLE` | Position Values |
+| `Buy_Value_Local` | `DOUBLE` | Local/FX Values |
+| `Close_Value_Local` | `DOUBLE` | Local/FX Values |
+| `Blended_FX_Buy_Rate` | `DOUBLE` | Local/FX Values |
+| `Buy_Price_Local` | `DOUBLE,          -- Acquisition price in instrument native currency` | Local/FX Values |
+| `Market_Price_Local` | `DOUBLE,       -- Market price in instrument native currency at snapshot` | Local/FX Values |
+| `FX_Rate_Buy` | `DOUBLE,              -- FX rate (native → INR) at acquisition date` | Local/FX Values |
+| `FX_Rate_Snap` | `DOUBLE,             -- FX rate (native → INR) at snapshot date` | Local/FX Values |
+| `Currency_Appreciation_Pct` | `DOUBLE` | Local/FX Values |
+| `"P/L"` | `DOUBLE` | Absolute Returns |
+| `Absolute_Return` | `DOUBLE` | Absolute Returns |
+| `Absolute_Return_Local` | `DOUBLE` | Absolute Returns |
+| `Asset_PnL` | `DOUBLE` | Absolute Returns |
+| `Forex_PnL` | `DOUBLE` | Absolute Returns |
+| `Forex_Contribution_Pct` | `DOUBLE` | Absolute Returns |
+| `Asset_Return_Pct` | `DOUBLE` | Absolute Returns |
+| `Forex_Return_Pct` | `DOUBLE` | Absolute Returns |
+| `Lot_CAGR` | `DOUBLE` | Performance Returns |
+| `Lot_CAGR_Status` | `TEXT,       -- VALID \| INVALID_INPUT \| UNDEFINED \| COMPUTATION_ERROR` | Performance Returns |
+| `Lot_CAGR_Local` | `DOUBLE` | Performance Returns |
+| `CAGR` | `DOUBLE` | Performance Returns |
+| `CAGR_Status` | `TEXT,           -- VALID \| INVALID_INPUT \| UNDEFINED \| COMPUTATION_ERROR` | Performance Returns |
+| `XIRR` | `DOUBLE` | Performance Returns |
+| `XIRR_Status` | `TEXT,           -- VALID \| INVALID_INPUT \| UNDEFINED \| NON_CONVERGENT` | Performance Returns |
+| `XIRR_Local` | `DOUBLE` | Performance Returns |
+| `FX_XIRR_Impact` | `DOUBLE` | Performance Returns |
+| `After_Tax_XIRR` | `DOUBLE` | Performance Returns |
+| `BM_Buy_Price` | `DOUBLE` | Benchmark Comparisons |
+| `BM_Market_Price` | `DOUBLE` | Benchmark Comparisons |
+| `Lot_BM_Return` | `DOUBLE` | Benchmark Comparisons |
+| `Lot_BM_CAGR` | `DOUBLE` | Benchmark Comparisons |
+| `Lot_BM_CAGR_Status` | `TEXT,    -- VALID \| INVALID_INPUT \| UNDEFINED \| COMPUTATION_ERROR` | Benchmark Comparisons |
+| `Lot_BM_CAGR_Local` | `DOUBLE` | Benchmark Comparisons |
+| `BM_CAGR` | `DOUBLE` | Benchmark Comparisons |
+| `BM_CAGR_Status` | `TEXT,        -- VALID \| INVALID_INPUT \| UNDEFINED \| COMPUTATION_ERROR` | Benchmark Comparisons |
+| `BM_XIRR` | `DOUBLE` | Benchmark Comparisons |
+| `BM_XIRR_Local` | `DOUBLE` | Benchmark Comparisons |
+| `Active_Return` | `DOUBLE` | Benchmark Comparisons |
+| `Active_Return_Local` | `DOUBLE` | Benchmark Comparisons |
+| `Lot_Alpha` | `DOUBLE` | Benchmark Comparisons |
+| `Is_Lagging_Benchmark` | `BIGINT` | Benchmark Comparisons |
+| `Max_Drawdown` | `DOUBLE` | Risk & Weights |
+| `Lot_Weight` | `DOUBLE` | Risk & Weights |
+| `Portfolio_Weight` | `DOUBLE` | Risk & Weights |
+| `Outperforming_Lot_Ratio` | `DOUBLE` | Risk & Weights |
+| `Dietz_Day_Weight` | `DOUBLE` | Risk & Weights |
+| `Age_Days` | `BIGINT` | Tax & Harvesting |
+| `LTCG_Threshold_Days` | `BIGINT` | Tax & Harvesting |
+| `Days_To_LTCG` | `BIGINT` | Tax & Harvesting |
+| `Holding_Type` | `TEXT` | Tax & Harvesting |
+| `Tax_Rate` | `DOUBLE` | Tax & Harvesting |
+| `Unrealized_LTCG` | `DOUBLE` | Tax & Harvesting |
+| `Unrealized_STCG` | `DOUBLE` | Tax & Harvesting |
+| `Unrealized_Gain` | `DOUBLE` | Tax & Harvesting |
+| `Unrealized_LTCL` | `DOUBLE` | Tax & Harvesting |
+| `Unrealized_STCL` | `DOUBLE` | Tax & Harvesting |
+| `Unrealized_Loss` | `DOUBLE` | Tax & Harvesting |
+| `LTCG_Tax_If_Sold` | `DOUBLE` | Tax & Harvesting |
+| `STCG_Tax_If_Sold` | `DOUBLE` | Tax & Harvesting |
+| `After_Tax_PL` | `DOUBLE` | Tax & Harvesting |
+| `After_Tax_Close_Value` | `DOUBLE` | Tax & Harvesting |
+| `FY` | `TEXT` | Tax & Harvesting |
+| `FY_Realized_LTCG` | `DOUBLE` | Tax & Harvesting |
+| `FY_Realized_STCG` | `DOUBLE` | Tax & Harvesting |
+| `FY_Realized_Gain` | `DOUBLE` | Tax & Harvesting |
+| `FY_Realized_LTCL` | `DOUBLE` | Tax & Harvesting |
+| `FY_Realized_STCL` | `DOUBLE` | Tax & Harvesting |
+| `FY_Realized_Loss` | `DOUBLE` | Tax & Harvesting |
+| `FY_Realized_Net_PnL` | `DOUBLE` | Tax & Harvesting |
+| `Equity_LTCG_Exemption` | `BIGINT` | Tax & Harvesting |
+| `Stepup_Eligible` | `BIGINT` | Tax & Harvesting |
+| `Can_Harvest_Loss` | `BOOLEAN` | Tax & Harvesting |
+| `Harvest_Recommendation` | `TEXT` | Tax & Harvesting |
 
-| Column | Physical type / constraint |
-|---|---|
-| `Lot_ID` | `TEXT NOT NULL` |
-| `Closing_Date` | `DATE NOT NULL` |
-| `ISIN` | `TEXT NOT NULL` |
-| `CURRENCY_ID` | `TEXT` |
-| `Buy_Date` | `DATE` |
-| `Purchase_ID` | `TEXT` |
-| `Lot_Source_Type` | `TEXT NOT NULL` |
-| `BENCHMARK_ID` | `TEXT` |
-| `TAX_TYPE` | `TEXT` |
-| `TAX_SUBTYPE` | `TEXT` |
-| `Quantity` | `DOUBLE` |
-| `Execution_Residual` | `DOUBLE` |
-| `Buy_Price` | `DOUBLE` |
-| `Market_Price` | `DOUBLE` |
-| `Buy_Value` | `DOUBLE` |
-| `Close_Value` | `DOUBLE` |
-| `Buy_Value_Local` | `DOUBLE` |
-| `Close_Value_Local` | `DOUBLE` |
-| `Blended_FX_Buy_Rate` | `DOUBLE` |
-| `Buy_Price_Local` | `DOUBLE` |
-| `Market_Price_Local` | `DOUBLE` |
-| `FX_Rate_Buy` | `DOUBLE` |
-| `FX_Rate_Snap` | `DOUBLE` |
-| `Currency_Appreciation_Pct` | `DOUBLE` |
-| `Absolute_Return` | `DOUBLE` |
-| `Absolute_Return_Local` | `DOUBLE` |
-| `Asset_PnL` | `DOUBLE` |
-| `Forex_PnL` | `DOUBLE` |
-| `Forex_Contribution_Pct` | `DOUBLE` |
-| `Asset_Return_Pct` | `DOUBLE` |
-| `Forex_Return_Pct` | `DOUBLE` |
-| `Lot_CAGR` | `DOUBLE` |
-| `Lot_CAGR_Status` | `TEXT` |
-| `Lot_CAGR_Local` | `DOUBLE` |
-| `CAGR` | `DOUBLE` |
-| `CAGR_Status` | `TEXT` |
-| `XIRR` | `DOUBLE` |
-| `XIRR_Status` | `TEXT` |
-| `XIRR_Local` | `DOUBLE` |
-| `FX_XIRR_Impact` | `DOUBLE` |
-| `After_Tax_XIRR` | `DOUBLE` |
-| `BM_Buy_Price` | `DOUBLE` |
-| `BM_Market_Price` | `DOUBLE` |
-| `Lot_BM_Return` | `DOUBLE` |
-| `Lot_BM_CAGR` | `DOUBLE` |
-| `Lot_BM_CAGR_Status` | `TEXT` |
-| `Lot_BM_CAGR_Local` | `DOUBLE` |
-| `BM_CAGR` | `DOUBLE` |
-| `BM_CAGR_Status` | `TEXT` |
-| `BM_XIRR` | `DOUBLE` |
-| `BM_XIRR_Local` | `DOUBLE` |
-| `Active_Return` | `DOUBLE` |
-| `Active_Return_Local` | `DOUBLE` |
-| `Lot_Alpha` | `DOUBLE` |
-| `Is_Lagging_Benchmark` | `BIGINT` |
-| `Max_Drawdown` | `DOUBLE` |
-| `Lot_Weight` | `DOUBLE` |
-| `Portfolio_Weight` | `DOUBLE` |
-| `Outperforming_Lot_Ratio` | `DOUBLE` |
-| `Dietz_Day_Weight` | `DOUBLE` |
-| `Age_Days` | `BIGINT` |
-| `LTCG_Threshold_Days` | `BIGINT` |
-| `Days_To_LTCG` | `BIGINT` |
-| `Holding_Type` | `TEXT` |
-| `Tax_Rate` | `DOUBLE` |
-| `Unrealized_LTCG` | `DOUBLE` |
-| `Unrealized_STCG` | `DOUBLE` |
-| `Unrealized_Gain` | `DOUBLE` |
-| `Unrealized_LTCL` | `DOUBLE` |
-| `Unrealized_STCL` | `DOUBLE` |
-| `Unrealized_Loss` | `DOUBLE` |
-| `LTCG_Tax_If_Sold` | `DOUBLE` |
-| `STCG_Tax_If_Sold` | `DOUBLE` |
-| `After_Tax_PL` | `DOUBLE` |
-| `After_Tax_Close_Value` | `DOUBLE` |
-| `FY` | `TEXT` |
-| `FY_Realized_LTCG` | `DOUBLE` |
-| `FY_Realized_STCG` | `DOUBLE` |
-| `FY_Realized_Gain` | `DOUBLE` |
-| `FY_Realized_LTCL` | `DOUBLE` |
-| `FY_Realized_STCL` | `DOUBLE` |
-| `FY_Realized_Loss` | `DOUBLE` |
-| `FY_Realized_Net_PnL` | `DOUBLE` |
-| `Equity_LTCG_Exemption` | `BIGINT` |
-| `Stepup_Eligible` | `BIGINT` |
-| `Can_Harvest_Loss` | `BOOLEAN` |
-| `Harvest_Recommendation` | `TEXT` |
+**Table constraints**
 
-The physical DDL defines **83 columns** for this table. The registry grain is the semantic row contract; it should be used when reasoning about joins and uniqueness rather than assuming the first ID-looking column is automatically the grain.
+- `PRIMARY KEY (Lot_ID, Closing_Date)`
 
 ### `silver.f_Investment_Realized_Events`
 
 **Contract ID:** `df_f_investment_realized_events`  
-**Domain:** Investments  
-**Registry grain:** **RealizedEvent**  
+**Grain:** `RealizedEvent`  
+**Domain:** `Investments`  
 **Producer:** `InvestmentQuantEngine`  
 **Publication order:** `205`
 
-One realized disposal component produced by canonical FIFO processing. A single sale may produce multiple rows when it consumes multiple acquisition lots.
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `Realized_Event_ID` | `TEXT PRIMARY KEY` | Field |
+| `Sale_ID` | `TEXT NOT NULL` | Field |
+| `Lot_ID` | `TEXT NOT NULL` | Field |
+| `Purchase_ID` | `TEXT` | Field |
+| `ISIN` | `TEXT` | Field |
+| `Acquisition_Date` | `DATE` | Field |
+| `Disposal_Date` | `DATE` | Field |
+| `FY` | `TEXT` | Field |
+| `Quantity_Disposed` | `DOUBLE` | Field |
+| `Acquisition_Price` | `DOUBLE` | Field |
+| `Disposed_Cost_Basis` | `DOUBLE` | Field |
+| `Sale_Price` | `DOUBLE` | Field |
+| `Sale_Proceeds` | `DOUBLE` | Field |
+| `Realized_Gain_Loss` | `DOUBLE` | Field |
+| `Holding_Type` | `TEXT` | Field |
+| `Tax_Type` | `TEXT` | Field |
+| `Tax_Subtype` | `TEXT` | Field |
+| `Lot_Source_Type` | `TEXT` | Field |
+| `Currency_ID` | `TEXT` | Field |
+| `Asset_PnL_Local` | `DOUBLE` | Field |
+| `Asset_PnL` | `DOUBLE` | Field |
+| `Forex_PnL` | `DOUBLE` | Field |
+| `Applied_Rate` | `DOUBLE` | NULL for CHECK_REQUIRED (RECONCILIATION) lots — no reliable rate can be assigned. |
+| `Estimated_Tax` | `DOUBLE` | NULL for CHECK_REQUIRED (RECONCILIATION) lots — no reliable rate can be assigned. |
 
-| Column | Physical type / constraint |
-|---|---|
-| `Realized_Event_ID` | `TEXT PRIMARY KEY` |
-| `Sale_ID` | `TEXT NOT NULL` |
-| `Lot_ID` | `TEXT NOT NULL` |
-| `Purchase_ID` | `TEXT` |
-| `ISIN` | `TEXT` |
-| `Acquisition_Date` | `DATE` |
-| `Disposal_Date` | `DATE` |
-| `FY` | `TEXT` |
-| `Quantity_Disposed` | `DOUBLE` |
-| `Acquisition_Price` | `DOUBLE` |
-| `Disposed_Cost_Basis` | `DOUBLE` |
-| `Sale_Price` | `DOUBLE` |
-| `Sale_Proceeds` | `DOUBLE` |
-| `Realized_Gain_Loss` | `DOUBLE` |
-| `Holding_Type` | `TEXT` |
-| `Tax_Type` | `TEXT` |
-| `Tax_Subtype` | `TEXT` |
-| `Lot_Source_Type` | `TEXT` |
-| `Currency_ID` | `TEXT` |
-| `Asset_PnL_Local` | `DOUBLE` |
-| `Asset_PnL` | `DOUBLE` |
-| `Forex_PnL` | `DOUBLE` |
-| `Applied_Rate` | `DOUBLE` |
-| `Estimated_Tax` | `DOUBLE` |
+**Table constraints**
 
-The physical DDL defines **24 columns** for this table. The registry grain is the semantic row contract; it should be used when reasoning about joins and uniqueness rather than assuming the first ID-looking column is automatically the grain.
+- `UNIQUE(Sale_ID, Lot_ID)`
 
 ### `silver.f_Investment_Reconciliation_Events`
 
 **Contract ID:** `df_f_investment_reconciliation_events`  
-**Domain:** Investments  
-**Registry grain:** **ReconEvent**  
+**Grain:** `ReconEvent`  
+**Domain:** `Investments`  
 **Producer:** `InvestmentQuantEngine`  
 **Publication order:** `206`
 
-Explicit provenance for quantity or cost-basis reconciliation between reconstructed and observed investment state.
-
-| Column | Physical type / constraint |
-|---|---|
-| `Reconciliation_Group_ID` | `TEXT NOT NULL` |
-| `Reconciliation_Event_ID` | `TEXT PRIMARY KEY` |
-| `Run_ID` | `TEXT` |
-| `ISIN` | `TEXT NOT NULL` |
-| `Reconciliation_Date` | `DATE NOT NULL` |
-| `Lot_ID` | `TEXT` |
-| `Purchase_ID` | `TEXT` |
-| `Adjustment_Type` | `TEXT` |
-| `Reason` | `TEXT` |
-| `Broker_Quantity` | `DOUBLE` |
-| `Reconstructed_Quantity` | `DOUBLE` |
-| `Quantity_Adjustment` | `DOUBLE` |
-| `Broker_Cost_Basis` | `DOUBLE` |
-| `Reconstructed_Cost_Basis` | `DOUBLE` |
-| `Cost_Basis_Adjustment` | `DOUBLE` |
-| `Original_Unit_Cost` | `DOUBLE` |
-| `Adjusted_Unit_Cost` | `DOUBLE` |
-
-The physical DDL defines **17 columns** for this table. The registry grain is the semantic row contract; it should be used when reasoning about joins and uniqueness rather than assuming the first ID-looking column is automatically the grain.
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `Reconciliation_Group_ID` | `TEXT NOT NULL` | Field |
+| `Reconciliation_Event_ID` | `TEXT PRIMARY KEY` | Field |
+| `Run_ID` | `TEXT` | Field |
+| `ISIN` | `TEXT NOT NULL` | Field |
+| `Reconciliation_Date` | `DATE NOT NULL` | Field |
+| `Lot_ID` | `TEXT` | Field |
+| `Purchase_ID` | `TEXT` | Field |
+| `Adjustment_Type` | `TEXT` | Field |
+| `Reason` | `TEXT` | Field |
+| `Broker_Quantity` | `DOUBLE` | Field |
+| `Reconstructed_Quantity` | `DOUBLE` | Field |
+| `Quantity_Adjustment` | `DOUBLE` | Field |
+| `Broker_Cost_Basis` | `DOUBLE` | Field |
+| `Reconstructed_Cost_Basis` | `DOUBLE` | Field |
+| `Cost_Basis_Adjustment` | `DOUBLE` | Field |
+| `Original_Unit_Cost` | `DOUBLE` | Field |
+| `Adjusted_Unit_Cost` | `DOUBLE` | Field |
 
 ### `silver.f_Tax_Events`
 
 **Contract ID:** `df_f_tax_events`  
-**Domain:** Taxes  
-**Registry grain:** **TaxEvent**  
+**Grain:** `TaxEvent`  
+**Domain:** `Taxes`  
 **Producer:** `TaxEngine`  
 **Publication order:** `300`
 
-Canonical tax-preparation evidence normalized from household ledger income and Quant realized events.
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `Tax_Event_ID` | `TEXT PRIMARY KEY` | Field |
+| `FY` | `TEXT NOT NULL` | Field |
+| `Event_Date` | `DATE NOT NULL` | Field |
+| `Source_Type` | `TEXT NOT NULL` | Field |
+| `Source_ID` | `TEXT NOT NULL` | Field |
+| `Income_Head` | `TEXT NOT NULL` | Field |
+| `Tax_Sub_Head` | `TEXT NOT NULL` | Field |
+| `Amount_INR` | `DOUBLE NOT NULL` | Field |
+| `Applied_Rate` | `DOUBLE` | Field |
+| `Estimated_Tax` | `DOUBLE` | Field |
+| `CURRENCY_ID` | `TEXT` | Field |
+| `Tax_Status` | `TEXT NOT NULL` | Field |
+| `Tax_Status_Reason` | `TEXT` | Field |
+| `ISIN` | `TEXT` | Field |
+| `Lot_ID` | `TEXT` | Field |
 
-| Column | Physical type / constraint |
-|---|---|
-| `Tax_Event_ID` | `TEXT PRIMARY KEY` |
-| `FY` | `TEXT NOT NULL` |
-| `Event_Date` | `DATE NOT NULL` |
-| `Source_Type` | `TEXT NOT NULL` |
-| `Source_ID` | `TEXT NOT NULL` |
-| `Income_Head` | `TEXT NOT NULL` |
-| `Tax_Sub_Head` | `TEXT NOT NULL` |
-| `Amount_INR` | `DOUBLE NOT NULL` |
-| `Applied_Rate` | `DOUBLE` |
-| `Estimated_Tax` | `DOUBLE` |
-| `CURRENCY_ID` | `TEXT` |
-| `Tax_Status` | `TEXT NOT NULL` |
-| `Tax_Status_Reason` | `TEXT` |
-| `ISIN` | `TEXT` |
-| `Lot_ID` | `TEXT` |
+**Table constraints**
 
-The physical DDL defines **15 columns** for this table. The registry grain is the semantic row contract; it should be used when reasoning about joins and uniqueness rather than assuming the first ID-looking column is automatically the grain.
+- `UNIQUE(Source_Type, Source_ID, Tax_Sub_Head)`
+
 
 ## Publication invariants
 
-- Every registered contract has a non-empty ID, physical table, grain, producer, and supported layer.
-- Contract IDs and physical table mappings are unique.
-- Engine output keys must match registered contract IDs.
-- Registered outputs must be produced before publication; unregistered outputs are rejected.
-- Physical DDL and producer output must remain compatible with `INSERT ... BY NAME`/loader behavior.
-- Schema changes are contract changes even when the database engine can technically coerce them.
+The Silver catalog depends on several invariants:
+
+1. registry contract IDs are unique;
+2. physical table names are unique within Silver/Gold registry scope;
+3. each contract has a declared grain and producer;
+4. physical schemas match the producer output;
+5. identity-bearing facts preserve deterministic identity semantics;
+6. publication order respects dependency.
+
+`validate_registry()` checks structural registry integrity. Runtime schema/publication validation protects the physical side.
 
 ## Ownership boundary
 
-Reference specifies the physical contract, not the full financial derivation. Financial formulas and interpretation live in the Finance specifications; orchestration and persistence behavior live in Architecture. This separation keeps the contract pages useful during implementation work instead of turning them into duplicate textbooks.
+Silver is canonical analytical state. It may contain reconstructed state such as lots and reconciliation events, but the financial logic that produces that state remains owned by the relevant domain/application service, not by the table definition.
 
 ## Related specifications
 
-- [Warehouse Architecture](../architecture/warehouse-architecture.md)
-- [Data Model](../architecture/data-model.md)
-- [Identity and Grain Contracts](identity-and-grain-contracts.md)
-- [Data Contract and Schema Evolution](../developer/data-contract-and-schema-evolution.md)
+- [Financial Model](../finance/financial-model.md)
+- [Investment Data Model](../finance/investment-data-model.md)
+- [Identity & Grain Contracts](identity-and-grain-contracts.md)
+- [Gold Data Contracts](gold-data-contracts.md)

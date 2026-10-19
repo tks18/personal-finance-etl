@@ -1,417 +1,717 @@
-# Multi-Currency and FX
+# Multi-Currency & FX
 
-Personal Finance ETL models foreign investments in both their economic currency and the reporting currency. This specification explains historical FX evidence, acquisition and snapshot FX state, local versus reporting valuation, realized and unrealized FX attribution, local CAGR/XIRR, benchmark currency treatment, failure gates, and the limits of what attribution can claim.
+A foreign investment has at least two economically valid stories at the same time.
 
-## Scope
+One story lives in the instrument's own currency:
 
-Multi-currency analytics separates three things that are easy to accidentally blend together: the instrument's local-currency economics, FX translation into the reporting currency, and the combined reporting-currency result. Personal Finance ETL retains acquisition FX and local prices at lot level so those components can be reconstructed rather than inferred from a single final INR value.
+> **Did the asset itself become more or less valuable?**
 
-## Currency authority
+The other lives in the reporting/base currency:
 
-`d_Currency` defines currency semantics and `f_Currency_FX_Rates` provides historical rates. Investment lots retain `Currency_ID`, acquisition local price and acquisition FX. Snapshot processing requests date-appropriate FX through the FX provider. The default/reporting currency behaves as a 1.0 conversion path.
+> **What did that investment actually do to my wealth after currency translation?**
 
-## Currency data flow
+Those stories can diverge materially.
+
+A US equity can rise in USD while falling in INR terms, or vice versa. If the engine keeps only one translated value, it loses the ability to explain why.
+
+This specification describes how I preserve both perspectives and how FX evidence is validated before it is allowed into Quant analytics.
 
 ```mermaid
 flowchart LR
-    CUR[d_Currency] --> FXP[FX provider]
-    RATES[f_Currency_FX_Rates] --> FXP
-    BUY[Purchase local price + FX buy] --> LOT[TaxLot]
-    FXP --> SNAP[Snapshot]
-    LOT --> SNAP
-    MKT[Market price] --> SNAP
-    SNAP --> LOCAL[Local economics]
-    SNAP --> INR[Reporting-currency economics]
-    SNAP --> ATTR[FX attribution]
+    ASSET["Asset price in local currency"]
+    FX["FX observation"]
+    LOCAL["Local-currency value / return"]
+    BASE["Base-currency value / return"]
+    ATTR["Asset vs FX attribution"]
+
+    ASSET --> LOCAL
+    ASSET --> BASE
+    FX --> BASE
+    LOCAL --> ATTR
+    BASE --> ATTR
 ```
 
-## Temporal causality
+The key rule is:
 
-Historical FX selection must not borrow future observations. The market-reconstruction pipeline and Quant FX provider use date-aware historical evidence so a past valuation is not translated using a rate that had not occurred yet. The detailed source-reconstruction gates are specified in [Investment Market Reconstruction](investment-market-reconstruction.md).
+> **FX is financial evidence, not a formatting conversion.**
 
-## Acquisition state
+## Implementation authority
 
-For foreign-currency lots, the state retains:
+FX responsibility is deliberately split.
 
-- reporting-currency acquisition price;
-- local-currency acquisition price;
-- acquisition FX rate;
-- currency identity;
-- benchmark local acquisition price where available.
+### Market-domain FX evidence
 
-That retained acquisition state is what makes later attribution possible.
+```text
+src/personal_finance_etl/domain/market/fx.py
+```
 
-## Snapshot FX resolution
+Owns:
+
+- point-in-time FX observations;
+- continuous daily FX series;
+- staleness policy;
+- point-in-time lookup;
+- missing-rate semantics.
+
+### Investment FX validation
+
+```text
+src/personal_finance_etl/domain/investments/valuation/fx.py
+```
+
+Owns:
+
+- pre-Quant foreign-currency FX availability checks;
+- fail-closed behavior when a provider/rate is unavailable.
+
+### Investment snapshots and attribution
+
+```text
+src/personal_finance_etl/domain/investments/portfolio/snapshots.py
+src/personal_finance_etl/domain/investments/lots/fifo.py
+src/personal_finance_etl/domain/investments/performance/xirr.py
+```
+
+Own:
+
+- acquisition FX;
+- snapshot FX;
+- local/base values;
+- realized/unrealized FX attribution;
+- local XIRR;
+- FX XIRR impact.
+
+No single module is allowed to quietly redefine currency semantics.
+
+## Currency identity comes from master data
+
+Each instrument carries a `CURRENCY_ID`.
+
+The configured default/reporting currency is resolved from financial rules.
+
+That means currency is part of the instrument contract, not inferred from ticker spelling or exchange name during analytics.
+
+## Base-currency assets use identity FX
+
+If the instrument currency is the configured default currency, conversion is trivial:
+
+\[
+FX = 1
+\]
+
+This is a true identity because local and reporting currency are the same.
+
+The same `1.0` is **not** safe as a fallback for foreign instruments.
+
+## Foreign instruments fail closed when FX infrastructure is missing
+
+`FXValidationGate` checks the instrument before Quant processing.
 
 ```python
-if (
-    lot.currency_id
-    and lot.currency_id != getattr(self.rules, "DEFAULT_CURRENCY_ID", "INR_INR")
-    and fx_provider
-):
-    fx_rate_snap = fx_provider.get_rate(m_date, lot.currency_id)
-    m_price_local = m_price / fx_rate_snap if fx_rate_snap > 0 else m_price
-else:
-    fx_rate_snap = 1.0
+# src/personal_finance_etl/domain/investments/valuation/fx.py
+
+if not is_foreign:
+    return  # Base-currency instruments never need FX validation
+
+if not self.fx_provider:
+    raise FXProviderMissingError(
+        f"ISIN={isin} is denominated in {instrument_currency} but no FX provider "
+        "is configured. Cannot compute INR values — refusing to proceed with "
+        "identity FX_Rate=1.0."
+    )
 ```
 
-Foreign lots resolve current FX for the snapshot date. Reporting-currency market price is converted back to local market price for local-return measurement. Default-currency lots use the identity conversion path.
+This is one of the most important currency safety guarantees in the engine.
 
-## Local asset P&L
+A missing FX provider does not turn USD into INR at parity because that would make the numbers look beautifully complete and financially absurd.
 
-Local asset P&L isolates security-price movement in the instrument currency:
+## Spot validation before Quant
 
-$$AssetPnL_{local}=(P_{t,local}-P_{0,local})Q$$
+The gate also checks whether the provider can supply a valid rate for the first purchase date.
 
-This is the cleanest view of whether the underlying security appreciated before currency translation.
+A rate is rejected when it is:
 
-## Translated asset P&L
+```text
+missing
+non-finite
+zero
+negative
+```
 
-The local asset P&L is translated using snapshot FX:
+The purpose is to detect broken FX coverage before deeper processing creates translated values.
 
-$$AssetPnL_{reporting}=AssetPnL_{local}\times FX_t$$
+## FX observations are first-class records
 
-This represents the reporting-currency value of the security-price movement measured at the current conversion rate.
-
-## FX P&L
-
-The implementation attributes FX movement on acquisition basis as:
-
-$$FXPnL=P_{0,local}(FX_t-FX_0)Q$$
-
-where $FX_0$ is lot acquisition FX and $FX_t$ is snapshot/disposal FX. This isolates currency movement applied to the original local acquisition basis.
-
-## Realized FX attribution
-
-The same decomposition is applied when FIFO consumes a foreign-currency lot on sale. Realized events therefore carry `Asset_PnL_Local`, translated `Asset_PnL`, and `Forex_PnL` alongside total realized gain/loss and the consumed lot identity.
-
-## Snapshot implementation
+The market domain defines:
 
 ```python
-asset_pnl_local = (m_price_local - lot.price_local) * lot.qty
-asset_pnl = asset_pnl_local * fx_rate_snap
-forex_pnl = lot.price_local * (fx_rate_snap - lot.fx_rate_buy) * lot.qty
-...
-asset_return_pct = asset_pnl / buy_val_lot if buy_val_lot != 0 else 0.0
-forex_return_pct = forex_pnl / buy_val_lot if buy_val_lot != 0 else 0.0
+@dataclass(frozen=True)
+class FXObservation:
+    rate: float | None
+    currency: str
+    observation_date: date
+    is_interpolated: bool = False
 ```
 
-## Return attribution
+Missing rate is represented explicitly.
 
-The snapshot exposes both asset-return and FX-return percentages relative to reporting-currency acquisition value. It also stores `Forex_Contribution_Pct = Forex_PnL / P&L` where total P&L is non-zero. These are diagnostic decompositions; they should not be interpreted as independent portfolio weights.
+`as_float()` defaults missing rates to `NaN`, not `1.0` or `0.0`.
 
-## Currency appreciation
+That design makes missing currency evidence propagate visibly instead of producing plausible wealth values.
 
-The implementation derives a blended acquisition FX rate from reporting/local acquisition values and compares current FX against it:
+## Continuous FX series is causally constructed
 
-$$CurrencyAppreciation=\frac{FX_t}{FX_{buy,blended}}-1$$
+The Silver FX series begins with a daily date spine crossed with active currencies.
 
-This expresses movement of the foreign currency relative to the reporting currency over the lot's acquisition-to-snapshot interval.
+Observed FX is then joined onto that spine.
 
-## Local and reporting values
-
-Lot snapshots retain both `Buy_Value_Local` / `Close_Value_Local` and reporting-currency `Buy_Value` / `Close_Value`. This avoids a common modeling trap where a column named simply `value` silently changes currency depending on geography.
-
-## Local CAGR
-
-`Lot_CAGR_Local` annualizes local acquisition price to local current market price. Reporting-currency `Lot_CAGR` includes the combined effect of asset and currency movement. Comparing the two provides a time-normalized view of FX impact at lot level.
-
-## Local XIRR
-
-Cashflows are maintained in reporting and local currency for money-weighted returns. `PortfolioXIRRCalculator` computes `Portfolio_XIRR` and `XIRR_Local` separately, then derives:
-
-$$FX\ XIRR\ Impact=XIRR_{reporting}-XIRR_{local}$$
-
-Unlike simple P&L attribution, this measure incorporates the timing of cashflows.
-
-## Benchmark local currency
-
-Benchmark shadow cashflows and terminal values can also carry local-currency representations. The engine therefore exposes `BM_XIRR_Local` and local active return when evidence is available. Benchmark comparison is not forced through reporting currency if local comparison is meaningful.
-
-## Attribution layers
+Missing dates can carry the latest prior observation forward only under bounded staleness rules.
 
 ```mermaid
 flowchart TD
-    LOCAL[Local security price movement] --> AP[Asset P&L Local]
-    AP --> TR[Translate at current FX]
-    FXMOVE[FX movement on acquisition basis] --> FP[Forex P&L]
-    TR --> REPORT[Reporting-currency attribution]
-    FP --> REPORT
-    LOCAL --> LX[Local XIRR / CAGR]
-    REPORT --> RX[Reporting XIRR / CAGR]
-    LX --> IMP[FX XIRR Impact]
-    RX --> IMP
+    OBS["Observed FX"]
+    SPINE["Date × active currency spine"]
+    JOIN["Left join"]
+    AGE["Retain observation date + age"]
+    FILL["Forward carry prior observation"]
+    GATE["7-day staleness gate"]
+    OUT["Continuous Silver FX"]
+
+    OBS --> JOIN
+    SPINE --> JOIN --> AGE --> FILL --> GATE --> OUT
 ```
 
-## Default-currency behavior
+## Invalid populated FX is an error
 
-For default-currency instruments, local and reporting values collapse to the same economics: FX rates are `1.0`, `Forex_PnL` is zero, local CAGR equals reporting CAGR, and currency appreciation is zero. The model therefore remains structurally consistent without inventing a special schema for domestic assets.
+Before forward filling, the transform detects non-positive or non-finite observed rates that are not closure gaps.
 
-## Missing and invalid FX
+That distinguishes:
 
-Foreign-currency processing depends on valid FX evidence. Dedicated FX gates reject missing, non-finite, or invalid rates rather than allowing a foreign position to silently fall back to `1.0`. The identity path is reserved for the actual default currency.
-
-## FX gate architecture
-
-```mermaid
-flowchart LR
-    LOT[Foreign lot] --> NEED{FX required?}
-    NEED -->|No: default currency| ONE[Use 1.0]
-    NEED -->|Yes| GET[Resolve historical rate]
-    GET --> VALID{finite and > 0?}
-    VALID -->|No| FAIL[Fail processing]
-    VALID -->|Yes| CALC[Compute local/reporting analytics]
+```text
+expected absence
 ```
 
-## Cost-basis reconciliation across currencies
+from:
 
-Cost-basis reconciliation can scale reporting-currency and local-currency basis separately when broker local basis is available. This prevents a reporting-currency correction from automatically implying the same proportional correction to local acquisition economics.
+```text
+bad populated evidence
+```
 
-## Financial interpretation
+The second is rejected.
 
-A foreign investment can gain locally while losing in reporting currency, lose locally while gaining because of FX, or have both components reinforce each other. The schema keeps those possibilities observable. “US stock return” is therefore not one number unless the currency perspective is specified.
+## Forward fill is backward-looking only
 
-## Guarantees and limitations
+For valuation date \(t\), a carried rate must come from an observation date \(s\) such that:
 
-**Guarantees:** explicit currency identity, retained acquisition FX, local/reporting values, no intentional future-FX leakage, separate asset/FX attribution, and local/reporting money-weighted metrics where evidence supports them.
+\[
+s \le t
+\]
 
-**Limitations:** attribution is model-based; it does not represent hedging instruments unless modeled separately; missing historical FX cannot be inferred safely; reporting-currency tax treatment can differ from economic attribution.
+A future FX observation may never flow backward into historical state.
 
-## Source map
+This protects historical return analysis from temporal leakage.
 
-Primary implementation authorities:
+## Seven-day continuous-series staleness gate
 
-- `backend/transform/currency.py` and currency transforms — canonical FX evidence.
-- `backend/engines/analytics/pipeline/processor/fx_gate.py` — FX validation/gating.
-- `backend/engines/analytics/core/fifo.py` — realized FX attribution.
-- `backend/engines/analytics/pipeline/processor/snapshot.py` — unrealized/local analytics.
-- `backend/engines/analytics/pipeline/postprocessor/xirr.py` — local/reporting XIRR.
-- `backend/engines/analytics/pipeline/postprocessor/coordinator.py` — aggregated FX metrics.
+The Silver FX transformation enforces:
 
-## Currency perspectives
+```python
+max_fx_staleness_days = 7
+```
 
-Every foreign investment can be viewed through at least two economic lenses:
+The latest prior rate can bridge weekends and short market closures, but it cannot be carried indefinitely.
 
-1. **local currency**, which isolates the security's own market movement;
-2. **reporting currency**, which combines security movement and FX translation.
+The transform retains:
 
-Personal Finance ETL stores both because neither is universally “the real return.” They answer different questions.
+```text
+FX_Observation_Date
+FX_Age_Days
+First_Observation_Date
+Is_Imputed
+```
+
+until the staleness decision has been made.
+
+## Why observation age belongs in the financial model
+
+Suppose:
+
+```text
+valuation date = 10 October
+FX rate = 83.20
+```
+
+That value is not fully interpretable without knowing whether 83.20 was observed:
+
+```text
+10 October
+9 October
+2 October
+```
+
+The same numeric rate can represent very different evidence quality.
+
+## Point-in-time provider fallback is separately bounded
+
+`FXRateProvider` stores rates in an in-memory map for fast lookup.
+
+Exact date is attempted first.
+
+If unavailable, the provider searches backward up to 30 days:
+
+```python
+for i in range(1, 31):
+    fallback_date = d - timedelta(days=i)
+    rate = self.fx_map.get((fallback_date, currency_id))
+    if rate is not None:
+        return rate
+```
+
+This lookup behavior is broader than the Silver continuous-series publication gate.
+
+That distinction is worth understanding:
+
+- the **published continuous FX series** enforces a strict seven-day staleness contract;
+- the **point lookup provider** can search farther back for specific analytical lookups;
+- the pre-Quant validation still rejects unavailable/non-positive results.
+
+The consumer must know which contract it is using.
 
 ## Acquisition-time currency state
 
-At purchase, canonical investment evidence carries enough information for the Quant lot to retain local acquisition price and acquisition FX. Reporting-currency basis is therefore not the only surviving number.
+A foreign-currency purchase records both:
 
-```mermaid
-flowchart LR
-    LP[Local purchase price] --> LOT[TaxLot]
-    FX0[Acquisition FX] --> LOT
-    Q[Quantity] --> LOT
-    LOT --> RP[Reporting basis]
-    LOT --> FUTURE[Future attribution anchor]
+```text
+price_local
+fx_rate_buy
+price/base value
+currency_id
 ```
+
+This freezes the acquisition perspective needed for later attribution.
+
+Today's FX rate must not be allowed to rewrite yesterday's acquisition basis.
 
 ## Snapshot-time currency state
 
-At each closing date, the engine resolves current FX and derives local market price from reporting-currency market price where necessary. Both local and reporting close values are then retained in the analytical lot snapshot.
-
-## P&L decomposition algebra
-
-Let:
-
-- $P_0$ be local acquisition price;
-- $P_t$ be local current price;
-- $F_0$ be acquisition FX;
-- $F_t$ be current FX;
-- $Q$ be quantity.
-
-Local security movement is:
-
-$$A_{local}=(P_t-P_0)Q$$
-
-Translated asset component is:
-
-$$A_{reporting}=A_{local}F_t$$
-
-FX component on original basis is:
-
-$$C=P_0(F_t-F_0)Q$$
-
-The implementation exposes these components alongside total reporting P&L rather than forcing users to reverse-engineer them from end values.
-
-## Interaction term caveat
-
-Currency and asset prices move simultaneously. Attribution formulas partition economic movement according to the implemented convention. They should not be described as unique mathematical truth independent of attribution method. The documentation therefore names the implemented components rather than claiming a universal decomposition theorem.
-
-## Realized versus unrealized attribution
-
-```mermaid
-flowchart TD
-    LOT[Foreign TaxLot] --> ACTIVE{Position state}
-    ACTIVE -->|Active| SNAP[Snapshot attribution]
-    ACTIVE -->|Disposed| REAL[Realized-event attribution]
-    SNAP --> U[Unrealized asset / FX P&L]
-    REAL --> R[Realized asset / FX P&L]
-```
-
-Both paths use the lot's acquisition currency state, preserving consistency across holding and disposal.
-
-## Buy value and close value
-
-The lot snapshot retains:
+At a later valuation date, the engine resolves:
 
 ```text
-Buy_Value
-Close_Value
-Buy_Value_Local
-Close_Value_Local
+market_price_local
+current FX rate
+close value local
+close value base
 ```
 
-The paired fields make currency perspective explicit in the schema. A consumer should never need to infer currency from geography or instrument name.
+The pair of acquisition and current currency states is what allows decomposition.
+
+## Local acquisition value
+
+\[
+B_{local} = Q \times P_{buy,local}
+\]
+
+## Base acquisition value
+
+Using acquisition FX:
+
+\[
+B_{base} = B_{local} \times FX_{buy}
+\]
+
+In practice, canonical purchase evidence can already carry base-currency value. That observed/canonical basis remains authoritative for the lot.
+
+## Local current value
+
+\[
+V_{local} = Q \times P_{market,local}
+\]
+
+## Base current value
+
+\[
+V_{base} = V_{local} \times FX_{snap}
+\]
+
+## Local asset P&L
+
+\[
+PnL_{local} = V_{local} - B_{local}
+\]
+
+This answers the pure asset-price question in local currency.
+
+## Total reporting-currency P&L
+
+\[
+PnL_{base} = V_{base} - B_{base}
+\]
+
+This answers what happened to wealth in the reporting currency.
+
+## FX attribution
+
+The engine preserves explicit asset and FX fields rather than reporting only total P&L.
+
+For realized events, FIFO uses:
+
+\[
+AssetPnL_{local} = (P_{sell,local} - P_{buy,local})Q
+\]
+
+\[
+AssetPnL_{base} = AssetPnL_{local} \times FX_{sell}
+\]
+
+\[
+ForexPnL = P_{buy,local}(FX_{sell}-FX_{buy})Q
+\]
+
+The snapshot layer similarly exposes fields such as:
+
+```text
+Buy_Value_Local
+Close_Value_Local
+Asset_PnL
+Forex_PnL
+Forex_Contribution_Pct
+Absolute_Return_Local
+Asset_Return_Pct
+Forex_Return_Pct
+Blended_FX_Buy_Rate
+FX_Rate_Buy
+FX_Rate_Snap
+Currency_Appreciation_Pct
+```
+
+That makes the currency effect inspectable instead of implied.
+
+## Interaction-term caveat
+
+A simple asset-plus-FX attribution can have interaction effects depending on the exact decomposition formula.
+
+For example:
+
+\[
+V_{base}=P_{local}\times FX
+\]
+
+Changing both price and FX simultaneously means total change is multiplicative, not perfectly separable into two independent additive changes without choosing an attribution convention.
+
+Therefore fields such as `Asset_PnL` and `Forex_PnL` should be read under the implementation's stated decomposition, not as a universal mathematical uniqueness claim.
+
+The important design choice is transparency: the model exposes the perspectives rather than hiding them in one total.
 
 ## Blended acquisition FX
 
-For analytics, blended acquisition FX can be derived from reporting and local acquisition values:
+For an open lot or aggregated position, acquisition FX can be represented through the historical relationship between local and base acquisition basis.
 
-$$F_{buy,blended}=\frac{BuyValue_{reporting}}{BuyValue_{local}}$$
+Conceptually:
 
-This becomes the comparison base for currency appreciation diagnostics.
+\[
+FX_{buy,blended} = \frac{B_{base}}{B_{local}}
+\]
+
+when local basis is positive.
+
+This provides an intuitive historical conversion anchor for open-state analytics.
 
 ## Currency appreciation diagnostic
 
-`Currency_Appreciation_Pct` expresses how current FX differs from the blended acquisition FX. Positive/negative interpretation depends on the quote convention represented by the canonical FX rates, so consumers should use the currency master rather than assuming all pairs are quoted identically by name.
+A simple currency movement diagnostic is:
 
-## FX contribution to P&L
+\[
+CurrencyAppreciation = \frac{FX_{snap}}{FX_{buy}} - 1
+\]
 
-`Forex_Contribution_Pct` divides FX P&L by total P&L when total P&L is non-zero. The metric can be large or counterintuitive when asset and FX components offset each other. It is therefore diagnostic, not a portfolio weight.
+Positive/negative interpretation depends on the quotation convention represented by the stored FX rate.
+
+The application avoids inferring economic direction from ISO names alone; it uses the configured currency contract.
 
 ## Local absolute return
 
-`Absolute_Return_Local` uses local prices and excludes reporting-currency translation. Comparing it with reporting absolute return isolates how much the currency perspective changes the observed result.
+\[
+R_{local} = \frac{V_{local}-B_{local}}{B_{local}}
+\]
+
+when basis is valid and positive.
+
+This isolates asset movement from reporting-currency translation.
+
+## Base absolute return
+
+\[
+R_{base} = \frac{V_{base}-B_{base}}{B_{base}}
+\]
+
+The difference between the two is an intuitive currency-effect diagnostic, though the exact P&L interaction decomposition remains multiplicative.
 
 ## Local CAGR
 
-Local CAGR uses local acquisition/current price over holding age. Reporting CAGR uses reporting basis/current price. Their difference is not labeled as a precise additive FX CAGR because compounded returns do not decompose linearly in all cases.
+The same CAGR function can be applied using local acquisition/current values.
 
-## Money-weighted currency attribution
+This lets the engine answer:
 
-XIRR is computed from parallel reporting and local cashflow streams. This is stronger than merely converting the final terminal value because purchase/sale timing matters.
+> how fast did the asset compound in its own currency?
 
-```mermaid
-flowchart LR
-    CF[Reporting cashflows] --> RX[Reporting XIRR]
-    LCF[Local cashflows] --> LX[Local XIRR]
-    RX --> D[FX XIRR Impact]
-    LX --> D
+before asking how reporting-currency wealth compounded.
+
+## Local XIRR
+
+Portfolio XIRR maintains separate local cash-flow vectors:
+
+```text
+amount_local
+terminal value local
+benchmark amount local
+benchmark terminal local
 ```
+
+Then it computes:
+
+```text
+XIRR_Local
+BM_XIRR_Local
+Active_Return_Local
+```
+
+This is a stronger currency lens than comparing only start/end FX rates because it respects irregular cash-flow timing.
+
+## FX XIRR impact
+
+The engine defines:
+
+\[
+FX\_XIRR\_Impact = XIRR_{base} - XIRR_{local}
+\]
+
+when both are valid.
+
+This is a money-weighted diagnostic of how reporting-currency translation changed the investor's experienced return.
 
 ## Benchmark currency treatment
 
-Benchmark shadow state can carry both reporting and local values. This allows local active return to compare portfolio and benchmark before reporting-currency translation, while reporting active return includes the currency perspective represented in each series.
+Benchmark shadow state also carries local/base perspectives where applicable.
 
-## Acquisition FX on realized events
+That allows active return to be evaluated in:
 
-When a lot is sold, `fx_rate_sell` is compared with the lot's retained `fx_rate_buy`. The realized event therefore does not need to rediscover acquisition FX from an external table after the fact.
-
-That is a useful lineage property: the lot carries the conversion context that shaped its basis.
-
-## FX provider responsibility
-
-The FX provider is responsible for returning a date-appropriate rate for a currency. The processor/fx gate is responsible for validating whether foreign-currency processing can proceed. FIFO and snapshot logic consume valid rates; they are not expected to implement source discovery.
-
-## Fail-closed foreign-currency behavior
-
-For foreign assets, missing or invalid FX should stop the affected processing path rather than silently treating one foreign unit as one reporting-currency unit. A `1.0` rate is semantically valid only for the default-currency identity path.
-
-## Temporal leakage threat model
-
-A future FX rate used in a past valuation would contaminate historical analytics. The same threat exists for market prices. The pipeline therefore treats temporal causality as a correctness constraint, not merely a data-cleaning preference.
-
-```mermaid
-flowchart LR
-    D[Valuation date] --> H{Historical evidence <= D?}
-    H -->|Yes| USE[Use latest eligible observation]
-    H -->|No| FAIL[Do not borrow future rate]
+```text
+reporting currency
+local currency
 ```
 
-## Weekends and market closures
+The distinction matters because benchmark-relative performance can look different after FX translation.
 
-Historical valuation can legitimately use an earlier observation when no same-day market/FX observation exists, subject to the relevant staleness rules. “Not observed today” is different from “use tomorrow's rate because it is convenient.”
+## Realized versus unrealized attribution
 
-## Domestic asset identity path
+### Realized
+
+Uses actual sale date, sale local price, and sale FX.
+
+### Unrealized
+
+Uses current snapshot date, current local market price, and current FX.
+
+The acquisition side remains anchored to the lot's original local price/FX.
+
+This preserves temporal causality.
+
+## Reconciliation and currency
+
+Cost-basis reconciliation can carry both:
+
+```text
+broker base-currency basis
+broker local-currency basis
+```
+
+When local basis is available, the FIFO engine computes a separate local scaling ratio.
+
+That prevents a base-currency correction from corrupting local asset economics.
+
+## Tax and FX boundary
+
+FX attribution and Tax classification interact, but they are not the same concern.
+
+The investment engine produces realized events with local/base/FX components and event-level estimated rates.
+
+The Tax engine later decides statutory/informational classification under configured Tax rules.
+
+A currency translation result should not quietly become a statutory Tax rule simply because both appear on the same disposal event.
+
+## Domestic instruments follow an identity path
 
 For default-currency assets:
 
 ```text
-FX_Rate_Buy  = 1
+FX_Rate_Buy = 1
 FX_Rate_Snap = 1
-Forex_PnL    = 0
-Currency_Appreciation = 0
-local value  = reporting value
+local value = base value
+Forex_PnL = 0
 ```
 
-This keeps one analytical schema across domestic and foreign assets.
+This keeps the schema consistent across domestic and foreign assets without inventing currency effects where none exist.
 
-## Reconciliation and FX
+## Missing/invalid FX is not zero
 
-Cost-basis reconciliation can receive both reporting and local broker basis. When local basis is present, local lot costs scale using a local ratio. This is important because aggregate reporting-basis mismatch can contain both security-basis and FX-history effects.
+The FX model distinguishes:
 
-## Tax and FX boundary
+```text
+missing
+invalid
+stale
+identity/base-currency
+valid observed
+valid carried observation
+```
 
-Quant exposes realized gain and attribution in the canonical reporting context used by downstream tax evidence. Tax does not recompute historical FX attribution independently. This preserves one economic realization authority.
+These states must not collapse into one number.
 
-## Currency-field interpretation table
+In particular:
 
-| Field | Perspective |
-|---|---|
-| `Buy_Price` | reporting currency |
-| `Market_Price` | reporting currency |
-| `Buy_Price_Local` | instrument/local currency |
-| `Market_Price_Local` | instrument/local currency |
-| `FX_Rate_Buy` | acquisition conversion |
-| `FX_Rate_Snap` | closing-date conversion |
-| `Asset_PnL_Local` | local security movement |
-| `Asset_PnL` | translated security movement |
-| `Forex_PnL` | FX attribution on acquisition basis |
-| `XIRR_Local` | local money-weighted return |
-| `FX_XIRR_Impact` | reporting minus local XIRR |
+```text
+missing foreign FX ≠ 1.0
+```
+
+That single inequality prevents a spectacular class of silent wealth distortion.
+
+## Temporal leakage threat model
+
+The currency layer protects against:
+
+### Future FX leakage
+
+A later rate cannot value an earlier date.
+
+### Unlimited stale carry
+
+Old observations cannot be treated as current indefinitely.
+
+### Acquisition-basis rewrite
+
+Current FX cannot rewrite historical acquisition cost.
+
+### Provider absence masked by identity
+
+Foreign assets cannot proceed as if local currency equals base currency.
+
+## Weekend and closure behavior
+
+Weekends commonly have no fresh FX observation.
+
+A prior valid observation may carry forward under the staleness policy.
+
+The resulting row remains marked as imputed/carried so data lineage stays visible.
+
+## Currency-field interpretation
+
+| Field family | Meaning |
+| --- | --- |
+| `*_Local` | instrument/native currency perspective |
+| base value without suffix | configured reporting/base currency perspective |
+| `FX_Rate_Buy` | acquisition-time conversion context |
+| `FX_Rate_Snap` | current snapshot conversion context |
+| `Forex_PnL` | currency-attribution component under engine convention |
+| `FX_XIRR_Impact` | money-weighted base minus local return diagnostic |
+| `Currency_Appreciation_Pct` | change in FX rate from acquisition to snapshot |
+
+The suffixes are financial semantics, not naming decoration.
 
 ## Edge-case matrix
 
-| Condition | Behavior |
-|---|---|
-| default currency | identity FX path |
-| foreign currency + valid rate | local/reporting analytics calculated |
-| foreign currency + invalid rate | processing fails/gates |
-| total P&L zero | FX contribution ratio avoids invalid division |
-| local basis absent in reconciliation | reporting basis can reconcile independently |
-| benchmark local evidence absent | local benchmark metrics unavailable |
-| historical date without same-day rate | prior eligible evidence may be used |
-| only future rate available | must not backfill backward in time |
+| Case | Expected behavior |
+| --- | --- |
+| domestic/base-currency asset | identity FX path |
+| foreign asset, provider missing | fail before Quant |
+| foreign asset, first-purchase rate missing | fail validation |
+| weekend | bounded backward carry |
+| long FX gap | fail staleness gate |
+| zero/negative observed FX | invalid evidence error |
+| current FX valid, acquisition FX missing | attribution incomplete/invalid |
+| reconciliation basis available only in base currency | local correction cannot be invented |
 
 ## Audit questions
 
-The model supports questions such as:
+The model should let me answer:
 
-- Did the security itself gain in its home currency?
-- Did currency translation help or hurt the reporting result?
-- What FX rate was embedded at acquisition?
-- What rate was used at the snapshot/disposal date?
-- Is benchmark underperformance a security-selection effect or partly currency perspective?
-- Did a reconciliation adjust local and reporting basis differently?
+- What currency is this instrument actually denominated in?
+- What FX rate was used at acquisition?
+- What FX rate was used at valuation/disposal?
+- Were those rates observed or carried?
+- How old was the carried observation?
+- What was local asset P&L?
+- What was reporting-currency P&L?
+- What currency effect was attributed?
+- What was local XIRR versus base XIRR?
+- Did reconciliation alter basis in both currency perspectives?
+
+## Guarantees
+
+The currency model guarantees, under valid evidence:
+
+- base-currency instruments use identity FX;
+- foreign instruments require FX evidence;
+- local and base values remain distinct;
+- acquisition and current FX remain temporally separate;
+- continuous Silver FX rejects stale/malformed evidence beyond policy;
+- return analytics can preserve both local and reporting-currency perspectives.
+
+## Limitations / non-guarantees
+
+It does not guarantee:
+
+- external FX provider observations are economically perfect;
+- every attribution decomposition is mathematically unique;
+- FX-related investment analytics equal statutory Tax FX treatment;
+- a 30-day point-provider fallback implies a 30-day continuous-series validity window;
+- historical missing FX can be safely estimated from future rates.
 
 ## Design trade-off: explicit duplicate perspectives
 
-Storing both local and reporting fields widens analytical facts. The alternative is repeated conversion during every downstream query, which risks inconsistent historical FX selection and makes attribution harder to audit. The implementation chooses explicit perspectives over schema minimalism.
+Publishing both local and base values creates more columns.
 
-## Design trade-off: attribution rather than one opaque P&L
+That duplication is intentional.
 
-A single reporting-currency P&L is simpler to display but hides whether investment selection or currency movement drove the outcome. The additional attribution fields make the model more complex and materially more informative.
+A “cleaner” schema with one generic `Value` field would force downstream consumers to infer currency meaning from context.
+
+In financial systems, context-dependent units are a bug farm with excellent branding.
+
+## Design trade-off: attribution instead of one opaque P&L
+
+One total P&L is simpler.
+
+It is also insufficient for a multi-currency portfolio.
+
+The explicit asset/FX perspectives make it possible to explain whether an investment thesis worked even when currency movement dominated the reporting-currency outcome.
+
+## The investment-engine narrative closes here
+
+The investment chain is now complete:
+
+```text
+transaction + market evidence
+    ↓
+historical market state reconstruction
+    ↓
+canonical FIFO lots and realized events
+    ↓
+reconciliation against independent observations
+    ↓
+performance / risk / benchmark analytics
+    ↓
+local vs reporting-currency interpretation
+```
+
+The next Finance batch can therefore move to a different question:
+
+> **How do these investment and household facts become Tax evidence, FIRE assumptions, and published methodology?**
 
 ## Related specifications
 
-- [Investment Data Model](investment-data-model.md)
 - [Investment Market Reconstruction](investment-market-reconstruction.md)
-- [FIFO and Realized Events](fifo-and-realized-events.md)
+- [FIFO & Realized Events](fifo-and-realized-events.md)
 - [Investment Reconciliation](investment-reconciliation.md)
-- [Investment Performance and Risk](investment-performance-and-risk.md)
-- [Currency and FX Contracts](../reference/silver-data-contracts.md)
+- [Investment Performance & Risk](investment-performance-and-risk.md)
+- [Tax Methodology](tax-methodology.md)
+- [Metrics & Methodology](metrics-and-methodology.md)
+- [Financial Rules Reference](../configuration/financial-rules-reference.md)

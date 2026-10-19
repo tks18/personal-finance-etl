@@ -1,118 +1,193 @@
 # Finance
 
-Personal Finance ETL treats finance as a set of explicit evidence, reconstruction, valuation, realization, reconciliation, taxation, and planning contracts. This section specifies those contracts from the implementation outward. It is deliberately not a gallery of dashboard metrics: the Gold layer is downstream of the financial model, not the place where financial meaning is invented.
+The finance layer is where this project stops being a generic ETL pipeline with money-shaped columns.
+
+Raw statements, household transactions, broker exports, market observations, FX rates, and configuration are only **evidence**. They become useful after I give them explicit financial meaning, preserve where that meaning came from, and keep observed facts separate from reconstructed state and forward-looking assumptions.
+
+That distinction drives the entire Finance section.
 
 ```mermaid
 flowchart LR
-    E[Source evidence] --> C[Canonical facts]
-    C --> H[Household state]
-    C --> M[Market reconstruction]
-    C --> Q[Quant / FIFO]
-    M --> P[Performance]
-    Q --> P
-    Q --> T[Tax evidence]
-    H --> W[Wealth]
-    P --> W
-    T --> W
-    W --> F[FIRE / planning]
+    E["Observed evidence"]
+    C["Canonical financial facts"]
+    R["Reconstructed state"]
+    M["Analytical measures"]
+    P["Presentation / planning"]
+
+    E --> C --> R --> M --> P
 ```
 
+The arrows are not permission to blur the layers. A broker quantity observation is still an observation after reconciliation. A FIFO lot is reconstructed state. An XIRR is a measure. A Monte Carlo percentile is a modeled future, not a historical fact wearing a nicer chart.
 
-## Learn the financial model as a journey
+## The Finance corpus has a deliberate order
 
-This section specifies the financial algorithms and semantics. The Wiki teaches the same domain concept-first: [Financial Model](https://github.com/tks18/personal-finance-etl/wiki/06-Financial-Model) → [Investment Engine](https://github.com/tks18/personal-finance-etl/wiki/07-Investment-Engine) / [Cash Flow & Wealth](https://github.com/tks18/personal-finance-etl/wiki/08-Cash-Flow-and-Wealth) → [Tax Evidence & Planning](https://github.com/tks18/personal-finance-etl/wiki/09-Tax-Evidence-and-Planning) → [FIRE & Planning](https://github.com/tks18/personal-finance-etl/wiki/10-FIRE-and-Planning).
-
-## Reading order
-
-| Specification | Question it owns |
-|---|---|
-| [Financial Model](financial-model.md) | What kinds of financial truth exist, and which subsystem owns them? |
-| [Cashflow and Wealth](cashflow-and-wealth.md) | How do household transactions become balances, cashflow and net worth? |
-| [Investment Data Model](investment-data-model.md) | What canonical evidence feeds investment reconstruction and analytics? |
-| [Investment Market Reconstruction](investment-market-reconstruction.md) | How is historical US market state reconstructed without broker daily holdings? |
-| [FIFO and Realized Events](fifo-and-realized-events.md) | How are acquisition lots and disposals reconstructed? |
-| [Investment Reconciliation](investment-reconciliation.md) | How are observed and reconstructed investment states reconciled? |
-| [Investment Performance and Risk](investment-performance-and-risk.md) | How are return, benchmark, XIRR and risk measures produced? |
-| [Multi-Currency and FX](multi-currency-and-fx.md) | How are local-currency economics separated from INR translation? |
-| [Tax Methodology](tax-methodology.md) | How do ledger and Quant evidence become tax-preparation events? |
-| [FIRE Methodology](fire-methodology.md) | How does current wealth become stochastic planning evidence? |
-| [Metrics and Methodology](metrics-and-methodology.md) | What cross-domain formulas and metric semantics are exposed? |
-
-## Financial authority map
-
-The most important rule is that a value should be interpreted according to the subsystem that owns it. A broker statement, a reconstructed holding, a FIFO lot, an indicative tax estimate and a Monte Carlo percentile are all useful, but they are not interchangeable kinds of truth.
+I read these pages as one financial model, not as a folder of independent topics.
 
 ```mermaid
-flowchart TB
-    S[Observed source evidence] --> N[Normalized canonical facts]
-    N --> R[Reconstructed state]
-    R --> A[Analytical measures]
-    A --> G[Gold presentation]
-    N --> X[Reconciliation evidence]
-    R --> X
-    A --> T[Indicative tax / planning]
+flowchart TD
+    FM["1 · Financial Model\nWhat kinds of truth exist?"]
+    CW["2 · Cashflow & Wealth\nHow does household activity become state?"]
+    IM["3 · Investment Data Model\nWhat does investment evidence prove?"]
+    MR["4 · Market Reconstruction\nHow is daily market state reconstructed?"]
+    FIFO["5 · FIFO & Realized Events\nHow do disposals consume acquisition history?"]
+    REC["6 · Reconciliation\nWhat happens when observation disagrees?"]
+    PERF["7 · Performance & Risk\nHow is reconstructed state measured?"]
+    FX["8 · Multi-Currency & FX\nWhat part of P/L came from the asset vs currency?"]
+    TAX["9 · Tax Methodology\nHow does financial evidence become indicative tax evidence?"]
+    FIRE["10 · FIRE Methodology\nHow does present state become modeled future paths?"]
+    MET["11 · Metrics & Methodology\nWhat do the published measures mean?"]
+
+    FM --> CW --> IM --> MR --> FIFO --> REC --> PERF --> FX --> TAX --> FIRE --> MET
 ```
 
-### Source authority
+This batch covers the first three steps: the semantic floor on which the rest of the finance engine stands.
 
-Broker statements, household transactions, market observations, FX observations and configuration inputs are evidence. Their existence does not mean every downstream row remains observed evidence.
+## Four kinds of authority
 
-### Canonical authority
+The financial model is easier to reason about when I stop asking one dataset to be authoritative for everything.
 
-Silver facts normalize evidence into stable grains such as one income transaction, one purchase, one sale, or one market observation. Deterministic identities are attached where downstream reconstruction requires continuity.
+| Authority | What it answers | Examples |
+| --- | --- | --- |
+| **Source authority** | What did an external or household source actually report? | broker trade, household transaction, market close, FX observation |
+| **Canonical authority** | What normalized economic fact do I accept into the model? | normalized purchase, sale, income, expense, transfer |
+| **Reconstruction authority** | What state follows from accepted facts and explicit algorithms? | active FIFO lots, realized events, reconstructed holdings |
+| **Presentation authority** | How do I expose the state for analysis and decisions? | Gold marts, cash-flow statements, portfolio analytics |
 
-### Reconstruction authority
+Operational provenance is orthogonal to all four. The SQLite Control Plane records what the application did with evidence; it does not replace the economic meaning of that evidence.
 
-Historical US holdings and Quant acquisition lots are reconstructed state. They solve different problems and intentionally use different grains.
+## Household finance and investments share principles, not mechanics
 
-### Presentation authority
+Household finance is principally a ledger/state problem:
 
-Gold datasets are presentation contracts. They summarize and reshape financial state; they do not supersede the canonical evidence that produced it.
+```mermaid
+flowchart LR
+    O["Opening state"]
+    I["Income"]
+    E["Expense"]
+    T["Transfers"]
+    L["Monthly ledger"]
+    W["Net worth"]
 
-## Implementation anchors
+    O --> L
+    I --> L
+    E --> L
+    T --> L
+    L --> W
+```
 
-The finance specifications repeatedly refer to these implementation areas:
+Investment finance adds chronology, market state, lot state, reconciliation, benchmark state, and multi-currency valuation:
+
+```mermaid
+flowchart LR
+    P["Purchases"]
+    S["Sales"]
+    M["Market observations"]
+    F["FX"]
+    L["Lots"]
+    R["Reconstruction"]
+    V["Valuation"]
+    X["Performance / tax evidence"]
+
+    P --> L
+    S --> L
+    L --> R
+    M --> V
+    F --> V
+    R --> V --> X
+```
+
+Both areas obey the same deeper rules: grain is explicit, identity is deterministic where required, missing is not zero, observed and reconstructed values are not silently merged, and financial policy is configuration rather than hidden constants.
+
+## Implementation ownership
+
+The current domain topology mirrors those distinctions:
 
 ```text
-backend/transform/facts.py
-backend/transform/investments.py
-backend/transform/us_stocks_transformer.py
-backend/engines/analytics/
-backend/engines/tax/
-backend/engines/presentation/
-backend/config/financial_rules.py
-backend/load/schema/silver.py
-backend/load/schema/gold.py
-backend/load/registry.py
+src/personal_finance_etl/domain/
+├── common/
+├── household/
+├── investments/
+├── market/
+├── tax/
+├── wealth/
+└── fire/
 ```
 
-The Reference section owns exact physical schemas. Finance owns their meaning, algorithms and boundaries. Duplicating 60-column DDL blocks here would merely make two sources of documentation truth, which is how future archaeology gets invented.
+`domain/` owns financial meaning. Application services sequence use cases. Infrastructure persists and retrieves state. Gold tables present results. That separation matters because a database schema should not accidentally become the place where Tax law or FIFO chronology is defined.
 
-## Core semantic distinctions
+## The first rule: say what a row means
 
-- **Observed** means supplied by an external or configured source.
-- **Canonical** means normalized into the application's stable analytical model.
-- **Reconstructed** means derived deterministically from evidence.
-- **Reconciled** means an explicit event records a discrepancy or adjustment between observed and reconstructed state.
-- **Realized** means an economic disposal has occurred.
-- **Unrealized** means value remains attached to an open position.
-- **Estimated** means a calculation is informative but does not claim statutory or external authority.
-- **Local currency** preserves the instrument's own economics.
-- **INR** is the reporting-currency translation used by the current financial model.
+Financial systems fail surprisingly often because a table has a name but no grain.
 
-The rest of this section is built around keeping those adjectives honest.
+These are different contracts:
+
+```text
+one row per household transaction
+one row per asset subcategory × month
+one row per investment transaction
+one row per instrument × valuation date
+one row per acquisition lot
+one row per realized disposal fragment
+```
+
+If grain changes, joins, aggregation, identity, reconciliation, and BI behavior change with it.
+
+A table with the right columns at the wrong grain is still wrong. It is just wrong in a way that SUM() can make look extremely confident.
+
+## The second rule: separate observation from reconstruction
+
+The investment engine deliberately keeps:
+
+```text
+broker-observed quantity
+reconstructed quantity
+reconciliation delta
+```
+
+as distinct concepts.
+
+Household modeling follows the same philosophy. Transactions are evidence. Monthly balances are reconstructed from opening state plus activity. Market-valued investments can override book-like ledger state for wealth presentation, but that does not rewrite the underlying transaction history.
+
+## The third rule: policy is visible
+
+Financial behavior is governed through validated `FinancialRules`, including household classifications, budget policy, investment policy, Tax assumptions, FIRE assumptions, and macro parameters.
+
+The rule tree is data, not a pile of constants hidden next to calculations.
+
+That gives the model two useful properties:
+
+1. changing policy does not require changing algorithm ownership; and
+2. run provenance can fingerprint the exact policy used.
+
+## The fourth rule: validity survives presentation
+
+The engine distinguishes values that are:
+
+- observed;
+- reconstructed;
+- estimated;
+- unavailable;
+- not computable;
+- zero.
+
+That distinction is especially important for XIRR, FX, Tax estimates, reconciliations, and FIRE outputs.
+
+A dashboard would often prefer a numeric zero. Finance would often prefer the truth.
+
+Finance wins.
+
+## Where to go next
+
+Start with [Financial Model](financial-model.md) if you want the ontology and authority model.
+
+Then follow [Cashflow & Wealth](cashflow-and-wealth.md) to see how household activity becomes monthly state.
+
+Then read [Investment Data Model](investment-data-model.md) before the deeper investment-engine pages. It defines what purchases, sales, market observations, instrument metadata, benchmarks, and currencies actually prove.
 
 ## Related specifications
 
-- [Financial Model](financial-model.md)
-- [Cashflow and Wealth](cashflow-and-wealth.md)
-- [Investment Data Model](investment-data-model.md)
-- [Investment Market Reconstruction](investment-market-reconstruction.md)
-- [FIFO and Realized Events](fifo-and-realized-events.md)
-- [Investment Reconciliation](investment-reconciliation.md)
-- [Investment Performance and Risk](investment-performance-and-risk.md)
-- [Multi-Currency and FX](multi-currency-and-fx.md)
-- [Tax Methodology](tax-methodology.md)
-- [FIRE Methodology](fire-methodology.md)
+- [System Architecture](../architecture/system-architecture.md)
 - [Data Model](../architecture/data-model.md)
-- [Silver Data Contracts](../reference/silver-data-contracts.md)
+- [Data Lifecycle](../architecture/data-lifecycle.md)
+- [Financial Rules Reference](../configuration/financial-rules-reference.md)
+- [Identity & Grain Contracts](../reference/identity-and-grain-contracts.md)

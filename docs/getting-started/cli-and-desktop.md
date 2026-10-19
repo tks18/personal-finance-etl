@@ -1,124 +1,111 @@
 # CLI and Desktop
 
-## Purpose
+Personal Finance ETL has two operating surfaces and one financial engine.
 
-Personal Finance ETL exposes terminal and desktop control surfaces over the same backend facade. This document specifies what each interface actually does, which commands exist, how asynchronous execution is surfaced, and where interface convenience stops and backend authority begins.
+That distinction is the most important thing to understand about the presentation layer:
 
-The core rule is simple:
+> **CLI and Desktop choose how I control the application. They do not select different finance logic.**
 
-> CLI and Desktop choose **how the user controls the application**. They do not choose different financial logic.
-
-## Shared backend
-
-Both interfaces depend on `backend/api/engine.py`:
-
-```python
-class PersonalFinanceEngine:
-    """Unified Facade for the entire Personal Finance Backend."""
-
-    def __init__(self) -> None:
-        self._prefs = PreferencesManager()
-```
-
-The facade owns:
-
-- recent configuration/rules paths;
-- configuration loading checks;
-- asynchronous pipeline execution;
-- coordinated snapshots;
-- coordinated restores.
+Both surfaces terminate in `PersonalFinanceEngine`, which exposes configuration, pipeline execution, snapshot, restore, and preference-facing workflows to presentation code.
 
 ```mermaid
 flowchart TB
-    CLI[Rich CLI] --> E[PersonalFinanceEngine]
-    GUI[CustomTkinter Desktop] --> E
-    E --> P[Multiprocessing ETL]
-    E --> B[SystemBackupManager]
-    E --> PREF[PreferencesManager]
+    CLI["Rich CLI"]
+    GUI["DesktopApp"]
+    ENGINE["PersonalFinanceEngine"]
+    PIPE["Pipeline orchestration"]
+    BACKUP["SystemBackupManager"]
+    PREF["PreferencesManager"]
+
+    CLI --> ENGINE
+    GUI --> ENGINE
+    ENGINE --> PIPE
+    ENGINE --> BACKUP
+    ENGINE --> PREF
 ```
 
-## Launcher behavior
+## The launcher contract
 
-`shan-fin` maps to `personal_finance_etl.frontend.launcher:main`.
+The canonical launcher is `presentation.launcher:main`.
 
-The launcher defines two subcommands:
+Its parser defines:
 
-```text
-cli
-    terminal interface
-
-tkinter
-    desktop interface
+```python
+cli_parser = subparsers.add_parser("cli", help="Launch the terminal CLI")
+cli_parser.add_argument("--config", type=str, help="Path to config.toml", default=None)
+cli_parser.add_argument("--rules", type=str, help="Path to rules.toml", default=None)
+cli_parser.add_argument("--snapshot", action="store_true", ...)
+cli_parser.add_argument("--restore", type=str, ...)
+cli_parser.add_argument("--auto", action="store_true", ...)
+cli_parser.add_argument("--cron", action="store_true", ...)
+cli_parser.add_argument("--docs", action="store_true", ...)
 ```
 
-If no subcommand is supplied, the launcher defaults to the desktop application.
+Source: `src/personal_finance_etl/presentation/launcher.py`
 
-| Command | Result |
-|---|---|
-| `shan-fin` | desktop |
-| `shan-fin tkinter` | desktop |
-| `shan-fin-gui` | desktop directly |
-| `shan-fin cli` | terminal CLI |
+No subcommand defaults to the Desktop application.
 
-## CLI arguments
+## Entry-point matrix
 
-The actual launcher contract is:
+| Command | Behavior |
+| --- | --- |
+| `shan-fin` | Desktop |
+| `shan-fin tkinter` | Desktop |
+| `shan-fin-gui` | Desktop directly |
+| `shan-fin cli` | Rich terminal CLI |
+| `shan-fin cli --docs` | open integrated documentation |
 
-```text
-shan-fin cli [--config PATH]
-             [--rules PATH]
-             [--snapshot]
-             [--restore BACKUP_ZIP]
-             [--auto]
-             [--cron]
-             [--docs]
+The installed scripts are declared in `pyproject.toml`.
+
+## CLI operating modes
+
+The CLI supports several distinct workflows.
+
+### Interactive pipeline run
+
+```bash
+shan-fin cli --config path/to/config.toml --rules path/to/rules.toml
 ```
 
-### `--config`
+The CLI can prompt for configuration/rules and retain recent selections.
 
-Path to the runtime Settings TOML.
+### Automatic run
 
-### `--rules`
+```bash
+shan-fin cli --config ... --rules ... --auto
+```
 
-Path to the FinancialRules TOML.
+`--auto` skips the explicit ignite confirmation.
 
-### `--auto`
+It does **not** make invalid configuration acceptable.
 
-Bypasses the interactive “ignite pipeline” confirmation. It does not imply that missing configuration/rules paths can be ignored; the CLI still needs those inputs and can prompt for them.
+### Unattended / cron-style run
 
-### `--cron`
+```bash
+shan-fin cli --config ... --rules ... --cron
+```
 
-Sets unattended mode and implies `--auto`. After the pipeline completes, the CLI exits instead of presenting the restart menu.
+`--cron` implies automatic execution and exits after completion rather than entering the interactive restart menu.
 
-### `--docs`
+### Snapshot
 
-Opens the integrated documentation/guides window and exits without running ETL.
+```bash
+shan-fin cli --config path/to/config.toml --snapshot
+```
+
+### Restore
+
+```bash
+shan-fin cli --config path/to/config.toml --restore path/to/backup.zip
+```
+
+### Documentation portal
 
 ```bash
 shan-fin cli --docs
 ```
 
-### `--snapshot`
-
-Creates a coordinated database snapshot using the selected config.
-
-```bash
-shan-fin cli --config "C:/path/config.toml" --snapshot
-```
-
-If `--config` is omitted, the CLI prompts for a recent/new config path.
-
-### `--restore`
-
-Restores a backup ZIP using the selected config to locate the target database pair.
-
-```bash
-shan-fin cli --config "C:/path/config.toml" --restore "C:/path/snapshot.zip"
-```
-
-The CLI displays an overwrite warning and requires confirmation. Restore permission errors are surfaced separately from generic restore failures.
-
-## Interactive CLI lifecycle
+## Interactive lifecycle
 
 ```mermaid
 stateDiagram-v2
@@ -126,7 +113,7 @@ stateDiagram-v2
     SelectConfig --> SelectRules
     SelectRules --> Confirm
     Confirm --> Running: approved / auto
-    Confirm --> [*]: aborted
+    Confirm --> [*]: abort
     Running --> Complete
     Complete --> RestartSame
     Complete --> RestartNew
@@ -135,184 +122,217 @@ stateDiagram-v2
     RestartNew --> SelectConfig
 ```
 
-After a non-cron run, the CLI offers:
+Interface state is not pipeline state.
 
-1. restart with previous configuration;
-2. restart with new configuration;
-3. exit.
+Each pipeline execution receives its own operational run lifecycle regardless of whether the UI reused the same configuration.
 
-This is interface state only. Each pipeline execution still receives a new operational run identity.
+## Asynchronous execution
 
-## Status transport
-
-`PersonalFinanceEngine.run_pipeline_async()` launches the pipeline in a separate `multiprocessing.Process` and creates a monitoring thread for the status queue.
+The façade exposes:
 
 ```python
-process = multiprocessing.Process(
-    target=process_wrapper,
-    args=(status_queue, config_path, rules_path),
-    daemon=True,
-)
-process.start()
+def run_pipeline_async(
+    self,
+    config_path: str,
+    rules_path: str,
+    on_status: Callable[[EngineStatusMessage], None],
+) -> None:
+    status_queue: multiprocessing.Queue[EngineStatusMessage] = multiprocessing.Queue()
+    process = WorkerPoolCoordinator.spawn_process(status_queue, config_path, rules_path)
+    WorkerPoolCoordinator.monitor_queue(process, status_queue, on_status)
 ```
 
-The monitor converts legacy tuple statuses when necessary and invokes the interface callback with `EngineStatus` objects.
+Source: `src/personal_finance_etl/application/facade.py`
+
+The presentation surface does not run the heavy ETL directly in its event loop.
 
 ```mermaid
 sequenceDiagram
-    participant UI as CLI / Desktop
-    participant E as Engine
-    participant P as ETL Process
-    participant Q as Status Queue
-    UI->>E: run_pipeline_async
-    E->>P: spawn process
-    P->>Q: EngineStatus
-    E->>Q: poll
-    E-->>UI: on_status(status)
-    P-->>E: exit code
-    E-->>UI: clean / abnormal completion
+    participant UI as CLI/Desktop
+    participant E as PersonalFinanceEngine
+    participant W as WorkerPoolCoordinator
+    participant P as ETL process
+    participant Q as status queue
+
+    UI->>E: run_pipeline_async(...)
+    E->>W: spawn_process(...)
+    W->>P: create worker process
+    P->>Q: EngineStatusMessage
+    W->>Q: monitor
+    W-->>UI: callback(status)
 ```
 
-This keeps the UI responsive while the ETL performs CPU/database work in another process.
+That separation matters most for Desktop responsiveness and process isolation.
 
-## CLI status rendering
+## Typed status messages
 
-The Rich CLI maps `LogLevel` to distinct presentation styles and updates a 0–100% progress bar from backend progress values in the 0.0–1.0 range.
+Presentation does not need to infer machine state from arbitrary strings.
 
-Completion is recognized from backend lifecycle messages such as:
+Status crosses the boundary through `EngineStatusMessage` and logging/status contracts.
+
+The UI can still render human-friendly messages, but machine meaning remains structured.
+
+This is the same principle used throughout the system: logs explain state; typed contracts carry state.
+
+## Desktop responsibilities
+
+The Desktop application owns human interaction:
+
+- configuration/rules selection;
+- running the pipeline;
+- progress/status rendering;
+- snapshot/restore actions;
+- integrated docs access;
+- tabs/widgets/theme behavior.
+
+It does not own:
+
+- FIFO;
+- Tax logic;
+- FIRE simulation;
+- warehouse publication;
+- recovery semantics.
+
+A visually convenient place to put logic is still the wrong place if it changes financial meaning.
+
+## Preferences are not financial configuration
+
+Recent config/rules paths are persisted through `PreferencesManager`.
+
+That is convenience state.
+
+It is intentionally separate from:
 
 ```text
-Process completed cleanly.
-Process exited abnormally.
+Settings
+    runtime topology
+
+FinancialRules
+    financial policy
 ```
 
-or a critical pipeline failure status.
+A recently opened file path should not become part of the financial model merely because the UI remembers it.
 
-The CLI also catches `KeyboardInterrupt` while waiting and exits with a non-zero status.
+## Snapshot behavior
 
-## Desktop application
-
-The desktop UI is implemented in `frontend/desktop/app.py` using CustomTkinter.
-
-Its main control surface includes:
-
-- Pipeline Config selector;
-- Financial Rules selector;
-- Run Pipeline button;
-- Snapshot DB button;
-- Restore DB button;
-- Guides & About button;
-- status/log panel.
-
-```mermaid
-flowchart TB
-    H[Desktop header]
-    H --> C[Pipeline Config]
-    H --> R[Financial Rules]
-    H --> RUN[Run Pipeline]
-    H --> S[Snapshot DB]
-    H --> REST[Restore DB]
-    H --> DOC[Guides & About]
-    RUN --> E[PersonalFinanceEngine]
-    S --> E
-    REST --> E
-```
-
-## Recent paths and preferences
-
-`PreferencesManager` stores recent config/rules paths under the user application-data directory:
-
-```text
-PersonalFinanceETL/prefs.json
-```
-
-On Windows, the base is `%APPDATA%`; when `APPDATA` is unavailable, the implementation falls back to the user home directory.
-
-Only existing recent paths are returned. Each list is capped at ten entries.
-
-This preference file is convenience state, not financial evidence or pipeline provenance.
-
-## Desktop configuration selection
-
-When a config path is selected, the desktop calls `engine.validate_config(path)`. The current facade implementation tests whether `Settings.from_toml(path)` succeeds; the full path-existence validation still occurs in the pipeline lifecycle.
-
-That nuance matters: the desktop’s early selection check is not equivalent to the full `Settings.validate_config()` run-readiness gate.
-
-## Snapshot and restore
-
-Both CLI and Desktop call the same backend methods:
+`PersonalFinanceEngine.snapshot_database_detailed()` loads `Settings`, constructs `SystemBackupManager`, and creates a coordinated snapshot for the configured DuckDB/SQLite pair.
 
 ```python
-def snapshot_database(self, config_path: str) -> str | None:
-    ...
-
-def restore_database(self, config_path: str, backup_zip_path: str) -> bool:
-    ...
+backup_mgr = SystemBackupManager(
+    cfg.TARGET_DB_BASE_PATH,
+    sqlite_db_name=cfg.RAW_DOCUMENT_STORE_NAME,
+    duckdb_name=cfg.TARGET_DB_NAME,
+)
+return backup_mgr.create_snapshot()
 ```
 
-The backend constructs `SystemBackupManager` from:
+Source: `src/personal_finance_etl/application/facade.py`
 
-- `TARGET_DB_BASE_PATH`;
-- `RAW_DOCUMENT_STORE_NAME`;
-- `TARGET_DB_NAME`.
+The presentation layer receives typed `SnapshotResult` / `SnapshotOutcome` semantics rather than implementing backup logic itself.
 
-The detailed locking/checkpoint/archive/rollback protocol is intentionally documented in [Backup and Restore](../architecture/backup-and-restore.md), not duplicated here.
+## Restore behavior
+
+Restore follows the same boundary.
+
+The façade returns a typed `RestoreResult` containing:
+
+- outcome;
+- active database state;
+- error message where relevant.
+
+If the active database files are in use, the compatibility wrapper raises `PermissionError` so the interface can surface a specific operating problem.
+
+Restore semantics are specified in [Backup and Restore](../architecture/backup-and-restore.md).
 
 ## Integrated documentation
 
-Both interface families can open the shared documentation renderer:
+The application ships the docs tree and uses a manifest-driven catalog.
 
-- CLI: `shan-fin cli --docs`;
-- Desktop: **Guides & About**.
+The docs presentation layer separates:
 
-The renderer is a frontend concern over the repository documentation manifest. Updating the documentation catalog later therefore requires the manifest to stay synchronized with the actual files.
+```text
+manifest/catalog
+    which documents exist and in what order
+
+renderer
+    Markdown/HTML conversion
+
+guides window
+    user-facing navigation
+```
+
+That means the docs portal is not a hard-coded list of filenames living inside a window class.
+
+The documentation itself behaves like a product surface with its own catalog contract.
 
 ## Choosing an interface
 
-| Need | Recommended surface |
-|---|---|
-| first exploratory run | Desktop or interactive CLI |
-| terminal visibility and logs | CLI |
-| scheduled/unattended execution | CLI `--cron` |
-| confirmation-free manual run | CLI `--auto` |
-| visual file selection | Desktop |
-| snapshot/restore | either |
-| integrated docs | either |
+Use the **CLI** when:
 
-There is no financial-accuracy advantage to one interface. Both ultimately invoke the same backend pipeline.
+- automating runs;
+- profiling;
+- diagnosing logs;
+- scripting snapshots;
+- running unattended;
+- preferring terminal workflows.
+
+Use **Desktop** when:
+
+- selecting files interactively;
+- watching status visually;
+- browsing docs inside the application;
+- operating the tool as a local desktop product.
+
+Use **synchronous engine execution** from developer/test contexts when profiling or deterministic in-process execution is useful.
+
+The financial outputs should not depend on which control surface started the run.
 
 ## Failure behavior
 
-### Child process exits abnormally
-
-The engine monitor emits:
+Presentation should distinguish at least:
 
 ```text
-Process exited abnormally.
+configuration validation failure
+pipeline failure
+abnormal worker process exit
+snapshot failure
+restore validation failure
+restore install failure
+permission/in-use failure
 ```
 
-when the child process terminates with a non-zero exit code and a natural terminal status was not sufficient.
+Do not collapse those into one “Something went wrong” modal if the backend already knows exactly what happened.
 
-### UI callback/status failure
+Useful systems preserve information all the way to the person who needs to act on it.
 
-The queue-monitor thread is defensive around queue timeouts and callback transport. Operational failure provenance still belongs to the pipeline/Control Plane rather than the UI widget tree.
+## The interface boundary
 
-### Snapshot returns `None`
+The final mental model is simple:
 
-The facade intentionally collapses snapshot exceptions to `None` for the UI. The CLI reports that the snapshot failed or the database does not yet exist.
+```text
+presentation
+    asks
 
-### Restore permission failure
+application façade
+    coordinates
 
-`PermissionError` is deliberately re-raised by the backend facade so interfaces can show a meaningful filesystem/lock error.
+domain / infrastructure
+    decide and perform
 
-## Interface boundary
+presentation
+    renders the result
+```
 
-The interfaces should not acquire financial logic. Classification, FIFO, tax, FIRE, contracts and recovery semantics belong to backend modules. A UI that starts recomputing finance independently would create two financial systems with matching buttons, which is a remarkably efficient way to ruin reconciliation.
+That closes the operational journey. Once a reader can install, configure, run, recover, and explore the system, the next useful question is no longer operational.
+
+It is contextual:
+
+> **Why does this project exist, and what kind of engineering did it become?**
+
+That is the purpose of the [About](../about/README.md) section.
 
 ## Related specifications
 
-- [Quick Start](quick-start.md)
-- [System Architecture](../architecture/system-architecture.md)
-- [Configuration Reference](../configuration/configuration-reference.md)
+- [Application and Dependency Architecture](../architecture/application-and-dependency-architecture.md)
 - [Backup and Restore](../architecture/backup-and-restore.md)
-- [Testing and Validation](../developer/testing-and-validation.md)
+- [Tooling, Quality and Release Engineering](../developer/tooling-quality-and-release-engineering.md)

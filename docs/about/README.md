@@ -1,78 +1,106 @@
-# About Personal Finance ETL
+# About
 
-The About section explains the part of Personal Finance ETL that source code cannot express by itself: **why the project exists, how it evolved, and what kind of engineering journey produced it**.
+The technical documentation explains **how** Personal Finance ETL works.
 
-The technical documentation deliberately speaks in a system-centered voice. This section is different. `project.md` and `about-me.md` use first person where ownership, motivation, and professional progression are the subject.
+This section explains **why it exists, how it became this kind of system, and what the project says about the way I approach finance and engineering**.
+
+That distinction matters.
+
+A project history should not become a second architecture manual, and an “about me” page should not become a résumé written in Markdown with unusually high Mermaid density.
+
+## Two stories, one project
 
 ```mermaid
 flowchart LR
-    WHY["Why the project exists"] --> PROJECT["Project Evolution"]
-    WHO["Who built it"] --> ME["About Me"]
-    PROJECT --> NOW["Current engineering system"]
-    ME --> NOW
-    NOW --> ROADMAP["Roadmap<br/>protect · validate · maintain"]
+    PERSON["My progression\nfinance + software + data"]
+    PROJECT["Project progression\nevidence + architecture + financial models"]
+    CONVERGE["Finance × engineering"]
+
+    PERSON --> CONVERGE
+    PROJECT --> CONVERGE
 ```
 
+Start with whichever question is more interesting.
 
-## Prefer the guided story?
+### Who built this, and why this combination of skills?
 
-The Wiki opens with **[Why This Exists](https://github.com/tks18/personal-finance-etl/wiki/01-Why-This-Exists)** and closes with **[Project Journey & What's Next](https://github.com/tks18/personal-finance-etl/wiki/16-Project-Journey-and-Whats-Next)**. Those pages teach the project's evolution as a narrative; the About documents here preserve the deeper project and creator context.
+Read [About Me](about-me.md).
 
-## Start here
+### How did the project itself evolve?
 
-| Document | Question it answers |
-|---|---|
-| [Project](project.md) | How did a personal finance workflow grow into the current financial data platform? |
-| [About Me](about-me.md) | What finance and engineering path shaped the way the system is built? |
-| [Roadmap](../roadmap.md) | What remains worth doing now that feature development is intentionally quiet? |
+Read [Project](project.md).
 
-## This section is not the technical specification
+## This section is not implementation authority
 
-The About pages intentionally avoid reproducing the implementation manuals.
-
-For implementation detail, use:
+Canonical technical truth still lives in:
 
 ```text
-Architecture   → how the system is constructed
-Reference      → exact physical contracts
-Finance        → financial semantics and algorithms
-Configuration  → runtime and policy controls
-Developer      → safe extension workflows
-Getting Started→ how to install and operate it
+/docs
+    deep technical specification
+
+code
+    implementation authority
+
+Wiki
+    guided conceptual teaching
 ```
 
-The About section instead provides the narrative context that connects those pieces.
+The About section may explain motivation and evolution, but it should not be used to infer current schema counts, lifecycle states, or financial formulas.
+
+Those belong in the technical reference.
 
 ## The project in one sentence
 
-Personal Finance ETL began as a way to understand and close personal finances reliably and gradually became a **local-first financial evidence, reconstruction, analytics, tax-preparation, and planning system** because each solved problem exposed the next missing layer.
+Personal Finance ETL is my local-first financial data engineering and quantitative decision-support platform for turning fragmented personal financial evidence into **reconciled, explainable, reproducible analytical state**.
 
-That evolution matters. The current architecture was not created to imitate an enterprise platform at home. It accumulated because real financial workflows kept asking harder questions.
+The interesting word is not “ETL.”
 
-```mermaid
-flowchart LR
-    FILES["Statements & files"] --> ETL["Repeatable ETL"]
-    ETL --> WH["Canonical warehouse"]
-    WH --> PROV["Provenance & Control Plane"]
-    PROV --> QUANT["Deterministic investment reconstruction"]
-    QUANT --> TAX["Tax evidence"]
-    TAX --> FIRE["Wealth & FIRE planning"]
-    FIRE --> MATURITY["QA · documentation · maintenance"]
-```
+It is **reconciled**.
+
+The system became much more than file ingestion because personal finance is full of situations where multiple sources can be individually plausible and collectively inconsistent.
+
+That is where the project’s real engineering identity emerged.
+
+## The through-line
+
+Across both pages, one idea keeps recurring:
+
+> **I care about evidence, boundaries, and explainability more than cleverness for its own sake.**
+
+That shows up in:
+
+- Control Plane history instead of opaque file mutation;
+- canonical grains instead of ambiguous tables;
+- FIFO lots instead of aggregate cost guesses;
+- reconciliation events instead of silently forcing agreement;
+- local/base currency separation instead of flattening FX away;
+- Tax evidence instead of pretending to be statutory filing software;
+- stochastic FIRE models that preserve assumptions instead of presenting one future as fact;
+- typed failure states instead of reading meaning from log strings;
+- documentation as a maintained engineering surface.
 
 ## A note on tone
 
-The technical docs are deliberately rigorous, but the repository is still a personal engineering project rather than a compliance manual that accidentally learned Markdown.
+This project is serious about financial correctness, but the documentation does not need to sound like it was written by a committee trapped in a beige conference room.
 
-A little character is allowed.
+The personality is intentional.
 
 The rule is simple:
 
-> **The joke may help explain the engineering. It may not replace the engineering.**
+> **The joke can decorate the explanation. It cannot replace the explanation.**
+
+## Where the About story hands off
+
+The About pages end at the present system.
+
+The next question is:
+
+> **If the architecture is stable and capability is no longer the bottleneck, what kinds of future changes are actually worth making?**
+
+That is the role of the [Roadmap](../roadmap.md).
 
 ## Related specifications
 
 - [System Architecture](../architecture/system-architecture.md)
 - [Financial Model](../finance/financial-model.md)
-- [Development Guide](../developer/development-guide.md)
 - [Roadmap](../roadmap.md)

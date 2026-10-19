@@ -1,325 +1,443 @@
 # Financial Rules Reference
 
-## Purpose
+A finance engine can hard-code policy into algorithms, or it can admit that policy changes.
 
-`backend/config/financial_rules.py` defines the semantic configuration model for Personal Finance ETL. These rules classify household evidence, identify asset behavior, normalize investment sources, control tax interpretation, provide macro fallbacks, set portfolio targets, and feed wealth/FIRE analytics. Unlike `Settings`, these values can change the *meaning* of financial outputs.
+This project chooses the second path.
+
+`FinancialRules` separates **financial interpretation** from the algorithms that apply that interpretation. The distinction lets category mappings, statutory assumptions, budget targets, portfolio thresholds, and planning assumptions evolve without scattering magic numbers and UID lists across domain modules.
+
+But configurability creates a new responsibility:
+
+> **A rule must be typed, validated where possible, traceable to its consumer, and auditable after execution.**
+
+Otherwise “configuration-driven” becomes a polite way of saying “the business logic moved into a TOML file and nobody knows who owns it now.”
+
+## The rule path
 
 ```mermaid
-flowchart TB
-    TOML[financial_rules.toml] --> FR[FinancialRules]
-    FR --> DIM[Dimensions + classification]
-    FR --> FACT[Canonical facts]
-    FR --> QUANT[Investment Quant]
-    FR --> TAX[Tax Engine]
-    FR --> BUDGET[Budget / cashflow]
-    FR --> PORT[Portfolio analytics]
-    FR --> FIRE[FIRE / Monte Carlo]
-    FR --> SNAP[Control Plane rules snapshot]
+flowchart LR
+    TOML["financial_rules.toml"] --> LOAD["FinancialRules.from_toml"]
+    LOAD --> MODEL["Pydantic policy graph"]
+    MODEL --> HOUSE["Household"]
+    MODEL --> INV["Investments"]
+    MODEL --> TAX["Tax"]
+    MODEL --> FIRE["FIRE / planning"]
+    MODEL --> AUDIT["Rule snapshots / audit rows"]
 ```
 
-## Source authority and load behavior
+The root model is the typed junction between configuration and domain behavior.
 
-- Model: `backend/config/financial_rules.py::FinancialRules`
-- Loader: `FinancialRules.from_toml()`
-- Dynamic audit projection: `FinancialRules.export_to_db_records()`
-- Source-aware exclusion validation: `validate_investment_exclusion_uids()`
+## Source authority
 
-Unlike `Settings.from_toml()`, `FinancialRules.from_toml()` is fail-closed: a missing/empty path raises `FileNotFoundError`. Financial semantics are not optional runtime decoration.
+The policy model is decomposed across:
+
+```text
+src/personal_finance_etl/config/financial_rules/
+├── model.py
+├── household.py
+├── investments.py
+├── tax.py
+└── fire.py
+```
+
+The decomposition is semantic:
+
+- household classification and budgeting;
+- investment instrument and portfolio policy;
+- statutory Tax policy;
+- macro, FIRE, stochastic, and CMA assumptions;
+- root composition and cross-data validation.
+
+## The top-level contract
 
 ```python
+# src/personal_finance_etl/config/financial_rules/model.py
 class FinancialRules(BaseModel):
-    income: IncomeRules = Field(default_factory=lambda: IncomeRules())
-    expense: ExpenseRules = Field(default_factory=lambda: ExpenseRules())
-    assets: AssetRules = Field(default_factory=lambda: AssetRules())
+    income: IncomeRules = Field(default_factory=IncomeRules)
+    expense: ExpenseRules = Field(default_factory=ExpenseRules)
+    assets: AssetRules = Field(default_factory=AssetRules)
     investments: dict[str, InvestmentInstrumentRules] = Field(default_factory=dict)
     assumptions: AssumptionsRules = Field(...)
     budget: BudgetRules = Field(default_factory=BudgetRules)
     portfolio_management: PortfolioManagementRules = Field(default_factory=PortfolioManagementRules)
 
-    # Transactional rules
     DEFAULT_CURRENCY_ID: str = "INR_INR"
     MF_SCHEME_MAPPINGS: dict[str, str] = Field(default_factory=dict)
 ```
 
-## Top-level contract
+The required field is `assumptions`. Most classification containers have safe empty/default factories so users can opt into policy mappings incrementally.
 
-| Field | Type | Default | Meaning |
-| --- | --- | --- | --- |
-| income | IncomeRules | factory |  |
-| expense | ExpenseRules | factory |  |
-| assets | AssetRules | factory |  |
-| investments | dict[str, InvestmentInstrumentRules] | factory |  |
-| assumptions | AssumptionsRules | ... |  |
-| budget | BudgetRules | factory |  |
-| portfolio_management | PortfolioManagementRules | factory |  |
-| DEFAULT_CURRENCY_ID | str | 'INR_INR' |  |
-| MF_SCHEME_MAPPINGS | dict[str, str] | factory |  |
+That asymmetry is deliberate: a financial run may have no custom active-income UID mapping, but planning/tax/macro assumptions must form a coherent model.
 
+## Loading is strict
 
-The model groups rules by domain rather than by consuming module. That is intentional: one classification may feed several downstream engines.
+Unlike `Settings`, financial rules do not silently become an empty model when the requested file is missing:
 
-## Complete model inventory
+```python
+# src/personal_finance_etl/config/financial_rules/model.py
+@classmethod
+def from_toml(cls, filepath: str | os.PathLike[str]) -> Self:
+    path_str = os.fspath(filepath)
+    if not path_str or not os.path.exists(path_str):
+        raise FileNotFoundError(f"Financial rules config not found at {path_str}")
 
-### `FinancialRules`
-
-| Field | Type | Default | Meaning |
-| --- | --- | --- | --- |
-| income | IncomeRules | factory |  |
-| expense | ExpenseRules | factory |  |
-| assets | AssetRules | factory |  |
-| investments | dict[str, InvestmentInstrumentRules] | factory |  |
-| assumptions | AssumptionsRules | ... |  |
-| budget | BudgetRules | factory |  |
-| portfolio_management | PortfolioManagementRules | factory |  |
-| DEFAULT_CURRENCY_ID | str | 'INR_INR' |  |
-| MF_SCHEME_MAPPINGS | dict[str, str] | factory |  |
-
-
-### `IncomeRules`
-
-| Field | Type | Default | Meaning |
-| --- | --- | --- | --- |
-| active | ActiveIncomeRules | factory |  |
-| dividends | DividendIncomeRules | factory |  |
-| interest | InterestIncomeRules | factory |  |
-| non_cash | NonCashIncomeRules | factory |  |
-
-
-### `BudgetRules`
-
-| Field | Type | Default | Meaning |
-| --- | --- | --- | --- |
-| income_allocation | IncomeAllocationRules | IncomeAllocationRules() |  |
-| alerts | BudgetAlerts | BudgetAlerts() |  |
-| smoothing | BudgetSmoothing | BudgetSmoothing() |  |
-
-
-### `IncomeAllocationRules`
-
-| Field | Type | Default | Meaning |
-| --- | --- | --- | --- |
-| core_expense_pct | float | 0.4 | Max % of smoothed income allocated to core/fixed expenses (40% default). |
-| non_core_expense_pct | float | 0.2 | Max % of smoothed income allocated to non-core/discretionary expenses (20% default). |
-| investment_pct | float | 0.3 | Minimum % of smoothed income to invest/save via net transfers (30% default). |
-
-
-### `BudgetAlerts`
-
-| Field | Type | Default | Meaning |
-| --- | --- | --- | --- |
-| overspend_alert_threshold | float | 0.05 | Fractional overage above budget target that triggers Is_Overspent flags (5% default). |
-| emergency_fund_target_months | int | 6 | Target number of months of core expenses to hold as emergency fund. |
-
-
-### `BudgetSmoothing`
-
-| Field | Type | Default | Meaning |
-| --- | --- | --- | --- |
-| income_smoothing_months | int | 3 | Number of trailing months used for recency-weighted income smoothing. |
-
-
-### `AssetRules`
-
-| Field | Type | Default | Meaning |
-| --- | --- | --- | --- |
-| illiquid | IlliquidAssetRules | factory |  |
-| cashflow | CashflowAssetRules | factory |  |
-| digital | DigitalAssetRules | factory |  |
-
-
-### `CashflowAssetRules`
-
-| Field | Type | Default | Meaning |
-| --- | --- | --- | --- |
-| cash_pools | list[str] | factory |  |
-| non_cash_pnl_sources | list[str] | factory |  |
-| working_capital_conduits | list[str] | factory |  |
-| investing_activities | list[str] | factory |  |
-| financing_liabilities | list[str] | factory |  |
-
-
-### `MacroAssumptions`
-
-| Field | Type | Default | Meaning |
-| --- | --- | --- | --- |
-| default_trading_days | float | ... | Default number of trading days in a year for annualized volatility calculations. |
-| fallback_inflation_rate | float | ... | Fallback annualized inflation rate if historical macro data is unavailable. |
-| fallback_risk_free_rate | float | ... | Fallback annualized risk-free rate if historical macro data is unavailable. |
-| fallback_ordinary_income_rate | float | 0.3 | Fallback ordinary income tax rate (marginal slab) if not found in macro table. |
-
-
-### `TaxAssumptions`
-
-| Field | Type | Default | Meaning |
-| --- | --- | --- | --- |
-| debt_mf_cutoff_date | str | ... | Date before which debt mutual funds have indexation benefits. |
-| harvest_wait_days_threshold | int | ... | Minimum days to wait before re-buying a harvested instrument to avoid wash-sale rules. |
-| ltcg_threshold_months | dict[str, int] | ... | Holding period thresholds in calendar months for Long Term Capital Gains across asset classes. |
-| fallback_equity_ltcg_exemption | float | ... | Annual tax-free exemption limit for equity Long Term Capital Gains. |
-| rates | TaxRates | factory |  |
-| heads_of_income | dict[str, TaxHeadConfig] | factory | Taxable income categories partitioned into heads of income and sub-heads. |
-| residual_income | dict[str, TaxHeadConfig] | factory | Residual taxable income heads and sub-heads (typically for parent category fallbacks). |
-| exempt_income | dict[str, TaxHeadConfig] | factory | Exempt / non-taxable income heads and sub-heads (defaults to non_taxable & exempt). |
-| investment_exclusions | InvestmentExclusionsConfig | factory |  |
-
-
-### `TaxRates`
-
-| Field | Type | Default | Meaning |
-| --- | --- | --- | --- |
-| equity_ltcg | float | 0.125 | LTCG tax rate for listed Indian equity (Section 112A). |
-| equity_stcg | float | 0.2 | STCG tax rate for listed Indian equity (Section 111A). |
-| foreign_equity_ltcg | float | 0.125 | LTCG tax rate for foreign listed equity (US stocks via LRS) — 12.5% post-Budget 2024. |
-| foreign_equity_stcg | float | 0.3 | STCG tax rate for foreign listed equity (US stocks via LRS) — slab rate. |
-| debt_ltcg | float | 0.2 | LTCG tax rate for debt. |
-| debt_stcg | float | 0.3 | STCG tax rate for debt. |
-| gold_ltcg | float | 0.2 | LTCG tax rate for gold. |
-| gold_stcg | float | 0.3 | STCG tax rate for gold. |
-
-
-### `InvestmentExclusionsConfig`
-
-| Field | Type | Default | Meaning |
-| --- | --- | --- | --- |
-| stcg_sub_cat_ids | list[str] | factory |  |
-| ltcg_sub_cat_ids | list[str] | factory |  |
-
-
-### `CMAAssumptions`
-
-| Field | Type | Default | Meaning |
-| --- | --- | --- | --- |
-| expected_real_return | float | 0.05 | Expected real return for long-term forecasting. |
-| fat_tail_multiplier | float | 1.2 | Multiplier to adjust normal volatility for fat tails. |
-
-
-### `PortfolioManagementRules`
-
-| Field | Type | Default | Meaning |
-| --- | --- | --- | --- |
-| rebalance_tolerance_pct_points | float | 5.0 | Threshold (in percentage points) for triggering a rebalance requirement. |
-
-
-The stochastic submodels under `FireAssumptions` and `MonteCarloAssumptions` are specified separately in [FIRE and Simulation Reference](fire-and-simulation-reference.md).
-
-## Income classification
-
-Income rules classify category/subcategory UIDs into active income, dividends, interest and non-cash income. The transformations materialize these semantics into canonical dimensions/facts rather than making every downstream Gold builder repeat UID lists.
-
-```mermaid
-flowchart LR
-    UID[Income category/subcategory UID] --> R{FinancialRules}
-    R --> A[Active income]
-    R --> D[Dividend]
-    R --> I[Interest]
-    R --> N[Non-cash]
-    A --> CAN[Canonical flags]
-    D --> CAN
-    I --> CAN
-    N --> CAN
-    CAN --> WEALTH[Cashflow / wealth]
-    CAN --> TAX[Tax evidence]
+    with open(path_str, "rb") as f:
+        data = tomllib.load(f)
+        return cls.model_validate(data)
 ```
 
-Both category-level and subcategory-level lists are supported. Consumers normalize configured UIDs for matching. Configuration therefore controls classification, while source transactions remain source evidence.
+That protects an important distinction:
+
+```text
+no explicit rules requested
+    ≠
+explicit rules path requested but missing
+```
+
+The first can be a supported application state. The second is configuration failure.
+
+## Policy is injected, not rediscovered
+
+Consumers receive `FinancialRules` directly.
+
+The model is imported across household, investment, market, Tax, wealth, FIRE, application services, Control Plane logging, and Meta publication.
+
+```mermaid
+flowchart TB
+    R["FinancialRules"]
+    R --> H["Household domain"]
+    R --> I["Investment domain"]
+    R --> T["Tax domain"]
+    R --> W["Wealth domain"]
+    R --> F["FIRE domain"]
+    R --> M["Market/macro"]
+    R --> A["Application services"]
+    R --> P["Provenance"]
+```
+
+This is preferable to each subsystem reparsing TOML because there is one validated object graph and one runtime interpretation.
+
+## Household income classification
+
+Income policy is composed of four independent classification buckets:
+
+```python
+# src/personal_finance_etl/config/financial_rules/household.py
+class IncomeRules(BaseModel):
+    active: ActiveIncomeRules = Field(default_factory=ActiveIncomeRules)
+    dividends: DividendIncomeRules = Field(default_factory=DividendIncomeRules)
+    interest: InterestIncomeRules = Field(default_factory=InterestIncomeRules)
+    non_cash: NonCashIncomeRules = Field(default_factory=NonCashIncomeRules)
+```
+
+Each bucket contains:
+
+```text
+category_ids
+sub_category_ids
+```
+
+This allows policy to operate at either classification level.
+
+### Why lists of UIDs belong in configuration
+
+The financial semantics are stable:
+
+```text
+active income
+interest income
+dividend income
+non-cash income
+```
+
+The actual household category/subcategory identifiers are user-specific master data.
+
+Hard-coding those UIDs in `domain/household/income.py` would couple the algorithm to one personal chart of accounts.
+
+The rule model separates the concept from the local identifier vocabulary.
 
 ## Expense classification
 
-`expense.core` identifies core/fixed expenses. This classification feeds household analytics, budget targets, emergency-fund calculations and FIRE spending assumptions. A transaction does not become a different transaction when this list changes; its analytical interpretation changes.
+The current expense policy exposes `core` expense identifiers:
+
+```python
+class ExpenseRules(BaseModel):
+    core: CoreExpenseRules = Field(default_factory=CoreExpenseRules)
+```
+
+Core-vs-non-core classification feeds cashflow, budget, emergency-fund, and FIRE interpretations.
+
+That means a UID moving into or out of `expense.core` can change:
+
+- trailing core spend;
+- emergency-fund targets;
+- FIRE target calculations;
+- budget alerts;
+- savings/runway analytics.
+
+One classification edit can therefore propagate into several downstream metrics without changing a single algorithm.
+
+That is exactly why it belongs in a documented policy contract.
 
 ## Asset semantics
 
-Asset rules distinguish several behavioral roles:
+`AssetRules` separates three distinct ideas:
 
-- **illiquid**: categories/subcategories excluded from liquid-resource interpretations;
-- **cash pools**: liquid stores used in cashflow/liquidity analysis;
-- **non-cash P&L sources**: value changes that should not masquerade as cash movement;
-- **working-capital conduits**: balance-sheet channels such as credit/reimbursement/prepaid flows;
-- **investing activities**: asset movements classified as investing cashflow;
-- **financing liabilities**: debt-like financing flows;
-- **digital assets**: dedicated category classification.
-
-```mermaid
-flowchart TD
-    ASSET[Asset / liability evidence] --> CLASS{Asset rules}
-    CLASS --> CASH[Cash pool]
-    CLASS --> ILLIQ[Illiquid]
-    CLASS --> NCP[Non-cash P&L]
-    CLASS --> WC[Working capital]
-    CLASS --> INV[Investing]
-    CLASS --> FIN[Financing]
-    CLASS --> DIG[Digital]
-    CASH --> CF[Cashflow statement]
-    ILLIQ --> NW[Net worth / liquidity]
-    NCP --> CF
-    WC --> CF
-    INV --> CF
-    FIN --> CF
+```python
+# src/personal_finance_etl/config/financial_rules/household.py
+class AssetRules(BaseModel):
+    illiquid: IlliquidAssetRules = Field(default_factory=IlliquidAssetRules)
+    cashflow: CashflowAssetRules = Field(default_factory=CashflowAssetRules)
+    digital: DigitalAssetRules = Field(default_factory=DigitalAssetRules)
 ```
 
-These lists encode accounting/analytical behavior. Overlapping or poorly chosen classifications can therefore alter cashflow presentation even when raw balances are unchanged.
+### Illiquid assets
 
-## Investment mappings and transaction normalization
+`category_ids` and `sub_category_ids` identify assets whose liquidity treatment differs from cash-like holdings.
 
-`investments` is a dictionary of named `InvestmentInstrumentRules`, each with category/subcategory UID lists. `DEFAULT_CURRENCY_ID` supplies the default reporting/source currency where transformations require a fallback. `MF_SCHEME_MAPPINGS` normalizes known mutual-fund scheme-name variants before canonical instrument matching.
+### Digital assets
+
+`category_ids` provide a dedicated classification surface for digital/crypto-style assets.
+
+### Cashflow conduits
+
+The cashflow policy is richer:
+
+```python
+class CashflowAssetRules(BaseModel):
+    cash_pools: list[str] = Field(default_factory=list)
+    non_cash_pnl_sources: list[str] = Field(default_factory=list)
+    working_capital_conduits: list[str] = Field(default_factory=list)
+    investing_activities: list[str] = Field(default_factory=list)
+    financing_liabilities: list[str] = Field(default_factory=list)
+```
+
+These lists drive statement-like cashflow interpretation.
+
+An account can be economically different depending on whether it behaves as:
+
+- spendable cash;
+- a non-cash P&L source;
+- working-capital conduit;
+- investing activity;
+- financing liability.
+
+The classification is not merely reporting cosmetics. It changes how movement is interpreted.
+
+## Budget policy
+
+Budgeting is split into allocation, alert, and smoothing rules.
+
+### Income allocation
+
+```python
+class IncomeAllocationRules(BaseModel):
+    core_expense_pct: float = Field(default=0.40, ...)
+    non_core_expense_pct: float = Field(default=0.20, ...)
+    investment_pct: float = Field(default=0.30, ...)
+```
+
+The remainder is an implicit buffer rather than another stored field.
+
+For the defaults:
+
+\[
+1 - 0.40 - 0.20 - 0.30 = 0.10
+\]
+
+The model does not currently enforce that the three explicit percentages sum to at most one. That is therefore a **semantic expectation**, not a Pydantic guarantee.
+
+Do not document unenforced invariants as validation behavior.
+
+### Alerts
+
+```text
+overspend_alert_threshold
+emergency_fund_target_months
+```
+
+The first determines when over-budget behavior is flagged. The second links core-expense classification to emergency-fund analytics.
+
+### Smoothing
+
+```text
+income_smoothing_months
+```
+
+controls the trailing smoothing horizon used by household budgeting logic.
+
+This makes budget policy a useful example of three configuration kinds living under one domain concept:
 
 ```mermaid
 flowchart LR
-    RAW[Vendor instrument / scheme] --> MAP[MF_SCHEME_MAPPINGS]
-    MAP --> MASTER[Canonical instrument]
-    CUR[DEFAULT_CURRENCY_ID] --> TX[Canonical purchase/sale/market rows]
-    MASTER --> TX
+    INC["Income history"] --> SMOOTH["Smoothing horizon"]
+    SMOOTH --> BASE["Smoothed income"]
+    BASE --> ALLOC["Allocation percentages"]
+    ALLOC --> TARGETS["Budget targets"]
+    TARGETS --> ALERT["Overspend threshold"]
 ```
 
-Scheme mapping is normalization, not fuzzy inference. Explicit aliases are preferable to hoping punctuation differences develop telepathy.
+## Investment instrument classification
 
-## Macro assumptions
+Investment mappings are dynamic by key:
 
-`MacroAssumptions` provides fallback values when historical macro evidence cannot supply a value required by an engine:
-
-- annual trading days for annualization;
-- fallback inflation;
-- fallback risk-free rate;
-- fallback ordinary-income tax rate.
-
-Fallbacks are not observations. Documentation and analytics should preserve that semantic distinction.
-
-## Budget rules
-
-Budget configuration combines allocation targets, alert thresholds and income smoothing.
-
-```mermaid
-flowchart LR
-    INCOME[Smoothed income] --> CORE[Core expense target]
-    INCOME --> NON[Non-core target]
-    INCOME --> INVEST[Investment target]
-    ACTUAL[Actual activity] --> COMP[Budget comparison]
-    CORE --> COMP
-    NON --> COMP
-    INVEST --> COMP
-    ALERT[Overspend threshold] --> COMP
+```python
+investments: dict[str, InvestmentInstrumentRules] = Field(default_factory=dict)
 ```
 
-`income_smoothing_months` controls the trailing horizon used by budget logic. The percentage fields are configuration inputs; the reference does not invent a validation constraint that the current Pydantic model does not enforce. In particular, the model does not currently enforce that allocation percentages sum to one. That is a configuration responsibility, not a hidden guarantee.
+Each named instrument group can supply category and subcategory identifiers.
+
+This supports local classification vocabularies without hard-coding “stocks”, “mutual funds”, “ETF”, or similar buckets into one fixed model schema.
+
+The algorithms remain responsible for investment behavior. The rules say which local master-data identifiers belong to each configured instrument grouping.
+
+## Mutual-fund scheme mappings
+
+`MF_SCHEME_MAPPINGS` maps source scheme names to canonical scheme names.
+
+This is a normalization policy surface.
+
+It exists because vendor naming can drift while the economic instrument remains the same.
+
+The mapping should therefore be interpreted as **name normalization**, not as proof that two unrelated instruments are economically interchangeable.
+
+A mapping edit can affect downstream joins and instrument continuity, so it deserves the same source-control discipline as code.
+
+## Default currency
+
+`DEFAULT_CURRENCY_ID` defaults to:
+
+```text
+INR_INR
+```
+
+This is a fallback/default identifier, not permission to erase explicit source currency.
+
+Multi-currency domains still preserve transaction/local/base currency semantics where the model requires them.
+
+Defaults should resolve missing policy, not overwrite observed evidence.
 
 ## Portfolio management
 
-`rebalance_tolerance_pct_points` is converted from percentage points to a fractional tolerance by investment presentation analytics. Target allocations live under `assumptions.target_allocations`. Together they support target-versus-actual allocation and rebalance flags.
-
-## Tax configuration
-
-Tax rules are the most validation-heavy deterministic part of `FinancialRules`.
-
-### Heads and sub-heads
-
-Each `TaxSubHeadConfig` can map category IDs, income subcategory IDs and tax-credit subcategory IDs to a display name, taxability and tax method. Allowed enums are:
-
-- taxability: `taxable`, `non_taxable`, `review`;
-- tax method: `ordinary_rate`, `capital_gains`, `exempt`, `review`.
-
-### Local validator
+The current portfolio policy has one explicit threshold:
 
 ```python
+# src/personal_finance_etl/config/financial_rules/investments.py
+class PortfolioManagementRules(BaseModel):
+    rebalance_tolerance_pct_points: float = Field(
+        default=5.0,
+        description="Threshold (in percentage points) for triggering a rebalance requirement.",
+    )
+```
+
+The unit is **percentage points**, not a decimal ratio.
+
+That wording matters.
+
+A configured `5.0` means a five-percentage-point drift threshold, not `500%` and not `5% of the target weight`.
+
+Units are part of configuration semantics.
+
+## Macro assumptions
+
+`MacroAssumptions` provides four fallbacks:
+
+| Field | Meaning |
+| --- | --- |
+| `default_trading_days` | annualization basis for volatility-style calculations |
+| `fallback_inflation_rate` | inflation used when historical macro evidence is unavailable |
+| `fallback_risk_free_rate` | risk-free fallback |
+| `fallback_ordinary_income_rate` | ordinary-income fallback rate |
+
+These are fallbacks, not replacements for observed macro data.
+
+For example, inflation construction uses historical macro data where available and fills missing observations with the configured fallback:
+
+```python
+# src/personal_finance_etl/domain/fire/inflation.py
+.with_columns(
+    pl.col("Inflation_Rate")
+    .fill_null(self.rules.assumptions.macro.fallback_inflation_rate)
+    .alias("INFLATION_YOY_PCT")
+)
+```
+
+That is an important semantic pattern:
+
+```text
+observed evidence if available
+        ↓
+fallback policy only when missing
+```
+
+Configuration should not bulldoze evidence merely because a default exists.
+
+## Tax policy is the most strongly validated subtree
+
+Tax configuration carries statutory interpretation, so it has the richest validation logic.
+
+The subtree includes:
+
+- holding-period thresholds;
+- debt-fund cutoff date;
+- harvesting wait threshold;
+- equity LTCG exemption fallback;
+- asset-class Tax rates;
+- taxable/non-taxable/review classification;
+- ordinary/capital-gains/exempt/review methods;
+- head/sub-head mappings;
+- Tax-credit category mappings;
+- investment exclusions.
+
+```mermaid
+flowchart TB
+    TAX["TaxAssumptions"]
+    TAX --> RATE["TaxRates"]
+    TAX --> HOLD["ltcg_threshold_months"]
+    TAX --> HEAD["heads_of_income"]
+    TAX --> EXEMPT["exempt_income"]
+    TAX --> RESID["residual_income"]
+    TAX --> EXCL["investment_exclusions"]
+```
+
+## Tax rates
+
+The current rate model contains:
+
+```text
+equity_ltcg
+equity_stcg
+foreign_equity_ltcg
+foreign_equity_stcg
+debt_ltcg
+debt_stcg
+gold_ltcg
+gold_stcg
+```
+
+These fields are policy assumptions consumed by Tax/investment logic. Documentation should describe them as configured statutory assumptions, not guarantees that every personal Tax circumstance is fully modeled.
+
+Indicative estimates remain indicative.
+
+## Taxability and method are explicit vocabularies
+
+Two literals constrain classification:
+
+```python
+TaxabilityType = Literal["taxable", "non_taxable", "review"]
+TaxMethodType = Literal["ordinary_rate", "capital_gains", "exempt", "review"]
+```
+
+The `review` state is important.
+
+Unclassified/ambiguous evidence should be able to remain visible as requiring review rather than being forced into a confident Tax answer.
+
+That is a healthier financial model than “unknown means taxable at some random default.”
+
+## A Tax sub-head is a structured policy contract
+
+```python
+# src/personal_finance_etl/config/financial_rules/tax.py
 class TaxSubHeadConfig(BaseModel):
     tax_head_display_name: str
     sub_head_display_name: str
@@ -328,166 +446,276 @@ class TaxSubHeadConfig(BaseModel):
     tax_credit_sub_cat_ids: list[str] = Field(default_factory=list)
     taxability: TaxabilityType = "review"
     tax_method: TaxMethodType = "review"
-
-    @model_validator(mode="after")
-    def validate_tax_credit_ids(self) -> Self:
-        income_ids = set(self.sub_cat_ids)
-        credit_ids = set(self.tax_credit_sub_cat_ids)
-        if len(income_ids) != len(self.sub_cat_ids):
-            raise ValueError("Duplicate sub_cat_ids configured for a tax sub-head.")
-        if len(credit_ids) != len(self.tax_credit_sub_cat_ids):
-            raise ValueError("Duplicate tax_credit_sub_cat_ids configured for a tax sub-head.")
-        overlap = income_ids.intersection(credit_ids)
-        if overlap:
-            raise ValueError(
-                "A subcategory UID cannot be configured as both income and tax credit: "
-                f"{sorted(overlap)}"
-            )
-        return self
 ```
 
-A subcategory cannot simultaneously be configured as income and a tax credit inside one sub-head, and duplicates are rejected.
+The model keeps display vocabulary, source identifier mapping, tax-credit mapping, taxability, and method together.
 
-### Global mutual exclusivity
+That makes each sub-head auditable as a coherent policy unit.
 
-`TaxAssumptions.validate_mutual_exclusivity()` extends that constraint across all configured heads, residual income and exempt income. Category IDs, income subcategory IDs and tax-credit subcategory IDs must not be multiply assigned across the tax classification tree.
+## Tax credit overlap is rejected
 
-```mermaid
-flowchart TD
-    UID[Category / subcategory UID] --> H1[Head A]
-    UID -. invalid duplicate .-> H2[Head B]
-    H1 --> VALID[Unique classification]
-    H2 --> FAIL[ValidationError]
-```
-
-### Investment exclusions
-
-`InvestmentExclusionsConfig` maintains separate STCG and LTCG ledger subcategory exclusion lists. It rejects blanks, surrounding whitespace, duplicates and overlap between the two lists. `FinancialRules.validate_investment_exclusion_uids()` then performs a second-stage validation against the materialized `silver.d_Income_Subcategory` dimension.
+A subcategory cannot be both income and Tax credit within the same sub-head:
 
 ```python
-class InvestmentExclusionsConfig(BaseModel):
-    stcg_sub_cat_ids: list[str] = Field(default_factory=list)
-    ltcg_sub_cat_ids: list[str] = Field(default_factory=list)
-
-    @model_validator(mode="after")
-    def validate_exclusions(self) -> Self:
-        for field_name, values in (
-            ("stcg_sub_cat_ids", self.stcg_sub_cat_ids),
-            ("ltcg_sub_cat_ids", self.ltcg_sub_cat_ids),
-        ):
-            if any(not uid or not uid.strip() for uid in values):
-                raise ValueError(f"{field_name} cannot contain blank UIDs.")
-            if any(uid != uid.strip() for uid in values):
-                raise ValueError(f"{field_name} cannot contain UIDs with surrounding whitespace.")
-            if len(set(values)) != len(values):
-                raise ValueError(f"Duplicate UIDs found in {field_name}.")
-
-        stcg = set(self.stcg_sub_cat_ids)
-        ltcg = set(self.ltcg_sub_cat_ids)
-        overlap = stcg.intersection(ltcg)
-        if overlap:
-            raise ValueError(
-                f"Overlapping sub_cat_ids between STCG and LTCG exclusions: {sorted(overlap)}"
-            )
-        return self
+# src/personal_finance_etl/config/financial_rules/tax.py
+overlap = income_ids.intersection(credit_ids)
+if overlap:
+    raise ValueError(
+        "A subcategory UID cannot be configured as both income and tax credit: "
+        f"{sorted(overlap)}"
+    )
 ```
 
-This two-stage design is important: Pydantic can prove internal configuration consistency, but only current source data can prove that a configured UID actually exists.
+Duplicates are also rejected.
+
+This is a good example of Pydantic doing more than type checking. It enforces a domain invariant at configuration load time.
+
+## Cross-sub-head uniqueness is validated too
+
+`TaxAssumptions` performs model-level validation across Tax head collections.
+
+The intent is to prevent one UID from being assigned inconsistently across overlapping head/sub-head vocabularies.
+
+Configuration-time rejection is valuable because a Tax ambiguity is cheaper to diagnose when loading rules than after producing a yearly summary.
+
+## Investment exclusions are validated in two stages
+
+First, Pydantic validates the configured lists themselves:
+
+```python
+# src/personal_finance_etl/config/financial_rules/tax.py
+stcg = set(self.stcg_sub_cat_ids)
+ltcg = set(self.ltcg_sub_cat_ids)
+overlap = stcg.intersection(ltcg)
+if overlap:
+    raise ValueError(
+        f"Overlapping sub_cat_ids between STCG and LTCG exclusions: {sorted(overlap)}"
+    )
+```
+
+It also rejects blanks, whitespace-padded values, and duplicates.
+
+Second, `FinancialRules` validates those configured UIDs against the **materialized subcategory dimension**:
+
+```python
+# src/personal_finance_etl/config/financial_rules/model.py
+available = {
+    str(uid).strip()
+    for uid in df_materialized.get_column("UID").drop_nulls().to_list()
+    if str(uid).strip()
+}
+unknown = sorted(configured - available)
+if unknown:
+    raise ValueError(
+        "Configured STCG/LTCG investment exclusion UID(s) do not exist in "
+        f"silver.d_Income_Subcategory: {unknown}"
+    )
+```
+
+This two-stage pattern is architecturally important:
 
 ```mermaid
 flowchart LR
-    TOML[Configured exclusions] --> P[Pydantic structural validation]
-    P -->|valid| D[Materialized income subcategory dimension]
-    D --> X[Existence validation]
-    X -->|valid| TAX[Tax Engine]
-    P -->|duplicate / overlap / whitespace| FAIL[Fail]
-    X -->|unknown UID| FAIL
+    RAW["TOML"] --> SYN["Syntactic / internal validation"]
+    SYN --> MODEL["FinancialRules"]
+    DIM["Actual Silver dimension"] --> REF["Referential validation"]
+    MODEL --> REF
+    REF --> DOMAIN["Tax execution"]
 ```
 
-The exclusions prevent household-ledger capital-gain categories from being counted again when Quant realized events already own investment realization.
+Pydantic can validate the configuration graph. Only runtime data can prove that a configured UID actually exists.
 
-## Tax rates and holding-period rules
+## Why referential validation materializes
 
-`TaxRates` provides configured fallback/rule rates for equity, foreign equity, debt and gold STCG/LTCG. `TaxAssumptions.ltcg_threshold_months` is a dictionary of holding thresholds in **calendar months** consumed by Quant macro rules. This exact field name and unit are authoritative; older example files that describe day-based `ltcg_thresholds` are stale and should not be copied forward.
+`validate_investment_exclusion_uids()` accepts a `DataFrame | LazyFrame` and collects the lazy input when needed.
 
-The tax configuration also includes debt-MF cutoff date, harvesting wait threshold and fallback equity-LTCG exemption. These are inputs to analytics, not claims that the Tax Engine implements complete statutory liability.
+That is a justified materialization boundary:
 
-## CMA and target allocation assumptions
+- the validation needs the actual set of UIDs;
+- the result is small dimension metadata;
+- failure must occur before Tax processing consumes invalid policy.
 
-CMA rules provide expected real return and a fat-tail volatility multiplier used in long-horizon planning. `target_allocations` maps allocation labels to target fractions for portfolio presentation. The current Pydantic model does not enforce that target allocations sum to exactly one, so configuration authors must treat that as a semantic responsibility unless/until implementation validation is added.
+“Keep everything lazy forever” would be the wrong optimization here.
 
-## Rule snapshot and audit projection
+## Tax policy does not own the Tax engine
 
-`FinancialRules.export_to_db_records()` recursively flattens nested rules into records with:
+The configuration package defines rates and mappings.
 
-- `Rule_Domain`;
-- `Rule_Type`;
-- `Target_Level`;
-- `Target_ID`.
+The Tax domain owns computation and event semantics.
 
-The Control Plane separately stores run-specific rule snapshots.
+```text
+config.financial_rules.tax
+    says what policy applies
 
-```mermaid
-flowchart TB
-    FR[FinancialRules] --> DUMP[model_dump]
-    DUMP --> FLAT[Audit flattening]
-    FLAT --> META[DuckDB current rules projection]
-    FR --> SNAP[Control Plane run snapshot]
-    SNAP --> REPLAY[Historical context]
+domain.tax
+    applies that policy to canonical evidence
 ```
 
-## Validation matrix
+That separation prevents statutory values from being scattered through algorithm code while keeping financial computation in the domain.
 
-| Rule area | Enforced by current model | Requires source/runtime context |
-| --- | --- | --- |
-| Tax sub-head duplicate income IDs | yes | no |
-| Income ID also tax-credit ID | yes | no |
-| Global tax-head duplicate category/subcategory | yes | no |
-| STCG/LTCG exclusion duplicates | yes | no |
-| STCG/LTCG exclusion overlap | yes | no |
-| Exclusion UID actually exists | no | **yes**, explicit runtime validation |
-| Budget allocation percentages sum to 100% | **not enforced** | configuration responsibility |
-| Target allocations sum to 100% | **not enforced** | configuration responsibility |
-| Markov transition probabilities form valid rows | **not enforced by Pydantic** | simulation/configuration responsibility |
+## FIRE and stochastic policy are part of `FinancialRules`, but deserve a separate lens
 
-The last three rows matter. Documentation should describe guarantees the code actually makes, not validators that would be aesthetically pleasing if they existed.
+`AssumptionsRules` groups:
+
+```python
+class AssumptionsRules(BaseModel):
+    macro: MacroAssumptions = Field(...)
+    fire: FireAssumptions = Field(...)
+    monte_carlo: MonteCarloAssumptions = Field(...)
+    tax: TaxAssumptions = Field(...)
+    cma: CMAAssumptions = Field(...)
+    target_allocations: dict[str, float] = Field(default_factory=dict)
+```
+
+The FIRE/Monte Carlo subtree is specified separately because its fields form an interacting stochastic model rather than a flat rule catalog.
+
+Continue with [FIRE & Simulation Configuration](fire-and-simulation-reference.md).
+
+## Target allocations
+
+`target_allocations` maps named asset/instrument buckets to target weights.
+
+The root model currently stores the mapping but does not universally enforce that configured values sum to exactly `1.0`.
+
+Therefore:
+
+> “weights should represent a coherent allocation” is a semantic expectation unless a consuming path performs additional validation.
+
+Again, documentation distinguishes **desired policy** from **implemented validator**.
+
+## Rule audit projection
+
+Rules can flatten themselves into database records:
+
+```python
+# src/personal_finance_etl/config/financial_rules/model.py
+def export_to_db_records(self) -> list[dict[str, str]]:
+    records: list[dict[str, str]] = []
+    data = self.model_dump()
+    _flatten_data_to_records(data, [], records)
+    return records
+```
+
+Leaf values become records carrying:
+
+```text
+Rule_Domain
+Rule_Type
+Target_Level
+Target_ID
+```
+
+Lists create one record per configured value.
+
+This design scales when nested rule models gain new leaves; the audit projection does not require a hand-written insert for every new policy field.
+
+## The projection normalizes rule vocabulary
+
+Helper functions map configuration paths into normalized audit fields.
+
+Examples include:
+
+- plural domain names becoming singular where appropriate;
+- acronyms such as FIRE/MF/ETF/ROI retaining readable capitalization;
+- `category_ids` mapping to `Category` target level;
+- `sub_category_ids` mapping to `Subcategory`.
+
+The result is a relational view over a nested policy object.
+
+That is useful for governance and inspection, even though the nested Pydantic model remains the runtime authority.
+
+## Rule snapshots preserve policy history
+
+A run can persist the serialized financial-rules payload in the Control Plane using the same content-addressed pattern as settings.
+
+```python
+# src/personal_finance_etl/infrastructure/control_plane/run_repository.py
+if rules_json:
+    canonical_rules = self._canonical_json(rules_json)
+    digest_rules = hashlib.sha256(canonical_rules.encode("utf-8")).hexdigest()
+    rules_id = f"snap_rule_{digest_rules}"
+    self.db.conn.execute(
+        "INSERT OR IGNORE INTO cp_rules_snapshots "
+        "(snapshot_id, content_hash, canonical_payload, created_at) VALUES (?, ?, ?, ?)",
+        (rules_id, digest_rules, canonical_rules, now),
+    )
+```
+
+The run then stores `rules_snapshot_id`.
+
+This matters because financial policy is allowed to evolve. If a Tax rate, classification UID, budget threshold, or FIRE assumption changes later, historical runs still point to the policy payload that produced them.
+
+A rules file is therefore both **configuration** and **financial provenance**.
 
 ## Change-impact map
 
+Different rule edits have different blast radii.
+
+| Rule family | Typical consumers | Risk character |
+| --- | --- | --- |
+| Income/expense IDs | household, wealth, FIRE | classification + downstream metric drift |
+| Asset/cashflow rules | household cashflow/wealth | statement classification |
+| Budget | household budgeting | target/alert changes |
+| Investment mappings | investment transforms/services | instrument classification |
+| MF scheme mapping | normalization | identity/join continuity risk |
+| Portfolio tolerance | portfolio analytics | rebalance flags |
+| Macro fallbacks | market/FIRE/investment analytics | fallback behavior |
+| Tax rates/heads | Tax/investment analytics | statutory interpretation |
+| FIRE assumptions | deterministic planning | target/coverage changes |
+| Monte Carlo assumptions | simulation | distribution/model behavior |
+| Target allocations | portfolio analytics | allocation/rebalance interpretation |
+
+## Safe rule-change workflow
+
 ```mermaid
-flowchart LR
-    IN[Income/expense rules] --> HH[Household facts + cashflow]
-    AS[Asset rules] --> CF[Cashflow + liquidity]
-    INV[Investment mappings] --> Q[Canonical investments / Quant]
-    TAXR[Tax rules] --> T[Tax + holding classification]
-    MAC[Macro fallbacks] --> Q
-    MAC --> W[Wealth]
-    B[Budget] --> W
-    CMA[CMA] --> FIRE[FIRE]
-    PM[Portfolio targets] --> PA[Portfolio presentation]
+flowchart TD
+    EDIT["Edit financial_rules.toml"] --> LOAD["Pydantic validation"]
+    LOAD -->|fail| FIX["Fix policy inconsistency"]
+    LOAD -->|pass| REF{"Needs runtime UID validation?"}
+    REF -->|yes| DIM["Validate against canonical dimension"]
+    REF -->|no| TEST["Focused domain tests"]
+    DIM --> TEST
+    TEST --> REG["Affected finance regression"]
+    REG --> RUN["Real pipeline if risk warrants"]
+    RUN --> AUDIT["Snapshot / audit context"]
 ```
 
-A rule change should therefore be reviewed by *consumer domain*, not only by TOML section.
+When changing financial policy:
+
+1. identify every domain consumer;
+2. decide whether the edit changes classification, algorithm inputs, or only fallback behavior;
+3. verify units and null/default semantics;
+4. run configuration/model validation;
+5. run referential validation when IDs point into canonical dimensions;
+6. run focused domain regression tests;
+7. compare affected financial outputs;
+8. preserve the rules file together with the run/snapshot provenance.
+
+## What not to do
+
+Do not:
+
+- duplicate a rule as a constant inside a domain module;
+- use config to override observed evidence silently;
+- describe unvalidated cross-field relationships as enforced;
+- treat all Tax estimates as statutory filing outputs;
+- reuse a UID in conflicting Tax meanings because “the downstream query will figure it out”; it will, just not in a way anyone enjoys.
+
+## Where the story goes next
+
+`FinancialRules` now explains **what policy exists**.
+
+The final configuration question is more subtle:
+
+> What does a policy field mean when it changes a probability distribution rather than a deterministic classification?
+
+That is the role of [FIRE & Simulation Configuration](fire-and-simulation-reference.md).
 
 ## Related specifications
 
 - [Financial Model](../finance/financial-model.md)
+- [Cashflow & Wealth](../finance/cashflow-and-wealth.md)
 - [Tax Methodology](../finance/tax-methodology.md)
-- [Investment Performance and Risk](../finance/investment-performance-and-risk.md)
-- [FIRE and Simulation Reference](fire-and-simulation-reference.md)
-- [Deterministic Identity and Replay](../architecture/deterministic-identity-and-replay.md)
-
-## Source map
-
-| Concern | Implementation authority |
-| --- | --- |
-| Runtime model definitions | `backend/config/financial_rules.py` |
-| Household dimension classification | `backend/transform/dimensions.py` |
-| Household fact flags | `backend/transform/facts.py` |
-| Quant macro/tax interpretation | `backend/engines/analytics/rules/macro.py` |
-| Tax event construction | `backend/engines/tax/core/base_events.py` |
-| Budget analytics | `backend/engines/presentation/modules/budget_forecast.py` |
-| Portfolio allocation presentation | `backend/engines/presentation/modules/investment_analytics.py` |
-| Wealth/FIRE metrics | `backend/engines/presentation/modules/wealth_risk_analytics.py` |
-| Monte Carlo kernel/wrapper | `backend/engines/presentation/helpers/fire_mc_sim.py` |
-| Run/simulation provenance | `backend/load/control_plane/run_repo.py` |
+- [Investment Data Model](../finance/investment-data-model.md)
+- [FIRE & Simulation Configuration](fire-and-simulation-reference.md)
+- [Data Contract & Schema Evolution](../developer/data-contract-and-schema-evolution.md)

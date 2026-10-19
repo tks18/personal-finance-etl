@@ -1,140 +1,143 @@
 # Glossary
 
-This glossary standardizes terms that cross architecture, finance, reference, and developer documentation. Definitions describe how Personal Finance ETL uses each term; they are not attempts to settle every possible industry definition.
+This glossary fixes the vocabulary used across Architecture, Finance, Developer, Configuration, and Reference documentation.
+
+The terms are intentionally narrow. In a system that distinguishes evidence, reconstruction, reconciliation, estimates, and simulation, “basically the same thing” is how semantic debt gets a mortgage.
 
 ## Core terms
 
 ### Actionable artifact
 
-A discovered source artifact that requires Bronze work in the current run because it is new, changed, re-ingested, or otherwise requires synchronization.
+A registered source artifact whose current lifecycle state requires Bronze synchronization, healing, or another explicit processing action.
 
 ### Artifact
 
-A source or virtual input tracked by the SQLite Control Plane with stable identity, path/hash observations, synchronization state, and lifecycle events.
+A source evidence object tracked with stable file identity, observed path/hash, lifecycle state, and optional retained payload.
 
 ### Bronze
 
-Persistent source-near DuckDB layer synchronized at file/category level. Bronze preserves complete raw analytical state across runs.
+Source-shaped DuckDB evidence synchronized from registered artifacts/providers before canonical financial transformation.
 
 ### Canonical fact
 
-Normalized financial evidence or derived fact with stable semantics independent of a vendor/source layout.
+A normalized financial record whose meaning and grain are defined independently of presentation.
 
 ### Control Plane
 
-SQLite operational authority for runs, artifacts, snapshots, failures, payloads, lifecycle events, and simulation provenance.
+SQLite operational authority for run history, artifacts, payloads, configuration/rules snapshots, failures, synchronization, provider requests, and simulation provenance.
 
 ### Data contract
 
-Registry/schema agreement describing a published dataset: physical table, layer, domain, grain, producer, order, and fixed DDL where applicable.
+A declared agreement covering physical table, layer, domain, grain, producer, publication order, and where applicable schema/identity semantics.
 
 ### Deterministic identity
 
-Stable identifier derived from canonical serialization of semantically identifying fields.
+A stable namespace-prefixed SHA-256-derived identifier generated from canonicalized, ordered identity fields.
 
 ### Evidence
 
-Observed source information such as transactions, broker statements, market observations, FX observations, or configuration inputs.
+Observed input from files, databases, providers, configuration, or other external sources before interpretation into canonical/reconstructed financial state.
 
 ### Full replace
 
-Bronze synchronization mode that drops/recreates the physical table from the current extracted schema and loads the complete actionable dataset.
+Bronze synchronization mode where the current complete source state replaces the table state for that contract.
 
 ### Gold
 
-BI-facing presentation layer rebuilt from current canonical analytical state.
+Decision-ready analytical presentation layer built from canonical/reconstructed upstream state.
 
 ### Grain
 
-The semantic meaning of one row, such as Day, Trade, Date-Currency, ISIN-Lot, or FY-SubHead.
+The economic meaning of one row, such as one trade, one lot, one realized event, or one Date-ISIN valuation.
 
 ### Healing
 
-Recovery behavior that reconciles DuckDB synchronization state with Control Plane authority after divergence or interrupted cross-store completion.
+Recovery action that repairs missing/incomplete synchronized state from retained or rediscovered evidence without pretending the original failure never occurred.
 
 ### Incremental Bronze
 
-Synchronization mode that replaces rows associated with actionable source filenames while retaining rows from unchanged files.
+Synchronization mode that preserves accumulated evidence and incorporates newly discovered artifacts without full table replacement.
 
-### Indicative tax estimate
+### Indicative Tax estimate
 
-Analytical estimate derived from available tax-relevant evidence and configured rates; not final statutory tax liability.
+A planning/reconciliation estimate derived from configured rules and evidence; not a statutory filing determination.
 
 ### Local currency
 
-Instrument/economic currency in which acquisition, sale, or market value is observed before reporting-currency translation.
+The instrument/transaction currency used for local-market economics before reporting-currency conversion.
 
 ### Meta
 
-DuckDB current-state metadata projection containing latest file, row-count, rules, settings, contract, and simulation context.
+DuckDB current-context tables used for analytical inspection; not historical operational authority.
 
 ### Observed state
 
-Financial/source state directly evidenced by an external or canonical source observation.
+State supported directly by source evidence such as broker holdings or transaction records.
 
 ### Publication order
 
-Registry integer controlling deterministic Silver/Gold table publication sequencing.
+Registry ordering used to respect analytical dependency when Silver/Gold contracts are materialized.
 
 ### Reconstructed state
 
-Derived financial state calculated from evidence, such as historical US holdings or FIFO lot state; not independent broker observation.
+Financial state derived deterministically from canonical evidence, such as FIFO lots or reconstructed holdings.
 
 ### Reconciliation
 
-Explicit comparison and adjustment provenance when reconstructed investment state differs from observed quantity or cost basis.
+Comparison between independently observed state and reconstructed state, with explicit discrepancy/correction evidence.
 
 ### Realized event
 
-Canonical Quant output representing the disposal of quantity from a specific acquisition lot by a specific sale.
+A disposal-to-consumed-lot economic event produced by FIFO, preserving acquisition lineage and realized gain/loss context.
 
 ### Replay envelope
 
-Fingerprintable set of model/input/rules/registry/seed context used to reason about stochastic run reproducibility under compatible implementation.
+The evidence, policy snapshots, identity rules, and execution context required to meaningfully reproduce/recompare a deterministic run.
 
 ### Reporting currency
 
-Currency used for consolidated valuation/analytics, including translated INR values in the current financial model.
+The common/base currency used for consolidated analytics after explicit FX conversion.
 
 ### Silver
 
-Canonical analytical layer containing normalized dimensions/facts plus Quant, reconciliation, and tax evidence.
+Canonical analytical layer containing normalized dimensions/facts and reconstructed financial events/state.
 
 ### Snapshot
 
-Content-addressed canonical settings or FinancialRules payload referenced by runs/simulations.
+Captured durable database/configuration state used for backup, restore, or reproducibility workflows.
 
 ### Source evidence
 
-Raw externally observed or configured information before canonical financial interpretation.
+Raw external observations that are retained or normalized before domain interpretation.
 
 ### Stochastic simulation
 
-Probabilistic FIRE/wealth modeling whose run provenance includes seed and fingerprints; distinct from deterministic financial reconstruction.
+Forward-looking modeled paths that use deterministic seeding for reproducibility but represent uncertainty rather than replay of historical truth.
 
 ### Synchronization status
 
-Control Plane state describing whether an artifact still requires Bronze synchronization or is aligned with analytical raw state.
+Operational state describing whether an artifact requires Bronze processing, has synchronized successfully, is deferred, failed, or otherwise needs action.
 
 ### Virtual artifact
 
-Control Plane artifact representing generated/configuration evidence that does not necessarily correspond to a conventional source file.
+A logical evidence object tracked operationally even when it is not represented by a conventional persisted source file.
+
 
 ## Semantic distinctions that matter
 
 | Do not collapse | Why |
 |---|---|
-| Evidence vs reconstructed state | One is observed; the other is derived from observations and algorithms. |
-| Historical Control Plane vs DuckDB Meta | One retains operational history; the other projects current analytical context. |
-| Incremental ingestion vs incremental analytics | Bronze synchronizes incrementally; Silver/Gold rebuild from complete Bronze state. |
-| US market reconstruction vs canonical FIFO | Historical holdings reconstruction supports market state; Quant owns canonical acquisition lots and realized disposals. |
-| Realized gain vs tax liability | Quant establishes economic realization; Tax normalizes evidence and estimates, not final statutory liability. |
-| Deterministic reconstruction vs stochastic replay | Stable financial identity/reconstruction and probabilistic simulation provenance solve different problems. |
-| Artifact path vs artifact identity | Location can change; identity/history should survive legitimate renames. |
+| evidence vs canonical fact | normalization adds meaning |
+| observed vs reconstructed | one is sourced; one is derived |
+| reconstructed vs reconciled | reconciliation explicitly incorporates discrepancy evidence |
+| current Meta vs historical Control Plane | convenience projection is not operational history |
+| local vs reporting currency | FX is part of economics, not formatting |
+| zero vs null vs invalid | zero is a value; the others describe missing/unsupported state |
+| deterministic replay vs stochastic reproducibility | same inputs should reproduce deterministic state; simulation uses seeded modeled uncertainty |
+| indicative Tax estimate vs statutory liability | planning evidence is not a filed legal determination |
 
 ## Related specifications
 
-- [Data Model](../architecture/data-model.md)
-- [Identity and Grain Contracts](identity-and-grain-contracts.md)
 - [Financial Model](../finance/financial-model.md)
+- [Metrics & Methodology](../finance/metrics-and-methodology.md)
 - [System Architecture](../architecture/system-architecture.md)
