@@ -1,126 +1,120 @@
 # Meta Data Contracts
 
-DuckDB Meta is a **current-state analytical projection**, not the historical operational authority. It makes the latest file registry view, row counts, rules, settings, contract catalog, and simulation provenance queryable beside the analytical warehouse without forcing BI/developer workloads to join into SQLite.
+DuckDB Meta is the **current analytical context** surface. It mirrors information useful to analytics and inspection without replacing the Control Plane as historical operational authority.
 
-```mermaid
-flowchart LR
-    CP[SQLite Control Plane history] --> M[DuckDB Meta current projection]
-    REG[Contract Registry] --> M
-    S[Silver] --> RC[Row counts]
-    G[Gold] --> RC
-    RC --> M
-```
+That distinction is the whole contract: Meta is convenient current state; SQLite Control Plane is durable operational history.
 
 ## Physical inventory
 
-The current Meta DDL defines **6 tables**.
+| Table | Purpose |
+|---|---|
+| `meta.m_File_Registry` | Current file-registry projection for analytical inspection |
+| `meta.m_Table_Row_Counts` | Current publication row counts |
+| `meta.m_Financial_Rules` | Current flattened financial rules snapshot |
+| `meta.m_Settings` | Current flattened settings snapshot |
+| `meta.m_Data_Contracts` | Current data-contract catalog projection |
+| `meta.m_Latest_Simulation` | Latest simulation context/result metadata |
 
 ## `meta.m_File_Registry`
 
-| Column | Physical type / constraint |
-|---|---|
-| `file_id` | `TEXT PRIMARY KEY` |
-| `file_name` | `TEXT NOT NULL` |
-| `relative_path` | `TEXT NOT NULL UNIQUE` |
-| `file_category` | `TEXT NOT NULL` |
-| `file_type` | `TEXT` |
-| `file_hash` | `TEXT NOT NULL` |
-| `file_size_bytes` | `BIGINT` |
-| `first_ingested` | `TIMESTAMP NOT NULL` |
-| `last_ingested` | `TIMESTAMP NOT NULL` |
-| `row_count` | `BIGINT` |
-
-Current source-file projection associated with Bronze. Historical lifecycle events remain in SQLite.
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `file_id` | `TEXT PRIMARY KEY,   -- deterministic: SHA-256(relative_path)` | Field |
+| `file_name` | `TEXT NOT NULL` | Field |
+| `relative_path` | `TEXT NOT NULL UNIQUE` | Field |
+| `file_category` | `TEXT NOT NULL,      -- 'mf_holdings', 'stock_pl', 'sqlite_source', etc.` | Field |
+| `file_type` | `TEXT,               -- 'excel', 'csv', 'sqlite', 'parquet', 'virtual'` | Field |
+| `file_hash` | `TEXT NOT NULL,      -- SHA-256 of file content` | Field |
+| `file_size_bytes` | `BIGINT` | Field |
+| `first_ingested` | `TIMESTAMP NOT NULL` | Field |
+| `last_ingested` | `TIMESTAMP NOT NULL` | Field |
+| `row_count` | `BIGINT` | Field |
 
 ## `meta.m_Table_Row_Counts`
 
-| Column | Physical type / constraint |
-|---|---|
-| `schema_name` | `TEXT NOT NULL` |
-| `table_name` | `TEXT NOT NULL` |
-| `row_count` | `BIGINT` |
-| `generated_at` | `TIMESTAMP` |
-
-Latest generated row-count observations for analytical tables.
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `schema_name` | `TEXT NOT NULL` | Field |
+| `table_name` | `TEXT NOT NULL` | Field |
+| `row_count` | `BIGINT` | Field |
+| `generated_at` | `TIMESTAMP` | Field |
 
 ## `meta.m_Financial_Rules`
 
-| Column | Physical type / constraint |
-|---|---|
-| `Rule_Domain` | `TEXT NOT NULL` |
-| `Rule_Type` | `TEXT NOT NULL` |
-| `Target_Level` | `TEXT NOT NULL` |
-| `Target_ID` | `TEXT NOT NULL` |
-
-Flattened latest-run financial-rule projection for inspection.
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `Rule_Domain` | `TEXT NOT NULL` | Field |
+| `Rule_Type` | `TEXT NOT NULL` | Field |
+| `Target_Level` | `TEXT NOT NULL` | Field |
+| `Target_ID` | `TEXT NOT NULL` | Field |
 
 ## `meta.m_Settings`
 
-| Column | Physical type / constraint |
-|---|---|
-| `Setting_Group` | `TEXT NOT NULL` |
-| `Setting_Key` | `TEXT NOT NULL` |
-| `Setting_Value` | `TEXT NOT NULL` |
-
-Flattened latest-run application-setting projection.
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `Setting_Group` | `TEXT NOT NULL` | Field |
+| `Setting_Key` | `TEXT NOT NULL` | Field |
+| `Setting_Value` | `TEXT NOT NULL` | Field |
 
 ## `meta.m_Data_Contracts`
 
-| Column | Physical type / constraint |
-|---|---|
-| `contract_id` | `TEXT NOT NULL` |
-| `layer` | `TEXT NOT NULL` |
-| `physical_table` | `TEXT NOT NULL` |
-| `domain` | `TEXT` |
-| `grain` | `TEXT` |
-| `producer` | `TEXT` |
-| `is_full_replace` | `BOOLEAN` |
-| `publication_order` | `INTEGER` |
-
-Latest contract-registry projection, including layer, grain, producer, replacement mode, and publication order.
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `contract_id` | `TEXT NOT NULL` | Field |
+| `layer` | `TEXT NOT NULL` | Field |
+| `physical_table` | `TEXT NOT NULL` | Field |
+| `domain` | `TEXT` | Field |
+| `grain` | `TEXT` | Field |
+| `producer` | `TEXT` | Field |
+| `is_full_replace` | `BOOLEAN` | Field |
+| `publication_order` | `INTEGER` | Field |
 
 ## `meta.m_Latest_Simulation`
 
-| Column | Physical type / constraint |
-|---|---|
-| `simulation_id` | `TEXT NOT NULL` |
-| `run_id` | `TEXT NOT NULL` |
-| `created_at` | `TIMESTAMP NOT NULL` |
-| `root_seed` | `TEXT NOT NULL` |
-| `iterations` | `INTEGER` |
-| `horizon` | `INTEGER` |
-| `input_as_of_date` | `DATE` |
-| `model_implementation_version` | `TEXT` |
-| `model_fingerprint` | `TEXT` |
-| `input_fingerprint` | `TEXT` |
-| `result_fingerprint` | `TEXT` |
-| `contract_registry_fingerprint` | `TEXT` |
-| `settings_snapshot_id` | `TEXT` |
-| `rules_snapshot_id` | `TEXT` |
-| `status` | `TEXT` |
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `simulation_id` | `TEXT NOT NULL` | Field |
+| `run_id` | `TEXT NOT NULL` | Field |
+| `created_at` | `TIMESTAMP NOT NULL` | Field |
+| `root_seed` | `TEXT NOT NULL` | Field |
+| `iterations` | `INTEGER` | Field |
+| `horizon` | `INTEGER` | Field |
+| `input_as_of_date` | `DATE` | Field |
+| `model_implementation_version` | `TEXT` | Field |
+| `model_fingerprint` | `TEXT` | Field |
+| `input_fingerprint` | `TEXT` | Field |
+| `result_fingerprint` | `TEXT` | Field |
+| `contract_registry_fingerprint` | `TEXT,  -- SHA-256 of sorted DATA_CONTRACT_REGISTRY structural metadata` | Field |
+| `settings_snapshot_id` | `TEXT` | Field |
+| `rules_snapshot_id` | `TEXT` | Field |
+| `status` | `TEXT` | Field |
 
-Mirror of the most recent successful simulation provenance row, allowing fingerprints/model version to be queried without a cross-store join.
 
 ## Authority boundary
 
-> **Control Plane history is authoritative; Meta is convenient current context.**
+```mermaid
+flowchart LR
+    CP["SQLite Control Plane
+historical operational authority"] --> M["DuckDB Meta
+current analytical context"]
+    M --> BI["inspection / analytics"]
+```
 
-This boundary prevents DuckDB from becoming a second historical registry with subtly different retention rules. The architecture already has one historian. Giving the warehouse a fake moustache does not make a second historian useful.
+Meta should not be used to reconstruct historical run truth when the Control Plane retains the authoritative lifecycle/provenance history.
 
 ## Refresh semantics
 
-Meta is refreshed as part of analytical publication. Row counts and current settings/rules/contracts describe the latest successful analytical context rather than an append-only history. Simulation metadata similarly mirrors the latest successful Control Plane simulation record.
+Meta tables are refreshed as part of analytical publication/current-context updates. They are intentionally small, query-friendly projections rather than event history.
 
 ## Contract invariants
 
-- Meta tables are query conveniences, not substitutes for Control Plane event history.
-- `m_Data_Contracts` must reflect the registry used by the published analytical database.
-- `m_Latest_Simulation` mirrors provenance; it does not own stochastic execution history.
-- File-registry projection can be healed from Control Plane authority when the stores diverge.
+- Meta is current-context, not full history.
+- Control Plane IDs/snapshots remain authoritative where mirrored.
+- Contract rows describe the current publication registry.
+- Latest simulation metadata is a pointer/context surface, not a replacement for `cp_simulation_runs` history.
 
 ## Related specifications
 
-- [Warehouse Architecture](../architecture/warehouse-architecture.md)
 - [Control Plane Data Contracts](control-plane-data-contracts.md)
-- [Deterministic Identity and Replay](../architecture/deterministic-identity-and-replay.md)
-- [Gold Data Contracts](gold-data-contracts.md)
+- [Warehouse Architecture](../architecture/warehouse-architecture.md)
+- [Configuration Reference](../configuration/configuration-reference.md)

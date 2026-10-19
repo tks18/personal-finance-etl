@@ -1,185 +1,270 @@
 # Control Plane Data Contracts
 
-The SQLite Control Plane is the historical operational authority for Personal Finance ETL. Its schema records run lifecycle, immutable configuration/rules snapshots, artifact identity and payloads, artifact-run events, failures, and simulation provenance. Unlike DuckDB Meta, these tables are designed to answer **what happened, under which context, and to which artifact/run**.
+The Control Plane is the durable operational ledger for runs, artifacts, retained payloads, configuration/rules snapshots, failures, provider requests, synchronization summaries, and simulation provenance.
 
-```mermaid
-erDiagram
-    cp_settings_snapshots ||--o{ cp_runs : configures
-    cp_rules_snapshots ||--o{ cp_runs : governs
-    cp_runs ||--o{ cp_run_failures : records
-    cp_runs ||--o{ cp_artifact_run_events : emits
-    cp_file_registry ||--o| cp_file_payloads : retains
-    cp_file_registry ||--o{ cp_artifact_run_events : history
-    cp_runs ||--o{ cp_simulation_runs : contains
-    cp_settings_snapshots ||--o{ cp_simulation_runs : configures
-    cp_rules_snapshots ||--o{ cp_simulation_runs : governs
-```
+Unlike Meta, this schema is designed to answer historical operational questions: **what happened, to which evidence, under which settings/rules, and what state did the run ultimately reach?**
 
 ## Physical inventory
 
-The current Control Plane DDL defines **8 tables**.
+| Table | Primary responsibility |
+|---|---|
+| `cp_file_registry` | Stable artifact identity and latest observed/sync state |
+| `cp_file_payloads` | Retained source bytes keyed by artifact identity |
+| `cp_settings_snapshots` | Content-addressed settings snapshots |
+| `cp_rules_snapshots` | Content-addressed financial-rules snapshots |
+| `cp_runs` | Run lifecycle and commit state |
+| `cp_run_failures` | Structured run failure history |
+| `cp_artifact_run_events` | Artifact lifecycle/event history |
+| `cp_external_provider_requests` | External provider request provenance |
+| `cp_run_sync_summaries` | Per-run Bronze synchronization outcome |
+| `cp_simulation_runs` | FIRE/simulation provenance and fingerprints |
 
 ## `cp_file_registry`
 
-Current artifact identity and synchronization state. `relative_path` is unique, while `file_id` is the stable registry identity used by payload/event relationships.
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `file_id` | `TEXT PRIMARY KEY` | Field |
+| `file_name` | `TEXT NOT NULL` | Field |
+| `relative_path` | `TEXT NOT NULL UNIQUE` | Field |
+| `file_category` | `TEXT NOT NULL` | Field |
+| `file_type` | `TEXT` | Field |
+| `file_hash` | `TEXT NOT NULL` | Field |
+| `file_size_bytes` | `BIGINT` | Field |
+| `sync_status` | `TEXT DEFAULT 'PENDING_BRONZE'` | Field |
+| `first_seen_run_id` | `TEXT` | Field |
+| `first_seen_at` | `TIMESTAMP NOT NULL` | Field |
+| `last_seen_run_id` | `TEXT` | Field |
+| `last_seen_at` | `TIMESTAMP NOT NULL` | Field |
+| `last_changed_run_id` | `TEXT` | Field |
+| `last_changed_at` | `TIMESTAMP` | Field |
+| `last_synced_run_id` | `TEXT` | Field |
+| `last_synced_at` | `TIMESTAMP` | Field |
 
-| Column | Physical type / constraint |
-|---|---|
-| `file_id` | `TEXT PRIMARY KEY` |
-| `file_name` | `TEXT NOT NULL` |
-| `relative_path` | `TEXT NOT NULL UNIQUE` |
-| `file_category` | `TEXT NOT NULL` |
-| `file_type` | `TEXT` |
-| `file_hash` | `TEXT NOT NULL` |
-| `file_size_bytes` | `BIGINT` |
-| `sync_status` | `TEXT DEFAULT 'PENDING_BRONZE'` |
-| `first_seen_run_id` | `TEXT` |
-| `first_seen_at` | `TIMESTAMP NOT NULL` |
-| `last_seen_run_id` | `TEXT` |
-| `last_seen_at` | `TIMESTAMP NOT NULL` |
-| `last_changed_run_id` | `TEXT` |
-| `last_changed_at` | `TIMESTAMP` |
-| `last_synced_run_id` | `TEXT` |
-| `last_synced_at` | `TIMESTAMP` |
+**Table constraints**
+
+- `FOREIGN KEY(first_seen_run_id) REFERENCES cp_runs(run_id)`
+- `FOREIGN KEY(last_seen_run_id) REFERENCES cp_runs(run_id)`
+- `FOREIGN KEY(last_changed_run_id) REFERENCES cp_runs(run_id)`
+- `FOREIGN KEY(last_synced_run_id) REFERENCES cp_runs(run_id)`
 
 ## `cp_file_payloads`
 
-Optional retained binary evidence keyed one-to-one by artifact identity. Registry history and payload retention are intentionally separate concepts.
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `file_id` | `TEXT PRIMARY KEY` | Field |
+| `file_bytes` | `BLOB` | Field |
 
-| Column | Physical type / constraint |
-|---|---|
-| `file_id` | `TEXT PRIMARY KEY` |
-| `file_bytes` | `BLOB` |
+**Table constraints**
+
+- `FOREIGN KEY(file_id) REFERENCES cp_file_registry(file_id) ON DELETE CASCADE`
 
 ## `cp_settings_snapshots`
 
-Content-addressed canonical settings snapshots used to bind runs to operational configuration.
-
-| Column | Physical type / constraint |
-|---|---|
-| `snapshot_id` | `TEXT PRIMARY KEY` |
-| `content_hash` | `TEXT NOT NULL` |
-| `canonical_payload` | `TEXT NOT NULL` |
-| `created_at` | `TIMESTAMP NOT NULL` |
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `snapshot_id` | `TEXT PRIMARY KEY` | Field |
+| `content_hash` | `TEXT NOT NULL` | Field |
+| `canonical_payload` | `TEXT NOT NULL` | Field |
+| `created_at` | `TIMESTAMP NOT NULL` | Field |
 
 ## `cp_rules_snapshots`
 
-Content-addressed canonical FinancialRules snapshots used to bind runs/simulations to financial semantics.
-
-| Column | Physical type / constraint |
-|---|---|
-| `snapshot_id` | `TEXT PRIMARY KEY` |
-| `content_hash` | `TEXT NOT NULL` |
-| `canonical_payload` | `TEXT NOT NULL` |
-| `created_at` | `TIMESTAMP NOT NULL` |
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `snapshot_id` | `TEXT PRIMARY KEY` | Field |
+| `content_hash` | `TEXT NOT NULL` | Field |
+| `canonical_payload` | `TEXT NOT NULL` | Field |
+| `created_at` | `TIMESTAMP NOT NULL` | Field |
 
 ## `cp_runs`
 
-Run lifecycle authority, including status, timestamps, application/schema context, snapshot references, and compressed execution log payload.
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `run_id` | `TEXT PRIMARY KEY` | Field |
+| `started_at` | `TIMESTAMP NOT NULL` | Field |
+| `finished_at` | `TIMESTAMP` | Field |
+| `status` | `TEXT` | Field |
+| `commit_state` | `TEXT NOT NULL DEFAULT 'NOT_STARTED'` | Field |
+| `application_version` | `TEXT` | Field |
+| `schema_version` | `TEXT` | Field |
+| `settings_snapshot_id` | `TEXT` | Field |
+| `rules_snapshot_id` | `TEXT` | Field |
+| `execution_log` | `BLOB` | Field |
 
-| Column | Physical type / constraint |
-|---|---|
-| `run_id` | `TEXT PRIMARY KEY` |
-| `started_at` | `TIMESTAMP NOT NULL` |
-| `finished_at` | `TIMESTAMP` |
-| `status` | `TEXT` |
-| `application_version` | `TEXT` |
-| `schema_version` | `TEXT` |
-| `settings_snapshot_id` | `TEXT` |
-| `rules_snapshot_id` | `TEXT` |
-| `execution_log` | `BLOB` |
+**Table constraints**
+
+- `FOREIGN KEY(settings_snapshot_id) REFERENCES cp_settings_snapshots(snapshot_id)`
+- `FOREIGN KEY(rules_snapshot_id) REFERENCES cp_rules_snapshots(snapshot_id)`
 
 ## `cp_run_failures`
 
-Structured failure evidence with stage, optional ISIN context, exception type/message, traceback, and timestamp.
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `id` | `INTEGER PRIMARY KEY AUTOINCREMENT` | Field |
+| `run_id` | `TEXT NOT NULL` | Field |
+| `failed_isin` | `TEXT` | Field |
+| `stage` | `TEXT` | Field |
+| `error_type` | `TEXT` | Field |
+| `error_message` | `TEXT` | Field |
+| `traceback_log` | `TEXT` | Field |
+| `failure_domain` | `TEXT NOT NULL DEFAULT 'UNKNOWN'` | Field |
+| `created_at` | `TIMESTAMP NOT NULL` | Field |
 
-| Column | Physical type / constraint |
-|---|---|
-| `id` | `INTEGER PRIMARY KEY AUTOINCREMENT` |
-| `run_id` | `TEXT NOT NULL` |
-| `failed_isin` | `TEXT` |
-| `stage` | `TEXT` |
-| `error_type` | `TEXT` |
-| `error_message` | `TEXT` |
-| `traceback_log` | `TEXT` |
-| `created_at` | `TIMESTAMP NOT NULL` |
+**Table constraints**
+
+- `FOREIGN KEY(run_id) REFERENCES cp_runs(run_id)`
 
 ## `cp_artifact_run_events`
 
-Append-style artifact lifecycle evidence. Events preserve run, artifact, event type/time, observed path/hash, previous/new sync state, and reason.
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `event_id` | `TEXT PRIMARY KEY` | Field |
+| `run_id` | `TEXT NOT NULL` | Field |
+| `file_id` | `TEXT NOT NULL` | Field |
+| `event_type` | `TEXT NOT NULL` | Field |
+| `event_at` | `TIMESTAMP NOT NULL` | Field |
+| `observed_path` | `TEXT` | Field |
+| `content_hash` | `TEXT` | Field |
+| `previous_status` | `TEXT` | Field |
+| `new_status` | `TEXT` | Field |
+| `event_reason` | `TEXT` | Field |
+| `affected_table` | `TEXT` | Field |
+| `detecting_run_id` | `TEXT` | Field |
+| `replay_run_id` | `TEXT` | Field |
+| `convergence_result` | `TEXT` | Field |
 
-| Column | Physical type / constraint |
-|---|---|
-| `event_id` | `TEXT PRIMARY KEY` |
-| `run_id` | `TEXT NOT NULL` |
-| `file_id` | `TEXT NOT NULL` |
-| `event_type` | `TEXT NOT NULL` |
-| `event_at` | `TIMESTAMP NOT NULL` |
-| `observed_path` | `TEXT` |
-| `content_hash` | `TEXT` |
-| `previous_status` | `TEXT` |
-| `new_status` | `TEXT` |
-| `event_reason` | `TEXT` |
+**Table constraints**
+
+- `FOREIGN KEY(run_id) REFERENCES cp_runs(run_id)`
+- `FOREIGN KEY(file_id) REFERENCES cp_file_registry(file_id)`
+
+## `cp_external_provider_requests`
+
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `request_id` | `TEXT PRIMARY KEY` | Field |
+| `run_id` | `TEXT NOT NULL` | Field |
+| `provider` | `TEXT NOT NULL` | Field |
+| `entity` | `TEXT NOT NULL` | Field |
+| `requested_start` | `DATE` | Field |
+| `requested_end` | `DATE` | Field |
+| `attempt_count` | `INTEGER NOT NULL DEFAULT 1` | Field |
+| `status` | `TEXT NOT NULL` | Field |
+| `failure_class` | `TEXT` | Field |
+| `final_error` | `TEXT` | Field |
+| `created_at` | `TIMESTAMP NOT NULL` | Field |
+
+**Table constraints**
+
+- `FOREIGN KEY(run_id) REFERENCES cp_runs(run_id)`
+
+## `cp_run_sync_summaries`
+
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `run_id` | `TEXT PRIMARY KEY` | Field |
+| `actionable_count` | `INTEGER NOT NULL` | Field |
+| `synced_count` | `INTEGER NOT NULL` | Field |
+| `healed_count` | `INTEGER NOT NULL` | Field |
+| `failed_count` | `INTEGER NOT NULL` | Field |
+| `deferred_count` | `INTEGER NOT NULL` | Field |
+| `sync_status` | `TEXT NOT NULL` | Field |
+| `created_at` | `TIMESTAMP NOT NULL` | Field |
+
+**Table constraints**
+
+- `FOREIGN KEY(run_id) REFERENCES cp_runs(run_id)`
 
 ## `cp_simulation_runs`
 
-Stochastic-run provenance: seed, horizon/iterations, input date, configuration snapshots, fingerprints, implementation version, status, and result fingerprint.
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `simulation_id` | `TEXT PRIMARY KEY` | Field |
+| `run_id` | `TEXT NOT NULL` | Field |
+| `created_at` | `TIMESTAMP NOT NULL` | Field |
+| `root_seed` | `TEXT NOT NULL` | Field |
+| `iterations` | `INTEGER` | Field |
+| `horizon` | `INTEGER` | Field |
+| `input_as_of_date` | `DATE` | Field |
+| `settings_snapshot_id` | `TEXT` | Field |
+| `rules_snapshot_id` | `TEXT` | Field |
+| `input_fingerprint` | `TEXT` | Field |
+| `model_fingerprint` | `TEXT` | Field |
+| `model_implementation_version` | `TEXT` | Field |
+| `status` | `TEXT` | Field |
+| `result_fingerprint` | `TEXT` | Field |
 
-| Column | Physical type / constraint |
-|---|---|
-| `simulation_id` | `TEXT PRIMARY KEY` |
-| `run_id` | `TEXT NOT NULL` |
-| `created_at` | `TIMESTAMP NOT NULL` |
-| `root_seed` | `TEXT NOT NULL` |
-| `iterations` | `INTEGER` |
-| `horizon` | `INTEGER` |
-| `input_as_of_date` | `DATE` |
-| `settings_snapshot_id` | `TEXT` |
-| `rules_snapshot_id` | `TEXT` |
-| `input_fingerprint` | `TEXT` |
-| `model_fingerprint` | `TEXT` |
-| `model_implementation_version` | `TEXT` |
-| `status` | `TEXT` |
-| `result_fingerprint` | `TEXT` |
+**Table constraints**
 
-## Run and artifact relationship
+- `FOREIGN KEY(run_id) REFERENCES cp_runs(run_id)`
+- `FOREIGN KEY(settings_snapshot_id) REFERENCES cp_settings_snapshots(snapshot_id)`
+- `FOREIGN KEY(rules_snapshot_id) REFERENCES cp_rules_snapshots(snapshot_id)`
+
+
+## Relationship model
 
 ```mermaid
-flowchart TD
-    RUN[cp_runs] --> EVT[cp_artifact_run_events]
-    ART[cp_file_registry] --> EVT
-    ART --> PAY[cp_file_payloads]
-    RUN --> FAIL[cp_run_failures]
-    RUN --> SIM[cp_simulation_runs]
-    SET[cp_settings_snapshots] --> RUN
-    RULE[cp_rules_snapshots] --> RUN
-    SET --> SIM
-    RULE --> SIM
+erDiagram
+    cp_runs ||--o{ cp_run_failures : records
+    cp_runs ||--o{ cp_artifact_run_events : observes
+    cp_runs ||--o{ cp_external_provider_requests : requests
+    cp_runs ||--o| cp_run_sync_summaries : summarizes
+    cp_runs ||--o{ cp_simulation_runs : anchors
+    cp_settings_snapshots ||--o{ cp_runs : configures
+    cp_rules_snapshots ||--o{ cp_runs : configures
+    cp_file_registry ||--o| cp_file_payloads : retains
+    cp_file_registry ||--o{ cp_artifact_run_events : histories
 ```
 
-## Savepoint semantics
+## Run truth and commit state
 
-Repository operations can use SQLite savepoints to create scoped atomic units inside the broader Control Plane transaction. Savepoints protect SQLite-local multi-step mutations; they do **not** create distributed atomicity with DuckDB. The cross-store commit boundary is documented separately because pretending otherwise would be the database equivalent of optimism-driven accounting.
+`cp_runs.commit_state` exists because the application coordinates more than one durable store. Run status alone cannot truthfully describe whether DuckDB and SQLite both committed, one committed, rollback occurred, or recovery is required.
 
-## Retention semantics
+That state is deliberately structured rather than inferred from logs.
 
-- Run and event rows preserve historical operational provenance.
-- Snapshot rows preserve canonical configuration/rules payloads referenced by runs.
-- Artifact registry rows preserve current identity/state plus first/last lifecycle references.
-- Payload rows preserve binary bytes only where the application retains them; event history must not be interpreted as a promise that every historical external file byte is permanently available.
-- Simulation rows preserve execution provenance, not the entire numerical runtime environment.
+## Artifact history
+
+`cp_artifact_run_events` records lifecycle events separately from `cp_file_registry` current state. This preserves the difference between:
+
+```text
+what the artifact is now
+vs
+what happened to the artifact across runs
+```
+
+The event record can retain observed path, content hash, previous/new status, affected table, replay run, and convergence result.
+
+## Configuration provenance
+
+Settings and financial rules are stored as canonical payload + content hash snapshots. Runs reference those snapshot IDs, allowing later investigation to recover the exact policy context rather than only the latest config file.
+
+## Simulation provenance
+
+`cp_simulation_runs` extends ordinary run provenance with:
+
+- root seed;
+- iteration count and horizon;
+- as-of date;
+- settings/rules snapshot IDs;
+- input fingerprint;
+- model fingerprint;
+- implementation marker;
+- result fingerprint.
+
+This separates deterministic pipeline replay from stochastic-model reproducibility.
 
 ## Contract invariants
 
-- Foreign keys are enabled for the Control Plane connection/schema.
-- Run-bound records reference a real `cp_runs.run_id`.
-- Artifact events reference both the run and registered artifact identity.
-- Settings/rules snapshots are content-addressed and reusable across runs with identical canonical payloads.
-- Simulation provenance references the run and the snapshots under which the simulation was executed.
+- `relative_path` is unique in the current artifact registry.
+- payload rows are one-to-one with registered artifacts.
+- run failures preserve failure domain instead of only error text.
+- event history never substitutes for the current artifact row; both are required.
+- synchronization summary is one row per run.
+- simulation history is append-oriented and anchored to a run.
+- snapshot IDs link operational history to exact settings/rules payloads.
 
 ## Related specifications
 
-- [Control Plane Artifact Lifecycle](../architecture/control-plane-artifact-lifecycle.md)
-- [Reliability and Recovery](../architecture/reliability-and-recovery.md)
-- [Deterministic Identity and Replay](../architecture/deterministic-identity-and-replay.md)
+- [Control Plane & Artifact Lifecycle](../architecture/control-plane-artifact-lifecycle.md)
+- [Reliability & Recovery](../architecture/reliability-and-recovery.md)
 - [Meta Data Contracts](meta-data-contracts.md)

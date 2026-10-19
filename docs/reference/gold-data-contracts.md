@@ -1,926 +1,888 @@
 # Gold Data Contracts
 
-Gold is the BI-facing presentation layer. Its contracts expose tax, wealth, cashflow, FIRE, and investment analytical views at deliberately consumable grains while keeping reconstruction mechanics in Silver and the engines that produce it.
+Gold is the analytical presentation layer. It reshapes canonical state for decision-making, BI, portfolio analysis, Tax summaries, and household/wealth analytics.
 
-## Registry authority
-
-The current registry contains **22 Gold contracts**. Publication order is explicit metadata, not an accidental consequence of dictionary iteration or filename sorting. The ETL validates the registry before publication and rejects missing or unregistered analytical outputs.
-
-```mermaid
-flowchart LR
-    P[Engine output key] --> R[DataContract registry]
-    R --> G[Grain + producer + order]
-    R --> T[Physical table]
-    T --> D[DDL schema]
-    D --> V[Validated publication]
-```
+Gold is not allowed to become a second financial engine. Its contract is presentation grain plus physical schema, with financial meaning inherited from canonical upstream state.
 
 ## Contract catalog
 
-| Order | Contract ID | Physical table | Domain | Grain | Producer |
-|---:|---|---|---|---|---|
-| 110 | `df_p_tf_wealth_monthly_totals` | `gold.Core_Monthly_Fact` | Wealth | Month | `WealthPresentationEngine` |
-| 110 | `df_p_tf_net_worth_monthly_summary` | `gold.Wealth_Asset_Breakdown` | Wealth | Month-Asset | `WealthPresentationEngine` |
-| 120 | `df_p_tf_category_spend_analytics` | `gold.Cashflow_Expense_Breakdown` | Wealth | Month-ExpenseCategory | `WealthPresentationEngine` |
-| 130 | `df_p_tf_income_streams_monthly` | `gold.Cashflow_Income_Breakdown` | Wealth | Month-IncomeCategory | `WealthPresentationEngine` |
-| 140 | `df_p_tf_wealth_risk_analytics` | `gold.Wealth_FIRE_Analytics` | Wealth | Month | `WealthPresentationEngine` |
-| 160 | `df_p_tf_budget_forecast_monthly` | `gold.Forecast_Budget_Variance` | Wealth | Month | `WealthPresentationEngine` |
-| 170 | `df_p_tf_investment_analytics` | `gold.Investment_Portfolio_Summary` | Investments | Month-ISIN | `InvestmentQuantEngine` |
-| 180 | `df_p_tf_monthly_cashflow_summary` | `gold.Cashflow_Efficiency_Analytics` | Wealth | Month | `WealthPresentationEngine` |
-| 190 | `df_p_tf_cashflow_activity_summary` | `gold.Cashflow_Activity_Summary` | Wealth | Month | `WealthPresentationEngine` |
-| 200 | `df_f_investment_analytics_isin` | `gold.Investment_By_ISIN` | Investments | Date-ISIN | `InvestmentQuantEngine` |
-| 210 | `df_f_investment_analytics_subtype` | `gold.Investment_By_Subtype` | Investments | Date-Subtype | `InvestmentQuantEngine` |
-| 220 | `df_f_investment_analytics_class` | `gold.Investment_By_Class` | Investments | Date-Class | `InvestmentQuantEngine` |
-| 230 | `df_f_investment_analytics_instrument_type` | `gold.Investment_By_Instrument_Type` | Investments | Date-InstrumentType | `InvestmentQuantEngine` |
-| 240 | `df_f_investment_analytics_sector` | `gold.Investment_By_Sector` | Investments | Date-Sector | `InvestmentQuantEngine` |
-| 250 | `df_f_investment_analytics_industry` | `gold.Investment_By_Industry` | Investments | Date-Industry | `InvestmentQuantEngine` |
-| 260 | `df_f_investment_analytics_portfolio` | `gold.Investment_By_Portfolio` | Investments | Date | `InvestmentQuantEngine` |
-| 270 | `df_f_investment_analytics_geo` | `gold.Investment_By_Geo` | Investments | Date-Geo | `InvestmentQuantEngine` |
-| 280 | `df_f_investment_analytics_country` | `gold.Investment_By_Country` | Investments | Date-Country | `InvestmentQuantEngine` |
-| 290 | `df_f_investment_analytics_currency` | `gold.Investment_By_Currency` | Investments | Date-Currency | `InvestmentQuantEngine` |
-| 302 | `df_p_tax_year_summary` | `gold.Tax_Year_Summary` | Taxes | FY | `TaxEngine` |
-| 303 | `df_p_tax_income_breakdown` | `gold.Tax_Income_Breakdown` | Taxes | FY-Head-SubHead-Source | `TaxEngine` |
-| 304 | `df_p_tax_reconciliation` | `gold.Tax_Reconciliation` | Taxes | FY-SubHead | `TaxEngine` |
+| Contract ID | Physical table | Domain | Grain | Producer | Order |
+|---|---|---|---|---|---:|
+| `df_p_tax_year_summary` | `gold.Tax_Year_Summary` | Taxes | `FY` | `TaxEngine` | 302 |
+| `df_p_tax_income_breakdown` | `gold.Tax_Income_Breakdown` | Taxes | `FY-Head-SubHead-Source` | `TaxEngine` | 303 |
+| `df_p_tax_reconciliation` | `gold.Tax_Reconciliation` | Taxes | `FY-SubHead` | `TaxEngine` | 304 |
+| `df_p_tf_wealth_monthly_totals` | `gold.Core_Monthly_Fact` | Wealth | `Month` | `WealthPresentationEngine` | 110 |
+| `df_p_tf_net_worth_monthly_summary` | `gold.Wealth_Asset_Breakdown` | Wealth | `Month-Asset` | `WealthPresentationEngine` | 110 |
+| `df_p_tf_category_spend_analytics` | `gold.Cashflow_Expense_Breakdown` | Wealth | `Month-ExpenseCategory` | `WealthPresentationEngine` | 120 |
+| `df_p_tf_income_streams_monthly` | `gold.Cashflow_Income_Breakdown` | Wealth | `Month-IncomeCategory` | `WealthPresentationEngine` | 130 |
+| `df_p_tf_wealth_risk_analytics` | `gold.Wealth_FIRE_Analytics` | Wealth | `Month` | `WealthPresentationEngine` | 140 |
+| `df_p_tf_budget_forecast_monthly` | `gold.Forecast_Budget_Variance` | Wealth | `Month` | `WealthPresentationEngine` | 160 |
+| `df_p_tf_investment_analytics` | `gold.Investment_Portfolio_Summary` | Investments | `Month-ISIN` | `InvestmentQuantEngine` | 170 |
+| `df_p_tf_monthly_cashflow_summary` | `gold.Cashflow_Efficiency_Analytics` | Wealth | `Month` | `WealthPresentationEngine` | 180 |
+| `df_p_tf_cashflow_activity_summary` | `gold.Cashflow_Activity_Summary` | Wealth | `Month` | `WealthPresentationEngine` | 190 |
+| `df_f_investment_analytics_isin` | `gold.Investment_By_ISIN` | Investments | `Date-ISIN` | `InvestmentQuantEngine` | 200 |
+| `df_f_investment_analytics_subtype` | `gold.Investment_By_Subtype` | Investments | `Date-Subtype` | `InvestmentQuantEngine` | 210 |
+| `df_f_investment_analytics_class` | `gold.Investment_By_Class` | Investments | `Date-Class` | `InvestmentQuantEngine` | 220 |
+| `df_f_investment_analytics_instrument_type` | `gold.Investment_By_Instrument_Type` | Investments | `Date-InstrumentType` | `InvestmentQuantEngine` | 230 |
+| `df_f_investment_analytics_sector` | `gold.Investment_By_Sector` | Investments | `Date-Sector` | `InvestmentQuantEngine` | 240 |
+| `df_f_investment_analytics_industry` | `gold.Investment_By_Industry` | Investments | `Date-Industry` | `InvestmentQuantEngine` | 250 |
+| `df_f_investment_analytics_portfolio` | `gold.Investment_By_Portfolio` | Investments | `Date` | `InvestmentQuantEngine` | 260 |
+| `df_f_investment_analytics_geo` | `gold.Investment_By_Geo` | Investments | `Date-Geo` | `InvestmentQuantEngine` | 270 |
+| `df_f_investment_analytics_country` | `gold.Investment_By_Country` | Investments | `Date-Country` | `InvestmentQuantEngine` | 280 |
+| `df_f_investment_analytics_currency` | `gold.Investment_By_Currency` | Investments | `Date-Currency` | `InvestmentQuantEngine` | 290 |
+
 
 ## Physical schemas
 
-### `gold.Core_Monthly_Fact`
-
-**Contract ID:** `df_p_tf_wealth_monthly_totals`  
-**Domain:** Wealth  
-**Registry grain:** **Month**  
-**Producer:** `WealthPresentationEngine`  
-**Publication order:** `110`
-
-| Column | Physical type / constraint |
-|---|---|
-| `MONTH_START_DATE` | `DATE` |
-| `MONTH_END_DATE` | `DATE` |
-| `Months_Elapsed` | `BIGINT` |
-| `Total_Income` | `DOUBLE` |
-| `Total_Cash_Income` | `DOUBLE` |
-| `Total_Non_Cash_Income` | `DOUBLE` |
-| `Total_Expense` | `DOUBLE` |
-| `Total_Core_Expense` | `DOUBLE` |
-| `Total_Cash_Expense` | `DOUBLE` |
-| `Total_Non_Cash_Expense` | `DOUBLE` |
-| `Net_Cashflow_Month` | `DOUBLE` |
-| `Opening_Balance_Asset` | `DOUBLE` |
-| `Opening_Balance_Asset_Market` | `DOUBLE` |
-| `Closing_Balance_Asset` | `DOUBLE` |
-| `Closing_Balance_Asset_Market` | `DOUBLE` |
-| `Asset_Delta` | `DOUBLE` |
-| `Asset_Market_Delta` | `DOUBLE` |
-| `Total_Assets` | `DOUBLE` |
-| `Total_Assets_Market` | `DOUBLE` |
-| `Opening_Investment_Book_Value` | `DOUBLE` |
-| `Closing_Investment_Book_Value` | `DOUBLE` |
-| `Investment_Book_Value_Delta` | `DOUBLE` |
-| `Opening_Investment_Market_Value` | `DOUBLE` |
-| `Closing_Investment_Market_Value` | `DOUBLE` |
-| `Investment_Market_Value_Delta` | `DOUBLE` |
-| `Liquid_Assets` | `DOUBLE` |
-| `Liquid_Assets_Market` | `DOUBLE` |
-| `Total_Liabilities` | `DOUBLE` |
-| `Total_Net_Worth` | `DOUBLE` |
-| `Total_Net_Worth_Market` | `DOUBLE` |
-| `Total_Foreign_Currency_Exposure` | `DOUBLE` |
-| `Opening_Unrealized_PL` | `DOUBLE` |
-| `Closing_Unrealized_PL` | `DOUBLE` |
-| `Closing_Asset_PnL` | `DOUBLE` |
-| `Closing_Forex_PnL` | `DOUBLE` |
-| `Opening_Investment_XIRR` | `DOUBLE` |
-| `Closing_Investment_XIRR` | `DOUBLE` |
-| `Foreign_Exposure_Pct` | `DOUBLE` |
-| `CPI_INDEX` | `DOUBLE` |
-| `INFLATION_YOY_PCT` | `DOUBLE` |
-
-The physical DDL defines **40 columns** for this table. The registry grain is the semantic row contract; it should be used when reasoning about joins and uniqueness rather than assuming the first ID-looking column is automatically the grain.
-
-### `gold.Wealth_Asset_Breakdown`
-
-**Contract ID:** `df_p_tf_net_worth_monthly_summary`  
-**Domain:** Wealth  
-**Registry grain:** **Month-Asset**  
-**Producer:** `WealthPresentationEngine`  
-**Publication order:** `110`
-
-| Column | Physical type / constraint |
-|---|---|
-| `MONTH_START_DATE` | `DATE` |
-| `MONTH_END_DATE` | `DATE` |
-| `ASSET_SUBCATEGORY_ID` | `TEXT` |
-| `Opening_Balance` | `DOUBLE` |
-| `Closing_Balance` | `DOUBLE` |
-| `Closing_Balance_Market` | `DOUBLE` |
-| `All_Time_High_Balance` | `DOUBLE` |
-| `Liquid_Assets` | `DOUBLE` |
-| `Liquid_Assets_Market` | `DOUBLE` |
-| `Closing_Asset_PnL` | `DOUBLE` |
-| `Closing_Forex_PnL` | `DOUBLE` |
-| `Organic_Growth_Value` | `DOUBLE` |
-| `Drawdown_From_Peak` | `DOUBLE` |
-| `Investment_Contribution_Pct` | `DOUBLE` |
-| `Savings_to_NW_Ratio` | `DOUBLE` |
-| `Income_Inflow` | `DOUBLE` |
-| `Cash_Income_Inflow` | `DOUBLE` |
-| `Non_Cash_Income_Inflow` | `DOUBLE` |
-| `Expense_Outflow` | `DOUBLE` |
-| `Core_Expense_Outflow` | `DOUBLE` |
-| `Cash_Expense_Outflow` | `DOUBLE` |
-| `Non_Cash_Expense_Outflow` | `DOUBLE` |
-| `Net_Transfers` | `DOUBLE` |
-| `Net_Cashflow_Month` | `DOUBLE` |
-| `Surplus_Deficit_Month` | `DOUBLE` |
-| `Cumulative_Net_Savings` | `DOUBLE` |
-| `Months_of_Runway` | `DOUBLE` |
-
-The physical DDL defines **27 columns** for this table. The registry grain is the semantic row contract; it should be used when reasoning about joins and uniqueness rather than assuming the first ID-looking column is automatically the grain.
-
-### `gold.Cashflow_Expense_Breakdown`
-
-**Contract ID:** `df_p_tf_category_spend_analytics`  
-**Domain:** Wealth  
-**Registry grain:** **Month-ExpenseCategory**  
-**Producer:** `WealthPresentationEngine`  
-**Publication order:** `120`
-
-| Column | Physical type / constraint |
-|---|---|
-| `MONTH_START_DATE` | `DATE` |
-| `MONTH_END_DATE` | `DATE` |
-| `YEAR_MONTH` | `TEXT` |
-| `CATEGORY_ID` | `TEXT` |
-| `CATEGORY_NAME` | `TEXT` |
-| `CATEGORY_GROUPS` | `TEXT` |
-| `Spend_Type` | `TEXT` |
-| `Is_Core_Expense` | `BOOLEAN` |
-| `Is_Investment` | `BOOLEAN` |
-| `Is_Discretionary` | `BOOLEAN` |
-| `Total_Monthly_Spend` | `DOUBLE` |
-| `Cash_Spend` | `DOUBLE` |
-| `Non_Cash_Spend` | `DOUBLE` |
-| `Trailing_3M_Avg_Spend` | `DOUBLE` |
-| `Cumulative_YTD_Spend` | `DOUBLE` |
-
-The physical DDL defines **15 columns** for this table. The registry grain is the semantic row contract; it should be used when reasoning about joins and uniqueness rather than assuming the first ID-looking column is automatically the grain.
-
-### `gold.Cashflow_Income_Breakdown`
-
-**Contract ID:** `df_p_tf_income_streams_monthly`  
-**Domain:** Wealth  
-**Registry grain:** **Month-IncomeCategory**  
-**Producer:** `WealthPresentationEngine`  
-**Publication order:** `130`
-
-| Column | Physical type / constraint |
-|---|---|
-| `MONTH_START_DATE` | `DATE` |
-| `MONTH_END_DATE` | `DATE` |
-| `YEAR_MONTH` | `TEXT` |
-| `CATEGORY_ID` | `TEXT` |
-| `CATEGORY_NAME` | `TEXT` |
-| `CATEGORY_GROUPS` | `TEXT` |
-| `Is_Active_Income` | `BOOLEAN` |
-| `Is_Passive_Income` | `BOOLEAN` |
-| `Is_Dividend_Income` | `BOOLEAN` |
-| `Is_Interest_Income` | `BOOLEAN` |
-| `Is_Non_Cash_Income` | `BOOLEAN` |
-| `Total_Monthly_Income` | `DOUBLE` |
-| `Trailing_3M_Avg_Income` | `DOUBLE` |
-| `Cumulative_YTD_Income` | `DOUBLE` |
-
-The physical DDL defines **14 columns** for this table. The registry grain is the semantic row contract; it should be used when reasoning about joins and uniqueness rather than assuming the first ID-looking column is automatically the grain.
-
-### `gold.Wealth_FIRE_Analytics`
-
-**Contract ID:** `df_p_tf_wealth_risk_analytics`  
-**Domain:** Wealth  
-**Registry grain:** **Month**  
-**Producer:** `WealthPresentationEngine`  
-**Publication order:** `140`
-
-BI-facing wealth and FIRE analytics, including stochastic simulation outputs. Simulation provenance itself remains in the Control Plane/Meta surfaces.
-
-| Column | Physical type / constraint |
-|---|---|
-| `MONTH_START_DATE` | `DATE` |
-| `MONTH_END_DATE` | `DATE` |
-| `YEAR_MONTH` | `TEXT` |
-| `Projected_FI_Date_P50` | `DATE` |
-| `Total_Income` | `DOUBLE` |
-| `Total_Cash_Income` | `DOUBLE` |
-| `Trailing_6M_Avg_Spend` | `DOUBLE` |
-| `Trailing_12M_Avg_Spend` | `DOUBLE` |
-| `Trailing_6M_Avg_Savings` | `DOUBLE` |
-| `Trailing_12M_Avg_Savings` | `DOUBLE` |
-| `Target_FI_Today` | `DOUBLE` |
-| `Coast_FI_Today` | `DOUBLE` |
-| `Lean_FI_Today` | `DOUBLE` |
-| `Target_FI_Total_Future_Nominal` | `DOUBLE` |
-| `FI_Gap` | `DOUBLE` |
-| `FI_Gap_Monthly_Trend` | `DOUBLE` |
-| `Terminal_Wealth_Nominal_P50` | `DOUBLE` |
-| `Real_Return_Assumed_Pct` | `DOUBLE` |
-| `Wealth_Velocity` | `DOUBLE` |
-| `Wealth_Acceleration` | `DOUBLE` |
-| `Real_NW_CAGR_3Y` | `DOUBLE` |
-| `Current_FI_Coverage_Pct` | `DOUBLE` |
-| `Estimated_Months_To_FI_Linear` | `DOUBLE` |
-| `Months_To_FI_Conservative_P90` | `DOUBLE` |
-| `Months_To_FI_Base_P50` | `DOUBLE` |
-| `Months_To_FI_Aggressive_P10` | `DOUBLE` |
-| `Probability_Of_Success_Pct` | `DOUBLE` |
-| `Years_To_FI_P50` | `DOUBLE` |
-| `Runway_Months_Linear` | `DOUBLE` |
-| `Runway_Months_Stressed_P10` | `DOUBLE` |
-| `Runway_Months_Base_P50` | `DOUBLE` |
-| `Withdrawal_Rate_If_Retired_Now` | `DOUBLE` |
-| `Savings_Rate_Required` | `DOUBLE` |
-| `Savings_Rate_Actual` | `DOUBLE` |
-| `FI_Velocity` | `DOUBLE` |
-
-The physical DDL defines **35 columns** for this table. The registry grain is the semantic row contract; it should be used when reasoning about joins and uniqueness rather than assuming the first ID-looking column is automatically the grain.
-
-### `gold.Forecast_Budget_Variance`
-
-**Contract ID:** `df_p_tf_budget_forecast_monthly`  
-**Domain:** Wealth  
-**Registry grain:** **Month**  
-**Producer:** `WealthPresentationEngine`  
-**Publication order:** `160`
-
-| Column | Physical type / constraint |
-|---|---|
-| `MONTH_START_DATE` | `DATE` |
-| `MONTH_END_DATE` | `DATE` |
-| `YEAR_MONTH` | `TEXT` |
-| `Is_Core_Overspent` | `BOOLEAN` |
-| `Is_NonCore_Overspent` | `BOOLEAN` |
-| `Is_Investment_Underfunded` | `BOOLEAN` |
-| `Is_Income_Volatile` | `BOOLEAN` |
-| `Is_Budget_Month_Healthy` | `BOOLEAN` |
-| `Total_Income` | `DOUBLE` |
-| `Actual_Income` | `DOUBLE` |
-| `Budget_Income` | `DOUBLE` |
-| `Budget_Core_Expense_Target` | `DOUBLE` |
-| `Budget_NonCore_Expense_Target` | `DOUBLE` |
-| `Budget_Investment_Target` | `DOUBLE` |
-| `Budget_Surplus_Buffer` | `DOUBLE` |
-| `Budget_Total_Expense_Target` | `DOUBLE` |
-| `Actual_Core_Expense` | `DOUBLE` |
-| `Actual_NonCore_Expense` | `DOUBLE` |
-| `Investment_Deployed` | `DOUBLE` |
-| `Investment_Redeemed` | `DOUBLE` |
-| `Actual_Investment` | `DOUBLE` |
-| `Actual_Savings` | `DOUBLE` |
-| `Emergency_Fund_Gap` | `DOUBLE` |
-| `Rule_Core_Pct_Budget` | `DOUBLE` |
-| `Rule_NonCore_Pct_Budget` | `DOUBLE` |
-| `Rule_Investment_Pct_Budget` | `DOUBLE` |
-| `Zero_Income_Runway_Months` | `DOUBLE` |
-
-The physical DDL defines **27 columns** for this table. The registry grain is the semantic row contract; it should be used when reasoning about joins and uniqueness rather than assuming the first ID-looking column is automatically the grain.
-
-### `gold.Investment_Portfolio_Summary`
-
-**Contract ID:** `df_p_tf_investment_analytics`  
-**Domain:** Investments  
-**Registry grain:** **Month-ISIN**  
-**Producer:** `InvestmentQuantEngine`  
-**Publication order:** `170`
-
-Monthly ISIN-level investment presentation output produced by the Quant Engine.
-
-| Column | Physical type / constraint |
-|---|---|
-| `MONTH_START_DATE` | `DATE` |
-| `Max_Closing_Date` | `DATE` |
-| `ISIN` | `TEXT` |
-| `CURRENCY_ID` | `TEXT` |
-| `INSTRUMENT_NAME` | `TEXT` |
-| `INSTRUMENT_CLASS` | `TEXT` |
-| `INSTRUMENT_TYPE` | `TEXT` |
-| `INSTRUMENT_SUBTYPE` | `TEXT` |
-| `SECTOR` | `TEXT` |
-| `Rebalance_Required` | `BOOLEAN` |
-| `ISIN_Market_Value` | `DOUBLE` |
-| `ISIN_Book_Value` | `DOUBLE` |
-| `ISIN_Market_Value_Local` | `DOUBLE` |
-| `ISIN_Book_Value_Local` | `DOUBLE` |
-| `ISIN_Unrealized_PnL` | `DOUBLE` |
-| `ISIN_Asset_PnL` | `DOUBLE` |
-| `ISIN_Forex_PnL` | `DOUBLE` |
-| `ISIN_Forex_Contribution_Pct` | `DOUBLE` |
-| `ISIN_XIRR_Local` | `DOUBLE` |
-| `ISIN_FX_XIRR_Impact` | `DOUBLE` |
-| `ISIN_BM_XIRR` | `DOUBLE` |
-| `ISIN_BM_XIRR_Local` | `DOUBLE` |
-| `ISIN_Active_Return` | `DOUBLE` |
-| `ISIN_Active_Return_Local` | `DOUBLE` |
-| `ISIN_Weight` | `DOUBLE` |
-| `Class_Weight` | `DOUBLE` |
-| `Class_Target_Weight` | `DOUBLE` |
-| `Class_Drift` | `DOUBLE` |
-| `Sector_Weight` | `DOUBLE` |
-| `Monthly_Market_Value_Change_Pct` | `DOUBLE` |
-| `ISIN_Harvestable_Loss` | `DOUBLE` |
-| `Tax_Harvesting_Priority_Score` | `DOUBLE` |
-
-The physical DDL defines **32 columns** for this table. The registry grain is the semantic row contract; it should be used when reasoning about joins and uniqueness rather than assuming the first ID-looking column is automatically the grain.
-
-### `gold.Cashflow_Efficiency_Analytics`
-
-**Contract ID:** `df_p_tf_monthly_cashflow_summary`  
-**Domain:** Wealth  
-**Registry grain:** **Month**  
-**Producer:** `WealthPresentationEngine`  
-**Publication order:** `180`
-
-| Column | Physical type / constraint |
-|---|---|
-| `MONTH_START_DATE` | `DATE` |
-| `MONTH_END_DATE` | `DATE` |
-| `YEAR_MONTH` | `TEXT` |
-| `Is_Surplus_Month` | `BOOLEAN` |
-| `Is_Investment_Target_Met` | `BOOLEAN` |
-| `Total_Income` | `DOUBLE` |
-| `Total_Cash_Income` | `DOUBLE` |
-| `Total_Non_Cash_Income` | `DOUBLE` |
-| `Total_Expense` | `DOUBLE` |
-| `Active_Income` | `DOUBLE` |
-| `Passive_Income` | `DOUBLE` |
-| `Dividend_Income` | `DOUBLE` |
-| `Interest_Income` | `DOUBLE` |
-| `Core_Expense` | `DOUBLE` |
-| `NonCore_Expense` | `DOUBLE` |
-| `Total_Cash_Expense` | `DOUBLE` |
-| `Total_Non_Cash_Expense` | `DOUBLE` |
-| `Total_Investment_Deployed` | `DOUBLE` |
-| `Total_Investment_Redeemed` | `DOUBLE` |
-| `Redemption_Gain_Loss_Value` | `DOUBLE` |
-| `Net_Investment_Flow` | `DOUBLE` |
-| `Gross_Surplus` | `DOUBLE` |
-| `Net_Surplus_After_Invest` | `DOUBLE` |
-| `Income_MoM_Delta` | `DOUBLE` |
-| `Expense_MoM_Delta` | `DOUBLE` |
-| `Investment_MoM_Delta` | `DOUBLE` |
-| `Trailing_3M_Avg_Income` | `DOUBLE` |
-| `Trailing_3M_Avg_Expense` | `DOUBLE` |
-| `Trailing_3M_Avg_Investment` | `DOUBLE` |
-| `Savings_Rate_Pct` | `DOUBLE` |
-| `Investment_Rate_Pct` | `DOUBLE` |
-| `Active_Income_Share_Pct` | `DOUBLE` |
-| `Passive_Income_Share_Pct` | `DOUBLE` |
-| `Core_Expense_Share_Pct` | `DOUBLE` |
-| `NonCore_Expense_Share_Pct` | `DOUBLE` |
-| `Income_MoM_Pct` | `DOUBLE` |
-| `Expense_MoM_Pct` | `DOUBLE` |
-| `Trailing_3M_Avg_Savings_Rate` | `DOUBLE` |
-| `Trailing_3M_Avg_Investment_Rate` | `DOUBLE` |
-| `Liquidity_Ratio_Months` | `DOUBLE` |
-| `Debt_to_Asset_Ratio_Pct` | `DOUBLE` |
-| `YoY_Net_Worth_Growth_Pct` | `DOUBLE` |
-| `YoY_Net_Worth_Growth_Pct_Real` | `DOUBLE` |
-| `Expense_to_NW_Ratio` | `DOUBLE` |
-| `Emergency_Fund_Coverage` | `DOUBLE` |
-
-The physical DDL defines **45 columns** for this table. The registry grain is the semantic row contract; it should be used when reasoning about joins and uniqueness rather than assuming the first ID-looking column is automatically the grain.
-
-### `gold.Cashflow_Activity_Summary`
-
-**Contract ID:** `df_p_tf_cashflow_activity_summary`  
-**Domain:** Wealth  
-**Registry grain:** **Month**  
-**Producer:** `WealthPresentationEngine`  
-**Publication order:** `190`
-
-| Column | Physical type / constraint |
-|---|---|
-| `MONTH_START_DATE` | `DATE` |
-| `MONTH_END_DATE` | `DATE` |
-| `YEAR_MONTH` | `TEXT` |
-| `Opening_Cash_Balance` | `DOUBLE` |
-| `Closing_Cash_Balance` | `DOUBLE` |
-| `Net_Cash_Movement` | `DOUBLE` |
-| `Cash_Inflow_Operating` | `DOUBLE` |
-| `Cash_Outflow_Operating` | `DOUBLE` |
-| `Net_Cashflow_Operating` | `DOUBLE` |
-| `Cash_Inflow_Investing` | `DOUBLE` |
-| `Cash_Outflow_Investing` | `DOUBLE` |
-| `Net_Cashflow_Investing` | `DOUBLE` |
-| `Cash_Inflow_Financing` | `DOUBLE` |
-| `Cash_Outflow_Financing` | `DOUBLE` |
-| `Net_Cashflow_Financing` | `DOUBLE` |
-| `Internal_Transfer_Inflow` | `DOUBLE` |
-| `Internal_Transfer_Outflow` | `DOUBLE` |
-| `Net_Internal_Transfers` | `DOUBLE` |
-| `Total_Cash_Expenses` | `DOUBLE` |
-| `Total_Non_Cash_Expenses` | `DOUBLE` |
-| `Total_Cash_Inflow` | `DOUBLE` |
-| `Total_Cash_Outflow` | `DOUBLE` |
-| `Calculated_Net_Cashflow` | `DOUBLE` |
-| `Unreconciled_Difference` | `DOUBLE` |
-
-The physical DDL defines **24 columns** for this table. The registry grain is the semantic row contract; it should be used when reasoning about joins and uniqueness rather than assuming the first ID-looking column is automatically the grain.
-
-### `gold.Investment_By_ISIN`
-
-**Contract ID:** `df_f_investment_analytics_isin`  
-**Domain:** Investments  
-**Registry grain:** **Date-ISIN**  
-**Producer:** `InvestmentQuantEngine`  
-**Publication order:** `200`
-
-| Column | Physical type / constraint |
-|---|---|
-| `Closing_Date` | `DATE NOT NULL` |
-| `ISIN` | `TEXT NOT NULL` |
-| `CURRENCY_ID` | `TEXT` |
-| `Total_Invested_Value` | `DOUBLE` |
-| `Total_Current_Value` | `DOUBLE` |
-| `Total_Quantity` | `DOUBLE` |
-| `Total_Stocks` | `DOUBLE` |
-| `Total_Invested_Value_Local` | `DOUBLE` |
-| `Total_Current_Value_Local` | `DOUBLE` |
-| `Current_FX_Rate` | `DOUBLE` |
-| `Blended_FX_Buy_Rate` | `DOUBLE` |
-| `Currency_Appreciation_Pct` | `DOUBLE` |
-| `Unrealized_PL` | `DOUBLE` |
-| `Asset_PnL` | `DOUBLE` |
-| `Forex_PnL` | `DOUBLE` |
-| `Forex_Contribution_Pct` | `DOUBLE` |
-| `Absolute_Return` | `DOUBLE` |
-| `CAGR` | `DOUBLE` |
-| `XIRR` | `DOUBLE` |
-| `XIRR_Local` | `DOUBLE` |
-| `FX_XIRR_Impact` | `DOUBLE` |
-| `After_Tax_XIRR` | `DOUBLE` |
-| `BM_CAGR` | `DOUBLE` |
-| `BM_XIRR` | `DOUBLE` |
-| `BM_XIRR_Local` | `DOUBLE` |
-| `Active_Return` | `DOUBLE` |
-| `Active_Return_Local` | `DOUBLE` |
-| `Is_Lagging_Benchmark` | `BIGINT` |
-| `Outperforming_Lot_Ratio` | `DOUBLE` |
-| `Max_Drawdown` | `DOUBLE` |
-| `Weight` | `DOUBLE` |
-| `Unrealized_LTCG` | `DOUBLE` |
-| `Unrealized_STCG` | `DOUBLE` |
-| `Unrealized_Gain` | `DOUBLE` |
-| `Unrealized_LTCL` | `DOUBLE` |
-| `Unrealized_STCL` | `DOUBLE` |
-| `Unrealized_Loss` | `DOUBLE` |
-| `LTCG_Tax_If_Sold` | `DOUBLE` |
-| `STCG_Tax_If_Sold` | `DOUBLE` |
-| `FY_Realized_LTCG` | `DOUBLE` |
-| `FY_Realized_STCG` | `DOUBLE` |
-| `FY_Realized_Gain` | `DOUBLE` |
-| `FY_Realized_LTCL` | `DOUBLE` |
-| `FY_Realized_STCL` | `DOUBLE` |
-| `FY_Realized_Loss` | `DOUBLE` |
-| `FY_Realized_Net_PnL` | `DOUBLE` |
-
-The physical DDL defines **46 columns** for this table. The registry grain is the semantic row contract; it should be used when reasoning about joins and uniqueness rather than assuming the first ID-looking column is automatically the grain.
-
-### `gold.Investment_By_Subtype`
-
-**Contract ID:** `df_f_investment_analytics_subtype`  
-**Domain:** Investments  
-**Registry grain:** **Date-Subtype**  
-**Producer:** `InvestmentQuantEngine`  
-**Publication order:** `210`
-
-| Column | Physical type / constraint |
-|---|---|
-| `Closing_Date` | `DATE NOT NULL` |
-| `INSTRUMENT_SUBTYPE` | `TEXT NOT NULL` |
-| `INSTRUMENT_CLASS` | `TEXT NOT NULL` |
-| `Total_Invested_Value` | `DOUBLE` |
-| `Total_Current_Value` | `DOUBLE` |
-| `Total_Quantity` | `DOUBLE` |
-| `Total_Stocks` | `DOUBLE` |
-| `Unrealized_PL` | `DOUBLE` |
-| `Asset_PnL` | `DOUBLE` |
-| `Forex_PnL` | `DOUBLE` |
-| `Forex_Contribution_Pct` | `DOUBLE` |
-| `Absolute_Return` | `DOUBLE` |
-| `XIRR` | `DOUBLE` |
-| `After_Tax_XIRR` | `DOUBLE` |
-| `BM_XIRR` | `DOUBLE` |
-| `Active_Return` | `DOUBLE` |
-| `Max_Drawdown` | `DOUBLE` |
-| `Weight` | `DOUBLE` |
-| `Unrealized_Gain` | `DOUBLE` |
-| `Unrealized_Loss` | `DOUBLE` |
-| `FY_Realized_Gain` | `DOUBLE` |
-| `FY_Realized_Loss` | `DOUBLE` |
-| `FY_Realized_Net_PnL` | `DOUBLE` |
-
-The physical DDL defines **23 columns** for this table. The registry grain is the semantic row contract; it should be used when reasoning about joins and uniqueness rather than assuming the first ID-looking column is automatically the grain.
-
-### `gold.Investment_By_Class`
-
-**Contract ID:** `df_f_investment_analytics_class`  
-**Domain:** Investments  
-**Registry grain:** **Date-Class**  
-**Producer:** `InvestmentQuantEngine`  
-**Publication order:** `220`
-
-| Column | Physical type / constraint |
-|---|---|
-| `Closing_Date` | `DATE NOT NULL` |
-| `INSTRUMENT_CLASS` | `TEXT NOT NULL` |
-| `Total_Invested_Value` | `DOUBLE` |
-| `Total_Current_Value` | `DOUBLE` |
-| `Total_Quantity` | `DOUBLE` |
-| `Total_Stocks` | `DOUBLE` |
-| `Unrealized_PL` | `DOUBLE` |
-| `Asset_PnL` | `DOUBLE` |
-| `Forex_PnL` | `DOUBLE` |
-| `Forex_Contribution_Pct` | `DOUBLE` |
-| `Absolute_Return` | `DOUBLE` |
-| `XIRR` | `DOUBLE` |
-| `After_Tax_XIRR` | `DOUBLE` |
-| `BM_XIRR` | `DOUBLE` |
-| `Active_Return` | `DOUBLE` |
-| `Max_Drawdown` | `DOUBLE` |
-| `Weight` | `DOUBLE` |
-| `Unrealized_Gain` | `DOUBLE` |
-| `Unrealized_Loss` | `DOUBLE` |
-| `FY_Realized_Gain` | `DOUBLE` |
-| `FY_Realized_Loss` | `DOUBLE` |
-| `FY_Realized_Net_PnL` | `DOUBLE` |
-
-The physical DDL defines **22 columns** for this table. The registry grain is the semantic row contract; it should be used when reasoning about joins and uniqueness rather than assuming the first ID-looking column is automatically the grain.
-
-### `gold.Investment_By_Instrument_Type`
-
-**Contract ID:** `df_f_investment_analytics_instrument_type`  
-**Domain:** Investments  
-**Registry grain:** **Date-InstrumentType**  
-**Producer:** `InvestmentQuantEngine`  
-**Publication order:** `230`
-
-| Column | Physical type / constraint |
-|---|---|
-| `Closing_Date` | `DATE NOT NULL` |
-| `INSTRUMENT_TYPE` | `TEXT NOT NULL` |
-| `Total_Invested_Value` | `DOUBLE` |
-| `Total_Current_Value` | `DOUBLE` |
-| `Total_Quantity` | `DOUBLE` |
-| `Total_Stocks` | `DOUBLE` |
-| `Unrealized_PL` | `DOUBLE` |
-| `Asset_PnL` | `DOUBLE` |
-| `Forex_PnL` | `DOUBLE` |
-| `Forex_Contribution_Pct` | `DOUBLE` |
-| `Absolute_Return` | `DOUBLE` |
-| `XIRR` | `DOUBLE` |
-| `After_Tax_XIRR` | `DOUBLE` |
-| `BM_XIRR` | `DOUBLE` |
-| `Active_Return` | `DOUBLE` |
-| `Max_Drawdown` | `DOUBLE` |
-| `Weight` | `DOUBLE` |
-| `Unrealized_Gain` | `DOUBLE` |
-| `Unrealized_Loss` | `DOUBLE` |
-| `FY_Realized_Gain` | `DOUBLE` |
-| `FY_Realized_Loss` | `DOUBLE` |
-| `FY_Realized_Net_PnL` | `DOUBLE` |
-
-The physical DDL defines **22 columns** for this table. The registry grain is the semantic row contract; it should be used when reasoning about joins and uniqueness rather than assuming the first ID-looking column is automatically the grain.
-
-### `gold.Investment_By_Sector`
-
-**Contract ID:** `df_f_investment_analytics_sector`  
-**Domain:** Investments  
-**Registry grain:** **Date-Sector**  
-**Producer:** `InvestmentQuantEngine`  
-**Publication order:** `240`
-
-| Column | Physical type / constraint |
-|---|---|
-| `Closing_Date` | `DATE NOT NULL` |
-| `SECTOR` | `TEXT NOT NULL` |
-| `Total_Invested_Value` | `DOUBLE` |
-| `Total_Current_Value` | `DOUBLE` |
-| `Total_Quantity` | `DOUBLE` |
-| `Total_Stocks` | `DOUBLE` |
-| `Unrealized_PL` | `DOUBLE` |
-| `Asset_PnL` | `DOUBLE` |
-| `Forex_PnL` | `DOUBLE` |
-| `Forex_Contribution_Pct` | `DOUBLE` |
-| `Absolute_Return` | `DOUBLE` |
-| `XIRR` | `DOUBLE` |
-| `After_Tax_XIRR` | `DOUBLE` |
-| `BM_XIRR` | `DOUBLE` |
-| `Active_Return` | `DOUBLE` |
-| `Max_Drawdown` | `DOUBLE` |
-| `Weight` | `DOUBLE` |
-| `Unrealized_Gain` | `DOUBLE` |
-| `Unrealized_Loss` | `DOUBLE` |
-| `FY_Realized_Gain` | `DOUBLE` |
-| `FY_Realized_Loss` | `DOUBLE` |
-| `FY_Realized_Net_PnL` | `DOUBLE` |
-
-The physical DDL defines **22 columns** for this table. The registry grain is the semantic row contract; it should be used when reasoning about joins and uniqueness rather than assuming the first ID-looking column is automatically the grain.
-
-### `gold.Investment_By_Industry`
-
-**Contract ID:** `df_f_investment_analytics_industry`  
-**Domain:** Investments  
-**Registry grain:** **Date-Industry**  
-**Producer:** `InvestmentQuantEngine`  
-**Publication order:** `250`
-
-| Column | Physical type / constraint |
-|---|---|
-| `Closing_Date` | `DATE NOT NULL` |
-| `INDUSTRY` | `TEXT NOT NULL` |
-| `Total_Invested_Value` | `DOUBLE` |
-| `Total_Current_Value` | `DOUBLE` |
-| `Total_Quantity` | `DOUBLE` |
-| `Total_Stocks` | `DOUBLE` |
-| `Unrealized_PL` | `DOUBLE` |
-| `Asset_PnL` | `DOUBLE` |
-| `Forex_PnL` | `DOUBLE` |
-| `Forex_Contribution_Pct` | `DOUBLE` |
-| `Absolute_Return` | `DOUBLE` |
-| `XIRR` | `DOUBLE` |
-| `After_Tax_XIRR` | `DOUBLE` |
-| `BM_XIRR` | `DOUBLE` |
-| `Active_Return` | `DOUBLE` |
-| `Max_Drawdown` | `DOUBLE` |
-| `Weight` | `DOUBLE` |
-| `Unrealized_Gain` | `DOUBLE` |
-| `Unrealized_Loss` | `DOUBLE` |
-| `FY_Realized_Gain` | `DOUBLE` |
-| `FY_Realized_Loss` | `DOUBLE` |
-| `FY_Realized_Net_PnL` | `DOUBLE` |
-
-The physical DDL defines **22 columns** for this table. The registry grain is the semantic row contract; it should be used when reasoning about joins and uniqueness rather than assuming the first ID-looking column is automatically the grain.
-
-### `gold.Investment_By_Portfolio`
-
-**Contract ID:** `df_f_investment_analytics_portfolio`  
-**Domain:** Investments  
-**Registry grain:** **Date**  
-**Producer:** `InvestmentQuantEngine`  
-**Publication order:** `260`
-
-| Column | Physical type / constraint |
-|---|---|
-| `Closing_Date` | `DATE NOT NULL` |
-| `Total_Invested_Value` | `DOUBLE` |
-| `Total_Current_Value` | `DOUBLE` |
-| `Total_Quantity` | `DOUBLE` |
-| `Total_Stocks` | `DOUBLE` |
-| `Unrealized_PL` | `DOUBLE` |
-| `Asset_PnL` | `DOUBLE` |
-| `Forex_PnL` | `DOUBLE` |
-| `Forex_Contribution_Pct` | `DOUBLE` |
-| `Absolute_Return` | `DOUBLE` |
-| `XIRR` | `DOUBLE` |
-| `After_Tax_XIRR` | `DOUBLE` |
-| `BM_XIRR` | `DOUBLE` |
-| `Active_Return` | `DOUBLE` |
-| `Max_Drawdown` | `DOUBLE` |
-| `Weight` | `DOUBLE` |
-| `Unrealized_Gain` | `DOUBLE` |
-| `Unrealized_Loss` | `DOUBLE` |
-| `FY_Realized_Gain` | `DOUBLE` |
-| `FY_Realized_Loss` | `DOUBLE` |
-| `FY_Realized_Net_PnL` | `DOUBLE` |
-
-The physical DDL defines **21 columns** for this table. The registry grain is the semantic row contract; it should be used when reasoning about joins and uniqueness rather than assuming the first ID-looking column is automatically the grain.
-
-### `gold.Investment_By_Geo`
-
-**Contract ID:** `df_f_investment_analytics_geo`  
-**Domain:** Investments  
-**Registry grain:** **Date-Geo**  
-**Producer:** `InvestmentQuantEngine`  
-**Publication order:** `270`
-
-| Column | Physical type / constraint |
-|---|---|
-| `Closing_Date` | `DATE NOT NULL` |
-| `GEO` | `TEXT NOT NULL` |
-| `Total_Invested_Value` | `DOUBLE` |
-| `Total_Current_Value` | `DOUBLE` |
-| `Total_Quantity` | `DOUBLE` |
-| `Total_Stocks` | `DOUBLE` |
-| `Unrealized_PL` | `DOUBLE` |
-| `Asset_PnL` | `DOUBLE` |
-| `Forex_PnL` | `DOUBLE` |
-| `Forex_Contribution_Pct` | `DOUBLE` |
-| `Absolute_Return` | `DOUBLE` |
-| `XIRR` | `DOUBLE` |
-| `After_Tax_XIRR` | `DOUBLE` |
-| `BM_XIRR` | `DOUBLE` |
-| `Active_Return` | `DOUBLE` |
-| `Max_Drawdown` | `DOUBLE` |
-| `Weight` | `DOUBLE` |
-| `Unrealized_Gain` | `DOUBLE` |
-| `Unrealized_Loss` | `DOUBLE` |
-| `FY_Realized_Gain` | `DOUBLE` |
-| `FY_Realized_Loss` | `DOUBLE` |
-| `FY_Realized_Net_PnL` | `DOUBLE` |
-
-The physical DDL defines **22 columns** for this table. The registry grain is the semantic row contract; it should be used when reasoning about joins and uniqueness rather than assuming the first ID-looking column is automatically the grain.
-
-### `gold.Investment_By_Country`
-
-**Contract ID:** `df_f_investment_analytics_country`  
-**Domain:** Investments  
-**Registry grain:** **Date-Country**  
-**Producer:** `InvestmentQuantEngine`  
-**Publication order:** `280`
-
-| Column | Physical type / constraint |
-|---|---|
-| `Closing_Date` | `DATE NOT NULL` |
-| `COUNTRY` | `TEXT NOT NULL` |
-| `Total_Invested_Value` | `DOUBLE` |
-| `Total_Current_Value` | `DOUBLE` |
-| `Total_Quantity` | `DOUBLE` |
-| `Total_Stocks` | `DOUBLE` |
-| `Total_Invested_Value_Local` | `DOUBLE` |
-| `Total_Current_Value_Local` | `DOUBLE` |
-| `Current_FX_Rate` | `DOUBLE` |
-| `Blended_FX_Buy_Rate` | `DOUBLE` |
-| `Currency_Appreciation_Pct` | `DOUBLE` |
-| `Unrealized_PL` | `DOUBLE` |
-| `Asset_PnL` | `DOUBLE` |
-| `Forex_PnL` | `DOUBLE` |
-| `Forex_Contribution_Pct` | `DOUBLE` |
-| `Absolute_Return` | `DOUBLE` |
-| `XIRR` | `DOUBLE` |
-| `After_Tax_XIRR` | `DOUBLE` |
-| `BM_XIRR` | `DOUBLE` |
-| `Active_Return` | `DOUBLE` |
-| `XIRR_Local` | `DOUBLE` |
-| `BM_XIRR_Local` | `DOUBLE` |
-| `Active_Return_Local` | `DOUBLE` |
-| `FX_XIRR_Impact` | `DOUBLE` |
-| `Max_Drawdown` | `DOUBLE` |
-| `Weight` | `DOUBLE` |
-| `Unrealized_Gain` | `DOUBLE` |
-| `Unrealized_Loss` | `DOUBLE` |
-| `FY_Realized_Gain` | `DOUBLE` |
-| `FY_Realized_Loss` | `DOUBLE` |
-| `FY_Realized_Net_PnL` | `DOUBLE` |
-
-The physical DDL defines **31 columns** for this table. The registry grain is the semantic row contract; it should be used when reasoning about joins and uniqueness rather than assuming the first ID-looking column is automatically the grain.
-
-### `gold.Investment_By_Currency`
-
-**Contract ID:** `df_f_investment_analytics_currency`  
-**Domain:** Investments  
-**Registry grain:** **Date-Currency**  
-**Producer:** `InvestmentQuantEngine`  
-**Publication order:** `290`
-
-| Column | Physical type / constraint |
-|---|---|
-| `Closing_Date` | `DATE NOT NULL` |
-| `CURRENCY_ID` | `TEXT NOT NULL` |
-| `Total_Invested_Value` | `DOUBLE` |
-| `Total_Current_Value` | `DOUBLE` |
-| `Total_Quantity` | `DOUBLE` |
-| `Total_Stocks` | `DOUBLE` |
-| `Total_Invested_Value_Local` | `DOUBLE` |
-| `Total_Current_Value_Local` | `DOUBLE` |
-| `Current_FX_Rate` | `DOUBLE` |
-| `Blended_FX_Buy_Rate` | `DOUBLE` |
-| `Currency_Appreciation_Pct` | `DOUBLE` |
-| `Unrealized_PL` | `DOUBLE` |
-| `Asset_PnL` | `DOUBLE` |
-| `Forex_PnL` | `DOUBLE` |
-| `Forex_Contribution_Pct` | `DOUBLE` |
-| `Absolute_Return` | `DOUBLE` |
-| `XIRR` | `DOUBLE` |
-| `XIRR_Local` | `DOUBLE` |
-| `FX_XIRR_Impact` | `DOUBLE` |
-| `After_Tax_XIRR` | `DOUBLE` |
-| `BM_XIRR` | `DOUBLE` |
-| `BM_XIRR_Local` | `DOUBLE` |
-| `Active_Return` | `DOUBLE` |
-| `Active_Return_Local` | `DOUBLE` |
-| `Max_Drawdown` | `DOUBLE` |
-| `Weight` | `DOUBLE` |
-| `Unrealized_Gain` | `DOUBLE` |
-| `Unrealized_Loss` | `DOUBLE` |
-| `FY_Realized_Gain` | `DOUBLE` |
-| `FY_Realized_Loss` | `DOUBLE` |
-| `FY_Realized_Net_PnL` | `DOUBLE` |
-
-The physical DDL defines **31 columns** for this table. The registry grain is the semantic row contract; it should be used when reasoning about joins and uniqueness rather than assuming the first ID-looking column is automatically the grain.
+The following tables are generated directly from `schema/gold.py`.
 
 ### `gold.Tax_Year_Summary`
 
 **Contract ID:** `df_p_tax_year_summary`  
-**Domain:** Taxes  
-**Registry grain:** **FY**  
+**Grain:** `FY`  
+**Domain:** `Taxes`  
 **Producer:** `TaxEngine`  
 **Publication order:** `302`
 
-| Column | Physical type / constraint |
-|---|---|
-| `FY` | `TEXT PRIMARY KEY` |
-| `Total_Ledger_Income` | `DOUBLE` |
-| `Total_Investment_Gain_Loss` | `DOUBLE` |
-| `Total_Tax_Credits` | `DOUBLE` |
-| `Total_Estimated_Investment_Tax` | `DOUBLE` |
-| `Investment_Tax_Estimate_Count` | `BIGINT` |
-| `Investment_Tax_Estimate_Missing_Count` | `BIGINT` |
-| `Investment_Tax_Estimate_Complete` | `BOOLEAN` |
-| `Total_Estimated_Ledger_Tax` | `DOUBLE` |
-| `Ledger_Tax_Estimate_Count` | `BIGINT` |
-| `Ledger_Tax_Estimate_Missing_Count` | `BIGINT` |
-| `Ledger_Tax_Estimate_Complete` | `BOOLEAN` |
-| `Total_Event_Count` | `BIGINT` |
-| `Ready_Count` | `BIGINT` |
-| `Check_Required_Count` | `BIGINT` |
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `FY` | `TEXT PRIMARY KEY` | Field |
+| `Total_Ledger_Income` | `DOUBLE` | Field |
+| `Total_Investment_Gain_Loss` | `DOUBLE` | Field |
+| `Total_Tax_Credits` | `DOUBLE` | Field |
+| `Total_Estimated_Investment_Tax` | `DOUBLE` | Field |
+| `Investment_Tax_Estimate_Count` | `BIGINT` | Field |
+| `Investment_Tax_Estimate_Missing_Count` | `BIGINT` | Field |
+| `Investment_Tax_Estimate_Complete` | `BOOLEAN` | Field |
+| `Total_Estimated_Ledger_Tax` | `DOUBLE` | Field |
+| `Ledger_Tax_Estimate_Count` | `BIGINT` | Field |
+| `Ledger_Tax_Estimate_Missing_Count` | `BIGINT` | Field |
+| `Ledger_Tax_Estimate_Complete` | `BOOLEAN` | Field |
+| `Total_Event_Count` | `BIGINT` | Field |
+| `Ready_Count` | `BIGINT` | Field |
 
-The physical DDL defines **15 columns** for this table. The registry grain is the semantic row contract; it should be used when reasoning about joins and uniqueness rather than assuming the first ID-looking column is automatically the grain.
+**Table constraints**
+
+- `Check_Required_Count BIGINT`
 
 ### `gold.Tax_Income_Breakdown`
 
 **Contract ID:** `df_p_tax_income_breakdown`  
-**Domain:** Taxes  
-**Registry grain:** **FY-Head-SubHead-Source**  
+**Grain:** `FY-Head-SubHead-Source`  
+**Domain:** `Taxes`  
 **Producer:** `TaxEngine`  
 **Publication order:** `303`
 
-| Column | Physical type / constraint |
-|---|---|
-| `FY` | `TEXT` |
-| `Income_Head` | `TEXT` |
-| `Tax_Sub_Head` | `TEXT` |
-| `Source_Type` | `TEXT` |
-| `Event_Amount_INR` | `DOUBLE` |
-| `Estimated_Tax_INR` | `DOUBLE` |
-| `Estimated_Tax_Event_Count` | `BIGINT` |
-| `Estimated_Tax_Missing_Count` | `BIGINT` |
-| `Estimated_Tax_Complete` | `BOOLEAN` |
-| `Event_Count` | `BIGINT` |
-| `Ready_Count` | `BIGINT` |
-| `Check_Required_Count` | `BIGINT` |
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `FY` | `TEXT` | Field |
+| `Income_Head` | `TEXT` | Field |
+| `Tax_Sub_Head` | `TEXT` | Field |
+| `Source_Type` | `TEXT` | Field |
+| `Event_Amount_INR` | `DOUBLE` | Field |
+| `Estimated_Tax_INR` | `DOUBLE` | Field |
+| `Estimated_Tax_Event_Count` | `BIGINT` | Field |
+| `Estimated_Tax_Missing_Count` | `BIGINT` | Field |
+| `Estimated_Tax_Complete` | `BOOLEAN` | Field |
+| `Event_Count` | `BIGINT` | Field |
+| `Ready_Count` | `BIGINT` | Field |
 
-The physical DDL defines **12 columns** for this table. The registry grain is the semantic row contract; it should be used when reasoning about joins and uniqueness rather than assuming the first ID-looking column is automatically the grain.
+**Table constraints**
+
+- `Check_Required_Count BIGINT`
 
 ### `gold.Tax_Reconciliation`
 
 **Contract ID:** `df_p_tax_reconciliation`  
-**Domain:** Taxes  
-**Registry grain:** **FY-SubHead**  
+**Grain:** `FY-SubHead`  
+**Domain:** `Taxes`  
 **Producer:** `TaxEngine`  
 **Publication order:** `304`
 
-| Column | Physical type / constraint |
-|---|---|
-| `FY` | `TEXT` |
-| `Tax_Sub_Head` | `TEXT` |
-| `Ledger_Tax_Event_Amount` | `DOUBLE` |
-| `Excluded_Non_Taxable_Amount` | `DOUBLE` |
-| `Excluded_Non_Taxable_Event_Count` | `BIGINT` |
-| `Excluded_Investment_Ledger_Amount` | `DOUBLE` |
-| `Excluded_Investment_Ledger_Event_Count` | `BIGINT` |
-| `Quant_Realized_Gain_Loss` | `DOUBLE` |
-| `Estimated_Investment_Tax` | `DOUBLE` |
-| `Estimated_Tax_Event_Count` | `BIGINT` |
-| `Estimated_Tax_Missing_Count` | `BIGINT` |
-| `Estimated_Investment_Tax_Complete` | `BOOLEAN` |
-| `Estimated_Ledger_Tax` | `DOUBLE` |
-| `Ledger_Tax_Estimate_Count` | `BIGINT` |
-| `Ledger_Tax_Estimate_Missing_Count` | `BIGINT` |
-| `Estimated_Ledger_Tax_Complete` | `BOOLEAN` |
-| `Tax_Credit_Amount` | `DOUBLE` |
-| `Tax_Event_Amount` | `DOUBLE` |
-| `Investment_Source_Difference_INR` | `DOUBLE` |
-| `Ledger_Event_Count` | `BIGINT` |
-| `Quant_Event_Count` | `BIGINT` |
-| `Tax_Credit_Event_Count` | `BIGINT` |
-| `Check_Required_Count` | `BIGINT` |
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `FY` | `TEXT` | Field |
+| `Tax_Sub_Head` | `TEXT` | Field |
+| `Ledger_Tax_Event_Amount` | `DOUBLE` | Field |
+| `Excluded_Non_Taxable_Amount` | `DOUBLE` | Field |
+| `Excluded_Non_Taxable_Event_Count` | `BIGINT` | Field |
+| `Excluded_Investment_Ledger_Amount` | `DOUBLE` | Field |
+| `Excluded_Investment_Ledger_Event_Count` | `BIGINT` | Field |
+| `Quant_Realized_Gain_Loss` | `DOUBLE` | Field |
+| `Estimated_Investment_Tax` | `DOUBLE` | Field |
+| `Estimated_Tax_Event_Count` | `BIGINT` | Field |
+| `Estimated_Tax_Missing_Count` | `BIGINT` | Field |
+| `Estimated_Investment_Tax_Complete` | `BOOLEAN` | Field |
+| `Estimated_Ledger_Tax` | `DOUBLE` | Field |
+| `Ledger_Tax_Estimate_Count` | `BIGINT` | Field |
+| `Ledger_Tax_Estimate_Missing_Count` | `BIGINT` | Field |
+| `Estimated_Ledger_Tax_Complete` | `BOOLEAN` | Field |
+| `Tax_Credit_Amount` | `DOUBLE` | Field |
+| `Tax_Event_Amount` | `DOUBLE` | Field |
+| `Investment_Source_Difference_INR` | `DOUBLE` | Field |
+| `Ledger_Event_Count` | `BIGINT` | Field |
+| `Quant_Event_Count` | `BIGINT` | Field |
+| `Tax_Credit_Event_Count` | `BIGINT` | Field |
 
-The physical DDL defines **23 columns** for this table. The registry grain is the semantic row contract; it should be used when reasoning about joins and uniqueness rather than assuming the first ID-looking column is automatically the grain.
+**Table constraints**
 
-## Publication invariants
+- `Check_Required_Count BIGINT`
+- `PRIMARY KEY(FY, Tax_Sub_Head)`
 
-- Every registered contract has a non-empty ID, physical table, grain, producer, and supported layer.
-- Contract IDs and physical table mappings are unique.
-- Engine output keys must match registered contract IDs.
-- Registered outputs must be produced before publication; unregistered outputs are rejected.
-- Physical DDL and producer output must remain compatible with `INSERT ... BY NAME`/loader behavior.
-- Schema changes are contract changes even when the database engine can technically coerce them.
+### `gold.Wealth_Asset_Breakdown`
+
+**Contract ID:** `df_p_tf_net_worth_monthly_summary`  
+**Grain:** `Month-Asset`  
+**Domain:** `Wealth`  
+**Producer:** `WealthPresentationEngine`  
+**Publication order:** `110`
+
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `MONTH_START_DATE` | `DATE` | Identifiers |
+| `MONTH_END_DATE` | `DATE` | Identifiers |
+| `ASSET_SUBCATEGORY_ID` | `TEXT` | Identifiers |
+| `Opening_Balance` | `DOUBLE` | Position Values |
+| `Closing_Balance` | `DOUBLE` | Position Values |
+| `Closing_Balance_Market` | `DOUBLE` | Position Values |
+| `All_Time_High_Balance` | `DOUBLE` | Position Values |
+| `Liquid_Assets` | `DOUBLE` | Position Values |
+| `Liquid_Assets_Market` | `DOUBLE` | Position Values |
+| `Closing_Asset_PnL` | `DOUBLE` | Absolute Returns |
+| `Closing_Forex_PnL` | `DOUBLE` | Absolute Returns |
+| `"MoM_Balance_Growth_%"` | `DOUBLE` | Performance Returns |
+| `"YoY_Balance_Growth_%"` | `DOUBLE` | Performance Returns |
+| `Organic_Growth_Value` | `DOUBLE` | Performance Returns |
+| `"Organic_Yield_%"` | `DOUBLE` | Performance Returns |
+| `Drawdown_From_Peak` | `DOUBLE` | Risk & Weights |
+| `Investment_Contribution_Pct` | `DOUBLE` | Risk & Weights |
+| `Savings_to_NW_Ratio` | `DOUBLE` | Risk & Weights |
+| `Income_Inflow` | `DOUBLE` | Cashflow |
+| `Cash_Income_Inflow` | `DOUBLE` | Cashflow |
+| `Non_Cash_Income_Inflow` | `DOUBLE` | Cashflow |
+| `Expense_Outflow` | `DOUBLE` | Cashflow |
+| `Core_Expense_Outflow` | `DOUBLE` | Cashflow |
+| `Cash_Expense_Outflow` | `DOUBLE` | Cashflow |
+| `Non_Cash_Expense_Outflow` | `DOUBLE` | Cashflow |
+| `Net_Transfers` | `DOUBLE` | Cashflow |
+| `Net_Cashflow_Month` | `DOUBLE` | Cashflow |
+| `Surplus_Deficit_Month` | `DOUBLE` | Cashflow |
+| `Cumulative_Net_Savings` | `DOUBLE` | Cashflow |
+| `"3M_Avg_Expense"` | `DOUBLE` | Trailing Averages |
+| `"3M_Avg_Core_Expense"` | `DOUBLE` | Trailing Averages |
+| `"3M_Avg_Income"` | `DOUBLE` | Trailing Averages |
+| `Months_of_Runway` | `DOUBLE` | Trailing Averages |
+
+### `gold.Core_Monthly_Fact`
+
+**Contract ID:** `df_p_tf_wealth_monthly_totals`  
+**Grain:** `Month`  
+**Domain:** `Wealth`  
+**Producer:** `WealthPresentationEngine`  
+**Publication order:** `110`
+
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `MONTH_START_DATE` | `DATE` | Identifiers |
+| `MONTH_END_DATE` | `DATE` | Identifiers |
+| `Months_Elapsed` | `BIGINT` | Descriptors/Classifications |
+| `Total_Income` | `DOUBLE` | Position Values |
+| `Total_Cash_Income` | `DOUBLE` | Position Values |
+| `Total_Non_Cash_Income` | `DOUBLE` | Position Values |
+| `Total_Expense` | `DOUBLE` | Position Values |
+| `Total_Core_Expense` | `DOUBLE` | Position Values |
+| `Total_Cash_Expense` | `DOUBLE` | Position Values |
+| `Total_Non_Cash_Expense` | `DOUBLE` | Position Values |
+| `Net_Cashflow_Month` | `DOUBLE` | Position Values |
+| `Opening_Balance_Asset` | `DOUBLE` | Position Values |
+| `Opening_Balance_Asset_Market` | `DOUBLE` | Position Values |
+| `Closing_Balance_Asset` | `DOUBLE` | Position Values |
+| `Closing_Balance_Asset_Market` | `DOUBLE` | Position Values |
+| `Asset_Delta` | `DOUBLE` | Position Values |
+| `Asset_Market_Delta` | `DOUBLE` | Position Values |
+| `Total_Assets` | `DOUBLE` | Position Values |
+| `Total_Assets_Market` | `DOUBLE` | Position Values |
+| `Opening_Investment_Book_Value` | `DOUBLE` | Position Values |
+| `Closing_Investment_Book_Value` | `DOUBLE` | Position Values |
+| `Investment_Book_Value_Delta` | `DOUBLE` | Position Values |
+| `Opening_Investment_Market_Value` | `DOUBLE` | Position Values |
+| `Closing_Investment_Market_Value` | `DOUBLE` | Position Values |
+| `Investment_Market_Value_Delta` | `DOUBLE` | Position Values |
+| `Liquid_Assets` | `DOUBLE` | Position Values |
+| `Liquid_Assets_Market` | `DOUBLE` | Position Values |
+| `Total_Liabilities` | `DOUBLE` | Position Values |
+| `Total_Net_Worth` | `DOUBLE` | Position Values |
+| `Total_Net_Worth_Market` | `DOUBLE` | Position Values |
+| `Total_Foreign_Currency_Exposure` | `DOUBLE` | Local/FX Values |
+| `Opening_Unrealized_PL` | `DOUBLE` | Absolute Returns |
+| `Closing_Unrealized_PL` | `DOUBLE` | Absolute Returns |
+| `Closing_Asset_PnL` | `DOUBLE` | Absolute Returns |
+| `Closing_Forex_PnL` | `DOUBLE` | Absolute Returns |
+| `Opening_Investment_XIRR` | `DOUBLE` | Performance Returns |
+| `Closing_Investment_XIRR` | `DOUBLE` | Performance Returns |
+| `Foreign_Exposure_Pct` | `DOUBLE` | Risk & Weights |
+| `CPI_INDEX` | `DOUBLE` | Risk & Weights |
+| `INFLATION_YOY_PCT` | `DOUBLE` | Risk & Weights |
+
+### `gold.Cashflow_Expense_Breakdown`
+
+**Contract ID:** `df_p_tf_category_spend_analytics`  
+**Grain:** `Month-ExpenseCategory`  
+**Domain:** `Wealth`  
+**Producer:** `WealthPresentationEngine`  
+**Publication order:** `120`
+
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `MONTH_START_DATE` | `DATE` | Identifiers |
+| `MONTH_END_DATE` | `DATE` | Identifiers |
+| `YEAR_MONTH` | `TEXT` | Identifiers |
+| `CATEGORY_ID` | `TEXT` | Identifiers |
+| `CATEGORY_NAME` | `TEXT` | Descriptors/Classifications |
+| `CATEGORY_GROUPS` | `TEXT` | Descriptors/Classifications |
+| `Spend_Type` | `TEXT` | Descriptors/Classifications |
+| `Is_Core_Expense` | `BOOLEAN` | Descriptors/Classifications |
+| `Is_Investment` | `BOOLEAN` | Descriptors/Classifications |
+| `Is_Discretionary` | `BOOLEAN` | Descriptors/Classifications |
+| `Total_Monthly_Spend` | `DOUBLE` | Position Values |
+| `Cash_Spend` | `DOUBLE` | Position Values |
+| `Non_Cash_Spend` | `DOUBLE` | Position Values |
+| `Trailing_3M_Avg_Spend` | `DOUBLE` | Position Values |
+| `Cumulative_YTD_Spend` | `DOUBLE` | Position Values |
+
+### `gold.Cashflow_Income_Breakdown`
+
+**Contract ID:** `df_p_tf_income_streams_monthly`  
+**Grain:** `Month-IncomeCategory`  
+**Domain:** `Wealth`  
+**Producer:** `WealthPresentationEngine`  
+**Publication order:** `130`
+
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `MONTH_START_DATE` | `DATE` | Identifiers |
+| `MONTH_END_DATE` | `DATE` | Identifiers |
+| `YEAR_MONTH` | `TEXT` | Identifiers |
+| `CATEGORY_ID` | `TEXT` | Identifiers |
+| `CATEGORY_NAME` | `TEXT` | Descriptors/Classifications |
+| `CATEGORY_GROUPS` | `TEXT` | Descriptors/Classifications |
+| `Is_Active_Income` | `BOOLEAN` | Descriptors/Classifications |
+| `Is_Passive_Income` | `BOOLEAN` | Descriptors/Classifications |
+| `Is_Dividend_Income` | `BOOLEAN` | Descriptors/Classifications |
+| `Is_Interest_Income` | `BOOLEAN` | Descriptors/Classifications |
+| `Is_Non_Cash_Income` | `BOOLEAN` | Descriptors/Classifications |
+| `Total_Monthly_Income` | `DOUBLE` | Position Values |
+| `Trailing_3M_Avg_Income` | `DOUBLE` | Position Values |
+| `Cumulative_YTD_Income` | `DOUBLE` | Position Values |
+
+### `gold.Wealth_FIRE_Analytics`
+
+**Contract ID:** `df_p_tf_wealth_risk_analytics`  
+**Grain:** `Month`  
+**Domain:** `Wealth`  
+**Producer:** `WealthPresentationEngine`  
+**Publication order:** `140`
+
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `MONTH_START_DATE` | `DATE` | Identifiers |
+| `MONTH_END_DATE` | `DATE` | Identifiers |
+| `YEAR_MONTH` | `TEXT` | Identifiers |
+| `Projected_FI_Date_P50` | `DATE` | Descriptors/Classifications |
+| `Total_Income` | `DOUBLE` | Position Values |
+| `Total_Cash_Income` | `DOUBLE` | Position Values |
+| `Trailing_6M_Avg_Spend` | `DOUBLE` | Position Values |
+| `Trailing_12M_Avg_Spend` | `DOUBLE` | Position Values |
+| `Trailing_6M_Avg_Savings` | `DOUBLE` | Position Values |
+| `Trailing_12M_Avg_Savings` | `DOUBLE` | Position Values |
+| `Target_FI_Today` | `DOUBLE` | Position Values |
+| `Coast_FI_Today` | `DOUBLE` | Position Values |
+| `Lean_FI_Today` | `DOUBLE` | Position Values |
+| `Target_FI_Total_Future_Nominal` | `DOUBLE` | Position Values |
+| `FI_Gap` | `DOUBLE` | Position Values |
+| `FI_Gap_Monthly_Trend` | `DOUBLE` | Position Values |
+| `Terminal_Wealth_Nominal_P50` | `DOUBLE` | Position Values |
+| `Real_Return_Assumed_Pct` | `DOUBLE` | Performance Returns |
+| `Wealth_Velocity` | `DOUBLE` | Performance Returns |
+| `Wealth_Acceleration` | `DOUBLE` | Performance Returns |
+| `Real_NW_CAGR_3Y` | `DOUBLE` | Performance Returns |
+| `Current_FI_Coverage_Pct` | `DOUBLE` | Risk & Weights |
+| `Estimated_Months_To_FI_Linear` | `DOUBLE` | Risk & Weights |
+| `Months_To_FI_Conservative_P90` | `DOUBLE` | Risk & Weights |
+| `Months_To_FI_Base_P50` | `DOUBLE` | Risk & Weights |
+| `Months_To_FI_Aggressive_P10` | `DOUBLE` | Risk & Weights |
+| `Probability_Of_Success_Pct` | `DOUBLE` | Risk & Weights |
+| `Years_To_FI_P50` | `DOUBLE` | Risk & Weights |
+| `Runway_Months_Linear` | `DOUBLE` | Risk & Weights |
+| `Runway_Months_Stressed_P10` | `DOUBLE` | Risk & Weights |
+| `Runway_Months_Base_P50` | `DOUBLE` | Risk & Weights |
+| `Withdrawal_Rate_If_Retired_Now` | `DOUBLE` | Risk & Weights |
+| `Savings_Rate_Required` | `DOUBLE` | Risk & Weights |
+| `Savings_Rate_Actual` | `DOUBLE` | Risk & Weights |
+| `FI_Velocity` | `DOUBLE` | Risk & Weights |
+
+### `gold.Forecast_Budget_Variance`
+
+**Contract ID:** `df_p_tf_budget_forecast_monthly`  
+**Grain:** `Month`  
+**Domain:** `Wealth`  
+**Producer:** `WealthPresentationEngine`  
+**Publication order:** `160`
+
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `MONTH_START_DATE` | `DATE` | Identifiers |
+| `MONTH_END_DATE` | `DATE` | Identifiers |
+| `YEAR_MONTH` | `TEXT` | Identifiers |
+| `Is_Core_Overspent` | `BOOLEAN` | Descriptors/Classifications |
+| `Is_NonCore_Overspent` | `BOOLEAN` | Descriptors/Classifications |
+| `Is_Investment_Underfunded` | `BOOLEAN` | Descriptors/Classifications |
+| `Is_Income_Volatile` | `BOOLEAN` | Descriptors/Classifications |
+| `Is_Budget_Month_Healthy` | `BOOLEAN` | Descriptors/Classifications |
+| `Total_Income` | `DOUBLE` | Position Values |
+| `Actual_Income` | `DOUBLE` | Position Values |
+| `Budget_Income` | `DOUBLE` | Position Values |
+| `Budget_Core_Expense_Target` | `DOUBLE` | Position Values |
+| `Budget_NonCore_Expense_Target` | `DOUBLE` | Position Values |
+| `Budget_Investment_Target` | `DOUBLE` | Position Values |
+| `Budget_Surplus_Buffer` | `DOUBLE` | Position Values |
+| `Budget_Total_Expense_Target` | `DOUBLE` | Position Values |
+| `Actual_Core_Expense` | `DOUBLE` | Position Values |
+| `Actual_NonCore_Expense` | `DOUBLE` | Position Values |
+| `Investment_Deployed` | `DOUBLE` | Position Values |
+| `Investment_Redeemed` | `DOUBLE` | Position Values |
+| `Actual_Investment` | `DOUBLE` | Position Values |
+| `Actual_Savings` | `DOUBLE` | Position Values |
+| `Emergency_Fund_Gap` | `DOUBLE` | Position Values |
+| `Rule_Core_Pct_Budget` | `DOUBLE` | Risk & Weights |
+| `Rule_NonCore_Pct_Budget` | `DOUBLE` | Risk & Weights |
+| `Rule_Investment_Pct_Budget` | `DOUBLE` | Risk & Weights |
+| `Zero_Income_Runway_Months` | `DOUBLE` | Risk & Weights |
+
+### `gold.Investment_Portfolio_Summary`
+
+**Contract ID:** `df_p_tf_investment_analytics`  
+**Grain:** `Month-ISIN`  
+**Domain:** `Investments`  
+**Producer:** `InvestmentQuantEngine`  
+**Publication order:** `170`
+
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `MONTH_START_DATE` | `DATE` | Identifiers |
+| `Max_Closing_Date` | `DATE` | Identifiers |
+| `ISIN` | `TEXT` | Identifiers |
+| `CURRENCY_ID` | `TEXT` | Identifiers |
+| `INSTRUMENT_NAME` | `TEXT` | Descriptors/Classifications |
+| `INSTRUMENT_CLASS` | `TEXT` | Descriptors/Classifications |
+| `INSTRUMENT_TYPE` | `TEXT` | Descriptors/Classifications |
+| `INSTRUMENT_SUBTYPE` | `TEXT` | Descriptors/Classifications |
+| `SECTOR` | `TEXT` | Descriptors/Classifications |
+| `Rebalance_Required` | `BOOLEAN` | Descriptors/Classifications |
+| `ISIN_Market_Value` | `DOUBLE` | Position Values |
+| `ISIN_Book_Value` | `DOUBLE` | Position Values |
+| `ISIN_Market_Value_Local` | `DOUBLE` | Local/FX Values |
+| `ISIN_Book_Value_Local` | `DOUBLE` | Local/FX Values |
+| `ISIN_Unrealized_PnL` | `DOUBLE` | Absolute Returns |
+| `ISIN_Asset_PnL` | `DOUBLE` | Absolute Returns |
+| `ISIN_Forex_PnL` | `DOUBLE` | Absolute Returns |
+| `ISIN_Forex_Contribution_Pct` | `DOUBLE` | Absolute Returns |
+| `ISIN_XIRR_Local` | `DOUBLE` | Performance Returns |
+| `ISIN_FX_XIRR_Impact` | `DOUBLE` | Performance Returns |
+| `ISIN_BM_XIRR` | `DOUBLE` | Benchmark Comparisons |
+| `ISIN_BM_XIRR_Local` | `DOUBLE` | Benchmark Comparisons |
+| `ISIN_Active_Return` | `DOUBLE` | Benchmark Comparisons |
+| `ISIN_Active_Return_Local` | `DOUBLE` | Benchmark Comparisons |
+| `ISIN_Weight` | `DOUBLE` | Risk & Weights |
+| `Class_Weight` | `DOUBLE` | Risk & Weights |
+| `Class_Target_Weight` | `DOUBLE` | Risk & Weights |
+| `Class_Drift` | `DOUBLE` | Risk & Weights |
+| `Sector_Weight` | `DOUBLE` | Risk & Weights |
+| `Monthly_Market_Value_Change_Pct` | `DOUBLE` | Risk & Weights |
+| `ISIN_Harvestable_Loss` | `DOUBLE` | Tax & Harvesting |
+| `Tax_Harvesting_Priority_Score` | `DOUBLE` | Tax & Harvesting |
+
+### `gold.Cashflow_Efficiency_Analytics`
+
+**Contract ID:** `df_p_tf_monthly_cashflow_summary`  
+**Grain:** `Month`  
+**Domain:** `Wealth`  
+**Producer:** `WealthPresentationEngine`  
+**Publication order:** `180`
+
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `MONTH_START_DATE` | `DATE` | Identifiers |
+| `MONTH_END_DATE` | `DATE` | Identifiers |
+| `YEAR_MONTH` | `TEXT` | Identifiers |
+| `Is_Surplus_Month` | `BOOLEAN` | Descriptors/Classifications |
+| `Is_Investment_Target_Met` | `BOOLEAN` | Descriptors/Classifications |
+| `Total_Income` | `DOUBLE` | Position Values |
+| `Total_Cash_Income` | `DOUBLE` | Position Values |
+| `Total_Non_Cash_Income` | `DOUBLE` | Position Values |
+| `Total_Expense` | `DOUBLE` | Position Values |
+| `Active_Income` | `DOUBLE` | Position Values |
+| `Passive_Income` | `DOUBLE` | Position Values |
+| `Dividend_Income` | `DOUBLE` | Position Values |
+| `Interest_Income` | `DOUBLE` | Position Values |
+| `Core_Expense` | `DOUBLE` | Position Values |
+| `NonCore_Expense` | `DOUBLE` | Position Values |
+| `Total_Cash_Expense` | `DOUBLE` | Position Values |
+| `Total_Non_Cash_Expense` | `DOUBLE` | Position Values |
+| `Total_Investment_Deployed` | `DOUBLE` | Position Values |
+| `Total_Investment_Redeemed` | `DOUBLE` | Position Values |
+| `Redemption_Gain_Loss_Value` | `DOUBLE` | Position Values |
+| `Net_Investment_Flow` | `DOUBLE` | Position Values |
+| `Gross_Surplus` | `DOUBLE` | Position Values |
+| `Net_Surplus_After_Invest` | `DOUBLE` | Position Values |
+| `Income_MoM_Delta` | `DOUBLE` | Position Values |
+| `Expense_MoM_Delta` | `DOUBLE` | Position Values |
+| `Investment_MoM_Delta` | `DOUBLE` | Position Values |
+| `Trailing_3M_Avg_Income` | `DOUBLE` | Position Values |
+| `Trailing_3M_Avg_Expense` | `DOUBLE` | Position Values |
+| `Trailing_3M_Avg_Investment` | `DOUBLE` | Position Values |
+| `Savings_Rate_Pct` | `DOUBLE` | Risk & Weights |
+| `Investment_Rate_Pct` | `DOUBLE` | Risk & Weights |
+| `Active_Income_Share_Pct` | `DOUBLE` | Risk & Weights |
+| `Passive_Income_Share_Pct` | `DOUBLE` | Risk & Weights |
+| `Core_Expense_Share_Pct` | `DOUBLE` | Risk & Weights |
+| `NonCore_Expense_Share_Pct` | `DOUBLE` | Risk & Weights |
+| `Income_MoM_Pct` | `DOUBLE` | Risk & Weights |
+| `Expense_MoM_Pct` | `DOUBLE` | Risk & Weights |
+| `Trailing_3M_Avg_Savings_Rate` | `DOUBLE` | Risk & Weights |
+| `Trailing_3M_Avg_Investment_Rate` | `DOUBLE` | Risk & Weights |
+| `Liquidity_Ratio_Months` | `DOUBLE` | Risk & Weights |
+| `Debt_to_Asset_Ratio_Pct` | `DOUBLE` | Risk & Weights |
+| `YoY_Net_Worth_Growth_Pct` | `DOUBLE` | Risk & Weights |
+| `YoY_Net_Worth_Growth_Pct_Real` | `DOUBLE` | Risk & Weights |
+| `Expense_to_NW_Ratio` | `DOUBLE` | Risk & Weights |
+| `Emergency_Fund_Coverage` | `DOUBLE` | Risk & Weights |
+
+### `gold.Investment_By_ISIN`
+
+**Contract ID:** `df_f_investment_analytics_isin`  
+**Grain:** `Date-ISIN`  
+**Domain:** `Investments`  
+**Producer:** `InvestmentQuantEngine`  
+**Publication order:** `200`
+
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `Closing_Date` | `DATE NOT NULL` | Identifiers |
+| `ISIN` | `TEXT NOT NULL` | Identifiers |
+| `CURRENCY_ID` | `TEXT` | Identifiers |
+| `Total_Invested_Value` | `DOUBLE` | Position Values |
+| `Total_Current_Value` | `DOUBLE` | Position Values |
+| `Total_Quantity` | `DOUBLE` | Position Values |
+| `Total_Stocks` | `DOUBLE` | Position Values |
+| `Total_Invested_Value_Local` | `DOUBLE` | Local/FX Values |
+| `Total_Current_Value_Local` | `DOUBLE` | Local/FX Values |
+| `Current_FX_Rate` | `DOUBLE` | Local/FX Values |
+| `Blended_FX_Buy_Rate` | `DOUBLE` | Local/FX Values |
+| `Currency_Appreciation_Pct` | `DOUBLE` | Local/FX Values |
+| `Unrealized_PL` | `DOUBLE` | Absolute Returns |
+| `Asset_PnL` | `DOUBLE` | Absolute Returns |
+| `Forex_PnL` | `DOUBLE` | Absolute Returns |
+| `Forex_Contribution_Pct` | `DOUBLE` | Absolute Returns |
+| `Absolute_Return` | `DOUBLE` | Absolute Returns |
+| `CAGR` | `DOUBLE` | Performance Returns |
+| `XIRR` | `DOUBLE` | Performance Returns |
+| `XIRR_Local` | `DOUBLE` | Performance Returns |
+| `FX_XIRR_Impact` | `DOUBLE` | Performance Returns |
+| `After_Tax_XIRR` | `DOUBLE` | Performance Returns |
+| `BM_CAGR` | `DOUBLE` | Benchmark Comparisons |
+| `BM_XIRR` | `DOUBLE` | Benchmark Comparisons |
+| `BM_XIRR_Local` | `DOUBLE` | Benchmark Comparisons |
+| `Active_Return` | `DOUBLE` | Benchmark Comparisons |
+| `Active_Return_Local` | `DOUBLE` | Benchmark Comparisons |
+| `Is_Lagging_Benchmark` | `BIGINT` | Benchmark Comparisons |
+| `Outperforming_Lot_Ratio` | `DOUBLE` | Benchmark Comparisons |
+| `Max_Drawdown` | `DOUBLE` | Risk & Weights |
+| `Weight` | `DOUBLE` | Risk & Weights |
+| `Unrealized_LTCG` | `DOUBLE` | Tax & Harvesting |
+| `Unrealized_STCG` | `DOUBLE` | Tax & Harvesting |
+| `Unrealized_Gain` | `DOUBLE` | Tax & Harvesting |
+| `Unrealized_LTCL` | `DOUBLE` | Tax & Harvesting |
+| `Unrealized_STCL` | `DOUBLE` | Tax & Harvesting |
+| `Unrealized_Loss` | `DOUBLE` | Tax & Harvesting |
+| `LTCG_Tax_If_Sold` | `DOUBLE` | Tax & Harvesting |
+| `STCG_Tax_If_Sold` | `DOUBLE` | Tax & Harvesting |
+| `FY_Realized_LTCG` | `DOUBLE` | Tax & Harvesting |
+| `FY_Realized_STCG` | `DOUBLE` | Tax & Harvesting |
+| `FY_Realized_Gain` | `DOUBLE` | Tax & Harvesting |
+| `FY_Realized_LTCL` | `DOUBLE` | Tax & Harvesting |
+| `FY_Realized_STCL` | `DOUBLE` | Tax & Harvesting |
+| `FY_Realized_Loss` | `DOUBLE` | Tax & Harvesting |
+| `FY_Realized_Net_PnL` | `DOUBLE` | Tax & Harvesting |
+
+### `gold.Investment_By_Subtype`
+
+**Contract ID:** `df_f_investment_analytics_subtype`  
+**Grain:** `Date-Subtype`  
+**Domain:** `Investments`  
+**Producer:** `InvestmentQuantEngine`  
+**Publication order:** `210`
+
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `Closing_Date` | `DATE NOT NULL` | Identifiers |
+| `INSTRUMENT_SUBTYPE` | `TEXT NOT NULL` | Identifiers |
+| `INSTRUMENT_CLASS` | `TEXT NOT NULL` | Descriptors/Classifications |
+| `Total_Invested_Value` | `DOUBLE` | Position Values |
+| `Total_Current_Value` | `DOUBLE` | Position Values |
+| `Total_Quantity` | `DOUBLE` | Position Values |
+| `Total_Stocks` | `DOUBLE` | Position Values |
+| `Unrealized_PL` | `DOUBLE` | Absolute Returns |
+| `Asset_PnL` | `DOUBLE` | Absolute Returns |
+| `Forex_PnL` | `DOUBLE` | Absolute Returns |
+| `Forex_Contribution_Pct` | `DOUBLE` | Absolute Returns |
+| `Absolute_Return` | `DOUBLE` | Absolute Returns |
+| `XIRR` | `DOUBLE` | Performance Returns |
+| `After_Tax_XIRR` | `DOUBLE` | Performance Returns |
+| `BM_XIRR` | `DOUBLE` | Benchmark Comparisons |
+| `Active_Return` | `DOUBLE` | Benchmark Comparisons |
+| `Max_Drawdown` | `DOUBLE` | Risk & Weights |
+| `Weight` | `DOUBLE` | Risk & Weights |
+| `Unrealized_Gain` | `DOUBLE` | Tax & Harvesting |
+| `Unrealized_Loss` | `DOUBLE` | Tax & Harvesting |
+| `FY_Realized_Gain` | `DOUBLE` | Tax & Harvesting |
+| `FY_Realized_Loss` | `DOUBLE` | Tax & Harvesting |
+| `FY_Realized_Net_PnL` | `DOUBLE` | Tax & Harvesting |
+
+### `gold.Investment_By_Class`
+
+**Contract ID:** `df_f_investment_analytics_class`  
+**Grain:** `Date-Class`  
+**Domain:** `Investments`  
+**Producer:** `InvestmentQuantEngine`  
+**Publication order:** `220`
+
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `Closing_Date` | `DATE NOT NULL` | Identifiers |
+| `INSTRUMENT_CLASS` | `TEXT NOT NULL` | Identifiers |
+| `Total_Invested_Value` | `DOUBLE` | Position Values |
+| `Total_Current_Value` | `DOUBLE` | Position Values |
+| `Total_Quantity` | `DOUBLE` | Position Values |
+| `Total_Stocks` | `DOUBLE` | Position Values |
+| `Unrealized_PL` | `DOUBLE` | Absolute Returns |
+| `Asset_PnL` | `DOUBLE` | Absolute Returns |
+| `Forex_PnL` | `DOUBLE` | Absolute Returns |
+| `Forex_Contribution_Pct` | `DOUBLE` | Absolute Returns |
+| `Absolute_Return` | `DOUBLE` | Absolute Returns |
+| `XIRR` | `DOUBLE` | Performance Returns |
+| `After_Tax_XIRR` | `DOUBLE` | Performance Returns |
+| `BM_XIRR` | `DOUBLE` | Benchmark Comparisons |
+| `Active_Return` | `DOUBLE` | Benchmark Comparisons |
+| `Max_Drawdown` | `DOUBLE` | Risk & Weights |
+| `Weight` | `DOUBLE` | Risk & Weights |
+| `Unrealized_Gain` | `DOUBLE` | Tax & Harvesting |
+| `Unrealized_Loss` | `DOUBLE` | Tax & Harvesting |
+| `FY_Realized_Gain` | `DOUBLE` | Tax & Harvesting |
+| `FY_Realized_Loss` | `DOUBLE` | Tax & Harvesting |
+| `FY_Realized_Net_PnL` | `DOUBLE` | Tax & Harvesting |
+
+### `gold.Investment_By_Instrument_Type`
+
+**Contract ID:** `df_f_investment_analytics_instrument_type`  
+**Grain:** `Date-InstrumentType`  
+**Domain:** `Investments`  
+**Producer:** `InvestmentQuantEngine`  
+**Publication order:** `230`
+
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `Closing_Date` | `DATE NOT NULL` | Identifiers |
+| `INSTRUMENT_TYPE` | `TEXT NOT NULL` | Identifiers |
+| `Total_Invested_Value` | `DOUBLE` | Position Values |
+| `Total_Current_Value` | `DOUBLE` | Position Values |
+| `Total_Quantity` | `DOUBLE` | Position Values |
+| `Total_Stocks` | `DOUBLE` | Position Values |
+| `Unrealized_PL` | `DOUBLE` | Absolute Returns |
+| `Asset_PnL` | `DOUBLE` | Absolute Returns |
+| `Forex_PnL` | `DOUBLE` | Absolute Returns |
+| `Forex_Contribution_Pct` | `DOUBLE` | Absolute Returns |
+| `Absolute_Return` | `DOUBLE` | Absolute Returns |
+| `XIRR` | `DOUBLE` | Performance Returns |
+| `After_Tax_XIRR` | `DOUBLE` | Performance Returns |
+| `BM_XIRR` | `DOUBLE` | Benchmark Comparisons |
+| `Active_Return` | `DOUBLE` | Benchmark Comparisons |
+| `Max_Drawdown` | `DOUBLE` | Risk & Weights |
+| `Weight` | `DOUBLE` | Risk & Weights |
+| `Unrealized_Gain` | `DOUBLE` | Tax & Harvesting |
+| `Unrealized_Loss` | `DOUBLE` | Tax & Harvesting |
+| `FY_Realized_Gain` | `DOUBLE` | Tax & Harvesting |
+| `FY_Realized_Loss` | `DOUBLE` | Tax & Harvesting |
+| `FY_Realized_Net_PnL` | `DOUBLE` | Tax & Harvesting |
+
+### `gold.Investment_By_Sector`
+
+**Contract ID:** `df_f_investment_analytics_sector`  
+**Grain:** `Date-Sector`  
+**Domain:** `Investments`  
+**Producer:** `InvestmentQuantEngine`  
+**Publication order:** `240`
+
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `Closing_Date` | `DATE NOT NULL` | Identifiers |
+| `SECTOR` | `TEXT NOT NULL` | Identifiers |
+| `Total_Invested_Value` | `DOUBLE` | Position Values |
+| `Total_Current_Value` | `DOUBLE` | Position Values |
+| `Total_Quantity` | `DOUBLE` | Position Values |
+| `Total_Stocks` | `DOUBLE` | Position Values |
+| `Unrealized_PL` | `DOUBLE` | Absolute Returns |
+| `Asset_PnL` | `DOUBLE` | Absolute Returns |
+| `Forex_PnL` | `DOUBLE` | Absolute Returns |
+| `Forex_Contribution_Pct` | `DOUBLE` | Absolute Returns |
+| `Absolute_Return` | `DOUBLE` | Absolute Returns |
+| `XIRR` | `DOUBLE` | Performance Returns |
+| `After_Tax_XIRR` | `DOUBLE` | Performance Returns |
+| `BM_XIRR` | `DOUBLE` | Benchmark Comparisons |
+| `Active_Return` | `DOUBLE` | Benchmark Comparisons |
+| `Max_Drawdown` | `DOUBLE` | Risk & Weights |
+| `Weight` | `DOUBLE` | Risk & Weights |
+| `Unrealized_Gain` | `DOUBLE` | Tax & Harvesting |
+| `Unrealized_Loss` | `DOUBLE` | Tax & Harvesting |
+| `FY_Realized_Gain` | `DOUBLE` | Tax & Harvesting |
+| `FY_Realized_Loss` | `DOUBLE` | Tax & Harvesting |
+| `FY_Realized_Net_PnL` | `DOUBLE` | Tax & Harvesting |
+
+### `gold.Investment_By_Industry`
+
+**Contract ID:** `df_f_investment_analytics_industry`  
+**Grain:** `Date-Industry`  
+**Domain:** `Investments`  
+**Producer:** `InvestmentQuantEngine`  
+**Publication order:** `250`
+
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `Closing_Date` | `DATE NOT NULL` | Identifiers |
+| `INDUSTRY` | `TEXT NOT NULL` | Identifiers |
+| `Total_Invested_Value` | `DOUBLE` | Position Values |
+| `Total_Current_Value` | `DOUBLE` | Position Values |
+| `Total_Quantity` | `DOUBLE` | Position Values |
+| `Total_Stocks` | `DOUBLE` | Position Values |
+| `Unrealized_PL` | `DOUBLE` | Absolute Returns |
+| `Asset_PnL` | `DOUBLE` | Absolute Returns |
+| `Forex_PnL` | `DOUBLE` | Absolute Returns |
+| `Forex_Contribution_Pct` | `DOUBLE` | Absolute Returns |
+| `Absolute_Return` | `DOUBLE` | Absolute Returns |
+| `XIRR` | `DOUBLE` | Performance Returns |
+| `After_Tax_XIRR` | `DOUBLE` | Performance Returns |
+| `BM_XIRR` | `DOUBLE` | Benchmark Comparisons |
+| `Active_Return` | `DOUBLE` | Benchmark Comparisons |
+| `Max_Drawdown` | `DOUBLE` | Risk & Weights |
+| `Weight` | `DOUBLE` | Risk & Weights |
+| `Unrealized_Gain` | `DOUBLE` | Tax & Harvesting |
+| `Unrealized_Loss` | `DOUBLE` | Tax & Harvesting |
+| `FY_Realized_Gain` | `DOUBLE` | Tax & Harvesting |
+| `FY_Realized_Loss` | `DOUBLE` | Tax & Harvesting |
+| `FY_Realized_Net_PnL` | `DOUBLE` | Tax & Harvesting |
+
+### `gold.Investment_By_Portfolio`
+
+**Contract ID:** `df_f_investment_analytics_portfolio`  
+**Grain:** `Date`  
+**Domain:** `Investments`  
+**Producer:** `InvestmentQuantEngine`  
+**Publication order:** `260`
+
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `Closing_Date` | `DATE NOT NULL` | Identifiers |
+| `Total_Invested_Value` | `DOUBLE` | Position Values |
+| `Total_Current_Value` | `DOUBLE` | Position Values |
+| `Total_Quantity` | `DOUBLE` | Position Values |
+| `Total_Stocks` | `DOUBLE` | Position Values |
+| `Unrealized_PL` | `DOUBLE` | Absolute Returns |
+| `Asset_PnL` | `DOUBLE` | Absolute Returns |
+| `Forex_PnL` | `DOUBLE` | Absolute Returns |
+| `Forex_Contribution_Pct` | `DOUBLE` | Absolute Returns |
+| `Absolute_Return` | `DOUBLE` | Absolute Returns |
+| `XIRR` | `DOUBLE` | Performance Returns |
+| `After_Tax_XIRR` | `DOUBLE` | Performance Returns |
+| `BM_XIRR` | `DOUBLE` | Benchmark Comparisons |
+| `Active_Return` | `DOUBLE` | Benchmark Comparisons |
+| `Max_Drawdown` | `DOUBLE` | Risk & Weights |
+| `Weight` | `DOUBLE` | Risk & Weights |
+| `Unrealized_Gain` | `DOUBLE` | Tax & Harvesting |
+| `Unrealized_Loss` | `DOUBLE` | Tax & Harvesting |
+| `FY_Realized_Gain` | `DOUBLE` | Tax & Harvesting |
+| `FY_Realized_Loss` | `DOUBLE` | Tax & Harvesting |
+| `FY_Realized_Net_PnL` | `DOUBLE` | Tax & Harvesting |
+
+### `gold.Investment_By_Geo`
+
+**Contract ID:** `df_f_investment_analytics_geo`  
+**Grain:** `Date-Geo`  
+**Domain:** `Investments`  
+**Producer:** `InvestmentQuantEngine`  
+**Publication order:** `270`
+
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `Closing_Date` | `DATE NOT NULL` | Identifiers |
+| `GEO` | `TEXT NOT NULL` | Identifiers |
+| `Total_Invested_Value` | `DOUBLE` | Position Values |
+| `Total_Current_Value` | `DOUBLE` | Position Values |
+| `Total_Quantity` | `DOUBLE` | Position Values |
+| `Total_Stocks` | `DOUBLE` | Position Values |
+| `Unrealized_PL` | `DOUBLE` | Absolute Returns |
+| `Asset_PnL` | `DOUBLE` | Absolute Returns |
+| `Forex_PnL` | `DOUBLE` | Absolute Returns |
+| `Forex_Contribution_Pct` | `DOUBLE` | Absolute Returns |
+| `Absolute_Return` | `DOUBLE` | Absolute Returns |
+| `XIRR` | `DOUBLE` | Performance Returns |
+| `After_Tax_XIRR` | `DOUBLE` | Performance Returns |
+| `BM_XIRR` | `DOUBLE` | Benchmark Comparisons |
+| `Active_Return` | `DOUBLE` | Benchmark Comparisons |
+| `Max_Drawdown` | `DOUBLE` | Risk & Weights |
+| `Weight` | `DOUBLE` | Risk & Weights |
+| `Unrealized_Gain` | `DOUBLE` | Tax & Harvesting |
+| `Unrealized_Loss` | `DOUBLE` | Tax & Harvesting |
+| `FY_Realized_Gain` | `DOUBLE` | Tax & Harvesting |
+| `FY_Realized_Loss` | `DOUBLE` | Tax & Harvesting |
+| `FY_Realized_Net_PnL` | `DOUBLE` | Tax & Harvesting |
+
+### `gold.Investment_By_Country`
+
+**Contract ID:** `df_f_investment_analytics_country`  
+**Grain:** `Date-Country`  
+**Domain:** `Investments`  
+**Producer:** `InvestmentQuantEngine`  
+**Publication order:** `280`
+
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `Closing_Date` | `DATE NOT NULL` | Identifiers |
+| `COUNTRY` | `TEXT NOT NULL` | Identifiers |
+| `Total_Invested_Value` | `DOUBLE` | Position Values |
+| `Total_Current_Value` | `DOUBLE` | Position Values |
+| `Total_Quantity` | `DOUBLE` | Position Values |
+| `Total_Stocks` | `DOUBLE` | Position Values |
+| `Total_Invested_Value_Local` | `DOUBLE` | Local/FX Values |
+| `Total_Current_Value_Local` | `DOUBLE` | Local/FX Values |
+| `Current_FX_Rate` | `DOUBLE` | Local/FX Values |
+| `Blended_FX_Buy_Rate` | `DOUBLE` | Local/FX Values |
+| `Currency_Appreciation_Pct` | `DOUBLE` | Local/FX Values |
+| `Unrealized_PL` | `DOUBLE` | Absolute Returns |
+| `Asset_PnL` | `DOUBLE` | Absolute Returns |
+| `Forex_PnL` | `DOUBLE` | Absolute Returns |
+| `Forex_Contribution_Pct` | `DOUBLE` | Absolute Returns |
+| `Absolute_Return` | `DOUBLE` | Absolute Returns |
+| `XIRR` | `DOUBLE` | Performance Returns |
+| `After_Tax_XIRR` | `DOUBLE` | Performance Returns |
+| `BM_XIRR` | `DOUBLE` | Benchmark Comparisons |
+| `Active_Return` | `DOUBLE` | Benchmark Comparisons |
+| `XIRR_Local` | `DOUBLE` | Benchmark Comparisons |
+| `BM_XIRR_Local` | `DOUBLE` | Benchmark Comparisons |
+| `Active_Return_Local` | `DOUBLE` | Benchmark Comparisons |
+| `FX_XIRR_Impact` | `DOUBLE` | Benchmark Comparisons |
+| `Max_Drawdown` | `DOUBLE` | Risk & Weights |
+| `Weight` | `DOUBLE` | Risk & Weights |
+| `Unrealized_Gain` | `DOUBLE` | Tax & Harvesting |
+| `Unrealized_Loss` | `DOUBLE` | Tax & Harvesting |
+| `FY_Realized_Gain` | `DOUBLE` | Tax & Harvesting |
+| `FY_Realized_Loss` | `DOUBLE` | Tax & Harvesting |
+| `FY_Realized_Net_PnL` | `DOUBLE` | Tax & Harvesting |
+
+### `gold.Investment_By_Currency`
+
+**Contract ID:** `df_f_investment_analytics_currency`  
+**Grain:** `Date-Currency`  
+**Domain:** `Investments`  
+**Producer:** `InvestmentQuantEngine`  
+**Publication order:** `290`
+
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `Closing_Date` | `DATE NOT NULL` | Identifiers |
+| `CURRENCY_ID` | `TEXT NOT NULL` | Identifiers |
+| `Total_Invested_Value` | `DOUBLE` | Position Values |
+| `Total_Current_Value` | `DOUBLE` | Position Values |
+| `Total_Quantity` | `DOUBLE` | Position Values |
+| `Total_Stocks` | `DOUBLE` | Position Values |
+| `Total_Invested_Value_Local` | `DOUBLE` | Local/FX Values |
+| `Total_Current_Value_Local` | `DOUBLE` | Local/FX Values |
+| `Current_FX_Rate` | `DOUBLE` | Local/FX Values |
+| `Blended_FX_Buy_Rate` | `DOUBLE` | Local/FX Values |
+| `Currency_Appreciation_Pct` | `DOUBLE` | Local/FX Values |
+| `Unrealized_PL` | `DOUBLE` | Absolute Returns |
+| `Asset_PnL` | `DOUBLE` | Absolute Returns |
+| `Forex_PnL` | `DOUBLE` | Absolute Returns |
+| `Forex_Contribution_Pct` | `DOUBLE` | Absolute Returns |
+| `Absolute_Return` | `DOUBLE` | Absolute Returns |
+| `XIRR` | `DOUBLE` | Performance Returns |
+| `XIRR_Local` | `DOUBLE` | Performance Returns |
+| `FX_XIRR_Impact` | `DOUBLE` | Performance Returns |
+| `After_Tax_XIRR` | `DOUBLE` | Performance Returns |
+| `BM_XIRR` | `DOUBLE` | Benchmark Comparisons |
+| `BM_XIRR_Local` | `DOUBLE` | Benchmark Comparisons |
+| `Active_Return` | `DOUBLE` | Benchmark Comparisons |
+| `Active_Return_Local` | `DOUBLE` | Benchmark Comparisons |
+| `Max_Drawdown` | `DOUBLE` | Risk & Weights |
+| `Weight` | `DOUBLE` | Risk & Weights |
+| `Unrealized_Gain` | `DOUBLE` | Tax & Harvesting |
+| `Unrealized_Loss` | `DOUBLE` | Tax & Harvesting |
+| `FY_Realized_Gain` | `DOUBLE` | Tax & Harvesting |
+| `FY_Realized_Loss` | `DOUBLE` | Tax & Harvesting |
+| `FY_Realized_Net_PnL` | `DOUBLE` | Tax & Harvesting |
+
+### `gold.Cashflow_Activity_Summary`
+
+**Contract ID:** `df_p_tf_cashflow_activity_summary`  
+**Grain:** `Month`  
+**Domain:** `Wealth`  
+**Producer:** `WealthPresentationEngine`  
+**Publication order:** `190`
+
+| Column | Physical type / constraint | Role |
+|---|---|---|
+| `MONTH_START_DATE` | `DATE` | Identifiers |
+| `MONTH_END_DATE` | `DATE` | Identifiers |
+| `YEAR_MONTH` | `TEXT` | Identifiers |
+| `Opening_Cash_Balance` | `DOUBLE` | Position Values |
+| `Closing_Cash_Balance` | `DOUBLE` | Position Values |
+| `Net_Cash_Movement` | `DOUBLE` | Position Values |
+| `Cash_Inflow_Operating` | `DOUBLE` | Position Values |
+| `Cash_Outflow_Operating` | `DOUBLE` | Position Values |
+| `Net_Cashflow_Operating` | `DOUBLE` | Position Values |
+| `Cash_Inflow_Investing` | `DOUBLE` | Position Values |
+| `Cash_Outflow_Investing` | `DOUBLE` | Position Values |
+| `Net_Cashflow_Investing` | `DOUBLE` | Position Values |
+| `Cash_Inflow_Financing` | `DOUBLE` | Position Values |
+| `Cash_Outflow_Financing` | `DOUBLE` | Position Values |
+| `Net_Cashflow_Financing` | `DOUBLE` | Position Values |
+| `Internal_Transfer_Inflow` | `DOUBLE` | Position Values |
+| `Internal_Transfer_Outflow` | `DOUBLE` | Position Values |
+| `Net_Internal_Transfers` | `DOUBLE` | Position Values |
+| `Total_Cash_Expenses` | `DOUBLE` | Position Values |
+| `Total_Non_Cash_Expenses` | `DOUBLE` | Position Values |
+| `Total_Cash_Inflow` | `DOUBLE` | Position Values |
+| `Total_Cash_Outflow` | `DOUBLE` | Position Values |
+| `Calculated_Net_Cashflow` | `DOUBLE` | Position Values |
+| `Unreconciled_Difference` | `DOUBLE` | Position Values |
+
+
+## Analytical semantics
+
+Gold measures are not uniformly additive.
+
+- cash amounts may be additive at their declared grain;
+- balances are usually semi-additive across time;
+- ratios, CAGR, XIRR, drawdown, and percentages are non-additive;
+- validity/null fields remain part of the metric contract.
+
+A BI tool can sum a column. That does not mean finance asked it to.
 
 ## Ownership boundary
 
-Reference specifies the physical contract, not the full financial derivation. Financial formulas and interpretation live in the Finance specifications; orchestration and persistence behavior live in Architecture. This separation keeps the contract pages useful during implementation work instead of turning them into duplicate textbooks.
+Gold builders can aggregate, reshape, and publish. They should not invent new Tax classification, FIFO logic, FX economics, or FIRE model semantics. If new financial meaning is required, it belongs upstream in the owning domain first.
 
 ## Related specifications
 
+- [Metrics & Methodology](../finance/metrics-and-methodology.md)
+- [Adding Gold Marts](../developer/adding-gold-marts.md)
 - [Warehouse Architecture](../architecture/warehouse-architecture.md)
-- [Data Model](../architecture/data-model.md)
-- [Identity and Grain Contracts](identity-and-grain-contracts.md)
-- [Data Contract and Schema Evolution](../developer/data-contract-and-schema-evolution.md)
