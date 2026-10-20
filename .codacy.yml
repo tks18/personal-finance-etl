@@ -6,8 +6,10 @@
 # Linked Native Configurations:
 #   - Ruff Linter & Formatter: ruff.toml (automatically detected by Codacy)
 #   - Pylint Static Analysis: .pylintrc (automatically detected by Codacy)
-#   - Flake8 / CodeFactor: .flake8
+#   - Prospector Meta-Linter: .prospector.yml
 #   - Mypy Strict Type Checking: mypy.ini
+#   - Pyright Strict Type Checking: pyrightconfig.json
+#   - Flake8 / CodeFactor: .flake8
 #   - CodeRabbit AI Review: .coderabbit.yaml
 # ==============================================================================
 
@@ -34,9 +36,14 @@ exclude_paths:
   - 'CHANGELOG.md'
   - 'src/personal_finance_etl/presentation/docs/assets/**'
   - '**.min.js'
+  # Exclude Declarative DDL Schemas (raw multi-line SQL table definitions)
+  - 'src/personal_finance_etl/infrastructure/warehouse/schema/**'
+  - 'src/personal_finance_etl/infrastructure/control_plane/schema.py'
+  # Exclude Monte Carlo Simulation numerical Numba @njit kernels
+  - 'src/personal_finance_etl/domain/fire/simulation.py'
 
 engines:
-  # Python Linter & Modernizer (aligned with line-length: 100)
+  # Python Linter & Modernizer (aligned with line-length: 100 in ruff.toml)
   ruff:
     enabled: true
     exclude_paths:
@@ -45,6 +52,9 @@ engines:
       - 'src/personal_finance_etl/presentation/docs/assets/**'
       - '.planning/**'
       - 'docs/**'
+      - 'src/personal_finance_etl/infrastructure/warehouse/schema/**'
+      - 'src/personal_finance_etl/infrastructure/control_plane/schema.py'
+      - 'src/personal_finance_etl/domain/fire/simulation.py'
 
   # Python Security Analysis (SAST)
   bandit:
@@ -55,7 +65,7 @@ engines:
       - '.planning/**'
       - 'docs/**'
 
-  # Static Code Analyzer & Code Smell Detector
+  # Static Code Analyzer & Code Smell Detector (delegates to .pylintrc)
   pylint:
     enabled: true
     exclude_paths:
@@ -64,6 +74,34 @@ engines:
       - 'src/personal_finance_etl/presentation/docs/assets/**'
       - '.planning/**'
       - 'docs/**'
+      - 'src/personal_finance_etl/infrastructure/warehouse/schema/**'
+      - 'src/personal_finance_etl/infrastructure/control_plane/schema.py'
+      - 'src/personal_finance_etl/domain/fire/simulation.py'
+
+  pylintpython3:
+    enabled: true
+    exclude_paths:
+      - 'tests/**'
+      - 'scripts/**'
+      - 'src/personal_finance_etl/presentation/docs/assets/**'
+      - '.planning/**'
+      - 'docs/**'
+      - 'src/personal_finance_etl/infrastructure/warehouse/schema/**'
+      - 'src/personal_finance_etl/infrastructure/control_plane/schema.py'
+      - 'src/personal_finance_etl/domain/fire/simulation.py'
+
+  # Multi-Linter Engine (delegates to .prospector.yml)
+  prospector:
+    enabled: true
+    exclude_paths:
+      - 'tests/**'
+      - 'scripts/**'
+      - 'src/personal_finance_etl/presentation/docs/assets/**'
+      - '.planning/**'
+      - 'docs/**'
+      - 'src/personal_finance_etl/infrastructure/warehouse/schema/**'
+      - 'src/personal_finance_etl/infrastructure/control_plane/schema.py'
+      - 'src/personal_finance_etl/domain/fire/simulation.py'
 
   # Code Duplication & Clone Detection (PMD-CPD)
   duplication:
@@ -73,10 +111,13 @@ engines:
       - 'scripts/**' # Exclude commit registries and orchestration utilities
       - '.planning/**' # Exclude historical analysis CSVs and phase trackers
       - 'src/personal_finance_etl/presentation/docs/assets/**' # Exclude vendored minified JS
+      - 'src/personal_finance_etl/infrastructure/warehouse/schema/**'
+      - 'src/personal_finance_etl/infrastructure/control_plane/schema.py'
+      - 'src/personal_finance_etl/domain/fire/simulation.py'
       - '**.min.js'
       - 'docs/**'
 
-  # Code Metrics Engine (Cyclomatic Complexity, Loc, Nesting)
+  # Code Metrics Engine (Cyclomatic Complexity, NLOC, Nesting via Lizard)
   metric:
     enabled: true
     exclude_paths:
@@ -84,6 +125,22 @@ engines:
       - 'scripts/**'
       - '.planning/**'
       - 'src/personal_finance_etl/presentation/docs/assets/**'
+      - 'src/personal_finance_etl/infrastructure/warehouse/schema/**'
+      - 'src/personal_finance_etl/infrastructure/control_plane/schema.py'
+      - 'src/personal_finance_etl/domain/fire/simulation.py'
+      - '**.min.js'
+      - 'docs/**'
+
+  lizard:
+    enabled: true
+    exclude_paths:
+      - 'tests/**'
+      - 'scripts/**'
+      - '.planning/**'
+      - 'src/personal_finance_etl/presentation/docs/assets/**'
+      - 'src/personal_finance_etl/infrastructure/warehouse/schema/**'
+      - 'src/personal_finance_etl/infrastructure/control_plane/schema.py'
+      - 'src/personal_finance_etl/domain/fire/simulation.py'
       - '**.min.js'
       - 'docs/**'
 
@@ -105,6 +162,9 @@ languages:
       - '_df_cache/**' # Runtime DataFrame cache
       - '.planning/**' # Planning and refactor documentation
       - 'docs/**'
+      - 'src/personal_finance_etl/infrastructure/warehouse/schema/**'
+      - 'src/personal_finance_etl/infrastructure/control_plane/schema.py'
+      - 'src/personal_finance_etl/domain/fire/simulation.py'
   javascript:
     exclude_paths:
       - 'src/personal_finance_etl/presentation/docs/assets/**' # Vendored mermaid/svg-pan-zoom

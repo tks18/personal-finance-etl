@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [9.2.8](https://github.com/tks18/personal-finance-etl/compare/9.2.7...9.2.8) (2026-10-20)
+
+
+### Docs 📃
+
+* **security:** clarify etl and cli/gui acronym definitions ([d38c46d](https://github.com/tks18/personal-finance-etl/commit/d38c46d81445c4cc7e9cbd0c493efd60676aea06))
+
+
+### CI 🛠
+
+* **codacy:** exclude declarative schemas and monte carlo kernels ([3beea04](https://github.com/tks18/personal-finance-etl/commit/3beea04c210c854599124b3b25423a9bfbde9f14))
+* **prospector:** configure rules aligned with ruff and pylint ([e145f90](https://github.com/tks18/personal-finance-etl/commit/e145f90d49243ff89dba25cfb7602145cde4d8e2))
+
 ### [9.2.7](https://github.com/tks18/personal-finance-etl/compare/9.2.6...9.2.7) (2026-10-19)
 
 

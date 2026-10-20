@@ -1,6 +1,6 @@
 # Security Policy
 
-Personal Finance ETL processes sensitive personal-finance data locally. Security reports should protect both the software and the financial information used with it.
+Personal Finance ETL (Extract, Transform, Load) processes sensitive personal-finance data locally. Security reports should protect both the software and the financial information used with it.
 
 ## Supported versions
 
@@ -43,7 +43,7 @@ Examples include:
 - path traversal or arbitrary file access,
 - unsafe deserialization or command execution,
 - permission bypass,
-- sensitive information leaking through CLI/GUI output,
+- sensitive information leaking through CLI (Command Line Interface) or GUI (Graphical User Interface) output,
 - dependency or packaging behaviour that creates a practical exploit path.
 
 Ordinary financial-calculation bugs are generally correctness issues unless they create a security impact.
