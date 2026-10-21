@@ -7,8 +7,8 @@ Owns
 Does not own
 -------------
 - Underlying SHA256 deterministic ID generator (owned by domain.common.identity).
-- TaxEvent schema definition (owned by domain.tax.tax_schema).
-- TaxEvent evidence normalizer (owned by domain.tax.events).
+- TaxEvent schema definition (owned by domain.tax.events.builder.schema).
+- TaxEvent evidence normalizer (owned by domain.tax.events.builder).
 """
 
 from __future__ import annotations
