@@ -239,11 +239,72 @@ def _prompt_next_iteration(config_path: str, rules_path: str) -> tuple[str | Non
         console.print("[red]Invalid selection.[/red]")
 
 
-def main_cli(args: argparse.Namespace) -> None:
-    """CLI execution entrypoint evaluating parsed arguments and controlling runtime loop."""
-    docs_mode = bool(getattr(args, "docs", False))
+def _run_cli_pipeline_iteration(
+    engine: PersonalFinanceEngine,
+    config_path: str | None,
+    rules_path: str | None,
+    auto_mode: bool,
+    cron_mode: bool,
+) -> tuple[str | None, str | None]:
+    """Execute a single interactive or automated CLI pipeline run cycle.
 
-    if docs_mode:
+    Parameters
+    ----------
+    engine : PersonalFinanceEngine
+        The orchestrating engine instance.
+    config_path : str | None
+        Current pipeline configuration file path, if specified.
+    rules_path : str | None
+        Current financial rules file path, if specified.
+    auto_mode : bool
+        Whether to bypass execution confirmation prompt.
+    cron_mode : bool
+        Whether the CLI is running under an automated cron runner.
+
+    Returns
+    -------
+    tuple[str | None, str | None]
+        Resolved configuration and rules path for the subsequent iteration.
+    """
+    if not config_path:
+        config_path = get_file_interactive("Config TOML", engine.get_recent_configs())
+
+    if not rules_path:
+        rules_path = get_file_interactive("Financial Rules TOML", engine.get_recent_rules())
+        engine.add_recent_rules(rules_path)
+
+    console.print()
+    console.print(
+        Panel(
+            f"[bold]Targeting Configuration:[/bold]\nConfig: {config_path}\nRules:  {rules_path}",
+            title="[bold magenta]Execution Parameters[/bold magenta]",
+            border_style="magenta",
+        )
+    )
+
+    if not auto_mode and not Confirm.ask("[bold cyan]Execute financial ETL pipeline?[/bold cyan]"):
+        console.print("[yellow]Operation aborted by user.[/yellow]")
+        sys.exit(0)
+
+    console.print("\n[bold green]🚀 EXECUTING ETL PIPELINE...[/bold green]\n")
+    _run_etl_progress(engine, config_path, rules_path)
+    console.print("\n[bold green]=== SYSTEM HALTED. OPERATION COMPLETE. ===[/bold green]\n")
+
+    if cron_mode:
+        sys.exit(0)
+
+    return _prompt_next_iteration(config_path, rules_path)
+
+
+def main_cli(args: argparse.Namespace) -> None:
+    """CLI execution entrypoint evaluating parsed arguments and controlling runtime loop.
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        Parsed command-line arguments.
+    """
+    if getattr(args, "docs", False):
         console.print("[bold cyan]Initializing Documentation Engine...[/bold cyan]")
         show_guides_window()
         sys.exit(0)
@@ -254,48 +315,18 @@ def main_cli(args: argparse.Namespace) -> None:
 
     config_path: str | None = getattr(args, "config", None)
     rules_path: str | None = getattr(args, "rules", None)
-    auto_mode: bool = bool(getattr(args, "auto", False))
     cron_mode: bool = bool(getattr(args, "cron", False))
-    snapshot_mode: bool = bool(getattr(args, "snapshot", False))
-    restore_target: str | None = getattr(args, "restore", None)
+    auto_mode: bool = bool(getattr(args, "auto", False)) or cron_mode
 
-    if cron_mode:
-        auto_mode = True
-
-    if snapshot_mode:
+    if getattr(args, "snapshot", False):
         _handle_snapshot(engine, config_path)
 
+    restore_target: str | None = getattr(args, "restore", None)
     if restore_target:
         _handle_restore(engine, config_path, restore_target)
 
     while True:
-        if not config_path:
-            config_path = get_file_interactive("Config TOML", engine.get_recent_configs())
-
-        if not rules_path:
-            rules_path = get_file_interactive("Financial Rules TOML", engine.get_recent_rules())
-            engine.add_recent_rules(rules_path)
-
-        console.print()
-        console.print(
-            Panel(
-                f"[bold]Targeting Configuration:[/bold]\nConfig: {config_path}\nRules:  {rules_path}",
-                title="[bold magenta]Execution Parameters[/bold magenta]",
-                border_style="magenta",
-            )
+        config_path, rules_path = _run_cli_pipeline_iteration(
+            engine, config_path, rules_path, auto_mode=auto_mode, cron_mode=cron_mode
         )
-
-        if not auto_mode:
-            if not Confirm.ask("[bold cyan]Execute financial ETL pipeline?[/bold cyan]"):
-                console.print("[yellow]Operation aborted by user.[/yellow]")
-                sys.exit(0)
-
-        console.print("\n[bold green]🚀 EXECUTING ETL PIPELINE...[/bold green]\n")
-        _run_etl_progress(engine, config_path, rules_path)
-        console.print("\n[bold green]=== SYSTEM HALTED. OPERATION COMPLETE. ===[/bold green]\n")
-
-        if cron_mode:
-            sys.exit(0)
-
-        config_path, rules_path = _prompt_next_iteration(config_path, rules_path)
         auto_mode = False
