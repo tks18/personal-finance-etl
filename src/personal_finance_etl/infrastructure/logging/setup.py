@@ -106,10 +106,11 @@ def add_file_handler(file_path: str) -> None:
 
     handler = logging.FileHandler(file_path, mode="w", encoding="utf-8")
     handler.setLevel(logging.DEBUG)
-    formatter = logging.Formatter(
-        "%(asctime)s.%(msecs)03d | %(levelname)-8s | Run:%(run_id)s | Stage:%(stage)s | ISIN:%(isin)s | Proc:%(processName)s | [%(module)s:%(funcName)s:%(lineno)d] | %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
+    fmt_str = (
+        "%(asctime)s.%(msecs)03d | %(levelname)-8s | Run:%(run_id)s | Stage:%(stage)s | "
+        "ISIN:%(isin)s | Proc:%(processName)s | [%(module)s:%(funcName)s:%(lineno)d] | %(message)s"
     )
+    formatter = logging.Formatter(fmt_str, datefmt="%Y-%m-%d %H:%M:%S")
     handler.setFormatter(formatter)
     logger.addHandler(handler)
 
