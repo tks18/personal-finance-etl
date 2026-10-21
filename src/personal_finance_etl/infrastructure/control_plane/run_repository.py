@@ -27,7 +27,7 @@ import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
-from typing import Any, cast
+from typing import cast
 
 import polars as pl
 
@@ -353,19 +353,16 @@ class RunRepository:
 
     def log_simulation_run(
         self,
-        params: SimulationRunParams | None = None,
-        **kwargs: Any,
+        params: SimulationRunParams,
     ) -> None:
         """Record a reproducible Monte Carlo simulation run in cp_simulation_runs.
 
         Parameters
         ----------
-        params : SimulationRunParams | None
+        params : SimulationRunParams
             Structured simulation run parameters.
-        **kwargs : Any
-            Backward compatibility parameters if params is omitted.
         """
-        p = params or SimulationRunParams(**kwargs)
+        p = params
         sim_id = f"sim_{p.run_id}"
         now = datetime.now().isoformat(timespec="seconds")
         model_fingerprint = self._compute_model_fingerprint(p.rules)
