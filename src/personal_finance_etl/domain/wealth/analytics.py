@@ -40,22 +40,12 @@ class InvestmentAnalyticsBuilder:
         self.base_lf = base_lf
         self.rules = rules
 
-    def build(self) -> pl.LazyFrame:
-        """Build the investment management analytics LazyFrame.
-
-        Returns
-        -------
-        pl.LazyFrame
-            ISIN-level analytics table containing market values, weights, drift,
-            rebalance requirements, tax harvesting priorities, and XIRR comparisons.
-        """
-        f_market_data = self.dfs.get("df_f_investment_analytics_lot")
-        d_inv_master = self.dfs.get("df_d_investment_master")
-        df_inv_port = self.dfs.get("df_f_investment_analytics_portfolio")
-
-        if f_market_data is None or d_inv_master is None or df_inv_port is None:
-            return pl.LazyFrame()
-
+    def _prepare_monthly_base(
+        self,
+        f_market_data: pl.DataFrame | pl.LazyFrame,
+        d_inv_master: pl.DataFrame | pl.LazyFrame,
+    ) -> pl.LazyFrame:
+        """Filter latest market data snapshot per month and join master instrument attributes."""
         lf_market_data = (
             f_market_data.lazy() if isinstance(f_market_data, pl.DataFrame) else f_market_data
         )
@@ -67,7 +57,7 @@ class InvestmentAnalyticsBuilder:
             pl.col("Closing_Date").dt.month_start().alias("MONTH_START_DATE")
         )
 
-        df_monthly_base = (
+        return (
             lf_market_data.filter(
                 pl.col("Closing_Date") == pl.col("Closing_Date").max().over("MONTH_START_DATE")
             )
@@ -93,8 +83,9 @@ class InvestmentAnalyticsBuilder:
             pl.col("SECTOR").fill_null("Unknown"),
         )
 
-        # 1. Base ISIN Aggregation
-        lf_isin_agg = df_monthly_base.group_by(
+    def _aggregate_isin_values(self, df_monthly_base: pl.LazyFrame) -> pl.LazyFrame:
+        """Aggregate ISIN market values, book values, and PnL metrics."""
+        return df_monthly_base.group_by(
             [
                 "MONTH_START_DATE",
                 "Max_Closing_Date",
@@ -121,7 +112,8 @@ class InvestmentAnalyticsBuilder:
             .alias("ISIN_Harvestable_Loss"),
         )
 
-        # 2. Portfolio Weights & Allocation
+    def _compute_weights_and_drift(self, lf_isin_agg: pl.LazyFrame) -> pl.LazyFrame:
+        """Calculate asset weights, drift vs target allocation, and rebalance triggers."""
         lf_isin_agg = lf_isin_agg.with_columns(
             pl.col("ISIN_Market_Value")
             .sum()
@@ -150,7 +142,6 @@ class InvestmentAnalyticsBuilder:
             .alias("Sector_Weight"),
         )
 
-        # 3. Target Allocations & Drift
         if self.rules and getattr(self.rules.assumptions, "target_allocations", None):
             alloc_data = [
                 {"INSTRUMENT_CLASS": str(k), "Class_Target_Weight": float(v)}
@@ -169,7 +160,7 @@ class InvestmentAnalyticsBuilder:
             else 0.05
         )
 
-        lf_isin_agg = lf_isin_agg.with_columns(
+        return lf_isin_agg.with_columns(
             (pl.col("Class_Weight") - pl.col("Class_Target_Weight")).alias("Class_Drift"),
             (pl.col("Class_Target_Weight") * pl.col("Total_Portfolio_Value")).alias(
                 "Class_Target_Value"
@@ -181,7 +172,8 @@ class InvestmentAnalyticsBuilder:
             .alias("Rebalance_Required")
         )
 
-        # 4. Returns & Performance Attribution (MoM Change)
+    def _compute_performance_and_harvesting(self, lf_isin_agg: pl.LazyFrame) -> pl.LazyFrame:
+        """Calculate MoM value changes and tax harvesting priority score."""
         lf_isin_agg = lf_isin_agg.sort(["ISIN", "MONTH_START_DATE"]).with_columns(
             pl.when(pl.col("ISIN_Market_Value").shift(1).over("ISIN") > 0)
             .then(
@@ -192,8 +184,7 @@ class InvestmentAnalyticsBuilder:
             .alias("Monthly_Market_Value_Change_Pct")
         )
 
-        # 5. Tax Harvesting Priority
-        lf_isin_agg = lf_isin_agg.with_columns(
+        return lf_isin_agg.with_columns(
             pl.when(pl.col("ISIN_Harvestable_Loss") < 0)
             .then(
                 (pl.col("ISIN_Harvestable_Loss").abs() / pl.col("ISIN_Book_Value")) * 0.5
@@ -201,14 +192,14 @@ class InvestmentAnalyticsBuilder:
             )
             .otherwise(0.0)
             .alias("Tax_Harvesting_Priority_Score")
-        )
-
-        lf_isin_agg = lf_isin_agg.with_columns(
+        ).with_columns(
             safe_divide(pl.col("ISIN_Forex_PnL"), pl.col("ISIN_Unrealized_PnL")).alias(
                 "ISIN_Forex_Contribution_Pct"
             )
         )
 
+    def _enrich_xirr_metrics(self, lf_isin_agg: pl.LazyFrame) -> pl.LazyFrame:
+        """Join XIRR and benchmark return metrics from ISIN analytics fact table."""
         df_inv_isin = self.dfs.get("df_f_investment_analytics_isin")
         if df_inv_isin is not None:
             lf_inv_isin = (
@@ -234,9 +225,7 @@ class InvestmentAnalyticsBuilder:
                     ]
                 )
             )
-            # Return metrics are non-additive and may be undefined. Preserve nulls
-            # from the analytics fact instead of turning unavailable returns into 0%.
-            lf_isin_agg = lf_isin_agg.join(
+            return lf_isin_agg.join(
                 lf_inv_isin_latest,
                 on=["MONTH_START_DATE", "ISIN"],
                 how="left",
@@ -248,17 +237,37 @@ class InvestmentAnalyticsBuilder:
                 pl.col("Active_Return").alias("ISIN_Active_Return"),
                 pl.col("Active_Return_Local").alias("ISIN_Active_Return_Local"),
             )
-        else:
-            # Missing analytics input means the return metrics are unavailable,
-            # not that their calculated return is zero.
-            lf_isin_agg = lf_isin_agg.with_columns(
-                pl.lit(None, dtype=pl.Float64).alias("ISIN_FX_XIRR_Impact"),
-                pl.lit(None, dtype=pl.Float64).alias("ISIN_XIRR_Local"),
-                pl.lit(None, dtype=pl.Float64).alias("ISIN_BM_XIRR"),
-                pl.lit(None, dtype=pl.Float64).alias("ISIN_BM_XIRR_Local"),
-                pl.lit(None, dtype=pl.Float64).alias("ISIN_Active_Return"),
-                pl.lit(None, dtype=pl.Float64).alias("ISIN_Active_Return_Local"),
-            )
+
+        return lf_isin_agg.with_columns(
+            pl.lit(None, dtype=pl.Float64).alias("ISIN_FX_XIRR_Impact"),
+            pl.lit(None, dtype=pl.Float64).alias("ISIN_XIRR_Local"),
+            pl.lit(None, dtype=pl.Float64).alias("ISIN_BM_XIRR"),
+            pl.lit(None, dtype=pl.Float64).alias("ISIN_BM_XIRR_Local"),
+            pl.lit(None, dtype=pl.Float64).alias("ISIN_Active_Return"),
+            pl.lit(None, dtype=pl.Float64).alias("ISIN_Active_Return_Local"),
+        )
+
+    def build(self) -> pl.LazyFrame:
+        """Build the investment management analytics LazyFrame.
+
+        Returns
+        -------
+        pl.LazyFrame
+            ISIN-level analytics table containing market values, weights, drift,
+            rebalance requirements, tax harvesting priorities, and XIRR comparisons.
+        """
+        f_market_data = self.dfs.get("df_f_investment_analytics_lot")
+        d_inv_master = self.dfs.get("df_d_investment_master")
+        df_inv_port = self.dfs.get("df_f_investment_analytics_portfolio")
+
+        if f_market_data is None or d_inv_master is None or df_inv_port is None:
+            return pl.LazyFrame()
+
+        df_monthly_base = self._prepare_monthly_base(f_market_data, d_inv_master)
+        lf_isin_agg = self._aggregate_isin_values(df_monthly_base)
+        lf_isin_agg = self._compute_weights_and_drift(lf_isin_agg)
+        lf_isin_agg = self._compute_performance_and_harvesting(lf_isin_agg)
+        lf_isin_agg = self._enrich_xirr_metrics(lf_isin_agg)
 
         return lf_isin_agg.select(
             [
