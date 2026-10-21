@@ -65,11 +65,12 @@ class NetWorthBuilder:
             "lf_monthly_totals": lf_monthly_totals,
         }
 
-    def _build_nw_summary(
+    def _join_ledger_activity(
         self,
         lf_asset: pl.LazyFrame,
         lf_months: pl.LazyFrame,
     ) -> pl.LazyFrame:
+        """Cross-join assets with months and join monthly activity and balance streams."""
         lf_activity = self.ledger_res["lf_activity"]
         lf_balances = self.ledger_res["lf_balances"]
 
@@ -80,7 +81,7 @@ class NetWorthBuilder:
             how="cross",
         )
 
-        lf_nw_summary = (
+        return (
             lf_assets_months.join(
                 lf_activity,
                 on=["MONTH_START_DATE", "MONTH_END_DATE", "ASSET_SUBCATEGORY_ID"],
@@ -106,24 +107,28 @@ class NetWorthBuilder:
             .sort(["ASSET_SUBCATEGORY_ID", "MONTH_START_DATE"])
         )
 
-        # Compute Closing Balance as cumulative sum of Net Changes
-        lf_nw_summary = lf_nw_summary.with_columns(
-            pl.col("MONTHLY_NET_CHANGE")
-            .cum_sum()
-            .over("ASSET_SUBCATEGORY_ID")
-            .alias("Closing_Balance")
-        )
-
-        lf_nw_summary = lf_nw_summary.with_columns(
-            (
-                pl.col("Closing_Balance").shift(1).over("ASSET_SUBCATEGORY_ID").fill_null(0.0)
-                + pl.col("DB_Opening_Balance").fill_null(0.0)
-            ).alias("Opening_Balance")
-        ).drop(
-            ["MONTHLY_NET_CHANGE", "MONTHLY_NET_CHANGE_right", "DB_Opening_Balance"], strict=False
-        )
-
+    def _compute_balances_and_growth(self, lf_nw_summary: pl.LazyFrame) -> pl.LazyFrame:
+        """Calculate cumulative balances, net cashflows, organic yields, and drawdowns."""
         lf_nw_summary = (
+            lf_nw_summary.with_columns(
+                pl.col("MONTHLY_NET_CHANGE")
+                .cum_sum()
+                .over("ASSET_SUBCATEGORY_ID")
+                .alias("Closing_Balance")
+            )
+            .with_columns(
+                (
+                    pl.col("Closing_Balance").shift(1).over("ASSET_SUBCATEGORY_ID").fill_null(0.0)
+                    + pl.col("DB_Opening_Balance").fill_null(0.0)
+                ).alias("Opening_Balance")
+            )
+            .drop(
+                ["MONTHLY_NET_CHANGE", "MONTHLY_NET_CHANGE_right", "DB_Opening_Balance"],
+                strict=False,
+            )
+        )
+
+        return (
             lf_nw_summary.with_columns(
                 (
                     pl.col("Income_Inflow") - pl.col("Expense_Outflow") + pl.col("Net_Transfers")
@@ -176,7 +181,9 @@ class NetWorthBuilder:
             )
         )
 
-        lf_nw_summary = (
+    def _compute_runway_metrics(self, lf_nw_summary: pl.LazyFrame) -> pl.LazyFrame:
+        """Compute rolling 3M averages, YoY balance growth, and runway months."""
+        return (
             lf_nw_summary.sort(["ASSET_SUBCATEGORY_ID", "MONTH_START_DATE"])
             .with_columns(
                 [
@@ -216,42 +223,55 @@ class NetWorthBuilder:
             .drop(["Prev_Year_Balance", "YEAR", "MONTH"])
         )
 
+    def _build_nw_summary(
+        self,
+        lf_asset: pl.LazyFrame,
+        lf_months: pl.LazyFrame,
+    ) -> pl.LazyFrame:
+        """Construct full monthly net worth summary across all asset subcategories."""
+        lf_nw_summary = self._join_ledger_activity(lf_asset, lf_months)
+        lf_nw_summary = self._compute_balances_and_growth(lf_nw_summary)
+        lf_nw_summary = self._compute_runway_metrics(lf_nw_summary)
         return self._inject_asset_market_values(lf_nw_summary)
+
+    def _aggregate_isin_market_values(
+        self,
+        df_inv_isin: pl.DataFrame | pl.LazyFrame,
+        df_inv_master: pl.DataFrame | pl.LazyFrame,
+    ) -> pl.LazyFrame:
+        """Aggregate monthly investment closing values by ASSET_SUBCATEGORY_ID."""
+        lf_inv_isin = df_inv_isin.lazy() if isinstance(df_inv_isin, pl.DataFrame) else df_inv_isin
+        lf_inv_master = (
+            df_inv_master.lazy() if isinstance(df_inv_master, pl.DataFrame) else df_inv_master
+        )
+
+        lf_inv_mapped = lf_inv_isin.join(
+            lf_inv_master.select(["ISIN", "CATEGORY_ID"]), on="ISIN", how="left"
+        ).with_columns(pl.col("Closing_Date").dt.month_end().alias("MONTH_END_DATE"))
+
+        lf_inv_latest_dates = lf_inv_mapped.group_by(["MONTH_END_DATE", "CATEGORY_ID"]).agg(
+            pl.col("Closing_Date").max().alias("Max_Closing_Date")
+        )
+
+        return (
+            lf_inv_mapped.join(lf_inv_latest_dates, on=["MONTH_END_DATE", "CATEGORY_ID"])
+            .filter(pl.col("Closing_Date") == pl.col("Max_Closing_Date"))
+            .group_by(["MONTH_END_DATE", "CATEGORY_ID"])
+            .agg(
+                pl.col("Total_Current_Value").sum().fill_null(0.0).alias("Asset_Market_Value"),
+                pl.col("Total_Invested_Value").sum().fill_null(0.0).alias("Asset_Book_Value"),
+                pl.col("Asset_PnL").sum().fill_null(0.0).alias("Closing_Asset_PnL"),
+                pl.col("Forex_PnL").sum().fill_null(0.0).alias("Closing_Forex_PnL"),
+            )
+            .rename({"CATEGORY_ID": "ASSET_SUBCATEGORY_ID"})
+        )
 
     def _inject_asset_market_values(self, lf_nw_summary: pl.LazyFrame) -> pl.LazyFrame:
         df_inv_isin = self.dfs.get("df_f_investment_analytics_isin")
         df_inv_master = self.dfs.get("df_d_investment_master")
 
         if df_inv_isin is not None and df_inv_master is not None:
-            lf_inv_isin = (
-                df_inv_isin.lazy() if isinstance(df_inv_isin, pl.DataFrame) else df_inv_isin
-            )
-            lf_inv_master = (
-                df_inv_master.lazy() if isinstance(df_inv_master, pl.DataFrame) else df_inv_master
-            )
-
-            # Map ISIN to ASSET_SUBCATEGORY_ID and snap to month-end
-            lf_inv_mapped = lf_inv_isin.join(
-                lf_inv_master.select(["ISIN", "CATEGORY_ID"]), on="ISIN", how="left"
-            ).with_columns(pl.col("Closing_Date").dt.month_end().alias("MONTH_END_DATE"))
-
-            lf_inv_latest_dates = lf_inv_mapped.group_by(["MONTH_END_DATE", "CATEGORY_ID"]).agg(
-                pl.col("Closing_Date").max().alias("Max_Closing_Date")
-            )
-
-            lf_inv_agg = (
-                lf_inv_mapped.join(lf_inv_latest_dates, on=["MONTH_END_DATE", "CATEGORY_ID"])
-                .filter(pl.col("Closing_Date") == pl.col("Max_Closing_Date"))
-                .group_by(["MONTH_END_DATE", "CATEGORY_ID"])
-                .agg(
-                    pl.col("Total_Current_Value").sum().fill_null(0.0).alias("Asset_Market_Value"),
-                    pl.col("Total_Invested_Value").sum().fill_null(0.0).alias("Asset_Book_Value"),
-                    pl.col("Asset_PnL").sum().fill_null(0.0).alias("Closing_Asset_PnL"),
-                    pl.col("Forex_PnL").sum().fill_null(0.0).alias("Closing_Forex_PnL"),
-                )
-                .rename({"CATEGORY_ID": "ASSET_SUBCATEGORY_ID"})
-            )
-
+            lf_inv_agg = self._aggregate_isin_market_values(df_inv_isin, df_inv_master)
             return (
                 lf_nw_summary.join(
                     lf_inv_agg, on=["MONTH_END_DATE", "ASSET_SUBCATEGORY_ID"], how="left"
@@ -299,8 +319,9 @@ class NetWorthBuilder:
             .alias("Liquid_Assets_Market"),
         )
 
-    def _build_monthly_totals(self, lf_nw_summary: pl.LazyFrame) -> pl.LazyFrame:
-        lf_monthly_totals = (
+    def _aggregate_monthly_balance_totals(self, lf_nw_summary: pl.LazyFrame) -> pl.LazyFrame:
+        """Roll up subcategory balances and cashflows into portfolio totals per month."""
+        return (
             lf_nw_summary.group_by(["MONTH_START_DATE", "MONTH_END_DATE"])
             .agg(
                 [
@@ -338,6 +359,9 @@ class NetWorthBuilder:
             )
         )
 
+    def _build_monthly_totals(self, lf_nw_summary: pl.LazyFrame) -> pl.LazyFrame:
+        """Construct portfolio-level net worth and balance totals per month."""
+        lf_monthly_totals = self._aggregate_monthly_balance_totals(lf_nw_summary)
         lf_monthly_totals = self._inject_portfolio_market_values(lf_monthly_totals)
 
         lf_monthly_totals = (
@@ -389,52 +413,59 @@ class NetWorthBuilder:
             how="left",
         ).drop("Total_Liabilities_Negative", strict=False)
 
+    def _aggregate_portfolio_analytics(
+        self, df_inv_port: pl.DataFrame | pl.LazyFrame
+    ) -> pl.LazyFrame:
+        """Aggregate latest portfolio valuations for each month end."""
+        lf_inv_port = df_inv_port.lazy() if isinstance(df_inv_port, pl.DataFrame) else df_inv_port
+        lf_inv_port_mapped = lf_inv_port.with_columns(
+            pl.col("Closing_Date").dt.month_end().alias("MONTH_END_DATE")
+        )
+        lf_inv_port_latest = lf_inv_port_mapped.group_by("MONTH_END_DATE").agg(
+            pl.col("Closing_Date").max().alias("Max_Closing_Date")
+        )
+        return (
+            lf_inv_port_mapped.join(lf_inv_port_latest, on="MONTH_END_DATE")
+            .filter(pl.col("Closing_Date") == pl.col("Max_Closing_Date"))
+            .select(
+                [
+                    "MONTH_END_DATE",
+                    pl.col("Total_Current_Value").alias("Closing_Investment_Market_Value"),
+                    pl.col("Total_Invested_Value").alias("Closing_Investment_Book_Value"),
+                    pl.col("XIRR").alias("Closing_Investment_XIRR"),
+                    pl.col("Unrealized_PL").alias("Closing_Unrealized_PL"),
+                    pl.col("Asset_PnL").alias("Closing_Asset_PnL"),
+                    pl.col("Forex_PnL").alias("Closing_Forex_PnL"),
+                ]
+            )
+        )
+
+    def _aggregate_currency_analytics(
+        self, df_inv_curr: pl.DataFrame | pl.LazyFrame
+    ) -> pl.LazyFrame:
+        """Aggregate foreign currency balances snapped to month end."""
+        lf_inv_curr = df_inv_curr.lazy() if isinstance(df_inv_curr, pl.DataFrame) else df_inv_curr
+        return (
+            lf_inv_curr.with_columns(pl.col("Closing_Date").dt.month_end().alias("MONTH_END_DATE"))
+            .filter(pl.col("CURRENCY_ID") != self.default_currency_id)
+            .group_by("MONTH_END_DATE")
+            .agg(
+                pl.col("Total_Current_Value")
+                .sum()
+                .fill_null(0.0)
+                .alias("Total_Foreign_Currency_Exposure")
+            )
+        )
+
     def _inject_portfolio_market_values(self, lf_monthly_totals: pl.LazyFrame) -> pl.LazyFrame:
+        """Join portfolio and currency valuations into monthly totals."""
         df_inv_port = self.dfs.get("df_f_investment_analytics_portfolio")
         if df_inv_port is not None:
-            lf_inv_port = (
-                df_inv_port.lazy() if isinstance(df_inv_port, pl.DataFrame) else df_inv_port
-            )
-            lf_inv_port_mapped = lf_inv_port.with_columns(
-                pl.col("Closing_Date").dt.month_end().alias("MONTH_END_DATE")
-            )
-            lf_inv_port_latest = lf_inv_port_mapped.group_by("MONTH_END_DATE").agg(
-                pl.col("Closing_Date").max().alias("Max_Closing_Date")
-            )
-            lf_inv_port_agg = (
-                lf_inv_port_mapped.join(lf_inv_port_latest, on="MONTH_END_DATE")
-                .filter(pl.col("Closing_Date") == pl.col("Max_Closing_Date"))
-                .select(
-                    [
-                        "MONTH_END_DATE",
-                        pl.col("Total_Current_Value").alias("Closing_Investment_Market_Value"),
-                        pl.col("Total_Invested_Value").alias("Closing_Investment_Book_Value"),
-                        pl.col("XIRR").alias("Closing_Investment_XIRR"),
-                        pl.col("Unrealized_PL").alias("Closing_Unrealized_PL"),
-                        pl.col("Asset_PnL").alias("Closing_Asset_PnL"),
-                        pl.col("Forex_PnL").alias("Closing_Forex_PnL"),
-                    ]
-                )
-            )
-
+            lf_inv_port_agg = self._aggregate_portfolio_analytics(df_inv_port)
             df_inv_curr = self.dfs.get("df_f_investment_analytics_currency")
+
             if df_inv_curr is not None:
-                lf_inv_curr = (
-                    df_inv_curr.lazy() if isinstance(df_inv_curr, pl.DataFrame) else df_inv_curr
-                )
-                lf_foreign_exposure = (
-                    lf_inv_curr.with_columns(
-                        pl.col("Closing_Date").dt.month_end().alias("MONTH_END_DATE")
-                    )
-                    .filter(pl.col("CURRENCY_ID") != self.default_currency_id)
-                    .group_by("MONTH_END_DATE")
-                    .agg(
-                        pl.col("Total_Current_Value")
-                        .sum()
-                        .fill_null(0.0)
-                        .alias("Total_Foreign_Currency_Exposure")
-                    )
-                )
+                lf_foreign_exposure = self._aggregate_currency_analytics(df_inv_curr)
                 lf_inv_port_agg = lf_inv_port_agg.join(
                     lf_foreign_exposure, on="MONTH_END_DATE", how="left"
                 ).with_columns(pl.col("Total_Foreign_Currency_Exposure").fill_null(0.0))
