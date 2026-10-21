@@ -91,6 +91,31 @@ _STAGE_MATCH_RULES: tuple[tuple[tuple[str, ...], FailureDomain], ...] = (
 )
 
 
+def _match_error_domain(err_type: str, err_str: str) -> FailureDomain | None:
+    """Match error type and message against known error patterns."""
+    for patterns, domain in _ERROR_MATCH_RULES:
+        if any(p in err_type or p in err_str for p in patterns):
+            return domain
+    if "Timeout" in err_type and "pipeline.lock" in err_str:
+        return FailureDomain.CONFIGURATION
+    return None
+
+
+def _match_stage_domain(stage: str, err_str: str) -> FailureDomain:
+    """Match stage name and error message against known stage patterns."""
+    stg = stage.strip().upper()
+    for patterns, domain in _STAGE_MATCH_RULES:
+        if any(p in stg for p in patterns):
+            return domain
+    if "COMMIT" in stg:
+        return (
+            FailureDomain.DUCKDB_COMMIT
+            if "DUCKDB" in err_str.upper()
+            else FailureDomain.SQLITE_COMMIT
+        )
+    return FailureDomain.UNKNOWN
+
+
 def classify_failure_domain(
     stage: str | None = None,
     error: BaseException | str | None = None,
@@ -112,29 +137,11 @@ def classify_failure_domain(
     err_str = str(error) if error is not None else ""
     err_type = type(error).__name__ if isinstance(error, BaseException) else ""
 
-    for patterns, domain in _ERROR_MATCH_RULES:
-        if any(p in err_type or p in err_str for p in patterns):
-            return domain
-
-    stg_upper = str(stage).upper() if stage else ""
-    if "DUCKDB_COMMIT" in stg_upper:
-        return FailureDomain.DUCKDB_COMMIT
-    if "SQLITE_COMMIT" in stg_upper:
-        return FailureDomain.SQLITE_COMMIT
-
-    if "Timeout" in err_type and "pipeline.lock" in err_str:
-        return FailureDomain.CONFIGURATION
+    err_domain = _match_error_domain(err_type, err_str)
+    if err_domain is not None:
+        return err_domain
 
     if stage:
-        stg = stage.strip().upper()
-        for patterns, domain in _STAGE_MATCH_RULES:
-            if any(p in stg for p in patterns):
-                return domain
-        if "COMMIT" in stg:
-            return (
-                FailureDomain.DUCKDB_COMMIT
-                if "DUCKDB" in err_str.upper()
-                else FailureDomain.SQLITE_COMMIT
-            )
+        return _match_stage_domain(stage, err_str)
 
     return FailureDomain.UNKNOWN
