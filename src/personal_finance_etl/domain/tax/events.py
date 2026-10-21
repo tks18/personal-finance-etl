@@ -2,13 +2,13 @@
 
 Owns
 ----
-- TAX_EVENT_SCHEMA: Strict Typed schema definition for canonical tax events.
 - BaseEventsBuilder / TaxEventNormalizer: Normalizes ledger income, tax credits, and Quant FIFO events.
-- Batch computation of deterministic Tax_Event_IDs.
 - Evidence validation across sources and dimension tables.
 
 Does not own
 -------------
+- TAX_EVENT_SCHEMA and TaxEventDict definitions (owned by domain.tax.tax_schema).
+- Batch computation of deterministic Tax_Event_IDs (owned by domain.tax.tax_id).
 - Statutory income head and sub-head classification rules (owned by domain.tax.classification).
 - Ordinary tax rate lookup and rate bounding (owned by domain.tax.estimates).
 - Presentation aggregations and reconciliation marts (owned by domain.tax.reconciliation).
@@ -19,37 +19,17 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping
 from datetime import date, datetime
-from typing import TypedDict
 
 import polars as pl
 
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.domain.common.dates import get_fy_string
-from personal_finance_etl.domain.common.identity import generate_deterministic_id
 from personal_finance_etl.domain.investments.contracts import RealizedEventDict
 from personal_finance_etl.domain.market.macro import FYMacroParametersTable
 from personal_finance_etl.domain.tax.classification import TaxClassifier
 from personal_finance_etl.domain.tax.estimates import TaxEstimator
-
-
-class TaxEventDict(TypedDict, total=False):
-    """Normalized tax event record dictionary."""
-
-    FY: str
-    Event_Date: date
-    Source_Type: str
-    Source_ID: str
-    Income_Head: str
-    Tax_Sub_Head: str
-    Amount_INR: float
-    Applied_Rate: float | None
-    Estimated_Tax: float | None
-    CURRENCY_ID: str | None
-    Tax_Status: str
-    Tax_Status_Reason: str | None
-    ISIN: str | None
-    Lot_ID: str | None
-
+from personal_finance_etl.domain.tax.tax_id import _batch_compute_tax_event_ids
+from personal_finance_etl.domain.tax.tax_schema import TAX_EVENT_SCHEMA, TaxEventDict
 
 __all__ = [
     "TAX_EVENT_SCHEMA",
@@ -58,43 +38,6 @@ __all__ = [
     "TaxEventNormalizer",
     "_batch_compute_tax_event_ids",
 ]
-
-TAX_EVENT_SCHEMA: dict[str, pl.DataType] = {
-    "Tax_Event_ID": pl.String(),
-    "FY": pl.String(),
-    "Event_Date": pl.Date(),
-    "Source_Type": pl.String(),
-    "Source_ID": pl.String(),
-    "Income_Head": pl.String(),
-    "Tax_Sub_Head": pl.String(),
-    "Amount_INR": pl.Float64(),
-    "Applied_Rate": pl.Float64(),
-    "Estimated_Tax": pl.Float64(),
-    "CURRENCY_ID": pl.String(),
-    "Tax_Status": pl.String(),
-    "Tax_Status_Reason": pl.String(),
-    "ISIN": pl.String(),
-    "Lot_ID": pl.String(),
-}
-
-
-def _batch_compute_tax_event_ids(s: pl.Series) -> pl.Series:
-    """Compute deterministic Tax_Event_IDs in batches using Polars struct map."""
-    source_types = s.struct.field("Source_Type")
-    source_ids = s.struct.field("Source_ID")
-    sub_heads = s.struct.field("Tax_Sub_Head")
-    ids = [
-        generate_deterministic_id(
-            "TAX",
-            {
-                "Source_Type": st,
-                "Source_ID": sid,
-                "Tax_Sub_Head": tsh,
-            },
-        )
-        for st, sid, tsh in zip(source_types, source_ids, sub_heads, strict=False)
-    ]
-    return pl.Series(ids, dtype=pl.String)
 
 
 class BaseEventsBuilder:
@@ -188,14 +131,8 @@ class BaseEventsBuilder:
         TaxClassifier.validate_tax_credit_uids(self.df_subcategory, credit_subheads)
 
     @staticmethod
-    def _validate_and_prepare_ledger_frame(
-        df: pl.DataFrame,
-        source_label: str,
-    ) -> pl.DataFrame:
-        """Validate BASE_AMOUNT and DATE columns, casting to finite Amount_INR, Event_Date, and FY."""
-        if df.is_empty():
-            return df
-
+    def _validate_ledger_amount(df: pl.DataFrame, source_label: str) -> pl.DataFrame:
+        """Validate BASE_AMOUNT column is non-boolean, finite, and convert to Amount_INR."""
         amount_col = df.get_column("BASE_AMOUNT")
         if amount_col.dtype == pl.Boolean:
             bad_id = str(df.get_column("Source_ID")[0])
@@ -221,7 +158,11 @@ class BaseEventsBuilder:
             raise ValueError(
                 f"Required amount {label_prefix}BASE_AMOUNT must be finite for source {bad_id!r}."
             )
+        return df
 
+    @staticmethod
+    def _validate_ledger_date(df: pl.DataFrame, source_label: str) -> pl.DataFrame:
+        """Validate DATE column is present, non-null, and convert to Date Event_Date."""
         if df["DATE"].is_null().any():
             bad_idx = df["DATE"].is_null().arg_true()[0]
             bad_id = str(df.get_column("Source_ID")[bad_idx])
@@ -229,19 +170,21 @@ class BaseEventsBuilder:
             raise ValueError(f"Required date {date_label} is null for source {bad_id!r}.")
 
         if df["DATE"].dtype == pl.Datetime:
-            df = df.with_columns(pl.col("DATE").dt.date().alias("Event_Date"))
-        elif df["DATE"].dtype == pl.Date:
-            df = df.with_columns(pl.col("DATE").alias("Event_Date"))
-        else:
-            try:
-                df = df.with_columns(pl.col("DATE").cast(pl.Date, strict=True).alias("Event_Date"))
-            except Exception as exc:
-                bad_id = str(df.get_column("Source_ID")[0])
-                date_label = f"{source_label} DATE" if source_label else "income DATE"
-                raise ValueError(
-                    f"Required date {date_label} is invalid for source {bad_id!r}: {exc}"
-                ) from exc
+            return df.with_columns(pl.col("DATE").dt.date().alias("Event_Date"))
+        if df["DATE"].dtype == pl.Date:
+            return df.with_columns(pl.col("DATE").alias("Event_Date"))
+        try:
+            return df.with_columns(pl.col("DATE").cast(pl.Date, strict=True).alias("Event_Date"))
+        except Exception as exc:
+            bad_id = str(df.get_column("Source_ID")[0])
+            date_label = f"{source_label} DATE" if source_label else "income DATE"
+            raise ValueError(
+                f"Required date {date_label} is invalid for source {bad_id!r}: {exc}"
+            ) from exc
 
+    @staticmethod
+    def _add_fy_column(df: pl.DataFrame) -> pl.DataFrame:
+        """Derive standard Indian Fiscal Year string from Event_Date."""
         fy_expr = (
             pl.when(pl.col("Event_Date").dt.month() >= 4)
             .then(
@@ -258,14 +201,21 @@ class BaseEventsBuilder:
         )
         return df.with_columns(fy_expr)
 
-    def _normalize_ledger_income(self, credit_subheads: dict[str, str]) -> pl.DataFrame:
-        required = {"UID", "DATE", "CATEGORY_ID", "BASE_AMOUNT"}
-        missing = sorted(required - set(self.df_income.columns))
-        if missing:
-            raise ValueError(f"Income transactions missing required columns: {missing}")
-        if self.df_income.is_empty():
-            return pl.DataFrame(schema=TAX_EVENT_SCHEMA)
+    @classmethod
+    def _validate_and_prepare_ledger_frame(
+        cls,
+        df: pl.DataFrame,
+        source_label: str,
+    ) -> pl.DataFrame:
+        """Validate BASE_AMOUNT and DATE columns, casting to finite Amount_INR, Event_Date, and FY."""
+        if df.is_empty():
+            return df
+        df = cls._validate_ledger_amount(df, source_label)
+        df = cls._validate_ledger_date(df, source_label)
+        return cls._add_fy_column(df)
 
+    def _prepare_subcategory_projection(self) -> pl.DataFrame:
+        """Extract existing subcategory dimension tax metadata columns."""
         sub_cols = [
             c
             for c in (
@@ -281,32 +231,24 @@ class BaseEventsBuilder:
         ]
         if "UID" not in sub_cols:
             raise ValueError("Income subcategory dimension must contain UID.")
+        return self.df_subcategory.select(sub_cols)
 
+    def _get_configured_exclusions(self) -> set[str]:
+        """Collect subcategory UIDs configured as capital gains exclusions."""
         excluded: set[str] = set()
         if self.rules is not None:
             exclusions = self.rules.assumptions.tax.investment_exclusions
             excluded.update(exclusions.stcg_sub_cat_ids)
             excluded.update(exclusions.ltcg_sub_cat_ids)
+        return excluded
 
-        df_sub = self.df_subcategory.select(sub_cols)
-        df_inc = self.df_income.with_columns(
-            pl.col("CATEGORY_ID")
-            .cast(pl.String)
-            .str.strip_chars()
-            .fill_null("")
-            .alias("_clean_cat_id"),
-            pl.col("UID").cast(pl.String).str.strip_chars().alias("Source_ID"),
-        )
-        if df_inc["Source_ID"].is_null().any() or (df_inc["Source_ID"] == "").any():
-            raise ValueError("Required identifier income UID is null or empty.")
-
-        df_joined = df_inc.join(
-            df_sub.with_columns(pl.col("UID").cast(pl.String).str.strip_chars()),
-            left_on="_clean_cat_id",
-            right_on="UID",
-            how="left",
-        )
-
+    def _filter_taxable_ledger_records(
+        self,
+        df_joined: pl.DataFrame,
+        excluded: set[str],
+        credit_subheads: dict[str, str],
+    ) -> pl.DataFrame:
+        """Filter out exclusions, tax credits, and non-taxable entries."""
         is_inv_excl = (
             pl.col("Is_Investment_Exclusion").fill_null(False)
             if "Is_Investment_Exclusion" in df_joined.columns
@@ -325,18 +267,19 @@ class BaseEventsBuilder:
             .fill_null("review")
         )
 
-        df_filtered = df_joined.filter(
+        return df_joined.filter(
             (~pl.col("_clean_cat_id").is_in(list(excluded)))
             & (~pl.col("_clean_cat_id").is_in(list(credit_subheads.keys())))
             & (~is_inv_excl)
             & (~is_tax_credit)
             & (taxability_clean != "non_taxable")
         )
-        if df_filtered.is_empty():
-            return pl.DataFrame(schema=TAX_EVENT_SCHEMA)
 
-        df_filtered = self._validate_and_prepare_ledger_frame(df_filtered, source_label="")
-
+    def _project_ledger_tax_events(
+        self,
+        df_filtered: pl.DataFrame,
+    ) -> pl.DataFrame:
+        """Project ledger columns to canonical TaxEvent schema attributes."""
         unique_dates = df_filtered["Event_Date"].unique().to_list()
         date_rate_map = {d: self._ordinary_income_rate(d) for d in unique_dates if d is not None}
         applied_rate_expr = pl.col("Event_Date").replace_strict(
@@ -345,6 +288,13 @@ class BaseEventsBuilder:
 
         income_head_expr = pl.col("Tax_Income_Head").cast(pl.String).str.strip_chars()
         tax_sub_head_expr = pl.col("Tax_Sub_Head").cast(pl.String).str.strip_chars()
+        taxability_clean = (
+            pl.col("Taxability")
+            .cast(pl.String)
+            .str.strip_chars()
+            .str.to_lowercase()
+            .fill_null("review")
+        )
 
         is_incomplete = (
             income_head_expr.is_null()
@@ -371,7 +321,7 @@ class BaseEventsBuilder:
             else pl.lit(None).cast(pl.String).alias("CURRENCY_ID")
         )
 
-        df_result = df_filtered.select(
+        return df_filtered.select(
             pl.col("FY"),
             pl.col("Event_Date"),
             pl.lit("LEDGER").alias("Source_Type"),
@@ -403,7 +353,42 @@ class BaseEventsBuilder:
             pl.lit(None).cast(pl.String).alias("ISIN"),
             pl.lit(None).cast(pl.String).alias("Lot_ID"),
         )
-        return df_result
+
+    def _normalize_ledger_income(self, credit_subheads: dict[str, str]) -> pl.DataFrame:
+        """Normalize taxable ledger income records into canonical TaxEvent schema."""
+        required = {"UID", "DATE", "CATEGORY_ID", "BASE_AMOUNT"}
+        missing = sorted(required - set(self.df_income.columns))
+        if missing:
+            raise ValueError(f"Income transactions missing required columns: {missing}")
+        if self.df_income.is_empty():
+            return pl.DataFrame(schema=TAX_EVENT_SCHEMA)
+
+        df_sub = self._prepare_subcategory_projection()
+        excluded = self._get_configured_exclusions()
+        df_inc = self.df_income.with_columns(
+            pl.col("CATEGORY_ID")
+            .cast(pl.String)
+            .str.strip_chars()
+            .fill_null("")
+            .alias("_clean_cat_id"),
+            pl.col("UID").cast(pl.String).str.strip_chars().alias("Source_ID"),
+        )
+        if df_inc["Source_ID"].is_null().any() or (df_inc["Source_ID"] == "").any():
+            raise ValueError("Required identifier income UID is null or empty.")
+
+        df_joined = df_inc.join(
+            df_sub.with_columns(pl.col("UID").cast(pl.String).str.strip_chars()),
+            left_on="_clean_cat_id",
+            right_on="UID",
+            how="left",
+        )
+
+        df_filtered = self._filter_taxable_ledger_records(df_joined, excluded, credit_subheads)
+        if df_filtered.is_empty():
+            return pl.DataFrame(schema=TAX_EVENT_SCHEMA)
+
+        df_filtered = self._validate_and_prepare_ledger_frame(df_filtered, source_label="")
+        return self._project_ledger_tax_events(df_filtered)
 
     def _ordinary_income_rate(self, event_date: date) -> float | None:
         """Resolve a configured ordinary-income estimate rate for the event date."""
@@ -437,7 +422,7 @@ class BaseEventsBuilder:
             else pl.lit(None).cast(pl.String).alias("CURRENCY_ID")
         )
 
-        df_result = df_credits.select(
+        return df_credits.select(
             pl.col("FY"),
             pl.col("Event_Date"),
             pl.lit("TAX_CREDIT").alias("Source_Type"),
@@ -455,12 +440,55 @@ class BaseEventsBuilder:
             pl.lit(None).cast(pl.String).alias("ISIN"),
             pl.lit(None).cast(pl.String).alias("Lot_ID"),
         )
-        return df_result
 
     @staticmethod
     def _optional_finite_number(value: object) -> float | None:
         """Return a finite numeric value, preserving missing/invalid values as null."""
         return TaxEstimator.clean_optional_finite_number(value)
+
+    def _resolve_quant_rates(
+        self,
+        row: Mapping[str, object],
+        is_reconciliation: bool,
+    ) -> tuple[float | None, float | None, bool]:
+        """Extract and bound applied rate and estimated tax from Quant realized event."""
+        applied_rate = self._optional_finite_number(row.get("Applied_Rate"))
+        estimated_tax = self._optional_finite_number(row.get("Estimated_Tax"))
+        if applied_rate is not None and not 0.0 <= applied_rate <= 1.0:
+            applied_rate = None
+        if estimated_tax is not None and estimated_tax < 0:
+            estimated_tax = None
+
+        rates_valid = applied_rate is not None and estimated_tax is not None
+        if is_reconciliation or not rates_valid:
+            return None, None, rates_valid
+        return applied_rate, estimated_tax, rates_valid
+
+    def _check_quant_status_reasons(
+        self,
+        row: Mapping[str, object],
+        is_reconciliation: bool,
+        classification_known: bool,
+        clean_curr: str | None,
+        rates_valid: bool,
+    ) -> list[str]:
+        """Compile status warnings for Quant tax events requiring manual review."""
+        status_reasons: list[str] = []
+        if is_reconciliation:
+            status_reasons.append(
+                "Reconciliation lot: original acquisition evidence requires review."
+            )
+        if not classification_known:
+            status_reasons.append("Investment tax classification is unmapped or invalid.")
+        if not self._clean_text(row.get("ISIN")):
+            status_reasons.append("ISIN is missing.")
+        if not self._clean_text(row.get("Lot_ID")):
+            status_reasons.append("Lot_ID is missing.")
+        if not clean_curr:
+            status_reasons.append("Currency_ID is missing.")
+        if not is_reconciliation and not rates_valid:
+            status_reasons.append("Applied tax rate or estimated tax is unavailable or invalid.")
+        return status_reasons
 
     def _build_quant_tax_event(
         self,
@@ -476,35 +504,13 @@ class BaseEventsBuilder:
         sub_head, classification_known = self._quant_sub_head(row)
         is_reconciliation = str(row.get("Lot_Source_Type") or "").upper() == "RECONCILIATION"
 
-        status_reasons: list[str] = []
-        if is_reconciliation:
-            status_reasons.append(
-                "Reconciliation lot: original acquisition evidence requires review."
-            )
-        if not classification_known:
-            status_reasons.append("Investment tax classification is unmapped or invalid.")
-        if not self._clean_text(row.get("ISIN")):
-            status_reasons.append("ISIN is missing.")
-        if not self._clean_text(row.get("Lot_ID")):
-            status_reasons.append("Lot_ID is missing.")
-
         currency_val = row.get("Currency_ID") if has_currency_id else row.get("CURRENCY_ID")
         clean_curr = self._clean_text(currency_val)
-        if not clean_curr:
-            status_reasons.append("Currency_ID is missing.")
 
-        applied_rate = self._optional_finite_number(row.get("Applied_Rate"))
-        estimated_tax = self._optional_finite_number(row.get("Estimated_Tax"))
-        if applied_rate is not None and not 0.0 <= applied_rate <= 1.0:
-            applied_rate = None
-        if estimated_tax is not None and estimated_tax < 0:
-            estimated_tax = None
-        if not is_reconciliation and (applied_rate is None or estimated_tax is None):
-            status_reasons.append("Applied tax rate or estimated tax is unavailable or invalid.")
-
-        if is_reconciliation or applied_rate is None or estimated_tax is None:
-            applied_rate = None
-            estimated_tax = None
+        applied_rate, estimated_tax, rates_valid = self._resolve_quant_rates(row, is_reconciliation)
+        status_reasons = self._check_quant_status_reasons(
+            row, is_reconciliation, classification_known, clean_curr, rates_valid
+        )
 
         return {
             "FY": self._financial_year(event_date),
@@ -546,6 +552,7 @@ class BaseEventsBuilder:
         TaxClassifier.validate_subcategory_dimension(self.df_subcategory)
 
     def _validate_event_keys(self, df: pl.DataFrame) -> None:
+        """Validate uniqueness of canonical TaxEvent natural keys."""
         key_columns = ["Source_Type", "Source_ID", "Tax_Sub_Head"]
         duplicates = df.group_by(key_columns).len().filter(pl.col("len") > 1)
         if not duplicates.is_empty():
