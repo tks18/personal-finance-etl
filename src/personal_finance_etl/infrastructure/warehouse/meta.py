@@ -69,7 +69,13 @@ class MetaLayer:
         self.conn = self.db_manager.conn
 
     def _inspect_bronze_table_files(self) -> tuple[dict[str, bool], dict[str, set[str]]]:
-        """Check presence of physical bronze tables and scan distinct loaded filenames."""
+        """Check presence of physical bronze tables and scan distinct loaded filenames.
+
+        Returns
+        -------
+        tuple[dict[str, bool], dict[str, set[str]]]
+            (tables_exist, table_files).
+        """
         existing_tables = {
             f"{r[0]}.{r[1]}".lower()
             for r in self.conn.execute(
@@ -95,6 +101,51 @@ class MetaLayer:
                 table_files[table] = set()
         return tables_exist, table_files
 
+    @staticmethod
+    def _is_sync_record_missing(
+        path: str,
+        status: str | None,
+        duckdb_paths: set[str],
+        table_exists: bool,
+        b_contract: BronzeDataContract | None,
+        row_count: int,
+        files_in_table: set[str],
+    ) -> bool:
+        """Determine if an individual synced file is absent or dropped from DuckDB.
+
+        Parameters
+        ----------
+        path : str
+            Relative file path.
+        status : str | None
+            Sync status string from control plane registry.
+        duckdb_paths : set[str]
+            Set of paths present in DuckDB m_File_Registry.
+        table_exists : bool
+            Whether target bronze table exists.
+        b_contract : BronzeDataContract | None
+            Matching bronze contract if found.
+        row_count : int
+            DuckDB row count for this file.
+        files_in_table : set[str]
+            Distinct filenames loaded in table.
+
+        Returns
+        -------
+        bool
+            True if file needs healing back to PENDING_BRONZE.
+        """
+        if status != "SYNCED":
+            return False
+        if path not in duckdb_paths or not table_exists:
+            return True
+        return (
+            b_contract is not None
+            and not b_contract.is_full_replace
+            and row_count > 0
+            and os.path.basename(path) not in files_in_table
+        )
+
     def _heal_missing_sync_records(
         self,
         cp: ControlPlane,
@@ -105,7 +156,30 @@ class MetaLayer:
         tables_exist: dict[str, bool],
         table_files: dict[str, set[str]],
     ) -> int:
-        """Find registered SQLite files absent or dropped in DuckDB and re-mark as PENDING_BRONZE."""
+        """Find registered SQLite files absent or dropped in DuckDB and re-mark as PENDING_BRONZE.
+
+        Parameters
+        ----------
+        cp : ControlPlane
+            Control plane instance.
+        duckdb_paths : set[str]
+            Set of paths in DuckDB file registry.
+        duckdb_row_counts : dict[str, int]
+            Row counts per path in DuckDB.
+        synced_registry : dict[str, str]
+            Map of path to sync status in SQLite.
+        cat_to_contract : dict[str, BronzeDataContract]
+            Map of category to bronze contract.
+        tables_exist : dict[str, bool]
+            Map of table name to existence flag.
+        table_files : dict[str, set[str]]
+            Map of table name to set of filenames present.
+
+        Returns
+        -------
+        int
+            Count of healed missing files.
+        """
         missing_count = 0
         raw_all: dict[str, list[str]] = cp.artifacts.get_all_paths_by_category()
 
@@ -119,20 +193,15 @@ class MetaLayer:
 
             for path in paths:
                 status = synced_registry.get(path)
-                if status == "SYNCED":
-                    is_missing = path not in duckdb_paths or not table_exists
-                    is_file_dropped = (
-                        b_contract is not None
-                        and not b_contract.is_full_replace
-                        and duckdb_row_counts.get(path, 0) > 0
-                        and os.path.basename(path) not in files_in_table
+                row_count = duckdb_row_counts.get(path, 0)
+                if self._is_sync_record_missing(
+                    path, status, duckdb_paths, table_exists, b_contract, row_count, files_in_table
+                ):
+                    cp.artifacts.db.conn.execute(
+                        "UPDATE cp_file_registry SET sync_status = 'PENDING_BRONZE' WHERE relative_path = ?",
+                        [path],
                     )
-                    if is_missing or is_file_dropped:
-                        cp.artifacts.db.conn.execute(
-                            "UPDATE cp_file_registry SET sync_status = 'PENDING_BRONZE' WHERE relative_path = ?",
-                            [path],
-                        )
-                        missing_count += 1
+                    missing_count += 1
         return missing_count
 
     def _prune_dangling_duckdb_files(
@@ -142,7 +211,24 @@ class MetaLayer:
         cat_to_table: dict[str, str],
         tables_exist: dict[str, bool],
     ) -> int:
-        """Remove DuckDB registry entries and table rows for files no longer in control plane."""
+        """Remove DuckDB registry entries and table rows for files no longer in control plane.
+
+        Parameters
+        ----------
+        duckdb_paths : set[str]
+            Paths present in DuckDB.
+        synced_registry : dict[str, str]
+            Paths mapped in SQLite control plane.
+        cat_to_table : dict[str, str]
+            Map of category to table name.
+        tables_exist : dict[str, bool]
+            Map of table name to existence flag.
+
+        Returns
+        -------
+        int
+            Count of pruned files.
+        """
         deleted_count = 0
         for duckdb_path in duckdb_paths:
             if duckdb_path not in synced_registry:
@@ -157,36 +243,52 @@ class MetaLayer:
                     if del_table and tables_exist.get(del_table, False):
                         try:
                             self.conn.execute(
-                                f"DELETE FROM {del_table} WHERE __file_name__ = ?",
-                                [fname],  # nosec B608
+                                f"DELETE FROM {del_table} WHERE __file_name__ = ?",  # nosec B608
+                                [fname],
                             )
-                        except (duckdb.CatalogException, duckdb.BinderException) as e:
-                            logger.debug(
-                                "[Bronze] Could not delete %s from %s: %s", fname, del_table, e
-                            )
+                        except duckdb.CatalogException:
+                            pass
 
-                    self.conn.execute(
-                        "DELETE FROM meta.m_File_Registry WHERE relative_path = ?", [duckdb_path]
-                    )
-                    deleted_count += 1
+                self.conn.execute(
+                    "DELETE FROM meta.m_File_Registry WHERE relative_path = ?",
+                    [duckdb_path],
+                )
+                deleted_count += 1
         return deleted_count
 
     def heal_duckdb_registry(self, cp: ControlPlane) -> None:
-        """Self-heal DuckDB file registry if items in SQLite control plane are missing."""
-        duckdb_rows = self.conn.execute(
-            "SELECT relative_path, row_count FROM meta.m_File_Registry"
-        ).fetchall()
-        duckdb_paths = {str(r[0]) for r in duckdb_rows}
-        duckdb_row_counts = {str(r[0]): (r[1] or 0) for r in duckdb_rows}
+        """Enforce 1:1 bi-directional consistency between SQLite and DuckDB file registries.
 
-        synced_registry = cp.artifacts.get_all_registry()
-        cat_to_contract = {
-            contract.sync_category: contract for contract in BRONZE_CONTRACT_REGISTRY
-        }
-        cat_to_table = {k: v.physical_table for k, v in cat_to_contract.items()}
+        Parameters
+        ----------
+        cp : ControlPlane
+            Active control plane facade.
+        """
+        logger.info(
+            "Executing self-healing synchronization between SQLite and DuckDB registries..."
+        )
 
         tables_exist, table_files = self._inspect_bronze_table_files()
 
+        synced_registry: dict[str, str] = {
+            r[0]: r[1]
+            for r in cp.artifacts.db.conn.execute(
+                "SELECT relative_path, sync_status FROM cp_file_registry"
+            ).fetchall()
+        }
+
+        duckdb_rows = self.conn.execute(
+            "SELECT relative_path, row_count FROM meta.m_File_Registry"
+        ).fetchall()
+        duckdb_paths = {r[0] for r in duckdb_rows}
+        duckdb_row_counts = {r[0]: r[1] for r in duckdb_rows}
+
+        cat_to_contract = {c.sync_category: c for c in BRONZE_CONTRACT_REGISTRY}
+        cat_to_table = {c.sync_category: c.physical_table for c in BRONZE_CONTRACT_REGISTRY}
+
+        deleted_count = self._prune_dangling_duckdb_files(
+            duckdb_paths, synced_registry, cat_to_table, tables_exist
+        )
         missing_count = self._heal_missing_sync_records(
             cp,
             duckdb_paths,
@@ -196,19 +298,25 @@ class MetaLayer:
             tables_exist,
             table_files,
         )
-        deleted_count = self._prune_dangling_duckdb_files(
-            duckdb_paths, synced_registry, cat_to_table, tables_exist
-        )
 
-        if missing_count > 0 or deleted_count > 0:
-            logger.info(
-                "Self-Healing: Re-queued %d missing file(s). Purged %d deleted file(s).",
-                missing_count,
+        if deleted_count > 0 or missing_count > 0:
+            logger.warning(
+                "MetaLayer Healing Report: Pruned %d orphaned records from DuckDB; "
+                "Re-queued %d missing/dropped files into SQLite Control Plane.",
                 deleted_count,
+                missing_count,
             )
+        else:
+            logger.info("MetaLayer: SQLite Control Plane and DuckDB are 100%% synchronized.")
 
     def migrate_identity(self, renames: list[tuple[str, str, str]]) -> None:
-        """Migrate relative paths and identifiers in DuckDB meta.m_File_Registry."""
+        """Migrate relative paths and identifiers in DuckDB meta.m_File_Registry.
+
+        Parameters
+        ----------
+        renames : list[tuple[str, str, str]]
+            Triplets of (old_path, new_path, category).
+        """
         if not renames:
             return
 
@@ -232,37 +340,52 @@ class MetaLayer:
                 new_rel_path,
             )
 
-    def register_file(self, filepath: str, category: str, row_count: int, cp: ControlPlane) -> None:
-        """Upsert a record into meta.m_File_Registry after successful Bronze ingestion."""
-        unique_path = filepath.replace("\\", "/")
-        file_name = os.path.basename(filepath)
+    def register_file(
+        self,
+        file_path: str,
+        category: str,
+        row_count: int,
+        cp: ControlPlane,
+    ) -> None:
+        """Insert or update an ingested file's provenance in meta.m_File_Registry.
 
-        if filepath.startswith("virtual://"):
-            file_type = "parquet"
-            reg = cp.artifacts.get_registry()
-            file_data = reg.get(unique_path)
-            file_hash: str = str(file_data[0]) if file_data else ""
-            file_size = 0
+        Parameters
+        ----------
+        file_path : str
+            Full path to the source file.
+        category : str
+            File category.
+        row_count : int
+            Row count inserted.
+        cp : ControlPlane
+            Control plane instance.
+        """
+        file_name = os.path.basename(file_path)
+        unique_path = file_path
+        file_size = os.path.getsize(file_path) if os.path.exists(file_path) else 0
+
+        ext = os.path.splitext(file_path)[1].lower()
+        file_type = FILE_TYPE_MAP.get(ext, "UNKNOWN")
+
+        file_id = generate_file_id(file_path)
+        policy_attr = ext.lstrip(".").lower()
+        should_hash = getattr(self.cfg.FILE_HASH_POLICY, policy_attr, False)
+
+        if should_hash and os.path.exists(file_path):
+            file_hash = compute_file_hash(file_path)
         else:
-            file_type = FILE_TYPE_MAP.get(category, "csv")
-            file_hash = compute_file_hash(filepath)
-            try:
-                file_size = os.path.getsize(filepath)
-            except OSError:
-                file_size = 0
+            file_hash = ""
 
-        file_id = generate_file_id(filepath)
-
-        exists = self.conn.execute(
-            "SELECT 1 FROM meta.m_File_Registry WHERE relative_path = ?", [unique_path]
+        existing = self.conn.execute(
+            "SELECT row_count FROM meta.m_File_Registry WHERE relative_path = ?",
+            [unique_path],
         ).fetchone()
 
-        if exists:
+        if existing:
             self.conn.execute(
                 """
                 UPDATE meta.m_File_Registry 
-                SET last_ingested = CURRENT_TIMESTAMP, 
-                    file_hash = ?, file_size_bytes = ?, row_count = ?
+                SET file_hash = ?, file_size = ?, row_count = ?, ingested_at = CURRENT_TIMESTAMP
                 WHERE relative_path = ?
                 """,
                 [file_hash, file_size, row_count, unique_path],
@@ -271,9 +394,8 @@ class MetaLayer:
             self.conn.execute(
                 """
                 INSERT INTO meta.m_File_Registry 
-                (file_id, file_name, relative_path, file_category, file_type, 
-                 first_ingested, last_ingested, file_hash, file_size_bytes, row_count)
-                VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ?, ?, ?)
+                (file_id, file_name, relative_path, file_category, file_type, file_hash, file_size, row_count, ingested_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
                 """,
                 [
                     file_id,
@@ -287,14 +409,15 @@ class MetaLayer:
                 ],
             )
 
-    def load(self, dfs: dict[str, pl.DataFrame], cp: ControlPlane | None = None) -> None:
-        """Truncate and record latest table row counts, configurations, and simulation provenance."""
-        logger.info("Recording current table metrics and configurations to Meta Layer...")
+    def _record_table_metrics(self, dfs: dict[str, pl.DataFrame]) -> None:
+        """Record row counts for all built Silver and Gold analytical tables.
 
+        Parameters
+        ----------
+        dfs : dict[str, pl.DataFrame]
+            Transformed DataFrames keyed by contract_id.
+        """
         self.conn.execute("DELETE FROM meta.m_Table_Row_Counts")
-        self.conn.execute("DELETE FROM meta.m_Financial_Rules")
-        self.conn.execute("DELETE FROM meta.m_Settings")
-
         contract_by_id = {c.contract_id: c for c in DATA_CONTRACT_REGISTRY}
 
         for contract_id, df in dfs.items():
@@ -304,19 +427,19 @@ class MetaLayer:
 
             count = df.height
             physical_table = contract.physical_table.split(".", maxsplit=1)[-1]
-
             self.conn.execute(
                 """
                 INSERT INTO meta.m_Table_Row_Counts
                 (schema_name, table_name, row_count, generated_at)
                 VALUES (?, ?, ?, CURRENT_TIMESTAMP)
                 """,
-                [
-                    contract.layer,
-                    physical_table,
-                    count,
-                ],
+                [contract.layer, physical_table, count],
             )
+
+    def _record_rules_and_settings(self) -> None:
+        """Snapshot current financial rules and environment settings into meta tables."""
+        self.conn.execute("DELETE FROM meta.m_Financial_Rules")
+        self.conn.execute("DELETE FROM meta.m_Settings")
 
         if self.rules is not None:
             rule_records = self.rules.export_to_db_records()
@@ -350,6 +473,8 @@ class MetaLayer:
                 ],
             )
 
+    def _record_data_contracts(self) -> None:
+        """Publish registered Bronze, Silver, and Gold data contracts into DuckDB."""
         self.conn.execute("DELETE FROM meta.m_Data_Contracts")
 
         for b_contract in BRONZE_CONTRACT_REGISTRY:
@@ -390,6 +515,8 @@ class MetaLayer:
                 ],
             )
 
+    def _cleanup_orphaned_tables(self) -> None:
+        """Drop any physical tables in bronze/silver/gold schemas not declared in contract registries."""
         existing_tables = self.conn.execute(
             "SELECT lower(table_schema), lower(table_name) FROM information_schema.tables WHERE lower(table_schema) IN ('bronze', 'silver', 'gold')"
         ).fetchall()
@@ -403,6 +530,76 @@ class MetaLayer:
                 logger.warning("MetaLayer: Dropping orphaned physical table %s", full_table_name)
                 self.conn.execute(f"DROP TABLE IF EXISTS {full_table_name} CASCADE")  # nosec B608
 
+    def _mirror_latest_simulation(
+        self,
+        cp: ControlPlane,
+        contract_registry_fingerprint: str,
+    ) -> None:
+        """Mirror provenance from the latest successful Monte Carlo simulation into DuckDB meta.
+
+        Parameters
+        ----------
+        cp : ControlPlane
+            Active control plane facade.
+        contract_registry_fingerprint : str
+            Cryptographic fingerprint of data contracts.
+        """
+        try:
+            sim_row = cp.db.conn.execute(
+                """
+                SELECT simulation_id, run_id, created_at, root_seed, iterations, horizon,
+                       input_as_of_date, model_implementation_version, model_fingerprint,
+                       input_fingerprint, result_fingerprint, settings_snapshot_id,
+                       rules_snapshot_id, status
+                FROM cp_simulation_runs
+                WHERE status = 'SUCCESS'
+                ORDER BY created_at DESC
+                LIMIT 1
+                """
+            ).fetchone()
+
+            if sim_row is not None:
+                self.conn.execute("DELETE FROM meta.m_Latest_Simulation")
+                self.conn.execute(
+                    """
+                    INSERT INTO meta.m_Latest_Simulation (
+                        simulation_id, run_id, created_at, root_seed, iterations, horizon,
+                        input_as_of_date, model_implementation_version, model_fingerprint,
+                        input_fingerprint, result_fingerprint, contract_registry_fingerprint,
+                        settings_snapshot_id, rules_snapshot_id, status
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    list(sim_row[:11]) + [contract_registry_fingerprint] + list(sim_row[11:]),
+                )
+                logger.info(
+                    "[META] Mirrored latest simulation run '%s' into meta.m_Latest_Simulation "
+                    "(contract_registry_fingerprint=%s...).",
+                    sim_row[0],
+                    contract_registry_fingerprint[:12],
+                )
+        except (sqlite3.Error, duckdb.Error) as mirror_err:
+            logger.warning(
+                "[META:OPTIONAL_OPERATION] Could not mirror simulation run into DuckDB meta: %s",
+                mirror_err,
+            )
+
+    def load(self, dfs: dict[str, pl.DataFrame], cp: ControlPlane | None = None) -> None:
+        """Truncate and record latest table row counts, configurations, and simulation provenance.
+
+        Parameters
+        ----------
+        dfs : dict[str, pl.DataFrame]
+            Transformed DataFrames keyed by contract_id.
+        cp : ControlPlane, optional
+            Active control plane facade for mirroring simulation provenance.
+        """
+        logger.info("Recording current table metrics and configurations to Meta Layer...")
+
+        self._record_table_metrics(dfs)
+        self._record_rules_and_settings()
+        self._record_data_contracts()
+        self._cleanup_orphaned_tables()
+
         tables_metadata = [
             {
                 "table_name": c.physical_table,
@@ -414,43 +611,6 @@ class MetaLayer:
         contract_registry_fingerprint = generate_contract_registry_fingerprint(tables_metadata)
 
         if cp is not None:
-            try:
-                sim_row = cp.db.conn.execute(
-                    """
-                    SELECT simulation_id, run_id, created_at, root_seed, iterations, horizon,
-                           input_as_of_date, model_implementation_version, model_fingerprint,
-                           input_fingerprint, result_fingerprint, settings_snapshot_id,
-                           rules_snapshot_id, status
-                    FROM cp_simulation_runs
-                    WHERE status = 'SUCCESS'
-                    ORDER BY created_at DESC
-                    LIMIT 1
-                    """
-                ).fetchone()
-
-                if sim_row is not None:
-                    self.conn.execute("DELETE FROM meta.m_Latest_Simulation")
-                    self.conn.execute(
-                        """
-                        INSERT INTO meta.m_Latest_Simulation (
-                            simulation_id, run_id, created_at, root_seed, iterations, horizon,
-                            input_as_of_date, model_implementation_version, model_fingerprint,
-                            input_fingerprint, result_fingerprint, contract_registry_fingerprint,
-                            settings_snapshot_id, rules_snapshot_id, status
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """,
-                        list(sim_row[:11]) + [contract_registry_fingerprint] + list(sim_row[11:]),
-                    )
-                    logger.info(
-                        "[META] Mirrored latest simulation run '%s' into meta.m_Latest_Simulation "
-                        "(contract_registry_fingerprint=%s...).",
-                        sim_row[0],
-                        contract_registry_fingerprint[:12],
-                    )
-            except (sqlite3.Error, duckdb.Error) as mirror_err:
-                logger.warning(
-                    "[META:OPTIONAL_OPERATION] Could not mirror simulation run into DuckDB meta: %s",
-                    mirror_err,
-                )
+            self._mirror_latest_simulation(cp, contract_registry_fingerprint)
 
         logger.info("Meta layer load complete. DuckDB snapshot represents the latest active state.")
