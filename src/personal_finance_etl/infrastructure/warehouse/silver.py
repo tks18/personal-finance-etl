@@ -39,8 +39,85 @@ class SilverLayer:
     def __init__(self, db_manager: DuckDBManager) -> None:
         self.db_manager = db_manager
 
+    @staticmethod
+    def _sanitize_dimension_strings(df: pl.DataFrame) -> pl.DataFrame:
+        """Convert empty strings to null values across string columns in dimension tables.
+
+        Parameters
+        ----------
+        df : pl.DataFrame
+            Input dimension DataFrame.
+
+        Returns
+        -------
+        pl.DataFrame
+            Sanitized DataFrame with empty strings replaced by nulls.
+        """
+        string_cols = [
+            c
+            for c, d in zip(df.columns, df.dtypes, strict=True)
+            if d in (getattr(pl, "Utf8", None), getattr(pl, "String", None))
+        ]
+        if string_cols:
+            return df.with_columns(
+                [
+                    pl.when(pl.col(c) == "").then(None).otherwise(pl.col(c)).alias(c)
+                    for c in string_cols
+                ]
+            )
+        return df
+
+    @staticmethod
+    def _validate_investment_master(df: pl.DataFrame) -> None:
+        """Enforce non-null constraints on critical columns in d_Investment_Master.
+
+        Parameters
+        ----------
+        df : pl.DataFrame
+            Investment master DataFrame.
+
+        Raises
+        ------
+        ValueError
+            If rows with missing ISIN or TAX_TYPE are present.
+        """
+        critical_errors: list[str] = []
+        for col_name in ("ISIN", "TAX_TYPE"):
+            if col_name in df.columns:
+                missing = df.filter(pl.col(col_name).is_null())
+                if missing.height > 0:
+                    logger.error(
+                        "CRITICAL: Found %d rows with missing %s in d_Investment_Master.",
+                        missing.height,
+                        col_name,
+                    )
+                    logger.error(
+                        "Please add the %s for the following instruments to your tracker:", col_name
+                    )
+                    for row in missing.to_dicts():
+                        logger.error("-> %s", row)
+                    critical_errors.append(col_name)
+
+        if critical_errors:
+            raise ValueError(
+                f"Critical data-quality violation in d_Investment_Master: Missing {', '.join(critical_errors)}"
+            )
+
     def _write(self, df: pl.DataFrame | pl.LazyFrame, table_name: str) -> int:
-        """Write DataFrame or LazyFrame into a Silver table with quality checks."""
+        """Write DataFrame or LazyFrame into a Silver table with quality checks.
+
+        Parameters
+        ----------
+        df : pl.DataFrame | pl.LazyFrame
+            Data to publish.
+        table_name : str
+            Physical Silver table name.
+
+        Returns
+        -------
+        int
+            Number of rows inserted.
+        """
         if isinstance(df, pl.LazyFrame):
             # Materialization Boundary: PUBLICATION_BOUNDARY
             # Terminal execution of lazy transformation graph for DuckDB Silver table insertion
@@ -50,52 +127,10 @@ class SilverLayer:
             return 0
 
         if "d_" in table_name:
-            string_cols = [
-                c
-                for c, d in zip(df.columns, df.dtypes, strict=True)
-                if d in (getattr(pl, "Utf8", None), getattr(pl, "String", None))
-            ]
-            if string_cols:
-                df = df.with_columns(
-                    [
-                        pl.when(pl.col(c) == "").then(None).otherwise(pl.col(c)).alias(c)
-                        for c in string_cols
-                    ]
-                )
+            df = self._sanitize_dimension_strings(df)
 
         if table_name == "silver.d_Investment_Master":
-            critical_errors: list[str] = []
-            if "ISIN" in df.columns:
-                missing_isin = df.filter(pl.col("ISIN").is_null())
-                if missing_isin.height > 0:
-                    logger.error(
-                        "CRITICAL: Found %d rows with missing ISIN in d_Investment_Master.",
-                        missing_isin.height,
-                    )
-                    logger.error(
-                        "Please add the ISIN for the following instruments to your tracker:"
-                    )
-                    for row in missing_isin.to_dicts():
-                        logger.error("-> %s", row)
-                    critical_errors.append("ISIN")
-            if "TAX_TYPE" in df.columns:
-                missing_tax = df.filter(pl.col("TAX_TYPE").is_null())
-                if missing_tax.height > 0:
-                    logger.error(
-                        "CRITICAL: Found %d rows with missing TAX_TYPE in d_Investment_Master.",
-                        missing_tax.height,
-                    )
-                    logger.error(
-                        "Please add the TAX_TYPE for the following instruments to your tracker:"
-                    )
-                    for row in missing_tax.to_dicts():
-                        logger.error("-> %s", row)
-                    critical_errors.append("TAX_TYPE")
-
-            if critical_errors:
-                raise ValueError(
-                    f"Critical data-quality violation in d_Investment_Master: Missing {', '.join(critical_errors)}"
-                )
+            self._validate_investment_master(df)
 
         self.db_manager.conn.register("temp_df", df)
         self.db_manager.conn.execute(
@@ -105,7 +140,13 @@ class SilverLayer:
         return df.height
 
     def load(self, dfs: dict[str, pl.DataFrame]) -> None:
-        """Truncate all silver.* tables and re-insert transformed DataFrames."""
+        """Truncate all silver.* tables and re-insert transformed DataFrames.
+
+        Parameters
+        ----------
+        dfs : dict[str, pl.DataFrame]
+            Transformed DataFrames keyed by contract_id.
+        """
         logger.info("Loading transformed datasets into Silver layer...")
 
         contracts = sorted(
