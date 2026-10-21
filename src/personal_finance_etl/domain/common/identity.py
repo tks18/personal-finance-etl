@@ -53,6 +53,17 @@ _IDENTITY_FIELD_ORDERS: dict[str, tuple[tuple[str, ...], ...]] = {
 }
 
 
+def _canonicalize_numeric(val: int | float | Decimal) -> str:
+    """Normalize numeric types into standard fixed-point decimal format."""
+    try:
+        d = Decimal(str(val)).normalize()
+        if d.is_zero():
+            return "0"
+        return format(d, "f")
+    except InvalidOperation:
+        return str(val)
+
+
 def canonicalize_value(val: object) -> str:
     """Normalize any Python value into a canonical string for deterministic hashing.
 
@@ -76,13 +87,7 @@ def canonicalize_value(val: object) -> str:
         case date():
             return val.strftime("%Y-%m-%d")
         case int() | float() | Decimal():
-            try:
-                d = Decimal(str(val)).normalize()
-                if d.is_zero():
-                    return "0"
-                return format(d, "f")
-            except InvalidOperation:
-                return str(val)
+            return _canonicalize_numeric(val)
         case str():
             nfc = unicodedata.normalize("NFC", val)
             return nfc.strip()
