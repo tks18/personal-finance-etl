@@ -16,12 +16,16 @@ from pathlib import Path
 
 import polars as pl
 
+from personal_finance_etl.application.investments.context import (
+    QuantDataFrames,
+    QuantRunOptions,
+)
 from personal_finance_etl.application.investments.quant_service import (
     InvestmentQuantEngine,
 )
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.domain.common.calculation import CalculationStatus
-from personal_finance_etl.domain.investments.lots.fifo import FIFOPortfolio
+from personal_finance_etl.domain.investments.lots.fifo import FIFOPortfolio, LotBuyParameters
 from personal_finance_etl.domain.investments.performance.returns import calculate_cagr
 from personal_finance_etl.domain.investments.performance.xirr import (
     calculate_xirr,
@@ -64,12 +68,14 @@ def test_fifo_accounting_lifecycle() -> None:
 
     # Buy Lot 1: 100 shares @ 100 on 2023-01-01, benchmark price 1000
     fifo.buy(
-        buy_date=date(2023, 1, 1),
-        qty=100.0,
-        price=100.0,
-        shadow_qty=10.0,
-        bm_price=1000.0,
-        purchase_id="P1",
+        LotBuyParameters(
+            buy_date=date(2023, 1, 1),
+            qty=100.0,
+            price=100.0,
+            shadow_qty=10.0,
+            bm_price=1000.0,
+            purchase_id="P1",
+        )
     )
     assert fifo.get_closing_units() == 100.0
     assert fifo.get_closing_shadow_units() == 10.0
@@ -81,12 +87,14 @@ def test_fifo_accounting_lifecycle() -> None:
 
     # Buy Lot 2: 50 shares @ 120 on 2023-06-01, benchmark price 1200
     fifo.buy(
-        buy_date=date(2023, 6, 1),
-        qty=50.0,
-        price=120.0,
-        shadow_qty=5.0,
-        bm_price=1200.0,
-        purchase_id="P2",
+        LotBuyParameters(
+            buy_date=date(2023, 6, 1),
+            qty=50.0,
+            price=120.0,
+            shadow_qty=5.0,
+            bm_price=1200.0,
+            purchase_id="P2",
+        )
     )
     assert fifo.get_closing_units() == 150.0
     assert fifo.get_closing_shadow_units() == 15.0
@@ -262,16 +270,20 @@ def test_investment_quant_engine_end_to_end() -> None:
 
     # Execute engine
     engine = InvestmentQuantEngine(
-        df_p=df_p,
-        df_s=df_s,
-        df_m=df_m,
-        df_i=df_i,
-        df_b=df_b,
-        df_t=df_t,
-        rules=rules,
-        start_date=date(2023, 1, 2),
-        end_date=date(2023, 1, 3),
-        run_id="TEST_RUN_001",
+        data=QuantDataFrames(
+            df_p=df_p,
+            df_s=df_s,
+            df_m=df_m,
+            df_i=df_i,
+            df_b=df_b,
+            df_t=df_t,
+        ),
+        options=QuantRunOptions(
+            rules=rules,
+            start_date=date(2023, 1, 2),
+            end_date=date(2023, 1, 3),
+            run_id="TEST_RUN_001",
+        ),
     )
     results = engine.run()
 
