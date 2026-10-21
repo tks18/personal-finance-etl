@@ -6,7 +6,7 @@ Owns
 
 Does not own
 -------------
-- Direct method cashflow statement reconciliation (owned by cashflow_statement.py).
+- Direct method cashflow statement reconciliation (owned by domain.household.cashflow.statement).
 - Budget target rules configuration (owned by config.financial_rules.household).
 - Presentation layer dispatching (owned by application.wealth.wealth_service).
 """
