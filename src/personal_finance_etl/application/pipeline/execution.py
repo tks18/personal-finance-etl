@@ -41,7 +41,10 @@ from personal_finance_etl.config.settings import Settings
 from personal_finance_etl.contracts.application import EngineStatusMessage
 from personal_finance_etl.contracts.extraction import ExtractionResult
 from personal_finance_etl.contracts.logging import ILogger, LogLevel
-from personal_finance_etl.infrastructure.control_plane import ControlPlane
+from personal_finance_etl.infrastructure.control_plane import (
+    ControlPlane,
+    SimulationRunParams,
+)
 from personal_finance_etl.infrastructure.logging.setup import logger
 from personal_finance_etl.infrastructure.providers.files.locator import (
     categorize_statement_files,
@@ -249,15 +252,17 @@ class PipelineExecutor:
         if cp and self.rules:
             metadata = cp.runs.get_run_metadata(run_id)
             cp.runs.log_simulation_run(
-                run_id=str(run_id),
-                root_seed=str(run_id),
-                rules=self.rules,
-                input_df=self.dfs.get("df_p_tf_wealth_risk_analytics_inputs"),
-                result_df=self.dfs.get("df_p_tf_wealth_risk_analytics"),
-                settings_snapshot_id=metadata.get("settings_snapshot_id"),
-                rules_snapshot_id=metadata.get("rules_snapshot_id")
-                if metadata.get("rules_snapshot_id") != "UNKNOWN"
-                else None,
+                SimulationRunParams(
+                    run_id=str(run_id),
+                    root_seed=str(run_id),
+                    rules=self.rules,
+                    input_df=self.dfs.get("df_p_tf_wealth_risk_analytics_inputs"),
+                    result_df=self.dfs.get("df_p_tf_wealth_risk_analytics"),
+                    settings_snapshot_id=metadata.get("settings_snapshot_id"),
+                    rules_snapshot_id=metadata.get("rules_snapshot_id")
+                    if metadata.get("rules_snapshot_id") != "UNKNOWN"
+                    else None,
+                )
             )
 
         if "df_p_tf_wealth_risk_analytics_inputs" in self.dfs:
