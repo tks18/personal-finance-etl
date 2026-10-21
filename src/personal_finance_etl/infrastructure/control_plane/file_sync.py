@@ -87,7 +87,18 @@ class FileSyncService:
         self,
         discovered_files: dict[str, list[str]],
     ) -> tuple[dict[str, list[str]], int]:
-        """Normalize discovered filepaths and validate uniqueness across categories."""
+        """Normalize discovered filepaths and validate uniqueness across categories.
+
+        Parameters
+        ----------
+        discovered_files : dict[str, list[str]]
+            Discovered paths per category.
+
+        Returns
+        -------
+        tuple[dict[str, list[str]], int]
+            (normalized_paths_by_category, unique_count).
+        """
         seen_path_categories: dict[str, str] = {}
         normalized_by_category: dict[str, list[str]] = {}
         unique_input_count = 0
@@ -178,6 +189,76 @@ class FileSyncService:
             self.artifact_repo.mark_removed(removed_paths)
         return removed_paths
 
+    def _evaluate_file_status(
+        self,
+        path: str,
+        category: str,
+        active_paths: set[str],
+        hash_to_paths: dict[str, dict[str, list[str]]],
+        registry: dict[str, tuple[str, str]],
+        registry_with_status: dict[str, tuple[str, str, str]],
+        should_check_hash: bool,
+    ) -> tuple[str, tuple[str, str, str] | None]:
+        """Classify a single file into 'HEALED', 'RENAME', 'NEW', 'CHANGED', or 'UNCHANGED'.
+
+        Parameters
+        ----------
+        path : str
+            Candidate file path.
+        category : str
+            Category name.
+        active_paths : set[str]
+            Active paths discovered for this category.
+        hash_to_paths : dict[str, dict[str, list[str]]]
+            Precomputed hash lookup map.
+        registry : dict[str, tuple[str, str]]
+            Registry map.
+        registry_with_status : dict[str, tuple[str, str, str]]
+            Registry with status map.
+        should_check_hash : bool
+            Whether hash drift checking is enabled for this file type.
+
+        Returns
+        -------
+        tuple[str, tuple[str, str, str] | None]
+            (action_kind, rename_tuple_if_applicable).
+        """
+        current = registry_with_status.get(path)
+        previous_status = current[2] if current else None
+
+        if previous_status == "REMOVED":
+            logger.info("[SYNC:HEALED] %s re-appeared after prior removal.", path)
+            self.artifact_repo.mark_healed([path], affected_table=category)
+            return "NEW", None
+
+        if current is None:
+            rename = self._try_migrate_rename(path, category, active_paths, hash_to_paths, registry)
+            if rename:
+                return "RENAME", rename
+            return "NEW", None
+
+        if not self.artifact_repo.has_payload(path):
+            logger.warning("[SYNC:REPAIR] Registered artifact has no payload: %s", path)
+            return "NEW", None
+
+        if should_check_hash:
+            disk_hash = compute_file_hash(path)
+            if not disk_hash:
+                raise FileNotFoundError(
+                    f"Registered file disappeared or could not be read during sync: {path}"
+                )
+            registered_hash = registry[path][0]
+            if disk_hash != registered_hash:
+                logger.info(
+                    "[SYNC:DRIFT] %s changed (registry=%s, disk=%s).",
+                    path,
+                    registered_hash,
+                    disk_hash,
+                )
+                return "CHANGED", None
+
+        return "UNCHANGED", None
+
     def _sync_with_disk(
         self,
         discovered_files: dict[str, list[str]],
@@ -215,46 +296,22 @@ class FileSyncService:
             all_active_paths.update(active_paths)
 
             for path in filepaths:
-                current = registry_with_status.get(path)
-                previous_status = current[2] if current else None
-
-                if previous_status == "REMOVED":
-                    logger.info("[SYNC:HEALED] %s re-appeared after prior removal.", path)
-                    self.artifact_repo.mark_healed([path], affected_table=category)
+                kind, rename_item = self._evaluate_file_status(
+                    path,
+                    category,
+                    active_paths,
+                    hash_to_paths,
+                    registry,
+                    registry_with_status,
+                    should_check_hash,
+                )
+                if kind == "NEW":
                     new_files[category].append(path)
-                    continue
-
-                if current is None:
-                    rename = self._try_migrate_rename(
-                        path, category, active_paths, hash_to_paths, registry
-                    )
-                    if rename:
-                        renamed_old_paths.add(rename[0])
-                        renames.append(rename)
-                    else:
-                        new_files[category].append(path)
-                    continue
-
-                if not self.artifact_repo.has_payload(path):
-                    logger.warning("[SYNC:REPAIR] Registered artifact has no payload: %s", path)
-                    new_files[category].append(path)
-                    continue
-
-                if should_check_hash:
-                    disk_hash = compute_file_hash(path)
-                    if not disk_hash:
-                        raise FileNotFoundError(
-                            f"Registered file disappeared or could not be read during sync: {path}"
-                        )
-                    registered_hash = registry[path][0]
-                    if disk_hash != registered_hash:
-                        logger.info(
-                            "[SYNC:DRIFT] %s changed (registry=%s, disk=%s).",
-                            path,
-                            registered_hash,
-                            disk_hash,
-                        )
-                        changed_files[category].append(path)
+                elif kind == "CHANGED":
+                    changed_files[category].append(path)
+                elif kind == "RENAME" and rename_item:
+                    renamed_old_paths.add(rename_item[0])
+                    renames.append(rename_item)
 
             if category in full_replace:
                 self.artifact_repo.prune_category(category, filepaths)

@@ -35,6 +35,16 @@ from personal_finance_etl.contracts.logging import ILogger, LogLevel
 __all__ = ["QueueStream", "WorkerPoolCoordinator", "infer_log_level", "process_wrapper"]
 
 
+def _is_step_log(msg: str, lw: str) -> bool:
+    return msg.startswith("[") or any(
+        token in lw for token in ("fetching", "loading", "post-processing")
+    )
+
+
+def _is_success_log(lw: str) -> bool:
+    return any(token in lw for token in ("✅", "complete", "success", "✓", "exported"))
+
+
 def infer_log_level(msg: str, is_error: bool = False) -> LogLevel:
     """Infer LogLevel from message contents or stream error flag."""
     if not msg:
@@ -42,13 +52,11 @@ def infer_log_level(msg: str, is_error: bool = False) -> LogLevel:
     lw = msg.lower()
     if "error" in lw or msg.startswith("Error"):
         return LogLevel.ERROR
-    if any(token in lw for token in ("✅", "complete", "success", "✓", "exported")):
+    if _is_success_log(lw):
         return LogLevel.SUCCESS
     if "warning" in lw or is_error:
         return LogLevel.WARNING
-    if any(token in lw for token in ("fetching", "loading", "post-processing")) or msg.startswith(
-        "["
-    ):
+    if _is_step_log(msg, lw):
         return LogLevel.STEP
     return LogLevel.INFO
 
@@ -155,6 +163,51 @@ class WorkerPoolCoordinator:
         return process
 
     @staticmethod
+    def _parse_queue_item(item: object) -> EngineStatusMessage:
+        """Parse raw tuple or EngineStatusMessage queue payload into structured status."""
+        if not isinstance(item, tuple):
+            return cast(EngineStatusMessage, item)
+        t_item = cast("tuple[object, ...]", item)
+        t_msg = str(t_item[0]) if len(t_item) > 0 and t_item[0] else ""
+        t_data = t_item[1] if len(t_item) > 1 and isinstance(t_item[1], pl.DataFrame) else None
+        t_prog = (
+            float(t_item[2]) if len(t_item) > 2 and isinstance(t_item[2], (int, float)) else None
+        )
+        return EngineStatusMessage(
+            msg=t_msg,
+            data=t_data,
+            progress=t_prog,
+            level=infer_log_level(t_msg),
+        )
+
+    @staticmethod
+    def _emit_exit_status(
+        process: multiprocessing.Process,
+        on_status: Callable[[EngineStatusMessage], None],
+    ) -> None:
+        """Emit clean completion or abnormal exit status based on worker exit code."""
+        if process.exitcode is None:
+            return
+        if process.exitcode != 0:
+            on_status(
+                EngineStatusMessage(
+                    msg="Process exited abnormally.",
+                    data=None,
+                    progress=0.0,
+                    level=LogLevel.ERROR,
+                )
+            )
+        else:
+            on_status(
+                EngineStatusMessage(
+                    msg="Process completed cleanly.",
+                    data=None,
+                    progress=1.0,
+                    level=LogLevel.SUCCESS,
+                )
+            )
+
+    @staticmethod
     def monitor_queue(
         process: multiprocessing.Process,
         status_queue: multiprocessing.Queue[EngineStatusMessage],
@@ -166,54 +219,13 @@ class WorkerPoolCoordinator:
             while process.is_alive() or not status_queue.empty():
                 try:
                     item = status_queue.get(timeout=0.1)
-
-                    if isinstance(item, tuple):
-                        t_item = cast("tuple[object, ...]", item)
-                        t_msg = str(t_item[0]) if len(t_item) > 0 and t_item[0] else ""
-                        t_data = (
-                            t_item[1]
-                            if len(t_item) > 1 and isinstance(t_item[1], pl.DataFrame)
-                            else None
-                        )
-                        t_prog = (
-                            float(t_item[2])
-                            if len(t_item) > 2 and isinstance(t_item[2], (int, float))
-                            else None
-                        )
-                        status = EngineStatusMessage(
-                            msg=t_msg,
-                            data=t_data,
-                            progress=t_prog,
-                            level=infer_log_level(t_msg),
-                        )
-                    else:
-                        status = item
-
-                    on_status(status)
+                    on_status(WorkerPoolCoordinator._parse_queue_item(item))
                 except queue.Empty:
                     continue
                 except Exception:
                     break
 
-            if process.exitcode is not None:
-                if process.exitcode != 0:
-                    on_status(
-                        EngineStatusMessage(
-                            msg="Process exited abnormally.",
-                            data=None,
-                            progress=0.0,
-                            level=LogLevel.ERROR,
-                        )
-                    )
-                else:
-                    on_status(
-                        EngineStatusMessage(
-                            msg="Process completed cleanly.",
-                            data=None,
-                            progress=1.0,
-                            level=LogLevel.SUCCESS,
-                        )
-                    )
+            WorkerPoolCoordinator._emit_exit_status(process, on_status)
 
         thread = threading.Thread(target=_monitor, daemon=True)
         thread.start()

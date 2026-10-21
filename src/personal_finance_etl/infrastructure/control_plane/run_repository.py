@@ -25,6 +25,7 @@ import math
 import sqlite3
 import uuid
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from datetime import date, datetime
 from typing import cast
 
@@ -41,6 +42,21 @@ from personal_finance_etl.contracts.lifecycle import (
 from personal_finance_etl.infrastructure.control_plane.connection import SQLiteManager
 
 logger = logging.getLogger("personal_finance_etl.control_plane.run_repo")
+
+
+@dataclass
+class SimulationRunParams:
+    """Parameters for recording a Monte Carlo simulation execution."""
+
+    run_id: str
+    root_seed: str
+    rules: FinancialRules
+    input_df: pl.DataFrame | pl.LazyFrame | None = None
+    result_df: pl.DataFrame | pl.LazyFrame | None = None
+    input_as_of_date: date | str | None = None
+    result_fingerprint: str | None = None
+    settings_snapshot_id: str | None = None
+    rules_snapshot_id: str | None = None
 
 
 class RunRepository:
@@ -255,73 +271,110 @@ class RunRepository:
             digest.update(b"\n")
         return digest.hexdigest()
 
-    def log_simulation_run(
-        self,
-        run_id: str,
-        root_seed: str,
-        rules: FinancialRules,
-        input_df: pl.DataFrame | pl.LazyFrame | None = None,
-        result_df: pl.DataFrame | pl.LazyFrame | None = None,
-        input_as_of_date: date | str | None = None,
-        result_fingerprint: str | None = None,
-        settings_snapshot_id: str | None = None,
-        rules_snapshot_id: str | None = None,
-    ) -> None:
-        """Record a reproducible Monte Carlo simulation run in cp_simulation_runs."""
-        sim_id = f"sim_{run_id}"
-        now = datetime.now().isoformat(timespec="seconds")
+    @classmethod
+    def _compute_model_fingerprint(cls, rules: FinancialRules) -> str:
+        """Derive deterministic SHA256 digest of simulation assumption models.
+
+        Parameters
+        ----------
+        rules : FinancialRules
+            Financial configuration rules containing simulation assumptions.
+
+        Returns
+        -------
+        str
+            Hex digest representing model fingerprint.
+        """
         combined_rules = {
             "monte_carlo": rules.assumptions.monte_carlo.model_dump(),
             "fire": rules.assumptions.fire.model_dump(),
             "cma": rules.assumptions.cma.model_dump(),
         }
-        model_fingerprint = hashlib.sha256(
+        return hashlib.sha256(
             json.dumps(
-                self._json_safe(combined_rules),
+                cls._json_safe(combined_rules),
                 sort_keys=True,
                 separators=(",", ":"),
                 ensure_ascii=False,
                 allow_nan=False,
             ).encode("utf-8")
         ).hexdigest()
-        input_fingerprint = self._fingerprint_dataframe(input_df)
-        if result_fingerprint is None and result_df is not None:
-            result_fingerprint = self._fingerprint_dataframe(result_df)
 
-        if input_as_of_date is None and isinstance(input_df, pl.DataFrame):
-            candidate_cols = [
-                "MONTH_START_DATE",
-                "MONTH_END_DATE",
-                "Date",
-                "DATE",
-                "as_of_date",
-                "Closing_Date",
-            ]
-            for col in candidate_cols:
-                if col in input_df.columns and input_df.height > 0:
-                    try:
-                        max_val = input_df[col].max()
-                        if max_val is not None:
-                            if isinstance(max_val, datetime):
-                                input_as_of_date = max_val.date().isoformat()
-                            elif isinstance(max_val, date):
-                                input_as_of_date = max_val.isoformat()
-                            else:
-                                input_as_of_date = (
-                                    str(max_val).split("T", maxsplit=1)[0].split(" ", maxsplit=1)[0]
-                                )
-                            break
-                    except (KeyError, TypeError, ValueError, AttributeError):
-                        pass
-        elif isinstance(input_as_of_date, (date, datetime)):
-            input_as_of_date = (
-                input_as_of_date.date().isoformat()
-                if isinstance(input_as_of_date, datetime)
-                else input_as_of_date.isoformat()
-            )
+    @staticmethod
+    def _resolve_input_as_of_date(
+        input_df: pl.DataFrame | pl.LazyFrame | None,
+        input_as_of_date: date | str | None,
+    ) -> str | None:
+        """Infer or format as-of date string from input DataFrame columns.
 
-        iterations = rules.assumptions.monte_carlo.iterations
-        horizon = rules.assumptions.monte_carlo.max_months
+        Parameters
+        ----------
+        input_df : pl.DataFrame | pl.LazyFrame | None
+            Input dataframe evaluated for date timestamps.
+        input_as_of_date : date | str | None
+            Explicit date override, if available.
+
+        Returns
+        -------
+        str | None
+            Resolved ISO date string or None.
+        """
+        if input_as_of_date is not None:
+            if isinstance(input_as_of_date, datetime):
+                return input_as_of_date.date().isoformat()
+            if isinstance(input_as_of_date, date):
+                return input_as_of_date.isoformat()
+            return str(input_as_of_date)
+
+        if not isinstance(input_df, pl.DataFrame) or input_df.height == 0:
+            return None
+
+        candidate_cols = [
+            "MONTH_START_DATE",
+            "MONTH_END_DATE",
+            "Date",
+            "DATE",
+            "as_of_date",
+            "Closing_Date",
+        ]
+        for col in candidate_cols:
+            if col in input_df.columns:
+                try:
+                    max_val = input_df[col].max()
+                    if max_val is not None:
+                        if isinstance(max_val, datetime):
+                            return max_val.date().isoformat()
+                        if isinstance(max_val, date):
+                            return max_val.isoformat()
+                        return str(max_val).split("T", maxsplit=1)[0].split(" ", maxsplit=1)[0]
+                except (KeyError, TypeError, ValueError, AttributeError):
+                    pass
+        return None
+
+    def log_simulation_run(
+        self,
+        params: SimulationRunParams,
+    ) -> None:
+        """Record a reproducible Monte Carlo simulation run in cp_simulation_runs.
+
+        Parameters
+        ----------
+        params : SimulationRunParams
+            Structured simulation run parameters.
+        """
+        p = params
+        sim_id = f"sim_{p.run_id}"
+        now = datetime.now().isoformat(timespec="seconds")
+        model_fingerprint = self._compute_model_fingerprint(p.rules)
+        input_fingerprint = self._fingerprint_dataframe(p.input_df)
+
+        result_fingerprint = p.result_fingerprint
+        if result_fingerprint is None and p.result_df is not None:
+            result_fingerprint = self._fingerprint_dataframe(p.result_df)
+
+        resolved_as_of_date = self._resolve_input_as_of_date(p.input_df, p.input_as_of_date)
+        iterations = p.rules.assumptions.monte_carlo.iterations
+        horizon = p.rules.assumptions.monte_carlo.max_months
 
         with self.db.atomic():
             self.db.conn.execute(
@@ -346,14 +399,14 @@ class RunRepository:
                        status = excluded.status""",
                 (
                     sim_id,
-                    run_id,
+                    p.run_id,
                     now,
-                    str(root_seed),
+                    str(p.root_seed),
                     iterations,
                     horizon,
-                    str(input_as_of_date) if input_as_of_date is not None else None,
-                    settings_snapshot_id,
-                    rules_snapshot_id,
+                    resolved_as_of_date,
+                    p.settings_snapshot_id,
+                    p.rules_snapshot_id,
                     "v1.0-gbm-fire",
                     input_fingerprint,
                     model_fingerprint,
@@ -512,77 +565,95 @@ class RunRepository:
         if recovered:
             logger.warning("[CONTROL_PLANE] Recovered %d interrupted run(s).", recovered)
 
+    @staticmethod
+    def _normalize_provider_record(
+        rec: ExtractionProviderRequest | Mapping[str, object],
+        run_id: str,
+        now: str,
+    ) -> tuple[str, str, str, str, str | None, str | None, int, str, str | None, str | None, str]:
+        """Normalize a provider request record into a SQL insert parameter tuple.
+
+        Parameters
+        ----------
+        rec : ExtractionProviderRequest | Mapping[str, object]
+            Input request record.
+        run_id : str
+            Active pipeline execution ID.
+        now : str
+            ISO-formatted timestamp fallback.
+
+        Returns
+        -------
+        tuple[str, str, str, str, str | None, str | None, int, str, str | None, str | None, str]
+            Normalized values for cp_external_provider_requests table columns.
+        """
+        req_id = str(rec.get("request_id") or uuid.uuid4())
+        provider = str(rec.get("provider", "UNKNOWN"))
+        entity = str(rec.get("entity", "UNKNOWN"))
+
+        req_start = rec.get("requested_start")
+        if isinstance(req_start, (date, datetime)):
+            req_start = req_start.isoformat()
+        elif req_start is not None:
+            req_start = str(req_start)
+
+        req_end = rec.get("requested_end")
+        if isinstance(req_end, (date, datetime)):
+            req_end = req_end.isoformat()
+        elif req_end is not None:
+            req_end = str(req_end)
+
+        raw_attempts = rec.get("attempt_count", 1)
+        if isinstance(raw_attempts, (int, str, float)):
+            try:
+                attempt_count = int(raw_attempts)
+            except (TypeError, ValueError):
+                attempt_count = 1
+        else:
+            attempt_count = 1
+
+        status = str(rec.get("status", "SUCCESS")).upper()
+        failure_class = rec.get("failure_class")
+        failure_class_str = str(failure_class) if failure_class is not None else None
+        final_error = rec.get("final_error")
+        final_error_str = str(final_error) if final_error is not None else None
+
+        created_at = rec.get("created_at") or now
+        if isinstance(created_at, (date, datetime)):
+            created_at = created_at.isoformat()
+
+        return (
+            req_id,
+            run_id,
+            provider,
+            entity,
+            req_start,
+            req_end,
+            attempt_count,
+            status,
+            failure_class_str,
+            final_error_str,
+            str(created_at),
+        )
+
     def log_provider_requests(
         self,
         run_id: str,
         records: Sequence[ExtractionProviderRequest] | Sequence[Mapping[str, object]],
     ) -> None:
-        """Persist batch of external provider requests with retry/status provenance."""
+        """Persist batch of external provider requests with retry/status provenance.
+
+        Parameters
+        ----------
+        run_id : str
+            Pipeline execution identifier.
+        records : Sequence[ExtractionProviderRequest] | Sequence[Mapping[str, object]]
+            Collection of provider request log items.
+        """
         if not records:
             return
         now = datetime.now().isoformat(timespec="seconds")
-        params: list[
-            tuple[
-                str,
-                str,
-                str,
-                str,
-                str | None,
-                str | None,
-                int,
-                str,
-                str | None,
-                str | None,
-                str,
-            ]
-        ] = []
-        for rec in records:
-            req_id = str(rec.get("request_id") or uuid.uuid4())
-            provider = str(rec.get("provider", "UNKNOWN"))
-            entity = str(rec.get("entity", "UNKNOWN"))
-            req_start = rec.get("requested_start")
-            if isinstance(req_start, (date, datetime)):
-                req_start = req_start.isoformat()
-            elif req_start is not None:
-                req_start = str(req_start)
-            req_end = rec.get("requested_end")
-            if isinstance(req_end, (date, datetime)):
-                req_end = req_end.isoformat()
-            elif req_end is not None:
-                req_end = str(req_end)
-            raw_attempts = rec.get("attempt_count", 1)
-            if isinstance(raw_attempts, (int, str, float)):
-                try:
-                    attempt_count = int(raw_attempts)
-                except (TypeError, ValueError):
-                    attempt_count = 1
-            else:
-                attempt_count = 1
-            status = str(rec.get("status", "SUCCESS")).upper()
-            failure_class = rec.get("failure_class")
-            if failure_class is not None:
-                failure_class = str(failure_class)
-            final_error = rec.get("final_error")
-            if final_error is not None:
-                final_error = str(final_error)
-            created_at = rec.get("created_at") or now
-            if isinstance(created_at, (date, datetime)):
-                created_at = created_at.isoformat()
-            params.append(
-                (
-                    req_id,
-                    run_id,
-                    provider,
-                    entity,
-                    req_start,
-                    req_end,
-                    attempt_count,
-                    status,
-                    failure_class,
-                    final_error,
-                    str(created_at),
-                )
-            )
+        params = [self._normalize_provider_record(rec, run_id, now) for rec in records]
         with self.db.atomic():
             self.db.conn.executemany(
                 """INSERT INTO cp_external_provider_requests

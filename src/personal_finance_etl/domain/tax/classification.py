@@ -51,7 +51,39 @@ class TaxClassifier:
     """Classifies income transactions, tax credits, and investment gains into tax heads."""
 
     @staticmethod
+    def _parse_acquisition_date(acquisition_date: object) -> date | None:
+        """Extract date object from date, datetime, or date string."""
+        if isinstance(acquisition_date, datetime):
+            return acquisition_date.date()
+        if isinstance(acquisition_date, str):
+            try:
+                return to_date_obj(acquisition_date, strict=True)
+            except ValueError:
+                return None
+        if isinstance(acquisition_date, date):
+            return acquisition_date
+        return None
+
+    @classmethod
+    def _resolve_debt_mf_prefix(
+        cls,
+        row: RealizedEventDict | Mapping[str, object],
+        debt_mf_cutoff_date: str | date | None,
+    ) -> str | None:
+        """Determine pre or post cutoff tax prefix for debt mutual funds."""
+        acq_date = cls._parse_acquisition_date(row.get("Acquisition_Date"))
+        cutoff = (
+            to_date_obj(debt_mf_cutoff_date, strict=False)
+            if debt_mf_cutoff_date is not None
+            else None
+        )
+        if acq_date is None or cutoff is None:
+            return None
+        return "Debt_MF_Pre_Cutoff" if acq_date < cutoff else "Debt_MF_Post_Cutoff"
+
+    @classmethod
     def _resolve_debt_prefix(
+        cls,
         row: RealizedEventDict | Mapping[str, object],
         subtype: str,
         debt_mf_cutoff_date: str | date | None,
@@ -64,29 +96,23 @@ class TaxClassifier:
         if subtype in {"bond", "debenture", "other_debt", "direct_debt"}:
             return "Other_Debt"
         if subtype in {"mf", "mutual_fund", "debt_mf"}:
-            acquisition_date = row.get("Acquisition_Date")
-            acq_date: date | None
-            if isinstance(acquisition_date, datetime):
-                acq_date = acquisition_date.date()
-            elif isinstance(acquisition_date, str):
-                try:
-                    acq_date = to_date_obj(acquisition_date, strict=True)
-                except ValueError:
-                    return None
-            elif isinstance(acquisition_date, date):
-                acq_date = acquisition_date
-            else:
-                return None
-
-            cutoff = (
-                to_date_obj(debt_mf_cutoff_date, strict=False)
-                if debt_mf_cutoff_date is not None
-                else None
-            )
-            if acq_date is None or cutoff is None:
-                return None
-            return "Debt_MF_Pre_Cutoff" if acq_date < cutoff else "Debt_MF_Post_Cutoff"
+            return cls._resolve_debt_mf_prefix(row, debt_mf_cutoff_date)
         return None
+
+    @classmethod
+    def _resolve_instrument_prefix(
+        cls,
+        row: RealizedEventDict | Mapping[str, object],
+        tax_type: str,
+        subtype: str,
+        debt_mf_cutoff_date: str | date | None,
+    ) -> str | None:
+        """Lookup or resolve statutory tax prefix based on asset type."""
+        if tax_type == "equity":
+            return _EQUITY_PREFIX_MAP.get(subtype)
+        if tax_type == "debt":
+            return cls._resolve_debt_prefix(row, subtype, debt_mf_cutoff_date)
+        return _DIRECT_TYPE_PREFIX_MAP.get(tax_type)
 
     @classmethod
     def map_quant_sub_head(
@@ -115,13 +141,7 @@ class TaxClassifier:
         if holding is None:
             return "CHECK_REQUIRED", False
 
-        if tax_type == "equity":
-            prefix = _EQUITY_PREFIX_MAP.get(subtype)
-        elif tax_type == "debt":
-            prefix = cls._resolve_debt_prefix(row, subtype, debt_mf_cutoff_date)
-        else:
-            prefix = _DIRECT_TYPE_PREFIX_MAP.get(tax_type)
-
+        prefix = cls._resolve_instrument_prefix(row, tax_type, subtype, debt_mf_cutoff_date)
         if prefix is None:
             return "CHECK_REQUIRED", False
 

@@ -49,33 +49,124 @@ EMPTY_US_MARKET_SCHEMA: dict[str, type[pl.DataType] | pl.DataType] = {
 }
 
 
-def transform_us_market_data(
-    df_bronze_prices_lazy: pl.LazyFrame,
-    df_purchase_lazy: pl.LazyFrame,
-    df_sale_lazy: pl.LazyFrame,
-    df_fx_lazy: pl.LazyFrame,
+@dataclasses.dataclass
+class _UsLot:
+    """Internal lot state tracking quantity and unit costs in local and base currency."""
+
+    qty: float
+    price_local: float
+    price_inr: float
+
+
+def _simulate_isin_lots(
+    isin: str,
+    curr_id: str,
+    buys: dict[date, list[TradeRecord]],
+    sells: dict[date, list[TradeRecord]],
+    start_date: date,
+    end_date: date,
+) -> list[MarketSpineRecord]:
+    """Reconstruct daily FIFO lot balances for a single US equity instrument.
+
+    Parameters
+    ----------
+    isin : str
+        Instrument identifier.
+    curr_id : str
+        Currency code of the asset.
+    buys : dict[date, list[TradeRecord]]
+        Date-indexed purchase transactions.
+    sells : dict[date, list[TradeRecord]]
+        Date-indexed sale transactions.
+    start_date : date
+        Simulation window starting boundary.
+    end_date : date
+        Simulation window ending boundary.
+
+    Returns
+    -------
+    list[MarketSpineRecord]
+        List of daily expanded lot records.
+    """
+    records: list[MarketSpineRecord] = []
+    current_date = start_date
+    lots: deque[_UsLot] = deque()
+
+    while current_date <= end_date:
+        day_buys = buys.get(current_date, [])
+        for b in sort_purchases(day_buys):
+            qty = float(b["Quantity"])
+            if qty > 0:
+                b_val_local = float(b.get("Value_Local") or 0.0)
+                b_val_inr = float(b.get("Value") or 0.0)
+                lots.append(
+                    _UsLot(
+                        qty=qty,
+                        price_local=b_val_local / qty,
+                        price_inr=b_val_inr / qty,
+                    )
+                )
+
+        day_sells = sells.get(current_date, [])
+        for s in sort_sales(day_sells):
+            sqty = float(s["Quantity"])
+            while sqty > 0 and lots:
+                if lots[0].qty > sqty:
+                    lots[0].qty -= sqty
+                    sqty = 0
+                else:
+                    sqty -= lots[0].qty
+                    lots.popleft()
+
+        lots_by_price: dict[tuple[float, float], float] = defaultdict(float)
+        for lot in lots:
+            lots_by_price[(lot.price_local, lot.price_inr)] += lot.qty
+
+        for (price_local, price_inr), qty in lots_by_price.items():
+            if qty > 0:
+                records.append(
+                    {
+                        "Date": current_date,
+                        "ISIN": isin,
+                        "CURRENCY_ID": curr_id,
+                        "Quantity": qty,
+                        "Buy_Value_Local": qty * price_local,
+                        "Buy_Value_INR": qty * price_inr,
+                        "Buy_Price_Local": price_local,
+                        "Buy_Price_INR": price_inr,
+                    }
+                )
+
+        current_date += timedelta(days=1)
+
+    return records
+
+
+def _build_us_fifo_spine(
+    us_purchases: pl.DataFrame,
+    df_sale: pl.DataFrame,
     global_start_date: date,
     global_end_date: date,
-) -> pl.LazyFrame:
-    """Transform bronze raw US stock prices into a continuous silver daily series.
+) -> pl.DataFrame:
+    """Reconstruct daily continuous FIFO spine across all active US stocks.
 
-    Build the FIFO spine, join FX rates, and calculate PnL.
+    Parameters
+    ----------
+    us_purchases : pl.DataFrame
+        Filtered US purchases dataframe.
+    df_sale : pl.DataFrame
+        Collected sales dataframe.
+    global_start_date : date
+        Start date boundary.
+    global_end_date : date
+        End date boundary.
+
+    Returns
+    -------
+    pl.DataFrame
+        Eager spine dataframe.
     """
-    # Materialization Boundary: STATEFUL_ALGORITHM_BOUNDARY
-    # Materialize purchase and sale transactions to resolve active US ticker universe and date boundaries
-    df_purchase = df_purchase_lazy.collect()
-    df_sale = df_sale_lazy.collect()
-
-    if df_purchase.is_empty():
-        return pl.DataFrame(schema=EMPTY_US_MARKET_SCHEMA).lazy()
-
-    us_purchases = df_purchase.filter(pl.col("__file_category__") == "US Stocks")
-    if us_purchases.is_empty():
-        return pl.DataFrame(schema=EMPTY_US_MARKET_SCHEMA).lazy()
-
     active_isins = us_purchases["ISIN"].unique().to_list()
-
-    # --- Phase 1: Reconstruct FIFO Spine ---
     df_p_us = us_purchases.select(
         ["ISIN", "Date", "Quantity", "Value_Local", "Value", "CURRENCY_ID"]
     ).sort(["ISIN", "Date"])
@@ -104,73 +195,21 @@ def transform_us_market_data(
             sells[str(raw_s["ISIN"])][dt].append(cast(TradeRecord, raw_s))
 
     spine_records: list[MarketSpineRecord] = []
-
-    @dataclasses.dataclass
-    class Lot:
-        """Internal lot state tracking quantity and unit costs in local and base currency."""
-
-        qty: float
-        price_local: float
-        price_inr: float
-
     for isin in active_isins:
-        current_date = global_start_date
-        lots: deque[Lot] = deque()
         curr_id = currency_map.get(isin)
         if not curr_id:
             raise ValueError(f"Missing CURRENCY_ID for US Stock ISIN: {isin}")
+        isin_records = _simulate_isin_lots(
+            isin=isin,
+            curr_id=curr_id,
+            buys=buys[isin],
+            sells=sells[isin],
+            start_date=global_start_date,
+            end_date=global_end_date,
+        )
+        spine_records.extend(isin_records)
 
-        while current_date <= global_end_date:
-            # Apply buys
-            day_buys = buys[isin].get(current_date, [])
-            for b in sort_purchases(day_buys):
-                qty = float(b["Quantity"])
-                if qty > 0:
-                    b_val_local = float(b.get("Value_Local") or 0.0)
-                    b_val_inr = float(b.get("Value") or 0.0)
-                    lots.append(
-                        Lot(
-                            qty=qty,
-                            price_local=b_val_local / qty,
-                            price_inr=b_val_inr / qty,
-                        )
-                    )
-
-            # Apply sells
-            day_sells = sells[isin].get(current_date, [])
-            for s in sort_sales(day_sells):
-                sqty = float(s["Quantity"])
-                while sqty > 0 and lots:
-                    if lots[0].qty > sqty:
-                        lots[0].qty -= sqty
-                        sqty = 0
-                    else:
-                        sqty -= lots[0].qty
-                        lots.popleft()
-
-            # Group by Buy Price to match the main Indian stock market data lot-level granularity
-            lots_by_price: dict[tuple[float, float], float] = defaultdict(float)
-            for lot in lots:
-                lots_by_price[(lot.price_local, lot.price_inr)] += lot.qty
-
-            for (price_local, price_inr), qty in lots_by_price.items():
-                if qty > 0:
-                    spine_records.append(
-                        {
-                            "Date": current_date,
-                            "ISIN": isin,
-                            "CURRENCY_ID": curr_id,
-                            "Quantity": qty,
-                            "Buy_Value_Local": qty * price_local,
-                            "Buy_Value_INR": qty * price_inr,
-                            "Buy_Price_Local": price_local,
-                            "Buy_Price_INR": price_inr,
-                        }
-                    )
-
-            current_date += timedelta(days=1)
-
-    df_spine_eager = pl.DataFrame(
+    return pl.DataFrame(
         spine_records,
         schema={
             "Date": pl.Date,
@@ -184,15 +223,28 @@ def transform_us_market_data(
         },
     )
 
-    if df_spine_eager.is_empty():
-        return pl.DataFrame(schema=EMPTY_US_MARKET_SCHEMA).lazy()
 
-    df_spine = df_spine_eager.lazy()
+def _join_and_validate_prices(
+    df_spine: pl.LazyFrame,
+    df_bronze_prices_lazy: pl.LazyFrame,
+    max_price_staleness_days: int = 7,
+) -> pl.LazyFrame:
+    """Join bronze prices via backward as-of merge and enforce staleness boundaries.
 
-    # Historical prices may only flow forward from an observation on or before the
-    # valuation date. Keep the source observation date long enough to enforce a
-    # bounded staleness policy; never backward-fill a missing historical price.
-    max_price_staleness_days = 7
+    Parameters
+    ----------
+    df_spine : pl.LazyFrame
+        Lazy spine dataframe.
+    df_bronze_prices_lazy : pl.LazyFrame
+        Lazy bronze price quotes.
+    max_price_staleness_days : int, default 7
+        Maximum allowed days without fresh price quote.
+
+    Returns
+    -------
+    pl.LazyFrame
+        Spine lazyframe enriched with prices and staleness indicators.
+    """
     invalid_source_prices = (
         df_bronze_prices_lazy.filter(
             pl.col("Closing_Price_Local").is_not_null()
@@ -200,8 +252,6 @@ def transform_us_market_data(
             & ~pl.col("Is_Closure_Gap").fill_null(False)
         )
         .select(["ISIN", "Date", "Closing_Price_Local"])
-        # Materialization Boundary: VALIDATION_DIAGNOSTIC
-        # Materialize sample (max 10) of invalid source quotes for diagnostic error message
         .limit(10)
         .collect()
     )
@@ -233,9 +283,10 @@ def transform_us_market_data(
         .with_columns(pl.col("Date").alias("Price_Observation_Date"))
         .sort("Date")
     )
-    df_spine = df_spine.sort("Date")
-    df_spine = (
-        df_spine.join_asof(
+
+    enriched_spine = (
+        df_spine.sort("Date")
+        .join_asof(
             df_prices,
             on="Date",
             by="ISIN",
@@ -258,7 +309,7 @@ def transform_us_market_data(
     )
 
     invalid_prices = (
-        df_spine.filter(
+        enriched_spine.filter(
             pl.col("Closing_Price_Local").is_null()
             | ~pl.col("Closing_Price_Local").is_finite()
             | (pl.col("Closing_Price_Local") <= 0)
@@ -266,8 +317,6 @@ def transform_us_market_data(
             | (pl.col("Price_Age_Days") > max_price_staleness_days)
         )
         .select(["ISIN", "Date", "Price_Observation_Date", "Price_Age_Days", "Closing_Price_Local"])
-        # Materialization Boundary: VALIDATION_DIAGNOSTIC
-        # Materialize sample (max 10) of stale or invalid prices for diagnostic error message
         .limit(10)
         .collect()
     )
@@ -278,24 +327,43 @@ def transform_us_market_data(
             f"Examples: {invalid_prices.to_dicts()}"
         )
 
-    # --- Phase 3: FX Translation ---
+    return enriched_spine
+
+
+def _join_fx_and_calculate_pnl(
+    df_spine: pl.LazyFrame,
+    df_fx_lazy: pl.LazyFrame,
+) -> pl.LazyFrame:
+    """Join currency FX rates and derive unit and total PnL metrics.
+
+    Parameters
+    ----------
+    df_spine : pl.LazyFrame
+        Lazy spine dataframe with prices.
+    df_fx_lazy : pl.LazyFrame
+        Lazy FX rates dataframe.
+
+    Returns
+    -------
+    pl.LazyFrame
+        Final transformed US market dataset.
+    """
     df_fx_sorted = (
         df_fx_lazy.select(["Date", "Currency_ID", "FX_Rate"])
         .rename({"Currency_ID": "CURRENCY_ID"})
         .sort("Date")
     )
-    df_spine = df_spine.sort("Date")
-    df_spine = df_spine.join_asof(
-        df_fx_sorted, on="Date", by="CURRENCY_ID", strategy="backward"
-    ).sort(["ISIN", "Date"])
+    joined_spine = (
+        df_spine.sort("Date")
+        .join_asof(df_fx_sorted, on="Date", by="CURRENCY_ID", strategy="backward")
+        .sort(["ISIN", "Date"])
+    )
 
     invalid_fx = (
-        df_spine.filter(
+        joined_spine.filter(
             pl.col("FX_Rate").is_null() | ~pl.col("FX_Rate").is_finite() | (pl.col("FX_Rate") <= 0)
         )
         .select(["ISIN", "Date", "CURRENCY_ID", "FX_Rate"])
-        # Materialization Boundary: VALIDATION_DIAGNOSTIC
-        # Materialize sample (max 10) of missing or invalid FX rates for diagnostic error message
         .limit(10)
         .collect()
     )
@@ -305,54 +373,94 @@ def transform_us_market_data(
             f"Examples: {invalid_fx.to_dicts()}"
         )
 
-    df_spine = df_spine.with_columns(
-        [
-            (pl.col("Closing_Price_Local") * pl.col("FX_Rate")).alias("Closing_Price"),
-            pl.col("Buy_Price_INR").alias("Buy_Price"),
-            pl.col("Buy_Value_INR").alias("Buy_Value"),
-        ]
+    return (
+        joined_spine.with_columns(
+            [
+                (pl.col("Closing_Price_Local") * pl.col("FX_Rate")).alias("Closing_Price"),
+                pl.col("Buy_Price_INR").alias("Buy_Price"),
+                pl.col("Buy_Value_INR").alias("Buy_Value"),
+            ]
+        )
+        .with_columns(
+            [
+                (pl.col("Quantity") * pl.col("Closing_Price")).alias("Closing_Value"),
+                (pl.col("Quantity") * pl.col("Closing_Price_Local")).alias("Closing_Value_Local"),
+                (pl.col("Closing_Price") - pl.col("Buy_Price")).alias("Unit_PnL"),
+            ]
+        )
+        .with_columns(
+            [
+                (pl.col("Unit_PnL") * pl.col("Quantity")).alias("Total_PnL"),
+                pl.lit("US Stocks").alias("__file_category__"),
+            ]
+        )
+        .filter(pl.col("Quantity") >= 0)
+        .select(
+            [
+                "Date",
+                "ISIN",
+                "__file_category__",
+                "Quantity",
+                "Closing_Price_Local",
+                "Buy_Price_Local",
+                "Closing_Value_Local",
+                "Buy_Value_Local",
+                "FX_Rate",
+                "Closing_Price",
+                "Buy_Price",
+                "Closing_Value",
+                "Buy_Value",
+                "Unit_PnL",
+                "Total_PnL",
+                "CURRENCY_ID",
+                "Data_Provider",
+                "Extraction_Time",
+                "Requested_Start",
+                "Requested_End",
+                "Is_Closure_Gap",
+                "Is_Imputed",
+            ]
+        )
     )
 
-    df_spine = df_spine.with_columns(
-        [
-            (pl.col("Quantity") * pl.col("Closing_Price")).alias("Closing_Value"),
-            (pl.col("Quantity") * pl.col("Closing_Price_Local")).alias("Closing_Value_Local"),
-            (pl.col("Closing_Price") - pl.col("Buy_Price")).alias("Unit_PnL"),
-        ]
+
+def transform_us_market_data(
+    df_bronze_prices_lazy: pl.LazyFrame,
+    df_purchase_lazy: pl.LazyFrame,
+    df_sale_lazy: pl.LazyFrame,
+    df_fx_lazy: pl.LazyFrame,
+    global_start_date: date,
+    global_end_date: date,
+) -> pl.LazyFrame:
+    """Transform bronze raw US stock prices into a continuous silver daily series.
+
+    Build the FIFO spine, join FX rates, and calculate PnL.
+    """
+    df_purchase = df_purchase_lazy.collect()
+    df_sale = df_sale_lazy.collect()
+
+    if df_purchase.is_empty():
+        return pl.DataFrame(schema=EMPTY_US_MARKET_SCHEMA).lazy()
+
+    us_purchases = df_purchase.filter(pl.col("__file_category__") == "US Stocks")
+    if us_purchases.is_empty():
+        return pl.DataFrame(schema=EMPTY_US_MARKET_SCHEMA).lazy()
+
+    df_spine_eager = _build_us_fifo_spine(
+        us_purchases=us_purchases,
+        df_sale=df_sale,
+        global_start_date=global_start_date,
+        global_end_date=global_end_date,
+    )
+    if df_spine_eager.is_empty():
+        return pl.DataFrame(schema=EMPTY_US_MARKET_SCHEMA).lazy()
+
+    df_spine_with_prices = _join_and_validate_prices(
+        df_spine=df_spine_eager.lazy(),
+        df_bronze_prices_lazy=df_bronze_prices_lazy,
     )
 
-    df_spine = df_spine.with_columns(
-        [
-            (pl.col("Unit_PnL") * pl.col("Quantity")).alias("Total_PnL"),
-            pl.lit("US Stocks").alias("__file_category__"),
-        ]
-    )
-
-    select_cols = [
-        "Date",
-        "ISIN",
-        "__file_category__",
-        "Quantity",
-        "Closing_Price_Local",
-        "Buy_Price_Local",
-        "Closing_Value_Local",
-        "Buy_Value_Local",
-        "FX_Rate",
-        "Closing_Price",
-        "Buy_Price",
-        "Closing_Value",
-        "Buy_Value",
-        "Unit_PnL",
-        "Total_PnL",
-        "CURRENCY_ID",
-        "Data_Provider",
-        "Extraction_Time",
-        "Requested_Start",
-        "Requested_End",
-        "Is_Closure_Gap",
-        "Is_Imputed",
-    ]
-
-    df_spine = df_spine.filter(pl.col("Quantity") >= 0)
-
-    return df_spine.select(select_cols).lazy()
+    return _join_fx_and_calculate_pnl(
+        df_spine=df_spine_with_prices,
+        df_fx_lazy=df_fx_lazy,
+    ).lazy()

@@ -5,19 +5,21 @@
 Owns
 ----
 - Automatic generation of Conventional Commit messages within 72 character limit.
-- Individual file staging and granular committing for refactoring workflows.
+- Individual file staging and isolated, granular committing for refactoring workflows.
+- Atomic handling of file renames, deletions, additions, and modifications.
 - Dynamic external mapping support (.commit_overrides.json / --map).
 - Interactive file-by-file Commitlint wizard (--interactive / -i).
-- Dry-run preview of commit headers and scopes.
+- Dry-run preview of commit headers, scopes, and staged changes.
 """
 
 from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass
 import json
+from pathlib import Path
 import subprocess
 import sys
-from pathlib import Path
 from typing import cast
 
 from rich.console import Console
@@ -47,6 +49,22 @@ COMMIT_TYPES: list[tuple[str, str]] = [
     ("style", "Changes that do not affect code meaning (formatting)"),
     ("perf", "A code change that improves performance"),
 ]
+
+
+@dataclass
+class ChangedFile:
+    """Represents an uncommitted file change in the repository."""
+
+    status: str
+    filepath: str
+    orig_path: str | None = None
+
+    @property
+    def display_path(self) -> str:
+        """Formatted path for user presentation and logs."""
+        if self.orig_path:
+            return f"{self.orig_path} -> {self.filepath}"
+        return self.filepath
 
 
 def load_custom_overrides(cli_map_path: str | None = None) -> dict[str, str]:
@@ -104,11 +122,19 @@ def _infer_scope(filepath: str) -> str:
     return Path(norm).stem[:12]
 
 
-def _infer_commit_message(filepath: str, status: str, overrides: dict[str, str] | None = None) -> str:
+def _infer_commit_message(
+    file_item: ChangedFile,
+    overrides: dict[str, str] | None = None,
+) -> str:
     """Infer a Commitlint-compliant message (max 72 chars) based on path heuristics."""
-    norm = filepath.replace("\\", "/")
-    if overrides and norm in overrides:
-        return overrides[norm]
+    norm = file_item.filepath.replace("\\", "/")
+    if overrides:
+        if norm in overrides:
+            return overrides[norm]
+        if file_item.orig_path:
+            norm_orig = file_item.orig_path.replace("\\", "/")
+            if norm_orig in overrides:
+                return overrides[norm_orig]
 
     # Package __init__.py declaration
     if norm.endswith("__init__.py"):
@@ -154,10 +180,19 @@ def _infer_commit_message(filepath: str, status: str, overrides: dict[str, str] 
     if norm.startswith("src/personal_finance_etl/"):
         rel = norm.replace("src/personal_finance_etl/", "")
         parts = rel.split("/")
-        layer = parts[0]
+        scope = (
+            parts[1]
+            if len(parts) >= 2 and parts[0] in {"domain", "application", "infrastructure", "presentation"}
+            else parts[0]
+        )
         stem = Path(norm).stem
-        action = "add" if "?" in status or "A" in status else "update"
-        return _format_header(f"refactor({layer})", f"{action} {stem}")
+        if file_item.status == "D":
+            return _format_header(f"refactor({scope})", f"remove deprecated {stem}")
+        if file_item.status == "R" and file_item.orig_path:
+            orig_stem = Path(file_item.orig_path).stem
+            return _format_header(f"refactor({scope})", f"rename {orig_stem} to {stem}")
+        action = "add" if file_item.status in ("?", "??", "A") else "update"
+        return _format_header(f"refactor({scope})", f"{action} {stem}")
 
     # Documentation & Planning
     if norm.startswith(".planning/"):
@@ -168,34 +203,73 @@ def _infer_commit_message(filepath: str, status: str, overrides: dict[str, str] 
 
     # Generic fallback
     stem = Path(norm).stem
-    action = "add" if "?" in status or "A" in status else "update"
+    if file_item.status == "D":
+        action = "remove"
+    elif file_item.status in ("?", "??", "A"):
+        action = "add"
+    else:
+        action = "update"
     return _format_header("chore", f"{action} {stem}")
 
 
-def get_changed_files() -> list[tuple[str, str]]:
-    """Return list of (status, filepath) for all uncommitted files."""
+def get_changed_files() -> list[ChangedFile]:
+    """Return list of ChangedFile objects for all uncommitted files.
+
+    Stages working tree changes temporarily to allow git to detect renames,
+    extracts the status lines, and immediately unstages them so the index
+    remains completely clean for isolated, atomic per-file commits.
+    """
+    # 1. Temporarily stage everything to trigger git's rename heuristics
+    subprocess.run(["git", "add", "-A"], capture_output=True, check=False)
+
+    # 2. Query status with find-renames enabled
     proc = subprocess.run(
-        ["git", "status", "-s", "-uall"],
+        ["git", "status", "-s", "-uall", "--find-renames"],
         capture_output=True,
         text=True,
         encoding="utf-8",
         errors="replace",
         check=True,
     )
-    results: list[tuple[str, str]] = []
+
+    # 3. Immediately unstage everything so the index is 100% clean
+    subprocess.run(["git", "restore", "--staged", "."], capture_output=True, check=False)
+
+    results: list[ChangedFile] = []
     for line in proc.stdout.splitlines():
         line = line.strip()
         if not line:
             continue
         status_part = line[:2].strip()
         file_part = line[2:].strip().strip('"')
-        results.append((status_part, file_part))
+
+        if " -> " in file_part:
+            orig, target = file_part.split(" -> ", 1)
+            results.append(
+                ChangedFile(
+                    status="R",
+                    filepath=target.strip().strip('"'),
+                    orig_path=orig.strip().strip('"'),
+                )
+            )
+        else:
+            results.append(
+                ChangedFile(
+                    status=status_part,
+                    filepath=file_part,
+                )
+            )
     return results
 
 
-def _get_file_stat(filepath: str) -> str:
+def _get_file_stat(file_item: ChangedFile) -> str:
     """Return diff stat summary for a given file."""
-    norm_path = filepath.replace("/", "\\") if sys.platform == "win32" else filepath
+    norm_path = file_item.filepath.replace("/", "\\") if sys.platform == "win32" else file_item.filepath
+    if file_item.status == "D":
+        return "deleted file"
+    if file_item.status == "R":
+        return f"renamed from {file_item.orig_path}"
+
     proc = subprocess.run(
         ["git", "diff", "--numstat", "HEAD", "--", norm_path],
         capture_output=True,
@@ -208,7 +282,7 @@ def _get_file_stat(filepath: str) -> str:
         parts = proc.stdout.strip().split()
         if len(parts) >= 2:
             return f"+{parts[0]} / -{parts[1]} lines"
-    p = Path(filepath)
+    p = Path(file_item.filepath)
     if p.is_file():
         try:
             line_count = len(p.read_text(encoding="utf-8", errors="replace").splitlines())
@@ -218,20 +292,31 @@ def _get_file_stat(filepath: str) -> str:
     return "modified"
 
 
-def _show_file_diff(filepath: str) -> None:
+def _show_file_diff(file_item: ChangedFile) -> None:
     """Display a colored syntax diff for a file in the terminal."""
-    norm_path = filepath.replace("/", "\\") if sys.platform == "win32" else filepath
-    proc = subprocess.run(
-        ["git", "diff", "HEAD", "--", norm_path],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        check=False,
-    )
+    norm_path = file_item.filepath.replace("/", "\\") if sys.platform == "win32" else file_item.filepath
+    if file_item.status == "R" and file_item.orig_path:
+        norm_orig = file_item.orig_path.replace("/", "\\") if sys.platform == "win32" else file_item.orig_path
+        proc = subprocess.run(
+            ["git", "diff", "HEAD", "--", norm_orig, norm_path],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
+    else:
+        proc = subprocess.run(
+            ["git", "diff", "HEAD", "--", norm_path],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
     diff_text = proc.stdout
     if not diff_text.strip():
-        p = Path(filepath)
+        p = Path(file_item.filepath)
         if p.is_file():
             try:
                 diff_text = p.read_text(encoding="utf-8", errors="replace")[:2000]
@@ -241,20 +326,18 @@ def _show_file_diff(filepath: str) -> None:
             diff_text = "(No diff available)"
 
     syntax = Syntax(diff_text, "diff" if "diff --git" in diff_text else "python", theme="monokai", line_numbers=True)
-    console.print(Panel(syntax, title=f"Diff: {norm_path}", border_style="cyan"))
+    console.print(Panel(syntax, title=f"Diff: {file_item.display_path}", border_style="cyan"))
 
 
 def prompt_interactive_commit(
-    filepath: str,
-    status: str,
+    file_item: ChangedFile,
     inferred_msg: str,
     index: int,
     total: int,
 ) -> str | None:
     """Interactive wizard to select, customize, or skip a commit message for a file."""
-    norm_path = filepath.replace("\\", "/")
-    stat_summary = _get_file_stat(filepath)
-    suggested_scope = _infer_scope(filepath)
+    stat_summary = _get_file_stat(file_item)
+    suggested_scope = _infer_scope(file_item.filepath)
 
     status_name = {
         "M": "[yellow]Modified[/yellow]",
@@ -262,12 +345,12 @@ def prompt_interactive_commit(
         "??": "[cyan]Untracked[/cyan]",
         "D": "[red]Deleted[/red]",
         "R": "[magenta]Renamed[/magenta]",
-    }.get(status, f"[dim]{status}[/dim]")
+    }.get(file_item.status, f"[dim]{file_item.status}[/dim]")
 
     while True:
         console.print(
             Panel(
-                f"[bold cyan]File [{index}/{total}]:[/bold cyan] [bold white]{norm_path}[/bold white]\n"
+                f"[bold cyan]File [{index}/{total}]:[/bold cyan] [bold white]{file_item.display_path}[/bold white]\n"
                 f"[dim]Status:[/dim]   {status_name} ({stat_summary})\n"
                 f"[dim]Inferred:[/dim] [bold green]{inferred_msg}[/bold green] [dim]({len(inferred_msg)}/72 chars)[/dim]",
                 title="[bold yellow]Commitlint Interactive Wizard[/bold yellow]",
@@ -334,11 +417,11 @@ def prompt_interactive_commit(
                 return custom_msg
 
         if choice == "4":
-            _show_file_diff(filepath)
+            _show_file_diff(file_item)
             continue
 
         if choice == "5":
-            console.print(f"[dim]Skipped {norm_path}[/dim]")
+            console.print(f"[dim]Skipped {file_item.display_path}[/dim]")
             return None
 
         if choice.lower() == "q":
@@ -346,32 +429,73 @@ def prompt_interactive_commit(
             return "__ABORT__"
 
 
-def run_git_commit(filepath: str, message: str, dry_run: bool = False) -> bool:
-    """Stage a single file and create a git commit."""
+def run_git_commit(file_item: ChangedFile, message: str, dry_run: bool = False) -> bool:
+    """Stage a single file (or rename pair) and create an isolated git commit."""
     if len(message) > 72:
         console.print(f"[bold red]ERROR:[/bold red] Commit message exceeds 72 characters ({len(message)} chars): '{message}'")
         return False
 
-    norm_path = filepath.replace("/", "\\") if sys.platform == "win32" else filepath
+    norm_path = file_item.filepath.replace("/", "\\") if sys.platform == "win32" else file_item.filepath
 
     if dry_run:
-        console.print(f"[dim][DRY-RUN][/dim] git add {norm_path}")
+        if file_item.status == "R" and file_item.orig_path:
+            norm_orig = file_item.orig_path.replace("/", "\\") if sys.platform == "win32" else file_item.orig_path
+            console.print(f"[dim][DRY-RUN][/dim] git add -A -- {norm_orig} {norm_path}")
+        elif file_item.status == "D":
+            console.print(f"[dim][DRY-RUN][/dim] git add -A -- {norm_path}")
+        else:
+            console.print(f"[dim][DRY-RUN][/dim] git add -- {norm_path}")
         console.print(f'[dim][DRY-RUN][/dim] git commit -m "{message}" [dim](len: {len(message)})[/dim]')
         return True
 
-    # 1. git add
-    add_proc = subprocess.run(
-        ["git", "add", norm_path],
+    # 1. Ensure staging index is completely empty before staging this file
+    subprocess.run(["git", "restore", "--staged", "."], capture_output=True, check=False)
+
+    # 2. Stage ONLY this change
+    if file_item.status == "R" and file_item.orig_path:
+        norm_orig = file_item.orig_path.replace("/", "\\") if sys.platform == "win32" else file_item.orig_path
+        add_proc = subprocess.run(
+            ["git", "add", "-A", "--", norm_orig, norm_path],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+    elif file_item.status == "D":
+        add_proc = subprocess.run(
+            ["git", "add", "-A", "--", norm_path],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+    else:
+        add_proc = subprocess.run(
+            ["git", "add", "--", norm_path],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+
+    if add_proc.returncode != 0:
+        console.print(f"[bold red]FAILED git add {norm_path}:[/bold red] {add_proc.stderr}")
+        return False
+
+    # 3. Verify that changes are staged
+    staged_proc = subprocess.run(
+        ["git", "diff", "--cached", "--name-only"],
         capture_output=True,
         text=True,
         encoding="utf-8",
         errors="replace",
     )
-    if add_proc.returncode != 0:
-        console.print(f"[bold red]FAILED git add {norm_path}:[/bold red] {add_proc.stderr}")
-        return False
+    staged_output = staged_proc.stdout.strip()
+    if not staged_output:
+        console.print(f"[yellow]Skipping {file_item.display_path}: no staged changes detected in index.[/yellow]")
+        return True
 
-    # 2. git commit
+    # 4. Execute atomic git commit
     commit_proc = subprocess.run(
         ["git", "commit", "-m", message],
         capture_output=True,
@@ -380,10 +504,11 @@ def run_git_commit(filepath: str, message: str, dry_run: bool = False) -> bool:
         errors="replace",
     )
     if commit_proc.returncode != 0:
-        console.print(f"[bold red]FAILED git commit for {norm_path}:[/bold red] {commit_proc.stderr}")
+        console.print(f"[bold red]FAILED git commit for {file_item.display_path}:[/bold red] {commit_proc.stderr}")
+        subprocess.run(["git", "restore", "--staged", "."], capture_output=True, check=False)
         return False
 
-    console.print(f'[bold green][OK][/bold green] Committed {norm_path}: "[cyan]{message}[/cyan]"')
+    console.print(f'[bold green][OK][/bold green] Committed {file_item.display_path}: "[cyan]{message}[/cyan]"')
     return True
 
 
@@ -417,7 +542,6 @@ def main() -> int:
     custom_overrides = load_custom_overrides(args.map_path)
 
     # Determine execution mode:
-    # --dry-run always takes precedence
     if args.dry_run:
         is_dry_run = True
     elif args.interactive:
@@ -426,12 +550,16 @@ def main() -> int:
         is_dry_run = not args.run
 
     if args.file:
-        files = [("M", args.file)]
+        files = [ChangedFile(status="M", filepath=args.file)]
     else:
         files = get_changed_files()
 
     if args.only_mapped:
-        files = [(s, f) for s, f in files if f.replace("\\", "/") in custom_overrides]
+        files = [
+            f for f in files
+            if f.filepath.replace("\\", "/") in custom_overrides
+            or (f.orig_path and f.orig_path.replace("\\", "/") in custom_overrides)
+        ]
         if not files:
             console.print("[yellow]No changed files match the overrides in the mapping file.[/yellow]")
             return 0
@@ -451,26 +579,30 @@ def main() -> int:
     fail_count = 0
     skipped_count = 0
 
-    for idx, (status, filepath) in enumerate(files, 1):
-        inferred = _infer_commit_message(filepath, status, custom_overrides)
+    try:
+        for idx, file_item in enumerate(files, 1):
+            inferred = _infer_commit_message(file_item, custom_overrides)
 
-        if args.interactive:
-            chosen_msg = prompt_interactive_commit(filepath, status, inferred, idx, len(files))
-            if chosen_msg == "__ABORT__":
-                console.print("\n[yellow]Interactive commit session stopped by user.[/yellow]")
-                break
-            if chosen_msg is None:
-                skipped_count += 1
-                continue
-            message = chosen_msg
-        else:
-            message = inferred
+            if args.interactive:
+                chosen_msg = prompt_interactive_commit(file_item, inferred, idx, len(files))
+                if chosen_msg == "__ABORT__":
+                    console.print("\n[yellow]Interactive commit session stopped by user.[/yellow]")
+                    break
+                if chosen_msg is None:
+                    skipped_count += 1
+                    continue
+                message = chosen_msg
+            else:
+                message = inferred
 
-        ok = run_git_commit(filepath, message, dry_run=is_dry_run)
-        if ok:
-            success_count += 1
-        else:
-            fail_count += 1
+            ok = run_git_commit(file_item, message, dry_run=is_dry_run)
+            if ok:
+                success_count += 1
+            else:
+                fail_count += 1
+    finally:
+        # Guarantee no staged leftovers remain in git index
+        subprocess.run(["git", "restore", "--staged", "."], capture_output=True, check=False)
 
     console.print(
         f"\n[bold]Summary:[/bold] {success_count} succeeded, {fail_count} failed, {skipped_count} skipped."

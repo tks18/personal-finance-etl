@@ -132,6 +132,59 @@ class StockPipeline:
 class USStockPipeline:
     """Ingestion strategy for US equities and global assets."""
 
+    @staticmethod
+    def _create_empty_market_data() -> pl.LazyFrame:
+        """Create an empty Polars LazyFrame schema for US stock market data observations."""
+        return pl.LazyFrame(
+            schema={
+                "Date": pl.Date,
+                "ISIN": pl.String,
+                "__file_category__": pl.String,
+                "Quantity": pl.Float64,
+                "Closing_Price_Local": pl.Float64,
+                "Buy_Price_Local": pl.Float64,
+                "Closing_Value_Local": pl.Float64,
+                "Buy_Value_Local": pl.Float64,
+                "FX_Rate": pl.Float64,
+                "Closing_Price": pl.Float64,
+                "Buy_Price": pl.Float64,
+                "Closing_Value": pl.Float64,
+                "Buy_Value": pl.Float64,
+                "Unit_PnL": pl.Float64,
+                "Total_PnL": pl.Float64,
+                "CURRENCY_ID": pl.String,
+            }
+        )
+
+    @staticmethod
+    def _aggregate_us_trades(
+        purchase_trans: pl.LazyFrame, sale_trans: pl.LazyFrame
+    ) -> tuple[pl.LazyFrame, pl.LazyFrame]:
+        """Aggregate buy and sell transactions with multi-currency valuations."""
+        purchase_ref = get_purchase_reference(
+            purchase_trans,
+            "Instrument Name",
+            "Date",
+            "Price",
+            "Quantity",
+            extra_group_cols=["Price_Local", "FX_Rate", "CURRENCY_ID"],
+        ).with_columns((pl.col("Quantity") * pl.col("Price_Local")).alias("Value_Local"))
+
+        sale_ref = (
+            get_sale_reference(
+                sale_trans,
+                purchase_ref,
+                "Instrument Name",
+                "Date",
+                "Price",
+                "Quantity",
+                extra_group_cols=["Price_Local", "FX_Rate", "CURRENCY_ID"],
+            )
+            .with_columns((pl.col("Quantity") * pl.col("Price_Local")).alias("Sell_Value_Local"))
+            .rename({"Price_Local": "Sell_Price_Local"})
+        )
+        return purchase_ref, sale_ref
+
     def process(
         self,
         extracted: ExtractionResult,
@@ -162,53 +215,10 @@ class USStockPipeline:
         purchase_trans = transform_stg_us_stock_trades(base_orders, trade_type="BUY")
         sale_trans = transform_stg_us_stock_trades(base_orders, trade_type="SELL")
 
-        logger.debug("Aggregating US Stock Purchases...")
-        purchase_ref = get_purchase_reference(
-            purchase_trans,
-            "Instrument Name",
-            "Date",
-            "Price",
-            "Quantity",
-            extra_group_cols=["Price_Local", "FX_Rate", "CURRENCY_ID"],
-        ).with_columns((pl.col("Quantity") * pl.col("Price_Local")).alias("Value_Local"))
-
-        logger.debug("Processing US Stock Sales...")
-        sale_ref = (
-            get_sale_reference(
-                sale_trans,
-                purchase_ref,
-                "Instrument Name",
-                "Date",
-                "Price",
-                "Quantity",
-                extra_group_cols=["Price_Local", "FX_Rate", "CURRENCY_ID"],
-            )
-            .with_columns((pl.col("Quantity") * pl.col("Price_Local")).alias("Sell_Value_Local"))
-            .rename({"Price_Local": "Sell_Price_Local"})
-        )
-
+        logger.debug("Aggregating US Stock Purchases and Sales...")
+        purchase_ref, sale_ref = self._aggregate_us_trades(purchase_trans, sale_trans)
         master_ref = get_stg_us_stock_master_ref(base_orders, d_asset_subcategory_lazy)
-
-        empty_market_data = pl.LazyFrame(
-            schema={
-                "Date": pl.Date,
-                "ISIN": pl.String,
-                "__file_category__": pl.String,
-                "Quantity": pl.Float64,
-                "Closing_Price_Local": pl.Float64,
-                "Buy_Price_Local": pl.Float64,
-                "Closing_Value_Local": pl.Float64,
-                "Buy_Value_Local": pl.Float64,
-                "FX_Rate": pl.Float64,
-                "Closing_Price": pl.Float64,
-                "Buy_Price": pl.Float64,
-                "Closing_Value": pl.Float64,
-                "Buy_Value": pl.Float64,
-                "Unit_PnL": pl.Float64,
-                "Total_PnL": pl.Float64,
-                "CURRENCY_ID": pl.String,
-            }
-        )
+        empty_market_data = self._create_empty_market_data()
 
         return AssetPipelineResult(
             market_data=empty_market_data,

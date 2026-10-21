@@ -19,18 +19,25 @@ from personal_finance_etl.domain.tax.estimates import TaxEstimator
 from personal_finance_etl.domain.tax.events import (
     TAX_EVENT_SCHEMA,
     BaseEventsBuilder,
+    TaxEventDict,
     TaxEventNormalizer,
     _batch_compute_tax_event_ids,
+    normalize_quant_realized_events,
 )
-from personal_finance_etl.domain.tax.reconciliation import TaxGoldFormatter, TaxReconciler
+from personal_finance_etl.domain.tax.reconciliation import (
+    TaxGoldFormatter,
+    TaxReconciler,
+)
 
 __all__ = [
     "TAX_EVENT_SCHEMA",
     "BaseEventsBuilder",
     "TaxClassifier",
     "TaxEstimator",
+    "TaxEventDict",
     "TaxEventNormalizer",
     "TaxGoldFormatter",
     "TaxReconciler",
     "_batch_compute_tax_event_ids",
+    "normalize_quant_realized_events",
 ]

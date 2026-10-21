@@ -100,52 +100,66 @@ class DocsRenderer:
         print("Bundled svg-pan-zoom runtime could not be loaded.")
         return ""
 
-    def build_html_app(self) -> str:
-        """Read all markdown docs and compile them into a single HTML web app string."""
+    def _preprocess_markdown_images(self, path: str, content: str) -> str:
+        """Inject base64 assets for social preview and logo references in markdown.
+
+        Parameters
+        ----------
+        path : str
+            Document file path.
+        content : str
+            Raw markdown content.
+
+        Returns
+        -------
+        str
+            Markdown content with embedded base64 assets.
+        """
+        if "README.md" in path:
+            content = self._inject_image(
+                content,
+                'src="https://raw.githubusercontent.com/tks18/personal-finance-etl/master/.github/assets/social_preview.png"',
+                "social_preview.png",
+            )
+            content = self._inject_image(
+                content,
+                'src=".github/assets/social_preview.png"',
+                "social_preview.png",
+            )
+            content = self._inject_image(
+                content,
+                'src="social_preview.png"',
+                "social_preview.png",
+            )
+            content = self._inject_logo(content, 'src="logo.png"')
+            content = self._inject_logo(
+                content,
+                'src="https://raw.githubusercontent.com/tks18/personal-finance-etl/master/logo.png"',
+            )
+        elif "about" in path.lower():
+            content = self._inject_logo(content, 'src="../logo.png"')
+        return content
+
+    def _load_rendered_docs(self) -> tuple[dict[str, dict[str, str]], dict[str, str]]:
+        """Load markdown files from docs directory and resolve display titles and image tags.
+
+        Returns
+        -------
+        tuple[dict[str, dict[str, str]], dict[str, str]]
+            Mapping of display titles to document metadata, and path-to-title index.
+        """
         docs_to_render: dict[str, dict[str, str]] = {}
         path_to_title: dict[str, str] = {}
-
         docs_dir = self.catalog.docs_dir
-        mermaid_js = self._load_mermaid_js()
-        svg_pan_zoom_js = self._load_svg_pan_zoom_js()
 
         for entry in self.catalog.get_all_docs():
             full_path = os.path.normpath(os.path.join(docs_dir, entry.path))
-            # Canonical document identity is repository/package-root relative.
-            # Manifest entries are relative to docs/, so prefix with docs/ first:
-            #   ../README.md -> README.md
-            #   README.md    -> docs/README.md
-            #   finance/x.md -> docs/finance/x.md
             manifest_path = entry.path.replace("\\", "/")
             norm_path = posixpath.normpath(posixpath.join("docs", manifest_path))
 
             if os.path.exists(full_path):
                 with open(full_path, encoding="utf-8") as f:
-                    content = f.read()
-
-                    if "README.md" in entry.path:
-                        content = self._inject_image(
-                            content,
-                            'src="https://raw.githubusercontent.com/tks18/personal-finance-etl/master/.github/assets/social_preview.png"',
-                            "social_preview.png",
-                        )
-                        content = self._inject_image(
-                            content,
-                            'src=".github/assets/social_preview.png"',
-                            "social_preview.png",
-                        )
-                        content = self._inject_image(
-                            content,
-                            'src="social_preview.png"',
-                            "social_preview.png",
-                        )
-                        content = self._inject_logo(content, 'src="logo.png"')
-                        content = self._inject_logo(
-                            content,
-                            'src="https://raw.githubusercontent.com/tks18/personal-finance-etl/master/logo.png"',
-                        )
-                    elif "about" in entry.path.lower():
-                        content = self._inject_logo(content, 'src="../logo.png"')
+                    content = self._preprocess_markdown_images(entry.path, f.read())
 
                     display_name = (
                         f"{entry.section} - {entry.title}"
@@ -155,16 +169,35 @@ class DocsRenderer:
 
                     docs_to_render[display_name] = {"path": norm_path, "raw_md": content}
                     path_to_title[norm_path] = display_name
+        return docs_to_render, path_to_title
 
-        # Convert to HTML and build JS data structure
+    def _convert_markdown_to_html(
+        self, docs_to_render: dict[str, dict[str, str]]
+    ) -> dict[str, dict[str, str]]:
+        """Convert markdown documents to sanitized HTML snippets.
+
+        Parameters
+        ----------
+        docs_to_render : dict[str, dict[str, str]]
+            Mapping of display title to raw markdown payload.
+
+        Returns
+        -------
+        dict[str, dict[str, str]]
+            Mapping of display title to rendered and escaped HTML snippets.
+        """
         html_sections: dict[str, dict[str, str]] = {}
+        admonitions = {
+            "> [!IMPORTANT]": "> **IMPORTANT:**",
+            "> [!NOTE]": "> **NOTE:**",
+            "> [!WARNING]": "> **WARNING:**",
+            "> [!CAUTION]": "> **CAUTION:**",
+            "> [!TIP]": "> **TIP:**",
+        }
         for title, doc_data in docs_to_render.items():
             md_content = doc_data["raw_md"]
-            md_content = md_content.replace("> [!IMPORTANT]", "> **IMPORTANT:**")
-            md_content = md_content.replace("> [!NOTE]", "> **NOTE:**")
-            md_content = md_content.replace("> [!WARNING]", "> **WARNING:**")
-            md_content = md_content.replace("> [!CAUTION]", "> **CAUTION:**")
-            md_content = md_content.replace("> [!TIP]", "> **TIP:**")
+            for search_tag, replace_tag in admonitions.items():
+                md_content = md_content.replace(search_tag, replace_tag)
 
             html = markdown.markdown(
                 md_content, extensions=["fenced_code", "tables", "nl2br", "sane_lists"]
@@ -173,11 +206,25 @@ class DocsRenderer:
                 "path": doc_data["path"],
                 "html": html.replace("`", "\\`").replace("$", "\\$"),
             }
+        return html_sections
 
-        # Build Left Sidebar UI
+    def _build_sidebar_links(
+        self, html_sections: dict[str, dict[str, str]]
+    ) -> tuple[str, str | None]:
+        """Generate sidebar navigation HTML elements from catalog sections.
+
+        Parameters
+        ----------
+        html_sections : dict[str, dict[str, str]]
+            Rendered document sections available in HTML format.
+
+        Returns
+        -------
+        tuple[str, str | None]
+            Concatenated sidebar navigation HTML markup, and the first active document title.
+        """
         sidebar_links = ""
         first_title: str | None = None
-
         sections = self.catalog.get_sections()
         for section_name, entries in sections.items():
             sidebar_links += '<details class="section-group" open>\n'
@@ -191,10 +238,22 @@ class DocsRenderer:
                     continue
                 if first_title is None:
                     first_title = display_name
-                # Escape for HTML attributes
                 safe_title = display_name.replace("'", "\\'")
-                sidebar_links += f'    <a href="#" onclick="loadDoc(\'{safe_title}\', this)" class="nav-link" data-title="{display_name}">{entry.title}</a>\n'
+                sidebar_links += (
+                    f'    <a href="#" onclick="loadDoc(\'{safe_title}\', this)" '
+                    f'class="nav-link" data-title="{display_name}">{entry.title}</a>\n'
+                )
             sidebar_links += "  </div>\n</details>\n"
+        return sidebar_links, first_title
+
+    def build_html_app(self) -> str:
+        """Read all markdown docs and compile them into a single HTML web app string."""
+        docs_to_render, path_to_title = self._load_rendered_docs()
+        html_sections = self._convert_markdown_to_html(docs_to_render)
+        sidebar_links, first_title = self._build_sidebar_links(html_sections)
+
+        mermaid_js = self._load_mermaid_js()
+        svg_pan_zoom_js = self._load_svg_pan_zoom_js()
 
         js_dict_entries = ",\n".join(
             [
@@ -674,10 +733,14 @@ class DocsRenderer:
                             const controls = document.createElement('div');
                             controls.className = 'mermaid-controls';
                             controls.innerHTML = `
-                                <button class="mermaid-btn" title="Zoom in" onclick="this.closest('.mermaid-wrapper')._pz && this.closest('.mermaid-wrapper')._pz.zoomIn()">+</button>
-                                <button class="mermaid-btn" title="Zoom out" onclick="this.closest('.mermaid-wrapper')._pz && this.closest('.mermaid-wrapper')._pz.zoomOut()">−</button>
-                                <button class="mermaid-btn" title="Reset" onclick="this.closest('.mermaid-wrapper')._pz && this.closest('.mermaid-wrapper')._pz.resetZoom()">⟳</button>
-                                <button class="mermaid-btn" title="Fullscreen" onclick="openDiagramModal(this.closest('.mermaid-wrapper')._svgSource)">⛶</button>
+                                <button class="mermaid-btn" title="Zoom in"
+                                    onclick="this.closest('.mermaid-wrapper')._pz && this.closest('.mermaid-wrapper')._pz.zoomIn()">+</button>
+                                <button class="mermaid-btn" title="Zoom out"
+                                    onclick="this.closest('.mermaid-wrapper')._pz && this.closest('.mermaid-wrapper')._pz.zoomOut()">−</button>
+                                <button class="mermaid-btn" title="Reset"
+                                    onclick="this.closest('.mermaid-wrapper')._pz && this.closest('.mermaid-wrapper')._pz.resetZoom()">⟳</button>
+                                <button class="mermaid-btn" title="Fullscreen"
+                                    onclick="openDiagramModal(this.closest('.mermaid-wrapper')._svgSource)">⛶</button>
                             `;
                             wrapper.appendChild(controls);
 

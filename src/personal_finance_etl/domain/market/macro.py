@@ -16,8 +16,8 @@ Does not own
 import calendar
 import logging
 from collections.abc import Callable
-from datetime import date
-from typing import TypedDict
+from datetime import date, datetime
+from typing import TypedDict, cast
 
 import polars as pl
 
@@ -133,43 +133,59 @@ class FYMacroParametersTable:
         ("default", ""): ("Default_LTCG", "Default_STCG"),
     }
 
+    def _parse_row(self, row: dict[str, object], default_cutoff: date | None) -> FYMapEntry:
+        """Parse a single financial year row into a typed FYMapEntry.
+
+        Parameters
+        ----------
+        row : dict[str, object]
+            Raw macro parameters row dictionary.
+        default_cutoff : date | None
+            Fallback debt mutual fund cutoff date.
+
+        Returns
+        -------
+        FYMapEntry
+            Structured FY map record.
+        """
+        start_d = to_date_obj(
+            cast(str | date | datetime | None, row.get("FY_Start_Date")), strict=True
+        )
+        end_d = to_date_obj(cast(str | date | datetime | None, row.get("FY_End_Date")), strict=True)
+        if not start_d or not end_d:
+            raise ValueError(
+                f"FY_Start_Date and FY_End_Date are required for Financial Year row: {row}"
+            )
+
+        raw_cutoff = str(row.get("Debt_MF_Cutoff_Date", "")).strip()
+        cutoff_d = (
+            to_date_obj(raw_cutoff, strict=True)
+            if raw_cutoff and raw_cutoff != "None"
+            else default_cutoff
+        )
+
+        return {
+            "start": start_d,
+            "end": end_d,
+            "debt_cutoff": cutoff_d or default_cutoff or _DEFAULT_DEBT_MF_CUTOFF,
+            "raw": cast(dict[str, float | str | date | None], row),
+        }
+
     def __init__(self, df: pl.DataFrame, rules: FinancialRules):
         self.rules = rules
         self.fy_map: list[FYMapEntry] = []
         if df.is_empty():
             raise ValueError("Macro Parameters DataFrame cannot be empty.")
 
+        default_cutoff = (
+            to_date_obj(self.rules.assumptions.tax.debt_mf_cutoff_date, strict=False)
+            if self.rules and hasattr(self.rules, "assumptions")
+            else _DEFAULT_DEBT_MF_CUTOFF
+        )
+
         for row in df.to_dicts():
             try:
-                start_d = to_date_obj(row.get("FY_Start_Date"), strict=True)
-                end_d = to_date_obj(row.get("FY_End_Date"), strict=True)
-                if not start_d or not end_d:
-                    raise ValueError(
-                        f"FY_Start_Date and FY_End_Date are required for Financial Year row: {row}"
-                    )
-
-                raw_cutoff = str(row.get("Debt_MF_Cutoff_Date", "")).strip()
-
-                default_cutoff = (
-                    to_date_obj(self.rules.assumptions.tax.debt_mf_cutoff_date, strict=False)
-                    if self.rules and hasattr(self.rules, "assumptions")
-                    else _DEFAULT_DEBT_MF_CUTOFF
-                )
-
-                cutoff_d = (
-                    to_date_obj(raw_cutoff, strict=True)
-                    if raw_cutoff and raw_cutoff != "None"
-                    else default_cutoff
-                )
-
-                self.fy_map.append(
-                    {
-                        "start": start_d,
-                        "end": end_d,
-                        "debt_cutoff": cutoff_d or default_cutoff or _DEFAULT_DEBT_MF_CUTOFF,
-                        "raw": row,
-                    }
-                )
+                self.fy_map.append(self._parse_row(row, default_cutoff))
             except Exception as e:
                 logger.error(f"Macro Parameters parsing error on row: {row}")
                 logger.error(f"Error details: {e}")

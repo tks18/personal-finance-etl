@@ -28,6 +28,9 @@ from personal_finance_etl.domain.investments.portfolio.analytics import (
     HarvestRecommendationCalculator as HarvestRecommendationCalculator,
 )
 from personal_finance_etl.domain.investments.portfolio.snapshots import (
+    LotValuationContext as LotValuationContext,
+)
+from personal_finance_etl.domain.investments.portfolio.snapshots import (
     SnapshotGenerator as SnapshotGenerator,
 )
 
@@ -35,6 +38,7 @@ __all__ = [
     "AdvancedAnalyticsCalculator",
     "GroupProcessor",
     "HarvestRecommendationCalculator",
+    "LotValuationContext",
     "PORTFOLIO_COL_RENAMES",
     "PortfolioWeightsCalculator",
     "SnapshotGenerator",

@@ -20,19 +20,10 @@ from personal_finance_etl.domain.common.dates import validate_and_parse_dates
 from personal_finance_etl.domain.common.validation import validate_and_parse_numerics
 
 
-def get_stg_mf_market_data(
-    raw_data: pl.LazyFrame, stg_mf_isin_mapping_lazy: pl.LazyFrame, default_currency_id: str
-) -> pl.LazyFrame:
-    """Apply final PQ & DAX transformations (including LOOKUPVALUE).
-
-    Returns a LazyFrame.
-    """
-    df_combined = raw_data
-
-    # Filter out empty placeholder rows (e.g. "NO HOLDINGS FOUND", blank trailing rows)
-    # BEFORE running strict numeric validation on active holdings
+def _filter_active_mf_holdings(df: pl.LazyFrame) -> pl.LazyFrame:
+    """Filter out empty placeholder rows before running strict numeric validation."""
     scheme_clean = pl.col("Scheme Name").cast(pl.String).str.strip_chars()
-    df_transformed = df_combined.filter(
+    return df.filter(
         scheme_clean.is_not_null()
         & (scheme_clean != "")
         & (
@@ -43,6 +34,16 @@ def get_stg_mf_market_data(
     ).with_columns(
         pl.col("Folio No.").cast(pl.String),
     )
+
+
+def get_stg_mf_market_data(
+    raw_data: pl.LazyFrame, stg_mf_isin_mapping_lazy: pl.LazyFrame, default_currency_id: str
+) -> pl.LazyFrame:
+    """Apply final PQ & DAX transformations (including LOOKUPVALUE).
+
+    Returns a LazyFrame.
+    """
+    df_transformed = _filter_active_mf_holdings(raw_data)
 
     num_cols = ["Units", "Invested Value", "Current Value", "Returns", "XIRR"]
     df_transformed = validate_and_parse_numerics(

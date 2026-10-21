@@ -1,4 +1,9 @@
-# pyright: reportUnknownMemberType=false, reportUnknownVariableType=false, reportUnknownArgumentType=false, reportUnknownParameterType=false, reportMissingImports=false, reportAttributeAccessIssue=false
+# pyright: reportUnknownMemberType=false
+# pyright: reportUnknownVariableType=false
+# pyright: reportUnknownArgumentType=false
+# pyright: reportUnknownParameterType=false
+# pyright: reportMissingImports=false
+# pyright: reportAttributeAccessIssue=false
 """Benchmark series provider adapter (Yahoo Finance).
 
 Owns
@@ -19,16 +24,12 @@ Does not own
 from __future__ import annotations
 
 import concurrent.futures
-import io
-import time
-import uuid
 from collections.abc import Mapping
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
+from typing import Any
 
+import pandas as pd  # type: ignore[import-untyped]
 import polars as pl
-
-# Exception TYP-002 [THIRD_PARTY_TYPING_GAP]: yfinance lacks py.typed marker and complete stubs
-import yfinance as yf  # type: ignore[import-untyped]
 
 from personal_finance_etl.contracts.application import EngineStatusMessage
 from personal_finance_etl.contracts.extraction import (
@@ -39,6 +40,11 @@ from personal_finance_etl.contracts.extraction import (
 from personal_finance_etl.contracts.logging import LogLevel, StatusQueue
 from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
 from personal_finance_etl.infrastructure.logging import logger
+from personal_finance_etl.infrastructure.providers.market.common import (
+    calculate_market_fetch_window,
+    download_yfinance_history,
+    vault_parquet_chunks,
+)
 
 __all__ = ["BenchmarkExtractor"]
 
@@ -56,100 +62,70 @@ class BenchmarkExtractor:
         self.status_queue = status_queue
         self.max_workers = max_workers
 
-    def _fetch_ticker_delta(
-        self,
+    @staticmethod
+    def _check_anomalous_drops(ticker: str, hist_pd: pd.DataFrame) -> tuple[list[str], str | None]:
+        """Detect single-day percentage declines exceeding 40% threshold.
+
+        Parameters
+        ----------
+        ticker : str
+            Yahoo Finance ticker symbol.
+        hist_pd : pd.DataFrame
+            Historical price observations dataframe.
+
+        Returns
+        -------
+        tuple[list[str], str | None]
+            List of anomalous drop dates and optional warning message string.
+        """
+        pct_drops: Any = hist_pd["Close"].pct_change()
+        huge_drops: Any = pct_drops[pct_drops < -0.4]
+        if not huge_drops.empty:
+            drop_dts = [d.strftime("%Y-%m-%d") for d in huge_drops.index]
+            warn_msg = f"⚠ Anomalous drops (>40%) in {ticker} on {', '.join(drop_dts)}"
+            logger.warning("[Benchmark Extractor] %s", warn_msg)
+            return drop_dts, warn_msg
+        return [], None
+
+    @staticmethod
+    def _build_benchmark_spine(
+        hist_pd: pd.DataFrame,
         row: Mapping[str, object],
-        start_dt: date,
+        ticker: str,
+        fetch_start: date,
         end_dt: date,
-        max_cached_date: date | None,
-    ) -> ExtractorEntityResult:
-        ticker = str(row.get("yF_Ticker", "")).strip()
-        if not ticker:
-            logger.debug(f"[Benchmark Extractor] Skipping empty ticker {row.get('ID')}")
-            return ExtractorEntityResult(
-                entity=str(row.get("ID", "Unknown")),
-                status=ExtractorEntityStatus.INVALID_PAYLOAD,
-                message=f"Warning: Skipping empty ticker {row.get('ID')}",
-                attempt_count=0,
-                requested_start=start_dt,
-                requested_end=end_dt,
-                failure_class="InvalidPayloadError",
-                final_error=f"Skipping empty ticker {row.get('ID')}",
-            )
+    ) -> pl.DataFrame:
+        """Construct continuous daily calendar spine joined against API observations.
 
-        fetch_start = start_dt - timedelta(days=15)
-        if max_cached_date and max_cached_date >= fetch_start:
-            fetch_start = max_cached_date + timedelta(days=1)
+        Parameters
+        ----------
+        hist_pd : pd.DataFrame
+            Downloaded raw price dataframe from yfinance.
+        row : Mapping[str, object]
+            Metadata record from Benchmark Master reference table.
+        ticker : str
+            Yahoo Finance ticker symbol.
+        fetch_start : date
+            Effective start date boundary.
+        end_dt : date
+            Effective end date boundary.
 
-        if fetch_start > end_dt:
-            logger.debug(
-                f"[Benchmark Extractor] {ticker} fully cached up to {end_dt}. Skipping API fetch."
-            )
-            return ExtractorEntityResult(
-                entity=ticker,
-                status=ExtractorEntityStatus.CACHED,
-                message=f"✓ {ticker} fully cached up to {end_dt}",
-                attempt_count=0,
-                requested_start=fetch_start,
-                requested_end=end_dt,
-            )
-
-        logger.debug(f"[Benchmark Extractor] API Fetching {ticker} from {fetch_start} to {end_dt}")
-        hist_pd = None
-        attempts_done = 0
-        for attempt in range(3):
-            attempts_done = attempt + 1
-            try:
-                ticker_obj = yf.Ticker(ticker)
-                hist_pd = ticker_obj.history(  # pyright: ignore[reportUnknownMemberType]
-                    start=fetch_start, end=end_dt + timedelta(days=1)
-                )
-                break
-            except Exception as e:
-                logger.warning(
-                    f"[Benchmark Extractor] Attempt {attempt + 1}/3 failed for {ticker}: {e}"
-                )
-                if attempt == 2:
-                    return ExtractorEntityResult(
-                        entity=ticker,
-                        status=ExtractorEntityStatus.RETRY_EXHAUSTED,
-                        message=f"Error on {ticker}: {str(e)}",
-                        attempt_count=attempts_done,
-                        requested_start=fetch_start,
-                        requested_end=end_dt,
-                        failure_class=type(e).__name__,
-                        final_error=str(e),
-                    )
-                time.sleep(1 + attempt * 2)
-
-        if hist_pd is None or hist_pd.empty:
-            logger.debug(f"[Benchmark Extractor] No data returned from API for {ticker}.")
-            return ExtractorEntityResult(
-                entity=ticker,
-                status=ExtractorEntityStatus.EMPTY_RESPONSE,
-                message=f"⚠ No new data fetched for {ticker}",
-                attempt_count=attempts_done,
-                requested_start=fetch_start,
-                requested_end=end_dt,
-                failure_class="EmptyResponse",
-                final_error=f"No new data fetched for {ticker}",
-            )
-
-        hist_pd.index = hist_pd.index.tz_localize(None).normalize()  # pyright: ignore[reportUnknownMemberType]
+        Returns
+        -------
+        pl.DataFrame
+            Continuous daily observations table with closure gap indicators.
+        """
         hist_pl = pl.from_pandas(hist_pd.reset_index())
-
         if "Date" not in hist_pl.columns:
             hist_pl = hist_pl.rename({"index": "Date"})
 
         df_api = hist_pl.select([pl.col("Date").cast(pl.Date), pl.col("Close").cast(pl.Float64)])
-
         df_spine = pl.DataFrame(
             {"Date": pl.date_range(start=fetch_start, end=end_dt, interval="1d", eager=True)}
         )
-
         df_new = df_spine.join(df_api, on="Date", how="left")
 
-        df_new = df_new.with_columns(
+        return df_new.with_columns(
             pl.lit(row["ID"]).alias("ID"),
             pl.lit(row["Benchmark_Name"]).alias("Benchmark_Name"),
             pl.lit(ticker).alias("yF_Ticker"),
@@ -162,16 +138,91 @@ class BenchmarkExtractor:
             pl.col("Close").is_null().alias("Is_Closure_Gap"),
         )
 
-        logger.debug(f"[Benchmark Extractor] Parsed {df_new.height} new records for {ticker}.")
+    def _fetch_ticker_delta(
+        self,
+        row: Mapping[str, object],
+        start_dt: date,
+        end_dt: date,
+        max_cached_date: date | None,
+    ) -> ExtractorEntityResult:
+        """Fetch delta observations for a single benchmark ticker.
 
-        warn_msg = None
-        pct_drops = hist_pd["Close"].pct_change()  # pyright: ignore[reportUnknownMemberType]
-        huge_drops = pct_drops[pct_drops < -0.4]  # pyright: ignore[reportUnknownMemberType]
-        drop_dts: list[str] = []
-        if not huge_drops.empty:  # pyright: ignore[reportUnknownMemberType]
-            drop_dts = [d.strftime("%Y-%m-%d") for d in huge_drops.index]  # pyright: ignore[reportUnknownMemberType]
-            warn_msg = f"⚠ Anomalous drops (>40%) in {ticker} on {', '.join(drop_dts)}"
-            logger.warning(f"[Benchmark Extractor] {warn_msg}")
+        Parameters
+        ----------
+        row : Mapping[str, object]
+            Benchmark metadata row containing ticker and identifier.
+        start_dt : date
+            Global requested start boundary.
+        end_dt : date
+            Global requested end boundary.
+        max_cached_date : date | None
+            Latest cached date in Bronze for this ticker.
+
+        Returns
+        -------
+        ExtractorEntityResult
+            Result container with status, payload, and diagnostics.
+        """
+        ticker = str(row.get("yF_Ticker", "")).strip()
+        if not ticker:
+            logger.debug("[Benchmark Extractor] Skipping empty ticker %s", row.get("ID"))
+            return ExtractorEntityResult(
+                entity=str(row.get("ID", "Unknown")),
+                status=ExtractorEntityStatus.INVALID_PAYLOAD,
+                message=f"Warning: Skipping empty ticker {row.get('ID')}",
+                attempt_count=0,
+                requested_start=start_dt,
+                requested_end=end_dt,
+                failure_class="InvalidPayloadError",
+                final_error=f"Skipping empty ticker {row.get('ID')}",
+            )
+
+        fetch_start, is_cached = calculate_market_fetch_window(start_dt, end_dt, max_cached_date)
+        if is_cached:
+            logger.debug(
+                "[Benchmark Extractor] %s fully cached up to %s. Skipping API fetch.",
+                ticker,
+                end_dt,
+            )
+            return ExtractorEntityResult(
+                entity=ticker,
+                status=ExtractorEntityStatus.CACHED,
+                message=f"✓ {ticker} fully cached up to {end_dt}",
+                attempt_count=0,
+                requested_start=fetch_start,
+                requested_end=end_dt,
+            )
+
+        hist_pd, attempts_done, err = download_yfinance_history(
+            ticker, fetch_start, end_dt, label="Benchmark Extractor"
+        )
+        if err is not None:
+            return ExtractorEntityResult(
+                entity=ticker,
+                status=ExtractorEntityStatus.RETRY_EXHAUSTED,
+                message=f"Error on {ticker}: {err}",
+                attempt_count=attempts_done,
+                requested_start=fetch_start,
+                requested_end=end_dt,
+                failure_class=type(err).__name__,
+                final_error=str(err),
+            )
+
+        if hist_pd is None or hist_pd.empty:
+            logger.debug("[Benchmark Extractor] No data returned from API for %s.", ticker)
+            return ExtractorEntityResult(
+                entity=ticker,
+                status=ExtractorEntityStatus.EMPTY_RESPONSE,
+                message=f"⚠ No new data fetched for {ticker}",
+                attempt_count=attempts_done,
+                requested_start=fetch_start,
+                requested_end=end_dt,
+                failure_class="EmptyResponse",
+                final_error=f"No new data fetched for {ticker}",
+            )
+
+        df_new = self._build_benchmark_spine(hist_pd, row, ticker, fetch_start, end_dt)
+        drop_dts, warn_msg = self._check_anomalous_drops(ticker, hist_pd)
 
         msg = f"✓ API Fetched {ticker} ({fetch_start} to {end_dt}) - {df_new.height} rows"
         if warn_msg:
@@ -187,6 +238,50 @@ class BenchmarkExtractor:
             requested_start=fetch_start,
             requested_end=end_dt,
         )
+
+    @staticmethod
+    def _build_cache_map(df_bronze_cached: pl.DataFrame) -> dict[str, date]:
+        """Build dictionary of latest cached observation dates per ticker."""
+        cache_map: dict[str, date] = {}
+        if not df_bronze_cached.is_empty():
+            aggs = df_bronze_cached.group_by("yF_Ticker").agg(pl.max("Date").alias("MaxDate"))
+            for r in aggs.to_dicts():
+                cache_map[r["yF_Ticker"]] = r["MaxDate"]
+        return cache_map
+
+    def _record_future_result(
+        self,
+        res: ExtractorEntityResult,
+        batch_result: ExtractionBatchResult,
+        all_new_data: list[pl.DataFrame],
+        prog: float,
+    ) -> None:
+        """Process and route entity extraction result into the batch result container."""
+        batch_result.entity_results.append(res)
+        level = LogLevel.INFO
+
+        if res.status == ExtractorEntityStatus.SUCCESS:
+            batch_result.successful_entities.append(res.entity)
+            if not res.df.is_empty():
+                all_new_data.append(res.df)
+            level = LogLevel.INFO
+        elif res.status == ExtractorEntityStatus.CACHED:
+            batch_result.cached_entities.append(res.entity)
+            level = LogLevel.INFO
+        elif res.status in (
+            ExtractorEntityStatus.NO_NEW_DATA,
+            ExtractorEntityStatus.EMPTY_RESPONSE,
+        ):
+            batch_result.no_new_data_entities.append(res.entity)
+            level = LogLevel.WARNING
+        else:
+            batch_result.failed_entities[res.entity] = res.message
+            level = LogLevel.ERROR
+
+        if res.message:
+            self.status_queue.put(
+                EngineStatusMessage(msg=res.message, data=None, progress=prog, level=level)
+            )
 
     def extract_benchmark_delta(
         self,
@@ -233,13 +328,7 @@ class BenchmarkExtractor:
             if str(r.get("yF_Ticker", "")).strip()
         ]
 
-        # Determine max cached date per ticker
-        cache_map: dict[str, date] = {}
-        if not df_bronze_cached.is_empty():
-            aggs = df_bronze_cached.group_by("yF_Ticker").agg(pl.max("Date").alias("MaxDate"))
-            for r in aggs.to_dicts():
-                cache_map[r["yF_Ticker"]] = r["MaxDate"]
-
+        cache_map = self._build_cache_map(df_bronze_cached)
         self.status_queue.put(
             EngineStatusMessage(
                 msg=f"Starting benchmark extractor for {total} tickers...",
@@ -268,32 +357,7 @@ class BenchmarkExtractor:
                 ticker = str(futures[future].get("yF_Ticker", "Unknown"))
                 try:
                     res = future.result()
-                    batch_result.entity_results.append(res)
-                    level = LogLevel.INFO
-                    if res.status == ExtractorEntityStatus.SUCCESS:
-                        batch_result.successful_entities.append(res.entity)
-                        if not res.df.is_empty():
-                            all_new_data.append(res.df)
-                        level = LogLevel.INFO
-                    elif res.status == ExtractorEntityStatus.CACHED:
-                        batch_result.cached_entities.append(res.entity)
-                        level = LogLevel.INFO
-                    elif res.status in (
-                        ExtractorEntityStatus.NO_NEW_DATA,
-                        ExtractorEntityStatus.EMPTY_RESPONSE,
-                    ):
-                        batch_result.no_new_data_entities.append(res.entity)
-                        level = LogLevel.WARNING
-                    else:  # FAILED, RETRY_EXHAUSTED, INVALID_PAYLOAD
-                        batch_result.failed_entities[res.entity] = res.message
-                        level = LogLevel.ERROR
-
-                    if res.message:
-                        self.status_queue.put(
-                            EngineStatusMessage(
-                                msg=res.message, data=None, progress=prog, level=level
-                            )
-                        )
+                    self._record_future_result(res, batch_result, all_new_data, prog)
                 except Exception as e:
                     err_msg = str(e)
                     batch_result.failed_entities[ticker] = err_msg
@@ -318,45 +382,12 @@ class BenchmarkExtractor:
                         )
                     )
 
-        # Enforce completeness policy before writing raw artifacts
         batch_result.assert_complete("Benchmark Extractor")
-
         if not all_new_data:
             return batch_result
 
         df_combined = pl.concat(all_new_data, how="diagonal")
-        df_combined = df_combined.with_columns(pl.col("Date").dt.year().alias("Year"))
-
-        years = df_combined["Year"].unique().to_list()
-        injected_files: list[str] = []
-        df_final_chunks: list[pl.DataFrame] = []
-
-        for year in years:
-            df_year = df_combined.filter(pl.col("Year") == year).drop("Year")
-
-            # Serialize to Parquet (without __file_name__)
-            buf = io.BytesIO()
-            df_year.write_parquet(buf)
-            raw_bytes = buf.getvalue()
-
-            run_uuid = str(uuid.uuid4())[:8]
-            filename = f"benchmark_delta_{year}_{run_uuid}.parquet"
-            virtual_path = self.cp.artifacts.inject_virtual_file(
-                filename=filename, category="benchmark_history", raw_bytes=raw_bytes
-            )
-            injected_files.append(virtual_path)
-
-            # Append to final chunks with file tracking metadata
-            df_final_chunks.append(
-                df_year.with_columns(
-                    pl.lit(filename).alias("__file_name__"),
-                    pl.lit(virtual_path).alias("__folder_path__"),
-                )
-            )
-
-        logger.info(
-            f"Benchmark Extractor injected {len(injected_files)} Parquet chunks into Raw Store."
+        batch_result.frames, batch_result.injected_files = vault_parquet_chunks(
+            self.cp, df_combined, "benchmark_delta", "benchmark_history"
         )
-        batch_result.frames = df_final_chunks
-        batch_result.injected_files = injected_files
         return batch_result

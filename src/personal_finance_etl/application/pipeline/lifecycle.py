@@ -72,6 +72,21 @@ class RunLifecycleCoordinator:
         self.cp: ControlPlane | None = None
         self.run_id: str | None = None
 
+    def _dump_configuration_logs(self) -> None:
+        """Dump formatted configuration and financial rules to debug logger."""
+        logger.debug("=== ETL CONFIGURATION DUMP ===")
+        if hasattr(self.cfg, "model_dump_json"):
+            logger.debug(self.cfg.model_dump_json(indent=2))
+        else:
+            logger.debug(str(self.cfg))
+
+        logger.debug("=== FINANCIAL RULES DUMP ===")
+        if self.rules is not None and hasattr(self.rules, "model_dump_json"):
+            logger.debug(self.rules.model_dump_json(indent=2))
+        else:
+            logger.debug(str(self.rules))
+        logger.debug("==============================")
+
     def initialize(self) -> tuple[ControlPlane, str, list[str]]:
         """Initialize logging, open database instances, begin transactions, and record run start.
 
@@ -87,19 +102,7 @@ class RunLifecycleCoordinator:
             )
         )
         add_file_handler(self.log_file_path)
-
-        logger.debug("=== ETL CONFIGURATION DUMP ===")
-        if hasattr(self.cfg, "model_dump_json"):
-            logger.debug(self.cfg.model_dump_json(indent=2))
-        else:
-            logger.debug(str(self.cfg))
-
-        logger.debug("=== FINANCIAL RULES DUMP ===")
-        if self.rules is not None and hasattr(self.rules, "model_dump_json"):
-            logger.debug(self.rules.model_dump_json(indent=2))
-        else:
-            logger.debug(str(self.rules))
-        logger.debug("==============================")
+        self._dump_configuration_logs()
 
         logger.info("Initializing Quantitative Master Engine...")
         self.db_manager.open()
@@ -255,9 +258,13 @@ class RunLifecycleCoordinator:
             return
 
         if self.commit_state == CommitState.RECOVERY_REQUIRED:
+            divergence_msg = (
+                f"Split-commit divergence: DuckDB committed, but SQLite commit failed: {exc}. "
+                "duckdb_commit_state=COMMITTED, sqlite_commit_state=FAILED"
+            )
             self.cp.runs.mark_recovery_required(
                 run_id=self.run_id,
-                error_message=f"Split-commit divergence: DuckDB committed, but SQLite commit failed: {exc}. duckdb_commit_state=COMMITTED, sqlite_commit_state=FAILED",
+                error_message=divergence_msg,
                 stage="COMMIT",
                 traceback_log=traceback.format_exc(),
             )

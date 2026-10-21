@@ -82,51 +82,45 @@ def clean_numeric_col(df: pl.DataFrame, col: str) -> pl.DataFrame:
         base = dtype.base_type() if callable(getattr(dtype, "base_type", None)) else dtype
         if base in (pl.Utf8, pl.String):
             return df.with_columns(
-                pl.col(col).str.replace_all(r"[\\',]", "").str.strip_chars().cast(pl.Float64)
+                pl.col(col).str.replace_all(r"[\',]", "").str.strip_chars().cast(pl.Float64)
             )
     return df
 
 
-def parse_strict_numeric(
-    value: object,
+def _parse_scalar_float(
+    value: int | float,
     *,
-    field_name: str = "numeric_field",
-    source: str | None = None,
-    sheet: str | None = None,
-    row_identifier: object = None,
-    optional: bool = False,
+    field_name: str,
+    source: str | None,
+    sheet: str | None,
+    row_identifier: object,
+    optional: bool,
 ) -> float | None:
-    """Strictly parse a scalar financial numeric value.
-
-    A blank/None value in an optional field returns None.
-    A malformed or non-finite populated value raises FinancialSourceValidationError.
-    """
-    if value is None:
+    """Validate and parse a Python int or float primitive."""
+    if math.isnan(value) or math.isinf(value):
         if optional:
             return None
         raise FinancialSourceValidationError(
-            f"Required financial numeric field {field_name!r} is missing/null",
+            f"Financial numeric in {field_name!r} cannot be NaN or infinite: {value!r}",
             source=source,
             sheet=sheet,
             field_name=field_name,
             raw_value=value,
             row_identifier=row_identifier,
         )
+    return float(value)
 
-    if isinstance(value, (int, float)):
-        if math.isnan(value) or math.isinf(value):
-            if optional:
-                return None
-            raise FinancialSourceValidationError(
-                f"Financial numeric in {field_name!r} cannot be NaN or infinite: {value!r}",
-                source=source,
-                sheet=sheet,
-                field_name=field_name,
-                raw_value=value,
-                row_identifier=row_identifier,
-            )
-        return float(value)
 
+def _parse_string_numeric(
+    value: object,
+    *,
+    field_name: str,
+    source: str | None,
+    sheet: str | None,
+    row_identifier: object,
+    optional: bool,
+) -> float | None:
+    """Validate and parse a string-encoded numeric representation."""
     val_str = str(value).strip().replace(",", "").rstrip("%").strip()
     if val_str == "" or val_str.lower() in NULL_SENTINELS:
         if optional:
@@ -156,6 +150,86 @@ def parse_strict_numeric(
         ) from err
 
 
+def parse_strict_numeric(
+    value: object,
+    *,
+    field_name: str = "numeric_field",
+    source: str | None = None,
+    sheet: str | None = None,
+    row_identifier: object = None,
+    optional: bool = False,
+) -> float | None:
+    """Strictly parse a scalar financial numeric value.
+
+    A blank/None value in an optional field returns None.
+    A malformed or non-finite populated value raises FinancialSourceValidationError.
+
+    Parameters
+    ----------
+    value : object
+        Scalar value to parse.
+    field_name : str, optional
+        Diagnostic label for field, by default "numeric_field".
+    source : str | None, optional
+        Source identifier or file path.
+    sheet : str | None, optional
+        Sheet name for workbook sources.
+    row_identifier : object, optional
+        Row key for diagnostics.
+    optional : bool, optional
+        Whether absent values resolve to None, by default False.
+
+    Returns
+    -------
+    float | None
+        Parsed float value or None if optional and absent.
+    """
+    if value is None:
+        if optional:
+            return None
+        raise FinancialSourceValidationError(
+            f"Required financial numeric field {field_name!r} is missing/null",
+            source=source,
+            sheet=sheet,
+            field_name=field_name,
+            raw_value=value,
+            row_identifier=row_identifier,
+        )
+
+    if isinstance(value, (int, float)):
+        return _parse_scalar_float(
+            value,
+            field_name=field_name,
+            source=source,
+            sheet=sheet,
+            row_identifier=row_identifier,
+            optional=optional,
+        )
+
+    return _parse_string_numeric(
+        value,
+        field_name=field_name,
+        source=source,
+        sheet=sheet,
+        row_identifier=row_identifier,
+        optional=optional,
+    )
+
+
+def _is_numeric_column_faulty(raw_v: object, is_optional: bool) -> bool:
+    """Determine whether a single cell value violates numeric constraints."""
+    if raw_v is None:
+        return not is_optional
+    raw_s = str(raw_v).replace(",", "").strip().rstrip("%").strip()
+    if raw_s == "" or raw_s.lower() in NULL_SENTINELS:
+        return not is_optional
+    try:
+        p = float(raw_s)
+        return not math.isfinite(p)
+    except ValueError:
+        return True
+
+
 def _diagnose_numeric_failure(
     row_dict: Mapping[str, object],
     available_cols: list[str],
@@ -170,23 +244,8 @@ def _diagnose_numeric_failure(
 
     for c in available_cols:
         raw_v = row_dict.get(c)
-        if raw_v is not None:
-            raw_s = str(raw_v).replace(",", "").strip().rstrip("%").strip()
-            if c in opt_set and (raw_s == "" or raw_s.lower() in NULL_SENTINELS):
-                continue
-            if c not in opt_set and (raw_s == "" or raw_s.lower() in NULL_SENTINELS):
-                faulty_col, faulty_val = c, raw_v
-                break
-            try:
-                p = float(raw_s)
-                if not math.isfinite(p):
-                    faulty_col, faulty_val = c, raw_v
-                    break
-            except ValueError:
-                faulty_col, faulty_val = c, raw_v
-                break
-        elif c not in opt_set:
-            faulty_col, faulty_val = c, None
+        if _is_numeric_column_faulty(raw_v, c in opt_set):
+            faulty_col, faulty_val = c, raw_v
             break
 
     raise FinancialSourceValidationError(
@@ -196,6 +255,31 @@ def _diagnose_numeric_failure(
         field_name=faulty_col,
         raw_value=faulty_val,
         row_identifier=row_id_val,
+    )
+
+
+def _build_numeric_validation_expr(col_name: str, is_optional: bool) -> pl.Expr:
+    """Construct Polars validation predicate detecting malformed numerics."""
+    raw_text = pl.col(col_name).cast(pl.String).str.replace_all(",", "").str.strip_chars("% \t\r\n")
+    is_populated = (
+        pl.col(col_name).is_not_null()
+        & (raw_text != "")
+        & (~raw_text.str.to_lowercase().is_in(NULL_SENTINELS))
+    )
+    parsed = raw_text.cast(pl.Float64, strict=False)
+    if is_optional:
+        return is_populated & (parsed.is_null() | ~parsed.is_finite())
+    return (~is_populated) | (parsed.is_null() | ~parsed.is_finite())
+
+
+def _build_numeric_cast_expr(col_name: str) -> pl.Expr:
+    """Construct Polars expression cleanly casting formatted string to Float64."""
+    raw_text = pl.col(col_name).cast(pl.String).str.replace_all(",", "").str.strip_chars("% \t\r\n")
+    return (
+        pl.when(raw_text.str.to_lowercase().is_in(NULL_SENTINELS) | (raw_text == ""))
+        .then(None)
+        .otherwise(raw_text.cast(pl.Float64, strict=False))
+        .alias(col_name)
     )
 
 
@@ -223,19 +307,7 @@ def validate_and_parse_numerics(
     has_source = source_col in schema.names()
     has_row_id = row_id_col is not None and row_id_col in schema.names()
 
-    invalid_checks: list[pl.Expr] = []
-    for c in available_cols:
-        raw_text = pl.col(c).cast(pl.String).str.replace_all(",", "").str.strip_chars("% \t\r\n")
-        is_populated = (
-            pl.col(c).is_not_null()
-            & (raw_text != "")
-            & (~raw_text.str.to_lowercase().is_in(NULL_SENTINELS))
-        )
-        parsed = raw_text.cast(pl.Float64, strict=False)
-        if c in opt_set:
-            invalid_checks.append(is_populated & (parsed.is_null() | ~parsed.is_finite()))
-        else:
-            invalid_checks.append((~is_populated) | (parsed.is_null() | ~parsed.is_finite()))
+    invalid_checks = [_build_numeric_validation_expr(c, c in opt_set) for c in available_cols]
 
     if invalid_checks:
         select_cols = available_cols.copy()
@@ -257,25 +329,5 @@ def validate_and_parse_numerics(
                 row_dict, available_cols, opt_set, source_val, sheet, row_id_val
             )
 
-    cast_exprs = [
-        pl.when(
-            pl.col(c)
-            .cast(pl.String)
-            .str.replace_all(",", "")
-            .str.strip_chars("% \t\r\n")
-            .str.to_lowercase()
-            .is_in(NULL_SENTINELS)
-            | (pl.col(c).cast(pl.String).str.strip_chars("% \t\r\n") == "")
-        )
-        .then(None)
-        .otherwise(
-            pl.col(c)
-            .cast(pl.String)
-            .str.replace_all(",", "")
-            .str.strip_chars("% \t\r\n")
-            .cast(pl.Float64, strict=False)
-        )
-        .alias(c)
-        for c in available_cols
-    ]
+    cast_exprs = [_build_numeric_cast_expr(c) for c in available_cols]
     return lf.with_columns(cast_exprs)

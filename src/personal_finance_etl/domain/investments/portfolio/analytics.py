@@ -24,6 +24,129 @@ from personal_finance_etl.domain.investments.contracts import CashflowDict, Term
 from personal_finance_etl.domain.market.macro import FYMacroParametersTable
 
 
+def _build_terminal_records(
+    unique_dates: list[date],
+    portfolio_terminals: dict[date, TerminalValueDict] | dict[date, dict[str, float]],
+) -> pl.DataFrame:
+    """Build a sorted valuation dataframe across evaluation dates.
+
+    Parameters
+    ----------
+    unique_dates : list[date]
+        Unique evaluation dates.
+    portfolio_terminals : dict[date, TerminalValueDict] | dict[date, dict[str, float]]
+        Terminal valuation snapshots.
+
+    Returns
+    -------
+    pl.DataFrame
+        Valuation series dataframe.
+    """
+    pt_records: list[dict[str, object]] = []
+    for d in unique_dates:
+        d_obj = to_date_obj(d)
+        if d_obj:
+            pt_entry = portfolio_terminals.get(d_obj, portfolio_terminals.get(d, {}))
+            pt_records.append(
+                {
+                    "Closing_Date": d,
+                    "Date_Obj": d_obj,
+                    "val": pt_entry.get("val", 0.0),
+                    "shadow_val": pt_entry.get("shadow_val", 0.0),
+                }
+            )
+    if not pt_records:
+        return pl.DataFrame()
+    return pl.DataFrame(pt_records).sort("Date_Obj")
+
+
+def _aggregate_net_injections(cashflows: list[CashflowDict]) -> pl.DataFrame:
+    """Aggregate cash flows by date to compute net injection amounts.
+
+    Parameters
+    ----------
+    cashflows : list[CashflowDict]
+        Portfolio cash flows.
+
+    Returns
+    -------
+    pl.DataFrame
+        Net injection aggregated by Date_Obj.
+    """
+    cf_records: list[dict[str, object]] = []
+    for cf in cashflows:
+        d_obj = to_date_obj(cf.get("date"))
+        if d_obj:
+            cf_records.append({"Date_Obj": d_obj, "injection": -float(cf.get("amount") or 0.0)})
+
+    if not cf_records:
+        return pl.DataFrame()
+
+    return (
+        pl.DataFrame(cf_records)
+        .group_by("Date_Obj")
+        .agg(pl.col("injection").sum().alias("net_injection"))
+    )
+
+
+def _compute_drawdown_series(df_pt: pl.DataFrame, df_cf: pl.DataFrame) -> pl.DataFrame:
+    """Calculate daily returns, cumulative peak returns, and running Max Drawdown (MDD).
+
+    Parameters
+    ----------
+    df_pt : pl.DataFrame
+        Terminal valuations dataframe.
+    df_cf : pl.DataFrame
+        Aggregated net injections dataframe.
+
+    Returns
+    -------
+    pl.DataFrame
+        Valuation dataframe enriched with Portfolio_Max_Drawdown.
+    """
+    if not df_cf.is_empty():
+        df_pt = df_pt.join(df_cf, on="Date_Obj", how="left").with_columns(
+            pl.col("net_injection").fill_null(0.0)
+        )
+    else:
+        df_pt = df_pt.with_columns(pl.lit(0.0).alias("net_injection"))
+
+    return (
+        df_pt.with_columns(
+            pl.when(
+                (
+                    pl.col("val").shift(1)
+                    + pl.when(pl.col("net_injection") > 0)
+                    .then(pl.col("net_injection"))
+                    .otherwise(0.0)
+                )
+                > 0
+            )
+            .then(
+                (pl.col("val") - pl.col("val").shift(1) - pl.col("net_injection"))
+                / (
+                    pl.col("val").shift(1)
+                    + pl.when(pl.col("net_injection") > 0)
+                    .then(pl.col("net_injection"))
+                    .otherwise(0.0)
+                )
+            )
+            .otherwise(0.0)
+            .alias("daily_return")
+        )
+        .with_columns((pl.col("daily_return") + 1.0).cum_prod().alias("cum_return"))
+        .with_columns(
+            pl.col("cum_return").cum_max().alias("peak_cum"),
+        )
+        .with_columns(
+            pl.when(pl.col("peak_cum") > 0)
+            .then((pl.col("cum_return") - pl.col("peak_cum")) / pl.col("peak_cum"))
+            .otherwise(0.0)
+            .alias("Portfolio_Max_Drawdown")
+        )
+    )
+
+
 class AdvancedAnalyticsCalculator:
     """Calculates Max Drawdown (MDD) tracking and portfolio baseline returns."""
 
@@ -56,98 +179,18 @@ class AdvancedAnalyticsCalculator:
         pl.DataFrame
             Augmented dataframe with Portfolio_Max_Drawdown.
         """
-        pt_records: list[dict[str, object]] = []
-        for d in unique_dates:
-            d_obj = to_date_obj(d)
-            if d_obj:
-                pt_entry = portfolio_terminals.get(d_obj, portfolio_terminals.get(d, {}))
-                pt_records.append(
-                    {
-                        "Closing_Date": d,
-                        "Date_Obj": d_obj,
-                        "val": pt_entry.get("val", 0.0),
-                        # shadow_val = what benchmark portfolio would be worth
-                        "shadow_val": pt_entry.get("shadow_val", 0.0),
-                    }
-                )
+        df_pt = _build_terminal_records(unique_dates, portfolio_terminals)
 
-        if pt_records:
-            df_pt = pl.DataFrame(pt_records).sort("Date_Obj")
-
-            # Aggregate cash flows by date to compute net injection
-            cf_records: list[dict[str, object]] = []
-            for cf in cashflows:
-                cf_date = cf.get("date")
-                d_obj = to_date_obj(cf_date)
-                if d_obj:
-                    # 'amount' is negative for buys (injections) and positive for sells (withdrawals)
-                    cf_records.append(
-                        {"Date_Obj": d_obj, "injection": -float(cf.get("amount") or 0.0)}
-                    )
-
-            if cf_records:
-                df_cf = (
-                    pl.DataFrame(cf_records)
-                    .group_by("Date_Obj")
-                    .agg(pl.col("injection").sum().alias("net_injection"))
-                )
-                df_pt = df_pt.join(df_cf, on="Date_Obj", how="left").with_columns(
-                    pl.col("net_injection").fill_null(0.0)
-                )
-            else:
-                df_pt = df_pt.with_columns(pl.lit(0.0).alias("net_injection"))
-
-            df_pt = (
-                df_pt.with_columns(
-                    pl.when(
-                        (
-                            pl.col("val").shift(1)
-                            + pl.when(pl.col("net_injection") > 0)
-                            .then(pl.col("net_injection"))
-                            .otherwise(0.0)
-                        )
-                        > 0
-                    )
-                    .then(
-                        (pl.col("val") - pl.col("val").shift(1) - pl.col("net_injection"))
-                        / (
-                            pl.col("val").shift(1)
-                            + pl.when(pl.col("net_injection") > 0)
-                            .then(pl.col("net_injection"))
-                            .otherwise(0.0)
-                        )
-                    )
-                    .otherwise(0.0)
-                    .alias("daily_return")
-                )
-                .with_columns((pl.col("daily_return") + 1.0).cum_prod().alias("cum_return"))
-                .with_columns(
-                    pl.col("cum_return").cum_max().alias("peak_cum"),
-                )
-                .with_columns(
-                    pl.when(pl.col("peak_cum") > 0)
-                    .then((pl.col("cum_return") - pl.col("peak_cum")) / pl.col("peak_cum"))
-                    .otherwise(0.0)
-                    .alias("Portfolio_Max_Drawdown")
-                )
-            )
-
-            df_port = df_port.join(
-                df_pt.select(
-                    [
-                        "Closing_Date",
-                        "Portfolio_Max_Drawdown",
-                    ]
-                ),
+        if not df_pt.is_empty():
+            df_cf = _aggregate_net_injections(cashflows)
+            df_pt = _compute_drawdown_series(df_pt, df_cf)
+            return df_port.join(
+                df_pt.select(["Closing_Date", "Portfolio_Max_Drawdown"]),
                 on="Closing_Date",
                 how="left",
             )
-        else:
-            df_port = df_port.with_columns(
-                pl.lit(0.0).alias("Portfolio_Max_Drawdown"),
-            )
 
-        return df_port
+        return df_port.with_columns(pl.lit(0.0).alias("Portfolio_Max_Drawdown"))
 
 
 class HarvestRecommendationCalculator:

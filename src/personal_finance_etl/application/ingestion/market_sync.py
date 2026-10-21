@@ -17,7 +17,6 @@ Does not own
 
 from __future__ import annotations
 
-import datetime
 import os
 from datetime import date
 
@@ -65,6 +64,72 @@ class CurrencyPipeline:
         self.status_queue = status_queue
         self.max_workers = max_workers
 
+    def _load_cached_bronze_currency(self) -> pl.DataFrame:
+        """Load existing Bronze currency FX observations or initialize empty schema."""
+        df_bronze_cached = self.bronze.get_table("r_Currency_FX_Data")
+        if df_bronze_cached.is_empty():
+            logger.debug(
+                "[ENGINE:CURRENCY] Bronze Cache: EMPTY. A full historical extraction will be performed."
+            )
+            return pl.DataFrame(
+                schema={
+                    "Date": pl.Date,
+                    "Currency_ID": pl.String,
+                    "Currency_Code": pl.String,
+                    "Target_Currency_Code": pl.String,
+                    "yF_Ticker": pl.String,
+                    "FX_Rate": pl.Float64,
+                    "Data_Provider": pl.String,
+                    "Extraction_Time": pl.String,
+                    "Requested_Start": pl.Date,
+                    "Requested_End": pl.Date,
+                    "Is_Closure_Gap": pl.Boolean,
+                }
+            )
+        cached_min = df_bronze_cached.select(pl.min("Date")).item()
+        cached_max = df_bronze_cached.select(pl.max("Date")).item()
+        logger.debug(
+            f"[ENGINE:CURRENCY] Bronze Cache: FOUND {df_bronze_cached.height} rows ({cached_min} to {cached_max})."
+        )
+        return df_bronze_cached
+
+    def _upsert_currency_delta(self, df_delta: pl.DataFrame, new_files: list[str]) -> pl.LazyFrame:
+        """Persist delta Parquet chunks into Bronze lakehouse and return full LazyFrame."""
+        if not df_delta.is_empty():
+            logger.debug("[ENGINE:CURRENCY] Upserting new Parquet chunks to Bronze...")
+            row_counts = self.bronze.upsert_table(
+                df=df_delta,
+                table_name="bronze.r_Currency_FX_Data",
+                actionable_files=new_files,
+                full_replace=False,
+            )
+            for filepath in new_files:
+                filename = os.path.basename(filepath)
+                count = row_counts.get(filename, 0)
+                self.bronze.cp.artifacts.mark_synced([filepath])
+                self.bronze.meta_layer.register_file(
+                    filepath, "currency_history", count, self.bronze.cp
+                )
+
+        df_bronze_full = self.bronze.get_table("r_Currency_FX_Data")
+        if df_bronze_full.is_empty():
+            return pl.LazyFrame(
+                schema={
+                    "Date": pl.Date,
+                    "Currency_ID": pl.String,
+                    "Currency_Code": pl.String,
+                    "Target_Currency_Code": pl.String,
+                    "yF_Ticker": pl.String,
+                    "FX_Rate": pl.Float64,
+                    "Data_Provider": pl.String,
+                    "Extraction_Time": pl.String,
+                    "Requested_Start": pl.Date,
+                    "Requested_End": pl.Date,
+                    "Is_Closure_Gap": pl.Boolean,
+                }
+            )
+        return df_bronze_full.lazy()
+
     def run(
         self,
         df_currency: pl.DataFrame,
@@ -84,35 +149,7 @@ class CurrencyPipeline:
             )
         )
 
-        # 1. Load Bronze Cache
-        df_bronze_cached = self.bronze.get_table("r_Currency_FX_Data")
-        if df_bronze_cached.is_empty():
-            logger.debug(
-                "[ENGINE:CURRENCY] Bronze Cache: EMPTY. A full historical extraction will be performed."
-            )
-            df_bronze_cached = pl.DataFrame(
-                schema={
-                    "Date": pl.Date,
-                    "Currency_ID": pl.String,
-                    "Currency_Code": pl.String,
-                    "Target_Currency_Code": pl.String,
-                    "yF_Ticker": pl.String,
-                    "FX_Rate": pl.Float64,
-                    "Data_Provider": pl.String,
-                    "Extraction_Time": pl.String,
-                    "Requested_Start": pl.Date,
-                    "Requested_End": pl.Date,
-                    "Is_Closure_Gap": pl.Boolean,
-                }
-            )
-        else:
-            cached_min = df_bronze_cached.select(pl.min("Date")).item()
-            cached_max = df_bronze_cached.select(pl.max("Date")).item()
-            logger.debug(
-                f"[ENGINE:CURRENCY] Bronze Cache: FOUND {df_bronze_cached.height} rows ({cached_min} to {cached_max})."
-            )
-
-        # 2. Extract Delta
+        df_bronze_cached = self._load_cached_bronze_currency()
         extractor = CurrencyExtractor(self.cp, self.status_queue, self.max_workers)
         batch_res = extractor.extract_currency_delta(
             df_currency, global_start_date, global_end_date, df_bronze_cached
@@ -122,7 +159,6 @@ class CurrencyPipeline:
                 self.cp.active_run_id, batch_res.to_provider_requests()
             )
         batch_res.assert_complete("Currency Extractor")
-        df_delta, new_files = batch_res.combined_frame, batch_res.injected_files
 
         self.status_queue.put(
             EngineStatusMessage(
@@ -133,44 +169,10 @@ class CurrencyPipeline:
             )
         )
 
-        # 3. Upsert to Bronze
-        if not df_delta.is_empty():
-            logger.debug("[ENGINE:CURRENCY] Upserting new Parquet chunks to Bronze...")
-            row_counts = self.bronze.upsert_table(
-                df=df_delta,
-                table_name="bronze.r_Currency_FX_Data",
-                actionable_files=new_files,
-                full_replace=False,
-            )
-            for filepath in new_files:
-                filename = os.path.basename(filepath)
-                count = row_counts.get(filename, 0)
-                self.bronze.cp.artifacts.mark_synced([filepath])
-                self.bronze.meta_layer.register_file(
-                    filepath, "currency_history", count, self.bronze.cp
-                )
+        df_bronze_full_lazy = self._upsert_currency_delta(
+            batch_res.combined_frame, batch_res.injected_files
+        )
 
-        df_bronze_full = self.bronze.get_table("r_Currency_FX_Data")
-        if df_bronze_full.is_empty():
-            df_bronze_full_lazy = pl.LazyFrame(
-                schema={
-                    "Date": pl.Date,
-                    "Currency_ID": pl.String,
-                    "Currency_Code": pl.String,
-                    "Target_Currency_Code": pl.String,
-                    "yF_Ticker": pl.String,
-                    "FX_Rate": pl.Float64,
-                    "Data_Provider": pl.String,
-                    "Extraction_Time": pl.String,
-                    "Requested_Start": pl.Date,
-                    "Requested_End": pl.Date,
-                    "Is_Closure_Gap": pl.Boolean,
-                }
-            )
-        else:
-            df_bronze_full_lazy = df_bronze_full.lazy()
-
-        # 4. Transform to Silver (Continuous Series)
         self.status_queue.put(
             EngineStatusMessage(
                 msg="Transforming continuous Currency FX series...",
@@ -183,9 +185,6 @@ class CurrencyPipeline:
         df_silver_lazy = transform_currency_fx_rates(
             df_bronze_full_lazy, df_currency.lazy(), global_start_date, global_end_date
         )
-
-        # Materialization Boundary: PUBLICATION_BOUNDARY
-        # Materialize transformed FX series into in-memory DataFrame for downstream DuckDB persistence
         df_silver = df_silver_lazy.collect(engine="streaming")
 
         self.status_queue.put(
@@ -207,6 +206,71 @@ class BenchmarkPipeline:
         self.cp = cp
         self.bronze = bronze
         self.status_queue = status_queue
+
+    @staticmethod
+    def _resolve_benchmark_date_range(
+        df_market: pl.DataFrame | None, df_purchase: pl.DataFrame | None
+    ) -> tuple[date, date]:
+        """Infer target historical extraction date boundaries from existing market transactions."""
+        min_market, max_market, min_purch = None, None, None
+        if df_market is not None and not df_market.is_empty():
+            market_dates = df_market.select(pl.col("Date").drop_nulls())
+            if not market_dates.is_empty():
+                min_market = market_dates.select(pl.min("Date")).item()
+                max_market = market_dates.select(pl.max("Date")).item()
+
+        if df_purchase is not None and not df_purchase.is_empty():
+            purch_dates = df_purchase.select(pl.col("Date").drop_nulls())
+            if not purch_dates.is_empty():
+                min_purch = purch_dates.select(pl.min("Date")).item()
+
+        valid_starts = [d for d in [min_market, min_purch] if d is not None]
+        start_date = min(valid_starts) if valid_starts else date(2000, 1, 1)
+        end_date = max_market if max_market else date.today()
+
+        if isinstance(start_date, str):
+            start_date = date.fromisoformat(start_date)
+        if isinstance(end_date, str):
+            end_date = date.fromisoformat(end_date)
+        return start_date, end_date
+
+    def _load_cached_bronze_benchmark(self) -> pl.DataFrame:
+        """Fetch cached benchmark observation table from Bronze layer."""
+        df_bronze_cached = self.bronze.get_table("r_Benchmark_Data")
+        if df_bronze_cached.is_empty():
+            logger.debug(
+                "[ENGINE:BENCHMARK] Bronze Cache: EMPTY. A full historical extraction will be performed."
+            )
+        else:
+            cached_min = df_bronze_cached.select(pl.min("Date")).item()
+            cached_max = df_bronze_cached.select(pl.max("Date")).item()
+            logger.debug(
+                f"[ENGINE:BENCHMARK] Bronze Cache: FOUND {df_bronze_cached.height} rows ({cached_min} to {cached_max})."
+            )
+        return df_bronze_cached
+
+    def _upsert_benchmark_delta(
+        self, df_new_raw: pl.DataFrame, virtual_files: list[str]
+    ) -> pl.DataFrame:
+        """Persist delta benchmark Parquet chunks to Bronze and re-fetch updated cache."""
+        if not df_new_raw.is_empty():
+            logger.debug("[ENGINE:BENCHMARK] Upserting new Parquet chunks to Bronze...")
+            row_counts = self.bronze.upsert_table(
+                df=df_new_raw,
+                table_name="bronze.r_Benchmark_Data",
+                actionable_files=virtual_files,
+                full_replace=False,
+            )
+
+            for filepath in virtual_files:
+                filename = os.path.basename(filepath)
+                count = row_counts.get(filename, 0)
+                self.bronze.cp.artifacts.mark_synced([filepath])
+                self.bronze.meta_layer.register_file(
+                    filepath, "benchmark_history", count, self.bronze.cp
+                )
+
+        return self.bronze.get_table("r_Benchmark_Data")
 
     def process(
         self,
@@ -231,44 +295,10 @@ class BenchmarkPipeline:
             Continuous Silver benchmark price observation table.
         """
         logger.info("Phase 3.5: Dynamic Benchmark Extraction & Transformation...")
-
-        min_market, max_market, min_purch = None, None, None
-        if df_market is not None and not df_market.is_empty():
-            market_dates = df_market.select(pl.col("Date").drop_nulls())
-            if not market_dates.is_empty():
-                min_market = market_dates.select(pl.min("Date")).item()
-                max_market = market_dates.select(pl.max("Date")).item()
-
-        if df_purchase is not None and not df_purchase.is_empty():
-            purch_dates = df_purchase.select(pl.col("Date").drop_nulls())
-            if not purch_dates.is_empty():
-                min_purch = purch_dates.select(pl.min("Date")).item()
-
-        valid_starts = [d for d in [min_market, min_purch] if d is not None]
-        start_date = min(valid_starts) if valid_starts else datetime.date(2000, 1, 1)
-        end_date = max_market if max_market else datetime.date.today()
-
-        if isinstance(start_date, str):
-            start_date = datetime.date.fromisoformat(start_date)
-        if isinstance(end_date, str):
-            end_date = datetime.date.fromisoformat(end_date)
-
+        start_date, end_date = self._resolve_benchmark_date_range(df_market, df_purchase)
         logger.info(f"  -> Target Global Range: {start_date} to {end_date}")
 
-        # 1. Fetch cached bounds from Bronze Layer (Encapsulated)
-        df_bronze_cached = self.bronze.get_table("r_Benchmark_Data")
-        if df_bronze_cached.is_empty():
-            logger.debug(
-                "[ENGINE:BENCHMARK] Bronze Cache: EMPTY. A full historical extraction will be performed."
-            )
-        else:
-            cached_min = df_bronze_cached.select(pl.min("Date")).item()
-            cached_max = df_bronze_cached.select(pl.max("Date")).item()
-            logger.debug(
-                f"[ENGINE:BENCHMARK] Bronze Cache: FOUND {df_bronze_cached.height} rows ({cached_min} to {cached_max})."
-            )
-
-        # 2. Extract Delta from external sources to Raw Store
+        df_bronze_cached = self._load_cached_bronze_benchmark()
         extractor = BenchmarkExtractor(self.cp, self.status_queue)
         batch_res = extractor.extract_benchmark_delta(
             df_m=df_master,
@@ -281,37 +311,16 @@ class BenchmarkPipeline:
                 self.cp.active_run_id, batch_res.to_provider_requests()
             )
         batch_res.assert_complete("Benchmark Extractor")
-        df_new_raw, virtual_files = batch_res.combined_frame, batch_res.injected_files
 
-        # 3. Load Delta directly into Bronze Layer
-        if not df_new_raw.is_empty():
-            logger.debug("[ENGINE:BENCHMARK] Upserting new Parquet chunks to Bronze...")
-            row_counts = self.bronze.upsert_table(
-                df=df_new_raw,
-                table_name="bronze.r_Benchmark_Data",
-                actionable_files=virtual_files,
-                full_replace=False,
-            )
+        df_bronze_cached = self._upsert_benchmark_delta(
+            batch_res.combined_frame, batch_res.injected_files
+        )
 
-            for filepath in virtual_files:
-                filename = os.path.basename(filepath)
-                count = row_counts.get(filename, 0)
-                self.bronze.cp.artifacts.mark_synced([filepath])
-                self.bronze.meta_layer.register_file(
-                    filepath, "benchmark_history", count, self.bronze.cp
-                )
-
-            # Refetch the complete cache post-upsert
-            df_bronze_cached = self.bronze.get_table("r_Benchmark_Data")
-
-        # 4. Transform Bronze into final Silver representations
         transformer = BenchmarkTransformer(self.status_queue)
         df_silver = transformer.transform(df_bronze_cached, start_date, end_date)
-
         logger.debug(
             f"[ENGINE:BENCHMARK] Transformation Complete: Silver Benchmark table has {df_silver.height} market periods."
         )
-
         return df_silver
 
 
@@ -325,6 +334,63 @@ class USMarketPipeline:
         self.bronze = bronze
         self.status_queue = status_queue
         self.max_workers = max_workers
+
+    def _load_cached_bronze_us_market(self) -> pl.DataFrame:
+        """Fetch cached US market prices from Bronze layer or initialize empty schema."""
+        df_bronze_cached = self.bronze.get_table("r_US_Stock_Prices")
+        if df_bronze_cached.is_empty():
+            logger.debug(
+                "[ENGINE:US_MARKET] Bronze Cache: EMPTY. A full historical extraction will be performed."
+            )
+            return pl.DataFrame(
+                schema={
+                    "Date": pl.Date,
+                    "ISIN": pl.String,
+                    "yF_Ticker": pl.String,
+                    "Closing_Price_Local": pl.Float64,
+                    "Data_Provider": pl.String,
+                    "Extraction_Time": pl.String,
+                    "Requested_Start": pl.Date,
+                    "Requested_End": pl.Date,
+                    "Is_Closure_Gap": pl.Boolean,
+                }
+            )
+        return df_bronze_cached
+
+    def _upsert_us_market_delta(self, df_delta: pl.DataFrame, new_files: list[str]) -> pl.LazyFrame:
+        """Persist US market delta Parquet chunks into Bronze layer and return full LazyFrame."""
+        if not df_delta.is_empty():
+            logger.debug("[ENGINE:US_MARKET] Upserting new Parquet chunks to Bronze...")
+            row_counts = self.bronze.upsert_table(
+                df=df_delta,
+                table_name="bronze.r_US_Stock_Prices",
+                actionable_files=new_files,
+                full_replace=False,
+            )
+            for filepath in new_files:
+                filename = os.path.basename(filepath)
+                count = row_counts.get(filename, 0)
+                self.bronze.cp.artifacts.mark_synced([filepath])
+                self.bronze.meta_layer.register_file(
+                    filepath, "us_stock_market", count, self.bronze.cp
+                )
+
+        df_bronze_full = self.bronze.get_table("r_US_Stock_Prices")
+        if df_bronze_full.is_empty():
+            return pl.LazyFrame(
+                schema={
+                    "Date": pl.Date,
+                    "ISIN": pl.String,
+                    "yF_Ticker": pl.String,
+                    "Closing_Price_Local": pl.Float64,
+                    "Data_Provider": pl.String,
+                    "Extraction_Time": pl.String,
+                    "Requested_Start": pl.Date,
+                    "Requested_End": pl.Date,
+                    "Is_Closure_Gap": pl.Boolean,
+                }
+            )
+        return df_bronze_full.lazy()
 
     def run(
         self,
@@ -364,27 +430,7 @@ class USMarketPipeline:
             )
         )
 
-        # 1. Load Bronze Cache
-        df_bronze_cached = self.bronze.get_table("r_US_Stock_Prices")
-        if df_bronze_cached.is_empty():
-            logger.debug(
-                "[ENGINE:US_MARKET] Bronze Cache: EMPTY. A full historical extraction will be performed."
-            )
-            df_bronze_cached = pl.DataFrame(
-                schema={
-                    "Date": pl.Date,
-                    "ISIN": pl.String,
-                    "yF_Ticker": pl.String,
-                    "Closing_Price_Local": pl.Float64,
-                    "Data_Provider": pl.String,
-                    "Extraction_Time": pl.String,
-                    "Requested_Start": pl.Date,
-                    "Requested_End": pl.Date,
-                    "Is_Closure_Gap": pl.Boolean,
-                }
-            )
-
-        # 2. Extract Delta
+        df_bronze_cached = self._load_cached_bronze_us_market()
         extractor = USMarketExtractor(self.cp, self.status_queue, self.max_workers)
         batch_res = extractor.extract_us_market_delta(
             isin_ticker_map, global_start_date, global_end_date, df_bronze_cached
@@ -394,7 +440,6 @@ class USMarketPipeline:
                 self.cp.active_run_id, batch_res.to_provider_requests()
             )
         batch_res.assert_complete("US Market Extractor")
-        df_delta, new_files = batch_res.combined_frame, batch_res.injected_files
 
         self.status_queue.put(
             EngineStatusMessage(
@@ -405,42 +450,10 @@ class USMarketPipeline:
             )
         )
 
-        # 3. Upsert to Bronze
-        if not df_delta.is_empty():
-            logger.debug("[ENGINE:US_MARKET] Upserting new Parquet chunks to Bronze...")
-            row_counts = self.bronze.upsert_table(
-                df=df_delta,
-                table_name="bronze.r_US_Stock_Prices",
-                actionable_files=new_files,
-                full_replace=False,
-            )
-            for filepath in new_files:
-                filename = os.path.basename(filepath)
-                count = row_counts.get(filename, 0)
-                self.bronze.cp.artifacts.mark_synced([filepath])
-                self.bronze.meta_layer.register_file(
-                    filepath, "us_stock_market", count, self.bronze.cp
-                )
+        df_bronze_full_lazy = self._upsert_us_market_delta(
+            batch_res.combined_frame, batch_res.injected_files
+        )
 
-        df_bronze_full = self.bronze.get_table("r_US_Stock_Prices")
-        if df_bronze_full.is_empty():
-            df_bronze_full_lazy = pl.LazyFrame(
-                schema={
-                    "Date": pl.Date,
-                    "ISIN": pl.String,
-                    "yF_Ticker": pl.String,
-                    "Closing_Price_Local": pl.Float64,
-                    "Data_Provider": pl.String,
-                    "Extraction_Time": pl.String,
-                    "Requested_Start": pl.Date,
-                    "Requested_End": pl.Date,
-                    "Is_Closure_Gap": pl.Boolean,
-                }
-            )
-        else:
-            df_bronze_full_lazy = df_bronze_full.lazy()
-
-        # 4. Transform to Silver (Continuous Series and Spine)
         self.status_queue.put(
             EngineStatusMessage(
                 msg="Transforming continuous US Market series...",
@@ -458,9 +471,6 @@ class USMarketPipeline:
             global_start_date=global_start_date,
             global_end_date=global_end_date,
         )
-
-        # Materialization Boundary: PUBLICATION_BOUNDARY
-        # Materialize transformed US market quotes into DataFrame for downstream DuckDB persistence
         df_silver = df_silver_lazy.collect(engine="streaming")
 
         self.status_queue.put(

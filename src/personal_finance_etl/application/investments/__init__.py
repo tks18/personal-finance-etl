@@ -20,6 +20,9 @@ from personal_finance_etl.application.investments.aggregation_service import (
 )
 from personal_finance_etl.application.investments.context import (
     AnalyticsContextManager,
+    QuantDataFrames,
+    QuantFilePaths,
+    QuantRunOptions,
     RunContext,
 )
 from personal_finance_etl.application.investments.input_adapter import (
@@ -43,6 +46,9 @@ __all__ = [
     "IsinProcessor",
     "PostProcessingPipeline",
     "PostProcessor",
+    "QuantDataFrames",
+    "QuantFilePaths",
+    "QuantRunOptions",
     "QuantService",
     "RunContext",
     "TaxDataLoader",

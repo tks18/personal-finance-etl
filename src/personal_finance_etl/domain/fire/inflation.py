@@ -1,14 +1,16 @@
-"""Inflation time-series and CPI index domain builder.
+"""Household inflation modeling and CPI series construction.
 
 Owns
 ----
-- InflationBuilder: Constructs continuous monthly inflation rates and cumulative CPI index.
-- Resolves latest CPI index observation status (VALID, NO_OBSERVATION, INVALID_INPUT, COMPUTATION_ERROR).
+- InflationBuilder: Constructs monthly continuous inflation rates and cumulative CPI index series.
+- CPI index derivation from Macro Parameters and fallback rates.
+- CpiResult contract mapping with calculation provenance.
 
 Does not own
 -------------
-- Raw macro parameter extraction (owned by infrastructure.providers.files.sqlite).
-- Financial rules configuration (owned by config.financial_rules).
+- Macro parameter source extraction (owned by infrastructure.providers).
+- Investment valuation adjustments (owned by domain.wealth.net_worth).
+- Physical table storage or DuckDB registration (owned by infrastructure.warehouse).
 """
 
 from __future__ import annotations
@@ -30,7 +32,7 @@ __all__ = ["InflationBuilder", "InflationCalendarResult"]
 
 
 class InflationCalendarResult(TypedDict):
-    """Structured result dictionary for the continuous monthly inflation series."""
+    """Result of inflation and calendar timeline processing."""
 
     lf_months: pl.LazyFrame
     lf_inflation: pl.LazyFrame
@@ -46,6 +48,51 @@ class InflationBuilder:
     ) -> None:
         self.dfs = dfs
         self.rules = rules
+
+    def _build_monthly_calendar(self, lf_open: pl.LazyFrame, lf_cal: pl.LazyFrame) -> pl.LazyFrame:
+        """Derive monthly start and end dates from the earliest opening balance to today."""
+        lf_min_date = lf_open.select(pl.col("ZTXDATESTR").min().alias("min_open_date")).fill_null(
+            date(2000, 1, 1)
+        )
+
+        return (
+            lf_cal.group_by(["YEAR", "MONTH"])
+            .agg(
+                [
+                    pl.col("DATE").min().alias("MONTH_START_DATE"),
+                    pl.col("DATE").max().alias("MONTH_END_DATE"),
+                ]
+            )
+            .filter(pl.col("MONTH_START_DATE") <= pl.lit(date.today()))
+            .join(lf_min_date, how="cross")
+            .filter(pl.col("MONTH_END_DATE") >= pl.col("min_open_date"))
+            .drop("min_open_date")
+            .sort(["YEAR", "MONTH"])
+        )
+
+    def _build_inflation_series(
+        self, lf_months: pl.LazyFrame, lf_macro: pl.LazyFrame
+    ) -> pl.LazyFrame:
+        """Construct continuous monthly inflation rate and cumulative CPI index series."""
+        return (
+            lf_months.sort("MONTH_START_DATE")
+            .join_asof(
+                lf_macro.sort("FY_Start_Date"),
+                left_on="MONTH_START_DATE",
+                right_on="FY_Start_Date",
+                strategy="backward",
+            )
+            .with_columns(
+                pl.col("Inflation_Rate")
+                .fill_null(self.rules.assumptions.macro.fallback_inflation_rate)
+                .alias("INFLATION_YOY_PCT")
+            )
+            .with_columns(
+                ((pl.col("INFLATION_YOY_PCT") + 1.0).pow(1.0 / 12.0)).alias("monthly_factor")
+            )
+            .with_columns((pl.col("monthly_factor").cum_prod() * 100.0).alias("CPI_INDEX"))
+            .select(["MONTH_START_DATE", "INFLATION_YOY_PCT", "CPI_INDEX"])
+        )
 
     def build(self) -> InflationCalendarResult:
         """Build continuous monthly calendar and inflation series.
@@ -83,45 +130,8 @@ class InflationBuilder:
             pl.col("FY_Start_Date").cast(pl.Date), pl.col("Inflation_Rate").cast(pl.Float64)
         )
 
-        lf_min_date = lf_open.select(pl.col("ZTXDATESTR").min().alias("min_open_date")).fill_null(
-            date(2000, 1, 1)
-        )
-
-        lf_months = (
-            lf_cal.group_by(["YEAR", "MONTH"])
-            .agg(
-                [
-                    pl.col("DATE").min().alias("MONTH_START_DATE"),
-                    pl.col("DATE").max().alias("MONTH_END_DATE"),
-                ]
-            )
-            .filter(pl.col("MONTH_START_DATE") <= pl.lit(date.today()))
-            .join(lf_min_date, how="cross")
-            .filter(pl.col("MONTH_END_DATE") >= pl.col("min_open_date"))
-            .drop("min_open_date")
-            .sort(["YEAR", "MONTH"])
-        )
-
-        lf_inflation = (
-            lf_months.sort("MONTH_START_DATE")
-            .join_asof(
-                lf_macro.sort("FY_Start_Date"),
-                left_on="MONTH_START_DATE",
-                right_on="FY_Start_Date",
-                strategy="backward",
-            )
-            .with_columns(
-                pl.col("Inflation_Rate")
-                .fill_null(self.rules.assumptions.macro.fallback_inflation_rate)
-                .alias("INFLATION_YOY_PCT")
-            )
-            .with_columns(
-                ((pl.col("INFLATION_YOY_PCT") + 1.0).pow(1.0 / 12.0)).alias("monthly_factor")
-            )
-            .with_columns((pl.col("monthly_factor").cum_prod() * 100.0).alias("CPI_INDEX"))
-            .select(["MONTH_START_DATE", "INFLATION_YOY_PCT", "CPI_INDEX"])
-        )
-
+        lf_months = self._build_monthly_calendar(lf_open, lf_cal)
+        lf_inflation = self._build_inflation_series(lf_months, lf_macro)
         cpi_result = self._resolve_latest_cpi(lf_inflation)
 
         return {

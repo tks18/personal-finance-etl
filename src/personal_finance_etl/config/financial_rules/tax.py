@@ -114,6 +114,94 @@ class InvestmentExclusionsConfig(BaseModel):
         return self
 
 
+def _check_duplicate_subhead(
+    seen_head_subhead: set[tuple[str, str]], head_name: str, sub_name: str
+) -> None:
+    head_sub_key = (head_name.strip().lower(), sub_name.strip().lower())
+    if head_sub_key in seen_head_subhead:
+        raise ValueError(
+            f"Duplicate sub-head declaration '{sub_name}' found under head '{head_name}'."
+        )
+    seen_head_subhead.add(head_sub_key)
+
+
+def _check_subcat_ids(
+    seen_sub_cats: dict[str, str],
+    seen_credit_sub_cats: dict[str, str],
+    sub_cat_ids: list[str],
+    location: str,
+) -> None:
+    for sub_cat in sub_cat_ids:
+        if sub_cat in seen_sub_cats:
+            raise ValueError(
+                f"Duplicate sub_cat_id {sub_cat} found in {location} "
+                f"(already configured in {seen_sub_cats[sub_cat]})"
+            )
+        if sub_cat in seen_credit_sub_cats:
+            raise ValueError(
+                f"Subcategory UID {sub_cat} in {location} is configured as both income and tax credit "
+                f"(already in tax credit {seen_credit_sub_cats[sub_cat]})."
+            )
+        seen_sub_cats[sub_cat] = location
+
+
+def _check_credit_subcat_ids(
+    seen_sub_cats: dict[str, str],
+    seen_credit_sub_cats: dict[str, str],
+    tax_credit_sub_cat_ids: list[str],
+    location: str,
+) -> None:
+    for credit_sub_cat in tax_credit_sub_cat_ids:
+        if credit_sub_cat in seen_credit_sub_cats:
+            raise ValueError(
+                f"Duplicate tax_credit_sub_cat_id {credit_sub_cat} found in {location} "
+                f"(already configured in {seen_credit_sub_cats[credit_sub_cat]})"
+            )
+        if credit_sub_cat in seen_sub_cats:
+            raise ValueError(
+                f"Subcategory UID {credit_sub_cat} in {location} is configured as both income and tax credit "
+                f"(already in income {seen_sub_cats[credit_sub_cat]})."
+            )
+        seen_credit_sub_cats[credit_sub_cat] = location
+
+
+def _check_cat_ids(
+    seen_cats: dict[str, str],
+    cat_ids: list[str],
+    location: str,
+) -> None:
+    for cat in cat_ids:
+        if cat in seen_cats:
+            raise ValueError(
+                f"Duplicate cat_id {cat} found in {location} "
+                f"(already configured in {seen_cats[cat]})"
+            )
+        seen_cats[cat] = location
+
+
+def _check_investment_exclusions(
+    seen_sub_cats: dict[str, str],
+    seen_credit_sub_cats: dict[str, str],
+    exclusions: InvestmentExclusionsConfig,
+) -> None:
+    for exclusion_type, exclusion_uids in (
+        ("stcg", exclusions.stcg_sub_cat_ids),
+        ("ltcg", exclusions.ltcg_sub_cat_ids),
+    ):
+        for uid in exclusion_uids:
+            if uid in seen_sub_cats:
+                raise ValueError(
+                    f"Subcategory UID {uid} in investment_exclusions.{exclusion_type} is already "
+                    f"configured in {seen_sub_cats[uid]}."
+                )
+            if uid in seen_credit_sub_cats:
+                raise ValueError(
+                    f"Subcategory UID {uid} in investment_exclusions.{exclusion_type} is configured "
+                    f"as a tax credit in {seen_credit_sub_cats[uid]}."
+                )
+            seen_sub_cats[uid] = f"investment_exclusions.{exclusion_type}"
+
+
 class TaxAssumptions(BaseModel):
     """Statutory tax rules, holding thresholds, exemption limits, and head mappings."""
 
@@ -158,71 +246,23 @@ class TaxAssumptions(BaseModel):
         seen_cats: dict[str, str] = {}
         seen_head_subhead: set[tuple[str, str]] = set()
 
-        # Combine all heads for global mutual exclusivity check
-        all_heads: list[tuple[str, TaxHeadConfig]] = []
-        all_heads.extend(self.heads_of_income.items())
-        all_heads.extend(self.exempt_income.items())
-        all_heads.extend(self.residual_income.items())
+        all_heads: list[tuple[str, TaxHeadConfig]] = [
+            *self.heads_of_income.items(),
+            *self.exempt_income.items(),
+            *self.residual_income.items(),
+        ]
 
         for head_name, head_config in all_heads:
             for sub_name, sub_config in head_config.sub_heads.items():
-                head_sub_key = (head_name.strip().lower(), sub_name.strip().lower())
-                if head_sub_key in seen_head_subhead:
-                    raise ValueError(
-                        f"Duplicate sub-head declaration '{sub_name}' found under head '{head_name}'."
-                    )
-                seen_head_subhead.add(head_sub_key)
+                loc = f"{head_name}.{sub_name}"
+                _check_duplicate_subhead(seen_head_subhead, head_name, sub_name)
+                _check_subcat_ids(seen_sub_cats, seen_credit_sub_cats, sub_config.sub_cat_ids, loc)
+                _check_credit_subcat_ids(
+                    seen_sub_cats, seen_credit_sub_cats, sub_config.tax_credit_sub_cat_ids, loc
+                )
+                _check_cat_ids(seen_cats, sub_config.cat_ids, loc)
 
-                for sub_cat in sub_config.sub_cat_ids:
-                    if sub_cat in seen_sub_cats:
-                        raise ValueError(
-                            f"Duplicate sub_cat_id {sub_cat} found in {head_name}.{sub_name} "
-                            f"(already configured in {seen_sub_cats[sub_cat]})"
-                        )
-                    if sub_cat in seen_credit_sub_cats:
-                        raise ValueError(
-                            f"Subcategory UID {sub_cat} in {head_name}.{sub_name} is configured as both income and tax credit "
-                            f"(already in tax credit {seen_credit_sub_cats[sub_cat]})."
-                        )
-                    seen_sub_cats[sub_cat] = f"{head_name}.{sub_name}"
-
-                for credit_sub_cat in sub_config.tax_credit_sub_cat_ids:
-                    if credit_sub_cat in seen_credit_sub_cats:
-                        raise ValueError(
-                            f"Duplicate tax_credit_sub_cat_id {credit_sub_cat} found in {head_name}.{sub_name} "
-                            f"(already configured in {seen_credit_sub_cats[credit_sub_cat]})"
-                        )
-                    if credit_sub_cat in seen_sub_cats:
-                        raise ValueError(
-                            f"Subcategory UID {credit_sub_cat} in {head_name}.{sub_name} is configured as both income and tax credit "
-                            f"(already in income {seen_sub_cats[credit_sub_cat]})."
-                        )
-                    seen_credit_sub_cats[credit_sub_cat] = f"{head_name}.{sub_name}"
-
-                for cat in sub_config.cat_ids:
-                    if cat in seen_cats:
-                        raise ValueError(
-                            f"Duplicate cat_id {cat} found in {head_name}.{sub_name} "
-                            f"(already configured in {seen_cats[cat]})"
-                        )
-                    seen_cats[cat] = f"{head_name}.{sub_name}"
-
-        # Ensure investment exclusions do not clash with ordinary income heads or tax credits
-        for exclusion_type, exclusion_uids in (
-            ("stcg", self.investment_exclusions.stcg_sub_cat_ids),
-            ("ltcg", self.investment_exclusions.ltcg_sub_cat_ids),
-        ):
-            for uid in exclusion_uids:
-                if uid in seen_sub_cats:
-                    raise ValueError(
-                        f"Subcategory UID {uid} in investment_exclusions.{exclusion_type} is already "
-                        f"configured in {seen_sub_cats[uid]}."
-                    )
-                if uid in seen_credit_sub_cats:
-                    raise ValueError(
-                        f"Subcategory UID {uid} in investment_exclusions.{exclusion_type} is configured "
-                        f"as a tax credit in {seen_credit_sub_cats[uid]}."
-                    )
-                seen_sub_cats[uid] = f"investment_exclusions.{exclusion_type}"
-
+        _check_investment_exclusions(
+            seen_sub_cats, seen_credit_sub_cats, self.investment_exclusions
+        )
         return self

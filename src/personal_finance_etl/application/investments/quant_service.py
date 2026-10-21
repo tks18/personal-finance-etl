@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import tempfile
 import traceback
-from datetime import date
 
 import polars as pl
 
@@ -28,11 +27,12 @@ from personal_finance_etl.application.investments.aggregation_service import (
 )
 from personal_finance_etl.application.investments.context import (
     AnalyticsContextManager,
+    QuantDataFrames,
+    QuantRunOptions,
 )
 from personal_finance_etl.application.investments.isin_service import (
     IsinPipeline,
 )
-from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.contracts.application import EngineStatusMessage
 from personal_finance_etl.contracts.logging import LogLevel, StatusQueue
 from personal_finance_etl.infrastructure.logging.setup import logger
@@ -45,31 +45,24 @@ class InvestmentQuantEngine:
 
     def __init__(
         self,
-        df_p: pl.DataFrame,
-        df_s: pl.DataFrame,
-        df_m: pl.DataFrame,
-        df_i: pl.DataFrame,
-        df_b: pl.DataFrame | None,
-        df_t: pl.DataFrame,
-        df_fx: pl.DataFrame | None = None,
+        data: QuantDataFrames,
+        options: QuantRunOptions,
         status_queue: StatusQueue | None = None,
-        rules: FinancialRules | None = None,
-        start_date: date | None = None,
-        end_date: date | None = None,
-        run_id: str = "UNKNOWN",
     ) -> None:
-        self.df_p = df_p
-        self.df_s = df_s
-        self.df_m = df_m
-        self.df_i = df_i
-        self.df_b = df_b if df_b is not None else pl.DataFrame()
-        self.df_t = df_t
-        self.df_fx = df_fx if df_fx is not None else pl.DataFrame()
+        """Initialize InvestmentQuantEngine with structured typed parameter bundles.
+
+        Parameters
+        ----------
+        data : QuantDataFrames
+            Bundle of DataFrames for analysis.
+        options : QuantRunOptions
+            Execution options and boundaries.
+        status_queue : StatusQueue | None, optional
+            Queue for streaming engine progress events.
+        """
+        self.data = data
+        self.options = options
         self.status_queue = status_queue
-        self.rules = rules
-        self.start_date = start_date
-        self.end_date = end_date
-        self.run_id = run_id
 
     def _report_status(
         self,
@@ -100,19 +93,7 @@ class InvestmentQuantEngine:
 
     def _run(self) -> dict[str, pl.DataFrame]:
         context_manager = AnalyticsContextManager(self.status_queue)
-        ctx, isins = context_manager.initialize(
-            self.df_p,
-            self.df_s,
-            self.df_m,
-            self.df_i,
-            self.df_b,
-            self.df_t,
-            self.df_fx,
-            self.start_date,
-            self.end_date,
-            self.rules,
-            run_id=self.run_id,
-        )
+        ctx, isins = context_manager.initialize(data=self.data, options=self.options)
 
         min_market = ctx.df_m.select(pl.min("Date")).item() if not ctx.df_m.is_empty() else None
         max_market = ctx.df_m.select(pl.max("Date")).item() if not ctx.df_m.is_empty() else None

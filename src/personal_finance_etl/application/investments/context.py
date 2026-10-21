@@ -27,6 +27,42 @@ from personal_finance_etl.domain.market.fx import FXRateProvider
 from personal_finance_etl.domain.market.macro import FYMacroParametersTable
 
 
+@dataclass(frozen=True)
+class QuantFilePaths:
+    """File path mappings for loading investment quant inputs from disk."""
+
+    p_path: str
+    s_path: str
+    m_path: str
+    i_path: str
+    b_path: str
+    t_path: str
+    fx_path: str | None = None
+
+
+@dataclass(frozen=True)
+class QuantDataFrames:
+    """Bundle of in-memory Polars DataFrames required for investment quant engine."""
+
+    df_p: pl.DataFrame
+    df_s: pl.DataFrame
+    df_m: pl.DataFrame
+    df_i: pl.DataFrame
+    df_b: pl.DataFrame | None = None
+    df_t: pl.DataFrame | None = None
+    df_fx: pl.DataFrame | None = None
+
+
+@dataclass(frozen=True)
+class QuantRunOptions:
+    """Execution options, date boundaries, and status reporting configuration."""
+
+    rules: FinancialRules | None = None
+    start_date: date | None = None
+    end_date: date | None = None
+    run_id: str = "UNKNOWN"
+
+
 @dataclass
 class RunContext:
     """Holds shared state (loaded data, FY table, config) for the execution run."""
@@ -51,14 +87,8 @@ class RunContext:
     @classmethod
     def load(
         cls,
-        p_path: str,
-        s_path: str,
-        m_path: str,
-        i_path: str,
-        b_path: str,
-        t_path: str,
+        paths: QuantFilePaths,
         rules: FinancialRules,
-        fx_path: str | None = None,
         start_date: date | None = None,
         end_date: date | None = None,
     ) -> "RunContext":
@@ -66,26 +96,14 @@ class RunContext:
 
         Parameters
         ----------
-        p_path : str
-            Path to purchases parquet/csv.
-        s_path : str
-            Path to sales parquet/csv.
-        m_path : str
-            Path to market data parquet/csv.
-        i_path : str
-            Path to ISIN master parquet/csv.
-        b_path : str
-            Path to benchmark data parquet/csv.
-        t_path : str
-            Path to macro parameters CSV.
+        paths : QuantFilePaths
+            Bundle of file paths.
         rules : FinancialRules
             Active financial rules configuration.
-        fx_path : str | None, optional
-            Path to currency FX parquet/csv, by default None.
         start_date : date | None, optional
-            Run analysis start boundary, by default None.
+            Run analysis start boundary.
         end_date : date | None, optional
-            Run analysis end boundary, by default None.
+            Run analysis end boundary.
 
         Returns
         -------
@@ -93,10 +111,15 @@ class RunContext:
             Initialized analytics run context.
         """
         df_p, df_s, df_m, isin_master, df_b, df_fx = TaxDataLoader.load_all(
-            p_path, s_path, m_path, i_path, b_path, fx_path=fx_path
+            paths.p_path,
+            paths.s_path,
+            paths.m_path,
+            paths.i_path,
+            paths.b_path,
+            fx_path=paths.fx_path,
         )
         try:
-            df_t = pl.read_csv(t_path)
+            df_t = pl.read_csv(paths.t_path)
             fy_table = FYMacroParametersTable(df_t, rules=rules)
         except Exception as e:
             raise Exception(f"Failed to load mandatory Macro Parameters CSV: {e}") from e
@@ -117,44 +140,17 @@ class RunContext:
     @classmethod
     def from_dataframes(
         cls,
-        df_p: pl.DataFrame,
-        df_s: pl.DataFrame,
-        df_m: pl.DataFrame,
-        df_i: pl.DataFrame,
-        df_b: pl.DataFrame,
-        df_t: pl.DataFrame,
-        rules: FinancialRules,
-        df_fx: pl.DataFrame | None = None,
-        start_date: date | None = None,
-        end_date: date | None = None,
-        run_id: str = "UNKNOWN",
+        data: QuantDataFrames,
+        options: QuantRunOptions,
     ) -> "RunContext":
         """Instantiate RunContext directly from in-memory DataFrames.
 
         Parameters
         ----------
-        df_p : pl.DataFrame
-            Purchases DataFrame.
-        df_s : pl.DataFrame
-            Sales DataFrame.
-        df_m : pl.DataFrame
-            Market data observations DataFrame.
-        df_i : pl.DataFrame
-            ISIN master DataFrame.
-        df_b : pl.DataFrame
-            Benchmark index DataFrame.
-        df_t : pl.DataFrame
-            Macro tax parameters DataFrame.
-        rules : FinancialRules
-            Active financial rules configuration.
-        df_fx : pl.DataFrame | None, optional
-            Currency FX rates DataFrame, by default None.
-        start_date : date | None, optional
-            Run start date boundary, by default None.
-        end_date : date | None, optional
-            Run end date boundary, by default None.
-        run_id : str, optional
-            Unique execution run identifier, by default "UNKNOWN".
+        data : QuantDataFrames
+            Bundle of DataFrames.
+        options : QuantRunOptions
+            Run configuration options.
 
         Returns
         -------
@@ -162,9 +158,13 @@ class RunContext:
             Initialized analytics run context.
         """
         loaded_p, loaded_s, loaded_m, is_m, loaded_b, loaded_fx = (
-            TaxDataLoader.load_from_dataframes(df_p, df_s, df_m, df_i, df_b, df_fx=df_fx)
+            TaxDataLoader.load_from_dataframes(
+                data.df_p, data.df_s, data.df_m, data.df_i, data.df_b, df_fx=data.df_fx
+            )
         )
-        fy_table = FYMacroParametersTable(df_t, rules=rules)
+        assert options.rules is not None
+        fy_df = data.df_t if data.df_t is not None else pl.DataFrame()
+        fy_table = FYMacroParametersTable(fy_df, rules=options.rules)
 
         return cls(
             df_p=loaded_p,
@@ -173,11 +173,11 @@ class RunContext:
             isin_master=is_m,
             df_b=loaded_b,
             fy_table=fy_table,
-            start_date=start_date,
-            end_date=end_date,
-            rules=rules,
+            start_date=options.start_date,
+            end_date=options.end_date,
+            rules=options.rules,
             df_fx=loaded_fx,
-            run_id=run_id,
+            run_id=options.run_id,
         )
 
 
@@ -193,44 +193,17 @@ class AnalyticsContextManager:
 
     def initialize(
         self,
-        df_p: pl.DataFrame,
-        df_s: pl.DataFrame,
-        df_m: pl.DataFrame,
-        df_i: pl.DataFrame,
-        df_b: pl.DataFrame,
-        df_t: pl.DataFrame,
-        df_fx: pl.DataFrame,
-        start_date: date | None,
-        end_date: date | None,
-        rules: FinancialRules | None,
-        run_id: str = "UNKNOWN",
+        data: QuantDataFrames,
+        options: QuantRunOptions,
     ) -> tuple[RunContext, list[str]]:
         """Validate input dataframes, initialize RunContext, and extract actionable ISINs.
 
         Parameters
         ----------
-        df_p : pl.DataFrame
-            Purchases DataFrame.
-        df_s : pl.DataFrame
-            Sales DataFrame.
-        df_m : pl.DataFrame
-            Market data observations DataFrame.
-        df_i : pl.DataFrame
-            ISIN master DataFrame.
-        df_b : pl.DataFrame
-            Benchmark index DataFrame.
-        df_t : pl.DataFrame
-            Macro tax parameters DataFrame.
-        df_fx : pl.DataFrame
-            Currency FX rates DataFrame.
-        start_date : date | None
-            Execution start boundary.
-        end_date : date | None
-            Execution end boundary.
-        rules : FinancialRules | None
-            Active financial rules configuration.
-        run_id : str, optional
-            Execution run identifier, by default "UNKNOWN".
+        data : QuantDataFrames
+            Bundle of DataFrames.
+        options : QuantRunOptions
+            Execution options and boundaries.
 
         Returns
         -------
@@ -244,22 +217,10 @@ class AnalyticsContextManager:
         """
         self._report("Loading DataFrame memory structures...", 0.01, LogLevel.STEP)
 
-        if rules is None:
+        if options.rules is None:
             raise ValueError("Financial rules must be provided")
 
-        ctx = RunContext.from_dataframes(
-            df_p,
-            df_s,
-            df_m,
-            df_i,
-            df_b,
-            df_t,
-            rules,
-            df_fx,
-            start_date,
-            end_date,
-            run_id=run_id,
-        )
+        ctx = RunContext.from_dataframes(data=data, options=options)
 
         self._report("Data loaded into Context successfully.", 0.05, LogLevel.INFO)
 
@@ -285,5 +246,8 @@ class AnalyticsContextManager:
 
 __all__ = [
     "AnalyticsContextManager",
+    "QuantDataFrames",
+    "QuantFilePaths",
+    "QuantRunOptions",
     "RunContext",
 ]

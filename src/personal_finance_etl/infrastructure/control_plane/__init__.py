@@ -27,7 +27,10 @@ from personal_finance_etl.infrastructure.control_plane.hashing import (
     hash_bytes,
     normalize_path,
 )
-from personal_finance_etl.infrastructure.control_plane.run_repository import RunRepository
+from personal_finance_etl.infrastructure.control_plane.run_repository import (
+    RunRepository,
+    SimulationRunParams,
+)
 
 __all__ = [
     "FILE_TYPE_MAP",
@@ -36,6 +39,7 @@ __all__ = [
     "FileSyncService",
     "RunRepository",
     "SQLiteManager",
+    "SimulationRunParams",
     "compute_file_hash",
     "generate_file_id",
     "hash_bytes",
