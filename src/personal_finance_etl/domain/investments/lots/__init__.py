@@ -26,6 +26,9 @@ from personal_finance_etl.domain.investments.lots.ordering import (
     sort_purchases,
     sort_sales,
 )
+from personal_finance_etl.domain.investments.lots.reconciliation import (
+    LotReconciler,
+)
 
 __all__ = [
     "AcquisitionLot",
@@ -33,6 +36,7 @@ __all__ = [
     "FIFOPortfolio",
     "LotAction",
     "LotBuyParameters",
+    "LotReconciler",
     "TaxLot",
     "sort_purchases",
     "sort_sales",
