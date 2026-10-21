@@ -14,6 +14,7 @@ Does not own
 import math
 from bisect import bisect_right
 from datetime import date, datetime
+from typing import cast
 
 import polars as pl
 
@@ -30,7 +31,47 @@ class BenchmarkPriceProvider:
     """
 
     bm_price_map: dict[date, float]
+    _dates: list[date]
     MAX_STALENESS_DAYS = 7
+
+    @staticmethod
+    def _parse_row_price(bench_id: str, row: dict[str, object]) -> tuple[date, float]:
+        """Validate date and finite positive close price from a benchmark row."""
+        raw_date = cast(str | date | datetime | None, row.get("Date"))
+        d_val = (
+            raw_date
+            if isinstance(raw_date, date) and not isinstance(raw_date, datetime)
+            else to_date_obj(raw_date)
+        )
+        if d_val is None:
+            raise ValueError(
+                f"Benchmark {bench_id!r} contains an invalid observation date: {raw_date!r}"
+            )
+        raw_price = row.get("Close")
+        if raw_price is None:
+            raise ValueError(
+                f"Benchmark {bench_id!r} has a null close on {d_val}; "
+                "missing observations must remain unavailable."
+            )
+        price = float(cast(float | int | str, raw_price))
+        if not math.isfinite(price) or price <= 0:
+            raise ValueError(
+                f"Benchmark {bench_id!r} has an invalid close on {d_val}: {raw_price!r}"
+            )
+        return d_val, price
+
+    def _load_dataframe(self, bench_id: str, df_b: pl.DataFrame) -> None:
+        """Filter and load benchmark closing prices from DataFrame."""
+        required = {"ID", "Date", "Close"}
+        missing = sorted(required - set(df_b.columns))
+        if missing:
+            raise ValueError(f"Benchmark data is missing required columns: {missing}")
+
+        b_subset = df_b.filter(pl.col("ID").cast(pl.String) == str(bench_id).strip()).sort("Date")
+        for row in b_subset.select(["Date", "Close"]).to_dicts():
+            d_val, price = self._parse_row_price(bench_id, row)
+            self.bm_price_map[d_val] = price
+        self._dates = sorted(self.bm_price_map)
 
     def __init__(
         self,
@@ -43,44 +84,13 @@ class BenchmarkPriceProvider:
             raise ValueError("max_staleness_days cannot be negative")
         self.max_staleness_days = max_staleness_days
         self.bm_price_map = {}
-        self._dates: list[date] = []
+        self._dates = []
         if prebuilt_map is not None:
             self._load_map(prebuilt_map)
             return
 
-        if df_b is None or not bench_id or not str(bench_id).strip():
-            return
-
-        required = {"ID", "Date", "Close"}
-        missing = sorted(required - set(df_b.columns))
-        if missing:
-            raise ValueError(f"Benchmark data is missing required columns: {missing}")
-
-        b_subset = df_b.filter(pl.col("ID").cast(pl.String) == str(bench_id).strip()).sort("Date")
-        for row in b_subset.select(["Date", "Close"]).to_dicts():
-            raw_date = row["Date"]
-            d_val = (
-                raw_date
-                if isinstance(raw_date, date) and not isinstance(raw_date, datetime)
-                else to_date_obj(raw_date)
-            )
-            if d_val is None:
-                raise ValueError(
-                    f"Benchmark {bench_id!r} contains an invalid observation date: {raw_date!r}"
-                )
-            raw_price = row["Close"]
-            if raw_price is None:
-                raise ValueError(
-                    f"Benchmark {bench_id!r} has a null close on {d_val}; "
-                    "missing observations must remain unavailable."
-                )
-            price = float(raw_price)
-            if not math.isfinite(price) or price <= 0:
-                raise ValueError(
-                    f"Benchmark {bench_id!r} has an invalid close on {d_val}: {raw_price!r}"
-                )
-            self.bm_price_map[d_val] = price
-        self._dates = sorted(self.bm_price_map)
+        if df_b is not None and bench_id and str(bench_id).strip():
+            self._load_dataframe(str(bench_id).strip(), df_b)
 
     def _load_map(self, values: dict[date, float]) -> None:
         for raw_date, raw_price in values.items():
