@@ -7,8 +7,8 @@ Owns
 
 Does not own
 -------------
-- TAX_EVENT_SCHEMA and TaxEventDict definitions (owned by domain.tax.tax_schema).
-- Batch computation of deterministic Tax_Event_IDs (owned by domain.tax.tax_id).
+- TAX_EVENT_SCHEMA and TaxEventDict definitions (owned by domain.tax.events.schema).
+- Batch computation of deterministic Tax_Event_IDs (owned by domain.tax.events.hashing).
 - Statutory income head and sub-head classification rules (owned by domain.tax.classification).
 - Ordinary tax rate lookup and rate bounding (owned by domain.tax.estimates).
 - Presentation aggregations and reconciliation marts (owned by domain.tax.reconciliation).
@@ -16,20 +16,19 @@ Does not own
 
 from __future__ import annotations
 
-import math
-from collections.abc import Mapping
-from datetime import date, datetime
+from datetime import date
 
 import polars as pl
 
 from personal_finance_etl.config.financial_rules import FinancialRules
-from personal_finance_etl.domain.common.dates import get_fy_string
-from personal_finance_etl.domain.investments.contracts import RealizedEventDict
 from personal_finance_etl.domain.market.macro import FYMacroParametersTable
 from personal_finance_etl.domain.tax.classification import TaxClassifier
 from personal_finance_etl.domain.tax.estimates import TaxEstimator
-from personal_finance_etl.domain.tax.tax_id import _batch_compute_tax_event_ids
-from personal_finance_etl.domain.tax.tax_schema import TAX_EVENT_SCHEMA, TaxEventDict
+from personal_finance_etl.domain.tax.events.hashing import _batch_compute_tax_event_ids
+from personal_finance_etl.domain.tax.events.quant import (
+    normalize_quant_realized_events,
+)
+from personal_finance_etl.domain.tax.events.schema import TAX_EVENT_SCHEMA, TaxEventDict
 
 __all__ = [
     "TAX_EVENT_SCHEMA",
@@ -441,111 +440,9 @@ class BaseEventsBuilder:
             pl.lit(None).cast(pl.String).alias("Lot_ID"),
         )
 
-    @staticmethod
-    def _optional_finite_number(value: object) -> float | None:
-        """Return a finite numeric value, preserving missing/invalid values as null."""
-        return TaxEstimator.clean_optional_finite_number(value)
-
-    def _resolve_quant_rates(
-        self,
-        row: Mapping[str, object],
-        is_reconciliation: bool,
-    ) -> tuple[float | None, float | None, bool]:
-        """Extract and bound applied rate and estimated tax from Quant realized event."""
-        applied_rate = self._optional_finite_number(row.get("Applied_Rate"))
-        estimated_tax = self._optional_finite_number(row.get("Estimated_Tax"))
-        if applied_rate is not None and not 0.0 <= applied_rate <= 1.0:
-            applied_rate = None
-        if estimated_tax is not None and estimated_tax < 0:
-            estimated_tax = None
-
-        rates_valid = applied_rate is not None and estimated_tax is not None
-        if is_reconciliation or not rates_valid:
-            return None, None, rates_valid
-        return applied_rate, estimated_tax, rates_valid
-
-    def _check_quant_status_reasons(
-        self,
-        row: Mapping[str, object],
-        is_reconciliation: bool,
-        classification_known: bool,
-        clean_curr: str | None,
-        rates_valid: bool,
-    ) -> list[str]:
-        """Compile status warnings for Quant tax events requiring manual review."""
-        status_reasons: list[str] = []
-        if is_reconciliation:
-            status_reasons.append(
-                "Reconciliation lot: original acquisition evidence requires review."
-            )
-        if not classification_known:
-            status_reasons.append("Investment tax classification is unmapped or invalid.")
-        if not self._clean_text(row.get("ISIN")):
-            status_reasons.append("ISIN is missing.")
-        if not self._clean_text(row.get("Lot_ID")):
-            status_reasons.append("Lot_ID is missing.")
-        if not clean_curr:
-            status_reasons.append("Currency_ID is missing.")
-        if not is_reconciliation and not rates_valid:
-            status_reasons.append("Applied tax rate or estimated tax is unavailable or invalid.")
-        return status_reasons
-
-    def _build_quant_tax_event(
-        self,
-        row: Mapping[str, object],
-        has_currency_id: bool,
-    ) -> TaxEventDict:
-        """Construct a strongly typed TaxEventDict from a Quant FIFO realized event row."""
-        source_id = self._required_id(row.get("Realized_Event_ID"), "Realized_Event_ID")
-        event_date = self._as_date(row.get("Disposal_Date"), "Quant Disposal_Date", source_id)
-        amount = self._required_amount(
-            row.get("Realized_Gain_Loss"), "Realized_Gain_Loss", source_id
-        )
-        sub_head, classification_known = self._quant_sub_head(row)
-        is_reconciliation = str(row.get("Lot_Source_Type") or "").upper() == "RECONCILIATION"
-
-        currency_val = row.get("Currency_ID") if has_currency_id else row.get("CURRENCY_ID")
-        clean_curr = self._clean_text(currency_val)
-
-        applied_rate, estimated_tax, rates_valid = self._resolve_quant_rates(row, is_reconciliation)
-        status_reasons = self._check_quant_status_reasons(
-            row, is_reconciliation, classification_known, clean_curr, rates_valid
-        )
-
-        return {
-            "FY": self._financial_year(event_date),
-            "Event_Date": event_date,
-            "Source_Type": "QUANT",
-            "Source_ID": source_id,
-            "Income_Head": "Capital Gains",
-            "Tax_Sub_Head": sub_head,
-            "Amount_INR": amount,
-            "Applied_Rate": applied_rate,
-            "Estimated_Tax": estimated_tax,
-            "CURRENCY_ID": clean_curr,
-            "Tax_Status": "CHECK_REQUIRED" if status_reasons else "READY",
-            "Tax_Status_Reason": " ".join(status_reasons) or None,
-            "ISIN": self._clean_text(row.get("ISIN")),
-            "Lot_ID": self._clean_text(row.get("Lot_ID")),
-        }
-
     def _normalize_quant_realized_events(self) -> list[TaxEventDict]:
         """Normalize authoritative Quant FIFO realized gains/losses."""
-        df = self.df_realized_events
-        if df.is_empty():
-            return []
-        required = {"Realized_Event_ID", "Disposal_Date", "Realized_Gain_Loss"}
-        missing = sorted(required - set(df.columns))
-        if missing:
-            raise ValueError(f"Quant realized events missing required columns: {missing}")
-
-        has_currency_id = "Currency_ID" in df.columns
-        return [self._build_quant_tax_event(row, has_currency_id) for row in df.to_dicts()]
-
-    def _quant_sub_head(self, row: RealizedEventDict | Mapping[str, object]) -> tuple[str, bool]:
-        """Map Quant instrument/holding metadata to the configured evidence sub-head."""
-        cutoff = self.rules.assumptions.tax.debt_mf_cutoff_date if self.rules else None
-        return TaxClassifier.map_quant_sub_head(row, debt_mf_cutoff_date=cutoff)
+        return normalize_quant_realized_events(self.df_realized_events, self.rules)
 
     def _validate_subcategory_dimension(self) -> None:
         """Reject ambiguous dimension keys before building the lookup map."""
@@ -561,62 +458,6 @@ class BaseEventsBuilder:
                 "Duplicate canonical TaxEvent natural key(s) detected "
                 f"(Source_Type, Source_ID, Tax_Sub_Head): {keys[:10]}"
             )
-
-    @staticmethod
-    def _required_id(value: object, field_name: str) -> str:
-        if value is None or not str(value).strip():
-            raise ValueError(f"Required identity field {field_name} is missing.")
-        return str(value).strip()
-
-    @staticmethod
-    def _required_amount(value: object, field_name: str, source_id: object) -> float:
-        if value is None:
-            raise ValueError(f"Required amount {field_name} is null for source {source_id!r}.")
-        if isinstance(value, bool) or not isinstance(value, (int, float, str)):
-            raise ValueError(
-                f"Required amount {field_name} is invalid for source {source_id!r}: {value!r}"
-            )
-        try:
-            amount = float(value)
-        except (TypeError, ValueError) as exc:
-            raise ValueError(
-                f"Required amount {field_name} is invalid for source {source_id!r}: {value!r}"
-            ) from exc
-
-        if not math.isfinite(amount):
-            raise ValueError(
-                f"Required amount {field_name} must be finite for source {source_id!r}."
-            )
-        return amount
-
-    @staticmethod
-    def _as_date(value: object, field_name: str, source_id: object) -> date:
-        if value is None:
-            raise ValueError(f"Required date {field_name} is null for source {source_id!r}.")
-        if isinstance(value, datetime):
-            return value.date()
-        if isinstance(value, date):
-            return value
-        try:
-            parsed = pl.Series([value]).cast(pl.Date, strict=True).item()
-        except Exception as exc:
-            raise ValueError(
-                f"Required date {field_name} is invalid for source {source_id!r}: {value!r}"
-            ) from exc
-        if not isinstance(parsed, date):
-            raise ValueError(f"Required date {field_name} is null for source {source_id!r}.")
-        return parsed
-
-    @staticmethod
-    def _financial_year(event_date: date) -> str:
-        return get_fy_string(event_date)
-
-    @staticmethod
-    def _clean_text(value: object) -> str | None:
-        if value is None:
-            return None
-        text = str(value).strip()
-        return text or None
 
 
 TaxEventNormalizer = BaseEventsBuilder
