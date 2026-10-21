@@ -7,8 +7,8 @@ Owns
 
 Does not own
 -------------
-- Deterministic ID hashing (owned by domain.tax.tax_id).
-- Evidence normalization and validation (owned by domain.tax.events).
+- Deterministic ID hashing (owned by domain.tax.events.builder.hashing).
+- Evidence normalization and validation (owned by domain.tax.events.builder).
 - Statutory income head and sub-head classification rules (owned by domain.tax.classification).
 """
 
