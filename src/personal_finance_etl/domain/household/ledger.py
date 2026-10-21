@@ -31,32 +31,9 @@ class LedgerBuilder:
         self.dfs = dfs
         self.rules = rules
 
-    def build(self) -> dict[str, pl.LazyFrame]:
-        """Build aggregated ledger structures.
-
-        Returns
-        -------
-        dict[str, pl.LazyFrame]
-            Dictionary containing:
-            - lf_exp_agg: Aggregated expenses with core and non-cash tags.
-            - lf_inc_agg: Aggregated income with stream classification tags.
-            - lf_activity: Monthly cash/non-cash inflow/outflow activity by asset subcategory.
-            - lf_balances: Monthly net changes by asset subcategory.
-        """
-        f_open = self.dfs.get("df_f_opening_balances")
-        f_inc = self.dfs.get("df_f_income_transactions")
-        f_exp = self.dfs.get("df_f_expense_transactions")
-        f_trn = self.dfs.get("df_f_transfer_transactions")
-
-        if f_open is None or f_inc is None or f_exp is None or f_trn is None:
-            return {}
-
-        lf_open = f_open.lazy() if isinstance(f_open, pl.DataFrame) else f_open
-        lf_inc = f_inc.lazy() if isinstance(f_inc, pl.DataFrame) else f_inc
-        lf_exp = f_exp.lazy() if isinstance(f_exp, pl.DataFrame) else f_exp
-        lf_trn = f_trn.lazy() if isinstance(f_trn, pl.DataFrame) else f_trn
-
-        lf_open_agg = (
+    def _prepare_opening_balances(self, lf_open: pl.LazyFrame) -> pl.LazyFrame:
+        """Extract latest account opening balance snapshots."""
+        return (
             lf_open.sort("ZUTIME")
             .group_by("ZASSETUID")
             .last()
@@ -69,7 +46,9 @@ class LedgerBuilder:
             )
         )
 
-        lf_inc_agg = ensure_date_col(lf_inc, "DATE").select(
+    def _prepare_income_transactions(self, lf_inc: pl.LazyFrame) -> pl.LazyFrame:
+        """Select and normalize standard income fields."""
+        return ensure_date_col(lf_inc, "DATE").select(
             [
                 pl.col("ASSET_ID").alias("ASSET_SUBCATEGORY_ID"),
                 pl.col("BASE_AMOUNT").alias("INCOME"),
@@ -82,7 +61,8 @@ class LedgerBuilder:
             ]
         )
 
-        d_asset_subcat = self.dfs.get("df_d_asset_subcategory")
+    def _prepare_expense_transactions(self, lf_exp: pl.LazyFrame) -> pl.LazyFrame:
+        """Enrich expenses with non-cash PnL indicators and parent category groups."""
         lf_exp_agg = ensure_date_col(lf_exp, "DATE").select(
             [
                 pl.col("ASSET_ID").alias("ASSET_SUBCATEGORY_ID"),
@@ -92,6 +72,7 @@ class LedgerBuilder:
                 pl.col("Is_Core_Expense"),
             ]
         )
+        d_asset_subcat = self.dfs.get("df_d_asset_subcategory")
         if d_asset_subcat is not None:
             lf_asset_subcat = (
                 d_asset_subcat.lazy()
@@ -136,7 +117,11 @@ class LedgerBuilder:
                 .drop("PARENT_ID")
             )
 
-        lf_trn_agg = ensure_date_col(lf_trn, "DATE").select(
+        return lf_exp_agg
+
+    def _prepare_transfer_transactions(self, lf_trn: pl.LazyFrame) -> pl.LazyFrame:
+        """Select normalized transfer rows."""
+        return ensure_date_col(lf_trn, "DATE").select(
             [
                 pl.col("ASSET_ID").alias("ASSET_SUBCATEGORY_ID"),
                 pl.col("AMOUNT_PROPER").alias("TRANSFER"),
@@ -144,7 +129,15 @@ class LedgerBuilder:
             ]
         )
 
-        lf_ledger = pl.concat(
+    def _build_unified_ledger(
+        self,
+        lf_open_agg: pl.LazyFrame,
+        lf_inc_agg: pl.LazyFrame,
+        lf_exp_agg: pl.LazyFrame,
+        lf_trn_agg: pl.LazyFrame,
+    ) -> pl.LazyFrame:
+        """Union opening balances, income, expenses, and transfers diagonally."""
+        return pl.concat(
             [
                 lf_open_agg.with_columns(
                     pl.lit("OPENING").alias("TYPE"), pl.lit(False).alias("Is_Non_Cash_Income")
@@ -171,7 +164,9 @@ class LedgerBuilder:
             how="diagonal",
         )
 
-        lf_activity = (
+    def _build_monthly_activity(self, lf_ledger: pl.LazyFrame) -> pl.LazyFrame:
+        """Aggregate monthly cash and non-cash inflows, outflows, and transfers."""
+        return (
             lf_ledger.with_columns(
                 pl.col("DATE").dt.month_start().alias("MONTH_START_DATE"),
                 pl.col("DATE").dt.month_end().alias("MONTH_END_DATE"),
@@ -239,6 +234,8 @@ class LedgerBuilder:
             )
         )
 
+    def _build_monthly_balances(self, lf_ledger: pl.LazyFrame) -> pl.LazyFrame:
+        """Compute monthly net balance changes by asset subcategory."""
         lf_ledger_balance = lf_ledger.with_columns(
             pl.when(pl.col("TYPE") == "EXPENSE")
             .then(pl.col("AMOUNT") * -1)
@@ -246,10 +243,43 @@ class LedgerBuilder:
             .alias("NET_AMOUNT"),
             pl.col("DATE").dt.month_end().alias("MONTH_END_DATE"),
         )
-
-        lf_balances = lf_ledger_balance.group_by(["ASSET_SUBCATEGORY_ID", "MONTH_END_DATE"]).agg(
+        return lf_ledger_balance.group_by(["ASSET_SUBCATEGORY_ID", "MONTH_END_DATE"]).agg(
             pl.col("NET_AMOUNT").sum().fill_null(0.0).alias("MONTHLY_NET_CHANGE")
         )
+
+    def build(self) -> dict[str, pl.LazyFrame]:
+        """Build aggregated ledger structures.
+
+        Returns
+        -------
+        dict[str, pl.LazyFrame]
+            Dictionary containing:
+            - lf_exp_agg: Aggregated expenses with core and non-cash tags.
+            - lf_inc_agg: Aggregated income with stream classification tags.
+            - lf_activity: Monthly cash/non-cash inflow/outflow activity by asset subcategory.
+            - lf_balances: Monthly net changes by asset subcategory.
+        """
+        f_open = self.dfs.get("df_f_opening_balances")
+        f_inc = self.dfs.get("df_f_income_transactions")
+        f_exp = self.dfs.get("df_f_expense_transactions")
+        f_trn = self.dfs.get("df_f_transfer_transactions")
+
+        if f_open is None or f_inc is None or f_exp is None or f_trn is None:
+            return {}
+
+        lf_open = f_open.lazy() if isinstance(f_open, pl.DataFrame) else f_open
+        lf_inc = f_inc.lazy() if isinstance(f_inc, pl.DataFrame) else f_inc
+        lf_exp = f_exp.lazy() if isinstance(f_exp, pl.DataFrame) else f_exp
+        lf_trn = f_trn.lazy() if isinstance(f_trn, pl.DataFrame) else f_trn
+
+        lf_open_agg = self._prepare_opening_balances(lf_open)
+        lf_inc_agg = self._prepare_income_transactions(lf_inc)
+        lf_exp_agg = self._prepare_expense_transactions(lf_exp)
+        lf_trn_agg = self._prepare_transfer_transactions(lf_trn)
+
+        lf_ledger = self._build_unified_ledger(lf_open_agg, lf_inc_agg, lf_exp_agg, lf_trn_agg)
+        lf_activity = self._build_monthly_activity(lf_ledger)
+        lf_balances = self._build_monthly_balances(lf_ledger)
 
         return {
             "lf_exp_agg": lf_exp_agg,
