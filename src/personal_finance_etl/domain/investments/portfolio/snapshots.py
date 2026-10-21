@@ -13,19 +13,24 @@ Does not own
 - Presentation layer formatting or persistence (owned by presentation and infrastructure).
 """
 
-from dataclasses import dataclass
 from datetime import date
 
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.domain.investments.contracts import (
-    InstrumentMetricsRecord,
     IsinMasterRecord,
     SnapshotRecord,
     TaxLot,
 )
 from personal_finance_etl.domain.investments.lots.fifo import FIFOPortfolio
 from personal_finance_etl.domain.investments.performance.returns import calculate_cagr
-from personal_finance_etl.domain.market.fx import FXRateProvider
+from personal_finance_etl.domain.investments.portfolio.lot_metrics import (
+    LotValuationContext,
+    _LotFxAttribution,
+    _LotTaxAttributes,
+    compute_domestic_fx_attribution,
+    compute_foreign_fx_attribution,
+    compute_lot_benchmark_metrics,
+)
 from personal_finance_etl.domain.market.macro import (
     FYMacroParametersTable,
     add_months,
@@ -41,228 +46,6 @@ def _raise_invariant(msg: str) -> str:
 def _rounded_optional(value: float | None, digits: int = 8) -> float | None:
     """Safely round an optional float value to specified decimal digits."""
     return round(value, digits) if value is not None else None
-
-
-@dataclass(frozen=True)
-class LotValuationContext:
-    """Market price, benchmark, and macroeconomic context for per-lot snapshot generation."""
-
-    m_date: date
-    m_price: float
-    m_bm_price: float
-    inst_metrics: InstrumentMetricsRecord
-    fx_provider: FXRateProvider | None = None
-    execution_residual: float = 0.0
-    remaining_ltcg_exemption: float = 0.0
-
-
-@dataclass
-class _LotTaxAttributes:
-    """Holding classification, tax rates, taxable capital gains, and after-tax values."""
-
-    holding_type: str
-    ltcg_rate: float
-    stcg_rate: float
-    ltcg_thr: int
-    days_to_ltcg: int
-    unreal_ltcg: float
-    unreal_stcg: float
-    unreal_gain: float
-    unreal_ltcl: float
-    unreal_stcl: float
-    unreal_loss: float
-    ltcg_tax: float
-    stcg_tax: float
-    after_tax_pl: float
-    after_tax_cv: float
-
-
-@dataclass
-class _LotFxAttribution:
-    """Attribution metrics decomposing native asset and foreign currency returns."""
-
-    buy_val_local: float
-    close_val_local: float
-    asset_pnl: float
-    forex_pnl: float
-    lot_cagr_local: float | None
-    absolute_return_local: float
-    asset_return_pct: float
-    forex_return_pct: float
-    blended_fx_buy_rate: float
-    curr_fx_rate: float
-    currency_appreciation_pct: float
-    fx_rate_buy: float
-    buy_price_local: float
-    market_price_local: float
-    forex_contrib: float
-
-
-@dataclass
-class _LotBenchmarkMetrics:
-    """Counterfactual benchmark returns, relative performance alpha, and outperformance indicator."""
-
-    bm_buy: float | None
-    m_bm_price_inr: float
-    lot_bm_ret: float
-    lot_bm_cagr: float | None
-    lot_bm_cagr_status: str
-    lot_bm_cagr_local: float | None
-    lot_alpha: float | None
-    is_outperforming: bool
-
-
-def _compute_lot_benchmark_metrics(
-    lot: TaxLot,
-    ctx: LotValuationContext,
-    age: int,
-    lot_cagr: float | None,
-    default_curr: str,
-) -> _LotBenchmarkMetrics:
-    """Calculate benchmark shadow returns, local CAGR, and outperformance alpha for a lot.
-
-    Parameters
-    ----------
-    lot : TaxLot
-        Subject tax lot.
-    ctx : LotValuationContext
-        Valuation context with benchmark and FX information.
-    age : int
-        Lot age in calendar days.
-    lot_cagr : float | None
-        Native asset annualized return.
-    default_curr : str
-        Default base currency ID.
-
-    Returns
-    -------
-    _LotBenchmarkMetrics
-        Computed benchmark metrics and outperformance flag.
-    """
-    if lot.currency_id and lot.currency_id != default_curr and ctx.fx_provider:
-        fx_rate_snap_lot = ctx.fx_provider.get_rate(ctx.m_date, lot.currency_id) or 1.0
-    else:
-        fx_rate_snap_lot = 1.0
-
-    m_bm_price_inr = ctx.m_bm_price * fx_rate_snap_lot
-    lbm_buy = lot.bm_buy
-
-    if lbm_buy and lbm_buy > 0:
-        lot_bm_ret = (m_bm_price_inr - lbm_buy) / lbm_buy
-        lot_bm_cagr_res = calculate_cagr(lbm_buy, m_bm_price_inr, age)
-        lot_bm_cagr = lot_bm_cagr_res.value
-        lot_bm_cagr_status = lot_bm_cagr_res.status
-    else:
-        lbm_buy = None
-        lot_bm_ret = 0.0
-        lot_bm_cagr = None
-        lot_bm_cagr_status = "UNDEFINED"
-
-    lbm_buy_local = lot.bm_buy_local
-    if lbm_buy_local and lbm_buy_local > 0:
-        lot_bm_cagr_local = calculate_cagr(lbm_buy_local, ctx.m_bm_price, age).value
-    else:
-        lot_bm_cagr_local = lot_bm_cagr
-
-    is_outperforming = False
-    if lot_cagr is not None and lot_bm_cagr is not None:
-        lot_alpha = lot_cagr - lot_bm_cagr
-        if lot_alpha > 0:
-            is_outperforming = True
-    else:
-        lot_alpha = None
-
-    return _LotBenchmarkMetrics(
-        bm_buy=lbm_buy,
-        m_bm_price_inr=m_bm_price_inr,
-        lot_bm_ret=lot_bm_ret,
-        lot_bm_cagr=lot_bm_cagr,
-        lot_bm_cagr_status=lot_bm_cagr_status,
-        lot_bm_cagr_local=lot_bm_cagr_local,
-        lot_alpha=lot_alpha,
-        is_outperforming=is_outperforming,
-    )
-
-
-def _compute_foreign_fx_attribution(
-    lot: TaxLot,
-    ctx: LotValuationContext,
-    age: int,
-    buy_val_lot: float,
-    pnl: float,
-) -> _LotFxAttribution:
-    """Decompose performance into asset and currency returns for foreign-currency holdings."""
-    fx_rate_snap = (
-        ctx.fx_provider.get_rate(ctx.m_date, str(lot.currency_id)) if ctx.fx_provider else None
-    ) or 1.0
-    m_price_local = ctx.m_price / fx_rate_snap if fx_rate_snap > 0 else ctx.m_price
-
-    buy_val_local = lot.qty * lot.price_local
-    close_val_local = lot.qty * m_price_local
-
-    asset_pnl_local = (m_price_local - lot.price_local) * lot.qty
-    asset_pnl = asset_pnl_local * fx_rate_snap
-    forex_pnl = lot.price_local * (fx_rate_snap - lot.fx_rate_buy) * lot.qty
-
-    lot_cagr_local = calculate_cagr(lot.price_local, m_price_local, age).value
-    absolute_return_local = (
-        (m_price_local - lot.price_local) / lot.price_local if lot.price_local > 0 else 0.0
-    )
-    asset_return_pct = asset_pnl / buy_val_lot if buy_val_lot != 0 else 0.0
-    forex_return_pct = forex_pnl / buy_val_lot if buy_val_lot != 0 else 0.0
-    blended_fx_buy_rate = buy_val_lot / buy_val_local if buy_val_local != 0 else lot.fx_rate_buy
-    curr_fx_rate = fx_rate_snap
-    currency_appreciation_pct = (
-        (curr_fx_rate / blended_fx_buy_rate) - 1.0 if blended_fx_buy_rate > 0 else 0.0
-    )
-    forex_contrib = forex_pnl / pnl if pnl != 0 else 0.0
-
-    return _LotFxAttribution(
-        buy_val_local=buy_val_local,
-        close_val_local=close_val_local,
-        asset_pnl=asset_pnl,
-        forex_pnl=forex_pnl,
-        lot_cagr_local=lot_cagr_local,
-        absolute_return_local=absolute_return_local,
-        asset_return_pct=asset_return_pct,
-        forex_return_pct=forex_return_pct,
-        blended_fx_buy_rate=blended_fx_buy_rate,
-        curr_fx_rate=curr_fx_rate,
-        currency_appreciation_pct=currency_appreciation_pct,
-        fx_rate_buy=lot.fx_rate_buy if lot.fx_rate_buy else 0.0,
-        buy_price_local=lot.price_local if lot.price_local else 0.0,
-        market_price_local=m_price_local,
-        forex_contrib=forex_contrib,
-    )
-
-
-def _compute_domestic_fx_attribution(
-    lot: TaxLot,
-    ctx: LotValuationContext,
-    buy_val_lot: float,
-    close_val: float,
-    pnl: float,
-    lot_cagr: float | None,
-    lot_return: float,
-) -> _LotFxAttribution:
-    """Return identity FX attribution metrics for base domestic currency holdings."""
-    return _LotFxAttribution(
-        buy_val_local=buy_val_lot,
-        close_val_local=close_val,
-        asset_pnl=pnl,
-        forex_pnl=0.0,
-        lot_cagr_local=lot_cagr,
-        absolute_return_local=lot_return,
-        asset_return_pct=lot_return,
-        forex_return_pct=0.0,
-        blended_fx_buy_rate=1.0,
-        curr_fx_rate=1.0,
-        currency_appreciation_pct=0.0,
-        fx_rate_buy=1.0,
-        buy_price_local=lot.price,
-        market_price_local=ctx.m_price,
-        forex_contrib=0.0,
-    )
 
 
 class SnapshotGenerator:
@@ -386,8 +169,8 @@ class SnapshotGenerator:
         """Decompose investment performance into native asset and foreign currency returns."""
         default_curr = getattr(self.rules, "DEFAULT_CURRENCY_ID", "INR_INR")
         if lot.currency_id and lot.currency_id != default_curr and ctx.fx_provider:
-            return _compute_foreign_fx_attribution(lot, ctx, age, buy_val_lot, pnl)
-        return _compute_domestic_fx_attribution(
+            return compute_foreign_fx_attribution(lot, ctx, age, buy_val_lot, pnl)
+        return compute_domestic_fx_attribution(
             lot, ctx, buy_val_lot, close_val, pnl, lot_cagr, lot_return
         )
 
@@ -412,7 +195,7 @@ class SnapshotGenerator:
             day_weight = 1.0
 
         default_curr = getattr(self.rules, "DEFAULT_CURRENCY_ID", "INR_INR")
-        bm = _compute_lot_benchmark_metrics(lot, ctx, age, lot_cagr, default_curr)
+        bm = compute_lot_benchmark_metrics(lot, ctx, age, lot_cagr, default_curr)
 
         pnl = (ctx.m_price - lot.price) * lot.qty
         close_val = lot.qty * ctx.m_price
