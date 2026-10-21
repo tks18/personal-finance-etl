@@ -61,23 +61,8 @@ def get_file_name(dt: date) -> str:
     return f"{dt.day:02d}-{dt.month:02d}-{dt.year}.csv"
 
 
-def to_date_obj(val: str | date | datetime | None, *, strict: bool = False) -> date | None:
-    """Flexibly coerce a value to a Python date object.
-
-    If strict is True, populated values that cannot be parsed raise ValueError
-    instead of silently returning None.
-    """
-    if val is None:
-        return None
-    if isinstance(val, date) and not isinstance(val, datetime):
-        return val
-    if isinstance(val, datetime):
-        return val.date()
-
-    val_clean = str(val).strip()
-    if not val_clean or val_clean.lower() in ("null", "none"):
-        return None
-
+def _parse_date_string(val_clean: str) -> date | None:
+    """Attempt parsing clean date string across supported standard formats."""
     val_date_part = val_clean.split(" ", maxsplit=1)[0]
     for fmt in ("%Y-%m-%d", "%d-%m-%Y", "%d %b %Y", "%d-%b-%y"):
         try:
@@ -89,6 +74,46 @@ def to_date_obj(val: str | date | datetime | None, *, strict: bool = False) -> d
                 return datetime.strptime(val_clean, fmt).date()
             except ValueError:
                 pass
+    return None
+
+
+def to_date_obj(val: str | date | datetime | None, *, strict: bool = False) -> date | None:
+    """Flexibly coerce a value to a Python date object.
+
+    If strict is True, populated values that cannot be parsed raise ValueError
+    instead of silently returning None.
+
+    Parameters
+    ----------
+    val : str | date | datetime | None
+        Input value to coerce.
+    strict : bool, optional
+        Whether to raise ValueError on malformed populated strings, by default False.
+
+    Returns
+    -------
+    date | None
+        Coerced date object, or None if empty or invalid in non-strict mode.
+
+    Raises
+    ------
+    ValueError
+        If strict is True and a populated string cannot be parsed as a date.
+    """
+    if val is None:
+        return None
+    if isinstance(val, datetime):
+        return val.date()
+    if isinstance(val, date):
+        return val
+
+    val_clean = str(val).strip()
+    if not val_clean or val_clean.lower() in ("null", "none"):
+        return None
+
+    parsed = _parse_date_string(val_clean)
+    if parsed is not None:
+        return parsed
 
     if strict:
         raise ValueError(f"Cannot parse date from populated value: {val!r}")
@@ -114,6 +139,22 @@ def ensure_date_col[T: (pl.DataFrame, pl.LazyFrame)](df: T, col_name: str = "DAT
     return df
 
 
+def _try_parse_date_formats(val_str: str, formats: tuple[str, ...]) -> date | None:
+    """Iterate over multiple date formats and return parsed date if matched."""
+    clean_val = val_str.split("T", maxsplit=1)[0]
+    for fmt in formats:
+        try:
+            return datetime.strptime(val_str, fmt).date()
+        except ValueError:
+            pass
+        if clean_val != val_str:
+            try:
+                return datetime.strptime(clean_val, fmt).date()
+            except ValueError:
+                pass
+    return None
+
+
 def parse_strict_date(
     value: object,
     formats: tuple[str, ...] = DEFAULT_DATE_FORMATS,
@@ -128,6 +169,28 @@ def parse_strict_date(
 
     A blank/None value in an optional field returns None.
     A populated value that cannot be parsed under any format raises FinancialSourceValidationError.
+
+    Parameters
+    ----------
+    value : object
+        Scalar date value to parse.
+    formats : tuple[str, ...], optional
+        Candidate datetime format patterns.
+    field_name : str, optional
+        Diagnostic label for field.
+    source : str | None, optional
+        Source identifier.
+    sheet : str | None, optional
+        Sheet name for workbooks.
+    row_identifier : object, optional
+        Row key for diagnostics.
+    optional : bool, optional
+        Whether absent values resolve to None, by default False.
+
+    Returns
+    -------
+    date | None
+        Parsed date or None.
     """
     if value is None:
         if optional:
@@ -159,17 +222,9 @@ def parse_strict_date(
             row_identifier=row_identifier,
         )
 
-    clean_val = val_str.split("T", maxsplit=1)[0]
-    for fmt in formats:
-        try:
-            return datetime.strptime(val_str, fmt).date()
-        except ValueError:
-            pass
-        if clean_val != val_str:
-            try:
-                return datetime.strptime(clean_val, fmt).date()
-            except ValueError:
-                pass
+    parsed = _try_parse_date_formats(val_str, formats)
+    if parsed is not None:
+        return parsed
 
     raise FinancialSourceValidationError(
         f"Malformed financial date in field {field_name!r}: {value!r}",
@@ -179,6 +234,26 @@ def parse_strict_date(
         raw_value=value,
         row_identifier=row_identifier,
     )
+
+
+def _is_date_column_faulty(
+    raw_v: object,
+    formats: list[str],
+    is_optional: bool,
+) -> bool:
+    """Check if a single cell date value violates parsing constraints."""
+    if raw_v is None:
+        return not is_optional
+    if isinstance(raw_v, (datetime, date)):
+        return False
+    raw_s = str(raw_v).strip()
+    if not is_optional and (raw_s == "" or raw_s.lower() in ("null", "none")):
+        return True
+    try:
+        parse_strict_date(raw_v, tuple(formats), optional=is_optional)
+        return False
+    except FinancialSourceValidationError:
+        return True
 
 
 def _diagnose_date_failure(
@@ -196,20 +271,8 @@ def _diagnose_date_failure(
 
     for c in available_cols:
         raw_v = row_dict.get(c)
-        if raw_v is not None:
-            if isinstance(raw_v, (datetime, date)):
-                continue
-            raw_s = str(raw_v).strip()
-            if c not in opt_set and (raw_s == "" or raw_s.lower() in ("null", "none")):
-                faulty_col, faulty_val = c, raw_v
-                break
-            try:
-                parse_strict_date(raw_v, tuple(date_cols_formats[c]), optional=c in opt_set)
-            except FinancialSourceValidationError:
-                faulty_col, faulty_val = c, raw_v
-                break
-        elif c not in opt_set:
-            faulty_col, faulty_val = c, None
+        if _is_date_column_faulty(raw_v, date_cols_formats[c], c in opt_set):
+            faulty_col, faulty_val = c, raw_v
             break
 
     raise FinancialSourceValidationError(
@@ -220,6 +283,44 @@ def _diagnose_date_failure(
         raw_value=faulty_val,
         row_identifier=row_id_val,
     )
+
+
+def _build_date_parse_expr(
+    col_name: str,
+    formats: list[str],
+    base_dtype: type[pl.DataType] | pl.DataType | None,
+) -> pl.Expr:
+    """Construct Polars coalesce expression attempting date parsing across candidate formats."""
+    raw_text = pl.col(col_name).cast(pl.String).str.strip_chars()
+    parse_attempts: list[pl.Expr] = []
+    if base_dtype == pl.Date:
+        parse_attempts.append(pl.col(col_name))
+    elif base_dtype == pl.Datetime:
+        parse_attempts.append(pl.col(col_name).dt.date())
+    elif base_dtype not in (pl.String, pl.Utf8):
+        parse_attempts.append(pl.col(col_name).cast(pl.Date, strict=False))
+
+    parse_attempts.extend(raw_text.str.to_date(fmt, strict=False) for fmt in formats)
+    parse_attempts.extend(
+        raw_text.str.to_datetime(fmt, strict=False).dt.date()
+        for fmt in formats
+        if "%H" in fmt or "%I" in fmt
+    )
+    parse_attempts.append(raw_text.str.slice(0, 10).str.to_date("%Y-%m-%d", strict=False))
+    return pl.coalesce(parse_attempts)
+
+
+def _build_date_invalid_check(col_name: str, parsed: pl.Expr, is_optional: bool) -> pl.Expr:
+    """Construct Polars validation predicate detecting unparseable dates."""
+    raw_text = pl.col(col_name).cast(pl.String).str.strip_chars()
+    is_populated = (
+        pl.col(col_name).is_not_null()
+        & (raw_text != "")
+        & (~raw_text.str.to_lowercase().is_in(["null", "none", "nan"]))
+    )
+    if is_optional:
+        return is_populated & parsed.is_null()
+    return (~is_populated) | parsed.is_null()
 
 
 def validate_and_parse_dates(
@@ -250,38 +351,14 @@ def validate_and_parse_dates(
 
     for c in available_cols:
         formats = date_cols_formats[c]
-        raw_text = pl.col(c).cast(pl.String).str.strip_chars()
-        is_populated = (
-            pl.col(c).is_not_null()
-            & (raw_text != "")
-            & (~raw_text.str.to_lowercase().is_in(["null", "none", "nan"]))
-        )
         c_dtype = schema.get(c)
         base = (
             c_dtype.base_type()
             if c_dtype is not None and callable(getattr(c_dtype, "base_type", None))
             else c_dtype
         )
-        parse_attempts: list[pl.Expr] = []
-        if base == pl.Date:
-            parse_attempts.append(pl.col(c))
-        elif base == pl.Datetime:
-            parse_attempts.append(pl.col(c).dt.date())
-        elif base not in (pl.String, pl.Utf8):
-            parse_attempts.append(pl.col(c).cast(pl.Date, strict=False))
-
-        parse_attempts.extend(raw_text.str.to_date(fmt, strict=False) for fmt in formats)
-        parse_attempts.extend(
-            raw_text.str.to_datetime(fmt, strict=False).dt.date()
-            for fmt in formats
-            if "%H" in fmt or "%I" in fmt
-        )
-        parse_attempts.append(raw_text.str.slice(0, 10).str.to_date("%Y-%m-%d", strict=False))
-        parsed = pl.coalesce(parse_attempts)
-        if c in opt_set:
-            invalid_checks.append(is_populated & parsed.is_null())
-        else:
-            invalid_checks.append((~is_populated) | parsed.is_null())
+        parsed = _build_date_parse_expr(c, formats, base)
+        invalid_checks.append(_build_date_invalid_check(c, parsed, c in opt_set))
         cast_exprs.append(parsed.alias(c))
 
     if invalid_checks:
