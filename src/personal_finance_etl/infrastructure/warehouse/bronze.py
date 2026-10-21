@@ -49,6 +49,109 @@ class BronzeLayer:
         self.cp = cp
         self.meta_layer = meta_layer
 
+    def _evolve_schema(self, table_name: str) -> None:
+        """Add any new columns found in schema_df to an existing bronze table.
+
+        Parameters
+        ----------
+        table_name : str
+            Target physical Bronze table name.
+        """
+        try:
+            table_cols = {
+                str(row[0]).lower()
+                for row in self.db_manager.conn.execute(f"DESCRIBE {table_name}").fetchall()  # nosec B608
+            }
+            for col_info in self.db_manager.conn.execute("DESCRIBE schema_df").fetchall():
+                col_name = str(col_info[0])
+                col_type = str(col_info[1])
+                if col_name.lower() not in table_cols:
+                    self.db_manager.conn.execute(
+                        f'ALTER TABLE {table_name} ADD COLUMN "{col_name}" {col_type}'  # nosec B608
+                    )
+                    logger.debug(
+                        "[Bronze] Evolved schema for %s: added column '%s' (%s)",
+                        table_name,
+                        col_name,
+                        col_type,
+                    )
+        except duckdb.CatalogException as e:
+            logger.debug("[Bronze] Table %s not yet created, skipping evolution: %s", table_name, e)
+
+    def _prepare_bronze_table(
+        self,
+        table_name: str,
+        full_replace: bool,
+        filenames: list[str],
+    ) -> None:
+        """Create or clear partition slices in the Bronze table before row insertion.
+
+        Parameters
+        ----------
+        table_name : str
+            Physical table name.
+        full_replace : bool
+            Whether to drop and replace the table.
+        filenames : list[str]
+            Basenames of files to remove before re-inserting.
+        """
+        if full_replace:
+            self.db_manager.conn.execute(f"DROP TABLE IF EXISTS {table_name}")  # nosec B608
+            self.db_manager.conn.execute(
+                f"CREATE TABLE {table_name} AS SELECT * FROM schema_df"  # nosec B608
+            )
+            logger.debug("[Bronze] Re-created %s for full replacement.", table_name)
+        else:
+            create_query = f"CREATE TABLE IF NOT EXISTS {table_name} AS SELECT * FROM schema_df"  # nosec B608
+            self.db_manager.conn.execute(create_query)
+            self._evolve_schema(table_name)
+
+            placeholders = ", ".join(["?"] * len(filenames))
+            delete_query = f"DELETE FROM {table_name} WHERE __file_name__ IN ({placeholders})"  # nosec B608
+            logger.debug("[BRONZE:DETAIL] Executing SQL: %s", delete_query)
+            self.db_manager.conn.execute(delete_query, filenames)
+
+    def _insert_bronze_records(
+        self,
+        table_name: str,
+        df_filtered: pl.DataFrame,
+    ) -> dict[str, int]:
+        """Insert filtered rows into the target table and return counts per file.
+
+        Parameters
+        ----------
+        table_name : str
+            Physical table name.
+        df_filtered : pl.DataFrame
+            Filtered DataFrame with actionable rows.
+
+        Returns
+        -------
+        dict[str, int]
+            Mapping of file basename to inserted row count.
+        """
+        result: dict[str, int] = {}
+        if df_filtered.height > 0:
+            self.db_manager.conn.register("temp_df", df_filtered)
+            insert_query = f"INSERT INTO {table_name} BY NAME SELECT * FROM temp_df"  # nosec B608
+            logger.debug("[BRONZE:DETAIL] Executing SQL: %s", insert_query)
+            self.db_manager.conn.execute(insert_query)
+            logger.debug(
+                "[BRONZE:DETAIL] Upserted %s: %d rows processed.",
+                table_name,
+                df_filtered.height,
+            )
+            self.db_manager.conn.unregister("temp_df")
+
+            counts = df_filtered.group_by("__file_name__").len()
+            for row in counts.iter_rows():
+                result[row[0]] = row[1]
+        else:
+            logger.debug(
+                "[BRONZE:DETAIL] Upserted %s: 0 rows processed (empty source).", table_name
+            )
+        return result
+
     def upsert_table(
         self,
         df: pl.DataFrame | pl.LazyFrame,
@@ -91,80 +194,27 @@ class BronzeLayer:
 
         schema_df = df.head(0)
         self.db_manager.conn.register("schema_df", schema_df)
-        if full_replace:
-            self.db_manager.conn.execute(
-                f"DROP TABLE IF EXISTS {table_name}"  # nosec B608
-            )
-            self.db_manager.conn.execute(
-                f"CREATE TABLE {table_name} AS SELECT * FROM schema_df"  # nosec B608
-            )
-            logger.debug("[Bronze] Re-created %s for full replacement.", table_name)
-        else:
-            create_query = f"CREATE TABLE IF NOT EXISTS {table_name} AS SELECT * FROM schema_df"  # nosec B608
-            self.db_manager.conn.execute(create_query)
+        try:
+            self._prepare_bronze_table(table_name, full_replace, filenames)
+        finally:
+            self.db_manager.conn.unregister("schema_df")
 
-            try:
-                table_cols = {
-                    str(row[0]).lower()
-                    for row in self.db_manager.conn.execute(
-                        f"DESCRIBE {table_name}"  # nosec B608
-                    ).fetchall()
-                }
-                for col_info in self.db_manager.conn.execute("DESCRIBE schema_df").fetchall():
-                    col_name = str(col_info[0])
-                    col_type = str(col_info[1])
-                    if col_name.lower() not in table_cols:
-                        self.db_manager.conn.execute(
-                            f'ALTER TABLE {table_name} ADD COLUMN "{col_name}" {col_type}'  # nosec B608
-                        )
-                        logger.debug(
-                            "[Bronze] Evolved schema for %s: added column '%s' (%s)",
-                            table_name,
-                            col_name,
-                            col_type,
-                        )
-            except duckdb.CatalogException as e:
-                logger.debug(
-                    "[Bronze] Table %s not yet created, skipping evolution: %s", table_name, e
-                )
-
-            placeholders = ", ".join(["?"] * len(filenames))
-            delete_query = f"DELETE FROM {table_name} WHERE __file_name__ IN ({placeholders})"  # nosec B608
-            logger.debug("[BRONZE:DETAIL] Executing SQL: %s", delete_query)
-            self.db_manager.conn.execute(delete_query, filenames)
-
-        self.db_manager.conn.unregister("schema_df")
-
-        result: dict[str, int] = {}
-
-        if df_filtered.height > 0:
-            self.db_manager.conn.register("temp_df", df_filtered)
-            insert_query = f"INSERT INTO {table_name} BY NAME SELECT * FROM temp_df"  # nosec B608
-            logger.debug("[BRONZE:DETAIL] Executing SQL: %s", insert_query)
-            self.db_manager.conn.execute(insert_query)
-            logger.debug(
-                "[BRONZE:DETAIL] Upserted %s: %d rows processed.",
-                table_name,
-                df_filtered.height,
-            )
-            self.db_manager.conn.unregister("temp_df")
-
-            counts = df_filtered.group_by("__file_name__").len()
-            for row in counts.iter_rows():
-                result[row[0]] = row[1]
-        else:
-            logger.debug(
-                "[BRONZE:DETAIL] Upserted %s: 0 rows processed (empty source).", table_name
-            )
-
-        return result
+        return self._insert_bronze_records(table_name, df_filtered)
 
     def load(
         self,
         extracted_data: ExtractionResult,
         actionable_files: dict[str, list[str]],
     ) -> None:
-        """Write all raw extracted DataFrames to bronze.* tables."""
+        """Write all raw extracted DataFrames to bronze.* tables.
+
+        Parameters
+        ----------
+        extracted_data : ExtractionResult
+            Extracted source frames.
+        actionable_files : dict[str, list[str]]
+            Mapping of sync category to actionable file paths.
+        """
         total_upserts = 0
         total_rows = 0
 
@@ -215,7 +265,13 @@ class BronzeLayer:
         )
 
     def migrate_identity(self, renames: list[tuple[str, str, str]]) -> None:
-        """Migrate file identity (rename) in all Bronze tables without re-ingesting rows."""
+        """Migrate file identity (rename) in all Bronze tables without re-ingesting rows.
+
+        Parameters
+        ----------
+        renames : list[tuple[str, str, str]]
+            Triplets of (old_path, new_path, category).
+        """
         if not renames:
             return
 
@@ -240,7 +296,18 @@ class BronzeLayer:
                 logger.debug("[Bronze] Could not rename %s in %s: %s", old_name, table, e)
 
     def get_table(self, table_name: str) -> pl.DataFrame:
-        """Read a table from the Bronze schema. Returns empty DataFrame if missing."""
+        """Read a table from the Bronze schema. Returns empty DataFrame if missing.
+
+        Parameters
+        ----------
+        table_name : str
+            Table name within bronze schema.
+
+        Returns
+        -------
+        pl.DataFrame
+            Queried DataFrame or empty frame.
+        """
         try:
             return self.db_manager.conn.execute(
                 f"SELECT * FROM bronze.{table_name}"  # nosec B608
@@ -249,7 +316,18 @@ class BronzeLayer:
             return pl.DataFrame()
 
     def get_full_dataset(self, original_mappings: dict[str, dict[str, str]]) -> ExtractionResult:
-        """Read full dataset from Bronze tables via DuckDB and return complete ExtractionResult."""
+        """Read full dataset from Bronze tables via DuckDB and return complete ExtractionResult.
+
+        Parameters
+        ----------
+        original_mappings : dict[str, dict[str, str]]
+            Original column mappings.
+
+        Returns
+        -------
+        ExtractionResult
+            Complete typed ExtractionResult.
+        """
         logger.info("Reading full dataset from Bronze Layer Lakehouse...")
 
         def _get_lf(table_name: str) -> pl.LazyFrame:
