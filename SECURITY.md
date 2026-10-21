@@ -27,11 +27,11 @@ security impact
 sanitized logs
 ```
 
-## Never submit real financial data
+## Financial Data Handling & Sanitization
 
-Do not attach or paste bank/broker statements, portfolio exports, tax documents, database files, raw Control Plane payloads, account numbers, tax identifiers, credentials, API keys, access tokens, addresses, or unsanitized execution logs into public issues, pull requests, discussions, or security reports.
+Do not attach or paste real bank/broker statements, portfolio exports, tax documents, database files, raw Control Plane payloads, account numbers, tax identifiers, credentials, API keys, access tokens, addresses, or unsanitized execution logs into public issues, pull requests, discussions, or security reports unless all identifying and proprietary attributes have been thoroughly redacted.
 
-Use synthetic examples or thoroughly sanitized reproductions.
+Always use synthetic examples or sanitized reproductions whenever possible.
 
 ## Security-relevant areas
 
