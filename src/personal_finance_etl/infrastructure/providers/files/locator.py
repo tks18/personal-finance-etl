@@ -22,6 +22,58 @@ from personal_finance_etl.infrastructure.logging import logger
 __all__ = ["categorize_statement_files"]
 
 
+def _match_category(filepath: str) -> str | None:
+    """Classify an Excel file path into its corresponding statement category.
+
+    Parameters
+    ----------
+    filepath : str
+        Normalized file path.
+
+    Returns
+    -------
+    str | None
+        Category identifier string, or None if file does not match any known pattern.
+    """
+    if not filepath.endswith(".xlsx"):
+        return None
+    if "Stock PL Statements" in filepath:
+        return "stock_pl"
+    if "Mutual Funds - Holdings" in filepath:
+        return "mf_holdings"
+    if "Stock - Orders" in filepath:
+        return "stock_orders"
+    if "Mutual Funds - Orders" in filepath:
+        return "mf_orders"
+    if "IND Money (US Stocks)" in filepath and "Transaction Reports" in filepath:
+        return "us_stock_transactions"
+    return None
+
+
+def _validate_required_categories(categories: dict[str, list[str]], strict: bool) -> None:
+    """Validate that non-optional statement categories contain at least one file.
+
+    Parameters
+    ----------
+    categories : dict[str, list[str]]
+        Classified files mapped by category.
+    strict : bool
+        Whether to enforce presence of all non-optional files.
+
+    Raises
+    ------
+    FileNotFoundError
+        If strict is True and any required category is empty.
+    """
+    if not strict:
+        return
+    for cat, files in categories.items():
+        if not files and cat != "us_stock_transactions":
+            raise FileNotFoundError(
+                f"No files found for category: '{cat}'. Please ensure statements are present."
+            )
+
+
 def categorize_statement_files(folder_path: str, strict: bool = True) -> dict[str, list[str]]:
     """Perform a single directory traversal to categorize all statement files.
 
@@ -45,26 +97,20 @@ def categorize_statement_files(folder_path: str, strict: bool = True) -> dict[st
     )
 
     categories: dict[str, list[str]] = {
-        "stock_pl": [f for f in all_files if f.endswith(".xlsx") and "Stock PL Statements" in f],
-        "mf_holdings": [
-            f for f in all_files if f.endswith(".xlsx") and "Mutual Funds - Holdings" in f
-        ],
-        "stock_orders": [f for f in all_files if f.endswith(".xlsx") and "Stock - Orders" in f],
-        "mf_orders": [f for f in all_files if f.endswith(".xlsx") and "Mutual Funds - Orders" in f],
-        "us_stock_transactions": [
-            f
-            for f in all_files
-            if f.endswith(".xlsx") and "IND Money (US Stocks)" in f and "Transaction Reports" in f
-        ],
+        "stock_pl": [],
+        "mf_holdings": [],
+        "stock_orders": [],
+        "mf_orders": [],
+        "us_stock_transactions": [],
     }
 
-    total_files = sum(len(f) for f in categories.values())
+    for f in all_files:
+        cat = _match_category(f)
+        if cat is not None:
+            categories[cat].append(f)
 
-    for cat, files in categories.items():
-        if not files and strict and cat != "us_stock_transactions":
-            raise FileNotFoundError(
-                f"No files found for category: '{cat}'. Please ensure statements are present."
-            )
+    total_files = sum(len(f) for f in categories.values())
+    _validate_required_categories(categories, strict)
 
     logger.info(f"[DISCOV] Scanned {total_files} active statement files from local disk.")
     return categories
