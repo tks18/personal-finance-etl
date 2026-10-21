@@ -1,22 +1,20 @@
-"""Wealth and presentation orchestrator service.
+"""Wealth presentation and analytical engine orchestrator.
 
 Owns
 ----
-- WealthService: Orchestrates analytical DAG execution across inflation, ledger, net worth,
-  spend analytics, budget forecasting, income streams, investment analytics, wealth risk (FIRE),
-  and cashflow statements.
-- Cleans floating-point NaN values to null for DuckDB/Power BI presentation compatibility.
+- WealthPresentationEngine (WealthService): Coordinates generation of Gold presentation models.
+- Execution DAG ordering: Inflation -> Ledger -> Net Worth -> Analytical Builders.
+- Imputation and NaN cleanup for Power BI / DuckDB compatibility.
 
 Does not own
 -------------
-- Financial domain business logic or formulas (owned by domain.household, domain.wealth, domain.fire).
-- Extraction or ingestion coordination (owned by application.ingestion).
-- DuckDB Gold table registration (owned by infrastructure.warehouse).
+- Raw transaction stage ingestion (owned by domain.household.transforms).
+- Simulation mathematical kernels (owned by domain.fire.simulation).
+- DuckDB persistence (owned by infrastructure.warehouse).
 """
 
 from __future__ import annotations
 
-import logging
 from collections.abc import Mapping
 
 import polars as pl
@@ -38,14 +36,13 @@ from personal_finance_etl.domain.household.income import IncomeStreamsBuilder
 from personal_finance_etl.domain.household.ledger import LedgerBuilder
 from personal_finance_etl.domain.wealth.analytics import InvestmentAnalyticsBuilder
 from personal_finance_etl.domain.wealth.net_worth import NetWorthBuilder
-
-logger = logging.getLogger(__name__)
+from personal_finance_etl.infrastructure.logging import logger
 
 __all__ = ["WealthPresentationEngine", "WealthService"]
 
 
 class WealthService:
-    """Presentation service orchestrating wealth, household, and FIRE analytical models.
+    """Orchestrates presentation and analytical calculation DAG.
 
     Consumes Silver-tier LazyFrames and produces unified Gold-tier presentation summary tables.
     """
@@ -53,6 +50,73 @@ class WealthService:
     def __init__(self, rules: FinancialRules, root_seed: str = "default_seed") -> None:
         self.rules = rules
         self.root_seed = root_seed
+
+    def _build_core_models(
+        self, dfs: Mapping[str, pl.DataFrame | pl.LazyFrame]
+    ) -> dict[str, pl.LazyFrame] | None:
+        """Execute prerequisite foundation models: Inflation, Ledger, and Net Worth."""
+        inflation_res = InflationBuilder(dfs, rules=self.rules).build()
+        if not inflation_res:
+            return None
+
+        cpi_res = inflation_res.get("cpi_result")
+        if cpi_res and cpi_res.status == CalculationStatus.COMPUTATION_ERROR:
+            raise RuntimeError(
+                f"Inflation computation failed: {cpi_res.reason}. "
+                "Aborting presentation DAG to prevent corrupted downstream FIRE state."
+            )
+
+        ledger_res = LedgerBuilder(dfs, rules=self.rules).build()
+        if not ledger_res:
+            return None
+
+        net_worth_res = NetWorthBuilder(
+            dfs, inflation_res, ledger_res, self.rules.DEFAULT_CURRENCY_ID
+        ).build()
+
+        return {
+            "lf_months": inflation_res["lf_months"],
+            "lf_inflation": inflation_res["lf_inflation"],
+            **ledger_res,
+            **net_worth_res,
+        }
+
+    def _build_presentation_tables(
+        self,
+        dfs: Mapping[str, pl.DataFrame | pl.LazyFrame],
+        base_lf: dict[str, pl.LazyFrame],
+    ) -> dict[str, pl.LazyFrame]:
+        """Execute downstream presentation and analytical model builders."""
+        results: dict[str, pl.LazyFrame] = {
+            "df_p_tf_net_worth_monthly_summary": base_lf["lf_nw_summary"],
+            "df_p_tf_wealth_monthly_totals": base_lf["lf_monthly_totals"],
+            "df_p_tf_category_spend_analytics": SpendAnalyticsBuilder(
+                dfs, base_lf, rules=self.rules
+            ).build(),
+            "df_p_tf_income_streams_monthly": IncomeStreamsBuilder(
+                dfs, base_lf, rules=self.rules
+            ).build(),
+            "df_p_tf_budget_forecast_monthly": BudgetForecastBuilder(
+                dfs, base_lf, rules=self.rules
+            ).build(),
+            "df_p_tf_investment_analytics": InvestmentAnalyticsBuilder(
+                dfs, base_lf, rules=self.rules
+            ).build(),
+        }
+
+        wealth_risk_res = WealthRiskAnalyticsBuilder(
+            dfs, base_lf, rules=self.rules, root_seed=self.root_seed
+        ).build()
+        results.update(wealth_risk_res)
+
+        results["df_p_tf_monthly_cashflow_summary"] = MonthlyCashflowSummaryBuilder(
+            dfs, base_lf, rules=self.rules
+        ).build()
+        results["df_p_tf_cashflow_activity_summary"] = CashflowStatementBuilder(
+            dfs, base_lf, rules=self.rules
+        ).build()
+
+        return results
 
     def run(self, dfs: Mapping[str, pl.DataFrame | pl.LazyFrame]) -> dict[str, pl.LazyFrame]:
         """Execute the presentation DAG across household, wealth, and FIRE builders.
@@ -72,78 +136,13 @@ class WealthService:
             "[ENGINE:PRESENTATION] Imputing missing data (NaN) with 0.0 for BI Engine compatibility..."
         )
 
-        # 1. Core Builders (Inflation, Ledger, Net Worth)
-        inflation_res = InflationBuilder(dfs, rules=self.rules).build()
-        if not inflation_res:
+        base_lf = self._build_core_models(dfs)
+        if base_lf is None:
             return {}
 
-        cpi_res = inflation_res.get("cpi_result")
-        if cpi_res and cpi_res.status == CalculationStatus.COMPUTATION_ERROR:
-            raise RuntimeError(
-                f"Inflation computation failed: {cpi_res.reason}. "
-                "Aborting presentation DAG to prevent corrupted downstream FIRE state."
-            )
-
-        ledger_res = LedgerBuilder(dfs, rules=self.rules).build()
-        if not ledger_res:
-            return {}
-
-        net_worth_res = NetWorthBuilder(
-            dfs, inflation_res, ledger_res, self.rules.DEFAULT_CURRENCY_ID
-        ).build()
-
-        base_lf: dict[str, pl.LazyFrame] = {
-            "lf_months": inflation_res["lf_months"],
-            "lf_inflation": inflation_res["lf_inflation"],
-            **ledger_res,
-            **net_worth_res,
-        }
-
-        results: dict[str, pl.LazyFrame] = {}
-
-        # 2. Net Worth Monthly Summary
-        results["df_p_tf_net_worth_monthly_summary"] = base_lf["lf_nw_summary"]
-        results["df_p_tf_wealth_monthly_totals"] = base_lf["lf_monthly_totals"]
-
-        # 3. Category Spend Analytics
-        results["df_p_tf_category_spend_analytics"] = SpendAnalyticsBuilder(
-            dfs, base_lf, rules=self.rules
-        ).build()
-
-        # 4. Income Streams & Passive Yield
-        results["df_p_tf_income_streams_monthly"] = IncomeStreamsBuilder(
-            dfs, base_lf, rules=self.rules
-        ).build()
-
-        # 5. Budget Forecast
-        results["df_p_tf_budget_forecast_monthly"] = BudgetForecastBuilder(
-            dfs, base_lf, rules=self.rules
-        ).build()
-
-        # 6. Investment Analytics (Merged Sector, Rebalancing, Attribution, Tax Harvesting)
-        results["df_p_tf_investment_analytics"] = InvestmentAnalyticsBuilder(
-            dfs, base_lf, rules=self.rules
-        ).build()
-
-        # 7. Wealth Risk Analytics (FIRE Forecasting)
-        wealth_risk_res = WealthRiskAnalyticsBuilder(
-            dfs, base_lf, rules=self.rules, root_seed=self.root_seed
-        ).build()
-        results.update(wealth_risk_res)
-
-        # 8. Monthly Cashflow Summary (now includes Financial Ratios)
-        results["df_p_tf_monthly_cashflow_summary"] = MonthlyCashflowSummaryBuilder(
-            dfs, base_lf, rules=self.rules
-        ).build()
-
-        # 9. Direct Method Cashflow Statement
-        results["df_p_tf_cashflow_activity_summary"] = CashflowStatementBuilder(
-            dfs, base_lf, rules=self.rules
-        ).build()
-
+        results = self._build_presentation_tables(dfs, base_lf)
         logger.debug("  -> Built %d BI presentation tables in DAG.", len(results))
 
-        # 10. Post-Processing: Clean NaN values for BI compatibility (DuckDB / Power BI)
         return {key: lf.with_columns(cs.float().fill_nan(None)) for key, lf in results.items()}
 
 
