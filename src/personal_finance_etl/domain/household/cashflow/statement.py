@@ -6,7 +6,7 @@ Owns
 
 Does not own
 -------------
-- Monthly cashflow summary or savings rate computations (owned by cashflow_summary.py).
+- Monthly cashflow summary or savings rate computations (owned by domain.household.cashflow.summary).
 - Budget target rules configuration (owned by config.financial_rules.household).
 - Presentation layer dispatching (owned by application.wealth.wealth_service).
 """
