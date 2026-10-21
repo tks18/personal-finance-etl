@@ -70,70 +70,53 @@ class DataExtractor:
     def _get_file_list_with_bytes(self, filepaths: list[str]) -> list[tuple[str, str, bytes]]:
         return [(os.path.basename(f), os.path.dirname(f), self._get_bytes(f)) for f in filepaths]
 
-    def run(self, actionable_files: dict[str, list[str]] | None = None) -> ExtractionResult:
-        """Extract and validate raw database, Excel, and CSV payloads into ExtractionResult.
-
-        Parameters
-        ----------
-        actionable_files : dict[str, list[str]] | None, optional
-            Dictionary mapping file categories to payload paths; if None, queries Control Plane.
-
-        Returns
-        -------
-        ExtractionResult
-            Container of extracted lazy frames, raw payloads, and mapping tables.
-        """
-        logger.info("Initializing extraction from Raw Store payloads...")
-        self.status_queue.put(
-            EngineStatusMessage(
-                msg="",
-                data=None,
-                progress=0.01,
-                level=LogLevel.STEP,
-            )
-        )
-
-        # Determine files to process
-        pending_files = actionable_files or self.cp.artifacts.get_pending_files()
-
+    def _extract_sqlite_tables(
+        self, pending_files: dict[str, list[str]]
+    ) -> tuple[pl.LazyFrame, pl.LazyFrame, pl.LazyFrame, pl.LazyFrame, pl.LazyFrame]:
+        """Extract reference tables from SQLite source database bytes."""
         logger.debug("[EXTRACT:DETAIL] Extracting Base Tables from SQLite...")
-        # Get sqlite file
         sqlite_files = pending_files.get("sqlite_source", [])
         if sqlite_files:
             sqlite_path = sqlite_files[0]
             sqlite_bytes = self._get_bytes(sqlite_path)
             extractor = SQLiteExtractor(self.cfg.SOURCE_DB_FOLDER)
-            zcategory_lazy, assetgroup_lazy, assets_lazy, currency_lazy, inoutcome_lazy = (
-                extractor.extract_base_tables(
-                    os.path.basename(sqlite_path), os.path.dirname(sqlite_path), sqlite_bytes
-                )
+            tables = extractor.extract_base_tables(
+                os.path.basename(sqlite_path), os.path.dirname(sqlite_path), sqlite_bytes
             )
             logger.debug(
                 "[EXTRACT:DETAIL] Successfully extracted 5 base reference tables from SQLite Source bytes."
             )
-        else:
-            zcategory_lazy = pl.LazyFrame()
-            assetgroup_lazy = pl.LazyFrame()
-            assets_lazy = pl.LazyFrame()
-            currency_lazy = pl.LazyFrame()
-            inoutcome_lazy = pl.LazyFrame()
+            return tables
+        return (
+            pl.LazyFrame(),
+            pl.LazyFrame(),
+            pl.LazyFrame(),
+            pl.LazyFrame(),
+            pl.LazyFrame(),
+        )
 
-        # Config files
-        def get_csv_lazy(
-            filepath: str, func: Callable[[str, str, bytes], pl.LazyFrame], category: str
-        ) -> pl.LazyFrame:
-            """Read a pending CSV configuration file as a Polars LazyFrame."""
-            files = pending_files.get(category, [])
-            normalized_filepath = filepath.replace("\\", "/")
-            if files and normalized_filepath in files:
-                return func(
-                    os.path.basename(normalized_filepath),
-                    os.path.dirname(normalized_filepath),
-                    self._get_bytes(normalized_filepath),
-                )
-            return pl.LazyFrame()
+    def _read_config_csv_lazy(
+        self,
+        pending_files: dict[str, list[str]],
+        filepath: str,
+        func: Callable[[str, str, bytes], pl.LazyFrame],
+        category: str,
+    ) -> pl.LazyFrame:
+        """Read a pending CSV configuration file as a Polars LazyFrame."""
+        files = pending_files.get(category, [])
+        normalized_filepath = filepath.replace("\\", "/")
+        if files and normalized_filepath in files:
+            return func(
+                os.path.basename(normalized_filepath),
+                os.path.dirname(normalized_filepath),
+                self._get_bytes(normalized_filepath),
+            )
+        return pl.LazyFrame()
 
-        # column_master is always required to build mappings, read it directly or from bytes
+    def _extract_config_tables(
+        self, pending_files: dict[str, list[str]]
+    ) -> tuple[pl.DataFrame, dict[str, dict[str, str]], dict[str, pl.LazyFrame]]:
+        """Extract column master mappings and configuration CSV lazyframes."""
         column_master_bytes = self._get_bytes(self.cfg.COLUMN_MASTER_PATH)
         df_column_master = pl.read_csv(io.BytesIO(column_master_bytes)).with_columns(
             pl.lit(os.path.basename(self.cfg.COLUMN_MASTER_PATH)).alias("__file_name__"),
@@ -147,26 +130,47 @@ class DataExtractor:
             "inoutcome": get_column_mapping(df_column_master, "INOUTCOME"),
             "opbal": get_column_mapping(df_column_master, "ZOPBAL"),
         }
+        config_frames = {
+            "stg_mf_isin_mapping": self._read_config_csv_lazy(
+                pending_files, self.cfg.MF_ISIN_CSV_PATH, extract_stg_mf_isin_mapping, "mf_isin"
+            ),
+            "stg_benchmark_mapping": self._read_config_csv_lazy(
+                pending_files,
+                self.cfg.BENCHMARK_MAPPING_CSV_PATH,
+                extract_stg_benchmark_mapping,
+                "benchmark_mapping",
+            ),
+            "raw_opening_balances": self._read_config_csv_lazy(
+                pending_files,
+                self.cfg.OPENING_BALANCE_CSV_PATH,
+                extract_opening_balances_raw,
+                "opening_balances",
+            ),
+            "raw_benchmark_master": self._read_config_csv_lazy(
+                pending_files,
+                self.cfg.BENCHMARK_MASTER_CSV_PATH,
+                extract_benchmark_master_raw,
+                "benchmark_master",
+            ),
+            "raw_macro_parameters": self._read_config_csv_lazy(
+                pending_files,
+                self.cfg.MACRO_PARAMETERS_CSV_PATH,
+                extract_macro_parameters_raw,
+                "macro_parameters",
+            ),
+            "currency_mapping_raw": self._read_config_csv_lazy(
+                pending_files,
+                self.cfg.CURRENCY_MAPPING_CSV_PATH,
+                extract_currency_mapping_raw,
+                "currency_mapping",
+            ),
+        }
+        return df_column_master, mappings, config_frames
 
-        stg_mf_isin_mapping_lazy = get_csv_lazy(
-            self.cfg.MF_ISIN_CSV_PATH, extract_stg_mf_isin_mapping, "mf_isin"
-        )
-        stg_benchmark_mapping_lazy = get_csv_lazy(
-            self.cfg.BENCHMARK_MAPPING_CSV_PATH, extract_stg_benchmark_mapping, "benchmark_mapping"
-        )
-        raw_opening_balances = get_csv_lazy(
-            self.cfg.OPENING_BALANCE_CSV_PATH, extract_opening_balances_raw, "opening_balances"
-        )
-        raw_benchmark_master = get_csv_lazy(
-            self.cfg.BENCHMARK_MASTER_CSV_PATH, extract_benchmark_master_raw, "benchmark_master"
-        )
-        raw_macro_parameters = get_csv_lazy(
-            self.cfg.MACRO_PARAMETERS_CSV_PATH, extract_macro_parameters_raw, "macro_parameters"
-        )
-        currency_mapping_raw = get_csv_lazy(
-            self.cfg.CURRENCY_MAPPING_CSV_PATH, extract_currency_mapping_raw, "currency_mapping"
-        )
-
+    def _extract_excel_statements(
+        self, pending_files: dict[str, list[str]]
+    ) -> dict[str, pl.LazyFrame]:
+        """Extract raw market and transaction frames from pending Excel files."""
         mf_holdings = pending_files.get("mf_holdings", [])
         mf_orders = pending_files.get("mf_orders", [])
         stock_pl = pending_files.get("stock_pl", [])
@@ -196,53 +200,38 @@ class DataExtractor:
         total_payloads = excel_count + csv_count + sqlite_count
 
         logger.info(
-            f"[EXTRACT] Pulled {total_payloads} binary payloads from Raw Store ({excel_count} Excel, {csv_count} CSV, {sqlite_count} DB)"
+            f"[EXTRACT] Pulled {total_payloads} binary payloads from Raw Store "
+            f"({excel_count} Excel, {csv_count} CSV, {sqlite_count} DB)"
         )
 
         if excel_count > 0:
-            mf_market_data_raw = extract_mf_market_data_raw(
-                self._get_file_list_with_bytes(mf_holdings)
-            )
-            mf_transactions_raw = extract_mf_transactions_raw(
-                self._get_file_list_with_bytes(mf_orders)
-            )
-            stock_market_data_raw = extract_stock_market_data_raw(
-                self._get_file_list_with_bytes(stock_pl)
-            )
-            stock_transactions_raw = extract_stock_transactions_raw(
-                self._get_file_list_with_bytes(stock_orders)
-            )
-            us_stock_transactions_raw = extract_us_stock_transactions_raw(
-                self._get_file_list_with_bytes(us_stock_transactions)
-            )
-        else:
-            mf_market_data_raw = pl.LazyFrame()
-            mf_transactions_raw = pl.LazyFrame()
-            stock_market_data_raw = pl.LazyFrame()
-            stock_transactions_raw = pl.LazyFrame()
-            us_stock_transactions_raw = pl.LazyFrame()
+            return {
+                "mf_market_data_raw": extract_mf_market_data_raw(
+                    self._get_file_list_with_bytes(mf_holdings)
+                ),
+                "mf_transactions_raw": extract_mf_transactions_raw(
+                    self._get_file_list_with_bytes(mf_orders)
+                ),
+                "stock_market_data_raw": extract_stock_market_data_raw(
+                    self._get_file_list_with_bytes(stock_pl)
+                ),
+                "stock_transactions_raw": extract_stock_transactions_raw(
+                    self._get_file_list_with_bytes(stock_orders)
+                ),
+                "us_stock_transactions_raw": extract_us_stock_transactions_raw(
+                    self._get_file_list_with_bytes(us_stock_transactions)
+                ),
+            }
+        return {
+            "mf_market_data_raw": pl.LazyFrame(),
+            "mf_transactions_raw": pl.LazyFrame(),
+            "stock_market_data_raw": pl.LazyFrame(),
+            "stock_transactions_raw": pl.LazyFrame(),
+            "us_stock_transactions_raw": pl.LazyFrame(),
+        }
 
-        result = ExtractionResult(
-            zcategory=zcategory_lazy,
-            assetgroup=assetgroup_lazy,
-            assets=assets_lazy,
-            currency=currency_lazy,
-            inoutcome=inoutcome_lazy,
-            mappings=mappings,
-            stg_mf_isin_mapping=stg_mf_isin_mapping_lazy,
-            stg_benchmark_mapping=stg_benchmark_mapping_lazy,
-            mf_market_data_raw=mf_market_data_raw,
-            mf_transactions_raw=mf_transactions_raw,
-            stock_market_data_raw=stock_market_data_raw,
-            stock_transactions_raw=stock_transactions_raw,
-            raw_opening_balances=raw_opening_balances,
-            raw_benchmark_master=raw_benchmark_master,
-            raw_macro_parameters=raw_macro_parameters,
-            column_master=df_column_master,
-            us_stock_transactions_raw=us_stock_transactions_raw,
-            currency_mapping_raw=currency_mapping_raw,
-        )
-
+    def _validate_extracted_streams(self, result: ExtractionResult) -> None:
+        """Execute Gatekeeper schema validation on active extracted streams."""
         logger.info("[QUALITY] Running Gatekeeper Schema Validation on 18 active streams...")
         self.status_queue.put(
             EngineStatusMessage(
@@ -296,4 +285,54 @@ class DataExtractor:
             )
             raise RuntimeError(f"Corrupted source data detected during extraction: {e}") from e
 
+    def run(self, actionable_files: dict[str, list[str]] | None = None) -> ExtractionResult:
+        """Extract and validate raw database, Excel, and CSV payloads into ExtractionResult.
+
+        Parameters
+        ----------
+        actionable_files : dict[str, list[str]] | None, optional
+            Dictionary mapping file categories to payload paths; if None, queries Control Plane.
+
+        Returns
+        -------
+        ExtractionResult
+            Container of extracted lazy frames, raw payloads, and mapping tables.
+        """
+        logger.info("Initializing extraction from Raw Store payloads...")
+        self.status_queue.put(
+            EngineStatusMessage(
+                msg="",
+                data=None,
+                progress=0.01,
+                level=LogLevel.STEP,
+            )
+        )
+
+        pending_files = actionable_files or self.cp.artifacts.get_pending_files()
+        zcat, agrp, asts, curr, inout = self._extract_sqlite_tables(pending_files)
+        df_column_master, mappings, config_frames = self._extract_config_tables(pending_files)
+        excel_frames = self._extract_excel_statements(pending_files)
+
+        result = ExtractionResult(
+            zcategory=zcat,
+            assetgroup=agrp,
+            assets=asts,
+            currency=curr,
+            inoutcome=inout,
+            mappings=mappings,
+            column_master=df_column_master,
+            stg_mf_isin_mapping=config_frames["stg_mf_isin_mapping"],
+            stg_benchmark_mapping=config_frames["stg_benchmark_mapping"],
+            raw_opening_balances=config_frames["raw_opening_balances"],
+            raw_benchmark_master=config_frames["raw_benchmark_master"],
+            raw_macro_parameters=config_frames["raw_macro_parameters"],
+            currency_mapping_raw=config_frames["currency_mapping_raw"],
+            mf_market_data_raw=excel_frames["mf_market_data_raw"],
+            mf_transactions_raw=excel_frames["mf_transactions_raw"],
+            stock_market_data_raw=excel_frames["stock_market_data_raw"],
+            stock_transactions_raw=excel_frames["stock_transactions_raw"],
+            us_stock_transactions_raw=excel_frames["us_stock_transactions_raw"],
+        )
+
+        self._validate_extracted_streams(result)
         return result
