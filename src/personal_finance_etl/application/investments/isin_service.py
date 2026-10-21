@@ -47,10 +47,13 @@ from personal_finance_etl.domain.investments.contracts import (
     TerminalValueRecord,
     TradeRecord,
 )
-from personal_finance_etl.domain.investments.lots.fifo import FIFOPortfolio
+from personal_finance_etl.domain.investments.lots.fifo import FIFOPortfolio, LotBuyParameters
 from personal_finance_etl.domain.investments.performance.returns import calculate_cagr
 from personal_finance_etl.domain.investments.performance.xirr import calculate_xirr
-from personal_finance_etl.domain.investments.portfolio.snapshots import SnapshotGenerator
+from personal_finance_etl.domain.investments.portfolio.snapshots import (
+    LotValuationContext,
+    SnapshotGenerator,
+)
 from personal_finance_etl.domain.investments.valuation.benchmark import (
     BenchmarkPriceProvider,
 )
@@ -222,35 +225,49 @@ class IsinProcessor:
             self._apply_sales(s_inst, m_date, state, isin, master_row)
             self._reconcile_market_observations(m_row, m_date, state, isin)
 
-            if not state.fifo.active_lots:
-                continue
-            if self.start_date and m_date < self.start_date:
-                continue
-            if self.end_date and m_date > self.end_date:
-                continue
-
-            terminals = self._compute_daily_terminals(m_row, m_date, state, isin)
-            metrics = self._compute_daily_metrics(m_date, terminals, state)
-
-            execution_residual = float(m_row.get("Execution_Residual") or 0.0)
-            remaining_ltcg = float(m_row.get("Equity_LTCG_Exemption") or 0.0)
-            new_snapshots = state.snapshot_generator.generate(
-                state.fifo,
-                m_date,
-                terminals.m_price,
-                terminals.m_bm_price,
-                metrics,
-                fx_provider=self.fx_provider,
-                execution_residual=execution_residual,
-                remaining_ltcg_exemption=remaining_ltcg,
-            )
-            state.isin_snapshots.extend(new_snapshots)
+            if not self._should_skip_market_date(state, m_date):
+                self._process_active_market_day(m_row, m_date, state, isin)
 
         # Apply any trailing trades after the last market date
         self._apply_purchases(p_inst, None, state, isin, master_row)
         self._apply_sales(s_inst, None, state, isin, master_row)
 
         return self._assemble_result(state, master_row)
+
+    def _should_skip_market_date(self, state: _IsinState, m_date: date) -> bool:
+        """Determine whether to skip lot snapshot calculation on a given evaluation date."""
+        if not state.fifo.active_lots:
+            return True
+        if self.start_date and m_date < self.start_date:
+            return True
+        if self.end_date and m_date > self.end_date:
+            return True
+        return False
+
+    def _process_active_market_day(
+        self,
+        m_row: TradeRecord,
+        m_date: date,
+        state: _IsinState,
+        isin: str,
+    ) -> None:
+        """Calculate terminals, metrics, and lot snapshots for an active market day."""
+        terminals = self._compute_daily_terminals(m_row, m_date, state, isin)
+        metrics = self._compute_daily_metrics(m_date, terminals, state)
+
+        execution_residual = float(m_row.get("Execution_Residual") or 0.0)
+        remaining_ltcg = float(m_row.get("Equity_LTCG_Exemption") or 0.0)
+        snapshot_ctx = LotValuationContext(
+            m_date=m_date,
+            m_price=terminals.m_price,
+            m_bm_price=terminals.m_bm_price,
+            inst_metrics=metrics,
+            fx_provider=self.fx_provider,
+            execution_residual=execution_residual,
+            remaining_ltcg_exemption=remaining_ltcg,
+        )
+        new_snapshots = state.snapshot_generator.generate(state.fifo, snapshot_ctx)
+        state.isin_snapshots.extend(new_snapshots)
 
     def _init_state(
         self,
@@ -316,6 +333,69 @@ class IsinProcessor:
             state.fx_cache[key] = rate
         return state.fx_cache[key]
 
+    def _record_purchase(
+        self,
+        row: TradeRecord,
+        row_dt_obj: date,
+        state: _IsinState,
+        isin: str,
+        master_row: IsinMasterRecord,
+    ) -> None:
+        """Register a single buy lot into FIFO portfolio and update cashflow states."""
+        qty = float(row["Quantity"])
+        b_price = float(row.get("Price") or 0.0)
+
+        v_val = row.get("Value")
+        buy_val = float(v_val) if v_val is not None else float(qty * b_price)
+
+        bm_p_raw = state.bm_provider.get_bm_price(row_dt_obj)
+        if not bm_p_raw or bm_p_raw <= 0:
+            bm_p_raw = float("nan")
+
+        _pl_val = row.get("Price_Local")
+        price_local = float(_pl_val) if _pl_val is not None else b_price
+        currency_id = str(
+            row.get("CURRENCY_ID") or master_row.get("CURRENCY_ID") or state.default_curr
+        )
+        fx_rate_buy = (
+            self._get_fx(state, isin, row_dt_obj, currency_id) if self.fx_provider else 1.0
+        )
+        fx_rate_buy = fx_rate_buy if fx_rate_buy is not None else float("nan")
+
+        bm_buy_local = float(bm_p_raw)
+        bm_buy_inr = float(bm_p_raw * fx_rate_buy)
+        shadow_q = buy_val / bm_buy_inr if bm_buy_inr > 0 else 0.0
+        purchase_id = row.get("Purchase_ID")
+
+        state.fifo.buy(
+            LotBuyParameters(
+                buy_date=row_dt_obj,
+                qty=qty,
+                price=b_price,
+                shadow_qty=shadow_q,
+                bm_price=bm_buy_inr,
+                price_local=price_local,
+                fx_rate_buy=fx_rate_buy,
+                currency_id=currency_id,
+                bm_buy_local=bm_buy_local,
+                purchase_id=purchase_id,
+            )
+        )
+        state.cf_dates.append(row_dt_obj)
+        state.cf_amounts.append(-buy_val)
+        state.bm_cf_amounts.append(-buy_val)
+        buy_val_local = float(qty * price_local)
+        state.bm_cf_amounts_local.append(-buy_val_local)
+        state.isin_cashflows.append(
+            CashflowRecord(
+                date=row_dt_obj,
+                amount=-buy_val,
+                amount_local=-buy_val_local,
+                benchmark_amount=-buy_val,
+                benchmark_amount_local=-buy_val_local,
+            )
+        )
+
     def _apply_purchases(
         self,
         p_inst: list[TradeRecord],
@@ -333,59 +413,117 @@ class IsinProcessor:
             if max_date is not None and row_dt_obj > max_date:
                 break
 
-            row = p_inst[state.p_idx]
-            qty = float(row["Quantity"])
-            b_price = float(row.get("Price") or 0.0)
-
-            v_val = row.get("Value")
-            buy_val = float(v_val) if v_val is not None else float(qty * b_price)
-
-            bm_p_raw = state.bm_provider.get_bm_price(row_dt_obj)
-            if not bm_p_raw or bm_p_raw <= 0:
-                bm_p_raw = float("nan")
-
-            _pl_val = row.get("Price_Local")
-            price_local = float(_pl_val) if _pl_val is not None else b_price
-            currency_id = str(
-                row.get("CURRENCY_ID") or master_row.get("CURRENCY_ID") or state.default_curr
-            )
-            fx_rate_buy = (
-                self._get_fx(state, isin, row_dt_obj, currency_id) if self.fx_provider else 1.0
-            )
-            fx_rate_buy = fx_rate_buy if fx_rate_buy is not None else float("nan")
-
-            bm_buy_local = float(bm_p_raw)
-            bm_buy_inr = float(bm_p_raw * fx_rate_buy)
-            shadow_q = buy_val / bm_buy_inr if bm_buy_inr > 0 else 0.0
-            purchase_id = row.get("Purchase_ID")
-
-            state.fifo.buy(
-                row_dt_obj,
-                qty,
-                b_price,
-                shadow_q,
-                bm_buy_inr,
-                price_local=price_local,
-                fx_rate_buy=fx_rate_buy,
-                currency_id=currency_id,
-                bm_buy_local=bm_buy_local,
-                purchase_id=purchase_id,
-            )
-            state.cf_dates.append(row_dt_obj)
-            state.cf_amounts.append(-buy_val)
-            state.bm_cf_amounts.append(-buy_val)
-            buy_val_local = float(qty * price_local)
-            state.bm_cf_amounts_local.append(-buy_val_local)
-            state.isin_cashflows.append(
-                CashflowRecord(
-                    date=row_dt_obj,
-                    amount=-buy_val,
-                    amount_local=-buy_val_local,
-                    benchmark_amount=-buy_val,
-                    benchmark_amount_local=-buy_val_local,
-                )
-            )
+            self._record_purchase(p_inst[state.p_idx], row_dt_obj, state, isin, master_row)
             state.p_idx += 1
+
+    def _resolve_sale_prices(
+        self,
+        row: TradeRecord,
+        row_dt_obj: date,
+        isin: str,
+        max_date: date | None,
+    ) -> tuple[float, float, float, float, bool]:
+        """Resolve and validate transaction price, local price, and proceeds for a sale."""
+        s_qty = float(row["Quantity"])
+        row_p_val: float | None = row.get("Price")
+        sv_val: float | None = row.get("Sell_Value")
+
+        if row_p_val is not None:
+            s_price = float(row_p_val)
+        elif sv_val is not None and s_qty > 0:
+            s_price = float(sv_val) / s_qty
+        else:
+            msg_suffix = (
+                "refusing to substitute the market close."
+                if max_date is not None
+                else "refusing to create a zero-price sale."
+            )
+            raise ValueError(
+                f"Sale price and proceeds are both missing for ISIN={isin} "
+                f"on {row_dt_obj}; {msg_suffix}"
+            )
+
+        s_price = float(s_price)
+        is_re_adjustment = _is_zero_proceeds_re_adjustment(
+            isin=isin,
+            quantity=s_qty,
+            price=s_price,
+            proceeds=sv_val,
+        )
+        if (not math.isfinite(s_price) or s_price <= 0) and not is_re_adjustment:
+            raise ValueError(f"Invalid sale price for ISIN={isin} on {row_dt_obj}: {s_price!r}")
+
+        s_val = (
+            0.0
+            if is_re_adjustment
+            else float(sv_val)
+            if sv_val is not None
+            else float(s_qty * s_price)
+        )
+        _spl_val = row.get("Sell_Price_Local")
+        s_price_local = (
+            0.0 if is_re_adjustment else float(_spl_val) if _spl_val is not None else s_price
+        )
+        s_val_local = 0.0 if is_re_adjustment else float(s_qty * s_price_local)
+
+        return s_price, s_val, s_price_local, s_val_local, is_re_adjustment
+
+    def _record_sale(
+        self,
+        row: TradeRecord,
+        row_dt_obj: date,
+        s_price: float,
+        s_val: float,
+        s_price_local: float,
+        s_val_local: float,
+        state: _IsinState,
+        isin: str,
+        master_row: IsinMasterRecord,
+    ) -> None:
+        """Register sale disposal into FIFO queue, match benchmark flows, and update cashflows."""
+        s_qty = float(row["Quantity"])
+        currency_id = str(
+            row.get("CURRENCY_ID") or master_row.get("CURRENCY_ID") or state.default_curr
+        )
+        fx_rate_sell = (
+            self._get_fx(state, isin, row_dt_obj, currency_id) if self.fx_provider else 1.0
+        )
+        fx_rate_sell = fx_rate_sell if fx_rate_sell is not None else float("nan")
+
+        state.cf_dates.append(row_dt_obj)
+        state.cf_amounts.append(s_val)
+
+        sale_id = row.get("Sale_ID")
+        events = state.fifo.sell(
+            row_dt_obj,
+            s_qty,
+            s_price,
+            price_local=s_price_local,
+            fx_rate_sell=fx_rate_sell,
+            sale_id=sale_id,
+        )
+
+        bm_sell_price_local = state.bm_provider.get_bm_price(row_dt_obj)
+        bm_sell_price_local = (
+            float(bm_sell_price_local) if bm_sell_price_local is not None else float("nan")
+        )
+        bm_sell_price_inr = bm_sell_price_local * fx_rate_sell
+        shadow_qty_sold = float(sum(e.get("shadow_qty_sold", 0.0) or 0.0 for e in events))
+        bm_sell_value_inr = shadow_qty_sold * bm_sell_price_inr
+        bm_sell_value_local = shadow_qty_sold * bm_sell_price_local
+
+        state.bm_cf_amounts.append(bm_sell_value_inr)
+        state.bm_cf_amounts_local.append(bm_sell_value_local)
+        state.isin_cashflows.append(
+            CashflowRecord(
+                date=row_dt_obj,
+                amount=s_val,
+                amount_local=s_val_local,
+                benchmark_amount=bm_sell_value_inr,
+                benchmark_amount_local=bm_sell_value_local,
+            )
+        )
+        state.isin_realized.extend(events)
 
     def _apply_sales(
         self,
@@ -404,92 +542,20 @@ class IsinProcessor:
             if max_date is not None and row_dt_obj > max_date:
                 break
 
-            row = s_inst[state.s_idx]
-            s_qty = float(row["Quantity"])
-            row_p_val: float | None = row.get("Price")
-            sv_val: float | None = row.get("Sell_Value")
-
-            if row_p_val is not None:
-                s_price = float(row_p_val)
-            elif sv_val is not None and s_qty > 0:
-                s_price = float(sv_val) / s_qty
-            else:
-                msg_suffix = (
-                    "refusing to substitute the market close."
-                    if max_date is not None
-                    else "refusing to create a zero-price sale."
-                )
-                raise ValueError(
-                    f"Sale price and proceeds are both missing for ISIN={isin} "
-                    f"on {row_dt_obj}; {msg_suffix}"
-                )
-
-            s_price = float(s_price)
-            is_re_adjustment = _is_zero_proceeds_re_adjustment(
-                isin=isin,
-                quantity=s_qty,
-                price=s_price,
-                proceeds=sv_val,
+            s_price, s_val, s_price_local, s_val_local, _ = self._resolve_sale_prices(
+                s_inst[state.s_idx], row_dt_obj, isin, max_date
             )
-            if (not math.isfinite(s_price) or s_price <= 0) and not is_re_adjustment:
-                raise ValueError(f"Invalid sale price for ISIN={isin} on {row_dt_obj}: {s_price!r}")
-
-            s_val = (
-                0.0
-                if is_re_adjustment
-                else float(sv_val)
-                if sv_val is not None
-                else float(s_qty * s_price)
-            )
-
-            _spl_val = row.get("Sell_Price_Local")
-            s_price_local = (
-                0.0 if is_re_adjustment else float(_spl_val) if _spl_val is not None else s_price
-            )
-            s_val_local = 0.0 if is_re_adjustment else float(s_qty * s_price_local)
-            currency_id = str(
-                row.get("CURRENCY_ID") or master_row.get("CURRENCY_ID") or state.default_curr
-            )
-            fx_rate_sell = (
-                self._get_fx(state, isin, row_dt_obj, currency_id) if self.fx_provider else 1.0
-            )
-            fx_rate_sell = fx_rate_sell if fx_rate_sell is not None else float("nan")
-
-            state.cf_dates.append(row_dt_obj)
-            state.cf_amounts.append(s_val)
-
-            sale_id = row.get("Sale_ID")
-            events = state.fifo.sell(
+            self._record_sale(
+                s_inst[state.s_idx],
                 row_dt_obj,
-                s_qty,
                 s_price,
-                price_local=s_price_local,
-                fx_rate_sell=fx_rate_sell,
-                sale_id=sale_id,
+                s_val,
+                s_price_local,
+                s_val_local,
+                state,
+                isin,
+                master_row,
             )
-
-            bm_sell_price_local = state.bm_provider.get_bm_price(row_dt_obj)
-            bm_sell_price_local = (
-                float(bm_sell_price_local) if bm_sell_price_local is not None else float("nan")
-            )
-            bm_sell_price_inr = bm_sell_price_local * fx_rate_sell
-            shadow_qty_sold = float(sum(e.get("shadow_qty_sold", 0.0) or 0.0 for e in events))
-            bm_sell_value_inr = shadow_qty_sold * bm_sell_price_inr
-            bm_sell_value_local = shadow_qty_sold * bm_sell_price_local
-
-            state.bm_cf_amounts.append(bm_sell_value_inr)
-            state.bm_cf_amounts_local.append(bm_sell_value_local)
-            state.isin_cashflows.append(
-                CashflowRecord(
-                    date=row_dt_obj,
-                    amount=s_val,
-                    amount_local=s_val_local,
-                    benchmark_amount=bm_sell_value_inr,
-                    benchmark_amount_local=bm_sell_value_local,
-                )
-            )
-
-            state.isin_realized.extend(events)
             state.s_idx += 1
 
     def _reconcile_market_observations(
@@ -533,36 +599,14 @@ class IsinProcessor:
             re["ISIN"] = isin
         state.isin_recon_events.extend(cb_recon_events)
 
-    def _compute_daily_terminals(
+    def _compute_terminal_val_local(
         self,
-        m_row: TradeRecord,
-        m_date: date,
         state: _IsinState,
         isin: str,
-    ) -> _DailyTerminals:
-        """Compute portfolio terminal values, shadow benchmark values, and after-tax terminal value."""
-        m_price = float(m_row.get("Closing_Price") or 0.0)
-        remaining_ltcg_exemption = float(m_row.get("Equity_LTCG_Exemption") or 0.0)
-        m_bm_price = state.bm_provider.get_bm_price(m_date)
-        if not m_bm_price or m_bm_price <= 0:
-            m_bm_price = float("nan")
-
-        fx_rate_snap = 1.0
-        if (
-            state.fifo.active_lots
-            and state.fifo.active_lots[0].currency_id
-            and state.fifo.active_lots[0].currency_id != state.default_curr
-            and self.fx_provider
-        ):
-            fx_val = self._get_fx(state, isin, m_date, state.fifo.active_lots[0].currency_id)
-            fx_rate_snap = fx_val if fx_val is not None else float("nan")
-
-        m_bm_price_inr = m_bm_price * fx_rate_snap
-
-        terminal_val = state.fifo.get_terminal_value(m_price)
-        shadow_terminal_val = state.fifo.get_shadow_terminal_value(m_bm_price_inr)
-        shadow_terminal_val_local = state.fifo.get_shadow_terminal_value(m_bm_price)
-
+        m_date: date,
+        m_price: float,
+    ) -> float:
+        """Calculate local-currency terminal value across active lots."""
         terminal_val_local = 0.0
         for lot in state.fifo.active_lots:
             if lot.currency_id and lot.currency_id != state.default_curr and self.fx_provider:
@@ -575,14 +619,17 @@ class IsinProcessor:
                 terminal_val_local += lot.qty * m_price_local
             else:
                 terminal_val_local += lot.qty * m_price
+        return terminal_val_local
 
-        pt = state.isin_terminals.setdefault(m_date, TerminalValueRecord())
-        pt.val += terminal_val
-        pt.shadow_val += shadow_terminal_val
-        pt.val_local += terminal_val_local
-        pt.shadow_val_local += shadow_terminal_val_local
-
-        after_tax_terminal_val = 0.0
+    def _compute_after_tax_terminal_val(
+        self,
+        state: _IsinState,
+        m_date: date,
+        m_price: float,
+        remaining_ltcg_exemption: float,
+    ) -> float:
+        """Calculate post-tax liquidating value accounting for accrued capital gains liability."""
+        after_tax_val = 0.0
         for lot in state.fifo.active_lots:
             if lot.qty <= 1e-8:
                 continue
@@ -599,8 +646,48 @@ class IsinProcessor:
             taxable_ltcg = max(0.0, unreal_ltcg - remaining_ltcg_exemption)
             ltcg_tax = taxable_ltcg * ltcg_rate
             stcg_tax = unreal_stcg * stcg_rate
-            after_tax_terminal_val += (lot.qty * m_price) - (ltcg_tax + stcg_tax)
+            after_tax_val += (lot.qty * m_price) - (ltcg_tax + stcg_tax)
+        return after_tax_val
 
+    def _compute_daily_terminals(
+        self,
+        m_row: TradeRecord,
+        m_date: date,
+        state: _IsinState,
+        isin: str,
+    ) -> _DailyTerminals:
+        """Compute portfolio terminal values, shadow benchmark values, and after-tax terminal value."""
+        m_price = float(m_row.get("Closing_Price") or 0.0)
+        remaining_ltcg = float(m_row.get("Equity_LTCG_Exemption") or 0.0)
+        m_bm_price = state.bm_provider.get_bm_price(m_date)
+        if not m_bm_price or m_bm_price <= 0:
+            m_bm_price = float("nan")
+
+        fx_rate_snap = 1.0
+        if (
+            state.fifo.active_lots
+            and state.fifo.active_lots[0].currency_id
+            and state.fifo.active_lots[0].currency_id != state.default_curr
+            and self.fx_provider
+        ):
+            fx_val = self._get_fx(state, isin, m_date, state.fifo.active_lots[0].currency_id)
+            fx_rate_snap = fx_val if fx_val is not None else float("nan")
+
+        m_bm_price_inr = m_bm_price * fx_rate_snap
+        terminal_val = state.fifo.get_terminal_value(m_price)
+        shadow_terminal_val = state.fifo.get_shadow_terminal_value(m_bm_price_inr)
+        shadow_terminal_val_local = state.fifo.get_shadow_terminal_value(m_bm_price)
+
+        val_local = self._compute_terminal_val_local(state, isin, m_date, m_price)
+        after_tax_terminal_val = self._compute_after_tax_terminal_val(
+            state, m_date, m_price, remaining_ltcg
+        )
+
+        pt = state.isin_terminals.setdefault(m_date, TerminalValueRecord())
+        pt.val += terminal_val
+        pt.shadow_val += shadow_terminal_val
+        pt.val_local += val_local
+        pt.shadow_val_local += shadow_terminal_val_local
         pt.after_tax_val += after_tax_terminal_val
 
         return _DailyTerminals(
@@ -609,47 +696,27 @@ class IsinProcessor:
             m_bm_price_inr=m_bm_price_inr,
             terminal_val=terminal_val,
             shadow_terminal_val=shadow_terminal_val,
-            val_local=terminal_val_local,
+            val_local=val_local,
             shadow_terminal_val_local=shadow_terminal_val_local,
             after_tax_terminal_val=after_tax_terminal_val,
         )
 
-    def _compute_daily_metrics(
+    def _compute_cagr_and_drawdown(
         self,
         m_date: date,
         terminals: _DailyTerminals,
         state: _IsinState,
-    ) -> InstrumentMetricsRecord:
-        """Calculate XIRR, benchmark active return, CAGR, and drawdown metrics."""
-        inst_xirr_result = calculate_xirr(
-            state.cf_dates + [m_date], state.cf_amounts + [terminals.terminal_val]
-        )
-        bm_xirr_result = calculate_xirr(
-            state.cf_dates + [m_date], state.bm_cf_amounts + [terminals.shadow_terminal_val]
-        )
-        inst_after_tax_xirr_result = calculate_xirr(
-            state.cf_dates + [m_date], state.cf_amounts + [terminals.after_tax_terminal_val]
-        )
-        inst_xirr = inst_xirr_result.value
-        bm_xirr_val = bm_xirr_result.value
-        inst_after_tax_xirr = inst_after_tax_xirr_result.value
-
-        inst_active_return = (
-            inst_xirr - bm_xirr_val if inst_xirr is not None and bm_xirr_val is not None else None
-        )
-        is_lagging = (
-            inst_xirr < bm_xirr_val if inst_xirr is not None and bm_xirr_val is not None else None
-        )
-
+    ) -> tuple[float | None, str, float | None, str, float]:
+        """Derive volume-weighted CAGR and running peak max drawdown."""
         closing_units = state.fifo.get_closing_units()
         inst_cagr: float | None = None
         inst_cagr_status: str = "UNDEFINED"
         inst_bm_cagr: float | None = None
         inst_bm_cagr_status: str = "UNDEFINED"
+
         if closing_units > 0:
             avg_cost = state.fifo.get_average_cost()
             avg_bm_cost = state.fifo.get_average_bm_cost()
-
             weighted_days = (
                 sum(
                     lot.qty * (m_date - lot.date).days for lot in state.fifo.active_lots if lot.date
@@ -675,50 +742,93 @@ class IsinProcessor:
             if current_dd < state.running_max_dd:
                 state.running_max_dd = current_dd
 
-        inst_max_dd = state.running_max_dd
+        return (
+            inst_cagr,
+            inst_cagr_status,
+            inst_bm_cagr,
+            inst_bm_cagr_status,
+            state.running_max_dd,
+        )
 
-        # Local XIRR Calculation
+    def _compute_local_xirr_metrics(
+        self,
+        m_date: date,
+        terminals: _DailyTerminals,
+        state: _IsinState,
+    ) -> tuple[float | None, str, float | None, str]:
+        """Derive local currency asset and benchmark XIRRs."""
         cf_dates_local = [c.date for c in state.isin_cashflows if c.date <= m_date]
         cf_amounts_local = [c.amount_local for c in state.isin_cashflows if c.date <= m_date]
-        inst_xirr_local_result = calculate_xirr(
+        xirr_local_res = calculate_xirr(
             cf_dates_local + [m_date], cf_amounts_local + [terminals.val_local]
         )
-
-        bm_cf_dates_local = cf_dates_local
         bm_cf_local = state.bm_cf_amounts_local[: len(cf_dates_local)]
-        inst_bm_xirr_local_result = calculate_xirr(
-            bm_cf_dates_local + [m_date], bm_cf_local + [terminals.shadow_terminal_val_local]
+        bm_xirr_local_res = calculate_xirr(
+            cf_dates_local + [m_date], bm_cf_local + [terminals.shadow_terminal_val_local]
         )
-        inst_xirr_local = inst_xirr_local_result.value
-        inst_bm_xirr_local = inst_bm_xirr_local_result.value
+        return (
+            xirr_local_res.value,
+            xirr_local_res.status,
+            bm_xirr_local_res.value,
+            bm_xirr_local_res.status,
+        )
+
+    def _compute_daily_metrics(
+        self,
+        m_date: date,
+        terminals: _DailyTerminals,
+        state: _IsinState,
+    ) -> InstrumentMetricsRecord:
+        """Calculate XIRR, benchmark active return, CAGR, and drawdown metrics."""
+        inst_xirr_res = calculate_xirr(
+            state.cf_dates + [m_date], state.cf_amounts + [terminals.terminal_val]
+        )
+        bm_xirr_res = calculate_xirr(
+            state.cf_dates + [m_date], state.bm_cf_amounts + [terminals.shadow_terminal_val]
+        )
+        after_tax_res = calculate_xirr(
+            state.cf_dates + [m_date], state.cf_amounts + [terminals.after_tax_terminal_val]
+        )
+
+        inst_xirr = inst_xirr_res.value
+        bm_xirr_val = bm_xirr_res.value
+        inst_active_return = (
+            inst_xirr - bm_xirr_val if inst_xirr is not None and bm_xirr_val is not None else None
+        )
+        is_lagging = (
+            inst_xirr < bm_xirr_val if inst_xirr is not None and bm_xirr_val is not None else None
+        )
+
+        cagr, cagr_st, bm_cagr, bm_cagr_st, max_dd = self._compute_cagr_and_drawdown(
+            m_date, terminals, state
+        )
+        xirr_loc, xirr_loc_st, bm_loc, bm_loc_st = self._compute_local_xirr_metrics(
+            m_date, terminals, state
+        )
 
         return {
-            "cagr": inst_cagr,
-            "cagr_status": inst_cagr_status,
-            "bm_cagr": inst_bm_cagr,
-            "bm_cagr_status": inst_bm_cagr_status,
+            "cagr": cagr,
+            "cagr_status": cagr_st,
+            "bm_cagr": bm_cagr,
+            "bm_cagr_status": bm_cagr_st,
             "xirr": inst_xirr,
-            "xirr_status": inst_xirr_result.status,
+            "xirr_status": inst_xirr_res.status,
             "bm_xirr": bm_xirr_val,
-            "bm_xirr_status": bm_xirr_result.status,
-            "after_tax_xirr": inst_after_tax_xirr,
-            "after_tax_xirr_status": inst_after_tax_xirr_result.status,
+            "bm_xirr_status": bm_xirr_res.status,
+            "after_tax_xirr": after_tax_res.value,
+            "after_tax_xirr_status": after_tax_res.status,
             "active_return": inst_active_return,
             "is_lagging": is_lagging,
-            "max_drawdown": inst_max_dd,
-            "xirr_local": inst_xirr_local,
-            "xirr_local_status": inst_xirr_local_result.status,
-            "bm_xirr_local": inst_bm_xirr_local,
-            "bm_xirr_local_status": inst_bm_xirr_local_result.status,
+            "max_drawdown": max_dd,
+            "xirr_local": xirr_loc,
+            "xirr_local_status": xirr_loc_st,
+            "bm_xirr_local": bm_loc,
+            "bm_xirr_local_status": bm_loc_st,
             "active_return_local": (
-                inst_xirr_local - inst_bm_xirr_local
-                if inst_xirr_local is not None and inst_bm_xirr_local is not None
-                else None
+                xirr_loc - bm_loc if xirr_loc is not None and bm_loc is not None else None
             ),
             "fx_xirr_impact": (
-                inst_xirr - inst_xirr_local
-                if inst_xirr is not None and inst_xirr_local is not None
-                else None
+                inst_xirr - xirr_loc if inst_xirr is not None and xirr_loc is not None else None
             ),
         }
 
@@ -886,6 +996,164 @@ def _process_isin_worker(
     except Exception as e:
         tb = traceback.format_exc()
         return False, [], {}, [], [], {}, {"isin": isin, "error": str(e), "traceback": tb}
+
+
+class _DimensionAccumulator:
+    """Container for dimensional cashflows, terminals, and realized events."""
+
+    def __init__(self) -> None:
+        self.cf: dict[str, list[CashflowDict]] = {}
+        self.pt: dict[str, dict[date, dict[str, float]]] = {}
+        self.re: dict[str, list[RealizedEventDict]] = {}
+
+
+class _PipelineAccumulator:
+    """Accumulates worker ISIN simulation outputs into multi-dimensional aggregation containers."""
+
+    def __init__(self, default_curr: str) -> None:
+        self.default_curr = default_curr
+        self.global_cashflows: list[CashflowDict] = []
+        self.portfolio_terminals: dict[date, dict[str, float]] = {}
+        self.realized_events: list[RealizedEventDict] = []
+        self.global_recon_events: list[ReconciliationEventDict] = []
+        self.isin_cashflows: dict[str, list[CashflowDict]] = {}
+        self.isin_terminals: dict[str, dict[date, TerminalValueDict]] = {}
+
+        self.dim_class = _DimensionAccumulator()
+        self.dim_subtype = _DimensionAccumulator()
+        self.dim_instrument_type = _DimensionAccumulator()
+        self.dim_sector = _DimensionAccumulator()
+        self.dim_industry = _DimensionAccumulator()
+        self.dim_geo = _DimensionAccumulator()
+        self.dim_country = _DimensionAccumulator()
+        self.dim_currency = _DimensionAccumulator()
+
+    @staticmethod
+    def _accumulate_group(
+        key: str,
+        target_cf: dict[str, list[CashflowDict]],
+        target_pt: dict[str, dict[date, dict[str, float]]],
+        isin_cf: list[CashflowDict],
+        isin_pt: dict[date, TerminalValueDict],
+    ) -> None:
+        target_cf.setdefault(key, []).extend(isin_cf)
+        pt_dict = target_pt.setdefault(key, {})
+        for d, vals in isin_pt.items():
+            entry = pt_dict.setdefault(
+                d,
+                {
+                    "val": 0.0,
+                    "shadow_val": 0.0,
+                    "after_tax_val": 0.0,
+                    "val_local": 0.0,
+                    "shadow_val_local": 0.0,
+                },
+            )
+            entry["val"] += vals.get("val", 0.0)
+            entry["shadow_val"] += vals.get("shadow_val", 0.0)
+            entry["after_tax_val"] += vals.get("after_tax_val", 0.0)
+            entry["val_local"] += vals.get("val_local", 0.0)
+            entry["shadow_val_local"] += vals.get("shadow_val_local", 0.0)
+
+    def ingest_isin_result(
+        self,
+        isin: str,
+        isin_cf: list[CashflowDict],
+        isin_pt: dict[date, TerminalValueDict],
+        isin_re: list[RealizedEventDict],
+        isin_recon: list[ReconciliationEventDict],
+        tags: dict[str, str],
+    ) -> None:
+        """Ingest individual ISIN worker result into global and group containers."""
+        if isin_cf or isin_pt:
+            self.isin_cashflows[isin] = isin_cf
+            self.isin_terminals[isin] = isin_pt
+
+        self.global_cashflows.extend(isin_cf)
+        for d, vals in isin_pt.items():
+            pt = self.portfolio_terminals.setdefault(
+                d,
+                {
+                    "val": 0.0,
+                    "shadow_val": 0.0,
+                    "after_tax_val": 0.0,
+                    "val_local": 0.0,
+                    "shadow_val_local": 0.0,
+                },
+            )
+            pt["val"] += vals.get("val", 0.0)
+            pt["shadow_val"] += vals.get("shadow_val", 0.0)
+            pt["after_tax_val"] += vals.get("after_tax_val", 0.0)
+            pt["val_local"] += vals.get("val_local", 0.0)
+            pt["shadow_val_local"] += vals.get("shadow_val_local", 0.0)
+
+        self.realized_events.extend(isin_re)
+        self.global_recon_events.extend(isin_recon)
+
+        if not tags:
+            return
+
+        cls = tags.get("class", "Unknown")
+        sub = tags.get("subtype", "Unknown")
+        inst_type = tags.get("instrument_type", "Unknown")
+        sector = tags.get("sector", "Unknown")
+        industry = tags.get("industry", "Unknown")
+        geo = tags.get("geo", "Unknown")
+        country = tags.get("country", "Unknown")
+        currency = tags.get("currency", self.default_curr)
+
+        self.dim_class.re.setdefault(cls, []).extend(isin_re)
+        self._accumulate_group(cls, self.dim_class.cf, self.dim_class.pt, isin_cf, isin_pt)
+
+        sub_key = f"{cls}___{sub}"
+        self.dim_subtype.re.setdefault(sub_key, []).extend(isin_re)
+        self._accumulate_group(sub_key, self.dim_subtype.cf, self.dim_subtype.pt, isin_cf, isin_pt)
+
+        self._accumulate_group(
+            inst_type, self.dim_instrument_type.cf, self.dim_instrument_type.pt, isin_cf, isin_pt
+        )
+        self._accumulate_group(sector, self.dim_sector.cf, self.dim_sector.pt, isin_cf, isin_pt)
+        self._accumulate_group(
+            industry, self.dim_industry.cf, self.dim_industry.pt, isin_cf, isin_pt
+        )
+        self._accumulate_group(geo, self.dim_geo.cf, self.dim_geo.pt, isin_cf, isin_pt)
+        self._accumulate_group(country, self.dim_country.cf, self.dim_country.pt, isin_cf, isin_pt)
+
+        self.dim_currency.re.setdefault(currency, []).extend(isin_re)
+        self._accumulate_group(
+            currency, self.dim_currency.cf, self.dim_currency.pt, isin_cf, isin_pt
+        )
+
+    def to_result(self, has_data: bool) -> PipelineExecutionResult:
+        """Construct the immutable PipelineExecutionResult structure."""
+        return PipelineExecutionResult(
+            has_data=has_data,
+            global_cf=self.global_cashflows,
+            global_pt=self.portfolio_terminals,
+            global_re=self.realized_events,
+            global_recon_events=self.global_recon_events,
+            isin_cf=self.isin_cashflows,
+            isin_pt=self.isin_terminals,
+            class_cf=self.dim_class.cf,
+            class_pt=self.dim_class.pt,
+            class_re=self.dim_class.re,
+            subtype_cf=self.dim_subtype.cf,
+            subtype_pt=self.dim_subtype.pt,
+            subtype_re=self.dim_subtype.re,
+            instrument_type_cf=self.dim_instrument_type.cf,
+            instrument_type_pt=self.dim_instrument_type.pt,
+            sector_cf=self.dim_sector.cf,
+            sector_pt=self.dim_sector.pt,
+            industry_cf=self.dim_industry.cf,
+            industry_pt=self.dim_industry.pt,
+            geo_cf=self.dim_geo.cf,
+            geo_pt=self.dim_geo.pt,
+            country_cf=self.dim_country.cf,
+            country_pt=self.dim_country.pt,
+            currency_cf=self.dim_currency.cf,
+            currency_pt=self.dim_currency.pt,
+            currency_re=self.dim_currency.re,
+        )
 
 
 class IsinPipeline:
@@ -1067,47 +1335,8 @@ class IsinPipeline:
         return tasks
 
     def process_all(self) -> PipelineExecutionResult:
-        """Execute parallel multi-process simulation across all configured ISIN instruments.
-
-        Returns
-        -------
-        PipelineExecutionResult
-            Aggregated global, asset-class, subtype, sector, geography, and currency
-            cashflows, terminal values, realized disposal events, and reconciliation adjustments.
-        """
-        global_cashflows: list[CashflowDict] = []
-        portfolio_terminals: dict[date, dict[str, float]] = {}
-        realized_events: list[RealizedEventDict] = []
-        isin_cashflows: dict[str, list[CashflowDict]] = {}
-        isin_terminals: dict[str, dict[date, TerminalValueDict]] = {}
-
-        class_cf: dict[str, list[CashflowDict]] = {}
-        class_pt: dict[str, dict[date, dict[str, float]]] = {}
-        class_re: dict[str, list[RealizedEventDict]] = {}
-
-        subtype_cf: dict[str, list[CashflowDict]] = {}
-        subtype_pt: dict[str, dict[date, dict[str, float]]] = {}
-        subtype_re: dict[str, list[RealizedEventDict]] = {}
-
-        instrument_type_cf: dict[str, list[CashflowDict]] = {}
-        instrument_type_pt: dict[str, dict[date, dict[str, float]]] = {}
-
-        sector_cf: dict[str, list[CashflowDict]] = {}
-        sector_pt: dict[str, dict[date, dict[str, float]]] = {}
-
-        industry_cf: dict[str, list[CashflowDict]] = {}
-        industry_pt: dict[str, dict[date, dict[str, float]]] = {}
-
-        geo_cf: dict[str, list[CashflowDict]] = {}
-        geo_pt: dict[str, dict[date, dict[str, float]]] = {}
-
-        country_cf: dict[str, list[CashflowDict]] = {}
-        country_pt: dict[str, dict[date, dict[str, float]]] = {}
-
-        currency_cf: dict[str, list[CashflowDict]] = {}
-        currency_pt: dict[str, dict[date, dict[str, float]]] = {}
-        currency_re: dict[str, list[RealizedEventDict]] = {}
-
+        """Execute parallel multi-process simulation across all configured ISIN instruments."""
+        acc = _PipelineAccumulator(self.ctx.rules.DEFAULT_CURRENCY_ID)
         has_data = False
         total_inst = len(self.isins)
         tasks = self._build_worker_tasks()
@@ -1116,7 +1345,6 @@ class IsinPipeline:
         is_daemon = current_process.daemon
         current_process.daemon = False
         worker_queue = start_worker_listener()
-        global_recon_events: list[ReconciliationEventDict] = []
 
         try:
             with concurrent.futures.ProcessPoolExecutor(
@@ -1152,59 +1380,7 @@ class IsinPipeline:
 
                     if success:
                         has_data = True
-                    if isin_cf or isin_pt:
-                        isin_cashflows[isin] = isin_cf
-                        isin_terminals[isin] = isin_pt
-
-                    global_cashflows.extend(isin_cf)
-                    for d, vals in isin_pt.items():
-                        pt = portfolio_terminals.setdefault(
-                            d,
-                            {
-                                "val": 0.0,
-                                "shadow_val": 0.0,
-                                "after_tax_val": 0.0,
-                                "val_local": 0.0,
-                                "shadow_val_local": 0.0,
-                            },
-                        )
-                        pt["val"] += vals.get("val", 0.0)
-                        pt["shadow_val"] += vals.get("shadow_val", 0.0)
-                        pt["after_tax_val"] += vals.get("after_tax_val", 0.0)
-                        pt["val_local"] += vals.get("val_local", 0.0)
-                        pt["shadow_val_local"] += vals.get("shadow_val_local", 0.0)
-                    realized_events.extend(isin_re)
-                    global_recon_events.extend(isin_recon)
-
-                    if not tags:
-                        continue
-
-                    cls = tags.get("class", "Unknown")
-                    sub = tags.get("subtype", "Unknown")
-                    inst_type = tags.get("instrument_type", "Unknown")
-                    sector = tags.get("sector", "Unknown")
-                    industry = tags.get("industry", "Unknown")
-                    geo = tags.get("geo", "Unknown")
-                    country = tags.get("country", "Unknown")
-                    currency = tags.get("currency", (self.ctx.rules.DEFAULT_CURRENCY_ID))
-
-                    class_re.setdefault(cls, []).extend(isin_re)
-                    self._accumulate_group(cls, class_cf, class_pt, isin_cf, isin_pt)
-
-                    sub_key = f"{cls}___{sub}"
-                    subtype_re.setdefault(sub_key, []).extend(isin_re)
-                    self._accumulate_group(sub_key, subtype_cf, subtype_pt, isin_cf, isin_pt)
-
-                    self._accumulate_group(
-                        inst_type, instrument_type_cf, instrument_type_pt, isin_cf, isin_pt
-                    )
-                    self._accumulate_group(sector, sector_cf, sector_pt, isin_cf, isin_pt)
-                    self._accumulate_group(industry, industry_cf, industry_pt, isin_cf, isin_pt)
-                    self._accumulate_group(geo, geo_cf, geo_pt, isin_cf, isin_pt)
-                    self._accumulate_group(country, country_cf, country_pt, isin_cf, isin_pt)
-
-                    currency_re.setdefault(currency, []).extend(isin_re)
-                    self._accumulate_group(currency, currency_cf, currency_pt, isin_cf, isin_pt)
+                    acc.ingest_isin_result(isin, isin_cf, isin_pt, isin_re, isin_recon, tags)
         finally:
             stop_worker_listener()
             current_process.daemon = is_daemon
@@ -1212,35 +1388,7 @@ class IsinPipeline:
         logger.info(
             f"  -> Quant Engine successfully processed {len(self.isins)} ISIN workloads across Process Pool."
         )
-
-        return PipelineExecutionResult(
-            has_data=has_data,
-            global_cf=global_cashflows,
-            global_pt=portfolio_terminals,
-            global_re=realized_events,
-            global_recon_events=global_recon_events,
-            isin_cf=isin_cashflows,
-            isin_pt=isin_terminals,
-            class_cf=class_cf,
-            class_pt=class_pt,
-            class_re=class_re,
-            subtype_cf=subtype_cf,
-            subtype_pt=subtype_pt,
-            subtype_re=subtype_re,
-            instrument_type_cf=instrument_type_cf,
-            instrument_type_pt=instrument_type_pt,
-            sector_cf=sector_cf,
-            sector_pt=sector_pt,
-            industry_cf=industry_cf,
-            industry_pt=industry_pt,
-            geo_cf=geo_cf,
-            geo_pt=geo_pt,
-            country_cf=country_cf,
-            country_pt=country_pt,
-            currency_cf=currency_cf,
-            currency_pt=currency_pt,
-            currency_re=currency_re,
-        )
+        return acc.to_result(has_data)
 
 
 __all__ = [
