@@ -19,13 +19,10 @@ from personal_finance_etl.domain.common.dates import validate_and_parse_dates
 from personal_finance_etl.domain.common.validation import validate_and_parse_numerics
 
 
-def get_base_us_stock_transactions(raw_data: pl.LazyFrame) -> pl.LazyFrame:
-    """Acts as the US_STOCK_TRANSACTIONS helper query.
-
-    Returns a single LazyFrame containing both Buys and Sells with translation to INR.
-    """
+def _filter_active_us_stock_transactions(df: pl.LazyFrame) -> pl.LazyFrame:
+    """Filter out empty placeholder rows from raw US stock transactions."""
     stock_clean = pl.col("Stock Name").cast(pl.String).str.strip_chars()
-    df_filtered = raw_data.filter(
+    return df.filter(
         stock_clean.is_not_null()
         & (stock_clean != "")
         & (
@@ -39,6 +36,14 @@ def get_base_us_stock_transactions(raw_data: pl.LazyFrame) -> pl.LazyFrame:
             )
         )
     )
+
+
+def get_base_us_stock_transactions(raw_data: pl.LazyFrame) -> pl.LazyFrame:
+    """Acts as the US_STOCK_TRANSACTIONS helper query.
+
+    Returns a single LazyFrame containing both Buys and Sells with translation to INR.
+    """
+    df_filtered = _filter_active_us_stock_transactions(raw_data)
 
     df_validated = validate_and_parse_dates(
         df_filtered,
