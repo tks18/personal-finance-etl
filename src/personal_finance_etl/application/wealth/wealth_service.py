@@ -24,14 +24,12 @@ from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.domain.common.calculation import CalculationStatus
 from personal_finance_etl.domain.fire.deterministic import WealthRiskAnalyticsBuilder
 from personal_finance_etl.domain.fire.inflation import InflationBuilder
-from personal_finance_etl.domain.household.budget import (
-    BudgetForecastBuilder,
-    SpendAnalyticsBuilder,
-)
+from personal_finance_etl.domain.household.budget import BudgetForecastBuilder
 from personal_finance_etl.domain.household.cashflow import (
     CashflowStatementBuilder,
     MonthlyCashflowSummaryBuilder,
 )
+from personal_finance_etl.domain.household.expense import SpendAnalyticsBuilder
 from personal_finance_etl.domain.household.income import IncomeStreamsBuilder
 from personal_finance_etl.domain.household.ledger import LedgerBuilder
 from personal_finance_etl.domain.wealth.analytics import InvestmentAnalyticsBuilder
