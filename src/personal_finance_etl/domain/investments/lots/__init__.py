@@ -12,7 +12,10 @@ Does not own
 - Warehouse persistence (owned by infrastructure.warehouse).
 """
 
-from personal_finance_etl.domain.investments.lots.fifo import FIFOPortfolio
+from personal_finance_etl.domain.investments.lots.fifo import (
+    FIFOPortfolio,
+    LotBuyParameters,
+)
 from personal_finance_etl.domain.investments.lots.models import (
     AcquisitionLot,
     LotAction,
@@ -29,6 +32,7 @@ __all__ = [
     "CanonicalOrderPolicy",
     "FIFOPortfolio",
     "LotAction",
+    "LotBuyParameters",
     "TaxLot",
     "sort_purchases",
     "sort_sales",
