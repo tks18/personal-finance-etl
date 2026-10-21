@@ -53,6 +53,7 @@ class UnifiedETLTab(BaseEngineTab):
         self._configure_log_tags()
 
     def _build_header(self) -> None:
+        """Construct the top control header including branding, paths, and action triggers."""
         hdr = ctk.CTkFrame(self, fg_color=Color.HEADER, corner_radius=0)
         hdr.grid(row=0, column=0, sticky="ew")
 
@@ -60,7 +61,24 @@ class UnifiedETLTab(BaseEngineTab):
         hdr.grid_columnconfigure(0, weight=3)
         hdr.grid_columnconfigure(1, weight=1)
 
-        # ── 1. Title Block (Row 0) ─────────────────────────────────
+        self._build_title_block(hdr)
+        self._build_path_inputs(hdr)
+        self._build_action_buttons(hdr)
+        self._build_info_box(hdr)
+
+        # ── Divider Line ─────────────────────────────────────────
+        ctk.CTkFrame(self, fg_color=Color.BORDER, height=1, corner_radius=0).grid(
+            row=0, column=0, sticky="sew"
+        )
+
+    def _build_title_block(self, hdr: ctk.CTkFrame) -> None:
+        """Render logo, title branding, and documentation guide trigger.
+
+        Parameters
+        ----------
+        hdr : ctk.CTkFrame
+            Header container frame.
+        """
         title_block = ctk.CTkFrame(hdr, fg_color="transparent")
         title_block.grid(row=0, column=0, columnspan=2, padx=(16, 16), pady=(12, 0), sticky="w")
 
@@ -80,8 +98,6 @@ class UnifiedETLTab(BaseEngineTab):
             font=ctk.CTkFont(family="Segoe UI", size=15, weight="bold"),
             text_color=Color.TEXT,
         ).pack(anchor="w")
-
-        # ── 1.5 Guides Button (Row 0, Col 1, Right Aligned) ────────
 
         guides_btn_frame = ctk.CTkFrame(hdr, fg_color="transparent")
         guides_btn_frame.grid(row=0, column=1, padx=(0, 16), pady=(12, 0), sticky="e")
@@ -105,7 +121,15 @@ class UnifiedETLTab(BaseEngineTab):
             text_color=Color.DIM,
         ).pack(anchor="w")
 
-        # ── 2. Config Path (Row 1, Col 0) (3/4th) ───────────────────
+    def _build_path_inputs(self, hdr: ctk.CTkFrame) -> None:
+        """Render configuration and rules path selectors in the desktop header.
+
+        Parameters
+        ----------
+        hdr : ctk.CTkFrame
+            Header container frame.
+        """
+        # ── Config Path (Row 1, Col 0) ─────────────────────────────
         cfg_frame = ctk.CTkFrame(hdr, fg_color="transparent")
         cfg_frame.grid(row=1, column=0, padx=(16, 10), pady=(12, 4), sticky="ew")
         cfg_frame.grid_columnconfigure(0, weight=0)  # label
@@ -154,7 +178,7 @@ class UnifiedETLTab(BaseEngineTab):
             command=lambda: self._select_file(self.config_path_var, "TOML", "*.toml"),
         ).grid(row=0, column=2)
 
-        # ── 2.5 Rules Path (Row 2, Col 0) ───────────────────────────
+        # ── Rules Path (Row 2, Col 0) ──────────────────────────────
         rules_frame = ctk.CTkFrame(hdr, fg_color="transparent")
         rules_frame.grid(row=2, column=0, padx=(16, 10), pady=(4, 4), sticky="ew")
         rules_frame.grid_columnconfigure(0, weight=0)  # label
@@ -202,7 +226,14 @@ class UnifiedETLTab(BaseEngineTab):
             command=lambda: self._select_file(self.rules_path_var, "Rules TOML", "*.toml"),
         ).grid(row=0, column=2)
 
-        # ── 3. Run Button (Row 1-2, Col 1) (1/4th) ────────────────────
+    def _build_action_buttons(self, hdr: ctk.CTkFrame) -> None:
+        """Render execution and snapshot action buttons.
+
+        Parameters
+        ----------
+        hdr : ctk.CTkFrame
+            Header container frame.
+        """
         btn_frame = ctk.CTkFrame(hdr, fg_color="transparent")
         btn_frame.grid(row=1, column=1, rowspan=2, padx=(0, 16), pady=(12, 4), sticky="ns")
         btn_frame.grid_columnconfigure(0, weight=1)
@@ -243,16 +274,27 @@ class UnifiedETLTab(BaseEngineTab):
         )
         self.restore_btn.grid(row=2, column=0, sticky="ew", pady=(8, 0))
 
-        # ── 4. Helper Info Box (Row 3) ──────────────────────────────
+    def _build_info_box(self, hdr: ctk.CTkFrame) -> None:
+        """Render informational mission banner at the bottom of the header.
+
+        Parameters
+        ----------
+        hdr : ctk.CTkFrame
+            Header container frame.
+        """
         info_block = ctk.CTkFrame(hdr, fg_color="transparent")
         info_block.grid(row=3, column=0, columnspan=2, padx=(16, 16), pady=(4, 16), sticky="ew")
 
         info = ctk.CTkFrame(info_block, fg_color=Color.BORDER, corner_radius=6)
         info.pack(fill="x", expand=True)
 
+        info_text = (
+            "Preserve financial evidence → Canonicalize meaning → Reconstruct state → "
+            "Reconcile against reality → Support decisions across Investments, Tax, Household, and FIRE."
+        )
         ctk.CTkLabel(
             info,
-            text="Preserve financial evidence → Canonicalize meaning → Reconstruct state → Reconcile against reality → Support decisions across Investments, Tax, Household, and FIRE.",
+            text=info_text,
             font=ctk.CTkFont(family="Segoe UI", size=10),
             text_color=Color.DIM,
             justify="left",
@@ -354,6 +396,7 @@ class UnifiedETLTab(BaseEngineTab):
             )
 
     def _restore_db(self) -> None:
+        """Prompt user for snapshot archive and initiate database restoration."""
         zip_path = filedialog.askopenfilename(
             title="Select Snapshot ZIP",
             filetypes=[("Zip files", "*.zip")],
@@ -361,34 +404,42 @@ class UnifiedETLTab(BaseEngineTab):
         if not zip_path:
             return
 
-        # Disable buttons
         self.run_btn.configure(state="disabled")
         self.snapshot_btn.configure(state="disabled")
         self.restore_btn.configure(state="disabled", text="Restoring...")
 
-        # Run safely
+        try:
+            self._execute_restore(zip_path)
+        finally:
+            self.run_btn.configure(state="normal")
+            self.snapshot_btn.configure(state="normal")
+            self.restore_btn.configure(state="normal", text="♻️ Restore DB")
+
+    def _execute_restore(self, zip_path: str) -> None:
+        """Execute database restore and propagate status messages.
+
+        Parameters
+        ----------
+        zip_path : str
+            Absolute path to the snapshot zip file.
+        """
         try:
             success = self.engine.restore_database(self.config_path_var.get(), zip_path)
-            if success:
-                self.handle_status(
-                    self.run_btn,
-                    EngineStatusMessage(
-                        msg="Database snapshot restored successfully.",
-                        data=None,
-                        progress=1.0,
-                        level=LogLevel.SUCCESS,
-                    ),
-                )
-            else:
-                self.handle_status(
-                    self.run_btn,
-                    EngineStatusMessage(
-                        msg="Failed to restore snapshot.",
-                        data=None,
-                        progress=0.0,
-                        level=LogLevel.ERROR,
-                    ),
-                )
+            msg = (
+                "Database snapshot restored successfully."
+                if success
+                else "Failed to restore snapshot."
+            )
+            level = LogLevel.SUCCESS if success else LogLevel.ERROR
+            self.handle_status(
+                self.run_btn,
+                EngineStatusMessage(
+                    msg=msg,
+                    data=None,
+                    progress=1.0 if success else 0.0,
+                    level=level,
+                ),
+            )
         except PermissionError as pe:
             self.handle_status(
                 self.run_btn,
@@ -409,10 +460,6 @@ class UnifiedETLTab(BaseEngineTab):
                     level=LogLevel.ERROR,
                 ),
             )
-        finally:
-            self.run_btn.configure(state="normal")
-            self.snapshot_btn.configure(state="normal")
-            self.restore_btn.configure(state="normal", text="♻️ Restore DB")
 
 
 # Exception TYP-003 [THIRD_PARTY_TYPING_GAP]: Subclassing untyped third-party ctk.CTk base class
