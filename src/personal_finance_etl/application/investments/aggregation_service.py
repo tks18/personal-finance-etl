@@ -160,80 +160,82 @@ class PostProcessor:
             )
         )
 
+    @staticmethod
+    def _level_aggregation_expressions() -> list[pl.Expr]:
+        return [
+            pl.col("Buy_Value").sum().alias("Total_Invested_Value"),
+            pl.col("Close_Value").sum().alias("Total_Current_Value"),
+            pl.col("Buy_Value_Local").sum().alias("Total_Invested_Value_Local"),
+            pl.col("Close_Value_Local").sum().alias("Total_Current_Value_Local"),
+            pl.col("Asset_PnL").sum().alias("Asset_PnL"),
+            pl.col("Forex_PnL").sum().alias("Forex_PnL"),
+            pl.col("Quantity").sum().alias("Total_Quantity"),
+            pl.col("ISIN").n_unique().alias("Total_Stocks"),
+            pl.col("Unrealized_Gain").sum().alias("Unrealized_Gain"),
+            pl.col("Unrealized_Loss").sum().alias("Unrealized_Loss"),
+            pl.col("FY_Realized_Gain").sum().alias("FY_Realized_Gain"),
+            pl.col("FY_Realized_Loss").sum().alias("FY_Realized_Loss"),
+            pl.col("FY_Realized_Net_PnL").sum().alias("FY_Realized_Net_PnL"),
+        ]
+
     def _aggregate_level(
         self,
         lazy_df_agg: pl.LazyFrame,
         group_cols: list[str],
     ) -> pl.LazyFrame:
         """Roll up active lot positions into additive group-level financial metrics."""
-        return (
-            lazy_df_agg.select(
-                list(
-                    set(
-                        group_cols
-                        + [
-                            "ISIN",
-                            "Quantity",
-                            "Buy_Value",
-                            "Close_Value",
-                            "Buy_Value_Local",
-                            "Close_Value_Local",
-                            "Asset_PnL",
-                            "Forex_PnL",
-                            "Unrealized_Gain",
-                            "Unrealized_Loss",
-                            "FY_Realized_Gain",
-                            "FY_Realized_Loss",
-                            "FY_Realized_Net_PnL",
-                        ]
-                    )
-                )
+        select_cols = list(
+            set(
+                group_cols
+                + [
+                    "ISIN",
+                    "Quantity",
+                    "Buy_Value",
+                    "Close_Value",
+                    "Buy_Value_Local",
+                    "Close_Value_Local",
+                    "Asset_PnL",
+                    "Forex_PnL",
+                    "Unrealized_Gain",
+                    "Unrealized_Loss",
+                    "FY_Realized_Gain",
+                    "FY_Realized_Loss",
+                    "FY_Realized_Net_PnL",
+                ]
             )
+        )
+        base = (
+            lazy_df_agg.select(select_cols)
             .group_by(group_cols)
-            .agg(
-                pl.col("Buy_Value").sum().alias("Total_Invested_Value"),
-                pl.col("Close_Value").sum().alias("Total_Current_Value"),
-                pl.col("Buy_Value_Local").sum().alias("Total_Invested_Value_Local"),
-                pl.col("Close_Value_Local").sum().alias("Total_Current_Value_Local"),
-                pl.col("Asset_PnL").sum().alias("Asset_PnL"),
-                pl.col("Forex_PnL").sum().alias("Forex_PnL"),
-                pl.col("Quantity").sum().alias("Total_Quantity"),
-                pl.col("ISIN").n_unique().alias("Total_Stocks"),
-                pl.col("Unrealized_Gain").sum().alias("Unrealized_Gain"),
-                pl.col("Unrealized_Loss").sum().alias("Unrealized_Loss"),
-                pl.col("FY_Realized_Gain").sum().alias("FY_Realized_Gain"),
-                pl.col("FY_Realized_Loss").sum().alias("FY_Realized_Loss"),
-                pl.col("FY_Realized_Net_PnL").sum().alias("FY_Realized_Net_PnL"),
-            )
+            .agg(self._level_aggregation_expressions())
             .with_columns(
                 (pl.col("Total_Current_Value") - pl.col("Total_Invested_Value")).alias(
                     "Unrealized_PL"
                 )
             )
-            .with_columns(
-                pl.when(pl.col("Total_Invested_Value") > 0)
-                .then(pl.col("Unrealized_PL") / pl.col("Total_Invested_Value"))
-                .otherwise(0.0)
-                .alias("Absolute_Return"),
-                pl.when(pl.col("Unrealized_PL") != 0.0)
-                .then(pl.col("Forex_PnL") / pl.col("Unrealized_PL"))
-                .otherwise(0.0)
-                .alias("Forex_Contribution_Pct"),
-                pl.when(pl.col("Total_Invested_Value_Local") > 0)
-                .then(pl.col("Total_Invested_Value") / pl.col("Total_Invested_Value_Local"))
-                .otherwise(1.0)
-                .alias("Blended_FX_Buy_Rate"),
-                pl.when(pl.col("Total_Current_Value_Local") > 0)
-                .then(pl.col("Total_Current_Value") / pl.col("Total_Current_Value_Local"))
-                .otherwise(1.0)
-                .alias("Current_FX_Rate"),
-            )
-            .with_columns(
-                pl.when(pl.col("Blended_FX_Buy_Rate") > 0)
-                .then((pl.col("Current_FX_Rate") / pl.col("Blended_FX_Buy_Rate")) - 1.0)
-                .otherwise(0.0)
-                .alias("Currency_Appreciation_Pct")
-            )
+        )
+        return base.with_columns(
+            pl.when(pl.col("Total_Invested_Value") > 0)
+            .then(pl.col("Unrealized_PL") / pl.col("Total_Invested_Value"))
+            .otherwise(0.0)
+            .alias("Absolute_Return"),
+            pl.when(pl.col("Unrealized_PL") != 0.0)
+            .then(pl.col("Forex_PnL") / pl.col("Unrealized_PL"))
+            .otherwise(0.0)
+            .alias("Forex_Contribution_Pct"),
+            pl.when(pl.col("Total_Invested_Value_Local") > 0)
+            .then(pl.col("Total_Invested_Value") / pl.col("Total_Invested_Value_Local"))
+            .otherwise(1.0)
+            .alias("Blended_FX_Buy_Rate"),
+            pl.when(pl.col("Total_Current_Value_Local") > 0)
+            .then(pl.col("Total_Current_Value") / pl.col("Total_Current_Value_Local"))
+            .otherwise(1.0)
+            .alias("Current_FX_Rate"),
+        ).with_columns(
+            pl.when(pl.col("Blended_FX_Buy_Rate") > 0)
+            .then((pl.col("Current_FX_Rate") / pl.col("Blended_FX_Buy_Rate")) - 1.0)
+            .otherwise(0.0)
+            .alias("Currency_Appreciation_Pct")
         )
 
     def _apply_weights_and_prune(
@@ -361,6 +363,103 @@ class PostProcessor:
             }
         )
 
+    def _build_isin_table(
+        self,
+        lazy_df_agg: pl.LazyFrame,
+        group_isin: pl.DataFrame,
+    ) -> pl.LazyFrame:
+        """Construct ISIN-level aggregated analytical table."""
+        metrics = (
+            lazy_df_agg.select(
+                [
+                    "Closing_Date",
+                    "ISIN",
+                    "CAGR",
+                    "BM_CAGR",
+                    "Is_Lagging_Benchmark",
+                    "LTCG_Tax_If_Sold",
+                    "STCG_Tax_If_Sold",
+                    "Unrealized_LTCG",
+                    "Unrealized_STCG",
+                    "Unrealized_LTCL",
+                    "Unrealized_STCL",
+                    "Outperforming_Lot_Ratio",
+                ]
+            )
+            .group_by(["Closing_Date", "ISIN"])
+            .agg(
+                pl.col("CAGR").first(),
+                pl.col("BM_CAGR").first(),
+                pl.col("Is_Lagging_Benchmark").first(),
+                pl.col("LTCG_Tax_If_Sold").sum(),
+                pl.col("STCG_Tax_If_Sold").sum(),
+                pl.col("Unrealized_LTCG").sum(),
+                pl.col("Unrealized_STCG").sum(),
+                pl.col("Unrealized_LTCL").sum(),
+                pl.col("Unrealized_STCL").sum(),
+                pl.col("Outperforming_Lot_Ratio").first(),
+            )
+        )
+        base = (
+            self._aggregate_level(lazy_df_agg, ["Closing_Date", "ISIN"])
+            .join(metrics, on=["Closing_Date", "ISIN"], how="left")
+            .join(group_isin.lazy(), on=["Closing_Date", "ISIN"], how="left")
+        )
+        return self._apply_weights_and_prune(base, "ISIN")
+
+    def _build_dimensional_tables(
+        self,
+        lazy_df_agg: pl.LazyFrame,
+        groups: dict[str, pl.DataFrame],
+    ) -> dict[str, pl.LazyFrame]:
+        """Construct 8 aggregated dimensional slice tables."""
+
+        def _build_dim(
+            dim_df: pl.DataFrame, group_cols: list[str], weight_key: str
+        ) -> pl.LazyFrame:
+            base = self._aggregate_level(lazy_df_agg, group_cols)
+            if not dim_df.is_empty():
+                base = base.join(dim_df.lazy(), on=group_cols, how="left")
+            return self._apply_weights_and_prune(base, weight_key)
+
+        return {
+            "class": _build_dim(
+                groups["class"], ["Closing_Date", "INSTRUMENT_CLASS"], "INSTRUMENT_CLASS"
+            ),
+            "subtype": _build_dim(
+                groups["subtype"],
+                ["Closing_Date", "INSTRUMENT_CLASS", "INSTRUMENT_SUBTYPE"],
+                "INSTRUMENT_SUBTYPE",
+            ),
+            "inst_type": _build_dim(
+                groups["inst_type"], ["Closing_Date", "INSTRUMENT_TYPE"], "INSTRUMENT_TYPE"
+            ),
+            "sector": _build_dim(groups["sector"], ["Closing_Date", "SECTOR"], "SECTOR"),
+            "industry": _build_dim(groups["industry"], ["Closing_Date", "INDUSTRY"], "INDUSTRY"),
+            "geo": _build_dim(groups["geo"], ["Closing_Date", "GEO"], "GEO"),
+            "country": _build_dim(groups["country"], ["Closing_Date", "COUNTRY"], "COUNTRY"),
+            "currency": _build_dim(
+                groups["currency"], ["Closing_Date", "CURRENCY_ID"], "CURRENCY_ID"
+            ),
+        }
+
+    def _build_portfolio_table(
+        self,
+        lazy_df_agg: pl.LazyFrame,
+        df_port: pl.DataFrame,
+    ) -> pl.LazyFrame:
+        """Construct portfolio-wide aggregate table."""
+        return (
+            self._aggregate_level(lazy_df_agg, ["Closing_Date"])
+            .join(
+                df_port.lazy().rename(PORTFOLIO_COL_RENAMES),
+                on=["Closing_Date"],
+                how="left",
+            )
+            .with_columns(pl.lit(1.0).alias("Weight"))
+            .drop(list(self._FX_LOCAL_COLUMNS), strict=False)
+        )
+
     def run(
         self,
         lazy_df: pl.LazyFrame,
@@ -395,82 +494,9 @@ class PostProcessor:
         # Compose master metadata join into lazy pipeline without eager round-trip materialization
         lazy_df_agg = lazy_df.join(master_cols, on="ISIN", how="left")
 
-        f_tf_isin = (
-            self._aggregate_level(lazy_df_agg, ["Closing_Date", "ISIN"])
-            .join(
-                lazy_df_agg.select(
-                    [
-                        "Closing_Date",
-                        "ISIN",
-                        "CAGR",
-                        "BM_CAGR",
-                        "Is_Lagging_Benchmark",
-                        "LTCG_Tax_If_Sold",
-                        "STCG_Tax_If_Sold",
-                        "Unrealized_LTCG",
-                        "Unrealized_STCG",
-                        "Unrealized_LTCL",
-                        "Unrealized_STCL",
-                        "Outperforming_Lot_Ratio",
-                    ]
-                )
-                .group_by(["Closing_Date", "ISIN"])
-                .agg(
-                    pl.col("CAGR").first(),
-                    pl.col("BM_CAGR").first(),
-                    pl.col("Is_Lagging_Benchmark").first(),
-                    pl.col("LTCG_Tax_If_Sold").sum(),
-                    pl.col("STCG_Tax_If_Sold").sum(),
-                    pl.col("Unrealized_LTCG").sum(),
-                    pl.col("Unrealized_STCG").sum(),
-                    pl.col("Unrealized_LTCL").sum(),
-                    pl.col("Unrealized_STCL").sum(),
-                    pl.col("Outperforming_Lot_Ratio").first(),
-                ),
-                on=["Closing_Date", "ISIN"],
-                how="left",
-            )
-            .join(groups["isin"].lazy(), on=["Closing_Date", "ISIN"], how="left")
-        )
-        f_tf_isin = self._apply_weights_and_prune(f_tf_isin, "ISIN")
-
-        def _build_dim(
-            dim_df: pl.DataFrame, group_cols: list[str], weight_key: str
-        ) -> pl.LazyFrame:
-            base = self._aggregate_level(lazy_df_agg, group_cols)
-            if not dim_df.is_empty():
-                base = base.join(dim_df.lazy(), on=group_cols, how="left")
-            return self._apply_weights_and_prune(base, weight_key)
-
-        f_tf_class = _build_dim(
-            groups["class"], ["Closing_Date", "INSTRUMENT_CLASS"], "INSTRUMENT_CLASS"
-        )
-        f_tf_subtype = _build_dim(
-            groups["subtype"],
-            ["Closing_Date", "INSTRUMENT_CLASS", "INSTRUMENT_SUBTYPE"],
-            "INSTRUMENT_SUBTYPE",
-        )
-        f_tf_inst_type = _build_dim(
-            groups["inst_type"], ["Closing_Date", "INSTRUMENT_TYPE"], "INSTRUMENT_TYPE"
-        )
-        f_tf_sector = _build_dim(groups["sector"], ["Closing_Date", "SECTOR"], "SECTOR")
-        f_tf_industry = _build_dim(groups["industry"], ["Closing_Date", "INDUSTRY"], "INDUSTRY")
-        f_tf_geo = _build_dim(groups["geo"], ["Closing_Date", "GEO"], "GEO")
-        f_tf_country = _build_dim(groups["country"], ["Closing_Date", "COUNTRY"], "COUNTRY")
-        f_tf_currency = _build_dim(
-            groups["currency"], ["Closing_Date", "CURRENCY_ID"], "CURRENCY_ID"
-        )
-
-        f_tf_port = (
-            self._aggregate_level(lazy_df_agg, ["Closing_Date"])
-            .join(
-                df_port.lazy().rename(PORTFOLIO_COL_RENAMES),
-                on=["Closing_Date"],
-                how="left",
-            )
-            .with_columns(pl.lit(1.0).alias("Weight"))
-            .drop(list(self._FX_LOCAL_COLUMNS), strict=False)
-        )
+        f_tf_isin = self._build_isin_table(lazy_df_agg, groups["isin"])
+        dim_tables = self._build_dimensional_tables(lazy_df_agg, groups)
+        f_tf_port = self._build_portfolio_table(lazy_df_agg, df_port)
 
         df_re = self._build_realized_events(pipeline_res)
         df_recon = self._build_reconciliation_events(pipeline_res)
@@ -480,14 +506,14 @@ class PostProcessor:
             "df_f_investment_realized_events": df_re,
             "df_f_investment_reconciliation_events": df_recon,
             "df_f_investment_analytics_isin": f_tf_isin,
-            "df_f_investment_analytics_subtype": f_tf_subtype,
-            "df_f_investment_analytics_class": f_tf_class,
-            "df_f_investment_analytics_instrument_type": f_tf_inst_type,
-            "df_f_investment_analytics_sector": f_tf_sector,
-            "df_f_investment_analytics_industry": f_tf_industry,
-            "df_f_investment_analytics_geo": f_tf_geo,
-            "df_f_investment_analytics_country": f_tf_country,
-            "df_f_investment_analytics_currency": f_tf_currency,
+            "df_f_investment_analytics_subtype": dim_tables["subtype"],
+            "df_f_investment_analytics_class": dim_tables["class"],
+            "df_f_investment_analytics_instrument_type": dim_tables["inst_type"],
+            "df_f_investment_analytics_sector": dim_tables["sector"],
+            "df_f_investment_analytics_industry": dim_tables["industry"],
+            "df_f_investment_analytics_geo": dim_tables["geo"],
+            "df_f_investment_analytics_country": dim_tables["country"],
+            "df_f_investment_analytics_currency": dim_tables["currency"],
             "df_f_investment_analytics_portfolio": f_tf_port,
         }
 
