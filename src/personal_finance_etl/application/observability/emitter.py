@@ -258,7 +258,7 @@ class ObservabilityEmitter:
                 # Sinks must not compromise pipeline execution integrity
                 pass
 
-    def emit_event(
+    def emit_event(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
         event_code: EventCode,
         message: str,
