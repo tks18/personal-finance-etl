@@ -31,15 +31,31 @@ from personal_finance_etl.infrastructure.observability.queue import (
     EventQueue,
     ObservabilityQueueSink,
 )
+from personal_finance_etl.infrastructure.observability.redaction import (
+    SENSITIVE_KEY_SUBSTRINGS,
+    fingerprint_config,
+    hash_identifier,
+    redact_dict,
+    redact_text,
+)
+from personal_finance_etl.infrastructure.observability.retention import (
+    LogRetentionManager,
+)
 
 __all__ = [
     "DEFAULT_COMPRESSION_LEVEL",
     "AsyncObservabilityListener",
     "EventQueue",
     "JsonlForensicSink",
+    "LogRetentionManager",
     "ObservabilityQueueSink",
+    "SENSITIVE_KEY_SUBSTRINGS",
     "archive_run_trace",
     "compress_bytes",
     "decompress_bytes",
+    "fingerprint_config",
+    "hash_identifier",
+    "redact_dict",
+    "redact_text",
     "retrieve_run_trace",
 ]
