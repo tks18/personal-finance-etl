@@ -186,7 +186,6 @@ def create_or_update_pr(
     body: str,
     draft: bool = False,
     dry_run: bool = False,
-    automerge: bool = True,
 ) -> int:
     """Create a new pull request or update an existing one using gh CLI."""
     if dry_run:
@@ -196,7 +195,6 @@ def create_or_update_pr(
                 f"[bold cyan]Head Branch:[/bold cyan] {head}\n"
                 f"[bold cyan]PR Title:[/bold cyan]    {title}\n"
                 f"[bold cyan]Mode:[/bold cyan]        [yellow]DRY-RUN PREVIEW[/yellow]\n"
-                f"[bold cyan]Auto-merge:[/bold cyan]  {'Yes (label: automerge)' if automerge else 'No'}\n"
                 f"[dim]Draft PR:[/dim]    {'Yes' if draft else 'No'}",
                 title="[bold yellow]Pull Request Preview[/bold yellow]",
                 border_style="yellow",
@@ -233,28 +231,8 @@ def create_or_update_pr(
                 "--body-file",
                 temp_body_path,
             ]
-            if automerge:
-                cmd.extend(["--add-label", "automerge"])
             subprocess.run(cmd, cwd=repo_dir, check=True)
             console.print(f"[bold green]✔ Successfully updated PR #{pr_number}:[/bold green] {pr_url}")
-
-            if automerge:
-                try:
-                    subprocess.run(
-                        ["gh", "pr", "merge", pr_number, "--auto", "--merge"],
-                        cwd=repo_dir,
-                        capture_output=True,
-                        text=True,
-                        check=True,
-                    )
-                    console.print(
-                        "[bold green]✔ Auto-merge armed:[/bold green] "
-                        "PR will merge automatically once all status checks pass (branch strictly preserved)."
-                    )
-                except subprocess.CalledProcessError as e:
-                    err = e.stderr.strip() if e.stderr else str(e)
-                    console.print(f"[dim yellow]Notice: Native auto-merge status: {err}[/dim yellow]")
-
             return 0
 
         console.print(f"[bold cyan]Creating new pull request from '{head}' into '{base}'...[/bold cyan]")
@@ -273,30 +251,11 @@ def create_or_update_pr(
         ]
         if draft:
             cmd.append("--draft")
-        if automerge:
-            cmd.extend(["--label", "automerge"])
 
         proc = subprocess.run(cmd, cwd=repo_dir, capture_output=True, text=True, check=True)
         new_url = proc.stdout.strip()
         console.print(f"[bold green]✔ Successfully created Pull Request:[/bold green] {new_url}")
-
-        if automerge:
-            try:
-                subprocess.run(
-                    ["gh", "pr", "merge", new_url, "--auto", "--merge"],
-                    cwd=repo_dir,
-                    capture_output=True,
-                    text=True,
-                    check=True,
-                )
-                console.print(
-                    "[bold green]✔ Auto-merge armed:[/bold green] "
-                    "PR will merge automatically once all status checks pass (branch strictly preserved)."
-                )
-            except subprocess.CalledProcessError as e:
-                err = e.stderr.strip() if e.stderr else str(e)
-                console.print(f"[dim yellow]Notice: Native auto-merge status: {err}[/dim yellow]")
-
+        console.print("[bold cyan]Please review and merge the PR on GitHub to publish the release.[/bold cyan]")
         return 0
 
     except subprocess.CalledProcessError as e:
@@ -358,12 +317,7 @@ def main(cli_args: list[str] | None = None) -> int:
         action="store_true",
         help="Force a fresh execution of the full Quality Gate before building PR.",
     )
-    parser.add_argument(
-        "--automerge",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Automatically apply 'automerge' label so Ranger merges PR once CI checks pass (default: True).",
-    )
+
 
     args = parser.parse_args(cli_args)
     root_dir = get_project_root()
@@ -409,7 +363,6 @@ def main(cli_args: list[str] | None = None) -> int:
         body=pr_body,
         draft=args.draft,
         dry_run=is_dry_run,
-        automerge=args.automerge,
     )
 
 
