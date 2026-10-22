@@ -101,7 +101,7 @@ def _process_isin_worker(
     ) = task
 
     logger.debug(
-        f"[Worker] Starting processing for ISIN: {isin} with {len(p_inst)} purchases, "
+        f"Starting processing for ISIN: {isin} with {len(p_inst)} purchases, "
         f"{len(s_inst)} sales, and {len(m_inst)} market quotes",
         extra={"isin": isin, "stage": "QuantWorker"},
     )
@@ -110,7 +110,7 @@ def _process_isin_worker(
     try:
         worker_id = multiprocessing.current_process().name
         logger.debug(
-            f"[ENGINE:POOL] {worker_id} started processing ISIN '{isin}'",
+            f"{worker_id} started processing ISIN '{isin}'",
             extra={"isin": isin, "stage": "QuantWorker"},
         )
         t0 = time.perf_counter()
@@ -118,7 +118,7 @@ def _process_isin_worker(
         res = processor.process(isin, p_inst, s_inst, m_inst, master_row, bm_map)
 
         logger.debug(
-            f"[ENGINE:POOL] {worker_id} finished ISIN '{isin}' in {(time.perf_counter() - t0) * 1000:.2f}ms",
+            f"{worker_id} finished ISIN '{isin}' in {(time.perf_counter() - t0) * 1000:.2f}ms",
             extra={"isin": isin, "stage": "QuantWorker"},
         )
 
