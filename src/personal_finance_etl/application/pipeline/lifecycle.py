@@ -19,10 +19,7 @@ from __future__ import annotations
 
 import gc
 import logging
-import os
-import sqlite3
 import traceback
-import zlib
 from multiprocessing.queues import Queue as MpQueue
 from typing import cast
 
@@ -55,6 +52,7 @@ from personal_finance_etl.infrastructure.logging.setup import (
     remove_file_handlers,
     stop_worker_listener,
 )
+from personal_finance_etl.infrastructure.observability.archival import archive_run_trace
 from personal_finance_etl.infrastructure.warehouse.connection import DuckDBManager
 from personal_finance_etl.infrastructure.warehouse.meta import MetaLayer
 
@@ -411,20 +409,8 @@ class RunLifecycleCoordinator:
         )
         stop_worker_listener()
         remove_file_handlers()
-        try:
-            if (
-                self.cp is not None
-                and self.run_id is not None
-                and os.path.exists(self.log_file_path)
-            ):
-                with open(self.log_file_path, "rb") as f:
-                    log_bytes = f.read()
-                compressed_log = zlib.compress(log_bytes, level=6)
-                self.cp.runs.save_execution_log(self.run_id, compressed_log)
-        except (sqlite3.Error, OSError, zlib.error) as log_err:
-            logger.warning(
-                f"[PIPELINE:OPTIONAL_OPERATION] Failed to save compressed execution log to Raw Store: {log_err}"
-            )
+        if self.cp is not None and self.run_id is not None:
+            archive_run_trace(self.cp, self.run_id, self.log_file_path)
 
         try:
             self.db_manager.close()
