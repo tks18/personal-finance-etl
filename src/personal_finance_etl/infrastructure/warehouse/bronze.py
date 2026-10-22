@@ -18,11 +18,23 @@ from __future__ import annotations
 
 import logging
 import os
+from datetime import UTC, datetime
 
 import duckdb
 import polars as pl
 
+from personal_finance_etl.contracts.application import EngineStage
 from personal_finance_etl.contracts.extraction import ExtractionResult
+from personal_finance_etl.contracts.observability import (
+    DiagnosticSeverity,
+    EventCode,
+    EventOutcome,
+    NullObservabilitySink,
+    ObservabilityContext,
+    ObservabilityEvent,
+    ObservabilitySink,
+    PresentationKind,
+)
 from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
 from personal_finance_etl.infrastructure.warehouse.connection import DuckDBManager
 from personal_finance_etl.infrastructure.warehouse.meta import MetaLayer
@@ -44,10 +56,17 @@ class BronzeLayer:
         Metadata projection layer manager.
     """
 
-    def __init__(self, db_manager: DuckDBManager, cp: ControlPlane, meta_layer: MetaLayer) -> None:
+    def __init__(
+        self,
+        db_manager: DuckDBManager,
+        cp: ControlPlane,
+        meta_layer: MetaLayer,
+        emitter: ObservabilitySink | None = None,
+    ) -> None:
         self.db_manager = db_manager
         self.cp = cp
         self.meta_layer = meta_layer
+        self.emitter = emitter or NullObservabilitySink()
 
     def _evolve_schema(self, table_name: str) -> None:
         """Add any new columns found in schema_df to an existing bronze table.
@@ -241,6 +260,22 @@ class BronzeLayer:
                         contract.physical_table,
                         rows_added,
                         len(actionable),
+                    )
+                    self.emitter.emit(
+                        ObservabilityEvent(
+                            timestamp=datetime.now(UTC),
+                            event_code=EventCode.BRONZE_UPSERT,
+                            severity=DiagnosticSeverity.DEBUG,
+                            presentation_kind=PresentationKind.INTERNAL,
+                            outcome=EventOutcome.COMPLETED,
+                            context=ObservabilityContext(
+                                stage=EngineStage.EXTRACTING,
+                                entity_type="Table",
+                                entity_id=contract.physical_table,
+                                rows=rows_added,
+                            ),
+                            message=f"Bronze: Table '{contract.physical_table}' upserted {rows_added} rows from {len(actionable)} files.",
+                        )
                     )
                     if rows_added > 0:
                         total_upserts += 1
