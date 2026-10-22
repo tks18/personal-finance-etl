@@ -129,10 +129,8 @@ class WealthService:
         dict[str, pl.LazyFrame]
             Dictionary of computed presentation LazyFrames with NaN values cleaned to nulls.
         """
-        logger.debug("[ENGINE:PRESENTATION] Starting Wealth Engine presentation layer builds...")
-        logger.debug(
-            "[ENGINE:PRESENTATION] Imputing missing data (NaN) with 0.0 for BI Engine compatibility..."
-        )
+        logger.debug("Starting Wealth Engine presentation layer builds...")
+        logger.debug("Imputing missing data (NaN) with 0.0 for BI Engine compatibility...")
 
         base_lf = self._build_core_models(dfs)
         if base_lf is None:
