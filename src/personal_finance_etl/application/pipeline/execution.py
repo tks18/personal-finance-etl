@@ -47,6 +47,7 @@ from personal_finance_etl.contracts.application import EngineStage, EngineStatus
 from personal_finance_etl.contracts.extraction import ExtractionResult
 from personal_finance_etl.contracts.logging import ILogger, LogLevel
 from personal_finance_etl.contracts.observability import (
+    DiagnosticSeverity,
     EventCode,
     PresentationKind,
 )
@@ -474,7 +475,7 @@ class PipelineExecutor:
         )
 
         meta_layer = MetaLayer(self.db_manager, self.cfg, self.rules)
-        bronze = BronzeLayer(self.db_manager, cp, meta_layer)
+        bronze = BronzeLayer(self.db_manager, cp, meta_layer, emitter=self.emitter)
         if renames:
             bronze.migrate_identity(renames)
             meta_layer.migrate_identity(renames)
@@ -551,6 +552,18 @@ class PipelineExecutor:
         if missing_contracts:
             raise RuntimeError(f"Engine failed to produce required tables: {missing_contracts}")
 
+        for df_key, df_val in self.dfs.items():
+            self.emitter.emit_event(
+                event_code=EventCode.PRESENTATION_DAG_START,
+                message=f"Presentation layer produced {df_key} ({df_val.height:,} rows)",
+                presentation_kind=PresentationKind.INTERNAL,
+                severity=DiagnosticSeverity.DEBUG,
+                stage=EngineStage.ANALYZING,
+                entity_type="Table",
+                entity_id=df_key,
+                rows=df_val.height,
+            )
+
         elapsed_s = time.perf_counter() - t_eng_start
         logger.info(
             f"Phase 4 Complete [{elapsed_s:.2f}s] - Presentation logic built {len(self.dfs)} total tables."
@@ -575,8 +588,8 @@ class PipelineExecutor:
             presentation_kind=PresentationKind.STEP,
             stage=EngineStage.PUBLISHING,
         )
-        SilverLayer(self.db_manager).load(self.dfs)
-        GoldLayer(self.db_manager).load(self.dfs)
+        SilverLayer(self.db_manager, emitter=self.emitter).load(self.dfs)
+        GoldLayer(self.db_manager, emitter=self.emitter).load(self.dfs)
         elapsed_s = time.perf_counter() - t_load_start
         logger.info(f"Phase 5 Complete [{elapsed_s:.2f}s] - Disk synchronization successful.")
         self.emitter.emit_event(
