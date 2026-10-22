@@ -1,0 +1,115 @@
+/* ==========================================================================
+   Personal Finance ETL - Documentation Theme Overrides
+   Author: Shan.tk (Sudharshan TK)
+   Color System: Deep Royal & Midnight Purple Shades (Anti-Pink / Anti-Magenta)
+   ========================================================================== */
+
+:root,
+[data-md-color-scheme="slate"],
+[data-md-color-scheme="default"],
+[data-md-color-primary="custom"] {
+  /* Core Purple System Variables */
+  --md-primary-fg-color:               #2d1254; /* Deep Royal Purple */
+  --md-primary-fg-color--light:         #3d1a73; /* Rich Regal Purple */
+  --md-primary-fg-color--dark:          #1c0b38; /* Midnight Purple */
+  --md-primary-bg-color:               #ffffff;
+  --md-primary-bg-color--light:         rgba(255, 255, 255, 0.7);
+
+  /* Accents & In-Page Highlights */
+  --md-accent-fg-color:                #8b5cf6; /* Electric Violet Accent */
+  --md-accent-fg-color--transparent:   rgba(139, 92, 246, 0.15);
+  --md-typeset-a-color:                #a78bfa; /* High-contrast violet for prose links */
+}
+
+/* --------------------------------------------------------------------------
+   Top Navigation Bar (Header)
+   -------------------------------------------------------------------------- */
+.md-header {
+  background-color: #2b1254 !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35) !important;
+}
+
+.md-header__title,
+.md-header__button,
+.md-header__topic {
+  color: #ffffff !important;
+}
+
+/* Header Search Bar */
+.md-search__inner {
+  color: #ffffff;
+}
+
+.md-search__form {
+  background-color: rgba(255, 255, 255, 0.12) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  border-radius: 6px !important;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.md-search__form:hover {
+  background-color: rgba(255, 255, 255, 0.18) !important;
+  border-color: rgba(167, 139, 250, 0.4) !important;
+}
+
+.md-search__input {
+  color: #ffffff !important;
+}
+
+.md-search__input::placeholder {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+
+.md-search__icon {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+/* --------------------------------------------------------------------------
+   Navigation Tabs Bar (Secondary Top Bar)
+   -------------------------------------------------------------------------- */
+.md-tabs {
+  background-color: #200d3d !important; /* Slightly deeper midnight shade for layered depth */
+  border-bottom: 1px solid rgba(139, 92, 246, 0.25) !important;
+  color: rgba(255, 255, 255, 0.8) !important;
+}
+
+.md-tabs__link {
+  color: rgba(243, 238, 255, 0.75) !important;
+  font-weight: 500;
+  border-bottom: 2px solid transparent !important;
+  transition: color 0.2s ease, border-color 0.2s ease, opacity 0.2s ease !important;
+}
+
+.md-tabs__link:hover {
+  color: #ffffff !important;
+  opacity: 1 !important;
+}
+
+.md-tabs__item--active .md-tabs__link {
+  color: #ffffff !important;
+  opacity: 1 !important;
+  border-bottom: 2px solid #a78bfa !important;
+}
+
+/* --------------------------------------------------------------------------
+   Mobile Navigation Drawer
+   -------------------------------------------------------------------------- */
+.md-nav--primary .md-nav__title[for="__drawer"] {
+  background-color: #2b1254 !important;
+  color: #ffffff !important;
+}
+
+/* --------------------------------------------------------------------------
+   Interactive Links & Details
+   -------------------------------------------------------------------------- */
+.md-typeset a {
+  color: #a78bfa;
+  transition: color 0.15s ease;
+}
+
+.md-typeset a:hover {
+  color: #c4b5fd;
+  text-decoration: underline;
+}
+
