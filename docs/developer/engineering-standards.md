@@ -674,3 +674,13 @@ Continue with [Tooling, Quality, and Release Engineering](tooling-quality-and-re
 - [Testing and Validation](testing-and-validation.md)
 - [Tooling, Quality, and Release Engineering](tooling-quality-and-release-engineering.md)
 - [Application and Dependency Architecture](../architecture/application-and-dependency-architecture.md)
+
+## 30. Unified Observability Architecture is Frozen
+
+The observability architecture is frozen as of v9.2.9:
+
+1. **Single Canonical Contract**: All operational and diagnostic events must flow through `ObservabilityEvent`. No custom strings, prefixes, or ad-hoc logger methods may be invented.
+2. **Zero Polars Collects for Logging**: Observability sinks and emitters must never call `.collect()` on Polars `LazyFrame` instances. Metadata such as row counts must come from explicit pipeline context.
+3. **Zero Hot-Loop Logging**: Numerical inner loops (e.g., FIFO matching, Monte Carlo simulation, IRR calculations) must never emit events on per-iteration steps. Events belong at batch and phase boundaries.
+4. **Zero String Severity Guessing**: UI and forensic sinks never parse English text to infer severity. Presentation style is driven exclusively by `PresentationKind` and `DiagnosticSeverity`.
+5. **Zero Sensitive Data Leakage**: Sinks automatically redact authorization tokens, credit cards, Indian PANs, and passwords at serialization boundaries.
