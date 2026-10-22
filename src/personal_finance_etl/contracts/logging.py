@@ -3,7 +3,7 @@
 Owns
 ----
 - LogLevel enumeration used across process boundaries and UI queues.
-- StatusQueue protocol for cross-process status sinks (with ILogger backward-compatibility alias).
+- StatusQueue protocol for cross-process status sinks.
 
 Does not own
 -------------
@@ -56,5 +56,5 @@ class NullStatusQueue:
         """Discard status message."""
 
 
-# Architectural alias for legacy ILogger protocol
+# Protocol alias for status queue callers
 ILogger = StatusQueue
