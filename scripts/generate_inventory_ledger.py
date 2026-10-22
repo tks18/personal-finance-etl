@@ -176,7 +176,11 @@ def scan_codebase() -> list[LedgerEntry]:
             lineno = node.lineno
             raw_snippet = lines[lineno - 1].strip() if lineno <= len(lines) else ""
             call_type = "logger" if is_logger else "EngineStatusMessage"
-            func_name = func.attr if is_logger else "EngineStatusMessage"
+            func_name = (
+                func.attr
+                if (is_logger and isinstance(func, ast.Attribute))
+                else "EngineStatusMessage"
+            )
 
             prefix_match = PREFIX_PATTERN.search(raw_snippet)
             prefix = prefix_match.group(1) if prefix_match else ""
