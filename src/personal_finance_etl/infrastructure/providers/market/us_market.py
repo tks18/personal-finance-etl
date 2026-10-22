@@ -41,6 +41,7 @@ from personal_finance_etl.contracts.observability import (
     EventOutcome,
     ObservabilityContext,
     ObservabilityEvent,
+    ObservabilitySink,
     PresentationKind,
 )
 from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
@@ -62,10 +63,19 @@ class USMarketExtractor:
         cp: ControlPlane,
         status_queue: StatusQueue,
         max_workers: int = 8,
+        emitter: ObservabilitySink | None = None,
     ) -> None:
         self.cp = cp
         self.status_queue = status_queue
         self.max_workers = max_workers
+        self.emitter = emitter
+
+    def _emit_event(self, event: ObservabilityEvent) -> None:
+        """Route event through observability sink or fallback status queue."""
+        if self.emitter is not None:
+            self.emitter.emit(event)
+        else:
+            self.status_queue.put(event)
 
     @staticmethod
     def _build_us_market_spine(
@@ -233,7 +243,7 @@ class USMarketExtractor:
             batch_result.successful_entities.append(res.entity)
             if not res.df.is_empty():
                 all_new_data.append(res.df)
-            self.status_queue.put(
+            self._emit_event(
                 ObservabilityEvent(
                     timestamp=datetime.now(UTC),
                     event_code=EventCode.MARKET_TICKER_SUCCESS,
@@ -251,7 +261,7 @@ class USMarketExtractor:
             )
         elif res.status == ExtractorEntityStatus.CACHED:
             batch_result.cached_entities.append(res.entity)
-            self.status_queue.put(
+            self._emit_event(
                 ObservabilityEvent(
                     timestamp=datetime.now(UTC),
                     event_code=EventCode.MARKET_TICKER_CACHE_HIT,
@@ -272,7 +282,7 @@ class USMarketExtractor:
             ExtractorEntityStatus.EMPTY_RESPONSE,
         ):
             batch_result.no_new_data_entities.append(res.entity)
-            self.status_queue.put(
+            self._emit_event(
                 ObservabilityEvent(
                     timestamp=datetime.now(UTC),
                     event_code=EventCode.MARKET_TICKER_SUCCESS,
@@ -289,7 +299,7 @@ class USMarketExtractor:
             )
         else:
             batch_result.failed_entities[res.entity] = res.message
-            self.status_queue.put(
+            self._emit_event(
                 ObservabilityEvent(
                     timestamp=datetime.now(UTC),
                     event_code=EventCode.MARKET_TICKER_FAILED,
