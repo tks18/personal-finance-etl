@@ -16,6 +16,13 @@ Does not own
 
 from __future__ import annotations
 
+from personal_finance_etl.infrastructure.observability.archival import (
+    DEFAULT_COMPRESSION_LEVEL,
+    archive_run_trace,
+    compress_bytes,
+    decompress_bytes,
+    retrieve_run_trace,
+)
 from personal_finance_etl.infrastructure.observability.forensic_sink import (
     JsonlForensicSink,
 )
@@ -26,8 +33,13 @@ from personal_finance_etl.infrastructure.observability.queue import (
 )
 
 __all__ = [
+    "DEFAULT_COMPRESSION_LEVEL",
     "AsyncObservabilityListener",
     "EventQueue",
     "JsonlForensicSink",
     "ObservabilityQueueSink",
+    "archive_run_trace",
+    "compress_bytes",
+    "decompress_bytes",
+    "retrieve_run_trace",
 ]
