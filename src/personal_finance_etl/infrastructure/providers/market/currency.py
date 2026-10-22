@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import concurrent.futures
 from collections.abc import Mapping
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 
 import pandas as pd  # type: ignore[import-untyped]
 import polars as pl
@@ -36,6 +36,14 @@ from personal_finance_etl.contracts.extraction import (
     ExtractorEntityStatus,
 )
 from personal_finance_etl.contracts.logging import LogLevel, StatusQueue
+from personal_finance_etl.contracts.observability import (
+    DiagnosticSeverity,
+    EventCode,
+    EventOutcome,
+    ObservabilityContext,
+    ObservabilityEvent,
+    PresentationKind,
+)
 from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
 from personal_finance_etl.infrastructure.logging import logger
 from personal_finance_etl.infrastructure.providers.market.common import (
@@ -139,7 +147,7 @@ class CurrencyExtractor:
         """
         ticker = str(row.get("yF_Ticker", "")).strip()
         if not ticker:
-            logger.debug("[Currency Extractor] Skipping empty ticker %s", row.get("UID"))
+            logger.debug("Currency Extractor: Skipping empty ticker %s", row.get("UID"))
             return ExtractorEntityResult(
                 entity=str(row.get("UID", "Unknown")),
                 status=ExtractorEntityStatus.INVALID_PAYLOAD,
@@ -154,12 +162,12 @@ class CurrencyExtractor:
         fetch_start, is_cached = calculate_market_fetch_window(start_dt, end_dt, max_cached_date)
         if is_cached:
             logger.debug(
-                "[Currency Extractor] %s fully cached up to %s. Skipping API fetch.", ticker, end_dt
+                "Currency Extractor: %s fully cached up to %s. Skipping API fetch.", ticker, end_dt
             )
             return ExtractorEntityResult(
                 entity=ticker,
                 status=ExtractorEntityStatus.CACHED,
-                message=f"✓ {ticker} fully cached up to {end_dt}",
+                message=f"{ticker} fully cached up to {end_dt}",
                 attempt_count=0,
                 requested_start=fetch_start,
                 requested_end=end_dt,
@@ -181,7 +189,7 @@ class CurrencyExtractor:
             )
 
         if hist_pd is None or hist_pd.empty:
-            logger.debug("[Currency Extractor] No data returned from API for %s.", ticker)
+            logger.debug("Currency Extractor: No data returned from API for %s.", ticker)
             return ExtractorEntityResult(
                 entity=ticker,
                 status=ExtractorEntityStatus.EMPTY_RESPONSE,
@@ -225,29 +233,81 @@ class CurrencyExtractor:
     ) -> None:
         """Process and route entity extraction result into the batch result container."""
         batch_result.entity_results.append(res)
-        level = LogLevel.INFO
 
         if res.status == ExtractorEntityStatus.SUCCESS:
             batch_result.successful_entities.append(res.entity)
             if not res.df.is_empty():
                 all_new_data.append(res.df)
-            level = LogLevel.INFO
+            self.status_queue.put(
+                ObservabilityEvent(
+                    timestamp=datetime.now(UTC),
+                    event_code=EventCode.MARKET_TICKER_SUCCESS,
+                    severity=DiagnosticSeverity.INFO,
+                    presentation_kind=PresentationKind.SUCCESS,
+                    outcome=EventOutcome.COMPLETED,
+                    context=ObservabilityContext(
+                        entity_type="Ticker",
+                        entity_id=res.entity,
+                        rows=res.df.height if not res.df.is_empty() else None,
+                    ),
+                    message=res.message,
+                    progress=prog,
+                )
+            )
         elif res.status == ExtractorEntityStatus.CACHED:
             batch_result.cached_entities.append(res.entity)
-            level = LogLevel.INFO
+            self.status_queue.put(
+                ObservabilityEvent(
+                    timestamp=datetime.now(UTC),
+                    event_code=EventCode.MARKET_TICKER_CACHE_HIT,
+                    severity=DiagnosticSeverity.INFO,
+                    presentation_kind=PresentationKind.STEP,
+                    outcome=EventOutcome.COMPLETED,
+                    context=ObservabilityContext(
+                        entity_type="Ticker",
+                        entity_id=res.entity,
+                        cache_hit=True,
+                    ),
+                    message=f"{res.entity} fully cached up to {res.requested_end}",
+                    progress=prog,
+                )
+            )
         elif res.status in (
             ExtractorEntityStatus.NO_NEW_DATA,
             ExtractorEntityStatus.EMPTY_RESPONSE,
         ):
             batch_result.no_new_data_entities.append(res.entity)
-            level = LogLevel.WARNING
+            self.status_queue.put(
+                ObservabilityEvent(
+                    timestamp=datetime.now(UTC),
+                    event_code=EventCode.MARKET_TICKER_SUCCESS,
+                    severity=DiagnosticSeverity.WARNING,
+                    presentation_kind=PresentationKind.WARNING,
+                    outcome=EventOutcome.COMPLETED,
+                    context=ObservabilityContext(
+                        entity_type="Ticker",
+                        entity_id=res.entity,
+                    ),
+                    message=res.message,
+                    progress=prog,
+                )
+            )
         else:
             batch_result.failed_entities[res.entity] = res.message
-            level = LogLevel.ERROR
-
-        if res.message:
             self.status_queue.put(
-                EngineStatusMessage(msg=res.message, data=None, progress=prog, level=level)
+                ObservabilityEvent(
+                    timestamp=datetime.now(UTC),
+                    event_code=EventCode.MARKET_TICKER_FAILED,
+                    severity=DiagnosticSeverity.ERROR,
+                    presentation_kind=PresentationKind.FAILURE,
+                    outcome=EventOutcome.FAILED,
+                    context=ObservabilityContext(
+                        entity_type="Ticker",
+                        entity_id=res.entity,
+                    ),
+                    message=res.message,
+                    progress=prog,
+                )
             )
 
     def extract_currency_delta(
