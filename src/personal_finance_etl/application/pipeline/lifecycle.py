@@ -52,7 +52,10 @@ from personal_finance_etl.infrastructure.logging.setup import (
     remove_file_handlers,
     stop_worker_listener,
 )
-from personal_finance_etl.infrastructure.observability.archival import archive_run_trace
+from personal_finance_etl.infrastructure.observability import (
+    LogRetentionManager,
+    archive_run_trace,
+)
 from personal_finance_etl.infrastructure.warehouse.connection import DuckDBManager
 from personal_finance_etl.infrastructure.warehouse.meta import MetaLayer
 
@@ -411,6 +414,16 @@ class RunLifecycleCoordinator:
         remove_file_handlers()
         if self.cp is not None and self.run_id is not None:
             archive_run_trace(self.cp, self.run_id, self.log_file_path)
+
+        try:
+            logs_dir = self.cfg.resolve_logs_dir()
+            retention_mgr = LogRetentionManager(
+                logs_dir=logs_dir,
+                retain_last_n_runs=self.cfg.RETAIN_LAST_N_RUNS,
+            )
+            retention_mgr.prune_expired_traces()
+        except Exception as retention_err:
+            logger.debug("Log Retention: Non-fatal cleanup error: %s", retention_err)
 
         try:
             self.db_manager.close()
