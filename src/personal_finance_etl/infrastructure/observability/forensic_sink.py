@@ -15,13 +15,18 @@ Does not own
 
 from __future__ import annotations
 
+import json
 import threading
 from pathlib import Path
-from typing import TextIO
+from typing import TextIO, cast
 
 from personal_finance_etl.contracts.observability import (
     ObservabilityEvent,
     ObservabilitySink,
+)
+from personal_finance_etl.infrastructure.observability.redaction import (
+    redact_dict,
+    redact_text,
 )
 
 __all__ = ["JsonlForensicSink"]
@@ -60,7 +65,13 @@ class JsonlForensicSink(ObservabilitySink):
         event : ObservabilityEvent
             The canonical structured event to append to the trace file.
         """
-        line = event.to_json() + "\n"
+        payload = event.to_dict()
+        if "message" in payload and isinstance(payload["message"], str):
+            payload["message"] = redact_text(payload["message"])
+        if "error" in payload and isinstance(payload["error"], dict):
+            payload["error"] = redact_dict(cast(dict[str, object], payload["error"]))
+
+        line = json.dumps(payload, separators=(",", ":"), ensure_ascii=False) + "\n"
         with self._lock:
             f = self._ensure_file_open()
             f.write(line)
