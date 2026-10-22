@@ -42,8 +42,8 @@ __all__ = ["QueueStream", "WorkerPoolCoordinator", "infer_log_level", "process_w
 
 
 def infer_log_level(msg: str, is_error: bool = False) -> LogLevel:
-    """Legacy severity pass-through (deprecated). Returns explicit severity from error flag."""
-    del msg  # String parsing demolished in Phase 9
+    """Map execution error status directly to LogLevel severity."""
+    del msg  # String parsing replaced by explicit boolean flag
     return LogLevel.ERROR if is_error else LogLevel.INFO
 
 
