@@ -20,8 +20,7 @@ from __future__ import annotations
 import gc
 import logging
 import traceback
-from multiprocessing.queues import Queue as MpQueue
-from typing import cast
+from pathlib import Path
 
 from personal_finance_etl.application.observability import (
     ObservabilityEmitter,
@@ -47,12 +46,12 @@ from personal_finance_etl.contracts.observability import (
 from personal_finance_etl.infrastructure.control_plane import ControlPlane
 from personal_finance_etl.infrastructure.logging.setup import (
     add_file_handler,
-    add_queue_handler,
     logger,
     remove_file_handlers,
     stop_worker_listener,
 )
 from personal_finance_etl.infrastructure.observability import (
+    JsonlForensicSink,
     LogRetentionManager,
     archive_run_trace,
 )
@@ -88,6 +87,8 @@ class RunLifecycleCoordinator:
         self.pending_recovery_runs: list[str] = []
         self.cp: ControlPlane | None = None
         self.run_id: str | None = None
+        self.forensic_file_path: Path | None = None
+        self.forensic_sink: JsonlForensicSink | None = None
 
     def _dump_configuration_logs(self) -> None:
         """Dump formatted configuration and financial rules to debug logger and emitter."""
@@ -123,14 +124,7 @@ class RunLifecycleCoordinator:
         tuple[ControlPlane, str, list[str]]
             Tuple of active ControlPlane instance, unique run_id string, and pending recovery run IDs.
         """
-        add_queue_handler(
-            cast(
-                MpQueue[tuple[str, str | None, str | None]],
-                self.status_queue,
-            )
-        )
         add_file_handler(self.log_file_path)
-        self._dump_configuration_logs()
 
         logger.info("Initializing Quantitative Master Engine...")
         self.emitter.emit_event(
@@ -166,6 +160,14 @@ class RunLifecycleCoordinator:
                 component="lifecycle",
             )
         )
+
+        logs_dir = self.cfg.resolve_logs_dir()
+        logs_dir.mkdir(parents=True, exist_ok=True)
+        self.forensic_file_path = logs_dir / f"trace_{run_id}.jsonl"
+        self.forensic_sink = JsonlForensicSink(self.forensic_file_path)
+        self.emitter.register_sink(self.forensic_sink)
+
+        self._dump_configuration_logs()
 
         # Detect any prior runs left requiring recovery
         self.pending_recovery_runs = cp.runs.get_recovery_required_runs()
@@ -412,8 +414,18 @@ class RunLifecycleCoordinator:
         )
         stop_worker_listener()
         remove_file_handlers()
+        if self.forensic_sink is not None:
+            self.forensic_sink.close()
+            self.emitter.unregister_sink(self.forensic_sink)
+            self.forensic_sink = None
+
         if self.cp is not None and self.run_id is not None:
-            archive_run_trace(self.cp, self.run_id, self.log_file_path)
+            trace_path = (
+                str(self.forensic_file_path)
+                if self.forensic_file_path is not None and self.forensic_file_path.exists()
+                else self.log_file_path
+            )
+            archive_run_trace(self.cp, self.run_id, trace_path)
 
         try:
             logs_dir = self.cfg.resolve_logs_dir()
