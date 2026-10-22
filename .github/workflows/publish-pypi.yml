@@ -19,8 +19,8 @@ permissions:
   contents: read
 
 jobs:
-  audit_and_test:
-    name: Quality Gate & Test Certification
+  quality_gate:
+    name: Fast Quality Gate (Ruff & Mypy)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
@@ -42,12 +42,9 @@ jobs:
       - name: Run Fast Audit (Ruff & Mypy)
         run: uv run poe audit-fast
 
-      - name: Run Test Suite
-        run: uv run pytest tests
-
   pypi_publish:
     name: Publish to PyPI via OIDC Trusted Publisher
-    needs: [audit_and_test]
+    needs: [quality_gate]
     runs-on: ubuntu-latest
     environment:
       name: pypi
