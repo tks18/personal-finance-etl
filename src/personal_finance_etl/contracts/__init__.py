@@ -8,6 +8,7 @@ Owns
 - Extraction batch and entity outcomes (ExtractionBatchResult, ExtractorEntityResult).
 - Snapshot and restore outcome contracts (SnapshotResult, RestoreResult).
 - Categorical log levels (LogLevel).
+- Canonical typed observability and telemetry contracts (ObservabilityEvent, EventCode).
 
 Does not own
 -------------
@@ -35,6 +36,15 @@ from personal_finance_etl.contracts.lifecycle import (
     classify_failure_domain,
 )
 from personal_finance_etl.contracts.logging import ILogger, LogLevel, StatusQueue
+from personal_finance_etl.contracts.observability import (
+    DiagnosticSeverity,
+    ErrorDetails,
+    EventCode,
+    EventOutcome,
+    ObservabilityContext,
+    ObservabilityEvent,
+    PresentationKind,
+)
 from personal_finance_etl.contracts.recovery import (
     RestoreOutcome,
     RestoreResult,
@@ -44,9 +54,13 @@ from personal_finance_etl.contracts.recovery import (
 
 __all__ = [
     "CommitState",
+    "DiagnosticSeverity",
     "EngineExecutionResult",
     "EngineStage",
     "EngineStatusMessage",
+    "ErrorDetails",
+    "EventCode",
+    "EventOutcome",
     "ExtractionBatchResult",
     "ExtractionCompletenessError",
     "ExtractionProviderRequest",
@@ -55,6 +69,9 @@ __all__ = [
     "FailureDomain",
     "ILogger",
     "LogLevel",
+    "ObservabilityContext",
+    "ObservabilityEvent",
+    "PresentationKind",
     "RestoreOutcome",
     "RestoreResult",
     "SnapshotOutcome",
