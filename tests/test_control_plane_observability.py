@@ -37,7 +37,7 @@ from personal_finance_etl.infrastructure.observability.archival import (
 
 
 @pytest.fixture
-def sqlite_db(tmp_path: Path) -> Generator[SQLiteManager, None, None]:
+def sqlite_db(tmp_path: Path) -> Generator[SQLiteManager]:
     """Create a temporary initialized Control Plane SQLite database."""
     manager = SQLiteManager(str(tmp_path), db_name="test_cp.sqlite")
     manager.open()
@@ -47,7 +47,7 @@ def sqlite_db(tmp_path: Path) -> Generator[SQLiteManager, None, None]:
 
 
 @pytest.fixture
-def control_plane(tmp_path: Path) -> Generator[ControlPlane, None, None]:
+def control_plane(tmp_path: Path) -> Generator[ControlPlane]:
     """Create a temporary initialized ControlPlane facade."""
     cp = ControlPlane(str(tmp_path), db_name="test_cp_facade.sqlite")
     cp.open()
