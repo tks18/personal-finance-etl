@@ -274,12 +274,10 @@ def publish_pypi(repo_dir: Path | None = None) -> int:
 
 
 def release_pipeline():
-    """Execute end-to-end post-tag release pipeline: git push -> create PR -> draft release -> PyPI publish."""
+    """Execute post-tag release pipeline: git push -> create PR -> draft release (PyPI publishes via CI on merge)."""
     from rich.console import Console
-    from scripts.create_pr import get_project_root
 
     console = Console()
-    root_dir = get_project_root()
     console.print("\n[bold cyan]═════ Starting Automated Post-Release Pipeline ═════[/bold cyan]\n")
 
     # Step 1: Git Push with follow-tags (triggers pre-push hook running audit-full and saving audit_report.json)
@@ -303,13 +301,7 @@ def release_pipeline():
     if rel_code != 0:
         console.print("[bold red]Pipeline warning: Draft release creation had errors.[/bold red]")
 
-    # Step 4: Build and publish to PyPI using token from .env
-    console.print("\n[bold yellow]Step 4: Building and publishing package to PyPI...[/bold yellow]")
-    pypi_code = publish_pypi(root_dir)
-    if pypi_code != 0:
-        console.print("[bold red]Pipeline warning: PyPI publishing had errors.[/bold red]")
-
-    console.print("\n[bold green]═════ Automated Post-Release Pipeline Completed ═════[/bold green]\n")
+    console.print("\n[bold green]═════ Automated Post-Release Pipeline Completed (CI publishes to PyPI on merge) ═════[/bold green]\n")
     sys.exit(0)
 
 
