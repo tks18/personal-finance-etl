@@ -97,7 +97,7 @@ def download_yfinance_history(
         Tuple of (result_dataframe, attempts_performed, last_exception).
         If successful, last_exception is None and result_dataframe is populated.
     """
-    logger.debug("[%s] API Fetching %s from %s to %s", label, ticker, fetch_start, end_dt)
+    logger.debug("API fetching %s (%s) from %s to %s", ticker, label, fetch_start, end_dt)
     attempts_done = 0
     last_err: Exception | None = None
     hist_pd: pd.DataFrame | None = None
@@ -117,11 +117,11 @@ def download_yfinance_history(
         except Exception as e:
             last_err = e
             logger.warning(
-                "[%s] Attempt %d/%d failed for %s: %s",
-                label,
+                "Attempt %d/%d failed for %s (%s): %s",
                 attempts_done,
                 max_attempts,
                 ticker,
+                label,
                 e,
             )
             if attempt < max_attempts - 1:
@@ -183,5 +183,7 @@ def vault_parquet_chunks(
             )
         )
 
-    logger.info("[%s] Injected %d Parquet chunks into Raw Store.", file_prefix, len(injected_files))
+    logger.info(
+        "Injected %d Parquet chunks into Raw Store for %s.", len(injected_files), file_prefix
+    )
     return df_final_chunks, injected_files
