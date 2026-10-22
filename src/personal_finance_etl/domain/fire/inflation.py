@@ -171,7 +171,7 @@ class InflationBuilder:
                 reason="Derived latest CPI_INDEX is null, NaN, or non-finite",
             )
         except Exception as err:
-            logger.error("[INFLATION] Unexpected failure computing latest CPI: %s", err)
+            logger.error("Inflation calculation: Unexpected failure computing latest CPI: %s", err)
             return CpiResult(
                 value=None,
                 status=CalculationStatus.COMPUTATION_ERROR,
