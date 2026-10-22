@@ -336,3 +336,11 @@ That is the purpose of the [About](../about/README.md) section.
 - [Application and Dependency Architecture](../architecture/application-and-dependency-architecture.md)
 - [Backup and Restore](../architecture/backup-and-restore.md)
 - [Tooling, Quality and Release Engineering](../developer/tooling-quality-and-release-engineering.md)
+
+## Observability and UI Narrative Sinks
+
+The application separates user-facing narrative from detailed forensic debugging:
+
+- **Concise Narrative Log**: The CLI (`RichNarrativeSink`) and CustomTkinter Desktop (`DesktopNarrativeSink`) render only significant milestones (`>>`, `✓`) and actionable failure summaries. Diagnostic chatter is dropped automatically.
+- **Forensic JSONL Trace**: Deep operational telemetry (ticker cache hits, table row counts, ISIN completion timings) is streamed to `outputs/logs/runs/trace_{run_id}.jsonl`.
+- **Single Error Summary**: On fatal failures, the desktop interface presents a single actionable error diagnostic rather than multiple modal popups.
