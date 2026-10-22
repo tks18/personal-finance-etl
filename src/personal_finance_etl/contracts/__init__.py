@@ -41,8 +41,10 @@ from personal_finance_etl.contracts.observability import (
     ErrorDetails,
     EventCode,
     EventOutcome,
+    NullObservabilitySink,
     ObservabilityContext,
     ObservabilityEvent,
+    ObservabilitySink,
     PresentationKind,
 )
 from personal_finance_etl.contracts.recovery import (
@@ -69,8 +71,10 @@ __all__ = [
     "FailureDomain",
     "ILogger",
     "LogLevel",
+    "NullObservabilitySink",
     "ObservabilityContext",
     "ObservabilityEvent",
+    "ObservabilitySink",
     "PresentationKind",
     "RestoreOutcome",
     "RestoreResult",
