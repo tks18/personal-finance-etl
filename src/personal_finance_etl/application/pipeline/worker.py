@@ -26,11 +26,17 @@ from typing import cast
 
 import polars as pl
 
+from personal_finance_etl.application.observability import get_global_emitter
 from personal_finance_etl.application.pipeline.orchestrator import ETLOrchestrator
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
 from personal_finance_etl.contracts.application import EngineStatusMessage
 from personal_finance_etl.contracts.logging import ILogger, LogLevel
+from personal_finance_etl.contracts.observability import ObservabilityEvent
+from personal_finance_etl.infrastructure.observability import (
+    EventQueue,
+    ObservabilityQueueSink,
+)
 
 __all__ = ["QueueStream", "WorkerPoolCoordinator", "infer_log_level", "process_wrapper"]
 
@@ -121,6 +127,10 @@ def process_wrapper(
     if status_queue is None:
         status_queue = cast(ILogger, multiprocessing.Queue())
 
+    emitter = get_global_emitter()
+    queue_sink = ObservabilityQueueSink(cast(EventQueue, status_queue))
+    emitter.register_sink(queue_sink)
+
     sys.stdout = QueueStream(status_queue, is_error=False)
     sys.stderr = QueueStream(status_queue, is_error=True)
 
@@ -142,6 +152,8 @@ def process_wrapper(
         )
         time.sleep(0.5)
         raise e
+    finally:
+        emitter.unregister_sink(queue_sink)
 
 
 class WorkerPoolCoordinator:
@@ -149,7 +161,7 @@ class WorkerPoolCoordinator:
 
     @staticmethod
     def spawn_process(
-        status_queue: multiprocessing.Queue[EngineStatusMessage],
+        status_queue: multiprocessing.Queue[EngineStatusMessage | ObservabilityEvent],
         config_path: str,
         rules_path: str,
     ) -> multiprocessing.Process:
@@ -163,8 +175,10 @@ class WorkerPoolCoordinator:
         return process
 
     @staticmethod
-    def _parse_queue_item(item: object) -> EngineStatusMessage:
-        """Parse raw tuple or EngineStatusMessage queue payload into structured status."""
+    def _parse_queue_item(item: object) -> EngineStatusMessage | ObservabilityEvent:
+        """Parse raw tuple or status queue payload into structured status or canonical event."""
+        if isinstance(item, ObservabilityEvent):
+            return item
         if not isinstance(item, tuple):
             return cast(EngineStatusMessage, item)
         t_item = cast("tuple[object, ...]", item)
@@ -183,7 +197,7 @@ class WorkerPoolCoordinator:
     @staticmethod
     def _emit_exit_status(
         process: multiprocessing.Process,
-        on_status: Callable[[EngineStatusMessage], None],
+        on_status: Callable[[EngineStatusMessage | ObservabilityEvent], None],
     ) -> None:
         """Emit clean completion or abnormal exit status based on worker exit code."""
         if process.exitcode is None:
@@ -210,8 +224,8 @@ class WorkerPoolCoordinator:
     @staticmethod
     def monitor_queue(
         process: multiprocessing.Process,
-        status_queue: multiprocessing.Queue[EngineStatusMessage],
-        on_status: Callable[[EngineStatusMessage], None],
+        status_queue: multiprocessing.Queue[EngineStatusMessage | ObservabilityEvent],
+        on_status: Callable[[EngineStatusMessage | ObservabilityEvent], None],
     ) -> threading.Thread:
         """Start a daemon thread monitoring status_queue until the child process terminates."""
 
