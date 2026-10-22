@@ -179,9 +179,7 @@ class BronzeLayer:
         """
         if isinstance(df, pl.LazyFrame):
             compact_plan = df.explain().replace("\n", " | ")
-            logger.debug(
-                "[DAG:OPTIMIZER] Physical Plan for Bronze '%s': %s", table_name, compact_plan
-            )
+            logger.debug("Physical Plan for Bronze '%s': %s", table_name, compact_plan)
             # Materialization Boundary: PUBLICATION_BOUNDARY
             # Terminal execution of lazy ingestion graph for DuckDB Bronze table insertion
             df = df.collect()
