@@ -26,6 +26,7 @@ from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
 from personal_finance_etl.contracts.application import EngineStatusMessage
 from personal_finance_etl.contracts.logging import ILogger
+from personal_finance_etl.contracts.observability import ObservabilityEvent
 from personal_finance_etl.contracts.recovery import (
     ActiveDatabaseState,
     RestoreOutcome,
@@ -159,10 +160,12 @@ class PersonalFinanceEngine:
         self,
         config_path: str,
         rules_path: str,
-        on_status: Callable[[EngineStatusMessage], None],
+        on_status: Callable[[EngineStatusMessage | ObservabilityEvent], None],
     ) -> None:
         """Spawn the multiprocessing ETL pipeline and stream status updates to on_status."""
-        status_queue: multiprocessing.Queue[EngineStatusMessage] = multiprocessing.Queue()
+        status_queue: multiprocessing.Queue[EngineStatusMessage | ObservabilityEvent] = (
+            multiprocessing.Queue()
+        )
         process = WorkerPoolCoordinator.spawn_process(status_queue, config_path, rules_path)
         WorkerPoolCoordinator.monitor_queue(process, status_queue, on_status)
 
