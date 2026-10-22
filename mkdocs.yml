@@ -1,0 +1,151 @@
+site_name: Personal Finance ETL
+site_description: Local-first financial data engineering and quantitative decision-support platform
+site_author: Shan.tk (Sudharshan TK)
+site_url: https://tks18.github.io/personal-finance-etl/
+repo_url: https://github.com/tks18/personal-finance-etl
+repo_name: tks18/personal-finance-etl
+edit_uri: blob/master/docs/
+
+docs_dir: docs
+site_dir: site
+
+theme:
+  name: material
+  logo: assets/images/logo.png
+  favicon: assets/images/logo.ico
+  language: en
+  palette:
+    - scheme: slate
+      primary: custom
+      accent: deep purple
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+    - scheme: default
+      primary: custom
+      accent: deep purple
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+  font:
+    text: Roboto
+    code: Roboto Mono
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - search.share
+    - content.code.copy
+    - content.tabs.link
+
+copyright: >
+  Copyright &copy; 2026 <a href="https://github.com/tks18" target="_blank" rel="noopener">Shan.tk (Sudharshan TK)</a> &middot; Built with Material for MkDocs
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/tks18
+      name: Shan.tk on GitHub
+    - icon: fontawesome/brands/linkedin
+      link: https://www.linkedin.com/in/sudharshan-tk
+      name: Sudharshan TK on LinkedIn
+
+extra_css:
+  - assets/stylesheets/custom.css
+
+plugins:
+  - search
+  - minify:
+      minify_html: true
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - Technical Documentation: README.md
+  - Getting Started:
+      - Overview: getting-started/README.md
+      - Installation: getting-started/installation.md
+      - Quick Start: getting-started/quick-start.md
+      - CLI & Desktop: getting-started/cli-and-desktop.md
+  - Architecture:
+      - Overview: architecture/README.md
+      - System Architecture: architecture/system-architecture.md
+      - Application Architecture: architecture/application-and-dependency-architecture.md
+      - Data Lifecycle: architecture/data-lifecycle.md
+      - Warehouse Architecture: architecture/warehouse-architecture.md
+      - Control Plane Lifecycle: architecture/control-plane-artifact-lifecycle.md
+      - Deterministic Replay: architecture/deterministic-identity-and-replay.md
+      - Reliability & Recovery: architecture/reliability-and-recovery.md
+      - Backup & Restore: architecture/backup-and-restore.md
+      - Data Model: architecture/data-model.md
+      - Design Decisions: architecture/design-decisions.md
+  - Finance:
+      - Overview: finance/README.md
+      - Financial Model: finance/financial-model.md
+      - Cashflow & Wealth: finance/cashflow-and-wealth.md
+      - Investment Data Model: finance/investment-data-model.md
+      - Market Reconstruction: finance/investment-market-reconstruction.md
+      - FIFO & Realized Events: finance/fifo-and-realized-events.md
+      - Investment Reconciliation: finance/investment-reconciliation.md
+      - Performance & Risk: finance/investment-performance-and-risk.md
+      - Multi-Currency & FX: finance/multi-currency-and-fx.md
+      - Tax Methodology: finance/tax-methodology.md
+      - FIRE Methodology: finance/fire-methodology.md
+      - Metrics & Methodology: finance/metrics-and-methodology.md
+  - Reference:
+      - Overview: reference/README.md
+      - Bronze Contracts: reference/bronze-data-contracts.md
+      - Silver Contracts: reference/silver-data-contracts.md
+      - Gold Contracts: reference/gold-data-contracts.md
+      - Meta Contracts: reference/meta-data-contracts.md
+      - Control Plane Contracts: reference/control-plane-data-contracts.md
+      - Identity & Grain: reference/identity-and-grain-contracts.md
+      - Glossary: reference/glossary.md
+  - Configuration:
+      - Overview: configuration/README.md
+      - Configuration Reference: configuration/configuration-reference.md
+      - Financial Rules Reference: configuration/financial-rules-reference.md
+      - FIRE & Simulation: configuration/fire-and-simulation-reference.md
+  - Developer:
+      - Overview: developer/README.md
+      - Development Guide: developer/development-guide.md
+      - Engineering Standards: developer/engineering-standards.md
+      - Adding Data Sources: developer/adding-data-sources.md
+      - Adding Transformations: developer/adding-transformations.md
+      - Adding Gold Marts: developer/adding-gold-marts.md
+      - Schema Evolution: developer/data-contract-and-schema-evolution.md
+      - Testing & Validation: developer/testing-and-validation.md
+      - Tooling & Release: developer/tooling-quality-and-release-engineering.md
+  - About:
+      - Overview: about/README.md
+      - Project: about/project.md
+      - About Me: about/about-me.md
+      - Roadmap: roadmap.md
