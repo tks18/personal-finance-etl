@@ -156,7 +156,7 @@ class ExtractionBatchResult:
         return records
 
     def __iter__(self) -> Iterator[pl.DataFrame | list[str]]:
-        """Support legacy tuple unpacking: (combined_df, injected_files) = batch_result."""
+        """Iterate over (combined_frame, injected_files) pair."""
         return iter((self.combined_frame, self.injected_files))
 
 
