@@ -248,7 +248,7 @@ class ObservabilityContext:
         Process name or thread identifier executing the work.
     """
 
-    run_id: str
+    run_id: str = ""
     stage: EngineStage = EngineStage.INITIALIZING
     component: str = ""
     operation: str = ""
