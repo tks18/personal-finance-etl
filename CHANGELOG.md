@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [9.3.1](https://github.com/tks18/personal-finance-etl/compare/9.3.0...9.3.1) (2026-10-22)
+
+
+### CI 🛠
+
+* **github-pages:** add nojekyll flag to prevent jekyll interference ([0c47dbc](https://github.com/tks18/personal-finance-etl/commit/0c47dbc9e57f0932cc8d79691f14f69253d8388c))
+* **pypi:** streamline gate to audit-fast and remove redundant pytest ([114ee18](https://github.com/tks18/personal-finance-etl/commit/114ee18b3b505b93d8952085846d4c90a77cf809))
+
+
+### Docs 📃
+
+* **readme:** add live documentation badges and portal links ([8b16208](https://github.com/tks18/personal-finance-etl/commit/8b1620815ec97d7694868d4838588d42611d7326))
+
+
+### Others 🔧
+
+* **project:** point documentation url to github pages portal ([573bbd9](https://github.com/tks18/personal-finance-etl/commit/573bbd9af71b8ba1095a5e0f2bf4f1fad9b840f2))
+
 ## [9.3.0](https://github.com/tks18/personal-finance-etl/compare/9.2.9...9.3.0) (2026-10-22)
 
 

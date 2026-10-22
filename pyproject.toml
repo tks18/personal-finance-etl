@@ -1,6 +1,6 @@
 [project]
 name = "personal-finance-etl"
-version = "9.3.0"
+version = "9.3.1"
 description = "Local-first financial data engineering and quantitative decision-support platform for reconciled personal finance, investment analytics, tax evidence, FIRE simulation, and BI."
 authors = [
   { name="Shan", email="tksudharshan@gmail.com" },
@@ -114,7 +114,7 @@ exclude = [
 
 [project.urls]
 Homepage = "https://github.com/tks18/personal-finance-etl"
-Documentation = "https://github.com/tks18/personal-finance-etl/blob/master/docs/README.md"
+Documentation = "https://tks18.github.io/personal-finance-etl/"
 Repository = "https://github.com/tks18/personal-finance-etl"
 Issues = "https://github.com/tks18/personal-finance-etl/issues"
 Changelog = "https://github.com/tks18/personal-finance-etl/blob/master/CHANGELOG.md"

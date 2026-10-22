@@ -43,7 +43,9 @@ jobs:
         run: uv pip install --system mkdocs-material mkdocs-minify-plugin pymdown-extensions
 
       - name: Build MkDocs Site
-        run: mkdocs build --strict
+        run: |
+          mkdocs build --strict
+          touch site/.nojekyll
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

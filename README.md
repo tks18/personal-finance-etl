@@ -20,6 +20,12 @@ So the project grew from ETL into the system I now use to **preserve financial e
     <a href="https://pypi.org/project/personal-finance-etl/">
         <img src="https://img.shields.io/pypi/v/personal-finance-etl?label=PyPI" alt="PyPI">
     </a>
+    <a href="https://tks18.github.io/personal-finance-etl/">
+        <img src="https://img.shields.io/badge/Docs-GitHub%20Pages-7c3aed?logo=materialformkdocs&amp;logoColor=white" alt="Documentation">
+    </a>
+    <a href="https://personal-finance-etl.readthedocs.io/">
+        <img src="https://img.shields.io/badge/Docs-ReadTheDocs-8ca1fe?logo=readthedocs&amp;logoColor=white" alt="ReadTheDocs">
+    </a>
     <a href="https://pepy.tech/projects/personal-finance-etl"><img src="https://static.pepy.tech/personalized-badge/personal-finance-etl?period=total&amp;units=INTERNATIONAL_SYSTEM&amp;left_color=BLACK&amp;right_color=GREEN&amp;left_text=downloads" alt="PyPI Downloads"></a>
     <img src="https://img.shields.io/badge/Python-3.13%2B-3776AB?logo=python&amp;logoColor=white" alt="Python">
     <a href="https://www.gnu.org/licenses/gpl-3.0"><img src="https://img.shields.io/badge/License-GPL--3.0-blue.svg" alt="License: GPL-3.0"></a>
@@ -40,8 +46,10 @@ So the project grew from ETL into the system I now use to **preserve financial e
 
 <p align="center">
   <strong>Explore:</strong>
+  <a href="https://tks18.github.io/personal-finance-etl/">Documentation</a> ·
+  <a href="https://personal-finance-etl.readthedocs.io/">ReadTheDocs</a> ·
   <a href="https://github.com/tks18/personal-finance-etl/wiki">Wiki</a> ·
-  <a href="docs/README.md">Technical Docs</a> ·
+  <a href="docs/README.md">Local Docs</a> ·
   <a href="docs/architecture/README.md">Architecture</a> ·
   <a href="docs/finance/README.md">Finance</a> ·
   <a href="docs/developer/README.md">Developer</a> ·
@@ -629,12 +637,13 @@ I would rather document a smaller guarantee accurately than a larger one poetica
 
 The repository now has four intentionally different knowledge surfaces.
 
-| Surface     | Job                                           | Start here                                                        |
-| ----------- | --------------------------------------------- | ----------------------------------------------------------------- |
-| **README**  | **SHOW** the project quickly                  | you are here                                                      |
-| **Wiki**    | **TEACH** the mental model                    | [GitHub Wiki](https://github.com/tks18/personal-finance-etl/wiki) |
-| **`/docs`** | **SPECIFY** implementation and finance deeply | [Technical Docs](docs/README.md)                                  |
-| **Code**    | **PROVE** the behavior                        | `src/personal_finance_etl/`                                       |
+| Surface         | Job                                           | Start here                                                                                                                        |
+| --------------- | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| **README**      | **SHOW** the project quickly                  | you are here                                                                                                                      |
+| **Docs Portal** | **INTERACT** with visual search & guides      | [Live Docs (Pages)](https://tks18.github.io/personal-finance-etl/) · [ReadTheDocs](https://personal-finance-etl.readthedocs.io/) |
+| **Wiki**        | **TEACH** the mental model                    | [GitHub Wiki](https://github.com/tks18/personal-finance-etl/wiki)                                                                 |
+| **`/docs`**     | **SPECIFY** implementation and finance deeply | [Technical Docs](docs/README.md)                                                                                                  |
+| **Code**        | **PROVE** the behavior                        | `src/personal_finance_etl/`                                                                                                       |
 
 If all four say exactly the same thing at exactly the same depth, I have successfully maintained four copies of one document. That would be impressive in the least useful possible way. 😄
 
