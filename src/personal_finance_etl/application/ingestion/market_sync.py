@@ -168,7 +168,9 @@ class CurrencyPipeline:
         )
 
         df_bronze_cached = self._load_cached_bronze_currency()
-        extractor = CurrencyExtractor(self.cp, self.status_queue, self.max_workers)
+        extractor = CurrencyExtractor(
+            self.cp, self.status_queue, self.max_workers, emitter=self.emitter
+        )
         batch_res = extractor.extract_currency_delta(
             df_currency, global_start_date, global_end_date, df_bronze_cached
         )
@@ -334,7 +336,7 @@ class BenchmarkPipeline:
         )
 
         df_bronze_cached = self._load_cached_bronze_benchmark()
-        extractor = BenchmarkExtractor(self.cp, self.status_queue)
+        extractor = BenchmarkExtractor(self.cp, self.status_queue, emitter=self.emitter)
         batch_res = extractor.extract_benchmark_delta(
             df_m=df_master,
             global_start_date=start_date,
@@ -483,7 +485,9 @@ class USMarketPipeline:
         )
 
         df_bronze_cached = self._load_cached_bronze_us_market()
-        extractor = USMarketExtractor(self.cp, self.status_queue, self.max_workers)
+        extractor = USMarketExtractor(
+            self.cp, self.status_queue, self.max_workers, emitter=self.emitter
+        )
         batch_res = extractor.extract_us_market_delta(
             isin_ticker_map, global_start_date, global_end_date, df_bronze_cached
         )
