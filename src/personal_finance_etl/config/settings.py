@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import os
 import tomllib
+from pathlib import Path
 from typing import cast
 
 from pydantic import BaseModel, Field
@@ -88,6 +89,23 @@ class Settings(BaseModel):
     STATEMENTS_FOLDER: str = ""
 
     FILE_HASH_POLICY: FileHashPolicy = Field(default_factory=FileHashPolicy)
+
+    # Observability & Forensic Logging
+    LOGS_DIRECTORY: str = "logs/runs"
+    RETAIN_LAST_N_RUNS: int = 12
+
+    def resolve_logs_dir(self) -> Path:
+        """Resolve the active logs directory path against target base path if relative.
+
+        Returns
+        -------
+        Path
+            Absolute or fully qualified Path to the forensic log directory.
+        """
+        raw_path = Path(self.LOGS_DIRECTORY)
+        if raw_path.is_absolute() or not self.TARGET_DB_BASE_PATH:
+            return raw_path
+        return Path(self.TARGET_DB_BASE_PATH) / raw_path
 
     @classmethod
     def from_toml(cls, filepath: str | os.PathLike[str], track_recent: bool = True) -> Settings:
