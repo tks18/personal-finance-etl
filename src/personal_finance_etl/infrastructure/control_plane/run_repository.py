@@ -202,6 +202,62 @@ class RunRepository:
             if cursor.rowcount != 1:
                 raise KeyError(f"Cannot save execution log for unknown run ID: {run_id}")
 
+    def get_execution_log(self, run_id: str) -> bytes | None:
+        """Fetch raw execution log bytes for a specific run ID.
+
+        Parameters
+        ----------
+        run_id : str
+            Target run identifier.
+
+        Returns
+        -------
+        bytes | None
+            Archived log payload bytes if found, else None.
+        """
+        row = self.db.conn.execute(
+            "SELECT execution_log FROM cp_runs WHERE run_id = ?",
+            (run_id,),
+        ).fetchone()
+        if row and row[0] is not None:
+            return bytes(row[0])
+        return None
+
+    def get_run_status(self, run_id: str) -> dict[str, object] | None:
+        """Fetch full lifecycle milestone status and commit state for a run.
+
+        Parameters
+        ----------
+        run_id : str
+            Target run identifier.
+
+        Returns
+        -------
+        dict[str, object] | None
+            Dictionary of run milestone attributes if found, else None.
+        """
+        row = self.db.conn.execute(
+            """SELECT run_id, started_at, finished_at, status, commit_state,
+                      application_version, schema_version, settings_snapshot_id,
+                      rules_snapshot_id, (execution_log IS NOT NULL) AS has_execution_log
+               FROM cp_runs WHERE run_id = ?""",
+            (run_id,),
+        ).fetchone()
+        if not row:
+            return None
+        return {
+            "run_id": row[0],
+            "started_at": row[1],
+            "finished_at": row[2],
+            "status": row[3],
+            "commit_state": row[4],
+            "application_version": row[5],
+            "schema_version": row[6],
+            "settings_snapshot_id": row[7],
+            "rules_snapshot_id": row[8],
+            "has_execution_log": bool(row[9]),
+        }
+
     def finish_run(
         self, run_id: str, status: str, commit_state: str | CommitState | None = None
     ) -> None:
@@ -563,7 +619,7 @@ class RunRepository:
                 )
                 recovered += 1
         if recovered:
-            logger.warning("[CONTROL_PLANE] Recovered %d interrupted run(s).", recovered)
+            logger.warning("ControlPlane: Recovered %d interrupted run(s).", recovered)
 
     @staticmethod
     def _normalize_provider_record(
