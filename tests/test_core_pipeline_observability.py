@@ -211,6 +211,6 @@ def test_application_layer_zero_legacy_prefixes() -> None:
             if forbidden_pattern.search(line):
                 violations.append(f"{py_file.name}:{line_num}: {line.strip()}")
 
-    assert not violations, f"Legacy string prefixes found in application package:\n" + "\n".join(
+    assert not violations, "Legacy string prefixes found in application package:\n" + "\n".join(
         violations
     )
