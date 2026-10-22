@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [9.3.3](https://github.com/tks18/personal-finance-etl/compare/9.3.2...9.3.3) (2026-10-22)
+
+
+### CI 🛠
+
+* **workflows:** remove automerge workflow in favor of manual merge ([cb0fecf](https://github.com/tks18/personal-finance-etl/commit/cb0fecf80f196fe25c3a8db2532f1d6e6b97b70e))
+
+
+### Code Refactoring 🖌
+
+* **scripts:** remove automerge flag and arming from pr tool ([805d0f8](https://github.com/tks18/personal-finance-etl/commit/805d0f86ed21a8f464eef4e21fe9904990b115bd))
+
 ### [9.3.2](https://github.com/tks18/personal-finance-etl/compare/9.3.1...9.3.2) (2026-10-22)
 
 
