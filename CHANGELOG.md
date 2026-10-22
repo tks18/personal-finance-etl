@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [9.3.2](https://github.com/tks18/personal-finance-etl/compare/9.3.1...9.3.2) (2026-10-22)
+
+
+### Features 🔥
+
+* **docs:** add requirements file for readthedocs environment ([9bcf57c](https://github.com/tks18/personal-finance-etl/commit/9bcf57cfbb0a97ec275e6a33b41b3f74bf1dabd5))
+
+
+### CI 🛠
+
+* **automerge:** support GH_PAT for downstream push workflow triggers ([add47ed](https://github.com/tks18/personal-finance-etl/commit/add47ed969e4aa449c9d7011102dd6fc20c2c7ab))
+* **rtd:** use native python.install with docs requirements ([2e62070](https://github.com/tks18/personal-finance-etl/commit/2e620702b62df27caf162027f028b4322307b9bf))
+
 ### [9.3.1](https://github.com/tks18/personal-finance-etl/compare/9.3.0...9.3.1) (2026-10-22)
 
 
