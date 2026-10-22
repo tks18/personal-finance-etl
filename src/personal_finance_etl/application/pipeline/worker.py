@@ -41,34 +41,14 @@ from personal_finance_etl.infrastructure.observability import (
 __all__ = ["QueueStream", "WorkerPoolCoordinator", "infer_log_level", "process_wrapper"]
 
 
-def _is_step_log(msg: str, lw: str) -> bool:
-    return msg.startswith("[") or any(
-        token in lw for token in ("fetching", "loading", "post-processing")
-    )
-
-
-def _is_success_log(lw: str) -> bool:
-    return any(token in lw for token in ("✅", "complete", "success", "✓", "exported"))
-
-
 def infer_log_level(msg: str, is_error: bool = False) -> LogLevel:
-    """Infer LogLevel from message contents or stream error flag."""
-    if not msg:
-        return LogLevel.WARNING if is_error else LogLevel.INFO
-    lw = msg.lower()
-    if "error" in lw or msg.startswith("Error"):
-        return LogLevel.ERROR
-    if _is_success_log(lw):
-        return LogLevel.SUCCESS
-    if "warning" in lw or is_error:
-        return LogLevel.WARNING
-    if _is_step_log(msg, lw):
-        return LogLevel.STEP
-    return LogLevel.INFO
+    """Legacy severity pass-through (deprecated). Returns explicit severity from error flag."""
+    del msg  # String parsing demolished in Phase 9
+    return LogLevel.ERROR if is_error else LogLevel.INFO
 
 
 class QueueStream:
-    """Stream wrapper redirecting stdout and stderr lines to the multiprocessing status queue."""
+    """Stream wrapper redirecting stdout and stderr lines without string-based severity inference."""
 
     def __init__(self, target_queue: ILogger, is_error: bool = False) -> None:
         self.queue = target_queue
@@ -76,16 +56,17 @@ class QueueStream:
         self.is_error = is_error
 
     def write(self, msg: str) -> None:
-        """Buffer and parse streaming text output into structured status messages."""
+        """Buffer and forward raw streaming text output without semantic guessing."""
         self.buffer += msg
         if "\n" in self.buffer:
             lines = self.buffer.split("\n")
+            level = LogLevel.ERROR if self.is_error else LogLevel.INFO
             for line in lines[:-1]:
-                if line.strip():
-                    level = infer_log_level(line.strip(), is_error=self.is_error)
+                stripped = line.strip()
+                if stripped:
                     self.queue.put(
                         EngineStatusMessage(
-                            msg=line.strip(),
+                            msg=stripped,
                             data=None,
                             progress=None,
                             level=level,
@@ -94,12 +75,13 @@ class QueueStream:
             self.buffer = lines[-1]
 
     def flush(self) -> None:
-        """Flush remaining buffered text as a status message."""
-        if self.buffer.strip():
-            level = infer_log_level(self.buffer.strip(), is_error=self.is_error)
+        """Flush remaining buffered text as raw output without semantic inference."""
+        stripped = self.buffer.strip()
+        if stripped:
+            level = LogLevel.ERROR if self.is_error else LogLevel.INFO
             self.queue.put(
                 EngineStatusMessage(
-                    msg=self.buffer.strip(),
+                    msg=stripped,
                     data=None,
                     progress=None,
                     level=level,
@@ -191,7 +173,7 @@ class WorkerPoolCoordinator:
             msg=t_msg,
             data=t_data,
             progress=t_prog,
-            level=infer_log_level(t_msg),
+            level=LogLevel.INFO,
         )
 
     @staticmethod
