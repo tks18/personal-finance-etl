@@ -21,10 +21,8 @@ import importlib.metadata
 import sys
 import threading
 import time
-from datetime import datetime
 
 from rich.console import Console
-from rich.markup import escape
 from rich.panel import Panel
 from rich.progress import (
     BarColumn,
@@ -38,8 +36,14 @@ from rich.prompt import Confirm, Prompt
 
 from personal_finance_etl.application.facade import PersonalFinanceEngine
 from personal_finance_etl.contracts.application import EngineStatusMessage
-from personal_finance_etl.contracts.logging import LogLevel
+from personal_finance_etl.contracts.observability import (
+    EventCode,
+    EventOutcome,
+    ObservabilityEvent,
+    PresentationKind,
+)
 from personal_finance_etl.presentation.docs.guides_window import show_guides_window
+from personal_finance_etl.presentation.observability import RichNarrativeSink
 
 __all__ = ["LOGO", "EngineStatus", "get_file_interactive", "main_cli", "print_bootloader"]
 
@@ -121,23 +125,6 @@ def get_file_interactive(prompt_text: str, recents: list[str]) -> str:
             console.print("[red]Please enter a valid number.[/red]")
 
 
-_STATUS_PREFIX_MAP: dict[LogLevel, str] = {
-    LogLevel.SUCCESS: "[bold green]✓[/bold green]",
-    LogLevel.ERROR: "[bold red]✗ ERROR:[/bold red]",
-    LogLevel.WARNING: "[bold yellow]![/bold yellow]",
-    LogLevel.STEP: "[bold cyan]>>[/bold cyan]",
-}
-
-
-def _render_status_message(status: EngineStatusMessage, progress: Progress) -> None:
-    if not status.msg:
-        return
-    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    safe_msg = escape(status.msg)
-    prefix = _STATUS_PREFIX_MAP.get(status.level, "[dim]•[/dim]")
-    progress.console.print(f"[dim][{ts}][/dim] {prefix} {safe_msg}")
-
-
 def _handle_snapshot(engine: PersonalFinanceEngine, config_path: str | None) -> None:
     if not config_path:
         console.print("\n[bold]Snapshot requires a config file.[/bold]")
@@ -200,17 +187,29 @@ def _run_etl_progress(engine: PersonalFinanceEngine, config_path: str, rules_pat
         expand=True,
     ) as progress:
         main_task = progress.add_task("[cyan]ETL Pipeline Progress", total=100.0)
+        narrative_sink = RichNarrativeSink(
+            console=console,
+            progress=progress,
+            task_id=main_task,
+        )
 
-        def on_status(status: EngineStatusMessage) -> None:
-            _render_status_message(status, progress)
-            if status.progress is not None:
-                progress.update(main_task, completed=status.progress * 100.0)
-
-            if (
-                status.msg in ("Process completed cleanly.", "Process exited abnormally.")
-                or "Critical Pipeline Failure" in status.msg
-            ):
-                completion_event.set()
+        def on_status(status: EngineStatusMessage | ObservabilityEvent) -> None:
+            if isinstance(status, ObservabilityEvent):
+                narrative_sink.emit(status)
+                if status.event_code == EventCode.SYSTEM_TEARDOWN or (
+                    status.outcome in (EventOutcome.COMPLETED, EventOutcome.FAILED)
+                    and status.presentation_kind
+                    in (PresentationKind.SUCCESS, PresentationKind.FAILURE)
+                    and (status.progress == 1.0 or status.outcome == EventOutcome.FAILED)
+                ):
+                    completion_event.set()
+            else:
+                narrative_sink.render_legacy_status(status)
+                if (
+                    status.msg in ("Process completed cleanly.", "Process exited abnormally.")
+                    or "Critical Pipeline Failure" in status.msg
+                ):
+                    completion_event.set()
 
         engine.run_pipeline_async(config_path, rules_path, on_status)
 
