@@ -5,7 +5,7 @@ Owns
 - BaseEngineTab: Common 2-column layout with header and progress/log output panel.
 - Thread-safe queue polling and main-thread status updates via Tkinter after().
 - Progress bar and colored log text box state management.
-- Processing both modern canonical ObservabilityEvents and legacy EngineStatusMessages.
+- Processing structured ObservabilityEvents and process boundary EngineStatusMessages.
 
 Does not own
 -------------
@@ -184,7 +184,7 @@ class BaseEngineTab(ctk.CTkFrame):  # type: ignore[misc]
             self._process_observability_event(run_btn, status)
             return
 
-        # Legacy EngineStatusMessage handling
+        # Cross-process EngineStatusMessage handling
         prog = getattr(status, "progress", None)
         if prog is not None:
             self._set_progress(float(prog))
