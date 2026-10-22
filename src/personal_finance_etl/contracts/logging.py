@@ -35,6 +35,7 @@ class StatusQueue(Protocol):
     def put(
         self,
         status: object,
+        /,
         block: bool = True,
         timeout: float | None = None,
     ) -> None:
@@ -48,6 +49,7 @@ class NullStatusQueue:
     def put(
         self,
         status: object,
+        /,
         block: bool = True,
         timeout: float | None = None,
     ) -> None:
