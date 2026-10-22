@@ -47,7 +47,9 @@ class JsonlForensicSink(ObservabilitySink):
     def _ensure_file_open(self) -> TextIO:
         """Lazily open the target log file handle in append mode."""
         if self._file is None or self._file.closed:
-            self._file = open(self.log_path, mode="a", encoding="utf-8", buffering=8192)
+            self._file = open(  # pylint: disable=consider-using-with
+                self.log_path, mode="a", encoding="utf-8", buffering=8192
+            )
         return self._file
 
     def emit(self, event: ObservabilityEvent) -> None:
