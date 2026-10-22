@@ -42,9 +42,7 @@ class GoldLayer:
         """Write DataFrame or LazyFrame into a Gold presentation table."""
         if isinstance(df, pl.LazyFrame):
             compact_plan = df.explain().replace("\n", " | ")
-            logger.debug(
-                "[DAG:OPTIMIZER] Physical Plan for Gold '%s': %s", table_name, compact_plan
-            )
+            logger.debug("Physical Plan for Gold '%s': %s", table_name, compact_plan)
             # Materialization Boundary: PUBLICATION_BOUNDARY
             # Terminal execution of lazy presentation graph for DuckDB Gold table insertion
             df = df.collect()
