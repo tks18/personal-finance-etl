@@ -47,7 +47,7 @@ from personal_finance_etl.presentation.observability import RichNarrativeSink
 
 __all__ = ["LOGO", "EngineStatus", "get_file_interactive", "main_cli", "print_bootloader"]
 
-# Backward-compatibility alias
+# Canonical status type export
 EngineStatus = EngineStatusMessage
 
 try:
@@ -204,7 +204,7 @@ def _run_etl_progress(engine: PersonalFinanceEngine, config_path: str, rules_pat
                 ):
                     completion_event.set()
             else:
-                narrative_sink.render_legacy_status(status)
+                narrative_sink.render_status_message(status)
                 if (
                     status.msg in ("Process completed cleanly.", "Process exited abnormally.")
                     or "Critical Pipeline Failure" in status.msg
