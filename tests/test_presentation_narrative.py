@@ -190,7 +190,7 @@ def test_rich_narrative_legacy_status_compatibility() -> None:
         level=LogLevel.STEP,
         progress=0.1,
     )
-    sink.render_legacy_status(legacy_msg)
+    sink.render_status_message(legacy_msg)
 
     rendered = output.getvalue()
     assert ">> Initializing Quantitative Master Engine..." in rendered
