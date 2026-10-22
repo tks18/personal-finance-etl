@@ -456,11 +456,7 @@ class ObservabilityEvent:
         return json.dumps(self.to_dict(), separators=(",", ":"))
 
     def to_status_message(self) -> EngineStatusMessage:
-        """Project ObservabilityEvent into legacy EngineStatusMessage for backward compatibility.
-
-        This compatibility adapter supports intermediate migration phases and will be
-        demolished upon full retirement of legacy presentation interfaces.
-        """
+        """Project ObservabilityEvent into EngineStatusMessage for process queue consumers."""
         if self.presentation_kind == PresentationKind.STEP:
             level = LogLevel.STEP
         elif self.presentation_kind == PresentationKind.SUCCESS:
