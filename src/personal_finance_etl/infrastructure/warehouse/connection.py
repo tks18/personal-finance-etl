@@ -69,28 +69,26 @@ class DuckDBManager:
         """
         if self._conn is not None:
             return self._conn
-        logger.debug("[DATABASE:DUCKDB] Opening connection to %s", self.db_path)
+        logger.debug("DuckDB Warehouse: Opening connection to %s", self.db_path)
         self._conn = duckdb.connect(self.db_path)
         mem_gb = max(4, int(psutil.virtual_memory().total / (1024**3) * 0.75))
         self._conn.execute(f"PRAGMA memory_limit='{mem_gb}GB'")  # nosec B608
         self._conn.execute("PRAGMA threads=4")
         logger.debug(
-            "[DATABASE:DUCKDB] Connection configured: memory_limit=%dGB, threads=4", mem_gb
+            "DuckDB Warehouse: Connection configured: memory_limit=%dGB, threads=4", mem_gb
         )
         return self._conn
 
     def close(self) -> None:
         """Run checkpoint and vacuum, then close the connection."""
         if self._conn is not None:
-            logger.debug("[DATABASE:DUCKDB] Commencing VACUUM and CHECKPOINT sequence...")
+            logger.debug("DuckDB Warehouse: Commencing VACUUM and CHECKPOINT sequence...")
             try:
                 self._conn.execute("VACUUM")
                 self._conn.execute("CHECKPOINT")
-                logger.debug("[DATABASE:DUCKDB] Checkpoint successful. Closing connection.")
+                logger.debug("DuckDB Warehouse: Checkpoint successful. Closing connection.")
             except duckdb.Error as e:
-                logger.warning(
-                    "[DATABASE:DUCKDB:OPTIONAL_OPERATION] Cleanup VACUUM/CHECKPOINT failed: %s", e
-                )
+                logger.warning("DuckDB Warehouse: Cleanup VACUUM/CHECKPOINT failed: %s", e)
             finally:
                 self._conn.close()
                 self._conn = None

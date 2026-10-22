@@ -179,7 +179,7 @@ class TransformationDAG:
         d_calendar_lazy = transform_d_calendar(df_bounds_lazy)
 
         compact_cal = d_calendar_lazy.explain().replace("\n", " | ")
-        logger.debug(f"[DAG:OPTIMIZER] Physical Plan for Master Calendar: {compact_cal}")
+        logger.debug(f"Physical Plan for Master Calendar: {compact_cal}")
 
         logger.debug("Executing Base Transformation DAG in Parallel...")
         self.status_queue.put(
@@ -212,7 +212,7 @@ class TransformationDAG:
 
         for name, node in dag_nodes.items():
             compact_plan = node.explain().replace("\n", " | ")
-            logger.debug(f"[DAG:OPTIMIZER] Physical Plan for Silver '{name}': {compact_plan}")
+            logger.debug(f"Physical Plan for Silver '{name}': {compact_plan}")
 
         results = pl.collect_all(list(dag_nodes.values()), engine="streaming")
 
@@ -223,7 +223,7 @@ class TransformationDAG:
         final_dfs: dict[str, pl.DataFrame] = {}
         for (name, _), df in zip(dag_nodes.items(), results, strict=True):
             logger.debug(
-                f"[DAG:TRACE] Node '{name}': Output materialized -> ({df.height} rows, {df.width} cols)"
+                f"Node '{name}': Output materialized -> ({df.height} rows, {df.width} cols)"
             )
             final_dfs[name] = df
 

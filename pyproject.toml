@@ -1,6 +1,6 @@
 [project]
 name = "personal-finance-etl"
-version = "9.2.9"
+version = "9.3.0"
 description = "Local-first financial data engineering and quantitative decision-support platform for reconciled personal finance, investment analytics, tax evidence, FIRE simulation, and BI."
 authors = [
   { name="Shan", email="tksudharshan@gmail.com" },
@@ -81,6 +81,15 @@ dev = [
     "tkreload>=1.0.4",
     "vulture>=2.16",
 ]
+docs = [
+    "mkdocs>=1.6.0",
+    "mkdocs-material>=9.5.0",
+    "mkdocs-minify-plugin>=0.8.0",
+    "pymdown-extensions>=10.14",
+]
+
+[tool.uv]
+default-groups = ["dev", "docs"]
 
 [build-system]
 requires = ["hatchling>=1.27.0"]

@@ -215,7 +215,7 @@ class HarvestRecommendationCalculator:
         wait_days = rules.assumptions.tax.harvest_wait_days_threshold if rules else 90
 
         # Derive foreign equity TAX_SUBTYPE exclusions from config if available;
-        # fall back to the known set for backward compatibility.
+        # fall back to standard asset classes if unconfigured.
         _foreign_subtypes: list[str] = [
             "us_listed",
             "us_stocks",

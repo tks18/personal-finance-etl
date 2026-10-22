@@ -8,6 +8,10 @@
 dev = { cmd = "uv run python -c \"from scripts.tasks import dev; dev()\"", help = "Run desktop application in hot-reload development mode" }
 build = { cmd = "uv run python -c \"from scripts.tasks import build; build()\"", help = "Build standalone production binary using PyInstaller" }
 
+# Documentation Management
+"docs:serve" = { cmd = "uv run mkdocs serve", help = "Start local hot-reloading documentation server" }
+"docs:build" = { cmd = "uv run mkdocs build --strict", help = "Build static documentation site with strict linting" }
+
 # GitHub Release Management
 "release:preview" = { cmd = "uv run python -c \"from scripts.tasks import release_preview; release_preview()\"", help = "Preview release notes for latest version in CHANGELOG.md" }
 "release:preview:all" = { cmd = "uv run python -c \"from scripts.tasks import release_preview_all; release_preview_all()\"", help = "Preview full release notes for all versions in CHANGELOG.md" }

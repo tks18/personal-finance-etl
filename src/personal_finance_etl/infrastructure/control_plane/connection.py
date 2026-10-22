@@ -176,7 +176,7 @@ class SQLiteManager:
             return
         parent = os.path.dirname(os.path.abspath(self.db_path))
         os.makedirs(parent, exist_ok=True)
-        logger.debug("[DATABASE:SQLITE] Opening connection to %s", self.db_path)
+        logger.debug("SQLite Control Plane: Opening connection to %s", self.db_path)
         connection: sqlite3.Connection | None = None
         try:
             connection = sqlite3.connect(
@@ -199,7 +199,7 @@ class SQLiteManager:
             if connection is not None:
                 connection.close()
             raise
-        logger.debug("[DATABASE:SQLITE] Configured WAL, busy timeout, and foreign keys")
+        logger.debug("SQLite Control Plane: Configured WAL, busy timeout, and foreign keys")
         logger.info("Control Plane DB connected at %s", self.db_path)
 
     def close(self) -> None:
@@ -208,7 +208,7 @@ class SQLiteManager:
             return
         try:
             if self._conn.in_transaction:
-                logger.warning("[DATABASE:SQLITE] Rolling back open transaction during close.")
+                logger.warning("SQLite Control Plane: Rolling back open transaction during close.")
                 self._conn.rollback()
             self._conn.close()
         finally:
@@ -262,7 +262,7 @@ class SQLiteManager:
         if present_control_tables:
             self._migrate_schema(existing_tables)
 
-        logger.debug("[DATABASE:SQLITE] Initializing current schema.")
+        logger.debug("SQLite Control Plane: Initializing current schema.")
         self.conn.executescript(RAW_DDL)
         self._create_indexes()
         self._validate_current_schema()
@@ -273,7 +273,7 @@ class SQLiteManager:
                 "Control-plane database contains foreign-key violations; refusing to continue. "
                 f"First violations: {violations!r}"
             )
-        logger.info("[DATABASE:SQLITE] Current schema ready (version %s).", self.SCHEMA_VERSION)
+        logger.info("SQLite Control Plane: Current schema ready (version %s).", self.SCHEMA_VERSION)
 
     def _migrate_runs(self, existing_tables: set[str]) -> None:
         """Add commit_state column to cp_runs if missing."""
@@ -282,7 +282,7 @@ class SQLiteManager:
                 str(row[1]) for row in self.conn.execute("PRAGMA table_info(cp_runs)").fetchall()
             }
             if "commit_state" not in cols:
-                logger.info("[DATABASE:SQLITE] Migrating cp_runs: adding commit_state column.")
+                logger.info("SQLite Control Plane: Migrating cp_runs: adding commit_state column.")
                 self.conn.execute(
                     "ALTER TABLE cp_runs ADD COLUMN commit_state TEXT NOT NULL DEFAULT 'NOT_STARTED'"
                 )
@@ -296,7 +296,7 @@ class SQLiteManager:
             }
             if "failure_domain" not in cols:
                 logger.info(
-                    "[DATABASE:SQLITE] Migrating cp_run_failures: adding failure_domain column."
+                    "SQLite Control Plane: Migrating cp_run_failures: adding failure_domain column."
                 )
                 self.conn.execute(
                     "ALTER TABLE cp_run_failures ADD COLUMN failure_domain TEXT NOT NULL DEFAULT 'UNKNOWN'"
@@ -377,7 +377,7 @@ class SQLiteManager:
         if self.conn.in_transaction:
             raise RuntimeError("A SQLite transaction is already active.")
         self.conn.execute("BEGIN IMMEDIATE;")
-        logger.debug("[DATABASE:SQLITE] BEGIN IMMEDIATE")
+        logger.debug("SQLite Control Plane: BEGIN IMMEDIATE")
 
     def commit(self) -> None:
         """Commit the active SQLite transaction."""

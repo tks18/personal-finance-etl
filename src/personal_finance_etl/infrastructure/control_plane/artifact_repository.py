@@ -188,7 +188,7 @@ class ArtifactRepository:
             for fid in obsolete_ids:
                 self.db.conn.execute("DELETE FROM cp_file_payloads WHERE file_id = ?", (fid,))
         logger.info(
-            "[ARTIFACT] Pruned payloads for %d obsolete files from category '%s'; "
+            "Artifact registry: Pruned payloads for %d obsolete files from category '%s'; "
             "registry identities and historical events retained.",
             len(obsolete_ids),
             category,
@@ -332,7 +332,7 @@ class ArtifactRepository:
         ).fetchone()
         if not payload_row or payload_row[0] is None:
             logger.warning(
-                "[SYNC:RENAME] Cannot migrate %s because its payload is missing; "
+                "Artifact registry: Cannot migrate %s because its payload is missing; "
                 "destination will be ingested as new.",
                 old_path,
             )
@@ -528,10 +528,10 @@ class ArtifactRepository:
                     )
                     total_count += 1
                 except Exception:
-                    logger.exception("[INGEST:ERROR] Failed to ingest %s", filepath)
+                    logger.exception("Ingestion: Failed to ingest %s", filepath)
                     raise
         if total_count:
-            logger.info("[INGEST] Safely vaulted %d payloads into SQLite Raw Store.", total_count)
+            logger.info("Ingestion: Safely vaulted %d payloads into SQLite Raw Store.", total_count)
 
     def inject_virtual_file(self, filename: str, category: str, raw_bytes: bytes) -> str:
         """Inject an in-memory configuration asset as a virtual:// control plane artifact.
@@ -674,7 +674,9 @@ class ArtifactRepository:
                     (path,),
                 ).fetchone()
                 if not row:
-                    logger.warning("[ARTIFACT] Cannot mark unknown file as SYNCED: %s", path)
+                    logger.warning(
+                        "Artifact registry: Cannot mark unknown file as SYNCED: %s", path
+                    )
                     continue
                 file_id, previous_status, last_run, digest, file_cat = row
                 if previous_status == "SYNCED" and last_run == self.active_run_id:
@@ -704,7 +706,7 @@ class ArtifactRepository:
                 )
                 marked += 1
         if marked:
-            logger.debug("[ARTIFACT] Marked %d file(s) as SYNCED.", marked)
+            logger.debug("Artifact registry: Marked %d file(s) as SYNCED.", marked)
 
     def mark_healed(
         self,
@@ -769,7 +771,7 @@ class ArtifactRepository:
                 )
                 healed += 1
         if healed:
-            logger.info("[ARTIFACT] Marked %d file(s) as HEALED.", healed)
+            logger.info("Artifact registry: Marked %d file(s) as HEALED.", healed)
 
     def record_healing_event(
         self,
@@ -871,4 +873,4 @@ class ArtifactRepository:
                 )
                 removed += 1
         if removed:
-            logger.info("[ARTIFACT] Marked %d file(s) as REMOVED.", removed)
+            logger.info("Artifact registry: Marked %d file(s) as REMOVED.", removed)

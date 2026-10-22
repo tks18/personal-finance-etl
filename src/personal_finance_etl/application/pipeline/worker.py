@@ -26,43 +26,29 @@ from typing import cast
 
 import polars as pl
 
+from personal_finance_etl.application.observability import get_global_emitter
 from personal_finance_etl.application.pipeline.orchestrator import ETLOrchestrator
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
 from personal_finance_etl.contracts.application import EngineStatusMessage
 from personal_finance_etl.contracts.logging import ILogger, LogLevel
+from personal_finance_etl.contracts.observability import ObservabilityEvent
+from personal_finance_etl.infrastructure.observability import (
+    EventQueue,
+    ObservabilityQueueSink,
+)
 
 __all__ = ["QueueStream", "WorkerPoolCoordinator", "infer_log_level", "process_wrapper"]
 
 
-def _is_step_log(msg: str, lw: str) -> bool:
-    return msg.startswith("[") or any(
-        token in lw for token in ("fetching", "loading", "post-processing")
-    )
-
-
-def _is_success_log(lw: str) -> bool:
-    return any(token in lw for token in ("✅", "complete", "success", "✓", "exported"))
-
-
 def infer_log_level(msg: str, is_error: bool = False) -> LogLevel:
-    """Infer LogLevel from message contents or stream error flag."""
-    if not msg:
-        return LogLevel.WARNING if is_error else LogLevel.INFO
-    lw = msg.lower()
-    if "error" in lw or msg.startswith("Error"):
-        return LogLevel.ERROR
-    if _is_success_log(lw):
-        return LogLevel.SUCCESS
-    if "warning" in lw or is_error:
-        return LogLevel.WARNING
-    if _is_step_log(msg, lw):
-        return LogLevel.STEP
-    return LogLevel.INFO
+    """Map execution error status directly to LogLevel severity."""
+    del msg  # String parsing replaced by explicit boolean flag
+    return LogLevel.ERROR if is_error else LogLevel.INFO
 
 
 class QueueStream:
-    """Stream wrapper redirecting stdout and stderr lines to the multiprocessing status queue."""
+    """Stream wrapper redirecting stdout and stderr lines without string-based severity inference."""
 
     def __init__(self, target_queue: ILogger, is_error: bool = False) -> None:
         self.queue = target_queue
@@ -70,16 +56,17 @@ class QueueStream:
         self.is_error = is_error
 
     def write(self, msg: str) -> None:
-        """Buffer and parse streaming text output into structured status messages."""
+        """Buffer and forward raw streaming text output without semantic guessing."""
         self.buffer += msg
         if "\n" in self.buffer:
             lines = self.buffer.split("\n")
+            level = LogLevel.ERROR if self.is_error else LogLevel.INFO
             for line in lines[:-1]:
-                if line.strip():
-                    level = infer_log_level(line.strip(), is_error=self.is_error)
+                stripped = line.strip()
+                if stripped:
                     self.queue.put(
                         EngineStatusMessage(
-                            msg=line.strip(),
+                            msg=stripped,
                             data=None,
                             progress=None,
                             level=level,
@@ -88,12 +75,13 @@ class QueueStream:
             self.buffer = lines[-1]
 
     def flush(self) -> None:
-        """Flush remaining buffered text as a status message."""
-        if self.buffer.strip():
-            level = infer_log_level(self.buffer.strip(), is_error=self.is_error)
+        """Flush remaining buffered text as raw output without semantic inference."""
+        stripped = self.buffer.strip()
+        if stripped:
+            level = LogLevel.ERROR if self.is_error else LogLevel.INFO
             self.queue.put(
                 EngineStatusMessage(
-                    msg=self.buffer.strip(),
+                    msg=stripped,
                     data=None,
                     progress=None,
                     level=level,
@@ -121,6 +109,10 @@ def process_wrapper(
     if status_queue is None:
         status_queue = cast(ILogger, multiprocessing.Queue())
 
+    emitter = get_global_emitter()
+    queue_sink = ObservabilityQueueSink(cast(EventQueue, status_queue))
+    emitter.register_sink(queue_sink)
+
     sys.stdout = QueueStream(status_queue, is_error=False)
     sys.stderr = QueueStream(status_queue, is_error=True)
 
@@ -142,6 +134,8 @@ def process_wrapper(
         )
         time.sleep(0.5)
         raise e
+    finally:
+        emitter.unregister_sink(queue_sink)
 
 
 class WorkerPoolCoordinator:
@@ -149,7 +143,7 @@ class WorkerPoolCoordinator:
 
     @staticmethod
     def spawn_process(
-        status_queue: multiprocessing.Queue[EngineStatusMessage],
+        status_queue: multiprocessing.Queue[EngineStatusMessage | ObservabilityEvent],
         config_path: str,
         rules_path: str,
     ) -> multiprocessing.Process:
@@ -163,8 +157,10 @@ class WorkerPoolCoordinator:
         return process
 
     @staticmethod
-    def _parse_queue_item(item: object) -> EngineStatusMessage:
-        """Parse raw tuple or EngineStatusMessage queue payload into structured status."""
+    def _parse_queue_item(item: object) -> EngineStatusMessage | ObservabilityEvent:
+        """Parse raw tuple or status queue payload into structured status or canonical event."""
+        if isinstance(item, ObservabilityEvent):
+            return item
         if not isinstance(item, tuple):
             return cast(EngineStatusMessage, item)
         t_item = cast("tuple[object, ...]", item)
@@ -177,13 +173,13 @@ class WorkerPoolCoordinator:
             msg=t_msg,
             data=t_data,
             progress=t_prog,
-            level=infer_log_level(t_msg),
+            level=LogLevel.INFO,
         )
 
     @staticmethod
     def _emit_exit_status(
         process: multiprocessing.Process,
-        on_status: Callable[[EngineStatusMessage], None],
+        on_status: Callable[[EngineStatusMessage | ObservabilityEvent], None],
     ) -> None:
         """Emit clean completion or abnormal exit status based on worker exit code."""
         if process.exitcode is None:
@@ -210,8 +206,8 @@ class WorkerPoolCoordinator:
     @staticmethod
     def monitor_queue(
         process: multiprocessing.Process,
-        status_queue: multiprocessing.Queue[EngineStatusMessage],
-        on_status: Callable[[EngineStatusMessage], None],
+        status_queue: multiprocessing.Queue[EngineStatusMessage | ObservabilityEvent],
+        on_status: Callable[[EngineStatusMessage | ObservabilityEvent], None],
     ) -> threading.Thread:
         """Start a daemon thread monitoring status_queue until the child process terminates."""
 

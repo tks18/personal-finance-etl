@@ -92,9 +92,7 @@ def categorize_statement_files(folder_path: str, strict: bool = True) -> dict[st
     """
     all_files = glob.glob(os.path.join(folder_path, "**", "*.*"), recursive=True)
     all_files = [f.replace("\\", "/") for f in all_files if not os.path.basename(f).startswith("~")]
-    logger.debug(
-        f"[DISCOV:TRACE] Scanning directory: {folder_path} - Found {len(all_files)} total blobs."
-    )
+    logger.debug(f"Scanning directory: {folder_path} - Found {len(all_files)} total blobs.")
 
     categories: dict[str, list[str]] = {
         "stock_pl": [],
@@ -112,5 +110,5 @@ def categorize_statement_files(folder_path: str, strict: bool = True) -> dict[st
     total_files = sum(len(f) for f in categories.values())
     _validate_required_categories(categories, strict)
 
-    logger.info(f"[DISCOV] Scanned {total_files} active statement files from local disk.")
+    logger.info(f"Scanned {total_files} active statement files from local disk.")
     return categories

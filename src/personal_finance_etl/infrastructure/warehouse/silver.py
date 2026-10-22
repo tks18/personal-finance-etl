@@ -17,9 +17,21 @@ Does not own
 from __future__ import annotations
 
 import logging
+from datetime import UTC, datetime
 
 import polars as pl
 
+from personal_finance_etl.contracts.application import EngineStage
+from personal_finance_etl.contracts.observability import (
+    DiagnosticSeverity,
+    EventCode,
+    EventOutcome,
+    NullObservabilitySink,
+    ObservabilityContext,
+    ObservabilityEvent,
+    ObservabilitySink,
+    PresentationKind,
+)
 from personal_finance_etl.infrastructure.warehouse.connection import DuckDBManager
 from personal_finance_etl.infrastructure.warehouse.registry import DATA_CONTRACT_REGISTRY
 from personal_finance_etl.infrastructure.warehouse.schema.silver import SILVER_DDL
@@ -36,8 +48,13 @@ class SilverLayer:
         Active DuckDB connection manager.
     """
 
-    def __init__(self, db_manager: DuckDBManager) -> None:
+    def __init__(
+        self,
+        db_manager: DuckDBManager,
+        emitter: ObservabilitySink | None = None,
+    ) -> None:
         self.db_manager = db_manager
+        self.emitter = emitter or NullObservabilitySink()
 
     @staticmethod
     def _sanitize_dimension_strings(df: pl.DataFrame) -> pl.DataFrame:
@@ -169,9 +186,25 @@ class SilverLayer:
                 if rows > 0:
                     tables_built += 1
                     total_rows += rows
+                self.emitter.emit(
+                    ObservabilityEvent(
+                        timestamp=datetime.now(UTC),
+                        event_code=EventCode.SILVER_REPLACE,
+                        severity=DiagnosticSeverity.DEBUG,
+                        presentation_kind=PresentationKind.INTERNAL,
+                        outcome=EventOutcome.COMPLETED,
+                        context=ObservabilityContext(
+                            stage=EngineStage.PUBLISHING,
+                            entity_type="Table",
+                            entity_id=contract.physical_table,
+                            rows=rows,
+                        ),
+                        message=f"Silver layer synchronized {contract.physical_table} ({rows:,} rows)",
+                    )
+                )
 
         logger.info(
-            "[SILVER] Rebuilt %d analytical tables (%s total rows).",
+            "Rebuilt %d analytical tables (%s total rows).",
             tables_built,
             f"{total_rows:,}",
         )

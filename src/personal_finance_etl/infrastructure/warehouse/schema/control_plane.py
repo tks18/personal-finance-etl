@@ -2,7 +2,7 @@
 
 Owns
 ----
-- Re-export of RAW_DDL for backward compatibility.
+- Re-export of RAW_DDL schema definitions.
 """
 
 from __future__ import annotations

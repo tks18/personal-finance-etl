@@ -31,6 +31,8 @@ class Color(StrEnum):
     SUCCESS = "#22C55E"
     WARNING = "#F59E0B"
     ERROR = "#EF4444"
+    SKIP = "#94A3B8"
+    RECOVERY = "#C084FC"
     DIM = "#4B5563"
     TEXT = "#E2E8F0"
     LOG_BG = "#080C14"
@@ -45,6 +47,8 @@ class LogTag(StrEnum):
     SUCCESS = "#22C55E"
     WARNING = "#F59E0B"
     ERROR = "#EF4444"
+    SKIP = "#94A3B8"
+    RECOVERY = "#C084FC"
 
 
 LOG_TAG_COLORS: dict[str, str] = {
@@ -54,6 +58,8 @@ LOG_TAG_COLORS: dict[str, str] = {
     "success": LogTag.SUCCESS.value,
     "warning": LogTag.WARNING.value,
     "error": LogTag.ERROR.value,
+    "skip": LogTag.SKIP.value,
+    "recovery": LogTag.RECOVERY.value,
 }
 
 

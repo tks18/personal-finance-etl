@@ -40,8 +40,7 @@ class EngineStage(StrEnum):
 class EngineStatusMessage:
     """Structured message for the UI and worker status queue.
 
-    Replaces legacy anonymous tuples (tuple[str, Any | None, float | None])
-    with a fully typed, extensible contract across process boundaries.
+    Fully typed status message contract across process boundaries.
     """
 
     msg: str
@@ -54,12 +53,12 @@ class EngineStatusMessage:
 
     @property
     def message(self) -> str:
-        """Alias for msg for backward compatibility."""
+        """Message content string accessor."""
         return self.msg
 
     @property
     def status(self) -> LogLevel:
-        """Alias for level for backward compatibility."""
+        """Status severity level accessor."""
         return self.level
 
 

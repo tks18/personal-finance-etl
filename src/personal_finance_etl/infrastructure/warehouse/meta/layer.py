@@ -154,7 +154,7 @@ class MetaLayer:
             self.conn.execute(
                 """
                 UPDATE meta.m_File_Registry 
-                SET file_hash = ?, file_size = ?, row_count = ?, ingested_at = CURRENT_TIMESTAMP
+                SET file_hash = ?, file_size_bytes = ?, row_count = ?, last_ingested = CURRENT_TIMESTAMP
                 WHERE relative_path = ?
                 """,
                 [file_hash, file_size, row_count, unique_path],
@@ -163,8 +163,8 @@ class MetaLayer:
             self.conn.execute(
                 """
                 INSERT INTO meta.m_File_Registry 
-                (file_id, file_name, relative_path, file_category, file_type, file_hash, file_size, row_count, ingested_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                (file_id, file_name, relative_path, file_category, file_type, file_hash, file_size_bytes, row_count, first_ingested, last_ingested)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                 """,
                 [
                     file_id,
@@ -341,14 +341,14 @@ class MetaLayer:
                     list(sim_row[:11]) + [contract_registry_fingerprint] + list(sim_row[11:]),
                 )
                 logger.info(
-                    "[META] Mirrored latest simulation run '%s' into meta.m_Latest_Simulation "
+                    "Mirrored latest simulation run '%s' into meta.m_Latest_Simulation "
                     "(contract_registry_fingerprint=%s...).",
                     sim_row[0],
                     contract_registry_fingerprint[:12],
                 )
         except (sqlite3.Error, duckdb.Error) as mirror_err:
             logger.warning(
-                "[META:OPTIONAL_OPERATION] Could not mirror simulation run into DuckDB meta: %s",
+                "Could not mirror simulation run into DuckDB meta: %s",
                 mirror_err,
             )
 

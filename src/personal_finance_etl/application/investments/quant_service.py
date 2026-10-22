@@ -33,8 +33,16 @@ from personal_finance_etl.application.investments.context import (
 from personal_finance_etl.application.investments.isin_service import (
     IsinPipeline,
 )
-from personal_finance_etl.contracts.application import EngineStatusMessage
+from personal_finance_etl.application.observability import (
+    ObservabilityEmitter,
+    get_global_emitter,
+)
+from personal_finance_etl.contracts.application import EngineStage, EngineStatusMessage
 from personal_finance_etl.contracts.logging import LogLevel, StatusQueue
+from personal_finance_etl.contracts.observability import (
+    EventCode,
+    PresentationKind,
+)
 from personal_finance_etl.infrastructure.logging.setup import logger
 
 __all__ = ["InvestmentQuantEngine", "QuantService"]
@@ -48,6 +56,7 @@ class InvestmentQuantEngine:
         data: QuantDataFrames,
         options: QuantRunOptions,
         status_queue: StatusQueue | None = None,
+        emitter: ObservabilityEmitter | None = None,
     ) -> None:
         """Initialize InvestmentQuantEngine with structured typed parameter bundles.
 
@@ -59,10 +68,13 @@ class InvestmentQuantEngine:
             Execution options and boundaries.
         status_queue : StatusQueue | None, optional
             Queue for streaming engine progress events.
+        emitter : ObservabilityEmitter | None, optional
+            Observability emitter for canonical structured events.
         """
         self.data = data
         self.options = options
         self.status_queue = status_queue
+        self.emitter = emitter or get_global_emitter()
 
     def _report_status(
         self,
@@ -100,6 +112,16 @@ class InvestmentQuantEngine:
         logger.info(
             f"  -> Quant Engine initialized context spanning market dates {min_market} to {max_market} for {len(isins)} unique ISINs."
         )
+        self.emitter.emit_event(
+            event_code=EventCode.QUANT_ENGINE_START,
+            message=(
+                f"Quant Engine initialized context spanning market dates {min_market} to "
+                f"{max_market} for {len(isins)} unique ISINs."
+            ),
+            presentation_kind=PresentationKind.STEP,
+            rows=len(isins),
+            stage=EngineStage.ANALYZING,
+        )
 
         if not isins:
             empty_df = pl.DataFrame()
@@ -112,7 +134,9 @@ class InvestmentQuantEngine:
             return {"df_f_investment_analytics_lot": empty_df}
 
         with tempfile.TemporaryDirectory() as tmp_dir:
-            isin_pipeline = IsinPipeline(ctx, isins, tmp_dir, self.status_queue)
+            isin_pipeline = IsinPipeline(
+                ctx, isins, tmp_dir, self.status_queue, emitter=self.emitter
+            )
             pipeline_res = isin_pipeline.process_all()
             has_data = pipeline_res.has_data
 
@@ -131,6 +155,13 @@ class InvestmentQuantEngine:
 
             succ_msg = f"✅  Processing Complete — generated {len(final_dfs)} analytics tables."
             self._report_status(succ_msg, None, 1.0, LogLevel.SUCCESS)
+            self.emitter.emit_event(
+                event_code=EventCode.QUANT_POOL_COMPLETED,
+                message=f"Processing Complete — generated {len(final_dfs)} analytics tables",
+                presentation_kind=PresentationKind.SUCCESS,
+                rows=len(final_dfs),
+                stage=EngineStage.ANALYZING,
+            )
 
             return final_dfs
 

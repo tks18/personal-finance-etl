@@ -2,6 +2,172 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [9.3.0](https://github.com/tks18/personal-finance-etl/compare/9.2.9...9.3.0) (2026-10-22)
+
+
+### Performance Improvements 🏎
+
+* **planning:** record logging baseline benchmark metrics ([573c19e](https://github.com/tks18/personal-finance-etl/commit/573c19ed7455cce568096d6f3ceaa9e5eab6a74b))
+* **scripts:** implement observability baseline benchmark harness ([4b46316](https://github.com/tks18/personal-finance-etl/commit/4b46316fe722cb0a30fda825a3f6649d7d603502))
+
+
+### Bug Fixes 🛠
+
+* **desktop:** eliminate per-line error dialog loop in status processing ([1efd00f](https://github.com/tks18/personal-finance-etl/commit/1efd00fb868279bc0bde9f47bfbe7e37616d07a2))
+* **warehouse:** correct duckdb file registry schema column names ([2f2bb78](https://github.com/tks18/personal-finance-etl/commit/2f2bb7854dc970dce6c3cec19abaebce8c8cc62a))
+
+
+### Docs 📃
+
+* add logging upgrade plan ([eb00fed](https://github.com/tks18/personal-finance-etl/commit/eb00fed379169e11dcef9f269fd7d2ec78c59c3f))
+* **architecture:** document three resolutions of observability truth ([dcc58d4](https://github.com/tks18/personal-finance-etl/commit/dcc58d43e56b6a05180d4723ca2cf089e409b806))
+* **planning:** catalog 296 logging callsites in inventory ledger ([a68a0b0](https://github.com/tks18/personal-finance-etl/commit/a68a0b02e20d257cc51c0d30eb2c63dd43e9cb41))
+* **planning:** certify phase 11 and freeze observability architecture ([48fa5d6](https://github.com/tks18/personal-finance-etl/commit/48fa5d6d9506e85f861a32f3e29c90cee7275470))
+* **standards:** declare unified observability architecture frozen ([87078ab](https://github.com/tks18/personal-finance-etl/commit/87078ab465e491524147b708a6de8b16aabb9c5d))
+* **ui:** document narrative sinks and single error diagnostic panel ([a079331](https://github.com/tks18/personal-finance-etl/commit/a079331da7be4c2c0b969afce66dfa2eedab3bc7))
+
+
+### Tests 🧪
+
+* **contracts:** add unit tests for observability contracts ([7f3fc28](https://github.com/tks18/personal-finance-etl/commit/7f3fc283b950ad52ec040c6838cebe7eb9ee9afd))
+* **contracts:** verify observability event creation and sink dispatch ([5ee253e](https://github.com/tks18/personal-finance-etl/commit/5ee253ecd43145de03c6337378d6fa6ab9843f65))
+* **control_plane:** sync assertions with observability contracts ([eabd8b6](https://github.com/tks18/personal-finance-etl/commit/eabd8b63ea4cb8ebe7b86f0fa911b95db07f3fce))
+* **control_plane:** verify milestone status and trace archival ([c93b3fc](https://github.com/tks18/personal-finance-etl/commit/c93b3fced07fcd42e97fd75404641ceb7127c8fc))
+* **diagnostics:** verify provider worker events and silence ([c111de9](https://github.com/tks18/personal-finance-etl/commit/c111de991debf0fd472e6459530bf5ceb8d35e57))
+* **observability:** add phase 10 performance and reliability gates ([d356bbe](https://github.com/tks18/personal-finance-etl/commit/d356bbe6161487de8a00648827d8a83e1ecd9918))
+* **observability:** add unit tests for emitter and span timing ([24a3a74](https://github.com/tks18/personal-finance-etl/commit/24a3a7485e8f3723f829203e16ea991d84bcfcf8))
+* **observability:** add unit tests for forensic jsonl pipeline ([20a1f28](https://github.com/tks18/personal-finance-etl/commit/20a1f28f627109a53179c3a560a3d66a45a045c8))
+* **observability:** add unit tests for narrative presentation sinks ([cf2aae5](https://github.com/tks18/personal-finance-etl/commit/cf2aae5446fb78eb38e5ed1937f3cd8d05b0367e))
+* **observability:** certify legacy demolition and live jsonl trace ([e6b08d3](https://github.com/tks18/personal-finance-etl/commit/e6b08d388d88e88fa401eb453c8baa8086d8e0c0))
+* **observability:** verify redaction coverage and retention pruning ([2b354d7](https://github.com/tks18/personal-finance-etl/commit/2b354d78428526f0900c2ca79affc85461b15272))
+* **pipeline:** add certification tests for core pipeline observability ([5b10b19](https://github.com/tks18/personal-finance-etl/commit/5b10b19ea7d64f46c8719b4976df997d8104e7cc))
+* **pipeline:** verify dense observability events across pipeline layers ([89fbdbe](https://github.com/tks18/personal-finance-etl/commit/89fbdbe3c9c492095930cf61d6571a6c61966e01))
+* **presentation:** update narrative test to render_status_message ([59e33c3](https://github.com/tks18/personal-finance-etl/commit/59e33c3eede83403e69d8f8f674fed38a813292f))
+* **run_headless:** update test suite ([9575981](https://github.com/tks18/personal-finance-etl/commit/95759811582fe46457565ff32c3c62c1b2d074a0))
+* **worker:** update queue stream test for raw severity routing ([b67d179](https://github.com/tks18/personal-finance-etl/commit/b67d179ff785e5d0618b7e9cb96d6f420bb97d70))
+
+
+### Features 🔥
+
+* **cli:** wire RichNarrativeSink into pipeline progress runner ([465909f](https://github.com/tks18/personal-finance-etl/commit/465909f93d97ec555873a3efd63292db0e1f7fbd))
+* **config:** add logs directory path and retention settings ([42f19b0](https://github.com/tks18/personal-finance-etl/commit/42f19b057962b65d60c5c910661f5e8cbedd77cc))
+* **contracts:** define canonical typed observability contracts ([94de36d](https://github.com/tks18/personal-finance-etl/commit/94de36d066149b84d68e9ae2a27d359e63aa521d))
+* **contracts:** export canonical observability contracts ([5c49efd](https://github.com/tks18/personal-finance-etl/commit/5c49efd402cf5059d451a5bff72a37b9c894a33f))
+* **control_plane:** add execution log retrieval and status query ([7599b06](https://github.com/tks18/personal-finance-etl/commit/7599b06c8b39f0b4e79891f1952b1f988658337b))
+* **docs:** add custom purple stylesheets for dark navigation theme ([c014939](https://github.com/tks18/personal-finance-etl/commit/c01493964c1f527ddce3670210ca0ffda3fb2711))
+* **docs:** add mkdocs material and plugins to docs dependency group ([13305be](https://github.com/tks18/personal-finance-etl/commit/13305be30ec94da1b7a44e15ee511ab4326f2ef3))
+* **docs:** add project favicon for mkdocs and readthedocs ([2d84b5c](https://github.com/tks18/personal-finance-etl/commit/2d84b5cedb569800ea7e4e6d6bd2cca6736b4eb6))
+* **docs:** add project header logo for mkdocs and readthedocs ([6f0546e](https://github.com/tks18/personal-finance-etl/commit/6f0546e8c5694fd053d9582c82fbd57821024572))
+* **docs:** configure material theme with logo favicon and branding ([8b1a5cf](https://github.com/tks18/personal-finance-etl/commit/8b1a5cfd43d101f535d077edcf5b8fdd74b0c8e4))
+* **ingestion:** pass observability sink to market provider pipelines ([4efe828](https://github.com/tks18/personal-finance-etl/commit/4efe8289b53b225165da162a01a670b5bb35d89a))
+* **investments:** emit per-isin completion events in quant pipeline ([667d264](https://github.com/tks18/personal-finance-etl/commit/667d264a516b23f2f5b27d4410a334424e8ac641))
+* **investments:** forward observability emitter to isin pipeline ([00af25b](https://github.com/tks18/personal-finance-etl/commit/00af25b1c2964f08fe4143ad46a87091f68bb7cd))
+* **market:** route benchmark ticker events to observability sink ([565dca5](https://github.com/tks18/personal-finance-etl/commit/565dca5aeb2edb0101893c07a83d2cc5caaa1dcd))
+* **market:** route currency ticker events to observability sink ([9de4eac](https://github.com/tks18/personal-finance-etl/commit/9de4eac6bc120c0788c5fd970b5b26fce7794ab1))
+* **market:** route us market ticker events to observability sink ([8a19e04](https://github.com/tks18/personal-finance-etl/commit/8a19e048d9c0162930ae9d59cea0c85ab4af5d8a))
+* **observability:** add redaction engine and config fingerprinting ([3760e61](https://github.com/tks18/personal-finance-etl/commit/3760e61441c4e73500e8944cbbf0c946453d04ee))
+* **observability:** add resilient zlib trace archival engine ([4398f55](https://github.com/tks18/personal-finance-etl/commit/4398f555ee70749b71a265c198832836639a23c2))
+* **observability:** add trace file retention manager ([c536088](https://github.com/tks18/personal-finance-etl/commit/c536088c27a876ae7630f9b4548237e679946ad7))
+* **observability:** create application observability package facade ([1eba725](https://github.com/tks18/personal-finance-etl/commit/1eba725eef688d9bbd16fab970d2251d8a2569b1))
+* **observability:** create infrastructure observability facade ([f468d3f](https://github.com/tks18/personal-finance-etl/commit/f468d3f9526261e36d90585da82532e72f7be151))
+* **observability:** create presentation observability facade ([3b55587](https://github.com/tks18/personal-finance-etl/commit/3b55587fbda6c40f1fd14f86209e608eeadd90f7))
+* **observability:** export archival helpers in package root ([01b47a2](https://github.com/tks18/personal-finance-etl/commit/01b47a25780435a248b9bf4567b560c287085644))
+* **observability:** export redaction and retention members in root ([c8a4896](https://github.com/tks18/personal-finance-etl/commit/c8a4896661fdc5eeee786a85f62d3482ee7eda45))
+* **observability:** implement ambient ContextVar context manager ([f3db27b](https://github.com/tks18/personal-finance-etl/commit/f3db27b5418900e2788fa388edc94abf18bb915c))
+* **observability:** implement append-only JsonlForensicSink ([de64e70](https://github.com/tks18/personal-finance-etl/commit/de64e70f453f27915e99943f555a92875bf962ed))
+* **observability:** implement async listener and queue sink ([b0b0ee9](https://github.com/tks18/personal-finance-etl/commit/b0b0ee941a4cacaf180b99d95b3cdfd8801d0ede))
+* **observability:** implement central event emitter and span manager ([2043431](https://github.com/tks18/personal-finance-etl/commit/2043431f320283b4487ce94609a97ffdf601525e))
+* **observability:** implement DesktopNarrativeSink for GUI dispatch ([db130ec](https://github.com/tks18/personal-finance-etl/commit/db130ec29db602da5fa6c553a43001ca4a0c3622))
+* **observability:** implement RichNarrativeSink for console narrative ([3aa5c2c](https://github.com/tks18/personal-finance-etl/commit/3aa5c2ca79bc06449dcde068a36bb1d1092b886f))
+* **pipeline:** wire dense table telemetry in presentation and loading ([b5f39cf](https://github.com/tks18/personal-finance-etl/commit/b5f39cf9046fe40a4c5047ce29e295dd6fde3207))
+* **poe:** add docs:serve and docs:build tasks to poe runner ([49c13d7](https://github.com/tks18/personal-finance-etl/commit/49c13d787c94c41fa2261a1556902372544345e9))
+* **presentation:** add skip and recovery styling tokens to theme ([1e4fc68](https://github.com/tks18/personal-finance-etl/commit/1e4fc68d328a560143ceb22e1b3721d1ba2567ed))
+* **presentation:** support ObservabilityEvent in BaseEngineTab status ([646b2ea](https://github.com/tks18/personal-finance-etl/commit/646b2eae458cb1b58c0f8809068a31aa05d5fb63))
+* **warehouse:** emit structured table replace events in gold layer ([6cd3164](https://github.com/tks18/personal-finance-etl/commit/6cd31641c176a1857e878a725cdbb16bdee2fe4e))
+* **warehouse:** emit structured table replace events in silver layer ([ba74d1a](https://github.com/tks18/personal-finance-etl/commit/ba74d1ad85961484d04bd75996afe284892583e8))
+* **warehouse:** emit structured table upsert events in bronze layer ([ef2ebbc](https://github.com/tks18/personal-finance-etl/commit/ef2ebbc100e03760c119f35c5df07551d34ad8e5))
+
+
+### Code Refactoring 🖌
+
+* **bronze:** remove legacy DAG string prefixes ([31269f9](https://github.com/tks18/personal-finance-etl/commit/31269f9f133a5fb263552591a2cf719bef5e23c6))
+* **cli:** clean status type alias and call render_status_message ([9a8e8f6](https://github.com/tks18/personal-finance-etl/commit/9a8e8f61a732aab8ac039a347dd54d7e35841973))
+* **contracts:** clarify EngineStatusMessage docstrings ([cb3e061](https://github.com/tks18/personal-finance-etl/commit/cb3e0612ce8e00785d449e8d6b79a782821b0fc1))
+* **contracts:** clean ExtractionBatchResult unpacking docstring ([c387250](https://github.com/tks18/personal-finance-etl/commit/c387250c08b119b86d3e85ff4fc1838f43c1ca95))
+* **contracts:** define ObservabilitySink protocol and cast data ([1aa8970](https://github.com/tks18/personal-finance-etl/commit/1aa8970dcaa96d93eeb1b2ca06a1352c72da96ab))
+* **contracts:** export ObservabilitySink and NullObservabilitySink ([715b503](https://github.com/tks18/personal-finance-etl/commit/715b503c164d6c6f8ce9d70789bf77974278ef32))
+* **control_plane:** clean bracket prefixes in file sync logs ([68add40](https://github.com/tks18/personal-finance-etl/commit/68add409b7768e90517975f7174125194b574573))
+* **control_plane:** clean bracket prefixes in sqlite logs ([f0f062f](https://github.com/tks18/personal-finance-etl/commit/f0f062f83808fb0e9846f25eb11f66770ca29e86))
+* **control_plane:** clean legacy bracket prefixes in artifacts ([52c6ee1](https://github.com/tks18/personal-finance-etl/commit/52c6ee136c0d2cc7f1c101ad5a8460547c73f007))
+* **coordinator:** emit EXTRACTION and SCHEMA_VALIDATION events ([674ca55](https://github.com/tks18/personal-finance-etl/commit/674ca556aa1690657dc5e8710bd99a8e5fa50a1f))
+* **csv:** remove legacy string prefixes from csv extractor ([7280318](https://github.com/tks18/personal-finance-etl/commit/7280318a5109bffbeb23c50ae845b37fd614d314))
+* **desktop:** clarify process status message handling comments ([a9d7fba](https://github.com/tks18/personal-finance-etl/commit/a9d7fbac08a5991b4ca2c45c8fd590d2983c6050))
+* **emitter:** add pylint disables for emit_event signature ([6be18c0](https://github.com/tks18/personal-finance-etl/commit/6be18c06c1b3483d7f8c24d322ac57f367b1e590))
+* **excel:** remove legacy prefixes across excel extractors ([2df4e9d](https://github.com/tks18/personal-finance-etl/commit/2df4e9db34d8ac23d3d66a39990a9f4c97ff3753))
+* **execution:** emit canonical events and demolish string prefixes ([06ee3d1](https://github.com/tks18/personal-finance-etl/commit/06ee3d19dfc3a2d032d1e9282c90142873e236b3))
+* **fire:** clean bracket prefix in inflation calculation error ([9c4e910](https://github.com/tks18/personal-finance-etl/commit/9c4e910438e7c97c7daa100b37c925e78d634042))
+* **fire:** rephrase deterministic linear projection comment ([8c34ce2](https://github.com/tks18/personal-finance-etl/commit/8c34ce271522a02490fbe897356b3c7899ce9305))
+* **forensic_sink:** add pylint disable for open file handle ([9a20dcd](https://github.com/tks18/personal-finance-etl/commit/9a20dcd9073800eae189200d5e1302d74d07f7e7))
+* **forensic_sink:** scrub sensitive tokens on jsonl serialization ([b385a27](https://github.com/tks18/personal-finance-etl/commit/b385a272056816d19086dca426592397565e0c37))
+* **gold:** remove legacy DAG string prefixes ([658f9d1](https://github.com/tks18/personal-finance-etl/commit/658f9d18fc12382791257fb53e4e47992dd4e7f5))
+* **household:** modernize source column mapping docstring ([619f68b](https://github.com/tks18/personal-finance-etl/commit/619f68b0002a77978a4c43235c8255d1d5b3fbf0))
+* **investments:** remove legacy prefixes and enforce silence ([5cb58c9](https://github.com/tks18/personal-finance-etl/commit/5cb58c9f79d85266f1a6c08ff64531dd4060aaf0))
+* **investments:** rephrase foreign subtype fallback comment ([e09f6b7](https://github.com/tks18/personal-finance-etl/commit/e09f6b7601f02ebfc4093ab2adba8433c197737d))
+* **investments:** rephrase lot ordering policy delegation ([7345cf9](https://github.com/tks18/personal-finance-etl/commit/7345cf90143322e56fa2196a2e5acf3ec2535f29))
+* **lifecycle:** attach live forensic jsonl sink and trace archive ([eb1ff44](https://github.com/tks18/personal-finance-etl/commit/eb1ff445a0c0aa0e4aafadbb424ef89aa9289564))
+* **lifecycle:** delegate trace archival to resilient helper ([85f314f](https://github.com/tks18/personal-finance-etl/commit/85f314f35e45a37e2604919a9e1233b707cee958))
+* **lifecycle:** emit canonical lifecycle events and ambient context ([8d0fcd3](https://github.com/tks18/personal-finance-etl/commit/8d0fcd3abcb224392a65747058a5d7f760e6ea4e))
+* **lifecycle:** enforce trace retention policy during teardown ([31370d2](https://github.com/tks18/personal-finance-etl/commit/31370d2c1ae36a517c2ec34e17011c8350bd2f34))
+* **locator:** remove legacy DISCOV string prefixes ([354ac82](https://github.com/tks18/personal-finance-etl/commit/354ac820b2e804aee3993efb9f88fb96a85c89bb))
+* **logging:** add positional argument support to StatusQueue ([402e58f](https://github.com/tks18/personal-finance-etl/commit/402e58fbe9c9322d0eafae62e5cceb428f719db4))
+* **logging:** modernize StatusQueue and ILogger docstrings ([904416c](https://github.com/tks18/personal-finance-etl/commit/904416c8865f6e9ba400d1936851d336bf37e512))
+* **market:** emit MARKET_FETCH and MARKET_SYNC_COMPLETED events ([5f6f701](https://github.com/tks18/personal-finance-etl/commit/5f6f70163d0eb21114312bdba51735ae60689cea))
+* **market:** emit structured events in benchmark extractor ([b7320dc](https://github.com/tks18/personal-finance-etl/commit/b7320dc669d921cb751c0d5986767fb7d41855a7))
+* **market:** emit structured events in currency extractor ([0e48e4c](https://github.com/tks18/personal-finance-etl/commit/0e48e4c5069b8489e7f93263285db66b50fb00cf))
+* **market:** emit structured events in us market extractor ([dcbc5d5](https://github.com/tks18/personal-finance-etl/commit/dcbc5d56ecd4faddce7b20eee3dce5e4cbb236d1))
+* **market:** remove legacy bracket prefixes in yfinance helper ([a71cebb](https://github.com/tks18/personal-finance-etl/commit/a71cebb9bd4ad4f3869fb6a53ed24398c9d513a9))
+* **observability:** add default run_id in ObservabilityContext ([b9cbfef](https://github.com/tks18/personal-finance-etl/commit/b9cbfef07ed51348f0e2e2360e648930683ca871))
+* **observability:** introduce render_status_message in narrative ([f09163c](https://github.com/tks18/personal-finance-etl/commit/f09163ce9d72578d31906287d30662e0482276f1))
+* **observability:** rephrase to_status_message prospective intent ([db48eed](https://github.com/tks18/personal-finance-etl/commit/db48eed04e292343ef45625893670ff2f7b94d2c))
+* **orchestrator:** emit RUN_START and RUN_COMPLETED events ([e39d420](https://github.com/tks18/personal-finance-etl/commit/e39d420d3cfcc1ab378b62fb0e6761c218701db6))
+* **pipeline:** accept ObservabilityEvent in facade callback ([70359bd](https://github.com/tks18/personal-finance-etl/commit/70359bdba56161225da9eb1d533d8057d236b7cd))
+* **pipeline:** clarify step delegation docstrings in orchestrator ([48ad113](https://github.com/tks18/personal-finance-etl/commit/48ad113fd6ce33614ec1a68ec7742927c248fcd5))
+* **pipeline:** decouple legacy text log handler in lifecycle ([795a99d](https://github.com/tks18/personal-finance-etl/commit/795a99d97dbb327c4efa4c4a4d607046dc60aa3f))
+* **quant:** emit QUANT_ENGINE_START and QUANT_POOL_COMPLETED ([35caaa3](https://github.com/tks18/personal-finance-etl/commit/35caaa3df5795abe81a61db5748d2d08d6702ab6))
+* **release:** decouple local pypi publish from release pipeline ([1f762e8](https://github.com/tks18/personal-finance-etl/commit/1f762e8ae8e69226527a0ede0e6abb5d121e6b08))
+* **schema:** rephrase control plane raw ddl export header ([26f2287](https://github.com/tks18/personal-finance-etl/commit/26f228784260e0fb7157aa5939fd629f8cb2c110))
+* **sqlite:** remove legacy string prefix from sqlite extractor ([bebc101](https://github.com/tks18/personal-finance-etl/commit/bebc1017fd25143eae1abcec1dcefebc0490c963))
+* **transformer:** remove legacy DAG string prefixes ([bfb4d38](https://github.com/tks18/personal-finance-etl/commit/bfb4d38004d9718b2a5ab636a6e833080353f36a))
+* **warehouse:** clean bracket prefixes in bronze layer logs ([f7fcce1](https://github.com/tks18/personal-finance-etl/commit/f7fcce11fcee3d5ccee1fbca5a0a00b16dcee50e))
+* **warehouse:** clean bracket prefixes in duckdb connection logs ([0b65eb6](https://github.com/tks18/personal-finance-etl/commit/0b65eb659f04b7783cd0eb94e73552febdb9c5b1))
+* **wealth:** remove legacy presentation string prefixes ([24a8e58](https://github.com/tks18/personal-finance-etl/commit/24a8e581ae127634304104f324f84b02d0525168))
+* **worker:** demolish string severity guessing in queue stream ([73d91e5](https://github.com/tks18/personal-finance-etl/commit/73d91e5b89b82011d9e1a965c636d0364028c1e7))
+* **worker:** modernize infer_log_level to direct boolean mapping ([d8789b3](https://github.com/tks18/personal-finance-etl/commit/d8789b33e700ca6c5732d2adcbf0f022518420ff))
+* **worker:** remove legacy string prefixes from isin worker ([a579fcb](https://github.com/tks18/personal-finance-etl/commit/a579fcbc8d0a382710428729cf6b537d5d54c131))
+* **worker:** wire ObservabilityQueueSink into worker pool wrapper ([14fe4d7](https://github.com/tks18/personal-finance-etl/commit/14fe4d7b643045a0296a9ba2ccc1b3a5e357a210))
+
+
+### Others 🔧
+
+* **benchmark:** remove temporary logging baseline file ([1bb1023](https://github.com/tks18/personal-finance-etl/commit/1bb10230735862969f7060528a7b0f084ac1886c))
+* **benchmark:** update baseline metrics for phase 10 certification ([7924ffe](https://github.com/tks18/personal-finance-etl/commit/7924ffe82be8dd92a18732a342aad7d61daa528c))
+* **git:** ignore mkdocs static build output directory site/ ([93adfb6](https://github.com/tks18/personal-finance-etl/commit/93adfb64a7ba498788efb49113bae343075755cd))
+* **lock:** lock mkdocs-material and documentation dependencies ([1b5ee0b](https://github.com/tks18/personal-finance-etl/commit/1b5ee0b46e72f77fbc73889780c449a988e036a2))
+* **planning:** archive completed logging upgrade blueprint ([ff39f67](https://github.com/tks18/personal-finance-etl/commit/ff39f677e1b243a2f052876d0ceb7858bee45363))
+* **scripts:** implement automated logging callsite ast census ([fc6fb91](https://github.com/tks18/personal-finance-etl/commit/fc6fb916a70121018332bb0702e6f4d30cc11e37))
+* **scripts:** narrow ast func attribute type for pyright ([2ff5bf5](https://github.com/tks18/personal-finance-etl/commit/2ff5bf5d005cf750b5944fe5093daea82b24be4b))
+* **scripts:** remove temporary logging inventory generator ([53dc506](https://github.com/tks18/personal-finance-etl/commit/53dc5064808aeaaf1ba2a25648419cc29944cee0))
+* **scripts:** remove temporary observability benchmark harness ([15187ff](https://github.com/tks18/personal-finance-etl/commit/15187ffc79019bf5c4a0ef093c7bbe6558700485))
+* **scripts:** remove unused imports for pyright cleanliness ([642428e](https://github.com/tks18/personal-finance-etl/commit/642428ef5a4559ff0ce315b3bb0addeb05f0aa28))
+
+
+### CI 🛠
+
+* **github-pages:** automate mkdocs deployment to pages on master push ([dd111b8](https://github.com/tks18/personal-finance-etl/commit/dd111b8f9cd684fc1acbb3122839672d33fb7a08))
+* **pypi:** automate trusted publisher oidc publishing on master push ([e72da7d](https://github.com/tks18/personal-finance-etl/commit/e72da7d99231e943b2931804c13e78a72cd357dc))
+* **pypi:** include bundled docs and license assets in trigger paths ([692e35f](https://github.com/tks18/personal-finance-etl/commit/692e35ff16c0a37c936a08876a78ce8958e9ceed))
+* **rtd:** add readthedocs v2 build configuration using mkdocs ([72c15cf](https://github.com/tks18/personal-finance-etl/commit/72c15cf0ae8cecc2ecd487117b0173ac52bf9b15))
+
 ### [9.2.9](https://github.com/tks18/personal-finance-etl/compare/9.2.8...9.2.9) (2026-10-21)
 
 

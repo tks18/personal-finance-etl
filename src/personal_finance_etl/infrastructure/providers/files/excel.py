@@ -57,11 +57,11 @@ def _clean_excel_headers(df_sliced: pl.DataFrame) -> tuple[pl.DataFrame, str]:
 
 def _process_mf_statement(filename: str, raw_bytes: bytes) -> pl.DataFrame:
     t0 = time.perf_counter()
-    logger.debug(f"[EXTRACT:EXCEL] Starting parse for MF Holding Statement: {filename}")
+    logger.debug(f"Starting parse for MF Holding Statement: {filename}")
     excel_reader = fastexcel.read_excel(raw_bytes)
     if "Holdings" not in excel_reader.sheet_names:
         logger.debug(
-            f"[EXTRACT:EXCEL] Skipped {filename}: Missing 'Holdings' sheet (took {time.perf_counter() - t0:.2f}s)"
+            f"Skipped {filename}: Missing 'Holdings' sheet (took {time.perf_counter() - t0:.2f}s)"
         )
         return pl.DataFrame()
 
@@ -70,7 +70,7 @@ def _process_mf_statement(filename: str, raw_bytes: bytes) -> pl.DataFrame:
     start_search = df_raw.with_row_index().filter(pl.col(col_1) == "Scheme Name")
     if start_search.is_empty():
         logger.debug(
-            f"[EXTRACT:EXCEL] Skipped {filename}: Could not find 'Scheme Name' anchor (took {time.perf_counter() - t0:.2f}s)"
+            f"Skipped {filename}: Could not find 'Scheme Name' anchor (took {time.perf_counter() - t0:.2f}s)"
         )
         return pl.DataFrame()
 
@@ -80,7 +80,7 @@ def _process_mf_statement(filename: str, raw_bytes: bytes) -> pl.DataFrame:
     df_data, first_col = _clean_excel_headers(df_sliced)
     final_df = df_data.filter(pl.col(first_col).is_not_null())
     logger.debug(
-        f"[EXTRACT:EXCEL] Parsed {filename} in {time.perf_counter() - t0:.2f}s - {final_df.height} rows extracted"
+        f"Parsed {filename} in {time.perf_counter() - t0:.2f}s - {final_df.height} rows extracted"
     )
     return final_df
 
@@ -115,11 +115,11 @@ def extract_mf_market_data_raw(valid_files: list[tuple[str, str, bytes]]) -> pl.
 
 def _process_mf_transaction_statements(filename: str, raw_bytes: bytes) -> pl.DataFrame:
     t0 = time.perf_counter()
-    logger.debug(f"[EXTRACT:EXCEL] Starting parse for MF Transaction Statement: {filename}")
+    logger.debug(f"Starting parse for MF Transaction Statement: {filename}")
     excel_reader = fastexcel.read_excel(raw_bytes)
     if "Transactions" not in excel_reader.sheet_names:
         logger.debug(
-            f"[EXTRACT:EXCEL] Skipped {filename}: Missing 'Transactions' sheet (took {time.perf_counter() - t0:.2f}s)"
+            f"Skipped {filename}: Missing 'Transactions' sheet (took {time.perf_counter() - t0:.2f}s)"
         )
         return pl.DataFrame()
     df_raw = excel_reader.load_sheet("Transactions", header_row=None).to_polars()
@@ -128,7 +128,7 @@ def _process_mf_transaction_statements(filename: str, raw_bytes: bytes) -> pl.Da
     col_1 = df_raw.columns[0]
     start_search = df_raw.with_row_index().filter(pl.col(col_1) == "Scheme Name")
     if start_search.is_empty():
-        logger.debug(f"[EXTRACT:EXCEL] Skipped {filename}: Could not find 'Scheme Name' anchor")
+        logger.debug(f"Skipped {filename}: Could not find 'Scheme Name' anchor")
         return pl.DataFrame()
     header_idx = int(start_search["index"][0])
     df_sliced = df_raw.slice(header_idx)
@@ -136,7 +136,7 @@ def _process_mf_transaction_statements(filename: str, raw_bytes: bytes) -> pl.Da
     df_data, first_col = _clean_excel_headers(df_sliced)
     final_df = df_data.filter(pl.col(first_col).is_not_null())
     logger.debug(
-        f"[EXTRACT:EXCEL] Parsed {filename} in {time.perf_counter() - t0:.2f}s - {final_df.height} rows extracted"
+        f"Parsed {filename} in {time.perf_counter() - t0:.2f}s - {final_df.height} rows extracted"
     )
     return final_df
 
@@ -186,7 +186,7 @@ def extract_mf_transactions_raw(valid_files: list[tuple[str, str, bytes]]) -> pl
 
 def _process_stock_closing_statement(filename: str, raw_bytes: bytes) -> pl.DataFrame:
     t0 = time.perf_counter()
-    logger.debug(f"[EXTRACT:EXCEL] Starting parse for Stock Closing Statement: {filename}")
+    logger.debug(f"Starting parse for Stock Closing Statement: {filename}")
     excel_reader = fastexcel.read_excel(raw_bytes)
     sheet_names = excel_reader.sheet_names
     target_sheet = next(
@@ -194,16 +194,14 @@ def _process_stock_closing_statement(filename: str, raw_bytes: bytes) -> pl.Data
     )
     if not target_sheet:
         logger.debug(
-            f"[EXTRACT:EXCEL] Skipped {filename}: Missing target sheet (took {time.perf_counter() - t0:.2f}s)"
+            f"Skipped {filename}: Missing target sheet (took {time.perf_counter() - t0:.2f}s)"
         )
         return pl.DataFrame()
     df_raw = excel_reader.load_sheet(target_sheet, header_row=None).to_polars()
     col_1 = df_raw.columns[0]
     start_search = df_raw.with_row_index().filter(pl.col(col_1) == "Unrealised trades")
     if start_search.is_empty():
-        logger.debug(
-            f"[EXTRACT:EXCEL] Skipped {filename}: Could not find 'Unrealised trades' anchor"
-        )
+        logger.debug(f"Skipped {filename}: Could not find 'Unrealised trades' anchor")
         return pl.DataFrame()
 
     header_idx = int(start_search["index"][0]) + 2
@@ -216,7 +214,7 @@ def _process_stock_closing_statement(filename: str, raw_bytes: bytes) -> pl.Data
         df_data = df_data.slice(0, end_idx)
 
     logger.debug(
-        f"[EXTRACT:EXCEL] Parsed {filename} in {time.perf_counter() - t0:.2f}s - {df_data.height} rows extracted"
+        f"Parsed {filename} in {time.perf_counter() - t0:.2f}s - {df_data.height} rows extracted"
     )
     return df_data
 
@@ -262,21 +260,21 @@ def extract_stock_market_data_raw(valid_files: list[tuple[str, str, bytes]]) -> 
 
 def _process_stock_transactions(filename: str, raw_bytes: bytes) -> pl.DataFrame:
     t0 = time.perf_counter()
-    logger.debug(f"[EXTRACT:EXCEL] Starting parse for Stock Transaction Statement: {filename}")
+    logger.debug(f"Starting parse for Stock Transaction Statement: {filename}")
     excel_reader = fastexcel.read_excel(raw_bytes)
     if "Sheet1" not in excel_reader.sheet_names:
         logger.debug(
-            f"[EXTRACT:EXCEL] Skipped {filename}: Missing 'Sheet1' sheet (took {time.perf_counter() - t0:.2f}s)"
+            f"Skipped {filename}: Missing 'Sheet1' sheet (took {time.perf_counter() - t0:.2f}s)"
         )
         return pl.DataFrame()
     df_raw = excel_reader.load_sheet("Sheet1", header_row=5).to_polars()
     if "Stock name" in df_raw.columns:
         final_df = df_raw.filter(pl.col("Stock name").is_not_null())
         logger.debug(
-            f"[EXTRACT:EXCEL] Parsed {filename} in {time.perf_counter() - t0:.2f}s - {final_df.height} rows extracted"
+            f"Parsed {filename} in {time.perf_counter() - t0:.2f}s - {final_df.height} rows extracted"
         )
         return final_df
-    logger.debug(f"[EXTRACT:EXCEL] Skipped {filename}: Could not find 'Stock name' column")
+    logger.debug(f"Skipped {filename}: Could not find 'Stock name' column")
     return pl.DataFrame()
 
 
@@ -311,17 +309,17 @@ def extract_stock_transactions_raw(valid_files: list[tuple[str, str, bytes]]) ->
 
 def _process_us_stock_transactions(filename: str, raw_bytes: bytes) -> pl.DataFrame:
     t0 = time.perf_counter()
-    logger.debug(f"[EXTRACT:EXCEL] Starting parse for US Stock Transaction Statement: {filename}")
+    logger.debug(f"Starting parse for US Stock Transaction Statement: {filename}")
     excel_reader = fastexcel.read_excel(raw_bytes)
     sheet_name = excel_reader.sheet_names[0]
     df_raw = excel_reader.load_sheet(sheet_name, header_row=0).to_polars()
     if "Stock Name" in df_raw.columns:
         final_df = df_raw.filter(pl.col("Stock Name").is_not_null())
         logger.debug(
-            f"[EXTRACT:EXCEL] Parsed {filename} in {time.perf_counter() - t0:.2f}s - {final_df.height} rows extracted"
+            f"Parsed {filename} in {time.perf_counter() - t0:.2f}s - {final_df.height} rows extracted"
         )
         return final_df
-    logger.debug(f"[EXTRACT:EXCEL] Skipped {filename}: Could not find 'Stock Name' column")
+    logger.debug(f"Skipped {filename}: Could not find 'Stock Name' column")
     return pl.DataFrame()
 
 

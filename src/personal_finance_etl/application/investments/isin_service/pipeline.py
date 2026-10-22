@@ -26,9 +26,18 @@ import polars as pl
 
 from personal_finance_etl.application.investments.context import RunContext
 from personal_finance_etl.application.investments.isin_service.worker import _process_isin_worker
+from personal_finance_etl.application.observability import (
+    ObservabilityEmitter,
+    get_global_emitter,
+)
 from personal_finance_etl.config.financial_rules import FinancialRules
-from personal_finance_etl.contracts.application import EngineStatusMessage
+from personal_finance_etl.contracts.application import EngineStage, EngineStatusMessage
 from personal_finance_etl.contracts.logging import LogLevel, StatusQueue
+from personal_finance_etl.contracts.observability import (
+    DiagnosticSeverity,
+    EventCode,
+    PresentationKind,
+)
 from personal_finance_etl.domain.investments.contracts import (
     CashflowDict,
     IsinMasterRecord,
@@ -264,11 +273,13 @@ class IsinPipeline:
         isins: list[str],
         tmp_dir: str,
         status_queue: StatusQueue | None = None,
+        emitter: ObservabilityEmitter | None = None,
     ):
         self.ctx = ctx
         self.isins = isins
         self.tmp_dir = tmp_dir
         self.status_queue = status_queue
+        self.emitter = emitter or get_global_emitter()
 
     def _report_step(self, progress: float) -> None:
         """Report incremental step progress to status queue."""
@@ -465,6 +476,16 @@ class IsinPipeline:
                     if success:
                         has_data = True
                     acc.ingest_isin_result(isin, isin_cf, isin_pt, isin_re, isin_recon, tags)
+                    self.emitter.emit_event(
+                        event_code=EventCode.QUANT_ISIN_PROCESSED,
+                        message=f"Calculated quant lots and cashflows for ISIN {isin}",
+                        presentation_kind=PresentationKind.INTERNAL,
+                        severity=DiagnosticSeverity.DEBUG,
+                        stage=EngineStage.ANALYZING,
+                        entity_type="ISIN",
+                        entity_id=isin,
+                        rows=len(isin_cf),
+                    )
         finally:
             stop_worker_listener()
             current_process.daemon = is_daemon

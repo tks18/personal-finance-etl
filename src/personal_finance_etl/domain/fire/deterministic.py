@@ -238,7 +238,7 @@ class WealthRiskAnalyticsBuilder:
             .unnest("mc_results")
             .drop(["_temp_year", "_temp_month", "Age_Months", "Seed_Int"])
             .with_columns(
-                # Legacy linear for reference
+                # Linear FI projection for comparison
                 safe_divide(
                     pl.max_horizontal(
                         0.0, pl.col("Target_FI_Today") - pl.col("Total_Net_Worth_Market_Af_Tax")

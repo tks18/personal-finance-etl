@@ -81,9 +81,7 @@ _default_policy = CanonicalOrderPolicy()
 def sort_purchases(purchases: list[TradeRecord]) -> list[TradeRecord]:
     """Sort purchases using the canonical ordering policy.
 
-    Delegates to :class:`CanonicalOrderPolicy`. Preserved for backward
-    compatibility — prefer instantiating ``CanonicalOrderPolicy`` directly in
-    new code so the policy is explicit and testable.
+    Delegates to :class:`CanonicalOrderPolicy` using default FIFO matching rules.
     """
     return _default_policy.sort_purchases(purchases)
 
@@ -91,8 +89,6 @@ def sort_purchases(purchases: list[TradeRecord]) -> list[TradeRecord]:
 def sort_sales(sales: list[TradeRecord]) -> list[TradeRecord]:
     """Sort sales using the canonical ordering policy.
 
-    Delegates to :class:`CanonicalOrderPolicy`. Preserved for backward
-    compatibility — prefer instantiating ``CanonicalOrderPolicy`` directly in
-    new code so the policy is explicit and testable.
+    Delegates to :class:`CanonicalOrderPolicy` using default FIFO matching rules.
     """
     return _default_policy.sort_sales(sales)

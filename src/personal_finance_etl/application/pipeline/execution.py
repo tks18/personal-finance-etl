@@ -7,6 +7,7 @@ Owns
 - Parallel execution of WealthPresentationEngine streaming Polars graphs.
 - Strict DataContract validation against DATA_CONTRACT_REGISTRY.
 - Persistence into Silver, Gold, and Meta warehouse layers.
+- Emitting canonical ObservabilityEvents across all five execution phases.
 
 Does not own
 -------------
@@ -33,14 +34,23 @@ from personal_finance_etl.application.investments.context import (
     QuantRunOptions,
 )
 from personal_finance_etl.application.investments.quant_service import InvestmentQuantEngine
+from personal_finance_etl.application.observability import (
+    ObservabilityEmitter,
+    get_global_emitter,
+)
 from personal_finance_etl.application.pipeline.transformer import TransformationDAG
 from personal_finance_etl.application.tax.tax_service import TaxEngine
 from personal_finance_etl.application.wealth.wealth_service import WealthPresentationEngine
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
-from personal_finance_etl.contracts.application import EngineStatusMessage
+from personal_finance_etl.contracts.application import EngineStage, EngineStatusMessage
 from personal_finance_etl.contracts.extraction import ExtractionResult
 from personal_finance_etl.contracts.logging import ILogger, LogLevel
+from personal_finance_etl.contracts.observability import (
+    DiagnosticSeverity,
+    EventCode,
+    PresentationKind,
+)
 from personal_finance_etl.infrastructure.control_plane import (
     ControlPlane,
     SimulationRunParams,
@@ -73,11 +83,13 @@ class PipelineExecutor:
         status_queue: ILogger,
         db_manager: DuckDBManager,
         rules: FinancialRules | None = None,
+        emitter: ObservabilityEmitter | None = None,
     ) -> None:
         self.cfg = cfg
         self.status_queue = status_queue
         self.db_manager = db_manager
         self.rules = rules
+        self.emitter = emitter or get_global_emitter()
         self.dfs: dict[str, pl.DataFrame] = {}
 
     def extract(
@@ -86,7 +98,7 @@ class PipelineExecutor:
         actionable_files: dict[str, list[str]] | None = None,
     ) -> ExtractionResult:
         """Extract evidence from local files or raw payloads via DataExtractor."""
-        extractor = DataExtractor(self.cfg, self.status_queue, cp)
+        extractor = DataExtractor(self.cfg, self.status_queue, cp, emitter=self.emitter)
         return extractor.run(actionable_files)
 
     def transform(self, extracted_data: ExtractionResult) -> None:
@@ -96,7 +108,7 @@ class PipelineExecutor:
 
     def process_benchmark(self, cp: ControlPlane, bronze: BronzeLayer) -> None:
         """Fetch and align benchmark history against investment portfolio holdings."""
-        pipeline = BenchmarkPipeline(cp, bronze, self.status_queue)
+        pipeline = BenchmarkPipeline(cp, bronze, self.status_queue, emitter=self.emitter)
         self.dfs["df_f_investment_benchmark_data"] = pipeline.process(
             df_market=self.dfs.get("df_f_investment_market_data"),
             df_purchase=self.dfs.get("df_f_tf_inv_purchase"),
@@ -105,7 +117,9 @@ class PipelineExecutor:
 
     def process_currency(self, cp: ControlPlane, bronze: BronzeLayer) -> None:
         """Fetch and synchronize continuous historical currency exchange rates."""
-        pipeline = CurrencyPipeline(cp, bronze, self.status_queue, max_workers=8)
+        pipeline = CurrencyPipeline(
+            cp, bronze, self.status_queue, max_workers=8, emitter=self.emitter
+        )
 
         # Start Date: Earliest date in Calendar
         cal_pd = self.dfs["df_d_calendar"]
@@ -119,9 +133,9 @@ class PipelineExecutor:
         df_market = self.dfs.get("df_f_investment_market_data")
         global_end_date = date.today()
         if df_market is not None and not df_market.is_empty():
-            ed = df_market.select(pl.col("Date").drop_nulls().max()).item()
-            if ed is not None:
-                global_end_date = ed
+            max_d = df_market.select(pl.max("Date")).item()
+            if max_d is not None:
+                global_end_date = max_d
 
         self.dfs["df_f_currency_fx_rates"] = pipeline.run(
             df_currency=self.dfs["df_d_currency"],
@@ -167,7 +181,9 @@ class PipelineExecutor:
 
     def process_us_market_data(self, cp: ControlPlane, bronze: BronzeLayer) -> None:
         """Fetch and synchronize continuous historical US stock prices."""
-        pipeline = USMarketPipeline(cp, bronze, self.status_queue, max_workers=8)
+        pipeline = USMarketPipeline(
+            cp, bronze, self.status_queue, max_workers=8, emitter=self.emitter
+        )
         start_date, end_date = self._resolve_us_market_range()
         df_us_market = pipeline.run(
             df_purchase=self.dfs["df_f_tf_inv_purchase"],
@@ -183,6 +199,13 @@ class PipelineExecutor:
         """Execute multi-process InvestmentQuantEngine and update analytical mart states."""
         logger.info("Starting Investment Quant Engine...")
         self.status_queue.put(EngineStatusMessage(msg="", progress=0.6, level=LogLevel.STEP))
+        self.emitter.emit_event(
+            event_code=EventCode.QUANT_ENGINE_START,
+            message="Starting Investment Quant Engine...",
+            presentation_kind=PresentationKind.STEP,
+            stage=EngineStage.ANALYZING,
+        )
+
         quant_engine = InvestmentQuantEngine(
             data=QuantDataFrames(
                 df_p=self.dfs["df_f_tf_inv_purchase"],
@@ -200,6 +223,7 @@ class PipelineExecutor:
                 run_id=run_id,
             ),
             status_queue=self.status_queue,
+            emitter=self.emitter,
         )
         analytics_results = quant_engine.run()
         self.dfs.update(analytics_results)
@@ -216,10 +240,23 @@ class PipelineExecutor:
                 (pl.col("Closing_Date") == max_date) & (pl.col("Quantity") > 0)
             ).height
         logger.info(f"  -> Quant Engine mapped {open_lots} open tax lots across portfolio.")
+        self.emitter.emit_event(
+            event_code=EventCode.QUANT_LOT_MAPPED,
+            message=f"Quant Engine mapped {open_lots} open tax lots across portfolio",
+            presentation_kind=PresentationKind.STEP,
+            rows=open_lots,
+            stage=EngineStage.ANALYZING,
+        )
 
     def _run_tax_engine(self) -> None:
         """Execute TaxEngine and attach tax event and reconciliation marts."""
         logger.info("Executing Tax Engine...")
+        self.emitter.emit_event(
+            event_code=EventCode.TAX_ENGINE_START,
+            message="Executing Tax Engine...",
+            presentation_kind=PresentationKind.STEP,
+            stage=EngineStage.ANALYZING,
+        )
         tax_engine = TaxEngine(
             df_income=self.dfs["df_f_income_transactions"],
             df_realized_events=self.dfs["df_f_investment_realized_events"],
@@ -229,11 +266,24 @@ class PipelineExecutor:
         )
         tax_results = tax_engine.run()
         self.dfs.update(tax_results)
+        self.emitter.emit_event(
+            event_code=EventCode.TAX_ENGINE_COMPLETED,
+            message=f"Tax Engine completed — generated {len(tax_results)} tax tables",
+            presentation_kind=PresentationKind.SUCCESS,
+            rows=len(tax_results),
+            stage=EngineStage.ANALYZING,
+        )
 
     def _run_presentation_engine(self, cp: ControlPlane | None, run_id: str) -> None:
         """Execute WealthPresentationEngine streaming graphs and log simulation telemetry."""
         logger.info("Starting Presentation Layer Engines...")
         self.status_queue.put(EngineStatusMessage(msg="", progress=0.8, level=LogLevel.STEP))
+        self.emitter.emit_event(
+            event_code=EventCode.PRESENTATION_DAG_START,
+            message="Starting Presentation Layer Engines...",
+            presentation_kind=PresentationKind.STEP,
+            stage=EngineStage.ANALYZING,
+        )
         if self.rules is None:
             raise ValueError("FinancialRules must be provided to ETL pipeline")
 
@@ -244,6 +294,13 @@ class PipelineExecutor:
             self.status_queue.put(EngineStatusMessage(msg="", progress=0.9, level=LogLevel.STEP))
             keys = list(presentation_lazy.keys())
             logger.info(f"  -> Spawning {len(keys)} concurrent Polars streaming graphs...")
+            self.emitter.emit_event(
+                event_code=EventCode.PRESENTATION_DAG_START,
+                message=f"Spawning {len(keys)} concurrent Polars streaming graphs...",
+                presentation_kind=PresentationKind.STEP,
+                rows=len(keys),
+                stage=EngineStage.ANALYZING,
+            )
             lazy_frames = [presentation_lazy[k] for k in keys]
             results = pl.collect_all(lazy_frames, engine="streaming")
             for k, res in zip(keys, results, strict=True):
@@ -269,13 +326,13 @@ class PipelineExecutor:
             self.dfs.pop("df_p_tf_wealth_risk_analytics_inputs")
 
     def run_engines(self, cp: ControlPlane | None, run_id: str) -> None:
-        """Run Quant, Tax, and Wealth Presentation engines with contract verification."""
+        """Sequentially execute Quant, Tax, and Presentation analytical engines."""
         self._run_quant_engine(run_id)
         self._run_tax_engine()
         self._run_presentation_engine(cp, run_id)
 
     def _inject_configuration_assets(self, discovered_files: dict[str, list[str]]) -> None:
-        """Inject required configuration CSVs and database assets into discovered file set."""
+        """Inject runtime dynamic configuration CSVs and primary SQLite sources into discovery map."""
         discovered_files["sqlite_source"] = [
             SQLiteExtractor(self.cfg.SOURCE_DB_FOLDER).get_latest_sqlite_backup().replace("\\", "/")
         ]
@@ -296,7 +353,14 @@ class PipelineExecutor:
             self.cfg.CURRENCY_MAPPING_CSV_PATH.replace("\\", "/")
         ]
         discovered_files["column_master"] = [self.cfg.COLUMN_MASTER_PATH.replace("\\", "/")]
-        logger.info("[DISCOV] Injected 8 dynamic configuration assets (7 CSV, 1 SQLite DB).")
+        logger.info("Injected 8 dynamic configuration assets (7 CSV, 1 SQLite DB).")
+        self.emitter.emit_event(
+            event_code=EventCode.EXTRACTION_COMPLETED,
+            message="Injected 8 dynamic configuration assets (7 CSV, 1 SQLite DB)",
+            presentation_kind=PresentationKind.STEP,
+            rows=8,
+            stage=EngineStage.DISCOVERING,
+        )
 
     def _run_discovery_phase(
         self, cp: ControlPlane
@@ -305,7 +369,13 @@ class PipelineExecutor:
         t_ext_start = time.perf_counter()
         renames: list[tuple[str, str, str]] = []
         if not self.cfg.DISABLE_FILE_DISCOVERER:
-            logger.info("[PHASE] --- 1/5: Discovery & Sync ---")
+            logger.info("Phase 1/5: Discovery & Sync")
+            self.emitter.emit_event(
+                event_code=EventCode.EXTRACTION_START,
+                message="Phase 1/5: Discovery & Sync",
+                presentation_kind=PresentationKind.STEP,
+                stage=EngineStage.DISCOVERING,
+            )
             discovered_files = categorize_statement_files(self.cfg.STATEMENTS_FOLDER, strict=True)
             self._inject_configuration_assets(discovered_files)
 
@@ -334,8 +404,15 @@ class PipelineExecutor:
             actionable_all = cp.artifacts.get_pending_files()
 
         extracted_data = self.extract(cp, actionable_files=actionable_all)
-        logger.info(
-            f"Phase 1 Complete [{time.perf_counter() - t_ext_start:.2f}s] - Actionable streams loaded into memory."
+        elapsed_s = time.perf_counter() - t_ext_start
+        logger.info(f"Phase 1 Complete [{elapsed_s:.2f}s] - Actionable streams loaded into memory.")
+        self.emitter.emit_event(
+            event_code=EventCode.EXTRACTION_COMPLETED,
+            message="Phase 1 Complete - Actionable streams loaded into memory",
+            presentation_kind=PresentationKind.SUCCESS,
+            duration_ms=elapsed_s * 1000.0,
+            progress=0.2,
+            stage=EngineStage.DISCOVERING,
         )
         return extracted_data, actionable_all, renames
 
@@ -389,24 +466,35 @@ class PipelineExecutor:
     ) -> tuple[BronzeLayer, ExtractionResult]:
         """Execute Phase 2: Upsert extracted datasets into Bronze Lakehouse."""
         t_bronze_start = time.perf_counter()
-        logger.info("[PHASE] --- 2/5: Upserting new datasets into Bronze Lakehouse ---")
+        logger.info("Phase 2/5: Upserting new datasets into Bronze Lakehouse")
+        self.emitter.emit_event(
+            event_code=EventCode.BRONZE_UPSERT,
+            message="Phase 2/5: Upserting new datasets into Bronze Lakehouse",
+            presentation_kind=PresentationKind.STEP,
+            stage=EngineStage.EXTRACTING,
+        )
 
         meta_layer = MetaLayer(self.db_manager, self.cfg, self.rules)
-        bronze = BronzeLayer(self.db_manager, cp, meta_layer)
+        bronze = BronzeLayer(self.db_manager, cp, meta_layer, emitter=self.emitter)
         if renames:
             bronze.migrate_identity(renames)
             meta_layer.migrate_identity(renames)
 
         bronze.load(extracted_data, actionable_all)
-        logger.info(
-            f"Phase 2 Complete [{time.perf_counter() - t_bronze_start:.2f}s] - Bronze layer synchronized."
+        elapsed_s = time.perf_counter() - t_bronze_start
+        logger.info(f"Phase 2 Complete [{elapsed_s:.2f}s] - Bronze layer synchronized.")
+        self.emitter.emit_event(
+            event_code=EventCode.BRONZE_UPSERT,
+            message="Phase 2 Complete - Bronze layer synchronized",
+            presentation_kind=PresentationKind.SUCCESS,
+            duration_ms=elapsed_s * 1000.0,
+            progress=0.4,
+            stage=EngineStage.EXTRACTING,
         )
 
         self._log_artifact_sync_summary(cp, run_id, actionable_all)
 
-        logger.debug(
-            "[ENGINE:READ] Fetching complete dataset from Bronze Lakehouse for Transformation..."
-        )
+        logger.debug("Fetching complete dataset from Bronze Lakehouse for Transformation...")
         full_dataset = bronze.get_full_dataset(extracted_data.mappings)
         return bronze, full_dataset
 
@@ -415,10 +503,26 @@ class PipelineExecutor:
     ) -> None:
         """Execute Phase 3: Base DAG mapping, FX rates, US market data, and benchmark transforms."""
         t_trans_start = time.perf_counter()
-        logger.info("[PHASE] --- 3/5: Transforming and harmonizing data streams ---")
+        logger.info("Phase 3/5: Transforming and harmonizing data streams")
+        self.emitter.emit_event(
+            event_code=EventCode.TRANSFORMATION_STAGE,
+            message="Phase 3/5: Transforming and harmonizing data streams",
+            presentation_kind=PresentationKind.STEP,
+            stage=EngineStage.TRANSFORMING,
+        )
         self.transform(full_dataset)
+        elapsed_s = time.perf_counter() - t_trans_start
         logger.info(
-            f"[PHASE] 3/5 Complete [{time.perf_counter() - t_trans_start:.2f}s] - DAG mapped {len(self.dfs)} base tables."
+            f"Phase 3 Complete [{elapsed_s:.2f}s] - DAG mapped {len(self.dfs)} base tables."
+        )
+        self.emitter.emit_event(
+            event_code=EventCode.TRANSFORMATION_DAG_COMPLETED,
+            message=f"Phase 3 Complete - DAG mapped {len(self.dfs)} base tables",
+            presentation_kind=PresentationKind.SUCCESS,
+            duration_ms=elapsed_s * 1000.0,
+            rows=len(self.dfs),
+            progress=0.6,
+            stage=EngineStage.TRANSFORMING,
         )
 
         self.process_currency(cp, bronze)
@@ -428,7 +532,13 @@ class PipelineExecutor:
     def _run_analytics_phase(self, cp: ControlPlane, run_id: str) -> None:
         """Execute Phase 4: Quant, Tax, and Wealth engines with data contract enforcement."""
         t_eng_start = time.perf_counter()
-        logger.info("[PHASE] --- 4/5: Executing Advanced Analytics & Monte Carlo engines ---")
+        logger.info("Phase 4/5: Executing Advanced Analytics & Monte Carlo engines")
+        self.emitter.emit_event(
+            event_code=EventCode.QUANT_ENGINE_START,
+            message="Phase 4/5: Executing Advanced Analytics & Monte Carlo engines",
+            presentation_kind=PresentationKind.STEP,
+            stage=EngineStage.ANALYZING,
+        )
         self.run_engines(cp, str(run_id))
 
         registered_contracts = {c.contract_id for c in DATA_CONTRACT_REGISTRY}
@@ -442,18 +552,53 @@ class PipelineExecutor:
         if missing_contracts:
             raise RuntimeError(f"Engine failed to produce required tables: {missing_contracts}")
 
+        for df_key, df_val in self.dfs.items():
+            self.emitter.emit_event(
+                event_code=EventCode.PRESENTATION_DAG_START,
+                message=f"Presentation layer produced {df_key} ({df_val.height:,} rows)",
+                presentation_kind=PresentationKind.INTERNAL,
+                severity=DiagnosticSeverity.DEBUG,
+                stage=EngineStage.ANALYZING,
+                entity_type="Table",
+                entity_id=df_key,
+                rows=df_val.height,
+            )
+
+        elapsed_s = time.perf_counter() - t_eng_start
         logger.info(
-            f"[PHASE] 4/5 Complete [{time.perf_counter() - t_eng_start:.2f}s] - Presentation logic built {len(self.dfs)} total tables."
+            f"Phase 4 Complete [{elapsed_s:.2f}s] - Presentation logic built {len(self.dfs)} total tables."
+        )
+        self.emitter.emit_event(
+            event_code=EventCode.PRESENTATION_DAG_COMPLETED,
+            message=f"Phase 4 Complete - Presentation logic built {len(self.dfs)} total tables",
+            presentation_kind=PresentationKind.SUCCESS,
+            duration_ms=elapsed_s * 1000.0,
+            rows=len(self.dfs),
+            progress=0.8,
+            stage=EngineStage.ANALYZING,
         )
 
     def _run_load_phase(self, cp: ControlPlane) -> None:
         """Execute Phase 5: Fully replace Silver and Gold analytical layers and write metadata."""
         t_load_start = time.perf_counter()
-        logger.info("[PHASE] --- 5/5: Fully replacing Silver and Gold analytical layers ---")
-        SilverLayer(self.db_manager).load(self.dfs)
-        GoldLayer(self.db_manager).load(self.dfs)
-        logger.info(
-            f"[PHASE] 5/5 Complete [{time.perf_counter() - t_load_start:.2f}s] - Disk synchronization successful."
+        logger.info("Phase 5/5: Fully replacing Silver and Gold analytical layers")
+        self.emitter.emit_event(
+            event_code=EventCode.GOLD_REPLACE,
+            message="Phase 5/5: Fully replacing Silver and Gold analytical layers",
+            presentation_kind=PresentationKind.STEP,
+            stage=EngineStage.PUBLISHING,
+        )
+        SilverLayer(self.db_manager, emitter=self.emitter).load(self.dfs)
+        GoldLayer(self.db_manager, emitter=self.emitter).load(self.dfs)
+        elapsed_s = time.perf_counter() - t_load_start
+        logger.info(f"Phase 5 Complete [{elapsed_s:.2f}s] - Disk synchronization successful.")
+        self.emitter.emit_event(
+            event_code=EventCode.GOLD_REPLACE,
+            message="Phase 5 Complete - Disk synchronization successful",
+            presentation_kind=PresentationKind.SUCCESS,
+            duration_ms=elapsed_s * 1000.0,
+            progress=1.0,
+            stage=EngineStage.PUBLISHING,
         )
 
         meta_layer = MetaLayer(self.db_manager, self.cfg, self.rules)
@@ -466,6 +611,16 @@ class PipelineExecutor:
 
         logger.info(f"Target Database: {self.cfg.TARGET_DB_BASE_PATH}")
         logger.info(f"Source Extractor Folder: {self.cfg.STATEMENTS_FOLDER}")
+        self.emitter.emit_event(
+            event_code=EventCode.SYSTEM_CONFIG_FINGERPRINT,
+            message=f"Target Database: {self.cfg.TARGET_DB_BASE_PATH}",
+            presentation_kind=PresentationKind.STEP,
+        )
+        self.emitter.emit_event(
+            event_code=EventCode.SYSTEM_CONFIG_FINGERPRINT,
+            message=f"Source Extractor Folder: {self.cfg.STATEMENTS_FOLDER}",
+            presentation_kind=PresentationKind.STEP,
+        )
 
         extracted_data, actionable_all, renames = self._run_discovery_phase(cp)
         bronze, full_dataset = self._run_bronze_phase(

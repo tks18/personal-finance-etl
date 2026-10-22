@@ -1,0 +1,80 @@
+name: Publish Python Package to PyPI
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - "src/**"
+      - "docs/**"
+      - "pyproject.toml"
+      - "README.md"
+      - "LICENSE"
+      - "logo.png"
+      - "logo.ico"
+      - ".github/workflows/publish-pypi.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit_and_test:
+    name: Quality Gate & Test Certification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install Dependencies
+        run: uv sync --all-groups
+
+      - name: Run Fast Audit (Ruff & Mypy)
+        run: uv run poe audit-fast
+
+      - name: Run Test Suite
+        run: uv run pytest tests
+
+  pypi_publish:
+    name: Publish to PyPI via OIDC Trusted Publisher
+    needs: [audit_and_test]
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/personal-finance-etl
+    permissions:
+      contents: read
+      id-token: write  # Mandatory for PyPI Trusted Publisher OIDC authentication
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Build Distribution Packages (Wheel & Sdist)
+        run: uv build
+
+      - name: Publish Package to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+          skip-existing: true
+

@@ -202,8 +202,11 @@ An exception raised during a logging call after commit should not make the lifec
 
 ```python
 elif self.duckdb_committed:
-    logger.warning(
-        "[DATABASE:DUCKDB] DuckDB is already committed; cannot rollback DuckDB."
+    self.emitter.emit_event(
+        event_code=EventCode.DATABASE_ROLLBACK,
+        message="DuckDB is already committed; cannot rollback DuckDB.",
+        presentation_kind=PresentationKind.WARNING,
+        severity=DiagnosticSeverity.WARNING,
     )
 ```
 
@@ -538,3 +541,23 @@ Continue with [Backup and Restore](backup-and-restore.md).
 - [Backup and Restore](backup-and-restore.md)
 - [Warehouse Architecture](warehouse-architecture.md)
 - [Developer: Testing and Validation](../developer/testing-and-validation.md)
+
+## Unified Observability Architecture (Three Resolutions of Truth)
+
+The engine enforces an enterprise observability architecture where every operational event originates from a single typed contract (`ObservabilityEvent`) and projects into three distinct resolutions:
+
+1. **User Narrative (UI Console / Desktop)**:
+   Concise, high-level milestone badges (`>>`, `✓`, `↷`, `!`, `✗`) providing immediate progress visibility (~20–40 lines per run) without cluttering the screen with database internals or stack traces.
+2. **Forensic Trace (`outputs/logs/runs/trace_{run_id}.jsonl`)**:
+   High-density, structured JSONL audit trail capturing every ticker fetch, cache state, table row count, and per-ISIN quant completion with sub-millisecond timestamps, queryable natively via Polars (`pl.read_ndjson`).
+3. **Control Plane (`control_plane.db`)**:
+   Authoritative durable operational records storing run milestones, commit hashes, failure domains, and zlib-compressed trace evidence linked by `run_id`.
+
+```mermaid
+flowchart TD
+    Emitter[ObservabilityEmitter] -->|Canonical Event| Contract[ObservabilityEvent Contract]
+    Contract -->|Filtered Narrative| UI[Desktop & CLI Narrative Sinks]
+    Contract -->|Structured JSONL| Trace[Forensic Trace Sink trace_run_id.jsonl]
+    Contract -->|Durable Milestones| CP[Control Plane SQLite Database]
+    Trace -.->|Compressed BLOB| CP
+```

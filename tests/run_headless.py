@@ -11,9 +11,7 @@ class LoggerQueue:
     def __init__(self) -> None:
         self._q: queue.Queue[object] = queue.Queue()
 
-    def put(
-        self, status: object, block: bool = True, timeout: float | None = None
-    ) -> None:
+    def put(self, status: object, block: bool = True, timeout: float | None = None) -> None:
         self._q.put(status, block=block, timeout=timeout)
 
 

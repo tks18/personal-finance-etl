@@ -23,10 +23,19 @@ from collections.abc import Callable
 
 import polars as pl
 
+from personal_finance_etl.application.observability import (
+    ObservabilityEmitter,
+    get_global_emitter,
+)
 from personal_finance_etl.config.settings import Settings
-from personal_finance_etl.contracts.application import EngineStatusMessage
+from personal_finance_etl.contracts.application import EngineStage, EngineStatusMessage
 from personal_finance_etl.contracts.extraction import ExtractionResult
 from personal_finance_etl.contracts.logging import LogLevel, StatusQueue
+from personal_finance_etl.contracts.observability import (
+    DiagnosticSeverity,
+    EventCode,
+    PresentationKind,
+)
 from personal_finance_etl.domain.household.transforms.common import get_column_mapping
 from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
 from personal_finance_etl.infrastructure.logging import logger
@@ -55,10 +64,17 @@ __all__ = ["DataExtractor"]
 class DataExtractor:
     """Coordinates evidence extraction from raw payloads and executes Gatekeeper validation."""
 
-    def __init__(self, cfg: Settings, status_queue: StatusQueue, cp: ControlPlane) -> None:
+    def __init__(
+        self,
+        cfg: Settings,
+        status_queue: StatusQueue,
+        cp: ControlPlane,
+        emitter: ObservabilityEmitter | None = None,
+    ) -> None:
         self.cfg = cfg
         self.status_queue = status_queue
         self.cp = cp
+        self.emitter = emitter or get_global_emitter()
 
     def _get_bytes(self, filepath: str) -> bytes:
         """Fetch bytes from Raw Store. Raise FileNotFoundError if missing."""
@@ -74,7 +90,7 @@ class DataExtractor:
         self, pending_files: dict[str, list[str]]
     ) -> tuple[pl.LazyFrame, pl.LazyFrame, pl.LazyFrame, pl.LazyFrame, pl.LazyFrame]:
         """Extract reference tables from SQLite source database bytes."""
-        logger.debug("[EXTRACT:DETAIL] Extracting Base Tables from SQLite...")
+        logger.debug("Extracting base reference tables from SQLite source...")
         sqlite_files = pending_files.get("sqlite_source", [])
         if sqlite_files:
             sqlite_path = sqlite_files[0]
@@ -83,9 +99,7 @@ class DataExtractor:
             tables = extractor.extract_base_tables(
                 os.path.basename(sqlite_path), os.path.dirname(sqlite_path), sqlite_bytes
             )
-            logger.debug(
-                "[EXTRACT:DETAIL] Successfully extracted 5 base reference tables from SQLite Source bytes."
-            )
+            logger.debug("Successfully extracted 5 base reference tables from SQLite source bytes.")
             return tables
         return (
             pl.LazyFrame(),
@@ -200,8 +214,18 @@ class DataExtractor:
         total_payloads = excel_count + csv_count + sqlite_count
 
         logger.info(
-            f"[EXTRACT] Pulled {total_payloads} binary payloads from Raw Store "
+            f"Pulled {total_payloads} binary payloads from Raw Store "
             f"({excel_count} Excel, {csv_count} CSV, {sqlite_count} DB)"
+        )
+        self.emitter.emit_event(
+            event_code=EventCode.EXTRACTION_BATCH,
+            message=(
+                f"Pulled {total_payloads} binary payloads from Raw Store "
+                f"({excel_count} Excel, {csv_count} CSV, {sqlite_count} DB)"
+            ),
+            presentation_kind=PresentationKind.STEP,
+            rows=total_payloads,
+            stage=EngineStage.EXTRACTING,
         )
 
         if excel_count > 0:
@@ -232,7 +256,13 @@ class DataExtractor:
 
     def _validate_extracted_streams(self, result: ExtractionResult) -> None:
         """Execute Gatekeeper schema validation on active extracted streams."""
-        logger.info("[QUALITY] Running Gatekeeper Schema Validation on 18 active streams...")
+        logger.info("Running Gatekeeper Schema Validation on 18 active streams...")
+        self.emitter.emit_event(
+            event_code=EventCode.SCHEMA_VALIDATION,
+            message="Running Gatekeeper Schema Validation on 18 active streams...",
+            presentation_kind=PresentationKind.STEP,
+            stage=EngineStage.EXTRACTING,
+        )
         self.status_queue.put(
             EngineStatusMessage(
                 msg="",
@@ -266,15 +296,26 @@ class DataExtractor:
             for lf in validation_frames:
                 schema = lf.collect_schema()
                 if len(schema.names()) > 0:
-                    logger.debug(
-                        f"[QUALITY:GATEKEEPER] Validating schema constraints: {schema.names()}"
-                    )
+                    logger.debug(f"Validating schema constraints: {schema.names()}")
 
             pl.collect_all([lf.head(1) for lf in validation_frames])
-            logger.info(
-                f"[QUALITY] Gatekeeper validated 18 schemas with 0 violations in {(time.perf_counter() - t0) * 1000:.2f}ms."
+            elapsed_ms = (time.perf_counter() - t0) * 1000.0
+            logger.info(f"Gatekeeper validated 18 schemas with 0 violations in {elapsed_ms:.2f}ms.")
+            self.emitter.emit_event(
+                event_code=EventCode.SCHEMA_VALIDATION,
+                message=f"Gatekeeper validated 18 schemas with 0 violations in {elapsed_ms:.2f}ms",
+                presentation_kind=PresentationKind.SUCCESS,
+                duration_ms=elapsed_ms,
+                stage=EngineStage.EXTRACTING,
             )
         except Exception as e:
+            self.emitter.emit_event(
+                event_code=EventCode.SCHEMA_VALIDATION,
+                message=f"Gatekeeper Validation Failed: {e}",
+                presentation_kind=PresentationKind.FAILURE,
+                severity=DiagnosticSeverity.ERROR,
+                stage=EngineStage.EXTRACTING,
+            )
             self.status_queue.put(
                 EngineStatusMessage(
                     msg=f"Gatekeeper Validation Failed: {e}",
@@ -299,6 +340,13 @@ class DataExtractor:
             Container of extracted lazy frames, raw payloads, and mapping tables.
         """
         logger.info("Initializing extraction from Raw Store payloads...")
+        self.emitter.emit_event(
+            event_code=EventCode.EXTRACTION_START,
+            message="Initializing extraction from Raw Store payloads...",
+            presentation_kind=PresentationKind.STEP,
+            progress=0.01,
+            stage=EngineStage.EXTRACTING,
+        )
         self.status_queue.put(
             EngineStatusMessage(
                 msg="",

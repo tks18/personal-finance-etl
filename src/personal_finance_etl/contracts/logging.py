@@ -3,7 +3,7 @@
 Owns
 ----
 - LogLevel enumeration used across process boundaries and UI queues.
-- StatusQueue protocol for cross-process status sinks (with ILogger backward-compatibility alias).
+- StatusQueue protocol for cross-process status sinks.
 
 Does not own
 -------------
@@ -35,6 +35,7 @@ class StatusQueue(Protocol):
     def put(
         self,
         status: object,
+        /,
         block: bool = True,
         timeout: float | None = None,
     ) -> None:
@@ -48,11 +49,12 @@ class NullStatusQueue:
     def put(
         self,
         status: object,
+        /,
         block: bool = True,
         timeout: float | None = None,
     ) -> None:
         """Discard status message."""
 
 
-# Architectural alias for legacy ILogger protocol
+# Protocol alias for status queue callers
 ILogger = StatusQueue

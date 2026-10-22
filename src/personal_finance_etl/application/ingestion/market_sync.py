@@ -22,8 +22,16 @@ from datetime import date
 
 import polars as pl
 
-from personal_finance_etl.contracts.application import EngineStatusMessage
+from personal_finance_etl.application.observability import (
+    ObservabilityEmitter,
+    get_global_emitter,
+)
+from personal_finance_etl.contracts.application import EngineStage, EngineStatusMessage
 from personal_finance_etl.contracts.logging import LogLevel, StatusQueue
+from personal_finance_etl.contracts.observability import (
+    EventCode,
+    PresentationKind,
+)
 from personal_finance_etl.domain.investments.valuation.market_state import (
     transform_us_market_data,
 )
@@ -57,20 +65,24 @@ class CurrencyPipeline:
     """Synchronizes external daily Currency FX rates into Bronze and Silver layers."""
 
     def __init__(
-        self, cp: ControlPlane, bronze: BronzeLayer, status_queue: StatusQueue, max_workers: int = 8
+        self,
+        cp: ControlPlane,
+        bronze: BronzeLayer,
+        status_queue: StatusQueue,
+        max_workers: int = 8,
+        emitter: ObservabilityEmitter | None = None,
     ) -> None:
         self.cp = cp
         self.bronze = bronze
         self.status_queue = status_queue
         self.max_workers = max_workers
+        self.emitter = emitter or get_global_emitter()
 
     def _load_cached_bronze_currency(self) -> pl.DataFrame:
         """Load existing Bronze currency FX observations or initialize empty schema."""
         df_bronze_cached = self.bronze.get_table("r_Currency_FX_Data")
         if df_bronze_cached.is_empty():
-            logger.debug(
-                "[ENGINE:CURRENCY] Bronze Cache: EMPTY. A full historical extraction will be performed."
-            )
+            logger.debug("Bronze Cache: EMPTY. A full historical extraction will be performed.")
             return pl.DataFrame(
                 schema={
                     "Date": pl.Date,
@@ -89,14 +101,14 @@ class CurrencyPipeline:
         cached_min = df_bronze_cached.select(pl.min("Date")).item()
         cached_max = df_bronze_cached.select(pl.max("Date")).item()
         logger.debug(
-            f"[ENGINE:CURRENCY] Bronze Cache: FOUND {df_bronze_cached.height} rows ({cached_min} to {cached_max})."
+            f"Bronze Cache: FOUND {df_bronze_cached.height} rows ({cached_min} to {cached_max})."
         )
         return df_bronze_cached
 
     def _upsert_currency_delta(self, df_delta: pl.DataFrame, new_files: list[str]) -> pl.LazyFrame:
         """Persist delta Parquet chunks into Bronze lakehouse and return full LazyFrame."""
         if not df_delta.is_empty():
-            logger.debug("[ENGINE:CURRENCY] Upserting new Parquet chunks to Bronze...")
+            logger.debug("Upserting new Parquet chunks to Bronze...")
             row_counts = self.bronze.upsert_table(
                 df=df_delta,
                 table_name="bronze.r_Currency_FX_Data",
@@ -139,6 +151,12 @@ class CurrencyPipeline:
         """Run the Currency FX pipeline."""
         logger.info("Phase 3.6: Dynamic Currency FX Extraction & Transformation...")
         logger.info(f"  -> Target Global Range: {global_start_date} to {global_end_date}")
+        self.emitter.emit_event(
+            event_code=EventCode.MARKET_FETCH_START,
+            message="Phase 3.6: Dynamic Currency FX Extraction & Transformation...",
+            presentation_kind=PresentationKind.STEP,
+            stage=EngineStage.TRANSFORMING,
+        )
 
         self.status_queue.put(
             EngineStatusMessage(
@@ -150,7 +168,9 @@ class CurrencyPipeline:
         )
 
         df_bronze_cached = self._load_cached_bronze_currency()
-        extractor = CurrencyExtractor(self.cp, self.status_queue, self.max_workers)
+        extractor = CurrencyExtractor(
+            self.cp, self.status_queue, self.max_workers, emitter=self.emitter
+        )
         batch_res = extractor.extract_currency_delta(
             df_currency, global_start_date, global_end_date, df_bronze_cached
         )
@@ -195,6 +215,12 @@ class CurrencyPipeline:
                 level=LogLevel.SUCCESS,
             )
         )
+        self.emitter.emit_event(
+            event_code=EventCode.MARKET_SYNC_COMPLETED,
+            message="Currency FX Pipeline Completed",
+            presentation_kind=PresentationKind.SUCCESS,
+            stage=EngineStage.TRANSFORMING,
+        )
 
         return df_silver
 
@@ -202,10 +228,17 @@ class CurrencyPipeline:
 class BenchmarkPipeline:
     """Synchronizes external daily Benchmark index series into Bronze and Silver layers."""
 
-    def __init__(self, cp: ControlPlane, bronze: BronzeLayer, status_queue: StatusQueue) -> None:
+    def __init__(
+        self,
+        cp: ControlPlane,
+        bronze: BronzeLayer,
+        status_queue: StatusQueue,
+        emitter: ObservabilityEmitter | None = None,
+    ) -> None:
         self.cp = cp
         self.bronze = bronze
         self.status_queue = status_queue
+        self.emitter = emitter or get_global_emitter()
 
     @staticmethod
     def _resolve_benchmark_date_range(
@@ -238,14 +271,12 @@ class BenchmarkPipeline:
         """Fetch cached benchmark observation table from Bronze layer."""
         df_bronze_cached = self.bronze.get_table("r_Benchmark_Data")
         if df_bronze_cached.is_empty():
-            logger.debug(
-                "[ENGINE:BENCHMARK] Bronze Cache: EMPTY. A full historical extraction will be performed."
-            )
+            logger.debug("Bronze Cache: EMPTY. A full historical extraction will be performed.")
         else:
             cached_min = df_bronze_cached.select(pl.min("Date")).item()
             cached_max = df_bronze_cached.select(pl.max("Date")).item()
             logger.debug(
-                f"[ENGINE:BENCHMARK] Bronze Cache: FOUND {df_bronze_cached.height} rows ({cached_min} to {cached_max})."
+                f"Bronze Cache: FOUND {df_bronze_cached.height} rows ({cached_min} to {cached_max})."
             )
         return df_bronze_cached
 
@@ -254,7 +285,7 @@ class BenchmarkPipeline:
     ) -> pl.DataFrame:
         """Persist delta benchmark Parquet chunks to Bronze and re-fetch updated cache."""
         if not df_new_raw.is_empty():
-            logger.debug("[ENGINE:BENCHMARK] Upserting new Parquet chunks to Bronze...")
+            logger.debug("Upserting new Parquet chunks to Bronze...")
             row_counts = self.bronze.upsert_table(
                 df=df_new_raw,
                 table_name="bronze.r_Benchmark_Data",
@@ -297,9 +328,15 @@ class BenchmarkPipeline:
         logger.info("Phase 3.5: Dynamic Benchmark Extraction & Transformation...")
         start_date, end_date = self._resolve_benchmark_date_range(df_market, df_purchase)
         logger.info(f"  -> Target Global Range: {start_date} to {end_date}")
+        self.emitter.emit_event(
+            event_code=EventCode.MARKET_FETCH_START,
+            message="Phase 3.5: Dynamic Benchmark Extraction & Transformation...",
+            presentation_kind=PresentationKind.STEP,
+            stage=EngineStage.TRANSFORMING,
+        )
 
         df_bronze_cached = self._load_cached_bronze_benchmark()
-        extractor = BenchmarkExtractor(self.cp, self.status_queue)
+        extractor = BenchmarkExtractor(self.cp, self.status_queue, emitter=self.emitter)
         batch_res = extractor.extract_benchmark_delta(
             df_m=df_master,
             global_start_date=start_date,
@@ -319,7 +356,14 @@ class BenchmarkPipeline:
         transformer = BenchmarkTransformer(self.status_queue)
         df_silver = transformer.transform(df_bronze_cached, start_date, end_date)
         logger.debug(
-            f"[ENGINE:BENCHMARK] Transformation Complete: Silver Benchmark table has {df_silver.height} market periods."
+            f"Transformation Complete: Silver Benchmark table has {df_silver.height} market periods."
+        )
+        self.emitter.emit_event(
+            event_code=EventCode.MARKET_SYNC_COMPLETED,
+            message=f"Successfully transformed benchmark data ({start_date} to {end_date}).",
+            presentation_kind=PresentationKind.SUCCESS,
+            rows=df_silver.height,
+            stage=EngineStage.TRANSFORMING,
         )
         return df_silver
 
@@ -328,20 +372,24 @@ class USMarketPipeline:
     """Synchronizes external daily US stock market prices into Bronze and Silver layers."""
 
     def __init__(
-        self, cp: ControlPlane, bronze: BronzeLayer, status_queue: StatusQueue, max_workers: int = 8
+        self,
+        cp: ControlPlane,
+        bronze: BronzeLayer,
+        status_queue: StatusQueue,
+        max_workers: int = 8,
+        emitter: ObservabilityEmitter | None = None,
     ) -> None:
         self.cp = cp
         self.bronze = bronze
         self.status_queue = status_queue
         self.max_workers = max_workers
+        self.emitter = emitter or get_global_emitter()
 
     def _load_cached_bronze_us_market(self) -> pl.DataFrame:
         """Fetch cached US market prices from Bronze layer or initialize empty schema."""
         df_bronze_cached = self.bronze.get_table("r_US_Stock_Prices")
         if df_bronze_cached.is_empty():
-            logger.debug(
-                "[ENGINE:US_MARKET] Bronze Cache: EMPTY. A full historical extraction will be performed."
-            )
+            logger.debug("Bronze Cache: EMPTY. A full historical extraction will be performed.")
             return pl.DataFrame(
                 schema={
                     "Date": pl.Date,
@@ -360,7 +408,7 @@ class USMarketPipeline:
     def _upsert_us_market_delta(self, df_delta: pl.DataFrame, new_files: list[str]) -> pl.LazyFrame:
         """Persist US market delta Parquet chunks into Bronze layer and return full LazyFrame."""
         if not df_delta.is_empty():
-            logger.debug("[ENGINE:US_MARKET] Upserting new Parquet chunks to Bronze...")
+            logger.debug("Upserting new Parquet chunks to Bronze...")
             row_counts = self.bronze.upsert_table(
                 df=df_delta,
                 table_name="bronze.r_US_Stock_Prices",
@@ -420,6 +468,12 @@ class USMarketPipeline:
 
         logger.info("Phase 3.7: Dynamic US Market Data Extraction & Transformation...")
         logger.info(f"  -> Target Global Range: {global_start_date} to {global_end_date}")
+        self.emitter.emit_event(
+            event_code=EventCode.MARKET_FETCH_START,
+            message="Phase 3.7: Dynamic US Market Data Extraction & Transformation...",
+            presentation_kind=PresentationKind.STEP,
+            stage=EngineStage.TRANSFORMING,
+        )
 
         self.status_queue.put(
             EngineStatusMessage(
@@ -431,7 +485,9 @@ class USMarketPipeline:
         )
 
         df_bronze_cached = self._load_cached_bronze_us_market()
-        extractor = USMarketExtractor(self.cp, self.status_queue, self.max_workers)
+        extractor = USMarketExtractor(
+            self.cp, self.status_queue, self.max_workers, emitter=self.emitter
+        )
         batch_res = extractor.extract_us_market_delta(
             isin_ticker_map, global_start_date, global_end_date, df_bronze_cached
         )
@@ -480,6 +536,12 @@ class USMarketPipeline:
                 progress=1.0,
                 level=LogLevel.SUCCESS,
             )
+        )
+        self.emitter.emit_event(
+            event_code=EventCode.MARKET_SYNC_COMPLETED,
+            message="US Market Pipeline Completed",
+            presentation_kind=PresentationKind.SUCCESS,
+            stage=EngineStage.TRANSFORMING,
         )
 
         return df_silver

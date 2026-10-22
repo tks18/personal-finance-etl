@@ -5,6 +5,7 @@ Owns
 - ETLOrchestrator: High-level use-case coordinator driving the 5 pipeline phases.
 - Delegating transaction management, logging, and split-commit recovery to RunLifecycleCoordinator.
 - Delegating evidence extraction, transformations, and warehouse loading to PipelineExecutor.
+- Emitting pipeline run start and completion events via central ObservabilityEmitter.
 
 Does not own
 -------------
@@ -19,13 +20,21 @@ import time
 
 import polars as pl
 
+from personal_finance_etl.application.observability import (
+    ObservabilityEmitter,
+    get_global_emitter,
+)
 from personal_finance_etl.application.pipeline.execution import PipelineExecutor
 from personal_finance_etl.application.pipeline.lifecycle import RunLifecycleCoordinator
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
-from personal_finance_etl.contracts.application import EngineStatusMessage
+from personal_finance_etl.contracts.application import EngineStage, EngineStatusMessage
 from personal_finance_etl.contracts.extraction import ExtractionResult
 from personal_finance_etl.contracts.logging import ILogger, LogLevel, NullStatusQueue
+from personal_finance_etl.contracts.observability import (
+    EventCode,
+    PresentationKind,
+)
 from personal_finance_etl.infrastructure.control_plane import ControlPlane
 from personal_finance_etl.infrastructure.logging.setup import logger
 from personal_finance_etl.infrastructure.warehouse.bronze import BronzeLayer
@@ -42,12 +51,16 @@ class ETLOrchestrator:
         cfg: Settings,
         status_queue: ILogger | None = None,
         rules: FinancialRules | None = None,
+        emitter: ObservabilityEmitter | None = None,
     ) -> None:
         self.cfg = cfg
         self.rules = rules
         self.status_queue = status_queue or NullStatusQueue()
+        self.emitter = emitter or get_global_emitter()
         self.db_manager = DuckDBManager(cfg.TARGET_DB_BASE_PATH, cfg.TARGET_DB_NAME)
-        self.executor = PipelineExecutor(cfg, self.status_queue, self.db_manager, rules)
+        self.executor = PipelineExecutor(
+            cfg, self.status_queue, self.db_manager, rules, emitter=self.emitter
+        )
 
     @property
     def dfs(self) -> dict[str, pl.DataFrame]:
@@ -64,34 +77,38 @@ class ETLOrchestrator:
         cp: ControlPlane,
         actionable_files: dict[str, list[str]] | None = None,
     ) -> ExtractionResult:
-        """Legacy pass-through extraction step."""
+        """Delegate discovery and extraction to pipeline executor."""
         return self.executor.extract(cp, actionable_files)
 
     def _transform(self, extracted_data: ExtractionResult) -> None:
-        """Legacy pass-through transformation step."""
+        """Delegate base transformation to pipeline executor."""
         self.executor.transform(extracted_data)
 
     def _process_benchmark(self, cp: ControlPlane, bronze: BronzeLayer) -> None:
-        """Legacy pass-through benchmark processing step."""
+        """Delegate benchmark processing to pipeline executor."""
         self.executor.process_benchmark(cp, bronze)
 
     def _process_currency(self, cp: ControlPlane, bronze: BronzeLayer) -> None:
-        """Legacy pass-through currency processing step."""
+        """Delegate currency FX processing to pipeline executor."""
         self.executor.process_currency(cp, bronze)
 
     def _process_us_market_data(self, cp: ControlPlane, bronze: BronzeLayer) -> None:
-        """Legacy pass-through US market processing step."""
+        """Delegate US market data processing to pipeline executor."""
         self.executor.process_us_market_data(cp, bronze)
 
     def _run_engines(self, cp: ControlPlane | None, run_id: str) -> None:
-        """Legacy pass-through presentation and quant engine execution step."""
+        """Delegate presentation and quantitative analytics execution to executor."""
         self.executor.run_engines(cp, run_id)
 
     def run(self) -> None:
         """Run the end-to-end quantitative ETL pipeline."""
         start_time = time.perf_counter()
         lifecycle = RunLifecycleCoordinator(
-            self.cfg, self.status_queue, self.db_manager, self.rules
+            self.cfg,
+            self.status_queue,
+            self.db_manager,
+            self.rules,
+            emitter=self.emitter,
         )
 
         try:
@@ -102,6 +119,13 @@ class ETLOrchestrator:
                     progress=0.0,
                     level=LogLevel.STEP,
                 )
+            )
+            self.emitter.emit_event(
+                event_code=EventCode.RUN_START,
+                message="Pipeline execution started.",
+                presentation_kind=PresentationKind.STEP,
+                progress=0.0,
+                stage=EngineStage.INITIALIZING,
             )
 
             self.executor.execute_phases(cp, run_id)
@@ -116,7 +140,16 @@ class ETLOrchestrator:
             )
             total_time = time.perf_counter() - start_time
             logger.info(
-                f"✅ Pipeline Execution Successful in {total_time:.2f} seconds. Total Nodes: {len(self.dfs)}"
+                f"Pipeline Execution Successful in {total_time:.2f} seconds. Total Nodes: {len(self.dfs)}"
+            )
+            self.emitter.emit_event(
+                event_code=EventCode.RUN_COMPLETED,
+                message=f"Pipeline Execution Successful in {total_time:.2f} seconds. Total Nodes: {len(self.dfs)}",
+                presentation_kind=PresentationKind.SUCCESS,
+                duration_ms=total_time * 1000.0,
+                rows=len(self.dfs),
+                progress=1.0,
+                stage=EngineStage.COMPLETED,
             )
         except Exception as e:
             lifecycle.handle_failure(e)
