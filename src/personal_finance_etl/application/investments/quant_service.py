@@ -134,7 +134,9 @@ class InvestmentQuantEngine:
             return {"df_f_investment_analytics_lot": empty_df}
 
         with tempfile.TemporaryDirectory() as tmp_dir:
-            isin_pipeline = IsinPipeline(ctx, isins, tmp_dir, self.status_queue)
+            isin_pipeline = IsinPipeline(
+                ctx, isins, tmp_dir, self.status_queue, emitter=self.emitter
+            )
             pipeline_res = isin_pipeline.process_all()
             has_data = pipeline_res.has_data
 
