@@ -27,7 +27,7 @@ def get_column_mapping(df_map: pl.DataFrame, table_name: str = "CATEGORY") -> di
     Returns
     -------
     dict[str, str]
-        Dictionary mapping legacy/source column names to canonical warehouse names.
+        Dictionary mapping raw source column names to canonical warehouse names.
     """
     mapping = (
         df_map.filter(pl.col("TABLE_NAME") == table_name)
