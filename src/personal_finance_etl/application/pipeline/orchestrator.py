@@ -77,27 +77,27 @@ class ETLOrchestrator:
         cp: ControlPlane,
         actionable_files: dict[str, list[str]] | None = None,
     ) -> ExtractionResult:
-        """Legacy pass-through extraction step."""
+        """Delegate discovery and extraction to pipeline executor."""
         return self.executor.extract(cp, actionable_files)
 
     def _transform(self, extracted_data: ExtractionResult) -> None:
-        """Legacy pass-through transformation step."""
+        """Delegate base transformation to pipeline executor."""
         self.executor.transform(extracted_data)
 
     def _process_benchmark(self, cp: ControlPlane, bronze: BronzeLayer) -> None:
-        """Legacy pass-through benchmark processing step."""
+        """Delegate benchmark processing to pipeline executor."""
         self.executor.process_benchmark(cp, bronze)
 
     def _process_currency(self, cp: ControlPlane, bronze: BronzeLayer) -> None:
-        """Legacy pass-through currency processing step."""
+        """Delegate currency FX processing to pipeline executor."""
         self.executor.process_currency(cp, bronze)
 
     def _process_us_market_data(self, cp: ControlPlane, bronze: BronzeLayer) -> None:
-        """Legacy pass-through US market processing step."""
+        """Delegate US market data processing to pipeline executor."""
         self.executor.process_us_market_data(cp, bronze)
 
     def _run_engines(self, cp: ControlPlane | None, run_id: str) -> None:
-        """Legacy pass-through presentation and quant engine execution step."""
+        """Delegate presentation and quantitative analytics execution to executor."""
         self.executor.run_engines(cp, run_id)
 
     def run(self) -> None:
