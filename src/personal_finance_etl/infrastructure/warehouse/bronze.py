@@ -70,13 +70,13 @@ class BronzeLayer:
                         f'ALTER TABLE {table_name} ADD COLUMN "{col_name}" {col_type}'  # nosec B608
                     )
                     logger.debug(
-                        "[Bronze] Evolved schema for %s: added column '%s' (%s)",
+                        "Bronze: Evolved schema for %s: added column '%s' (%s)",
                         table_name,
                         col_name,
                         col_type,
                     )
         except duckdb.CatalogException as e:
-            logger.debug("[Bronze] Table %s not yet created, skipping evolution: %s", table_name, e)
+            logger.debug("Bronze: Table %s not yet created, skipping evolution: %s", table_name, e)
 
     def _prepare_bronze_table(
         self,
@@ -100,7 +100,7 @@ class BronzeLayer:
             self.db_manager.conn.execute(
                 f"CREATE TABLE {table_name} AS SELECT * FROM schema_df"  # nosec B608
             )
-            logger.debug("[Bronze] Re-created %s for full replacement.", table_name)
+            logger.debug("Bronze: Re-created %s for full replacement.", table_name)
         else:
             create_query = f"CREATE TABLE IF NOT EXISTS {table_name} AS SELECT * FROM schema_df"  # nosec B608
             self.db_manager.conn.execute(create_query)
@@ -108,7 +108,7 @@ class BronzeLayer:
 
             placeholders = ", ".join(["?"] * len(filenames))
             delete_query = f"DELETE FROM {table_name} WHERE __file_name__ IN ({placeholders})"  # nosec B608
-            logger.debug("[BRONZE:DETAIL] Executing SQL: %s", delete_query)
+            logger.debug("Bronze SQL: %s", delete_query)
             self.db_manager.conn.execute(delete_query, filenames)
 
     def _insert_bronze_records(
@@ -134,10 +134,10 @@ class BronzeLayer:
         if df_filtered.height > 0:
             self.db_manager.conn.register("temp_df", df_filtered)
             insert_query = f"INSERT INTO {table_name} BY NAME SELECT * FROM temp_df"  # nosec B608
-            logger.debug("[BRONZE:DETAIL] Executing SQL: %s", insert_query)
+            logger.debug("Bronze SQL: %s", insert_query)
             self.db_manager.conn.execute(insert_query)
             logger.debug(
-                "[BRONZE:DETAIL] Upserted %s: %d rows processed.",
+                "Bronze: Upserted %s: %d rows processed.",
                 table_name,
                 df_filtered.height,
             )
@@ -147,9 +147,7 @@ class BronzeLayer:
             for row in counts.iter_rows():
                 result[row[0]] = row[1]
         else:
-            logger.debug(
-                "[BRONZE:DETAIL] Upserted %s: 0 rows processed (empty source).", table_name
-            )
+            logger.debug("Bronze: Upserted %s: 0 rows processed (empty source).", table_name)
         return result
 
     def upsert_table(
@@ -222,7 +220,7 @@ class BronzeLayer:
                 actionable = actionable_files.get(contract.sync_category, [])
                 if actionable:
                     logger.debug(
-                        "[SCHEMA] %s Schema: %s", contract.physical_table, df.collect_schema()
+                        "Schema: %s Schema: %s", contract.physical_table, df.collect_schema()
                     )
                     row_counts = self.upsert_table(
                         df,
@@ -239,7 +237,7 @@ class BronzeLayer:
 
                     rows_added = sum(row_counts.values())
                     logger.debug(
-                        "[BRONZE:TRACE] Table '%s': Upserted %d rows from %d files.",
+                        "Bronze: Table '%s': Upserted %d rows from %d files.",
                         contract.physical_table,
                         rows_added,
                         len(actionable),
@@ -257,7 +255,7 @@ class BronzeLayer:
                         )
 
         logger.info(
-            "[BRONZE] Synchronized %d source datasets (%s new rows).",
+            "Bronze: Synchronized %d source datasets (%s new rows).",
             total_upserts,
             f"{total_rows:,}",
         )
@@ -291,7 +289,7 @@ class BronzeLayer:
                     [new_name, old_name],
                 )
             except (duckdb.BinderException, duckdb.CatalogException) as e:
-                logger.debug("[Bronze] Could not rename %s in %s: %s", old_name, table, e)
+                logger.debug("Bronze: Could not rename %s in %s: %s", old_name, table, e)
 
     def get_table(self, table_name: str) -> pl.DataFrame:
         """Read a table from the Bronze schema. Returns empty DataFrame if missing.
@@ -338,7 +336,7 @@ class BronzeLayer:
                     .lazy()
                 )
             except duckdb.CatalogException:
-                logger.debug("[Bronze] Table %s does not exist. Returning empty frame.", table_name)
+                logger.debug("Bronze: Table %s does not exist. Returning empty frame.", table_name)
                 return pl.LazyFrame()
 
         def _get_df(table_name: str) -> pl.DataFrame:
@@ -347,7 +345,7 @@ class BronzeLayer:
                     f"SELECT * FROM {table_name}"  # nosec B608
                 ).pl()
             except duckdb.CatalogException:
-                logger.debug("[Bronze] Table %s does not exist. Returning empty frame.", table_name)
+                logger.debug("Bronze: Table %s does not exist. Returning empty frame.", table_name)
                 return pl.DataFrame()
 
         return ExtractionResult(
