@@ -23,7 +23,7 @@ import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import cast
+from typing import Protocol, cast
 
 from personal_finance_etl.contracts.application import EngineStage, EngineStatusMessage
 from personal_finance_etl.contracts.lifecycle import FailureDomain
@@ -34,8 +34,10 @@ __all__ = [
     "ErrorDetails",
     "EventCode",
     "EventOutcome",
+    "NullObservabilitySink",
     "ObservabilityContext",
     "ObservabilityEvent",
+    "ObservabilitySink",
     "PresentationKind",
 ]
 
@@ -126,6 +128,34 @@ class EventOutcome(StrEnum):
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
     SKIPPED = "SKIPPED"
+
+
+class ObservabilitySink(Protocol):
+    """Protocol for cross-boundary observability sinks consuming canonical events."""
+
+    def emit(self, event: ObservabilityEvent) -> None:
+        """Process and route one canonical ObservabilityEvent.
+
+        Parameters
+        ----------
+        event : ObservabilityEvent
+            The canonical structured event to consume.
+        """
+        ...
+
+    def flush(self) -> None:
+        """Flush any buffered events to the underlying destination."""
+        ...
+
+
+class NullObservabilitySink:
+    """No-op observability sink used when no external sinks are attached."""
+
+    def emit(self, event: ObservabilityEvent) -> None:
+        """Discard the observability event."""
+
+    def flush(self) -> None:
+        """No-op flush."""
 
 
 @dataclass(frozen=True)
