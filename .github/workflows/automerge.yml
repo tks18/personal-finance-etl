@@ -19,4 +19,4 @@ jobs:
       - name: Arm Native GitHub Auto-Merge
         run: gh pr merge --auto --merge "${{ github.event.pull_request.html_url }}"
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
