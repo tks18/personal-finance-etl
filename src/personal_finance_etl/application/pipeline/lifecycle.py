@@ -45,9 +45,7 @@ from personal_finance_etl.contracts.observability import (
 )
 from personal_finance_etl.infrastructure.control_plane import ControlPlane
 from personal_finance_etl.infrastructure.logging.setup import (
-    add_file_handler,
     logger,
-    remove_file_handlers,
     stop_worker_listener,
 )
 from personal_finance_etl.infrastructure.observability import (
@@ -78,7 +76,6 @@ class RunLifecycleCoordinator:
         self.rules = rules
         self.emitter = emitter or get_global_emitter()
 
-        self.log_file_path: str = self.db_manager.db_path.replace(".duckdb", ".log")
         self.duckdb_started: bool = False
         self.sqlite_started: bool = False
         self.duckdb_committed: bool = False
@@ -124,8 +121,6 @@ class RunLifecycleCoordinator:
         tuple[ControlPlane, str, list[str]]
             Tuple of active ControlPlane instance, unique run_id string, and pending recovery run IDs.
         """
-        add_file_handler(self.log_file_path)
-
         logger.info("Initializing Quantitative Master Engine...")
         self.emitter.emit_event(
             event_code=EventCode.RUN_START,
@@ -413,19 +408,18 @@ class RunLifecycleCoordinator:
             severity=DiagnosticSeverity.INFO,
         )
         stop_worker_listener()
-        remove_file_handlers()
         if self.forensic_sink is not None:
             self.forensic_sink.close()
             self.emitter.unregister_sink(self.forensic_sink)
             self.forensic_sink = None
 
-        if self.cp is not None and self.run_id is not None:
-            trace_path = (
-                str(self.forensic_file_path)
-                if self.forensic_file_path is not None and self.forensic_file_path.exists()
-                else self.log_file_path
-            )
-            archive_run_trace(self.cp, self.run_id, trace_path)
+        if (
+            self.cp is not None
+            and self.run_id is not None
+            and self.forensic_file_path is not None
+            and self.forensic_file_path.exists()
+        ):
+            archive_run_trace(self.cp, self.run_id, str(self.forensic_file_path))
 
         try:
             logs_dir = self.cfg.resolve_logs_dir()
