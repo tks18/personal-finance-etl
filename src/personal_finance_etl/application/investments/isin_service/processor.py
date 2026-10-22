@@ -123,7 +123,7 @@ class IsinProcessor:
         if not m_inst:
             return None
 
-        logger.debug(f"[Processor] ISIN {isin} computing across {len(m_inst)} historical dates.")
+        logger.debug(f"ISIN {isin} computing across {len(m_inst)} historical dates.")
 
         state = self._init_state(isin, master_row, bm_map, p_inst, m_inst)
         if not state:
