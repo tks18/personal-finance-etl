@@ -198,7 +198,6 @@ class BaseEngineTab(ctk.CTkFrame):  # type: ignore[misc]
             if lvl == LogLevel.ERROR or level_str == "error":
                 if run_btn is not None:
                     run_btn.configure(state="normal", text=self._run_btn_text)
-                messagebox.showerror("Error", msg)
 
         if prog == 1.0:
             if run_btn is not None:
