@@ -43,7 +43,7 @@ _KIND_PREFIX_MAP: Final[dict[PresentationKind, str]] = {
     PresentationKind.RECOVERY: "[bold magenta]♻ RECOVERY:[/bold magenta]",
 }
 
-_LEGACY_PREFIX_MAP: Final[dict[LogLevel, str]] = {
+_STATUS_PREFIX_MAP: Final[dict[LogLevel, str]] = {
     LogLevel.SUCCESS: "[bold green]✓[/bold green]",
     LogLevel.ERROR: "[bold red]✗ ERROR:[/bold red]",
     LogLevel.WARNING: "[bold yellow]![/bold yellow]",
@@ -141,13 +141,13 @@ class RichNarrativeSink(ObservabilitySink):
         if event.presentation_kind == PresentationKind.FAILURE:
             self._render_failure_panel(event)
 
-    def render_legacy_status(self, status: EngineStatusMessage) -> None:
-        """Render a backward-compatible legacy EngineStatusMessage.
+    def render_status_message(self, status: EngineStatusMessage) -> None:
+        """Render a process status message to the console.
 
         Parameters
         ----------
         status : EngineStatusMessage
-            Legacy status payload to render.
+            Status message payload to render.
         """
         if not status.msg:
             return
@@ -155,7 +155,7 @@ class RichNarrativeSink(ObservabilitySink):
         if status.progress is not None and self._progress is not None and self._task_id is not None:
             self._progress.update(self._task_id, completed=status.progress * 100.0)
 
-        prefix = _LEGACY_PREFIX_MAP.get(status.level, "[dim]•[/dim]")
+        prefix = _STATUS_PREFIX_MAP.get(status.level, "[dim]•[/dim]")
         safe_msg = escape(status.msg)
 
         if self._show_timestamps:
