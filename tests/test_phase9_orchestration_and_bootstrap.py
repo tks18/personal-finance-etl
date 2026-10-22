@@ -204,7 +204,7 @@ def test_run_lifecycle_split_commit_recovery_marker(tmp_path: Path) -> None:
 
 
 def test_queue_stream_and_log_level_inference() -> None:
-    """Verify QueueStream captures stream writes and infers correct log levels."""
+    """Verify QueueStream forwards stdout and stderr without string-based severity guessing."""
 
     class MockQueue:
         def __init__(self) -> None:
@@ -214,16 +214,19 @@ def test_queue_stream_and_log_level_inference() -> None:
             self.messages.append(status)
 
     mock_q = MockQueue()
-    stream = QueueStream(mock_q, is_error=False)
+    stdout_stream = QueueStream(mock_q, is_error=False)
 
-    stream.write("Processing dataset batch...\n")
-    stream.write("Warning: Minor latency detected\n")
-    stream.write("Error occurred during network read\n")
-    stream.write("Complete: 100% processed\n")
-    stream.flush()
+    stdout_stream.write("Processing dataset batch...\n")
+    stdout_stream.write("Warning: Minor latency detected\n")
+    stdout_stream.write("Error occurred during network read\n")
+    stdout_stream.write("Complete: 100% processed\n")
+    stdout_stream.flush()
 
-    levels = [m.level for m in mock_q.messages]
-    assert LogLevel.INFO in levels
-    assert LogLevel.WARNING in levels
-    assert LogLevel.ERROR in levels
-    assert LogLevel.SUCCESS in levels
+    assert all(m.level == LogLevel.INFO for m in mock_q.messages)
+    assert len(mock_q.messages) == 4
+
+    stderr_stream = QueueStream(mock_q, is_error=True)
+    stderr_stream.write("Critical worker failure encountered\n")
+    stderr_stream.flush()
+
+    assert mock_q.messages[-1].level == LogLevel.ERROR
