@@ -2,6 +2,52 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [9.3.4](https://github.com/tks18/personal-finance-etl/compare/9.3.3...9.3.4) (2026-10-23)
+
+
+### CI 🛠
+
+* **mkdocs:** update mkdocs.yml file to reflect the branding strategy ([dac60aa](https://github.com/tks18/personal-finance-etl/commit/dac60aa1ddc99c6e4ed39bb5ae206c509c9c21bb))
+* **mkdocs:** update mkdocs.yml to override extras block ([7093c53](https://github.com/tks18/personal-finance-etl/commit/7093c535e74ddc51d267e07a32df0f3967207c54))
+
+
+### Build System 🏗
+
+* update product descriptions and branding ([9c97adc](https://github.com/tks18/personal-finance-etl/commit/9c97adc5af004cc10fee19c283fe652bd7ec1601))
+
+
+### Docs 📃
+
+* add index.md as landing page for docs portal ([b32aff3](https://github.com/tks18/personal-finance-etl/commit/b32aff3bdc6e3891a43b3d9e6a509debcf5caf9e))
+* add logging upgrade plan ([864b417](https://github.com/tks18/personal-finance-etl/commit/864b417da8a3dd1c20d541d98bb3df13f8d7318d))
+* add new social_preview img for better representation ([c691ddc](https://github.com/tks18/personal-finance-etl/commit/c691ddc26bee941f188beaed1035f82743b772e4))
+* add overrides for mkdocs extras ([4b24d5a](https://github.com/tks18/personal-finance-etl/commit/4b24d5a52761244e5a48fa190d9f4527e4c75600))
+* create custom.css for mkdocs rendering ([5f56fbe](https://github.com/tks18/personal-finance-etl/commit/5f56fbee07d9eeb01e8f40df1ce5b0c3ac6940a9))
+* integrate new logo across all docs ([7c2ccb4](https://github.com/tks18/personal-finance-etl/commit/7c2ccb4748d91513b8f4f1915ca8a2419fb88641))
+* minor updates ([0100f70](https://github.com/tks18/personal-finance-etl/commit/0100f709c84fe7cfcdd687b8edc70fc149ad30e6))
+* preserve docs router to documentation-guide ([5735d15](https://github.com/tks18/personal-finance-etl/commit/5735d159732bd3c46b4d7ef732521d785fa92f01))
+* update css stylesheet for docs portal ([7dc80c4](https://github.com/tks18/personal-finance-etl/commit/7dc80c44e3d5b6fea989aa562648f1064b37e456))
+* update descriptions ([ab91073](https://github.com/tks18/personal-finance-etl/commit/ab91073c0dc3cd7ae0d53189815f7473b63c1801))
+* update doc strings and logging with updated branding ([96f1df9](https://github.com/tks18/personal-finance-etl/commit/96f1df92e7118810121093541fedb5d902b84063))
+* update doc strings and logging with updated branding ([957fd1e](https://github.com/tks18/personal-finance-etl/commit/957fd1e6bf4320ff6b5b619e8ff184d19041ec6d))
+* update logo in readme ([098b891](https://github.com/tks18/personal-finance-etl/commit/098b891d12b2bc351a90f7cb35d5c81c6180826a))
+
+
+### Others 🔧
+
+* remove root logos, and replace it in all places across codebase ([35539a4](https://github.com/tks18/personal-finance-etl/commit/35539a494c587445e434b0d26c1a99f6a188698b))
+* update main logo and ico files ([8a643c2](https://github.com/tks18/personal-finance-etl/commit/8a643c258a6de4fcedb898e65735178863ef3f1f))
+
+
+### Bug Fixes 🛠
+
+* **mkdocs:** fix overrides meta html file ([3ba897f](https://github.com/tks18/personal-finance-etl/commit/3ba897fb01b7afd09294075fab3fca2bcc882c19))
+
+
+### Styling 🎨
+
+* linting / formatting ([d1b88f2](https://github.com/tks18/personal-finance-etl/commit/d1b88f2e41357e45ccefad187934eaa0fb86672b))
+
 ### [9.3.3](https://github.com/tks18/personal-finance-etl/compare/9.3.2...9.3.3) (2026-10-22)
 
 
