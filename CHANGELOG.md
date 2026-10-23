@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [9.3.5](https://github.com/tks18/personal-finance-etl/compare/9.3.4...9.3.5) (2026-10-23)
+
+
+### Bug Fixes 🛠
+
+* compress all assets for optimized build ([167d8f1](https://github.com/tks18/personal-finance-etl/commit/167d8f1255d09d19e470ad1588ee4817ef68fb85))
+* **mkdocs.yml:** exclude readme.md from build ([c85d9a1](https://github.com/tks18/personal-finance-etl/commit/c85d9a1f00bc677b48e3d3640cdfabd772193e88))
+
 ### [9.3.4](https://github.com/tks18/personal-finance-etl/compare/9.3.3...9.3.4) (2026-10-23)
 
 
