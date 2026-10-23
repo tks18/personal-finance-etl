@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [9.3.6](https://github.com/tks18/personal-finance-etl/compare/9.3.5...9.3.6) (2026-10-23)
+
+
+### Bug Fixes 🛠
+
+* **mkdocs:** fix meta image link ([333a207](https://github.com/tks18/personal-finance-etl/commit/333a2074457bcaf0d62b7a0220f2dae6794b30cc))
+
 ### [9.3.5](https://github.com/tks18/personal-finance-etl/compare/9.3.4...9.3.5) (2026-10-23)
 
 
