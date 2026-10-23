@@ -631,7 +631,7 @@ class DocsRenderer:
         </head>
         <body>
             <div id="topbar">
-                <div class="app-title">📊 Shan's Personal Finance ETL</div>
+                <div class="app-title">📊 Personal Finance ETL</div>
             </div>
             <div id="app-container">
                 <div id="sidebar">

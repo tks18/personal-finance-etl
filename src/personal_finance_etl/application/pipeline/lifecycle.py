@@ -121,10 +121,10 @@ class RunLifecycleCoordinator:
         tuple[ControlPlane, str, list[str]]
             Tuple of active ControlPlane instance, unique run_id string, and pending recovery run IDs.
         """
-        logger.info("Initializing Quantitative Master Engine...")
+        logger.info("Initializing Personal Finance ETL...")
         self.emitter.emit_event(
             event_code=EventCode.RUN_START,
-            message="Initializing Quantitative Master Engine...",
+            message="Initializing Personal Finance ETL...",
             presentation_kind=PresentationKind.STEP,
             stage=EngineStage.INITIALIZING,
         )

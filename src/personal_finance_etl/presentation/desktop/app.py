@@ -94,7 +94,7 @@ class UnifiedETLTab(BaseEngineTab):
 
         ctk.CTkLabel(
             text_block,
-            text="Shan's Personal Finance ETL",
+            text="Personal Finance ETL",
             font=ctk.CTkFont(family="Segoe UI", size=15, weight="bold"),
             text_color=Color.TEXT,
         ).pack(anchor="w")
@@ -468,7 +468,7 @@ class DesktopApp(ctk.CTk):  # type: ignore[misc]
 
     def __init__(self) -> None:
         super().__init__()
-        self.title("Shan's Personal Finance ETL")
+        self.title("Personal Finance ETL")
         self.geometry("960x660")
         self.minsize(760, 500)
         self.configure(fg_color="#0D1117")
