@@ -186,14 +186,14 @@ def test_rich_narrative_legacy_status_compatibility() -> None:
     sink = RichNarrativeSink(console=console, show_timestamps=False)
 
     legacy_msg = EngineStatusMessage(
-        msg="Initializing Quantitative Master Engine...",
+        msg="Initializing Personal Finance ETL...",
         level=LogLevel.STEP,
         progress=0.1,
     )
     sink.render_status_message(legacy_msg)
 
     rendered = output.getvalue()
-    assert ">> Initializing Quantitative Master Engine..." in rendered
+    assert ">> Initializing Personal Finance ETL..." in rendered
     assert sink.rendered_count == 1
 
 
