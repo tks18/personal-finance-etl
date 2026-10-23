@@ -32,7 +32,7 @@ def show_guides_window() -> None:
     renderer = DocsRenderer(catalog)
 
     html = renderer.build_html_app()
-    icon_path = resource_path("logo.ico")
+    icon_path = resource_path("docs/assets/images/logo.ico")
 
     # WebView2 NavigateToString has a hard ~1.5 MB string limit.
     # Writing to a temp file and passing file:/// URL bypasses this completely.

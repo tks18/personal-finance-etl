@@ -35,7 +35,7 @@ class DocsRenderer:
     def __init__(self, catalog: DocsCatalog) -> None:
         self.catalog = catalog
 
-    def _inject_image(self, text: str, src_pattern: str, image_rel_path: str = "logo.png") -> str:
+    def _inject_image(self, text: str, src_pattern: str, image_rel_path: str = "docs/assets/images/logo.png") -> str:
         img_path = resource_path(image_rel_path)
         if os.path.exists(img_path):
             with open(img_path, "rb") as img_f:
@@ -44,7 +44,7 @@ class DocsRenderer:
         return text
 
     def _inject_logo(self, text: str, src_pattern: str) -> str:
-        return self._inject_image(text, src_pattern, "logo.png")
+        return self._inject_image(text, src_pattern, "docs/assets/images/logo.png")
 
     @staticmethod
     def _load_mermaid_js() -> str:
@@ -131,13 +131,13 @@ class DocsRenderer:
                 'src="social_preview.png"',
                 "social_preview.png",
             )
-            content = self._inject_logo(content, 'src="logo.png"')
+            content = self._inject_logo(content, 'src="docs/assets/images/logo.png"')
             content = self._inject_logo(
                 content,
-                'src="https://raw.githubusercontent.com/tks18/personal-finance-etl/master/logo.png"',
+                'src="https://raw.githubusercontent.com/tks18/personal-finance-etl/master/docs/assets/images/logo.png"',
             )
         elif "about" in path.lower():
-            content = self._inject_logo(content, 'src="../logo.png"')
+            content = self._inject_logo(content, 'src="../docs/assets/images/logo.png"')
         return content
 
     def _load_rendered_docs(self) -> tuple[dict[str, dict[str, str]], dict[str, str]]:

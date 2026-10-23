@@ -10,8 +10,6 @@ on:
       - "pyproject.toml"
       - "README.md"
       - "LICENSE"
-      - "logo.png"
-      - "logo.ico"
       - ".github/workflows/publish-pypi.yml"
   workflow_dispatch:
 
