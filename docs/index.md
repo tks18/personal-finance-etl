@@ -6,6 +6,7 @@ hide:
 ---
 
 <div class="pf-hero">
+  <a class="pf-hero-mark" href="./" aria-label="Personal Finance ETL home"><img src="assets/images/logo.png" alt="Personal Finance ETL logo"></a>
   <div class="pf-eyebrow">PERSONAL FINANCIAL SYSTEMS ENGINEERING</div>
   <h1>From fragmented financial evidence to <span>explainable financial state.</span></h1>
   <p class="pf-hero-copy">A local-first personal financial systems platform spanning data engineering, investment accounting, reconciliation, Tax evidence, wealth analytics and FIRE planning.</p>

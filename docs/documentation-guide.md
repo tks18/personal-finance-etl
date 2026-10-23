@@ -1,3 +1,8 @@
+<div class="pf-doc-identity">
+  <img src="../assets/images/logo.png" alt="Personal Finance ETL logo">
+  <div><strong>PERSONAL FINANCE ETL</strong><span>Technical Documentation · SPECIFY</span></div>
+</div>
+
 # Personal Finance ETL Technical Documentation
 
 Personal Finance ETL turns fragmented household, investment, market, currency, and configuration evidence into something much harder to fake: **traceable financial state**.
