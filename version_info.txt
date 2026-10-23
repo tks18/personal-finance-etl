@@ -1,7 +1,7 @@
 VSVersionInfo(
   ffi=FixedFileInfo(
-    filevers=(9, 3, 5, 0),
-    prodvers=(9, 3, 5, 0),
+    filevers=(9, 3, 6, 0),
+    prodvers=(9, 3, 6, 0),
     mask=0x3f,
     flags=0x0,
     OS=0x40004,
@@ -16,12 +16,12 @@ VSVersionInfo(
         '040904B0',
         [StringStruct('CompanyName', 'Sudharshan TK'),
         StringStruct('FileDescription', 'Local-first personal financial systems platform.'),
-        StringStruct('FileVersion', '9.3.5'),
+        StringStruct('FileVersion', '9.3.6'),
         StringStruct('InternalName', 'Personal Finance ETL'),
         StringStruct('LegalCopyright', 'Copyright (c) 2026 Shan.tk. All rights reserved.'),
         StringStruct('OriginalFilename', 'Personal Finance ETL.exe'),
         StringStruct('ProductName', 'Personal Finance ETL'),
-        StringStruct('ProductVersion', '9.3.5')])
+        StringStruct('ProductVersion', '9.3.6')])
       ]), 
     VarFileInfo([VarStruct('Translation', [1033, 1200])])
   ]
