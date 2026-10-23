@@ -1,6 +1,6 @@
-site_name: Personal Finance ETL
-site_description: Local-first financial data engineering and quantitative decision-support platform
-site_author: Shan.tk (Sudharshan TK)
+site_name: Personal Finance ETL · Financial Systems Engineering
+site_description: A local-first personal financial systems platform for data engineering, investment accounting, reconciliation, Tax evidence, wealth analytics and FIRE planning.
+site_author: Sudharshan TK · Shan.tk
 site_url: https://tks18.github.io/personal-finance-etl/
 repo_url: https://github.com/tks18/personal-finance-etl
 repo_name: tks18/personal-finance-etl
@@ -28,8 +28,8 @@ theme:
         icon: material/brightness-7
         name: Switch to dark mode
   font:
-    text: Roboto
-    code: Roboto Mono
+    text: Inter
+    code: JetBrains Mono
   features:
     - navigation.instant
     - navigation.tracking
@@ -45,7 +45,7 @@ theme:
     - content.tabs.link
 
 copyright: >
-  Copyright &copy; 2026 <a href="https://github.com/tks18" target="_blank" rel="noopener">Shan.tk (Sudharshan TK)</a> &middot; Built with Material for MkDocs
+  Personal Finance ETL &middot; Built by <a href="https://github.com/tks18" target="_blank" rel="noopener">Shan.tk</a> &middot; Finance &times; Data &times; Software
 
 extra:
   social:
@@ -89,53 +89,41 @@ markdown_extensions:
       permalink: true
 
 nav:
-  - Technical Documentation: README.md
-  - Getting Started:
-      - Overview: getting-started/README.md
+  - Explore:
+      - Home: index.md
+      - Documentation Guide: documentation-guide.md
+      - Getting Started: getting-started/README.md
       - Installation: getting-started/installation.md
       - Quick Start: getting-started/quick-start.md
       - CLI & Desktop: getting-started/cli-and-desktop.md
-  - Architecture:
+      - Project Story: about/project.md
+  - System:
       - Overview: architecture/README.md
       - System Architecture: architecture/system-architecture.md
-      - Application Architecture: architecture/application-and-dependency-architecture.md
+      - Application & Dependencies: architecture/application-and-dependency-architecture.md
       - Data Lifecycle: architecture/data-lifecycle.md
-      - Warehouse Architecture: architecture/warehouse-architecture.md
-      - Control Plane Lifecycle: architecture/control-plane-artifact-lifecycle.md
-      - Deterministic Replay: architecture/deterministic-identity-and-replay.md
+      - Control Plane: architecture/control-plane-artifact-lifecycle.md
+      - Warehouse: architecture/warehouse-architecture.md
       - Reliability & Recovery: architecture/reliability-and-recovery.md
+      - Identity & Replay: architecture/deterministic-identity-and-replay.md
       - Backup & Restore: architecture/backup-and-restore.md
       - Data Model: architecture/data-model.md
       - Design Decisions: architecture/design-decisions.md
   - Finance:
       - Overview: finance/README.md
       - Financial Model: finance/financial-model.md
-      - Cashflow & Wealth: finance/cashflow-and-wealth.md
+      - Cash Flow & Wealth: finance/cashflow-and-wealth.md
       - Investment Data Model: finance/investment-data-model.md
       - Market Reconstruction: finance/investment-market-reconstruction.md
       - FIFO & Realized Events: finance/fifo-and-realized-events.md
-      - Investment Reconciliation: finance/investment-reconciliation.md
+      - Reconciliation: finance/investment-reconciliation.md
       - Performance & Risk: finance/investment-performance-and-risk.md
       - Multi-Currency & FX: finance/multi-currency-and-fx.md
-      - Tax Methodology: finance/tax-methodology.md
-      - FIRE Methodology: finance/fire-methodology.md
-      - Metrics & Methodology: finance/metrics-and-methodology.md
-  - Reference:
-      - Overview: reference/README.md
-      - Bronze Contracts: reference/bronze-data-contracts.md
-      - Silver Contracts: reference/silver-data-contracts.md
-      - Gold Contracts: reference/gold-data-contracts.md
-      - Meta Contracts: reference/meta-data-contracts.md
-      - Control Plane Contracts: reference/control-plane-data-contracts.md
-      - Identity & Grain: reference/identity-and-grain-contracts.md
-      - Glossary: reference/glossary.md
-  - Configuration:
-      - Overview: configuration/README.md
-      - Configuration Reference: configuration/configuration-reference.md
-      - Financial Rules Reference: configuration/financial-rules-reference.md
-      - FIRE & Simulation: configuration/fire-and-simulation-reference.md
-  - Developer:
-      - Overview: developer/README.md
+      - Tax: finance/tax-methodology.md
+      - FIRE: finance/fire-methodology.md
+      - Metrics: finance/metrics-and-methodology.md
+  - Engineering:
+      - Developer Overview: developer/README.md
       - Development Guide: developer/development-guide.md
       - Engineering Standards: developer/engineering-standards.md
       - Adding Data Sources: developer/adding-data-sources.md
@@ -144,8 +132,21 @@ nav:
       - Schema Evolution: developer/data-contract-and-schema-evolution.md
       - Testing & Validation: developer/testing-and-validation.md
       - Tooling & Release: developer/tooling-quality-and-release-engineering.md
+      - Configuration Overview: configuration/README.md
+      - Configuration Reference: configuration/configuration-reference.md
+      - Financial Rules: configuration/financial-rules-reference.md
+      - FIRE & Simulation Config: configuration/fire-and-simulation-reference.md
+  - Reference:
+      - Overview: reference/README.md
+      - Bronze: reference/bronze-data-contracts.md
+      - Silver: reference/silver-data-contracts.md
+      - Gold: reference/gold-data-contracts.md
+      - Meta: reference/meta-data-contracts.md
+      - Control Plane: reference/control-plane-data-contracts.md
+      - Identity & Grain: reference/identity-and-grain-contracts.md
+      - Glossary: reference/glossary.md
   - About:
       - Overview: about/README.md
       - Project: about/project.md
-      - About Me: about/about-me.md
+      - About Shan.tk: about/about-me.md
       - Roadmap: roadmap.md
