@@ -11,6 +11,7 @@ site_dir: site
 
 theme:
   name: material
+  custom_dir: docs/overrides
   logo: assets/images/logo.png
   favicon: assets/images/logo.ico
   language: en
@@ -48,6 +49,10 @@ copyright: >
   Personal Finance ETL &middot; Built by <a href="https://github.com/tks18" target="_blank" rel="noopener">Shan.tk</a> &middot; Finance &times; Data &times; Software
 
 extra:
+  generator: false
+  homepage: https://tks18.github.io/personal-finance-etl/
+  creator_name: Sudharshan TK · Shan.tk
+  creator_url: https://github.com/tks18
   social:
     - icon: fontawesome/brands/github
       link: https://github.com/tks18
