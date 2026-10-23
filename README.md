@@ -1,3 +1,9 @@
+<p align="center">
+  <a href="https://tks18.github.io/personal-finance-etl/">
+    <img src="https://raw.githubusercontent.com/tks18/personal-finance-etl/master/.github/assets/logo.png" width="136" alt="Personal Finance ETL logo">
+  </a>
+</p>
+
 # Personal Finance ETL
 
 **My local-first personal financial systems platform for reconciled personal finance, investment accounting, tax evidence, wealth analytics, FIRE planning, and BI.**
