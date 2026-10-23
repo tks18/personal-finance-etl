@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+
+{% block extrahead %}
+  {{ super() }}
+  {% set canonical_url = config.site_url ~ page.url %}
+  <meta name="author" content="Sudharshan TK · Shan.tk">
+  <meta name="creator" content="Sudharshan TK · Shan.tk">
+  <meta name="application-name" content="Personal Finance ETL">
+  <meta name="theme-color" content="#6D28D9">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Personal Finance ETL">
+  <meta property="og:title" content="{{ page.meta.title or page.title }} · Personal Finance ETL">
+  <meta property="og:description" content="{{ page.meta.description or config.site_description }}">
+  <meta property="og:url" content="{{ canonical_url }}">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="{{ page.meta.title or page.title }} · Personal Finance ETL">
+  <meta name="twitter:description" content="{{ page.meta.description or config.site_description }}">
+{% endblock %}
