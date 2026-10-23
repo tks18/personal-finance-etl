@@ -72,7 +72,7 @@ exe_cli = EXE(
     a.binaries,
     a.datas,
     [],
-    name='Shan\'s Personal Finance ETL CLI',
+    name='Personal Finance ETL CLI',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
