@@ -439,3 +439,65 @@ body {
     animation-duration: .01ms !important;
   }
 }
+
+
+/* --------------------------------------------------------------------------
+   PFETL identity integration
+   -------------------------------------------------------------------------- */
+.pf-hero-mark {
+  display: inline-flex;
+  width: 76px;
+  height: 76px;
+  margin-bottom: 1.1rem;
+  border-radius: 18px;
+  filter: drop-shadow(0 12px 26px rgba(109, 40, 217, .22));
+}
+
+.pf-hero-mark img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.pf-doc-identity {
+  display: inline-flex;
+  align-items: center;
+  gap: .75rem;
+  margin: .2rem 0 1.2rem;
+  padding: .55rem .8rem .55rem .55rem;
+  border: 1px solid var(--pf-border);
+  border-radius: var(--pf-radius);
+  background: var(--pf-surface);
+}
+
+.pf-doc-identity img {
+  width: 38px;
+  height: 38px;
+  object-fit: contain;
+  border-radius: 9px;
+}
+
+.pf-doc-identity strong,
+.pf-doc-identity span {
+  display: block;
+}
+
+.pf-doc-identity strong {
+  color: var(--pf-text);
+  font-size: .72rem;
+  letter-spacing: .08em;
+}
+
+.pf-doc-identity span {
+  margin-top: .08rem;
+  color: var(--pf-text-muted);
+  font-size: .68rem;
+}
+
+@media (max-width: 700px) {
+  .pf-hero-mark {
+    width: 62px;
+    height: 62px;
+    border-radius: 15px;
+  }
+}
