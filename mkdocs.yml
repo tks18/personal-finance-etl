@@ -9,6 +9,11 @@ edit_uri: blob/master/docs/
 docs_dir: docs
 site_dir: site
 
+# Exclude docs/README.md from site generation so it does not conflict with docs/index.md in strict mode.
+# (docs/README.md is retained for GitHub directory browsing when viewing /docs on GitHub).
+exclude_docs: |
+  /README.md
+
 theme:
   name: material
   custom_dir: docs/overrides
