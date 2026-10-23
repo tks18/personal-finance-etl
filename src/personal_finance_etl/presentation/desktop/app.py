@@ -82,7 +82,7 @@ class UnifiedETLTab(BaseEngineTab):
         title_block = ctk.CTkFrame(hdr, fg_color="transparent")
         title_block.grid(row=0, column=0, columnspan=2, padx=(16, 16), pady=(12, 0), sticky="w")
 
-        logo_path = resource_path("logo.png")
+        logo_path = resource_path("docs/assets/images/logo.png")
         if os.path.exists(logo_path):
             img = ctk.CTkImage(dark_image=Image.open(logo_path), size=(36, 36))
             ctk.CTkLabel(title_block, image=img, text="").grid(
@@ -94,7 +94,7 @@ class UnifiedETLTab(BaseEngineTab):
 
         ctk.CTkLabel(
             text_block,
-            text="Shan's Personal Finance ETL",
+            text="Personal Finance ETL",
             font=ctk.CTkFont(family="Segoe UI", size=15, weight="bold"),
             text_color=Color.TEXT,
         ).pack(anchor="w")
@@ -468,12 +468,12 @@ class DesktopApp(ctk.CTk):  # type: ignore[misc]
 
     def __init__(self) -> None:
         super().__init__()
-        self.title("Shan's Personal Finance ETL")
+        self.title("Personal Finance ETL")
         self.geometry("960x660")
         self.minsize(760, 500)
         self.configure(fg_color="#0D1117")
 
-        icon_path = resource_path("logo.ico")
+        icon_path = resource_path("docs/assets/images/logo.ico")
         if os.path.exists(icon_path):
             self.after(200, lambda: self.iconbitmap(icon_path))
 

@@ -272,7 +272,7 @@ That is why the current documentation is designed as part of the system, not a m
 
 ## What the project is today
 
-Today the repository is best described as a **local-first financial data engineering and quantitative decision-support platform**.
+Today the repository is best described as a **local-first personal financial systems platform**.
 
 It combines:
 

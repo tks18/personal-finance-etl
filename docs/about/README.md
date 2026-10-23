@@ -51,7 +51,7 @@ Those belong in the technical reference.
 
 ## The project in one sentence
 
-Personal Finance ETL is my local-first financial data engineering and quantitative decision-support platform for turning fragmented personal financial evidence into **reconciled, explainable, reproducible analytical state**.
+Personal Finance ETL is my local-first personal financial systems platform for turning fragmented personal financial evidence into **reconciled, explainable, reproducible analytical state**.
 
 The interesting word is not “ETL.”
 

@@ -32,7 +32,7 @@ def show_guides_window() -> None:
     renderer = DocsRenderer(catalog)
 
     html = renderer.build_html_app()
-    icon_path = resource_path("logo.ico")
+    icon_path = resource_path("docs/assets/images/logo.ico")
 
     # WebView2 NavigateToString has a hard ~1.5 MB string limit.
     # Writing to a temp file and passing file:/// URL bypasses this completely.
@@ -52,7 +52,7 @@ def show_guides_window() -> None:
 
         # Exception TYP-005 [THIRD_PARTY_TYPING_GAP]: pywebview window builder lacks static stubs
         webview.create_window(  # pyright: ignore[reportUnknownMemberType]
-            "Shan's Personal Finance ETL - Guides & About",
+            "Personal Finance ETL · Guides & About",
             url=url,
             width=1280,
             height=850,

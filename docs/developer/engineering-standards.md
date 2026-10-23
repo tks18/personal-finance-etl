@@ -677,7 +677,7 @@ Continue with [Tooling, Quality, and Release Engineering](tooling-quality-and-re
 
 ## 30. Unified Observability Architecture is Frozen
 
-The observability architecture is frozen as of v9.2.9:
+The observability architecture is frozen around the following contract:
 
 1. **Single Canonical Contract**: All operational and diagnostic events must flow through `ObservabilityEvent`. No custom strings, prefixes, or ad-hoc logger methods may be invented.
 2. **Zero Polars Collects for Logging**: Observability sinks and emitters must never call `.collect()` on Polars `LazyFrame` instances. Metadata such as row counts must come from explicit pipeline context.

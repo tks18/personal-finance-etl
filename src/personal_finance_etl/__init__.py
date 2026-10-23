@@ -1,6 +1,6 @@
 """Personal Finance ETL Engine.
 
-My local-first financial data engineering and quantitative decision-support platform for
+My local-first personal financial systems platform for
 reconciled personal finance, investment analytics, tax evidence, FIRE simulation, and BI.
 This application strictly adheres to Clean Architecture and Domain-Driven Design (DDD),
 enforcing clean, unidirectional boundaries across layered subsystems:
@@ -41,6 +41,6 @@ __all__ = [
     "run_app",
 ]
 
-__version__ = "9.3.3"
+__version__ = "9.3.4"
 __author__ = "Sudharshan TK"
 PACKAGE_NAME = "personal-finance-etl"

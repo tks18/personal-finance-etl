@@ -1,10 +1,12 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/tks18/personal-finance-etl/master/.github/assets/social_preview.png" alt="Personal Finance ETL" width="100%" />
+  <a href="https://tks18.github.io/personal-finance-etl/">
+    <img src="https://raw.githubusercontent.com/tks18/personal-finance-etl/master/.github/assets/logo.png" width="136" alt="Personal Finance ETL logo">
+  </a>
 </p>
 
 # Personal Finance ETL
 
-**My local-first financial data engineering and quantitative decision-support platform for reconciled personal finance, investment analytics, tax evidence, FIRE simulation, and BI.**
+**My local-first personal financial systems platform for reconciled personal finance, investment accounting, tax evidence, wealth analytics, FIRE planning, and BI.**
 
 I built this because I wanted one answer to a deceptively simple question:
 

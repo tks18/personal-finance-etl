@@ -25,7 +25,9 @@ __all__ = ["build_argument_parser", "main"]
 
 def build_argument_parser() -> argparse.ArgumentParser:
     """Build canonical command-line argument parser for Personal Finance ETL."""
-    parser = argparse.ArgumentParser(description="Personal Finance Quant Engine")
+    parser = argparse.ArgumentParser(
+        description="Personal Finance ETL · Financial Systems Engineering"
+    )
     subparsers = parser.add_subparsers(dest="command", help="Frontend to launch")
 
     # CLI Subcommand
