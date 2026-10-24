@@ -3,7 +3,6 @@ site_description: A local-first personal financial systems platform for data eng
 site_author: Sudharshan TK · Shan.tk
 site_url: https://tks18.github.io/personal-finance-etl/
 repo_url: https://github.com/tks18/personal-finance-etl
-repo_name: tks18/personal-finance-etl
 edit_uri: blob/master/docs/
 
 docs_dir: docs
@@ -51,7 +50,7 @@ theme:
     - content.tabs.link
 
 copyright: >
-  Personal Finance ETL &middot; Built by <a href="https://github.com/tks18" target="_blank" rel="noopener">Shan.tk</a> &middot; Finance &times; Data &times; Software
+  Personal Finance ETL &middot; Built by <a href="https://tks18.github.io/personal-finance-etl/about/about-me/">Shan.tk</a> &middot; Finance &times; Data &times; Software
 
 extra:
   generator: false
@@ -67,7 +66,15 @@ extra:
       name: Sudharshan TK on LinkedIn
 
 extra_css:
-  - assets/stylesheets/custom.css
+  - assets/stylesheets/tokens.css
+  - assets/stylesheets/header-navigation.css
+  - assets/stylesheets/content.css
+  - assets/stylesheets/components.css
+  - assets/stylesheets/landing.css
+  - assets/stylesheets/responsive.css
+
+extra_javascript:
+  - assets/javascripts/portal.js
 
 plugins:
   - search
