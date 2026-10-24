@@ -1,0 +1,130 @@
+body { background:var(--pf-bg); color:var(--pf-text); }
+.md-grid { max-width:92rem; }
+.md-header { background:#180b2e; border-bottom:1px solid rgba(167,139,250,.14); box-shadow:none; }
+[data-md-color-scheme="default"] .md-header { background:#241044; }
+.md-header__inner { min-height:3rem; }
+.md-header__title { font-weight:760; letter-spacing:-.02em; }
+.md-header__source { display:none; }
+.md-tabs { background:#10071f; border-bottom:1px solid rgba(167,139,250,.12); }
+[data-md-color-scheme="default"] .md-tabs { background:#180b2e; }
+.md-tabs__link { opacity:.72; font-weight:650; }
+.md-tabs__link--active,.md-tabs__link:hover { opacity:1; color:#fff; }
+.md-tabs__item--active .md-tabs__link { position:relative; }
+.md-tabs__item--active .md-tabs__link::after { content:""; position:absolute; left:0; right:0; bottom:-.55rem; height:2px; border-radius:9px; background:#a78bfa; }
+.md-search__form { border:1px solid rgba(255,255,255,.15); border-radius:9px; background:rgba(255,255,255,.08); }
+.md-search__form:focus-within { border-color:rgba(192,132,252,.55); box-shadow:0 0 0 2px rgba(139,92,246,.12); }
+.md-main__inner { margin-top:1.1rem; }
+.md-sidebar--primary { width:12rem; }
+.md-sidebar--secondary { width:11.5rem; }
+.md-sidebar--primary .md-nav__title,.md-sidebar--secondary .md-nav__title { background:transparent!important; box-shadow:none!important; color:var(--pf-muted); font-size:.66rem; font-weight:820; letter-spacing:.08em; text-transform:uppercase; }
+.md-sidebar--primary .md-nav__link { margin:.08rem 0; padding:.24rem .42rem; border-left:2px solid transparent; border-radius:0 6px 6px 0; color:var(--pf-muted); font-size:.76rem; }
+.md-sidebar--primary .md-nav__link:hover { color:var(--pf-text); background:var(--pf-surface-2); }
+.md-sidebar--primary .md-nav__link--active { color:var(--pf-brand); border-left-color:var(--pf-brand); background:transparent; font-weight:760; }
+.md-sidebar--secondary .md-nav { border-left:1px solid var(--pf-border); padding-left:.65rem; }
+.md-sidebar--secondary .md-nav__title { padding-left:0; }
+.md-sidebar--secondary .md-nav__link { color:var(--pf-muted); font-size:.68rem; line-height:1.35; }
+.md-sidebar--secondary .md-nav__link--active { color:var(--pf-brand); font-weight:720; }
+.md-sidebar--secondary .md-sidebar__scrollwrap { scrollbar-width:none; }
+.md-sidebar--secondary .md-sidebar__scrollwrap::-webkit-scrollbar { display:none; }
+.md-footer { border-top:1px solid var(--pf-border); }
+.md-footer-meta { background:var(--pf-surface); }
+#pf-reading-progress { position:fixed; z-index:20; top:0; left:0; width:0; height:2px; background:linear-gradient(90deg,#7c3aed,#c084fc); pointer-events:none; }
+
+
+/* Final universe pass ------------------------------------------------------ */
+
+/* Product identity stays stable in persistent chrome. Material may update
+   the title text during scroll/instant navigation, so hide its dynamic label
+   and provide the canonical product name visually. */
+.md-header__title .md-header__topic { display:none; }
+.md-header__title::after {
+  content:"Personal Finance ETL";
+  color:#fff;
+  font-size:.9rem;
+  font-weight:780;
+  letter-spacing:-.025em;
+  white-space:nowrap;
+}
+
+/* The creator signs the product from the opposite side of the header. */
+.pf-creator-header {
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  min-width:9.5rem;
+  margin-left:.8rem;
+  padding:.12rem .5rem;
+  color:#fff!important;
+  text-decoration:none!important;
+  line-height:1.08;
+}
+.pf-creator-header__name {
+  font-size:.64rem;
+  font-weight:700;
+  white-space:nowrap;
+}
+.pf-creator-header__name strong { color:#c4b5fd; }
+.pf-creator-header__role {
+  margin-top:.16rem;
+  color:rgba(255,255,255,.62);
+  font-size:.52rem;
+  font-weight:550;
+  letter-spacing:.025em;
+  white-space:nowrap;
+}
+.pf-creator-header:hover .pf-creator-header__name strong { color:#fff; }
+
+/* Quiet navigation labels. No title slabs. */
+.md-sidebar .md-nav__title {
+  background:none!important;
+  background-color:transparent!important;
+  box-shadow:none!important;
+  border:0!important;
+  color:var(--pf-muted)!important;
+}
+.md-sidebar--primary .md-nav__title {
+  padding:.15rem .42rem .38rem!important;
+}
+.md-sidebar--secondary .md-nav__title {
+  padding:.15rem 0 .38rem!important;
+}
+.md-sidebar--secondary .md-nav__title::first-letter { text-transform:uppercase; }
+
+/* Slightly slimmer rails: document wins. */
+.md-sidebar--primary { width:10.75rem; }
+.md-sidebar--secondary { width:9.75rem; }
+.md-sidebar--secondary .md-nav__link { font-size:.64rem; }
+
+/* Hide all nested sidebar scrollbars while preserving scrolling. */
+.md-sidebar__scrollwrap {
+  scrollbar-width:none;
+}
+.md-sidebar__scrollwrap::-webkit-scrollbar {
+  width:0;
+  height:0;
+}
+
+/* Search stays central and creator-aware without becoming a giant control. */
+.md-search { max-width:27rem; }
+
+/* On the homepage, top navigation is sufficient: remove documentation rails. */
+body:has(.pf-hero) .md-sidebar--primary,
+body:has(.pf-hero) .md-sidebar--secondary {
+  display:none!important;
+}
+body:has(.pf-hero) .md-content {
+  max-width:none;
+}
+body:has(.pf-hero) .md-content__inner {
+  max-width:76rem;
+  margin-inline:auto;
+}
+body:has(.pf-hero) .md-main__inner {
+  max-width:82rem;
+  padding-inline:1.2rem;
+}
+
+/* The native back-to-top control is useful in specs, intrusive on the hero. */
+body:has(.pf-hero) .md-top {
+  display:none!important;
+}

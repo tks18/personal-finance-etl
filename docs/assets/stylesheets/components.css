@@ -1,0 +1,41 @@
+.pf-overview-intro { max-width:52rem; margin:.25rem 0 1.5rem; }
+.pf-overview-eyebrow {
+  margin-bottom:.4rem; color:var(--pf-brand); font-size:.67rem; font-weight:850;
+  letter-spacing:.13em; text-transform:uppercase;
+}
+.pf-overview-intro h1 { margin:.15rem 0 .65rem!important; }
+.pf-overview-intro p { max-width:44rem; color:var(--pf-muted); font-size:.9rem; }
+.pf-overview-routes {
+  display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.7rem; max-width:62rem; margin:1.25rem 0 2.25rem;
+}
+.pf-overview-card {
+  display:block; padding:1rem; border:1px solid var(--pf-border); border-radius:var(--pf-r);
+  background:var(--pf-surface); color:var(--pf-text)!important; text-decoration:none!important;
+}
+.pf-overview-card:hover { border-color:color-mix(in srgb,var(--pf-brand) 48%,var(--pf-border)); background:var(--pf-surface-2); }
+.pf-overview-card strong,.pf-overview-card span { display:block; }
+.pf-overview-card strong { font-size:.82rem; }
+.pf-overview-card span { margin-top:.28rem; color:var(--pf-muted); font-size:.68rem; }
+
+#pf-reading-progress {
+  position:fixed; z-index:20; top:0; left:0; width:0; height:2px;
+  background:linear-gradient(90deg,#7c3aed,#c084fc); pointer-events:none;
+}
+.pf-mermaid-modal {
+  position:fixed; z-index:1000; inset:0; display:none; padding:1rem;
+  background:rgba(5,5,8,.88); backdrop-filter:blur(8px);
+}
+.pf-mermaid-modal.is-open { display:grid; place-items:center; }
+.pf-mermaid-modal__panel {
+  position:relative; width:min(96vw,90rem); height:min(92vh,60rem); overflow:auto;
+  border:1px solid var(--pf-border); border-radius:var(--pf-r-lg); background:var(--pf-surface); padding:2rem;
+}
+.pf-mermaid-modal__content { min-width:max-content; min-height:100%; display:grid; place-items:center; }
+.pf-mermaid-modal__content svg { max-width:none!important; height:auto!important; }
+.pf-mermaid-modal__close {
+  position:sticky; z-index:2; top:0; float:right; width:2rem; height:2rem; border:1px solid var(--pf-border);
+  border-radius:999px; background:var(--pf-surface-2); color:var(--pf-text); cursor:pointer;
+}
+
+/* Documentation Guide is a router: orientation first, specification second. */
+.pf-overview-routes + p { margin-top:2rem; }

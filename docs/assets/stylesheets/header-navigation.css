@@ -1,0 +1,121 @@
+body { background:var(--pf-bg); color:var(--pf-text); }
+.md-grid { max-width:92rem; }
+
+.md-header { background:#180b2e; border-bottom:1px solid rgba(167,139,250,.13); box-shadow:none; }
+[data-md-color-scheme="default"] .md-header { background:#241044; }
+.md-header__inner { min-height:3.15rem; gap:.55rem; }
+.md-header__button.md-logo { margin-right:.15rem; }
+.md-header__button.md-logo img { width:1.45rem; height:1.45rem; }
+
+.pf-product {
+  display:flex; align-items:center; min-width:max-content; color:#fff!important;
+  font-size:.86rem; font-weight:780; letter-spacing:-.025em; text-decoration:none!important;
+}
+.pf-header-spacer { flex:1 1 auto; }
+.md-search { flex:0 1 24rem; }
+.md-search__form {
+  border:1px solid rgba(255,255,255,.14); border-radius:9px; background:rgba(255,255,255,.075);
+}
+.md-search__form:focus-within { border-color:rgba(192,132,252,.55); box-shadow:0 0 0 2px rgba(139,92,246,.12); }
+
+.pf-builder {
+  display:flex; flex-direction:column; min-width:11.5rem; padding:.1rem .2rem;
+  color:#fff!important; text-decoration:none!important; line-height:1.08;
+}
+.pf-builder-name { font-size:.65rem; font-weight:720; white-space:nowrap; }
+.pf-builder-name strong { color:#c4b5fd; }
+.pf-builder-role { margin-top:.15rem; color:rgba(255,255,255,.62); font-size:.51rem; white-space:nowrap; }
+.pf-builder:hover strong { color:#fff; }
+
+.md-tabs { background:#10071f; border-bottom:1px solid rgba(167,139,250,.12); }
+[data-md-color-scheme="default"] .md-tabs { background:#180b2e; }
+.md-tabs__link { position:relative; opacity:.72; font-weight:650; }
+.md-tabs__link--active,.md-tabs__link:hover { opacity:1; color:#fff; }
+.md-tabs__item--active .md-tabs__link::after {
+  content:""; position:absolute; left:0; right:0; bottom:-.55rem; height:2px;
+  border-radius:999px; background:#a78bfa;
+}
+
+/* Navigation stays Material-native; only visual weight changes. */
+.md-main__inner { margin-top:1.15rem; }
+.md-sidebar--primary { width:11rem; }
+.md-sidebar--secondary { width:10rem; }
+.md-sidebar .md-nav__title {
+  padding:.18rem .4rem .38rem!important; background:transparent!important; box-shadow:none!important;
+  color:var(--pf-muted)!important; font-size:.64rem; font-weight:820; letter-spacing:.075em; text-transform:uppercase;
+}
+.md-sidebar--primary .md-nav__link {
+  margin:.06rem 0; padding:.23rem .38rem; border-left:2px solid transparent; border-radius:0 6px 6px 0;
+  color:var(--pf-muted); font-size:.74rem;
+}
+.md-sidebar--primary .md-nav__link:hover { color:var(--pf-text); background:var(--pf-surface-2); }
+.md-sidebar--primary .md-nav__link--active {
+  color:var(--pf-brand); border-left-color:var(--pf-brand); background:transparent; font-weight:760;
+}
+.md-sidebar--secondary .md-nav { padding-left:.6rem; border-left:1px solid var(--pf-border); }
+.md-sidebar--secondary .md-nav__title { padding-left:0!important; }
+.md-sidebar--secondary .md-nav__link { color:var(--pf-muted); font-size:.65rem; line-height:1.35; }
+.md-sidebar--secondary .md-nav__link--active { color:var(--pf-brand); font-weight:720; }
+.md-sidebar__scrollwrap { scrollbar-width:none; }
+.md-sidebar__scrollwrap::-webkit-scrollbar { width:0; height:0; }
+
+.md-footer { border-top:1px solid var(--pf-border); }
+.md-footer-meta { background:var(--pf-surface); }
+
+
+/* The section bar is a first-class exploration surface. */
+.md-tabs {
+  display:block!important;
+  visibility:visible!important;
+}
+.md-tabs__list {
+  display:flex;
+  align-items:center;
+}
+
+
+/* Explicit global documentation router. This is owned markup, not Material tabs. */
+.md-tabs { display:none!important; }
+
+.pf-global-nav {
+  position:sticky;
+  top:3.15rem;
+  z-index:3;
+  height:2.55rem;
+  border-bottom:1px solid rgba(167,139,250,.14);
+  background:#10071f;
+}
+[data-md-color-scheme="default"] .pf-global-nav { background:#180b2e; }
+
+.pf-global-nav__inner {
+  display:flex;
+  height:100%;
+  align-items:center;
+  gap:1.55rem;
+  padding:0 .6rem;
+}
+
+.pf-global-nav a {
+  position:relative;
+  display:flex;
+  height:100%;
+  align-items:center;
+  color:rgba(255,255,255,.68)!important;
+  font-size:.68rem;
+  font-weight:680;
+  text-decoration:none!important;
+}
+
+.pf-global-nav a:hover,
+.pf-global-nav a.is-active { color:#fff!important; }
+
+.pf-global-nav a.is-active::after {
+  content:"";
+  position:absolute;
+  right:0;
+  bottom:0;
+  left:0;
+  height:2px;
+  border-radius:999px;
+  background:#a78bfa;
+}
