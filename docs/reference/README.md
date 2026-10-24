@@ -1,4 +1,15 @@
-# Reference Contracts
+<div class="pf-overview-intro">
+  <div class="pf-overview-eyebrow">REFERENCE</div>
+  <h1>Contracts</h1>
+  <p>The exact physical contracts, grain, identity and ownership rules behind the analytical system.</p>
+</div>
+
+<div class="pf-overview-routes">
+  <a class="pf-overview-card" href="bronze-data-contracts/"><strong>Bronze</strong><span>Source-shaped evidence contracts. →</span></a>
+  <a class="pf-overview-card" href="silver-data-contracts/"><strong>Silver</strong><span>Canonical analytical state. →</span></a>
+  <a class="pf-overview-card" href="gold-data-contracts/"><strong>Gold</strong><span>Decision-ready marts. →</span></a>
+  <a class="pf-overview-card" href="identity-and-grain-contracts/"><strong>Identity & Grain</strong><span>Keys, grain and deterministic identity. →</span></a>
+</div>
 
 The reference section is the place to verify **what physically exists**.
 

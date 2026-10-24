@@ -1,4 +1,15 @@
-# Developer Engineering
+<div class="pf-overview-intro">
+  <div class="pf-overview-eyebrow">ENGINEERING</div>
+  <h1>Developer Guide</h1>
+  <p>How to change Personal Finance ETL without weakening its contracts, financial meaning or operational guarantees.</p>
+</div>
+
+<div class="pf-overview-routes">
+  <a class="pf-overview-card" href="development-guide/"><strong>Development Guide</strong><span>Repository workflow and extension model. →</span></a>
+  <a class="pf-overview-card" href="engineering-standards/"><strong>Engineering Standards</strong><span>The codebase rules that protect system quality. →</span></a>
+  <a class="pf-overview-card" href="testing-and-validation/"><strong>Testing & Validation</strong><span>How changes prove they are safe. →</span></a>
+  <a class="pf-overview-card" href="tooling-quality-and-release-engineering/"><strong>Tooling & Release</strong><span>Quality gates, packaging and release discipline. →</span></a>
+</div>
 
 Changing Personal Finance ETL is another kind of state transition.
 
