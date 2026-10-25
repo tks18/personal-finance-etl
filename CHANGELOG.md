@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [9.3.7](https://github.com/tks18/personal-finance-etl/compare/9.3.6...9.3.7) (2026-10-25)
+
+
+### CI 🛠
+
+* **git:** exclude docs portal css, js from analysis ([b3dfe0b](https://github.com/tks18/personal-finance-etl/commit/b3dfe0b3f454d74672a06edd078f960302090625))
+* **mkdocs:** update paths to css, js, minor other updates ([d5fd65d](https://github.com/tks18/personal-finance-etl/commit/d5fd65d9360ebc833480bc9338dc7297e6a32b76))
+
+
+### Docs 📃
+
+* **css:** split css into multiple files and enhance style ([e5b8e56](https://github.com/tks18/personal-finance-etl/commit/e5b8e564e81019e762331ab38f66009c49e3b129))
+* **js:** add small js handler for mkdocs ([bca976f](https://github.com/tks18/personal-finance-etl/commit/bca976f9e97b7e349f2d246a233483b615b63554))
+* **overrides:** add header, tabs, and overrides template file ([1ed8fb1](https://github.com/tks18/personal-finance-etl/commit/1ed8fb16cb097f0cfa45fba80f45a6c247f09c41))
+* update all readmes to include small portal of html block ([7da83bd](https://github.com/tks18/personal-finance-etl/commit/7da83bd34d2b6902d25c6339d05580779ba7a103))
+
 ### [9.3.6](https://github.com/tks18/personal-finance-etl/compare/9.3.5...9.3.6) (2026-10-23)
 
 

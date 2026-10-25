@@ -1,4 +1,15 @@
-# Finance
+<div class="pf-overview-intro">
+  <div class="pf-overview-eyebrow">FINANCE</div>
+  <h1>Financial Engineering</h1>
+  <p>How Personal Finance ETL reconstructs economic events, reconciles evidence and turns financial state into decisions.</p>
+</div>
+
+<div class="pf-overview-routes">
+  <a class="pf-overview-card" href="financial-model/"><strong>Financial Model</strong><span>The financial truth model and its boundaries. →</span></a>
+  <a class="pf-overview-card" href="investment-data-model/"><strong>Investments</strong><span>Canonical investment state and ownership. →</span></a>
+  <a class="pf-overview-card" href="tax-methodology/"><strong>Tax</strong><span>Tax evidence, classification and computation. →</span></a>
+  <a class="pf-overview-card" href="fire-methodology/"><strong>FIRE</strong><span>Long-horizon planning and simulation. →</span></a>
+</div>
 
 The finance layer is where this project stops being a generic ETL pipeline with money-shaped columns.
 

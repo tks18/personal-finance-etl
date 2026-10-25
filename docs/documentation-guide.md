@@ -1,42 +1,24 @@
-<div class="pf-doc-identity">
-  <img src="../assets/images/logo.png" alt="Personal Finance ETL logo">
-  <div><strong>PERSONAL FINANCE ETL</strong><span>Technical Documentation · SPECIFY</span></div>
+---
+title: Documentation Guide
+description: Find the right path through Personal Finance ETL's architecture, finance, engineering and reference documentation.
+---
+
+<div class="pf-overview-intro">
+  <div class="pf-overview-eyebrow">EXPLORE</div>
+  <h1>Documentation Guide</h1>
+  <p>Choose the question you want answered, then move toward the layer that owns the truth.</p>
 </div>
 
-# Personal Finance ETL Technical Documentation
+<div class="pf-overview-routes">
+  <a class="pf-overview-card" href="architecture/README/"><strong>Architecture</strong><span>How the system owns truth and execution. →</span></a>
+  <a class="pf-overview-card" href="finance/README/"><strong>Finance</strong><span>How evidence becomes financial meaning. →</span></a>
+  <a class="pf-overview-card" href="developer/README/"><strong>Engineering</strong><span>How the system changes safely. →</span></a>
+  <a class="pf-overview-card" href="reference/README/"><strong>Reference</strong><span>Exact contracts, schemas, grain and identity. →</span></a>
+</div>
 
 Personal Finance ETL turns fragmented household, investment, market, currency, and configuration evidence into something much harder to fake: **traceable financial state**.
 
-That requires more than moving files through Bronze, Silver, and Gold.
-
-The system has to preserve where evidence came from, distinguish observation from reconstruction, keep financial identity deterministic, reconcile disagreement instead of hiding it, publish analytical state at explicit grains, survive partial failure, and still leave enough provenance behind to explain what happened later.
-
-This `/docs` tree is where I specify how that works.
-
-It is intentionally deeper than the root README and more implementation-heavy than the Wiki. The goal is not to introduce the project quickly. The goal is to make the engineering inspectable.
-
-```mermaid
-flowchart LR
-    E["Evidence"] --> C["Canonical financial state"]
-    C --> R["Reconstructed / reconciled state"]
-    R --> A["Decision-ready analytics"]
-
-    E -. provenance .-> O["Operational history"]
-    C -. execution context .-> O
-    R -. recovery / replay .-> O
-
-    CFG["Validated settings + financial policy"] --> C
-    CFG --> R
-    CFG --> A
-
-    TEST["Contracts + tests + quality gates"] -. protect .-> C
-    TEST -. protect .-> R
-    TEST -. protect .-> A
-```
-
-The documentation follows the same logic. Start with the question you have, then move toward the layer that owns the answer.
-
----
+This documentation is intentionally deeper than the root README and more implementation-heavy than the Wiki. Its job is to make the engineering inspectable.
 
 ## The documentation contract
 

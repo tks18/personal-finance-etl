@@ -1,0 +1,10 @@
+<nav class="pf-global-nav" aria-label="Documentation sections">
+  <div class="pf-global-nav__inner md-grid">
+    <a href="{{ config.site_url }}" {% if page and page.is_homepage %}class="is-active"{% endif %}>Explore</a>
+    <a href="{{ config.site_url }}architecture/" {% if page and page.url.startswith("architecture/") %}class="is-active"{% endif %}>System</a>
+    <a href="{{ config.site_url }}finance/" {% if page and page.url.startswith("finance/") %}class="is-active"{% endif %}>Finance</a>
+    <a href="{{ config.site_url }}developer/" {% if page and (page.url.startswith("developer/") or page.url.startswith("configuration/")) %}class="is-active"{% endif %}>Engineering</a>
+    <a href="{{ config.site_url }}reference/" {% if page and page.url.startswith("reference/") %}class="is-active"{% endif %}>Reference</a>
+    <a href="{{ config.site_url }}about/" {% if page and page.url.startswith("about/") %}class="is-active"{% endif %}>About</a>
+  </div>
+</nav>

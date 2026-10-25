@@ -1,0 +1,115 @@
+.md-content { min-width:0; }
+.md-content__inner { max-width:62rem; margin-inline:auto; padding-bottom:2.5rem; }
+.md-typeset { color:var(--pf-text); font-size:.79rem; line-height:1.72; }
+.md-typeset > p,.md-typeset > ul,.md-typeset > ol,.md-typeset > blockquote { max-width:48rem; }
+.md-typeset h1 {
+  max-width:52rem; margin:.35rem 0 1.65rem; padding-bottom:.85rem; border-bottom:1px solid var(--pf-border);
+  color:var(--pf-text); font-size:2.18rem; font-weight:780; line-height:1.08; letter-spacing:-.045em;
+}
+.md-typeset h1::after {
+  content:""; display:block; width:4rem; height:3px; margin-top:.82rem; border-radius:9px;
+  background:linear-gradient(90deg,var(--pf-brand),var(--pf-brand-strong));
+}
+.md-typeset h2 {
+  max-width:52rem; margin-top:2.55rem; padding-top:.75rem; border-top:1px solid var(--pf-border);
+  color:var(--pf-text); font-size:1.31rem; font-weight:760; letter-spacing:-.025em;
+}
+.md-typeset h3 { max-width:52rem; margin-top:1.8rem; color:var(--pf-text); font-size:1.03rem; font-weight:730; }
+.md-typeset .headerlink { opacity:0; transition:opacity .15s ease; }
+.md-typeset :is(h1,h2,h3):hover .headerlink,.md-typeset .headerlink:focus { opacity:.55; }
+.md-typeset code:not(pre code) {
+  padding:.08rem .28rem; border:1px solid var(--pf-border); border-radius:5px;
+  background:var(--pf-surface-2); color:var(--pf-text);
+}
+.md-typeset blockquote {
+  padding:.7rem 1rem; border-left:3px solid var(--pf-brand); border-radius:0 var(--pf-r) var(--pf-r) 0;
+  background:var(--pf-surface-2); color:color-mix(in srgb,var(--pf-text) 76%,var(--pf-muted));
+}
+.md-typeset .highlight,.md-typeset pre {
+  max-width:62rem; border:1px solid var(--pf-border); border-radius:var(--pf-r);
+  background:var(--pf-surface); box-shadow:none;
+}
+.md-typeset .mermaid {
+  max-width:62rem; margin:1.6rem 0; padding:1.2rem; overflow:auto; border:1px solid var(--pf-border);
+  border-radius:var(--pf-r-lg); background:var(--pf-surface); cursor:zoom-in;
+}
+.md-typeset__table {
+  display:block; width:100%; max-width:62rem; margin:1.35rem 0; overflow-x:auto;
+  border:1px solid var(--pf-border); border-radius:var(--pf-r); background:var(--pf-surface);
+}
+.md-typeset table:not([class]) { width:100%; margin:0; border:0; }
+.md-typeset table:not([class]) th { background:var(--pf-surface-2); color:var(--pf-text); font-size:.69rem; font-weight:800; }
+.md-typeset table:not([class]) td { vertical-align:top; border-top:1px solid var(--pf-border); }
+.md-typeset .admonition,.md-typeset details {
+  max-width:52rem; border:1px solid var(--pf-border); border-left-width:3px;
+  border-radius:var(--pf-r); background:var(--pf-surface); box-shadow:none;
+}
+.md-typeset .admonition.note,.md-typeset details.note { border-left-color:var(--pf-info); }
+.md-typeset .admonition.tip,.md-typeset details.tip { border-left-color:var(--pf-success); }
+.md-typeset .admonition.warning,.md-typeset details.warning { border-left-color:var(--pf-warning); }
+.md-typeset .admonition.danger,.md-typeset details.danger { border-left-color:var(--pf-danger); }
+
+
+/* Final technical surfaces ------------------------------------------------ */
+
+/* Material's table wrapper is the only frame. */
+.md-typeset__table {
+  padding:0!important;
+  overflow:auto;
+  border:1px solid color-mix(in srgb,var(--pf-border) 88%,var(--pf-brand));
+  border-radius:12px;
+  background:var(--pf-surface);
+  box-shadow:0 8px 28px rgba(0,0,0,.08);
+}
+[data-md-color-scheme="slate"] .md-typeset__table {
+  box-shadow:0 10px 32px rgba(0,0,0,.18);
+}
+.md-typeset__table > table:not([class]) {
+  display:table;
+  width:100%;
+  margin:0!important;
+  border:0!important;
+  border-radius:0!important;
+  background:transparent;
+}
+.md-typeset table:not([class]) th:first-child { border-top-left-radius:11px; }
+.md-typeset table:not([class]) th:last-child { border-top-right-radius:11px; }
+.md-typeset table:not([class]) tr:last-child td:first-child { border-bottom-left-radius:11px; }
+.md-typeset table:not([class]) tr:last-child td:last-child { border-bottom-right-radius:11px; }
+
+/* Code: frame the highlight wrapper and let the pre/code sit flush inside it. */
+.md-typeset .highlight {
+  padding:0!important;
+  overflow:auto;
+  border:1px solid color-mix(in srgb,var(--pf-border) 88%,var(--pf-brand));
+  border-radius:12px;
+  background:var(--pf-surface-2);
+  box-shadow:0 8px 28px rgba(0,0,0,.08);
+}
+[data-md-color-scheme="slate"] .md-typeset .highlight {
+  box-shadow:0 10px 32px rgba(0,0,0,.18);
+}
+.md-typeset .highlight > pre {
+  margin:0!important;
+  border:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+}
+.md-typeset .highlight code {
+  border-radius:0!important;
+}
+
+/* Plain fenced/pre blocks that are not wrapped by .highlight remain framed. */
+.md-typeset > pre {
+  overflow:auto;
+  border:1px solid color-mix(in srgb,var(--pf-border) 88%,var(--pf-brand));
+  border-radius:12px;
+  background:var(--pf-surface-2);
+}
+
+/* Mermaid follows the same restrained radius language. */
+.md-typeset .mermaid {
+  border-radius:12px;
+  border-color:color-mix(in srgb,var(--pf-border) 88%,var(--pf-brand));
+}

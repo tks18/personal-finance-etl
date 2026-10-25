@@ -1,4 +1,15 @@
-# Architecture
+<div class="pf-overview-intro">
+  <div class="pf-overview-eyebrow">SYSTEM</div>
+  <h1>Architecture</h1>
+  <p>Runtime authority, data lifecycle, operational truth and reliability across Personal Finance ETL.</p>
+</div>
+
+<div class="pf-overview-routes">
+  <a class="pf-overview-card" href="system-architecture/"><strong>System Architecture</strong><span>Runtime authority and package ownership. →</span></a>
+  <a class="pf-overview-card" href="data-lifecycle/"><strong>Data Lifecycle</strong><span>How evidence moves through the system. →</span></a>
+  <a class="pf-overview-card" href="control-plane-artifact-lifecycle/"><strong>Control Plane</strong><span>Operational truth and artifact history. →</span></a>
+  <a class="pf-overview-card" href="reliability-and-recovery/"><strong>Reliability</strong><span>Failure, recovery and convergence semantics. →</span></a>
+</div>
 
 Personal Finance ETL is not one database with a collection of scripts around it. It is a local financial system that has to keep several kinds of truth separate long enough to make them useful.
 

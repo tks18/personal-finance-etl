@@ -12,3 +12,20 @@ src/personal_finance_etl/presentation/docs/assets/mermaid/*.min.js linguist-gene
 
 src/personal_finance_etl/presentation/docs/assets/svg-pan-zoom/** linguist-vendored
 src/personal_finance_etl/presentation/docs/assets/svg-pan-zoom/*.min.js linguist-generated=true
+
+
+# ---------------------------------------------------------------------------
+# Documentation portal presentation layer
+# ---------------------------------------------------------------------------
+# These files style/operate the MkDocs engineering portal. They are supporting
+# documentation infrastructure, not the primary implementation language.
+docs/assets/stylesheets/** linguist-documentation
+docs/assets/stylesheets/** linguist-detectable=false
+docs/assets/javascripts/** linguist-documentation
+docs/assets/javascripts/** linguist-detectable=false
+docs/overrides/** linguist-documentation
+docs/overrides/** linguist-detectable=false
+
+# Generated documentation output must never influence repository language stats.
+site/** linguist-generated=true
+site/** linguist-detectable=false

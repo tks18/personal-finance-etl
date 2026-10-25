@@ -2,6 +2,7 @@
 title: Personal Finance ETL
 description: From fragmented financial evidence to explainable financial state.
 hide:
+  - navigation
   - toc
 ---
 
@@ -13,10 +14,15 @@ hide:
   <div class="pf-actions">
     <a class="pf-btn pf-btn-primary" href="architecture/README/">Explore the System</a>
     <a class="pf-btn pf-btn-secondary" href="architecture/system-architecture/">View Architecture</a>
-    <a class="pf-text-link" href="https://github.com/tks18/personal-finance-etl">GitHub ↗</a>
+    <a class="pf-text-link" href="https://github.com/tks18/personal-finance-etl" target="_blank">GitHub ↗</a>
   </div>
   <div class="pf-tech-strip">Python <span>·</span> Polars <span>·</span> DuckDB <span>·</span> SQLite <span>·</span> Power BI</div>
-  <div class="pf-signature">Built by <strong>Sudharshan TK · Shan.tk</strong><br><span>Chartered Accountant × Data &amp; Software Engineer</span></div>
+  <div class="pf-signature pf-signature-final">
+    <span class="pf-built-by">BUILT BY</span>
+    <strong>Sudharshan TK · Shan.tk</strong>
+    <span>Chartered Accountant × Data &amp; Software Engineer</span>
+    <em>Because apparently “I need better personal-finance analytics” was not allowed to remain a small problem. 😄</em>
+  </div>
 </div>
 
 <p class="pf-character-line">Built for one household. Engineered slightly beyond reasonable requirements. 😄</p>
@@ -29,7 +35,11 @@ hide:
   <span>Household</span><span>Brokers</span><span>Market</span><span>FX</span><span>Reference</span>
 </div>
 
-The hard part is not collecting files. It is reconstructing financial state without losing the evidence that produced it.
+Bank records know one part of the story. Brokers know another. Market data knows prices, not intent. Tax rules care about chronology. Spreadsheets remember everything and explain nothing.
+
+**The problem isn't getting more data. It's deciding what is true.**
+
+That means reconstructing financial state without losing the evidence that produced it.
 
 <div class="pf-section-label">02 · THE SYSTEM</div>
 
@@ -56,27 +66,27 @@ flowchart LR
 
 <div class="pf-section-label">03 · FOUR PILLARS</div>
 
-## Finance, data and software engineering in one system.
+## One financial problem. Several engineering disciplines showed up.
 
 <div class="pf-grid pf-grid-2">
   <a class="pf-card" href="finance/README/">
     <div class="pf-card-kicker">01 · FINANCIAL ENGINEERING</div>
-    <h3>Reconstruct the economics.</h3>
+    <h3>Reconstruct what economically happened.</h3>
     <p>FIFO · reconciliation · performance · FX · Tax · wealth · FIRE</p>
   </a>
   <a class="pf-card" href="architecture/README/">
     <div class="pf-card-kicker">02 · DATA PLATFORM</div>
-    <h3>Preserve the evidence.</h3>
+    <h3>Preserve where every number came from.</h3>
     <p>Contracts · lineage · Polars · DuckDB · SQLite Control Plane</p>
   </a>
   <a class="pf-card" href="finance/metrics-and-methodology/">
     <div class="pf-card-kicker">03 · DECISION INTELLIGENCE</div>
-    <h3>Serve decisions, not mystery numbers.</h3>
+    <h3>Turn state into something useful.</h3>
     <p>Portfolio analytics · household state · Power BI · planning</p>
   </a>
   <a class="pf-card" href="architecture/reliability-and-recovery/">
     <div class="pf-card-kicker">04 · RELIABILITY & SOFTWARE</div>
-    <h3>Make the result believable.</h3>
+    <h3>Make tomorrow’s run agree with today’s truth.</h3>
     <p>Typed architecture · recovery · observability · testing · packaging</p>
   </a>
 </div>
@@ -127,15 +137,15 @@ flowchart LR
     <p><strong>Finance gave me the questions. Data gave me the structure. Software engineering let me build the answers.</strong></p>
   </div>
   <div class="pf-creator-links">
-    <a href="https://github.com/tks18">GitHub ↗</a>
-    <a href="https://www.linkedin.com/in/sudharshan-tk">LinkedIn ↗</a>
+    <a href="https://github.com/tks18" target="_blank">GitHub ↗</a>
+    <a href="https://www.linkedin.com/in/sudharshan-tk" target="_blank">LinkedIn ↗</a>
     <a href="about/about-me/">About Shan.tk →</a>
   </div>
 </div>
 
 <div class="pf-final-cta">
   <div>
-    <span class="pf-section-label">READY TO GO DEEPER?</span>
+    <span class="pf-section-label">YOU’VE SEEN THE SYSTEM. NOW INSPECT IT.</span>
     <h2>Preserve the evidence. Reconstruct the state. Explain the decision.</h2>
   </div>
   <a class="pf-btn pf-btn-primary" href="documentation-guide/">Open the Documentation Guide</a>
