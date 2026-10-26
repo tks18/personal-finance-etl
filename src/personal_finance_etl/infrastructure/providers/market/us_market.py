@@ -354,7 +354,6 @@ class USMarketExtractor:
         self.status_queue.put(
             EngineStatusMessage(
                 msg=f"Starting US Stock market extractor for {total} tickers...",
-                data=None,
                 progress=0.1,
                 level=LogLevel.STEP,
             )
@@ -400,7 +399,6 @@ class USMarketExtractor:
                     self.status_queue.put(
                         EngineStatusMessage(
                             msg=f"Error: Critical thread failure on {isin}: {err_msg}",
-                            data=None,
                             progress=prog,
                             level=LogLevel.ERROR,
                         )
