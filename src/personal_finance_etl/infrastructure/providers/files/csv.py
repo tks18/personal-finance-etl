@@ -15,10 +15,9 @@ Does not own
 from __future__ import annotations
 
 import io
+import logging
 
 import polars as pl
-
-from personal_finance_etl.infrastructure.logging import logger
 
 __all__ = [
     "extract_benchmark_master_raw",
@@ -28,6 +27,8 @@ __all__ = [
     "extract_stg_benchmark_mapping",
     "extract_stg_mf_isin_mapping",
 ]
+
+logger = logging.getLogger(__name__)
 
 
 def extract_stg_mf_isin_mapping(filename: str, folder_path: str, raw_bytes: bytes) -> pl.LazyFrame:
