@@ -38,9 +38,11 @@ from personal_finance_etl.contracts.extraction import (
     ExtractorEntityResult,
     ExtractorEntityStatus,
 )
+from personal_finance_etl.contracts.lifecycle import FailureDomain
 from personal_finance_etl.contracts.logging import StatusQueue
 from personal_finance_etl.contracts.observability import (
     DiagnosticSeverity,
+    ErrorDetails,
     EventCode,
     EventOutcome,
     ObservabilityContext,
@@ -291,8 +293,11 @@ class BenchmarkExtractor:
                     presentation_kind=PresentationKind.SUCCESS,
                     outcome=EventOutcome.COMPLETED,
                     context=ObservabilityContext(
+                        stage=EngineStage.TRANSFORMING,
+                        provider="YahooFinance",
                         entity_type="Ticker",
                         entity_id=res.entity,
+                        attempt=res.attempt_count,
                         rows=res.df.height if not res.df.is_empty() else None,
                     ),
                     message=res.message,
@@ -309,6 +314,8 @@ class BenchmarkExtractor:
                     presentation_kind=PresentationKind.STEP,
                     outcome=EventOutcome.COMPLETED,
                     context=ObservabilityContext(
+                        stage=EngineStage.TRANSFORMING,
+                        provider="YahooFinance",
                         entity_type="Ticker",
                         entity_id=res.entity,
                         cache_hit=True,
@@ -330,8 +337,11 @@ class BenchmarkExtractor:
                     presentation_kind=PresentationKind.WARNING,
                     outcome=EventOutcome.COMPLETED,
                     context=ObservabilityContext(
+                        stage=EngineStage.TRANSFORMING,
+                        provider="YahooFinance",
                         entity_type="Ticker",
                         entity_id=res.entity,
+                        attempt=res.attempt_count,
                     ),
                     message=res.message,
                     progress=prog,
@@ -339,6 +349,13 @@ class BenchmarkExtractor:
             )
         else:
             batch_result.failed_entities[res.entity] = res.message
+            err_details = ErrorDetails(
+                exception_type=res.failure_class or "MarketTickerFetchError",
+                exception_message=res.final_error or res.message,
+                failure_domain=FailureDomain.EXTERNAL_PROVIDER,
+                traceback_summary="",
+                retryable=False,
+            )
             self._emit_event(
                 ObservabilityEvent(
                     timestamp=datetime.now(UTC),
@@ -346,9 +363,13 @@ class BenchmarkExtractor:
                     severity=DiagnosticSeverity.ERROR,
                     presentation_kind=PresentationKind.FAILURE,
                     outcome=EventOutcome.FAILED,
+                    error=err_details,
                     context=ObservabilityContext(
+                        stage=EngineStage.TRANSFORMING,
+                        provider="YahooFinance",
                         entity_type="Ticker",
                         entity_id=res.entity,
+                        attempt=res.attempt_count,
                     ),
                     message=res.message,
                     progress=prog,
