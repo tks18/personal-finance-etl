@@ -5,6 +5,7 @@ Owns
 - EventQueue: Protocol unifying thread and multiprocessing event queues.
 - ObservabilityQueueSink: Non-blocking sink enqueuing events to a background buffer.
 - AsyncObservabilityListener: Background daemon thread pulling queued events and writing to sinks.
+- create_forensic_pipeline: Assembles asynchronous queue, listener, and JSONL forensic sink.
 
 Does not own
 -------------
@@ -17,18 +18,25 @@ from __future__ import annotations
 
 import queue
 import threading
+from pathlib import Path
 from types import TracebackType
 from typing import Protocol
 
 from personal_finance_etl.contracts.observability import (
+    DiagnosticSeverity,
+    EventOutcome,
     ObservabilityEvent,
     ObservabilitySink,
+)
+from personal_finance_etl.infrastructure.observability.forensic_sink import (
+    JsonlForensicSink,
 )
 
 __all__ = [
     "AsyncObservabilityListener",
     "EventQueue",
     "ObservabilityQueueSink",
+    "create_forensic_pipeline",
 ]
 
 
@@ -108,6 +116,16 @@ class AsyncObservabilityListener:
         self._thread: threading.Thread | None = None
         self._stop_requested = threading.Event()
 
+    def is_alive(self) -> bool:
+        """Return True if background consumer thread is actively running.
+
+        Returns
+        -------
+        bool
+            True if the thread is started and alive, False otherwise.
+        """
+        return self._thread is not None and self._thread.is_alive()
+
     def start(self) -> None:
         """Start the background consumer thread."""
         if self._thread is not None and self._thread.is_alive():
@@ -121,13 +139,36 @@ class AsyncObservabilityListener:
         )
         self._thread.start()
 
+    def flush(self) -> None:
+        """Flush all attached sinks synchronously.
+
+        Silently suppresses individual sink failures to maintain listener stability.
+        """
+        for sink in self.sinks:
+            try:
+                sink.flush()
+            except Exception:
+                pass
+
     def _dispatch(self, event: ObservabilityEvent) -> None:
-        """Safely fan-out one event to all listener-owned sinks."""
+        """Safely fan-out one event to all listener-owned sinks.
+
+        Parameters
+        ----------
+        event : ObservabilityEvent
+            The canonical structured event to forward to attached sinks.
+        """
         for sink in self.sinks:
             try:
                 sink.emit(event)
             except Exception:
                 pass
+
+        if (
+            event.severity in (DiagnosticSeverity.ERROR, DiagnosticSeverity.CRITICAL)
+            or event.outcome == EventOutcome.FAILED
+        ):
+            self.flush()
 
     def _run_loop(self) -> None:
         """Execute main loop pulling events from queue until sentinel or stop signal."""
@@ -154,18 +195,14 @@ class AsyncObservabilityListener:
                 self._dispatch(item)
 
         # Flush all sinks
-        for sink in self.sinks:
-            try:
-                sink.flush()
-            except Exception:
-                pass
+        self.flush()
 
-    def stop(self, timeout: float = 3.0) -> None:
-        """Stop the background listener thread and flush all sinks.
+    def stop(self, timeout: float = 5.0) -> None:
+        """Stop the background listener thread, drain residual events, and flush sinks.
 
         Parameters
         ----------
-        timeout : float, default=3.0
+        timeout : float, default=5.0
             Maximum duration in seconds to wait for thread join.
         """
         self._stop_requested.set()
@@ -177,6 +214,16 @@ class AsyncObservabilityListener:
         if self._thread is not None:
             self._thread.join(timeout=timeout)
             self._thread = None
+
+        # Drain any residual items directly in calling thread if queue still contains items
+        while True:
+            try:
+                item = self.inbound_queue.get_nowait()
+            except (queue.Empty, OSError):
+                break
+
+            if item is not None:
+                self._dispatch(item)
 
         for sink in self.sinks:
             try:
@@ -200,3 +247,28 @@ class AsyncObservabilityListener:
     ) -> None:
         """Exit context manager, stopping the listener thread and flushing sinks."""
         self.stop()
+
+
+def create_forensic_pipeline(
+    log_path: str | Path,
+    buffer_size: int = 50,
+) -> tuple[ObservabilityQueueSink, AsyncObservabilityListener, JsonlForensicSink]:
+    """Create asynchronous queue, background listener, and JSONL forensic sink pipeline.
+
+    Parameters
+    ----------
+    log_path : str | Path
+        Filesystem path to output JSONL forensic trace.
+    buffer_size : int, default=50
+        Number of events to buffer before flushing file handle to physical disk.
+
+    Returns
+    -------
+    tuple[ObservabilityQueueSink, AsyncObservabilityListener, JsonlForensicSink]
+        Tuple of queue sink for emitter registration, background listener, and forensic sink.
+    """
+    forensic_queue: queue.Queue[ObservabilityEvent | None] = queue.Queue()
+    forensic_sink = JsonlForensicSink(log_path, buffer_size=buffer_size)
+    listener = AsyncObservabilityListener(forensic_queue, sinks=[forensic_sink])
+    queue_sink = ObservabilityQueueSink(forensic_queue)
+    return queue_sink, listener, forensic_sink
