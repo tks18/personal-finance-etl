@@ -23,6 +23,8 @@ from personal_finance_etl.infrastructure.observability.archival import (
     compress_bytes,
     decompress_bytes,
     retrieve_run_trace,
+    retrieve_run_trace_events,
+    retrieve_run_trace_text,
 )
 from personal_finance_etl.infrastructure.observability.forensic_sink import (
     JsonlForensicSink,
@@ -69,4 +71,6 @@ __all__ = [
     "redact_dict",
     "redact_text",
     "retrieve_run_trace",
+    "retrieve_run_trace_events",
+    "retrieve_run_trace_text",
 ]
