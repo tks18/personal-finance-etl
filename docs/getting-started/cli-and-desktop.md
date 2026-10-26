@@ -135,9 +135,9 @@ def run_pipeline_async(
     self,
     config_path: str,
     rules_path: str,
-    on_status: Callable[[EngineStatusMessage], None],
+    on_status: Callable[[ObservabilityEvent], None],
 ) -> None:
-    status_queue: multiprocessing.Queue[EngineStatusMessage] = multiprocessing.Queue()
+    status_queue: multiprocessing.Queue[ObservabilityEvent] = multiprocessing.Queue()
     process = WorkerPoolCoordinator.spawn_process(status_queue, config_path, rules_path)
     WorkerPoolCoordinator.monitor_queue(process, status_queue, on_status)
 ```
@@ -157,7 +157,7 @@ sequenceDiagram
     UI->>E: run_pipeline_async(...)
     E->>W: spawn_process(...)
     W->>P: create worker process
-    P->>Q: EngineStatusMessage
+    P->>Q: ObservabilityEvent
     W->>Q: monitor
     W-->>UI: callback(status)
 ```
@@ -168,7 +168,7 @@ That separation matters most for Desktop responsiveness and process isolation.
 
 Presentation does not need to infer machine state from arbitrary strings.
 
-Status crosses the boundary through `EngineStatusMessage` and logging/status contracts.
+Status crosses the boundary through `ObservabilityEvent` and logging/status contracts.
 
 The UI can still render human-friendly messages, but machine meaning remains structured.
 
