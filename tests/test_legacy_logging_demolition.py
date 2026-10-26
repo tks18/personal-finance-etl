@@ -8,6 +8,8 @@ Owns
 - Verification that generated trace files are queryable natively via Polars (pl.read_ndjson).
 - Verification of Control Plane trace archival using the generated JSONL file.
 - Static codebase assertions confirming complete elimination of legacy bracket prefixes.
+- Verification that dead logging helpers and global logger exports are eradicated.
+- Static codebase assertions confirming absence of global logger imports.
 
 Does not own
 -------------
@@ -216,3 +218,37 @@ def test_static_absence_of_legacy_bracket_prefixes() -> None:
                         f"Found prohibited legacy prefix '{prefix}' in {py_file}:\n"
                         + "\n".join(lines[:3])
                     )
+
+
+def test_logging_infrastructure_demolished_exports() -> None:
+    """Verify dead logging helpers and global logger export are permanently eradicated."""
+    import personal_finance_etl.infrastructure.logging as logging_pkg
+    import personal_finance_etl.infrastructure.logging.setup as logging_setup
+
+    demolished_symbols = [
+        "logger",
+        "add_file_handler",
+        "remove_file_handlers",
+        "add_queue_handler",
+        "QueueHandler",
+        "setup_logger",
+    ]
+    for sym in demolished_symbols:
+        assert not hasattr(logging_pkg, sym), f"{sym} still exported from infrastructure.logging"
+        assert not hasattr(logging_setup, sym), f"{sym} still present in infrastructure.logging.setup"
+
+
+def test_static_absence_of_global_logger_imports() -> None:
+    """Verify zero production files import global logger from infrastructure.logging."""
+    src_dir = Path("src/personal_finance_etl")
+    for py_file in src_dir.rglob("*.py"):
+        content = py_file.read_text(encoding="utf-8")
+        parsed = ast.parse(content, filename=str(py_file))
+        for node in ast.walk(parsed):
+            if isinstance(node, ast.ImportFrom):
+                if node.module and "personal_finance_etl.infrastructure.logging" in node.module:
+                    for alias in node.names:
+                        assert alias.name != "logger", (
+                            f"File {py_file} illegally imports global 'logger' from {node.module}"
+                        )
+
