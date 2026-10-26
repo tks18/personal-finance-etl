@@ -13,6 +13,7 @@ Does not own
 
 from __future__ import annotations
 
+import logging
 import os
 
 import polars as pl
@@ -29,9 +30,10 @@ from personal_finance_etl.contracts.observability import (
     PresentationKind,
 )
 from personal_finance_etl.domain.investments.contracts import PipelineExecutionResult
-from personal_finance_etl.infrastructure.logging.setup import logger
 
 __all__ = ["PostProcessingPipeline"]
+
+logger = logging.getLogger(__name__)
 
 
 class PostProcessingPipeline:
