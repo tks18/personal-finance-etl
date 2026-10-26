@@ -16,14 +16,13 @@ Does not own
 
 from __future__ import annotations
 
+import logging
 import re
 import time
 from datetime import datetime
 
 import fastexcel
 import polars as pl
-
-from personal_finance_etl.infrastructure.logging import logger
 
 __all__ = [
     "extract_mf_market_data_raw",
@@ -32,6 +31,8 @@ __all__ = [
     "extract_stock_transactions_raw",
     "extract_us_stock_transactions_raw",
 ]
+
+logger = logging.getLogger(__name__)
 
 
 def _clean_excel_headers(df_sliced: pl.DataFrame) -> tuple[pl.DataFrame, str]:
