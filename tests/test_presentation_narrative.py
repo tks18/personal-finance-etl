@@ -46,6 +46,7 @@ from personal_finance_etl.presentation.observability.desktop_sink import (
 def _make_event(
     kind: PresentationKind,
     msg: str,
+    event_code: EventCode = EventCode.EXTRACTION_COMPLETED,
     duration_ms: float | None = None,
     rows: int | None = None,
     cache_hit: bool | None = None,
@@ -67,7 +68,7 @@ def _make_event(
         entity_id=entity_id,
     )
     return ObservabilityEvent.create(
-        event_code=EventCode.EXTRACTION_COMPLETED,
+        event_code=event_code,
         message=msg,
         context=ctx,
         presentation_kind=kind,
@@ -358,3 +359,334 @@ def test_base_engine_tab_process_observability_event_failure() -> None:
         assert title == "Execution Failure"
         assert "Domain: FINANCIAL_INVARIANT" in text
         assert "run-test-1234" in text
+
+
+def test_rich_narrative_suppresses_repetitive_per_entity_success() -> None:
+    """Verify RichNarrativeSink suppresses repetitive per-entity ticker/ISIN lines."""
+    buf = io.StringIO()
+    console = Console(file=buf, color_system=None, width=120)
+    sink = RichNarrativeSink(
+        console=console, show_timestamps=False, suppress_per_entity_success=True
+    )
+
+    event_cached = ObservabilityEvent.create(
+        event_code=EventCode.MARKET_TICKER_CACHE_HIT,
+        message="USDINR=X fully cached",
+        presentation_kind=PresentationKind.STEP,
+        progress=0.5,
+    )
+    sink.emit(event_cached)
+    assert sink.rendered_count == 0
+    assert buf.getvalue() == ""
+
+    # When suppression is disabled, line is rendered
+    sink_verbose = RichNarrativeSink(
+        console=console, show_timestamps=False, suppress_per_entity_success=False
+    )
+    sink_verbose.emit(event_cached)
+    assert sink_verbose.rendered_count == 1
+    assert "USDINR=X fully cached" in buf.getvalue()
+
+
+def test_rich_narrative_renders_ticker_failure_even_when_suppression_active() -> None:
+    """Verify failed ticker events are always rendered even when per-entity suppression is active."""
+    buf = io.StringIO()
+    console = Console(file=buf, color_system=None, width=120)
+    sink = RichNarrativeSink(
+        console=console, show_timestamps=False, suppress_per_entity_success=True
+    )
+
+    err = ErrorDetails(
+        exception_type="HttpError",
+        exception_message="503 Service Unavailable",
+        failure_domain=FailureDomain.EXTERNAL_PROVIDER,
+        traceback_summary="",
+    )
+    event_fail = ObservabilityEvent.create(
+        event_code=EventCode.MARKET_TICKER_FAILED,
+        message="Failed to fetch NVDA",
+        presentation_kind=PresentationKind.FAILURE,
+        error=err,
+    )
+    sink.emit(event_fail)
+    assert sink.rendered_count == 1
+    assert "FAILURE: Failed to fetch NVDA" in buf.getvalue()
+
+
+def test_desktop_narrative_sink_suppresses_repetitive_per_entity_success() -> None:
+    """Verify DesktopNarrativeSink suppresses repetitive per-entity ticks from log callback."""
+    log_mock = MagicMock()
+    prog_mock = MagicMock()
+    sink = DesktopNarrativeSink(
+        log_callback=log_mock,
+        progress_callback=prog_mock,
+        suppress_per_entity_success=True,
+    )
+
+    event_cached = ObservabilityEvent.create(
+        event_code=EventCode.MARKET_TICKER_CACHE_HIT,
+        message="USDINR=X fully cached",
+        presentation_kind=PresentationKind.STEP,
+        progress=0.45,
+    )
+    sink.emit(event_cached)
+    log_mock.assert_not_called()
+    prog_mock.assert_called_once_with(0.45)
+
+
+def test_narrative_density_within_target_bounds() -> None:
+    """Verify standard successful 5-phase run renders within target narrative density (20-42 events)."""
+    buf = io.StringIO()
+    console = Console(file=buf, color_system=None, width=120)
+    sink = RichNarrativeSink(
+        console=console, show_timestamps=False, suppress_per_entity_success=True
+    )
+
+    milestone_events = [
+        _make_event(
+            PresentationKind.STEP,
+            "Initializing Personal Finance ETL...",
+            event_code=EventCode.RUN_START,
+        ),
+        _make_event(
+            PresentationKind.STEP,
+            "Pipeline execution started.",
+            event_code=EventCode.RUN_START,
+        ),
+        _make_event(
+            PresentationKind.STEP,
+            "Phase 1/5: Discovery & Sync",
+            event_code=EventCode.EXTRACTION_START,
+        ),
+        _make_event(
+            PresentationKind.STEP,
+            "Injected 8 dynamic configuration assets",
+            event_code=EventCode.EXTRACTION_COMPLETED,
+            rows=8,
+        ),
+        _make_event(
+            PresentationKind.STEP,
+            "Initializing extraction from Raw Store payloads...",
+            event_code=EventCode.EXTRACTION_START,
+        ),
+        _make_event(
+            PresentationKind.STEP,
+            "Pulled 0 binary payloads from Raw Store",
+            event_code=EventCode.EXTRACTION_BATCH,
+            rows=0,
+        ),
+        _make_event(
+            PresentationKind.STEP,
+            "Running Gatekeeper Schema Validation...",
+            event_code=EventCode.SCHEMA_VALIDATION,
+        ),
+        _make_event(
+            PresentationKind.SUCCESS,
+            "Gatekeeper validated 18 schemas",
+            event_code=EventCode.SCHEMA_VALIDATION,
+            duration_ms=1.5,
+        ),
+        _make_event(
+            PresentationKind.SUCCESS,
+            "Phase 1 Complete - Actionable streams loaded",
+            event_code=EventCode.EXTRACTION_COMPLETED,
+            duration_ms=450.0,
+        ),
+        _make_event(
+            PresentationKind.STEP,
+            "Phase 2/5: Upserting new datasets into Bronze Lakehouse",
+            event_code=EventCode.BRONZE_UPSERT,
+        ),
+        _make_event(
+            PresentationKind.SUCCESS,
+            "Phase 2 Complete - Bronze layer synchronized",
+            event_code=EventCode.BRONZE_UPSERT,
+            duration_ms=0.5,
+        ),
+        _make_event(
+            PresentationKind.STEP,
+            "Phase 3/5: Transforming and harmonizing data streams",
+            event_code=EventCode.TRANSFORMATION_STAGE,
+        ),
+        _make_event(
+            PresentationKind.SUCCESS,
+            "Phase 3 Complete - DAG mapped 18 base tables",
+            event_code=EventCode.TRANSFORMATION_DAG_COMPLETED,
+            rows=18,
+            duration_ms=620.0,
+        ),
+        _make_event(
+            PresentationKind.STEP,
+            "Starting Currency FX Pipeline...",
+            event_code=EventCode.MARKET_FETCH_START,
+        ),
+        _make_event(
+            PresentationKind.PROGRESS,
+            "Upserting Delta into Bronze Currency Lake...",
+            event_code=EventCode.BRONZE_UPSERT,
+        ),
+        _make_event(
+            PresentationKind.PROGRESS,
+            "Transforming continuous Currency FX series...",
+            event_code=EventCode.TRANSFORMATION_STAGE,
+        ),
+        _make_event(
+            PresentationKind.SUCCESS,
+            "Currency FX Pipeline Completed.",
+            event_code=EventCode.MARKET_SYNC_COMPLETED,
+        ),
+        _make_event(
+            PresentationKind.STEP,
+            "Starting US Market Data Pipeline...",
+            event_code=EventCode.MARKET_FETCH_START,
+        ),
+        _make_event(
+            PresentationKind.PROGRESS,
+            "Upserting Delta into Bronze US Market Lake...",
+            event_code=EventCode.BRONZE_UPSERT,
+        ),
+        _make_event(
+            PresentationKind.PROGRESS,
+            "Transforming continuous US Market series...",
+            event_code=EventCode.TRANSFORMATION_STAGE,
+        ),
+        _make_event(
+            PresentationKind.SUCCESS,
+            "US Market Pipeline Completed.",
+            event_code=EventCode.MARKET_SYNC_COMPLETED,
+        ),
+        _make_event(
+            PresentationKind.STEP,
+            "Phase 3.5: Dynamic Benchmark Extraction...",
+            event_code=EventCode.MARKET_FETCH_START,
+        ),
+        _make_event(
+            PresentationKind.PROGRESS,
+            "Upserting Delta into Bronze Benchmark Lake...",
+            event_code=EventCode.BRONZE_UPSERT,
+        ),
+        _make_event(
+            PresentationKind.PROGRESS,
+            "Transforming Bronze Benchmark Data into Silver...",
+            event_code=EventCode.TRANSFORMATION_STAGE,
+        ),
+        _make_event(
+            PresentationKind.SUCCESS,
+            "Benchmark Pipeline Completed.",
+            event_code=EventCode.MARKET_SYNC_COMPLETED,
+            rows=11784,
+        ),
+        _make_event(
+            PresentationKind.STEP,
+            "Phase 4/5: Executing Advanced Analytics...",
+            event_code=EventCode.QUANT_ENGINE_START,
+        ),
+        _make_event(
+            PresentationKind.STEP,
+            "Starting Investment Quant Engine...",
+            event_code=EventCode.QUANT_ENGINE_START,
+        ),
+        _make_event(
+            PresentationKind.STEP,
+            "Quant Engine initialized context spanning market dates...",
+            event_code=EventCode.QUANT_ENGINE_START,
+            rows=147,
+        ),
+        _make_event(
+            PresentationKind.SUCCESS,
+            "Processing Complete — generated 13 analytics tables",
+            event_code=EventCode.QUANT_POOL_COMPLETED,
+            rows=13,
+        ),
+        _make_event(
+            PresentationKind.STEP,
+            "Quant Engine mapped 341 open tax lots across portfolio",
+            event_code=EventCode.QUANT_LOT_MAPPED,
+            rows=341,
+        ),
+        _make_event(
+            PresentationKind.STEP,
+            "Executing Tax Engine...",
+            event_code=EventCode.TAX_ENGINE_START,
+        ),
+        _make_event(
+            PresentationKind.SUCCESS,
+            "Tax Engine completed — generated 4 tax tables",
+            event_code=EventCode.TAX_ENGINE_COMPLETED,
+            rows=4,
+        ),
+        _make_event(
+            PresentationKind.STEP,
+            "Starting Presentation Layer Engines...",
+            event_code=EventCode.PRESENTATION_DAG_START,
+        ),
+        _make_event(
+            PresentationKind.STEP,
+            "Building core wealth models...",
+            event_code=EventCode.WEALTH_ENGINE_START,
+        ),
+        _make_event(
+            PresentationKind.STEP,
+            "Starting FIRE Monte Carlo simulation engine...",
+            event_code=EventCode.FIRE_ENGINE_START,
+            rows=1000,
+        ),
+        _make_event(
+            PresentationKind.SUCCESS,
+            "FIRE Monte Carlo simulations complete",
+            event_code=EventCode.FIRE_ENGINE_COMPLETED,
+            rows=2,
+        ),
+        _make_event(
+            PresentationKind.SUCCESS,
+            "Wealth presentation models assembled",
+            event_code=EventCode.WEALTH_ENGINE_COMPLETED,
+            rows=10,
+        ),
+        _make_event(
+            PresentationKind.STEP,
+            "Spawning 10 concurrent Polars streaming graphs...",
+            event_code=EventCode.PRESENTATION_DAG_START,
+            rows=10,
+        ),
+        _make_event(
+            PresentationKind.SUCCESS,
+            "Phase 4 Complete - Presentation logic built 46 total tables",
+            event_code=EventCode.PRESENTATION_DAG_COMPLETED,
+            rows=46,
+            duration_ms=27800.0,
+        ),
+        _make_event(
+            PresentationKind.STEP,
+            "Phase 5/5: Fully replacing Silver and Gold analytical layers",
+            event_code=EventCode.GOLD_REPLACE,
+        ),
+        _make_event(
+            PresentationKind.SUCCESS,
+            "Phase 5 Complete - Disk synchronization successful",
+            event_code=EventCode.GOLD_REPLACE,
+            duration_ms=2110.0,
+        ),
+        _make_event(
+            PresentationKind.SUCCESS,
+            "Pipeline Execution Successful in 32.66 seconds.",
+            event_code=EventCode.RUN_COMPLETED,
+            duration_ms=32660.0,
+        ),
+    ]
+
+    routine_ticker_events = [
+        _make_event(
+            PresentationKind.STEP,
+            f"TICKER_{i} fully cached",
+            event_code=EventCode.MARKET_TICKER_CACHE_HIT,
+            progress=i / 20.0,
+        )
+        for i in range(20)
+    ]
+
+    for ev in milestone_events + routine_ticker_events:
+        sink.emit(ev)
+
+    assert 20 <= sink.rendered_count <= 45
+    assert sink.rendered_count == len(milestone_events)
