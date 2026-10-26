@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import queue
 import threading
+from collections.abc import Mapping
 from pathlib import Path
 from types import TracebackType
 from typing import Protocol
@@ -30,6 +31,9 @@ from personal_finance_etl.contracts.observability import (
 )
 from personal_finance_etl.infrastructure.observability.forensic_sink import (
     JsonlForensicSink,
+)
+from personal_finance_etl.infrastructure.observability.redaction import (
+    RedactionPolicy,
 )
 
 __all__ = [
@@ -252,6 +256,7 @@ class AsyncObservabilityListener:
 def create_forensic_pipeline(
     log_path: str | Path,
     buffer_size: int = 50,
+    policies: Mapping[str, RedactionPolicy] | None = None,
 ) -> tuple[ObservabilityQueueSink, AsyncObservabilityListener, JsonlForensicSink]:
     """Create asynchronous queue, background listener, and JSONL forensic sink pipeline.
 
@@ -261,6 +266,8 @@ def create_forensic_pipeline(
         Filesystem path to output JSONL forensic trace.
     buffer_size : int, default=50
         Number of events to buffer before flushing file handle to physical disk.
+    policies : Mapping[str, RedactionPolicy] | None, default=None
+        Optional field-level redaction policies applied at forensic write boundary.
 
     Returns
     -------
@@ -268,7 +275,7 @@ def create_forensic_pipeline(
         Tuple of queue sink for emitter registration, background listener, and forensic sink.
     """
     forensic_queue: queue.Queue[ObservabilityEvent | None] = queue.Queue()
-    forensic_sink = JsonlForensicSink(log_path, buffer_size=buffer_size)
+    forensic_sink = JsonlForensicSink(log_path, buffer_size=buffer_size, policies=policies)
     listener = AsyncObservabilityListener(forensic_queue, sinks=[forensic_sink])
     queue_sink = ObservabilityQueueSink(forensic_queue)
     return queue_sink, listener, forensic_sink
