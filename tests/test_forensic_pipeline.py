@@ -18,6 +18,8 @@ from pathlib import Path
 
 import polars as pl
 
+from personal_finance_etl.application.observability import ObservabilityEmitter
+from personal_finance_etl.application.pipeline.lifecycle import RunLifecycleCoordinator
 from personal_finance_etl.config.settings import Settings
 from personal_finance_etl.contracts import (
     DiagnosticSeverity,
@@ -28,13 +30,16 @@ from personal_finance_etl.contracts import (
     FailureDomain,
     ObservabilityContext,
     ObservabilityEvent,
+    ObservabilitySink,
     PresentationKind,
 )
 from personal_finance_etl.infrastructure.observability import (
     AsyncObservabilityListener,
     JsonlForensicSink,
     ObservabilityQueueSink,
+    create_forensic_pipeline,
 )
+from personal_finance_etl.infrastructure.warehouse.connection import DuckDBManager
 
 
 def test_settings_log_configuration(tmp_path: Path) -> None:
@@ -189,3 +194,236 @@ def test_multiprocessing_queue_listener(tmp_path: Path) -> None:
     unnested = df.unnest("context")
     workers_found = set(unnested["worker_id"].to_list())
     assert workers_found == {"worker-0", "worker-1"}
+
+
+def test_async_observability_listener_is_alive_and_flush(tmp_path: Path) -> None:
+    """Verify is_alive reflects thread state and flush executes on all sinks."""
+    log_file = tmp_path / "lifecycle_trace.jsonl"
+    file_sink = JsonlForensicSink(log_file, buffer_size=100)
+    event_queue: queue.Queue[ObservabilityEvent | None] = queue.Queue()
+
+    listener = AsyncObservabilityListener(event_queue, sinks=[file_sink])
+    assert not listener.is_alive()
+
+    listener.start()
+    assert listener.is_alive()
+
+    ctx = ObservabilityContext(run_id="run-flush-01")
+    event = ObservabilityEvent.create(
+        event_code=EventCode.DISCOVERY_START,
+        message="Discovery init",
+        context=ctx,
+    )
+    event_queue.put(event)
+
+    time.sleep(0.1)
+
+    listener.flush()
+    assert log_file.exists()
+    assert log_file.stat().st_size > 0
+
+    listener.stop(timeout=3.0)
+    assert not listener.is_alive()
+
+
+def test_async_observability_listener_immediate_flush_on_error_or_failure(tmp_path: Path) -> None:
+    """Verify listener flushes sinks immediately upon encountering ERROR or FAILED events."""
+    log_file = tmp_path / "error_flush_trace.jsonl"
+    file_sink = JsonlForensicSink(log_file, buffer_size=200)
+    event_queue: queue.Queue[ObservabilityEvent | None] = queue.Queue()
+    queue_sink = ObservabilityQueueSink(event_queue)
+
+    listener = AsyncObservabilityListener(event_queue, sinks=[file_sink])
+    listener.start()
+
+    ctx = ObservabilityContext(run_id="run-err-01")
+    info_event = ObservabilityEvent.create(
+        event_code=EventCode.DISCOVERY_START,
+        message="Standard info event",
+        context=ctx,
+        severity=DiagnosticSeverity.INFO,
+    )
+    queue_sink.emit(info_event)
+    time.sleep(0.1)
+
+    err = ErrorDetails(
+        exception_type="RuntimeError",
+        exception_message="Fatal processing failure",
+        failure_domain=FailureDomain.WORKER,
+        traceback_summary="Traceback: line 10",
+    )
+    error_event = ObservabilityEvent.create(
+        event_code=EventCode.RUN_FAILED,
+        message="Fatal pipeline error",
+        context=ctx,
+        severity=DiagnosticSeverity.ERROR,
+        outcome=EventOutcome.FAILED,
+        error=err,
+    )
+    queue_sink.emit(error_event)
+
+    time.sleep(0.15)
+
+    assert log_file.exists()
+    df = pl.read_ndjson(log_file)
+    assert df.height == 2
+
+    listener.stop(timeout=3.0)
+
+
+class _MockStatusQueue:
+    """Mock queue capturing status items."""
+
+    def put(
+        self,
+        status: object,
+        /,
+        block: bool = True,
+        timeout: float | None = None,
+    ) -> None:
+        del status, block, timeout
+
+
+def test_run_lifecycle_coordinator_async_pipeline_wiring(tmp_path: Path) -> None:
+    """Verify RunLifecycleCoordinator wires queue sink to emitter and drains on teardown."""
+    cfg = Settings()
+    cfg.TARGET_DB_BASE_PATH = str(tmp_path)
+    cfg.TARGET_DB_NAME = "async_test.duckdb"
+    cfg.RAW_DOCUMENT_STORE_NAME = "async_test_raw.db"
+    cfg.LOGS_DIRECTORY = "logs/runs"
+
+    db_path = str(tmp_path / "async_test.duckdb")
+    db_mgr = DuckDBManager(db_path)
+    mock_q = _MockStatusQueue()
+    emitter = ObservabilityEmitter()
+
+    coordinator = RunLifecycleCoordinator(
+        cfg=cfg,
+        status_queue=mock_q,
+        db_manager=db_mgr,
+        emitter=emitter,
+    )
+
+    _cp, run_id, _ = coordinator.initialize()
+
+    assert coordinator.forensic_sink is not None
+    assert isinstance(coordinator.forensic_sink, JsonlForensicSink)
+    assert coordinator.async_listener is not None
+    assert coordinator.async_listener.is_alive()
+    assert coordinator.queue_sink is not None
+    assert coordinator.queue_sink in emitter._sinks  # pyright: ignore[reportPrivateUsage]
+    assert coordinator.forensic_sink not in emitter._sinks  # pyright: ignore[reportPrivateUsage]
+
+    emitter.emit_event(
+        event_code=EventCode.DISCOVERY_START,
+        message="Scanning 100 statements",
+        presentation_kind=PresentationKind.STEP,
+        rows=100,
+    )
+    emitter.emit_event(
+        event_code=EventCode.EXTRACTION_COMPLETED,
+        message="Extraction finished cleanly",
+        presentation_kind=PresentationKind.SUCCESS,
+        rows=100,
+    )
+
+    coordinator.commit()
+    coordinator.teardown()
+
+    assert coordinator.forensic_sink is None
+    assert coordinator.queue_sink is None
+    assert coordinator.async_listener is None
+    assert len(emitter._sinks) == 0  # pyright: ignore[reportPrivateUsage]
+
+    trace_file = tmp_path / "logs" / "runs" / f"trace_{run_id}.jsonl"
+    assert trace_file.exists()
+    df = pl.read_ndjson(trace_file)
+    event_codes = df["event_code"].to_list()
+    assert EventCode.DISCOVERY_START.value in event_codes
+    assert EventCode.EXTRACTION_COMPLETED.value in event_codes
+    assert EventCode.SYSTEM_TEARDOWN.value in event_codes
+
+
+class _FailingSink(ObservabilitySink):
+    """Sink that deliberately raises exceptions during emit and flush."""
+
+    def emit(self, event: ObservabilityEvent) -> None:
+        del event
+        raise OSError("Simulated disk device failure")
+
+    def flush(self) -> None:
+        raise OSError("Simulated flush write error")
+
+
+def test_sink_failure_resilience(tmp_path: Path) -> None:
+    """Verify sink exceptions do not terminate listener thread or crash the pipeline."""
+    del tmp_path
+    failing_sink = _FailingSink()
+    event_queue: queue.Queue[ObservabilityEvent | None] = queue.Queue()
+    queue_sink = ObservabilityQueueSink(event_queue)
+
+    listener = AsyncObservabilityListener(event_queue, sinks=[failing_sink])
+    listener.start()
+
+    ctx = ObservabilityContext(run_id="run-resilience-01")
+    for i in range(10):
+        ev = ObservabilityEvent.create(
+            event_code=EventCode.GENERIC_DIAGNOSTIC,
+            message=f"Event {i}",
+            context=ctx,
+        )
+        queue_sink.emit(ev)
+
+    err_ev = ObservabilityEvent.create(
+        event_code=EventCode.RUN_FAILED,
+        message="Error event during disk error",
+        context=ctx,
+        severity=DiagnosticSeverity.ERROR,
+    )
+    queue_sink.emit(err_ev)
+
+    time.sleep(0.1)
+    assert listener.is_alive()
+
+    listener.stop(timeout=2.0)
+    assert not listener.is_alive()
+
+
+def test_high_volume_burst_drain_zero_loss(tmp_path: Path) -> None:
+    """Verify zero event loss when draining a high-volume burst of events during shutdown."""
+    log_file = tmp_path / "burst_trace.jsonl"
+    file_sink = JsonlForensicSink(log_file, buffer_size=50)
+    event_queue: queue.Queue[ObservabilityEvent | None] = queue.Queue()
+    queue_sink = ObservabilityQueueSink(event_queue)
+
+    listener = AsyncObservabilityListener(event_queue, sinks=[file_sink])
+    listener.start()
+
+    total_events = 500
+    for i in range(total_events):
+        ctx = ObservabilityContext(run_id="run-burst-01", rows=i)
+        ev = ObservabilityEvent.create(
+            event_code=EventCode.QUANT_ISIN_PROCESSED,
+            message=f"Processed ISIN batch {i}",
+            context=ctx,
+        )
+        queue_sink.emit(ev)
+
+    listener.stop(timeout=5.0)
+
+    assert log_file.exists()
+    df = pl.read_ndjson(log_file)
+    assert df.height == total_events
+
+
+def test_create_forensic_pipeline_helper(tmp_path: Path) -> None:
+    """Verify create_forensic_pipeline constructs properly wired queue, listener, and sink."""
+    log_file = tmp_path / "helper_trace.jsonl"
+    q_sink, listener, f_sink = create_forensic_pipeline(log_file, buffer_size=25)
+
+    assert isinstance(q_sink, ObservabilityQueueSink)
+    assert isinstance(listener, AsyncObservabilityListener)
+    assert isinstance(f_sink, JsonlForensicSink)
+    assert f_sink in listener.sinks
+    assert f_sink.buffer_size == 25
+
