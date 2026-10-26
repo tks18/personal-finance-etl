@@ -45,7 +45,6 @@ from personal_finance_etl.contracts.observability import (
 )
 from personal_finance_etl.infrastructure.control_plane import ControlPlane
 from personal_finance_etl.infrastructure.logging.setup import (
-    logger,
     stop_worker_listener,
 )
 from personal_finance_etl.infrastructure.observability import (
@@ -62,6 +61,8 @@ from personal_finance_etl.infrastructure.warehouse.connection import DuckDBManag
 from personal_finance_etl.infrastructure.warehouse.meta import MetaLayer
 
 __all__ = ["RunLifecycleCoordinator"]
+
+logger = logging.getLogger(__name__)
 
 
 class RunLifecycleCoordinator:
