@@ -43,9 +43,9 @@ from personal_finance_etl.application.tax.tax_service import TaxEngine
 from personal_finance_etl.application.wealth.wealth_service import WealthPresentationEngine
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
-from personal_finance_etl.contracts.application import EngineStage, EngineStatusMessage
+from personal_finance_etl.contracts.application import EngineStage
 from personal_finance_etl.contracts.extraction import ExtractionResult
-from personal_finance_etl.contracts.logging import ILogger, LogLevel
+from personal_finance_etl.contracts.logging import ILogger
 from personal_finance_etl.contracts.observability import (
     DiagnosticSeverity,
     EventCode,
@@ -198,11 +198,11 @@ class PipelineExecutor:
     def _run_quant_engine(self, run_id: str) -> None:
         """Execute multi-process InvestmentQuantEngine and update analytical mart states."""
         logger.info("Starting Investment Quant Engine...")
-        self.status_queue.put(EngineStatusMessage(msg="", progress=0.6, level=LogLevel.STEP))
         self.emitter.emit_event(
             event_code=EventCode.QUANT_ENGINE_START,
             message="Starting Investment Quant Engine...",
             presentation_kind=PresentationKind.STEP,
+            progress=0.6,
             stage=EngineStage.ANALYZING,
         )
 
@@ -277,11 +277,11 @@ class PipelineExecutor:
     def _run_presentation_engine(self, cp: ControlPlane | None, run_id: str) -> None:
         """Execute WealthPresentationEngine streaming graphs and log simulation telemetry."""
         logger.info("Starting Presentation Layer Engines...")
-        self.status_queue.put(EngineStatusMessage(msg="", progress=0.8, level=LogLevel.STEP))
         self.emitter.emit_event(
             event_code=EventCode.PRESENTATION_DAG_START,
             message="Starting Presentation Layer Engines...",
             presentation_kind=PresentationKind.STEP,
+            progress=0.8,
             stage=EngineStage.ANALYZING,
         )
         if self.rules is None:
@@ -291,13 +291,13 @@ class PipelineExecutor:
         presentation_lazy = wealth_engine.run(self.dfs)
         if presentation_lazy:
             logger.info("Executing Presentation DAG in Parallel...")
-            self.status_queue.put(EngineStatusMessage(msg="", progress=0.9, level=LogLevel.STEP))
             keys = list(presentation_lazy.keys())
             logger.info(f"  -> Spawning {len(keys)} concurrent Polars streaming graphs...")
             self.emitter.emit_event(
                 event_code=EventCode.PRESENTATION_DAG_START,
                 message=f"Spawning {len(keys)} concurrent Polars streaming graphs...",
                 presentation_kind=PresentationKind.STEP,
+                progress=0.9,
                 rows=len(keys),
                 stage=EngineStage.ANALYZING,
             )
