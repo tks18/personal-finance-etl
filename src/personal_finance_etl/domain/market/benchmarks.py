@@ -204,7 +204,6 @@ class BenchmarkTransformer:
             self.status_queue.put(
                 EngineStatusMessage(
                     msg=f"Transforming Bronze Benchmark Data into Silver ({global_start_date} to {global_end_date})...",
-                    data=None,
                     progress=0.1,
                     level=LogLevel.STEP,
                 )
@@ -221,7 +220,6 @@ class BenchmarkTransformer:
             self.status_queue.put(
                 EngineStatusMessage(
                     msg=f"Successfully transformed benchmark data ({global_start_date} to {global_end_date}).",
-                    data=None,
                     progress=1.0,
                     level=LogLevel.SUCCESS,
                 )
