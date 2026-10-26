@@ -26,8 +26,8 @@ from personal_finance_etl.application.observability import (
     ObservabilityEmitter,
     get_global_emitter,
 )
-from personal_finance_etl.contracts.application import EngineStage, EngineStatusMessage
-from personal_finance_etl.contracts.logging import LogLevel, StatusQueue
+from personal_finance_etl.contracts.application import EngineStage
+from personal_finance_etl.contracts.logging import StatusQueue
 from personal_finance_etl.contracts.observability import (
     EventCode,
     PresentationKind,
@@ -153,17 +153,10 @@ class CurrencyPipeline:
         logger.info(f"  -> Target Global Range: {global_start_date} to {global_end_date}")
         self.emitter.emit_event(
             event_code=EventCode.MARKET_FETCH_START,
-            message="Phase 3.6: Dynamic Currency FX Extraction & Transformation...",
+            message="Starting Currency FX Pipeline...",
             presentation_kind=PresentationKind.STEP,
+            progress=0.05,
             stage=EngineStage.TRANSFORMING,
-        )
-
-        self.status_queue.put(
-            EngineStatusMessage(
-                msg="Starting Currency FX Pipeline...",
-                progress=0.05,
-                level=LogLevel.STEP,
-            )
         )
 
         df_bronze_cached = self._load_cached_bronze_currency()
@@ -179,24 +172,24 @@ class CurrencyPipeline:
             )
         batch_res.assert_complete("Currency Extractor")
 
-        self.status_queue.put(
-            EngineStatusMessage(
-                msg="Upserting Delta into Bronze Currency Lake...",
-                progress=0.6,
-                level=LogLevel.INFO,
-            )
+        self.emitter.emit_event(
+            event_code=EventCode.BRONZE_UPSERT,
+            message="Upserting Delta into Bronze Currency Lake...",
+            presentation_kind=PresentationKind.PROGRESS,
+            progress=0.6,
+            stage=EngineStage.TRANSFORMING,
         )
 
         df_bronze_full_lazy = self._upsert_currency_delta(
             batch_res.combined_frame, batch_res.injected_files
         )
 
-        self.status_queue.put(
-            EngineStatusMessage(
-                msg="Transforming continuous Currency FX series...",
-                progress=0.8,
-                level=LogLevel.INFO,
-            )
+        self.emitter.emit_event(
+            event_code=EventCode.TRANSFORMATION_STAGE,
+            message="Transforming continuous Currency FX series...",
+            presentation_kind=PresentationKind.PROGRESS,
+            progress=0.8,
+            stage=EngineStage.TRANSFORMING,
         )
 
         df_silver_lazy = transform_currency_fx_rates(
@@ -204,17 +197,11 @@ class CurrencyPipeline:
         )
         df_silver = df_silver_lazy.collect(engine="streaming")
 
-        self.status_queue.put(
-            EngineStatusMessage(
-                msg="Currency FX Pipeline Completed.",
-                progress=1.0,
-                level=LogLevel.SUCCESS,
-            )
-        )
         self.emitter.emit_event(
             event_code=EventCode.MARKET_SYNC_COMPLETED,
-            message="Currency FX Pipeline Completed",
+            message="Currency FX Pipeline Completed.",
             presentation_kind=PresentationKind.SUCCESS,
+            progress=1.0,
             stage=EngineStage.TRANSFORMING,
         )
 
@@ -356,7 +343,7 @@ class BenchmarkPipeline:
         )
         self.emitter.emit_event(
             event_code=EventCode.MARKET_SYNC_COMPLETED,
-            message=f"Successfully transformed benchmark data ({start_date} to {end_date}).",
+            message="Benchmark Pipeline Completed.",
             presentation_kind=PresentationKind.SUCCESS,
             rows=df_silver.height,
             stage=EngineStage.TRANSFORMING,
@@ -466,17 +453,10 @@ class USMarketPipeline:
         logger.info(f"  -> Target Global Range: {global_start_date} to {global_end_date}")
         self.emitter.emit_event(
             event_code=EventCode.MARKET_FETCH_START,
-            message="Phase 3.7: Dynamic US Market Data Extraction & Transformation...",
+            message="Starting US Market Data Pipeline...",
             presentation_kind=PresentationKind.STEP,
+            progress=0.05,
             stage=EngineStage.TRANSFORMING,
-        )
-
-        self.status_queue.put(
-            EngineStatusMessage(
-                msg="Starting US Market Data Pipeline...",
-                progress=0.05,
-                level=LogLevel.STEP,
-            )
         )
 
         df_bronze_cached = self._load_cached_bronze_us_market()
@@ -492,24 +472,24 @@ class USMarketPipeline:
             )
         batch_res.assert_complete("US Market Extractor")
 
-        self.status_queue.put(
-            EngineStatusMessage(
-                msg="Upserting Delta into Bronze US Market Lake...",
-                progress=0.6,
-                level=LogLevel.INFO,
-            )
+        self.emitter.emit_event(
+            event_code=EventCode.BRONZE_UPSERT,
+            message="Upserting Delta into Bronze US Market Lake...",
+            presentation_kind=PresentationKind.PROGRESS,
+            progress=0.6,
+            stage=EngineStage.TRANSFORMING,
         )
 
         df_bronze_full_lazy = self._upsert_us_market_delta(
             batch_res.combined_frame, batch_res.injected_files
         )
 
-        self.status_queue.put(
-            EngineStatusMessage(
-                msg="Transforming continuous US Market series...",
-                progress=0.8,
-                level=LogLevel.INFO,
-            )
+        self.emitter.emit_event(
+            event_code=EventCode.TRANSFORMATION_STAGE,
+            message="Transforming continuous US Market series...",
+            presentation_kind=PresentationKind.PROGRESS,
+            progress=0.8,
+            stage=EngineStage.TRANSFORMING,
         )
 
         df_silver_lazy = transform_us_market_data(
@@ -522,17 +502,11 @@ class USMarketPipeline:
         )
         df_silver = df_silver_lazy.collect(engine="streaming")
 
-        self.status_queue.put(
-            EngineStatusMessage(
-                msg="US Market Pipeline Completed.",
-                progress=1.0,
-                level=LogLevel.SUCCESS,
-            )
-        )
         self.emitter.emit_event(
             event_code=EventCode.MARKET_SYNC_COMPLETED,
-            message="US Market Pipeline Completed",
+            message="US Market Pipeline Completed.",
             presentation_kind=PresentationKind.SUCCESS,
+            progress=1.0,
             stage=EngineStage.TRANSFORMING,
         )
 
