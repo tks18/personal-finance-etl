@@ -16,6 +16,7 @@ Does not own
 
 from __future__ import annotations
 
+import logging
 import time
 
 import polars as pl
@@ -36,11 +37,12 @@ from personal_finance_etl.contracts.observability import (
     PresentationKind,
 )
 from personal_finance_etl.infrastructure.control_plane import ControlPlane
-from personal_finance_etl.infrastructure.logging.setup import logger
 from personal_finance_etl.infrastructure.warehouse.bronze import BronzeLayer
 from personal_finance_etl.infrastructure.warehouse.connection import DuckDBManager
 
 __all__ = ["ETLOrchestrator"]
+
+logger = logging.getLogger(__name__)
 
 
 class ETLOrchestrator:
