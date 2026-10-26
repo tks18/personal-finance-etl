@@ -110,7 +110,12 @@ def test_zero_hot_loop_logging_in_domain_numerical_algorithms() -> None:
 
 def test_zero_string_severity_inference_in_entire_codebase() -> None:
     """Certify zero surviving string-parsing or prefix-based severity inference functions."""
-    prohibited_function_names = {"_is_step_log", "_is_success_log", "_is_error_log"}
+    prohibited_function_names = {
+        "_is_step_log",
+        "_is_success_log",
+        "_is_error_log",
+        "infer_log_level",
+    }
     violations: list[str] = []
 
     for py_file in SRC_ROOT.rglob("*.py"):
