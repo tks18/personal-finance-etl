@@ -314,7 +314,6 @@ class UnifiedETLTab(BaseEngineTab):
                 self.run_btn,
                 EngineStatusMessage(
                     msg=f"Error loading initial config: {e}",
-                    data=None,
                     progress=0.0,
                     level=LogLevel.ERROR,
                 ),
@@ -328,7 +327,6 @@ class UnifiedETLTab(BaseEngineTab):
                 self.run_btn,
                 EngineStatusMessage(
                     msg=f"Failed to load config from {path}",
-                    data=None,
                     progress=0.0,
                     level=LogLevel.ERROR,
                 ),
@@ -369,7 +367,6 @@ class UnifiedETLTab(BaseEngineTab):
                     self.run_btn,
                     EngineStatusMessage(
                         msg=f"Database snapshot created at: {snap_path}",
-                        data=None,
                         progress=1.0,
                         level=LogLevel.SUCCESS,
                     ),
@@ -379,7 +376,6 @@ class UnifiedETLTab(BaseEngineTab):
                     self.run_btn,
                     EngineStatusMessage(
                         msg="Database file does not exist yet. Run the pipeline first.",
-                        data=None,
                         progress=0.0,
                         level=LogLevel.WARNING,
                     ),
@@ -389,7 +385,6 @@ class UnifiedETLTab(BaseEngineTab):
                 self.run_btn,
                 EngineStatusMessage(
                     msg=f"Failed to create snapshot: {e}",
-                    data=None,
                     progress=0.0,
                     level=LogLevel.ERROR,
                 ),
@@ -435,7 +430,6 @@ class UnifiedETLTab(BaseEngineTab):
                 self.run_btn,
                 EngineStatusMessage(
                     msg=msg,
-                    data=None,
                     progress=1.0 if success else 0.0,
                     level=level,
                 ),
@@ -445,7 +439,6 @@ class UnifiedETLTab(BaseEngineTab):
                 self.run_btn,
                 EngineStatusMessage(
                     msg=str(pe),
-                    data=None,
                     progress=0.0,
                     level=LogLevel.ERROR,
                 ),
@@ -455,7 +448,6 @@ class UnifiedETLTab(BaseEngineTab):
                 self.run_btn,
                 EngineStatusMessage(
                     msg=f"Unexpected error restoring snapshot: {e}",
-                    data=None,
                     progress=0.0,
                     level=LogLevel.ERROR,
                 ),
