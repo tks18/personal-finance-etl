@@ -147,6 +147,24 @@ def test_rich_narrative_renders_cache_hit_and_skip() -> None:
     assert "(cache hit)" in rendered
 
 
+def test_rich_narrative_skips_empty_progress_message() -> None:
+    """Ensure pure progress ticks with empty message do not render empty lines."""
+    output = io.StringIO()
+    console = Console(file=output, color_system=None, width=120)
+    sink = RichNarrativeSink(console=console, show_timestamps=False)
+
+    event = _make_event(
+        PresentationKind.PROGRESS,
+        "",
+        progress=0.45,
+    )
+    sink.emit(event)
+
+    rendered = output.getvalue()
+    assert rendered == ""
+    assert sink.rendered_count == 0
+
+
 def test_rich_narrative_failure_renders_actionable_panel_without_stacktrace() -> None:
     """Ensure FAILURE events present actionable diagnostics without raw tracebacks."""
     output = io.StringIO()
