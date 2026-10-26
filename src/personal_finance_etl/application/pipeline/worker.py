@@ -29,7 +29,7 @@ from personal_finance_etl.application.pipeline.orchestrator import ETLOrchestrat
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
 from personal_finance_etl.contracts.lifecycle import FailureDomain
-from personal_finance_etl.contracts.logging import ILogger, LogLevel
+from personal_finance_etl.contracts.logging import ILogger
 from personal_finance_etl.contracts.observability import (
     DiagnosticSeverity,
     ErrorDetails,
@@ -43,13 +43,7 @@ from personal_finance_etl.infrastructure.observability import (
     ObservabilityQueueSink,
 )
 
-__all__ = ["QueueStream", "WorkerPoolCoordinator", "infer_log_level", "process_wrapper"]
-
-
-def infer_log_level(msg: str, is_error: bool = False) -> LogLevel:
-    """Map execution error status directly to LogLevel severity."""
-    del msg  # String parsing replaced by explicit boolean flag
-    return LogLevel.ERROR if is_error else LogLevel.INFO
+__all__ = ["QueueStream", "WorkerPoolCoordinator", "process_wrapper"]
 
 
 class QueueStream:
@@ -77,7 +71,7 @@ class QueueStream:
                             message=stripped,
                             severity=severity,
                             outcome=outcome,
-                            presentation_kind=PresentationKind.PROGRESS,
+                            presentation_kind=PresentationKind.INTERNAL,
                         )
                     )
             self.buffer = lines[-1]
@@ -95,7 +89,7 @@ class QueueStream:
                     message=stripped,
                     severity=severity,
                     outcome=outcome,
-                    presentation_kind=PresentationKind.PROGRESS,
+                    presentation_kind=PresentationKind.INTERNAL,
                 )
             )
             self.buffer = ""
