@@ -28,9 +28,9 @@ from personal_finance_etl.application.pipeline.execution import PipelineExecutor
 from personal_finance_etl.application.pipeline.lifecycle import RunLifecycleCoordinator
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
-from personal_finance_etl.contracts.application import EngineStage, EngineStatusMessage
+from personal_finance_etl.contracts.application import EngineStage
 from personal_finance_etl.contracts.extraction import ExtractionResult
-from personal_finance_etl.contracts.logging import ILogger, LogLevel, NullStatusQueue
+from personal_finance_etl.contracts.logging import ILogger, NullStatusQueue
 from personal_finance_etl.contracts.observability import (
     EventCode,
     PresentationKind,
@@ -113,13 +113,6 @@ class ETLOrchestrator:
 
         try:
             cp, run_id, _ = lifecycle.initialize()
-            self.status_queue.put(
-                EngineStatusMessage(
-                    msg="",
-                    progress=0.0,
-                    level=LogLevel.STEP,
-                )
-            )
             self.emitter.emit_event(
                 event_code=EventCode.RUN_START,
                 message="Pipeline execution started.",
@@ -131,13 +124,6 @@ class ETLOrchestrator:
             self.executor.execute_phases(cp, run_id)
             lifecycle.commit()
 
-            self.status_queue.put(
-                EngineStatusMessage(
-                    msg="",
-                    progress=1.0,
-                    level=LogLevel.SUCCESS,
-                )
-            )
             total_time = time.perf_counter() - start_time
             logger.info(
                 f"Pipeline Execution Successful in {total_time:.2f} seconds. Total Nodes: {len(self.dfs)}"
