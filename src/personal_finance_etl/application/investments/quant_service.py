@@ -17,6 +17,7 @@ Does not own
 
 from __future__ import annotations
 
+import logging
 import tempfile
 
 import polars as pl
@@ -44,9 +45,10 @@ from personal_finance_etl.contracts.observability import (
     EventOutcome,
     PresentationKind,
 )
-from personal_finance_etl.infrastructure.logging.setup import logger
 
 __all__ = ["InvestmentQuantEngine", "QuantService"]
+
+logger = logging.getLogger(__name__)
 
 
 class InvestmentQuantEngine:
