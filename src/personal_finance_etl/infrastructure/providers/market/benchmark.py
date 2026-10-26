@@ -31,13 +31,13 @@ from typing import Any
 import pandas as pd  # type: ignore[import-untyped]
 import polars as pl
 
-from personal_finance_etl.contracts.application import EngineStatusMessage
+from personal_finance_etl.contracts.application import EngineStage
 from personal_finance_etl.contracts.extraction import (
     ExtractionBatchResult,
     ExtractorEntityResult,
     ExtractorEntityStatus,
 )
-from personal_finance_etl.contracts.logging import LogLevel, StatusQueue
+from personal_finance_etl.contracts.logging import StatusQueue
 from personal_finance_etl.contracts.observability import (
     DiagnosticSeverity,
     EventCode,
@@ -400,10 +400,14 @@ class BenchmarkExtractor:
 
         cache_map = self._build_cache_map(df_bronze_cached)
         self.status_queue.put(
-            EngineStatusMessage(
-                msg=f"Starting benchmark extractor for {total} tickers...",
+            ObservabilityEvent.create(
+                event_code=EventCode.MARKET_FETCH_START,
+                message=f"Starting benchmark extractor for {total} tickers...",
                 progress=0.1,
-                level=LogLevel.STEP,
+                severity=DiagnosticSeverity.INFO,
+                outcome=EventOutcome.COMPLETED,
+                presentation_kind=PresentationKind.STEP,
+                stage=EngineStage.TRANSFORMING,
             )
         )
 
@@ -443,10 +447,14 @@ class BenchmarkExtractor:
                         )
                     )
                     self.status_queue.put(
-                        EngineStatusMessage(
-                            msg=f"Error: Critical thread failure on {ticker}: {err_msg}",
+                        ObservabilityEvent.create(
+                            event_code=EventCode.MARKET_TICKER_FAILED,
+                            message=f"Error: Critical thread failure on {ticker}: {err_msg}",
                             progress=prog,
-                            level=LogLevel.ERROR,
+                            severity=DiagnosticSeverity.ERROR,
+                            outcome=EventOutcome.FAILED,
+                            presentation_kind=PresentationKind.FAILURE,
+                            stage=EngineStage.TRANSFORMING,
                         )
                     )
 
