@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import logging
 import tempfile
+import traceback
 
 import polars as pl
 
@@ -38,9 +39,11 @@ from personal_finance_etl.application.observability import (
     get_global_emitter,
 )
 from personal_finance_etl.contracts.application import EngineStage
+from personal_finance_etl.contracts.lifecycle import FailureDomain
 from personal_finance_etl.contracts.logging import StatusQueue
 from personal_finance_etl.contracts.observability import (
     DiagnosticSeverity,
+    ErrorDetails,
     EventCode,
     EventOutcome,
     PresentationKind,
@@ -90,13 +93,21 @@ class InvestmentQuantEngine:
         try:
             return self._run()
         except Exception as e:
+            err_details = ErrorDetails(
+                exception_type=type(e).__name__,
+                exception_message=str(e),
+                failure_domain=FailureDomain.WORKER,
+                traceback_summary=traceback.format_exc(),
+                retryable=False,
+            )
             self.emitter.emit_event(
-                event_code=EventCode.RUN_FAILED,
+                event_code=EventCode.QUANT_POOL_COMPLETED,
                 message=f"Quant Engine failed: {e}",
                 severity=DiagnosticSeverity.ERROR,
                 outcome=EventOutcome.FAILED,
                 presentation_kind=PresentationKind.FAILURE,
                 stage=EngineStage.ANALYZING,
+                error=err_details,
             )
             raise e
 
