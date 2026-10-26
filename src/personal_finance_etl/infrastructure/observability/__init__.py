@@ -35,6 +35,8 @@ from personal_finance_etl.infrastructure.observability.queue import (
 )
 from personal_finance_etl.infrastructure.observability.redaction import (
     SENSITIVE_KEY_SUBSTRINGS,
+    ConfigFingerprintDict,
+    RedactionPolicy,
     fingerprint_config,
     hash_identifier,
     redact_dict,
@@ -45,12 +47,14 @@ from personal_finance_etl.infrastructure.observability.retention import (
 )
 
 __all__ = [
+    "ConfigFingerprintDict",
     "DEFAULT_COMPRESSION_LEVEL",
     "AsyncObservabilityListener",
     "EventQueue",
     "JsonlForensicSink",
     "LogRetentionManager",
     "ObservabilityQueueSink",
+    "RedactionPolicy",
     "SENSITIVE_KEY_SUBSTRINGS",
     "archive_run_trace",
     "compress_bytes",
