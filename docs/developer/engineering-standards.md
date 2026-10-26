@@ -35,15 +35,15 @@ Every production behavior has one primary owner.
 
 The current ownership model is:
 
-| Responsibility | Owner |
-|---|---|
-| financial meaning, formulas, invariants | `domain/` |
-| use-case sequencing and workflow coordination | `application/` |
+| Responsibility                                           | Owner             |
+| -------------------------------------------------------- | ----------------- |
+| financial meaning, formulas, invariants                  | `domain/`         |
+| use-case sequencing and workflow coordination            | `application/`    |
 | concrete providers, files, stores, locks, recovery, logs | `infrastructure/` |
-| stable messages that genuinely cross boundaries | `contracts/` |
-| validated runtime settings and financial policy | `config/` |
-| CLI/Desktop/docs presentation | `presentation/` |
-| concrete dependency assembly | `bootstrap/` |
+| stable messages that genuinely cross boundaries          | `contracts/`      |
+| validated runtime settings and financial policy          | `config/`         |
+| CLI/Desktop/docs presentation                            | `presentation/`   |
+| concrete dependency assembly                             | `bootstrap/`      |
 
 A change may cross these packages. Responsibility should not.
 
@@ -432,14 +432,14 @@ A materialization boundary must correspond to a reason.
 
 Useful categories are:
 
-| Boundary | Why eager state is legitimate |
-|---|---|
-| publication | data must be persisted |
-| stateful algorithm | Python/object state is the model |
-| third-party integration | API/library requires concrete values |
-| process boundary | data crosses workers/processes |
-| scalar extraction | one concrete value is required |
-| diagnostic/validation | material state is necessary to inspect failure |
+| Boundary                | Why eager state is legitimate                  |
+| ----------------------- | ---------------------------------------------- |
+| publication             | data must be persisted                         |
+| stateful algorithm      | Python/object state is the model               |
+| third-party integration | API/library requires concrete values           |
+| process boundary        | data crosses workers/processes                 |
+| scalar extraction       | one concrete value is required                 |
+| diagnostic/validation   | material state is necessary to inspect failure |
 
 `collect_schema()` is schema inspection, not equivalent to collecting the dataset.
 
@@ -576,7 +576,21 @@ A clean quality gate is necessary evidence.
 
 It is not sufficient evidence for financial correctness.
 
-## 27. Performance work preserves semantic observability
+## 27. Unified Observability Architecture is Frozen
+
+The observability architecture is frozen around the following contract:
+
+> **User logs explain the run. Debug traces reconstruct the run. Control Plane proves the run happened.**
+
+1. **Single Canonical Contract**: All operational and diagnostic events must flow through `ObservabilityEvent`. No custom strings, prefixes, or ad-hoc logger methods may be invented.
+2. **Zero Polars Collects for Logging**: Observability sinks and emitters must never call `.collect()` on Polars `LazyFrame` instances. Metadata such as row counts must come from explicit pipeline context.
+3. **Zero Hot-Loop Logging**: Numerical inner loops (e.g., FIFO matching, Monte Carlo simulation, IRR calculations) must never emit events on per-iteration steps. Events belong at batch and phase boundaries.
+4. **Zero String Severity Guessing**: UI and forensic sinks never parse English text to infer severity. Presentation style is driven exclusively by `PresentationKind` and `DiagnosticSeverity`.
+5. **Zero Sensitive Data Leakage**: Sinks automatically redact authorization tokens, credit cards, Indian PANs, and passwords at serialization boundaries.
+6. **Asynchronous File I/O Delivery**: The main execution thread and worker subprocesses never block on forensic file I/O; events are passed non-blockingly across IPC queues to the background AsyncObservabilityListener.
+7. **Selective Durable SQLite Evidence**: Control Plane SQLite records only coarse transaction milestones (cp_runs), failure domains (cp_run_failures), provider requests (cp_external_provider_requests), and compressed zlib trace BLOBs. Zero per-event SQLite writes.
+
+## 28. Performance work preserves semantic observability
 
 A performance change should be measurable and explainable.
 
@@ -593,7 +607,7 @@ trade-off
 
 A faster result that cannot be audited is not automatically better.
 
-## 28. Security stays at the boundary
+## 29. Security stays at the boundary
 
 Secrets, tokens, and credentials:
 
@@ -604,7 +618,7 @@ Secrets, tokens, and credentials:
 
 Publishing tooling loads secrets for use, not display.
 
-## 29. Exceptions are documented as exceptions
+## 30. Exceptions are documented as exceptions
 
 A standard can have justified exceptions.
 
@@ -619,7 +633,7 @@ what would allow the exception to disappear
 
 Silent exceptions become precedent accidentally.
 
-## 30. Canonical documentation is release-agnostic
+## 31. Canonical documentation is release-agnostic
 
 Technical docs describe the stable current system.
 
@@ -627,7 +641,7 @@ Release history belongs in CHANGELOG and GitHub Releases unless a genuine protoc
 
 This keeps architecture readable as architecture rather than as a fossil record.
 
-## 31. Documentation itself has ownership
+## 32. Documentation itself has ownership
 
 The documentation surfaces have different responsibilities:
 
@@ -642,7 +656,7 @@ Developer docs therefore specify mechanics, contracts, failure behavior, and ext
 
 They do not need to repeat every conceptual explanation from the Wiki or every marketing proof point from the root README.
 
-## 32. "Done" means another engineer can reason about the change
+## 33. "Done" means another engineer can reason about the change
 
 Before I call a non-trivial change done, another competent engineer should be able to answer:
 
@@ -663,7 +677,7 @@ If those answers still require archaeology, the implementation may work, but the
 
 Standards are useful only if the repository can enforce them without relying on perfect human memory.
 
-The next specification therefore moves from *rules* to *machinery*: the fast/full quality gates, tracked Git hooks, structured audits, commit/PR automation, build path, and release/publish controls that turn these standards into a repeatable developer loop.
+The next specification therefore moves from _rules_ to _machinery_: the fast/full quality gates, tracked Git hooks, structured audits, commit/PR automation, build path, and release/publish controls that turn these standards into a repeatable developer loop.
 
 Continue with [Tooling, Quality, and Release Engineering](tooling-quality-and-release-engineering.md).
 
@@ -674,13 +688,3 @@ Continue with [Tooling, Quality, and Release Engineering](tooling-quality-and-re
 - [Testing and Validation](testing-and-validation.md)
 - [Tooling, Quality, and Release Engineering](tooling-quality-and-release-engineering.md)
 - [Application and Dependency Architecture](../architecture/application-and-dependency-architecture.md)
-
-## 30. Unified Observability Architecture is Frozen
-
-The observability architecture is frozen around the following contract:
-
-1. **Single Canonical Contract**: All operational and diagnostic events must flow through `ObservabilityEvent`. No custom strings, prefixes, or ad-hoc logger methods may be invented.
-2. **Zero Polars Collects for Logging**: Observability sinks and emitters must never call `.collect()` on Polars `LazyFrame` instances. Metadata such as row counts must come from explicit pipeline context.
-3. **Zero Hot-Loop Logging**: Numerical inner loops (e.g., FIFO matching, Monte Carlo simulation, IRR calculations) must never emit events on per-iteration steps. Events belong at batch and phase boundaries.
-4. **Zero String Severity Guessing**: UI and forensic sinks never parse English text to infer severity. Presentation style is driven exclusively by `PresentationKind` and `DiagnosticSeverity`.
-5. **Zero Sensitive Data Leakage**: Sinks automatically redact authorization tokens, credit cards, Indian PANs, and passwords at serialization boundaries.
