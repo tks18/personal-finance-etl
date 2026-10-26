@@ -22,8 +22,10 @@ import os
 import time
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import cast
 
 from personal_finance_etl.config.settings import Settings
+from personal_finance_etl.contracts.application import EngineStage
 from personal_finance_etl.contracts.observability import (
     DiagnosticSeverity,
     ErrorDetails,
@@ -36,6 +38,7 @@ from personal_finance_etl.contracts.observability import (
 )
 from personal_finance_etl.infrastructure.observability.forensic_sink import JsonlForensicSink
 from personal_finance_etl.infrastructure.observability.redaction import (
+    RedactionPolicy,
     fingerprint_config,
     hash_identifier,
     redact_dict,
@@ -112,13 +115,15 @@ def test_redact_dict_scrubs_nested_structures() -> None:
     assert sanitized["user_id"] == "usr_100"
     assert sanitized["api_key"] == "[REDACTED]"
     assert sanitized["account_number"] == "[REDACTED]"
-    assert sanitized["settings"]["password"] == "[REDACTED]"
-    assert sanitized["settings"]["database"] == "analytics.duckdb"
-    assert "ABCDE9999Z" not in sanitized["settings"]["notes"]
-    assert "[REDACTED_PAN]" in sanitized["settings"]["notes"]
-    assert sanitized["log_entries"][0] == "Normal log message"
-    assert "secret_token" not in sanitized["log_entries"][1]
-    assert "[REDACTED_TOKEN]" in sanitized["log_entries"][1]
+    settings_dict = cast(dict[str, object], sanitized["settings"])
+    assert settings_dict["password"] == "[REDACTED]"
+    assert settings_dict["database"] == "analytics.duckdb"
+    assert "ABCDE9999Z" not in str(settings_dict["notes"])
+    assert "[REDACTED_PAN]" in str(settings_dict["notes"])
+    log_entries = cast(list[object], sanitized["log_entries"])
+    assert log_entries[0] == "Normal log message"
+    assert "secret_token" not in str(log_entries[1])
+    assert "[REDACTED_TOKEN]" in str(log_entries[1])
 
 
 def test_fingerprint_config_produces_safe_summary() -> None:
@@ -235,3 +240,155 @@ def test_retention_manager_age_bound(tmp_path: Path) -> None:
     assert pruned[0].name == "ancient.jsonl"
     assert f_fresh.exists()
     assert not f_old.exists()
+
+
+def test_redaction_policy_matrix() -> None:
+    """Verify SAFE, HASH, REDACT, and OMIT policies work accurately."""
+    payload: dict[str, object] = {
+        "safe_param": "regular_value",
+        "user_account": "ACC_998877",
+        "access_token": "secret_token_12345",
+        "pin_code": "9876",
+    }
+    policies: dict[str, RedactionPolicy] = {
+        "safe_param": RedactionPolicy.SAFE,
+        "user_account": RedactionPolicy.HASH,
+        "access_token": RedactionPolicy.REDACT,
+        "pin_code": RedactionPolicy.OMIT,
+    }
+
+    sanitized = redact_dict(payload, policies=policies)
+
+    # SAFE: retained as is
+    assert sanitized["safe_param"] == "regular_value"
+    # HASH: deterministic hashed string
+    assert isinstance(sanitized["user_account"], str)
+    assert sanitized["user_account"].startswith("id_")
+    assert "ACC_998877" not in sanitized["user_account"]
+    assert sanitized["user_account"] == hash_identifier("ACC_998877")
+    # REDACT: masked with [REDACTED]
+    assert sanitized["access_token"] == "[REDACTED]"
+    # OMIT: key is completely dropped
+    assert "pin_code" not in sanitized
+
+
+def test_redact_text_adversarial_patterns() -> None:
+    """Verify adversarial secrets, tokens, JWTs, and database URIs are sanitized."""
+    # JWT token
+    jwt_input = "Session bearer: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgN_pGMstVEMmPO_c"
+    jwt_clean = redact_text(jwt_input)
+    assert "eyJhbGciOi" not in jwt_clean
+    assert "[REDACTED_JWT]" in jwt_clean
+
+    # OpenAI / Stripe style API keys
+    api_key_input = "Loaded model using sk_live_1234567890abcdef1234567890 securely."
+    api_key_clean = redact_text(api_key_input)
+    assert "sk_live_" not in api_key_clean
+    assert "[REDACTED_API_KEY]" in api_key_clean
+
+    # GitHub token
+    gh_input = "Syncing repo via ghp_1234567890abcdef1234567890abcdef1234"
+    gh_clean = redact_text(gh_input)
+    assert "ghp_" not in gh_clean
+    assert "[REDACTED_TOKEN]" in gh_clean
+
+    # Database connection string with password
+    uri_input = "Connecting to postgresql://postgres:SuperSecretPassword@localhost:5432/finance_db"
+    uri_clean = redact_text(uri_input)
+    assert "SuperSecretPassword" not in uri_clean
+    assert "Connecting to postgresql://postgres:[REDACTED]@localhost:5432/finance_db" == uri_clean
+
+    # Key assignments
+    assign_input = "Config loaded with password='MyVaultPassword123' and credential = 'AdminCredential456'"
+    assign_clean = redact_text(assign_input)
+    assert "MyVaultPassword123" not in assign_clean
+    assert "AdminCredential456" not in assign_clean
+    assert "password=[REDACTED]" in assign_clean
+    assert "credential=[REDACTED]" in assign_clean
+
+
+def test_jsonl_forensic_sink_full_payload_scrubbing(tmp_path: Path) -> None:
+    """Verify JsonlForensicSink scrubs sensitive identifiers across all payload sub-dictionaries."""
+    log_file = tmp_path / "forensic_adversarial.jsonl"
+    sink = JsonlForensicSink(log_file)
+
+    err = ErrorDetails(
+        exception_type="DatabaseError",
+        exception_message="Failed connecting to postgresql://admin:SuperSecretPwd123@prod-db.internal:5432/ledger",
+        failure_domain=FailureDomain.SOURCE_VALIDATION,
+        traceback_summary="File 'auth.py', line 42, in connect: token='ghp_secrettoken12345678901234567890123456' invalid",
+    )
+    ctx = ObservabilityContext(
+        run_id="run-adv-01",
+        stage=EngineStage.EXTRACTING,
+        component="db_adapter_sk_test_1234567890abcdef12345678",
+        operation="fetch_pan_ABCDE1234F_statement",
+        entity_id="987-65-4321",
+    )
+    event = ObservabilityEvent.create(
+        event_code=EventCode.RUN_FAILED,
+        message="Request failed: Bearer ya29.a0AfH6SMBxyz1234567890abcdef with sk_live_1234567890abcdef1234567890",
+        context=ctx,
+        severity=DiagnosticSeverity.ERROR,
+        presentation_kind=PresentationKind.FAILURE,
+        outcome=EventOutcome.FAILED,
+        error=err,
+    )
+
+    sink.emit(event)
+    sink.flush()
+    sink.close()
+
+    raw_content = log_file.read_text(encoding="utf-8")
+
+    # Assert ZERO secrets leaked into raw file
+    assert "ya29.a0AfH6SMB" not in raw_content
+    assert "sk_live_" not in raw_content
+    assert "sk_test_" not in raw_content
+    assert "SuperSecretPwd123" not in raw_content
+    assert "ABCDE1234F" not in raw_content
+    assert "987-65-4321" not in raw_content
+    assert "ghp_secrettoken" not in raw_content
+
+    # Assert proper replacement tokens appear
+    assert "Bearer [REDACTED_TOKEN]" in raw_content
+    assert "[REDACTED_API_KEY]" in raw_content
+    assert "[REDACTED_PAN]" in raw_content
+    assert "[REDACTED_SSN]" in raw_content
+    assert "token=[REDACTED]" in raw_content
+
+    # Verify structured ndjson can still be parsed natively
+    parsed = json.loads(raw_content.strip())
+    assert parsed["context"]["operation"] == "fetch_pan_[REDACTED_PAN]_statement"
+    assert parsed["context"]["entity_id"] == "[REDACTED_SSN]"
+
+
+def test_jsonl_forensic_sink_with_policy_overrides(tmp_path: Path) -> None:
+    """Verify JsonlForensicSink respects custom policy mappings (e.g. HASH entity_id)."""
+    log_file = tmp_path / "forensic_policies.jsonl"
+    policies: dict[str, RedactionPolicy] = {
+        "entity_id": RedactionPolicy.HASH,
+    }
+    sink = JsonlForensicSink(log_file, policies=policies)
+
+    ctx = ObservabilityContext(
+        run_id="run-hash-01",
+        entity_id="user_account_998811",
+    )
+    event = ObservabilityEvent.create(
+        event_code=EventCode.DISCOVERY_START,
+        message="Discovery phase started",
+        context=ctx,
+    )
+
+    sink.emit(event)
+    sink.flush()
+    sink.close()
+
+    raw_content = log_file.read_text(encoding="utf-8")
+    assert "user_account_998811" not in raw_content
+
+    parsed = json.loads(raw_content.strip())
+    assert parsed["context"]["entity_id"].startswith("id_")
+    assert parsed["context"]["entity_id"] == hash_identifier("user_account_998811")
+
