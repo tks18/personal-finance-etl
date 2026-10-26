@@ -13,6 +13,7 @@ Does not own
 
 from __future__ import annotations
 
+import logging
 import multiprocessing
 import os
 import time
@@ -32,9 +33,10 @@ from personal_finance_etl.domain.investments.contracts import (
 )
 from personal_finance_etl.domain.market.fx import FXRateProvider
 from personal_finance_etl.domain.market.macro import FYMacroParametersTable
-from personal_finance_etl.infrastructure.logging.setup import logger
 
 __all__ = ["_process_isin_worker"]
+
+logger = logging.getLogger(__name__)
 
 
 def _process_isin_worker(
