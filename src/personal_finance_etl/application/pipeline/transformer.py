@@ -185,7 +185,6 @@ class TransformationDAG:
         self.status_queue.put(
             EngineStatusMessage(
                 msg="",
-                data=None,
                 progress=0.2,
                 level=LogLevel.STEP,
             )
