@@ -161,7 +161,6 @@ class CurrencyPipeline:
         self.status_queue.put(
             EngineStatusMessage(
                 msg="Starting Currency FX Pipeline...",
-                data=None,
                 progress=0.05,
                 level=LogLevel.STEP,
             )
@@ -183,7 +182,6 @@ class CurrencyPipeline:
         self.status_queue.put(
             EngineStatusMessage(
                 msg="Upserting Delta into Bronze Currency Lake...",
-                data=None,
                 progress=0.6,
                 level=LogLevel.INFO,
             )
@@ -196,7 +194,6 @@ class CurrencyPipeline:
         self.status_queue.put(
             EngineStatusMessage(
                 msg="Transforming continuous Currency FX series...",
-                data=None,
                 progress=0.8,
                 level=LogLevel.INFO,
             )
@@ -210,7 +207,6 @@ class CurrencyPipeline:
         self.status_queue.put(
             EngineStatusMessage(
                 msg="Currency FX Pipeline Completed.",
-                data=None,
                 progress=1.0,
                 level=LogLevel.SUCCESS,
             )
@@ -478,7 +474,6 @@ class USMarketPipeline:
         self.status_queue.put(
             EngineStatusMessage(
                 msg="Starting US Market Data Pipeline...",
-                data=None,
                 progress=0.05,
                 level=LogLevel.STEP,
             )
@@ -500,7 +495,6 @@ class USMarketPipeline:
         self.status_queue.put(
             EngineStatusMessage(
                 msg="Upserting Delta into Bronze US Market Lake...",
-                data=None,
                 progress=0.6,
                 level=LogLevel.INFO,
             )
@@ -513,7 +507,6 @@ class USMarketPipeline:
         self.status_queue.put(
             EngineStatusMessage(
                 msg="Transforming continuous US Market series...",
-                data=None,
                 progress=0.8,
                 level=LogLevel.INFO,
             )
@@ -532,7 +525,6 @@ class USMarketPipeline:
         self.status_queue.put(
             EngineStatusMessage(
                 msg="US Market Pipeline Completed.",
-                data=None,
                 progress=1.0,
                 level=LogLevel.SUCCESS,
             )
