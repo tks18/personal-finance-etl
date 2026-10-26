@@ -28,9 +28,9 @@ from personal_finance_etl.application.observability import (
     get_global_emitter,
 )
 from personal_finance_etl.config.settings import Settings
-from personal_finance_etl.contracts.application import EngineStage, EngineStatusMessage
+from personal_finance_etl.contracts.application import EngineStage
 from personal_finance_etl.contracts.extraction import ExtractionResult
-from personal_finance_etl.contracts.logging import LogLevel, StatusQueue
+from personal_finance_etl.contracts.logging import StatusQueue
 from personal_finance_etl.contracts.observability import (
     DiagnosticSeverity,
     EventCode,
@@ -261,14 +261,8 @@ class DataExtractor:
             event_code=EventCode.SCHEMA_VALIDATION,
             message="Running Gatekeeper Schema Validation on 18 active streams...",
             presentation_kind=PresentationKind.STEP,
+            progress=0.15,
             stage=EngineStage.EXTRACTING,
-        )
-        self.status_queue.put(
-            EngineStatusMessage(
-                msg="",
-                progress=0.15,
-                level=LogLevel.STEP,
-            )
         )
 
         validation_frames = [
@@ -313,14 +307,8 @@ class DataExtractor:
                 message=f"Gatekeeper Validation Failed: {e}",
                 presentation_kind=PresentationKind.FAILURE,
                 severity=DiagnosticSeverity.ERROR,
+                progress=0.0,
                 stage=EngineStage.EXTRACTING,
-            )
-            self.status_queue.put(
-                EngineStatusMessage(
-                    msg=f"Gatekeeper Validation Failed: {e}",
-                    progress=0,
-                    level=LogLevel.ERROR,
-                )
             )
             raise RuntimeError(f"Corrupted source data detected during extraction: {e}") from e
 
@@ -344,13 +332,6 @@ class DataExtractor:
             presentation_kind=PresentationKind.STEP,
             progress=0.01,
             stage=EngineStage.EXTRACTING,
-        )
-        self.status_queue.put(
-            EngineStatusMessage(
-                msg="",
-                progress=0.01,
-                level=LogLevel.STEP,
-            )
         )
 
         pending_files = actionable_files or self.cp.artifacts.get_pending_files()
