@@ -6,6 +6,7 @@ Owns
 - AsyncObservabilityListener: Dedicated daemon thread owning file I/O operations.
 - ObservabilityQueueSink: Non-blocking queue sink routing events across processes.
 - EventQueue: Protocol unifying thread and multiprocessing event queues.
+- create_forensic_pipeline: Assembles asynchronous queue, listener, and JSONL forensic sink.
 
 Does not own
 -------------
@@ -30,6 +31,7 @@ from personal_finance_etl.infrastructure.observability.queue import (
     AsyncObservabilityListener,
     EventQueue,
     ObservabilityQueueSink,
+    create_forensic_pipeline,
 )
 from personal_finance_etl.infrastructure.observability.redaction import (
     SENSITIVE_KEY_SUBSTRINGS,
@@ -52,6 +54,7 @@ __all__ = [
     "SENSITIVE_KEY_SUBSTRINGS",
     "archive_run_trace",
     "compress_bytes",
+    "create_forensic_pipeline",
     "decompress_bytes",
     "fingerprint_config",
     "hash_identifier",
