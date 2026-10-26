@@ -105,7 +105,9 @@ class PipelineExecutor:
 
     def transform(self, extracted_data: ExtractionResult) -> None:
         """Transform raw extracted data into base dimension and fact tables."""
-        transformer = TransformationDAG(self.cfg, self.status_queue, self.rules)
+        transformer = TransformationDAG(
+            self.cfg, self.status_queue, self.rules, emitter=self.emitter
+        )
         self.dfs = transformer.run(extracted_data)
 
     def process_benchmark(self, cp: ControlPlane, bronze: BronzeLayer) -> None:
@@ -268,6 +270,17 @@ class PipelineExecutor:
         )
         tax_results = tax_engine.run()
         self.dfs.update(tax_results)
+        for tax_name, tax_df in tax_results.items():
+            self.emitter.emit_event(
+                event_code=EventCode.TAX_ENGINE_COMPLETED,
+                message=f"Tax engine materialized {tax_name} ({tax_df.height} rows)",
+                presentation_kind=PresentationKind.INTERNAL,
+                severity=DiagnosticSeverity.DEBUG,
+                stage=EngineStage.ANALYZING,
+                entity_type="Table",
+                entity_id=tax_name,
+                rows=tax_df.height,
+            )
         self.emitter.emit_event(
             event_code=EventCode.TAX_ENGINE_COMPLETED,
             message=f"Tax Engine completed — generated {len(tax_results)} tax tables",
@@ -289,7 +302,9 @@ class PipelineExecutor:
         if self.rules is None:
             raise ValueError("FinancialRules must be provided to ETL pipeline")
 
-        wealth_engine = WealthPresentationEngine(rules=self.rules, root_seed=run_id)
+        wealth_engine = WealthPresentationEngine(
+            rules=self.rules, root_seed=run_id, emitter=self.emitter
+        )
         presentation_lazy = wealth_engine.run(self.dfs)
         if presentation_lazy:
             logger.info("Executing Presentation DAG in Parallel...")
@@ -556,7 +571,7 @@ class PipelineExecutor:
 
         for df_key, df_val in self.dfs.items():
             self.emitter.emit_event(
-                event_code=EventCode.PRESENTATION_DAG_START,
+                event_code=EventCode.PRESENTATION_DAG_COMPLETED,
                 message=f"Presentation layer produced {df_key} ({df_val.height:,} rows)",
                 presentation_kind=PresentationKind.INTERNAL,
                 severity=DiagnosticSeverity.DEBUG,
