@@ -215,7 +215,7 @@ class BenchmarkTransformer:
                     progress=0.1,
                     severity=DiagnosticSeverity.INFO,
                     outcome=EventOutcome.COMPLETED,
-                    presentation_kind=PresentationKind.STEP,
+                    presentation_kind=PresentationKind.INTERNAL,
                     stage=EngineStage.TRANSFORMING,
                 )
             )
@@ -235,7 +235,7 @@ class BenchmarkTransformer:
                     progress=1.0,
                     severity=DiagnosticSeverity.INFO,
                     outcome=EventOutcome.COMPLETED,
-                    presentation_kind=PresentationKind.SUCCESS,
+                    presentation_kind=PresentationKind.INTERNAL,
                     stage=EngineStage.TRANSFORMING,
                 )
             )
