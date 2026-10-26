@@ -402,7 +402,6 @@ class BenchmarkExtractor:
         self.status_queue.put(
             EngineStatusMessage(
                 msg=f"Starting benchmark extractor for {total} tickers...",
-                data=None,
                 progress=0.1,
                 level=LogLevel.STEP,
             )
@@ -446,7 +445,6 @@ class BenchmarkExtractor:
                     self.status_queue.put(
                         EngineStatusMessage(
                             msg=f"Error: Critical thread failure on {ticker}: {err_msg}",
-                            data=None,
                             progress=prog,
                             level=LogLevel.ERROR,
                         )
