@@ -18,6 +18,7 @@ Does not own
 
 from __future__ import annotations
 
+import logging
 import time
 from datetime import date
 
@@ -55,7 +56,6 @@ from personal_finance_etl.infrastructure.control_plane import (
     ControlPlane,
     SimulationRunParams,
 )
-from personal_finance_etl.infrastructure.logging.setup import logger
 from personal_finance_etl.infrastructure.providers.files.locator import (
     categorize_statement_files,
 )
@@ -72,6 +72,8 @@ from personal_finance_etl.infrastructure.warehouse.registry import (
 from personal_finance_etl.infrastructure.warehouse.silver import SilverLayer
 
 __all__ = ["PipelineExecutor"]
+
+logger = logging.getLogger(__name__)
 
 
 class PipelineExecutor:
