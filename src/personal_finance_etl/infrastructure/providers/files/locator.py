@@ -15,11 +15,12 @@ Does not own
 from __future__ import annotations
 
 import glob
+import logging
 import os
 
-from personal_finance_etl.infrastructure.logging import logger
-
 __all__ = ["categorize_statement_files"]
+
+logger = logging.getLogger(__name__)
 
 
 def _match_category(filepath: str) -> str | None:
