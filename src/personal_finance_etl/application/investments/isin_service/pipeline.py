@@ -31,11 +31,13 @@ from personal_finance_etl.application.observability import (
     get_global_emitter,
 )
 from personal_finance_etl.config.financial_rules import FinancialRules
-from personal_finance_etl.contracts.application import EngineStage, EngineStatusMessage
-from personal_finance_etl.contracts.logging import LogLevel, StatusQueue
+from personal_finance_etl.contracts.application import EngineStage
+from personal_finance_etl.contracts.logging import StatusQueue
 from personal_finance_etl.contracts.observability import (
     DiagnosticSeverity,
     EventCode,
+    EventOutcome,
+    ObservabilityEvent,
     PresentationKind,
 )
 from personal_finance_etl.domain.investments.contracts import (
@@ -285,7 +287,15 @@ class IsinPipeline:
         """Report incremental step progress to status queue."""
         if self.status_queue:
             self.status_queue.put(
-                EngineStatusMessage(msg="", progress=progress, level=LogLevel.STEP)
+                ObservabilityEvent.create(
+                    event_code=EventCode.QUANT_ISIN_PROCESSED,
+                    message="",
+                    progress=progress,
+                    severity=DiagnosticSeverity.INFO,
+                    outcome=EventOutcome.COMPLETED,
+                    presentation_kind=PresentationKind.PROGRESS,
+                    stage=EngineStage.ANALYZING,
+                )
             )
 
     def _build_worker_tasks(
