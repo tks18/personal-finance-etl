@@ -5,7 +5,7 @@ Owns
 - BaseEngineTab: Common 2-column layout with header and progress/log output panel.
 - Thread-safe queue polling and main-thread status updates via Tkinter after().
 - Progress bar and colored log text box state management.
-- Processing structured ObservabilityEvents and process boundary EngineStatusMessages.
+- Processing structured ObservabilityEvents across process boundaries.
 
 Does not own
 -------------
@@ -22,8 +22,6 @@ from typing import Final
 # Exception TYP-003 [THIRD_PARTY_TYPING_GAP]: customtkinter lacks py.typed marker and complete stubs
 import customtkinter as ctk  # type: ignore[import-untyped]
 
-from personal_finance_etl.contracts.application import EngineStatusMessage
-from personal_finance_etl.contracts.logging import LogLevel
 from personal_finance_etl.contracts.observability import (
     EventCode,
     ObservabilityEvent,
@@ -158,7 +156,7 @@ class BaseEngineTab(ctk.CTkFrame):  # type: ignore[misc]
     def handle_status(
         self,
         run_btn: ctk.CTkButton | None,
-        status: EngineStatusMessage | ObservabilityEvent,
+        status: ObservabilityEvent,
     ) -> None:
         """Handle status updates from backend engine with thread-safe UI dispatch.
 
@@ -166,7 +164,7 @@ class BaseEngineTab(ctk.CTkFrame):  # type: ignore[misc]
         ----------
         run_btn : ctk.CTkButton | None
             Execution button to re-enable on termination, if provided.
-        status : EngineStatusMessage | ObservabilityEvent
+        status : ObservabilityEvent
             Status payload to render.
         """
         self.after(0, lambda: self._process_status(run_btn, status))
@@ -174,34 +172,21 @@ class BaseEngineTab(ctk.CTkFrame):  # type: ignore[misc]
     def _process_status(
         self,
         run_btn: ctk.CTkButton | None,
-        status: EngineStatusMessage | ObservabilityEvent,
+        status: ObservabilityEvent,
     ) -> None:
-        """Process status message on the Tkinter event loop thread."""
+        """Process status message on the Tkinter event loop thread.
+
+        Parameters
+        ----------
+        run_btn : ctk.CTkButton | None
+            Execution trigger button.
+        status : ObservabilityEvent
+            Canonical observability event to process.
+        """
         if not self.winfo_exists():
             return
 
-        if isinstance(status, ObservabilityEvent):
-            self._process_observability_event(run_btn, status)
-            return
-
-        # Cross-process EngineStatusMessage handling
-        prog = getattr(status, "progress", None)
-        if prog is not None:
-            self._set_progress(float(prog))
-
-        msg = getattr(status, "msg", "") or getattr(status, "message", "")
-        lvl = getattr(status, "level", LogLevel.INFO)
-        level_str = lvl.value if isinstance(lvl, LogLevel) else str(lvl).lower()
-
-        if msg:
-            self._log(msg, level_str)
-            if lvl == LogLevel.ERROR or level_str == "error":
-                if run_btn is not None:
-                    run_btn.configure(state="normal", text=self._run_btn_text)
-
-        if prog == 1.0:
-            if run_btn is not None:
-                run_btn.configure(state="normal", text=self._run_btn_text)
+        self._process_observability_event(run_btn, status)
 
     def _process_observability_event(
         self,
@@ -214,6 +199,10 @@ class BaseEngineTab(ctk.CTkFrame):  # type: ignore[misc]
 
         if event.progress is not None:
             self._set_progress(float(event.progress))
+
+        # Pure progress updates without narrative prose should not log empty lines
+        if not event.message.strip():
+            return
 
         tag = _DESKTOP_TAG_MAP.get(event.presentation_kind, "info")
         prefix = _DESKTOP_PREFIX_MAP.get(event.presentation_kind, "•")
