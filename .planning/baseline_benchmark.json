@@ -1,0 +1,54 @@
+{
+  "timestamp": "2026-10-26T12:56:45Z",
+  "architecture_version": "v9.3.7",
+  "pipeline_baseline": {
+    "cached_run_seconds": 28.0,
+    "cold_run_seconds": 48.0,
+    "estimated_event_count": 1200,
+    "approx_uncompressed_log_kb": 380.0,
+    "approx_compressed_log_kb": 42.0
+  },
+  "live_production_run": {
+    "runtime_seconds": 28.81,
+    "total_nodes": 46,
+    "unique_isins": 147,
+    "files_scanned": 1627,
+    "open_tax_lots": 341,
+    "uncompressed_log_bytes": 347589,
+    "log_line_count": 1192,
+    "zlib_level_6_bytes": 33687,
+    "zlib_level_9_bytes": 32660,
+    "compression_ratio_level_6": 10.32
+  },
+  "micro_benchmark": {
+    "iterations": 10000,
+    "total_time_ms": 200.59,
+    "records_per_second": 49853.18,
+    "log_file_size_bytes": 2509590,
+    "peak_memory_mb": 28.46,
+    "cpu_percent": 0.0,
+    "compression_benchmarks": [
+      {
+        "level": 1,
+        "raw_size_bytes": 2509590,
+        "compressed_size_bytes": 45414,
+        "compression_ratio": 55.26,
+        "duration_ms": 4.216
+      },
+      {
+        "level": 6,
+        "raw_size_bytes": 2509590,
+        "compressed_size_bytes": 36753,
+        "compression_ratio": 68.28,
+        "duration_ms": 11.361
+      },
+      {
+        "level": 9,
+        "raw_size_bytes": 2509590,
+        "compressed_size_bytes": 27690,
+        "compression_ratio": 90.63,
+        "duration_ms": 16.484
+      }
+    ]
+  }
+}
