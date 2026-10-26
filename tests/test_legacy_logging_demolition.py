@@ -61,7 +61,6 @@ class _MockStatusQueue:
         elif isinstance(status, tuple):
             t_item = cast("tuple[object, ...]", status)
             msg = str(t_item[0]) if len(t_item) > 0 and t_item[0] else ""
-            data = t_item[1] if len(t_item) > 1 and isinstance(t_item[1], pl.DataFrame) else None
             prog = (
                 float(t_item[2])
                 if len(t_item) > 2 and isinstance(t_item[2], (int, float))
@@ -70,7 +69,6 @@ class _MockStatusQueue:
             self.messages.append(
                 EngineStatusMessage(
                     msg=msg,
-                    data=data,
                     progress=prog,
                     level=LogLevel.INFO,
                 )
@@ -117,7 +115,7 @@ def test_worker_pool_coordinator_queue_item_parsing() -> None:
     assert isinstance(msg, EngineStatusMessage)
     assert msg.level == LogLevel.INFO
     assert msg.msg == "Error: failed to fetch market ticker"
-    assert msg.data is None
+    assert not hasattr(msg, "data")
     assert msg.progress == 0.5
 
 
