@@ -15,6 +15,7 @@ Does not own
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Mapping
 
 import polars as pl
@@ -34,9 +35,10 @@ from personal_finance_etl.domain.household.income import IncomeStreamsBuilder
 from personal_finance_etl.domain.household.ledger import LedgerBuilder
 from personal_finance_etl.domain.wealth.analytics import InvestmentAnalyticsBuilder
 from personal_finance_etl.domain.wealth.net_worth import NetWorthBuilder
-from personal_finance_etl.infrastructure.logging import logger
 
 __all__ = ["WealthPresentationEngine", "WealthService"]
+
+logger = logging.getLogger(__name__)
 
 
 class WealthService:
