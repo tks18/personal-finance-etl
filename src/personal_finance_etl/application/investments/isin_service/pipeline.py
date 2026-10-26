@@ -16,6 +16,7 @@ Does not own
 from __future__ import annotations
 
 import concurrent.futures
+import logging
 import multiprocessing
 import os
 import traceback
@@ -53,13 +54,14 @@ from personal_finance_etl.domain.investments.valuation.benchmark import Benchmar
 from personal_finance_etl.domain.market.fx import FXRateProvider
 from personal_finance_etl.domain.market.macro import FYMacroParametersTable
 from personal_finance_etl.infrastructure.logging.setup import (
-    logger,
     setup_worker_logging,
     start_worker_listener,
     stop_worker_listener,
 )
 
 __all__ = ["IsinPipeline"]
+
+logger = logging.getLogger(__name__)
 
 
 class _DimensionAccumulator:
