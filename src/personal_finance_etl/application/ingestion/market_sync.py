@@ -334,8 +334,24 @@ class BenchmarkPipeline:
             )
         batch_res.assert_complete("Benchmark Extractor")
 
+        self.emitter.emit_event(
+            event_code=EventCode.BRONZE_UPSERT,
+            message="Upserting Delta into Bronze Benchmark Lake...",
+            presentation_kind=PresentationKind.PROGRESS,
+            progress=0.6,
+            stage=EngineStage.TRANSFORMING,
+        )
+
         df_bronze_cached = self._upsert_benchmark_delta(
             batch_res.combined_frame, batch_res.injected_files
+        )
+
+        self.emitter.emit_event(
+            event_code=EventCode.TRANSFORMATION_STAGE,
+            message=f"Transforming Bronze Benchmark Data into Silver ({start_date} to {end_date})...",
+            presentation_kind=PresentationKind.PROGRESS,
+            progress=0.8,
+            stage=EngineStage.TRANSFORMING,
         )
 
         transformer = BenchmarkTransformer(self.status_queue)
