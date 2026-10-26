@@ -17,6 +17,7 @@ Does not own
 
 from __future__ import annotations
 
+import logging
 import os
 from datetime import date
 
@@ -42,7 +43,6 @@ from personal_finance_etl.domain.market.fx import (
     transform_currency_fx_rates,
 )
 from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
-from personal_finance_etl.infrastructure.logging import logger
 from personal_finance_etl.infrastructure.providers.market.benchmark import (
     BenchmarkExtractor,
 )
@@ -59,6 +59,8 @@ __all__ = [
     "CurrencyPipeline",
     "USMarketPipeline",
 ]
+
+logger = logging.getLogger(__name__)
 
 
 class CurrencyPipeline:
