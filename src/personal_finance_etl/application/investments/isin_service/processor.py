@@ -16,6 +16,7 @@ Does not own
 
 from __future__ import annotations
 
+import logging
 import math
 from datetime import date
 
@@ -52,9 +53,10 @@ from personal_finance_etl.domain.investments.valuation.fx import (
 )
 from personal_finance_etl.domain.market.fx import FXRateProvider
 from personal_finance_etl.domain.market.macro import FYMacroParametersTable
-from personal_finance_etl.infrastructure.logging.setup import logger
 
 __all__ = ["IsinProcessor"]
+
+logger = logging.getLogger(__name__)
 
 
 class IsinProcessor:
