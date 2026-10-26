@@ -204,6 +204,14 @@ class BaseEngineTab(ctk.CTkFrame):  # type: ignore[misc]
         if not event.message.strip():
             return
 
+        # Suppress repetitive per-entity success/cache ticks from cluttering UI log
+        if event.event_code in (
+            EventCode.MARKET_TICKER_SUCCESS,
+            EventCode.MARKET_TICKER_CACHE_HIT,
+            EventCode.QUANT_ISIN_PROCESSED,
+        ) and event.presentation_kind in (PresentationKind.STEP, PresentationKind.SUCCESS):
+            return
+
         tag = _DESKTOP_TAG_MAP.get(event.presentation_kind, "info")
         prefix = _DESKTOP_PREFIX_MAP.get(event.presentation_kind, "•")
 
