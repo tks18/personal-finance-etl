@@ -15,6 +15,7 @@ Does not own
 from __future__ import annotations
 
 import io
+import logging
 import time
 import uuid
 from datetime import date, timedelta
@@ -27,13 +28,14 @@ import polars as pl
 import yfinance as yf  # type: ignore[import-untyped]
 
 from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
-from personal_finance_etl.infrastructure.logging import logger
 
 __all__ = [
     "calculate_market_fetch_window",
     "download_yfinance_history",
     "vault_parquet_chunks",
 ]
+
+logger = logging.getLogger(__name__)
 
 
 def calculate_market_fetch_window(
