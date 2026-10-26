@@ -16,7 +16,6 @@ import pytest
 from personal_finance_etl.contracts.application import (
     EngineExecutionResult,
     EngineStage,
-    EngineStatusMessage,
 )
 from personal_finance_etl.contracts.extraction import (
     ExtractionBatchResult,
@@ -151,16 +150,9 @@ def test_recovery_results():
     assert restore.is_success is True
 
 
-def test_application_messages():
-    msg = EngineStatusMessage(
-        msg="Processing ISINs",
-        level=LogLevel.STEP,
-        progress=50.0,
-        stage=EngineStage.TRANSFORMING,
-    )
-    assert msg.level == LogLevel.STEP
-    assert msg.stage == EngineStage.TRANSFORMING
-
+def test_application_execution_result():
+    assert EngineStage.TRANSFORMING.value == "TRANSFORMING"
+    assert LogLevel.INFO.value == "info"
     res = EngineExecutionResult(
         is_success=True,
         run_id="run_123",

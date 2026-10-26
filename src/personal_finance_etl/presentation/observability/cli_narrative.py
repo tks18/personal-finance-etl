@@ -15,7 +15,6 @@ Does not own
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Final
 
 from rich.console import Console
@@ -23,9 +22,8 @@ from rich.markup import escape
 from rich.panel import Panel
 from rich.progress import Progress, TaskID
 
-from personal_finance_etl.contracts.application import EngineStatusMessage
-from personal_finance_etl.contracts.logging import LogLevel
 from personal_finance_etl.contracts.observability import (
+    EventCode,
     ObservabilityEvent,
     ObservabilitySink,
     PresentationKind,
@@ -43,14 +41,6 @@ _KIND_PREFIX_MAP: Final[dict[PresentationKind, str]] = {
     PresentationKind.RECOVERY: "[bold magenta]♻ RECOVERY:[/bold magenta]",
 }
 
-_STATUS_PREFIX_MAP: Final[dict[LogLevel, str]] = {
-    LogLevel.SUCCESS: "[bold green]✓[/bold green]",
-    LogLevel.ERROR: "[bold red]✗ ERROR:[/bold red]",
-    LogLevel.WARNING: "[bold yellow]![/bold yellow]",
-    LogLevel.STEP: "[bold cyan]>>[/bold cyan]",
-    LogLevel.INFO: "[dim]•[/dim]",
-}
-
 
 class RichNarrativeSink(ObservabilitySink):
     """Rich console renderer projecting canonical events into a clean narrative.
@@ -66,12 +56,14 @@ class RichNarrativeSink(ObservabilitySink):
         task_id: TaskID | None = None,
         show_timestamps: bool = True,
         time_format: str = "%H:%M:%S",
+        suppress_per_entity_success: bool = True,
     ) -> None:
         self._console: Console = console if console is not None else Console()
         self._progress: Progress | None = progress
         self._task_id: TaskID | None = task_id
         self._show_timestamps: bool = show_timestamps
         self._time_format: str = time_format
+        self._suppress_per_entity_success: bool = suppress_per_entity_success
         self._rendered_count: int = 0
 
     @property
@@ -94,6 +86,23 @@ class RichNarrativeSink(ObservabilitySink):
         # Update progress bar if associated with a Rich progress task
         if event.progress is not None and self._progress is not None and self._task_id is not None:
             self._progress.update(self._task_id, completed=event.progress * 100.0)
+
+        # Pure progress bar updates without narrative prose should not print empty log lines
+        if not event.message.strip():
+            return
+
+        # Suppress repetitive per-entity success/cache ticks from cluttering the human run narrative
+        if (
+            self._suppress_per_entity_success
+            and event.event_code
+            in (
+                EventCode.MARKET_TICKER_SUCCESS,
+                EventCode.MARKET_TICKER_CACHE_HIT,
+                EventCode.QUANT_ISIN_PROCESSED,
+            )
+            and event.presentation_kind in (PresentationKind.STEP, PresentationKind.SUCCESS)
+        ):
+            return
 
         # Build formatted narrative line
         prefix = _KIND_PREFIX_MAP.get(event.presentation_kind, "[dim]•[/dim]")
@@ -140,36 +149,6 @@ class RichNarrativeSink(ObservabilitySink):
         # On failure: display actionable summary panel without dumping stack traces
         if event.presentation_kind == PresentationKind.FAILURE:
             self._render_failure_panel(event)
-
-    def render_status_message(self, status: EngineStatusMessage) -> None:
-        """Render a process status message to the console.
-
-        Parameters
-        ----------
-        status : EngineStatusMessage
-            Status message payload to render.
-        """
-        if not status.msg:
-            return
-
-        if status.progress is not None and self._progress is not None and self._task_id is not None:
-            self._progress.update(self._task_id, completed=status.progress * 100.0)
-
-        prefix = _STATUS_PREFIX_MAP.get(status.level, "[dim]•[/dim]")
-        safe_msg = escape(status.msg)
-
-        if self._show_timestamps:
-            ts = status.timestamp if status.timestamp else None
-            if ts is not None:
-                ts_str = ts.strftime(self._time_format)
-            else:
-                ts_str = datetime.now().strftime(self._time_format)
-            line = f"[dim][{ts_str}][/dim] {prefix} {safe_msg}"
-        else:
-            line = f"{prefix} {safe_msg}"
-
-        self._print_line(line)
-        self._rendered_count += 1
 
     def flush(self) -> None:
         """Flush output to the underlying console."""

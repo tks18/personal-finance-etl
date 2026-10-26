@@ -17,6 +17,7 @@ Does not own
 
 from __future__ import annotations
 
+import logging
 import tempfile
 import traceback
 
@@ -37,15 +38,20 @@ from personal_finance_etl.application.observability import (
     ObservabilityEmitter,
     get_global_emitter,
 )
-from personal_finance_etl.contracts.application import EngineStage, EngineStatusMessage
-from personal_finance_etl.contracts.logging import LogLevel, StatusQueue
+from personal_finance_etl.contracts.application import EngineStage
+from personal_finance_etl.contracts.lifecycle import FailureDomain
+from personal_finance_etl.contracts.logging import StatusQueue
 from personal_finance_etl.contracts.observability import (
+    DiagnosticSeverity,
+    ErrorDetails,
     EventCode,
+    EventOutcome,
     PresentationKind,
 )
-from personal_finance_etl.infrastructure.logging.setup import logger
 
 __all__ = ["InvestmentQuantEngine", "QuantService"]
+
+logger = logging.getLogger(__name__)
 
 
 class InvestmentQuantEngine:
@@ -76,18 +82,6 @@ class InvestmentQuantEngine:
         self.status_queue = status_queue
         self.emitter = emitter or get_global_emitter()
 
-    def _report_status(
-        self,
-        msg: str,
-        data: pl.DataFrame | None,
-        progress: float,
-        level: LogLevel,
-    ) -> None:
-        if self.status_queue is not None:
-            self.status_queue.put(
-                EngineStatusMessage(msg=msg, data=data, progress=progress, level=level)
-            )
-
     def run(self) -> dict[str, pl.DataFrame]:
         """Execute the quantitative analysis engine.
 
@@ -99,8 +93,22 @@ class InvestmentQuantEngine:
         try:
             return self._run()
         except Exception as e:
-            err_msg = f"Error: {e}\n{traceback.format_exc()}"
-            self._report_status(err_msg, None, 0.0, LogLevel.ERROR)
+            err_details = ErrorDetails(
+                exception_type=type(e).__name__,
+                exception_message=str(e),
+                failure_domain=FailureDomain.WORKER,
+                traceback_summary=traceback.format_exc(),
+                retryable=False,
+            )
+            self.emitter.emit_event(
+                event_code=EventCode.QUANT_POOL_COMPLETED,
+                message=f"Quant Engine failed: {e}",
+                severity=DiagnosticSeverity.ERROR,
+                outcome=EventOutcome.FAILED,
+                presentation_kind=PresentationKind.FAILURE,
+                stage=EngineStage.ANALYZING,
+                error=err_details,
+            )
             raise e
 
     def _run(self) -> dict[str, pl.DataFrame]:
@@ -125,11 +133,11 @@ class InvestmentQuantEngine:
 
         if not isins:
             empty_df = pl.DataFrame()
-            self._report_status(
-                "Processing Complete! (no valid ISINs found)",
-                empty_df,
-                1.0,
-                LogLevel.SUCCESS,
+            self.emitter.emit_event(
+                event_code=EventCode.QUANT_POOL_COMPLETED,
+                message="Processing Complete! (no valid ISINs found)",
+                presentation_kind=PresentationKind.SUCCESS,
+                stage=EngineStage.ANALYZING,
             )
             return {"df_f_investment_analytics_lot": empty_df}
 
@@ -142,19 +150,17 @@ class InvestmentQuantEngine:
 
             if not has_data:
                 empty_df = pl.DataFrame()
-                self._report_status(
-                    "Processing Complete! (no output rows)",
-                    empty_df,
-                    1.0,
-                    LogLevel.SUCCESS,
+                self.emitter.emit_event(
+                    event_code=EventCode.QUANT_POOL_COMPLETED,
+                    message="Processing Complete! (no output rows)",
+                    presentation_kind=PresentationKind.SUCCESS,
+                    stage=EngineStage.ANALYZING,
                 )
                 return {"df_f_investment_analytics_lot": empty_df}
 
             post_pipeline = PostProcessingPipeline(ctx, tmp_dir, self.status_queue)
             final_dfs = post_pipeline.run(pipeline_res)
 
-            succ_msg = f"✅  Processing Complete — generated {len(final_dfs)} analytics tables."
-            self._report_status(succ_msg, None, 1.0, LogLevel.SUCCESS)
             self.emitter.emit_event(
                 event_code=EventCode.QUANT_POOL_COMPLETED,
                 message=f"Processing Complete — generated {len(final_dfs)} analytics tables",

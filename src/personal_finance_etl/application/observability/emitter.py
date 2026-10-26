@@ -31,6 +31,7 @@ from personal_finance_etl.application.observability.context import (
 )
 from personal_finance_etl.contracts.application import EngineStage
 from personal_finance_etl.contracts.lifecycle import (
+    CommitState,
     FailureDomain,
     classify_failure_domain,
 )
@@ -60,7 +61,7 @@ class SpanContext:
     hierarchical operation correlation IDs.
     """
 
-    def __init__(
+    def __init__(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
         emitter: ObservabilityEmitter,
         operation: str,
@@ -75,6 +76,10 @@ class SpanContext:
         cache_hit: bool | None = None,
         message: str = "",
         log_start: bool = True,
+        batch_id: str | None = None,
+        commit_state: CommitState | None = None,
+        settings_fingerprint: str | None = None,
+        rules_fingerprint: str | None = None,
     ) -> None:
         self.emitter = emitter
         self.operation = operation
@@ -89,6 +94,10 @@ class SpanContext:
         self.cache_hit = cache_hit
         self.message = message
         self.log_start = log_start
+        self.batch_id = batch_id
+        self.commit_state = commit_state
+        self.settings_fingerprint = settings_fingerprint
+        self.rules_fingerprint = rules_fingerprint
 
         self.start_ns: int = 0
         self.token: contextvars.Token[ObservabilityContext] | None = None
@@ -126,6 +135,10 @@ class SpanContext:
             rows=self.rows,
             provider=self.provider,
             cache_hit=self.cache_hit,
+            batch_id=self.batch_id,
+            commit_state=self.commit_state,
+            settings_fingerprint=self.settings_fingerprint,
+            rules_fingerprint=self.rules_fingerprint,
         )
         self.token = set_current_context(child_ctx)
 
@@ -276,6 +289,10 @@ class ObservabilityEmitter:
         duration_ms: float | None = None,
         provider: str | None = None,
         cache_hit: bool | None = None,
+        batch_id: str | None = None,
+        commit_state: CommitState | None = None,
+        settings_fingerprint: str | None = None,
+        rules_fingerprint: str | None = None,
     ) -> ObservabilityEvent:
         """Construct and emit an event using current ambient context.
 
@@ -313,6 +330,14 @@ class ObservabilityEmitter:
             Optional provider name.
         cache_hit : bool | None, default=None
             Optional cache hit flag.
+        batch_id : str | None, default=None
+            Optional batch identifier.
+        commit_state : CommitState | None, default=None
+            Optional transaction commit state.
+        settings_fingerprint : str | None, default=None
+            Optional configuration settings hash digest.
+        rules_fingerprint : str | None, default=None
+            Optional financial rules hash digest.
 
         Returns
         -------
@@ -330,6 +355,10 @@ class ObservabilityEmitter:
             duration_ms=duration_ms,
             provider=provider,
             cache_hit=cache_hit,
+            batch_id=batch_id,
+            commit_state=commit_state,
+            settings_fingerprint=settings_fingerprint,
+            rules_fingerprint=rules_fingerprint,
         )
         event = ObservabilityEvent.create(
             event_code=event_code,
@@ -344,7 +373,7 @@ class ObservabilityEmitter:
         self.emit(event)
         return event
 
-    def span(
+    def span(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
         operation: str,
         component: str = "",
@@ -358,6 +387,10 @@ class ObservabilityEmitter:
         cache_hit: bool | None = None,
         message: str = "",
         log_start: bool = True,
+        batch_id: str | None = None,
+        commit_state: CommitState | None = None,
+        settings_fingerprint: str | None = None,
+        rules_fingerprint: str | None = None,
     ) -> SpanContext:
         """Create a scoped execution span measuring duration and outcome.
 
@@ -387,6 +420,14 @@ class ObservabilityEmitter:
             Optional narrative message description.
         log_start : bool, default=True
             Whether to emit a START event upon entering the span.
+        batch_id : str | None, default=None
+            Optional batch identifier.
+        commit_state : CommitState | None, default=None
+            Optional transaction commit state.
+        settings_fingerprint : str | None, default=None
+            Optional configuration settings hash digest.
+        rules_fingerprint : str | None, default=None
+            Optional financial rules hash digest.
 
         Returns
         -------
@@ -407,6 +448,10 @@ class ObservabilityEmitter:
             cache_hit=cache_hit,
             message=message,
             log_start=log_start,
+            batch_id=batch_id,
+            commit_state=commit_state,
+            settings_fingerprint=settings_fingerprint,
+            rules_fingerprint=rules_fingerprint,
         )
 
     def flush(self) -> None:

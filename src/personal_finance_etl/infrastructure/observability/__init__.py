@@ -6,6 +6,7 @@ Owns
 - AsyncObservabilityListener: Dedicated daemon thread owning file I/O operations.
 - ObservabilityQueueSink: Non-blocking queue sink routing events across processes.
 - EventQueue: Protocol unifying thread and multiprocessing event queues.
+- create_forensic_pipeline: Assembles asynchronous queue, listener, and JSONL forensic sink.
 
 Does not own
 -------------
@@ -22,6 +23,8 @@ from personal_finance_etl.infrastructure.observability.archival import (
     compress_bytes,
     decompress_bytes,
     retrieve_run_trace,
+    retrieve_run_trace_events,
+    retrieve_run_trace_text,
 )
 from personal_finance_etl.infrastructure.observability.forensic_sink import (
     JsonlForensicSink,
@@ -30,10 +33,15 @@ from personal_finance_etl.infrastructure.observability.queue import (
     AsyncObservabilityListener,
     EventQueue,
     ObservabilityQueueSink,
+    create_forensic_pipeline,
 )
 from personal_finance_etl.infrastructure.observability.redaction import (
     SENSITIVE_KEY_SUBSTRINGS,
+    ConfigFingerprintDict,
+    RedactionPolicy,
+    RulesFingerprintDict,
     fingerprint_config,
+    fingerprint_rules,
     hash_identifier,
     redact_dict,
     redact_text,
@@ -43,19 +51,26 @@ from personal_finance_etl.infrastructure.observability.retention import (
 )
 
 __all__ = [
+    "ConfigFingerprintDict",
     "DEFAULT_COMPRESSION_LEVEL",
     "AsyncObservabilityListener",
     "EventQueue",
     "JsonlForensicSink",
     "LogRetentionManager",
     "ObservabilityQueueSink",
+    "RedactionPolicy",
+    "RulesFingerprintDict",
     "SENSITIVE_KEY_SUBSTRINGS",
     "archive_run_trace",
     "compress_bytes",
+    "create_forensic_pipeline",
     "decompress_bytes",
     "fingerprint_config",
+    "fingerprint_rules",
     "hash_identifier",
     "redact_dict",
     "redact_text",
     "retrieve_run_trace",
+    "retrieve_run_trace_events",
+    "retrieve_run_trace_text",
 ]

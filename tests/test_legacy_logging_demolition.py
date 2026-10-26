@@ -3,11 +3,13 @@
 Owns
 ----
 - Verification of QueueStream raw forwarding without string-based level inference.
-- Verification of infer_log_level clean boolean routing.
+- Verification that infer_log_level is permanently demolished.
 - Verification of live RunLifecycleCoordinator JSONL forensic sink attachment and lifecycle.
 - Verification that generated trace files are queryable natively via Polars (pl.read_ndjson).
 - Verification of Control Plane trace archival using the generated JSONL file.
 - Static codebase assertions confirming complete elimination of legacy bracket prefixes.
+- Verification that dead logging helpers and global logger exports are eradicated.
+- Static codebase assertions confirming absence of global logger imports.
 
 Does not own
 -------------
@@ -19,7 +21,6 @@ from __future__ import annotations
 
 import ast
 from pathlib import Path
-from typing import cast
 
 import polars as pl
 
@@ -28,14 +29,14 @@ from personal_finance_etl.application.pipeline.lifecycle import RunLifecycleCoor
 from personal_finance_etl.application.pipeline.worker import (
     QueueStream,
     WorkerPoolCoordinator,
-    infer_log_level,
 )
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
-from personal_finance_etl.contracts.application import EngineStage, EngineStatusMessage
-from personal_finance_etl.contracts.logging import LogLevel
+from personal_finance_etl.contracts.application import EngineStage
 from personal_finance_etl.contracts.observability import (
+    DiagnosticSeverity,
     EventCode,
+    ObservabilityEvent,
     PresentationKind,
 )
 from personal_finance_etl.infrastructure.observability.archival import retrieve_run_trace
@@ -43,10 +44,10 @@ from personal_finance_etl.infrastructure.warehouse.connection import DuckDBManag
 
 
 class _MockStatusQueue:
-    """Mock queue capturing EngineStatusMessage instances for testing."""
+    """Mock queue capturing ObservabilityEvent instances for testing."""
 
     def __init__(self) -> None:
-        self.messages: list[EngineStatusMessage] = []
+        self.events: list[ObservabilityEvent] = []
 
     def put(
         self,
@@ -56,25 +57,8 @@ class _MockStatusQueue:
         timeout: float | None = None,
     ) -> None:
         del block, timeout
-        if isinstance(status, EngineStatusMessage):
-            self.messages.append(status)
-        elif isinstance(status, tuple):
-            t_item = cast("tuple[object, ...]", status)
-            msg = str(t_item[0]) if len(t_item) > 0 and t_item[0] else ""
-            data = t_item[1] if len(t_item) > 1 and isinstance(t_item[1], pl.DataFrame) else None
-            prog = (
-                float(t_item[2])
-                if len(t_item) > 2 and isinstance(t_item[2], (int, float))
-                else None
-            )
-            self.messages.append(
-                EngineStatusMessage(
-                    msg=msg,
-                    data=data,
-                    progress=prog,
-                    level=LogLevel.INFO,
-                )
-            )
+        if isinstance(status, ObservabilityEvent):
+            self.events.append(status)
 
 
 def test_queue_stream_demolition_of_string_inference() -> None:
@@ -88,37 +72,44 @@ def test_queue_stream_demolition_of_string_inference() -> None:
     stdout_stream.write("Complete: [GATE] Verified 18 schemas\n")
     stdout_stream.flush()
 
-    assert len(mock_q.messages) == 4
-    for msg in mock_q.messages:
-        assert msg.level == LogLevel.INFO
+    assert len(mock_q.events) == 4
+    for event in mock_q.events:
+        assert event.severity == DiagnosticSeverity.INFO
+        assert event.event_code == EventCode.RAW_STDOUT
+        assert event.presentation_kind == PresentationKind.INTERNAL
 
     stderr_mock_q = _MockStatusQueue()
     stderr_stream = QueueStream(stderr_mock_q, is_error=True)
     stderr_stream.write("Fatal crash during network socket binding\n")
     stderr_stream.flush()
 
-    assert len(stderr_mock_q.messages) == 1
-    assert stderr_mock_q.messages[0].level == LogLevel.ERROR
+    assert len(stderr_mock_q.events) == 1
+    assert stderr_mock_q.events[0].severity == DiagnosticSeverity.ERROR
+    assert stderr_mock_q.events[0].event_code == EventCode.RAW_STDERR
+    assert stderr_mock_q.events[0].presentation_kind == PresentationKind.INTERNAL
 
 
-def test_infer_log_level_boolean_routing() -> None:
-    """Verify infer_log_level relies strictly on is_error boolean flag."""
-    assert infer_log_level("Error: fatal disk corruption", is_error=False) == LogLevel.INFO
-    assert infer_log_level("Normal status check", is_error=False) == LogLevel.INFO
-    assert infer_log_level("Success!", is_error=True) == LogLevel.ERROR
-    assert infer_log_level("", is_error=True) == LogLevel.ERROR
+def test_infer_log_level_permanently_demolished() -> None:
+    """Verify infer_log_level is permanently eradicated from worker module."""
+    import personal_finance_etl.application.pipeline.worker as worker_mod
+
+    assert not hasattr(worker_mod, "infer_log_level")
 
 
 def test_worker_pool_coordinator_queue_item_parsing() -> None:
-    """Verify WorkerPoolCoordinator parses queue tuples without severity guessing."""
-    msg = WorkerPoolCoordinator._parse_queue_item(  # pyright: ignore[reportPrivateUsage]
-        ("Error: failed to fetch market ticker", None, 0.5)
+    """Verify WorkerPoolCoordinator parses queue items into canonical ObservabilityEvent."""
+    canonical = ObservabilityEvent.create(
+        event_code=EventCode.RAW_STDOUT,
+        message="Market ticker sync complete",
+        progress=0.5,
     )
-    assert isinstance(msg, EngineStatusMessage)
-    assert msg.level == LogLevel.INFO
-    assert msg.msg == "Error: failed to fetch market ticker"
-    assert msg.data is None
-    assert msg.progress == 0.5
+    event1 = WorkerPoolCoordinator._parse_queue_item(canonical)  # pyright: ignore[reportPrivateUsage]
+    assert event1 is canonical
+
+    event2 = WorkerPoolCoordinator._parse_queue_item("Raw status string")  # pyright: ignore[reportPrivateUsage]
+    assert isinstance(event2, ObservabilityEvent)
+    assert event2.message == "Raw status string"
+    assert event2.severity == DiagnosticSeverity.INFO
 
 
 def test_lifecycle_coordinator_live_jsonl_production_and_archival(tmp_path: Path) -> None:
@@ -227,3 +218,37 @@ def test_static_absence_of_legacy_bracket_prefixes() -> None:
                         f"Found prohibited legacy prefix '{prefix}' in {py_file}:\n"
                         + "\n".join(lines[:3])
                     )
+
+
+def test_logging_infrastructure_demolished_exports() -> None:
+    """Verify dead logging helpers and global logger export are permanently eradicated."""
+    import personal_finance_etl.infrastructure.logging as logging_pkg
+    import personal_finance_etl.infrastructure.logging.setup as logging_setup
+
+    demolished_symbols = [
+        "logger",
+        "add_file_handler",
+        "remove_file_handlers",
+        "add_queue_handler",
+        "QueueHandler",
+        "setup_logger",
+    ]
+    for sym in demolished_symbols:
+        assert not hasattr(logging_pkg, sym), f"{sym} still exported from infrastructure.logging"
+        assert not hasattr(logging_setup, sym), f"{sym} still present in infrastructure.logging.setup"
+
+
+def test_static_absence_of_global_logger_imports() -> None:
+    """Verify zero production files import global logger from infrastructure.logging."""
+    src_dir = Path("src/personal_finance_etl")
+    for py_file in src_dir.rglob("*.py"):
+        content = py_file.read_text(encoding="utf-8")
+        parsed = ast.parse(content, filename=str(py_file))
+        for node in ast.walk(parsed):
+            if isinstance(node, ast.ImportFrom):
+                if node.module and "personal_finance_etl.infrastructure.logging" in node.module:
+                    for alias in node.names:
+                        assert alias.name != "logger", (
+                            f"File {py_file} illegally imports global 'logger' from {node.module}"
+                        )
+

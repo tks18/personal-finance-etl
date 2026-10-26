@@ -23,21 +23,24 @@ Does not own
 from __future__ import annotations
 
 import concurrent.futures
+import logging
 from collections.abc import Mapping
 from datetime import UTC, date, datetime
 
 import pandas as pd  # type: ignore[import-untyped]
 import polars as pl
 
-from personal_finance_etl.contracts.application import EngineStatusMessage
+from personal_finance_etl.contracts.application import EngineStage
 from personal_finance_etl.contracts.extraction import (
     ExtractionBatchResult,
     ExtractorEntityResult,
     ExtractorEntityStatus,
 )
-from personal_finance_etl.contracts.logging import LogLevel, StatusQueue
+from personal_finance_etl.contracts.lifecycle import FailureDomain
+from personal_finance_etl.contracts.logging import StatusQueue
 from personal_finance_etl.contracts.observability import (
     DiagnosticSeverity,
+    ErrorDetails,
     EventCode,
     EventOutcome,
     ObservabilityContext,
@@ -46,7 +49,6 @@ from personal_finance_etl.contracts.observability import (
     PresentationKind,
 )
 from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
-from personal_finance_etl.infrastructure.logging import logger
 from personal_finance_etl.infrastructure.providers.market.common import (
     calculate_market_fetch_window,
     download_yfinance_history,
@@ -54,6 +56,8 @@ from personal_finance_etl.infrastructure.providers.market.common import (
 )
 
 __all__ = ["CurrencyExtractor"]
+
+logger = logging.getLogger(__name__)
 
 
 class CurrencyExtractor:
@@ -256,8 +260,11 @@ class CurrencyExtractor:
                     presentation_kind=PresentationKind.SUCCESS,
                     outcome=EventOutcome.COMPLETED,
                     context=ObservabilityContext(
+                        stage=EngineStage.TRANSFORMING,
+                        provider="YahooFinance",
                         entity_type="Ticker",
                         entity_id=res.entity,
+                        attempt=res.attempt_count,
                         rows=res.df.height if not res.df.is_empty() else None,
                     ),
                     message=res.message,
@@ -274,6 +281,8 @@ class CurrencyExtractor:
                     presentation_kind=PresentationKind.STEP,
                     outcome=EventOutcome.COMPLETED,
                     context=ObservabilityContext(
+                        stage=EngineStage.TRANSFORMING,
+                        provider="YahooFinance",
                         entity_type="Ticker",
                         entity_id=res.entity,
                         cache_hit=True,
@@ -295,8 +304,11 @@ class CurrencyExtractor:
                     presentation_kind=PresentationKind.WARNING,
                     outcome=EventOutcome.COMPLETED,
                     context=ObservabilityContext(
+                        stage=EngineStage.TRANSFORMING,
+                        provider="YahooFinance",
                         entity_type="Ticker",
                         entity_id=res.entity,
+                        attempt=res.attempt_count,
                     ),
                     message=res.message,
                     progress=prog,
@@ -304,6 +316,13 @@ class CurrencyExtractor:
             )
         else:
             batch_result.failed_entities[res.entity] = res.message
+            err_details = ErrorDetails(
+                exception_type=res.failure_class or "MarketTickerFetchError",
+                exception_message=res.final_error or res.message,
+                failure_domain=FailureDomain.EXTERNAL_PROVIDER,
+                traceback_summary="",
+                retryable=False,
+            )
             self._emit_event(
                 ObservabilityEvent(
                     timestamp=datetime.now(UTC),
@@ -311,9 +330,13 @@ class CurrencyExtractor:
                     severity=DiagnosticSeverity.ERROR,
                     presentation_kind=PresentationKind.FAILURE,
                     outcome=EventOutcome.FAILED,
+                    error=err_details,
                     context=ObservabilityContext(
+                        stage=EngineStage.TRANSFORMING,
+                        provider="YahooFinance",
                         entity_type="Ticker",
                         entity_id=res.entity,
+                        attempt=res.attempt_count,
                     ),
                     message=res.message,
                     progress=prog,
@@ -363,11 +386,14 @@ class CurrencyExtractor:
 
         cache_map = self._build_cache_map(df_bronze_cached)
         self.status_queue.put(
-            EngineStatusMessage(
-                msg=f"Starting Currency FX extractor for {total} tickers...",
-                data=None,
+            ObservabilityEvent.create(
+                event_code=EventCode.MARKET_FETCH_START,
+                message=f"Starting Currency FX extractor for {total} tickers...",
                 progress=0.1,
-                level=LogLevel.STEP,
+                severity=DiagnosticSeverity.INFO,
+                outcome=EventOutcome.COMPLETED,
+                presentation_kind=PresentationKind.STEP,
+                stage=EngineStage.TRANSFORMING,
             )
         )
 
@@ -407,11 +433,14 @@ class CurrencyExtractor:
                         )
                     )
                     self.status_queue.put(
-                        EngineStatusMessage(
-                            msg=f"Error: Critical thread failure on {ticker}: {err_msg}",
-                            data=None,
+                        ObservabilityEvent.create(
+                            event_code=EventCode.MARKET_TICKER_FAILED,
+                            message=f"Error: Critical thread failure on {ticker}: {err_msg}",
                             progress=prog,
-                            level=LogLevel.ERROR,
+                            severity=DiagnosticSeverity.ERROR,
+                            outcome=EventOutcome.FAILED,
+                            presentation_kind=PresentationKind.FAILURE,
+                            stage=EngineStage.TRANSFORMING,
                         )
                     )
 

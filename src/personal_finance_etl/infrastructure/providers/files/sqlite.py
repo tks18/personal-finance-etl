@@ -16,14 +16,15 @@ Does not own
 from __future__ import annotations
 
 import glob
+import logging
 import os
 import sqlite3
 
 import polars as pl
 
-from personal_finance_etl.infrastructure.logging import logger
-
 __all__ = ["SQLiteExtractor"]
+
+logger = logging.getLogger(__name__)
 
 
 class SQLiteExtractor:

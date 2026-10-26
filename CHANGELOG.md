@@ -2,6 +2,167 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [9.4.0](https://github.com/tks18/personal-finance-etl/compare/9.3.7...9.4.0) (2026-10-26)
+
+
+### Bug Fixes 🛠
+
+* **observability:** align forensic sink payload with ErrorDetailsDict ([af9d2bd](https://github.com/tks18/personal-finance-etl/commit/af9d2bd753b60502920cfc95e900c1f8667323e1))
+
+
+### Performance Improvements 🏎
+
+* **observability:** tune default forensic sink buffer size to 50 ([dadb578](https://github.com/tks18/personal-finance-etl/commit/dadb5788da681467a418540fff7db807209c06e1))
+
+
+### Code Refactoring 🖌
+
+* **aggregation:** emit ObservabilityEvent for step progress ([7d3d9eb](https://github.com/tks18/personal-finance-etl/commit/7d3d9ebb6761047c8ec4ba33ed8a62daa651eedc))
+* **benchmark_provider:** emit ObservabilityEvent for delta fetch ([b10bdb5](https://github.com/tks18/personal-finance-etl/commit/b10bdb538f6c8394cafca64b43a8d05eaae33c1f))
+* **benchmark_provider:** remove data arg from status messages ([d3631d2](https://github.com/tks18/personal-finance-etl/commit/d3631d2047ac20d884c26697501768b2d138e3a7))
+* **benchmarks:** emit ObservabilityEvent for transform steps ([45568db](https://github.com/tks18/personal-finance-etl/commit/45568dba18462f8875c2034d3f6dd029e38fb567))
+* **benchmarks:** mark transformer domain status events internal ([8ed44df](https://github.com/tks18/personal-finance-etl/commit/8ed44dfbeb68b192df03d4eb410578803f887a7b))
+* **benchmarks:** remove unused data arg from status messages ([8406e94](https://github.com/tks18/personal-finance-etl/commit/8406e94d957882a892cf8a97b3efd3f758e852dd))
+* **bootstrap:** unify fallback queue under ObservabilityEvent ([e8e89b0](https://github.com/tks18/personal-finance-etl/commit/e8e89b0686d3c89898151b1bd4cff5d29f36cab0))
+* **cli:** consume pure ObservabilityEvent across CLI narrative ([84f60b5](https://github.com/tks18/personal-finance-etl/commit/84f60b59ae5c33cf395dfad19ef0dad7b8939c1d))
+* **contracts:** demolish EngineStatusMessage dataclass ([2f8a664](https://github.com/tks18/personal-finance-etl/commit/2f8a664988d21a47889e69a81f00e64146d2c190))
+* **contracts:** eradicate EngineStatusMessage export ([5d2cb43](https://github.com/tks18/personal-finance-etl/commit/5d2cb43bef6000b50e7f54f9efd9678a340f576f))
+* **coordinator:** migrate status reporting to ObservabilityEvent ([6b46975](https://github.com/tks18/personal-finance-etl/commit/6b46975b4adf9d3c53a604c5e4294bfc54239b4a))
+* **coordinator:** remove unused data arg from status messages ([384b31c](https://github.com/tks18/personal-finance-etl/commit/384b31cd04e346c6f9810edc9c3746aa3c01d501))
+* **currency_provider:** emit ObservabilityEvent for delta fetch ([16abcca](https://github.com/tks18/personal-finance-etl/commit/16abccaa894a5eeded99669e84d7aedde2e38801))
+* **currency_provider:** remove data arg from status messages ([05b90ad](https://github.com/tks18/personal-finance-etl/commit/05b90adefb3ef917fddace187be620b983f965d0))
+* **desktop_sink:** update consumer type to pure ObservabilityEvent ([a29a0a7](https://github.com/tks18/personal-finance-etl/commit/a29a0a717915259eac89265b4f13c1191079cfe0))
+* **desktop:** emit ObservabilityEvent for app diagnostics ([e8bfedf](https://github.com/tks18/personal-finance-etl/commit/e8bfedf56e6bb88f39d7d8ddad2736fe8bd6194f))
+* **desktop:** filter repetitive per-entity ticks in base tab ([f7808f4](https://github.com/tks18/personal-finance-etl/commit/f7808f4770f425fd4932886ceec7b5c5f55730d7))
+* **desktop:** remove data arg from status messages ([8eb6276](https://github.com/tks18/personal-finance-etl/commit/8eb6276227662df9146dc2f7020e0838d79ecc9b))
+* **desktop:** unify base tab status on ObservabilityEvent ([4d0ab56](https://github.com/tks18/personal-finance-etl/commit/4d0ab56148a5395883fb0fb9fdf7287eda4f6a12))
+* **execution:** remove duplicate config fingerprint emissions ([ffe1e5d](https://github.com/tks18/personal-finance-etl/commit/ffe1e5d12181f0d67dd0f2f457b1f177510b1913))
+* **execution:** unify execution phase progress in emitter ([e04c1e0](https://github.com/tks18/personal-finance-etl/commit/e04c1e06ecbdbe622b8e9a689627944b002bd23a))
+* **facade:** unify async status callback on ObservabilityEvent ([ede88d6](https://github.com/tks18/personal-finance-etl/commit/ede88d62e51285cb72b3c042ee1c65fbe40f75b7))
+* **ingestion:** emit bronze upsert and transform milestones ([5a4d97e](https://github.com/tks18/personal-finance-etl/commit/5a4d97e9d686feb325a06f301c6c968f22cfeb6b))
+* **ingestion:** enrich extraction with provider and error details ([30abfbd](https://github.com/tks18/personal-finance-etl/commit/30abfbd139b8318a7fba6cfb3220e161f89b3318))
+* **ingestion:** standardize module-level getLogger instance ([378c950](https://github.com/tks18/personal-finance-etl/commit/378c950aaa8719c556e20b69a2ef6214c11e7ecc))
+* **ingestion:** standardize module-level getLogger instance ([c0827a9](https://github.com/tks18/personal-finance-etl/commit/c0827a934130530847f58aa10f77f7960a4f8ee4))
+* **investments:** attach structured error details on isin failure ([6786fb4](https://github.com/tks18/personal-finance-etl/commit/6786fb4cded3f803e3f938d43b52567da1bc4458))
+* **investments:** eliminate duplicate run failed on quant error ([9cda59a](https://github.com/tks18/personal-finance-etl/commit/9cda59a2972e6a6b4d445c0357364040c7e364fc))
+* **investments:** emit ObservabilityEvent in analytics context ([927690a](https://github.com/tks18/personal-finance-etl/commit/927690a5b0ee2b0a388cb682a8b7709f6e58a615))
+* **investments:** standardize module-level getLogger instance ([5cc609c](https://github.com/tks18/personal-finance-etl/commit/5cc609cba8b992c7dbca681a03f49a865c93ac25))
+* **investments:** standardize module-level getLogger instance ([549daf0](https://github.com/tks18/personal-finance-etl/commit/549daf0dae9f3f2e42bff0e080dd53e8f9c6a3a8))
+* **investments:** standardize module-level getLogger instance ([70d3c8b](https://github.com/tks18/personal-finance-etl/commit/70d3c8b494c132940d489858c24e2422c898dd76))
+* **investments:** standardize module-level getLogger instance ([69eed77](https://github.com/tks18/personal-finance-etl/commit/69eed7732b0248e20c9639fb47fefc73217c51b3))
+* **investments:** standardize module-level getLogger instance ([95efdce](https://github.com/tks18/personal-finance-etl/commit/95efdce473ad08ac4cc18776f6a42d6b49e9a3cb))
+* **isin_service:** emit ObservabilityEvent for worker progress ([93eb2d7](https://github.com/tks18/personal-finance-etl/commit/93eb2d7d2b3f96821c23a0f78f13fdb3fc970bf2))
+* **lifecycle:** attach commit state to failure and commit events ([63cfaef](https://github.com/tks18/personal-finance-etl/commit/63cfaefe01d22439692c6e0cf425a1fc4ff2d955))
+* **lifecycle:** wire asynchronous queue and listener pipeline ([d41c62d](https://github.com/tks18/personal-finance-etl/commit/d41c62d8dcf556b8b87f995318a9b75a7ea279df))
+* **logging:** demolish dead file/queue helpers and global logger ([4bced5a](https://github.com/tks18/personal-finance-etl/commit/4bced5a6582ae875e34c2d57cd66d844901681b4))
+* **logging:** re-export canonical worker listener functions ([e742a04](https://github.com/tks18/personal-finance-etl/commit/e742a04547dcb9ea883786fae3ab2c5da964c25a))
+* **market_sync:** eradicate status message instantiation ([6d684d2](https://github.com/tks18/personal-finance-etl/commit/6d684d2043eb9724a30c73b5e4f0d17031ddcadb))
+* **market_sync:** remove unused data arg from status messages ([ec57c6f](https://github.com/tks18/personal-finance-etl/commit/ec57c6f3d7fe6ba2aba9a1944e26cbb22e7d6152))
+* **narrative:** eradicate legacy render_status_message ([739ffd1](https://github.com/tks18/personal-finance-etl/commit/739ffd15df667abb03935d71e1b8d40f3398887c))
+* **observability:** demolish legacy status bridge methods ([7f7e900](https://github.com/tks18/personal-finance-etl/commit/7f7e9000daf663b60ad30a5852d20c55294a3ff3))
+* **observability:** remove data argument from to_status_message ([0715e97](https://github.com/tks18/personal-finance-etl/commit/0715e97a11ff9f56f086856a5227a81293228009))
+* **orchestrator:** attach commit state to run completed event ([bf668f7](https://github.com/tks18/personal-finance-etl/commit/bf668f7b421b48e98e01e13690b1cfae8ebe55bf))
+* **orchestrator:** eradicate duplicate legacy status messages ([5e8a89d](https://github.com/tks18/personal-finance-etl/commit/5e8a89d672de7163a0c19438ae8fe1e9b0d98a99))
+* **pipeline:** enrich table materialization and tax engine events ([dd0cd97](https://github.com/tks18/personal-finance-etl/commit/dd0cd97bd2c270d40f6e15c5cf10b618af3b93d7))
+* **pipeline:** standardize module-level getLogger instance ([b655c60](https://github.com/tks18/personal-finance-etl/commit/b655c60afa4ba9727d0c702d2f11a4ab2f3d8897))
+* **pipeline:** standardize module-level getLogger instance ([636faa7](https://github.com/tks18/personal-finance-etl/commit/636faa755e2bd49c4c870292404d683ed760b147))
+* **pipeline:** standardize module-level getLogger instance ([f0e6f49](https://github.com/tks18/personal-finance-etl/commit/f0e6f49620496a6a71986e39a4a8c30f04c24694))
+* **pipeline:** standardize module-level getLogger instance ([7942a08](https://github.com/tks18/personal-finance-etl/commit/7942a08385d5b0d3479c9256f024bb8746f7fa59))
+* **presentation:** suppress repetitive per-entity success ticks ([9a6bd33](https://github.com/tks18/personal-finance-etl/commit/9a6bd333bff6a0c004d2f4113cef6d84b42aa150))
+* **presentation:** suppress repetitive per-entity ticks in desktop ([6e62aa4](https://github.com/tks18/personal-finance-etl/commit/6e62aa429b4eea2f5aeecdd9f4de730a1b21ddd1))
+* **providers:** enrich benchmark telemetry with provider and error ([cd34c22](https://github.com/tks18/personal-finance-etl/commit/cd34c22030a87c5d269c72d53daf6e15497e785b))
+* **providers:** enrich currency telemetry with provider and error ([920b180](https://github.com/tks18/personal-finance-etl/commit/920b180417b31ec33d9a5717c6df2f7918a62bd7))
+* **providers:** enrich us market telemetry with provider and error ([dbcb9e3](https://github.com/tks18/personal-finance-etl/commit/dbcb9e3818cb010299c56567fdac746b1f4ddab4))
+* **providers:** standardize module-level getLogger instance ([bbb2d5e](https://github.com/tks18/personal-finance-etl/commit/bbb2d5e194a8c3efb87e45361bd30dff031ed1e0))
+* **providers:** standardize module-level getLogger instance ([eba061f](https://github.com/tks18/personal-finance-etl/commit/eba061f97a382ee30ad859501dfab2d0be3cd2a4))
+* **providers:** standardize module-level getLogger instance ([1de105f](https://github.com/tks18/personal-finance-etl/commit/1de105f0c67b6d6f10254f25c57f574b4f504fc8))
+* **providers:** standardize module-level getLogger instance ([7646ecb](https://github.com/tks18/personal-finance-etl/commit/7646ecb92b931c7f5bb58117037bb53a31ea8029))
+* **providers:** standardize module-level getLogger instance ([b8b0862](https://github.com/tks18/personal-finance-etl/commit/b8b0862631b2c54bb7e163e3fd35effbd65e54ec))
+* **providers:** standardize module-level getLogger instance ([223664f](https://github.com/tks18/personal-finance-etl/commit/223664f80de9beaaf2ffad72d953b14a077dbb33))
+* **providers:** standardize module-level getLogger instance ([a6cf421](https://github.com/tks18/personal-finance-etl/commit/a6cf42137d83b2960e1afbfa3c4555cb524e0dbc))
+* **providers:** standardize module-level getLogger instance ([9a3fb9d](https://github.com/tks18/personal-finance-etl/commit/9a3fb9d1f46a3180aca4d19b3c294d67fbf9f379))
+* **quant:** emit ObservabilityEvent in quant engine reporter ([9d0be31](https://github.com/tks18/personal-finance-etl/commit/9d0be31b32a2b9fa1e35801f97c434ea0e398382))
+* **quant:** remove dataframe payloads from status reporting ([81e6767](https://github.com/tks18/personal-finance-etl/commit/81e67671c5bc1cf583a8604c3a0e670f2643af55))
+* **transformer:** emit ObservabilityEvent for DAG progress ([c7febbf](https://github.com/tks18/personal-finance-etl/commit/c7febbf0656da7e769cccb7514866c81b3e2f863))
+* **transformer:** remove unused data arg from status message ([50043f5](https://github.com/tks18/personal-finance-etl/commit/50043f5e15ef92ab36ac1382305107e6ce78bea4))
+* **transformer:** wire emitter and emit table-level telemetry ([29696eb](https://github.com/tks18/personal-finance-etl/commit/29696ebede47efcbde7285c9b26d277bf42844af))
+* **us_market_provider:** emit ObservabilityEvent for delta fetch ([2b152d3](https://github.com/tks18/personal-finance-etl/commit/2b152d3fc3dece85903bf8fb2139c4f284b79e4d))
+* **us_market_provider:** remove data arg from status messages ([c668269](https://github.com/tks18/personal-finance-etl/commit/c668269b59715c9447d4e31d3e2ff8f043d2b38b))
+* **wealth:** emit wealth and fire monte carlo lifecycle events ([3ac02c2](https://github.com/tks18/personal-finance-etl/commit/3ac02c20c2b59257da7d17641860e802ef81fbca))
+* **wealth:** standardize module-level getLogger instance ([5f5e803](https://github.com/tks18/personal-finance-etl/commit/5f5e803f5c6f27c8a9f19aabed98cf224303cbd8))
+* **worker:** demolish infer_log_level and route stream internally ([ffd1871](https://github.com/tks18/personal-finance-etl/commit/ffd18715a9e5a24700094e6567c454447d3b40a1))
+* **worker:** remove dataframe extraction from worker queue item ([572749e](https://github.com/tks18/personal-finance-etl/commit/572749e4ca5243ea4b52c74cd75a6d8068cedd0b))
+* **worker:** unify worker stream and queues on ObservabilityEvent ([9a7cdd2](https://github.com/tks18/personal-finance-etl/commit/9a7cdd26fa9461959d182429ef4eb9a5b98ec697))
+
+
+### Features 🔥
+
+* **contracts:** eradicate EngineStatusMessage.data and add transport ([8e7534d](https://github.com/tks18/personal-finance-etl/commit/8e7534d4fa0655a170e37cfcdc8f8e2379399fc1))
+* **contracts:** export EngineDataTransport contract ([d8abffe](https://github.com/tks18/personal-finance-etl/commit/d8abffe46c1717970e72499d50b29baa17e8deef))
+* **contracts:** harden canonical event and context contracts ([9ac2d21](https://github.com/tks18/personal-finance-etl/commit/9ac2d213946c977acd993c8ea694d8f331c944af))
+* **contracts:** re-export typed observability dictionary contracts ([863bf60](https://github.com/tks18/personal-finance-etl/commit/863bf60363f98cf24a50d8f18784cf24562f3588))
+* **emitter:** support bounded scalar context in emit_event and spans ([705e7c6](https://github.com/tks18/personal-finance-etl/commit/705e7c6d99c210ba5ae552cee4ead048087da33f))
+* **lifecycle:** emit config provenance and eradicate raw json dumps ([7b63e35](https://github.com/tks18/personal-finance-etl/commit/7b63e35a08d76a590949c2dbdabeae6c4331d727))
+* **observability:** add async listener lifecycle and pipeline factory ([85adc99](https://github.com/tks18/personal-finance-etl/commit/85adc99ae05161996da401349ed20b2c25e1a2a1))
+* **observability:** apply full payload redaction at forensic boundary ([544a3f1](https://github.com/tks18/personal-finance-etl/commit/544a3f17b42541bf2c1fce56cd197baaa8a0e243))
+* **observability:** export async forensic pipeline factory ([8ade703](https://github.com/tks18/personal-finance-etl/commit/8ade70304b2a751a9514887fbafa6bc90f7b42e4))
+* **observability:** export RedactionPolicy and config fingerprint ([20e4058](https://github.com/tks18/personal-finance-etl/commit/20e4058f64d4519984ff3ed877eb3dca5a299f28))
+* **observability:** export rules fingerprint contract and helper ([cf2bb5b](https://github.com/tks18/personal-finance-etl/commit/cf2bb5bcdd8bb247f963fc5875de51e085e2fcdb))
+* **observability:** export trace text and event retrieval helpers ([8df1b3a](https://github.com/tks18/personal-finance-etl/commit/8df1b3a76e77fc0bd4366275c00037fdad64c8bb))
+* **observability:** support Path and structured trace retrieval ([cd26312](https://github.com/tks18/personal-finance-etl/commit/cd26312aa4214f6889fcb3d53a40546f16886c15))
+* **observability:** support redaction policies in forensic pipeline ([e5dfa45](https://github.com/tks18/personal-finance-etl/commit/e5dfa45e24a12811d473491354a074940830df04))
+* **provenance:** add deterministic financial rules fingerprinting ([4ec6f53](https://github.com/tks18/personal-finance-etl/commit/4ec6f5303ab9a39cf217c4de6be35bc3f6311a24))
+* **redaction:** introduce RedactionPolicy and adversarial scrubbing ([b2e3a83](https://github.com/tks18/personal-finance-etl/commit/b2e3a8364ee3f65b62f96623afb5911703a2f138))
+
+
+### Tests 🧪
+
+* **bootstrap:** update QueueStream tests for ObservabilityEvent ([3009104](https://github.com/tks18/personal-finance-etl/commit/3009104252f143f9656d5d072030dee3ecf97248))
+* **certification:** add infer_log_level to prohibited functions ([f5b66fb](https://github.com/tks18/personal-finance-etl/commit/f5b66fb1366218a10e7af1536c13ae755a8c40ba))
+* **certification:** tune throughput gate threshold for windows disk io ([feb898d](https://github.com/tks18/personal-finance-etl/commit/feb898d1bc91a1fd216c8b2242ed9d30539024be))
+* **contracts:** eradicate legacy status bridge tests ([065aaa2](https://github.com/tks18/personal-finance-etl/commit/065aaa2ad22420c08c8b315df3a325a22dc24e74))
+* **contracts:** verify event families and bounded context round trips ([2a15168](https://github.com/tks18/personal-finance-etl/commit/2a1516895f1a6a85ba77ad6281e9986a8ac3ef72))
+* **contracts:** verify status projection lacks data attribute ([af733f1](https://github.com/tks18/personal-finance-etl/commit/af733f1a8b9135ac36ff804eb0cc6a178fbc96bb))
+* **demolition:** verify EngineStatusMessage lacks data attribute ([06dd05b](https://github.com/tks18/personal-finance-etl/commit/06dd05ba531ba7f652a4151eb8c98ebe0878117d))
+* **demolition:** verify logger export and import elimination ([6a5ead9](https://github.com/tks18/personal-finance-etl/commit/6a5ead93160918a8c936083a279ac672221cc016))
+* **demolition:** verify permanent demolition of infer_log_level ([fc855f1](https://github.com/tks18/personal-finance-etl/commit/fc855f1ae147dcd510fb9a10a9fcbaf6abb276f8))
+* **demolition:** verify QueueStream emits canonical ObservabilityEvent ([1e9f8b0](https://github.com/tks18/personal-finance-etl/commit/1e9f8b096314d28a489801c91177a51722cdd48c))
+* **forensics:** add subsystem debuggability and polars query suite ([5b3029b](https://github.com/tks18/personal-finance-etl/commit/5b3029b5e5a10ccea005546064c803842f7085f8))
+* **narrative:** verify pure progress ticks skip empty lines ([b936402](https://github.com/tks18/personal-finance-etl/commit/b936402972182d5aa7b553ea3ece16006f860526))
+* **observability:** certify control plane trace lifecycle and bounds ([18e53e3](https://github.com/tks18/personal-finance-etl/commit/18e53e3d5f4a6ab54e1ad731e64ba2acc3ae1136))
+* **observability:** verify async listener drain and lifecycle wiring ([42dae39](https://github.com/tks18/personal-finance-etl/commit/42dae392695868584c171eb8cfef5698c7f59ca7))
+* **observability:** verify QueueStream emits INTERNAL events ([7de2472](https://github.com/tks18/personal-finance-etl/commit/7de247205db69d923b0c6ed752726caa9f9cf027))
+* **observability:** verify total eradication of EngineStatusMessage ([9efe48b](https://github.com/tks18/personal-finance-etl/commit/9efe48b0c2eba3ebea3b885ef2b6a59745698aa9))
+* **phase1:** eradicate legacy EngineStatusMessage unit test ([1f1b48a](https://github.com/tks18/personal-finance-etl/commit/1f1b48afb1a6c97ae879d4f6ff14638285517751))
+* **presentation:** eradicate legacy status message test ([d33d757](https://github.com/tks18/personal-finance-etl/commit/d33d7572eae61203934d651e7691e28f20a397ac))
+* **presentation:** verify suppression of per-entity ticks and density ([40e11cb](https://github.com/tks18/personal-finance-etl/commit/40e11cb32fa47f08116bff9be067e96b46bd2028))
+* **provenance:** verify config and rules fingerprinting and events ([dde4427](https://github.com/tks18/personal-finance-etl/commit/dde442711a19601a480faf96424e3c423fef97e2))
+* **redaction:** verify policy matrix and adversarial pattern scrubbing ([97d8441](https://github.com/tks18/personal-finance-etl/commit/97d84410c7415eb88d396a4e73f1f2612236156b))
+* **transport:** verify separation of status and data transport ([030f305](https://github.com/tks18/personal-finance-etl/commit/030f305335ba08d0925dbf5e548d07011d712a91))
+* **transport:** verify total eradication of EngineStatusMessage ([7f2d810](https://github.com/tks18/personal-finance-etl/commit/7f2d81078be67910576c800742e7368291bf8e2b))
+
+
+### Docs 📃
+
+* **architecture:** enshrine unified observability triad invariant ([239f822](https://github.com/tks18/personal-finance-etl/commit/239f822b5a1c8f8f5fbf39a468edb8e4911549bb))
+* **architecture:** replace EngineStatusMessage in architecture ([3077a97](https://github.com/tks18/personal-finance-etl/commit/3077a97fb0c8efc924e87fb06dfe5118adf5caa8))
+* **architecture:** update contracts list to ObservabilityEvent ([d83d549](https://github.com/tks18/personal-finance-etl/commit/d83d5494a8bd9b8742e601b8b146bc38add20b98))
+* **cli:** update async facade signature to ObservabilityEvent ([1c7b71a](https://github.com/tks18/personal-finance-etl/commit/1c7b71a3988f544c91efde1507e4da8be6270a2f))
+* **index:** update canonical specification receipts metric ([7ed446c](https://github.com/tks18/personal-finance-etl/commit/7ed446ce9f957d2af6412ac6c836670edfec205f))
+* **observability:** compile phase 0 legacy logging demolition ledger ([d4d886d](https://github.com/tks18/personal-finance-etl/commit/d4d886d1a046b89c0f88a96498dc08462e6bbe86))
+* **readme:** update repository shape metrics and loc counts ([79efc91](https://github.com/tks18/personal-finance-etl/commit/79efc918df8b70d39551dafea1a1aa8d4a0950d6))
+* **standards:** enshrine observability triad invariant and rules ([2eb1ff1](https://github.com/tks18/personal-finance-etl/commit/2eb1ff112c1fcde2a68b78afb83d9d9e215e1fd1))
+
+
+### Others 🔧
+
+* **observability:** add AST census scanner and benchmark generator ([03166a5](https://github.com/tks18/personal-finance-etl/commit/03166a5109962d93fe4180b747fcc2acd5b6ef94))
+* **observability:** freeze phase 0 baseline performance benchmarks ([cdec1f4](https://github.com/tks18/personal-finance-etl/commit/cdec1f4a6ca77bc3e3ae829215cb4da921577d34))
+* **planning:** delete baseline benchmark json artifact ([057c836](https://github.com/tks18/personal-finance-etl/commit/057c8369bedb260a392ac5f8ad17331f73e0f2f9))
+* **planning:** delete legacy demolition ledger ([f2f4fc5](https://github.com/tks18/personal-finance-etl/commit/f2f4fc54a151c82780e094d5898baee0ae7367d9))
+* **planning:** delete logging upgrade transition plan ([58ee888](https://github.com/tks18/personal-finance-etl/commit/58ee88827b2e59c094ae1e1cee2f32d137691d7f))
+* **scripts:** remove obsolete observability census script ([de09a03](https://github.com/tks18/personal-finance-etl/commit/de09a035805c8dba0de684294fc2b8109f4d1e71))
+
 ### [9.3.7](https://github.com/tks18/personal-finance-etl/compare/9.3.6...9.3.7) (2026-10-25)
 
 

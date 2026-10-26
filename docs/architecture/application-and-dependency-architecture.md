@@ -317,9 +317,9 @@ The cross-boundary package currently exposes lifecycle, logging, application sta
 # src/personal_finance_etl/contracts/__init__.py
 __all__ = [
     "CommitState",
+    "EngineDataTransport",
     "EngineExecutionResult",
     "EngineStage",
-    "EngineStatusMessage",
     "ExtractionBatchResult",
     "ExtractionCompletenessError",
     "FailureDomain",
@@ -464,7 +464,7 @@ Asynchronous pipeline execution uses a multiprocessing worker and streams typed 
 
 That makes process boundaries another place where hidden coupling would be expensive.
 
-The application contract `EngineStatusMessage`, logging protocol, and worker coordination keep status transport separate from GUI widget state.
+The application contract `ObservabilityEvent`, logging protocol, and worker coordination keep status transport separate from GUI widget state.
 
 A process can fail without the UI needing to understand the internals of the financial engine that failed.
 

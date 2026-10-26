@@ -22,8 +22,8 @@ from personal_finance_etl.application.facade import PersonalFinanceEngine
 from personal_finance_etl.application.pipeline.orchestrator import ETLOrchestrator
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
-from personal_finance_etl.contracts.application import EngineStatusMessage
 from personal_finance_etl.contracts.logging import ILogger
+from personal_finance_etl.contracts.observability import ObservabilityEvent
 from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
 from personal_finance_etl.infrastructure.preferences import PreferencesManager
 from personal_finance_etl.infrastructure.recovery.backup import SystemBackupManager
@@ -36,11 +36,11 @@ class _NullLoggerQueue:
     """Fallback in-memory queue satisfying ILogger protocol when no queue is provided."""
 
     def __init__(self) -> None:
-        self._q: queue.Queue[EngineStatusMessage] = queue.Queue()
+        self._q: queue.Queue[ObservabilityEvent] = queue.Queue()
 
     def put(
         self,
-        status: EngineStatusMessage,
+        status: ObservabilityEvent,
         block: bool = True,
         timeout: float | None = None,
     ) -> None:

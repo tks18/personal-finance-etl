@@ -15,12 +15,22 @@ Does not own
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Mapping
 
 import polars as pl
 import polars.selectors as cs
 
+from personal_finance_etl.application.observability import (
+    ObservabilityEmitter,
+    get_global_emitter,
+)
 from personal_finance_etl.config.financial_rules import FinancialRules
+from personal_finance_etl.contracts.application import EngineStage
+from personal_finance_etl.contracts.observability import (
+    EventCode,
+    PresentationKind,
+)
 from personal_finance_etl.domain.common.calculation import CalculationStatus
 from personal_finance_etl.domain.fire.deterministic import WealthRiskAnalyticsBuilder
 from personal_finance_etl.domain.fire.inflation import InflationBuilder
@@ -34,9 +44,10 @@ from personal_finance_etl.domain.household.income import IncomeStreamsBuilder
 from personal_finance_etl.domain.household.ledger import LedgerBuilder
 from personal_finance_etl.domain.wealth.analytics import InvestmentAnalyticsBuilder
 from personal_finance_etl.domain.wealth.net_worth import NetWorthBuilder
-from personal_finance_etl.infrastructure.logging import logger
 
 __all__ = ["WealthPresentationEngine", "WealthService"]
+
+logger = logging.getLogger(__name__)
 
 
 class WealthService:
@@ -45,14 +56,26 @@ class WealthService:
     Consumes Silver-tier LazyFrames and produces unified Gold-tier presentation summary tables.
     """
 
-    def __init__(self, rules: FinancialRules, root_seed: str = "default_seed") -> None:
+    def __init__(
+        self,
+        rules: FinancialRules,
+        root_seed: str = "default_seed",
+        emitter: ObservabilityEmitter | None = None,
+    ) -> None:
         self.rules = rules
         self.root_seed = root_seed
+        self.emitter = emitter or get_global_emitter()
 
     def _build_core_models(
         self, dfs: Mapping[str, pl.DataFrame | pl.LazyFrame]
     ) -> dict[str, pl.LazyFrame] | None:
         """Execute prerequisite foundation models: Inflation, Ledger, and Net Worth."""
+        self.emitter.emit_event(
+            event_code=EventCode.WEALTH_ENGINE_START,
+            message="Building core wealth models (Inflation, Ledger, Net Worth)...",
+            presentation_kind=PresentationKind.STEP,
+            stage=EngineStage.ANALYZING,
+        )
         inflation_res = InflationBuilder(dfs, rules=self.rules).build()
         if not inflation_res:
             return None
@@ -102,10 +125,33 @@ class WealthService:
             ).build(),
         }
 
+        iterations = (
+            self.rules.assumptions.monte_carlo.iterations
+            if self.rules.assumptions and self.rules.assumptions.monte_carlo
+            else 1000
+        )
+        self.emitter.emit_event(
+            event_code=EventCode.FIRE_ENGINE_START,
+            message=f"Starting FIRE Monte Carlo simulation engine ({iterations:,} paths)...",
+            presentation_kind=PresentationKind.STEP,
+            stage=EngineStage.ANALYZING,
+            entity_type="Engine",
+            entity_id="MonteCarlo",
+            rows=iterations,
+        )
         wealth_risk_res = WealthRiskAnalyticsBuilder(
             dfs, base_lf, rules=self.rules, root_seed=self.root_seed
         ).build()
         results.update(wealth_risk_res)
+        self.emitter.emit_event(
+            event_code=EventCode.FIRE_ENGINE_COMPLETED,
+            message=f"FIRE Monte Carlo simulations complete — generated {len(wealth_risk_res)} risk models",
+            presentation_kind=PresentationKind.SUCCESS,
+            stage=EngineStage.ANALYZING,
+            entity_type="Engine",
+            entity_id="MonteCarlo",
+            rows=len(wealth_risk_res),
+        )
 
         results["df_p_tf_monthly_cashflow_summary"] = MonthlyCashflowSummaryBuilder(
             dfs, base_lf, rules=self.rules
@@ -138,6 +184,13 @@ class WealthService:
 
         results = self._build_presentation_tables(dfs, base_lf)
         logger.debug("  -> Built %d BI presentation tables in DAG.", len(results))
+        self.emitter.emit_event(
+            event_code=EventCode.WEALTH_ENGINE_COMPLETED,
+            message=f"Wealth presentation models assembled ({len(results)} tables)",
+            presentation_kind=PresentationKind.SUCCESS,
+            stage=EngineStage.ANALYZING,
+            rows=len(results),
+        )
 
         return {key: lf.with_columns(cs.float().fill_nan(None)) for key, lf in results.items()}
 

@@ -17,8 +17,10 @@ Does not own
 from __future__ import annotations
 
 import io
+import logging
 import os
 import time
+import traceback
 from collections.abc import Callable
 
 import polars as pl
@@ -28,17 +30,18 @@ from personal_finance_etl.application.observability import (
     get_global_emitter,
 )
 from personal_finance_etl.config.settings import Settings
-from personal_finance_etl.contracts.application import EngineStage, EngineStatusMessage
+from personal_finance_etl.contracts.application import EngineStage
 from personal_finance_etl.contracts.extraction import ExtractionResult
-from personal_finance_etl.contracts.logging import LogLevel, StatusQueue
+from personal_finance_etl.contracts.lifecycle import FailureDomain
+from personal_finance_etl.contracts.logging import StatusQueue
 from personal_finance_etl.contracts.observability import (
     DiagnosticSeverity,
+    ErrorDetails,
     EventCode,
     PresentationKind,
 )
 from personal_finance_etl.domain.household.transforms.common import get_column_mapping
 from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
-from personal_finance_etl.infrastructure.logging import logger
 from personal_finance_etl.infrastructure.providers.files.csv import (
     extract_benchmark_master_raw,
     extract_currency_mapping_raw,
@@ -59,6 +62,8 @@ from personal_finance_etl.infrastructure.providers.files.sqlite import (
 )
 
 __all__ = ["DataExtractor"]
+
+logger = logging.getLogger(__name__)
 
 
 class DataExtractor:
@@ -100,6 +105,17 @@ class DataExtractor:
                 os.path.basename(sqlite_path), os.path.dirname(sqlite_path), sqlite_bytes
             )
             logger.debug("Successfully extracted 5 base reference tables from SQLite source bytes.")
+            self.emitter.emit_event(
+                event_code=EventCode.PROVIDER_BATCH_INGEST,
+                message="Extracted 5 base reference tables from SQLite source",
+                presentation_kind=PresentationKind.INTERNAL,
+                severity=DiagnosticSeverity.DEBUG,
+                stage=EngineStage.EXTRACTING,
+                provider="SQLite",
+                entity_type="Table",
+                entity_id="sqlite_source",
+                rows=5,
+            )
             return tables
         return (
             pl.LazyFrame(),
@@ -179,6 +195,15 @@ class DataExtractor:
                 "currency_mapping",
             ),
         }
+        self.emitter.emit_event(
+            event_code=EventCode.PROVIDER_BATCH_INGEST,
+            message=f"Extracted {len(config_frames) + 1} dynamic configuration CSV tables",
+            presentation_kind=PresentationKind.INTERNAL,
+            severity=DiagnosticSeverity.DEBUG,
+            stage=EngineStage.EXTRACTING,
+            provider="CSV",
+            rows=len(config_frames) + 1,
+        )
         return df_column_master, mappings, config_frames
 
     def _extract_excel_statements(
@@ -261,15 +286,8 @@ class DataExtractor:
             event_code=EventCode.SCHEMA_VALIDATION,
             message="Running Gatekeeper Schema Validation on 18 active streams...",
             presentation_kind=PresentationKind.STEP,
+            progress=0.15,
             stage=EngineStage.EXTRACTING,
-        )
-        self.status_queue.put(
-            EngineStatusMessage(
-                msg="",
-                data=None,
-                progress=0.15,
-                level=LogLevel.STEP,
-            )
         )
 
         validation_frames = [
@@ -309,20 +327,21 @@ class DataExtractor:
                 stage=EngineStage.EXTRACTING,
             )
         except Exception as e:
+            err_details = ErrorDetails(
+                exception_type=type(e).__name__,
+                exception_message=str(e),
+                failure_domain=FailureDomain.SOURCE_VALIDATION,
+                traceback_summary=traceback.format_exc(),
+                retryable=False,
+            )
             self.emitter.emit_event(
                 event_code=EventCode.SCHEMA_VALIDATION,
                 message=f"Gatekeeper Validation Failed: {e}",
                 presentation_kind=PresentationKind.FAILURE,
                 severity=DiagnosticSeverity.ERROR,
+                progress=0.0,
                 stage=EngineStage.EXTRACTING,
-            )
-            self.status_queue.put(
-                EngineStatusMessage(
-                    msg=f"Gatekeeper Validation Failed: {e}",
-                    data=None,
-                    progress=0,
-                    level=LogLevel.ERROR,
-                )
+                error=err_details,
             )
             raise RuntimeError(f"Corrupted source data detected during extraction: {e}") from e
 
@@ -346,14 +365,6 @@ class DataExtractor:
             presentation_kind=PresentationKind.STEP,
             progress=0.01,
             stage=EngineStage.EXTRACTING,
-        )
-        self.status_queue.put(
-            EngineStatusMessage(
-                msg="",
-                data=None,
-                progress=0.01,
-                level=LogLevel.STEP,
-            )
         )
 
         pending_files = actionable_files or self.cp.artifacts.get_pending_files()

@@ -2,7 +2,7 @@
 
 Owns
 ----
-- Typed cross-process worker status messages (EngineStatusMessage).
+- Dedicated tabular result transport contract (EngineDataTransport).
 - EngineStage categorical workflow stages.
 - EngineExecutionResult high-level pipeline outcome.
 
@@ -12,6 +12,9 @@ Does not own
 - Presentation rendering (owned by presentation).
 """
 
+from __future__ import annotations
+
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
@@ -19,7 +22,8 @@ from enum import StrEnum
 import polars as pl
 
 from personal_finance_etl.contracts.lifecycle import CommitState, FailureDomain
-from personal_finance_etl.contracts.logging import LogLevel
+
+__all__ = ["EngineDataTransport", "EngineExecutionResult", "EngineStage"]
 
 
 class EngineStage(StrEnum):
@@ -36,30 +40,30 @@ class EngineStage(StrEnum):
     RECOVERY = "RECOVERY"
 
 
-@dataclass
-class EngineStatusMessage:
-    """Structured message for the UI and worker status queue.
+def _empty_metadata() -> dict[str, str | int | float | bool]:
+    return {}
 
-    Fully typed status message contract across process boundaries.
+
+@dataclass(frozen=True)
+class EngineDataTransport:
+    """Dedicated typed contract for UI-bound or cross-process tabular results.
+
+    Attributes
+    ----------
+    channel : str
+        Identifier for the dataset category (e.g. 'analytics', 'portfolio', 'tax').
+    data : pl.DataFrame
+        Tabular dataset payload.
+    metadata : Mapping[str, str | int | float | bool]
+        Bounded descriptive metadata.
+    timestamp : datetime
+        Creation timestamp.
     """
 
-    msg: str
-    level: LogLevel = LogLevel.INFO
-    progress: float | None = None
-    data: pl.DataFrame | None = None
-    stage: EngineStage | None = None
-    failure_domain: FailureDomain | None = None
+    channel: str
+    data: pl.DataFrame
+    metadata: Mapping[str, str | int | float | bool] = field(default_factory=_empty_metadata)
     timestamp: datetime = field(default_factory=datetime.now)
-
-    @property
-    def message(self) -> str:
-        """Message content string accessor."""
-        return self.msg
-
-    @property
-    def status(self) -> LogLevel:
-        """Status severity level accessor."""
-        return self.level
 
 
 @dataclass(frozen=True)

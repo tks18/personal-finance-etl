@@ -4,7 +4,7 @@ Owns
 ----
 - Typed messages and results crossing architectural and process boundaries.
 - Pipeline lifecycle state enums (CommitState, FailureDomain).
-- Cross-process worker status messages (EngineStatusMessage).
+- Tabular data transport contract (EngineDataTransport).
 - Extraction batch and entity outcomes (ExtractionBatchResult, ExtractorEntityResult).
 - Snapshot and restore outcome contracts (SnapshotResult, RestoreResult).
 - Categorical log levels (LogLevel).
@@ -18,9 +18,9 @@ Does not own
 """
 
 from personal_finance_etl.contracts.application import (
+    EngineDataTransport,
     EngineExecutionResult,
     EngineStage,
-    EngineStatusMessage,
 )
 from personal_finance_etl.contracts.extraction import (
     ExtractionBatchResult,
@@ -39,11 +39,14 @@ from personal_finance_etl.contracts.logging import ILogger, LogLevel, StatusQueu
 from personal_finance_etl.contracts.observability import (
     DiagnosticSeverity,
     ErrorDetails,
+    ErrorDetailsDict,
     EventCode,
     EventOutcome,
     NullObservabilitySink,
     ObservabilityContext,
+    ObservabilityContextDict,
     ObservabilityEvent,
+    ObservabilityEventDict,
     ObservabilitySink,
     PresentationKind,
 )
@@ -57,10 +60,11 @@ from personal_finance_etl.contracts.recovery import (
 __all__ = [
     "CommitState",
     "DiagnosticSeverity",
+    "EngineDataTransport",
     "EngineExecutionResult",
     "EngineStage",
-    "EngineStatusMessage",
     "ErrorDetails",
+    "ErrorDetailsDict",
     "EventCode",
     "EventOutcome",
     "ExtractionBatchResult",
@@ -73,7 +77,9 @@ __all__ = [
     "LogLevel",
     "NullObservabilitySink",
     "ObservabilityContext",
+    "ObservabilityContextDict",
     "ObservabilityEvent",
+    "ObservabilityEventDict",
     "ObservabilitySink",
     "PresentationKind",
     "RestoreOutcome",

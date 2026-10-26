@@ -45,18 +45,24 @@ from personal_finance_etl.contracts.observability import (
 )
 from personal_finance_etl.infrastructure.control_plane import ControlPlane
 from personal_finance_etl.infrastructure.logging.setup import (
-    logger,
     stop_worker_listener,
 )
 from personal_finance_etl.infrastructure.observability import (
+    AsyncObservabilityListener,
     JsonlForensicSink,
     LogRetentionManager,
+    ObservabilityQueueSink,
     archive_run_trace,
+    create_forensic_pipeline,
+    fingerprint_config,
+    fingerprint_rules,
 )
 from personal_finance_etl.infrastructure.warehouse.connection import DuckDBManager
 from personal_finance_etl.infrastructure.warehouse.meta import MetaLayer
 
 __all__ = ["RunLifecycleCoordinator"]
+
+logger = logging.getLogger(__name__)
 
 
 class RunLifecycleCoordinator:
@@ -86,31 +92,30 @@ class RunLifecycleCoordinator:
         self.run_id: str | None = None
         self.forensic_file_path: Path | None = None
         self.forensic_sink: JsonlForensicSink | None = None
+        self.async_listener: AsyncObservabilityListener | None = None
+        self.queue_sink: ObservabilityQueueSink | None = None
 
     def _dump_configuration_logs(self) -> None:
-        """Dump formatted configuration and financial rules to debug logger and emitter."""
-        logger.debug("=== ETL CONFIGURATION DUMP ===")
-        cfg_str = (
-            self.cfg.model_dump_json(indent=2)
-            if hasattr(self.cfg, "model_dump_json")
-            else str(self.cfg)
-        )
-        logger.debug(cfg_str)
+        """Emit deterministic provenance fingerprint event and safe configuration summary."""
+        settings_summary = fingerprint_config(self.cfg)
+        rules_summary = fingerprint_rules(self.rules)
 
-        logger.debug("=== FINANCIAL RULES DUMP ===")
-        rules_str = (
-            self.rules.model_dump_json(indent=2)
-            if self.rules is not None and hasattr(self.rules, "model_dump_json")
-            else str(self.rules)
+        logger.info(
+            "Configuration fingerprint: %s | Rules fingerprint: %s",
+            settings_summary["config_hash"],
+            rules_summary["rules_hash"],
         )
-        logger.debug(rules_str)
-        logger.debug("==============================")
 
         self.emitter.emit_event(
             event_code=EventCode.SYSTEM_CONFIG_FINGERPRINT,
-            message="Loaded ETL configuration and financial rules policies",
+            message=(
+                f"Configuration fingerprint: {settings_summary['config_hash']} | "
+                f"Rules fingerprint: {rules_summary['rules_hash']}"
+            ),
             presentation_kind=PresentationKind.INTERNAL,
-            severity=DiagnosticSeverity.DEBUG,
+            severity=DiagnosticSeverity.INFO,
+            settings_fingerprint=settings_summary["config_hash"],
+            rules_fingerprint=rules_summary["rules_hash"],
         )
 
     def initialize(self) -> tuple[ControlPlane, str, list[str]]:
@@ -148,19 +153,26 @@ class RunLifecycleCoordinator:
         cp.file_sync.active_run_id = run_id
 
         # Bind ambient context for current execution run
+        settings_summary = fingerprint_config(self.cfg)
+        rules_summary = fingerprint_rules(self.rules)
         set_current_context(
             ObservabilityContext(
                 run_id=run_id,
                 stage=EngineStage.INITIALIZING,
                 component="lifecycle",
+                settings_fingerprint=settings_summary["config_hash"],
+                rules_fingerprint=rules_summary["rules_hash"],
             )
         )
 
         logs_dir = self.cfg.resolve_logs_dir()
         logs_dir.mkdir(parents=True, exist_ok=True)
         self.forensic_file_path = logs_dir / f"trace_{run_id}.jsonl"
-        self.forensic_sink = JsonlForensicSink(self.forensic_file_path)
-        self.emitter.register_sink(self.forensic_sink)
+        self.queue_sink, self.async_listener, self.forensic_sink = create_forensic_pipeline(
+            self.forensic_file_path, buffer_size=50
+        )
+        self.async_listener.start()
+        self.emitter.register_sink(self.queue_sink)
 
         self._dump_configuration_logs()
 
@@ -396,6 +408,7 @@ class RunLifecycleCoordinator:
             severity=DiagnosticSeverity.ERROR,
             error=err_details,
             stage=EngineStage.FAILED,
+            commit_state=self.commit_state,
         )
 
     def teardown(self) -> None:
@@ -408,10 +421,13 @@ class RunLifecycleCoordinator:
             severity=DiagnosticSeverity.INFO,
         )
         stop_worker_listener()
-        if self.forensic_sink is not None:
-            self.forensic_sink.close()
-            self.emitter.unregister_sink(self.forensic_sink)
-            self.forensic_sink = None
+        if self.queue_sink is not None:
+            self.emitter.unregister_sink(self.queue_sink)
+            self.queue_sink = None
+        if self.async_listener is not None:
+            self.async_listener.stop(timeout=5.0)
+            self.async_listener = None
+        self.forensic_sink = None
 
         if (
             self.cp is not None

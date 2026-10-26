@@ -18,6 +18,7 @@ Does not own
 
 from __future__ import annotations
 
+import logging
 import time
 from datetime import date
 
@@ -43,9 +44,9 @@ from personal_finance_etl.application.tax.tax_service import TaxEngine
 from personal_finance_etl.application.wealth.wealth_service import WealthPresentationEngine
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
-from personal_finance_etl.contracts.application import EngineStage, EngineStatusMessage
+from personal_finance_etl.contracts.application import EngineStage
 from personal_finance_etl.contracts.extraction import ExtractionResult
-from personal_finance_etl.contracts.logging import ILogger, LogLevel
+from personal_finance_etl.contracts.logging import ILogger
 from personal_finance_etl.contracts.observability import (
     DiagnosticSeverity,
     EventCode,
@@ -55,7 +56,6 @@ from personal_finance_etl.infrastructure.control_plane import (
     ControlPlane,
     SimulationRunParams,
 )
-from personal_finance_etl.infrastructure.logging.setup import logger
 from personal_finance_etl.infrastructure.providers.files.locator import (
     categorize_statement_files,
 )
@@ -72,6 +72,8 @@ from personal_finance_etl.infrastructure.warehouse.registry import (
 from personal_finance_etl.infrastructure.warehouse.silver import SilverLayer
 
 __all__ = ["PipelineExecutor"]
+
+logger = logging.getLogger(__name__)
 
 
 class PipelineExecutor:
@@ -103,7 +105,9 @@ class PipelineExecutor:
 
     def transform(self, extracted_data: ExtractionResult) -> None:
         """Transform raw extracted data into base dimension and fact tables."""
-        transformer = TransformationDAG(self.cfg, self.status_queue, self.rules)
+        transformer = TransformationDAG(
+            self.cfg, self.status_queue, self.rules, emitter=self.emitter
+        )
         self.dfs = transformer.run(extracted_data)
 
     def process_benchmark(self, cp: ControlPlane, bronze: BronzeLayer) -> None:
@@ -198,11 +202,11 @@ class PipelineExecutor:
     def _run_quant_engine(self, run_id: str) -> None:
         """Execute multi-process InvestmentQuantEngine and update analytical mart states."""
         logger.info("Starting Investment Quant Engine...")
-        self.status_queue.put(EngineStatusMessage(msg="", progress=0.6, level=LogLevel.STEP))
         self.emitter.emit_event(
             event_code=EventCode.QUANT_ENGINE_START,
             message="Starting Investment Quant Engine...",
             presentation_kind=PresentationKind.STEP,
+            progress=0.6,
             stage=EngineStage.ANALYZING,
         )
 
@@ -266,6 +270,17 @@ class PipelineExecutor:
         )
         tax_results = tax_engine.run()
         self.dfs.update(tax_results)
+        for tax_name, tax_df in tax_results.items():
+            self.emitter.emit_event(
+                event_code=EventCode.TAX_ENGINE_COMPLETED,
+                message=f"Tax engine materialized {tax_name} ({tax_df.height} rows)",
+                presentation_kind=PresentationKind.INTERNAL,
+                severity=DiagnosticSeverity.DEBUG,
+                stage=EngineStage.ANALYZING,
+                entity_type="Table",
+                entity_id=tax_name,
+                rows=tax_df.height,
+            )
         self.emitter.emit_event(
             event_code=EventCode.TAX_ENGINE_COMPLETED,
             message=f"Tax Engine completed — generated {len(tax_results)} tax tables",
@@ -277,27 +292,29 @@ class PipelineExecutor:
     def _run_presentation_engine(self, cp: ControlPlane | None, run_id: str) -> None:
         """Execute WealthPresentationEngine streaming graphs and log simulation telemetry."""
         logger.info("Starting Presentation Layer Engines...")
-        self.status_queue.put(EngineStatusMessage(msg="", progress=0.8, level=LogLevel.STEP))
         self.emitter.emit_event(
             event_code=EventCode.PRESENTATION_DAG_START,
             message="Starting Presentation Layer Engines...",
             presentation_kind=PresentationKind.STEP,
+            progress=0.8,
             stage=EngineStage.ANALYZING,
         )
         if self.rules is None:
             raise ValueError("FinancialRules must be provided to ETL pipeline")
 
-        wealth_engine = WealthPresentationEngine(rules=self.rules, root_seed=run_id)
+        wealth_engine = WealthPresentationEngine(
+            rules=self.rules, root_seed=run_id, emitter=self.emitter
+        )
         presentation_lazy = wealth_engine.run(self.dfs)
         if presentation_lazy:
             logger.info("Executing Presentation DAG in Parallel...")
-            self.status_queue.put(EngineStatusMessage(msg="", progress=0.9, level=LogLevel.STEP))
             keys = list(presentation_lazy.keys())
             logger.info(f"  -> Spawning {len(keys)} concurrent Polars streaming graphs...")
             self.emitter.emit_event(
                 event_code=EventCode.PRESENTATION_DAG_START,
                 message=f"Spawning {len(keys)} concurrent Polars streaming graphs...",
                 presentation_kind=PresentationKind.STEP,
+                progress=0.9,
                 rows=len(keys),
                 stage=EngineStage.ANALYZING,
             )
@@ -554,7 +571,7 @@ class PipelineExecutor:
 
         for df_key, df_val in self.dfs.items():
             self.emitter.emit_event(
-                event_code=EventCode.PRESENTATION_DAG_START,
+                event_code=EventCode.PRESENTATION_DAG_COMPLETED,
                 message=f"Presentation layer produced {df_key} ({df_val.height:,} rows)",
                 presentation_kind=PresentationKind.INTERNAL,
                 severity=DiagnosticSeverity.DEBUG,
@@ -609,17 +626,19 @@ class PipelineExecutor:
         self.cfg.validate_config()
         validate_registry()
 
-        logger.info(f"Target Database: {self.cfg.TARGET_DB_BASE_PATH}")
-        logger.info(f"Source Extractor Folder: {self.cfg.STATEMENTS_FOLDER}")
+        logger.info("Target Database: %s", self.cfg.TARGET_DB_BASE_PATH)
+        logger.info("Source Extractor Folder: %s", self.cfg.STATEMENTS_FOLDER)
         self.emitter.emit_event(
-            event_code=EventCode.SYSTEM_CONFIG_FINGERPRINT,
+            event_code=EventCode.GENERIC_DIAGNOSTIC,
             message=f"Target Database: {self.cfg.TARGET_DB_BASE_PATH}",
-            presentation_kind=PresentationKind.STEP,
+            presentation_kind=PresentationKind.INTERNAL,
+            severity=DiagnosticSeverity.DEBUG,
         )
         self.emitter.emit_event(
-            event_code=EventCode.SYSTEM_CONFIG_FINGERPRINT,
+            event_code=EventCode.GENERIC_DIAGNOSTIC,
             message=f"Source Extractor Folder: {self.cfg.STATEMENTS_FOLDER}",
-            presentation_kind=PresentationKind.STEP,
+            presentation_kind=PresentationKind.INTERNAL,
+            severity=DiagnosticSeverity.DEBUG,
         )
 
         extracted_data, actionable_all, renames = self._run_discovery_phase(cp)

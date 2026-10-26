@@ -18,8 +18,15 @@ from datetime import date
 
 import polars as pl
 
-from personal_finance_etl.contracts.application import EngineStatusMessage
-from personal_finance_etl.contracts.logging import LogLevel, StatusQueue
+from personal_finance_etl.contracts.application import EngineStage
+from personal_finance_etl.contracts.logging import StatusQueue
+from personal_finance_etl.contracts.observability import (
+    DiagnosticSeverity,
+    EventCode,
+    EventOutcome,
+    ObservabilityEvent,
+    PresentationKind,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -202,11 +209,14 @@ class BenchmarkTransformer:
         """Transform Bronze benchmark observations into a continuous daily Silver series."""
         if self.status_queue is not None:
             self.status_queue.put(
-                EngineStatusMessage(
-                    msg=f"Transforming Bronze Benchmark Data into Silver ({global_start_date} to {global_end_date})...",
-                    data=None,
+                ObservabilityEvent.create(
+                    event_code=EventCode.TRANSFORMATION_STAGE,
+                    message=f"Transforming Bronze Benchmark Data into Silver ({global_start_date} to {global_end_date})...",
                     progress=0.1,
-                    level=LogLevel.STEP,
+                    severity=DiagnosticSeverity.INFO,
+                    outcome=EventOutcome.COMPLETED,
+                    presentation_kind=PresentationKind.INTERNAL,
+                    stage=EngineStage.TRANSFORMING,
                 )
             )
 
@@ -219,11 +229,14 @@ class BenchmarkTransformer:
         logger.info(f"BenchmarkTransformer generated Silver table with {df_silver.height} rows.")
         if self.status_queue is not None:
             self.status_queue.put(
-                EngineStatusMessage(
-                    msg=f"Successfully transformed benchmark data ({global_start_date} to {global_end_date}).",
-                    data=None,
+                ObservabilityEvent.create(
+                    event_code=EventCode.TRANSFORMATION_STAGE,
+                    message=f"Successfully transformed benchmark data ({global_start_date} to {global_end_date}).",
                     progress=1.0,
-                    level=LogLevel.SUCCESS,
+                    severity=DiagnosticSeverity.INFO,
+                    outcome=EventOutcome.COMPLETED,
+                    presentation_kind=PresentationKind.INTERNAL,
+                    stage=EngineStage.TRANSFORMING,
                 )
             )
 

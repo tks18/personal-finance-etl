@@ -15,10 +15,12 @@ Does not own
 
 from __future__ import annotations
 
+import json
 import logging
-import os
 import sqlite3
 import zlib
+from pathlib import Path
+from typing import cast
 
 from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
 
@@ -30,6 +32,8 @@ __all__ = [
     "compress_bytes",
     "decompress_bytes",
     "retrieve_run_trace",
+    "retrieve_run_trace_events",
+    "retrieve_run_trace_text",
 ]
 
 DEFAULT_COMPRESSION_LEVEL = 6
@@ -72,7 +76,7 @@ def decompress_bytes(data: bytes) -> bytes:
 def archive_run_trace(
     cp: ControlPlane,
     run_id: str,
-    trace_file_path: str,
+    trace_file_path: str | Path,
     compression_level: int = DEFAULT_COMPRESSION_LEVEL,
 ) -> bool:
     """Safely compress and persist execution log or JSONL trace into Control Plane.
@@ -87,7 +91,7 @@ def archive_run_trace(
         Active Control Plane facade instance.
     run_id : str
         Target execution run identifier.
-    trace_file_path : str
+    trace_file_path : str | Path
         File system path to log or JSONL trace.
     compression_level : int, default=6
         Compression level to apply (0-9).
@@ -97,18 +101,17 @@ def archive_run_trace(
     bool
         True if trace was successfully archived, False on non-fatal failure or missing file.
     """
-    if not os.path.exists(trace_file_path):
+    path = Path(trace_file_path)
+    if not path.exists():
         logger.debug(
             "Trace Archival: Trace file not found at %s. Skipping archival for run %s.",
-            trace_file_path,
+            path,
             run_id,
         )
         return False
 
     try:
-        with open(trace_file_path, "rb") as f:
-            log_bytes = f.read()
-
+        log_bytes = path.read_bytes()
         compressed_log = compress_bytes(log_bytes, level=compression_level)
         cp.runs.save_execution_log(run_id, compressed_log)
         logger.debug(
@@ -172,3 +175,63 @@ def retrieve_run_trace(
             err,
         )
         return raw
+
+
+def retrieve_run_trace_text(
+    cp: ControlPlane,
+    run_id: str,
+    encoding: str = "utf-8",
+) -> str | None:
+    """Fetch and decode archived execution log or trace payload as a string.
+
+    Parameters
+    ----------
+    cp : ControlPlane
+        Active Control Plane facade instance.
+    run_id : str
+        Target execution run identifier.
+    encoding : str, default="utf-8"
+        String encoding format for decoding decompressed trace bytes.
+
+    Returns
+    -------
+    str | None
+        Decoded trace string if present, else None.
+    """
+    raw_bytes = retrieve_run_trace(cp, run_id, decompress=True)
+    if raw_bytes is None:
+        return None
+    return raw_bytes.decode(encoding=encoding, errors="replace")
+
+
+def retrieve_run_trace_events(
+    cp: ControlPlane,
+    run_id: str,
+) -> list[dict[str, object]] | None:
+    """Fetch, decompress, and parse archived JSONL forensic events from Control Plane.
+
+    Parameters
+    ----------
+    cp : ControlPlane
+        Active Control Plane facade instance.
+    run_id : str
+        Target execution run identifier.
+
+    Returns
+    -------
+    list[dict[str, object]] | None
+        List of parsed JSON event dictionaries if present, else None.
+    """
+    text = retrieve_run_trace_text(cp, run_id)
+    if text is None:
+        return None
+    records: list[dict[str, object]] = []
+    for line in text.splitlines():
+        line_str = line.strip()
+        if not line_str:
+            continue
+        try:
+            records.append(cast(dict[str, object], json.loads(line_str)))
+        except json.JSONDecodeError:
+            continue
+    return records

@@ -547,18 +547,18 @@ The project is large enough that architectural discipline is not hypothetical.
 
 | Surface                   | Current repository shape |
 | ------------------------- | -----------------------: |
-| Production Python modules |                  **156** |
-| Production Python LOC     |                 **~32k** |
+| Production Python modules |                  **204** |
+| Production Python LOC     |                 **~41k** |
 | Bronze contracts          |                   **20** |
 | Silver contracts          |                   **24** |
 | Gold contracts            |                   **22** |
 | Meta tables               |                    **6** |
 | Control Plane tables      |                   **10** |
-| Canonical technical docs  |                   **53** |
+| Canonical technical docs  |                   **55** |
 
 The counts are useful context, not trophies.
 
-A 32k-line codebase can still be badly designed. The interesting question is whether another engineer can answer:
+A 41k-line codebase can still be badly designed. The interesting question is whether another engineer can answer:
 
 ```text
 who owns this behavior?

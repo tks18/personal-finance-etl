@@ -99,7 +99,7 @@ flowchart LR
   <div><strong>20</strong><span>Bronze contracts</span></div>
   <div><strong>24</strong><span>Silver tables</span></div>
   <div><strong>22</strong><span>Gold tables</span></div>
-  <div><strong>53</strong><span>Canonical specs</span></div>
+  <div><strong>55</strong><span>Canonical specs</span></div>
   <div><strong>10</strong><span>Control Plane tables</span></div>
 </div>
 

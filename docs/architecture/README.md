@@ -180,7 +180,7 @@ That would merely move coupling into a different folder.
 
 Instead, the package owns messages whose meaning genuinely crosses an architectural or process boundary:
 
-- `EngineStatusMessage` and execution results;
+- `ObservabilityEvent` and execution results;
 - extraction outcomes and completeness errors;
 - `CommitState` and `FailureDomain`;
 - logging protocols;
@@ -311,9 +311,10 @@ The top-level packages expose small public surfaces through `__all__` where a st
 # src/personal_finance_etl/contracts/__init__.py
 __all__ = [
     "CommitState",
+    "EngineDataTransport",
     "EngineExecutionResult",
     "EngineStage",
-    "EngineStatusMessage",
+    "ObservabilityEvent",
     "ExtractionBatchResult",
     "FailureDomain",
     "RestoreResult",

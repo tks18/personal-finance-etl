@@ -16,6 +16,7 @@ Does not own
 from __future__ import annotations
 
 import concurrent.futures
+import logging
 import multiprocessing
 import os
 import traceback
@@ -31,11 +32,15 @@ from personal_finance_etl.application.observability import (
     get_global_emitter,
 )
 from personal_finance_etl.config.financial_rules import FinancialRules
-from personal_finance_etl.contracts.application import EngineStage, EngineStatusMessage
-from personal_finance_etl.contracts.logging import LogLevel, StatusQueue
+from personal_finance_etl.contracts.application import EngineStage
+from personal_finance_etl.contracts.lifecycle import FailureDomain
+from personal_finance_etl.contracts.logging import StatusQueue
 from personal_finance_etl.contracts.observability import (
     DiagnosticSeverity,
+    ErrorDetails,
     EventCode,
+    EventOutcome,
+    ObservabilityEvent,
     PresentationKind,
 )
 from personal_finance_etl.domain.investments.contracts import (
@@ -51,13 +56,14 @@ from personal_finance_etl.domain.investments.valuation.benchmark import Benchmar
 from personal_finance_etl.domain.market.fx import FXRateProvider
 from personal_finance_etl.domain.market.macro import FYMacroParametersTable
 from personal_finance_etl.infrastructure.logging.setup import (
-    logger,
     setup_worker_logging,
     start_worker_listener,
     stop_worker_listener,
 )
 
 __all__ = ["IsinPipeline"]
+
+logger = logging.getLogger(__name__)
 
 
 class _DimensionAccumulator:
@@ -285,7 +291,15 @@ class IsinPipeline:
         """Report incremental step progress to status queue."""
         if self.status_queue:
             self.status_queue.put(
-                EngineStatusMessage(msg="", progress=progress, level=LogLevel.STEP)
+                ObservabilityEvent.create(
+                    event_code=EventCode.QUANT_ISIN_PROCESSED,
+                    message="",
+                    progress=progress,
+                    severity=DiagnosticSeverity.INFO,
+                    outcome=EventOutcome.COMPLETED,
+                    presentation_kind=PresentationKind.PROGRESS,
+                    stage=EngineStage.ANALYZING,
+                )
             )
 
     def _build_worker_tasks(
@@ -464,6 +478,24 @@ class IsinPipeline:
                         logger.error(
                             f"ISIN Processing Failed for {isin}: {error_msg}\n{traceback.format_exc()}"
                         )
+                        err_details = ErrorDetails(
+                            exception_type=type(e).__name__,
+                            exception_message=str(e),
+                            failure_domain=FailureDomain.WORKER,
+                            traceback_summary=traceback.format_exc(),
+                            retryable=False,
+                        )
+                        self.emitter.emit_event(
+                            event_code=EventCode.QUANT_ISIN_PROCESSED,
+                            message=f"ISIN Processing Failed for {isin}: {error_msg}",
+                            presentation_kind=PresentationKind.FAILURE,
+                            severity=DiagnosticSeverity.ERROR,
+                            outcome=EventOutcome.FAILED,
+                            stage=EngineStage.ANALYZING,
+                            entity_type="ISIN",
+                            entity_id=isin,
+                            error=err_details,
+                        )
                         raise RuntimeError(f"ISIN_FAILURE|{isin}|{error_msg}") from e
 
                     if error_info is not None:
@@ -471,6 +503,24 @@ class IsinPipeline:
                         error_msg = error_info.get("error", "Unknown Error")
                         tb = error_info.get("traceback", "")
                         logger.error(f"ISIN Processing Failed for {failed_isin}: {error_msg}\n{tb}")
+                        err_details = ErrorDetails(
+                            exception_type="ISINCalculationError",
+                            exception_message=error_msg,
+                            failure_domain=FailureDomain.WORKER,
+                            traceback_summary=tb,
+                            retryable=False,
+                        )
+                        self.emitter.emit_event(
+                            event_code=EventCode.QUANT_ISIN_PROCESSED,
+                            message=f"ISIN Processing Failed for {failed_isin}: {error_msg}",
+                            presentation_kind=PresentationKind.FAILURE,
+                            severity=DiagnosticSeverity.ERROR,
+                            outcome=EventOutcome.FAILED,
+                            stage=EngineStage.ANALYZING,
+                            entity_type="ISIN",
+                            entity_id=failed_isin,
+                            error=err_details,
+                        )
                         raise RuntimeError(f"ISIN_FAILURE|{failed_isin}|{error_msg}")
 
                     if success:

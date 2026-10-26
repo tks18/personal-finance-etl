@@ -526,25 +526,11 @@ That model is less magical than “atomic ETL.”
 
 It is also much easier to trust because every claim corresponds to a state the code can observe.
 
-## Continue with captured-state recovery
-
-The reliability model prefers rollback and deterministic convergence during ordinary run failure. The next specification covers the separate case where both databases must be restored from a coordinated historical snapshot.
-
-Continue with [Backup and Restore](backup-and-restore.md).
-
-## Related specifications
-
-- [Architecture](README.md)
-- [Data Lifecycle](data-lifecycle.md)
-- [Control Plane Artifact Lifecycle](control-plane-artifact-lifecycle.md)
-- [Deterministic Identity and Replay](deterministic-identity-and-replay.md)
-- [Backup and Restore](backup-and-restore.md)
-- [Warehouse Architecture](warehouse-architecture.md)
-- [Developer: Testing and Validation](../developer/testing-and-validation.md)
-
 ## Unified Observability Architecture (Three Resolutions of Truth)
 
 The engine enforces an enterprise observability architecture where every operational event originates from a single typed contract (`ObservabilityEvent`) and projects into three distinct resolutions:
+
+> **User logs explain the run. Debug traces reconstruct the run. Control Plane proves the run happened.**
 
 1. **User Narrative (UI Console / Desktop)**:
    Concise, high-level milestone badges (`>>`, `✓`, `↷`, `!`, `✗`) providing immediate progress visibility (~20–40 lines per run) without cluttering the screen with database internals or stack traces.
@@ -561,3 +547,19 @@ flowchart TD
     Contract -->|Durable Milestones| CP[Control Plane SQLite Database]
     Trace -.->|Compressed BLOB| CP
 ```
+
+## Continue with captured-state recovery
+
+The reliability model prefers rollback and deterministic convergence during ordinary run failure. The next specification covers the separate case where both databases must be restored from a coordinated historical snapshot.
+
+Continue with [Backup and Restore](backup-and-restore.md).
+
+## Related specifications
+
+- [Architecture](README.md)
+- [Data Lifecycle](data-lifecycle.md)
+- [Control Plane Artifact Lifecycle](control-plane-artifact-lifecycle.md)
+- [Deterministic Identity and Replay](deterministic-identity-and-replay.md)
+- [Backup and Restore](backup-and-restore.md)
+- [Warehouse Architecture](warehouse-architecture.md)
+- [Developer: Testing and Validation](../developer/testing-and-validation.md)
