@@ -29,9 +29,8 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import NotRequired, Protocol, TypedDict, cast
 
-from personal_finance_etl.contracts.application import EngineStage, EngineStatusMessage
+from personal_finance_etl.contracts.application import EngineStage
 from personal_finance_etl.contracts.lifecycle import CommitState, FailureDomain
-from personal_finance_etl.contracts.logging import LogLevel
 
 __all__ = [
     "DiagnosticSeverity",
@@ -546,27 +545,60 @@ class ObservabilityEvent:
     progress: float | None = None
 
     @classmethod
-    def create(
+    def create(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         cls,
         event_code: EventCode,
         message: str,
-        context: ObservabilityContext,
+        context: ObservabilityContext | None = None,
         severity: DiagnosticSeverity = DiagnosticSeverity.INFO,
         presentation_kind: PresentationKind = PresentationKind.STEP,
         outcome: EventOutcome = EventOutcome.COMPLETED,
         error: ErrorDetails | None = None,
         progress: float | None = None,
         timestamp: datetime | None = None,
+        stage: EngineStage | None = None,
     ) -> ObservabilityEvent:
-        """Construct a canonical ObservabilityEvent with UTC timestamp."""
+        """Construct a canonical ObservabilityEvent with UTC timestamp.
+
+        Parameters
+        ----------
+        event_code : EventCode
+            Categorical machine-readable code for the event.
+        message : str
+            Human-readable presentation narrative describing the event.
+        context : ObservabilityContext | None, default=None
+            Rich structural context metadata; if None, defaults to blank context.
+        severity : DiagnosticSeverity, default=DiagnosticSeverity.INFO
+            Categorical severity level.
+        presentation_kind : PresentationKind, default=PresentationKind.STEP
+            Presentation intent and visual formatting style.
+        outcome : EventOutcome, default=EventOutcome.COMPLETED
+            State transition outcome.
+        error : ErrorDetails | None, default=None
+            Exception and diagnostic error envelope if applicable.
+        progress : float | None, default=None
+            Progress metric from 0.0 to 1.0.
+        timestamp : datetime | None, default=None
+            UTC timestamp; if None, captures current UTC time.
+        stage : EngineStage | None, default=None
+            Optional stage override to update on context if provided.
+
+        Returns
+        -------
+        ObservabilityEvent
+            Immutable canonical event instance.
+        """
         ts = timestamp if timestamp is not None else datetime.now(UTC)
+        ctx = context if context is not None else ObservabilityContext()
+        if stage is not None:
+            ctx = ctx.with_updates(stage=stage)
         return cls(
             timestamp=ts,
             event_code=event_code,
             severity=severity,
             presentation_kind=presentation_kind,
             outcome=outcome,
-            context=context,
+            context=ctx,
             message=message,
             error=error,
             progress=progress,
@@ -592,39 +624,6 @@ class ObservabilityEvent:
     def to_json(self) -> str:
         """Render event as a single-line JSON string without line breaks."""
         return json.dumps(self.to_dict(), separators=(",", ":"))
-
-    def to_status_message(self) -> EngineStatusMessage:
-        """Project ObservabilityEvent into EngineStatusMessage for process queue consumers."""
-        if self.presentation_kind == PresentationKind.STEP:
-            level = LogLevel.STEP
-        elif self.presentation_kind == PresentationKind.SUCCESS:
-            level = LogLevel.SUCCESS
-        elif self.presentation_kind == PresentationKind.WARNING:
-            level = LogLevel.WARNING
-        elif self.presentation_kind == PresentationKind.FAILURE:
-            level = LogLevel.ERROR
-        else:
-            level_map: dict[DiagnosticSeverity, LogLevel] = {
-                DiagnosticSeverity.TRACE: LogLevel.INFO,
-                DiagnosticSeverity.DEBUG: LogLevel.INFO,
-                DiagnosticSeverity.INFO: LogLevel.INFO,
-                DiagnosticSeverity.WARNING: LogLevel.WARNING,
-                DiagnosticSeverity.ERROR: LogLevel.ERROR,
-                DiagnosticSeverity.CRITICAL: LogLevel.ERROR,
-            }
-            level = level_map.get(self.severity, LogLevel.INFO)
-
-        failure_domain = self.error.failure_domain if self.error is not None else None
-        local_ts = self.timestamp.astimezone() if self.timestamp.tzinfo else self.timestamp
-
-        return EngineStatusMessage(
-            msg=self.message,
-            level=level,
-            progress=self.progress,
-            stage=self.context.stage,
-            failure_domain=failure_domain,
-            timestamp=local_ts,
-        )
 
     @classmethod
     def from_dict(cls, data: Mapping[str, object]) -> ObservabilityEvent:
