@@ -19,7 +19,6 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Final
 
-from personal_finance_etl.contracts.application import EngineStatusMessage
 from personal_finance_etl.contracts.observability import (
     ObservabilityEvent,
     ObservabilitySink,
@@ -118,7 +117,7 @@ class DesktopNarrativeSink(ObservabilitySink):
 
     def __init__(
         self,
-        status_consumer: Callable[[EngineStatusMessage | ObservabilityEvent], None] | None = None,
+        status_consumer: Callable[[ObservabilityEvent], None] | None = None,
         log_callback: Callable[[str, str], None] | None = None,
         progress_callback: Callable[[float], None] | None = None,
         error_callback: Callable[[str, str], None] | None = None,
