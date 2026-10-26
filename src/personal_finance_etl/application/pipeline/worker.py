@@ -24,8 +24,6 @@ import traceback
 from collections.abc import Callable
 from typing import cast
 
-import polars as pl
-
 from personal_finance_etl.application.observability import get_global_emitter
 from personal_finance_etl.application.pipeline.orchestrator import ETLOrchestrator
 from personal_finance_etl.config.financial_rules import FinancialRules
@@ -67,7 +65,6 @@ class QueueStream:
                     self.queue.put(
                         EngineStatusMessage(
                             msg=stripped,
-                            data=None,
                             progress=None,
                             level=level,
                         )
@@ -82,7 +79,6 @@ class QueueStream:
             self.queue.put(
                 EngineStatusMessage(
                     msg=stripped,
-                    data=None,
                     progress=None,
                     level=level,
                 )
@@ -127,7 +123,6 @@ def process_wrapper(
         status_queue.put(
             EngineStatusMessage(
                 msg=f"Critical Pipeline Failure: {e}\n{traceback.format_exc()}",
-                data=None,
                 progress=0.0,
                 level=LogLevel.ERROR,
             )
@@ -165,13 +160,11 @@ class WorkerPoolCoordinator:
             return cast(EngineStatusMessage, item)
         t_item = cast("tuple[object, ...]", item)
         t_msg = str(t_item[0]) if len(t_item) > 0 and t_item[0] else ""
-        t_data = t_item[1] if len(t_item) > 1 and isinstance(t_item[1], pl.DataFrame) else None
         t_prog = (
             float(t_item[2]) if len(t_item) > 2 and isinstance(t_item[2], (int, float)) else None
         )
         return EngineStatusMessage(
             msg=t_msg,
-            data=t_data,
             progress=t_prog,
             level=LogLevel.INFO,
         )
@@ -188,7 +181,6 @@ class WorkerPoolCoordinator:
             on_status(
                 EngineStatusMessage(
                     msg="Process exited abnormally.",
-                    data=None,
                     progress=0.0,
                     level=LogLevel.ERROR,
                 )
@@ -197,7 +189,6 @@ class WorkerPoolCoordinator:
             on_status(
                 EngineStatusMessage(
                     msg="Process completed cleanly.",
-                    data=None,
                     progress=1.0,
                     level=LogLevel.SUCCESS,
                 )
