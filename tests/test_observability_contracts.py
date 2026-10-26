@@ -335,7 +335,7 @@ def test_backward_compatibility_status_message_bridge() -> None:
     assert msg_step.level == LogLevel.STEP
     assert msg_step.progress == 0.6
     assert msg_step.stage == EngineStage.ANALYZING
-    assert msg_step.data is None
+    assert not hasattr(msg_step, "data")
 
     # Error event mapping
     err = ErrorDetails(
