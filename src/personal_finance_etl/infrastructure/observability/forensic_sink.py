@@ -40,7 +40,16 @@ class JsonlForensicSink(ObservabilitySink):
     All disk writes are serialized and formatted as single-line JSON records.
     """
 
-    def __init__(self, log_path: str | Path, buffer_size: int = 1) -> None:
+    def __init__(self, log_path: str | Path, buffer_size: int = 50) -> None:
+        """Initialize append-only JSONL forensic sink.
+
+        Parameters
+        ----------
+        log_path : str | Path
+            Target filesystem path for the append-only JSONL forensic trace.
+        buffer_size : int, default=50
+            Number of write operations to buffer before explicitly flushing to physical disk.
+        """
         self.log_path = Path(log_path)
         self.buffer_size = buffer_size
         self._lock = threading.Lock()
