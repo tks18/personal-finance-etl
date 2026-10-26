@@ -18,6 +18,7 @@ Does not own
 """
 
 from personal_finance_etl.contracts.application import (
+    EngineDataTransport,
     EngineExecutionResult,
     EngineStage,
     EngineStatusMessage,
@@ -60,6 +61,7 @@ from personal_finance_etl.contracts.recovery import (
 __all__ = [
     "CommitState",
     "DiagnosticSeverity",
+    "EngineDataTransport",
     "EngineExecutionResult",
     "EngineStage",
     "EngineStatusMessage",
