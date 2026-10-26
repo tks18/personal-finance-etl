@@ -112,7 +112,7 @@ def test_queue_stream_emits_canonical_observability_events() -> None:
     assert event.event_code == EventCode.RAW_STDOUT
     assert event.severity == DiagnosticSeverity.INFO
     assert event.outcome == EventOutcome.COMPLETED
-    assert event.presentation_kind == PresentationKind.PROGRESS
+    assert event.presentation_kind == PresentationKind.INTERNAL
     assert event.message == "Ingesting bronze lakehouse entities..."
 
     mock_err_q = _CaptureQueue()
@@ -126,7 +126,7 @@ def test_queue_stream_emits_canonical_observability_events() -> None:
     assert err_event.event_code == EventCode.RAW_STDERR
     assert err_event.severity == DiagnosticSeverity.ERROR
     assert err_event.outcome == EventOutcome.FAILED
-    assert err_event.presentation_kind == PresentationKind.PROGRESS
+    assert err_event.presentation_kind == PresentationKind.INTERNAL
     assert err_event.message == "Execution failed during network fetch"
 
 
