@@ -25,9 +25,16 @@ from personal_finance_etl.application.ingestion.asset_strategies import (
 )
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
-from personal_finance_etl.contracts.application import EngineStatusMessage
+from personal_finance_etl.contracts.application import EngineStage
 from personal_finance_etl.contracts.extraction import AssetPipelineResult, ExtractionResult
-from personal_finance_etl.contracts.logging import ILogger, LogLevel
+from personal_finance_etl.contracts.logging import ILogger
+from personal_finance_etl.contracts.observability import (
+    DiagnosticSeverity,
+    EventCode,
+    EventOutcome,
+    ObservabilityEvent,
+    PresentationKind,
+)
 from personal_finance_etl.domain.household.transforms.calendar import (
     get_stg_calendar_ref,
     transform_d_calendar,
@@ -183,10 +190,14 @@ class TransformationDAG:
 
         logger.debug("Executing Base Transformation DAG in Parallel...")
         self.status_queue.put(
-            EngineStatusMessage(
-                msg="",
+            ObservabilityEvent.create(
+                event_code=EventCode.TRANSFORMATION_STAGE,
+                message="",
                 progress=0.2,
-                level=LogLevel.STEP,
+                severity=DiagnosticSeverity.INFO,
+                outcome=EventOutcome.COMPLETED,
+                presentation_kind=PresentationKind.PROGRESS,
+                stage=EngineStage.TRANSFORMING,
             )
         )
         dag_nodes = {
