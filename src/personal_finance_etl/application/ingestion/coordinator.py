@@ -266,7 +266,6 @@ class DataExtractor:
         self.status_queue.put(
             EngineStatusMessage(
                 msg="",
-                data=None,
                 progress=0.15,
                 level=LogLevel.STEP,
             )
@@ -319,7 +318,6 @@ class DataExtractor:
             self.status_queue.put(
                 EngineStatusMessage(
                     msg=f"Gatekeeper Validation Failed: {e}",
-                    data=None,
                     progress=0,
                     level=LogLevel.ERROR,
                 )
@@ -350,7 +348,6 @@ class DataExtractor:
         self.status_queue.put(
             EngineStatusMessage(
                 msg="",
-                data=None,
                 progress=0.01,
                 level=LogLevel.STEP,
             )
