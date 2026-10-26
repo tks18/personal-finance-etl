@@ -20,16 +20,19 @@ import enum
 import hashlib
 import json
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping, Sequence, Sized
 from typing import TypedDict, cast
 
+from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
 
 __all__ = [
     "ConfigFingerprintDict",
     "RedactionPolicy",
+    "RulesFingerprintDict",
     "SENSITIVE_KEY_SUBSTRINGS",
     "fingerprint_config",
+    "fingerprint_rules",
     "hash_identifier",
     "redact_dict",
     "redact_text",
@@ -61,6 +64,27 @@ class ConfigFingerprintDict(TypedDict):
     disable_file_discoverer: bool
     retain_last_n_runs: int
     logs_directory: str
+
+
+class RulesFingerprintDict(TypedDict):
+    """Deterministic financial rules fingerprint and safe summary metadata.
+
+    Attributes
+    ----------
+    rules_hash : str
+        Hex-encoded SHA-256 fingerprint prefix of the canonical rules configuration.
+    default_currency_id : str
+        Default active currency identifier.
+    investment_instrument_count : int
+        Number of configured investment instrument policy definitions.
+    has_tax_assumptions : bool
+        Flag indicating if tax calculation assumptions are configured.
+    """
+
+    rules_hash: str
+    default_currency_id: str
+    investment_instrument_count: int
+    has_tax_assumptions: bool
 
 
 class RedactionPolicy(enum.Enum):
@@ -305,7 +329,7 @@ def fingerprint_config(settings: Settings | Mapping[str, object]) -> ConfigFinge
         raw_dict = dict(settings)
 
     # Compute deterministic hash over sorted canonical JSON
-    canonical_json = json.dumps(raw_dict, sort_keys=True, default=str)
+    canonical_json = json.dumps(raw_dict, sort_keys=True, separators=(",", ":"), default=str)
     config_hash = hashlib.sha256(canonical_json.encode("utf-8")).hexdigest()
 
     safe_summary: ConfigFingerprintDict = {
@@ -314,5 +338,51 @@ def fingerprint_config(settings: Settings | Mapping[str, object]) -> ConfigFinge
         "disable_file_discoverer": bool(raw_dict.get("DISABLE_FILE_DISCOVERER", False)),
         "retain_last_n_runs": int(cast(int, raw_dict.get("RETAIN_LAST_N_RUNS", 12))),
         "logs_directory": str(raw_dict.get("LOGS_DIRECTORY", "logs/runs")),
+    }
+    return safe_summary
+
+
+def fingerprint_rules(
+    rules: FinancialRules | Mapping[str, object] | None,
+) -> RulesFingerprintDict:
+    """Generate a deterministic financial rules fingerprint and privacy-safe metadata summary.
+
+    Parameters
+    ----------
+    rules : FinancialRules | Mapping[str, object] | None
+        Application financial rules instance or rules mapping, or None if unconfigured.
+
+    Returns
+    -------
+    RulesFingerprintDict
+        Dictionary containing rules SHA-256 fingerprint and safe non-sensitive parameters.
+    """
+    if rules is None:
+        return {
+            "rules_hash": "none",
+            "default_currency_id": "",
+            "investment_instrument_count": 0,
+            "has_tax_assumptions": False,
+        }
+
+    raw_dict: dict[str, object]
+    if isinstance(rules, FinancialRules):
+        raw_dict = rules.model_dump(mode="python")
+    else:
+        raw_dict = dict(rules)
+
+    canonical_json = json.dumps(raw_dict, sort_keys=True, separators=(",", ":"), default=str)
+    rules_hash = hashlib.sha256(canonical_json.encode("utf-8")).hexdigest()
+
+    investments = raw_dict.get("investments")
+    inst_count = len(cast(Sized, investments)) if isinstance(investments, (dict, list)) else 0
+    assumptions = raw_dict.get("assumptions")
+    has_tax = isinstance(assumptions, dict) and "tax" in assumptions
+
+    safe_summary: RulesFingerprintDict = {
+        "rules_hash": f"sha256_{rules_hash[:16]}",
+        "default_currency_id": str(raw_dict.get("DEFAULT_CURRENCY_ID", "INR_INR")),
+        "investment_instrument_count": inst_count,
+        "has_tax_assumptions": has_tax,
     }
     return safe_summary
