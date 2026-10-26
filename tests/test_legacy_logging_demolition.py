@@ -3,7 +3,7 @@
 Owns
 ----
 - Verification of QueueStream raw forwarding without string-based level inference.
-- Verification of infer_log_level clean boolean routing.
+- Verification that infer_log_level is permanently demolished.
 - Verification of live RunLifecycleCoordinator JSONL forensic sink attachment and lifecycle.
 - Verification that generated trace files are queryable natively via Polars (pl.read_ndjson).
 - Verification of Control Plane trace archival using the generated JSONL file.
@@ -27,12 +27,10 @@ from personal_finance_etl.application.pipeline.lifecycle import RunLifecycleCoor
 from personal_finance_etl.application.pipeline.worker import (
     QueueStream,
     WorkerPoolCoordinator,
-    infer_log_level,
 )
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
 from personal_finance_etl.contracts.application import EngineStage
-from personal_finance_etl.contracts.logging import LogLevel
 from personal_finance_etl.contracts.observability import (
     DiagnosticSeverity,
     EventCode,
@@ -76,6 +74,7 @@ def test_queue_stream_demolition_of_string_inference() -> None:
     for event in mock_q.events:
         assert event.severity == DiagnosticSeverity.INFO
         assert event.event_code == EventCode.RAW_STDOUT
+        assert event.presentation_kind == PresentationKind.INTERNAL
 
     stderr_mock_q = _MockStatusQueue()
     stderr_stream = QueueStream(stderr_mock_q, is_error=True)
@@ -85,14 +84,14 @@ def test_queue_stream_demolition_of_string_inference() -> None:
     assert len(stderr_mock_q.events) == 1
     assert stderr_mock_q.events[0].severity == DiagnosticSeverity.ERROR
     assert stderr_mock_q.events[0].event_code == EventCode.RAW_STDERR
+    assert stderr_mock_q.events[0].presentation_kind == PresentationKind.INTERNAL
 
 
-def test_infer_log_level_boolean_routing() -> None:
-    """Verify infer_log_level relies strictly on is_error boolean flag."""
-    assert infer_log_level("Error: fatal disk corruption", is_error=False) == LogLevel.INFO
-    assert infer_log_level("Normal status check", is_error=False) == LogLevel.INFO
-    assert infer_log_level("Success!", is_error=True) == LogLevel.ERROR
-    assert infer_log_level("", is_error=True) == LogLevel.ERROR
+def test_infer_log_level_permanently_demolished() -> None:
+    """Verify infer_log_level is permanently eradicated from worker module."""
+    import personal_finance_etl.application.pipeline.worker as worker_mod
+
+    assert not hasattr(worker_mod, "infer_log_level")
 
 
 def test_worker_pool_coordinator_queue_item_parsing() -> None:
