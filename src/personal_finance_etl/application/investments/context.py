@@ -20,8 +20,15 @@ import polars as pl
 
 from personal_finance_etl.application.investments.input_adapter import TaxDataLoader
 from personal_finance_etl.config.financial_rules import FinancialRules
-from personal_finance_etl.contracts.application import EngineStatusMessage
+from personal_finance_etl.contracts.application import EngineStage
 from personal_finance_etl.contracts.logging import LogLevel, StatusQueue
+from personal_finance_etl.contracts.observability import (
+    DiagnosticSeverity,
+    EventCode,
+    EventOutcome,
+    ObservabilityEvent,
+    PresentationKind,
+)
 from personal_finance_etl.domain.investments.contracts import IsinMasterRecord
 from personal_finance_etl.domain.market.fx import FXRateProvider
 from personal_finance_etl.domain.market.macro import FYMacroParametersTable
@@ -189,7 +196,29 @@ class AnalyticsContextManager:
 
     def _report(self, msg: str, progress: float, level: LogLevel = LogLevel.INFO) -> None:
         if self.status_queue:
-            self.status_queue.put(EngineStatusMessage(msg=msg, progress=progress, level=level))
+            severity = (
+                DiagnosticSeverity.ERROR
+                if level == LogLevel.ERROR
+                else (
+                    DiagnosticSeverity.WARNING
+                    if level == LogLevel.WARNING
+                    else DiagnosticSeverity.INFO
+                )
+            )
+            kind = PresentationKind.STEP if level == LogLevel.STEP else PresentationKind.PROGRESS
+            self.status_queue.put(
+                ObservabilityEvent.create(
+                    event_code=EventCode.QUANT_ENGINE_START,
+                    message=msg,
+                    progress=progress,
+                    severity=severity,
+                    outcome=(
+                        EventOutcome.FAILED if level == LogLevel.ERROR else EventOutcome.COMPLETED
+                    ),
+                    presentation_kind=kind,
+                    stage=EngineStage.ANALYZING,
+                )
+            )
 
     def initialize(
         self,
