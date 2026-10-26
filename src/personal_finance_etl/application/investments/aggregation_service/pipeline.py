@@ -19,8 +19,15 @@ import polars as pl
 
 from personal_finance_etl.application.investments.aggregation_service.service import PostProcessor
 from personal_finance_etl.application.investments.context import RunContext
-from personal_finance_etl.contracts.application import EngineStatusMessage
-from personal_finance_etl.contracts.logging import LogLevel, StatusQueue
+from personal_finance_etl.contracts.application import EngineStage
+from personal_finance_etl.contracts.logging import StatusQueue
+from personal_finance_etl.contracts.observability import (
+    DiagnosticSeverity,
+    EventCode,
+    EventOutcome,
+    ObservabilityEvent,
+    PresentationKind,
+)
 from personal_finance_etl.domain.investments.contracts import PipelineExecutionResult
 from personal_finance_etl.infrastructure.logging.setup import logger
 
@@ -55,7 +62,15 @@ class PostProcessingPipeline:
         """Report incremental step progress to status queue."""
         if self.status_queue:
             self.status_queue.put(
-                EngineStatusMessage(msg="", progress=progress, level=LogLevel.STEP)
+                ObservabilityEvent.create(
+                    event_code=EventCode.TRANSFORMATION_STAGE,
+                    message="",
+                    progress=progress,
+                    severity=DiagnosticSeverity.INFO,
+                    outcome=EventOutcome.COMPLETED,
+                    presentation_kind=PresentationKind.PROGRESS,
+                    stage=EngineStage.ANALYZING,
+                )
             )
 
     def run(
