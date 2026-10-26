@@ -24,8 +24,13 @@ import customtkinter as ctk  # type: ignore[import-untyped]
 from PIL import Image
 
 from personal_finance_etl.application.facade import PersonalFinanceEngine
-from personal_finance_etl.contracts.application import EngineStatusMessage
-from personal_finance_etl.contracts.logging import LogLevel
+from personal_finance_etl.contracts.observability import (
+    DiagnosticSeverity,
+    EventCode,
+    EventOutcome,
+    ObservabilityEvent,
+    PresentationKind,
+)
 from personal_finance_etl.infrastructure.filesystem.paths import resource_path
 from personal_finance_etl.presentation.desktop.base_tab import BaseEngineTab
 from personal_finance_etl.presentation.desktop.theme import Color
@@ -312,10 +317,13 @@ class UnifiedETLTab(BaseEngineTab):
         except Exception as e:
             self.handle_status(
                 self.run_btn,
-                EngineStatusMessage(
-                    msg=f"Error loading initial config: {e}",
+                ObservabilityEvent.create(
+                    event_code=EventCode.GENERIC_DIAGNOSTIC,
+                    message=f"Error loading initial config: {e}",
                     progress=0.0,
-                    level=LogLevel.ERROR,
+                    severity=DiagnosticSeverity.ERROR,
+                    outcome=EventOutcome.FAILED,
+                    presentation_kind=PresentationKind.FAILURE,
                 ),
             )
 
@@ -325,10 +333,13 @@ class UnifiedETLTab(BaseEngineTab):
         if not self.engine.validate_config(path):
             self.handle_status(
                 self.run_btn,
-                EngineStatusMessage(
-                    msg=f"Failed to load config from {path}",
+                ObservabilityEvent.create(
+                    event_code=EventCode.GENERIC_DIAGNOSTIC,
+                    message=f"Failed to load config from {path}",
                     progress=0.0,
-                    level=LogLevel.ERROR,
+                    severity=DiagnosticSeverity.ERROR,
+                    outcome=EventOutcome.FAILED,
+                    presentation_kind=PresentationKind.FAILURE,
                 ),
             )
 
@@ -365,28 +376,37 @@ class UnifiedETLTab(BaseEngineTab):
             if snap_path:
                 self.handle_status(
                     self.run_btn,
-                    EngineStatusMessage(
-                        msg=f"Database snapshot created at: {snap_path}",
+                    ObservabilityEvent.create(
+                        event_code=EventCode.RECOVERY_SNAPSHOT,
+                        message=f"Database snapshot created at: {snap_path}",
                         progress=1.0,
-                        level=LogLevel.SUCCESS,
+                        severity=DiagnosticSeverity.INFO,
+                        outcome=EventOutcome.COMPLETED,
+                        presentation_kind=PresentationKind.SUCCESS,
                     ),
                 )
             else:
                 self.handle_status(
                     self.run_btn,
-                    EngineStatusMessage(
-                        msg="Database file does not exist yet. Run the pipeline first.",
+                    ObservabilityEvent.create(
+                        event_code=EventCode.RECOVERY_SNAPSHOT,
+                        message="Database file does not exist yet. Run the pipeline first.",
                         progress=0.0,
-                        level=LogLevel.WARNING,
+                        severity=DiagnosticSeverity.WARNING,
+                        outcome=EventOutcome.FAILED,
+                        presentation_kind=PresentationKind.FAILURE,
                     ),
                 )
         except Exception as e:
             self.handle_status(
                 self.run_btn,
-                EngineStatusMessage(
-                    msg=f"Failed to create snapshot: {e}",
+                ObservabilityEvent.create(
+                    event_code=EventCode.RECOVERY_SNAPSHOT,
+                    message=f"Failed to create snapshot: {e}",
                     progress=0.0,
-                    level=LogLevel.ERROR,
+                    severity=DiagnosticSeverity.ERROR,
+                    outcome=EventOutcome.FAILED,
+                    presentation_kind=PresentationKind.FAILURE,
                 ),
             )
 
@@ -425,31 +445,41 @@ class UnifiedETLTab(BaseEngineTab):
                 if success
                 else "Failed to restore snapshot."
             )
-            level = LogLevel.SUCCESS if success else LogLevel.ERROR
             self.handle_status(
                 self.run_btn,
-                EngineStatusMessage(
-                    msg=msg,
+                ObservabilityEvent.create(
+                    event_code=EventCode.RECOVERY_RESTORE,
+                    message=msg,
                     progress=1.0 if success else 0.0,
-                    level=level,
+                    severity=(DiagnosticSeverity.INFO if success else DiagnosticSeverity.ERROR),
+                    outcome=(EventOutcome.COMPLETED if success else EventOutcome.FAILED),
+                    presentation_kind=(
+                        PresentationKind.SUCCESS if success else PresentationKind.FAILURE
+                    ),
                 ),
             )
         except PermissionError as pe:
             self.handle_status(
                 self.run_btn,
-                EngineStatusMessage(
-                    msg=str(pe),
+                ObservabilityEvent.create(
+                    event_code=EventCode.RECOVERY_RESTORE,
+                    message=str(pe),
                     progress=0.0,
-                    level=LogLevel.ERROR,
+                    severity=DiagnosticSeverity.ERROR,
+                    outcome=EventOutcome.FAILED,
+                    presentation_kind=PresentationKind.FAILURE,
                 ),
             )
         except Exception as e:
             self.handle_status(
                 self.run_btn,
-                EngineStatusMessage(
-                    msg=f"Unexpected error restoring snapshot: {e}",
+                ObservabilityEvent.create(
+                    event_code=EventCode.RECOVERY_RESTORE,
+                    message=f"Unexpected error restoring snapshot: {e}",
                     progress=0.0,
-                    level=LogLevel.ERROR,
+                    severity=DiagnosticSeverity.ERROR,
+                    outcome=EventOutcome.FAILED,
+                    presentation_kind=PresentationKind.FAILURE,
                 ),
             )
 
