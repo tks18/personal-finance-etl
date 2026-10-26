@@ -18,7 +18,6 @@ Does not own
 from __future__ import annotations
 
 import tempfile
-import traceback
 
 import polars as pl
 
@@ -37,10 +36,12 @@ from personal_finance_etl.application.observability import (
     ObservabilityEmitter,
     get_global_emitter,
 )
-from personal_finance_etl.contracts.application import EngineStage, EngineStatusMessage
-from personal_finance_etl.contracts.logging import LogLevel, StatusQueue
+from personal_finance_etl.contracts.application import EngineStage
+from personal_finance_etl.contracts.logging import StatusQueue
 from personal_finance_etl.contracts.observability import (
+    DiagnosticSeverity,
     EventCode,
+    EventOutcome,
     PresentationKind,
 )
 from personal_finance_etl.infrastructure.logging.setup import logger
@@ -76,15 +77,6 @@ class InvestmentQuantEngine:
         self.status_queue = status_queue
         self.emitter = emitter or get_global_emitter()
 
-    def _report_status(
-        self,
-        msg: str,
-        progress: float,
-        level: LogLevel,
-    ) -> None:
-        if self.status_queue is not None:
-            self.status_queue.put(EngineStatusMessage(msg=msg, progress=progress, level=level))
-
     def run(self) -> dict[str, pl.DataFrame]:
         """Execute the quantitative analysis engine.
 
@@ -96,8 +88,14 @@ class InvestmentQuantEngine:
         try:
             return self._run()
         except Exception as e:
-            err_msg = f"Error: {e}\n{traceback.format_exc()}"
-            self._report_status(err_msg, 0.0, LogLevel.ERROR)
+            self.emitter.emit_event(
+                event_code=EventCode.RUN_FAILED,
+                message=f"Quant Engine failed: {e}",
+                severity=DiagnosticSeverity.ERROR,
+                outcome=EventOutcome.FAILED,
+                presentation_kind=PresentationKind.FAILURE,
+                stage=EngineStage.ANALYZING,
+            )
             raise e
 
     def _run(self) -> dict[str, pl.DataFrame]:
@@ -122,10 +120,11 @@ class InvestmentQuantEngine:
 
         if not isins:
             empty_df = pl.DataFrame()
-            self._report_status(
-                "Processing Complete! (no valid ISINs found)",
-                1.0,
-                LogLevel.SUCCESS,
+            self.emitter.emit_event(
+                event_code=EventCode.QUANT_POOL_COMPLETED,
+                message="Processing Complete! (no valid ISINs found)",
+                presentation_kind=PresentationKind.SUCCESS,
+                stage=EngineStage.ANALYZING,
             )
             return {"df_f_investment_analytics_lot": empty_df}
 
@@ -138,18 +137,17 @@ class InvestmentQuantEngine:
 
             if not has_data:
                 empty_df = pl.DataFrame()
-                self._report_status(
-                    "Processing Complete! (no output rows)",
-                    1.0,
-                    LogLevel.SUCCESS,
+                self.emitter.emit_event(
+                    event_code=EventCode.QUANT_POOL_COMPLETED,
+                    message="Processing Complete! (no output rows)",
+                    presentation_kind=PresentationKind.SUCCESS,
+                    stage=EngineStage.ANALYZING,
                 )
                 return {"df_f_investment_analytics_lot": empty_df}
 
             post_pipeline = PostProcessingPipeline(ctx, tmp_dir, self.status_queue)
             final_dfs = post_pipeline.run(pipeline_res)
 
-            succ_msg = f"✅  Processing Complete — generated {len(final_dfs)} analytics tables."
-            self._report_status(succ_msg, 1.0, LogLevel.SUCCESS)
             self.emitter.emit_event(
                 event_code=EventCode.QUANT_POOL_COMPLETED,
                 message=f"Processing Complete — generated {len(final_dfs)} analytics tables",
