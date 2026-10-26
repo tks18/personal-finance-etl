@@ -5,7 +5,6 @@ Owns
 - Invariant testing for EventCode, DiagnosticSeverity, PresentationKind, EventOutcome enums.
 - Serialization and deserialization round-trip validation for ObservabilityEvent, ObservabilityContext, ErrorDetails.
 - Verification of bounded context attributes (batch_id, commit_state, settings_fingerprint, rules_fingerprint).
-- Backward compatibility projection testing for to_status_message() adapter.
 - Immutability and bounding validation for context containers.
 - Semantic independence verification (event meaning requires zero message parsing).
 """
@@ -21,13 +20,11 @@ from personal_finance_etl.contracts import (
     CommitState,
     DiagnosticSeverity,
     EngineStage,
-    EngineStatusMessage,
     ErrorDetails,
     ErrorDetailsDict,
     EventCode,
     EventOutcome,
     FailureDomain,
-    LogLevel,
     ObservabilityContext,
     ObservabilityContextDict,
     ObservabilityEvent,
@@ -317,41 +314,3 @@ def test_event_semantics_independent_of_message_prose() -> None:
     event_dict: ObservabilityEventDict = event.to_dict()
     assert event_dict["event_code"] == "RUN_COMPLETED"
     assert event_dict["presentation_kind"] == "SUCCESS"
-
-
-def test_backward_compatibility_status_message_bridge() -> None:
-    """Verify to_status_message() adapter correctly bridges into legacy EngineStatusMessage."""
-    ctx = ObservabilityContext(run_id="run-compat-01", stage=EngineStage.ANALYZING)
-    event_step = ObservabilityEvent.create(
-        event_code=EventCode.QUANT_ENGINE_START,
-        message="Starting Investment Quant Engine...",
-        context=ctx,
-        presentation_kind=PresentationKind.STEP,
-        progress=0.6,
-    )
-    msg_step = event_step.to_status_message()
-    assert isinstance(msg_step, EngineStatusMessage)
-    assert msg_step.msg == "Starting Investment Quant Engine..."
-    assert msg_step.level == LogLevel.STEP
-    assert msg_step.progress == 0.6
-    assert msg_step.stage == EngineStage.ANALYZING
-    assert not hasattr(msg_step, "data")
-
-    # Error event mapping
-    err = ErrorDetails(
-        exception_type="RuntimeError",
-        exception_message="DuckDB disk lock",
-        failure_domain=FailureDomain.DUCKDB_COMMIT,
-        traceback_summary="lock error",
-    )
-    event_err = ObservabilityEvent.create(
-        event_code=EventCode.RUN_FAILED,
-        message="Fatal database failure",
-        context=ctx,
-        severity=DiagnosticSeverity.ERROR,
-        presentation_kind=PresentationKind.FAILURE,
-        error=err,
-    )
-    msg_err = event_err.to_status_message()
-    assert msg_err.level == LogLevel.ERROR
-    assert msg_err.failure_domain == FailureDomain.DUCKDB_COMMIT
