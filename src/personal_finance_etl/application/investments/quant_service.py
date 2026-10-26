@@ -79,14 +79,11 @@ class InvestmentQuantEngine:
     def _report_status(
         self,
         msg: str,
-        data: pl.DataFrame | None,
         progress: float,
         level: LogLevel,
     ) -> None:
         if self.status_queue is not None:
-            self.status_queue.put(
-                EngineStatusMessage(msg=msg, data=data, progress=progress, level=level)
-            )
+            self.status_queue.put(EngineStatusMessage(msg=msg, progress=progress, level=level))
 
     def run(self) -> dict[str, pl.DataFrame]:
         """Execute the quantitative analysis engine.
@@ -100,7 +97,7 @@ class InvestmentQuantEngine:
             return self._run()
         except Exception as e:
             err_msg = f"Error: {e}\n{traceback.format_exc()}"
-            self._report_status(err_msg, None, 0.0, LogLevel.ERROR)
+            self._report_status(err_msg, 0.0, LogLevel.ERROR)
             raise e
 
     def _run(self) -> dict[str, pl.DataFrame]:
@@ -127,7 +124,6 @@ class InvestmentQuantEngine:
             empty_df = pl.DataFrame()
             self._report_status(
                 "Processing Complete! (no valid ISINs found)",
-                empty_df,
                 1.0,
                 LogLevel.SUCCESS,
             )
@@ -144,7 +140,6 @@ class InvestmentQuantEngine:
                 empty_df = pl.DataFrame()
                 self._report_status(
                     "Processing Complete! (no output rows)",
-                    empty_df,
                     1.0,
                     LogLevel.SUCCESS,
                 )
@@ -154,7 +149,7 @@ class InvestmentQuantEngine:
             final_dfs = post_pipeline.run(pipeline_res)
 
             succ_msg = f"✅  Processing Complete — generated {len(final_dfs)} analytics tables."
-            self._report_status(succ_msg, None, 1.0, LogLevel.SUCCESS)
+            self._report_status(succ_msg, 1.0, LogLevel.SUCCESS)
             self.emitter.emit_event(
                 event_code=EventCode.QUANT_POOL_COMPLETED,
                 message=f"Processing Complete — generated {len(final_dfs)} analytics tables",
