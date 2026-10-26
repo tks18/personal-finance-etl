@@ -35,7 +35,6 @@ from rich.progress import (
 from rich.prompt import Confirm, Prompt
 
 from personal_finance_etl.application.facade import PersonalFinanceEngine
-from personal_finance_etl.contracts.application import EngineStatusMessage
 from personal_finance_etl.contracts.observability import (
     EventCode,
     EventOutcome,
@@ -48,7 +47,7 @@ from personal_finance_etl.presentation.observability import RichNarrativeSink
 __all__ = ["LOGO", "EngineStatus", "get_file_interactive", "main_cli", "print_bootloader"]
 
 # Canonical status type export
-EngineStatus = EngineStatusMessage
+EngineStatus = ObservabilityEvent
 
 try:
     __version__ = importlib.metadata.version("personal-finance-etl")
@@ -193,23 +192,19 @@ def _run_etl_progress(engine: PersonalFinanceEngine, config_path: str, rules_pat
             task_id=main_task,
         )
 
-        def on_status(status: EngineStatusMessage | ObservabilityEvent) -> None:
-            if isinstance(status, ObservabilityEvent):
-                narrative_sink.emit(status)
-                if status.event_code == EventCode.SYSTEM_TEARDOWN or (
-                    status.outcome in (EventOutcome.COMPLETED, EventOutcome.FAILED)
-                    and status.presentation_kind
-                    in (PresentationKind.SUCCESS, PresentationKind.FAILURE)
-                    and (status.progress == 1.0 or status.outcome == EventOutcome.FAILED)
-                ):
-                    completion_event.set()
-            else:
-                narrative_sink.render_status_message(status)
-                if (
-                    status.msg in ("Process completed cleanly.", "Process exited abnormally.")
-                    or "Critical Pipeline Failure" in status.msg
-                ):
-                    completion_event.set()
+        def on_status(status: ObservabilityEvent) -> None:
+            narrative_sink.emit(status)
+            if status.event_code in (
+                EventCode.SYSTEM_TEARDOWN,
+                EventCode.RUN_COMPLETED,
+                EventCode.RUN_FAILED,
+                EventCode.RUN_ABORTED,
+            ) or (
+                status.outcome in (EventOutcome.COMPLETED, EventOutcome.FAILED)
+                and status.presentation_kind in (PresentationKind.SUCCESS, PresentationKind.FAILURE)
+                and (status.progress == 1.0 or status.outcome == EventOutcome.FAILED)
+            ):
+                completion_event.set()
 
         engine.run_pipeline_async(config_path, rules_path, on_status)
 
