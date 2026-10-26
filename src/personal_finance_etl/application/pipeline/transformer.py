@@ -25,6 +25,10 @@ from personal_finance_etl.application.ingestion.asset_strategies import (
     StockPipeline,
     USStockPipeline,
 )
+from personal_finance_etl.application.observability import (
+    ObservabilityEmitter,
+    get_global_emitter,
+)
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
 from personal_finance_etl.contracts.application import EngineStage
@@ -34,7 +38,6 @@ from personal_finance_etl.contracts.observability import (
     DiagnosticSeverity,
     EventCode,
     EventOutcome,
-    ObservabilityEvent,
     PresentationKind,
 )
 from personal_finance_etl.domain.household.transforms.calendar import (
@@ -79,10 +82,12 @@ class TransformationDAG:
         cfg: Settings,
         status_queue: ILogger,
         rules: FinancialRules | None = None,
+        emitter: ObservabilityEmitter | None = None,
     ) -> None:
         self.cfg = cfg
         self.status_queue = status_queue
         self.rules = rules
+        self.emitter = emitter or get_global_emitter()
 
     def run(self, extracted: ExtractionResult) -> dict[str, pl.DataFrame]:
         """Execute parallel streaming transformation across dimensions, facts, and asset pipelines."""
@@ -192,16 +197,14 @@ class TransformationDAG:
         logger.debug(f"Physical Plan for Master Calendar: {compact_cal}")
 
         logger.debug("Executing Base Transformation DAG in Parallel...")
-        self.status_queue.put(
-            ObservabilityEvent.create(
-                event_code=EventCode.TRANSFORMATION_STAGE,
-                message="",
-                progress=0.2,
-                severity=DiagnosticSeverity.INFO,
-                outcome=EventOutcome.COMPLETED,
-                presentation_kind=PresentationKind.PROGRESS,
-                stage=EngineStage.TRANSFORMING,
-            )
+        self.emitter.emit_event(
+            event_code=EventCode.TRANSFORMATION_STAGE,
+            message="",
+            progress=0.2,
+            severity=DiagnosticSeverity.INFO,
+            outcome=EventOutcome.COMPLETED,
+            presentation_kind=PresentationKind.PROGRESS,
+            stage=EngineStage.TRANSFORMING,
         )
         dag_nodes = {
             "df_d_income_category": d_income_category_lazy,
@@ -239,6 +242,16 @@ class TransformationDAG:
                 f"Node '{name}': Output materialized -> ({df.height} rows, {df.width} cols)"
             )
             final_dfs[name] = df
+            self.emitter.emit_event(
+                event_code=EventCode.TRANSFORMATION_STAGE,
+                message=f"Silver node '{name}' materialized ({df.height} rows)",
+                presentation_kind=PresentationKind.INTERNAL,
+                severity=DiagnosticSeverity.DEBUG,
+                stage=EngineStage.TRANSFORMING,
+                entity_type="Table",
+                entity_id=name,
+                rows=df.height,
+            )
 
         logger.debug("Executing Calendar Generation DAG...")
         # Materialization Boundary: PUBLICATION_BOUNDARY
@@ -246,5 +259,15 @@ class TransformationDAG:
         calendar_result = d_calendar_lazy.collect(engine="streaming")
         logger.debug(f"  -> Generated {calendar_result.height} rows for Master Calendar.")
         final_dfs["df_d_calendar"] = calendar_result
+        self.emitter.emit_event(
+            event_code=EventCode.TRANSFORMATION_STAGE,
+            message=f"Master Calendar materialized ({calendar_result.height} rows)",
+            presentation_kind=PresentationKind.INTERNAL,
+            severity=DiagnosticSeverity.DEBUG,
+            stage=EngineStage.TRANSFORMING,
+            entity_type="Table",
+            entity_id="df_d_calendar",
+            rows=calendar_result.height,
+        )
 
         return final_dfs
