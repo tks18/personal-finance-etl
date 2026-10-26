@@ -20,6 +20,7 @@ from collections.abc import Callable
 from typing import Final
 
 from personal_finance_etl.contracts.observability import (
+    EventCode,
     ObservabilityEvent,
     ObservabilitySink,
     PresentationKind,
@@ -121,11 +122,13 @@ class DesktopNarrativeSink(ObservabilitySink):
         log_callback: Callable[[str, str], None] | None = None,
         progress_callback: Callable[[float], None] | None = None,
         error_callback: Callable[[str, str], None] | None = None,
+        suppress_per_entity_success: bool = True,
     ) -> None:
         self._status_consumer = status_consumer
         self._log_callback = log_callback
         self._progress_callback = progress_callback
         self._error_callback = error_callback
+        self._suppress_per_entity_success = suppress_per_entity_success
         self._emitted_count: int = 0
 
     @property
@@ -143,6 +146,21 @@ class DesktopNarrativeSink(ObservabilitySink):
         """
         # Drop internal diagnostic chatter from human-facing presentation
         if event.presentation_kind == PresentationKind.INTERNAL:
+            return
+
+        # Suppress repetitive per-entity success/cache ticks from cluttering the UI narrative
+        if (
+            self._suppress_per_entity_success
+            and event.event_code
+            in (
+                EventCode.MARKET_TICKER_SUCCESS,
+                EventCode.MARKET_TICKER_CACHE_HIT,
+                EventCode.QUANT_ISIN_PROCESSED,
+            )
+            and event.presentation_kind in (PresentationKind.STEP, PresentationKind.SUCCESS)
+        ):
+            if self._progress_callback is not None and event.progress is not None:
+                self._progress_callback(float(event.progress))
             return
 
         self._emitted_count += 1
