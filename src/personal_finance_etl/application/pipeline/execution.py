@@ -609,17 +609,19 @@ class PipelineExecutor:
         self.cfg.validate_config()
         validate_registry()
 
-        logger.info(f"Target Database: {self.cfg.TARGET_DB_BASE_PATH}")
-        logger.info(f"Source Extractor Folder: {self.cfg.STATEMENTS_FOLDER}")
+        logger.info("Target Database: %s", self.cfg.TARGET_DB_BASE_PATH)
+        logger.info("Source Extractor Folder: %s", self.cfg.STATEMENTS_FOLDER)
         self.emitter.emit_event(
-            event_code=EventCode.SYSTEM_CONFIG_FINGERPRINT,
+            event_code=EventCode.GENERIC_DIAGNOSTIC,
             message=f"Target Database: {self.cfg.TARGET_DB_BASE_PATH}",
-            presentation_kind=PresentationKind.STEP,
+            presentation_kind=PresentationKind.INTERNAL,
+            severity=DiagnosticSeverity.DEBUG,
         )
         self.emitter.emit_event(
-            event_code=EventCode.SYSTEM_CONFIG_FINGERPRINT,
+            event_code=EventCode.GENERIC_DIAGNOSTIC,
             message=f"Source Extractor Folder: {self.cfg.STATEMENTS_FOLDER}",
-            presentation_kind=PresentationKind.STEP,
+            presentation_kind=PresentationKind.INTERNAL,
+            severity=DiagnosticSeverity.DEBUG,
         )
 
         extracted_data, actionable_all, renames = self._run_discovery_phase(cp)
