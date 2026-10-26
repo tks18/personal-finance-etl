@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import TextIO, cast
 
 from personal_finance_etl.contracts.observability import (
+    ErrorDetailsDict,
     ObservabilityEvent,
     ObservabilitySink,
 )
@@ -66,10 +67,13 @@ class JsonlForensicSink(ObservabilitySink):
             The canonical structured event to append to the trace file.
         """
         payload = event.to_dict()
-        if "message" in payload and isinstance(payload["message"], str):
+        if payload.get("message"):
             payload["message"] = redact_text(payload["message"])
-        if "error" in payload and isinstance(payload["error"], dict):
-            payload["error"] = redact_dict(cast(dict[str, object], payload["error"]))
+        err_payload = payload.get("error")
+        if err_payload is not None:
+            payload["error"] = cast(
+                ErrorDetailsDict, redact_dict(cast(dict[str, object], err_payload))
+            )
 
         line = json.dumps(payload, separators=(",", ":"), ensure_ascii=False) + "\n"
         with self._lock:
