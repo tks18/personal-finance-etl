@@ -621,7 +621,6 @@ class ObservabilityEvent:
             msg=self.message,
             level=level,
             progress=self.progress,
-            data=None,
             stage=self.context.stage,
             failure_domain=failure_domain,
             timestamp=local_ts,
