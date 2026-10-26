@@ -23,6 +23,7 @@ Does not own
 from __future__ import annotations
 
 import concurrent.futures
+import logging
 from datetime import UTC, date, datetime
 
 import pandas as pd  # type: ignore[import-untyped]
@@ -45,7 +46,6 @@ from personal_finance_etl.contracts.observability import (
     PresentationKind,
 )
 from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
-from personal_finance_etl.infrastructure.logging import logger
 from personal_finance_etl.infrastructure.providers.market.common import (
     calculate_market_fetch_window,
     download_yfinance_history,
@@ -53,6 +53,8 @@ from personal_finance_etl.infrastructure.providers.market.common import (
 )
 
 __all__ = ["USMarketExtractor"]
+
+logger = logging.getLogger(__name__)
 
 
 class USMarketExtractor:
