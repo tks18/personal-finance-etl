@@ -24,6 +24,7 @@ Does not own
 from __future__ import annotations
 
 import concurrent.futures
+import logging
 from collections.abc import Mapping
 from datetime import UTC, date, datetime
 from typing import Any
@@ -48,7 +49,6 @@ from personal_finance_etl.contracts.observability import (
     PresentationKind,
 )
 from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
-from personal_finance_etl.infrastructure.logging import logger
 from personal_finance_etl.infrastructure.providers.market.common import (
     calculate_market_fetch_window,
     download_yfinance_history,
@@ -56,6 +56,8 @@ from personal_finance_etl.infrastructure.providers.market.common import (
 )
 
 __all__ = ["BenchmarkExtractor"]
+
+logger = logging.getLogger(__name__)
 
 
 class BenchmarkExtractor:
