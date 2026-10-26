@@ -15,6 +15,8 @@ Does not own
 
 from __future__ import annotations
 
+import logging
+
 import polars as pl
 
 from personal_finance_etl.application.ingestion.asset_strategies import (
@@ -63,9 +65,10 @@ from personal_finance_etl.domain.investments.transforms.common import (
     get_f_tf_investment_sale_data,
     transform_stg_investment_market_data,
 )
-from personal_finance_etl.infrastructure.logging.setup import logger
 
 __all__ = ["TransformationDAG"]
+
+logger = logging.getLogger(__name__)
 
 
 class TransformationDAG:
