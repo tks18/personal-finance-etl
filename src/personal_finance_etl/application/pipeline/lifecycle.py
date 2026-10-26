@@ -49,9 +49,12 @@ from personal_finance_etl.infrastructure.logging.setup import (
     stop_worker_listener,
 )
 from personal_finance_etl.infrastructure.observability import (
+    AsyncObservabilityListener,
     JsonlForensicSink,
     LogRetentionManager,
+    ObservabilityQueueSink,
     archive_run_trace,
+    create_forensic_pipeline,
 )
 from personal_finance_etl.infrastructure.warehouse.connection import DuckDBManager
 from personal_finance_etl.infrastructure.warehouse.meta import MetaLayer
@@ -86,6 +89,8 @@ class RunLifecycleCoordinator:
         self.run_id: str | None = None
         self.forensic_file_path: Path | None = None
         self.forensic_sink: JsonlForensicSink | None = None
+        self.async_listener: AsyncObservabilityListener | None = None
+        self.queue_sink: ObservabilityQueueSink | None = None
 
     def _dump_configuration_logs(self) -> None:
         """Dump formatted configuration and financial rules to debug logger and emitter."""
@@ -159,8 +164,11 @@ class RunLifecycleCoordinator:
         logs_dir = self.cfg.resolve_logs_dir()
         logs_dir.mkdir(parents=True, exist_ok=True)
         self.forensic_file_path = logs_dir / f"trace_{run_id}.jsonl"
-        self.forensic_sink = JsonlForensicSink(self.forensic_file_path)
-        self.emitter.register_sink(self.forensic_sink)
+        self.queue_sink, self.async_listener, self.forensic_sink = create_forensic_pipeline(
+            self.forensic_file_path, buffer_size=50
+        )
+        self.async_listener.start()
+        self.emitter.register_sink(self.queue_sink)
 
         self._dump_configuration_logs()
 
@@ -408,10 +416,13 @@ class RunLifecycleCoordinator:
             severity=DiagnosticSeverity.INFO,
         )
         stop_worker_listener()
-        if self.forensic_sink is not None:
-            self.forensic_sink.close()
-            self.emitter.unregister_sink(self.forensic_sink)
-            self.forensic_sink = None
+        if self.queue_sink is not None:
+            self.emitter.unregister_sink(self.queue_sink)
+            self.queue_sink = None
+        if self.async_listener is not None:
+            self.async_listener.stop(timeout=5.0)
+            self.async_listener = None
+        self.forensic_sink = None
 
         if (
             self.cp is not None
