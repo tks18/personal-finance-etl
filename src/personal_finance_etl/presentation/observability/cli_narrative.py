@@ -23,6 +23,7 @@ from rich.panel import Panel
 from rich.progress import Progress, TaskID
 
 from personal_finance_etl.contracts.observability import (
+    EventCode,
     ObservabilityEvent,
     ObservabilitySink,
     PresentationKind,
@@ -55,12 +56,14 @@ class RichNarrativeSink(ObservabilitySink):
         task_id: TaskID | None = None,
         show_timestamps: bool = True,
         time_format: str = "%H:%M:%S",
+        suppress_per_entity_success: bool = True,
     ) -> None:
         self._console: Console = console if console is not None else Console()
         self._progress: Progress | None = progress
         self._task_id: TaskID | None = task_id
         self._show_timestamps: bool = show_timestamps
         self._time_format: str = time_format
+        self._suppress_per_entity_success: bool = suppress_per_entity_success
         self._rendered_count: int = 0
 
     @property
@@ -86,6 +89,19 @@ class RichNarrativeSink(ObservabilitySink):
 
         # Pure progress bar updates without narrative prose should not print empty log lines
         if not event.message.strip():
+            return
+
+        # Suppress repetitive per-entity success/cache ticks from cluttering the human run narrative
+        if (
+            self._suppress_per_entity_success
+            and event.event_code
+            in (
+                EventCode.MARKET_TICKER_SUCCESS,
+                EventCode.MARKET_TICKER_CACHE_HIT,
+                EventCode.QUANT_ISIN_PROCESSED,
+            )
+            and event.presentation_kind in (PresentationKind.STEP, PresentationKind.SUCCESS)
+        ):
             return
 
         # Build formatted narrative line
