@@ -28,9 +28,16 @@ from personal_finance_etl.application.observability import get_global_emitter
 from personal_finance_etl.application.pipeline.orchestrator import ETLOrchestrator
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
-from personal_finance_etl.contracts.application import EngineStatusMessage
+from personal_finance_etl.contracts.lifecycle import FailureDomain
 from personal_finance_etl.contracts.logging import ILogger, LogLevel
-from personal_finance_etl.contracts.observability import ObservabilityEvent
+from personal_finance_etl.contracts.observability import (
+    DiagnosticSeverity,
+    ErrorDetails,
+    EventCode,
+    EventOutcome,
+    ObservabilityEvent,
+    PresentationKind,
+)
 from personal_finance_etl.infrastructure.observability import (
     EventQueue,
     ObservabilityQueueSink,
@@ -58,15 +65,19 @@ class QueueStream:
         self.buffer += msg
         if "\n" in self.buffer:
             lines = self.buffer.split("\n")
-            level = LogLevel.ERROR if self.is_error else LogLevel.INFO
+            event_code = EventCode.RAW_STDERR if self.is_error else EventCode.RAW_STDOUT
+            severity = DiagnosticSeverity.ERROR if self.is_error else DiagnosticSeverity.INFO
+            outcome = EventOutcome.FAILED if self.is_error else EventOutcome.COMPLETED
             for line in lines[:-1]:
                 stripped = line.strip()
                 if stripped:
                     self.queue.put(
-                        EngineStatusMessage(
-                            msg=stripped,
-                            progress=None,
-                            level=level,
+                        ObservabilityEvent.create(
+                            event_code=event_code,
+                            message=stripped,
+                            severity=severity,
+                            outcome=outcome,
+                            presentation_kind=PresentationKind.PROGRESS,
                         )
                     )
             self.buffer = lines[-1]
@@ -75,12 +86,16 @@ class QueueStream:
         """Flush remaining buffered text as raw output without semantic inference."""
         stripped = self.buffer.strip()
         if stripped:
-            level = LogLevel.ERROR if self.is_error else LogLevel.INFO
+            event_code = EventCode.RAW_STDERR if self.is_error else EventCode.RAW_STDOUT
+            severity = DiagnosticSeverity.ERROR if self.is_error else DiagnosticSeverity.INFO
+            outcome = EventOutcome.FAILED if self.is_error else EventOutcome.COMPLETED
             self.queue.put(
-                EngineStatusMessage(
-                    msg=stripped,
-                    progress=None,
-                    level=level,
+                ObservabilityEvent.create(
+                    event_code=event_code,
+                    message=stripped,
+                    severity=severity,
+                    outcome=outcome,
+                    presentation_kind=PresentationKind.PROGRESS,
                 )
             )
             self.buffer = ""
@@ -121,10 +136,20 @@ def process_wrapper(
 
     except Exception as e:
         status_queue.put(
-            EngineStatusMessage(
-                msg=f"Critical Pipeline Failure: {e}\n{traceback.format_exc()}",
+            ObservabilityEvent.create(
+                event_code=EventCode.RUN_FAILED,
+                message=f"Critical Pipeline Failure: {e}\n{traceback.format_exc()}",
+                severity=DiagnosticSeverity.ERROR,
+                outcome=EventOutcome.FAILED,
                 progress=0.0,
-                level=LogLevel.ERROR,
+                presentation_kind=PresentationKind.FAILURE,
+                error=ErrorDetails(
+                    exception_type=type(e).__name__,
+                    exception_message=str(e),
+                    traceback_summary=traceback.format_exc(),
+                    failure_domain=FailureDomain.WORKER,
+                    retryable=False,
+                ),
             )
         )
         time.sleep(0.5)
@@ -138,7 +163,7 @@ class WorkerPoolCoordinator:
 
     @staticmethod
     def spawn_process(
-        status_queue: multiprocessing.Queue[EngineStatusMessage | ObservabilityEvent],
+        status_queue: multiprocessing.Queue[ObservabilityEvent],
         config_path: str,
         rules_path: str,
     ) -> multiprocessing.Process:
@@ -152,53 +177,65 @@ class WorkerPoolCoordinator:
         return process
 
     @staticmethod
-    def _parse_queue_item(item: object) -> EngineStatusMessage | ObservabilityEvent:
-        """Parse raw tuple or status queue payload into structured status or canonical event."""
+    def _parse_queue_item(item: object) -> ObservabilityEvent:
+        """Parse status queue item into canonical ObservabilityEvent.
+
+        Parameters
+        ----------
+        item : object
+            Status queue item.
+
+        Returns
+        -------
+        ObservabilityEvent
+            Canonical observability event instance.
+        """
         if isinstance(item, ObservabilityEvent):
             return item
-        if not isinstance(item, tuple):
-            return cast(EngineStatusMessage, item)
-        t_item = cast("tuple[object, ...]", item)
-        t_msg = str(t_item[0]) if len(t_item) > 0 and t_item[0] else ""
-        t_prog = (
-            float(t_item[2]) if len(t_item) > 2 and isinstance(t_item[2], (int, float)) else None
-        )
-        return EngineStatusMessage(
-            msg=t_msg,
-            progress=t_prog,
-            level=LogLevel.INFO,
+        return ObservabilityEvent.create(
+            event_code=EventCode.GENERIC_DIAGNOSTIC,
+            message=str(item),
+            severity=DiagnosticSeverity.INFO,
+            outcome=EventOutcome.COMPLETED,
+            presentation_kind=PresentationKind.PROGRESS,
         )
 
     @staticmethod
     def _emit_exit_status(
         process: multiprocessing.Process,
-        on_status: Callable[[EngineStatusMessage | ObservabilityEvent], None],
+        on_status: Callable[[ObservabilityEvent], None],
     ) -> None:
         """Emit clean completion or abnormal exit status based on worker exit code."""
         if process.exitcode is None:
             return
         if process.exitcode != 0:
             on_status(
-                EngineStatusMessage(
-                    msg="Process exited abnormally.",
+                ObservabilityEvent.create(
+                    event_code=EventCode.RUN_FAILED,
+                    message="Process exited abnormally.",
+                    severity=DiagnosticSeverity.ERROR,
+                    outcome=EventOutcome.FAILED,
                     progress=0.0,
-                    level=LogLevel.ERROR,
+                    presentation_kind=PresentationKind.FAILURE,
                 )
             )
         else:
             on_status(
-                EngineStatusMessage(
-                    msg="Process completed cleanly.",
+                ObservabilityEvent.create(
+                    event_code=EventCode.RUN_COMPLETED,
+                    message="Process completed cleanly.",
+                    severity=DiagnosticSeverity.INFO,
+                    outcome=EventOutcome.COMPLETED,
                     progress=1.0,
-                    level=LogLevel.SUCCESS,
+                    presentation_kind=PresentationKind.PROGRESS,
                 )
             )
 
     @staticmethod
     def monitor_queue(
         process: multiprocessing.Process,
-        status_queue: multiprocessing.Queue[EngineStatusMessage | ObservabilityEvent],
-        on_status: Callable[[EngineStatusMessage | ObservabilityEvent], None],
+        status_queue: multiprocessing.Queue[ObservabilityEvent],
+        on_status: Callable[[ObservabilityEvent], None],
     ) -> threading.Thread:
         """Start a daemon thread monitoring status_queue until the child process terminates."""
 
