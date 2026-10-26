@@ -138,6 +138,7 @@ class ETLOrchestrator:
                 rows=len(self.dfs),
                 progress=1.0,
                 stage=EngineStage.COMPLETED,
+                commit_state=lifecycle.commit_state,
             )
         except Exception as e:
             lifecycle.handle_failure(e)
