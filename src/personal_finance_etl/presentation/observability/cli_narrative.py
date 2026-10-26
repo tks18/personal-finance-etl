@@ -15,7 +15,6 @@ Does not own
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Final
 
 from rich.console import Console
@@ -23,8 +22,6 @@ from rich.markup import escape
 from rich.panel import Panel
 from rich.progress import Progress, TaskID
 
-from personal_finance_etl.contracts.application import EngineStatusMessage
-from personal_finance_etl.contracts.logging import LogLevel
 from personal_finance_etl.contracts.observability import (
     ObservabilityEvent,
     ObservabilitySink,
@@ -41,14 +38,6 @@ _KIND_PREFIX_MAP: Final[dict[PresentationKind, str]] = {
     PresentationKind.WARNING: "[bold yellow]![/bold yellow]",
     PresentationKind.FAILURE: "[bold red]✗ FAILURE:[/bold red]",
     PresentationKind.RECOVERY: "[bold magenta]♻ RECOVERY:[/bold magenta]",
-}
-
-_STATUS_PREFIX_MAP: Final[dict[LogLevel, str]] = {
-    LogLevel.SUCCESS: "[bold green]✓[/bold green]",
-    LogLevel.ERROR: "[bold red]✗ ERROR:[/bold red]",
-    LogLevel.WARNING: "[bold yellow]![/bold yellow]",
-    LogLevel.STEP: "[bold cyan]>>[/bold cyan]",
-    LogLevel.INFO: "[dim]•[/dim]",
 }
 
 
@@ -95,6 +84,10 @@ class RichNarrativeSink(ObservabilitySink):
         if event.progress is not None and self._progress is not None and self._task_id is not None:
             self._progress.update(self._task_id, completed=event.progress * 100.0)
 
+        # Pure progress bar updates without narrative prose should not print empty log lines
+        if not event.message.strip():
+            return
+
         # Build formatted narrative line
         prefix = _KIND_PREFIX_MAP.get(event.presentation_kind, "[dim]•[/dim]")
         safe_msg = escape(event.message)
@@ -140,36 +133,6 @@ class RichNarrativeSink(ObservabilitySink):
         # On failure: display actionable summary panel without dumping stack traces
         if event.presentation_kind == PresentationKind.FAILURE:
             self._render_failure_panel(event)
-
-    def render_status_message(self, status: EngineStatusMessage) -> None:
-        """Render a process status message to the console.
-
-        Parameters
-        ----------
-        status : EngineStatusMessage
-            Status message payload to render.
-        """
-        if not status.msg:
-            return
-
-        if status.progress is not None and self._progress is not None and self._task_id is not None:
-            self._progress.update(self._task_id, completed=status.progress * 100.0)
-
-        prefix = _STATUS_PREFIX_MAP.get(status.level, "[dim]•[/dim]")
-        safe_msg = escape(status.msg)
-
-        if self._show_timestamps:
-            ts = status.timestamp if status.timestamp else None
-            if ts is not None:
-                ts_str = ts.strftime(self._time_format)
-            else:
-                ts_str = datetime.now().strftime(self._time_format)
-            line = f"[dim][{ts_str}][/dim] {prefix} {safe_msg}"
-        else:
-            line = f"{prefix} {safe_msg}"
-
-        self._print_line(line)
-        self._rendered_count += 1
 
     def flush(self) -> None:
         """Flush output to the underlying console."""
