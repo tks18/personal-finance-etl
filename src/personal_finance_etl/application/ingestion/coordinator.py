@@ -17,6 +17,7 @@ Does not own
 from __future__ import annotations
 
 import io
+import logging
 import os
 import time
 from collections.abc import Callable
@@ -38,7 +39,6 @@ from personal_finance_etl.contracts.observability import (
 )
 from personal_finance_etl.domain.household.transforms.common import get_column_mapping
 from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
-from personal_finance_etl.infrastructure.logging import logger
 from personal_finance_etl.infrastructure.providers.files.csv import (
     extract_benchmark_master_raw,
     extract_currency_mapping_raw,
@@ -59,6 +59,8 @@ from personal_finance_etl.infrastructure.providers.files.sqlite import (
 )
 
 __all__ = ["DataExtractor"]
+
+logger = logging.getLogger(__name__)
 
 
 class DataExtractor:
