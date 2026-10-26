@@ -7,8 +7,11 @@ Owns
 - PresentationKind: Presentation intent for CLI and Desktop UI narratives.
 - EventOutcome: Standard transition states (STARTED, COMPLETED, FAILED, SKIPPED).
 - ErrorDetails: Immutable structured exception telemetry container.
+- ErrorDetailsDict: Strongly-typed serialized dictionary contract for exception telemetry.
 - ObservabilityContext: Bounded, scalar context envelope propagated across spans.
+- ObservabilityContextDict: Strongly-typed serialized dictionary contract for context envelopes.
 - ObservabilityEvent: Immutable canonical event emitted once and projected to sinks.
+- ObservabilityEventDict: Strongly-typed serialized dictionary contract for canonical events.
 
 Does not own
 -------------
@@ -20,23 +23,27 @@ Does not own
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Protocol, cast
+from typing import NotRequired, Protocol, TypedDict, cast
 
 from personal_finance_etl.contracts.application import EngineStage, EngineStatusMessage
-from personal_finance_etl.contracts.lifecycle import FailureDomain
+from personal_finance_etl.contracts.lifecycle import CommitState, FailureDomain
 from personal_finance_etl.contracts.logging import LogLevel
 
 __all__ = [
     "DiagnosticSeverity",
     "ErrorDetails",
+    "ErrorDetailsDict",
     "EventCode",
     "EventOutcome",
     "NullObservabilitySink",
     "ObservabilityContext",
+    "ObservabilityContextDict",
     "ObservabilityEvent",
+    "ObservabilityEventDict",
     "ObservabilitySink",
     "PresentationKind",
 ]
@@ -51,14 +58,19 @@ class EventCode(StrEnum):
     RUN_FAILED = "RUN_FAILED"
     RUN_ABORTED = "RUN_ABORTED"
     RUN_RECOVERY = "RUN_RECOVERY"
+    RECOVERY_SNAPSHOT = "RECOVERY_SNAPSHOT"
+    RECOVERY_RESTORE = "RECOVERY_RESTORE"
 
-    # Discovery & Ingestion
+    # Discovery & Ingestion / Providers
     DISCOVERY_START = "DISCOVERY_START"
     DISCOVERY_COMPLETED = "DISCOVERY_COMPLETED"
     EXTRACTION_START = "EXTRACTION_START"
     EXTRACTION_BATCH = "EXTRACTION_BATCH"
     EXTRACTION_COMPLETED = "EXTRACTION_COMPLETED"
     SCHEMA_VALIDATION = "SCHEMA_VALIDATION"
+    PROVIDER_DISCOVERY = "PROVIDER_DISCOVERY"
+    PROVIDER_BATCH_INGEST = "PROVIDER_BATCH_INGEST"
+    PROVIDER_FILE_ERROR = "PROVIDER_FILE_ERROR"
 
     # Market Data Synchronization
     MARKET_FETCH_START = "MARKET_FETCH_START"
@@ -75,6 +87,7 @@ class EventCode(StrEnum):
     GOLD_REPLACE = "GOLD_REPLACE"
     META_SNAPSHOT = "META_SNAPSHOT"
     DATABASE_VACUUM = "DATABASE_VACUUM"
+    DATABASE_CHECKPOINT = "DATABASE_CHECKPOINT"
     DATABASE_COMMIT = "DATABASE_COMMIT"
     DATABASE_ROLLBACK = "DATABASE_ROLLBACK"
 
@@ -87,13 +100,19 @@ class EventCode(StrEnum):
     QUANT_LOT_MAPPED = "QUANT_LOT_MAPPED"
     TAX_ENGINE_START = "TAX_ENGINE_START"
     TAX_ENGINE_COMPLETED = "TAX_ENGINE_COMPLETED"
+    WEALTH_ENGINE_START = "WEALTH_ENGINE_START"
+    WEALTH_ENGINE_COMPLETED = "WEALTH_ENGINE_COMPLETED"
+    FIRE_ENGINE_START = "FIRE_ENGINE_START"
+    FIRE_ENGINE_COMPLETED = "FIRE_ENGINE_COMPLETED"
     PRESENTATION_DAG_START = "PRESENTATION_DAG_START"
     PRESENTATION_DAG_COMPLETED = "PRESENTATION_DAG_COMPLETED"
 
-    # System, Diagnostics & Heartbeats
+    # System, Diagnostics & Raw Stream Telemetry
     SYSTEM_CONFIG_FINGERPRINT = "SYSTEM_CONFIG_FINGERPRINT"
     SYSTEM_MEMORY_SAMPLE = "SYSTEM_MEMORY_SAMPLE"
     SYSTEM_TEARDOWN = "SYSTEM_TEARDOWN"
+    RAW_STDOUT = "RAW_STDOUT"
+    RAW_STDERR = "RAW_STDERR"
     GENERIC_DIAGNOSTIC = "GENERIC_DIAGNOSTIC"
 
 
@@ -158,6 +177,16 @@ class NullObservabilitySink:
         """No-op flush."""
 
 
+class ErrorDetailsDict(TypedDict):
+    """JSON-serializable representation of ErrorDetails."""
+
+    exception_type: str
+    exception_message: str
+    failure_domain: str
+    traceback_summary: str
+    retryable: bool
+
+
 @dataclass(frozen=True)
 class ErrorDetails:
     """Immutable structured exception telemetry container.
@@ -182,7 +211,7 @@ class ErrorDetails:
     traceback_summary: str
     retryable: bool = False
 
-    def to_dict(self) -> dict[str, object]:
+    def to_dict(self) -> ErrorDetailsDict:
         """Convert error details into a JSON-serializable dictionary."""
         return {
             "exception_type": self.exception_type,
@@ -193,8 +222,19 @@ class ErrorDetails:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, object]) -> ErrorDetails:
-        """Construct ErrorDetails from a serialized dictionary."""
+    def from_dict(cls, data: Mapping[str, object]) -> ErrorDetails:
+        """Construct ErrorDetails from a serialized dictionary.
+
+        Parameters
+        ----------
+        data : Mapping[str, object]
+            Serialized key-value mapping representing error details.
+
+        Returns
+        -------
+        ErrorDetails
+            Reconstructed immutable error telemetry instance.
+        """
         domain_str = str(data.get("failure_domain", FailureDomain.TRANSFORMATION))
         try:
             domain = FailureDomain(domain_str)
@@ -208,6 +248,29 @@ class ErrorDetails:
             traceback_summary=str(data.get("traceback_summary", "")),
             retryable=bool(data.get("retryable", False)),
         )
+
+
+class ObservabilityContextDict(TypedDict):
+    """JSON-serializable representation of ObservabilityContext."""
+
+    run_id: str
+    stage: str
+    component: str
+    operation: str
+    operation_id: str
+    parent_operation_id: NotRequired[str | None]
+    entity_type: NotRequired[str | None]
+    entity_id: NotRequired[str | None]
+    duration_ms: NotRequired[float | None]
+    rows: NotRequired[int | None]
+    attempt: NotRequired[int | None]
+    provider: NotRequired[str | None]
+    cache_hit: NotRequired[bool | None]
+    worker_id: NotRequired[str | None]
+    batch_id: NotRequired[str | None]
+    commit_state: NotRequired[str | None]
+    settings_fingerprint: NotRequired[str | None]
+    rules_fingerprint: NotRequired[str | None]
 
 
 @dataclass(frozen=True)
@@ -246,6 +309,14 @@ class ObservabilityContext:
         Whether the operation was satisfied from local cache.
     worker_id : str | None, default=None
         Process name or thread identifier executing the work.
+    batch_id : str | None, default=None
+        Unique batch identifier for bulk processing and ISIN work distribution.
+    commit_state : CommitState | None, default=None
+        Coordinated transaction commit state at the time of emission.
+    settings_fingerprint : str | None, default=None
+        Cryptographic SHA-256 fingerprint digest of active Settings configuration.
+    rules_fingerprint : str | None, default=None
+        Cryptographic SHA-256 fingerprint digest of active FinancialRules policies.
     """
 
     run_id: str = ""
@@ -262,8 +333,12 @@ class ObservabilityContext:
     provider: str | None = None
     cache_hit: bool | None = None
     worker_id: str | None = None
+    batch_id: str | None = None
+    commit_state: CommitState | None = None
+    settings_fingerprint: str | None = None
+    rules_fingerprint: str | None = None
 
-    def with_updates(
+    def with_updates(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
         stage: EngineStage | None = None,
         component: str | None = None,
@@ -278,6 +353,10 @@ class ObservabilityContext:
         provider: str | None = None,
         cache_hit: bool | None = None,
         worker_id: str | None = None,
+        batch_id: str | None = None,
+        commit_state: CommitState | None = None,
+        settings_fingerprint: str | None = None,
+        rules_fingerprint: str | None = None,
     ) -> ObservabilityContext:
         """Create a new context instance with selected scalar updates."""
         return ObservabilityContext(
@@ -297,11 +376,21 @@ class ObservabilityContext:
             provider=provider if provider is not None else self.provider,
             cache_hit=cache_hit if cache_hit is not None else self.cache_hit,
             worker_id=worker_id if worker_id is not None else self.worker_id,
+            batch_id=batch_id if batch_id is not None else self.batch_id,
+            commit_state=commit_state if commit_state is not None else self.commit_state,
+            settings_fingerprint=(
+                settings_fingerprint
+                if settings_fingerprint is not None
+                else self.settings_fingerprint
+            ),
+            rules_fingerprint=(
+                rules_fingerprint if rules_fingerprint is not None else self.rules_fingerprint
+            ),
         )
 
-    def to_dict(self) -> dict[str, object]:
+    def to_dict(self) -> ObservabilityContextDict:
         """Convert context attributes into a JSON-serializable dictionary."""
-        out: dict[str, object] = {
+        out: ObservabilityContextDict = {
             "run_id": self.run_id,
             "stage": str(self.stage),
             "component": self.component,
@@ -326,16 +415,43 @@ class ObservabilityContext:
             out["cache_hit"] = self.cache_hit
         if self.worker_id is not None:
             out["worker_id"] = self.worker_id
+        if self.batch_id is not None:
+            out["batch_id"] = self.batch_id
+        if self.commit_state is not None:
+            out["commit_state"] = str(self.commit_state)
+        if self.settings_fingerprint is not None:
+            out["settings_fingerprint"] = self.settings_fingerprint
+        if self.rules_fingerprint is not None:
+            out["rules_fingerprint"] = self.rules_fingerprint
         return out
 
     @classmethod
-    def from_dict(cls, data: dict[str, object]) -> ObservabilityContext:
-        """Construct ObservabilityContext from a serialized dictionary."""
+    def from_dict(cls, data: Mapping[str, object]) -> ObservabilityContext:
+        """Construct ObservabilityContext from a serialized dictionary.
+
+        Parameters
+        ----------
+        data : Mapping[str, object]
+            Serialized key-value mapping representing context fields.
+
+        Returns
+        -------
+        ObservabilityContext
+            Reconstructed immutable context envelope.
+        """
         stage_str = str(data.get("stage", EngineStage.INITIALIZING))
         try:
             stage = EngineStage(stage_str)
         except ValueError:
             stage = EngineStage.INITIALIZING
+
+        commit_state_val = data.get("commit_state")
+        commit_state: CommitState | None = None
+        if commit_state_val is not None:
+            try:
+                commit_state = CommitState(str(commit_state_val))
+            except ValueError:
+                commit_state = None
 
         duration_val = data.get("duration_ms")
         duration_ms = float(duration_val) if isinstance(duration_val, (int, float)) else None
@@ -366,7 +482,29 @@ class ObservabilityContext:
             provider=str(data["provider"]) if data.get("provider") else None,
             cache_hit=cache_hit,
             worker_id=str(data["worker_id"]) if data.get("worker_id") else None,
+            batch_id=str(data["batch_id"]) if data.get("batch_id") else None,
+            commit_state=commit_state,
+            settings_fingerprint=(
+                str(data["settings_fingerprint"]) if data.get("settings_fingerprint") else None
+            ),
+            rules_fingerprint=(
+                str(data["rules_fingerprint"]) if data.get("rules_fingerprint") else None
+            ),
         )
+
+
+class ObservabilityEventDict(TypedDict):
+    """JSON-serializable representation of ObservabilityEvent."""
+
+    timestamp: str
+    event_code: str
+    severity: str
+    presentation_kind: str
+    outcome: str
+    context: ObservabilityContextDict
+    message: str
+    error: NotRequired[ErrorDetailsDict]
+    progress: NotRequired[float | None]
 
 
 @dataclass(frozen=True)
@@ -434,9 +572,9 @@ class ObservabilityEvent:
             progress=progress,
         )
 
-    def to_dict(self) -> dict[str, object]:
+    def to_dict(self) -> ObservabilityEventDict:
         """Serialize event into a JSON-serializable dictionary for JSONL sink."""
-        out: dict[str, object] = {
+        out: ObservabilityEventDict = {
             "timestamp": self.timestamp.isoformat(),
             "event_code": str(self.event_code),
             "severity": str(self.severity),
@@ -490,8 +628,19 @@ class ObservabilityEvent:
         )
 
     @classmethod
-    def from_dict(cls, data: dict[str, object]) -> ObservabilityEvent:
-        """Construct an ObservabilityEvent from a serialized dictionary."""
+    def from_dict(cls, data: Mapping[str, object]) -> ObservabilityEvent:
+        """Construct an ObservabilityEvent from a serialized dictionary.
+
+        Parameters
+        ----------
+        data : Mapping[str, object]
+            Serialized key-value mapping representing the event.
+
+        Returns
+        -------
+        ObservabilityEvent
+            Reconstructed immutable canonical observability event.
+        """
         ts_str = str(data.get("timestamp", ""))
         try:
             ts = datetime.fromisoformat(ts_str)
@@ -500,15 +649,15 @@ class ObservabilityEvent:
 
         raw_ctx = data.get("context")
         ctx: ObservabilityContext
-        if isinstance(raw_ctx, dict):
-            ctx = ObservabilityContext.from_dict(cast("dict[str, object]", raw_ctx))
+        if isinstance(raw_ctx, Mapping):
+            ctx = ObservabilityContext.from_dict(cast("Mapping[str, object]", raw_ctx))
         else:
             ctx = ObservabilityContext(run_id="-")
 
         raw_err = data.get("error")
         err: ErrorDetails | None = None
-        if isinstance(raw_err, dict):
-            err = ErrorDetails.from_dict(cast("dict[str, object]", raw_err))
+        if isinstance(raw_err, Mapping):
+            err = ErrorDetails.from_dict(cast("Mapping[str, object]", raw_err))
 
         prog_val = data.get("progress")
         prog = float(prog_val) if isinstance(prog_val, (int, float)) else None
