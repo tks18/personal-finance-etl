@@ -27,9 +27,12 @@ from personal_finance_etl.application.pipeline import (
 from personal_finance_etl.bootstrap.container import ServiceContainer
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
-from personal_finance_etl.contracts.application import EngineStatusMessage
 from personal_finance_etl.contracts.lifecycle import CommitState
-from personal_finance_etl.contracts.logging import LogLevel
+from personal_finance_etl.contracts.observability import (
+    DiagnosticSeverity,
+    EventCode,
+    ObservabilityEvent,
+)
 from personal_finance_etl.contracts.recovery import SnapshotOutcome
 from personal_finance_etl.infrastructure.warehouse.connection import DuckDBManager
 
@@ -204,11 +207,11 @@ def test_run_lifecycle_split_commit_recovery_marker(tmp_path: Path) -> None:
 
 
 def test_queue_stream_and_log_level_inference() -> None:
-    """Verify QueueStream forwards stdout and stderr without string-based severity guessing."""
+    """Verify QueueStream forwards stdout and stderr as canonical ObservabilityEvents."""
 
     class MockQueue:
         def __init__(self) -> None:
-            self.messages: list[EngineStatusMessage] = []
+            self.messages: list[ObservabilityEvent] = []
 
         def put(self, status: Any, block: bool = True, timeout: float | None = None) -> None:
             self.messages.append(status)
@@ -222,11 +225,13 @@ def test_queue_stream_and_log_level_inference() -> None:
     stdout_stream.write("Complete: 100% processed\n")
     stdout_stream.flush()
 
-    assert all(m.level == LogLevel.INFO for m in mock_q.messages)
+    assert all(m.severity == DiagnosticSeverity.INFO for m in mock_q.messages)
+    assert all(m.event_code == EventCode.RAW_STDOUT for m in mock_q.messages)
     assert len(mock_q.messages) == 4
 
     stderr_stream = QueueStream(mock_q, is_error=True)
     stderr_stream.write("Critical worker failure encountered\n")
     stderr_stream.flush()
 
-    assert mock_q.messages[-1].level == LogLevel.ERROR
+    assert mock_q.messages[-1].severity == DiagnosticSeverity.ERROR
+    assert mock_q.messages[-1].event_code == EventCode.RAW_STDERR
