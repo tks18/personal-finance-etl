@@ -408,6 +408,7 @@ class RunLifecycleCoordinator:
             severity=DiagnosticSeverity.ERROR,
             error=err_details,
             stage=EngineStage.FAILED,
+            commit_state=self.commit_state,
         )
 
     def teardown(self) -> None:
