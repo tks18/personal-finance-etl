@@ -23,9 +23,8 @@ from unittest.mock import MagicMock, patch
 
 from rich.console import Console
 
-from personal_finance_etl.contracts.application import EngineStage, EngineStatusMessage
+from personal_finance_etl.contracts.application import EngineStage
 from personal_finance_etl.contracts.lifecycle import FailureDomain
-from personal_finance_etl.contracts.logging import LogLevel
 from personal_finance_etl.contracts.observability import (
     ErrorDetails,
     EventCode,
@@ -177,24 +176,6 @@ def test_rich_narrative_failure_renders_actionable_panel_without_stacktrace() ->
     assert "Transient failure eligible for automatic retry" in rendered
     # Must NOT expose raw traceback frame to normal users
     assert 'File "raw_store.py", line 42' not in rendered
-
-
-def test_rich_narrative_legacy_status_compatibility() -> None:
-    """Ensure backward-compatible rendering for legacy EngineStatusMessage."""
-    output = io.StringIO()
-    console = Console(file=output, color_system=None, width=120)
-    sink = RichNarrativeSink(console=console, show_timestamps=False)
-
-    legacy_msg = EngineStatusMessage(
-        msg="Initializing Personal Finance ETL...",
-        level=LogLevel.STEP,
-        progress=0.1,
-    )
-    sink.render_status_message(legacy_msg)
-
-    rendered = output.getvalue()
-    assert ">> Initializing Personal Finance ETL..." in rendered
-    assert sink.rendered_count == 1
 
 
 def test_desktop_sink_drops_internal_events() -> None:
