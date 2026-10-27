@@ -25,13 +25,15 @@ import zipfile
 import duckdb
 from filelock import FileLock, Timeout
 
-from personal_finance_etl.application.observability.diagnostics import get_observability_diagnostics
 from personal_finance_etl.contracts.recovery import (
     ActiveDatabaseState,
     RestoreOutcome,
     RestoreResult,
 )
 from personal_finance_etl.infrastructure.filesystem.paths import get_temp_dir
+from personal_finance_etl.infrastructure.observability.diagnostics import (
+    get_observability_diagnostics,
+)
 
 diagnostics = get_observability_diagnostics("personal_finance_etl.recovery.restore")
 
