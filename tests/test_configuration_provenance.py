@@ -17,7 +17,6 @@ Does not own
 
 from __future__ import annotations
 
-import logging
 from pathlib import Path
 from typing import cast
 
@@ -60,7 +59,7 @@ class _CollectingSink(ObservabilitySink):
 
 
 class _DummyStatusQueue:
-    """Test dummy status queue implementing ILogger Protocol."""
+    """Test dummy queue implementing the canonical EventQueue protocol."""
 
     def put(
         self,
@@ -130,9 +129,7 @@ def test_fingerprint_rules_determinism_and_defaults() -> None:
     assert res1["default_currency_id"] == "INR_INR"
 
 
-def test_lifecycle_emits_system_config_fingerprint_with_real_values(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture
-) -> None:
+def test_lifecycle_emits_system_config_fingerprint_with_real_values(tmp_path: Path) -> None:
     """Verify RunLifecycleCoordinator emits SYSTEM_CONFIG_FINGERPRINT with real context."""
     db_base = tmp_path / "data"
     db_base.mkdir(parents=True, exist_ok=True)
@@ -164,15 +161,9 @@ def test_lifecycle_emits_system_config_fingerprint_with_real_values(
         emitter=emitter,
     )
 
-    with caplog.at_level(logging.DEBUG):
-        cp, run_id, _ = coordinator.initialize()
+    cp, run_id, _ = coordinator.initialize()
 
     try:
-        # Check that unrestricted dumps are eradicated from logs
-        captured_text = caplog.text
-        assert "=== ETL CONFIGURATION DUMP ===" not in captured_text
-        assert "=== FINANCIAL RULES DUMP ===" not in captured_text
-
         # Verify SYSTEM_CONFIG_FINGERPRINT event was emitted
         fp_events = [
             e for e in collecting_sink.events if e.event_code == EventCode.SYSTEM_CONFIG_FINGERPRINT

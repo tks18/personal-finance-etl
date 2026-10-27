@@ -8,8 +8,8 @@ Owns
 - Verification that generated trace files are queryable natively via Polars (pl.read_ndjson).
 - Verification of Control Plane trace archival using the generated JSONL file.
 - Static codebase assertions confirming complete elimination of legacy bracket prefixes.
-- Verification that dead logging helpers and global logger exports are eradicated.
-- Static codebase assertions confirming absence of global logger imports.
+- Verification that the legacy logging packages are physically absent.
+- Static assertions confirming zero stdlib logging imports or logger call sites.
 
 Does not own
 -------------
@@ -110,6 +110,22 @@ def test_worker_pool_coordinator_queue_item_parsing() -> None:
     assert isinstance(event2, ObservabilityEvent)
     assert event2.message == "Raw status string"
     assert event2.severity == DiagnosticSeverity.INFO
+
+
+def test_worker_exit_fallback_never_duplicates_a_terminal_event() -> None:
+    """Verify process-exit fallback is silent after a canonical terminal event."""
+    observed: list[ObservabilityEvent] = []
+
+    class _FinishedProcess:
+        exitcode = 0
+
+    WorkerPoolCoordinator._emit_exit_status(  # pyright: ignore[reportPrivateUsage]
+        _FinishedProcess(),  # type: ignore[arg-type]
+        observed.append,
+        terminal_seen=True,
+    )
+
+    assert observed == []
 
 
 def test_lifecycle_coordinator_live_jsonl_production_and_archival(tmp_path: Path) -> None:
@@ -220,35 +236,51 @@ def test_static_absence_of_legacy_bracket_prefixes() -> None:
                     )
 
 
-def test_logging_infrastructure_demolished_exports() -> None:
-    """Verify dead logging helpers and global logger export are permanently eradicated."""
-    import personal_finance_etl.infrastructure.logging as logging_pkg
-    import personal_finance_etl.infrastructure.logging.setup as logging_setup
-
-    demolished_symbols = [
-        "logger",
-        "add_file_handler",
-        "remove_file_handlers",
-        "add_queue_handler",
-        "QueueHandler",
-        "setup_logger",
-    ]
-    for sym in demolished_symbols:
-        assert not hasattr(logging_pkg, sym), f"{sym} still exported from infrastructure.logging"
-        assert not hasattr(logging_setup, sym), f"{sym} still present in infrastructure.logging.setup"
+def test_logging_infrastructure_physically_absent() -> None:
+    """Verify both legacy logging packages have been deleted from production source."""
+    assert not Path("src/personal_finance_etl/contracts/logging.py").exists()
+    assert not Path("src/personal_finance_etl/infrastructure/logging").exists()
 
 
-def test_static_absence_of_global_logger_imports() -> None:
-    """Verify zero production files import global logger from infrastructure.logging."""
+def test_static_absence_of_all_legacy_logging() -> None:
+    """Verify production has no stdlib logging import, logger symbol, or logging calls."""
     src_dir = Path("src/personal_finance_etl")
     for py_file in src_dir.rglob("*.py"):
         content = py_file.read_text(encoding="utf-8")
         parsed = ast.parse(content, filename=str(py_file))
         for node in ast.walk(parsed):
+            if isinstance(node, ast.Import):
+                assert all(not alias.name.startswith("logging") for alias in node.names), (
+                    f"File {py_file} imports Python logging"
+                )
             if isinstance(node, ast.ImportFrom):
-                if node.module and "personal_finance_etl.infrastructure.logging" in node.module:
-                    for alias in node.names:
-                        assert alias.name != "logger", (
-                            f"File {py_file} illegally imports global 'logger' from {node.module}"
-                        )
+                assert not (node.module or "").startswith("logging"), (
+                    f"File {py_file} imports Python logging"
+                )
+                assert "personal_finance_etl.infrastructure.logging" not in (node.module or "")
+                assert "personal_finance_etl.contracts.logging" not in (node.module or "")
+            if isinstance(node, ast.Name):
+                assert node.id != "logger", f"File {py_file} retains legacy logger symbol"
+            if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name):
+                assert node.value.id != "logging", f"File {py_file} calls Python logging"
+
+
+def test_status_queues_are_sinks_not_parallel_event_producers() -> None:
+    """Ensure application code never bypasses the emitter with direct status writes."""
+    src_dir = Path("src/personal_finance_etl")
+    violations: list[str] = []
+    for py_file in src_dir.rglob("*.py"):
+        parsed = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(py_file))
+        for node in ast.walk(parsed):
+            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+                continue
+            owner = node.func.value
+            if (
+                node.func.attr == "put"
+                and isinstance(owner, ast.Attribute)
+                and owner.attr == "status_queue"
+            ):
+                violations.append(f"{py_file}:{node.lineno}")
+
+    assert not violations, "Direct status-queue event production found: " + ", ".join(violations)
 

@@ -103,7 +103,6 @@ def test_package_structure_exists():
         "infrastructure/providers/market",
         "infrastructure/recovery",
         "infrastructure/preferences",
-        "infrastructure/logging",
         "infrastructure/filesystem",
         "presentation",
         "presentation/cli",

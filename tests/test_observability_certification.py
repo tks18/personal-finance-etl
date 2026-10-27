@@ -77,16 +77,25 @@ def test_zero_hot_loop_logging_in_domain_numerical_algorithms() -> None:
     numerical_files = [
         domain_dir / "investments" / "lots" / "fifo.py",
         domain_dir / "investments" / "lots" / "ordering.py",
-        domain_dir / "investments" / "performance" / "irr.py",
-        domain_dir / "fire" / "monte_carlo.py",
+        domain_dir / "investments" / "performance" / "xirr.py",
+        domain_dir / "fire" / "simulation" / "kernel.py",
     ]
 
-    prohibited_calls = {"emit_event", "emit", "render_status_message", "render_legacy_status"}
+    prohibited_calls = {
+        "emit_event",
+        "emit",
+        "debug",
+        "info",
+        "warning",
+        "error",
+        "critical",
+        "render_status_message",
+        "render_legacy_status",
+    }
     violations: list[str] = []
 
     for py_file in numerical_files:
-        if not py_file.exists():
-            continue
+        assert py_file.exists(), f"Certification target moved or disappeared: {py_file}"
         tree = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(py_file))
         for node in ast.walk(tree):
             if isinstance(node, (ast.For, ast.While)):

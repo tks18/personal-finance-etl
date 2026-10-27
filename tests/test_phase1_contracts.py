@@ -28,7 +28,7 @@ from personal_finance_etl.contracts.lifecycle import (
     FailureDomain,
     classify_failure_domain,
 )
-from personal_finance_etl.contracts.logging import LogLevel
+from personal_finance_etl.contracts.observability import DiagnosticSeverity
 from personal_finance_etl.contracts.recovery import (
     RestoreOutcome,
     RestoreResult,
@@ -152,7 +152,7 @@ def test_recovery_results():
 
 def test_application_execution_result():
     assert EngineStage.TRANSFORMING.value == "TRANSFORMING"
-    assert LogLevel.INFO.value == "info"
+    assert DiagnosticSeverity.INFO.value == "INFO"
     res = EngineExecutionResult(
         is_success=True,
         run_id="run_123",

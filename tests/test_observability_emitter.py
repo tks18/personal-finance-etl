@@ -66,8 +66,11 @@ def test_emitter_sink_registration_and_fanout() -> None:
         context=ObservabilityContext(run_id="run-100"),
     )
     # emit must not raise even if bad_sink raises
-    emitter.emit(event)
+    emitted = emitter.emit(event)
 
+    assert emitted.sequence == 1
+    assert sink1.events[0].sequence == 1
+    assert sink1.events[0].event_id == event.event_id
     assert len(sink1.events) == 1
     assert sink1.events[0].event_code == EventCode.DISCOVERY_START
     assert len(sink2.events) == 1
@@ -78,9 +81,38 @@ def test_emitter_sink_registration_and_fanout() -> None:
     assert sink2.flushed is True
 
     emitter.unregister_sink(sink1)
-    emitter.emit(event)
+    emitted_again = emitter.emit(event)
+    assert emitted_again.sequence == 2
     assert len(sink1.events) == 1  # Unregistered, count did not increase
     assert len(sink2.events) == 2
+    assert sink2.events[-1].sequence == 2
+
+
+def test_emit_enriches_manually_constructed_event_with_ambient_run_context() -> None:
+    """Ensure sink-oriented producers cannot accidentally lose run correlation."""
+    sink = MockRecordingSink()
+    emitter = ObservabilityEmitter(sinks=[sink])
+    token = set_current_context(
+        ObservabilityContext(
+            run_id="run-correlation-1",
+            settings_fingerprint="sha256_settings",
+            rules_fingerprint="sha256_rules",
+        )
+    )
+
+    try:
+        emitter.emit(
+            ObservabilityEvent.create(
+                event_code=EventCode.GENERIC_DIAGNOSTIC,
+                message="manual event",
+            )
+        )
+    finally:
+        reset_current_context(token)
+
+    assert sink.events[0].context.run_id == "run-correlation-1"
+    assert sink.events[0].context.settings_fingerprint == "sha256_settings"
+    assert sink.events[0].context.rules_fingerprint == "sha256_rules"
 
 
 def test_span_timing_and_outcomes() -> None:
@@ -219,3 +251,30 @@ def test_concurrent_thread_context_isolation() -> None:
     for i, (run_id, op) in enumerate(results):
         assert run_id == f"run-{i}"
         assert op == f"op_{i}"
+
+
+def test_correlation_scope_builds_lineage_without_synthetic_events() -> None:
+    """Correlation scopes bind parent/child operation IDs without increasing event volume."""
+    sink = MockRecordingSink()
+    emitter = ObservabilityEmitter(sinks=[sink])
+    token = set_current_context(ObservabilityContext(run_id="run-lineage"))
+    try:
+        with emitter.scope("pipeline_execution", component="pipeline"):
+            root_event = emitter.emit_event(
+                event_code=EventCode.TRANSFORMATION_STAGE,
+                message="Pipeline boundary",
+            )
+            with emitter.scope("phase_3_transform", component="pipeline"):
+                child_event = emitter.emit_event(
+                    event_code=EventCode.TRANSFORMATION_DAG_COMPLETED,
+                    message="Transform complete",
+                )
+    finally:
+        reset_current_context(token)
+
+    assert len(sink.events) == 2
+    assert root_event.context.operation == "pipeline_execution"
+    assert root_event.context.operation_id
+    assert child_event.context.operation == "phase_3_transform"
+    assert child_event.context.parent_operation_id == root_event.context.operation_id
+    assert child_event.context.run_id == "run-lineage"
