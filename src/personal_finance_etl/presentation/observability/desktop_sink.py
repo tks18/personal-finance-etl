@@ -65,9 +65,14 @@ def format_event_narrative(event: ObservabilityEvent) -> str:
     prefix = _KIND_PREFIX_MAP.get(event.presentation_kind, "•")
     parts: list[str] = [f"{prefix} {event.message}"]
 
-    if event.context.entity_type and event.context.entity_id:
+    # Only display entity badge when it is a meaningful domain entity (suppress redundant [Run: uuid])
+    if event.context.entity_type and event.context.entity_id and event.context.entity_type != "Run":
         parts.append(f"[{event.context.entity_type}: {event.context.entity_id}]")
-    elif event.context.entity_id:
+    elif (
+        event.context.entity_id
+        and not event.context.entity_type
+        and event.context.entity_id != event.context.run_id
+    ):
         parts.append(f"[{event.context.entity_id}]")
 
     if event.context.rows is not None:
@@ -81,6 +86,16 @@ def format_event_narrative(event: ObservabilityEvent) -> str:
             parts.append(f"({event.context.duration_ms / 1000.0:.2f}s)")
         else:
             parts.append(f"({event.context.duration_ms:.1f}ms)")
+
+    # On failure, append actionable diagnostic hints inline into the log
+    if event.presentation_kind == PresentationKind.FAILURE and event.error is not None:
+        if event.error.remediation_hint:
+            parts.append(f"\n  ↳ Remediation: {event.error.remediation_hint}")
+        if event.error.context_variables:
+            ctx_summary = ", ".join(
+                f"{k}={v}" for k, v in sorted(event.error.context_variables.items())
+            )
+            parts.append(f"\n  ↳ Context: [{ctx_summary}]")
 
     return " ".join(parts)
 
@@ -102,12 +117,22 @@ def format_failure_summary(event: ObservabilityEvent) -> str:
         return f"{event.message}\n\nRun ID: {event.context.run_id}"
 
     lines: list[str] = [
-        f"Domain: {event.error.failure_domain.value}",
+        f"Failure Domain: {event.error.failure_domain.value}",
         f"Error: {event.error.exception_type} - {event.error.exception_message}",
-        "",
-        f"Run ID: {event.context.run_id}",
-        "Inspect forensic log for complete diagnostic details.",
     ]
+    if event.error.failing_stage:
+        lines.append(f"Stage: {event.error.failing_stage}")
+    if event.error.failing_entity:
+        lines.append(f"Entity: {event.error.failing_entity}")
+    if event.error.remediation_hint:
+        lines.append(f"\nRemediation: {event.error.remediation_hint}")
+    if event.error.context_variables:
+        lines.append("\nDiagnostic State:")
+        for ck, cv in sorted(event.error.context_variables.items()):
+            lines.append(f"  • {ck}: {cv}")
+    lines.append("")
+    lines.append(f"Run ID: {event.context.run_id}")
+    lines.append("Inspect forensic log for complete trace and stack context.")
     if event.error.retryable:
         lines.append("Status: Transient failure eligible for automatic retry.")
     return "\n".join(lines)
