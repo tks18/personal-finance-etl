@@ -22,7 +22,7 @@ from typing import cast
 
 import pytest
 
-from personal_finance_etl.application.observability import (
+from personal_finance_etl.infrastructure.observability import (
     ObservabilityEmitter,
     get_current_context,
 )

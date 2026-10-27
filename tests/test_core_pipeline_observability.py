@@ -30,7 +30,7 @@ from personal_finance_etl.application.ingestion.market_sync import (
     CurrencyPipeline,
     USMarketPipeline,
 )
-from personal_finance_etl.application.observability import (
+from personal_finance_etl.infrastructure.observability import (
     ObservabilityEmitter,
 )
 from personal_finance_etl.config.settings import Settings

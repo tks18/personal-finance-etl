@@ -27,7 +27,7 @@ import time
 from typing import Final
 import zlib
 
-from personal_finance_etl.application.observability import (
+from personal_finance_etl.infrastructure.observability import (
     ObservabilityEmitter,
     reset_current_context,
     set_current_context,
@@ -49,7 +49,6 @@ SRC_ROOT: Final[Path] = REPO_ROOT / "src" / "personal_finance_etl"
 def test_zero_polars_collect_in_observability_pipeline() -> None:
     """Certify that observability sinks and pipeline emitters execute zero Polars .collect() calls."""
     observability_dirs = [
-        SRC_ROOT / "application" / "observability",
         SRC_ROOT / "infrastructure" / "observability",
         SRC_ROOT / "presentation" / "observability",
     ]

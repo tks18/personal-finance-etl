@@ -14,7 +14,7 @@ import concurrent.futures
 
 import pytest
 
-from personal_finance_etl.application.observability import (
+from personal_finance_etl.infrastructure.observability import (
     ObservabilityEmitter,
     get_current_context,
     reset_current_context,
