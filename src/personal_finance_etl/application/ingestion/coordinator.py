@@ -24,11 +24,6 @@ from collections.abc import Callable
 
 import polars as pl
 
-from personal_finance_etl.application.observability import (
-    ObservabilityEmitter,
-    get_global_emitter,
-)
-from personal_finance_etl.application.observability.diagnostics import get_observability_diagnostics
 from personal_finance_etl.config.settings import Settings
 from personal_finance_etl.contracts.application import EngineStage
 from personal_finance_etl.contracts.event_transport import EventQueue
@@ -42,6 +37,13 @@ from personal_finance_etl.contracts.observability import (
 )
 from personal_finance_etl.domain.household.transforms.common import get_column_mapping
 from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
+from personal_finance_etl.infrastructure.observability import (
+    ObservabilityEmitter,
+    get_global_emitter,
+)
+from personal_finance_etl.infrastructure.observability.diagnostics import (
+    get_observability_diagnostics,
+)
 from personal_finance_etl.infrastructure.providers.files.csv import (
     extract_benchmark_master_raw,
     extract_currency_mapping_raw,
@@ -89,6 +91,18 @@ class DataExtractor:
         return raw_bytes
 
     def _get_file_list_with_bytes(self, filepaths: list[str]) -> list[tuple[str, str, bytes]]:
+        """Retrieve binary contents along with path metadata for a list of file paths.
+
+        Parameters
+        ----------
+        filepaths : list[str]
+            List of file paths to resolve from the control plane artifact store.
+
+        Returns
+        -------
+        list[tuple[str, str, bytes]]
+            List of tuples of (filename, directory_path, file_bytes).
+        """
         return [(os.path.basename(f), os.path.dirname(f), self._get_bytes(f)) for f in filepaths]
 
     def _extract_sqlite_tables(

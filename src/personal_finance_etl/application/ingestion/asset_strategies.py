@@ -19,7 +19,6 @@ from typing import Protocol, runtime_checkable
 
 import polars as pl
 
-from personal_finance_etl.application.observability.diagnostics import ObservabilityDiagnostics
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.contracts.extraction import AssetPipelineResult, ExtractionResult
 from personal_finance_etl.domain.investments.transforms.common import (
@@ -45,6 +44,7 @@ from personal_finance_etl.domain.investments.transforms.us_equity import (
     get_stg_us_stock_master_ref,
     transform_stg_us_stock_trades,
 )
+from personal_finance_etl.infrastructure.observability.diagnostics import ObservabilityDiagnostics
 
 __all__ = [
     "AssetPipeline",
