@@ -17,7 +17,6 @@ Does not own
 
 from __future__ import annotations
 
-import logging
 import os
 import sqlite3
 import uuid
@@ -33,9 +32,12 @@ from personal_finance_etl.contracts.recovery import (
     SnapshotResult,
 )
 from personal_finance_etl.infrastructure.filesystem.paths import get_temp_dir
+from personal_finance_etl.infrastructure.observability.diagnostics import (
+    get_observability_diagnostics,
+)
 from personal_finance_etl.infrastructure.recovery.restore import SnapshotRestorer
 
-logger = logging.getLogger("personal_finance_etl.recovery.backup")
+diagnostics = get_observability_diagnostics("personal_finance_etl.recovery.backup")
 
 __all__ = ["SnapshotRestorer", "SystemBackupManager"]
 
@@ -185,7 +187,7 @@ class SystemBackupManager:
             msg = "Cannot create coordinated snapshot. Missing required database(s): " + ", ".join(
                 missing
             )
-            logger.error(msg)
+            diagnostics.error(msg)
             return SnapshotResult(outcome=SnapshotOutcome.SNAPSHOT_FAILED, error_message=msg)
 
         ts = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
@@ -205,7 +207,7 @@ class SystemBackupManager:
             self._write_snapshot_archive(temp_zip, temp_sqlite)
             os.replace(temp_zip, zip_path)
             temp_zip_to_clean = None
-            logger.info("Coordinated snapshot created at %s", zip_path)
+            diagnostics.info("Coordinated snapshot created at %s", zip_path)
             return SnapshotResult(outcome=SnapshotOutcome.SNAPSHOT_PUBLISHED, zip_path=zip_path)
         finally:
             for path in (temp_sqlite, temp_zip_to_clean):
@@ -213,7 +215,7 @@ class SystemBackupManager:
                     try:
                         os.remove(path)
                     except OSError as cleanup_error:
-                        logger.warning(
+                        diagnostics.warning(
                             "Could not remove temporary snapshot file %s: %s", path, cleanup_error
                         )
 
@@ -230,7 +232,7 @@ class SystemBackupManager:
             msg = "Cannot create coordinated snapshot. Missing required database(s): " + ", ".join(
                 missing
             )
-            logger.error(msg)
+            diagnostics.error(msg)
             return SnapshotResult(outcome=SnapshotOutcome.SNAPSHOT_FAILED, error_message=msg)
 
         lock_path = os.path.join(self.base_path, "pipeline.lock")
@@ -239,11 +241,11 @@ class SystemBackupManager:
                 return self._execute_snapshot_under_lock()
         except Timeout:
             msg = "Cannot create snapshot: Pipeline is currently running."
-            logger.error(msg)
+            diagnostics.error(msg)
             return SnapshotResult(outcome=SnapshotOutcome.SNAPSHOT_FAILED, error_message=msg)
         except Exception as e:
             msg = f"Failed to create coordinated snapshot: {e}"
-            logger.error(msg)
+            diagnostics.error(msg)
             return SnapshotResult(outcome=SnapshotOutcome.SNAPSHOT_FAILED, error_message=msg)
 
     def restore_snapshot(self, zip_path: str) -> RestoreResult:

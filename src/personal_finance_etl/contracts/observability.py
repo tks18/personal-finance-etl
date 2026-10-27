@@ -15,7 +15,7 @@ Owns
 
 Does not own
 -------------
-- Sink fan-out or span orchestration (owned by application.observability).
+- Sink fan-out or span orchestration (owned by infrastructure.observability).
 - File system JSONL appending or queue listener threads (owned by infrastructure.observability).
 - Terminal formatting or GUI widget manipulation (owned by presentation).
 """
@@ -23,8 +23,10 @@ Does not own
 from __future__ import annotations
 
 import json
+import traceback
+import uuid
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import NotRequired, Protocol, TypedDict, cast
@@ -37,6 +39,7 @@ __all__ = [
     "ErrorDetails",
     "ErrorDetailsDict",
     "EventCode",
+    "EventEmitter",
     "EventOutcome",
     "NullObservabilitySink",
     "ObservabilityContext",
@@ -148,6 +151,31 @@ class EventOutcome(StrEnum):
     SKIPPED = "SKIPPED"
 
 
+class EventEmitter(Protocol):
+    """Protocol for cross-boundary event emission capability.
+
+    Owns
+    ----
+    - Capability contract for routing or dispatching canonical ObservabilityEvents.
+    - Enables decoupled event producers without forcing a dependency on concrete emitter classes.
+    """
+
+    def emit(self, event: ObservabilityEvent) -> object:
+        """Process, dispatch, or sequence one canonical ObservabilityEvent.
+
+        Parameters
+        ----------
+        event : ObservabilityEvent
+            The canonical structured event to dispatch.
+
+        Returns
+        -------
+        object
+            Implementation-defined return value (e.g. sequenced event or None).
+        """
+        ...
+
+
 class ObservabilitySink(Protocol):
     """Protocol for cross-boundary observability sinks consuming canonical events."""
 
@@ -184,6 +212,10 @@ class ErrorDetailsDict(TypedDict):
     failure_domain: str
     traceback_summary: str
     retryable: bool
+    context_variables: dict[str, str | int | float | bool]
+    remediation_hint: str
+    failing_stage: str
+    failing_entity: str
 
 
 @dataclass(frozen=True)
@@ -202,6 +234,14 @@ class ErrorDetails:
         Normalized or formatted traceback string.
     retryable : bool, default=False
         Whether the failure is transient and eligible for automatic retry.
+    context_variables : dict[str, str | int | float | bool]
+        Diagnostic key-value state context capturing values active at failure time.
+    remediation_hint : str, default=""
+        Actionable operational guidance or instructions to remediate the failure.
+    failing_stage : str, default=""
+        Pipeline or engine stage where the fault occurred.
+    failing_entity : str, default=""
+        Identifier of the specific domain entity being processed when failure occurred.
     """
 
     exception_type: str
@@ -209,6 +249,12 @@ class ErrorDetails:
     failure_domain: FailureDomain
     traceback_summary: str
     retryable: bool = False
+    context_variables: dict[str, str | int | float | bool] = field(
+        default_factory=lambda: cast(dict[str, str | int | float | bool], {})
+    )
+    remediation_hint: str = ""
+    failing_stage: str = ""
+    failing_entity: str = ""
 
     def to_dict(self) -> ErrorDetailsDict:
         """Convert error details into a JSON-serializable dictionary."""
@@ -218,7 +264,67 @@ class ErrorDetails:
             "failure_domain": str(self.failure_domain),
             "traceback_summary": self.traceback_summary,
             "retryable": self.retryable,
+            "context_variables": dict(self.context_variables),
+            "remediation_hint": self.remediation_hint,
+            "failing_stage": self.failing_stage,
+            "failing_entity": self.failing_entity,
         }
+
+    @classmethod
+    def create(
+        cls,
+        exc: BaseException,
+        failure_domain: FailureDomain,
+        stage: str = "",
+        entity: str = "",
+        hint: str = "",
+        retryable: bool = False,
+        context_variables: Mapping[str, str | int | float | bool] | None = None,
+        **extra_vars: str | int | float | bool,
+    ) -> ErrorDetails:
+        """Construct ErrorDetails from an active exception and contextual attributes.
+
+        Parameters
+        ----------
+        exc : BaseException
+            The raised exception instance.
+        failure_domain : FailureDomain
+            Architectural failure classification domain.
+        stage : str, default=""
+            Pipeline stage where exception was raised.
+        entity : str, default=""
+            Domain entity or table associated with the fault.
+        hint : str, default=""
+            Actionable troubleshooting guidance.
+        retryable : bool, default=False
+            Whether the failure is eligible for automatic retry.
+        context_variables : Mapping[str, str | int | float | bool] | None, default=None
+            Diagnostic key-value state context capturing values active at failure time.
+        **extra_vars : str | int | float | bool
+            Additional key-value diagnostic state variables.
+
+        Returns
+        -------
+        ErrorDetails
+            Structured immutable error telemetry container.
+        """
+        merged_vars: dict[str, str | int | float | bool] = {}
+        if context_variables:
+            merged_vars.update(context_variables)
+        if extra_vars:
+            merged_vars.update(extra_vars)
+
+        return cls(
+            exception_type=type(exc).__name__,
+            exception_message=str(exc),
+            failure_domain=failure_domain,
+            traceback_summary=traceback.format_exc(),
+            retryable=retryable,
+            context_variables=merged_vars,
+            remediation_hint=hint,
+            failing_stage=stage,
+            failing_entity=entity,
+        )
 
     @classmethod
     def from_dict(cls, data: Mapping[str, object]) -> ErrorDetails:
@@ -240,12 +346,27 @@ class ErrorDetails:
         except ValueError:
             domain = FailureDomain.TRANSFORMATION
 
+        raw_ctx = data.get("context_variables")
+        ctx_vars: dict[str, str | int | float | bool] = {}
+        if isinstance(raw_ctx, Mapping):
+            raw_map = cast(Mapping[object, object], raw_ctx)
+            for k, v in raw_map.items():
+                k_str = str(k)
+                if isinstance(v, (str, int, float, bool)):
+                    ctx_vars[k_str] = v
+                else:
+                    ctx_vars[k_str] = str(v)
+
         return cls(
             exception_type=str(data.get("exception_type", "UnknownException")),
             exception_message=str(data.get("exception_message", "")),
             failure_domain=domain,
             traceback_summary=str(data.get("traceback_summary", "")),
             retryable=bool(data.get("retryable", False)),
+            context_variables=ctx_vars,
+            remediation_hint=str(data.get("remediation_hint", "")),
+            failing_stage=str(data.get("failing_stage", "")),
+            failing_entity=str(data.get("failing_entity", "")),
         )
 
 
@@ -495,6 +616,9 @@ class ObservabilityContext:
 class ObservabilityEventDict(TypedDict):
     """JSON-serializable representation of ObservabilityEvent."""
 
+    schema_version: int
+    event_id: str
+    sequence: int
     timestamp: str
     event_code: str
     severity: str
@@ -541,6 +665,9 @@ class ObservabilityEvent:
     outcome: EventOutcome
     context: ObservabilityContext
     message: str
+    schema_version: int = 1
+    event_id: str = field(default_factory=lambda: f"evt_{uuid.uuid4().hex}")
+    sequence: int = 0
     error: ErrorDetails | None = None
     progress: float | None = None
 
@@ -593,6 +720,9 @@ class ObservabilityEvent:
         if stage is not None:
             ctx = ctx.with_updates(stage=stage)
         return cls(
+            schema_version=1,
+            event_id=f"evt_{uuid.uuid4().hex}",
+            sequence=0,
             timestamp=ts,
             event_code=event_code,
             severity=severity,
@@ -607,6 +737,9 @@ class ObservabilityEvent:
     def to_dict(self) -> ObservabilityEventDict:
         """Serialize event into a JSON-serializable dictionary for JSONL sink."""
         out: ObservabilityEventDict = {
+            "schema_version": self.schema_version,
+            "event_id": self.event_id,
+            "sequence": self.sequence,
             "timestamp": self.timestamp.isoformat(),
             "event_code": str(self.event_code),
             "severity": str(self.severity),
@@ -660,7 +793,16 @@ class ObservabilityEvent:
         prog_val = data.get("progress")
         prog = float(prog_val) if isinstance(prog_val, (int, float)) else None
 
+        raw_schema = data.get("schema_version", 1)
+        schema_ver = int(raw_schema) if isinstance(raw_schema, (int, str)) else 1
+
+        raw_seq = data.get("sequence", 0)
+        seq_val = int(raw_seq) if isinstance(raw_seq, (int, str)) else 0
+
         return cls(
+            schema_version=schema_ver,
+            event_id=str(data.get("event_id", f"evt_{uuid.uuid4().hex}")),
+            sequence=seq_val,
             timestamp=ts,
             event_code=EventCode(str(data.get("event_code", EventCode.GENERIC_DIAGNOSTIC))),
             severity=DiagnosticSeverity(str(data.get("severity", DiagnosticSeverity.INFO))),

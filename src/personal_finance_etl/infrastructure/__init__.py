@@ -1,4 +1,4 @@
-"""Infrastructure layer: persistence, external providers, filesystem, and logging.
+"""Infrastructure layer: persistence, external providers, filesystem, and observability.
 
 Owns
 ----
@@ -6,7 +6,7 @@ Owns
 - Concrete SQLite Control Plane management, repositories, and file synchronization.
 - External evidence acquisition providers (files and market data APIs).
 - Database backup, snapshot archives, and recovery persistence.
-- User preference file storage and process-wide logging configuration.
+- User preference storage and asynchronous forensic trace persistence.
 
 Does not own
 -------------

@@ -41,6 +41,13 @@ class EngineStage(StrEnum):
 
 
 def _empty_metadata() -> dict[str, str | int | float | bool]:
+    """Provide a default empty metadata dictionary for pipeline status events.
+
+    Returns
+    -------
+    dict[str, str | int | float | bool]
+        An empty dictionary adhering to typed event metadata attributes.
+    """
     return {}
 
 

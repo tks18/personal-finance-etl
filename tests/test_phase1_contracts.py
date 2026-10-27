@@ -28,7 +28,7 @@ from personal_finance_etl.contracts.lifecycle import (
     FailureDomain,
     classify_failure_domain,
 )
-from personal_finance_etl.contracts.logging import LogLevel
+from personal_finance_etl.contracts.observability import DiagnosticSeverity
 from personal_finance_etl.contracts.recovery import (
     RestoreOutcome,
     RestoreResult,
@@ -135,7 +135,7 @@ def test_extraction_batch_result_contract():
 
 def test_recovery_results():
     snap = SnapshotResult(
-        outcome=SnapshotOutcome.SUCCESS,
+        outcome=SnapshotOutcome.SNAPSHOT_PUBLISHED,
         archive_path=None,
         files_archived=["raw.sqlite", "duckdb.db"],
         archive_size_bytes=1024,
@@ -143,7 +143,7 @@ def test_recovery_results():
     assert snap.is_success is True
 
     restore = RestoreResult(
-        outcome=RestoreOutcome.SUCCESS,
+        outcome=RestoreOutcome.RESTORE_SUCCEEDED,
         source_archive=None,  # type: ignore[arg-type]
         files_restored=["duckdb.db"],
     )
@@ -152,7 +152,7 @@ def test_recovery_results():
 
 def test_application_execution_result():
     assert EngineStage.TRANSFORMING.value == "TRANSFORMING"
-    assert LogLevel.INFO.value == "info"
+    assert DiagnosticSeverity.INFO.value == "INFO"
     res = EngineExecutionResult(
         is_success=True,
         run_id="run_123",

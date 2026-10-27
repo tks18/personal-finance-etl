@@ -245,6 +245,9 @@ def test_observability_event_serialization_and_json() -> None:
     json_str = event.to_json()
     assert "\n" not in json_str
     parsed = json.loads(json_str)
+    assert parsed["schema_version"] == 1
+    assert parsed["event_id"].startswith("evt_")
+    assert parsed["sequence"] == 0
     assert parsed["event_code"] == "MARKET_TICKER_CACHE_HIT"
     assert parsed["severity"] == "INFO"
     assert parsed["presentation_kind"] == "SKIP"
@@ -255,6 +258,9 @@ def test_observability_event_serialization_and_json() -> None:
 
     # Deserialization
     reconstructed = ObservabilityEvent.from_dict(parsed)
+    assert reconstructed.schema_version == 1
+    assert reconstructed.event_id == event.event_id
+    assert reconstructed.sequence == 0
     assert reconstructed.event_code == EventCode.MARKET_TICKER_CACHE_HIT
     assert reconstructed.severity == DiagnosticSeverity.INFO
     assert reconstructed.presentation_kind == PresentationKind.SKIP

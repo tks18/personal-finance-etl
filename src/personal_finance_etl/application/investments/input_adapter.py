@@ -84,6 +84,28 @@ class TaxDataLoader:
         pl.DataFrame | None,
         pl.DataFrame | None,
     ]:
+        """Normalize and type-align input DataFrames for investment tax evaluation.
+
+        Parameters
+        ----------
+        df_p : pl.DataFrame
+            Purchases DataFrame.
+        df_s : pl.DataFrame
+            Sales DataFrame.
+        df_m : pl.DataFrame
+            ISIN master metadata DataFrame.
+        df_i : pl.DataFrame | None
+            Historical inflation rates DataFrame.
+        df_b : pl.DataFrame | None
+            Benchmark indices closing prices DataFrame.
+        df_fx : pl.DataFrame | None, default None
+            Foreign exchange conversion rates DataFrame.
+
+        Returns
+        -------
+        tuple
+            Normalized DataFrames and ISIN master mapping dictionary.
+        """
         df_p = parse_date_col(df_p)
         df_s = parse_date_col(df_s)
         df_m = parse_date_col(df_m)

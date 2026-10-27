@@ -188,21 +188,22 @@ def test_isin_processor_hot_loop_silence() -> None:
 
     assert process_func is not None, "IsinProcessor.process method not found"
 
-    # Walk all loops inside process() and ensure no Call nodes reference logger
-    forbidden_logger_calls: list[str] = []
+    # Walk all loops inside process() and ensure no diagnostic emission occurs.
+    forbidden_diagnostic_calls: list[str] = []
     for node in ast.walk(process_func):
         if isinstance(node, (ast.For, ast.While)):
             for loop_child in ast.walk(node):
                 if isinstance(loop_child, ast.Call):
                     func = loop_child.func
                     if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name):
-                        if func.value.id == "logger":
-                            forbidden_logger_calls.append(
-                                f"Line {loop_child.lineno}: logger.{func.attr}"
+                        if func.value.id in {"diagnostics", "emitter"}:
+                            forbidden_diagnostic_calls.append(
+                                f"Line {loop_child.lineno}: {func.value.id}.{func.attr}"
                             )
 
-    assert not forbidden_logger_calls, (
-        f"Hot-loop logging violations detected in IsinProcessor.process: {forbidden_logger_calls}"
+    assert not forbidden_diagnostic_calls, (
+        "Hot-loop observability violations detected in IsinProcessor.process: "
+        f"{forbidden_diagnostic_calls}"
     )
 
 

@@ -127,6 +127,18 @@ class BaseEventsBuilder:
         return TaxClassifier.build_tax_credit_subhead_map(self.rules)
 
     def _validate_tax_credit_uids(self, credit_subheads: dict[str, str]) -> None:
+        """Validate configured tax credit subcategory UIDs against subcategory dimension.
+
+        Parameters
+        ----------
+        credit_subheads : dict[str, str]
+            Dictionary of subcategory UIDs to tax credit subheads.
+
+        Raises
+        ------
+        ValueError
+            If any declared tax credit UID does not exist in the subcategory dimension.
+        """
         TaxClassifier.validate_tax_credit_uids(self.df_subcategory, credit_subheads)
 
     @staticmethod

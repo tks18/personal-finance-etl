@@ -15,8 +15,6 @@ Does not own
 
 from __future__ import annotations
 
-import logging
-
 import polars as pl
 
 from personal_finance_etl.application.ingestion.asset_strategies import (
@@ -25,15 +23,11 @@ from personal_finance_etl.application.ingestion.asset_strategies import (
     StockPipeline,
     USStockPipeline,
 )
-from personal_finance_etl.application.observability import (
-    ObservabilityEmitter,
-    get_global_emitter,
-)
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
 from personal_finance_etl.contracts.application import EngineStage
+from personal_finance_etl.contracts.event_transport import EventQueue
 from personal_finance_etl.contracts.extraction import AssetPipelineResult, ExtractionResult
-from personal_finance_etl.contracts.logging import ILogger
 from personal_finance_etl.contracts.observability import (
     DiagnosticSeverity,
     EventCode,
@@ -68,10 +62,17 @@ from personal_finance_etl.domain.investments.transforms.common import (
     get_f_tf_investment_sale_data,
     transform_stg_investment_market_data,
 )
+from personal_finance_etl.infrastructure.observability import (
+    ObservabilityEmitter,
+    get_global_emitter,
+)
+from personal_finance_etl.infrastructure.observability.diagnostics import (
+    get_observability_diagnostics,
+)
 
 __all__ = ["TransformationDAG"]
 
-logger = logging.getLogger(__name__)
+diagnostics = get_observability_diagnostics(__name__)
 
 
 class TransformationDAG:
@@ -80,7 +81,7 @@ class TransformationDAG:
     def __init__(
         self,
         cfg: Settings,
-        status_queue: ILogger,
+        status_queue: EventQueue,
         rules: FinancialRules | None = None,
         emitter: ObservabilityEmitter | None = None,
     ) -> None:
@@ -93,7 +94,7 @@ class TransformationDAG:
         """Execute parallel streaming transformation across dimensions, facts, and asset pipelines."""
         if self.rules is None:
             raise ValueError("FinancialRules must be provided to TransformationDAG")
-        logger.debug("Transforming Base Dimensions...")
+        diagnostics.debug("Transforming Base Dimensions...")
         mappings = extracted.mappings
         d_income_category_lazy = transform_d_income_category(
             extracted.zcategory, mappings["category"], self.rules
@@ -118,7 +119,7 @@ class TransformationDAG:
         )
 
         # Load mapping dependencies
-        logger.debug("Transforming Macro Parameters and Opening Balances...")
+        diagnostics.debug("Transforming Macro Parameters and Opening Balances...")
         d_macro_parameters_lazy = transform_d_macro_parameters(extracted.raw_macro_parameters)
 
         f_opening_balances_lazy = transform_f_opening_balances(
@@ -141,7 +142,7 @@ class TransformationDAG:
         )
 
         if len(extracted.mf_market_data_raw.collect_schema().names()) == 0:
-            logger.debug("Empty incremental frames detected. Skipping AssetPipelines...")
+            diagnostics.debug("Empty incremental frames detected. Skipping AssetPipelines...")
             stg_investment_market_data_lazy = pl.LazyFrame()
             f_tf_inv_purchase_data_lazy = pl.LazyFrame()
             f_tf_inv_sale_data_lazy = pl.LazyFrame()
@@ -156,7 +157,7 @@ class TransformationDAG:
             asset_results: list[AssetPipelineResult] = []
             for pipeline in asset_pipelines:
                 asset_results.append(
-                    pipeline.process(extracted, d_asset_subcategory_lazy, self.rules, logger)
+                    pipeline.process(extracted, d_asset_subcategory_lazy, self.rules, diagnostics)
                 )
 
             market_data_ref_lazy_list = [res.market_data_ref for res in asset_results]
@@ -174,14 +175,14 @@ class TransformationDAG:
                 sale_ref_lazy_list, self.rules.DEFAULT_CURRENCY_ID
             )
 
-            logger.debug("Building Investment Master...")
+            diagnostics.debug("Building Investment Master...")
             d_tf_investment_master_lazy = get_d_investment_master(
                 master_ref_lazy_list,
                 extracted.stg_benchmark_mapping,
                 self.rules.DEFAULT_CURRENCY_ID,
             )
 
-        logger.debug("Generating Master Calendar...")
+        diagnostics.debug("Generating Master Calendar...")
         df_bounds_lazy = get_stg_calendar_ref(
             f_income_transactions_lazy,
             f_expense_transactions_lazy,
@@ -194,9 +195,9 @@ class TransformationDAG:
         d_calendar_lazy = transform_d_calendar(df_bounds_lazy)
 
         compact_cal = d_calendar_lazy.explain().replace("\n", " | ")
-        logger.debug(f"Physical Plan for Master Calendar: {compact_cal}")
+        diagnostics.debug(f"Physical Plan for Master Calendar: {compact_cal}")
 
-        logger.debug("Executing Base Transformation DAG in Parallel...")
+        diagnostics.debug("Executing Base Transformation DAG in Parallel...")
         self.emitter.emit_event(
             event_code=EventCode.TRANSFORMATION_STAGE,
             message="",
@@ -228,17 +229,17 @@ class TransformationDAG:
 
         for name, node in dag_nodes.items():
             compact_plan = node.explain().replace("\n", " | ")
-            logger.debug(f"Physical Plan for Silver '{name}': {compact_plan}")
+            diagnostics.debug(f"Physical Plan for Silver '{name}': {compact_plan}")
 
         results = pl.collect_all(list(dag_nodes.values()), engine="streaming")
 
-        logger.debug(
+        diagnostics.debug(
             f"  -> Base Transformation DAG successfully mapped {len(results)} core tables."
         )
 
         final_dfs: dict[str, pl.DataFrame] = {}
         for (name, _), df in zip(dag_nodes.items(), results, strict=True):
-            logger.debug(
+            diagnostics.debug(
                 f"Node '{name}': Output materialized -> ({df.height} rows, {df.width} cols)"
             )
             final_dfs[name] = df
@@ -253,11 +254,11 @@ class TransformationDAG:
                 rows=df.height,
             )
 
-        logger.debug("Executing Calendar Generation DAG...")
+        diagnostics.debug("Executing Calendar Generation DAG...")
         # Materialization Boundary: PUBLICATION_BOUNDARY
         # Materialize continuous calendar dimension into DataFrame for downstream analytical models
         calendar_result = d_calendar_lazy.collect(engine="streaming")
-        logger.debug(f"  -> Generated {calendar_result.height} rows for Master Calendar.")
+        diagnostics.debug(f"  -> Generated {calendar_result.height} rows for Master Calendar.")
         final_dfs["df_d_calendar"] = calendar_result
         self.emitter.emit_event(
             event_code=EventCode.TRANSFORMATION_STAGE,

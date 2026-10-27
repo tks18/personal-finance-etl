@@ -7,7 +7,7 @@ Owns
 - Tabular data transport contract (EngineDataTransport).
 - Extraction batch and entity outcomes (ExtractionBatchResult, ExtractorEntityResult).
 - Snapshot and restore outcome contracts (SnapshotResult, RestoreResult).
-- Categorical log levels (LogLevel).
+- Canonical event transport queue contracts.
 - Canonical typed observability and telemetry contracts (ObservabilityEvent, EventCode).
 
 Does not own
@@ -22,6 +22,7 @@ from personal_finance_etl.contracts.application import (
     EngineExecutionResult,
     EngineStage,
 )
+from personal_finance_etl.contracts.event_transport import EventQueue, NullEventQueue
 from personal_finance_etl.contracts.extraction import (
     ExtractionBatchResult,
     ExtractionCompletenessError,
@@ -35,12 +36,12 @@ from personal_finance_etl.contracts.lifecycle import (
     SyncSummaryRecord,
     classify_failure_domain,
 )
-from personal_finance_etl.contracts.logging import ILogger, LogLevel, StatusQueue
 from personal_finance_etl.contracts.observability import (
     DiagnosticSeverity,
     ErrorDetails,
     ErrorDetailsDict,
     EventCode,
+    EventEmitter,
     EventOutcome,
     NullObservabilitySink,
     ObservabilityContext,
@@ -66,6 +67,7 @@ __all__ = [
     "ErrorDetails",
     "ErrorDetailsDict",
     "EventCode",
+    "EventEmitter",
     "EventOutcome",
     "ExtractionBatchResult",
     "ExtractionCompletenessError",
@@ -73,8 +75,8 @@ __all__ = [
     "ExtractorEntityResult",
     "ExtractorEntityStatus",
     "FailureDomain",
-    "ILogger",
-    "LogLevel",
+    "EventQueue",
+    "NullEventQueue",
     "NullObservabilitySink",
     "ObservabilityContext",
     "ObservabilityContextDict",
@@ -86,7 +88,6 @@ __all__ = [
     "RestoreResult",
     "SnapshotOutcome",
     "SnapshotResult",
-    "StatusQueue",
     "SyncSummaryRecord",
     "classify_failure_domain",
 ]

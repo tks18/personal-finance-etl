@@ -18,7 +18,6 @@ Does not own
 
 from __future__ import annotations
 
-import logging
 import os
 import uuid
 from dataclasses import dataclass
@@ -31,9 +30,12 @@ from personal_finance_etl.infrastructure.control_plane.hashing import (
     hash_bytes,
     normalize_path,
 )
+from personal_finance_etl.infrastructure.observability.diagnostics import (
+    get_observability_diagnostics,
+)
 from personal_finance_etl.infrastructure.warehouse.registry import BRONZE_CONTRACT_REGISTRY
 
-logger = logging.getLogger("personal_finance_etl.control_plane.artifact_repo")
+diagnostics = get_observability_diagnostics("personal_finance_etl.control_plane.artifact_repo")
 
 
 @dataclass
@@ -187,7 +189,7 @@ class ArtifactRepository:
         with self.db.atomic():
             for fid in obsolete_ids:
                 self.db.conn.execute("DELETE FROM cp_file_payloads WHERE file_id = ?", (fid,))
-        logger.info(
+        diagnostics.info(
             "Artifact registry: Pruned payloads for %d obsolete files from category '%s'; "
             "registry identities and historical events retained.",
             len(obsolete_ids),
@@ -331,7 +333,7 @@ class ArtifactRepository:
             "SELECT file_bytes FROM cp_file_payloads WHERE file_id = ?", (old_id,)
         ).fetchone()
         if not payload_row or payload_row[0] is None:
-            logger.warning(
+            diagnostics.warning(
                 "Artifact registry: Cannot migrate %s because its payload is missing; "
                 "destination will be ingested as new.",
                 old_path,
@@ -528,10 +530,12 @@ class ArtifactRepository:
                     )
                     total_count += 1
                 except Exception:
-                    logger.exception("Ingestion: Failed to ingest %s", filepath)
+                    diagnostics.exception("Ingestion: Failed to ingest %s", filepath)
                     raise
         if total_count:
-            logger.info("Ingestion: Safely vaulted %d payloads into SQLite Raw Store.", total_count)
+            diagnostics.info(
+                "Ingestion: Safely vaulted %d payloads into SQLite Raw Store.", total_count
+            )
 
     def inject_virtual_file(self, filename: str, category: str, raw_bytes: bytes) -> str:
         """Inject an in-memory configuration asset as a virtual:// control plane artifact.
@@ -674,7 +678,7 @@ class ArtifactRepository:
                     (path,),
                 ).fetchone()
                 if not row:
-                    logger.warning(
+                    diagnostics.warning(
                         "Artifact registry: Cannot mark unknown file as SYNCED: %s", path
                     )
                     continue
@@ -706,7 +710,7 @@ class ArtifactRepository:
                 )
                 marked += 1
         if marked:
-            logger.debug("Artifact registry: Marked %d file(s) as SYNCED.", marked)
+            diagnostics.debug("Artifact registry: Marked %d file(s) as SYNCED.", marked)
 
     def mark_healed(
         self,
@@ -771,7 +775,7 @@ class ArtifactRepository:
                 )
                 healed += 1
         if healed:
-            logger.info("Artifact registry: Marked %d file(s) as HEALED.", healed)
+            diagnostics.info("Artifact registry: Marked %d file(s) as HEALED.", healed)
 
     def record_healing_event(
         self,
@@ -873,4 +877,4 @@ class ArtifactRepository:
                 )
                 removed += 1
         if removed:
-            logger.info("Artifact registry: Marked %d file(s) as REMOVED.", removed)
+            diagnostics.info("Artifact registry: Marked %d file(s) as REMOVED.", removed)

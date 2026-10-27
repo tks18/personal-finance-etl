@@ -16,9 +16,7 @@ Does not own
 
 from __future__ import annotations
 
-import logging
 import os
-from datetime import UTC, datetime
 
 import duckdb
 import polars as pl
@@ -28,19 +26,21 @@ from personal_finance_etl.contracts.extraction import ExtractionResult
 from personal_finance_etl.contracts.observability import (
     DiagnosticSeverity,
     EventCode,
-    EventOutcome,
-    NullObservabilitySink,
-    ObservabilityContext,
-    ObservabilityEvent,
-    ObservabilitySink,
     PresentationKind,
 )
 from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
+from personal_finance_etl.infrastructure.observability import (
+    ObservabilityEmitter,
+    get_global_emitter,
+)
+from personal_finance_etl.infrastructure.observability.diagnostics import (
+    get_observability_diagnostics,
+)
 from personal_finance_etl.infrastructure.warehouse.connection import DuckDBManager
 from personal_finance_etl.infrastructure.warehouse.meta import MetaLayer
 from personal_finance_etl.infrastructure.warehouse.registry import BRONZE_CONTRACT_REGISTRY
 
-logger = logging.getLogger("personal_finance_etl.warehouse.bronze")
+diagnostics = get_observability_diagnostics("personal_finance_etl.warehouse.bronze")
 
 
 class BronzeLayer:
@@ -61,12 +61,12 @@ class BronzeLayer:
         db_manager: DuckDBManager,
         cp: ControlPlane,
         meta_layer: MetaLayer,
-        emitter: ObservabilitySink | None = None,
+        emitter: ObservabilityEmitter | None = None,
     ) -> None:
         self.db_manager = db_manager
         self.cp = cp
         self.meta_layer = meta_layer
-        self.emitter = emitter or NullObservabilitySink()
+        self.emitter = emitter or get_global_emitter()
 
     def _evolve_schema(self, table_name: str) -> None:
         """Add any new columns found in schema_df to an existing bronze table.
@@ -88,14 +88,16 @@ class BronzeLayer:
                     self.db_manager.conn.execute(
                         f'ALTER TABLE {table_name} ADD COLUMN "{col_name}" {col_type}'  # nosec B608
                     )
-                    logger.debug(
+                    diagnostics.debug(
                         "Bronze: Evolved schema for %s: added column '%s' (%s)",
                         table_name,
                         col_name,
                         col_type,
                     )
         except duckdb.CatalogException as e:
-            logger.debug("Bronze: Table %s not yet created, skipping evolution: %s", table_name, e)
+            diagnostics.debug(
+                "Bronze: Table %s not yet created, skipping evolution: %s", table_name, e
+            )
 
     def _prepare_bronze_table(
         self,
@@ -119,7 +121,7 @@ class BronzeLayer:
             self.db_manager.conn.execute(
                 f"CREATE TABLE {table_name} AS SELECT * FROM schema_df"  # nosec B608
             )
-            logger.debug("Bronze: Re-created %s for full replacement.", table_name)
+            diagnostics.debug("Bronze: Re-created %s for full replacement.", table_name)
         else:
             create_query = f"CREATE TABLE IF NOT EXISTS {table_name} AS SELECT * FROM schema_df"  # nosec B608
             self.db_manager.conn.execute(create_query)
@@ -127,7 +129,7 @@ class BronzeLayer:
 
             placeholders = ", ".join(["?"] * len(filenames))
             delete_query = f"DELETE FROM {table_name} WHERE __file_name__ IN ({placeholders})"  # nosec B608
-            logger.debug("Bronze SQL: %s", delete_query)
+            diagnostics.debug("Bronze SQL: %s", delete_query)
             self.db_manager.conn.execute(delete_query, filenames)
 
     def _insert_bronze_records(
@@ -153,9 +155,9 @@ class BronzeLayer:
         if df_filtered.height > 0:
             self.db_manager.conn.register("temp_df", df_filtered)
             insert_query = f"INSERT INTO {table_name} BY NAME SELECT * FROM temp_df"  # nosec B608
-            logger.debug("Bronze SQL: %s", insert_query)
+            diagnostics.debug("Bronze SQL: %s", insert_query)
             self.db_manager.conn.execute(insert_query)
-            logger.debug(
+            diagnostics.debug(
                 "Bronze: Upserted %s: %d rows processed.",
                 table_name,
                 df_filtered.height,
@@ -166,7 +168,7 @@ class BronzeLayer:
             for row in counts.iter_rows():
                 result[row[0]] = row[1]
         else:
-            logger.debug("Bronze: Upserted %s: 0 rows processed (empty source).", table_name)
+            diagnostics.debug("Bronze: Upserted %s: 0 rows processed (empty source).", table_name)
         return result
 
     def upsert_table(
@@ -196,7 +198,7 @@ class BronzeLayer:
         """
         if isinstance(df, pl.LazyFrame):
             compact_plan = df.explain().replace("\n", " | ")
-            logger.debug("Physical Plan for Bronze '%s': %s", table_name, compact_plan)
+            diagnostics.debug("Physical Plan for Bronze '%s': %s", table_name, compact_plan)
             # Materialization Boundary: PUBLICATION_BOUNDARY
             # Terminal execution of lazy ingestion graph for DuckDB Bronze table insertion
             df = df.collect()
@@ -238,7 +240,7 @@ class BronzeLayer:
             if df is not None:
                 actionable = actionable_files.get(contract.sync_category, [])
                 if actionable:
-                    logger.debug(
+                    diagnostics.debug(
                         "Schema: %s Schema: %s", contract.physical_table, df.collect_schema()
                     )
                     row_counts = self.upsert_table(
@@ -255,27 +257,21 @@ class BronzeLayer:
                         )
 
                     rows_added = sum(row_counts.values())
-                    logger.debug(
+                    diagnostics.debug(
                         "Bronze: Table '%s': Upserted %d rows from %d files.",
                         contract.physical_table,
                         rows_added,
                         len(actionable),
                     )
-                    self.emitter.emit(
-                        ObservabilityEvent(
-                            timestamp=datetime.now(UTC),
-                            event_code=EventCode.BRONZE_UPSERT,
-                            severity=DiagnosticSeverity.DEBUG,
-                            presentation_kind=PresentationKind.INTERNAL,
-                            outcome=EventOutcome.COMPLETED,
-                            context=ObservabilityContext(
-                                stage=EngineStage.EXTRACTING,
-                                entity_type="Table",
-                                entity_id=contract.physical_table,
-                                rows=rows_added,
-                            ),
-                            message=f"Bronze: Table '{contract.physical_table}' upserted {rows_added} rows from {len(actionable)} files.",
-                        )
+                    self.emitter.emit_event(
+                        event_code=EventCode.BRONZE_UPSERT,
+                        message=f"Bronze: Table '{contract.physical_table}' upserted {rows_added} rows from {len(actionable)} files.",
+                        severity=DiagnosticSeverity.DEBUG,
+                        presentation_kind=PresentationKind.INTERNAL,
+                        stage=EngineStage.EXTRACTING,
+                        entity_type="Table",
+                        entity_id=contract.physical_table,
+                        rows=rows_added,
                     )
                     if rows_added > 0:
                         total_upserts += 1
@@ -289,7 +285,7 @@ class BronzeLayer:
                             filepath, contract.sync_category, count, self.cp
                         )
 
-        logger.info(
+        diagnostics.info(
             "Bronze: Synchronized %d source datasets (%s new rows).",
             total_upserts,
             f"{total_rows:,}",
@@ -324,7 +320,7 @@ class BronzeLayer:
                     [new_name, old_name],
                 )
             except (duckdb.BinderException, duckdb.CatalogException) as e:
-                logger.debug("Bronze: Could not rename %s in %s: %s", old_name, table, e)
+                diagnostics.debug("Bronze: Could not rename %s in %s: %s", old_name, table, e)
 
     def get_table(self, table_name: str) -> pl.DataFrame:
         """Read a table from the Bronze schema. Returns empty DataFrame if missing.
@@ -359,7 +355,7 @@ class BronzeLayer:
         ExtractionResult
             Complete typed ExtractionResult.
         """
-        logger.info("Reading full dataset from Bronze Layer Lakehouse...")
+        diagnostics.info("Reading full dataset from Bronze Layer Lakehouse...")
 
         def _get_lf(table_name: str) -> pl.LazyFrame:
             try:
@@ -371,7 +367,9 @@ class BronzeLayer:
                     .lazy()
                 )
             except duckdb.CatalogException:
-                logger.debug("Bronze: Table %s does not exist. Returning empty frame.", table_name)
+                diagnostics.debug(
+                    "Bronze: Table %s does not exist. Returning empty frame.", table_name
+                )
                 return pl.LazyFrame()
 
         def _get_df(table_name: str) -> pl.DataFrame:
@@ -380,7 +378,9 @@ class BronzeLayer:
                     f"SELECT * FROM {table_name}"  # nosec B608
                 ).pl()
             except duckdb.CatalogException:
-                logger.debug("Bronze: Table %s does not exist. Returning empty frame.", table_name)
+                diagnostics.debug(
+                    "Bronze: Table %s does not exist. Returning empty frame.", table_name
+                )
                 return pl.DataFrame()
 
         return ExtractionResult(

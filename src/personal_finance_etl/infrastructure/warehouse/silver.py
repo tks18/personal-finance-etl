@@ -16,27 +16,26 @@ Does not own
 
 from __future__ import annotations
 
-import logging
-from datetime import UTC, datetime
-
 import polars as pl
 
 from personal_finance_etl.contracts.application import EngineStage
 from personal_finance_etl.contracts.observability import (
     DiagnosticSeverity,
     EventCode,
-    EventOutcome,
-    NullObservabilitySink,
-    ObservabilityContext,
-    ObservabilityEvent,
-    ObservabilitySink,
     PresentationKind,
+)
+from personal_finance_etl.infrastructure.observability import (
+    ObservabilityEmitter,
+    get_global_emitter,
+)
+from personal_finance_etl.infrastructure.observability.diagnostics import (
+    get_observability_diagnostics,
 )
 from personal_finance_etl.infrastructure.warehouse.connection import DuckDBManager
 from personal_finance_etl.infrastructure.warehouse.registry import DATA_CONTRACT_REGISTRY
 from personal_finance_etl.infrastructure.warehouse.schema.silver import SILVER_DDL
 
-logger = logging.getLogger("personal_finance_etl.warehouse.silver")
+diagnostics = get_observability_diagnostics("personal_finance_etl.warehouse.silver")
 
 
 class SilverLayer:
@@ -51,10 +50,10 @@ class SilverLayer:
     def __init__(
         self,
         db_manager: DuckDBManager,
-        emitter: ObservabilitySink | None = None,
+        emitter: ObservabilityEmitter | None = None,
     ) -> None:
         self.db_manager = db_manager
-        self.emitter = emitter or NullObservabilitySink()
+        self.emitter = emitter or get_global_emitter()
 
     @staticmethod
     def _sanitize_dimension_strings(df: pl.DataFrame) -> pl.DataFrame:
@@ -103,16 +102,16 @@ class SilverLayer:
             if col_name in df.columns:
                 missing = df.filter(pl.col(col_name).is_null())
                 if missing.height > 0:
-                    logger.error(
+                    diagnostics.error(
                         "CRITICAL: Found %d rows with missing %s in d_Investment_Master.",
                         missing.height,
                         col_name,
                     )
-                    logger.error(
+                    diagnostics.error(
                         "Please add the %s for the following instruments to your tracker:", col_name
                     )
                     for row in missing.to_dicts():
-                        logger.error("-> %s", row)
+                        diagnostics.error("-> %s", row)
                     critical_errors.append(col_name)
 
         if critical_errors:
@@ -164,7 +163,7 @@ class SilverLayer:
         dfs : dict[str, pl.DataFrame]
             Transformed DataFrames keyed by contract_id.
         """
-        logger.info("Loading transformed datasets into Silver layer...")
+        diagnostics.info("Loading transformed datasets into Silver layer...")
 
         contracts = sorted(
             (c for c in DATA_CONTRACT_REGISTRY if c.layer == "silver"),
@@ -186,24 +185,18 @@ class SilverLayer:
                 if rows > 0:
                     tables_built += 1
                     total_rows += rows
-                self.emitter.emit(
-                    ObservabilityEvent(
-                        timestamp=datetime.now(UTC),
-                        event_code=EventCode.SILVER_REPLACE,
-                        severity=DiagnosticSeverity.DEBUG,
-                        presentation_kind=PresentationKind.INTERNAL,
-                        outcome=EventOutcome.COMPLETED,
-                        context=ObservabilityContext(
-                            stage=EngineStage.PUBLISHING,
-                            entity_type="Table",
-                            entity_id=contract.physical_table,
-                            rows=rows,
-                        ),
-                        message=f"Silver layer synchronized {contract.physical_table} ({rows:,} rows)",
-                    )
+                self.emitter.emit_event(
+                    event_code=EventCode.SILVER_REPLACE,
+                    message=f"Silver layer synchronized {contract.physical_table} ({rows:,} rows)",
+                    severity=DiagnosticSeverity.DEBUG,
+                    presentation_kind=PresentationKind.INTERNAL,
+                    stage=EngineStage.PUBLISHING,
+                    entity_type="Table",
+                    entity_id=contract.physical_table,
+                    rows=rows,
                 )
 
-        logger.info(
+        diagnostics.info(
             "Rebuilt %d analytical tables (%s total rows).",
             tables_built,
             f"{total_rows:,}",

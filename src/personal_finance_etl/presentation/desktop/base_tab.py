@@ -217,9 +217,18 @@ class BaseEngineTab(ctk.CTkFrame):  # type: ignore[misc]
 
         parts: list[str] = [f"{prefix} {event.message}"]
 
-        if event.context.entity_type and event.context.entity_id:
+        # Only display entity badge when it is a meaningful domain entity (suppress redundant [Run: uuid])
+        if (
+            event.context.entity_type
+            and event.context.entity_id
+            and event.context.entity_type != "Run"
+        ):
             parts.append(f"[{event.context.entity_type}: {event.context.entity_id}]")
-        elif event.context.entity_id:
+        elif (
+            event.context.entity_id
+            and not event.context.entity_type
+            and event.context.entity_id != event.context.run_id
+        ):
             parts.append(f"[{event.context.entity_id}]")
 
         if event.context.rows is not None:
@@ -234,6 +243,16 @@ class BaseEngineTab(ctk.CTkFrame):  # type: ignore[misc]
             else:
                 parts.append(f"({event.context.duration_ms:.1f}ms)")
 
+        # On failure, append actionable diagnostic hints inline into the log
+        if event.presentation_kind == PresentationKind.FAILURE and event.error is not None:
+            if event.error.remediation_hint:
+                parts.append(f"\n  ↳ Remediation: {event.error.remediation_hint}")
+            if event.error.context_variables:
+                ctx_summary = ", ".join(
+                    f"{k}={v}" for k, v in sorted(event.error.context_variables.items())
+                )
+                parts.append(f"\n  ↳ Context: [{ctx_summary}]")
+
         msg = " ".join(parts)
         self._log(msg, tag)
 
@@ -243,13 +262,23 @@ class BaseEngineTab(ctk.CTkFrame):  # type: ignore[misc]
 
             dialog_lines: list[str] = []
             if event.error is not None:
-                dialog_lines.append(f"Domain: {event.error.failure_domain.value}")
+                dialog_lines.append(f"Failure Domain: {event.error.failure_domain.value}")
                 dialog_lines.append(
                     f"Error: {event.error.exception_type} - {event.error.exception_message}"
                 )
+                if event.error.failing_stage:
+                    dialog_lines.append(f"Stage: {event.error.failing_stage}")
+                if event.error.failing_entity:
+                    dialog_lines.append(f"Entity: {event.error.failing_entity}")
+                if event.error.remediation_hint:
+                    dialog_lines.append(f"\nRemediation: {event.error.remediation_hint}")
+                if event.error.context_variables:
+                    dialog_lines.append("\nDiagnostic State:")
+                    for ck, cv in sorted(event.error.context_variables.items()):
+                        dialog_lines.append(f"  • {ck}: {cv}")
                 dialog_lines.append("")
                 dialog_lines.append(f"Run ID: {event.context.run_id}")
-                dialog_lines.append("Inspect forensic log for complete diagnostic details.")
+                dialog_lines.append("Inspect forensic log for complete trace and stack context.")
                 if event.error.retryable:
                     dialog_lines.append("Status: Transient failure eligible for retry.")
             else:

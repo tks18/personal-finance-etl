@@ -268,6 +268,18 @@ class NetWorthBuilder:
         )
 
     def _inject_asset_market_values(self, lf_nw_summary: pl.LazyFrame) -> pl.LazyFrame:
+        """Enrich net worth monthly summary records with granular investment market valuations.
+
+        Parameters
+        ----------
+        lf_nw_summary : pl.LazyFrame
+            Monthly net worth summary LazyFrame.
+
+        Returns
+        -------
+        pl.LazyFrame
+            Enhanced LazyFrame incorporating mark-to-market valuations and unrealized PnL.
+        """
         df_inv_isin = self.dfs.get("df_f_investment_analytics_isin")
         df_inv_master = self.dfs.get("df_d_investment_master")
 

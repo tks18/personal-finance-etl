@@ -15,7 +15,6 @@ Does not own
 from __future__ import annotations
 
 import io
-import logging
 import time
 import uuid
 from datetime import date, timedelta
@@ -28,6 +27,9 @@ import polars as pl
 import yfinance as yf  # type: ignore[import-untyped]
 
 from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
+from personal_finance_etl.infrastructure.observability.diagnostics import (
+    get_observability_diagnostics,
+)
 
 __all__ = [
     "calculate_market_fetch_window",
@@ -35,7 +37,7 @@ __all__ = [
     "vault_parquet_chunks",
 ]
 
-logger = logging.getLogger(__name__)
+diagnostics = get_observability_diagnostics(__name__)
 
 
 def calculate_market_fetch_window(
@@ -99,7 +101,7 @@ def download_yfinance_history(
         Tuple of (result_dataframe, attempts_performed, last_exception).
         If successful, last_exception is None and result_dataframe is populated.
     """
-    logger.debug("API fetching %s (%s) from %s to %s", ticker, label, fetch_start, end_dt)
+    diagnostics.debug("API fetching %s (%s) from %s to %s", ticker, label, fetch_start, end_dt)
     attempts_done = 0
     last_err: Exception | None = None
     hist_pd: pd.DataFrame | None = None
@@ -118,7 +120,7 @@ def download_yfinance_history(
             return hist_pd, attempts_done, None
         except Exception as e:
             last_err = e
-            logger.warning(
+            diagnostics.warning(
                 "Attempt %d/%d failed for %s (%s): %s",
                 attempts_done,
                 max_attempts,
@@ -185,7 +187,7 @@ def vault_parquet_chunks(
             )
         )
 
-    logger.info(
+    diagnostics.info(
         "Injected %d Parquet chunks into Raw Store for %s.", len(injected_files), file_prefix
     )
     return df_final_chunks, injected_files

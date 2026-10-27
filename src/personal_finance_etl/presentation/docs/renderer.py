@@ -36,6 +36,22 @@ class DocsRenderer:
         self.catalog = catalog
 
     def _inject_image(self, text: str, src_pattern: str, image_rel_path: str = "docs/assets/images/logo.png") -> str:
+        """Inject base64-encoded image data into HTML string matching an image source pattern.
+
+        Parameters
+        ----------
+        text : str
+            Source HTML markup content.
+        src_pattern : str
+            Image source pattern to match and replace.
+        image_rel_path : str, default "docs/assets/images/logo.png"
+            Relative asset path to image file.
+
+        Returns
+        -------
+        str
+            Transformed HTML with embedded base64 data URI.
+        """
         img_path = resource_path(image_rel_path)
         if os.path.exists(img_path):
             with open(img_path, "rb") as img_f:
@@ -44,6 +60,20 @@ class DocsRenderer:
         return text
 
     def _inject_logo(self, text: str, src_pattern: str) -> str:
+        """Inject base64-encoded brand logo into HTML template.
+
+        Parameters
+        ----------
+        text : str
+            Source HTML markup content.
+        src_pattern : str
+            Logo image source placeholder string.
+
+        Returns
+        -------
+        str
+            HTML markup with inline base64 logo data.
+        """
         return self._inject_image(text, src_pattern, "docs/assets/images/logo.png")
 
     @staticmethod

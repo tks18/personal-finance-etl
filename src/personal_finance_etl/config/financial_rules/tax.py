@@ -117,6 +117,22 @@ class InvestmentExclusionsConfig(BaseModel):
 def _check_duplicate_subhead(
     seen_head_subhead: set[tuple[str, str]], head_name: str, sub_name: str
 ) -> None:
+    """Validate that a sub-head name is not declared more than once under a head.
+
+    Parameters
+    ----------
+    seen_head_subhead : set[tuple[str, str]]
+        Set of tracked (head_name, sub_name) tuples.
+    head_name : str
+        Canonical name of the income head.
+    sub_name : str
+        Canonical name of the sub-head.
+
+    Raises
+    ------
+    ValueError
+        If the sub-head has already been defined under the same head.
+    """
     head_sub_key = (head_name.strip().lower(), sub_name.strip().lower())
     if head_sub_key in seen_head_subhead:
         raise ValueError(
@@ -131,6 +147,24 @@ def _check_subcat_ids(
     sub_cat_ids: list[str],
     location: str,
 ) -> None:
+    """Ensure subcategory IDs are uniquely assigned and not used as tax credits.
+
+    Parameters
+    ----------
+    seen_sub_cats : dict[str, str]
+        Mapping of observed subcategory UIDs to their source locations.
+    seen_credit_sub_cats : dict[str, str]
+        Mapping of observed credit subcategory UIDs to their source locations.
+    sub_cat_ids : list[str]
+        List of subcategory IDs to validate.
+    location : str
+        Descriptive path or location string for error attribution.
+
+    Raises
+    ------
+    ValueError
+        If any ID is duplicated or overlaps with credit categories.
+    """
     for sub_cat in sub_cat_ids:
         if sub_cat in seen_sub_cats:
             raise ValueError(
@@ -151,6 +185,24 @@ def _check_credit_subcat_ids(
     tax_credit_sub_cat_ids: list[str],
     location: str,
 ) -> None:
+    """Ensure tax credit subcategory IDs are uniquely assigned without income overlap.
+
+    Parameters
+    ----------
+    seen_sub_cats : dict[str, str]
+        Mapping of observed subcategory UIDs to their source locations.
+    seen_credit_sub_cats : dict[str, str]
+        Mapping of observed credit subcategory UIDs to their source locations.
+    tax_credit_sub_cat_ids : list[str]
+        List of tax credit subcategory IDs to validate.
+    location : str
+        Descriptive path or location string for error attribution.
+
+    Raises
+    ------
+    ValueError
+        If any credit ID is duplicated or overlaps with income categories.
+    """
     for credit_sub_cat in tax_credit_sub_cat_ids:
         if credit_sub_cat in seen_credit_sub_cats:
             raise ValueError(
@@ -170,6 +222,22 @@ def _check_cat_ids(
     cat_ids: list[str],
     location: str,
 ) -> None:
+    """Validate that category IDs are not duplicated across heads.
+
+    Parameters
+    ----------
+    seen_cats : dict[str, str]
+        Mapping of observed category IDs to their declared locations.
+    cat_ids : list[str]
+        List of category IDs to validate.
+    location : str
+        Descriptive path or location string for error attribution.
+
+    Raises
+    ------
+    ValueError
+        If any category ID is defined in multiple heads or configurations.
+    """
     for cat in cat_ids:
         if cat in seen_cats:
             raise ValueError(
@@ -184,6 +252,22 @@ def _check_investment_exclusions(
     seen_credit_sub_cats: dict[str, str],
     exclusions: InvestmentExclusionsConfig,
 ) -> None:
+    """Verify that capital gains exclusion IDs do not clash with ordinary income or credits.
+
+    Parameters
+    ----------
+    seen_sub_cats : dict[str, str]
+        Mapping of observed subcategory UIDs to their source locations.
+    seen_credit_sub_cats : dict[str, str]
+        Mapping of observed credit subcategory UIDs to their source locations.
+    exclusions : InvestmentExclusionsConfig
+        Investment exclusions configuration specifying STCG and LTCG IDs.
+
+    Raises
+    ------
+    ValueError
+        If any exclusion UID is already registered as income or tax credit.
+    """
     for exclusion_type, exclusion_uids in (
         ("stcg", exclusions.stcg_sub_cat_ids),
         ("ltcg", exclusions.ltcg_sub_cat_ids),

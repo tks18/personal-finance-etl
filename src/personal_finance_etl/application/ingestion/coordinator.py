@@ -17,7 +17,6 @@ Does not own
 from __future__ import annotations
 
 import io
-import logging
 import os
 import time
 import traceback
@@ -25,15 +24,11 @@ from collections.abc import Callable
 
 import polars as pl
 
-from personal_finance_etl.application.observability import (
-    ObservabilityEmitter,
-    get_global_emitter,
-)
 from personal_finance_etl.config.settings import Settings
 from personal_finance_etl.contracts.application import EngineStage
+from personal_finance_etl.contracts.event_transport import EventQueue
 from personal_finance_etl.contracts.extraction import ExtractionResult
 from personal_finance_etl.contracts.lifecycle import FailureDomain
-from personal_finance_etl.contracts.logging import StatusQueue
 from personal_finance_etl.contracts.observability import (
     DiagnosticSeverity,
     ErrorDetails,
@@ -42,6 +37,13 @@ from personal_finance_etl.contracts.observability import (
 )
 from personal_finance_etl.domain.household.transforms.common import get_column_mapping
 from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
+from personal_finance_etl.infrastructure.observability import (
+    ObservabilityEmitter,
+    get_global_emitter,
+)
+from personal_finance_etl.infrastructure.observability.diagnostics import (
+    get_observability_diagnostics,
+)
 from personal_finance_etl.infrastructure.providers.files.csv import (
     extract_benchmark_master_raw,
     extract_currency_mapping_raw,
@@ -63,7 +65,7 @@ from personal_finance_etl.infrastructure.providers.files.sqlite import (
 
 __all__ = ["DataExtractor"]
 
-logger = logging.getLogger(__name__)
+diagnostics = get_observability_diagnostics(__name__)
 
 
 class DataExtractor:
@@ -72,7 +74,7 @@ class DataExtractor:
     def __init__(
         self,
         cfg: Settings,
-        status_queue: StatusQueue,
+        status_queue: EventQueue,
         cp: ControlPlane,
         emitter: ObservabilityEmitter | None = None,
     ) -> None:
@@ -89,13 +91,25 @@ class DataExtractor:
         return raw_bytes
 
     def _get_file_list_with_bytes(self, filepaths: list[str]) -> list[tuple[str, str, bytes]]:
+        """Retrieve binary contents along with path metadata for a list of file paths.
+
+        Parameters
+        ----------
+        filepaths : list[str]
+            List of file paths to resolve from the control plane artifact store.
+
+        Returns
+        -------
+        list[tuple[str, str, bytes]]
+            List of tuples of (filename, directory_path, file_bytes).
+        """
         return [(os.path.basename(f), os.path.dirname(f), self._get_bytes(f)) for f in filepaths]
 
     def _extract_sqlite_tables(
         self, pending_files: dict[str, list[str]]
     ) -> tuple[pl.LazyFrame, pl.LazyFrame, pl.LazyFrame, pl.LazyFrame, pl.LazyFrame]:
         """Extract reference tables from SQLite source database bytes."""
-        logger.debug("Extracting base reference tables from SQLite source...")
+        diagnostics.debug("Extracting base reference tables from SQLite source...")
         sqlite_files = pending_files.get("sqlite_source", [])
         if sqlite_files:
             sqlite_path = sqlite_files[0]
@@ -104,7 +118,9 @@ class DataExtractor:
             tables = extractor.extract_base_tables(
                 os.path.basename(sqlite_path), os.path.dirname(sqlite_path), sqlite_bytes
             )
-            logger.debug("Successfully extracted 5 base reference tables from SQLite source bytes.")
+            diagnostics.debug(
+                "Successfully extracted 5 base reference tables from SQLite source bytes."
+            )
             self.emitter.emit_event(
                 event_code=EventCode.PROVIDER_BATCH_INGEST,
                 message="Extracted 5 base reference tables from SQLite source",
@@ -238,7 +254,7 @@ class DataExtractor:
         sqlite_count = len(pending_files.get("sqlite_source", []))
         total_payloads = excel_count + csv_count + sqlite_count
 
-        logger.info(
+        diagnostics.info(
             f"Pulled {total_payloads} binary payloads from Raw Store "
             f"({excel_count} Excel, {csv_count} CSV, {sqlite_count} DB)"
         )
@@ -281,7 +297,7 @@ class DataExtractor:
 
     def _validate_extracted_streams(self, result: ExtractionResult) -> None:
         """Execute Gatekeeper schema validation on active extracted streams."""
-        logger.info("Running Gatekeeper Schema Validation on 18 active streams...")
+        diagnostics.info("Running Gatekeeper Schema Validation on 18 active streams...")
         self.emitter.emit_event(
             event_code=EventCode.SCHEMA_VALIDATION,
             message="Running Gatekeeper Schema Validation on 18 active streams...",
@@ -314,11 +330,13 @@ class DataExtractor:
             for lf in validation_frames:
                 schema = lf.collect_schema()
                 if len(schema.names()) > 0:
-                    logger.debug(f"Validating schema constraints: {schema.names()}")
+                    diagnostics.debug(f"Validating schema constraints: {schema.names()}")
 
             pl.collect_all([lf.head(1) for lf in validation_frames])
             elapsed_ms = (time.perf_counter() - t0) * 1000.0
-            logger.info(f"Gatekeeper validated 18 schemas with 0 violations in {elapsed_ms:.2f}ms.")
+            diagnostics.info(
+                f"Gatekeeper validated 18 schemas with 0 violations in {elapsed_ms:.2f}ms."
+            )
             self.emitter.emit_event(
                 event_code=EventCode.SCHEMA_VALIDATION,
                 message=f"Gatekeeper validated 18 schemas with 0 violations in {elapsed_ms:.2f}ms",
@@ -358,7 +376,7 @@ class DataExtractor:
         ExtractionResult
             Container of extracted lazy frames, raw payloads, and mapping tables.
         """
-        logger.info("Initializing extraction from Raw Store payloads...")
+        diagnostics.info("Initializing extraction from Raw Store payloads...")
         self.emitter.emit_event(
             event_code=EventCode.EXTRACTION_START,
             message="Initializing extraction from Raw Store payloads...",

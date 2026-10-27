@@ -20,7 +20,6 @@ from __future__ import annotations
 import hashlib
 import importlib.metadata
 import json
-import logging
 import math
 import sqlite3
 import uuid
@@ -40,8 +39,11 @@ from personal_finance_etl.contracts.lifecycle import (
     classify_failure_domain,
 )
 from personal_finance_etl.infrastructure.control_plane.connection import SQLiteManager
+from personal_finance_etl.infrastructure.observability.diagnostics import (
+    get_observability_diagnostics,
+)
 
-logger = logging.getLogger("personal_finance_etl.control_plane.run_repo")
+diagnostics = get_observability_diagnostics("personal_finance_etl.control_plane.run_repo")
 
 
 @dataclass
@@ -619,7 +621,7 @@ class RunRepository:
                 )
                 recovered += 1
         if recovered:
-            logger.warning("ControlPlane: Recovered %d interrupted run(s).", recovered)
+            diagnostics.warning("ControlPlane: Recovered %d interrupted run(s).", recovered)
 
     @staticmethod
     def _normalize_provider_record(

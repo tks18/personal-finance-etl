@@ -30,7 +30,7 @@ from pathlib import Path
 
 import pytest
 
-from personal_finance_etl.application.observability import ObservabilityEmitter
+from personal_finance_etl.infrastructure.observability import ObservabilityEmitter
 from personal_finance_etl.contracts.application import EngineStage
 from personal_finance_etl.contracts.extraction import ExtractionProviderRequest
 from personal_finance_etl.contracts.lifecycle import (

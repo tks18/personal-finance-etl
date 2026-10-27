@@ -93,6 +93,18 @@ class BenchmarkPriceProvider:
             self._load_dataframe(str(bench_id).strip(), df_b)
 
     def _load_map(self, values: dict[date, float]) -> None:
+        """Populate internal benchmark price map from an existing date-to-price mapping.
+
+        Parameters
+        ----------
+        values : dict[date, float]
+            Dictionary of dates to benchmark prices.
+
+        Raises
+        ------
+        ValueError
+            If any date is invalid or if any price is non-finite or non-positive.
+        """
         for raw_date, raw_price in values.items():
             d_val = (
                 raw_date

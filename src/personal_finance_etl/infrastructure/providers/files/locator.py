@@ -15,12 +15,15 @@ Does not own
 from __future__ import annotations
 
 import glob
-import logging
 import os
+
+from personal_finance_etl.infrastructure.observability.diagnostics import (
+    get_observability_diagnostics,
+)
 
 __all__ = ["categorize_statement_files"]
 
-logger = logging.getLogger(__name__)
+diagnostics = get_observability_diagnostics(__name__)
 
 
 def _match_category(filepath: str) -> str | None:
@@ -93,7 +96,7 @@ def categorize_statement_files(folder_path: str, strict: bool = True) -> dict[st
     """
     all_files = glob.glob(os.path.join(folder_path, "**", "*.*"), recursive=True)
     all_files = [f.replace("\\", "/") for f in all_files if not os.path.basename(f).startswith("~")]
-    logger.debug(f"Scanning directory: {folder_path} - Found {len(all_files)} total blobs.")
+    diagnostics.debug(f"Scanning directory: {folder_path} - Found {len(all_files)} total blobs.")
 
     categories: dict[str, list[str]] = {
         "stock_pl": [],
@@ -111,5 +114,5 @@ def categorize_statement_files(folder_path: str, strict: bool = True) -> dict[st
     total_files = sum(len(f) for f in categories.values())
     _validate_required_categories(categories, strict)
 
-    logger.info(f"Scanned {total_files} active statement files from local disk.")
+    diagnostics.info(f"Scanned {total_files} active statement files from local disk.")
     return categories

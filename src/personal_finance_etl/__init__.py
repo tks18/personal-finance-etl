@@ -10,7 +10,7 @@ Architecture Overview:
 1. `personal_finance_etl.contracts`: Canonical interfaces, protocols, and data contracts.
 2. `personal_finance_etl.config`: Strongly-typed configuration settings and partitioned financial policy models.
 3. `personal_finance_etl.domain`: Pure functional financial mathematics, transforms, and domain logic.
-4. `personal_finance_etl.infrastructure`: Database persistence (DuckDB + SQLite), logging, and external providers.
+4. `personal_finance_etl.infrastructure`: Persistence, observability sinks, and external providers.
 5. `personal_finance_etl.application`: Application services, pipeline execution, and public façade.
 6. `personal_finance_etl.bootstrap`: Dependency injection and composition root.
 Owns
@@ -41,6 +41,6 @@ __all__ = [
     "run_app",
 ]
 
-__version__ = "9.4.0"
+__version__ = "9.5.0"
 __author__ = "Sudharshan TK"
 PACKAGE_NAME = "personal-finance-etl"

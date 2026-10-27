@@ -3,7 +3,7 @@
 Owns
 ----
 - ETLOrchestrator: High-level use-case coordinator driving the 5 pipeline phases.
-- Delegating transaction management, logging, and split-commit recovery to RunLifecycleCoordinator.
+- Delegating transactions, observability, and split-commit recovery to RunLifecycleCoordinator.
 - Delegating evidence extraction, transformations, and warehouse loading to PipelineExecutor.
 - Emitting pipeline run start and completion events via central ObservabilityEmitter.
 
@@ -16,33 +16,35 @@ Does not own
 
 from __future__ import annotations
 
-import logging
 import time
 
 import polars as pl
 
-from personal_finance_etl.application.observability import (
-    ObservabilityEmitter,
-    get_global_emitter,
-)
 from personal_finance_etl.application.pipeline.execution import PipelineExecutor
 from personal_finance_etl.application.pipeline.lifecycle import RunLifecycleCoordinator
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
 from personal_finance_etl.contracts.application import EngineStage
+from personal_finance_etl.contracts.event_transport import EventQueue, NullEventQueue
 from personal_finance_etl.contracts.extraction import ExtractionResult
-from personal_finance_etl.contracts.logging import ILogger, NullStatusQueue
 from personal_finance_etl.contracts.observability import (
     EventCode,
     PresentationKind,
 )
 from personal_finance_etl.infrastructure.control_plane import ControlPlane
+from personal_finance_etl.infrastructure.observability import (
+    ObservabilityEmitter,
+    get_global_emitter,
+)
+from personal_finance_etl.infrastructure.observability.diagnostics import (
+    get_observability_diagnostics,
+)
 from personal_finance_etl.infrastructure.warehouse.bronze import BronzeLayer
 from personal_finance_etl.infrastructure.warehouse.connection import DuckDBManager
 
 __all__ = ["ETLOrchestrator"]
 
-logger = logging.getLogger(__name__)
+diagnostics = get_observability_diagnostics(__name__)
 
 
 class ETLOrchestrator:
@@ -51,13 +53,13 @@ class ETLOrchestrator:
     def __init__(
         self,
         cfg: Settings,
-        status_queue: ILogger | None = None,
+        status_queue: EventQueue | None = None,
         rules: FinancialRules | None = None,
         emitter: ObservabilityEmitter | None = None,
     ) -> None:
         self.cfg = cfg
         self.rules = rules
-        self.status_queue = status_queue or NullStatusQueue()
+        self.status_queue = status_queue or NullEventQueue()
         self.emitter = emitter or get_global_emitter()
         self.db_manager = DuckDBManager(cfg.TARGET_DB_BASE_PATH, cfg.TARGET_DB_NAME)
         self.executor = PipelineExecutor(
@@ -115,9 +117,10 @@ class ETLOrchestrator:
 
         try:
             cp, run_id, _ = lifecycle.initialize()
+            short_id = run_id[:8]
             self.emitter.emit_event(
                 event_code=EventCode.RUN_START,
-                message="Pipeline execution started.",
+                message=f"Pipeline execution started [Run: {short_id}].",
                 presentation_kind=PresentationKind.STEP,
                 progress=0.0,
                 stage=EngineStage.INITIALIZING,
@@ -127,12 +130,12 @@ class ETLOrchestrator:
             lifecycle.commit()
 
             total_time = time.perf_counter() - start_time
-            logger.info(
-                f"Pipeline Execution Successful in {total_time:.2f} seconds. Total Nodes: {len(self.dfs)}"
-            )
             self.emitter.emit_event(
                 event_code=EventCode.RUN_COMPLETED,
-                message=f"Pipeline Execution Successful in {total_time:.2f} seconds. Total Nodes: {len(self.dfs)}",
+                message=(
+                    f"Pipeline Execution Successful in {total_time:.2f}s "
+                    f"(Total Nodes: {len(self.dfs)}) [Run: {short_id}]."
+                ),
                 presentation_kind=PresentationKind.SUCCESS,
                 duration_ms=total_time * 1000.0,
                 rows=len(self.dfs),

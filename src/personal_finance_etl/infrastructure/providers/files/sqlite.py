@@ -16,15 +16,18 @@ Does not own
 from __future__ import annotations
 
 import glob
-import logging
 import os
 import sqlite3
 
 import polars as pl
 
+from personal_finance_etl.infrastructure.observability.diagnostics import (
+    get_observability_diagnostics,
+)
+
 __all__ = ["SQLiteExtractor"]
 
-logger = logging.getLogger(__name__)
+diagnostics = get_observability_diagnostics(__name__)
 
 
 class SQLiteExtractor:
@@ -93,7 +96,7 @@ class SQLiteExtractor:
                 ).lazy()
             )
 
-            logger.debug(f"Successfully extracted 5 base tables from {filename}")
+            diagnostics.debug(f"Successfully extracted 5 base tables from {filename}")
 
         # Tables were read into memory DataFrames during SQLite connection lifecycle;
         # returning LazyFrames directly without redundant collect().lazy() round-trips.

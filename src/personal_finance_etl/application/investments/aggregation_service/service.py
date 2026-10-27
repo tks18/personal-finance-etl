@@ -160,6 +160,13 @@ class PostProcessor:
 
     @staticmethod
     def _level_aggregation_expressions() -> list[pl.Expr]:
+        """Construct standard aggregation expressions for rolling up lot-level investment metrics.
+
+        Returns
+        -------
+        list[pl.Expr]
+            List of Polars aggregation expressions for financial metrics.
+        """
         return [
             pl.col("Buy_Value").sum().alias("Total_Invested_Value"),
             pl.col("Close_Value").sum().alias("Total_Current_Value"),

@@ -10,7 +10,7 @@ Does not own
 -------------
 - Queue listener lifecycle and multi-process IPC (owned by infrastructure.observability.queue).
 - Presentation narrative formatting or terminal rendering (owned by presentation).
-- Event creation and contextual span tracking (owned by application.observability).
+- Event creation and contextual span tracking (owned by infrastructure.observability).
 """
 
 from __future__ import annotations

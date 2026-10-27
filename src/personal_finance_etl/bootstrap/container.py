@@ -22,7 +22,7 @@ from personal_finance_etl.application.facade import PersonalFinanceEngine
 from personal_finance_etl.application.pipeline.orchestrator import ETLOrchestrator
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
-from personal_finance_etl.contracts.logging import ILogger
+from personal_finance_etl.contracts.event_transport import EventQueue
 from personal_finance_etl.contracts.observability import ObservabilityEvent
 from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
 from personal_finance_etl.infrastructure.preferences import PreferencesManager
@@ -32,8 +32,8 @@ from personal_finance_etl.infrastructure.warehouse.connection import DuckDBManag
 __all__ = ["ServiceContainer"]
 
 
-class _NullLoggerQueue:
-    """Fallback in-memory queue satisfying ILogger protocol when no queue is provided."""
+class _NullEventQueue:
+    """Fallback in-memory queue satisfying EventQueue protocol when no queue is provided."""
 
     def __init__(self) -> None:
         self._q: queue.Queue[ObservabilityEvent] = queue.Queue()
@@ -94,13 +94,13 @@ class ServiceContainer:
         self,
         config_path: str | None = None,
         rules_path: str | None = None,
-        status_queue: ILogger | None = None,
+        status_queue: EventQueue | None = None,
         settings: Settings | None = None,
     ) -> ETLOrchestrator:
         """Assemble an ETLOrchestrator with all required dependencies wired."""
         cfg = settings or self.create_settings(config_path)
         rules = self.create_rules(rules_path)
-        active_queue: ILogger = status_queue or cast(ILogger, _NullLoggerQueue())
+        active_queue: EventQueue = status_queue or cast(EventQueue, _NullEventQueue())
         return ETLOrchestrator(cfg, active_queue, rules)
 
     def create_engine(self) -> PersonalFinanceEngine:

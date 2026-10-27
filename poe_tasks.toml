@@ -34,6 +34,7 @@ audit-fast = { cmd = "uv run python -c \"from scripts.tasks import audit_fast; a
 audit-full = { cmd = "uv run python -c \"from scripts.tasks import audit_full; audit_full()\"", help = "Run Full Quality Gate (all 6 engines: Ruff, Mypy, Pyright, Pylint, Pytest)" }
 audit-csv = { cmd = "uv run python -c \"from scripts.tasks import audit_csv; audit_csv()\"", help = "Run Full Quality Gate and export structured CSV report" }
 audit-json = { cmd = "uv run python -c \"from scripts.tasks import audit_json; audit_json()\"", help = "Run Full Quality Gate and export structured JSON report" }
+audit-docs = { cmd = "uv run python scripts/audit_documentation.py", help = "Run AST-level documentation compliance auditor" }
 
 # Git Hooks Orchestration
 install-hooks = { cmd = "uv run python -c \"from scripts.tasks import install_hooks; install_hooks()\"", help = "Install Git pre-commit and pre-push quality hooks" }

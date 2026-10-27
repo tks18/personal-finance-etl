@@ -13,7 +13,6 @@ Does not own
 
 from __future__ import annotations
 
-import logging
 import os
 
 import polars as pl
@@ -21,19 +20,25 @@ import polars as pl
 from personal_finance_etl.application.investments.aggregation_service.service import PostProcessor
 from personal_finance_etl.application.investments.context import RunContext
 from personal_finance_etl.contracts.application import EngineStage
-from personal_finance_etl.contracts.logging import StatusQueue
+from personal_finance_etl.contracts.event_transport import EventQueue
 from personal_finance_etl.contracts.observability import (
     DiagnosticSeverity,
     EventCode,
     EventOutcome,
-    ObservabilityEvent,
     PresentationKind,
 )
 from personal_finance_etl.domain.investments.contracts import PipelineExecutionResult
+from personal_finance_etl.infrastructure.observability import (
+    ObservabilityEmitter,
+    get_global_emitter,
+)
+from personal_finance_etl.infrastructure.observability.diagnostics import (
+    get_observability_diagnostics,
+)
 
 __all__ = ["PostProcessingPipeline"]
 
-logger = logging.getLogger(__name__)
+diagnostics = get_observability_diagnostics(__name__)
 
 
 class PostProcessingPipeline:
@@ -45,7 +50,7 @@ class PostProcessingPipeline:
         Analytics run context containing configuration and shared tables.
     tmp_dir : str
         Directory containing intermediate per-ISIN Parquet partitions.
-    status_queue : StatusQueue | None, optional
+    status_queue : EventQueue | None, optional
         Status queue for reporting pipeline progress.
     """
 
@@ -53,27 +58,26 @@ class PostProcessingPipeline:
         self,
         ctx: RunContext,
         tmp_dir: str,
-        status_queue: StatusQueue | None = None,
+        status_queue: EventQueue | None = None,
+        emitter: ObservabilityEmitter | None = None,
     ) -> None:
         self.ctx = ctx
         self.tmp_dir = tmp_dir
         self.status_queue = status_queue
+        self.emitter = emitter or get_global_emitter()
         self.postprocessor = PostProcessor(ctx)
 
     def _report_step(self, progress: float) -> None:
-        """Report incremental step progress to status queue."""
-        if self.status_queue:
-            self.status_queue.put(
-                ObservabilityEvent.create(
-                    event_code=EventCode.TRANSFORMATION_STAGE,
-                    message="",
-                    progress=progress,
-                    severity=DiagnosticSeverity.INFO,
-                    outcome=EventOutcome.COMPLETED,
-                    presentation_kind=PresentationKind.PROGRESS,
-                    stage=EngineStage.ANALYZING,
-                )
-            )
+        """Emit incremental progress through the canonical emitter."""
+        self.emitter.emit_event(
+            event_code=EventCode.TRANSFORMATION_STAGE,
+            message="",
+            progress=progress,
+            severity=DiagnosticSeverity.INFO,
+            outcome=EventOutcome.COMPLETED,
+            presentation_kind=PresentationKind.PROGRESS,
+            stage=EngineStage.ANALYZING,
+        )
 
     def run(
         self,
@@ -91,7 +95,7 @@ class PostProcessingPipeline:
         dict[str, pl.DataFrame]
             Collected dictionary of final analytics tables.
         """
-        logger.debug("Post-processing: Scanning temporary parquet files...")
+        diagnostics.debug("Post-processing: Scanning temporary parquet files...")
         self._report_step(0.86)
 
         lazy_df = pl.scan_parquet(os.path.join(self.tmp_dir, "*.parquet"))
@@ -101,12 +105,12 @@ class PostProcessingPipeline:
         unique_dates_df = lazy_df.select("Closing_Date").unique().collect()
         unique_dates = unique_dates_df["Closing_Date"].sort().to_list()
 
-        logger.debug("Post-processing: Aggregating portfolio metrics...")
+        diagnostics.debug("Post-processing: Aggregating portfolio metrics...")
         self._report_step(0.90)
 
         res_dict = self.postprocessor.run(lazy_df, unique_dates, pipeline_res)
 
-        logger.debug("Post-processing: Collecting final output...")
+        diagnostics.debug("Post-processing: Collecting final output...")
         self._report_step(0.95)
 
         # Materialization Boundary: PUBLICATION_BOUNDARY

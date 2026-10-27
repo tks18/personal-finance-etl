@@ -9,7 +9,7 @@ Owns
 Does not own
 -------------
 - Forensic JSONL file persistence (owned by infrastructure.observability).
-- Central emitter and span management (owned by application.observability).
+- Central emitter and span management (owned by infrastructure.observability).
 - Canonical contracts and data types (owned by contracts.observability).
 """
 
