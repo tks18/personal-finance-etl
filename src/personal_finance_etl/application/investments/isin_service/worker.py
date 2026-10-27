@@ -13,10 +13,7 @@ Does not own
 
 from __future__ import annotations
 
-import logging
-import multiprocessing
 import os
-import time
 import traceback
 from datetime import date
 from typing import cast
@@ -35,8 +32,6 @@ from personal_finance_etl.domain.market.fx import FXRateProvider
 from personal_finance_etl.domain.market.macro import FYMacroParametersTable
 
 __all__ = ["_process_isin_worker"]
-
-logger = logging.getLogger(__name__)
 
 
 def _process_isin_worker(
@@ -102,27 +97,9 @@ def _process_isin_worker(
         tmp_dir,
     ) = task
 
-    logger.debug(
-        f"Starting processing for ISIN: {isin} with {len(p_inst)} purchases, "
-        f"{len(s_inst)} sales, and {len(m_inst)} market quotes",
-        extra={"isin": isin, "stage": "QuantWorker"},
-    )
-
     processor = IsinProcessor(fy_table, start_date, end_date, rules, fx_provider)
     try:
-        worker_id = multiprocessing.current_process().name
-        logger.debug(
-            f"{worker_id} started processing ISIN '{isin}'",
-            extra={"isin": isin, "stage": "QuantWorker"},
-        )
-        t0 = time.perf_counter()
-
         res = processor.process(isin, p_inst, s_inst, m_inst, master_row, bm_map)
-
-        logger.debug(
-            f"{worker_id} finished ISIN '{isin}' in {(time.perf_counter() - t0) * 1000:.2f}ms",
-            extra={"isin": isin, "stage": "QuantWorker"},
-        )
 
         if res is not None:
             df = res.df_snapshots

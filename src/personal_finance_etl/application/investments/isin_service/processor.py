@@ -16,7 +16,6 @@ Does not own
 
 from __future__ import annotations
 
-import logging
 import math
 from datetime import date
 
@@ -30,6 +29,7 @@ from personal_finance_etl.application.investments.isin_service.trades import (
     apply_purchases,
     apply_sales,
 )
+from personal_finance_etl.application.observability.diagnostics import get_observability_diagnostics
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.domain.common.dates import to_date_obj
 from personal_finance_etl.domain.investments.contracts import (
@@ -56,7 +56,7 @@ from personal_finance_etl.domain.market.macro import FYMacroParametersTable
 
 __all__ = ["IsinProcessor"]
 
-logger = logging.getLogger(__name__)
+diagnostics = get_observability_diagnostics(__name__)
 
 
 class IsinProcessor:
@@ -125,7 +125,7 @@ class IsinProcessor:
         if not m_inst:
             return None
 
-        logger.debug(f"ISIN {isin} computing across {len(m_inst)} historical dates.")
+        diagnostics.debug(f"ISIN {isin} computing across {len(m_inst)} historical dates.")
 
         state = self._init_state(isin, master_row, bm_map, p_inst, m_inst)
         if not state:

@@ -19,14 +19,14 @@ from datetime import date
 import polars as pl
 
 from personal_finance_etl.application.investments.input_adapter import TaxDataLoader
+from personal_finance_etl.application.observability import ObservabilityEmitter, get_global_emitter
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.contracts.application import EngineStage
-from personal_finance_etl.contracts.logging import LogLevel, StatusQueue
+from personal_finance_etl.contracts.event_transport import EventQueue
 from personal_finance_etl.contracts.observability import (
     DiagnosticSeverity,
     EventCode,
     EventOutcome,
-    ObservabilityEvent,
     PresentationKind,
 )
 from personal_finance_etl.domain.investments.contracts import IsinMasterRecord
@@ -191,34 +191,34 @@ class RunContext:
 class AnalyticsContextManager:
     """Manages the initialization of the quantitative analytics engine context."""
 
-    def __init__(self, status_queue: StatusQueue | None = None):
+    def __init__(
+        self,
+        status_queue: EventQueue | None = None,
+        emitter: ObservabilityEmitter | None = None,
+    ):
         self.status_queue = status_queue
+        self.emitter = emitter or get_global_emitter()
 
-    def _report(self, msg: str, progress: float, level: LogLevel = LogLevel.INFO) -> None:
-        if self.status_queue:
-            severity = (
-                DiagnosticSeverity.ERROR
-                if level == LogLevel.ERROR
-                else (
-                    DiagnosticSeverity.WARNING
-                    if level == LogLevel.WARNING
-                    else DiagnosticSeverity.INFO
-                )
-            )
-            kind = PresentationKind.STEP if level == LogLevel.STEP else PresentationKind.PROGRESS
-            self.status_queue.put(
-                ObservabilityEvent.create(
-                    event_code=EventCode.QUANT_ENGINE_START,
-                    message=msg,
-                    progress=progress,
-                    severity=severity,
-                    outcome=(
-                        EventOutcome.FAILED if level == LogLevel.ERROR else EventOutcome.COMPLETED
-                    ),
-                    presentation_kind=kind,
-                    stage=EngineStage.ANALYZING,
-                )
-            )
+    def _report(
+        self,
+        msg: str,
+        progress: float,
+        severity: DiagnosticSeverity = DiagnosticSeverity.INFO,
+        presentation_kind: PresentationKind = PresentationKind.PROGRESS,
+    ) -> None:
+        self.emitter.emit_event(
+            event_code=EventCode.QUANT_ENGINE_START,
+            message=msg,
+            progress=progress,
+            severity=severity,
+            outcome=(
+                EventOutcome.FAILED
+                if severity == DiagnosticSeverity.ERROR
+                else EventOutcome.COMPLETED
+            ),
+            presentation_kind=presentation_kind,
+            stage=EngineStage.ANALYZING,
+        )
 
     def initialize(
         self,
@@ -244,14 +244,18 @@ class AnalyticsContextManager:
         ValueError
             If rules is None or required structures are missing.
         """
-        self._report("Loading DataFrame memory structures...", 0.01, LogLevel.STEP)
+        self._report(
+            "Loading DataFrame memory structures...",
+            0.01,
+            presentation_kind=PresentationKind.STEP,
+        )
 
         if options.rules is None:
             raise ValueError("Financial rules must be provided")
 
         ctx = RunContext.from_dataframes(data=data, options=options)
 
-        self._report("Data loaded into Context successfully.", 0.05, LogLevel.INFO)
+        self._report("Data loaded into Context successfully.", 0.05)
 
         isins_p = (
             [str(x) for x in ctx.df_p["ISIN"].unique().to_list()]

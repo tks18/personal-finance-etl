@@ -17,7 +17,6 @@ Does not own
 
 from __future__ import annotations
 
-import logging
 import tempfile
 import traceback
 
@@ -38,9 +37,10 @@ from personal_finance_etl.application.observability import (
     ObservabilityEmitter,
     get_global_emitter,
 )
+from personal_finance_etl.application.observability.diagnostics import get_observability_diagnostics
 from personal_finance_etl.contracts.application import EngineStage
+from personal_finance_etl.contracts.event_transport import EventQueue
 from personal_finance_etl.contracts.lifecycle import FailureDomain
-from personal_finance_etl.contracts.logging import StatusQueue
 from personal_finance_etl.contracts.observability import (
     DiagnosticSeverity,
     ErrorDetails,
@@ -51,7 +51,7 @@ from personal_finance_etl.contracts.observability import (
 
 __all__ = ["InvestmentQuantEngine", "QuantService"]
 
-logger = logging.getLogger(__name__)
+diagnostics = get_observability_diagnostics(__name__)
 
 
 class InvestmentQuantEngine:
@@ -61,7 +61,7 @@ class InvestmentQuantEngine:
         self,
         data: QuantDataFrames,
         options: QuantRunOptions,
-        status_queue: StatusQueue | None = None,
+        status_queue: EventQueue | None = None,
         emitter: ObservabilityEmitter | None = None,
     ) -> None:
         """Initialize InvestmentQuantEngine with structured typed parameter bundles.
@@ -72,7 +72,7 @@ class InvestmentQuantEngine:
             Bundle of DataFrames for analysis.
         options : QuantRunOptions
             Execution options and boundaries.
-        status_queue : StatusQueue | None, optional
+        status_queue : EventQueue | None, optional
             Queue for streaming engine progress events.
         emitter : ObservabilityEmitter | None, optional
             Observability emitter for canonical structured events.
@@ -112,12 +112,12 @@ class InvestmentQuantEngine:
             raise e
 
     def _run(self) -> dict[str, pl.DataFrame]:
-        context_manager = AnalyticsContextManager(self.status_queue)
+        context_manager = AnalyticsContextManager(self.status_queue, emitter=self.emitter)
         ctx, isins = context_manager.initialize(data=self.data, options=self.options)
 
         min_market = ctx.df_m.select(pl.min("Date")).item() if not ctx.df_m.is_empty() else None
         max_market = ctx.df_m.select(pl.max("Date")).item() if not ctx.df_m.is_empty() else None
-        logger.info(
+        diagnostics.info(
             f"  -> Quant Engine initialized context spanning market dates {min_market} to {max_market} for {len(isins)} unique ISINs."
         )
         self.emitter.emit_event(
@@ -158,7 +158,12 @@ class InvestmentQuantEngine:
                 )
                 return {"df_f_investment_analytics_lot": empty_df}
 
-            post_pipeline = PostProcessingPipeline(ctx, tmp_dir, self.status_queue)
+            post_pipeline = PostProcessingPipeline(
+                ctx,
+                tmp_dir,
+                self.status_queue,
+                emitter=self.emitter,
+            )
             final_dfs = post_pipeline.run(pipeline_res)
 
             self.emitter.emit_event(
