@@ -24,7 +24,6 @@ Does not own
 from __future__ import annotations
 
 import concurrent.futures
-import logging
 from collections.abc import Mapping
 from datetime import UTC, date, datetime
 from typing import Any
@@ -32,14 +31,15 @@ from typing import Any
 import pandas as pd  # type: ignore[import-untyped]
 import polars as pl
 
+from personal_finance_etl.application.observability.diagnostics import get_observability_diagnostics
 from personal_finance_etl.contracts.application import EngineStage
+from personal_finance_etl.contracts.event_transport import EventQueue
 from personal_finance_etl.contracts.extraction import (
     ExtractionBatchResult,
     ExtractorEntityResult,
     ExtractorEntityStatus,
 )
 from personal_finance_etl.contracts.lifecycle import FailureDomain
-from personal_finance_etl.contracts.logging import StatusQueue
 from personal_finance_etl.contracts.observability import (
     DiagnosticSeverity,
     ErrorDetails,
@@ -59,7 +59,7 @@ from personal_finance_etl.infrastructure.providers.market.common import (
 
 __all__ = ["BenchmarkExtractor"]
 
-logger = logging.getLogger(__name__)
+diagnostics = get_observability_diagnostics(__name__)
 
 
 class BenchmarkExtractor:
@@ -68,7 +68,7 @@ class BenchmarkExtractor:
     def __init__(
         self,
         cp: ControlPlane,
-        status_queue: StatusQueue,
+        status_queue: EventQueue,
         max_workers: int = 8,
         emitter: ObservabilitySink | None = None,
     ) -> None:
@@ -105,7 +105,7 @@ class BenchmarkExtractor:
         if not huge_drops.empty:
             drop_dts = [d.strftime("%Y-%m-%d") for d in huge_drops.index]
             warn_msg = f"⚠ Anomalous drops (>40%) in {ticker} on {', '.join(drop_dts)}"
-            logger.warning("Benchmark Extractor: %s", warn_msg)
+            diagnostics.warning("Benchmark Extractor: %s", warn_msg)
             return drop_dts, warn_msg
         return [], None
 
@@ -187,7 +187,7 @@ class BenchmarkExtractor:
         """
         ticker = str(row.get("yF_Ticker", "")).strip()
         if not ticker:
-            logger.debug("Benchmark Extractor: Skipping empty ticker %s", row.get("ID"))
+            diagnostics.debug("Benchmark Extractor: Skipping empty ticker %s", row.get("ID"))
             return ExtractorEntityResult(
                 entity=str(row.get("ID", "Unknown")),
                 status=ExtractorEntityStatus.INVALID_PAYLOAD,
@@ -201,7 +201,7 @@ class BenchmarkExtractor:
 
         fetch_start, is_cached = calculate_market_fetch_window(start_dt, end_dt, max_cached_date)
         if is_cached:
-            logger.debug(
+            diagnostics.debug(
                 "Benchmark Extractor: %s fully cached up to %s. Skipping API fetch.",
                 ticker,
                 end_dt,
@@ -231,7 +231,7 @@ class BenchmarkExtractor:
             )
 
         if hist_pd is None or hist_pd.empty:
-            logger.debug("Benchmark Extractor: No data returned from API for %s.", ticker)
+            diagnostics.debug("Benchmark Extractor: No data returned from API for %s.", ticker)
             return ExtractorEntityResult(
                 entity=ticker,
                 status=ExtractorEntityStatus.EMPTY_RESPONSE,
@@ -422,7 +422,7 @@ class BenchmarkExtractor:
         ]
 
         cache_map = self._build_cache_map(df_bronze_cached)
-        self.status_queue.put(
+        self._emit_event(
             ObservabilityEvent.create(
                 event_code=EventCode.MARKET_FETCH_START,
                 message=f"Starting benchmark extractor for {total} tickers...",
@@ -469,7 +469,7 @@ class BenchmarkExtractor:
                             final_error=err_msg,
                         )
                     )
-                    self.status_queue.put(
+                    self._emit_event(
                         ObservabilityEvent.create(
                             event_code=EventCode.MARKET_TICKER_FAILED,
                             message=f"Error: Critical thread failure on {ticker}: {err_msg}",
