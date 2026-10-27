@@ -19,8 +19,6 @@ import polars as pl
 
 from personal_finance_etl.application.investments.aggregation_service.service import PostProcessor
 from personal_finance_etl.application.investments.context import RunContext
-from personal_finance_etl.application.observability import ObservabilityEmitter, get_global_emitter
-from personal_finance_etl.application.observability.diagnostics import get_observability_diagnostics
 from personal_finance_etl.contracts.application import EngineStage
 from personal_finance_etl.contracts.event_transport import EventQueue
 from personal_finance_etl.contracts.observability import (
@@ -30,6 +28,13 @@ from personal_finance_etl.contracts.observability import (
     PresentationKind,
 )
 from personal_finance_etl.domain.investments.contracts import PipelineExecutionResult
+from personal_finance_etl.infrastructure.observability import (
+    ObservabilityEmitter,
+    get_global_emitter,
+)
+from personal_finance_etl.infrastructure.observability.diagnostics import (
+    get_observability_diagnostics,
+)
 
 __all__ = ["PostProcessingPipeline"]
 

@@ -19,7 +19,6 @@ from datetime import date
 import polars as pl
 
 from personal_finance_etl.application.investments.input_adapter import TaxDataLoader
-from personal_finance_etl.application.observability import ObservabilityEmitter, get_global_emitter
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.contracts.application import EngineStage
 from personal_finance_etl.contracts.event_transport import EventQueue
@@ -32,6 +31,10 @@ from personal_finance_etl.contracts.observability import (
 from personal_finance_etl.domain.investments.contracts import IsinMasterRecord
 from personal_finance_etl.domain.market.fx import FXRateProvider
 from personal_finance_etl.domain.market.macro import FYMacroParametersTable
+from personal_finance_etl.infrastructure.observability import (
+    ObservabilityEmitter,
+    get_global_emitter,
+)
 
 
 @dataclass(frozen=True)
@@ -206,6 +209,19 @@ class AnalyticsContextManager:
         severity: DiagnosticSeverity = DiagnosticSeverity.INFO,
         presentation_kind: PresentationKind = PresentationKind.PROGRESS,
     ) -> None:
+        """Emit pipeline progress diagnostic event via canonical emitter.
+
+        Parameters
+        ----------
+        msg : str
+            Diagnostic narrative message.
+        progress : float
+            Progress percentage (0.0 to 1.0).
+        severity : DiagnosticSeverity, default DiagnosticSeverity.INFO
+            Diagnostic severity level.
+        presentation_kind : PresentationKind, default PresentationKind.PROGRESS
+            Category of user presentation feedback.
+        """
         self.emitter.emit_event(
             event_code=EventCode.QUANT_ENGINE_START,
             message=msg,

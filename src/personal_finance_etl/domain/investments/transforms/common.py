@@ -258,6 +258,18 @@ def transform_stg_investment_market_data(
 
 
 def _compute_purchase_id(row: Mapping[str, object]) -> str:
+    """Generate a deterministic identifier for an individual purchase record.
+
+    Parameters
+    ----------
+    row : Mapping[str, object]
+        Row attributes containing ISIN, Date, Price, Quantity, and CURRENCY_ID.
+
+    Returns
+    -------
+    str
+        Deterministic purchase UUID string prefixed with 'PURCHASE'.
+    """
     fields = {
         "ISIN": row["ISIN"],
         "Date": row["Date"],
@@ -269,6 +281,18 @@ def _compute_purchase_id(row: Mapping[str, object]) -> str:
 
 
 def _batch_compute_purchase_ids(s: pl.Series) -> pl.Series:
+    """Compute deterministic purchase IDs across a Struct Series of purchase fields.
+
+    Parameters
+    ----------
+    s : pl.Series
+        Polars Struct series holding ISIN, Date, Price, Quantity, and CURRENCY_ID fields.
+
+    Returns
+    -------
+    pl.Series
+        String Series of generated purchase IDs.
+    """
     isins = s.struct.field("ISIN")
     dates = s.struct.field("Date")
     prices = s.struct.field("Price")
@@ -290,6 +314,18 @@ def _batch_compute_purchase_ids(s: pl.Series) -> pl.Series:
 
 
 def _compute_sale_id(row: Mapping[str, object]) -> str:
+    """Generate a deterministic identifier for an individual sale record.
+
+    Parameters
+    ----------
+    row : Mapping[str, object]
+        Row attributes containing ISIN, Date, Sell_Price, Quantity, and CURRENCY_ID.
+
+    Returns
+    -------
+    str
+        Deterministic sale UUID string prefixed with 'SALE'.
+    """
     fields = {
         "ISIN": row["ISIN"],
         "Date": row["Date"],
@@ -301,6 +337,18 @@ def _compute_sale_id(row: Mapping[str, object]) -> str:
 
 
 def _batch_compute_sale_ids(s: pl.Series) -> pl.Series:
+    """Compute deterministic sale IDs across a Struct Series of sale fields.
+
+    Parameters
+    ----------
+    s : pl.Series
+        Polars Struct series holding ISIN, Date, Sell_Price, Quantity, and CURRENCY_ID fields.
+
+    Returns
+    -------
+    pl.Series
+        String Series of generated sale IDs.
+    """
     isins = s.struct.field("ISIN")
     dates = s.struct.field("Date")
     sell_prices = s.struct.field("Sell_Price")

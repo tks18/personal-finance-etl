@@ -33,11 +33,6 @@ from personal_finance_etl.application.investments.context import (
 from personal_finance_etl.application.investments.isin_service import (
     IsinPipeline,
 )
-from personal_finance_etl.application.observability import (
-    ObservabilityEmitter,
-    get_global_emitter,
-)
-from personal_finance_etl.application.observability.diagnostics import get_observability_diagnostics
 from personal_finance_etl.contracts.application import EngineStage
 from personal_finance_etl.contracts.event_transport import EventQueue
 from personal_finance_etl.contracts.lifecycle import FailureDomain
@@ -47,6 +42,13 @@ from personal_finance_etl.contracts.observability import (
     EventCode,
     EventOutcome,
     PresentationKind,
+)
+from personal_finance_etl.infrastructure.observability import (
+    ObservabilityEmitter,
+    get_global_emitter,
+)
+from personal_finance_etl.infrastructure.observability.diagnostics import (
+    get_observability_diagnostics,
 )
 
 __all__ = ["InvestmentQuantEngine", "QuantService"]
@@ -112,6 +114,13 @@ class InvestmentQuantEngine:
             raise e
 
     def _run(self) -> dict[str, pl.DataFrame]:
+        """Execute core pipeline calculations across ISIN analytics and portfolio rollups.
+
+        Returns
+        -------
+        dict[str, pl.DataFrame]
+            Dictionary of analytical result DataFrames keyed by table name.
+        """
         context_manager = AnalyticsContextManager(self.status_queue, emitter=self.emitter)
         ctx, isins = context_manager.initialize(data=self.data, options=self.options)
 

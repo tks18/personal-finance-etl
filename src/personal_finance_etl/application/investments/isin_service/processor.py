@@ -29,7 +29,6 @@ from personal_finance_etl.application.investments.isin_service.trades import (
     apply_purchases,
     apply_sales,
 )
-from personal_finance_etl.application.observability.diagnostics import get_observability_diagnostics
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.domain.common.dates import to_date_obj
 from personal_finance_etl.domain.investments.contracts import (
@@ -53,6 +52,9 @@ from personal_finance_etl.domain.investments.valuation.fx import (
 )
 from personal_finance_etl.domain.market.fx import FXRateProvider
 from personal_finance_etl.domain.market.macro import FYMacroParametersTable
+from personal_finance_etl.infrastructure.observability.diagnostics import (
+    get_observability_diagnostics,
+)
 
 __all__ = ["IsinProcessor"]
 
