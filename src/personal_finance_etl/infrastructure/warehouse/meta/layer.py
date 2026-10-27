@@ -22,7 +22,6 @@ import sqlite3
 import duckdb
 import polars as pl
 
-from personal_finance_etl.application.observability.diagnostics import get_observability_diagnostics
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
 from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
@@ -30,6 +29,9 @@ from personal_finance_etl.infrastructure.control_plane.hashing import (
     FILE_TYPE_MAP,
     compute_file_hash,
     generate_file_id,
+)
+from personal_finance_etl.infrastructure.observability.diagnostics import (
+    get_observability_diagnostics,
 )
 from personal_finance_etl.infrastructure.warehouse.connection import DuckDBManager
 from personal_finance_etl.infrastructure.warehouse.fingerprints import (

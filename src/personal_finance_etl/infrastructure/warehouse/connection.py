@@ -20,7 +20,9 @@ import os
 import duckdb
 import psutil
 
-from personal_finance_etl.application.observability.diagnostics import get_observability_diagnostics
+from personal_finance_etl.infrastructure.observability.diagnostics import (
+    get_observability_diagnostics,
+)
 from personal_finance_etl.infrastructure.warehouse.schema.gold import GOLD_DDL
 from personal_finance_etl.infrastructure.warehouse.schema.meta import META_DDL
 from personal_finance_etl.infrastructure.warehouse.schema.silver import SILVER_DDL
