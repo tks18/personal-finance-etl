@@ -20,6 +20,10 @@ from personal_finance_etl.application.observability.context import (
     reset_current_context,
     set_current_context,
 )
+from personal_finance_etl.application.observability.diagnostics import (
+    ObservabilityDiagnostics,
+    get_observability_diagnostics,
+)
 from personal_finance_etl.application.observability.emitter import (
     ObservabilityEmitter,
     SpanContext,
@@ -28,10 +32,12 @@ from personal_finance_etl.application.observability.emitter import (
 )
 
 __all__ = [
+    "ObservabilityDiagnostics",
     "ObservabilityEmitter",
     "SpanContext",
     "get_current_context",
     "get_global_emitter",
+    "get_observability_diagnostics",
     "reset_current_context",
     "set_current_context",
     "set_global_emitter",

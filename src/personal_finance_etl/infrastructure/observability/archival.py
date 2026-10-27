@@ -16,15 +16,15 @@ Does not own
 from __future__ import annotations
 
 import json
-import logging
 import sqlite3
 import zlib
 from pathlib import Path
 from typing import cast
 
+from personal_finance_etl.application.observability.diagnostics import get_observability_diagnostics
 from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
 
-logger = logging.getLogger("personal_finance_etl.observability.archival")
+diagnostics = get_observability_diagnostics("personal_finance_etl.observability.archival")
 
 __all__ = [
     "DEFAULT_COMPRESSION_LEVEL",
@@ -103,7 +103,7 @@ def archive_run_trace(
     """
     path = Path(trace_file_path)
     if not path.exists():
-        logger.debug(
+        diagnostics.debug(
             "Trace Archival: Trace file not found at %s. Skipping archival for run %s.",
             path,
             run_id,
@@ -114,7 +114,7 @@ def archive_run_trace(
         log_bytes = path.read_bytes()
         compressed_log = compress_bytes(log_bytes, level=compression_level)
         cp.runs.save_execution_log(run_id, compressed_log)
-        logger.debug(
+        diagnostics.debug(
             "Trace Archival: Successfully archived compressed trace for run %s (%d -> %d bytes).",
             run_id,
             len(log_bytes),
@@ -122,7 +122,7 @@ def archive_run_trace(
         )
         return True
     except (sqlite3.Error, OSError, zlib.error, UnicodeDecodeError, KeyError, RuntimeError) as err:
-        logger.warning(
+        diagnostics.warning(
             "Trace Archival: Non-fatal degradation saving execution trace to Control Plane for run %s: %s",
             run_id,
             err,
@@ -154,7 +154,7 @@ def retrieve_run_trace(
     try:
         raw = cp.runs.get_execution_log(run_id)
     except (sqlite3.Error, RuntimeError, KeyError) as err:
-        logger.warning(
+        diagnostics.warning(
             "Trace Archival: Failed to retrieve stored trace from Control Plane for run %s: %s",
             run_id,
             err,
@@ -169,7 +169,7 @@ def retrieve_run_trace(
     try:
         return decompress_bytes(raw)
     except zlib.error as err:
-        logger.warning(
+        diagnostics.warning(
             "Trace Archival: Failed to decompress stored trace for run %s: %s",
             run_id,
             err,

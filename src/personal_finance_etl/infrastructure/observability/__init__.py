@@ -5,7 +5,7 @@ Owns
 - JsonlForensicSink: Append-only JSONL file sink for high-resolution diagnostic traces.
 - AsyncObservabilityListener: Dedicated daemon thread owning file I/O operations.
 - ObservabilityQueueSink: Non-blocking queue sink routing events across processes.
-- EventQueue: Protocol unifying thread and multiprocessing event queues.
+- BufferedEventQueue: Read/write queue used by the asynchronous listener.
 - create_forensic_pipeline: Assembles asynchronous queue, listener, and JSONL forensic sink.
 
 Does not own
@@ -31,7 +31,7 @@ from personal_finance_etl.infrastructure.observability.forensic_sink import (
 )
 from personal_finance_etl.infrastructure.observability.queue import (
     AsyncObservabilityListener,
-    EventQueue,
+    BufferedEventQueue,
     ObservabilityQueueSink,
     create_forensic_pipeline,
 )
@@ -54,7 +54,7 @@ __all__ = [
     "ConfigFingerprintDict",
     "DEFAULT_COMPRESSION_LEVEL",
     "AsyncObservabilityListener",
-    "EventQueue",
+    "BufferedEventQueue",
     "JsonlForensicSink",
     "LogRetentionManager",
     "ObservabilityQueueSink",

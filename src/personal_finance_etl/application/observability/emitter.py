@@ -21,6 +21,7 @@ import threading
 import time
 import traceback
 import uuid
+from dataclasses import replace
 from types import TracebackType
 from typing import Literal
 
@@ -47,11 +48,58 @@ from personal_finance_etl.contracts.observability import (
 )
 
 __all__ = [
+    "CorrelationScope",
     "ObservabilityEmitter",
     "SpanContext",
     "get_global_emitter",
     "set_global_emitter",
 ]
+
+
+class CorrelationScope:
+    """Bind hierarchical observability context without emitting synthetic events.
+
+    Scopes let semantic events inherit a stable operation_id/parent_operation_id
+    lineage while preserving the invariant that one semantic occurrence produces
+    one event.
+    """
+
+    def __init__(
+        self,
+        operation: str,
+        component: str = "",
+        stage: EngineStage | None = None,
+        entity_type: str | None = None,
+        entity_id: str | None = None,
+        batch_id: str | None = None,
+    ) -> None:
+        self.operation = operation
+        self.component = component
+        self.stage = stage
+        self.entity_type = entity_type
+        self.entity_id = entity_id
+        self.batch_id = batch_id
+        self.token: contextvars.Token[ObservabilityContext] | None = None
+
+    def __enter__(self) -> CorrelationScope:
+        parent = get_current_context()
+        child = parent.with_updates(
+            stage=self.stage,
+            component=self.component or parent.component,
+            operation=self.operation,
+            operation_id=f"op_{uuid.uuid4().hex[:16]}",
+            parent_operation_id=parent.operation_id or None,
+            entity_type=self.entity_type,
+            entity_id=self.entity_id,
+            batch_id=self.batch_id,
+        )
+        self.token = set_current_context(child)
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> Literal[False]:
+        if self.token is not None:
+            reset_current_context(self.token)
+        return False
 
 
 class SpanContext:
@@ -223,6 +271,7 @@ class ObservabilityEmitter:
     def __init__(self, sinks: list[ObservabilitySink] | None = None) -> None:
         self._sinks: list[ObservabilitySink] = list(sinks or [])
         self._lock = threading.Lock()
+        self._sequence = 0
 
     def register_sink(self, sink: ObservabilitySink) -> None:
         """Register a new observability sink for event fan-out.
@@ -253,15 +302,40 @@ class ObservabilityEmitter:
         with self._lock:
             self._sinks.clear()
 
-    def emit(self, event: ObservabilityEvent) -> None:
-        """Fan-out an ObservabilityEvent to all registered sinks safely.
+    def emit(self, event: ObservabilityEvent) -> ObservabilityEvent:
+        """Sequence and fan-out an ObservabilityEvent to all registered sinks safely.
 
         Parameters
         ----------
         event : ObservabilityEvent
             The canonical event to dispatch.
         """
+        ambient = get_current_context()
+        if not event.context.run_id and ambient.run_id:
+            event = replace(
+                event,
+                context=replace(
+                    event.context,
+                    run_id=ambient.run_id,
+                    operation_id=event.context.operation_id or ambient.operation_id,
+                    parent_operation_id=(
+                        event.context.parent_operation_id or ambient.parent_operation_id
+                    ),
+                    batch_id=event.context.batch_id or ambient.batch_id,
+                    commit_state=event.context.commit_state or ambient.commit_state,
+                    settings_fingerprint=(
+                        event.context.settings_fingerprint or ambient.settings_fingerprint
+                    ),
+                    rules_fingerprint=(
+                        event.context.rules_fingerprint or ambient.rules_fingerprint
+                    ),
+                ),
+            )
+
         with self._lock:
+            self._sequence += 1
+            if event.sequence == 0:
+                event = replace(event, sequence=self._sequence)
             targets = list(self._sinks)
 
         for sink in targets:
@@ -270,6 +344,7 @@ class ObservabilityEmitter:
             except Exception:
                 # Sinks must not compromise pipeline execution integrity
                 pass
+        return event
 
     def emit_event(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
@@ -370,8 +445,26 @@ class ObservabilityEmitter:
             error=error,
             progress=progress,
         )
-        self.emit(event)
-        return event
+        return self.emit(event)
+
+    def scope(
+        self,
+        operation: str,
+        component: str = "",
+        stage: EngineStage | None = None,
+        entity_type: str | None = None,
+        entity_id: str | None = None,
+        batch_id: str | None = None,
+    ) -> CorrelationScope:
+        """Bind a child correlation scope without creating additional events."""
+        return CorrelationScope(
+            operation=operation,
+            component=component,
+            stage=stage,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            batch_id=batch_id,
+        )
 
     def span(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,

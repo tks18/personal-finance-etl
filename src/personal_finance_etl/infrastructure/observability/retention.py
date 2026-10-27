@@ -15,12 +15,13 @@ Does not own
 
 from __future__ import annotations
 
-import logging
 import os
 import time
 from pathlib import Path
 
-logger = logging.getLogger("personal_finance_etl.observability.retention")
+from personal_finance_etl.application.observability.diagnostics import get_observability_diagnostics
+
+diagnostics = get_observability_diagnostics("personal_finance_etl.observability.retention")
 
 __all__ = ["LogRetentionManager"]
 
@@ -106,7 +107,7 @@ class LogRetentionManager:
                     continue
 
         if not to_prune:
-            logger.debug(
+            diagnostics.debug(
                 "Log Retention: All %d trace file(s) in %s are within retention bounds.",
                 len(files),
                 self.logs_dir,
@@ -122,16 +123,16 @@ class LogRetentionManager:
             try:
                 os.unlink(file_path)
                 pruned_successfully.append(file_path)
-                logger.debug("Log Retention: Pruned expired trace file %s.", file_path.name)
+                diagnostics.debug("Log Retention: Pruned expired trace file %s.", file_path.name)
             except (OSError, PermissionError) as err:
-                logger.warning(
+                diagnostics.warning(
                     "Log Retention: Non-fatal failure pruning trace file %s: %s",
                     file_path.name,
                     err,
                 )
 
         if pruned_successfully and not dry_run:
-            logger.info(
+            diagnostics.info(
                 "Log Retention: Pruned %d expired trace file(s) from %s.",
                 len(pruned_successfully),
                 self.logs_dir,

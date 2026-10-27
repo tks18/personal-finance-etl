@@ -23,8 +23,9 @@ Does not own
 from __future__ import annotations
 
 import json
+import uuid
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import NotRequired, Protocol, TypedDict, cast
@@ -495,6 +496,9 @@ class ObservabilityContext:
 class ObservabilityEventDict(TypedDict):
     """JSON-serializable representation of ObservabilityEvent."""
 
+    schema_version: int
+    event_id: str
+    sequence: int
     timestamp: str
     event_code: str
     severity: str
@@ -541,6 +545,9 @@ class ObservabilityEvent:
     outcome: EventOutcome
     context: ObservabilityContext
     message: str
+    schema_version: int = 1
+    event_id: str = field(default_factory=lambda: f"evt_{uuid.uuid4().hex}")
+    sequence: int = 0
     error: ErrorDetails | None = None
     progress: float | None = None
 
@@ -593,6 +600,9 @@ class ObservabilityEvent:
         if stage is not None:
             ctx = ctx.with_updates(stage=stage)
         return cls(
+            schema_version=1,
+            event_id=f"evt_{uuid.uuid4().hex}",
+            sequence=0,
             timestamp=ts,
             event_code=event_code,
             severity=severity,
@@ -607,6 +617,9 @@ class ObservabilityEvent:
     def to_dict(self) -> ObservabilityEventDict:
         """Serialize event into a JSON-serializable dictionary for JSONL sink."""
         out: ObservabilityEventDict = {
+            "schema_version": self.schema_version,
+            "event_id": self.event_id,
+            "sequence": self.sequence,
             "timestamp": self.timestamp.isoformat(),
             "event_code": str(self.event_code),
             "severity": str(self.severity),
@@ -661,6 +674,9 @@ class ObservabilityEvent:
         prog = float(prog_val) if isinstance(prog_val, (int, float)) else None
 
         return cls(
+            schema_version=int(data.get("schema_version", 1)),
+            event_id=str(data.get("event_id", f"evt_{uuid.uuid4().hex}")),
+            sequence=int(data.get("sequence", 0)),
             timestamp=ts,
             event_code=EventCode(str(data.get("event_code", EventCode.GENERIC_DIAGNOSTIC))),
             severity=DiagnosticSeverity(str(data.get("severity", DiagnosticSeverity.INFO))),

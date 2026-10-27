@@ -2,7 +2,7 @@
 
 Owns
 ----
-- EventQueue: Protocol unifying thread and multiprocessing event queues.
+- BufferedEventQueue: Read/write queue used by the asynchronous listener.
 - ObservabilityQueueSink: Non-blocking sink enqueuing events to a background buffer.
 - AsyncObservabilityListener: Background daemon thread pulling queued events and writing to sinks.
 - create_forensic_pipeline: Assembles asynchronous queue, listener, and JSONL forensic sink.
@@ -23,6 +23,7 @@ from pathlib import Path
 from types import TracebackType
 from typing import Protocol
 
+from personal_finance_etl.contracts.event_transport import EventQueue
 from personal_finance_etl.contracts.observability import (
     DiagnosticSeverity,
     EventOutcome,
@@ -38,24 +39,14 @@ from personal_finance_etl.infrastructure.observability.redaction import (
 
 __all__ = [
     "AsyncObservabilityListener",
-    "EventQueue",
+    "BufferedEventQueue",
     "ObservabilityQueueSink",
     "create_forensic_pipeline",
 ]
 
 
-class EventQueue(Protocol):
-    """Protocol for cross-thread or cross-process queues transporting events."""
-
-    def put(
-        self,
-        item: ObservabilityEvent | None,
-        /,
-        block: bool = True,
-        timeout: float | None = None,
-    ) -> None:
-        """Put an item onto the queue."""
-        ...
+class BufferedEventQueue(EventQueue, Protocol):
+    """Readable event queue owned by an asynchronous consumer."""
 
     def get(
         self,
@@ -97,7 +88,7 @@ class ObservabilityQueueSink(ObservabilitySink):
             try:
                 self.queue.put(event, block=True, timeout=0.05)
             except Exception:
-                # Logging queue must not compromise execution stability
+                # Observability transport must not compromise execution stability.
                 pass
 
     def flush(self) -> None:
@@ -112,7 +103,7 @@ class AsyncObservabilityListener:
 
     def __init__(
         self,
-        inbound_queue: EventQueue,
+        inbound_queue: BufferedEventQueue,
         sinks: list[ObservabilitySink],
     ) -> None:
         self.inbound_queue = inbound_queue
