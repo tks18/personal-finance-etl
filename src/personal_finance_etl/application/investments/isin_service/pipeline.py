@@ -26,11 +26,6 @@ import polars as pl
 
 from personal_finance_etl.application.investments.context import RunContext
 from personal_finance_etl.application.investments.isin_service.worker import _process_isin_worker
-from personal_finance_etl.application.observability import (
-    ObservabilityEmitter,
-    get_global_emitter,
-)
-from personal_finance_etl.application.observability.diagnostics import get_observability_diagnostics
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.contracts.application import EngineStage
 from personal_finance_etl.contracts.event_transport import EventQueue
@@ -54,6 +49,13 @@ from personal_finance_etl.domain.investments.contracts import (
 from personal_finance_etl.domain.investments.valuation.benchmark import BenchmarkPriceProvider
 from personal_finance_etl.domain.market.fx import FXRateProvider
 from personal_finance_etl.domain.market.macro import FYMacroParametersTable
+from personal_finance_etl.infrastructure.observability import (
+    ObservabilityEmitter,
+    get_global_emitter,
+)
+from personal_finance_etl.infrastructure.observability.diagnostics import (
+    get_observability_diagnostics,
+)
 
 __all__ = ["IsinPipeline"]
 
@@ -281,17 +283,46 @@ class IsinPipeline:
         self.status_queue = status_queue
         self.emitter = emitter or get_global_emitter()
 
-    def _report_step(self, progress: float) -> None:
-        """Emit incremental progress through the canonical emitter."""
-        self.emitter.emit_event(
-            event_code=EventCode.QUANT_ISIN_PROCESSED,
-            message="",
-            progress=progress,
-            severity=DiagnosticSeverity.INFO,
-            outcome=EventOutcome.COMPLETED,
-            presentation_kind=PresentationKind.PROGRESS,
-            stage=EngineStage.ANALYZING,
-        )
+    def _report_step(self, completed: int, total: int, current_isin: str = "") -> None:
+        """Emit incremental progress and periodic visible milestones through canonical emitter.
+
+        Parameters
+        ----------
+        completed : int
+            Number of completed ISIN tasks.
+        total : int
+            Total number of ISIN tasks.
+        current_isin : str, default=""
+            The most recently completed ISIN symbol/code.
+        """
+        progress = 0.05 + 0.8 * (completed / total) if total > 0 else 0.85
+        pct = int((completed / total) * 100) if total > 0 else 100
+
+        # Milestone step interval (every 25 ISINs or ~20%)
+        is_milestone = completed == 1 or (completed % max(1, total // 5) == 0) or completed == total
+
+        if is_milestone:
+            msg = f"Valuating portfolio positions ({completed}/{total} ISINs, {pct}% complete)..."
+            self.emitter.emit_event(
+                event_code=EventCode.QUANT_ISIN_PROCESSED,
+                message=msg,
+                progress=progress,
+                severity=DiagnosticSeverity.INFO,
+                outcome=EventOutcome.COMPLETED,
+                presentation_kind=PresentationKind.STEP,
+                stage=EngineStage.ANALYZING,
+                rows=completed,
+            )
+        else:
+            self.emitter.emit_event(
+                event_code=EventCode.QUANT_ISIN_PROCESSED,
+                message="",
+                progress=progress,
+                severity=DiagnosticSeverity.INFO,
+                outcome=EventOutcome.COMPLETED,
+                presentation_kind=PresentationKind.PROGRESS,
+                stage=EngineStage.ANALYZING,
+            )
 
     def _build_worker_tasks(
         self,
@@ -454,7 +485,7 @@ class IsinPipeline:
 
                 for i, future in enumerate(concurrent.futures.as_completed(future_to_isin)):
                     isin = future_to_isin[future]
-                    self._report_step(0.05 + 0.8 * (i / total_inst))
+                    self._report_step(i + 1, total_inst, isin)
 
                     try:
                         success, isin_cf, isin_pt, isin_re, isin_recon, tags, error_info = (
@@ -465,12 +496,13 @@ class IsinPipeline:
                         diagnostics.error(
                             f"ISIN Processing Failed for {isin}: {error_msg}\n{traceback.format_exc()}"
                         )
-                        err_details = ErrorDetails(
-                            exception_type=type(e).__name__,
-                            exception_message=str(e),
+                        err_details = ErrorDetails.create(
+                            exc=e,
                             failure_domain=FailureDomain.WORKER,
-                            traceback_summary=traceback.format_exc(),
-                            retryable=False,
+                            stage="InvestmentQuantEngine",
+                            entity=isin,
+                            hint=f"Check transaction dates, lot consistency, and market price coverage for ISIN {isin}",
+                            failed_isin=isin,
                         )
                         self.emitter.emit_event(
                             event_code=EventCode.QUANT_ISIN_PROCESSED,
@@ -492,12 +524,13 @@ class IsinPipeline:
                         diagnostics.error(
                             f"ISIN Processing Failed for {failed_isin}: {error_msg}\n{tb}"
                         )
-                        err_details = ErrorDetails(
-                            exception_type="ISINCalculationError",
-                            exception_message=error_msg,
+                        err_details = ErrorDetails.create(
+                            exc=RuntimeError(error_msg),
                             failure_domain=FailureDomain.WORKER,
-                            traceback_summary=tb,
-                            retryable=False,
+                            stage="InvestmentQuantEngine",
+                            entity=failed_isin,
+                            hint=f"Verify prices in market data table and check buy/sell order chronology for ISIN {failed_isin}",
+                            failed_isin=failed_isin,
                         )
                         self.emitter.emit_event(
                             event_code=EventCode.QUANT_ISIN_PROCESSED,
