@@ -24,7 +24,7 @@ from personal_finance_etl.application.pipeline.orchestrator import ETLOrchestrat
 from personal_finance_etl.application.pipeline.worker import WorkerPoolCoordinator
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
-from personal_finance_etl.contracts.logging import ILogger
+from personal_finance_etl.contracts.event_transport import EventQueue
 from personal_finance_etl.contracts.observability import ObservabilityEvent
 from personal_finance_etl.contracts.recovery import (
     ActiveDatabaseState,
@@ -46,10 +46,10 @@ class ContainerProtocol(Protocol):
         self,
         config_path: str | None = None,
         rules_path: str | None = None,
-        status_queue: ILogger | None = None,
+        status_queue: EventQueue | None = None,
         settings: Settings | None = None,
     ) -> ETLOrchestrator:
-        """Create and wire an ETLOrchestrator instance with configuration and logging.
+        """Create and wire an ETLOrchestrator with configuration and observability.
 
         Parameters
         ----------
@@ -57,8 +57,8 @@ class ContainerProtocol(Protocol):
             Path to application settings YAML.
         rules_path : str | None, optional
             Path to financial rules YAML.
-        status_queue : ILogger | None, optional
-            Logger or queue for runtime status events.
+        status_queue : EventQueue | None, optional
+            Queue transport for canonical runtime events.
         settings : Settings | None, optional
             Pre-loaded settings instance.
 
@@ -170,7 +170,7 @@ class PersonalFinanceEngine:
         self,
         config_path: str = "config.toml",
         rules_path: str = "",
-        status_queue: ILogger | None = None,
+        status_queue: EventQueue | None = None,
     ) -> None:
         """Execute the ETL pipeline synchronously in the current thread (ideal for profiling/testing)."""
         if self.container is not None and hasattr(self.container, "create_orchestrator"):
