@@ -8,7 +8,7 @@ Owns
 Does not own
 -------------
 - Canonical context data structures (owned by contracts.observability).
-- Event dispatch and sink fan-out (owned by application.observability.emitter).
+- Event dispatch and sink fan-out (owned by infrastructure.observability.emitter).
 """
 
 from __future__ import annotations

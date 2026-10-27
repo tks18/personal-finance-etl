@@ -25,11 +25,6 @@ from dataclasses import replace
 from types import TracebackType
 from typing import Literal
 
-from personal_finance_etl.application.observability.context import (
-    get_current_context,
-    reset_current_context,
-    set_current_context,
-)
 from personal_finance_etl.contracts.application import EngineStage
 from personal_finance_etl.contracts.lifecycle import (
     CommitState,
@@ -45,6 +40,11 @@ from personal_finance_etl.contracts.observability import (
     ObservabilityEvent,
     ObservabilitySink,
     PresentationKind,
+)
+from personal_finance_etl.infrastructure.observability.context import (
+    get_current_context,
+    reset_current_context,
+    set_current_context,
 )
 
 __all__ = [
@@ -73,6 +73,23 @@ class CorrelationScope:
         entity_id: str | None = None,
         batch_id: str | None = None,
     ) -> None:
+        """Initialize correlation scope context manager.
+
+        Parameters
+        ----------
+        operation : str
+            Logical operation name for this scope.
+        component : str, default=""
+            Active subsystem or component name.
+        stage : EngineStage | None, default=None
+            Execution pipeline stage.
+        entity_type : str | None, default=None
+            Domain entity classification if applicable.
+        entity_id : str | None, default=None
+            Entity identifier if applicable.
+        batch_id : str | None, default=None
+            Batch execution grouping identifier.
+        """
         self.operation = operation
         self.component = component
         self.stage = stage
@@ -82,6 +99,13 @@ class CorrelationScope:
         self.token: contextvars.Token[ObservabilityContext] | None = None
 
     def __enter__(self) -> CorrelationScope:
+        """Bind child correlation context for this execution scope.
+
+        Returns
+        -------
+        CorrelationScope
+            The active correlation scope context manager.
+        """
         parent = get_current_context()
         child = parent.with_updates(
             stage=self.stage,
@@ -96,7 +120,28 @@ class CorrelationScope:
         self.token = set_current_context(child)
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> Literal[False]:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> Literal[False]:
+        """Restore previous ambient observability context on scope exit.
+
+        Parameters
+        ----------
+        exc_type : type[BaseException] | None
+            Exception class if an exception was raised within the scope.
+        exc_val : BaseException | None
+            Exception instance if an exception was raised within the scope.
+        exc_tb : TracebackType | None
+            Traceback object if an exception was raised within the scope.
+
+        Returns
+        -------
+        Literal[False]
+            Always False so exceptions propagate to callers.
+        """
         if self.token is not None:
             reset_current_context(self.token)
         return False
@@ -129,6 +174,45 @@ class SpanContext:
         settings_fingerprint: str | None = None,
         rules_fingerprint: str | None = None,
     ) -> None:
+        """Initialize execution span context manager with metric tracking.
+
+        Parameters
+        ----------
+        emitter : ObservabilityEmitter
+            Active event emitter for milestone dispatch.
+        operation : str
+            Operation or step name being tracked.
+        component : str, default=""
+            Subsystem component generating the span.
+        event_code : EventCode, default=EventCode.GENERIC_DIAGNOSTIC
+            Canonical event code classification.
+        presentation_kind : PresentationKind, default=PresentationKind.STEP
+            Presentation renderer intent.
+        severity : DiagnosticSeverity, default=DiagnosticSeverity.INFO
+            Diagnostic severity classification.
+        entity_type : str | None, default=None
+            Target entity classification.
+        entity_id : str | None, default=None
+            Target entity identifier.
+        rows : int | None, default=None
+            Row count processed if applicable.
+        provider : str | None, default=None
+            External data provider name.
+        cache_hit : bool | None, default=None
+            Whether operation resolved from cache.
+        message : str, default=""
+            Human-readable presentation narrative.
+        log_start : bool, default=True
+            Whether to emit a START milestone event on entry.
+        batch_id : str | None, default=None
+            Batch grouping identifier.
+        commit_state : CommitState | None, default=None
+            Transaction commit state.
+        settings_fingerprint : str | None, default=None
+            Configuration settings hash.
+        rules_fingerprint : str | None, default=None
+            Financial rules hash.
+        """
         self.emitter = emitter
         self.operation = operation
         self.component = component
@@ -269,6 +353,13 @@ class ObservabilityEmitter:
     """Central event emitter managing multi-sink fan-out and span orchestration."""
 
     def __init__(self, sinks: list[ObservabilitySink] | None = None) -> None:
+        """Initialize central observability event emitter.
+
+        Parameters
+        ----------
+        sinks : list[ObservabilitySink] | None, default=None
+            Initial collection of event sinks for multi-destination fan-out.
+        """
         self._sinks: list[ObservabilitySink] = list(sinks or [])
         self._lock = threading.Lock()
         self._sequence = 0
