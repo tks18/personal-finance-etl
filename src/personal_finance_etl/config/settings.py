@@ -23,8 +23,6 @@ from typing import cast
 
 from pydantic import BaseModel, Field
 
-from personal_finance_etl.infrastructure.preferences import PreferencesManager
-
 
 class FileHashPolicy(BaseModel):
     """File content hashing policy flags for source deduplication across format categories."""
@@ -108,15 +106,13 @@ class Settings(BaseModel):
         return Path(self.TARGET_DB_BASE_PATH) / raw_path
 
     @classmethod
-    def from_toml(cls, filepath: str | os.PathLike[str], track_recent: bool = True) -> Settings:
+    def from_toml(cls, filepath: str | os.PathLike[str]) -> Settings:
         """Load a TOML configuration and return a Settings instance.
 
         Parameters
         ----------
         filepath : str | os.PathLike[str]
             Path to the configuration TOML file.
-        track_recent : bool, default=True
-            Whether to record this filepath into the user's recent configuration list.
 
         Returns
         -------
@@ -131,11 +127,6 @@ class Settings(BaseModel):
             data = tomllib.load(f)
 
         cfg = cls(**data)
-        if track_recent:
-            try:
-                PreferencesManager().add_recent_config(path_str)
-            except Exception:
-                pass
         return cfg
 
     def validate_config(self) -> None:

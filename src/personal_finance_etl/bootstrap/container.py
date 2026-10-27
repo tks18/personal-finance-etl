@@ -67,11 +67,15 @@ class ServiceContainer:
     def create_settings(self, config_path: str | None = None) -> Settings:
         """Resolve and parse Settings from TOML path."""
         target_path = config_path or self.default_config_path
+        if target_path:
+            self._prefs.add_recent_config(target_path)
         return Settings.from_toml(target_path) if target_path else Settings()
 
     def create_rules(self, rules_path: str | None = None) -> FinancialRules | None:
         """Resolve and parse FinancialRules from TOML path if provided."""
         target_path = rules_path or self.default_rules_path
+        if target_path:
+            self._prefs.add_recent_rules(target_path)
         return FinancialRules.from_toml(target_path) if target_path else None
 
     def create_duckdb_manager(self, cfg: Settings) -> DuckDBManager:

@@ -308,8 +308,13 @@ def _run_cli_pipeline_iteration(
     if not config_path:
         config_path = get_file_interactive("Config TOML", engine.get_recent_configs())
 
+    if config_path:
+        engine.add_recent_config(config_path)
+
     if not rules_path:
         rules_path = get_file_interactive("Financial Rules TOML", engine.get_recent_rules())
+
+    if rules_path:
         engine.add_recent_rules(rules_path)
 
     console.print()

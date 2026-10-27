@@ -83,6 +83,10 @@ class PersonalFinanceEngine:
         """Fetch list of recently opened configuration TOML paths."""
         return self._prefs.get_recent_configs()
 
+    def add_recent_config(self, path: str) -> None:
+        """Add a configuration TOML path to the recent history."""
+        self._prefs.add_recent_config(path)
+
     def get_recent_rules(self) -> list[str]:
         """Fetch list of recently opened financial rules TOML paths."""
         return self._prefs.get_recent_rules()
@@ -162,6 +166,10 @@ class PersonalFinanceEngine:
         on_status: Callable[[ObservabilityEvent], None],
     ) -> None:
         """Spawn the multiprocessing ETL pipeline and stream status updates to on_status."""
+        if config_path:
+            self.add_recent_config(config_path)
+        if rules_path:
+            self.add_recent_rules(rules_path)
         status_queue: multiprocessing.Queue[ObservabilityEvent] = multiprocessing.Queue()
         process = WorkerPoolCoordinator.spawn_process(status_queue, config_path, rules_path)
         WorkerPoolCoordinator.monitor_queue(process, status_queue, on_status)
@@ -173,6 +181,10 @@ class PersonalFinanceEngine:
         status_queue: EventQueue | None = None,
     ) -> None:
         """Execute the ETL pipeline synchronously in the current thread (ideal for profiling/testing)."""
+        if config_path:
+            self.add_recent_config(config_path)
+        if rules_path:
+            self.add_recent_rules(rules_path)
         if self.container is not None and hasattr(self.container, "create_orchestrator"):
             orchestrator = self.container.create_orchestrator(
                 config_path=config_path,
