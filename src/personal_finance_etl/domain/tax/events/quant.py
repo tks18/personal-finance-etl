@@ -39,6 +39,18 @@ __all__ = [
 
 
 def _clean_text(value: object) -> str | None:
+    """Trim whitespace and normalize empty strings to None.
+
+    Parameters
+    ----------
+    value : object
+        Input string or object to sanitize.
+
+    Returns
+    -------
+    str | None
+        Stripped string, or None if the value is null or empty.
+    """
     if value is None:
         return None
     text = str(value).strip()
@@ -46,12 +58,52 @@ def _clean_text(value: object) -> str | None:
 
 
 def _required_id(value: object, field_name: str) -> str:
+    """Validate and extract a non-empty identity string.
+
+    Parameters
+    ----------
+    value : object
+        Candidate identity value.
+    field_name : str
+        Field label for descriptive error messaging.
+
+    Returns
+    -------
+    str
+        Stripped identity string.
+
+    Raises
+    ------
+    ValueError
+        If the value is null or whitespace-only.
+    """
     if value is None or not str(value).strip():
         raise ValueError(f"Required identity field {field_name} is missing.")
     return str(value).strip()
 
 
 def _required_amount(value: object, field_name: str, source_id: object) -> float:
+    """Validate and convert an input value into a finite float amount.
+
+    Parameters
+    ----------
+    value : object
+        Candidate numeric or string amount value.
+    field_name : str
+        Field label for error attribution.
+    source_id : object
+        Source transaction ID for diagnostic logging.
+
+    Returns
+    -------
+    float
+        Finite floating-point amount.
+
+    Raises
+    ------
+    ValueError
+        If value is boolean, non-numeric, null, or non-finite.
+    """
     if value is None:
         raise ValueError(f"Required amount {field_name} is null for source {source_id!r}.")
     if isinstance(value, bool) or not isinstance(value, (int, float, str)):
@@ -71,6 +123,27 @@ def _required_amount(value: object, field_name: str, source_id: object) -> float
 
 
 def _as_date(value: object, field_name: str, source_id: object) -> date:
+    """Parse and validate an arbitrary date representation into a Python date object.
+
+    Parameters
+    ----------
+    value : object
+        Candidate date object, datetime, or date string.
+    field_name : str
+        Field label for diagnostic context.
+    source_id : object
+        Source ID for error attribution.
+
+    Returns
+    -------
+    date
+        Validated date instance.
+
+    Raises
+    ------
+    ValueError
+        If value is null or cannot be cast into a valid date.
+    """
     if value is None:
         raise ValueError(f"Required date {field_name} is null for source {source_id!r}.")
     if isinstance(value, datetime):

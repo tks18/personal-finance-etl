@@ -20,11 +20,6 @@ from collections.abc import Mapping
 import polars as pl
 import polars.selectors as cs
 
-from personal_finance_etl.application.observability import (
-    ObservabilityEmitter,
-    get_global_emitter,
-)
-from personal_finance_etl.application.observability.diagnostics import get_observability_diagnostics
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.contracts.application import EngineStage
 from personal_finance_etl.contracts.observability import (
@@ -44,6 +39,13 @@ from personal_finance_etl.domain.household.income import IncomeStreamsBuilder
 from personal_finance_etl.domain.household.ledger import LedgerBuilder
 from personal_finance_etl.domain.wealth.analytics import InvestmentAnalyticsBuilder
 from personal_finance_etl.domain.wealth.net_worth import NetWorthBuilder
+from personal_finance_etl.infrastructure.observability import (
+    ObservabilityEmitter,
+    get_global_emitter,
+)
+from personal_finance_etl.infrastructure.observability.diagnostics import (
+    get_observability_diagnostics,
+)
 
 __all__ = ["WealthPresentationEngine", "WealthService"]
 

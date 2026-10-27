@@ -191,6 +191,18 @@ class FYMacroParametersTable:
         self.fy_map.sort(key=lambda x: x["start"])
 
     def _find_entry(self, ref_date: date) -> FYMapEntry | None:
+        """Find the matching financial year entry for a reference date.
+
+        Parameters
+        ----------
+        ref_date : date
+            Date for which to look up fiscal year parameters.
+
+        Returns
+        -------
+        FYMapEntry | None
+            The matching financial year dictionary entry, or closest past/future entry if outside range.
+        """
         # Exact match
         for entry in reversed(self.fy_map):
             if entry["start"] <= ref_date <= entry["end"]:
@@ -233,6 +245,24 @@ class FYMacroParametersTable:
     def _classify(
         self, tax_type: str, tax_subtype: str, lot_buy_date: date, debt_cutoff: date
     ) -> tuple[str, str]:
+        """Classify asset tax type and subtype into statutory parameter keys.
+
+        Parameters
+        ----------
+        tax_type : str
+            Base tax classification (e.g. 'equity', 'debt', 'gold').
+        tax_subtype : str
+            Sub-classification (e.g. 'us_listed', 'mf', 'unlisted').
+        lot_buy_date : date
+            Acquisition date of the investment lot.
+        debt_cutoff : date
+            Cutoff date separating grandfathered debt indexation benefits.
+
+        Returns
+        -------
+        tuple[str, str]
+            Tuple of canonical tax category and refined subtype.
+        """
         tt = tax_type.strip().lower()
         tst = tax_subtype.strip().lower()
 

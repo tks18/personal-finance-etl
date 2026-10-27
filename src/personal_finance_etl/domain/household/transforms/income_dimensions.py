@@ -30,6 +30,26 @@ def _build_tax_map_row(
     taxability: str,
     tax_method: str,
 ) -> dict[str, str]:
+    """Construct a row dictionary mapping a category UID to its tax attributes.
+
+    Parameters
+    ----------
+    uid : str
+        Unique identifier for the category or subcategory.
+    head : str
+        Display name of the tax income head.
+    sub_head : str
+        Display name of the tax sub-head.
+    taxability : str
+        Taxability classification (e.g. 'Taxable', 'Exempt').
+    tax_method : str
+        Applicable tax calculation method.
+
+    Returns
+    -------
+    dict[str, str]
+        A mapping record for dimension LazyFrame construction.
+    """
     return {
         "UID": uid,
         "Tax_Income_Head": head,
@@ -42,6 +62,18 @@ def _build_tax_map_row(
 def _extract_head_tax_mappings(
     heads: list[TaxHeadConfig],
 ) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
+    """Extract category and subcategory tax mapping records from tax head configurations.
+
+    Parameters
+    ----------
+    heads : list[TaxHeadConfig]
+        List of configured tax heads containing sub-head definitions and UID lists.
+
+    Returns
+    -------
+    tuple[list[dict[str, str]], list[dict[str, str]]]
+        Tuple containing category mapping rows and subcategory mapping rows.
+    """
     cat_rows: list[dict[str, str]] = []
     sub_cat_rows: list[dict[str, str]] = []
 
@@ -63,6 +95,18 @@ def _extract_head_tax_mappings(
 
 
 def _get_tax_maps(rules: FinancialRules | None) -> tuple[pl.LazyFrame, pl.LazyFrame]:
+    """Generate category and subcategory tax mapping LazyFrames from financial rules.
+
+    Parameters
+    ----------
+    rules : FinancialRules | None
+        Optional financial rules model containing tax configuration assumptions.
+
+    Returns
+    -------
+    tuple[pl.LazyFrame, pl.LazyFrame]
+        Pair of LazyFrames representing category and subcategory tax mappings.
+    """
     schema = {
         "UID": pl.Utf8,
         "Tax_Income_Head": pl.Utf8,

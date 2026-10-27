@@ -90,6 +90,99 @@ def _run_mc_simulations_numba(
     npt.NDArray[np.float64],  # 30 out_avg_swr_p50
     npt.NDArray[np.float64],  # 31 out_terminal_wealth_nom_p50
 ]:
+    """Execute high-performance parallelized Monte Carlo simulations via Numba.
+
+    Parameters
+    ----------
+    pv_arr : npt.NDArray[np.float64]
+        Initial portfolio present value vector across scenarios.
+    pmt_total_arr : npt.NDArray[np.float64]
+        Monthly contribution or savings rate vector.
+    fv_total_arr : npt.NDArray[np.float64]
+        Future value cashflow target vector.
+    burn_total_arr : npt.NDArray[np.float64]
+        Monthly expense burn rate vector.
+    inf_rates : npt.NDArray[np.float64]
+        Historical or expected inflation rate vector.
+    seed_ints : npt.NDArray[np.int32]
+        Random seeds per thread.
+    gens : Any
+        Numba-compatible pseudo-random number generator collection.
+    iterations : int
+        Number of simulation trajectories per scenario.
+    max_months : int
+        Maximum simulation horizon in months.
+    vol_r : float
+        Annualized volatility parameter.
+    mean_r : float
+        Annualized expected return drift.
+    swr : float
+        Safe withdrawal rate fraction.
+    current_age_months_arr : npt.NDArray[np.int32]
+        Current household member ages in months.
+    target_lifespan_months : int
+        Simulation planning horizon cap in months.
+    tm_flat : npt.NDArray[np.float64]
+        Flattened regime transition probability matrix.
+    state_bull_params : npt.NDArray[np.float64]
+        Bull regime return and volatility parameters.
+    state_bear_params : npt.NDArray[np.float64]
+        Bear regime return and volatility parameters.
+    state_stag_params : npt.NDArray[np.float64]
+        Stagflation regime return and volatility parameters.
+    hc_shock_prob : float
+        Health care shock probability per month.
+    hc_shock_min : int
+        Minimum health care shock duration in months.
+    hc_shock_max : int
+        Maximum health care shock duration in months.
+    hc_cov : float
+        Health care cost of variance / coefficient.
+    gp_derisk_start : int
+        Month to begin glide-path de-risking.
+    gp_rerisk_end : int
+        Month to complete glide-path re-risking.
+    gp_base_eq : float
+        Base equity percentage for glide-path.
+    gp_target_eq : float
+        Target equity percentage during retirement.
+    gp_dyn_debt : bool
+        Flag indicating dynamic debt adjustment.
+    jump_prob_ann : float
+        Annualized market jump/crash probability.
+    jump_mag : float
+        Jump magnitude fraction.
+    gp_debt_ret : float
+        Debt return parameter.
+    gp_debt_vol : float
+        Debt volatility parameter.
+    gk_upper : float
+        Guyton-Klinker upper capital preservation guardrail.
+    gk_lower : float
+        Guyton-Klinker lower prosperity guardrail.
+    gk_cut : float
+        Spending cut percentage on upper guardrail breach.
+    gk_raise : float
+        Spending raise percentage on lower guardrail breach.
+    inf_theta : float
+        Mean-reverting inflation speed parameter.
+    inf_vol_ann : float
+        Annualized inflation volatility.
+    inf_max : float
+        Maximum allowed inflation cap.
+    inf_min : float
+        Minimum allowed inflation floor.
+    sorr_months : int
+        Sequence-of-returns risk evaluation window in months.
+    expense_drag : float
+        Portfolio management fee and expense drag percentage.
+
+    Returns
+    -------
+    tuple[npt.NDArray[np.float64], ...]
+        16 simulated metric arrays containing percentiles (P90, P50, P10), success probability,
+        runways, drawdowns, and terminal wealth.
+    """
     n_rows = len(pv_arr)
     # Total Outputs (16 arrays)
     out_p90 = np.full(n_rows, np.nan)
