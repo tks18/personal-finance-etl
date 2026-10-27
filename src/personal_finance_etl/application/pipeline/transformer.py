@@ -23,11 +23,6 @@ from personal_finance_etl.application.ingestion.asset_strategies import (
     StockPipeline,
     USStockPipeline,
 )
-from personal_finance_etl.application.observability import (
-    ObservabilityEmitter,
-    get_global_emitter,
-)
-from personal_finance_etl.application.observability.diagnostics import get_observability_diagnostics
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
 from personal_finance_etl.contracts.application import EngineStage
@@ -66,6 +61,13 @@ from personal_finance_etl.domain.investments.transforms.common import (
     get_f_tf_investment_purchase_data,
     get_f_tf_investment_sale_data,
     transform_stg_investment_market_data,
+)
+from personal_finance_etl.infrastructure.observability import (
+    ObservabilityEmitter,
+    get_global_emitter,
+)
+from personal_finance_etl.infrastructure.observability.diagnostics import (
+    get_observability_diagnostics,
 )
 
 __all__ = ["TransformationDAG"]

@@ -22,7 +22,6 @@ import threading
 from collections.abc import Callable
 from typing import cast
 
-from personal_finance_etl.application.observability import ObservabilityEmitter, get_global_emitter
 from personal_finance_etl.application.pipeline.orchestrator import ETLOrchestrator
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
@@ -35,7 +34,9 @@ from personal_finance_etl.contracts.observability import (
     PresentationKind,
 )
 from personal_finance_etl.infrastructure.observability import (
+    ObservabilityEmitter,
     ObservabilityQueueSink,
+    get_global_emitter,
 )
 
 __all__ = ["QueueStream", "WorkerPoolCoordinator", "process_wrapper"]
@@ -49,11 +50,27 @@ class QueueStream:
         target: EventQueue | ObservabilityEmitter,
         is_error: bool = False,
     ) -> None:
+        """Initialize standard output/error stream redirector.
+
+        Parameters
+        ----------
+        target : EventQueue | ObservabilityEmitter
+            Destination event queue or central emitter.
+        is_error : bool, default=False
+            Whether this stream captures standard error.
+        """
         self.target = target
         self.buffer = ""
         self.is_error = is_error
 
     def _emit(self, message: str) -> None:
+        """Emit raw stdout/stderr message as a canonical diagnostic event.
+
+        Parameters
+        ----------
+        message : str
+            The raw text line intercepted from the stream.
+        """
         event_code = EventCode.RAW_STDERR if self.is_error else EventCode.RAW_STDOUT
         severity = DiagnosticSeverity.ERROR if self.is_error else DiagnosticSeverity.INFO
         outcome = EventOutcome.FAILED if self.is_error else EventOutcome.COMPLETED
@@ -115,7 +132,7 @@ def process_wrapper(
         status_queue = cast(EventQueue, multiprocessing.Queue())
 
     emitter = get_global_emitter()
-    queue_sink = ObservabilityQueueSink(cast(EventQueue, status_queue))
+    queue_sink = ObservabilityQueueSink(status_queue)
     emitter.register_sink(queue_sink)
 
     sys.stdout = QueueStream(emitter, is_error=False)
