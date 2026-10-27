@@ -518,19 +518,19 @@ class IsinPipeline:
                         raise RuntimeError(f"ISIN_FAILURE|{isin}|{error_msg}") from e
 
                     if error_info is not None:
-                        failed_isin = error_info.get("isin", isin)
-                        error_msg = error_info.get("error", "Unknown Error")
-                        tb = error_info.get("traceback", "")
-                        diagnostics.error(
-                            f"ISIN Processing Failed for {failed_isin}: {error_msg}\n{tb}"
-                        )
-                        err_details = ErrorDetails.create(
-                            exc=RuntimeError(error_msg),
+                        failed_isin = str(error_info.get("isin", isin))
+                        error_msg = str(error_info.get("error", "Unknown Error"))
+                        tb = str(error_info.get("traceback", ""))
+                        err_details = ErrorDetails(
+                            exception_type="RuntimeError",
+                            exception_message=error_msg,
                             failure_domain=FailureDomain.WORKER,
-                            stage="InvestmentQuantEngine",
-                            entity=failed_isin,
-                            hint=f"Verify prices in market data table and check buy/sell order chronology for ISIN {failed_isin}",
-                            failed_isin=failed_isin,
+                            traceback_summary=tb,
+                            retryable=False,
+                            context_variables={"failed_isin": failed_isin},
+                            remediation_hint=f"Verify prices in market data table and check buy/sell order chronology for ISIN {failed_isin}",
+                            failing_stage="InvestmentQuantEngine",
+                            failing_entity=failed_isin,
                         )
                         self.emitter.emit_event(
                             event_code=EventCode.QUANT_ISIN_PROCESSED,
