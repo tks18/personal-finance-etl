@@ -135,7 +135,7 @@ def test_extraction_batch_result_contract():
 
 def test_recovery_results():
     snap = SnapshotResult(
-        outcome=SnapshotOutcome.SUCCESS,
+        outcome=SnapshotOutcome.SNAPSHOT_PUBLISHED,
         archive_path=None,
         files_archived=["raw.sqlite", "duckdb.db"],
         archive_size_bytes=1024,
@@ -143,7 +143,7 @@ def test_recovery_results():
     assert snap.is_success is True
 
     restore = RestoreResult(
-        outcome=RestoreOutcome.SUCCESS,
+        outcome=RestoreOutcome.RESTORE_SUCCEEDED,
         source_archive=None,  # type: ignore[arg-type]
         files_restored=["duckdb.db"],
     )
