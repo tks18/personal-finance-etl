@@ -160,7 +160,7 @@ The two root models do not fail the same way.
 ```python
 # src/personal_finance_etl/config/settings.py
 @classmethod
-def from_toml(cls, filepath: str | os.PathLike[str], track_recent: bool = True) -> Settings:
+def from_toml(cls, filepath: str | os.PathLike[str]) -> Settings:
     path_str = os.fspath(filepath)
     if not os.path.exists(path_str):
         return cls()

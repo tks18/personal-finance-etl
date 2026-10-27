@@ -203,7 +203,7 @@ That distinction prevents two very different “hash” concepts from being conf
 ```python
 # src/personal_finance_etl/config/settings.py
 @classmethod
-def from_toml(cls, filepath: str | os.PathLike[str], track_recent: bool = True) -> Settings:
+def from_toml(cls, filepath: str | os.PathLike[str]) -> Settings:
     path_str = os.fspath(filepath)
     if not os.path.exists(path_str):
         return cls()
@@ -280,15 +280,12 @@ The model is the contract.
 
 ## Recent configuration history is a preference, not financial state
 
-When a configuration successfully loads, `Settings.from_toml()` attempts to add the path to recent preferences:
+When a configuration is selected and validated, preference persistence is coordinated at the application/presentation boundary (e.g. `PersonalFinanceEngine.add_recent_config()` and desktop/CLI handlers):
 
 ```python
-# src/personal_finance_etl/config/settings.py
-if track_recent:
-    try:
-        PreferencesManager().add_recent_config(path_str)
-    except Exception:
-        pass
+# Coordinated by application / presentation layer
+if config_path:
+    engine.add_recent_config(config_path)
 ```
 
 This operation is intentionally best-effort.
