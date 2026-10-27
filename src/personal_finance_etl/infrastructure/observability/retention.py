@@ -19,7 +19,9 @@ import os
 import time
 from pathlib import Path
 
-from personal_finance_etl.application.observability.diagnostics import get_observability_diagnostics
+from personal_finance_etl.infrastructure.observability.diagnostics import (
+    get_observability_diagnostics,
+)
 
 diagnostics = get_observability_diagnostics("personal_finance_etl.observability.retention")
 

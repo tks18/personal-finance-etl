@@ -10,7 +10,7 @@ Owns
 Does not own
 -------------
 - Concrete JSONL formatting or disk appending (owned by infrastructure.observability.forensic_sink).
-- Event creation and context management (owned by application.observability).
+- Event creation and context management (owned by infrastructure.observability).
 - Terminal rendering or GUI widget dispatch (owned by presentation).
 """
 
@@ -72,6 +72,13 @@ class ObservabilityQueueSink(ObservabilitySink):
     """
 
     def __init__(self, target_queue: EventQueue) -> None:
+        """Initialize queue sink forwarding events to an asynchronous buffer.
+
+        Parameters
+        ----------
+        target_queue : EventQueue
+            Target IPC or background queue receiving events.
+        """
         self.queue = target_queue
 
     def emit(self, event: ObservabilityEvent) -> None:
@@ -106,6 +113,15 @@ class AsyncObservabilityListener:
         inbound_queue: BufferedEventQueue,
         sinks: list[ObservabilitySink],
     ) -> None:
+        """Initialize asynchronous listener background worker thread.
+
+        Parameters
+        ----------
+        inbound_queue : BufferedEventQueue
+            Inbound queue providing serialized events.
+        sinks : list[ObservabilitySink]
+            Target sinks receiving dequeued events.
+        """
         self.inbound_queue = inbound_queue
         self.sinks = list(sinks)
         self._thread: threading.Thread | None = None
