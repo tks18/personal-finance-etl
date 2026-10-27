@@ -1,4 +1,17 @@
-"""Typed queue contracts for transporting canonical observability events."""
+"""Typed queue contracts for transporting canonical observability events across boundaries.
+
+Owns
+----
+- EventQueue protocol defining the structural contract for inter-process and in-memory event queues.
+- NullEventQueue providing a typed no-op null object for headless or non-subscribed execution paths.
+- Typed event-transport boundary abstraction between producers and asynchronous consumers.
+
+Does not own
+-------------
+- Event dispatch, filtering, or fan-out emission (owned by infrastructure.observability.emitter).
+- Sink persistence, JSONL formatting, or disk writing (owned by infrastructure.observability.forensic_sink).
+- Presentation rendering, UI log formatting, or desktop widgets (owned by presentation).
+"""
 
 from __future__ import annotations
 

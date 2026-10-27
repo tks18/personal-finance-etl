@@ -349,6 +349,8 @@ class UnifiedETLTab(BaseEngineTab):
                     presentation_kind=PresentationKind.FAILURE,
                 ),
             )
+        else:
+            self.engine.add_recent_config(path)
 
     def _select_file(
         self, str_var: ctk.StringVar, type_name: str = "TOML", ext: str = "*.toml"

@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [9.5.2](https://github.com/tks18/personal-finance-etl/compare/9.5.1...9.5.2) (2026-10-27)
+
+
+### Features 🔥
+
+* **investments:** preserve worker traceback in errordetails ([9f811fc](https://github.com/tks18/personal-finance-etl/commit/9f811fc9a1e45d08a48fffd82f6db8a8d507c733))
+
+
+### Code Refactoring 🖌
+
+* **config:** decouple settings from preferences manager ([82501da](https://github.com/tks18/personal-finance-etl/commit/82501daf56b1d7d9f0fe0d5cfe8ce9e9f6b58f8b))
+
+
+### Docs 📃
+
+* add minor updates ([05355d7](https://github.com/tks18/personal-finance-etl/commit/05355d7e6e9ea38bba6a3acf0bfb51a726aa219c))
+* **contracts:** document event transport and schema boundaries ([44d6267](https://github.com/tks18/personal-finance-etl/commit/44d62673fddc165f98352d6fcd8400ad9264f797))
+
 ### [9.5.1](https://github.com/tks18/personal-finance-etl/compare/9.5.0...9.5.1) (2026-10-27)
 
 

@@ -26,6 +26,12 @@ FORBIDDEN_IMPORTS = {
         "personal_finance_etl.backend",
         "personal_finance_etl.frontend",
     ],
+    "config": [
+        "personal_finance_etl.application",
+        "personal_finance_etl.infrastructure",
+        "personal_finance_etl.presentation",
+        "personal_finance_etl.domain",
+    ],
     "domain": [
         "personal_finance_etl.application",
         "personal_finance_etl.infrastructure",

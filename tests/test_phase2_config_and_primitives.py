@@ -140,7 +140,7 @@ def test_settings_toml_loading_and_flatten():
     toml_path = Path("tests/config.toml")
     assert toml_path.exists()
 
-    cfg = Settings.from_toml(str(toml_path), track_recent=False)
+    cfg = Settings.from_toml(str(toml_path))
     assert cfg.TARGET_DB_NAME == "Personal_Finance_DB.duckdb"
     assert cfg.FILE_HASH_POLICY.csv is True
 
