@@ -15,27 +15,21 @@ Does not own
 
 from __future__ import annotations
 
-import logging
-from datetime import UTC, datetime
-
 import polars as pl
 
+from personal_finance_etl.application.observability import ObservabilityEmitter, get_global_emitter
+from personal_finance_etl.application.observability.diagnostics import get_observability_diagnostics
 from personal_finance_etl.contracts.application import EngineStage
 from personal_finance_etl.contracts.observability import (
     DiagnosticSeverity,
     EventCode,
-    EventOutcome,
-    NullObservabilitySink,
-    ObservabilityContext,
-    ObservabilityEvent,
-    ObservabilitySink,
     PresentationKind,
 )
 from personal_finance_etl.infrastructure.warehouse.connection import DuckDBManager
 from personal_finance_etl.infrastructure.warehouse.registry import DATA_CONTRACT_REGISTRY
 from personal_finance_etl.infrastructure.warehouse.schema.gold import GOLD_DDL
 
-logger = logging.getLogger("personal_finance_etl.warehouse.gold")
+diagnostics = get_observability_diagnostics("personal_finance_etl.warehouse.gold")
 
 
 class GoldLayer:
@@ -50,16 +44,16 @@ class GoldLayer:
     def __init__(
         self,
         db_manager: DuckDBManager,
-        emitter: ObservabilitySink | None = None,
+        emitter: ObservabilityEmitter | None = None,
     ) -> None:
         self.db_manager = db_manager
-        self.emitter = emitter or NullObservabilitySink()
+        self.emitter = emitter or get_global_emitter()
 
     def _write(self, df: pl.DataFrame | pl.LazyFrame, table_name: str) -> int:
         """Write DataFrame or LazyFrame into a Gold presentation table."""
         if isinstance(df, pl.LazyFrame):
             compact_plan = df.explain().replace("\n", " | ")
-            logger.debug("Physical Plan for Gold '%s': %s", table_name, compact_plan)
+            diagnostics.debug("Physical Plan for Gold '%s': %s", table_name, compact_plan)
             # Materialization Boundary: PUBLICATION_BOUNDARY
             # Terminal execution of lazy presentation graph for DuckDB Gold table insertion
             df = df.collect()
@@ -76,7 +70,7 @@ class GoldLayer:
 
     def load(self, dfs: dict[str, pl.DataFrame]) -> None:
         """Truncate all gold.* tables and re-insert presentation DataFrames."""
-        logger.info("Loading presentation datasets into Gold layer...")
+        diagnostics.info("Loading presentation datasets into Gold layer...")
 
         contracts = sorted(
             (c for c in DATA_CONTRACT_REGISTRY if c.layer == "gold"),
@@ -98,24 +92,18 @@ class GoldLayer:
                 if rows > 0:
                     tables_built += 1
                     total_rows += rows
-                self.emitter.emit(
-                    ObservabilityEvent(
-                        timestamp=datetime.now(UTC),
-                        event_code=EventCode.GOLD_REPLACE,
-                        severity=DiagnosticSeverity.DEBUG,
-                        presentation_kind=PresentationKind.INTERNAL,
-                        outcome=EventOutcome.COMPLETED,
-                        context=ObservabilityContext(
-                            stage=EngineStage.PUBLISHING,
-                            entity_type="Table",
-                            entity_id=contract.physical_table,
-                            rows=rows,
-                        ),
-                        message=f"Gold layer synchronized {contract.physical_table} ({rows:,} rows)",
-                    )
+                self.emitter.emit_event(
+                    event_code=EventCode.GOLD_REPLACE,
+                    message=f"Gold layer synchronized {contract.physical_table} ({rows:,} rows)",
+                    severity=DiagnosticSeverity.DEBUG,
+                    presentation_kind=PresentationKind.INTERNAL,
+                    stage=EngineStage.PUBLISHING,
+                    entity_type="Table",
+                    entity_id=contract.physical_table,
+                    rows=rows,
                 )
 
-        logger.info(
+        diagnostics.info(
             "Rebuilt %d presentation tables (%s total rows).",
             tables_built,
             f"{total_rows:,}",

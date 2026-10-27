@@ -15,18 +15,18 @@ Does not own
 
 from __future__ import annotations
 
-import logging
 import os
 
 import duckdb
 
+from personal_finance_etl.application.observability.diagnostics import get_observability_diagnostics
 from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
 from personal_finance_etl.infrastructure.warehouse.registry import (
     BRONZE_CONTRACT_REGISTRY,
     BronzeDataContract,
 )
 
-logger = logging.getLogger("personal_finance_etl.warehouse.meta.healing")
+diagnostics = get_observability_diagnostics("personal_finance_etl.warehouse.meta.healing")
 
 __all__ = ["DuckDBRegistryHealer"]
 
@@ -239,7 +239,7 @@ class DuckDBRegistryHealer:
         cp : ControlPlane
             Active control plane facade.
         """
-        logger.info(
+        diagnostics.info(
             "Executing self-healing synchronization between SQLite and DuckDB registries..."
         )
 
@@ -275,11 +275,11 @@ class DuckDBRegistryHealer:
         )
 
         if deleted_count > 0 or missing_count > 0:
-            logger.warning(
+            diagnostics.warning(
                 "MetaLayer Healing Report: Pruned %d orphaned records from DuckDB; "
                 "Re-queued %d missing/dropped files into SQLite Control Plane.",
                 deleted_count,
                 missing_count,
             )
         else:
-            logger.info("MetaLayer: SQLite Control Plane and DuckDB are 100%% synchronized.")
+            diagnostics.info("MetaLayer: SQLite Control Plane and DuckDB are 100%% synchronized.")

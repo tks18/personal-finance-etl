@@ -15,17 +15,17 @@ Does not own
 
 from __future__ import annotations
 
-import logging
 import os
 
 import duckdb
 import psutil
 
+from personal_finance_etl.application.observability.diagnostics import get_observability_diagnostics
 from personal_finance_etl.infrastructure.warehouse.schema.gold import GOLD_DDL
 from personal_finance_etl.infrastructure.warehouse.schema.meta import META_DDL
 from personal_finance_etl.infrastructure.warehouse.schema.silver import SILVER_DDL
 
-logger = logging.getLogger("personal_finance_etl.warehouse.connection")
+diagnostics = get_observability_diagnostics("personal_finance_etl.warehouse.connection")
 
 
 class DuckDBManager:
@@ -69,12 +69,12 @@ class DuckDBManager:
         """
         if self._conn is not None:
             return self._conn
-        logger.debug("DuckDB Warehouse: Opening connection to %s", self.db_path)
+        diagnostics.debug("DuckDB Warehouse: Opening connection to %s", self.db_path)
         self._conn = duckdb.connect(self.db_path)
         mem_gb = max(4, int(psutil.virtual_memory().total / (1024**3) * 0.75))
         self._conn.execute(f"PRAGMA memory_limit='{mem_gb}GB'")  # nosec B608
         self._conn.execute("PRAGMA threads=4")
-        logger.debug(
+        diagnostics.debug(
             "DuckDB Warehouse: Connection configured: memory_limit=%dGB, threads=4", mem_gb
         )
         return self._conn
@@ -82,13 +82,13 @@ class DuckDBManager:
     def close(self) -> None:
         """Run checkpoint and vacuum, then close the connection."""
         if self._conn is not None:
-            logger.debug("DuckDB Warehouse: Commencing VACUUM and CHECKPOINT sequence...")
+            diagnostics.debug("DuckDB Warehouse: Commencing VACUUM and CHECKPOINT sequence...")
             try:
                 self._conn.execute("VACUUM")
                 self._conn.execute("CHECKPOINT")
-                logger.debug("DuckDB Warehouse: Checkpoint successful. Closing connection.")
+                diagnostics.debug("DuckDB Warehouse: Checkpoint successful. Closing connection.")
             except duckdb.Error as e:
-                logger.warning("DuckDB Warehouse: Cleanup VACUUM/CHECKPOINT failed: %s", e)
+                diagnostics.warning("DuckDB Warehouse: Cleanup VACUUM/CHECKPOINT failed: %s", e)
             finally:
                 self._conn.close()
                 self._conn = None

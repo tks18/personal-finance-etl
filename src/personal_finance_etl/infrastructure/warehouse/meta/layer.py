@@ -16,13 +16,13 @@ Does not own
 
 from __future__ import annotations
 
-import logging
 import os
 import sqlite3
 
 import duckdb
 import polars as pl
 
+from personal_finance_etl.application.observability.diagnostics import get_observability_diagnostics
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
 from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
@@ -41,7 +41,7 @@ from personal_finance_etl.infrastructure.warehouse.registry import (
     DATA_CONTRACT_REGISTRY,
 )
 
-logger = logging.getLogger("personal_finance_etl.warehouse.meta")
+diagnostics = get_observability_diagnostics("personal_finance_etl.warehouse.meta")
 
 
 class MetaLayer:
@@ -103,7 +103,7 @@ class MetaLayer:
                 """,
                 [new_rel_path, new_name, new_file_id, old_rel_path],
             )
-            logger.debug(
+            diagnostics.debug(
                 "[METADATA:QUERY] Migrated DuckDB identity from '%s' to '%s'.",
                 old_rel_path,
                 new_rel_path,
@@ -296,7 +296,9 @@ class MetaLayer:
         for schema_name, table_name in existing_tables:
             full_table_name = f"{schema_name}.{table_name}"
             if full_table_name not in valid_physical_tables:
-                logger.warning("MetaLayer: Dropping orphaned physical table %s", full_table_name)
+                diagnostics.warning(
+                    "MetaLayer: Dropping orphaned physical table %s", full_table_name
+                )
                 self.conn.execute(f"DROP TABLE IF EXISTS {full_table_name} CASCADE")  # nosec B608
 
     def _mirror_latest_simulation(
@@ -340,14 +342,14 @@ class MetaLayer:
                     """,
                     list(sim_row[:11]) + [contract_registry_fingerprint] + list(sim_row[11:]),
                 )
-                logger.info(
+                diagnostics.info(
                     "Mirrored latest simulation run '%s' into meta.m_Latest_Simulation "
                     "(contract_registry_fingerprint=%s...).",
                     sim_row[0],
                     contract_registry_fingerprint[:12],
                 )
         except (sqlite3.Error, duckdb.Error) as mirror_err:
-            logger.warning(
+            diagnostics.warning(
                 "Could not mirror simulation run into DuckDB meta: %s",
                 mirror_err,
             )
@@ -362,7 +364,7 @@ class MetaLayer:
         cp : ControlPlane, optional
             Active control plane facade for mirroring simulation provenance.
         """
-        logger.info("Recording current table metrics and configurations to Meta Layer...")
+        diagnostics.info("Recording current table metrics and configurations to Meta Layer...")
 
         self._record_table_metrics(dfs)
         self._record_rules_and_settings()
@@ -382,4 +384,6 @@ class MetaLayer:
         if cp is not None:
             self._mirror_latest_simulation(cp, contract_registry_fingerprint)
 
-        logger.info("Meta layer load complete. DuckDB snapshot represents the latest active state.")
+        diagnostics.info(
+            "Meta layer load complete. DuckDB snapshot represents the latest active state."
+        )
