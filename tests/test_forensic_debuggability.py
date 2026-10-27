@@ -27,7 +27,7 @@ import pytest
 
 from personal_finance_etl.application.ingestion.coordinator import DataExtractor
 from personal_finance_etl.application.investments.quant_service import InvestmentQuantEngine
-from personal_finance_etl.application.observability import ObservabilityEmitter
+from personal_finance_etl.infrastructure.observability import ObservabilityEmitter
 from personal_finance_etl.application.wealth.wealth_service import WealthService
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
