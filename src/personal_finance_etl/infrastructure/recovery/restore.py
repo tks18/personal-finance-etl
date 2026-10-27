@@ -15,7 +15,6 @@ Does not own
 
 from __future__ import annotations
 
-import logging
 import os
 import shutil
 import sqlite3
@@ -26,6 +25,7 @@ import zipfile
 import duckdb
 from filelock import FileLock, Timeout
 
+from personal_finance_etl.application.observability.diagnostics import get_observability_diagnostics
 from personal_finance_etl.contracts.recovery import (
     ActiveDatabaseState,
     RestoreOutcome,
@@ -33,7 +33,7 @@ from personal_finance_etl.contracts.recovery import (
 )
 from personal_finance_etl.infrastructure.filesystem.paths import get_temp_dir
 
-logger = logging.getLogger("personal_finance_etl.recovery.restore")
+diagnostics = get_observability_diagnostics("personal_finance_etl.recovery.restore")
 
 __all__ = ["SnapshotRestorer"]
 
@@ -242,7 +242,7 @@ class SnapshotRestorer:
                     os.replace(backup_path, original_path)
             return True
         except Exception as rb_err:
-            logger.critical("RESTORE CRITICAL ERROR: Rollback failed: %s", rb_err)
+            diagnostics.critical("RESTORE CRITICAL ERROR: Rollback failed: %s", rb_err)
             return False
 
     @staticmethod
@@ -259,7 +259,7 @@ class SnapshotRestorer:
                 if os.path.exists(backup_path):
                     os.remove(backup_path)
             except OSError as cleanup_error:
-                logger.warning(
+                diagnostics.warning(
                     "Restored successfully but could not remove recovery file %s: %s",
                     backup_path,
                     cleanup_error,
@@ -329,7 +329,7 @@ class SnapshotRestorer:
             self._validate_and_extract_archive(zip_path, temp_extract_dir)
         except Exception as val_err:
             msg = f"Snapshot validation failed: {val_err}"
-            logger.error(msg)
+            diagnostics.error(msg)
             return RestoreResult(
                 outcome=RestoreOutcome.RESTORE_VALIDATION_FAILED,
                 active_database_state=ActiveDatabaseState.PREVIOUS_PAIR_INTACT,
@@ -339,7 +339,7 @@ class SnapshotRestorer:
         success, err_msg, rollback_success = self._install_restored_databases(temp_extract_dir)
         if not success:
             if rollback_success:
-                logger.warning(
+                diagnostics.warning(
                     "Restore installation failed; successfully rolled back to intact previous database pair: %s",
                     err_msg,
                 )
@@ -348,7 +348,7 @@ class SnapshotRestorer:
                     active_database_state=ActiveDatabaseState.PREVIOUS_PAIR_INTACT,
                     error_message=err_msg,
                 )
-            logger.error(
+            diagnostics.error(
                 "Restore installation failed and rollback could not be guaranteed; operator inspection required."
             )
             return RestoreResult(
@@ -357,7 +357,7 @@ class SnapshotRestorer:
                 error_message=f"Installation failed ({err_msg}); rollback failed. Inspection required.",
             )
 
-        logger.info("Coordinated snapshot restored from %s to %s", zip_path, self.base_path)
+        diagnostics.info("Coordinated snapshot restored from %s to %s", zip_path, self.base_path)
         return RestoreResult(
             outcome=RestoreOutcome.RESTORE_SUCCEEDED,
             active_database_state=ActiveDatabaseState.NEW_PAIR_INSTALLED,
@@ -378,7 +378,7 @@ class SnapshotRestorer:
         """
         if not os.path.isfile(zip_path):
             msg = f"Backup file not found: {zip_path}"
-            logger.error(msg)
+            diagnostics.error(msg)
             return RestoreResult(
                 outcome=RestoreOutcome.RESTORE_VALIDATION_FAILED,
                 active_database_state=ActiveDatabaseState.PREVIOUS_PAIR_INTACT,
@@ -395,7 +395,7 @@ class SnapshotRestorer:
                 return self._execute_restore_under_lock(zip_path, temp_extract_dir)
         except Timeout:
             msg = "Cannot restore snapshot: Pipeline is currently running."
-            logger.error(msg)
+            diagnostics.error(msg)
             return RestoreResult(
                 outcome=RestoreOutcome.RESTORE_VALIDATION_FAILED,
                 active_database_state=ActiveDatabaseState.PREVIOUS_PAIR_INTACT,
@@ -406,7 +406,7 @@ class SnapshotRestorer:
                 "Cannot restore snapshot: A database or backup file is currently in use. "
                 "Close active dashboards or database tools and try again."
             )
-            logger.error("%s (%s)", msg, pe)
+            diagnostics.error("%s (%s)", msg, pe)
             return RestoreResult(
                 outcome=RestoreOutcome.RESTORE_VALIDATION_FAILED,
                 active_database_state=ActiveDatabaseState.PREVIOUS_PAIR_INTACT,
