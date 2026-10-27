@@ -21,12 +21,6 @@ import gc
 import traceback
 from pathlib import Path
 
-from personal_finance_etl.application.observability import (
-    ObservabilityEmitter,
-    get_global_emitter,
-    set_current_context,
-)
-from personal_finance_etl.application.observability.diagnostics import get_observability_diagnostics
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
 from personal_finance_etl.contracts.application import EngineStage
@@ -48,11 +42,17 @@ from personal_finance_etl.infrastructure.observability import (
     AsyncObservabilityListener,
     JsonlForensicSink,
     LogRetentionManager,
+    ObservabilityEmitter,
     ObservabilityQueueSink,
     archive_run_trace,
     create_forensic_pipeline,
     fingerprint_config,
     fingerprint_rules,
+    get_global_emitter,
+    set_current_context,
+)
+from personal_finance_etl.infrastructure.observability.diagnostics import (
+    get_observability_diagnostics,
 )
 from personal_finance_etl.infrastructure.warehouse.connection import DuckDBManager
 from personal_finance_etl.infrastructure.warehouse.meta import MetaLayer
@@ -383,16 +383,47 @@ class RunLifecycleCoordinator:
             diagnostics.error(f"Failed to log run_failure to Control Plane: {failure_log_err}")
 
         domain = classify_failure_domain("Pipeline", type(exc).__name__ or str(exc))
-        err_details = ErrorDetails(
-            exception_type=type(exc).__name__,
-            exception_message=str(exc),
+
+        # Build actionable remediation guidance based on failure classification
+        hint = ""
+        exc_str = str(exc)
+        if "ISIN_FAILURE" in exc_str:
+            hint = "Verify purchase/sale dates and prices in statement files; ensure market data covers all holding dates."
+        elif domain == FailureDomain.SOURCE_VALIDATION or "Gatekeeper" in exc_str:
+            hint = (
+                "Check column schema and data types in raw source files against column_master.csv."
+            )
+        elif isinstance(exc, FileNotFoundError) or "not found" in exc_str.lower():
+            hint = "Check configured paths and ensure required input files exist in configured directories."
+        elif isinstance(exc, PermissionError) or "database is locked" in exc_str.lower():
+            hint = "Close any external DuckDB, SQLite, or Excel programs holding open locks on the files."
+        elif "commit" in exc_str.lower() or domain in (
+            FailureDomain.DUCKDB_COMMIT,
+            FailureDomain.SQLITE_COMMIT,
+        ):
+            hint = "Inspect database file integrity and ensure sufficient disk space for transaction commits."
+
+        ctx_vars: dict[str, str | int | float | bool] = {
+            "commit_state": self.commit_state.value,
+        }
+        if self.forensic_file_path:
+            ctx_vars["forensic_trace_path"] = str(self.forensic_file_path)
+
+        err_details = ErrorDetails.create(
+            exc=exc,
             failure_domain=domain,
-            traceback_summary=traceback.format_exc(),
+            stage="PipelineLifecycle",
+            hint=hint,
             retryable=False,
+            context_variables=ctx_vars,
+        )
+
+        trace_hint = (
+            f"\n  ↳ Forensic Trace: {self.forensic_file_path}" if self.forensic_file_path else ""
         )
         self.emitter.emit_event(
             event_code=EventCode.RUN_FAILED,
-            message=f"Critical Pipeline Failure: {exc}",
+            message=f"Critical Pipeline Failure: {exc}{trace_hint}",
             presentation_kind=PresentationKind.FAILURE,
             severity=DiagnosticSeverity.ERROR,
             error=err_details,
