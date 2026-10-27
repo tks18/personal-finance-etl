@@ -13,22 +13,9 @@ Does not own
 - Storage or persistence in DuckDB (owned by infrastructure.warehouse).
 """
 
-import logging
 from datetime import date
 
 import polars as pl
-
-from personal_finance_etl.contracts.application import EngineStage
-from personal_finance_etl.contracts.logging import StatusQueue
-from personal_finance_etl.contracts.observability import (
-    DiagnosticSeverity,
-    EventCode,
-    EventOutcome,
-    ObservabilityEvent,
-    PresentationKind,
-)
-
-logger = logging.getLogger(__name__)
 
 
 def transform_benchmark_data(
@@ -62,9 +49,6 @@ def transform_benchmark_data(
         df_bronze_benchmark = df_bronze_benchmark.collect()
 
     if df_bronze_benchmark.is_empty():
-        logger.warning(
-            "transform_benchmark_data received empty Bronze data. Returning empty frame."
-        )
         return pl.DataFrame()
 
     # Reject invalid published prices; explicit closure-gap/null rows are treated as
@@ -166,11 +150,8 @@ def transform_benchmark_data(
         ["Date", "yF_Ticker", "Benchmark_Observation_Date", "Benchmark_Age_Days"]
     )
     if not unavailable.is_empty():
-        logger.warning(
-            "Benchmark prices are unavailable before the first observation or beyond "
-            f"the {max_benchmark_staleness_days}-day staleness limit. "
-            f"Examples: {unavailable.head(10).to_dicts()}"
-        )
+        # Unavailable rows intentionally remain null after the staleness policy is applied.
+        pass
 
     df_silver = df_filled
 
@@ -192,13 +173,7 @@ def transform_benchmark_data(
 
 
 class BenchmarkTransformer:
-    """Reads Bronze benchmark dataset and builds a continuous daily Silver series.
-
-    Encapsulates the stateful status queue notification around `transform_benchmark_data`.
-    """
-
-    def __init__(self, status_queue: StatusQueue | None = None) -> None:
-        self.status_queue = status_queue
+    """Read Bronze benchmark data and build a continuous daily Silver series."""
 
     def transform(
         self,
@@ -207,37 +182,10 @@ class BenchmarkTransformer:
         global_end_date: date,
     ) -> pl.DataFrame:
         """Transform Bronze benchmark observations into a continuous daily Silver series."""
-        if self.status_queue is not None:
-            self.status_queue.put(
-                ObservabilityEvent.create(
-                    event_code=EventCode.TRANSFORMATION_STAGE,
-                    message=f"Transforming Bronze Benchmark Data into Silver ({global_start_date} to {global_end_date})...",
-                    progress=0.1,
-                    severity=DiagnosticSeverity.INFO,
-                    outcome=EventOutcome.COMPLETED,
-                    presentation_kind=PresentationKind.INTERNAL,
-                    stage=EngineStage.TRANSFORMING,
-                )
-            )
-
         df_silver = transform_benchmark_data(
             df_bronze_benchmark,
             global_start_date,
             global_end_date,
         )
-
-        logger.info(f"BenchmarkTransformer generated Silver table with {df_silver.height} rows.")
-        if self.status_queue is not None:
-            self.status_queue.put(
-                ObservabilityEvent.create(
-                    event_code=EventCode.TRANSFORMATION_STAGE,
-                    message=f"Successfully transformed benchmark data ({global_start_date} to {global_end_date}).",
-                    progress=1.0,
-                    severity=DiagnosticSeverity.INFO,
-                    outcome=EventOutcome.COMPLETED,
-                    presentation_kind=PresentationKind.INTERNAL,
-                    stage=EngineStage.TRANSFORMING,
-                )
-            )
 
         return df_silver

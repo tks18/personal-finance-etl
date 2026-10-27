@@ -15,7 +15,6 @@ Does not own
 
 from __future__ import annotations
 
-import logging
 from collections.abc import Mapping
 
 import polars as pl
@@ -25,6 +24,7 @@ from personal_finance_etl.application.observability import (
     ObservabilityEmitter,
     get_global_emitter,
 )
+from personal_finance_etl.application.observability.diagnostics import get_observability_diagnostics
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.contracts.application import EngineStage
 from personal_finance_etl.contracts.observability import (
@@ -47,7 +47,7 @@ from personal_finance_etl.domain.wealth.net_worth import NetWorthBuilder
 
 __all__ = ["WealthPresentationEngine", "WealthService"]
 
-logger = logging.getLogger(__name__)
+diagnostics = get_observability_diagnostics(__name__)
 
 
 class WealthService:
@@ -175,15 +175,15 @@ class WealthService:
         dict[str, pl.LazyFrame]
             Dictionary of computed presentation LazyFrames with NaN values cleaned to nulls.
         """
-        logger.debug("Starting Wealth Engine presentation layer builds...")
-        logger.debug("Imputing missing data (NaN) with 0.0 for BI Engine compatibility...")
+        diagnostics.debug("Starting Wealth Engine presentation layer builds...")
+        diagnostics.debug("Imputing missing data (NaN) with 0.0 for BI Engine compatibility...")
 
         base_lf = self._build_core_models(dfs)
         if base_lf is None:
             return {}
 
         results = self._build_presentation_tables(dfs, base_lf)
-        logger.debug("  -> Built %d BI presentation tables in DAG.", len(results))
+        diagnostics.debug("  -> Built %d BI presentation tables in DAG.", len(results))
         self.emitter.emit_event(
             event_code=EventCode.WEALTH_ENGINE_COMPLETED,
             message=f"Wealth presentation models assembled ({len(results)} tables)",

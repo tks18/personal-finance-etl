@@ -15,7 +15,6 @@ Does not own
 
 from __future__ import annotations
 
-import logging
 import math
 from collections.abc import Mapping
 from datetime import date
@@ -25,8 +24,6 @@ import polars as pl
 
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.domain.common.calculation import CalculationStatus, CpiResult
-
-logger = logging.getLogger(__name__)
 
 __all__ = ["InflationBuilder", "InflationCalendarResult"]
 
@@ -171,7 +168,6 @@ class InflationBuilder:
                 reason="Derived latest CPI_INDEX is null, NaN, or non-finite",
             )
         except Exception as err:
-            logger.error("Inflation calculation: Unexpected failure computing latest CPI: %s", err)
             return CpiResult(
                 value=None,
                 status=CalculationStatus.COMPUTATION_ERROR,

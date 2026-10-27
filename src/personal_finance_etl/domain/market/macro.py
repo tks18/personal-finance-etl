@@ -14,7 +14,6 @@ Does not own
 """
 
 import calendar
-import logging
 from collections.abc import Callable
 from datetime import date, datetime
 from typing import TypedDict, cast
@@ -23,8 +22,6 @@ import polars as pl
 
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.domain.common.dates import to_date_obj
-
-logger = logging.getLogger(__name__)
 
 __all__ = [
     "FYMacroParametersTable",
@@ -187,8 +184,6 @@ class FYMacroParametersTable:
             try:
                 self.fy_map.append(self._parse_row(row, default_cutoff))
             except Exception as e:
-                logger.error(f"Macro Parameters parsing error on row: {row}")
-                logger.error(f"Error details: {e}")
                 raise ValueError(
                     f"Malformed financial year parameters in row: {row}. Details: {e}"
                 ) from e
@@ -295,14 +290,7 @@ class FYMacroParametersTable:
             return fallback
         try:
             return float(str(val).replace(",", "").strip())
-        except (ValueError, TypeError) as err:
-            logger.warning(
-                "[MACRO] Unparseable Equity_LTCG_Exemption %r for date %s; using fallback %s: %s",
-                val,
-                ref_date,
-                fallback,
-                err,
-            )
+        except (ValueError, TypeError):
             return fallback
 
     def get_holding_type(
@@ -336,14 +324,7 @@ class FYMacroParametersTable:
             return fallback
         try:
             return float(str(val).replace(",", "").strip())
-        except (ValueError, TypeError) as err:
-            logger.warning(
-                "[MACRO] Unparseable Risk_Free_Rate %r for date %s; using fallback %s: %s",
-                val,
-                ref_date,
-                fallback,
-                err,
-            )
+        except (ValueError, TypeError):
             return fallback
 
     def get_inflation_rate(self, ref_date: date) -> float:
@@ -362,14 +343,7 @@ class FYMacroParametersTable:
             return fallback
         try:
             return float(str(val).replace(",", "").strip())
-        except (ValueError, TypeError) as err:
-            logger.warning(
-                "[MACRO] Unparseable Inflation_Rate %r for date %s; using fallback %s: %s",
-                val,
-                ref_date,
-                fallback,
-                err,
-            )
+        except (ValueError, TypeError):
             return fallback
 
     def get_ordinary_income_rate(self, ref_date: date) -> float:
@@ -388,12 +362,5 @@ class FYMacroParametersTable:
             return fallback
         try:
             return float(str(val).replace(",", "").strip())
-        except (ValueError, TypeError) as err:
-            logger.warning(
-                "[MACRO] Unparseable Estimated_Ordinary_Income_Tax_Rate %r for date %s; using fallback %s: %s",
-                val,
-                ref_date,
-                fallback,
-                err,
-            )
+        except (ValueError, TypeError):
             return fallback
