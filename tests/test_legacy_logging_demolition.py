@@ -24,7 +24,7 @@ from pathlib import Path
 
 import polars as pl
 
-from personal_finance_etl.application.observability import ObservabilityEmitter
+from personal_finance_etl.infrastructure.observability import ObservabilityEmitter
 from personal_finance_etl.application.pipeline.lifecycle import RunLifecycleCoordinator
 from personal_finance_etl.application.pipeline.worker import (
     QueueStream,
