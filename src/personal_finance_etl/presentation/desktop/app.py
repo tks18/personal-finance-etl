@@ -328,6 +328,13 @@ class UnifiedETLTab(BaseEngineTab):
             )
 
     def _on_config_selected(self, path: str) -> None:
+        """Handle user selection of configuration file and validate syntax.
+
+        Parameters
+        ----------
+        path : str
+            File system path to chosen pipeline configuration file.
+        """
         if not path:
             return
         if not self.engine.validate_config(path):
@@ -346,6 +353,17 @@ class UnifiedETLTab(BaseEngineTab):
     def _select_file(
         self, str_var: ctk.StringVar, type_name: str = "TOML", ext: str = "*.toml"
     ) -> None:
+        """Open native desktop file dialog to pick a configuration file.
+
+        Parameters
+        ----------
+        str_var : ctk.StringVar
+            Tkinter String variable to store the selected file path.
+        type_name : str, default "TOML"
+            Configuration file type label.
+        ext : str, default "*.toml"
+            File extension filter glob.
+        """
         path = filedialog.askopenfilename(
             title=f"Select {type_name} Config",
             filetypes=[(f"{type_name} files", ext), ("All files", "*.*")],
@@ -359,6 +377,7 @@ class UnifiedETLTab(BaseEngineTab):
                 self.engine.add_recent_rules(path)
 
     def _start_pipeline(self) -> None:
+        """Initiate asynchronous pipeline execution from the desktop UI tab."""
         self.run_btn.configure(state="disabled", text="Running...")
         self.status_log.configure(state="normal")
         self.status_log.delete("1.0", "end")
@@ -371,6 +390,7 @@ class UnifiedETLTab(BaseEngineTab):
         )
 
     def _snapshot_db(self) -> None:
+        """Trigger an instant database snapshot backup from the desktop UI tab."""
         try:
             snap_path = self.engine.snapshot_database(self.config_path_var.get())
             if snap_path:

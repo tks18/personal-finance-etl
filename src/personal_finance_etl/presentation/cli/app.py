@@ -125,6 +125,15 @@ def get_file_interactive(prompt_text: str, recents: list[str]) -> str:
 
 
 def _handle_snapshot(engine: PersonalFinanceEngine, config_path: str | None) -> None:
+    """Execute interactive or headless SQLite database backup snapshot and exit.
+
+    Parameters
+    ----------
+    engine : PersonalFinanceEngine
+        Personal finance engine instance.
+    config_path : str | None
+        Path to pipeline config file or None for interactive prompt.
+    """
     if not config_path:
         console.print("\n[bold]Snapshot requires a config file.[/bold]")
         config_path = get_file_interactive("Config TOML", engine.get_recent_configs())
@@ -147,6 +156,17 @@ def _handle_snapshot(engine: PersonalFinanceEngine, config_path: str | None) -> 
 def _handle_restore(
     engine: PersonalFinanceEngine, config_path: str | None, restore_target: str
 ) -> None:
+    """Execute interactive or headless database restoration from a chosen snapshot.
+
+    Parameters
+    ----------
+    engine : PersonalFinanceEngine
+        Personal finance engine instance.
+    config_path : str | None
+        Path to pipeline config file or None for interactive prompt.
+    restore_target : str
+        Snapshot filename or relative/absolute path to restore.
+    """
     if not config_path:
         console.print("\n[bold]Restore requires a config file.[/bold]")
         config_path = get_file_interactive("Config TOML", engine.get_recent_configs())
@@ -173,6 +193,17 @@ def _handle_restore(
 
 
 def _run_etl_progress(engine: PersonalFinanceEngine, config_path: str, rules_path: str) -> None:
+    """Run pipeline with rich progress bar visualization and terminal event rendering.
+
+    Parameters
+    ----------
+    engine : PersonalFinanceEngine
+        Personal finance engine instance.
+    config_path : str
+        Path to pipeline TOML configuration.
+    rules_path : str
+        Path to financial rules TOML configuration.
+    """
     completion_event = threading.Event()
 
     with Progress(
@@ -217,6 +248,20 @@ def _run_etl_progress(engine: PersonalFinanceEngine, config_path: str, rules_pat
 
 
 def _prompt_next_iteration(config_path: str, rules_path: str) -> tuple[str | None, str | None]:
+    """Display interactive post-execution menu prompting user for next workflow iteration.
+
+    Parameters
+    ----------
+    config_path : str
+        Previous configuration file path.
+    rules_path : str
+        Previous financial rules file path.
+
+    Returns
+    -------
+    tuple[str | None, str | None]
+        Selected configuration path pair or None to prompt anew.
+    """
     console.print("\n[bold cyan]--- What would you like to do next? ---[/bold cyan]")
     console.print("[1] Restart pipeline with PREVIOUS configuration")
     console.print("[2] Restart pipeline with NEW configuration")
