@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [9.5.1](https://github.com/tks18/personal-finance-etl/compare/9.5.0...9.5.1) (2026-10-27)
+
+
+### Docs 📃
+
+* **readme:** update production module count and loc stats ([b3c82cc](https://github.com/tks18/personal-finance-etl/commit/b3c82ccfc3e7b3cfd1173b9da06760b0fb4f43ff))
+
 ## [9.5.0](https://github.com/tks18/personal-finance-etl/compare/9.4.0...9.5.0) (2026-10-27)
 
 
