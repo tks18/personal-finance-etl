@@ -15,16 +15,16 @@ Does not own
 
 from __future__ import annotations
 
-import logging
 import os
 import sqlite3
 import uuid
 from collections.abc import Generator
 from contextlib import contextmanager
 
+from personal_finance_etl.application.observability.diagnostics import get_observability_diagnostics
 from personal_finance_etl.infrastructure.control_plane.schema import RAW_DDL
 
-logger = logging.getLogger("personal_finance_etl.control_plane")
+diagnostics = get_observability_diagnostics("personal_finance_etl.control_plane")
 
 
 REQUIRED_SCHEMA_COLUMNS: dict[str, set[str]] = {
@@ -176,7 +176,7 @@ class SQLiteManager:
             return
         parent = os.path.dirname(os.path.abspath(self.db_path))
         os.makedirs(parent, exist_ok=True)
-        logger.debug("SQLite Control Plane: Opening connection to %s", self.db_path)
+        diagnostics.debug("SQLite Control Plane: Opening connection to %s", self.db_path)
         connection: sqlite3.Connection | None = None
         try:
             connection = sqlite3.connect(
@@ -199,8 +199,8 @@ class SQLiteManager:
             if connection is not None:
                 connection.close()
             raise
-        logger.debug("SQLite Control Plane: Configured WAL, busy timeout, and foreign keys")
-        logger.info("Control Plane DB connected at %s", self.db_path)
+        diagnostics.debug("SQLite Control Plane: Configured WAL, busy timeout, and foreign keys")
+        diagnostics.info("Control Plane DB connected at %s", self.db_path)
 
     def close(self) -> None:
         """Safely rollback uncommitted transactions and close the SQLite connection."""
@@ -208,12 +208,14 @@ class SQLiteManager:
             return
         try:
             if self._conn.in_transaction:
-                logger.warning("SQLite Control Plane: Rolling back open transaction during close.")
+                diagnostics.warning(
+                    "SQLite Control Plane: Rolling back open transaction during close."
+                )
                 self._conn.rollback()
             self._conn.close()
         finally:
             self._conn = None
-        logger.info("Control Plane DB connection closed.")
+        diagnostics.info("Control Plane DB connection closed.")
 
     @contextmanager
     def atomic(self) -> Generator[None]:
@@ -262,7 +264,7 @@ class SQLiteManager:
         if present_control_tables:
             self._migrate_schema(existing_tables)
 
-        logger.debug("SQLite Control Plane: Initializing current schema.")
+        diagnostics.debug("SQLite Control Plane: Initializing current schema.")
         self.conn.executescript(RAW_DDL)
         self._create_indexes()
         self._validate_current_schema()
@@ -273,7 +275,9 @@ class SQLiteManager:
                 "Control-plane database contains foreign-key violations; refusing to continue. "
                 f"First violations: {violations!r}"
             )
-        logger.info("SQLite Control Plane: Current schema ready (version %s).", self.SCHEMA_VERSION)
+        diagnostics.info(
+            "SQLite Control Plane: Current schema ready (version %s).", self.SCHEMA_VERSION
+        )
 
     def _migrate_runs(self, existing_tables: set[str]) -> None:
         """Add commit_state column to cp_runs if missing."""
@@ -282,7 +286,9 @@ class SQLiteManager:
                 str(row[1]) for row in self.conn.execute("PRAGMA table_info(cp_runs)").fetchall()
             }
             if "commit_state" not in cols:
-                logger.info("SQLite Control Plane: Migrating cp_runs: adding commit_state column.")
+                diagnostics.info(
+                    "SQLite Control Plane: Migrating cp_runs: adding commit_state column."
+                )
                 self.conn.execute(
                     "ALTER TABLE cp_runs ADD COLUMN commit_state TEXT NOT NULL DEFAULT 'NOT_STARTED'"
                 )
@@ -295,7 +301,7 @@ class SQLiteManager:
                 for row in self.conn.execute("PRAGMA table_info(cp_run_failures)").fetchall()
             }
             if "failure_domain" not in cols:
-                logger.info(
+                diagnostics.info(
                     "SQLite Control Plane: Migrating cp_run_failures: adding failure_domain column."
                 )
                 self.conn.execute(
@@ -377,12 +383,12 @@ class SQLiteManager:
         if self.conn.in_transaction:
             raise RuntimeError("A SQLite transaction is already active.")
         self.conn.execute("BEGIN IMMEDIATE;")
-        logger.debug("SQLite Control Plane: BEGIN IMMEDIATE")
+        diagnostics.debug("SQLite Control Plane: BEGIN IMMEDIATE")
 
     def commit(self) -> None:
         """Commit the active SQLite transaction."""
         self.conn.commit()
-        logger.info("Control Plane transaction committed.")
+        diagnostics.info("Control Plane transaction committed.")
 
     def rollback(self) -> None:
         """Rollback the active SQLite transaction if one is open."""
@@ -390,7 +396,7 @@ class SQLiteManager:
             return
         try:
             self._conn.rollback()
-            logger.warning("Control Plane transaction rolled back.")
+            diagnostics.warning("Control Plane transaction rolled back.")
         except sqlite3.Error:
-            logger.exception("Failed to rollback SQLite control-plane transaction.")
+            diagnostics.exception("Failed to rollback SQLite control-plane transaction.")
             raise

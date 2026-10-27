@@ -16,9 +16,9 @@ Does not own
 
 from __future__ import annotations
 
-import logging
 import os
 
+from personal_finance_etl.application.observability.diagnostics import get_observability_diagnostics
 from personal_finance_etl.config.settings import FileHashPolicy
 from personal_finance_etl.infrastructure.control_plane.artifact_repository import ArtifactRepository
 from personal_finance_etl.infrastructure.control_plane.hashing import (
@@ -27,7 +27,7 @@ from personal_finance_etl.infrastructure.control_plane.hashing import (
     normalize_path,
 )
 
-logger = logging.getLogger("personal_finance_etl.control_plane.file_sync")
+diagnostics = get_observability_diagnostics("personal_finance_etl.control_plane.file_sync")
 
 
 class FileSyncService:
@@ -151,15 +151,15 @@ class FileSyncService:
             if migrated:
                 registry[path] = (disk_hash, category)
                 registry.pop(old_path, None)
-                logger.debug("File sync: Migrated identity from '%s' to '%s'.", old_path, path)
+                diagnostics.debug("File sync: Migrated identity from '%s' to '%s'.", old_path, path)
                 return (old_path, path, category)
-            logger.warning(
+            diagnostics.warning(
                 "File sync: Source identity %s has no payload; ingesting %s as new.",
                 old_path,
                 path,
             )
         elif len(candidates) > 1:
-            logger.warning(
+            diagnostics.warning(
                 "File sync: Ambiguous rename for %s: %d same-hash candidates. Treating as new.",
                 path,
                 len(candidates),
@@ -185,7 +185,7 @@ class FileSyncService:
             )
         ]
         if removed_paths:
-            logger.info("File sync: %d file(s) no longer present on disk.", len(removed_paths))
+            diagnostics.info("File sync: %d file(s) no longer present on disk.", len(removed_paths))
             self.artifact_repo.mark_removed(removed_paths)
         return removed_paths
 
@@ -227,7 +227,7 @@ class FileSyncService:
         previous_status = current[2] if current else None
 
         if previous_status == "REMOVED":
-            logger.info("File sync: %s re-appeared after prior removal.", path)
+            diagnostics.info("File sync: %s re-appeared after prior removal.", path)
             self.artifact_repo.mark_healed([path], affected_table=category)
             return "NEW", None
 
@@ -238,7 +238,7 @@ class FileSyncService:
             return "NEW", None
 
         if not self.artifact_repo.has_payload(path):
-            logger.warning("File sync: Registered artifact has no payload: %s", path)
+            diagnostics.warning("File sync: Registered artifact has no payload: %s", path)
             return "NEW", None
 
         if should_check_hash:
@@ -249,7 +249,7 @@ class FileSyncService:
                 )
             registered_hash = registry[path][0]
             if disk_hash != registered_hash:
-                logger.info(
+                diagnostics.info(
                     "File sync: %s changed (registry=%s, disk=%s).",
                     path,
                     registered_hash,
@@ -341,7 +341,7 @@ class FileSyncService:
         rename_count = len(renames)
         rename_str = f" | {rename_count} Renamed" if rename_count else ""
         removed_str = f" | {len(removed_paths)} Removed" if removed_paths else ""
-        logger.info(
+        diagnostics.info(
             "File sync: Delta identified: %d New | %d Changed%s%s | %d Skipped",
             new_count,
             changed_count,
