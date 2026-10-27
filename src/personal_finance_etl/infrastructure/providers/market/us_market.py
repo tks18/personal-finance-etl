@@ -28,7 +28,6 @@ from datetime import UTC, date, datetime
 import pandas as pd  # type: ignore[import-untyped]
 import polars as pl
 
-from personal_finance_etl.application.observability.diagnostics import get_observability_diagnostics
 from personal_finance_etl.contracts.application import EngineStage
 from personal_finance_etl.contracts.event_transport import EventQueue
 from personal_finance_etl.contracts.extraction import (
@@ -41,13 +40,21 @@ from personal_finance_etl.contracts.observability import (
     DiagnosticSeverity,
     ErrorDetails,
     EventCode,
+    EventEmitter,
     EventOutcome,
     ObservabilityContext,
     ObservabilityEvent,
-    ObservabilitySink,
     PresentationKind,
 )
 from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
+from personal_finance_etl.infrastructure.observability.diagnostics import (
+    get_observability_diagnostics,
+)
+from personal_finance_etl.infrastructure.observability.emitter import (
+    ObservabilityEmitter,
+    get_global_emitter,
+)
+from personal_finance_etl.infrastructure.observability.queue import ObservabilityQueueSink
 from personal_finance_etl.infrastructure.providers.market.common import (
     calculate_market_fetch_window,
     download_yfinance_history,
@@ -65,21 +72,23 @@ class USMarketExtractor:
     def __init__(
         self,
         cp: ControlPlane,
-        status_queue: EventQueue,
+        status_queue: EventQueue | None = None,
         max_workers: int = 8,
-        emitter: ObservabilitySink | None = None,
+        emitter: EventEmitter | None = None,
     ) -> None:
         self.cp = cp
         self.status_queue = status_queue
         self.max_workers = max_workers
-        self.emitter = emitter
+        if emitter is not None:
+            self.emitter = emitter
+        elif status_queue is not None:
+            self.emitter = ObservabilityEmitter(sinks=[ObservabilityQueueSink(status_queue)])
+        else:
+            self.emitter = get_global_emitter()
 
     def _emit_event(self, event: ObservabilityEvent) -> None:
-        """Route event through observability sink or fallback status queue."""
-        if self.emitter is not None:
-            self.emitter.emit(event)
-        else:
-            self.status_queue.put(event)
+        """Route event through canonical observability emitter."""
+        self.emitter.emit(event)
 
     @staticmethod
     def _build_us_market_spine(

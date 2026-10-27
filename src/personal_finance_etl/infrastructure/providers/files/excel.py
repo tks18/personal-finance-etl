@@ -23,7 +23,9 @@ from datetime import datetime
 import fastexcel
 import polars as pl
 
-from personal_finance_etl.application.observability.diagnostics import get_observability_diagnostics
+from personal_finance_etl.infrastructure.observability.diagnostics import (
+    get_observability_diagnostics,
+)
 
 __all__ = [
     "extract_mf_market_data_raw",
@@ -58,6 +60,20 @@ def _clean_excel_headers(df_sliced: pl.DataFrame) -> tuple[pl.DataFrame, str]:
 
 
 def _process_mf_statement(filename: str, raw_bytes: bytes) -> pl.DataFrame:
+    """Parse a single mutual fund holdings Excel statement from raw binary bytes.
+
+    Parameters
+    ----------
+    filename : str
+        Source filename for logging context.
+    raw_bytes : bytes
+        Binary payload of the Excel workbook.
+
+    Returns
+    -------
+    pl.DataFrame
+        Extracted mutual fund holdings records.
+    """
     t0 = time.perf_counter()
     diagnostics.debug(f"Starting parse for MF Holding Statement: {filename}")
     excel_reader = fastexcel.read_excel(raw_bytes)
@@ -116,6 +132,20 @@ def extract_mf_market_data_raw(valid_files: list[tuple[str, str, bytes]]) -> pl.
 
 
 def _process_mf_transaction_statements(filename: str, raw_bytes: bytes) -> pl.DataFrame:
+    """Parse mutual fund transaction order statements from raw binary bytes.
+
+    Parameters
+    ----------
+    filename : str
+        Source filename for logging context.
+    raw_bytes : bytes
+        Binary payload of the Excel workbook.
+
+    Returns
+    -------
+    pl.DataFrame
+        Extracted mutual fund transaction records.
+    """
     t0 = time.perf_counter()
     diagnostics.debug(f"Starting parse for MF Transaction Statement: {filename}")
     excel_reader = fastexcel.read_excel(raw_bytes)
@@ -187,6 +217,20 @@ def extract_mf_transactions_raw(valid_files: list[tuple[str, str, bytes]]) -> pl
 
 
 def _process_stock_closing_statement(filename: str, raw_bytes: bytes) -> pl.DataFrame:
+    """Parse domestic stock closing valuation Excel workbook from raw binary bytes.
+
+    Parameters
+    ----------
+    filename : str
+        Source filename for logging context.
+    raw_bytes : bytes
+        Binary payload of the Excel workbook.
+
+    Returns
+    -------
+    pl.DataFrame
+        Extracted stock closing positions DataFrame.
+    """
     t0 = time.perf_counter()
     diagnostics.debug(f"Starting parse for Stock Closing Statement: {filename}")
     excel_reader = fastexcel.read_excel(raw_bytes)
@@ -261,6 +305,20 @@ def extract_stock_market_data_raw(valid_files: list[tuple[str, str, bytes]]) -> 
 
 
 def _process_stock_transactions(filename: str, raw_bytes: bytes) -> pl.DataFrame:
+    """Parse domestic stock trade orders Excel statement from raw binary bytes.
+
+    Parameters
+    ----------
+    filename : str
+        Source filename for logging context.
+    raw_bytes : bytes
+        Binary payload of the Excel workbook.
+
+    Returns
+    -------
+    pl.DataFrame
+        Extracted trade order records DataFrame.
+    """
     t0 = time.perf_counter()
     diagnostics.debug(f"Starting parse for Stock Transaction Statement: {filename}")
     excel_reader = fastexcel.read_excel(raw_bytes)
@@ -310,6 +368,20 @@ def extract_stock_transactions_raw(valid_files: list[tuple[str, str, bytes]]) ->
 
 
 def _process_us_stock_transactions(filename: str, raw_bytes: bytes) -> pl.DataFrame:
+    """Parse foreign US equity transactions Excel statement from raw binary bytes.
+
+    Parameters
+    ----------
+    filename : str
+        Source filename for logging context.
+    raw_bytes : bytes
+        Binary payload of the Excel workbook.
+
+    Returns
+    -------
+    pl.DataFrame
+        Extracted US stock trade records DataFrame.
+    """
     t0 = time.perf_counter()
     diagnostics.debug(f"Starting parse for US Stock Transaction Statement: {filename}")
     excel_reader = fastexcel.read_excel(raw_bytes)

@@ -18,7 +18,9 @@ import io
 
 import polars as pl
 
-from personal_finance_etl.application.observability.diagnostics import get_observability_diagnostics
+from personal_finance_etl.infrastructure.observability.diagnostics import (
+    get_observability_diagnostics,
+)
 
 __all__ = [
     "extract_benchmark_master_raw",

@@ -17,7 +17,9 @@ from __future__ import annotations
 import glob
 import os
 
-from personal_finance_etl.application.observability.diagnostics import get_observability_diagnostics
+from personal_finance_etl.infrastructure.observability.diagnostics import (
+    get_observability_diagnostics,
+)
 
 __all__ = ["categorize_statement_files"]
 
