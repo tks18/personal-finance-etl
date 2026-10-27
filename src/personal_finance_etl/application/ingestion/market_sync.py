@@ -22,13 +22,9 @@ from datetime import date
 
 import polars as pl
 
-from personal_finance_etl.application.observability import (
-    ObservabilityEmitter,
-    get_global_emitter,
-)
-from personal_finance_etl.application.observability.diagnostics import get_observability_diagnostics
 from personal_finance_etl.contracts.application import EngineStage
 from personal_finance_etl.contracts.event_transport import EventQueue
+from personal_finance_etl.contracts.extraction import ExtractorEntityStatus
 from personal_finance_etl.contracts.observability import (
     EventCode,
     PresentationKind,
@@ -43,6 +39,13 @@ from personal_finance_etl.domain.market.fx import (
     transform_currency_fx_rates,
 )
 from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
+from personal_finance_etl.infrastructure.observability import (
+    ObservabilityEmitter,
+    get_global_emitter,
+)
+from personal_finance_etl.infrastructure.observability.diagnostics import (
+    get_observability_diagnostics,
+)
 from personal_finance_etl.infrastructure.providers.market.benchmark import (
     BenchmarkExtractor,
 )
@@ -199,11 +202,19 @@ class CurrencyPipeline:
         )
         df_silver = df_silver_lazy.collect(engine="streaming")
 
+        cached_cnt = sum(
+            1 for e in batch_res.entity_results if e.status == ExtractorEntityStatus.CACHED
+        )
+        fetched_cnt = len(batch_res.entity_results) - cached_cnt
         self.emitter.emit_event(
             event_code=EventCode.MARKET_SYNC_COMPLETED,
-            message="Currency FX Pipeline Completed.",
+            message=(
+                f"Currency FX Pipeline Completed — {len(batch_res.entity_results)} ticker(s) "
+                f"({cached_cnt} cached, {fetched_cnt} fetched, {df_silver.height:,} quotes)"
+            ),
             presentation_kind=PresentationKind.SUCCESS,
             progress=1.0,
+            rows=df_silver.height,
             stage=EngineStage.TRANSFORMING,
         )
 
@@ -359,9 +370,16 @@ class BenchmarkPipeline:
         diagnostics.debug(
             f"Transformation Complete: Silver Benchmark table has {df_silver.height} market periods."
         )
+        cached_cnt = sum(
+            1 for e in batch_res.entity_results if e.status == ExtractorEntityStatus.CACHED
+        )
+        fetched_cnt = len(batch_res.entity_results) - cached_cnt
         self.emitter.emit_event(
             event_code=EventCode.MARKET_SYNC_COMPLETED,
-            message="Benchmark Pipeline Completed.",
+            message=(
+                f"Benchmark Pipeline Completed — {len(batch_res.entity_results)} indices "
+                f"({cached_cnt} cached, {fetched_cnt} fetched, {df_silver.height:,} quotes)"
+            ),
             presentation_kind=PresentationKind.SUCCESS,
             rows=df_silver.height,
             stage=EngineStage.TRANSFORMING,
@@ -520,11 +538,19 @@ class USMarketPipeline:
         )
         df_silver = df_silver_lazy.collect(engine="streaming")
 
+        cached_cnt = sum(
+            1 for e in batch_res.entity_results if e.status == ExtractorEntityStatus.CACHED
+        )
+        fetched_cnt = len(batch_res.entity_results) - cached_cnt
         self.emitter.emit_event(
             event_code=EventCode.MARKET_SYNC_COMPLETED,
-            message="US Market Pipeline Completed.",
+            message=(
+                f"US Market Pipeline Completed — {len(batch_res.entity_results)} tickers "
+                f"({cached_cnt} cached, {fetched_cnt} fetched, {df_silver.height:,} quotes)"
+            ),
             presentation_kind=PresentationKind.SUCCESS,
             progress=1.0,
+            rows=df_silver.height,
             stage=EngineStage.TRANSFORMING,
         )
 
