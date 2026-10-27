@@ -23,13 +23,15 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 
-from personal_finance_etl.application.observability.diagnostics import get_observability_diagnostics
 from personal_finance_etl.infrastructure.control_plane.connection import SQLiteManager
 from personal_finance_etl.infrastructure.control_plane.hashing import (
     FILE_TYPE_MAP,
     generate_file_id,
     hash_bytes,
     normalize_path,
+)
+from personal_finance_etl.infrastructure.observability.diagnostics import (
+    get_observability_diagnostics,
 )
 from personal_finance_etl.infrastructure.warehouse.registry import BRONZE_CONTRACT_REGISTRY
 

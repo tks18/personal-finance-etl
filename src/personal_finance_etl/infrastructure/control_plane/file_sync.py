@@ -18,13 +18,15 @@ from __future__ import annotations
 
 import os
 
-from personal_finance_etl.application.observability.diagnostics import get_observability_diagnostics
 from personal_finance_etl.config.settings import FileHashPolicy
 from personal_finance_etl.infrastructure.control_plane.artifact_repository import ArtifactRepository
 from personal_finance_etl.infrastructure.control_plane.hashing import (
     FILE_TYPE_MAP,
     compute_file_hash,
     normalize_path,
+)
+from personal_finance_etl.infrastructure.observability.diagnostics import (
+    get_observability_diagnostics,
 )
 
 diagnostics = get_observability_diagnostics("personal_finance_etl.control_plane.file_sync")
@@ -265,6 +267,22 @@ class FileSyncService:
         hash_policy: FileHashPolicy,
         full_replace_categories: list[str],
     ) -> tuple[dict[str, list[str]], dict[str, list[str]], int, list[tuple[str, str, str]]]:
+        """Synchronize discovered disk files against SQLite artifact metadata registry.
+
+        Parameters
+        ----------
+        discovered_files : dict[str, list[str]]
+            Mapping of category names to lists of disk file paths.
+        hash_policy : FileHashPolicy
+            Hashing strategy for file integrity checks.
+        full_replace_categories : list[str]
+            Categories where any change triggers full replacement.
+
+        Returns
+        -------
+        tuple
+            Tuple of (new_files, changed_files, removed_count, detected_renames).
+        """
         registry_with_status = self.artifact_repo.get_registry_with_status()
         registry: dict[str, tuple[str, str]] = {
             path: (digest, category)

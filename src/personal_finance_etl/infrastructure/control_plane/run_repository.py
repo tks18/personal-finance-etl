@@ -30,7 +30,6 @@ from typing import cast
 
 import polars as pl
 
-from personal_finance_etl.application.observability.diagnostics import get_observability_diagnostics
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.contracts.extraction import ExtractionProviderRequest
 from personal_finance_etl.contracts.lifecycle import (
@@ -40,6 +39,9 @@ from personal_finance_etl.contracts.lifecycle import (
     classify_failure_domain,
 )
 from personal_finance_etl.infrastructure.control_plane.connection import SQLiteManager
+from personal_finance_etl.infrastructure.observability.diagnostics import (
+    get_observability_diagnostics,
+)
 
 diagnostics = get_observability_diagnostics("personal_finance_etl.control_plane.run_repo")
 

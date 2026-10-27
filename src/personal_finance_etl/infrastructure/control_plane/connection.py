@@ -21,8 +21,10 @@ import uuid
 from collections.abc import Generator
 from contextlib import contextmanager
 
-from personal_finance_etl.application.observability.diagnostics import get_observability_diagnostics
 from personal_finance_etl.infrastructure.control_plane.schema import RAW_DDL
+from personal_finance_etl.infrastructure.observability.diagnostics import (
+    get_observability_diagnostics,
+)
 
 diagnostics = get_observability_diagnostics("personal_finance_etl.control_plane")
 
