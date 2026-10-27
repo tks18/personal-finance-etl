@@ -15,11 +15,11 @@ Does not own
 
 from __future__ import annotations
 
-import logging
 from typing import Protocol, runtime_checkable
 
 import polars as pl
 
+from personal_finance_etl.application.observability.diagnostics import ObservabilityDiagnostics
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.contracts.extraction import AssetPipelineResult, ExtractionResult
 from personal_finance_etl.domain.investments.transforms.common import (
@@ -63,7 +63,7 @@ class AssetPipeline(Protocol):
         extracted: ExtractionResult,
         d_asset_subcategory_lazy: pl.LazyFrame,
         rules: FinancialRules,
-        logger: logging.Logger,
+        diagnostics: ObservabilityDiagnostics,
     ) -> AssetPipelineResult:
         """Process the asset-specific logic and return AssetPipelineResult."""
         ...
@@ -77,7 +77,7 @@ class StockPipeline:
         extracted: ExtractionResult,
         d_asset_subcategory_lazy: pl.LazyFrame,
         rules: FinancialRules,
-        logger: logging.Logger,
+        diagnostics: ObservabilityDiagnostics,
     ) -> AssetPipelineResult:
         """Process domestic stock market data, trade orders, and master references.
 
@@ -89,31 +89,31 @@ class StockPipeline:
             Reference dimension for asset subcategories.
         rules : FinancialRules
             Financial rules and default currency configuration.
-        logger : logging.Logger
-            Pipeline execution logger.
+        diagnostics : ObservabilityDiagnostics
+            Pipeline execution diagnostics.
 
         Returns
         -------
         AssetPipelineResult
             Normalized market data, purchases, sales, and master references.
         """
-        logger.debug("Parsing unstructured Stock Excel files...")
+        diagnostics.debug("Parsing unstructured Stock Excel files...")
         market_data = get_stg_stock_market_data(
             extracted.stock_market_data_raw, rules.DEFAULT_CURRENCY_ID
         )
         market_data_ref = get_stg_stock_market_data_ref(market_data)
 
-        logger.debug("Parsing Stock Trade Orders...")
+        diagnostics.debug("Parsing Stock Trade Orders...")
         base_orders = get_base_stock_transactions(extracted.stock_transactions_raw)
         purchase_trans = transform_stg_stock_trades(base_orders, trade_type="BUY")
         sale_trans = transform_stg_stock_trades(base_orders, trade_type="SELL")
 
-        logger.debug("Aggregating Stock Purchases...")
+        diagnostics.debug("Aggregating Stock Purchases...")
         purchase_ref = get_purchase_reference(
             purchase_trans, "Stock name", "Execution date and time", "Price", "Quantity"
         )
 
-        logger.debug("Processing Stock Sales...")
+        diagnostics.debug("Processing Stock Sales...")
         sale_ref = get_sale_reference(
             sale_trans, purchase_ref, "Stock name", "Execution date and time", "Price", "Quantity"
         )
@@ -190,7 +190,7 @@ class USStockPipeline:
         extracted: ExtractionResult,
         d_asset_subcategory_lazy: pl.LazyFrame,
         rules: FinancialRules,
-        logger: logging.Logger,
+        diagnostics: ObservabilityDiagnostics,
     ) -> AssetPipelineResult:
         """Process foreign stock trade transactions, multi-currency values, and FX rates.
 
@@ -202,20 +202,20 @@ class USStockPipeline:
             Reference dimension for asset subcategories.
         rules : FinancialRules
             Financial rules and default currency configuration.
-        logger : logging.Logger
-            Pipeline execution logger.
+        diagnostics : ObservabilityDiagnostics
+            Pipeline execution diagnostics.
 
         Returns
         -------
         AssetPipelineResult
             Normalized purchases, sales, and master references for US equities.
         """
-        logger.debug("Parsing US Stock Trade Orders...")
+        diagnostics.debug("Parsing US Stock Trade Orders...")
         base_orders = get_base_us_stock_transactions(extracted.us_stock_transactions_raw)
         purchase_trans = transform_stg_us_stock_trades(base_orders, trade_type="BUY")
         sale_trans = transform_stg_us_stock_trades(base_orders, trade_type="SELL")
 
-        logger.debug("Aggregating US Stock Purchases and Sales...")
+        diagnostics.debug("Aggregating US Stock Purchases and Sales...")
         purchase_ref, sale_ref = self._aggregate_us_trades(purchase_trans, sale_trans)
         master_ref = get_stg_us_stock_master_ref(base_orders, d_asset_subcategory_lazy)
         empty_market_data = self._create_empty_market_data()
@@ -237,7 +237,7 @@ class MutualFundPipeline:
         extracted: ExtractionResult,
         d_asset_subcategory_lazy: pl.LazyFrame,
         rules: FinancialRules,
-        logger: logging.Logger,
+        diagnostics: ObservabilityDiagnostics,
     ) -> AssetPipelineResult:
         """Process domestic mutual fund market data, transactions, and ISIN mappings.
 
@@ -249,22 +249,22 @@ class MutualFundPipeline:
             Reference dimension for asset subcategories.
         rules : FinancialRules
             Financial rules and default currency configuration.
-        logger : logging.Logger
-            Pipeline execution logger.
+        diagnostics : ObservabilityDiagnostics
+            Pipeline execution diagnostics.
 
         Returns
         -------
         AssetPipelineResult
             Normalized MF market data, purchases, sales, and master references.
         """
-        logger.debug("Parsing unstructured Mutual Fund Excel files...")
+        diagnostics.debug("Parsing unstructured Mutual Fund Excel files...")
         mapping = extracted.stg_mf_isin_mapping
         market_data = get_stg_mf_market_data(
             extracted.mf_market_data_raw, mapping, rules.DEFAULT_CURRENCY_ID
         )
         market_data_ref = get_stg_mf_market_data_ref(market_data)
 
-        logger.debug("Parsing Mutual Fund Trade Orders...")
+        diagnostics.debug("Parsing Mutual Fund Trade Orders...")
         base_orders = get_base_mf_transactions(extracted.mf_transactions_raw)
         purchase_trans = transform_stg_mf_trades(
             base_orders, mapping, rules.MF_SCHEME_MAPPINGS, trade_type="PURCHASE"
@@ -273,12 +273,12 @@ class MutualFundPipeline:
             base_orders, mapping, rules.MF_SCHEME_MAPPINGS, trade_type="REDEEM"
         )
 
-        logger.debug("Aggregating Mutual Fund Purchases...")
+        diagnostics.debug("Aggregating Mutual Fund Purchases...")
         purchase_ref = get_purchase_reference(
             purchase_trans, "Final Scheme Name", "Date", "NAV", "Units"
         )
 
-        logger.debug("Processing Mutual Fund Sales...")
+        diagnostics.debug("Processing Mutual Fund Sales...")
         sale_ref = get_sale_reference(
             sale_trans, purchase_ref, "Final Scheme Name", "Date", "NAV", "Units"
         )
