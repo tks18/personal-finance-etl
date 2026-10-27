@@ -552,7 +552,14 @@ def run_upfront_quality_gate() -> bool:
         True if all checks pass cleanly, False otherwise.
     """
     console.print("\n[bold cyan]Running Upfront Quality Gate Verification (Ruff + Mypy)...[/bold cyan]")
-    proc = subprocess.run(["uv", "run", "poe", "audit-fast"], capture_output=True, text=True, check=False)
+    proc = subprocess.run(
+        ["uv", "run", "poe", "audit-fast"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
     if proc.returncode != 0:
         combined = (proc.stdout.strip() + "\n" + proc.stderr.strip()).strip()
         console.print(
