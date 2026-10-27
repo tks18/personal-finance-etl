@@ -5,7 +5,7 @@ Owns
 - RunLifecycleCoordinator: Manages transactional lifecycles across DuckDB and SQLite Control Plane.
 - Atomic two-phase commit coordination (DuckDB committed first, SQLite committed second).
 - Split-commit detection, durable RECOVERY_REQUIRED marking, and prior run convergence.
-- Run log lifecycle, log compression archiving into Control Plane, and connection teardown.
+- Forensic trace lifecycle, compressed Control Plane archival, and connection teardown.
 - Emitting canonical ObservabilityEvents across lifecycle transitions.
 
 Does not own
@@ -18,7 +18,6 @@ Does not own
 from __future__ import annotations
 
 import gc
-import logging
 import traceback
 from pathlib import Path
 
@@ -27,15 +26,16 @@ from personal_finance_etl.application.observability import (
     get_global_emitter,
     set_current_context,
 )
+from personal_finance_etl.application.observability.diagnostics import get_observability_diagnostics
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
 from personal_finance_etl.contracts.application import EngineStage
+from personal_finance_etl.contracts.event_transport import EventQueue
 from personal_finance_etl.contracts.lifecycle import (
     CommitState,
     FailureDomain,
     classify_failure_domain,
 )
-from personal_finance_etl.contracts.logging import ILogger
 from personal_finance_etl.contracts.observability import (
     DiagnosticSeverity,
     ErrorDetails,
@@ -44,9 +44,6 @@ from personal_finance_etl.contracts.observability import (
     PresentationKind,
 )
 from personal_finance_etl.infrastructure.control_plane import ControlPlane
-from personal_finance_etl.infrastructure.logging.setup import (
-    stop_worker_listener,
-)
 from personal_finance_etl.infrastructure.observability import (
     AsyncObservabilityListener,
     JsonlForensicSink,
@@ -62,7 +59,7 @@ from personal_finance_etl.infrastructure.warehouse.meta import MetaLayer
 
 __all__ = ["RunLifecycleCoordinator"]
 
-logger = logging.getLogger(__name__)
+diagnostics = get_observability_diagnostics(__name__)
 
 
 class RunLifecycleCoordinator:
@@ -71,7 +68,7 @@ class RunLifecycleCoordinator:
     def __init__(
         self,
         cfg: Settings,
-        status_queue: ILogger,
+        status_queue: EventQueue,
         db_manager: DuckDBManager,
         rules: FinancialRules | None = None,
         emitter: ObservabilityEmitter | None = None,
@@ -100,7 +97,7 @@ class RunLifecycleCoordinator:
         settings_summary = fingerprint_config(self.cfg)
         rules_summary = fingerprint_rules(self.rules)
 
-        logger.info(
+        diagnostics.info(
             "Configuration fingerprint: %s | Rules fingerprint: %s",
             settings_summary["config_hash"],
             rules_summary["rules_hash"],
@@ -119,21 +116,13 @@ class RunLifecycleCoordinator:
         )
 
     def initialize(self) -> tuple[ControlPlane, str, list[str]]:
-        """Initialize logging, open database instances, begin transactions, and record run start.
+        """Initialize observability, open databases, begin transactions, and record run start.
 
         Returns
         -------
         tuple[ControlPlane, str, list[str]]
             Tuple of active ControlPlane instance, unique run_id string, and pending recovery run IDs.
         """
-        logger.info("Initializing Personal Finance ETL...")
-        self.emitter.emit_event(
-            event_code=EventCode.RUN_START,
-            message="Initializing Personal Finance ETL...",
-            presentation_kind=PresentationKind.STEP,
-            stage=EngineStage.INITIALIZING,
-        )
-
         self.db_manager.open()
         self.db_manager.ensure_schemas()
 
@@ -183,7 +172,6 @@ class RunLifecycleCoordinator:
                 f"Found {len(self.pending_recovery_runs)} prior run(s) requiring convergence: "
                 f"{self.pending_recovery_runs}. Initiating state reconciliation."
             )
-            logger.warning(rec_msg)
             self.emitter.emit_event(
                 event_code=EventCode.DATABASE_ROLLBACK,
                 message=rec_msg,
@@ -197,7 +185,6 @@ class RunLifecycleCoordinator:
         meta_layer.heal_duckdb_registry(cp)
 
         # Start ACID Transaction for the entire ETL run
-        logger.debug("Beginning DuckDB ACID transaction...")
         self.emitter.emit_event(
             event_code=EventCode.DATABASE_COMMIT,
             message="Beginning DuckDB ACID transaction",
@@ -226,7 +213,6 @@ class RunLifecycleCoordinator:
 
         # 1. Commit DuckDB
         try:
-            logger.debug("Committing DuckDB transaction...")
             self.emitter.emit_event(
                 event_code=EventCode.DATABASE_COMMIT,
                 message="Committing DuckDB transaction",
@@ -264,7 +250,6 @@ class RunLifecycleCoordinator:
                 f"Successfully converged {len(self.pending_recovery_runs)} prior diverged run(s): "
                 f"{self.pending_recovery_runs}."
             )
-            logger.info(conv_msg)
             self.emitter.emit_event(
                 event_code=EventCode.DATABASE_COMMIT,
                 message=conv_msg,
@@ -288,9 +273,8 @@ class RunLifecycleCoordinator:
         """Rollback open transactions across DuckDB and SQLite if not already committed."""
         if self.duckdb_started and not self.duckdb_committed:
             try:
-                logger.debug("Rolling back DuckDB transaction...")
+                diagnostics.debug("Rolling back DuckDB transaction...")
                 self.db_manager.conn.execute("ROLLBACK")
-                logger.warning("DuckDB transaction rolled back.")
                 self.emitter.emit_event(
                     event_code=EventCode.DATABASE_ROLLBACK,
                     message="DuckDB transaction rolled back.",
@@ -298,43 +282,48 @@ class RunLifecycleCoordinator:
                     severity=DiagnosticSeverity.WARNING,
                 )
             except Exception as rollback_err:
-                logger.error(f"Failed to rollback DuckDB transaction: {rollback_err}")
+                diagnostics.error(f"Failed to rollback DuckDB transaction: {rollback_err}")
         elif self.duckdb_committed:
-            logger.warning("DuckDB is already committed; cannot rollback DuckDB.")
+            diagnostics.warning("DuckDB is already committed; cannot rollback DuckDB.")
 
         if self.cp is not None and self.sqlite_started and not self.sqlite_committed:
             try:
                 self.cp.rollback()
             except Exception as rollback_err:
-                logger.error(f"Failed to rollback SQLite Raw Store transaction: {rollback_err}")
+                diagnostics.error(
+                    f"Failed to rollback SQLite Raw Store transaction: {rollback_err}"
+                )
 
     def _log_failure_status(self) -> None:
-        """Emit truthful rollback logging guarded strictly by commit state."""
-        messages: dict[CommitState, tuple[int, str]] = {
+        """Emit truthful rollback diagnostics guarded strictly by commit state."""
+        messages: dict[CommitState, tuple[DiagnosticSeverity, str]] = {
             CommitState.ROLLED_BACK: (
-                logging.WARNING,
+                DiagnosticSeverity.WARNING,
                 "Pipeline failed. All open transactions rolled back to maintain integrity (state: ROLLED_BACK).",
             ),
             CommitState.RECOVERY_REQUIRED: (
-                logging.ERROR,
+                DiagnosticSeverity.ERROR,
                 "CRITICAL SPLIT-COMMIT DIVERGENCE: DuckDB committed successfully, but SQLite Raw Store commit failed. "
                 "Transactions CANNOT be fully rolled back. DuckDB has durable changes. State: RECOVERY_REQUIRED. "
                 "RECOVERY_REQUIRED marker will be persisted.",
             ),
             CommitState.FULLY_COMMITTED: (
-                logging.WARNING,
+                DiagnosticSeverity.WARNING,
                 "Pipeline encountered post-commit failure. Transactions are already fully committed (state: FULLY_COMMITTED).",
             ),
             CommitState.COMMIT_STATE_UNKNOWN: (
-                logging.ERROR,
+                DiagnosticSeverity.ERROR,
                 "Pipeline failed with uncertain transaction commit state (state: COMMIT_STATE_UNKNOWN).",
             ),
         }
         level, msg = messages.get(
             self.commit_state,
-            (logging.ERROR, f"Pipeline failed with unexpected commit state ({self.commit_state})."),
+            (
+                DiagnosticSeverity.ERROR,
+                f"Pipeline failed with unexpected commit state ({self.commit_state}).",
+            ),
         )
-        logger.log(level, msg)
+        diagnostics.emit(level, msg)
 
     def _persist_failure_telemetry(self, exc: Exception) -> None:
         """Persist error telemetry, failure domains, and recovery markers into Control Plane."""
@@ -384,14 +373,14 @@ class RunLifecycleCoordinator:
 
     def handle_failure(self, exc: Exception) -> None:
         """Rollback open transactions and persist truthful error telemetry into Control Plane."""
-        logger.exception("CRITICAL PIPELINE FAILURE:")
+        diagnostics.exception("CRITICAL PIPELINE FAILURE:")
         self.commit_state = self._resolve_commit_state()
         self._rollback_open_transactions()
         self._log_failure_status()
         try:
             self._persist_failure_telemetry(exc)
         except Exception as failure_log_err:
-            logger.error(f"Failed to log run_failure to Control Plane: {failure_log_err}")
+            diagnostics.error(f"Failed to log run_failure to Control Plane: {failure_log_err}")
 
         domain = classify_failure_domain("Pipeline", type(exc).__name__ or str(exc))
         err_details = ErrorDetails(
@@ -412,15 +401,13 @@ class RunLifecycleCoordinator:
         )
 
     def teardown(self) -> None:
-        """Teardown logging handlers, archive compressed execution log, and close database handles."""
-        logger.info("Cleaning up database connections and WAL sidecars...")
+        """Drain observability, archive the compressed trace, and close database handles."""
         self.emitter.emit_event(
             event_code=EventCode.SYSTEM_TEARDOWN,
             message="Cleaning up database connections and WAL sidecars...",
             presentation_kind=PresentationKind.INTERNAL,
             severity=DiagnosticSeverity.INFO,
         )
-        stop_worker_listener()
         if self.queue_sink is not None:
             self.emitter.unregister_sink(self.queue_sink)
             self.queue_sink = None
@@ -445,7 +432,7 @@ class RunLifecycleCoordinator:
             )
             retention_mgr.prune_expired_traces()
         except Exception as retention_err:
-            logger.debug("Log Retention: Non-fatal cleanup error: %s", retention_err)
+            diagnostics.debug("Log Retention: Non-fatal cleanup error: %s", retention_err)
 
         try:
             self.db_manager.close()
