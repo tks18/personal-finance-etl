@@ -36,10 +36,6 @@ class SnapshotOutcome(StrEnum):
     SNAPSHOT_PUBLISHED = "SNAPSHOT_PUBLISHED"
     SNAPSHOT_FAILED = "SNAPSHOT_FAILED"
 
-    # Compatibility aliases
-    SUCCESS = "SNAPSHOT_PUBLISHED"
-    FAILED = "SNAPSHOT_FAILED"
-
 
 class RestoreOutcome(StrEnum):
     """Categorical outcome of a coordinated database restore operation."""
@@ -49,10 +45,6 @@ class RestoreOutcome(StrEnum):
     RESTORE_SUCCEEDED = "RESTORE_SUCCEEDED"
     RESTORE_INSTALL_FAILED_ROLLED_BACK = "RESTORE_INSTALL_FAILED_ROLLED_BACK"
     RESTORE_STATE_UNCERTAIN = "RESTORE_STATE_UNCERTAIN"
-
-    # Compatibility aliases
-    SUCCESS = "RESTORE_SUCCEEDED"
-    FAILED = "RESTORE_VALIDATION_FAILED"
 
 
 class ActiveDatabaseState(StrEnum):
@@ -77,7 +69,7 @@ class SnapshotResult:
     @property
     def is_success(self) -> bool:
         """Return True if the snapshot archive completed and was published successfully."""
-        return self.outcome in (SnapshotOutcome.SNAPSHOT_PUBLISHED, SnapshotOutcome.SUCCESS) and (
+        return self.outcome == SnapshotOutcome.SNAPSHOT_PUBLISHED and (
             self.zip_path is not None
             or self.archive_path is not None
             or len(self.files_archived) > 0
@@ -106,7 +98,7 @@ class RestoreResult:
     def is_success(self) -> bool:
         """Return True if the restore succeeded and the new database pair was installed."""
         return (
-            self.outcome in (RestoreOutcome.RESTORE_SUCCEEDED, RestoreOutcome.SUCCESS)
+            self.outcome == RestoreOutcome.RESTORE_SUCCEEDED
             and self.active_database_state == ActiveDatabaseState.NEW_PAIR_INSTALLED
         )
 
