@@ -20,11 +20,6 @@ import time
 
 import polars as pl
 
-from personal_finance_etl.application.observability import (
-    ObservabilityEmitter,
-    get_global_emitter,
-)
-from personal_finance_etl.application.observability.diagnostics import get_observability_diagnostics
 from personal_finance_etl.application.pipeline.execution import PipelineExecutor
 from personal_finance_etl.application.pipeline.lifecycle import RunLifecycleCoordinator
 from personal_finance_etl.config.financial_rules import FinancialRules
@@ -37,6 +32,13 @@ from personal_finance_etl.contracts.observability import (
     PresentationKind,
 )
 from personal_finance_etl.infrastructure.control_plane import ControlPlane
+from personal_finance_etl.infrastructure.observability import (
+    ObservabilityEmitter,
+    get_global_emitter,
+)
+from personal_finance_etl.infrastructure.observability.diagnostics import (
+    get_observability_diagnostics,
+)
 from personal_finance_etl.infrastructure.warehouse.bronze import BronzeLayer
 from personal_finance_etl.infrastructure.warehouse.connection import DuckDBManager
 
@@ -115,9 +117,10 @@ class ETLOrchestrator:
 
         try:
             cp, run_id, _ = lifecycle.initialize()
+            short_id = run_id[:8]
             self.emitter.emit_event(
                 event_code=EventCode.RUN_START,
-                message="Pipeline execution started.",
+                message=f"Pipeline execution started [Run: {short_id}].",
                 presentation_kind=PresentationKind.STEP,
                 progress=0.0,
                 stage=EngineStage.INITIALIZING,
@@ -129,7 +132,10 @@ class ETLOrchestrator:
             total_time = time.perf_counter() - start_time
             self.emitter.emit_event(
                 event_code=EventCode.RUN_COMPLETED,
-                message=f"Pipeline Execution Successful in {total_time:.2f} seconds. Total Nodes: {len(self.dfs)}",
+                message=(
+                    f"Pipeline Execution Successful in {total_time:.2f}s "
+                    f"(Total Nodes: {len(self.dfs)}) [Run: {short_id}]."
+                ),
                 presentation_kind=PresentationKind.SUCCESS,
                 duration_ms=total_time * 1000.0,
                 rows=len(self.dfs),

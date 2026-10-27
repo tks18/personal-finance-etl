@@ -34,11 +34,6 @@ from personal_finance_etl.application.investments.context import (
     QuantRunOptions,
 )
 from personal_finance_etl.application.investments.quant_service import InvestmentQuantEngine
-from personal_finance_etl.application.observability import (
-    ObservabilityEmitter,
-    get_global_emitter,
-)
-from personal_finance_etl.application.observability.diagnostics import get_observability_diagnostics
 from personal_finance_etl.application.pipeline.transformer import TransformationDAG
 from personal_finance_etl.application.tax.tax_service import TaxEngine
 from personal_finance_etl.application.wealth.wealth_service import WealthPresentationEngine
@@ -55,6 +50,13 @@ from personal_finance_etl.contracts.observability import (
 from personal_finance_etl.infrastructure.control_plane import (
     ControlPlane,
     SimulationRunParams,
+)
+from personal_finance_etl.infrastructure.observability import (
+    ObservabilityEmitter,
+    get_global_emitter,
+)
+from personal_finance_etl.infrastructure.observability.diagnostics import (
+    get_observability_diagnostics,
 )
 from personal_finance_etl.infrastructure.providers.files.locator import (
     categorize_statement_files,
@@ -611,8 +613,6 @@ class PipelineExecutor:
         with self.emitter.scope(
             operation="pipeline_execution",
             component="pipeline",
-            entity_type="Run",
-            entity_id=str(run_id),
         ):
             with self.emitter.scope(
                 operation="phase_1_discovery", component="pipeline", stage=EngineStage.DISCOVERING
