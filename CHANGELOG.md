@@ -2,6 +2,70 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [9.5.0](https://github.com/tks18/personal-finance-etl/compare/9.4.0...9.5.0) (2026-10-27)
+
+
+### CI 🛠
+
+* **scripts:** add strict ast documentation auditor script ([856b055](https://github.com/tks18/personal-finance-etl/commit/856b055038236dee3e0860cd895cd7cd7f9397bf))
+* **scripts:** upgrade auto_commit with atomic grouping and upfront gate ([0e72ded](https://github.com/tks18/personal-finance-etl/commit/0e72ded21bd29efe2f3ff4a32dc08e809f58bcaa))
+* **tasks:** add audit-docs task for ast compliance ([79806f9](https://github.com/tks18/personal-finance-etl/commit/79806f9372df885646793e646aa19fbe61125847))
+
+
+### Features 🔥
+
+* **contracts:** enrich errordetails with diagnostics fields ([a7e256d](https://github.com/tks18/personal-finance-etl/commit/a7e256dfa167d08975926578345317792f4e8ed5))
+* **desktop:** suppress run tag noise and enrich error dialog ([6bb9e72](https://github.com/tks18/personal-finance-etl/commit/6bb9e729ef6672af3c817682df4e13c7c2d712b5))
+* **ingestion:** enrich market extraction completion metrics ([1804a15](https://github.com/tks18/personal-finance-etl/commit/1804a151716950ed3cebd5d817d33193bcac50ac))
+* **investments:** add periodic isin valuation milestones ([74198fe](https://github.com/tks18/personal-finance-etl/commit/74198fea15aa60a21407377983bb45ab1051a51d))
+* **observability:** format remediation hints in desktop sink ([7297b5d](https://github.com/tks18/personal-finance-etl/commit/7297b5dbc51ffcd509de0ce974d13760af727933))
+* **observability:** strengthen canonical event contracts ([0d69819](https://github.com/tks18/personal-finance-etl/commit/0d69819503bd18381626568faeabd5acedf2c79c))
+* **pipeline:** add correlated execution lineage ([a7f4300](https://github.com/tks18/personal-finance-etl/commit/a7f43007cc8997ff020e5e96cc3527aef6e4707b))
+* **pipeline:** enrich failure handler with remediation hints ([16c060e](https://github.com/tks18/personal-finance-etl/commit/16c060e50268cdc0e0acb49791b9f320cce22b74))
+
+
+### Code Refactoring 🖌
+
+* **analytics:** migrate domain diagnostics ([c59772a](https://github.com/tks18/personal-finance-etl/commit/c59772a58030a130b2e5c95347ca2c4ee4c1a31f))
+* **bootstrap:** adopt canonical event transport ([f38256a](https://github.com/tks18/personal-finance-etl/commit/f38256a7492674b706bb68b703295006ab729836))
+* **contracts:** update canonical contract exports ([e319a7f](https://github.com/tks18/personal-finance-etl/commit/e319a7f5176f0bad8be9215771836ce32d9a6e5b))
+* **control-plane:** unify operational diagnostics ([0284107](https://github.com/tks18/personal-finance-etl/commit/0284107ba3d5094aec34a4f9de58360d8fafced4))
+* **control-plane:** update observability import path ([fbe6944](https://github.com/tks18/personal-finance-etl/commit/fbe69440acd7e54ddc2325e7d55e4b49e1ca9bdf))
+* **domain:** update observability import path ([d1b87ea](https://github.com/tks18/personal-finance-etl/commit/d1b87ea9d7179f54b07ab6437c5bf7f9f2d2bb21))
+* **ingestion:** emit canonical diagnostics ([06d215a](https://github.com/tks18/personal-finance-etl/commit/06d215a8a2b5f6090d442597423620fb0cb0083f))
+* **ingestion:** update observability import path ([20d2ae9](https://github.com/tks18/personal-finance-etl/commit/20d2ae9c45d8348fffe4a133fcf4721069fc4e09))
+* **investments:** unify worker observability ([dd0de21](https://github.com/tks18/personal-finance-etl/commit/dd0de215b4e6489cbb93821cd4c871e20e9a2dc5))
+* **investments:** update observability import path ([edc5351](https://github.com/tks18/personal-finance-etl/commit/edc5351ff3ac495c8f308a6d7abf4d31ace2cf55))
+* **observability:** export canonical infrastructure symbols ([98ba544](https://github.com/tks18/personal-finance-etl/commit/98ba5440284946182f4d681fad368f3f2df46a84))
+* **observability:** relocate components to infrastructure ([7af53cd](https://github.com/tks18/personal-finance-etl/commit/7af53cd441625f1b6a9175ff578677e310f23a01))
+* **observability:** remove legacy logging stack ([cf23fb2](https://github.com/tks18/personal-finance-etl/commit/cf23fb2f649258f40e9900addb3b20754d7f0e32))
+* **observability:** update internal infrastructure imports ([79d6035](https://github.com/tks18/personal-finance-etl/commit/79d60354f0ba2af6e2b717c11928f67212344c50))
+* **pipeline:** remove run entity tag and format run id ([6494f93](https://github.com/tks18/personal-finance-etl/commit/6494f934c6c8f1f02a6ef6336842e6a8afac8b97))
+* **pipeline:** update observability import path ([618b5ba](https://github.com/tks18/personal-finance-etl/commit/618b5ba497f417e41b9cf39ca9bc0e25803dd567))
+* **presentation:** update observability import path ([caf6e19](https://github.com/tks18/personal-finance-etl/commit/caf6e19d2a26e714dd42064486069e96693e2b02))
+* **providers:** migrate file diagnostics ([a01daa7](https://github.com/tks18/personal-finance-etl/commit/a01daa706deb510fabb78d7e84facc196f8402fb))
+* **providers:** update observability import path ([c3c95dd](https://github.com/tks18/personal-finance-etl/commit/c3c95dda1c1442a3dd14903650cb9e4a17692a96))
+* **recovery:** emit canonical recovery diagnostics ([42cf524](https://github.com/tks18/personal-finance-etl/commit/42cf5245b36aef7b607ebc7c2e369c8f0bb4b988))
+* **recovery:** remove legacy outcome compatibility shims ([9cb863c](https://github.com/tks18/personal-finance-etl/commit/9cb863cbfc5c71ed0ab6421f4e35126b4c09dc71))
+* **recovery:** use canonical recovery outcome enums ([29ba773](https://github.com/tks18/personal-finance-etl/commit/29ba773001c864ded9a0a9840168e5e0a7d01303))
+* **warehouse:** migrate persistence diagnostics ([db9a0d7](https://github.com/tks18/personal-finance-etl/commit/db9a0d7947254b1a21f270d53fbb03a083115aed))
+* **warehouse:** update observability import path ([55ca6a6](https://github.com/tks18/personal-finance-etl/commit/55ca6a6c36b951056ffeaf42828f3468b68c931a))
+
+
+### Tests 🧪
+
+* **contracts:** verify canonical recovery outcome enums ([6924919](https://github.com/tks18/personal-finance-etl/commit/692491978eafd6692e11245f76a53330c898f35a))
+* **demolition:** verify complete removal of legacy logging ([36b02c3](https://github.com/tks18/personal-finance-etl/commit/36b02c36f0d834df56437bccfed198a0c6640775))
+* **observability:** certify enterprise event architecture ([fc5a174](https://github.com/tks18/personal-finance-etl/commit/fc5a174859a7577a1fe43dea9901b1345d03a180))
+* **observability:** update forensic debuggability assertions ([c7f1b2b](https://github.com/tks18/personal-finance-etl/commit/c7f1b2b091e4f09cc923df7ebc49a629313b19eb))
+* **observability:** update observability import paths in tests ([21e1357](https://github.com/tks18/personal-finance-etl/commit/21e1357c3266ace7221606237954acd0abf36864))
+
+
+### Bug Fixes 🛠
+
+* **providers:** harden market event delivery ([db06f0a](https://github.com/tks18/personal-finance-etl/commit/db06f0ad3ec4d55d624af485dde613b523423091))
+* **scripts:** add explicit utf-8 encoding to upfront gate subprocess ([fd8cf17](https://github.com/tks18/personal-finance-etl/commit/fd8cf176047889eda2656c977ed01a9b3f5e8c5d))
+
 ## [9.4.0](https://github.com/tks18/personal-finance-etl/compare/9.3.7...9.4.0) (2026-10-26)
 
 
