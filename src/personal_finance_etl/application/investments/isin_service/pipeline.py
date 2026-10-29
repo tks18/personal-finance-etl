@@ -20,13 +20,16 @@ import multiprocessing
 import os
 import traceback
 from datetime import date
-from typing import cast
+from typing import NoReturn, cast
 
 import polars as pl
 
 from personal_finance_etl.application.investments.context import RunContext
-from personal_finance_etl.application.investments.isin_service.worker import _process_isin_worker
-from personal_finance_etl.config.financial_rules import FinancialRules
+from personal_finance_etl.application.investments.isin_service.worker import (
+    IsinResultPayload,
+    IsinTaskPayload,
+    _process_isin_worker,
+)
 from personal_finance_etl.contracts.application import EngineStage
 from personal_finance_etl.contracts.event_transport import EventQueue
 from personal_finance_etl.contracts.lifecycle import FailureDomain
@@ -47,8 +50,6 @@ from personal_finance_etl.domain.investments.contracts import (
     TradeRecord,
 )
 from personal_finance_etl.domain.investments.valuation.benchmark import BenchmarkPriceProvider
-from personal_finance_etl.domain.market.fx import FXRateProvider
-from personal_finance_etl.domain.market.macro import FYMacroParametersTable
 from personal_finance_etl.infrastructure.observability import (
     ObservabilityEmitter,
     get_global_emitter,
@@ -126,16 +127,15 @@ class _PipelineAccumulator:
             entry["val_local"] += vals.get("val_local", 0.0)
             entry["shadow_val_local"] += vals.get("shadow_val_local", 0.0)
 
-    def ingest_isin_result(
+    def _accumulate_terminals_and_cashflows(
         self,
         isin: str,
         isin_cf: list[CashflowDict],
         isin_pt: dict[date, TerminalValueDict],
         isin_re: list[RealizedEventDict],
         isin_recon: list[ReconciliationEventDict],
-        tags: dict[str, str],
     ) -> None:
-        """Ingest individual ISIN worker result into global and group containers.
+        """Merge instrument-level cashflows and daily terminals into global portfolio totals.
 
         Parameters
         ----------
@@ -149,8 +149,6 @@ class _PipelineAccumulator:
             Realized capital gain events.
         isin_recon : list[ReconciliationEventDict]
             Quantity/cost-basis reconciliation events.
-        tags : dict[str, str]
-            Classification tags.
         """
         if isin_cf or isin_pt:
             self.isin_cashflows[isin] = isin_cf
@@ -177,6 +175,26 @@ class _PipelineAccumulator:
         self.realized_events.extend(isin_re)
         self.global_recon_events.extend(isin_recon)
 
+    def _accumulate_dimensions(
+        self,
+        tags: dict[str, str],
+        isin_cf: list[CashflowDict],
+        isin_pt: dict[date, TerminalValueDict],
+        isin_re: list[RealizedEventDict],
+    ) -> None:
+        """Aggregate cashflows and terminals across asset class, sector, geography, and currency.
+
+        Parameters
+        ----------
+        tags : dict[str, str]
+            Classification tags for the instrument.
+        isin_cf : list[CashflowDict]
+            Instrument cashflows.
+        isin_pt : dict[date, TerminalValueDict]
+            Daily terminals for the instrument.
+        isin_re : list[RealizedEventDict]
+            Realized capital gain events.
+        """
         if not tags:
             return
 
@@ -210,6 +228,35 @@ class _PipelineAccumulator:
         self._accumulate_group(
             currency, self.dim_currency.cf, self.dim_currency.pt, isin_cf, isin_pt
         )
+
+    def ingest_isin_result(
+        self,
+        isin: str,
+        isin_cf: list[CashflowDict],
+        isin_pt: dict[date, TerminalValueDict],
+        isin_re: list[RealizedEventDict],
+        isin_recon: list[ReconciliationEventDict],
+        tags: dict[str, str],
+    ) -> None:
+        """Ingest individual ISIN worker result into global and group containers.
+
+        Parameters
+        ----------
+        isin : str
+            Instrument ISIN code.
+        isin_cf : list[CashflowDict]
+            Instrument cashflows.
+        isin_pt : dict[date, TerminalValueDict]
+            Daily terminals for the instrument.
+        isin_re : list[RealizedEventDict]
+            Realized capital gain events.
+        isin_recon : list[ReconciliationEventDict]
+            Quantity/cost-basis reconciliation events.
+        tags : dict[str, str]
+            Classification tags.
+        """
+        self._accumulate_terminals_and_cashflows(isin, isin_cf, isin_pt, isin_re, isin_recon)
+        self._accumulate_dimensions(tags, isin_cf, isin_pt, isin_re)
 
     def to_result(self, has_data: bool) -> PipelineExecutionResult:
         """Construct the immutable PipelineExecutionResult structure.
@@ -324,30 +371,19 @@ class IsinPipeline:
                 stage=EngineStage.ANALYZING,
             )
 
-    def _build_worker_tasks(
+    def _partition_source_frames(
         self,
-    ) -> list[
-        tuple[
-            str,
-            list[TradeRecord],
-            list[TradeRecord],
-            list[TradeRecord],
-            IsinMasterRecord,
-            dict[date, float],
-            FYMacroParametersTable,
-            date | None,
-            date | None,
-            FinancialRules,
-            FXRateProvider | None,
-            str,
-        ]
+    ) -> tuple[
+        dict[tuple[object, ...] | str, pl.DataFrame],
+        dict[tuple[object, ...] | str, pl.DataFrame],
+        dict[tuple[object, ...] | str, pl.DataFrame],
     ]:
-        """Partition input trade frames and build task payloads for multiprocessing worker pool.
+        """Partition input trade, sale, and market frames by ISIN code.
 
         Returns
         -------
-        list[tuple]
-            List of worker task tuples ready for ProcessPoolExecutor execution.
+        tuple
+            Tuple of (purchase_partitions, sale_partitions, market_partitions).
         """
         p_dict_pl: dict[tuple[object, ...] | str, pl.DataFrame] = (
             cast(
@@ -396,44 +432,51 @@ class IsinPipeline:
             else {}
         )
 
+        return p_dict_pl, s_dict_pl, m_dict_pl
+
+    def _build_benchmark_maps(self) -> dict[str, dict[date, float]]:
+        """Extract unique benchmark identifiers and construct date-to-price lookup tables.
+
+        Returns
+        -------
+        dict[str, dict[date, float]]
+            Mapping of benchmark ID to date-to-closing-price map.
+        """
         bm_maps: dict[str, dict[date, float]] = {}
         for _isin, row in self.ctx.isin_master.items():
             b_id = str(row.get("BENCHMARK_ID", ""))
             if b_id and b_id not in bm_maps:
                 bm_maps[b_id] = BenchmarkPriceProvider(b_id, self.ctx.df_b).bm_price_map
+        return bm_maps
 
-        tasks: list[
-            tuple[
-                str,
-                list[TradeRecord],
-                list[TradeRecord],
-                list[TradeRecord],
-                IsinMasterRecord,
-                dict[date, float],
-                FYMacroParametersTable,
-                date | None,
-                date | None,
-                FinancialRules,
-                FXRateProvider | None,
-                str,
-            ]
-        ] = []
+    def _build_worker_tasks(self) -> list[IsinTaskPayload]:
+        """Partition input trade frames and build task payloads for multiprocessing worker pool.
+
+        Returns
+        -------
+        list[IsinTaskPayload]
+            List of worker task payloads ready for ProcessPoolExecutor execution.
+        """
+        p_dict_pl, s_dict_pl, m_dict_pl = self._partition_source_frames()
+        bm_maps = self._build_benchmark_maps()
+
+        tasks: list[IsinTaskPayload] = []
         for isin in self.isins:
             p_df = p_dict_pl.get((isin,)) if (isin,) in p_dict_pl else p_dict_pl.get(isin)
             p_inst = cast(
-                "list[TradeRecord]",
+                list[TradeRecord],
                 p_df.sort("Date").to_dicts() if p_df is not None and not p_df.is_empty() else [],
             )
 
             s_df = s_dict_pl.get((isin,)) if (isin,) in s_dict_pl else s_dict_pl.get(isin)
             s_inst = cast(
-                "list[TradeRecord]",
+                list[TradeRecord],
                 s_df.sort("Date").to_dicts() if s_df is not None and not s_df.is_empty() else [],
             )
 
             m_df = m_dict_pl.get((isin,)) if (isin,) in m_dict_pl else m_dict_pl.get(isin)
             m_inst = cast(
-                "list[TradeRecord]",
+                list[TradeRecord],
                 m_df.to_dicts() if m_df is not None and not m_df.is_empty() else [],
             )
 
@@ -442,22 +485,154 @@ class IsinPipeline:
             bm_map = bm_maps.get(b_id, {})
 
             tasks.append(
-                (
-                    isin,
-                    p_inst,
-                    s_inst,
-                    m_inst,
-                    master_row,
-                    bm_map,
-                    self.ctx.fy_table,
-                    self.ctx.start_date,
-                    self.ctx.end_date,
-                    self.ctx.rules,
-                    self.ctx.fx_provider,
-                    self.tmp_dir,
+                IsinTaskPayload(
+                    isin=isin,
+                    p_inst=p_inst,
+                    s_inst=s_inst,
+                    m_inst=m_inst,
+                    master_row=master_row,
+                    bm_map=bm_map,
+                    fy_table=self.ctx.fy_table,
+                    start_date=self.ctx.start_date,
+                    end_date=self.ctx.end_date,
+                    rules=self.ctx.rules,
+                    fx_provider=self.ctx.fx_provider,
+                    tmp_dir=self.tmp_dir,
                 )
             )
         return tasks
+
+    def _handle_process_boundary_failure(self, isin: str, exc: Exception) -> NoReturn:
+        """Construct failure details, emit observability event, and raise on IPC boundary failure.
+
+        Parameters
+        ----------
+        isin : str
+            Security ISIN that failed during IPC retrieval.
+        exc : Exception
+            Exception raised during future.result().
+
+        Raises
+        ------
+        RuntimeError
+            Formatted single-event IPC failure message.
+        """
+        error_msg = f"Process-boundary failure: {type(exc).__name__} - {str(exc)}"
+        diagnostics.error(
+            f"ISIN Processing Failed for {isin}: {error_msg}\n{traceback.format_exc()}"
+        )
+        err_details = ErrorDetails.create(
+            exc=exc,
+            failure_domain=FailureDomain.WORKER,
+            stage="InvestmentQuantEngine",
+            entity=isin,
+            hint=f"Check transaction dates, lot consistency, and market price coverage for ISIN {isin}",
+            failed_isin=isin,
+        )
+        self.emitter.emit_event(
+            event_code=EventCode.QUANT_ISIN_PROCESSED,
+            message=f"ISIN Processing Failed for {isin}: {error_msg}",
+            presentation_kind=PresentationKind.FAILURE,
+            severity=DiagnosticSeverity.ERROR,
+            outcome=EventOutcome.FAILED,
+            stage=EngineStage.ANALYZING,
+            entity_type="ISIN",
+            entity_id=isin,
+            error=err_details,
+        )
+        raise RuntimeError(f"ISIN_FAILURE|{isin}|{error_msg}") from exc
+
+    def _handle_worker_execution_failure(
+        self, fallback_isin: str, error_info: dict[str, str]
+    ) -> NoReturn:
+        """Construct failure details, emit observability event, and raise on child process error.
+
+        Parameters
+        ----------
+        fallback_isin : str
+            Fallback ISIN identifier if omitted from error payload.
+        error_info : dict[str, str]
+            Dictionary containing isin, error message, and traceback summary.
+
+        Raises
+        ------
+        RuntimeError
+            Formatted single-event worker execution failure message.
+        """
+        failed_isin = str(error_info.get("isin", fallback_isin))
+        error_msg = str(error_info.get("error", "Unknown Error"))
+        tb = str(error_info.get("traceback", ""))
+        err_details = ErrorDetails(
+            exception_type="RuntimeError",
+            exception_message=error_msg,
+            failure_domain=FailureDomain.WORKER,
+            traceback_summary=tb,
+            retryable=False,
+            context_variables={"failed_isin": failed_isin},
+            remediation_hint=(
+                f"Verify prices in market data table and check buy/sell order chronology for ISIN {failed_isin}"
+            ),
+            failing_stage="InvestmentQuantEngine",
+            failing_entity=failed_isin,
+        )
+        self.emitter.emit_event(
+            event_code=EventCode.QUANT_ISIN_PROCESSED,
+            message=f"ISIN Processing Failed for {failed_isin}: {error_msg}",
+            presentation_kind=PresentationKind.FAILURE,
+            severity=DiagnosticSeverity.ERROR,
+            outcome=EventOutcome.FAILED,
+            stage=EngineStage.ANALYZING,
+            entity_type="ISIN",
+            entity_id=failed_isin,
+            error=err_details,
+        )
+        raise RuntimeError(f"ISIN_FAILURE|{failed_isin}|{error_msg}")
+
+    def _process_worker_result(
+        self,
+        isin: str,
+        result: IsinResultPayload,
+        acc: _PipelineAccumulator,
+    ) -> bool:
+        """Unpack worker payload, check failures, ingest into accumulator, and emit debug event.
+
+        Parameters
+        ----------
+        isin : str
+            Instrument ISIN code.
+        result : IsinResultPayload
+            Result bundle returned from worker child process.
+        acc : _PipelineAccumulator
+            Global and dimensional result accumulator.
+
+        Returns
+        -------
+        bool
+            True if non-empty parquet partition was written for this ISIN.
+        """
+        if result.error_info is not None:
+            self._handle_worker_execution_failure(isin, result.error_info)
+
+        acc.ingest_isin_result(
+            isin=isin,
+            isin_cf=result.cashflows,
+            isin_pt=result.terminals,
+            isin_re=result.realized_events,
+            isin_recon=result.recon_events,
+            tags=result.tags,
+        )
+
+        self.emitter.emit_event(
+            event_code=EventCode.QUANT_ISIN_PROCESSED,
+            message=f"Calculated quant lots and cashflows for ISIN {isin}",
+            presentation_kind=PresentationKind.INTERNAL,
+            severity=DiagnosticSeverity.DEBUG,
+            stage=EngineStage.ANALYZING,
+            entity_type="ISIN",
+            entity_id=isin,
+            rows=len(result.cashflows),
+        )
+        return result.success
 
     def process_all(self) -> PipelineExecutionResult:
         """Execute parallel multi-process simulation across all configured ISIN instruments.
@@ -480,7 +655,7 @@ class IsinPipeline:
                 max_workers=min(4, os.cpu_count() or 1),
             ) as executor:
                 future_to_isin = {
-                    executor.submit(_process_isin_worker, task): task[0] for task in tasks
+                    executor.submit(_process_isin_worker, task): task.isin for task in tasks
                 }
 
                 for i, future in enumerate(concurrent.futures.as_completed(future_to_isin)):
@@ -488,76 +663,12 @@ class IsinPipeline:
                     self._report_step(i + 1, total_inst, isin)
 
                     try:
-                        success, isin_cf, isin_pt, isin_re, isin_recon, tags, error_info = (
-                            future.result()
-                        )
+                        result = future.result()
                     except Exception as e:
-                        error_msg = f"Process-boundary failure: {type(e).__name__} - {str(e)}"
-                        diagnostics.error(
-                            f"ISIN Processing Failed for {isin}: {error_msg}\n{traceback.format_exc()}"
-                        )
-                        err_details = ErrorDetails.create(
-                            exc=e,
-                            failure_domain=FailureDomain.WORKER,
-                            stage="InvestmentQuantEngine",
-                            entity=isin,
-                            hint=f"Check transaction dates, lot consistency, and market price coverage for ISIN {isin}",
-                            failed_isin=isin,
-                        )
-                        self.emitter.emit_event(
-                            event_code=EventCode.QUANT_ISIN_PROCESSED,
-                            message=f"ISIN Processing Failed for {isin}: {error_msg}",
-                            presentation_kind=PresentationKind.FAILURE,
-                            severity=DiagnosticSeverity.ERROR,
-                            outcome=EventOutcome.FAILED,
-                            stage=EngineStage.ANALYZING,
-                            entity_type="ISIN",
-                            entity_id=isin,
-                            error=err_details,
-                        )
-                        raise RuntimeError(f"ISIN_FAILURE|{isin}|{error_msg}") from e
+                        self._handle_process_boundary_failure(isin, e)
 
-                    if error_info is not None:
-                        failed_isin = str(error_info.get("isin", isin))
-                        error_msg = str(error_info.get("error", "Unknown Error"))
-                        tb = str(error_info.get("traceback", ""))
-                        err_details = ErrorDetails(
-                            exception_type="RuntimeError",
-                            exception_message=error_msg,
-                            failure_domain=FailureDomain.WORKER,
-                            traceback_summary=tb,
-                            retryable=False,
-                            context_variables={"failed_isin": failed_isin},
-                            remediation_hint=f"Verify prices in market data table and check buy/sell order chronology for ISIN {failed_isin}",
-                            failing_stage="InvestmentQuantEngine",
-                            failing_entity=failed_isin,
-                        )
-                        self.emitter.emit_event(
-                            event_code=EventCode.QUANT_ISIN_PROCESSED,
-                            message=f"ISIN Processing Failed for {failed_isin}: {error_msg}",
-                            presentation_kind=PresentationKind.FAILURE,
-                            severity=DiagnosticSeverity.ERROR,
-                            outcome=EventOutcome.FAILED,
-                            stage=EngineStage.ANALYZING,
-                            entity_type="ISIN",
-                            entity_id=failed_isin,
-                            error=err_details,
-                        )
-                        raise RuntimeError(f"ISIN_FAILURE|{failed_isin}|{error_msg}")
-
-                    if success:
+                    if self._process_worker_result(isin, result, acc):
                         has_data = True
-                    acc.ingest_isin_result(isin, isin_cf, isin_pt, isin_re, isin_recon, tags)
-                    self.emitter.emit_event(
-                        event_code=EventCode.QUANT_ISIN_PROCESSED,
-                        message=f"Calculated quant lots and cashflows for ISIN {isin}",
-                        presentation_kind=PresentationKind.INTERNAL,
-                        severity=DiagnosticSeverity.DEBUG,
-                        stage=EngineStage.ANALYZING,
-                        entity_type="ISIN",
-                        entity_id=isin,
-                        rows=len(isin_cf),
-                    )
         finally:
             current_process.daemon = is_daemon
 
