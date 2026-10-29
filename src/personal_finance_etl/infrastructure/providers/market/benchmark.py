@@ -26,7 +26,7 @@ from __future__ import annotations
 import concurrent.futures
 from collections.abc import Mapping
 from datetime import date, datetime
-from typing import Any
+from typing import cast
 
 import pandas as pd  # type: ignore[import-untyped]
 import polars as pl
@@ -99,8 +99,8 @@ class BenchmarkExtractor:
         tuple[list[str], str | None]
             List of anomalous drop dates and optional warning message string.
         """
-        pct_drops: Any = hist_pd["Close"].pct_change()
-        huge_drops: Any = pct_drops[pct_drops < -0.4]
+        pct_drops: pd.Series = cast(pd.Series, hist_pd["Close"].pct_change())
+        huge_drops = pct_drops[pct_drops < -0.4]
         if not huge_drops.empty:
             drop_dts = [d.strftime("%Y-%m-%d") for d in huge_drops.index]
             warn_msg = f"⚠ Anomalous drops (>40%) in {ticker} on {', '.join(drop_dts)}"

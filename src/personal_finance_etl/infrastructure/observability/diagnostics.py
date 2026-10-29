@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import traceback
 from collections.abc import Mapping
-from typing import Any
+from typing import cast
 
 from personal_finance_etl.contracts.application import EngineStage
 from personal_finance_etl.contracts.lifecycle import FailureDomain
@@ -99,12 +99,31 @@ class ObservabilityDiagnostics:
         except (TypeError, ValueError):
             return " ".join((text, *(str(arg) for arg in args)))
 
+    @staticmethod
+    def _extract_extra(kwargs: Mapping[str, object]) -> Mapping[str, object] | None:
+        """Extract and validate the optional 'extra' metadata mapping.
+
+        Parameters
+        ----------
+        kwargs : Mapping[str, object]
+            Keyword arguments passed to logging method.
+
+        Returns
+        -------
+        Mapping[str, object] | None
+            The extra mapping if present and valid, else None.
+        """
+        extra = kwargs.get("extra")
+        if isinstance(extra, Mapping):
+            return cast(Mapping[str, object], extra)
+        return None
+
     def _emit(
         self,
         severity: DiagnosticSeverity,
         message: object,
         *args: object,
-        extra: Mapping[str, Any] | None = None,
+        extra: Mapping[str, object] | None = None,
         capture_exception: bool = False,
     ) -> None:
         """Construct and emit a canonical ObservabilityEvent for a diagnostic entry.
@@ -117,7 +136,7 @@ class ObservabilityDiagnostics:
             Message text or format template.
         *args : object
             Positional format arguments.
-        extra : Mapping[str, Any] | None, default=None
+        extra : Mapping[str, object] | None, default=None
             Structured metadata dictionary (e.g. isin, stage).
         capture_exception : bool, default=False
             Whether to inspect and attach active exception traceback details.
@@ -149,7 +168,7 @@ class ObservabilityDiagnostics:
             error=error,
         )
 
-    def debug(self, message: object, *args: object, **kwargs: Any) -> None:
+    def debug(self, message: object, *args: object, **kwargs: object) -> None:
         """Emit a DEBUG-level diagnostic event.
 
         Parameters
@@ -158,12 +177,12 @@ class ObservabilityDiagnostics:
             Diagnostic message or format string.
         *args : object
             Positional format arguments for message.
-        **kwargs : Any
+        **kwargs : object
             Optional keyword arguments including 'extra' mapping.
         """
-        self._emit(DiagnosticSeverity.DEBUG, message, *args, extra=kwargs.get("extra"))
+        self._emit(DiagnosticSeverity.DEBUG, message, *args, extra=self._extract_extra(kwargs))
 
-    def info(self, message: object, *args: object, **kwargs: Any) -> None:
+    def info(self, message: object, *args: object, **kwargs: object) -> None:
         """Emit an INFO-level diagnostic event.
 
         Parameters
@@ -172,12 +191,12 @@ class ObservabilityDiagnostics:
             Diagnostic message or format string.
         *args : object
             Positional format arguments for message.
-        **kwargs : Any
+        **kwargs : object
             Optional keyword arguments including 'extra' mapping.
         """
-        self._emit(DiagnosticSeverity.INFO, message, *args, extra=kwargs.get("extra"))
+        self._emit(DiagnosticSeverity.INFO, message, *args, extra=self._extract_extra(kwargs))
 
-    def warning(self, message: object, *args: object, **kwargs: Any) -> None:
+    def warning(self, message: object, *args: object, **kwargs: object) -> None:
         """Emit a WARNING-level diagnostic event.
 
         Parameters
@@ -186,12 +205,12 @@ class ObservabilityDiagnostics:
             Diagnostic message or format string.
         *args : object
             Positional format arguments for message.
-        **kwargs : Any
+        **kwargs : object
             Optional keyword arguments including 'extra' mapping.
         """
-        self._emit(DiagnosticSeverity.WARNING, message, *args, extra=kwargs.get("extra"))
+        self._emit(DiagnosticSeverity.WARNING, message, *args, extra=self._extract_extra(kwargs))
 
-    def error(self, message: object, *args: object, **kwargs: Any) -> None:
+    def error(self, message: object, *args: object, **kwargs: object) -> None:
         """Emit an ERROR-level diagnostic event.
 
         Parameters
@@ -200,12 +219,12 @@ class ObservabilityDiagnostics:
             Diagnostic message or format string.
         *args : object
             Positional format arguments for message.
-        **kwargs : Any
+        **kwargs : object
             Optional keyword arguments including 'extra' mapping.
         """
-        self._emit(DiagnosticSeverity.ERROR, message, *args, extra=kwargs.get("extra"))
+        self._emit(DiagnosticSeverity.ERROR, message, *args, extra=self._extract_extra(kwargs))
 
-    def critical(self, message: object, *args: object, **kwargs: Any) -> None:
+    def critical(self, message: object, *args: object, **kwargs: object) -> None:
         """Emit a CRITICAL-level diagnostic event.
 
         Parameters
@@ -214,12 +233,12 @@ class ObservabilityDiagnostics:
             Diagnostic message or format string.
         *args : object
             Positional format arguments for message.
-        **kwargs : Any
+        **kwargs : object
             Optional keyword arguments including 'extra' mapping.
         """
-        self._emit(DiagnosticSeverity.CRITICAL, message, *args, extra=kwargs.get("extra"))
+        self._emit(DiagnosticSeverity.CRITICAL, message, *args, extra=self._extract_extra(kwargs))
 
-    def exception(self, message: object, *args: object, **kwargs: Any) -> None:
+    def exception(self, message: object, *args: object, **kwargs: object) -> None:
         """Emit an ERROR-level diagnostic event capturing the current active exception.
 
         Parameters
@@ -228,14 +247,14 @@ class ObservabilityDiagnostics:
             Diagnostic message or format string.
         *args : object
             Positional format arguments for message.
-        **kwargs : Any
+        **kwargs : object
             Optional keyword arguments including 'extra' mapping.
         """
         self._emit(
             DiagnosticSeverity.ERROR,
             message,
             *args,
-            extra=kwargs.get("extra"),
+            extra=self._extract_extra(kwargs),
             capture_exception=True,
         )
 
@@ -244,7 +263,7 @@ class ObservabilityDiagnostics:
         severity: DiagnosticSeverity,
         message: object,
         *args: object,
-        **kwargs: Any,
+        **kwargs: object,
     ) -> None:
         """Emit a diagnostic event with an explicitly specified severity level.
 
@@ -256,10 +275,10 @@ class ObservabilityDiagnostics:
             Diagnostic message or format string.
         *args : object
             Positional format arguments for message.
-        **kwargs : Any
+        **kwargs : object
             Optional keyword arguments including 'extra' mapping.
         """
-        self._emit(severity, message, *args, extra=kwargs.get("extra"))
+        self._emit(severity, message, *args, extra=self._extract_extra(kwargs))
 
 
 def get_observability_diagnostics(

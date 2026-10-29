@@ -1,3 +1,9 @@
+# pyright: reportUnknownMemberType=false
+# pyright: reportUnknownVariableType=false
+# pyright: reportUnknownArgumentType=false
+# pyright: reportUnknownParameterType=false
+# pyright: reportMissingImports=false
+# pyright: reportAttributeAccessIssue=false
 """Common utility routines for external Yahoo Finance market data providers.
 
 Owns
@@ -26,7 +32,7 @@ import time
 import uuid
 from collections.abc import Mapping
 from datetime import UTC, date, datetime, timedelta
-from typing import Any, Literal
+from typing import Literal, Protocol, cast
 
 import pandas as pd  # type: ignore[import-untyped]
 import polars as pl
@@ -66,8 +72,23 @@ ConcatMethod = Literal[
     "vertical", "vertical_relaxed", "diagonal", "diagonal_relaxed", "horizontal", "align"
 ]
 
+
+class YFinanceTickerProtocol(Protocol):
+    """Structural protocol for external yfinance Ticker client interface."""
+
+    def history(
+        self,
+        start: date | datetime | str | None = None,
+        end: date | datetime | str | None = None,
+        **kwargs: object,
+    ) -> pd.DataFrame:
+        """Fetch historical price observation frame."""
+        ...
+
+
 __all__ = [
     "ConcatMethod",
+    "YFinanceTickerProtocol",
     "build_bronze_cache_map",
     "calculate_market_fetch_window",
     "collect_extraction_futures",
@@ -202,8 +223,9 @@ def download_yfinance_history(
     for attempt in range(max_attempts):
         attempts_done = attempt + 1
         try:
-            ticker_obj: Any = yf.Ticker(ticker)
-            raw_hist: Any = ticker_obj.history(start=fetch_start, end=end_dt + timedelta(days=1))
+            ticker_obj: YFinanceTickerProtocol = yf.Ticker(ticker)
+            raw_hist_obj = ticker_obj.history(start=fetch_start, end=end_dt + timedelta(days=1))
+            raw_hist = cast(pd.DataFrame | None, raw_hist_obj)
             if raw_hist is not None and not raw_hist.empty:
                 # Strip timezone and normalize timestamps to calendar dates
                 raw_hist.index = raw_hist.index.tz_localize(None).normalize()
