@@ -235,24 +235,56 @@ class SpanContext:
         self.token: contextvars.Token[ObservabilityContext] | None = None
 
     def set_rows(self, rows: int) -> None:
-        """Update the processed row count for the current span."""
+        """Update the processed row count for the current span.
+
+        Parameters
+        ----------
+        rows : int
+            Number of rows processed.
+        """
         self.rows = rows
 
     def set_entity(self, entity_type: str, entity_id: str) -> None:
-        """Update the targeted entity classification and identifier."""
+        """Update the targeted entity classification and identifier.
+
+        Parameters
+        ----------
+        entity_type : str
+            Domain entity classification.
+        entity_id : str
+            Unique entity identifier.
+        """
         self.entity_type = entity_type
         self.entity_id = entity_id
 
     def set_cache_hit(self, cache_hit: bool) -> None:
-        """Record whether the operation was served from cache."""
+        """Record whether the operation was served from cache.
+
+        Parameters
+        ----------
+        cache_hit : bool
+            True if served from local cache, else False.
+        """
         self.cache_hit = cache_hit
 
     def set_message(self, message: str) -> None:
-        """Update the human-readable narrative description for the span outcome."""
+        """Update the human-readable narrative description for the span outcome.
+
+        Parameters
+        ----------
+        message : str
+            Updated outcome message.
+        """
         self.message = message
 
     def __enter__(self) -> SpanContext:
-        """Enter the execution span, bind child context, and emit START event."""
+        """Enter the execution span, bind child context, and emit START event.
+
+        Returns
+        -------
+        SpanContext
+            Active span context manager.
+        """
         self.start_ns = time.perf_counter_ns()
         parent_ctx = get_current_context()
 
@@ -288,13 +320,97 @@ class SpanContext:
 
         return self
 
+    def _build_failure_event(
+        self, exc_val: BaseException, current_ctx: ObservabilityContext
+    ) -> ObservabilityEvent:
+        """Construct structured failure event with domain classification and traceback.
+
+        Parameters
+        ----------
+        exc_val : BaseException
+            Caught exception instance.
+        current_ctx : ObservabilityContext
+            Current execution span context.
+
+        Returns
+        -------
+        ObservabilityEvent
+            Formulated failure event.
+        """
+        domain = classify_failure_domain(
+            stage=str(current_ctx.stage),
+            error=exc_val,
+        )
+        if domain == FailureDomain.UNKNOWN:
+            domain = FailureDomain.TRANSFORMATION
+
+        err_details = ErrorDetails(
+            exception_type=type(exc_val).__name__,
+            exception_message=str(exc_val),
+            failure_domain=domain,
+            traceback_summary=traceback.format_exc(),
+            retryable=False,
+        )
+        fail_msg = self.message or f"Failed {self.operation}: {exc_val}"
+        return ObservabilityEvent.create(
+            event_code=self.event_code,
+            message=fail_msg,
+            context=current_ctx,
+            severity=DiagnosticSeverity.ERROR,
+            presentation_kind=PresentationKind.FAILURE,
+            outcome=EventOutcome.FAILED,
+            error=err_details,
+        )
+
+    def _build_success_event(
+        self, elapsed_ms: float, current_ctx: ObservabilityContext
+    ) -> ObservabilityEvent:
+        """Construct structured success event with duration metrics.
+
+        Parameters
+        ----------
+        elapsed_ms : float
+            Elapsed span runtime in milliseconds.
+        current_ctx : ObservabilityContext
+            Current execution span context.
+
+        Returns
+        -------
+        ObservabilityEvent
+            Formulated completion event.
+        """
+        success_msg = self.message or f"Completed {self.operation} in {elapsed_ms:.2f}ms"
+        return ObservabilityEvent.create(
+            event_code=self.event_code,
+            message=success_msg,
+            context=current_ctx,
+            severity=self.severity,
+            presentation_kind=self.presentation_kind,
+            outcome=EventOutcome.COMPLETED,
+        )
+
     def __exit__(
         self,
         exc_type: type[BaseException] | None,
         exc_val: BaseException | None,
         exc_tb: TracebackType | None,
     ) -> Literal[False]:
-        """Exit the execution span, calculate duration, and emit SUCCESS or FAILURE."""
+        """Exit the execution span, calculate duration, and emit SUCCESS or FAILURE.
+
+        Parameters
+        ----------
+        exc_type : type[BaseException] | None
+            Exception type if raised.
+        exc_val : BaseException | None
+            Exception instance if raised.
+        exc_tb : TracebackType | None
+            Traceback object if raised.
+
+        Returns
+        -------
+        Literal[False]
+            Always False to allow exception propagation.
+        """
         elapsed_ms = (time.perf_counter_ns() - self.start_ns) / 1_000_000.0
         current_ctx = get_current_context().with_updates(
             duration_ms=round(elapsed_ms, 3),
@@ -306,41 +422,10 @@ class SpanContext:
 
         try:
             if exc_val is not None:
-                domain = classify_failure_domain(
-                    stage=str(current_ctx.stage),
-                    error=exc_val,
-                )
-                if domain == FailureDomain.UNKNOWN:
-                    domain = FailureDomain.TRANSFORMATION
-
-                err_details = ErrorDetails(
-                    exception_type=type(exc_val).__name__,
-                    exception_message=str(exc_val),
-                    failure_domain=domain,
-                    traceback_summary=traceback.format_exc(),
-                    retryable=False,
-                )
-                fail_msg = self.message or f"Failed {self.operation}: {exc_val}"
-                fail_event = ObservabilityEvent.create(
-                    event_code=self.event_code,
-                    message=fail_msg,
-                    context=current_ctx,
-                    severity=DiagnosticSeverity.ERROR,
-                    presentation_kind=PresentationKind.FAILURE,
-                    outcome=EventOutcome.FAILED,
-                    error=err_details,
-                )
+                fail_event = self._build_failure_event(exc_val, current_ctx)
                 self.emitter.emit(fail_event)
             else:
-                success_msg = self.message or f"Completed {self.operation} in {elapsed_ms:.2f}ms"
-                succ_event = ObservabilityEvent.create(
-                    event_code=self.event_code,
-                    message=success_msg,
-                    context=current_ctx,
-                    severity=self.severity,
-                    presentation_kind=self.presentation_kind,
-                    outcome=EventOutcome.COMPLETED,
-                )
+                succ_event = self._build_success_event(elapsed_ms, current_ctx)
                 self.emitter.emit(succ_event)
         finally:
             if self.token is not None:
@@ -393,17 +478,23 @@ class ObservabilityEmitter:
         with self._lock:
             self._sinks.clear()
 
-    def emit(self, event: ObservabilityEvent) -> ObservabilityEvent:
-        """Sequence and fan-out an ObservabilityEvent to all registered sinks safely.
+    @staticmethod
+    def _enrich_ambient_context(event: ObservabilityEvent) -> ObservabilityEvent:
+        """Enrich event context with active ambient run and execution metadata.
 
         Parameters
         ----------
         event : ObservabilityEvent
-            The canonical event to dispatch.
+            Candidate event to enrich.
+
+        Returns
+        -------
+        ObservabilityEvent
+            Enriched event instance.
         """
         ambient = get_current_context()
         if not event.context.run_id and ambient.run_id:
-            event = replace(
+            return replace(
                 event,
                 context=replace(
                     event.context,
@@ -422,6 +513,22 @@ class ObservabilityEmitter:
                     ),
                 ),
             )
+        return event
+
+    def emit(self, event: ObservabilityEvent) -> ObservabilityEvent:
+        """Sequence and fan-out an ObservabilityEvent to all registered sinks safely.
+
+        Parameters
+        ----------
+        event : ObservabilityEvent
+            The canonical event to dispatch.
+
+        Returns
+        -------
+        ObservabilityEvent
+            The sequenced event as emitted.
+        """
+        event = self._enrich_ambient_context(event)
 
         with self._lock:
             self._sequence += 1
@@ -547,7 +654,28 @@ class ObservabilityEmitter:
         entity_id: str | None = None,
         batch_id: str | None = None,
     ) -> CorrelationScope:
-        """Bind a child correlation scope without creating additional events."""
+        """Bind a child correlation scope without creating additional events.
+
+        Parameters
+        ----------
+        operation : str
+            Operation identifier.
+        component : str, default=""
+            Component or subsystem name.
+        stage : EngineStage | None, default=None
+            ETL execution stage.
+        entity_type : str | None, default=None
+            Entity type classification.
+        entity_id : str | None, default=None
+            Entity identifier.
+        batch_id : str | None, default=None
+            Batch identifier.
+
+        Returns
+        -------
+        CorrelationScope
+            The configured correlation scope.
+        """
         return CorrelationScope(
             operation=operation,
             component=component,
