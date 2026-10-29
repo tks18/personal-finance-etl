@@ -35,7 +35,9 @@ class DocsRenderer:
     def __init__(self, catalog: DocsCatalog) -> None:
         self.catalog = catalog
 
-    def _inject_image(self, text: str, src_pattern: str, image_rel_path: str = "docs/assets/images/logo.png") -> str:
+    def _inject_image(
+        self, text: str, src_pattern: str, image_rel_path: str = "docs/assets/images/logo.png"
+    ) -> str:
         """Inject base64-encoded image data into HTML string matching an image source pattern.
 
         Parameters
@@ -276,39 +278,15 @@ class DocsRenderer:
             sidebar_links += "  </div>\n</details>\n"
         return sidebar_links, first_title
 
-    def build_html_app(self) -> str:
-        """Read all markdown docs and compile them into a single HTML web app string."""
-        docs_to_render, path_to_title = self._load_rendered_docs()
-        html_sections = self._convert_markdown_to_html(docs_to_render)
-        sidebar_links, first_title = self._build_sidebar_links(html_sections)
+    def _build_app_stylesheet(self) -> str:
+        """Generate static CSS stylesheet for layout, responsive panels, and themes.
 
-        mermaid_js = self._load_mermaid_js()
-        svg_pan_zoom_js = self._load_svg_pan_zoom_js()
-
-        js_dict_entries = ",\n".join(
-            [
-                f"'{title}': {{ path: '{data['path']}', html: `{data['html']}` }}"
-                for title, data in html_sections.items()
-            ]
-        )
-        js_docs_data = f"const docsData = {{\n{js_dict_entries}\n}};"
-        js_path_map = f"const pathToTitle = {json.dumps(path_to_title)};"
-
-        template = f"""
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Guides & About</title>
-            <script>
-              {mermaid_js}
-            </script>
-            <script>
-              {svg_pan_zoom_js}
-            </script>
-            <style>
-                :root {{
+        Returns
+        -------
+        str
+            Full CSS stylesheet content.
+        """
+        return """                :root {
                     --bg-main: #0D1117;
                     --bg-sidebar: #080C14;
                     --text-main: #E2E8F0;
@@ -317,8 +295,8 @@ class DocsRenderer:
                     --accent-hover: #3B82F6;
                     --border: #1E293B;
                     --code-bg: #1E293B;
-                }}
-                body {{
+                }
+                body {
                     margin: 0;
                     padding: 0;
                     font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
@@ -328,10 +306,10 @@ class DocsRenderer:
                     flex-direction: column;
                     height: 100vh;
                     overflow: hidden;
-                }}
+                }
                 
                 /* Top Header */
-                #topbar {{
+                #topbar {
                     height: 50px;
                     background-color: var(--bg-sidebar);
                     border-bottom: 1px solid var(--border);
@@ -339,61 +317,61 @@ class DocsRenderer:
                     align-items: center;
                     padding: 0 20px;
                     flex-shrink: 0;
-                }}
-                .app-title {{
+                }
+                .app-title {
                     font-size: 1.2rem;
                     font-weight: bold;
                     color: #F8FAFC;
                     letter-spacing: 0.05em;
-                }}
+                }
                 
-                #app-container {{
+                #app-container {
                     display: flex;
                     flex: 1;
                     overflow: hidden;
-                }}
+                }
                 
                 /* Sidebar (Left & Right) */
-                #sidebar, #right-sidebar {{
+                #sidebar, #right-sidebar {
                     width: 250px;
                     background-color: var(--bg-sidebar);
                     display: flex;
                     flex-direction: column;
                     overflow-y: auto;
                     flex-shrink: 0;
-                }}
-                #sidebar {{ border-right: 1px solid var(--border); width: 260px; }}
-                #right-sidebar {{ border-left: 1px solid var(--border); width: 280px; }}
+                }
+                #sidebar { border-right: 1px solid var(--border); width: 260px; }
+                #right-sidebar { border-left: 1px solid var(--border); width: 280px; }
 
                 /* Custom Scrollbar for modern look */
-                ::-webkit-scrollbar {{
+                ::-webkit-scrollbar {
                     width: 8px;
                     height: 8px;
-                }}
-                ::-webkit-scrollbar-track {{
+                }
+                ::-webkit-scrollbar-track {
                     background: transparent;
-                }}
-                ::-webkit-scrollbar-thumb {{
+                }
+                ::-webkit-scrollbar-thumb {
                     background: #334155;
                     border-radius: 4px;
-                }}
-                ::-webkit-scrollbar-thumb:hover {{
+                }
+                ::-webkit-scrollbar-thumb:hover {
                     background: #475569;
-                }}
+                }
                 
-                .sidebar-header {{
+                .sidebar-header {
                     padding: 20px;
                     font-size: 1.2rem;
                     font-weight: bold;
                     border-bottom: 1px solid var(--border);
                     color: #7DD3FC;
-                }}
+                }
                 
                 /* Left Sidebar Collapsible Sections */
-                .section-group {{
+                .section-group {
                     border-bottom: 1px solid rgba(255,255,255,0.05);
-                }}
-                .section-title {{
+                }
+                .section-title {
                     padding: 12px 20px;
                     font-size: 0.95em;
                     font-weight: bold;
@@ -402,10 +380,10 @@ class DocsRenderer:
                     text-transform: uppercase;
                     letter-spacing: 0.05em;
                     user-select: none;
-                }}
-                .section-title:hover {{ color: #E2E8F0; }}
+                }
+                .section-title:hover { color: #E2E8F0; }
                 
-                .nav-link {{
+                .nav-link {
                     display: block;
                     padding: 8px 20px 8px 30px;
                     color: var(--text-dim);
@@ -413,30 +391,30 @@ class DocsRenderer:
                     transition: all 0.2s;
                     cursor: pointer;
                     font-size: 0.95em;
-                }}
-                .nav-link:hover {{
+                }
+                .nav-link:hover {
                     background-color: rgba(255,255,255,0.05);
                     color: var(--text-main);
-                }}
-                .nav-link.active {{
+                }
+                .nav-link.active {
                     background-color: rgba(37, 99, 235, 0.2);
                     color: #60A5FA;
                     border-left: 3px solid #60A5FA;
                     padding-left: 27px; /* compensate for border */
-                }}
+                }
                 
                 /* Right Sidebar TOC */
-                details.toc-group > summary {{
+                details.toc-group > summary {
                     list-style: none;
-                }}
-                details.toc-group > summary::-webkit-details-marker {{
+                }
+                details.toc-group > summary::-webkit-details-marker {
                     display: none;
-                }}
-                details.toc-group > summary {{
+                }
+                details.toc-group > summary {
                     position: relative;
                     cursor: pointer;
-                }}
-                details.toc-group > summary::before {{
+                }
+                details.toc-group > summary::before {
                     content: '▶';
                     position: absolute;
                     left: 6px;
@@ -444,12 +422,12 @@ class DocsRenderer:
                     font-size: 0.65em;
                     color: var(--text-dim);
                     transition: transform 0.2s;
-                }}
-                details.toc-group[open] > summary::before {{
+                }
+                details.toc-group[open] > summary::before {
                     transform: rotate(90deg);
-                }}
+                }
                 
-                .toc-link {{
+                .toc-link {
                     display: block;
                     padding: 6px 20px;
                     color: var(--text-dim);
@@ -460,64 +438,64 @@ class DocsRenderer:
                     overflow: hidden;
                     text-overflow: ellipsis;
                     border-left: 2px solid transparent;
-                }}
-                .toc-link:hover {{ 
+                }
+                .toc-link:hover { 
                     color: var(--text-main); 
                     background-color: rgba(255,255,255,0.05);
-                }}
-                .toc-h1 {{ 
+                }
+                .toc-h1 { 
                     padding-left: 22px; 
                     font-weight: bold; 
                     padding-top: 8px; 
                     padding-bottom: 8px;
                     color: #E2E8F0; 
                     font-size: 0.95em;
-                }}
-                .toc-h1:hover {{ background-color: transparent; }}
-                .toc-h2 {{ padding-left: 22px; }}
-                .toc-h3 {{ padding-left: 40px; font-size: 0.8em; opacity: 0.8; }}
+                }
+                .toc-h1:hover { background-color: transparent; }
+                .toc-h2 { padding-left: 22px; }
+                .toc-h3 { padding-left: 40px; font-size: 0.8em; opacity: 0.8; }
                 
-                #toc-container {{
+                #toc-container {
                     padding-bottom: 20px;
-                }}
+                }
 
                 /* Main Content */
-                #main-content {{
+                #main-content {
                     flex: 1;
                     overflow-y: auto;
                     padding: 40px;
                     line-height: 1.6;
-                }}
-                #content-container {{
+                }
+                #content-container {
                     max-width: 900px;
                     margin: 0 auto;
-                }}
+                }
                 /* Markdown Styling */
-                h1, h2, h3, h4 {{
+                h1, h2, h3, h4 {
                     color: #F8FAFC;
                     margin-top: 1.5em;
                     margin-bottom: 0.5em;
                     border-bottom: 1px solid var(--border);
                     padding-bottom: 0.3em;
-                }}
-                a {{ color: #60A5FA; text-decoration: none; }}
-                a:hover {{ text-decoration: underline; }}
-                code {{
+                }
+                a { color: #60A5FA; text-decoration: none; }
+                a:hover { text-decoration: underline; }
+                code {
                     background-color: var(--code-bg);
                     padding: 0.2em 0.4em;
                     border-radius: 4px;
                     font-family: Consolas, monospace;
                     font-size: 0.9em;
-                }}
-                pre {{
+                }
+                pre {
                     background-color: var(--code-bg);
                     padding: 16px;
                     border-radius: 6px;
                     overflow-x: auto;
                     border: 1px solid var(--border);
-                }}
-                pre code {{ background-color: transparent; padding: 0; }}
-                blockquote {{
+                }
+                pre code { background-color: transparent; padding: 0; }
+                blockquote {
                     border-left: 4px solid var(--accent);
                     margin: 0;
                     padding-left: 16px;
@@ -525,62 +503,62 @@ class DocsRenderer:
                     background-color: rgba(37, 99, 235, 0.1);
                     padding: 10px 16px;
                     border-radius: 0 4px 4px 0;
-                }}
-                table {{
+                }
+                table {
                     width: 100%;
                     border-collapse: collapse;
                     margin: 1em 0;
-                }}
-                th, td {{
+                }
+                th, td {
                     border: 1px solid var(--border);
                     padding: 8px 12px;
                     text-align: left;
-                }}
-                th {{ background-color: var(--bg-sidebar); }}
-                img {{ max-width: 100%; height: auto; }}
-                hr {{ border: 0; border-top: 1px solid var(--border); margin: 2em 0; }}
+                }
+                th { background-color: var(--bg-sidebar); }
+                img { max-width: 100%; height: auto; }
+                hr { border: 0; border-top: 1px solid var(--border); margin: 2em 0; }
 
                 /* Mermaid diagram interactive container */
-                .mermaid-wrapper {{
+                .mermaid-wrapper {
                     position: relative;
                     background: #0d1117;
                     border: 1px solid var(--border);
                     border-radius: 8px;
                     margin: 1.5em 0;
                     overflow: hidden;
-                }}
-                .mermaid-diagram {{
+                }
+                .mermaid-diagram {
                     width: 100%;
                     height: 420px;
                     cursor: grab;
                     display: block;
                     position: relative;
-                }}
-                .mermaid-diagram:active {{ cursor: grabbing; }}
+                }
+                .mermaid-diagram:active { cursor: grabbing; }
                 /* The inner .mermaid div mermaid renders into must fill the viewport */
                 .mermaid-diagram .mermaid,
-                #diagram-modal-content .mermaid {{
+                #diagram-modal-content .mermaid {
                     width: 100%;
                     height: 100%;
                     display: block;
-                }}
+                }
                 /* Ensure the SVG mermaid outputs also fills the space */
                 .mermaid-diagram svg,
-                #diagram-modal-content svg {{
+                #diagram-modal-content svg {
                     display: block;
                     width: 100% !important;
                     height: 100% !important;
                     max-width: none !important;
-                }}
-                .mermaid-controls {{
+                }
+                .mermaid-controls {
                     position: absolute;
                     bottom: 10px;
                     right: 10px;
                     display: flex;
                     gap: 6px;
                     z-index: 10;
-                }}
-                .mermaid-btn {{
+                }
+                .mermaid-btn {
                     background: rgba(15,23,42,0.85);
                     border: 1px solid var(--border);
                     color: var(--text-dim);
@@ -594,9 +572,9 @@ class DocsRenderer:
                     justify-content: center;
                     transition: all 0.15s;
                     backdrop-filter: blur(4px);
-                }}
-                .mermaid-btn:hover {{ background: rgba(37,99,235,0.3); color: #60A5FA; border-color: #60A5FA; }}
-                .mermaid-hint {{
+                }
+                .mermaid-btn:hover { background: rgba(37,99,235,0.3); color: #60A5FA; border-color: #60A5FA; }
+                .mermaid-hint {
                     position: absolute;
                     top: 8px;
                     left: 10px;
@@ -604,10 +582,10 @@ class DocsRenderer:
                     color: var(--text-dim);
                     opacity: 0.7;
                     pointer-events: none;
-                }}
+                }
 
                 /* Fullscreen modal */
-                #diagram-modal {{
+                #diagram-modal {
                     display: none;
                     position: fixed;
                     inset: 0;
@@ -615,9 +593,9 @@ class DocsRenderer:
                     z-index: 9999;
                     align-items: center;
                     justify-content: center;
-                }}
-                #diagram-modal.open {{ display: flex; }}
-                #diagram-modal-inner {{
+                }
+                #diagram-modal.open { display: flex; }
+                #diagram-modal-inner {
                     background: #0d1117;
                     border: 1px solid var(--border);
                     border-radius: 12px;
@@ -625,21 +603,21 @@ class DocsRenderer:
                     height: 88vh;
                     position: relative;
                     overflow: hidden;
-                }}
-                #diagram-modal-content {{
+                }
+                #diagram-modal-content {
                     width: 100%;
                     height: 100%;
                     cursor: grab;
                     display: block;
                     position: relative;
-                }}
-                #diagram-modal-content:active {{ cursor: grabbing; }}
-                .modal-controls {{
+                }
+                #diagram-modal-content:active { cursor: grabbing; }
+                .modal-controls {
                     bottom: 16px;
                     right: 16px;
                     gap: 8px;
-                }}
-                #modal-close {{
+                }
+                #modal-close {
                     position: absolute;
                     top: 12px;
                     right: 12px;
@@ -655,42 +633,31 @@ class DocsRenderer:
                     align-items: center;
                     justify-content: center;
                     z-index: 10;
-                }}
-                #modal-close:hover {{ background: rgba(220,38,38,0.3); border-color: #f87171; color: #f87171; }}
+                }
+                #modal-close:hover { background: rgba(220,38,38,0.3); border-color: #f87171; color: #f87171; }
             </style>
-        </head>
-        <body>
-            <div id="topbar">
-                <div class="app-title">📊 Personal Finance ETL</div>
-            </div>
-            <div id="app-container">
-                <div id="sidebar">
-                    {sidebar_links}
-                </div>
-                <div id="main-content">
-                    <div id="content-container"></div>
-                </div>
-                <div id="right-sidebar">
-                    <div class="sidebar-header">📑 On This Page</div>
-                    <div id="toc-container"></div>
-                </div>
-            </div>
+"""
 
-            <!-- Fullscreen diagram modal -->
-            <div id="diagram-modal">
-                <div id="diagram-modal-inner">
-                    <button id="modal-close" onclick="closeDiagramModal()" title="Close (Esc)">✕</button>
-                    <div id="diagram-modal-content"></div>
-                    <div class="mermaid-controls modal-controls">
-                        <button class="mermaid-btn" title="Zoom in" onclick="_modalPz && _modalPz.zoomIn()">+</button>
-                        <button class="mermaid-btn" title="Zoom out" onclick="_modalPz && _modalPz.zoomOut()">−</button>
-                        <button class="mermaid-btn" title="Reset" onclick="_modalPz && (_modalPz.reset(), _modalPz.fit(), _modalPz.center())">⟳</button>
-                    </div>
-                </div>
-            </div>
+    def _build_app_client_script(
+        self, js_docs_data: str, js_path_map: str, first_title: str
+    ) -> str:
+        """Generate interactive client JavaScript for doc navigation, TOC, modal, and pan-zoom.
 
-            <script>
-                const mermaidAvailable = typeof window.mermaid !== 'undefined';
+        Parameters
+        ----------
+        js_docs_data : str
+            Serialized JavaScript object containing document metadata and HTML snippets.
+        js_path_map : str
+            Serialized JSON mapping relative paths to display titles.
+        first_title : str
+            Identifier for the initially loaded document.
+
+        Returns
+        -------
+        str
+            Client JavaScript script block content.
+        """
+        return f"""                const mermaidAvailable = typeof window.mermaid !== 'undefined';
 
                 if (mermaidAvailable) {{
                   mermaid.initialize({{
@@ -999,7 +966,120 @@ class DocsRenderer:
                     loadDoc('{first_title}', null);
                 }});
             </script>
-        </body>
+"""
+
+    def _assemble_html_shell(
+        self,
+        mermaid_js: str,
+        svg_pan_zoom_js: str,
+        sidebar_links: str,
+        css: str,
+        client_js: str,
+    ) -> str:
+        """Assemble the complete HTML document shell from component scripts and styles.
+
+        Parameters
+        ----------
+        mermaid_js : str
+            Bundled Mermaid.js runtime source.
+        svg_pan_zoom_js : str
+            Bundled svg-pan-zoom.js runtime source.
+        sidebar_links : str
+            Pre-rendered sidebar navigation HTML links.
+        css : str
+            Compiled stylesheet markup.
+        client_js : str
+            Client script logic.
+
+        Returns
+        -------
+        str
+            Complete HTML application string.
+        """
+        return f"""
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Guides & About</title>
+            <script>
+              {mermaid_js}
+            </script>
+            <script>
+              {svg_pan_zoom_js}
+            </script>
+            <style>
+{css}        </head>
+        <body>
+            <div id="topbar">
+                <div class="app-title">📊 Personal Finance ETL</div>
+            </div>
+            <div id="app-container">
+                <div id="sidebar">
+                    {sidebar_links}
+                </div>
+                <div id="main-content">
+                    <div id="content-container"></div>
+                </div>
+                <div id="right-sidebar">
+                    <div class="sidebar-header">📑 On This Page</div>
+                    <div id="toc-container"></div>
+                </div>
+            </div>
+
+            <!-- Fullscreen diagram modal -->
+            <div id="diagram-modal">
+                <div id="diagram-modal-inner">
+                    <button id="modal-close" onclick="closeDiagramModal()" title="Close (Esc)">✕</button>
+                    <div id="diagram-modal-content"></div>
+                    <div class="mermaid-controls modal-controls">
+                        <button class="mermaid-btn" title="Zoom in" onclick="_modalPz && _modalPz.zoomIn()">+</button>
+                        <button class="mermaid-btn" title="Zoom out" onclick="_modalPz && _modalPz.zoomOut()">−</button>
+                        <button class="mermaid-btn" title="Reset" onclick="_modalPz && (_modalPz.reset(), _modalPz.fit(), _modalPz.center())">⟳</button>
+                    </div>
+                </div>
+            </div>
+
+            <script>
+{client_js}        </body>
         </html>
         """
-        return template
+
+    def build_html_app(self) -> str:
+        """Read all markdown docs and compile them into a single HTML web app string.
+
+        Returns
+        -------
+        str
+            Compiled single-page HTML web application string.
+        """
+        docs_to_render, path_to_title = self._load_rendered_docs()
+        html_sections = self._convert_markdown_to_html(docs_to_render)
+        sidebar_links, first_title = self._build_sidebar_links(html_sections)
+
+        mermaid_js = self._load_mermaid_js()
+        svg_pan_zoom_js = self._load_svg_pan_zoom_js()
+
+        js_dict_entries = ",\n".join(
+            [
+                f"'{title}': {{ path: '{data['path']}', html: `{data['html']}` }}"
+                for title, data in html_sections.items()
+            ]
+        )
+        js_docs_data = f"const docsData = {{\n{js_dict_entries}\n}};"
+        js_path_map = f"const pathToTitle = {json.dumps(path_to_title)};"
+
+        css = self._build_app_stylesheet()
+        client_js = self._build_app_client_script(
+            js_docs_data=js_docs_data,
+            js_path_map=js_path_map,
+            first_title=first_title or "",
+        )
+        return self._assemble_html_shell(
+            mermaid_js=mermaid_js,
+            svg_pan_zoom_js=svg_pan_zoom_js,
+            sidebar_links=sidebar_links,
+            css=css,
+            client_js=client_js,
+        )
