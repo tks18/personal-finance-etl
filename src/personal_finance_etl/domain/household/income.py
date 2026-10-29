@@ -35,20 +35,23 @@ class IncomeStreamsBuilder:
         self.base_lf = base_lf
         self.rules = rules
 
-    def build(self) -> pl.LazyFrame:
-        """Build the Income Streams LazyFrame.
+    def _build_monthly_category_grid(
+        self, lf_inc_agg: pl.LazyFrame, lf_months: pl.LazyFrame
+    ) -> pl.LazyFrame:
+        """Aggregate monthly income per category across full calendar months grid.
+
+        Parameters
+        ----------
+        lf_inc_agg : pl.LazyFrame
+            Aggregated raw income transaction stream.
+        lf_months : pl.LazyFrame
+            Spine of continuous calendar month intervals.
 
         Returns
         -------
         pl.LazyFrame
-            LazyFrame matching presentation Income Streams schema.
+            Monthly grid frame with null-filled total income and transaction averages.
         """
-        lf_inc_agg: pl.LazyFrame = self.base_lf["lf_inc_agg"]
-        lf_months: pl.LazyFrame = self.base_lf["lf_months"]
-
-        d_inc_subcat = self.dfs.get("df_d_income_subcategory")
-        d_inc_cat = self.dfs.get("df_d_income_category")
-
         lf_inc_monthly = (
             lf_inc_agg.with_columns(
                 pl.col("DATE").dt.month_start().alias("MONTH_START_DATE"),
@@ -65,13 +68,31 @@ class IncomeStreamsBuilder:
 
         lf_grid = lf_months.join(lf_inc_agg.select("CATEGORY_ID").unique(), how="cross")
 
-        lf_inc_monthly = lf_grid.join(
-            lf_inc_monthly, on=["MONTH_START_DATE", "MONTH_END_DATE", "CATEGORY_ID"], how="left"
+        return lf_grid.join(
+            lf_inc_monthly,
+            on=["MONTH_START_DATE", "MONTH_END_DATE", "CATEGORY_ID"],
+            how="left",
         ).with_columns(
             pl.col("Total_Monthly_Income").fill_null(0.0),
             pl.col("Average_Transaction_Value").fill_null(0.0),
             pl.col("MONTH_START_DATE").cast(pl.String).str.slice(0, 7).alias("YEAR_MONTH"),
         )
+
+    def _enrich_income_dimensions(self, lf_inc_monthly: pl.LazyFrame) -> pl.LazyFrame:
+        """Join income category metadata, parent groupings, and classification flags.
+
+        Parameters
+        ----------
+        lf_inc_monthly : pl.LazyFrame
+            Monthly category income grid frame.
+
+        Returns
+        -------
+        pl.LazyFrame
+            Frame enriched with category names, group descriptors, and active/passive flags.
+        """
+        d_inc_subcat = self.dfs.get("df_d_income_subcategory")
+        d_inc_cat = self.dfs.get("df_d_income_category")
 
         if d_inc_subcat is not None and d_inc_cat is not None:
             lf_inc_subcat = (
@@ -79,7 +100,7 @@ class IncomeStreamsBuilder:
             )
             lf_inc_cat = d_inc_cat.lazy() if isinstance(d_inc_cat, pl.DataFrame) else d_inc_cat
 
-            lf_inc_monthly = (
+            return (
                 lf_inc_monthly.join(
                     lf_inc_subcat.select(
                         [
@@ -108,18 +129,31 @@ class IncomeStreamsBuilder:
                 )
                 .drop("PARENT_ID")
             )
-        else:
-            lf_inc_monthly = lf_inc_monthly.with_columns(
-                pl.lit(None).alias("CATEGORY_NAME"),
-                pl.lit(None).alias("CATEGORY_GROUPS"),
-                pl.lit(False).alias("Is_Active_Income"),
-                pl.lit(False).alias("Is_Passive_Income"),
-                pl.lit(False).alias("Is_Dividend_Income"),
-                pl.lit(False).alias("Is_Interest_Income"),
-                pl.lit(False).alias("Is_Non_Cash_Income"),
-            )
 
-        lf_income_streams = (
+        return lf_inc_monthly.with_columns(
+            pl.lit(None).alias("CATEGORY_NAME"),
+            pl.lit(None).alias("CATEGORY_GROUPS"),
+            pl.lit(False).alias("Is_Active_Income"),
+            pl.lit(False).alias("Is_Passive_Income"),
+            pl.lit(False).alias("Is_Dividend_Income"),
+            pl.lit(False).alias("Is_Interest_Income"),
+            pl.lit(False).alias("Is_Non_Cash_Income"),
+        )
+
+    def _calculate_rolling_income_metrics(self, lf_inc_monthly: pl.LazyFrame) -> pl.LazyFrame:
+        """Calculate trailing averages, cumulative totals, stability, and diversification scores.
+
+        Parameters
+        ----------
+        lf_inc_monthly : pl.LazyFrame
+            Dimension-enriched monthly income frame.
+
+        Returns
+        -------
+        pl.LazyFrame
+            Frame enriched with trailing metrics, MoM/YoY growth, and stability indices.
+        """
+        return (
             lf_inc_monthly.sort(["CATEGORY_ID", "MONTH_START_DATE"])
             .with_columns(
                 pl.col("Total_Monthly_Income")
@@ -253,6 +287,19 @@ class IncomeStreamsBuilder:
             )
         )
 
+    def _project_income_streams_schema(self, lf_income_streams: pl.LazyFrame) -> pl.LazyFrame:
+        """Select and order columns matching presentation-tier Income Streams schema.
+
+        Parameters
+        ----------
+        lf_income_streams : pl.LazyFrame
+            Fully evaluated income streams LazyFrame.
+
+        Returns
+        -------
+        pl.LazyFrame
+            Final schema projected income streams model.
+        """
         return lf_income_streams.select(
             *[
                 "MONTH_START_DATE",
@@ -271,3 +318,19 @@ class IncomeStreamsBuilder:
                 "Is_Non_Cash_Income",
             ]
         )
+
+    def build(self) -> pl.LazyFrame:
+        """Build the Income Streams LazyFrame.
+
+        Returns
+        -------
+        pl.LazyFrame
+            LazyFrame matching presentation Income Streams schema.
+        """
+        lf_inc_agg: pl.LazyFrame = self.base_lf["lf_inc_agg"]
+        lf_months: pl.LazyFrame = self.base_lf["lf_months"]
+
+        lf_inc_monthly = self._build_monthly_category_grid(lf_inc_agg, lf_months)
+        lf_inc_enriched = self._enrich_income_dimensions(lf_inc_monthly)
+        lf_income_streams = self._calculate_rolling_income_metrics(lf_inc_enriched)
+        return self._project_income_streams_schema(lf_income_streams)
