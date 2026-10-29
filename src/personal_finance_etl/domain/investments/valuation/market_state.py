@@ -252,6 +252,8 @@ def _join_and_validate_prices(
             & ~pl.col("Is_Closure_Gap").fill_null(False)
         )
         .select(["ISIN", "Date", "Closing_Price_Local"])
+        # Materialization Boundary: VALIDATION_DIAGNOSTIC
+        # Materialize bounded sample (max 10) of invalid source prices for structured error diagnostics
         .limit(10)
         .collect()
     )
@@ -317,6 +319,8 @@ def _join_and_validate_prices(
             | (pl.col("Price_Age_Days") > max_price_staleness_days)
         )
         .select(["ISIN", "Date", "Price_Observation_Date", "Price_Age_Days", "Closing_Price_Local"])
+        # Materialization Boundary: VALIDATION_DIAGNOSTIC
+        # Materialize bounded sample (max 10) of missing or stale US stock prices for error diagnostics
         .limit(10)
         .collect()
     )
@@ -364,6 +368,8 @@ def _join_fx_and_calculate_pnl(
             pl.col("FX_Rate").is_null() | ~pl.col("FX_Rate").is_finite() | (pl.col("FX_Rate") <= 0)
         )
         .select(["ISIN", "Date", "CURRENCY_ID", "FX_Rate"])
+        # Materialization Boundary: VALIDATION_DIAGNOSTIC
+        # Materialize bounded sample (max 10) of invalid FX rates for error diagnostics
         .limit(10)
         .collect()
     )
@@ -436,6 +442,8 @@ def transform_us_market_data(
 
     Build the FIFO spine, join FX rates, and calculate PnL.
     """
+    # Materialization Boundary: STATEFUL_ALGORITHM_BOUNDARY
+    # Materialize purchase and sale records for sequential FIFO inventory lot matching
     df_purchase = df_purchase_lazy.collect()
     df_sale = df_sale_lazy.collect()
 

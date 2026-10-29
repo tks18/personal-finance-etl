@@ -81,6 +81,8 @@ def fingerprint_dataframe(input_df: pl.DataFrame | pl.LazyFrame | None) -> str:
     """
     if input_df is None:
         return "no-input"
+    # Materialization Boundary: FORENSIC_SERIALIZATION
+    # Materialize lazyframe input if necessary to compute canonical row-level SHA-256 digest
     df = input_df.collect() if isinstance(input_df, pl.LazyFrame) else input_df
     if not hasattr(df, "to_dicts") or not hasattr(df, "columns"):
         raise TypeError("Simulation input must expose Polars-compatible columns and to_dicts().")

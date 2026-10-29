@@ -322,6 +322,8 @@ class CurrencyPipeline:
         df_silver_lazy = transform_currency_fx_rates(
             df_bronze_full_lazy, df_currency.lazy(), global_start_date, global_end_date
         )
+        # Materialization Boundary: PUBLICATION_BOUNDARY
+        # Materialize final continuous currency FX observations for pipeline publication and warehouse
         df_silver = df_silver_lazy.collect(engine="streaming")
 
         emit_market_sync_completed(
@@ -664,6 +666,8 @@ class USMarketPipeline:
             global_start_date=global_start_date,
             global_end_date=global_end_date,
         )
+        # Materialization Boundary: PUBLICATION_BOUNDARY
+        # Materialize final continuous US market valuation dataset for pipeline publication and warehouse
         df_silver = df_silver_lazy.collect(engine="streaming")
 
         emit_market_sync_completed(
