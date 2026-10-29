@@ -1,7 +1,7 @@
 {
   "name": "personal-finance-etl",
   "description": "Local-first personal financial systems platform for investment accounting, reconciliation, tax evidence, wealth analytics, FIRE planning, and BI.",
-  "version": "9.5.2",
+  "version": "9.5.3",
   "repository": "https://github.com/tks18/personal-finance-etl",
   "author": "tks18 <tksudharshan@gmail.com>",
   "license": "GPL-3.0-or-later",
