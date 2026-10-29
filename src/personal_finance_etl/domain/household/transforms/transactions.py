@@ -83,6 +83,8 @@ def _validate_monetary_invariants(df_renamed: pl.LazyFrame, raw_columns: set[str
                 if c in raw_columns
             ]
         )
+        # Materialization Boundary: VALIDATION_DIAGNOSTIC
+        # Materialize bounded sample (max 20) of invalid monetary rows for structured diagnostics
         .limit(20)
         .collect()
     )

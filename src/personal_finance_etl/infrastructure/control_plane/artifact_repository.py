@@ -8,6 +8,7 @@ Owns
 - Identity migration and path normalization during file renames.
 - Virtual configuration artifact injection (inject_virtual_file).
 - Obsolete payload pruning for full-replacement categories (prune_category).
+- Counting artifact lifecycle audit events for run observability.
 
 Does not own
 -------------
@@ -35,7 +36,126 @@ from personal_finance_etl.infrastructure.observability.diagnostics import (
 )
 from personal_finance_etl.infrastructure.warehouse.registry import BRONZE_CONTRACT_REGISTRY
 
+__all__ = ["ArtifactEventRecord", "ArtifactRepository"]
+
 diagnostics = get_observability_diagnostics("personal_finance_etl.control_plane.artifact_repo")
+
+# Static SQL query constants
+SQL_SELECT_FILE_CATEGORY = "SELECT file_category FROM cp_file_registry WHERE file_id = ?"
+
+SQL_INSERT_ARTIFACT_EVENT = """
+INSERT INTO cp_artifact_run_events (
+    event_id, run_id, file_id, event_type, event_at, observed_path,
+    content_hash, previous_status, new_status, event_reason,
+    affected_table, detecting_run_id, replay_run_id, convergence_result
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+"""
+
+SQL_SELECT_REGISTRY = "SELECT relative_path, file_hash, file_category FROM cp_file_registry"
+
+SQL_SELECT_REGISTRY_WITH_STATUS = (
+    "SELECT relative_path, file_hash, file_category, sync_status FROM cp_file_registry"
+)
+
+SQL_CHECK_PAYLOAD_EXISTS = """
+SELECT 1 FROM cp_file_payloads p
+JOIN cp_file_registry r ON r.file_id = p.file_id
+WHERE r.relative_path = ? AND p.file_bytes IS NOT NULL
+"""
+
+SQL_SELECT_CATEGORY_FILES = (
+    "SELECT file_id, relative_path FROM cp_file_registry WHERE file_category = ?"
+)
+
+SQL_DELETE_PAYLOAD = "DELETE FROM cp_file_payloads WHERE file_id = ?"
+
+SQL_INSERT_MIGRATED_REGISTRY = """
+INSERT INTO cp_file_registry (
+    file_id, file_name, relative_path, file_category, file_type, file_hash,
+    file_size_bytes, first_seen_run_id, first_seen_at, last_seen_run_id,
+    last_seen_at, last_changed_run_id, last_changed_at, last_synced_run_id,
+    last_synced_at, sync_status
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+"""
+
+SQL_UPSERT_PAYLOAD = """
+INSERT INTO cp_file_payloads (file_id, file_bytes) VALUES (?, ?)
+ON CONFLICT(file_id) DO UPDATE SET file_bytes = excluded.file_bytes
+"""
+
+SQL_SELECT_FILE_FOR_MIGRATION = """
+SELECT file_id, file_name, file_category, file_type, file_hash,
+       file_size_bytes, first_seen_run_id, first_seen_at,
+       last_seen_run_id, last_seen_at, last_changed_run_id,
+       last_changed_at, last_synced_run_id, last_synced_at, sync_status
+FROM cp_file_registry WHERE relative_path = ?
+"""
+
+SQL_SELECT_PAYLOAD_BYTES = "SELECT file_bytes FROM cp_file_payloads WHERE file_id = ?"
+
+SQL_CHECK_PATH_OR_ID_CONFLICT = (
+    "SELECT file_id FROM cp_file_registry WHERE relative_path = ? OR file_id = ?"
+)
+
+SQL_SELECT_FILE_ID_AND_STATUS = (
+    "SELECT file_id, sync_status FROM cp_file_registry WHERE relative_path = ?"
+)
+
+SQL_UPDATE_FILE_REGISTRY_METADATA = """
+UPDATE cp_file_registry
+SET file_name = ?, file_category = ?, file_type = ?, file_hash = ?,
+    file_size_bytes = ?, last_seen_run_id = COALESCE(?, last_seen_run_id), last_seen_at = ?,
+    last_changed_run_id = COALESCE(?, last_changed_run_id), last_changed_at = ?, sync_status = 'PENDING_BRONZE'
+WHERE relative_path = ?
+"""
+
+SQL_INSERT_NEW_FILE_REGISTRY = """
+INSERT INTO cp_file_registry (
+    file_id, file_name, relative_path, file_category, file_type, file_hash,
+    file_size_bytes, first_seen_run_id, first_seen_at, last_seen_run_id,
+    last_seen_at, last_changed_run_id, last_changed_at, sync_status
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING_BRONZE')
+"""
+
+SQL_SELECT_PAYLOAD_BYTES_BY_PATH = """
+SELECT p.file_bytes FROM cp_file_payloads p
+JOIN cp_file_registry r ON r.file_id = p.file_id
+WHERE r.relative_path = ?
+"""
+
+SQL_SELECT_PENDING_FILES = (
+    "SELECT file_category, relative_path FROM cp_file_registry "
+    "WHERE sync_status = 'PENDING_BRONZE' ORDER BY file_category, relative_path"
+)
+
+SQL_SELECT_ALL_PATHS_BY_CATEGORY = "SELECT file_category, relative_path FROM cp_file_registry ORDER BY file_category, relative_path"
+
+SQL_SELECT_ALL_REGISTRY_STATUS = "SELECT relative_path, sync_status FROM cp_file_registry"
+
+SQL_SELECT_FILE_METADATA_FOR_SYNC = (
+    "SELECT file_id, sync_status, last_synced_run_id, file_hash, file_category "
+    "FROM cp_file_registry WHERE relative_path = ?"
+)
+
+SQL_UPDATE_FILE_SYNCED = (
+    "UPDATE cp_file_registry "
+    "SET sync_status = 'SYNCED', last_synced_run_id = COALESCE(?, last_synced_run_id), "
+    "    last_synced_at = ? WHERE relative_path = ?"
+)
+
+SQL_SELECT_FILE_METADATA_FOR_STATUS = "SELECT file_id, sync_status, file_hash, file_category FROM cp_file_registry WHERE relative_path = ?"
+
+SQL_UPDATE_FILE_HEALED = (
+    "UPDATE cp_file_registry "
+    "SET sync_status = 'PENDING_BRONZE', last_seen_run_id = COALESCE(?, last_seen_run_id), "
+    "    last_seen_at = ? WHERE relative_path = ?"
+)
+
+SQL_UPDATE_FILE_REMOVED = (
+    "UPDATE cp_file_registry SET sync_status = 'REMOVED' WHERE relative_path = ?"
+)
+
+SQL_COUNT_EVENTS = "SELECT COUNT(*) FROM cp_artifact_run_events WHERE run_id = ? AND event_type = ?"
 
 
 @dataclass
@@ -71,12 +191,29 @@ class ArtifactRepository:
 
     @staticmethod
     def _now() -> str:
-        """Return current ISO 8601 timestamp string with second precision."""
+        """Return current ISO 8601 timestamp string with second precision.
+
+        Returns
+        -------
+        str
+            Current timestamp in ISO format.
+        """
         return datetime.now().isoformat(timespec="seconds")
 
     @staticmethod
     def _resolve_table(category: str | None) -> str | None:
-        """Resolve physical Bronze lakehouse table from file category."""
+        """Resolve physical Bronze lakehouse table from file category.
+
+        Parameters
+        ----------
+        category : str | None
+            File category string.
+
+        Returns
+        -------
+        str | None
+            Target physical table identifier or None.
+        """
         if not category:
             return None
         if category == "sqlite_source":
@@ -85,6 +222,24 @@ class ArtifactRepository:
             if contract.sync_category == category:
                 return contract.physical_table
         return f"bronze.{category}"
+
+    def count_events(self, run_id: str, event_type: str) -> int:
+        """Count artifact audit events matching run ID and event type.
+
+        Parameters
+        ----------
+        run_id : str
+            Pipeline execution ID.
+        event_type : str
+            Event type to filter on (e.g. 'HEALED', 'DISCOVERED', 'SYNCED').
+
+        Returns
+        -------
+        int
+            Count of matching event records.
+        """
+        row = self.db.conn.execute(SQL_COUNT_EVENTS, (run_id, event_type)).fetchone()
+        return int(row[0]) if row and row[0] is not None else 0
 
     def _insert_event(self, event: ArtifactEventRecord) -> None:
         """Insert an immutable audit event into cp_artifact_run_events.
@@ -99,10 +254,7 @@ class ArtifactRepository:
 
         affected_table = event.affected_table
         if not affected_table and event.file_id:
-            row = self.db.conn.execute(
-                "SELECT file_category FROM cp_file_registry WHERE file_id = ?",
-                (event.file_id,),
-            ).fetchone()
+            row = self.db.conn.execute(SQL_SELECT_FILE_CATEGORY, (event.file_id,)).fetchone()
             if row and row[0]:
                 affected_table = self._resolve_table(row[0])
 
@@ -117,11 +269,7 @@ class ArtifactRepository:
         )
 
         self.db.conn.execute(
-            """INSERT INTO cp_artifact_run_events
-               (event_id, run_id, file_id, event_type, event_at, observed_path,
-                content_hash, previous_status, new_status, event_reason,
-                affected_table, detecting_run_id, replay_run_id, convergence_result)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            SQL_INSERT_ARTIFACT_EVENT,
             (
                 str(uuid.uuid4()),
                 self.active_run_id,
@@ -141,20 +289,28 @@ class ArtifactRepository:
         )
 
     def get_registry(self) -> dict[str, tuple[str, str]]:
-        """Return canonical path -> (file_hash, file_category)."""
-        cursor = self.db.conn.execute(
-            "SELECT relative_path, file_hash, file_category FROM cp_file_registry"
-        )
+        """Return canonical path -> (file_hash, file_category).
+
+        Returns
+        -------
+        dict[str, tuple[str, str]]
+            Map of normalized path to file hash and category.
+        """
+        cursor = self.db.conn.execute(SQL_SELECT_REGISTRY)
         return {
             normalize_path(path): (file_hash, file_category)
             for path, file_hash, file_category in cursor.fetchall()
         }
 
     def get_registry_with_status(self) -> dict[str, tuple[str, str, str]]:
-        """Return canonical path -> (file_hash, file_category, sync_status)."""
-        cursor = self.db.conn.execute(
-            "SELECT relative_path, file_hash, file_category, sync_status FROM cp_file_registry"
-        )
+        """Return canonical path -> (file_hash, file_category, sync_status).
+
+        Returns
+        -------
+        dict[str, tuple[str, str, str]]
+            Map of normalized path to file hash, category, and sync status.
+        """
+        cursor = self.db.conn.execute(SQL_SELECT_REGISTRY_WITH_STATUS)
         return {
             normalize_path(path): (
                 file_hash or "",
@@ -165,30 +321,41 @@ class ArtifactRepository:
         }
 
     def has_payload(self, filepath: str) -> bool:
-        """Check whether binary payload exists in cp_file_payloads for path."""
+        """Check whether binary payload exists in cp_file_payloads for path.
+
+        Parameters
+        ----------
+        filepath : str
+            Candidate file path.
+
+        Returns
+        -------
+        bool
+            True if payload exists and is non-null.
+        """
         path = normalize_path(filepath)
-        row = self.db.conn.execute(
-            """SELECT 1 FROM cp_file_payloads p
-               JOIN cp_file_registry r ON r.file_id = p.file_id
-               WHERE r.relative_path = ? AND p.file_bytes IS NOT NULL""",
-            (path,),
-        ).fetchone()
+        row = self.db.conn.execute(SQL_CHECK_PAYLOAD_EXISTS, (path,)).fetchone()
         return row is not None
 
     def prune_category(self, category: str, active_discovered_paths: list[str]) -> None:
-        """Delete payloads for files no longer in active scan for full-replace categories."""
+        """Delete payloads for files no longer in active scan for full-replace categories.
+
+        Parameters
+        ----------
+        category : str
+            Category identifier to prune.
+        active_discovered_paths : list[str]
+            Active paths discovered on disk.
+        """
         active_set = {normalize_path(p) for p in active_discovered_paths}
-        rows = self.db.conn.execute(
-            "SELECT file_id, relative_path FROM cp_file_registry WHERE file_category = ?",
-            (category,),
-        ).fetchall()
+        rows = self.db.conn.execute(SQL_SELECT_CATEGORY_FILES, (category,)).fetchall()
         obsolete_ids = [row[0] for row in rows if normalize_path(row[1]) not in active_set]
         if not obsolete_ids:
             return
 
         with self.db.atomic():
             for fid in obsolete_ids:
-                self.db.conn.execute("DELETE FROM cp_file_payloads WHERE file_id = ?", (fid,))
+                self.db.conn.execute(SQL_DELETE_PAYLOAD, (fid,))
         diagnostics.info(
             "Artifact registry: Pruned payloads for %d obsolete files from category '%s'; "
             "registry identities and historical events retained.",
@@ -207,7 +374,27 @@ class ArtifactRepository:
         file_size_bytes: int | None,
         payload_bytes: bytes,
     ) -> None:
-        """Atomically persist new identity row and move payload bytes."""
+        """Atomically persist new identity row and move payload bytes.
+
+        Parameters
+        ----------
+        old_id : str
+            Original file identifier.
+        new_id : str
+            Target new file identifier.
+        old_path : str
+            Original relative path.
+        new_path : str
+            New target relative path.
+        row_data : tuple[object, ...]
+            Existing row columns.
+        observed_hash : str | None
+            Precomputed file hash.
+        file_size_bytes : int | None
+            File size in bytes.
+        payload_bytes : bytes
+            Binary payload bytes.
+        """
         (
             _old_id,
             _old_name,
@@ -233,12 +420,7 @@ class ArtifactRepository:
 
         with self.db.atomic():
             self.db.conn.execute(
-                """INSERT INTO cp_file_registry (
-                       file_id, file_name, relative_path, file_category, file_type, file_hash,
-                       file_size_bytes, first_seen_run_id, first_seen_at, last_seen_run_id,
-                       last_seen_at, last_changed_run_id, last_changed_at, last_synced_run_id,
-                       last_synced_at, sync_status)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                SQL_INSERT_MIGRATED_REGISTRY,
                 (
                     new_id,
                     new_path.rsplit("/", 1)[-1],
@@ -258,12 +440,8 @@ class ArtifactRepository:
                     new_status,
                 ),
             )
-            self.db.conn.execute(
-                "INSERT INTO cp_file_payloads (file_id, file_bytes) VALUES (?, ?) "
-                "ON CONFLICT(file_id) DO UPDATE SET file_bytes = excluded.file_bytes",
-                (new_id, payload_bytes),
-            )
-            self.db.conn.execute("DELETE FROM cp_file_payloads WHERE file_id = ?", (old_id,))
+            self.db.conn.execute(SQL_UPSERT_PAYLOAD, (new_id, payload_bytes))
+            self.db.conn.execute(SQL_DELETE_PAYLOAD, (old_id,))
             affected_table = self._resolve_table(str(category))
             self._insert_event(
                 ArtifactEventRecord(
@@ -281,10 +459,7 @@ class ArtifactRepository:
                     convergence_result="PENDING",
                 )
             )
-            self.db.conn.execute(
-                "UPDATE cp_file_registry SET sync_status = 'REMOVED' WHERE file_id = ?",
-                (old_id,),
-            )
+            self.db.conn.execute(SQL_UPDATE_FILE_REMOVED, (old_path,))
 
     def migrate_identity(
         self,
@@ -311,27 +486,23 @@ class ArtifactRepository:
         -------
         bool
             True if migration succeeded; False if source payload is missing.
+
+        Raises
+        ------
+        ValueError
+            If destination path or ID is already registered.
         """
         old_path = normalize_path(old_rel_path)
         new_path = normalize_path(new_filepath)
         if old_path == new_path:
             return True
 
-        row = self.db.conn.execute(
-            """SELECT file_id, file_name, file_category, file_type, file_hash,
-                      file_size_bytes, first_seen_run_id, first_seen_at,
-                      last_seen_run_id, last_seen_at, last_changed_run_id,
-                      last_changed_at, last_synced_run_id, last_synced_at, sync_status
-               FROM cp_file_registry WHERE relative_path = ?""",
-            (old_path,),
-        ).fetchone()
+        row = self.db.conn.execute(SQL_SELECT_FILE_FOR_MIGRATION, (old_path,)).fetchone()
         if not row:
             return False
 
         old_id = row[0]
-        payload_row = self.db.conn.execute(
-            "SELECT file_bytes FROM cp_file_payloads WHERE file_id = ?", (old_id,)
-        ).fetchone()
+        payload_row = self.db.conn.execute(SQL_SELECT_PAYLOAD_BYTES, (old_id,)).fetchone()
         if not payload_row or payload_row[0] is None:
             diagnostics.warning(
                 "Artifact registry: Cannot migrate %s because its payload is missing; "
@@ -342,7 +513,7 @@ class ArtifactRepository:
 
         new_id = generate_file_id(new_path)
         conflict = self.db.conn.execute(
-            "SELECT file_id FROM cp_file_registry WHERE relative_path = ? OR file_id = ?",
+            SQL_CHECK_PATH_OR_ID_CONFLICT,
             (new_path, new_id),
         ).fetchone()
         if conflict:
@@ -391,17 +562,11 @@ class ArtifactRepository:
             (file_id, previous_status).
         """
         path = normalize_path(filepath)
-        existing = self.db.conn.execute(
-            "SELECT file_id, sync_status FROM cp_file_registry WHERE relative_path = ?", (path,)
-        ).fetchone()
+        existing = self.db.conn.execute(SQL_SELECT_FILE_ID_AND_STATUS, (path,)).fetchone()
         if existing:
             file_id, previous_status = existing
             self.db.conn.execute(
-                """UPDATE cp_file_registry
-                   SET file_name = ?, file_category = ?, file_type = ?, file_hash = ?,
-                       file_size_bytes = ?, last_seen_run_id = COALESCE(?, last_seen_run_id), last_seen_at = ?,
-                       last_changed_run_id = COALESCE(?, last_changed_run_id), last_changed_at = ?, sync_status = 'PENDING_BRONZE'
-                   WHERE relative_path = ?""",
+                SQL_UPDATE_FILE_REGISTRY_METADATA,
                 (
                     filename,
                     category,
@@ -419,11 +584,7 @@ class ArtifactRepository:
 
         file_id = generate_file_id(path)
         self.db.conn.execute(
-            """INSERT INTO cp_file_registry (
-                   file_id, file_name, relative_path, file_category, file_type, file_hash,
-                   file_size_bytes, first_seen_run_id, first_seen_at, last_seen_run_id,
-                   last_seen_at, last_changed_run_id, last_changed_at, sync_status)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING_BRONZE')""",
+            SQL_INSERT_NEW_FILE_REGISTRY,
             (
                 file_id,
                 filename,
@@ -450,7 +611,21 @@ class ArtifactRepository:
         new_paths: set[str],
         changed_paths: set[str],
     ) -> None:
-        """Vault a single binary file payload into the SQLite raw store."""
+        """Vault a single binary file payload into the SQLite raw store.
+
+        Parameters
+        ----------
+        filepath : str
+            Physical file path on disk.
+        category : str
+            Asset category classification.
+        file_type : str
+            File type string (e.g. 'csv', 'sqlite').
+        new_paths : set[str]
+            Set of newly discovered file paths.
+        changed_paths : set[str]
+            Set of modified file paths.
+        """
         path = normalize_path(filepath)
         with open(filepath, "rb") as file_handle:
             raw_bytes = file_handle.read()
@@ -469,11 +644,7 @@ class ArtifactRepository:
                 file_size=size,
                 now=now,
             )
-            self.db.conn.execute(
-                "INSERT INTO cp_file_payloads (file_id, file_bytes) VALUES (?, ?) "
-                "ON CONFLICT(file_id) DO UPDATE SET file_bytes = excluded.file_bytes",
-                (file_id, raw_bytes),
-            )
+            self.db.conn.execute(SQL_UPSERT_PAYLOAD, (file_id, raw_bytes))
             if path in new_paths:
                 event_type = "DISCOVERED"
             elif path in changed_paths:
@@ -568,11 +739,7 @@ class ArtifactRepository:
                 file_size=len(raw_bytes),
                 now=now,
             )
-            self.db.conn.execute(
-                "INSERT INTO cp_file_payloads (file_id, file_bytes) VALUES (?, ?) "
-                "ON CONFLICT(file_id) DO UPDATE SET file_bytes = excluded.file_bytes",
-                (file_id, raw_bytes),
-            )
+            self.db.conn.execute(SQL_UPSERT_PAYLOAD, (file_id, raw_bytes))
             affected_table = self._resolve_table(category)
             self._insert_event(
                 ArtifactEventRecord(
@@ -606,12 +773,7 @@ class ArtifactRepository:
             Stored raw bytes if found, otherwise None.
         """
         path = normalize_path(filepath)
-        row = self.db.conn.execute(
-            """SELECT p.file_bytes FROM cp_file_payloads p
-               JOIN cp_file_registry r ON r.file_id = p.file_id
-               WHERE r.relative_path = ?""",
-            (path,),
-        ).fetchone()
+        row = self.db.conn.execute(SQL_SELECT_PAYLOAD_BYTES_BY_PATH, (path,)).fetchone()
         return row[0] if row else None
 
     def get_pending_files(self) -> dict[str, list[str]]:
@@ -622,10 +784,7 @@ class ArtifactRepository:
         dict[str, list[str]]
             Category-mapped pending file paths.
         """
-        cursor = self.db.conn.execute(
-            "SELECT file_category, relative_path FROM cp_file_registry "
-            "WHERE sync_status = 'PENDING_BRONZE' ORDER BY file_category, relative_path"
-        )
+        cursor = self.db.conn.execute(SQL_SELECT_PENDING_FILES)
         pending: dict[str, list[str]] = {}
         for category, path in cursor.fetchall():
             pending.setdefault(category, []).append(normalize_path(path))
@@ -639,9 +798,7 @@ class ArtifactRepository:
         dict[str, list[str]]
             Category-mapped relative file paths.
         """
-        cursor = self.db.conn.execute(
-            "SELECT file_category, relative_path FROM cp_file_registry ORDER BY file_category, relative_path"
-        )
+        cursor = self.db.conn.execute(SQL_SELECT_ALL_PATHS_BY_CATEGORY)
         result: dict[str, list[str]] = {}
         for category, path in cursor.fetchall():
             result.setdefault(category, []).append(normalize_path(path))
@@ -655,7 +812,7 @@ class ArtifactRepository:
         dict[str, str]
             Map of path to sync status.
         """
-        cursor = self.db.conn.execute("SELECT relative_path, sync_status FROM cp_file_registry")
+        cursor = self.db.conn.execute(SQL_SELECT_ALL_REGISTRY_STATUS)
         return {normalize_path(path): status for path, status in cursor.fetchall()}
 
     def mark_synced(self, filepaths: list[str]) -> None:
@@ -673,8 +830,7 @@ class ArtifactRepository:
         with self.db.atomic():
             for path in dict.fromkeys(normalize_path(fp) for fp in filepaths):
                 row = self.db.conn.execute(
-                    "SELECT file_id, sync_status, last_synced_run_id, file_hash, file_category "
-                    "FROM cp_file_registry WHERE relative_path = ?",
+                    SQL_SELECT_FILE_METADATA_FOR_SYNC,
                     (path,),
                 ).fetchone()
                 if not row:
@@ -703,9 +859,7 @@ class ArtifactRepository:
                     )
                 )
                 self.db.conn.execute(
-                    "UPDATE cp_file_registry "
-                    "SET sync_status = 'SYNCED', last_synced_run_id = COALESCE(?, last_synced_run_id), "
-                    "    last_synced_at = ? WHERE relative_path = ?",
+                    SQL_UPDATE_FILE_SYNCED,
                     (self.active_run_id, now, path),
                 )
                 marked += 1
@@ -743,8 +897,7 @@ class ArtifactRepository:
         with self.db.atomic():
             for path in dict.fromkeys(normalize_path(fp) for fp in filepaths):
                 row = self.db.conn.execute(
-                    "SELECT file_id, sync_status, file_hash, file_category FROM cp_file_registry "
-                    "WHERE relative_path = ?",
+                    SQL_SELECT_FILE_METADATA_FOR_STATUS,
                     (path,),
                 ).fetchone()
                 if not row or row[1] != "REMOVED":
@@ -768,9 +921,7 @@ class ArtifactRepository:
                     )
                 )
                 self.db.conn.execute(
-                    "UPDATE cp_file_registry "
-                    "SET sync_status = 'PENDING_BRONZE', last_seen_run_id = COALESCE(?, last_seen_run_id), "
-                    "    last_seen_at = ? WHERE relative_path = ?",
+                    SQL_UPDATE_FILE_HEALED,
                     (self.active_run_id, now, path),
                 )
                 healed += 1
@@ -805,10 +956,7 @@ class ArtifactRepository:
             Human-readable explanation.
         """
         path = normalize_path(filepath)
-        row = self.db.conn.execute(
-            "SELECT file_id, sync_status, file_hash, file_category FROM cp_file_registry WHERE relative_path = ?",
-            (path,),
-        ).fetchone()
+        row = self.db.conn.execute(SQL_SELECT_FILE_METADATA_FOR_STATUS, (path,)).fetchone()
         if not row:
             return
         file_id, status, digest, file_cat = row
@@ -847,8 +995,7 @@ class ArtifactRepository:
         with self.db.atomic():
             for path in dict.fromkeys(normalize_path(fp) for fp in filepaths):
                 row = self.db.conn.execute(
-                    "SELECT file_id, sync_status, file_hash, file_category FROM cp_file_registry "
-                    "WHERE relative_path = ?",
+                    SQL_SELECT_FILE_METADATA_FOR_STATUS,
                     (path,),
                 ).fetchone()
                 if not row or row[1] == "REMOVED":
@@ -871,10 +1018,7 @@ class ArtifactRepository:
                         convergence_result="TOMBSTONED",
                     )
                 )
-                self.db.conn.execute(
-                    "UPDATE cp_file_registry SET sync_status = 'REMOVED' WHERE relative_path = ?",
-                    (path,),
-                )
+                self.db.conn.execute(SQL_UPDATE_FILE_REMOVED, (path,))
                 removed += 1
         if removed:
             diagnostics.info("Artifact registry: Marked %d file(s) as REMOVED.", removed)

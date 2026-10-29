@@ -42,6 +42,7 @@ from personal_finance_etl.config.settings import Settings
 from personal_finance_etl.contracts.application import EngineStage
 from personal_finance_etl.contracts.event_transport import EventQueue
 from personal_finance_etl.contracts.extraction import ExtractionResult
+from personal_finance_etl.contracts.lifecycle import SyncSummaryRecord
 from personal_finance_etl.contracts.observability import (
     DiagnosticSeverity,
     EventCode,
@@ -73,9 +74,101 @@ from personal_finance_etl.infrastructure.warehouse.registry import (
 )
 from personal_finance_etl.infrastructure.warehouse.silver import SilverLayer
 
-__all__ = ["PipelineExecutor"]
+__all__ = [
+    "PipelineExecutor",
+    "compute_artifact_sync_summary",
+    "materialize_presentation_graphs",
+]
 
 diagnostics = get_observability_diagnostics(__name__)
+
+
+def compute_artifact_sync_summary(
+    actionable_all: dict[str, list[str]],
+    cp: ControlPlane,
+    run_id: str,
+) -> SyncSummaryRecord:
+    """Compute run-level artifact synchronization summary metrics from Control Plane state.
+
+    Parameters
+    ----------
+    actionable_all : dict[str, list[str]]
+        All actionable file paths by category.
+    cp : ControlPlane
+        Active ControlPlane instance.
+    run_id : str
+        Current pipeline execution run ID.
+
+    Returns
+    -------
+    SyncSummaryRecord
+        Summary metrics dictionary matching SyncSummaryRecord contract.
+    """
+    actionable_paths = [p for paths in actionable_all.values() for p in paths]
+    if not actionable_paths:
+        return {
+            "run_id": run_id,
+            "actionable_count": 0,
+            "synced_count": 0,
+            "healed_count": 0,
+            "failed_count": 0,
+            "deferred_count": 0,
+            "sync_status": "NOT_REQUIRED",
+        }
+
+    norm_actionable = {p.replace("\\", "/") for p in actionable_paths}
+    reg_with_status = cp.artifacts.get_registry_with_status()
+    synced_cnt = sum(
+        1 for p in norm_actionable if reg_with_status.get(p, (None, None, None))[2] == "SYNCED"
+    )
+    healed_cnt = cp.artifacts.count_events(run_id=run_id, event_type="HEALED")
+    failed_cnt = len(actionable_paths) - synced_cnt
+    status_str = "COMPLETE" if failed_cnt == 0 else ("PARTIAL" if synced_cnt > 0 else "FAILED")
+
+    return {
+        "run_id": run_id,
+        "actionable_count": len(actionable_paths),
+        "synced_count": synced_cnt,
+        "healed_count": healed_cnt,
+        "failed_count": failed_cnt,
+        "deferred_count": 0,
+        "sync_status": status_str,
+    }
+
+
+def materialize_presentation_graphs(
+    presentation_lazy: dict[str, pl.LazyFrame],
+    emitter: ObservabilityEmitter,
+) -> dict[str, pl.DataFrame]:
+    """Execute concurrent streaming collection of presentation graphs and emit progress telemetry.
+
+    Parameters
+    ----------
+    presentation_lazy : dict[str, pl.LazyFrame]
+        LazyFrames keyed by table contract ID.
+    emitter : ObservabilityEmitter
+        Active observability event emitter.
+
+    Returns
+    -------
+    dict[str, pl.DataFrame]
+        Materialized DataFrames keyed by contract ID.
+    """
+    if not presentation_lazy:
+        return {}
+
+    keys = list(presentation_lazy.keys())
+    emitter.emit_event(
+        event_code=EventCode.PRESENTATION_DAG_START,
+        message=f"Spawning {len(keys)} concurrent Polars streaming graphs...",
+        presentation_kind=PresentationKind.STEP,
+        progress=0.9,
+        rows=len(keys),
+        stage=EngineStage.ANALYZING,
+    )
+    lazy_frames = [presentation_lazy[k] for k in keys]
+    results = pl.collect_all(lazy_frames, engine="streaming")
+    return dict(zip(keys, results, strict=True))
 
 
 class PipelineExecutor:
@@ -101,19 +194,46 @@ class PipelineExecutor:
         cp: ControlPlane,
         actionable_files: dict[str, list[str]] | None = None,
     ) -> ExtractionResult:
-        """Extract evidence from local files or raw payloads via DataExtractor."""
+        """Extract evidence from local files or raw payloads via DataExtractor.
+
+        Parameters
+        ----------
+        cp : ControlPlane
+            Active ControlPlane instance.
+        actionable_files : dict[str, list[str]] | None, default=None
+            Optional subset of actionable files to extract.
+
+        Returns
+        -------
+        ExtractionResult
+            Parsed tabular frames and extraction metadata.
+        """
         extractor = DataExtractor(self.cfg, self.status_queue, cp, emitter=self.emitter)
         return extractor.run(actionable_files)
 
     def transform(self, extracted_data: ExtractionResult) -> None:
-        """Transform raw extracted data into base dimension and fact tables."""
+        """Transform raw extracted data into base dimension and fact tables.
+
+        Parameters
+        ----------
+        extracted_data : ExtractionResult
+            Extracted source datasets.
+        """
         transformer = TransformationDAG(
             self.cfg, self.status_queue, self.rules, emitter=self.emitter
         )
         self.dfs = transformer.run(extracted_data)
 
     def process_benchmark(self, cp: ControlPlane, bronze: BronzeLayer) -> None:
-        """Fetch and align benchmark history against investment portfolio holdings."""
+        """Fetch and align benchmark history against investment portfolio holdings.
+
+        Parameters
+        ----------
+        cp : ControlPlane
+            Active ControlPlane instance.
+        bronze : BronzeLayer
+            Bronze persistence layer.
+        """
         pipeline = BenchmarkPipeline(cp, bronze, self.status_queue, emitter=self.emitter)
         self.dfs["df_f_investment_benchmark_data"] = pipeline.process(
             df_market=self.dfs.get("df_f_investment_market_data"),
@@ -122,12 +242,19 @@ class PipelineExecutor:
         )
 
     def process_currency(self, cp: ControlPlane, bronze: BronzeLayer) -> None:
-        """Fetch and synchronize continuous historical currency exchange rates."""
+        """Fetch and synchronize continuous historical currency exchange rates.
+
+        Parameters
+        ----------
+        cp : ControlPlane
+            Active ControlPlane instance.
+        bronze : BronzeLayer
+            Bronze persistence layer.
+        """
         pipeline = CurrencyPipeline(
             cp, bronze, self.status_queue, max_workers=8, emitter=self.emitter
         )
 
-        # Start Date: Earliest date in Calendar
         cal_pd = self.dfs["df_d_calendar"]
         if cal_pd.is_empty():
             global_start_date = date.today()
@@ -135,7 +262,6 @@ class PipelineExecutor:
             sd = cal_pd.select(pl.min("Date")).item()
             global_start_date = sd if sd is not None else date.today()
 
-        # End Date: Max date of Indian Market Data
         df_market = self.dfs.get("df_f_investment_market_data")
         global_end_date = date.today()
         if df_market is not None and not df_market.is_empty():
@@ -150,7 +276,13 @@ class PipelineExecutor:
         )
 
     def _resolve_us_market_range(self) -> tuple[date, date]:
-        """Resolve bounding dates for US market data synchronization."""
+        """Resolve bounding dates for US market data synchronization.
+
+        Returns
+        -------
+        tuple[date, date]
+            (start_date, end_date) bounding interval.
+        """
         df_purchase = self.dfs.get("df_f_tf_inv_purchase")
         df_sale = self.dfs.get("df_f_tf_inv_sale")
 
@@ -174,7 +306,13 @@ class PipelineExecutor:
         return global_start_date, global_end_date
 
     def _merge_us_market_data(self, df_us_market: pl.DataFrame) -> None:
-        """Merge newly extracted US stock prices into general investment market data."""
+        """Merge newly extracted US stock prices into general investment market data.
+
+        Parameters
+        ----------
+        df_us_market : pl.DataFrame
+            US stock price DataFrame.
+        """
         if df_us_market.is_empty():
             return
         df_market_existing = self.dfs.get("df_f_investment_market_data")
@@ -186,7 +324,15 @@ class PipelineExecutor:
             self.dfs["df_f_investment_market_data"] = df_us_market
 
     def process_us_market_data(self, cp: ControlPlane, bronze: BronzeLayer) -> None:
-        """Fetch and synchronize continuous historical US stock prices."""
+        """Fetch and synchronize continuous historical US stock prices.
+
+        Parameters
+        ----------
+        cp : ControlPlane
+            Active ControlPlane instance.
+        bronze : BronzeLayer
+            Bronze persistence layer.
+        """
         pipeline = USMarketPipeline(
             cp, bronze, self.status_queue, max_workers=8, emitter=self.emitter
         )
@@ -202,7 +348,13 @@ class PipelineExecutor:
         self._merge_us_market_data(df_us_market)
 
     def _run_quant_engine(self, run_id: str) -> None:
-        """Execute multi-process InvestmentQuantEngine and update analytical mart states."""
+        """Execute multi-process InvestmentQuantEngine and update analytical mart states.
+
+        Parameters
+        ----------
+        run_id : str
+            Active pipeline execution ID.
+        """
         self.emitter.emit_event(
             event_code=EventCode.QUANT_ENGINE_START,
             message="Starting Investment Quant Engine...",
@@ -289,7 +441,20 @@ class PipelineExecutor:
         )
 
     def _run_presentation_engine(self, cp: ControlPlane | None, run_id: str) -> None:
-        """Execute WealthPresentationEngine streaming graphs and log simulation telemetry."""
+        """Execute WealthPresentationEngine streaming graphs and log simulation telemetry.
+
+        Parameters
+        ----------
+        cp : ControlPlane | None
+            Optional ControlPlane instance.
+        run_id : str
+            Active pipeline execution ID.
+
+        Raises
+        ------
+        ValueError
+            If financial rules are missing.
+        """
         self.emitter.emit_event(
             event_code=EventCode.PRESENTATION_DAG_START,
             message="Starting Presentation Layer Engines...",
@@ -304,20 +469,8 @@ class PipelineExecutor:
             rules=self.rules, root_seed=run_id, emitter=self.emitter
         )
         presentation_lazy = wealth_engine.run(self.dfs)
-        if presentation_lazy:
-            keys = list(presentation_lazy.keys())
-            self.emitter.emit_event(
-                event_code=EventCode.PRESENTATION_DAG_START,
-                message=f"Spawning {len(keys)} concurrent Polars streaming graphs...",
-                presentation_kind=PresentationKind.STEP,
-                progress=0.9,
-                rows=len(keys),
-                stage=EngineStage.ANALYZING,
-            )
-            lazy_frames = [presentation_lazy[k] for k in keys]
-            results = pl.collect_all(lazy_frames, engine="streaming")
-            for k, res in zip(keys, results, strict=True):
-                self.dfs[k] = res
+        materialized_presentation = materialize_presentation_graphs(presentation_lazy, self.emitter)
+        self.dfs.update(materialized_presentation)
 
         if cp and self.rules:
             metadata = cp.runs.get_run_metadata(run_id)
@@ -339,13 +492,27 @@ class PipelineExecutor:
             self.dfs.pop("df_p_tf_wealth_risk_analytics_inputs")
 
     def run_engines(self, cp: ControlPlane | None, run_id: str) -> None:
-        """Sequentially execute Quant, Tax, and Presentation analytical engines."""
+        """Sequentially execute Quant, Tax, and Presentation analytical engines.
+
+        Parameters
+        ----------
+        cp : ControlPlane | None
+            Optional ControlPlane instance.
+        run_id : str
+            Active pipeline execution ID.
+        """
         self._run_quant_engine(run_id)
         self._run_tax_engine()
         self._run_presentation_engine(cp, run_id)
 
     def _inject_configuration_assets(self, discovered_files: dict[str, list[str]]) -> None:
-        """Inject runtime dynamic configuration CSVs and primary SQLite sources into discovery map."""
+        """Inject runtime dynamic configuration CSVs and primary SQLite sources into discovery map.
+
+        Parameters
+        ----------
+        discovered_files : dict[str, list[str]]
+            Category-mapped discovery dictionary to populate.
+        """
         discovered_files["sqlite_source"] = [
             SQLiteExtractor(self.cfg.SOURCE_DB_FOLDER).get_latest_sqlite_backup().replace("\\", "/")
         ]
@@ -377,7 +544,18 @@ class PipelineExecutor:
     def _run_discovery_phase(
         self, cp: ControlPlane
     ) -> tuple[ExtractionResult, dict[str, list[str]], list[tuple[str, str, str]]]:
-        """Execute Phase 1: File discovery, fingerprint sync, and raw extraction."""
+        """Execute Phase 1: File discovery, fingerprint sync, and raw extraction.
+
+        Parameters
+        ----------
+        cp : ControlPlane
+            Active ControlPlane instance.
+
+        Returns
+        -------
+        tuple[ExtractionResult, dict[str, list[str]], list[tuple[str, str, str]]]
+            Extracted source data, actionable path map, and list of file renames.
+        """
         t_ext_start = time.perf_counter()
         renames: list[tuple[str, str, str]] = []
         if not self.cfg.DISABLE_FILE_DISCOVERER:
@@ -429,41 +607,18 @@ class PipelineExecutor:
     def _log_artifact_sync_summary(
         self, cp: ControlPlane, run_id: str, actionable_all: dict[str, list[str]]
     ) -> None:
-        """Record run-level artifact synchronization completeness in Control Plane."""
-        actionable_paths = [p for paths in actionable_all.values() for p in paths]
-        if not actionable_paths:
-            sync_summary = {
-                "actionable_count": 0,
-                "synced_count": 0,
-                "healed_count": 0,
-                "failed_count": 0,
-                "deferred_count": 0,
-                "sync_status": "NOT_REQUIRED",
-            }
-        else:
-            norm_actionable = {p.replace("\\", "/") for p in actionable_paths}
-            reg_with_status = cp.artifacts.get_registry_with_status()
-            synced_cnt = sum(
-                1
-                for p in norm_actionable
-                if reg_with_status.get(p, (None, None, None))[2] == "SYNCED"
-            )
-            healed_cnt = cp.db.conn.execute(
-                "SELECT COUNT(*) FROM cp_artifact_run_events WHERE run_id = ? AND event_type = 'HEALED'",
-                (run_id,),
-            ).fetchone()[0]
-            failed_cnt = len(actionable_paths) - synced_cnt
-            status_str = (
-                "COMPLETE" if failed_cnt == 0 else ("PARTIAL" if synced_cnt > 0 else "FAILED")
-            )
-            sync_summary = {
-                "actionable_count": len(actionable_paths),
-                "synced_count": synced_cnt,
-                "healed_count": healed_cnt,
-                "failed_count": failed_cnt,
-                "deferred_count": 0,
-                "sync_status": status_str,
-            }
+        """Record run-level artifact synchronization completeness in Control Plane.
+
+        Parameters
+        ----------
+        cp : ControlPlane
+            Active ControlPlane instance.
+        run_id : str
+            Active pipeline execution ID.
+        actionable_all : dict[str, list[str]]
+            Category-mapped actionable file paths.
+        """
+        sync_summary = compute_artifact_sync_summary(actionable_all, cp, run_id)
         cp.runs.log_sync_summary(run_id, sync_summary)
 
     def _run_bronze_phase(
@@ -474,7 +629,26 @@ class PipelineExecutor:
         actionable_all: dict[str, list[str]],
         renames: list[tuple[str, str, str]],
     ) -> tuple[BronzeLayer, ExtractionResult]:
-        """Execute Phase 2: Upsert extracted datasets into Bronze Lakehouse."""
+        """Execute Phase 2: Upsert extracted datasets into Bronze Lakehouse.
+
+        Parameters
+        ----------
+        cp : ControlPlane
+            Active ControlPlane instance.
+        run_id : str
+            Active pipeline execution ID.
+        extracted_data : ExtractionResult
+            Extracted input datasets.
+        actionable_all : dict[str, list[str]]
+            Actionable file paths by category.
+        renames : list[tuple[str, str, str]]
+            Detected file renames.
+
+        Returns
+        -------
+        tuple[BronzeLayer, ExtractionResult]
+            Bronze lakehouse layer and complete cumulative extraction result.
+        """
         t_bronze_start = time.perf_counter()
         self.emitter.emit_event(
             event_code=EventCode.BRONZE_UPSERT,
@@ -509,7 +683,17 @@ class PipelineExecutor:
     def _run_transform_phase(
         self, cp: ControlPlane, bronze: BronzeLayer, full_dataset: ExtractionResult
     ) -> None:
-        """Execute Phase 3: Base DAG mapping, FX rates, US market data, and benchmark transforms."""
+        """Execute Phase 3: Base DAG mapping, FX rates, US market data, and benchmark transforms.
+
+        Parameters
+        ----------
+        cp : ControlPlane
+            Active ControlPlane instance.
+        bronze : BronzeLayer
+            Bronze persistence layer.
+        full_dataset : ExtractionResult
+            Cumulative Bronze extraction result.
+        """
         t_trans_start = time.perf_counter()
         self.emitter.emit_event(
             event_code=EventCode.TRANSFORMATION_STAGE,
@@ -534,7 +718,20 @@ class PipelineExecutor:
         self.process_benchmark(cp, bronze)
 
     def _run_analytics_phase(self, cp: ControlPlane, run_id: str) -> None:
-        """Execute Phase 4: Quant, Tax, and Wealth engines with data contract enforcement."""
+        """Execute Phase 4: Quant, Tax, and Wealth engines with data contract enforcement.
+
+        Parameters
+        ----------
+        cp : ControlPlane
+            Active ControlPlane instance.
+        run_id : str
+            Active pipeline execution ID.
+
+        Raises
+        ------
+        RuntimeError
+            If any table is unregistered or missing from DATA_CONTRACT_REGISTRY.
+        """
         t_eng_start = time.perf_counter()
         self.emitter.emit_event(
             event_code=EventCode.QUANT_ENGINE_START,
@@ -548,7 +745,8 @@ class PipelineExecutor:
         for df_key in self.dfs:
             if df_key not in registered_contracts:
                 raise RuntimeError(
-                    f"Engine produced unregistered table '{df_key}'. All analytical tables must be defined in DATA_CONTRACT_REGISTRY."
+                    f"Engine produced unregistered table '{df_key}'. "
+                    "All analytical tables must be defined in DATA_CONTRACT_REGISTRY."
                 )
 
         missing_contracts = registered_contracts - set(self.dfs)
@@ -579,7 +777,13 @@ class PipelineExecutor:
         )
 
     def _run_load_phase(self, cp: ControlPlane) -> None:
-        """Execute Phase 5: Fully replace Silver and Gold analytical layers and write metadata."""
+        """Execute Phase 5: Fully replace Silver and Gold analytical layers and write metadata.
+
+        Parameters
+        ----------
+        cp : ControlPlane
+            Active ControlPlane instance.
+        """
         t_load_start = time.perf_counter()
         self.emitter.emit_event(
             event_code=EventCode.GOLD_REPLACE,
@@ -603,7 +807,15 @@ class PipelineExecutor:
         meta_layer.load(self.dfs, cp=cp)
 
     def execute_phases(self, cp: ControlPlane, run_id: str) -> None:
-        """Execute all five sequential ETL pipeline phases."""
+        """Execute all five sequential ETL pipeline phases.
+
+        Parameters
+        ----------
+        cp : ControlPlane
+            Active ControlPlane instance.
+        run_id : str
+            Unique execution run ID.
+        """
         self.cfg.validate_config()
         validate_registry()
 

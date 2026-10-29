@@ -18,11 +18,31 @@ Does not own
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Protocol
 
 import numpy as np
 import numpy.typing as npt
 from numba import njit, prange
+
+
+class NumbaRngSequence(Protocol):
+    """Protocol for sequence of random generators indexed by integers or numpy integers."""
+
+    def __getitem__(self, index: int | np.intp) -> np.random.Generator:
+        """Retrieve random generator by integer or numpy integer index.
+
+        Parameters
+        ----------
+        index : int | np.intp
+            Positional index into the generator collection.
+
+        Returns
+        -------
+        np.random.Generator
+            The indexed NumPy generator instance.
+        """
+        ...
+
 
 __all__ = ["_run_mc_simulations_numba"]
 
@@ -36,8 +56,8 @@ def _run_mc_simulations_numba(
     burn_total_arr: npt.NDArray[np.float64],
     inf_rates: npt.NDArray[np.float64],
     seed_ints: npt.NDArray[np.int32],
-    # Exception TYP-001 [NUMBA_OR_LIBRARY_LIMITATION]: Numba compiled kernel requires untyped list of PRNG generators
-    gens: Any,
+    # Numba numerical boundary: Sequence of NumPy Generator instances in a numba.typed.List
+    gens: NumbaRngSequence,
     iterations: int,
     max_months: int,
     vol_r: float,
@@ -106,8 +126,8 @@ def _run_mc_simulations_numba(
         Historical or expected inflation rate vector.
     seed_ints : npt.NDArray[np.int32]
         Random seeds per thread.
-    gens : Any
-        Numba-compatible pseudo-random number generator collection.
+    gens : NumbaRngSequence
+        Numba typed list of NumPy pseudo-random number generator instances.
     iterations : int
         Number of simulation trajectories per scenario.
     max_months : int

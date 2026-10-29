@@ -120,6 +120,8 @@ class FinancialRules(BaseModel):
         materialized dimension can establish whether a UID exists in the current source data.
         """
         if isinstance(df_subcategory, pl.LazyFrame):
+            # Materialization Boundary: VALIDATION_DIAGNOSTIC
+            # Materialize subcategory dimension to validate configured investment exclusions
             df_materialized = df_subcategory.collect()
         else:
             df_materialized = df_subcategory

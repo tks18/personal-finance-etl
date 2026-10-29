@@ -25,8 +25,8 @@ from __future__ import annotations
 
 import concurrent.futures
 from collections.abc import Mapping
-from datetime import UTC, date, datetime
-from typing import Any
+from datetime import date, datetime
+from typing import cast
 
 import pandas as pd  # type: ignore[import-untyped]
 import polars as pl
@@ -38,14 +38,11 @@ from personal_finance_etl.contracts.extraction import (
     ExtractorEntityResult,
     ExtractorEntityStatus,
 )
-from personal_finance_etl.contracts.lifecycle import FailureDomain
 from personal_finance_etl.contracts.observability import (
     DiagnosticSeverity,
-    ErrorDetails,
     EventCode,
     EventEmitter,
     EventOutcome,
-    ObservabilityContext,
     ObservabilityEvent,
     PresentationKind,
 )
@@ -53,15 +50,13 @@ from personal_finance_etl.infrastructure.control_plane.facade import ControlPlan
 from personal_finance_etl.infrastructure.observability.diagnostics import (
     get_observability_diagnostics,
 )
-from personal_finance_etl.infrastructure.observability.emitter import (
-    ObservabilityEmitter,
-    get_global_emitter,
-)
-from personal_finance_etl.infrastructure.observability.queue import ObservabilityQueueSink
 from personal_finance_etl.infrastructure.providers.market.common import (
-    calculate_market_fetch_window,
-    download_yfinance_history,
-    vault_parquet_chunks,
+    build_bronze_cache_map,
+    collect_extraction_futures,
+    fetch_ticker_raw_history,
+    finalize_extraction_batch,
+    record_extractor_entity_result,
+    resolve_market_emitter,
 )
 
 __all__ = ["BenchmarkExtractor"]
@@ -82,12 +77,7 @@ class BenchmarkExtractor:
         self.cp = cp
         self.status_queue = status_queue
         self.max_workers = max_workers
-        if emitter is not None:
-            self.emitter = emitter
-        elif status_queue is not None:
-            self.emitter = ObservabilityEmitter(sinks=[ObservabilityQueueSink(status_queue)])
-        else:
-            self.emitter = get_global_emitter()
+        self.emitter = resolve_market_emitter(emitter, status_queue)
 
     def _emit_event(self, event: ObservabilityEvent) -> None:
         """Route event through canonical observability emitter."""
@@ -109,8 +99,8 @@ class BenchmarkExtractor:
         tuple[list[str], str | None]
             List of anomalous drop dates and optional warning message string.
         """
-        pct_drops: Any = hist_pd["Close"].pct_change()
-        huge_drops: Any = pct_drops[pct_drops < -0.4]
+        pct_drops: pd.Series = cast(pd.Series, hist_pd["Close"].pct_change())
+        huge_drops = pct_drops[pct_drops < -0.4]
         if not huge_drops.empty:
             drop_dts = [d.strftime("%Y-%m-%d") for d in huge_drops.index]
             warn_msg = f"⚠ Anomalous drops (>40%) in {ticker} on {', '.join(drop_dts)}"
@@ -208,50 +198,18 @@ class BenchmarkExtractor:
                 final_error=f"Skipping empty ticker {row.get('ID')}",
             )
 
-        fetch_start, is_cached = calculate_market_fetch_window(start_dt, end_dt, max_cached_date)
-        if is_cached:
-            diagnostics.debug(
-                "Benchmark Extractor: %s fully cached up to %s. Skipping API fetch.",
-                ticker,
-                end_dt,
-            )
-            return ExtractorEntityResult(
-                entity=ticker,
-                status=ExtractorEntityStatus.CACHED,
-                message=f"{ticker} fully cached up to {end_dt}",
-                attempt_count=0,
-                requested_start=fetch_start,
-                requested_end=end_dt,
-            )
-
-        hist_pd, attempts_done, err = download_yfinance_history(
-            ticker, fetch_start, end_dt, label="Benchmark Extractor"
+        hist_pd, fetch_start, attempts_done, early_res = fetch_ticker_raw_history(
+            ticker=ticker,
+            entity_label=ticker,
+            start_dt=start_dt,
+            end_dt=end_dt,
+            max_cached_date=max_cached_date,
+            label="Benchmark Extractor",
         )
-        if err is not None:
-            return ExtractorEntityResult(
-                entity=ticker,
-                status=ExtractorEntityStatus.RETRY_EXHAUSTED,
-                message=f"Error on {ticker}: {err}",
-                attempt_count=attempts_done,
-                requested_start=fetch_start,
-                requested_end=end_dt,
-                failure_class=type(err).__name__,
-                final_error=str(err),
-            )
+        if early_res is not None:
+            return early_res
 
-        if hist_pd is None or hist_pd.empty:
-            diagnostics.debug("Benchmark Extractor: No data returned from API for %s.", ticker)
-            return ExtractorEntityResult(
-                entity=ticker,
-                status=ExtractorEntityStatus.EMPTY_RESPONSE,
-                message=f"⚠ No new data fetched for {ticker}",
-                attempt_count=attempts_done,
-                requested_start=fetch_start,
-                requested_end=end_dt,
-                failure_class="EmptyResponse",
-                final_error=f"No new data fetched for {ticker}",
-            )
-
+        assert hist_pd is not None
         df_new = self._build_benchmark_spine(hist_pd, row, ticker, fetch_start, end_dt)
         drop_dts, warn_msg = self._check_anomalous_drops(ticker, hist_pd)
 
@@ -272,13 +230,19 @@ class BenchmarkExtractor:
 
     @staticmethod
     def _build_cache_map(df_bronze_cached: pl.DataFrame) -> dict[str, date]:
-        """Build dictionary of latest cached observation dates per ticker."""
-        cache_map: dict[str, date] = {}
-        if not df_bronze_cached.is_empty():
-            aggs = df_bronze_cached.group_by("yF_Ticker").agg(pl.max("Date").alias("MaxDate"))
-            for r in aggs.to_dicts():
-                cache_map[r["yF_Ticker"]] = r["MaxDate"]
-        return cache_map
+        """Build dictionary of latest cached observation dates per ticker.
+
+        Parameters
+        ----------
+        df_bronze_cached : pl.DataFrame
+            Cached Bronze DataFrame.
+
+        Returns
+        -------
+        dict[str, date]
+            Mapping of ticker symbol to latest cached observation date.
+        """
+        return build_bronze_cache_map(df_bronze_cached, key_column="yF_Ticker")
 
     def _record_future_result(
         self,
@@ -287,103 +251,26 @@ class BenchmarkExtractor:
         all_new_data: list[pl.DataFrame],
         prog: float,
     ) -> None:
-        """Process and route entity extraction result into the batch result container."""
-        batch_result.entity_results.append(res)
+        """Process and route entity extraction result into the batch result container.
 
-        if res.status == ExtractorEntityStatus.SUCCESS:
-            batch_result.successful_entities.append(res.entity)
-            if not res.df.is_empty():
-                all_new_data.append(res.df)
-            self._emit_event(
-                ObservabilityEvent(
-                    timestamp=datetime.now(UTC),
-                    event_code=EventCode.MARKET_TICKER_SUCCESS,
-                    severity=DiagnosticSeverity.INFO,
-                    presentation_kind=PresentationKind.SUCCESS,
-                    outcome=EventOutcome.COMPLETED,
-                    context=ObservabilityContext(
-                        stage=EngineStage.TRANSFORMING,
-                        provider="YahooFinance",
-                        entity_type="Ticker",
-                        entity_id=res.entity,
-                        attempt=res.attempt_count,
-                        rows=res.df.height if not res.df.is_empty() else None,
-                    ),
-                    message=res.message,
-                    progress=prog,
-                )
-            )
-        elif res.status == ExtractorEntityStatus.CACHED:
-            batch_result.cached_entities.append(res.entity)
-            self._emit_event(
-                ObservabilityEvent(
-                    timestamp=datetime.now(UTC),
-                    event_code=EventCode.MARKET_TICKER_CACHE_HIT,
-                    severity=DiagnosticSeverity.INFO,
-                    presentation_kind=PresentationKind.STEP,
-                    outcome=EventOutcome.COMPLETED,
-                    context=ObservabilityContext(
-                        stage=EngineStage.TRANSFORMING,
-                        provider="YahooFinance",
-                        entity_type="Ticker",
-                        entity_id=res.entity,
-                        cache_hit=True,
-                    ),
-                    message=f"{res.entity} fully cached up to {res.requested_end}",
-                    progress=prog,
-                )
-            )
-        elif res.status in (
-            ExtractorEntityStatus.NO_NEW_DATA,
-            ExtractorEntityStatus.EMPTY_RESPONSE,
-        ):
-            batch_result.no_new_data_entities.append(res.entity)
-            self._emit_event(
-                ObservabilityEvent(
-                    timestamp=datetime.now(UTC),
-                    event_code=EventCode.MARKET_TICKER_SUCCESS,
-                    severity=DiagnosticSeverity.WARNING,
-                    presentation_kind=PresentationKind.WARNING,
-                    outcome=EventOutcome.COMPLETED,
-                    context=ObservabilityContext(
-                        stage=EngineStage.TRANSFORMING,
-                        provider="YahooFinance",
-                        entity_type="Ticker",
-                        entity_id=res.entity,
-                        attempt=res.attempt_count,
-                    ),
-                    message=res.message,
-                    progress=prog,
-                )
-            )
-        else:
-            batch_result.failed_entities[res.entity] = res.message
-            err_details = ErrorDetails(
-                exception_type=res.failure_class or "MarketTickerFetchError",
-                exception_message=res.final_error or res.message,
-                failure_domain=FailureDomain.EXTERNAL_PROVIDER,
-                traceback_summary="",
-                retryable=False,
-            )
-            self._emit_event(
-                ObservabilityEvent(
-                    timestamp=datetime.now(UTC),
-                    event_code=EventCode.MARKET_TICKER_FAILED,
-                    severity=DiagnosticSeverity.ERROR,
-                    presentation_kind=PresentationKind.FAILURE,
-                    outcome=EventOutcome.FAILED,
-                    error=err_details,
-                    context=ObservabilityContext(
-                        stage=EngineStage.TRANSFORMING,
-                        provider="YahooFinance",
-                        entity_type="Ticker",
-                        entity_id=res.entity,
-                        attempt=res.attempt_count,
-                    ),
-                    message=res.message,
-                    progress=prog,
-                )
-            )
+        Parameters
+        ----------
+        res : ExtractorEntityResult
+            Single entity extraction result.
+        batch_result : ExtractionBatchResult
+            Container aggregating all entity results.
+        all_new_data : list[pl.DataFrame]
+            Accumulator list for newly extracted DataFrames.
+        prog : float
+            Extraction progress fraction.
+        """
+        record_extractor_entity_result(
+            res=res,
+            batch_result=batch_result,
+            all_new_data=all_new_data,
+            progress=prog,
+            emitter=self.emitter,
+        )
 
     def extract_benchmark_delta(
         self,
@@ -443,7 +330,6 @@ class BenchmarkExtractor:
             )
         )
 
-        processed = 0
         with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
             futures = {
                 executor.submit(
@@ -452,50 +338,26 @@ class BenchmarkExtractor:
                     global_start_date,
                     global_end_date,
                     cache_map.get(str(row.get("yF_Ticker", "")).strip()),
-                ): row
+                ): str(row.get("yF_Ticker", "Unknown"))
                 for row in tickers_df
             }
 
-            for future in concurrent.futures.as_completed(futures):
-                processed += 1
-                prog = 0.1 + 0.4 * (processed / total)
-                ticker = str(futures[future].get("yF_Ticker", "Unknown"))
-                try:
-                    res = future.result()
-                    self._record_future_result(res, batch_result, all_new_data, prog)
-                except Exception as e:
-                    err_msg = str(e)
-                    batch_result.failed_entities[ticker] = err_msg
-                    batch_result.entity_results.append(
-                        ExtractorEntityResult(
-                            entity=ticker,
-                            status=ExtractorEntityStatus.FAILED,
-                            message=err_msg,
-                            attempt_count=1,
-                            requested_start=global_start_date,
-                            requested_end=global_end_date,
-                            failure_class=type(e).__name__,
-                            final_error=err_msg,
-                        )
-                    )
-                    self._emit_event(
-                        ObservabilityEvent.create(
-                            event_code=EventCode.MARKET_TICKER_FAILED,
-                            message=f"Error: Critical thread failure on {ticker}: {err_msg}",
-                            progress=prog,
-                            severity=DiagnosticSeverity.ERROR,
-                            outcome=EventOutcome.FAILED,
-                            presentation_kind=PresentationKind.FAILURE,
-                            stage=EngineStage.TRANSFORMING,
-                        )
-                    )
+            collect_extraction_futures(
+                futures=futures,
+                batch_result=batch_result,
+                all_new_data=all_new_data,
+                emitter=self.emitter,
+                global_start_date=global_start_date,
+                global_end_date=global_end_date,
+                total=total,
+            )
 
-        batch_result.assert_complete("Benchmark Extractor")
-        if not all_new_data:
-            return batch_result
-
-        df_combined = pl.concat(all_new_data, how="diagonal")
-        batch_result.frames, batch_result.injected_files = vault_parquet_chunks(
-            self.cp, df_combined, "benchmark_delta", "benchmark_history"
+        return finalize_extraction_batch(
+            cp=self.cp,
+            batch_result=batch_result,
+            all_new_data=all_new_data,
+            extractor_name="Benchmark Extractor",
+            file_prefix="benchmark_delta",
+            category="benchmark_history",
+            concat_how="diagonal",
         )
-        return batch_result

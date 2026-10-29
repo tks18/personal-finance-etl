@@ -19,7 +19,6 @@ Does not own
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
 
 import numba.typed
 import numpy as np
@@ -53,7 +52,7 @@ def get_monte_carlo_fire_batch(
 
     # Exception TYP-001 [NUMBA_OR_LIBRARY_LIMITATION]: Polars UDF struct mapper accepts optional keyword arguments
     # pylint: disable=too-many-locals
-    def monte_carlo_fire_batch(s: pl.Series, **kwargs: Any) -> pl.Series:
+    def monte_carlo_fire_batch(s: pl.Series, **kwargs: object) -> pl.Series:
         df = s.struct.unnest()
         pv = df["Total_Net_Worth_Market_Af_Tax"].to_numpy().astype(float)
         pmt = df["Trailing_12M_Avg_Total_Savings"].to_numpy().astype(float)

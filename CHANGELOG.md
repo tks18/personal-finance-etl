@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [9.5.3](https://github.com/tks18/personal-finance-etl/compare/9.5.2...9.5.3) (2026-10-29)
+
+
+### Docs 📃
+
+* add v9.5.3 planning doc ([3b7ed1f](https://github.com/tks18/personal-finance-etl/commit/3b7ed1fcdd06e711aa47a02fa1ac28807dfea3d3))
+
+
+### Code Refactoring 🖌
+
+* **control-plane:** organize queries and transitions in repos ([2991d36](https://github.com/tks18/personal-finance-etl/commit/2991d36b393f59988f43d006b0d93b127ebfb87d))
+* **fire:** modularize deterministic fire analytics builders ([173f552](https://github.com/tks18/personal-finance-etl/commit/173f552c3430e0059750c4280ffbca12e12afa19))
+* **household:** decompose calendar spine and time intelligence ([dd3bfc1](https://github.com/tks18/personal-finance-etl/commit/dd3bfc194177ca65b84c48449fa471da69e527e9))
+* **household:** decompose income streams aggregation and metrics ([697bd59](https://github.com/tks18/personal-finance-etl/commit/697bd59b18a6fd0503c2e826a0c9d1af65e3abf4))
+* **household:** separate budget actuals, variance and forecast ([3930396](https://github.com/tks18/personal-finance-etl/commit/393039612d954df8ab7dc819a458f89c40f385ae))
+* **investments:** decouple task prep and results in isin pipeline ([08fa03b](https://github.com/tks18/personal-finance-etl/commit/08fa03b8fdc94793de9e742061bc005c6c97ee56))
+* **market:** decompose fx and benchmark daily transformations ([9a92071](https://github.com/tks18/personal-finance-etl/commit/9a92071c377497638c9a7c6a60b7c17aeaff4286))
+* **orchestration:** modularize pipeline and market sync ([4d1087c](https://github.com/tks18/personal-finance-etl/commit/4d1087cb94be54fdb129a53e4e8bacaf985861c6))
+* **pipeline:** audit polars collect points and prune dead code ([8968f8c](https://github.com/tks18/personal-finance-etl/commit/8968f8c538442e55bd25aef28bff42c44f589d03))
+* **pipeline:** structure silver transformation dag by stages ([38d1806](https://github.com/tks18/personal-finance-etl/commit/38d18064fc5c8d78c943765ee6ff65cf59d909d8))
+* **presentation:** decompose html and client scripts in renderer ([9056d1d](https://github.com/tks18/personal-finance-etl/commit/9056d1d2a2cbb92505c9a9b4eea731dc00bef684))
+* **providers:** extract shared future collection and vaulting ([4889391](https://github.com/tks18/personal-finance-etl/commit/48893910d2cc125d71f482fb2e8b6e2b18dc20fd))
+* **types:** introduce typed contracts for simulation and providers ([a4db692](https://github.com/tks18/personal-finance-etl/commit/a4db692c12d9fb9a2a4f74ace6210080612b7325))
+
+
+### Others 🔧
+
+* **baseline:** record v9.5.2 benchmarks and collect inventory ([c651a1d](https://github.com/tks18/personal-finance-etl/commit/c651a1de063d7d53d38863651a5935bb2e2715f8))
+* **release:** remove planning artifacts for v9.5.3 release ([d0cd836](https://github.com/tks18/personal-finance-etl/commit/d0cd836b4b9a3feed37b871d542e8ba77faae725))
+
 ### [9.5.2](https://github.com/tks18/personal-finance-etl/compare/9.5.1...9.5.2) (2026-10-27)
 
 

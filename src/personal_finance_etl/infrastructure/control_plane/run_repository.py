@@ -7,12 +7,13 @@ Owns
 - Run failure audit logging and failure domain classification.
 - Crash recovery and convergence marking for interrupted runs.
 - External provider request audit logging and file-sync summary metrics.
-- Simulation run reproducibility tracking and fingerprint persistence.
+- Simulation run reproducibility tracking and fingerprint persistence delegating to simulation_fingerprint.
 
 Does not own
 -------------
 - Source file artifact tracking and binary payload vaulting (owned by artifact_repository).
 - SQLite connection and low-level transaction primitives (owned by connection).
+- Simulation mathematical fingerprint calculation (owned by simulation_fingerprint).
 """
 
 from __future__ import annotations
@@ -20,13 +21,11 @@ from __future__ import annotations
 import hashlib
 import importlib.metadata
 import json
-import math
 import sqlite3
 import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
-from typing import cast
 
 import polars as pl
 
@@ -39,11 +38,147 @@ from personal_finance_etl.contracts.lifecycle import (
     classify_failure_domain,
 )
 from personal_finance_etl.infrastructure.control_plane.connection import SQLiteManager
+from personal_finance_etl.infrastructure.control_plane.simulation_fingerprint import (
+    compute_model_fingerprint,
+    fingerprint_dataframe,
+    json_safe,
+    resolve_input_as_of_date,
+)
 from personal_finance_etl.infrastructure.observability.diagnostics import (
     get_observability_diagnostics,
 )
 
+__all__ = ["RunRepository", "SimulationRunParams"]
+
 diagnostics = get_observability_diagnostics("personal_finance_etl.control_plane.run_repo")
+
+# Static SQL query constants
+SQL_INSERT_SETTINGS_SNAPSHOT = (
+    "INSERT OR IGNORE INTO cp_settings_snapshots "
+    "(snapshot_id, content_hash, canonical_payload, created_at) VALUES (?, ?, ?, ?)"
+)
+
+SQL_INSERT_RULES_SNAPSHOT = (
+    "INSERT OR IGNORE INTO cp_rules_snapshots "
+    "(snapshot_id, content_hash, canonical_payload, created_at) VALUES (?, ?, ?, ?)"
+)
+
+SQL_INSERT_RUN = """
+INSERT INTO cp_runs (
+    run_id, started_at, status, commit_state, application_version, schema_version,
+    settings_snapshot_id, rules_snapshot_id
+) VALUES (?, ?, 'STARTED', 'STARTED', ?, ?, ?, ?)
+"""
+
+SQL_SELECT_RUN_METADATA = (
+    "SELECT settings_snapshot_id, rules_snapshot_id FROM cp_runs WHERE run_id = ?"
+)
+
+SQL_UPDATE_RUN_STATUS = "UPDATE cp_runs SET status = ? WHERE run_id = ?"
+
+SQL_UPDATE_COMMIT_STATE = "UPDATE cp_runs SET commit_state = ? WHERE run_id = ?"
+
+SQL_UPDATE_EXECUTION_LOG = "UPDATE cp_runs SET execution_log = ? WHERE run_id = ?"
+
+SQL_SELECT_EXECUTION_LOG = "SELECT execution_log FROM cp_runs WHERE run_id = ?"
+
+SQL_SELECT_RUN_STATUS = """
+SELECT run_id, started_at, finished_at, status, commit_state,
+       application_version, schema_version, settings_snapshot_id,
+       rules_snapshot_id, (execution_log IS NOT NULL) AS has_execution_log
+FROM cp_runs WHERE run_id = ?
+"""
+
+SQL_FINISH_RUN_WITH_COMMIT = (
+    "UPDATE cp_runs SET status = ?, commit_state = ?, finished_at = ? WHERE run_id = ?"
+)
+
+SQL_FINISH_RUN = "UPDATE cp_runs SET status = ?, finished_at = ? WHERE run_id = ?"
+
+SQL_UPSERT_SIMULATION_RUN = """
+INSERT INTO cp_simulation_runs (
+    simulation_id, run_id, created_at, root_seed, iterations, horizon,
+    input_as_of_date, settings_snapshot_id, rules_snapshot_id,
+    model_implementation_version, input_fingerprint, model_fingerprint,
+    result_fingerprint, status
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'SUCCESS')
+ON CONFLICT(simulation_id) DO UPDATE SET
+    created_at = excluded.created_at,
+    root_seed = excluded.root_seed,
+    iterations = excluded.iterations,
+    horizon = excluded.horizon,
+    input_as_of_date = excluded.input_as_of_date,
+    settings_snapshot_id = excluded.settings_snapshot_id,
+    rules_snapshot_id = excluded.rules_snapshot_id,
+    model_implementation_version = excluded.model_implementation_version,
+    input_fingerprint = excluded.input_fingerprint,
+    model_fingerprint = excluded.model_fingerprint,
+    result_fingerprint = excluded.result_fingerprint,
+    status = excluded.status
+"""
+
+SQL_INSERT_RUN_FAILURE = """
+INSERT INTO cp_run_failures (
+    run_id, failed_isin, stage, error_type, error_message, traceback_log, failure_domain, created_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+"""
+
+SQL_SELECT_RECOVERY_REQUIRED_RUNS = (
+    "SELECT run_id FROM cp_runs WHERE UPPER(status) = 'RECOVERY_REQUIRED' ORDER BY started_at"
+)
+
+SQL_UPDATE_RECOVERY_REQUIRED = "UPDATE cp_runs SET status = 'RECOVERY_REQUIRED', commit_state = ?, finished_at = ? WHERE run_id = ?"
+
+SQL_UPDATE_RECOVERY_CONVERGED = (
+    "UPDATE cp_runs SET status = 'CONVERGED', commit_state = ? "
+    "WHERE run_id = ? AND UPPER(status) = 'RECOVERY_REQUIRED'"
+)
+
+SQL_SELECT_STALE_RUNS = (
+    "SELECT run_id, status FROM cp_runs WHERE UPPER(status) IN ('STARTED', 'RUNNING', 'COMMITTING')"
+)
+
+SQL_UPDATE_STALE_RUN = (
+    "UPDATE cp_runs SET status = ?, commit_state = ?, finished_at = ? "
+    "WHERE run_id = ? AND UPPER(status) IN ('STARTED', 'RUNNING', 'COMMITTING')"
+)
+
+SQL_INSERT_PROVIDER_REQUEST = """
+INSERT INTO cp_external_provider_requests (
+    request_id, run_id, provider, entity, requested_start, requested_end,
+    attempt_count, status, failure_class, final_error, created_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+"""
+
+SQL_UPSERT_SYNC_SUMMARY = """
+INSERT INTO cp_run_sync_summaries (
+    run_id, actionable_count, synced_count, healed_count, failed_count, deferred_count, sync_status, created_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(run_id) DO UPDATE SET
+    actionable_count = excluded.actionable_count,
+    synced_count = excluded.synced_count,
+    healed_count = excluded.healed_count,
+    failed_count = excluded.failed_count,
+    deferred_count = excluded.deferred_count,
+    sync_status = excluded.sync_status,
+    created_at = excluded.created_at
+"""
+
+SQL_SELECT_SYNC_SUMMARY = """
+SELECT run_id, actionable_count, synced_count, healed_count, failed_count, deferred_count, sync_status, created_at
+FROM cp_run_sync_summaries WHERE run_id = ?
+"""
+
+SQL_SELECT_LATEST_SUCCESSFUL_SIMULATION = """
+SELECT simulation_id, run_id, created_at, root_seed, iterations, horizon,
+       input_as_of_date, model_implementation_version, model_fingerprint,
+       input_fingerprint, result_fingerprint, settings_snapshot_id,
+       rules_snapshot_id, status
+FROM cp_simulation_runs
+WHERE status = 'SUCCESS'
+ORDER BY created_at DESC
+LIMIT 1
+"""
 
 
 @dataclass
@@ -73,9 +208,26 @@ class RunRepository:
     def __init__(self, db: SQLiteManager) -> None:
         self.db = db
 
+    # Backward-compatible static references to fingerprint helpers
+    _json_safe = staticmethod(json_safe)
+    _fingerprint_dataframe = staticmethod(fingerprint_dataframe)
+    _compute_model_fingerprint = staticmethod(compute_model_fingerprint)
+    _resolve_input_as_of_date = staticmethod(resolve_input_as_of_date)
+
     @staticmethod
     def _canonical_json(value: str) -> str:
-        """Parse and re-serialize JSON with sorted keys and minimal whitespace."""
+        """Parse and re-serialize JSON with sorted keys and minimal whitespace.
+
+        Parameters
+        ----------
+        value : str
+            Input JSON string.
+
+        Returns
+        -------
+        str
+            Canonical formatted JSON string.
+        """
         try:
             parsed = json.loads(value)
         except (TypeError, json.JSONDecodeError):
@@ -84,7 +236,13 @@ class RunRepository:
 
     @staticmethod
     def _application_version() -> str:
-        """Retrieve installed application version string."""
+        """Retrieve installed application version string.
+
+        Returns
+        -------
+        str
+            Application version prefixed with 'v'.
+        """
         try:
             return f"v{importlib.metadata.version('personal-finance-etl')}"
         except importlib.metadata.PackageNotFoundError:
@@ -115,8 +273,7 @@ class RunRepository:
                 digest_cfg = hashlib.sha256(canonical_cfg.encode("utf-8")).hexdigest()
                 settings_id = f"snap_set_{digest_cfg}"
                 self.db.conn.execute(
-                    "INSERT OR IGNORE INTO cp_settings_snapshots "
-                    "(snapshot_id, content_hash, canonical_payload, created_at) VALUES (?, ?, ?, ?)",
+                    SQL_INSERT_SETTINGS_SNAPSHOT,
                     (settings_id, digest_cfg, canonical_cfg, now),
                 )
             if rules_json:
@@ -124,15 +281,11 @@ class RunRepository:
                 digest_rules = hashlib.sha256(canonical_rules.encode("utf-8")).hexdigest()
                 rules_id = f"snap_rule_{digest_rules}"
                 self.db.conn.execute(
-                    "INSERT OR IGNORE INTO cp_rules_snapshots "
-                    "(snapshot_id, content_hash, canonical_payload, created_at) VALUES (?, ?, ?, ?)",
+                    SQL_INSERT_RULES_SNAPSHOT,
                     (rules_id, digest_rules, canonical_rules, now),
                 )
             self.db.conn.execute(
-                """INSERT INTO cp_runs
-                   (run_id, started_at, status, commit_state, application_version, schema_version,
-                    settings_snapshot_id, rules_snapshot_id)
-                   VALUES (?, ?, 'STARTED', 'STARTED', ?, ?, ?, ?)""",
+                SQL_INSERT_RUN,
                 (
                     run_id,
                     now,
@@ -145,9 +298,20 @@ class RunRepository:
         return run_id
 
     def get_run_metadata(self, run_id: str) -> dict[str, str | None]:
-        """Fetch snapshot IDs associated with a run."""
+        """Fetch snapshot IDs associated with a run.
+
+        Parameters
+        ----------
+        run_id : str
+            Target run ID.
+
+        Returns
+        -------
+        dict[str, str | None]
+            Map containing settings_snapshot_id and rules_snapshot_id.
+        """
         row = self.db.conn.execute(
-            "SELECT settings_snapshot_id, rules_snapshot_id FROM cp_runs WHERE run_id = ?",
+            SQL_SELECT_RUN_METADATA,
             (run_id,),
         ).fetchone()
         if row:
@@ -175,32 +339,52 @@ class RunRepository:
         if not normalized_status:
             raise ValueError("Run status must be a non-empty string.")
         with self.db.atomic():
-            cursor = self.db.conn.execute(
-                "UPDATE cp_runs SET status = ? WHERE run_id = ?", (normalized_status, run_id)
-            )
+            cursor = self.db.conn.execute(SQL_UPDATE_RUN_STATUS, (normalized_status, run_id))
             if cursor.rowcount != 1:
                 raise KeyError(f"Cannot update unknown run ID: {run_id}")
 
     def update_commit_state(self, run_id: str, commit_state: str | CommitState) -> None:
-        """Update the two-phase commit state of a run."""
+        """Update the two-phase commit state of a run.
+
+        Parameters
+        ----------
+        run_id : str
+            Target run ID.
+        commit_state : str | CommitState
+            New commit state enum or string.
+
+        Raises
+        ------
+        KeyError
+            If run_id does not exist.
+        """
         val = (
             commit_state.value
             if isinstance(commit_state, CommitState)
             else str(commit_state).strip().upper()
         )
         with self.db.atomic():
-            cursor = self.db.conn.execute(
-                "UPDATE cp_runs SET commit_state = ? WHERE run_id = ?", (val, run_id)
-            )
+            cursor = self.db.conn.execute(SQL_UPDATE_COMMIT_STATE, (val, run_id))
             if cursor.rowcount != 1:
                 raise KeyError(f"Cannot update commit state for unknown run ID: {run_id}")
 
     def save_execution_log(self, run_id: str, log_data: bytes) -> None:
-        """Save raw execution log bytes to the run record."""
+        """Save raw execution log bytes to the run record.
+
+        Parameters
+        ----------
+        run_id : str
+            Target run ID.
+        log_data : bytes
+            Raw log bytes payload.
+
+        Raises
+        ------
+        KeyError
+            If run_id does not exist.
+        """
         with self.db.atomic():
-            cursor = self.db.conn.execute(
-                "UPDATE cp_runs SET execution_log = ? WHERE run_id = ?", (log_data, run_id)
-            )
+            cursor = self.db.conn.execute(SQL_UPDATE_EXECUTION_LOG, (log_data, run_id))
             if cursor.rowcount != 1:
                 raise KeyError(f"Cannot save execution log for unknown run ID: {run_id}")
 
@@ -218,7 +402,7 @@ class RunRepository:
             Archived log payload bytes if found, else None.
         """
         row = self.db.conn.execute(
-            "SELECT execution_log FROM cp_runs WHERE run_id = ?",
+            SQL_SELECT_EXECUTION_LOG,
             (run_id,),
         ).fetchone()
         if row and row[0] is not None:
@@ -239,10 +423,7 @@ class RunRepository:
             Dictionary of run milestone attributes if found, else None.
         """
         row = self.db.conn.execute(
-            """SELECT run_id, started_at, finished_at, status, commit_state,
-                      application_version, schema_version, settings_snapshot_id,
-                      rules_snapshot_id, (execution_log IS NOT NULL) AS has_execution_log
-               FROM cp_runs WHERE run_id = ?""",
+            SQL_SELECT_RUN_STATUS,
             (run_id,),
         ).fetchone()
         if not row:
@@ -263,7 +444,24 @@ class RunRepository:
     def finish_run(
         self, run_id: str, status: str, commit_state: str | CommitState | None = None
     ) -> None:
-        """Finalize a pipeline run with termination timestamp and state."""
+        """Finalize a pipeline run with termination timestamp and state.
+
+        Parameters
+        ----------
+        run_id : str
+            Target run ID.
+        status : str
+            Terminal status string.
+        commit_state : str | CommitState | None, default=None
+            Final commit state if explicitly assigned.
+
+        Raises
+        ------
+        ValueError
+            If status is empty.
+        KeyError
+            If run_id does not exist.
+        """
         normalized_status = status.strip().upper()
         if not normalized_status:
             raise ValueError("Run status must be a non-empty string.")
@@ -276,138 +474,16 @@ class RunRepository:
                     else str(commit_state).strip().upper()
                 )
                 cursor = self.db.conn.execute(
-                    "UPDATE cp_runs SET status = ?, commit_state = ?, finished_at = ? WHERE run_id = ?",
+                    SQL_FINISH_RUN_WITH_COMMIT,
                     (normalized_status, val, now, run_id),
                 )
             else:
                 cursor = self.db.conn.execute(
-                    "UPDATE cp_runs SET status = ?, finished_at = ? WHERE run_id = ?",
+                    SQL_FINISH_RUN,
                     (normalized_status, now, run_id),
                 )
             if cursor.rowcount != 1:
                 raise KeyError(f"Cannot finish unknown run ID: {run_id}")
-
-    @staticmethod
-    def _json_safe(value: object) -> object:
-        """Recursively serialize objects to JSON-compatible data structures."""
-        if isinstance(value, dict):
-            mapping = cast(dict[object, object], value)
-            return {str(key): RunRepository._json_safe(item) for key, item in mapping.items()}
-        if isinstance(value, (list, tuple)):
-            items = cast(list[object] | tuple[object, ...], value)
-            return [RunRepository._json_safe(item) for item in items]
-        if isinstance(value, float) and not math.isfinite(value):
-            return str(value)
-        if isinstance(value, (date, datetime)):
-            return value.isoformat()
-        if value is None or isinstance(value, (str, int, float, bool)):
-            return value
-        return str(value)
-
-    @classmethod
-    def _fingerprint_dataframe(cls, input_df: pl.DataFrame | pl.LazyFrame | None) -> str:
-        """Compute deterministic SHA-256 fingerprint of a tabular DataFrame."""
-        if input_df is None:
-            return "no-input"
-        df = input_df.collect() if isinstance(input_df, pl.LazyFrame) else input_df
-        if not hasattr(df, "to_dicts") or not hasattr(df, "columns"):
-            raise TypeError(
-                "Simulation input must expose Polars-compatible columns and to_dicts()."
-            )
-        columns: list[str] = [str(column) for column in df.columns]
-        rows = cast(list[dict[str, object]], df.to_dicts())
-        digest = hashlib.sha256()
-        header = json.dumps(columns, ensure_ascii=False, separators=(",", ":"))
-        digest.update(header.encode("utf-8"))
-        digest.update(b"\n")
-        for row in rows:
-            safe_row = cls._json_safe(row)
-            encoded = json.dumps(
-                safe_row, sort_keys=True, ensure_ascii=False, separators=(",", ":"), allow_nan=False
-            )
-            digest.update(encoded.encode("utf-8"))
-            digest.update(b"\n")
-        return digest.hexdigest()
-
-    @classmethod
-    def _compute_model_fingerprint(cls, rules: FinancialRules) -> str:
-        """Derive deterministic SHA256 digest of simulation assumption models.
-
-        Parameters
-        ----------
-        rules : FinancialRules
-            Financial configuration rules containing simulation assumptions.
-
-        Returns
-        -------
-        str
-            Hex digest representing model fingerprint.
-        """
-        combined_rules = {
-            "monte_carlo": rules.assumptions.monte_carlo.model_dump(),
-            "fire": rules.assumptions.fire.model_dump(),
-            "cma": rules.assumptions.cma.model_dump(),
-        }
-        return hashlib.sha256(
-            json.dumps(
-                cls._json_safe(combined_rules),
-                sort_keys=True,
-                separators=(",", ":"),
-                ensure_ascii=False,
-                allow_nan=False,
-            ).encode("utf-8")
-        ).hexdigest()
-
-    @staticmethod
-    def _resolve_input_as_of_date(
-        input_df: pl.DataFrame | pl.LazyFrame | None,
-        input_as_of_date: date | str | None,
-    ) -> str | None:
-        """Infer or format as-of date string from input DataFrame columns.
-
-        Parameters
-        ----------
-        input_df : pl.DataFrame | pl.LazyFrame | None
-            Input dataframe evaluated for date timestamps.
-        input_as_of_date : date | str | None
-            Explicit date override, if available.
-
-        Returns
-        -------
-        str | None
-            Resolved ISO date string or None.
-        """
-        if input_as_of_date is not None:
-            if isinstance(input_as_of_date, datetime):
-                return input_as_of_date.date().isoformat()
-            if isinstance(input_as_of_date, date):
-                return input_as_of_date.isoformat()
-            return str(input_as_of_date)
-
-        if not isinstance(input_df, pl.DataFrame) or input_df.height == 0:
-            return None
-
-        candidate_cols = [
-            "MONTH_START_DATE",
-            "MONTH_END_DATE",
-            "Date",
-            "DATE",
-            "as_of_date",
-            "Closing_Date",
-        ]
-        for col in candidate_cols:
-            if col in input_df.columns:
-                try:
-                    max_val = input_df[col].max()
-                    if max_val is not None:
-                        if isinstance(max_val, datetime):
-                            return max_val.date().isoformat()
-                        if isinstance(max_val, date):
-                            return max_val.isoformat()
-                        return str(max_val).split("T", maxsplit=1)[0].split(" ", maxsplit=1)[0]
-                except (KeyError, TypeError, ValueError, AttributeError):
-                    pass
-        return None
 
     def log_simulation_run(
         self,
@@ -423,38 +499,20 @@ class RunRepository:
         p = params
         sim_id = f"sim_{p.run_id}"
         now = datetime.now().isoformat(timespec="seconds")
-        model_fingerprint = self._compute_model_fingerprint(p.rules)
-        input_fingerprint = self._fingerprint_dataframe(p.input_df)
+        model_fp = compute_model_fingerprint(p.rules)
+        input_fp = fingerprint_dataframe(p.input_df)
 
-        result_fingerprint = p.result_fingerprint
-        if result_fingerprint is None and p.result_df is not None:
-            result_fingerprint = self._fingerprint_dataframe(p.result_df)
+        result_fp = p.result_fingerprint
+        if result_fp is None and p.result_df is not None:
+            result_fp = fingerprint_dataframe(p.result_df)
 
-        resolved_as_of_date = self._resolve_input_as_of_date(p.input_df, p.input_as_of_date)
+        resolved_as_of_date = resolve_input_as_of_date(p.input_df, p.input_as_of_date)
         iterations = p.rules.assumptions.monte_carlo.iterations
         horizon = p.rules.assumptions.monte_carlo.max_months
 
         with self.db.atomic():
             self.db.conn.execute(
-                """INSERT INTO cp_simulation_runs (
-                       simulation_id, run_id, created_at, root_seed, iterations, horizon,
-                       input_as_of_date, settings_snapshot_id, rules_snapshot_id,
-                       model_implementation_version, input_fingerprint, model_fingerprint,
-                       result_fingerprint, status)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'SUCCESS')
-                   ON CONFLICT(simulation_id) DO UPDATE SET
-                       created_at = excluded.created_at,
-                       root_seed = excluded.root_seed,
-                       iterations = excluded.iterations,
-                       horizon = excluded.horizon,
-                       input_as_of_date = excluded.input_as_of_date,
-                       settings_snapshot_id = excluded.settings_snapshot_id,
-                       rules_snapshot_id = excluded.rules_snapshot_id,
-                       model_implementation_version = excluded.model_implementation_version,
-                       input_fingerprint = excluded.input_fingerprint,
-                       model_fingerprint = excluded.model_fingerprint,
-                       result_fingerprint = excluded.result_fingerprint,
-                       status = excluded.status""",
+                SQL_UPSERT_SIMULATION_RUN,
                 (
                     sim_id,
                     p.run_id,
@@ -466,9 +524,9 @@ class RunRepository:
                     p.settings_snapshot_id,
                     p.rules_snapshot_id,
                     "v1.0-gbm-fire",
-                    input_fingerprint,
-                    model_fingerprint,
-                    result_fingerprint,
+                    input_fp,
+                    model_fp,
+                    result_fp,
                 ),
             )
 
@@ -482,7 +540,25 @@ class RunRepository:
         traceback_log: str | None = None,
         failure_domain: FailureDomain | str | None = None,
     ) -> None:
-        """Persist a failure audit record with domain classification."""
+        """Persist a failure audit record with domain classification.
+
+        Parameters
+        ----------
+        run_id : str
+            Active run identifier.
+        failed_isin : str | None
+            Associated ISIN if failure was instrument-specific.
+        stage : str
+            Pipeline execution stage.
+        error_type : str
+            Error classification or exception name.
+        error_message : str
+            Descriptive error narrative.
+        traceback_log : str | None, default=None
+            Full exception traceback string.
+        failure_domain : FailureDomain | str | None, default=None
+            Categorized failure domain.
+        """
         now = datetime.now().isoformat(timespec="seconds")
         if failure_domain is None:
             resolved_domain = classify_failure_domain(stage, error_type or error_message).value
@@ -492,9 +568,7 @@ class RunRepository:
             resolved_domain = str(failure_domain).upper()
 
         self.db.conn.execute(
-            """INSERT INTO cp_run_failures
-               (run_id, failed_isin, stage, error_type, error_message, traceback_log, failure_domain, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            SQL_INSERT_RUN_FAILURE,
             (
                 run_id,
                 failed_isin,
@@ -508,10 +582,14 @@ class RunRepository:
         )
 
     def get_recovery_required_runs(self) -> list[str]:
-        """Return all run IDs currently marked RECOVERY_REQUIRED."""
-        cursor = self.db.conn.execute(
-            "SELECT run_id FROM cp_runs WHERE UPPER(status) = 'RECOVERY_REQUIRED' ORDER BY started_at"
-        )
+        """Return all run IDs currently marked RECOVERY_REQUIRED.
+
+        Returns
+        -------
+        list[str]
+            List of run identifiers awaiting crash recovery.
+        """
+        cursor = self.db.conn.execute(SQL_SELECT_RECOVERY_REQUIRED_RUNS)
         return [str(row[0]) for row in cursor.fetchall()]
 
     def mark_recovery_required(
@@ -521,12 +599,24 @@ class RunRepository:
         stage: str = "COMMIT",
         traceback_log: str | None = None,
     ) -> None:
-        """Atomically persist RECOVERY_REQUIRED status and CROSS_STORE_DIVERGENCE event."""
+        """Atomically persist RECOVERY_REQUIRED status and CROSS_STORE_DIVERGENCE event.
+
+        Parameters
+        ----------
+        run_id : str
+            Run ID encountering divergence.
+        error_message : str
+            Explanation of divergence condition.
+        stage : str, default='COMMIT'
+            Stage where divergence occurred.
+        traceback_log : str | None, default=None
+            Optional traceback details.
+        """
         now = datetime.now().isoformat(timespec="seconds")
         try:
             with self.db.atomic():
                 self.db.conn.execute(
-                    "UPDATE cp_runs SET status = 'RECOVERY_REQUIRED', commit_state = ?, finished_at = ? WHERE run_id = ?",
+                    SQL_UPDATE_RECOVERY_REQUIRED,
                     (CommitState.RECOVERY_REQUIRED.value, now, run_id),
                 )
                 self.log_run_failure(
@@ -542,13 +632,11 @@ class RunRepository:
             conn = sqlite3.connect(self.db.db_path, timeout=30.0)
             try:
                 conn.execute(
-                    "UPDATE cp_runs SET status = 'RECOVERY_REQUIRED', commit_state = ?, finished_at = ? WHERE run_id = ?",
+                    SQL_UPDATE_RECOVERY_REQUIRED,
                     (CommitState.RECOVERY_REQUIRED.value, now, run_id),
                 )
                 conn.execute(
-                    """INSERT INTO cp_run_failures
-                       (run_id, failed_isin, stage, error_type, error_message, traceback_log, failure_domain, created_at)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                    SQL_INSERT_RUN_FAILURE,
                     (
                         run_id,
                         None,
@@ -565,11 +653,19 @@ class RunRepository:
                 conn.close()
 
     def mark_recovery_converged(self, recovered_run_id: str, reconciling_run_id: str) -> None:
-        """Mark a prior RECOVERY_REQUIRED run as CONVERGED after successful reconciliation."""
+        """Mark a prior RECOVERY_REQUIRED run as CONVERGED after successful reconciliation.
+
+        Parameters
+        ----------
+        recovered_run_id : str
+            Prior run ID that was previously in divergence.
+        reconciling_run_id : str
+            Current run ID performing the successful reconciliation.
+        """
         now = datetime.now().isoformat(timespec="seconds")
         with self.db.atomic():
             self.db.conn.execute(
-                "UPDATE cp_runs SET status = 'CONVERGED', commit_state = ? WHERE run_id = ? AND UPPER(status) = 'RECOVERY_REQUIRED'",
+                SQL_UPDATE_RECOVERY_CONVERGED,
                 (CommitState.CONVERGED.value, recovered_run_id),
             )
             self.log_run_failure(
@@ -586,9 +682,7 @@ class RunRepository:
         now = datetime.now().isoformat(timespec="seconds")
         recovered = 0
         with self.db.atomic():
-            stale_runs = self.db.conn.execute(
-                "SELECT run_id, status FROM cp_runs WHERE UPPER(status) IN ('STARTED', 'RUNNING', 'COMMITTING')"
-            ).fetchall()
+            stale_runs = self.db.conn.execute(SQL_SELECT_STALE_RUNS).fetchall()
             for run_id, status in stale_runs:
                 is_committing = str(status).upper() == "COMMITTING"
                 new_status = "RECOVERY_REQUIRED" if is_committing else "FAILED"
@@ -605,8 +699,7 @@ class RunRepository:
                 )
 
                 cursor = self.db.conn.execute(
-                    "UPDATE cp_runs SET status = ?, commit_state = ?, finished_at = ? "
-                    "WHERE run_id = ? AND UPPER(status) IN ('STARTED', 'RUNNING', 'COMMITTING')",
+                    SQL_UPDATE_STALE_RUN,
                     (new_status, new_commit_state, now, run_id),
                 )
                 if cursor.rowcount != 1:
@@ -713,18 +806,20 @@ class RunRepository:
         now = datetime.now().isoformat(timespec="seconds")
         params = [self._normalize_provider_record(rec, run_id, now) for rec in records]
         with self.db.atomic():
-            self.db.conn.executemany(
-                """INSERT INTO cp_external_provider_requests
-                   (request_id, run_id, provider, entity, requested_start, requested_end,
-                    attempt_count, status, failure_class, final_error, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                params,
-            )
+            self.db.conn.executemany(SQL_INSERT_PROVIDER_REQUEST, params)
 
     def log_sync_summary(
         self, run_id: str, summary: SyncSummaryRecord | Mapping[str, object]
     ) -> None:
-        """Persist authoritative file-sync summary metrics for a pipeline run."""
+        """Persist authoritative file-sync summary metrics for a pipeline run.
+
+        Parameters
+        ----------
+        run_id : str
+            Active pipeline execution ID.
+        summary : SyncSummaryRecord | Mapping[str, object]
+            Aggregated artifact sync counts and final status.
+        """
         now = datetime.now().isoformat(timespec="seconds")
         raw_actionable = summary.get("actionable_count", 0)
         actionable_count = (
@@ -741,17 +836,7 @@ class RunRepository:
         sync_status = str(summary.get("sync_status", "COMPLETE")).upper()
         with self.db.atomic():
             self.db.conn.execute(
-                """INSERT INTO cp_run_sync_summaries
-                   (run_id, actionable_count, synced_count, healed_count, failed_count, deferred_count, sync_status, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                   ON CONFLICT(run_id) DO UPDATE SET
-                       actionable_count = excluded.actionable_count,
-                       synced_count = excluded.synced_count,
-                       healed_count = excluded.healed_count,
-                       failed_count = excluded.failed_count,
-                       deferred_count = excluded.deferred_count,
-                       sync_status = excluded.sync_status,
-                       created_at = excluded.created_at""",
+                SQL_UPSERT_SYNC_SUMMARY,
                 (
                     run_id,
                     actionable_count,
@@ -765,12 +850,19 @@ class RunRepository:
             )
 
     def get_sync_summary(self, run_id: str) -> SyncSummaryRecord | None:
-        """Retrieve file-sync summary metrics for a pipeline run."""
-        row = self.db.conn.execute(
-            """SELECT run_id, actionable_count, synced_count, healed_count, failed_count, deferred_count, sync_status, created_at
-               FROM cp_run_sync_summaries WHERE run_id = ?""",
-            (run_id,),
-        ).fetchone()
+        """Retrieve file-sync summary metrics for a pipeline run.
+
+        Parameters
+        ----------
+        run_id : str
+            Target run ID.
+
+        Returns
+        -------
+        SyncSummaryRecord | None
+            Summary record dictionary if found, else None.
+        """
+        row = self.db.conn.execute(SQL_SELECT_SYNC_SUMMARY, (run_id,)).fetchone()
         if not row:
             return None
         return {
@@ -782,4 +874,32 @@ class RunRepository:
             "deferred_count": int(row[5]),
             "sync_status": str(row[6]),
             "created_at": str(row[7]),
+        }
+
+    def get_latest_successful_simulation(self) -> dict[str, object] | None:
+        """Retrieve the most recent successful simulation run record.
+
+        Returns
+        -------
+        dict[str, object] | None
+            Simulation attribute dictionary if found, else None.
+        """
+        row = self.db.conn.execute(SQL_SELECT_LATEST_SUCCESSFUL_SIMULATION).fetchone()
+        if not row:
+            return None
+        return {
+            "simulation_id": row[0],
+            "run_id": row[1],
+            "created_at": row[2],
+            "root_seed": row[3],
+            "iterations": row[4],
+            "horizon": row[5],
+            "input_as_of_date": row[6],
+            "model_implementation_version": row[7],
+            "model_fingerprint": row[8],
+            "input_fingerprint": row[9],
+            "result_fingerprint": row[10],
+            "settings_snapshot_id": row[11],
+            "rules_snapshot_id": row[12],
+            "status": row[13],
         }

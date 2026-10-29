@@ -82,24 +82,17 @@ class FXRateProvider:
         return None
 
 
-def transform_currency_fx_rates(
-    df_bronze_lazy: pl.LazyFrame,
+def _build_continuous_fx_spine(
     df_currency_master_lazy: pl.LazyFrame,
     global_start_date: date,
     global_end_date: date,
 ) -> pl.LazyFrame:
-    """Transform Bronze FX observations into a daily Silver series.
-
-    Missing dates may use the latest prior observation for up to seven calendar
-    days (weekends and short market holidays). Rates before the first observation,
-    rates older than the staleness limit, and invalid rates fail closed.
+    """Build a continuous calendar date spine crossed with all active currency tickers.
 
     Parameters
     ----------
-    df_bronze_lazy : pl.LazyFrame
-        Bronze raw FX observations LazyFrame.
     df_currency_master_lazy : pl.LazyFrame
-        Currency master dimension LazyFrame.
+        Active currency master dimension containing ticker mappings.
     global_start_date : date
         Global start date of daily series.
     global_end_date : date
@@ -108,9 +101,8 @@ def transform_currency_fx_rates(
     Returns
     -------
     pl.LazyFrame
-        Continuous daily FX Silver LazyFrame.
+        Full Cartesian spine of daily dates and active currency tickers.
     """
-    # 1. Create a continuous date spine
     df_spine = pl.DataFrame(
         {
             "Date": pl.date_range(
@@ -119,17 +111,33 @@ def transform_currency_fx_rates(
         }
     ).lazy()
 
-    # 2. Get active tickers
     df_active_tickers = (
         df_currency_master_lazy.filter(pl.col("Is_Active"))
         .select(["UID", "ISO", "Target_Currency_Code", "yF_Ticker"])
         .rename({"UID": "Currency_ID", "ISO": "Currency_Code"})
     )
 
-    # 3. Join Spine with Tickers (Cross Join to get all combinations)
-    df_spine_full = df_spine.join(df_active_tickers, how="cross")
+    return df_spine.join(df_active_tickers, how="cross")
 
-    # 4. Validate malformed observed rates, then aggregate valid observations to daily level.
+
+def _validate_and_aggregate_source_fx(df_bronze_lazy: pl.LazyFrame) -> pl.LazyFrame:
+    """Validate raw Bronze FX observations and aggregate them to unique daily pairs.
+
+    Parameters
+    ----------
+    df_bronze_lazy : pl.LazyFrame
+        Raw Bronze FX observations LazyFrame.
+
+    Returns
+    -------
+    pl.LazyFrame
+        Daily aggregated clean FX observations.
+
+    Raises
+    ------
+    ValueError
+        If Bronze observations contain non-positive or non-finite rates.
+    """
     invalid_source_fx = (
         df_bronze_lazy.filter(
             pl.col("FX_Rate").is_not_null()
@@ -148,7 +156,7 @@ def transform_currency_fx_rates(
             f"{invalid_source_fx.to_dicts()}"
         )
 
-    df_bronze_agg = df_bronze_lazy.group_by(["Date", "Currency_ID"]).agg(
+    return df_bronze_lazy.group_by(["Date", "Currency_ID"]).agg(
         [
             pl.when(
                 pl.col("FX_Rate").is_not_null()
@@ -166,12 +174,35 @@ def transform_currency_fx_rates(
         ]
     )
 
-    # 5. Left join continuous spine with actual rates
+
+def _apply_staleness_and_imputation_policy(
+    df_spine_full: pl.LazyFrame,
+    df_bronze_agg: pl.LazyFrame,
+    max_fx_staleness_days: int = 7,
+) -> pl.LazyFrame:
+    """Join date spine with observations, apply forward-fill imputation, and enforce staleness.
+
+    Parameters
+    ----------
+    df_spine_full : pl.LazyFrame
+        Cross-joined continuous date and currency spine.
+    df_bronze_agg : pl.LazyFrame
+        Daily aggregated Bronze FX observations.
+    max_fx_staleness_days : int, default=7
+        Maximum allowed calendar days to carry forward prior rate observations.
+
+    Returns
+    -------
+    pl.LazyFrame
+        Continuous daily series with forward-filled rates and imputation flags.
+
+    Raises
+    ------
+    ValueError
+        If observations exceed the staleness limit or are missing initial history.
+    """
     df_continuous = df_spine_full.join(df_bronze_agg, on=["Date", "Currency_ID"], how="left")
 
-    # 6. Forward-fill only from prior observations. Retain the observation date
-    # internally so a long gap cannot be mistaken for a current FX rate.
-    max_fx_staleness_days = 7
     df_sorted = df_continuous.sort(["Currency_ID", "Date"]).with_columns(
         (pl.col("Is_Closure_Gap").fill_null(True) | pl.col("FX_Rate").is_null()).alias("Is_Imputed")
     )
@@ -235,8 +266,23 @@ def transform_currency_fx_rates(
             "pipeline start date."
         )
 
-    # 7. Final Projection
-    df_final = df_filled.select(
+    return df_filled
+
+
+def _project_final_fx_schema(df_filled: pl.LazyFrame) -> pl.LazyFrame:
+    """Project final Silver FX schema columns in standard sequence.
+
+    Parameters
+    ----------
+    df_filled : pl.LazyFrame
+        Staleness-verified and imputed FX LazyFrame.
+
+    Returns
+    -------
+    pl.LazyFrame
+        Standardized 10-column Silver FX LazyFrame.
+    """
+    return df_filled.select(
         [
             "Date",
             "Currency_ID",
@@ -251,4 +297,40 @@ def transform_currency_fx_rates(
         ]
     )
 
-    return df_final
+
+def transform_currency_fx_rates(
+    df_bronze_lazy: pl.LazyFrame,
+    df_currency_master_lazy: pl.LazyFrame,
+    global_start_date: date,
+    global_end_date: date,
+) -> pl.LazyFrame:
+    """Transform Bronze FX observations into a daily Silver series.
+
+    Missing dates may use the latest prior observation for up to seven calendar
+    days (weekends and short market holidays). Rates before the first observation,
+    rates older than the staleness limit, and invalid rates fail closed.
+
+    Parameters
+    ----------
+    df_bronze_lazy : pl.LazyFrame
+        Bronze raw FX observations LazyFrame.
+    df_currency_master_lazy : pl.LazyFrame
+        Currency master dimension LazyFrame.
+    global_start_date : date
+        Global start date of daily series.
+    global_end_date : date
+        Global end date of daily series.
+
+    Returns
+    -------
+    pl.LazyFrame
+        Continuous daily FX Silver LazyFrame.
+    """
+    df_spine_full = _build_continuous_fx_spine(
+        df_currency_master_lazy, global_start_date, global_end_date
+    )
+    df_bronze_agg = _validate_and_aggregate_source_fx(df_bronze_lazy)
+    df_filled = _apply_staleness_and_imputation_policy(
+        df_spine_full, df_bronze_agg, max_fx_staleness_days=7
+    )
+    return _project_final_fx_schema(df_filled)

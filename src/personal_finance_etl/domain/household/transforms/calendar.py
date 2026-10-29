@@ -89,10 +89,8 @@ def get_stg_calendar_ref(
     return df_bounds_lazy
 
 
-def transform_d_calendar(df_bounds_lazy: pl.LazyFrame) -> pl.LazyFrame:
-    """Generate all 40 requested time-intelligence columns for the Calendar Master.
-
-    Assumes an April 1st - March 31st Financial Year.
+def _build_date_spine(df_bounds_lazy: pl.LazyFrame) -> pl.LazyFrame:
+    """Generate daily date sequence between min and max date boundaries.
 
     Parameters
     ----------
@@ -102,54 +100,78 @@ def transform_d_calendar(df_bounds_lazy: pl.LazyFrame) -> pl.LazyFrame:
     Returns
     -------
     pl.LazyFrame
-        Fully enriched calendar dimension LazyFrame.
+        Single-column LazyFrame named `Date` with daily date spine.
     """
-    df_cal = df_bounds_lazy.select(
+    return df_bounds_lazy.select(
         pl.date_ranges(
             pl.col("min_date").dt.truncate("1mo").dt.offset_by("-1mo"),
             pl.col("max_date").dt.month_end(),
             "1d",
         ).alias("Date")
-    ).explode("Date")
+    ).explode("Date", empty_as_null=True)
 
-    df_transformed = (
-        df_cal
-        # Block 1: Base Numeric and String Extractions
-        .with_columns(
-            [
-                pl.col("Date").dt.day().alias("Day"),
-                pl.col("Date").dt.strftime("%A").alias("Day_Name"),
-                pl.col("Date").dt.strftime("%a").alias("Day_Name_Short"),
-                pl.col("Date").dt.ordinal_day().alias("Day_Ordinal"),
-                pl.col("Date").dt.weekday().alias("Weekday"),
-                pl.col("Date").dt.week().alias("Week"),
-                pl.col("Date").dt.month().alias("Month"),
-                pl.col("Date").dt.strftime("%B").alias("Month_Name"),
-                pl.col("Date").dt.strftime("%b").alias("Month_Name_Short"),
-                pl.col("Date").dt.quarter().alias("Quarter"),
-                pl.col("Date").dt.year().alias("Year"),
-                pl.col("Date").dt.offset_by("-3mo").alias("FY_Shift"),
-                pl.col("Date").dt.truncate("1mo").alias("Start_of_Month"),
-                pl.col("Date").dt.month_end().alias("End_of_Month"),
-                pl.col("Date").dt.truncate("1w").alias("Start_of_Week"),
-            ]
-        )
-        # Block 2: Dependent Dates (Quarters and Weeks)
-        .with_columns(
-            [
-                pl.col("Start_of_Week").dt.offset_by("6d").alias("End_of_Week"),
-                (
-                    pl.col("Year").cast(pl.String)
-                    + "-"
-                    + ((pl.col("Quarter") - 1) * 3 + 1).cast(pl.String).str.pad_start(2, "0")
-                    + "-01"
-                )
-                .str.to_date("%Y-%m-%d", strict=False)
-                .alias("Start_of_Quarter"),
-            ]
-        )
-        # Block 3a: Dependent End of Quarter and FY Extracts
-        .with_columns(
+
+def _enrich_base_calendar_components(df_cal: pl.LazyFrame) -> pl.LazyFrame:
+    """Extract standard calendar date components including week, month, quarter, and year.
+
+    Parameters
+    ----------
+    df_cal : pl.LazyFrame
+        Raw daily date spine.
+
+    Returns
+    -------
+    pl.LazyFrame
+        Enriched frame with base date component columns.
+    """
+    return df_cal.with_columns(
+        [
+            pl.col("Date").dt.day().alias("Day"),
+            pl.col("Date").dt.strftime("%A").alias("Day_Name"),
+            pl.col("Date").dt.strftime("%a").alias("Day_Name_Short"),
+            pl.col("Date").dt.ordinal_day().alias("Day_Ordinal"),
+            pl.col("Date").dt.weekday().alias("Weekday"),
+            pl.col("Date").dt.week().alias("Week"),
+            pl.col("Date").dt.month().alias("Month"),
+            pl.col("Date").dt.strftime("%B").alias("Month_Name"),
+            pl.col("Date").dt.strftime("%b").alias("Month_Name_Short"),
+            pl.col("Date").dt.quarter().alias("Quarter"),
+            pl.col("Date").dt.year().alias("Year"),
+            pl.col("Date").dt.offset_by("-3mo").alias("FY_Shift"),
+            pl.col("Date").dt.truncate("1mo").alias("Start_of_Month"),
+            pl.col("Date").dt.month_end().alias("End_of_Month"),
+            pl.col("Date").dt.truncate("1w").alias("Start_of_Week"),
+        ]
+    ).with_columns(
+        [
+            pl.col("Start_of_Week").dt.offset_by("6d").alias("End_of_Week"),
+            (
+                pl.col("Year").cast(pl.String)
+                + "-"
+                + ((pl.col("Quarter") - 1) * 3 + 1).cast(pl.String).str.pad_start(2, "0")
+                + "-01"
+            )
+            .str.to_date("%Y-%m-%d", strict=False)
+            .alias("Start_of_Quarter"),
+        ]
+    )
+
+
+def _enrich_fiscal_calendar_components(df_base: pl.LazyFrame) -> pl.LazyFrame:
+    """Enrich fiscal year, fiscal quarter, and ordinal labels based on April-March FY.
+
+    Parameters
+    ----------
+    df_base : pl.LazyFrame
+        Base calendar components frame.
+
+    Returns
+    -------
+    pl.LazyFrame
+        Frame enriched with fiscal boundaries and period labels.
+    """
+    return (
+        df_base.with_columns(
             [
                 pl.col("Start_of_Quarter")
                 .dt.offset_by("3mo")
@@ -161,7 +183,6 @@ def transform_d_calendar(df_bounds_lazy: pl.LazyFrame) -> pl.LazyFrame:
                 pl.col("Week").alias("Week_Ordinal"),
             ]
         )
-        # Block 3b: SPLIT HERE - Safe to reference End of Quarter now
         .with_columns(
             [
                 pl.col("Start_of_Month").alias("FY_Start_of_Month"),
@@ -170,7 +191,6 @@ def transform_d_calendar(df_bounds_lazy: pl.LazyFrame) -> pl.LazyFrame:
                 pl.col("End_of_Quarter").alias("FY_End_of_Quarter"),
             ]
         )
-        # Block 4: Ordinal Suffix Helper & Labels
         .with_columns(
             [
                 pl.when(pl.col("Day_Ordinal").is_in([11, 12, 13]))
@@ -217,7 +237,6 @@ def transform_d_calendar(df_bounds_lazy: pl.LazyFrame) -> pl.LazyFrame:
                 pl.when(pl.col("Weekday").is_in([6, 7])).then(1).otherwise(0).alias("IS_WEEKEND"),
             ]
         )
-        # Block 5: Final Cross-Concatenations
         .with_columns(
             [
                 (pl.col("Quarter_Name") + "-" + pl.col("Year").cast(pl.String)).alias(
@@ -237,8 +256,24 @@ def transform_d_calendar(df_bounds_lazy: pl.LazyFrame) -> pl.LazyFrame:
                 ),
             ]
         )
-        # Block 6: Advanced BI Dimensions (Ordinals and Relative Time)
-        .with_columns(
+    )
+
+
+def _enrich_business_rules_and_flags(df_fiscal: pl.LazyFrame) -> pl.LazyFrame:
+    """Calculate BI dimensions, relative time intelligence flags, and period progress.
+
+    Parameters
+    ----------
+    df_fiscal : pl.LazyFrame
+        Fiscal-enriched calendar frame.
+
+    Returns
+    -------
+    pl.LazyFrame
+        Frame enriched with progress percentages and current/previous comparison flags.
+    """
+    return (
+        df_fiscal.with_columns(
             [
                 (pl.col("Year") * 100 + pl.col("Month")).alias("Month_Ordinal"),
                 (pl.col("Year") * 10 + pl.col("Quarter")).alias("Quarter_Ordinal"),
@@ -279,7 +314,6 @@ def transform_d_calendar(df_bounds_lazy: pl.LazyFrame) -> pl.LazyFrame:
                 ).alias("Is_Current_Month"),
                 (pl.col("Year") == datetime.date.today().year).alias("Is_Current_Year"),
                 (pl.col("Date") > datetime.date.today()).alias("Is_Future_Date"),
-                # YTD Logic
                 (
                     (pl.col("Year") == datetime.date.today().year)
                     & (pl.col("Date") <= datetime.date.today())
@@ -295,7 +329,6 @@ def transform_d_calendar(df_bounds_lazy: pl.LazyFrame) -> pl.LazyFrame:
                 (pl.col("Year") == (datetime.date.today().year - 1)).alias("Is_Previous_Year"),
             ]
         )
-        # We need to calculate Current FY dynamically to set Is_Current_FY
         .with_columns(
             pl.lit(datetime.date.today()).dt.offset_by("-3mo").dt.year().alias("_current_fy")
         )
@@ -309,7 +342,6 @@ def transform_d_calendar(df_bounds_lazy: pl.LazyFrame) -> pl.LazyFrame:
             ]
         )
         .with_columns(
-            # Quarter Logic
             (
                 (pl.col("Year") == datetime.date.today().year)
                 & (pl.col("Quarter") == pl.lit(datetime.date.today()).dt.quarter())
@@ -322,86 +354,111 @@ def transform_d_calendar(df_bounds_lazy: pl.LazyFrame) -> pl.LazyFrame:
                 & pl.when(pl.lit(datetime.date.today()).dt.month().is_in([1, 4, 7, 10]))
                 .then(True)
                 .otherwise(False)
-            ).alias("Is_Previous_Quarter"),  # Simplified previous quarter proxy
-        )
-        # Clean up
-        .drop(["FY_Shift", "_day_suffix", "_week_suffix", "_current_fy"])
-        .select(
-            [
-                # Base Date
-                "Date",
-                # Day Properties
-                "Day",
-                "Day_Name",
-                "Day_Name_Short",
-                "Day_Ordinal",
-                "Day_Ordinal_Name",
-                "Weekday",
-                "IS_WEEKEND",
-                # Week Properties
-                "Week",
-                "Week_Ordinal",
-                "Week_Ordinal_Name",
-                "Week_Name",
-                "Week_Year",
-                "Week_Name_Year",
-                "Start_of_Week",
-                "End_of_Week",
-                # Month Properties
-                "Month",
-                "Month_Name",
-                "Month_Name_Short",
-                "Month_Year",
-                "Short_Month_Year",
-                "V_Short_Month_Year",
-                "Month_Ordinal",
-                "Start_of_Month",
-                "End_of_Month",
-                "Days_in_Month",
-                "Month_Progress_Pct",
-                # Quarter Properties
-                "Quarter",
-                "Quarter_Name",
-                "Quarter_Year",
-                "Quarter_Ordinal",
-                "Start_of_Quarter",
-                "End_of_Quarter",
-                # Year Properties
-                "Year",
-                "Days_in_Year",
-                "Year_Progress_Pct",
-                # Financial Year Properties
-                "Financial_Year",
-                "FY_Year",
-                "FY_Month",
-                "FY_Month_Ordinal",
-                "FY_Quarter",
-                "FY_Quarter_Name",
-                "FY_Quarter_Year",
-                "FY_Quarter_Ordinal",
-                "FY_Start_of_Month",
-                "FY_End_of_Month",
-                "FY_Start_of_Quarter",
-                "FY_End_of_Quarter",
-                # Boolean / Snapshot Flags
-                "Is_Last_Day_Of_Month",
-                "Is_Last_Day_Of_Quarter",
-                "Is_Last_Day_Of_Year",
-                "Is_Last_Day_Of_FY",
-                "Is_Quarter_End_Month",
-                "Is_Tax_Harvesting_Season",
-                "Is_Current_Month",
-                "Is_Previous_Month",
-                "Is_Current_Quarter",
-                "Is_Previous_Quarter",
-                "Is_Current_Year",
-                "Is_Previous_Year",
-                "Is_Current_FY",
-                "Is_YTD",
-                "Is_FY_YTD",
-                "Is_Future_Date",
-            ]
+            ).alias("Is_Previous_Quarter"),
         )
     )
 
-    return df_transformed
+
+def _project_calendar_columns(df_enriched: pl.LazyFrame) -> pl.LazyFrame:
+    """Project and drop temporary calculation columns to match presentation schema.
+
+    Parameters
+    ----------
+    df_enriched : pl.LazyFrame
+        Fully enriched calendar dimension LazyFrame.
+
+    Returns
+    -------
+    pl.LazyFrame
+        Projected calendar master dimension LazyFrame.
+    """
+    return df_enriched.drop(["FY_Shift", "_day_suffix", "_week_suffix", "_current_fy"]).select(
+        [
+            "Date",
+            "Day",
+            "Day_Name",
+            "Day_Name_Short",
+            "Day_Ordinal",
+            "Day_Ordinal_Name",
+            "Weekday",
+            "IS_WEEKEND",
+            "Week",
+            "Week_Ordinal",
+            "Week_Ordinal_Name",
+            "Week_Name",
+            "Week_Year",
+            "Week_Name_Year",
+            "Start_of_Week",
+            "End_of_Week",
+            "Month",
+            "Month_Name",
+            "Month_Name_Short",
+            "Month_Year",
+            "Short_Month_Year",
+            "V_Short_Month_Year",
+            "Month_Ordinal",
+            "Start_of_Month",
+            "End_of_Month",
+            "Days_in_Month",
+            "Month_Progress_Pct",
+            "Quarter",
+            "Quarter_Name",
+            "Quarter_Year",
+            "Quarter_Ordinal",
+            "Start_of_Quarter",
+            "End_of_Quarter",
+            "Year",
+            "Days_in_Year",
+            "Year_Progress_Pct",
+            "Financial_Year",
+            "FY_Year",
+            "FY_Month",
+            "FY_Month_Ordinal",
+            "FY_Quarter",
+            "FY_Quarter_Name",
+            "FY_Quarter_Year",
+            "FY_Quarter_Ordinal",
+            "FY_Start_of_Month",
+            "FY_End_of_Month",
+            "FY_Start_of_Quarter",
+            "FY_End_of_Quarter",
+            "Is_Last_Day_Of_Month",
+            "Is_Last_Day_Of_Quarter",
+            "Is_Last_Day_Of_Year",
+            "Is_Last_Day_Of_FY",
+            "Is_Quarter_End_Month",
+            "Is_Tax_Harvesting_Season",
+            "Is_Current_Month",
+            "Is_Previous_Month",
+            "Is_Current_Quarter",
+            "Is_Previous_Quarter",
+            "Is_Current_Year",
+            "Is_Previous_Year",
+            "Is_Current_FY",
+            "Is_YTD",
+            "Is_FY_YTD",
+            "Is_Future_Date",
+        ]
+    )
+
+
+def transform_d_calendar(df_bounds_lazy: pl.LazyFrame) -> pl.LazyFrame:
+    """Generate all 40 requested time-intelligence columns for the Calendar Master.
+
+    Assumes an April 1st - March 31st Financial Year.
+
+    Parameters
+    ----------
+    df_bounds_lazy : pl.LazyFrame
+        LazyFrame containing `min_date` and `max_date`.
+
+    Returns
+    -------
+    pl.LazyFrame
+        Fully enriched calendar dimension LazyFrame.
+    """
+    df_spine = _build_date_spine(df_bounds_lazy)
+    df_base = _enrich_base_calendar_components(df_spine)
+    df_fiscal = _enrich_fiscal_calendar_components(df_base)
+    df_enriched = _enrich_business_rules_and_flags(df_fiscal)
+    return _project_calendar_columns(df_enriched)
