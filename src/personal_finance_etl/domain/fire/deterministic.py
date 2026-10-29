@@ -46,18 +46,19 @@ class WealthRiskAnalyticsBuilder:
         self._dob_month = int(dob_parts[1])
         self._tax_rate = rules.assumptions.tax.rates.equity_ltcg
 
-    def build(self) -> dict[str, pl.LazyFrame]:
-        """Build FIRE analytics and simulation inputs LazyFrames.
+    def _prepare_base_inputs(self, lf_monthly_totals: pl.LazyFrame) -> pl.LazyFrame:
+        """Prepare base FIRE inputs, monthly net savings, and after-tax net worth.
+
+        Parameters
+        ----------
+        lf_monthly_totals : pl.LazyFrame
+            Base monthly totals LazyFrame.
 
         Returns
         -------
-        dict[str, pl.LazyFrame]
-            Dictionary containing:
-            - df_p_tf_wealth_risk_analytics_inputs: Feature vector driving the Monte Carlo engine.
-            - df_p_tf_wealth_risk_analytics: Unified table of deterministic FI metrics and Monte Carlo percentiles.
+        pl.LazyFrame
+            Base LazyFrame enriched with after-tax net worth and savings metrics.
         """
-        lf_monthly_totals = self.base_lf["lf_monthly_totals"]
-
         lf_fire_base = (
             lf_monthly_totals.select(
                 [
@@ -83,7 +84,6 @@ class WealthRiskAnalyticsBuilder:
         )
 
         df_inv_port = self.dfs.get("df_f_investment_analytics_portfolio")
-
         if df_inv_port is not None:
             lf_inv_port = (
                 df_inv_port.lazy() if isinstance(df_inv_port, pl.DataFrame) else df_inv_port
@@ -126,15 +126,29 @@ class WealthRiskAnalyticsBuilder:
                 .drop(["Port_Market_Value", "Port_Book_Value"])
             )
         else:
-            pass
+            lf_fire_base = lf_fire_base.with_columns(
+                pl.col("Total_Net_Worth_Market").alias("Total_Net_Worth_Market_Af_Tax")
+            )
+        return lf_fire_base
 
+    def _compute_rolling_projections(
+        self, lf_fire_base: pl.LazyFrame
+    ) -> tuple[pl.LazyFrame, pl.LazyFrame]:
+        """Compute rolling expenditure, savings averages, and deterministic FI targets.
+
+        Parameters
+        ----------
+        lf_fire_base : pl.LazyFrame
+            Base monthly totals with after-tax valuation.
+
+        Returns
+        -------
+        tuple[pl.LazyFrame, pl.LazyFrame]
+            Tuple containing:
+            - lf_fire_forecast: Rolling forecast table with deterministic FI targets.
+            - lf_fire_inputs: Feature vector driving the Monte Carlo simulation engine.
+        """
         swr = self.rules.assumptions.fire.swr_multiplier
-        coast_real_return = self.rules.assumptions.fire.coast_fi_real_return
-        coast_years = self.rules.assumptions.fire.coast_fi_years
-        lean_ratio = self.rules.assumptions.fire.lean_fi_ratio
-
-        cma_real_return = self.rules.assumptions.cma.expected_real_return
-        cma_fat_tail = self.rules.assumptions.cma.fat_tail_multiplier
         lf_fire_forecast = (
             lf_fire_base.sort("MONTH_START_DATE")
             .with_columns(
@@ -186,8 +200,28 @@ class WealthRiskAnalyticsBuilder:
                 "INFLATION_YOY_PCT",
             ]
         )
+        return lf_fire_forecast, lf_fire_inputs
 
-        lf_fire_forecast = (
+    def _execute_monte_carlo_simulations(
+        self, lf_fire_forecast: pl.LazyFrame, cma_real_return: float, cma_fat_tail: float
+    ) -> pl.LazyFrame:
+        """Run batch Monte Carlo stochastic simulations across monthly historical snapshots.
+
+        Parameters
+        ----------
+        lf_fire_forecast : pl.LazyFrame
+            Forecast table containing rolling inputs and targets.
+        cma_real_return : float
+            Capital Market Assumptions expected real return rate.
+        cma_fat_tail : float
+            Fat-tail distribution multiplier for extreme downside market shocks.
+
+        Returns
+        -------
+        pl.LazyFrame
+            Forecast table unnested with Monte Carlo percentiles and runway forecasts.
+        """
+        return (
             lf_fire_forecast.with_columns(
                 pl.col("MONTH_START_DATE").dt.year().alias("_temp_year"),
                 pl.col("MONTH_START_DATE").dt.month().alias("_temp_month"),
@@ -237,8 +271,31 @@ class WealthRiskAnalyticsBuilder:
             )
             .unnest("mc_results")
             .drop(["_temp_year", "_temp_month", "Age_Months", "Seed_Int"])
-            .with_columns(
-                # Linear FI projection for comparison
+        )
+
+    def _compute_milestones_and_trends(
+        self, lf_fire_forecast: pl.LazyFrame, cma_real_return: float
+    ) -> pl.LazyFrame:
+        """Compute Lean FI, Coast FI, withdrawal rates, velocities, and wealth trends.
+
+        Parameters
+        ----------
+        lf_fire_forecast : pl.LazyFrame
+            Forecast table with unnested Monte Carlo outcomes.
+        cma_real_return : float
+            Assumed real investment return rate.
+
+        Returns
+        -------
+        pl.LazyFrame
+            Enriched forecast table with complete FI milestone and trend analytics.
+        """
+        coast_real_return = self.rules.assumptions.fire.coast_fi_real_return
+        coast_years = self.rules.assumptions.fire.coast_fi_years
+        lean_ratio = self.rules.assumptions.fire.lean_fi_ratio
+
+        return (
+            lf_fire_forecast.with_columns(
                 safe_divide(
                     pl.max_horizontal(
                         0.0, pl.col("Target_FI_Today") - pl.col("Total_Net_Worth_Market_Af_Tax")
@@ -324,12 +381,10 @@ class WealthRiskAnalyticsBuilder:
                 ),
             )
             .with_columns(
-                # Actual monthly savings rate as a percentage of income
                 safe_divide("Net_Savings", "Total_Cash_Income").alias("Savings_Rate_Actual"),
                 safe_divide("Net_Savings_Total", "Total_Cash_Income").alias(
                     "Savings_Rate_Actual_Total"
                 ),
-                # FI Velocity: MoM change in FI coverage — positive = approaching FI
                 (
                     pl.col("Current_FI_Coverage_Pct") - pl.col("Current_FI_Coverage_Pct").shift(1)
                 ).alias("FI_Velocity"),
@@ -337,7 +392,6 @@ class WealthRiskAnalyticsBuilder:
                     pl.col("Current_FI_Coverage_Pct_Total")
                     - pl.col("Current_FI_Coverage_Pct_Total").shift(1)
                 ).alias("FI_Velocity_Total"),
-                # Real Net Worth CAGR over 3 years (36 months), inflation-adjusted
                 pl.when(pl.col("Total_Net_Worth_Market_Af_Tax").shift(36) > 0)
                 .then(
                     (
@@ -354,30 +408,38 @@ class WealthRiskAnalyticsBuilder:
             )
         )
 
-        lf_fire_forecast = lf_fire_forecast.select(
+    def _assemble_final_projection(self, lf_fire_forecast: pl.LazyFrame) -> pl.LazyFrame:
+        """Select and alias presentation-tier columns in canonical schema order.
+
+        Parameters
+        ----------
+        lf_fire_forecast : pl.LazyFrame
+            Fully enriched analytical forecast table.
+
+        Returns
+        -------
+        pl.LazyFrame
+            Final schema projected table ready for publication in gold.
+        """
+        return lf_fire_forecast.select(
             [
                 "MONTH_START_DATE",
                 "MONTH_END_DATE",
                 "YEAR_MONTH",
                 "Total_Income",
                 "Total_Cash_Income",
-                # Spending & Savings
                 pl.col("Trailing_6M_Avg_Total_Spend").alias("Trailing_6M_Avg_Spend"),
                 pl.col("Trailing_12M_Avg_Total_Spend").alias("Trailing_12M_Avg_Spend"),
                 pl.col("Trailing_6M_Avg_Total_Savings").alias("Trailing_6M_Avg_Savings"),
                 pl.col("Trailing_12M_Avg_Total_Savings").alias("Trailing_12M_Avg_Savings"),
                 "Real_Return_Assumed_Pct",
-                # FI Numbers (Today's Money)
                 pl.col("Target_FI_Today_Total").alias("Target_FI_Today"),
                 pl.col("Coast_FI_Today_Total").alias("Coast_FI_Today"),
                 pl.col("Lean_FI_Today_Total").alias("Lean_FI_Today"),
-                # FI Future Nominal Values
                 "Target_FI_Total_Future_Nominal",
-                # FI Progress
                 pl.col("Current_FI_Coverage_Pct_Total").alias("Current_FI_Coverage_Pct"),
                 pl.col("FI_Gap_Total").alias("FI_Gap"),
                 pl.col("FI_Gap_Total_Monthly_Trend").alias("FI_Gap_Monthly_Trend"),
-                # Time to FI
                 pl.col("Estimated_Months_To_FI_Total_Linear").alias(
                     "Estimated_Months_To_FI_Linear"
                 ),
@@ -387,7 +449,6 @@ class WealthRiskAnalyticsBuilder:
                 "Probability_Of_Success_Pct",
                 "Years_To_FI_P50",
                 "Projected_FI_Date_P50",
-                # Sustainability
                 pl.col("Runway_Months_Total_Linear").alias("Runway_Months_Linear"),
                 "Runway_Months_Stressed_P10",
                 "Runway_Months_Base_P50",
@@ -395,17 +456,38 @@ class WealthRiskAnalyticsBuilder:
                     "Withdrawal_Rate_If_Retired_Now"
                 ),
                 pl.col("Savings_Rate_Required_Total").alias("Savings_Rate_Required"),
-                # Savings & FI Progress Metrics
                 pl.col("Savings_Rate_Actual_Total").alias("Savings_Rate_Actual"),
                 pl.col("FI_Velocity_Total").alias("FI_Velocity"),
-                # Decumulation & Velocity
                 "Wealth_Velocity",
                 "Wealth_Acceleration",
                 "Real_NW_CAGR_3Y",
                 "Terminal_Wealth_Nominal_P50",
             ]
         )
+
+    def build(self) -> dict[str, pl.LazyFrame]:
+        """Build FIRE analytics and simulation inputs LazyFrames.
+
+        Returns
+        -------
+        dict[str, pl.LazyFrame]
+            Dictionary containing:
+            - df_p_tf_wealth_risk_analytics_inputs: Feature vector driving the Monte Carlo engine.
+            - df_p_tf_wealth_risk_analytics: Unified table of deterministic FI metrics and Monte Carlo percentiles.
+        """
+        cma_real_return = self.rules.assumptions.cma.expected_real_return
+        cma_fat_tail = self.rules.assumptions.cma.fat_tail_multiplier
+
+        lf_monthly_totals = self.base_lf["lf_monthly_totals"]
+        lf_fire_base = self._prepare_base_inputs(lf_monthly_totals)
+        lf_fire_forecast, lf_fire_inputs = self._compute_rolling_projections(lf_fire_base)
+        lf_fire_mc = self._execute_monte_carlo_simulations(
+            lf_fire_forecast, cma_real_return, cma_fat_tail
+        )
+        lf_fire_analyzed = self._compute_milestones_and_trends(lf_fire_mc, cma_real_return)
+        lf_final = self._assemble_final_projection(lf_fire_analyzed)
+
         return {
             "df_p_tf_wealth_risk_analytics_inputs": lf_fire_inputs,
-            "df_p_tf_wealth_risk_analytics": lf_fire_forecast,
+            "df_p_tf_wealth_risk_analytics": lf_final,
         }
