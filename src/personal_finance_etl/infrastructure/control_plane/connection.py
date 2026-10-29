@@ -4,12 +4,13 @@ Owns
 ----
 - SQLite connection lifecycle, WAL journal mode, and foreign key enforcement.
 - Savepoint-based nested atomic transaction management (atomic() context manager).
-- Control plane schema initialization, migration (to SCHEMA_VERSION 3), and validation.
+- Schema bootstrap orchestration delegating DDL execution and validation to schema.py.
 - SQLite transaction primitives (begin_transaction, commit, rollback).
 
 Does not own
 -------------
 - Specific table payload reading/writing (owned by run_repository and artifact_repository).
+- Schema DDL, migrations, and column definitions (owned by schema.py).
 - DuckDB analytical warehouse connections (owned by infrastructure.warehouse.connection).
 """
 
@@ -21,125 +22,21 @@ import uuid
 from collections.abc import Generator
 from contextlib import contextmanager
 
-from personal_finance_etl.infrastructure.control_plane.schema import RAW_DDL
+from personal_finance_etl.infrastructure.control_plane.schema import (
+    CURRENT_CONTROL_TABLES,
+    RAW_DDL,
+    REQUIRED_SCHEMA_COLUMNS,
+    apply_schema_migrations,
+    create_indexes,
+    validate_schema,
+)
 from personal_finance_etl.infrastructure.observability.diagnostics import (
     get_observability_diagnostics,
 )
 
+__all__ = ["REQUIRED_SCHEMA_COLUMNS", "SQLiteManager"]
+
 diagnostics = get_observability_diagnostics("personal_finance_etl.control_plane")
-
-
-REQUIRED_SCHEMA_COLUMNS: dict[str, set[str]] = {
-    "cp_settings_snapshots": {
-        "snapshot_id",
-        "content_hash",
-        "canonical_payload",
-        "created_at",
-    },
-    "cp_rules_snapshots": {
-        "snapshot_id",
-        "content_hash",
-        "canonical_payload",
-        "created_at",
-    },
-    "cp_runs": {
-        "run_id",
-        "started_at",
-        "finished_at",
-        "status",
-        "commit_state",
-        "application_version",
-        "schema_version",
-        "settings_snapshot_id",
-        "rules_snapshot_id",
-        "execution_log",
-    },
-    "cp_file_registry": {
-        "file_id",
-        "file_name",
-        "relative_path",
-        "file_category",
-        "file_type",
-        "file_hash",
-        "file_size_bytes",
-        "sync_status",
-        "first_seen_run_id",
-        "first_seen_at",
-        "last_seen_run_id",
-        "last_seen_at",
-        "last_changed_run_id",
-        "last_changed_at",
-        "last_synced_run_id",
-        "last_synced_at",
-    },
-    "cp_file_payloads": {"file_id", "file_bytes"},
-    "cp_run_failures": {
-        "id",
-        "run_id",
-        "failed_isin",
-        "stage",
-        "error_type",
-        "error_message",
-        "traceback_log",
-        "failure_domain",
-        "created_at",
-    },
-    "cp_artifact_run_events": {
-        "event_id",
-        "run_id",
-        "file_id",
-        "event_type",
-        "event_at",
-        "observed_path",
-        "content_hash",
-        "previous_status",
-        "new_status",
-        "event_reason",
-        "affected_table",
-        "detecting_run_id",
-        "replay_run_id",
-        "convergence_result",
-    },
-    "cp_external_provider_requests": {
-        "request_id",
-        "run_id",
-        "provider",
-        "entity",
-        "requested_start",
-        "requested_end",
-        "attempt_count",
-        "status",
-        "failure_class",
-        "final_error",
-        "created_at",
-    },
-    "cp_run_sync_summaries": {
-        "run_id",
-        "actionable_count",
-        "synced_count",
-        "healed_count",
-        "failed_count",
-        "deferred_count",
-        "sync_status",
-        "created_at",
-    },
-    "cp_simulation_runs": {
-        "simulation_id",
-        "run_id",
-        "created_at",
-        "root_seed",
-        "iterations",
-        "horizon",
-        "input_as_of_date",
-        "settings_snapshot_id",
-        "rules_snapshot_id",
-        "input_fingerprint",
-        "model_fingerprint",
-        "model_implementation_version",
-        "status",
-        "result_fingerprint",
-    },
-}
 
 
 class SQLiteManager:
@@ -250,26 +147,14 @@ class SQLiteManager:
                 "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
             ).fetchall()
         }
-        current_tables = {
-            "cp_settings_snapshots",
-            "cp_rules_snapshots",
-            "cp_runs",
-            "cp_file_registry",
-            "cp_file_payloads",
-            "cp_run_failures",
-            "cp_artifact_run_events",
-            "cp_simulation_runs",
-            "cp_external_provider_requests",
-            "cp_run_sync_summaries",
-        }
-        present_control_tables = existing_tables & current_tables
+        present_control_tables = existing_tables & CURRENT_CONTROL_TABLES
         if present_control_tables:
-            self._migrate_schema(existing_tables)
+            apply_schema_migrations(self.conn, existing_tables)
 
         diagnostics.debug("SQLite Control Plane: Initializing current schema.")
         self.conn.executescript(RAW_DDL)
-        self._create_indexes()
-        self._validate_current_schema()
+        create_indexes(self.conn)
+        validate_schema(self.conn)
 
         violations = self.conn.execute("PRAGMA foreign_key_check").fetchmany(10)
         if violations:
@@ -280,105 +165,6 @@ class SQLiteManager:
         diagnostics.info(
             "SQLite Control Plane: Current schema ready (version %s).", self.SCHEMA_VERSION
         )
-
-    def _migrate_runs(self, existing_tables: set[str]) -> None:
-        """Add commit_state column to cp_runs if missing."""
-        if "cp_runs" in existing_tables:
-            cols = {
-                str(row[1]) for row in self.conn.execute("PRAGMA table_info(cp_runs)").fetchall()
-            }
-            if "commit_state" not in cols:
-                diagnostics.info(
-                    "SQLite Control Plane: Migrating cp_runs: adding commit_state column."
-                )
-                self.conn.execute(
-                    "ALTER TABLE cp_runs ADD COLUMN commit_state TEXT NOT NULL DEFAULT 'NOT_STARTED'"
-                )
-
-    def _migrate_failures(self, existing_tables: set[str]) -> None:
-        """Add failure_domain column to cp_run_failures if missing."""
-        if "cp_run_failures" in existing_tables:
-            cols = {
-                str(row[1])
-                for row in self.conn.execute("PRAGMA table_info(cp_run_failures)").fetchall()
-            }
-            if "failure_domain" not in cols:
-                diagnostics.info(
-                    "SQLite Control Plane: Migrating cp_run_failures: adding failure_domain column."
-                )
-                self.conn.execute(
-                    "ALTER TABLE cp_run_failures ADD COLUMN failure_domain TEXT NOT NULL DEFAULT 'UNKNOWN'"
-                )
-
-    def _migrate_events(self, existing_tables: set[str]) -> None:
-        """Add lineage and replay columns to cp_artifact_run_events if missing."""
-        if "cp_artifact_run_events" not in existing_tables:
-            return
-        cols = {
-            str(row[1])
-            for row in self.conn.execute("PRAGMA table_info(cp_artifact_run_events)").fetchall()
-        }
-        columns_to_add = [
-            ("affected_table", "TEXT"),
-            ("detecting_run_id", "TEXT"),
-            ("replay_run_id", "TEXT"),
-            ("convergence_result", "TEXT"),
-        ]
-        for col_name, col_type in columns_to_add:
-            if col_name not in cols:
-                self.conn.execute(
-                    f"ALTER TABLE cp_artifact_run_events ADD COLUMN {col_name} {col_type}"
-                )
-
-    def _migrate_schema(self, existing_tables: set[str]) -> None:
-        """Apply non-destructive schema migrations to existing control plane tables.
-
-        Parameters
-        ----------
-        existing_tables : set[str]
-            Set of existing table names in the database.
-        """
-        self._migrate_runs(existing_tables)
-        self._migrate_failures(existing_tables)
-        self._migrate_events(existing_tables)
-
-    def _validate_current_schema(self) -> None:
-        """Fail closed when an existing database is not on the current schema.
-
-        Raises
-        ------
-        RuntimeError
-            If any table is missing required schema columns.
-        """
-        for table, required in REQUIRED_SCHEMA_COLUMNS.items():
-            actual = {
-                str(row[0])
-                for row in self.conn.execute(
-                    "SELECT name FROM pragma_table_info(?)", (table,)
-                ).fetchall()
-            }
-            missing = required - actual
-            if missing:
-                raise RuntimeError(
-                    f"Control-plane table {table!r} is not on the current schema; "
-                    f"missing columns: {sorted(missing)}. Run the project's explicit "
-                    "database migration procedure; automatic migrations are disabled."
-                )
-
-    def _create_indexes(self) -> None:
-        """Create standard indexes on control plane tables."""
-        statements = (
-            "CREATE INDEX IF NOT EXISTS idx_cp_file_registry_category_status ON cp_file_registry(file_category, sync_status)",
-            "CREATE INDEX IF NOT EXISTS idx_cp_file_registry_status ON cp_file_registry(sync_status)",
-            "CREATE INDEX IF NOT EXISTS idx_cp_artifact_events_file_time ON cp_artifact_run_events(file_id, event_at)",
-            "CREATE INDEX IF NOT EXISTS idx_cp_artifact_events_run ON cp_artifact_run_events(run_id)",
-            "CREATE INDEX IF NOT EXISTS idx_cp_runs_status ON cp_runs(status)",
-            "CREATE INDEX IF NOT EXISTS idx_cp_runs_commit_state ON cp_runs(commit_state)",
-            "CREATE INDEX IF NOT EXISTS idx_cp_run_failures_run ON cp_run_failures(run_id)",
-            "CREATE INDEX IF NOT EXISTS idx_cp_provider_requests_run ON cp_external_provider_requests(run_id)",
-        )
-        for statement in statements:
-            self.conn.execute(statement)
 
     def begin_transaction(self) -> None:
         """Begin an immediate SQLite transaction."""

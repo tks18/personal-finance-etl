@@ -17,9 +17,12 @@ Does not own
 from __future__ import annotations
 
 import os
+from collections.abc import Sequence
 
 from personal_finance_etl.config.settings import FileHashPolicy
-from personal_finance_etl.infrastructure.control_plane.artifact_repository import ArtifactRepository
+from personal_finance_etl.infrastructure.control_plane.artifact_repository import (
+    ArtifactRepository,
+)
 from personal_finance_etl.infrastructure.control_plane.hashing import (
     FILE_TYPE_MAP,
     compute_file_hash,
@@ -29,7 +32,16 @@ from personal_finance_etl.infrastructure.observability.diagnostics import (
     get_observability_diagnostics,
 )
 
+__all__ = ["FileSyncService", "SyncDeltaResult"]
+
 diagnostics = get_observability_diagnostics("personal_finance_etl.control_plane.file_sync")
+
+SyncDeltaResult = tuple[
+    dict[str, list[str]],
+    dict[str, list[str]],
+    int,
+    list[tuple[str, str, str]],
+]
 
 
 class FileSyncService:
@@ -47,12 +59,24 @@ class FileSyncService:
 
     @property
     def active_run_id(self) -> str | None:
-        """Currently active pipeline run identifier."""
+        """Currently active pipeline run identifier.
+
+        Returns
+        -------
+        str | None
+            Active run identifier if set.
+        """
         return self._active_run_id
 
     @active_run_id.setter
     def active_run_id(self, value: str | None) -> None:
-        """Set the active run identifier and propagate it to the artifact repository."""
+        """Set the active run identifier and propagate it to the artifact repository.
+
+        Parameters
+        ----------
+        value : str | None
+            New active run identifier.
+        """
         self._active_run_id = value
         self.artifact_repo.active_run_id = value
 
@@ -61,7 +85,7 @@ class FileSyncService:
         discovered_files: dict[str, list[str]],
         hash_policy: FileHashPolicy,
         full_replace_categories: list[str],
-    ) -> tuple[dict[str, list[str]], dict[str, list[str]], int, list[tuple[str, str, str]]]:
+    ) -> SyncDeltaResult:
         """Synchronize the scan as one atomic control-plane operation.
 
         Parameters
@@ -75,7 +99,7 @@ class FileSyncService:
 
         Returns
         -------
-        tuple[dict[str, list[str]], dict[str, list[str]], int, list[tuple[str, str, str]]]
+        SyncDeltaResult
             A 4-tuple containing:
             - new_files: dict mapping category to new filepaths.
             - changed_files: dict mapping category to modified filepaths.
@@ -100,6 +124,11 @@ class FileSyncService:
         -------
         tuple[dict[str, list[str]], int]
             (normalized_paths_by_category, unique_count).
+
+        Raises
+        ------
+        ValueError
+            If the same file path appears under multiple distinct categories.
         """
         seen_path_categories: dict[str, str] = {}
         normalized_by_category: dict[str, list[str]] = {}
@@ -132,7 +161,31 @@ class FileSyncService:
         hash_to_paths: dict[str, dict[str, list[str]]],
         registry: dict[str, tuple[str, str]],
     ) -> tuple[str, str, str] | None:
-        """Attempt to migrate registered artifact identity when a single unambiguous same-hash candidate exists."""
+        """Attempt to migrate registered artifact identity when a single unambiguous candidate exists.
+
+        Parameters
+        ----------
+        path : str
+            Target file path on disk.
+        category : str
+            Category name.
+        active_paths : set[str]
+            All discovered paths in this category.
+        hash_to_paths : dict[str, dict[str, list[str]]]
+            Precomputed hash lookup map.
+        registry : dict[str, tuple[str, str]]
+            Registry map.
+
+        Returns
+        -------
+        tuple[str, str, str] | None
+            (old_path, path, category) if migrated, else None.
+
+        Raises
+        ------
+        FileNotFoundError
+            If candidate file vanished before hashing.
+        """
         disk_hash = compute_file_hash(path)
         if not disk_hash:
             raise FileNotFoundError(
@@ -175,7 +228,24 @@ class FileSyncService:
         all_active_paths: set[str],
         renamed_old_paths: set[str],
     ) -> list[str]:
-        """Detect and mark registered artifacts that no longer exist on disk as REMOVED."""
+        """Detect and mark registered artifacts that no longer exist on disk as REMOVED.
+
+        Parameters
+        ----------
+        registry_with_status : dict[str, tuple[str, str, str]]
+            Registry entries mapped to (hash, category, status).
+        discovered_categories : set[str]
+            Categories seen in current discovery pass.
+        all_active_paths : set[str]
+            All active paths discovered across all categories.
+        renamed_old_paths : set[str]
+            Paths that were successfully renamed in this pass.
+
+        Returns
+        -------
+        list[str]
+            List of pruned filepaths marked REMOVED.
+        """
         removed_paths: list[str] = [
             registered_path
             for registered_path, (_digest, category, status) in registry_with_status.items()
@@ -224,6 +294,11 @@ class FileSyncService:
         -------
         tuple[str, tuple[str, str, str] | None]
             (action_kind, rename_tuple_if_applicable).
+
+        Raises
+        ------
+        FileNotFoundError
+            If registered file cannot be read during sync.
         """
         current = registry_with_status.get(path)
         previous_status = current[2] if current else None
@@ -261,12 +336,46 @@ class FileSyncService:
 
         return "UNCHANGED", None
 
+    def _assemble_and_ingest_actionable_files(
+        self,
+        normalized_categories: Sequence[str],
+        new_files: dict[str, list[str]],
+        changed_files: dict[str, list[str]],
+    ) -> dict[str, list[str]]:
+        """Filter and vault actionable binary payloads into artifact store.
+
+        Parameters
+        ----------
+        normalized_categories : Sequence[str]
+            Ordered collection of category names.
+        new_files : dict[str, list[str]]
+            Category-mapped newly discovered filepaths.
+        changed_files : dict[str, list[str]]
+            Category-mapped modified filepaths.
+
+        Returns
+        -------
+        dict[str, list[str]]
+            Category-mapped merged actionable filepaths.
+        """
+        actionable_files: dict[str, list[str]] = {}
+        for category in normalized_categories:
+            merged = list(
+                dict.fromkeys(new_files.get(category, []) + changed_files.get(category, []))
+            )
+            if merged:
+                actionable_files[category] = merged
+        self.artifact_repo.ingest_binaries(
+            actionable_files, new_files=new_files, changed_files=changed_files
+        )
+        return actionable_files
+
     def _sync_with_disk(
         self,
         discovered_files: dict[str, list[str]],
         hash_policy: FileHashPolicy,
         full_replace_categories: list[str],
-    ) -> tuple[dict[str, list[str]], dict[str, list[str]], int, list[tuple[str, str, str]]]:
+    ) -> SyncDeltaResult:
         """Synchronize discovered disk files against SQLite artifact metadata registry.
 
         Parameters
@@ -280,7 +389,7 @@ class FileSyncService:
 
         Returns
         -------
-        tuple
+        SyncDeltaResult
             Tuple of (new_files, changed_files, removed_count, detected_renames).
         """
         registry_with_status = self.artifact_repo.get_registry_with_status()
@@ -345,13 +454,8 @@ class FileSyncService:
             + len(renames)
         )
         files_skipped = max(0, unique_input_count - actionable_count)
-        actionable_files: dict[str, list[str]] = {}
-        for category in normalized_by_category:
-            merged = list(dict.fromkeys(new_files[category] + changed_files[category]))
-            if merged:
-                actionable_files[category] = merged
-        self.artifact_repo.ingest_binaries(
-            actionable_files, new_files=new_files, changed_files=changed_files
+        self._assemble_and_ingest_actionable_files(
+            list(normalized_by_category.keys()), new_files, changed_files
         )
 
         new_count = sum(len(paths) for paths in new_files.values())
