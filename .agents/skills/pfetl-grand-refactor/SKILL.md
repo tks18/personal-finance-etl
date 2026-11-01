@@ -34,7 +34,7 @@ flowchart TD
     D --> E["5. User Review & Approval"]
     E --> F["6. Incremental Code & Test Implementation"]
     F --> G["7. Fast Quality Gate (uv run poe audit-fast)"]
-    G --> H["8. Architecture Boundary Gate (pytest tests/test_architecture_boundaries.py)"]
+    G --> H["8. Architecture Boundary Gate (pytest tests/architecture/test_boundaries.py)"]
     H --> I["9. Full Quality Gate Audit (uv run poe audit-full)"]
     I --> J["10. Partition Semantic Commits in .commit_overrides.json"]
     J --> K["11. Commit Preview (uv run poe commit:overrides:preview)"]
@@ -78,17 +78,21 @@ Never mix codebase implementation, tests, planning documentation, and agent skil
 
 1. **Production Codebase:**
    - Format: `feat(<scope>): ...` or `refactor(<scope>): ...`
-   - Scope: Target package (e.g. `contracts`, `config`, `domain`, `infrastructure`).
+   - Scope: Target package or component (e.g. `contracts`, `config`, `domain`, `infrastructure`).
    - Files: Only production source files under `src/`.
+   - Granularity: **Granular commits are required.** Do not force all production files into a single commit. When changes span distinct architectural layers, subsystems, or functional areas, partition them into multiple focused commits (e.g., `feat(contracts): ...` followed by `refactor(config): ...`).
 2. **Test Suite:**
    - Format: `test(<scope>): ...`
-   - Scope: Tested component or feature.
+   - Scope: Tested component, layer, or subsystem (e.g. `contracts`, `config`, `domain`, `architecture`).
    - Files: Only test files under `tests/`.
+   - Granularity: **Granular test commits are required.** Separate test files by architectural layer or subsystem corresponding to their source changes rather than forcing all test additions into a single commit.
 3. **Planning & Roadmap Documentation:**
    - Format: `docs(refactor): ...`
+   - Scope: `refactor` or target milestone.
    - Files: Files under `planning/grand-refactor/`.
-4. **Agent Skills & Tooling:**
-   - Format: `feat(skills): ...` or `chore(skills): ...`
+4. **Agent Skills & Developer Tooling:**
+   - Format: **ALWAYS `chore(skills): ...`** (Never `feat` or `refactor`, because skills are developer and agent execution aids, not runtime production code or features).
+   - Scope: `skills` or specific skill name.
    - Files: Files under `.agents/skills/`.
 
 ### Commit Header Rules

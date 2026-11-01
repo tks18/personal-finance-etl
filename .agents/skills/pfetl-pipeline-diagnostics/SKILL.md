@@ -16,7 +16,7 @@ This skill provides step-by-step procedures for profiling, inspecting, and diagn
 
 Headless runs allow testing the full ETL pipeline without launching the CustomTkinter GUI.
 
-### Configuration (`tests/config.toml`)
+### Configuration (`tests/fixtures/config.toml`)
 Ensure the test configuration points to either fixture statements or local data:
 
 ```toml
@@ -45,7 +45,7 @@ STATEMENTS_FOLDER = "inputs/Statements"
 Run the headless pipeline via `uv`:
 
 ```powershell
-uv run python tests/run_headless.py
+uv run python tests/fixtures/run_headless.py
 ```
 
 ### Programmatic Headless Invocation (Custom Script)
@@ -64,8 +64,8 @@ class StatusQueue:
     def put(self, event, block=True, timeout=None):
         print(f"[{getattr(event, 'severity', 'INFO')}] {getattr(event, 'message', event)}")
 
-cfg = Settings.from_toml("tests/config.toml")
-rules = FinancialRules.from_toml("tests/financial_rules.toml")
+cfg = Settings.from_toml("tests/fixtures/config.toml")
+rules = FinancialRules.from_toml("tests/fixtures/financial_rules.toml")
 q = StatusQueue()
 
 orchestrator = ETLOrchestrator(cfg, status_queue=q, rules=rules)

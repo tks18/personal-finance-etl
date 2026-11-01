@@ -96,7 +96,7 @@ Runs 6 verification engines:
 - Polars DataFrames: Annotate expressions and schemas explicitly.
 
 ### Architecture Boundary Failures
-- If `tests/test_architecture_boundaries.py` reports a forbidden import:
+- If `tests/architecture/test_boundaries.py` reports a forbidden import:
   1. Inspect the import violation in the test output.
   2. Verify which layer is prohibited from importing the target (e.g. `domain` importing `duckdb` or `sqlite3`).
   3. Never alter the test assertions. Move storage queries into `infrastructure/warehouse` and expose data to the domain via pure Polars frames or contract dataclasses.
