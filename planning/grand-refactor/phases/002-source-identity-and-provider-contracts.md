@@ -179,13 +179,13 @@ Do not:
 
 ## 15. Completion checklist
 
-- [ ] `SourceId` exists and is provider/path independent.
-- [ ] `ProviderType` contains only supported external source providers.
-- [ ] `SourceConfig` is Pydantic-validated and serializable.
-- [ ] Dependency direction is preserved.
-- [ ] Runtime code remains untouched.
-- [ ] Focused tests pass.
-- [ ] Architecture tests pass.
+- [x] `SourceId` exists and is provider/path independent.
+- [x] `ProviderType` contains only supported external source providers.
+- [x] `SourceConfig` is Pydantic-validated and serializable.
+- [x] Dependency direction is preserved.
+- [x] Runtime code remains untouched.
+- [x] Focused tests pass.
+- [x] Architecture tests pass.
 
 ## 16. Commit
 
