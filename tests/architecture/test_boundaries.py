@@ -1,5 +1,3 @@
-# pylint: skip-file
-# flake8: noqa
 """Architectural boundary enforcement tests.
 
 Owns
@@ -71,7 +69,7 @@ def _extract_imported_modules(py_file: Path) -> list[tuple[int, str]]:
     return imported
 
 
-def test_package_structure_exists():
+def test_package_structure_exists() -> None:
     """Verify that all target architecture packages exist and contain __init__.py."""
     expected_packages = [
         "application",
@@ -124,7 +122,7 @@ def test_package_structure_exists():
         assert init_file.is_file(), f"Target package missing __init__.py: {pkg}"
 
 
-def test_numpy_docstrings_in_target_packages():
+def test_numpy_docstrings_in_target_packages() -> None:
     """Verify that all target package __init__.py files have NumPy-style ownership docstrings."""
     target_layers = (
         "application",
@@ -147,7 +145,7 @@ def test_numpy_docstrings_in_target_packages():
         )
 
 
-def test_dependency_boundaries():
+def test_dependency_boundaries() -> None:
     """Enforce the strict architectural import boundaries across newly refactored layers."""
     violations: list[str] = []
 
@@ -169,7 +167,7 @@ def test_dependency_boundaries():
     assert not violations, "Architectural boundary violations found:\n" + "\n".join(violations)
 
 
-def test_legacy_packages_demolished():
+def test_legacy_packages_demolished() -> None:
     """Assert that legacy backend and frontend packages no longer exist under SRC_ROOT."""
     assert not (SRC_ROOT / "backend").exists(), "Legacy 'backend' directory still exists in src"
     assert not (SRC_ROOT / "frontend").exists(), "Legacy 'frontend' directory still exists in src"

@@ -1,5 +1,3 @@
-# pylint: skip-file
-# flake8: noqa
 """Architectural certification and constitutional audit test suite.
 
 Owns
@@ -20,6 +18,8 @@ from __future__ import annotations
 import ast
 import importlib
 from pathlib import Path
+
+from personal_finance_etl.config.financial_rules import FinancialRules
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SRC_ROOT = REPO_ROOT / "src" / "personal_finance_etl"
@@ -217,14 +217,8 @@ def test_canonical_facade_and_container() -> None:
     assert container.get_preferences_manager() is not None
 
 
-def test_financial_rules_model_completeness() -> None:
+def test_financial_rules_model_completeness(rules: FinancialRules) -> None:
     """Verify composed FinancialRules model loads and validates test rules cleanly."""
-    from personal_finance_etl.config.financial_rules import FinancialRules
-
-    rules_path = REPO_ROOT / "tests" / "fixtures" / "financial_rules.toml"
-    assert rules_path.exists(), "Test financial_rules.toml missing"
-
-    rules = FinancialRules.from_toml(str(rules_path))
     assert rules.DEFAULT_CURRENCY_ID == "INR_INR"
     assert rules.income is not None
     assert rules.expense is not None

@@ -1,5 +1,3 @@
-# pylint: skip-file
-# flake8: noqa
 """Legacy package demolition and canonical exports certification test suite.
 
 Owns
