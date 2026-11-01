@@ -63,3 +63,29 @@ uv run python tests/fixtures/run_headless.py
    - Tests must run 100% offline. Never make real HTTP/network calls (e.g. to `yfinance` or external market providers) during tests. Mock network boundaries or inject synthetic test fixtures.
 6. **Deterministic Assertions:**
    - Avoid floating-point equality checks (`assert a == b`). Use `math.isclose()` or `pytest.approx()` with explicit tolerances when validating financial metrics (XIRR, CAGR, returns, tax amounts).
+
+---
+
+## 4. Centralized Enterprise Fixture Catalog (`tests/conftest.py`)
+
+All tests automatically inherit standard typed fixtures from `tests/conftest.py`. Never redefine local mock rules, status queues, or ad-hoc database managers:
+
+| Fixture | Scope | Return Type | Description |
+|---|---|---|---|
+| `rules` | `function` | `FinancialRules` | Fresh, deep-copied instance of the canonical 442-line ruleset. Safe to mutate per-test without side effects. |
+| `mock_rules` | `function` | `FinancialRules` | Alias to `rules` for backwards-compatibility. |
+| `canonical_rules` | `session` | `FinancialRules` | Session-cached template loaded once from `tests/fixtures/financial_rules.toml`. |
+| `isolated_settings` | `function` | `Settings` | Ephemeral `Settings` pointing `TARGET_DB_BASE_PATH` and `LOGS_DIRECTORY` to `tmp_path`. |
+| `isolated_duckdb_manager` | `function` | `DuckDBManager` | Active DuckDB warehouse manager connected to an isolated database in `tmp_path`. |
+| `isolated_control_plane` | `function` | `ControlPlane` | Active Control Plane facade connected to an isolated SQLite database in `tmp_path`. |
+| `isolated_sqlite_manager` | `function` | `SQLiteManager` | Active SQLite connection manager targeting `tmp_path`. |
+| `status_queue` | `function` | `ThreadSafeStatusQueue` | Typed thread-safe status queue capturing events for pipeline tests. |
+| `test_emitter` | `function` | `tuple[ObservabilityEmitter, MemoryEventSink]` | Emitter pre-registered with an in-memory test sink for asserting emitted events. |
+| `isolated_container` | `function` | `ServiceContainer` | Fully wired composition root targeting the isolated `tmp_path` environment. |
+| `isolated_engine` | `function` | `PersonalFinanceEngine` | High-level engine façade backed by `isolated_container`. |
+| `isolated_live_settings` | `function` | `Settings` | Loads user test config from G: drive if mounted, redirecting outputs to `tmp_path`. Skips if G: is unmounted. |
+| `repo_root` | `session` | `Path` | Absolute path to project root. |
+| `fixtures_dir` | `session` | `Path` | Absolute path to `tests/fixtures`. |
+| `rules_path` | `session` | `Path` | Path to `tests/fixtures/financial_rules.toml`. |
+| `config_path` | `session` | `Path` | Path to `tests/fixtures/config.toml`. |
+
