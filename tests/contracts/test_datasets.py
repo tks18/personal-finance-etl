@@ -1,5 +1,3 @@
-# pylint: skip-file
-# flake8: noqa
 """Canonical dataset identity and registry contracts test suite.
 
 Owns
@@ -65,7 +63,15 @@ def test_dataset_id_naming_conventions() -> None:
         # Naming family check
         assert any(
             member.name.startswith(family)
-            for family in ("HOUSEHOLD_", "INVESTMENT_", "MARKET_", "TAX_", "WEALTH_", "FIRE_", "COMMON_")
+            for family in (
+                "HOUSEHOLD_",
+                "INVESTMENT_",
+                "MARKET_",
+                "TAX_",
+                "WEALTH_",
+                "FIRE_",
+                "COMMON_",
+            )
         )
 
 
@@ -139,7 +145,9 @@ def test_validate_registry_success() -> None:
     validate_registry()
 
 
-def test_validate_registry_rejects_duplicate_bronze_dataset_id(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_validate_registry_rejects_duplicate_bronze_dataset_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Verify registry validation rejects duplicate Bronze DatasetId."""
     corrupted_bronze = list(BRONZE_CONTRACT_REGISTRY)
     # Duplicate first entry
@@ -160,7 +168,9 @@ def test_validate_registry_rejects_duplicate_bronze_dataset_id(monkeypatch: pyte
         validate_registry()
 
 
-def test_validate_registry_rejects_duplicate_analytical_dataset_id(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_validate_registry_rejects_duplicate_analytical_dataset_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Verify registry validation rejects duplicate analytical DatasetId."""
     corrupted_data = list(DATA_CONTRACT_REGISTRY)
     # Duplicate first entry
@@ -187,12 +197,21 @@ def test_validate_registry_rejects_duplicate_analytical_dataset_id(monkeypatch: 
 def test_fingerprint_incorporates_dataset_id() -> None:
     """Verify that metadata fingerprint calculation includes dataset_id."""
     meta1 = [
-        {"dataset_id": "common_calendar", "table_name": "silver.d_Calendar", "grain": "Day", "producer": "CoreEngine"},
+        {
+            "dataset_id": "common_calendar",
+            "table_name": "silver.d_Calendar",
+            "grain": "Day",
+            "producer": "CoreEngine",
+        },
     ]
     meta2 = [
-        {"dataset_id": "different_dataset", "table_name": "silver.d_Calendar", "grain": "Day", "producer": "CoreEngine"},
+        {
+            "dataset_id": "different_dataset",
+            "table_name": "silver.d_Calendar",
+            "grain": "Day",
+            "producer": "CoreEngine",
+        },
     ]
     fp1 = generate_contract_registry_fingerprint(meta1)
     fp2 = generate_contract_registry_fingerprint(meta2)
     assert fp1 != fp2
-

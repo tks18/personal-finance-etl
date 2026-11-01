@@ -16,13 +16,15 @@ Does not own
 from __future__ import annotations
 
 import dataclasses
+from collections.abc import Callable
 from datetime import datetime
+from typing import cast
 
 import polars as pl
 import pytest
 
-import personal_finance_etl.contracts as contracts
-import personal_finance_etl.contracts.application as app_contracts
+from personal_finance_etl import contracts
+from personal_finance_etl.contracts import application as app_contracts
 from personal_finance_etl.contracts.application import (
     EngineDataTransport,
     EngineStage,
@@ -45,7 +47,7 @@ def test_engine_status_message_completely_eradicated() -> None:
 def test_engine_data_transport_typed_contract() -> None:
     """Verify dedicated EngineDataTransport contract transports tabular results independently."""
     sample_df = pl.DataFrame({"metric": ["CAGR", "IRR"], "value": [0.145, 0.182]})
-    metadata = {"run_id": "run_test_01", "row_count": 2}
+    metadata: dict[str, str | int | float | bool] = {"run_id": "run_test_01", "row_count": 2}
 
     transport = EngineDataTransport(
         channel="portfolio_analytics",
@@ -81,8 +83,8 @@ def test_observability_event_has_no_data_payload() -> None:
     assert event.progress == 0.75
 
     with pytest.raises(TypeError, match="unexpected keyword argument 'data'"):
-        create_fn = getattr(ObservabilityEvent, "create")
-        create_fn(
+        create_fn = cast(Callable[..., object], ObservabilityEvent.create)
+        create_fn(  # pylint: disable=unexpected-keyword-arg
             event_code=EventCode.TRANSFORMATION_DAG_COMPLETED,
             message="failure",
             data=pl.DataFrame(),

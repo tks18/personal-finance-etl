@@ -1,5 +1,3 @@
-# pylint: skip-file
-# flake8: noqa
 """Typed contracts and primitive domain representations test suite.
 
 Owns
@@ -7,6 +5,8 @@ Owns
 - Unit tests validating contract instantiation, invariant checking, alias mapping,
   and behavioral semantics for contracts/ and domain/investments/contracts.py.
 """
+
+from __future__ import annotations
 
 from datetime import date
 
@@ -60,13 +60,13 @@ from personal_finance_etl.domain.market.fx import FXObservation
 # ---------------------------------------------------------------------------
 
 
-def test_commit_state_enum():
+def test_commit_state_enum() -> None:
     assert CommitState.NOT_STARTED == "NOT_STARTED"
     assert CommitState.FULLY_COMMITTED == "FULLY_COMMITTED"
     assert CommitState.RECOVERY_REQUIRED == "RECOVERY_REQUIRED"
 
 
-def test_classify_failure_domain():
+def test_classify_failure_domain() -> None:
     # Exception type checks
     val_err = FinancialSourceValidationError("Malformed date", source="Zerodha")
     assert classify_failure_domain("TRANSFORM", val_err) == FailureDomain.SOURCE_VALIDATION
@@ -90,7 +90,7 @@ def test_classify_failure_domain():
     assert classify_failure_domain("UNKNOWN_STAGE") == FailureDomain.UNKNOWN
 
 
-def test_extraction_batch_result_contract():
+def test_extraction_batch_result_contract() -> None:
     df1 = pl.DataFrame({"a": [1, 2]})
     df2 = pl.DataFrame({"a": [3, 4]})
 
@@ -133,7 +133,7 @@ def test_extraction_batch_result_contract():
     assert "GBP" in str(exc_info.value)
 
 
-def test_recovery_results():
+def test_recovery_results() -> None:
     snap = SnapshotResult(
         outcome=SnapshotOutcome.SNAPSHOT_PUBLISHED,
         archive_path=None,
@@ -144,13 +144,13 @@ def test_recovery_results():
 
     restore = RestoreResult(
         outcome=RestoreOutcome.RESTORE_SUCCEEDED,
-        source_archive=None,  # type: ignore[arg-type]
+        source_archive=None,
         files_restored=["duckdb.db"],
     )
     assert restore.is_success is True
 
 
-def test_application_execution_result():
+def test_application_execution_result() -> None:
     assert EngineStage.TRANSFORMING.value == "TRANSFORMING"
     assert DiagnosticSeverity.INFO.value == "INFO"
     res = EngineExecutionResult(
@@ -168,7 +168,7 @@ def test_application_execution_result():
 # ---------------------------------------------------------------------------
 
 
-def test_calculation_results():
+def test_calculation_results() -> None:
     xirr_ok = XirrResult(value=0.15, status=CalculationStatus.VALID)
     assert xirr_ok.is_valid is True
     assert xirr_ok.as_float() == 0.15
@@ -185,7 +185,7 @@ def test_calculation_results():
     assert cpi_ok.is_valid is True
 
 
-def test_financial_source_validation_error():
+def test_financial_source_validation_error() -> None:
     err = FinancialSourceValidationError(
         "Invalid number format",
         source="Excel_Bank",
@@ -202,7 +202,7 @@ def test_financial_source_validation_error():
     assert "row=42" in msg
 
 
-def test_fx_observation():
+def test_fx_observation() -> None:
     obs = FXObservation(rate=83.5, currency="USD", observation_date=date(2025, 1, 15))
     assert obs.is_missing is False
     assert obs.as_float() == 83.5
@@ -217,7 +217,7 @@ def test_fx_observation():
 # ---------------------------------------------------------------------------
 
 
-def test_tax_lot_slots_and_immutability():
+def test_tax_lot_slots_and_immutability() -> None:
     lot = TaxLot(
         date=date(2024, 1, 10),
         qty=100.0,
@@ -233,7 +233,7 @@ def test_tax_lot_slots_and_immutability():
         lot.qty = 200.0  # type: ignore[misc]
 
 
-def test_realized_event_record_aliases():
+def test_realized_event_record_aliases() -> None:
     # Test constructing from dictionary with established Polars/FIFO field names
     data = {
         "Realized_Event_ID": "REALIZED_abc123",
@@ -261,7 +261,7 @@ def test_realized_event_record_aliases():
     assert event.holding_type == "LTCG"
 
 
-def test_reconciliation_event_record_aliases():
+def test_reconciliation_event_record_aliases() -> None:
     data = {
         "Reconciliation_Event_ID": "RECON_001",
         "Reconciliation_Group_ID": "GROUP_001",
@@ -277,7 +277,7 @@ def test_reconciliation_event_record_aliases():
     assert recon.delta_qty == 5.0
 
 
-def test_isin_process_result_and_pipeline_result():
+def test_isin_process_result_and_pipeline_result() -> None:
     tags = ISINTags.model_validate(
         {
             "class": "Equity",

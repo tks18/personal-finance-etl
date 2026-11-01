@@ -1,5 +1,3 @@
-# pylint: skip-file
-# flake8: noqa
 """Source identity and provider contracts test suite.
 
 Owns
@@ -46,7 +44,7 @@ def test_source_id_rejection_invariants() -> None:
 
     # Non-string type
     with pytest.raises(TypeError, match="SourceId must be a string"):
-        validate_source_id(12345)  # type: ignore[arg-type]
+        validate_source_id(12345)
 
     # Path separators forbidden (both forward and backward slash)
     with pytest.raises(ValueError, match="SourceId cannot contain path separators"):
@@ -58,9 +56,9 @@ def test_source_id_rejection_invariants() -> None:
 
 def test_provider_type_closed_vocabulary() -> None:
     """Verify ProviderType enum members and case-insensitive resolution."""
-    assert ProviderType.CSV == "csv"
-    assert ProviderType.EXCEL == "excel"
-    assert ProviderType.SQLITE == "sqlite"
+    assert ProviderType.CSV.value == "csv"
+    assert ProviderType.EXCEL.value == "excel"
+    assert ProviderType.SQLITE.value == "sqlite"
 
     # Case-insensitive resolution via _missing_
     assert ProviderType("csv") == ProviderType.CSV
