@@ -1,5 +1,3 @@
-# pylint: skip-file
-# flake8: noqa
 """Desktop GUI and presentation layer verification test suite.
 
 Validates
@@ -43,12 +41,12 @@ def test_presentation_subpackage_exports() -> None:
 
 def test_theme_constants() -> None:
     """Assert theme tokens and color mappings."""
-    assert canonical_theme.Color.BG == "#0D1117"
-    assert canonical_theme.Color.ACCENT == "#3B82F6"
-    assert canonical_theme.Color.SUCCESS == "#22C55E"
-    assert canonical_theme.LogTag.STEP == "#60A5FA"
-    assert canonical_theme.ExportMode.CONSOLIDATED == "consolidated"
-    assert canonical_theme.ExportMode.INDIVIDUAL == "individual"
+    assert canonical_theme.Color.BG.value == "#0D1117"
+    assert canonical_theme.Color.ACCENT.value == "#3B82F6"
+    assert canonical_theme.Color.SUCCESS.value == "#22C55E"
+    assert canonical_theme.LogTag.STEP.value == "#60A5FA"
+    assert canonical_theme.ExportMode.CONSOLIDATED.value == "consolidated"
+    assert canonical_theme.ExportMode.INDIVIDUAL.value == "individual"
 
 
 def test_argument_parser_subcommands() -> None:
