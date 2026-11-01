@@ -18,7 +18,7 @@ Before implementing or planning any refactor phase, always consult:
 1. `planning/grand-refactor/README.md`: Master phase roadmap, status table, milestones, and batch authorities.
 2. `planning/grand-refactor/ARCHITECTURE.md`: Target data spine, configuration boundaries, stable identities (`DatasetId`, `SourceId`, `CapabilityId`), and migration discipline.
 3. `planning/grand-refactor/phases/<phase_num>-*.md`: Specific outcome, inherited state, target state, files in scope, non-goals, and completion checklist for the active phase.
-4. `AGENTS.md`: Seven-Layer Architecture boundary rules, prohibited imports, NumPy docstring standards, and fast quality gates.
+4. `AGENTS.md`: Seven-Layer Architecture boundary rules, prohibited imports, NumPy docstring standards, and quality gates.
 
 ---
 
@@ -33,11 +33,12 @@ flowchart TD
     C --> D["4. Generate Implementation Plan Artifact"]
     D --> E["5. User Review & Approval"]
     E --> F["6. Incremental Code & Test Implementation"]
-    F --> G["7. Quality Gate Audit (uv run poe audit-fast)"]
+    F --> G["7. Fast Quality Gate (uv run poe audit-fast)"]
     G --> H["8. Architecture Boundary Gate (pytest tests/test_architecture_boundaries.py)"]
-    H --> I["9. Stage Semantic Commit in .commit_overrides.json"]
-    I --> J["10. Commit Preview (uv run poe commit:overrides:preview)"]
-    J --> K["11. User Independent Verification & Final Confirmation"]
+    H --> I["9. Full Quality Gate Audit (uv run poe audit-full)"]
+    I --> J["10. Partition Semantic Commits in .commit_overrides.json"]
+    J --> K["11. Commit Preview (uv run poe commit:overrides:preview)"]
+    K --> L["12. User Independent Verification & Final Confirmation"]
 ```
 
 ---
@@ -59,15 +60,39 @@ flowchart TD
 3. **Double-Commit Integrity:**
    - Commit DuckDB warehouse first, SQLite Control Plane second.
    - Any crash between commits enforces `RECOVERY_REQUIRED` semantics.
+4. **Strict Typing Invariant (Zero-`Any` & Zero-`TYPE_CHECKING` Standard):**
+   - Every class, function, parameter, return value, and data structure across all 50 phases must be strictly and concretely typed.
+   - `Any` or untyped containers (`dict[Any, Any]`, `list[Any]`) are strictly forbidden. Use concrete types, TypeVars, generic protocols, or explicit type unions.
+   - `from typing import TYPE_CHECKING` and `if TYPE_CHECKING:` blocks are **strictly forbidden** anywhere in the repository (`tests/test_phase12_constitutional_certification.py`).
+   - Inline or deferred imports inside function, method, or class bodies are **strictly forbidden**. All imports must remain top-level.
+   - All code must pass both Mypy (`disallow_untyped_defs = True`) and Pyright/Pylance without diagnostics.
+5. **Full Quality Gate Audit Before Commit:**
+   - At the conclusion of each phase or sub-phase prior to committing, execute `uv run poe audit-full`.
+   - All 6 quality engines (Ruff Check, Ruff Format, Mypy Typecheck, Pyright Typecheck, Pylint Deep Analysis, Pytest Full Suite) must pass 100% green.
 
 ---
 
-## 4. Commitlint & Commit Overrides Protocol
+## 4. Semantic Commit Partitioning & Overrides Protocol
 
-For every completed phase:
-1. Formulate a semantic commit header: `<type>(<scope>): <subject>` strictly **<= 72 characters**.
-2. Group all changed files into `.commit_overrides.json` at the repository root.
-3. Preview the commit grouping via `uv run poe commit:overrides:preview`.
-4. **Never execute the commit automatically.** Allow the user to run independent tests and confirm before executing `uv run poe commit:overrides`.
-5. Mark the phase checkbox complete `[x]` in `planning/grand-refactor/README.md`.
+Never mix codebase implementation, tests, planning documentation, and agent skills into a single monolithic commit. Every phase must partition changes into discrete, semantic commit groups in `.commit_overrides.json`:
 
+1. **Production Codebase:**
+   - Format: `feat(<scope>): ...` or `refactor(<scope>): ...`
+   - Scope: Target package (e.g. `contracts`, `config`, `domain`, `infrastructure`).
+   - Files: Only production source files under `src/`.
+2. **Test Suite:**
+   - Format: `test(<scope>): ...`
+   - Scope: Tested component or feature.
+   - Files: Only test files under `tests/`.
+3. **Planning & Roadmap Documentation:**
+   - Format: `docs(refactor): ...`
+   - Files: Files under `planning/grand-refactor/`.
+4. **Agent Skills & Tooling:**
+   - Format: `feat(skills): ...` or `chore(skills): ...`
+   - Files: Files under `.agents/skills/`.
+
+### Commit Header Rules
+- Header line must be **strictly <= 72 characters**.
+- Lowercase subject, no trailing punctuation.
+- Preview all overrides before confirming: `uv run poe commit:overrides:preview`.
+- **Never execute commits automatically.** Always allow the user to test independently and confirm before running `uv run poe commit:overrides`.
