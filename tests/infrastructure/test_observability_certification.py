@@ -42,7 +42,7 @@ from personal_finance_etl.contracts.observability import (
 )
 from personal_finance_etl.infrastructure.observability import JsonlForensicSink
 
-REPO_ROOT: Final[Path] = Path(__file__).resolve().parent.parent
+REPO_ROOT: Final[Path] = Path(__file__).resolve().parents[2]
 SRC_ROOT: Final[Path] = REPO_ROOT / "src" / "personal_finance_etl"
 
 

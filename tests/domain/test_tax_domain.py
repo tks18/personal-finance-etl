@@ -59,7 +59,7 @@ def mock_rules() -> FinancialRules:
     """Create a minimal FinancialRules instance for tax testing."""
     from pathlib import Path
 
-    rules = FinancialRules.from_toml(Path("tests/financial_rules.toml"))
+    rules = FinancialRules.from_toml(Path("tests/fixtures/financial_rules.toml"))
     rules.assumptions.tax.debt_mf_cutoff_date = "2023-03-31"
     rules.assumptions.tax.investment_exclusions = InvestmentExclusionsConfig(
         stcg_sub_cat_ids=["CAT_EXCL_STCG"],

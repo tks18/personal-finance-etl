@@ -21,7 +21,7 @@ import ast
 import importlib
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parents[2]
 SRC_ROOT = REPO_ROOT / "src" / "personal_finance_etl"
 TESTS_ROOT = REPO_ROOT / "tests"
 
@@ -221,7 +221,7 @@ def test_financial_rules_model_completeness() -> None:
     """Verify composed FinancialRules model loads and validates test rules cleanly."""
     from personal_finance_etl.config.financial_rules import FinancialRules
 
-    rules_path = REPO_ROOT / "tests" / "financial_rules.toml"
+    rules_path = REPO_ROOT / "tests" / "fixtures" / "financial_rules.toml"
     assert rules_path.exists(), "Test financial_rules.toml missing"
 
     rules = FinancialRules.from_toml(str(rules_path))

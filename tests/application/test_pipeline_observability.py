@@ -193,7 +193,7 @@ def test_market_sync_pipelines_emit_lifecycle_events(
 def test_application_layer_zero_legacy_prefixes() -> None:
     """Constitutional assertion: Zero legacy string prefixes exist in application package."""
     app_root = (
-        Path(__file__).resolve().parent.parent / "src" / "personal_finance_etl" / "application"
+        Path(__file__).resolve().parents[2] / "src" / "personal_finance_etl" / "application"
     )
     assert app_root.exists(), f"Application root does not exist: {app_root}"
 

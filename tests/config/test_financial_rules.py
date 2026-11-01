@@ -114,9 +114,9 @@ def test_fingerprint_rules_determinism_and_defaults() -> None:
     assert none_res["investment_instrument_count"] == 0
     assert none_res["has_tax_assumptions"] is False
 
-    rules_path = Path("tests/financial_rules.toml")
+    rules_path = Path("tests/fixtures/financial_rules.toml")
     if not rules_path.exists():
-        pytest.skip("tests/financial_rules.toml not found")
+        pytest.skip("tests/fixtures/financial_rules.toml not found")
 
     rules1 = FinancialRules.from_toml(rules_path)
     rules2 = FinancialRules.from_toml(rules_path)
@@ -143,7 +143,7 @@ def test_lifecycle_emits_system_config_fingerprint_with_real_values(tmp_path: Pa
         LOGS_DIRECTORY=str(logs_dir),
     )
 
-    rules_path = Path("tests/financial_rules.toml")
+    rules_path = Path("tests/fixtures/financial_rules.toml")
     rules = FinancialRules.from_toml(rules_path) if rules_path.exists() else None
 
     emitter = ObservabilityEmitter()

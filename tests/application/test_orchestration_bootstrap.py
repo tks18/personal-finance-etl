@@ -40,7 +40,7 @@ from personal_finance_etl.infrastructure.warehouse.connection import DuckDBManag
 @pytest.fixture
 def mock_rules() -> FinancialRules:
     """Load canonical test financial rules."""
-    return FinancialRules.from_toml(Path("tests/financial_rules.toml"))
+    return FinancialRules.from_toml(Path("tests/fixtures/financial_rules.toml"))
 
 
 def test_service_container_wiring(mock_rules: FinancialRules, tmp_path: Path) -> None:
@@ -55,7 +55,7 @@ def test_service_container_wiring(mock_rules: FinancialRules, tmp_path: Path) ->
     cfg = container.create_settings()
     assert isinstance(cfg, Settings)
 
-    rules = container.create_rules("tests/financial_rules.toml")
+    rules = container.create_rules("tests/fixtures/financial_rules.toml")
     assert isinstance(rules, FinancialRules)
 
     # Storage & Control Plane
@@ -70,7 +70,7 @@ def test_service_container_wiring(mock_rules: FinancialRules, tmp_path: Path) ->
     assert backup_mgr.base_path == str(tmp_path)
 
     # Orchestrator
-    orchestrator = container.create_orchestrator(rules_path="tests/financial_rules.toml")
+    orchestrator = container.create_orchestrator(rules_path="tests/fixtures/financial_rules.toml")
     assert isinstance(orchestrator, ETLOrchestrator)
     assert isinstance(orchestrator.executor, PipelineExecutor)
 
@@ -85,7 +85,7 @@ def test_personal_finance_engine_facade(tmp_path: Path) -> None:
     engine = PersonalFinanceEngine()
 
     # Configuration validation
-    valid = engine.validate_config("tests/financial_rules.toml")
+    valid = engine.validate_config("tests/fixtures/financial_rules.toml")
     # A financial rules file is not a valid Settings file (missing fields like STATEMENTS_FOLDER)
     assert isinstance(valid, bool)
 

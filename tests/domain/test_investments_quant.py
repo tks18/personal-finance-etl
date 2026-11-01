@@ -41,7 +41,7 @@ from personal_finance_etl.domain.market.macro import FYMacroParametersTable
 
 def test_fifo_accounting_lifecycle() -> None:
     """Verify FIFO queue buy/sell matching, deterministic IDs, shadow units, and realized PnL."""
-    toml_path = Path("tests/financial_rules.toml")
+    toml_path = Path("tests/fixtures/financial_rules.toml")
     rules = FinancialRules.from_toml(str(toml_path))
 
     df_t = pl.DataFrame(
@@ -191,7 +191,7 @@ def test_reconciliation_engine_quantity_and_basis() -> None:
 
 def test_investment_quant_engine_end_to_end() -> None:
     """Verify full InvestmentQuantEngine execution on synthetic multi-stream data."""
-    toml_path = Path("tests/financial_rules.toml")
+    toml_path = Path("tests/fixtures/financial_rules.toml")
     rules = FinancialRules.from_toml(str(toml_path))
 
     # Purchases: Buy 10 shares of INE002A01018 on 2023-01-02 @ 100

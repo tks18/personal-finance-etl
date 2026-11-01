@@ -64,7 +64,7 @@ from personal_finance_etl.infrastructure.preferences.repository import Preferenc
 
 def test_financial_rules_toml_loading_and_export():
     """Verify loading real TOML config and flattening to DB records."""
-    toml_path = Path("tests/financial_rules.toml")
+    toml_path = Path("tests/fixtures/financial_rules.toml")
     assert toml_path.exists()
 
     rules = FinancialRules.from_toml(str(toml_path))
@@ -88,7 +88,7 @@ def test_financial_rules_toml_loading_and_export():
 
 def test_financial_rules_exclusion_validation():
     """Verify exclusion validation against subcategory dimension."""
-    toml_path = Path("tests/financial_rules.toml")
+    toml_path = Path("tests/fixtures/financial_rules.toml")
     rules = FinancialRules.from_toml(str(toml_path))
 
     # Should succeed with matching UIDs
@@ -137,7 +137,7 @@ def test_tax_assumptions_mutual_exclusivity():
 
 def test_settings_toml_loading_and_flatten():
     """Verify Settings loads from TOML and flattens to DB records."""
-    toml_path = Path("tests/config.toml")
+    toml_path = Path("tests/fixtures/config.toml")
     assert toml_path.exists()
 
     cfg = Settings.from_toml(str(toml_path))
@@ -318,5 +318,5 @@ def test_filesystem_paths():
     cache_dir = get_cache_dir(temp_dir, "test_cache")
     assert Path(cache_dir).is_dir()
 
-    res = resource_path("tests/config.toml")
+    res = resource_path("tests/fixtures/config.toml")
     assert Path(res).exists()

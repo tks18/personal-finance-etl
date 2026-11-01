@@ -1,5 +1,6 @@
 # pylint: skip-file
 # flake8: noqa
+from pathlib import Path
 import queue
 import time
 
@@ -21,7 +22,8 @@ def main():
     start_time = time.time()
 
     try:
-        cfg = Settings.from_toml("config.toml")
+        cfg_path = "tests/fixtures/config.toml" if Path("tests/fixtures/config.toml").exists() else "config.toml"
+        cfg = Settings.from_toml(cfg_path)
 
         # Run in main thread for profiling
         orchestrator = ETLOrchestrator(cfg, q)

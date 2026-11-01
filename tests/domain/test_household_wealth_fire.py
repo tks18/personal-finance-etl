@@ -39,7 +39,7 @@ from personal_finance_etl.domain.wealth.scoring import (
 @pytest.fixture
 def mock_rules() -> FinancialRules:
     """Load canonical test financial rules."""
-    return FinancialRules.from_toml(Path("tests/financial_rules.toml"))
+    return FinancialRules.from_toml(Path("tests/fixtures/financial_rules.toml"))
 
 
 def test_simulation_reproducibility_seed_generation() -> None:

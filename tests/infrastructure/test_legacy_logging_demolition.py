@@ -138,7 +138,7 @@ def test_lifecycle_coordinator_live_jsonl_production_and_archival(tmp_path: Path
     db_path = str(tmp_path / "test_warehouse.duckdb")
     db_mgr = DuckDBManager(db_path)
     mock_q = _MockStatusQueue()
-    rules = FinancialRules.from_toml(Path("tests/financial_rules.toml"))
+    rules = FinancialRules.from_toml(Path("tests/fixtures/financial_rules.toml"))
     emitter = ObservabilityEmitter()
 
     coordinator = RunLifecycleCoordinator(

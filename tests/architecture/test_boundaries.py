@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-SRC_ROOT = Path(__file__).resolve().parent.parent / "src" / "personal_finance_etl"
+SRC_ROOT = Path(__file__).resolve().parents[2] / "src" / "personal_finance_etl"
 
 # Forbidden import prefixes per layer according to the Engineering Constitution
 FORBIDDEN_IMPORTS = {

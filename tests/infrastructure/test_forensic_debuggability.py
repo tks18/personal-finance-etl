@@ -188,7 +188,7 @@ def test_wealth_and_fire_engine_lifecycle_events(
 ) -> None:
     """Verify WealthService emits WEALTH_ENGINE and FIRE_ENGINE lifecycle events with simulation count."""
     emitter, sink = memory_emitter
-    rules = FinancialRules.from_toml(Path("tests/financial_rules.toml"))
+    rules = FinancialRules.from_toml(Path("tests/fixtures/financial_rules.toml"))
 
     service = WealthService(rules=rules, root_seed="test_seed_42", emitter=emitter)
     assert service.emitter is emitter
