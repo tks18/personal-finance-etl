@@ -12,11 +12,10 @@
 
 line-length = 100
 target-version = "py313"
-src = ["src"]
+src = ["src", "tests"]
 
-# Exclude every directory and root script except src/
+# Exclude every directory and root script except src/ and tests/
 extend-exclude = [
-    "tests",
     "scripts",
     ".planning",
     "docs",
