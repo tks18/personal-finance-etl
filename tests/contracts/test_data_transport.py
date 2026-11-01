@@ -1,4 +1,4 @@
-"""Phase 5 Data Transport and Status Separation Test Suite.
+"""Data transport integrity and status separation test suite.
 
 Owns
 ----

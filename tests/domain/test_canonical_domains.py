@@ -1,10 +1,10 @@
 # pylint: skip-file
 # flake8: noqa
-"""Phase 5 Canonical Financial Domains certification tests.
+"""Canonical financial domains and transforms certification test suite.
 
 Owns
 ----
-- Strict object identity equivalence tests (`is`) between all legacy shims and canonical domain modules.
+- Unit verification of pure domain financial transformations and business logic.
 - Unit verification of household transforms (calendar, dimensions, facts, common).
 - Unit verification of market domain (fx rate provider, benchmark transformer, macro table).
 - Unit verification of investments transforms (ordering policy, references, US equity).

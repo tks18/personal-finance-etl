@@ -1,6 +1,6 @@
 # pylint: skip-file
 # flake8: noqa
-"""Phase 11 Legacy Demolition Certification Test Suite.
+"""Legacy package demolition and canonical exports certification test suite.
 
 Owns
 ----

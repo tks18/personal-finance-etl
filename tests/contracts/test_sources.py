@@ -1,6 +1,6 @@
 # pylint: skip-file
 # flake8: noqa
-"""Unit tests for Phase 002 Source Identity and Provider Contracts.
+"""Source identity and provider contracts test suite.
 
 Owns
 ----

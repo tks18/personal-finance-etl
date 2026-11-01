@@ -1,4 +1,4 @@
-"""Unit tests for Phase 3 forensic debug pipeline, async queue listeners, and Polars queryability.
+"""Forensic debug pipeline, asynchronous queue listeners, and Polars queryability test suite.
 
 Owns
 ----

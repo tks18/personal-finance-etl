@@ -1,9 +1,9 @@
 # pylint: skip-file
 # flake8: noqa
-"""Comprehensive verification test suite for Phase 6: Investment & Quant Domain.
+"""Investment accounting, FIFO lot matching, and quantitative valuation test suite.
 
 Verifies:
-1. 100% strict object identity equivalence (`is`) across all legacy shims and target modules.
+1. Architectural boundary integrity for investment domain kernels.
 2. FIFO lot accounting, matching, shadow units, and deterministic ID generation.
 3. CAGR and XIRR calculation edge cases and status code fidelity.
 4. Valuation, FX validation gate, and benchmark bounded staleness fallback.

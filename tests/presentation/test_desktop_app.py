@@ -1,11 +1,10 @@
 # pylint: skip-file
 # flake8: noqa
-"""Phase 10 presentation layer verification test suite.
+"""Desktop GUI and presentation layer verification test suite.
 
 Validates
 ---------
-1. 100% object identity equivalence (`is`) between superseded legacy frontend
-   modules and canonical presentation targets.
+1. Presentation layer CLI and GUI application entry points.
 2. Dual-mode argument parser behavior for CLI and Desktop GUI subcommands.
 3. Theme tokens, color codes, and log tag formatting mappings.
 4. Documentation manifest catalog parsing and HTML renderer compilation.

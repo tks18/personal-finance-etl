@@ -1,6 +1,6 @@
 # pylint: skip-file
 # flake8: noqa
-"""Unit tests for Phase 001 Canonical Dataset Identity and Registry.
+"""Canonical dataset identity and registry contracts test suite.
 
 Owns
 ----

@@ -1,4 +1,4 @@
-"""Unit tests for Phase 1 canonical observability contracts.
+"""Canonical observability contracts and event schemas test suite.
 
 Owns
 ----

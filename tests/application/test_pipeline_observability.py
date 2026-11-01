@@ -3,7 +3,7 @@
 
 Owns
 ----
-- Verification of canonical ObservabilityEvent emission across Core Pipeline boundaries (Phase 1–5).
+- Verification of canonical ObservabilityEvent emission across Core Pipeline stages.
 - Verification of DataExtractor gatekeeper validation event emission.
 - Verification of MarketSync pipelines (Currency, Benchmark, US Market) event emission.
 - Verification of Quant and Tax service lifecycle transitions.
@@ -11,8 +11,8 @@ Owns
 
 Does not own
 -------------
-- Forensic JSONL sink file I/O verification (owned by tests/test_forensic_pipeline.py).
-- Rich CLI or Desktop CustomTkinter narrative rendering (owned by tests/test_presentation_narrative.py).
+- Forensic JSONL sink file I/O verification (owned by tests/application/test_forensic_pipeline.py).
+- Rich CLI or Desktop CustomTkinter narrative rendering (owned by tests/presentation/test_narrative.py).
 """
 
 from __future__ import annotations

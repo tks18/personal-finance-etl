@@ -1,4 +1,4 @@
-"""Unit tests for Phase 2 central event emitter, context scoping, and span timing.
+"""Central event emitter, context scoping, and span timing test suite.
 
 Owns
 ----

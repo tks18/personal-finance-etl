@@ -1,9 +1,9 @@
 # pylint: skip-file
 # flake8: noqa
-"""Verification tests for Phase 3 Infrastructure refactoring.
+"""DuckDB analytical warehouse and SQLite Control Plane infrastructure test suite.
 
 Asserts:
-1. 100% object identity equivalence (`is`) between superseded legacy modules and canonical targets.
+1. Architectural boundary integrity for storage and control plane.
 2. SQLite Control Plane connection lifecycle, savepoint-based nested atomicity, and schema validation.
 3. DuckDB warehouse manager, schema creation, and pragma configuration.
 4. Warehouse data contracts, registries, and fingerprinting determinism.

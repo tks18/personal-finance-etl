@@ -1,9 +1,9 @@
 # pylint: skip-file
 # flake8: noqa
-"""Unit and regression tests for Phase 7: Tax Domain & Application Service.
+"""Tax domain models, classification, rate resolution, and tax event builder test suite.
 
 Tests:
-1. Strict object identity equivalence (`is`) across all legacy shims vs canonical modules.
+1. Architectural boundary integrity and pure domain tax logic.
 2. TaxClassifier domain logic: quant sub-head mapping, cutoff logic, credit UIDs, subcategory dimension.
 3. TaxEstimator rate resolution, finite number cleaning, and rate bounds.
 4. BaseEventsBuilder / TaxEventNormalizer: ledger income, tax credits, quant FIFO events, deterministic IDs.

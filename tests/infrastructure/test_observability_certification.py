@@ -1,15 +1,15 @@
 # pylint: skip-file
 # flake8: noqa
-"""Phase 10 & 11 Observability Performance, Reliability, and Constitutional Certification Test Suite.
+"""Observability performance, reliability, and constitutional certification test suite.
 
 Owns
 ----
-- Phase 10 Performance Acceptance Gates:
+- Performance Acceptance Gates:
   - Micro-benchmark throughput (>= 25,000 records/sec) and sub-millisecond event emission.
   - Compression latency and ratio gates (zlib compression ratio >= 5.0x, latency <= 50ms).
   - Zero Polars lazy-frame collections (.collect()) solely for logging/observability.
   - Zero hot-loop logging in domain numerical calculations (FIFO, Monte Carlo, IRR).
-- Phase 11 Constitutional Freeze & Anti-Regression Invariants:
+- Constitutional Freeze & Anti-Regression Invariants:
   - Zero legacy string-based severity inference or prefix parsing across src/.
   - Zero sensitive financial data leakage (PAN, cards, tokens, passwords) in trace output.
   - Unified single canonical observability event contract with three intentional projections:
