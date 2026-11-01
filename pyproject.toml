@@ -135,3 +135,8 @@ exclude_dirs = [
     "_df_cache",
 ]
 skips = ["B101", "B110", "B404", "B603", "B607", "B608"]
+
+[tool.pytest.ini_options]
+markers = [
+    "live_data: mark test as requiring local live test data on G: drive",
+]
