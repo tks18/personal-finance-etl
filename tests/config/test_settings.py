@@ -1,5 +1,3 @@
-# pylint: skip-file
-# flake8: noqa
 """Configuration, preferences, and common domain primitives test suite.
 
 Owns
@@ -62,7 +60,7 @@ from personal_finance_etl.infrastructure.filesystem.paths import (
 from personal_finance_etl.infrastructure.preferences.repository import PreferencesManager
 
 
-def test_financial_rules_toml_loading_and_export():
+def test_financial_rules_toml_loading_and_export() -> None:
     """Verify loading real TOML config and flattening to DB records."""
     toml_path = Path("tests/fixtures/financial_rules.toml")
     assert toml_path.exists()
@@ -86,10 +84,8 @@ def test_financial_rules_toml_loading_and_export():
     assert "Target_ID" in first
 
 
-def test_financial_rules_exclusion_validation():
+def test_financial_rules_exclusion_validation(rules: FinancialRules) -> None:
     """Verify exclusion validation against subcategory dimension."""
-    toml_path = Path("tests/fixtures/financial_rules.toml")
-    rules = FinancialRules.from_toml(str(toml_path))
 
     # Should succeed with matching UIDs
     configured_uids = sorted(
@@ -110,7 +106,7 @@ def test_financial_rules_exclusion_validation():
         rules.validate_investment_exclusion_uids(pl.DataFrame({"OTHER": [1, 2]}))
 
 
-def test_tax_assumptions_mutual_exclusivity():
+def test_tax_assumptions_mutual_exclusivity() -> None:
     """Verify that overlapping tax subheads or credit categories raise ValueError."""
     # Test duplicate subhead under the same head
     with pytest.raises(ValueError, match="Duplicate sub-head declaration"):
@@ -138,7 +134,7 @@ def test_tax_assumptions_mutual_exclusivity():
         )
 
 
-def test_settings_toml_loading_and_flatten():
+def test_settings_toml_loading_and_flatten() -> None:
     """Verify Settings loads from TOML and flattens to DB records."""
     toml_path = Path("tests/fixtures/config.toml")
     assert toml_path.exists()
@@ -156,7 +152,7 @@ def test_settings_toml_loading_and_flatten():
         assert "Setting_Value" in r
 
 
-def test_preferences_manager(tmp_path: Path):
+def test_preferences_manager(tmp_path: Path) -> None:
     """Verify PreferencesManager saves recent configs, caps at 10, and filters nonexistent paths."""
     prefs_file = str(tmp_path / "prefs.json")
     mgr = PreferencesManager(prefs_path=prefs_file)
@@ -180,7 +176,7 @@ def test_preferences_manager(tmp_path: Path):
     assert mgr.get_recent_configs() == [str(f2)]
 
 
-def test_deterministic_identity_v2():
+def test_deterministic_identity_v2() -> None:
     """Verify Canonical ID Serialization v2 produces deterministic hashes."""
     purchase_fields = {
         "ISIN": "INE002A01018",
@@ -208,7 +204,7 @@ def test_deterministic_identity_v2():
     assert canonicalize_value("  INFY  ") == "INFY"
 
 
-def test_indian_fiscal_year_computations():
+def test_indian_fiscal_year_computations() -> None:
     """Verify April 1 start and March 31 end boundaries of Indian financial years."""
     # April 1, 2024 -> FY 2024-25
     d1 = date(2024, 4, 1)
@@ -232,7 +228,7 @@ def test_indian_fiscal_year_computations():
     assert lf_with_fy["FY"].to_list() == ["2024-25", "2023-24"]
 
 
-def test_date_parsing_and_validation():
+def test_date_parsing_and_validation() -> None:
     """Verify strict scalar and LazyFrame date validation."""
     assert to_date_obj("2024-05-15") == date(2024, 5, 15)
     assert to_date_obj(None) is None
@@ -268,7 +264,7 @@ def test_date_parsing_and_validation():
         validate_and_parse_dates(lf_bad, {"Date": ["%Y-%m-%d"]}).collect()
 
 
-def test_numeric_parsing_and_validation():
+def test_numeric_parsing_and_validation() -> None:
     """Verify strict scalar and LazyFrame numeric validation."""
     assert parse_strict_numeric("1,250.75") == 1250.75
     assert parse_strict_numeric(" 50% ") == 50.0
@@ -290,7 +286,7 @@ def test_numeric_parsing_and_validation():
         validate_and_parse_numerics(lf_bad, ["Price"]).collect()
 
 
-def test_polars_analytical_primitives():
+def test_polars_analytical_primitives() -> None:
     """Verify safe_divide, pct_growth, and rolling expressions."""
     df = pl.DataFrame(
         {
@@ -313,7 +309,7 @@ def test_polars_analytical_primitives():
     assert pytest.approx(growth_vals[2]) == 0.10
 
 
-def test_filesystem_paths():
+def test_filesystem_paths() -> None:
     """Verify filesystem resource and temporary path resolution."""
     temp_dir = get_temp_dir()
     assert Path(temp_dir).is_dir()

@@ -17,15 +17,8 @@ Does not own
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import cast
 
-import pytest
-
-from personal_finance_etl.infrastructure.observability import (
-    ObservabilityEmitter,
-    get_current_context,
-)
 from personal_finance_etl.application.pipeline.lifecycle import RunLifecycleCoordinator
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
@@ -35,6 +28,10 @@ from personal_finance_etl.contracts.observability import (
     ObservabilityEvent,
     ObservabilitySink,
     PresentationKind,
+)
+from personal_finance_etl.infrastructure.observability import (
+    ObservabilityEmitter,
+    get_current_context,
 )
 from personal_finance_etl.infrastructure.observability.redaction import (
     ConfigFingerprintDict,
@@ -106,7 +103,7 @@ def test_fingerprint_config_determinism_and_privacy() -> None:
     assert res3["config_hash"] != res1["config_hash"]
 
 
-def test_fingerprint_rules_determinism_and_defaults() -> None:
+def test_fingerprint_rules_determinism_and_defaults(rules: FinancialRules) -> None:
     """Verify fingerprint_rules handles None and produces deterministic digests."""
     none_res: RulesFingerprintDict = fingerprint_rules(None)
     assert none_res["rules_hash"] == "none"
@@ -114,12 +111,8 @@ def test_fingerprint_rules_determinism_and_defaults() -> None:
     assert none_res["investment_instrument_count"] == 0
     assert none_res["has_tax_assumptions"] is False
 
-    rules_path = Path("tests/fixtures/financial_rules.toml")
-    if not rules_path.exists():
-        pytest.skip("tests/fixtures/financial_rules.toml not found")
-
-    rules1 = FinancialRules.from_toml(rules_path)
-    rules2 = FinancialRules.from_toml(rules_path)
+    rules1 = rules
+    rules2 = FinancialRules.model_validate(rules.model_dump())
 
     res1: RulesFingerprintDict = fingerprint_rules(rules1)
     res2: RulesFingerprintDict = fingerprint_rules(rules2)
@@ -129,28 +122,18 @@ def test_fingerprint_rules_determinism_and_defaults() -> None:
     assert res1["default_currency_id"] == "INR_INR"
 
 
-def test_lifecycle_emits_system_config_fingerprint_with_real_values(tmp_path: Path) -> None:
+def test_lifecycle_emits_system_config_fingerprint_with_real_values(
+    isolated_settings: Settings,
+    isolated_duckdb_manager: DuckDBManager,
+    rules: FinancialRules,
+) -> None:
     """Verify RunLifecycleCoordinator emits SYSTEM_CONFIG_FINGERPRINT with real context."""
-    db_base = tmp_path / "data"
-    db_base.mkdir(parents=True, exist_ok=True)
-    logs_dir = tmp_path / "logs"
-    logs_dir.mkdir(parents=True, exist_ok=True)
-
-    cfg = Settings(
-        TARGET_DB_BASE_PATH=str(db_base),
-        TARGET_DB_NAME="test_prov.duckdb",
-        RAW_DOCUMENT_STORE_NAME="test_prov_raw.duckdb",
-        LOGS_DIRECTORY=str(logs_dir),
-    )
-
-    rules_path = Path("tests/fixtures/financial_rules.toml")
-    rules = FinancialRules.from_toml(rules_path) if rules_path.exists() else None
-
+    cfg = isolated_settings
     emitter = ObservabilityEmitter()
     collecting_sink = _CollectingSink()
     emitter.register_sink(collecting_sink)
 
-    db_manager = DuckDBManager(cfg.TARGET_DB_BASE_PATH, cfg.TARGET_DB_NAME)
+    db_manager = isolated_duckdb_manager
     status_queue = _DummyStatusQueue()
 
     coordinator = RunLifecycleCoordinator(
@@ -194,11 +177,9 @@ def test_lifecycle_emits_system_config_fingerprint_with_real_values(tmp_path: Pa
             settings_snap, rules_snap = raw_runs[0]
             assert settings_snap is not None
             assert str(settings_snap).startswith("snap_set_")
-            if rules is not None:
-                assert rules_snap is not None
-                assert str(rules_snap).startswith("snap_rule_")
+            assert rules_snap is not None
+            assert str(rules_snap).startswith("snap_rule_")
 
     finally:
         coordinator.commit()
         coordinator.teardown()
-
