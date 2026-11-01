@@ -101,7 +101,7 @@ The invariant is:
 The repository parses imports with `ast` and rejects forbidden arrows.
 
 ```python
-# tests/test_architecture_boundaries.py
+# tests/architecture/test_boundaries.py
 FORBIDDEN_IMPORTS = {
     "contracts": [
         "personal_finance_etl.domain",

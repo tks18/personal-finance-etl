@@ -28,7 +28,7 @@ This repository uses **Astral `uv`** for dependency resolution, virtual environm
 
 ## 2. Seven-Layer Architecture & Import Boundaries
 
-The codebase enforces a strict **7-layer clean architectural boundary system** to prevent financial logic from leaking into storage or presentation mechanisms. These boundaries are verified programmatically via AST in `tests/test_architecture_boundaries.py`.
+The codebase enforces a strict **7-layer clean architectural boundary system** to prevent financial logic from leaking into storage or presentation mechanisms. These boundaries are verified programmatically via AST in `tests/architecture/test_boundaries.py`.
 
 ```mermaid
 flowchart TB
@@ -122,7 +122,7 @@ Before concluding any work, every AI agent must execute this verification sequen
    ```
 3. **Verify Architectural Boundaries:**
    ```powershell
-   uv run pytest tests/test_architecture_boundaries.py
+   uv run pytest tests/architecture/test_boundaries.py
    ```
 4. **Run Target Tests:**
    ```powershell

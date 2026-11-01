@@ -330,7 +330,7 @@ Internal implementation remains importable Python, but documented public surface
 The codebase includes AST-based tests that reject forbidden import arrows and verify the target package structure.
 
 ```python
-# tests/test_architecture_boundaries.py
+# tests/architecture/test_boundaries.py
 FORBIDDEN_IMPORTS = {
     "contracts": [
         "personal_finance_etl.domain",
