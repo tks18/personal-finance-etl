@@ -1,5 +1,3 @@
-# pylint: skip-file
-# flake8: noqa
 """Application orchestration, pipeline execution, and ServiceContainer composition root test suite.
 
 Verifies:
@@ -97,9 +95,7 @@ def test_personal_finance_engine_facade(tmp_path: Path) -> None:
     assert snap_res.outcome == SnapshotOutcome.SNAPSHOT_FAILED
 
 
-def test_run_lifecycle_coordinator_transitions(
-    tmp_path: Path, status_queue: EventQueue
-) -> None:
+def test_run_lifecycle_coordinator_transitions(tmp_path: Path, status_queue: EventQueue) -> None:
     """Verify RunLifecycleCoordinator initialization, transaction states, and commit convergence."""
     cfg = Settings()
     cfg.TARGET_DB_BASE_PATH = str(tmp_path)
@@ -109,33 +105,34 @@ def test_run_lifecycle_coordinator_transitions(
     db_manager = DuckDBManager(cfg.TARGET_DB_BASE_PATH, cfg.TARGET_DB_NAME)
     lifecycle = RunLifecycleCoordinator(cfg, status_queue, db_manager, rules=None)
 
-    assert lifecycle.commit_state == CommitState.NOT_STARTED
+    state_initial = lifecycle.commit_state
+    assert state_initial is CommitState.NOT_STARTED
 
     _cp, run_id, _pending_rec = lifecycle.initialize()
     assert isinstance(run_id, str)
     assert lifecycle.duckdb_started
     assert lifecycle.sqlite_started
-    assert lifecycle.commit_state == CommitState.STARTED
+    state_started = lifecycle.commit_state
+    assert state_started is CommitState.STARTED
 
     # Commit phase
     lifecycle.commit()
     assert lifecycle.duckdb_committed
     assert lifecycle.sqlite_committed
-    assert lifecycle.commit_state == CommitState.FULLY_COMMITTED
+    state_committed = lifecycle.commit_state
+    assert state_committed is CommitState.FULLY_COMMITTED
 
     lifecycle.teardown()
 
 
 def test_run_lifecycle_rollback_on_failure(
-    tmp_path: Path, status_queue: EventQueue
+    isolated_settings: Settings,
+    isolated_duckdb_manager: DuckDBManager,
+    status_queue: EventQueue,
 ) -> None:
     """Verify RunLifecycleCoordinator rolls back cleanly on exception and sets ROLLED_BACK state."""
-    cfg = Settings()
-    cfg.TARGET_DB_BASE_PATH = str(tmp_path)
-    cfg.TARGET_DB_NAME = "test_rollback.duckdb"
-    cfg.RAW_DOCUMENT_STORE_NAME = "test_rollback_raw.db"
-
-    db_manager = DuckDBManager(cfg.TARGET_DB_BASE_PATH, cfg.TARGET_DB_NAME)
+    cfg = isolated_settings
+    db_manager = isolated_duckdb_manager
     lifecycle = RunLifecycleCoordinator(cfg, status_queue, db_manager, rules=None)
 
     cp, run_id, _ = lifecycle.initialize()
@@ -170,7 +167,7 @@ def test_run_lifecycle_split_commit_recovery_marker(
     cp, run_id, _ = lifecycle.initialize()
 
     # Break SQLite commit to simulate split-commit divergence
-    def faulty_commit():
+    def faulty_commit() -> None:
         raise RuntimeError("Disk I/O error writing SQLite journal")
 
     cp.commit = faulty_commit  # type: ignore[method-assign]
@@ -178,7 +175,7 @@ def test_run_lifecycle_split_commit_recovery_marker(
     with pytest.raises(RuntimeError, match="SQLite Commit Failed after DuckDB committed"):
         lifecycle.commit()
 
-    assert lifecycle.commit_state == CommitState.RECOVERY_REQUIRED
+    assert lifecycle.commit_state is CommitState.RECOVERY_REQUIRED
     lifecycle.handle_failure(RuntimeError("SQLite Commit Failed"))
 
     row = cp.db.conn.execute(

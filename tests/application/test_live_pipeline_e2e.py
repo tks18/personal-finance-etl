@@ -58,4 +58,3 @@ def test_live_pipeline_isolation_and_wiring(
     # Validate engine configuration validation with live settings
     engine = PersonalFinanceEngine(container=container)
     assert engine.container is container
-

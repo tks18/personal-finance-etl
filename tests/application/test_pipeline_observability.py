@@ -30,9 +30,6 @@ from personal_finance_etl.application.ingestion.market_sync import (
     CurrencyPipeline,
     USMarketPipeline,
 )
-from personal_finance_etl.infrastructure.observability import (
-    ObservabilityEmitter,
-)
 from personal_finance_etl.config.settings import Settings
 from personal_finance_etl.contracts.application import EngineStage
 from personal_finance_etl.contracts.extraction import ExtractionResult
@@ -42,6 +39,9 @@ from personal_finance_etl.contracts.observability import (
     PresentationKind,
 )
 from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
+from personal_finance_etl.infrastructure.observability import (
+    ObservabilityEmitter,
+)
 from personal_finance_etl.infrastructure.warehouse.bronze import BronzeLayer
 
 
@@ -70,10 +70,11 @@ def test_emitter() -> tuple[ObservabilityEmitter, MockRecordingSink]:
 
 def test_data_extractor_emits_extraction_and_schema_validation(
     test_emitter: tuple[ObservabilityEmitter, MockRecordingSink],
+    isolated_settings: Settings,
 ) -> None:
     """Verify DataExtractor emits EXTRACTION_START and SCHEMA_VALIDATION events."""
     emitter, sink = test_emitter
-    cfg = Settings()
+    cfg = isolated_settings
     mock_queue = MagicMock()
     mock_cp = MagicMock(spec=ControlPlane)
 
@@ -116,10 +117,11 @@ def test_data_extractor_emits_extraction_and_schema_validation(
 
 def test_data_extractor_emits_schema_validation_failure(
     test_emitter: tuple[ObservabilityEmitter, MockRecordingSink],
+    isolated_settings: Settings,
 ) -> None:
     """Verify DataExtractor emits FAILURE event on schema validation exception."""
     emitter, sink = test_emitter
-    cfg = Settings()
+    cfg = isolated_settings
     mock_queue = MagicMock()
     mock_cp = MagicMock(spec=ControlPlane)
 
@@ -192,9 +194,7 @@ def test_market_sync_pipelines_emit_lifecycle_events(
 
 def test_application_layer_zero_legacy_prefixes() -> None:
     """Constitutional assertion: Zero legacy string prefixes exist in application package."""
-    app_root = (
-        Path(__file__).resolve().parents[2] / "src" / "personal_finance_etl" / "application"
-    )
+    app_root = Path(__file__).resolve().parents[2] / "src" / "personal_finance_etl" / "application"
     assert app_root.exists(), f"Application root does not exist: {app_root}"
 
     forbidden_pattern = re.compile(

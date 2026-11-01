@@ -1,8 +1,6 @@
-# pylint: skip-file
-# flake8: noqa
-from pathlib import Path
 import queue
 import time
+from pathlib import Path
 
 from personal_finance_etl.application.pipeline.orchestrator import ETLOrchestrator
 from personal_finance_etl.config.settings import Settings
@@ -16,13 +14,17 @@ class LoggerQueue:
         self._q.put(status, block=block, timeout=timeout)
 
 
-def main():
+def main() -> None:
     print("Starting Headless ETL Pipeline...")
     q = LoggerQueue()
     start_time = time.time()
 
     try:
-        cfg_path = "tests/fixtures/config.toml" if Path("tests/fixtures/config.toml").exists() else "config.toml"
+        cfg_path = (
+            "tests/fixtures/config.toml"
+            if Path("tests/fixtures/config.toml").exists()
+            else "config.toml"
+        )
         cfg = Settings.from_toml(cfg_path)
 
         # Run in main thread for profiling

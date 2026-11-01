@@ -18,7 +18,6 @@ from pathlib import Path
 
 import polars as pl
 
-from personal_finance_etl.infrastructure.observability import ObservabilityEmitter
 from personal_finance_etl.application.pipeline.lifecycle import RunLifecycleCoordinator
 from personal_finance_etl.config.settings import Settings
 from personal_finance_etl.contracts import (
@@ -36,6 +35,7 @@ from personal_finance_etl.contracts import (
 from personal_finance_etl.infrastructure.observability import (
     AsyncObservabilityListener,
     JsonlForensicSink,
+    ObservabilityEmitter,
     ObservabilityQueueSink,
     create_forensic_pipeline,
 )
@@ -284,16 +284,13 @@ class _MockStatusQueue:
         del status, block, timeout
 
 
-def test_run_lifecycle_coordinator_async_pipeline_wiring(tmp_path: Path) -> None:
+def test_run_lifecycle_coordinator_async_pipeline_wiring(
+    isolated_settings: Settings,
+    isolated_duckdb_manager: DuckDBManager,
+) -> None:
     """Verify RunLifecycleCoordinator wires queue sink to emitter and drains on teardown."""
-    cfg = Settings()
-    cfg.TARGET_DB_BASE_PATH = str(tmp_path)
-    cfg.TARGET_DB_NAME = "async_test.duckdb"
-    cfg.RAW_DOCUMENT_STORE_NAME = "async_test_raw.db"
-    cfg.LOGS_DIRECTORY = "logs/runs"
-
-    db_path = str(tmp_path / "async_test.duckdb")
-    db_mgr = DuckDBManager(db_path)
+    cfg = isolated_settings
+    db_mgr = isolated_duckdb_manager
     mock_q = _MockStatusQueue()
     emitter = ObservabilityEmitter()
 
@@ -335,7 +332,7 @@ def test_run_lifecycle_coordinator_async_pipeline_wiring(tmp_path: Path) -> None
     assert coordinator.async_listener is None
     assert len(emitter._sinks) == 0  # pyright: ignore[reportPrivateUsage]
 
-    trace_file = tmp_path / "logs" / "runs" / f"trace_{run_id}.jsonl"
+    trace_file = cfg.resolve_logs_dir() / f"trace_{run_id}.jsonl"
     assert trace_file.exists()
     df = pl.read_ndjson(trace_file)
     event_codes = df["event_code"].to_list()
@@ -426,4 +423,3 @@ def test_create_forensic_pipeline_helper(tmp_path: Path) -> None:
     assert isinstance(f_sink, JsonlForensicSink)
     assert f_sink in listener.sinks
     assert f_sink.buffer_size == 25
-
