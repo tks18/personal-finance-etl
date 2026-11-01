@@ -1,10 +1,10 @@
 # pylint: skip-file
 # flake8: noqa
-"""Tests for Phase 2: Configuration, Preferences, and Common Domain Primitives.
+"""Configuration, preferences, and common domain primitives test suite.
 
 Owns
 ----
-- Complete identity equivalence verification between legacy shims and canonical targets for Phase 2.
+- Verification of configuration model immutability and schema parsing.
 - TOML configuration parsing and database audit export for Settings and FinancialRules.
 - Indian Fiscal Year (FY) calculation and strict date parsing tests.
 - FinancialSourceValidationError raising and numeric parsing tests.
@@ -21,7 +21,7 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-# Canonical Phase 2 imports
+# Canonical configuration imports
 from personal_finance_etl.config.financial_rules import (
     FinancialRules,
     TaxAssumptions,
@@ -92,9 +92,12 @@ def test_financial_rules_exclusion_validation():
     rules = FinancialRules.from_toml(str(toml_path))
 
     # Should succeed with matching UIDs
-    df_valid = pl.DataFrame(
-        {"UID": ["test-stocks-stcg-uid", "test-stocks-ltcg-uid", "INCOME_INTEREST"]}
+    configured_uids = sorted(
+        set(rules.assumptions.tax.investment_exclusions.stcg_sub_cat_ids).union(
+            rules.assumptions.tax.investment_exclusions.ltcg_sub_cat_ids
+        )
     )
+    df_valid = pl.DataFrame({"UID": configured_uids + ["INCOME_INTEREST"]})
     rules.validate_investment_exclusion_uids(df_valid)
 
     # Missing configured UIDs raises ValueError

@@ -1,9 +1,9 @@
 # pylint: skip-file
 # flake8: noqa
-"""Tests for Phase 8: Household Analytics, Wealth, and FIRE domains and application services.
+"""Household analytics, wealth calculations, and FIRE simulations test suite.
 
 Verifies:
-1. Strict object identity equivalence (`is`) between all legacy presentation shims and canonical domain/application modules.
+1. Verification of pure financial domain models and application services.
 2. Deterministic simulation seed derivation and reproducibility provenance.
 3. Budget health scoring, grades, and stress indicators.
 4. Budget forward forecasting.
@@ -15,10 +15,8 @@ Verifies:
 from __future__ import annotations
 
 from datetime import date
-from pathlib import Path
 
 import polars as pl
-import pytest
 
 from personal_finance_etl.application.wealth import WealthService
 from personal_finance_etl.config.financial_rules import FinancialRules
@@ -34,12 +32,6 @@ from personal_finance_etl.domain.wealth.analytics import InvestmentAnalyticsBuil
 from personal_finance_etl.domain.wealth.scoring import (
     calculate_budget_health_score,
 )
-
-
-@pytest.fixture
-def mock_rules() -> FinancialRules:
-    """Load canonical test financial rules."""
-    return FinancialRules.from_toml(Path("tests/fixtures/financial_rules.toml"))
 
 
 def test_simulation_reproducibility_seed_generation() -> None:

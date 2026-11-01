@@ -1,4 +1,4 @@
-"""Phase 4 Configuration and Financial Rules Provenance Test Suite.
+"""Configuration and financial rules provenance test suite.
 
 Owns
 ----

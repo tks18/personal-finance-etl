@@ -1,9 +1,9 @@
 # pylint: skip-file
 # flake8: noqa
-"""Tests for Phase 9: Application Orchestration and Bootstrap Composition Root.
+"""Application orchestration, pipeline execution, and ServiceContainer composition root test suite.
 
 Verifies:
-1. Strict object identity equivalence (`is`) between legacy shims and canonical modules.
+1. Clean architecture layer contracts and ServiceContainer wiring.
 2. ServiceContainer dependency wiring and instantiation of storage, rules, orchestrators, and engines.
 3. PersonalFinanceEngine façade methods (configuration, preferences, backup telemetry).
 4. RunLifecycleCoordinator transactional lifecycle, two-phase commit, rollback, and split-commit recovery.
@@ -13,7 +13,6 @@ Verifies:
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 
 import pytest
 
@@ -27,6 +26,7 @@ from personal_finance_etl.application.pipeline import (
 from personal_finance_etl.bootstrap.container import ServiceContainer
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
+from personal_finance_etl.contracts.event_transport import EventQueue
 from personal_finance_etl.contracts.lifecycle import CommitState
 from personal_finance_etl.contracts.observability import (
     DiagnosticSeverity,
@@ -35,12 +35,6 @@ from personal_finance_etl.contracts.observability import (
 )
 from personal_finance_etl.contracts.recovery import SnapshotOutcome
 from personal_finance_etl.infrastructure.warehouse.connection import DuckDBManager
-
-
-@pytest.fixture
-def mock_rules() -> FinancialRules:
-    """Load canonical test financial rules."""
-    return FinancialRules.from_toml(Path("tests/fixtures/financial_rules.toml"))
 
 
 def test_service_container_wiring(mock_rules: FinancialRules, tmp_path: Path) -> None:
@@ -103,23 +97,17 @@ def test_personal_finance_engine_facade(tmp_path: Path) -> None:
     assert snap_res.outcome == SnapshotOutcome.SNAPSHOT_FAILED
 
 
-def test_run_lifecycle_coordinator_transitions(tmp_path: Path) -> None:
+def test_run_lifecycle_coordinator_transitions(
+    tmp_path: Path, status_queue: EventQueue
+) -> None:
     """Verify RunLifecycleCoordinator initialization, transaction states, and commit convergence."""
     cfg = Settings()
     cfg.TARGET_DB_BASE_PATH = str(tmp_path)
     cfg.TARGET_DB_NAME = "test_lifecycle.duckdb"
     cfg.RAW_DOCUMENT_STORE_NAME = "test_lifecycle_raw.db"
 
-    class MockStatusQueue:
-        def __init__(self) -> None:
-            self.items: list[Any] = []
-
-        def put(self, status: Any, block: bool = True, timeout: float | None = None) -> None:
-            self.items.append(status)
-
-    q = MockStatusQueue()
     db_manager = DuckDBManager(cfg.TARGET_DB_BASE_PATH, cfg.TARGET_DB_NAME)
-    lifecycle = RunLifecycleCoordinator(cfg, q, db_manager, rules=None)
+    lifecycle = RunLifecycleCoordinator(cfg, status_queue, db_manager, rules=None)
 
     assert lifecycle.commit_state == CommitState.NOT_STARTED
 
@@ -138,19 +126,17 @@ def test_run_lifecycle_coordinator_transitions(tmp_path: Path) -> None:
     lifecycle.teardown()
 
 
-def test_run_lifecycle_rollback_on_failure(tmp_path: Path) -> None:
+def test_run_lifecycle_rollback_on_failure(
+    tmp_path: Path, status_queue: EventQueue
+) -> None:
     """Verify RunLifecycleCoordinator rolls back cleanly on exception and sets ROLLED_BACK state."""
     cfg = Settings()
     cfg.TARGET_DB_BASE_PATH = str(tmp_path)
     cfg.TARGET_DB_NAME = "test_rollback.duckdb"
     cfg.RAW_DOCUMENT_STORE_NAME = "test_rollback_raw.db"
 
-    class MockStatusQueue:
-        def put(self, status: Any, block: bool = True, timeout: float | None = None) -> None:
-            pass
-
     db_manager = DuckDBManager(cfg.TARGET_DB_BASE_PATH, cfg.TARGET_DB_NAME)
-    lifecycle = RunLifecycleCoordinator(cfg, MockStatusQueue(), db_manager, rules=None)
+    lifecycle = RunLifecycleCoordinator(cfg, status_queue, db_manager, rules=None)
 
     cp, run_id, _ = lifecycle.initialize()
 
@@ -169,19 +155,17 @@ def test_run_lifecycle_rollback_on_failure(tmp_path: Path) -> None:
     lifecycle.teardown()
 
 
-def test_run_lifecycle_split_commit_recovery_marker(tmp_path: Path) -> None:
+def test_run_lifecycle_split_commit_recovery_marker(
+    tmp_path: Path, status_queue: EventQueue
+) -> None:
     """Verify split-commit divergence marks RECOVERY_REQUIRED when SQLite commit fails."""
     cfg = Settings()
     cfg.TARGET_DB_BASE_PATH = str(tmp_path)
     cfg.TARGET_DB_NAME = "test_split_commit.duckdb"
     cfg.RAW_DOCUMENT_STORE_NAME = "test_split_commit_raw.db"
 
-    class MockStatusQueue:
-        def put(self, status: Any, block: bool = True, timeout: float | None = None) -> None:
-            pass
-
     db_manager = DuckDBManager(cfg.TARGET_DB_BASE_PATH, cfg.TARGET_DB_NAME)
-    lifecycle = RunLifecycleCoordinator(cfg, MockStatusQueue(), db_manager, rules=None)
+    lifecycle = RunLifecycleCoordinator(cfg, status_queue, db_manager, rules=None)
 
     cp, run_id, _ = lifecycle.initialize()
 
@@ -213,8 +197,16 @@ def test_queue_stream_and_log_level_inference() -> None:
         def __init__(self) -> None:
             self.messages: list[ObservabilityEvent] = []
 
-        def put(self, status: Any, block: bool = True, timeout: float | None = None) -> None:
-            self.messages.append(status)
+        def put(
+            self,
+            event: ObservabilityEvent | None,
+            /,
+            block: bool = True,
+            timeout: float | None = None,
+        ) -> None:
+            del block, timeout
+            if event is not None:
+                self.messages.append(event)
 
     mock_q = MockQueue()
     stdout_stream = QueueStream(mock_q, is_error=False)

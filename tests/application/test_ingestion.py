@@ -1,11 +1,11 @@
 # pyright: reportPrivateUsage=false
 # pylint: skip-file
 # flake8: noqa
-"""Unit and integration tests for Phase 4: Extraction and Ingestion.
+"""Extraction and ingestion application services test suite.
 
 Owns
 ----
-- Verification of 100% object identity equivalence ('is') between legacy extract/pipeline modules and canonical targets.
+- Verification of statement extraction and ingestion pipeline contracts.
 - Verification of statement locator file discovery and categorization heuristics.
 - Verification of in-memory CSV extraction adapters and schema tagging.
 - Verification of external SQLite household database base table extraction.
@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import sqlite3
 from datetime import date
-from typing import Any
+from pathlib import Path
 from unittest.mock import MagicMock
 
 # Canonical imports
@@ -50,7 +50,7 @@ from personal_finance_etl.infrastructure.providers.market.us_market import (
 )
 
 
-def test_statement_locator_categorization(tmp_path: Any) -> None:
+def test_statement_locator_categorization(tmp_path: Path) -> None:
     """Verify recursive scanning and categorization of statement files."""
     # Create directory structure with mock files
     (tmp_path / "Stock PL Statements").mkdir(parents=True)
@@ -105,7 +105,7 @@ def test_csv_extraction_adapters() -> None:
     assert df_bench["yF_Ticker"][0] == "^NSEI"
 
 
-def test_sqlite_extractor_base_tables(tmp_path: Any) -> None:
+def test_sqlite_extractor_base_tables(tmp_path: Path) -> None:
     """Verify in-memory deserialization and extraction of external SQLite household tables."""
     db_path = tmp_path / "test_household.sqlite"
     with sqlite3.connect(db_path) as conn:

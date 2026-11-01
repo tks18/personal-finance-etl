@@ -1,4 +1,4 @@
-"""Tests verifying Phase 6 EngineStatusMessage complete eradication and status queue unification.
+"""Engine status queue unification and event messaging test suite.
 
 Owns
 ----
@@ -19,7 +19,6 @@ from __future__ import annotations
 import ast
 import inspect
 from pathlib import Path
-from typing import Any
 
 import personal_finance_etl.contracts as contracts
 import personal_finance_etl.contracts.application as app_contracts
@@ -92,7 +91,7 @@ def test_queue_stream_emits_canonical_observability_events() -> None:
 
         def put(
             self,
-            status: Any,
+            status: object,
             /,
             block: bool = True,
             timeout: float | None = None,
