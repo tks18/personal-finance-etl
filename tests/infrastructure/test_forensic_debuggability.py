@@ -27,7 +27,6 @@ import pytest
 
 from personal_finance_etl.application.ingestion.coordinator import DataExtractor
 from personal_finance_etl.application.investments.quant_service import InvestmentQuantEngine
-from personal_finance_etl.infrastructure.observability import ObservabilityEmitter
 from personal_finance_etl.application.wealth.wealth_service import WealthService
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
@@ -49,7 +48,10 @@ from personal_finance_etl.contracts.observability import (
     PresentationKind,
 )
 from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
-from personal_finance_etl.infrastructure.observability import JsonlForensicSink
+from personal_finance_etl.infrastructure.observability import (
+    JsonlForensicSink,
+    ObservabilityEmitter,
+)
 from personal_finance_etl.infrastructure.providers.market.currency import CurrencyExtractor
 
 
@@ -133,10 +135,11 @@ def test_market_provider_forensic_telemetry_enrichment(
 
 def test_gatekeeper_validation_failure_attaches_error_details(
     memory_emitter: tuple[ObservabilityEmitter, _MemorySink],
+    isolated_settings: Settings,
 ) -> None:
     """Verify DataExtractor schema validation failure attaches ErrorDetails with SOURCE_VALIDATION."""
     emitter, sink = memory_emitter
-    cfg = Settings()
+    cfg = isolated_settings
     mock_queue = MagicMock()
     mock_cp = MagicMock(spec=ControlPlane)
 
@@ -185,10 +188,10 @@ def test_gatekeeper_validation_failure_attaches_error_details(
 
 def test_wealth_and_fire_engine_lifecycle_events(
     memory_emitter: tuple[ObservabilityEmitter, _MemorySink],
+    rules: FinancialRules,
 ) -> None:
     """Verify WealthService emits WEALTH_ENGINE and FIRE_ENGINE lifecycle events with simulation count."""
     emitter, sink = memory_emitter
-    rules = FinancialRules.from_toml(Path("tests/fixtures/financial_rules.toml"))
 
     service = WealthService(rules=rules, root_seed="test_seed_42", emitter=emitter)
     assert service.emitter is emitter
@@ -210,9 +213,7 @@ def test_quant_engine_failure_eliminates_duplicate_run_failed(
     # Mock quant engine with failing _run method
     mock_data = MagicMock()
     mock_options = MagicMock()
-    engine = InvestmentQuantEngine(
-        data=mock_data, options=mock_options, emitter=emitter
-    )
+    engine = InvestmentQuantEngine(data=mock_data, options=mock_options, emitter=emitter)
     engine._run = MagicMock(side_effect=RuntimeError("Quant Memory Exceeded"))  # type: ignore[method-assign]
 
     with pytest.raises(RuntimeError, match="Quant Memory Exceeded"):
@@ -334,7 +335,10 @@ def test_polars_ndjson_forensic_trace_queryability(tmp_path: Path) -> None:
     # Q2: Find all materialized Table nodes
     table_df = df.filter(pl.col("context").struct.field("entity_type") == "Table")
     assert table_df.height == 1
-    assert table_df.select(pl.col("context").struct.field("entity_id")).item() == "df_f_investment_market_data"
+    assert (
+        table_df.select(pl.col("context").struct.field("entity_id")).item()
+        == "df_f_investment_market_data"
+    )
     assert table_df.select(pl.col("context").struct.field("rows")).item() == 10500
 
     # Q3: Find Monte Carlo simulation parameters
@@ -345,4 +349,6 @@ def test_polars_ndjson_forensic_trace_queryability(tmp_path: Path) -> None:
     # Q4: Find failure reason and domain
     fail_df = df.filter(pl.col("error").struct.field("failure_domain") == "SOURCE_VALIDATION")
     assert fail_df.height == 1
-    assert fail_df.select(pl.col("error").struct.field("exception_type")).item() == "ValidationError"
+    assert (
+        fail_df.select(pl.col("error").struct.field("exception_type")).item() == "ValidationError"
+    )

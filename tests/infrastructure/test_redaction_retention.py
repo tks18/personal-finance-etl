@@ -26,12 +26,12 @@ from typing import cast
 
 from personal_finance_etl.config.settings import Settings
 from personal_finance_etl.contracts.application import EngineStage
+from personal_finance_etl.contracts.lifecycle import FailureDomain
 from personal_finance_etl.contracts.observability import (
     DiagnosticSeverity,
     ErrorDetails,
     EventCode,
     EventOutcome,
-    FailureDomain,
     ObservabilityContext,
     ObservabilityEvent,
     PresentationKind,
@@ -299,7 +299,9 @@ def test_redact_text_adversarial_patterns() -> None:
     assert "Connecting to postgresql://postgres:[REDACTED]@localhost:5432/finance_db" == uri_clean
 
     # Key assignments
-    assign_input = "Config loaded with password='MyVaultPassword123' and credential = 'AdminCredential456'"
+    assign_input = (
+        "Config loaded with password='MyVaultPassword123' and credential = 'AdminCredential456'"
+    )
     assign_clean = redact_text(assign_input)
     assert "MyVaultPassword123" not in assign_clean
     assert "AdminCredential456" not in assign_clean
@@ -391,4 +393,3 @@ def test_jsonl_forensic_sink_with_policy_overrides(tmp_path: Path) -> None:
     parsed = json.loads(raw_content.strip())
     assert parsed["context"]["entity_id"].startswith("id_")
     assert parsed["context"]["entity_id"] == hash_identifier("user_account_998811")
-

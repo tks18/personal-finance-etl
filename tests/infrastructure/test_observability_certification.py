@@ -1,5 +1,3 @@
-# pylint: skip-file
-# flake8: noqa
 """Observability performance, reliability, and constitutional certification test suite.
 
 Owns
@@ -22,16 +20,11 @@ from __future__ import annotations
 
 import ast
 import json
-from pathlib import Path
 import time
-from typing import Final
 import zlib
+from pathlib import Path
+from typing import Final
 
-from personal_finance_etl.infrastructure.observability import (
-    ObservabilityEmitter,
-    reset_current_context,
-    set_current_context,
-)
 from personal_finance_etl.contracts.application import EngineStage
 from personal_finance_etl.contracts.observability import (
     DiagnosticSeverity,
@@ -40,7 +33,12 @@ from personal_finance_etl.contracts.observability import (
     ObservabilityEvent,
     PresentationKind,
 )
-from personal_finance_etl.infrastructure.observability import JsonlForensicSink
+from personal_finance_etl.infrastructure.observability import (
+    JsonlForensicSink,
+    ObservabilityEmitter,
+    reset_current_context,
+    set_current_context,
+)
 
 REPO_ROOT: Final[Path] = Path(__file__).resolve().parents[2]
 SRC_ROOT: Final[Path] = REPO_ROOT / "src" / "personal_finance_etl"

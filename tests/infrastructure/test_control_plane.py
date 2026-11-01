@@ -30,7 +30,6 @@ from pathlib import Path
 
 import pytest
 
-from personal_finance_etl.infrastructure.observability import ObservabilityEmitter
 from personal_finance_etl.contracts.application import EngineStage
 from personal_finance_etl.contracts.extraction import ExtractionProviderRequest
 from personal_finance_etl.contracts.lifecycle import (
@@ -50,6 +49,7 @@ from personal_finance_etl.infrastructure.control_plane.facade import ControlPlan
 from personal_finance_etl.infrastructure.control_plane.run_repository import (
     RunRepository,
 )
+from personal_finance_etl.infrastructure.observability import ObservabilityEmitter
 from personal_finance_etl.infrastructure.observability.archival import (
     DEFAULT_COMPRESSION_LEVEL,
     archive_run_trace,
@@ -426,9 +426,7 @@ def test_archival_non_fatal_on_missing_file(control_plane: ControlPlane) -> None
     assert success is False
 
 
-def test_archival_non_fatal_on_database_error(
-    control_plane: ControlPlane, tmp_path: Path
-) -> None:
+def test_archival_non_fatal_on_database_error(control_plane: ControlPlane, tmp_path: Path) -> None:
     """Verify archive_run_trace never raises exceptions if SQLite write fails."""
     run_id = control_plane.runs.start_run()
     trace_file = tmp_path / "valid.log"

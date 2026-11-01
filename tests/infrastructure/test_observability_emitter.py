@@ -14,12 +14,6 @@ import concurrent.futures
 
 import pytest
 
-from personal_finance_etl.infrastructure.observability import (
-    ObservabilityEmitter,
-    get_current_context,
-    reset_current_context,
-    set_current_context,
-)
 from personal_finance_etl.contracts import (
     DiagnosticSeverity,
     EngineStage,
@@ -29,6 +23,12 @@ from personal_finance_etl.contracts import (
     ObservabilityContext,
     ObservabilityEvent,
     PresentationKind,
+)
+from personal_finance_etl.infrastructure.observability import (
+    ObservabilityEmitter,
+    get_current_context,
+    reset_current_context,
+    set_current_context,
 )
 
 

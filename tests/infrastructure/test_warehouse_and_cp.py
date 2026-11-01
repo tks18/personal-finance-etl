@@ -1,5 +1,3 @@
-# pylint: skip-file
-# flake8: noqa
 """DuckDB analytical warehouse and SQLite Control Plane infrastructure test suite.
 
 Asserts:

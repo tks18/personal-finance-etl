@@ -24,7 +24,6 @@ from pathlib import Path
 
 import polars as pl
 
-from personal_finance_etl.infrastructure.observability import ObservabilityEmitter
 from personal_finance_etl.application.pipeline.lifecycle import RunLifecycleCoordinator
 from personal_finance_etl.application.pipeline.worker import (
     QueueStream,
@@ -39,6 +38,7 @@ from personal_finance_etl.contracts.observability import (
     ObservabilityEvent,
     PresentationKind,
 )
+from personal_finance_etl.infrastructure.observability import ObservabilityEmitter
 from personal_finance_etl.infrastructure.observability.archival import retrieve_run_trace
 from personal_finance_etl.infrastructure.warehouse.connection import DuckDBManager
 
@@ -125,20 +125,18 @@ def test_worker_exit_fallback_never_duplicates_a_terminal_event() -> None:
         terminal_seen=True,
     )
 
-    assert observed == []
+    assert len(observed) == 0
 
 
-def test_lifecycle_coordinator_live_jsonl_production_and_archival(tmp_path: Path) -> None:
+def test_lifecycle_coordinator_live_jsonl_production_and_archival(
+    isolated_settings: Settings,
+    isolated_duckdb_manager: DuckDBManager,
+    rules: FinancialRules,
+) -> None:
     """Verify RunLifecycleCoordinator attaches live JSONL sink, writes trace, and archives it."""
-    cfg = Settings()
-    cfg.TARGET_DB_BASE_PATH = str(tmp_path)
-    cfg.RAW_DOCUMENT_STORE_NAME = "raw_store.db"
-    cfg.LOGS_DIRECTORY = "logs/runs"
-
-    db_path = str(tmp_path / "test_warehouse.duckdb")
-    db_mgr = DuckDBManager(db_path)
+    cfg = isolated_settings
+    db_mgr = isolated_duckdb_manager
     mock_q = _MockStatusQueue()
-    rules = FinancialRules.from_toml(Path("tests/fixtures/financial_rules.toml"))
     emitter = ObservabilityEmitter()
 
     coordinator = RunLifecycleCoordinator(
@@ -283,4 +281,3 @@ def test_status_queues_are_sinks_not_parallel_event_producers() -> None:
                 violations.append(f"{py_file}:{node.lineno}")
 
     assert not violations, "Direct status-queue event production found: " + ", ".join(violations)
-
