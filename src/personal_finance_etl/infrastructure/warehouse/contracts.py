@@ -16,9 +16,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from personal_finance_etl.contracts.datasets import DatasetId
+
 __all__ = [
     "BronzeDataContract",
     "DataContract",
+    "DatasetId",
     "BRONZE_CONTRACT_REGISTRY",
     "DATA_CONTRACT_REGISTRY",
 ]
@@ -28,6 +31,7 @@ __all__ = [
 class DataContract:
     """Publication contract for analytical Silver and Gold warehouse datasets."""
 
+    dataset_id: DatasetId
     contract_id: str
     layer: str
     physical_table: str
@@ -41,6 +45,7 @@ class DataContract:
 class BronzeDataContract:
     """Relationship between extraction attributes, sync categories, and Bronze tables."""
 
+    dataset_id: DatasetId
     extraction_attribute: str
     sync_category: str
     physical_table: str
@@ -48,54 +53,163 @@ class BronzeDataContract:
 
 
 BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
-    BronzeDataContract("zcategory", "sqlite_source", "bronze.r_SQLite_ZCategory", True),
-    BronzeDataContract("assetgroup", "sqlite_source", "bronze.r_SQLite_AssetGroup", True),
-    BronzeDataContract("assets", "sqlite_source", "bronze.r_SQLite_Assets", True),
-    BronzeDataContract("currency", "sqlite_source", "bronze.r_SQLite_Currency", True),
-    BronzeDataContract("inoutcome", "sqlite_source", "bronze.r_SQLite_InOutcome", True),
-    BronzeDataContract("stg_mf_isin_mapping", "mf_isin", "bronze.r_MF_ISIN_Mapping", True),
     BronzeDataContract(
-        "stg_benchmark_mapping", "benchmark_mapping", "bronze.r_Benchmark_Mapping", True
+        DatasetId.HOUSEHOLD_ZCATEGORY,
+        "zcategory",
+        "sqlite_source",
+        "bronze.r_SQLite_ZCategory",
+        True,
     ),
     BronzeDataContract(
-        "raw_opening_balances", "opening_balances", "bronze.r_Opening_Balances", True
+        DatasetId.HOUSEHOLD_ASSET_GROUP,
+        "assetgroup",
+        "sqlite_source",
+        "bronze.r_SQLite_AssetGroup",
+        True,
     ),
     BronzeDataContract(
-        "raw_benchmark_master", "benchmark_master", "bronze.r_Benchmark_Master", True
+        DatasetId.HOUSEHOLD_ASSETS,
+        "assets",
+        "sqlite_source",
+        "bronze.r_SQLite_Assets",
+        True,
     ),
     BronzeDataContract(
-        "raw_macro_parameters", "macro_parameters", "bronze.r_Macro_Parameters", True
+        DatasetId.HOUSEHOLD_CURRENCY,
+        "currency",
+        "sqlite_source",
+        "bronze.r_SQLite_Currency",
+        True,
     ),
-    BronzeDataContract("column_master", "column_master", "bronze.r_Column_Master", True),
-    BronzeDataContract("mf_market_data_raw", "mf_holdings", "bronze.r_MF_Market_Data", False),
     BronzeDataContract(
+        DatasetId.HOUSEHOLD_INOUTCOME,
+        "inoutcome",
+        "sqlite_source",
+        "bronze.r_SQLite_InOutcome",
+        True,
+    ),
+    BronzeDataContract(
+        DatasetId.INVESTMENT_MF_ISIN_MAPPING,
+        "stg_mf_isin_mapping",
+        "mf_isin",
+        "bronze.r_MF_ISIN_Mapping",
+        True,
+    ),
+    BronzeDataContract(
+        DatasetId.INVESTMENT_BENCHMARK_MAPPING,
+        "stg_benchmark_mapping",
+        "benchmark_mapping",
+        "bronze.r_Benchmark_Mapping",
+        True,
+    ),
+    BronzeDataContract(
+        DatasetId.HOUSEHOLD_OPENING_BALANCES,
+        "raw_opening_balances",
+        "opening_balances",
+        "bronze.r_Opening_Balances",
+        True,
+    ),
+    BronzeDataContract(
+        DatasetId.INVESTMENT_BENCHMARK_MASTER,
+        "raw_benchmark_master",
+        "benchmark_master",
+        "bronze.r_Benchmark_Master",
+        True,
+    ),
+    BronzeDataContract(
+        DatasetId.INVESTMENT_MACRO_PARAMETERS,
+        "raw_macro_parameters",
+        "macro_parameters",
+        "bronze.r_Macro_Parameters",
+        True,
+    ),
+    BronzeDataContract(
+        DatasetId.COMMON_COLUMN_MASTER,
+        "column_master",
+        "column_master",
+        "bronze.r_Column_Master",
+        True,
+    ),
+    BronzeDataContract(
+        DatasetId.MARKET_MF_HOLDINGS,
+        "mf_market_data_raw",
+        "mf_holdings",
+        "bronze.r_MF_Market_Data",
+        False,
+    ),
+    BronzeDataContract(
+        DatasetId.INVESTMENT_US_STOCK_TRANSACTIONS,
         "us_stock_transactions_raw",
         "us_stock_transactions",
         "bronze.r_US_Stock_Transactions",
         False,
     ),
     BronzeDataContract(
-        "currency_mapping_raw", "currency_mapping", "bronze.r_Currency_Mapping", True
-    ),
-    BronzeDataContract("currency_fx_raw", "currency_history", "bronze.r_Currency_FX_Data", False),
-    BronzeDataContract("mf_transactions_raw", "mf_orders", "bronze.r_MF_Transactions", False),
-    BronzeDataContract("stock_market_data_raw", "stock_pl", "bronze.r_Stock_Market_Data", False),
-    BronzeDataContract(
-        "stock_transactions_raw", "stock_orders", "bronze.r_Stock_Transactions", False
+        DatasetId.MARKET_CURRENCY_MAPPING,
+        "currency_mapping_raw",
+        "currency_mapping",
+        "bronze.r_Currency_Mapping",
+        True,
     ),
     BronzeDataContract(
-        "benchmark_history_raw", "benchmark_history", "bronze.r_Benchmark_Data", False
+        DatasetId.MARKET_CURRENCY_FX_RATES,
+        "currency_fx_raw",
+        "currency_history",
+        "bronze.r_Currency_FX_Data",
+        False,
     ),
     BronzeDataContract(
-        "us_stock_market_data_raw", "us_stock_market", "bronze.r_US_Stock_Prices", False
+        DatasetId.INVESTMENT_MF_ORDERS,
+        "mf_transactions_raw",
+        "mf_orders",
+        "bronze.r_MF_Transactions",
+        False,
+    ),
+    BronzeDataContract(
+        DatasetId.MARKET_STOCK_HOLDINGS,
+        "stock_market_data_raw",
+        "stock_pl",
+        "bronze.r_Stock_Market_Data",
+        False,
+    ),
+    BronzeDataContract(
+        DatasetId.INVESTMENT_STOCK_ORDERS,
+        "stock_transactions_raw",
+        "stock_orders",
+        "bronze.r_Stock_Transactions",
+        False,
+    ),
+    BronzeDataContract(
+        DatasetId.MARKET_BENCHMARK_HISTORY,
+        "benchmark_history_raw",
+        "benchmark_history",
+        "bronze.r_Benchmark_Data",
+        False,
+    ),
+    BronzeDataContract(
+        DatasetId.MARKET_US_STOCK_PRICES,
+        "us_stock_market_data_raw",
+        "us_stock_market",
+        "bronze.r_US_Stock_Prices",
+        False,
     ),
 ]
 
-# Lightweight registry for Silver and Gold analytical layers
+# Authoritative registry for Silver and Gold analytical layers
 DATA_CONTRACT_REGISTRY: list[DataContract] = [
     # --- Silver Dimensions ---
-    DataContract("df_d_calendar", "silver", "silver.d_Calendar", "Common", "Day", "CoreEngine", 10),
     DataContract(
+        DatasetId.COMMON_CALENDAR,
+        "df_d_calendar",
+        "silver",
+        "silver.d_Calendar",
+        "Common",
+        "Day",
+        "CoreEngine",
+        10,
+    ),
+    DataContract(
+        DatasetId.WEALTH_INCOME_CATEGORY,
         "df_d_income_category",
         "silver",
         "silver.d_Income_Category",
@@ -105,6 +219,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
         20,
     ),
     DataContract(
+        DatasetId.WEALTH_INCOME_SUBCATEGORY,
         "df_d_income_subcategory",
         "silver",
         "silver.d_Income_Subcategory",
@@ -114,6 +229,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
         30,
     ),
     DataContract(
+        DatasetId.WEALTH_EXPENSE_CATEGORY,
         "df_d_expense_category",
         "silver",
         "silver.d_Expense_Category",
@@ -123,6 +239,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
         40,
     ),
     DataContract(
+        DatasetId.WEALTH_EXPENSE_SUBCATEGORY,
         "df_d_expense_subcategory",
         "silver",
         "silver.d_Expense_Subcategory",
@@ -132,6 +249,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
         50,
     ),
     DataContract(
+        DatasetId.WEALTH_ASSET_CATEGORY,
         "df_d_asset_category",
         "silver",
         "silver.d_Asset_Category",
@@ -141,6 +259,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
         60,
     ),
     DataContract(
+        DatasetId.WEALTH_ASSET_SUBCATEGORY,
         "df_d_asset_subcategory",
         "silver",
         "silver.d_Asset_SubCategory",
@@ -150,9 +269,17 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
         70,
     ),
     DataContract(
-        "df_d_currency", "silver", "silver.d_Currency", "Common", "Currency", "CoreEngine", 80
+        DatasetId.COMMON_CURRENCY,
+        "df_d_currency",
+        "silver",
+        "silver.d_Currency",
+        "Common",
+        "Currency",
+        "CoreEngine",
+        80,
     ),
     DataContract(
+        DatasetId.INVESTMENT_BENCHMARK_MASTER_DIM,
         "df_d_benchmark_master",
         "silver",
         "silver.d_Investment_Benchmark_Master",
@@ -162,6 +289,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
         90,
     ),
     DataContract(
+        DatasetId.COMMON_CURRENCY_FX_RATES,
         "df_f_currency_fx_rates",
         "silver",
         "silver.f_Currency_FX_Rates",
@@ -171,6 +299,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
         95,
     ),
     DataContract(
+        DatasetId.INVESTMENT_MASTER,
         "df_d_investment_master",
         "silver",
         "silver.d_Investment_Master",
@@ -180,6 +309,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
         100,
     ),
     DataContract(
+        DatasetId.INVESTMENT_MACRO_PARAMETERS_DIM,
         "df_d_macro_parameters",
         "silver",
         "silver.d_Macro_Parameters",
@@ -190,6 +320,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
     ),
     # --- Silver Facts ---
     DataContract(
+        DatasetId.WEALTH_INCOME_TRANSACTIONS,
         "df_f_income_transactions",
         "silver",
         "silver.f_Income_Transactions",
@@ -199,6 +330,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
         120,
     ),
     DataContract(
+        DatasetId.WEALTH_EXPENSE_TRANSACTIONS,
         "df_f_expense_transactions",
         "silver",
         "silver.f_Expense_Transactions",
@@ -208,6 +340,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
         130,
     ),
     DataContract(
+        DatasetId.WEALTH_TRANSFER_TRANSACTIONS,
         "df_f_transfer_transactions",
         "silver",
         "silver.f_Transfer_Transactions",
@@ -217,6 +350,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
         140,
     ),
     DataContract(
+        DatasetId.WEALTH_OPENING_BALANCES,
         "df_f_opening_balances",
         "silver",
         "silver.f_Opening_Balances",
@@ -226,6 +360,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
         150,
     ),
     DataContract(
+        DatasetId.INVESTMENT_MARKET_DATA,
         "df_f_investment_market_data",
         "silver",
         "silver.f_Investment_Market_Data",
@@ -235,6 +370,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
         160,
     ),
     DataContract(
+        DatasetId.INVESTMENT_PURCHASE_DATA,
         "df_f_tf_inv_purchase",
         "silver",
         "silver.f_Investment_Purchase_Data",
@@ -244,6 +380,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
         170,
     ),
     DataContract(
+        DatasetId.INVESTMENT_SALE_DATA,
         "df_f_tf_inv_sale",
         "silver",
         "silver.f_Investment_Sale_Data",
@@ -253,6 +390,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
         180,
     ),
     DataContract(
+        DatasetId.INVESTMENT_BENCHMARK_DATA,
         "df_f_investment_benchmark_data",
         "silver",
         "silver.f_Investment_Benchmark_Data",
@@ -262,6 +400,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
         190,
     ),
     DataContract(
+        DatasetId.INVESTMENT_LOT_ANALYTICS,
         "df_f_investment_analytics_lot",
         "silver",
         "silver.f_Investment_Analytics_Lot",
@@ -271,6 +410,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
         200,
     ),
     DataContract(
+        DatasetId.INVESTMENT_REALIZED_EVENTS,
         "df_f_investment_realized_events",
         "silver",
         "silver.f_Investment_Realized_Events",
@@ -280,6 +420,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
         205,
     ),
     DataContract(
+        DatasetId.INVESTMENT_RECONCILIATION_EVENTS,
         "df_f_investment_reconciliation_events",
         "silver",
         "silver.f_Investment_Reconciliation_Events",
@@ -289,6 +430,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
         206,
     ),
     DataContract(
+        DatasetId.TAX_EVENTS,
         "df_f_tax_events",
         "silver",
         "silver.f_Tax_Events",
@@ -299,6 +441,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
     ),
     # --- Gold Presentation ---
     DataContract(
+        DatasetId.TAX_YEAR_SUMMARY,
         "df_p_tax_year_summary",
         "gold",
         "gold.Tax_Year_Summary",
@@ -308,6 +451,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
         302,
     ),
     DataContract(
+        DatasetId.TAX_INCOME_BREAKDOWN,
         "df_p_tax_income_breakdown",
         "gold",
         "gold.Tax_Income_Breakdown",
@@ -317,6 +461,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
         303,
     ),
     DataContract(
+        DatasetId.TAX_RECONCILIATION,
         "df_p_tax_reconciliation",
         "gold",
         "gold.Tax_Reconciliation",
@@ -326,6 +471,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
         304,
     ),
     DataContract(
+        DatasetId.WEALTH_CORE_MONTHLY,
         "df_p_tf_wealth_monthly_totals",
         "gold",
         "gold.Core_Monthly_Fact",
@@ -335,6 +481,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
         110,
     ),
     DataContract(
+        DatasetId.WEALTH_ASSET_BREAKDOWN,
         "df_p_tf_net_worth_monthly_summary",
         "gold",
         "gold.Wealth_Asset_Breakdown",
@@ -344,6 +491,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
         110,
     ),
     DataContract(
+        DatasetId.WEALTH_CASHFLOW_EXPENSE_BREAKDOWN,
         "df_p_tf_category_spend_analytics",
         "gold",
         "gold.Cashflow_Expense_Breakdown",
@@ -353,6 +501,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
         120,
     ),
     DataContract(
+        DatasetId.WEALTH_CASHFLOW_INCOME_BREAKDOWN,
         "df_p_tf_income_streams_monthly",
         "gold",
         "gold.Cashflow_Income_Breakdown",
@@ -362,6 +511,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
         130,
     ),
     DataContract(
+        DatasetId.FIRE_ANALYTICS,
         "df_p_tf_wealth_risk_analytics",
         "gold",
         "gold.Wealth_FIRE_Analytics",
@@ -371,6 +521,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
         140,
     ),
     DataContract(
+        DatasetId.WEALTH_BUDGET_VARIANCE,
         "df_p_tf_budget_forecast_monthly",
         "gold",
         "gold.Forecast_Budget_Variance",
@@ -380,6 +531,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
         160,
     ),
     DataContract(
+        DatasetId.INVESTMENT_PORTFOLIO_SUMMARY,
         "df_p_tf_investment_analytics",
         "gold",
         "gold.Investment_Portfolio_Summary",
@@ -389,6 +541,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
         170,
     ),
     DataContract(
+        DatasetId.WEALTH_CASHFLOW_EFFICIENCY,
         "df_p_tf_monthly_cashflow_summary",
         "gold",
         "gold.Cashflow_Efficiency_Analytics",
@@ -398,6 +551,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
         180,
     ),
     DataContract(
+        DatasetId.WEALTH_CASHFLOW_ACTIVITY_SUMMARY,
         "df_p_tf_cashflow_activity_summary",
         "gold",
         "gold.Cashflow_Activity_Summary",
@@ -407,6 +561,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
         190,
     ),
     DataContract(
+        DatasetId.INVESTMENT_BY_ISIN,
         "df_f_investment_analytics_isin",
         "gold",
         "gold.Investment_By_ISIN",
@@ -416,6 +571,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
         200,
     ),
     DataContract(
+        DatasetId.INVESTMENT_BY_SUBTYPE,
         "df_f_investment_analytics_subtype",
         "gold",
         "gold.Investment_By_Subtype",
@@ -425,6 +581,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
         210,
     ),
     DataContract(
+        DatasetId.INVESTMENT_BY_CLASS,
         "df_f_investment_analytics_class",
         "gold",
         "gold.Investment_By_Class",
@@ -434,6 +591,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
         220,
     ),
     DataContract(
+        DatasetId.INVESTMENT_BY_INSTRUMENT_TYPE,
         "df_f_investment_analytics_instrument_type",
         "gold",
         "gold.Investment_By_Instrument_Type",
@@ -443,6 +601,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
         230,
     ),
     DataContract(
+        DatasetId.INVESTMENT_BY_SECTOR,
         "df_f_investment_analytics_sector",
         "gold",
         "gold.Investment_By_Sector",
@@ -452,6 +611,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
         240,
     ),
     DataContract(
+        DatasetId.INVESTMENT_BY_INDUSTRY,
         "df_f_investment_analytics_industry",
         "gold",
         "gold.Investment_By_Industry",
@@ -461,6 +621,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
         250,
     ),
     DataContract(
+        DatasetId.INVESTMENT_BY_PORTFOLIO,
         "df_f_investment_analytics_portfolio",
         "gold",
         "gold.Investment_By_Portfolio",
@@ -470,6 +631,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
         260,
     ),
     DataContract(
+        DatasetId.INVESTMENT_BY_GEO,
         "df_f_investment_analytics_geo",
         "gold",
         "gold.Investment_By_Geo",
@@ -479,6 +641,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
         270,
     ),
     DataContract(
+        DatasetId.INVESTMENT_BY_COUNTRY,
         "df_f_investment_analytics_country",
         "gold",
         "gold.Investment_By_Country",
@@ -488,6 +651,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
         280,
     ),
     DataContract(
+        DatasetId.INVESTMENT_BY_CURRENCY,
         "df_f_investment_analytics_currency",
         "gold",
         "gold.Investment_By_Currency",

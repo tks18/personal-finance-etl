@@ -3,8 +3,9 @@
 Owns
 ----
 - Contract lookup by physical table name (get_contract_by_table).
-- Structural integrity validation for registered data contracts (validate_registry).
-- Re-exporting DataContract models and registries from warehouse.contracts.
+- Contract lookup by canonical dataset identity (get_contract_by_dataset_id, get_bronze_contract_by_dataset_id).
+- Structural integrity and identity validation for registered data contracts (validate_registry).
+- Re-exporting DataContract models, DatasetId, and registries from warehouse.contracts.
 
 Does not own
 -------------
@@ -16,6 +17,7 @@ Does not own
 
 from __future__ import annotations
 
+from personal_finance_etl.contracts.datasets import DatasetId
 from personal_finance_etl.infrastructure.warehouse.contracts import (
     BRONZE_CONTRACT_REGISTRY,
     DATA_CONTRACT_REGISTRY,
@@ -28,6 +30,9 @@ __all__ = [
     "DATA_CONTRACT_REGISTRY",
     "BronzeDataContract",
     "DataContract",
+    "DatasetId",
+    "get_bronze_contract_by_dataset_id",
+    "get_contract_by_dataset_id",
     "get_contract_by_table",
     "validate_registry",
 ]
@@ -52,18 +57,69 @@ def get_contract_by_table(physical_table: str) -> DataContract | None:
     return None
 
 
+def get_contract_by_dataset_id(dataset_id: DatasetId | str) -> DataContract | None:
+    """Find a DataContract matching the given DatasetId.
+
+    Parameters
+    ----------
+    dataset_id : DatasetId | str
+        Authoritative dataset identifier to look up.
+
+    Returns
+    -------
+    DataContract | None
+        Matching DataContract if found, otherwise None.
+    """
+    val = str(dataset_id)
+    for contract in DATA_CONTRACT_REGISTRY:
+        if contract.dataset_id.value == val or contract.dataset_id == dataset_id:
+            return contract
+    return None
+
+
+def get_bronze_contract_by_dataset_id(
+    dataset_id: DatasetId | str,
+) -> BronzeDataContract | None:
+    """Find a BronzeDataContract matching the given DatasetId.
+
+    Parameters
+    ----------
+    dataset_id : DatasetId | str
+        Authoritative Bronze dataset identifier to look up.
+
+    Returns
+    -------
+    BronzeDataContract | None
+        Matching BronzeDataContract if found, otherwise None.
+    """
+    val = str(dataset_id)
+    for contract in BRONZE_CONTRACT_REGISTRY:
+        if contract.dataset_id.value == val or contract.dataset_id == dataset_id:
+            return contract
+    return None
+
+
 def _validate_data_contracts() -> None:
     """Validate structure, uniqueness, and required attributes of Silver/Gold contracts.
 
     Raises
     ------
     ValueError
-        If duplicate IDs, duplicate physical tables, invalid layers, or empty fields are found.
+        If duplicate IDs, duplicate dataset IDs, duplicate physical tables, invalid layers,
+        or empty fields are found.
     """
     seen_ids: set[str] = set()
+    seen_dataset_ids: set[str] = set()
     seen_tables: set[str] = set()
 
     for contract in DATA_CONTRACT_REGISTRY:
+        if not contract.dataset_id:
+            raise ValueError(f"Analytical contract {contract.contract_id} missing DatasetId.")
+        ds_val = str(contract.dataset_id)
+        if ds_val in seen_dataset_ids:
+            raise ValueError(f"Duplicate analytical DatasetId found: {ds_val}")
+        seen_dataset_ids.add(ds_val)
+
         if not contract.contract_id:
             raise ValueError("Contract ID cannot be empty.")
         if contract.contract_id in seen_ids:
@@ -94,10 +150,22 @@ def _validate_bronze_contracts() -> None:
     Raises
     ------
     ValueError
-        If duplicate table mappings, invalid prefixes, or missing categories are found.
+        If duplicate table mappings, duplicate dataset IDs, invalid prefixes,
+        or missing categories are found.
     """
     bronze_tables: set[str] = set()
+    bronze_dataset_ids: set[str] = set()
+
     for b_contract in BRONZE_CONTRACT_REGISTRY:
+        if not b_contract.dataset_id:
+            raise ValueError(
+                f"Bronze contract {b_contract.extraction_attribute} missing DatasetId."
+            )
+        ds_val = str(b_contract.dataset_id)
+        if ds_val in bronze_dataset_ids:
+            raise ValueError(f"Duplicate Bronze DatasetId found: {ds_val}")
+        bronze_dataset_ids.add(ds_val)
+
         if not b_contract.extraction_attribute:
             raise ValueError("Bronze extraction_attribute cannot be empty.")
         if not b_contract.sync_category:
@@ -118,7 +186,16 @@ def validate_registry() -> None:
     Raises
     ------
     ValueError
-        If duplicate IDs, duplicate physical tables, invalid layers, or empty fields are found.
+        If duplicate contract IDs, duplicate dataset IDs, duplicate physical tables,
+        invalid layers, or empty fields are found.
     """
     _validate_data_contracts()
     _validate_bronze_contracts()
+
+    # Verify global uniqueness of DatasetId across all warehouse contracts
+    all_dataset_ids = [str(c.dataset_id) for c in BRONZE_CONTRACT_REGISTRY] + [
+        str(c.dataset_id) for c in DATA_CONTRACT_REGISTRY
+    ]
+    if len(all_dataset_ids) != len(set(all_dataset_ids)):
+        duplicates = {x for x in all_dataset_ids if all_dataset_ids.count(x) > 1}
+        raise ValueError(f"Cross-layer duplicate DatasetId found across registries: {duplicates}")

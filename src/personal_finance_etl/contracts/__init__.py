@@ -5,6 +5,7 @@ Owns
 - Typed messages and results crossing architectural and process boundaries.
 - Pipeline lifecycle state enums (CommitState, FailureDomain).
 - Tabular data transport contract (EngineDataTransport).
+- Canonical dataset identifiers (DatasetId).
 - Extraction batch and entity outcomes (ExtractionBatchResult, ExtractorEntityResult).
 - Snapshot and restore outcome contracts (SnapshotResult, RestoreResult).
 - Canonical event transport queue contracts.
@@ -22,6 +23,7 @@ from personal_finance_etl.contracts.application import (
     EngineExecutionResult,
     EngineStage,
 )
+from personal_finance_etl.contracts.datasets import DatasetId
 from personal_finance_etl.contracts.event_transport import EventQueue, NullEventQueue
 from personal_finance_etl.contracts.extraction import (
     ExtractionBatchResult,
@@ -60,6 +62,7 @@ from personal_finance_etl.contracts.recovery import (
 
 __all__ = [
     "CommitState",
+    "DatasetId",
     "DiagnosticSeverity",
     "EngineDataTransport",
     "EngineExecutionResult",
