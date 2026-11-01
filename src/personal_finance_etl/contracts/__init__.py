@@ -6,6 +6,7 @@ Owns
 - Pipeline lifecycle state enums (CommitState, FailureDomain).
 - Tabular data transport contract (EngineDataTransport).
 - Canonical dataset identifiers (DatasetId).
+- Source identity and provider contracts (SourceId, ProviderType, validate_source_id).
 - Extraction batch and entity outcomes (ExtractionBatchResult, ExtractorEntityResult).
 - Snapshot and restore outcome contracts (SnapshotResult, RestoreResult).
 - Canonical event transport queue contracts.
@@ -59,6 +60,11 @@ from personal_finance_etl.contracts.recovery import (
     SnapshotOutcome,
     SnapshotResult,
 )
+from personal_finance_etl.contracts.sources import (
+    ProviderType,
+    SourceId,
+    validate_source_id,
+)
 
 __all__ = [
     "CommitState",
@@ -87,10 +93,13 @@ __all__ = [
     "ObservabilityEventDict",
     "ObservabilitySink",
     "PresentationKind",
+    "ProviderType",
     "RestoreOutcome",
     "RestoreResult",
     "SnapshotOutcome",
     "SnapshotResult",
+    "SourceId",
     "SyncSummaryRecord",
     "classify_failure_domain",
+    "validate_source_id",
 ]

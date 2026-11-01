@@ -4,6 +4,7 @@ Owns
 ----
 - Validated runtime environment settings (Settings).
 - Financial policy and rule definitions (FinancialRules).
+- Declarative physical evidence source configuration (SourceConfig).
 - Validation of TOML configuration files.
 
 Does not own
@@ -15,9 +16,11 @@ Does not own
 
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import FileHashPolicy, Settings
+from personal_finance_etl.config.sources import SourceConfig
 
 __all__ = [
     "FileHashPolicy",
     "FinancialRules",
     "Settings",
+    "SourceConfig",
 ]
