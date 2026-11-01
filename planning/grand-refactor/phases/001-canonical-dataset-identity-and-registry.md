@@ -266,16 +266,16 @@ Do not:
 
 ## 15. Completion checklist
 
-- [ ] `DatasetId` exists in `contracts`.
-- [ ] Every Bronze contract is mapped.
-- [ ] Every Silver/Gold contract is mapped.
-- [ ] Registry lookup by DatasetId works.
-- [ ] Duplicate DatasetId validation exists.
-- [ ] Registry fingerprint semantics are deliberate and tested.
-- [ ] Existing registry/table/runtime keys are unchanged.
-- [ ] Focused contract tests pass.
-- [ ] Architecture/constitutional tests pass.
-- [ ] Repository is green and committable.
+- [x] `DatasetId` exists in `contracts`.
+- [x] Every Bronze contract is mapped.
+- [x] Every Silver/Gold contract is mapped.
+- [x] Registry lookup by DatasetId works.
+- [x] Duplicate DatasetId validation exists.
+- [x] Registry fingerprint semantics are deliberate and tested.
+- [x] Existing registry/table/runtime keys are unchanged.
+- [x] Focused contract tests pass.
+- [x] Architecture/constitutional tests pass.
+- [x] Repository is green and committable.
 
 ## 16. Commit boundary
 

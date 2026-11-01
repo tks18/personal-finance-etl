@@ -33,7 +33,7 @@ If code evidence contradicts a phase, stop and amend the phase before changing t
 
 | Phase | Outcome | Target release | Status |
 |---:|---|---|---|
-| 001 | Canonical dataset identity and registry | v9.5.4 | [ ] |
+| 001 | Canonical dataset identity and registry | v9.5.4 | [x] |
 | 002 | Source identity and provider contracts | v9.5.4 | [ ] |
 | 003 | Typed dataset selectors and source-dataset contracts | v9.5.4 | [ ] |
 | 004 | Complete v9.5.3 topology as declarative configuration | v9.5.4 | [ ] |
