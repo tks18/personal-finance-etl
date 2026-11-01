@@ -17,8 +17,8 @@ Does not own
 
 from __future__ import annotations
 
-from pathlib import Path
 import queue
+from pathlib import Path
 
 import pytest
 
@@ -31,7 +31,6 @@ from personal_finance_etl.infrastructure.control_plane.connection import SQLiteM
 from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
 from personal_finance_etl.infrastructure.observability import ObservabilityEmitter
 from personal_finance_etl.infrastructure.warehouse.connection import DuckDBManager
-
 
 # ---------------------------------------------------------------------------
 # Path & Discovery Fixtures
