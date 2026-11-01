@@ -84,6 +84,7 @@ def test_package_structure_exists():
         "bootstrap",
         "config",
         "config/financial_rules",
+        "config/sources",
         "contracts",
         "domain",
         "domain/common",
