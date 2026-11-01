@@ -1,5 +1,3 @@
-# pylint: skip-file
-# flake8: noqa
 """Canonical financial domains and transforms certification test suite.
 
 Owns
@@ -9,6 +7,8 @@ Owns
 - Unit verification of market domain (fx rate provider, benchmark transformer, macro table).
 - Unit verification of investments transforms (ordering policy, references, US equity).
 """
+
+from __future__ import annotations
 
 from datetime import date
 
@@ -40,8 +40,9 @@ from personal_finance_etl.domain.market import (
 )
 
 
-def test_calendar_transforms():
+def test_calendar_transforms() -> None:
     """Verify calendar bounds extraction and 40+ column dimension generation."""
+
     # Build 7 dummy fact streams with dates
     df_date1 = pl.DataFrame({"DATE": ["2023-04-15", "2023-05-20"]}).lazy()
     df_date2 = pl.DataFrame({"DATE": ["2023-06-01"]}).lazy()
@@ -70,8 +71,9 @@ def test_calendar_transforms():
     assert apr_1["FY_Quarter"][0] == 1
 
 
-def test_household_common_and_dimensions():
+def test_household_common_and_dimensions() -> None:
     """Verify column mapping filter and basic dimension projection."""
+
     df_map = pl.DataFrame(
         {
             "TABLE_NAME": ["CATEGORY", "CATEGORY", "ASSET"],
@@ -111,8 +113,9 @@ def test_household_common_and_dimensions():
     assert curr_dim["Is_Active"][0] is False
 
 
-def test_market_domain_primitives():
+def test_market_domain_primitives() -> None:
     """Verify FXRateProvider lookup and macro add_months edge cases."""
+
     # FXRateProvider
     df_fx = pl.DataFrame(
         {
@@ -143,8 +146,9 @@ def test_market_domain_primitives():
     assert target_macro.get_ltcg_threshold_months("equity", "listed", None) == 24
 
 
-def test_investments_lot_ordering_policy():
+def test_investments_lot_ordering_policy() -> None:
     """Verify CanonicalOrderPolicy tie-breaker hierarchy: Date ASC -> Price ASC -> ID ASC."""
+
     policy = target_ord.CanonicalOrderPolicy()
 
     from personal_finance_etl.domain.investments.contracts import TradeRecord
@@ -190,8 +194,9 @@ def test_investments_lot_ordering_policy():
     assert sorted_p[3].get("Purchase_ID") == "B_ID"
 
 
-def test_investments_rolling_average_buy_price():
+def test_investments_rolling_average_buy_price() -> None:
     """Verify get_sale_reference calculates historical cumulative weighted buy price."""
+
     # 2 Purchases: 10 units @ 100 on Day 1, 10 units @ 200 on Day 2
     # Rolling buy price at Day 1 = 100, at Day 2 = (1000 + 2000)/20 = 150
     df_p = pl.DataFrame(

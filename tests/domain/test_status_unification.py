@@ -20,9 +20,9 @@ import ast
 import inspect
 from pathlib import Path
 
-import personal_finance_etl.contracts as contracts
 import personal_finance_etl.contracts.application as app_contracts
 import personal_finance_etl.contracts.observability as obs_contracts
+from personal_finance_etl import contracts
 from personal_finance_etl.application.facade import PersonalFinanceEngine
 from personal_finance_etl.application.pipeline.worker import (
     QueueStream,

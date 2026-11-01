@@ -1,5 +1,3 @@
-# pylint: skip-file
-# flake8: noqa
 """Investment accounting, FIFO lot matching, and quantitative valuation test suite.
 
 Verifies:
@@ -12,7 +10,6 @@ Verifies:
 """
 
 from datetime import date
-from pathlib import Path
 
 import polars as pl
 
@@ -39,10 +36,8 @@ from personal_finance_etl.domain.investments.valuation.benchmark import (
 from personal_finance_etl.domain.market.macro import FYMacroParametersTable
 
 
-def test_fifo_accounting_lifecycle() -> None:
+def test_fifo_accounting_lifecycle(rules: FinancialRules) -> None:
     """Verify FIFO queue buy/sell matching, deterministic IDs, shadow units, and realized PnL."""
-    toml_path = Path("tests/fixtures/financial_rules.toml")
-    rules = FinancialRules.from_toml(str(toml_path))
 
     df_t = pl.DataFrame(
         {
@@ -189,10 +184,8 @@ def test_reconciliation_engine_quantity_and_basis() -> None:
     assert ReconciliationEngine.should_reconcile_basis(5000.005, 50.0, 100.0) is False
 
 
-def test_investment_quant_engine_end_to_end() -> None:
+def test_investment_quant_engine_end_to_end(rules: FinancialRules) -> None:
     """Verify full InvestmentQuantEngine execution on synthetic multi-stream data."""
-    toml_path = Path("tests/fixtures/financial_rules.toml")
-    rules = FinancialRules.from_toml(str(toml_path))
 
     # Purchases: Buy 10 shares of INE002A01018 on 2023-01-02 @ 100
     df_p = pl.DataFrame(

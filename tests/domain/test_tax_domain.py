@@ -1,5 +1,3 @@
-# pylint: skip-file
-# flake8: noqa
 """Tax domain models, classification, rate resolution, and tax event builder test suite.
 
 Tests:

@@ -1,5 +1,3 @@
-# pylint: skip-file
-# flake8: noqa
 """Household analytics, wealth calculations, and FIRE simulations test suite.
 
 Verifies:
