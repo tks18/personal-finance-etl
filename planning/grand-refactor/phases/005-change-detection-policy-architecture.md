@@ -222,13 +222,13 @@ Do not:
 
 ## 16. Completion checklist
 
-- [ ] Four policy responsibilities are modeled separately.
-- [ ] Invalid combinations are rejected.
-- [ ] Compatibility resolver exists.
-- [ ] Every current category is covered by a policy matrix.
-- [ ] Current behavior is reproduced exactly in tests.
-- [ ] Runtime behavior is unchanged.
-- [ ] Phase fits the 3-4 hour boundary without pulling Phase 006 runtime migration forward.
+- [x] Four policy responsibilities are modeled separately.
+- [x] Invalid combinations are rejected.
+- [x] Compatibility resolver exists.
+- [x] Every current category is covered by a policy matrix.
+- [x] Current behavior is reproduced exactly in tests.
+- [x] Runtime behavior is unchanged.
+- [x] Phase fits the 3-4 hour boundary without pulling Phase 006 runtime migration forward.
 
 ## 17. Commit
 
