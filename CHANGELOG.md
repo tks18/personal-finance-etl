@@ -2,6 +2,65 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [9.5.4](https://github.com/tks18/personal-finance-etl/compare/9.5.3...9.5.4) (2026-11-02)
+
+
+### Code Refactoring 🖌
+
+* **py.typed:** add py ([5c0bf4c](https://github.com/tks18/personal-finance-etl/commit/5c0bf4cfb833f26229fb580532eba0f50e339250))
+* **tests:** restructure test suite into 7-layer hierarchy ([048c140](https://github.com/tks18/personal-finance-etl/commit/048c140143ad79d8b4a2ac07b33cf07425fa0ccc))
+
+
+### Others 🔧
+
+* **skills:** document enterprise test suite architecture and fixtures ([132c862](https://github.com/tks18/personal-finance-etl/commit/132c862acb785574c57e61372ff35d33c2c1a1c1))
+* **skills:** enforce granular commits and chore type for skills ([ecab6aa](https://github.com/tks18/personal-finance-etl/commit/ecab6aae129b29cadc93c729c9eec0bbbab3e3f8))
+* **toolchain:** enable strict mypy, ruff, and pylint on tests ([f50cf8f](https://github.com/tks18/personal-finance-etl/commit/f50cf8f499da0f792c0694e3959e3ddce59e1497))
+
+
+### Features 🔥
+
+* **agents:** add pfetl agent skills suite ([bb0bdef](https://github.com/tks18/personal-finance-etl/commit/bb0bdef9a9f7c5836f9d4475741501ff7479b7b7))
+* **config:** add source identity and provider config models ([31c2790](https://github.com/tks18/personal-finance-etl/commit/31c2790d519441bfc11b93904f81fd24b102a315))
+* **config:** add topology coverage evaluator ([b831f81](https://github.com/tks18/personal-finance-etl/commit/b831f81bb8cb12ceffb2c45d51c810e221578929))
+* **config:** add typed source dataset selectors ([15669dc](https://github.com/tks18/personal-finance-etl/commit/15669dc518d8d4cb989789ef3683b3df241410fd))
+* **contracts:** add canonical dataset identity and registry ([f2bf882](https://github.com/tks18/personal-finance-etl/commit/f2bf882c67eaac3785235b5d2dc81b604e67435c))
+* **contracts:** add dataset origin and bronze classification ([8a94a73](https://github.com/tks18/personal-finance-etl/commit/8a94a73713289ce18da5544541035f6479065862))
+* **skills:** add zero-type-checking and audit-full refactor rules ([6f82cc0](https://github.com/tks18/personal-finance-etl/commit/6f82cc059677eb87243eb4e0e78dca9252f00e10))
+
+
+### Tests 🧪
+
+* **application:** add live pipeline e2e integration test ([8a56706](https://github.com/tks18/personal-finance-etl/commit/8a56706e1a93ecc340311d21532f9b3d8cf5e3e4))
+* **application:** unify isolated settings and queue fixtures ([6fcb7ed](https://github.com/tks18/personal-finance-etl/commit/6fcb7edf33feb4379ffdd90f1f240169a3b97f19))
+* **architecture:** add return types and remove test suppressions ([27f54ba](https://github.com/tks18/personal-finance-etl/commit/27f54bad9046411f7a6ab85a1d43bb0a98586469))
+* **config:** add dataset selector and source binding tests ([b21da0f](https://github.com/tks18/personal-finance-etl/commit/b21da0ff3337bde734922e7292e69cc0aa1fc469))
+* **config:** add source contracts and boundary tests ([5f8fcc0](https://github.com/tks18/personal-finance-etl/commit/5f8fcc0695d68690ac0fad96fe8fdfbdcf1e19b0))
+* **config:** model current source topology declaratively ([f420b84](https://github.com/tks18/personal-finance-etl/commit/f420b8460e2f17f958c296005bdb790c92d03ce7))
+* **config:** unify financial rules fixtures and add return types ([16b67ef](https://github.com/tks18/personal-finance-etl/commit/16b67ef24fb03f6aef519eade19320bc1d25fce5))
+* **conftest:** unify enterprise test fixtures and event queue mocks ([82f9d22](https://github.com/tks18/personal-finance-etl/commit/82f9d2298cead142df3e0f5152f1aed76586b9e8))
+* **contracts:** fix strenum comparisons and data transport types ([05433e9](https://github.com/tks18/personal-finance-etl/commit/05433e9288be12f3098d2cb88a895f5c9bc22c86))
+* **docs:** modernize test module docstrings removing phase numbers ([dfccf44](https://github.com/tks18/personal-finance-etl/commit/dfccf444fa0655b521d33b8e0dfd315dbf90971c))
+* **domain:** migrate to shared rules fixture and add return types ([eb64a1f](https://github.com/tks18/personal-finance-etl/commit/eb64a1f72d31055c96fae100c37ad6e7b2cf7d5a))
+* **fixtures:** establish centralized conftest fixture hub ([eefe1f8](https://github.com/tks18/personal-finance-etl/commit/eefe1f815d1d3bc15e893a1c5db42556b9fcd0cb))
+* **fixtures:** replicate production rules and portable config ([cfea497](https://github.com/tks18/personal-finance-etl/commit/cfea497ecb22dc66e4278dc64d61892054572eda))
+* **infrastructure:** unify isolated warehouse and cp fixtures ([a0b459e](https://github.com/tks18/personal-finance-etl/commit/a0b459e45098f82bcc3d9503ada50a9eeccad99e))
+* **presentation:** fix theme enum comparisons and pragma headers ([167468f](https://github.com/tks18/personal-finance-etl/commit/167468fa706d4df0733672f66204972734506a1c))
+* refactor test files to consume shared fixtures and remove Any ([e3a4507](https://github.com/tks18/personal-finance-etl/commit/e3a4507704514ec71db4bf66d06fe37cc9769194))
+
+
+### Docs 📃
+
+* add refactor planning document ([546d388](https://github.com/tks18/personal-finance-etl/commit/546d388716d865e81a8c89d567e94e638e8c5898))
+* add refactor planning document ([1b3daab](https://github.com/tks18/personal-finance-etl/commit/1b3daab6644f8fb186ca93d74c0cf71ea8ca390d))
+* **agents:** add root, tests, and scripts AGENTS.md rulebooks ([0ef27c7](https://github.com/tks18/personal-finance-etl/commit/0ef27c7b4b0fba21bda945aaa2dac5acf950f0e5))
+* **agents:** update testing guidelines for 7-layer test tree ([ce1ffb9](https://github.com/tks18/personal-finance-etl/commit/ce1ffb94836bca4df158d5f588dddc7279462747))
+* **refactor:** complete phase 001 and add grand refactor skill ([422ba0d](https://github.com/tks18/personal-finance-etl/commit/422ba0d89dd91f4e206399b39d98f68cfa7a0cb4))
+* **refactor:** complete phase 002 checklist and roadmap status ([2b6f10f](https://github.com/tks18/personal-finance-etl/commit/2b6f10f89d99fa954c4f20022a9d0b023a9fe3d2))
+* **refactor:** complete phase 003 plan and handoff ([aed7e49](https://github.com/tks18/personal-finance-etl/commit/aed7e49348eaf66b1a7f1d3900a4753d3d0b3164))
+* **refactor:** complete phase 004 topology plan and handoff ([310b37b](https://github.com/tks18/personal-finance-etl/commit/310b37ba3cc24e6d813fc5340bcf63e96068227f))
+* **tests:** document centralized fixture catalog in workspace guide ([ddcbb32](https://github.com/tks18/personal-finance-etl/commit/ddcbb32611fc17642dd5137399fb51a83a205157))
+
 ### [9.5.3](https://github.com/tks18/personal-finance-etl/compare/9.5.2...9.5.3) (2026-10-29)
 
 
