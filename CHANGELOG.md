@@ -2,6 +2,39 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [9.5.5](https://github.com/tks18/personal-finance-etl/compare/9.5.4...9.5.5) (2026-11-02)
+
+
+### CI 🛠
+
+* remove all unwanted CI Files ([427df6e](https://github.com/tks18/personal-finance-etl/commit/427df6e22462648d0e07a589b9696f2b9559abec))
+* remove coderabbit and bandit ci files ([b5495fe](https://github.com/tks18/personal-finance-etl/commit/b5495fe295823cc9c099532ddeb9ad6c43ae0cf6))
+
+
+### Features 🔥
+
+* **application:** implement change detection policy resolver ([731684a](https://github.com/tks18/personal-finance-etl/commit/731684aeb82d3c4e112a955ce2786582c7f75cfa))
+* **config:** model dataset change detection policy ([11af14b](https://github.com/tks18/personal-finance-etl/commit/11af14bf1d93cc270a48d3d9fcdf7987d801381f))
+
+
+### Code Refactoring 🖌
+
+* **control-plane:** use resolved change policies ([fcf7123](https://github.com/tks18/personal-finance-etl/commit/fcf71233fe93dbde760023e341fb009fddd6a75b))
+* **pipeline:** pass resolved policies to file sync ([2670a8b](https://github.com/tks18/personal-finance-etl/commit/2670a8b31a35746347a3b1ff9a67fbc8e58e3bb2))
+
+
+### Tests 🧪
+
+* **application:** add policy resolver matrix tests ([176faf7](https://github.com/tks18/personal-finance-etl/commit/176faf76978a066be0f65d7654f9c345c15c24e5))
+* **config:** add change detection policy tests ([3f678e4](https://github.com/tks18/personal-finance-etl/commit/3f678e407d54ced54a12f96451a70952fce1a8a1))
+* **control-plane:** verify policy-driven file sync ([6f69bde](https://github.com/tks18/personal-finance-etl/commit/6f69bdea0c7aabfa098d50202dc7f1233e032bcf))
+
+
+### Docs 📃
+
+* **refactor:** complete phase 005 policy plan and handoff ([fd838ed](https://github.com/tks18/personal-finance-etl/commit/fd838edf170afecde4d1bbeacdb0f4943e7451f4))
+* **refactor:** complete phase 006 runtime cutover plan ([0e55ad6](https://github.com/tks18/personal-finance-etl/commit/0e55ad6517eada616959323204d5b184338f9e4e))
+
 ### [9.5.4](https://github.com/tks18/personal-finance-etl/compare/9.5.3...9.5.4) (2026-11-02)
 
 
