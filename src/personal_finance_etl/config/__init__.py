@@ -6,6 +6,7 @@ Owns
 - Financial policy and rule definitions (FinancialRules).
 - Declarative physical evidence source configuration (SourceConfig, SourceDatasetConfig).
 - Physical dataset selectors (CsvSelector, ExcelSelector, SqliteSelector).
+- Topology coverage evaluation (TopologyCoverageReport, evaluate_bronze_topology_coverage).
 - Validation of TOML configuration files.
 
 Does not own
@@ -24,6 +25,8 @@ from personal_finance_etl.config.sources import (
     SourceConfig,
     SourceDatasetConfig,
     SqliteSelector,
+    TopologyCoverageReport,
+    evaluate_bronze_topology_coverage,
 )
 
 __all__ = [
@@ -36,4 +39,6 @@ __all__ = [
     "SourceConfig",
     "SourceDatasetConfig",
     "SqliteSelector",
+    "TopologyCoverageReport",
+    "evaluate_bronze_topology_coverage",
 ]

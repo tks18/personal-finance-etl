@@ -6,6 +6,8 @@ Owns
 - SourceDatasetConfig: Declarative binding of a physical source to a canonical dataset.
 - CsvSelector, ExcelSelector, SqliteSelector: Discriminated physical dataset selectors.
 - DatasetSelector: Discriminated union of supported dataset selectors.
+- TopologyCoverageReport: Diagnostic report summarizing Bronze dataset coverage.
+- evaluate_bronze_topology_coverage: Evaluator comparing configured bindings against Bronze contracts.
 - validate_source_dataset_bindings: Aggregate validation helper for sources and dataset bindings.
 - validate_source_selector_compatibility: Cross-model provider compatibility validator.
 
@@ -25,6 +27,10 @@ from personal_finance_etl.config.sources.selectors import (
     ExcelSelector,
     SqliteSelector,
 )
+from personal_finance_etl.config.sources.topology import (
+    TopologyCoverageReport,
+    evaluate_bronze_topology_coverage,
+)
 from personal_finance_etl.config.sources.validation import (
     validate_source_dataset_bindings,
     validate_source_selector_compatibility,
@@ -37,6 +43,8 @@ __all__ = [
     "SourceConfig",
     "SourceDatasetConfig",
     "SqliteSelector",
+    "TopologyCoverageReport",
+    "evaluate_bronze_topology_coverage",
     "validate_source_dataset_bindings",
     "validate_source_selector_compatibility",
 ]
