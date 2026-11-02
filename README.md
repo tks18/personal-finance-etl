@@ -34,9 +34,6 @@ So the project grew from ETL into the system I now use to **preserve financial e
 </p>
 
 <p align="center">
-    <a href="https://app.codacy.com/gh/tks18/personal-finance-etl/dashboard?utm_source=gh&amp;utm_medium=referral&amp;utm_content=&amp;utm_campaign=Badge_grade"><img src="https://app.codacy.com/project/badge/Grade/49aca2f2e7d044a5916adc56beb4c7dd" alt="Codacy Badge"></a>
-    <a href="https://www.codefactor.io/repository/github/tks18/personal-finance-etl"><img src="https://www.codefactor.io/repository/github/tks18/personal-finance-etl/badge" alt="CodeFactor"></a>
-    <a href="https://coderabbit.ai"><img src="https://img.shields.io/coderabbit/prs/github/tks18/personal-finance-etl?label=CodeRabbit%20Reviews" alt="CodeRabbit Reviews"></a>
     <a href="https://deepwiki.com/tks18/personal-finance-etl"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
 </p>
 
@@ -639,13 +636,13 @@ I would rather document a smaller guarantee accurately than a larger one poetica
 
 The repository now has four intentionally different knowledge surfaces.
 
-| Surface         | Job                                           | Start here                                                                                                                        |
-| --------------- | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| **README**      | **SHOW** the project quickly                  | you are here                                                                                                                      |
+| Surface         | Job                                           | Start here                                                                                                                       |
+| --------------- | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| **README**      | **SHOW** the project quickly                  | you are here                                                                                                                     |
 | **Docs Portal** | **INTERACT** with visual search & guides      | [Live Docs (Pages)](https://tks18.github.io/personal-finance-etl/) · [ReadTheDocs](https://personal-finance-etl.readthedocs.io/) |
-| **Wiki**        | **TEACH** the mental model                    | [GitHub Wiki](https://github.com/tks18/personal-finance-etl/wiki)                                                                 |
-| **`/docs`**     | **SPECIFY** implementation and finance deeply | [Technical Docs](docs/README.md)                                                                                                  |
-| **Code**        | **PROVE** the behavior                        | `src/personal_finance_etl/`                                                                                                       |
+| **Wiki**        | **TEACH** the mental model                    | [GitHub Wiki](https://github.com/tks18/personal-finance-etl/wiki)                                                                |
+| **`/docs`**     | **SPECIFY** implementation and finance deeply | [Technical Docs](docs/README.md)                                                                                                 |
+| **Code**        | **PROVE** the behavior                        | `src/personal_finance_etl/`                                                                                                      |
 
 If all four say exactly the same thing at exactly the same depth, I have successfully maintained four copies of one document. That would be impressive in the least useful possible way. 😄
 
