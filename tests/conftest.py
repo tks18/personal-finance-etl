@@ -26,7 +26,15 @@ from personal_finance_etl.application.facade import PersonalFinanceEngine
 from personal_finance_etl.bootstrap.container import ServiceContainer
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
+from personal_finance_etl.config.sources.model import SourceConfig, SourceDatasetConfig
+from personal_finance_etl.config.sources.selectors import (
+    CsvSelector,
+    ExcelSelector,
+    SqliteSelector,
+)
+from personal_finance_etl.contracts.datasets import DatasetId
 from personal_finance_etl.contracts.observability import ObservabilityEvent
+from personal_finance_etl.contracts.sources import ProviderType, SourceId
 from personal_finance_etl.infrastructure.control_plane.connection import SQLiteManager
 from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
 from personal_finance_etl.infrastructure.observability import ObservabilityEmitter
@@ -98,6 +106,242 @@ def config_path(fixtures_dir: Path) -> Path:
         Path to canonical config.toml.
     """
     return fixtures_dir / "config.toml"
+
+
+def get_v953_baseline_sources() -> list[SourceConfig]:
+    """Return declarative SourceConfig representations of all v9.5.3 external evidence sources.
+
+    Returns
+    -------
+    list[SourceConfig]
+        List of configured physical evidence sources using test-safe placeholder paths.
+    """
+    return [
+        SourceConfig(
+            source_id=SourceId("household_db"),
+            provider_type=ProviderType.SQLITE,
+            location="inputs/SOURCE_DB.sqlite",
+            enabled=True,
+            description="External household money management SQLite database backup",
+        ),
+        SourceConfig(
+            source_id=SourceId("mf_isin_csv"),
+            provider_type=ProviderType.CSV,
+            location="inputs/MF_ISIN_MAPPING.csv",
+            enabled=True,
+            description="Mutual fund name to ISIN mapping table",
+        ),
+        SourceConfig(
+            source_id=SourceId("benchmark_mapping_csv"),
+            provider_type=ProviderType.CSV,
+            location="inputs/BENCHMARK_MAPPING.csv",
+            enabled=True,
+            description="Asset to benchmark index mapping table",
+        ),
+        SourceConfig(
+            source_id=SourceId("opening_balance_csv"),
+            provider_type=ProviderType.CSV,
+            location="inputs/OPENING_BALANCE.csv",
+            enabled=True,
+            description="Historical household ledger opening balances",
+        ),
+        SourceConfig(
+            source_id=SourceId("benchmark_master_csv"),
+            provider_type=ProviderType.CSV,
+            location="inputs/BENCHMARK_MASTER.csv",
+            enabled=True,
+            description="Benchmark index master catalog",
+        ),
+        SourceConfig(
+            source_id=SourceId("macro_parameters_csv"),
+            provider_type=ProviderType.CSV,
+            location="inputs/MACRO_PARAMETERS.csv",
+            enabled=True,
+            description="Macroeconomic and tax policy parameters",
+        ),
+        SourceConfig(
+            source_id=SourceId("currency_mapping_csv"),
+            provider_type=ProviderType.CSV,
+            location="inputs/CURRENCY_MAPPING.csv",
+            enabled=True,
+            description="Currency ticker mapping and exchange symbols",
+        ),
+        SourceConfig(
+            source_id=SourceId("column_master_csv"),
+            provider_type=ProviderType.CSV,
+            location="inputs/COLUMN_MASTER.csv",
+            enabled=True,
+            description="Transitional column mapping dictionary (scheduled for retirement in Phase 030/035)",
+        ),
+        SourceConfig(
+            source_id=SourceId("mf_holdings_excel"),
+            provider_type=ProviderType.EXCEL,
+            location="inputs/Statements/Mutual Funds - Holdings",
+            enabled=True,
+            description="Monthly mutual fund holdings spreadsheet directory",
+        ),
+        SourceConfig(
+            source_id=SourceId("mf_orders_excel"),
+            provider_type=ProviderType.EXCEL,
+            location="inputs/Statements/Mutual Funds - Orders",
+            enabled=True,
+            description="Monthly mutual fund orders and transactions spreadsheet directory",
+        ),
+        SourceConfig(
+            source_id=SourceId("stock_pl_excel"),
+            provider_type=ProviderType.EXCEL,
+            location="inputs/Statements/Stock PL Statements",
+            enabled=True,
+            description="Monthly stock profit and loss statement directory",
+        ),
+        SourceConfig(
+            source_id=SourceId("stock_orders_excel"),
+            provider_type=ProviderType.EXCEL,
+            location="inputs/Statements/Stock - Orders",
+            enabled=True,
+            description="Monthly stock order execution statement directory",
+        ),
+        SourceConfig(
+            source_id=SourceId("us_stock_transactions"),
+            provider_type=ProviderType.CSV,
+            location="inputs/Statements/IND Money (US Stocks)/Transaction Reports",
+            enabled=False,
+            description="Optional US stock transaction reports directory (default disabled)",
+        ),
+    ]
+
+
+def get_v953_baseline_dataset_bindings() -> list[SourceDatasetConfig]:
+    """Return declarative SourceDatasetConfig bindings covering all external Bronze datasets.
+
+    Returns
+    -------
+    list[SourceDatasetConfig]
+        List of source-to-dataset bindings for all 16 externally supplied Bronze datasets.
+    """
+    return [
+        SourceDatasetConfig(
+            source_id=SourceId("household_db"),
+            dataset_id=DatasetId.HOUSEHOLD_ZCATEGORY,
+            selector=SqliteSelector(table_name="ZCATEGORY"),
+            enabled=True,
+            description="Household expense categories table",
+        ),
+        SourceDatasetConfig(
+            source_id=SourceId("household_db"),
+            dataset_id=DatasetId.HOUSEHOLD_ASSET_GROUP,
+            selector=SqliteSelector(table_name="ASSETGROUP"),
+            enabled=True,
+            description="Household asset grouping table",
+        ),
+        SourceDatasetConfig(
+            source_id=SourceId("household_db"),
+            dataset_id=DatasetId.HOUSEHOLD_ASSETS,
+            selector=SqliteSelector(table_name="ASSETS"),
+            enabled=True,
+            description="Household financial accounts and assets table",
+        ),
+        SourceDatasetConfig(
+            source_id=SourceId("household_db"),
+            dataset_id=DatasetId.HOUSEHOLD_CURRENCY,
+            selector=SqliteSelector(table_name="CURRENCY"),
+            enabled=True,
+            description="Household currency denominations table",
+        ),
+        SourceDatasetConfig(
+            source_id=SourceId("household_db"),
+            dataset_id=DatasetId.HOUSEHOLD_INOUTCOME,
+            selector=SqliteSelector(table_name="INOUTCOME"),
+            enabled=True,
+            description="Household financial ledger income and expense transactions table",
+        ),
+        SourceDatasetConfig(
+            source_id=SourceId("mf_isin_csv"),
+            dataset_id=DatasetId.INVESTMENT_MF_ISIN_MAPPING,
+            selector=CsvSelector(),
+            enabled=True,
+        ),
+        SourceDatasetConfig(
+            source_id=SourceId("benchmark_mapping_csv"),
+            dataset_id=DatasetId.INVESTMENT_BENCHMARK_MAPPING,
+            selector=CsvSelector(),
+            enabled=True,
+        ),
+        SourceDatasetConfig(
+            source_id=SourceId("opening_balance_csv"),
+            dataset_id=DatasetId.HOUSEHOLD_OPENING_BALANCES,
+            selector=CsvSelector(),
+            enabled=True,
+        ),
+        SourceDatasetConfig(
+            source_id=SourceId("benchmark_master_csv"),
+            dataset_id=DatasetId.INVESTMENT_BENCHMARK_MASTER,
+            selector=CsvSelector(),
+            enabled=True,
+        ),
+        SourceDatasetConfig(
+            source_id=SourceId("macro_parameters_csv"),
+            dataset_id=DatasetId.INVESTMENT_MACRO_PARAMETERS,
+            selector=CsvSelector(),
+            enabled=True,
+        ),
+        SourceDatasetConfig(
+            source_id=SourceId("currency_mapping_csv"),
+            dataset_id=DatasetId.MARKET_CURRENCY_MAPPING,
+            selector=CsvSelector(),
+            enabled=True,
+        ),
+        SourceDatasetConfig(
+            source_id=SourceId("column_master_csv"),
+            dataset_id=DatasetId.COMMON_COLUMN_MASTER,
+            selector=CsvSelector(),
+            enabled=True,
+            description="Transitional column master mapping dataset (scheduled for retirement in Phase 030/035)",
+        ),
+        SourceDatasetConfig(
+            source_id=SourceId("mf_holdings_excel"),
+            dataset_id=DatasetId.MARKET_MF_HOLDINGS,
+            selector=ExcelSelector(sheet_name="Holdings"),
+            enabled=True,
+        ),
+        SourceDatasetConfig(
+            source_id=SourceId("mf_orders_excel"),
+            dataset_id=DatasetId.INVESTMENT_MF_ORDERS,
+            selector=ExcelSelector(sheet_name="Transactions"),
+            enabled=True,
+        ),
+        SourceDatasetConfig(
+            source_id=SourceId("stock_pl_excel"),
+            dataset_id=DatasetId.MARKET_STOCK_HOLDINGS,
+            selector=ExcelSelector(sheet_name="Trade Level"),
+            enabled=True,
+        ),
+        SourceDatasetConfig(
+            source_id=SourceId("stock_orders_excel"),
+            dataset_id=DatasetId.INVESTMENT_STOCK_ORDERS,
+            selector=ExcelSelector(sheet_name="Sheet1", header_row=5),
+            enabled=True,
+        ),
+        SourceDatasetConfig(
+            source_id=SourceId("us_stock_transactions"),
+            dataset_id=DatasetId.INVESTMENT_US_STOCK_TRANSACTIONS,
+            selector=CsvSelector(file_pattern="*.csv"),
+            enabled=False,
+            description="Optional US stock transactions reports",
+        ),
+    ]
+
+
+@pytest.fixture(scope="session")
+def v953_baseline_topology() -> tuple[list[SourceConfig], list[SourceDatasetConfig]]:
+    """Return the baseline Shan external source topology representing all v9.5.3 Bronze evidence.
+
+    Returns
+    -------
+    tuple[list[SourceConfig], list[SourceDatasetConfig]]
+        Tuple containing 13 SourceConfigs and 17 SourceDatasetConfigs.
+    """
+    return get_v953_baseline_sources(), get_v953_baseline_dataset_bindings()
 
 
 # ---------------------------------------------------------------------------
