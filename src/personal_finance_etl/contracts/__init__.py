@@ -24,7 +24,15 @@ from personal_finance_etl.contracts.application import (
     EngineExecutionResult,
     EngineStage,
 )
-from personal_finance_etl.contracts.datasets import DatasetId
+from personal_finance_etl.contracts.datasets import (
+    BRONZE_DATASET_ORIGIN_MAP,
+    EXTERNAL_CONFIGURED_DATASETS,
+    PROVIDER_GENERATED_DATASETS,
+    TRANSITIONAL_DATASETS,
+    DatasetId,
+    DatasetOrigin,
+    get_bronze_dataset_origin,
+)
 from personal_finance_etl.contracts.event_transport import EventQueue, NullEventQueue
 from personal_finance_etl.contracts.extraction import (
     ExtractionBatchResult,
@@ -67,9 +75,12 @@ from personal_finance_etl.contracts.sources import (
 )
 
 __all__ = [
+    "BRONZE_DATASET_ORIGIN_MAP",
     "CommitState",
     "DatasetId",
+    "DatasetOrigin",
     "DiagnosticSeverity",
+    "EXTERNAL_CONFIGURED_DATASETS",
     "EngineDataTransport",
     "EngineExecutionResult",
     "EngineStage",
@@ -92,6 +103,7 @@ __all__ = [
     "ObservabilityEvent",
     "ObservabilityEventDict",
     "ObservabilitySink",
+    "PROVIDER_GENERATED_DATASETS",
     "PresentationKind",
     "ProviderType",
     "RestoreOutcome",
@@ -100,6 +112,8 @@ __all__ = [
     "SnapshotResult",
     "SourceId",
     "SyncSummaryRecord",
+    "TRANSITIONAL_DATASETS",
     "classify_failure_domain",
+    "get_bronze_dataset_origin",
     "validate_source_id",
 ]
