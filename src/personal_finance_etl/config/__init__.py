@@ -4,7 +4,8 @@ Owns
 ----
 - Validated runtime environment settings (Settings).
 - Financial policy and rule definitions (FinancialRules).
-- Declarative physical evidence source configuration (SourceConfig).
+- Declarative physical evidence source configuration (SourceConfig, SourceDatasetConfig).
+- Physical dataset selectors (CsvSelector, ExcelSelector, SqliteSelector).
 - Validation of TOML configuration files.
 
 Does not own
@@ -16,11 +17,23 @@ Does not own
 
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import FileHashPolicy, Settings
-from personal_finance_etl.config.sources import SourceConfig
+from personal_finance_etl.config.sources import (
+    CsvSelector,
+    DatasetSelector,
+    ExcelSelector,
+    SourceConfig,
+    SourceDatasetConfig,
+    SqliteSelector,
+)
 
 __all__ = [
+    "CsvSelector",
+    "DatasetSelector",
+    "ExcelSelector",
     "FileHashPolicy",
     "FinancialRules",
     "Settings",
     "SourceConfig",
+    "SourceDatasetConfig",
+    "SqliteSelector",
 ]
