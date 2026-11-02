@@ -5,7 +5,7 @@ Owns
 - SQLite connection management and PRAGMA settings.
 - RunRepository: execution lifecycle and run history persistence.
 - ArtifactRepository: file sync records, hashes, and provenance persistence.
-- FileSyncService: detecting file changes via SHA-256 and tracking sync status.
+- FileSyncService: synchronizing discovered files against Control Plane registry using resolved change detection policies.
 - ControlPlane infrastructure façade.
 
 Does not own
