@@ -147,12 +147,12 @@ Do not:
 
 ## 13. Completion checklist
 
-- [ ] Three provider-specific selector types exist.
-- [ ] SourceDatasetConfig binds SourceId to DatasetId.
-- [ ] Cross-model validation exists.
-- [ ] No untyped selector dictionary is used.
-- [ ] Runtime remains unchanged.
-- [ ] Tests and architecture gates pass.
+- [x] Three provider-specific selector types exist.
+- [x] SourceDatasetConfig binds SourceId to DatasetId.
+- [x] Cross-model validation exists.
+- [x] No untyped selector dictionary is used.
+- [x] Runtime remains unchanged.
+- [x] Tests and architecture gates pass.
 
 ## 14. Commit
 

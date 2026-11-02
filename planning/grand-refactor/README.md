@@ -35,7 +35,7 @@ If code evidence contradicts a phase, stop and amend the phase before changing t
 |---:|---|---|---|
 | 001 | Canonical dataset identity and registry | v9.5.4 | [x] |
 | 002 | Source identity and provider contracts | v9.5.4 | [x] |
-| 003 | Typed dataset selectors and source-dataset contracts | v9.5.4 | [ ] |
+| 003 | Typed dataset selectors and source-dataset contracts | v9.5.4 | [x] |
 | 004 | Complete v9.5.3 topology as declarative configuration | v9.5.4 | [ ] |
 | 005 | Change-detection policy architecture | v9.5.5 | [ ] |
 | 006 | Change-detection runtime cutover | v9.5.5 | [ ] |
