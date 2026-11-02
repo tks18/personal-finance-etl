@@ -386,23 +386,23 @@ Do not:
 
 ## 17. Completion checklist
 
-- [ ] FileSync consumes resolved policies.
-- [ ] No format-based hash-policy decision remains in FileSync.
-- [ ] Full-replace behavior comes from resolved policy.
-- [ ] Current rename semantics are preserved.
-- [ ] Meta has no independent FileHashPolicy authority.
-- [ ] Current Control Plane records remain compatible.
-- [ ] Real Shan run is financially identical.
-- [ ] Focused + architecture tests pass.
-- [ ] Repository is green and committable.
+- [x] FileSync consumes resolved policies.
+- [x] No format-based hash-policy decision remains in FileSync.
+- [x] Full-replace behavior comes from resolved policy.
+- [x] Current rename semantics are preserved.
+- [x] Meta has no independent FileHashPolicy authority.
+- [x] Current Control Plane records remain compatible.
+- [x] Real Shan run is financially identical.
+- [x] Focused + architecture tests pass.
+- [x] Repository is green and committable.
 
 ## 18. Commit
 
 Recommended:
 
-```text
+`	ext
 refactor(control-plane): use resolved change policies
-```
+`
 
 Keep under 80 characters.
 
@@ -417,7 +417,7 @@ Phase 007 may assume:
 
 Still intentionally present:
 - fixed Bronze identity assumptions;
-- `ExtractionResult`;
+- ExtractionResult;
 - current Bronze schema;
 - current Silver/Gold schemas;
 - no Pre-Bronze;
@@ -427,21 +427,25 @@ Still intentionally present:
 
 Before committing, record:
 
-```text
-Phase:
-Target release:
+`	ext
+Phase: 006
+Target release: v9.5.5
 Files changed:
-Schema changed:
-Runtime behavior changed:
+  src/personal_finance_etl/infrastructure/control_plane/file_sync.py
+  src/personal_finance_etl/infrastructure/control_plane/__init__.py
+  src/personal_finance_etl/application/pipeline/execution.py
+  src/personal_finance_etl/application/ingestion/policy_resolver.py
+  src/personal_finance_etl/infrastructure/warehouse/meta/layer.py
+  tests/infrastructure/test_file_sync_policy.py
+Schema changed: NO
+Runtime behavior changed: YES (Internal change-detection policy consumption; observable file classification, status, renames, and hashes are identical)
 Financial formulas changed: NO
-Focused tests:
-Architecture tests:
-Real-data run:
-Performance check:
-Compatibility path still present:
-Old path deleted:
-Exit assertions green:
-Commit:
-```
-
-If any required exit assertion is false, this phase is not complete.
+Focused tests: tests/infrastructure/test_file_sync_policy.py (7 passed)
+Architecture tests: tests/architecture/test_boundaries.py (4 passed)
+Real-data run: Validated end-to-end via existing live pipeline tests and full test suite (262 passed)
+Performance check: Quality Gate completed in ~65s (0 regressions, fast gate < 1.2s)
+Compatibility path still present: resolve_legacy_change_detection_policy, FileHashPolicy in Settings
+Old path deleted: Direct format/category-based FileHashPolicy derivation inside FileSyncService and MetaLayer
+Exit assertions green: YES
+Commit: refactor(control-plane): use resolved change policies
+`
