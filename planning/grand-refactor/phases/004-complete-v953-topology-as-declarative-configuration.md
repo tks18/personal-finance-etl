@@ -164,13 +164,13 @@ Do not:
 
 ## 12. Completion checklist
 
-- [ ] Every current Bronze dataset is classified.
-- [ ] Every externally supplied dataset is representable.
-- [ ] Provider-generated datasets are explicitly separated.
-- [ ] Transitional column_master is tracked.
-- [ ] No runtime code changed.
-- [ ] v9.5.4 foundation tests pass.
-- [ ] Full quality gate passes before tagging/releasing v9.5.4.
+- [x] Every current Bronze dataset is classified.
+- [x] Every externally supplied dataset is representable.
+- [x] Provider-generated datasets are explicitly separated.
+- [x] Transitional column_master is tracked.
+- [x] No runtime code changed.
+- [x] v9.5.4 foundation tests pass.
+- [x] Full quality gate passes before tagging/releasing v9.5.4.
 
 ## 13. Commit
 
