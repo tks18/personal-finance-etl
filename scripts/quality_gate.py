@@ -248,7 +248,7 @@ def run_quality_gate(
     if auto_fix:
         console.print("[yellow]>> Running auto-fix (Ruff lint & format)...[/yellow]")
         subprocess.run(["uv", "run", "ruff", "check", "--fix", "."], cwd=ROOT_DIR, check=False)
-        subprocess.run(["uv", "run", "ruff", "format", "src/"], cwd=ROOT_DIR, check=False)
+        subprocess.run(["uv", "run", "ruff", "format", "src/", "tests/"], cwd=ROOT_DIR, check=False)
 
     # Engine Catalog
     # Tier 1 (Fast): Ruff Check, Ruff Format, Mypy
@@ -258,7 +258,7 @@ def run_quality_gate(
         (
             "Ruff Format",
             "Fast",
-            ["uv", "run", "ruff", "format", "--check", "src/"],
+            ["uv", "run", "ruff", "format", "--check", "src/", "tests/"],
             _parse_generic_failures,
         ),
         ("Mypy Typecheck", "Fast", ["uv", "run", "mypy"], _parse_mypy_output),
@@ -276,7 +276,7 @@ def run_quality_gate(
                 (
                     "Pylint Deep Analysis",
                     "Full",
-                    ["uv", "run", "pylint", "src"],
+                    ["uv", "run", "pylint", "src", "tests"],
                     _parse_pylint_output,
                 ),
                 (

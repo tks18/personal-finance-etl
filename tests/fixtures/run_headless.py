@@ -1,0 +1,42 @@
+import queue
+import time
+from pathlib import Path
+
+from personal_finance_etl.application.pipeline.orchestrator import ETLOrchestrator
+from personal_finance_etl.config.settings import Settings
+
+
+class LoggerQueue:
+    def __init__(self) -> None:
+        self._q: queue.Queue[object] = queue.Queue()
+
+    def put(self, status: object, block: bool = True, timeout: float | None = None) -> None:
+        self._q.put(status, block=block, timeout=timeout)
+
+
+def main() -> None:
+    print("Starting Headless ETL Pipeline...")
+    q = LoggerQueue()
+    start_time = time.time()
+
+    try:
+        cfg_path = (
+            "tests/fixtures/config.toml"
+            if Path("tests/fixtures/config.toml").exists()
+            else "config.toml"
+        )
+        cfg = Settings.from_toml(cfg_path)
+
+        # Run in main thread for profiling
+        orchestrator = ETLOrchestrator(cfg, q)
+        orchestrator.run()
+    except Exception as e:
+        print(f"Error: {e}")
+        raise e
+
+    end_time = time.time()
+    print(f"Pipeline completed in {end_time - start_time:.2f} seconds.")
+
+
+if __name__ == "__main__":
+    main()

@@ -375,6 +375,7 @@ class MetaLayer:
 
         tables_metadata = [
             {
+                "dataset_id": c.dataset_id.value,
                 "table_name": c.physical_table,
                 "grain": c.grain,
                 "producer": c.producer,

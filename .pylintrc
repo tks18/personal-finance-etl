@@ -13,8 +13,8 @@
 [MASTER]
 py-version = 3.13
 jobs = 0
-source-roots = src
-init-hook = 'import sys; sys.path.insert(0, "src")'
+source-roots = src, tests
+init-hook = 'import sys; sys.path.insert(0, "src"); sys.path.insert(0, ".")'
 extension-pkg-allow-list =
     pyxirr,
     duckdb,
@@ -25,7 +25,6 @@ extension-pkg-allow-list =
 
 # Directory and file base names to ignore
 ignore =
-    tests,
     scripts,
     docs,
     .planning,
@@ -43,14 +42,12 @@ ignore =
 
 # Regex patterns matching file/directory base names
 ignore-patterns =
-    ^test_.*\.py$,
-    ^tests$,
     ^scripts$,
     ^docs$
 
 # Regex patterns matching file paths (supports absolute and relative paths)
 ignore-paths =
-    (^|[/\\])(tests|scripts|docs|\.planning|build|dist|outputs|backups|scratch|node_modules|\.yarn|\.venv|_df_cache)([/\\]|$),
+    (^|[/\\])(scripts|docs|\.planning|build|dist|outputs|backups|scratch|node_modules|\.yarn|\.venv|_df_cache)([/\\]|$),
     .*main\.py$,
     .*main\.spec$,
     .*[/\\]presentation[/\\]docs[/\\]assets([/\\]|$)
@@ -58,8 +55,8 @@ ignore-paths =
 [MAIN]
 py-version = 3.13
 jobs = 0
-source-roots = src
-init-hook = 'import sys; sys.path.insert(0, "src")'
+source-roots = src, tests
+init-hook = 'import sys; sys.path.insert(0, "src"); sys.path.insert(0, ".")'
 extension-pkg-allow-list =
     pyxirr,
     duckdb,
@@ -69,7 +66,6 @@ extension-pkg-allow-list =
     numba
 
 ignore =
-    tests,
     scripts,
     docs,
     .planning,
@@ -86,13 +82,11 @@ ignore =
     main.spec
 
 ignore-patterns =
-    ^test_.*\.py$,
-    ^tests$,
     ^scripts$,
     ^docs$
 
 ignore-paths =
-    (^|[/\\])(tests|scripts|docs|\.planning|build|dist|outputs|backups|scratch|node_modules|\.yarn|\.venv|_df_cache)([/\\]|$),
+    (^|[/\\])(scripts|docs|\.planning|build|dist|outputs|backups|scratch|node_modules|\.yarn|\.venv|_df_cache)([/\\]|$),
     .*main\.py$,
     .*main\.spec$,
     .*[/\\]presentation[/\\]docs[/\\]assets([/\\]|$)

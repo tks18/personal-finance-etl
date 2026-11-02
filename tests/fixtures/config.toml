@@ -1,0 +1,30 @@
+# Configuration for Personal Finance ETL
+SOURCE_DB_FOLDER = "inputs/SOURCE_DB.db"
+TARGET_DB_BASE_PATH = "outputs"
+TARGET_DB_NAME = "Personal_Finance_DB.duckdb"
+
+# Raw Store Config
+DISABLE_FILE_DISCOVERER = false
+RAW_DOCUMENT_STORE_NAME = "Personal_Finance_DB_Raw_Store.sqlite"
+
+# Dependencies
+COLUMN_MASTER_PATH = "inputs/COLUMN_MASTER.csv"
+MF_ISIN_CSV_PATH = "inputs/MF_ISIN_MAPPING.csv"
+BENCHMARK_MAPPING_CSV_PATH = "inputs/BENCHMARK_MAPPING.csv"
+BENCHMARK_MASTER_CSV_PATH = "inputs/BENCHMARK_MASTER.csv"
+MACRO_PARAMETERS_CSV_PATH = "inputs/MACRO_PARAMETERS.csv"
+OPENING_BALANCE_CSV_PATH = "inputs/OPENING_BALANCE.csv"
+CURRENCY_MAPPING_CSV_PATH = "inputs/CURRENCY_MAPPING.csv"
+
+# Statements
+STATEMENTS_FOLDER = "inputs/Statements"
+
+# Observability & Logging
+LOGS_DIRECTORY = "logs/runs"
+RETAIN_LAST_N_RUNS = 12
+
+# File Hash
+[FILE_HASH_POLICY]
+csv = true
+excel = false
+sqlite = true

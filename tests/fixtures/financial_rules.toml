@@ -1,0 +1,442 @@
+# Financial Rules Configuration
+
+# Defaults
+DEFAULT_CURRENCY_ID = "INR_INR"
+
+# Configurable Mappings
+[MF_SCHEME_MAPPINGS]
+"Quant Tax Plan Direct Growth" = "Quant ELSS Tax Saver Fund Direct Growth"
+"IDBI India Top 100 Equity Fund Direct Growth" = "LIC MF Large Cap Fund Direct Growth"
+"TATA DIGITAL INDIA FUND DIRECT PLAN GROWTH" = "Tata Digital India Fund Direct Growth"
+"ICICI PRUDENTIAL TECHNOLOGY FUND - DIRECT PLAN - GROWTH" = "ICICI Prudential Technology Direct Plan Growth"
+"DSP BlackRock Small Cap Fund - Direct - Growth" = "DSP Small Cap Direct Plan Growth"
+"ICICI Prudential S&P BSE Liquid Rate ETF" = "ICICI Prudential S&P BSE Liquid Rate"
+"Zerodha Nifty LargeMidcap 250 Index Fund" = "Zerodha Nifty LargeMidcap 250 Index Fd"
+
+[income.active]
+category_ids = ["2"] #Salary
+sub_category_ids = []
+
+[income.dividends]
+category_ids = []
+sub_category_ids = ["E1FFA01B-86D4-4083-BC1A-A469299E5F41"] #Dividends
+
+[income.interest]
+category_ids = []
+sub_category_ids = [
+    "951F62DE-F993-4937-91E7-F8EE15E4501B", #Savings Bank Interest
+    "6CDCA0D1-C831-4922-ABFD-84756C30219D", #PPF Interest
+    "191A446C-DBD4-4EFA-8105-3F407492EF8F", #FD Interest
+    "209A1CED-A764-4621-B465-186F23F666B0" #RD Interest
+    ]
+
+[income.non_cash]
+category_ids = [
+    "60de392d-466e-488b-9b4f-5910f94a2a04" # Non Cash Income (EPF, PF Interest, etc)
+]
+sub_category_ids = []
+
+[expense.core]
+category_ids = [
+    "CB261E83-6B2F-4D5B-A25B-B5C9CDA1C0F5", #Communication (Internet, Broadband, etc)
+    "6B469543-721D-4F46-865E-87EA60C77112", #Electricity
+    "15", #Education
+    "CFE9EFBF-0595-4404-89E8-D0C631CD374C", #Essential EMIs
+    "3564f91a-d376-49c4-88e8-1537e7bf02cc", #Family Support
+    "14", #Health
+    "71F17CAC-C5B6-4016-93BE-3EEAB21BB598", #Insurances
+    "7dad3170-df8d-4ad4-bb89-bdf73146e49c", #Maintenances (Vehicle, etc)
+    "661A29ED-ADB3-4922-A845-094D2F563AD3", #Rents
+    "5BF30B78-3D8C-46D1-9EE3-94FAD1B00FC1", #Taxes
+    "BE495B48-5CBA-4528-AC7B-7CE65D808F9F", #Transportation
+]
+sub_category_ids = [
+    "B6EAF9F2-E747-4204-A3A8-D26386BC051B", #Clothing - Essentials - Online
+    "145526FE-150A-4A73-8468-957EF7B4F825", #Clothing - Essentials - Offline
+    "AAB13786-DA46-455E-9E88-798E56DD6531", #Subscriptions - Essential Apps
+    "5C88A120-FD45-45EB-92F5-F931FF885B14", #One Time - Essential Apps
+    "172C2824-51B2-4CB5-B319-773FC5EE6DA4", #Food - Breakfast
+    "18", #Food - Lunch
+    "19", #Food - Dinner
+    "D31898E6-D447-4025-8DAD-54916A2F86F8", #Food - Snacks
+    "20", #Food - Eating out Essentials
+    "21", #Food - Tea/Coffee
+    "1C4CB881-D1EC-4977-BEC9-A7B37E365AAA", #Gadgets - Essentials
+    "7c164f62-74bd-4951-80f6-94c87663ed3d", # Gadgets - Subscriptions
+    "C7C501CF-3C4C-4096-8BE6-6E731A183EA2", #Groceries - Essentials - Offline
+    "8F59C3A6-C340-4FB4-85E4-7A25E2E2310E", #Groceries - Essentials - Online
+    "AFBE2BD8-88CB-4E0A-A6F7-E87E5DFCB6C4", #Groceries - Sanitation
+    "2C2CF324-B41B-4113-A63C-EC806A772847", #Groceries - Water
+    "7EBB30F8-FA24-491D-98B5-6C063CDA0A96", #Misc - Bank Charges
+    "C3E46655-09C2-4DEA-9171-74B657810056", #Misc - MF Entry Load
+    "26CB831D-9B81-487D-8306-B4983732A186", #Misc - Stock Charges
+    "1B861E2F-2349-4DA7-A032-811F55046655", #Misc - STT
+    "C8A7331A-3854-41D0-B688-7EA17AEAB761", #Misc - Other Essentials
+    "2636aad7-b1a5-43c8-9fbe-6bb1efeb51a1", #Subscriptions - ICAI Fees
+]
+
+# Asset mappings
+
+[assets.illiquid]
+category_ids = [
+    "a87da9a8-c539-4889-825d-404d841a0a8f", # Trip Related Accounts
+    "5538bc56-a855-4ba3-8159-3fa834c05440", # Security Deposits
+    "8e7e90c0-b337-4a1f-b76a-0332fb2ef2ce", # Expense Amortizations
+    "D2C6566B-0135-4589-B8D6-70FB7BB881FF", # Asset Amortizations
+    "02037a46-0edf-438a-a0ab-8589f7696114" # Physical Assets
+]
+sub_category_ids = []
+
+[assets.cashflow]
+cash_pools = [
+    "1", # Bank Accounts
+    "4", # Savings
+    "11", # Cash
+    "3", # Debit Card
+    "6", # Top-Up/Prepaid
+    "4DC12C05-F51E-4C51-91BA-C8077A5251E6", # Digital Wallets
+    "95b1e4ee-aac3-4148-9647-e2d31c4d0659"  # Meal Wallets
+]
+non_cash_pnl_sources = [
+    "D2C6566B-0135-4589-B8D6-70FB7BB881FF", # Asset Amortizations
+    "8e7e90c0-b337-4a1f-b76a-0332fb2ef2ce",  # Expense Amortizations
+    "a87da9a8-c539-4889-825d-404d841a0a8f", # Trip Related Accounts
+    "02037a46-0edf-438a-a0ab-8589f7696114" # Physical Assets
+]
+working_capital_conduits = [
+    "9D81E7D5-381B-4368-9170-92A17E5B7CA2", # Reimbursements
+    "10", # Insurance
+    "7"   # Others (Suspense/Clearing)
+]
+investing_activities = [
+    "EC2099EF-58BB-4CE6-84D9-4C306AFC6BCC", # Investments
+    "5538bc56-a855-4ba3-8159-3fa834c05440"  # Security Deposits
+]
+financing_liabilities = [
+    "2", # Credit Card
+    "5", # Loan
+    "9"  # Overdrafts
+]
+
+[assets.digital]
+category_ids = [
+ "4DC12C05-F51E-4C51-91BA-C8077A5251E6" # Digital Wallets   
+]
+
+# Investment mappings
+
+[investments.stocks_and_etfs]
+category_ids = []
+sub_category_ids = ["EB6DAD60-81C9-4200-8820-F7480F4A972F"]
+
+[investments.mutual_funds]
+category_ids = []
+sub_category_ids = ["FFF20552-FCA9-4DE6-928C-F73C4E78CDB5"]
+
+[assumptions.macro]
+# Default number of trading days in a year for annualized volatility calculations.
+default_trading_days = 252.0
+# Fallback annualized inflation rate if historical macro data is unavailable.
+fallback_inflation_rate = 0.06
+# Fallback annualized risk-free rate if historical macro data is unavailable.
+fallback_risk_free_rate = 0.065
+# Fallback ordinary income tax rate (individual marginal slab) if not in macro table.
+fallback_ordinary_income_rate = 0.9112
+[assumptions.fire]
+# Safe Withdrawal Rate multiplier (e.g., 28.5 for the 3.5% rule, moderate stance).
+swr_multiplier = 28.5
+# Assumed real (inflation-adjusted) return for Coast FI compounding.
+coast_fi_real_return = 0.05
+# Number of years to coast (compound without contributions) for Coast FI targets.
+coast_fi_years = 10
+# Ratio of the Target FI amount considered sufficient for Lean FI (e.g., 0.7 for 70%).
+lean_fi_ratio = 0.7
+# Fallback nominal return to use for FIRE forecasting if historical trailing returns are unavailable.
+fallback_trailing_return = 0.11
+# Floor Safe Withdrawal Rate (SWR) during severe portfolio drawdowns.
+cape_swr_floor = 0.04
+# Ceiling Safe Withdrawal Rate (SWR) during moderate drawdowns.
+cape_swr_ceiling = 0.045
+# Base Safe Withdrawal Rate (SWR) during normal market conditions.
+cape_swr_base = 0.035
+# The maximum age until which you expect to be healthy and working.
+human_capital_max_age = 55.0
+# Annual discount rate applied to future earnings to assess human capital value.
+human_capital_discount_rate = 0.05
+
+
+[assumptions.monte_carlo]
+# Number of Monte Carlo paths/simulations to run.
+iterations = 10000
+# Maximum months allowed to reach FI. (400 months = ~33 years to hit your FI number)
+max_months = 400
+# Assumed annualized standard deviation (volatility) of returns.
+annual_volatility = 0.15
+# Absolute minimum annualized real return applied during Monte Carlo forecasting.
+real_return_floor = 0.01
+# Time horizon for Sequence of Returns Risk (SORR) CAGR calculations.
+sorr_cagr_window_months = 60
+# Desired target age for FIRE calculations. (Plan for longer lifespan for safety)
+desired_target_age = 85
+# Date of birth in YYYY-MM-DD format.
+date_of_birth = "1995-01-01"
+
+[assumptions.monte_carlo.jump_diffusion]
+# Merton Jump-Diffusion parameters for simulating Black Swan events
+jump_probability_annual = 0.05
+jump_magnitude = -0.20
+# Expected annual drag from ETF expense ratios and portfolio fees
+expense_ratio_drag = 0.003
+
+[assumptions.monte_carlo.markov_regime]
+# 3x3 Matrix defining probabilities to transition between Bull, Bear, and Stagflation states.
+# Row 0: Bull, Row 1: Bear, Row 2: Stagflation
+transition_matrix = [
+    [0.85, 0.12, 0.03], # Bull (lasts ~6.5 years)
+    [0.45, 0.50, 0.05], # Bear (lasts ~2 years)
+    [0.30, 0.10, 0.60]  # Stagflation (lasts ~2.5 years)
+]
+# State Parameters defined as: [drift, volatility, inflation_target]
+state_bull = [0.18, 0.18, 0.05]  # High drift, high vol, stable inflation
+state_bear = [-0.20, 0.25, 0.04] # Negative drift, high vol, falling inflation
+state_stag = [-0.02, 0.20, 0.08] # Flat/negative drift, moderate vol, spiking inflation
+
+[assumptions.monte_carlo.human_capital]
+# Probability of losing income (job loss, zero bonus) when entering a Bear or Stagflation state.
+shock_probability = 0.20
+# Duration of the income shock in months
+shock_duration_min = 6
+shock_duration_max = 12
+# Percentage of core expenses covered by unemployment benefits or severance during a shock
+unemployment_benefit_coverage_pct = 0.0
+
+[assumptions.monte_carlo.glide_path]
+# "Bond Tent" settings to protect against Sequence of Returns Risk (SORR)
+# Begin scaling down equities this many months before your target FI date.
+derisk_start_months_prior = 60
+# Slowly scale equities back up this many months after reaching FI.
+post_fi_re_risk_months = 120
+# Maximum equity allocation during accumulation and late retirement.
+base_equity_weight = 0.70
+# Minimum equity allocation (maximum safety) at the exact moment of FI.
+fi_target_equity_weight = 0.55
+# Expected real return for the non-equity (debt) portion.
+debt_real_return = 0.02
+# Expected volatility for the non-equity (debt) portion.
+debt_volatility = 0.04
+# If true, during decumulation down-months, withdrawals are taken from debt, bypassing equity liquidation.
+dynamic_debt_drawdown_first = true
+
+[assumptions.monte_carlo.guyton_klinger]
+# Multiplier over initial SWR to trigger a lifestyle cut (e.g., 1.2 for +20% threshold breach)
+withdrawal_upper_threshold = 1.2
+# Multiplier under initial SWR to trigger a lifestyle raise (e.g., 0.8 for -20% threshold breach)
+withdrawal_lower_threshold = 0.8
+# Multiplier for withdrawal amount when cutting lifestyle (e.g., 0.90 for -10% spend cut)
+lifestyle_cut_multiplier = 0.90
+# Multiplier for withdrawal amount when raising lifestyle (e.g., 1.10 for +10% spend raise)
+lifestyle_raise_multiplier = 1.10
+
+[assumptions.monte_carlo.inflation_model]
+# Speed of mean reversion (theta) for the Ornstein-Uhlenbeck stochastic inflation process
+mean_reversion_speed = 0.1
+# Annualized standard deviation (volatility) of the inflation path
+volatility_annual = 0.015
+# Absolute maximum cap for simulated inflation to prevent unrealistic hyperinflation runs (e.g., 15%)
+max_inflation_cap = 0.15
+# Absolute minimum floor for deflation (e.g., -2%)
+min_deflation_floor = -0.02
+
+[assumptions.tax]
+# Date before which debt mutual funds retain indexation benefits.
+debt_mf_cutoff_date = "2023-04-01"
+# Minimum days to wait before re-buying a harvested instrument to avoid wash-sale rules.
+harvest_wait_days_threshold = 90
+# Annual tax-free exemption limit for equity Long Term Capital Gains.
+fallback_equity_ltcg_exemption = 125000.0
+
+[assumptions.tax.ltcg_threshold_months]
+# Holding period thresholds in months for Long Term Capital Gains across asset classes.
+equity_listed = 12
+equity_unlisted = 24
+debt_mf = 36
+debt_other = 36
+debt_ = 36
+gold_mf = 24
+gold_ = 12
+sgb_mf = 24
+sgb_ = 12
+silver_mf = 24
+silver_ = 12
+
+# Investment gain categories entered in the household ledger.
+[assumptions.tax.investment_exclusions]
+stcg_sub_cat_ids = [
+    "64E7E571-6524-4A1D-BAE6-C68F751BB79D", # Stocks LTCG
+    "45E5EAEC-1A70-48C7-8707-F1CCB3555607", # Mutual Fund LTCG
+    "492CCDAA-4C8E-4A7A-88AA-052CF75D4325" # ETF LTCG
+]
+ltcg_sub_cat_ids = [
+    "602cad79-9d08-46f5-a019-7653979f453b", # ETF STCG
+    "8fdf821a-209f-4633-9f3c-ec2d8c32c115", # Mutual Fund STCG
+    "445a3173-250a-4d0f-a32b-2383f3dc82d5", # Stocks STCG
+]
+
+[assumptions.tax.heads_of_income.Salary.sub_heads.Base]
+tax_head_display_name = "Salary"
+sub_head_display_name = "Basic"
+cat_ids = []
+sub_cat_ids = [
+    "FE49F043-A2FF-4797-B6E1-D90BE1D69985" # Basic Salary
+]
+tax_credit_sub_cat_ids = [
+    "97216DA4-0339-4AEA-985E-C0880F5F9625" # TDS on Salary
+]
+taxability = "taxable"
+tax_method = "ordinary_rate"
+
+[assumptions.tax.exempt_income.Salary.sub_heads.Leave_Encashment]
+tax_head_display_name = "Salary"
+sub_head_display_name = "Leave Encashment"
+sub_cat_ids = [
+    "58425cc6-12ef-498a-86eb-cf3d2a5afcf8"  # Leave Encashment
+]
+tax_credit_sub_cat_ids = []
+taxability = "non_taxable"
+tax_method = "exempt"
+
+[assumptions.tax.exempt_income.Salary.sub_heads.Non_Taxable_Deductions]
+tax_head_display_name = "Salary"
+sub_head_display_name = "Non Taxable Deductions"
+sub_cat_ids = [
+    "3B0920EE-D20C-46A0-B9E7-289439DBD98B",  # Other Deductions - Professional Tax
+    "FF413A37-5794-43E0-B46B-9C830857304B" # Other Deductions - PF Employee Contribution
+]
+tax_credit_sub_cat_ids = []
+taxability = "non_taxable"
+tax_method = "exempt"
+
+[assumptions.tax.residual_income.Salary.sub_heads.Other_Allowances]
+tax_head_display_name = "Salary"
+sub_head_display_name = "Other Allowances"
+cat_ids = [
+    "2" # Remaining Salary Income (Bonus, Incentives, etc)
+]
+tax_credit_sub_cat_ids = []
+taxability = "taxable"
+tax_method = "ordinary_rate"
+
+[assumptions.tax.heads_of_income.Capital_Gains.sub_heads.Other_Capital_Gains]
+tax_head_display_name = "Capital Gains"
+sub_head_display_name = "Other Assets"
+sub_cat_ids = [
+    "07b38586-36a8-4349-b2b3-7284fcef4bfa", # Other Assets - LTCG - Not Expecting anything here in the near future atleast
+    "bea2fa7c-ac2e-4109-bd04-7310924340bc" # Other Assets - STCG - Not Expecting anything here in the near future atleast 
+]
+tax_credit_sub_cat_ids = []
+taxability = "taxable"
+tax_method = "ordinary_rate"
+
+[assumptions.tax.heads_of_income.Other_Sources.sub_heads.Dividends]
+tax_head_display_name = "Other Sources"
+sub_head_display_name = "Dividend Income"
+sub_cat_ids = [
+    "E1FFA01B-86D4-4083-BC1A-A469299E5F41" # Dividends
+]
+tax_credit_sub_cat_ids = []
+taxability = "taxable"
+tax_method = "ordinary_rate"
+
+[assumptions.tax.heads_of_income.Other_Sources.sub_heads.Interest]
+tax_head_display_name = "Other Sources"
+sub_head_display_name = "Interest Income"
+sub_cat_ids = [
+    "951F62DE-F993-4937-91E7-F8EE15E4501B", # Savings Bank Interest
+    "6CDCA0D1-C831-4922-ABFD-84756C30219D", # PPF Interest
+    "191A446C-DBD4-4EFA-8105-3F407492EF8F", # FD Interest
+    "209A1CED-A764-4621-B465-186F23F666B0" # RD Interest
+]
+tax_credit_sub_cat_ids = []
+taxability = "taxable"
+tax_method = "ordinary_rate"
+
+[assumptions.tax.exempt_income.Other_Sources.sub_heads.Gift_Family_Friends]
+tax_head_display_name = "Other Sources"
+sub_head_display_name = "Gifts from Family & Friends"
+sub_cat_ids = [
+    "72D55887-AF76-47AB-AE83-62339252EC46" # Gifts from Family & Friends
+]
+tax_credit_sub_cat_ids = []
+taxability = "non_taxable"
+tax_method = "exempt"
+
+[assumptions.tax.residual_income.Other_Sources.sub_heads.Other_Income]
+tax_head_display_name = "Other Sources"
+sub_head_display_name = "Other Income"
+cat_ids = [
+    "0355E42A-38EC-45FC-8847-814DCFD5E94D" # Remaining IFOS Income
+]
+tax_credit_sub_cat_ids = []
+taxability = "taxable"
+tax_method = "ordinary_rate"
+
+[assumptions.tax.exempt_income.Non_Cash.sub_heads.Non_Cash_Income]
+tax_head_display_name = "Non Cash Income"
+sub_head_display_name = "Cashbacks, EPF, PF Interest, etc"
+cat_ids = [
+    "FF256CA1-3C5C-4319-8BE7-8F44641A77E3", # Miscellaneous
+    "60de392d-466e-488b-9b4f-5910f94a2a04", # Non Cash Income (EPF, PF Interest, etc)
+    "3228D350-B87F-4322-A540-8C9E7DFDF35D" # Reimbursements
+]
+tax_credit_sub_cat_ids = []
+taxability = "non_taxable"
+tax_method = "exempt"
+
+[assumptions.tax.rates]
+# Listed Indian equity (Section 111A / 112A)
+equity_ltcg = 0.125
+equity_stcg = 0.20
+# Foreign listed equity via LRS (US stocks) — post-Budget 2024
+# LTCG (> 24 months): 12.5% concessional rate
+# STCG (≤ 24 months): investor's income-tax slab rate
+foreign_equity_ltcg = 0.125
+foreign_equity_stcg = 0.30
+# Debt instruments
+debt_ltcg = 0.20
+debt_stcg = 0.30
+# Gold and sovereign instruments
+gold_ltcg = 0.20
+gold_stcg = 0.30
+
+[assumptions.cma]
+expected_real_return = 0.05
+fat_tail_multiplier = 1.2
+
+[assumptions.target_allocations]
+"Direct Stocks" = 0.25
+"ETFs" = 0.15
+"Mutual Funds" = 0.60
+
+# Budget Rules (40/20/30+10 rule)
+[budget.income_allocation]
+# Max % of smoothed income for core/fixed needs (rent, EMI, utilities, groceries)
+core_expense_pct = 0.40
+# Max % for non-core/discretionary (dining, shopping, travel)
+non_core_expense_pct = 0.20
+# Minimum % to deploy into investment accounts via net transfers
+investment_pct = 0.30
+# Implicit buffer/savings cushion = 1 - 0.40 - 0.20 - 0.30 = 0.10
+
+[budget.alerts]
+# Flag Is_Overspent if actual > budget_target by this fraction
+overspend_alert_threshold = 0.05
+# Emergency fund target: N months of core expenses
+emergency_fund_target_months = 6
+
+[budget.smoothing]
+# Trailing months used for recency-biased income smoothing (3×T-1 + 2×T-2 + 1×T-3)
+income_smoothing_months = 3
+
+[portfolio_management]
+# Threshold (in percentage points) for triggering a rebalance requirement.
+rebalance_tolerance_pct_points = 5.0

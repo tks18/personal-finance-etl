@@ -37,8 +37,6 @@ exclude =
     _df_cache/*,
     .planning,
     .planning/*,
-    tests,
-    tests/*,
     scripts,
     scripts/*,
     docs,

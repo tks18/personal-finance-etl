@@ -5,6 +5,8 @@ Owns
 - Typed messages and results crossing architectural and process boundaries.
 - Pipeline lifecycle state enums (CommitState, FailureDomain).
 - Tabular data transport contract (EngineDataTransport).
+- Canonical dataset identifiers (DatasetId).
+- Source identity and provider contracts (SourceId, ProviderType, validate_source_id).
 - Extraction batch and entity outcomes (ExtractionBatchResult, ExtractorEntityResult).
 - Snapshot and restore outcome contracts (SnapshotResult, RestoreResult).
 - Canonical event transport queue contracts.
@@ -21,6 +23,15 @@ from personal_finance_etl.contracts.application import (
     EngineDataTransport,
     EngineExecutionResult,
     EngineStage,
+)
+from personal_finance_etl.contracts.datasets import (
+    BRONZE_DATASET_ORIGIN_MAP,
+    EXTERNAL_CONFIGURED_DATASETS,
+    PROVIDER_GENERATED_DATASETS,
+    TRANSITIONAL_DATASETS,
+    DatasetId,
+    DatasetOrigin,
+    get_bronze_dataset_origin,
 )
 from personal_finance_etl.contracts.event_transport import EventQueue, NullEventQueue
 from personal_finance_etl.contracts.extraction import (
@@ -57,10 +68,19 @@ from personal_finance_etl.contracts.recovery import (
     SnapshotOutcome,
     SnapshotResult,
 )
+from personal_finance_etl.contracts.sources import (
+    ProviderType,
+    SourceId,
+    validate_source_id,
+)
 
 __all__ = [
+    "BRONZE_DATASET_ORIGIN_MAP",
     "CommitState",
+    "DatasetId",
+    "DatasetOrigin",
     "DiagnosticSeverity",
+    "EXTERNAL_CONFIGURED_DATASETS",
     "EngineDataTransport",
     "EngineExecutionResult",
     "EngineStage",
@@ -83,11 +103,17 @@ __all__ = [
     "ObservabilityEvent",
     "ObservabilityEventDict",
     "ObservabilitySink",
+    "PROVIDER_GENERATED_DATASETS",
     "PresentationKind",
+    "ProviderType",
     "RestoreOutcome",
     "RestoreResult",
     "SnapshotOutcome",
     "SnapshotResult",
+    "SourceId",
     "SyncSummaryRecord",
+    "TRANSITIONAL_DATASETS",
     "classify_failure_domain",
+    "get_bronze_dataset_origin",
+    "validate_source_id",
 ]
