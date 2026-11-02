@@ -61,7 +61,15 @@ def resolve_legacy_change_detection_policy(
     contracts_for_cat = [
         contract for contract in BRONZE_CONTRACT_REGISTRY if contract.sync_category == category
     ]
-    is_full_replace = any(contract.is_full_replace for contract in contracts_for_cat)
+    if contracts_for_cat:
+        full_replace_flags = {contract.is_full_replace for contract in contracts_for_cat}
+        if len(full_replace_flags) > 1:
+            raise ValueError(
+                f"Conflicting full_replace flags for sync category '{category}': {full_replace_flags}"
+            )
+        is_full_replace = next(iter(full_replace_flags))
+    else:
+        is_full_replace = False
 
     # Detect provider-generated virtual streams (e.g. currency_history, us_stock_market)
     is_provider_generated = False

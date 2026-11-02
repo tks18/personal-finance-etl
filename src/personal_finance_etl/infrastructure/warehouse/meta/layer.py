@@ -29,6 +29,7 @@ from personal_finance_etl.infrastructure.control_plane.hashing import (
     FILE_TYPE_MAP,
     compute_file_hash,
     generate_file_id,
+    normalize_path,
 )
 from personal_finance_etl.infrastructure.observability.diagnostics import (
     get_observability_diagnostics,
@@ -135,17 +136,21 @@ class MetaLayer:
         unique_path = file_path
         file_size = os.path.getsize(file_path) if os.path.exists(file_path) else 0
 
-        ext = os.path.splitext(file_path)[1].lower()
-        file_type = FILE_TYPE_MAP.get(ext, "UNKNOWN")
-
+        file_type = FILE_TYPE_MAP.get(category, "UNKNOWN")
         file_id = generate_file_id(file_path)
-        policy_attr = ext.lstrip(".").lower()
-        should_hash = getattr(self.cfg.FILE_HASH_POLICY, policy_attr, False)
+        norm_path = normalize_path(file_path)
 
-        if should_hash and os.path.exists(file_path):
-            file_hash = compute_file_hash(file_path)
+        cursor = cp.artifacts.db.conn.execute(
+            "SELECT file_hash, file_type, file_size_bytes FROM cp_file_registry WHERE relative_path = ?",
+            [norm_path],
+        )
+        row = cursor.fetchone()
+        if row:
+            file_hash = row[0] or ""
+            file_type = row[1] or file_type
+            file_size = row[2] if row[2] is not None else file_size
         else:
-            file_hash = ""
+            file_hash = compute_file_hash(file_path) if os.path.exists(file_path) else ""
 
         existing = self.conn.execute(
             "SELECT row_count FROM meta.m_File_Registry WHERE relative_path = ?",

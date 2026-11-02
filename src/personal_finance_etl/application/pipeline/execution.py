@@ -29,6 +29,9 @@ from personal_finance_etl.application.ingestion.market_sync import (
     CurrencyPipeline,
     USMarketPipeline,
 )
+from personal_finance_etl.application.ingestion.policy_resolver import (
+    resolve_legacy_change_detection_policy,
+)
 from personal_finance_etl.application.investments.context import (
     QuantDataFrames,
     QuantRunOptions,
@@ -68,7 +71,6 @@ from personal_finance_etl.infrastructure.warehouse.connection import DuckDBManag
 from personal_finance_etl.infrastructure.warehouse.gold import GoldLayer
 from personal_finance_etl.infrastructure.warehouse.meta import MetaLayer
 from personal_finance_etl.infrastructure.warehouse.registry import (
-    BRONZE_CONTRACT_REGISTRY,
     DATA_CONTRACT_REGISTRY,
     validate_registry,
 )
@@ -568,15 +570,12 @@ class PipelineExecutor:
             discovered_files = categorize_statement_files(self.cfg.STATEMENTS_FOLDER, strict=True)
             self._inject_configuration_assets(discovered_files)
 
-            full_replace_categories = list(
-                set(
-                    contract.sync_category
-                    for contract in BRONZE_CONTRACT_REGISTRY
-                    if contract.is_full_replace
-                )
-            )
+            policies_by_category = {
+                category: resolve_legacy_change_detection_policy(category, settings=self.cfg)
+                for category in discovered_files
+            }
             new_files, changed_files, _, renames = cp.file_sync.sync_with_disk(
-                discovered_files, self.cfg.FILE_HASH_POLICY, full_replace_categories
+                discovered_files, policies_by_category
             )
 
             pending_files = cp.artifacts.get_pending_files()
