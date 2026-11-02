@@ -19,6 +19,7 @@ from typing import Self
 
 from pydantic import BaseModel, field_validator, model_validator
 
+from personal_finance_etl.config.sources.change_detection import ChangeDetectionPolicy
 from personal_finance_etl.config.sources.selectors import DatasetSelector
 from personal_finance_etl.contracts.datasets import DatasetId
 from personal_finance_etl.contracts.sources import (
@@ -115,6 +116,8 @@ class SourceDatasetConfig(BaseModel):
         Operational toggle to enable or disable ingestion of this specific dataset.
     description : str | None, default None
         Optional human-readable documentation for this dataset binding.
+    change_detection : ChangeDetectionPolicy | None, default None
+        Optional explicit change-detection and synchronization policy override.
     """
 
     source_id: SourceId
@@ -122,6 +125,7 @@ class SourceDatasetConfig(BaseModel):
     selector: DatasetSelector
     enabled: bool = True
     description: str | None = None
+    change_detection: ChangeDetectionPolicy | None = None
 
     @field_validator("source_id", mode="before")
     @classmethod

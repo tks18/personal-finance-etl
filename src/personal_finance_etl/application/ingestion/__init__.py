@@ -5,6 +5,7 @@ Owns
 - Orchestrating evidence acquisition from providers.
 - Checking extraction completeness and recording provenance.
 - Coordinating Bronze storage persistence and synchronization.
+- Transitional compatibility resolution for change detection (resolve_legacy_change_detection_policy).
 
 Does not own
 -------------
@@ -29,6 +30,9 @@ from personal_finance_etl.application.ingestion.market_sync import (
     CurrencyPipeline,
     USMarketPipeline,
 )
+from personal_finance_etl.application.ingestion.policy_resolver import (
+    resolve_legacy_change_detection_policy,
+)
 
 __all__ = [
     "AssetPipeline",
@@ -39,4 +43,5 @@ __all__ = [
     "StockPipeline",
     "USMarketPipeline",
     "USStockPipeline",
+    "resolve_legacy_change_detection_policy",
 ]

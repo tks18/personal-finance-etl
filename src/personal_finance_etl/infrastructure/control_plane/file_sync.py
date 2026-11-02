@@ -17,14 +17,18 @@ Does not own
 from __future__ import annotations
 
 import os
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
-from personal_finance_etl.config.settings import FileHashPolicy
+from personal_finance_etl.config.sources.change_detection import (
+    ChangeDetectionPolicy,
+    DriftStrategy,
+    RenameStrategy,
+    SyncStrategy,
+)
 from personal_finance_etl.infrastructure.control_plane.artifact_repository import (
     ArtifactRepository,
 )
 from personal_finance_etl.infrastructure.control_plane.hashing import (
-    FILE_TYPE_MAP,
     compute_file_hash,
     normalize_path,
 )
@@ -83,8 +87,7 @@ class FileSyncService:
     def sync_with_disk(
         self,
         discovered_files: dict[str, list[str]],
-        hash_policy: FileHashPolicy,
-        full_replace_categories: list[str],
+        policies_by_category: Mapping[str, ChangeDetectionPolicy],
     ) -> SyncDeltaResult:
         """Synchronize the scan as one atomic control-plane operation.
 
@@ -92,10 +95,8 @@ class FileSyncService:
         ----------
         discovered_files : dict[str, list[str]]
             Category-mapped list of discovered filesystem paths.
-        hash_policy : FileHashPolicy
-            Policy determining which file types require SHA-256 drift checks.
-        full_replace_categories : list[str]
-            Categories that replace full datasets upon each discovery.
+        policies_by_category : Mapping[str, ChangeDetectionPolicy]
+            Resolved change-detection and synchronization policy per category.
 
         Returns
         -------
@@ -105,9 +106,14 @@ class FileSyncService:
             - changed_files: dict mapping category to modified filepaths.
             - files_skipped: int count of unchanged files.
             - renames: list of (old_path, new_path, category) tuples.
+
+        Raises
+        ------
+        KeyError
+            If any discovered category lacks a resolved ChangeDetectionPolicy.
         """
         with self.artifact_repo.db.atomic():
-            return self._sync_with_disk(discovered_files, hash_policy, full_replace_categories)
+            return self._sync_with_disk(discovered_files, policies_by_category)
 
     def _normalize_discovered_files(
         self,
@@ -269,7 +275,7 @@ class FileSyncService:
         hash_to_paths: dict[str, dict[str, list[str]]],
         registry: dict[str, tuple[str, str]],
         registry_with_status: dict[str, tuple[str, str, str]],
-        should_check_hash: bool,
+        policy: ChangeDetectionPolicy,
     ) -> tuple[str, tuple[str, str, str] | None]:
         """Classify a single file into 'HEALED', 'RENAME', 'NEW', 'CHANGED', or 'UNCHANGED'.
 
@@ -287,8 +293,8 @@ class FileSyncService:
             Registry map.
         registry_with_status : dict[str, tuple[str, str, str]]
             Registry with status map.
-        should_check_hash : bool
-            Whether hash drift checking is enabled for this file type.
+        policy : ChangeDetectionPolicy
+            Authoritative change-detection policy for this category.
 
         Returns
         -------
@@ -309,16 +315,19 @@ class FileSyncService:
             return "NEW", None
 
         if current is None:
-            rename = self._try_migrate_rename(path, category, active_paths, hash_to_paths, registry)
-            if rename:
-                return "RENAME", rename
+            if policy.rename_strategy == RenameStrategy.CONTENT_FINGERPRINT:
+                rename = self._try_migrate_rename(
+                    path, category, active_paths, hash_to_paths, registry
+                )
+                if rename:
+                    return "RENAME", rename
             return "NEW", None
 
         if not self.artifact_repo.has_payload(path):
             diagnostics.warning("File sync: Registered artifact has no payload: %s", path)
             return "NEW", None
 
-        if should_check_hash:
+        if policy.drift_strategy == DriftStrategy.CONTENT:
             disk_hash = compute_file_hash(path)
             if not disk_hash:
                 raise FileNotFoundError(
@@ -373,8 +382,7 @@ class FileSyncService:
     def _sync_with_disk(
         self,
         discovered_files: dict[str, list[str]],
-        hash_policy: FileHashPolicy,
-        full_replace_categories: list[str],
+        policies_by_category: Mapping[str, ChangeDetectionPolicy],
     ) -> SyncDeltaResult:
         """Synchronize discovered disk files against SQLite artifact metadata registry.
 
@@ -382,15 +390,18 @@ class FileSyncService:
         ----------
         discovered_files : dict[str, list[str]]
             Mapping of category names to lists of disk file paths.
-        hash_policy : FileHashPolicy
-            Hashing strategy for file integrity checks.
-        full_replace_categories : list[str]
-            Categories where any change triggers full replacement.
+        policies_by_category : Mapping[str, ChangeDetectionPolicy]
+            Resolved change-detection and synchronization policy per category.
 
         Returns
         -------
         SyncDeltaResult
             Tuple of (new_files, changed_files, removed_count, detected_renames).
+
+        Raises
+        ------
+        KeyError
+            If any discovered category lacks a resolved ChangeDetectionPolicy.
         """
         registry_with_status = self.artifact_repo.get_registry_with_status()
         registry: dict[str, tuple[str, str]] = {
@@ -408,17 +419,21 @@ class FileSyncService:
         renames: list[tuple[str, str, str]] = []
         renamed_old_paths: set[str] = set()
         all_active_paths: set[str] = set()
-        full_replace = set(full_replace_categories)
 
         normalized_by_category, unique_input_count = self._normalize_discovered_files(
             discovered_files
         )
 
+        for category in normalized_by_category:
+            if category not in policies_by_category:
+                raise KeyError(
+                    f"No ChangeDetectionPolicy resolved for discovered category: {category!r}"
+                )
+
         for category, filepaths in normalized_by_category.items():
+            policy = policies_by_category[category]
             new_files[category] = []
             changed_files[category] = []
-            file_type = FILE_TYPE_MAP.get(category, "csv")
-            should_check_hash = bool(getattr(hash_policy, file_type, False))
             active_paths = set(filepaths)
             all_active_paths.update(active_paths)
 
@@ -430,7 +445,7 @@ class FileSyncService:
                     hash_to_paths,
                     registry,
                     registry_with_status,
-                    should_check_hash,
+                    policy,
                 )
                 if kind == "NEW":
                     new_files[category].append(path)
@@ -440,7 +455,7 @@ class FileSyncService:
                     renamed_old_paths.add(rename_item[0])
                     renames.append(rename_item)
 
-            if category in full_replace:
+            if policy.sync_strategy == SyncStrategy.FULL_REPLACE:
                 self.artifact_repo.prune_category(category, filepaths)
 
         discovered_categories = set(normalized_by_category)
