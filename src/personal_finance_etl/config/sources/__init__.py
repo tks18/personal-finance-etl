@@ -9,6 +9,8 @@ Owns
 - ChangeDetectionPolicy: Decoupled change-detection and synchronization policy model.
 - FingerprintStrategy, DriftStrategy, RenameStrategy, SyncStrategy: Policy dimension enums.
 - resolve_change_detection_policy: Pure resolution function building policy from format and flags.
+- SourceFieldIdentity, CompositeIdentity, DerivedDeterministicIdentity: Row identity strategies.
+- BronzeIdentityStrategy: Discriminated union of supported Bronze identity strategies.
 - TopologyCoverageReport: Diagnostic report summarizing Bronze dataset coverage.
 - evaluate_bronze_topology_coverage: Evaluator comparing configured bindings against Bronze contracts.
 - validate_source_dataset_bindings: Aggregate validation helper for sources and dataset bindings.
@@ -31,6 +33,13 @@ from personal_finance_etl.config.sources.change_detection import (
     SyncStrategy,
     resolve_change_detection_policy,
 )
+from personal_finance_etl.config.sources.identity import (
+    PROTECTED_FINANCIAL_NAMESPACES,
+    BronzeIdentityStrategy,
+    CompositeIdentity,
+    DerivedDeterministicIdentity,
+    SourceFieldIdentity,
+)
 from personal_finance_etl.config.sources.model import SourceConfig, SourceDatasetConfig
 from personal_finance_etl.config.sources.selectors import (
     CsvSelector,
@@ -48,15 +57,20 @@ from personal_finance_etl.config.sources.validation import (
 )
 
 __all__ = [
+    "BronzeIdentityStrategy",
     "ChangeDetectionPolicy",
+    "CompositeIdentity",
     "CsvSelector",
     "DatasetSelector",
+    "DerivedDeterministicIdentity",
     "DriftStrategy",
     "ExcelSelector",
     "FingerprintStrategy",
+    "PROTECTED_FINANCIAL_NAMESPACES",
     "RenameStrategy",
     "SourceConfig",
     "SourceDatasetConfig",
+    "SourceFieldIdentity",
     "SqliteSelector",
     "SyncStrategy",
     "TopologyCoverageReport",

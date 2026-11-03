@@ -3,6 +3,7 @@
 Owns
 ----
 - DatasetId: Closed string-serializable enum vocabulary identifying all canonical datasets.
+- IdentityRequirement: Authoritative row identity requirement for Bronze datasets.
 - DatasetOrigin: Authoritative classification of Bronze dataset origins.
 - BRONZE_DATASET_ORIGIN_MAP: Mapping of all 20 canonical Bronze datasets to their origins.
 - PROVIDER_GENERATED_DATASETS, TRANSITIONAL_DATASETS, EXTERNAL_CONFIGURED_DATASETS:
@@ -24,10 +25,18 @@ __all__ = [
     "DatasetId",
     "DatasetOrigin",
     "EXTERNAL_CONFIGURED_DATASETS",
+    "IdentityRequirement",
     "PROVIDER_GENERATED_DATASETS",
     "TRANSITIONAL_DATASETS",
     "get_bronze_dataset_origin",
 ]
+
+
+class IdentityRequirement(StrEnum):
+    """Authoritative row identity requirement for canonical Bronze datasets."""
+
+    NONE = "none"
+    REQUIRED = "required"
 
 
 class DatasetId(StrEnum):

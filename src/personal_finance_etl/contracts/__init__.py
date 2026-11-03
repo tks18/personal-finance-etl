@@ -11,6 +11,7 @@ Owns
 - Snapshot and restore outcome contracts (SnapshotResult, RestoreResult).
 - Canonical event transport queue contracts.
 - Canonical typed observability and telemetry contracts (ObservabilityEvent, EventCode).
+- Authoritative Silver and Gold semantic inventories, column classifications, and dispositions.
 
 Does not own
 -------------
@@ -31,6 +32,7 @@ from personal_finance_etl.contracts.datasets import (
     TRANSITIONAL_DATASETS,
     DatasetId,
     DatasetOrigin,
+    IdentityRequirement,
     get_bronze_dataset_origin,
 )
 from personal_finance_etl.contracts.event_transport import EventQueue, NullEventQueue
@@ -68,6 +70,21 @@ from personal_finance_etl.contracts.recovery import (
     SnapshotOutcome,
     SnapshotResult,
 )
+from personal_finance_etl.contracts.semantic_inventory import (
+    GOLD_CONTRACT_DEPENDENCIES,
+    SILVER_COLUMN_DISPOSITIONS,
+    SILVER_CONTRACT_SEMANTICS,
+    ColumnClassification,
+    ColumnDisposition,
+    GoldContractDependency,
+    SilverColumnDisposition,
+    SilverContractSemantics,
+    get_columns_by_classification,
+    get_columns_by_disposition,
+    get_gold_contract_dependency,
+    get_silver_column_disposition,
+    get_silver_contract_semantics,
+)
 from personal_finance_etl.contracts.sources import (
     ProviderType,
     SourceId,
@@ -76,6 +93,8 @@ from personal_finance_etl.contracts.sources import (
 
 __all__ = [
     "BRONZE_DATASET_ORIGIN_MAP",
+    "ColumnClassification",
+    "ColumnDisposition",
     "CommitState",
     "DatasetId",
     "DatasetOrigin",
@@ -95,6 +114,9 @@ __all__ = [
     "ExtractorEntityResult",
     "ExtractorEntityStatus",
     "FailureDomain",
+    "GOLD_CONTRACT_DEPENDENCIES",
+    "GoldContractDependency",
+    "IdentityRequirement",
     "EventQueue",
     "NullEventQueue",
     "NullObservabilitySink",
@@ -108,6 +130,10 @@ __all__ = [
     "ProviderType",
     "RestoreOutcome",
     "RestoreResult",
+    "SILVER_COLUMN_DISPOSITIONS",
+    "SILVER_CONTRACT_SEMANTICS",
+    "SilverColumnDisposition",
+    "SilverContractSemantics",
     "SnapshotOutcome",
     "SnapshotResult",
     "SourceId",
@@ -115,5 +141,10 @@ __all__ = [
     "TRANSITIONAL_DATASETS",
     "classify_failure_domain",
     "get_bronze_dataset_origin",
+    "get_columns_by_classification",
+    "get_columns_by_disposition",
+    "get_gold_contract_dependency",
+    "get_silver_column_disposition",
+    "get_silver_contract_semantics",
     "validate_source_id",
 ]

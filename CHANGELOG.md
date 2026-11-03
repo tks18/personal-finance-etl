@@ -2,6 +2,37 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [9.6.0](https://github.com/tks18/personal-finance-etl/compare/9.5.5...9.6.0) (2026-11-03)
+
+
+### Features 🔥
+
+* **app:** implement identity plan compiler and deterministic executor ([fdd213c](https://github.com/tks18/personal-finance-etl/commit/fdd213cd59a802fd7679d310da83c515c0390a27))
+* **config:** add bronze source identity strategy models ([6fe0921](https://github.com/tks18/personal-finance-etl/commit/6fe0921e366a8d18e6da7f244deec8b8adca9f8a))
+* **contracts:** define bronze identity requirements and grain ([064c445](https://github.com/tks18/personal-finance-etl/commit/064c44535ef5315eeb32a587cf3e9e4fa514f042))
+
+
+### Others 🔧
+
+* **contracts:** freeze canonical model migration inventory ([f8d8b86](https://github.com/tks18/personal-finance-etl/commit/f8d8b8606dff08d6f197d01eade0f786eafce256))
+
+
+### Code Refactoring 🖌
+
+* **warehouse:** refine silver contract row grains ([7ed8fa8](https://github.com/tks18/personal-finance-etl/commit/7ed8fa8afaa854a40c2bb6795acc07d78c23d443))
+
+
+### Tests 🧪
+
+* **contracts:** verify bronze identity contract and strategy system ([6996589](https://github.com/tks18/personal-finance-etl/commit/69965893ef3b5b789fa7cb9ea55298ade9d3c962))
+* **contracts:** verify canonical silver gold semantic inventory ([fe2971c](https://github.com/tks18/personal-finance-etl/commit/fe2971c4bd511146e5d66aea77ee2576d4e7fe23))
+
+
+### Docs 📃
+
+* **refactor:** complete phase 007 plan and handoff ([00b1c96](https://github.com/tks18/personal-finance-etl/commit/00b1c961ce9eec74ae50d73fdb394fdcb9568ebf))
+* **refactor:** complete phase 008 semantic inventory plan ([61c63e6](https://github.com/tks18/personal-finance-etl/commit/61c63e6cdc3ee4a1f00641a89cdadbf6b7fd011e))
+
 ### [9.5.5](https://github.com/tks18/personal-finance-etl/compare/9.5.4...9.5.5) (2026-11-02)
 
 

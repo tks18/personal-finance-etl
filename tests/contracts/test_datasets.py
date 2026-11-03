@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import pytest
 
-from personal_finance_etl.contracts.datasets import DatasetId
+from personal_finance_etl.contracts.datasets import DatasetId, IdentityRequirement
 from personal_finance_etl.infrastructure.warehouse.contracts import (
     BRONZE_CONTRACT_REGISTRY,
     DATA_CONTRACT_REGISTRY,
@@ -158,6 +158,8 @@ def test_validate_registry_rejects_duplicate_bronze_dataset_id(
             "sqlite_source",
             "bronze.r_SQLite_ZCategory_Dup",
             True,
+            IdentityRequirement.REQUIRED,
+            "Household Category (Z_PK)",
         )
     )
     monkeypatch.setattr(

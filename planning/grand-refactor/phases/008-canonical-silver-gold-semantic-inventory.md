@@ -225,14 +225,14 @@ Do not:
 
 ## 13. Completion checklist
 
-- [ ] Every Silver contract has precise row grain.
-- [ ] Every Silver contract has identity semantics.
-- [ ] All 533 Silver columns are classified.
-- [ ] All known source/provider residue has disposition.
-- [ ] All 22 Gold contracts have dependency entries.
-- [ ] Manifest coverage is enforced by tests.
-- [ ] No physical schema changed.
-- [ ] No financial output changed.
+- [x] Every Silver contract has precise row grain.
+- [x] Every Silver contract has identity semantics.
+- [x] All 534 Silver columns are classified.
+- [x] All known source/provider residue has disposition.
+- [x] All 22 Gold contracts have dependency entries.
+- [x] Manifest coverage is enforced by tests.
+- [x] No physical schema changed.
+- [x] No financial output changed.
 
 ## 14. Commit
 
@@ -251,20 +251,26 @@ The manifest remains authoritative until each row is closed by later migration p
 Before committing, record:
 
 ```text
-Phase:
-Target release:
+Phase: 008
+Target release: v9.6.0
 Files changed:
-Schema changed:
-Runtime behavior changed:
+  src/personal_finance_etl/contracts/semantic_inventory.py
+  src/personal_finance_etl/contracts/silver_column_dispositions.json
+  src/personal_finance_etl/contracts/__init__.py
+  src/personal_finance_etl/infrastructure/warehouse/contracts.py
+  tests/contracts/test_semantic_inventory.py
+  tests/infrastructure/test_warehouse_and_cp.py
+Schema changed: NO (Metadata & contract inventory only; no DDL or DuckDB/SQLite schema migration)
+Runtime behavior changed: NO (Additive contracts and manifests; zero runtime modification to analytical pipelines)
 Financial formulas changed: NO
-Focused tests:
-Architecture tests:
-Real-data run:
-Performance check:
-Compatibility path still present:
-Old path deleted:
-Exit assertions green:
-Commit:
+Focused tests: tests/contracts/test_semantic_inventory.py (8 passed)
+Architecture tests: tests/architecture/test_boundaries.py (4 passed)
+Real-data run: Validated end-to-end via existing live pipeline tests and full test suite (278 passed)
+Performance check: Full Quality Gate audit completed in ~80s (0 regressions, fast gate < 1.1s)
+Compatibility path still present: Complete v9.5.3-compatible analytical layer
+Old path deleted: None (vague grain strings in DATA_CONTRACT_REGISTRY clarified to precise one-row grains)
+Exit assertions green: YES
+Commit: chore(contracts): freeze canonical model migration inventory
 ```
 
 If any required exit assertion is false, this phase is not complete.
