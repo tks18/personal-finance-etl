@@ -123,7 +123,7 @@ def test_warehouse_registry_and_fingerprints() -> None:
     c = get_contract_by_table("silver.d_Calendar")
     assert c is not None
     assert c.layer == "silver"
-    assert c.grain == "Day"
+    assert c.grain == "Calendar Day (Date)"
 
     metadata = [
         {"table_name": "silver.d_Calendar", "grain": "Day", "producer": "CoreEngine"},
