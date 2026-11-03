@@ -6,6 +6,7 @@ Owns
 - Checking extraction completeness and recording provenance.
 - Coordinating Bronze storage persistence and synchronization.
 - Transitional compatibility resolution for change detection (resolve_legacy_change_detection_policy).
+- Identity plan compilation and deterministic execution for Bronze datasets (compile_identity_plan, execute_identity_plan).
 
 Does not own
 -------------
@@ -25,6 +26,16 @@ from personal_finance_etl.application.ingestion.asset_strategies import (
 from personal_finance_etl.application.ingestion.coordinator import (
     DataExtractor,
 )
+from personal_finance_etl.application.ingestion.identity import (
+    IdentityCollisionDiagnostic,
+    IdentityCollisionError,
+    IdentityNotPermittedError,
+    IdentityPlan,
+    MissingIdentityFieldError,
+    MissingIdentityStrategyError,
+    compile_identity_plan,
+    execute_identity_plan,
+)
 from personal_finance_etl.application.ingestion.market_sync import (
     BenchmarkPipeline,
     CurrencyPipeline,
@@ -39,9 +50,17 @@ __all__ = [
     "BenchmarkPipeline",
     "CurrencyPipeline",
     "DataExtractor",
+    "IdentityCollisionDiagnostic",
+    "IdentityCollisionError",
+    "IdentityNotPermittedError",
+    "IdentityPlan",
+    "MissingIdentityFieldError",
+    "MissingIdentityStrategyError",
     "MutualFundPipeline",
     "StockPipeline",
     "USMarketPipeline",
     "USStockPipeline",
+    "compile_identity_plan",
+    "execute_identity_plan",
     "resolve_legacy_change_detection_policy",
 ]
