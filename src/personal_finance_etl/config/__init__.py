@@ -20,15 +20,19 @@ Does not own
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import FileHashPolicy, Settings
 from personal_finance_etl.config.sources import (
+    BronzeIdentityStrategy,
     ChangeDetectionPolicy,
+    CompositeIdentity,
     CsvSelector,
     DatasetSelector,
+    DerivedDeterministicIdentity,
     DriftStrategy,
     ExcelSelector,
     FingerprintStrategy,
     RenameStrategy,
     SourceConfig,
     SourceDatasetConfig,
+    SourceFieldIdentity,
     SqliteSelector,
     SyncStrategy,
     TopologyCoverageReport,
@@ -37,9 +41,12 @@ from personal_finance_etl.config.sources import (
 )
 
 __all__ = [
+    "BronzeIdentityStrategy",
     "ChangeDetectionPolicy",
+    "CompositeIdentity",
     "CsvSelector",
     "DatasetSelector",
+    "DerivedDeterministicIdentity",
     "DriftStrategy",
     "ExcelSelector",
     "FileHashPolicy",
@@ -49,6 +56,7 @@ __all__ = [
     "Settings",
     "SourceConfig",
     "SourceDatasetConfig",
+    "SourceFieldIdentity",
     "SqliteSelector",
     "SyncStrategy",
     "TopologyCoverageReport",

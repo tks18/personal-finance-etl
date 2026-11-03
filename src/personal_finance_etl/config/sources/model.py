@@ -20,6 +20,7 @@ from typing import Self
 from pydantic import BaseModel, field_validator, model_validator
 
 from personal_finance_etl.config.sources.change_detection import ChangeDetectionPolicy
+from personal_finance_etl.config.sources.identity import BronzeIdentityStrategy
 from personal_finance_etl.config.sources.selectors import DatasetSelector
 from personal_finance_etl.contracts.datasets import DatasetId
 from personal_finance_etl.contracts.sources import (
@@ -118,6 +119,8 @@ class SourceDatasetConfig(BaseModel):
         Optional human-readable documentation for this dataset binding.
     change_detection : ChangeDetectionPolicy | None, default None
         Optional explicit change-detection and synchronization policy override.
+    identity : BronzeIdentityStrategy | None, default None
+        Optional explicit Bronze row identity strategy override.
     """
 
     source_id: SourceId
@@ -126,6 +129,7 @@ class SourceDatasetConfig(BaseModel):
     enabled: bool = True
     description: str | None = None
     change_detection: ChangeDetectionPolicy | None = None
+    identity: BronzeIdentityStrategy | None = None
 
     @field_validator("source_id", mode="before")
     @classmethod
