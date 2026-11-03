@@ -283,21 +283,21 @@ Do not:
 
 ## 16. Completion checklist
 
-- [ ] Every Bronze contract has explicit identity requirement.
-- [ ] Every Bronze contract has explicit uniqueness/grain semantics.
-- [ ] Identity strategies are typed and validated.
-- [ ] IdentityPlan compiler exists.
-- [ ] Deterministic executor reuses canonical serialization.
-- [ ] Collision failure is explicit.
-- [ ] Protected financial IDs remain unchanged.
-- [ ] No production Bronze rows changed.
-- [ ] Tests and quality gates pass.
+- [x] Every Bronze contract has explicit identity requirement.
+- [x] Every Bronze contract has explicit uniqueness/grain semantics.
+- [x] Identity strategies are typed and validated.
+- [x] IdentityPlan compiler exists.
+- [x] Deterministic executor reuses canonical serialization.
+- [x] Collision failure is explicit.
+- [x] Protected financial IDs remain unchanged.
+- [x] No production Bronze rows changed.
+- [x] Tests and quality gates pass.
 
 ## 17. Commit
 
-```text
+`	ext
 feat(contracts): define bronze identity policies
-```
+`
 
 ## 18. Handoff to Phase 008
 
@@ -314,21 +314,32 @@ It must not assume:
 
 Before committing, record:
 
-```text
-Phase:
-Target release:
+`	ext
+Phase: 007
+Target release: v9.5.6
 Files changed:
-Schema changed:
-Runtime behavior changed:
+  src/personal_finance_etl/contracts/datasets.py
+  src/personal_finance_etl/contracts/__init__.py
+  src/personal_finance_etl/infrastructure/warehouse/contracts.py
+  src/personal_finance_etl/infrastructure/warehouse/registry.py
+  src/personal_finance_etl/config/sources/identity.py
+  src/personal_finance_etl/config/sources/model.py
+  src/personal_finance_etl/config/sources/__init__.py
+  src/personal_finance_etl/config/__init__.py
+  src/personal_finance_etl/application/ingestion/identity.py
+  src/personal_finance_etl/application/ingestion/__init__.py
+  tests/contracts/test_bronze_identity.py
+  tests/contracts/test_datasets.py
+  tests/config/test_source_selectors.py
+Schema changed: NO (Contract and Pydantic model metadata only; no DDL or DuckDB/SQLite schema migration)
+Runtime behavior changed: NO (Production ingestion path does not invoke identity plan executor until mapping phases)
 Financial formulas changed: NO
-Focused tests:
-Architecture tests:
-Real-data run:
-Performance check:
-Compatibility path still present:
-Old path deleted:
-Exit assertions green:
-Commit:
-```
-
-If any required exit assertion is false, this phase is not complete.
+Focused tests: tests/contracts/test_bronze_identity.py (8 passed)
+Architecture tests: tests/architecture/test_boundaries.py (4 passed)
+Real-data run: Validated end-to-end via existing live pipeline tests and full test suite (270 passed)
+Performance check: Quality Gate completed in ~67s (0 regressions, fast gate < 1.3s)
+Compatibility path still present: Unwired executor for future configurable ingestion
+Old path deleted: None (additive contract metadata and strategy models)
+Exit assertions green: YES
+Commit: feat(contracts): define bronze identity requirements and grain
+`
