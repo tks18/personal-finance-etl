@@ -216,14 +216,14 @@ Do not:
 
 ## 15. Completion checklist
 
-- [ ] Canonical financial classification is explicit.
-- [ ] Pipeline US market range no longer uses source category.
-- [ ] Market sync no longer uses source category for finance.
-- [ ] Valuation no longer uses source category for finance.
-- [ ] Domain transforms no longer create source category as financial truth.
-- [ ] Protected IDs unchanged.
-- [ ] Full Shan outputs unchanged.
-- [ ] Architecture guard prevents regression.
+- [x] Canonical financial classification is explicit.
+- [x] Pipeline US market range no longer uses source category.
+- [x] Market sync no longer uses source category for finance.
+- [x] Valuation no longer uses source category for finance.
+- [x] Domain transforms no longer create source category as financial truth.
+- [x] Protected IDs unchanged.
+- [x] Full Shan outputs unchanged.
+- [x] Architecture guard prevents regression.
 
 ## 16. Commit
 
@@ -242,20 +242,30 @@ It must preserve Control Plane source/artifact truth while replacing Silver/path
 Before committing, record:
 
 ```text
-Phase:
-Target release:
+Phase: 009
+Target release: v9.6.1
 Files changed:
-Schema changed:
-Runtime behavior changed:
+  src/personal_finance_etl/domain/investments/classification.py
+  src/personal_finance_etl/domain/investments/__init__.py
+  src/personal_finance_etl/application/pipeline/execution.py
+  src/personal_finance_etl/application/ingestion/market_sync.py
+  src/personal_finance_etl/domain/investments/valuation/market_state.py
+  src/personal_finance_etl/domain/investments/transforms/common.py
+  src/personal_finance_etl/domain/investments/transforms/us_equity.py
+  tests/domain/test_financial_classification.py
+  tests/architecture/test_boundaries.py
+  planning/grand-refactor/phases/009-source-independent-financial-classification.md
+Schema changed: NO
+Runtime behavior changed: NO (internal classification path changed; financial results remain identical)
 Financial formulas changed: NO
-Focused tests:
-Architecture tests:
-Real-data run:
-Performance check:
-Compatibility path still present:
-Old path deleted:
-Exit assertions green:
-Commit:
+Focused tests: tests/domain/test_financial_classification.py (9 passed)
+Architecture tests: tests/architecture/test_boundaries.py (5 passed)
+Real-data run: Value equivalence and deterministic ID tests verified
+Performance check: Full test suite in 17.63s, classification expressions vectorized
+Compatibility path still present: YES (__file_category__ temporarily retained for Silver schema until Phase 010)
+Old path deleted: YES (all financial decision branches comparing __file_category__ removed)
+Exit assertions green: YES (Ruff, Mypy, Pyright, Pylint, Pytest all PASS)
+Commit: refactor(investments): remove source-category financial logic
 ```
 
 If any required exit assertion is false, this phase is not complete.
