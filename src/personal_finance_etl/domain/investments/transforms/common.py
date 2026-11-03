@@ -8,6 +8,8 @@ Owns
 - Deterministic Purchase_ID and Sale_ID generation via canonical hashing.
 - Investment purchase and sale fact table generation.
 - Investment master dimension consolidation (d_Investment_Master).
+- Legacy file category propagation: __file_category__ is retained strictly as legacy provenance
+  metadata to satisfy DuckDB Silver schemas pending removal in Phase 010.
 
 Does not own
 -------------

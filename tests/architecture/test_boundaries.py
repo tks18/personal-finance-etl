@@ -171,3 +171,74 @@ def test_legacy_packages_demolished() -> None:
     """Assert that legacy backend and frontend packages no longer exist under SRC_ROOT."""
     assert not (SRC_ROOT / "backend").exists(), "Legacy 'backend' directory still exists in src"
     assert not (SRC_ROOT / "frontend").exists(), "Legacy 'frontend' directory still exists in src"
+
+
+def test_no_source_category_in_financial_logic() -> None:
+    """Constitutional guard: No application or domain logic may branch on __file_category__.
+
+    Guarantees that financial logic relies exclusively on canonical classification
+    (CURRENCY_ID, COUNTRY, GEO, INSTRUMENT_CLASS, etc.) rather than source file taxonomy.
+    """
+    financial_layers = ["application", "domain"]
+    violations: list[str] = []
+
+    class ComparisonChecker(ast.NodeVisitor):
+        def __init__(self, filepath: Path) -> None:
+            self.filepath = filepath
+
+        def visit_Compare(self, node: ast.Compare) -> None:
+            # Check equality/relational value comparisons against __file_category__
+            for op, comparator in zip(node.ops, node.comparators, strict=False):
+                if isinstance(op, (ast.Eq, ast.NotEq, ast.Lt, ast.LtE, ast.Gt, ast.GtE)):
+                    operands = [node.left, comparator]
+                    for operand in operands:
+                        if (
+                            isinstance(operand, ast.Constant)
+                            and operand.value == "__file_category__"
+                        ):
+                            violations.append(
+                                f"{self.filepath}:{node.lineno}: Value comparison on '__file_category__'"
+                            )
+                        if isinstance(operand, ast.Call):
+                            for arg in operand.args:
+                                if (
+                                    isinstance(arg, ast.Constant)
+                                    and arg.value == "__file_category__"
+                                ):
+                                    violations.append(
+                                        f"{self.filepath}:{node.lineno}: Expression compares pl.col('__file_category__')"
+                                    )
+                        if isinstance(operand, ast.Subscript):
+                            if (
+                                isinstance(operand.slice, ast.Constant)
+                                and operand.slice.value == "__file_category__"
+                            ):
+                                violations.append(
+                                    f"{self.filepath}:{node.lineno}: Subscript comparison on '__file_category__'"
+                                )
+            self.generic_visit(node)
+
+        def visit_Call(self, node: ast.Call) -> None:
+            if isinstance(node.func, ast.Attribute) and node.func.attr in ("is_in", "is_between"):
+                if isinstance(node.func.value, ast.Call):
+                    for arg in node.func.value.args:
+                        if isinstance(arg, ast.Constant) and arg.value == "__file_category__":
+                            violations.append(
+                                f"{self.filepath}:{node.lineno}: Call '{node.func.attr}' on '__file_category__'"
+                            )
+            self.generic_visit(node)
+
+    for layer in financial_layers:
+        layer_dir = SRC_ROOT / layer
+        if not layer_dir.is_dir():
+            continue
+        for py_file in layer_dir.rglob("*.py"):
+            content = py_file.read_text(encoding="utf-8")
+            tree = ast.parse(content, filename=str(py_file))
+            checker = ComparisonChecker(py_file.relative_to(SRC_ROOT))
+            checker.visit(tree)
+
+    assert not violations, (
+        "Forbidden source-category financial logic found in application/domain:\n"
+        + "\n".join(violations)
+    )

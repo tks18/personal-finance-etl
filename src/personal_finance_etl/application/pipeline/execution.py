@@ -51,6 +51,9 @@ from personal_finance_etl.contracts.observability import (
     EventCode,
     PresentationKind,
 )
+from personal_finance_etl.domain.investments.classification import (
+    filter_us_market_trades,
+)
 from personal_finance_etl.infrastructure.control_plane import (
     ControlPlane,
     SimulationRunParams,
@@ -291,7 +294,7 @@ class PipelineExecutor:
         valid_starts: list[date] = []
         for df in (df_purchase, df_sale):
             if df is not None and not df.is_empty():
-                us_sub = df.filter(pl.col("__file_category__") == "US Stocks")
+                us_sub = filter_us_market_trades(df)
                 if not us_sub.is_empty():
                     d = us_sub.select(pl.col("Date").drop_nulls().min()).item()
                     if isinstance(d, date):

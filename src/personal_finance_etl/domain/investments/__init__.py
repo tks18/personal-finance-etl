@@ -15,6 +15,15 @@ Does not own
 - Presentation rendering (owned by presentation).
 """
 
+from personal_finance_etl.domain.investments.classification import (
+    DEFAULT_DOMESTIC_COUNTRY,
+    DEFAULT_DOMESTIC_CURRENCY,
+    filter_us_market_trades,
+    is_foreign_currency_trade_expr,
+    is_us_market_instrument_expr,
+    is_us_market_trade_expr,
+    resolve_us_market_active_isins,
+)
 from personal_finance_etl.domain.investments.contracts import (
     AcquisitionLot,
     CashflowDict,
@@ -71,4 +80,11 @@ __all__ = [
     "TerminalValueDict",
     "TerminalValueRecord",
     "TradeRecord",
+    "DEFAULT_DOMESTIC_COUNTRY",
+    "DEFAULT_DOMESTIC_CURRENCY",
+    "filter_us_market_trades",
+    "is_foreign_currency_trade_expr",
+    "is_us_market_instrument_expr",
+    "is_us_market_trade_expr",
+    "resolve_us_market_active_isins",
 ]
