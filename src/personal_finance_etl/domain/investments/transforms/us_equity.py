@@ -6,6 +6,8 @@ Owns
 - Currency translation from USD to INR using observed transaction exchange rates.
 - Per-unit price calculation for US stock buys and sells.
 - US stock instrument master reference extraction (stg_StockMasterRef for US).
+- Legacy file category propagation: __file_category__ is tagged strictly as legacy provenance
+  metadata to satisfy DuckDB Silver schemas pending removal in Phase 010.
 
 Does not own
 -------------

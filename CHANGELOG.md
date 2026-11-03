@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [9.6.1](https://github.com/tks18/personal-finance-etl/compare/9.6.0...9.6.1) (2026-11-03)
+
+
+### Code Refactoring 🖌
+
+* **investments:** remove source-category financial logic ([28c18d9](https://github.com/tks18/personal-finance-etl/commit/28c18d94a27368651f894cbd5300e52db66b0819))
+
+
+### Docs 📃
+
+* **refactor:** complete phase 009 classification plan ([8496eb0](https://github.com/tks18/personal-finance-etl/commit/8496eb049846a4a8ed17aa7d1a673393ee33591d))
+
 ## [9.6.0](https://github.com/tks18/personal-finance-etl/compare/9.5.5...9.6.0) (2026-11-03)
 
 

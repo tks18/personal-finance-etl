@@ -20,6 +20,7 @@ from typing import cast
 
 import polars as pl
 
+from personal_finance_etl.domain.investments.classification import filter_us_market_trades
 from personal_finance_etl.domain.investments.contracts import MarketSpineRecord, TradeRecord
 from personal_finance_etl.domain.investments.lots.ordering import sort_purchases, sort_sales
 
@@ -171,9 +172,7 @@ def _build_us_fifo_spine(
         ["ISIN", "Date", "Quantity", "Value_Local", "Value", "CURRENCY_ID"]
     ).sort(["ISIN", "Date"])
     df_s_us = (
-        df_sale.filter(pl.col("__file_category__") == "US Stocks")
-        .select(["ISIN", "Date", "Quantity"])
-        .sort(["ISIN", "Date"])
+        filter_us_market_trades(df_sale).select(["ISIN", "Date", "Quantity"]).sort(["ISIN", "Date"])
     )
 
     buys: defaultdict[str, defaultdict[date, list[TradeRecord]]] = defaultdict(
@@ -450,7 +449,7 @@ def transform_us_market_data(
     if df_purchase.is_empty():
         return pl.DataFrame(schema=EMPTY_US_MARKET_SCHEMA).lazy()
 
-    us_purchases = df_purchase.filter(pl.col("__file_category__") == "US Stocks")
+    us_purchases = filter_us_market_trades(df_purchase)
     if us_purchases.is_empty():
         return pl.DataFrame(schema=EMPTY_US_MARKET_SCHEMA).lazy()
 

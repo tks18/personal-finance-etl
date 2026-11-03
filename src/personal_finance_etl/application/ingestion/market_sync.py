@@ -32,6 +32,9 @@ from personal_finance_etl.contracts.observability import (
     EventCode,
     PresentationKind,
 )
+from personal_finance_etl.domain.investments.classification import (
+    filter_us_market_trades,
+)
 from personal_finance_etl.domain.investments.valuation.market_state import (
     transform_us_market_data,
 )
@@ -608,7 +611,7 @@ class USMarketPipeline:
         if df_purchase.is_empty():
             return pl.DataFrame()
 
-        us_purchases = df_purchase.filter(pl.col("__file_category__") == "US Stocks")
+        us_purchases = filter_us_market_trades(df_purchase)
         if us_purchases.is_empty():
             return pl.DataFrame()
 
