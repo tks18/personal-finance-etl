@@ -17,7 +17,7 @@ Does not own
 
 from __future__ import annotations
 
-from personal_finance_etl.contracts.datasets import DatasetId
+from personal_finance_etl.contracts.datasets import DatasetId, IdentityRequirement
 from personal_finance_etl.infrastructure.warehouse.contracts import (
     BRONZE_CONTRACT_REGISTRY,
     DATA_CONTRACT_REGISTRY,
@@ -178,6 +178,18 @@ def _validate_bronze_contracts() -> None:
         if b_contract.physical_table in bronze_tables:
             raise ValueError(f"Duplicate Bronze table mapping: {b_contract.physical_table}")
         bronze_tables.add(b_contract.physical_table)
+
+        if b_contract.identity_requirement not in (
+            IdentityRequirement.REQUIRED,
+            IdentityRequirement.NONE,
+        ):
+            raise ValueError(
+                f"Bronze contract '{b_contract.dataset_id}' has invalid or missing identity_requirement: {b_contract.identity_requirement}"
+            )
+        if not b_contract.grain or not b_contract.grain.strip():
+            raise ValueError(
+                f"Bronze contract '{b_contract.dataset_id}' missing grain declaration."
+            )
 
 
 def validate_registry() -> None:

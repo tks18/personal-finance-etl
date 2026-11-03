@@ -16,12 +16,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from personal_finance_etl.contracts.datasets import DatasetId
+from personal_finance_etl.contracts.datasets import DatasetId, IdentityRequirement
 
 __all__ = [
     "BronzeDataContract",
     "DataContract",
     "DatasetId",
+    "IdentityRequirement",
     "BRONZE_CONTRACT_REGISTRY",
     "DATA_CONTRACT_REGISTRY",
 ]
@@ -50,6 +51,8 @@ class BronzeDataContract:
     sync_category: str
     physical_table: str
     is_full_replace: bool
+    identity_requirement: IdentityRequirement
+    grain: str
 
 
 BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
@@ -59,6 +62,8 @@ BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
         "sqlite_source",
         "bronze.r_SQLite_ZCategory",
         True,
+        IdentityRequirement.REQUIRED,
+        "Household Category (Z_PK)",
     ),
     BronzeDataContract(
         DatasetId.HOUSEHOLD_ASSET_GROUP,
@@ -66,6 +71,8 @@ BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
         "sqlite_source",
         "bronze.r_SQLite_AssetGroup",
         True,
+        IdentityRequirement.REQUIRED,
+        "Household Asset Group (Z_PK)",
     ),
     BronzeDataContract(
         DatasetId.HOUSEHOLD_ASSETS,
@@ -73,6 +80,8 @@ BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
         "sqlite_source",
         "bronze.r_SQLite_Assets",
         True,
+        IdentityRequirement.REQUIRED,
+        "Household Asset (Z_PK)",
     ),
     BronzeDataContract(
         DatasetId.HOUSEHOLD_CURRENCY,
@@ -80,6 +89,8 @@ BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
         "sqlite_source",
         "bronze.r_SQLite_Currency",
         True,
+        IdentityRequirement.REQUIRED,
+        "Household Currency (Z_PK)",
     ),
     BronzeDataContract(
         DatasetId.HOUSEHOLD_INOUTCOME,
@@ -87,6 +98,8 @@ BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
         "sqlite_source",
         "bronze.r_SQLite_InOutcome",
         True,
+        IdentityRequirement.REQUIRED,
+        "Household Transaction (ZUID)",
     ),
     BronzeDataContract(
         DatasetId.INVESTMENT_MF_ISIN_MAPPING,
@@ -94,6 +107,8 @@ BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
         "mf_isin",
         "bronze.r_MF_ISIN_Mapping",
         True,
+        IdentityRequirement.REQUIRED,
+        "Mutual Fund Scheme Mapping (Scheme Name)",
     ),
     BronzeDataContract(
         DatasetId.INVESTMENT_BENCHMARK_MAPPING,
@@ -101,6 +116,8 @@ BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
         "benchmark_mapping",
         "bronze.r_Benchmark_Mapping",
         True,
+        IdentityRequirement.REQUIRED,
+        "Benchmark Scheme Mapping (Scheme Name)",
     ),
     BronzeDataContract(
         DatasetId.HOUSEHOLD_OPENING_BALANCES,
@@ -108,6 +125,8 @@ BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
         "opening_balances",
         "bronze.r_Opening_Balances",
         True,
+        IdentityRequirement.REQUIRED,
+        "Asset Opening Balance (Account, Date)",
     ),
     BronzeDataContract(
         DatasetId.INVESTMENT_BENCHMARK_MASTER,
@@ -115,6 +134,8 @@ BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
         "benchmark_master",
         "bronze.r_Benchmark_Master",
         True,
+        IdentityRequirement.REQUIRED,
+        "Benchmark Definition (Benchmark Code)",
     ),
     BronzeDataContract(
         DatasetId.INVESTMENT_MACRO_PARAMETERS,
@@ -122,6 +143,8 @@ BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
         "macro_parameters",
         "bronze.r_Macro_Parameters",
         True,
+        IdentityRequirement.REQUIRED,
+        "Macro Parameter (Parameter Name, Effective Date)",
     ),
     BronzeDataContract(
         DatasetId.COMMON_COLUMN_MASTER,
@@ -129,6 +152,8 @@ BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
         "column_master",
         "bronze.r_Column_Master",
         True,
+        IdentityRequirement.REQUIRED,
+        "Canonical Column Specification (Physical Table, Canonical Column)",
     ),
     BronzeDataContract(
         DatasetId.MARKET_MF_HOLDINGS,
@@ -136,6 +161,8 @@ BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
         "mf_holdings",
         "bronze.r_MF_Market_Data",
         False,
+        IdentityRequirement.NONE,
+        "Mutual Fund Holding Evidence Snapshot (Scheme, Folio, Date)",
     ),
     BronzeDataContract(
         DatasetId.INVESTMENT_US_STOCK_TRANSACTIONS,
@@ -143,6 +170,8 @@ BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
         "us_stock_transactions",
         "bronze.r_US_Stock_Transactions",
         False,
+        IdentityRequirement.NONE,
+        "US Stock Trade Evidence (Symbol, Date, Quantity, Price)",
     ),
     BronzeDataContract(
         DatasetId.MARKET_CURRENCY_MAPPING,
@@ -150,6 +179,8 @@ BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
         "currency_mapping",
         "bronze.r_Currency_Mapping",
         True,
+        IdentityRequirement.REQUIRED,
+        "Currency Code Mapping (From Currency, To Currency)",
     ),
     BronzeDataContract(
         DatasetId.MARKET_CURRENCY_FX_RATES,
@@ -157,6 +188,8 @@ BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
         "currency_history",
         "bronze.r_Currency_FX_Data",
         False,
+        IdentityRequirement.NONE,
+        "Daily Currency FX Rate Time-Series (Base, Quote, Date)",
     ),
     BronzeDataContract(
         DatasetId.INVESTMENT_MF_ORDERS,
@@ -164,6 +197,8 @@ BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
         "mf_orders",
         "bronze.r_MF_Transactions",
         False,
+        IdentityRequirement.NONE,
+        "Mutual Fund Order Evidence (Folio, Date, Units, Amount)",
     ),
     BronzeDataContract(
         DatasetId.MARKET_STOCK_HOLDINGS,
@@ -171,6 +206,8 @@ BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
         "stock_pl",
         "bronze.r_Stock_Market_Data",
         False,
+        IdentityRequirement.NONE,
+        "Stock Holding Evidence Snapshot (Symbol, ISIN, Date)",
     ),
     BronzeDataContract(
         DatasetId.INVESTMENT_STOCK_ORDERS,
@@ -178,6 +215,8 @@ BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
         "stock_orders",
         "bronze.r_Stock_Transactions",
         False,
+        IdentityRequirement.NONE,
+        "Stock Trade Order Evidence (ISIN, Trade Date, Quantity, Price)",
     ),
     BronzeDataContract(
         DatasetId.MARKET_BENCHMARK_HISTORY,
@@ -185,6 +224,8 @@ BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
         "benchmark_history",
         "bronze.r_Benchmark_Data",
         False,
+        IdentityRequirement.NONE,
+        "Daily Benchmark Valuation Time-Series (Benchmark Code, Date)",
     ),
     BronzeDataContract(
         DatasetId.MARKET_US_STOCK_PRICES,
@@ -192,6 +233,8 @@ BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
         "us_stock_market",
         "bronze.r_US_Stock_Prices",
         False,
+        IdentityRequirement.NONE,
+        "Daily US Stock Closing Price Time-Series (Ticker, Date)",
     ),
 ]
 

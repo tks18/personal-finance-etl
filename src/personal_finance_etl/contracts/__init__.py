@@ -31,6 +31,7 @@ from personal_finance_etl.contracts.datasets import (
     TRANSITIONAL_DATASETS,
     DatasetId,
     DatasetOrigin,
+    IdentityRequirement,
     get_bronze_dataset_origin,
 )
 from personal_finance_etl.contracts.event_transport import EventQueue, NullEventQueue
@@ -95,6 +96,7 @@ __all__ = [
     "ExtractorEntityResult",
     "ExtractorEntityStatus",
     "FailureDomain",
+    "IdentityRequirement",
     "EventQueue",
     "NullEventQueue",
     "NullObservabilitySink",
