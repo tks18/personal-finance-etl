@@ -21,6 +21,7 @@ import sqlite3
 
 import polars as pl
 
+from personal_finance_etl.infrastructure.control_plane.hashing import generate_file_id
 from personal_finance_etl.infrastructure.observability.diagnostics import (
     get_observability_diagnostics,
 )
@@ -60,12 +61,15 @@ class SQLiteExtractor:
         self, filename: str, folder_path: str, raw_bytes: bytes
     ) -> tuple[pl.LazyFrame, pl.LazyFrame, pl.LazyFrame, pl.LazyFrame, pl.LazyFrame]:
         """Deserialize in-memory bytes, extract tables into Polars LazyFrames, and tag file info."""
+        filepath = f"{folder_path}/{filename}" if folder_path else filename
+        artifact_id = generate_file_id(filepath)
 
         def add_file_info(lf: pl.LazyFrame) -> pl.LazyFrame:
-            """Append source file name and folder metadata columns to table LazyFrame."""
+            """Append source file name, folder, and artifact_id metadata columns to table LazyFrame."""
             return lf.with_columns(
                 pl.lit(filename).alias("__file_name__"),
                 pl.lit(folder_path).alias("__folder_path__"),
+                pl.lit(artifact_id).alias("artifact_id"),
             )
 
         with sqlite3.connect(":memory:") as conn:

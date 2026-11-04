@@ -6,7 +6,7 @@ Owns
 - In-memory parsing of Excel binary statements using fastexcel.
 - Header detection and normalization across financial statement structures.
 - Date extraction heuristics from file basenames.
-- Ingestion metadata tagging (__file_name__, __folder_path__, Month Date, __file_category__).
+- Ingestion metadata tagging (__file_name__, __folder_path__, Month Date, __file_category__, artifact_id).
 
 Does not own
 -------------
@@ -23,6 +23,7 @@ from datetime import datetime
 import fastexcel
 import polars as pl
 
+from personal_finance_etl.infrastructure.control_plane.hashing import generate_file_id
 from personal_finance_etl.infrastructure.observability.diagnostics import (
     get_observability_diagnostics,
 )
@@ -119,11 +120,14 @@ def extract_mf_market_data_raw(valid_files: list[tuple[str, str, bytes]]) -> pl.
         df_processed = _process_mf_statement(filename, raw_bytes)
         if df_processed.is_empty():
             continue
+        filepath = f"{folder_path}/{filename}" if folder_path else filename
+        artifact_id = generate_file_id(filepath)
         df_processed = df_processed.with_columns(
             pl.lit(filename).alias("__file_name__"),
             pl.lit(folder_path).alias("__folder_path__"),
             pl.lit(month_date).alias("Month Date"),
             pl.lit("Indian MF").alias("__file_category__"),
+            pl.lit(artifact_id).alias("artifact_id"),
         )
         all_dfs.append(df_processed)
     if not all_dfs:
@@ -204,11 +208,14 @@ def extract_mf_transactions_raw(valid_files: list[tuple[str, str, bytes]]) -> pl
         df_processed = _process_mf_transaction_statements(filename, raw_bytes)
         if df_processed.is_empty():
             continue
+        filepath = f"{folder_path}/{filename}" if folder_path else filename
+        artifact_id = generate_file_id(filepath)
         df_processed = df_processed.with_columns(
             pl.lit(filename).alias("__file_name__"),
             pl.lit(folder_path).alias("__folder_path__"),
             pl.lit(month_date).alias("Month Date"),
             pl.lit("Indian MF").alias("__file_category__"),
+            pl.lit(artifact_id).alias("artifact_id"),
         )
         all_dfs.append(df_processed)
     if not all_dfs:
@@ -292,11 +299,14 @@ def extract_stock_market_data_raw(valid_files: list[tuple[str, str, bytes]]) -> 
         df_processed = _process_stock_closing_statement(filename, raw_bytes)
         if df_processed.is_empty():
             continue
+        filepath = f"{folder_path}/{filename}" if folder_path else filename
+        artifact_id = generate_file_id(filepath)
         df_processed = df_processed.with_columns(
             pl.lit(filename).alias("__file_name__"),
             pl.lit(folder_path).alias("__folder_path__"),
             pl.lit(month_date).alias("Month Date"),
             pl.lit("Indian Stocks").alias("__file_category__"),
+            pl.lit(artifact_id).alias("artifact_id"),
         )
         all_dfs.append(df_processed)
     if not all_dfs:
@@ -356,10 +366,13 @@ def extract_stock_transactions_raw(valid_files: list[tuple[str, str, bytes]]) ->
         df_processed = _process_stock_transactions(filename, raw_bytes)
         if df_processed.is_empty():
             continue
+        filepath = f"{folder_path}/{filename}" if folder_path else filename
+        artifact_id = generate_file_id(filepath)
         df_processed = df_processed.with_columns(
             pl.lit(filename).alias("__file_name__"),
             pl.lit(folder_path).alias("__folder_path__"),
             pl.lit("Indian Stocks").alias("__file_category__"),
+            pl.lit(artifact_id).alias("artifact_id"),
         )
         all_dfs.append(df_processed)
     if not all_dfs:
@@ -415,10 +428,13 @@ def extract_us_stock_transactions_raw(valid_files: list[tuple[str, str, bytes]])
         df_processed = _process_us_stock_transactions(filename, raw_bytes)
         if df_processed.is_empty():
             continue
+        filepath = f"{folder_path}/{filename}" if folder_path else filename
+        artifact_id = generate_file_id(filepath)
         df_processed = df_processed.with_columns(
             pl.lit(filename).alias("__file_name__"),
             pl.lit(folder_path).alias("__folder_path__"),
             pl.lit("US Stocks").alias("__file_category__"),
+            pl.lit(artifact_id).alias("artifact_id"),
         )
         all_dfs.append(df_processed)
     if not all_dfs:
