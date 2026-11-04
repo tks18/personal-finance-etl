@@ -193,9 +193,10 @@ def transform_f_income_transactions(
     d_subcat: pl.LazyFrame | None = None,
 ) -> pl.LazyFrame:
     """Branches off the base transactions for Income (TYPE = 0) and applies classification."""
-    df_transformed = base_transactions_lazy.filter(pl.col("TRANSACTION_TYPE") == 0).select(
-        BASE_TRANSACTION_COLS
-    )
+    cols = list(BASE_TRANSACTION_COLS)
+    if "artifact_id" in base_transactions_lazy.collect_schema().names():
+        cols.append("artifact_id")
+    df_transformed = base_transactions_lazy.filter(pl.col("TRANSACTION_TYPE") == 0).select(cols)
 
     if rules and d_subcat is not None:
         return _classify_income_transaction_rules(df_transformed, rules, d_subcat)
@@ -214,9 +215,10 @@ def transform_f_expense_transactions(
     d_subcat: pl.LazyFrame | None = None,
 ) -> pl.LazyFrame:
     """Branches off the base transactions for Expenses (TYPE = 1) and applies the EXCH_RATE calculation."""
-    df_transformed = base_transactions_lazy.filter(pl.col("TRANSACTION_TYPE") == 1).select(
-        BASE_TRANSACTION_COLS
-    )
+    cols = list(BASE_TRANSACTION_COLS)
+    if "artifact_id" in base_transactions_lazy.collect_schema().names():
+        cols.append("artifact_id")
+    df_transformed = base_transactions_lazy.filter(pl.col("TRANSACTION_TYPE") == 1).select(cols)
 
     if rules and d_subcat is not None:
         df_transformed = df_transformed.join(
@@ -267,9 +269,13 @@ def transform_f_transfer_transactions(
         how="left",
     )
 
+    cols = list(BASE_TRANSACTION_COLS) + ["ASSET_GROUP"]
+    if "artifact_id" in df_joined_cat.collect_schema().names():
+        cols.append("artifact_id")
+
     return (
         df_joined_cat.filter((pl.col("TRANSACTION_TYPE") == 3) | (pl.col("TRANSACTION_TYPE") == 4))
-        .select(BASE_TRANSACTION_COLS + ["ASSET_GROUP"])
+        .select(cols)
         .with_columns(
             pl.when(pl.col("TRANSACTION_TYPE") == 3)
             .then(pl.lit("Out"))
@@ -324,26 +330,28 @@ def transform_f_opening_balances(
     raw_data: pl.LazyFrame, column_mapping: dict[str, str]
 ) -> pl.LazyFrame:
     """Execute the PQ logic for Opening Balances."""
-    df_transformed = raw_data.rename(column_mapping).select(
-        [
-            "__file_name__",
-            "__folder_path__",
-            "Z_PK",
-            "ZUTIME",
-            "ZDATE",
-            "ZAMOUNT",
-            "ZAMOUNTACCOUNT",
-            "ZAMOUNTSUB",
-            "ZCONTENT",
-            "ZDO_TYPE",
-            "ZASSETUID",
-            "ZCATEGORYUID",
-            "ZCURRENCYUID",
-            "ZTOASSETUID",
-            "ZTXDATESTR",
-            "ZTXUIDFEE",
-            "ZTXUIDTRANS",
-            "ZUID",
-        ]
-    )
+    cols = [
+        "__file_name__",
+        "__folder_path__",
+        "Z_PK",
+        "ZUTIME",
+        "ZDATE",
+        "ZAMOUNT",
+        "ZAMOUNTACCOUNT",
+        "ZAMOUNTSUB",
+        "ZCONTENT",
+        "ZDO_TYPE",
+        "ZASSETUID",
+        "ZCATEGORYUID",
+        "ZCURRENCYUID",
+        "ZTOASSETUID",
+        "ZTXDATESTR",
+        "ZTXUIDFEE",
+        "ZTXUIDTRANS",
+        "ZUID",
+    ]
+    if "artifact_id" in raw_data.collect_schema().names():
+        cols.append("artifact_id")
+
+    df_transformed = raw_data.rename(column_mapping).select(cols)
     return _parse_opening_balance_fields(df_transformed)
