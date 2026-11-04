@@ -94,6 +94,7 @@ CREATE TABLE IF NOT EXISTS silver.d_Income_Category (
     ORDER_SEQUENCE BIGINT,
     __file_name__ TEXT,
     __folder_path__ TEXT,
+    artifact_id TEXT,
     S_NO BIGINT,
     MODIFY_DATE BIGINT
 );
@@ -115,6 +116,7 @@ CREATE TABLE IF NOT EXISTS silver.d_Income_Subcategory (
     Is_Tax_Credits BOOLEAN,
     __file_name__ TEXT,
     __folder_path__ TEXT,
+    artifact_id TEXT,
     S_NO BIGINT,
     MODIFY_DATE BIGINT,
     Tax_Income_Head TEXT,
@@ -132,6 +134,7 @@ CREATE TABLE IF NOT EXISTS silver.d_Expense_Category (
     ORDER_SEQUENCE BIGINT,
     __file_name__ TEXT,
     __folder_path__ TEXT,
+    artifact_id TEXT,
     S_NO BIGINT,
     MODIFY_DATE BIGINT
 );
@@ -146,6 +149,7 @@ CREATE TABLE IF NOT EXISTS silver.d_Expense_Subcategory (
     Is_Core_Expense BOOLEAN,
     __file_name__ TEXT,
     __folder_path__ TEXT,
+    artifact_id TEXT,
     S_NO BIGINT,
     MODIFY_DATE BIGINT,
     FOREIGN KEY(CATEGORY_ID) REFERENCES silver.d_Expense_Category(UID)
@@ -166,6 +170,7 @@ CREATE TABLE IF NOT EXISTS silver.d_Asset_Category (
     is_non_cash_pnl BOOLEAN,
     __file_name__ TEXT,
     __folder_path__ TEXT,
+    artifact_id TEXT,
     DEVICE_ID BIGINT,
     USE_TIME BIGINT
 );
@@ -195,6 +200,7 @@ CREATE TABLE IF NOT EXISTS silver.d_Asset_Subcategory (
     is_non_cash_pnl BOOLEAN,
     __file_name__ TEXT,
     __folder_path__ TEXT,
+    artifact_id TEXT,
     S_NO BIGINT,
     ADDED_TIME BIGINT,
     FOREIGN KEY(ASSET_GROUP_ID) REFERENCES silver.d_Asset_Category(UID)
@@ -220,6 +226,7 @@ CREATE TABLE IF NOT EXISTS silver.d_Currency (
     INSERT_TYPE TEXT,
     __file_name__ TEXT,
     __folder_path__ TEXT,
+    artifact_id TEXT,
     S_NO BIGINT,
     MODIFY_DATE BIGINT
 );
@@ -242,6 +249,7 @@ CREATE TABLE IF NOT EXISTS silver.f_Currency_FX_Rates (
     Is_Closure_Gap BOOLEAN,
     Is_Imputed BOOLEAN,
     First_Observation_Date DATE,
+    artifact_id TEXT,
     FOREIGN KEY(Date) REFERENCES silver.d_Calendar(Date),
     FOREIGN KEY(Currency_ID) REFERENCES silver.d_Currency(UID)
 );
@@ -276,6 +284,7 @@ CREATE TABLE IF NOT EXISTS silver.f_Income_Transactions (
     EXCH_RATE DOUBLE,
     __file_name__ TEXT,
     __folder_path__ TEXT,
+    artifact_id TEXT,
     S_NO BIGINT,
     TIMESTAMP BIGINT,
     UPDATED_TIME BIGINT,
@@ -312,6 +321,7 @@ CREATE TABLE IF NOT EXISTS silver.f_Expense_Transactions (
     EXCH_RATE DOUBLE,
     __file_name__ TEXT,
     __folder_path__ TEXT,
+    artifact_id TEXT,
     S_NO BIGINT,
     TIMESTAMP BIGINT,
     UPDATED_TIME BIGINT,
@@ -350,6 +360,7 @@ CREATE TABLE IF NOT EXISTS silver.f_Transfer_Transactions (
     EXCH_RATE DOUBLE,
     __file_name__ TEXT,
     __folder_path__ TEXT,
+    artifact_id TEXT,
     S_NO BIGINT,
     TIMESTAMP BIGINT,
     UPDATED_TIME BIGINT,
@@ -382,6 +393,7 @@ CREATE TABLE IF NOT EXISTS silver.f_Opening_Balances (
     ZUTIME BIGINT,
     __file_name__ TEXT,
     __folder_path__ TEXT,
+    artifact_id TEXT,
     FOREIGN KEY(ZCURRENCYUID) REFERENCES silver.d_Currency(UID),
     FOREIGN KEY(ZASSETUID) REFERENCES silver.d_Asset_Subcategory(UID),
     FOREIGN KEY(ZTXDATESTR) REFERENCES silver.d_Calendar(Date)
@@ -395,7 +407,8 @@ CREATE TABLE IF NOT EXISTS silver.d_Investment_Benchmark_Master (
     Benchmark_Name TEXT,
     yF_Ticker TEXT,
     __file_name__ TEXT,
-    __folder_path__ TEXT
+    __folder_path__ TEXT,
+    artifact_id TEXT
 );
 
 CREATE TABLE IF NOT EXISTS silver.d_Investment_Master (
@@ -454,6 +467,7 @@ CREATE TABLE IF NOT EXISTS silver.d_Macro_Parameters (
     Remarks TEXT,
     __file_name__ TEXT,
     __folder_path__ TEXT,
+    artifact_id TEXT,
     FOREIGN KEY(FY_Start_Date) REFERENCES silver.d_Calendar(Date)
 );
 
@@ -486,6 +500,7 @@ CREATE TABLE IF NOT EXISTS silver.f_Investment_Market_Data (
     Requested_End DATE,
     Is_Closure_Gap BOOLEAN,
     Is_Imputed BOOLEAN,
+    artifact_id TEXT,
     FOREIGN KEY(Date) REFERENCES silver.d_Calendar(Date),
     FOREIGN KEY(ISIN) REFERENCES silver.d_Investment_Master(ISIN),
     FOREIGN KEY(CURRENCY_ID) REFERENCES silver.d_Currency(UID)
@@ -509,6 +524,7 @@ CREATE TABLE IF NOT EXISTS silver.f_Investment_Purchase_Data (
     FX_Rate DOUBLE,
     __file_name__ TEXT,
     __folder_path__ TEXT,
+    artifact_id TEXT,
     FOREIGN KEY(Date) REFERENCES silver.d_Calendar(Date),
     FOREIGN KEY(ISIN) REFERENCES silver.d_Investment_Master(ISIN),
     FOREIGN KEY(CURRENCY_ID) REFERENCES silver.d_Currency(UID)
@@ -539,6 +555,7 @@ CREATE TABLE IF NOT EXISTS silver.f_Investment_Sale_Data (
     Total_PnL DOUBLE,
     __file_name__ TEXT,
     __folder_path__ TEXT,
+    artifact_id TEXT,
     FOREIGN KEY(Date) REFERENCES silver.d_Calendar(Date),
     FOREIGN KEY(ISIN) REFERENCES silver.d_Investment_Master(ISIN),
     FOREIGN KEY(CURRENCY_ID) REFERENCES silver.d_Currency(UID)
@@ -561,6 +578,7 @@ CREATE TABLE IF NOT EXISTS silver.f_Investment_Benchmark_Data (
     Requested_End DATE,
     Is_Closure_Gap BOOLEAN,
     Is_Imputed BOOLEAN,
+    artifact_id TEXT,
     FOREIGN KEY(Date) REFERENCES silver.d_Calendar(Date),
     FOREIGN KEY(ID) REFERENCES silver.d_Investment_Benchmark_Master(ID)
 );
