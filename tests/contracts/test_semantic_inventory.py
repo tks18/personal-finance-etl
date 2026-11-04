@@ -101,9 +101,9 @@ def test_silver_column_disposition_ddl_exact_parity() -> None:
         (entry.physical_table.lower(), entry.column_name) for entry in SILVER_COLUMN_DISPOSITIONS
     }
 
-    # Total column count assertion (exactly 534 physical columns)
-    assert len(ddl_table_col_pairs) == 534
-    assert len(SILVER_COLUMN_DISPOSITIONS) == 534
+    # Total column count assertion (exactly 552 physical columns)
+    assert len(ddl_table_col_pairs) == 552
+    assert len(SILVER_COLUMN_DISPOSITIONS) == 552
 
     # Parity assertions: no missing columns, no extraneous manifest entries
     missing_in_manifest = ddl_table_col_pairs - manifest_table_col_pairs

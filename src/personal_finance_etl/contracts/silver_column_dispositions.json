@@ -95,7 +95,7 @@
     "column_name": "__file_name__",
     "classification": "provenance_reference",
     "disposition": "move_to_provenance",
-    "target_name": null,
+    "target_name": "artifact_id",
     "rationale": "Ingestion statement provenance file trace"
   },
   {
@@ -104,7 +104,7 @@
     "column_name": "__folder_path__",
     "classification": "provenance_reference",
     "disposition": "move_to_provenance",
-    "target_name": null,
+    "target_name": "artifact_id",
     "rationale": "Ingestion statement provenance file trace"
   },
   {
@@ -311,7 +311,7 @@
     "column_name": "__file_name__",
     "classification": "provenance_reference",
     "disposition": "move_to_provenance",
-    "target_name": null,
+    "target_name": "artifact_id",
     "rationale": "Ingestion statement provenance file trace"
   },
   {
@@ -320,7 +320,7 @@
     "column_name": "__folder_path__",
     "classification": "provenance_reference",
     "disposition": "move_to_provenance",
-    "target_name": null,
+    "target_name": "artifact_id",
     "rationale": "Ingestion statement provenance file trace"
   },
   {
@@ -1058,7 +1058,7 @@
     "column_name": "__file_name__",
     "classification": "provenance_reference",
     "disposition": "move_to_provenance",
-    "target_name": null,
+    "target_name": "artifact_id",
     "rationale": "Ingestion statement provenance file trace"
   },
   {
@@ -1067,7 +1067,7 @@
     "column_name": "__folder_path__",
     "classification": "provenance_reference",
     "disposition": "move_to_provenance",
-    "target_name": null,
+    "target_name": "artifact_id",
     "rationale": "Ingestion statement provenance file trace"
   },
   {
@@ -1121,7 +1121,7 @@
     "column_name": "__file_name__",
     "classification": "provenance_reference",
     "disposition": "move_to_provenance",
-    "target_name": null,
+    "target_name": "artifact_id",
     "rationale": "Ingestion statement provenance file trace"
   },
   {
@@ -1130,7 +1130,7 @@
     "column_name": "__folder_path__",
     "classification": "provenance_reference",
     "disposition": "move_to_provenance",
-    "target_name": null,
+    "target_name": "artifact_id",
     "rationale": "Ingestion statement provenance file trace"
   },
   {
@@ -1202,7 +1202,7 @@
     "column_name": "__file_name__",
     "classification": "provenance_reference",
     "disposition": "move_to_provenance",
-    "target_name": null,
+    "target_name": "artifact_id",
     "rationale": "Ingestion statement provenance file trace"
   },
   {
@@ -1211,7 +1211,7 @@
     "column_name": "__folder_path__",
     "classification": "provenance_reference",
     "disposition": "move_to_provenance",
-    "target_name": null,
+    "target_name": "artifact_id",
     "rationale": "Ingestion statement provenance file trace"
   },
   {
@@ -1274,7 +1274,7 @@
     "column_name": "__file_name__",
     "classification": "provenance_reference",
     "disposition": "move_to_provenance",
-    "target_name": null,
+    "target_name": "artifact_id",
     "rationale": "Ingestion statement provenance file trace"
   },
   {
@@ -1283,7 +1283,7 @@
     "column_name": "__folder_path__",
     "classification": "provenance_reference",
     "disposition": "move_to_provenance",
-    "target_name": null,
+    "target_name": "artifact_id",
     "rationale": "Ingestion statement provenance file trace"
   },
   {
@@ -1418,7 +1418,7 @@
     "column_name": "__file_name__",
     "classification": "provenance_reference",
     "disposition": "move_to_provenance",
-    "target_name": null,
+    "target_name": "artifact_id",
     "rationale": "Ingestion statement provenance file trace"
   },
   {
@@ -1427,7 +1427,7 @@
     "column_name": "__folder_path__",
     "classification": "provenance_reference",
     "disposition": "move_to_provenance",
-    "target_name": null,
+    "target_name": "artifact_id",
     "rationale": "Ingestion statement provenance file trace"
   },
   {
@@ -1526,7 +1526,7 @@
     "column_name": "__file_name__",
     "classification": "provenance_reference",
     "disposition": "move_to_provenance",
-    "target_name": null,
+    "target_name": "artifact_id",
     "rationale": "Ingestion statement provenance file trace"
   },
   {
@@ -1535,7 +1535,7 @@
     "column_name": "__folder_path__",
     "classification": "provenance_reference",
     "disposition": "move_to_provenance",
-    "target_name": null,
+    "target_name": "artifact_id",
     "rationale": "Ingestion statement provenance file trace"
   },
   {
@@ -1904,7 +1904,7 @@
     "column_name": "__file_name__",
     "classification": "provenance_reference",
     "disposition": "move_to_provenance",
-    "target_name": null,
+    "target_name": "artifact_id",
     "rationale": "Ingestion statement provenance file trace"
   },
   {
@@ -1913,7 +1913,7 @@
     "column_name": "__folder_path__",
     "classification": "provenance_reference",
     "disposition": "move_to_provenance",
-    "target_name": null,
+    "target_name": "artifact_id",
     "rationale": "Ingestion statement provenance file trace"
   },
   {
@@ -2219,7 +2219,7 @@
     "column_name": "__file_name__",
     "classification": "provenance_reference",
     "disposition": "move_to_provenance",
-    "target_name": null,
+    "target_name": "artifact_id",
     "rationale": "Ingestion statement provenance file trace"
   },
   {
@@ -2228,7 +2228,7 @@
     "column_name": "__folder_path__",
     "classification": "provenance_reference",
     "disposition": "move_to_provenance",
-    "target_name": null,
+    "target_name": "artifact_id",
     "rationale": "Ingestion statement provenance file trace"
   },
   {
@@ -2471,7 +2471,7 @@
     "column_name": "__file_name__",
     "classification": "provenance_reference",
     "disposition": "move_to_provenance",
-    "target_name": null,
+    "target_name": "artifact_id",
     "rationale": "Ingestion statement provenance file trace"
   },
   {
@@ -2480,7 +2480,7 @@
     "column_name": "__folder_path__",
     "classification": "provenance_reference",
     "disposition": "move_to_provenance",
-    "target_name": null,
+    "target_name": "artifact_id",
     "rationale": "Ingestion statement provenance file trace"
   },
   {
@@ -3713,7 +3713,7 @@
     "column_name": "__file_name__",
     "classification": "provenance_reference",
     "disposition": "move_to_provenance",
-    "target_name": null,
+    "target_name": "artifact_id",
     "rationale": "Ingestion statement provenance file trace"
   },
   {
@@ -3722,7 +3722,7 @@
     "column_name": "__folder_path__",
     "classification": "provenance_reference",
     "disposition": "move_to_provenance",
-    "target_name": null,
+    "target_name": "artifact_id",
     "rationale": "Ingestion statement provenance file trace"
   },
   {
@@ -4253,7 +4253,7 @@
     "column_name": "__file_name__",
     "classification": "provenance_reference",
     "disposition": "move_to_provenance",
-    "target_name": null,
+    "target_name": "artifact_id",
     "rationale": "Ingestion statement provenance file trace"
   },
   {
@@ -4262,7 +4262,7 @@
     "column_name": "__folder_path__",
     "classification": "provenance_reference",
     "disposition": "move_to_provenance",
-    "target_name": null,
+    "target_name": "artifact_id",
     "rationale": "Ingestion statement provenance file trace"
   },
   {
@@ -4415,7 +4415,7 @@
     "column_name": "__file_name__",
     "classification": "provenance_reference",
     "disposition": "move_to_provenance",
-    "target_name": null,
+    "target_name": "artifact_id",
     "rationale": "Ingestion statement provenance file trace"
   },
   {
@@ -4424,7 +4424,7 @@
     "column_name": "__folder_path__",
     "classification": "provenance_reference",
     "disposition": "move_to_provenance",
-    "target_name": null,
+    "target_name": "artifact_id",
     "rationale": "Ingestion statement provenance file trace"
   },
   {
@@ -4766,7 +4766,7 @@
     "column_name": "__file_name__",
     "classification": "provenance_reference",
     "disposition": "move_to_provenance",
-    "target_name": null,
+    "target_name": "artifact_id",
     "rationale": "Ingestion statement provenance file trace"
   },
   {
@@ -4775,7 +4775,7 @@
     "column_name": "__folder_path__",
     "classification": "provenance_reference",
     "disposition": "move_to_provenance",
-    "target_name": null,
+    "target_name": "artifact_id",
     "rationale": "Ingestion statement provenance file trace"
   },
   {
@@ -4804,5 +4804,167 @@
     "disposition": "move_to_provenance",
     "target_name": "modified_at",
     "rationale": "Source record modification timestamp"
+  },
+  {
+    "dataset_id": "wealth_asset_category",
+    "physical_table": "silver.d_Asset_Category",
+    "column_name": "artifact_id",
+    "classification": "provenance_reference",
+    "disposition": "retain",
+    "target_name": null,
+    "rationale": "Canonical Control Plane artifact identifier"
+  },
+  {
+    "dataset_id": "wealth_asset_subcategory",
+    "physical_table": "silver.d_Asset_Subcategory",
+    "column_name": "artifact_id",
+    "classification": "provenance_reference",
+    "disposition": "retain",
+    "target_name": null,
+    "rationale": "Canonical Control Plane artifact identifier"
+  },
+  {
+    "dataset_id": "common_currency",
+    "physical_table": "silver.d_Currency",
+    "column_name": "artifact_id",
+    "classification": "provenance_reference",
+    "disposition": "retain",
+    "target_name": null,
+    "rationale": "Canonical Control Plane artifact identifier"
+  },
+  {
+    "dataset_id": "wealth_expense_category",
+    "physical_table": "silver.d_Expense_Category",
+    "column_name": "artifact_id",
+    "classification": "provenance_reference",
+    "disposition": "retain",
+    "target_name": null,
+    "rationale": "Canonical Control Plane artifact identifier"
+  },
+  {
+    "dataset_id": "wealth_expense_subcategory",
+    "physical_table": "silver.d_Expense_Subcategory",
+    "column_name": "artifact_id",
+    "classification": "provenance_reference",
+    "disposition": "retain",
+    "target_name": null,
+    "rationale": "Canonical Control Plane artifact identifier"
+  },
+  {
+    "dataset_id": "wealth_income_category",
+    "physical_table": "silver.d_Income_Category",
+    "column_name": "artifact_id",
+    "classification": "provenance_reference",
+    "disposition": "retain",
+    "target_name": null,
+    "rationale": "Canonical Control Plane artifact identifier"
+  },
+  {
+    "dataset_id": "wealth_income_subcategory",
+    "physical_table": "silver.d_Income_Subcategory",
+    "column_name": "artifact_id",
+    "classification": "provenance_reference",
+    "disposition": "retain",
+    "target_name": null,
+    "rationale": "Canonical Control Plane artifact identifier"
+  },
+  {
+    "dataset_id": "investment_benchmark_master_dim",
+    "physical_table": "silver.d_Investment_Benchmark_Master",
+    "column_name": "artifact_id",
+    "classification": "provenance_reference",
+    "disposition": "retain",
+    "target_name": null,
+    "rationale": "Canonical Control Plane artifact identifier"
+  },
+  {
+    "dataset_id": "investment_macro_parameters_dim",
+    "physical_table": "silver.d_Macro_Parameters",
+    "column_name": "artifact_id",
+    "classification": "provenance_reference",
+    "disposition": "retain",
+    "target_name": null,
+    "rationale": "Canonical Control Plane artifact identifier"
+  },
+  {
+    "dataset_id": "common_currency_fx_rates",
+    "physical_table": "silver.f_Currency_FX_Rates",
+    "column_name": "artifact_id",
+    "classification": "provenance_reference",
+    "disposition": "retain",
+    "target_name": null,
+    "rationale": "Canonical Control Plane artifact identifier"
+  },
+  {
+    "dataset_id": "wealth_expense_transactions",
+    "physical_table": "silver.f_Expense_Transactions",
+    "column_name": "artifact_id",
+    "classification": "provenance_reference",
+    "disposition": "retain",
+    "target_name": null,
+    "rationale": "Canonical Control Plane artifact identifier"
+  },
+  {
+    "dataset_id": "wealth_income_transactions",
+    "physical_table": "silver.f_Income_Transactions",
+    "column_name": "artifact_id",
+    "classification": "provenance_reference",
+    "disposition": "retain",
+    "target_name": null,
+    "rationale": "Canonical Control Plane artifact identifier"
+  },
+  {
+    "dataset_id": "investment_benchmark_data",
+    "physical_table": "silver.f_Investment_Benchmark_Data",
+    "column_name": "artifact_id",
+    "classification": "provenance_reference",
+    "disposition": "retain",
+    "target_name": null,
+    "rationale": "Canonical Control Plane artifact identifier"
+  },
+  {
+    "dataset_id": "investment_market_data",
+    "physical_table": "silver.f_Investment_Market_Data",
+    "column_name": "artifact_id",
+    "classification": "provenance_reference",
+    "disposition": "retain",
+    "target_name": null,
+    "rationale": "Canonical Control Plane artifact identifier"
+  },
+  {
+    "dataset_id": "investment_purchase_data",
+    "physical_table": "silver.f_Investment_Purchase_Data",
+    "column_name": "artifact_id",
+    "classification": "provenance_reference",
+    "disposition": "retain",
+    "target_name": null,
+    "rationale": "Canonical Control Plane artifact identifier"
+  },
+  {
+    "dataset_id": "investment_sale_data",
+    "physical_table": "silver.f_Investment_Sale_Data",
+    "column_name": "artifact_id",
+    "classification": "provenance_reference",
+    "disposition": "retain",
+    "target_name": null,
+    "rationale": "Canonical Control Plane artifact identifier"
+  },
+  {
+    "dataset_id": "wealth_opening_balances",
+    "physical_table": "silver.f_Opening_Balances",
+    "column_name": "artifact_id",
+    "classification": "provenance_reference",
+    "disposition": "retain",
+    "target_name": null,
+    "rationale": "Canonical Control Plane artifact identifier"
+  },
+  {
+    "dataset_id": "wealth_transfer_transactions",
+    "physical_table": "silver.f_Transfer_Transactions",
+    "column_name": "artifact_id",
+    "classification": "provenance_reference",
+    "disposition": "retain",
+    "target_name": null,
+    "rationale": "Canonical Control Plane artifact identifier"
   }
 ]
