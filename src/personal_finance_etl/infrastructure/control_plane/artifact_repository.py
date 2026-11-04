@@ -24,6 +24,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 
+from personal_finance_etl.contracts.provenance import ArtifactMetadata
 from personal_finance_etl.infrastructure.control_plane.connection import SQLiteManager
 from personal_finance_etl.infrastructure.control_plane.hashing import (
     FILE_TYPE_MAP,
@@ -42,6 +43,12 @@ diagnostics = get_observability_diagnostics("personal_finance_etl.control_plane.
 
 # Static SQL query constants
 SQL_SELECT_FILE_CATEGORY = "SELECT file_category FROM cp_file_registry WHERE file_id = ?"
+
+SQL_SELECT_ARTIFACT_METADATA = """
+SELECT file_id, file_name, relative_path, file_category, file_type, file_hash, sync_status
+FROM cp_file_registry
+WHERE file_id = ?
+"""
 
 SQL_INSERT_ARTIFACT_EVENT = """
 INSERT INTO cp_artifact_run_events (
@@ -319,6 +326,32 @@ class ArtifactRepository:
             )
             for path, file_hash, file_category, sync_status in cursor.fetchall()
         }
+
+    def get_artifact_metadata(self, artifact_id: str) -> ArtifactMetadata | None:
+        """Resolve an artifact ID to descriptive metadata from the file registry.
+
+        Parameters
+        ----------
+        artifact_id : str
+            Hexadecimal SHA-256 identifier of the artifact.
+
+        Returns
+        -------
+        ArtifactMetadata | None
+            Descriptive artifact record if found, otherwise None.
+        """
+        row = self.db.conn.execute(SQL_SELECT_ARTIFACT_METADATA, (artifact_id,)).fetchone()
+        if row is None:
+            return None
+        return ArtifactMetadata(
+            artifact_id=str(row[0]),
+            file_name=str(row[1]),
+            relative_path=str(row[2]),
+            file_category=str(row[3]),
+            file_type=str(row[4]) if row[4] is not None else None,
+            file_hash=str(row[5]) if row[5] is not None else "",
+            sync_status=str(row[6]) if row[6] is not None else None,
+        )
 
     def has_payload(self, filepath: str) -> bool:
         """Check whether binary payload exists in cp_file_payloads for path.
