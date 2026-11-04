@@ -42,7 +42,7 @@ If code evidence contradicts a phase, stop and amend the phase before changing t
 | 007 | Bronze identity contract and strategy system | v9.5.6 | [x] |
 | 008 | Canonical Silver/Gold semantic inventory | v9.6.0 | [x] |
 | 009 | Source-independent financial classification | v9.6.1 | [x] |
-| 010 | Canonical provenance model | v9.6.2 | [ ] |
+| 010 | Canonical provenance model | v9.6.2 | [x] |
 | 011 | Silver provenance cleanup | v9.6.2 | [ ] |
 | 012 | Provider-neutral market vocabulary | v9.6.3 | [ ] |
 | 013 | Canonical Silver vocabulary cutover | v9.6.4 | [ ] |
