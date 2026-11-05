@@ -78,7 +78,6 @@ def get_base_us_stock_transactions(raw_data: pl.LazyFrame) -> pl.LazyFrame:
     cols: list[str | pl.Expr] = [
         pl.col("Stock Name").alias("Instrument Name"),
         "ISIN",
-        pl.col("Yahoo Ticker").alias("yF_Ticker"),
         pl.col("Order Date").alias("Date"),
         pl.col("Transaction Type").alias("Type"),
         "Quantity",

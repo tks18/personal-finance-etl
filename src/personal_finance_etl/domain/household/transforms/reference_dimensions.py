@@ -55,9 +55,7 @@ def transform_d_currency(
     )
 
     if mapping_lazy is not None:
-        mapping_lazy = mapping_lazy.select(
-            ["UID", "Target_Currency_Code", "yF_Ticker", "Is_Active"]
-        )
+        mapping_lazy = mapping_lazy.select(["UID", "Target_Currency_Code", "Is_Active"])
         if "Is_Active" in mapping_lazy.collect_schema().names():
             mapping_lazy = mapping_lazy.with_columns(
                 pl.col("Is_Active").cast(pl.Boolean).fill_null(False)
@@ -66,7 +64,6 @@ def transform_d_currency(
 
     return df_transformed.with_columns(
         pl.lit(None).cast(pl.String).alias("Target_Currency_Code"),
-        pl.lit(None).cast(pl.String).alias("yF_Ticker"),
         pl.lit(False).alias("Is_Active"),
     )
 
@@ -76,7 +73,6 @@ def transform_d_investment_benchmark_master(raw_data: pl.LazyFrame) -> pl.LazyFr
     cols = [
         "ID",
         "Benchmark_Name",
-        "yF_Ticker",
         "CURRENCY_ID",
         "artifact_id",
     ]

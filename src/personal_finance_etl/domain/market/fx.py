@@ -113,7 +113,7 @@ def _build_continuous_fx_spine(
 
     df_active_tickers = (
         df_currency_master_lazy.filter(pl.col("Is_Active"))
-        .select(["UID", "ISO", "Target_Currency_Code", "yF_Ticker"])
+        .select(["UID", "ISO", "Target_Currency_Code"])
         .rename({"UID": "Currency_ID", "ISO": "Currency_Code"})
     )
 
@@ -280,7 +280,7 @@ def _project_final_fx_schema(df_filled: pl.LazyFrame) -> pl.LazyFrame:
     Returns
     -------
     pl.LazyFrame
-        Standardized 10-column Silver FX LazyFrame.
+        Standardized Silver FX LazyFrame.
     """
     return df_filled.select(
         [
@@ -289,7 +289,6 @@ def _project_final_fx_schema(df_filled: pl.LazyFrame) -> pl.LazyFrame:
             "Currency_Code",
             "Target_Currency_Code",
             "FX_Rate",
-            "yF_Ticker",
             "Data_Provider",
             "Extraction_Time",
             "Is_Imputed",

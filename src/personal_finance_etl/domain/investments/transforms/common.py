@@ -529,7 +529,6 @@ def get_d_investment_master(
             pl.col("Country").alias("COUNTRY"),
             pl.col("Geo").alias("GEO"),
             pl.col("Geo_Subtype").alias("GEO_SUBTYPE"),
-            pl.col("Yahoo_Ticker").alias("YAHOO_TICKER"),
             "CURRENCY_ID",
         ]
     )
