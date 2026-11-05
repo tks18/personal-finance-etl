@@ -131,12 +131,12 @@ Do not:
 
 ## 11. Completion checklist
 
-- [ ] Capability IDs derive from real engine ownership.
-- [ ] Required vs optional dependencies explicit.
-- [ ] All analytical contracts covered.
-- [ ] Full graph resolves deterministically.
-- [ ] Cycles/unknown references fail.
-- [ ] Runtime remains full-system.
+- [x] Capability IDs derive from real engine ownership.
+- [x] Required vs optional dependencies explicit.
+- [x] All analytical contracts covered.
+- [x] Full graph resolves deterministically.
+- [x] Cycles/unknown references fail.
+- [x] Runtime remains full-system.
 
 ## 12. Commit boundary
 
@@ -151,20 +151,24 @@ Phase 015 may assume the capability graph can resolve the full current system an
 ## Phase completion record
 
 ```text
-Phase:
-Target release:
+Phase: 014
+Target release: v9.7.0
 Files changed:
-Schema changed:
-Runtime behavior changed:
+  - src/personal_finance_etl/contracts/capabilities.py
+  - src/personal_finance_etl/contracts/__init__.py
+  - tests/contracts/test_capabilities.py
+  - tests/architecture/test_boundaries.py
+Schema changed: NO
+Runtime behavior changed: NO
 Financial formulas changed: NO
-Focused tests:
-Architecture tests:
-Real-data run:
-Performance check:
-Compatibility path still present:
-Old path deleted:
-Exit assertions green:
-Commit:
+Focused tests: tests/contracts/test_capabilities.py (15 passed)
+Architecture tests: tests/architecture/test_boundaries.py (10 passed)
+Real-data run: N/A (declarative contract and graph resolution phase; runtime remains full-system)
+Performance check: Graph validation and topological resolution execute in <1ms
+Compatibility path still present: YES (full-system pipeline execution unchanged)
+Old path deleted: N/A (first formal capability graph architecture)
+Exit assertions green: YES
+Commit: feat(contracts): define financial capability graph and registry
 ```
 
 A phase is incomplete if any required exit assertion is false.

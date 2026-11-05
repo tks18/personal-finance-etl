@@ -46,7 +46,7 @@ If code evidence contradicts a phase, stop and amend the phase before changing t
 | 011 | Silver provenance cleanup | v9.6.2 | [x] |
 | 012 | Provider-neutral market vocabulary | v9.6.3 | [x] |
 | 013 | Canonical Silver vocabulary cutover | v9.6.4 | [x] |
-| 014 | Capability graph | v9.7.0 | [ ] |
+| 014 | Capability graph | v9.7.0 | [x] |
 | 015 | Execution planner and plan-scoped completeness | v9.7.1 | [ ] |
 | 016 | First optional capability proof | v9.7.2 | [ ] |
 | 017 | Production source configuration loader | v9.8.0 | [ ] |

@@ -300,3 +300,16 @@ def test_silver_ddl_has_no_legacy_source_residue_or_file_category() -> None:
         pattern = rf"^\s*{re.escape(term)}\s+"
         match = re.search(pattern, SILVER_DDL, re.MULTILINE)
         assert match is None, f"Forbidden legacy residue column '{term}' declared in Silver DDL"
+
+
+def test_capabilities_contract_purity() -> None:
+    """Verify that capability contracts module imports only pure contracts and standard library."""
+    capabilities_file = SRC_ROOT / "contracts" / "capabilities.py"
+    assert capabilities_file.is_file(), "contracts/capabilities.py must exist"
+
+    imported = _extract_imported_modules(capabilities_file)
+    for lineno, mod in imported:
+        if mod.startswith("personal_finance_etl."):
+            assert mod.startswith("personal_finance_etl.contracts"), (
+                f"Line {lineno}: capability contracts must only import from contracts layer, got '{mod}'"
+            )
