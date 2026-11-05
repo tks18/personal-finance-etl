@@ -24,7 +24,9 @@ from personal_finance_etl.application.pipeline.orchestrator import ETLOrchestrat
 from personal_finance_etl.application.pipeline.worker import WorkerPoolCoordinator
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
+from personal_finance_etl.config.sources.loader import SourceConfiguration
 from personal_finance_etl.contracts.event_transport import EventQueue
+from personal_finance_etl.contracts.execution_plan import ExecutionPlan
 from personal_finance_etl.contracts.observability import ObservabilityEvent
 from personal_finance_etl.contracts.recovery import (
     ActiveDatabaseState,
@@ -46,8 +48,11 @@ class ContainerProtocol(Protocol):
         self,
         config_path: str | None = None,
         rules_path: str | None = None,
+        sources_path: str | None = None,
         status_queue: EventQueue | None = None,
         settings: Settings | None = None,
+        source_config: SourceConfiguration | None = None,
+        plan: ExecutionPlan | None = None,
     ) -> ETLOrchestrator:
         """Create and wire an ETLOrchestrator with configuration and observability.
 
@@ -57,10 +62,16 @@ class ContainerProtocol(Protocol):
             Path to application settings YAML.
         rules_path : str | None, optional
             Path to financial rules YAML.
+        sources_path : str | None, optional
+            Path to source configuration TOML.
         status_queue : EventQueue | None, optional
             Queue transport for canonical runtime events.
         settings : Settings | None, optional
             Pre-loaded settings instance.
+        source_config : SourceConfiguration | None, optional
+            Pre-loaded SourceConfiguration instance.
+        plan : ExecutionPlan | None, optional
+            Pre-compiled execution plan.
 
         Returns
         -------
@@ -99,6 +110,25 @@ class PersonalFinanceEngine:
         """Validate whether a configuration TOML file parses correctly."""
         try:
             Settings.from_toml(path)
+            return True
+        except Exception:
+            return False
+
+    def validate_sources_config(self, path: str) -> bool:
+        """Validate whether a source configuration TOML file parses and validates correctly.
+
+        Parameters
+        ----------
+        path : str
+            Filesystem path to source configuration TOML file.
+
+        Returns
+        -------
+        bool
+            True if the configuration is valid, False otherwise.
+        """
+        try:
+            SourceConfiguration.from_toml(path)
             return True
         except Exception:
             return False

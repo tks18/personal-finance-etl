@@ -23,8 +23,13 @@ import polars as pl
 from personal_finance_etl.application.pipeline.execution import PipelineExecutor
 from personal_finance_etl.application.pipeline.lifecycle import RunLifecycleCoordinator
 from personal_finance_etl.application.pipeline.planner import CapabilityPlanner
+from personal_finance_etl.application.pipeline.source_planner import (
+    CompiledSourcePlan,
+    SourcePlanner,
+)
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
+from personal_finance_etl.config.sources.loader import SourceConfiguration
 from personal_finance_etl.contracts.application import EngineStage
 from personal_finance_etl.contracts.event_transport import EventQueue, NullEventQueue
 from personal_finance_etl.contracts.execution_plan import ExecutionPlan
@@ -56,12 +61,31 @@ class ETLOrchestrator:
         rules: FinancialRules | None = None,
         emitter: ObservabilityEmitter | None = None,
         plan: ExecutionPlan | None = None,
+        source_config: SourceConfiguration | None = None,
+        source_plan: CompiledSourcePlan | None = None,
     ) -> None:
         self.cfg = cfg
         self.rules = rules
         self.status_queue = status_queue or NullEventQueue()
         self.emitter = emitter or get_global_emitter()
-        self.plan = plan or CapabilityPlanner().create_plan()
+        self.source_config = source_config
+
+        if plan is not None:
+            self.plan = plan
+        elif source_config is not None:
+            requested_caps = source_config.capabilities.resolved_capabilities
+            self.plan = CapabilityPlanner().create_plan(requested_capabilities=requested_caps)
+        else:
+            self.plan = CapabilityPlanner().create_plan()
+
+        self.source_plan: CompiledSourcePlan | None
+        if source_plan is not None:
+            self.source_plan = source_plan
+        elif source_config is not None:
+            self.source_plan = SourcePlanner(source_config, self.plan).compile_plan()
+        else:
+            self.source_plan = None
+
         self.db_manager = DuckDBManager(cfg.TARGET_DB_BASE_PATH, cfg.TARGET_DB_NAME)
         self.executor = PipelineExecutor(
             cfg,
