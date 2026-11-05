@@ -391,6 +391,7 @@ class ObservabilityContextDict(TypedDict):
     commit_state: NotRequired[str | None]
     settings_fingerprint: NotRequired[str | None]
     rules_fingerprint: NotRequired[str | None]
+    plan_fingerprint: NotRequired[str | None]
 
 
 @dataclass(frozen=True)
@@ -437,6 +438,8 @@ class ObservabilityContext:
         Cryptographic SHA-256 fingerprint digest of active Settings configuration.
     rules_fingerprint : str | None, default=None
         Cryptographic SHA-256 fingerprint digest of active FinancialRules policies.
+    plan_fingerprint : str | None, default=None
+        Cryptographic SHA-256 fingerprint digest of active ExecutionPlan.
     """
 
     run_id: str = ""
@@ -457,6 +460,7 @@ class ObservabilityContext:
     commit_state: CommitState | None = None
     settings_fingerprint: str | None = None
     rules_fingerprint: str | None = None
+    plan_fingerprint: str | None = None
 
     def with_updates(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
@@ -477,6 +481,7 @@ class ObservabilityContext:
         commit_state: CommitState | None = None,
         settings_fingerprint: str | None = None,
         rules_fingerprint: str | None = None,
+        plan_fingerprint: str | None = None,
     ) -> ObservabilityContext:
         """Create a new context instance with selected scalar updates."""
         return ObservabilityContext(
@@ -505,6 +510,9 @@ class ObservabilityContext:
             ),
             rules_fingerprint=(
                 rules_fingerprint if rules_fingerprint is not None else self.rules_fingerprint
+            ),
+            plan_fingerprint=(
+                plan_fingerprint if plan_fingerprint is not None else self.plan_fingerprint
             ),
         )
 
@@ -543,6 +551,8 @@ class ObservabilityContext:
             out["settings_fingerprint"] = self.settings_fingerprint
         if self.rules_fingerprint is not None:
             out["rules_fingerprint"] = self.rules_fingerprint
+        if self.plan_fingerprint is not None:
+            out["plan_fingerprint"] = self.plan_fingerprint
         return out
 
     @classmethod
@@ -609,6 +619,9 @@ class ObservabilityContext:
             ),
             rules_fingerprint=(
                 str(data["rules_fingerprint"]) if data.get("rules_fingerprint") else None
+            ),
+            plan_fingerprint=(
+                str(data["plan_fingerprint"]) if data.get("plan_fingerprint") else None
             ),
         )
 

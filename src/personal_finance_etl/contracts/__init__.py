@@ -51,6 +51,7 @@ from personal_finance_etl.contracts.datasets import (
     get_bronze_dataset_origin,
 )
 from personal_finance_etl.contracts.event_transport import EventQueue, NullEventQueue
+from personal_finance_etl.contracts.execution_plan import ExecutionPlan
 from personal_finance_etl.contracts.extraction import (
     ExtractionBatchResult,
     ExtractionCompletenessError,
@@ -142,6 +143,7 @@ __all__ = [
     "EventCode",
     "EventEmitter",
     "EventOutcome",
+    "ExecutionPlan",
     "ExternalEnrichmentId",
     "ExtractionBatchResult",
     "ExtractionCompletenessError",
