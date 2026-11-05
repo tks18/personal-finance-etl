@@ -217,10 +217,12 @@ def test_deterministic_id_stability_with_provenance() -> None:
 
     final_purchases = get_f_tf_investment_purchase_data([df_with_art], "INR").collect()
     assert "artifact_id" in final_purchases.columns
+    assert "__file_name__" not in final_purchases.columns
+    assert "__folder_path__" not in final_purchases.columns
     assert final_purchases["Purchase_ID"][0] == expected_purchase_id
 
-    # 2. Transform without artifact_id present
-    df_without_art = pl.DataFrame(
+    # 2. Transform with a different artifact_id to prove ID independence
+    df_diff_art = pl.DataFrame(
         {
             **sample_data,
             "Price_Local": [100.0],
@@ -230,11 +232,16 @@ def test_deterministic_id_stability_with_provenance() -> None:
             "__file_name__": ["orders.xlsx"],
             "__folder_path__": ["path"],
             "__file_category__": ["Indian MF"],
+            "artifact_id": ["different_sha256_mock_id"],
         }
     ).lazy()
 
-    final_purchases_no_art = get_f_tf_investment_purchase_data([df_without_art], "INR").collect()
-    assert final_purchases_no_art["Purchase_ID"][0] == expected_purchase_id
+    final_purchases_diff = get_f_tf_investment_purchase_data([df_diff_art], "INR").collect()
+    assert "artifact_id" in final_purchases_diff.columns
+    assert final_purchases_diff["artifact_id"][0] == "different_sha256_mock_id"
+    assert "__file_name__" not in final_purchases_diff.columns
+    assert "__folder_path__" not in final_purchases_diff.columns
+    assert final_purchases_diff["Purchase_ID"][0] == expected_purchase_id
 
 
 def test_sale_deterministic_id_stability_with_provenance() -> None:
@@ -274,5 +281,7 @@ def test_sale_deterministic_id_stability_with_provenance() -> None:
 
     final_sales = get_f_tf_investment_sale_data([df_sale], "INR").collect()
     assert "artifact_id" in final_sales.columns
+    assert "__file_name__" not in final_sales.columns
+    assert "__folder_path__" not in final_sales.columns
     assert final_sales["artifact_id"][0] == "art_us_123"
     assert final_sales["Sale_ID"][0] == expected_sale_id
