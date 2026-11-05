@@ -460,7 +460,12 @@ GOLD_CONTRACT_DEPENDENCIES: dict[DatasetId, GoldContractDependency] = {
                 "ASSET_ID",
                 "TO_ASSET_ID",
             ),
-            DatasetId.WEALTH_OPENING_BALANCES: ("Z_PK", "ZDATE", "ZAMOUNT", "ZASSETUID"),
+            DatasetId.WEALTH_OPENING_BALANCES: (
+                "Z_PK",
+                "Date",
+                "Opening_Amount",
+                "ASSET_SUBCATEGORY_ID",
+            ),
             DatasetId.WEALTH_ASSET_SUBCATEGORY: (
                 "UID",
                 "ASSET_NAME",
@@ -507,7 +512,12 @@ GOLD_CONTRACT_DEPENDENCIES: dict[DatasetId, GoldContractDependency] = {
                 "ASSET_ID",
                 "TO_ASSET_ID",
             ),
-            DatasetId.WEALTH_OPENING_BALANCES: ("Z_PK", "ZDATE", "ZAMOUNT", "ZASSETUID"),
+            DatasetId.WEALTH_OPENING_BALANCES: (
+                "Z_PK",
+                "Date",
+                "Opening_Amount",
+                "ASSET_SUBCATEGORY_ID",
+            ),
             DatasetId.WEALTH_ASSET_CATEGORY: ("UID", "ASSET_GROUP", "ledger_role"),
             DatasetId.WEALTH_ASSET_SUBCATEGORY: (
                 "UID",
@@ -595,7 +605,7 @@ GOLD_CONTRACT_DEPENDENCIES: dict[DatasetId, GoldContractDependency] = {
                 "BASE_AMOUNT",
                 "Is_Core_Expense",
             ),
-            DatasetId.WEALTH_OPENING_BALANCES: ("Z_PK", "ZDATE", "ZAMOUNT"),
+            DatasetId.WEALTH_OPENING_BALANCES: ("Z_PK", "Date", "Opening_Amount"),
             DatasetId.INVESTMENT_LOT_ANALYTICS: ("Lot_ID", "Closing_Date", "Close_Value"),
             DatasetId.INVESTMENT_MACRO_PARAMETERS_DIM: ("FY", "Inflation_Rate", "Risk_Free_Rate"),
         },
