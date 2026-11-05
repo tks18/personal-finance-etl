@@ -70,12 +70,15 @@ def get_stg_calendar_ref(
             ]
         ).alias("DATE")
 
+    opbal_cols = f_opbal_lazy.collect_schema().names()
+    opbal_date_col = "Date" if "Date" in opbal_cols else "ZTXDATESTR"
+
     df_union = pl.concat(
         [
             f_inc_lazy.select(safe_date_cast("DATE")),
             f_exp_lazy.select(safe_date_cast("DATE")),
             f_trans_lazy.select(safe_date_cast("DATE")),
-            f_opbal_lazy.select(safe_date_cast("ZTXDATESTR")),
+            f_opbal_lazy.select(safe_date_cast(opbal_date_col)),
             stg_mkt_lazy.select(safe_date_cast("Date")),
             f_pur_lazy.select(safe_date_cast("Date")),
             f_sale_lazy.select(safe_date_cast("Date")),
