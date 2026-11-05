@@ -202,7 +202,6 @@ CREATE TABLE IF NOT EXISTS silver.d_Currency (
     ISO TEXT,
     MAIN_ISO TEXT,
     Target_Currency_Code TEXT,
-    yF_Ticker TEXT,
     SYMBOL TEXT,
     SYMBOL_POSITION TEXT,
     ORDER_SEQUENCE BIGINT,
@@ -224,7 +223,6 @@ CREATE TABLE IF NOT EXISTS silver.f_Currency_FX_Rates (
     -- Descriptors/Classifications
     Currency_Code TEXT NOT NULL,
     Target_Currency_Code TEXT NOT NULL,
-    yF_Ticker TEXT NOT NULL,
     -- Local/FX Values
     FX_Rate DOUBLE NOT NULL,
     -- Provenance
@@ -383,7 +381,6 @@ CREATE TABLE IF NOT EXISTS silver.d_Investment_Benchmark_Master (
     CURRENCY_ID TEXT,
     -- Descriptors/Classifications
     Benchmark_Name TEXT,
-    yF_Ticker TEXT,
     artifact_id TEXT
 );
 
@@ -404,7 +401,6 @@ CREATE TABLE IF NOT EXISTS silver.d_Investment_Master (
     COUNTRY TEXT,
     GEO TEXT,
     GEO_SUBTYPE TEXT,
-    YAHOO_TICKER TEXT,
     -- Tax & Harvesting
     TAX_TYPE TEXT NOT NULL,
     TAX_SUBTYPE TEXT,
@@ -538,7 +534,6 @@ CREATE TABLE IF NOT EXISTS silver.f_Investment_Benchmark_Data (
     CURRENCY_ID TEXT,
     -- Descriptors/Classifications
     Benchmark_Name TEXT,
-    yF_Ticker TEXT,
     -- Position Values
     Close DOUBLE,
     -- Provenance
