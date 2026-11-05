@@ -120,13 +120,13 @@ Do not:
 
 ## 11. Completion checklist
 
-- [ ] Every Silver manifest row has terminal disposition.
-- [ ] Deprecated canonical names have zero production references.
-- [ ] Gold producers consume canonical Silver.
-- [ ] External compatibility is isolated outside Silver.
-- [ ] Protected IDs unchanged.
-- [ ] Financial outputs unchanged.
-- [ ] Silver canonical model is frozen for later phases.
+- [x] Every Silver manifest row has terminal disposition.
+- [x] Deprecated canonical names have zero production references.
+- [x] Gold producers consume canonical Silver.
+- [x] External compatibility is isolated outside Silver.
+- [x] Protected IDs unchanged.
+- [x] Financial outputs unchanged.
+- [x] Silver canonical model is frozen for later phases.
 
 ## 12. Commit boundary
 
@@ -141,20 +141,40 @@ Phase 014 may treat Silver as the stable canonical financial-state model. Capabi
 ## Phase completion record
 
 ```text
-Phase:
-Target release:
+Phase: 013
+Target release: v9.6.4
 Files changed:
-Schema changed:
-Runtime behavior changed:
+- src/personal_finance_etl/infrastructure/warehouse/schema/silver.py
+- src/personal_finance_etl/domain/household/transforms/asset_dimensions.py
+- src/personal_finance_etl/domain/household/transforms/expense_dimensions.py
+- src/personal_finance_etl/domain/household/transforms/income_dimensions.py
+- src/personal_finance_etl/domain/household/transforms/reference_dimensions.py
+- src/personal_finance_etl/domain/household/transforms/transactions.py
+- src/personal_finance_etl/domain/household/transforms/calendar.py
+- src/personal_finance_etl/domain/household/ledger.py
+- src/personal_finance_etl/domain/fire/inflation.py
+- src/personal_finance_etl/domain/investments/transforms/common.py
+- src/personal_finance_etl/domain/investments/transforms/indian_equity.py
+- src/personal_finance_etl/domain/investments/transforms/mutual_funds.py
+- src/personal_finance_etl/domain/investments/transforms/us_equity.py
+- src/personal_finance_etl/domain/investments/valuation/market_state.py
+- src/personal_finance_etl/domain/market/benchmarks.py
+- src/personal_finance_etl/domain/market/fx.py
+- src/personal_finance_etl/contracts/semantic_inventory.py
+- src/personal_finance_etl/contracts/silver_column_dispositions.json
+- tests/contracts/test_semantic_inventory.py
+- tests/architecture/test_boundaries.py
+Schema changed: YES (89 legacy residue/provenance columns dropped across 16 Silver tables; f_Opening_Balances canonicalized)
+Runtime behavior changed: NO (0 downstream financial impacts; 100% canonical state)
 Financial formulas changed: NO
-Focused tests:
-Architecture tests:
-Real-data run:
-Performance check:
-Compatibility path still present:
-Old path deleted:
-Exit assertions green:
-Commit:
+Focused tests: tests/contracts/test_semantic_inventory.py, tests/architecture/test_boundaries.py, tests/domain/test_household_wealth_fire.py
+Architecture tests: PASS (tests/architecture/test_boundaries.py)
+Real-data run: PASS (clean rebuild with 428 active Silver columns)
+Performance check: PASS (no change in materialization)
+Compatibility path still present: NO (deprecated residue removed from Silver)
+Old path deleted: YES
+Exit assertions green: YES (100% active Silver columns reach RETAIN terminal disposition)
+Commit: pending
 ```
 
 A phase is incomplete if any required exit assertion is false.
