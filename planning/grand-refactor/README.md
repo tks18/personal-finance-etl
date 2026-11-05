@@ -44,7 +44,7 @@ If code evidence contradicts a phase, stop and amend the phase before changing t
 | 009 | Source-independent financial classification | v9.6.1 | [x] |
 | 010 | Canonical provenance model | v9.6.2 | [x] |
 | 011 | Silver provenance cleanup | v9.6.2 | [x] |
-| 012 | Provider-neutral market vocabulary | v9.6.3 | [ ] |
+| 012 | Provider-neutral market vocabulary | v9.6.3 | [x] |
 | 013 | Canonical Silver vocabulary cutover | v9.6.4 | [ ] |
 | 014 | Capability graph | v9.7.0 | [ ] |
 | 015 | Execution planner and plan-scoped completeness | v9.7.1 | [ ] |
