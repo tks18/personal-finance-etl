@@ -48,7 +48,9 @@ class InflationBuilder:
 
     def _build_monthly_calendar(self, lf_open: pl.LazyFrame, lf_cal: pl.LazyFrame) -> pl.LazyFrame:
         """Derive monthly start and end dates from the earliest opening balance to today."""
-        lf_min_date = lf_open.select(pl.col("ZTXDATESTR").min().alias("min_open_date")).fill_null(
+        cols = lf_open.collect_schema().names()
+        date_col = "Date" if "Date" in cols else "ZTXDATESTR"
+        lf_min_date = lf_open.select(pl.col(date_col).min().alias("min_open_date")).fill_null(
             date(2000, 1, 1)
         )
 

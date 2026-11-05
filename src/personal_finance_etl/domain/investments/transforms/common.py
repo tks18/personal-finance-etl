@@ -8,8 +8,6 @@ Owns
 - Deterministic Purchase_ID and Sale_ID generation via canonical hashing.
 - Investment purchase and sale fact table generation.
 - Investment master dimension consolidation (d_Investment_Master).
-- Legacy file category propagation: __file_category__ is retained strictly as legacy provenance
-  metadata to satisfy DuckDB Silver schemas pending removal in Phase 010.
 
 Does not own
 -------------
@@ -18,7 +16,6 @@ Does not own
 """
 
 from collections.abc import Mapping
-from datetime import UTC, datetime
 
 import polars as pl
 
@@ -39,7 +36,6 @@ def get_purchase_reference(
     Returns: ISIN, Date, Price, Quantity, Value
     """
     group_cols: list[str | pl.Expr] = [
-        "__file_category__",
         "ISIN",
         pl.col(instrument_col).alias("Instrument name"),
         pl.col(date_col).alias("Date"),
@@ -121,7 +117,6 @@ def get_sale_reference(
     Also calculates the Rolling Average Buy Price based on historical purchases.
     """
     group_cols: list[str | pl.Expr] = [
-        "__file_category__",
         "ISIN",
         pl.col(instrument_col).alias("Instrument name"),
         pl.col(date_col).alias("Date"),
@@ -182,26 +177,10 @@ def _fallback_local_columns(df: pl.LazyFrame, pairs: list[tuple[str, str]]) -> p
 def _normalize_market_data_metadata(df_union: pl.LazyFrame) -> pl.LazyFrame:
     """Fill default metadata flags and dates for stage market data."""
     cols = df_union.collect_schema().names()
-    default_time = datetime(2000, 1, 1, tzinfo=UTC)
     return df_union.with_columns(
-        pl.col("__file_category__").fill_null("Indian")
-        if "__file_category__" in cols
-        else pl.lit("Indian").alias("__file_category__"),
-        pl.col("Data_Provider").fill_null("Broker Statement")
-        if "Data_Provider" in cols
-        else pl.lit("Broker Statement").alias("Data_Provider"),
-        pl.col("Extraction_Time").fill_null(default_time)
-        if "Extraction_Time" in cols
-        else pl.lit(default_time).alias("Extraction_Time"),
         pl.col("Is_Imputed").fill_null(False)
         if "Is_Imputed" in cols
         else pl.lit(False).alias("Is_Imputed"),
-        pl.col("Requested_Start").fill_null(pl.col("Date"))
-        if "Requested_Start" in cols
-        else pl.col("Date").alias("Requested_Start"),
-        pl.col("Requested_End").fill_null(pl.col("Date"))
-        if "Requested_End" in cols
-        else pl.col("Date").alias("Requested_End"),
         pl.col("Is_Closure_Gap").fill_null(False)
         if "Is_Closure_Gap" in cols
         else pl.lit(False).alias("Is_Closure_Gap"),
@@ -229,27 +208,25 @@ def transform_stg_investment_market_data(
     select_cols = [
         "Date",
         "ISIN",
-        "__file_category__",
+        "CURRENCY_ID",
         "Quantity",
+        "Closing_Price",
+        "Buy_Price",
+        "Closing_Value",
+        "Buy_Value",
         "Closing_Price_Local",
         "Buy_Price_Local",
         "Closing_Value_Local",
         "Buy_Value_Local",
         "FX_Rate",
-        "Closing_Price",
-        "Buy_Price",
-        "Closing_Value",
-        "Buy_Value",
         "Unit_PnL",
         "Total_PnL",
-        "CURRENCY_ID",
-        "Data_Provider",
-        "Extraction_Time",
-        "Requested_Start",
-        "Requested_End",
         "Is_Closure_Gap",
         "Is_Imputed",
     ]
+    if "artifact_id" in df_union.collect_schema().names():
+        select_cols.append("artifact_id")
+
     return (
         df_union.select(select_cols)
         .unique()
@@ -376,12 +353,6 @@ def get_f_tf_investment_purchase_data(
 ) -> pl.LazyFrame:
     """Translate DAX UNION + SUMMARIZE for Purchases."""
     df_union = pl.concat(refs, how="diagonal_relaxed")
-    cols = df_union.collect_schema().names()
-    if "__file_category__" not in cols:
-        df_union = df_union.with_columns(pl.lit("Indian").alias("__file_category__"))
-    else:
-        df_union = df_union.with_columns(pl.col("__file_category__").fill_null("Indian"))
-
     pairs = [("Price_Local", "Price"), ("Value_Local", "Value")]
     df_union = _fallback_local_columns(df_union, pairs)
     df_union = _normalize_currency_and_fx(df_union, default_currency_id)
@@ -389,7 +360,6 @@ def get_f_tf_investment_purchase_data(
     select_cols = [
         "ISIN",
         "Date",
-        "__file_category__",
         "Price_Local",
         "Value_Local",
         "FX_Rate",
@@ -416,12 +386,8 @@ def get_f_tf_investment_sale_data(
 ) -> pl.LazyFrame:
     """Translate DAX UNION + SUMMARIZE for Sales."""
     df_union = pl.concat(refs, how="diagonal_relaxed")
-
     cols = df_union.collect_schema().names()
-    if "__file_category__" not in cols:
-        df_union = df_union.with_columns(pl.lit("Indian").alias("__file_category__"))
-    else:
-        df_union = df_union.with_columns(pl.col("__file_category__").fill_null("Indian"))
+
     if "Sell_Price_Local" not in cols:
         df_union = df_union.with_columns(pl.col("Sell_Price").alias("Sell_Price_Local"))
     else:
@@ -463,7 +429,6 @@ def get_f_tf_investment_sale_data(
     select_cols = [
         "ISIN",
         "Date",
-        "__file_category__",
         "Quantity",
         "Sell_Price_Local",
         "Sell_Value_Local",

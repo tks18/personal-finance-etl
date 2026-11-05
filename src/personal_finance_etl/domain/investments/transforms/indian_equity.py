@@ -94,7 +94,6 @@ def get_stg_stock_market_data(raw_data: pl.LazyFrame, default_currency_id: str) 
         pl.lit(default_currency_id).alias("CURRENCY_ID"),
     )
     cols = [
-        "__file_category__",
         "Month Date",
         "Stock name",
         "ISIN",
@@ -126,7 +125,6 @@ def get_stg_stock_market_data_ref(stg_stock_market_data_lazy: pl.LazyFrame) -> p
         # SUMMARIZE (Group By)
         .group_by(
             [
-                "__file_category__",
                 pl.col("Month Date").alias("Date"),
                 "ISIN",
                 pl.col("Stock name").alias("Instrument Name"),
@@ -166,7 +164,6 @@ def get_base_stock_transactions(raw_data: pl.LazyFrame) -> pl.LazyFrame:
         )
     )
     cols = [
-        "__file_category__",
         "Stock name",
         "Symbol",
         "ISIN",

@@ -33,15 +33,22 @@ class LedgerBuilder:
 
     def _prepare_opening_balances(self, lf_open: pl.LazyFrame) -> pl.LazyFrame:
         """Extract latest account opening balance snapshots."""
+        cols = lf_open.collect_schema().names()
+        date_col = "Date" if "Date" in cols else "ZTXDATESTR"
+        asset_col = "ASSET_SUBCATEGORY_ID" if "ASSET_SUBCATEGORY_ID" in cols else "ZASSETUID"
+        amount_col = (
+            "Opening_Amount_Account" if "Opening_Amount_Account" in cols else "ZAMOUNTACCOUNT"
+        )
+        sort_col = "Date" if "Date" in cols else ("ZUTIME" if "ZUTIME" in cols else date_col)
         return (
-            lf_open.sort("ZUTIME")
-            .group_by("ZASSETUID")
+            lf_open.sort(sort_col)
+            .group_by(asset_col)
             .last()
             .select(
                 [
-                    pl.col("ZASSETUID").alias("ASSET_SUBCATEGORY_ID"),
-                    pl.col("ZAMOUNTACCOUNT").alias("AMOUNT"),
-                    pl.col("ZTXDATESTR").alias("DATE"),
+                    pl.col(asset_col).alias("ASSET_SUBCATEGORY_ID"),
+                    pl.col(amount_col).alias("AMOUNT"),
+                    pl.col(date_col).alias("DATE"),
                 ]
             )
         )

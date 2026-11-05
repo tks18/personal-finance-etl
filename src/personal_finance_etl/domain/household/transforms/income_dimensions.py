@@ -153,11 +153,8 @@ def transform_d_income_category(
 ) -> pl.LazyFrame:
     """Execute the PQ and DAX logic using Polars LazyFrames."""
     cols = [
-        "S_NO",
-        "MODIFY_DATE",
         "UID",
         "CATEGORY_NAME",
-        "ORDER_SEQUENCE",
         "artifact_id",
     ]
 
@@ -258,21 +255,18 @@ def _join_income_tax_mappings(
 def transform_d_income_subcategory(
     df_lazy: pl.LazyFrame,
     column_mapping: dict[str, str],
-    df_d_income_category_lazy: pl.LazyFrame,
+    _df_d_income_category_lazy: pl.LazyFrame | None = None,
     rules: FinancialRules | None = None,
 ) -> pl.LazyFrame:
     """Execute the PQ and DAX logic for Income Subcategories."""
     cols = [
-        "S_NO",
-        "MODIFY_DATE",
         "UID",
         "CATEGORY_NAME",
-        "ORDER_SEQUENCE",
         "CATEGORY_ID",
         "artifact_id",
     ]
 
-    df_pq = (
+    df_transformed = (
         df_lazy.rename(column_mapping)
         .with_columns(pl.col("IS_DEL").cast(pl.String))
         .filter(pl.col("IS_DEL").fill_null("0") == "0")
@@ -283,23 +277,6 @@ def transform_d_income_subcategory(
         )
         .select(cols)
     )
-
-    df_joined = df_pq.join(
-        df_d_income_category_lazy.select(["UID", "CATEGORY_NAME_SHORT"]),
-        left_on="CATEGORY_ID",
-        right_on="UID",
-        how="left",
-    )
-
-    df_transformed = df_joined.with_columns(
-        pl.when(
-            (pl.col("CATEGORY_NAME_SHORT") == "Salary")
-            & pl.col("CATEGORY_NAME").str.contains("(?i)allowance")
-        )
-        .then(pl.lit("Allowances"))
-        .otherwise(pl.col("CATEGORY_NAME"))
-        .alias("CATEGORY_GROUPS")
-    ).drop("CATEGORY_NAME_SHORT")
 
     if rules:
         df_transformed = _classify_income_rules(df_transformed, rules)

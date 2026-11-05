@@ -30,20 +30,10 @@ def transform_d_currency(
 ) -> pl.LazyFrame:
     """Execute the PQ logic for the Currency Master table."""
     cols = [
-        "S_NO",
         "UID",
         "CURRENCY_NAME",
         "ISO",
-        "MAIN_ISO",
-        "ORDER_SEQUENCE",
-        "RATE",
         "SYMBOL",
-        "INSERT_TYPE",
-        "SYMBOL_POSITION",
-        "IS_MAIN_CURRENCY",
-        "IS_SHOW",
-        "MODIFY_DATE",
-        "DECIMAL_POINT",
         "artifact_id",
     ]
 

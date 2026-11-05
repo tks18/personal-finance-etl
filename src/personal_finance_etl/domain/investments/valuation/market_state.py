@@ -27,7 +27,6 @@ from personal_finance_etl.domain.investments.lots.ordering import sort_purchases
 EMPTY_US_MARKET_SCHEMA: dict[str, type[pl.DataType] | pl.DataType] = {
     "Date": pl.Date,
     "ISIN": pl.String,
-    "__file_category__": pl.String,
     "Quantity": pl.Float64,
     "Closing_Price_Local": pl.Float64,
     "Buy_Price_Local": pl.Float64,
@@ -41,10 +40,6 @@ EMPTY_US_MARKET_SCHEMA: dict[str, type[pl.DataType] | pl.DataType] = {
     "Unit_PnL": pl.Float64,
     "Total_PnL": pl.Float64,
     "CURRENCY_ID": pl.String,
-    "Data_Provider": pl.String,
-    "Extraction_Time": pl.String,
-    "Requested_Start": pl.Date,
-    "Requested_End": pl.Date,
     "Is_Closure_Gap": pl.Boolean,
     "Is_Imputed": pl.Boolean,
 }
@@ -394,17 +389,13 @@ def _join_fx_and_calculate_pnl(
             ]
         )
         .with_columns(
-            [
-                (pl.col("Unit_PnL") * pl.col("Quantity")).alias("Total_PnL"),
-                pl.lit("US Stocks").alias("__file_category__"),
-            ]
+            (pl.col("Unit_PnL") * pl.col("Quantity")).alias("Total_PnL"),
         )
         .filter(pl.col("Quantity") >= 0)
         .select(
             [
                 "Date",
                 "ISIN",
-                "__file_category__",
                 "Quantity",
                 "Closing_Price_Local",
                 "Buy_Price_Local",
@@ -418,10 +409,6 @@ def _join_fx_and_calculate_pnl(
                 "Unit_PnL",
                 "Total_PnL",
                 "CURRENCY_ID",
-                "Data_Provider",
-                "Extraction_Time",
-                "Requested_Start",
-                "Requested_End",
                 "Is_Closure_Gap",
                 "Is_Imputed",
             ]

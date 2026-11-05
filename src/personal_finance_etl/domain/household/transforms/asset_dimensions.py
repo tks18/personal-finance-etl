@@ -91,12 +91,8 @@ def transform_d_asset_category(
 ) -> pl.LazyFrame:
     """Execute the PQ logic for Asset Categories (ASSETGROUP)."""
     cols = [
-        "DEVICE_ID",
         "UID",
-        "USE_TIME",
         "ASSET_GROUP",
-        "TYPE",
-        "ORDER_SEQUENCE",
         "artifact_id",
     ]
 
@@ -201,19 +197,11 @@ def transform_d_asset_subcategory(
 ) -> pl.LazyFrame:
     """Execute the PQ logic for Asset Subcategories (ASSETS)."""
     cols = [
-        "S_NO",
-        "CARD_STATEMENT_DATE",
-        "CARD_PAYMENT_DATE",
         "ASSET_NAME",
-        "ORDER_SEQUENCE",
         "ASSET_DESCRIPTION",
         "NOTES",
-        "TRANSFER_EXPENSE",
-        "CARD_AUTOPAY",
-        "ADDED_TIME",
         "UID",
         "CURRENCY_ID",
-        "AUTOPAY_ASSET_ID",
         "ASSET_GROUP_ID",
         "artifact_id",
     ]

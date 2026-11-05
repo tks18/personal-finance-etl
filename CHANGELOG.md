@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [9.6.4](https://github.com/tks18/personal-finance-etl/compare/9.6.3...9.6.4) (2026-11-05)
+
+
+### Code Refactoring 🖌
+
+* **contracts:** close all non-retain silver dispositions ([3c489d3](https://github.com/tks18/personal-finance-etl/commit/3c489d3cb36fcdf8bbab7dfd741ec44e011e282d))
+* **domain:** canonicalize opening balances and update consumers ([d0705d0](https://github.com/tks18/personal-finance-etl/commit/d0705d0c3072ea95580b0fee867f15c3acc44a36))
+* **domain:** remove file category and provider metadata ([862fa4a](https://github.com/tks18/personal-finance-etl/commit/862fa4a778e993227007dead56aa72f708115bb1))
+* **domain:** remove legacy columns from household dimensions ([2b51b04](https://github.com/tks18/personal-finance-etl/commit/2b51b046fee860c5a1f9ba2c2c9cd7d58afad8e7))
+* **domain:** remove legacy columns from transaction transforms ([88f17b5](https://github.com/tks18/personal-finance-etl/commit/88f17b5fc82d42a7693f9acb8a8a55f741eda56a))
+* **warehouse:** drop legacy columns from silver ddl ([638edb6](https://github.com/tks18/personal-finance-etl/commit/638edb61b565dd077412cd85dc89c561f851a54a))
+
+
+### Tests 🧪
+
+* **architecture:** enforce no source residue in silver ddl ([515bcde](https://github.com/tks18/personal-finance-etl/commit/515bcde47b6bed5d45052e010cba466420e45b68))
+* **contracts:** assert 428 active silver columns and retain parity ([94ea391](https://github.com/tks18/personal-finance-etl/commit/94ea391e7ea083c598f86452c5d7ede98b7d3af4))
+
+
+### Docs 📃
+
+* **refactor:** complete phase 013 checklist and records ([b5c9864](https://github.com/tks18/personal-finance-etl/commit/b5c9864153d9ba9cc903f1ee29a4287f78a2f588))
+
 ### [9.6.3](https://github.com/tks18/personal-finance-etl/compare/9.6.2...9.6.3) (2026-11-05)
 
 

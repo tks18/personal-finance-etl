@@ -65,7 +65,6 @@ def get_stg_mf_market_data(
     )
 
     cols = [
-        "__file_category__",
         "Month Date",
         "Scheme Name",
         "AMC",
@@ -97,7 +96,6 @@ def get_stg_mf_market_data_ref(stg_mf_market_data_lazy: pl.LazyFrame) -> pl.Lazy
         # SUMMARIZE (Group By)
         .group_by(
             [
-                "__file_category__",
                 pl.col("Month Date").alias("Date"),
                 "ISIN",
                 pl.col("Scheme Name").alias("Instrument Name"),
@@ -140,7 +138,6 @@ def get_base_mf_transactions(raw_data: pl.LazyFrame) -> pl.LazyFrame:
 
     scheme_clean = pl.col("Scheme Name").cast(pl.String).str.strip_chars()
     cols = [
-        "__file_category__",
         "Month Date",
         "Scheme Name",
         "Transaction Type",
