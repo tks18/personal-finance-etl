@@ -242,3 +242,11 @@ def test_no_source_category_in_financial_logic() -> None:
         "Forbidden source-category financial logic found in application/domain:\n"
         + "\n".join(violations)
     )
+
+
+def test_silver_ddl_has_no_legacy_path_columns() -> None:
+    """Verify that physical Silver DDL declares zero legacy file/folder path columns."""
+    from personal_finance_etl.infrastructure.warehouse.schema.silver import SILVER_DDL
+
+    assert "__file_name__" not in SILVER_DDL
+    assert "__folder_path__" not in SILVER_DDL
