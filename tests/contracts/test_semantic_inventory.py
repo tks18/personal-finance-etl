@@ -102,9 +102,9 @@ def test_silver_column_disposition_ddl_exact_parity() -> None:
         (entry.physical_table.lower(), entry.column_name) for entry in SILVER_COLUMN_DISPOSITIONS
     }
 
-    # Total column count assertion (exactly 517 active physical columns)
-    assert len(ddl_table_col_pairs) == 517
-    assert len(SILVER_COLUMN_DISPOSITIONS) == 517
+    # Total column count assertion (exactly 428 active physical columns)
+    assert len(ddl_table_col_pairs) == 428
+    assert len(SILVER_COLUMN_DISPOSITIONS) == 428
 
     # Parity assertions: no missing columns, no extraneous manifest entries
     missing_in_manifest = ddl_table_col_pairs - manifest_table_col_pairs
@@ -114,6 +114,14 @@ def test_silver_column_disposition_ddl_exact_parity() -> None:
 
     unknown_in_manifest = manifest_table_col_pairs - ddl_table_col_pairs
     assert not unknown_in_manifest, f"Manifest declares non-existent columns: {unknown_in_manifest}"
+
+    # 100% of active Silver columns have reached terminal RETAIN state
+    retain_active = [
+        entry
+        for entry in SILVER_COLUMN_DISPOSITIONS
+        if entry.disposition == ColumnDisposition.RETAIN
+    ]
+    assert len(retain_active) == 428
 
 
 def test_closed_provenance_columns_absent_from_silver_ddl() -> None:
@@ -172,15 +180,52 @@ def test_closed_provider_columns_absent_from_silver_ddl() -> None:
     ]
     assert len(active_provider_cols) == 0
 
-    # Total closed dispositions across all phases: 30 (phase 011) + 5 (phase 012) = 35
+    # Total closed dispositions across all phases: 30 (phase 011) + 5 (phase 012) + 89 (phase 013) = 124
     total_closed = [entry for entry in ALL_SILVER_COLUMN_DISPOSITIONS if not entry.is_active]
-    assert len(total_closed) == 35
+    assert len(total_closed) == 124
+
+
+def test_closed_phase013_columns_absent_from_silver_ddl() -> None:
+    """Verify that all 89 closed legacy residue and provenance columns are absent from physical Silver DDL."""
+    ddl_cols_map = _get_ddl_silver_columns()
+    ddl_table_col_pairs = {
+        (table.lower(), col) for table, cols in ddl_cols_map.items() for col in cols
+    }
+
+    closed_dispositions = [
+        entry
+        for entry in ALL_SILVER_COLUMN_DISPOSITIONS
+        if not entry.is_active and entry.closed_in_phase == "013"
+    ]
+    assert len(closed_dispositions) == 89
+
+    for entry in closed_dispositions:
+        assert (entry.physical_table.lower(), entry.column_name) not in ddl_table_col_pairs
+
+    # Assert that NO Silver table has legacy source residue in physical DDL
+    all_silver_cols = {col for _, cols in ddl_cols_map.items() for col in cols}
+    assert "__file_category__" not in all_silver_cols
+    assert "ORDER_SEQUENCE" not in all_silver_cols
+    assert "S_NO" not in all_silver_cols
+    assert "PAID" not in all_silver_cols
+    assert "CARDDIVIDMONTH" not in all_silver_cols
+    assert "DEVICE_ID" not in all_silver_cols
+    assert "USE_TIME" not in all_silver_cols
+    assert "ADDED_TIME" not in all_silver_cols
+    assert "INSERT_TYPE" not in all_silver_cols
+    assert "IS_SHOW" not in all_silver_cols
 
 
 def test_zero_review_required() -> None:
-    """Assert that zero Silver columns remain with REVIEW_REQUIRED disposition."""
+    """Assert that zero Silver columns remain with REVIEW_REQUIRED, REMOVE, or RENAME disposition."""
     review_cols = get_columns_by_disposition(ColumnDisposition.REVIEW_REQUIRED)
     assert len(review_cols) == 0, f"Unresolved columns marked REVIEW_REQUIRED: {review_cols}"
+
+    remove_cols = get_columns_by_disposition(ColumnDisposition.REMOVE_AFTER_CONSUMER_MIGRATION)
+    assert len(remove_cols) == 0, f"Unresolved columns marked REMOVE: {remove_cols}"
+
+    rename_cols = get_columns_by_disposition(ColumnDisposition.RENAME)
+    assert len(rename_cols) == 0, f"Unresolved columns marked RENAME: {rename_cols}"
 
 
 def test_known_residue_dispositions() -> None:
@@ -355,7 +400,14 @@ def test_semantic_inventory_query_helpers() -> None:
     assert len(prov_cols) > 0
 
     retain_cols = get_columns_by_disposition(ColumnDisposition.RETAIN)
-    assert len(retain_cols) > 0
+    assert len(retain_cols) == 428
 
     remove_cols = get_columns_by_disposition(ColumnDisposition.REMOVE_AFTER_CONSUMER_MIGRATION)
-    assert len(remove_cols) > 0
+    assert len(remove_cols) == 0
+
+    all_remove_cols = [
+        e
+        for e in ALL_SILVER_COLUMN_DISPOSITIONS
+        if e.disposition == ColumnDisposition.REMOVE_AFTER_CONSUMER_MIGRATION
+    ]
+    assert len(all_remove_cols) > 0
