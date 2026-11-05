@@ -29,6 +29,7 @@ from pathlib import Path
 from personal_finance_etl.contracts.datasets import DatasetId
 
 __all__ = [
+    "ALL_SILVER_COLUMN_DISPOSITIONS",
     "GOLD_CONTRACT_DEPENDENCIES",
     "SILVER_COLUMN_DISPOSITIONS",
     "SILVER_CONTRACT_SEMANTICS",
@@ -91,6 +92,8 @@ class SilverColumnDisposition:
     disposition: ColumnDisposition
     target_name: str | None = None
     rationale: str = ""
+    is_active: bool = True
+    closed_in_phase: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -952,30 +955,38 @@ GOLD_CONTRACT_DEPENDENCIES: dict[DatasetId, GoldContractDependency] = {
 }
 
 
-def _load_silver_column_dispositions() -> tuple[SilverColumnDisposition, ...]:
+def _load_silver_column_dispositions() -> tuple[
+    tuple[SilverColumnDisposition, ...], tuple[SilverColumnDisposition, ...]
+]:
     """Load and validate the authoritative column disposition manifest from JSON."""
     json_path = Path(__file__).parent / "silver_column_dispositions.json"
     with open(json_path, encoding="utf-8") as f:
         raw_items = json.load(f)
 
-    dispositions: list[SilverColumnDisposition] = []
+    all_dispositions: list[SilverColumnDisposition] = []
+    active_dispositions: list[SilverColumnDisposition] = []
     for item in raw_items:
-        dispositions.append(
-            SilverColumnDisposition(
-                dataset_id=DatasetId(item["dataset_id"]),
-                physical_table=str(item["physical_table"]),
-                column_name=str(item["column_name"]),
-                classification=ColumnClassification(item["classification"]),
-                disposition=ColumnDisposition(item["disposition"]),
-                target_name=item["target_name"],
-                rationale=str(item.get("rationale", "")),
-            )
+        is_active = bool(item.get("is_active", True))
+        disp = SilverColumnDisposition(
+            dataset_id=DatasetId(item["dataset_id"]),
+            physical_table=str(item["physical_table"]),
+            column_name=str(item["column_name"]),
+            classification=ColumnClassification(item["classification"]),
+            disposition=ColumnDisposition(item["disposition"]),
+            target_name=item["target_name"],
+            rationale=str(item.get("rationale", "")),
+            is_active=is_active,
+            closed_in_phase=item.get("closed_in_phase"),
         )
-    return tuple(dispositions)
+        all_dispositions.append(disp)
+        if is_active:
+            active_dispositions.append(disp)
+    return tuple(all_dispositions), tuple(active_dispositions)
 
 
-# Authoritative column disposition manifest covering all 534 physical Silver columns
-SILVER_COLUMN_DISPOSITIONS: tuple[SilverColumnDisposition, ...] = _load_silver_column_dispositions()
+# Authoritative column disposition manifest: ALL tracks complete audit history;
+# SILVER_COLUMN_DISPOSITIONS tracks currently active physical Silver columns (522).
+ALL_SILVER_COLUMN_DISPOSITIONS, SILVER_COLUMN_DISPOSITIONS = _load_silver_column_dispositions()
 
 
 def get_silver_contract_semantics(dataset_id: DatasetId) -> SilverContractSemantics:

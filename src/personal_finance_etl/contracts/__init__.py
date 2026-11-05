@@ -76,6 +76,7 @@ from personal_finance_etl.contracts.recovery import (
     SnapshotResult,
 )
 from personal_finance_etl.contracts.semantic_inventory import (
+    ALL_SILVER_COLUMN_DISPOSITIONS,
     GOLD_CONTRACT_DEPENDENCIES,
     SILVER_COLUMN_DISPOSITIONS,
     SILVER_CONTRACT_SEMANTICS,
@@ -97,6 +98,7 @@ from personal_finance_etl.contracts.sources import (
 )
 
 __all__ = [
+    "ALL_SILVER_COLUMN_DISPOSITIONS",
     "ArtifactMetadata",
     "BRONZE_DATASET_ORIGIN_MAP",
     "ColumnClassification",
