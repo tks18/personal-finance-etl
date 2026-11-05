@@ -91,10 +91,7 @@ CREATE TABLE IF NOT EXISTS silver.d_Income_Category (
     -- Descriptors/Classifications
     CATEGORY_NAME TEXT,
     CATEGORY_NAME_SHORT TEXT,
-    ORDER_SEQUENCE BIGINT,
-    artifact_id TEXT,
-    S_NO BIGINT,
-    MODIFY_DATE BIGINT
+    artifact_id TEXT
 );
 
 CREATE TABLE IF NOT EXISTS silver.d_Income_Subcategory (
@@ -103,8 +100,6 @@ CREATE TABLE IF NOT EXISTS silver.d_Income_Subcategory (
     CATEGORY_ID TEXT,
     -- Descriptors/Classifications
     CATEGORY_NAME TEXT,
-    CATEGORY_GROUPS TEXT,
-    ORDER_SEQUENCE BIGINT,
     Is_Active_Income BOOLEAN,
     Is_Passive_Income BOOLEAN,
     Is_Dividend_Income BOOLEAN,
@@ -113,8 +108,6 @@ CREATE TABLE IF NOT EXISTS silver.d_Income_Subcategory (
     Is_Investment_Exclusion BOOLEAN,
     Is_Tax_Credits BOOLEAN,
     artifact_id TEXT,
-    S_NO BIGINT,
-    MODIFY_DATE BIGINT,
     Tax_Income_Head TEXT,
     Tax_Sub_Head TEXT,
     Taxability TEXT,
@@ -127,10 +120,7 @@ CREATE TABLE IF NOT EXISTS silver.d_Expense_Category (
     UID TEXT PRIMARY KEY,
     -- Descriptors/Classifications
     CATEGORY_NAME TEXT,
-    ORDER_SEQUENCE BIGINT,
-    artifact_id TEXT,
-    S_NO BIGINT,
-    MODIFY_DATE BIGINT
+    artifact_id TEXT
 );
 
 CREATE TABLE IF NOT EXISTS silver.d_Expense_Subcategory (
@@ -139,11 +129,8 @@ CREATE TABLE IF NOT EXISTS silver.d_Expense_Subcategory (
     CATEGORY_ID TEXT,
     -- Descriptors/Classifications
     CATEGORY_NAME TEXT,
-    ORDER_SEQUENCE BIGINT,
     Is_Core_Expense BOOLEAN,
     artifact_id TEXT,
-    S_NO BIGINT,
-    MODIFY_DATE BIGINT,
     FOREIGN KEY(CATEGORY_ID) REFERENCES silver.d_Expense_Category(UID)
 );
 
@@ -152,17 +139,13 @@ CREATE TABLE IF NOT EXISTS silver.d_Asset_Category (
     UID TEXT PRIMARY KEY,
     -- Descriptors/Classifications
     ASSET_GROUP TEXT,
-    TYPE BIGINT,
-    ORDER_SEQUENCE BIGINT,
     ledger_role TEXT,
     cashflow_activity_type TEXT,
     settlement_timing TEXT,
     Is_Digital_Asset BOOLEAN,
     is_cash_pool BOOLEAN,
     is_non_cash_pnl BOOLEAN,
-    artifact_id TEXT,
-    DEVICE_ID BIGINT,
-    USE_TIME BIGINT
+    artifact_id TEXT
 );
 
 CREATE TABLE IF NOT EXISTS silver.d_Asset_Subcategory (
@@ -170,27 +153,19 @@ CREATE TABLE IF NOT EXISTS silver.d_Asset_Subcategory (
     UID TEXT PRIMARY KEY,
     ASSET_GROUP_ID TEXT,
     CURRENCY_ID TEXT,
-    AUTOPAY_ASSET_ID TEXT,
     -- Descriptors/Classifications
     ASSET_NAME TEXT,
     ASSET_DESCRIPTION TEXT,
     NOTES TEXT,
-    ORDER_SEQUENCE BIGINT,
     ledger_role TEXT,
     cashflow_activity_type TEXT,
     settlement_timing TEXT,
-    TRANSFER_EXPENSE BIGINT,
-    CARD_AUTOPAY BIGINT,
-    CARD_STATEMENT_DATE BIGINT,
-    CARD_PAYMENT_DATE BIGINT,
     Is_Liquid BOOLEAN,
     Is_Illiquid BOOLEAN,
     Is_Digital_Asset BOOLEAN,
     is_cash_pool BOOLEAN,
     is_non_cash_pnl BOOLEAN,
     artifact_id TEXT,
-    S_NO BIGINT,
-    ADDED_TIME BIGINT,
     FOREIGN KEY(ASSET_GROUP_ID) REFERENCES silver.d_Asset_Category(UID)
 );
 
@@ -200,20 +175,10 @@ CREATE TABLE IF NOT EXISTS silver.d_Currency (
     -- Descriptors/Classifications
     CURRENCY_NAME TEXT,
     ISO TEXT,
-    MAIN_ISO TEXT,
     Target_Currency_Code TEXT,
     SYMBOL TEXT,
-    SYMBOL_POSITION TEXT,
-    ORDER_SEQUENCE BIGINT,
-    RATE DOUBLE,
-    DECIMAL_POINT BIGINT,
-    IS_MAIN_CURRENCY BIGINT,
-    IS_SHOW BIGINT,
     Is_Active BOOLEAN,
-    INSERT_TYPE TEXT,
-    artifact_id TEXT,
-    S_NO BIGINT,
-    MODIFY_DATE BIGINT
+    artifact_id TEXT
 );
 
 CREATE TABLE IF NOT EXISTS silver.f_Currency_FX_Rates (
@@ -226,13 +191,8 @@ CREATE TABLE IF NOT EXISTS silver.f_Currency_FX_Rates (
     -- Local/FX Values
     FX_Rate DOUBLE NOT NULL,
     -- Provenance
-    Data_Provider TEXT,
-    Extraction_Time TEXT,
-    Requested_Start DATE,
-    Requested_End DATE,
     Is_Closure_Gap BOOLEAN,
     Is_Imputed BOOLEAN,
-    First_Observation_Date DATE,
     artifact_id TEXT,
     FOREIGN KEY(Date) REFERENCES silver.d_Calendar(Date),
     FOREIGN KEY(Currency_ID) REFERENCES silver.d_Currency(UID)
@@ -250,12 +210,6 @@ CREATE TABLE IF NOT EXISTS silver.f_Income_Transactions (
     -- Descriptors/Classifications
     TIME TEXT,
     DESCRIPTION TEXT,
-    PAID TEXT,
-    TRANSACTION_TYPE BIGINT,
-    FEES_NOTES TEXT,
-    MARK TEXT,
-    TRANSFER_FEES TEXT,
-    CARDDIVIDMONTH BIGINT,
     Is_Active_Income BOOLEAN,
     Is_Dividend_Income BOOLEAN,
     Is_Interest_Income BOOLEAN,
@@ -267,9 +221,6 @@ CREATE TABLE IF NOT EXISTS silver.f_Income_Transactions (
     LOCAL_AMOUNT DOUBLE,
     EXCH_RATE DOUBLE,
     artifact_id TEXT,
-    S_NO BIGINT,
-    TIMESTAMP BIGINT,
-    UPDATED_TIME BIGINT,
     FOREIGN KEY(CATEGORY_ID) REFERENCES silver.d_Income_Subcategory(UID),
     FOREIGN KEY(ASSET_ID) REFERENCES silver.d_Asset_Subcategory(UID),
     FOREIGN KEY(CURRENCY_ID) REFERENCES silver.d_Currency(UID),
@@ -288,12 +239,6 @@ CREATE TABLE IF NOT EXISTS silver.f_Expense_Transactions (
     -- Descriptors/Classifications
     TIME TEXT,
     DESCRIPTION TEXT,
-    PAID TEXT,
-    TRANSACTION_TYPE BIGINT,
-    FEES_NOTES TEXT,
-    MARK TEXT,
-    TRANSFER_FEES TEXT,
-    CARDDIVIDMONTH BIGINT,
     Is_Core_Expense BOOLEAN,
     -- Position Values
     BASE_AMOUNT DOUBLE,
@@ -302,9 +247,6 @@ CREATE TABLE IF NOT EXISTS silver.f_Expense_Transactions (
     LOCAL_AMOUNT DOUBLE,
     EXCH_RATE DOUBLE,
     artifact_id TEXT,
-    S_NO BIGINT,
-    TIMESTAMP BIGINT,
-    UPDATED_TIME BIGINT,
     FOREIGN KEY(CATEGORY_ID) REFERENCES silver.d_Expense_Subcategory(UID),
     FOREIGN KEY(ASSET_ID) REFERENCES silver.d_Asset_Subcategory(UID),
     FOREIGN KEY(CURRENCY_ID) REFERENCES silver.d_Currency(UID),
@@ -324,13 +266,6 @@ CREATE TABLE IF NOT EXISTS silver.f_Transfer_Transactions (
     -- Descriptors/Classifications
     TIME TEXT,
     DESCRIPTION TEXT,
-    PAID TEXT,
-    TRANSACTION_TYPE BIGINT,
-    TRANSFER_TYPE TEXT,
-    FEES_NOTES TEXT,
-    MARK TEXT,
-    TRANSFER_FEES TEXT,
-    CARDDIVIDMONTH BIGINT,
     -- Position Values
     BASE_AMOUNT DOUBLE,
     AMOUNT_ACCOUNT DOUBLE,
@@ -339,9 +274,6 @@ CREATE TABLE IF NOT EXISTS silver.f_Transfer_Transactions (
     LOCAL_AMOUNT DOUBLE,
     EXCH_RATE DOUBLE,
     artifact_id TEXT,
-    S_NO BIGINT,
-    TIMESTAMP BIGINT,
-    UPDATED_TIME BIGINT,
     FOREIGN KEY(CURRENCY_ID) REFERENCES silver.d_Currency(UID),
     FOREIGN KEY(ASSET_ID) REFERENCES silver.d_Asset_Subcategory(UID),
     FOREIGN KEY(TO_ASSET_ID) REFERENCES silver.d_Asset_Subcategory(UID),
@@ -352,27 +284,17 @@ CREATE TABLE IF NOT EXISTS silver.f_Transfer_Transactions (
 CREATE TABLE IF NOT EXISTS silver.f_Opening_Balances (
     -- Identifiers
     Z_PK BIGINT PRIMARY KEY,
-    ZTXDATESTR DATE,
-    ZASSETUID TEXT,
-    ZCATEGORYUID TEXT,
-    ZCURRENCYUID TEXT,
-    ZTOASSETUID TEXT,
-    ZTXUIDFEE TEXT,
-    ZTXUIDTRANS TEXT,
-    ZUID TEXT,
-    -- Descriptors/Classifications
-    ZCONTENT TEXT,
-    ZDO_TYPE BIGINT,
+    Date DATE NOT NULL,
+    ASSET_SUBCATEGORY_ID TEXT NOT NULL,
+    CURRENCY_ID TEXT,
     -- Position Values
-    ZAMOUNT DOUBLE,
-    ZAMOUNTACCOUNT DOUBLE,
-    ZAMOUNTSUB DOUBLE,
-    ZDATE DOUBLE,
-    ZUTIME BIGINT,
+    Opening_Amount DOUBLE,
+    Opening_Amount_Account DOUBLE,
+    -- Provenance
     artifact_id TEXT,
-    FOREIGN KEY(ZCURRENCYUID) REFERENCES silver.d_Currency(UID),
-    FOREIGN KEY(ZASSETUID) REFERENCES silver.d_Asset_Subcategory(UID),
-    FOREIGN KEY(ZTXDATESTR) REFERENCES silver.d_Calendar(Date)
+    FOREIGN KEY(CURRENCY_ID) REFERENCES silver.d_Currency(UID),
+    FOREIGN KEY(ASSET_SUBCATEGORY_ID) REFERENCES silver.d_Asset_Subcategory(UID),
+    FOREIGN KEY(Date) REFERENCES silver.d_Calendar(Date)
 );
 
 CREATE TABLE IF NOT EXISTS silver.d_Investment_Benchmark_Master (
@@ -446,8 +368,6 @@ CREATE TABLE IF NOT EXISTS silver.f_Investment_Market_Data (
     Date DATE NOT NULL,
     ISIN TEXT NOT NULL,
     CURRENCY_ID TEXT,
-    -- Descriptors/Classifications
-    __file_category__ TEXT,
     -- Position Values
     Quantity DOUBLE,
     Closing_Price DOUBLE,
@@ -464,10 +384,6 @@ CREATE TABLE IF NOT EXISTS silver.f_Investment_Market_Data (
     Unit_PnL DOUBLE,
     Total_PnL DOUBLE,
     -- Provenance
-    Data_Provider TEXT,
-    Extraction_Time TEXT,
-    Requested_Start DATE,
-    Requested_End DATE,
     Is_Closure_Gap BOOLEAN,
     Is_Imputed BOOLEAN,
     artifact_id TEXT,
@@ -482,8 +398,6 @@ CREATE TABLE IF NOT EXISTS silver.f_Investment_Purchase_Data (
     Date DATE NOT NULL,
     ISIN TEXT NOT NULL,
     CURRENCY_ID TEXT,
-    -- Descriptors/Classifications
-    __file_category__ TEXT,
     -- Position Values
     Quantity DOUBLE,
     Price DOUBLE,
@@ -504,8 +418,6 @@ CREATE TABLE IF NOT EXISTS silver.f_Investment_Sale_Data (
     Date DATE NOT NULL,
     ISIN TEXT NOT NULL,
     CURRENCY_ID TEXT,
-    -- Descriptors/Classifications
-    __file_category__ TEXT,
     -- Position Values
     Quantity DOUBLE,
     Sell_Price DOUBLE,
@@ -537,10 +449,6 @@ CREATE TABLE IF NOT EXISTS silver.f_Investment_Benchmark_Data (
     -- Position Values
     Close DOUBLE,
     -- Provenance
-    Data_Provider TEXT,
-    Extraction_Time TEXT,
-    Requested_Start DATE,
-    Requested_End DATE,
     Is_Closure_Gap BOOLEAN,
     Is_Imputed BOOLEAN,
     artifact_id TEXT,
