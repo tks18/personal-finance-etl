@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [9.7.1](https://github.com/tks18/personal-finance-etl/compare/9.7.0...9.7.1) (2026-11-05)
+
+
+### Features 🔥
+
+* **application:** implement CapabilityPlanner resolution ([379006c](https://github.com/tks18/personal-finance-etl/commit/379006c28005d77f1e364a1e58914282a2519a9c))
+* **contracts:** add immutable ExecutionPlan contract ([d505cd6](https://github.com/tks18/personal-finance-etl/commit/d505cd6ca7b21dae47c361e8c5f225b538055ef2))
+* **control-plane:** persist execution plan snapshots ([30c2db4](https://github.com/tks18/personal-finance-etl/commit/30c2db460bc83fd2c6d6e79b2898fb74354afe87))
+* **pipeline:** cut over to plan-scoped completeness ([ac48984](https://github.com/tks18/personal-finance-etl/commit/ac489846ba59b4e5937e65a1cc7d308b9a7b2164))
+
+
+### Docs 📃
+
+* **refactor:** complete phase 015 checklist and records ([3466f23](https://github.com/tks18/personal-finance-etl/commit/3466f2343fc15aa239380b797c29b0f12e771dfe))
+
 ## [9.7.0](https://github.com/tks18/personal-finance-etl/compare/9.6.4...9.7.0) (2026-11-05)
 
 
