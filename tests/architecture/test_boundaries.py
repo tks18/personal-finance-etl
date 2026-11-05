@@ -313,3 +313,39 @@ def test_capabilities_contract_purity() -> None:
             assert mod.startswith("personal_finance_etl.contracts"), (
                 f"Line {lineno}: capability contracts must only import from contracts layer, got '{mod}'"
             )
+
+
+def test_domain_has_no_capability_plan_inspection() -> None:
+    """Verify that pure domain layer never inspects execution plans or capability flags."""
+    domain_dir = SRC_ROOT / "domain"
+    forbidden_symbols = {"ExecutionPlan", "CapabilityId", "CapabilityPlanner"}
+    violations: list[str] = []
+
+    for py_file in domain_dir.rglob("*.py"):
+        if py_file.name.startswith("__"):
+            continue
+        tree = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(py_file))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    if any(sym in alias.name for sym in forbidden_symbols):
+                        violations.append(
+                            f"{py_file.relative_to(SRC_ROOT)}:{node.lineno}: imports '{alias.name}'"
+                        )
+            elif isinstance(node, ast.ImportFrom):
+                if node.module and any(
+                    sym in node.module for sym in ("capabilities", "execution_plan", "planner")
+                ):
+                    violations.append(
+                        f"{py_file.relative_to(SRC_ROOT)}:{node.lineno}: imports from '{node.module}'"
+                    )
+                for alias in node.names:
+                    if alias.name in forbidden_symbols:
+                        violations.append(
+                            f"{py_file.relative_to(SRC_ROOT)}:{node.lineno}: imports '{alias.name}'"
+                        )
+
+    assert not violations, (
+        "Pure domain layer must never inspect execution plans or capability flags:\n"
+        + "\n".join(violations)
+    )

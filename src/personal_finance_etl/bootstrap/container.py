@@ -16,13 +16,24 @@ Does not own
 from __future__ import annotations
 
 import queue
+from pathlib import Path
 from typing import cast
 
 from personal_finance_etl.application.facade import PersonalFinanceEngine
 from personal_finance_etl.application.pipeline.orchestrator import ETLOrchestrator
+from personal_finance_etl.application.pipeline.planner import CapabilityPlanner
+from personal_finance_etl.application.pipeline.source_planner import (
+    CompiledSourcePlan,
+    SourcePlanner,
+)
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
+from personal_finance_etl.config.sources.loader import (
+    SourceConfiguration,
+    get_shan_baseline_source_configuration,
+)
 from personal_finance_etl.contracts.event_transport import EventQueue
+from personal_finance_etl.contracts.execution_plan import ExecutionPlan
 from personal_finance_etl.contracts.observability import ObservabilityEvent
 from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
 from personal_finance_etl.infrastructure.preferences import PreferencesManager
@@ -55,9 +66,11 @@ class ServiceContainer:
         self,
         default_config_path: str = "config.toml",
         default_rules_path: str = "",
+        default_sources_path: str = "sources.toml",
     ) -> None:
         self.default_config_path = default_config_path
         self.default_rules_path = default_rules_path
+        self.default_sources_path = default_sources_path
         self._prefs = PreferencesManager()
 
     def get_preferences_manager(self) -> PreferencesManager:
@@ -77,6 +90,24 @@ class ServiceContainer:
         if target_path:
             self._prefs.add_recent_rules(target_path)
         return FinancialRules.from_toml(target_path) if target_path else None
+
+    def create_source_config(self, sources_path: str | None = None) -> SourceConfiguration:
+        """Resolve and parse SourceConfiguration from TOML path or fallback to canonical Shan baseline.
+
+        Parameters
+        ----------
+        sources_path : str | None, optional
+            Path to the source configuration TOML file.
+
+        Returns
+        -------
+        SourceConfiguration
+            Parsed SourceConfiguration instance if file exists, or canonical Shan baseline.
+        """
+        target_path = sources_path or self.default_sources_path
+        if target_path and Path(target_path).is_file():
+            return SourceConfiguration.from_toml(target_path)
+        return get_shan_baseline_source_configuration()
 
     def create_duckdb_manager(self, cfg: Settings) -> DuckDBManager:
         """Instantiate a DuckDBManager bound to the configured database path."""
@@ -98,14 +129,58 @@ class ServiceContainer:
         self,
         config_path: str | None = None,
         rules_path: str | None = None,
+        sources_path: str | None = None,
         status_queue: EventQueue | None = None,
         settings: Settings | None = None,
+        source_config: SourceConfiguration | None = None,
+        plan: ExecutionPlan | None = None,
     ) -> ETLOrchestrator:
-        """Assemble an ETLOrchestrator with all required dependencies wired."""
+        """Assemble an ETLOrchestrator with all required dependencies wired.
+
+        Parameters
+        ----------
+        config_path : str | None, optional
+            Path to settings TOML file.
+        rules_path : str | None, optional
+            Path to financial rules TOML file.
+        sources_path : str | None, optional
+            Path to source configuration TOML file.
+        status_queue : EventQueue | None, optional
+            Queue for event transport.
+        settings : Settings | None, optional
+            Pre-loaded Settings instance.
+        source_config : SourceConfiguration | None, optional
+            Pre-loaded SourceConfiguration instance.
+        plan : ExecutionPlan | None, optional
+            Pre-compiled ExecutionPlan instance.
+
+        Returns
+        -------
+        ETLOrchestrator
+            Wired execution orchestrator.
+        """
         cfg = settings or self.create_settings(config_path)
         rules = self.create_rules(rules_path)
+        src_cfg = source_config or self.create_source_config(sources_path)
         active_queue: EventQueue = status_queue or cast(EventQueue, _NullEventQueue())
-        return ETLOrchestrator(cfg, active_queue, rules)
+
+        # If execution plan is not explicitly provided, resolve from source_config capability selection
+        resolved_plan = plan
+        if resolved_plan is None:
+            requested_caps = src_cfg.capabilities.resolved_capabilities
+            resolved_plan = CapabilityPlanner().create_plan(requested_capabilities=requested_caps)
+
+        # Compile non-I/O source plan
+        source_plan: CompiledSourcePlan = SourcePlanner(src_cfg, resolved_plan).compile_plan()
+
+        return ETLOrchestrator(
+            cfg,
+            active_queue,
+            rules,
+            plan=resolved_plan,
+            source_config=src_cfg,
+            source_plan=source_plan,
+        )
 
     def create_engine(self) -> PersonalFinanceEngine:
         """Assemble a PersonalFinanceEngine application façade bound to this container."""

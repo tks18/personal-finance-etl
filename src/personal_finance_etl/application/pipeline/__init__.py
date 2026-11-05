@@ -18,6 +18,13 @@ from __future__ import annotations
 from personal_finance_etl.application.pipeline.execution import PipelineExecutor
 from personal_finance_etl.application.pipeline.lifecycle import RunLifecycleCoordinator
 from personal_finance_etl.application.pipeline.orchestrator import ETLOrchestrator
+from personal_finance_etl.application.pipeline.source_planner import (
+    CompiledSourcePlan,
+    DatasetPlan,
+    SourcePlan,
+    SourcePlanner,
+    SourcePlanningError,
+)
 from personal_finance_etl.application.pipeline.transformer import TransformationDAG
 from personal_finance_etl.application.pipeline.worker import (
     QueueStream,
@@ -26,10 +33,15 @@ from personal_finance_etl.application.pipeline.worker import (
 )
 
 __all__ = [
+    "CompiledSourcePlan",
+    "DatasetPlan",
     "ETLOrchestrator",
     "PipelineExecutor",
     "QueueStream",
     "RunLifecycleCoordinator",
+    "SourcePlan",
+    "SourcePlanner",
+    "SourcePlanningError",
     "TransformationDAG",
     "WorkerPoolCoordinator",
     "process_wrapper",

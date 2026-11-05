@@ -2,6 +2,9 @@
 
 Owns
 ----
+- CURRENT_SOURCE_CONFIG_SCHEMA_VERSION, SUPPORTED_SOURCE_CONFIG_SCHEMA_VERSIONS: Schema versions.
+- CapabilitySelection: Declarative capability selection model.
+- SourceConfiguration: Versioned root evidence source configuration model.
 - SourceConfig: Declarative validated evidence source configuration model.
 - SourceDatasetConfig: Declarative binding of a physical source to a canonical dataset.
 - CsvSelector, ExcelSelector, SqliteSelector: Discriminated physical dataset selectors.
@@ -15,6 +18,8 @@ Owns
 - evaluate_bronze_topology_coverage: Evaluator comparing configured bindings against Bronze contracts.
 - validate_source_dataset_bindings: Aggregate validation helper for sources and dataset bindings.
 - validate_source_selector_compatibility: Cross-model provider compatibility validator.
+- get_shan_baseline_sources, get_shan_baseline_dataset_bindings: Baseline evidence specifications.
+- get_shan_baseline_source_configuration: Canonical baseline SourceConfiguration instance.
 
 Does not own
 ------------
@@ -40,6 +45,15 @@ from personal_finance_etl.config.sources.identity import (
     DerivedDeterministicIdentity,
     SourceFieldIdentity,
 )
+from personal_finance_etl.config.sources.loader import (
+    CURRENT_SOURCE_CONFIG_SCHEMA_VERSION,
+    SUPPORTED_SOURCE_CONFIG_SCHEMA_VERSIONS,
+    CapabilitySelection,
+    SourceConfiguration,
+    get_shan_baseline_dataset_bindings,
+    get_shan_baseline_source_configuration,
+    get_shan_baseline_sources,
+)
 from personal_finance_etl.config.sources.model import SourceConfig, SourceDatasetConfig
 from personal_finance_etl.config.sources.selectors import (
     CsvSelector,
@@ -57,7 +71,10 @@ from personal_finance_etl.config.sources.validation import (
 )
 
 __all__ = [
+    "CURRENT_SOURCE_CONFIG_SCHEMA_VERSION",
+    "SUPPORTED_SOURCE_CONFIG_SCHEMA_VERSIONS",
     "BronzeIdentityStrategy",
+    "CapabilitySelection",
     "ChangeDetectionPolicy",
     "CompositeIdentity",
     "CsvSelector",
@@ -69,12 +86,16 @@ __all__ = [
     "PROTECTED_FINANCIAL_NAMESPACES",
     "RenameStrategy",
     "SourceConfig",
+    "SourceConfiguration",
     "SourceDatasetConfig",
     "SourceFieldIdentity",
     "SqliteSelector",
     "SyncStrategy",
     "TopologyCoverageReport",
     "evaluate_bronze_topology_coverage",
+    "get_shan_baseline_dataset_bindings",
+    "get_shan_baseline_source_configuration",
+    "get_shan_baseline_sources",
     "resolve_change_detection_policy",
     "validate_source_dataset_bindings",
     "validate_source_selector_compatibility",

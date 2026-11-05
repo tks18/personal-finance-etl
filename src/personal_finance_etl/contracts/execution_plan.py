@@ -185,6 +185,22 @@ class ExecutionPlan:
         val = dataset_id.value if isinstance(dataset_id, DatasetId) else str(dataset_id).lower()
         return any(d.value == val for d in self.active_analytical_datasets)
 
+    def is_bronze_dataset_active(self, dataset_id: DatasetId | str) -> bool:
+        """Check whether a specific Bronze dataset is active (required or optional) in this execution plan.
+
+        Parameters
+        ----------
+        dataset_id : DatasetId | str
+            Canonical Bronze dataset identifier to check.
+
+        Returns
+        -------
+        bool
+            True if active (required or optional), False otherwise.
+        """
+        val = dataset_id.value if isinstance(dataset_id, DatasetId) else str(dataset_id).lower()
+        return any(d.value == val for d in self.active_bronze_datasets)
+
     def is_dataset_required(self, dataset_id: DatasetId | str) -> bool:
         """Check whether a specific Bronze dataset is required by this execution plan.
 

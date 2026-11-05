@@ -160,15 +160,15 @@ Do not:
 
 ## 11. Completion checklist
 
-- [ ] Versioned root configuration loads in production bootstrap.
-- [ ] Settings/FinancialRules/SourceConfiguration remain separate.
-- [ ] Cross-object validation is complete.
-- [ ] Shan topology is represented.
-- [ ] Capability selection feeds planner.
-- [ ] SourcePlanner compiles deterministic non-I/O DatasetPlans.
-- [ ] Required configured datasets are satisfiable at planning time.
-- [ ] Fixed ingestion still owns runtime source access.
-- [ ] Pipeline behavior unchanged.
+- [x] Versioned root configuration loads in production bootstrap.
+- [x] Settings/FinancialRules/SourceConfiguration remain separate.
+- [x] Cross-object validation is complete.
+- [x] Shan topology is represented.
+- [x] Capability selection feeds planner.
+- [x] SourcePlanner compiles deterministic non-I/O DatasetPlans.
+- [x] Required configured datasets are satisfiable at planning time.
+- [x] Fixed ingestion still owns runtime source access.
+- [x] Pipeline behavior unchanged.
 
 ## 12. Commit boundary
 
@@ -183,20 +183,34 @@ Phase 018 may assume a validated `SourceConfiguration` is available at runtime a
 ## Phase completion record
 
 ```text
-Phase:
-Target release:
+Phase: 017
+Target release: v9.8.0
 Files changed:
-Schema changed:
-Runtime behavior changed:
+  - src/personal_finance_etl/config/sources/loader.py
+  - src/personal_finance_etl/config/sources/__init__.py
+  - src/personal_finance_etl/application/pipeline/source_planner.py
+  - src/personal_finance_etl/application/pipeline/__init__.py
+  - src/personal_finance_etl/application/pipeline/orchestrator.py
+  - src/personal_finance_etl/application/facade.py
+  - src/personal_finance_etl/bootstrap/container.py
+  - src/personal_finance_etl/contracts/execution_plan.py
+  - tests/fixtures/sources.toml
+  - tests/conftest.py
+  - tests/config/test_source_configuration.py
+  - tests/application/test_source_planner.py
+  - planning/grand-refactor/phases/017-production-source-configuration-loader.md
+  - planning/grand-refactor/README.md
+Schema changed: NO (configuration schema v1.0.0 introduced; warehouse DDL unchanged)
+Runtime behavior changed: NO (fixed ingestion paths preserved; source configuration and planning run additively alongside execution plan)
 Financial formulas changed: NO
-Focused tests:
-Architecture tests:
-Real-data run:
-Performance check:
-Compatibility path still present:
-Old path deleted:
-Exit assertions green:
-Commit:
+Focused tests: tests/config/test_source_configuration.py (11 passed), tests/application/test_source_planner.py (7 passed)
+Architecture tests: tests/architecture/test_boundaries.py (11 passed)
+Real-data run: YES (live pipeline E2E passed with full plan)
+Performance check: PASS (fast audit in 1.10s; full quality gate across 6 engines in 79.39s)
+Compatibility path still present: YES (fallback to get_shan_baseline_source_configuration when sources.toml omitted)
+Old path deleted: N/A
+Exit assertions green: YES (all 368 tests passing; 6/6 quality engines green)
+Commit: pending user confirmation
 ```
 
 A phase is incomplete if any required exit assertion is false.

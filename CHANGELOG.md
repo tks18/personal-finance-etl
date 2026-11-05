@@ -2,6 +2,45 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [9.8.0](https://github.com/tks18/personal-finance-etl/compare/9.7.2...9.8.0) (2026-11-05)
+
+
+### Features 🔥
+
+* **application:** implement non-IO SourcePlanner and plan models ([27e1ffc](https://github.com/tks18/personal-finance-etl/commit/27e1ffccd72b57677a58ec585bd9209d3f07f386))
+* **bootstrap:** wire source configuration and planning into container ([9bcca0e](https://github.com/tks18/personal-finance-etl/commit/9bcca0e97c9e006e3970fdfe01f49c48908a0cd6))
+* **config:** implement versioned SourceConfiguration loader ([9b3f2af](https://github.com/tks18/personal-finance-etl/commit/9b3f2afce9b3916a1ab97649add6084a533c5125))
+* **contracts:** add bronze dataset activity predicate to plan ([34b6797](https://github.com/tks18/personal-finance-etl/commit/34b679767ed8d9a788952a9aa0f2a88a52e14b88))
+
+
+### Tests 🧪
+
+* **config:** add SourceConfiguration and SourcePlanner suites ([b9b0091](https://github.com/tks18/personal-finance-etl/commit/b9b0091b260dee0b9dbf92b2538060aa8740ef45))
+
+
+### Docs 📃
+
+* **refactor:** complete phase 017 checklist and records ([7cd3694](https://github.com/tks18/personal-finance-etl/commit/7cd36942d8ed3d451eb0df218ecd33768d0d4205))
+
+### [9.7.2](https://github.com/tks18/personal-finance-etl/compare/9.7.1...9.7.2) (2026-11-05)
+
+
+### Features 🔥
+
+* **pipeline:** gate benchmark provider and transform on plan ([cb3658e](https://github.com/tks18/personal-finance-etl/commit/cb3658e717eb19408e9e8ede4985aec41ca8c2d2))
+* **pipeline:** pass execution plan into TransformationDAG ([8c9e3e6](https://github.com/tks18/personal-finance-etl/commit/8c9e3e61301b857faabd1531d2712c46bad0a667))
+
+
+### Tests 🧪
+
+* **architecture:** assert domain has no capability plan inspection ([1c1df28](https://github.com/tks18/personal-finance-etl/commit/1c1df2882f5e729a86dcf1bb72890741739ef14a))
+* **pipeline:** prove optional benchmark capability execution ([beb92d0](https://github.com/tks18/personal-finance-etl/commit/beb92d0eb4cb61f6396f2d20f9f2406dff445728))
+
+
+### Docs 📃
+
+* **refactor:** complete phase 016 checklist and records ([671f870](https://github.com/tks18/personal-finance-etl/commit/671f870dba6a0aa1003904aac1f5452f09f1ee19))
+
 ### [9.7.1](https://github.com/tks18/personal-finance-etl/compare/9.7.0...9.7.1) (2026-11-05)
 
 
