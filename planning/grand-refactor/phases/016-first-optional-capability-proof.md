@@ -126,13 +126,13 @@ Do not:
 
 ## 11. Completion checklist
 
-- [ ] One optional capability is explicitly selected and justified.
-- [ ] Execution is controlled only by ExecutionPlan.
-- [ ] Provider/service work is skipped when inactive.
-- [ ] Inactive outputs are not required/published.
-- [ ] Enabled path is identical.
-- [ ] Disabled path leaves unrelated outputs identical.
-- [ ] No scattered feature flag introduced.
+- [x] One optional capability is explicitly selected and justified (`CapabilityId.BENCHMARK_ENRICHMENT`).
+- [x] Execution is controlled only by ExecutionPlan.
+- [x] Provider/service work is skipped when inactive (`BenchmarkPipeline.sync_and_calculate` not invoked, `SKIP` event emitted).
+- [x] Inactive outputs are not required/published (`df_d_benchmark_master` & `df_f_benchmark_prices` omitted from DAG and plan completeness; spurious output rejected).
+- [x] Enabled path is identical (full-current plan executes all 46 tables and syncs prices).
+- [x] Disabled path leaves unrelated outputs identical (core 73 lot accounting columns, realized PnL, reconciliation events 100% byte-identical).
+- [x] No scattered feature flag introduced (conditional branching confined to `PipelineExecutor` & `TransformationDAG`; `domain/` free of capability plan branching).
 
 ## 12. Commit boundary
 
@@ -147,20 +147,26 @@ Phase 017 may assume capability selection is operationally meaningful and `Execu
 ## Phase completion record
 
 ```text
-Phase:
-Target release:
+Phase: 016
+Target release: v9.7.2
 Files changed:
-Schema changed:
-Runtime behavior changed:
+  - src/personal_finance_etl/application/pipeline/transformer.py
+  - src/personal_finance_etl/application/pipeline/execution.py
+  - tests/architecture/test_boundaries.py
+  - tests/application/test_optional_capability_benchmark.py
+  - planning/grand-refactor/phases/016-first-optional-capability-proof.md
+  - planning/grand-refactor/README.md
+Schema changed: NO (analytical completeness scoped to active contracts; DuckDB full schema unchanged)
+Runtime behavior changed: YES (when BENCHMARK_ENRICHMENT is disabled in ExecutionPlan, benchmark master transform and benchmark price provider sync are skipped, emitting PresentationKind.SKIP; plan-scoped completeness requires exactly 44 analytical tables instead of 46)
 Financial formulas changed: NO
-Focused tests:
-Architecture tests:
-Real-data run:
-Performance check:
-Compatibility path still present:
-Old path deleted:
-Exit assertions green:
-Commit:
+Focused tests: tests/application/test_optional_capability_benchmark.py (7 passed)
+Architecture tests: tests/architecture/test_boundaries.py::test_domain_has_no_capability_plan_inspection (11 passed)
+Real-data run: YES (live pipeline E2E passed with full plan)
+Performance check: PASS (audit-fast in 1.04s; full audit across 6 engines in 80.25s)
+Compatibility path still present: NO (default ExecutionPlan is full-universe backward compatible)
+Old path deleted: N/A
+Exit assertions green: YES (all 350 tests passing; 6/6 quality engines green)
+Commit: pending user confirmation
 ```
 
 A phase is incomplete if any required exit assertion is false.

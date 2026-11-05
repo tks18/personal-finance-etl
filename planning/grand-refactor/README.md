@@ -48,7 +48,7 @@ If code evidence contradicts a phase, stop and amend the phase before changing t
 | 013 | Canonical Silver vocabulary cutover | v9.6.4 | [x] |
 | 014 | Capability graph | v9.7.0 | [x] |
 | 015 | Execution planner and plan-scoped completeness | v9.7.1 | [x] |
-| 016 | First optional capability proof | v9.7.2 | [ ] |
+| 016 | First optional capability proof | v9.7.2 | [x] |
 | 017 | Production source configuration loader | v9.8.0 | [ ] |
 | 018 | Mapping and normalization engine | v9.8.1 | [ ] |
 | 019 | Identity integration and current mapping migration | v9.8.2 | [ ] |
