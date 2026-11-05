@@ -13,6 +13,7 @@ Owns
 - Canonical typed observability and telemetry contracts (ObservabilityEvent, EventCode).
 - Authoritative Silver and Gold semantic inventories, column classifications, and dispositions.
 - Canonical provenance and artifact metadata contracts (ProvenanceRef, ArtifactMetadata).
+- Provider-neutral market vocabulary and symbol mapping contracts (ProviderSymbolMapping, ProviderSymbolRegistry).
 
 Does not own
 -------------
@@ -49,6 +50,10 @@ from personal_finance_etl.contracts.lifecycle import (
     FailureDomain,
     SyncSummaryRecord,
     classify_failure_domain,
+)
+from personal_finance_etl.contracts.market import (
+    ProviderSymbolMapping,
+    ProviderSymbolRegistry,
 )
 from personal_finance_etl.contracts.observability import (
     DiagnosticSeverity,
@@ -136,6 +141,8 @@ __all__ = [
     "PROVIDER_GENERATED_DATASETS",
     "PresentationKind",
     "ProvenanceRef",
+    "ProviderSymbolMapping",
+    "ProviderSymbolRegistry",
     "ProviderType",
     "RestoreOutcome",
     "RestoreResult",

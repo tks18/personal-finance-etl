@@ -46,6 +46,7 @@ from personal_finance_etl.contracts.application import EngineStage
 from personal_finance_etl.contracts.event_transport import EventQueue
 from personal_finance_etl.contracts.extraction import ExtractionResult
 from personal_finance_etl.contracts.lifecycle import SyncSummaryRecord
+from personal_finance_etl.contracts.market import ProviderSymbolRegistry
 from personal_finance_etl.contracts.observability import (
     DiagnosticSeverity,
     EventCode,
@@ -69,6 +70,9 @@ from personal_finance_etl.infrastructure.providers.files.locator import (
     categorize_statement_files,
 )
 from personal_finance_etl.infrastructure.providers.files.sqlite import SQLiteExtractor
+from personal_finance_etl.infrastructure.providers.market import (
+    build_provider_symbol_registry,
+)
 from personal_finance_etl.infrastructure.warehouse.bronze import BronzeLayer
 from personal_finance_etl.infrastructure.warehouse.connection import DuckDBManager
 from personal_finance_etl.infrastructure.warehouse.gold import GoldLayer
@@ -193,6 +197,7 @@ class PipelineExecutor:
         self.rules = rules
         self.emitter = emitter or get_global_emitter()
         self.dfs: dict[str, pl.DataFrame] = {}
+        self.provider_symbols: ProviderSymbolRegistry | None = None
 
     def extract(
         self,
@@ -224,6 +229,11 @@ class PipelineExecutor:
         extracted_data : ExtractionResult
             Extracted source datasets.
         """
+        self.provider_symbols = build_provider_symbol_registry(
+            currency_mapping=extracted_data.currency_mapping_raw,
+            benchmark_master=extracted_data.raw_benchmark_master,
+            benchmark_mapping=extracted_data.stg_benchmark_mapping,
+        )
         transformer = TransformationDAG(
             self.cfg, self.status_queue, self.rules, emitter=self.emitter
         )
@@ -244,6 +254,7 @@ class PipelineExecutor:
             df_market=self.dfs.get("df_f_investment_market_data"),
             df_purchase=self.dfs.get("df_f_tf_inv_purchase"),
             df_master=self.dfs["df_d_benchmark_master"],
+            provider_symbols=self.provider_symbols,
         )
 
     def process_currency(self, cp: ControlPlane, bronze: BronzeLayer) -> None:
@@ -278,6 +289,7 @@ class PipelineExecutor:
             df_currency=self.dfs["df_d_currency"],
             global_start_date=global_start_date,
             global_end_date=global_end_date,
+            provider_symbols=self.provider_symbols,
         )
 
     def _resolve_us_market_range(self) -> tuple[date, date]:
@@ -349,6 +361,7 @@ class PipelineExecutor:
             df_fx=self.dfs["df_f_currency_fx_rates"],
             global_start_date=start_date,
             global_end_date=end_date,
+            provider_symbols=self.provider_symbols,
         )
         self._merge_us_market_data(df_us_market)
 

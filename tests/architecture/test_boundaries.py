@@ -250,3 +250,28 @@ def test_silver_ddl_has_no_legacy_path_columns() -> None:
 
     assert "__file_name__" not in SILVER_DDL
     assert "__folder_path__" not in SILVER_DDL
+
+
+def test_silver_ddl_has_no_provider_specific_columns() -> None:
+    """Verify that physical Silver DDL declares zero external provider-specific ticker columns."""
+    from personal_finance_etl.infrastructure.warehouse.schema.silver import SILVER_DDL
+
+    assert "yF_Ticker" not in SILVER_DDL
+    assert "YAHOO_TICKER" not in SILVER_DDL
+
+
+def test_domain_has_no_provider_ticker_references() -> None:
+    """Verify that pure financial domain layer contains zero vendor ticker references."""
+    domain_path = Path("src/personal_finance_etl/domain")
+    forbidden_terms = {"yF_Ticker", "YAHOO_TICKER"}
+    violations: list[str] = []
+
+    for py_file in domain_path.rglob("*.py"):
+        content = py_file.read_text(encoding="utf-8")
+        for term in forbidden_terms:
+            if term in content:
+                violations.append(f"{py_file}: contains forbidden vendor symbol '{term}'")
+
+    assert not violations, (
+        "Forbidden provider ticker references found in pure domain layer:\n" + "\n".join(violations)
+    )

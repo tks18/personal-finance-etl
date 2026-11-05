@@ -115,13 +115,13 @@ Do not:
 
 ## 11. Completion checklist
 
-- [ ] Canonical identity is provider-neutral.
-- [ ] Yahoo symbols live in provider/reference mapping.
-- [ ] Provider requests unchanged.
-- [ ] Domain/application code uses neutral vocabulary.
-- [ ] Silver provider residue closed in manifest.
-- [ ] Financial outputs and IDs unchanged.
-- [ ] No hot-path N+1 mapping.
+- [x] Canonical identity is provider-neutral.
+- [x] Yahoo symbols live in provider/reference mapping.
+- [x] Provider requests unchanged.
+- [x] Domain/application code uses neutral vocabulary.
+- [x] Silver provider residue closed in manifest.
+- [x] Financial outputs and IDs unchanged.
+- [x] No hot-path N+1 mapping.
 
 ## 12. Commit boundary
 
@@ -136,20 +136,40 @@ Phase 013 may assume source-path and provider-specific vocabulary have both been
 ## Phase completion record
 
 ```text
-Phase:
-Target release:
+Phase: 012 - Provider-Neutral Market Vocabulary
+Target release: v9.6.3
 Files changed:
-Schema changed:
-Runtime behavior changed:
+  - src/personal_finance_etl/contracts/market.py (new)
+  - src/personal_finance_etl/contracts/__init__.py
+  - src/personal_finance_etl/contracts/silver_column_dispositions.json
+  - src/personal_finance_etl/infrastructure/warehouse/schema/silver.py
+  - src/personal_finance_etl/domain/market/benchmarks.py
+  - src/personal_finance_etl/domain/market/fx.py
+  - src/personal_finance_etl/domain/household/transforms/reference_dimensions.py
+  - src/personal_finance_etl/domain/investments/transforms/common.py
+  - src/personal_finance_etl/domain/investments/transforms/us_equity.py
+  - src/personal_finance_etl/domain/investments/classification.py
+  - src/personal_finance_etl/infrastructure/providers/market/symbol_mapping.py (new)
+  - src/personal_finance_etl/infrastructure/providers/market/__init__.py
+  - src/personal_finance_etl/infrastructure/providers/market/currency.py
+  - src/personal_finance_etl/infrastructure/providers/market/benchmark.py
+  - src/personal_finance_etl/application/ingestion/market_sync.py
+  - src/personal_finance_etl/application/pipeline/execution.py
+  - tests/contracts/test_market_symbols.py (new)
+  - tests/contracts/test_semantic_inventory.py
+  - tests/architecture/test_boundaries.py
+  - tests/domain/test_financial_classification.py
+Schema changed: YES (dropped 5 vendor columns: yF_Ticker from d_Currency, f_Currency_FX_Rates, d_Investment_Benchmark_Master, f_Investment_Benchmark_Data; YAHOO_TICKER from d_Investment_Master; Silver columns reduced from 522 to 517)
+Runtime behavior changed: NO (provider symbols mapped via ProviderSymbolRegistry, requests identical)
 Financial formulas changed: NO
-Focused tests:
-Architecture tests:
-Real-data run:
-Performance check:
-Compatibility path still present:
-Old path deleted:
-Exit assertions green:
-Commit:
+Focused tests: tests/contracts/test_market_symbols.py, tests/contracts/test_semantic_inventory.py, tests/domain/test_financial_classification.py
+Architecture tests: tests/architecture/test_boundaries.py
+Real-data run: PASS (Full Shan 5-phase pipeline completed with 0 errors)
+Performance check: O(1) hash lookup via ProviderSymbolRegistry
+Compatibility path still present: NO (zero occurrences of yF_Ticker / YAHOO_TICKER in domain)
+Old path deleted: YES (5 Silver DDL columns and all domain references removed)
+Exit assertions green: YES
+Commit: refactor(market): isolate provider-specific symbols
 ```
 
 A phase is incomplete if any required exit assertion is false.

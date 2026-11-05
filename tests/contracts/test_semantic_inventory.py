@@ -102,9 +102,9 @@ def test_silver_column_disposition_ddl_exact_parity() -> None:
         (entry.physical_table.lower(), entry.column_name) for entry in SILVER_COLUMN_DISPOSITIONS
     }
 
-    # Total column count assertion (exactly 522 active physical columns)
-    assert len(ddl_table_col_pairs) == 522
-    assert len(SILVER_COLUMN_DISPOSITIONS) == 522
+    # Total column count assertion (exactly 517 active physical columns)
+    assert len(ddl_table_col_pairs) == 517
+    assert len(SILVER_COLUMN_DISPOSITIONS) == 517
 
     # Parity assertions: no missing columns, no extraneous manifest entries
     missing_in_manifest = ddl_table_col_pairs - manifest_table_col_pairs
@@ -123,12 +123,15 @@ def test_closed_provenance_columns_absent_from_silver_ddl() -> None:
         (table.lower(), col) for table, cols in ddl_cols_map.items() for col in cols
     }
 
-    closed_dispositions = [entry for entry in ALL_SILVER_COLUMN_DISPOSITIONS if not entry.is_active]
+    closed_dispositions = [
+        entry
+        for entry in ALL_SILVER_COLUMN_DISPOSITIONS
+        if not entry.is_active and entry.closed_in_phase == "011"
+    ]
     assert len(closed_dispositions) == 30
     assert len(ALL_SILVER_COLUMN_DISPOSITIONS) == 552
 
     for entry in closed_dispositions:
-        assert entry.closed_in_phase == "011"
         assert entry.column_name in ("__file_name__", "__folder_path__")
         assert (entry.physical_table.lower(), entry.column_name) not in ddl_table_col_pairs
 
@@ -136,6 +139,42 @@ def test_closed_provenance_columns_absent_from_silver_ddl() -> None:
     all_silver_cols = {col for _, cols in ddl_cols_map.items() for col in cols}
     assert "__file_name__" not in all_silver_cols
     assert "__folder_path__" not in all_silver_cols
+
+
+def test_closed_provider_columns_absent_from_silver_ddl() -> None:
+    """Verify that all 5 closed provider ticker columns are absent from physical Silver DDL."""
+    ddl_cols_map = _get_ddl_silver_columns()
+    ddl_table_col_pairs = {
+        (table.lower(), col) for table, cols in ddl_cols_map.items() for col in cols
+    }
+
+    closed_dispositions = [
+        entry
+        for entry in ALL_SILVER_COLUMN_DISPOSITIONS
+        if not entry.is_active and entry.closed_in_phase == "012"
+    ]
+    assert len(closed_dispositions) == 5
+
+    for entry in closed_dispositions:
+        assert entry.column_name in ("yF_Ticker", "YAHOO_TICKER")
+        assert (entry.physical_table.lower(), entry.column_name) not in ddl_table_col_pairs
+
+    # Assert that NO Silver table has yF_Ticker or YAHOO_TICKER in physical DDL
+    all_silver_cols = {col for _, cols in ddl_cols_map.items() for col in cols}
+    assert "yF_Ticker" not in all_silver_cols
+    assert "YAHOO_TICKER" not in all_silver_cols
+
+    # Verify zero active provider metadata columns remain in the lakehouse
+    active_provider_cols = [
+        entry
+        for entry in SILVER_COLUMN_DISPOSITIONS
+        if entry.classification == ColumnClassification.PROVIDER_METADATA
+    ]
+    assert len(active_provider_cols) == 0
+
+    # Total closed dispositions across all phases: 30 (phase 011) + 5 (phase 012) = 35
+    total_closed = [entry for entry in ALL_SILVER_COLUMN_DISPOSITIONS if not entry.is_active]
+    assert len(total_closed) == 35
 
 
 def test_zero_review_required() -> None:

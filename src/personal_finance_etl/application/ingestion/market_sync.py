@@ -18,6 +18,7 @@ Does not own
 from __future__ import annotations
 
 import os
+from collections.abc import Mapping
 from datetime import date
 
 import polars as pl
@@ -28,6 +29,7 @@ from personal_finance_etl.contracts.extraction import (
     ExtractionBatchResult,
     ExtractorEntityStatus,
 )
+from personal_finance_etl.contracts.market import ProviderSymbolRegistry
 from personal_finance_etl.contracts.observability import (
     EventCode,
     PresentationKind,
@@ -268,6 +270,7 @@ class CurrencyPipeline:
         df_currency: pl.DataFrame,
         global_start_date: date,
         global_end_date: date,
+        provider_symbols: ProviderSymbolRegistry | Mapping[str, str] | None = None,
     ) -> pl.DataFrame:
         """Run the Currency FX pipeline.
 
@@ -279,6 +282,8 @@ class CurrencyPipeline:
             Earliest required date for exchange rate continuous history.
         global_end_date : date
             Latest required date for exchange rate continuous history.
+        provider_symbols : ProviderSymbolRegistry | Mapping[str, str] | None, default None
+            Optional external provider symbol registry or mapping.
 
         Returns
         -------
@@ -298,7 +303,11 @@ class CurrencyPipeline:
             self.cp, self.status_queue, self.max_workers, emitter=self.emitter
         )
         batch_res = extractor.extract_currency_delta(
-            df_currency, global_start_date, global_end_date, df_bronze_cached
+            df_currency,
+            global_start_date,
+            global_end_date,
+            df_bronze_cached,
+            provider_symbols=provider_symbols,
         )
         log_provider_requests_and_assert(self.cp, batch_res, "Currency Extractor")
 
@@ -446,6 +455,7 @@ class BenchmarkPipeline:
         df_market: pl.DataFrame | None,
         df_purchase: pl.DataFrame | None,
         df_master: pl.DataFrame,
+        provider_symbols: ProviderSymbolRegistry | Mapping[str, str] | None = None,
     ) -> pl.DataFrame:
         """Extract missing benchmark index rates and produce continuous Silver benchmark table.
 
@@ -457,6 +467,8 @@ class BenchmarkPipeline:
             Trade purchase table for earliest investment bounds calculation.
         df_master : pl.DataFrame
             Instrument master reference table containing benchmark identifiers.
+        provider_symbols : ProviderSymbolRegistry | Mapping[str, str] | None, default None
+            Optional external provider symbol registry or mapping.
 
         Returns
         -------
@@ -478,6 +490,7 @@ class BenchmarkPipeline:
             global_start_date=start_date,
             global_end_date=end_date,
             df_bronze_cached=df_bronze_cached,
+            provider_symbols=provider_symbols,
         )
         log_provider_requests_and_assert(self.cp, batch_res, "Benchmark Extractor")
 
@@ -585,6 +598,7 @@ class USMarketPipeline:
         df_fx: pl.DataFrame,
         global_start_date: date,
         global_end_date: date,
+        provider_symbols: ProviderSymbolRegistry | Mapping[str, str] | None = None,
     ) -> pl.DataFrame:
         """Run the US Market Data pipeline.
 
@@ -602,6 +616,8 @@ class USMarketPipeline:
             Earliest required date for US stock quotes.
         global_end_date : date
             Latest required date for US stock quotes.
+        provider_symbols : ProviderSymbolRegistry | Mapping[str, str] | None, default None
+            Optional external provider symbol registry or mapping.
 
         Returns
         -------
@@ -616,13 +632,24 @@ class USMarketPipeline:
             return pl.DataFrame()
 
         active_isins = us_purchases["ISIN"].unique().to_list()
-        master_dict = dict(zip(df_master["ISIN"], df_master["YAHOO_TICKER"], strict=False))
 
         isin_ticker_map: dict[str, str] = {}
         for isin in active_isins:
-            name = str(master_dict.get(isin, ""))
-            if name:
-                isin_ticker_map[str(isin)] = name
+            str_isin = str(isin).strip()
+            ticker: str | None = None
+            if provider_symbols is not None:
+                if isinstance(provider_symbols, ProviderSymbolRegistry):
+                    ticker = provider_symbols.get_symbol(str_isin)
+                else:
+                    ticker = provider_symbols.get(str_isin)
+            elif "YAHOO_TICKER" in df_master.columns:
+                match = df_master.filter(pl.col("ISIN") == str_isin)
+                if not match.is_empty():
+                    val = match.select("YAHOO_TICKER").item()
+                    if val is not None:
+                        ticker = str(val).strip()
+            if ticker:
+                isin_ticker_map[str_isin] = ticker
 
         self.emitter.emit_event(
             event_code=EventCode.MARKET_FETCH_START,

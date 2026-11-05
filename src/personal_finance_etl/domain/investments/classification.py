@@ -16,6 +16,7 @@ Does not own
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import TypeVar, overload
 
 import polars as pl
@@ -131,8 +132,9 @@ def resolve_us_market_active_isins(
     df_purchase: pl.DataFrame | pl.LazyFrame,
     df_master: pl.DataFrame | pl.LazyFrame,
     default_currency_id: str = DEFAULT_DOMESTIC_CURRENCY,
+    provider_symbols: Mapping[str, str] | None = None,
 ) -> list[str]:
-    """Resolve active US / foreign market ISINs that possess valid vendor market tickers.
+    """Resolve active US / foreign market ISINs that possess valid trade activity.
 
     Parameters
     ----------
@@ -142,6 +144,11 @@ def resolve_us_market_active_isins(
         Harmonized instrument reference master dimension.
     default_currency_id : str, default "INR_INR"
         Base domestic reporting currency identifier.
+    provider_symbols : Mapping[str, str] | None, default None
+        Optional provider symbol mapping (e.g. ISIN to market ticker). When supplied,
+        only ISINs present with non-empty market symbols in the mapping are retained.
+        When omitted, candidates are resolved against instrument master records using
+        canonical US / foreign instrument classification.
 
     Returns
     -------
@@ -162,9 +169,16 @@ def resolve_us_market_active_isins(
     if not active_candidate_isins or df_m.is_empty():
         return []
 
-    valid_master = df_m.filter(
-        pl.col("ISIN").is_in(list(active_candidate_isins))
-        & pl.col("YAHOO_TICKER").is_not_null()
-        & (pl.col("YAHOO_TICKER").cast(pl.String).str.strip_chars() != "")
-    )
+    if provider_symbols is not None:
+        valid_isins = [
+            isin
+            for isin in active_candidate_isins
+            if isin in provider_symbols and str(provider_symbols[isin]).strip() != ""
+        ]
+        valid_master = df_m.filter(pl.col("ISIN").is_in(valid_isins))
+    else:
+        valid_master = df_m.filter(
+            pl.col("ISIN").is_in(list(active_candidate_isins))
+            & is_us_market_instrument_expr(default_currency_id=default_currency_id)
+        )
     return valid_master["ISIN"].unique().to_list()

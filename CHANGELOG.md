@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [9.6.3](https://github.com/tks18/personal-finance-etl/compare/9.6.2...9.6.3) (2026-11-05)
+
+
+### Features 🔥
+
+* **contracts:** add provider symbol registry and close manifest entries ([510bf1d](https://github.com/tks18/personal-finance-etl/commit/510bf1d74da50087be83d1c1a1232b4de5febfd4))
+
+
+### Code Refactoring 🖌
+
+* **domain:** decouple provider tickers ([e1fcaa1](https://github.com/tks18/personal-finance-etl/commit/e1fcaa198bce42fc3e8389ba29bfeb4497f59279))
+* **market:** adapt extractors to provider symbol registry ([203b44c](https://github.com/tks18/personal-finance-etl/commit/203b44c9220bd9d7b17fa2ace6ba54f96180c7bf))
+* **warehouse:** drop provider ticker columns from silver ddl ([fc53957](https://github.com/tks18/personal-finance-etl/commit/fc53957f67e35d942838ebf8e044d4bc09eb0879))
+
+
+### Tests 🧪
+
+* **architecture:** enforce no provider columns in silver ([cdf94bd](https://github.com/tks18/personal-finance-etl/commit/cdf94bd861e1ac556644f46ee0bd65eb9fe7904d))
+* **contracts:** assert provider columns absent from silver ddl ([736d4c6](https://github.com/tks18/personal-finance-etl/commit/736d4c6659e8dd5d5cbce62b438f260aa4f83372))
+
+
+### Docs 📃
+
+* **refactor:** complete phase 012 checklist and records ([92948dc](https://github.com/tks18/personal-finance-etl/commit/92948dcdf049452d8cc0cd42f44061146e7f7644))
+
 ### [9.6.2](https://github.com/tks18/personal-finance-etl/compare/9.6.1...9.6.2) (2026-11-05)
 
 

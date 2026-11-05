@@ -44,7 +44,7 @@ def _validate_and_filter_clean_benchmark_observations(
             & (~pl.col("Close").is_finite() | (pl.col("Close") <= 0))
             & ~pl.col("Is_Closure_Gap").fill_null(False)
         )
-        .select(["Date", "yF_Ticker", "Close"])
+        .select(["Date", "ID", "Close"])
         .head(10)
     )
     if not invalid_source_prices.is_empty():
@@ -60,8 +60,8 @@ def _validate_and_filter_clean_benchmark_observations(
             & (pl.col("Close") > 0)
             & ~pl.col("Is_Closure_Gap").fill_null(False)
         )
-        .sort(["Date", "yF_Ticker"])
-        .unique(subset=["Date", "yF_Ticker"], keep="last")
+        .sort(["Date", "ID"])
+        .unique(subset=["Date", "ID"], keep="last")
     )
 
     if df_clean.is_empty():
@@ -74,16 +74,16 @@ def _validate_and_filter_clean_benchmark_observations(
 
 
 def _build_benchmark_continuous_spine(
-    tickers: list[str],
+    benchmark_ids: list[str],
     global_start_date: date,
     global_end_date: date,
 ) -> pl.DataFrame:
-    """Build a continuous daily Cartesian date spine for all active benchmark tickers.
+    """Build a continuous daily Cartesian date spine for all active benchmark IDs.
 
     Parameters
     ----------
-    tickers : list[str]
-        List of unique active benchmark ticker symbols.
+    benchmark_ids : list[str]
+        List of unique active benchmark identifier strings.
     global_start_date : date
         Start date of the required continuous daily spine.
     global_end_date : date
@@ -92,7 +92,7 @@ def _build_benchmark_continuous_spine(
     Returns
     -------
     pl.DataFrame
-        Cross-joined continuous date and ticker spine.
+        Cross-joined continuous date and benchmark ID spine.
     """
     df_full_idx = pl.DataFrame(
         {
@@ -106,9 +106,9 @@ def _build_benchmark_continuous_spine(
     )
 
     return df_full_idx.join(
-        pl.DataFrame({"yF_Ticker": tickers}),
+        pl.DataFrame({"ID": benchmark_ids}),
         how="cross",
-    ).sort(["Date", "yF_Ticker"])
+    ).sort(["Date", "ID"])
 
 
 def _apply_benchmark_asof_and_staleness(
@@ -121,7 +121,7 @@ def _apply_benchmark_asof_and_staleness(
     Parameters
     ----------
     df_spine : pl.DataFrame
-        Continuous daily date and ticker spine.
+        Continuous daily date and benchmark ID spine.
     df_clean : pl.DataFrame
         Clean benchmark observations.
     max_benchmark_staleness_days : int, default=7
@@ -134,14 +134,14 @@ def _apply_benchmark_asof_and_staleness(
     """
     df_observations = df_clean.with_columns(
         pl.col("Date").alias("Benchmark_Observation_Date")
-    ).sort(["Date", "yF_Ticker"])
+    ).sort(["Date", "ID"])
 
     df_filled = df_spine.join_asof(
         df_observations,
         on="Date",
-        by="yF_Ticker",
+        by="ID",
         strategy="backward",
-    ).sort(["Date", "yF_Ticker"])
+    ).sort(["Date", "ID"])
 
     return df_filled.with_columns(
         (pl.col("Date") - pl.col("Benchmark_Observation_Date"))
@@ -168,7 +168,7 @@ def _apply_benchmark_asof_and_staleness(
 
 
 def _project_final_benchmark_schema(df_filled: pl.DataFrame) -> pl.DataFrame:
-    """Drop temporary tracking and lineage columns to finalize Silver benchmark schema.
+    """Project final Silver benchmark schema columns in standard sequence.
 
     Parameters
     ----------
@@ -178,22 +178,24 @@ def _project_final_benchmark_schema(df_filled: pl.DataFrame) -> pl.DataFrame:
     Returns
     -------
     pl.DataFrame
-        Final cleaned Silver benchmark DataFrame.
+        Final cleaned Silver benchmark DataFrame matching physical Silver DDL.
     """
-    cols_to_drop = [
-        c
-        for c in [
-            "__file_name__",
-            "__folder_path__",
-            "__ingested_at__",
-            "Benchmark_Observation_Date",
-            "Benchmark_Age_Days",
-        ]
-        if c in df_filled.columns
+    canonical_cols = [
+        "Date",
+        "ID",
+        "CURRENCY_ID",
+        "Benchmark_Name",
+        "Close",
+        "Data_Provider",
+        "Extraction_Time",
+        "Requested_Start",
+        "Requested_End",
+        "Is_Closure_Gap",
+        "Is_Imputed",
+        "artifact_id",
     ]
-    if cols_to_drop:
-        return df_filled.drop(cols_to_drop)
-    return df_filled
+    available_cols = [c for c in canonical_cols if c in df_filled.columns]
+    return df_filled.select(available_cols)
 
 
 def transform_benchmark_data(
@@ -230,11 +232,11 @@ def transform_benchmark_data(
         return pl.DataFrame()
 
     df_clean = _validate_and_filter_clean_benchmark_observations(df_bronze_benchmark)
-    tickers = sorted(df_clean["yF_Ticker"].unique().to_list())
-    if not tickers:
-        raise ValueError("Benchmark Bronze data has no tickers with valid observations.")
+    benchmark_ids = sorted(df_clean["ID"].unique().to_list())
+    if not benchmark_ids:
+        raise ValueError("Benchmark Bronze data has no benchmarks with valid observations.")
 
-    df_spine = _build_benchmark_continuous_spine(tickers, global_start_date, global_end_date)
+    df_spine = _build_benchmark_continuous_spine(benchmark_ids, global_start_date, global_end_date)
     df_filled = _apply_benchmark_asof_and_staleness(
         df_spine, df_clean, max_benchmark_staleness_days=7
     )

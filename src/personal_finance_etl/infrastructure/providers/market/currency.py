@@ -36,6 +36,7 @@ from personal_finance_etl.contracts.extraction import (
     ExtractorEntityResult,
     ExtractorEntityStatus,
 )
+from personal_finance_etl.contracts.market import ProviderSymbolRegistry
 from personal_finance_etl.contracts.observability import (
     DiagnosticSeverity,
     EventCode,
@@ -133,12 +134,47 @@ class CurrencyExtractor:
             pl.col("Close").is_null().alias("Is_Closure_Gap"),
         ).drop("Close")
 
+    @staticmethod
+    def _resolve_currency_ticker(
+        row: Mapping[str, object],
+        provider_symbols: ProviderSymbolRegistry | Mapping[str, str] | None = None,
+    ) -> str:
+        """Resolve external vendor symbol for currency FX rate extraction.
+
+        Parameters
+        ----------
+        row : Mapping[str, object]
+            Currency metadata record.
+        provider_symbols : ProviderSymbolRegistry | Mapping[str, str] | None, default None
+            Optional provider symbol registry or mapping.
+
+        Returns
+        -------
+        str
+            Resolved external vendor symbol or empty string.
+        """
+        if provider_symbols is not None:
+            uid = str(row.get("UID", "")).strip()
+            target = str(row.get("Target_Currency_Code", "")).strip()
+            if isinstance(provider_symbols, ProviderSymbolRegistry):
+                sym = provider_symbols.get_fx_symbol(uid, target) or provider_symbols.get_symbol(
+                    uid
+                )
+                if sym:
+                    return sym
+            else:
+                sym = provider_symbols.get(uid)
+                if sym:
+                    return str(sym).strip()
+        return str(row.get("yF_Ticker", "")).strip()
+
     def _fetch_ticker_delta(
         self,
         row: Mapping[str, object],
         start_dt: date,
         end_dt: date,
         max_cached_date: date | None,
+        resolved_ticker: str | None = None,
     ) -> ExtractorEntityResult:
         """Fetch delta observations for a single currency FX ticker.
 
@@ -152,13 +188,15 @@ class CurrencyExtractor:
             Global requested end boundary.
         max_cached_date : date | None
             Latest cached observation date in Bronze for this currency.
+        resolved_ticker : str | None, default None
+            Explicitly resolved external ticker symbol.
 
         Returns
         -------
         ExtractorEntityResult
             Result container with status, payload, and diagnostics.
         """
-        ticker = str(row.get("yF_Ticker", "")).strip()
+        ticker = resolved_ticker or str(row.get("yF_Ticker", "")).strip()
         if not ticker:
             diagnostics.debug("Currency Extractor: Skipping empty ticker %s", row.get("UID"))
             return ExtractorEntityResult(
@@ -247,6 +285,7 @@ class CurrencyExtractor:
         global_start_date: date,
         global_end_date: date,
         df_bronze_cached: pl.DataFrame,
+        provider_symbols: ProviderSymbolRegistry | Mapping[str, str] | None = None,
     ) -> ExtractionBatchResult:
         """Extract incremental currency foreign exchange rates via Yahoo Finance.
 
@@ -260,6 +299,8 @@ class CurrencyExtractor:
             Extraction window end boundary.
         df_bronze_cached : pl.DataFrame
             Existing Bronze cache to identify latest available exchange rates.
+        provider_symbols : ProviderSymbolRegistry | Mapping[str, str] | None, default None
+            Optional external provider symbol registry or mapping.
 
         Returns
         -------
@@ -276,11 +317,10 @@ class CurrencyExtractor:
             start_date=global_start_date,
             end_date=global_end_date,
         )
-        batch_result.requested_entities = [
-            str(r.get("yF_Ticker", "")).strip()
-            for r in tickers_df
-            if str(r.get("yF_Ticker", "")).strip()
+        resolved_rows = [
+            (r, self._resolve_currency_ticker(r, provider_symbols)) for r in tickers_df
         ]
+        batch_result.requested_entities = [ticker for _, ticker in resolved_rows if ticker]
 
         cache_map = self._build_cache_map(df_bronze_cached)
         self._emit_event(
@@ -302,9 +342,10 @@ class CurrencyExtractor:
                     row,
                     global_start_date,
                     global_end_date,
-                    cache_map.get(str(row.get("yF_Ticker", "")).strip()),
-                ): str(row.get("yF_Ticker", "Unknown"))
-                for row in tickers_df
+                    cache_map.get(ticker) or cache_map.get(str(row.get("UID", "")).strip()),
+                    ticker,
+                ): ticker or str(row.get("UID", "Unknown"))
+                for row, ticker in resolved_rows
             }
 
             collect_extraction_futures(
