@@ -71,6 +71,13 @@ CREATE TABLE IF NOT EXISTS cp_rules_snapshots (
     created_at TIMESTAMP NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS cp_plan_snapshots (
+    snapshot_id TEXT PRIMARY KEY,
+    content_hash TEXT NOT NULL,
+    canonical_payload TEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS cp_runs (
     run_id TEXT PRIMARY KEY,
     started_at TIMESTAMP NOT NULL,
@@ -81,9 +88,11 @@ CREATE TABLE IF NOT EXISTS cp_runs (
     schema_version TEXT,
     settings_snapshot_id TEXT,
     rules_snapshot_id TEXT,
+    plan_snapshot_id TEXT,
     execution_log BLOB,
     FOREIGN KEY(settings_snapshot_id) REFERENCES cp_settings_snapshots(snapshot_id),
-    FOREIGN KEY(rules_snapshot_id) REFERENCES cp_rules_snapshots(snapshot_id)
+    FOREIGN KEY(rules_snapshot_id) REFERENCES cp_rules_snapshots(snapshot_id),
+    FOREIGN KEY(plan_snapshot_id) REFERENCES cp_plan_snapshots(snapshot_id)
 );
 
 CREATE TABLE IF NOT EXISTS cp_run_failures (
@@ -179,6 +188,12 @@ REQUIRED_SCHEMA_COLUMNS: dict[str, set[str]] = {
         "canonical_payload",
         "created_at",
     },
+    "cp_plan_snapshots": {
+        "snapshot_id",
+        "content_hash",
+        "canonical_payload",
+        "created_at",
+    },
     "cp_runs": {
         "run_id",
         "started_at",
@@ -189,6 +204,7 @@ REQUIRED_SCHEMA_COLUMNS: dict[str, set[str]] = {
         "schema_version",
         "settings_snapshot_id",
         "rules_snapshot_id",
+        "plan_snapshot_id",
         "execution_log",
     },
     "cp_file_registry": {
@@ -332,6 +348,11 @@ def _migrate_runs(conn: sqlite3.Connection, existing_tables: set[str]) -> None:
             conn.execute(
                 "ALTER TABLE cp_runs ADD COLUMN commit_state TEXT NOT NULL DEFAULT 'NOT_STARTED'"
             )
+        if "plan_snapshot_id" not in cols:
+            diagnostics.info(
+                "SQLite Control Plane: Migrating cp_runs: adding plan_snapshot_id column."
+            )
+            conn.execute("ALTER TABLE cp_runs ADD COLUMN plan_snapshot_id TEXT")
 
 
 def _migrate_failures(conn: sqlite3.Connection, existing_tables: set[str]) -> None:

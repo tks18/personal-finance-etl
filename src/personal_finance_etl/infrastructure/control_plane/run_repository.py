@@ -30,6 +30,7 @@ from datetime import date, datetime
 import polars as pl
 
 from personal_finance_etl.config.financial_rules import FinancialRules
+from personal_finance_etl.contracts.execution_plan import ExecutionPlan
 from personal_finance_etl.contracts.extraction import ExtractionProviderRequest
 from personal_finance_etl.contracts.lifecycle import (
     CommitState,
@@ -63,15 +64,20 @@ SQL_INSERT_RULES_SNAPSHOT = (
     "(snapshot_id, content_hash, canonical_payload, created_at) VALUES (?, ?, ?, ?)"
 )
 
+SQL_INSERT_PLAN_SNAPSHOT = (
+    "INSERT OR IGNORE INTO cp_plan_snapshots "
+    "(snapshot_id, content_hash, canonical_payload, created_at) VALUES (?, ?, ?, ?)"
+)
+
 SQL_INSERT_RUN = """
 INSERT INTO cp_runs (
     run_id, started_at, status, commit_state, application_version, schema_version,
-    settings_snapshot_id, rules_snapshot_id
-) VALUES (?, ?, 'STARTED', 'STARTED', ?, ?, ?, ?)
+    settings_snapshot_id, rules_snapshot_id, plan_snapshot_id
+) VALUES (?, ?, 'STARTED', 'STARTED', ?, ?, ?, ?, ?)
 """
 
 SQL_SELECT_RUN_METADATA = (
-    "SELECT settings_snapshot_id, rules_snapshot_id FROM cp_runs WHERE run_id = ?"
+    "SELECT settings_snapshot_id, rules_snapshot_id, plan_snapshot_id FROM cp_runs WHERE run_id = ?"
 )
 
 SQL_UPDATE_RUN_STATUS = "UPDATE cp_runs SET status = ? WHERE run_id = ?"
@@ -248,7 +254,12 @@ class RunRepository:
         except importlib.metadata.PackageNotFoundError:
             return "v-unknown"
 
-    def start_run(self, cfg_json: str | None = None, rules_json: str | None = None) -> str:
+    def start_run(
+        self,
+        cfg_json: str | None = None,
+        rules_json: str | None = None,
+        plan: ExecutionPlan | None = None,
+    ) -> str:
         """Initialize a new pipeline execution run record and snapshot configs.
 
         Parameters
@@ -257,6 +268,8 @@ class RunRepository:
             Serialized settings snapshot payload.
         rules_json : str, optional
             Serialized financial rules snapshot payload.
+        plan : ExecutionPlan, optional
+            Active execution plan to persist and associate with run.
 
         Returns
         -------
@@ -267,6 +280,7 @@ class RunRepository:
         now = datetime.now().isoformat(timespec="seconds")
         settings_id: str | None = None
         rules_id: str | None = None
+        plan_id: str | None = None
         with self.db.atomic():
             if cfg_json:
                 canonical_cfg = self._canonical_json(cfg_json)
@@ -284,6 +298,14 @@ class RunRepository:
                     SQL_INSERT_RULES_SNAPSHOT,
                     (rules_id, digest_rules, canonical_rules, now),
                 )
+            if plan is not None:
+                canonical_plan = plan.to_canonical_json()
+                digest_plan = plan.plan_fingerprint.removeprefix("plan_")
+                plan_id = plan.plan_fingerprint
+                self.db.conn.execute(
+                    SQL_INSERT_PLAN_SNAPSHOT,
+                    (plan_id, digest_plan, canonical_plan, now),
+                )
             self.db.conn.execute(
                 SQL_INSERT_RUN,
                 (
@@ -293,9 +315,40 @@ class RunRepository:
                     f"v{self.db.SCHEMA_VERSION}",
                     settings_id,
                     rules_id,
+                    plan_id,
                 ),
             )
         return run_id
+
+    def log_plan_snapshot(self, run_id: str, plan: ExecutionPlan) -> str:
+        """Persist an execution plan snapshot and link it to an active run record.
+
+        Parameters
+        ----------
+        run_id : str
+            Active run identifier.
+        plan : ExecutionPlan
+            Active execution plan to snapshot.
+
+        Returns
+        -------
+        str
+            Snapshot ID of the persisted execution plan.
+        """
+        now = datetime.now().isoformat(timespec="seconds")
+        canonical_plan = plan.to_canonical_json()
+        digest_plan = plan.plan_fingerprint.removeprefix("plan_")
+        plan_id = plan.plan_fingerprint
+        with self.db.atomic():
+            self.db.conn.execute(
+                SQL_INSERT_PLAN_SNAPSHOT,
+                (plan_id, digest_plan, canonical_plan, now),
+            )
+            self.db.conn.execute(
+                "UPDATE cp_runs SET plan_snapshot_id = ? WHERE run_id = ?",
+                (plan_id, run_id),
+            )
+        return plan_id
 
     def get_run_metadata(self, run_id: str) -> dict[str, str | None]:
         """Fetch snapshot IDs associated with a run.
@@ -308,14 +361,18 @@ class RunRepository:
         Returns
         -------
         dict[str, str | None]
-            Map containing settings_snapshot_id and rules_snapshot_id.
+            Map containing settings_snapshot_id, rules_snapshot_id, and plan_snapshot_id.
         """
         row = self.db.conn.execute(
             SQL_SELECT_RUN_METADATA,
             (run_id,),
         ).fetchone()
         if row:
-            return {"settings_snapshot_id": row[0], "rules_snapshot_id": row[1]}
+            return {
+                "settings_snapshot_id": row[0],
+                "rules_snapshot_id": row[1],
+                "plan_snapshot_id": row[2],
+            }
         return {}
 
     def update_run_status(self, run_id: str, status: str) -> None:
