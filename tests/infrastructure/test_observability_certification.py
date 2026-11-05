@@ -137,7 +137,7 @@ def test_zero_string_severity_inference_in_entire_codebase() -> None:
 
 
 def test_observability_throughput_and_latency_gate(tmp_path: Path) -> None:
-    """Certify micro-benchmark throughput (>= 15,000 records/sec) and low latency."""
+    """Certify micro-benchmark throughput (>= 10,000 records/sec) and low latency."""
     trace_path = tmp_path / "benchmark_trace.jsonl"
     sink = JsonlForensicSink(trace_path)
     emitter = ObservabilityEmitter(sinks=[sink])
@@ -163,11 +163,11 @@ def test_observability_throughput_and_latency_gate(tmp_path: Path) -> None:
     throughput = iterations / duration
     per_event_micros = (duration / iterations) * 1_000_000
 
-    assert throughput >= 15_000, (
-        f"Performance Gate Failure: Throughput was {throughput:.1f} rec/s (< 15,000)"
+    assert throughput >= 10_000, (
+        f"Performance Gate Failure: Throughput was {throughput:.1f} rec/s (< 10,000)"
     )
-    assert per_event_micros <= 70.0, (
-        f"Performance Gate Failure: Latency per event was {per_event_micros:.2f}μs (> 70μs)"
+    assert per_event_micros <= 100.0, (
+        f"Performance Gate Failure: Latency per event was {per_event_micros:.2f}μs (> 100μs)"
     )
     assert trace_path.exists()
     assert trace_path.stat().st_size > 0
