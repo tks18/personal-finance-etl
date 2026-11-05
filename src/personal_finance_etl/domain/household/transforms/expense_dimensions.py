@@ -27,6 +27,15 @@ def transform_d_expense_category(
     df_lazy: pl.LazyFrame, column_mapping: dict[str, str]
 ) -> pl.LazyFrame:
     """Execute the PQ logic for Expense Categories (TYPE = 1)."""
+    cols = [
+        "S_NO",
+        "MODIFY_DATE",
+        "UID",
+        "CATEGORY_NAME",
+        "ORDER_SEQUENCE",
+        "artifact_id",
+    ]
+
     return (
         df_lazy.rename(column_mapping)
         .with_columns(pl.col("IS_DEL").cast(pl.String))
@@ -35,17 +44,7 @@ def transform_d_expense_category(
             (pl.col("TYPE") == 1)
             & (pl.col("CATEGORY_ID").is_null() | (pl.col("CATEGORY_ID").str.len_chars() < 1))
         )
-        .select(
-            [
-                "__file_name__",
-                "__folder_path__",
-                "S_NO",
-                "MODIFY_DATE",
-                "UID",
-                "CATEGORY_NAME",
-                "ORDER_SEQUENCE",
-            ]
-        )
+        .select(cols)
     )
 
 
@@ -53,6 +52,16 @@ def transform_d_expense_subcategory(
     df_lazy: pl.LazyFrame, column_mapping: dict[str, str], rules: FinancialRules | None = None
 ) -> pl.LazyFrame:
     """Execute the PQ logic for Expense Subcategories."""
+    cols = [
+        "S_NO",
+        "MODIFY_DATE",
+        "UID",
+        "CATEGORY_NAME",
+        "ORDER_SEQUENCE",
+        "CATEGORY_ID",
+        "artifact_id",
+    ]
+
     df_transformed = (
         df_lazy.rename(column_mapping)
         .with_columns(pl.col("IS_DEL").cast(pl.String))
@@ -62,18 +71,7 @@ def transform_d_expense_subcategory(
             & pl.col("CATEGORY_ID").is_not_null()
             & (pl.col("CATEGORY_ID").str.len_chars() > 0)
         )
-        .select(
-            [
-                "__file_name__",
-                "__folder_path__",
-                "S_NO",
-                "MODIFY_DATE",
-                "UID",
-                "CATEGORY_NAME",
-                "ORDER_SEQUENCE",
-                "CATEGORY_ID",
-            ]
-        )
+        .select(cols)
     )
 
     if rules:

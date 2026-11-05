@@ -6,6 +6,7 @@ Owns
 - Inter-process file locking for the pipeline control plane (pipeline.lock).
 - Atomic run ID propagation across control plane subsystems.
 - Schema verification and crash recovery trigger upon startup.
+- On-demand lineage resolution to descriptive artifact metadata (get_artifact_metadata).
 
 Does not own
 -------------
@@ -19,6 +20,7 @@ import os
 
 from filelock import FileLock, Timeout
 
+from personal_finance_etl.contracts.provenance import ArtifactMetadata
 from personal_finance_etl.infrastructure.control_plane.artifact_repository import ArtifactRepository
 from personal_finance_etl.infrastructure.control_plane.connection import SQLiteManager
 from personal_finance_etl.infrastructure.control_plane.file_sync import FileSyncService
@@ -114,3 +116,18 @@ class ControlPlane:
     def rollback(self) -> None:
         """Rollback the active SQLite transaction if one is open."""
         self.db.rollback()
+
+    def get_artifact_metadata(self, artifact_id: str) -> ArtifactMetadata | None:
+        """Resolve an artifact ID to descriptive metadata from the control plane registry.
+
+        Parameters
+        ----------
+        artifact_id : str
+            Hexadecimal SHA-256 identifier of the artifact.
+
+        Returns
+        -------
+        ArtifactMetadata | None
+            Descriptive artifact record if found, otherwise None.
+        """
+        return self.artifacts.get_artifact_metadata(artifact_id)

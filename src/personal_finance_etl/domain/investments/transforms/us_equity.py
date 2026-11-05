@@ -75,24 +75,23 @@ def get_base_us_stock_transactions(raw_data: pl.LazyFrame) -> pl.LazyFrame:
         source_col="__file_name__",
     )
 
-    df_transformed = df_validated.select(
-        [
-            "__file_name__",
-            "__folder_path__",
-            pl.col("Stock Name").alias("Instrument Name"),
-            "ISIN",
-            pl.col("Yahoo Ticker").alias("yF_Ticker"),
-            pl.col("Order Date").alias("Date"),
-            pl.col("Transaction Type").alias("Type"),
-            "Quantity",
-            pl.col("Price ($)").alias("Price_Local"),
-            pl.col("Order Amount ($)").alias("Value_Local"),
-            pl.col("Exch Rate").alias("FX_Rate"),
-            pl.col("Order Amount (INR)").alias("Value"),
-            pl.col("Brokerage (INR)").alias("Brokerage_INR"),
-            pl.col("Currency").alias("CURRENCY_ID"),
-        ]
-    ).with_columns(
+    cols: list[str | pl.Expr] = [
+        pl.col("Stock Name").alias("Instrument Name"),
+        "ISIN",
+        pl.col("Yahoo Ticker").alias("yF_Ticker"),
+        pl.col("Order Date").alias("Date"),
+        pl.col("Transaction Type").alias("Type"),
+        "Quantity",
+        pl.col("Price ($)").alias("Price_Local"),
+        pl.col("Order Amount ($)").alias("Value_Local"),
+        pl.col("Exch Rate").alias("FX_Rate"),
+        pl.col("Order Amount (INR)").alias("Value"),
+        pl.col("Brokerage (INR)").alias("Brokerage_INR"),
+        pl.col("Currency").alias("CURRENCY_ID"),
+        "artifact_id",
+    ]
+
+    df_transformed = df_validated.select(cols).with_columns(
         [
             pl.lit("US Stocks").alias("__file_category__"),
             (pl.col("Price_Local") * pl.col("FX_Rate")).alias("Price"),

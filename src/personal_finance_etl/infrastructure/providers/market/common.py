@@ -59,6 +59,7 @@ from personal_finance_etl.contracts.observability import (
     PresentationKind,
 )
 from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
+from personal_finance_etl.infrastructure.control_plane.hashing import generate_file_id
 from personal_finance_etl.infrastructure.observability.diagnostics import (
     get_observability_diagnostics,
 )
@@ -601,11 +602,13 @@ def vault_parquet_chunks(
             filename=filename, category=category, raw_bytes=raw_bytes
         )
         injected_files.append(virtual_path)
+        artifact_id = generate_file_id(virtual_path)
 
         df_final_chunks.append(
             df_year.with_columns(
                 pl.lit(filename).alias("__file_name__"),
                 pl.lit(virtual_path).alias("__folder_path__"),
+                pl.lit(artifact_id).alias("artifact_id"),
             )
         )
 

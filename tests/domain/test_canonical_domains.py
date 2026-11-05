@@ -104,6 +104,7 @@ def test_household_common_and_dimensions() -> None:
             "IS_DEL": [0],
             "__file_name__": ["currency.csv"],
             "__folder_path__": ["/tmp"],
+            "artifact_id": ["sha256_mock_curr"],
         }
     ).lazy()
 
@@ -111,6 +112,9 @@ def test_household_common_and_dimensions() -> None:
     assert curr_dim.height == 1
     assert curr_dim["ISO"][0] == "INR"
     assert curr_dim["Is_Active"][0] is False
+    assert "artifact_id" in curr_dim.columns
+    assert "__file_name__" not in curr_dim.columns
+    assert "__folder_path__" not in curr_dim.columns
 
 
 def test_market_domain_primitives() -> None:
@@ -204,6 +208,7 @@ def test_investments_rolling_average_buy_price() -> None:
             "__file_name__": ["p.csv", "p.csv"],
             "__folder_path__": ["/tmp", "/tmp"],
             "__file_category__": ["Indian", "Indian"],
+            "artifact_id": ["sha256_p1", "sha256_p2"],
             "ISIN": ["INF001", "INF001"],
             "Instrument": ["Fund A", "Fund A"],
             "Date": [date(2023, 1, 1), date(2023, 1, 2)],
@@ -225,6 +230,7 @@ def test_investments_rolling_average_buy_price() -> None:
             "__file_name__": ["s.csv"],
             "__folder_path__": ["/tmp"],
             "__file_category__": ["Indian"],
+            "artifact_id": ["sha256_s1"],
             "ISIN": ["INF001"],
             "Instrument": ["Fund A"],
             "Date": [date(2023, 1, 3)],
@@ -243,6 +249,7 @@ def test_investments_rolling_average_buy_price() -> None:
     ).collect()
 
     assert s_ref.height == 1
+    assert "artifact_id" in s_ref.columns
     assert s_ref["Buy_Price"][0] == 150.0
     assert s_ref["Unit_PnL"][0] == pytest.approx(30.0)
     assert s_ref["Total_PnL"][0] == pytest.approx(150.0)

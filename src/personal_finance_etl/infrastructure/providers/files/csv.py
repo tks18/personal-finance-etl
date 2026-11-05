@@ -4,7 +4,7 @@ Owns
 ----
 - Parsing in-memory CSV binary payloads into Polars LazyFrames.
 - Applying source-level schema overrides for configuration and mapping assets.
-- Ingestion metadata tagging (__file_name__, __folder_path__).
+- Ingestion metadata tagging (__file_name__, __folder_path__, artifact_id).
 
 Does not own
 -------------
@@ -18,6 +18,7 @@ import io
 
 import polars as pl
 
+from personal_finance_etl.infrastructure.control_plane.hashing import generate_file_id
 from personal_finance_etl.infrastructure.observability.diagnostics import (
     get_observability_diagnostics,
 )
@@ -38,12 +39,15 @@ def extract_stg_mf_isin_mapping(filename: str, folder_path: str, raw_bytes: byte
     """Parse Mutual Fund ISIN mapping CSV bytes into a LazyFrame."""
     schema_overrides = {"INSTRUMENT_NAME": pl.String, "ISIN": pl.String}
     diagnostics.debug(f"Building lazy frame for MF ISIN mapping: {filename}")
+    filepath = f"{folder_path}/{filename}" if folder_path else filename
+    artifact_id = generate_file_id(filepath)
     return (
         pl.read_csv(io.BytesIO(raw_bytes), schema_overrides=schema_overrides)
         .lazy()
         .with_columns(
             pl.lit(filename).alias("__file_name__"),
             pl.lit(folder_path).alias("__folder_path__"),
+            pl.lit(artifact_id).alias("artifact_id"),
         )
     )
 
@@ -59,12 +63,15 @@ def extract_currency_mapping_raw(filename: str, folder_path: str, raw_bytes: byt
         "Is_Active": pl.Boolean,
     }
     diagnostics.debug(f"Building lazy frame for Currency mapping: {filename}")
+    filepath = f"{folder_path}/{filename}" if folder_path else filename
+    artifact_id = generate_file_id(filepath)
     return (
         pl.read_csv(io.BytesIO(raw_bytes), schema_overrides=schema_overrides)
         .lazy()
         .with_columns(
             pl.lit(filename).alias("__file_name__"),
             pl.lit(folder_path).alias("__folder_path__"),
+            pl.lit(artifact_id).alias("artifact_id"),
         )
     )
 
@@ -86,12 +93,15 @@ def extract_stg_benchmark_mapping(
         "Geo_Subtype": pl.String,
     }
     diagnostics.debug(f"Building lazy frame for Benchmark mapping: {filename}")
+    filepath = f"{folder_path}/{filename}" if folder_path else filename
+    artifact_id = generate_file_id(filepath)
     return (
         pl.read_csv(io.BytesIO(raw_bytes), schema_overrides=schema_overrides)
         .lazy()
         .with_columns(
             pl.lit(filename).alias("__file_name__"),
             pl.lit(folder_path).alias("__folder_path__"),
+            pl.lit(artifact_id).alias("artifact_id"),
         )
     )
 
@@ -105,12 +115,15 @@ def extract_benchmark_master_raw(filename: str, folder_path: str, raw_bytes: byt
         "Currency": pl.String,
     }
     diagnostics.debug(f"Building lazy frame for Benchmark master: {filename}")
+    filepath = f"{folder_path}/{filename}" if folder_path else filename
+    artifact_id = generate_file_id(filepath)
     return (
         pl.read_csv(io.BytesIO(raw_bytes), schema_overrides=schema_overrides)
         .lazy()
         .with_columns(
             pl.lit(filename).alias("__file_name__"),
             pl.lit(folder_path).alias("__folder_path__"),
+            pl.lit(artifact_id).alias("artifact_id"),
         )
     )
 
@@ -142,20 +155,26 @@ def extract_macro_parameters_raw(filename: str, folder_path: str, raw_bytes: byt
         "Estimated_Ordinary_Income_Tax_Rate": pl.Float64,
         "Remarks": pl.String,
     }
+    filepath = f"{folder_path}/{filename}" if folder_path else filename
+    artifact_id = generate_file_id(filepath)
     return (
         pl.read_csv(io.BytesIO(raw_bytes), schema_overrides=schema_overrides, try_parse_dates=True)
         .lazy()
         .with_columns(
             pl.lit(filename).alias("__file_name__"),
             pl.lit(folder_path).alias("__folder_path__"),
+            pl.lit(artifact_id).alias("artifact_id"),
         )
     )
 
 
 def extract_opening_balances_raw(filename: str, folder_path: str, raw_bytes: bytes) -> pl.LazyFrame:
     """Parse Opening Balances CSV bytes into a LazyFrame."""
+    filepath = f"{folder_path}/{filename}" if folder_path else filename
+    artifact_id = generate_file_id(filepath)
     df = pl.read_csv(io.BytesIO(raw_bytes), try_parse_dates=True)
     return df.lazy().with_columns(
         pl.lit(filename).alias("__file_name__"),
         pl.lit(folder_path).alias("__folder_path__"),
+        pl.lit(artifact_id).alias("artifact_id"),
     )

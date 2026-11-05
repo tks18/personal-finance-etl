@@ -38,14 +38,13 @@ def get_purchase_reference(
     Groups by Instrument, ISIN, Date, and Price, then sums the Quantity.
     Returns: ISIN, Date, Price, Quantity, Value
     """
-    group_cols = [
-        "__file_name__",
-        "__folder_path__",
+    group_cols: list[str | pl.Expr] = [
         "__file_category__",
         "ISIN",
         pl.col(instrument_col).alias("Instrument name"),
         pl.col(date_col).alias("Date"),
         pl.col(price_col).alias("Price"),
+        "artifact_id",
     ]
     if extra_group_cols:
         group_cols.extend(extra_group_cols)
@@ -121,14 +120,13 @@ def get_sale_reference(
 
     Also calculates the Rolling Average Buy Price based on historical purchases.
     """
-    group_cols = [
-        "__file_name__",
-        "__folder_path__",
+    group_cols: list[str | pl.Expr] = [
         "__file_category__",
         "ISIN",
         pl.col(instrument_col).alias("Instrument name"),
         pl.col(date_col).alias("Date"),
         pl.col(price_col).alias("Sell_Price"),
+        "artifact_id",
     ]
     if extra_group_cols:
         group_cols.extend(extra_group_cols)
@@ -389,8 +387,6 @@ def get_f_tf_investment_purchase_data(
     df_union = _normalize_currency_and_fx(df_union, default_currency_id)
 
     select_cols = [
-        "__file_name__",
-        "__folder_path__",
         "ISIN",
         "Date",
         "__file_category__",
@@ -401,6 +397,7 @@ def get_f_tf_investment_purchase_data(
         "Quantity",
         "Value",
         "CURRENCY_ID",
+        "artifact_id",
     ]
     return (
         df_union.select(select_cols)
@@ -464,8 +461,6 @@ def get_f_tf_investment_sale_data(
         )
 
     select_cols = [
-        "__file_name__",
-        "__folder_path__",
         "ISIN",
         "Date",
         "__file_category__",
@@ -480,6 +475,7 @@ def get_f_tf_investment_sale_data(
         "Unit_PnL",
         "Total_PnL",
         "CURRENCY_ID",
+        "artifact_id",
     ]
     df_final = (
         df_union.select(select_cols)

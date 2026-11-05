@@ -37,6 +37,7 @@ from personal_finance_etl.contracts.observability import (
 )
 from personal_finance_etl.domain.household.transforms.common import get_column_mapping
 from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
+from personal_finance_etl.infrastructure.control_plane.hashing import generate_file_id
 from personal_finance_etl.infrastructure.observability import (
     ObservabilityEmitter,
     get_global_emitter,
@@ -164,9 +165,11 @@ class DataExtractor:
     ) -> tuple[pl.DataFrame, dict[str, dict[str, str]], dict[str, pl.LazyFrame]]:
         """Extract column master mappings and configuration CSV lazyframes."""
         column_master_bytes = self._get_bytes(self.cfg.COLUMN_MASTER_PATH)
+        column_master_artifact_id = generate_file_id(self.cfg.COLUMN_MASTER_PATH)
         df_column_master = pl.read_csv(io.BytesIO(column_master_bytes)).with_columns(
             pl.lit(os.path.basename(self.cfg.COLUMN_MASTER_PATH)).alias("__file_name__"),
             pl.lit(os.path.dirname(self.cfg.COLUMN_MASTER_PATH)).alias("__folder_path__"),
+            pl.lit(column_master_artifact_id).alias("artifact_id"),
         )
         mappings = {
             "category": get_column_mapping(df_column_master, "CATEGORY"),

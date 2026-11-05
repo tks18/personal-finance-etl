@@ -12,6 +12,7 @@ Owns
 - Canonical event transport queue contracts.
 - Canonical typed observability and telemetry contracts (ObservabilityEvent, EventCode).
 - Authoritative Silver and Gold semantic inventories, column classifications, and dispositions.
+- Canonical provenance and artifact metadata contracts (ProvenanceRef, ArtifactMetadata).
 
 Does not own
 -------------
@@ -64,6 +65,10 @@ from personal_finance_etl.contracts.observability import (
     ObservabilitySink,
     PresentationKind,
 )
+from personal_finance_etl.contracts.provenance import (
+    ArtifactMetadata,
+    ProvenanceRef,
+)
 from personal_finance_etl.contracts.recovery import (
     RestoreOutcome,
     RestoreResult,
@@ -71,6 +76,7 @@ from personal_finance_etl.contracts.recovery import (
     SnapshotResult,
 )
 from personal_finance_etl.contracts.semantic_inventory import (
+    ALL_SILVER_COLUMN_DISPOSITIONS,
     GOLD_CONTRACT_DEPENDENCIES,
     SILVER_COLUMN_DISPOSITIONS,
     SILVER_CONTRACT_SEMANTICS,
@@ -92,6 +98,8 @@ from personal_finance_etl.contracts.sources import (
 )
 
 __all__ = [
+    "ALL_SILVER_COLUMN_DISPOSITIONS",
+    "ArtifactMetadata",
     "BRONZE_DATASET_ORIGIN_MAP",
     "ColumnClassification",
     "ColumnDisposition",
@@ -127,6 +135,7 @@ __all__ = [
     "ObservabilitySink",
     "PROVIDER_GENERATED_DATASETS",
     "PresentationKind",
+    "ProvenanceRef",
     "ProviderType",
     "RestoreOutcome",
     "RestoreResult",

@@ -86,41 +86,33 @@ def get_stg_stock_market_data(raw_data: pl.LazyFrame, default_currency_id: str) 
 
     df_transformed = _resolve_unrealised_pnl(df_transformed, has_typo, has_proper)
 
-    df_transformed = (
-        df_transformed
-        # DAX: Calculated Columns
-        .with_columns(
-            pl.when(pl.col("ISIN").str.contains("INF"))
-            .then(pl.lit("ETFs"))
-            .otherwise(pl.lit("Direct Stocks"))
-            .alias("STOCKS_CLASS"),
-            pl.lit(default_currency_id).alias("CURRENCY_ID"),
-        )
-        # Power Query: Reordered Columns (Select)
-        .select(
-            [
-                "__file_name__",
-                "__folder_path__",
-                "__file_category__",
-                "Month Date",
-                "Stock name",
-                "ISIN",
-                "Quantity",
-                "Buy date",
-                "Buy price",
-                "Buy value",
-                "Closing date",
-                "Closing price",
-                "Closing value",
-                "Unrealised P&L",
-                "Remark",
-                "STOCKS_CLASS",
-                "CURRENCY_ID",
-            ]
-        )
+    df_transformed = df_transformed.with_columns(
+        pl.when(pl.col("ISIN").str.contains("INF"))
+        .then(pl.lit("ETFs"))
+        .otherwise(pl.lit("Direct Stocks"))
+        .alias("STOCKS_CLASS"),
+        pl.lit(default_currency_id).alias("CURRENCY_ID"),
     )
+    cols = [
+        "__file_category__",
+        "Month Date",
+        "Stock name",
+        "ISIN",
+        "Quantity",
+        "Buy date",
+        "Buy price",
+        "Buy value",
+        "Closing date",
+        "Closing price",
+        "Closing value",
+        "Unrealised P&L",
+        "Remark",
+        "STOCKS_CLASS",
+        "CURRENCY_ID",
+        "artifact_id",
+    ]
 
-    return df_transformed
+    return df_transformed.select(cols)
 
 
 def get_stg_stock_market_data_ref(stg_stock_market_data_lazy: pl.LazyFrame) -> pl.LazyFrame:
@@ -164,35 +156,31 @@ def get_base_stock_transactions(raw_data: pl.LazyFrame) -> pl.LazyFrame:
     Returns a single LazyFrame containing both Buys and Sells.
     """
     stock_clean = pl.col("Stock name").cast(pl.String).str.strip_chars()
-    df_transformed = (
-        raw_data.filter(
-            stock_clean.is_not_null()
-            & (stock_clean != "")
-            & (
-                ~stock_clean.str.to_uppercase().is_in(
-                    ["NO TRANSACTIONS FOUND", "NO DATA FOUND", "NO TRANSACTION FOUND"]
-                )
+    df_filtered = raw_data.filter(
+        stock_clean.is_not_null()
+        & (stock_clean != "")
+        & (
+            ~stock_clean.str.to_uppercase().is_in(
+                ["NO TRANSACTIONS FOUND", "NO DATA FOUND", "NO TRANSACTION FOUND"]
             )
         )
-        # Select required columns
-        .select(
-            [
-                "__file_name__",
-                "__folder_path__",
-                "__file_category__",
-                "Stock name",
-                "Symbol",
-                "ISIN",
-                "Type",
-                "Quantity",
-                "Value",
-                "Exchange",
-                "Exchange Order Id",
-                "Execution date and time",
-                "Order status",
-            ]
-        )
     )
+    cols = [
+        "__file_category__",
+        "Stock name",
+        "Symbol",
+        "ISIN",
+        "Type",
+        "Quantity",
+        "Value",
+        "Exchange",
+        "Exchange Order Id",
+        "Execution date and time",
+        "Order status",
+        "artifact_id",
+    ]
+
+    df_transformed = df_filtered.select(cols)
 
     df_transformed = validate_and_parse_numerics(
         df_transformed,

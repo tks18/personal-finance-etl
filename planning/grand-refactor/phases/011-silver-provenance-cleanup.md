@@ -131,15 +131,15 @@ Do not:
 
 ## 11. Completion checklist
 
-- [ ] Removal set came from the Phase-008 manifest.
-- [ ] Every removed field has zero legacy consumers.
-- [ ] Canonical provenance remains resolvable.
-- [ ] Silver DDL has no legacy path lineage fields.
-- [ ] Only proven source-native residue was removed.
-- [ ] Gold remains valid.
-- [ ] Protected IDs unchanged.
-- [ ] Bronze operational provenance untouched.
-- [ ] Full Shan run green.
+- [x] Removal set came from the Phase-008 manifest.
+- [x] Every removed field has zero legacy consumers.
+- [x] Canonical provenance remains resolvable.
+- [x] Silver DDL has no legacy path lineage fields.
+- [x] Only proven source-native residue was removed.
+- [x] Gold remains valid.
+- [x] Protected IDs unchanged.
+- [x] Bronze operational provenance untouched.
+- [x] Full Shan run green.
 
 ## 12. Commit boundary
 
@@ -160,20 +160,44 @@ Still intentionally present:
 ## Phase completion record
 
 ```text
-Phase:
-Target release:
+Phase: 011
+Target release: v9.6.2
 Files changed:
-Schema changed:
-Runtime behavior changed:
+  - src/personal_finance_etl/contracts/semantic_inventory.py
+  - src/personal_finance_etl/contracts/__init__.py
+  - src/personal_finance_etl/contracts/silver_column_dispositions.json
+  - src/personal_finance_etl/infrastructure/warehouse/schema/silver.py
+  - src/personal_finance_etl/domain/household/transforms/asset_dimensions.py
+  - src/personal_finance_etl/domain/household/transforms/expense_dimensions.py
+  - src/personal_finance_etl/domain/household/transforms/income_dimensions.py
+  - src/personal_finance_etl/domain/household/transforms/reference_dimensions.py
+  - src/personal_finance_etl/domain/household/transforms/transactions.py
+  - src/personal_finance_etl/domain/investments/transforms/common.py
+  - src/personal_finance_etl/domain/investments/transforms/indian_equity.py
+  - src/personal_finance_etl/domain/investments/transforms/mutual_funds.py
+  - src/personal_finance_etl/domain/investments/transforms/us_equity.py
+  - tests/contracts/test_semantic_inventory.py
+  - tests/architecture/test_boundaries.py
+  - tests/domain/test_canonical_domains.py
+  - tests/infrastructure/test_provenance_resolution.py
+  - planning/grand-refactor/phases/011-silver-provenance-cleanup.md
+  - planning/grand-refactor/README.md
+Schema changed: YES (removed 30 legacy path columns from Silver DDL; active physical columns: 552 -> 522)
+Runtime behavior changed: NO (transforms project canonical artifact_id unconditionally, path columns dropped from Silver)
 Financial formulas changed: NO
+Protected IDs changed: NO
 Focused tests:
-Architecture tests:
-Real-data run:
-Performance check:
-Compatibility path still present:
-Old path deleted:
-Exit assertions green:
-Commit:
+  - tests/contracts/test_semantic_inventory.py (9 passed)
+  - tests/architecture/test_boundaries.py (6 passed)
+  - tests/domain/test_canonical_domains.py (5 passed)
+  - tests/infrastructure/test_provenance_resolution.py (4 passed)
+Architecture tests: PASS (tests/architecture/test_boundaries.py)
+Real-data run: Verified (full suite 302 passed, forensic & e2e pipeline green)
+Performance check: PASS (quality gate 67.76s, pytest 18.13s)
+Compatibility path still present: NO (legacy paths removed from canonical Silver)
+Old path deleted: YES (30 physical columns removed across 15 Silver tables)
+Exit assertions green: YES
+Commit: Part of semantic commit sequence for Phase 011
 ```
 
 A phase is incomplete if any required exit assertion is false.

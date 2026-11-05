@@ -152,6 +152,15 @@ def transform_d_income_category(
     df_lazy: pl.LazyFrame, column_mapping: dict[str, str], _rules: FinancialRules | None = None
 ) -> pl.LazyFrame:
     """Execute the PQ and DAX logic using Polars LazyFrames."""
+    cols = [
+        "S_NO",
+        "MODIFY_DATE",
+        "UID",
+        "CATEGORY_NAME",
+        "ORDER_SEQUENCE",
+        "artifact_id",
+    ]
+
     return (
         df_lazy.rename(column_mapping)
         .with_columns(pl.col("IS_DEL").cast(pl.String))
@@ -160,17 +169,7 @@ def transform_d_income_category(
             (pl.col("TYPE") == 0)
             & (pl.col("CATEGORY_ID").is_null() | (pl.col("CATEGORY_ID").str.len_chars() < 1))
         )
-        .select(
-            [
-                "__file_name__",
-                "__folder_path__",
-                "S_NO",
-                "MODIFY_DATE",
-                "UID",
-                "CATEGORY_NAME",
-                "ORDER_SEQUENCE",
-            ]
-        )
+        .select(cols)
         .with_columns(
             pl.col("CATEGORY_NAME")
             .str.replace("Income from ", "", literal=True)
@@ -263,6 +262,16 @@ def transform_d_income_subcategory(
     rules: FinancialRules | None = None,
 ) -> pl.LazyFrame:
     """Execute the PQ and DAX logic for Income Subcategories."""
+    cols = [
+        "S_NO",
+        "MODIFY_DATE",
+        "UID",
+        "CATEGORY_NAME",
+        "ORDER_SEQUENCE",
+        "CATEGORY_ID",
+        "artifact_id",
+    ]
+
     df_pq = (
         df_lazy.rename(column_mapping)
         .with_columns(pl.col("IS_DEL").cast(pl.String))
@@ -272,18 +281,7 @@ def transform_d_income_subcategory(
             & pl.col("CATEGORY_ID").is_not_null()
             & (pl.col("CATEGORY_ID").str.len_chars() > 0)
         )
-        .select(
-            [
-                "__file_name__",
-                "__folder_path__",
-                "S_NO",
-                "MODIFY_DATE",
-                "UID",
-                "CATEGORY_NAME",
-                "ORDER_SEQUENCE",
-                "CATEGORY_ID",
-            ]
-        )
+        .select(cols)
     )
 
     df_joined = df_pq.join(

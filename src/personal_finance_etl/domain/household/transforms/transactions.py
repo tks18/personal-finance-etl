@@ -32,8 +32,6 @@ __all__ = [
 ]
 
 BASE_TRANSACTION_COLS = [
-    "__file_name__",
-    "__folder_path__",
     "S_NO",
     "UID",
     "ASSET_ID",
@@ -56,6 +54,7 @@ BASE_TRANSACTION_COLS = [
     "CURRENCY_ID",
     "AMOUNT_ACCOUNT",
     "EXCH_RATE",
+    "artifact_id",
 ]
 
 
@@ -267,9 +266,11 @@ def transform_f_transfer_transactions(
         how="left",
     )
 
+    cols = list(BASE_TRANSACTION_COLS) + ["ASSET_GROUP"]
+
     return (
         df_joined_cat.filter((pl.col("TRANSACTION_TYPE") == 3) | (pl.col("TRANSACTION_TYPE") == 4))
-        .select(BASE_TRANSACTION_COLS + ["ASSET_GROUP"])
+        .select(cols)
         .with_columns(
             pl.when(pl.col("TRANSACTION_TYPE") == 3)
             .then(pl.lit("Out"))
@@ -324,26 +325,25 @@ def transform_f_opening_balances(
     raw_data: pl.LazyFrame, column_mapping: dict[str, str]
 ) -> pl.LazyFrame:
     """Execute the PQ logic for Opening Balances."""
-    df_transformed = raw_data.rename(column_mapping).select(
-        [
-            "__file_name__",
-            "__folder_path__",
-            "Z_PK",
-            "ZUTIME",
-            "ZDATE",
-            "ZAMOUNT",
-            "ZAMOUNTACCOUNT",
-            "ZAMOUNTSUB",
-            "ZCONTENT",
-            "ZDO_TYPE",
-            "ZASSETUID",
-            "ZCATEGORYUID",
-            "ZCURRENCYUID",
-            "ZTOASSETUID",
-            "ZTXDATESTR",
-            "ZTXUIDFEE",
-            "ZTXUIDTRANS",
-            "ZUID",
-        ]
-    )
+    cols = [
+        "Z_PK",
+        "ZUTIME",
+        "ZDATE",
+        "ZAMOUNT",
+        "ZAMOUNTACCOUNT",
+        "ZAMOUNTSUB",
+        "ZCONTENT",
+        "ZDO_TYPE",
+        "ZASSETUID",
+        "ZCATEGORYUID",
+        "ZCURRENCYUID",
+        "ZTOASSETUID",
+        "ZTXDATESTR",
+        "ZTXUIDFEE",
+        "ZTXUIDTRANS",
+        "ZUID",
+        "artifact_id",
+    ]
+
+    df_transformed = raw_data.rename(column_mapping).select(cols)
     return _parse_opening_balance_fields(df_transformed)
