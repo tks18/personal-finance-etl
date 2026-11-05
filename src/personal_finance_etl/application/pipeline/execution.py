@@ -37,6 +37,7 @@ from personal_finance_etl.application.investments.context import (
     QuantRunOptions,
 )
 from personal_finance_etl.application.investments.quant_service import InvestmentQuantEngine
+from personal_finance_etl.application.pipeline.planner import CapabilityPlanner
 from personal_finance_etl.application.pipeline.transformer import TransformationDAG
 from personal_finance_etl.application.tax.tax_service import TaxEngine
 from personal_finance_etl.application.wealth.wealth_service import WealthPresentationEngine
@@ -44,6 +45,7 @@ from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
 from personal_finance_etl.contracts.application import EngineStage
 from personal_finance_etl.contracts.event_transport import EventQueue
+from personal_finance_etl.contracts.execution_plan import ExecutionPlan
 from personal_finance_etl.contracts.extraction import ExtractionResult
 from personal_finance_etl.contracts.lifecycle import SyncSummaryRecord
 from personal_finance_etl.contracts.market import ProviderSymbolRegistry
@@ -190,12 +192,14 @@ class PipelineExecutor:
         db_manager: DuckDBManager,
         rules: FinancialRules | None = None,
         emitter: ObservabilityEmitter | None = None,
+        plan: ExecutionPlan | None = None,
     ) -> None:
         self.cfg = cfg
         self.status_queue = status_queue
         self.db_manager = db_manager
         self.rules = rules
         self.emitter = emitter or get_global_emitter()
+        self.plan = plan or CapabilityPlanner().create_plan()
         self.dfs: dict[str, pl.DataFrame] = {}
         self.provider_symbols: ProviderSymbolRegistry | None = None
 
@@ -756,17 +760,33 @@ class PipelineExecutor:
         )
         self.run_engines(cp, str(run_id))
 
-        registered_contracts = {c.contract_id for c in DATA_CONTRACT_REGISTRY}
+        contract_by_id = {c.contract_id: c for c in DATA_CONTRACT_REGISTRY}
+        contract_by_dataset = {c.dataset_id: c for c in DATA_CONTRACT_REGISTRY}
+
         for df_key in self.dfs:
-            if df_key not in registered_contracts:
+            contract = contract_by_id.get(df_key)
+            if contract is None:
                 raise RuntimeError(
                     f"Engine produced unregistered table '{df_key}'. "
                     "All analytical tables must be defined in DATA_CONTRACT_REGISTRY."
                 )
+            if contract.dataset_id not in self.plan.active_analytical_datasets:
+                raise RuntimeError(
+                    f"Engine produced unexpected analytical table '{df_key}' "
+                    f"(dataset_id='{contract.dataset_id.value}') not active in "
+                    f"execution plan '{self.plan.plan_fingerprint}'."
+                )
 
-        missing_contracts = registered_contracts - set(self.dfs)
-        if missing_contracts:
-            raise RuntimeError(f"Engine failed to produce required tables: {missing_contracts}")
+        missing_datasets = [
+            d.value
+            for d in self.plan.active_analytical_datasets
+            if d not in contract_by_dataset or contract_by_dataset[d].contract_id not in self.dfs
+        ]
+        if missing_datasets:
+            raise RuntimeError(
+                f"Engine failed to produce required plan analytical datasets: {sorted(missing_datasets)} "
+                f"for plan '{self.plan.plan_fingerprint}'."
+            )
 
         for df_key, df_val in self.dfs.items():
             self.emitter.emit_event(

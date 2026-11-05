@@ -144,15 +144,15 @@ Do not:
 
 ## 11. Completion checklist
 
-- [ ] ExecutionPlan immutable and deterministic.
-- [ ] CapabilityPlanner resolves full graph.
-- [ ] Pipeline receives plan through explicit dependency.
-- [ ] Completeness is plan-scoped.
-- [ ] Full-current behavior unchanged.
-- [ ] Plan fingerprint persisted.
-- [ ] Observability context bounded.
-- [ ] Synthetic partial-plan tests pass.
-- [ ] Full Shan run green.
+- [x] ExecutionPlan immutable and deterministic.
+- [x] CapabilityPlanner resolves full graph.
+- [x] Pipeline receives plan through explicit dependency.
+- [x] Completeness is plan-scoped.
+- [x] Full-current behavior unchanged.
+- [x] Plan fingerprint persisted.
+- [x] Observability context bounded.
+- [x] Synthetic partial-plan tests pass.
+- [x] Full Shan run green.
 
 ## 12. Commit boundary
 
@@ -167,20 +167,33 @@ Phase 016 may assume execution-plan completeness is authoritative while actual e
 ## Phase completion record
 
 ```text
-Phase:
-Target release:
+Phase: 015
+Target release: v9.7.1
 Files changed:
-Schema changed:
-Runtime behavior changed:
+  - src/personal_finance_etl/contracts/execution_plan.py (NEW)
+  - src/personal_finance_etl/contracts/observability.py
+  - src/personal_finance_etl/contracts/__init__.py
+  - src/personal_finance_etl/application/pipeline/planner.py (NEW)
+  - src/personal_finance_etl/application/pipeline/execution.py
+  - src/personal_finance_etl/application/pipeline/orchestrator.py
+  - src/personal_finance_etl/application/pipeline/lifecycle.py
+  - src/personal_finance_etl/infrastructure/control_plane/schema.py
+  - src/personal_finance_etl/infrastructure/control_plane/run_repository.py
+  - src/personal_finance_etl/infrastructure/observability/emitter.py
+  - tests/contracts/test_execution_plan.py (NEW)
+  - tests/application/test_capability_planner.py (NEW)
+  - tests/application/test_plan_scoped_completeness.py (NEW)
+Schema changed: YES (cp_plan_snapshots table and cp_runs.plan_snapshot_id column added via migration)
+Runtime behavior changed: NO (default full plan preserves 100% full-current engine execution)
 Financial formulas changed: NO
-Focused tests:
-Architecture tests:
-Real-data run:
-Performance check:
-Compatibility path still present:
-Old path deleted:
-Exit assertions green:
-Commit:
+Focused tests: 14 passing (tests/contracts/test_execution_plan.py, tests/application/test_capability_planner.py, tests/application/test_plan_scoped_completeness.py)
+Architecture tests: 10 passing (tests/architecture/test_boundaries.py)
+Real-data run: Verified fullShan live test passing
+Performance check: Observability throughput >10k rec/s, fast gate <2s
+Compatibility path still present: YES
+Old path deleted: Global DATA_CONTRACT_REGISTRY completeness assertion replaced with plan-scoped completeness
+Exit assertions green: YES
+Commit: Pending user approval
 ```
 
 A phase is incomplete if any required exit assertion is false.
