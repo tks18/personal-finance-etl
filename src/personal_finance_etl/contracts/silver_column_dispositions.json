@@ -1080,8 +1080,9 @@
     "classification": "provider_metadata",
     "disposition": "move_to_provider_mapping",
     "target_name": null,
-    "rationale": "Yahoo Finance proprietary vendor ticker",
-    "is_active": true
+    "rationale": "Closed in Phase 012: Provider symbol migrated to ProviderSymbolRegistry mapping",
+    "is_active": false,
+    "closed_in_phase": "012"
   },
   {
     "dataset_id": "common_currency",
@@ -1700,8 +1701,9 @@
     "classification": "provider_metadata",
     "disposition": "move_to_provider_mapping",
     "target_name": null,
-    "rationale": "Yahoo Finance proprietary vendor ticker",
-    "is_active": true
+    "rationale": "Closed in Phase 012: Provider symbol migrated to ProviderSymbolRegistry mapping",
+    "is_active": false,
+    "closed_in_phase": "012"
   },
   {
     "dataset_id": "investment_benchmark_master_dim",
@@ -1872,8 +1874,9 @@
     "classification": "provider_metadata",
     "disposition": "move_to_provider_mapping",
     "target_name": null,
-    "rationale": "Yahoo Finance proprietary vendor ticker",
-    "is_active": true
+    "rationale": "Closed in Phase 012: Provider symbol migrated to ProviderSymbolRegistry mapping",
+    "is_active": false,
+    "closed_in_phase": "012"
   },
   {
     "dataset_id": "investment_master",
@@ -2194,8 +2197,9 @@
     "classification": "provider_metadata",
     "disposition": "move_to_provider_mapping",
     "target_name": null,
-    "rationale": "Yahoo Finance proprietary vendor ticker",
-    "is_active": true
+    "rationale": "Closed in Phase 012: Provider symbol migrated to ProviderSymbolRegistry mapping",
+    "is_active": false,
+    "closed_in_phase": "012"
   },
   {
     "dataset_id": "common_currency_fx_rates",
@@ -3738,8 +3742,9 @@
     "classification": "provider_metadata",
     "disposition": "move_to_provider_mapping",
     "target_name": null,
-    "rationale": "Yahoo Finance proprietary vendor ticker",
-    "is_active": true
+    "rationale": "Closed in Phase 012: Provider symbol migrated to ProviderSymbolRegistry mapping",
+    "is_active": false,
+    "closed_in_phase": "012"
   },
   {
     "dataset_id": "investment_benchmark_data",
