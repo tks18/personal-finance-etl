@@ -44,6 +44,7 @@ from personal_finance_etl.application.wealth.wealth_service import WealthPresent
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
 from personal_finance_etl.contracts.application import EngineStage
+from personal_finance_etl.contracts.capabilities import CapabilityId
 from personal_finance_etl.contracts.event_transport import EventQueue
 from personal_finance_etl.contracts.execution_plan import ExecutionPlan
 from personal_finance_etl.contracts.extraction import ExtractionResult
@@ -239,7 +240,11 @@ class PipelineExecutor:
             benchmark_mapping=extracted_data.stg_benchmark_mapping,
         )
         transformer = TransformationDAG(
-            self.cfg, self.status_queue, self.rules, emitter=self.emitter
+            self.cfg,
+            self.status_queue,
+            self.rules,
+            emitter=self.emitter,
+            plan=self.plan,
         )
         self.dfs = transformer.run(extracted_data)
 
@@ -253,11 +258,20 @@ class PipelineExecutor:
         bronze : BronzeLayer
             Bronze persistence layer.
         """
+        if not self.plan.is_capability_active(CapabilityId.BENCHMARK_ENRICHMENT):
+            self.emitter.emit_event(
+                event_code=EventCode.MARKET_FETCH_START,
+                message="Capability 'benchmark_enrichment' inactive in execution plan. Skipping benchmark price sync.",
+                presentation_kind=PresentationKind.SKIP,
+                stage=EngineStage.TRANSFORMING,
+            )
+            return
+
         pipeline = BenchmarkPipeline(cp, bronze, self.status_queue, emitter=self.emitter)
         self.dfs["df_f_investment_benchmark_data"] = pipeline.process(
             df_market=self.dfs.get("df_f_investment_market_data"),
             df_purchase=self.dfs.get("df_f_tf_inv_purchase"),
-            df_master=self.dfs["df_d_benchmark_master"],
+            df_master=self.dfs.get("df_d_benchmark_master", pl.DataFrame()),
             provider_symbols=self.provider_symbols,
         )
 
@@ -734,7 +748,18 @@ class PipelineExecutor:
 
         self.process_currency(cp, bronze)
         self.process_us_market_data(cp, bronze)
-        self.process_benchmark(cp, bronze)
+        if self.plan.is_capability_active(CapabilityId.BENCHMARK_ENRICHMENT):
+            self.process_benchmark(cp, bronze)
+        else:
+            self.emitter.emit_event(
+                event_code=EventCode.MARKET_FETCH_START,
+                message=(
+                    "Capability 'benchmark_enrichment' inactive in execution plan. "
+                    "Skipping benchmark price sync."
+                ),
+                presentation_kind=PresentationKind.SKIP,
+                stage=EngineStage.TRANSFORMING,
+            )
 
     def _run_analytics_phase(self, cp: ControlPlane, run_id: str) -> None:
         """Execute Phase 4: Quant, Tax, and Wealth engines with data contract enforcement.
