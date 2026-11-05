@@ -20,6 +20,9 @@ from personal_finance_etl.infrastructure.providers.market.benchmark import (
 from personal_finance_etl.infrastructure.providers.market.currency import (
     CurrencyExtractor,
 )
+from personal_finance_etl.infrastructure.providers.market.symbol_mapping import (
+    build_provider_symbol_registry,
+)
 from personal_finance_etl.infrastructure.providers.market.us_market import (
     USMarketExtractor,
 )
@@ -28,4 +31,5 @@ __all__ = [
     "BenchmarkExtractor",
     "CurrencyExtractor",
     "USMarketExtractor",
+    "build_provider_symbol_registry",
 ]
