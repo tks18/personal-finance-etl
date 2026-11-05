@@ -79,7 +79,6 @@ def test_is_us_market_instrument_expr() -> None:
             "ISIN": ["US001", "IE001", "US002", "IN001"],
             "COUNTRY": ["US", "Ireland", "India", "India"],
             "CURRENCY_ID": ["INR_INR", "USD", "INR_USD", "INR_INR"],
-            "YAHOO_TICKER": ["AAPL", "CRWD", "GOOGL", None],
         }
     )
     res = df_master.filter(is_us_market_instrument_expr())
@@ -109,11 +108,20 @@ def test_resolve_us_market_active_isins() -> None:
     df_master = pl.DataFrame(
         {
             "ISIN": ["US001", "US002", "US003", "US004"],
-            "YAHOO_TICKER": ["AAPL", "  ", None, "MSFT"],
+            "CURRENCY_ID": ["USD", "USD", "USD", "USD"],
+            "COUNTRY": ["US", "US", "US", "US"],
         }
     )
-    active = resolve_us_market_active_isins(df_purchase, df_master)
+    # Case 1: with provider_symbols mapping
+    provider_symbols = {"US001": "AAPL", "US002": "  ", "US003": "", "US004": "MSFT"}
+    active = resolve_us_market_active_isins(
+        df_purchase, df_master, provider_symbols=provider_symbols
+    )
     assert active == ["US001"]
+
+    # Case 2: without provider_symbols (resolves candidate instruments via canonical classification)
+    active_all = resolve_us_market_active_isins(df_purchase, df_master)
+    assert set(active_all) == {"US001", "US002", "US003"}
 
 
 def test_us_market_range_value_equivalence() -> None:
