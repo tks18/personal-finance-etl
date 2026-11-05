@@ -216,17 +216,10 @@ def _apply_staleness_and_imputation_policy(
     df_filled = (
         df_sorted.with_columns(
             pl.col("FX_Rate").forward_fill().over("Currency_ID"),
-            pl.col("Data_Provider").forward_fill().over("Currency_ID"),
-            pl.col("Extraction_Time").forward_fill().over("Currency_ID"),
             pl.col("FX_Observation_Date").forward_fill().over("Currency_ID"),
         )
         .with_columns(
             (pl.col("Date") - pl.col("FX_Observation_Date")).dt.total_days().alias("FX_Age_Days"),
-            pl.col("Date")
-            .filter(~pl.col("Is_Imputed"))
-            .min()
-            .over("Currency_ID")
-            .alias("First_Observation_Date"),
         )
         .with_columns(
             (pl.col("Is_Imputed") | (pl.col("FX_Observation_Date") != pl.col("Date"))).alias(
@@ -282,19 +275,18 @@ def _project_final_fx_schema(df_filled: pl.LazyFrame) -> pl.LazyFrame:
     pl.LazyFrame
         Standardized Silver FX LazyFrame.
     """
-    return df_filled.select(
-        [
-            "Date",
-            "Currency_ID",
-            "Currency_Code",
-            "Target_Currency_Code",
-            "FX_Rate",
-            "Data_Provider",
-            "Extraction_Time",
-            "Is_Imputed",
-            "First_Observation_Date",
-        ]
-    )
+    canonical_cols = [
+        "Date",
+        "Currency_ID",
+        "Currency_Code",
+        "Target_Currency_Code",
+        "FX_Rate",
+        "Is_Closure_Gap",
+        "Is_Imputed",
+        "artifact_id",
+    ]
+    cols = df_filled.collect_schema().names()
+    return df_filled.select([c for c in canonical_cols if c in cols])
 
 
 def transform_currency_fx_rates(
