@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [9.7.2](https://github.com/tks18/personal-finance-etl/compare/9.7.1...9.7.2) (2026-11-05)
+
+
+### Features 🔥
+
+* **pipeline:** gate benchmark provider and transform on plan ([cb3658e](https://github.com/tks18/personal-finance-etl/commit/cb3658e717eb19408e9e8ede4985aec41ca8c2d2))
+* **pipeline:** pass execution plan into TransformationDAG ([8c9e3e6](https://github.com/tks18/personal-finance-etl/commit/8c9e3e61301b857faabd1531d2712c46bad0a667))
+
+
+### Tests 🧪
+
+* **architecture:** assert domain has no capability plan inspection ([1c1df28](https://github.com/tks18/personal-finance-etl/commit/1c1df2882f5e729a86dcf1bb72890741739ef14a))
+* **pipeline:** prove optional benchmark capability execution ([beb92d0](https://github.com/tks18/personal-finance-etl/commit/beb92d0eb4cb61f6396f2d20f9f2406dff445728))
+
+
+### Docs 📃
+
+* **refactor:** complete phase 016 checklist and records ([671f870](https://github.com/tks18/personal-finance-etl/commit/671f870dba6a0aa1003904aac1f5452f09f1ee19))
+
 ### [9.7.1](https://github.com/tks18/personal-finance-etl/compare/9.7.0...9.7.1) (2026-11-05)
 
 
