@@ -26,7 +26,9 @@ from personal_finance_etl.application.ingestion.asset_strategies import (
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
 from personal_finance_etl.contracts.application import EngineStage
+from personal_finance_etl.contracts.capabilities import CapabilityId
 from personal_finance_etl.contracts.event_transport import EventQueue
+from personal_finance_etl.contracts.execution_plan import ExecutionPlan
 from personal_finance_etl.contracts.extraction import AssetPipelineResult, ExtractionResult
 from personal_finance_etl.contracts.observability import (
     DiagnosticSeverity,
@@ -84,11 +86,13 @@ class TransformationDAG:
         status_queue: EventQueue,
         rules: FinancialRules | None = None,
         emitter: ObservabilityEmitter | None = None,
+        plan: ExecutionPlan | None = None,
     ) -> None:
         self.cfg = cfg
         self.status_queue = status_queue
         self.rules = rules
         self.emitter = emitter or get_global_emitter()
+        self.plan = plan
 
     def _transform_dimensions(self, extracted: ExtractionResult) -> dict[str, pl.LazyFrame]:
         """Transform base dimension LazyFrames from extracted staging records.
@@ -132,11 +136,8 @@ class TransformationDAG:
 
         diagnostics.debug("Transforming Macro Parameters and Opening Balances...")
         d_macro_parameters_lazy = transform_d_macro_parameters(extracted.raw_macro_parameters)
-        d_benchmark_master_lazy = transform_d_investment_benchmark_master(
-            extracted.raw_benchmark_master
-        )
 
-        return {
+        dims: dict[str, pl.LazyFrame] = {
             "df_d_income_category": d_income_category_lazy,
             "df_d_income_subcategory": d_income_subcategory_lazy,
             "df_d_expense_category": d_expense_category_lazy,
@@ -145,8 +146,21 @@ class TransformationDAG:
             "df_d_asset_subcategory": d_asset_subcategory_lazy,
             "df_d_currency": d_currency_lazy,
             "df_d_macro_parameters": d_macro_parameters_lazy,
-            "df_d_benchmark_master": d_benchmark_master_lazy,
         }
+
+        if self.plan is None or self.plan.is_capability_active(CapabilityId.BENCHMARK_ENRICHMENT):
+            dims["df_d_benchmark_master"] = transform_d_investment_benchmark_master(
+                extracted.raw_benchmark_master
+            )
+        else:
+            self.emitter.emit_event(
+                event_code=EventCode.TRANSFORMATION_STAGE,
+                message="Capability 'benchmark_enrichment' inactive in execution plan. Skipping df_d_benchmark_master.",
+                presentation_kind=PresentationKind.SKIP,
+                stage=EngineStage.TRANSFORMING,
+            )
+
+        return dims
 
     def _transform_facts(
         self, extracted: ExtractionResult, dims: dict[str, pl.LazyFrame]
@@ -430,7 +444,6 @@ class TransformationDAG:
             "df_d_asset_category": dims["df_d_asset_category"],
             "df_d_asset_subcategory": dims["df_d_asset_subcategory"],
             "df_d_currency": dims["df_d_currency"],
-            "df_d_benchmark_master": dims["df_d_benchmark_master"],
             "df_d_macro_parameters": dims["df_d_macro_parameters"],
             "df_f_income_transactions": facts["df_f_income_transactions"],
             "df_f_expense_transactions": facts["df_f_expense_transactions"],
@@ -441,5 +454,7 @@ class TransformationDAG:
             "df_f_tf_inv_sale": assets["df_f_tf_inv_sale"],
             "df_d_investment_master": assets["df_d_investment_master"],
         }
+        if "df_d_benchmark_master" in dims:
+            dag_nodes["df_d_benchmark_master"] = dims["df_d_benchmark_master"]
 
         return self._materialize_dag_and_emit_events(dag_nodes, d_calendar_lazy)
