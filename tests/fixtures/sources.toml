@@ -1,0 +1,256 @@
+schema_version = "1.0.0"
+
+[capabilities]
+enabled = ["household_core", "investment_accounting", "benchmark_enrichment", "foreign_asset_enrichment", "tax", "wealth", "fire"]
+
+[[sources]]
+source_id = "household_db"
+provider_type = "sqlite"
+location = "inputs/SOURCE_DB.sqlite"
+enabled = true
+description = "External household money management SQLite database backup"
+
+[[sources]]
+source_id = "mf_isin_csv"
+provider_type = "csv"
+location = "inputs/MF_ISIN_MAPPING.csv"
+enabled = true
+description = "Mutual fund name to ISIN mapping table"
+
+[[sources]]
+source_id = "benchmark_mapping_csv"
+provider_type = "csv"
+location = "inputs/BENCHMARK_MAPPING.csv"
+enabled = true
+description = "Asset to benchmark index mapping table"
+
+[[sources]]
+source_id = "opening_balance_csv"
+provider_type = "csv"
+location = "inputs/OPENING_BALANCE.csv"
+enabled = true
+description = "Historical household ledger opening balances"
+
+[[sources]]
+source_id = "benchmark_master_csv"
+provider_type = "csv"
+location = "inputs/BENCHMARK_MASTER.csv"
+enabled = true
+description = "Benchmark index master catalog"
+
+[[sources]]
+source_id = "macro_parameters_csv"
+provider_type = "csv"
+location = "inputs/MACRO_PARAMETERS.csv"
+enabled = true
+description = "Macroeconomic and tax policy parameters"
+
+[[sources]]
+source_id = "currency_mapping_csv"
+provider_type = "csv"
+location = "inputs/CURRENCY_MAPPING.csv"
+enabled = true
+description = "Currency ticker mapping and exchange symbols"
+
+[[sources]]
+source_id = "column_master_csv"
+provider_type = "csv"
+location = "inputs/COLUMN_MASTER.csv"
+enabled = true
+description = "Transitional column mapping dictionary (scheduled for retirement in Phase 030/035)"
+
+[[sources]]
+source_id = "mf_holdings_excel"
+provider_type = "excel"
+location = "inputs/Statements/Mutual Funds - Holdings"
+enabled = true
+description = "Monthly mutual fund holdings spreadsheet directory"
+
+[[sources]]
+source_id = "mf_orders_excel"
+provider_type = "excel"
+location = "inputs/Statements/Mutual Funds - Orders"
+enabled = true
+description = "Monthly mutual fund orders and transactions spreadsheet directory"
+
+[[sources]]
+source_id = "stock_pl_excel"
+provider_type = "excel"
+location = "inputs/Statements/Stock PL Statements"
+enabled = true
+description = "Monthly stock profit and loss statement directory"
+
+[[sources]]
+source_id = "stock_orders_excel"
+provider_type = "excel"
+location = "inputs/Statements/Stock - Orders"
+enabled = true
+description = "Monthly stock order execution statement directory"
+
+[[sources]]
+source_id = "us_stock_transactions"
+provider_type = "csv"
+location = "inputs/Statements/IND Money (US Stocks)/Transaction Reports"
+enabled = false
+description = "Optional US stock transaction reports directory (default disabled)"
+
+[[datasets]]
+source_id = "household_db"
+dataset_id = "household_zcategory"
+enabled = true
+description = "Household expense categories table"
+[datasets.selector]
+provider_type = "sqlite"
+table_name = "ZCATEGORY"
+
+[[datasets]]
+source_id = "household_db"
+dataset_id = "household_asset_group"
+enabled = true
+description = "Household asset grouping table"
+[datasets.selector]
+provider_type = "sqlite"
+table_name = "ASSETGROUP"
+
+[[datasets]]
+source_id = "household_db"
+dataset_id = "household_assets"
+enabled = true
+description = "Household financial accounts and assets table"
+[datasets.selector]
+provider_type = "sqlite"
+table_name = "ASSETS"
+
+[[datasets]]
+source_id = "household_db"
+dataset_id = "household_currency"
+enabled = true
+description = "Household currency denominations table"
+[datasets.selector]
+provider_type = "sqlite"
+table_name = "CURRENCY"
+
+[[datasets]]
+source_id = "household_db"
+dataset_id = "household_inoutcome"
+enabled = true
+description = "Household financial ledger income and expense transactions table"
+[datasets.selector]
+provider_type = "sqlite"
+table_name = "INOUTCOME"
+
+[[datasets]]
+source_id = "mf_isin_csv"
+dataset_id = "investment_mf_isin_mapping"
+enabled = true
+[datasets.selector]
+provider_type = "csv"
+delimiter = ","
+encoding = "utf-8"
+has_header = true
+
+[[datasets]]
+source_id = "benchmark_mapping_csv"
+dataset_id = "investment_benchmark_mapping"
+enabled = true
+[datasets.selector]
+provider_type = "csv"
+delimiter = ","
+encoding = "utf-8"
+has_header = true
+
+[[datasets]]
+source_id = "opening_balance_csv"
+dataset_id = "household_opening_balances"
+enabled = true
+[datasets.selector]
+provider_type = "csv"
+delimiter = ","
+encoding = "utf-8"
+has_header = true
+
+[[datasets]]
+source_id = "benchmark_master_csv"
+dataset_id = "investment_benchmark_master"
+enabled = true
+[datasets.selector]
+provider_type = "csv"
+delimiter = ","
+encoding = "utf-8"
+has_header = true
+
+[[datasets]]
+source_id = "macro_parameters_csv"
+dataset_id = "investment_macro_parameters"
+enabled = true
+[datasets.selector]
+provider_type = "csv"
+delimiter = ","
+encoding = "utf-8"
+has_header = true
+
+[[datasets]]
+source_id = "currency_mapping_csv"
+dataset_id = "market_currency_mapping"
+enabled = true
+[datasets.selector]
+provider_type = "csv"
+delimiter = ","
+encoding = "utf-8"
+has_header = true
+
+[[datasets]]
+source_id = "column_master_csv"
+dataset_id = "common_column_master"
+enabled = true
+description = "Transitional column master mapping dataset (scheduled for retirement in Phase 030/035)"
+[datasets.selector]
+provider_type = "csv"
+delimiter = ","
+encoding = "utf-8"
+has_header = true
+
+[[datasets]]
+source_id = "mf_holdings_excel"
+dataset_id = "market_mf_holdings"
+enabled = true
+[datasets.selector]
+provider_type = "excel"
+sheet_name = "Holdings"
+
+[[datasets]]
+source_id = "mf_orders_excel"
+dataset_id = "investment_mf_orders"
+enabled = true
+[datasets.selector]
+provider_type = "excel"
+sheet_name = "Transactions"
+
+[[datasets]]
+source_id = "stock_pl_excel"
+dataset_id = "market_stock_holdings"
+enabled = true
+[datasets.selector]
+provider_type = "excel"
+sheet_name = "Trade Level"
+
+[[datasets]]
+source_id = "stock_orders_excel"
+dataset_id = "investment_stock_orders"
+enabled = true
+[datasets.selector]
+provider_type = "excel"
+sheet_name = "Sheet1"
+header_row = 5
+
+[[datasets]]
+source_id = "us_stock_transactions"
+dataset_id = "investment_us_stock_transactions"
+enabled = false
+description = "Optional US stock transactions reports"
+[datasets.selector]
+provider_type = "csv"
+file_pattern = "*.csv"
+delimiter = ","
+encoding = "utf-8"
+has_header = true
