@@ -92,8 +92,6 @@ CREATE TABLE IF NOT EXISTS silver.d_Income_Category (
     CATEGORY_NAME TEXT,
     CATEGORY_NAME_SHORT TEXT,
     ORDER_SEQUENCE BIGINT,
-    __file_name__ TEXT,
-    __folder_path__ TEXT,
     artifact_id TEXT,
     S_NO BIGINT,
     MODIFY_DATE BIGINT
@@ -114,8 +112,6 @@ CREATE TABLE IF NOT EXISTS silver.d_Income_Subcategory (
     Is_Non_Cash_Income BOOLEAN,
     Is_Investment_Exclusion BOOLEAN,
     Is_Tax_Credits BOOLEAN,
-    __file_name__ TEXT,
-    __folder_path__ TEXT,
     artifact_id TEXT,
     S_NO BIGINT,
     MODIFY_DATE BIGINT,
@@ -132,8 +128,6 @@ CREATE TABLE IF NOT EXISTS silver.d_Expense_Category (
     -- Descriptors/Classifications
     CATEGORY_NAME TEXT,
     ORDER_SEQUENCE BIGINT,
-    __file_name__ TEXT,
-    __folder_path__ TEXT,
     artifact_id TEXT,
     S_NO BIGINT,
     MODIFY_DATE BIGINT
@@ -147,8 +141,6 @@ CREATE TABLE IF NOT EXISTS silver.d_Expense_Subcategory (
     CATEGORY_NAME TEXT,
     ORDER_SEQUENCE BIGINT,
     Is_Core_Expense BOOLEAN,
-    __file_name__ TEXT,
-    __folder_path__ TEXT,
     artifact_id TEXT,
     S_NO BIGINT,
     MODIFY_DATE BIGINT,
@@ -168,8 +160,6 @@ CREATE TABLE IF NOT EXISTS silver.d_Asset_Category (
     Is_Digital_Asset BOOLEAN,
     is_cash_pool BOOLEAN,
     is_non_cash_pnl BOOLEAN,
-    __file_name__ TEXT,
-    __folder_path__ TEXT,
     artifact_id TEXT,
     DEVICE_ID BIGINT,
     USE_TIME BIGINT
@@ -198,8 +188,6 @@ CREATE TABLE IF NOT EXISTS silver.d_Asset_Subcategory (
     Is_Digital_Asset BOOLEAN,
     is_cash_pool BOOLEAN,
     is_non_cash_pnl BOOLEAN,
-    __file_name__ TEXT,
-    __folder_path__ TEXT,
     artifact_id TEXT,
     S_NO BIGINT,
     ADDED_TIME BIGINT,
@@ -224,8 +212,6 @@ CREATE TABLE IF NOT EXISTS silver.d_Currency (
     IS_SHOW BIGINT,
     Is_Active BOOLEAN,
     INSERT_TYPE TEXT,
-    __file_name__ TEXT,
-    __folder_path__ TEXT,
     artifact_id TEXT,
     S_NO BIGINT,
     MODIFY_DATE BIGINT
@@ -282,8 +268,6 @@ CREATE TABLE IF NOT EXISTS silver.f_Income_Transactions (
     -- Local/FX Values
     LOCAL_AMOUNT DOUBLE,
     EXCH_RATE DOUBLE,
-    __file_name__ TEXT,
-    __folder_path__ TEXT,
     artifact_id TEXT,
     S_NO BIGINT,
     TIMESTAMP BIGINT,
@@ -319,8 +303,6 @@ CREATE TABLE IF NOT EXISTS silver.f_Expense_Transactions (
     -- Local/FX Values
     LOCAL_AMOUNT DOUBLE,
     EXCH_RATE DOUBLE,
-    __file_name__ TEXT,
-    __folder_path__ TEXT,
     artifact_id TEXT,
     S_NO BIGINT,
     TIMESTAMP BIGINT,
@@ -358,8 +340,6 @@ CREATE TABLE IF NOT EXISTS silver.f_Transfer_Transactions (
     -- Local/FX Values
     LOCAL_AMOUNT DOUBLE,
     EXCH_RATE DOUBLE,
-    __file_name__ TEXT,
-    __folder_path__ TEXT,
     artifact_id TEXT,
     S_NO BIGINT,
     TIMESTAMP BIGINT,
@@ -391,8 +371,6 @@ CREATE TABLE IF NOT EXISTS silver.f_Opening_Balances (
     ZAMOUNTSUB DOUBLE,
     ZDATE DOUBLE,
     ZUTIME BIGINT,
-    __file_name__ TEXT,
-    __folder_path__ TEXT,
     artifact_id TEXT,
     FOREIGN KEY(ZCURRENCYUID) REFERENCES silver.d_Currency(UID),
     FOREIGN KEY(ZASSETUID) REFERENCES silver.d_Asset_Subcategory(UID),
@@ -406,8 +384,6 @@ CREATE TABLE IF NOT EXISTS silver.d_Investment_Benchmark_Master (
     -- Descriptors/Classifications
     Benchmark_Name TEXT,
     yF_Ticker TEXT,
-    __file_name__ TEXT,
-    __folder_path__ TEXT,
     artifact_id TEXT
 );
 
@@ -465,8 +441,6 @@ CREATE TABLE IF NOT EXISTS silver.d_Macro_Parameters (
     Estimated_Ordinary_Income_Tax_Rate DOUBLE,
     -- Descriptors/Classifications
     Remarks TEXT,
-    __file_name__ TEXT,
-    __folder_path__ TEXT,
     artifact_id TEXT,
     FOREIGN KEY(FY_Start_Date) REFERENCES silver.d_Calendar(Date)
 );
@@ -522,8 +496,6 @@ CREATE TABLE IF NOT EXISTS silver.f_Investment_Purchase_Data (
     Price_Local DOUBLE,
     Value_Local DOUBLE,
     FX_Rate DOUBLE,
-    __file_name__ TEXT,
-    __folder_path__ TEXT,
     artifact_id TEXT,
     FOREIGN KEY(Date) REFERENCES silver.d_Calendar(Date),
     FOREIGN KEY(ISIN) REFERENCES silver.d_Investment_Master(ISIN),
@@ -553,8 +525,6 @@ CREATE TABLE IF NOT EXISTS silver.f_Investment_Sale_Data (
     -- Absolute Returns
     Unit_PnL DOUBLE,
     Total_PnL DOUBLE,
-    __file_name__ TEXT,
-    __folder_path__ TEXT,
     artifact_id TEXT,
     FOREIGN KEY(Date) REFERENCES silver.d_Calendar(Date),
     FOREIGN KEY(ISIN) REFERENCES silver.d_Investment_Master(ISIN),
