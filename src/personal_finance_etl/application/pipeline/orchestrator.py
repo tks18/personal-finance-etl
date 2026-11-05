@@ -22,10 +22,12 @@ import polars as pl
 
 from personal_finance_etl.application.pipeline.execution import PipelineExecutor
 from personal_finance_etl.application.pipeline.lifecycle import RunLifecycleCoordinator
+from personal_finance_etl.application.pipeline.planner import CapabilityPlanner
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
 from personal_finance_etl.contracts.application import EngineStage
 from personal_finance_etl.contracts.event_transport import EventQueue, NullEventQueue
+from personal_finance_etl.contracts.execution_plan import ExecutionPlan
 from personal_finance_etl.contracts.observability import (
     EventCode,
     PresentationKind,
@@ -53,14 +55,21 @@ class ETLOrchestrator:
         status_queue: EventQueue | None = None,
         rules: FinancialRules | None = None,
         emitter: ObservabilityEmitter | None = None,
+        plan: ExecutionPlan | None = None,
     ) -> None:
         self.cfg = cfg
         self.rules = rules
         self.status_queue = status_queue or NullEventQueue()
         self.emitter = emitter or get_global_emitter()
+        self.plan = plan or CapabilityPlanner().create_plan()
         self.db_manager = DuckDBManager(cfg.TARGET_DB_BASE_PATH, cfg.TARGET_DB_NAME)
         self.executor = PipelineExecutor(
-            cfg, self.status_queue, self.db_manager, rules, emitter=self.emitter
+            cfg,
+            self.status_queue,
+            self.db_manager,
+            rules,
+            emitter=self.emitter,
+            plan=self.plan,
         )
 
     @property
@@ -82,6 +91,7 @@ class ETLOrchestrator:
             self.db_manager,
             self.rules,
             emitter=self.emitter,
+            plan=self.plan,
         )
 
         try:

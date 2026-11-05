@@ -21,10 +21,12 @@ import gc
 import traceback
 from pathlib import Path
 
+from personal_finance_etl.application.pipeline.planner import CapabilityPlanner
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
 from personal_finance_etl.contracts.application import EngineStage
 from personal_finance_etl.contracts.event_transport import EventQueue
+from personal_finance_etl.contracts.execution_plan import ExecutionPlan
 from personal_finance_etl.contracts.lifecycle import (
     CommitState,
     FailureDomain,
@@ -72,12 +74,14 @@ class RunLifecycleCoordinator:
         db_manager: DuckDBManager,
         rules: FinancialRules | None = None,
         emitter: ObservabilityEmitter | None = None,
+        plan: ExecutionPlan | None = None,
     ) -> None:
         self.cfg = cfg
         self.status_queue = status_queue
         self.db_manager = db_manager
         self.rules = rules
         self.emitter = emitter or get_global_emitter()
+        self.plan = plan or CapabilityPlanner().create_plan()
 
         self.duckdb_started: bool = False
         self.sqlite_started: bool = False
@@ -98,21 +102,24 @@ class RunLifecycleCoordinator:
         rules_summary = fingerprint_rules(self.rules)
 
         diagnostics.info(
-            "Configuration fingerprint: %s | Rules fingerprint: %s",
+            "Configuration fingerprint: %s | Rules fingerprint: %s | Plan fingerprint: %s",
             settings_summary["config_hash"],
             rules_summary["rules_hash"],
+            self.plan.plan_fingerprint,
         )
 
         self.emitter.emit_event(
             event_code=EventCode.SYSTEM_CONFIG_FINGERPRINT,
             message=(
                 f"Configuration fingerprint: {settings_summary['config_hash']} | "
-                f"Rules fingerprint: {rules_summary['rules_hash']}"
+                f"Rules fingerprint: {rules_summary['rules_hash']} | "
+                f"Plan fingerprint: {self.plan.plan_fingerprint}"
             ),
             presentation_kind=PresentationKind.INTERNAL,
             severity=DiagnosticSeverity.INFO,
             settings_fingerprint=settings_summary["config_hash"],
             rules_fingerprint=rules_summary["rules_hash"],
+            plan_fingerprint=self.plan.plan_fingerprint,
         )
 
     def initialize(self) -> tuple[ControlPlane, str, list[str]]:
@@ -135,6 +142,7 @@ class RunLifecycleCoordinator:
         run_id = cp.runs.start_run(
             cfg_json=self.cfg.model_dump_json(),
             rules_json=self.rules.model_dump_json() if self.rules else None,
+            plan=self.plan,
         )
         self.run_id = run_id
         cp.active_run_id = run_id
@@ -151,6 +159,7 @@ class RunLifecycleCoordinator:
                 component="lifecycle",
                 settings_fingerprint=settings_summary["config_hash"],
                 rules_fingerprint=rules_summary["rules_hash"],
+                plan_fingerprint=self.plan.plan_fingerprint,
             )
         )
 
