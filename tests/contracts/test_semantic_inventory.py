@@ -22,6 +22,7 @@ import pytest
 
 from personal_finance_etl.contracts.datasets import DatasetId
 from personal_finance_etl.contracts.semantic_inventory import (
+    ALL_SILVER_COLUMN_DISPOSITIONS,
     GOLD_CONTRACT_DEPENDENCIES,
     SILVER_COLUMN_DISPOSITIONS,
     SILVER_CONTRACT_SEMANTICS,
@@ -101,9 +102,9 @@ def test_silver_column_disposition_ddl_exact_parity() -> None:
         (entry.physical_table.lower(), entry.column_name) for entry in SILVER_COLUMN_DISPOSITIONS
     }
 
-    # Total column count assertion (exactly 552 physical columns)
-    assert len(ddl_table_col_pairs) == 552
-    assert len(SILVER_COLUMN_DISPOSITIONS) == 552
+    # Total column count assertion (exactly 522 active physical columns)
+    assert len(ddl_table_col_pairs) == 522
+    assert len(SILVER_COLUMN_DISPOSITIONS) == 522
 
     # Parity assertions: no missing columns, no extraneous manifest entries
     missing_in_manifest = ddl_table_col_pairs - manifest_table_col_pairs
@@ -113,6 +114,28 @@ def test_silver_column_disposition_ddl_exact_parity() -> None:
 
     unknown_in_manifest = manifest_table_col_pairs - ddl_table_col_pairs
     assert not unknown_in_manifest, f"Manifest declares non-existent columns: {unknown_in_manifest}"
+
+
+def test_closed_provenance_columns_absent_from_silver_ddl() -> None:
+    """Verify that all 30 closed legacy provenance columns are absent from physical Silver DDL."""
+    ddl_cols_map = _get_ddl_silver_columns()
+    ddl_table_col_pairs = {
+        (table.lower(), col) for table, cols in ddl_cols_map.items() for col in cols
+    }
+
+    closed_dispositions = [entry for entry in ALL_SILVER_COLUMN_DISPOSITIONS if not entry.is_active]
+    assert len(closed_dispositions) == 30
+    assert len(ALL_SILVER_COLUMN_DISPOSITIONS) == 552
+
+    for entry in closed_dispositions:
+        assert entry.closed_in_phase == "011"
+        assert entry.column_name in ("__file_name__", "__folder_path__")
+        assert (entry.physical_table.lower(), entry.column_name) not in ddl_table_col_pairs
+
+    # Assert that NO Silver table has __file_name__ or __folder_path__ in physical DDL
+    all_silver_cols = {col for _, cols in ddl_cols_map.items() for col in cols}
+    assert "__file_name__" not in all_silver_cols
+    assert "__folder_path__" not in all_silver_cols
 
 
 def test_zero_review_required() -> None:
@@ -175,7 +198,7 @@ def test_known_residue_dispositions() -> None:
     }
 
     found_names: set[str] = set()
-    for entry in SILVER_COLUMN_DISPOSITIONS:
+    for entry in ALL_SILVER_COLUMN_DISPOSITIONS:
         if entry.column_name in known_residue_names:
             expected_class, expected_disp = known_residue_names[entry.column_name]
             assert entry.classification == expected_class, (
