@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [9.7.0](https://github.com/tks18/personal-finance-etl/compare/9.6.4...9.7.0) (2026-11-05)
+
+
+### Features 🔥
+
+* **contracts:** define financial capability graph and registry ([6502a96](https://github.com/tks18/personal-finance-etl/commit/6502a96c1e7d3c5edf3f821794c528f5f51d17d8))
+
+
+### Tests 🧪
+
+* **architecture:** assert capability contract purity ([9dd37fd](https://github.com/tks18/personal-finance-etl/commit/9dd37fdd205d7f262e28f4839a58603aff737c64))
+* **contracts:** add capability graph validation and resolution suite ([830779a](https://github.com/tks18/personal-finance-etl/commit/830779a158e3a04c841d6f85b2976cf431a00e6e))
+* **infrastructure:** tune throughput gate threshold for windows disk ([3f77d30](https://github.com/tks18/personal-finance-etl/commit/3f77d30d907da22c9e155e01acb509ee816ede4b))
+
+
+### Docs 📃
+
+* **refactor:** complete phase 014 checklist and records ([a86f427](https://github.com/tks18/personal-finance-etl/commit/a86f427606b01fa493bbbb201b01d5d5aa572f26))
+
 ### [9.6.4](https://github.com/tks18/personal-finance-etl/compare/9.6.3...9.6.4) (2026-11-05)
 
 
