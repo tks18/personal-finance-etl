@@ -28,16 +28,13 @@ def transform_d_expense_category(
 ) -> pl.LazyFrame:
     """Execute the PQ logic for Expense Categories (TYPE = 1)."""
     cols = [
-        "__file_name__",
-        "__folder_path__",
         "S_NO",
         "MODIFY_DATE",
         "UID",
         "CATEGORY_NAME",
         "ORDER_SEQUENCE",
+        "artifact_id",
     ]
-    if "artifact_id" in df_lazy.collect_schema().names():
-        cols.append("artifact_id")
 
     return (
         df_lazy.rename(column_mapping)
@@ -56,17 +53,14 @@ def transform_d_expense_subcategory(
 ) -> pl.LazyFrame:
     """Execute the PQ logic for Expense Subcategories."""
     cols = [
-        "__file_name__",
-        "__folder_path__",
         "S_NO",
         "MODIFY_DATE",
         "UID",
         "CATEGORY_NAME",
         "ORDER_SEQUENCE",
         "CATEGORY_ID",
+        "artifact_id",
     ]
-    if "artifact_id" in df_lazy.collect_schema().names():
-        cols.append("artifact_id")
 
     df_transformed = (
         df_lazy.rename(column_mapping)

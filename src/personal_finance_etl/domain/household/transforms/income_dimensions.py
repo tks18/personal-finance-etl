@@ -153,16 +153,13 @@ def transform_d_income_category(
 ) -> pl.LazyFrame:
     """Execute the PQ and DAX logic using Polars LazyFrames."""
     cols = [
-        "__file_name__",
-        "__folder_path__",
         "S_NO",
         "MODIFY_DATE",
         "UID",
         "CATEGORY_NAME",
         "ORDER_SEQUENCE",
+        "artifact_id",
     ]
-    if "artifact_id" in df_lazy.collect_schema().names():
-        cols.append("artifact_id")
 
     return (
         df_lazy.rename(column_mapping)
@@ -266,17 +263,14 @@ def transform_d_income_subcategory(
 ) -> pl.LazyFrame:
     """Execute the PQ and DAX logic for Income Subcategories."""
     cols = [
-        "__file_name__",
-        "__folder_path__",
         "S_NO",
         "MODIFY_DATE",
         "UID",
         "CATEGORY_NAME",
         "ORDER_SEQUENCE",
         "CATEGORY_ID",
+        "artifact_id",
     ]
-    if "artifact_id" in df_lazy.collect_schema().names():
-        cols.append("artifact_id")
 
     df_pq = (
         df_lazy.rename(column_mapping)

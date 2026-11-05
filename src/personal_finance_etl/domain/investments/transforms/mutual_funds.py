@@ -65,8 +65,6 @@ def get_stg_mf_market_data(
     )
 
     cols = [
-        "__file_name__",
-        "__folder_path__",
         "__file_category__",
         "Month Date",
         "Scheme Name",
@@ -82,9 +80,8 @@ def get_stg_mf_market_data(
         "XIRR",
         "CURRENCY_ID",
         "ISIN",
+        "artifact_id",
     ]
-    if "artifact_id" in raw_data.collect_schema().names():
-        cols.append("artifact_id")
 
     return df_transformed.select(cols)
 
@@ -143,8 +140,6 @@ def get_base_mf_transactions(raw_data: pl.LazyFrame) -> pl.LazyFrame:
 
     scheme_clean = pl.col("Scheme Name").cast(pl.String).str.strip_chars()
     cols = [
-        "__file_name__",
-        "__folder_path__",
         "__file_category__",
         "Month Date",
         "Scheme Name",
@@ -153,9 +148,8 @@ def get_base_mf_transactions(raw_data: pl.LazyFrame) -> pl.LazyFrame:
         "NAV",
         "Amount",
         "Date",
+        "artifact_id",
     ]
-    if "artifact_id" in df_combined.collect_schema().names():
-        cols.append("artifact_id")
 
     df_transformed = df_combined.filter(
         scheme_clean.is_not_null()

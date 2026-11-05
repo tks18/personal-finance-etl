@@ -30,8 +30,6 @@ def transform_d_currency(
 ) -> pl.LazyFrame:
     """Execute the PQ logic for the Currency Master table."""
     cols = [
-        "__file_name__",
-        "__folder_path__",
         "S_NO",
         "UID",
         "CURRENCY_NAME",
@@ -46,9 +44,8 @@ def transform_d_currency(
         "IS_SHOW",
         "MODIFY_DATE",
         "DECIMAL_POINT",
+        "artifact_id",
     ]
-    if "artifact_id" in df_lazy.collect_schema().names():
-        cols.append("artifact_id")
 
     df_transformed = (
         df_lazy.rename(column_mapping)
@@ -77,15 +74,12 @@ def transform_d_currency(
 def transform_d_investment_benchmark_master(raw_data: pl.LazyFrame) -> pl.LazyFrame:
     """Execute the PQ logic for the Benchmark Master table."""
     cols = [
-        "__file_name__",
-        "__folder_path__",
         "ID",
         "Benchmark_Name",
         "yF_Ticker",
         "CURRENCY_ID",
+        "artifact_id",
     ]
-    if "artifact_id" in raw_data.collect_schema().names():
-        cols.append("artifact_id")
     return raw_data.rename({"Currency": "CURRENCY_ID"}).select(cols)
 
 
@@ -93,8 +87,6 @@ def transform_d_macro_parameters(raw_data: pl.LazyFrame) -> pl.LazyFrame:
     """Execute the PQ logic for the Macro Parameters table."""
     cols = [
         "FY",
-        "__file_name__",
-        "__folder_path__",
         "FY_Start_Date",
         "FY_End_Date",
         "Debt_MF_Cutoff_Date",
@@ -117,9 +109,8 @@ def transform_d_macro_parameters(raw_data: pl.LazyFrame) -> pl.LazyFrame:
         "Estimated_Ordinary_Income_Tax_Rate",
         "Equity_LTCG_Exemption",
         "Remarks",
+        "artifact_id",
     ]
-    if "artifact_id" in raw_data.collect_schema().names():
-        cols.append("artifact_id")
 
     return raw_data.with_columns(
         (

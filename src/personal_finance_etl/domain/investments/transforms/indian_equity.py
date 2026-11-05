@@ -94,8 +94,6 @@ def get_stg_stock_market_data(raw_data: pl.LazyFrame, default_currency_id: str) 
         pl.lit(default_currency_id).alias("CURRENCY_ID"),
     )
     cols = [
-        "__file_name__",
-        "__folder_path__",
         "__file_category__",
         "Month Date",
         "Stock name",
@@ -111,9 +109,8 @@ def get_stg_stock_market_data(raw_data: pl.LazyFrame, default_currency_id: str) 
         "Remark",
         "STOCKS_CLASS",
         "CURRENCY_ID",
+        "artifact_id",
     ]
-    if "artifact_id" in raw_data.collect_schema().names():
-        cols.append("artifact_id")
 
     return df_transformed.select(cols)
 
@@ -169,8 +166,6 @@ def get_base_stock_transactions(raw_data: pl.LazyFrame) -> pl.LazyFrame:
         )
     )
     cols = [
-        "__file_name__",
-        "__folder_path__",
         "__file_category__",
         "Stock name",
         "Symbol",
@@ -182,9 +177,8 @@ def get_base_stock_transactions(raw_data: pl.LazyFrame) -> pl.LazyFrame:
         "Exchange Order Id",
         "Execution date and time",
         "Order status",
+        "artifact_id",
     ]
-    if "artifact_id" in raw_data.collect_schema().names():
-        cols.append("artifact_id")
 
     df_transformed = df_filtered.select(cols)
 

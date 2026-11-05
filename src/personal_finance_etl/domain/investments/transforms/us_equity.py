@@ -76,8 +76,6 @@ def get_base_us_stock_transactions(raw_data: pl.LazyFrame) -> pl.LazyFrame:
     )
 
     cols: list[str | pl.Expr] = [
-        "__file_name__",
-        "__folder_path__",
         pl.col("Stock Name").alias("Instrument Name"),
         "ISIN",
         pl.col("Yahoo Ticker").alias("yF_Ticker"),
@@ -90,9 +88,8 @@ def get_base_us_stock_transactions(raw_data: pl.LazyFrame) -> pl.LazyFrame:
         pl.col("Order Amount (INR)").alias("Value"),
         pl.col("Brokerage (INR)").alias("Brokerage_INR"),
         pl.col("Currency").alias("CURRENCY_ID"),
+        "artifact_id",
     ]
-    if "artifact_id" in df_validated.collect_schema().names():
-        cols.append("artifact_id")
 
     df_transformed = df_validated.select(cols).with_columns(
         [
