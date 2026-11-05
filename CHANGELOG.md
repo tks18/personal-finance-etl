@@ -2,6 +2,38 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [9.6.2](https://github.com/tks18/personal-finance-etl/compare/9.6.1...9.6.2) (2026-11-05)
+
+
+### Features 🔥
+
+* **contracts:** add canonical provenance contracts and manifest parity ([e0d427f](https://github.com/tks18/personal-finance-etl/commit/e0d427fcf551f7e05b0d96666ecb75fc5318e32d))
+* **control-plane:** add artifact metadata resolution query ([4d23c71](https://github.com/tks18/personal-finance-etl/commit/4d23c71edc04fa9c420640bc830671de6a94d11d))
+* **domain:** preserve artifact_id through domain transforms ([7555c7a](https://github.com/tks18/personal-finance-etl/commit/7555c7a6fcaa69137f5fa51beb273d6772849ac3))
+* **providers:** additively populate artifact_id in extraction ([4e1abc2](https://github.com/tks18/personal-finance-etl/commit/4e1abc2315f846085ff85433d67ebbbb7b4ca9e9))
+* **warehouse:** add artifact_id to silver table ddl ([80da2aa](https://github.com/tks18/personal-finance-etl/commit/80da2aac7b598ab64f7adeb53ddb9fc169c4777a))
+
+
+### Code Refactoring 🖌
+
+* **contracts:** mark legacy provenance columns closed in manifest ([a6a9df1](https://github.com/tks18/personal-finance-etl/commit/a6a9df1554d0edf9179361949622f7130dac55d9))
+* **domain:** remove legacy path fields from transforms ([14f6d66](https://github.com/tks18/personal-finance-etl/commit/14f6d660e5068be3294f221f1076b771bd115bff))
+* **warehouse:** drop legacy path columns from silver ddl ([4db80ef](https://github.com/tks18/personal-finance-etl/commit/4db80ef845df5490bea56a6c523cf8f065a08e69))
+
+
+### Tests 🧪
+
+* **architecture:** enforce no path columns in silver ddl ([c079f99](https://github.com/tks18/personal-finance-etl/commit/c079f99fa78bea72bba8db1631d524f008e16ab5))
+* **contracts:** update silver parity and assert path columns absent ([4f29396](https://github.com/tks18/personal-finance-etl/commit/4f293966786a207ef35c108ee4c455b23f8646d5))
+* **domain:** assert path columns absent and artifact_id preserved ([ffaadd3](https://github.com/tks18/personal-finance-etl/commit/ffaadd3d434f97d968349765ff7d79c0cfe0413d))
+* **infrastructure:** add provenance resolution and lineage tests ([d595bab](https://github.com/tks18/personal-finance-etl/commit/d595babef105be62cc6dfd53a3880904888f0105))
+
+
+### Docs 📃
+
+* **refactor:** complete phase 010 checklist and records ([df216a0](https://github.com/tks18/personal-finance-etl/commit/df216a061f56c131748ec5fa91c05baf150d057c))
+* **refactor:** complete phase 011 checklist and records ([40cbcc8](https://github.com/tks18/personal-finance-etl/commit/40cbcc8a8e0c06731db08e66b6bc201908ce5aa5))
+
 ### [9.6.1](https://github.com/tks18/personal-finance-etl/compare/9.6.0...9.6.1) (2026-11-03)
 
 
