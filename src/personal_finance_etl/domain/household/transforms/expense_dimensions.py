@@ -28,11 +28,8 @@ def transform_d_expense_category(
 ) -> pl.LazyFrame:
     """Execute the PQ logic for Expense Categories (TYPE = 1)."""
     cols = [
-        "S_NO",
-        "MODIFY_DATE",
         "UID",
         "CATEGORY_NAME",
-        "ORDER_SEQUENCE",
         "artifact_id",
     ]
 
@@ -53,11 +50,8 @@ def transform_d_expense_subcategory(
 ) -> pl.LazyFrame:
     """Execute the PQ logic for Expense Subcategories."""
     cols = [
-        "S_NO",
-        "MODIFY_DATE",
         "UID",
         "CATEGORY_NAME",
-        "ORDER_SEQUENCE",
         "CATEGORY_ID",
         "artifact_id",
     ]
