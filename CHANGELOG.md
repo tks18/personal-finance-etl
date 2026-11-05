@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [9.8.0](https://github.com/tks18/personal-finance-etl/compare/9.7.2...9.8.0) (2026-11-05)
+
+
+### Features 🔥
+
+* **application:** implement non-IO SourcePlanner and plan models ([27e1ffc](https://github.com/tks18/personal-finance-etl/commit/27e1ffccd72b57677a58ec585bd9209d3f07f386))
+* **bootstrap:** wire source configuration and planning into container ([9bcca0e](https://github.com/tks18/personal-finance-etl/commit/9bcca0e97c9e006e3970fdfe01f49c48908a0cd6))
+* **config:** implement versioned SourceConfiguration loader ([9b3f2af](https://github.com/tks18/personal-finance-etl/commit/9b3f2afce9b3916a1ab97649add6084a533c5125))
+* **contracts:** add bronze dataset activity predicate to plan ([34b6797](https://github.com/tks18/personal-finance-etl/commit/34b679767ed8d9a788952a9aa0f2a88a52e14b88))
+
+
+### Tests 🧪
+
+* **config:** add SourceConfiguration and SourcePlanner suites ([b9b0091](https://github.com/tks18/personal-finance-etl/commit/b9b0091b260dee0b9dbf92b2538060aa8740ef45))
+
+
+### Docs 📃
+
+* **refactor:** complete phase 017 checklist and records ([7cd3694](https://github.com/tks18/personal-finance-etl/commit/7cd36942d8ed3d451eb0df218ecd33768d0d4205))
+
 ### [9.7.2](https://github.com/tks18/personal-finance-etl/compare/9.7.1...9.7.2) (2026-11-05)
 
 
