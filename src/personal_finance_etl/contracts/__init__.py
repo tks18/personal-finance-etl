@@ -14,6 +14,7 @@ Owns
 - Authoritative Silver and Gold semantic inventories, column classifications, and dispositions.
 - Canonical provenance and artifact metadata contracts (ProvenanceRef, ArtifactMetadata).
 - Provider-neutral market vocabulary and symbol mapping contracts (ProviderSymbolMapping, ProviderSymbolRegistry).
+- Financial capability graph, descriptors, and resolution (CapabilityId, CapabilityDescriptor, CapabilityGraph).
 
 Does not own
 -------------
@@ -26,6 +27,18 @@ from personal_finance_etl.contracts.application import (
     EngineDataTransport,
     EngineExecutionResult,
     EngineStage,
+)
+from personal_finance_etl.contracts.capabilities import (
+    CAPABILITY_REGISTRY,
+    COMMON_PRODUCED_SILVER_DATASETS,
+    CapabilityDescriptor,
+    CapabilityGraph,
+    CapabilityGraphError,
+    CapabilityId,
+    ContributionDescriptor,
+    ContributionScope,
+    ExternalEnrichmentId,
+    ResolvedCapabilityGraph,
 )
 from personal_finance_etl.contracts.datasets import (
     BRONZE_DATASET_ORIGIN_MAP,
@@ -106,9 +119,17 @@ __all__ = [
     "ALL_SILVER_COLUMN_DISPOSITIONS",
     "ArtifactMetadata",
     "BRONZE_DATASET_ORIGIN_MAP",
+    "CAPABILITY_REGISTRY",
+    "COMMON_PRODUCED_SILVER_DATASETS",
+    "CapabilityDescriptor",
+    "CapabilityGraph",
+    "CapabilityGraphError",
+    "CapabilityId",
     "ColumnClassification",
     "ColumnDisposition",
     "CommitState",
+    "ContributionDescriptor",
+    "ContributionScope",
     "DatasetId",
     "DatasetOrigin",
     "DiagnosticSeverity",
@@ -121,6 +142,7 @@ __all__ = [
     "EventCode",
     "EventEmitter",
     "EventOutcome",
+    "ExternalEnrichmentId",
     "ExtractionBatchResult",
     "ExtractionCompletenessError",
     "ExtractionProviderRequest",
@@ -144,6 +166,7 @@ __all__ = [
     "ProviderSymbolMapping",
     "ProviderSymbolRegistry",
     "ProviderType",
+    "ResolvedCapabilityGraph",
     "RestoreOutcome",
     "RestoreResult",
     "SILVER_COLUMN_DISPOSITIONS",
