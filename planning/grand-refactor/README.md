@@ -50,8 +50,8 @@ If code evidence contradicts a phase, stop and amend the phase before changing t
 | 015 | Execution planner and plan-scoped completeness | v9.7.1 | [x] |
 | 016 | First optional capability proof | v9.7.2 | [x] |
 | 017 | Production source configuration loader | v9.8.0 | [x] |
-| 018 | Mapping and normalization engine | v9.8.1 | [ ] |
-| 019 | Identity integration and current mapping migration | v9.8.2 | [ ] |
+| 018 | Mapping and normalization engine | v9.8.1 | [x] |
+| 019 | Identity integration and current mapping migration | v9.8.2 | [x] |
 | 020 | Generalized configuration provenance | v9.8.3 | [ ] |
 | 021 | Pre-Bronze persistence foundation | v9.9.0 | [ ] |
 | 022 | Pre-Bronze operational and recovery integration | v9.9.1 | [ ] |

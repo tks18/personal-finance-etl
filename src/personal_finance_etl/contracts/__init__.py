@@ -13,6 +13,7 @@ Owns
 - Canonical typed observability and telemetry contracts (ObservabilityEvent, EventCode).
 - Authoritative Silver and Gold semantic inventories, column classifications, and dispositions.
 - Canonical provenance and artifact metadata contracts (ProvenanceRef, ArtifactMetadata).
+- Canonical Bronze field vocabularies and validation (CANONICAL_BRONZE_FIELDS, CANONICAL_PROVENANCE_FIELDS).
 - Provider-neutral market vocabulary and symbol mapping contracts (ProviderSymbolMapping, ProviderSymbolRegistry).
 - Financial capability graph, descriptors, and resolution (CapabilityId, CapabilityDescriptor, CapabilityGraph).
 
@@ -27,6 +28,12 @@ from personal_finance_etl.contracts.application import (
     EngineDataTransport,
     EngineExecutionResult,
     EngineStage,
+)
+from personal_finance_etl.contracts.canonical_fields import (
+    CANONICAL_BRONZE_FIELDS,
+    CANONICAL_PROVENANCE_FIELDS,
+    get_canonical_fields,
+    is_valid_canonical_field,
 )
 from personal_finance_etl.contracts.capabilities import (
     CAPABILITY_REGISTRY,
@@ -120,6 +127,8 @@ __all__ = [
     "ALL_SILVER_COLUMN_DISPOSITIONS",
     "ArtifactMetadata",
     "BRONZE_DATASET_ORIGIN_MAP",
+    "CANONICAL_BRONZE_FIELDS",
+    "CANONICAL_PROVENANCE_FIELDS",
     "CAPABILITY_REGISTRY",
     "COMMON_PRODUCED_SILVER_DATASETS",
     "CapabilityDescriptor",
@@ -182,10 +191,12 @@ __all__ = [
     "TRANSITIONAL_DATASETS",
     "classify_failure_domain",
     "get_bronze_dataset_origin",
+    "get_canonical_fields",
     "get_columns_by_classification",
     "get_columns_by_disposition",
     "get_gold_contract_dependency",
     "get_silver_column_disposition",
     "get_silver_contract_semantics",
+    "is_valid_canonical_field",
     "validate_source_id",
 ]

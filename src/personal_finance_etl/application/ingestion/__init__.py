@@ -7,6 +7,7 @@ Owns
 - Coordinating Bronze storage persistence and synchronization.
 - Transitional compatibility resolution for change detection (resolve_legacy_change_detection_policy).
 - Identity plan compilation and deterministic execution for Bronze datasets (compile_identity_plan, execute_identity_plan).
+- Pre-Bronze dataset admission coordinating normalization and identity resolution (AdmissionPlan, AdmissionService).
 
 Does not own
 -------------
@@ -17,6 +18,10 @@ Does not own
 
 from __future__ import annotations
 
+from personal_finance_etl.application.ingestion.admission import (
+    AdmissionPlan,
+    AdmissionService,
+)
 from personal_finance_etl.application.ingestion.asset_strategies import (
     AssetPipeline,
     MutualFundPipeline,
@@ -46,6 +51,8 @@ from personal_finance_etl.application.ingestion.policy_resolver import (
 )
 
 __all__ = [
+    "AdmissionPlan",
+    "AdmissionService",
     "AssetPipeline",
     "BenchmarkPipeline",
     "CurrencyPipeline",

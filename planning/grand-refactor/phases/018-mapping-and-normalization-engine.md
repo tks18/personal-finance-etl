@@ -145,13 +145,13 @@ Do not:
 
 ## 11. Completion checklist
 
-- [ ] Mapping model is typed.
-- [ ] Normalization vocabulary is bounded.
-- [ ] Compiler validates canonical targets.
-- [ ] Executor is deterministic/vectorized.
-- [ ] Typed errors identify source/dataset.
-- [ ] Current representative mappings can be reproduced.
-- [ ] No production persistence changed.
+- [x] Mapping model is typed.
+- [x] Normalization vocabulary is bounded.
+- [x] Compiler validates canonical targets.
+- [x] Executor is deterministic/vectorized.
+- [x] Typed errors identify source/dataset.
+- [x] Current representative mappings can be reproduced.
+- [x] No production persistence changed.
 
 ## 12. Commit boundary
 
@@ -166,20 +166,37 @@ Phase 019 may assume canonical normalization plans can be compiled/executed in m
 ## Phase completion record
 
 ```text
-Phase:
-Target release:
+Phase: 018
+Target release: v9.8.1
 Files changed:
-Schema changed:
-Runtime behavior changed:
+  - src/personal_finance_etl/contracts/canonical_fields.py
+  - src/personal_finance_etl/contracts/__init__.py
+  - src/personal_finance_etl/config/sources/mapping.py
+  - src/personal_finance_etl/config/sources/normalization.py
+  - src/personal_finance_etl/config/sources/model.py
+  - src/personal_finance_etl/config/sources/loader.py
+  - src/personal_finance_etl/config/sources/__init__.py
+  - src/personal_finance_etl/application/normalization/errors.py
+  - src/personal_finance_etl/application/normalization/models.py
+  - src/personal_finance_etl/application/normalization/compiler.py
+  - src/personal_finance_etl/application/normalization/executor.py
+  - src/personal_finance_etl/application/normalization/__init__.py
+  - tests/contracts/test_canonical_fields.py
+  - tests/config/test_mapping_config.py
+  - tests/config/test_source_selectors.py
+  - tests/application/test_normalization_compiler.py
+  - tests/application/test_normalization_executor.py
+Schema changed: NO (In-memory configuration models and compiler/executor added; Bronze persistence unchanged)
+Runtime behavior changed: NO (Active extraction/transformation unchanged; legacy coordinator preserved)
 Financial formulas changed: NO
-Focused tests:
-Architecture tests:
-Real-data run:
-Performance check:
-Compatibility path still present:
-Old path deleted:
-Exit assertions green:
-Commit:
+Focused tests: tests/contracts/test_canonical_fields.py, tests/config/test_mapping_config.py, tests/application/test_normalization_compiler.py, tests/application/test_normalization_executor.py (28/28 passed)
+Architecture tests: tests/architecture/test_boundaries.py (11/11 passed)
+Real-data run: N/A (Non-I/O in-memory engine)
+Performance check: Sub-millisecond non-I/O compilation and vectorized native Polars execution
+Compatibility path still present: YES (column_master.csv preserved in coordinator)
+Old path deleted: NO (demolition scheduled for Phase 030/035)
+Exit assertions green: YES
+Commit: feat(ingestion): add mapping normalization engine
 ```
 
 A phase is incomplete if any required exit assertion is false.

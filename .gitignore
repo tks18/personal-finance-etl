@@ -139,6 +139,7 @@ ui.lock
 tests/output/
 tests/samples/output
 outputs/
+inputs/
 scratch/
 
 # Local Commit Overrides & Custom Maps

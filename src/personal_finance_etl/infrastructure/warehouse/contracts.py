@@ -117,7 +117,7 @@ BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
         "bronze.r_Benchmark_Mapping",
         True,
         IdentityRequirement.REQUIRED,
-        "Benchmark Scheme Mapping (Scheme Name)",
+        "Benchmark Asset Mapping (ISIN)",
     ),
     BronzeDataContract(
         DatasetId.HOUSEHOLD_OPENING_BALANCES,
@@ -135,7 +135,7 @@ BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
         "bronze.r_Benchmark_Master",
         True,
         IdentityRequirement.REQUIRED,
-        "Benchmark Definition (Benchmark Code)",
+        "Benchmark Definition (ID)",
     ),
     BronzeDataContract(
         DatasetId.INVESTMENT_MACRO_PARAMETERS,
@@ -144,7 +144,7 @@ BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
         "bronze.r_Macro_Parameters",
         True,
         IdentityRequirement.REQUIRED,
-        "Macro Parameter (Parameter Name, Effective Date)",
+        "Financial Year Macro Parameter (FY)",
     ),
     BronzeDataContract(
         DatasetId.COMMON_COLUMN_MASTER,
