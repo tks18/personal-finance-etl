@@ -23,6 +23,10 @@ from personal_finance_etl.infrastructure.control_plane.facade import ControlPlan
 from personal_finance_etl.infrastructure.observability.diagnostics import (
     get_observability_diagnostics,
 )
+from personal_finance_etl.infrastructure.warehouse.contracts import (
+    PRE_BRONZE_ARTIFACT_ID,
+    PRE_BRONZE_CONTRACT_REGISTRY,
+)
 from personal_finance_etl.infrastructure.warehouse.registry import (
     BRONZE_CONTRACT_REGISTRY,
     BronzeDataContract,
@@ -210,12 +214,12 @@ class DuckDBRegistryHealer:
         for duckdb_path in duckdb_paths:
             if duckdb_path not in synced_registry:
                 row = self.conn.execute(
-                    "SELECT file_name, file_category FROM meta.m_File_Registry WHERE relative_path = ?",
+                    "SELECT file_name, file_category, file_id FROM meta.m_File_Registry WHERE relative_path = ?",
                     [duckdb_path],
                 ).fetchone()
 
                 if row:
-                    fname, cat = row
+                    fname, cat, file_id = row
                     del_table = cat_to_table.get(cat)
                     if del_table and tables_exist.get(del_table, False):
                         try:
@@ -225,6 +229,17 @@ class DuckDBRegistryHealer:
                             )
                         except duckdb.CatalogException:
                             pass
+
+                    # Prune associated rows in Pre-Bronze tables using explicit artifact provenance
+                    if file_id:
+                        for pb_contract in PRE_BRONZE_CONTRACT_REGISTRY:
+                            try:
+                                self.conn.execute(
+                                    f"DELETE FROM {pb_contract.physical_table} WHERE {PRE_BRONZE_ARTIFACT_ID} = ?",  # nosec B608
+                                    [file_id],
+                                )
+                            except duckdb.CatalogException:
+                                pass
 
                 self.conn.execute(
                     "DELETE FROM meta.m_File_Registry WHERE relative_path = ?",

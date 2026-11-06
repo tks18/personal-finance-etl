@@ -16,12 +16,15 @@ from __future__ import annotations
 
 from personal_finance_etl.infrastructure.warehouse.connection import DuckDBManager
 from personal_finance_etl.infrastructure.warehouse.contracts import (
+    MANAGED_WAREHOUSE_SCHEMAS,
+    PERSISTED_DATA_SCHEMAS,
     PRE_BRONZE_ARTIFACT_ID,
     PRE_BRONZE_CONTRACT_REGISTRY,
     PRE_BRONZE_DATASET_ID,
     PRE_BRONZE_PROVENANCE_COLUMNS,
     PRE_BRONZE_SOURCE_ID,
     PreBronzeDataContract,
+    WarehouseLayer,
 )
 from personal_finance_etl.infrastructure.warehouse.fingerprints import (
     generate_contract_registry_fingerprint,
@@ -45,6 +48,8 @@ from personal_finance_etl.infrastructure.warehouse.registry import (
 __all__ = [
     "BRONZE_CONTRACT_REGISTRY",
     "DATA_CONTRACT_REGISTRY",
+    "MANAGED_WAREHOUSE_SCHEMAS",
+    "PERSISTED_DATA_SCHEMAS",
     "PRE_BRONZE_ARTIFACT_ID",
     "PRE_BRONZE_CONTRACT_REGISTRY",
     "PRE_BRONZE_DATASET_ID",
@@ -55,6 +60,7 @@ __all__ = [
     "DuckDBManager",
     "PreBronzeDataContract",
     "PreBronzeLayer",
+    "WarehouseLayer",
     "generate_contract_registry_fingerprint",
     "get_contract_by_table",
     "get_pre_bronze_contract_by_dataset_id",

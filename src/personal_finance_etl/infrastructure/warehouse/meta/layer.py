@@ -6,7 +6,7 @@ Owns
 - Self-healing DuckDB file registry against SQLite Control Plane records (heal_duckdb_registry).
 - Ingested file registration in meta.m_File_Registry (register_file).
 - Recording table row metrics, financial rules, settings, data contracts, and simulation run provenance.
-- Dropping uncontracted orphaned physical tables in bronze/silver/gold schemas.
+- Dropping uncontracted orphaned physical tables in pre_bronze/bronze/silver/gold schemas.
 
 Does not own
 -------------
@@ -24,6 +24,7 @@ import polars as pl
 
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
+from personal_finance_etl.config.sources.change_detection import SyncStrategy
 from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
 from personal_finance_etl.infrastructure.control_plane.hashing import (
     FILE_TYPE_MAP,
@@ -35,6 +36,11 @@ from personal_finance_etl.infrastructure.observability.diagnostics import (
     get_observability_diagnostics,
 )
 from personal_finance_etl.infrastructure.warehouse.connection import DuckDBManager
+from personal_finance_etl.infrastructure.warehouse.contracts import (
+    PERSISTED_DATA_SCHEMAS,
+    PRE_BRONZE_CONTRACT_REGISTRY,
+    WarehouseLayer,
+)
 from personal_finance_etl.infrastructure.warehouse.fingerprints import (
     generate_contract_registry_fingerprint,
 )
@@ -186,7 +192,7 @@ class MetaLayer:
             )
 
     def _record_table_metrics(self, dfs: dict[str, pl.DataFrame]) -> None:
-        """Record row counts for all built Silver and Gold analytical tables.
+        """Record row counts for all built Pre-Bronze, Silver, and Gold analytical tables.
 
         Parameters
         ----------
@@ -211,6 +217,26 @@ class MetaLayer:
                 """,
                 [contract.layer, physical_table, count],
             )
+
+        # Record Pre-Bronze table metrics if physical tables exist in DuckDB
+        for pb_contract in PRE_BRONZE_CONTRACT_REGISTRY:
+            try:
+                row = self.conn.execute(
+                    f"SELECT count(*) FROM {pb_contract.physical_table}"  # nosec B608
+                ).fetchone()
+                if row is not None:
+                    count = int(row[0])
+                    schema_part, table_part = pb_contract.physical_table.split(".", maxsplit=1)
+                    self.conn.execute(
+                        """
+                        INSERT INTO meta.m_Table_Row_Counts
+                        (schema_name, table_name, row_count, generated_at)
+                        VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+                        """,
+                        [schema_part, table_part, count],
+                    )
+            except duckdb.CatalogException:
+                pass
 
     def _record_rules_and_settings(self) -> None:
         """Snapshot current financial rules and environment settings into meta tables."""
@@ -250,8 +276,27 @@ class MetaLayer:
             )
 
     def _record_data_contracts(self) -> None:
-        """Publish registered Bronze, Silver, and Gold data contracts into DuckDB."""
+        """Publish registered Pre-Bronze, Bronze, Silver, and Gold data contracts into DuckDB."""
         self.conn.execute("DELETE FROM meta.m_Data_Contracts")
+
+        for pb_contract in PRE_BRONZE_CONTRACT_REGISTRY:
+            self.conn.execute(
+                """
+                INSERT INTO meta.m_Data_Contracts 
+                (contract_id, layer, physical_table, domain, grain, producer, is_full_replace, publication_order) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    pb_contract.dataset_id.value,
+                    WarehouseLayer.PRE_BRONZE.value,
+                    pb_contract.physical_table,
+                    "PreBronze",
+                    "Source",
+                    "Provider",
+                    pb_contract.sync_strategy == SyncStrategy.FULL_REPLACE,
+                    -1,
+                ],
+            )
 
         for b_contract in BRONZE_CONTRACT_REGISTRY:
             self.conn.execute(
@@ -291,13 +336,16 @@ class MetaLayer:
                 ],
             )
 
-    def _cleanup_orphaned_tables(self) -> None:
-        """Drop any physical tables in bronze/silver/gold schemas not declared in contract registries."""
+    def cleanup_orphaned_tables(self) -> None:
+        """Drop any physical tables in pre_bronze/bronze/silver/gold schemas not declared in contracts."""
+        schema_placeholders = ", ".join(f"'{s}'" for s in PERSISTED_DATA_SCHEMAS)
         existing_tables = self.conn.execute(
-            "SELECT lower(table_schema), lower(table_name) FROM information_schema.tables WHERE lower(table_schema) IN ('bronze', 'silver', 'gold')"
+            f"SELECT lower(table_schema), lower(table_name) "  # nosec B608
+            f"FROM information_schema.tables WHERE lower(table_schema) IN ({schema_placeholders})"
         ).fetchall()
 
-        valid_physical_tables = {c.physical_table.lower() for c in BRONZE_CONTRACT_REGISTRY}
+        valid_physical_tables = {c.physical_table.lower() for c in PRE_BRONZE_CONTRACT_REGISTRY}
+        valid_physical_tables.update({c.physical_table.lower() for c in BRONZE_CONTRACT_REGISTRY})
         valid_physical_tables.update({c.physical_table.lower() for c in DATA_CONTRACT_REGISTRY})
 
         for schema_name, table_name in existing_tables:
@@ -307,6 +355,10 @@ class MetaLayer:
                     "MetaLayer: Dropping orphaned physical table %s", full_table_name
                 )
                 self.conn.execute(f"DROP TABLE IF EXISTS {full_table_name} CASCADE")  # nosec B608
+
+    def _cleanup_orphaned_tables(self) -> None:
+        """Drop any physical tables not declared in contracts (internal alias)."""
+        self.cleanup_orphaned_tables()
 
     def _mirror_latest_simulation(
         self,
@@ -376,7 +428,7 @@ class MetaLayer:
         self._record_table_metrics(dfs)
         self._record_rules_and_settings()
         self._record_data_contracts()
-        self._cleanup_orphaned_tables()
+        self.cleanup_orphaned_tables()
 
         tables_metadata = [
             {
