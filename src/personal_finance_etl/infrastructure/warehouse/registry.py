@@ -21,22 +21,28 @@ from personal_finance_etl.contracts.datasets import DatasetId, IdentityRequireme
 from personal_finance_etl.infrastructure.warehouse.contracts import (
     BRONZE_CONTRACT_REGISTRY,
     DATA_CONTRACT_REGISTRY,
+    MANAGED_WAREHOUSE_SCHEMAS,
+    PERSISTED_DATA_SCHEMAS,
     PRE_BRONZE_CONTRACT_REGISTRY,
     BronzeDataContract,
     DataContract,
     PreBronzeDataContract,
     SyncStrategy,
+    WarehouseLayer,
 )
 
 __all__ = [
     "BRONZE_CONTRACT_REGISTRY",
     "DATA_CONTRACT_REGISTRY",
+    "MANAGED_WAREHOUSE_SCHEMAS",
+    "PERSISTED_DATA_SCHEMAS",
     "PRE_BRONZE_CONTRACT_REGISTRY",
     "BronzeDataContract",
     "DataContract",
     "DatasetId",
     "PreBronzeDataContract",
     "SyncStrategy",
+    "WarehouseLayer",
     "get_bronze_contract_by_dataset_id",
     "get_contract_by_dataset_id",
     "get_contract_by_table",

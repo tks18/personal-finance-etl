@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [9.9.1](https://github.com/tks18/personal-finance-etl/compare/9.9.0...9.9.1) (2026-11-06)
+
+
+### Features 🔥
+
+* **recovery:** integrate pre-bronze operations ([3177f76](https://github.com/tks18/personal-finance-etl/commit/3177f76199c7506add5cab592bcf511232ee9c22))
+
+
+### Tests 🧪
+
+* **recovery:** add pre-bronze operational and recovery tests ([f78562b](https://github.com/tks18/personal-finance-etl/commit/f78562bf15ac97f15beb18bc934fefa94cbc185d))
+
+
+### Docs 📃
+
+* **refactor:** complete phase 022 pre-bronze recovery integration ([c4f2885](https://github.com/tks18/personal-finance-etl/commit/c4f288599f2e2537f1fab36078228f524b6d0f2c))
+
 ## [9.9.0](https://github.com/tks18/personal-finance-etl/compare/9.8.3...9.9.0) (2026-11-06)
 
 

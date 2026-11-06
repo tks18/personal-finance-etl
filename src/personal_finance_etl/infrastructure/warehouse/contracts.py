@@ -4,6 +4,7 @@ Owns
 ----
 - PreBronzeDataContract, BronzeDataContract, and DataContract dataclass definitions.
 - Standard Pre-Bronze provenance column constants.
+- WarehouseLayer enumeration and managed warehouse schema taxonomies.
 - PRE_BRONZE_CONTRACT_REGISTRY: Catalog of Pre-Bronze warehouse persistence contracts.
 - BRONZE_CONTRACT_REGISTRY: Catalog of Bronze ingestion layer contracts.
 - DATA_CONTRACT_REGISTRY: Catalog of Silver and Gold analytical presentation contracts.
@@ -17,6 +18,7 @@ Does not own
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum
 
 from personal_finance_etl.config.sources.change_detection import SyncStrategy
 from personal_finance_etl.contracts.datasets import DatasetId, IdentityRequirement
@@ -31,7 +33,37 @@ PRE_BRONZE_PROVENANCE_COLUMNS: tuple[str, ...] = (
     PRE_BRONZE_DATASET_ID,
 )
 
+
+class WarehouseLayer(StrEnum):
+    """Authoritative warehouse analytical layer classifications."""
+
+    PRE_BRONZE = "pre_bronze"
+    BRONZE = "bronze"
+    SILVER = "silver"
+    GOLD = "gold"
+    META = "meta"
+
+
+# Authoritative, centralized tuple of all managed warehouse schemas in DuckDB
+MANAGED_WAREHOUSE_SCHEMAS: tuple[str, ...] = (
+    WarehouseLayer.PRE_BRONZE.value,
+    WarehouseLayer.BRONZE.value,
+    WarehouseLayer.SILVER.value,
+    WarehouseLayer.GOLD.value,
+    WarehouseLayer.META.value,
+)
+
+# Persisted tabular data schemas (excluding meta) subject to orphan table pruning and metrics
+PERSISTED_DATA_SCHEMAS: tuple[str, ...] = (
+    WarehouseLayer.PRE_BRONZE.value,
+    WarehouseLayer.BRONZE.value,
+    WarehouseLayer.SILVER.value,
+    WarehouseLayer.GOLD.value,
+)
+
 __all__ = [
+    "MANAGED_WAREHOUSE_SCHEMAS",
+    "PERSISTED_DATA_SCHEMAS",
     "PRE_BRONZE_ARTIFACT_ID",
     "PRE_BRONZE_CONTRACT_REGISTRY",
     "PRE_BRONZE_DATASET_ID",
@@ -43,6 +75,7 @@ __all__ = [
     "IdentityRequirement",
     "PreBronzeDataContract",
     "SyncStrategy",
+    "WarehouseLayer",
     "BRONZE_CONTRACT_REGISTRY",
     "DATA_CONTRACT_REGISTRY",
 ]
