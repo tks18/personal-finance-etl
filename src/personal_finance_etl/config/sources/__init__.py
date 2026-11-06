@@ -14,6 +14,7 @@ Owns
 - resolve_change_detection_policy: Pure resolution function building policy from format and flags.
 - SourceFieldIdentity, CompositeIdentity, DerivedDeterministicIdentity: Row identity strategies.
 - BronzeIdentityStrategy: Discriminated union of supported Bronze identity strategies.
+- SourceConfigFingerprint, canonicalize_source_configuration, compute_source_config_fingerprint: Provenance.
 - ColumnMapping, dict_to_mapping_list, mapping_list_to_dict: Source-to-canonical mapping models.
 - CanonicalDtype, CastRule, ParseDateRule, TrimRule, NormalizeCaseRule: Bounded normalization rules.
 - ConstantRule, DefaultRule, NormalizeNullRule, MapValuesRule, NormalizationRule: Bounded normalization rules.
@@ -40,6 +41,11 @@ from personal_finance_etl.config.sources.change_detection import (
     RenameStrategy,
     SyncStrategy,
     resolve_change_detection_policy,
+)
+from personal_finance_etl.config.sources.fingerprint import (
+    SourceConfigFingerprint,
+    canonicalize_source_configuration,
+    compute_source_config_fingerprint,
 )
 from personal_finance_etl.config.sources.identity import (
     PROTECTED_FINANCIAL_NAMESPACES,
@@ -116,6 +122,7 @@ __all__ = [
     "ParseDateRule",
     "RenameStrategy",
     "SourceConfig",
+    "SourceConfigFingerprint",
     "SourceConfiguration",
     "SourceDatasetConfig",
     "SourceFieldIdentity",
@@ -123,6 +130,8 @@ __all__ = [
     "SyncStrategy",
     "TopologyCoverageReport",
     "TrimRule",
+    "canonicalize_source_configuration",
+    "compute_source_config_fingerprint",
     "dict_to_mapping_list",
     "evaluate_bronze_topology_coverage",
     "get_shan_baseline_dataset_bindings",
