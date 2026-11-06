@@ -349,3 +349,28 @@ def test_domain_has_no_capability_plan_inspection() -> None:
         "Pure domain layer must never inspect execution plans or capability flags:\n"
         + "\n".join(violations)
     )
+
+
+def test_pandera_import_boundary() -> None:
+    """Verify that pandera is strictly imported only within infrastructure.validation."""
+    allowed_dir = SRC_ROOT / "infrastructure" / "validation"
+    violations: list[str] = []
+
+    for py_file in SRC_ROOT.rglob("*.py"):
+        try:
+            py_file.relative_to(allowed_dir)
+            continue
+        except ValueError:
+            pass
+
+        imported = _extract_imported_modules(py_file)
+        for lineno, mod in imported:
+            if mod == "pandera" or mod.startswith("pandera."):
+                violations.append(
+                    f"{py_file.relative_to(SRC_ROOT)}:{lineno}: forbidden import of '{mod}'"
+                )
+
+    assert not violations, (
+        "Pandera must strictly be imported ONLY within infrastructure.validation:\n"
+        + "\n".join(violations)
+    )

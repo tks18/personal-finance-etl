@@ -37,6 +37,7 @@ from personal_finance_etl.contracts.observability import ObservabilityEvent
 from personal_finance_etl.infrastructure.control_plane.connection import SQLiteManager
 from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
 from personal_finance_etl.infrastructure.observability import ObservabilityEmitter
+from personal_finance_etl.infrastructure.validation import PanderaDataFrameValidator
 from personal_finance_etl.infrastructure.warehouse import DuckDBManager, PreBronzeLayer
 
 # ---------------------------------------------------------------------------
@@ -457,6 +458,26 @@ def test_emitter() -> tuple[ObservabilityEmitter, MemoryEventSink]:
     sink = MemoryEventSink()
     emitter.register_sink(sink)
     return emitter, sink
+
+
+@pytest.fixture(scope="function")
+def isolated_dataframe_validator(
+    test_emitter: tuple[ObservabilityEmitter, MemoryEventSink],
+) -> PanderaDataFrameValidator:
+    """Provide a PanderaDataFrameValidator instance wired with test_emitter.
+
+    Parameters
+    ----------
+    test_emitter : tuple[ObservabilityEmitter, MemoryEventSink]
+        Isolated test event emitter and memory sink.
+
+    Returns
+    -------
+    PanderaDataFrameValidator
+        Configured validator instance.
+    """
+    emitter, _ = test_emitter
+    return PanderaDataFrameValidator(emitter=emitter)
 
 
 # ---------------------------------------------------------------------------

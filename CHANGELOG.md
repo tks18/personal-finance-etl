@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [9.9.2](https://github.com/tks18/personal-finance-etl/compare/9.9.1...9.9.2) (2026-11-06)
+
+
+### Build System 🏗
+
+* **deps:** add pandera dependency ([838ec7b](https://github.com/tks18/personal-finance-etl/commit/838ec7b700afddee6e8b30756024c56f6ea9cd82))
+
+
+### Features 🔥
+
+* **contracts:** add validation contracts and event codes ([d96325f](https://github.com/tks18/personal-finance-etl/commit/d96325fc967d46d3a0ed45d19aa3e0c4c62e989f))
+* **validation:** implement pandera dataframe validator ([10d1601](https://github.com/tks18/personal-finance-etl/commit/10d16013ff021c87761696c1c3f568226b33bff8))
+
+
+### Tests 🧪
+
+* **validation:** add validation boundary and import guard tests ([e0b8f45](https://github.com/tks18/personal-finance-etl/commit/e0b8f455eb2c36a4ff1a3886f963d128d7b4caad))
+
+
+### Docs 📃
+
+* **refactor:** complete phase 023 pandera validation boundary ([432a622](https://github.com/tks18/personal-finance-etl/commit/432a622d3b9619d30924b0b0102029f97f6d88d6))
+
 ### [9.9.1](https://github.com/tks18/personal-finance-etl/compare/9.9.0...9.9.1) (2026-11-06)
 
 

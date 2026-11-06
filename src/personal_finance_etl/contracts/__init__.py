@@ -16,6 +16,7 @@ Owns
 - Canonical Bronze field vocabularies and validation (CANONICAL_BRONZE_FIELDS, CANONICAL_PROVENANCE_FIELDS).
 - Provider-neutral market vocabulary and symbol mapping contracts (ProviderSymbolMapping, ProviderSymbolRegistry).
 - Financial capability graph, descriptors, and resolution (CapabilityId, CapabilityDescriptor, CapabilityGraph).
+- Cross-boundary tabular validation contracts and protocol (ValidationStage, ValidationContext, ValidationResult, ValidationError, DataFrameValidator).
 
 Does not own
 -------------
@@ -122,6 +123,15 @@ from personal_finance_etl.contracts.sources import (
     SourceId,
     validate_source_id,
 )
+from personal_finance_etl.contracts.validation import (
+    DataFrameValidator,
+    ValidationCheckFailure,
+    ValidationContext,
+    ValidationError,
+    ValidationExample,
+    ValidationResult,
+    ValidationStage,
+)
 
 __all__ = [
     "ALL_SILVER_COLUMN_DISPOSITIONS",
@@ -138,6 +148,7 @@ __all__ = [
     "ColumnClassification",
     "ColumnDisposition",
     "CommitState",
+    "DataFrameValidator",
     "ContributionDescriptor",
     "ContributionScope",
     "DatasetId",
@@ -189,6 +200,12 @@ __all__ = [
     "SourceId",
     "SyncSummaryRecord",
     "TRANSITIONAL_DATASETS",
+    "ValidationCheckFailure",
+    "ValidationContext",
+    "ValidationError",
+    "ValidationExample",
+    "ValidationResult",
+    "ValidationStage",
     "classify_failure_domain",
     "get_bronze_dataset_origin",
     "get_canonical_fields",
