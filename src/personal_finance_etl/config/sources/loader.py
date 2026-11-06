@@ -35,7 +35,11 @@ from personal_finance_etl.config.sources.mapping import (
     ColumnMapping,
     dict_to_mapping_list,
 )
-from personal_finance_etl.config.sources.model import SourceConfig, SourceDatasetConfig
+from personal_finance_etl.config.sources.model import (
+    SourceConfig,
+    SourceDatasetConfig,
+    SourceFieldDeclaration,
+)
 from personal_finance_etl.config.sources.normalization import (
     CastRule,
     ConstantRule,
@@ -176,6 +180,20 @@ def _serialize_normalization_rule(norm: NormalizationRule) -> list[str]:
         lines.append(f"mapping = {{ {map_entries} }}")
         if norm.default is not None:
             lines.append(f'default = "{norm.default}"')
+    return lines
+
+
+def _serialize_dataset_field(field: SourceFieldDeclaration) -> list[str]:
+    """Serialize a source field declaration to TOML lines."""
+    lines: list[str] = [
+        "[[datasets.fields]]",
+        f'name = "{field.name}"',
+        f'data_type = "{field.data_type}"',
+        f"nullable = {'true' if field.nullable else 'false'}",
+        f"unique = {'true' if field.unique else 'false'}",
+    ]
+    if field.description is not None:
+        lines.append(f'description = "{field.description}"')
     return lines
 
 
@@ -392,6 +410,9 @@ class SourceConfiguration(BaseModel):
             for norm in ds.normalization:
                 lines.extend(_serialize_normalization_rule(norm))
 
+            for f in ds.fields:
+                lines.extend(_serialize_dataset_field(f))
+
             lines.append("")
 
         content = "\n".join(lines)
@@ -522,6 +543,83 @@ _HOUSEHOLD_ZCATEGORY_MAPPING: list[ColumnMapping] = dict_to_mapping_list(
         "syncVersion": "SYNC_VERSION",
     }
 )
+
+_HOUSEHOLD_ZCATEGORY_FIELDS: list[SourceFieldDeclaration] = [
+    SourceFieldDeclaration(
+        name="ID",
+        data_type="Int64",
+        nullable=False,
+        unique=True,
+        description="Primary surrogate integer key in source SQLite table",
+    ),
+    SourceFieldDeclaration(
+        name="C_IS_DEL",
+        data_type="Int64",
+        nullable=True,
+        description="Deletion indicator flag",
+    ),
+    SourceFieldDeclaration(
+        name="C_UTIME",
+        data_type="Int64",
+        nullable=True,
+        description="Record modification epoch millisecond timestamp",
+    ),
+    SourceFieldDeclaration(
+        name="uid",
+        data_type="String",
+        nullable=False,
+        unique=True,
+        description="Natural unique identifier string for the category",
+    ),
+    SourceFieldDeclaration(
+        name="NAME",
+        data_type="String",
+        nullable=False,
+        description="Category name",
+    ),
+    SourceFieldDeclaration(
+        name="ORDERSEQ",
+        data_type="Int64",
+        nullable=True,
+        description="Category display order sequence",
+    ),
+    SourceFieldDeclaration(
+        name="TYPE",
+        data_type="Int64",
+        nullable=False,
+        description="Category financial classification type code",
+    ),
+    SourceFieldDeclaration(
+        name="STATUS",
+        data_type="Int64",
+        nullable=True,
+        description="Category active or archived status code",
+    ),
+    SourceFieldDeclaration(
+        name="pUid",
+        data_type="String",
+        nullable=True,
+        description="Parent category UID reference for subcategories",
+    ),
+    SourceFieldDeclaration(
+        name="isSynced",
+        data_type="Int64",
+        nullable=True,
+        description="Cloud synchronization status flag",
+    ),
+    SourceFieldDeclaration(
+        name="syncTime",
+        data_type="Int64",
+        nullable=True,
+        description="Cloud synchronization epoch timestamp",
+    ),
+    SourceFieldDeclaration(
+        name="syncVersion",
+        data_type="Int64",
+        nullable=True,
+        description="Cloud synchronization schema or entity version",
+    ),
+]
 
 _HOUSEHOLD_ASSET_GROUP_MAPPING: list[ColumnMapping] = dict_to_mapping_list(
     {
@@ -707,6 +805,7 @@ def get_shan_baseline_dataset_bindings() -> list[SourceDatasetConfig]:
             description="Household expense categories table",
             identity=SourceFieldIdentity(field="UID"),
             mapping=list(_HOUSEHOLD_ZCATEGORY_MAPPING),
+            fields=list(_HOUSEHOLD_ZCATEGORY_FIELDS),
         ),
         SourceDatasetConfig(
             source_id=SourceId("household_db"),

@@ -68,7 +68,11 @@ from personal_finance_etl.config.sources.mapping import (
     dict_to_mapping_list,
     mapping_list_to_dict,
 )
-from personal_finance_etl.config.sources.model import SourceConfig, SourceDatasetConfig
+from personal_finance_etl.config.sources.model import (
+    SourceConfig,
+    SourceDatasetConfig,
+    SourceFieldDeclaration,
+)
 from personal_finance_etl.config.sources.normalization import (
     CanonicalDtype,
     CastRule,
@@ -125,6 +129,7 @@ __all__ = [
     "SourceConfigFingerprint",
     "SourceConfiguration",
     "SourceDatasetConfig",
+    "SourceFieldDeclaration",
     "SourceFieldIdentity",
     "SqliteSelector",
     "SyncStrategy",
