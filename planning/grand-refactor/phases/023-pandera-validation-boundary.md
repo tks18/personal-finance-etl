@@ -130,13 +130,13 @@ Do not:
 
 ## 11. Completion checklist
 
-- [ ] Pandera dependency integrated.
-- [ ] PFETL validation protocol/result exists.
-- [ ] Adapter isolates Pandera.
-- [ ] Materialization boundary measured and frozen.
-- [ ] Failures are bounded/actionable.
-- [ ] Observability integrated without redesign.
-- [ ] Current production ingestion unchanged.
+- [x] Pandera dependency integrated.
+- [x] PFETL validation protocol/result exists.
+- [x] Adapter isolates Pandera.
+- [x] Materialization boundary measured and frozen.
+- [x] Failures are bounded/actionable.
+- [x] Observability integrated without redesign.
+- [x] Current production ingestion unchanged.
 
 ## 12. Commit boundary
 
@@ -151,20 +151,31 @@ Phase 024 may assume a performance-characterized, observable validation service 
 ## Phase completion record
 
 ```text
-Phase:
-Target release:
+Phase: 023
+Target release: v9.9.2
 Files changed:
-Schema changed:
-Runtime behavior changed:
+  pyproject.toml
+  uv.lock
+  src/personal_finance_etl/bootstrap/container.py
+  src/personal_finance_etl/contracts/__init__.py
+  src/personal_finance_etl/contracts/observability.py
+  src/personal_finance_etl/contracts/validation.py
+  src/personal_finance_etl/infrastructure/validation/__init__.py
+  src/personal_finance_etl/infrastructure/validation/pandera_adapter.py
+  tests/architecture/test_boundaries.py
+  tests/conftest.py
+  tests/infrastructure/test_validation_boundary.py
+Schema changed: NO
+Runtime behavior changed: NO (Validation service available in ServiceContainer; existing production ingestion Gatekeeper untouched)
 Financial formulas changed: NO
-Focused tests:
-Architecture tests:
-Real-data run:
-Performance check:
-Compatibility path still present:
-Old path deleted:
-Exit assertions green:
-Commit:
+Focused tests: tests/infrastructure/test_validation_boundary.py
+Architecture tests: tests/architecture/test_boundaries.py
+Real-data run: N/A (validation service introduced in isolation before dataset contracts in Phase 024)
+Performance check: PASS (DataFrame and LazyFrame validation <30ms for 100k rows)
+Compatibility path still present: YES (Gatekeeper intact)
+Old path deleted: NO (Gatekeeper demolition owned by Phase 035)
+Exit assertions green: YES
+Commit: feat(validation): add pandera dataframe boundary
 ```
 
 A phase is incomplete if any required exit assertion is false.

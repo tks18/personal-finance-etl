@@ -55,7 +55,7 @@ If code evidence contradicts a phase, stop and amend the phase before changing t
 | 020 | Generalized configuration provenance | v9.8.3 | [x] |
 | 021 | Pre-Bronze persistence foundation | v9.9.0 | [x] |
 | 022 | Pre-Bronze operational and recovery integration | v9.9.1 | [x] |
-| 023 | Pandera validation boundary | v9.9.2 | [ ] |
+| 023 | Pandera validation boundary | v9.9.2 | [x] |
 | 024 | Source and first canonical Bronze validation contracts | v9.9.3 | [ ] |
 | 025 | First generalized dataset vertical slice | v9.9.4 | [ ] |
 | 026 | Typed DatasetCollection introduction | v9.9.5 | [ ] |
