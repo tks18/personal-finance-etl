@@ -78,6 +78,14 @@ CREATE TABLE IF NOT EXISTS cp_plan_snapshots (
     created_at TIMESTAMP NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS cp_source_config_snapshots (
+    snapshot_id TEXT PRIMARY KEY,
+    content_hash TEXT NOT NULL,
+    canonical_payload TEXT NOT NULL,
+    schema_version TEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS cp_runs (
     run_id TEXT PRIMARY KEY,
     started_at TIMESTAMP NOT NULL,
@@ -89,10 +97,12 @@ CREATE TABLE IF NOT EXISTS cp_runs (
     settings_snapshot_id TEXT,
     rules_snapshot_id TEXT,
     plan_snapshot_id TEXT,
+    source_config_snapshot_id TEXT,
     execution_log BLOB,
     FOREIGN KEY(settings_snapshot_id) REFERENCES cp_settings_snapshots(snapshot_id),
     FOREIGN KEY(rules_snapshot_id) REFERENCES cp_rules_snapshots(snapshot_id),
-    FOREIGN KEY(plan_snapshot_id) REFERENCES cp_plan_snapshots(snapshot_id)
+    FOREIGN KEY(plan_snapshot_id) REFERENCES cp_plan_snapshots(snapshot_id),
+    FOREIGN KEY(source_config_snapshot_id) REFERENCES cp_source_config_snapshots(snapshot_id)
 );
 
 CREATE TABLE IF NOT EXISTS cp_run_failures (
@@ -194,6 +204,13 @@ REQUIRED_SCHEMA_COLUMNS: dict[str, set[str]] = {
         "canonical_payload",
         "created_at",
     },
+    "cp_source_config_snapshots": {
+        "snapshot_id",
+        "content_hash",
+        "canonical_payload",
+        "schema_version",
+        "created_at",
+    },
     "cp_runs": {
         "run_id",
         "started_at",
@@ -205,6 +222,7 @@ REQUIRED_SCHEMA_COLUMNS: dict[str, set[str]] = {
         "settings_snapshot_id",
         "rules_snapshot_id",
         "plan_snapshot_id",
+        "source_config_snapshot_id",
         "execution_log",
     },
     "cp_file_registry": {
@@ -297,6 +315,8 @@ REQUIRED_SCHEMA_COLUMNS: dict[str, set[str]] = {
 CURRENT_CONTROL_TABLES: set[str] = {
     "cp_settings_snapshots",
     "cp_rules_snapshots",
+    "cp_plan_snapshots",
+    "cp_source_config_snapshots",
     "cp_runs",
     "cp_file_registry",
     "cp_file_payloads",
@@ -314,6 +334,8 @@ INDEX_STATEMENTS: tuple[str, ...] = (
     "CREATE INDEX IF NOT EXISTS idx_cp_artifact_events_run ON cp_artifact_run_events(run_id)",
     "CREATE INDEX IF NOT EXISTS idx_cp_runs_status ON cp_runs(status)",
     "CREATE INDEX IF NOT EXISTS idx_cp_runs_commit_state ON cp_runs(commit_state)",
+    "CREATE INDEX IF NOT EXISTS idx_cp_runs_source_config_snapshot ON cp_runs(source_config_snapshot_id)",
+    "CREATE INDEX IF NOT EXISTS idx_cp_source_config_snapshots_hash ON cp_source_config_snapshots(content_hash)",
     "CREATE INDEX IF NOT EXISTS idx_cp_run_failures_run ON cp_run_failures(run_id)",
     "CREATE INDEX IF NOT EXISTS idx_cp_provider_requests_run ON cp_external_provider_requests(run_id)",
 )
@@ -353,6 +375,11 @@ def _migrate_runs(conn: sqlite3.Connection, existing_tables: set[str]) -> None:
                 "SQLite Control Plane: Migrating cp_runs: adding plan_snapshot_id column."
             )
             conn.execute("ALTER TABLE cp_runs ADD COLUMN plan_snapshot_id TEXT")
+        if "source_config_snapshot_id" not in cols:
+            diagnostics.info(
+                "SQLite Control Plane: Migrating cp_runs: adding source_config_snapshot_id column."
+            )
+            conn.execute("ALTER TABLE cp_runs ADD COLUMN source_config_snapshot_id TEXT")
 
 
 def _migrate_failures(conn: sqlite3.Connection, existing_tables: set[str]) -> None:
