@@ -119,13 +119,13 @@ Do not:
 
 ## 11. Completion checklist
 
-- [ ] Meta/catalog integration complete.
-- [ ] Backup includes Pre-Bronze.
-- [ ] Restore reproduces Pre-Bronze.
-- [ ] Rollback proven.
-- [ ] Split-commit recovery proven.
-- [ ] Existing DB compatibility proven.
-- [ ] No production source depends on layer yet.
+- [x] Meta/catalog integration complete.
+- [x] Backup includes Pre-Bronze.
+- [x] Restore reproduces Pre-Bronze.
+- [x] Rollback proven.
+- [x] Split-commit recovery proven.
+- [x] Existing DB compatibility proven.
+- [x] No production source depends on layer yet.
 
 ## 12. Commit boundary
 
@@ -140,20 +140,26 @@ Phase 023 may assume Pre-Bronze is persistence/recovery-safe. It can introduce P
 ## Phase completion record
 
 ```text
-Phase:
-Target release:
+Phase: 022
+Target release: v9.9.1
 Files changed:
-Schema changed:
-Runtime behavior changed:
+  src/personal_finance_etl/infrastructure/warehouse/__init__.py
+  src/personal_finance_etl/infrastructure/warehouse/contracts.py
+  src/personal_finance_etl/infrastructure/warehouse/meta/healing.py
+  src/personal_finance_etl/infrastructure/warehouse/meta/layer.py
+  src/personal_finance_etl/infrastructure/warehouse/registry.py
+  tests/infrastructure/test_pre_bronze_operational.py
+Schema changed: YES (meta.m_Data_Contracts and meta.m_Table_Row_Counts record Pre-Bronze; pre_bronze schema participating in centralized warehouse lifecycle)
+Runtime behavior changed: NO (No production sources use Pre-Bronze; Pre-Bronze operations integrated into warehouse metadata, backup, restore, pruning, and healing)
 Financial formulas changed: NO
-Focused tests:
-Architecture tests:
-Real-data run:
-Performance check:
-Compatibility path still present:
-Old path deleted:
-Exit assertions green:
-Commit:
+Focused tests: tests/infrastructure/test_pre_bronze_operational.py, tests/infrastructure/test_pre_bronze_persistence.py
+Architecture tests: tests/architecture/test_boundaries.py
+Real-data run: N/A (no production source uses Pre-Bronze yet)
+Performance check: PASS (backup and restore include pre_bronze with negligible overhead)
+Compatibility path still present: YES (databases without pre_bronze schema or tables operate and restore without failure)
+Old path deleted: N/A (additive integration)
+Exit assertions green: YES
+Commit: feat(recovery): integrate pre-bronze operations
 ```
 
 A phase is incomplete if any required exit assertion is false.
