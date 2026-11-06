@@ -102,6 +102,22 @@ description = "Household expense categories table"
 [datasets.selector]
 provider_type = "sqlite"
 table_name = "ZCATEGORY"
+[datasets.identity]
+strategy_type = "source_field"
+field = "UID"
+[datasets.mapping]
+"ID" = "S_NO"
+"C_IS_DEL" = "IS_DEL"
+"C_UTIME" = "MODIFY_DATE"
+"uid" = "UID"
+"NAME" = "CATEGORY_NAME"
+"ORDERSEQ" = "ORDER_SEQUENCE"
+"TYPE" = "TYPE"
+"STATUS" = "STATUS"
+"pUid" = "CATEGORY_ID"
+"isSynced" = "IS_SYNCED"
+"syncTime" = "SYNC_TIME"
+"syncVersion" = "SYNC_VERSION"
 
 [[datasets]]
 source_id = "household_db"
@@ -111,6 +127,20 @@ description = "Household asset grouping table"
 [datasets.selector]
 provider_type = "sqlite"
 table_name = "ASSETGROUP"
+[datasets.identity]
+strategy_type = "source_field"
+field = "UID"
+[datasets.mapping]
+"DEVICE_ID" = "DEVICE_ID"
+"uid" = "UID"
+"IS_DEL" = "IS_DEL"
+"USETIME" = "USE_TIME"
+"ACC_GROUP_NAME" = "ASSET_GROUP"
+"TYPE" = "TYPE"
+"ORDERSEQ" = "ORDER_SEQUENCE"
+"isSynced" = "IS_SYNCED"
+"syncTime" = "SYNC_TIME"
+"syncVersion" = "SYNC_VERSION"
 
 [[datasets]]
 source_id = "household_db"
@@ -120,6 +150,35 @@ description = "Household financial accounts and assets table"
 [datasets.selector]
 provider_type = "sqlite"
 table_name = "ASSETS"
+[datasets.identity]
+strategy_type = "source_field"
+field = "UID"
+[datasets.mapping]
+"ID" = "S_NO"
+"CARD_DAY_FIN" = "CARD_STATEMENT_DATE"
+"CARD_DAY_PAY" = "CARD_PAYMENT_DATE"
+"NIC_NAME" = "ASSET_NAME"
+"ORDERSEQ" = "ORDER_SEQUENCE"
+"ZDATA" = "IS_DEL"
+"ZDATA1" = "ASSET_DESCRIPTION"
+"ZDATA2" = "NOTES"
+"IS_TRANS_EXPENSE" = "TRANSFER_EXPENSE"
+"IS_CARD_AUTO_PAY" = "CARD_AUTOPAY"
+"APP_PACKAGE" = "APP_PACKAGE"
+"APP_NAME" = "APP_NAME"
+"SMS_TEL" = "SMS_TEL"
+"SMS_STRING" = "SMS_STRING"
+"A_UTIME" = "ADDED_TIME"
+"CARD_USAGE_HURDLE_TYPE" = "CARD_USAGE_HURDLE_TYPE"
+"CARD_USAGE_HURDLE_START_DATE" = "CARD_USAGE_HURDLE_START_DATE"
+"CARD_USAGE_HURDLE_AMOUNT" = "CARD_USAGE_HURDLE_AMOUNT"
+"uid" = "UID"
+"currencyUid" = "CURRENCY_ID"
+"cardAssetUid" = "AUTOPAY_ASSET_ID"
+"groupUid" = "ASSET_GROUP_ID"
+"isSynced" = "IS_SYNCED"
+"syncTime" = "SYNC_TIME"
+"syncVersion" = "SYNC_VERSION"
 
 [[datasets]]
 source_id = "household_db"
@@ -129,6 +188,28 @@ description = "Household currency denominations table"
 [datasets.selector]
 provider_type = "sqlite"
 table_name = "CURRENCY"
+[datasets.identity]
+strategy_type = "source_field"
+field = "UID"
+[datasets.mapping]
+"ID" = "S_NO"
+"uid" = "UID"
+"NAME" = "CURRENCY_NAME"
+"ISO" = "ISO"
+"MAIN_ISO" = "MAIN_ISO"
+"IS_DEL" = "IS_DEL"
+"ORDER_SEQ" = "ORDER_SEQUENCE"
+"RATE" = "RATE"
+"SYMBOL" = "SYMBOL"
+"INSERT_TYPE" = "INSERT_TYPE"
+"SYMBOL_POSITION" = "SYMBOL_POSITION"
+"IS_MAIN_CURRENCY" = "IS_MAIN_CURRENCY"
+"IS_SHOW" = "IS_SHOW"
+"MODIFY_DATE" = "MODIFY_DATE"
+"DECIMAL_POINT" = "DECIMAL_POINT"
+"isSynced" = "IS_SYNCED"
+"syncTime" = "SYNC_TIME"
+"syncVersion" = "SYNC_VERSION"
 
 [[datasets]]
 source_id = "household_db"
@@ -138,6 +219,45 @@ description = "Household financial ledger income and expense transactions table"
 [datasets.selector]
 provider_type = "sqlite"
 table_name = "INOUTCOME"
+[datasets.identity]
+strategy_type = "source_field"
+field = "UID"
+[datasets.mapping]
+"AID" = "S_NO"
+"uid" = "UID"
+"assetUid" = "ASSET_ID"
+"CARDDIVIDMONTH" = "CARDDIVIDMONTH"
+"ctgUid" = "CATEGORY_ID"
+"toAssetUid" = "TO_ASSET_ID"
+"ZCONTENT" = "DESCRIPTION"
+"ZDATE" = "TIMESTAMP"
+"WDATE" = "DATE"
+"wtime" = "TIME"
+"paid" = "PAID"
+"DO_TYPE" = "TRANSACTION_TYPE"
+"ZMONEY" = "BASE_AMOUNT"
+"txUidTrans" = "TRANSFER_UID"
+"ZDATA" = "FEES_NOTES"
+"SMS_RDATE" = "SMS_RDATE"
+"IN_ZMONEY" = "LOCAL_AMOUNT"
+"ASSET_NIC" = "ASSET_NAME"
+"CATEGORY_NAME" = "CATEGORY_NAME"
+"cardDivideUid" = "CARD_DIVIDE_ID"
+"CARD_DIVIDE_MONTH_STR" = "CARD_DIVIDE_MONTH_STR"
+"MARK" = "MARK"
+"txUidFee" = "TRANSFER_FEES"
+"SMS_ORIGIN" = "SMS_ORIGIN"
+"SMS_PARSE_CONTENT" = "SMS_PARSE_CONTENT"
+"IS_DEL" = "IS_DEL"
+"UTIME" = "UPDATED_TIME"
+"currencyUid" = "CURRENCY_ID"
+"AMOUNT_ACCOUNT" = "AMOUNT_ACCOUNT"
+"lat" = "LAT"
+"lng" = "LONG"
+"gstd" = "GSTD"
+"isSynced" = "IS_SYNCED"
+"syncTime" = "SYNC_TIME"
+"syncVersion" = "SYNC_VERSION"
 
 [[datasets]]
 source_id = "mf_isin_csv"
@@ -148,6 +268,9 @@ provider_type = "csv"
 delimiter = ","
 encoding = "utf-8"
 has_header = true
+[datasets.identity]
+strategy_type = "source_field"
+field = "INSTRUMENT_NAME"
 
 [[datasets]]
 source_id = "benchmark_mapping_csv"
@@ -158,6 +281,9 @@ provider_type = "csv"
 delimiter = ","
 encoding = "utf-8"
 has_header = true
+[datasets.identity]
+strategy_type = "source_field"
+field = "ISIN"
 
 [[datasets]]
 source_id = "opening_balance_csv"
@@ -168,6 +294,63 @@ provider_type = "csv"
 delimiter = ","
 encoding = "utf-8"
 has_header = true
+[datasets.identity]
+strategy_type = "source_field"
+field = "Z_PK"
+[datasets.mapping]
+"Z_PK" = "Z_PK"
+"Z_ENT" = "Z_ENT"
+"Z_OPT" = "Z_OPT"
+"ZASSET_GROUP" = "ZASSET_GROUP"
+"ZASSET_ID" = "ZASSET_ID"
+"ZCATEGORY_ID" = "ZCATEGORY_ID"
+"ZOPPOSITEAID" = "ZOPPOSITEAID"
+"ZAID" = "ZAID"
+"ZCATEGORYID" = "ZCATEGORYID"
+"ZCURRENCYID" = "ZCURRENCYID"
+"ZFEE_ID" = "ZFEE_ID"
+"ZISDEL" = "ZISDEL"
+"ZISSYNCED" = "ZISSYNCED"
+"ZMARK" = "ZMARK"
+"ZSYNCCHECK" = "ZSYNCCHECK"
+"ZSYNCVERSION" = "ZSYNCVERSION"
+"ZUTIME" = "ZUTIME"
+"ZDATE" = "ZDATE"
+"ZAMOUNT" = "ZAMOUNT"
+"ZAMOUNTACCOUNT" = "ZAMOUNTACCOUNT"
+"ZAMOUNTSUB" = "ZAMOUNTSUB"
+"ZSYNCTIME" = "ZSYNCTIME"
+"ZASSET_NAME" = "ZASSET_NAME"
+"ZASSET_NIC" = "ZASSET_NIC"
+"ZCARDDIVIDID" = "ZCARDDIVIDID"
+"ZCATEGORY_NAME" = "ZCATEGORY_NAME"
+"ZCONTENT" = "ZCONTENT"
+"ZDO_TYPE" = "ZDO_TYPE"
+"ZMONEY" = "ZMONEY"
+"ZASSETUID" = "ZASSETUID"
+"ZCARDDIVIDEMONTH" = "ZCARDDIVIDEMONTH"
+"ZCARDDIVIDEMONTHSTR" = "ZCARDDIVIDEMONTHSTR"
+"ZCARDDIVIDEUID" = "ZCARDDIVIDEUID"
+"ZCARDTIMESTAMPSTR" = "ZCARDTIMESTAMPSTR"
+"ZCATEGORYUID" = "ZCATEGORYUID"
+"ZCURRENCY" = "ZCURRENCY"
+"ZCURRENCYUID" = "ZCURRENCYUID"
+"ZGSTD" = "ZGSTD"
+"ZLAT" = "ZLAT"
+"ZLNG" = "ZLNG"
+"ZMEMO" = "ZMEMO"
+"ZPAID" = "ZPAID"
+"ZSMSORIGINE" = "ZSMSORIGINE"
+"ZSMSPARSECONTENTS" = "ZSMSPARSECONTENTS"
+"ZSMSRDATE" = "ZSMSRDATE"
+"ZTOASSETUID" = "ZTOASSETUID"
+"ZTXDATESTR" = "ZTXDATESTR"
+"ZTXUIDFEE" = "ZTXUIDFEE"
+"ZTXUIDTRANS" = "ZTXUIDTRANS"
+"ZUID" = "ZUID"
+"ZWTIME" = "ZWTIME"
+"ZZDATA1" = "ZZDATA1"
+"ZZDATA2" = "ZZDATA2"
 
 [[datasets]]
 source_id = "benchmark_master_csv"
@@ -178,6 +361,9 @@ provider_type = "csv"
 delimiter = ","
 encoding = "utf-8"
 has_header = true
+[datasets.identity]
+strategy_type = "source_field"
+field = "ID"
 
 [[datasets]]
 source_id = "macro_parameters_csv"
@@ -188,6 +374,9 @@ provider_type = "csv"
 delimiter = ","
 encoding = "utf-8"
 has_header = true
+[datasets.identity]
+strategy_type = "source_field"
+field = "FY"
 
 [[datasets]]
 source_id = "currency_mapping_csv"
@@ -198,6 +387,9 @@ provider_type = "csv"
 delimiter = ","
 encoding = "utf-8"
 has_header = true
+[datasets.identity]
+strategy_type = "source_field"
+field = "UID"
 
 [[datasets]]
 source_id = "column_master_csv"
@@ -209,6 +401,9 @@ provider_type = "csv"
 delimiter = ","
 encoding = "utf-8"
 has_header = true
+[datasets.identity]
+strategy_type = "composite"
+fields = ["TABLE_NAME", "OLD_COLUMN"]
 
 [[datasets]]
 source_id = "mf_holdings_excel"

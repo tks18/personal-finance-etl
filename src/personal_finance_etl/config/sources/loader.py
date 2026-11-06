@@ -26,11 +26,21 @@ from typing import Self
 
 from pydantic import BaseModel, Field, model_validator
 
+from personal_finance_etl.config.sources.identity import (
+    BronzeIdentityStrategy,
+    CompositeIdentity,
+    SourceFieldIdentity,
+)
+from personal_finance_etl.config.sources.mapping import (
+    ColumnMapping,
+    dict_to_mapping_list,
+)
 from personal_finance_etl.config.sources.model import SourceConfig, SourceDatasetConfig
 from personal_finance_etl.config.sources.normalization import (
     CastRule,
     ConstantRule,
     DefaultRule,
+    NormalizationRule,
     NormalizeCaseRule,
     NormalizeNullRule,
     ParseDateRule,
@@ -38,6 +48,7 @@ from personal_finance_etl.config.sources.normalization import (
 )
 from personal_finance_etl.config.sources.selectors import (
     CsvSelector,
+    DatasetSelector,
     ExcelSelector,
     SqliteSelector,
 )
@@ -86,6 +97,86 @@ class CapabilitySelection(BaseModel):
         if self.enabled is not None:
             return frozenset(self.enabled)
         return frozenset(CapabilityId)
+
+
+def _serialize_dataset_selector(sel: DatasetSelector) -> list[str]:
+    """Serialize a dataset selector to TOML lines."""
+    lines: list[str] = [
+        "[datasets.selector]",
+        f'provider_type = "{sel.provider_type.value}"',
+    ]
+    if isinstance(sel, CsvSelector):
+        if sel.file_pattern is not None:
+            lines.append(f'file_pattern = "{sel.file_pattern}"')
+        lines.append(f'delimiter = "{sel.delimiter}"')
+        lines.append(f'encoding = "{sel.encoding}"')
+        lines.append(f"has_header = {'true' if sel.has_header else 'false'}")
+    elif isinstance(sel, ExcelSelector):
+        if sel.sheet_name is not None:
+            lines.append(f'sheet_name = "{sel.sheet_name}"')
+        if sel.header_row is not None:
+            lines.append(f"header_row = {sel.header_row}")
+    else:
+        lines.append(f'table_name = "{sel.table_name}"')
+    return lines
+
+
+def _serialize_dataset_identity(ident: BronzeIdentityStrategy) -> list[str]:
+    """Serialize a Bronze identity strategy to TOML lines."""
+    lines: list[str] = [
+        "[datasets.identity]",
+        f'strategy_type = "{ident.strategy_type}"',
+    ]
+    if isinstance(ident, SourceFieldIdentity):
+        lines.append(f'field = "{ident.field}"')
+    elif isinstance(ident, CompositeIdentity):
+        fields_str = ", ".join(f'"{f}"' for f in ident.fields)
+        lines.append(f"fields = [{fields_str}]")
+    else:
+        fields_str = ", ".join(f'"{f}"' for f in ident.fields)
+        lines.append(f"fields = [{fields_str}]")
+        if ident.namespace is not None:
+            lines.append(f'namespace = "{ident.namespace}"')
+        if ident.version != "v2":
+            lines.append(f'version = "{ident.version}"')
+    return lines
+
+
+def _serialize_normalization_rule(norm: NormalizationRule) -> list[str]:
+    """Serialize a normalization rule to TOML lines."""
+    lines: list[str] = [
+        "[[datasets.normalization]]",
+        f'rule = "{norm.rule}"',
+        f'field = "{norm.field}"',
+    ]
+    if isinstance(norm, CastRule):
+        lines.append(f'target_type = "{norm.target_type}"')
+    elif isinstance(norm, ParseDateRule):
+        if norm.format is not None:
+            lines.append(f'format = "{norm.format}"')
+        lines.append(f"strict = {'true' if norm.strict else 'false'}")
+    elif isinstance(norm, TrimRule):
+        lines.append(f'mode = "{norm.mode}"')
+    elif isinstance(norm, NormalizeCaseRule):
+        lines.append(f'case = "{norm.case}"')
+    elif isinstance(norm, (ConstantRule, DefaultRule)):
+        val_str = (
+            f'"{norm.value}"'
+            if isinstance(norm.value, str)
+            else str(norm.value).lower()
+            if isinstance(norm.value, bool)
+            else str(norm.value)
+        )
+        lines.append(f"value = {val_str}")
+    elif isinstance(norm, NormalizeNullRule):
+        nulls = ", ".join(f'"{x}"' for x in norm.null_values)
+        lines.append(f"null_values = [{nulls}]")
+    else:
+        map_entries = ", ".join(f'"{k}" = "{v}"' for k, v in norm.mapping.items())
+        lines.append(f"mapping = {{ {map_entries} }}")
+        if norm.default is not None:
+            lines.append(f'default = "{norm.default}"')
+    return lines
 
 
 class SourceConfiguration(BaseModel):
@@ -288,22 +379,10 @@ class SourceConfiguration(BaseModel):
             lines.append(f"enabled = {'true' if ds.enabled else 'false'}")
             if ds.description is not None:
                 lines.append(f'description = "{ds.description}"')
-            lines.append("[datasets.selector]")
-            sel = ds.selector
-            lines.append(f'provider_type = "{sel.provider_type.value}"')
-            if isinstance(sel, CsvSelector):
-                if sel.file_pattern is not None:
-                    lines.append(f'file_pattern = "{sel.file_pattern}"')
-                lines.append(f'delimiter = "{sel.delimiter}"')
-                lines.append(f'encoding = "{sel.encoding}"')
-                lines.append(f"has_header = {'true' if sel.has_header else 'false'}")
-            elif isinstance(sel, ExcelSelector):
-                if sel.sheet_name is not None:
-                    lines.append(f'sheet_name = "{sel.sheet_name}"')
-                if sel.header_row is not None:
-                    lines.append(f"header_row = {sel.header_row}")
-            else:
-                lines.append(f'table_name = "{sel.table_name}"')
+            lines.extend(_serialize_dataset_selector(ds.selector))
+
+            if ds.identity is not None:
+                lines.extend(_serialize_dataset_identity(ds.identity))
 
             if ds.mapping:
                 lines.append("[datasets.mapping]")
@@ -311,45 +390,7 @@ class SourceConfiguration(BaseModel):
                     lines.append(f'"{m.source_field}" = "{m.canonical_field}"')
 
             for norm in ds.normalization:
-                lines.append("[[datasets.normalization]]")
-                lines.append(f'rule = "{norm.rule}"')
-                lines.append(f'field = "{norm.field}"')
-                if isinstance(norm, CastRule):
-                    lines.append(f'target_type = "{norm.target_type}"')
-                elif isinstance(norm, ParseDateRule):
-                    if norm.format is not None:
-                        lines.append(f'format = "{norm.format}"')
-                    lines.append(f"strict = {'true' if norm.strict else 'false'}")
-                elif isinstance(norm, TrimRule):
-                    lines.append(f'mode = "{norm.mode}"')
-                elif isinstance(norm, NormalizeCaseRule):
-                    lines.append(f'case = "{norm.case}"')
-                elif isinstance(norm, ConstantRule):
-                    val_str = (
-                        f'"{norm.value}"'
-                        if isinstance(norm.value, str)
-                        else str(norm.value).lower()
-                        if isinstance(norm.value, bool)
-                        else str(norm.value)
-                    )
-                    lines.append(f"value = {val_str}")
-                elif isinstance(norm, DefaultRule):
-                    val_str = (
-                        f'"{norm.value}"'
-                        if isinstance(norm.value, str)
-                        else str(norm.value).lower()
-                        if isinstance(norm.value, bool)
-                        else str(norm.value)
-                    )
-                    lines.append(f"value = {val_str}")
-                elif isinstance(norm, NormalizeNullRule):
-                    nulls = ", ".join(f'"{x}"' for x in norm.null_values)
-                    lines.append(f"null_values = [{nulls}]")
-                else:
-                    map_entries = ", ".join(f'"{k}" = "{v}"' for k, v in norm.mapping.items())
-                    lines.append(f"mapping = {{ {map_entries} }}")
-                    if norm.default is not None:
-                        lines.append(f'default = "{norm.default}"')
+                lines.extend(_serialize_normalization_rule(norm))
 
             lines.append("")
 
@@ -465,6 +506,190 @@ def get_shan_baseline_sources() -> list[SourceConfig]:
     ]
 
 
+_HOUSEHOLD_ZCATEGORY_MAPPING: list[ColumnMapping] = dict_to_mapping_list(
+    {
+        "ID": "S_NO",
+        "C_IS_DEL": "IS_DEL",
+        "C_UTIME": "MODIFY_DATE",
+        "uid": "UID",
+        "NAME": "CATEGORY_NAME",
+        "ORDERSEQ": "ORDER_SEQUENCE",
+        "TYPE": "TYPE",
+        "STATUS": "STATUS",
+        "pUid": "CATEGORY_ID",
+        "isSynced": "IS_SYNCED",
+        "syncTime": "SYNC_TIME",
+        "syncVersion": "SYNC_VERSION",
+    }
+)
+
+_HOUSEHOLD_ASSET_GROUP_MAPPING: list[ColumnMapping] = dict_to_mapping_list(
+    {
+        "DEVICE_ID": "DEVICE_ID",
+        "uid": "UID",
+        "IS_DEL": "IS_DEL",
+        "USETIME": "USE_TIME",
+        "ACC_GROUP_NAME": "ASSET_GROUP",
+        "TYPE": "TYPE",
+        "ORDERSEQ": "ORDER_SEQUENCE",
+        "isSynced": "IS_SYNCED",
+        "syncTime": "SYNC_TIME",
+        "syncVersion": "SYNC_VERSION",
+    }
+)
+
+_HOUSEHOLD_ASSETS_MAPPING: list[ColumnMapping] = dict_to_mapping_list(
+    {
+        "ID": "S_NO",
+        "CARD_DAY_FIN": "CARD_STATEMENT_DATE",
+        "CARD_DAY_PAY": "CARD_PAYMENT_DATE",
+        "NIC_NAME": "ASSET_NAME",
+        "ORDERSEQ": "ORDER_SEQUENCE",
+        "ZDATA": "IS_DEL",
+        "ZDATA1": "ASSET_DESCRIPTION",
+        "ZDATA2": "NOTES",
+        "IS_TRANS_EXPENSE": "TRANSFER_EXPENSE",
+        "IS_CARD_AUTO_PAY": "CARD_AUTOPAY",
+        "APP_PACKAGE": "APP_PACKAGE",
+        "APP_NAME": "APP_NAME",
+        "SMS_TEL": "SMS_TEL",
+        "SMS_STRING": "SMS_STRING",
+        "A_UTIME": "ADDED_TIME",
+        "CARD_USAGE_HURDLE_TYPE": "CARD_USAGE_HURDLE_TYPE",
+        "CARD_USAGE_HURDLE_START_DATE": "CARD_USAGE_HURDLE_START_DATE",
+        "CARD_USAGE_HURDLE_AMOUNT": "CARD_USAGE_HURDLE_AMOUNT",
+        "uid": "UID",
+        "currencyUid": "CURRENCY_ID",
+        "cardAssetUid": "AUTOPAY_ASSET_ID",
+        "groupUid": "ASSET_GROUP_ID",
+        "isSynced": "IS_SYNCED",
+        "syncTime": "SYNC_TIME",
+        "syncVersion": "SYNC_VERSION",
+    }
+)
+
+_HOUSEHOLD_CURRENCY_MAPPING: list[ColumnMapping] = dict_to_mapping_list(
+    {
+        "ID": "S_NO",
+        "uid": "UID",
+        "NAME": "CURRENCY_NAME",
+        "ISO": "ISO",
+        "MAIN_ISO": "MAIN_ISO",
+        "IS_DEL": "IS_DEL",
+        "ORDER_SEQ": "ORDER_SEQUENCE",
+        "RATE": "RATE",
+        "SYMBOL": "SYMBOL",
+        "INSERT_TYPE": "INSERT_TYPE",
+        "SYMBOL_POSITION": "SYMBOL_POSITION",
+        "IS_MAIN_CURRENCY": "IS_MAIN_CURRENCY",
+        "IS_SHOW": "IS_SHOW",
+        "MODIFY_DATE": "MODIFY_DATE",
+        "DECIMAL_POINT": "DECIMAL_POINT",
+        "isSynced": "IS_SYNCED",
+        "syncTime": "SYNC_TIME",
+        "syncVersion": "SYNC_VERSION",
+    }
+)
+
+_HOUSEHOLD_INOUTCOME_MAPPING: list[ColumnMapping] = dict_to_mapping_list(
+    {
+        "AID": "S_NO",
+        "uid": "UID",
+        "assetUid": "ASSET_ID",
+        "CARDDIVIDMONTH": "CARDDIVIDMONTH",
+        "ctgUid": "CATEGORY_ID",
+        "toAssetUid": "TO_ASSET_ID",
+        "ZCONTENT": "DESCRIPTION",
+        "ZDATE": "TIMESTAMP",
+        "WDATE": "DATE",
+        "wtime": "TIME",
+        "paid": "PAID",
+        "DO_TYPE": "TRANSACTION_TYPE",
+        "ZMONEY": "BASE_AMOUNT",
+        "txUidTrans": "TRANSFER_UID",
+        "ZDATA": "FEES_NOTES",
+        "SMS_RDATE": "SMS_RDATE",
+        "IN_ZMONEY": "LOCAL_AMOUNT",
+        "ASSET_NIC": "ASSET_NAME",
+        "CATEGORY_NAME": "CATEGORY_NAME",
+        "cardDivideUid": "CARD_DIVIDE_ID",
+        "CARD_DIVIDE_MONTH_STR": "CARD_DIVIDE_MONTH_STR",
+        "MARK": "MARK",
+        "txUidFee": "TRANSFER_FEES",
+        "SMS_ORIGIN": "SMS_ORIGIN",
+        "SMS_PARSE_CONTENT": "SMS_PARSE_CONTENT",
+        "IS_DEL": "IS_DEL",
+        "UTIME": "UPDATED_TIME",
+        "currencyUid": "CURRENCY_ID",
+        "AMOUNT_ACCOUNT": "AMOUNT_ACCOUNT",
+        "lat": "LAT",
+        "lng": "LONG",
+        "gstd": "GSTD",
+        "isSynced": "IS_SYNCED",
+        "syncTime": "SYNC_TIME",
+        "syncVersion": "SYNC_VERSION",
+    }
+)
+
+_HOUSEHOLD_OPENING_BALANCES_MAPPING: list[ColumnMapping] = dict_to_mapping_list(
+    {
+        "Z_PK": "Z_PK",
+        "Z_ENT": "Z_ENT",
+        "Z_OPT": "Z_OPT",
+        "ZASSET_GROUP": "ZASSET_GROUP",
+        "ZASSET_ID": "ZASSET_ID",
+        "ZCATEGORY_ID": "ZCATEGORY_ID",
+        "ZOPPOSITEAID": "ZOPPOSITEAID",
+        "ZAID": "ZAID",
+        "ZCATEGORYID": "ZCATEGORYID",
+        "ZCURRENCYID": "ZCURRENCYID",
+        "ZFEE_ID": "ZFEE_ID",
+        "ZISDEL": "ZISDEL",
+        "ZISSYNCED": "ZISSYNCED",
+        "ZMARK": "ZMARK",
+        "ZSYNCCHECK": "ZSYNCCHECK",
+        "ZSYNCVERSION": "ZSYNCVERSION",
+        "ZUTIME": "ZUTIME",
+        "ZDATE": "ZDATE",
+        "ZAMOUNT": "ZAMOUNT",
+        "ZAMOUNTACCOUNT": "ZAMOUNTACCOUNT",
+        "ZAMOUNTSUB": "ZAMOUNTSUB",
+        "ZSYNCTIME": "ZSYNCTIME",
+        "ZASSET_NAME": "ZASSET_NAME",
+        "ZASSET_NIC": "ZASSET_NIC",
+        "ZCARDDIVIDID": "ZCARDDIVIDID",
+        "ZCATEGORY_NAME": "ZCATEGORY_NAME",
+        "ZCONTENT": "ZCONTENT",
+        "ZDO_TYPE": "ZDO_TYPE",
+        "ZMONEY": "ZMONEY",
+        "ZASSETUID": "ZASSETUID",
+        "ZCARDDIVIDEMONTH": "ZCARDDIVIDEMONTH",
+        "ZCARDDIVIDEMONTHSTR": "ZCARDDIVIDEMONTHSTR",
+        "ZCARDDIVIDEUID": "ZCARDDIVIDEUID",
+        "ZCARDTIMESTAMPSTR": "ZCARDTIMESTAMPSTR",
+        "ZCATEGORYUID": "ZCATEGORYUID",
+        "ZCURRENCY": "ZCURRENCY",
+        "ZCURRENCYUID": "ZCURRENCYUID",
+        "ZGSTD": "ZGSTD",
+        "ZLAT": "ZLAT",
+        "ZLNG": "ZLNG",
+        "ZMEMO": "ZMEMO",
+        "ZPAID": "ZPAID",
+        "ZSMSORIGINE": "ZSMSORIGINE",
+        "ZSMSPARSECONTENTS": "ZSMSPARSECONTENTS",
+        "ZSMSRDATE": "ZSMSRDATE",
+        "ZTOASSETUID": "ZTOASSETUID",
+        "ZTXDATESTR": "ZTXDATESTR",
+        "ZTXUIDFEE": "ZTXUIDFEE",
+        "ZTXUIDTRANS": "ZTXUIDTRANS",
+        "ZUID": "ZUID",
+        "ZWTIME": "ZWTIME",
+        "ZZDATA1": "ZZDATA1",
+        "ZZDATA2": "ZZDATA2",
+    }
+)
+
+
 def get_shan_baseline_dataset_bindings() -> list[SourceDatasetConfig]:
     """Return declarative SourceDatasetConfig bindings covering all external Bronze datasets.
 
@@ -480,6 +705,8 @@ def get_shan_baseline_dataset_bindings() -> list[SourceDatasetConfig]:
             selector=SqliteSelector(table_name="ZCATEGORY"),
             enabled=True,
             description="Household expense categories table",
+            identity=SourceFieldIdentity(field="UID"),
+            mapping=list(_HOUSEHOLD_ZCATEGORY_MAPPING),
         ),
         SourceDatasetConfig(
             source_id=SourceId("household_db"),
@@ -487,6 +714,8 @@ def get_shan_baseline_dataset_bindings() -> list[SourceDatasetConfig]:
             selector=SqliteSelector(table_name="ASSETGROUP"),
             enabled=True,
             description="Household asset grouping table",
+            identity=SourceFieldIdentity(field="UID"),
+            mapping=list(_HOUSEHOLD_ASSET_GROUP_MAPPING),
         ),
         SourceDatasetConfig(
             source_id=SourceId("household_db"),
@@ -494,6 +723,8 @@ def get_shan_baseline_dataset_bindings() -> list[SourceDatasetConfig]:
             selector=SqliteSelector(table_name="ASSETS"),
             enabled=True,
             description="Household financial accounts and assets table",
+            identity=SourceFieldIdentity(field="UID"),
+            mapping=list(_HOUSEHOLD_ASSETS_MAPPING),
         ),
         SourceDatasetConfig(
             source_id=SourceId("household_db"),
@@ -501,6 +732,8 @@ def get_shan_baseline_dataset_bindings() -> list[SourceDatasetConfig]:
             selector=SqliteSelector(table_name="CURRENCY"),
             enabled=True,
             description="Household currency denominations table",
+            identity=SourceFieldIdentity(field="UID"),
+            mapping=list(_HOUSEHOLD_CURRENCY_MAPPING),
         ),
         SourceDatasetConfig(
             source_id=SourceId("household_db"),
@@ -508,42 +741,51 @@ def get_shan_baseline_dataset_bindings() -> list[SourceDatasetConfig]:
             selector=SqliteSelector(table_name="INOUTCOME"),
             enabled=True,
             description="Household financial ledger income and expense transactions table",
+            identity=SourceFieldIdentity(field="UID"),
+            mapping=list(_HOUSEHOLD_INOUTCOME_MAPPING),
         ),
         SourceDatasetConfig(
             source_id=SourceId("mf_isin_csv"),
             dataset_id=DatasetId.INVESTMENT_MF_ISIN_MAPPING,
             selector=CsvSelector(),
             enabled=True,
+            identity=SourceFieldIdentity(field="INSTRUMENT_NAME"),
         ),
         SourceDatasetConfig(
             source_id=SourceId("benchmark_mapping_csv"),
             dataset_id=DatasetId.INVESTMENT_BENCHMARK_MAPPING,
             selector=CsvSelector(),
             enabled=True,
+            identity=SourceFieldIdentity(field="ISIN"),
         ),
         SourceDatasetConfig(
             source_id=SourceId("opening_balance_csv"),
             dataset_id=DatasetId.HOUSEHOLD_OPENING_BALANCES,
             selector=CsvSelector(),
             enabled=True,
+            identity=SourceFieldIdentity(field="Z_PK"),
+            mapping=list(_HOUSEHOLD_OPENING_BALANCES_MAPPING),
         ),
         SourceDatasetConfig(
             source_id=SourceId("benchmark_master_csv"),
             dataset_id=DatasetId.INVESTMENT_BENCHMARK_MASTER,
             selector=CsvSelector(),
             enabled=True,
+            identity=SourceFieldIdentity(field="ID"),
         ),
         SourceDatasetConfig(
             source_id=SourceId("macro_parameters_csv"),
             dataset_id=DatasetId.INVESTMENT_MACRO_PARAMETERS,
             selector=CsvSelector(),
             enabled=True,
+            identity=SourceFieldIdentity(field="FY"),
         ),
         SourceDatasetConfig(
             source_id=SourceId("currency_mapping_csv"),
             dataset_id=DatasetId.MARKET_CURRENCY_MAPPING,
             selector=CsvSelector(),
             enabled=True,
+            identity=SourceFieldIdentity(field="UID"),
         ),
         SourceDatasetConfig(
             source_id=SourceId("column_master_csv"),
@@ -551,6 +793,7 @@ def get_shan_baseline_dataset_bindings() -> list[SourceDatasetConfig]:
             selector=CsvSelector(),
             enabled=True,
             description="Transitional column master mapping dataset (scheduled for retirement in Phase 030/035)",
+            identity=CompositeIdentity(fields=["TABLE_NAME", "OLD_COLUMN"]),
         ),
         SourceDatasetConfig(
             source_id=SourceId("mf_holdings_excel"),
