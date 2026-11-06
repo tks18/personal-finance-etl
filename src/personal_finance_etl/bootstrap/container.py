@@ -36,9 +36,10 @@ from personal_finance_etl.contracts.event_transport import EventQueue
 from personal_finance_etl.contracts.execution_plan import ExecutionPlan
 from personal_finance_etl.contracts.observability import ObservabilityEvent
 from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
+from personal_finance_etl.infrastructure.observability import ObservabilityEmitter
 from personal_finance_etl.infrastructure.preferences import PreferencesManager
 from personal_finance_etl.infrastructure.recovery.backup import SystemBackupManager
-from personal_finance_etl.infrastructure.warehouse.connection import DuckDBManager
+from personal_finance_etl.infrastructure.warehouse import DuckDBManager, PreBronzeLayer
 
 __all__ = ["ServiceContainer"]
 
@@ -112,6 +113,27 @@ class ServiceContainer:
     def create_duckdb_manager(self, cfg: Settings) -> DuckDBManager:
         """Instantiate a DuckDBManager bound to the configured database path."""
         return DuckDBManager(cfg.TARGET_DB_BASE_PATH, cfg.TARGET_DB_NAME)
+
+    def create_pre_bronze_layer(
+        self,
+        db_manager: DuckDBManager,
+        emitter: ObservabilityEmitter | None = None,
+    ) -> PreBronzeLayer:
+        """Instantiate a PreBronzeLayer bound to the active DuckDB warehouse manager.
+
+        Parameters
+        ----------
+        db_manager : DuckDBManager
+            Active DuckDB connection manager.
+        emitter : ObservabilityEmitter | None, default=None
+            Observability emitter for diagnostic logging and telemetry.
+
+        Returns
+        -------
+        PreBronzeLayer
+            Configured Pre-Bronze layer manager.
+        """
+        return PreBronzeLayer(db_manager, emitter=emitter)
 
     def create_control_plane(self, cfg: Settings) -> ControlPlane:
         """Instantiate a ControlPlane bound to the configured SQLite document store."""

@@ -2,8 +2,8 @@
 
 Owns
 ----
-- Contract lookup by physical table name (get_contract_by_table).
-- Contract lookup by canonical dataset identity (get_contract_by_dataset_id, get_bronze_contract_by_dataset_id).
+- Contract lookup by physical table name (get_contract_by_table, get_pre_bronze_contract_by_table).
+- Contract lookup by canonical dataset identity (get_contract_by_dataset_id, get_bronze_contract_by_dataset_id, get_pre_bronze_contract_by_dataset_id).
 - Structural integrity and identity validation for registered data contracts (validate_registry).
 - Re-exporting DataContract models, DatasetId, and registries from warehouse.contracts.
 
@@ -11,7 +11,7 @@ Does not own
 -------------
 - Concrete contract registry definitions (owned by infrastructure.warehouse.contracts).
 - DuckDB table execution and DDL creation (owned by infrastructure.warehouse.connection).
-- Layer-specific persistence engines (owned by bronze.py, silver.py, gold.py, meta.py).
+- Layer-specific persistence engines (owned by pre_bronze.py, bronze.py, silver.py, gold.py, meta.py).
 - Cryptographic registry fingerprint generation (owned by infrastructure.warehouse.fingerprints).
 """
 
@@ -21,19 +21,27 @@ from personal_finance_etl.contracts.datasets import DatasetId, IdentityRequireme
 from personal_finance_etl.infrastructure.warehouse.contracts import (
     BRONZE_CONTRACT_REGISTRY,
     DATA_CONTRACT_REGISTRY,
+    PRE_BRONZE_CONTRACT_REGISTRY,
     BronzeDataContract,
     DataContract,
+    PreBronzeDataContract,
+    SyncStrategy,
 )
 
 __all__ = [
     "BRONZE_CONTRACT_REGISTRY",
     "DATA_CONTRACT_REGISTRY",
+    "PRE_BRONZE_CONTRACT_REGISTRY",
     "BronzeDataContract",
     "DataContract",
     "DatasetId",
+    "PreBronzeDataContract",
+    "SyncStrategy",
     "get_bronze_contract_by_dataset_id",
     "get_contract_by_dataset_id",
     "get_contract_by_table",
+    "get_pre_bronze_contract_by_dataset_id",
+    "get_pre_bronze_contract_by_table",
     "validate_registry",
 ]
 
@@ -95,6 +103,47 @@ def get_bronze_contract_by_dataset_id(
     val = str(dataset_id)
     for contract in BRONZE_CONTRACT_REGISTRY:
         if contract.dataset_id.value == val or contract.dataset_id == dataset_id:
+            return contract
+    return None
+
+
+def get_pre_bronze_contract_by_dataset_id(
+    dataset_id: DatasetId | str,
+) -> PreBronzeDataContract | None:
+    """Find a PreBronzeDataContract matching the given DatasetId.
+
+    Parameters
+    ----------
+    dataset_id : DatasetId | str
+        Authoritative dataset identifier to look up.
+
+    Returns
+    -------
+    PreBronzeDataContract | None
+        Matching PreBronzeDataContract if found, otherwise None.
+    """
+    val = str(dataset_id)
+    for contract in PRE_BRONZE_CONTRACT_REGISTRY:
+        if contract.dataset_id.value == val or contract.dataset_id == dataset_id:
+            return contract
+    return None
+
+
+def get_pre_bronze_contract_by_table(physical_table: str) -> PreBronzeDataContract | None:
+    """Find a PreBronzeDataContract matching the given physical table name (case-insensitive).
+
+    Parameters
+    ----------
+    physical_table : str
+        Physical table name to look up.
+
+    Returns
+    -------
+    PreBronzeDataContract | None
+        Matching PreBronzeDataContract if found, otherwise None.
+    """
+    for contract in PRE_BRONZE_CONTRACT_REGISTRY:
+        if contract.physical_table.lower() == physical_table.lower():
             return contract
     return None
 
@@ -192,6 +241,46 @@ def _validate_bronze_contracts() -> None:
             )
 
 
+def _validate_pre_bronze_contracts() -> None:
+    """Validate structure, uniqueness, and prefixing of Pre-Bronze contracts.
+
+    Raises
+    ------
+    ValueError
+        If duplicate table mappings, duplicate dataset IDs, invalid prefixes,
+        or invalid sync strategies are found.
+    """
+    pre_bronze_tables: set[str] = set()
+    pre_bronze_dataset_ids: set[str] = set()
+
+    for pb_contract in PRE_BRONZE_CONTRACT_REGISTRY:
+        if not pb_contract.dataset_id:
+            raise ValueError("Pre-Bronze contract missing DatasetId.")
+        ds_val = str(pb_contract.dataset_id)
+        if ds_val in pre_bronze_dataset_ids:
+            raise ValueError(f"Duplicate Pre-Bronze DatasetId found: {ds_val}")
+        pre_bronze_dataset_ids.add(ds_val)
+
+        if not pb_contract.physical_table:
+            raise ValueError(f"Pre-Bronze physical_table empty for {pb_contract.dataset_id}")
+        if not pb_contract.physical_table.startswith("pre_bronze.pb_"):
+            raise ValueError(
+                f"Pre-Bronze table must start with 'pre_bronze.pb_': {pb_contract.physical_table}"
+            )
+
+        if pb_contract.physical_table in pre_bronze_tables:
+            raise ValueError(f"Duplicate Pre-Bronze table mapping: {pb_contract.physical_table}")
+        pre_bronze_tables.add(pb_contract.physical_table)
+
+        if pb_contract.sync_strategy not in (
+            SyncStrategy.FULL_REPLACE,
+            SyncStrategy.INCREMENTAL,
+        ):
+            raise ValueError(
+                f"Pre-Bronze contract '{pb_contract.dataset_id}' has invalid sync_strategy: {pb_contract.sync_strategy}"
+            )
+
+
 def validate_registry() -> None:
     """Validate uniqueness and presence of required metadata across registries.
 
@@ -203,6 +292,7 @@ def validate_registry() -> None:
     """
     _validate_data_contracts()
     _validate_bronze_contracts()
+    _validate_pre_bronze_contracts()
 
     # Verify global uniqueness of DatasetId across all warehouse contracts
     all_dataset_ids = [str(c.dataset_id) for c in BRONZE_CONTRACT_REGISTRY] + [

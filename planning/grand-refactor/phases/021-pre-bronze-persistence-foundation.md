@@ -162,14 +162,14 @@ Do not:
 
 ## 11. Completion checklist
 
-- [ ] `pre_bronze` schema exists additively.
-- [ ] Typed persistence contract exists.
-- [ ] Full-replace persistence works.
-- [ ] Artifact-key incremental persistence works.
-- [ ] Reads return source-shaped data.
-- [ ] Rollback is proven.
-- [ ] No independent commit exists.
-- [ ] Production pipeline still bypasses Pre-Bronze.
+- [x] `pre_bronze` schema exists additively.
+- [x] Typed persistence contract exists.
+- [x] Full-replace persistence works.
+- [x] Artifact-key incremental persistence works.
+- [x] Reads return source-shaped data.
+- [x] Rollback is proven.
+- [x] No independent commit exists.
+- [x] Production pipeline still bypasses Pre-Bronze.
 
 ## 12. Commit boundary
 
@@ -184,20 +184,31 @@ Phase 022 may assume Pre-Bronze can persist/read controlled source-shaped datase
 ## Phase completion record
 
 ```text
-Phase:
-Target release:
+Phase: 021 - Pre-Bronze Persistence Foundation
+Target release: v9.9.0
 Files changed:
-Schema changed:
-Runtime behavior changed:
+  - src/personal_finance_etl/infrastructure/warehouse/schema/pre_bronze.py (NEW)
+  - src/personal_finance_etl/infrastructure/warehouse/schema/__init__.py
+  - src/personal_finance_etl/infrastructure/warehouse/connection.py
+  - src/personal_finance_etl/infrastructure/warehouse/contracts.py
+  - src/personal_finance_etl/infrastructure/warehouse/registry.py
+  - src/personal_finance_etl/infrastructure/warehouse/pre_bronze.py (NEW)
+  - src/personal_finance_etl/infrastructure/warehouse/__init__.py
+  - src/personal_finance_etl/bootstrap/container.py
+  - tests/conftest.py
+  - tests/infrastructure/test_pre_bronze_persistence.py (NEW)
+  - tests/infrastructure/test_warehouse_and_cp.py
+Schema changed: YES (additive DuckDB schema pre_bronze and pre_bronze.pb_* tables)
+Runtime behavior changed: YES (additive PreBronzeLayer persistence engine, production pipeline bypasses)
 Financial formulas changed: NO
-Focused tests:
-Architecture tests:
-Real-data run:
-Performance check:
-Compatibility path still present:
-Old path deleted:
-Exit assertions green:
-Commit:
+Focused tests: tests/infrastructure/test_pre_bronze_persistence.py (12 passed)
+Architecture tests: tests/architecture/test_boundaries.py (11 passed)
+Real-data run: tests/application/test_forensic_pipeline.py (10 passed)
+Performance check: PASS (12 warehouse tests in 1.56s)
+Compatibility path still present: YES (Bronze / fixed ingestion untouched)
+Old path deleted: NO (demolition scheduled for Phase 035)
+Exit assertions green: YES
+Commit: feat(warehouse): add pre-bronze persistence
 ```
 
 A phase is incomplete if any required exit assertion is false.

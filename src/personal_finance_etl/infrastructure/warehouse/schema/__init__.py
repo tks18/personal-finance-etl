@@ -2,7 +2,7 @@
 
 Owns
 ----
-- Declarative DDL statements for Bronze, Silver, Gold, and Meta tables.
+- Declarative DDL statements for Pre-Bronze, Bronze, Silver, Gold, and Meta tables.
 - Database pragmas and index definitions.
 - Control plane schema catalog.
 
@@ -19,12 +19,14 @@ from personal_finance_etl.infrastructure.warehouse.schema.control_plane import R
 from personal_finance_etl.infrastructure.warehouse.schema.gold import GOLD_DDL
 from personal_finance_etl.infrastructure.warehouse.schema.meta import META_DDL
 from personal_finance_etl.infrastructure.warehouse.schema.pragmas import SQLITE_PRAGMAS
+from personal_finance_etl.infrastructure.warehouse.schema.pre_bronze import PRE_BRONZE_DDL
 from personal_finance_etl.infrastructure.warehouse.schema.silver import SILVER_DDL
 
 __all__ = [
     "BRONZE_DDL",
     "GOLD_DDL",
     "META_DDL",
+    "PRE_BRONZE_DDL",
     "RAW_DDL",
     "SILVER_DDL",
     "SQLITE_PRAGMAS",

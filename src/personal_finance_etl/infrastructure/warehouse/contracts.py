@@ -1,31 +1,73 @@
-"""Authoritative catalog of Bronze and Silver data lakehouse contracts.
+"""Authoritative catalog of Pre-Bronze, Bronze, and Silver data lakehouse contracts.
 
 Owns
 ----
-- DataContract and BronzeDataContract dataclass definitions.
+- PreBronzeDataContract, BronzeDataContract, and DataContract dataclass definitions.
+- Standard Pre-Bronze provenance column constants.
+- PRE_BRONZE_CONTRACT_REGISTRY: Catalog of Pre-Bronze warehouse persistence contracts.
 - BRONZE_CONTRACT_REGISTRY: Catalog of Bronze ingestion layer contracts.
 - DATA_CONTRACT_REGISTRY: Catalog of Silver and Gold analytical presentation contracts.
 
 Does not own
 -------------
 - DDL generation and catalog validation logic (owned by infrastructure.warehouse.registry).
-- Table upsert execution (owned by infrastructure.warehouse.bronze/silver).
+- Table upsert execution (owned by infrastructure.warehouse.pre_bronze/bronze/silver).
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
+from personal_finance_etl.config.sources.change_detection import SyncStrategy
 from personal_finance_etl.contracts.datasets import DatasetId, IdentityRequirement
 
+# Standard Pre-Bronze operational provenance column names
+PRE_BRONZE_ARTIFACT_ID: str = "__artifact_id__"
+PRE_BRONZE_SOURCE_ID: str = "__source_id__"
+PRE_BRONZE_DATASET_ID: str = "__dataset_id__"
+PRE_BRONZE_PROVENANCE_COLUMNS: tuple[str, ...] = (
+    PRE_BRONZE_ARTIFACT_ID,
+    PRE_BRONZE_SOURCE_ID,
+    PRE_BRONZE_DATASET_ID,
+)
+
 __all__ = [
+    "PRE_BRONZE_ARTIFACT_ID",
+    "PRE_BRONZE_CONTRACT_REGISTRY",
+    "PRE_BRONZE_DATASET_ID",
+    "PRE_BRONZE_PROVENANCE_COLUMNS",
+    "PRE_BRONZE_SOURCE_ID",
     "BronzeDataContract",
     "DataContract",
     "DatasetId",
     "IdentityRequirement",
+    "PreBronzeDataContract",
+    "SyncStrategy",
     "BRONZE_CONTRACT_REGISTRY",
     "DATA_CONTRACT_REGISTRY",
 ]
+
+
+@dataclass(frozen=True, slots=True)
+class PreBronzeDataContract:
+    """Authoritative persistence contract for a Pre-Bronze warehouse dataset.
+
+    Parameters
+    ----------
+    dataset_id : DatasetId
+        Canonical logical dataset identity.
+    physical_table : str
+        PFETL-controlled physical table name in DuckDB (e.g. 'pre_bronze.pb_household_zcategory').
+    sync_strategy : SyncStrategy, default=SyncStrategy.INCREMENTAL
+        Warehouse synchronization mode (full-replace vs incremental).
+    provenance_required : bool, default=True
+        Whether rows must carry explicit operational provenance metadata.
+    """
+
+    dataset_id: DatasetId
+    physical_table: str
+    sync_strategy: SyncStrategy = SyncStrategy.INCREMENTAL
+    provenance_required: bool = True
 
 
 @dataclass
@@ -236,6 +278,19 @@ BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
         IdentityRequirement.NONE,
         "Daily US Stock Closing Price Time-Series (Ticker, Date)",
     ),
+]
+
+# Authoritative registry for Pre-Bronze warehouse layer
+PRE_BRONZE_CONTRACT_REGISTRY: list[PreBronzeDataContract] = [
+    PreBronzeDataContract(
+        dataset_id=b.dataset_id,
+        physical_table=f"pre_bronze.pb_{b.dataset_id.value}",
+        sync_strategy=(
+            SyncStrategy.FULL_REPLACE if b.is_full_replace else SyncStrategy.INCREMENTAL
+        ),
+        provenance_required=True,
+    )
+    for b in BRONZE_CONTRACT_REGISTRY
 ]
 
 # Authoritative registry for Silver and Gold analytical layers
