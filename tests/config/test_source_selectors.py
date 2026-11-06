@@ -175,6 +175,7 @@ def test_source_dataset_config_validation_and_roundtrip() -> None:
         "identity": None,
         "mapping": [],
         "normalization": [],
+        "fields": [],
     }
     reconstructed_dict = SourceDatasetConfig.model_validate(data_dict)
     assert reconstructed_dict == binding
