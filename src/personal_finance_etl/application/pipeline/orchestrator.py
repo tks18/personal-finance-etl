@@ -116,6 +116,7 @@ class ETLOrchestrator:
             self.rules,
             emitter=self.emitter,
             plan=self.plan,
+            source_config=self.source_config,
         )
 
         try:
