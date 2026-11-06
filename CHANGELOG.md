@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [9.8.3](https://github.com/tks18/personal-finance-etl/compare/9.8.2...9.8.3) (2026-11-06)
+
+
+### Features 🔥
+
+* **config:** implement source config fingerprinting ([36a17f0](https://github.com/tks18/personal-finance-etl/commit/36a17f08ebde0755f3049674bc4d0fa5de39154c))
+* **control-plane:** persist source configuration snapshots and linkage ([1b3ed53](https://github.com/tks18/personal-finance-etl/commit/1b3ed537faf2b8d23a3c7ea1676a951c9a4ac4a0))
+* **observability:** add source config fingerprint telemetry ([fc7481c](https://github.com/tks18/personal-finance-etl/commit/fc7481c8a26ebc5121acc391b4e60f78c04531ce))
+* **pipeline:** attach source configuration provenance to lifecycle ([66c5c73](https://github.com/tks18/personal-finance-etl/commit/66c5c73ce4cc4587a247172d6f0f0de9fd458a30))
+
+
+### Tests 🧪
+
+* **provenance:** add source config fingerprint and snapshot tests ([712e91d](https://github.com/tks18/personal-finance-etl/commit/712e91d0052de36c44edb12316ea5e6f28387625))
+
+
+### Docs 📃
+
+* **refactor:** complete phase 020 config provenance ([c1db03d](https://github.com/tks18/personal-finance-etl/commit/c1db03dc963b1f6c9c4f32a23afb3318d1ef8f14))
+
 ### [9.8.2](https://github.com/tks18/personal-finance-etl/compare/9.8.1...9.8.2) (2026-11-06)
 
 
