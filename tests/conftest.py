@@ -37,7 +37,7 @@ from personal_finance_etl.contracts.observability import ObservabilityEvent
 from personal_finance_etl.infrastructure.control_plane.connection import SQLiteManager
 from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
 from personal_finance_etl.infrastructure.observability import ObservabilityEmitter
-from personal_finance_etl.infrastructure.warehouse.connection import DuckDBManager
+from personal_finance_etl.infrastructure.warehouse import DuckDBManager, PreBronzeLayer
 
 # ---------------------------------------------------------------------------
 # Path & Discovery Fixtures
@@ -298,6 +298,25 @@ def isolated_duckdb_manager(isolated_settings: Settings) -> DuckDBManager:
         base_path=isolated_settings.TARGET_DB_BASE_PATH,
         db_name=isolated_settings.TARGET_DB_NAME,
     )
+
+
+@pytest.fixture(scope="function")
+def isolated_pre_bronze_layer(isolated_duckdb_manager: DuckDBManager) -> PreBronzeLayer:
+    """Provide an initialized PreBronzeLayer instance bound to isolated DuckDB warehouse.
+
+    Parameters
+    ----------
+    isolated_duckdb_manager : DuckDBManager
+        Isolated test DuckDB connection manager.
+
+    Returns
+    -------
+    PreBronzeLayer
+        Pre-Bronze layer persistence manager.
+    """
+    isolated_duckdb_manager.open()
+    isolated_duckdb_manager.ensure_schemas()
+    return PreBronzeLayer(isolated_duckdb_manager)
 
 
 @pytest.fixture(scope="function")

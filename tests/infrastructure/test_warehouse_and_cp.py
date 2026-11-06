@@ -148,7 +148,7 @@ def test_duckdb_warehouse_lifecycle() -> None:
                 "SELECT schema_name FROM information_schema.schemata"
             ).fetchall()
         }
-        assert {"bronze", "silver", "gold", "meta"}.issubset(schemas)
+        assert {"pre_bronze", "bronze", "silver", "gold", "meta"}.issubset(schemas)
 
         db_mgr.close()
 
