@@ -35,10 +35,14 @@ from personal_finance_etl.config.sources.loader import (
 from personal_finance_etl.contracts.event_transport import EventQueue
 from personal_finance_etl.contracts.execution_plan import ExecutionPlan
 from personal_finance_etl.contracts.observability import ObservabilityEvent
+from personal_finance_etl.contracts.validation import DataFrameValidator
 from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
 from personal_finance_etl.infrastructure.observability import ObservabilityEmitter
 from personal_finance_etl.infrastructure.preferences import PreferencesManager
 from personal_finance_etl.infrastructure.recovery.backup import SystemBackupManager
+from personal_finance_etl.infrastructure.validation.pandera_adapter import (
+    PanderaDataFrameValidator,
+)
 from personal_finance_etl.infrastructure.warehouse import DuckDBManager, PreBronzeLayer
 
 __all__ = ["ServiceContainer"]
@@ -134,6 +138,27 @@ class ServiceContainer:
             Configured Pre-Bronze layer manager.
         """
         return PreBronzeLayer(db_manager, emitter=emitter)
+
+    def create_dataframe_validator(
+        self,
+        emitter: ObservabilityEmitter | None = None,
+        max_examples: int = 5,
+    ) -> DataFrameValidator:
+        """Instantiate a DataFrameValidator backed by Pandera.
+
+        Parameters
+        ----------
+        emitter : ObservabilityEmitter | None, default=None
+            Active observability emitter.
+        max_examples : int, default=5
+            Maximum number of violation examples preserved per failed check.
+
+        Returns
+        -------
+        DataFrameValidator
+            Configured validator instance.
+        """
+        return PanderaDataFrameValidator(emitter=emitter, max_examples=max_examples)
 
     def create_control_plane(self, cfg: Settings) -> ControlPlane:
         """Instantiate a ControlPlane bound to the configured SQLite document store."""
