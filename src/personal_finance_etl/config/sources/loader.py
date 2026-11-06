@@ -27,6 +27,15 @@ from typing import Self
 from pydantic import BaseModel, Field, model_validator
 
 from personal_finance_etl.config.sources.model import SourceConfig, SourceDatasetConfig
+from personal_finance_etl.config.sources.normalization import (
+    CastRule,
+    ConstantRule,
+    DefaultRule,
+    NormalizeCaseRule,
+    NormalizeNullRule,
+    ParseDateRule,
+    TrimRule,
+)
 from personal_finance_etl.config.sources.selectors import (
     CsvSelector,
     ExcelSelector,
@@ -295,6 +304,53 @@ class SourceConfiguration(BaseModel):
                     lines.append(f"header_row = {sel.header_row}")
             else:
                 lines.append(f'table_name = "{sel.table_name}"')
+
+            if ds.mapping:
+                lines.append("[datasets.mapping]")
+                for m in ds.mapping:
+                    lines.append(f'"{m.source_field}" = "{m.canonical_field}"')
+
+            for norm in ds.normalization:
+                lines.append("[[datasets.normalization]]")
+                lines.append(f'rule = "{norm.rule}"')
+                lines.append(f'field = "{norm.field}"')
+                if isinstance(norm, CastRule):
+                    lines.append(f'target_type = "{norm.target_type}"')
+                elif isinstance(norm, ParseDateRule):
+                    if norm.format is not None:
+                        lines.append(f'format = "{norm.format}"')
+                    lines.append(f"strict = {'true' if norm.strict else 'false'}")
+                elif isinstance(norm, TrimRule):
+                    lines.append(f'mode = "{norm.mode}"')
+                elif isinstance(norm, NormalizeCaseRule):
+                    lines.append(f'case = "{norm.case}"')
+                elif isinstance(norm, ConstantRule):
+                    val_str = (
+                        f'"{norm.value}"'
+                        if isinstance(norm.value, str)
+                        else str(norm.value).lower()
+                        if isinstance(norm.value, bool)
+                        else str(norm.value)
+                    )
+                    lines.append(f"value = {val_str}")
+                elif isinstance(norm, DefaultRule):
+                    val_str = (
+                        f'"{norm.value}"'
+                        if isinstance(norm.value, str)
+                        else str(norm.value).lower()
+                        if isinstance(norm.value, bool)
+                        else str(norm.value)
+                    )
+                    lines.append(f"value = {val_str}")
+                elif isinstance(norm, NormalizeNullRule):
+                    nulls = ", ".join(f'"{x}"' for x in norm.null_values)
+                    lines.append(f"null_values = [{nulls}]")
+                else:
+                    map_entries = ", ".join(f'"{k}" = "{v}"' for k, v in norm.mapping.items())
+                    lines.append(f"mapping = {{ {map_entries} }}")
+                    if norm.default is not None:
+                        lines.append(f'default = "{norm.default}"')
+
             lines.append("")
 
         content = "\n".join(lines)

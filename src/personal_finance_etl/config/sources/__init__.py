@@ -14,6 +14,9 @@ Owns
 - resolve_change_detection_policy: Pure resolution function building policy from format and flags.
 - SourceFieldIdentity, CompositeIdentity, DerivedDeterministicIdentity: Row identity strategies.
 - BronzeIdentityStrategy: Discriminated union of supported Bronze identity strategies.
+- ColumnMapping, dict_to_mapping_list, mapping_list_to_dict: Source-to-canonical mapping models.
+- CanonicalDtype, CastRule, ParseDateRule, TrimRule, NormalizeCaseRule: Bounded normalization rules.
+- ConstantRule, DefaultRule, NormalizeNullRule, MapValuesRule, NormalizationRule: Bounded normalization rules.
 - TopologyCoverageReport: Diagnostic report summarizing Bronze dataset coverage.
 - evaluate_bronze_topology_coverage: Evaluator comparing configured bindings against Bronze contracts.
 - validate_source_dataset_bindings: Aggregate validation helper for sources and dataset bindings.
@@ -54,7 +57,24 @@ from personal_finance_etl.config.sources.loader import (
     get_shan_baseline_source_configuration,
     get_shan_baseline_sources,
 )
+from personal_finance_etl.config.sources.mapping import (
+    ColumnMapping,
+    dict_to_mapping_list,
+    mapping_list_to_dict,
+)
 from personal_finance_etl.config.sources.model import SourceConfig, SourceDatasetConfig
+from personal_finance_etl.config.sources.normalization import (
+    CanonicalDtype,
+    CastRule,
+    ConstantRule,
+    DefaultRule,
+    MapValuesRule,
+    NormalizationRule,
+    NormalizeCaseRule,
+    NormalizeNullRule,
+    ParseDateRule,
+    TrimRule,
+)
 from personal_finance_etl.config.sources.selectors import (
     CsvSelector,
     DatasetSelector,
@@ -74,16 +94,26 @@ __all__ = [
     "CURRENT_SOURCE_CONFIG_SCHEMA_VERSION",
     "SUPPORTED_SOURCE_CONFIG_SCHEMA_VERSIONS",
     "BronzeIdentityStrategy",
+    "CanonicalDtype",
     "CapabilitySelection",
+    "CastRule",
     "ChangeDetectionPolicy",
+    "ColumnMapping",
     "CompositeIdentity",
+    "ConstantRule",
     "CsvSelector",
     "DatasetSelector",
+    "DefaultRule",
     "DerivedDeterministicIdentity",
     "DriftStrategy",
     "ExcelSelector",
     "FingerprintStrategy",
+    "MapValuesRule",
+    "NormalizeCaseRule",
+    "NormalizeNullRule",
+    "NormalizationRule",
     "PROTECTED_FINANCIAL_NAMESPACES",
+    "ParseDateRule",
     "RenameStrategy",
     "SourceConfig",
     "SourceConfiguration",
@@ -92,10 +122,13 @@ __all__ = [
     "SqliteSelector",
     "SyncStrategy",
     "TopologyCoverageReport",
+    "TrimRule",
+    "dict_to_mapping_list",
     "evaluate_bronze_topology_coverage",
     "get_shan_baseline_dataset_bindings",
     "get_shan_baseline_source_configuration",
     "get_shan_baseline_sources",
+    "mapping_list_to_dict",
     "resolve_change_detection_policy",
     "validate_source_dataset_bindings",
     "validate_source_selector_compatibility",
