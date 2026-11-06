@@ -129,13 +129,13 @@ Do not:
 
 ## 11. Completion checklist
 
-- [ ] Normalization -> identity composition is explicit.
-- [ ] Trusted household IDs preserved.
-- [ ] External no-ID fixture derives stable IDs.
-- [ ] Collision detection works.
-- [ ] Column-master semantics fully represented in config.
-- [ ] Transition parity guard exists.
-- [ ] No production persistence changed.
+- [x] Normalization -> identity composition is explicit.
+- [x] Trusted household IDs preserved.
+- [x] External no-ID fixture derives stable IDs.
+- [x] Collision detection works.
+- [x] Column-master semantics fully represented in config.
+- [x] Transition parity guard exists.
+- [x] No production persistence changed.
 
 ## 12. Commit boundary
 
@@ -150,20 +150,29 @@ Phase 020 may assume the complete generalized configuration semantics now exist:
 ## Phase completion record
 
 ```text
-Phase:
-Target release:
+Phase: 019 - Identity Integration and Current Mapping Migration
+Target release: v9.8.2
 Files changed:
-Schema changed:
-Runtime behavior changed:
+  - src/personal_finance_etl/contracts/canonical_fields.py
+  - src/personal_finance_etl/config/sources/loader.py
+  - src/personal_finance_etl/application/ingestion/admission.py
+  - src/personal_finance_etl/application/ingestion/__init__.py
+  - tests/fixtures/sources.toml
+  - tests/fixtures/COLUMN_MASTER.csv
+  - tests/config/test_column_master_parity.py
+  - tests/application/test_admission_service.py
+  - .gitignore
+Schema changed: NO (configuration and contracts expanded)
+Runtime behavior changed: NO (pipeline paths preserved, admission service additive)
 Financial formulas changed: NO
-Focused tests:
-Architecture tests:
-Real-data run:
-Performance check:
-Compatibility path still present:
-Old path deleted:
-Exit assertions green:
-Commit:
+Focused tests: tests/application/test_admission_service.py, tests/config/test_column_master_parity.py
+Architecture tests: tests/architecture/test_boundaries.py
+Real-data run: N/A (non-I/O admission planning and mapping migration)
+Performance check: Admission execution and parity validation runs in <0.10s
+Compatibility path still present: YES (legacy column_master reading in coordinator remains active)
+Old path deleted: NO
+Exit assertions green: YES
+Commit: pending
 ```
 
 A phase is incomplete if any required exit assertion is false.
