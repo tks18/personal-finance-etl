@@ -24,6 +24,11 @@ from pathlib import Path
 from personal_finance_etl.application.pipeline.planner import CapabilityPlanner
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
+from personal_finance_etl.config.sources import (
+    SourceConfiguration,
+    compute_source_config_fingerprint,
+    get_shan_baseline_source_configuration,
+)
 from personal_finance_etl.contracts.application import EngineStage
 from personal_finance_etl.contracts.event_transport import EventQueue
 from personal_finance_etl.contracts.execution_plan import ExecutionPlan
@@ -75,6 +80,7 @@ class RunLifecycleCoordinator:
         rules: FinancialRules | None = None,
         emitter: ObservabilityEmitter | None = None,
         plan: ExecutionPlan | None = None,
+        source_config: SourceConfiguration | None = None,
     ) -> None:
         self.cfg = cfg
         self.status_queue = status_queue
@@ -82,6 +88,9 @@ class RunLifecycleCoordinator:
         self.rules = rules
         self.emitter = emitter or get_global_emitter()
         self.plan = plan or CapabilityPlanner().create_plan()
+        self.source_config = (
+            source_config if source_config is not None else get_shan_baseline_source_configuration()
+        )
 
         self.duckdb_started: bool = False
         self.sqlite_started: bool = False
@@ -100,12 +109,14 @@ class RunLifecycleCoordinator:
         """Emit deterministic provenance fingerprint event and safe configuration summary."""
         settings_summary = fingerprint_config(self.cfg)
         rules_summary = fingerprint_rules(self.rules)
+        source_config_fp = compute_source_config_fingerprint(self.source_config)
 
         diagnostics.info(
-            "Configuration fingerprint: %s | Rules fingerprint: %s | Plan fingerprint: %s",
+            "Configuration fingerprint: %s | Rules fingerprint: %s | Plan fingerprint: %s | Source config fingerprint: %s",
             settings_summary["config_hash"],
             rules_summary["rules_hash"],
             self.plan.plan_fingerprint,
+            source_config_fp.fingerprint,
         )
 
         self.emitter.emit_event(
@@ -113,14 +124,47 @@ class RunLifecycleCoordinator:
             message=(
                 f"Configuration fingerprint: {settings_summary['config_hash']} | "
                 f"Rules fingerprint: {rules_summary['rules_hash']} | "
-                f"Plan fingerprint: {self.plan.plan_fingerprint}"
+                f"Plan fingerprint: {self.plan.plan_fingerprint} | "
+                f"Source config fingerprint: {source_config_fp.fingerprint}"
             ),
             presentation_kind=PresentationKind.INTERNAL,
             severity=DiagnosticSeverity.INFO,
             settings_fingerprint=settings_summary["config_hash"],
             rules_fingerprint=rules_summary["rules_hash"],
             plan_fingerprint=self.plan.plan_fingerprint,
+            source_config_fingerprint=source_config_fp.fingerprint,
         )
+
+        self.emitter.emit_event(
+            event_code=EventCode.SYSTEM_SOURCE_CONFIG_FINGERPRINT,
+            message=(
+                f"Source configuration active: fingerprint={source_config_fp.fingerprint} "
+                f"content_hash={source_config_fp.content_hash} "
+                f"schema_version={source_config_fp.schema_version}"
+            ),
+            presentation_kind=PresentationKind.INTERNAL,
+            severity=DiagnosticSeverity.INFO,
+            source_config_fingerprint=source_config_fp.fingerprint,
+        )
+
+        if self.cp is not None and self.cp.runs.has_source_config_changed_since_last_success(
+            source_config_fp.content_hash
+        ):
+            prior_snap_id = self.cp.runs.get_latest_successful_run_source_config_snapshot_id()
+            diagnostics.info(
+                "Source configuration change detected compared to previous successful run (%s).",
+                prior_snap_id,
+            )
+            self.emitter.emit_event(
+                event_code=EventCode.SYSTEM_SOURCE_CONFIG_CHANGED,
+                message=(
+                    f"Source configuration modified since latest successful run. "
+                    f"Active: {source_config_fp.fingerprint} (prior snapshot: {prior_snap_id})"
+                ),
+                presentation_kind=PresentationKind.INTERNAL,
+                severity=DiagnosticSeverity.INFO,
+                source_config_fingerprint=source_config_fp.fingerprint,
+            )
 
     def initialize(self) -> tuple[ControlPlane, str, list[str]]:
         """Initialize observability, open databases, begin transactions, and record run start.
@@ -143,6 +187,7 @@ class RunLifecycleCoordinator:
             cfg_json=self.cfg.model_dump_json(),
             rules_json=self.rules.model_dump_json() if self.rules else None,
             plan=self.plan,
+            source_config=self.source_config,
         )
         self.run_id = run_id
         cp.active_run_id = run_id
@@ -152,6 +197,7 @@ class RunLifecycleCoordinator:
         # Bind ambient context for current execution run
         settings_summary = fingerprint_config(self.cfg)
         rules_summary = fingerprint_rules(self.rules)
+        source_config_fp = compute_source_config_fingerprint(self.source_config)
         set_current_context(
             ObservabilityContext(
                 run_id=run_id,
@@ -160,6 +206,7 @@ class RunLifecycleCoordinator:
                 settings_fingerprint=settings_summary["config_hash"],
                 rules_fingerprint=rules_summary["rules_hash"],
                 plan_fingerprint=self.plan.plan_fingerprint,
+                source_config_fingerprint=source_config_fp.fingerprint,
             )
         )
 

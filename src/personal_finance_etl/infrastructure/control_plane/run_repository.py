@@ -30,6 +30,10 @@ from datetime import date, datetime
 import polars as pl
 
 from personal_finance_etl.config.financial_rules import FinancialRules
+from personal_finance_etl.config.sources import (
+    SourceConfiguration,
+    compute_source_config_fingerprint,
+)
 from personal_finance_etl.contracts.execution_plan import ExecutionPlan
 from personal_finance_etl.contracts.extraction import ExtractionProviderRequest
 from personal_finance_etl.contracts.lifecycle import (
@@ -69,15 +73,33 @@ SQL_INSERT_PLAN_SNAPSHOT = (
     "(snapshot_id, content_hash, canonical_payload, created_at) VALUES (?, ?, ?, ?)"
 )
 
+SQL_INSERT_SOURCE_CONFIG_SNAPSHOT = (
+    "INSERT OR IGNORE INTO cp_source_config_snapshots "
+    "(snapshot_id, content_hash, canonical_payload, schema_version, created_at) "
+    "VALUES (?, ?, ?, ?, ?)"
+)
+
+SQL_SELECT_SOURCE_CONFIG_SNAPSHOT = (
+    "SELECT snapshot_id, content_hash, canonical_payload, schema_version, created_at "
+    "FROM cp_source_config_snapshots WHERE snapshot_id = ?"
+)
+
+SQL_SELECT_LATEST_SUCCESS_SOURCE_CONFIG_SNAPSHOT_ID = (
+    "SELECT source_config_snapshot_id FROM cp_runs "
+    "WHERE UPPER(status) = 'SUCCESS' AND source_config_snapshot_id IS NOT NULL "
+    "ORDER BY started_at DESC, rowid DESC LIMIT 1"
+)
+
 SQL_INSERT_RUN = """
 INSERT INTO cp_runs (
     run_id, started_at, status, commit_state, application_version, schema_version,
-    settings_snapshot_id, rules_snapshot_id, plan_snapshot_id
-) VALUES (?, ?, 'STARTED', 'STARTED', ?, ?, ?, ?, ?)
+    settings_snapshot_id, rules_snapshot_id, plan_snapshot_id, source_config_snapshot_id
+) VALUES (?, ?, 'STARTED', 'STARTED', ?, ?, ?, ?, ?, ?)
 """
 
 SQL_SELECT_RUN_METADATA = (
-    "SELECT settings_snapshot_id, rules_snapshot_id, plan_snapshot_id FROM cp_runs WHERE run_id = ?"
+    "SELECT settings_snapshot_id, rules_snapshot_id, plan_snapshot_id, source_config_snapshot_id "
+    "FROM cp_runs WHERE run_id = ?"
 )
 
 SQL_UPDATE_RUN_STATUS = "UPDATE cp_runs SET status = ? WHERE run_id = ?"
@@ -91,7 +113,8 @@ SQL_SELECT_EXECUTION_LOG = "SELECT execution_log FROM cp_runs WHERE run_id = ?"
 SQL_SELECT_RUN_STATUS = """
 SELECT run_id, started_at, finished_at, status, commit_state,
        application_version, schema_version, settings_snapshot_id,
-       rules_snapshot_id, (execution_log IS NOT NULL) AS has_execution_log
+       rules_snapshot_id, (execution_log IS NOT NULL) AS has_execution_log,
+       plan_snapshot_id, source_config_snapshot_id
 FROM cp_runs WHERE run_id = ?
 """
 
@@ -202,7 +225,7 @@ class SimulationRunParams:
     rules_snapshot_id: str | None = None
 
 
-class RunRepository:
+class RunRepository:  # pylint: disable=too-many-public-methods
     """Persistence and audit transitions for pipeline execution runs and lifecycle events.
 
     Parameters
@@ -259,6 +282,7 @@ class RunRepository:
         cfg_json: str | None = None,
         rules_json: str | None = None,
         plan: ExecutionPlan | None = None,
+        source_config: SourceConfiguration | None = None,
     ) -> str:
         """Initialize a new pipeline execution run record and snapshot configs.
 
@@ -270,6 +294,8 @@ class RunRepository:
             Serialized financial rules snapshot payload.
         plan : ExecutionPlan, optional
             Active execution plan to persist and associate with run.
+        source_config : SourceConfiguration, optional
+            Active generalized source configuration to snapshot.
 
         Returns
         -------
@@ -281,6 +307,7 @@ class RunRepository:
         settings_id: str | None = None
         rules_id: str | None = None
         plan_id: str | None = None
+        source_config_id: str | None = None
         with self.db.atomic():
             if cfg_json:
                 canonical_cfg = self._canonical_json(cfg_json)
@@ -306,6 +333,19 @@ class RunRepository:
                     SQL_INSERT_PLAN_SNAPSHOT,
                     (plan_id, digest_plan, canonical_plan, now),
                 )
+            if source_config is not None:
+                sc_fp = compute_source_config_fingerprint(source_config)
+                source_config_id = f"snap_src_{sc_fp.content_hash}"
+                self.db.conn.execute(
+                    SQL_INSERT_SOURCE_CONFIG_SNAPSHOT,
+                    (
+                        source_config_id,
+                        sc_fp.content_hash,
+                        sc_fp.canonical_payload,
+                        sc_fp.schema_version,
+                        now,
+                    ),
+                )
             self.db.conn.execute(
                 SQL_INSERT_RUN,
                 (
@@ -316,6 +356,7 @@ class RunRepository:
                     settings_id,
                     rules_id,
                     plan_id,
+                    source_config_id,
                 ),
             )
         return run_id
@@ -350,6 +391,102 @@ class RunRepository:
             )
         return plan_id
 
+    def log_source_config_snapshot(self, run_id: str, source_config: SourceConfiguration) -> str:
+        """Persist a source configuration snapshot and link it to an active run record.
+
+        Parameters
+        ----------
+        run_id : str
+            Active run identifier.
+        source_config : SourceConfiguration
+            Active source configuration to snapshot.
+
+        Returns
+        -------
+        str
+            Snapshot ID of the persisted source configuration.
+        """
+        now = datetime.now().isoformat(timespec="seconds")
+        sc_fp = compute_source_config_fingerprint(source_config)
+        snapshot_id = f"snap_src_{sc_fp.content_hash}"
+        with self.db.atomic():
+            self.db.conn.execute(
+                SQL_INSERT_SOURCE_CONFIG_SNAPSHOT,
+                (
+                    snapshot_id,
+                    sc_fp.content_hash,
+                    sc_fp.canonical_payload,
+                    sc_fp.schema_version,
+                    now,
+                ),
+            )
+            self.db.conn.execute(
+                "UPDATE cp_runs SET source_config_snapshot_id = ? WHERE run_id = ?",
+                (snapshot_id, run_id),
+            )
+        return snapshot_id
+
+    def get_source_config_snapshot(self, snapshot_id: str) -> dict[str, object] | None:
+        """Retrieve a stored source configuration snapshot by ID.
+
+        Parameters
+        ----------
+        snapshot_id : str
+            Snapshot identifier.
+
+        Returns
+        -------
+        dict[str, object] | None
+            Snapshot data mapping if found, otherwise None.
+        """
+        row = self.db.conn.execute(
+            SQL_SELECT_SOURCE_CONFIG_SNAPSHOT,
+            (snapshot_id,),
+        ).fetchone()
+        if not row:
+            return None
+        return {
+            "snapshot_id": str(row[0]),
+            "content_hash": str(row[1]),
+            "canonical_payload": str(row[2]),
+            "schema_version": str(row[3]),
+            "created_at": str(row[4]),
+        }
+
+    def get_latest_successful_run_source_config_snapshot_id(self) -> str | None:
+        """Retrieve the source configuration snapshot ID of the latest successful run.
+
+        Returns
+        -------
+        str | None
+            Snapshot ID if a prior successful run exists, otherwise None.
+        """
+        row = self.db.conn.execute(SQL_SELECT_LATEST_SUCCESS_SOURCE_CONFIG_SNAPSHOT_ID).fetchone()
+        if row and row[0]:
+            return str(row[0])
+        return None
+
+    def has_source_config_changed_since_last_success(self, current_content_hash: str) -> bool:
+        """Check whether the active source configuration differs from the latest successful run.
+
+        Parameters
+        ----------
+        current_content_hash : str
+            64-character SHA-256 content digest of current configuration.
+
+        Returns
+        -------
+        bool
+            True if prior successful run exists with a different hash, False otherwise.
+        """
+        latest_snap_id = self.get_latest_successful_run_source_config_snapshot_id()
+        if not latest_snap_id:
+            return False
+        prior_snapshot = self.get_source_config_snapshot(latest_snap_id)
+        if not prior_snapshot:
+            return False
+        return str(prior_snapshot["content_hash"]) != current_content_hash
+
     def get_run_metadata(self, run_id: str) -> dict[str, str | None]:
         """Fetch snapshot IDs associated with a run.
 
@@ -361,7 +498,7 @@ class RunRepository:
         Returns
         -------
         dict[str, str | None]
-            Map containing settings_snapshot_id, rules_snapshot_id, and plan_snapshot_id.
+            Map containing settings_snapshot_id, rules_snapshot_id, plan_snapshot_id, and source_config_snapshot_id.
         """
         row = self.db.conn.execute(
             SQL_SELECT_RUN_METADATA,
@@ -372,6 +509,7 @@ class RunRepository:
                 "settings_snapshot_id": row[0],
                 "rules_snapshot_id": row[1],
                 "plan_snapshot_id": row[2],
+                "source_config_snapshot_id": row[3],
             }
         return {}
 
@@ -496,6 +634,8 @@ class RunRepository:
             "settings_snapshot_id": row[7],
             "rules_snapshot_id": row[8],
             "has_execution_log": bool(row[9]),
+            "plan_snapshot_id": row[10] if len(row) > 10 else None,
+            "source_config_snapshot_id": row[11] if len(row) > 11 else None,
         }
 
     def finish_run(

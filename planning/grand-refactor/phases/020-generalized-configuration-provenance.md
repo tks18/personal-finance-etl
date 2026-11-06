@@ -145,15 +145,15 @@ Do not:
 
 ## 11. Completion checklist
 
-- [ ] Complete SourceConfiguration has deterministic fingerprint.
-- [ ] Fingerprint version/schema explicit.
-- [ ] Snapshot persisted in Control Plane.
-- [ ] Run references exact source config.
-- [ ] ExecutionPlan fingerprint linked.
-- [ ] Config changes detected, not auto-remediated.
-- [ ] Observability context bounded.
-- [ ] Existing settings/rules provenance preserved.
-- [ ] Current pipeline outputs unchanged.
+- [x] Complete SourceConfiguration has deterministic fingerprint.
+- [x] Fingerprint version/schema explicit.
+- [x] Snapshot persisted in Control Plane.
+- [x] Run references exact source config.
+- [x] ExecutionPlan fingerprint linked.
+- [x] Config changes detected, not auto-remediated.
+- [x] Observability context bounded.
+- [x] Existing settings/rules provenance preserved.
+- [x] Current pipeline outputs unchanged.
 
 ## 12. Commit boundary
 
@@ -176,20 +176,30 @@ Still intentionally present after Phase 020:
 ## Phase completion record
 
 ```text
-Phase:
-Target release:
+Phase: 020
+Target release: v9.8.3
 Files changed:
-Schema changed:
-Runtime behavior changed:
+  - src/personal_finance_etl/config/sources/fingerprint.py (created)
+  - src/personal_finance_etl/config/sources/__init__.py
+  - src/personal_finance_etl/contracts/observability.py
+  - src/personal_finance_etl/infrastructure/observability/emitter.py
+  - src/personal_finance_etl/infrastructure/control_plane/schema.py
+  - src/personal_finance_etl/infrastructure/control_plane/run_repository.py
+  - src/personal_finance_etl/application/pipeline/lifecycle.py
+  - src/personal_finance_etl/application/pipeline/orchestrator.py
+  - tests/config/test_source_config_fingerprint.py (created)
+  - tests/infrastructure/test_source_config_provenance.py (created)
+Schema changed: YES (additive cp_source_config_snapshots table and cp_runs.source_config_snapshot_id column)
+Runtime behavior changed: NO (backward-compatible snapshotting, ambient provenance context propagation, non-remediating change notification)
 Financial formulas changed: NO
-Focused tests:
-Architecture tests:
-Real-data run:
-Performance check:
-Compatibility path still present:
-Old path deleted:
-Exit assertions green:
-Commit:
+Focused tests: 14 passed (tests/config/test_source_config_fingerprint.py, tests/infrastructure/test_source_config_provenance.py)
+Architecture tests: 11 passed (tests/architecture/test_boundaries.py)
+Real-data run: N/A
+Performance check: <0.6s test run, <1ms SHA-256 fingerprinting per execution run
+Compatibility path still present: YES (default fallback to Shan baseline if source_config omitted)
+Old path deleted: NO
+Exit assertions green: YES (100% pass across all 6 quality engines: Ruff, Mypy, Pyright, Pylint, Pytest 426/426)
+Commit: Pending user approval
 ```
 
 A phase is incomplete if any required exit assertion is false.

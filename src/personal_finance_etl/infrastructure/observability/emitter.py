@@ -174,6 +174,7 @@ class SpanContext:
         settings_fingerprint: str | None = None,
         rules_fingerprint: str | None = None,
         plan_fingerprint: str | None = None,
+        source_config_fingerprint: str | None = None,
     ) -> None:
         """Initialize execution span context manager with metric tracking.
 
@@ -215,6 +216,8 @@ class SpanContext:
             Financial rules hash.
         plan_fingerprint : str | None, default=None
             Execution plan hash.
+        source_config_fingerprint : str | None, default=None
+            Source configuration hash.
         """
         self.emitter = emitter
         self.operation = operation
@@ -234,6 +237,7 @@ class SpanContext:
         self.settings_fingerprint = settings_fingerprint
         self.rules_fingerprint = rules_fingerprint
         self.plan_fingerprint = plan_fingerprint
+        self.source_config_fingerprint = source_config_fingerprint
 
         self.start_ns: int = 0
         self.token: contextvars.Token[ObservabilityContext] | None = None
@@ -308,6 +312,7 @@ class SpanContext:
             settings_fingerprint=self.settings_fingerprint,
             rules_fingerprint=self.rules_fingerprint,
             plan_fingerprint=self.plan_fingerprint,
+            source_config_fingerprint=self.source_config_fingerprint,
         )
         self.token = set_current_context(child_ctx)
 
@@ -517,6 +522,9 @@ class ObservabilityEmitter:
                         event.context.rules_fingerprint or ambient.rules_fingerprint
                     ),
                     plan_fingerprint=(event.context.plan_fingerprint or ambient.plan_fingerprint),
+                    source_config_fingerprint=(
+                        event.context.source_config_fingerprint or ambient.source_config_fingerprint
+                    ),
                 ),
             )
         return event
@@ -573,6 +581,7 @@ class ObservabilityEmitter:
         settings_fingerprint: str | None = None,
         rules_fingerprint: str | None = None,
         plan_fingerprint: str | None = None,
+        source_config_fingerprint: str | None = None,
     ) -> ObservabilityEvent:
         """Construct and emit an event using current ambient context.
 
@@ -620,6 +629,8 @@ class ObservabilityEmitter:
             Optional financial rules hash digest.
         plan_fingerprint : str | None, default=None
             Optional execution plan hash digest.
+        source_config_fingerprint : str | None, default=None
+            Optional source configuration hash digest.
 
         Returns
         -------
@@ -642,6 +653,7 @@ class ObservabilityEmitter:
             settings_fingerprint=settings_fingerprint,
             rules_fingerprint=rules_fingerprint,
             plan_fingerprint=plan_fingerprint,
+            source_config_fingerprint=source_config_fingerprint,
         )
         event = ObservabilityEvent.create(
             event_code=event_code,
@@ -714,6 +726,7 @@ class ObservabilityEmitter:
         settings_fingerprint: str | None = None,
         rules_fingerprint: str | None = None,
         plan_fingerprint: str | None = None,
+        source_config_fingerprint: str | None = None,
     ) -> SpanContext:
         """Create a scoped execution span measuring duration and outcome.
 
@@ -753,6 +766,8 @@ class ObservabilityEmitter:
             Optional financial rules hash digest.
         plan_fingerprint : str | None, default=None
             Optional execution plan hash digest.
+        source_config_fingerprint : str | None, default=None
+            Optional source configuration hash digest.
 
         Returns
         -------
@@ -778,6 +793,7 @@ class ObservabilityEmitter:
             settings_fingerprint=settings_fingerprint,
             rules_fingerprint=rules_fingerprint,
             plan_fingerprint=plan_fingerprint,
+            source_config_fingerprint=source_config_fingerprint,
         )
 
     def flush(self) -> None:
