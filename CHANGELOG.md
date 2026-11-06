@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [9.8.1](https://github.com/tks18/personal-finance-etl/compare/9.8.0...9.8.1) (2026-11-06)
+
+
+### Features 🔥
+
+* **application:** implement normalization compiler and plan ([88950e9](https://github.com/tks18/personal-finance-etl/commit/88950e94cb3a8cb89be5f100e60aa901466471c1))
+* **application:** implement vectorized normalization executor ([6f60a5a](https://github.com/tks18/personal-finance-etl/commit/6f60a5a0f2dd4be33a0432690ccea1aacbde06cf))
+* **config:** add typed mapping and normalization rules ([62917e0](https://github.com/tks18/personal-finance-etl/commit/62917e080e2ede452b7c6f1894989865be73cfd6))
+* **contracts:** define canonical bronze field vocabulary ([2aaf727](https://github.com/tks18/personal-finance-etl/commit/2aaf7277c02702ebd5910b5c2b0e4d93ed19ac02))
+
+
+### Tests 🧪
+
+* **normalization:** add comprehensive mapping and executor suites ([a899497](https://github.com/tks18/personal-finance-etl/commit/a8994970b1c0dafc568b9e3e8bb9f27aea089a1c))
+
+
+### Docs 📃
+
+* **refactor:** complete phase 018 checklist and records ([7d70a73](https://github.com/tks18/personal-finance-etl/commit/7d70a73837a5b0403fdfb4718f631cdf3dd26d0e))
+
 ## [9.8.0](https://github.com/tks18/personal-finance-etl/compare/9.7.2...9.8.0) (2026-11-05)
 
 
