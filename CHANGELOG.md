@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [9.9.0](https://github.com/tks18/personal-finance-etl/compare/9.8.3...9.9.0) (2026-11-06)
+
+
+### Features 🔥
+
+* **bootstrap:** wire pre-bronze layer in service container ([ba46666](https://github.com/tks18/personal-finance-etl/commit/ba466663e631c3d82430833962b142db88fa27c7))
+* **warehouse:** add pre-bronze schema and contracts ([2687ba3](https://github.com/tks18/personal-finance-etl/commit/2687ba31852152255099a6e8d9b9b6927db0cb39))
+* **warehouse:** implement pre-bronze layer persistence ([a93339f](https://github.com/tks18/personal-finance-etl/commit/a93339fbe338382ce28a5cb36977d47aafd0b174))
+
+
+### Tests 🧪
+
+* **warehouse:** add pre-bronze persistence and transaction tests ([3e550c3](https://github.com/tks18/personal-finance-etl/commit/3e550c31d614a34afd27c205ec82be554e2d648c))
+
+
+### Docs 📃
+
+* **refactor:** complete phase 021 pre-bronze foundation ([587f9b9](https://github.com/tks18/personal-finance-etl/commit/587f9b9c38402559fc66ca447bd9499e9593cb45))
+
 ### [9.8.3](https://github.com/tks18/personal-finance-etl/compare/9.8.2...9.8.3) (2026-11-06)
 
 
