@@ -34,7 +34,7 @@ from personal_finance_etl.contracts.sources import (
     validate_source_id,
 )
 
-__all__ = ["SourceConfig", "SourceDatasetConfig"]
+__all__ = ["SourceConfig", "SourceDatasetConfig", "SourceFieldDeclaration"]
 
 
 class SourceConfig(BaseModel):
@@ -117,6 +117,35 @@ def _empty_normalization_rules() -> list[NormalizationRule]:
     return []
 
 
+class SourceFieldDeclaration(BaseModel):
+    """Declarative specification of an expected source evidence field.
+
+    Parameters
+    ----------
+    name : str
+        Source field or column name as present in the raw tabular stream.
+    data_type : str, default 'String'
+        Declared data type string ('Int64', 'Float64', 'String', 'Date', 'Boolean').
+    nullable : bool, default True
+        Whether null or missing values are permitted in this source column.
+    unique : bool, default False
+        Whether values in this source column must be unique across rows.
+    description : str | None, default None
+        Optional human-readable documentation for this source field.
+    """
+
+    name: str
+    data_type: str = "String"
+    nullable: bool = True
+    unique: bool = False
+    description: str | None = None
+
+
+def _empty_fields() -> list[SourceFieldDeclaration]:
+    """Create an empty list of SourceFieldDeclaration instances."""
+    return []
+
+
 class SourceDatasetConfig(BaseModel):
     """Declarative binding of a physical evidence source to a canonical PFETL dataset.
 
@@ -140,6 +169,8 @@ class SourceDatasetConfig(BaseModel):
         Declarative column translation rules from source names to canonical Bronze names.
     normalization : list[NormalizationRule], default empty list
         Ordered list of bounded normalization transformations to apply during ingestion.
+    fields : list[SourceFieldDeclaration], default empty list
+        Declarative schema specification of expected source tabular fields.
     """
 
     source_id: SourceId
@@ -151,6 +182,51 @@ class SourceDatasetConfig(BaseModel):
     identity: BronzeIdentityStrategy | None = None
     mapping: list[ColumnMapping] = Field(default_factory=_empty_column_mappings)
     normalization: list[NormalizationRule] = Field(default_factory=_empty_normalization_rules)
+    fields: list[SourceFieldDeclaration] = Field(default_factory=_empty_fields)
+
+    @field_validator("fields", mode="before")
+    @classmethod
+    def _coerce_fields_dict(cls, v: object) -> object:
+        """Coerce dictionary declarations into a list of SourceFieldDeclaration instances.
+
+        Parameters
+        ----------
+        v : object
+            Input candidate, either a dictionary or list of field declarations.
+
+        Returns
+        -------
+        object
+            Coerced list or original value.
+        """
+        if isinstance(v, dict):
+            typed_dict = cast(dict[object, object], v)
+            coerced: list[SourceFieldDeclaration] = []
+            for k, val in typed_dict.items():
+                col_name = str(k)
+                if isinstance(val, str):
+                    coerced.append(SourceFieldDeclaration(name=col_name, data_type=val))
+                elif isinstance(val, dict):
+                    inner_dict = cast(dict[object, object], val)
+                    dtype = str(inner_dict.get("data_type", "String"))
+                    nullable = bool(inner_dict.get("nullable", True))
+                    unique = bool(inner_dict.get("unique", False))
+                    desc = (
+                        str(inner_dict.get("description"))
+                        if "description" in inner_dict and inner_dict["description"] is not None
+                        else None
+                    )
+                    coerced.append(
+                        SourceFieldDeclaration(
+                            name=col_name,
+                            data_type=dtype,
+                            nullable=nullable,
+                            unique=unique,
+                            description=desc,
+                        )
+                    )
+            return coerced
+        return v
 
     @field_validator("mapping", mode="before")
     @classmethod

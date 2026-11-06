@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [9.9.3](https://github.com/tks18/personal-finance-etl/compare/9.9.2...9.9.3) (2026-11-06)
+
+
+### Features 🔥
+
+* **config:** add source field declarations and baseline bindings ([2906537](https://github.com/tks18/personal-finance-etl/commit/29065370edb0e8134d018a256b36b634c39d5079))
+* **validation:** implement source compiler and canonical bronze schema ([e1b1239](https://github.com/tks18/personal-finance-etl/commit/e1b12393bbcf62ffafbe70a3c5e560028154105c))
+
+
+### Tests 🧪
+
+* **validation:** add admission contracts and dual gate tests ([816ad48](https://github.com/tks18/personal-finance-etl/commit/816ad489511d282bf0f6d590a86f6d7a5f316d5f))
+
+
+### Docs 📃
+
+* **refactor:** complete phase 024 admission contracts ([e10f9c0](https://github.com/tks18/personal-finance-etl/commit/e10f9c03e8340ef23b3b5fbeb31f2222e9617767))
+
 ### [9.9.2](https://github.com/tks18/personal-finance-etl/compare/9.9.1...9.9.2) (2026-11-06)
 
 
