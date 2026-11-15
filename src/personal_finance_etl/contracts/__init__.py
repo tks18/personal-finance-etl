@@ -17,6 +17,7 @@ Owns
 - Provider-neutral market vocabulary and symbol mapping contracts (ProviderSymbolMapping, ProviderSymbolRegistry).
 - Financial capability graph, descriptors, and resolution (CapabilityId, CapabilityDescriptor, CapabilityGraph).
 - Cross-boundary tabular validation contracts and protocol (ValidationStage, ValidationContext, ValidationResult, ValidationError, DataFrameValidator).
+- Typed dataset collection and runtime transport contracts (DatasetCollection, DatasetRuntimeMetadata, MissingDatasetError).
 
 Does not own
 -------------
@@ -48,6 +49,11 @@ from personal_finance_etl.contracts.capabilities import (
     ExternalEnrichmentId,
     ResolvedCapabilityGraph,
 )
+from personal_finance_etl.contracts.dataset_collection import (
+    DatasetCollection,
+    DatasetRuntimeMetadata,
+    MissingDatasetError,
+)
 from personal_finance_etl.contracts.datasets import (
     BRONZE_DATASET_ORIGIN_MAP,
     EXTERNAL_CONFIGURED_DATASETS,
@@ -61,9 +67,12 @@ from personal_finance_etl.contracts.datasets import (
 from personal_finance_etl.contracts.event_transport import EventQueue, NullEventQueue
 from personal_finance_etl.contracts.execution_plan import ExecutionPlan
 from personal_finance_etl.contracts.extraction import (
+    DATASET_ID_TO_EXTRACTION_ATTRIBUTE,
+    EXTRACTION_ATTRIBUTE_TO_DATASET_ID,
     ExtractionBatchResult,
     ExtractionCompletenessError,
     ExtractionProviderRequest,
+    ExtractionResult,
     ExtractorEntityResult,
     ExtractorEntityStatus,
 )
@@ -151,10 +160,14 @@ __all__ = [
     "DataFrameValidator",
     "ContributionDescriptor",
     "ContributionScope",
+    "DATASET_ID_TO_EXTRACTION_ATTRIBUTE",
+    "DatasetCollection",
     "DatasetId",
     "DatasetOrigin",
+    "DatasetRuntimeMetadata",
     "DiagnosticSeverity",
     "EXTERNAL_CONFIGURED_DATASETS",
+    "EXTRACTION_ATTRIBUTE_TO_DATASET_ID",
     "EngineDataTransport",
     "EngineExecutionResult",
     "EngineStage",
@@ -168,6 +181,7 @@ __all__ = [
     "ExtractionBatchResult",
     "ExtractionCompletenessError",
     "ExtractionProviderRequest",
+    "ExtractionResult",
     "ExtractorEntityResult",
     "ExtractorEntityStatus",
     "FailureDomain",
@@ -175,6 +189,7 @@ __all__ = [
     "GoldContractDependency",
     "IdentityRequirement",
     "EventQueue",
+    "MissingDatasetError",
     "NullEventQueue",
     "NullObservabilitySink",
     "ObservabilityContext",

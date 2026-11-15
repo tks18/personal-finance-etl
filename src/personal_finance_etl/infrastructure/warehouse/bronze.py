@@ -5,7 +5,7 @@ Owns
 - Incremental upserting of raw extracted DataFrames into bronze.* DuckDB tables.
 - Table schema evolution for newly added source columns.
 - Identity migration during file renames without re-ingesting physical rows.
-- Full dataset reading from Bronze tables into a typed ExtractionResult.
+- Full dataset reading from Bronze tables into a typed DatasetCollection or ExtractionResult.
 
 Does not own
 -------------
@@ -22,6 +22,7 @@ import duckdb
 import polars as pl
 
 from personal_finance_etl.contracts.application import EngineStage
+from personal_finance_etl.contracts.dataset_collection import DatasetCollection
 from personal_finance_etl.contracts.datasets import DatasetId
 from personal_finance_etl.contracts.extraction import ExtractionResult
 from personal_finance_etl.contracts.observability import (
@@ -358,8 +359,51 @@ class BronzeLayer:
         except duckdb.CatalogException:
             return pl.DataFrame()
 
+    def get_dataset_collection(self) -> DatasetCollection:
+        """Read full dataset state from Bronze tables via DuckDB and return complete DatasetCollection.
+
+        Returns
+        -------
+        DatasetCollection
+            Immutable DatasetCollection containing all Bronze lakehouse tables indexed by DatasetId.
+        """
+        diagnostics.info("Reading full dataset collection from Bronze Layer Lakehouse...")
+        frames: dict[DatasetId, pl.LazyFrame | pl.DataFrame] = {}
+
+        for contract in BRONZE_CONTRACT_REGISTRY:
+            table_name = contract.physical_table
+            try:
+                # Column master is currently consumed as a DataFrame
+                if contract.dataset_id == DatasetId.COMMON_COLUMN_MASTER:
+                    frames[contract.dataset_id] = self.db_manager.conn.query(
+                        f"SELECT * FROM {table_name}"  # nosec B608
+                    ).pl()
+                else:
+                    frames[contract.dataset_id] = (
+                        self.db_manager.conn.query(
+                            f"SELECT * FROM {table_name}"  # nosec B608
+                        )
+                        .pl()
+                        .lazy()
+                    )
+            except duckdb.CatalogException:
+                diagnostics.debug(
+                    "Bronze: Table %s does not exist. Registering empty frame.", table_name
+                )
+                if contract.dataset_id == DatasetId.COMMON_COLUMN_MASTER:
+                    frames[contract.dataset_id] = pl.DataFrame()
+                else:
+                    frames[contract.dataset_id] = pl.LazyFrame()
+
+        return DatasetCollection(frames=frames)
+
     def get_full_dataset(self, original_mappings: dict[str, dict[str, str]]) -> ExtractionResult:
         """Read full dataset from Bronze tables via DuckDB and return complete ExtractionResult.
+
+        Notes
+        -----
+        DEPRECATION TARGET: Phase 027.
+        Delegates to get_dataset_collection() and adapts to legacy ExtractionResult DTO.
 
         Parameters
         ----------
@@ -372,50 +416,5 @@ class BronzeLayer:
             Complete typed ExtractionResult.
         """
         diagnostics.info("Reading full dataset from Bronze Layer Lakehouse...")
-
-        def _get_lf(table_name: str) -> pl.LazyFrame:
-            try:
-                return (
-                    self.db_manager.conn.query(
-                        f"SELECT * FROM {table_name}"  # nosec B608
-                    )
-                    .pl()
-                    .lazy()
-                )
-            except duckdb.CatalogException:
-                diagnostics.debug(
-                    "Bronze: Table %s does not exist. Returning empty frame.", table_name
-                )
-                return pl.LazyFrame()
-
-        def _get_df(table_name: str) -> pl.DataFrame:
-            try:
-                return self.db_manager.conn.query(
-                    f"SELECT * FROM {table_name}"  # nosec B608
-                ).pl()
-            except duckdb.CatalogException:
-                diagnostics.debug(
-                    "Bronze: Table %s does not exist. Returning empty frame.", table_name
-                )
-                return pl.DataFrame()
-
-        return ExtractionResult(
-            zcategory=_get_lf("bronze.r_SQLite_ZCategory"),
-            assetgroup=_get_lf("bronze.r_SQLite_AssetGroup"),
-            assets=_get_lf("bronze.r_SQLite_Assets"),
-            currency=_get_lf("bronze.r_SQLite_Currency"),
-            inoutcome=_get_lf("bronze.r_SQLite_InOutcome"),
-            mappings=original_mappings,
-            stg_mf_isin_mapping=_get_lf("bronze.r_MF_ISIN_Mapping"),
-            stg_benchmark_mapping=_get_lf("bronze.r_Benchmark_Mapping"),
-            mf_market_data_raw=_get_lf("bronze.r_MF_Market_Data"),
-            mf_transactions_raw=_get_lf("bronze.r_MF_Transactions"),
-            stock_market_data_raw=_get_lf("bronze.r_Stock_Market_Data"),
-            stock_transactions_raw=_get_lf("bronze.r_Stock_Transactions"),
-            raw_opening_balances=_get_lf("bronze.r_Opening_Balances"),
-            raw_benchmark_master=_get_lf("bronze.r_Benchmark_Master"),
-            raw_macro_parameters=_get_lf("bronze.r_Macro_Parameters"),
-            column_master=_get_df("bronze.r_Column_Master"),
-            us_stock_transactions_raw=_get_lf("bronze.r_US_Stock_Transactions"),
-            currency_mapping_raw=_get_lf("bronze.r_Currency_Mapping"),
-        )
+        collection = self.get_dataset_collection()
+        return ExtractionResult.from_dataset_collection(collection, mappings=original_mappings)

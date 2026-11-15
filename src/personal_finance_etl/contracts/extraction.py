@@ -6,6 +6,9 @@ Owns
 - ExtractorEntityResult structured outcome for single-entity workers.
 - ExtractionBatchResult aggregated outcomes across concurrent extraction workers.
 - ExtractionCompletenessError raised on missing required market evidence.
+- ExtractionResult legacy consolidated raw extracted evidence stream container.
+- EXTRACTION_ATTRIBUTE_TO_DATASET_ID mapping from ExtractionResult attributes to DatasetIds.
+- DATASET_ID_TO_EXTRACTION_ATTRIBUTE inverse mapping from DatasetIds to ExtractionResult attributes.
 
 Does not own
 -------------
@@ -13,6 +16,9 @@ Does not own
 - Bronze warehouse persistence (owned by infrastructure.warehouse.bronze).
 """
 
+from __future__ import annotations
+
+import dataclasses
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import date
@@ -20,6 +26,9 @@ from enum import StrEnum
 from typing import TypedDict
 
 import polars as pl
+
+from personal_finance_etl.contracts.dataset_collection import DatasetCollection
+from personal_finance_etl.contracts.datasets import DatasetId
 
 
 class ExtractorEntityStatus(StrEnum):
@@ -162,7 +171,13 @@ class ExtractionBatchResult:
 
 @dataclass
 class ExtractionResult:
-    """Consolidated raw extracted evidence streams across all ingestion sources."""
+    """Consolidated raw extracted evidence streams across all ingestion sources.
+
+    Notes
+    -----
+    DEPRECATION TARGET: Phase 027.
+    Use contracts.dataset_collection.DatasetCollection for new development.
+    """
 
     zcategory: pl.LazyFrame
     assetgroup: pl.LazyFrame
@@ -182,6 +197,124 @@ class ExtractionResult:
     column_master: pl.DataFrame | pl.LazyFrame
     us_stock_transactions_raw: pl.LazyFrame
     currency_mapping_raw: pl.LazyFrame
+
+    def to_dataset_collection(self) -> DatasetCollection:
+        """Convert this ExtractionResult into an immutable typed DatasetCollection.
+
+        Returns
+        -------
+        DatasetCollection
+            DatasetCollection containing all 17 dataset frames indexed by DatasetId.
+        """
+        frames: dict[DatasetId, pl.LazyFrame | pl.DataFrame] = {
+            DatasetId.HOUSEHOLD_ZCATEGORY: self.zcategory,
+            DatasetId.HOUSEHOLD_ASSET_GROUP: self.assetgroup,
+            DatasetId.HOUSEHOLD_ASSETS: self.assets,
+            DatasetId.HOUSEHOLD_CURRENCY: self.currency,
+            DatasetId.HOUSEHOLD_INOUTCOME: self.inoutcome,
+            DatasetId.INVESTMENT_MF_ISIN_MAPPING: self.stg_mf_isin_mapping,
+            DatasetId.INVESTMENT_BENCHMARK_MAPPING: self.stg_benchmark_mapping,
+            DatasetId.MARKET_MF_HOLDINGS: self.mf_market_data_raw,
+            DatasetId.INVESTMENT_MF_ORDERS: self.mf_transactions_raw,
+            DatasetId.MARKET_STOCK_HOLDINGS: self.stock_market_data_raw,
+            DatasetId.INVESTMENT_STOCK_ORDERS: self.stock_transactions_raw,
+            DatasetId.HOUSEHOLD_OPENING_BALANCES: self.raw_opening_balances,
+            DatasetId.INVESTMENT_BENCHMARK_MASTER: self.raw_benchmark_master,
+            DatasetId.INVESTMENT_MACRO_PARAMETERS: self.raw_macro_parameters,
+            DatasetId.COMMON_COLUMN_MASTER: self.column_master,
+            DatasetId.INVESTMENT_US_STOCK_TRANSACTIONS: self.us_stock_transactions_raw,
+            DatasetId.MARKET_CURRENCY_MAPPING: self.currency_mapping_raw,
+        }
+        return DatasetCollection(frames=frames)
+
+    @classmethod
+    def from_dataset_collection(
+        cls,
+        collection: DatasetCollection,
+        mappings: dict[str, dict[str, str]] | None = None,
+    ) -> ExtractionResult:
+        """Construct an ExtractionResult from a DatasetCollection for backward compatibility.
+
+        Parameters
+        ----------
+        collection : DatasetCollection
+            Source dataset collection.
+        mappings : dict[str, dict[str, str]] | None, default=None
+            Optional mappings dictionary to attach to ExtractionResult.
+
+        Returns
+        -------
+        ExtractionResult
+            Populated ExtractionResult instance.
+        """
+
+        def _get_lf(ds_id: DatasetId) -> pl.LazyFrame:
+            frame = collection.get(ds_id)
+            if frame is None:
+                return pl.LazyFrame()
+            return frame if isinstance(frame, pl.LazyFrame) else frame.lazy()
+
+        def _get_cm() -> pl.DataFrame | pl.LazyFrame:
+            frame = collection.get(DatasetId.COMMON_COLUMN_MASTER)
+            if frame is None:
+                return pl.DataFrame()
+            return frame
+
+        return cls(
+            zcategory=_get_lf(DatasetId.HOUSEHOLD_ZCATEGORY),
+            assetgroup=_get_lf(DatasetId.HOUSEHOLD_ASSET_GROUP),
+            assets=_get_lf(DatasetId.HOUSEHOLD_ASSETS),
+            currency=_get_lf(DatasetId.HOUSEHOLD_CURRENCY),
+            inoutcome=_get_lf(DatasetId.HOUSEHOLD_INOUTCOME),
+            mappings=mappings if mappings is not None else {},
+            stg_mf_isin_mapping=_get_lf(DatasetId.INVESTMENT_MF_ISIN_MAPPING),
+            stg_benchmark_mapping=_get_lf(DatasetId.INVESTMENT_BENCHMARK_MAPPING),
+            mf_market_data_raw=_get_lf(DatasetId.MARKET_MF_HOLDINGS),
+            mf_transactions_raw=_get_lf(DatasetId.INVESTMENT_MF_ORDERS),
+            stock_market_data_raw=_get_lf(DatasetId.MARKET_STOCK_HOLDINGS),
+            stock_transactions_raw=_get_lf(DatasetId.INVESTMENT_STOCK_ORDERS),
+            raw_opening_balances=_get_lf(DatasetId.HOUSEHOLD_OPENING_BALANCES),
+            raw_benchmark_master=_get_lf(DatasetId.INVESTMENT_BENCHMARK_MASTER),
+            raw_macro_parameters=_get_lf(DatasetId.INVESTMENT_MACRO_PARAMETERS),
+            column_master=_get_cm(),
+            us_stock_transactions_raw=_get_lf(DatasetId.INVESTMENT_US_STOCK_TRANSACTIONS),
+            currency_mapping_raw=_get_lf(DatasetId.MARKET_CURRENCY_MAPPING),
+        )
+
+
+EXTRACTION_ATTRIBUTE_TO_DATASET_ID: dict[str, DatasetId] = {
+    "zcategory": DatasetId.HOUSEHOLD_ZCATEGORY,
+    "assetgroup": DatasetId.HOUSEHOLD_ASSET_GROUP,
+    "assets": DatasetId.HOUSEHOLD_ASSETS,
+    "currency": DatasetId.HOUSEHOLD_CURRENCY,
+    "inoutcome": DatasetId.HOUSEHOLD_INOUTCOME,
+    "stg_mf_isin_mapping": DatasetId.INVESTMENT_MF_ISIN_MAPPING,
+    "stg_benchmark_mapping": DatasetId.INVESTMENT_BENCHMARK_MAPPING,
+    "mf_market_data_raw": DatasetId.MARKET_MF_HOLDINGS,
+    "mf_transactions_raw": DatasetId.INVESTMENT_MF_ORDERS,
+    "stock_market_data_raw": DatasetId.MARKET_STOCK_HOLDINGS,
+    "stock_transactions_raw": DatasetId.INVESTMENT_STOCK_ORDERS,
+    "raw_opening_balances": DatasetId.HOUSEHOLD_OPENING_BALANCES,
+    "raw_benchmark_master": DatasetId.INVESTMENT_BENCHMARK_MASTER,
+    "raw_macro_parameters": DatasetId.INVESTMENT_MACRO_PARAMETERS,
+    "column_master": DatasetId.COMMON_COLUMN_MASTER,
+    "us_stock_transactions_raw": DatasetId.INVESTMENT_US_STOCK_TRANSACTIONS,
+    "currency_mapping_raw": DatasetId.MARKET_CURRENCY_MAPPING,
+}
+
+DATASET_ID_TO_EXTRACTION_ATTRIBUTE: dict[DatasetId, str] = {
+    v: k for k, v in EXTRACTION_ATTRIBUTE_TO_DATASET_ID.items()
+}
+
+# Invariant check: Assert that every frame field on ExtractionResult is mapped
+_FRAME_FIELDS_ON_EXTRACTION_RESULT = {
+    f.name for f in dataclasses.fields(ExtractionResult) if f.name != "mappings"
+}
+assert set(EXTRACTION_ATTRIBUTE_TO_DATASET_ID.keys()) == _FRAME_FIELDS_ON_EXTRACTION_RESULT, (
+    f"Mismatch in ExtractionResult adapter mapping: "
+    f"unmapped={_FRAME_FIELDS_ON_EXTRACTION_RESULT - set(EXTRACTION_ATTRIBUTE_TO_DATASET_ID.keys())}, "
+    f"extra={set(EXTRACTION_ATTRIBUTE_TO_DATASET_ID.keys()) - _FRAME_FIELDS_ON_EXTRACTION_RESULT}"
+)
 
 
 @dataclass

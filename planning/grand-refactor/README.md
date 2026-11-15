@@ -58,7 +58,7 @@ If code evidence contradicts a phase, stop and amend the phase before changing t
 | 023 | Pandera validation boundary | v9.9.2 | [x] |
 | 024 | Source and first canonical Bronze validation contracts | v9.9.3 | [x] |
 | 025 | First generalized dataset vertical slice | v9.9.4 | [x] |
-| 026 | Typed DatasetCollection introduction | v9.9.5 | [ ] |
+| 026 | Typed DatasetCollection introduction | v9.9.5 | [x] |
 | 027 | DatasetCollection consumer migration and ExtractionResult demolition | v9.9.6 | [ ] |
 | 028 | Household reference evidence migration | v10.0.0-rc1 | [ ] |
 | 029 | Household transaction evidence and no-UID identity proof | v10.0.0-rc2 | [ ] |

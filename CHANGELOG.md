@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [9.9.5](https://github.com/tks18/personal-finance-etl/compare/9.9.4...9.9.5) (2026-11-15)
+
+
+### Features 🔥
+
+* **contracts:** add bidirectional dataset collection adapter ([eff4a5d](https://github.com/tks18/personal-finance-etl/commit/eff4a5de30bdd2919b087b402e53a470bd66c9b6))
+* **contracts:** implement typed dataset collection and metadata ([8ebc8bf](https://github.com/tks18/personal-finance-etl/commit/8ebc8bf7c0600cc6933601a471490b194880b7a0))
+* **warehouse:** add bronze dataset collection reconstruction ([ef370ae](https://github.com/tks18/personal-finance-etl/commit/ef370ae071b0b72b1cf9a0d34ab6ec34374b8574))
+
+
+### Tests 🧪
+
+* **contracts:** add dataset collection and adapter test suite ([9e23de3](https://github.com/tks18/personal-finance-etl/commit/9e23de3aef27b2d05a0d65b66e2bed0eb62d5d3c))
+
+
+### Docs 📃
+
+* **refactor:** complete phase 026 dataset collection transport ([1c375fd](https://github.com/tks18/personal-finance-etl/commit/1c375fdbcb8156a490095d1bad6dead1f4318afd))
+
 ### [9.9.4](https://github.com/tks18/personal-finance-etl/compare/9.9.3...9.9.4) (2026-11-15)
 
 
