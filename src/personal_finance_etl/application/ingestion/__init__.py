@@ -49,6 +49,9 @@ from personal_finance_etl.application.ingestion.market_sync import (
 from personal_finance_etl.application.ingestion.policy_resolver import (
     resolve_legacy_change_detection_policy,
 )
+from personal_finance_etl.application.ingestion.slice_runner import (
+    DatasetIngestionService,
+)
 
 __all__ = [
     "AdmissionPlan",
@@ -57,6 +60,7 @@ __all__ = [
     "BenchmarkPipeline",
     "CurrencyPipeline",
     "DataExtractor",
+    "DatasetIngestionService",
     "IdentityCollisionDiagnostic",
     "IdentityCollisionError",
     "IdentityNotPermittedError",
