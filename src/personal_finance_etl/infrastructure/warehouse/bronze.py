@@ -22,6 +22,7 @@ import duckdb
 import polars as pl
 
 from personal_finance_etl.contracts.application import EngineStage
+from personal_finance_etl.contracts.datasets import DatasetId
 from personal_finance_etl.contracts.extraction import ExtractionResult
 from personal_finance_etl.contracts.observability import (
     DiagnosticSeverity,
@@ -29,6 +30,7 @@ from personal_finance_etl.contracts.observability import (
     PresentationKind,
 )
 from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
+from personal_finance_etl.infrastructure.control_plane.hashing import generate_file_id
 from personal_finance_etl.infrastructure.observability import (
     ObservabilityEmitter,
     get_global_emitter,
@@ -41,6 +43,8 @@ from personal_finance_etl.infrastructure.warehouse.meta import MetaLayer
 from personal_finance_etl.infrastructure.warehouse.registry import BRONZE_CONTRACT_REGISTRY
 
 diagnostics = get_observability_diagnostics("personal_finance_etl.warehouse.bronze")
+
+MIGRATED_DATASETS: frozenset[DatasetId] = frozenset({DatasetId.HOUSEHOLD_ZCATEGORY})
 
 
 class BronzeLayer:
@@ -236,6 +240,8 @@ class BronzeLayer:
         total_rows = 0
 
         for contract in BRONZE_CONTRACT_REGISTRY:
+            if contract.dataset_id in MIGRATED_DATASETS:
+                continue
             df = getattr(extracted_data, contract.extraction_attribute, None)
             if df is not None:
                 actionable = actionable_files.get(contract.sync_category, [])
@@ -302,25 +308,35 @@ class BronzeLayer:
         if not renames:
             return
 
-        cat_to_table = {
-            contract.sync_category: contract.physical_table for contract in BRONZE_CONTRACT_REGISTRY
-        }
+        cats_to_tables: dict[str, list[str]] = {}
+        for contract in BRONZE_CONTRACT_REGISTRY:
+            cats_to_tables.setdefault(contract.sync_category, []).append(contract.physical_table)
 
         for old_path, new_path, category in renames:
-            table = cat_to_table.get(category)
-            if not table:
+            tables = cats_to_tables.get(category, [])
+            if not tables:
                 continue
 
             old_name = os.path.basename(old_path)
             new_name = os.path.basename(new_path)
+            old_id = generate_file_id(old_path)
+            new_id = generate_file_id(new_path)
 
-            try:
-                self.db_manager.conn.execute(
-                    f"UPDATE {table} SET __file_name__ = ? WHERE __file_name__ = ?",  # nosec B608
-                    [new_name, old_name],
-                )
-            except (duckdb.BinderException, duckdb.CatalogException) as e:
-                diagnostics.debug("Bronze: Could not rename %s in %s: %s", old_name, table, e)
+            for table in tables:
+                try:
+                    self.db_manager.conn.execute(
+                        f"UPDATE {table} SET __file_name__ = ? WHERE __file_name__ = ?",  # nosec B608
+                        [new_name, old_name],
+                    )
+                    try:
+                        self.db_manager.conn.execute(
+                            f"UPDATE {table} SET artifact_id = ? WHERE artifact_id = ?",  # nosec B608
+                            [new_id, old_id],
+                        )
+                    except duckdb.BinderException:
+                        pass
+                except (duckdb.BinderException, duckdb.CatalogException) as e:
+                    diagnostics.debug("Bronze: Could not rename %s in %s: %s", old_name, table, e)
 
     def get_table(self, table_name: str) -> pl.DataFrame:
         """Read a table from the Bronze schema. Returns empty DataFrame if missing.

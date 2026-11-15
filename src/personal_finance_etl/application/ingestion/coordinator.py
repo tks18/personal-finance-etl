@@ -124,16 +124,17 @@ class DataExtractor:
             )
             self.emitter.emit_event(
                 event_code=EventCode.PROVIDER_BATCH_INGEST,
-                message="Extracted 5 base reference tables from SQLite source",
+                message="Extracted 4 legacy base reference tables from SQLite source (zcategory migrated)",
                 presentation_kind=PresentationKind.INTERNAL,
                 severity=DiagnosticSeverity.DEBUG,
                 stage=EngineStage.EXTRACTING,
                 provider="SQLite",
                 entity_type="Table",
                 entity_id="sqlite_source",
-                rows=5,
+                rows=4,
             )
-            return tables
+            # zcategory is migrated in Phase 025 to generalized admission; legacy extraction route bypassed
+            return (pl.LazyFrame(), tables[1], tables[2], tables[3], tables[4])
         return (
             pl.LazyFrame(),
             pl.LazyFrame(),

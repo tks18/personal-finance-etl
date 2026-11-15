@@ -23,6 +23,7 @@ from datetime import date
 
 import polars as pl
 
+from personal_finance_etl.application.ingestion.admission import AdmissionService
 from personal_finance_etl.application.ingestion.coordinator import DataExtractor
 from personal_finance_etl.application.ingestion.market_sync import (
     BenchmarkPipeline,
@@ -32,19 +33,31 @@ from personal_finance_etl.application.ingestion.market_sync import (
 from personal_finance_etl.application.ingestion.policy_resolver import (
     resolve_legacy_change_detection_policy,
 )
+from personal_finance_etl.application.ingestion.slice_runner import (
+    DatasetIngestionService,
+)
 from personal_finance_etl.application.investments.context import (
     QuantDataFrames,
     QuantRunOptions,
 )
 from personal_finance_etl.application.investments.quant_service import InvestmentQuantEngine
 from personal_finance_etl.application.pipeline.planner import CapabilityPlanner
+from personal_finance_etl.application.pipeline.source_planner import (
+    CompiledSourcePlan,
+    SourcePlanner,
+)
 from personal_finance_etl.application.pipeline.transformer import TransformationDAG
 from personal_finance_etl.application.tax.tax_service import TaxEngine
 from personal_finance_etl.application.wealth.wealth_service import WealthPresentationEngine
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
+from personal_finance_etl.config.sources.loader import (
+    SourceConfiguration,
+    get_shan_baseline_source_configuration,
+)
 from personal_finance_etl.contracts.application import EngineStage
 from personal_finance_etl.contracts.capabilities import CapabilityId
+from personal_finance_etl.contracts.datasets import DatasetId
 from personal_finance_etl.contracts.event_transport import EventQueue
 from personal_finance_etl.contracts.execution_plan import ExecutionPlan
 from personal_finance_etl.contracts.extraction import ExtractionResult
@@ -55,6 +68,7 @@ from personal_finance_etl.contracts.observability import (
     EventCode,
     PresentationKind,
 )
+from personal_finance_etl.contracts.validation import DataFrameValidator
 from personal_finance_etl.domain.investments.classification import (
     filter_us_market_trades,
 )
@@ -62,6 +76,7 @@ from personal_finance_etl.infrastructure.control_plane import (
     ControlPlane,
     SimulationRunParams,
 )
+from personal_finance_etl.infrastructure.control_plane.hashing import generate_file_id
 from personal_finance_etl.infrastructure.observability import (
     ObservabilityEmitter,
     get_global_emitter,
@@ -76,12 +91,17 @@ from personal_finance_etl.infrastructure.providers.files.sqlite import SQLiteExt
 from personal_finance_etl.infrastructure.providers.market import (
     build_provider_symbol_registry,
 )
+from personal_finance_etl.infrastructure.validation import (
+    PanderaDataFrameValidator,
+)
 from personal_finance_etl.infrastructure.warehouse.bronze import BronzeLayer
 from personal_finance_etl.infrastructure.warehouse.connection import DuckDBManager
 from personal_finance_etl.infrastructure.warehouse.gold import GoldLayer
 from personal_finance_etl.infrastructure.warehouse.meta import MetaLayer
+from personal_finance_etl.infrastructure.warehouse.pre_bronze import PreBronzeLayer
 from personal_finance_etl.infrastructure.warehouse.registry import (
     DATA_CONTRACT_REGISTRY,
+    get_pre_bronze_contract_by_dataset_id,
     validate_registry,
 )
 from personal_finance_etl.infrastructure.warehouse.silver import SilverLayer
@@ -194,6 +214,11 @@ class PipelineExecutor:
         rules: FinancialRules | None = None,
         emitter: ObservabilityEmitter | None = None,
         plan: ExecutionPlan | None = None,
+        source_config: SourceConfiguration | None = None,
+        source_plan: CompiledSourcePlan | None = None,
+        admission_service: AdmissionService | None = None,
+        validator: DataFrameValidator | None = None,
+        ingestion_service: DatasetIngestionService | None = None,
     ) -> None:
         self.cfg = cfg
         self.status_queue = status_queue
@@ -203,6 +228,17 @@ class PipelineExecutor:
         self.plan = plan or CapabilityPlanner().create_plan()
         self.dfs: dict[str, pl.DataFrame] = {}
         self.provider_symbols: ProviderSymbolRegistry | None = None
+        self.source_config = source_config or get_shan_baseline_source_configuration()
+        self.source_plan = (
+            source_plan or SourcePlanner(self.source_config, self.plan).compile_plan()
+        )
+        self.admission_service = admission_service or AdmissionService()
+        self.validator = validator or PanderaDataFrameValidator(emitter=self.emitter)
+        self.ingestion_service = ingestion_service or DatasetIngestionService(
+            validator=self.validator,
+            admission_service=self.admission_service,
+            emitter=self.emitter,
+        )
 
     def extract(
         self,
@@ -692,9 +728,35 @@ class PipelineExecutor:
 
         meta_layer = MetaLayer(self.db_manager, self.cfg, self.rules)
         bronze = BronzeLayer(self.db_manager, cp, meta_layer, emitter=self.emitter)
+        pre_bronze = PreBronzeLayer(self.db_manager, emitter=self.emitter)
         if renames:
             bronze.migrate_identity(renames)
             meta_layer.migrate_identity(renames)
+            for old_path, new_path, category in renames:
+                if category == "sqlite_source":
+                    old_id = generate_file_id(old_path)
+                    new_id = generate_file_id(new_path)
+                    pb_contract = get_pre_bronze_contract_by_dataset_id(
+                        DatasetId.HOUSEHOLD_ZCATEGORY
+                    )
+                    if pb_contract and pre_bronze.table_exists(pb_contract):
+                        pre_bronze.migrate_artifact_identity(old_id, new_id, pb_contract)
+
+        # Ingest migrated datasets through generalized vertical slice
+        migrated_datasets = (DatasetId.HOUSEHOLD_ZCATEGORY,)
+        for ds_id in migrated_datasets:
+            ds_plan = self.source_plan.get_dataset_plan(ds_id)
+            if ds_plan is not None:
+                self.ingestion_service.ingest_dataset(
+                    dataset_plan=ds_plan,
+                    source_config=self.source_config,
+                    cp=cp,
+                    pre_bronze=pre_bronze,
+                    bronze=bronze,
+                    meta_layer=meta_layer,
+                    actionable_files=actionable_all,
+                    run_id=run_id,
+                )
 
         bronze.load(extracted_data, actionable_all)
         elapsed_s = time.perf_counter() - t_bronze_start
