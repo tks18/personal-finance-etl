@@ -609,7 +609,7 @@ _HOUSEHOLD_ZCATEGORY_FIELDS: list[SourceFieldDeclaration] = [
     ),
     SourceFieldDeclaration(
         name="syncTime",
-        data_type="Int64",
+        data_type="Float64",
         nullable=True,
         description="Cloud synchronization epoch timestamp",
     ),

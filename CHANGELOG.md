@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [9.9.4](https://github.com/tks18/personal-finance-etl/compare/9.9.3...9.9.4) (2026-11-15)
+
+
+### Features 🔥
+
+* **ingestion:** implement dataset ingestion service and extraction ([ec4cfd3](https://github.com/tks18/personal-finance-etl/commit/ec4cfd3103e0ad4579b687f9e17060a053696e9a))
+
+
+### Code Refactoring 🖌
+
+* **domain:** enable canonical bronze in category transforms ([d22923b](https://github.com/tks18/personal-finance-etl/commit/d22923b07ff49e636c5b477eeca554bc9c8bed55))
+* **pipeline:** wire vertical slice and bypass legacy route ([5d012db](https://github.com/tks18/personal-finance-etl/commit/5d012db33c249a462a9b43a00b235bb882c19046))
+
+
+### Bug Fixes 🛠
+
+* **schema:** align zcategory synctime contract with sqlite float ([30d7a71](https://github.com/tks18/personal-finance-etl/commit/30d7a713528c841a549ded04bbbc172a6b90d571))
+
+
+### Tests 🧪
+
+* **ingestion:** add 16-scenario vertical slice test matrix ([5d3be99](https://github.com/tks18/personal-finance-etl/commit/5d3be993b83172a1fe4607b49a03d89ed37ec285))
+
+
+### Docs 📃
+
+* **refactor:** complete phase 025 first generalized slice ([509d472](https://github.com/tks18/personal-finance-etl/commit/509d47215ac9bf205996c99c21242a1c83002486))
+
 ### [9.9.3](https://github.com/tks18/personal-finance-etl/compare/9.9.2...9.9.3) (2026-11-06)
 
 

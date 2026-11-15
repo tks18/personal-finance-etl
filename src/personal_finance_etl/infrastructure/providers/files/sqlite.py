@@ -57,6 +57,47 @@ class SQLiteExtractor:
             raise FileNotFoundError(f"No database backup found in {self.folder_path}")
         return max(files, key=os.path.getmtime)
 
+    def extract_table(
+        self, filename: str, folder_path: str, raw_bytes: bytes, table_name: str
+    ) -> pl.LazyFrame:
+        """Deserialize in-memory bytes and extract an individual table into a Polars LazyFrame.
+
+        Parameters
+        ----------
+        filename : str
+            Source file basename.
+        folder_path : str
+            Source directory path.
+        raw_bytes : bytes
+            Binary database backup payload.
+        table_name : str
+            Target SQLite table name.
+
+        Returns
+        -------
+        pl.LazyFrame
+            Source-shaped LazyFrame tagged with source file provenance.
+        """
+        filepath = f"{folder_path}/{filename}" if folder_path else filename
+        artifact_id = generate_file_id(filepath)
+
+        clean_table = table_name.replace('"', '""')
+        with sqlite3.connect(":memory:") as conn:
+            conn.deserialize(raw_bytes)
+            return (
+                pl.read_database(
+                    f'SELECT * FROM "{clean_table}"',
+                    connection=conn,
+                    infer_schema_length=10000,  # nosec B608
+                )
+                .lazy()
+                .with_columns(
+                    pl.lit(filename).alias("__file_name__"),
+                    pl.lit(folder_path).alias("__folder_path__"),
+                    pl.lit(artifact_id).alias("artifact_id"),
+                )
+            )
+
     def extract_base_tables(
         self, filename: str, folder_path: str, raw_bytes: bytes
     ) -> tuple[pl.LazyFrame, pl.LazyFrame, pl.LazyFrame, pl.LazyFrame, pl.LazyFrame]:

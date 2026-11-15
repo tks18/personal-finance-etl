@@ -94,6 +94,8 @@ class ETLOrchestrator:
             rules,
             emitter=self.emitter,
             plan=self.plan,
+            source_config=self.source_config,
+            source_plan=self.source_plan,
         )
 
     @property

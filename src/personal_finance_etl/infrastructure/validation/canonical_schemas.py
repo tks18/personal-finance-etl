@@ -40,7 +40,7 @@ CANONICAL_BRONZE_HOUSEHOLD_ZCATEGORY_SCHEMA: pa.DataFrameSchema = pa.DataFrameSc
         "STATUS": pa.Column(pl.Int64, nullable=True, name="STATUS"),
         "CATEGORY_ID": pa.Column(pl.String, nullable=True, name="CATEGORY_ID"),
         "IS_SYNCED": pa.Column(pl.Int64, nullable=True, name="IS_SYNCED"),
-        "SYNC_TIME": pa.Column(pl.Int64, nullable=True, name="SYNC_TIME"),
+        "SYNC_TIME": pa.Column(pl.Float64, nullable=True, name="SYNC_TIME"),
         "SYNC_VERSION": pa.Column(pl.Int64, nullable=True, name="SYNC_VERSION"),
         "ORDER_NUM": pa.Column(pl.Int64, nullable=True, required=False, name="ORDER_NUM"),
         "artifact_id": pa.Column(pl.String, nullable=False, required=False, name="artifact_id"),
