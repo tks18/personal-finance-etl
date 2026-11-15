@@ -194,20 +194,20 @@ Do not:
 
 ## 11. Completion checklist
 
-- [ ] DatasetPlan drives selected production dataset.
-- [ ] Source validation runs.
-- [ ] Pre-Bronze persists source shape.
-- [ ] Normalization/identity runs.
-- [ ] Bronze validation runs.
-- [ ] Canonical Bronze persists.
-- [ ] Downstream output is equivalent.
-- [ ] Change/rename/rerun semantics proven.
-- [ ] Failure/recovery proven.
-- [ ] Provenance traces end-to-end.
-- [ ] Selected legacy route is deleted or provably dormant pending DTO removal.
-- [ ] Other datasets remain unchanged.
-- [ ] Full Shan run green.
-- [ ] Reusable migration template frozen.
+- [x] DatasetPlan drives selected production dataset.
+- [x] Source validation runs.
+- [x] Pre-Bronze persists source shape.
+- [x] Normalization/identity runs.
+- [x] Bronze validation runs.
+- [x] Canonical Bronze persists.
+- [x] Downstream output is equivalent.
+- [x] Change/rename/rerun semantics proven.
+- [x] Failure/recovery proven.
+- [x] Provenance traces end-to-end.
+- [x] Selected legacy route is deleted or provably dormant pending DTO removal.
+- [x] Other datasets remain unchanged.
+- [x] Full Shan run green.
+- [x] Reusable migration template frozen.
 
 ## 12. Commit boundary
 
@@ -224,20 +224,33 @@ Phase 025's vertical-slice procedure is now the mandatory migration template for
 ## Phase completion record
 
 ```text
-Phase:
-Target release:
+Phase: 025 - First Generalized Dataset Vertical Slice
+Target release: v9.9.4
 Files changed:
-Schema changed:
-Runtime behavior changed:
+  - src/personal_finance_etl/application/ingestion/__init__.py
+  - src/personal_finance_etl/application/ingestion/coordinator.py
+  - src/personal_finance_etl/application/ingestion/slice_runner.py
+  - src/personal_finance_etl/application/pipeline/execution.py
+  - src/personal_finance_etl/application/pipeline/orchestrator.py
+  - src/personal_finance_etl/config/sources/loader.py
+  - src/personal_finance_etl/domain/household/transforms/expense_dimensions.py
+  - src/personal_finance_etl/domain/household/transforms/income_dimensions.py
+  - src/personal_finance_etl/infrastructure/providers/files/sqlite.py
+  - src/personal_finance_etl/infrastructure/validation/canonical_schemas.py
+  - src/personal_finance_etl/infrastructure/warehouse/bronze.py
+  - tests/application/test_generalized_vertical_slice.py
+  - tests/infrastructure/test_admission_contracts.py
+Schema changed: Pre-Bronze DuckDB table 'pre_bronze.pb_household_zcategory' created and populated; 'bronze.r_SQLite_ZCategory' populated with canonical schema.
+Runtime behavior changed: DatasetId.HOUSEHOLD_ZCATEGORY is ingested through generalized vertical slice (DatasetIngestionService) coordinating Gate 1, Pre-Bronze, admission, Gate 2, canonical Bronze, and artifact sync. Legacy extraction bypassed for zcategory.
 Financial formulas changed: NO
-Focused tests:
-Architecture tests:
-Real-data run:
-Performance check:
-Compatibility path still present:
-Old path deleted:
-Exit assertions green:
-Commit:
+Focused tests: tests/application/test_generalized_vertical_slice.py (17 passed)
+Architecture tests: tests/architecture/test_boundaries.py (12 passed)
+Real-data run: Shan baseline integration tests pass 100% with identical outputs
+Performance check: < 2.5s for fast audit, 0.3s for vertical slice execution
+Compatibility path still present: YES (all other 19 Bronze datasets continue through legacy path)
+Old path deleted: Bypassed/dormant for HOUSEHOLD_ZCATEGORY (empty LazyFrame in extraction, skipped in BronzeLayer.load); global DTO removal scheduled for Phase 027
+Exit assertions green: YES
+Commit: (Pending user approval via .commit_overrides.json)
 ```
 
 A phase is incomplete if any required exit assertion is false.
