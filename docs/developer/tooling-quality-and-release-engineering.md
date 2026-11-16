@@ -144,7 +144,7 @@ The tracked pre-commit hook describes it directly:
 # Runs Ruff Check, Ruff Format Check, and Mypy Typecheck (< 2s).
 echo "[Quality Gate] Running Pre-Commit Fast Verification (Ruff + Mypy)..."
 
-uv run poe audit-fast
+uv run poe audit:fast
 EXIT_CODE=$?
 ```
 
@@ -165,7 +165,7 @@ Designed for pre-push and certification.
 # Runs Ruff, Format, Mypy, Pyright, Pylint, and Pytest (~40-70s).
 echo "[Quality Gate] Running Pre-Push Full Verification Suite..."
 
-uv run poe audit-full
+uv run poe audit:full
 EXIT_CODE=$?
 ```
 
@@ -558,7 +558,7 @@ sequenceDiagram
     participant R as Release Tool
     participant Y as PyPI
 
-    D->>Q: audit-fast / audit-full
+    D->>Q: audit:fast / audit:full
     Q-->>D: structured evidence
     D->>G: coherent commits / push
     D->>P: preview/create PR with audit report
@@ -723,9 +723,9 @@ Continue with [Adding Data Sources](adding-data-sources.md).
 Before using the release path for a substantial change:
 
 - [ ] Focused/domain tests passed.
-- [ ] `audit-fast` passes in the edit loop.
+- [ ] `audit:fast` passes in the edit loop.
 - [ ] Commits are coherent and reviewable.
-- [ ] `audit-full` passes before push/certification.
+- [ ] `audit:full` passes before push/certification.
 - [ ] Structured audit evidence is fresh enough for the PR.
 - [ ] PR preview/body accurately represents the change.
 - [ ] CHANGELOG release entry is correct where a release is intended.

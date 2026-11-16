@@ -14,8 +14,8 @@ This repository uses **Astral `uv`** for dependency resolution, virtual environm
 
 | Purpose | Command | Notes |
 |---|---|---|
-| **Fast Quality Gate** | `uv run poe audit-fast` | Runs Ruff check, Ruff format check, and Mypy in <2s. Run frequently during development. |
-| **Fast Gate with Auto-Fix** | `uv run poe audit-fast:fix` | Automatically fixes safe Ruff lint and format issues. |
+| **Fast Quality Gate** | `uv run poe audit:fast` | Runs Ruff check, Ruff format check, and Mypy in <2s. Run frequently during development. |
+| **Fast Gate with Auto-Fix** | `uv run poe audit:fix` | Automatically fixes safe Ruff lint and format issues. |
 | **Full Quality Gate** | `uv run poe audit` | Runs Ruff, Mypy, Pyright, Pylint, and Pytest. Mandatory before PRs and releases. |
 | **Test Execution** | `uv run pytest` | Runs full test suite. Target individual tests: `uv run pytest tests/test_<name>.py`. |
 | **Desktop App (Dev)** | `uv run poe dev` | Starts desktop GUI with hot-reloading via `tkreload main.py`. |
@@ -114,11 +114,11 @@ Before concluding any work, every AI agent must execute this verification sequen
 
 1. **Run Fast Quality Gate:**
    ```powershell
-   uv run poe audit-fast
+   uv run poe audit:fast
    ```
 2. **Auto-Fix Formatting if Needed:**
    ```powershell
-   uv run poe audit-fast:fix
+   uv run poe audit:fix
    ```
 3. **Verify Architectural Boundaries:**
    ```powershell

@@ -533,9 +533,9 @@ The exact task graph is covered in [Tooling, Quality, and Release Engineering](t
 ```text
 focused edit
     -> focused tests
-    -> audit-fast
+    -> audit:fast
     -> coherent commit
-    -> audit-full
+    -> audit:full
     -> PR / release workflow when appropriate
 ```
 

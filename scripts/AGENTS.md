@@ -12,11 +12,11 @@ The `scripts/` directory hosts developer orchestration tools, quality gates, rel
 
 | Script | Poe Task Bindings | Responsibility |
 |---|---|---|
-| `quality_gate.py` | `audit`, `audit-fast`, `audit-fast:fix`, `audit-full`, `audit-csv`, `audit-json` | Multi-tier static analysis and test validation (Ruff, Mypy, Pyright, Pylint, Pytest). Exports structured CLI, JSON, and CSV audits. |
+| `quality_gate.py` | `audit`, `audit:fast`, `audit:fix`, `audit:full`, `audit:csv`, `audit:json` | Multi-tier static analysis and test validation (Ruff, Mypy, Pyright, Pylint, Pytest). Exports structured CLI, JSON, and CSV audits. |
 | `auto_commit.py` | `commit`, `commit:preview`, `commit:run`, `commit:interactive`, `commit:overrides` | Automated Conventional Commit wizard enforcing Commitlint standards (<= 72 char header), staging files atomic-by-semantic-group or using `.commit_overrides.json`. |
 | `create_pr.py` | `pr:preview`, `pr:create` | Creates/updates GitHub Pull Requests from `dev` to `master` with attached Quality Gate certification tables. |
 | `create_releases.py` | `release:preview`, `release:dry-run`, `release:latest`, `release:latest:draft`, `release:all` | Parses `CHANGELOG.md` versions and manages GitHub releases/tags. |
-| `audit_documentation.py` | `audit-docs` | AST-level validator verifying NumPy docstring compliance across packages. |
+| `audit_documentation.py` | `audit:docs` | AST-level validator verifying NumPy docstring compliance across packages. |
 | `install_hooks.py` | `install-hooks` | Installs Git pre-commit and pre-push quality hooks linking into fast/full quality gates. |
 | `tasks.py` | (Internal dispatcher) | Entry-point routing for `poe_tasks.toml`. |
 
@@ -26,12 +26,12 @@ The `scripts/` directory hosts developer orchestration tools, quality gates, rel
 
 Quality verification is split into two tiers to optimize developer velocity:
 
-1. **Tier 1 — Fast Audit (`uv run poe audit-fast` / `< 2s`):**
+1. **Tier 1 — Fast Audit (`uv run poe audit:fast` / `< 2s`):**
    - **Ruff Check:** Fast linting across `src/`.
    - **Ruff Format Check:** Checks line length (100) and formatting.
    - **Mypy:** Strict static type analysis on `src/`.
-   - *Use `uv run poe audit-fast:fix` to auto-correct safe lint and format errors.*
-2. **Tier 2 — Full Audit (`uv run poe audit` / `~30-45s`):**
+   - *Use `uv run poe audit:fix` to auto-correct safe lint and format errors.*
+2. **Tier 2 — Full Audit (`uv run poe audit` or `uv run poe audit:full` / `~30-45s`):**
    - Runs all 6 verification engines: **Ruff Lint**, **Ruff Format**, **Mypy**, **Pyright**, **Pylint**, and **Pytest**.
    - Generates unified quality gate scores and optionally exports structured JSON/CSV reports.
 
