@@ -103,12 +103,30 @@ def load_audit_report(root_dir: Path, force_run: bool = False) -> dict[str, Any]
     }
 
 
-def format_audit_markdown(audit_data: dict[str, Any], head_branch: str, base_branch: str) -> str:
+def is_prerelease(version_or_tag: str) -> bool:
+    """Check if version or tag indicates a pre-release (alpha, beta, rc, dev)."""
+    clean = version_or_tag.lstrip("v").strip()
+    return bool(
+        re.search(
+            r"-(rc|alpha|beta|dev|preview|pre)\.?\d*|(?<=\d)(rc|a|b|c|dev)\d+",
+            clean,
+            re.IGNORECASE,
+        )
+    )
+
+
+def format_audit_markdown(
+    audit_data: dict[str, Any],
+    head_branch: str,
+    base_branch: str,
+    is_pre: bool = False,
+) -> str:
     """Format Quality Gate audit metrics into a GitHub Markdown table."""
     engines = audit_data.get("engines", [])
     all_passed = audit_data.get("all_passed", True)
     total_duration = audit_data.get("total_duration_seconds", 0.0)
     timestamp = audit_data.get("timestamp", "N/A")
+    track_badge = "🧪 **Pre-Release Track (Release Candidate)**" if is_pre else "🚀 **Production Stable Track**"
 
     lines: list[str] = [
         "---",
@@ -132,6 +150,7 @@ def format_audit_markdown(audit_data: dict[str, Any], head_branch: str, base_bra
     lines.extend(
         [
             "",
+            f"> **Release Track:** {track_badge}  ",
             f"> **Gate Status:** {overall_badge} (Total: {total_duration:.2f}s)  ",
             f"> **Audit Timestamp:** `{timestamp}`  ",
             f"> **Branch Flow:** `{head_branch}` ➔ `{base_branch}`  ",
@@ -313,6 +332,12 @@ def main(cli_args: list[str] | None = None) -> int:
         help="Open PR as a draft.",
     )
     parser.add_argument(
+        "--prerelease",
+        action="store_true",
+        default=False,
+        help="Explicitly mark PR as a Pre-Release (auto-detected if version contains rc/alpha/beta).",
+    )
+    parser.add_argument(
         "--re-audit",
         action="store_true",
         help="Force a fresh execution of the full Quality Gate before building PR.",
@@ -343,11 +368,18 @@ def main(cli_args: list[str] | None = None) -> int:
         target_entry = releases[0]
 
     version_str = target_entry["version"].lstrip("v")
-    pr_title = args.title or f"Release v{version_str}"
+    is_pre = args.prerelease or is_prerelease(version_str)
+    default_prefix = "Pre-Release" if is_pre else "Release"
+    pr_title = args.title or f"{default_prefix} v{version_str}"
 
     # Load and format quality gate audit
     audit_data = load_audit_report(root_dir, force_run=args.re_audit)
-    audit_md = format_audit_markdown(audit_data, head_branch=args.head, base_branch=args.base)
+    audit_md = format_audit_markdown(
+        audit_data,
+        head_branch=args.head,
+        base_branch=args.base,
+        is_pre=is_pre,
+    )
 
     # Compose final PR body: Changelog notes + Quality Gate table
     pr_body = f"{target_entry['body']}\n\n{audit_md}\n"

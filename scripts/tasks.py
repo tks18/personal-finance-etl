@@ -1,3 +1,4 @@
+# type: ignore
 # pylint: skip-file
 # flake8: noqa
 import os
@@ -25,6 +26,13 @@ def release_preview():
     sys.exit(run_release_cli(["--preview"]))
 
 
+def release_bump():
+    """Run dynamic semantic version and pre-release manager."""
+    from scripts.release_bump import main as release_bump_main
+
+    sys.exit(release_bump_main(sys.argv[1:]))
+
+
 def release_preview_all():
     """Preview full release notes for all versions in CHANGELOG.md."""
     sys.exit(run_release_cli(["--preview-all"]))
@@ -38,6 +46,11 @@ def release_dry_run():
 def release_latest():
     """Publish the latest changelog version as a GitHub release."""
     sys.exit(run_release_cli(["--latest", "--run"]))
+
+
+def release_latest_prerelease():
+    """Publish the latest changelog version explicitly marked as a pre-release on GitHub."""
+    sys.exit(run_release_cli(["--latest", "--run", "--prerelease"]))
 
 
 def release_latest_draft():
