@@ -1,3 +1,4 @@
+# pylint: disable=too-many-lines
 """Production source configuration loader, schema models, and baseline Shan topology.
 
 Owns
@@ -1331,6 +1332,328 @@ _HOUSEHOLD_OPENING_BALANCES_MAPPING: list[ColumnMapping] = dict_to_mapping_list(
     }
 )
 
+_HOUSEHOLD_OPENING_BALANCES_FIELDS: list[SourceFieldDeclaration] = [
+    SourceFieldDeclaration(
+        name="Z_PK",
+        data_type="Int64",
+        nullable=False,
+        unique=True,
+        description="Primary surrogate integer key in opening balances",
+    ),
+    SourceFieldDeclaration(
+        name="Z_ENT",
+        data_type="Int64",
+        nullable=True,
+        description="Entity identifier integer",
+    ),
+    SourceFieldDeclaration(
+        name="Z_OPT",
+        data_type="Int64",
+        nullable=True,
+        description="Optimization sequence integer",
+    ),
+    SourceFieldDeclaration(
+        name="ZASSET_GROUP",
+        data_type="Int64",
+        nullable=True,
+        description="Foreign key reference integer to asset group",
+    ),
+    SourceFieldDeclaration(
+        name="ZASSET_ID",
+        data_type="Int64",
+        nullable=True,
+        description="Foreign key reference integer to asset account",
+    ),
+    SourceFieldDeclaration(
+        name="ZCATEGORY_ID",
+        data_type="Int64",
+        nullable=True,
+        description="Foreign key reference integer to category",
+    ),
+    SourceFieldDeclaration(
+        name="ZOPPOSITEAID",
+        data_type="Int64",
+        nullable=True,
+        description="Opposite transaction identifier integer",
+    ),
+    SourceFieldDeclaration(
+        name="ZAID",
+        data_type="Int64",
+        nullable=True,
+        description="Account asset identifier integer",
+    ),
+    SourceFieldDeclaration(
+        name="ZCATEGORYID",
+        data_type="Int64",
+        nullable=True,
+        description="Category identifier integer",
+    ),
+    SourceFieldDeclaration(
+        name="ZCURRENCYID",
+        data_type="Int64",
+        nullable=True,
+        description="Currency denomination identifier integer",
+    ),
+    SourceFieldDeclaration(
+        name="ZFEE_ID",
+        data_type="Int64",
+        nullable=True,
+        description="Transaction fee identifier integer",
+    ),
+    SourceFieldDeclaration(
+        name="ZISDEL",
+        data_type="Int64",
+        nullable=True,
+        description="Logical deletion flag integer",
+    ),
+    SourceFieldDeclaration(
+        name="ZISSYNCED",
+        data_type="Int64",
+        nullable=True,
+        description="Cloud synchronization status flag integer",
+    ),
+    SourceFieldDeclaration(
+        name="ZMARK",
+        data_type="Int64",
+        nullable=True,
+        description="User bookmark or star flag integer",
+    ),
+    SourceFieldDeclaration(
+        name="ZSYNCCHECK",
+        data_type="Int64",
+        nullable=True,
+        description="Cloud sync checksum verification flag integer",
+    ),
+    SourceFieldDeclaration(
+        name="ZSYNCVERSION",
+        data_type="Int64",
+        nullable=True,
+        description="Cloud sync schema or entity version integer",
+    ),
+    SourceFieldDeclaration(
+        name="ZUTIME",
+        data_type="Float64",
+        nullable=True,
+        description="Record modification epoch timestamp float",
+    ),
+    SourceFieldDeclaration(
+        name="ZDATE",
+        data_type="Float64",
+        nullable=True,
+        description="Opening balance date epoch timestamp float",
+    ),
+    SourceFieldDeclaration(
+        name="ZAMOUNT",
+        data_type="Float64",
+        nullable=True,
+        description="Base currency opening balance amount",
+    ),
+    SourceFieldDeclaration(
+        name="ZAMOUNTACCOUNT",
+        data_type="Float64",
+        nullable=True,
+        description="Asset account currency opening balance amount",
+    ),
+    SourceFieldDeclaration(
+        name="ZAMOUNTSUB",
+        data_type="Float64",
+        nullable=True,
+        description="Sub-account opening balance amount",
+    ),
+    SourceFieldDeclaration(
+        name="ZSYNCTIME",
+        data_type="Float64",
+        nullable=True,
+        description="Cloud sync epoch timestamp float",
+    ),
+    SourceFieldDeclaration(
+        name="ZASSET_NAME",
+        data_type="String",
+        nullable=True,
+        description="Denormalized asset account name string",
+    ),
+    SourceFieldDeclaration(
+        name="ZASSET_NIC",
+        data_type="String",
+        nullable=True,
+        description="Denormalized asset nickname string",
+    ),
+    SourceFieldDeclaration(
+        name="ZCARDDIVIDID",
+        data_type="String",
+        nullable=True,
+        description="Credit card divide installment group identifier",
+    ),
+    SourceFieldDeclaration(
+        name="ZCATEGORY_NAME",
+        data_type="String",
+        nullable=True,
+        description="Denormalized category name string",
+    ),
+    SourceFieldDeclaration(
+        name="ZCONTENT",
+        data_type="String",
+        nullable=True,
+        description="Opening balance description or narrative content",
+    ),
+    SourceFieldDeclaration(
+        name="ZDO_TYPE",
+        data_type="String",
+        nullable=True,
+        description="Transaction type code string",
+    ),
+    SourceFieldDeclaration(
+        name="ZMONEY",
+        data_type="String",
+        nullable=True,
+        description="Opening balance amount string representation",
+    ),
+    SourceFieldDeclaration(
+        name="ZASSETUID",
+        data_type="String",
+        nullable=True,
+        description="Foreign key UID reference to asset account",
+    ),
+    SourceFieldDeclaration(
+        name="ZCARDDIVIDEMONTH",
+        data_type="String",
+        nullable=True,
+        description="Credit card divide tenure month string",
+    ),
+    SourceFieldDeclaration(
+        name="ZCARDDIVIDEMONTHSTR",
+        data_type="String",
+        nullable=True,
+        description="Credit card divide month fraction string",
+    ),
+    SourceFieldDeclaration(
+        name="ZCARDDIVIDEUID",
+        data_type="String",
+        nullable=True,
+        description="Credit card divide identifier string",
+    ),
+    SourceFieldDeclaration(
+        name="ZCARDTIMESTAMPSTR",
+        data_type="String",
+        nullable=True,
+        description="Credit card closing timestamp string",
+    ),
+    SourceFieldDeclaration(
+        name="ZCATEGORYUID",
+        data_type="String",
+        nullable=True,
+        description="Foreign key UID reference to category",
+    ),
+    SourceFieldDeclaration(
+        name="ZCURRENCY",
+        data_type="String",
+        nullable=True,
+        description="Currency denomination string",
+    ),
+    SourceFieldDeclaration(
+        name="ZCURRENCYUID",
+        data_type="String",
+        nullable=True,
+        description="Foreign key UID reference to currency",
+    ),
+    SourceFieldDeclaration(
+        name="ZGSTD",
+        data_type="String",
+        nullable=True,
+        description="GST tax identification or state code",
+    ),
+    SourceFieldDeclaration(
+        name="ZLAT",
+        data_type="Float64",
+        nullable=True,
+        description="Geolocation latitude coordinate",
+    ),
+    SourceFieldDeclaration(
+        name="ZLNG",
+        data_type="Float64",
+        nullable=True,
+        description="Geolocation longitude coordinate",
+    ),
+    SourceFieldDeclaration(
+        name="ZMEMO",
+        data_type="String",
+        nullable=True,
+        description="Opening balance memo notes string",
+    ),
+    SourceFieldDeclaration(
+        name="ZPAID",
+        data_type="String",
+        nullable=True,
+        description="Settlement payment status string",
+    ),
+    SourceFieldDeclaration(
+        name="ZSMSORIGINE",
+        data_type="String",
+        nullable=True,
+        description="SMS sender origin code string",
+    ),
+    SourceFieldDeclaration(
+        name="ZSMSPARSECONTENTS",
+        data_type="String",
+        nullable=True,
+        description="Raw SMS parsed template content string",
+    ),
+    SourceFieldDeclaration(
+        name="ZSMSRDATE",
+        data_type="String",
+        nullable=True,
+        description="SMS receipt date string",
+    ),
+    SourceFieldDeclaration(
+        name="ZTOASSETUID",
+        data_type="String",
+        nullable=True,
+        description="Destination asset account UID reference string",
+    ),
+    SourceFieldDeclaration(
+        name="ZTXDATESTR",
+        data_type="String",
+        nullable=True,
+        description="Opening balance date string",
+    ),
+    SourceFieldDeclaration(
+        name="ZTXUIDFEE",
+        data_type="String",
+        nullable=True,
+        description="Transfer fee UID reference string",
+    ),
+    SourceFieldDeclaration(
+        name="ZTXUIDTRANS",
+        data_type="String",
+        nullable=True,
+        description="Transfer link UID reference string",
+    ),
+    SourceFieldDeclaration(
+        name="ZUID",
+        data_type="String",
+        nullable=True,
+        description="Record UID string if present",
+    ),
+    SourceFieldDeclaration(
+        name="ZWTIME",
+        data_type="String",
+        nullable=True,
+        description="Opening balance time string",
+    ),
+    SourceFieldDeclaration(
+        name="ZZDATA1",
+        data_type="String",
+        nullable=True,
+        description="Supplemental data field 1 string",
+    ),
+    SourceFieldDeclaration(
+        name="ZZDATA2",
+        data_type="String",
+        nullable=True,
+        description="Supplemental data field 2 string",
+    ),
+]
+
 
 def get_shan_baseline_dataset_bindings() -> list[SourceDatasetConfig]:
     """Return declarative SourceDatasetConfig bindings covering all external Bronze datasets.
@@ -1412,6 +1735,7 @@ def get_shan_baseline_dataset_bindings() -> list[SourceDatasetConfig]:
             enabled=True,
             identity=SourceFieldIdentity(field="Z_PK"),
             mapping=list(_HOUSEHOLD_OPENING_BALANCES_MAPPING),
+            fields=list(_HOUSEHOLD_OPENING_BALANCES_FIELDS),
         ),
         SourceDatasetConfig(
             source_id=SourceId("benchmark_master_csv"),
