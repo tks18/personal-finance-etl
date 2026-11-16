@@ -27,9 +27,11 @@ from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
 from personal_finance_etl.contracts.application import EngineStage
 from personal_finance_etl.contracts.capabilities import CapabilityId
+from personal_finance_etl.contracts.dataset_collection import DatasetCollection
+from personal_finance_etl.contracts.datasets import DatasetId
 from personal_finance_etl.contracts.event_transport import EventQueue
 from personal_finance_etl.contracts.execution_plan import ExecutionPlan
-from personal_finance_etl.contracts.extraction import AssetPipelineResult, ExtractionResult
+from personal_finance_etl.contracts.extraction import AssetPipelineResult
 from personal_finance_etl.contracts.observability import (
     DiagnosticSeverity,
     EventCode,
@@ -40,6 +42,7 @@ from personal_finance_etl.domain.household.transforms.calendar import (
     get_stg_calendar_ref,
     transform_d_calendar,
 )
+from personal_finance_etl.domain.household.transforms.common import get_column_mapping
 from personal_finance_etl.domain.household.transforms.dimensions import (
     transform_d_asset_category,
     transform_d_asset_subcategory,
@@ -94,13 +97,48 @@ class TransformationDAG:
         self.emitter = emitter or get_global_emitter()
         self.plan = plan
 
-    def _transform_dimensions(self, extracted: ExtractionResult) -> dict[str, pl.LazyFrame]:
+    def _resolve_mappings(self, extracted: DatasetCollection) -> dict[str, dict[str, str]]:
+        """Resolve physical column mappings from COMMON_COLUMN_MASTER in the dataset collection.
+
+        Parameters
+        ----------
+        extracted : DatasetCollection
+            Extracted source dataset collection.
+
+        Returns
+        -------
+        dict[str, dict[str, str]]
+            Dictionary mapping table keys to column name rename dictionaries.
+        """
+        table_name_map = {
+            "category": "CATEGORY",
+            "asset_group": "ASSETGROUP",
+            "assets": "ASSETS",
+            "currency": "CURRENCY",
+            "inoutcome": "INOUTCOME",
+            "opbal": "ZOPBAL",
+        }
+        col_master_frame = extracted.get(DatasetId.COMMON_COLUMN_MASTER)
+        if col_master_frame is None:
+            return {k: {} for k in table_name_map}
+        if isinstance(col_master_frame, pl.LazyFrame):
+            df_col_master = col_master_frame.collect()
+        else:
+            df_col_master = col_master_frame
+        if df_col_master.height == 0:
+            return {k: {} for k in table_name_map}
+        return {
+            k: get_column_mapping(df_col_master, target_table)
+            for k, target_table in table_name_map.items()
+        }
+
+    def _transform_dimensions(self, extracted: DatasetCollection) -> dict[str, pl.LazyFrame]:
         """Transform base dimension LazyFrames from extracted staging records.
 
         Parameters
         ----------
-        extracted : ExtractionResult
-            Extracted source and mapping entities.
+        extracted : DatasetCollection
+            Extracted source dataset collection.
 
         Returns
         -------
@@ -111,31 +149,36 @@ class TransformationDAG:
             raise ValueError("FinancialRules must be provided to TransformationDAG")
 
         diagnostics.debug("Transforming Base Dimensions...")
-        mappings = extracted.mappings
+        mappings = self._resolve_mappings(extracted)
+        zcategory = extracted.require_lazy(DatasetId.HOUSEHOLD_ZCATEGORY)
         d_income_category_lazy = transform_d_income_category(
-            extracted.zcategory, mappings["category"], self.rules
+            zcategory, mappings["category"], self.rules
         )
         d_income_subcategory_lazy = transform_d_income_subcategory(
-            extracted.zcategory, mappings["category"], d_income_category_lazy, self.rules
+            zcategory, mappings["category"], d_income_category_lazy, self.rules
         )
-        d_expense_category_lazy = transform_d_expense_category(
-            extracted.zcategory, mappings["category"]
-        )
+        d_expense_category_lazy = transform_d_expense_category(zcategory, mappings["category"])
         d_expense_subcategory_lazy = transform_d_expense_subcategory(
-            extracted.zcategory, mappings["category"], self.rules
+            zcategory, mappings["category"], self.rules
         )
         d_asset_category_lazy = transform_d_asset_category(
-            extracted.assetgroup, mappings["asset_group"], self.rules
+            extracted.require_lazy(DatasetId.HOUSEHOLD_ASSET_GROUP),
+            mappings["asset_group"],
+            self.rules,
         )
         d_asset_subcategory_lazy = transform_d_asset_subcategory(
-            extracted.assets, mappings["assets"], self.rules
+            extracted.require_lazy(DatasetId.HOUSEHOLD_ASSETS), mappings["assets"], self.rules
         )
         d_currency_lazy = transform_d_currency(
-            extracted.currency, mappings["currency"], extracted.currency_mapping_raw
+            extracted.require_lazy(DatasetId.HOUSEHOLD_CURRENCY),
+            mappings["currency"],
+            extracted.require_lazy(DatasetId.MARKET_CURRENCY_MAPPING),
         )
 
         diagnostics.debug("Transforming Macro Parameters and Opening Balances...")
-        d_macro_parameters_lazy = transform_d_macro_parameters(extracted.raw_macro_parameters)
+        d_macro_parameters_lazy = transform_d_macro_parameters(
+            extracted.require_lazy(DatasetId.INVESTMENT_MACRO_PARAMETERS)
+        )
 
         dims: dict[str, pl.LazyFrame] = {
             "df_d_income_category": d_income_category_lazy,
@@ -150,7 +193,7 @@ class TransformationDAG:
 
         if self.plan is None or self.plan.is_capability_active(CapabilityId.BENCHMARK_ENRICHMENT):
             dims["df_d_benchmark_master"] = transform_d_investment_benchmark_master(
-                extracted.raw_benchmark_master
+                extracted.require_lazy(DatasetId.INVESTMENT_BENCHMARK_MASTER)
             )
         else:
             self.emitter.emit_event(
@@ -163,14 +206,14 @@ class TransformationDAG:
         return dims
 
     def _transform_facts(
-        self, extracted: ExtractionResult, dims: dict[str, pl.LazyFrame]
+        self, extracted: DatasetCollection, dims: dict[str, pl.LazyFrame]
     ) -> dict[str, pl.LazyFrame]:
         """Transform core cashflow, opening balances, and transaction fact LazyFrames.
 
         Parameters
         ----------
-        extracted : ExtractionResult
-            Extracted source and mapping entities.
+        extracted : DatasetCollection
+            Extracted source dataset collection.
         dims : dict[str, pl.LazyFrame]
             Transformed dimension tables for foreign key lookups.
 
@@ -182,17 +225,19 @@ class TransformationDAG:
         if self.rules is None:
             raise ValueError("FinancialRules must be provided to TransformationDAG")
 
-        mappings = extracted.mappings
+        mappings = self._resolve_mappings(extracted)
         d_income_subcategory_lazy = dims["df_d_income_subcategory"]
         d_expense_subcategory_lazy = dims["df_d_expense_subcategory"]
         d_asset_category_lazy = dims["df_d_asset_category"]
         d_asset_subcategory_lazy = dims["df_d_asset_subcategory"]
 
         f_opening_balances_lazy = transform_f_opening_balances(
-            extracted.raw_opening_balances, extracted.mappings["opbal"]
+            extracted.require_lazy(DatasetId.HOUSEHOLD_OPENING_BALANCES), mappings["opbal"]
         )
 
-        base_transactions_lazy = get_base_transactions(extracted.inoutcome, mappings["inoutcome"])
+        base_transactions_lazy = get_base_transactions(
+            extracted.require_lazy(DatasetId.HOUSEHOLD_INOUTCOME), mappings["inoutcome"]
+        )
         f_income_transactions_lazy = transform_f_income_transactions(
             base_transactions_lazy, self.rules, d_income_subcategory_lazy
         )
@@ -211,14 +256,14 @@ class TransformationDAG:
         }
 
     def _run_asset_pipelines(
-        self, extracted: ExtractionResult, d_asset_subcategory_lazy: pl.LazyFrame
+        self, extracted: DatasetCollection, d_asset_subcategory_lazy: pl.LazyFrame
     ) -> dict[str, pl.LazyFrame]:
         """Execute investment asset pipelines for Mutual Funds, Stocks, and US Equities.
 
         Parameters
         ----------
-        extracted : ExtractionResult
-            Extracted raw statements and transaction reports.
+        extracted : DatasetCollection
+            Extracted raw statements and transaction reports in DatasetCollection.
         d_asset_subcategory_lazy : pl.LazyFrame
             Transformed asset subcategory dimension.
 
@@ -230,7 +275,8 @@ class TransformationDAG:
         if self.rules is None:
             raise ValueError("FinancialRules must be provided to TransformationDAG")
 
-        if len(extracted.mf_market_data_raw.collect_schema().names()) == 0:
+        mf_market_frame = extracted.get(DatasetId.MARKET_MF_HOLDINGS)
+        if mf_market_frame is None or len(mf_market_frame.collect_schema().names()) == 0:
             diagnostics.debug("Empty incremental frames detected. Skipping AssetPipelines...")
             return {
                 "df_f_investment_market_data": pl.LazyFrame(),
@@ -269,7 +315,7 @@ class TransformationDAG:
         diagnostics.debug("Building Investment Master...")
         d_tf_investment_master_lazy = get_d_investment_master(
             master_ref_lazy_list,
-            extracted.stg_benchmark_mapping,
+            extracted.require_lazy(DatasetId.INVESTMENT_BENCHMARK_MAPPING),
             self.rules.DEFAULT_CURRENCY_ID,
         )
 
@@ -406,13 +452,13 @@ class TransformationDAG:
 
         return final_dfs
 
-    def run(self, extracted: ExtractionResult) -> dict[str, pl.DataFrame]:
+    def run(self, extracted: DatasetCollection) -> dict[str, pl.DataFrame]:
         """Execute parallel streaming transformation across dimensions, facts, and asset pipelines.
 
         Parameters
         ----------
-        extracted : ExtractionResult
-            Extracted source and mapping entities.
+        extracted : DatasetCollection
+            Extracted source dataset collection.
 
         Returns
         -------

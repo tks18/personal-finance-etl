@@ -57,10 +57,10 @@ from personal_finance_etl.config.sources.loader import (
 )
 from personal_finance_etl.contracts.application import EngineStage
 from personal_finance_etl.contracts.capabilities import CapabilityId
+from personal_finance_etl.contracts.dataset_collection import DatasetCollection
 from personal_finance_etl.contracts.datasets import DatasetId
 from personal_finance_etl.contracts.event_transport import EventQueue
 from personal_finance_etl.contracts.execution_plan import ExecutionPlan
-from personal_finance_etl.contracts.extraction import ExtractionResult
 from personal_finance_etl.contracts.lifecycle import SyncSummaryRecord
 from personal_finance_etl.contracts.market import ProviderSymbolRegistry
 from personal_finance_etl.contracts.observability import (
@@ -244,7 +244,7 @@ class PipelineExecutor:
         self,
         cp: ControlPlane,
         actionable_files: dict[str, list[str]] | None = None,
-    ) -> ExtractionResult:
+    ) -> DatasetCollection:
         """Extract evidence from local files or raw payloads via DataExtractor.
 
         Parameters
@@ -256,24 +256,24 @@ class PipelineExecutor:
 
         Returns
         -------
-        ExtractionResult
-            Parsed tabular frames and extraction metadata.
+        DatasetCollection
+            Parsed tabular frames keyed by canonical DatasetId.
         """
         extractor = DataExtractor(self.cfg, self.status_queue, cp, emitter=self.emitter)
         return extractor.run(actionable_files)
 
-    def transform(self, extracted_data: ExtractionResult) -> None:
+    def transform(self, extracted_data: DatasetCollection) -> None:
         """Transform raw extracted data into base dimension and fact tables.
 
         Parameters
         ----------
-        extracted_data : ExtractionResult
+        extracted_data : DatasetCollection
             Extracted source datasets.
         """
         self.provider_symbols = build_provider_symbol_registry(
-            currency_mapping=extracted_data.currency_mapping_raw,
-            benchmark_master=extracted_data.raw_benchmark_master,
-            benchmark_mapping=extracted_data.stg_benchmark_mapping,
+            currency_mapping=extracted_data.require_lazy(DatasetId.MARKET_CURRENCY_MAPPING),
+            benchmark_master=extracted_data.require_lazy(DatasetId.INVESTMENT_BENCHMARK_MASTER),
+            benchmark_mapping=extracted_data.require_lazy(DatasetId.INVESTMENT_BENCHMARK_MAPPING),
         )
         transformer = TransformationDAG(
             self.cfg,
@@ -615,7 +615,7 @@ class PipelineExecutor:
 
     def _run_discovery_phase(
         self, cp: ControlPlane
-    ) -> tuple[ExtractionResult, dict[str, list[str]], list[tuple[str, str, str]]]:
+    ) -> tuple[DatasetCollection, dict[str, list[str]], list[tuple[str, str, str]]]:
         """Execute Phase 1: File discovery, fingerprint sync, and raw extraction.
 
         Parameters
@@ -625,7 +625,7 @@ class PipelineExecutor:
 
         Returns
         -------
-        tuple[ExtractionResult, dict[str, list[str]], list[tuple[str, str, str]]]
+        tuple[DatasetCollection, dict[str, list[str]], list[tuple[str, str, str]]]
             Extracted source data, actionable path map, and list of file renames.
         """
         t_ext_start = time.perf_counter()
@@ -694,10 +694,10 @@ class PipelineExecutor:
         self,
         cp: ControlPlane,
         run_id: str,
-        extracted_data: ExtractionResult,
+        extracted_data: DatasetCollection,
         actionable_all: dict[str, list[str]],
         renames: list[tuple[str, str, str]],
-    ) -> tuple[BronzeLayer, ExtractionResult]:
+    ) -> tuple[BronzeLayer, DatasetCollection]:
         """Execute Phase 2: Upsert extracted datasets into Bronze Lakehouse.
 
         Parameters
@@ -706,7 +706,7 @@ class PipelineExecutor:
             Active ControlPlane instance.
         run_id : str
             Active pipeline execution ID.
-        extracted_data : ExtractionResult
+        extracted_data : DatasetCollection
             Extracted input datasets.
         actionable_all : dict[str, list[str]]
             Actionable file paths by category.
@@ -715,8 +715,8 @@ class PipelineExecutor:
 
         Returns
         -------
-        tuple[BronzeLayer, ExtractionResult]
-            Bronze lakehouse layer and complete cumulative extraction result.
+        tuple[BronzeLayer, DatasetCollection]
+            Bronze lakehouse layer and complete cumulative dataset collection.
         """
         t_bronze_start = time.perf_counter()
         self.emitter.emit_event(
@@ -772,11 +772,11 @@ class PipelineExecutor:
         self._log_artifact_sync_summary(cp, run_id, actionable_all)
 
         diagnostics.debug("Fetching complete dataset from Bronze Lakehouse for Transformation...")
-        full_dataset = bronze.get_full_dataset(extracted_data.mappings)
+        full_dataset = bronze.get_dataset_collection()
         return bronze, full_dataset
 
     def _run_transform_phase(
-        self, cp: ControlPlane, bronze: BronzeLayer, full_dataset: ExtractionResult
+        self, cp: ControlPlane, bronze: BronzeLayer, full_dataset: DatasetCollection
     ) -> None:
         """Execute Phase 3: Base DAG mapping, FX rates, US market data, and benchmark transforms.
 
@@ -786,8 +786,8 @@ class PipelineExecutor:
             Active ControlPlane instance.
         bronze : BronzeLayer
             Bronze persistence layer.
-        full_dataset : ExtractionResult
-            Cumulative Bronze extraction result.
+        full_dataset : DatasetCollection
+            Cumulative Bronze dataset collection.
         """
         t_trans_start = time.perf_counter()
         self.emitter.emit_event(
