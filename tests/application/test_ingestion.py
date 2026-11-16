@@ -121,9 +121,13 @@ def test_sqlite_extractor_base_tables(tmp_path: Path) -> None:
 
     raw_bytes = db_path.read_bytes()
     extractor = SQLiteExtractor(str(tmp_path))
-    zcat, agroup, assets, curr, inout = extractor.extract_base_tables(
-        "test_household.sqlite", str(tmp_path), raw_bytes
+    zcat = extractor.extract_table("test_household.sqlite", str(tmp_path), raw_bytes, "ZCATEGORY")
+    agroup = extractor.extract_table(
+        "test_household.sqlite", str(tmp_path), raw_bytes, "ASSETGROUP"
     )
+    assets = extractor.extract_table("test_household.sqlite", str(tmp_path), raw_bytes, "ASSETS")
+    curr = extractor.extract_table("test_household.sqlite", str(tmp_path), raw_bytes, "CURRENCY")
+    inout = extractor.extract_table("test_household.sqlite", str(tmp_path), raw_bytes, "INOUTCOME")
 
     assert zcat.collect().height == 1
     assert agroup.collect().height == 1
