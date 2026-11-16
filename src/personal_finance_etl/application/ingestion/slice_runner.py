@@ -26,7 +26,7 @@ import polars as pl
 from personal_finance_etl.application.ingestion.admission import AdmissionService
 from personal_finance_etl.application.pipeline.source_planner import DatasetPlan
 from personal_finance_etl.config.sources.loader import SourceConfiguration
-from personal_finance_etl.config.sources.selectors import SqliteSelector
+from personal_finance_etl.config.sources.selectors import CsvSelector, SqliteSelector
 from personal_finance_etl.contracts.application import EngineStage
 from personal_finance_etl.contracts.observability import (
     DiagnosticSeverity,
@@ -47,6 +47,7 @@ from personal_finance_etl.infrastructure.observability import (
 from personal_finance_etl.infrastructure.observability.diagnostics import (
     get_observability_diagnostics,
 )
+from personal_finance_etl.infrastructure.providers.files.csv import CSVExtractor
 from personal_finance_etl.infrastructure.providers.files.sqlite import SQLiteExtractor
 from personal_finance_etl.infrastructure.validation import (
     POLARS_TYPE_MAP,
@@ -218,6 +219,16 @@ class DatasetIngestionService:
                 table_name = dataset_plan.selector.table_name
                 extractor = SQLiteExtractor(folder_path)
                 source_lazy = extractor.extract_table(filename, folder_path, raw_bytes, table_name)
+            elif isinstance(dataset_plan.selector, CsvSelector):
+                csv_extractor = CSVExtractor(folder_path)
+                source_lazy = csv_extractor.extract_csv(
+                    filename,
+                    folder_path,
+                    raw_bytes,
+                    delimiter=dataset_plan.selector.delimiter,
+                    encoding=dataset_plan.selector.encoding,
+                    has_header=dataset_plan.selector.has_header,
+                )
             else:
                 raise NotImplementedError(
                     f"Provider selector '{type(dataset_plan.selector).__name__}' not supported."
@@ -225,17 +236,40 @@ class DatasetIngestionService:
 
             raw_df = source_lazy.collect()
 
-            # Align all-null columns inferred by Polars with declared source field dtypes
-            null_cols_to_cast: list[pl.Expr] = []
+            # Align column types inferred by Polars with declared source field dtypes
+            cols_to_cast: list[pl.Expr] = []
             field_types = {f.name: f.data_type.strip().lower() for f in ds_config.fields}
             for col in raw_df.columns:
-                if raw_df[col].dtype == pl.Null and col in field_types:
+                if col in field_types:
                     norm_t = field_types[col]
-                    if norm_t in POLARS_TYPE_MAP:
-                        target_dtype = POLARS_TYPE_MAP[norm_t]
-                        null_cols_to_cast.append(pl.col(col).cast(target_dtype))
-            if null_cols_to_cast:
-                raw_df = raw_df.with_columns(null_cols_to_cast)
+                    target_dtype = POLARS_TYPE_MAP.get(norm_t)
+                    if target_dtype is not None:
+                        current_dtype = raw_df[col].dtype
+                        if current_dtype == pl.Null:
+                            cols_to_cast.append(pl.col(col).cast(target_dtype))
+                        elif target_dtype.is_float() and current_dtype.is_integer():
+                            cols_to_cast.append(pl.col(col).cast(pl.Float64))
+                        elif target_dtype.is_(pl.String) and not current_dtype.is_(pl.String):
+                            cols_to_cast.append(pl.col(col).cast(pl.String))
+                        elif (
+                            target_dtype.is_integer()
+                            and current_dtype.is_integer()
+                            and current_dtype != target_dtype
+                        ):
+                            cols_to_cast.append(pl.col(col).cast(target_dtype))
+                        elif (
+                            (target_dtype.is_integer() or target_dtype.is_float())
+                            and current_dtype.is_(pl.String)
+                            and (
+                                raw_df[col].null_count() == len(raw_df)
+                                or raw_df[col].is_null().all()
+                            )
+                        ):
+                            cols_to_cast.append(pl.col(col).cast(target_dtype))
+                        elif target_dtype.is_integer() and current_dtype.is_float():
+                            cols_to_cast.append(pl.col(col).cast(target_dtype))
+            if cols_to_cast:
+                raw_df = raw_df.with_columns(cols_to_cast)
 
             # 2. Gate 1: Source Validation (PRE_BRONZE)
             source_schema = compile_source_schema(ds_config)

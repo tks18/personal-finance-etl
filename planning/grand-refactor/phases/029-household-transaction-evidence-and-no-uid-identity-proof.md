@@ -118,13 +118,13 @@ Do not:
 
 ## 11. Completion checklist
 
-- [ ] Household evidence family fully generalized.
-- [ ] Shan trusted IDs preserved.
-- [ ] External derived IDs deterministic.
-- [ ] Collision failure atomic/actionable.
-- [ ] Same canonical contract serves both sources.
-- [ ] No household legacy extraction route remains.
-- [ ] Full Shan run green.
+- [x] Household evidence family fully generalized.
+- [x] Shan trusted IDs preserved.
+- [x] External derived IDs deterministic.
+- [x] Collision failure atomic/actionable.
+- [x] Same canonical contract serves both sources.
+- [x] No household legacy extraction route remains.
+- [x] Full Shan run green.
 
 ## 12. Commit boundary
 
@@ -139,20 +139,30 @@ Phase 030 may assume the household side is completely generalized and has proven
 ## Phase completion record
 
 ```text
-Phase:
-Target release:
+Phase: 029
+Target release: v10.0.0-rc2
 Files changed:
-Schema changed:
-Runtime behavior changed:
+- src/personal_finance_etl/infrastructure/providers/files/csv.py
+- src/personal_finance_etl/infrastructure/providers/files/__init__.py
+- src/personal_finance_etl/application/ingestion/slice_runner.py
+- src/personal_finance_etl/application/ingestion/coordinator.py
+- src/personal_finance_etl/application/pipeline/execution.py
+- src/personal_finance_etl/config/sources/loader.py
+- src/personal_finance_etl/infrastructure/validation/canonical_schemas.py
+- src/personal_finance_etl/infrastructure/warehouse/bronze.py
+- tests/application/test_generalized_vertical_slice.py
+- tests/application/test_household_no_uid_identity_proof.py
+Schema changed: NO
+Runtime behavior changed: YES
 Financial formulas changed: NO
-Focused tests:
-Architecture tests:
-Real-data run:
-Performance check:
-Compatibility path still present:
-Old path deleted:
-Exit assertions green:
-Commit:
+Focused tests: tests/application/test_household_no_uid_identity_proof.py, tests/application/test_generalized_vertical_slice.py
+Architecture tests: tests/architecture/test_boundaries.py, tests/architecture/test_constitutional_certification.py, tests/architecture/test_legacy_demolition.py
+Real-data run: PASS
+Performance check: PASS (2.18s fast audit, 86.87s full 6-engine audit)
+Compatibility path still present: NO
+Old path deleted: YES
+Exit assertions green: YES
+Commit: pending user confirmation
 ```
 
 A phase is incomplete if any required exit assertion is false.

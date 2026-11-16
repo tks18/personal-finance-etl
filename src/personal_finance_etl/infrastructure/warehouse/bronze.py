@@ -51,6 +51,7 @@ MIGRATED_DATASETS: frozenset[DatasetId] = frozenset(
         DatasetId.HOUSEHOLD_ASSETS,
         DatasetId.HOUSEHOLD_CURRENCY,
         DatasetId.HOUSEHOLD_INOUTCOME,
+        DatasetId.HOUSEHOLD_OPENING_BALANCES,
     }
 )
 

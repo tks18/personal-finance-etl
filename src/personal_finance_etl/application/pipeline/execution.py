@@ -736,6 +736,7 @@ class PipelineExecutor:
             DatasetId.HOUSEHOLD_ASSETS,
             DatasetId.HOUSEHOLD_CURRENCY,
             DatasetId.HOUSEHOLD_INOUTCOME,
+            DatasetId.HOUSEHOLD_OPENING_BALANCES,
         )
 
         if renames:

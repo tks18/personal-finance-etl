@@ -24,6 +24,7 @@ from personal_finance_etl.infrastructure.observability.diagnostics import (
 )
 
 __all__ = [
+    "CSVExtractor",
     "extract_benchmark_master_raw",
     "extract_currency_mapping_raw",
     "extract_macro_parameters_raw",
@@ -33,6 +34,67 @@ __all__ = [
 ]
 
 diagnostics = get_observability_diagnostics(__name__)
+
+
+class CSVExtractor:
+    """Extracts raw Polars LazyFrames from external CSV evidence payloads.
+
+    Parameters
+    ----------
+    folder_path : str, default ""
+        Base source folder path for the extractor instance.
+    """
+
+    def __init__(self, folder_path: str = "") -> None:
+        self.folder_path = folder_path
+
+    def extract_csv(
+        self,
+        filename: str,
+        folder_path: str,
+        raw_bytes: bytes,
+        *,
+        delimiter: str = ",",
+        encoding: str = "utf8",
+        has_header: bool = True,
+    ) -> pl.LazyFrame:
+        """Parse in-memory CSV bytes into an annotated Polars LazyFrame.
+
+        Parameters
+        ----------
+        filename : str
+            Source file basename.
+        folder_path : str
+            Source directory path.
+        raw_bytes : bytes
+            Binary CSV payload.
+        delimiter : str, default ","
+            Single-character column separator delimiter.
+        encoding : str, default "utf8"
+            Character encoding codec.
+        has_header : bool, default True
+            Whether the first line contains column headers.
+
+        Returns
+        -------
+        pl.LazyFrame
+            Source-shaped LazyFrame tagged with source file provenance.
+        """
+        filepath = f"{folder_path}/{filename}" if folder_path else filename
+        artifact_id = generate_file_id(filepath)
+        norm_encoding = "utf8" if encoding.lower() in ("utf-8", "utf8") else encoding
+        df = pl.read_csv(
+            io.BytesIO(raw_bytes),
+            separator=delimiter,
+            encoding=norm_encoding,
+            has_header=has_header,
+            infer_schema_length=10000,
+        )
+        return df.lazy().with_columns(
+            pl.lit(filename).alias("__file_name__"),
+            pl.lit(folder_path).alias("__folder_path__"),
+            pl.lit(artifact_id).alias("artifact_id"),
+        )
 
 
 def extract_stg_mf_isin_mapping(filename: str, folder_path: str, raw_bytes: bytes) -> pl.LazyFrame:
