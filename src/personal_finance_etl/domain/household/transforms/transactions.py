@@ -92,7 +92,10 @@ def get_base_transactions(df_lazy: pl.LazyFrame, column_mapping: dict[str, str])
 
     Reads INOUTCOME once, renames columns, and filters deleted rows.
     """
-    df_renamed = df_lazy.rename(column_mapping)
+    active_mapping = {
+        k: v for k, v in column_mapping.items() if k in df_lazy.collect_schema().names()
+    }
+    df_renamed = df_lazy.rename(active_mapping)
     raw_columns = set(df_renamed.collect_schema().names())
     required_columns = {"IS_DEL", "UID", "BASE_AMOUNT"}
     missing_columns = sorted(required_columns - raw_columns)

@@ -37,8 +37,12 @@ def transform_d_currency(
         "artifact_id",
     ]
 
+    active_mapping = {
+        k: v for k, v in column_mapping.items() if k in df_lazy.collect_schema().names()
+    }
+
     df_transformed = (
-        df_lazy.rename(column_mapping)
+        df_lazy.rename(active_mapping)
         .with_columns(pl.col("IS_DEL").cast(pl.String))
         .filter(pl.col("IS_DEL").fill_null("0") == "0")
         .select(cols)
