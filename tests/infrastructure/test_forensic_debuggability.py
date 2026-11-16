@@ -31,9 +31,10 @@ from personal_finance_etl.application.wealth.wealth_service import WealthService
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
 from personal_finance_etl.contracts.application import EngineStage
+from personal_finance_etl.contracts.dataset_collection import DatasetCollection
+from personal_finance_etl.contracts.datasets import DatasetId
 from personal_finance_etl.contracts.extraction import (
     ExtractionBatchResult,
-    ExtractionResult,
     ExtractorEntityResult,
     ExtractorEntityStatus,
 )
@@ -145,29 +146,13 @@ def test_gatekeeper_validation_failure_attaches_error_details(
 
     extractor = DataExtractor(cfg, mock_queue, mock_cp, emitter=emitter)
 
-    faulty_lf = MagicMock()
+    faulty_lf = MagicMock(spec=pl.LazyFrame)
     faulty_lf.collect_schema.side_effect = ValueError("Column 'Date' missing from schema")
 
-    dummy_lf = pl.DataFrame({"id": [1]}).lazy()
-    res = ExtractionResult(
-        zcategory=faulty_lf,
-        assetgroup=dummy_lf,
-        assets=dummy_lf,
-        currency=dummy_lf,
-        inoutcome=dummy_lf,
-        mappings={},
-        column_master=pl.DataFrame(),
-        stg_mf_isin_mapping=dummy_lf,
-        stg_benchmark_mapping=dummy_lf,
-        raw_opening_balances=dummy_lf,
-        raw_benchmark_master=dummy_lf,
-        raw_macro_parameters=dummy_lf,
-        currency_mapping_raw=dummy_lf,
-        mf_market_data_raw=dummy_lf,
-        mf_transactions_raw=dummy_lf,
-        stock_market_data_raw=dummy_lf,
-        stock_transactions_raw=dummy_lf,
-        us_stock_transactions_raw=dummy_lf,
+    res = DatasetCollection(
+        frames={
+            DatasetId.HOUSEHOLD_ZCATEGORY: faulty_lf,
+        }
     )
 
     with pytest.raises(RuntimeError, match="Corrupted source data detected"):

@@ -1,10 +1,10 @@
-"""Comprehensive test suite for Phase 026 typed DatasetCollection transport.
+"""Comprehensive test suite for Phase 026/027 typed DatasetCollection transport.
 
 Owns
 ----
 - Invariant tests for DatasetCollection immutability, type enforcement, and accessors.
 - Bounded operational metadata tests for DatasetRuntimeMetadata.
-- Compatibility adapter tests between ExtractionResult and DatasetCollection.
+- Authoritative transport verification for DatasetCollection across Bronze lakehouse.
 - BronzeLayer.get_dataset_collection lakehouse reconstruction tests.
 - Eager-free lazy evaluation preservation assertions.
 
@@ -17,7 +17,6 @@ Does not own
 
 from __future__ import annotations
 
-import dataclasses
 from typing import Any
 
 import polars as pl
@@ -30,11 +29,6 @@ from personal_finance_etl.contracts.dataset_collection import (
     MissingDatasetError,
 )
 from personal_finance_etl.contracts.datasets import DatasetId
-from personal_finance_etl.contracts.extraction import (
-    DATASET_ID_TO_EXTRACTION_ATTRIBUTE,
-    EXTRACTION_ATTRIBUTE_TO_DATASET_ID,
-    ExtractionResult,
-)
 from personal_finance_etl.contracts.provenance import ProvenanceRef
 from personal_finance_etl.contracts.sources import SourceId
 from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
@@ -239,77 +233,14 @@ def test_dataset_runtime_metadata() -> None:
         )
 
 
-def test_extraction_result_adapter_coverage() -> None:
-    """Verify bidirectional adapter mappings cover all 17 frame fields on ExtractionResult."""
-    # Ensure mapping covers every non-mappings field on ExtractionResult
-    expected_fields = {f.name for f in dataclasses.fields(ExtractionResult) if f.name != "mappings"}
-    assert set(EXTRACTION_ATTRIBUTE_TO_DATASET_ID.keys()) == expected_fields
-    assert len(EXTRACTION_ATTRIBUTE_TO_DATASET_ID) == 17
-    assert len(DATASET_ID_TO_EXTRACTION_ATTRIBUTE) == 17
-
-    # Inverse mapping is strictly consistent
-    for attr, ds_id in EXTRACTION_ATTRIBUTE_TO_DATASET_ID.items():
-        assert DATASET_ID_TO_EXTRACTION_ATTRIBUTE[ds_id] == attr
-
-
-def test_extraction_result_roundtrip_adaptation() -> None:
-    """Verify zero-copy, loss-free roundtrip between ExtractionResult and DatasetCollection."""
-    # Create distinct DataFrames/LazyFrames for each field
-    lf_dict: dict[str, pl.LazyFrame] = {
-        f: pl.LazyFrame({f: [i]})
-        for i, f in enumerate(EXTRACTION_ATTRIBUTE_TO_DATASET_ID)
-        if f != "column_master"
-    }
-    cm_df = pl.DataFrame({"physical_table": ["table1"], "canonical_column": ["col1"]})
-    test_mappings = {"cat1": {"source_col": "target_col"}}
-
-    orig_result = ExtractionResult(
-        zcategory=lf_dict["zcategory"],
-        assetgroup=lf_dict["assetgroup"],
-        assets=lf_dict["assets"],
-        currency=lf_dict["currency"],
-        inoutcome=lf_dict["inoutcome"],
-        mappings=test_mappings,
-        stg_mf_isin_mapping=lf_dict["stg_mf_isin_mapping"],
-        stg_benchmark_mapping=lf_dict["stg_benchmark_mapping"],
-        mf_market_data_raw=lf_dict["mf_market_data_raw"],
-        mf_transactions_raw=lf_dict["mf_transactions_raw"],
-        stock_market_data_raw=lf_dict["stock_market_data_raw"],
-        stock_transactions_raw=lf_dict["stock_transactions_raw"],
-        raw_opening_balances=lf_dict["raw_opening_balances"],
-        raw_benchmark_master=lf_dict["raw_benchmark_master"],
-        raw_macro_parameters=lf_dict["raw_macro_parameters"],
-        column_master=cm_df,
-        us_stock_transactions_raw=lf_dict["us_stock_transactions_raw"],
-        currency_mapping_raw=lf_dict["currency_mapping_raw"],
-    )
-
-    # Convert to DatasetCollection
-    collection = orig_result.to_dataset_collection()
-    assert len(collection) == 17
-
-    # Verify every DatasetId exists in collection
-    for attr, ds_id in EXTRACTION_ATTRIBUTE_TO_DATASET_ID.items():
+def test_dataset_collection_canonical_registry_coverage() -> None:
+    """Verify DatasetCollection can represent all canonical DatasetIds without data loss."""
+    frames = {ds_id: pl.LazyFrame({"id": [idx]}) for idx, ds_id in enumerate(DatasetId)}
+    collection = DatasetCollection(frames=frames)
+    assert len(collection) == len(DatasetId)
+    for ds_id in DatasetId:
         assert ds_id in collection
-        frame = collection.require(ds_id)
-        if attr == "column_master":
-            assert isinstance(frame, pl.DataFrame)
-            assert frame.equals(cm_df)
-        else:
-            assert isinstance(frame, pl.LazyFrame)
-            assert frame.collect().equals(lf_dict[attr].collect())
-
-    # Roundtrip back to ExtractionResult
-    restored_result = ExtractionResult.from_dataset_collection(collection, mappings=test_mappings)
-    assert restored_result.mappings == test_mappings
-    assert isinstance(restored_result.column_master, pl.DataFrame)
-    assert restored_result.column_master.equals(cm_df)
-
-    for attr in EXTRACTION_ATTRIBUTE_TO_DATASET_ID:
-        if attr == "column_master":
-            continue
-        restored_frame: pl.LazyFrame = getattr(restored_result, attr)
-        assert restored_frame.collect().equals(lf_dict[attr].collect())
+        assert collection.require_lazy(ds_id).collect().height == 1
 
 
 def test_bronze_layer_get_dataset_collection(
@@ -370,13 +301,3 @@ def test_bronze_layer_get_dataset_collection(
     assets_read = collection.require(DatasetId.HOUSEHOLD_ASSETS)
     assert isinstance(assets_read, pl.LazyFrame)
     assert assets_read.collect().is_empty()
-
-    # 2. Legacy get_full_dataset() produces equivalent result
-    test_mappings = {"sync": {"col_a": "col_b"}}
-    legacy_result = bronze.get_full_dataset(test_mappings)
-    assert isinstance(legacy_result, ExtractionResult)
-    assert legacy_result.mappings == test_mappings
-    assert legacy_result.zcategory.collect().height == 2
-    assert isinstance(legacy_result.column_master, pl.DataFrame)
-    assert legacy_result.column_master.height == 1
-    assert legacy_result.assets.collect().is_empty()

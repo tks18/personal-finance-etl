@@ -25,9 +25,9 @@ from pandera.api.polars.types import PolarsData
 
 from personal_finance_etl.application.ingestion.coordinator import DataExtractor
 from personal_finance_etl.config.settings import Settings
+from personal_finance_etl.contracts.dataset_collection import DatasetCollection
 from personal_finance_etl.contracts.datasets import DatasetId
 from personal_finance_etl.contracts.event_transport import EventQueue
-from personal_finance_etl.contracts.extraction import ExtractionResult
 from personal_finance_etl.contracts.observability import (
     DiagnosticSeverity,
     EventCode,
@@ -399,25 +399,11 @@ def test_legacy_gatekeeper_coexistence(
     )
 
     empty_lf = pl.LazyFrame({"col_a": pl.Series([], dtype=pl.String)})
-    res = ExtractionResult(
-        zcategory=empty_lf,
-        assetgroup=empty_lf,
-        assets=empty_lf,
-        currency=empty_lf,
-        inoutcome=empty_lf,
-        mappings={},
-        column_master=pl.DataFrame({"col": ["val"]}),
-        stg_mf_isin_mapping=empty_lf,
-        stg_benchmark_mapping=empty_lf,
-        raw_opening_balances=empty_lf,
-        raw_benchmark_master=empty_lf,
-        raw_macro_parameters=empty_lf,
-        currency_mapping_raw=empty_lf,
-        mf_market_data_raw=empty_lf,
-        mf_transactions_raw=empty_lf,
-        stock_market_data_raw=empty_lf,
-        stock_transactions_raw=empty_lf,
-        us_stock_transactions_raw=empty_lf,
+    res = DatasetCollection(
+        frames={
+            DatasetId.HOUSEHOLD_ZCATEGORY: empty_lf,
+            DatasetId.COMMON_COLUMN_MASTER: pl.DataFrame({"col": ["val"]}),
+        }
     )
 
     # Legacy validation method must execute without error

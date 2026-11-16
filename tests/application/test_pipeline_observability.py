@@ -32,7 +32,8 @@ from personal_finance_etl.application.ingestion.market_sync import (
 )
 from personal_finance_etl.config.settings import Settings
 from personal_finance_etl.contracts.application import EngineStage
-from personal_finance_etl.contracts.extraction import ExtractionResult
+from personal_finance_etl.contracts.dataset_collection import DatasetCollection
+from personal_finance_etl.contracts.datasets import DatasetId
 from personal_finance_etl.contracts.observability import (
     EventCode,
     ObservabilityEvent,
@@ -80,27 +81,13 @@ def test_data_extractor_emits_extraction_and_schema_validation(
 
     extractor = DataExtractor(cfg, mock_queue, mock_cp, emitter=emitter)
 
-    # Empty extraction result for testing schema validation
+    # DatasetCollection for testing schema validation
     dummy_lf = pl.DataFrame({"id": [1], "name": ["test"]}).lazy()
-    res = ExtractionResult(
-        zcategory=dummy_lf,
-        assetgroup=dummy_lf,
-        assets=dummy_lf,
-        currency=dummy_lf,
-        inoutcome=dummy_lf,
-        mappings={},
-        column_master=pl.DataFrame(),
-        stg_mf_isin_mapping=dummy_lf,
-        stg_benchmark_mapping=dummy_lf,
-        raw_opening_balances=dummy_lf,
-        raw_benchmark_master=dummy_lf,
-        raw_macro_parameters=dummy_lf,
-        currency_mapping_raw=dummy_lf,
-        mf_market_data_raw=dummy_lf,
-        mf_transactions_raw=dummy_lf,
-        stock_market_data_raw=dummy_lf,
-        stock_transactions_raw=dummy_lf,
-        us_stock_transactions_raw=dummy_lf,
+    res = DatasetCollection(
+        frames={
+            DatasetId.HOUSEHOLD_ZCATEGORY: dummy_lf,
+            DatasetId.COMMON_COLUMN_MASTER: pl.DataFrame(),
+        }
     )
 
     extractor._validate_extracted_streams(res)
@@ -127,31 +114,14 @@ def test_data_extractor_emits_schema_validation_failure(
 
     extractor = DataExtractor(cfg, mock_queue, mock_cp, emitter=emitter)
 
-    # Faulty extraction result that raises an exception when collected
-    bad_lf = pl.LazyFrame()
-    # Mocking bad schema collect
-    faulty_lf = MagicMock()
+    # Faulty dataset collection that raises an exception when schema is inspected
+    faulty_lf = MagicMock(spec=pl.LazyFrame)
     faulty_lf.collect_schema.side_effect = RuntimeError("Corrupted Parquet Stream")
 
-    res = ExtractionResult(
-        zcategory=faulty_lf,
-        assetgroup=bad_lf,
-        assets=bad_lf,
-        currency=bad_lf,
-        inoutcome=bad_lf,
-        mappings={},
-        column_master=pl.DataFrame(),
-        stg_mf_isin_mapping=bad_lf,
-        stg_benchmark_mapping=bad_lf,
-        raw_opening_balances=bad_lf,
-        raw_benchmark_master=bad_lf,
-        raw_macro_parameters=bad_lf,
-        currency_mapping_raw=bad_lf,
-        mf_market_data_raw=bad_lf,
-        mf_transactions_raw=bad_lf,
-        stock_market_data_raw=bad_lf,
-        stock_transactions_raw=bad_lf,
-        us_stock_transactions_raw=bad_lf,
+    res = DatasetCollection(
+        frames={
+            DatasetId.HOUSEHOLD_ZCATEGORY: faulty_lf,
+        }
     )
 
     with pytest.raises(RuntimeError, match="Corrupted source data detected"):

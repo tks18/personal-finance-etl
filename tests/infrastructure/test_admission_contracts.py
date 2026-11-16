@@ -14,8 +14,6 @@ Owns
 
 from __future__ import annotations
 
-import dataclasses
-
 import polars as pl
 import pytest
 
@@ -31,8 +29,8 @@ from personal_finance_etl.config.sources.selectors import SqliteSelector
 from personal_finance_etl.contracts.canonical_fields import (
     CANONICAL_BRONZE_FIELDS,
 )
+from personal_finance_etl.contracts.dataset_collection import DatasetCollection
 from personal_finance_etl.contracts.datasets import DatasetId
-from personal_finance_etl.contracts.extraction import ExtractionResult
 from personal_finance_etl.contracts.sources import ProviderType, SourceId
 from personal_finance_etl.contracts.validation import (
     ValidationContext,
@@ -99,13 +97,14 @@ def test_exact_legacy_route_documented() -> None:
     discovery: pending_files['sqlite_source']
         -> category: 'zcategory'
         -> provider: SQLite (table ZCATEGORY)
-        -> ExtractionResult.zcategory
+        -> DatasetCollection keyed by DatasetId.HOUSEHOLD_ZCATEGORY
         -> Bronze table: bronze.r_SQLite_ZCategory
         -> downstream consumer: transform_d_income_category in domain.household.transforms
     """
-    # 1. ExtractionResult transport field exists on dataclass
-    extraction_fields: set[str] = {f.name for f in dataclasses.fields(ExtractionResult)}
-    assert "zcategory" in extraction_fields
+    # 1. DatasetId exists and is represented in DatasetCollection
+    assert DatasetId.HOUSEHOLD_ZCATEGORY in DatasetId
+    coll = DatasetCollection(frames={DatasetId.HOUSEHOLD_ZCATEGORY: pl.LazyFrame()})
+    assert DatasetId.HOUSEHOLD_ZCATEGORY in coll
 
     # 2. Bronze contract anchors
     contract = _get_bronze_contract(DatasetId.HOUSEHOLD_ZCATEGORY)
