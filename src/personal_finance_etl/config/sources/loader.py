@@ -636,6 +636,70 @@ _HOUSEHOLD_ASSET_GROUP_MAPPING: list[ColumnMapping] = dict_to_mapping_list(
     }
 )
 
+_HOUSEHOLD_ASSET_GROUP_FIELDS: list[SourceFieldDeclaration] = [
+    SourceFieldDeclaration(
+        name="DEVICE_ID",
+        data_type="Int64",
+        nullable=True,
+        description="Source device identifier integer",
+    ),
+    SourceFieldDeclaration(
+        name="uid",
+        data_type="String",
+        nullable=False,
+        unique=True,
+        description="Natural unique identifier string for asset group",
+    ),
+    SourceFieldDeclaration(
+        name="IS_DEL",
+        data_type="Int64",
+        nullable=True,
+        description="Logical deletion flag (0 active, 1 deleted)",
+    ),
+    SourceFieldDeclaration(
+        name="USETIME",
+        data_type="Int64",
+        nullable=True,
+        description="Asset group last use epoch timestamp",
+    ),
+    SourceFieldDeclaration(
+        name="ACC_GROUP_NAME",
+        data_type="String",
+        nullable=False,
+        description="Asset group name",
+    ),
+    SourceFieldDeclaration(
+        name="TYPE",
+        data_type="Int64",
+        nullable=False,
+        description="Asset group financial classification type code",
+    ),
+    SourceFieldDeclaration(
+        name="ORDERSEQ",
+        data_type="Int64",
+        nullable=True,
+        description="Asset group display order sequence",
+    ),
+    SourceFieldDeclaration(
+        name="isSynced",
+        data_type="Int64",
+        nullable=True,
+        description="Cloud synchronization status flag",
+    ),
+    SourceFieldDeclaration(
+        name="syncTime",
+        data_type="Float64",
+        nullable=True,
+        description="Cloud synchronization epoch timestamp",
+    ),
+    SourceFieldDeclaration(
+        name="syncVersion",
+        data_type="Int64",
+        nullable=True,
+        description="Cloud synchronization schema or entity version",
+    ),
+]
+
 _HOUSEHOLD_ASSETS_MAPPING: list[ColumnMapping] = dict_to_mapping_list(
     {
         "ID": "S_NO",
@@ -666,6 +730,160 @@ _HOUSEHOLD_ASSETS_MAPPING: list[ColumnMapping] = dict_to_mapping_list(
     }
 )
 
+_HOUSEHOLD_ASSETS_FIELDS: list[SourceFieldDeclaration] = [
+    SourceFieldDeclaration(
+        name="ID",
+        data_type="Int64",
+        nullable=True,
+        description="Legacy primary key integer identifier",
+    ),
+    SourceFieldDeclaration(
+        name="CARD_DAY_FIN",
+        data_type="String",
+        nullable=True,
+        description="Credit card statement closing day of month string",
+    ),
+    SourceFieldDeclaration(
+        name="CARD_DAY_PAY",
+        data_type="String",
+        nullable=True,
+        description="Credit card payment due day of month string",
+    ),
+    SourceFieldDeclaration(
+        name="NIC_NAME",
+        data_type="String",
+        nullable=False,
+        description="Asset account nickname or display name",
+    ),
+    SourceFieldDeclaration(
+        name="ORDERSEQ",
+        data_type="Int64",
+        nullable=True,
+        description="Asset display order sequence",
+    ),
+    SourceFieldDeclaration(
+        name="ZDATA",
+        data_type="String",
+        nullable=True,
+        description="Logical deletion flag mapped from ZDATA string",
+    ),
+    SourceFieldDeclaration(
+        name="ZDATA1",
+        data_type="String",
+        nullable=True,
+        description="Asset description note mapped from ZDATA1",
+    ),
+    SourceFieldDeclaration(
+        name="ZDATA2",
+        data_type="String",
+        nullable=True,
+        description="Additional asset notes mapped from ZDATA2",
+    ),
+    SourceFieldDeclaration(
+        name="IS_TRANS_EXPENSE",
+        data_type="Int64",
+        nullable=True,
+        description="Flag indicating if transfer is recorded as expense",
+    ),
+    SourceFieldDeclaration(
+        name="IS_CARD_AUTO_PAY",
+        data_type="Int64",
+        nullable=True,
+        description="Credit card autopay configuration flag",
+    ),
+    SourceFieldDeclaration(
+        name="APP_PACKAGE",
+        data_type="String",
+        nullable=True,
+        description="Associated banking mobile application package name",
+    ),
+    SourceFieldDeclaration(
+        name="APP_NAME",
+        data_type="String",
+        nullable=True,
+        description="Associated banking mobile application name",
+    ),
+    SourceFieldDeclaration(
+        name="SMS_TEL",
+        data_type="String",
+        nullable=True,
+        description="Banking SMS sender telephone or shortcode",
+    ),
+    SourceFieldDeclaration(
+        name="SMS_STRING",
+        data_type="String",
+        nullable=True,
+        description="Banking SMS parser pattern string",
+    ),
+    SourceFieldDeclaration(
+        name="A_UTIME",
+        data_type="Int64",
+        nullable=True,
+        description="Asset creation or addition epoch timestamp",
+    ),
+    SourceFieldDeclaration(
+        name="CARD_USAGE_HURDLE_TYPE",
+        data_type="Int64",
+        nullable=True,
+        description="Credit card annual fee waiver milestone type",
+    ),
+    SourceFieldDeclaration(
+        name="CARD_USAGE_HURDLE_START_DATE",
+        data_type="Float64",
+        nullable=True,
+        description="Credit card fee waiver milestone start date",
+    ),
+    SourceFieldDeclaration(
+        name="CARD_USAGE_HURDLE_AMOUNT",
+        data_type="Float64",
+        nullable=True,
+        description="Credit card spend hurdle target amount",
+    ),
+    SourceFieldDeclaration(
+        name="uid",
+        data_type="String",
+        nullable=False,
+        unique=True,
+        description="Natural unique identifier string for asset account",
+    ),
+    SourceFieldDeclaration(
+        name="currencyUid",
+        data_type="String",
+        nullable=True,
+        description="Foreign key UID reference to currency",
+    ),
+    SourceFieldDeclaration(
+        name="cardAssetUid",
+        data_type="String",
+        nullable=True,
+        description="Foreign key UID reference to autopay source asset",
+    ),
+    SourceFieldDeclaration(
+        name="groupUid",
+        data_type="String",
+        nullable=True,
+        description="Foreign key UID reference to asset group",
+    ),
+    SourceFieldDeclaration(
+        name="isSynced",
+        data_type="Int64",
+        nullable=True,
+        description="Cloud synchronization status flag",
+    ),
+    SourceFieldDeclaration(
+        name="syncTime",
+        data_type="Float64",
+        nullable=True,
+        description="Cloud synchronization epoch timestamp",
+    ),
+    SourceFieldDeclaration(
+        name="syncVersion",
+        data_type="Int64",
+        nullable=True,
+        description="Cloud synchronization schema or entity version",
+    ),
+]
+
 _HOUSEHOLD_CURRENCY_MAPPING: list[ColumnMapping] = dict_to_mapping_list(
     {
         "ID": "S_NO",
@@ -688,6 +906,118 @@ _HOUSEHOLD_CURRENCY_MAPPING: list[ColumnMapping] = dict_to_mapping_list(
         "syncVersion": "SYNC_VERSION",
     }
 )
+
+_HOUSEHOLD_CURRENCY_FIELDS: list[SourceFieldDeclaration] = [
+    SourceFieldDeclaration(
+        name="ID",
+        data_type="Int64",
+        nullable=True,
+        description="Legacy primary key integer identifier",
+    ),
+    SourceFieldDeclaration(
+        name="uid",
+        data_type="String",
+        nullable=False,
+        unique=True,
+        description="Natural unique identifier string for currency",
+    ),
+    SourceFieldDeclaration(
+        name="NAME",
+        data_type="String",
+        nullable=False,
+        description="Currency name",
+    ),
+    SourceFieldDeclaration(
+        name="ISO",
+        data_type="String",
+        nullable=True,
+        description="Standard 3-letter currency ISO code",
+    ),
+    SourceFieldDeclaration(
+        name="MAIN_ISO",
+        data_type="String",
+        nullable=True,
+        description="Main base currency ISO code",
+    ),
+    SourceFieldDeclaration(
+        name="IS_DEL",
+        data_type="Int64",
+        nullable=True,
+        description="Logical deletion flag (0 active, 1 deleted)",
+    ),
+    SourceFieldDeclaration(
+        name="ORDER_SEQ",
+        data_type="Int64",
+        nullable=True,
+        description="Currency display order sequence",
+    ),
+    SourceFieldDeclaration(
+        name="RATE",
+        data_type="Float64",
+        nullable=True,
+        description="Exchange rate multiplier relative to base currency",
+    ),
+    SourceFieldDeclaration(
+        name="SYMBOL",
+        data_type="String",
+        nullable=True,
+        description="Currency symbol glyph",
+    ),
+    SourceFieldDeclaration(
+        name="INSERT_TYPE",
+        data_type="String",
+        nullable=True,
+        description="Currency entry insertion type code string",
+    ),
+    SourceFieldDeclaration(
+        name="SYMBOL_POSITION",
+        data_type="String",
+        nullable=True,
+        description="Currency symbol formatting display position string",
+    ),
+    SourceFieldDeclaration(
+        name="IS_MAIN_CURRENCY",
+        data_type="Int64",
+        nullable=True,
+        description="Flag indicating if this is primary base reporting currency",
+    ),
+    SourceFieldDeclaration(
+        name="IS_SHOW",
+        data_type="Int64",
+        nullable=True,
+        description="Visibility flag for currency selector",
+    ),
+    SourceFieldDeclaration(
+        name="MODIFY_DATE",
+        data_type="Int64",
+        nullable=True,
+        description="Currency modification epoch timestamp",
+    ),
+    SourceFieldDeclaration(
+        name="DECIMAL_POINT",
+        data_type="Int64",
+        nullable=True,
+        description="Number of decimal fractional digits for currency",
+    ),
+    SourceFieldDeclaration(
+        name="isSynced",
+        data_type="Int64",
+        nullable=True,
+        description="Cloud synchronization status flag",
+    ),
+    SourceFieldDeclaration(
+        name="syncTime",
+        data_type="Float64",
+        nullable=True,
+        description="Cloud synchronization epoch timestamp",
+    ),
+    SourceFieldDeclaration(
+        name="syncVersion",
+        data_type="Int64",
+        nullable=True,
+        description="Cloud synchronization schema or entity version",
+    ),
+]
 
 _HOUSEHOLD_INOUTCOME_MAPPING: list[ColumnMapping] = dict_to_mapping_list(
     {
@@ -728,6 +1058,220 @@ _HOUSEHOLD_INOUTCOME_MAPPING: list[ColumnMapping] = dict_to_mapping_list(
         "syncVersion": "SYNC_VERSION",
     }
 )
+
+_HOUSEHOLD_INOUTCOME_FIELDS: list[SourceFieldDeclaration] = [
+    SourceFieldDeclaration(
+        name="AID",
+        data_type="Int64",
+        nullable=True,
+        description="Legacy primary key sequence integer",
+    ),
+    SourceFieldDeclaration(
+        name="uid",
+        data_type="String",
+        nullable=False,
+        unique=True,
+        description="Natural unique identifier string for transaction",
+    ),
+    SourceFieldDeclaration(
+        name="assetUid",
+        data_type="String",
+        nullable=False,
+        description="Foreign key UID reference to source asset account",
+    ),
+    SourceFieldDeclaration(
+        name="CARDDIVIDMONTH",
+        data_type="String",
+        nullable=True,
+        description="Credit card installment tenure in months",
+    ),
+    SourceFieldDeclaration(
+        name="ctgUid",
+        data_type="String",
+        nullable=True,
+        description="Foreign key UID reference to expense/income category",
+    ),
+    SourceFieldDeclaration(
+        name="toAssetUid",
+        data_type="String",
+        nullable=True,
+        description="Foreign key UID reference to destination asset account for transfers",
+    ),
+    SourceFieldDeclaration(
+        name="ZCONTENT",
+        data_type="String",
+        nullable=True,
+        description="Transaction description or merchant content",
+    ),
+    SourceFieldDeclaration(
+        name="ZDATE",
+        data_type="String",
+        nullable=False,
+        description="Transaction timestamp in epoch milliseconds or integer date",
+    ),
+    SourceFieldDeclaration(
+        name="WDATE",
+        data_type="String",
+        nullable=True,
+        description="Calendar date string of transaction (YYYY-MM-DD)",
+    ),
+    SourceFieldDeclaration(
+        name="wtime",
+        data_type="String",
+        nullable=True,
+        description="Time string of transaction (HH:MM:SS)",
+    ),
+    SourceFieldDeclaration(
+        name="paid",
+        data_type="String",
+        nullable=True,
+        description="Settlement payment status flag",
+    ),
+    SourceFieldDeclaration(
+        name="DO_TYPE",
+        data_type="String",
+        nullable=False,
+        description="Transaction type code (0 expense, 1 income, 2 transfer)",
+    ),
+    SourceFieldDeclaration(
+        name="ZMONEY",
+        data_type="String",
+        nullable=False,
+        description="Base currency transaction amount",
+    ),
+    SourceFieldDeclaration(
+        name="txUidTrans",
+        data_type="String",
+        nullable=True,
+        description="Foreign key reference UID linking two legs of transfer",
+    ),
+    SourceFieldDeclaration(
+        name="ZDATA",
+        data_type="String",
+        nullable=True,
+        description="Transaction fee, notes, or memo string",
+    ),
+    SourceFieldDeclaration(
+        name="SMS_RDATE",
+        data_type="String",
+        nullable=True,
+        description="Banking SMS receipt date string",
+    ),
+    SourceFieldDeclaration(
+        name="IN_ZMONEY",
+        data_type="String",
+        nullable=True,
+        description="Original currency transaction amount before conversion",
+    ),
+    SourceFieldDeclaration(
+        name="ASSET_NIC",
+        data_type="String",
+        nullable=True,
+        description="Denormalized asset account name at time of transaction",
+    ),
+    SourceFieldDeclaration(
+        name="CATEGORY_NAME",
+        data_type="String",
+        nullable=True,
+        description="Denormalized category name at time of transaction",
+    ),
+    SourceFieldDeclaration(
+        name="cardDivideUid",
+        data_type="String",
+        nullable=True,
+        description="Installment divide UID group identifier",
+    ),
+    SourceFieldDeclaration(
+        name="CARD_DIVIDE_MONTH_STR",
+        data_type="String",
+        nullable=True,
+        description="Installment month fraction string label",
+    ),
+    SourceFieldDeclaration(
+        name="MARK",
+        data_type="Int64",
+        nullable=True,
+        description="User bookmark or star flag",
+    ),
+    SourceFieldDeclaration(
+        name="txUidFee",
+        data_type="String",
+        nullable=True,
+        description="Foreign key reference UID for associated transfer fees",
+    ),
+    SourceFieldDeclaration(
+        name="SMS_ORIGIN",
+        data_type="String",
+        nullable=True,
+        description="Banking SMS sender origin code",
+    ),
+    SourceFieldDeclaration(
+        name="SMS_PARSE_CONTENT",
+        data_type="String",
+        nullable=True,
+        description="Raw matched SMS parse template content",
+    ),
+    SourceFieldDeclaration(
+        name="IS_DEL",
+        data_type="Int64",
+        nullable=True,
+        description="Logical deletion flag (0 active, 1 deleted)",
+    ),
+    SourceFieldDeclaration(
+        name="UTIME",
+        data_type="Int64",
+        nullable=True,
+        description="Transaction update or modification epoch timestamp",
+    ),
+    SourceFieldDeclaration(
+        name="currencyUid",
+        data_type="String",
+        nullable=True,
+        description="Foreign key UID reference to transaction currency",
+    ),
+    SourceFieldDeclaration(
+        name="AMOUNT_ACCOUNT",
+        data_type="Float64",
+        nullable=True,
+        description="Asset account balance impact amount",
+    ),
+    SourceFieldDeclaration(
+        name="lat",
+        data_type="Float64",
+        nullable=True,
+        description="Geolocation latitude coordinate",
+    ),
+    SourceFieldDeclaration(
+        name="lng",
+        data_type="Float64",
+        nullable=True,
+        description="Geolocation longitude coordinate",
+    ),
+    SourceFieldDeclaration(
+        name="gstd",
+        data_type="String",
+        nullable=True,
+        description="Goods and Services Tax GST identification or state code",
+    ),
+    SourceFieldDeclaration(
+        name="isSynced",
+        data_type="Int64",
+        nullable=True,
+        description="Cloud synchronization status flag",
+    ),
+    SourceFieldDeclaration(
+        name="syncTime",
+        data_type="Float64",
+        nullable=True,
+        description="Cloud synchronization epoch timestamp",
+    ),
+    SourceFieldDeclaration(
+        name="syncVersion",
+        data_type="Int64",
+        nullable=True,
+        description="Cloud synchronization schema or entity version",
+    ),
+]
 
 _HOUSEHOLD_OPENING_BALANCES_MAPPING: list[ColumnMapping] = dict_to_mapping_list(
     {
@@ -815,6 +1359,7 @@ def get_shan_baseline_dataset_bindings() -> list[SourceDatasetConfig]:
             description="Household asset grouping table",
             identity=SourceFieldIdentity(field="UID"),
             mapping=list(_HOUSEHOLD_ASSET_GROUP_MAPPING),
+            fields=list(_HOUSEHOLD_ASSET_GROUP_FIELDS),
         ),
         SourceDatasetConfig(
             source_id=SourceId("household_db"),
@@ -824,6 +1369,7 @@ def get_shan_baseline_dataset_bindings() -> list[SourceDatasetConfig]:
             description="Household financial accounts and assets table",
             identity=SourceFieldIdentity(field="UID"),
             mapping=list(_HOUSEHOLD_ASSETS_MAPPING),
+            fields=list(_HOUSEHOLD_ASSETS_FIELDS),
         ),
         SourceDatasetConfig(
             source_id=SourceId("household_db"),
@@ -833,6 +1379,7 @@ def get_shan_baseline_dataset_bindings() -> list[SourceDatasetConfig]:
             description="Household currency denominations table",
             identity=SourceFieldIdentity(field="UID"),
             mapping=list(_HOUSEHOLD_CURRENCY_MAPPING),
+            fields=list(_HOUSEHOLD_CURRENCY_FIELDS),
         ),
         SourceDatasetConfig(
             source_id=SourceId("household_db"),
@@ -842,6 +1389,7 @@ def get_shan_baseline_dataset_bindings() -> list[SourceDatasetConfig]:
             description="Household financial ledger income and expense transactions table",
             identity=SourceFieldIdentity(field="UID"),
             mapping=list(_HOUSEHOLD_INOUTCOME_MAPPING),
+            fields=list(_HOUSEHOLD_INOUTCOME_FIELDS),
         ),
         SourceDatasetConfig(
             source_id=SourceId("mf_isin_csv"),
