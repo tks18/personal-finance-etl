@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [9.9.6](https://github.com/tks18/personal-finance-etl/compare/9.9.5...9.9.6) (2026-11-16)
+
+
+### Code Refactoring 🖌
+
+* **contracts:** demolish extraction result and adapter mappings ([611b9cf](https://github.com/tks18/personal-finance-etl/commit/611b9cfd438e0e08ce4ac556283800f11a48a833))
+* **ingestion:** migrate coordinator and asset strategies ([928288e](https://github.com/tks18/personal-finance-etl/commit/928288e4360c0dba78c69a9123fd5f6bfcdbf8f2))
+* **pipeline:** migrate transformer and execution engine ([eb3d447](https://github.com/tks18/personal-finance-etl/commit/eb3d4471c6016f569ebfcbbb670e3f4fff52e72c))
+* **warehouse:** migrate bronze layer and delete get_full_dataset ([8c33534](https://github.com/tks18/personal-finance-etl/commit/8c3353447fdae623c0a1ae260c141aea92e68066))
+
+
+### Tests 🧪
+
+* **refactor:** migrate test suites and add architecture guard ([ebd7f6d](https://github.com/tks18/personal-finance-etl/commit/ebd7f6ddfd0c0ac21af392258611b3012d143f4b))
+
+
+### Docs 📃
+
+* **refactor:** complete phase 027 consumer migration ([5b8f640](https://github.com/tks18/personal-finance-etl/commit/5b8f64004ef3aa2b5ca785952764c0da2e522b55))
+
 ### [9.9.5](https://github.com/tks18/personal-finance-etl/compare/9.9.4...9.9.5) (2026-11-15)
 
 
