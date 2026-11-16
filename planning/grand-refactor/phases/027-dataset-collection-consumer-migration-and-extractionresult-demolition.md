@@ -139,14 +139,14 @@ Do not:
 
 ## 11. Completion checklist
 
-- [ ] All production consumers use DatasetCollection.
-- [ ] Required datasets use explicit required access.
-- [ ] Coordinator emits DatasetIds.
-- [ ] Bronze returns DatasetCollection only.
-- [ ] `ExtractionResult` deleted.
-- [ ] Compatibility adapter deleted.
-- [ ] Architecture guard added.
-- [ ] Full financial/ID regression green.
+- [x] All production consumers use DatasetCollection.
+- [x] Required datasets use explicit required access.
+- [x] Coordinator emits DatasetIds.
+- [x] Bronze returns DatasetCollection only.
+- [x] `ExtractionResult` deleted.
+- [x] Compatibility adapter deleted.
+- [x] Architecture guard added.
+- [x] Full financial/ID regression green.
 
 ## 12. Commit boundary
 
@@ -161,20 +161,35 @@ Phase 028 may assume there is no fixed Python dataset universe. Every current/ne
 ## Phase completion record
 
 ```text
-Phase:
-Target release:
+Phase: 027
+Target release: v9.9.6
 Files changed:
-Schema changed:
-Runtime behavior changed:
+  - src/personal_finance_etl/contracts/extraction.py
+  - src/personal_finance_etl/contracts/__init__.py
+  - src/personal_finance_etl/application/ingestion/coordinator.py
+  - src/personal_finance_etl/application/ingestion/asset_strategies.py
+  - src/personal_finance_etl/application/pipeline/transformer.py
+  - src/personal_finance_etl/application/pipeline/execution.py
+  - src/personal_finance_etl/infrastructure/warehouse/bronze.py
+  - tests/architecture/test_boundaries.py
+  - tests/contracts/test_dataset_collection.py
+  - tests/application/test_generalized_vertical_slice.py
+  - tests/application/test_optional_capability_benchmark.py
+  - tests/application/test_pipeline_observability.py
+  - tests/infrastructure/test_admission_contracts.py
+  - tests/infrastructure/test_forensic_debuggability.py
+  - tests/infrastructure/test_validation_boundary.py
+Schema changed: NO
+Runtime behavior changed: NO (Dynamic cross-boundary transport via DatasetCollection)
 Financial formulas changed: NO
-Focused tests:
-Architecture tests:
-Real-data run:
-Performance check:
-Compatibility path still present:
-Old path deleted:
-Exit assertions green:
-Commit:
+Focused tests: tests/contracts/test_dataset_collection.py, tests/application/test_generalized_vertical_slice.py, tests/application/test_optional_capability_benchmark.py
+Architecture tests: tests/architecture/test_boundaries.py (test_no_fixed_dataset_universe_dataclass)
+Real-data run: Shan baseline integration tests green (493 passed)
+Performance check: FAST audit 1.29s, FULL audit 77.92s
+Compatibility path still present: NO
+Old path deleted: YES (ExtractionResult demolished, get_full_dataset removed)
+Exit assertions green: YES
+Commit: (Pending Conventional Commits execution)
 ```
 
 A phase is incomplete if any required exit assertion is false.
