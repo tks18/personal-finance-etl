@@ -26,8 +26,9 @@ import polars as pl
 
 from personal_finance_etl.config.settings import Settings
 from personal_finance_etl.contracts.application import EngineStage
+from personal_finance_etl.contracts.dataset_collection import DatasetCollection
+from personal_finance_etl.contracts.datasets import DatasetId
 from personal_finance_etl.contracts.event_transport import EventQueue
-from personal_finance_etl.contracts.extraction import ExtractionResult
 from personal_finance_etl.contracts.lifecycle import FailureDomain
 from personal_finance_etl.contracts.observability import (
     DiagnosticSeverity,
@@ -35,7 +36,6 @@ from personal_finance_etl.contracts.observability import (
     EventCode,
     PresentationKind,
 )
-from personal_finance_etl.domain.household.transforms.common import get_column_mapping
 from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
 from personal_finance_etl.infrastructure.control_plane.hashing import generate_file_id
 from personal_finance_etl.infrastructure.observability import (
@@ -163,8 +163,8 @@ class DataExtractor:
 
     def _extract_config_tables(
         self, pending_files: dict[str, list[str]]
-    ) -> tuple[pl.DataFrame, dict[str, dict[str, str]], dict[str, pl.LazyFrame]]:
-        """Extract column master mappings and configuration CSV lazyframes."""
+    ) -> tuple[pl.DataFrame, dict[str, pl.LazyFrame]]:
+        """Extract column master frame and configuration CSV lazyframes."""
         column_master_bytes = self._get_bytes(self.cfg.COLUMN_MASTER_PATH)
         column_master_artifact_id = generate_file_id(self.cfg.COLUMN_MASTER_PATH)
         df_column_master = pl.read_csv(io.BytesIO(column_master_bytes)).with_columns(
@@ -172,14 +172,6 @@ class DataExtractor:
             pl.lit(os.path.dirname(self.cfg.COLUMN_MASTER_PATH)).alias("__folder_path__"),
             pl.lit(column_master_artifact_id).alias("artifact_id"),
         )
-        mappings = {
-            "category": get_column_mapping(df_column_master, "CATEGORY"),
-            "asset_group": get_column_mapping(df_column_master, "ASSETGROUP"),
-            "assets": get_column_mapping(df_column_master, "ASSETS"),
-            "currency": get_column_mapping(df_column_master, "CURRENCY"),
-            "inoutcome": get_column_mapping(df_column_master, "INOUTCOME"),
-            "opbal": get_column_mapping(df_column_master, "ZOPBAL"),
-        }
         config_frames = {
             "stg_mf_isin_mapping": self._read_config_csv_lazy(
                 pending_files, self.cfg.MF_ISIN_CSV_PATH, extract_stg_mf_isin_mapping, "mf_isin"
@@ -224,7 +216,7 @@ class DataExtractor:
             provider="CSV",
             rows=len(config_frames) + 1,
         )
-        return df_column_master, mappings, config_frames
+        return df_column_master, config_frames
 
     def _extract_excel_statements(
         self, pending_files: dict[str, list[str]]
@@ -299,35 +291,18 @@ class DataExtractor:
             "us_stock_transactions_raw": pl.LazyFrame(),
         }
 
-    def _validate_extracted_streams(self, result: ExtractionResult) -> None:
+    def _validate_extracted_streams(self, collection: DatasetCollection) -> None:
         """Execute Gatekeeper schema validation on active extracted streams."""
-        diagnostics.info("Running Gatekeeper Schema Validation on 18 active streams...")
+        diagnostics.info("Running Gatekeeper Schema Validation on active streams...")
         self.emitter.emit_event(
             event_code=EventCode.SCHEMA_VALIDATION,
-            message="Running Gatekeeper Schema Validation on 18 active streams...",
+            message="Running Gatekeeper Schema Validation on active streams...",
             presentation_kind=PresentationKind.STEP,
             progress=0.15,
             stage=EngineStage.EXTRACTING,
         )
 
-        validation_frames = [
-            result.zcategory,
-            result.assetgroup,
-            result.assets,
-            result.currency,
-            result.inoutcome,
-            result.stg_mf_isin_mapping,
-            result.stg_benchmark_mapping,
-            result.mf_market_data_raw,
-            result.mf_transactions_raw,
-            result.stock_market_data_raw,
-            result.stock_transactions_raw,
-            result.raw_opening_balances,
-            result.raw_benchmark_master,
-            result.raw_macro_parameters,
-            result.us_stock_transactions_raw,
-            result.currency_mapping_raw,
-        ]
+        validation_frames = [f for _, f in collection.items() if isinstance(f, pl.LazyFrame)]
 
         try:
             t0 = time.perf_counter()
@@ -339,11 +314,11 @@ class DataExtractor:
             pl.collect_all([lf.head(1) for lf in validation_frames])
             elapsed_ms = (time.perf_counter() - t0) * 1000.0
             diagnostics.info(
-                f"Gatekeeper validated 18 schemas with 0 violations in {elapsed_ms:.2f}ms."
+                f"Gatekeeper validated {len(validation_frames)} schemas with 0 violations in {elapsed_ms:.2f}ms."
             )
             self.emitter.emit_event(
                 event_code=EventCode.SCHEMA_VALIDATION,
-                message=f"Gatekeeper validated 18 schemas with 0 violations in {elapsed_ms:.2f}ms",
+                message=f"Gatekeeper validated {len(validation_frames)} schemas with 0 violations in {elapsed_ms:.2f}ms",
                 presentation_kind=PresentationKind.SUCCESS,
                 duration_ms=elapsed_ms,
                 stage=EngineStage.EXTRACTING,
@@ -367,8 +342,8 @@ class DataExtractor:
             )
             raise RuntimeError(f"Corrupted source data detected during extraction: {e}") from e
 
-    def run(self, actionable_files: dict[str, list[str]] | None = None) -> ExtractionResult:
-        """Extract and validate raw database, Excel, and CSV payloads into ExtractionResult.
+    def run(self, actionable_files: dict[str, list[str]] | None = None) -> DatasetCollection:
+        """Extract and validate raw database, Excel, and CSV payloads into DatasetCollection.
 
         Parameters
         ----------
@@ -377,8 +352,8 @@ class DataExtractor:
 
         Returns
         -------
-        ExtractionResult
-            Container of extracted lazy frames, raw payloads, and mapping tables.
+        DatasetCollection
+            Immutable container of extracted lazy frames and raw payloads keyed by canonical DatasetId.
         """
         diagnostics.info("Initializing extraction from Raw Store payloads...")
         self.emitter.emit_event(
@@ -391,29 +366,32 @@ class DataExtractor:
 
         pending_files = actionable_files or self.cp.artifacts.get_pending_files()
         zcat, agrp, asts, curr, inout = self._extract_sqlite_tables(pending_files)
-        df_column_master, mappings, config_frames = self._extract_config_tables(pending_files)
+        df_column_master, config_frames = self._extract_config_tables(pending_files)
         excel_frames = self._extract_excel_statements(pending_files)
 
-        result = ExtractionResult(
-            zcategory=zcat,
-            assetgroup=agrp,
-            assets=asts,
-            currency=curr,
-            inoutcome=inout,
-            mappings=mappings,
-            column_master=df_column_master,
-            stg_mf_isin_mapping=config_frames["stg_mf_isin_mapping"],
-            stg_benchmark_mapping=config_frames["stg_benchmark_mapping"],
-            raw_opening_balances=config_frames["raw_opening_balances"],
-            raw_benchmark_master=config_frames["raw_benchmark_master"],
-            raw_macro_parameters=config_frames["raw_macro_parameters"],
-            currency_mapping_raw=config_frames["currency_mapping_raw"],
-            mf_market_data_raw=excel_frames["mf_market_data_raw"],
-            mf_transactions_raw=excel_frames["mf_transactions_raw"],
-            stock_market_data_raw=excel_frames["stock_market_data_raw"],
-            stock_transactions_raw=excel_frames["stock_transactions_raw"],
-            us_stock_transactions_raw=excel_frames["us_stock_transactions_raw"],
+        collection = DatasetCollection(
+            frames={
+                DatasetId.HOUSEHOLD_ZCATEGORY: zcat,
+                DatasetId.HOUSEHOLD_ASSET_GROUP: agrp,
+                DatasetId.HOUSEHOLD_ASSETS: asts,
+                DatasetId.HOUSEHOLD_CURRENCY: curr,
+                DatasetId.HOUSEHOLD_INOUTCOME: inout,
+                DatasetId.COMMON_COLUMN_MASTER: df_column_master,
+                DatasetId.INVESTMENT_MF_ISIN_MAPPING: config_frames["stg_mf_isin_mapping"],
+                DatasetId.INVESTMENT_BENCHMARK_MAPPING: config_frames["stg_benchmark_mapping"],
+                DatasetId.HOUSEHOLD_OPENING_BALANCES: config_frames["raw_opening_balances"],
+                DatasetId.INVESTMENT_BENCHMARK_MASTER: config_frames["raw_benchmark_master"],
+                DatasetId.INVESTMENT_MACRO_PARAMETERS: config_frames["raw_macro_parameters"],
+                DatasetId.MARKET_CURRENCY_MAPPING: config_frames["currency_mapping_raw"],
+                DatasetId.MARKET_MF_HOLDINGS: excel_frames["mf_market_data_raw"],
+                DatasetId.INVESTMENT_MF_ORDERS: excel_frames["mf_transactions_raw"],
+                DatasetId.MARKET_STOCK_HOLDINGS: excel_frames["stock_market_data_raw"],
+                DatasetId.INVESTMENT_STOCK_ORDERS: excel_frames["stock_transactions_raw"],
+                DatasetId.INVESTMENT_US_STOCK_TRANSACTIONS: excel_frames[
+                    "us_stock_transactions_raw"
+                ],
+            }
         )
 
-        self._validate_extracted_streams(result)
-        return result
+        self._validate_extracted_streams(collection)
+        return collection
