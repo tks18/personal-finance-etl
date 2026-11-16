@@ -33,9 +33,9 @@ flowchart TD
     C --> D["4. Generate Implementation Plan Artifact"]
     D --> E["5. User Review & Approval"]
     E --> F["6. Incremental Code & Test Implementation"]
-    F --> G["7. Fast Quality Gate (uv run poe audit-fast)"]
+    F --> G["7. Fast Quality Gate (uv run poe audit:fast)"]
     G --> H["8. Architecture Boundary Gate (pytest tests/architecture/test_boundaries.py)"]
-    H --> I["9. Full Quality Gate Audit (uv run poe audit-full)"]
+    H --> I["9. Full Quality Gate Audit (uv run poe audit:full)"]
     I --> J["10. Partition Semantic Commits in .commit_overrides.json"]
     J --> K["11. Commit Preview (uv run poe commit:overrides:preview)"]
     K --> L["12. User Independent Verification & Final Confirmation"]
@@ -67,7 +67,7 @@ flowchart TD
    - Inline or deferred imports inside function, method, or class bodies are **strictly forbidden**. All imports must remain top-level.
    - All code must pass both Mypy (`disallow_untyped_defs = True`) and Pyright/Pylance without diagnostics.
 5. **Full Quality Gate Audit Before Commit:**
-   - At the conclusion of each phase or sub-phase prior to committing, execute `uv run poe audit-full`.
+   - At the conclusion of each phase or sub-phase prior to committing, execute `uv run poe audit:full`.
    - All 6 quality engines (Ruff Check, Ruff Format, Mypy Typecheck, Pyright Typecheck, Pylint Deep Analysis, Pytest Full Suite) must pass 100% green.
 
 ---
