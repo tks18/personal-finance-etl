@@ -143,7 +143,10 @@ def test_javascript_python_updater(repo_root: Path) -> None:
     console.log(JSON.stringify(results));
     """
 
-    res = subprocess.run([node_exe, "-e", test_script], capture_output=True, text=True, check=True)
+    res = subprocess.run(
+        [node_exe, "-"], input=test_script, capture_output=True, text=True, check=True
+    )
+    assert res.stdout.strip(), f"Node execution produced no output. Stderr: {res.stderr}"
     data = json.loads(res.stdout.strip())
 
     assert data["toPython"]["rc1"] == "10.0.0rc1"
@@ -188,7 +191,10 @@ def test_javascript_version_info_updater(repo_root: Path) -> None:
     console.log(JSON.stringify(results));
     """
 
-    res = subprocess.run([node_exe, "-e", test_script], capture_output=True, text=True, check=True)
+    res = subprocess.run(
+        [node_exe, "-"], input=test_script, capture_output=True, text=True, check=True
+    )
+    assert res.stdout.strip(), f"Node execution produced no output. Stderr: {res.stderr}"
     data = json.loads(res.stdout.strip())
 
     assert data["tuple_stable"] == "10, 0, 0, 0"
