@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [10.0.0-rc.2](https://github.com/tks18/personal-finance-etl/compare/10.0.0-rc.1...10.0.0-rc.2) (2026-11-16)
+
+
+### Features 🔥
+
+* **config:** declare source fields for opening balances dataset ([0f96834](https://github.com/tks18/personal-finance-etl/commit/0f96834af00c38367eaff759d790307999335710))
+* **validation:** canonical bronze schema for household opening balances ([9375778](https://github.com/tks18/personal-finance-etl/commit/937577893bd3b2e2d83800c840744646df4d08ca))
+
+
+### Code Refactoring 🖌
+
+* **ingestion:** generic csvextractor and opening balances cutover ([76fb0c7](https://github.com/tks18/personal-finance-etl/commit/76fb0c7fe7c915e873cef8f16881222ce062e7e2))
+
+
+### Tests 🧪
+
+* **ingestion:** certify external no-uid deterministic identity proof ([f87d91b](https://github.com/tks18/personal-finance-etl/commit/f87d91bc06623feaaec981fd40b1b1cc45830755))
+
+
+### Docs 📃
+
+* **refactor:** complete phase 029 household transaction proof ([2ae7adb](https://github.com/tks18/personal-finance-etl/commit/2ae7adba954e3af68883a67ae09714631b874acd))
+
 ## [10.0.0-rc.1](https://github.com/tks18/personal-finance-etl/compare/9.9.6...10.0.0-rc.1) (2026-11-16)
 
 
