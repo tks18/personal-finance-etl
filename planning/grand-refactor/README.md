@@ -61,7 +61,7 @@ If code evidence contradicts a phase, stop and amend the phase before changing t
 | 026 | Typed DatasetCollection introduction | v9.9.5 | [x] |
 | 027 | DatasetCollection consumer migration and ExtractionResult demolition | v9.9.6 | [x] |
 | 028 | Household reference evidence migration | v10.0.0-rc1 | [x] |
-| 029 | Household transaction evidence and no-UID identity proof | v10.0.0-rc2 | [ ] |
+| 029 | Household transaction evidence and no-UID identity proof | v10.0.0-rc2 | [x] |
 | 030 | Reference evidence migration and column-master retirement | v10.0.0-rc3 | [ ] |
 | 031 | Mutual-fund evidence migration | v10.0.0-rc4 | [ ] |
 | 032 | Domestic-stock evidence migration | v10.0.0-rc5 | [ ] |
