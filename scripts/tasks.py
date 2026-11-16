@@ -293,7 +293,7 @@ def release_pipeline():
     console = Console()
     console.print("\n[bold cyan]═════ Starting Automated Post-Release Pipeline ═════[/bold cyan]\n")
 
-    # Step 1: Git Push with follow-tags (triggers pre-push hook running audit-full and saving audit_report.json)
+    # Step 1: Git Push with follow-tags (triggers pre-push hook running audit:full and saving audit_report.json)
     console.print("[bold yellow]Step 1: Pushing commits and release tags to origin dev...[/bold yellow]")
     push_proc = subprocess.run(["git", "push", "--follow-tags", "origin", "dev"], check=False)
     if push_proc.returncode != 0:

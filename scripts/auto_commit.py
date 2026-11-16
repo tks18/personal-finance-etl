@@ -553,7 +553,7 @@ def run_upfront_quality_gate() -> bool:
     """
     console.print("\n[bold cyan]Running Upfront Quality Gate Verification (Ruff + Mypy)...[/bold cyan]")
     proc = subprocess.run(
-        ["uv", "run", "poe", "audit-fast"],
+        ["uv", "run", "poe", "audit:fast"],
         capture_output=True,
         text=True,
         encoding="utf-8",
