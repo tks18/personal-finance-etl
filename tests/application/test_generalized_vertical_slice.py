@@ -30,7 +30,6 @@ Does not own
 
 from __future__ import annotations
 
-import dataclasses
 import sqlite3
 from collections.abc import Iterator, Sequence
 from pathlib import Path
@@ -54,9 +53,9 @@ from personal_finance_etl.config.settings import Settings
 from personal_finance_etl.config.sources.loader import (
     get_shan_baseline_source_configuration,
 )
+from personal_finance_etl.contracts.dataset_collection import DatasetCollection
 from personal_finance_etl.contracts.datasets import DatasetId
 from personal_finance_etl.contracts.event_transport import NullEventQueue
-from personal_finance_etl.contracts.extraction import ExtractionResult
 from personal_finance_etl.contracts.validation import (
     ValidationError,
     ValidationStage,
@@ -1186,8 +1185,8 @@ def test_full_shan_pipeline_financial_equivalence(
     isolated_control_plane.artifacts.ingest_binaries(actionable_all)
     extracted = executor.extract(isolated_control_plane, actionable_all)
 
-    # Assert legacy extraction returned dormant empty LazyFrame for zcategory
-    assert extracted.zcategory.collect().height == 0
+    # Assert extraction returned dormant empty LazyFrame for zcategory
+    assert extracted.require_lazy(DatasetId.HOUSEHOLD_ZCATEGORY).collect().height == 0
 
     # Run bronze phase
     run_id = isolated_control_plane.runs.start_run()
@@ -1200,9 +1199,10 @@ def test_full_shan_pipeline_financial_equivalence(
     )
 
     # Assert bronze layer loaded full dataset including zcategory from bronze.r_SQLite_ZCategory
-    assert full_extracted.zcategory.collect().height == 4
-    assert "UID" in full_extracted.zcategory.collect().columns
-    assert "CATEGORY_NAME" in full_extracted.zcategory.collect().columns
+    zcat_collected = full_extracted.require_lazy(DatasetId.HOUSEHOLD_ZCATEGORY).collect()
+    assert zcat_collected.height == 4
+    assert "UID" in zcat_collected.columns
+    assert "CATEGORY_NAME" in zcat_collected.columns
 
     # Assert Pre-Bronze table exists and populated
     pb_contract = get_pre_bronze_contract_by_dataset_id(DatasetId.HOUSEHOLD_ZCATEGORY)
@@ -1264,12 +1264,13 @@ def test_protected_ids_unchanged(
     )
 
     # Check Bronze UIDs
-    bronze_uids = full_extracted.zcategory.collect()["UID"].to_list()
+    zcategory_lazy = full_extracted.require_lazy(DatasetId.HOUSEHOLD_ZCATEGORY)
+    bronze_uids = zcategory_lazy.collect()["UID"].to_list()
     for uid in raw_uids:
         assert uid in bronze_uids
 
     # Check Silver Category transforms
-    inc_cat = transform_d_income_category(full_extracted.zcategory, {}).collect()
+    inc_cat = transform_d_income_category(zcategory_lazy, {}).collect()
     assert "CAT_INCOME_SALARY" in inc_cat["UID"].to_list()
 
 
@@ -1283,7 +1284,7 @@ def test_selected_legacy_route_dormant(
     db_file = _create_sqlite_db(tmp_path / "household" / "dormant.sqlite")
     norm_path = str(db_file).replace("\\", "/")
 
-    # 1. ExtractionResult.zcategory from DataExtractor is empty
+    # 1. HOUSEHOLD_ZCATEGORY stream from DataExtractor is empty
     isolated_control_plane.artifacts.ingest_binaries({"sqlite_source": [norm_path]})
     extractor = DataExtractor(
         cfg=isolated_settings,
@@ -1304,9 +1305,9 @@ def test_selected_legacy_route_dormant(
     meta = MetaLayer(isolated_duckdb_manager, isolated_settings, None)
     bronze = BronzeLayer(isolated_duckdb_manager, isolated_control_plane, meta)
     # Even if extracted_data had zcategory populated, load skips it
-    extraction_fields: dict[str, Any] = {f.name: None for f in dataclasses.fields(ExtractionResult)}
-    extraction_fields["zcategory"] = pl.DataFrame({"dummy": [1]}).lazy()
-    mock_extracted = ExtractionResult(**extraction_fields)
+    mock_extracted = DatasetCollection(
+        frames={DatasetId.HOUSEHOLD_ZCATEGORY: pl.DataFrame({"dummy": [1]}).lazy()}
+    )
     # Should not raise and should not write r_SQLite_ZCategory
     bronze.load(mock_extracted, {"sqlite_source": [norm_path]})
     check = _fetch_scalar(

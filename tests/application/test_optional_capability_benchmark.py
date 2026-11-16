@@ -40,9 +40,9 @@ from personal_finance_etl.application.pipeline.transformer import Transformation
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
 from personal_finance_etl.contracts.capabilities import CapabilityId
+from personal_finance_etl.contracts.dataset_collection import DatasetCollection
 from personal_finance_etl.contracts.datasets import DatasetId
 from personal_finance_etl.contracts.event_transport import NullEventQueue
-from personal_finance_etl.contracts.extraction import ExtractionResult
 from personal_finance_etl.contracts.observability import PresentationKind
 from personal_finance_etl.infrastructure.control_plane import ControlPlane
 from personal_finance_etl.infrastructure.observability import ObservabilityEmitter
@@ -203,30 +203,26 @@ def test_transformation_dag_respects_disabled_benchmark_plan(
     )
 
     lf = pl.DataFrame().lazy()
-    extracted = ExtractionResult(
-        zcategory=lf,
-        assetgroup=lf,
-        assets=lf,
-        currency=lf,
-        inoutcome=lf,
-        mappings={
-            "category": {},
-            "asset_group": {},
-            "assets": {},
-            "currency": {},
-        },
-        stg_mf_isin_mapping=lf,
-        stg_benchmark_mapping=lf,
-        mf_market_data_raw=lf,
-        mf_transactions_raw=lf,
-        stock_market_data_raw=lf,
-        stock_transactions_raw=lf,
-        raw_opening_balances=lf,
-        raw_benchmark_master=lf,
-        raw_macro_parameters=lf,
-        column_master=pl.DataFrame(),
-        us_stock_transactions_raw=lf,
-        currency_mapping_raw=lf,
+    extracted = DatasetCollection(
+        frames={
+            DatasetId.HOUSEHOLD_ZCATEGORY: lf,
+            DatasetId.HOUSEHOLD_ASSET_GROUP: lf,
+            DatasetId.HOUSEHOLD_ASSETS: lf,
+            DatasetId.HOUSEHOLD_CURRENCY: lf,
+            DatasetId.HOUSEHOLD_INOUTCOME: lf,
+            DatasetId.INVESTMENT_MF_ISIN_MAPPING: lf,
+            DatasetId.INVESTMENT_BENCHMARK_MAPPING: lf,
+            DatasetId.MARKET_MF_HOLDINGS: lf,
+            DatasetId.INVESTMENT_MF_ORDERS: lf,
+            DatasetId.MARKET_STOCK_HOLDINGS: lf,
+            DatasetId.INVESTMENT_STOCK_ORDERS: lf,
+            DatasetId.HOUSEHOLD_OPENING_BALANCES: lf,
+            DatasetId.INVESTMENT_BENCHMARK_MASTER: lf,
+            DatasetId.INVESTMENT_MACRO_PARAMETERS: lf,
+            DatasetId.COMMON_COLUMN_MASTER: pl.DataFrame(),
+            DatasetId.INVESTMENT_US_STOCK_TRANSACTIONS: lf,
+            DatasetId.MARKET_CURRENCY_MAPPING: lf,
+        }
     )
 
     dims = transformer._transform_dimensions(extracted)
@@ -448,3 +444,33 @@ def test_quant_engine_active_outputs_invariant_to_benchmark_presence(
     recon_enabled = res_enabled["df_f_investment_reconciliation_events"]
     recon_disabled = res_disabled["df_f_investment_reconciliation_events"]
     assert recon_enabled.equals(recon_disabled)
+
+
+def test_transformation_dag_resolve_mappings() -> None:
+    """Verify TransformationDAG._resolve_mappings extracts canonical uppercase table mappings."""
+    cm_df = pl.DataFrame(
+        {
+            "TABLE_NAME": [
+                "CATEGORY",
+                "ASSETGROUP",
+                "ASSETS",
+                "CURRENCY",
+                "INOUTCOME",
+                "INOUTCOME",
+                "ZOPBAL",
+            ],
+            "OLD_COLUMN": ["uid", "uid", "uid", "uid", "ZMONEY", "uid", "ZAMOUNT"],
+            "NEW_COLUMN": ["UID", "UID", "UID", "UID", "BASE_AMOUNT", "UID", "ZAMOUNT"],
+        }
+    )
+    collection = DatasetCollection(frames={DatasetId.COMMON_COLUMN_MASTER: cm_df})
+    dag = TransformationDAG(Settings(), NullEventQueue())
+    mappings = dag._resolve_mappings(collection)  # pyright: ignore[reportPrivateUsage]
+    assert "inoutcome" in mappings
+    assert mappings["inoutcome"]["ZMONEY"] == "BASE_AMOUNT"
+    assert mappings["inoutcome"]["uid"] == "UID"
+    assert mappings["opbal"]["ZAMOUNT"] == "ZAMOUNT"
+    assert mappings["category"]["uid"] == "UID"
+    assert mappings["asset_group"]["uid"] == "UID"
+    assert mappings["assets"]["uid"] == "UID"
+    assert mappings["currency"]["uid"] == "UID"

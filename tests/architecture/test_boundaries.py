@@ -374,3 +374,47 @@ def test_pandera_import_boundary() -> None:
         "Pandera must strictly be imported ONLY within infrastructure.validation:\n"
         + "\n".join(violations)
     )
+
+
+def test_no_fixed_dataset_universe_dataclass() -> None:
+    """Verify that ExtractionResult is abolished and no fixed dataset dataclass exists in contracts.
+
+    Governing Invariant
+    -------------------
+    Phase 027 permanently demolishes ExtractionResult and prohibits fixed-field dataset
+    universe dataclasses in contracts. All cross-boundary tabular collections must use
+    contracts.dataset_collection.DatasetCollection.
+    """
+    import importlib
+
+    import personal_finance_etl.contracts as contracts_pkg
+
+    # 1. ExtractionResult must not be in contracts package __all__ or namespace
+    assert not hasattr(contracts_pkg, "ExtractionResult")
+    assert "ExtractionResult" not in getattr(contracts_pkg, "__all__", [])
+
+    # 2. extraction module must not export ExtractionResult or legacy mapping dicts
+    extraction_mod = importlib.import_module("personal_finance_etl.contracts.extraction")
+    assert not hasattr(extraction_mod, "ExtractionResult")
+    assert not hasattr(extraction_mod, "EXTRACTION_ATTRIBUTE_TO_DATASET_ID")
+    assert not hasattr(extraction_mod, "DATASET_ID_TO_EXTRACTION_ATTRIBUTE")
+
+    # 3. AST guard: contracts directory must contain no class named ExtractionResult
+    contracts_dir = SRC_ROOT / "contracts"
+    legacy_field_fingerprints = {"zcategory", "mf_market_data_raw", "stock_transactions_raw"}
+    for py_file in contracts_dir.rglob("*.py"):
+        tree = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(py_file))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ClassDef):
+                assert node.name != "ExtractionResult", (
+                    f"Forbidden class 'ExtractionResult' found in {py_file.name}"
+                )
+                # Verify no dataclass defines the old static dataset universe fields
+                field_names = {
+                    stmt.target.id
+                    for stmt in node.body
+                    if isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name)
+                }
+                assert not legacy_field_fingerprints.issubset(field_names), (
+                    f"Forbidden fixed dataset universe dataclass found in {py_file.name}: {node.name}"
+                )
