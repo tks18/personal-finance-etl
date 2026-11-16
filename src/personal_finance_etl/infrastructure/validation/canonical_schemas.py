@@ -7,6 +7,7 @@ Owns
 - CANONICAL_BRONZE_HOUSEHOLD_ASSETS_SCHEMA: Immutable pandera.polars.DataFrameSchema for DatasetId.HOUSEHOLD_ASSETS.
 - CANONICAL_BRONZE_HOUSEHOLD_CURRENCY_SCHEMA: Immutable pandera.polars.DataFrameSchema for DatasetId.HOUSEHOLD_CURRENCY.
 - CANONICAL_BRONZE_HOUSEHOLD_INOUTCOME_SCHEMA: Immutable pandera.polars.DataFrameSchema for DatasetId.HOUSEHOLD_INOUTCOME.
+- CANONICAL_BRONZE_HOUSEHOLD_OPENING_BALANCES_SCHEMA: Immutable pandera.polars.DataFrameSchema for DatasetId.HOUSEHOLD_OPENING_BALANCES.
 - CANONICAL_BRONZE_SCHEMAS: Registry mapping DatasetIds to authoritative canonical Bronze schemas.
 - get_canonical_bronze_schema: Safe accessor for retrieving the canonical Bronze schema for a given DatasetId.
 - has_canonical_bronze_schema: Inspection predicate determining whether a DatasetId has a registered canonical schema.
@@ -30,6 +31,7 @@ __all__ = [
     "CANONICAL_BRONZE_HOUSEHOLD_ASSET_GROUP_SCHEMA",
     "CANONICAL_BRONZE_HOUSEHOLD_CURRENCY_SCHEMA",
     "CANONICAL_BRONZE_HOUSEHOLD_INOUTCOME_SCHEMA",
+    "CANONICAL_BRONZE_HOUSEHOLD_OPENING_BALANCES_SCHEMA",
     "CANONICAL_BRONZE_HOUSEHOLD_ZCATEGORY_SCHEMA",
     "CANONICAL_BRONZE_SCHEMAS",
     "get_canonical_bronze_schema",
@@ -149,40 +151,50 @@ CANONICAL_BRONZE_HOUSEHOLD_CURRENCY_SCHEMA: pa.DataFrameSchema = pa.DataFrameSch
 CANONICAL_BRONZE_HOUSEHOLD_INOUTCOME_SCHEMA: pa.DataFrameSchema = pa.DataFrameSchema(
     columns={
         "UID": pa.Column(pl.String, nullable=False, unique=True, name="UID"),
-        "ASSET_ID": pa.Column(pl.String, nullable=False, name="ASSET_ID"),
-        "TIMESTAMP": pa.Column(pl.String, nullable=False, name="TIMESTAMP"),
         "TRANSACTION_TYPE": pa.Column(pl.String, nullable=False, name="TRANSACTION_TYPE"),
         "BASE_AMOUNT": pa.Column(pl.String, nullable=False, name="BASE_AMOUNT"),
-        "S_NO": pa.Column(pl.Int64, nullable=True, name="S_NO"),
-        "CARDDIVIDMONTH": pa.Column(pl.String, nullable=True, name="CARDDIVIDMONTH"),
-        "CATEGORY_ID": pa.Column(pl.String, nullable=True, name="CATEGORY_ID"),
-        "TO_ASSET_ID": pa.Column(pl.String, nullable=True, name="TO_ASSET_ID"),
-        "DESCRIPTION": pa.Column(pl.String, nullable=True, name="DESCRIPTION"),
-        "DATE": pa.Column(pl.String, nullable=True, name="DATE"),
-        "TIME": pa.Column(pl.String, nullable=True, name="TIME"),
-        "PAID": pa.Column(pl.String, nullable=True, name="PAID"),
-        "TRANSFER_UID": pa.Column(pl.String, nullable=True, name="TRANSFER_UID"),
-        "FEES_NOTES": pa.Column(pl.String, nullable=True, name="FEES_NOTES"),
-        "SMS_RDATE": pa.Column(pl.String, nullable=True, name="SMS_RDATE"),
-        "LOCAL_AMOUNT": pa.Column(pl.String, nullable=True, name="LOCAL_AMOUNT"),
-        "ASSET_NAME": pa.Column(pl.String, nullable=True, name="ASSET_NAME"),
-        "CATEGORY_NAME": pa.Column(pl.String, nullable=True, name="CATEGORY_NAME"),
-        "CARD_DIVIDE_ID": pa.Column(pl.String, nullable=True, name="CARD_DIVIDE_ID"),
-        "CARD_DIVIDE_MONTH_STR": pa.Column(pl.String, nullable=True, name="CARD_DIVIDE_MONTH_STR"),
-        "MARK": pa.Column(pl.Int64, nullable=True, name="MARK"),
-        "TRANSFER_FEES": pa.Column(pl.String, nullable=True, name="TRANSFER_FEES"),
-        "SMS_ORIGIN": pa.Column(pl.String, nullable=True, name="SMS_ORIGIN"),
-        "SMS_PARSE_CONTENT": pa.Column(pl.String, nullable=True, name="SMS_PARSE_CONTENT"),
-        "IS_DEL": pa.Column(pl.Int64, nullable=True, name="IS_DEL"),
-        "UPDATED_TIME": pa.Column(pl.Int64, nullable=True, name="UPDATED_TIME"),
-        "CURRENCY_ID": pa.Column(pl.String, nullable=True, name="CURRENCY_ID"),
-        "AMOUNT_ACCOUNT": pa.Column(pl.Float64, nullable=True, name="AMOUNT_ACCOUNT"),
-        "LAT": pa.Column(pl.Float64, nullable=True, name="LAT"),
-        "LONG": pa.Column(pl.Float64, nullable=True, name="LONG"),
-        "GSTD": pa.Column(pl.String, nullable=True, name="GSTD"),
-        "IS_SYNCED": pa.Column(pl.Int64, nullable=True, name="IS_SYNCED"),
-        "SYNC_TIME": pa.Column(pl.Float64, nullable=True, name="SYNC_TIME"),
-        "SYNC_VERSION": pa.Column(pl.Int64, nullable=True, name="SYNC_VERSION"),
+        "ASSET_ID": pa.Column(pl.String, nullable=True, required=False, name="ASSET_ID"),
+        "TIMESTAMP": pa.Column(pl.String, nullable=True, required=False, name="TIMESTAMP"),
+        "S_NO": pa.Column(pl.Int64, nullable=True, required=False, name="S_NO"),
+        "CARDDIVIDMONTH": pa.Column(
+            pl.String, nullable=True, required=False, name="CARDDIVIDMONTH"
+        ),
+        "CATEGORY_ID": pa.Column(pl.String, nullable=True, required=False, name="CATEGORY_ID"),
+        "TO_ASSET_ID": pa.Column(pl.String, nullable=True, required=False, name="TO_ASSET_ID"),
+        "DESCRIPTION": pa.Column(pl.String, nullable=True, required=False, name="DESCRIPTION"),
+        "DATE": pa.Column(pl.String, nullable=True, required=False, name="DATE"),
+        "TIME": pa.Column(pl.String, nullable=True, required=False, name="TIME"),
+        "PAID": pa.Column(pl.String, nullable=True, required=False, name="PAID"),
+        "TRANSFER_UID": pa.Column(pl.String, nullable=True, required=False, name="TRANSFER_UID"),
+        "FEES_NOTES": pa.Column(pl.String, nullable=True, required=False, name="FEES_NOTES"),
+        "SMS_RDATE": pa.Column(pl.String, nullable=True, required=False, name="SMS_RDATE"),
+        "LOCAL_AMOUNT": pa.Column(pl.String, nullable=True, required=False, name="LOCAL_AMOUNT"),
+        "ASSET_NAME": pa.Column(pl.String, nullable=True, required=False, name="ASSET_NAME"),
+        "CATEGORY_NAME": pa.Column(pl.String, nullable=True, required=False, name="CATEGORY_NAME"),
+        "CARD_DIVIDE_ID": pa.Column(
+            pl.String, nullable=True, required=False, name="CARD_DIVIDE_ID"
+        ),
+        "CARD_DIVIDE_MONTH_STR": pa.Column(
+            pl.String, nullable=True, required=False, name="CARD_DIVIDE_MONTH_STR"
+        ),
+        "MARK": pa.Column(pl.Int64, nullable=True, required=False, name="MARK"),
+        "TRANSFER_FEES": pa.Column(pl.String, nullable=True, required=False, name="TRANSFER_FEES"),
+        "SMS_ORIGIN": pa.Column(pl.String, nullable=True, required=False, name="SMS_ORIGIN"),
+        "SMS_PARSE_CONTENT": pa.Column(
+            pl.String, nullable=True, required=False, name="SMS_PARSE_CONTENT"
+        ),
+        "IS_DEL": pa.Column(pl.Int64, nullable=True, required=False, name="IS_DEL"),
+        "UPDATED_TIME": pa.Column(pl.Int64, nullable=True, required=False, name="UPDATED_TIME"),
+        "CURRENCY_ID": pa.Column(pl.String, nullable=True, required=False, name="CURRENCY_ID"),
+        "AMOUNT_ACCOUNT": pa.Column(
+            pl.Float64, nullable=True, required=False, name="AMOUNT_ACCOUNT"
+        ),
+        "LAT": pa.Column(pl.Float64, nullable=True, required=False, name="LAT"),
+        "LONG": pa.Column(pl.Float64, nullable=True, required=False, name="LONG"),
+        "GSTD": pa.Column(pl.String, nullable=True, required=False, name="GSTD"),
+        "IS_SYNCED": pa.Column(pl.Int64, nullable=True, required=False, name="IS_SYNCED"),
+        "SYNC_TIME": pa.Column(pl.Float64, nullable=True, required=False, name="SYNC_TIME"),
+        "SYNC_VERSION": pa.Column(pl.Int64, nullable=True, required=False, name="SYNC_VERSION"),
         "TRANSACTION_DATE": pa.Column(
             pl.String, nullable=True, required=False, name="TRANSACTION_DATE"
         ),
@@ -199,12 +211,94 @@ CANONICAL_BRONZE_HOUSEHOLD_INOUTCOME_SCHEMA: pa.DataFrameSchema = pa.DataFrameSc
     name="canonical_bronze_household_inoutcome",
 )
 
+CANONICAL_BRONZE_HOUSEHOLD_OPENING_BALANCES_SCHEMA: pa.DataFrameSchema = pa.DataFrameSchema(
+    columns={
+        "UID": pa.Column(pl.String, nullable=False, unique=True, name="UID"),
+        "Z_PK": pa.Column(pl.Int64, nullable=False, unique=True, name="Z_PK"),
+        "Z_ENT": pa.Column(pl.Int64, nullable=True, required=False, name="Z_ENT"),
+        "Z_OPT": pa.Column(pl.Int64, nullable=True, required=False, name="Z_OPT"),
+        "ZASSET_GROUP": pa.Column(pl.Int64, nullable=True, required=False, name="ZASSET_GROUP"),
+        "ZASSET_ID": pa.Column(pl.Int64, nullable=True, required=False, name="ZASSET_ID"),
+        "ZCATEGORY_ID": pa.Column(pl.Int64, nullable=True, required=False, name="ZCATEGORY_ID"),
+        "ZOPPOSITEAID": pa.Column(pl.Int64, nullable=True, required=False, name="ZOPPOSITEAID"),
+        "ZAID": pa.Column(pl.Int64, nullable=True, required=False, name="ZAID"),
+        "ZCATEGORYID": pa.Column(pl.Int64, nullable=True, required=False, name="ZCATEGORYID"),
+        "ZCURRENCYID": pa.Column(pl.Int64, nullable=True, required=False, name="ZCURRENCYID"),
+        "ZFEE_ID": pa.Column(pl.Int64, nullable=True, required=False, name="ZFEE_ID"),
+        "ZISDEL": pa.Column(pl.Int64, nullable=True, required=False, name="ZISDEL"),
+        "ZISSYNCED": pa.Column(pl.Int64, nullable=True, required=False, name="ZISSYNCED"),
+        "ZMARK": pa.Column(pl.Int64, nullable=True, required=False, name="ZMARK"),
+        "ZSYNCCHECK": pa.Column(pl.Int64, nullable=True, required=False, name="ZSYNCCHECK"),
+        "ZSYNCVERSION": pa.Column(pl.Int64, nullable=True, required=False, name="ZSYNCVERSION"),
+        "ZUTIME": pa.Column(pl.Float64, nullable=True, required=False, name="ZUTIME"),
+        "ZDATE": pa.Column(pl.Float64, nullable=True, required=False, name="ZDATE"),
+        "ZAMOUNT": pa.Column(pl.Float64, nullable=True, required=False, name="ZAMOUNT"),
+        "ZAMOUNTACCOUNT": pa.Column(
+            pl.Float64, nullable=True, required=False, name="ZAMOUNTACCOUNT"
+        ),
+        "ZAMOUNTSUB": pa.Column(pl.Float64, nullable=True, required=False, name="ZAMOUNTSUB"),
+        "ZSYNCTIME": pa.Column(pl.Float64, nullable=True, required=False, name="ZSYNCTIME"),
+        "ZASSET_NAME": pa.Column(pl.String, nullable=True, required=False, name="ZASSET_NAME"),
+        "ZASSET_NIC": pa.Column(pl.String, nullable=True, required=False, name="ZASSET_NIC"),
+        "ZCARDDIVIDID": pa.Column(pl.String, nullable=True, required=False, name="ZCARDDIVIDID"),
+        "ZCATEGORY_NAME": pa.Column(
+            pl.String, nullable=True, required=False, name="ZCATEGORY_NAME"
+        ),
+        "ZCONTENT": pa.Column(pl.String, nullable=True, required=False, name="ZCONTENT"),
+        "ZDO_TYPE": pa.Column(pl.String, nullable=True, required=False, name="ZDO_TYPE"),
+        "ZMONEY": pa.Column(pl.String, nullable=True, required=False, name="ZMONEY"),
+        "ZASSETUID": pa.Column(pl.String, nullable=True, required=False, name="ZASSETUID"),
+        "ZCARDDIVIDEMONTH": pa.Column(
+            pl.String, nullable=True, required=False, name="ZCARDDIVIDEMONTH"
+        ),
+        "ZCARDDIVIDEMONTHSTR": pa.Column(
+            pl.String, nullable=True, required=False, name="ZCARDDIVIDEMONTHSTR"
+        ),
+        "ZCARDDIVIDEUID": pa.Column(
+            pl.String, nullable=True, required=False, name="ZCARDDIVIDEUID"
+        ),
+        "ZCARDTIMESTAMPSTR": pa.Column(
+            pl.String, nullable=True, required=False, name="ZCARDTIMESTAMPSTR"
+        ),
+        "ZCATEGORYUID": pa.Column(pl.String, nullable=True, required=False, name="ZCATEGORYUID"),
+        "ZCURRENCY": pa.Column(pl.String, nullable=True, required=False, name="ZCURRENCY"),
+        "ZCURRENCYUID": pa.Column(pl.String, nullable=True, required=False, name="ZCURRENCYUID"),
+        "ZGSTD": pa.Column(pl.String, nullable=True, required=False, name="ZGSTD"),
+        "ZLAT": pa.Column(pl.Float64, nullable=True, required=False, name="ZLAT"),
+        "ZLNG": pa.Column(pl.Float64, nullable=True, required=False, name="ZLNG"),
+        "ZMEMO": pa.Column(pl.String, nullable=True, required=False, name="ZMEMO"),
+        "ZPAID": pa.Column(pl.String, nullable=True, required=False, name="ZPAID"),
+        "ZSMSORIGINE": pa.Column(pl.String, nullable=True, required=False, name="ZSMSORIGINE"),
+        "ZSMSPARSECONTENTS": pa.Column(
+            pl.String, nullable=True, required=False, name="ZSMSPARSECONTENTS"
+        ),
+        "ZSMSRDATE": pa.Column(pl.String, nullable=True, required=False, name="ZSMSRDATE"),
+        "ZTOASSETUID": pa.Column(pl.String, nullable=True, required=False, name="ZTOASSETUID"),
+        "ZTXDATESTR": pa.Column(pl.String, nullable=True, required=False, name="ZTXDATESTR"),
+        "ZTXUIDFEE": pa.Column(pl.String, nullable=True, required=False, name="ZTXUIDFEE"),
+        "ZTXUIDTRANS": pa.Column(pl.String, nullable=True, required=False, name="ZTXUIDTRANS"),
+        "ZUID": pa.Column(pl.String, nullable=True, required=False, name="ZUID"),
+        "ZWTIME": pa.Column(pl.String, nullable=True, required=False, name="ZWTIME"),
+        "ZZDATA1": pa.Column(pl.String, nullable=True, required=False, name="ZZDATA1"),
+        "ZZDATA2": pa.Column(pl.String, nullable=True, required=False, name="ZZDATA2"),
+        "Account_Name": pa.Column(pl.String, nullable=True, required=False, name="Account_Name"),
+        "Balance": pa.Column(pl.Float64, nullable=True, required=False, name="Balance"),
+        "Balance_Date": pa.Column(pl.String, nullable=True, required=False, name="Balance_Date"),
+        "Currency": pa.Column(pl.String, nullable=True, required=False, name="Currency"),
+        "ORDER_NUM": pa.Column(pl.Int64, nullable=True, required=False, name="ORDER_NUM"),
+        "artifact_id": pa.Column(pl.String, nullable=False, required=False, name="artifact_id"),
+    },
+    strict=False,
+    name="canonical_bronze_household_opening_balances",
+)
+
 CANONICAL_BRONZE_SCHEMAS: dict[DatasetId, pa.DataFrameSchema] = {
     DatasetId.HOUSEHOLD_ZCATEGORY: CANONICAL_BRONZE_HOUSEHOLD_ZCATEGORY_SCHEMA,
     DatasetId.HOUSEHOLD_ASSET_GROUP: CANONICAL_BRONZE_HOUSEHOLD_ASSET_GROUP_SCHEMA,
     DatasetId.HOUSEHOLD_ASSETS: CANONICAL_BRONZE_HOUSEHOLD_ASSETS_SCHEMA,
     DatasetId.HOUSEHOLD_CURRENCY: CANONICAL_BRONZE_HOUSEHOLD_CURRENCY_SCHEMA,
     DatasetId.HOUSEHOLD_INOUTCOME: CANONICAL_BRONZE_HOUSEHOLD_INOUTCOME_SCHEMA,
+    DatasetId.HOUSEHOLD_OPENING_BALANCES: CANONICAL_BRONZE_HOUSEHOLD_OPENING_BALANCES_SCHEMA,
 }
 
 
