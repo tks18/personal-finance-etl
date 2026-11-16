@@ -19,7 +19,7 @@ Quality verification is split into fast and full tiers:
 ### Tier 1 — Fast Audit (< 2s)
 Run frequently during local development:
 ```powershell
-uv run poe audit-fast
+uv run poe audit:fast
 ```
 - **Ruff Lint:** Fast syntax and rule check.
 - **Ruff Format Check:** Checks 100-character line lengths and style.
@@ -28,7 +28,7 @@ uv run poe audit-fast
 ### Tier 1 Auto-Fix
 Automatically correct safe Ruff formatting and import issues:
 ```powershell
-uv run poe audit-fast:fix
+uv run poe audit:fix
 ```
 
 ### Tier 2 — Full Audit (~30-45s)
@@ -36,7 +36,7 @@ Mandatory before creating pull requests or releasing:
 ```powershell
 uv run poe audit
 # or full suite with structured exports:
-uv run poe audit-full
+uv run poe audit:full
 ```
 Runs 6 verification engines:
 1. `ruff check src`
@@ -87,7 +87,7 @@ Runs 6 verification engines:
   ```
 - Run AST docstring verification:
   ```powershell
-  uv run poe audit-docs
+  uv run poe audit:docs
   ```
 
 ### Mypy Strict Mode in Python 3.13

@@ -86,7 +86,7 @@ uv run poe commit:overrides
 ## 4. Quality Gate Integration & Atomic Bypass
 
 1. **Pre-Commit Verification:**
-   Before staging files, `auto_commit.py` automatically runs the Fast Quality Gate (`uv run poe audit-fast`). If lint or type checks fail, the commit process halts immediately.
+   Before staging files, `auto_commit.py` automatically runs the Fast Quality Gate (`uv run poe audit:fast`). If lint or type checks fail, the commit process halts immediately.
 2. **Atomic `--no-verify` Bypass:**
    Because `auto_commit.py` already verified the full working tree upfront, it commits individual atomic groups using `--no-verify`. This prevents repetitive, blocking Git hooks from running on partial slices of unstaged files.
 

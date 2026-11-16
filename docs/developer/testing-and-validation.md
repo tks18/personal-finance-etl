@@ -597,14 +597,14 @@ The tracked pre-commit hook runs the fast tier:
 
 ```sh
 # .githooks/pre-commit
-uv run poe audit-fast
+uv run poe audit:fast
 ```
 
 The tracked pre-push hook runs the full tier:
 
 ```sh
 # .githooks/pre-push
-uv run poe audit-full
+uv run poe audit:full
 ```
 
 The distinction is intentional.

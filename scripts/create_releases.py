@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 # ruff: noqa
-# type: ignore
 # pylint: skip-file
 # flake8: noqa
 """Module to parse CHANGELOG.md and publish GitHub releases."""
@@ -57,7 +56,7 @@ def parse_changelog(filepath: Path) -> list[dict[str, str]]:
     )
 
     matches = list(header_pattern.finditer(content))
-    releases = []
+    releases: list[dict[str, str]] = []
 
     for i, match in enumerate(matches):
         version = (match.group("ver_bracket") or match.group("ver_plain")).strip()
@@ -80,19 +79,47 @@ def resolve_git_tag(version: str, existing_tags: set[str]) -> str | None:
     return None
 
 
-def print_release_preview(tag: str, title: str, body: str, index: int, total: int):
+def is_prerelease(version_or_tag: str) -> bool:
+    """Check if version or tag indicates a pre-release (alpha, beta, rc, dev)."""
+    clean = version_or_tag.lstrip("v").strip()
+    return bool(
+        re.search(
+            r"-(rc|alpha|beta|dev|preview|pre)\.?\d*|(?<=\d)(rc|a|b|c|dev)\d+",
+            clean,
+            re.IGNORECASE,
+        )
+    )
+
+
+def format_release_title(version_str: str) -> str:
+    """Format release title with proper Pre-Release/Release prefix."""
+    clean = version_str.lstrip("v")
+    prefix = "Pre-Release" if is_prerelease(clean) else "Release"
+    return f"{prefix} - v{clean}"
+
+
+def print_release_preview(tag: str, title: str, body: str, index: int, total: int) -> None:
     separator = "=" * 80
+    prerelease_str = "Yes (Pre-Release)" if is_prerelease(tag) else "No (Production)"
     print(f"\n{separator}")
     print(f"[{index}/{total}] PREVIEW: {tag}")
     print(f"{separator}")
     print(f"• Target Git Tag   : {tag}")
     print(f"• Release Title    : {title}")
+    print(f"• Pre-Release Track: {prerelease_str}")
     print(f"• Release Content  :\n")
     print(body)
     print(f"{separator}\n")
 
 
-def publish_release(repo_dir: Path, tag: str, title: str, body: str, is_draft: bool = False):
+def publish_release(
+    repo_dir: Path,
+    tag: str,
+    title: str,
+    body: str,
+    is_draft: bool = False,
+    is_prerelease_override: bool = False,
+) -> None:
     with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as f:
         f.write(body)
         temp_notes_file = f.name
@@ -109,10 +136,18 @@ def publish_release(repo_dir: Path, tag: str, title: str, body: str, is_draft: b
     ]
     if is_draft:
         cmd.append("--draft")
+    if is_prerelease_override or is_prerelease(tag):
+        cmd.append("--prerelease")
 
     try:
         subprocess.run(cmd, cwd=repo_dir, check=True)
-        print(f"✔ Successfully released {tag}{' (as draft)' if is_draft else ''}")
+        status_extras: list[str] = []
+        if is_draft:
+            status_extras.append("draft")
+        if is_prerelease_override or is_prerelease(tag):
+            status_extras.append("pre-release")
+        status_str = f" (as {', '.join(status_extras)})" if status_extras else ""
+        print(f"✔ Successfully released {tag}{status_str}")
     except subprocess.CalledProcessError as e:
         print(f"✘ Failed to create release for {tag}: {e}")
     finally:
@@ -144,6 +179,12 @@ def run_release_cli(cli_args: list[str] | None = None) -> int:
         "--draft",
         action="store_true",
         help="Create release as a Draft on GitHub (safe testing)",
+    )
+    parser.add_argument(
+        "--prerelease",
+        action="store_true",
+        default=False,
+        help="Mark release as a Pre-Release on GitHub (auto-detected if tag contains rc/alpha/beta)",
     )
     parser.add_argument(
         "--preview",
@@ -187,6 +228,7 @@ def run_release_cli(cli_args: list[str] | None = None) -> int:
     # 1. Preview Single / Latest Version
     if args.preview is not None or (args.latest and not args.run and not args.preview_all):
         # Determine whether to preview 'latest' or a specific version
+        entry: dict[str, str] | None = None
         if args.preview in (None, "LATEST") or args.latest:
             entry = releases[0]
             print(f"[*] Previewing latest version in changelog: v{entry['version'].lstrip('v')}")
@@ -197,11 +239,12 @@ def run_release_cli(cli_args: list[str] | None = None) -> int:
                 print(f"Version '{args.preview}' not found in {changelog_path.name}.")
                 return 1
 
+        assert entry is not None
         tag = (
             resolve_git_tag(entry["version"], existing_tags)
             or f"{entry['version']} (TAG NOT IN GIT)"
         )
-        title = f"Release - v{entry['version'].lstrip('v')}"
+        title = format_release_title(entry["version"])
         print_release_preview(tag, title, entry["body"], 1, 1)
         return 0
 
@@ -212,7 +255,7 @@ def run_release_cli(cli_args: list[str] | None = None) -> int:
                 resolve_git_tag(rel["version"], existing_tags)
                 or f"{rel['version']} (TAG NOT IN GIT)"
             )
-            title = f"Release - v{rel['version'].lstrip('v')}"
+            title = format_release_title(rel["version"])
             print_release_preview(tag, title, rel["body"], idx, len(releases))
         return 0
 
@@ -231,11 +274,11 @@ def run_release_cli(cli_args: list[str] | None = None) -> int:
             return 1
 
     # Match targets against local git tags
-    valid_releases = []
+    valid_releases: list[tuple[str, dict[str, str]]] = []
     for rel in releases:
-        tag = resolve_git_tag(rel["version"], existing_tags)
-        if tag:
-            valid_releases.append((tag, rel))
+        matched_tag = resolve_git_tag(rel["version"], existing_tags)
+        if matched_tag:
+            valid_releases.append((matched_tag, rel))
         else:
             print(f"[!] Warning: Git tag for version '{rel['version']}' not found. Skipping.")
 
@@ -248,7 +291,7 @@ def run_release_cli(cli_args: list[str] | None = None) -> int:
     if not args.run:
         print(f"\n[DRY RUN] Found {total_valid} release(s) ready in {changelog_path.name}:")
         for idx, (tag, rel) in enumerate(valid_releases, 1):
-            title = f"Release - v{rel['version'].lstrip('v')}"
+            title = format_release_title(rel["version"])
             first_line = rel["body"].splitlines()[0] if rel["body"] else ""
             print(
                 f"[{idx:02d}/{total_valid:02d}] Tag: {tag:<10} | Title: {title:<20} | Starts: {first_line[:40]}..."
@@ -258,7 +301,7 @@ def run_release_cli(cli_args: list[str] | None = None) -> int:
 
     # Publish Execution
     for idx, (tag, rel) in enumerate(valid_releases, 1):
-        title = f"Release - v{rel['version'].lstrip('v')}"
+        title = format_release_title(rel["version"])
         body = rel["body"]
 
         if args.interactive:
@@ -272,7 +315,14 @@ def run_release_cli(cli_args: list[str] | None = None) -> int:
                 args.interactive = False
 
         print(f"Publishing release [{idx}/{total_valid}] -> Tag '{tag}', Title '{title}'...")
-        publish_release(root_dir, tag, title, body, is_draft=args.draft)
+        publish_release(
+            root_dir,
+            tag,
+            title,
+            body,
+            is_draft=args.draft,
+            is_prerelease_override=args.prerelease,
+        )
 
     return 0
 
