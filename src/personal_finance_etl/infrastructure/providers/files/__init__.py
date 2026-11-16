@@ -15,6 +15,7 @@ Does not own
 from __future__ import annotations
 
 from personal_finance_etl.infrastructure.providers.files.csv import (
+    CSVExtractor,
     extract_benchmark_master_raw,
     extract_currency_mapping_raw,
     extract_macro_parameters_raw,
@@ -37,6 +38,7 @@ from personal_finance_etl.infrastructure.providers.files.sqlite import (
 )
 
 __all__ = [
+    "CSVExtractor",
     "SQLiteExtractor",
     "categorize_statement_files",
     "extract_benchmark_master_raw",

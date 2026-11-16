@@ -49,7 +49,6 @@ from personal_finance_etl.infrastructure.providers.files.csv import (
     extract_benchmark_master_raw,
     extract_currency_mapping_raw,
     extract_macro_parameters_raw,
-    extract_opening_balances_raw,
     extract_stg_benchmark_mapping,
     extract_stg_mf_isin_mapping,
 )
@@ -144,12 +143,6 @@ class DataExtractor:
                 self.cfg.BENCHMARK_MAPPING_CSV_PATH,
                 extract_stg_benchmark_mapping,
                 "benchmark_mapping",
-            ),
-            "raw_opening_balances": self._read_config_csv_lazy(
-                pending_files,
-                self.cfg.OPENING_BALANCE_CSV_PATH,
-                extract_opening_balances_raw,
-                "opening_balances",
             ),
             "raw_benchmark_master": self._read_config_csv_lazy(
                 pending_files,
@@ -341,7 +334,7 @@ class DataExtractor:
                 DatasetId.COMMON_COLUMN_MASTER: df_column_master,
                 DatasetId.INVESTMENT_MF_ISIN_MAPPING: config_frames["stg_mf_isin_mapping"],
                 DatasetId.INVESTMENT_BENCHMARK_MAPPING: config_frames["stg_benchmark_mapping"],
-                DatasetId.HOUSEHOLD_OPENING_BALANCES: config_frames["raw_opening_balances"],
+                DatasetId.HOUSEHOLD_OPENING_BALANCES: pl.LazyFrame(),
                 DatasetId.INVESTMENT_BENCHMARK_MASTER: config_frames["raw_benchmark_master"],
                 DatasetId.INVESTMENT_MACRO_PARAMETERS: config_frames["raw_macro_parameters"],
                 DatasetId.MARKET_CURRENCY_MAPPING: config_frames["currency_mapping_raw"],
