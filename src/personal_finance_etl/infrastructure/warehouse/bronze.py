@@ -44,7 +44,15 @@ from personal_finance_etl.infrastructure.warehouse.registry import BRONZE_CONTRA
 
 diagnostics = get_observability_diagnostics("personal_finance_etl.warehouse.bronze")
 
-MIGRATED_DATASETS: frozenset[DatasetId] = frozenset({DatasetId.HOUSEHOLD_ZCATEGORY})
+MIGRATED_DATASETS: frozenset[DatasetId] = frozenset(
+    {
+        DatasetId.HOUSEHOLD_ZCATEGORY,
+        DatasetId.HOUSEHOLD_ASSET_GROUP,
+        DatasetId.HOUSEHOLD_ASSETS,
+        DatasetId.HOUSEHOLD_CURRENCY,
+        DatasetId.HOUSEHOLD_INOUTCOME,
+    }
+)
 
 
 class BronzeLayer:
