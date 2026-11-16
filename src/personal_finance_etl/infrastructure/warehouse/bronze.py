@@ -5,7 +5,7 @@ Owns
 - Incremental upserting of raw extracted DataFrames into bronze.* DuckDB tables.
 - Table schema evolution for newly added source columns.
 - Identity migration during file renames without re-ingesting physical rows.
-- Full dataset reading from Bronze tables into a typed DatasetCollection or ExtractionResult.
+- Full dataset reading from Bronze tables into an immutable DatasetCollection.
 
 Does not own
 -------------
@@ -24,7 +24,6 @@ import polars as pl
 from personal_finance_etl.contracts.application import EngineStage
 from personal_finance_etl.contracts.dataset_collection import DatasetCollection
 from personal_finance_etl.contracts.datasets import DatasetId
-from personal_finance_etl.contracts.extraction import ExtractionResult
 from personal_finance_etl.contracts.observability import (
     DiagnosticSeverity,
     EventCode,
@@ -225,15 +224,15 @@ class BronzeLayer:
 
     def load(
         self,
-        extracted_data: ExtractionResult,
+        extracted_data: DatasetCollection,
         actionable_files: dict[str, list[str]],
     ) -> None:
         """Write all raw extracted DataFrames to bronze.* tables.
 
         Parameters
         ----------
-        extracted_data : ExtractionResult
-            Extracted source frames.
+        extracted_data : DatasetCollection
+            Extracted source dataset collection.
         actionable_files : dict[str, list[str]]
             Mapping of sync category to actionable file paths.
         """
@@ -243,7 +242,7 @@ class BronzeLayer:
         for contract in BRONZE_CONTRACT_REGISTRY:
             if contract.dataset_id in MIGRATED_DATASETS:
                 continue
-            df = getattr(extracted_data, contract.extraction_attribute, None)
+            df = extracted_data.get(contract.dataset_id)
             if df is not None:
                 actionable = actionable_files.get(contract.sync_category, [])
                 if actionable:
@@ -396,25 +395,3 @@ class BronzeLayer:
                     frames[contract.dataset_id] = pl.LazyFrame()
 
         return DatasetCollection(frames=frames)
-
-    def get_full_dataset(self, original_mappings: dict[str, dict[str, str]]) -> ExtractionResult:
-        """Read full dataset from Bronze tables via DuckDB and return complete ExtractionResult.
-
-        Notes
-        -----
-        DEPRECATION TARGET: Phase 027.
-        Delegates to get_dataset_collection() and adapts to legacy ExtractionResult DTO.
-
-        Parameters
-        ----------
-        original_mappings : dict[str, dict[str, str]]
-            Original column mappings.
-
-        Returns
-        -------
-        ExtractionResult
-            Complete typed ExtractionResult.
-        """
-        diagnostics.info("Reading full dataset from Bronze Layer Lakehouse...")
-        collection = self.get_dataset_collection()
-        return ExtractionResult.from_dataset_collection(collection, mappings=original_mappings)
