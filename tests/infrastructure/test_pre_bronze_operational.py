@@ -284,6 +284,50 @@ def test_pre_bronze_meta_healing_with_artifact_provenance(
     assert remaining_pb.height == 0
 
 
+def test_pre_bronze_self_healing_requeues_missing_tables(
+    isolated_duckdb_manager: DuckDBManager,
+    isolated_control_plane: ControlPlane,
+) -> None:
+    """Verify DuckDBRegistryHealer re-queues SYNCED file to PENDING_BRONZE when Pre-Bronze table is missing."""
+    isolated_control_plane.open()
+    isolated_control_plane.ensure_schema()
+    isolated_duckdb_manager.open()
+    isolated_duckdb_manager.ensure_schemas()
+
+    file_path = "Statements/MoneyManager/test.mmbak"
+    # Register file in SQLite cp_file_registry as SYNCED
+    isolated_control_plane.artifacts.db.conn.execute(
+        """
+        INSERT INTO cp_file_registry (
+            file_id, file_name, relative_path, file_category, file_type,
+            file_hash, file_size_bytes, sync_status, first_seen_at, last_seen_at
+        ) VALUES ('fid_123', 'test.mmbak', ?, 'sqlite_source', 'mmbak', 'h123', 500, 'SYNCED', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        """,
+        [file_path],
+    )
+
+    # Register file in DuckDB meta.m_File_Registry
+    isolated_duckdb_manager.conn.execute(
+        """
+        INSERT INTO meta.m_File_Registry (
+            file_id, file_name, relative_path, file_category, file_type,
+            file_hash, file_size_bytes, first_ingested, last_ingested, row_count
+        ) VALUES ('fid_123', 'test.mmbak', ?, 'sqlite_source', 'mmbak', 'h123', 500, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 10)
+        """,
+        [file_path],
+    )
+
+    # But do NOT create any Pre-Bronze tables in DuckDB (simulating uninitialized Pre-Bronze)
+    healer = DuckDBRegistryHealer(isolated_duckdb_manager.conn)
+    healer.heal_duckdb_registry(isolated_control_plane)
+
+    # Verify SQLite status was healed back to PENDING_BRONZE
+    status = isolated_control_plane.artifacts.db.conn.execute(
+        "SELECT sync_status FROM cp_file_registry WHERE relative_path = ?", [file_path]
+    ).fetchone()[0]
+    assert status == "PENDING_BRONZE"
+
+
 def test_pre_bronze_orphaned_table_cleanup_guard(
     isolated_duckdb_manager: DuckDBManager,
     isolated_settings: Settings,

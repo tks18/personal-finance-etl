@@ -2,6 +2,43 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [10.0.0-rc.1](https://github.com/tks18/personal-finance-etl/compare/9.9.6...10.0.0-rc.1) (2026-11-16)
+
+
+### CI 🛠
+
+* **pypi:** update quality gate step to poe audit:fast ([2ce7661](https://github.com/tks18/personal-finance-etl/commit/2ce76615143967f56909daba3a7496b51cdcc4c6))
+
+
+### Features 🔥
+
+* **config:** declare source fields for household reference tables ([c41ebf1](https://github.com/tks18/personal-finance-etl/commit/c41ebf19cb92375bf5b5f76376e044a409b0733f))
+* **release:** support dynamic pre-release tracks and pipelines ([c1e1524](https://github.com/tks18/personal-finance-etl/commit/c1e1524e314d95b46458854c41747bb91d702cf7))
+* **release:** upgrade tooling for PEP 440 pre-release versions ([4c22763](https://github.com/tks18/personal-finance-etl/commit/4c227638f5d7b8711902163fe8c5907129adceb9))
+* **tasks:** standardize audit task notation across poe and yarn ([0506a23](https://github.com/tks18/personal-finance-etl/commit/0506a23f1f03c0a5ebf56a326e81e9789a115bf7))
+* **validation:** canonical bronze schemas for household family ([064abd6](https://github.com/tks18/personal-finance-etl/commit/064abd6c7acc2aff3c7b035795050d6af5db1ef8))
+* **warehouse:** lakehouse self-healing and household datasets ([db51629](https://github.com/tks18/personal-finance-etl/commit/db51629db17d09a96363041fe4e0feddf3882cc6))
+
+
+### Code Refactoring 🖌
+
+* **domain:** resilient mapping in household transforms ([1ee4334](https://github.com/tks18/personal-finance-etl/commit/1ee43346b9d0b916a825d81f0b38acee72524def))
+* **ingestion:** generalized sqlite extractor and null casting ([78ecc6a](https://github.com/tks18/personal-finance-etl/commit/78ecc6a0706f97b1283b91fe13a8f38c09237127))
+
+
+### Tests 🧪
+
+* **ingestion:** certify household reference family migration ([555fba2](https://github.com/tks18/personal-finance-etl/commit/555fba2ff75ee577cae733a34c33d83fa2dea971))
+* **release:** add automated tests for pre-release tooling ([5235c5a](https://github.com/tks18/personal-finance-etl/commit/5235c5a30f529e13c6dd288d77ff5a25811759b2))
+* **release:** pass updater scripts via stdin for robust node execution ([98c39fa](https://github.com/tks18/personal-finance-etl/commit/98c39fae6be6f8f0690b79f16da4ddea638a99cf))
+
+
+### Docs 📃
+
+* **refactor:** complete phase 028 household reference migration ([369dba9](https://github.com/tks18/personal-finance-etl/commit/369dba977efacca1935a9a7a0ffdf147c3c44a7d))
+* **skills:** update audit task references in pfetl agent skills ([2f1c220](https://github.com/tks18/personal-finance-etl/commit/2f1c22095dd78653ac976a65eff5e82775251d88))
+* **tooling:** synchronize audit task references to colon notation ([4c0f23d](https://github.com/tks18/personal-finance-etl/commit/4c0f23d18ce22e7cce32abe88e2b0efd17d92b96))
+
 ### [9.9.6](https://github.com/tks18/personal-finance-etl/compare/9.9.5...9.9.6) (2026-11-16)
 
 

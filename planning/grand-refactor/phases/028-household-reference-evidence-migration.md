@@ -134,14 +134,14 @@ Do not:
 
 ## 11. Completion checklist
 
-- [ ] All applicable five reference streams generalized.
-- [ ] Generic SQLite selector path is production-used.
-- [ ] Stable IDs preserved.
-- [ ] Multi-dataset artifact provenance correct.
-- [ ] Fixed household-table unpacking removed.
-- [ ] Legacy routes removed.
-- [ ] Family recovery/full-replace proven.
-- [ ] Full Shan run green.
+- [x] All applicable five reference streams generalized.
+- [x] Generic SQLite selector path is production-used.
+- [x] Stable IDs preserved.
+- [x] Multi-dataset artifact provenance correct.
+- [x] Fixed household-table unpacking removed.
+- [x] Legacy routes removed.
+- [x] Family recovery/full-replace proven.
+- [x] Full Shan run green.
 
 ## 12. Commit boundary
 
@@ -156,20 +156,33 @@ Phase 029 may assume household reference dimensions are fully configuration-driv
 ## Phase completion record
 
 ```text
-Phase:
-Target release:
+Phase: 028
+Target release: v10.0.0-rc1
 Files changed:
-Schema changed:
-Runtime behavior changed:
+- src/personal_finance_etl/infrastructure/validation/canonical_schemas.py
+- src/personal_finance_etl/infrastructure/validation/__init__.py
+- src/personal_finance_etl/config/sources/loader.py
+- src/personal_finance_etl/domain/household/transforms/asset_dimensions.py
+- src/personal_finance_etl/domain/household/transforms/reference_dimensions.py
+- src/personal_finance_etl/domain/household/transforms/transactions.py
+- src/personal_finance_etl/infrastructure/warehouse/bronze.py
+- src/personal_finance_etl/application/pipeline/execution.py
+- src/personal_finance_etl/infrastructure/providers/files/sqlite.py
+- src/personal_finance_etl/application/ingestion/coordinator.py
+- src/personal_finance_etl/application/ingestion/slice_runner.py
+- tests/application/test_ingestion.py
+- tests/application/test_generalized_vertical_slice.py
+Schema changed: NO
+Runtime behavior changed: YES
 Financial formulas changed: NO
-Focused tests:
-Architecture tests:
-Real-data run:
-Performance check:
-Compatibility path still present:
-Old path deleted:
-Exit assertions green:
-Commit:
+Focused tests: tests/application/test_generalized_vertical_slice.py, tests/application/test_ingestion.py
+Architecture tests: tests/architecture/test_boundaries.py, tests/architecture/test_constitutional_certification.py, tests/architecture/test_legacy_demolition.py
+Real-data run: PASS
+Performance check: PASS (<1s fast gate)
+Compatibility path still present: NO
+Old path deleted: YES
+Exit assertions green: YES
+Commit: pending user confirmation
 ```
 
 A phase is incomplete if any required exit assertion is false.

@@ -101,6 +101,7 @@ from personal_finance_etl.infrastructure.warehouse.meta import MetaLayer
 from personal_finance_etl.infrastructure.warehouse.pre_bronze import PreBronzeLayer
 from personal_finance_etl.infrastructure.warehouse.registry import (
     DATA_CONTRACT_REGISTRY,
+    get_bronze_contract_by_dataset_id,
     get_pre_bronze_contract_by_dataset_id,
     validate_registry,
 )
@@ -729,6 +730,14 @@ class PipelineExecutor:
         meta_layer = MetaLayer(self.db_manager, self.cfg, self.rules)
         bronze = BronzeLayer(self.db_manager, cp, meta_layer, emitter=self.emitter)
         pre_bronze = PreBronzeLayer(self.db_manager, emitter=self.emitter)
+        migrated_datasets = (
+            DatasetId.HOUSEHOLD_ZCATEGORY,
+            DatasetId.HOUSEHOLD_ASSET_GROUP,
+            DatasetId.HOUSEHOLD_ASSETS,
+            DatasetId.HOUSEHOLD_CURRENCY,
+            DatasetId.HOUSEHOLD_INOUTCOME,
+        )
+
         if renames:
             bronze.migrate_identity(renames)
             meta_layer.migrate_identity(renames)
@@ -736,17 +745,25 @@ class PipelineExecutor:
                 if category == "sqlite_source":
                     old_id = generate_file_id(old_path)
                     new_id = generate_file_id(new_path)
-                    pb_contract = get_pre_bronze_contract_by_dataset_id(
-                        DatasetId.HOUSEHOLD_ZCATEGORY
-                    )
-                    if pb_contract and pre_bronze.table_exists(pb_contract):
-                        pre_bronze.migrate_artifact_identity(old_id, new_id, pb_contract)
+                    for ds_id in migrated_datasets:
+                        pb_contract = get_pre_bronze_contract_by_dataset_id(ds_id)
+                        if pb_contract and pre_bronze.table_exists(pb_contract):
+                            pre_bronze.migrate_artifact_identity(old_id, new_id, pb_contract)
 
         # Ingest migrated datasets through generalized vertical slice
-        migrated_datasets = (DatasetId.HOUSEHOLD_ZCATEGORY,)
         for ds_id in migrated_datasets:
             ds_plan = self.source_plan.get_dataset_plan(ds_id)
             if ds_plan is not None:
+                pb_contract = get_pre_bronze_contract_by_dataset_id(ds_id)
+                b_contract = get_bronze_contract_by_dataset_id(ds_id)
+                sync_cat = b_contract.sync_category if b_contract else "sqlite_source"
+                dataset_actionable = actionable_all
+                if pb_contract and not pre_bronze.table_exists(pb_contract):
+                    if not actionable_all.get(sync_cat):
+                        all_cat_files = cp.artifacts.get_all_paths_by_category().get(sync_cat, [])
+                        if all_cat_files:
+                            dataset_actionable = dict(actionable_all)
+                            dataset_actionable[sync_cat] = all_cat_files
                 self.ingestion_service.ingest_dataset(
                     dataset_plan=ds_plan,
                     source_config=self.source_config,
@@ -754,7 +771,7 @@ class PipelineExecutor:
                     pre_bronze=pre_bronze,
                     bronze=bronze,
                     meta_layer=meta_layer,
-                    actionable_files=actionable_all,
+                    actionable_files=dataset_actionable,
                     run_id=run_id,
                 )
 

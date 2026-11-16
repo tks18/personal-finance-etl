@@ -1067,7 +1067,7 @@ wheels = [
 
 [[package]]
 name = "personal-finance-etl"
-version = "9.9.6"
+version = "10.0.0rc1"
 source = { editable = "." }
 dependencies = [
     { name = "customtkinter" },

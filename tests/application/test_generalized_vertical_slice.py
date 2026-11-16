@@ -222,17 +222,69 @@ def _create_sqlite_db(
                         ),
                     )
 
-        # Create other standard household tables so unmigrated tests / extraction passes
-        conn.execute("CREATE TABLE ASSETGROUP (ID INTEGER PRIMARY KEY, NAME TEXT, uid TEXT)")
-        conn.execute("INSERT INTO ASSETGROUP VALUES (1, 'Bank Accounts', 'AG_BANK')")
-        conn.execute("CREATE TABLE ASSETS (ID INTEGER PRIMARY KEY, TITLE TEXT, uid TEXT)")
-        conn.execute("INSERT INTO ASSETS VALUES (1, 'HDFC Salary', 'ASSET_HDFC')")
-        conn.execute("CREATE TABLE CURRENCY (ID INTEGER PRIMARY KEY, CODE TEXT, uid TEXT)")
-        conn.execute("INSERT INTO CURRENCY VALUES (1, 'INR', 'CURR_INR')")
-        conn.execute(
-            "CREATE TABLE INOUTCOME (ID INTEGER PRIMARY KEY, AMOUNT REAL, uid TEXT, C_IS_DEL INTEGER)"
+        # Create complete household reference tables conforming to source field declarations
+        conn.executescript(
+            """
+            CREATE TABLE ASSETGROUP (
+                ID INTEGER PRIMARY KEY, DEVICE_ID INTEGER, uid TEXT UNIQUE, IS_DEL INTEGER,
+                USETIME INTEGER, ACC_GROUP_NAME TEXT NOT NULL, TYPE INTEGER NOT NULL,
+                ORDERSEQ INTEGER, isSynced INTEGER, syncTime REAL, syncVersion INTEGER
+            );
+            INSERT INTO ASSETGROUP VALUES (1, 101, 'AG_BANK', 0, 1700000000, 'Bank Accounts', 0, 1, 1, 1700000000.0, 1);
+
+            CREATE TABLE ASSETS (
+                ID INTEGER PRIMARY KEY, CARD_DAY_FIN TEXT, CARD_DAY_PAY TEXT, NIC_NAME TEXT NOT NULL,
+                ORDERSEQ INTEGER, ZDATA TEXT, ZDATA1 TEXT, ZDATA2 TEXT, IS_TRANS_EXPENSE INTEGER,
+                IS_CARD_AUTO_PAY INTEGER, APP_PACKAGE TEXT, APP_NAME TEXT, SMS_TEL TEXT, SMS_STRING TEXT,
+                A_UTIME INTEGER, CARD_USAGE_HURDLE_TYPE INTEGER, CARD_USAGE_HURDLE_START_DATE REAL,
+                CARD_USAGE_HURDLE_AMOUNT REAL, uid TEXT UNIQUE, currencyUid TEXT, cardAssetUid TEXT,
+                groupUid TEXT, isSynced INTEGER, syncTime REAL, syncVersion INTEGER
+            );
+            INSERT INTO ASSETS VALUES (
+                1, '0', '0', 'HDFC Salary', 1, '0', 'Main checking account', 'Notes', 0, 0,
+                'com.hdfc', 'HDFC Bank', 'HDFCBK', 'sms', 1700000000, 0, 0.0, 0.0,
+                'ASSET_HDFC', 'CURR_INR', NULL, 'AG_BANK', 1, 1700000000.0, 1
+            );
+
+            CREATE TABLE CURRENCY (
+                ID INTEGER PRIMARY KEY, uid TEXT UNIQUE, NAME TEXT NOT NULL, ISO TEXT,
+                MAIN_ISO TEXT, IS_DEL INTEGER, ORDER_SEQ INTEGER, RATE REAL, SYMBOL TEXT,
+                INSERT_TYPE TEXT, SYMBOL_POSITION TEXT, IS_MAIN_CURRENCY INTEGER,
+                IS_SHOW INTEGER, MODIFY_DATE INTEGER, DECIMAL_POINT INTEGER, isSynced INTEGER,
+                syncTime REAL, syncVersion INTEGER
+            );
+            INSERT INTO CURRENCY VALUES (
+                1, 'CURR_INR', 'Indian Rupee', 'INR', 'INR', 0, 1, 1.0, '₹',
+                '0', '0', 1, 1, 1700000000, 2, 1, 1700000000.0, 1
+            );
+
+            CREATE TABLE INOUTCOME (
+                AID INTEGER PRIMARY KEY, uid TEXT UNIQUE, assetUid TEXT NOT NULL, CARDDIVIDMONTH TEXT,
+                ctgUid TEXT, toAssetUid TEXT, ZCONTENT TEXT, ZDATE TEXT NOT NULL, WDATE TEXT,
+                wtime TEXT, paid TEXT, DO_TYPE TEXT NOT NULL, ZMONEY TEXT NOT NULL,
+                txUidTrans TEXT, ZDATA TEXT, SMS_RDATE TEXT, IN_ZMONEY TEXT, ASSET_NIC TEXT,
+                CATEGORY_NAME TEXT, cardDivideUid TEXT, CARD_DIVIDE_MONTH_STR TEXT, MARK INTEGER,
+                txUidFee TEXT, SMS_ORIGIN TEXT, SMS_PARSE_CONTENT TEXT, IS_DEL INTEGER,
+                UTIME INTEGER, currencyUid TEXT, AMOUNT_ACCOUNT REAL, lat REAL, lng REAL,
+                gstd TEXT, isSynced INTEGER, syncTime REAL, syncVersion INTEGER
+            );
+            INSERT INTO INOUTCOME VALUES (
+                1, 'TX_001', 'ASSET_HDFC', '0', 'CAT_INCOME_SALARY', NULL, 'Monthly Salary',
+                '1700000000', '2023-11-15', '10:00:00', '1', '1', '50000.0', NULL, 'Memo',
+                '2023-11-15', '50000.0', 'HDFC Salary', 'Income from Salary', NULL,
+                NULL, 0, NULL, 'HDFCBK', 'salary credited',
+                0, 1700000000, 'CURR_INR', 50000.0, 0.0, 0.0, 'IN', 1, 1700000000.0, 1
+            );
+            INSERT INTO INOUTCOME VALUES (
+                2, 'TX_002', 'ASSET_HDFC', '0', 'CAT_EXPENSE_FOOD', NULL, 'Dinner',
+                '1700000100', '2023-11-15', '20:00:00', '1', '0', '1500.0', NULL, 'Restaurant',
+                '2023-11-15', '1500.0', 'HDFC Salary', 'Food & Groceries', NULL,
+                NULL, 0, NULL, 'HDFCBK', 'spent 1500',
+                0, 1700000100, 'CURR_INR', -1500.0, 0.0, 0.0, 'IN', 1, 1700000100.0, 1
+            );
+            """
         )
-        conn.execute("INSERT INTO INOUTCOME VALUES (1, 5000.0, 'TX_001', 0)")
+
         conn.commit()
     finally:
         conn.close()
@@ -1280,54 +1332,87 @@ def test_selected_legacy_route_dormant(
     isolated_settings: Settings,
     tmp_path: Path,
 ) -> None:
-    """Scenario 15: Legacy route for HOUSEHOLD_ZCATEGORY is dormant."""
+    """Scenario 15: Legacy route for all 5 household datasets is dormant."""
     db_file = _create_sqlite_db(tmp_path / "household" / "dormant.sqlite")
     norm_path = str(db_file).replace("\\", "/")
 
-    # 1. HOUSEHOLD_ZCATEGORY stream from DataExtractor is empty
+    # 1. Household streams from DataExtractor are empty
     isolated_control_plane.artifacts.ingest_binaries({"sqlite_source": [norm_path]})
     extractor = DataExtractor(
         cfg=isolated_settings,
         status_queue=NullEventQueue(),
         cp=isolated_control_plane,
     )
-    tables = extractor._extract_sqlite_tables(
-        pending_files={"sqlite_source": [norm_path]},
-    )
-    assert tables[0].collect().height == 0
+    collection = extractor.run(actionable_files={"sqlite_source": [norm_path]})
+    for ds_id in (
+        DatasetId.HOUSEHOLD_ZCATEGORY,
+        DatasetId.HOUSEHOLD_ASSET_GROUP,
+        DatasetId.HOUSEHOLD_ASSETS,
+        DatasetId.HOUSEHOLD_CURRENCY,
+        DatasetId.HOUSEHOLD_INOUTCOME,
+    ):
+        frame = collection.require_lazy(ds_id)
+        assert frame.collect().height == 0
 
-    # 2. HOUSEHOLD_ZCATEGORY is in MIGRATED_DATASETS
-    assert DatasetId.HOUSEHOLD_ZCATEGORY in MIGRATED_DATASETS
+    # 2. All 5 are in MIGRATED_DATASETS
+    for ds_id in (
+        DatasetId.HOUSEHOLD_ZCATEGORY,
+        DatasetId.HOUSEHOLD_ASSET_GROUP,
+        DatasetId.HOUSEHOLD_ASSETS,
+        DatasetId.HOUSEHOLD_CURRENCY,
+        DatasetId.HOUSEHOLD_INOUTCOME,
+    ):
+        assert ds_id in MIGRATED_DATASETS
 
-    # 3. BronzeLayer.load skips HOUSEHOLD_ZCATEGORY
+    # 3. BronzeLayer.load skips all 5
     isolated_duckdb_manager.open()
     isolated_duckdb_manager.ensure_schemas()
     meta = MetaLayer(isolated_duckdb_manager, isolated_settings, None)
     bronze = BronzeLayer(isolated_duckdb_manager, isolated_control_plane, meta)
-    # Even if extracted_data had zcategory populated, load skips it
     mock_extracted = DatasetCollection(
-        frames={DatasetId.HOUSEHOLD_ZCATEGORY: pl.DataFrame({"dummy": [1]}).lazy()}
+        frames={
+            ds_id: pl.DataFrame({"dummy": [1]}).lazy()
+            for ds_id in (
+                DatasetId.HOUSEHOLD_ZCATEGORY,
+                DatasetId.HOUSEHOLD_ASSET_GROUP,
+                DatasetId.HOUSEHOLD_ASSETS,
+                DatasetId.HOUSEHOLD_CURRENCY,
+                DatasetId.HOUSEHOLD_INOUTCOME,
+            )
+        }
     )
-    # Should not raise and should not write r_SQLite_ZCategory
     bronze.load(mock_extracted, {"sqlite_source": [norm_path]})
-    check = _fetch_scalar(
-        isolated_duckdb_manager,
-        "SELECT count(*) FROM information_schema.tables WHERE table_name = 'r_SQLite_ZCategory'",
-    )
-    assert check == 0
+    for table_name in (
+        "r_SQLite_ZCategory",
+        "r_SQLite_AssetGroup",
+        "r_SQLite_Assets",
+        "r_SQLite_Currency",
+        "r_SQLite_InOutcome",
+    ):
+        check = _fetch_scalar(
+            isolated_duckdb_manager,
+            f"SELECT count(*) FROM information_schema.tables WHERE table_name = '{table_name}'",
+        )
+        assert check == 0
 
 
 def test_unmigrated_datasets_remain_legacy() -> None:
-    """Scenario 16: All 19 unmigrated datasets remain on legacy path without regression."""
-    assert DatasetId.HOUSEHOLD_ZCATEGORY in MIGRATED_DATASETS
-    assert len(MIGRATED_DATASETS) == 1
+    """Scenario 16: All 15 unmigrated datasets remain on legacy path without regression."""
+    assert len(MIGRATED_DATASETS) == 5
+    for ds_id in (
+        DatasetId.HOUSEHOLD_ZCATEGORY,
+        DatasetId.HOUSEHOLD_ASSET_GROUP,
+        DatasetId.HOUSEHOLD_ASSETS,
+        DatasetId.HOUSEHOLD_CURRENCY,
+        DatasetId.HOUSEHOLD_INOUTCOME,
+    ):
+        assert ds_id in MIGRATED_DATASETS
 
     # Check all other contracts in BRONZE_CONTRACT_REGISTRY are not in MIGRATED_DATASETS
     unmigrated = [c for c in BRONZE_CONTRACT_REGISTRY if c.dataset_id not in MIGRATED_DATASETS]
-    assert len(unmigrated) >= 19
+    assert len(unmigrated) >= 15
     for contract in unmigrated:
-        assert contract.dataset_id != DatasetId.HOUSEHOLD_ZCATEGORY
-        assert contract.extraction_attribute != "zcategory"
+        assert contract.dataset_id not in MIGRATED_DATASETS
 
 
 def test_migration_template_checklist_contract() -> None:

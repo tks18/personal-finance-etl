@@ -21,6 +21,8 @@ import os
 from collections.abc import Sequence
 from pathlib import Path
 
+import polars as pl
+
 from personal_finance_etl.application.ingestion.admission import AdmissionService
 from personal_finance_etl.application.pipeline.source_planner import DatasetPlan
 from personal_finance_etl.config.sources.loader import SourceConfiguration
@@ -47,6 +49,7 @@ from personal_finance_etl.infrastructure.observability.diagnostics import (
 )
 from personal_finance_etl.infrastructure.providers.files.sqlite import SQLiteExtractor
 from personal_finance_etl.infrastructure.validation import (
+    POLARS_TYPE_MAP,
     PanderaDataFrameValidator,
     compile_source_schema,
     get_canonical_bronze_schema,
@@ -217,10 +220,22 @@ class DatasetIngestionService:
                 source_lazy = extractor.extract_table(filename, folder_path, raw_bytes, table_name)
             else:
                 raise NotImplementedError(
-                    f"Provider selector '{type(dataset_plan.selector).__name__}' not supported in Phase 025."
+                    f"Provider selector '{type(dataset_plan.selector).__name__}' not supported."
                 )
 
             raw_df = source_lazy.collect()
+
+            # Align all-null columns inferred by Polars with declared source field dtypes
+            null_cols_to_cast: list[pl.Expr] = []
+            field_types = {f.name: f.data_type.strip().lower() for f in ds_config.fields}
+            for col in raw_df.columns:
+                if raw_df[col].dtype == pl.Null and col in field_types:
+                    norm_t = field_types[col]
+                    if norm_t in POLARS_TYPE_MAP:
+                        target_dtype = POLARS_TYPE_MAP[norm_t]
+                        null_cols_to_cast.append(pl.col(col).cast(target_dtype))
+            if null_cols_to_cast:
+                raw_df = raw_df.with_columns(null_cols_to_cast)
 
             # 2. Gate 1: Source Validation (PRE_BRONZE)
             source_schema = compile_source_schema(ds_config)

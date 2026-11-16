@@ -60,9 +60,6 @@ from personal_finance_etl.infrastructure.providers.files.excel import (
     extract_stock_transactions_raw,
     extract_us_stock_transactions_raw,
 )
-from personal_finance_etl.infrastructure.providers.files.sqlite import (
-    SQLiteExtractor,
-)
 
 __all__ = ["DataExtractor"]
 
@@ -106,43 +103,6 @@ class DataExtractor:
         """
         return [(os.path.basename(f), os.path.dirname(f), self._get_bytes(f)) for f in filepaths]
 
-    def _extract_sqlite_tables(
-        self, pending_files: dict[str, list[str]]
-    ) -> tuple[pl.LazyFrame, pl.LazyFrame, pl.LazyFrame, pl.LazyFrame, pl.LazyFrame]:
-        """Extract reference tables from SQLite source database bytes."""
-        diagnostics.debug("Extracting base reference tables from SQLite source...")
-        sqlite_files = pending_files.get("sqlite_source", [])
-        if sqlite_files:
-            sqlite_path = sqlite_files[0]
-            sqlite_bytes = self._get_bytes(sqlite_path)
-            extractor = SQLiteExtractor(self.cfg.SOURCE_DB_FOLDER)
-            tables = extractor.extract_base_tables(
-                os.path.basename(sqlite_path), os.path.dirname(sqlite_path), sqlite_bytes
-            )
-            diagnostics.debug(
-                "Successfully extracted 5 base reference tables from SQLite source bytes."
-            )
-            self.emitter.emit_event(
-                event_code=EventCode.PROVIDER_BATCH_INGEST,
-                message="Extracted 4 legacy base reference tables from SQLite source (zcategory migrated)",
-                presentation_kind=PresentationKind.INTERNAL,
-                severity=DiagnosticSeverity.DEBUG,
-                stage=EngineStage.EXTRACTING,
-                provider="SQLite",
-                entity_type="Table",
-                entity_id="sqlite_source",
-                rows=4,
-            )
-            # zcategory is migrated in Phase 025 to generalized admission; legacy extraction route bypassed
-            return (pl.LazyFrame(), tables[1], tables[2], tables[3], tables[4])
-        return (
-            pl.LazyFrame(),
-            pl.LazyFrame(),
-            pl.LazyFrame(),
-            pl.LazyFrame(),
-            pl.LazyFrame(),
-        )
-
     def _read_config_csv_lazy(
         self,
         pending_files: dict[str, list[str]],
@@ -165,13 +125,16 @@ class DataExtractor:
         self, pending_files: dict[str, list[str]]
     ) -> tuple[pl.DataFrame, dict[str, pl.LazyFrame]]:
         """Extract column master frame and configuration CSV lazyframes."""
-        column_master_bytes = self._get_bytes(self.cfg.COLUMN_MASTER_PATH)
-        column_master_artifact_id = generate_file_id(self.cfg.COLUMN_MASTER_PATH)
-        df_column_master = pl.read_csv(io.BytesIO(column_master_bytes)).with_columns(
-            pl.lit(os.path.basename(self.cfg.COLUMN_MASTER_PATH)).alias("__file_name__"),
-            pl.lit(os.path.dirname(self.cfg.COLUMN_MASTER_PATH)).alias("__folder_path__"),
-            pl.lit(column_master_artifact_id).alias("artifact_id"),
-        )
+        if self.cfg.COLUMN_MASTER_PATH:
+            column_master_bytes = self._get_bytes(self.cfg.COLUMN_MASTER_PATH)
+            column_master_artifact_id = generate_file_id(self.cfg.COLUMN_MASTER_PATH)
+            df_column_master = pl.read_csv(io.BytesIO(column_master_bytes)).with_columns(
+                pl.lit(os.path.basename(self.cfg.COLUMN_MASTER_PATH)).alias("__file_name__"),
+                pl.lit(os.path.dirname(self.cfg.COLUMN_MASTER_PATH)).alias("__folder_path__"),
+                pl.lit(column_master_artifact_id).alias("artifact_id"),
+            )
+        else:
+            df_column_master = pl.DataFrame()
         config_frames = {
             "stg_mf_isin_mapping": self._read_config_csv_lazy(
                 pending_files, self.cfg.MF_ISIN_CSV_PATH, extract_stg_mf_isin_mapping, "mf_isin"
@@ -365,17 +328,16 @@ class DataExtractor:
         )
 
         pending_files = actionable_files or self.cp.artifacts.get_pending_files()
-        zcat, agrp, asts, curr, inout = self._extract_sqlite_tables(pending_files)
         df_column_master, config_frames = self._extract_config_tables(pending_files)
         excel_frames = self._extract_excel_statements(pending_files)
 
         collection = DatasetCollection(
             frames={
-                DatasetId.HOUSEHOLD_ZCATEGORY: zcat,
-                DatasetId.HOUSEHOLD_ASSET_GROUP: agrp,
-                DatasetId.HOUSEHOLD_ASSETS: asts,
-                DatasetId.HOUSEHOLD_CURRENCY: curr,
-                DatasetId.HOUSEHOLD_INOUTCOME: inout,
+                DatasetId.HOUSEHOLD_ZCATEGORY: pl.LazyFrame(),
+                DatasetId.HOUSEHOLD_ASSET_GROUP: pl.LazyFrame(),
+                DatasetId.HOUSEHOLD_ASSETS: pl.LazyFrame(),
+                DatasetId.HOUSEHOLD_CURRENCY: pl.LazyFrame(),
+                DatasetId.HOUSEHOLD_INOUTCOME: pl.LazyFrame(),
                 DatasetId.COMMON_COLUMN_MASTER: df_column_master,
                 DatasetId.INVESTMENT_MF_ISIN_MAPPING: config_frames["stg_mf_isin_mapping"],
                 DatasetId.INVESTMENT_BENCHMARK_MAPPING: config_frames["stg_benchmark_mapping"],

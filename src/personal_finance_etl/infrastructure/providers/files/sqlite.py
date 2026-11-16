@@ -4,7 +4,7 @@
 Owns
 ----
 - In-memory deserialization of SQLite binary backups (:memory: via conn.deserialize).
-- Extraction of 5 core household base tables (ZCATEGORY, ASSETGROUP, ASSETS, CURRENCY, INOUTCOME).
+- Dynamic extraction of configured SQLite tables into Polars LazyFrames.
 - Discovery of the latest SQLite/mmbak backup file from a local directory.
 
 Does not own
@@ -97,58 +97,3 @@ class SQLiteExtractor:
                     pl.lit(artifact_id).alias("artifact_id"),
                 )
             )
-
-    def extract_base_tables(
-        self, filename: str, folder_path: str, raw_bytes: bytes
-    ) -> tuple[pl.LazyFrame, pl.LazyFrame, pl.LazyFrame, pl.LazyFrame, pl.LazyFrame]:
-        """Deserialize in-memory bytes, extract tables into Polars LazyFrames, and tag file info."""
-        filepath = f"{folder_path}/{filename}" if folder_path else filename
-        artifact_id = generate_file_id(filepath)
-
-        def add_file_info(lf: pl.LazyFrame) -> pl.LazyFrame:
-            """Append source file name, folder, and artifact_id metadata columns to table LazyFrame."""
-            return lf.with_columns(
-                pl.lit(filename).alias("__file_name__"),
-                pl.lit(folder_path).alias("__folder_path__"),
-                pl.lit(artifact_id).alias("artifact_id"),
-            )
-
-        with sqlite3.connect(":memory:") as conn:
-            conn.deserialize(raw_bytes)
-            zcategory_lazy = add_file_info(
-                pl.read_database(
-                    "SELECT * FROM ZCATEGORY", connection=conn, infer_schema_length=10000
-                ).lazy()
-            )
-            assetgroup_lazy = add_file_info(
-                pl.read_database(
-                    "SELECT * FROM ASSETGROUP", connection=conn, infer_schema_length=10000
-                ).lazy()
-            )
-            assets_lazy = add_file_info(
-                pl.read_database(
-                    "SELECT * FROM ASSETS", connection=conn, infer_schema_length=10000
-                ).lazy()
-            )
-            currency_lazy = add_file_info(
-                pl.read_database(
-                    "SELECT * FROM CURRENCY", connection=conn, infer_schema_length=10000
-                ).lazy()
-            )
-            inoutcome_lazy = add_file_info(
-                pl.read_database(
-                    "SELECT * FROM INOUTCOME", connection=conn, infer_schema_length=10000
-                ).lazy()
-            )
-
-            diagnostics.debug(f"Successfully extracted 5 base tables from {filename}")
-
-        # Tables were read into memory DataFrames during SQLite connection lifecycle;
-        # returning LazyFrames directly without redundant collect().lazy() round-trips.
-        return (
-            zcategory_lazy,
-            assetgroup_lazy,
-            assets_lazy,
-            currency_lazy,
-            inoutcome_lazy,
-        )
