@@ -61,7 +61,6 @@
     "release:flow:alpha": "uv run poe release:flow:alpha",
     "release:flow:beta": "uv run poe release:flow:beta",
     "release:flow:major:rc": "uv run poe release:flow:major:rc",
-    "release:flow:rc:major:rc": "uv run poe release:flow:rc:major:rc",
     "release:flow:minor:rc": "uv run poe release:flow:minor:rc",
     "release:flow:patch:rc": "uv run poe release:flow:patch:rc",
     "release:flow:final": "uv run poe release:flow:final",

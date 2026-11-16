@@ -36,7 +36,6 @@ release = { cmd = "uv run python scripts/release_bump.py", help = "Dynamic seman
 "release:flow:alpha" = { cmd = "uv run python scripts/release_bump.py --alpha --pipeline", help = "Increment alpha and run full post-release pipeline" }
 "release:flow:beta" = { cmd = "uv run python scripts/release_bump.py --beta --pipeline", help = "Increment beta and run full post-release pipeline" }
 "release:flow:major:rc" = { cmd = "uv run python scripts/release_bump.py --major --rc --pipeline", help = "Start next major RC and run full post-release pipeline" }
-"release:flow:rc:major:rc" = { cmd = "uv run python scripts/release_bump.py --major --rc --pipeline", help = "Alias: Start next major RC and run full post-release pipeline" }
 "release:flow:minor:rc" = { cmd = "uv run python scripts/release_bump.py --minor --rc --pipeline", help = "Start next minor RC and run full post-release pipeline" }
 "release:flow:patch:rc" = { cmd = "uv run python scripts/release_bump.py --patch --rc --pipeline", help = "Start next patch RC and run full post-release pipeline" }
 "release:flow:final" = { cmd = "uv run python scripts/release_bump.py --final --pipeline", help = "Promote RC to final production release and run full post-release pipeline" }
