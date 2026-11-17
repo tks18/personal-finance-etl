@@ -27,8 +27,12 @@ from personal_finance_etl.application.ingestion.admission import AdmissionServic
 from personal_finance_etl.application.pipeline.source_planner import DatasetPlan
 from personal_finance_etl.config.sources.identity import SourceFieldIdentity
 from personal_finance_etl.config.sources.loader import SourceConfiguration
-from personal_finance_etl.config.sources.selectors import CsvSelector, SqliteSelector
+from personal_finance_etl.config.sources.selectors import (
+    CsvSelector,
+    SqliteSelector,
+)
 from personal_finance_etl.contracts.application import EngineStage
+from personal_finance_etl.contracts.datasets import DatasetId
 from personal_finance_etl.contracts.observability import (
     DiagnosticSeverity,
     EventCode,
@@ -49,7 +53,12 @@ from personal_finance_etl.infrastructure.observability.diagnostics import (
     get_observability_diagnostics,
 )
 from personal_finance_etl.infrastructure.providers.files.csv import CSVExtractor
-from personal_finance_etl.infrastructure.providers.files.sqlite import SQLiteExtractor
+from personal_finance_etl.infrastructure.providers.files.excel import (
+    ExcelExtractor,
+)
+from personal_finance_etl.infrastructure.providers.files.sqlite import (
+    SQLiteExtractor,
+)
 from personal_finance_etl.infrastructure.validation import (
     POLARS_TYPE_MAP,
     PanderaDataFrameValidator,
@@ -206,6 +215,19 @@ class DatasetIngestionService:
             dataset_plan.dataset_id.value,
             len(target_paths),
         )
+        self.emitter.emit_event(
+            event_code=EventCode.EXTRACTION_START,
+            message=(
+                f"Ingesting dataset '{dataset_plan.dataset_id.value}' from {len(target_paths)} "
+                f"actionable file(s)..."
+            ),
+            severity=DiagnosticSeverity.INFO,
+            presentation_kind=PresentationKind.STEP,
+            stage=EngineStage.EXTRACTING,
+            entity_type="dataset",
+            entity_id=dataset_plan.dataset_id.value,
+            rows=len(target_paths),
+        )
 
         total_rows_added = 0
         for filepath in target_paths:
@@ -231,8 +253,24 @@ class DatasetIngestionService:
                     has_header=dataset_plan.selector.has_header,
                 )
             else:
-                raise NotImplementedError(
-                    f"Provider selector '{type(dataset_plan.selector).__name__}' not supported."
+                excel_extractor = ExcelExtractor(folder_path)
+                category = (
+                    "Indian MF"
+                    if dataset_plan.dataset_id
+                    in (DatasetId.MARKET_MF_HOLDINGS, DatasetId.INVESTMENT_MF_ORDERS)
+                    else None
+                )
+                source_lazy = excel_extractor.extract_sheet(
+                    filename,
+                    folder_path,
+                    raw_bytes,
+                    sheet_name=dataset_plan.selector.sheet_name,
+                    candidate_sheets=dataset_plan.selector.candidate_sheets,
+                    header_row=dataset_plan.selector.header_row,
+                    header_anchor=dataset_plan.selector.header_anchor,
+                    anchor_offset=dataset_plan.selector.anchor_offset,
+                    stop_on_blank=dataset_plan.selector.stop_on_blank,
+                    file_category=category,
                 )
 
             raw_df = source_lazy.collect()
@@ -302,6 +340,10 @@ class DatasetIngestionService:
                     pb_contract, raw_df, artifact_id=artifact_id, source_id=dataset_plan.source_id
                 )
 
+            # Ensure artifact_id is present for canonical Bronze admission
+            if "artifact_id" not in raw_df.columns:
+                raw_df = raw_df.with_columns(pl.lit(artifact_id).alias("artifact_id"))
+
             # 4. Admission Normalization & Row Identity Derivation
             id_col = "UID"
             if isinstance(
@@ -357,7 +399,7 @@ class DatasetIngestionService:
                 f"{total_rows_added} rows from {len(target_paths)} files via generalized admission."
             ),
             severity=DiagnosticSeverity.INFO,
-            presentation_kind=PresentationKind.STEP,
+            presentation_kind=PresentationKind.SUCCESS,
             stage=EngineStage.EXTRACTING,
             entity_type="Table",
             entity_id=bronze_contract.physical_table,

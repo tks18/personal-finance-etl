@@ -43,8 +43,6 @@ from personal_finance_etl.infrastructure.observability.diagnostics import (
     get_observability_diagnostics,
 )
 from personal_finance_etl.infrastructure.providers.files.excel import (
-    extract_mf_market_data_raw,
-    extract_mf_transactions_raw,
     extract_stock_market_data_raw,
     extract_stock_transactions_raw,
     extract_us_stock_transactions_raw,
@@ -141,12 +139,6 @@ class DataExtractor:
 
         if excel_count > 0:
             return {
-                "mf_market_data_raw": extract_mf_market_data_raw(
-                    self._get_file_list_with_bytes(mf_holdings)
-                ),
-                "mf_transactions_raw": extract_mf_transactions_raw(
-                    self._get_file_list_with_bytes(mf_orders)
-                ),
                 "stock_market_data_raw": extract_stock_market_data_raw(
                     self._get_file_list_with_bytes(stock_pl)
                 ),
@@ -158,8 +150,6 @@ class DataExtractor:
                 ),
             }
         return {
-            "mf_market_data_raw": pl.LazyFrame(),
-            "mf_transactions_raw": pl.LazyFrame(),
             "stock_market_data_raw": pl.LazyFrame(),
             "stock_transactions_raw": pl.LazyFrame(),
             "us_stock_transactions_raw": pl.LazyFrame(),
@@ -255,8 +245,8 @@ class DataExtractor:
                 DatasetId.INVESTMENT_BENCHMARK_MASTER: pl.LazyFrame(),
                 DatasetId.INVESTMENT_MACRO_PARAMETERS: pl.LazyFrame(),
                 DatasetId.MARKET_CURRENCY_MAPPING: pl.LazyFrame(),
-                DatasetId.MARKET_MF_HOLDINGS: excel_frames["mf_market_data_raw"],
-                DatasetId.INVESTMENT_MF_ORDERS: excel_frames["mf_transactions_raw"],
+                DatasetId.MARKET_MF_HOLDINGS: pl.LazyFrame(),
+                DatasetId.INVESTMENT_MF_ORDERS: pl.LazyFrame(),
                 DatasetId.MARKET_STOCK_HOLDINGS: excel_frames["stock_market_data_raw"],
                 DatasetId.INVESTMENT_STOCK_ORDERS: excel_frames["stock_transactions_raw"],
                 DatasetId.INVESTMENT_US_STOCK_TRANSACTIONS: excel_frames[
