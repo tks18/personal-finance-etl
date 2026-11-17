@@ -120,6 +120,7 @@ Mandatory:
 - capability failure matrix;
 - malformed source/mapping failures;
 - incremental change/replay;
+- comprehensive FIFO lot matching tests (exhaustive consumption, partial lot depletion, remaining cost basis) using static evidence fixtures;
 - full Shan regression.
 
 ## 10. Explicit non-goals

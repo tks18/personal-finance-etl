@@ -102,6 +102,17 @@ Compare full/cached runtime to approved pre-refactor baseline and explain materi
 ### Step 12 - Release cleanup
 Version metadata/changelog/release notes only after all gates green.
 
+### Step 13 - Standardized Evidence Test Fixtures Migration (`tests/fixtures/evidence/`)
+- Establish a canonical repository of realistic, static sample files in `tests/fixtures/evidence/` across all migrated datasets:
+  - `household/`: `Expenses_Sample.sqlite` (with valid `ZCATEGORY`, `ZEXPENSES`, `ZSUB_CATEGORY` tables).
+  - `mutual_funds/`: `MF_Holdings_Sample.xlsx`, `MF_Orders_Sample.xlsx` (with representative metadata header offsets, trades, and empty periods).
+  - `domestic_stocks/`: `Stock_PL_Sample.xlsx`, `Stock_Orders_Sample.xlsx`, `Stock_Orders_Empty.xlsx` (with realistic ISINs, broker layouts, and trade statuses).
+  - `reference/`: `ISIN_Map_Sample.csv`, `Security_Master_Sample.csv`, `Benchmark_Index_Sample.csv`.
+  - `us_stocks/`: `US_Holdings_Sample.xlsx`, `US_Transactions_Sample.xlsx`.
+- Demolish all ad-hoc in-memory byte/zip builders (`_build_minimal_xlsx()`) from migration and unit test suites (`test_mutual_fund_evidence_migration.py`, `test_domestic_stock_evidence_migration.py`, etc.).
+- Introduce centralized pytest fixtures in `tests/conftest.py` that provide clean, isolated copies of these static files to test runs.
+- Ensure all test suites pass with 100% parity against these static sample fixtures.
+
 ## 7. Files and symbols in scope
 
 Modify only defects uncovered by certification plus release metadata/tests.
@@ -135,7 +146,8 @@ Mandatory:
 - protected identity snapshot;
 - JSONL lineage reconstruction, including a multiprocessing/worker path;
 - performance comparison;
-- zero legacy ingestion references.
+- zero legacy ingestion references;
+- canonical static evidence fixtures established in `tests/fixtures/evidence/` and all in-memory openpyxl/zipfile byte builders demolished.
 
 ## 10. Explicit non-goals
 
@@ -158,6 +170,7 @@ Do not:
 - [ ] JSONL lineage reconstructable.
 - [ ] Multiprocessing/worker lineage remains correlated.
 - [ ] Performance accepted.
+- [ ] Canonical evidence fixtures in `tests/fixtures/evidence/` established and in-memory zip builders demolished.
 - [ ] v10.0.0 releasable.
 
 ## 12. Commit boundary

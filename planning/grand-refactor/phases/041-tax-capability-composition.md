@@ -120,7 +120,8 @@ Required:
 - inactive Tax outputs absent from produced set;
 - full Shan Tax events/amounts/IDs identical;
 - unrelated outputs identical when Tax disabled;
-- architecture guard against direct Tax feature flags.
+- architecture guard against direct Tax feature flags;
+- deterministic financial test cases using `tests/fixtures/evidence/` for capital gains tax calculations (LTCG / STCG, grandfathering rules, tax slabs, dividend withholding) against predictable real-world trades.
 
 ## 10. Explicit non-goals
 

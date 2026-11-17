@@ -113,7 +113,8 @@ Required:
 - FIRE missing-mandatory-input failure;
 - disabled service call counts zero;
 - simulation boundary test/documented decision;
-- full Shan wealth/FIRE/simulation equivalence.
+- full Shan wealth/FIRE/simulation equivalence;
+- end-to-end headless wealth and FIRE Monte Carlo simulation tests driven by static sample fixtures from `tests/fixtures/evidence/`.
 
 ## 10. Explicit non-goals
 

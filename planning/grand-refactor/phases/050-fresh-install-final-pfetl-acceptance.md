@@ -31,6 +31,7 @@ Use:
 - empty working data/control-plane/warehouse directories;
 - one golden external household configuration;
 - one golden investment configuration or a combined scenario;
+- canonical sample evidence repository (`tests/fixtures/evidence/`) serving as the public-facing golden reference dataset for new users and automated fresh-install acceptance runs;
 - frozen machine-readable config schema;
 - PFETL CLI/help;
 - backup/restore commands;
@@ -226,7 +227,8 @@ Final mandatory acceptance matrix:
 
 ### Regression
 - Shan full financial oracle remains green;
-- external household/investment golden fixtures remain green.
+- external household/investment golden fixtures remain green;
+- static sample evidence suite (`tests/fixtures/evidence/`) executes end-to-end verifying zero-defect execution of FIFO lot matching, capital gains tax, FIRE simulations, and Wealth reporting on clean installs.
 
 ## 10. Explicit non-goals
 
