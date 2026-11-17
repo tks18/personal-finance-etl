@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import codecs
 import re
-from typing import Annotated, Literal
+from typing import Annotated, Literal, cast
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -153,13 +153,25 @@ class ExcelSelector(BaseModel):
         Discriminator identifying the Excel provider type.
     sheet_name : str | None, default None
         Target worksheet name. If None, default/first worksheet resolution applies.
+    candidate_sheets : list[str] | None, default None
+        Ordered candidate worksheet names to inspect if sheet_name is None.
     header_row : int | None, default None
         Zero-based row index containing column headers if header detection is not automatic.
+    header_anchor : str | None, default None
+        Text anchor to scan for in the worksheet to locate the column header row.
+    anchor_offset : int, default 0
+        Row offset relative to the header_anchor where column headers begin.
+    stop_on_blank : bool, default False
+        Whether extraction stops when the first empty cell in the primary anchor column is encountered.
     """
 
     provider_type: Literal[ProviderType.EXCEL] = ProviderType.EXCEL
     sheet_name: str | None = None
+    candidate_sheets: list[str] | None = None
     header_row: int | None = None
+    header_anchor: str | None = None
+    anchor_offset: int = 0
+    stop_on_blank: bool = False
 
     @field_validator("sheet_name", mode="before")
     @classmethod
@@ -189,6 +201,67 @@ class ExcelSelector(BaseModel):
         if not cleaned:
             raise ValueError("sheet_name cannot be empty or whitespace.")
         return cleaned
+
+    @field_validator("header_anchor", mode="before")
+    @classmethod
+    def _validate_header_anchor(cls, v: object) -> str | None:
+        """Validate that header_anchor, if provided, is a non-empty string.
+
+        Parameters
+        ----------
+        v : object
+            Input header anchor candidate.
+
+        Returns
+        -------
+        str | None
+            Cleaned header anchor or None.
+
+        Raises
+        ------
+        ValueError
+            If v is provided and is not a string, or is an empty string or whitespace only.
+        """
+        if v is None:
+            return None
+        if not isinstance(v, str):
+            raise ValueError(f"header_anchor must be a string, got {type(v).__name__}")
+        cleaned = v.strip()
+        if not cleaned:
+            raise ValueError("header_anchor cannot be empty or whitespace.")
+        return cleaned
+
+    @field_validator("candidate_sheets", mode="before")
+    @classmethod
+    def _validate_candidate_sheets(cls, v: object) -> list[str] | None:
+        """Validate that candidate_sheets, if provided, contains non-empty strings.
+
+        Parameters
+        ----------
+        v : object
+            Input candidate sheets sequence.
+
+        Returns
+        -------
+        list[str] | None
+            Cleaned list of candidate sheet names or None.
+
+        Raises
+        ------
+        ValueError
+            If sequence contains empty or non-string sheet names.
+        """
+        if v is None:
+            return None
+        if not isinstance(v, (list, tuple)):
+            raise ValueError("candidate_sheets must be a sequence of sheet name strings.")
+        raw_items = cast(list[object] | tuple[object, ...], v)
+        cleaned_list: list[str] = []
+        for item in raw_items:
+            if not isinstance(item, str) or not item.strip():
+                raise ValueError("candidate_sheets entries must be non-empty strings.")
+            cleaned_list.append(item.strip())
+        return cleaned_list
 
     @field_validator("header_row", mode="before")
     @classmethod

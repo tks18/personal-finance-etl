@@ -742,6 +742,8 @@ class PipelineExecutor:
             DatasetId.INVESTMENT_BENCHMARK_MASTER,
             DatasetId.INVESTMENT_MACRO_PARAMETERS,
             DatasetId.MARKET_CURRENCY_MAPPING,
+            DatasetId.MARKET_MF_HOLDINGS,
+            DatasetId.INVESTMENT_MF_ORDERS,
         )
 
         if renames:

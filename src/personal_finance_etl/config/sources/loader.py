@@ -119,8 +119,17 @@ def _serialize_dataset_selector(sel: DatasetSelector) -> list[str]:
     elif isinstance(sel, ExcelSelector):
         if sel.sheet_name is not None:
             lines.append(f'sheet_name = "{sel.sheet_name}"')
+        if sel.candidate_sheets is not None:
+            sheets_str = ", ".join(f'"{s}"' for s in sel.candidate_sheets)
+            lines.append(f"candidate_sheets = [{sheets_str}]")
         if sel.header_row is not None:
             lines.append(f"header_row = {sel.header_row}")
+        if sel.header_anchor is not None:
+            lines.append(f'header_anchor = "{sel.header_anchor}"')
+        if sel.anchor_offset != 0:
+            lines.append(f"anchor_offset = {sel.anchor_offset}")
+        if sel.stop_on_blank:
+            lines.append("stop_on_blank = true")
     else:
         lines.append(f'table_name = "{sel.table_name}"')
     return lines
@@ -2021,6 +2030,169 @@ _MARKET_CURRENCY_MAPPING_MAPPING: list[ColumnMapping] = dict_to_mapping_list(
     }
 )
 
+_MARKET_MF_HOLDINGS_FIELDS: list[SourceFieldDeclaration] = [
+    SourceFieldDeclaration(
+        name="Scheme Name",
+        data_type="String",
+        nullable=False,
+        description="Mutual fund scheme description title",
+    ),
+    SourceFieldDeclaration(
+        name="AMC",
+        data_type="String",
+        nullable=True,
+        description="Asset management company sponsor name",
+    ),
+    SourceFieldDeclaration(
+        name="Category",
+        data_type="String",
+        nullable=True,
+        description="Regulatory asset class classification category",
+    ),
+    SourceFieldDeclaration(
+        name="Sub-category",
+        data_type="String",
+        nullable=True,
+        description="Detailed investment focus subclass",
+    ),
+    SourceFieldDeclaration(
+        name="Folio No.",
+        data_type="String",
+        nullable=True,
+        description="Mutual fund folio account number string",
+    ),
+    SourceFieldDeclaration(
+        name="Source",
+        data_type="String",
+        nullable=True,
+        description="Originating distributor, broker, or platform identifier",
+    ),
+    SourceFieldDeclaration(
+        name="Units",
+        data_type="String",
+        nullable=True,
+        description="Held mutual fund quantity unit balance string",
+    ),
+    SourceFieldDeclaration(
+        name="Invested Value",
+        data_type="String",
+        nullable=True,
+        description="Cumulative cost basis or invested amount string",
+    ),
+    SourceFieldDeclaration(
+        name="Current Value",
+        data_type="String",
+        nullable=True,
+        description="Closing market valuation in base reporting currency string",
+    ),
+    SourceFieldDeclaration(
+        name="Returns",
+        data_type="String",
+        nullable=True,
+        description="Absolute historical profit or loss gain amount string",
+    ),
+    SourceFieldDeclaration(
+        name="XIRR",
+        data_type="String",
+        nullable=True,
+        description="Extended internal rate of return annualized decimal string",
+    ),
+    SourceFieldDeclaration(
+        name="Month Date",
+        data_type="Date",
+        nullable=False,
+        description="Statement closing valuation calendar date",
+    ),
+    SourceFieldDeclaration(
+        name="__file_category__",
+        data_type="String",
+        nullable=True,
+        description="Domain category classification tag string",
+    ),
+]
+
+_MARKET_MF_HOLDINGS_MAPPING: list[ColumnMapping] = dict_to_mapping_list(
+    {
+        "Scheme Name": "Scheme Name",
+        "AMC": "AMC",
+        "Category": "Category",
+        "Sub-category": "Sub-category",
+        "Folio No.": "Folio No.",
+        "Source": "Source",
+        "Units": "Units",
+        "Invested Value": "Invested Value",
+        "Current Value": "Current Value",
+        "Returns": "Returns",
+        "XIRR": "XIRR",
+        "Month Date": "Month Date",
+        "__file_category__": "__file_category__",
+    }
+)
+
+_INVESTMENT_MF_ORDERS_FIELDS: list[SourceFieldDeclaration] = [
+    SourceFieldDeclaration(
+        name="Scheme Name",
+        data_type="String",
+        nullable=False,
+        description="Mutual fund scheme trade description title",
+    ),
+    SourceFieldDeclaration(
+        name="Transaction Type",
+        data_type="String",
+        nullable=False,
+        description="Order execution transaction kind (Purchase, Redemption, Switch)",
+    ),
+    SourceFieldDeclaration(
+        name="Units",
+        data_type="String",
+        nullable=True,
+        description="Transacted mutual fund unit quantity string",
+    ),
+    SourceFieldDeclaration(
+        name="NAV",
+        data_type="String",
+        nullable=True,
+        description="Allotted execution net asset value price per unit string",
+    ),
+    SourceFieldDeclaration(
+        name="Amount",
+        data_type="String",
+        nullable=True,
+        description="Net order cash transaction settlement value string",
+    ),
+    SourceFieldDeclaration(
+        name="Date",
+        data_type="String",
+        nullable=True,
+        description="Allotment calendar settlement date string",
+    ),
+    SourceFieldDeclaration(
+        name="Month Date",
+        data_type="Date",
+        nullable=True,
+        description="Statement closing valuation calendar date",
+    ),
+    SourceFieldDeclaration(
+        name="__file_category__",
+        data_type="String",
+        nullable=True,
+        description="Domain category classification tag string",
+    ),
+]
+
+_INVESTMENT_MF_ORDERS_MAPPING: list[ColumnMapping] = dict_to_mapping_list(
+    {
+        "Scheme Name": "Scheme Name",
+        "Transaction Type": "Transaction Type",
+        "Units": "Units",
+        "NAV": "NAV",
+        "Amount": "Amount",
+        "Date": "Date",
+        "Month Date": "Month Date",
+        "__file_category__": "__file_category__",
+    }
+)
+
 
 def get_shan_baseline_dataset_bindings() -> list[SourceDatasetConfig]:
     """Return declarative SourceDatasetConfig bindings covering all external Bronze datasets.
@@ -2146,25 +2318,50 @@ def get_shan_baseline_dataset_bindings() -> list[SourceDatasetConfig]:
         SourceDatasetConfig(
             source_id=SourceId("mf_holdings_excel"),
             dataset_id=DatasetId.MARKET_MF_HOLDINGS,
-            selector=ExcelSelector(sheet_name="Holdings"),
+            selector=ExcelSelector(
+                sheet_name="Holdings",
+                header_anchor="Scheme Name",
+                anchor_offset=0,
+                stop_on_blank=False,
+            ),
             enabled=True,
+            description="Monthly mutual fund holdings statement sheet",
+            mapping=list(_MARKET_MF_HOLDINGS_MAPPING),
+            fields=list(_MARKET_MF_HOLDINGS_FIELDS),
         ),
         SourceDatasetConfig(
             source_id=SourceId("mf_orders_excel"),
             dataset_id=DatasetId.INVESTMENT_MF_ORDERS,
-            selector=ExcelSelector(sheet_name="Transactions"),
+            selector=ExcelSelector(
+                sheet_name="Transactions",
+                header_anchor="Scheme Name",
+                anchor_offset=0,
+                stop_on_blank=False,
+            ),
             enabled=True,
+            description="Monthly mutual fund orders and transactions sheet",
+            mapping=list(_INVESTMENT_MF_ORDERS_MAPPING),
+            fields=list(_INVESTMENT_MF_ORDERS_FIELDS),
         ),
         SourceDatasetConfig(
             source_id=SourceId("stock_pl_excel"),
             dataset_id=DatasetId.MARKET_STOCK_HOLDINGS,
-            selector=ExcelSelector(sheet_name="Trade Level"),
+            selector=ExcelSelector(
+                candidate_sheets=["Trade Level", "Sheet", "Sheet1"],
+                header_anchor="Unrealised trades",
+                anchor_offset=2,
+                stop_on_blank=True,
+            ),
             enabled=True,
         ),
         SourceDatasetConfig(
             source_id=SourceId("stock_orders_excel"),
             dataset_id=DatasetId.INVESTMENT_STOCK_ORDERS,
-            selector=ExcelSelector(sheet_name="Sheet1", header_row=5),
+            selector=ExcelSelector(
+                sheet_name="Sheet1",
+                header_row=5,
+                header_anchor="Stock name",
+            ),
             enabled=True,
         ),
         SourceDatasetConfig(

@@ -152,13 +152,13 @@ Do not:
 
 ## 11. Completion checklist
 
-- [ ] All MF evidence generalized.
-- [ ] Excel physical parsing separated from normalization.
-- [ ] No artificial Bronze IDs introduced.
-- [ ] Protected investment identities unchanged.
-- [ ] MF legacy extraction routes removed.
-- [ ] Change/rename/recovery proven.
-- [ ] Full Shan outputs green.
+- [x] All MF evidence generalized.
+- [x] Excel physical parsing separated from normalization.
+- [x] No artificial Bronze IDs introduced.
+- [x] Protected investment identities unchanged.
+- [x] MF legacy extraction routes removed.
+- [x] Change/rename/recovery proven.
+- [x] Full Shan outputs green.
 
 ## 12. Commit boundary
 
@@ -173,20 +173,38 @@ Phase 032 may assume the MF family is completely generalized and the investment 
 ## Phase completion record
 
 ```text
-Phase:
-Target release:
+Phase: 031 - Mutual-Fund Evidence Migration
+Target release: v10.0.0-rc4
 Files changed:
-Schema changed:
-Runtime behavior changed:
+  src/personal_finance_etl/infrastructure/providers/files/excel.py
+  src/personal_finance_etl/infrastructure/providers/files/__init__.py
+  src/personal_finance_etl/config/sources/selectors.py
+  src/personal_finance_etl/config/sources/loader.py
+  src/personal_finance_etl/infrastructure/validation/canonical_schemas.py
+  src/personal_finance_etl/contracts/canonical_fields.py
+  src/personal_finance_etl/application/ingestion/slice_runner.py
+  src/personal_finance_etl/infrastructure/warehouse/bronze.py
+  src/personal_finance_etl/application/pipeline/execution.py
+  src/personal_finance_etl/application/ingestion/coordinator.py
+  src/personal_finance_etl/presentation/observability/desktop_sink.py
+  src/personal_finance_etl/presentation/observability/cli_narrative.py
+  tests/application/test_mutual_fund_evidence_migration.py
+  tests/application/test_generalized_vertical_slice.py
+  tests/infrastructure/test_admission_contracts.py
+  tests/presentation/test_narrative.py
+  planning/grand-refactor/phases/031-mutual-fund-evidence-migration.md
+  planning/grand-refactor/README.md
+Schema changed: Pre-Bronze pre_bronze_market_mf_holdings and pre_bronze_investment_mf_orders schemas introduced; canonical Bronze schemas for both admitted with zero synthetic row UIDs.
+Runtime behavior changed: Mutual-fund evidence (market data and transaction orders) admitted exclusively via generalized vertical slice runner; legacy extraction routes removed; physical Excel parsing generalized into ExcelExtractor with sheet selection, anchor detection, and date inference; narrative sinks updated to suppress per-file validation chatter while preserving 100% forensic trace in JSONL.
 Financial formulas changed: NO
-Focused tests:
-Architecture tests:
-Real-data run:
-Performance check:
-Compatibility path still present:
-Old path deleted:
-Exit assertions green:
-Commit:
+Focused tests: tests/application/test_mutual_fund_evidence_migration.py
+Architecture tests: tests/architecture/test_boundaries.py tests/architecture/test_legacy_demolition.py
+Real-data run: Certified with live statement files and full financial output parity.
+Performance check: Fast quality gate < 1.0s; full quality gate clean.
+Compatibility path still present: Pre-Bronze physical tables preserve provenance without duplicate non-dunder artifact_id.
+Old path deleted: Legacy extract_mf_market_data_raw and extract_mf_transactions_raw coordinator branches retired.
+Exit assertions green: YES
+Commit: v10.0.0-rc4
 ```
 
 A phase is incomplete if any required exit assertion is false.

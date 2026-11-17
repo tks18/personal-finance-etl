@@ -24,6 +24,7 @@ from personal_finance_etl.infrastructure.providers.files.csv import (
     extract_stg_mf_isin_mapping,
 )
 from personal_finance_etl.infrastructure.providers.files.excel import (
+    ExcelExtractor,
     extract_mf_market_data_raw,
     extract_mf_transactions_raw,
     extract_stock_market_data_raw,
@@ -39,6 +40,7 @@ from personal_finance_etl.infrastructure.providers.files.sqlite import (
 
 __all__ = [
     "CSVExtractor",
+    "ExcelExtractor",
     "SQLiteExtractor",
     "categorize_statement_files",
     "extract_benchmark_master_raw",
