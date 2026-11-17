@@ -744,6 +744,8 @@ class PipelineExecutor:
             DatasetId.MARKET_CURRENCY_MAPPING,
             DatasetId.MARKET_MF_HOLDINGS,
             DatasetId.INVESTMENT_MF_ORDERS,
+            DatasetId.MARKET_STOCK_HOLDINGS,
+            DatasetId.INVESTMENT_STOCK_ORDERS,
         )
 
         if renames:

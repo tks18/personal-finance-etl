@@ -258,6 +258,9 @@ class DatasetIngestionService:
                     "Indian MF"
                     if dataset_plan.dataset_id
                     in (DatasetId.MARKET_MF_HOLDINGS, DatasetId.INVESTMENT_MF_ORDERS)
+                    else "Indian Stocks"
+                    if dataset_plan.dataset_id
+                    in (DatasetId.MARKET_STOCK_HOLDINGS, DatasetId.INVESTMENT_STOCK_ORDERS)
                     else None
                 )
                 source_lazy = excel_extractor.extract_sheet(
