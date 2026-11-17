@@ -136,14 +136,14 @@ Do not:
 
 ## 11. Completion checklist
 
-- [ ] All in-scope static/reference datasets generalized.
-- [ ] Natural grain/uniqueness enforced.
-- [ ] SourceConfiguration is sole mapping authority.
-- [ ] `column_master` production path removed.
-- [ ] `get_column_mapping` legacy path removed.
-- [ ] Settings/manual injection cleaned.
-- [ ] Reference downstream outputs unchanged.
-- [ ] Full Shan run green.
+- [x] All in-scope static/reference datasets generalized.
+- [x] Natural grain/uniqueness enforced.
+- [x] SourceConfiguration is sole mapping authority.
+- [x] `column_master` production path removed.
+- [x] `get_column_mapping` legacy path removed.
+- [x] Settings/manual injection cleaned.
+- [x] Reference downstream outputs unchanged.
+- [x] Full Shan run green.
 
 ## 12. Commit boundary
 
@@ -165,20 +165,37 @@ Phase 031 begins the higher-risk investment evidence migrations, starting with m
 ## Phase completion record
 
 ```text
-Phase:
-Target release:
+Phase: 030 - Reference Evidence Migration and Column-Master Retirement
+Target release: v10.0.0-rc3
 Files changed:
-Schema changed:
-Runtime behavior changed:
+  src/personal_finance_etl/config/sources/loader.py
+  src/personal_finance_etl/infrastructure/validation/canonical_schemas.py
+  src/personal_finance_etl/infrastructure/providers/files/csv.py
+  src/personal_finance_etl/application/ingestion/slice_runner.py
+  src/personal_finance_etl/infrastructure/warehouse/bronze.py
+  src/personal_finance_etl/application/pipeline/execution.py
+  src/personal_finance_etl/application/pipeline/transformer.py
+  src/personal_finance_etl/application/ingestion/coordinator.py
+  src/personal_finance_etl/domain/household/transforms/common.py
+  src/personal_finance_etl/domain/household/transforms/__init__.py
+  src/personal_finance_etl/config/settings.py
+  tests/config/test_column_master_parity.py
+  tests/application/test_reference_evidence_migration.py
+  tests/application/test_normalization_executor.py
+  tests/domain/test_canonical_domains.py
+  tests/application/test_optional_capability_benchmark.py
+  tests/application/test_generalized_vertical_slice.py
+Schema changed: YES (5 reference datasets registered in Pre-Bronze and canonical Bronze Pandera schemas; natural grains preserved)
+Runtime behavior changed: YES (all 5 reference datasets ingested through generalized vertical slice; column_master retired; SourceConfiguration sole mapping authority)
 Financial formulas changed: NO
-Focused tests:
-Architecture tests:
-Real-data run:
-Performance check:
-Compatibility path still present:
-Old path deleted:
-Exit assertions green:
-Commit:
+Focused tests: tests/application/test_reference_evidence_migration.py, tests/config/test_column_master_parity.py
+Architecture tests: tests/architecture/test_boundaries.py, tests/architecture/test_legacy_demolition.py
+Real-data run: PASS (tests/application/test_live_pipeline_e2e.py)
+Performance check: PASS (<1.0s fast audit, 97.5s full 6-engine audit)
+Compatibility path still present: NO (column_master removed from data plane; get_column_mapping deleted)
+Old path deleted: YES (_read_config_csv_lazy, _extract_config_tables, get_column_mapping deleted)
+Exit assertions green: YES
+Commit: Pending user review and execution via .commit_overrides.json
 ```
 
 A phase is incomplete if any required exit assertion is false.
