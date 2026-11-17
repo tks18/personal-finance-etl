@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [10.0.0-rc.5](https://github.com/tks18/personal-finance-etl/compare/10.0.0-rc.4...10.0.0-rc.5) (2026-11-17)
+
+
+### Features 🔥
+
+* **contracts:** update canonical bronze stock field vocabularies ([e486ecc](https://github.com/tks18/personal-finance-etl/commit/e486ecc2a62f9cea6c080e2071056f6809f68ac6))
+* **ingestion:** route domestic stock evidence via slice runner ([405c995](https://github.com/tks18/personal-finance-etl/commit/405c995aac25ea6c8eae3e71da5b61cd887be533))
+* **validation:** register canonical bronze stock pandera schemas ([75e507d](https://github.com/tks18/personal-finance-etl/commit/75e507da0d536693430a1327242506aca2fdd64b))
+
+
+### Tests 🧪
+
+* **ingestion:** certify domestic stock evidence migration and parity ([26d9498](https://github.com/tks18/personal-finance-etl/commit/26d9498bbcdb61c1139967923e0a739e820cd5b2))
+
+
+### Code Refactoring 🖌
+
+* **config:** declare domestic stock source fields and mappings ([2c2bd57](https://github.com/tks18/personal-finance-etl/commit/2c2bd5788169931710cae90ff020e32db0f9a3a2))
+* **ingestion:** demolish legacy domestic stock extraction paths ([1b555f2](https://github.com/tks18/personal-finance-etl/commit/1b555f244180cd9929f2697b149437ac573f3574))
+* **presentation:** suppress validation chatter in desktop gui ([cee76f4](https://github.com/tks18/personal-finance-etl/commit/cee76f4e686895a428b0d78a55e227839e8f9836))
+
+
+### Docs 📃
+
+* **refactor:** complete phase 032 and record sample fixture roadmap ([1312c22](https://github.com/tks18/personal-finance-etl/commit/1312c22ff0f925a9e4af4824c8d134295f846343))
+
 ## [10.0.0-rc.4](https://github.com/tks18/personal-finance-etl/compare/10.0.0-rc.3...10.0.0-rc.4) (2026-11-17)
 
 
