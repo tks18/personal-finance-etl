@@ -2,6 +2,35 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [10.0.0-rc.3](https://github.com/tks18/personal-finance-etl/compare/10.0.0-rc.2...10.0.0-rc.3) (2026-11-17)
+
+
+### Others 🔧
+
+* **release:** remove redundant release:flow:rc:major:rc alias ([a84c8ca](https://github.com/tks18/personal-finance-etl/commit/a84c8cabe0318d1f3e5d7080c81e1382f80ab7c3))
+
+
+### Features 🔥
+
+* **validation:** introduce reference bronze pandera schemas ([a34f206](https://github.com/tks18/personal-finance-etl/commit/a34f2067ee74819810f292a38cefba0882c57455))
+
+
+### Code Refactoring 🖌
+
+* **config:** declare reference datasets and retire column_master ([60321e0](https://github.com/tks18/personal-finance-etl/commit/60321e0bb43a91ace0984c84671b50d70d230dd0))
+* **domain:** delete get_column_mapping and use source config ([c7b97a8](https://github.com/tks18/personal-finance-etl/commit/c7b97a8fa615b6bfd0611db81cbe683de449d9fa))
+* **ingestion:** generalize reference and retire column_master ([1fb97fc](https://github.com/tks18/personal-finance-etl/commit/1fb97fc01efb90f0c0c0021e1e848013780b4145))
+
+
+### Tests 🧪
+
+* **ingestion:** certify reference migration and column_master ([fd84162](https://github.com/tks18/personal-finance-etl/commit/fd8416278e15aebe961a79c577477875acb9e1e5))
+
+
+### Docs 📃
+
+* **refactor:** complete phase 030 reference evidence migration ([3e084e1](https://github.com/tks18/personal-finance-etl/commit/3e084e12fe2f29cdd3c02065cebbdc00aa47c3d9))
+
 ## [10.0.0-rc.2](https://github.com/tks18/personal-finance-etl/compare/10.0.0-rc.1...10.0.0-rc.2) (2026-11-16)
 
 
