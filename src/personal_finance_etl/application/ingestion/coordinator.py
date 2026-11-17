@@ -16,11 +16,9 @@ Does not own
 
 from __future__ import annotations
 
-import io
 import os
 import time
 import traceback
-from collections.abc import Callable
 
 import polars as pl
 
@@ -37,20 +35,12 @@ from personal_finance_etl.contracts.observability import (
     PresentationKind,
 )
 from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
-from personal_finance_etl.infrastructure.control_plane.hashing import generate_file_id
 from personal_finance_etl.infrastructure.observability import (
     ObservabilityEmitter,
     get_global_emitter,
 )
 from personal_finance_etl.infrastructure.observability.diagnostics import (
     get_observability_diagnostics,
-)
-from personal_finance_etl.infrastructure.providers.files.csv import (
-    extract_benchmark_master_raw,
-    extract_currency_mapping_raw,
-    extract_macro_parameters_raw,
-    extract_stg_benchmark_mapping,
-    extract_stg_mf_isin_mapping,
 )
 from personal_finance_etl.infrastructure.providers.files.excel import (
     extract_mf_market_data_raw,
@@ -101,78 +91,6 @@ class DataExtractor:
             List of tuples of (filename, directory_path, file_bytes).
         """
         return [(os.path.basename(f), os.path.dirname(f), self._get_bytes(f)) for f in filepaths]
-
-    def _read_config_csv_lazy(
-        self,
-        pending_files: dict[str, list[str]],
-        filepath: str,
-        func: Callable[[str, str, bytes], pl.LazyFrame],
-        category: str,
-    ) -> pl.LazyFrame:
-        """Read a pending CSV configuration file as a Polars LazyFrame."""
-        files = pending_files.get(category, [])
-        normalized_filepath = filepath.replace("\\", "/")
-        if files and normalized_filepath in files:
-            return func(
-                os.path.basename(normalized_filepath),
-                os.path.dirname(normalized_filepath),
-                self._get_bytes(normalized_filepath),
-            )
-        return pl.LazyFrame()
-
-    def _extract_config_tables(
-        self, pending_files: dict[str, list[str]]
-    ) -> tuple[pl.DataFrame, dict[str, pl.LazyFrame]]:
-        """Extract column master frame and configuration CSV lazyframes."""
-        if self.cfg.COLUMN_MASTER_PATH:
-            column_master_bytes = self._get_bytes(self.cfg.COLUMN_MASTER_PATH)
-            column_master_artifact_id = generate_file_id(self.cfg.COLUMN_MASTER_PATH)
-            df_column_master = pl.read_csv(io.BytesIO(column_master_bytes)).with_columns(
-                pl.lit(os.path.basename(self.cfg.COLUMN_MASTER_PATH)).alias("__file_name__"),
-                pl.lit(os.path.dirname(self.cfg.COLUMN_MASTER_PATH)).alias("__folder_path__"),
-                pl.lit(column_master_artifact_id).alias("artifact_id"),
-            )
-        else:
-            df_column_master = pl.DataFrame()
-        config_frames = {
-            "stg_mf_isin_mapping": self._read_config_csv_lazy(
-                pending_files, self.cfg.MF_ISIN_CSV_PATH, extract_stg_mf_isin_mapping, "mf_isin"
-            ),
-            "stg_benchmark_mapping": self._read_config_csv_lazy(
-                pending_files,
-                self.cfg.BENCHMARK_MAPPING_CSV_PATH,
-                extract_stg_benchmark_mapping,
-                "benchmark_mapping",
-            ),
-            "raw_benchmark_master": self._read_config_csv_lazy(
-                pending_files,
-                self.cfg.BENCHMARK_MASTER_CSV_PATH,
-                extract_benchmark_master_raw,
-                "benchmark_master",
-            ),
-            "raw_macro_parameters": self._read_config_csv_lazy(
-                pending_files,
-                self.cfg.MACRO_PARAMETERS_CSV_PATH,
-                extract_macro_parameters_raw,
-                "macro_parameters",
-            ),
-            "currency_mapping_raw": self._read_config_csv_lazy(
-                pending_files,
-                self.cfg.CURRENCY_MAPPING_CSV_PATH,
-                extract_currency_mapping_raw,
-                "currency_mapping",
-            ),
-        }
-        self.emitter.emit_event(
-            event_code=EventCode.PROVIDER_BATCH_INGEST,
-            message=f"Extracted {len(config_frames) + 1} dynamic configuration CSV tables",
-            presentation_kind=PresentationKind.INTERNAL,
-            severity=DiagnosticSeverity.DEBUG,
-            stage=EngineStage.EXTRACTING,
-            provider="CSV",
-            rows=len(config_frames) + 1,
-        )
-        return df_column_master, config_frames
 
     def _extract_excel_statements(
         self, pending_files: dict[str, list[str]]
@@ -321,7 +239,6 @@ class DataExtractor:
         )
 
         pending_files = actionable_files or self.cp.artifacts.get_pending_files()
-        df_column_master, config_frames = self._extract_config_tables(pending_files)
         excel_frames = self._extract_excel_statements(pending_files)
 
         collection = DatasetCollection(
@@ -331,13 +248,13 @@ class DataExtractor:
                 DatasetId.HOUSEHOLD_ASSETS: pl.LazyFrame(),
                 DatasetId.HOUSEHOLD_CURRENCY: pl.LazyFrame(),
                 DatasetId.HOUSEHOLD_INOUTCOME: pl.LazyFrame(),
-                DatasetId.COMMON_COLUMN_MASTER: df_column_master,
-                DatasetId.INVESTMENT_MF_ISIN_MAPPING: config_frames["stg_mf_isin_mapping"],
-                DatasetId.INVESTMENT_BENCHMARK_MAPPING: config_frames["stg_benchmark_mapping"],
+                DatasetId.COMMON_COLUMN_MASTER: pl.DataFrame(),
+                DatasetId.INVESTMENT_MF_ISIN_MAPPING: pl.LazyFrame(),
+                DatasetId.INVESTMENT_BENCHMARK_MAPPING: pl.LazyFrame(),
                 DatasetId.HOUSEHOLD_OPENING_BALANCES: pl.LazyFrame(),
-                DatasetId.INVESTMENT_BENCHMARK_MASTER: config_frames["raw_benchmark_master"],
-                DatasetId.INVESTMENT_MACRO_PARAMETERS: config_frames["raw_macro_parameters"],
-                DatasetId.MARKET_CURRENCY_MAPPING: config_frames["currency_mapping_raw"],
+                DatasetId.INVESTMENT_BENCHMARK_MASTER: pl.LazyFrame(),
+                DatasetId.INVESTMENT_MACRO_PARAMETERS: pl.LazyFrame(),
+                DatasetId.MARKET_CURRENCY_MAPPING: pl.LazyFrame(),
                 DatasetId.MARKET_MF_HOLDINGS: excel_frames["mf_market_data_raw"],
                 DatasetId.INVESTMENT_MF_ORDERS: excel_frames["mf_transactions_raw"],
                 DatasetId.MARKET_STOCK_HOLDINGS: excel_frames["stock_market_data_raw"],

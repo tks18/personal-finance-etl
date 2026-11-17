@@ -57,6 +57,7 @@ class CSVExtractor:
         delimiter: str = ",",
         encoding: str = "utf8",
         has_header: bool = True,
+        try_parse_dates: bool = True,
     ) -> pl.LazyFrame:
         """Parse in-memory CSV bytes into an annotated Polars LazyFrame.
 
@@ -74,6 +75,8 @@ class CSVExtractor:
             Character encoding codec.
         has_header : bool, default True
             Whether the first line contains column headers.
+        try_parse_dates : bool, default True
+            Whether to attempt automatic date parsing for date columns.
 
         Returns
         -------
@@ -89,6 +92,7 @@ class CSVExtractor:
             encoding=norm_encoding,
             has_header=has_header,
             infer_schema_length=10000,
+            try_parse_dates=try_parse_dates,
         )
         return df.lazy().with_columns(
             pl.lit(filename).alias("__file_name__"),
