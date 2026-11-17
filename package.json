@@ -1,7 +1,7 @@
 {
   "name": "personal-finance-etl",
   "description": "Local-first personal financial systems platform for investment accounting, reconciliation, tax evidence, wealth analytics, FIRE planning, and BI.",
-  "version": "10.0.0-rc.2",
+  "version": "10.0.0-rc.3",
   "repository": "https://github.com/tks18/personal-finance-etl",
   "author": "tks18 <tksudharshan@gmail.com>",
   "license": "GPL-3.0-or-later",
@@ -61,7 +61,6 @@
     "release:flow:alpha": "uv run poe release:flow:alpha",
     "release:flow:beta": "uv run poe release:flow:beta",
     "release:flow:major:rc": "uv run poe release:flow:major:rc",
-    "release:flow:rc:major:rc": "uv run poe release:flow:rc:major:rc",
     "release:flow:minor:rc": "uv run poe release:flow:minor:rc",
     "release:flow:patch:rc": "uv run poe release:flow:patch:rc",
     "release:flow:final": "uv run poe release:flow:final",

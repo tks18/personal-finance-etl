@@ -282,6 +282,7 @@ class PipelineExecutor:
             self.rules,
             emitter=self.emitter,
             plan=self.plan,
+            source_config=self.source_config,
         )
         self.dfs = transformer.run(extracted_data)
 
@@ -605,12 +606,11 @@ class PipelineExecutor:
         discovered_files["currency_mapping"] = [
             self.cfg.CURRENCY_MAPPING_CSV_PATH.replace("\\", "/")
         ]
-        discovered_files["column_master"] = [self.cfg.COLUMN_MASTER_PATH.replace("\\", "/")]
         self.emitter.emit_event(
             event_code=EventCode.EXTRACTION_COMPLETED,
-            message="Injected 8 dynamic configuration assets (7 CSV, 1 SQLite DB)",
+            message="Injected 7 dynamic configuration assets (6 CSV, 1 SQLite DB)",
             presentation_kind=PresentationKind.STEP,
-            rows=8,
+            rows=7,
             stage=EngineStage.DISCOVERING,
         )
 
@@ -737,16 +737,22 @@ class PipelineExecutor:
             DatasetId.HOUSEHOLD_CURRENCY,
             DatasetId.HOUSEHOLD_INOUTCOME,
             DatasetId.HOUSEHOLD_OPENING_BALANCES,
+            DatasetId.INVESTMENT_MF_ISIN_MAPPING,
+            DatasetId.INVESTMENT_BENCHMARK_MAPPING,
+            DatasetId.INVESTMENT_BENCHMARK_MASTER,
+            DatasetId.INVESTMENT_MACRO_PARAMETERS,
+            DatasetId.MARKET_CURRENCY_MAPPING,
         )
 
         if renames:
             bronze.migrate_identity(renames)
             meta_layer.migrate_identity(renames)
             for old_path, new_path, category in renames:
-                if category == "sqlite_source":
-                    old_id = generate_file_id(old_path)
-                    new_id = generate_file_id(new_path)
-                    for ds_id in migrated_datasets:
+                old_id = generate_file_id(old_path)
+                new_id = generate_file_id(new_path)
+                for ds_id in migrated_datasets:
+                    b_contract = get_bronze_contract_by_dataset_id(ds_id)
+                    if b_contract and b_contract.sync_category == category:
                         pb_contract = get_pre_bronze_contract_by_dataset_id(ds_id)
                         if pb_contract and pre_bronze.table_exists(pb_contract):
                             pre_bronze.migrate_artifact_identity(old_id, new_id, pb_contract)

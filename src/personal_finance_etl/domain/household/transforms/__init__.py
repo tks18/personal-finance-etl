@@ -17,9 +17,6 @@ from personal_finance_etl.domain.household.transforms.calendar import (
     get_stg_calendar_ref,
     transform_d_calendar,
 )
-from personal_finance_etl.domain.household.transforms.common import (
-    get_column_mapping,
-)
 from personal_finance_etl.domain.household.transforms.dimensions import (
     transform_d_asset_category,
     transform_d_asset_subcategory,
@@ -43,7 +40,6 @@ from personal_finance_etl.domain.household.transforms.transactions import (
 __all__ = [
     "BASE_TRANSACTION_COLS",
     "get_base_transactions",
-    "get_column_mapping",
     "get_stg_calendar_ref",
     "transform_d_asset_category",
     "transform_d_asset_subcategory",

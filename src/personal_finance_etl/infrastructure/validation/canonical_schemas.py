@@ -8,6 +8,11 @@ Owns
 - CANONICAL_BRONZE_HOUSEHOLD_CURRENCY_SCHEMA: Immutable pandera.polars.DataFrameSchema for DatasetId.HOUSEHOLD_CURRENCY.
 - CANONICAL_BRONZE_HOUSEHOLD_INOUTCOME_SCHEMA: Immutable pandera.polars.DataFrameSchema for DatasetId.HOUSEHOLD_INOUTCOME.
 - CANONICAL_BRONZE_HOUSEHOLD_OPENING_BALANCES_SCHEMA: Immutable pandera.polars.DataFrameSchema for DatasetId.HOUSEHOLD_OPENING_BALANCES.
+- CANONICAL_BRONZE_INVESTMENT_MF_ISIN_MAPPING_SCHEMA: Immutable pandera.polars.DataFrameSchema for DatasetId.INVESTMENT_MF_ISIN_MAPPING.
+- CANONICAL_BRONZE_INVESTMENT_BENCHMARK_MAPPING_SCHEMA: Immutable pandera.polars.DataFrameSchema for DatasetId.INVESTMENT_BENCHMARK_MAPPING.
+- CANONICAL_BRONZE_INVESTMENT_BENCHMARK_MASTER_SCHEMA: Immutable pandera.polars.DataFrameSchema for DatasetId.INVESTMENT_BENCHMARK_MASTER.
+- CANONICAL_BRONZE_INVESTMENT_MACRO_PARAMETERS_SCHEMA: Immutable pandera.polars.DataFrameSchema for DatasetId.INVESTMENT_MACRO_PARAMETERS.
+- CANONICAL_BRONZE_MARKET_CURRENCY_MAPPING_SCHEMA: Immutable pandera.polars.DataFrameSchema for DatasetId.MARKET_CURRENCY_MAPPING.
 - CANONICAL_BRONZE_SCHEMAS: Registry mapping DatasetIds to authoritative canonical Bronze schemas.
 - get_canonical_bronze_schema: Safe accessor for retrieving the canonical Bronze schema for a given DatasetId.
 - has_canonical_bronze_schema: Inspection predicate determining whether a DatasetId has a registered canonical schema.
@@ -33,6 +38,11 @@ __all__ = [
     "CANONICAL_BRONZE_HOUSEHOLD_INOUTCOME_SCHEMA",
     "CANONICAL_BRONZE_HOUSEHOLD_OPENING_BALANCES_SCHEMA",
     "CANONICAL_BRONZE_HOUSEHOLD_ZCATEGORY_SCHEMA",
+    "CANONICAL_BRONZE_INVESTMENT_BENCHMARK_MAPPING_SCHEMA",
+    "CANONICAL_BRONZE_INVESTMENT_BENCHMARK_MASTER_SCHEMA",
+    "CANONICAL_BRONZE_INVESTMENT_MACRO_PARAMETERS_SCHEMA",
+    "CANONICAL_BRONZE_INVESTMENT_MF_ISIN_MAPPING_SCHEMA",
+    "CANONICAL_BRONZE_MARKET_CURRENCY_MAPPING_SCHEMA",
     "CANONICAL_BRONZE_SCHEMAS",
     "get_canonical_bronze_schema",
     "has_canonical_bronze_schema",
@@ -292,6 +302,128 @@ CANONICAL_BRONZE_HOUSEHOLD_OPENING_BALANCES_SCHEMA: pa.DataFrameSchema = pa.Data
     name="canonical_bronze_household_opening_balances",
 )
 
+CANONICAL_BRONZE_INVESTMENT_MF_ISIN_MAPPING_SCHEMA: pa.DataFrameSchema = pa.DataFrameSchema(
+    columns={
+        "INSTRUMENT_NAME": pa.Column(
+            pl.String, nullable=False, unique=True, name="INSTRUMENT_NAME"
+        ),
+        "ISIN": pa.Column(pl.String, nullable=False, name="ISIN"),
+        "artifact_id": pa.Column(pl.String, nullable=False, required=False, name="artifact_id"),
+    },
+    strict=False,
+    name="canonical_bronze_investment_mf_isin_mapping",
+)
+
+CANONICAL_BRONZE_INVESTMENT_BENCHMARK_MAPPING_SCHEMA: pa.DataFrameSchema = pa.DataFrameSchema(
+    columns={
+        "ISIN": pa.Column(pl.String, nullable=False, unique=True, name="ISIN"),
+        "Sector": pa.Column(pl.String, nullable=True, required=False, name="Sector"),
+        "Industry": pa.Column(pl.String, nullable=True, required=False, name="Industry"),
+        "Benchmark_ID": pa.Column(pl.String, nullable=True, required=False, name="Benchmark_ID"),
+        "Yahoo_Ticker": pa.Column(pl.String, nullable=True, required=False, name="Yahoo_Ticker"),
+        "Tax_Instrument_Type": pa.Column(
+            pl.String, nullable=True, required=False, name="Tax_Instrument_Type"
+        ),
+        "Tax_Instrument_Subtype": pa.Column(
+            pl.String, nullable=True, required=False, name="Tax_Instrument_Subtype"
+        ),
+        "Country": pa.Column(pl.String, nullable=True, required=False, name="Country"),
+        "Geo": pa.Column(pl.String, nullable=True, required=False, name="Geo"),
+        "Geo_Subtype": pa.Column(pl.String, nullable=True, required=False, name="Geo_Subtype"),
+        "Ticker": pa.Column(pl.String, nullable=True, required=False, name="Ticker"),
+        "artifact_id": pa.Column(pl.String, nullable=False, required=False, name="artifact_id"),
+    },
+    strict=False,
+    name="canonical_bronze_investment_benchmark_mapping",
+)
+
+CANONICAL_BRONZE_INVESTMENT_BENCHMARK_MASTER_SCHEMA: pa.DataFrameSchema = pa.DataFrameSchema(
+    columns={
+        "ID": pa.Column(pl.String, nullable=False, unique=True, name="ID"),
+        "Benchmark_Name": pa.Column(pl.String, nullable=False, name="Benchmark_Name"),
+        "yF_Ticker": pa.Column(pl.String, nullable=True, required=False, name="yF_Ticker"),
+        "Currency": pa.Column(pl.String, nullable=True, required=False, name="Currency"),
+        "artifact_id": pa.Column(pl.String, nullable=False, required=False, name="artifact_id"),
+    },
+    strict=False,
+    name="canonical_bronze_investment_benchmark_master",
+)
+
+CANONICAL_BRONZE_INVESTMENT_MACRO_PARAMETERS_SCHEMA: pa.DataFrameSchema = pa.DataFrameSchema(
+    columns={
+        "FY": pa.Column(pl.String, nullable=False, unique=True, name="FY"),
+        "FY_Start_Date": pa.Column(pl.Date, nullable=False, name="FY_Start_Date"),
+        "FY_End_Date": pa.Column(pl.Date, nullable=False, name="FY_End_Date"),
+        "Debt_MF_Cutoff_Date": pa.Column(
+            pl.Date, nullable=True, required=False, name="Debt_MF_Cutoff_Date"
+        ),
+        "Inflation_Rate": pa.Column(
+            pl.Float64, nullable=True, required=False, name="Inflation_Rate"
+        ),
+        "Risk_Free_Rate": pa.Column(
+            pl.Float64, nullable=True, required=False, name="Risk_Free_Rate"
+        ),
+        "Estimated_Ordinary_Income_Tax_Rate": pa.Column(
+            pl.Float64, nullable=True, required=False, name="Estimated_Ordinary_Income_Tax_Rate"
+        ),
+        "Equity_LTCG_Exemption": pa.Column(
+            pl.Int64, nullable=True, required=False, name="Equity_LTCG_Exemption"
+        ),
+        "Equity_Listed_LTCG": pa.Column(
+            pl.Float64, nullable=True, required=False, name="Equity_Listed_LTCG"
+        ),
+        "Equity_Listed_STCG": pa.Column(
+            pl.Float64, nullable=True, required=False, name="Equity_Listed_STCG"
+        ),
+        "Equity_Unlisted_LTCG": pa.Column(
+            pl.Float64, nullable=True, required=False, name="Equity_Unlisted_LTCG"
+        ),
+        "Equity_Unlisted_STCG": pa.Column(
+            pl.Float64, nullable=True, required=False, name="Equity_Unlisted_STCG"
+        ),
+        "Gold_LTCG": pa.Column(pl.Float64, nullable=True, required=False, name="Gold_LTCG"),
+        "Gold_STCG": pa.Column(pl.Float64, nullable=True, required=False, name="Gold_STCG"),
+        "Debt_MF_Pre_Cutoff_LTCG": pa.Column(
+            pl.Float64, nullable=True, required=False, name="Debt_MF_Pre_Cutoff_LTCG"
+        ),
+        "Debt_MF_Pre_Cutoff_STCG": pa.Column(
+            pl.Float64, nullable=True, required=False, name="Debt_MF_Pre_Cutoff_STCG"
+        ),
+        "Debt_MF_Post_Cutoff_LTCG": pa.Column(
+            pl.Float64, nullable=True, required=False, name="Debt_MF_Post_Cutoff_LTCG"
+        ),
+        "Debt_MF_Post_Cutoff_STCG": pa.Column(
+            pl.Float64, nullable=True, required=False, name="Debt_MF_Post_Cutoff_STCG"
+        ),
+        "Other_Debt_LTCG": pa.Column(
+            pl.Float64, nullable=True, required=False, name="Other_Debt_LTCG"
+        ),
+        "Other_Debt_STCG": pa.Column(
+            pl.Float64, nullable=True, required=False, name="Other_Debt_STCG"
+        ),
+        "Default_LTCG": pa.Column(pl.Float64, nullable=True, required=False, name="Default_LTCG"),
+        "Default_STCG": pa.Column(pl.Float64, nullable=True, required=False, name="Default_STCG"),
+        "Remarks": pa.Column(pl.String, nullable=True, required=False, name="Remarks"),
+        "artifact_id": pa.Column(pl.String, nullable=False, required=False, name="artifact_id"),
+    },
+    strict=False,
+    name="canonical_bronze_investment_macro_parameters",
+)
+
+CANONICAL_BRONZE_MARKET_CURRENCY_MAPPING_SCHEMA: pa.DataFrameSchema = pa.DataFrameSchema(
+    columns={
+        "UID": pa.Column(pl.String, nullable=False, unique=True, name="UID"),
+        "Currency_Code": pa.Column(pl.String, nullable=False, name="Currency_Code"),
+        "Target_Currency_Code": pa.Column(pl.String, nullable=False, name="Target_Currency_Code"),
+        "yF_Ticker": pa.Column(pl.String, nullable=True, required=False, name="yF_Ticker"),
+        "Currency_Name": pa.Column(pl.String, nullable=True, required=False, name="Currency_Name"),
+        "Is_Active": pa.Column(pl.Boolean, nullable=True, required=False, name="Is_Active"),
+        "artifact_id": pa.Column(pl.String, nullable=False, required=False, name="artifact_id"),
+    },
+    strict=False,
+    name="canonical_bronze_market_currency_mapping",
+)
+
 CANONICAL_BRONZE_SCHEMAS: dict[DatasetId, pa.DataFrameSchema] = {
     DatasetId.HOUSEHOLD_ZCATEGORY: CANONICAL_BRONZE_HOUSEHOLD_ZCATEGORY_SCHEMA,
     DatasetId.HOUSEHOLD_ASSET_GROUP: CANONICAL_BRONZE_HOUSEHOLD_ASSET_GROUP_SCHEMA,
@@ -299,6 +431,11 @@ CANONICAL_BRONZE_SCHEMAS: dict[DatasetId, pa.DataFrameSchema] = {
     DatasetId.HOUSEHOLD_CURRENCY: CANONICAL_BRONZE_HOUSEHOLD_CURRENCY_SCHEMA,
     DatasetId.HOUSEHOLD_INOUTCOME: CANONICAL_BRONZE_HOUSEHOLD_INOUTCOME_SCHEMA,
     DatasetId.HOUSEHOLD_OPENING_BALANCES: CANONICAL_BRONZE_HOUSEHOLD_OPENING_BALANCES_SCHEMA,
+    DatasetId.INVESTMENT_MF_ISIN_MAPPING: CANONICAL_BRONZE_INVESTMENT_MF_ISIN_MAPPING_SCHEMA,
+    DatasetId.INVESTMENT_BENCHMARK_MAPPING: CANONICAL_BRONZE_INVESTMENT_BENCHMARK_MAPPING_SCHEMA,
+    DatasetId.INVESTMENT_BENCHMARK_MASTER: CANONICAL_BRONZE_INVESTMENT_BENCHMARK_MASTER_SCHEMA,
+    DatasetId.INVESTMENT_MACRO_PARAMETERS: CANONICAL_BRONZE_INVESTMENT_MACRO_PARAMETERS_SCHEMA,
+    DatasetId.MARKET_CURRENCY_MAPPING: CANONICAL_BRONZE_MARKET_CURRENCY_MAPPING_SCHEMA,
 }
 
 

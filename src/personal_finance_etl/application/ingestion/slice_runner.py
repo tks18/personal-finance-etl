@@ -25,6 +25,7 @@ import polars as pl
 
 from personal_finance_etl.application.ingestion.admission import AdmissionService
 from personal_finance_etl.application.pipeline.source_planner import DatasetPlan
+from personal_finance_etl.config.sources.identity import SourceFieldIdentity
 from personal_finance_etl.config.sources.loader import SourceConfiguration
 from personal_finance_etl.config.sources.selectors import CsvSelector, SqliteSelector
 from personal_finance_etl.contracts.application import EngineStage
@@ -268,6 +269,15 @@ class DatasetIngestionService:
                             cols_to_cast.append(pl.col(col).cast(target_dtype))
                         elif target_dtype.is_integer() and current_dtype.is_float():
                             cols_to_cast.append(pl.col(col).cast(target_dtype))
+                        elif target_dtype == pl.Date and current_dtype.is_(pl.String):
+                            cols_to_cast.append(
+                                pl.coalesce(
+                                    pl.col(col).str.to_date("%Y-%m-%d", strict=False),
+                                    pl.col(col).str.to_date("%d-%m-%Y", strict=False),
+                                    pl.col(col).str.to_date("%Y/%m/%d", strict=False),
+                                    pl.col(col).str.to_date("%d/%m/%Y", strict=False),
+                                )
+                            )
             if cols_to_cast:
                 raw_df = raw_df.with_columns(cols_to_cast)
 
@@ -293,10 +303,17 @@ class DatasetIngestionService:
                 )
 
             # 4. Admission Normalization & Row Identity Derivation
+            id_col = "UID"
+            if isinstance(
+                ds_config.identity, SourceFieldIdentity
+            ) and ds_config.identity.field not in ("Z_PK", "UID", "ZUID"):
+                id_col = ds_config.identity.field
+
             admission_plan = self.admission_service.compile_admission_plan(
                 dataset_config=ds_config,
                 bronze_contract=bronze_contract,
                 available_source_columns=raw_df.columns,
+                id_column=id_col,
             )
             admitted_lf = self.admission_service.execute_admission(admission_plan, raw_df)
 

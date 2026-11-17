@@ -25,6 +25,11 @@ from personal_finance_etl.application.ingestion.asset_strategies import (
 )
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
+from personal_finance_etl.config.sources.loader import (
+    SourceConfiguration,
+    get_shan_baseline_source_configuration,
+)
+from personal_finance_etl.config.sources.mapping import mapping_list_to_dict
 from personal_finance_etl.contracts.application import EngineStage
 from personal_finance_etl.contracts.capabilities import CapabilityId
 from personal_finance_etl.contracts.dataset_collection import DatasetCollection
@@ -42,7 +47,6 @@ from personal_finance_etl.domain.household.transforms.calendar import (
     get_stg_calendar_ref,
     transform_d_calendar,
 )
-from personal_finance_etl.domain.household.transforms.common import get_column_mapping
 from personal_finance_etl.domain.household.transforms.dimensions import (
     transform_d_asset_category,
     transform_d_asset_subcategory,
@@ -90,47 +94,40 @@ class TransformationDAG:
         rules: FinancialRules | None = None,
         emitter: ObservabilityEmitter | None = None,
         plan: ExecutionPlan | None = None,
+        source_config: SourceConfiguration | None = None,
     ) -> None:
         self.cfg = cfg
         self.status_queue = status_queue
         self.rules = rules
         self.emitter = emitter or get_global_emitter()
         self.plan = plan
+        self.source_config = source_config
 
-    def _resolve_mappings(self, extracted: DatasetCollection) -> dict[str, dict[str, str]]:
-        """Resolve physical column mappings from COMMON_COLUMN_MASTER in the dataset collection.
-
-        Parameters
-        ----------
-        extracted : DatasetCollection
-            Extracted source dataset collection.
+    def _resolve_mappings(self) -> dict[str, dict[str, str]]:
+        """Resolve physical column mappings directly from authoritative SourceConfiguration.
 
         Returns
         -------
         dict[str, dict[str, str]]
             Dictionary mapping table keys to column name rename dictionaries.
         """
-        table_name_map = {
-            "category": "CATEGORY",
-            "asset_group": "ASSETGROUP",
-            "assets": "ASSETS",
-            "currency": "CURRENCY",
-            "inoutcome": "INOUTCOME",
-            "opbal": "ZOPBAL",
+        table_name_map: dict[str, DatasetId] = {
+            "category": DatasetId.HOUSEHOLD_ZCATEGORY,
+            "asset_group": DatasetId.HOUSEHOLD_ASSET_GROUP,
+            "assets": DatasetId.HOUSEHOLD_ASSETS,
+            "currency": DatasetId.HOUSEHOLD_CURRENCY,
+            "inoutcome": DatasetId.HOUSEHOLD_INOUTCOME,
+            "opbal": DatasetId.HOUSEHOLD_OPENING_BALANCES,
         }
-        col_master_frame = extracted.get(DatasetId.COMMON_COLUMN_MASTER)
-        if col_master_frame is None:
-            return {k: {} for k in table_name_map}
-        if isinstance(col_master_frame, pl.LazyFrame):
-            df_col_master = col_master_frame.collect()
-        else:
-            df_col_master = col_master_frame
-        if df_col_master.height == 0:
-            return {k: {} for k in table_name_map}
-        return {
-            k: get_column_mapping(df_col_master, target_table)
-            for k, target_table in table_name_map.items()
-        }
+        cfg = self.source_config or get_shan_baseline_source_configuration()
+        mappings: dict[str, dict[str, str]] = {}
+        for k, ds_id in table_name_map.items():
+            binding = cfg.get_dataset_binding(ds_id)
+            if binding is not None:
+                mappings[k] = mapping_list_to_dict(binding.mapping)
+            else:
+                mappings[k] = {}
+        return mappings
 
     def _transform_dimensions(self, extracted: DatasetCollection) -> dict[str, pl.LazyFrame]:
         """Transform base dimension LazyFrames from extracted staging records.
@@ -149,7 +146,7 @@ class TransformationDAG:
             raise ValueError("FinancialRules must be provided to TransformationDAG")
 
         diagnostics.debug("Transforming Base Dimensions...")
-        mappings = self._resolve_mappings(extracted)
+        mappings = self._resolve_mappings()
         zcategory = extracted.require_lazy(DatasetId.HOUSEHOLD_ZCATEGORY)
         d_income_category_lazy = transform_d_income_category(
             zcategory, mappings["category"], self.rules
@@ -225,7 +222,7 @@ class TransformationDAG:
         if self.rules is None:
             raise ValueError("FinancialRules must be provided to TransformationDAG")
 
-        mappings = self._resolve_mappings(extracted)
+        mappings = self._resolve_mappings()
         d_income_subcategory_lazy = dims["df_d_income_subcategory"]
         d_expense_subcategory_lazy = dims["df_d_expense_subcategory"]
         d_asset_category_lazy = dims["df_d_asset_category"]

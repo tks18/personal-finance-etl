@@ -19,9 +19,6 @@ from personal_finance_etl.domain.household.transforms import (
     calendar as target_cal,
 )
 from personal_finance_etl.domain.household.transforms import (
-    common as target_common,
-)
-from personal_finance_etl.domain.household.transforms import (
     dimensions as target_dim,
 )
 from personal_finance_etl.domain.investments.lots import (
@@ -72,18 +69,7 @@ def test_calendar_transforms() -> None:
 
 
 def test_household_common_and_dimensions() -> None:
-    """Verify column mapping filter and basic dimension projection."""
-
-    df_map = pl.DataFrame(
-        {
-            "TABLE_NAME": ["CATEGORY", "CATEGORY", "ASSET"],
-            "OLD_COLUMN": ["NAME", "SEQ", "TITLE"],
-            "NEW_COLUMN": ["CATEGORY_NAME", "ORDER_SEQUENCE", "ASSET_NAME"],
-        }
-    )
-    mapping = target_common.get_column_mapping(df_map, "CATEGORY")
-    assert mapping == {"NAME": "CATEGORY_NAME", "SEQ": "ORDER_SEQUENCE"}
-
+    """Verify basic dimension projection."""
     # Currency dimension transformation
     df_raw_curr = pl.DataFrame(
         {

@@ -46,7 +46,6 @@ from personal_finance_etl.config.sources.selectors import (
 )
 from personal_finance_etl.contracts.datasets import DatasetId
 from personal_finance_etl.contracts.sources import SourceId
-from personal_finance_etl.domain.household.transforms.common import get_column_mapping
 
 
 def test_executor_executes_all_rules_vectorized() -> None:
@@ -261,7 +260,9 @@ def test_equivalence_household_sqlite_assetgroup() -> None:
             "NEW_COLUMN": ["UID", "ASSET_GROUP", "ORDER_NUM", "IS_DEL"],
         }
     )
-    legacy_mapping = get_column_mapping(df_column_master, "ASSETGROUP")
+    legacy_mapping = {
+        str(row["OLD_COLUMN"]): str(row["NEW_COLUMN"]) for row in df_column_master.to_dicts()
+    }
 
     # 2. Source-shaped SQLite raw frame
     df_sqlite_raw = pl.DataFrame(

@@ -12,12 +12,12 @@ from pathlib import Path
 import polars as pl
 import pytest
 
+from personal_finance_etl.config.settings import Settings
 from personal_finance_etl.config.sources.loader import (
     get_shan_baseline_source_configuration,
 )
 from personal_finance_etl.config.sources.mapping import mapping_list_to_dict
 from personal_finance_etl.contracts.datasets import DatasetId
-from personal_finance_etl.domain.household.transforms.common import get_column_mapping
 
 FIXTURE_PATH = Path("tests/fixtures/COLUMN_MASTER.csv")
 
@@ -90,9 +90,10 @@ def test_column_master_equivalence_by_table(
     dataset_id: DatasetId,
     expected_count: int,
 ) -> None:
-    """Assert exact mapping equivalence between legacy get_column_mapping and SourceDatasetConfig."""
+    """Assert exact mapping equivalence between legacy COLUMN_MASTER fixture and SourceDatasetConfig."""
     df_map = pl.read_csv(FIXTURE_PATH)
-    legacy_mapping = get_column_mapping(df_map, table_name)
+    filtered = df_map.filter(pl.col("TABLE_NAME") == table_name)
+    legacy_mapping = {str(row["OLD_COLUMN"]): str(row["NEW_COLUMN"]) for row in filtered.to_dicts()}
     assert len(legacy_mapping) == expected_count
 
     config = get_shan_baseline_source_configuration()
@@ -104,3 +105,16 @@ def test_column_master_equivalence_by_table(
         f"Mapping discrepancy detected for {table_name}: "
         f"diff={set(new_mapping.items()) ^ set(legacy_mapping.items())}"
     )
+
+
+def test_column_master_retirement_in_settings() -> None:
+    """Assert Settings does not require COLUMN_MASTER_PATH for config validation."""
+    settings = Settings()
+    # Even if COLUMN_MASTER_PATH is set to empty or a non-existent path,
+    # validate_config should not fail on column_master.
+    settings.COLUMN_MASTER_PATH = "non_existent/path/to/COLUMN_MASTER.csv"
+    # Check that COLUMN_MASTER_PATH is not in required_files logic
+    import inspect
+
+    source_code = inspect.getsource(settings.validate_config)
+    assert "COLUMN_MASTER_PATH" not in source_code

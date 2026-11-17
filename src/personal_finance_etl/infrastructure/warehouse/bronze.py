@@ -52,6 +52,11 @@ MIGRATED_DATASETS: frozenset[DatasetId] = frozenset(
         DatasetId.HOUSEHOLD_CURRENCY,
         DatasetId.HOUSEHOLD_INOUTCOME,
         DatasetId.HOUSEHOLD_OPENING_BALANCES,
+        DatasetId.INVESTMENT_MF_ISIN_MAPPING,
+        DatasetId.INVESTMENT_BENCHMARK_MAPPING,
+        DatasetId.INVESTMENT_BENCHMARK_MASTER,
+        DatasetId.INVESTMENT_MACRO_PARAMETERS,
+        DatasetId.MARKET_CURRENCY_MAPPING,
     }
 )
 
@@ -249,7 +254,10 @@ class BronzeLayer:
         total_rows = 0
 
         for contract in BRONZE_CONTRACT_REGISTRY:
-            if contract.dataset_id in MIGRATED_DATASETS:
+            if (
+                contract.dataset_id in MIGRATED_DATASETS
+                or contract.dataset_id == DatasetId.COMMON_COLUMN_MASTER
+            ):
                 continue
             df = extracted_data.get(contract.dataset_id)
             if df is not None:
