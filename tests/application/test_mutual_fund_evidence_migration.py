@@ -1,0 +1,683 @@
+# pyright: reportPrivateUsage=false
+"""Verification suite for Phase 031 Mutual-Fund Evidence Migration.
+
+Owns
+----
+- Multi-dataset vertical slice ingestion across mutual fund evidence datasets:
+  (MARKET_MF_HOLDINGS, INVESTMENT_MF_ORDERS).
+- Verification of zero artificial Bronze row UIDs (IdentityRequirement.NONE invariant).
+- Pre-Bronze operational provenance tracking (__artifact_id__, __source_id__, __dataset_id__).
+- Pandera schema validation enforcement (Gate 1 & Gate 2) and error rejection.
+- Idempotent rerun verification ensuring zero redundant row appends on unchanged files.
+- Downstream MutualFundStrategy parity and deterministic PURCHASE / SALE identity generation.
+
+Does not own
+------------
+- Single-slice generalized ingestion mechanics (owned by test_generalized_vertical_slice.py).
+- Reference evidence ingestion (owned by test_reference_evidence_migration.py).
+- Downstream FIFO and Tax calculations (owned by test_tax_domain.py).
+"""
+
+from __future__ import annotations
+
+import io
+import zipfile
+from collections.abc import Iterator
+from datetime import date
+from pathlib import Path
+
+import polars as pl
+import pytest
+from pandera.errors import SchemaError, SchemaErrors
+
+from personal_finance_etl.application.ingestion.admission import AdmissionService
+from personal_finance_etl.application.ingestion.asset_strategies import (
+    MutualFundPipeline,
+)
+from personal_finance_etl.application.ingestion.slice_runner import (
+    DatasetIngestionService,
+)
+from personal_finance_etl.application.pipeline.planner import CapabilityPlanner
+from personal_finance_etl.application.pipeline.source_planner import (
+    SourcePlanner,
+)
+from personal_finance_etl.config.financial_rules import FinancialRules
+from personal_finance_etl.config.settings import Settings
+from personal_finance_etl.config.sources.loader import (
+    get_shan_baseline_source_configuration,
+)
+from personal_finance_etl.contracts.dataset_collection import DatasetCollection
+from personal_finance_etl.contracts.datasets import DatasetId
+from personal_finance_etl.contracts.validation import ValidationError
+from personal_finance_etl.domain.investments.transforms.common import (
+    get_f_tf_investment_purchase_data,
+    get_f_tf_investment_sale_data,
+)
+from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
+from personal_finance_etl.infrastructure.observability import (
+    get_global_emitter,
+)
+from personal_finance_etl.infrastructure.observability.diagnostics import (
+    get_observability_diagnostics,
+)
+from personal_finance_etl.infrastructure.validation import (
+    PanderaDataFrameValidator,
+)
+from personal_finance_etl.infrastructure.warehouse.bronze import BronzeLayer
+from personal_finance_etl.infrastructure.warehouse.connection import DuckDBManager
+from personal_finance_etl.infrastructure.warehouse.contracts import (
+    PRE_BRONZE_ARTIFACT_ID,
+)
+from personal_finance_etl.infrastructure.warehouse.meta import MetaLayer
+from personal_finance_etl.infrastructure.warehouse.pre_bronze import PreBronzeLayer
+from personal_finance_etl.infrastructure.warehouse.registry import (
+    get_bronze_contract_by_dataset_id,
+    get_pre_bronze_contract_by_dataset_id,
+)
+
+
+def _build_minimal_xlsx(sheet_name: str, rows: list[list[object]]) -> bytes:
+    """Build an in-memory .xlsx binary payload for testing fastexcel ingestion.
+
+    Parameters
+    ----------
+    sheet_name : str
+        Target worksheet title.
+    rows : list[list[object]]
+        Table rows including header row.
+
+    Returns
+    -------
+    bytes
+        Valid raw Excel workbook byte stream.
+    """
+    content_types = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+        '<Default Extension="xml" ContentType="application/xml"/>'
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+        '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+        '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+        "</Types>"
+    )
+    rels = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>'
+        "</Relationships>"
+    )
+    wb_rels = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'
+        "</Relationships>"
+    )
+    wb = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+        f'<sheets><sheet name="{sheet_name}" sheetId="1" r:id="rId1"/></sheets>'
+        "</workbook>"
+    )
+
+    # Build worksheet rows
+    ws_rows: list[str] = []
+    for r_idx, row in enumerate(rows, start=1):
+        cells: list[str] = []
+        for c_idx, val in enumerate(row):
+            col_letter = chr(65 + c_idx)
+            cell_ref = f"{col_letter}{r_idx}"
+            if isinstance(val, (int, float)):
+                cells.append(f'<c r="{cell_ref}"><v>{val}</v></c>')
+            elif val is None:
+                continue
+            else:
+                str_val = str(val).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                cells.append(f'<c r="{cell_ref}" t="inlineStr"><is><t>{str_val}</t></is></c>')
+        row_str = f'<row r="{r_idx}">{"".join(cells)}</row>'
+        ws_rows.append(row_str)
+
+    ws = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+        f"<sheetData>{''.join(ws_rows)}</sheetData>"
+        "</worksheet>"
+    )
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("[Content_Types].xml", content_types)
+        z.writestr("_rels/.rels", rels)
+        z.writestr("xl/_rels/workbook.xml.rels", wb_rels)
+        z.writestr("xl/workbook.xml", wb)
+        z.writestr("xl/worksheets/sheet1.xml", ws)
+
+    return buf.getvalue()
+
+
+def _create_mf_excel_fixtures(inputs_dir: Path) -> dict[str, str]:
+    """Create isolated test Excel files for mutual fund holdings and orders.
+
+    Parameters
+    ----------
+    inputs_dir : Path
+        Directory where Excel statement workbooks should be written.
+
+    Returns
+    -------
+    dict[str, str]
+        Mapping from sync_category to normalized file path.
+    """
+    inputs_dir.mkdir(parents=True, exist_ok=True)
+
+    # 1. Holdings workbook: metadata at rows 0-2, Scheme Name anchor at row 3
+    holdings_rows: list[list[object]] = [
+        ["Groww Mutual Fund Portfolio Report", "", "", "", "", "", "", "", "", "", ""],
+        ["Investor: Shan", "", "", "", "", "", "", "", "", "", ""],
+        ["Generated on: 31-03-2024", "", "", "", "", "", "", "", "", "", ""],
+        [
+            "Scheme Name",
+            "AMC",
+            "Category",
+            "Sub-category",
+            "Folio No.",
+            "Source",
+            "Units",
+            "Invested Value",
+            "Current Value",
+            "Returns",
+            "XIRR",
+        ],
+        [
+            "Parag Parikh Flexi Cap Fund - Direct Plan - Growth",
+            "PPFAS Mutual Fund",
+            "Equity",
+            "Flexi Cap",
+            "12345/01",
+            "Kuvera",
+            "100.5",
+            "50000.0",
+            "65000.0",
+            "15000.0",
+            "18.5",
+        ],
+        [
+            "Mirae Asset Large Cap Fund - Direct Plan - Growth",
+            "Mirae Asset Mutual Fund",
+            "Equity",
+            "Large Cap",
+            "67890/02",
+            "Kuvera",
+            "200.0",
+            "80000.0",
+            "95000.0",
+            "15000.0",
+            "14.2",
+        ],
+    ]
+    holdings_path = inputs_dir / "Mutual_Funds_Holdings_31-03-2024.xlsx"
+    holdings_path.write_bytes(_build_minimal_xlsx("Holdings", holdings_rows))
+
+    # 2. Orders/Transactions workbook: metadata at rows 0-1, Scheme Name anchor at row 2
+    orders_rows: list[list[object]] = [
+        ["Groww Order History", "", "", "", "", ""],
+        ["Account: Shan", "", "", "", "", ""],
+        [
+            "Scheme Name",
+            "Transaction Type",
+            "Units",
+            "NAV",
+            "Amount",
+            "Date",
+        ],
+        [
+            "Parag Parikh Flexi Cap Fund - Direct Plan - Growth",
+            "PURCHASE",
+            "100.5",
+            "497.51",
+            "50000.0",
+            "15-Jan-2023",
+        ],
+        [
+            "Parag Parikh Flexi Cap Fund - Direct Plan - Growth",
+            "REDEEM",
+            "10.5",
+            "550.0",
+            "5775.0",
+            "20-Feb-2024",
+        ],
+    ]
+    orders_path = inputs_dir / "Mutual_Funds_Transactions_31-03-2024.xlsx"
+    orders_path.write_bytes(_build_minimal_xlsx("Transactions", orders_rows))
+
+    return {
+        "mf_holdings": str(holdings_path).replace("\\", "/"),
+        "mf_orders": str(orders_path).replace("\\", "/"),
+    }
+
+
+@pytest.fixture(autouse=True)
+def _auto_open_control_plane(isolated_control_plane: ControlPlane) -> Iterator[None]:
+    """Ensure isolated ControlPlane connection is open and schema initialized.
+
+    Parameters
+    ----------
+    isolated_control_plane : ControlPlane
+        Isolated test SQLite Control Plane fixture.
+    """
+    isolated_control_plane.open()
+    isolated_control_plane.ensure_schema()
+    yield
+    isolated_control_plane.close()
+
+
+def test_mutual_fund_end_to_end_vertical_slice_admission(
+    isolated_settings: Settings,
+    isolated_duckdb_manager: DuckDBManager,
+    isolated_control_plane: ControlPlane,
+    rules: FinancialRules,
+    tmp_path: Path,
+) -> None:
+    """Ingest both mutual fund Excel statements through generalized vertical slice.
+
+    Parameters
+    ----------
+    isolated_settings : Settings
+        Isolated test settings.
+    isolated_duckdb_manager : DuckDBManager
+        Isolated test DuckDB connection manager.
+    isolated_control_plane : ControlPlane
+        Isolated test SQLite Control Plane facade.
+    rules : FinancialRules
+        Isolated financial rules fixture.
+    tmp_path : Path
+        Isolated temporary directory path.
+    """
+    files_map = _create_mf_excel_fixtures(tmp_path / "inputs_mf")
+    actionable = {cat: [path] for cat, path in files_map.items()}
+    isolated_control_plane.artifacts.ingest_binaries(actionable)
+
+    isolated_duckdb_manager.open()
+    isolated_duckdb_manager.ensure_schemas()
+
+    emitter = get_global_emitter()
+    validator = PanderaDataFrameValidator(emitter=emitter)
+    admission = AdmissionService()
+    ingestion_service = DatasetIngestionService(validator, admission, emitter)
+
+    pre_bronze = PreBronzeLayer(isolated_duckdb_manager, emitter=emitter)
+    meta = MetaLayer(isolated_duckdb_manager, isolated_settings, rules)
+    bronze = BronzeLayer(isolated_duckdb_manager, isolated_control_plane, meta, emitter=emitter)
+
+    source_config = get_shan_baseline_source_configuration()
+    plan = CapabilityPlanner().create_plan()
+    source_plan = SourcePlanner(source_config, plan).compile_plan()
+
+    mf_datasets = (DatasetId.MARKET_MF_HOLDINGS, DatasetId.INVESTMENT_MF_ORDERS)
+
+    # 1. Ingest both mutual fund datasets through generalized vertical slice
+    for ds_id in mf_datasets:
+        ds_plan = source_plan.get_dataset_plan(ds_id)
+        assert ds_plan is not None
+        success = ingestion_service.ingest_dataset(
+            dataset_plan=ds_plan,
+            source_config=source_config,
+            cp=isolated_control_plane,
+            pre_bronze=pre_bronze,
+            bronze=bronze,
+            meta_layer=meta,
+            actionable_files=actionable,
+            run_id="run_mf_001",
+        )
+        assert success is True
+
+    # 2. Verify Pre-Bronze tables created with operational provenance
+    for ds_id in mf_datasets:
+        pb_contract = get_pre_bronze_contract_by_dataset_id(ds_id)
+        assert pb_contract is not None
+        assert pre_bronze.table_exists(pb_contract)
+        pb_df = isolated_duckdb_manager.conn.query(
+            f"SELECT * FROM {pb_contract.physical_table}"
+        ).pl()
+        assert pb_df.height >= 2
+        assert PRE_BRONZE_ARTIFACT_ID in pb_df.columns
+        assert "__source_id__" in pb_df.columns
+        assert "__dataset_id__" in pb_df.columns
+        # Cleanliness invariant: raw Pre-Bronze does NOT carry duplicate artifact_id column
+        assert "artifact_id" not in pb_df.columns
+
+    # 3. Verify Bronze tables created with NO synthetic row UIDs (IdentityRequirement.NONE)
+    b_holdings = isolated_duckdb_manager.conn.query("SELECT * FROM bronze.r_MF_Market_Data").pl()
+    assert b_holdings.height == 2
+    assert "Scheme Name" in b_holdings.columns
+    assert "Units" in b_holdings.columns
+    assert "Month Date" in b_holdings.columns
+    assert "artifact_id" in b_holdings.columns
+    assert "UID" not in b_holdings.columns  # No artificial UID!
+    assert b_holdings["Month Date"][0] == date(2024, 3, 31)
+
+    b_orders = isolated_duckdb_manager.conn.query("SELECT * FROM bronze.r_MF_Transactions").pl()
+    assert b_orders.height == 2
+    assert "Scheme Name" in b_orders.columns
+    assert "Transaction Type" in b_orders.columns
+    assert "Units" in b_orders.columns
+    assert "artifact_id" in b_orders.columns
+    assert "UID" not in b_orders.columns  # No artificial UID!
+    assert set(b_orders["Transaction Type"]) == {"PURCHASE", "REDEEM"}
+
+
+def test_mutual_fund_gate1_pandera_schema_validation_rejection(
+    isolated_settings: Settings,
+    isolated_duckdb_manager: DuckDBManager,
+    isolated_control_plane: ControlPlane,
+    rules: FinancialRules,
+    tmp_path: Path,
+) -> None:
+    """Verify that corrupt mutual fund orders fail Gate 1 Pandera validation and abort.
+
+    Parameters
+    ----------
+    isolated_settings : Settings
+        Isolated test settings.
+    isolated_duckdb_manager : DuckDBManager
+        Isolated test DuckDB connection manager.
+    isolated_control_plane : ControlPlane
+        Isolated test SQLite Control Plane facade.
+    rules : FinancialRules
+        Isolated financial rules fixture.
+    tmp_path : Path
+        Isolated temporary directory path.
+    """
+    inputs_dir = tmp_path / "inputs_corrupt_mf"
+    inputs_dir.mkdir(parents=True, exist_ok=True)
+
+    # Missing mandatory Transaction Type column
+    corrupt_orders_rows: list[list[object]] = [
+        ["Scheme Name", "Units", "Amount"],
+        ["Parag Parikh Flexi Cap Fund", 100.0, 50000.0],
+    ]
+    corrupt_path = inputs_dir / "Mutual_Funds_Transactions_31-03-2024.xlsx"
+    corrupt_path.write_bytes(_build_minimal_xlsx("Transactions", corrupt_orders_rows))
+
+    norm_path = str(corrupt_path).replace("\\", "/")
+    actionable = {"mf_orders": [norm_path]}
+    isolated_control_plane.artifacts.ingest_binaries(actionable)
+
+    isolated_duckdb_manager.open()
+    isolated_duckdb_manager.ensure_schemas()
+
+    emitter = get_global_emitter()
+    validator = PanderaDataFrameValidator(emitter=emitter)
+    admission = AdmissionService()
+    ingestion_service = DatasetIngestionService(validator, admission, emitter)
+
+    pre_bronze = PreBronzeLayer(isolated_duckdb_manager, emitter=emitter)
+    meta = MetaLayer(isolated_duckdb_manager, isolated_settings, rules)
+    bronze = BronzeLayer(isolated_duckdb_manager, isolated_control_plane, meta, emitter=emitter)
+
+    source_config = get_shan_baseline_source_configuration()
+    plan = CapabilityPlanner().create_plan()
+    source_plan = SourcePlanner(source_config, plan).compile_plan()
+    ds_plan = source_plan.get_dataset_plan(DatasetId.INVESTMENT_MF_ORDERS)
+    assert ds_plan is not None
+
+    with pytest.raises((ValidationError, SchemaError, SchemaErrors)):
+        ingestion_service.ingest_dataset(
+            dataset_plan=ds_plan,
+            source_config=source_config,
+            cp=isolated_control_plane,
+            pre_bronze=pre_bronze,
+            bronze=bronze,
+            meta_layer=meta,
+            actionable_files=actionable,
+            run_id="run_corrupt_mf",
+        )
+
+    # Bronze table must not be created or populated
+    b_contract = get_bronze_contract_by_dataset_id(DatasetId.INVESTMENT_MF_ORDERS)
+    assert b_contract is not None
+    schema_name, table_name = b_contract.physical_table.split(".")
+    res = isolated_duckdb_manager.conn.execute(
+        "SELECT table_name FROM information_schema.tables WHERE table_schema = ? AND table_name = ?",
+        [schema_name, table_name],
+    ).fetchall()
+    assert len(res) == 0
+
+
+def test_mutual_fund_idempotent_rerun(
+    isolated_settings: Settings,
+    isolated_duckdb_manager: DuckDBManager,
+    isolated_control_plane: ControlPlane,
+    rules: FinancialRules,
+    tmp_path: Path,
+) -> None:
+    """Verify unchanged mutual fund workbooks yield zero redundant row appends on rerun.
+
+    Parameters
+    ----------
+    isolated_settings : Settings
+        Isolated test settings.
+    isolated_duckdb_manager : DuckDBManager
+        Isolated test DuckDB connection manager.
+    isolated_control_plane : ControlPlane
+        Isolated test SQLite Control Plane facade.
+    rules : FinancialRules
+        Isolated financial rules fixture.
+    tmp_path : Path
+        Isolated temporary directory path.
+    """
+    files_map = _create_mf_excel_fixtures(tmp_path / "inputs_idempotent_mf")
+    actionable = {cat: [path] for cat, path in files_map.items()}
+    isolated_control_plane.artifacts.ingest_binaries(actionable)
+
+    isolated_duckdb_manager.open()
+    isolated_duckdb_manager.ensure_schemas()
+
+    emitter = get_global_emitter()
+    validator = PanderaDataFrameValidator(emitter=emitter)
+    admission = AdmissionService()
+    ingestion_service = DatasetIngestionService(validator, admission, emitter)
+
+    pre_bronze = PreBronzeLayer(isolated_duckdb_manager, emitter=emitter)
+    meta = MetaLayer(isolated_duckdb_manager, isolated_settings, rules)
+    bronze = BronzeLayer(isolated_duckdb_manager, isolated_control_plane, meta, emitter=emitter)
+
+    source_config = get_shan_baseline_source_configuration()
+    plan = CapabilityPlanner().create_plan()
+    source_plan = SourcePlanner(source_config, plan).compile_plan()
+
+    mf_datasets = (DatasetId.MARKET_MF_HOLDINGS, DatasetId.INVESTMENT_MF_ORDERS)
+
+    # First run
+    for ds_id in mf_datasets:
+        ds_plan = source_plan.get_dataset_plan(ds_id)
+        assert ds_plan is not None
+        ingestion_service.ingest_dataset(
+            dataset_plan=ds_plan,
+            source_config=source_config,
+            cp=isolated_control_plane,
+            pre_bronze=pre_bronze,
+            bronze=bronze,
+            meta_layer=meta,
+            actionable_files=actionable,
+            run_id="run_idem_mf_1",
+        )
+
+    res_h1 = isolated_duckdb_manager.conn.query(
+        "SELECT COUNT(*) FROM bronze.r_MF_Market_Data"
+    ).fetchone()
+    assert res_h1 is not None
+    res_o1 = isolated_duckdb_manager.conn.query(
+        "SELECT COUNT(*) FROM bronze.r_MF_Transactions"
+    ).fetchone()
+    assert res_o1 is not None
+    counts_after_first: dict[str, int] = {
+        "holdings": int(res_h1[0]),
+        "orders": int(res_o1[0]),
+    }
+
+    # Second run with identical input files
+    for ds_id in mf_datasets:
+        ds_plan = source_plan.get_dataset_plan(ds_id)
+        assert ds_plan is not None
+        ingestion_service.ingest_dataset(
+            dataset_plan=ds_plan,
+            source_config=source_config,
+            cp=isolated_control_plane,
+            pre_bronze=pre_bronze,
+            bronze=bronze,
+            meta_layer=meta,
+            actionable_files=actionable,
+            run_id="run_idem_mf_2",
+        )
+
+    res_h2 = isolated_duckdb_manager.conn.query(
+        "SELECT COUNT(*) FROM bronze.r_MF_Market_Data"
+    ).fetchone()
+    assert res_h2 is not None
+    res_o2 = isolated_duckdb_manager.conn.query(
+        "SELECT COUNT(*) FROM bronze.r_MF_Transactions"
+    ).fetchone()
+    assert res_o2 is not None
+    counts_after_second: dict[str, int] = {
+        "holdings": int(res_h2[0]),
+        "orders": int(res_o2[0]),
+    }
+
+    assert counts_after_second == counts_after_first
+
+
+def test_mutual_fund_downstream_transformation_and_identity_parity(
+    isolated_settings: Settings,
+    isolated_duckdb_manager: DuckDBManager,
+    isolated_control_plane: ControlPlane,
+    rules: FinancialRules,
+    tmp_path: Path,
+) -> None:
+    """Verify downstream MutualFundStrategy produces valid and deterministic PURCHASE/SALE IDs.
+
+    Parameters
+    ----------
+    isolated_settings : Settings
+        Isolated test settings.
+    isolated_duckdb_manager : DuckDBManager
+        Isolated test DuckDB connection manager.
+    isolated_control_plane : ControlPlane
+        Isolated test SQLite Control Plane facade.
+    rules : FinancialRules
+        Isolated financial rules fixture.
+    tmp_path : Path
+        Isolated temporary directory path.
+    """
+    files_map = _create_mf_excel_fixtures(tmp_path / "inputs_downstream_mf")
+    actionable = {cat: [path] for cat, path in files_map.items()}
+    isolated_control_plane.artifacts.ingest_binaries(actionable)
+
+    isolated_duckdb_manager.open()
+    isolated_duckdb_manager.ensure_schemas()
+
+    emitter = get_global_emitter()
+    validator = PanderaDataFrameValidator(emitter=emitter)
+    admission = AdmissionService()
+    ingestion_service = DatasetIngestionService(validator, admission, emitter)
+
+    pre_bronze = PreBronzeLayer(isolated_duckdb_manager, emitter=emitter)
+    meta = MetaLayer(isolated_duckdb_manager, isolated_settings, rules)
+    bronze = BronzeLayer(isolated_duckdb_manager, isolated_control_plane, meta, emitter=emitter)
+
+    source_config = get_shan_baseline_source_configuration()
+    plan = CapabilityPlanner().create_plan()
+    source_plan = SourcePlanner(source_config, plan).compile_plan()
+
+    for ds_id in (DatasetId.MARKET_MF_HOLDINGS, DatasetId.INVESTMENT_MF_ORDERS):
+        ds_plan = source_plan.get_dataset_plan(ds_id)
+        assert ds_plan is not None
+        ingestion_service.ingest_dataset(
+            dataset_plan=ds_plan,
+            source_config=source_config,
+            cp=isolated_control_plane,
+            pre_bronze=pre_bronze,
+            bronze=bronze,
+            meta_layer=meta,
+            actionable_files=actionable,
+            run_id="run_downstream_mf",
+        )
+
+    # Ingest ISIN mapping into Bronze to satisfy join
+    isin_df = pl.DataFrame(
+        {
+            "INSTRUMENT_NAME": ["Parag Parikh Flexi Cap Fund - Direct Plan - Growth"],
+            "ISIN": ["INF879O01019"],
+            "artifact_id": ["art_isin_001"],
+        }
+    )
+    isolated_duckdb_manager.conn.execute("CREATE SCHEMA IF NOT EXISTS bronze")
+    isolated_duckdb_manager.conn.register("_temp_isin", isin_df)
+    isolated_duckdb_manager.conn.execute(
+        "CREATE TABLE bronze.r_MF_ISIN_Mapping AS SELECT * FROM _temp_isin"
+    )
+
+    # Query Bronze frames for MutualFundStrategy
+    bronze_holdings = (
+        isolated_duckdb_manager.conn.query("SELECT * FROM bronze.r_MF_Market_Data").pl().lazy()
+    )
+    bronze_orders = (
+        isolated_duckdb_manager.conn.query("SELECT * FROM bronze.r_MF_Transactions").pl().lazy()
+    )
+    bronze_isin = (
+        isolated_duckdb_manager.conn.query("SELECT * FROM bronze.r_MF_ISIN_Mapping").pl().lazy()
+    )
+
+    collection = DatasetCollection(
+        frames={
+            DatasetId.MARKET_MF_HOLDINGS: bronze_holdings,
+            DatasetId.INVESTMENT_MF_ORDERS: bronze_orders,
+            DatasetId.INVESTMENT_MF_ISIN_MAPPING: bronze_isin,
+        }
+    )
+
+    d_asset_subcategory = pl.DataFrame(
+        {
+            "UID": ["ASSET_SUBCAT_MF"],
+            "ASSET_NAME": ["Mutual Funds"],
+        }
+    ).lazy()
+
+    pipeline = MutualFundPipeline()
+    diag = get_observability_diagnostics("test_downstream_mf")
+    result = pipeline.process(
+        extracted=collection,
+        d_asset_subcategory_lazy=d_asset_subcategory,
+        rules=rules,
+        diagnostics=diag,
+    )
+
+    # Assert Purchase Reference has ISIN and valid height
+    purchase_df = result.purchase_ref.collect()
+    assert purchase_df.height == 1
+    assert "ISIN" in purchase_df.columns
+    assert purchase_df["ISIN"][0] == "INF879O01019"
+
+    # Assert Sale Reference has ISIN and valid height
+    sale_df = result.sale_ref.collect()
+    assert sale_df.height == 1
+    assert "ISIN" in sale_df.columns
+
+    # Verify downstream Silver fact tables compute deterministic Purchase_ID and Sale_ID
+    purchase_fact = get_f_tf_investment_purchase_data(
+        [result.purchase_ref], rules.DEFAULT_CURRENCY_ID
+    ).collect()
+    assert "Purchase_ID" in purchase_fact.columns
+    assert purchase_fact["Purchase_ID"][0].startswith("PURCHASE_")
+
+    sale_fact = get_f_tf_investment_sale_data(
+        [result.sale_ref], rules.DEFAULT_CURRENCY_ID
+    ).collect()
+    assert "Sale_ID" in sale_fact.columns
+    assert sale_fact["Sale_ID"][0].startswith("SALE_")
+
+    # Assert Master Reference unions distinct instruments
+    master_df = result.master_ref.collect()
+    assert master_df.height >= 1
+    assert "ISIN" in master_df.columns
+    assert "INSTRUMENT_CLASS" in master_df.columns
+    assert master_df["INSTRUMENT_CLASS"][0] == "Mutual Funds"
