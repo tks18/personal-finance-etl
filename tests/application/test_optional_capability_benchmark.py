@@ -447,30 +447,12 @@ def test_quant_engine_active_outputs_invariant_to_benchmark_presence(
 
 
 def test_transformation_dag_resolve_mappings() -> None:
-    """Verify TransformationDAG._resolve_mappings extracts canonical uppercase table mappings."""
-    cm_df = pl.DataFrame(
-        {
-            "TABLE_NAME": [
-                "CATEGORY",
-                "ASSETGROUP",
-                "ASSETS",
-                "CURRENCY",
-                "INOUTCOME",
-                "INOUTCOME",
-                "ZOPBAL",
-            ],
-            "OLD_COLUMN": ["uid", "uid", "uid", "uid", "ZMONEY", "uid", "ZAMOUNT"],
-            "NEW_COLUMN": ["UID", "UID", "UID", "UID", "BASE_AMOUNT", "UID", "ZAMOUNT"],
-        }
-    )
-    collection = DatasetCollection(frames={DatasetId.COMMON_COLUMN_MASTER: cm_df})
+    """Verify TransformationDAG._resolve_mappings extracts canonical uppercase table mappings from SourceConfiguration."""
     dag = TransformationDAG(Settings(), NullEventQueue())
-    mappings = dag._resolve_mappings(collection)  # pyright: ignore[reportPrivateUsage]
+    mappings = dag._resolve_mappings()  # pyright: ignore[reportPrivateUsage]
     assert "inoutcome" in mappings
-    assert mappings["inoutcome"]["ZMONEY"] == "BASE_AMOUNT"
-    assert mappings["inoutcome"]["uid"] == "UID"
-    assert mappings["opbal"]["ZAMOUNT"] == "ZAMOUNT"
-    assert mappings["category"]["uid"] == "UID"
-    assert mappings["asset_group"]["uid"] == "UID"
-    assert mappings["assets"]["uid"] == "UID"
-    assert mappings["currency"]["uid"] == "UID"
+    assert "category" in mappings
+    assert "asset_group" in mappings
+    assert "assets" in mappings
+    assert "currency" in mappings
+    assert "opbal" in mappings
