@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [10.0.0-rc.4](https://github.com/tks18/personal-finance-etl/compare/10.0.0-rc.3...10.0.0-rc.4) (2026-11-17)
+
+
+### Features 🔥
+
+* **providers:** introduce generic ExcelExtractor for statements ([e4947ac](https://github.com/tks18/personal-finance-etl/commit/e4947acd1447850e5e513b99e8d7b21c01badaab))
+* **validation:** introduce mutual fund canonical bronze schemas ([b8fa891](https://github.com/tks18/personal-finance-etl/commit/b8fa8919c6de2caffffa116fdd678277992f4303))
+
+
+### Tests 🧪
+
+* **ingestion:** certify mutual fund evidence migration and parity ([978b594](https://github.com/tks18/personal-finance-etl/commit/978b59420a75ae15bd3e8d6ab86c2132daa31d1a))
+
+
+### Code Refactoring 🖌
+
+* **config:** declare mutual fund fields and canonical bindings ([f1dbbb9](https://github.com/tks18/personal-finance-etl/commit/f1dbbb97bc898df654768aeb7290a6af6c7ee40c))
+* **ingestion:** generalize mutual fund evidence via slice runner ([83026b1](https://github.com/tks18/personal-finance-etl/commit/83026b1f8ab51d4a3273885145ceecb706387601))
+* **presentation:** suppress per-file validation in narrative sinks ([0eea668](https://github.com/tks18/personal-finance-etl/commit/0eea6680bc373129075fc5d4e80326d23479068f))
+
+
+### Docs 📃
+
+* **refactor:** complete phase 031 mutual fund evidence migration ([fef3163](https://github.com/tks18/personal-finance-etl/commit/fef316354a7b6ca364efe27828de21a1a0c2e8d3))
+
 ## [10.0.0-rc.3](https://github.com/tks18/personal-finance-etl/compare/10.0.0-rc.2...10.0.0-rc.3) (2026-11-17)
 
 
