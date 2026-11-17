@@ -13,6 +13,10 @@ Owns
 - CANONICAL_BRONZE_INVESTMENT_BENCHMARK_MASTER_SCHEMA: Immutable pandera.polars.DataFrameSchema for DatasetId.INVESTMENT_BENCHMARK_MASTER.
 - CANONICAL_BRONZE_INVESTMENT_MACRO_PARAMETERS_SCHEMA: Immutable pandera.polars.DataFrameSchema for DatasetId.INVESTMENT_MACRO_PARAMETERS.
 - CANONICAL_BRONZE_MARKET_CURRENCY_MAPPING_SCHEMA: Immutable pandera.polars.DataFrameSchema for DatasetId.MARKET_CURRENCY_MAPPING.
+- CANONICAL_BRONZE_MARKET_MF_HOLDINGS_SCHEMA: Immutable pandera.polars.DataFrameSchema for DatasetId.MARKET_MF_HOLDINGS.
+- CANONICAL_BRONZE_INVESTMENT_MF_ORDERS_SCHEMA: Immutable pandera.polars.DataFrameSchema for DatasetId.INVESTMENT_MF_ORDERS.
+- CANONICAL_BRONZE_MARKET_STOCK_HOLDINGS_SCHEMA: Immutable pandera.polars.DataFrameSchema for DatasetId.MARKET_STOCK_HOLDINGS.
+- CANONICAL_BRONZE_INVESTMENT_STOCK_ORDERS_SCHEMA: Immutable pandera.polars.DataFrameSchema for DatasetId.INVESTMENT_STOCK_ORDERS.
 - CANONICAL_BRONZE_SCHEMAS: Registry mapping DatasetIds to authoritative canonical Bronze schemas.
 - get_canonical_bronze_schema: Safe accessor for retrieving the canonical Bronze schema for a given DatasetId.
 - has_canonical_bronze_schema: Inspection predicate determining whether a DatasetId has a registered canonical schema.
@@ -43,8 +47,10 @@ __all__ = [
     "CANONICAL_BRONZE_INVESTMENT_MACRO_PARAMETERS_SCHEMA",
     "CANONICAL_BRONZE_INVESTMENT_MF_ISIN_MAPPING_SCHEMA",
     "CANONICAL_BRONZE_INVESTMENT_MF_ORDERS_SCHEMA",
+    "CANONICAL_BRONZE_INVESTMENT_STOCK_ORDERS_SCHEMA",
     "CANONICAL_BRONZE_MARKET_CURRENCY_MAPPING_SCHEMA",
     "CANONICAL_BRONZE_MARKET_MF_HOLDINGS_SCHEMA",
+    "CANONICAL_BRONZE_MARKET_STOCK_HOLDINGS_SCHEMA",
     "CANONICAL_BRONZE_SCHEMAS",
     "get_canonical_bronze_schema",
     "has_canonical_bronze_schema",
@@ -469,6 +475,54 @@ CANONICAL_BRONZE_INVESTMENT_MF_ORDERS_SCHEMA: pa.DataFrameSchema = pa.DataFrameS
     name="canonical_bronze_investment_mf_orders",
 )
 
+CANONICAL_BRONZE_MARKET_STOCK_HOLDINGS_SCHEMA: pa.DataFrameSchema = pa.DataFrameSchema(
+    columns={
+        "Stock name": pa.Column(pl.String, nullable=False, name="Stock name"),
+        "ISIN": pa.Column(pl.String, nullable=False, name="ISIN"),
+        "Quantity": pa.Column(pl.String, nullable=True, required=False, name="Quantity"),
+        "Buy date": pa.Column(pl.String, nullable=True, required=False, name="Buy date"),
+        "Buy price": pa.Column(pl.String, nullable=True, required=False, name="Buy price"),
+        "Buy value": pa.Column(pl.String, nullable=True, required=False, name="Buy value"),
+        "Closing date": pa.Column(pl.String, nullable=True, required=False, name="Closing date"),
+        "Closing price": pa.Column(pl.String, nullable=True, required=False, name="Closing price"),
+        "Closing value": pa.Column(pl.String, nullable=True, required=False, name="Closing value"),
+        "Unrealised P&L": pa.Column(
+            pl.String, nullable=True, required=False, name="Unrealised P&L"
+        ),
+        "Remark": pa.Column(pl.String, nullable=True, required=False, name="Remark"),
+        "Month Date": pa.Column(pl.Date, nullable=False, name="Month Date"),
+        "__file_category__": pa.Column(
+            pl.String, nullable=True, required=False, name="__file_category__"
+        ),
+        "artifact_id": pa.Column(pl.String, nullable=False, required=False, name="artifact_id"),
+    },
+    strict=False,
+    name="canonical_bronze_market_stock_holdings",
+)
+
+CANONICAL_BRONZE_INVESTMENT_STOCK_ORDERS_SCHEMA: pa.DataFrameSchema = pa.DataFrameSchema(
+    columns={
+        "Stock name": pa.Column(pl.String, nullable=False, name="Stock name"),
+        "Symbol": pa.Column(pl.String, nullable=False, name="Symbol"),
+        "ISIN": pa.Column(pl.String, nullable=False, name="ISIN"),
+        "Type": pa.Column(pl.String, nullable=False, name="Type"),
+        "Quantity": pa.Column(pl.Float64, nullable=True, required=False, name="Quantity"),
+        "Value": pa.Column(pl.Float64, nullable=True, required=False, name="Value"),
+        "Exchange": pa.Column(pl.String, nullable=False, name="Exchange"),
+        "Exchange Order Id": pa.Column(pl.String, nullable=False, name="Exchange Order Id"),
+        "Execution date and time": pa.Column(
+            pl.String, nullable=False, name="Execution date and time"
+        ),
+        "Order status": pa.Column(pl.String, nullable=False, name="Order status"),
+        "__file_category__": pa.Column(
+            pl.String, nullable=True, required=False, name="__file_category__"
+        ),
+        "artifact_id": pa.Column(pl.String, nullable=False, required=False, name="artifact_id"),
+    },
+    strict=False,
+    name="canonical_bronze_investment_stock_orders",
+)
+
 CANONICAL_BRONZE_SCHEMAS: dict[DatasetId, pa.DataFrameSchema] = {
     DatasetId.HOUSEHOLD_ZCATEGORY: CANONICAL_BRONZE_HOUSEHOLD_ZCATEGORY_SCHEMA,
     DatasetId.HOUSEHOLD_ASSET_GROUP: CANONICAL_BRONZE_HOUSEHOLD_ASSET_GROUP_SCHEMA,
@@ -483,6 +537,8 @@ CANONICAL_BRONZE_SCHEMAS: dict[DatasetId, pa.DataFrameSchema] = {
     DatasetId.MARKET_CURRENCY_MAPPING: CANONICAL_BRONZE_MARKET_CURRENCY_MAPPING_SCHEMA,
     DatasetId.MARKET_MF_HOLDINGS: CANONICAL_BRONZE_MARKET_MF_HOLDINGS_SCHEMA,
     DatasetId.INVESTMENT_MF_ORDERS: CANONICAL_BRONZE_INVESTMENT_MF_ORDERS_SCHEMA,
+    DatasetId.MARKET_STOCK_HOLDINGS: CANONICAL_BRONZE_MARKET_STOCK_HOLDINGS_SCHEMA,
+    DatasetId.INVESTMENT_STOCK_ORDERS: CANONICAL_BRONZE_INVESTMENT_STOCK_ORDERS_SCHEMA,
 }
 
 
