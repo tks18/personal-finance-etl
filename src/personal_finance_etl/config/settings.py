@@ -143,7 +143,6 @@ class Settings(BaseModel):
         ]
 
         required_files = [
-            ("COLUMN_MASTER_PATH", self.COLUMN_MASTER_PATH),
             ("MF_ISIN_CSV_PATH", self.MF_ISIN_CSV_PATH),
             ("BENCHMARK_MAPPING_CSV_PATH", self.BENCHMARK_MAPPING_CSV_PATH),
             ("BENCHMARK_MASTER_CSV_PATH", self.BENCHMARK_MASTER_CSV_PATH),

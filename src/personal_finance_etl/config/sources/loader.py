@@ -487,8 +487,8 @@ def get_shan_baseline_sources() -> list[SourceConfig]:
             source_id=SourceId("column_master_csv"),
             provider_type=ProviderType.CSV,
             location="inputs/COLUMN_MASTER.csv",
-            enabled=True,
-            description="Transitional column mapping dictionary (scheduled for retirement in Phase 030/035)",
+            enabled=False,
+            description="Retired column mapping dictionary (retired in Phase 030)",
         ),
         SourceConfig(
             source_id=SourceId("mf_holdings_excel"),
@@ -1654,6 +1654,373 @@ _HOUSEHOLD_OPENING_BALANCES_FIELDS: list[SourceFieldDeclaration] = [
     ),
 ]
 
+_INVESTMENT_MF_ISIN_FIELDS: list[SourceFieldDeclaration] = [
+    SourceFieldDeclaration(
+        name="INSTRUMENT_NAME",
+        data_type="String",
+        nullable=False,
+        unique=True,
+        description="Mutual fund scheme portfolio name",
+    ),
+    SourceFieldDeclaration(
+        name="ISIN",
+        data_type="String",
+        nullable=False,
+        description="International Securities Identification Number for the mutual fund",
+    ),
+]
+
+_INVESTMENT_MF_ISIN_MAPPING: list[ColumnMapping] = dict_to_mapping_list(
+    {
+        "INSTRUMENT_NAME": "INSTRUMENT_NAME",
+        "ISIN": "ISIN",
+    }
+)
+
+_INVESTMENT_BENCHMARK_MAPPING_FIELDS: list[SourceFieldDeclaration] = [
+    SourceFieldDeclaration(
+        name="ISIN",
+        data_type="String",
+        nullable=False,
+        unique=True,
+        description="International Securities Identification Number",
+    ),
+    SourceFieldDeclaration(
+        name="Sector",
+        data_type="String",
+        nullable=True,
+        description="Primary industry or economic sector classification",
+    ),
+    SourceFieldDeclaration(
+        name="Industry",
+        data_type="String",
+        nullable=True,
+        description="Granular industry or business activity classification",
+    ),
+    SourceFieldDeclaration(
+        name="Benchmark_ID",
+        data_type="String",
+        nullable=True,
+        description="Foreign key identifier referencing benchmark master catalog",
+    ),
+    SourceFieldDeclaration(
+        name="Yahoo_Ticker",
+        data_type="String",
+        nullable=True,
+        description="Yahoo Finance market ticker symbol",
+    ),
+    SourceFieldDeclaration(
+        name="Tax_Instrument_Type",
+        data_type="String",
+        nullable=True,
+        description="Tax regulatory instrument class (Equity, Debt, Gold, Cash)",
+    ),
+    SourceFieldDeclaration(
+        name="Tax_Instrument_Subtype",
+        data_type="String",
+        nullable=True,
+        description="Tax regulatory instrument subclass (Listed, Unlisted)",
+    ),
+    SourceFieldDeclaration(
+        name="Country",
+        data_type="String",
+        nullable=True,
+        description="Domicile or jurisdiction country name",
+    ),
+    SourceFieldDeclaration(
+        name="Geo",
+        data_type="String",
+        nullable=True,
+        description="Geographic region classification",
+    ),
+    SourceFieldDeclaration(
+        name="Geo_Subtype",
+        data_type="String",
+        nullable=True,
+        description="Granular geographic market designation",
+    ),
+    SourceFieldDeclaration(
+        name="Ticker",
+        data_type="String",
+        nullable=True,
+        description="Exchange trade symbol or local ticker identifier",
+    ),
+]
+
+_INVESTMENT_BENCHMARK_MAPPING_MAPPING: list[ColumnMapping] = dict_to_mapping_list(
+    {
+        "ISIN": "ISIN",
+        "Sector": "Sector",
+        "Industry": "Industry",
+        "Benchmark_ID": "Benchmark_ID",
+        "Yahoo_Ticker": "Yahoo_Ticker",
+        "Tax_Instrument_Type": "Tax_Instrument_Type",
+        "Tax_Instrument_Subtype": "Tax_Instrument_Subtype",
+        "Country": "Country",
+        "Geo": "Geo",
+        "Geo_Subtype": "Geo_Subtype",
+        "Ticker": "Ticker",
+    }
+)
+
+_INVESTMENT_BENCHMARK_MASTER_FIELDS: list[SourceFieldDeclaration] = [
+    SourceFieldDeclaration(
+        name="ID",
+        data_type="String",
+        nullable=False,
+        unique=True,
+        description="Unique benchmark definition primary key",
+    ),
+    SourceFieldDeclaration(
+        name="Benchmark_Name",
+        data_type="String",
+        nullable=False,
+        description="Human-readable benchmark index title",
+    ),
+    SourceFieldDeclaration(
+        name="yF_Ticker",
+        data_type="String",
+        nullable=True,
+        description="Yahoo Finance ticker symbol for daily historical prices",
+    ),
+    SourceFieldDeclaration(
+        name="Currency",
+        data_type="String",
+        nullable=True,
+        description="Currency code or foreign key reference for benchmark pricing",
+    ),
+]
+
+_INVESTMENT_BENCHMARK_MASTER_MAPPING: list[ColumnMapping] = dict_to_mapping_list(
+    {
+        "ID": "ID",
+        "Benchmark_Name": "Benchmark_Name",
+        "yF_Ticker": "yF_Ticker",
+        "Currency": "Currency",
+    }
+)
+
+_INVESTMENT_MACRO_PARAMETERS_FIELDS: list[SourceFieldDeclaration] = [
+    SourceFieldDeclaration(
+        name="FY",
+        data_type="String",
+        nullable=False,
+        unique=True,
+        description="Financial year descriptor string (e.g. 2024-25)",
+    ),
+    SourceFieldDeclaration(
+        name="FY_Start_Date",
+        data_type="Date",
+        nullable=False,
+        description="Financial year start calendar date",
+    ),
+    SourceFieldDeclaration(
+        name="FY_End_Date",
+        data_type="Date",
+        nullable=False,
+        description="Financial year end calendar date",
+    ),
+    SourceFieldDeclaration(
+        name="Debt_MF_Cutoff_Date",
+        data_type="Date",
+        nullable=True,
+        description="Statutory taxation cutoff date for debt mutual funds",
+    ),
+    SourceFieldDeclaration(
+        name="Inflation_Rate",
+        data_type="Float64",
+        nullable=True,
+        description="Annualized macroeconomic inflation rate decimal",
+    ),
+    SourceFieldDeclaration(
+        name="Risk_Free_Rate",
+        data_type="Float64",
+        nullable=True,
+        description="Sovereign risk-free return rate decimal",
+    ),
+    SourceFieldDeclaration(
+        name="Estimated_Ordinary_Income_Tax_Rate",
+        data_type="Float64",
+        nullable=True,
+        description="Estimated marginal ordinary income tax rate decimal",
+    ),
+    SourceFieldDeclaration(
+        name="Equity_LTCG_Exemption",
+        data_type="Int64",
+        nullable=True,
+        description="Statutory exempt threshold amount for listed equity LTCG",
+    ),
+    SourceFieldDeclaration(
+        name="Equity_Listed_LTCG",
+        data_type="Float64",
+        nullable=True,
+        description="Listed equity long-term capital gains tax rate decimal",
+    ),
+    SourceFieldDeclaration(
+        name="Equity_Listed_STCG",
+        data_type="Float64",
+        nullable=True,
+        description="Listed equity short-term capital gains tax rate decimal",
+    ),
+    SourceFieldDeclaration(
+        name="Equity_Unlisted_LTCG",
+        data_type="Float64",
+        nullable=True,
+        description="Unlisted equity long-term capital gains tax rate decimal",
+    ),
+    SourceFieldDeclaration(
+        name="Equity_Unlisted_STCG",
+        data_type="Float64",
+        nullable=True,
+        description="Unlisted equity short-term capital gains tax rate decimal",
+    ),
+    SourceFieldDeclaration(
+        name="Gold_LTCG",
+        data_type="Float64",
+        nullable=True,
+        description="Sovereign and physical gold long-term capital gains tax rate decimal",
+    ),
+    SourceFieldDeclaration(
+        name="Gold_STCG",
+        data_type="Float64",
+        nullable=True,
+        description="Gold short-term capital gains tax rate decimal",
+    ),
+    SourceFieldDeclaration(
+        name="Debt_MF_Pre_Cutoff_LTCG",
+        data_type="Float64",
+        nullable=True,
+        description="Pre-cutoff debt mutual fund LTCG tax rate decimal with indexation",
+    ),
+    SourceFieldDeclaration(
+        name="Debt_MF_Pre_Cutoff_STCG",
+        data_type="Float64",
+        nullable=True,
+        description="Pre-cutoff debt mutual fund STCG tax rate decimal",
+    ),
+    SourceFieldDeclaration(
+        name="Debt_MF_Post_Cutoff_LTCG",
+        data_type="Float64",
+        nullable=True,
+        description="Post-cutoff debt mutual fund LTCG tax rate decimal without indexation",
+    ),
+    SourceFieldDeclaration(
+        name="Debt_MF_Post_Cutoff_STCG",
+        data_type="Float64",
+        nullable=True,
+        description="Post-cutoff debt mutual fund STCG tax rate decimal",
+    ),
+    SourceFieldDeclaration(
+        name="Other_Debt_LTCG",
+        data_type="Float64",
+        nullable=True,
+        description="Other debt securities long-term capital gains tax rate decimal",
+    ),
+    SourceFieldDeclaration(
+        name="Other_Debt_STCG",
+        data_type="Float64",
+        nullable=True,
+        description="Other debt securities short-term capital gains tax rate decimal",
+    ),
+    SourceFieldDeclaration(
+        name="Default_LTCG",
+        data_type="Float64",
+        nullable=True,
+        description="Fallback default long-term capital gains tax rate decimal",
+    ),
+    SourceFieldDeclaration(
+        name="Default_STCG",
+        data_type="Float64",
+        nullable=True,
+        description="Fallback default short-term capital gains tax rate decimal",
+    ),
+    SourceFieldDeclaration(
+        name="Remarks",
+        data_type="String",
+        nullable=True,
+        description="Explanatory or regulatory notes for fiscal parameters",
+    ),
+]
+
+_INVESTMENT_MACRO_PARAMETERS_MAPPING: list[ColumnMapping] = dict_to_mapping_list(
+    {
+        "FY": "FY",
+        "FY_Start_Date": "FY_Start_Date",
+        "FY_End_Date": "FY_End_Date",
+        "Debt_MF_Cutoff_Date": "Debt_MF_Cutoff_Date",
+        "Inflation_Rate": "Inflation_Rate",
+        "Risk_Free_Rate": "Risk_Free_Rate",
+        "Estimated_Ordinary_Income_Tax_Rate": "Estimated_Ordinary_Income_Tax_Rate",
+        "Equity_LTCG_Exemption": "Equity_LTCG_Exemption",
+        "Equity_Listed_LTCG": "Equity_Listed_LTCG",
+        "Equity_Listed_STCG": "Equity_Listed_STCG",
+        "Equity_Unlisted_LTCG": "Equity_Unlisted_LTCG",
+        "Equity_Unlisted_STCG": "Equity_Unlisted_STCG",
+        "Gold_LTCG": "Gold_LTCG",
+        "Gold_STCG": "Gold_STCG",
+        "Debt_MF_Pre_Cutoff_LTCG": "Debt_MF_Pre_Cutoff_LTCG",
+        "Debt_MF_Pre_Cutoff_STCG": "Debt_MF_Pre_Cutoff_STCG",
+        "Debt_MF_Post_Cutoff_LTCG": "Debt_MF_Post_Cutoff_LTCG",
+        "Debt_MF_Post_Cutoff_STCG": "Debt_MF_Post_Cutoff_STCG",
+        "Other_Debt_LTCG": "Other_Debt_LTCG",
+        "Other_Debt_STCG": "Other_Debt_STCG",
+        "Default_LTCG": "Default_LTCG",
+        "Default_STCG": "Default_STCG",
+        "Remarks": "Remarks",
+    }
+)
+
+_MARKET_CURRENCY_MAPPING_FIELDS: list[SourceFieldDeclaration] = [
+    SourceFieldDeclaration(
+        name="UID",
+        data_type="String",
+        nullable=False,
+        unique=True,
+        description="Currency pair composite unique identifier (e.g. INR_USD)",
+    ),
+    SourceFieldDeclaration(
+        name="Currency_Code",
+        data_type="String",
+        nullable=False,
+        description="ISO 4217 base source currency code",
+    ),
+    SourceFieldDeclaration(
+        name="Target_Currency_Code",
+        data_type="String",
+        nullable=False,
+        description="ISO 4217 target reporting currency code",
+    ),
+    SourceFieldDeclaration(
+        name="yF_Ticker",
+        data_type="String",
+        nullable=True,
+        description="Yahoo Finance exchange rate symbol (e.g. USDINR=X)",
+    ),
+    SourceFieldDeclaration(
+        name="Currency_Name",
+        data_type="String",
+        nullable=True,
+        description="Human-readable currency nomenclature",
+    ),
+    SourceFieldDeclaration(
+        name="Is_Active",
+        data_type="Boolean",
+        nullable=True,
+        description="Active rate synchronization indicator flag",
+    ),
+]
+
+_MARKET_CURRENCY_MAPPING_MAPPING: list[ColumnMapping] = dict_to_mapping_list(
+    {
+        "UID": "UID",
+        "Currency_Code": "Currency_Code",
+        "Target_Currency_Code": "Target_Currency_Code",
+        "yF_Ticker": "yF_Ticker",
+        "Currency_Name": "Currency_Name",
+        "Is_Active": "Is_Active",
+    }
+)
+
 
 def get_shan_baseline_dataset_bindings() -> list[SourceDatasetConfig]:
     """Return declarative SourceDatasetConfig bindings covering all external Bronze datasets.
@@ -1720,6 +2087,8 @@ def get_shan_baseline_dataset_bindings() -> list[SourceDatasetConfig]:
             selector=CsvSelector(),
             enabled=True,
             identity=SourceFieldIdentity(field="INSTRUMENT_NAME"),
+            mapping=list(_INVESTMENT_MF_ISIN_MAPPING),
+            fields=list(_INVESTMENT_MF_ISIN_FIELDS),
         ),
         SourceDatasetConfig(
             source_id=SourceId("benchmark_mapping_csv"),
@@ -1727,6 +2096,8 @@ def get_shan_baseline_dataset_bindings() -> list[SourceDatasetConfig]:
             selector=CsvSelector(),
             enabled=True,
             identity=SourceFieldIdentity(field="ISIN"),
+            mapping=list(_INVESTMENT_BENCHMARK_MAPPING_MAPPING),
+            fields=list(_INVESTMENT_BENCHMARK_MAPPING_FIELDS),
         ),
         SourceDatasetConfig(
             source_id=SourceId("opening_balance_csv"),
@@ -1743,6 +2114,8 @@ def get_shan_baseline_dataset_bindings() -> list[SourceDatasetConfig]:
             selector=CsvSelector(),
             enabled=True,
             identity=SourceFieldIdentity(field="ID"),
+            mapping=list(_INVESTMENT_BENCHMARK_MASTER_MAPPING),
+            fields=list(_INVESTMENT_BENCHMARK_MASTER_FIELDS),
         ),
         SourceDatasetConfig(
             source_id=SourceId("macro_parameters_csv"),
@@ -1750,6 +2123,8 @@ def get_shan_baseline_dataset_bindings() -> list[SourceDatasetConfig]:
             selector=CsvSelector(),
             enabled=True,
             identity=SourceFieldIdentity(field="FY"),
+            mapping=list(_INVESTMENT_MACRO_PARAMETERS_MAPPING),
+            fields=list(_INVESTMENT_MACRO_PARAMETERS_FIELDS),
         ),
         SourceDatasetConfig(
             source_id=SourceId("currency_mapping_csv"),
@@ -1757,13 +2132,15 @@ def get_shan_baseline_dataset_bindings() -> list[SourceDatasetConfig]:
             selector=CsvSelector(),
             enabled=True,
             identity=SourceFieldIdentity(field="UID"),
+            mapping=list(_MARKET_CURRENCY_MAPPING_MAPPING),
+            fields=list(_MARKET_CURRENCY_MAPPING_FIELDS),
         ),
         SourceDatasetConfig(
             source_id=SourceId("column_master_csv"),
             dataset_id=DatasetId.COMMON_COLUMN_MASTER,
             selector=CsvSelector(),
-            enabled=True,
-            description="Transitional column master mapping dataset (scheduled for retirement in Phase 030/035)",
+            enabled=False,
+            description="Retired column master mapping dataset (transitional retirement in Phase 030)",
             identity=CompositeIdentity(fields=["TABLE_NAME", "OLD_COLUMN"]),
         ),
         SourceDatasetConfig(
