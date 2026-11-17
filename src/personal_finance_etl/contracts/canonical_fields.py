@@ -310,16 +310,14 @@ CANONICAL_BRONZE_FIELDS: dict[DatasetId, frozenset[str]] = {
     ),
     DatasetId.INVESTMENT_MF_ORDERS: frozenset(
         {
-            "Order Date",
-            "Order No",
             "Scheme Name",
             "Transaction Type",
             "Units",
             "NAV",
             "Amount",
-            "STT",
-            "Stamp Duty",
-            "Total Amount",
+            "Date",
+            "Month Date",
+            "__file_category__",
         }
     ),
     DatasetId.INVESTMENT_STOCK_ORDERS: frozenset(
@@ -343,13 +341,16 @@ CANONICAL_BRONZE_FIELDS: dict[DatasetId, frozenset[str]] = {
     DatasetId.MARKET_MF_HOLDINGS: frozenset(
         {
             "Scheme Name",
-            "Folio No",
+            "AMC",
+            "Category",
+            "Sub-category",
+            "Folio No.",
+            "Source",
             "Units",
-            "Nav",
-            "Current Value",
             "Invested Value",
-            "Gain/Loss",
-            "Gain/Loss %",
+            "Current Value",
+            "Returns",
+            "XIRR",
             "Month Date",
             "__file_category__",
         }
