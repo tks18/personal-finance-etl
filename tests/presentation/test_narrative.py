@@ -720,6 +720,12 @@ def test_sinks_suppress_per_file_validation_start_and_success() -> None:
     assert desktop_sink.emitted_count == 0
     desktop_log.assert_not_called()
 
+    # BaseEngineTab in Desktop GUI must also suppress routine validation
+    mock_tab = MagicMock()
+    BaseEngineTab._process_observability_event(mock_tab, None, start_ev)
+    BaseEngineTab._process_observability_event(mock_tab, None, success_ev)
+    mock_tab._log.assert_not_called()
+
     rich_sink.emit(start_ev)
     rich_sink.emit(success_ev)
     assert rich_sink.rendered_count == 0
