@@ -690,3 +690,60 @@ def test_narrative_density_within_target_bounds() -> None:
 
     assert 20 <= sink.rendered_count <= 45
     assert sink.rendered_count == len(milestone_events)
+
+
+def test_sinks_suppress_per_file_validation_start_and_success() -> None:
+    """Ensure both desktop and rich narrative sinks suppress routine validation events."""
+    desktop_log = MagicMock()
+    desktop_sink = DesktopNarrativeSink(log_callback=desktop_log, suppress_per_entity_success=True)
+
+    output = io.StringIO()
+    console = Console(file=output, color_system=None, width=120)
+    rich_sink = RichNarrativeSink(
+        console=console, show_timestamps=False, suppress_per_entity_success=True
+    )
+
+    start_ev = _make_event(
+        PresentationKind.STEP,
+        "Validating dataset 'investment_mf_orders'",
+        event_code=EventCode.VALIDATION_START,
+    )
+    success_ev = _make_event(
+        PresentationKind.SUCCESS,
+        "Validation passed for dataset 'investment_mf_orders'",
+        event_code=EventCode.VALIDATION_SUCCESS,
+        duration_ms=2.1,
+    )
+
+    desktop_sink.emit(start_ev)
+    desktop_sink.emit(success_ev)
+    assert desktop_sink.emitted_count == 0
+    desktop_log.assert_not_called()
+
+    rich_sink.emit(start_ev)
+    rich_sink.emit(success_ev)
+    assert rich_sink.rendered_count == 0
+    assert output.getvalue() == ""
+
+    # Failure must never be suppressed
+    err = ErrorDetails(
+        exception_type="ValidationError",
+        exception_message="Missing required column 'Scheme Name'",
+        failure_domain=FailureDomain.SOURCE_VALIDATION,
+        traceback_summary="traceback...",
+        retryable=False,
+    )
+    fail_ev = _make_event(
+        PresentationKind.FAILURE,
+        "Validation failed for dataset 'investment_mf_orders'",
+        event_code=EventCode.VALIDATION_FAILED,
+        error=err,
+    )
+
+    desktop_sink.emit(fail_ev)
+    assert desktop_sink.emitted_count == 1
+    desktop_log.assert_called_once()
+
+    rich_sink.emit(fail_ev)
+    assert rich_sink.rendered_count == 1
+    assert "Validation failed" in output.getvalue()
