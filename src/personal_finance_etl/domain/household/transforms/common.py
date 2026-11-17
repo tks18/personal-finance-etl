@@ -2,36 +2,15 @@
 
 Owns
 ----
-- Mapping table lookup utilities for column translation (Power Query equivalent).
 - Pure tabular transformation utilities for household streams.
 
 Does not own
 -------------
 - Validation logic (owned by domain.common.validation).
 - Date calculation logic (owned by domain.common.dates).
+- Column mapping extraction (retired in Phase 030; owned by config.sources).
 """
 
-import polars as pl
+from __future__ import annotations
 
-
-def get_column_mapping(df_map: pl.DataFrame, table_name: str = "CATEGORY") -> dict[str, str]:
-    """Filter the pre-loaded COLUMN_MASTER DataFrame and return a dictionary of {OLD_COLUMN: NEW_COLUMN}.
-
-    Parameters
-    ----------
-    df_map : pl.DataFrame
-        Column mapping table containing `TABLE_NAME`, `OLD_COLUMN`, and `NEW_COLUMN`.
-    table_name : str, default "CATEGORY"
-        Specific table key to filter mappings for.
-
-    Returns
-    -------
-    dict[str, str]
-        Dictionary mapping raw source column names to canonical warehouse names.
-    """
-    mapping = (
-        df_map.filter(pl.col("TABLE_NAME") == table_name)
-        .select(["OLD_COLUMN", "NEW_COLUMN"])
-        .rows()
-    )
-    return dict(mapping)
+__all__: list[str] = []
