@@ -209,6 +209,8 @@ class BaseEngineTab(ctk.CTkFrame):  # type: ignore[misc]
             EventCode.MARKET_TICKER_SUCCESS,
             EventCode.MARKET_TICKER_CACHE_HIT,
             EventCode.QUANT_ISIN_PROCESSED,
+            EventCode.VALIDATION_START,
+            EventCode.VALIDATION_SUCCESS,
         ) and event.presentation_kind in (PresentationKind.STEP, PresentationKind.SUCCESS):
             return
 

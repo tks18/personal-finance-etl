@@ -2193,6 +2193,190 @@ _INVESTMENT_MF_ORDERS_MAPPING: list[ColumnMapping] = dict_to_mapping_list(
     }
 )
 
+_MARKET_STOCK_HOLDINGS_FIELDS: list[SourceFieldDeclaration] = [
+    SourceFieldDeclaration(
+        name="Stock name",
+        data_type="String",
+        nullable=False,
+        description="Domestic stock scrip description title",
+    ),
+    SourceFieldDeclaration(
+        name="ISIN",
+        data_type="String",
+        nullable=False,
+        description="International Securities Identification Number",
+    ),
+    SourceFieldDeclaration(
+        name="Quantity",
+        data_type="String",
+        nullable=True,
+        description="Held stock quantity unit balance string",
+    ),
+    SourceFieldDeclaration(
+        name="Buy date",
+        data_type="String",
+        nullable=True,
+        description="Acquisition or trade execution calendar date string",
+    ),
+    SourceFieldDeclaration(
+        name="Buy price",
+        data_type="String",
+        nullable=True,
+        description="Average acquisition price per share string",
+    ),
+    SourceFieldDeclaration(
+        name="Buy value",
+        data_type="String",
+        nullable=True,
+        description="Total historical acquisition cost basis string",
+    ),
+    SourceFieldDeclaration(
+        name="Closing date",
+        data_type="String",
+        nullable=True,
+        description="Statement closing valuation calendar date string",
+    ),
+    SourceFieldDeclaration(
+        name="Closing price",
+        data_type="String",
+        nullable=True,
+        description="Market closing valuation price per share string",
+    ),
+    SourceFieldDeclaration(
+        name="Closing value",
+        data_type="String",
+        nullable=True,
+        description="Closing market valuation in base reporting currency string",
+    ),
+    SourceFieldDeclaration(
+        name="Unrealised P&L",
+        data_type="String",
+        nullable=True,
+        description="Unrealized historical profit or loss gain amount string",
+    ),
+    SourceFieldDeclaration(
+        name="Remark",
+        data_type="String",
+        nullable=True,
+        description="Broker explanatory note or remark string",
+    ),
+    SourceFieldDeclaration(
+        name="Month Date",
+        data_type="Date",
+        nullable=False,
+        description="Statement closing valuation calendar date",
+    ),
+    SourceFieldDeclaration(
+        name="__file_category__",
+        data_type="String",
+        nullable=True,
+        description="Domain category classification tag string",
+    ),
+]
+
+_MARKET_STOCK_HOLDINGS_MAPPING: list[ColumnMapping] = dict_to_mapping_list(
+    {
+        "Stock name": "Stock name",
+        "ISIN": "ISIN",
+        "Quantity": "Quantity",
+        "Buy date": "Buy date",
+        "Buy price": "Buy price",
+        "Buy value": "Buy value",
+        "Closing date": "Closing date",
+        "Closing price": "Closing price",
+        "Closing value": "Closing value",
+        "Unrealised P&L": "Unrealised P&L",
+        "Remark": "Remark",
+        "Month Date": "Month Date",
+        "__file_category__": "__file_category__",
+    }
+)
+
+_INVESTMENT_STOCK_ORDERS_FIELDS: list[SourceFieldDeclaration] = [
+    SourceFieldDeclaration(
+        name="Stock name",
+        data_type="String",
+        nullable=False,
+        description="Domestic stock scrip description title",
+    ),
+    SourceFieldDeclaration(
+        name="Symbol",
+        data_type="String",
+        nullable=False,
+        description="Exchange trading symbol ticker string",
+    ),
+    SourceFieldDeclaration(
+        name="ISIN",
+        data_type="String",
+        nullable=False,
+        description="International Securities Identification Number",
+    ),
+    SourceFieldDeclaration(
+        name="Type",
+        data_type="String",
+        nullable=False,
+        description="Order execution transaction kind (BUY, SELL)",
+    ),
+    SourceFieldDeclaration(
+        name="Quantity",
+        data_type="String",
+        nullable=True,
+        description="Transacted share quantity units string",
+    ),
+    SourceFieldDeclaration(
+        name="Value",
+        data_type="String",
+        nullable=True,
+        description="Total transacted order consideration value string",
+    ),
+    SourceFieldDeclaration(
+        name="Exchange",
+        data_type="String",
+        nullable=False,
+        description="Execution securities exchange market code (e.g. NSE, BSE)",
+    ),
+    SourceFieldDeclaration(
+        name="Exchange Order Id",
+        data_type="String",
+        nullable=False,
+        description="Exchange execution order reference identifier string",
+    ),
+    SourceFieldDeclaration(
+        name="Execution date and time",
+        data_type="String",
+        nullable=False,
+        description="Order allotment timestamp string",
+    ),
+    SourceFieldDeclaration(
+        name="Order status",
+        data_type="String",
+        nullable=False,
+        description="Order fulfillment status string (e.g. Executed)",
+    ),
+    SourceFieldDeclaration(
+        name="__file_category__",
+        data_type="String",
+        nullable=True,
+        description="Domain category classification tag string",
+    ),
+]
+
+_INVESTMENT_STOCK_ORDERS_MAPPING: list[ColumnMapping] = dict_to_mapping_list(
+    {
+        "Stock name": "Stock name",
+        "Symbol": "Symbol",
+        "ISIN": "ISIN",
+        "Type": "Type",
+        "Quantity": "Quantity",
+        "Value": "Value",
+        "Exchange": "Exchange",
+        "Exchange Order Id": "Exchange Order Id",
+        "Execution date and time": "Execution date and time",
+        "Order status": "Order status",
+        "__file_category__": "__file_category__",
+    }
+)
+
 
 def get_shan_baseline_dataset_bindings() -> list[SourceDatasetConfig]:
     """Return declarative SourceDatasetConfig bindings covering all external Bronze datasets.
@@ -2353,6 +2537,9 @@ def get_shan_baseline_dataset_bindings() -> list[SourceDatasetConfig]:
                 stop_on_blank=True,
             ),
             enabled=True,
+            description="Monthly domestic stock profit and loss closing statement sheet",
+            mapping=list(_MARKET_STOCK_HOLDINGS_MAPPING),
+            fields=list(_MARKET_STOCK_HOLDINGS_FIELDS),
         ),
         SourceDatasetConfig(
             source_id=SourceId("stock_orders_excel"),
@@ -2363,6 +2550,13 @@ def get_shan_baseline_dataset_bindings() -> list[SourceDatasetConfig]:
                 header_anchor="Stock name",
             ),
             enabled=True,
+            description="Monthly domestic stock trade order execution statement sheet",
+            normalization=[
+                CastRule(field="Quantity", target_type="float64"),
+                CastRule(field="Value", target_type="float64"),
+            ],
+            mapping=list(_INVESTMENT_STOCK_ORDERS_MAPPING),
+            fields=list(_INVESTMENT_STOCK_ORDERS_FIELDS),
         ),
         SourceDatasetConfig(
             source_id=SourceId("us_stock_transactions"),

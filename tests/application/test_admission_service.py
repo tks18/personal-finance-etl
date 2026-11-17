@@ -304,7 +304,7 @@ def test_admission_unconstrained_dataset_without_identity() -> None:
         dataset_id=DatasetId.INVESTMENT_STOCK_ORDERS,
         selector=CsvSelector(),
         mapping=[
-            ColumnMapping(source_field="Order No", canonical_field="Order No"),
+            ColumnMapping(source_field="Order No", canonical_field="Exchange Order Id"),
             ColumnMapping(source_field="Symbol", canonical_field="Symbol"),
         ],
     )
@@ -316,7 +316,7 @@ def test_admission_unconstrained_dataset_without_identity() -> None:
     input_df = pl.DataFrame({"Order No": ["101", "102"], "Symbol": ["RELIANCE", "INFY"]})
     admitted_df = service.execute_admission(plan, input_df).collect()
 
-    assert admitted_df.columns == ["Order No", "Symbol"]
+    assert admitted_df.columns == ["Exchange Order Id", "Symbol"]
     assert len(admitted_df) == 2
 
 

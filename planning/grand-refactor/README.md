@@ -64,7 +64,7 @@ If code evidence contradicts a phase, stop and amend the phase before changing t
 | 029 | Household transaction evidence and no-UID identity proof | v10.0.0-rc2 | [x] |
 | 030 | Reference evidence migration and column-master retirement | v10.0.0-rc3 | [x] |
 | 031 | Mutual-fund evidence migration | v10.0.0-rc4 | [x] |
-| 032 | Domestic-stock evidence migration | v10.0.0-rc5 | [ ] |
+| 032 | Domestic-stock evidence migration | v10.0.0-rc5 | [x] |
 | 033 | US-investment evidence migration | v10.0.0-rc6 | [ ] |
 | 034 | Provider-generated market evidence migration | v10.0.0-rc7 | [ ] |
 | 035 | Fixed-topology demolition | v10.0.0-rc8 | [ ] |
@@ -113,11 +113,11 @@ Phases 026-030 preserve the same rigor through fixed-transport demolition, house
 
 Phases 031-035 preserve the same rigor through all investment/provider evidence migrations and complete fixed-topology demolition.
 
-Phases 036-040 preserve the same rigor through strict canonical Bronze, operational provenance cutover, v10 generalized-ingestion certification, and the first major capability-composition releases.
+Phases 036-040 preserve the same rigor through strict canonical Bronze, operational provenance cutover, v10 generalized-ingestion certification (including canonical static sample evidence repository `tests/fixtures/evidence/` retiring in-memory byte builders), and the first major capability-composition releases.
 
 Phases 041-045 preserve the same rigor through Tax/Wealth/FIRE composition, plan-aware physical warehouse state, generalized replay/recovery, and PFETL-native configuration diagnostics.
 
-Phases 046-050 preserve the same rigor through external-user certification, performance hardening, public configuration freeze, and the final clean-install PFETL acceptance.
+Phases 046-050 preserve the same rigor through external-user certification, performance hardening, public configuration freeze, and the final clean-install PFETL acceptance verifying end-to-end execution of FIFO, Tax, FIRE, and Wealth reporting on golden fixtures.
 
 All 50 phases are specified and have passed the program-level QA described in `QA-REPORT.md`. Implementation remains phase-by-phase and every phase must finish green before the next begins.
 

@@ -27,8 +27,6 @@ from personal_finance_etl.infrastructure.providers.files.excel import (
     ExcelExtractor,
     extract_mf_market_data_raw,
     extract_mf_transactions_raw,
-    extract_stock_market_data_raw,
-    extract_stock_transactions_raw,
     extract_us_stock_transactions_raw,
 )
 from personal_finance_etl.infrastructure.providers.files.locator import (
@@ -51,7 +49,5 @@ __all__ = [
     "extract_opening_balances_raw",
     "extract_stg_benchmark_mapping",
     "extract_stg_mf_isin_mapping",
-    "extract_stock_market_data_raw",
-    "extract_stock_transactions_raw",
     "extract_us_stock_transactions_raw",
 ]

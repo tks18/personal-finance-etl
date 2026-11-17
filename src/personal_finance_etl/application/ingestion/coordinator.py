@@ -43,8 +43,6 @@ from personal_finance_etl.infrastructure.observability.diagnostics import (
     get_observability_diagnostics,
 )
 from personal_finance_etl.infrastructure.providers.files.excel import (
-    extract_stock_market_data_raw,
-    extract_stock_transactions_raw,
     extract_us_stock_transactions_raw,
 )
 
@@ -94,19 +92,9 @@ class DataExtractor:
         self, pending_files: dict[str, list[str]]
     ) -> dict[str, pl.LazyFrame]:
         """Extract raw market and transaction frames from pending Excel files."""
-        mf_holdings = pending_files.get("mf_holdings", [])
-        mf_orders = pending_files.get("mf_orders", [])
-        stock_pl = pending_files.get("stock_pl", [])
-        stock_orders = pending_files.get("stock_orders", [])
         us_stock_transactions = pending_files.get("us_stock_transactions", [])
 
-        excel_count = (
-            len(mf_holdings)
-            + len(mf_orders)
-            + len(stock_pl)
-            + len(stock_orders)
-            + len(us_stock_transactions)
-        )
+        excel_count = len(us_stock_transactions)
         csv_count = sum(
             len(pending_files.get(k, []))
             for k in [
@@ -139,19 +127,11 @@ class DataExtractor:
 
         if excel_count > 0:
             return {
-                "stock_market_data_raw": extract_stock_market_data_raw(
-                    self._get_file_list_with_bytes(stock_pl)
-                ),
-                "stock_transactions_raw": extract_stock_transactions_raw(
-                    self._get_file_list_with_bytes(stock_orders)
-                ),
                 "us_stock_transactions_raw": extract_us_stock_transactions_raw(
                     self._get_file_list_with_bytes(us_stock_transactions)
                 ),
             }
         return {
-            "stock_market_data_raw": pl.LazyFrame(),
-            "stock_transactions_raw": pl.LazyFrame(),
             "us_stock_transactions_raw": pl.LazyFrame(),
         }
 
@@ -247,8 +227,8 @@ class DataExtractor:
                 DatasetId.MARKET_CURRENCY_MAPPING: pl.LazyFrame(),
                 DatasetId.MARKET_MF_HOLDINGS: pl.LazyFrame(),
                 DatasetId.INVESTMENT_MF_ORDERS: pl.LazyFrame(),
-                DatasetId.MARKET_STOCK_HOLDINGS: excel_frames["stock_market_data_raw"],
-                DatasetId.INVESTMENT_STOCK_ORDERS: excel_frames["stock_transactions_raw"],
+                DatasetId.MARKET_STOCK_HOLDINGS: pl.LazyFrame(),
+                DatasetId.INVESTMENT_STOCK_ORDERS: pl.LazyFrame(),
                 DatasetId.INVESTMENT_US_STOCK_TRANSACTIONS: excel_frames[
                     "us_stock_transactions_raw"
                 ],

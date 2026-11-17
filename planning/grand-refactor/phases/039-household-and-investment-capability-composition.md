@@ -132,7 +132,8 @@ Required:
 - budget/cashflow valid;
 - active contract set excludes investment accounting outputs;
 - full Shan outputs/IDs identical;
-- household-only runtime demonstrates skipped work.
+- household-only runtime demonstrates skipped work;
+- capability integration tests leverage static sample fixtures from `tests/fixtures/evidence/` rather than synthetic in-memory frames.
 
 ## 10. Explicit non-goals
 
