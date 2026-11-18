@@ -27,6 +27,7 @@ from typing import Self
 
 from pydantic import BaseModel, Field, model_validator
 
+from personal_finance_etl.config.settings import Settings
 from personal_finance_etl.config.sources.identity import (
     BronzeIdentityStrategy,
     CompositeIdentity,
@@ -117,6 +118,8 @@ def _serialize_dataset_selector(sel: DatasetSelector) -> list[str]:
         lines.append(f'encoding = "{sel.encoding}"')
         lines.append(f"has_header = {'true' if sel.has_header else 'false'}")
     elif isinstance(sel, ExcelSelector):
+        if sel.file_pattern is not None:
+            lines.append(f'file_pattern = "{sel.file_pattern}"')
         if sel.sheet_name is not None:
             lines.append(f'sheet_name = "{sel.sheet_name}"')
         if sel.candidate_sheets is not None:
@@ -436,103 +439,185 @@ class SourceConfiguration(BaseModel):
         return content
 
 
-def get_shan_baseline_sources() -> list[SourceConfig]:
+def _resolve_statement_dir(
+    statements_folder: str | None,
+    relative_target: str,
+    default_fallback: str,
+) -> str:
+    """Resolve a statement subfolder from STATEMENTS_FOLDER or return default fallback.
+
+    Parameters
+    ----------
+    statements_folder : str | None
+        Root statements directory path.
+    relative_target : str
+        Relative subfolder path within statements directory.
+    default_fallback : str
+        Default fallback path if folder does not exist.
+
+    Returns
+    -------
+    str
+        Resolved directory path or fallback.
+    """
+    if not isinstance(statements_folder, str) or not os.path.isdir(statements_folder):
+        return default_fallback
+
+    candidates = [
+        os.path.join(statements_folder, "Investments", "Groww", relative_target),
+        os.path.join(statements_folder, "Investments", relative_target),
+        os.path.join(statements_folder, relative_target),
+    ]
+    for cand in candidates:
+        if os.path.isdir(cand):
+            return cand
+    return os.path.join(statements_folder, relative_target)
+
+
+def get_shan_baseline_sources(settings: Settings | None = None) -> list[SourceConfig]:
     """Return declarative SourceConfig representations of all v9.5.3 external evidence sources.
+
+    Parameters
+    ----------
+    settings : Settings | None, default None
+        Optional execution settings containing source filesystem locations.
 
     Returns
     -------
     list[SourceConfig]
         List of configured physical evidence sources using canonical baseline paths.
     """
+    stmts_raw = getattr(settings, "STATEMENTS_FOLDER", None) if settings else None
+    stmts = stmts_raw if isinstance(stmts_raw, str) else None
+
+    household_folder = getattr(settings, "SOURCE_DB_FOLDER", None) if settings else None
+    household_loc = "inputs/SOURCE_DB.sqlite"
+    if isinstance(household_folder, str) and household_folder and os.path.isdir(household_folder):
+        household_loc = household_folder
+
+    def _resolve_file_loc(attr: str, default: str) -> str:
+        if not settings:
+            return default
+        val = getattr(settings, attr, None)
+        if isinstance(val, str) and val and os.path.exists(val):
+            return val
+        return default
+
+    mf_isin_loc = _resolve_file_loc("MF_ISIN_CSV_PATH", "inputs/MF_ISIN_MAPPING.csv")
+    bm_map_loc = _resolve_file_loc("BENCHMARK_MAPPING_CSV_PATH", "inputs/BENCHMARK_MAPPING.csv")
+    opbal_loc = _resolve_file_loc("OPENING_BALANCE_CSV_PATH", "inputs/OPENING_BALANCE.csv")
+    bm_master_loc = _resolve_file_loc("BENCHMARK_MASTER_CSV_PATH", "inputs/BENCHMARK_MASTER.csv")
+    macro_loc = _resolve_file_loc("MACRO_PARAMETERS_CSV_PATH", "inputs/MACRO_PARAMETERS.csv")
+    curr_map_loc = _resolve_file_loc("CURRENCY_MAPPING_CSV_PATH", "inputs/CURRENCY_MAPPING.csv")
+    col_master_loc = _resolve_file_loc("COLUMN_MASTER_PATH", "inputs/COLUMN_MASTER.csv")
+
+    mf_holdings_loc = _resolve_statement_dir(
+        stmts, "Mutual Funds - Holdings", "inputs/Statements/Mutual Funds - Holdings"
+    )
+    mf_orders_loc = _resolve_statement_dir(
+        stmts, "Mutual Funds - Orders", "inputs/Statements/Mutual Funds - Orders"
+    )
+    stock_pl_loc = _resolve_statement_dir(
+        stmts, "Stock PL Statements", "inputs/Statements/Stock PL Statements"
+    )
+    stock_orders_loc = _resolve_statement_dir(
+        stmts, "Stock - Orders", "inputs/Statements/Stock - Orders"
+    )
+    us_stock_loc = _resolve_statement_dir(
+        stmts,
+        os.path.join("IND Money (US Stocks)", "Transaction Reports"),
+        "inputs/Statements/IND Money (US Stocks)/Transaction Reports",
+    )
+
     return [
         SourceConfig(
             source_id=SourceId("household_db"),
             provider_type=ProviderType.SQLITE,
-            location="inputs/SOURCE_DB.sqlite",
+            location=household_loc,
             enabled=True,
             description="External household money management SQLite database backup",
         ),
         SourceConfig(
             source_id=SourceId("mf_isin_csv"),
             provider_type=ProviderType.CSV,
-            location="inputs/MF_ISIN_MAPPING.csv",
+            location=mf_isin_loc,
             enabled=True,
             description="Mutual fund name to ISIN mapping table",
         ),
         SourceConfig(
             source_id=SourceId("benchmark_mapping_csv"),
             provider_type=ProviderType.CSV,
-            location="inputs/BENCHMARK_MAPPING.csv",
+            location=bm_map_loc,
             enabled=True,
             description="Asset to benchmark index mapping table",
         ),
         SourceConfig(
             source_id=SourceId("opening_balance_csv"),
             provider_type=ProviderType.CSV,
-            location="inputs/OPENING_BALANCE.csv",
+            location=opbal_loc,
             enabled=True,
             description="Historical household ledger opening balances",
         ),
         SourceConfig(
             source_id=SourceId("benchmark_master_csv"),
             provider_type=ProviderType.CSV,
-            location="inputs/BENCHMARK_MASTER.csv",
+            location=bm_master_loc,
             enabled=True,
             description="Benchmark index master catalog",
         ),
         SourceConfig(
             source_id=SourceId("macro_parameters_csv"),
             provider_type=ProviderType.CSV,
-            location="inputs/MACRO_PARAMETERS.csv",
+            location=macro_loc,
             enabled=True,
             description="Macroeconomic and tax policy parameters",
         ),
         SourceConfig(
             source_id=SourceId("currency_mapping_csv"),
             provider_type=ProviderType.CSV,
-            location="inputs/CURRENCY_MAPPING.csv",
+            location=curr_map_loc,
             enabled=True,
             description="Currency ticker mapping and exchange symbols",
         ),
         SourceConfig(
             source_id=SourceId("column_master_csv"),
             provider_type=ProviderType.CSV,
-            location="inputs/COLUMN_MASTER.csv",
+            location=col_master_loc,
             enabled=False,
             description="Retired column mapping dictionary (retired in Phase 030)",
         ),
         SourceConfig(
             source_id=SourceId("mf_holdings_excel"),
             provider_type=ProviderType.EXCEL,
-            location="inputs/Statements/Mutual Funds - Holdings",
+            location=mf_holdings_loc,
             enabled=True,
             description="Monthly mutual fund holdings spreadsheet directory",
         ),
         SourceConfig(
             source_id=SourceId("mf_orders_excel"),
             provider_type=ProviderType.EXCEL,
-            location="inputs/Statements/Mutual Funds - Orders",
+            location=mf_orders_loc,
             enabled=True,
             description="Monthly mutual fund orders and transactions spreadsheet directory",
         ),
         SourceConfig(
             source_id=SourceId("stock_pl_excel"),
             provider_type=ProviderType.EXCEL,
-            location="inputs/Statements/Stock PL Statements",
+            location=stock_pl_loc,
             enabled=True,
             description="Monthly stock profit and loss statement directory",
         ),
         SourceConfig(
             source_id=SourceId("stock_orders_excel"),
             provider_type=ProviderType.EXCEL,
-            location="inputs/Statements/Stock - Orders",
+            location=stock_orders_loc,
             enabled=True,
             description="Monthly stock order execution statement directory",
         ),
         SourceConfig(
             source_id=SourceId("us_stock_transactions"),
             provider_type=ProviderType.EXCEL,
-            location="inputs/Statements/IND Money (US Stocks)/Transaction Reports",
+            location=us_stock_loc,
             enabled=True,
             description="US stock trade transaction statements directory",
         ),
@@ -2694,8 +2779,15 @@ def get_shan_baseline_dataset_bindings() -> list[SourceDatasetConfig]:
     ]
 
 
-def get_shan_baseline_source_configuration() -> SourceConfiguration:
+def get_shan_baseline_source_configuration(
+    settings: Settings | None = None,
+) -> SourceConfiguration:
     """Return the assembled canonical Shan SourceConfiguration instance with all capabilities active.
+
+    Parameters
+    ----------
+    settings : Settings | None, default None
+        Optional execution settings containing source filesystem locations.
 
     Returns
     -------
@@ -2704,7 +2796,7 @@ def get_shan_baseline_source_configuration() -> SourceConfiguration:
     """
     return SourceConfiguration(
         schema_version=CURRENT_SOURCE_CONFIG_SCHEMA_VERSION,
-        sources=tuple(get_shan_baseline_sources()),
+        sources=tuple(get_shan_baseline_sources(settings=settings)),
         datasets=tuple(get_shan_baseline_dataset_bindings()),
         capabilities=CapabilitySelection(enabled=tuple(CapabilityId)),
     )

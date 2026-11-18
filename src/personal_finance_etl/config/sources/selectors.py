@@ -168,12 +168,42 @@ class ExcelSelector(BaseModel):
     """
 
     provider_type: Literal[ProviderType.EXCEL] = ProviderType.EXCEL
+    file_pattern: str | None = None
     sheet_name: str | None = None
     candidate_sheets: list[str] | None = None
     header_row: int | None = None
     header_anchor: str | None = None
     anchor_offset: int = 0
     stop_on_blank: bool = False
+
+    @field_validator("file_pattern", mode="before")
+    @classmethod
+    def _validate_file_pattern(cls, v: object) -> str | None:
+        """Validate that file_pattern, if provided, is a non-empty string.
+
+        Parameters
+        ----------
+        v : object
+            Input file pattern candidate.
+
+        Returns
+        -------
+        str | None
+            Cleaned file pattern or None.
+
+        Raises
+        ------
+        ValueError
+            If v is provided and is not a string, or is empty or whitespace only.
+        """
+        if v is None:
+            return None
+        if not isinstance(v, str):
+            raise ValueError(f"file_pattern must be a string, got {type(v).__name__}")
+        pattern = v.strip()
+        if not pattern:
+            raise ValueError("file_pattern cannot be empty or whitespace.")
+        return pattern
 
     @field_validator("sheet_name", mode="before")
     @classmethod

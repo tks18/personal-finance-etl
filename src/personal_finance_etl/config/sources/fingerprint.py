@@ -110,6 +110,7 @@ def canonicalize_source_configuration(config: SourceConfiguration) -> dict[str, 
             sel_dict["file_pattern"] = sel.file_pattern
             sel_dict["has_header"] = sel.has_header
         elif isinstance(sel, ExcelSelector):
+            sel_dict["file_pattern"] = sel.file_pattern
             sel_dict["header_row"] = sel.header_row
             sel_dict["sheet_name"] = sel.sheet_name
         elif isinstance(sel, SqliteSelector):

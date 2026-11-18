@@ -13,7 +13,6 @@ Does not own
 ------------
 - Physical hash computation or file reading (owned by infrastructure.control_plane.hashing).
 - FileSyncService execution loop (owned by infrastructure.control_plane.file_sync).
-- Legacy category mapping resolution (owned by application.ingestion.policy_resolver).
 """
 
 from __future__ import annotations
