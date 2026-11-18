@@ -1398,7 +1398,7 @@ def test_selected_legacy_route_dormant(
 
 def test_unmigrated_datasets_remain_legacy() -> None:
     """Scenario 16: All unmigrated datasets remain on legacy path without regression."""
-    assert len(MIGRATED_DATASETS) == 16
+    assert len(MIGRATED_DATASETS) == 19
     for ds_id in (
         DatasetId.HOUSEHOLD_ZCATEGORY,
         DatasetId.HOUSEHOLD_ASSET_GROUP,
@@ -1416,19 +1416,36 @@ def test_unmigrated_datasets_remain_legacy() -> None:
         DatasetId.MARKET_STOCK_HOLDINGS,
         DatasetId.INVESTMENT_STOCK_ORDERS,
         DatasetId.INVESTMENT_US_STOCK_TRANSACTIONS,
+        DatasetId.MARKET_CURRENCY_FX_RATES,
+        DatasetId.MARKET_BENCHMARK_HISTORY,
+        DatasetId.MARKET_US_STOCK_PRICES,
     ):
         assert ds_id in MIGRATED_DATASETS
 
     # Check all other contracts in BRONZE_CONTRACT_REGISTRY are not in MIGRATED_DATASETS
     unmigrated = [c for c in BRONZE_CONTRACT_REGISTRY if c.dataset_id not in MIGRATED_DATASETS]
-    assert len(unmigrated) == 4
-    for contract in unmigrated:
-        assert contract.dataset_id not in MIGRATED_DATASETS
+    assert len(unmigrated) == 1
+    assert unmigrated[0].dataset_id == DatasetId.COMMON_COLUMN_MASTER
 
 
 def test_migration_template_checklist_contract() -> None:
     """Scenario 17: Enforce migration template obligations A-L on migrated datasets."""
+    from personal_finance_etl.contracts.datasets import PROVIDER_GENERATED_DATASETS
+
     for ds_id in MIGRATED_DATASETS:
+        if ds_id in PROVIDER_GENERATED_DATASETS:
+            # Provider datasets are dynamically synthesized in SourcePlanner without user file bindings
+            pb_contract = get_pre_bronze_contract_by_dataset_id(ds_id)
+            assert pb_contract is not None, f"Item F: Missing PreBronzeDataContract for {ds_id}"
+            assert pb_contract.physical_table.startswith("pre_bronze.pb_")
+            bronze_contract = get_bronze_contract_by_dataset_id(ds_id)
+            assert bronze_contract is not None, f"Item H: Missing BronzeDataContract for {ds_id}"
+            assert has_canonical_bronze_schema(ds_id), (
+                f"Item I: Missing canonical Bronze schema for {ds_id}"
+            )
+            assert ds_id in MIGRATED_DATASETS
+            continue
+
         # A. Source selector configured
         source_config = get_shan_baseline_source_configuration()
         binding = source_config.get_dataset_binding(ds_id)
