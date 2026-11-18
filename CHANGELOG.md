@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [10.0.0-rc.6](https://github.com/tks18/personal-finance-etl/compare/10.0.0-rc.5...10.0.0-rc.6) (2026-11-18)
+
+
+### Features 🔥
+
+* **contracts:** update canonical bronze us stock field vocabularies ([15f7308](https://github.com/tks18/personal-finance-etl/commit/15f730801ffccdfeae2b3b841dcecbaa6f5c6010))
+* **ingestion:** route us stock evidence via slice runner ([a2234ef](https://github.com/tks18/personal-finance-etl/commit/a2234efb6826d793b5df501013769b3596e2d1be))
+* **validation:** register canonical bronze us stock pandera schema ([c183bdb](https://github.com/tks18/personal-finance-etl/commit/c183bdb798e03a4eb466c904329a81ba434b29f7))
+
+
+### Code Refactoring 🖌
+
+* **config:** declare us stock source fields mappings and selectors ([12054ed](https://github.com/tks18/personal-finance-etl/commit/12054edd91b07b223c0fdd262f2f6774a647faf6))
+* **ingestion:** demolish legacy us stock extraction paths ([39da7d9](https://github.com/tks18/personal-finance-etl/commit/39da7d907c0ea732f46dcb81a67c9db2a51d7501))
+
+
+### Tests 🧪
+
+* **ingestion:** certify us stock evidence migration and parity ([72ab9e1](https://github.com/tks18/personal-finance-etl/commit/72ab9e13f5599a41fd4c6a287afa9ad8af324622))
+
+
+### Docs 📃
+
+* **refactor:** complete phase 033 us stock evidence migration ([9c96c91](https://github.com/tks18/personal-finance-etl/commit/9c96c9139cb10b5e834ddcd35c4d18a36739d2d0))
+
 ## [10.0.0-rc.5](https://github.com/tks18/personal-finance-etl/compare/10.0.0-rc.4...10.0.0-rc.5) (2026-11-17)
 
 
