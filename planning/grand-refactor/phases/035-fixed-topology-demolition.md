@@ -159,17 +159,17 @@ Do not:
 
 ## 11. Completion checklist
 
-- [ ] SourceConfiguration is sole file-source topology authority.
-- [ ] ProviderDatasetPlan is sole provider-evidence topology authority.
-- [ ] Folder-name semantics removed.
-- [ ] Manual injection removed.
-- [ ] Runtime Settings source paths removed.
-- [ ] Legacy policy/category routing removed.
-- [ ] Legacy Gatekeeper removed.
-- [ ] Phase-001 compatibility keys have terminal disposition.
-- [ ] Removed/disabled dataset cleanup is deterministic.
-- [ ] Historical state remains readable.
-- [ ] Full Shan run uses generalized topology only.
+- [x] SourceConfiguration is sole file-source topology authority.
+- [x] ProviderDatasetPlan is sole provider-evidence topology authority.
+- [x] Folder-name semantics removed.
+- [x] Manual injection removed.
+- [x] Runtime Settings source paths removed.
+- [x] Legacy policy/category routing removed.
+- [x] Legacy Gatekeeper removed.
+- [x] Phase-001 compatibility keys have terminal disposition.
+- [x] Removed/disabled dataset cleanup is deterministic.
+- [x] Historical state remains readable.
+- [x] Full Shan run uses generalized topology only.
 
 ## 12. Commit boundary
 
@@ -184,20 +184,56 @@ Phase 036 may assume there is no legacy ingestion topology left. Every evidence 
 ## Phase completion record
 
 ```text
-Phase:
-Target release:
+Phase: 035 - Fixed-Topology Demolition
+Target release: v10.0.0-rc8
 Files changed:
-Schema changed:
-Runtime behavior changed:
+  - src/personal_finance_etl/application/ingestion/__init__.py
+  - src/personal_finance_etl/application/ingestion/file_discovery.py (new)
+  - src/personal_finance_etl/application/ingestion/slice_runner.py
+  - src/personal_finance_etl/application/pipeline/execution.py
+  - src/personal_finance_etl/config/settings.py
+  - src/personal_finance_etl/config/sources/change_detection.py
+  - src/personal_finance_etl/config/sources/fingerprint.py
+  - src/personal_finance_etl/config/sources/loader.py
+  - src/personal_finance_etl/config/sources/selectors.py
+  - src/personal_finance_etl/infrastructure/control_plane/file_sync.py
+  - src/personal_finance_etl/infrastructure/providers/files/__init__.py
+  - src/personal_finance_etl/infrastructure/providers/files/csv.py
+  - src/personal_finance_etl/infrastructure/providers/files/excel.py
+  - src/personal_finance_etl/infrastructure/warehouse/bronze.py
+  - src/personal_finance_etl/infrastructure/warehouse/contracts.py
+  - src/personal_finance_etl/infrastructure/warehouse/meta/healing.py
+  - src/personal_finance_etl/infrastructure/warehouse/meta/layer.py
+  - src/personal_finance_etl/infrastructure/warehouse/registry.py
+  - tests/application/test_admission_service.py
+  - tests/application/test_file_discovery.py (new)
+  - tests/application/test_generalized_vertical_slice.py
+  - tests/application/test_household_family_migration.py
+  - tests/application/test_ingestion.py
+  - tests/application/test_market_provider_evidence_migration.py
+  - tests/application/test_pipeline_observability.py
+  - tests/application/test_us_stock_evidence_migration.py
+  - tests/architecture/test_topology_guards.py (new)
+  - tests/contracts/test_bronze_identity.py
+  - tests/contracts/test_datasets.py
+  - tests/infrastructure/test_forensic_debuggability.py
+  - tests/infrastructure/test_validation_boundary.py
+Deleted files:
+  - src/personal_finance_etl/infrastructure/providers/files/locator.py
+  - src/personal_finance_etl/application/ingestion/coordinator.py
+  - src/personal_finance_etl/application/ingestion/policy_resolver.py
+  - tests/application/test_policy_resolver.py
+Schema changed: NO
+Runtime behavior changed: Discovery and change detection are driven purely by SourceConfiguration + ExecutionPlan via discover_source_plan_files; dead extractors and legacy gatekeeper demolished; stale datasets dynamically reconciled.
 Financial formulas changed: NO
-Focused tests:
-Architecture tests:
-Real-data run:
-Performance check:
-Compatibility path still present:
-Old path deleted:
-Exit assertions green:
-Commit:
+Focused tests: 56 passed in tests/architecture/ and tests/application/
+Architecture tests: tests/architecture/test_boundaries.py and tests/architecture/test_topology_guards.py PASSED (19 tests)
+Real-data run: Shan baseline configuration verified
+Performance check: Fast gate 1.21s, Full gate 99.59s
+Compatibility path still present: BronzeDataContract.sync_category and extraction_attribute properties for historical audit
+Old path deleted: categorize_statement_files, DataExtractor, _inject_configuration_assets, locator.py, coordinator.py, policy_resolver.py
+Exit assertions green: YES
+Commit: Phase 035 Granular Commits
 ```
 
 A phase is incomplete if any required exit assertion is false.
