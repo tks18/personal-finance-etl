@@ -48,7 +48,7 @@ def transform_d_currency(
         .select(cols)
     )
 
-    if mapping_lazy is not None:
+    if mapping_lazy is not None and "UID" in mapping_lazy.collect_schema().names():
         mapping_lazy = mapping_lazy.select(["UID", "Target_Currency_Code", "Is_Active"])
         if "Is_Active" in mapping_lazy.collect_schema().names():
             mapping_lazy = mapping_lazy.with_columns(

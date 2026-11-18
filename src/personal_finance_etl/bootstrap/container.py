@@ -96,13 +96,19 @@ class ServiceContainer:
             self._prefs.add_recent_rules(target_path)
         return FinancialRules.from_toml(target_path) if target_path else None
 
-    def create_source_config(self, sources_path: str | None = None) -> SourceConfiguration:
+    def create_source_config(
+        self,
+        sources_path: str | None = None,
+        settings: Settings | None = None,
+    ) -> SourceConfiguration:
         """Resolve and parse SourceConfiguration from TOML path or fallback to canonical Shan baseline.
 
         Parameters
         ----------
         sources_path : str | None, optional
             Path to the source configuration TOML file.
+        settings : Settings | None, optional
+            Optional execution settings containing source filesystem locations.
 
         Returns
         -------
@@ -112,7 +118,7 @@ class ServiceContainer:
         target_path = sources_path or self.default_sources_path
         if target_path and Path(target_path).is_file():
             return SourceConfiguration.from_toml(target_path)
-        return get_shan_baseline_source_configuration()
+        return get_shan_baseline_source_configuration(settings=settings)
 
     def create_duckdb_manager(self, cfg: Settings) -> DuckDBManager:
         """Instantiate a DuckDBManager bound to the configured database path."""
@@ -208,7 +214,7 @@ class ServiceContainer:
         """
         cfg = settings or self.create_settings(config_path)
         rules = self.create_rules(rules_path)
-        src_cfg = source_config or self.create_source_config(sources_path)
+        src_cfg = source_config or self.create_source_config(sources_path, settings=cfg)
         active_queue: EventQueue = status_queue or cast(EventQueue, _NullEventQueue())
 
         # If execution plan is not explicitly provided, resolve from source_config capability selection

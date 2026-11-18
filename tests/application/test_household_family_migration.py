@@ -25,7 +25,6 @@ from pathlib import Path
 import pytest
 
 from personal_finance_etl.application.ingestion.admission import AdmissionService
-from personal_finance_etl.application.ingestion.coordinator import DataExtractor
 from personal_finance_etl.application.ingestion.slice_runner import (
     DatasetIngestionService,
 )
@@ -563,6 +562,8 @@ def test_household_family_transformation_dag_all_dimensions_and_facts(
 
 
 def test_extractor_fixed_routines_permanently_demolished() -> None:
-    """Ensure extract_base_tables and _extract_sqlite_tables are completely demolished."""
+    """Ensure extract_base_tables and DataExtractor are completely demolished."""
+    from personal_finance_etl.application import ingestion
+
     assert not hasattr(SQLiteExtractor, "extract_base_tables")
-    assert not hasattr(DataExtractor, "_extract_sqlite_tables")
+    assert not hasattr(ingestion, "DataExtractor")

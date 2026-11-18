@@ -64,11 +64,11 @@ from personal_finance_etl.infrastructure.validation.canonical_schemas import (
     has_canonical_bronze_schema,
 )
 from personal_finance_etl.infrastructure.warehouse.bronze import (
-    MIGRATED_DATASETS,
     BronzeLayer,
 )
 from personal_finance_etl.infrastructure.warehouse.connection import DuckDBManager
 from personal_finance_etl.infrastructure.warehouse.contracts import (
+    BRONZE_CONTRACT_REGISTRY,
     PRE_BRONZE_ARTIFACT_ID,
     PRE_BRONZE_DATASET_ID,
     PRE_BRONZE_SOURCE_ID,
@@ -379,14 +379,17 @@ def test_upsert_market_delta_validation_failure_blocks_bronze() -> None:
 
 
 def test_migrated_datasets_contains_all_19_active_evidence_streams() -> None:
-    """Verify MIGRATED_DATASETS includes all 19 active Medallion Bronze evidence datasets."""
-    assert len(MIGRATED_DATASETS) == 19
+    """Verify all 19 active Medallion Bronze evidence datasets are registered."""
+    evidence_contracts = [
+        c for c in BRONZE_CONTRACT_REGISTRY if c.dataset_id != DatasetId.COMMON_COLUMN_MASTER
+    ]
+    assert len(evidence_contracts) == 19
     for ds_id in (
         DatasetId.MARKET_CURRENCY_FX_RATES,
         DatasetId.MARKET_BENCHMARK_HISTORY,
         DatasetId.MARKET_US_STOCK_PRICES,
     ):
-        assert ds_id in MIGRATED_DATASETS
+        assert any(c.dataset_id == ds_id for c in evidence_contracts)
 
 
 def test_pipeline_executor_capability_skips() -> None:

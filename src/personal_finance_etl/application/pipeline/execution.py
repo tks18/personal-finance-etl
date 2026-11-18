@@ -22,16 +22,16 @@ import time
 from datetime import date
 
 import polars as pl
+from pydantic import BaseModel, ConfigDict
 
 from personal_finance_etl.application.ingestion.admission import AdmissionService
-from personal_finance_etl.application.ingestion.coordinator import DataExtractor
+from personal_finance_etl.application.ingestion.file_discovery import (
+    discover_source_plan_files,
+)
 from personal_finance_etl.application.ingestion.market_sync import (
     BenchmarkPipeline,
     CurrencyPipeline,
     USMarketPipeline,
-)
-from personal_finance_etl.application.ingestion.policy_resolver import (
-    resolve_legacy_change_detection_policy,
 )
 from personal_finance_etl.application.ingestion.slice_runner import (
     DatasetIngestionService,
@@ -51,6 +51,7 @@ from personal_finance_etl.application.tax.tax_service import TaxEngine
 from personal_finance_etl.application.wealth.wealth_service import WealthPresentationEngine
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
+from personal_finance_etl.config.sources.change_detection import ChangeDetectionPolicy
 from personal_finance_etl.config.sources.loader import (
     SourceConfiguration,
     get_shan_baseline_source_configuration,
@@ -68,6 +69,7 @@ from personal_finance_etl.contracts.observability import (
     EventCode,
     PresentationKind,
 )
+from personal_finance_etl.contracts.sources import ProviderType
 from personal_finance_etl.contracts.validation import DataFrameValidator
 from personal_finance_etl.domain.investments.classification import (
     filter_us_market_trades,
@@ -84,10 +86,6 @@ from personal_finance_etl.infrastructure.observability import (
 from personal_finance_etl.infrastructure.observability.diagnostics import (
     get_observability_diagnostics,
 )
-from personal_finance_etl.infrastructure.providers.files.locator import (
-    categorize_statement_files,
-)
-from personal_finance_etl.infrastructure.providers.files.sqlite import SQLiteExtractor
 from personal_finance_etl.infrastructure.providers.market import (
     build_provider_symbol_registry,
 )
@@ -100,6 +98,7 @@ from personal_finance_etl.infrastructure.warehouse.gold import GoldLayer
 from personal_finance_etl.infrastructure.warehouse.meta import MetaLayer
 from personal_finance_etl.infrastructure.warehouse.pre_bronze import PreBronzeLayer
 from personal_finance_etl.infrastructure.warehouse.registry import (
+    BRONZE_CONTRACT_REGISTRY,
     DATA_CONTRACT_REGISTRY,
     get_bronze_contract_by_dataset_id,
     get_pre_bronze_contract_by_dataset_id,
@@ -204,6 +203,17 @@ def materialize_presentation_graphs(
     return dict(zip(keys, results, strict=True))
 
 
+class _SnapshotDataset(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    dataset_id: str = ""
+    enabled: bool = True
+
+
+class _SnapshotPayload(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    datasets: list[_SnapshotDataset] = []
+
+
 class PipelineExecutor:
     """Executes the quantitative ETL phases from discovery through analytical presentation."""
 
@@ -229,7 +239,7 @@ class PipelineExecutor:
         self.plan = plan or CapabilityPlanner().create_plan()
         self.dfs: dict[str, pl.DataFrame] = {}
         self.provider_symbols: ProviderSymbolRegistry | None = None
-        self.source_config = source_config or get_shan_baseline_source_configuration()
+        self.source_config = source_config or get_shan_baseline_source_configuration(settings=cfg)
         self.source_plan = (
             source_plan or SourcePlanner(self.source_config, self.plan).compile_plan()
         )
@@ -246,22 +256,23 @@ class PipelineExecutor:
         cp: ControlPlane,
         actionable_files: dict[str, list[str]] | None = None,
     ) -> DatasetCollection:
-        """Extract evidence from local files or raw payloads via DataExtractor.
+        """Return empty DatasetCollection as a deprecated compatibility stub.
 
         Parameters
         ----------
         cp : ControlPlane
             Active ControlPlane instance.
         actionable_files : dict[str, list[str]] | None, default=None
-            Optional subset of actionable files to extract.
+            Optional subset of actionable files to extract (unused).
 
         Returns
         -------
         DatasetCollection
-            Parsed tabular frames keyed by canonical DatasetId.
+            Empty dataset collection.
         """
-        extractor = DataExtractor(self.cfg, self.status_queue, cp, emitter=self.emitter)
-        return extractor.run(actionable_files)
+        return DatasetCollection(
+            frames={c.dataset_id: pl.DataFrame().lazy() for c in BRONZE_CONTRACT_REGISTRY}
+        )
 
     def transform(self, extracted_data: DatasetCollection) -> None:
         """Transform raw extracted data into base dimension and fact tables.
@@ -597,45 +608,10 @@ class PipelineExecutor:
         self._run_tax_engine()
         self._run_presentation_engine(cp, run_id)
 
-    def _inject_configuration_assets(self, discovered_files: dict[str, list[str]]) -> None:
-        """Inject runtime dynamic configuration CSVs and primary SQLite sources into discovery map.
-
-        Parameters
-        ----------
-        discovered_files : dict[str, list[str]]
-            Category-mapped discovery dictionary to populate.
-        """
-        discovered_files["sqlite_source"] = [
-            SQLiteExtractor(self.cfg.SOURCE_DB_FOLDER).get_latest_sqlite_backup().replace("\\", "/")
-        ]
-        discovered_files["mf_isin"] = [self.cfg.MF_ISIN_CSV_PATH.replace("\\", "/")]
-        discovered_files["benchmark_mapping"] = [
-            self.cfg.BENCHMARK_MAPPING_CSV_PATH.replace("\\", "/")
-        ]
-        discovered_files["opening_balances"] = [
-            self.cfg.OPENING_BALANCE_CSV_PATH.replace("\\", "/")
-        ]
-        discovered_files["benchmark_master"] = [
-            self.cfg.BENCHMARK_MASTER_CSV_PATH.replace("\\", "/")
-        ]
-        discovered_files["macro_parameters"] = [
-            self.cfg.MACRO_PARAMETERS_CSV_PATH.replace("\\", "/")
-        ]
-        discovered_files["currency_mapping"] = [
-            self.cfg.CURRENCY_MAPPING_CSV_PATH.replace("\\", "/")
-        ]
-        self.emitter.emit_event(
-            event_code=EventCode.EXTRACTION_COMPLETED,
-            message="Injected 7 dynamic configuration assets (6 CSV, 1 SQLite DB)",
-            presentation_kind=PresentationKind.STEP,
-            rows=7,
-            stage=EngineStage.DISCOVERING,
-        )
-
     def _run_discovery_phase(
         self, cp: ControlPlane
     ) -> tuple[DatasetCollection, dict[str, list[str]], list[tuple[str, str, str]]]:
-        """Execute Phase 1: File discovery, fingerprint sync, and raw extraction.
+        """Execute Phase 1: File discovery, fingerprint sync, and change detection.
 
         Parameters
         ----------
@@ -645,7 +621,7 @@ class PipelineExecutor:
         Returns
         -------
         tuple[DatasetCollection, dict[str, list[str]], list[tuple[str, str, str]]]
-            Extracted source data, actionable path map, and list of file renames.
+            Empty dataset collection, actionable path map, and list of file renames.
         """
         t_ext_start = time.perf_counter()
         renames: list[tuple[str, str, str]] = []
@@ -656,41 +632,65 @@ class PipelineExecutor:
                 presentation_kind=PresentationKind.STEP,
                 stage=EngineStage.DISCOVERING,
             )
-            discovered_files = categorize_statement_files(self.cfg.STATEMENTS_FOLDER, strict=True)
-            self._inject_configuration_assets(discovered_files)
+            discovered_by_dataset = discover_source_plan_files(self.source_plan.source_plans)
 
-            policies_by_category = {
-                category: resolve_legacy_change_detection_policy(category, settings=self.cfg)
-                for category in discovered_files
-            }
+            # Group discovered files and policies by sync_category for Control Plane artifact registration
+            discovered_by_category: dict[str, list[str]] = {}
+            policies_by_category: dict[str, ChangeDetectionPolicy] = {}
+
+            for sp in self.source_plan.source_plans:
+                for dp in sp.dataset_plans:
+                    b_contract = get_bronze_contract_by_dataset_id(dp.dataset_id)
+                    cat = b_contract.sync_category if b_contract else dp.dataset_id.value
+                    files = discovered_by_dataset.get(dp.dataset_id.value, [])
+                    if files:
+                        cat_list = discovered_by_category.setdefault(cat, [])
+                        for f in files:
+                            if f not in cat_list:
+                                cat_list.append(f)
+                        policies_by_category[cat] = dp.change_detection
+
             new_files, changed_files, _, renames = cp.file_sync.sync_with_disk(
-                discovered_files, policies_by_category
+                discovered_by_category, policies_by_category
             )
 
             pending_files = cp.artifacts.get_pending_files()
             actionable_all: dict[str, list[str]] = {}
-            all_keys = set(discovered_files.keys()).union(pending_files.keys())
+            all_keys = set(discovered_by_category.keys()).union(pending_files.keys())
             for k in all_keys:
                 paths = new_files.get(k, []) + changed_files.get(k, []) + pending_files.get(k, [])
                 if paths:
                     actionable_all[k] = sorted({p.replace("\\", "/") for p in paths})
+
+            # Also populate actionable files by dataset_id.value for direct DatasetPlan lookups
+            for sp in self.source_plan.source_plans:
+                for dp in sp.dataset_plans:
+                    b_contract = get_bronze_contract_by_dataset_id(dp.dataset_id)
+                    cat = b_contract.sync_category if b_contract else dp.dataset_id.value
+                    if cat in actionable_all and dp.dataset_id.value not in actionable_all:
+                        actionable_all[dp.dataset_id.value] = actionable_all[cat]
         else:
             diagnostics.info(
                 "Phase 1/5: Bypassing File Discoverer. Fetching pending files from Raw Store..."
             )
             actionable_all = cp.artifacts.get_pending_files()
 
-        extracted_data = self.extract(cp, actionable_files=actionable_all)
         elapsed_s = time.perf_counter() - t_ext_start
         self.emitter.emit_event(
             event_code=EventCode.EXTRACTION_COMPLETED,
-            message="Phase 1 Complete - Actionable streams loaded into memory",
+            message="Phase 1 Complete - Actionable streams synchronized",
             presentation_kind=PresentationKind.SUCCESS,
             duration_ms=elapsed_s * 1000.0,
             progress=0.2,
             stage=EngineStage.DISCOVERING,
         )
-        return extracted_data, actionable_all, renames
+        return (
+            DatasetCollection(
+                frames={c.dataset_id: pl.DataFrame().lazy() for c in BRONZE_CONTRACT_REGISTRY}
+            ),
+            actionable_all,
+            renames,
+        )
 
     def _log_artifact_sync_summary(
         self, cp: ControlPlane, run_id: str, actionable_all: dict[str, list[str]]
@@ -709,6 +709,74 @@ class PipelineExecutor:
         sync_summary = compute_artifact_sync_summary(actionable_all, cp, run_id)
         cp.runs.log_sync_summary(run_id, sync_summary)
 
+    def _reconcile_removed_datasets(
+        self,
+        cp: ControlPlane,
+        pre_bronze: PreBronzeLayer,
+        bronze: BronzeLayer,
+    ) -> None:
+        """Reconcile removed or disabled datasets by clearing stale DuckDB tables.
+
+        Parameters
+        ----------
+        cp : ControlPlane
+            Active ControlPlane instance.
+        pre_bronze : PreBronzeLayer
+            Active Pre-Bronze persistence layer.
+        bronze : BronzeLayer
+            Active Bronze persistence layer.
+        """
+        latest_snap_id = cp.runs.get_latest_successful_run_source_config_snapshot_id()
+        if not latest_snap_id:
+            return
+
+        prior_snapshot = cp.runs.get_source_config_snapshot(latest_snap_id)
+        if not prior_snapshot or not prior_snapshot.get("canonical_payload"):
+            return
+
+        payload_raw = prior_snapshot.get("canonical_payload")
+        if not isinstance(payload_raw, str):
+            return
+
+        try:
+            snapshot_data = _SnapshotPayload.model_validate_json(payload_raw)
+        except Exception:
+            return
+
+        prior_dataset_ids: set[str] = {
+            ds.dataset_id for ds in snapshot_data.datasets if ds.enabled and ds.dataset_id
+        }
+
+        current_dataset_ids: set[str] = {
+            dp.dataset_id.value for sp in self.source_plan.source_plans for dp in sp.dataset_plans
+        }
+
+        removed = prior_dataset_ids - current_dataset_ids
+        for ds_name in sorted(removed):
+            try:
+                ds_id = DatasetId(ds_name)
+            except ValueError:
+                continue
+
+            pb_contract = get_pre_bronze_contract_by_dataset_id(ds_id)
+            if pb_contract and pre_bronze.table_exists(pb_contract):
+                self.db_manager.conn.execute(f"DELETE FROM {pb_contract.physical_table}")
+
+            b_contract = get_bronze_contract_by_dataset_id(ds_id)
+            if b_contract:
+                try:
+                    self.db_manager.conn.execute(f"DELETE FROM {b_contract.physical_table}")
+                except Exception:
+                    pass
+
+            self.emitter.emit_event(
+                event_code=EventCode.BRONZE_UPSERT,
+                message=f"Reconciled removed/disabled dataset '{ds_name}': cleared Pre-Bronze and Bronze tables.",
+                presentation_kind=PresentationKind.STEP,
+                severity=DiagnosticSeverity.INFO,
+                stage=EngineStage.EXTRACTING,
+            )
+
     def _run_bronze_phase(
         self,
         cp: ControlPlane,
@@ -717,7 +785,7 @@ class PipelineExecutor:
         actionable_all: dict[str, list[str]],
         renames: list[tuple[str, str, str]],
     ) -> tuple[BronzeLayer, DatasetCollection]:
-        """Execute Phase 2: Upsert extracted datasets into Bronze Lakehouse.
+        """Execute Phase 2: Ingest discovered datasets into Pre-Bronze and Bronze Lakehouse.
 
         Parameters
         ----------
@@ -726,7 +794,7 @@ class PipelineExecutor:
         run_id : str
             Active pipeline execution ID.
         extracted_data : DatasetCollection
-            Extracted input datasets.
+            Legacy extracted dataset collection (unused).
         actionable_all : dict[str, list[str]]
             Actionable file paths by category.
         renames : list[tuple[str, str, str]]
@@ -748,24 +816,9 @@ class PipelineExecutor:
         meta_layer = MetaLayer(self.db_manager, self.cfg, self.rules)
         bronze = BronzeLayer(self.db_manager, cp, meta_layer, emitter=self.emitter)
         pre_bronze = PreBronzeLayer(self.db_manager, emitter=self.emitter)
-        migrated_datasets = (
-            DatasetId.HOUSEHOLD_ZCATEGORY,
-            DatasetId.HOUSEHOLD_ASSET_GROUP,
-            DatasetId.HOUSEHOLD_ASSETS,
-            DatasetId.HOUSEHOLD_CURRENCY,
-            DatasetId.HOUSEHOLD_INOUTCOME,
-            DatasetId.HOUSEHOLD_OPENING_BALANCES,
-            DatasetId.INVESTMENT_MF_ISIN_MAPPING,
-            DatasetId.INVESTMENT_BENCHMARK_MAPPING,
-            DatasetId.INVESTMENT_BENCHMARK_MASTER,
-            DatasetId.INVESTMENT_MACRO_PARAMETERS,
-            DatasetId.MARKET_CURRENCY_MAPPING,
-            DatasetId.MARKET_MF_HOLDINGS,
-            DatasetId.INVESTMENT_MF_ORDERS,
-            DatasetId.MARKET_STOCK_HOLDINGS,
-            DatasetId.INVESTMENT_STOCK_ORDERS,
-            DatasetId.INVESTMENT_US_STOCK_TRANSACTIONS,
-        )
+
+        # Reconcile removed or disabled datasets
+        self._reconcile_removed_datasets(cp, pre_bronze, bronze)
 
         if renames:
             bronze.migrate_identity(renames)
@@ -773,27 +826,33 @@ class PipelineExecutor:
             for old_path, new_path, category in renames:
                 old_id = generate_file_id(old_path)
                 new_id = generate_file_id(new_path)
-                for ds_id in migrated_datasets:
-                    b_contract = get_bronze_contract_by_dataset_id(ds_id)
-                    if b_contract and b_contract.sync_category == category:
-                        pb_contract = get_pre_bronze_contract_by_dataset_id(ds_id)
-                        if pb_contract and pre_bronze.table_exists(pb_contract):
-                            pre_bronze.migrate_artifact_identity(old_id, new_id, pb_contract)
+                for sp in self.source_plan.source_plans:
+                    for ds_plan in sp.dataset_plans:
+                        b_contract = get_bronze_contract_by_dataset_id(ds_plan.dataset_id)
+                        if b_contract and b_contract.sync_category == category:
+                            pb_contract = get_pre_bronze_contract_by_dataset_id(ds_plan.dataset_id)
+                            if pb_contract and pre_bronze.table_exists(pb_contract):
+                                pre_bronze.migrate_artifact_identity(old_id, new_id, pb_contract)
 
-        # Ingest migrated datasets through generalized vertical slice
-        for ds_id in migrated_datasets:
-            ds_plan = self.source_plan.get_dataset_plan(ds_id)
-            if ds_plan is not None:
+        # Ingest datasets declared in compiled source plan through generalized vertical slice
+        for sp in self.source_plan.source_plans:
+            if sp.provider_type == ProviderType.MARKET_DATA:
+                continue
+            for ds_plan in sp.dataset_plans:
+                ds_id = ds_plan.dataset_id
+                if ds_id == DatasetId.COMMON_COLUMN_MASTER:
+                    continue
                 pb_contract = get_pre_bronze_contract_by_dataset_id(ds_id)
                 b_contract = get_bronze_contract_by_dataset_id(ds_id)
-                sync_cat = b_contract.sync_category if b_contract else "sqlite_source"
+                sync_cat = b_contract.sync_category if b_contract else ds_id.value
                 dataset_actionable = actionable_all
                 if pb_contract and not pre_bronze.table_exists(pb_contract):
-                    if not actionable_all.get(sync_cat):
+                    if not actionable_all.get(sync_cat) and not actionable_all.get(ds_id.value):
                         all_cat_files = cp.artifacts.get_all_paths_by_category().get(sync_cat, [])
                         if all_cat_files:
                             dataset_actionable = dict(actionable_all)
                             dataset_actionable[sync_cat] = all_cat_files
+                            dataset_actionable[ds_id.value] = all_cat_files
                 self.ingestion_service.ingest_dataset(
                     dataset_plan=ds_plan,
                     source_config=self.source_config,
@@ -805,7 +864,6 @@ class PipelineExecutor:
                     run_id=run_id,
                 )
 
-        bronze.load(extracted_data, actionable_all)
         elapsed_s = time.perf_counter() - t_bronze_start
         self.emitter.emit_event(
             event_code=EventCode.BRONZE_UPSERT,
@@ -989,7 +1047,7 @@ class PipelineExecutor:
         validate_registry()
 
         diagnostics.debug("Target Database: %s", self.cfg.TARGET_DB_BASE_PATH)
-        diagnostics.debug("Source Extractor Folder: %s", self.cfg.STATEMENTS_FOLDER)
+        diagnostics.debug("Execution Plan: %s", self.plan.plan_fingerprint)
 
         with self.emitter.scope(
             operation="pipeline_execution",

@@ -29,7 +29,10 @@ from personal_finance_etl.application.pipeline.source_planner import (
 )
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
-from personal_finance_etl.config.sources.loader import SourceConfiguration
+from personal_finance_etl.config.sources.loader import (
+    SourceConfiguration,
+    get_shan_baseline_source_configuration,
+)
 from personal_finance_etl.contracts.application import EngineStage
 from personal_finance_etl.contracts.event_transport import EventQueue, NullEventQueue
 from personal_finance_etl.contracts.execution_plan import ExecutionPlan
@@ -68,23 +71,18 @@ class ETLOrchestrator:
         self.rules = rules
         self.status_queue = status_queue or NullEventQueue()
         self.emitter = emitter or get_global_emitter()
-        self.source_config = source_config
+        self.source_config = source_config or get_shan_baseline_source_configuration(settings=cfg)
 
         if plan is not None:
             self.plan = plan
-        elif source_config is not None:
-            requested_caps = source_config.capabilities.resolved_capabilities
-            self.plan = CapabilityPlanner().create_plan(requested_capabilities=requested_caps)
         else:
-            self.plan = CapabilityPlanner().create_plan()
+            requested_caps = self.source_config.capabilities.resolved_capabilities
+            self.plan = CapabilityPlanner().create_plan(requested_capabilities=requested_caps)
 
-        self.source_plan: CompiledSourcePlan | None
         if source_plan is not None:
             self.source_plan = source_plan
-        elif source_config is not None:
-            self.source_plan = SourcePlanner(source_config, self.plan).compile_plan()
         else:
-            self.source_plan = None
+            self.source_plan = SourcePlanner(self.source_config, self.plan).compile_plan()
 
         self.db_manager = DuckDBManager(cfg.TARGET_DB_BASE_PATH, cfg.TARGET_DB_NAME)
         self.executor = PipelineExecutor(

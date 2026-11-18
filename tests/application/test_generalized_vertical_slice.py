@@ -40,7 +40,6 @@ import polars as pl
 import pytest
 
 from personal_finance_etl.application.ingestion.admission import AdmissionService
-from personal_finance_etl.application.ingestion.coordinator import DataExtractor
 from personal_finance_etl.application.ingestion.slice_runner import (
     DatasetIngestionService,
 )
@@ -53,7 +52,6 @@ from personal_finance_etl.config.settings import Settings
 from personal_finance_etl.config.sources.loader import (
     get_shan_baseline_source_configuration,
 )
-from personal_finance_etl.contracts.dataset_collection import DatasetCollection
 from personal_finance_etl.contracts.datasets import DatasetId
 from personal_finance_etl.contracts.event_transport import NullEventQueue
 from personal_finance_etl.contracts.validation import (
@@ -77,10 +75,7 @@ from personal_finance_etl.infrastructure.validation import (
     PanderaDataFrameValidator,
     has_canonical_bronze_schema,
 )
-from personal_finance_etl.infrastructure.warehouse.bronze import (
-    MIGRATED_DATASETS,
-    BronzeLayer,
-)
+from personal_finance_etl.infrastructure.warehouse.bronze import BronzeLayer
 from personal_finance_etl.infrastructure.warehouse.connection import DuckDBManager
 from personal_finance_etl.infrastructure.warehouse.contracts import (
     BRONZE_CONTRACT_REGISTRY,
@@ -1326,113 +1321,34 @@ def test_protected_ids_unchanged(
     assert "CAT_INCOME_SALARY" in inc_cat["UID"].to_list()
 
 
-def test_selected_legacy_route_dormant(
-    isolated_control_plane: ControlPlane,
-    isolated_duckdb_manager: DuckDBManager,
-    isolated_settings: Settings,
-    tmp_path: Path,
-) -> None:
-    """Scenario 15: Legacy route for all 5 household datasets is dormant."""
-    db_file = _create_sqlite_db(tmp_path / "household" / "dormant.sqlite")
-    norm_path = str(db_file).replace("\\", "/")
+def test_selected_legacy_route_dormant() -> None:
+    """Scenario 15: Legacy route and DataExtractor are permanently demolished."""
+    from personal_finance_etl.application import ingestion
 
-    # 1. Household streams from DataExtractor are empty
-    isolated_control_plane.artifacts.ingest_binaries({"sqlite_source": [norm_path]})
-    extractor = DataExtractor(
-        cfg=isolated_settings,
-        status_queue=NullEventQueue(),
-        cp=isolated_control_plane,
-    )
-    collection = extractor.run(actionable_files={"sqlite_source": [norm_path]})
-    for ds_id in (
-        DatasetId.HOUSEHOLD_ZCATEGORY,
-        DatasetId.HOUSEHOLD_ASSET_GROUP,
-        DatasetId.HOUSEHOLD_ASSETS,
-        DatasetId.HOUSEHOLD_CURRENCY,
-        DatasetId.HOUSEHOLD_INOUTCOME,
-    ):
-        frame = collection.require_lazy(ds_id)
-        assert frame.collect().height == 0
-
-    # 2. All 5 are in MIGRATED_DATASETS
-    for ds_id in (
-        DatasetId.HOUSEHOLD_ZCATEGORY,
-        DatasetId.HOUSEHOLD_ASSET_GROUP,
-        DatasetId.HOUSEHOLD_ASSETS,
-        DatasetId.HOUSEHOLD_CURRENCY,
-        DatasetId.HOUSEHOLD_INOUTCOME,
-    ):
-        assert ds_id in MIGRATED_DATASETS
-
-    # 3. BronzeLayer.load skips all 5
-    isolated_duckdb_manager.open()
-    isolated_duckdb_manager.ensure_schemas()
-    meta = MetaLayer(isolated_duckdb_manager, isolated_settings, None)
-    bronze = BronzeLayer(isolated_duckdb_manager, isolated_control_plane, meta)
-    mock_extracted = DatasetCollection(
-        frames={
-            ds_id: pl.DataFrame({"dummy": [1]}).lazy()
-            for ds_id in (
-                DatasetId.HOUSEHOLD_ZCATEGORY,
-                DatasetId.HOUSEHOLD_ASSET_GROUP,
-                DatasetId.HOUSEHOLD_ASSETS,
-                DatasetId.HOUSEHOLD_CURRENCY,
-                DatasetId.HOUSEHOLD_INOUTCOME,
-            )
-        }
-    )
-    bronze.load(mock_extracted, {"sqlite_source": [norm_path]})
-    for table_name in (
-        "r_SQLite_ZCategory",
-        "r_SQLite_AssetGroup",
-        "r_SQLite_Assets",
-        "r_SQLite_Currency",
-        "r_SQLite_InOutcome",
-    ):
-        check = _fetch_scalar(
-            isolated_duckdb_manager,
-            f"SELECT count(*) FROM information_schema.tables WHERE table_name = '{table_name}'",
-        )
-        assert check == 0
+    assert not hasattr(ingestion, "DataExtractor")
 
 
 def test_unmigrated_datasets_remain_legacy() -> None:
-    """Scenario 16: All unmigrated datasets remain on legacy path without regression."""
-    assert len(MIGRATED_DATASETS) == 19
-    for ds_id in (
-        DatasetId.HOUSEHOLD_ZCATEGORY,
-        DatasetId.HOUSEHOLD_ASSET_GROUP,
-        DatasetId.HOUSEHOLD_ASSETS,
-        DatasetId.HOUSEHOLD_CURRENCY,
-        DatasetId.HOUSEHOLD_INOUTCOME,
-        DatasetId.HOUSEHOLD_OPENING_BALANCES,
-        DatasetId.INVESTMENT_MF_ISIN_MAPPING,
-        DatasetId.INVESTMENT_BENCHMARK_MAPPING,
-        DatasetId.INVESTMENT_BENCHMARK_MASTER,
-        DatasetId.INVESTMENT_MACRO_PARAMETERS,
-        DatasetId.MARKET_CURRENCY_MAPPING,
-        DatasetId.MARKET_MF_HOLDINGS,
-        DatasetId.INVESTMENT_MF_ORDERS,
-        DatasetId.MARKET_STOCK_HOLDINGS,
-        DatasetId.INVESTMENT_STOCK_ORDERS,
-        DatasetId.INVESTMENT_US_STOCK_TRANSACTIONS,
-        DatasetId.MARKET_CURRENCY_FX_RATES,
-        DatasetId.MARKET_BENCHMARK_HISTORY,
-        DatasetId.MARKET_US_STOCK_PRICES,
-    ):
-        assert ds_id in MIGRATED_DATASETS
-
-    # Check all other contracts in BRONZE_CONTRACT_REGISTRY are not in MIGRATED_DATASETS
-    unmigrated = [c for c in BRONZE_CONTRACT_REGISTRY if c.dataset_id not in MIGRATED_DATASETS]
-    assert len(unmigrated) == 1
-    assert unmigrated[0].dataset_id == DatasetId.COMMON_COLUMN_MASTER
+    """Scenario 16: All evidence datasets are natively registered without legacy dependencies."""
+    evidence_contracts = [
+        c for c in BRONZE_CONTRACT_REGISTRY if c.dataset_id != DatasetId.COMMON_COLUMN_MASTER
+    ]
+    assert len(evidence_contracts) == 19
+    for c in evidence_contracts:
+        assert has_canonical_bronze_schema(c.dataset_id)
+        pb = get_pre_bronze_contract_by_dataset_id(c.dataset_id)
+        assert pb is not None
 
 
 def test_migration_template_checklist_contract() -> None:
-    """Scenario 17: Enforce migration template obligations A-L on migrated datasets."""
+    """Scenario 17: Enforce migration template obligations A-I on all registered evidence datasets."""
     from personal_finance_etl.contracts.datasets import PROVIDER_GENERATED_DATASETS
 
-    for ds_id in MIGRATED_DATASETS:
+    evidence_contracts = [
+        c for c in BRONZE_CONTRACT_REGISTRY if c.dataset_id != DatasetId.COMMON_COLUMN_MASTER
+    ]
+    for c in evidence_contracts:
+        ds_id = c.dataset_id
         if ds_id in PROVIDER_GENERATED_DATASETS:
             # Provider datasets are dynamically synthesized in SourcePlanner without user file bindings
             pb_contract = get_pre_bronze_contract_by_dataset_id(ds_id)
@@ -1443,7 +1359,6 @@ def test_migration_template_checklist_contract() -> None:
             assert has_canonical_bronze_schema(ds_id), (
                 f"Item I: Missing canonical Bronze schema for {ds_id}"
             )
-            assert ds_id in MIGRATED_DATASETS
             continue
 
         # A. Source selector configured
@@ -1483,6 +1398,3 @@ def test_migration_template_checklist_contract() -> None:
         assert has_canonical_bronze_schema(ds_id), (
             f"Item I: Missing canonical Bronze schema for {ds_id}"
         )
-
-        # J. Included in MIGRATED_DATASETS
-        assert ds_id in MIGRATED_DATASETS, f"Item J: Dataset {ds_id} not in MIGRATED_DATASETS"
