@@ -661,11 +661,11 @@ def test_downstream_us_stock_pipeline_parity(
 
 def test_legacy_us_stock_extraction_demolished() -> None:
     """Verify legacy extraction functions are demolished from files provider and coordinator."""
-    import personal_finance_etl.application.ingestion.coordinator as coord_mod
+    import personal_finance_etl.application.ingestion as ingestion_pkg
     import personal_finance_etl.infrastructure.providers.files as files_pkg
     import personal_finance_etl.infrastructure.providers.files.excel as excel_mod
 
     assert not hasattr(files_pkg, "extract_us_stock_transactions_raw")
     assert not hasattr(excel_mod, "extract_us_stock_transactions_raw")
     assert not hasattr(excel_mod, "_process_us_stock_transactions")
-    assert not hasattr(coord_mod, "extract_us_stock_transactions_raw")
+    assert not hasattr(ingestion_pkg, "DataExtractor")
