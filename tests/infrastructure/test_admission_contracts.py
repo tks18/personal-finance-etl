@@ -232,10 +232,11 @@ def test_canonical_bronze_schema_independent_and_authoritative() -> None:
     """Verify that canonical Bronze schemas are authoritative, independent of user config."""
     assert has_canonical_bronze_schema(DatasetId.HOUSEHOLD_ZCATEGORY) is True
     assert has_canonical_bronze_schema(DatasetId.INVESTMENT_STOCK_ORDERS) is True
-    assert has_canonical_bronze_schema(DatasetId.INVESTMENT_US_STOCK_TRANSACTIONS) is False
+    assert has_canonical_bronze_schema(DatasetId.INVESTMENT_US_STOCK_TRANSACTIONS) is True
+    assert has_canonical_bronze_schema(DatasetId.MARKET_CURRENCY_FX_RATES) is False
 
     with pytest.raises(KeyError, match="No canonical Bronze validation schema registered"):
-        get_canonical_bronze_schema(DatasetId.INVESTMENT_US_STOCK_TRANSACTIONS)
+        get_canonical_bronze_schema(DatasetId.MARKET_CURRENCY_FX_RATES)
 
     schema = get_canonical_bronze_schema(DatasetId.HOUSEHOLD_ZCATEGORY)
     assert schema is CANONICAL_BRONZE_HOUSEHOLD_ZCATEGORY_SCHEMA

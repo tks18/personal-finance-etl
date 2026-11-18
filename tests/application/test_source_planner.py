@@ -195,11 +195,17 @@ def test_source_planner_disabled_source_disables_dataset(
     source_config: SourceConfiguration,
 ) -> None:
     """Verify that an operationally disabled source propagates is_enabled=False to all its dataset plans."""
+    disabled_sources = [
+        s.model_copy(update={"enabled": False}) if s.source_id == "us_stock_transactions" else s
+        for s in source_config.sources
+    ]
+    disabled_source_config = source_config.model_copy(update={"sources": tuple(disabled_sources)})
+
     execution_plan = CapabilityPlanner().create_plan()
-    planner = SourcePlanner(source_config, execution_plan)
+    planner = SourcePlanner(disabled_source_config, execution_plan)
     compiled = planner.compile_plan()
 
-    # In Shan baseline, us_stock_transactions is disabled (enabled=False)
+    # Disabled source propagates to dataset plan
     dp_us = compiled.get_dataset_plan(DatasetId.INVESTMENT_US_STOCK_TRANSACTIONS)
     assert dp_us is not None
     assert dp_us.is_enabled is False

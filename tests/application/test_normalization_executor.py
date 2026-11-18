@@ -361,11 +361,11 @@ def test_equivalence_excel_us_stock_cleaning() -> None:
         dataset_id=DatasetId.INVESTMENT_US_STOCK_TRANSACTIONS,
         selector=ExcelSelector(sheet_name="Transactions"),
         mapping=[
-            ColumnMapping(source_field="Trade Date", canonical_field="Trade Date"),
-            ColumnMapping(source_field="Symbol", canonical_field="Symbol"),
+            ColumnMapping(source_field="Trade Date", canonical_field="Order Date"),
+            ColumnMapping(source_field="Symbol", canonical_field="Stock Symbol"),
             ColumnMapping(source_field="Quantity", canonical_field="Quantity"),
-            ColumnMapping(source_field="Price", canonical_field="Price"),
-            ColumnMapping(source_field="Gross Amount", canonical_field="Gross Amount"),
+            ColumnMapping(source_field="Price", canonical_field="Price ($)"),
+            ColumnMapping(source_field="Gross Amount", canonical_field="Order Amount ($)"),
             ColumnMapping(source_field="Currency", canonical_field="Currency"),
         ],
         normalization=[
@@ -382,12 +382,12 @@ def test_equivalence_excel_us_stock_cleaning() -> None:
     executor = NormalizationExecutor()
     result_df = executor.execute(plan, df_excel_raw).collect()
 
-    assert result_df["Trade Date"].to_list() == [
+    assert result_df["Order Date"].to_list() == [
         datetime.date(2026, 2, 5),
         datetime.date(2026, 2, 10),
     ]
-    assert result_df["Symbol"].to_list() == ["AAPL", "MSFT"]
+    assert result_df["Stock Symbol"].to_list() == ["AAPL", "MSFT"]
     assert result_df["Quantity"].to_list() == [10.0, 5.0]
-    assert result_df["Price"].to_list() == [230.50, 410.20]
-    assert result_df["Gross Amount"].to_list() == [2305.00, 2051.00]
+    assert result_df["Price ($)"].to_list() == [230.50, 410.20]
+    assert result_df["Order Amount ($)"].to_list() == [2305.00, 2051.00]
     assert result_df["artifact_id"].to_list() == ["art_us", "art_us"]
