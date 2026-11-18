@@ -726,8 +726,18 @@ class ArtifactRepository:
         }
         total_count = 0
         for category, filepaths in actionable_files.items():
-            file_type = FILE_TYPE_MAP.get(category, "csv")
             for filepath in filepaths:
+                ext = os.path.splitext(filepath)[1].lower().lstrip(".")
+                if ext == "parquet":
+                    file_type = "parquet"
+                elif ext in ("xlsx", "xls"):
+                    file_type = "excel"
+                elif ext in ("sqlite", "db"):
+                    file_type = "sqlite"
+                elif ext == "csv":
+                    file_type = "csv"
+                else:
+                    file_type = FILE_TYPE_MAP.get(category, "csv")
                 try:
                     self._ingest_single_binary(
                         filepath, category, file_type, new_paths, changed_paths
@@ -760,7 +770,17 @@ class ArtifactRepository:
         """
         path = normalize_path(f"virtual://{category}/{filename}")
         now = self._now()
-        file_type = FILE_TYPE_MAP.get(category, "csv")
+        ext = os.path.splitext(filename)[1].lower().lstrip(".")
+        if ext == "parquet":
+            file_type = "parquet"
+        elif ext in ("xlsx", "xls"):
+            file_type = "excel"
+        elif ext in ("sqlite", "db"):
+            file_type = "sqlite"
+        elif ext == "csv":
+            file_type = "csv"
+        else:
+            file_type = FILE_TYPE_MAP.get(category, "csv")
         digest = hash_bytes(raw_bytes)
         with self.db.atomic():
             file_id, previous_status = self._upsert_registry(

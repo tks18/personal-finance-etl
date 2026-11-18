@@ -105,5 +105,8 @@ class DuckDBManager:
         self.conn.execute("CREATE SCHEMA IF NOT EXISTS gold")
         self.conn.execute(PRE_BRONZE_DDL)
         self.conn.execute(META_DDL)
+        self.conn.execute(
+            "UPDATE meta.m_File_Registry SET file_type = 'parquet' WHERE (file_name LIKE '%.parquet' OR relative_path LIKE '%.parquet') AND file_type != 'parquet'"
+        )
         self.conn.execute(SILVER_DDL)
         self.conn.execute(GOLD_DDL)

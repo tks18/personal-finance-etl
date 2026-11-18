@@ -32,6 +32,8 @@ FILE_TYPE_MAP: dict[str, str] = {
     "benchmark_mapping": "csv",
     "column_master": "csv",
     "benchmark_history": "parquet",
+    "currency_history": "parquet",
+    "us_stock_market": "parquet",
 }
 
 

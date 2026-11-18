@@ -76,9 +76,7 @@ def resolve_legacy_change_detection_policy(
     if contracts_for_cat and all(
         contract.dataset_id in PROVIDER_GENERATED_DATASETS for contract in contracts_for_cat
     ):
-        # Note: benchmark_history is in FILE_TYPE_MAP as 'parquet', whereas virtual
-        # API streams like currency_history and us_stock_market have no disk files.
-        if category in ("currency_history", "us_stock_market"):
+        if category in ("benchmark_history", "currency_history", "us_stock_market"):
             is_provider_generated = True
 
     file_type = FILE_TYPE_MAP.get(category, "csv")
