@@ -174,19 +174,19 @@ def test_us_stock_transactions_optionality(
     us_source = next(s for s in sources if s.source_id == "us_stock_transactions")
     us_binding = next(b for b in bindings if b.source_id == "us_stock_transactions")
 
-    # Default is disabled (optional capability)
-    assert us_source.enabled is False
-    assert us_binding.enabled is False
+    # Baseline is enabled in Phase 033
+    assert us_source.enabled is True
+    assert us_binding.enabled is True
 
-    # Enabling US stock transactions preserves full validity
-    enabled_source = us_source.model_copy(update={"enabled": True})
-    enabled_binding = us_binding.model_copy(update={"enabled": True})
+    # Disabling US stock transactions preserves full validity
+    disabled_source = us_source.model_copy(update={"enabled": False})
+    disabled_binding = us_binding.model_copy(update={"enabled": False})
 
     updated_sources = [
-        s if s.source_id != "us_stock_transactions" else enabled_source for s in sources
+        s if s.source_id != "us_stock_transactions" else disabled_source for s in sources
     ]
     updated_bindings = [
-        b if b.source_id != "us_stock_transactions" else enabled_binding for b in bindings
+        b if b.source_id != "us_stock_transactions" else disabled_binding for b in bindings
     ]
 
     validate_source_dataset_bindings(updated_sources, updated_bindings)
@@ -220,8 +220,8 @@ def test_baseline_topology_serialization_roundtrip(
     csv_bindings = [b for b in reconstructed_bindings if isinstance(b.selector, CsvSelector)]
 
     assert len(sqlite_bindings) == 5
-    assert len(excel_bindings) == 4
-    assert len(csv_bindings) == 8
+    assert len(excel_bindings) == 5
+    assert len(csv_bindings) == 7
 
 
 def test_topology_coverage_diagnostics() -> None:

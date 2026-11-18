@@ -1398,7 +1398,7 @@ def test_selected_legacy_route_dormant(
 
 def test_unmigrated_datasets_remain_legacy() -> None:
     """Scenario 16: All unmigrated datasets remain on legacy path without regression."""
-    assert len(MIGRATED_DATASETS) == 15
+    assert len(MIGRATED_DATASETS) == 16
     for ds_id in (
         DatasetId.HOUSEHOLD_ZCATEGORY,
         DatasetId.HOUSEHOLD_ASSET_GROUP,
@@ -1415,12 +1415,13 @@ def test_unmigrated_datasets_remain_legacy() -> None:
         DatasetId.INVESTMENT_MF_ORDERS,
         DatasetId.MARKET_STOCK_HOLDINGS,
         DatasetId.INVESTMENT_STOCK_ORDERS,
+        DatasetId.INVESTMENT_US_STOCK_TRANSACTIONS,
     ):
         assert ds_id in MIGRATED_DATASETS
 
     # Check all other contracts in BRONZE_CONTRACT_REGISTRY are not in MIGRATED_DATASETS
     unmigrated = [c for c in BRONZE_CONTRACT_REGISTRY if c.dataset_id not in MIGRATED_DATASETS]
-    assert len(unmigrated) == 5
+    assert len(unmigrated) == 4
     for contract in unmigrated:
         assert contract.dataset_id not in MIGRATED_DATASETS
 

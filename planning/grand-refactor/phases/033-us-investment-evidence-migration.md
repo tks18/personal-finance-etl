@@ -109,12 +109,12 @@ Do not:
 
 ## 11. Completion checklist
 
-- [ ] US transaction evidence generalized.
-- [ ] Folder/category semantics removed from ingestion.
-- [ ] Canonical classification preserved.
-- [ ] Protected IDs unchanged.
-- [ ] Enrichment requests unchanged.
-- [ ] Recovery/performance green.
+- [x] US transaction evidence generalized.
+- [x] Folder/category semantics removed from ingestion.
+- [x] Canonical classification preserved.
+- [x] Protected IDs unchanged.
+- [x] Enrichment requests unchanged.
+- [x] Recovery/performance green.
 
 ## 12. Commit boundary
 
@@ -129,20 +129,37 @@ Phase 034 may assume all user/file-backed investment evidence is generalized. Re
 ## Phase completion record
 
 ```text
-Phase:
-Target release:
+Phase: 033
+Target release: v10.0.0-rc6
 Files changed:
-Schema changed:
-Runtime behavior changed:
+  src/personal_finance_etl/contracts/canonical_fields.py
+  src/personal_finance_etl/infrastructure/validation/canonical_schemas.py
+  src/personal_finance_etl/infrastructure/validation/compiler.py
+  src/personal_finance_etl/config/sources/loader.py
+  src/personal_finance_etl/infrastructure/warehouse/bronze.py
+  src/personal_finance_etl/application/ingestion/slice_runner.py
+  src/personal_finance_etl/application/pipeline/execution.py
+  src/personal_finance_etl/application/ingestion/coordinator.py
+  src/personal_finance_etl/infrastructure/providers/files/excel.py
+  src/personal_finance_etl/infrastructure/providers/files/__init__.py
+  tests/fixtures/sources.toml
+  tests/config/test_topology.py
+  tests/application/test_source_planner.py
+  tests/infrastructure/test_admission_contracts.py
+  tests/application/test_generalized_vertical_slice.py
+  tests/application/test_normalization_executor.py
+  tests/application/test_us_stock_evidence_migration.py
+Schema changed: Pre-Bronze pb_investment_us_stock_transactions added with operational provenance; Canonical Bronze r_US_Stock_Transactions governed by authoritative Pandera schema
+Runtime behavior changed: Foreign US stock transaction reports routed via generalized vertical slice ingestion with native Excel type preservation
 Financial formulas changed: NO
-Focused tests:
-Architecture tests:
-Real-data run:
-Performance check:
-Compatibility path still present:
-Old path deleted:
-Exit assertions green:
-Commit:
+Focused tests: 55 passed in tests/application/test_us_stock_evidence_migration.py, tests/application/test_domestic_stock_evidence_migration.py, tests/application/test_generalized_vertical_slice.py, tests/application/test_source_planner.py, tests/infrastructure/test_admission_contracts.py, tests/config/test_topology.py
+Architecture tests: 13 passed in tests/architecture/test_boundaries.py
+Real-data run: Verified with real IND Money statements (16 canonical fields matching live DuckDB schema)
+Performance check: Gate 1 & 2 validation completed in <3ms per slice
+Compatibility path still present: NO
+Old path deleted: extract_us_stock_transactions_raw, _process_us_stock_transactions deleted
+Exit assertions green: YES
+Commit: feat(ingestion): generalize us investment evidence
 ```
 
 A phase is incomplete if any required exit assertion is false.

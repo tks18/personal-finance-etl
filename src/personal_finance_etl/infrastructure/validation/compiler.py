@@ -41,6 +41,8 @@ POLARS_TYPE_MAP: dict[str, type[pl.DataType] | pl.DataType] = {
     "bool": pl.Boolean,
     "date": pl.Date,
     "datetime": pl.Datetime,
+    "datetime_ms": pl.Datetime("ms"),
+    "datetime[ms]": pl.Datetime("ms"),
 }
 
 
