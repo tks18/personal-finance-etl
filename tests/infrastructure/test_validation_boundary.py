@@ -23,11 +23,7 @@ import polars as pl
 import pytest
 from pandera.api.polars.types import PolarsData
 
-from personal_finance_etl.application.ingestion.coordinator import DataExtractor
-from personal_finance_etl.config.settings import Settings
-from personal_finance_etl.contracts.dataset_collection import DatasetCollection
 from personal_finance_etl.contracts.datasets import DatasetId
-from personal_finance_etl.contracts.event_transport import EventQueue
 from personal_finance_etl.contracts.observability import (
     DiagnosticSeverity,
     EventCode,
@@ -42,7 +38,6 @@ from personal_finance_etl.contracts.validation import (
     ValidationResult,
     ValidationStage,
 )
-from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
 from personal_finance_etl.infrastructure.observability import ObservabilityEmitter
 from personal_finance_etl.infrastructure.validation.pandera_adapter import (
     PanderaDataFrameValidator,
@@ -381,30 +376,3 @@ def test_raise_on_error_false_returns_result(
     assert res.is_valid is False
     assert res.affected_row_count == 1
     assert len(res.failures) == 1
-
-
-def test_legacy_gatekeeper_coexistence(
-    isolated_settings: Settings,
-    status_queue: EventQueue,
-    isolated_control_plane: ControlPlane,
-    test_emitter: tuple[ObservabilityEmitter, _EventSink],
-) -> None:
-    """Verify that the existing legacy Gatekeeper validation executes without interference."""
-    emitter, _ = test_emitter
-    extractor = DataExtractor(
-        isolated_settings,
-        status_queue,
-        isolated_control_plane,
-        emitter=emitter,
-    )
-
-    empty_lf = pl.LazyFrame({"col_a": pl.Series([], dtype=pl.String)})
-    res = DatasetCollection(
-        frames={
-            DatasetId.HOUSEHOLD_ZCATEGORY: empty_lf,
-            DatasetId.COMMON_COLUMN_MASTER: pl.DataFrame({"col": ["val"]}),
-        }
-    )
-
-    # Legacy validation method must execute without error
-    extractor._validate_extracted_streams(res)  # pyright: ignore[reportPrivateUsage]

@@ -4,7 +4,6 @@
 Owns
 ----
 - Verification of canonical ObservabilityEvent emission across Core Pipeline stages.
-- Verification of DataExtractor gatekeeper validation event emission.
 - Verification of MarketSync pipelines (Currency, Benchmark, US Market) event emission.
 - Verification of Quant and Tax service lifecycle transitions.
 - Architectural assertion guaranteeing zero legacy string prefixes in application package.
@@ -21,23 +20,15 @@ import re
 from pathlib import Path
 from unittest.mock import MagicMock
 
-import polars as pl
 import pytest
 
-from personal_finance_etl.application.ingestion.coordinator import DataExtractor
 from personal_finance_etl.application.ingestion.market_sync import (
     BenchmarkPipeline,
     CurrencyPipeline,
     USMarketPipeline,
 )
-from personal_finance_etl.config.settings import Settings
-from personal_finance_etl.contracts.application import EngineStage
-from personal_finance_etl.contracts.dataset_collection import DatasetCollection
-from personal_finance_etl.contracts.datasets import DatasetId
 from personal_finance_etl.contracts.observability import (
-    EventCode,
     ObservabilityEvent,
-    PresentationKind,
 )
 from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
 from personal_finance_etl.infrastructure.observability import (
@@ -67,74 +58,6 @@ def test_emitter() -> tuple[ObservabilityEmitter, MockRecordingSink]:
     sink = MockRecordingSink()
     emitter.register_sink(sink)
     return emitter, sink
-
-
-def test_data_extractor_emits_extraction_and_schema_validation(
-    test_emitter: tuple[ObservabilityEmitter, MockRecordingSink],
-    isolated_settings: Settings,
-) -> None:
-    """Verify DataExtractor emits EXTRACTION_START and SCHEMA_VALIDATION events."""
-    emitter, sink = test_emitter
-    cfg = isolated_settings
-    mock_queue = MagicMock()
-    mock_cp = MagicMock(spec=ControlPlane)
-
-    extractor = DataExtractor(cfg, mock_queue, mock_cp, emitter=emitter)
-
-    # DatasetCollection for testing schema validation
-    dummy_lf = pl.DataFrame({"id": [1], "name": ["test"]}).lazy()
-    res = DatasetCollection(
-        frames={
-            DatasetId.HOUSEHOLD_ZCATEGORY: dummy_lf,
-            DatasetId.COMMON_COLUMN_MASTER: pl.DataFrame(),
-        }
-    )
-
-    extractor._validate_extracted_streams(res)
-
-    event_codes = [e.event_code for e in sink.events]
-    assert EventCode.SCHEMA_VALIDATION in event_codes
-
-    validation_events = [e for e in sink.events if e.event_code == EventCode.SCHEMA_VALIDATION]
-    assert len(validation_events) >= 2
-    assert validation_events[0].presentation_kind == PresentationKind.STEP
-    assert validation_events[-1].presentation_kind == PresentationKind.SUCCESS
-    assert validation_events[-1].context.stage == EngineStage.EXTRACTING
-
-
-def test_data_extractor_emits_schema_validation_failure(
-    test_emitter: tuple[ObservabilityEmitter, MockRecordingSink],
-    isolated_settings: Settings,
-) -> None:
-    """Verify DataExtractor emits FAILURE event on schema validation exception."""
-    emitter, sink = test_emitter
-    cfg = isolated_settings
-    mock_queue = MagicMock()
-    mock_cp = MagicMock(spec=ControlPlane)
-
-    extractor = DataExtractor(cfg, mock_queue, mock_cp, emitter=emitter)
-
-    # Faulty dataset collection that raises an exception when schema is inspected
-    faulty_lf = MagicMock(spec=pl.LazyFrame)
-    faulty_lf.collect_schema.side_effect = RuntimeError("Corrupted Parquet Stream")
-
-    res = DatasetCollection(
-        frames={
-            DatasetId.HOUSEHOLD_ZCATEGORY: faulty_lf,
-        }
-    )
-
-    with pytest.raises(RuntimeError, match="Corrupted source data detected"):
-        extractor._validate_extracted_streams(res)
-
-    failed_events = [
-        e
-        for e in sink.events
-        if e.event_code == EventCode.SCHEMA_VALIDATION
-        and e.presentation_kind == PresentationKind.FAILURE
-    ]
-    assert len(failed_events) == 1
-    assert "Corrupted Parquet Stream" in failed_events[0].message
 
 
 def test_market_sync_pipelines_emit_lifecycle_events(

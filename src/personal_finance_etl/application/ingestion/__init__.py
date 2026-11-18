@@ -5,7 +5,7 @@ Owns
 - Orchestrating evidence acquisition from providers.
 - Checking extraction completeness and recording provenance.
 - Coordinating Bronze storage persistence and synchronization.
-- Transitional compatibility resolution for change detection (resolve_legacy_change_detection_policy).
+- Source-agnostic filesystem file discovery via typed selectors (discover_source_plan_files).
 - Identity plan compilation and deterministic execution for Bronze datasets (compile_identity_plan, execute_identity_plan).
 - Pre-Bronze dataset admission coordinating normalization and identity resolution (AdmissionPlan, AdmissionService).
 
@@ -28,8 +28,8 @@ from personal_finance_etl.application.ingestion.asset_strategies import (
     StockPipeline,
     USStockPipeline,
 )
-from personal_finance_etl.application.ingestion.coordinator import (
-    DataExtractor,
+from personal_finance_etl.application.ingestion.file_discovery import (
+    discover_source_plan_files,
 )
 from personal_finance_etl.application.ingestion.identity import (
     IdentityCollisionDiagnostic,
@@ -46,9 +46,6 @@ from personal_finance_etl.application.ingestion.market_sync import (
     CurrencyPipeline,
     USMarketPipeline,
 )
-from personal_finance_etl.application.ingestion.policy_resolver import (
-    resolve_legacy_change_detection_policy,
-)
 from personal_finance_etl.application.ingestion.slice_runner import (
     DatasetIngestionService,
 )
@@ -59,7 +56,6 @@ __all__ = [
     "AssetPipeline",
     "BenchmarkPipeline",
     "CurrencyPipeline",
-    "DataExtractor",
     "DatasetIngestionService",
     "IdentityCollisionDiagnostic",
     "IdentityCollisionError",
@@ -72,6 +68,6 @@ __all__ = [
     "USMarketPipeline",
     "USStockPipeline",
     "compile_identity_plan",
+    "discover_source_plan_files",
     "execute_identity_plan",
-    "resolve_legacy_change_detection_policy",
 ]
