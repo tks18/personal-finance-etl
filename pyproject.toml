@@ -1,6 +1,6 @@
 [project]
 name = "personal-finance-etl"
-version = "10.0.0rc6"
+version = "10.0.0rc7"
 description = "Local-first personal financial systems platform for investment accounting, reconciliation, tax evidence, wealth analytics, FIRE planning, and BI."
 authors = [
   { name="Shan", email="tksudharshan@gmail.com" },

@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [10.0.0-rc.7](https://github.com/tks18/personal-finance-etl/compare/10.0.0-rc.6...10.0.0-rc.7) (2026-11-18)
+
+
+### Bug Fixes 🛠
+
+* **control-plane:** classify provider parquet artifacts as parquet ([0428cb4](https://github.com/tks18/personal-finance-etl/commit/0428cb48ec46750701735185eb425b6380b102f1))
+
+
+### Features 🔥
+
+* **config:** support market provider selector in sources models ([49f30c4](https://github.com/tks18/personal-finance-etl/commit/49f30c4297ac6379f80e1db9e70ba7b7f5599eca))
+* **contracts:** add market provider selector and schema fields ([b51c1f8](https://github.com/tks18/personal-finance-etl/commit/b51c1f8acb48ecb9ae958ff9e736c67a6cc68da1))
+* **ingestion:** generalize market provider delta admission ([16abf95](https://github.com/tks18/personal-finance-etl/commit/16abf95d779efcae226baf6ddc9d1e2a62942a89))
+* **validation:** register canonical bronze market provider schemas ([e6febc2](https://github.com/tks18/personal-finance-etl/commit/e6febc29747a8677edb6b5119ab4fba92c4cb28b))
+
+
+### Tests 🧪
+
+* **ingestion:** certify market provider evidence migration ([59329bd](https://github.com/tks18/personal-finance-etl/commit/59329bde3680dd3f790aea1f4fd7f0314a21c091))
+
+
+### Docs 📃
+
+* **refactor:** complete phase 034 market evidence migration ([dbf4e00](https://github.com/tks18/personal-finance-etl/commit/dbf4e0079bd5ccc07c40c1afcea141a3976632e6))
+
 ## [10.0.0-rc.6](https://github.com/tks18/personal-finance-etl/compare/10.0.0-rc.5...10.0.0-rc.6) (2026-11-18)
 
 
