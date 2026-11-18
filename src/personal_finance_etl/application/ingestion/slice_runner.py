@@ -29,6 +29,7 @@ from personal_finance_etl.config.sources.identity import SourceFieldIdentity
 from personal_finance_etl.config.sources.loader import SourceConfiguration
 from personal_finance_etl.config.sources.selectors import (
     CsvSelector,
+    ExcelSelector,
     SqliteSelector,
 )
 from personal_finance_etl.contracts.application import EngineStage
@@ -252,7 +253,7 @@ class DatasetIngestionService:
                     encoding=dataset_plan.selector.encoding,
                     has_header=dataset_plan.selector.has_header,
                 )
-            else:
+            elif isinstance(dataset_plan.selector, ExcelSelector):
                 excel_extractor = ExcelExtractor(folder_path)
                 category = (
                     "Indian MF"
@@ -276,6 +277,10 @@ class DatasetIngestionService:
                     anchor_offset=dataset_plan.selector.anchor_offset,
                     stop_on_blank=dataset_plan.selector.stop_on_blank,
                     file_category=category,
+                )
+            else:
+                raise TypeError(
+                    f"Unsupported selector type for file ingestion: {type(dataset_plan.selector).__name__}"
                 )
 
             raw_df = source_lazy.collect()
