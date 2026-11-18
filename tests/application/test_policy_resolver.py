@@ -138,9 +138,9 @@ MATRIX_TEST_CASES = [
     ),
     (
         "benchmark_history",
-        FingerprintStrategy.SHA256,
+        FingerprintStrategy.NONE,
         DriftStrategy.METADATA,
-        RenameStrategy.CONTENT_FINGERPRINT,
+        RenameStrategy.DISABLED,
         SyncStrategy.INCREMENTAL,
     ),
     (
