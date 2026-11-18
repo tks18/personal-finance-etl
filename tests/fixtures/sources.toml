@@ -89,10 +89,10 @@ description = "Monthly stock order execution statement directory"
 
 [[sources]]
 source_id = "us_stock_transactions"
-provider_type = "csv"
+provider_type = "excel"
 location = "inputs/Statements/IND Money (US Stocks)/Transaction Reports"
-enabled = false
-description = "Optional US stock transaction reports directory (default disabled)"
+enabled = true
+description = "US stock trade transaction statements directory"
 
 [[datasets]]
 source_id = "household_db"
@@ -441,11 +441,8 @@ header_row = 5
 [[datasets]]
 source_id = "us_stock_transactions"
 dataset_id = "investment_us_stock_transactions"
-enabled = false
-description = "Optional US stock transactions reports"
+enabled = true
+description = "US stock trade execution statement sheet"
 [datasets.selector]
-provider_type = "csv"
-file_pattern = "*.csv"
-delimiter = ","
-encoding = "utf-8"
-has_header = true
+provider_type = "excel"
+header_row = 0

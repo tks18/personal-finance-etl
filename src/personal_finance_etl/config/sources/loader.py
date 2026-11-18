@@ -529,10 +529,10 @@ def get_shan_baseline_sources() -> list[SourceConfig]:
         ),
         SourceConfig(
             source_id=SourceId("us_stock_transactions"),
-            provider_type=ProviderType.CSV,
+            provider_type=ProviderType.EXCEL,
             location="inputs/Statements/IND Money (US Stocks)/Transaction Reports",
-            enabled=False,
-            description="Optional US stock transaction reports directory (default disabled)",
+            enabled=True,
+            description="US stock trade transaction statements directory",
         ),
     ]
 
@@ -2377,6 +2377,126 @@ _INVESTMENT_STOCK_ORDERS_MAPPING: list[ColumnMapping] = dict_to_mapping_list(
     }
 )
 
+_INVESTMENT_US_STOCK_TRANSACTIONS_FIELDS: list[SourceFieldDeclaration] = [
+    SourceFieldDeclaration(
+        name="Stock Name",
+        data_type="String",
+        nullable=False,
+        description="Company or instrument title string",
+    ),
+    SourceFieldDeclaration(
+        name="ISIN",
+        data_type="String",
+        nullable=False,
+        description="US / foreign standard ISIN alphanumeric code",
+    ),
+    SourceFieldDeclaration(
+        name="Stock Symbol",
+        data_type="String",
+        nullable=False,
+        description="Local market equity trading ticker",
+    ),
+    SourceFieldDeclaration(
+        name="Yahoo Ticker",
+        data_type="String",
+        nullable=False,
+        description="Market data vendor quote ticker",
+    ),
+    SourceFieldDeclaration(
+        name="Order Date",
+        data_type="Datetime[ms]",
+        nullable=False,
+        description="Order execution timestamp",
+    ),
+    SourceFieldDeclaration(
+        name="Currency",
+        data_type="String",
+        nullable=False,
+        description="Trading currency code (e.g. USD)",
+    ),
+    SourceFieldDeclaration(
+        name="Transaction Type",
+        data_type="String",
+        nullable=False,
+        description="Transaction direction (BUY / SELL)",
+    ),
+    SourceFieldDeclaration(
+        name="Order Type",
+        data_type="String",
+        nullable=False,
+        description="Order execution type (MARKET / LIMIT)",
+    ),
+    SourceFieldDeclaration(
+        name="Quantity",
+        data_type="Float64",
+        nullable=True,
+        description="Executed share units count",
+    ),
+    SourceFieldDeclaration(
+        name="Price ($)",
+        data_type="Float64",
+        nullable=True,
+        description="Local execution price per share in USD",
+    ),
+    SourceFieldDeclaration(
+        name="Order Amount ($)",
+        data_type="Float64",
+        nullable=True,
+        description="Gross order consideration in USD",
+    ),
+    SourceFieldDeclaration(
+        name="Brokerage ($)",
+        data_type="Float64",
+        nullable=True,
+        description="Commission and charges in USD",
+    ),
+    SourceFieldDeclaration(
+        name="Exch Rate",
+        data_type="Float64",
+        nullable=True,
+        description="Observed USD to INR foreign exchange rate",
+    ),
+    SourceFieldDeclaration(
+        name="Order Amount (INR)",
+        data_type="Float64",
+        nullable=True,
+        description="Order settlement value in base currency INR",
+    ),
+    SourceFieldDeclaration(
+        name="Brokerage (INR)",
+        data_type="Float64",
+        nullable=True,
+        description="Commission and charges converted to INR",
+    ),
+    SourceFieldDeclaration(
+        name="__file_category__",
+        data_type="String",
+        nullable=True,
+        description="File category tag",
+    ),
+]
+
+_INVESTMENT_US_STOCK_TRANSACTIONS_MAPPING: list[ColumnMapping] = dict_to_mapping_list(
+    {
+        "Stock Name": "Stock Name",
+        "ISIN": "ISIN",
+        "Stock Symbol": "Stock Symbol",
+        "Yahoo Ticker": "Yahoo Ticker",
+        "Order Date": "Order Date",
+        "Currency": "Currency",
+        "Transaction Type": "Transaction Type",
+        "Order Type": "Order Type",
+        "Quantity": "Quantity",
+        "Price ($)": "Price ($)",
+        "Order Amount ($)": "Order Amount ($)",
+        "Brokerage ($)": "Brokerage ($)",
+        "Exch Rate": "Exch Rate",
+        "Order Amount (INR)": "Order Amount (INR)",
+        "Brokerage (INR)": "Brokerage (INR)",
+        "__file_category__": "__file_category__",
+    }
+)
+
 
 def get_shan_baseline_dataset_bindings() -> list[SourceDatasetConfig]:
     """Return declarative SourceDatasetConfig bindings covering all external Bronze datasets.
@@ -2561,9 +2681,13 @@ def get_shan_baseline_dataset_bindings() -> list[SourceDatasetConfig]:
         SourceDatasetConfig(
             source_id=SourceId("us_stock_transactions"),
             dataset_id=DatasetId.INVESTMENT_US_STOCK_TRANSACTIONS,
-            selector=CsvSelector(file_pattern="*.csv"),
-            enabled=False,
-            description="Optional US stock transactions reports",
+            selector=ExcelSelector(
+                header_row=0,
+            ),
+            enabled=True,
+            description="US stock trade execution statement sheet",
+            mapping=list(_INVESTMENT_US_STOCK_TRANSACTIONS_MAPPING),
+            fields=list(_INVESTMENT_US_STOCK_TRANSACTIONS_FIELDS),
         ),
     ]
 
