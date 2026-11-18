@@ -32,7 +32,6 @@ __all__ = [
     "ExcelExtractor",
     "extract_mf_market_data_raw",
     "extract_mf_transactions_raw",
-    "extract_us_stock_transactions_raw",
 ]
 
 diagnostics = get_observability_diagnostics(__name__)
@@ -141,38 +140,57 @@ class ExcelExtractor:
             )
             return pl.LazyFrame()
 
-        df_raw = excel_reader.load_sheet(target_sheet, header_row=None).to_polars()
-        if df_raw.is_empty():
-            return pl.LazyFrame()
-
-        header_idx: int = 0
-        if header_anchor is not None:
-            anchor_clean = header_anchor.strip()
-            start_search = df_raw.with_row_index().filter(
-                pl.any_horizontal(
-                    pl.all().cast(pl.String, strict=False).str.strip_chars() == anchor_clean
-                )
-            )
-            if start_search.is_empty():
-                diagnostics.debug(
-                    "Skipped %s: Could not find header anchor '%s' in sheet '%s'",
-                    filename,
-                    header_anchor,
-                    target_sheet,
-                )
+        if header_anchor is None and header_row is not None:
+            df_data = excel_reader.load_sheet(target_sheet, header_row=header_row).to_polars()
+            if df_data.is_empty():
                 return pl.LazyFrame()
-            header_idx = int(start_search["index"][0]) + anchor_offset
-        elif header_row is not None:
-            header_idx = header_row
+            clean_headers: list[str] = []
+            seen: dict[str, int] = {}
+            for i, h in enumerate(df_data.columns):
+                header_str = h.strip()
+                if header_str in ("", "None", "null"):
+                    header_str = f"Unnamed_{i}"
+                if header_str in seen:
+                    seen[header_str] += 1
+                    header_str = f"{header_str}_{seen[header_str]}"
+                else:
+                    seen[header_str] = 0
+                clean_headers.append(header_str)
+            df_data = df_data.rename(dict(zip(df_data.columns, clean_headers, strict=False)))
+            first_col = clean_headers[0]
+        else:
+            df_raw = excel_reader.load_sheet(target_sheet, header_row=None).to_polars()
+            if df_raw.is_empty():
+                return pl.LazyFrame()
 
-        if header_idx >= df_raw.height:
-            return pl.LazyFrame()
+            header_idx: int = 0
+            if header_anchor is not None:
+                anchor_clean = header_anchor.strip()
+                start_search = df_raw.with_row_index().filter(
+                    pl.any_horizontal(
+                        pl.all().cast(pl.String, strict=False).str.strip_chars() == anchor_clean
+                    )
+                )
+                if start_search.is_empty():
+                    diagnostics.debug(
+                        "Skipped %s: Could not find header anchor '%s' in sheet '%s'",
+                        filename,
+                        header_anchor,
+                        target_sheet,
+                    )
+                    return pl.LazyFrame()
+                header_idx = int(start_search["index"][0]) + anchor_offset
+            elif header_row is not None:
+                header_idx = header_row
 
-        df_sliced = df_raw.slice(header_idx)
-        if df_sliced.is_empty():
-            return pl.LazyFrame()
+            if header_idx >= df_raw.height:
+                return pl.LazyFrame()
 
-        df_data, first_col = _clean_excel_headers(df_sliced)
+            df_sliced = df_raw.slice(header_idx)
+            if df_sliced.is_empty():
+                return pl.LazyFrame()
+
+            df_data, first_col = _clean_excel_headers(df_sliced)
 
         if stop_on_blank:
             null_search = df_data.with_row_index().filter(pl.col(first_col).is_null())
@@ -368,68 +386,6 @@ def extract_mf_transactions_raw(valid_files: list[tuple[str, str, bytes]]) -> pl
             pl.lit(folder_path).alias("__folder_path__"),
             pl.lit(month_date).alias("Month Date"),
             pl.lit("Indian MF").alias("__file_category__"),
-            pl.lit(artifact_id).alias("artifact_id"),
-        )
-        all_dfs.append(df_processed)
-    if not all_dfs:
-        return pl.LazyFrame()
-    return pl.concat(all_dfs, how="diagonal").lazy()
-
-
-def _process_us_stock_transactions(filename: str, raw_bytes: bytes) -> pl.DataFrame:
-    """Parse foreign US equity transactions Excel statement from raw binary bytes.
-
-    Parameters
-    ----------
-    filename : str
-        Source filename for logging context.
-    raw_bytes : bytes
-        Binary payload of the Excel workbook.
-
-    Returns
-    -------
-    pl.DataFrame
-        Extracted US stock trade records DataFrame.
-    """
-    t0 = time.perf_counter()
-    diagnostics.debug(f"Starting parse for US Stock Transaction Statement: {filename}")
-    excel_reader = fastexcel.read_excel(raw_bytes)
-    sheet_name = excel_reader.sheet_names[0]
-    df_raw = excel_reader.load_sheet(sheet_name, header_row=0).to_polars()
-    if "Stock Name" in df_raw.columns:
-        final_df = df_raw.filter(pl.col("Stock Name").is_not_null())
-        diagnostics.debug(
-            f"Parsed {filename} in {time.perf_counter() - t0:.2f}s - {final_df.height} rows extracted"
-        )
-        return final_df
-    diagnostics.debug(f"Skipped {filename}: Could not find 'Stock Name' column")
-    return pl.DataFrame()
-
-
-def extract_us_stock_transactions_raw(valid_files: list[tuple[str, str, bytes]]) -> pl.LazyFrame:
-    """Parse raw Excel foreign/US stock trade transaction statements into a combined LazyFrame.
-
-    Parameters
-    ----------
-    valid_files : list[tuple[str, str, bytes]]
-        List of (filename, folder_path, raw_bytes) tuples.
-
-    Returns
-    -------
-    pl.LazyFrame
-        Combined lazy frame of US stock transactions.
-    """
-    all_dfs: list[pl.DataFrame] = []
-    for filename, folder_path, raw_bytes in valid_files:
-        df_processed = _process_us_stock_transactions(filename, raw_bytes)
-        if df_processed.is_empty():
-            continue
-        filepath = f"{folder_path}/{filename}" if folder_path else filename
-        artifact_id = generate_file_id(filepath)
-        df_processed = df_processed.with_columns(
-            pl.lit(filename).alias("__file_name__"),
-            pl.lit(folder_path).alias("__folder_path__"),
-            pl.lit("US Stocks").alias("__file_category__"),
             pl.lit(artifact_id).alias("artifact_id"),
         )
         all_dfs.append(df_processed)

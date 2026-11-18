@@ -42,9 +42,6 @@ from personal_finance_etl.infrastructure.observability import (
 from personal_finance_etl.infrastructure.observability.diagnostics import (
     get_observability_diagnostics,
 )
-from personal_finance_etl.infrastructure.providers.files.excel import (
-    extract_us_stock_transactions_raw,
-)
 
 __all__ = ["DataExtractor"]
 
@@ -88,13 +85,9 @@ class DataExtractor:
         """
         return [(os.path.basename(f), os.path.dirname(f), self._get_bytes(f)) for f in filepaths]
 
-    def _extract_excel_statements(
-        self, pending_files: dict[str, list[str]]
-    ) -> dict[str, pl.LazyFrame]:
-        """Extract raw market and transaction frames from pending Excel files."""
-        us_stock_transactions = pending_files.get("us_stock_transactions", [])
-
-        excel_count = len(us_stock_transactions)
+    def _extract_excel_statements(self, pending_files: dict[str, list[str]]) -> None:
+        """Log extraction telemetry for pending binary payloads."""
+        excel_count = 0
         csv_count = sum(
             len(pending_files.get(k, []))
             for k in [
@@ -124,16 +117,6 @@ class DataExtractor:
             rows=total_payloads,
             stage=EngineStage.EXTRACTING,
         )
-
-        if excel_count > 0:
-            return {
-                "us_stock_transactions_raw": extract_us_stock_transactions_raw(
-                    self._get_file_list_with_bytes(us_stock_transactions)
-                ),
-            }
-        return {
-            "us_stock_transactions_raw": pl.LazyFrame(),
-        }
 
     def _validate_extracted_streams(self, collection: DatasetCollection) -> None:
         """Execute Gatekeeper schema validation on active extracted streams."""
@@ -209,7 +192,7 @@ class DataExtractor:
         )
 
         pending_files = actionable_files or self.cp.artifacts.get_pending_files()
-        excel_frames = self._extract_excel_statements(pending_files)
+        self._extract_excel_statements(pending_files)
 
         collection = DatasetCollection(
             frames={
@@ -229,9 +212,7 @@ class DataExtractor:
                 DatasetId.INVESTMENT_MF_ORDERS: pl.LazyFrame(),
                 DatasetId.MARKET_STOCK_HOLDINGS: pl.LazyFrame(),
                 DatasetId.INVESTMENT_STOCK_ORDERS: pl.LazyFrame(),
-                DatasetId.INVESTMENT_US_STOCK_TRANSACTIONS: excel_frames[
-                    "us_stock_transactions_raw"
-                ],
+                DatasetId.INVESTMENT_US_STOCK_TRANSACTIONS: pl.LazyFrame(),
             }
         )
 
