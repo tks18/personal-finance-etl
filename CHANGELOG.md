@@ -2,6 +2,37 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [10.0.0-rc.8](https://github.com/tks18/personal-finance-etl/compare/10.0.0-rc.7...10.0.0-rc.8) (2026-11-18)
+
+
+### Bug Fixes 🛠
+
+* **tests:** fix the legacy source matrix in tests ([2ccd18a](https://github.com/tks18/personal-finance-etl/commit/2ccd18a42ed164f0cb3022abcb2a21a6562ac90a))
+
+
+### Features 🔥
+
+* **config:** add file_pattern and optional legacy settings ([da6cbee](https://github.com/tks18/personal-finance-etl/commit/da6cbee3cd5f0ca8e659ca8b8335915573c49382))
+* **ingestion:** implement generic source-plan file discovery ([f376f89](https://github.com/tks18/personal-finance-etl/commit/f376f890c83d2024ece07275efdf75592543819f))
+
+
+### Code Refactoring 🖌
+
+* **ingestion:** demolish coordinator and policy resolver ([68f12df](https://github.com/tks18/personal-finance-etl/commit/68f12df750d60b64f555af423a6d1795d6c57952))
+* **pipeline:** switch ingestion to generic source topology ([098bfd5](https://github.com/tks18/personal-finance-etl/commit/098bfd594eafdee90eccdcf25e310405e99f2754))
+* **providers:** demolish dead file extractors and locator ([7a73efa](https://github.com/tks18/personal-finance-etl/commit/7a73efa151faed41330ca08fca618134c57ef936))
+* **warehouse:** streamline bronze contract and deprecations ([b0f1eeb](https://github.com/tks18/personal-finance-etl/commit/b0f1eeb29e1461c662b992ccd637f998de9ac5a7))
+
+
+### Tests 🧪
+
+* **architecture:** enforce fixed-topology demolition guards ([f4ec648](https://github.com/tks18/personal-finance-etl/commit/f4ec6486fbc8e2bbb04198275181f8f034e42155))
+
+
+### Docs 📃
+
+* **refactor:** complete phase 035 fixed-topology demolition ([ce6072b](https://github.com/tks18/personal-finance-etl/commit/ce6072ba1df69e17baaafe1bb94aba7d4fdbf640))
+
 ## [10.0.0-rc.7](https://github.com/tks18/personal-finance-etl/compare/10.0.0-rc.6...10.0.0-rc.7) (2026-11-18)
 
 
