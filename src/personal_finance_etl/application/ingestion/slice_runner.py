@@ -261,6 +261,8 @@ class DatasetIngestionService:
                     else "Indian Stocks"
                     if dataset_plan.dataset_id
                     in (DatasetId.MARKET_STOCK_HOLDINGS, DatasetId.INVESTMENT_STOCK_ORDERS)
+                    else "US Stocks"
+                    if dataset_plan.dataset_id == DatasetId.INVESTMENT_US_STOCK_TRANSACTIONS
                     else None
                 )
                 source_lazy = excel_extractor.extract_sheet(
