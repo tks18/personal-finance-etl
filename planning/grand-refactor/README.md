@@ -66,7 +66,7 @@ If code evidence contradicts a phase, stop and amend the phase before changing t
 | 031 | Mutual-fund evidence migration | v10.0.0-rc4 | [x] |
 | 032 | Domestic-stock evidence migration | v10.0.0-rc5 | [x] |
 | 033 | US-investment evidence migration | v10.0.0-rc6 | [x] |
-| 034 | Provider-generated market evidence migration | v10.0.0-rc7 | [ ] |
+| 034 | Provider-generated market evidence migration | v10.0.0-rc7 | [x] |
 | 035 | Fixed-topology demolition | v10.0.0-rc8 | [ ] |
 | 036 | Strict canonical Bronze cutover | v10.0.0-rc9 | [ ] |
 | 037 | Artifact-key operational provenance cutover | v10.0.0-rc10 | [ ] |

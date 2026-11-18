@@ -142,7 +142,17 @@ class MetaLayer:
         unique_path = file_path
         file_size = os.path.getsize(file_path) if os.path.exists(file_path) else 0
 
-        file_type = FILE_TYPE_MAP.get(category, "UNKNOWN")
+        ext = os.path.splitext(file_name)[1].lower().lstrip(".")
+        if ext == "parquet":
+            file_type = "parquet"
+        elif ext in ("xlsx", "xls"):
+            file_type = "excel"
+        elif ext in ("sqlite", "db"):
+            file_type = "sqlite"
+        elif ext == "csv":
+            file_type = "csv"
+        else:
+            file_type = FILE_TYPE_MAP.get(category, "UNKNOWN")
         file_id = generate_file_id(file_path)
         norm_path = normalize_path(file_path)
 
@@ -167,10 +177,10 @@ class MetaLayer:
             self.conn.execute(
                 """
                 UPDATE meta.m_File_Registry 
-                SET file_hash = ?, file_size_bytes = ?, row_count = ?, last_ingested = CURRENT_TIMESTAMP
+                SET file_hash = ?, file_type = ?, file_size_bytes = ?, row_count = ?, last_ingested = CURRENT_TIMESTAMP
                 WHERE relative_path = ?
                 """,
-                [file_hash, file_size, row_count, unique_path],
+                [file_hash, file_type, file_size, row_count, unique_path],
             )
         else:
             self.conn.execute(

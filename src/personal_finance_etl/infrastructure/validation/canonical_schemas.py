@@ -18,6 +18,9 @@ Owns
 - CANONICAL_BRONZE_MARKET_STOCK_HOLDINGS_SCHEMA: Immutable pandera.polars.DataFrameSchema for DatasetId.MARKET_STOCK_HOLDINGS.
 - CANONICAL_BRONZE_INVESTMENT_STOCK_ORDERS_SCHEMA: Immutable pandera.polars.DataFrameSchema for DatasetId.INVESTMENT_STOCK_ORDERS.
 - CANONICAL_BRONZE_INVESTMENT_US_STOCK_TRANSACTIONS_SCHEMA: Immutable pandera.polars.DataFrameSchema for DatasetId.INVESTMENT_US_STOCK_TRANSACTIONS.
+- CANONICAL_BRONZE_MARKET_CURRENCY_FX_RATES_SCHEMA: Immutable pandera.polars.DataFrameSchema for DatasetId.MARKET_CURRENCY_FX_RATES.
+- CANONICAL_BRONZE_MARKET_BENCHMARK_HISTORY_SCHEMA: Immutable pandera.polars.DataFrameSchema for DatasetId.MARKET_BENCHMARK_HISTORY.
+- CANONICAL_BRONZE_MARKET_US_STOCK_PRICES_SCHEMA: Immutable pandera.polars.DataFrameSchema for DatasetId.MARKET_US_STOCK_PRICES.
 - CANONICAL_BRONZE_SCHEMAS: Registry mapping DatasetIds to authoritative canonical Bronze schemas.
 - get_canonical_bronze_schema: Safe accessor for retrieving the canonical Bronze schema for a given DatasetId.
 - has_canonical_bronze_schema: Inspection predicate determining whether a DatasetId has a registered canonical schema.
@@ -50,9 +53,12 @@ __all__ = [
     "CANONICAL_BRONZE_INVESTMENT_MF_ORDERS_SCHEMA",
     "CANONICAL_BRONZE_INVESTMENT_STOCK_ORDERS_SCHEMA",
     "CANONICAL_BRONZE_INVESTMENT_US_STOCK_TRANSACTIONS_SCHEMA",
+    "CANONICAL_BRONZE_MARKET_BENCHMARK_HISTORY_SCHEMA",
+    "CANONICAL_BRONZE_MARKET_CURRENCY_FX_RATES_SCHEMA",
     "CANONICAL_BRONZE_MARKET_CURRENCY_MAPPING_SCHEMA",
     "CANONICAL_BRONZE_MARKET_MF_HOLDINGS_SCHEMA",
     "CANONICAL_BRONZE_MARKET_STOCK_HOLDINGS_SCHEMA",
+    "CANONICAL_BRONZE_MARKET_US_STOCK_PRICES_SCHEMA",
     "CANONICAL_BRONZE_SCHEMAS",
     "get_canonical_bronze_schema",
     "has_canonical_bronze_schema",
@@ -557,6 +563,62 @@ CANONICAL_BRONZE_INVESTMENT_US_STOCK_TRANSACTIONS_SCHEMA: pa.DataFrameSchema = p
     name="canonical_bronze_investment_us_stock_transactions",
 )
 
+CANONICAL_BRONZE_MARKET_CURRENCY_FX_RATES_SCHEMA: pa.DataFrameSchema = pa.DataFrameSchema(
+    columns={
+        "Date": pa.Column(pl.Date, nullable=False, name="Date"),
+        "Currency_ID": pa.Column(pl.String, nullable=False, name="Currency_ID"),
+        "Currency_Name": pa.Column(pl.String, nullable=True, required=False, name="Currency_Name"),
+        "Currency_Code": pa.Column(pl.String, nullable=False, name="Currency_Code"),
+        "Target_Currency_Code": pa.Column(pl.String, nullable=False, name="Target_Currency_Code"),
+        "yF_Ticker": pa.Column(pl.String, nullable=False, name="yF_Ticker"),
+        "FX_Rate": pa.Column(pl.Float64, nullable=True, name="FX_Rate"),
+        "Data_Provider": pa.Column(pl.String, nullable=False, name="Data_Provider"),
+        "Extraction_Time": pa.Column(pl.String, nullable=False, name="Extraction_Time"),
+        "Requested_Start": pa.Column(pl.Date, nullable=False, name="Requested_Start"),
+        "Requested_End": pa.Column(pl.Date, nullable=False, name="Requested_End"),
+        "Is_Closure_Gap": pa.Column(pl.Boolean, nullable=False, name="Is_Closure_Gap"),
+        "artifact_id": pa.Column(pl.String, nullable=False, required=False, name="artifact_id"),
+    },
+    strict=False,
+    name="canonical_bronze_market_currency_fx_rates",
+)
+
+CANONICAL_BRONZE_MARKET_BENCHMARK_HISTORY_SCHEMA: pa.DataFrameSchema = pa.DataFrameSchema(
+    columns={
+        "Date": pa.Column(pl.Date, nullable=False, name="Date"),
+        "ID": pa.Column(pl.String, nullable=False, name="ID"),
+        "Benchmark_Name": pa.Column(pl.String, nullable=False, name="Benchmark_Name"),
+        "yF_Ticker": pa.Column(pl.String, nullable=False, name="yF_Ticker"),
+        "CURRENCY_ID": pa.Column(pl.String, nullable=False, name="CURRENCY_ID"),
+        "Close": pa.Column(pl.Float64, nullable=True, name="Close"),
+        "Data_Provider": pa.Column(pl.String, nullable=False, name="Data_Provider"),
+        "Extraction_Time": pa.Column(pl.String, nullable=False, name="Extraction_Time"),
+        "Requested_Start": pa.Column(pl.Date, nullable=False, name="Requested_Start"),
+        "Requested_End": pa.Column(pl.Date, nullable=False, name="Requested_End"),
+        "Is_Closure_Gap": pa.Column(pl.Boolean, nullable=False, name="Is_Closure_Gap"),
+        "artifact_id": pa.Column(pl.String, nullable=False, required=False, name="artifact_id"),
+    },
+    strict=False,
+    name="canonical_bronze_market_benchmark_history",
+)
+
+CANONICAL_BRONZE_MARKET_US_STOCK_PRICES_SCHEMA: pa.DataFrameSchema = pa.DataFrameSchema(
+    columns={
+        "Date": pa.Column(pl.Date, nullable=False, name="Date"),
+        "ISIN": pa.Column(pl.String, nullable=False, name="ISIN"),
+        "yF_Ticker": pa.Column(pl.String, nullable=False, name="yF_Ticker"),
+        "Closing_Price_Local": pa.Column(pl.Float64, nullable=True, name="Closing_Price_Local"),
+        "Data_Provider": pa.Column(pl.String, nullable=False, name="Data_Provider"),
+        "Extraction_Time": pa.Column(pl.String, nullable=False, name="Extraction_Time"),
+        "Requested_Start": pa.Column(pl.Date, nullable=False, name="Requested_Start"),
+        "Requested_End": pa.Column(pl.Date, nullable=False, name="Requested_End"),
+        "Is_Closure_Gap": pa.Column(pl.Boolean, nullable=False, name="Is_Closure_Gap"),
+        "artifact_id": pa.Column(pl.String, nullable=False, required=False, name="artifact_id"),
+    },
+    strict=False,
+    name="canonical_bronze_market_us_stock_prices",
+)
+
 CANONICAL_BRONZE_SCHEMAS: dict[DatasetId, pa.DataFrameSchema] = {
     DatasetId.HOUSEHOLD_ZCATEGORY: CANONICAL_BRONZE_HOUSEHOLD_ZCATEGORY_SCHEMA,
     DatasetId.HOUSEHOLD_ASSET_GROUP: CANONICAL_BRONZE_HOUSEHOLD_ASSET_GROUP_SCHEMA,
@@ -574,6 +636,9 @@ CANONICAL_BRONZE_SCHEMAS: dict[DatasetId, pa.DataFrameSchema] = {
     DatasetId.MARKET_STOCK_HOLDINGS: CANONICAL_BRONZE_MARKET_STOCK_HOLDINGS_SCHEMA,
     DatasetId.INVESTMENT_STOCK_ORDERS: CANONICAL_BRONZE_INVESTMENT_STOCK_ORDERS_SCHEMA,
     DatasetId.INVESTMENT_US_STOCK_TRANSACTIONS: CANONICAL_BRONZE_INVESTMENT_US_STOCK_TRANSACTIONS_SCHEMA,
+    DatasetId.MARKET_CURRENCY_FX_RATES: CANONICAL_BRONZE_MARKET_CURRENCY_FX_RATES_SCHEMA,
+    DatasetId.MARKET_BENCHMARK_HISTORY: CANONICAL_BRONZE_MARKET_BENCHMARK_HISTORY_SCHEMA,
+    DatasetId.MARKET_US_STOCK_PRICES: CANONICAL_BRONZE_MARKET_US_STOCK_PRICES_SCHEMA,
 }
 
 

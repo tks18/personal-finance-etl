@@ -62,6 +62,9 @@ MIGRATED_DATASETS: frozenset[DatasetId] = frozenset(
         DatasetId.MARKET_STOCK_HOLDINGS,
         DatasetId.INVESTMENT_STOCK_ORDERS,
         DatasetId.INVESTMENT_US_STOCK_TRANSACTIONS,
+        DatasetId.MARKET_CURRENCY_FX_RATES,
+        DatasetId.MARKET_BENCHMARK_HISTORY,
+        DatasetId.MARKET_US_STOCK_PRICES,
     }
 )
 

@@ -27,7 +27,10 @@ from personal_finance_etl.config.sources.change_detection import (
 )
 from personal_finance_etl.config.sources.identity import BronzeIdentityStrategy
 from personal_finance_etl.config.sources.loader import SourceConfiguration
-from personal_finance_etl.config.sources.selectors import DatasetSelector
+from personal_finance_etl.config.sources.selectors import (
+    DatasetSelector,
+    MarketProviderSelector,
+)
 from personal_finance_etl.contracts.datasets import (
     BRONZE_DATASET_ORIGIN_MAP,
     DatasetId,
@@ -265,6 +268,38 @@ class SourcePlanner:
             if is_enabled:
                 satisfied_datasets.add(binding.dataset_id)
 
+        # Compile provider-generated dataset plans dynamically based on ExecutionPlan
+        provider_dataset_plans: list[DatasetPlan] = []
+        for provider_ds_id in (
+            DatasetId.MARKET_CURRENCY_FX_RATES,
+            DatasetId.MARKET_BENCHMARK_HISTORY,
+            DatasetId.MARKET_US_STOCK_PRICES,
+        ):
+            is_req = self.execution_plan.is_dataset_required(provider_ds_id)
+            is_act = self.execution_plan.is_bronze_dataset_active(provider_ds_id)
+            prov_plan = DatasetPlan(
+                source_id=SourceId("provider_market_data"),
+                dataset_id=provider_ds_id,
+                provider_type=ProviderType.MARKET_DATA,
+                location="provider://market_data",
+                selector=MarketProviderSelector(feed_name="yahoo_finance"),
+                change_detection=resolve_change_detection_policy(
+                    file_type="market_data",
+                    is_full_replace=False,
+                    hash_policy=FileHashPolicy(),
+                    is_provider_generated=True,
+                ),
+                origin=DatasetOrigin.PROVIDER_GENERATED,
+                is_required=is_req,
+                is_enabled=is_act,
+                mapping_plan=None,
+                identity_strategy=None,
+            )
+            provider_dataset_plans.append(prov_plan)
+            dataset_plans_list.append(prov_plan)
+            if is_act:
+                satisfied_datasets.add(provider_ds_id)
+
         # Invariant check: All required Bronze datasets with EXTERNAL_CONFIGURED_SOURCE origin
         # must be configured in the source configuration bindings
         configured_datasets = {binding.dataset_id for binding in self.source_config.datasets}
@@ -292,6 +327,18 @@ class SourcePlanner:
                 dataset_plans=tuple(ds_by_source.get(src.source_id, [])),
             )
             source_plans_list.append(sp)
+
+        # Append synthesized provider market source plan
+        prov_source_id = SourceId("provider_market_data")
+        source_plans_list.append(
+            SourcePlan(
+                source_id=prov_source_id,
+                provider_type=ProviderType.MARKET_DATA,
+                location="provider://market_data",
+                enabled=any(dp.is_enabled for dp in provider_dataset_plans),
+                dataset_plans=tuple(provider_dataset_plans),
+            )
+        )
 
         return CompiledSourcePlan(
             source_plans=tuple(source_plans_list),

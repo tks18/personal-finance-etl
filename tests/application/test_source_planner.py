@@ -45,8 +45,17 @@ def test_source_planner_compilation_all_required_satisfied(
     compiled = planner.compile_plan()
 
     assert isinstance(compiled, CompiledSourcePlan)
-    assert len(compiled.source_plans) == len(source_config.sources)
-    assert len(compiled.dataset_plans) == len(source_config.datasets)
+    assert len(compiled.source_plans) == len(source_config.sources) + 1
+    assert len(compiled.dataset_plans) == len(source_config.datasets) + 3
+
+    # Verify synthesized provider dataset plans
+    dp_fx = compiled.get_dataset_plan(DatasetId.MARKET_CURRENCY_FX_RATES)
+    assert dp_fx is not None
+    assert dp_fx.source_id == SourceId("provider_market_data")
+    assert dp_fx.provider_type == ProviderType.MARKET_DATA
+    assert dp_fx.origin == DatasetOrigin.PROVIDER_GENERATED
+    assert dp_fx.is_required is True
+    assert dp_fx.is_enabled is True
 
     # Verify household_zcategory dataset plan
     dp = compiled.get_dataset_plan(DatasetId.HOUSEHOLD_ZCATEGORY)
@@ -269,4 +278,4 @@ def test_service_container_creates_source_config_and_orchestrator(
     assert isinstance(orchestrator, ETLOrchestrator)
     assert orchestrator.source_config is not None
     assert orchestrator.source_plan is not None
-    assert len(orchestrator.source_plan.dataset_plans) == 17
+    assert len(orchestrator.source_plan.dataset_plans) == 20

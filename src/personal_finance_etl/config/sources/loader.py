@@ -130,8 +130,10 @@ def _serialize_dataset_selector(sel: DatasetSelector) -> list[str]:
             lines.append(f"anchor_offset = {sel.anchor_offset}")
         if sel.stop_on_blank:
             lines.append("stop_on_blank = true")
-    else:
+    elif isinstance(sel, SqliteSelector):
         lines.append(f'table_name = "{sel.table_name}"')
+    else:
+        lines.append(f'feed_name = "{sel.feed_name}"')
     return lines
 
 

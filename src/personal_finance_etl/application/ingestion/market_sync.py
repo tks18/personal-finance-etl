@@ -17,6 +17,7 @@ Does not own
 
 from __future__ import annotations
 
+import io
 import os
 from collections.abc import Mapping
 from datetime import date
@@ -24,6 +25,7 @@ from datetime import date
 import polars as pl
 
 from personal_finance_etl.contracts.application import EngineStage
+from personal_finance_etl.contracts.datasets import DatasetId
 from personal_finance_etl.contracts.event_transport import EventQueue
 from personal_finance_etl.contracts.extraction import (
     ExtractionBatchResult,
@@ -33,6 +35,11 @@ from personal_finance_etl.contracts.market import ProviderSymbolRegistry
 from personal_finance_etl.contracts.observability import (
     EventCode,
     PresentationKind,
+)
+from personal_finance_etl.contracts.sources import SourceId
+from personal_finance_etl.contracts.validation import (
+    ValidationContext,
+    ValidationStage,
 )
 from personal_finance_etl.domain.investments.classification import (
     filter_us_market_trades,
@@ -47,6 +54,7 @@ from personal_finance_etl.domain.market.fx import (
     transform_currency_fx_rates,
 )
 from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
+from personal_finance_etl.infrastructure.control_plane.hashing import generate_file_id
 from personal_finance_etl.infrastructure.observability import (
     ObservabilityEmitter,
     get_global_emitter,
@@ -63,7 +71,15 @@ from personal_finance_etl.infrastructure.providers.market.currency import (
 from personal_finance_etl.infrastructure.providers.market.us_market import (
     USMarketExtractor,
 )
+from personal_finance_etl.infrastructure.validation import (
+    PanderaDataFrameValidator,
+    get_canonical_bronze_schema,
+)
 from personal_finance_etl.infrastructure.warehouse.bronze import BronzeLayer
+from personal_finance_etl.infrastructure.warehouse.pre_bronze import PreBronzeLayer
+from personal_finance_etl.infrastructure.warehouse.registry import (
+    get_pre_bronze_contract_by_dataset_id,
+)
 
 __all__ = [
     "BenchmarkPipeline",
@@ -109,8 +125,10 @@ def upsert_market_delta_and_register(
     table_name: str,
     new_files: list[str],
     meta_file_type: str,
+    dataset_id: DatasetId | None = None,
+    frames: list[pl.DataFrame] | None = None,
 ) -> None:
-    """Upsert delta market Parquet chunks to Bronze, mark artifacts synced, and register metadata.
+    """Upsert delta market Parquet chunks to Pre-Bronze and Bronze, validate schemas, and register metadata.
 
     Parameters
     ----------
@@ -124,9 +142,78 @@ def upsert_market_delta_and_register(
         List of newly generated chunk file paths.
     meta_file_type : str
         Metadata classification string for file registry.
+    dataset_id : DatasetId | None, default None
+        Authoritative dataset identifier for validation and Pre-Bronze contracts.
+    frames : list[pl.DataFrame] | None, default None
+        Individual yearly chunk DataFrames corresponding to new_files.
     """
+    if dataset_id is not None:
+        pb_contract = get_pre_bronze_contract_by_dataset_id(dataset_id)
+        if pb_contract is not None:
+            pb_layer = PreBronzeLayer(bronze.db_manager, emitter=bronze.emitter)
+            if df_delta.is_empty() and not pb_layer.table_exists(pb_contract):
+                cat_paths = bronze.cp.artifacts.get_all_paths_by_category().get(meta_file_type, [])
+                for v_path in cat_paths:
+                    file_bytes = bronze.cp.artifacts.get_file_bytes(v_path)
+                    if file_bytes is not None:
+                        try:
+                            chunk_frame = pl.read_parquet(io.BytesIO(file_bytes))
+                            artifact_id = generate_file_id(v_path)
+                            pb_layer.write_incremental(
+                                contract=pb_contract,
+                                df=chunk_frame,
+                                artifact_id=artifact_id,
+                                source_id=SourceId("market_data"),
+                            )
+                        except Exception as e:
+                            diagnostics.warning("Failed to backfill chunk %s: %s", v_path, e)
+                if not pb_layer.table_exists(pb_contract):
+                    existing_bronze = bronze.get_table(table_name)
+                    if not existing_bronze.is_empty():
+                        pb_layer.write_incremental(
+                            contract=pb_contract,
+                            df=existing_bronze,
+                            artifact_id="cached_bronze_initial_sync",
+                            source_id=SourceId("market_data"),
+                        )
+
     if not df_delta.is_empty():
-        diagnostics.debug("Upserting new Parquet chunks to Bronze...")
+        diagnostics.debug("Upserting new Parquet chunks for %s...", table_name)
+        if dataset_id is not None:
+            # 1. Gate 1 Validation & Pre-Bronze Persistence
+            pb_contract = get_pre_bronze_contract_by_dataset_id(dataset_id)
+            if pb_contract is not None:
+                pb_layer = PreBronzeLayer(bronze.db_manager, emitter=bronze.emitter)
+                if frames and len(frames) == len(new_files):
+                    for chunk_frame, v_path in zip(frames, new_files, strict=False):
+                        artifact_id = generate_file_id(v_path)
+                        pb_layer.write_incremental(
+                            contract=pb_contract,
+                            df=chunk_frame,
+                            artifact_id=artifact_id,
+                            source_id=SourceId("market_data"),
+                        )
+                else:
+                    for v_path in new_files:
+                        artifact_id = generate_file_id(v_path)
+                        pb_layer.write_incremental(
+                            contract=pb_contract,
+                            df=df_delta,
+                            artifact_id=artifact_id,
+                            source_id=SourceId("market_data"),
+                        )
+
+            # 2. Gate 2 Validation against Canonical Bronze Pandera Schema
+            canonical_schema = get_canonical_bronze_schema(dataset_id)
+            validator = PanderaDataFrameValidator(emitter=bronze.emitter)
+            ctx = ValidationContext(
+                stage=ValidationStage.CANONICAL_BRONZE,
+                dataset_id=dataset_id,
+                contract_id=dataset_id.value,
+            )
+            validator.validate(frame=df_delta, schema=canonical_schema, context=ctx)
+
+        # 3. Canonical Bronze Upsert & Control Plane Registration
         row_counts = bronze.upsert_table(
             df=df_delta,
             table_name=table_name,
@@ -238,7 +325,12 @@ class CurrencyPipeline:
         )
         return df_bronze_cached
 
-    def _upsert_currency_delta(self, df_delta: pl.DataFrame, new_files: list[str]) -> pl.LazyFrame:
+    def _upsert_currency_delta(
+        self,
+        df_delta: pl.DataFrame,
+        new_files: list[str],
+        frames: list[pl.DataFrame] | None = None,
+    ) -> pl.LazyFrame:
         """Persist delta Parquet chunks into Bronze lakehouse and return full LazyFrame.
 
         Parameters
@@ -247,6 +339,8 @@ class CurrencyPipeline:
             Newly extracted currency observation rows.
         new_files : list[str]
             Newly generated chunk filenames.
+        frames : list[pl.DataFrame] | None, default None
+            Individual chunk DataFrames corresponding to new_files.
 
         Returns
         -------
@@ -259,6 +353,8 @@ class CurrencyPipeline:
             table_name="bronze.r_Currency_FX_Data",
             new_files=new_files,
             meta_file_type="currency_history",
+            dataset_id=DatasetId.MARKET_CURRENCY_FX_RATES,
+            frames=frames,
         )
         df_bronze_full = self.bronze.get_table("r_Currency_FX_Data")
         if df_bronze_full.is_empty():
@@ -320,7 +416,7 @@ class CurrencyPipeline:
         )
 
         df_bronze_full_lazy = self._upsert_currency_delta(
-            batch_res.combined_frame, batch_res.injected_files
+            batch_res.combined_frame, batch_res.injected_files, frames=batch_res.frames
         )
 
         self.emitter.emit_event(
@@ -425,7 +521,10 @@ class BenchmarkPipeline:
         return df_bronze_cached
 
     def _upsert_benchmark_delta(
-        self, df_new_raw: pl.DataFrame, virtual_files: list[str]
+        self,
+        df_new_raw: pl.DataFrame,
+        virtual_files: list[str],
+        frames: list[pl.DataFrame] | None = None,
     ) -> pl.DataFrame:
         """Persist delta benchmark Parquet chunks to Bronze and re-fetch updated cache.
 
@@ -435,6 +534,8 @@ class BenchmarkPipeline:
             Newly extracted raw benchmark observations.
         virtual_files : list[str]
             Newly generated virtual artifact filenames.
+        frames : list[pl.DataFrame] | None, default None
+            Individual chunk DataFrames corresponding to virtual_files.
 
         Returns
         -------
@@ -447,6 +548,8 @@ class BenchmarkPipeline:
             table_name="bronze.r_Benchmark_Data",
             new_files=virtual_files,
             meta_file_type="benchmark_history",
+            dataset_id=DatasetId.MARKET_BENCHMARK_HISTORY,
+            frames=frames,
         )
         return self.bronze.get_table("r_Benchmark_Data")
 
@@ -503,7 +606,7 @@ class BenchmarkPipeline:
         )
 
         df_bronze_cached = self._upsert_benchmark_delta(
-            batch_res.combined_frame, batch_res.injected_files
+            batch_res.combined_frame, batch_res.injected_files, frames=batch_res.frames
         )
 
         self.emitter.emit_event(
@@ -563,7 +666,12 @@ class USMarketPipeline:
             return pl.DataFrame(schema=US_MARKET_BRONZE_SCHEMA)
         return df_bronze_cached
 
-    def _upsert_us_market_delta(self, df_delta: pl.DataFrame, new_files: list[str]) -> pl.LazyFrame:
+    def _upsert_us_market_delta(
+        self,
+        df_delta: pl.DataFrame,
+        new_files: list[str],
+        frames: list[pl.DataFrame] | None = None,
+    ) -> pl.LazyFrame:
         """Persist US market delta Parquet chunks into Bronze layer and return full LazyFrame.
 
         Parameters
@@ -572,6 +680,8 @@ class USMarketPipeline:
             Newly extracted US stock price rows.
         new_files : list[str]
             Newly generated chunk filenames.
+        frames : list[pl.DataFrame] | None, default None
+            Individual chunk DataFrames corresponding to new_files.
 
         Returns
         -------
@@ -584,6 +694,8 @@ class USMarketPipeline:
             table_name="bronze.r_US_Stock_Prices",
             new_files=new_files,
             meta_file_type="us_stock_market",
+            dataset_id=DatasetId.MARKET_US_STOCK_PRICES,
+            frames=frames,
         )
         df_bronze_full = self.bronze.get_table("r_US_Stock_Prices")
         if df_bronze_full.is_empty():
@@ -677,7 +789,7 @@ class USMarketPipeline:
         )
 
         df_bronze_full_lazy = self._upsert_us_market_delta(
-            batch_res.combined_frame, batch_res.injected_files
+            batch_res.combined_frame, batch_res.injected_files, frames=batch_res.frames
         )
 
         self.emitter.emit_event(

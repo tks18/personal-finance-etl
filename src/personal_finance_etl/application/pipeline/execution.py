@@ -323,6 +323,15 @@ class PipelineExecutor:
         bronze : BronzeLayer
             Bronze persistence layer.
         """
+        if not self.plan.is_capability_active(CapabilityId.FOREIGN_ASSET_ENRICHMENT):
+            self.emitter.emit_event(
+                event_code=EventCode.MARKET_FETCH_START,
+                message="Capability 'foreign_asset_enrichment' inactive in execution plan. Skipping currency FX sync.",
+                presentation_kind=PresentationKind.SKIP,
+                stage=EngineStage.TRANSFORMING,
+            )
+            return
+
         pipeline = CurrencyPipeline(
             cp, bronze, self.status_queue, max_workers=8, emitter=self.emitter
         )
@@ -406,6 +415,15 @@ class PipelineExecutor:
         bronze : BronzeLayer
             Bronze persistence layer.
         """
+        if not self.plan.is_capability_active(CapabilityId.FOREIGN_ASSET_ENRICHMENT):
+            self.emitter.emit_event(
+                event_code=EventCode.MARKET_FETCH_START,
+                message="Capability 'foreign_asset_enrichment' inactive in execution plan. Skipping US stock market sync.",
+                presentation_kind=PresentationKind.SKIP,
+                stage=EngineStage.TRANSFORMING,
+            )
+            return
+
         pipeline = USMarketPipeline(
             cp, bronze, self.status_queue, max_workers=8, emitter=self.emitter
         )

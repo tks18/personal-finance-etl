@@ -444,6 +444,10 @@ def apply_schema_migrations(conn: sqlite3.Connection, existing_tables: set[str])
     _migrate_runs(conn, existing_tables)
     _migrate_failures(conn, existing_tables)
     _migrate_events(conn, existing_tables)
+    if "cp_file_registry" in existing_tables:
+        conn.execute(
+            "UPDATE cp_file_registry SET file_type = 'parquet' WHERE (file_name LIKE '%.parquet' OR relative_path LIKE '%.parquet') AND file_type != 'parquet'"
+        )
 
 
 def validate_schema(conn: sqlite3.Connection) -> None:
