@@ -117,24 +117,77 @@ class DataContract:
     publication_order: int
 
 
+_LEGACY_SYNC_CATEGORY_MAP: dict[DatasetId, str] = {
+    DatasetId.HOUSEHOLD_ZCATEGORY: "sqlite_source",
+    DatasetId.HOUSEHOLD_ASSET_GROUP: "sqlite_source",
+    DatasetId.HOUSEHOLD_ASSETS: "sqlite_source",
+    DatasetId.HOUSEHOLD_CURRENCY: "sqlite_source",
+    DatasetId.HOUSEHOLD_INOUTCOME: "sqlite_source",
+    DatasetId.MARKET_STOCK_HOLDINGS: "stock_pl",
+    DatasetId.MARKET_MF_HOLDINGS: "mf_holdings",
+    DatasetId.INVESTMENT_STOCK_ORDERS: "stock_orders",
+    DatasetId.INVESTMENT_MF_ORDERS: "mf_orders",
+    DatasetId.INVESTMENT_US_STOCK_TRANSACTIONS: "us_stock_transactions",
+    DatasetId.INVESTMENT_MF_ISIN_MAPPING: "mf_isin",
+    DatasetId.INVESTMENT_BENCHMARK_MAPPING: "benchmark_mapping",
+    DatasetId.HOUSEHOLD_OPENING_BALANCES: "opening_balances",
+    DatasetId.INVESTMENT_BENCHMARK_MASTER: "benchmark_master",
+    DatasetId.INVESTMENT_MACRO_PARAMETERS: "macro_parameters",
+    DatasetId.MARKET_CURRENCY_MAPPING: "currency_mapping",
+    DatasetId.MARKET_CURRENCY_FX_RATES: "currency_history",
+    DatasetId.MARKET_BENCHMARK_HISTORY: "benchmark",
+    DatasetId.MARKET_US_STOCK_PRICES: "us_stock_market",
+    DatasetId.COMMON_COLUMN_MASTER: "column_master",
+}
+
+_LEGACY_EXTRACTION_ATTR_MAP: dict[DatasetId, str] = {
+    DatasetId.HOUSEHOLD_ZCATEGORY: "zcategory",
+    DatasetId.HOUSEHOLD_ASSET_GROUP: "assetgroup",
+    DatasetId.HOUSEHOLD_ASSETS: "assets",
+    DatasetId.HOUSEHOLD_CURRENCY: "currency",
+    DatasetId.HOUSEHOLD_INOUTCOME: "inoutcome",
+    DatasetId.MARKET_STOCK_HOLDINGS: "stock_pl",
+    DatasetId.MARKET_MF_HOLDINGS: "mf_holdings",
+    DatasetId.INVESTMENT_STOCK_ORDERS: "stock_orders",
+    DatasetId.INVESTMENT_MF_ORDERS: "mf_orders",
+    DatasetId.INVESTMENT_US_STOCK_TRANSACTIONS: "us_stock_transactions",
+    DatasetId.INVESTMENT_MF_ISIN_MAPPING: "mf_isin",
+    DatasetId.INVESTMENT_BENCHMARK_MAPPING: "benchmark_mapping",
+    DatasetId.HOUSEHOLD_OPENING_BALANCES: "opening_balances",
+    DatasetId.INVESTMENT_BENCHMARK_MASTER: "benchmark_master",
+    DatasetId.INVESTMENT_MACRO_PARAMETERS: "macro_parameters",
+    DatasetId.MARKET_CURRENCY_MAPPING: "currency_mapping",
+    DatasetId.MARKET_CURRENCY_FX_RATES: "currency_history",
+    DatasetId.MARKET_BENCHMARK_HISTORY: "benchmark",
+    DatasetId.MARKET_US_STOCK_PRICES: "us_stock_market",
+    DatasetId.COMMON_COLUMN_MASTER: "column_master",
+}
+
+
 @dataclass
 class BronzeDataContract:
-    """Relationship between extraction attributes, sync categories, and Bronze tables."""
+    """Canonical Bronze lakehouse contract."""
 
     dataset_id: DatasetId
-    extraction_attribute: str
-    sync_category: str
     physical_table: str
     is_full_replace: bool
     identity_requirement: IdentityRequirement
     grain: str
 
+    @property
+    def sync_category(self) -> str:
+        """Compatibility property returning legacy sync category."""
+        return _LEGACY_SYNC_CATEGORY_MAP.get(self.dataset_id, self.dataset_id.value)
+
+    @property
+    def extraction_attribute(self) -> str:
+        """Compatibility property returning legacy extraction attribute."""
+        return _LEGACY_EXTRACTION_ATTR_MAP.get(self.dataset_id, self.dataset_id.value)
+
 
 BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
     BronzeDataContract(
         DatasetId.HOUSEHOLD_ZCATEGORY,
-        "zcategory",
-        "sqlite_source",
         "bronze.r_SQLite_ZCategory",
         True,
         IdentityRequirement.REQUIRED,
@@ -142,8 +195,6 @@ BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
     ),
     BronzeDataContract(
         DatasetId.HOUSEHOLD_ASSET_GROUP,
-        "assetgroup",
-        "sqlite_source",
         "bronze.r_SQLite_AssetGroup",
         True,
         IdentityRequirement.REQUIRED,
@@ -151,8 +202,6 @@ BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
     ),
     BronzeDataContract(
         DatasetId.HOUSEHOLD_ASSETS,
-        "assets",
-        "sqlite_source",
         "bronze.r_SQLite_Assets",
         True,
         IdentityRequirement.REQUIRED,
@@ -160,8 +209,6 @@ BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
     ),
     BronzeDataContract(
         DatasetId.HOUSEHOLD_CURRENCY,
-        "currency",
-        "sqlite_source",
         "bronze.r_SQLite_Currency",
         True,
         IdentityRequirement.REQUIRED,
@@ -169,8 +216,6 @@ BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
     ),
     BronzeDataContract(
         DatasetId.HOUSEHOLD_INOUTCOME,
-        "inoutcome",
-        "sqlite_source",
         "bronze.r_SQLite_InOutcome",
         True,
         IdentityRequirement.REQUIRED,
@@ -178,8 +223,6 @@ BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
     ),
     BronzeDataContract(
         DatasetId.INVESTMENT_MF_ISIN_MAPPING,
-        "stg_mf_isin_mapping",
-        "mf_isin",
         "bronze.r_MF_ISIN_Mapping",
         True,
         IdentityRequirement.REQUIRED,
@@ -187,8 +230,6 @@ BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
     ),
     BronzeDataContract(
         DatasetId.INVESTMENT_BENCHMARK_MAPPING,
-        "stg_benchmark_mapping",
-        "benchmark_mapping",
         "bronze.r_Benchmark_Mapping",
         True,
         IdentityRequirement.REQUIRED,
@@ -196,8 +237,6 @@ BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
     ),
     BronzeDataContract(
         DatasetId.HOUSEHOLD_OPENING_BALANCES,
-        "raw_opening_balances",
-        "opening_balances",
         "bronze.r_Opening_Balances",
         True,
         IdentityRequirement.REQUIRED,
@@ -205,8 +244,6 @@ BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
     ),
     BronzeDataContract(
         DatasetId.INVESTMENT_BENCHMARK_MASTER,
-        "raw_benchmark_master",
-        "benchmark_master",
         "bronze.r_Benchmark_Master",
         True,
         IdentityRequirement.REQUIRED,
@@ -214,8 +251,6 @@ BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
     ),
     BronzeDataContract(
         DatasetId.INVESTMENT_MACRO_PARAMETERS,
-        "raw_macro_parameters",
-        "macro_parameters",
         "bronze.r_Macro_Parameters",
         True,
         IdentityRequirement.REQUIRED,
@@ -223,8 +258,6 @@ BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
     ),
     BronzeDataContract(
         DatasetId.COMMON_COLUMN_MASTER,
-        "column_master",
-        "column_master",
         "bronze.r_Column_Master",
         True,
         IdentityRequirement.REQUIRED,
@@ -232,8 +265,6 @@ BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
     ),
     BronzeDataContract(
         DatasetId.MARKET_MF_HOLDINGS,
-        "mf_market_data_raw",
-        "mf_holdings",
         "bronze.r_MF_Market_Data",
         False,
         IdentityRequirement.NONE,
@@ -241,8 +272,6 @@ BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
     ),
     BronzeDataContract(
         DatasetId.INVESTMENT_US_STOCK_TRANSACTIONS,
-        "us_stock_transactions_raw",
-        "us_stock_transactions",
         "bronze.r_US_Stock_Transactions",
         False,
         IdentityRequirement.NONE,
@@ -250,8 +279,6 @@ BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
     ),
     BronzeDataContract(
         DatasetId.MARKET_CURRENCY_MAPPING,
-        "currency_mapping_raw",
-        "currency_mapping",
         "bronze.r_Currency_Mapping",
         True,
         IdentityRequirement.REQUIRED,
@@ -259,8 +286,6 @@ BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
     ),
     BronzeDataContract(
         DatasetId.MARKET_CURRENCY_FX_RATES,
-        "currency_fx_raw",
-        "currency_history",
         "bronze.r_Currency_FX_Data",
         False,
         IdentityRequirement.NONE,
@@ -268,8 +293,6 @@ BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
     ),
     BronzeDataContract(
         DatasetId.INVESTMENT_MF_ORDERS,
-        "mf_transactions_raw",
-        "mf_orders",
         "bronze.r_MF_Transactions",
         False,
         IdentityRequirement.NONE,
@@ -277,8 +300,6 @@ BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
     ),
     BronzeDataContract(
         DatasetId.MARKET_STOCK_HOLDINGS,
-        "stock_market_data_raw",
-        "stock_pl",
         "bronze.r_Stock_Market_Data",
         False,
         IdentityRequirement.NONE,
@@ -286,8 +307,6 @@ BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
     ),
     BronzeDataContract(
         DatasetId.INVESTMENT_STOCK_ORDERS,
-        "stock_transactions_raw",
-        "stock_orders",
         "bronze.r_Stock_Transactions",
         False,
         IdentityRequirement.NONE,
@@ -295,8 +314,6 @@ BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
     ),
     BronzeDataContract(
         DatasetId.MARKET_BENCHMARK_HISTORY,
-        "benchmark_history_raw",
-        "benchmark_history",
         "bronze.r_Benchmark_Data",
         False,
         IdentityRequirement.NONE,
@@ -304,8 +321,6 @@ BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
     ),
     BronzeDataContract(
         DatasetId.MARKET_US_STOCK_PRICES,
-        "us_stock_market_data_raw",
-        "us_stock_market",
         "bronze.r_US_Stock_Prices",
         False,
         IdentityRequirement.NONE,

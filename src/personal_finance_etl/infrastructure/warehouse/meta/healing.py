@@ -305,9 +305,11 @@ class DuckDBRegistryHealer:
         cat_to_bronze_contracts: dict[str, list[BronzeDataContract]] = {}
         for c in BRONZE_CONTRACT_REGISTRY:
             cat_to_bronze_contracts.setdefault(c.sync_category, []).append(c)
+            cat_to_bronze_contracts.setdefault(c.dataset_id.value, []).append(c)
 
         cat_to_pb_contracts: dict[str, list[PreBronzeDataContract]] = {}
         for pb in PRE_BRONZE_CONTRACT_REGISTRY:
+            cat_to_pb_contracts.setdefault(pb.dataset_id.value, []).append(pb)
             b_match = get_bronze_contract_by_dataset_id(pb.dataset_id)
             if b_match is not None:
                 cat_to_pb_contracts.setdefault(b_match.sync_category, []).append(pb)

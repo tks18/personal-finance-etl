@@ -25,14 +25,10 @@ from unittest.mock import MagicMock
 import polars as pl
 import pytest
 
-from personal_finance_etl.application.ingestion.coordinator import DataExtractor
 from personal_finance_etl.application.investments.quant_service import InvestmentQuantEngine
 from personal_finance_etl.application.wealth.wealth_service import WealthService
 from personal_finance_etl.config.financial_rules import FinancialRules
-from personal_finance_etl.config.settings import Settings
 from personal_finance_etl.contracts.application import EngineStage
-from personal_finance_etl.contracts.dataset_collection import DatasetCollection
-from personal_finance_etl.contracts.datasets import DatasetId
 from personal_finance_etl.contracts.extraction import (
     ExtractionBatchResult,
     ExtractorEntityResult,
@@ -132,43 +128,6 @@ def test_market_provider_forensic_telemetry_enrichment(
     assert ev_fail.error is not None
     assert ev_fail.error.failure_domain == FailureDomain.EXTERNAL_PROVIDER
     assert ev_fail.error.exception_type == "HttpTimeoutError"
-
-
-def test_gatekeeper_validation_failure_attaches_error_details(
-    memory_emitter: tuple[ObservabilityEmitter, _MemorySink],
-    isolated_settings: Settings,
-) -> None:
-    """Verify DataExtractor schema validation failure attaches ErrorDetails with SOURCE_VALIDATION."""
-    emitter, sink = memory_emitter
-    cfg = isolated_settings
-    mock_queue = MagicMock()
-    mock_cp = MagicMock(spec=ControlPlane)
-
-    extractor = DataExtractor(cfg, mock_queue, mock_cp, emitter=emitter)
-
-    faulty_lf = MagicMock(spec=pl.LazyFrame)
-    faulty_lf.collect_schema.side_effect = ValueError("Column 'Date' missing from schema")
-
-    res = DatasetCollection(
-        frames={
-            DatasetId.HOUSEHOLD_ZCATEGORY: faulty_lf,
-        }
-    )
-
-    with pytest.raises(RuntimeError, match="Corrupted source data detected"):
-        extractor._validate_extracted_streams(res)
-
-    fail_events = [
-        e
-        for e in sink.events
-        if e.event_code == EventCode.SCHEMA_VALIDATION
-        and e.presentation_kind == PresentationKind.FAILURE
-    ]
-    assert len(fail_events) == 1
-    assert fail_events[0].error is not None
-    assert fail_events[0].error.failure_domain == FailureDomain.SOURCE_VALIDATION
-    assert fail_events[0].error.exception_type == "ValueError"
-    assert "Column 'Date' missing" in fail_events[0].error.exception_message
 
 
 def test_wealth_and_fire_engine_lifecycle_events(

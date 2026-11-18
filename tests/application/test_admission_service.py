@@ -292,8 +292,6 @@ def test_admission_unconstrained_dataset_without_identity() -> None:
     """Verify transparent pass-through for datasets with IdentityRequirement.NONE and no identity."""
     contract = BronzeDataContract(
         dataset_id=DatasetId.INVESTMENT_STOCK_ORDERS,
-        extraction_attribute="stock_orders",
-        sync_category="orders",
         physical_table="bronze.orders",
         is_full_replace=False,
         identity_requirement=IdentityRequirement.NONE,

@@ -39,6 +39,7 @@ from personal_finance_etl.contracts.observability import (
     EventCode,
     PresentationKind,
 )
+from personal_finance_etl.contracts.sources import ProviderType
 from personal_finance_etl.contracts.validation import (
     DataFrameValidator,
     ValidationContext,
@@ -82,6 +83,53 @@ from personal_finance_etl.infrastructure.warehouse.registry import (
 __all__ = ["DatasetIngestionService"]
 
 diagnostics = get_observability_diagnostics(__name__)
+
+
+def _resolve_target_paths(
+    dataset_plan: DatasetPlan,
+    bronze_contract: BronzeDataContract,
+    actionable_files: Sequence[str] | dict[str, list[str]],
+) -> list[str]:
+    """Resolve target actionable filepaths for a dataset plan.
+
+    Parameters
+    ----------
+    dataset_plan : DatasetPlan
+        Compiled execution plan for the target dataset.
+    bronze_contract : BronzeDataContract
+        Canonical Bronze persistence contract.
+    actionable_files : Sequence[str] | dict[str, list[str]]
+        Category-mapped actionable paths or explicit list of paths.
+
+    Returns
+    -------
+    list[str]
+        Deduplicated, sorted list of actionable file paths.
+    """
+    if not isinstance(actionable_files, dict):
+        return sorted(set(actionable_files))
+
+    target_paths: list[str] = []
+    ds_val = dataset_plan.dataset_id.value
+    if ds_val in actionable_files:
+        target_paths.extend(actionable_files[ds_val])
+    cat = getattr(bronze_contract, "sync_category", None)
+    if cat and cat in actionable_files and cat != ds_val:
+        target_paths.extend(actionable_files[cat])
+
+    if not target_paths:
+        for leg_key, files in actionable_files.items():
+            if (
+                (leg_key == "sqlite_source" and dataset_plan.provider_type == ProviderType.SQLITE)
+                or (
+                    leg_key == "stock_pl"
+                    and dataset_plan.dataset_id == DatasetId.MARKET_STOCK_HOLDINGS
+                )
+                or (leg_key in ds_val)
+            ):
+                target_paths.extend(files)
+
+    return sorted(set(target_paths))
 
 
 class DatasetIngestionService:
@@ -197,11 +245,7 @@ class DatasetIngestionService:
         if ds_config is None:
             raise ValueError(f"No SourceDatasetConfig found for dataset {dataset_plan.dataset_id}")
 
-        target_paths: list[str]
-        if isinstance(actionable_files, dict):
-            target_paths = list(actionable_files.get(bronze_contract.sync_category, []))
-        else:
-            target_paths = list(actionable_files)
+        target_paths = _resolve_target_paths(dataset_plan, bronze_contract, actionable_files)
 
         if not target_paths:
             diagnostics.debug(

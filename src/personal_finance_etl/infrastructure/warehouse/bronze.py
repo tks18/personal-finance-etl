@@ -21,14 +21,8 @@ import os
 import duckdb
 import polars as pl
 
-from personal_finance_etl.contracts.application import EngineStage
 from personal_finance_etl.contracts.dataset_collection import DatasetCollection
 from personal_finance_etl.contracts.datasets import DatasetId
-from personal_finance_etl.contracts.observability import (
-    DiagnosticSeverity,
-    EventCode,
-    PresentationKind,
-)
 from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
 from personal_finance_etl.infrastructure.control_plane.hashing import generate_file_id
 from personal_finance_etl.infrastructure.observability import (
@@ -44,29 +38,7 @@ from personal_finance_etl.infrastructure.warehouse.registry import BRONZE_CONTRA
 
 diagnostics = get_observability_diagnostics("personal_finance_etl.warehouse.bronze")
 
-MIGRATED_DATASETS: frozenset[DatasetId] = frozenset(
-    {
-        DatasetId.HOUSEHOLD_ZCATEGORY,
-        DatasetId.HOUSEHOLD_ASSET_GROUP,
-        DatasetId.HOUSEHOLD_ASSETS,
-        DatasetId.HOUSEHOLD_CURRENCY,
-        DatasetId.HOUSEHOLD_INOUTCOME,
-        DatasetId.HOUSEHOLD_OPENING_BALANCES,
-        DatasetId.INVESTMENT_MF_ISIN_MAPPING,
-        DatasetId.INVESTMENT_BENCHMARK_MAPPING,
-        DatasetId.INVESTMENT_BENCHMARK_MASTER,
-        DatasetId.INVESTMENT_MACRO_PARAMETERS,
-        DatasetId.MARKET_CURRENCY_MAPPING,
-        DatasetId.MARKET_MF_HOLDINGS,
-        DatasetId.INVESTMENT_MF_ORDERS,
-        DatasetId.MARKET_STOCK_HOLDINGS,
-        DatasetId.INVESTMENT_STOCK_ORDERS,
-        DatasetId.INVESTMENT_US_STOCK_TRANSACTIONS,
-        DatasetId.MARKET_CURRENCY_FX_RATES,
-        DatasetId.MARKET_BENCHMARK_HISTORY,
-        DatasetId.MARKET_US_STOCK_PRICES,
-    }
-)
+MIGRATED_DATASETS: frozenset[DatasetId] = frozenset()
 
 
 class BronzeLayer:
@@ -249,78 +221,18 @@ class BronzeLayer:
         extracted_data: DatasetCollection,
         actionable_files: dict[str, list[str]],
     ) -> None:
-        """Write all raw extracted DataFrames to bronze.* tables.
+        """Act as a deprecated compatibility stub for legacy bronze loading.
+
+        All datasets are natively ingested through DatasetIngestionService.
 
         Parameters
         ----------
         extracted_data : DatasetCollection
-            Extracted source dataset collection.
+            Legacy extracted dataset collection (unused).
         actionable_files : dict[str, list[str]]
-            Mapping of sync category to actionable file paths.
+            Mapping of sync category to actionable file paths (unused).
         """
-        total_upserts = 0
-        total_rows = 0
-
-        for contract in BRONZE_CONTRACT_REGISTRY:
-            if (
-                contract.dataset_id in MIGRATED_DATASETS
-                or contract.dataset_id == DatasetId.COMMON_COLUMN_MASTER
-            ):
-                continue
-            df = extracted_data.get(contract.dataset_id)
-            if df is not None:
-                actionable = actionable_files.get(contract.sync_category, [])
-                if actionable:
-                    diagnostics.debug(
-                        "Schema: %s Schema: %s", contract.physical_table, df.collect_schema()
-                    )
-                    row_counts = self.upsert_table(
-                        df,
-                        contract.physical_table,
-                        actionable,
-                        full_replace=contract.is_full_replace,
-                    )
-
-                    if contract.is_full_replace:
-                        self.db_manager.conn.execute(
-                            "DELETE FROM meta.m_File_Registry WHERE file_category = ?",
-                            [contract.sync_category],
-                        )
-
-                    rows_added = sum(row_counts.values())
-                    diagnostics.debug(
-                        "Bronze: Table '%s': Upserted %d rows from %d files.",
-                        contract.physical_table,
-                        rows_added,
-                        len(actionable),
-                    )
-                    self.emitter.emit_event(
-                        event_code=EventCode.BRONZE_UPSERT,
-                        message=f"Bronze: Table '{contract.physical_table}' upserted {rows_added} rows from {len(actionable)} files.",
-                        severity=DiagnosticSeverity.DEBUG,
-                        presentation_kind=PresentationKind.INTERNAL,
-                        stage=EngineStage.EXTRACTING,
-                        entity_type="Table",
-                        entity_id=contract.physical_table,
-                        rows=rows_added,
-                    )
-                    if rows_added > 0:
-                        total_upserts += 1
-                        total_rows += rows_added
-
-                    for filepath in actionable:
-                        filename = os.path.basename(filepath)
-                        count = row_counts.get(filename, 0)
-                        self.cp.artifacts.mark_synced([filepath])
-                        self.meta_layer.register_file(
-                            filepath, contract.sync_category, count, self.cp
-                        )
-
-        diagnostics.info(
-            "Bronze: Synchronized %d source datasets (%s new rows).",
-            total_upserts,
-            f"{total_rows:,}",
-        )
+        return
 
     def migrate_identity(self, renames: list[tuple[str, str, str]]) -> None:
         """Migrate file identity (rename) in all Bronze tables without re-ingesting rows.
@@ -334,8 +246,31 @@ class BronzeLayer:
             return
 
         cats_to_tables: dict[str, list[str]] = {}
+        legacy_cat_map: dict[str, list[str]] = {
+            "sqlite_source": [
+                "bronze.r_SQLite_ZCategory",
+                "bronze.r_SQLite_AssetGroup",
+                "bronze.r_SQLite_Assets",
+                "bronze.r_SQLite_Currency",
+                "bronze.r_SQLite_InOutcome",
+            ],
+            "stock_pl": ["bronze.r_Stock_PL"],
+            "mf_holdings": ["bronze.r_Mutual_Funds_Holdings"],
+            "stock_orders": ["bronze.r_Stock_Orders"],
+            "mf_orders": ["bronze.r_Mutual_Funds_Orders"],
+            "us_stock_transactions": ["bronze.r_IND_Money_US_Stocks"],
+            "mf_isin": ["bronze.r_STG_MF_ISIN_Mapping"],
+            "benchmark_mapping": ["bronze.r_STG_Benchmark_Mapping"],
+            "opening_balances": ["bronze.r_Opening_Balances"],
+            "benchmark_master": ["bronze.r_Benchmark_Master"],
+            "macro_parameters": ["bronze.r_Macro_Parameters"],
+            "currency_mapping": ["bronze.r_Currency_Mapping"],
+        }
         for contract in BRONZE_CONTRACT_REGISTRY:
+            cats_to_tables.setdefault(contract.dataset_id.value, []).append(contract.physical_table)
             cats_to_tables.setdefault(contract.sync_category, []).append(contract.physical_table)
+        for leg_cat, leg_tables in legacy_cat_map.items():
+            cats_to_tables.setdefault(leg_cat, []).extend(leg_tables)
 
         for old_path, new_path, category in renames:
             tables = cats_to_tables.get(category, [])

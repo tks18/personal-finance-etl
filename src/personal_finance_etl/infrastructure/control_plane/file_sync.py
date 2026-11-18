@@ -9,7 +9,7 @@ Owns
 
 Does not own
 -------------
-- Physical file searching or pattern discovery (owned by infrastructure.providers.files.locator).
+- Physical file searching or pattern discovery (owned by application.ingestion.file_discovery).
 - Low-level artifact payload persistence (owned by artifact_repository).
 - Run lifecycle state management (owned by run_repository).
 """

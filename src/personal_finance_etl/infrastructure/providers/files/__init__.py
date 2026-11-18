@@ -4,7 +4,6 @@ Owns
 ----
 - CSV and Excel statement parsing adapters.
 - External household SQLite source extraction adapter.
-- Local filesystem statement discovery and locator adapter.
 
 Does not own
 -------------
@@ -16,20 +15,9 @@ from __future__ import annotations
 
 from personal_finance_etl.infrastructure.providers.files.csv import (
     CSVExtractor,
-    extract_benchmark_master_raw,
-    extract_currency_mapping_raw,
-    extract_macro_parameters_raw,
-    extract_opening_balances_raw,
-    extract_stg_benchmark_mapping,
-    extract_stg_mf_isin_mapping,
 )
 from personal_finance_etl.infrastructure.providers.files.excel import (
     ExcelExtractor,
-    extract_mf_market_data_raw,
-    extract_mf_transactions_raw,
-)
-from personal_finance_etl.infrastructure.providers.files.locator import (
-    categorize_statement_files,
 )
 from personal_finance_etl.infrastructure.providers.files.sqlite import (
     SQLiteExtractor,
@@ -39,13 +27,4 @@ __all__ = [
     "CSVExtractor",
     "ExcelExtractor",
     "SQLiteExtractor",
-    "categorize_statement_files",
-    "extract_benchmark_master_raw",
-    "extract_currency_mapping_raw",
-    "extract_macro_parameters_raw",
-    "extract_mf_market_data_raw",
-    "extract_mf_transactions_raw",
-    "extract_opening_balances_raw",
-    "extract_stg_benchmark_mapping",
-    "extract_stg_mf_isin_mapping",
 ]

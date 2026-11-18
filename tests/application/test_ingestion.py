@@ -26,14 +26,6 @@ from personal_finance_etl.application.ingestion.asset_strategies import (
     USStockPipeline,
 )
 from personal_finance_etl.contracts.extraction import ExtractorEntityStatus
-from personal_finance_etl.infrastructure.providers.files.csv import (
-    extract_benchmark_master_raw,
-    extract_currency_mapping_raw,
-    extract_stg_mf_isin_mapping,
-)
-from personal_finance_etl.infrastructure.providers.files.locator import (
-    categorize_statement_files,
-)
 from personal_finance_etl.infrastructure.providers.files.sqlite import (
     SQLiteExtractor,
 )
@@ -46,61 +38,6 @@ from personal_finance_etl.infrastructure.providers.market.currency import (
 from personal_finance_etl.infrastructure.providers.market.us_market import (
     USMarketExtractor,
 )
-
-
-def test_statement_locator_categorization(tmp_path: Path) -> None:
-    """Verify recursive scanning and categorization of statement files."""
-    # Create directory structure with mock files
-    (tmp_path / "Stock PL Statements").mkdir(parents=True)
-    (tmp_path / "Stock PL Statements" / "pl_2026.xlsx").write_text("dummy")
-
-    (tmp_path / "Mutual Funds - Holdings").mkdir(parents=True)
-    (tmp_path / "Mutual Funds - Holdings" / "mf_holdings.xlsx").write_text("dummy")
-
-    (tmp_path / "Stock - Orders").mkdir(parents=True)
-    (tmp_path / "Stock - Orders" / "orders.xlsx").write_text("dummy")
-
-    (tmp_path / "Mutual Funds - Orders").mkdir(parents=True)
-    (tmp_path / "Mutual Funds - Orders" / "mf_orders.xlsx").write_text("dummy")
-
-    (tmp_path / "IND Money (US Stocks)" / "Transaction Reports").mkdir(parents=True)
-    (tmp_path / "IND Money (US Stocks)" / "Transaction Reports" / "us_tx.xlsx").write_text("dummy")
-
-    # Temporary lock file that should be ignored
-    (tmp_path / "Stock - Orders" / "~$lock.xlsx").write_text("temp")
-
-    cats = categorize_statement_files(str(tmp_path), strict=True)
-    assert len(cats["stock_pl"]) == 1
-    assert len(cats["mf_holdings"]) == 1
-    assert len(cats["stock_orders"]) == 1
-    assert len(cats["mf_orders"]) == 1
-    assert len(cats["us_stock_transactions"]) == 1
-
-
-def test_csv_extraction_adapters() -> None:
-    """Verify parsing and schema assignment for CSV evidence assets."""
-    # MF ISIN Mapping
-    raw_isin = b"INSTRUMENT_NAME,ISIN\nTest Growth Fund,INF123456789\n"
-    lf_isin = extract_stg_mf_isin_mapping("isin.csv", "/data", raw_isin)
-    df_isin = lf_isin.collect()
-    assert df_isin.height == 1
-    assert df_isin["ISIN"][0] == "INF123456789"
-    assert df_isin["__file_name__"][0] == "isin.csv"
-
-    # Currency Mapping
-    raw_curr = b"UID,Currency_Code,Target_Currency_Code,yF_Ticker,Currency_Name,Is_Active\nUSD,USD,INR,USDINR=X,US Dollar,true\n"
-    lf_curr = extract_currency_mapping_raw("curr.csv", "/data", raw_curr)
-    df_curr = lf_curr.collect()
-    assert df_curr.height == 1
-    assert df_curr["Currency_Code"][0] == "USD"
-    assert df_curr["Is_Active"][0] is True
-
-    # Benchmark Master
-    raw_bench = b"ID,Benchmark_Name,yF_Ticker,Currency\nNIFTY50,Nifty 50,^NSEI,INR\n"
-    lf_bench = extract_benchmark_master_raw("bench.csv", "/data", raw_bench)
-    df_bench = lf_bench.collect()
-    assert df_bench.height == 1
-    assert df_bench["yF_Ticker"][0] == "^NSEI"
 
 
 def test_sqlite_extractor_base_tables(tmp_path: Path) -> None:
