@@ -36,6 +36,7 @@ from personal_finance_etl.config.sources.normalization import (
 from personal_finance_etl.config.sources.selectors import (
     CsvSelector,
     ExcelSelector,
+    SqliteSelector,
 )
 
 __all__ = [
@@ -111,8 +112,10 @@ def canonicalize_source_configuration(config: SourceConfiguration) -> dict[str, 
         elif isinstance(sel, ExcelSelector):
             sel_dict["header_row"] = sel.header_row
             sel_dict["sheet_name"] = sel.sheet_name
-        else:
+        elif isinstance(sel, SqliteSelector):
             sel_dict["table_name"] = sel.table_name
+        else:
+            sel_dict["feed_name"] = sel.feed_name
 
         ident = ds.identity
         ident_dict: dict[str, object] | None = None

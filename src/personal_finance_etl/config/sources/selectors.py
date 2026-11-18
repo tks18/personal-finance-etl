@@ -5,6 +5,7 @@ Owns
 - CsvSelector: File-level dataset selector and parsing options for CSV providers.
 - ExcelSelector: Sheet-level dataset selector and header configuration for Excel providers.
 - SqliteSelector: Table-level dataset selector for SQLite database providers.
+- MarketProviderSelector: Dataset selector for external market data providers.
 - DatasetSelector: Discriminated union of all supported provider dataset selectors.
 
 Does not own
@@ -28,6 +29,7 @@ __all__ = [
     "CsvSelector",
     "DatasetSelector",
     "ExcelSelector",
+    "MarketProviderSelector",
     "SqliteSelector",
 ]
 
@@ -339,7 +341,22 @@ class SqliteSelector(BaseModel):
         return cleaned
 
 
+class MarketProviderSelector(BaseModel):
+    """Dataset selector for external market data providers.
+
+    Parameters
+    ----------
+    provider_type : Literal[ProviderType.MARKET_DATA], default ProviderType.MARKET_DATA
+        Discriminator identifying the external market data provider type.
+    feed_name : str, default "yahoo_finance"
+        Logical feed or upstream vendor identifier.
+    """
+
+    provider_type: Literal[ProviderType.MARKET_DATA] = ProviderType.MARKET_DATA
+    feed_name: str = "yahoo_finance"
+
+
 type DatasetSelector = Annotated[
-    CsvSelector | ExcelSelector | SqliteSelector,
+    CsvSelector | ExcelSelector | SqliteSelector | MarketProviderSelector,
     Field(discriminator="provider_type"),
 ]
