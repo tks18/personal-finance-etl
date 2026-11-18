@@ -75,8 +75,6 @@ def test_validate_registry_rejects_missing_identity_metadata(
     corrupted_grain = list(BRONZE_CONTRACT_REGISTRY)
     corrupted_grain[0] = BronzeDataContract(
         dataset_id=corrupted_grain[0].dataset_id,
-        extraction_attribute=corrupted_grain[0].extraction_attribute,
-        sync_category=corrupted_grain[0].sync_category,
         physical_table=corrupted_grain[0].physical_table,
         is_full_replace=corrupted_grain[0].is_full_replace,
         identity_requirement=IdentityRequirement.REQUIRED,

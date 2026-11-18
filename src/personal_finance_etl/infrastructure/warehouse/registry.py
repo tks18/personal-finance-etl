@@ -213,20 +213,14 @@ def _validate_bronze_contracts() -> None:
 
     for b_contract in BRONZE_CONTRACT_REGISTRY:
         if not b_contract.dataset_id:
-            raise ValueError(
-                f"Bronze contract {b_contract.extraction_attribute} missing DatasetId."
-            )
+            raise ValueError(f"Bronze contract {b_contract.physical_table} missing DatasetId.")
         ds_val = str(b_contract.dataset_id)
         if ds_val in bronze_dataset_ids:
             raise ValueError(f"Duplicate Bronze DatasetId found: {ds_val}")
         bronze_dataset_ids.add(ds_val)
 
-        if not b_contract.extraction_attribute:
-            raise ValueError("Bronze extraction_attribute cannot be empty.")
-        if not b_contract.sync_category:
-            raise ValueError(f"Bronze sync_category empty for {b_contract.extraction_attribute}")
         if not b_contract.physical_table:
-            raise ValueError(f"Bronze physical_table empty for {b_contract.extraction_attribute}")
+            raise ValueError(f"Bronze physical_table empty for {b_contract.dataset_id.value}")
         if not b_contract.physical_table.startswith("bronze."):
             raise ValueError(f"Bronze table must start with 'bronze.': {b_contract.physical_table}")
 

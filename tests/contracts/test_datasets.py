@@ -153,13 +153,11 @@ def test_validate_registry_rejects_duplicate_bronze_dataset_id(
     # Duplicate first entry
     corrupted_bronze.append(
         BronzeDataContract(
-            DatasetId.HOUSEHOLD_ZCATEGORY,
-            "zcategory_dup",
-            "sqlite_source",
-            "bronze.r_SQLite_ZCategory_Dup",
-            True,
-            IdentityRequirement.REQUIRED,
-            "Household Category (Z_PK)",
+            dataset_id=DatasetId.HOUSEHOLD_ZCATEGORY,
+            physical_table="bronze.r_SQLite_ZCategory_Dup",
+            is_full_replace=True,
+            identity_requirement=IdentityRequirement.REQUIRED,
+            grain="Household Category (Z_PK)",
         )
     )
     monkeypatch.setattr(

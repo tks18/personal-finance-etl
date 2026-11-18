@@ -316,7 +316,7 @@ class MetaLayer:
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 [
-                    b_contract.extraction_attribute,
+                    b_contract.dataset_id.value,
                     "bronze",
                     b_contract.physical_table,
                     "Raw",
