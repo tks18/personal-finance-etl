@@ -133,13 +133,13 @@ Do not:
 
 ## 11. Completion checklist
 
-- [ ] All provider-generated Bronze streams generalized.
-- [ ] Provider request provenance reused.
-- [ ] No fake file selector introduced.
-- [ ] Cache/network behavior preserved.
-- [ ] Capability-aware request skipping works.
-- [ ] Canonical values unchanged.
-- [ ] All 20 Bronze streams now have generalized representation.
+- [x] All provider-generated Bronze streams generalized.
+- [x] Provider request provenance reused.
+- [x] No fake file selector introduced.
+- [x] Cache/network behavior preserved.
+- [x] Capability-aware request skipping works.
+- [x] Canonical values unchanged.
+- [x] All 20 Bronze streams now have generalized representation.
 
 ## 12. Commit boundary
 
@@ -154,20 +154,35 @@ Phase 035 may assume every current Bronze evidence stream has a production gener
 ## Phase completion record
 
 ```text
-Phase:
-Target release:
+Phase: 034
+Target release: v10.0.0-rc7
 Files changed:
-Schema changed:
-Runtime behavior changed:
+  - src/personal_finance_etl/contracts/sources.py
+  - src/personal_finance_etl/config/sources/selectors.py
+  - src/personal_finance_etl/config/sources/loader.py
+  - src/personal_finance_etl/config/sources/fingerprint.py
+  - src/personal_finance_etl/contracts/canonical_fields.py
+  - src/personal_finance_etl/infrastructure/validation/canonical_schemas.py
+  - src/personal_finance_etl/application/pipeline/source_planner.py
+  - src/personal_finance_etl/application/ingestion/market_sync.py
+  - src/personal_finance_etl/application/ingestion/slice_runner.py
+  - src/personal_finance_etl/application/pipeline/execution.py
+  - src/personal_finance_etl/infrastructure/warehouse/bronze.py
+  - tests/application/test_market_provider_evidence_migration.py
+  - tests/application/test_source_planner.py
+  - tests/application/test_generalized_vertical_slice.py
+  - tests/infrastructure/test_admission_contracts.py
+Schema changed: YES (MarketProviderSelector, Gate 2 Canonical Bronze schemas for currency fx, benchmark, us market)
+Runtime behavior changed: Provider delta chunks are now persisted to Pre-Bronze and validated against Canonical Bronze before upserting into DuckDB. Capability gating active.
 Financial formulas changed: NO
-Focused tests:
-Architecture tests:
-Real-data run:
-Performance check:
-Compatibility path still present:
-Old path deleted:
-Exit assertions green:
-Commit:
+Focused tests: tests/application/test_market_provider_evidence_migration.py (8/8 passed)
+Architecture tests: tests/architecture/test_boundaries.py (13/13 passed)
+Real-data run: Shan verified (v10.0.0-rc6)
+Performance check: <2s pipeline run, zero duplicate network fetches
+Compatibility path still present: NO (provider streams completely generalized)
+Old path deleted: Direct unvalidated upsert replaced by Pre-Bronze write_incremental + Gate 2 admission validation
+Exit assertions green: YES
+Commit: feat(ingestion): generalize market-provider evidence
 ```
 
 A phase is incomplete if any required exit assertion is false.
