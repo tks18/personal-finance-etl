@@ -59,6 +59,7 @@ class ProviderType(StrEnum):
     CSV = "csv"
     EXCEL = "excel"
     SQLITE = "sqlite"
+    MARKET_DATA = "market_data"
 
     @classmethod
     def _missing_(cls, value: object) -> ProviderType | None:

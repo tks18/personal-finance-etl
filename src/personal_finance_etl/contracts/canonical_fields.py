@@ -370,13 +370,18 @@ CANONICAL_BRONZE_FIELDS: dict[DatasetId, frozenset[str]] = {
     ),
     DatasetId.MARKET_CURRENCY_FX_RATES: frozenset(
         {
-            "Ticker",
             "Date",
-            "Close",
-            "Open",
-            "High",
-            "Low",
-            "Volume",
+            "Currency_ID",
+            "Currency_Name",
+            "Currency_Code",
+            "Target_Currency_Code",
+            "yF_Ticker",
+            "FX_Rate",
+            "Data_Provider",
+            "Extraction_Time",
+            "Requested_Start",
+            "Requested_End",
+            "Is_Closure_Gap",
         }
     ),
     DatasetId.MARKET_STOCK_HOLDINGS: frozenset(
@@ -398,24 +403,30 @@ CANONICAL_BRONZE_FIELDS: dict[DatasetId, frozenset[str]] = {
     ),
     DatasetId.MARKET_BENCHMARK_HISTORY: frozenset(
         {
-            "Ticker",
             "Date",
+            "ID",
+            "Benchmark_Name",
+            "yF_Ticker",
+            "CURRENCY_ID",
             "Close",
-            "Open",
-            "High",
-            "Low",
-            "Volume",
+            "Data_Provider",
+            "Extraction_Time",
+            "Requested_Start",
+            "Requested_End",
+            "Is_Closure_Gap",
         }
     ),
     DatasetId.MARKET_US_STOCK_PRICES: frozenset(
         {
-            "Ticker",
             "Date",
-            "Close",
-            "Open",
-            "High",
-            "Low",
-            "Volume",
+            "ISIN",
+            "yF_Ticker",
+            "Closing_Price_Local",
+            "Data_Provider",
+            "Extraction_Time",
+            "Requested_Start",
+            "Requested_End",
+            "Is_Closure_Gap",
         }
     ),
     DatasetId.COMMON_COLUMN_MASTER: frozenset(
