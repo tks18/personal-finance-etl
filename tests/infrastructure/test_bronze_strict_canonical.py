@@ -34,6 +34,7 @@ from personal_finance_etl.contracts.canonical_fields import (
 )
 from personal_finance_etl.contracts.datasets import DatasetId
 from personal_finance_etl.contracts.sources import SourceId
+from personal_finance_etl.infrastructure.control_plane.hashing import generate_file_id
 from personal_finance_etl.infrastructure.validation.canonical_schemas import (
     get_canonical_bronze_schema,
     has_canonical_bronze_schema,
@@ -125,8 +126,6 @@ def test_gate2_strict_schema_accepts_valid_canonical_and_provenance() -> None:
             "SYNC_VERSION": [1],
             "ORDER_NUM": [1],
             "artifact_id": ["art_123"],
-            "__file_name__": ["zcat.sqlite"],
-            "__folder_path__": ["inputs/db"],
         }
     )
     validated = schema.validate(valid_data)
@@ -171,6 +170,9 @@ def test_source_drift_contained_in_pre_bronze_and_stripped_from_bronze(
     pb_contract = get_pre_bronze_contract_by_dataset_id(ds_id)
     assert pb_contract is not None
 
+    test_file = "inputs/db/test_drift.sqlite"
+    test_art_id = generate_file_id(test_file)
+
     # Source frame with extra unmapped source column and full canonical fields
     raw_source = pl.DataFrame(
         {
@@ -187,9 +189,7 @@ def test_source_drift_contained_in_pre_bronze_and_stripped_from_bronze(
             "ZSYNCTIME": [1700000000.0],
             "ZSYNCVER": [1],
             "EXTRA_VENDOR_METADATA": ["source_drift_value"],
-            "artifact_id": ["art_test_drift"],
-            "__file_name__": ["test_drift.sqlite"],
-            "__folder_path__": ["inputs/db"],
+            "artifact_id": [test_art_id],
         }
     )
 
@@ -198,7 +198,7 @@ def test_source_drift_contained_in_pre_bronze_and_stripped_from_bronze(
     pb_layer.write_incremental(
         contract=pb_contract,
         df=raw_source,
-        artifact_id="art_test_drift",
+        artifact_id=test_art_id,
     )
     pb_table = pb_contract.physical_table
     pb_cols = {row[0] for row in temp_duckdb.conn.execute(f"DESCRIBE {pb_table}").fetchall()}
