@@ -2,6 +2,35 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [10.0.0-rc.10](https://github.com/tks18/personal-finance-etl/compare/10.0.0-rc.9...10.0.0-rc.10) (2026-11-19)
+
+
+### Features 🔥
+
+* **validation:** remove filename columns from bronze schemas ([8d2be6e](https://github.com/tks18/personal-finance-etl/commit/8d2be6eddcfb03fcf6c26556942aa9e476850ac4))
+* **warehouse:** remove filename columns from bronze ddl ([0ee7ed0](https://github.com/tks18/personal-finance-etl/commit/0ee7ed052c0719e8ee463f7fbd961ddaf3012bb5))
+
+
+### Code Refactoring 🖌
+
+* **bronze:** key table operations by artifact_id ([df58486](https://github.com/tks18/personal-finance-etl/commit/df58486d697188954da208f2eefd4ae57e236d0e))
+* **contracts:** prune provenance fields to artifact_id ([7ff66d6](https://github.com/tks18/personal-finance-etl/commit/7ff66d66d9ea29c7b3983a8e067bf626a58c5c3f))
+* **domain:** adapt transforms and diagnostics to artifact_id ([092e1ee](https://github.com/tks18/personal-finance-etl/commit/092e1ee83e027eaf7ed97026034ab4778a833d3f))
+* **meta:** key healing operations by artifact_id ([4907b6d](https://github.com/tks18/personal-finance-etl/commit/4907b6df3e87ab3e08248797bf5504b3529e5d92))
+* **providers:** prune filename metadata from file extractors ([34e6b3c](https://github.com/tks18/personal-finance-etl/commit/34e6b3c6a54de2e7fc823be2436694ffde0b5be6))
+* **providers:** prune market delta provenance columns ([fb45da5](https://github.com/tks18/personal-finance-etl/commit/fb45da5283816d76b00e38fa0b780aad5e1460f0))
+
+
+### Tests 🧪
+
+* **migration:** update legacy filename assertions ([7c17218](https://github.com/tks18/personal-finance-etl/commit/7c17218720964dce04b0a98bb4d4a7e6ae4d033b))
+* **warehouse:** add artifact provenance cutover and ast tests ([ef4aced](https://github.com/tks18/personal-finance-etl/commit/ef4acedc686f6ca04764a947d8299261feb2c447))
+
+
+### Docs 📃
+
+* **refactor:** complete phase 037 artifact provenance cutover ([f18b14a](https://github.com/tks18/personal-finance-etl/commit/f18b14a66c392cc40ce8692469242854aa11d9e0))
+
 ## [10.0.0-rc.9](https://github.com/tks18/personal-finance-etl/compare/10.0.0-rc.8...10.0.0-rc.9) (2026-11-19)
 
 
