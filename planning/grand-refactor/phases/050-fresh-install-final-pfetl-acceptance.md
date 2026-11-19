@@ -98,6 +98,26 @@ Introduce one invalid mapping/source schema/identity collision. Run diagnostics,
 ### Step 9 - Capability switch
 Change from full/combined scenario to a supported reduced plan. Verify provider work skipped and Phase-043 stale analytical tables removed. Switch back and verify recreation.
 
+### Step 9b - Master Capability Matrix E2E Acceptance Suite
+Author and execute `tests/application/test_master_capability_matrix_acceptance.py`.
+This suite systematically and sequentially executes headless pipeline runs across all **10 topologically valid capability combinations** from clean scratch workspaces using public configuration:
+1. `[HOUSEHOLD_CORE]` (Pure Household Budgeting & Cashflow)
+2. `[HOUSEHOLD_CORE, WEALTH]` (Household Balance Sheet & Net Worth from Cash/Property)
+3. `[HOUSEHOLD_CORE, WEALTH, FIRE]` (Household FIRE without Equities)
+4. `[HOUSEHOLD_CORE, INVESTMENT_ACCOUNTING]` (Domestic Investments Pure: FIFO lots, realized gains, portfolio XIRR)
+5. `[HOUSEHOLD_CORE, INVESTMENT_ACCOUNTING, BENCHMARK_ENRICHMENT]` (Domestic + Benchmark Alpha/Beta)
+6. `[HOUSEHOLD_CORE, INVESTMENT_ACCOUNTING, FOREIGN_ASSET_ENRICHMENT]` (Global Investments + Multi-Currency Forex Exposure)
+7. `[HOUSEHOLD_CORE, INVESTMENT_ACCOUNTING, TAX]` (Domestic Investments + Statutory Capital Gains Tax Liability)
+8. `[HOUSEHOLD_CORE, INVESTMENTS, BENCHMARK, FOREIGN]` (Full Investment Suite, Tax Disabled)
+9. `[HOUSEHOLD_CORE, INVESTMENTS, FOREIGN, TAX]` (Global Investments + Tax, Benchmark Disabled)
+10. `[ALL 7 CAPABILITIES]` (Master Comprehensive Golden User Baseline)
+
+For every combination, the acceptance suite assertively verifies:
+- **DuckDB Physical Catalog Purity:** queries `information_schema.tables` to assert only active Medallion tables exist in DuckDB; disabled tables are strictly absent (zero ghost tables).
+- **Schema & Column Purity:** inspects composite tables (`gold.household_monthly_summary`, `gold.investments_portfolio_summary`, `gold.core_monthly_fact`) to assert columns belonging to disabled capabilities are physically omitted or strictly null.
+- **Ground-Truth Analytical Accuracy:** asserts total expenses, cashflows, portfolio valuations, FIFO realized returns, tax liabilities, net worth, and FIRE milestones match deterministic mathematical ground truth down to the penny.
+- **Operational & Observability Purity:** verifies Control Plane records exact active capabilities and JSONL traces contain zero warnings or unhandled exceptions.
+
 ### Step 10 - Backup/restore
 Backup generalized state including Pre-Bronze/config provenance. Restore into clean target and verify outputs/next incremental run.
 
@@ -207,11 +227,15 @@ Final mandatory acceptance matrix:
 - remediation and rerun;
 - split-commit/recovery suite remains green.
 
-### Capability
-- reduced plan;
-- provider skipping;
-- stale-table cleanup;
-- re-enable.
+### Capability & Master Capability Matrix Acceptance
+- reduced plan and provider skipping;
+- stale-table cleanup and re-enable;
+- **Master Capability Matrix E2E Test Suite (`test_master_capability_matrix_acceptance.py`):**
+  - Sequentially executes all 10 topologically valid capability combinations on clean scratch workspaces;
+  - Asserts physical DuckDB catalog purity (zero ghost tables for inactive capabilities);
+  - Asserts schema and column purity (disabled capability columns omitted or strictly null in confluence marts);
+  - Asserts numerical analytical accuracy down to the penny for cashflow, portfolio value, realized gains, tax liabilities, net worth, and FIRE milestones;
+  - Asserts Control Plane capability provenance and JSONL trace purity across every combination.
 
 ### Backup/restore
 - complete generalized state;
@@ -285,6 +309,7 @@ Do not:
 - [ ] Shan oracle green.
 - [ ] External golden fixtures green.
 - [ ] Generic Golden User end-to-end acceptance green (source-agnostic proof from Ingestion to Monte Carlo on clean install).
+- [ ] Master Capability Matrix E2E test suite green across all 10 topological combinations with assertive catalog and analytical verifications.
 - [ ] All 50 phase contracts closed.
 - [ ] No unresolved core requirement deferred.
 

@@ -127,8 +127,15 @@ Convert Shan's live production configuration in Google Drive to explicit TOML fi
    - Update `ServiceContainer.create_source_config()` to load exclusively from `sources.toml` (raising `FileNotFoundError` with clear remediation guidance if absent, rather than falling back to hardcoded code).
    - Add architecture guards in `tests/architecture/` verifying zero hardcoded `SourceConfig` instances exist in `src/`.
 
-### Step 8 - Golden configuration fixtures
-Promote external household/investment configurations to schema-v1 golden examples/tests.
+### Step 8 - Golden configuration fixtures & User Starter Templates
+Promote external household and investment configurations to schema-v1 golden examples and distribute frozen user starter templates under `examples/templates/`:
+- `template_household_minimal.toml`: pure household budgeting and expense tracking (`[HOUSEHOLD_CORE]`).
+- `template_household_wealth_fire.toml`: household balance sheet, net worth, savings rates, and FIRE milestones without stock portfolios (`[HOUSEHOLD_CORE, WEALTH, FIRE]`).
+- `template_domestic_investor.toml`: domestic equity tradebooks, mutual fund folios, FIFO lots, and capital gains tax (`[HOUSEHOLD_CORE, INVESTMENT_ACCOUNTING, TAX]`).
+- `template_global_investor.toml`: domestic + US equities, USD/INR foreign exchange, and index benchmarks (`[HOUSEHOLD_CORE, INVESTMENT_ACCOUNTING, BENCHMARK_ENRICHMENT, FOREIGN_ASSET_ENRICHMENT, TAX]`).
+- `template_full_spectrum.toml`: comprehensive golden configuration exercising all 7 capabilities.
+
+Automated tests must verify every template strictly conforms to the frozen JSON schema and passes dry-run admission without warning.
 
 ### Step 9 - Architecture guard
 Future public model changes require schema/version/golden fixture updates.
@@ -166,6 +173,7 @@ Required:
 - complete public-surface inventory;
 - deterministic machine-readable schema export;
 - golden Excel/CSV/SQLite/domestic/foreign configs validate;
+- production starter templates (`examples/templates/*.toml`) validate against schema v1 and pass dry run admission;
 - version incompatibility failure;
 - discriminator round trips;
 - canonical serialization/fingerprint stability under v1;
@@ -190,6 +198,7 @@ Do not:
 - [ ] Machine-readable schema exported.
 - [ ] Compatibility/deprecation policy implemented.
 - [ ] Golden external configs pass.
+- [ ] Starter templates distributed in `examples/templates/` and certified across capability archetypes.
 - [ ] Fingerprinting remains deterministic.
 - [ ] Future changes are guarded.
 - [ ] Transitional column_master completely demolished and DatasetId.COMMON_COLUMN_MASTER purged (Bronze contracts permanently reduced to 19).

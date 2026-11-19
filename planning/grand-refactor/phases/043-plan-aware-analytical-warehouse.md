@@ -110,8 +110,21 @@ Integrity validates expected active table and column set from persisted run/plan
 ### Step 7 - Presentation behavior
 If CLI/Desktop/Power BI integration enumerates tables or columns, it must tolerate capability-specific absence and expose active capabilities rather than treating absence as corruption.
 
-### Step 8 - Capability-switch matrix
-Run full -> household-only -> domestic investments -> full. At each step assert exact managed table set, exact column presence, and zero stale data or phantom null columns.
+### Step 8 - Capability-switch matrix & Automated Multi-Fixture Suite
+Author dedicated `sources.toml` test fixtures covering distinct capability configurations:
+- `sources_matrix_household_only.toml`: pure household (`HOUSEHOLD_CORE`).
+- `sources_matrix_domestic_investments.toml`: domestic investment accounting (`HOUSEHOLD_CORE` + `INVESTMENT_ACCOUNTING`).
+- `sources_matrix_investments_benchmark.toml`: domestic + benchmark (`HOUSEHOLD_CORE` + `INVESTMENT_ACCOUNTING` + `BENCHMARK_ENRICHMENT`).
+- `sources_matrix_investments_foreign.toml`: domestic + US holdings + FX (`HOUSEHOLD_CORE` + `INVESTMENT_ACCOUNTING` + `FOREIGN_ASSET_ENRICHMENT`).
+- `sources_matrix_investments_tax.toml`: domestic + tax rules (`HOUSEHOLD_CORE` + `INVESTMENT_ACCOUNTING` + `TAX`).
+- `sources_matrix_wealth_fire.toml`: household + wealth + FIRE without equities (`HOUSEHOLD_CORE` + `WEALTH` + `FIRE`).
+- `sources_matrix_full.toml`: all 7 capabilities.
+
+Execute automated transitions across the matrix (e.g. Full -> Household Only -> Domestic Investments -> Full):
+- At each step query DuckDB catalog directly (`information_schema.tables`, `PRAGMA table_info(...)`).
+- Assert exact managed table set: tables for disabled capabilities do NOT exist in DuckDB.
+- Assert exact column set: columns belonging to disabled capabilities are physically absent from table DDL.
+- Verify zero stale data, zero ghost tables, and zero phantom empty columns.
 
 ### Step 9 - Capability-unified physical table cutover
 Rename all physical tables across `pre_bronze`, `bronze`, `silver`, and `gold` to follow `<capability>_<entity>`. Demolish all legacy prefixes (`pb_*`, `r_*`, `d_*`, `f_*`). Update DataContract registry, DDL schemas, loaders, and downstream queries.
@@ -160,12 +173,14 @@ Do not change capability graph or financial formulas.
 ## 9. Tests and verification
 
 Required:
-- household-only exact table set;
+- automated capability matrix tests running headless pipelines against dedicated `sources_matrix_*.toml` fixtures;
+- household-only exact table set (assert all investment and tax tables strictly absent from DuckDB catalog);
 - full exact table set;
-- domestic-only exact set;
-- full->partial removes stale managed tables;
-- partial->full recreates correctly;
-- legacy table prefix guard (assert zero `r_*`, `d_*`, `f_*`, `pb_*` tables);
+- domestic-only exact set (assert FX, benchmark, and tax tables absent from DuckDB);
+- full->partial removes stale managed tables transactionally;
+- partial->full recreates tables correctly with clean schemas;
+- physical column omission assertions in DuckDB (`PRAGMA table_info(...)` shows zero columns for disabled capabilities in composite tables);
+- legacy table prefix guard (assert zero `r_*`, `d_*`, `f_*`, `pb_*` tables in DuckDB);
 - unknown/user table not dropped;
 - Meta considers partial state healthy;
 - backup/restore partial warehouse;
@@ -188,6 +203,8 @@ Do not:
 - [ ] Gold DDL plan-aware and column-aware.
 - [ ] Silver and Gold DDL dynamically include strictly active columns from CapabilityColumnInventory.
 - [ ] Inactive capability columns physically omitted from DuckDB tables (zero phantom null columns).
+- [ ] Dedicated capability matrix fixtures created under `tests/fixtures/config/` (`sources_matrix_*.toml`).
+- [ ] Automated capability matrix tests verify DuckDB table and column physical absence across transitions.
 - [ ] Stale managed tables removed safely.
 - [ ] Meta/catalog plan-aware.
 - [ ] Backup/restore/integrity plan-aware.
