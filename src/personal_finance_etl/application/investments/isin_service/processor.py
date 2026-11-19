@@ -87,6 +87,7 @@ class IsinProcessor:
         fx_provider: FXRateProvider | None = None,
         enable_benchmark: bool = True,
         enable_foreign_assets: bool = True,
+        enable_tax: bool = True,
     ) -> None:
         self.fy_table = fy_table
         self.start_date = start_date
@@ -95,6 +96,7 @@ class IsinProcessor:
         self.fx_provider = fx_provider
         self.enable_benchmark = enable_benchmark
         self.enable_foreign_assets = enable_foreign_assets
+        self.enable_tax = enable_tax
 
     def process(
         self,
@@ -183,6 +185,7 @@ class IsinProcessor:
             self._get_fx,
             enable_benchmark=self.enable_benchmark,
             enable_foreign_assets=self.enable_foreign_assets,
+            enable_tax=self.enable_tax,
         )
         metrics = compute_daily_metrics(
             m_date,
@@ -190,6 +193,7 @@ class IsinProcessor:
             state,
             enable_benchmark=self.enable_benchmark,
             enable_foreign_assets=self.enable_foreign_assets,
+            enable_tax=self.enable_tax,
         )
 
         execution_residual = float(m_row.get("Execution_Residual") or 0.0)
@@ -227,10 +231,18 @@ class IsinProcessor:
             master_row,
             enable_benchmark=self.enable_benchmark,
             enable_foreign_assets=self.enable_foreign_assets,
+            enable_tax=self.enable_tax,
         )
 
         default_curr = getattr(self.rules, "DEFAULT_CURRENCY_ID", "INR_INR")
-        fifo = FIFOPortfolio(tax_type, tax_subtype, self.fy_table, default_curr, isin)
+        fifo = FIFOPortfolio(
+            tax_type,
+            tax_subtype,
+            self.fy_table,
+            default_curr,
+            isin,
+            enable_tax=self.enable_tax,
+        )
 
         first_p_date = (
             to_date_obj(p_inst[0]["Date"])

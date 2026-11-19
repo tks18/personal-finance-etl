@@ -499,6 +499,7 @@ class PipelineExecutor:
                 enable_foreign_assets=self.plan.is_capability_active(
                     CapabilityId.FOREIGN_ASSET_ENRICHMENT
                 ),
+                enable_tax=self.plan.is_capability_active(CapabilityId.TAX),
             ),
             status_queue=self.status_queue,
             emitter=self.emitter,
@@ -587,7 +588,10 @@ class PipelineExecutor:
             raise ValueError("FinancialRules must be provided to ETL pipeline")
 
         wealth_engine = WealthPresentationEngine(
-            rules=self.rules, root_seed=run_id, emitter=self.emitter
+            rules=self.rules,
+            root_seed=run_id,
+            emitter=self.emitter,
+            enable_tax=self.plan.is_capability_active(CapabilityId.TAX),
         )
         presentation_lazy = wealth_engine.run(self.dfs)
         materialized_presentation = materialize_presentation_graphs(presentation_lazy, self.emitter)
@@ -626,6 +630,13 @@ class PipelineExecutor:
             self._run_quant_engine(run_id)
         if self.plan.is_capability_active(CapabilityId.TAX):
             self._run_tax_engine()
+        else:
+            self.emitter.emit_event(
+                event_code=EventCode.TAX_ENGINE_START,
+                message="Capability 'tax' inactive in execution plan. Skipping Tax Engine.",
+                presentation_kind=PresentationKind.SKIP,
+                stage=EngineStage.ANALYZING,
+            )
         if self.plan.is_capability_active(CapabilityId.WEALTH) or self.plan.is_capability_active(
             CapabilityId.FIRE
         ):

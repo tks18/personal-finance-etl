@@ -59,6 +59,7 @@ class PostProcessor:
         self.ctx = ctx
         self.enable_benchmark: bool = getattr(ctx, "enable_benchmark", True)
         self.enable_foreign_assets: bool = getattr(ctx, "enable_foreign_assets", True)
+        self.enable_tax: bool = getattr(ctx, "enable_tax", True)
         self.xirr_calc = PortfolioXIRRCalculator()
         self.analytics_calc = AdvancedAnalyticsCalculator(ctx.fy_table, ctx.rules)
         self.weights_calc = PortfolioWeightsCalculator()
@@ -68,6 +69,7 @@ class PostProcessor:
             self.analytics_calc,
             enable_benchmark=self.enable_benchmark,
             enable_foreign_assets=self.enable_foreign_assets,
+            enable_tax=self.enable_tax,
         )
 
     _FX_LOCAL_COLUMNS: tuple[str, ...] = (
@@ -94,6 +96,7 @@ class PostProcessor:
             pipeline_res.global_pt,
             enable_benchmark=self.enable_benchmark,
             enable_foreign_assets=self.enable_foreign_assets,
+            enable_tax=self.enable_tax,
         )
         return self.analytics_calc.calculate(
             df_port, unique_dates, pipeline_res.global_pt, pipeline_res.global_cf
@@ -395,8 +398,24 @@ class PostProcessor:
         df_port = self._compute_portfolio_level(unique_dates, pipeline_res)
 
         lazy_df = self.weights_calc.calculate(lazy_df)
-        lazy_df = self.gains_calc.calculate(lazy_df, unique_dates, pipeline_res.global_re)
-        lazy_df = self.harvest_calc.calculate(lazy_df, rules=self.ctx.rules)
+        if self.enable_tax:
+            lazy_df = self.gains_calc.calculate(lazy_df, unique_dates, pipeline_res.global_re)
+            lazy_df = self.harvest_calc.calculate(lazy_df, rules=self.ctx.rules)
+        else:
+            lazy_df = lazy_df.with_columns(
+                pl.lit(None, dtype=pl.String).alias("FY"),
+                pl.lit(None, dtype=pl.Float64).alias("FY_Realized_LTCG"),
+                pl.lit(None, dtype=pl.Float64).alias("FY_Realized_STCG"),
+                pl.lit(None, dtype=pl.Float64).alias("FY_Realized_Gain"),
+                pl.lit(None, dtype=pl.Float64).alias("FY_Realized_LTCL"),
+                pl.lit(None, dtype=pl.Float64).alias("FY_Realized_STCL"),
+                pl.lit(None, dtype=pl.Float64).alias("FY_Realized_Loss"),
+                pl.lit(None, dtype=pl.Float64).alias("FY_Realized_Net_PnL"),
+                pl.lit(None, dtype=pl.Float64).alias("Equity_LTCG_Exemption"),
+                pl.lit(None, dtype=pl.Boolean).alias("Stepup_Eligible"),
+                pl.lit(None, dtype=pl.Boolean).alias("Can_Harvest_Loss"),
+                pl.lit(None, dtype=pl.String).alias("Harvest_Recommendation"),
+            )
 
         groups = self._compute_group_analytics(unique_dates, pipeline_res)
 
