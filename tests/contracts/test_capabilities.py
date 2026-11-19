@@ -251,7 +251,9 @@ def test_full_system_topological_resolution() -> None:
     assert (
         len(plan.required_bronze_datasets) == 19
     )  # 6 HH + 6 Inv + 3 BM + 4 FA = 19 required bronze
-    assert len(plan.optional_bronze_datasets) == 2  # COLUMN_MASTER + US_STOCK_TRANSACTIONS
+    assert (
+        len(plan.optional_bronze_datasets) == 3
+    )  # COLUMN_MASTER + US_STOCK_TRANSACTIONS + BENCHMARK_MAPPING
     assert len(plan.required_external_enrichments) == 3
 
     # All 3 external enrichments accounted for

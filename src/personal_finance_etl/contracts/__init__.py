@@ -38,6 +38,7 @@ from personal_finance_etl.contracts.canonical_fields import (
     is_valid_canonical_field,
 )
 from personal_finance_etl.contracts.capabilities import (
+    CAPABILITY_COLUMN_INVENTORY,
     CAPABILITY_REGISTRY,
     COMMON_PRODUCED_SILVER_DATASETS,
     CapabilityDescriptor,
@@ -48,6 +49,7 @@ from personal_finance_etl.contracts.capabilities import (
     ContributionScope,
     ExternalEnrichmentId,
     ResolvedCapabilityGraph,
+    get_capability_columns,
 )
 from personal_finance_etl.contracts.dataset_collection import (
     DatasetCollection,
@@ -145,6 +147,7 @@ __all__ = [
     "BRONZE_DATASET_ORIGIN_MAP",
     "CANONICAL_BRONZE_FIELDS",
     "CANONICAL_PROVENANCE_FIELDS",
+    "CAPABILITY_COLUMN_INVENTORY",
     "CAPABILITY_REGISTRY",
     "COMMON_PRODUCED_SILVER_DATASETS",
     "CapabilityDescriptor",
@@ -218,6 +221,7 @@ __all__ = [
     "classify_failure_domain",
     "get_bronze_dataset_origin",
     "get_canonical_fields",
+    "get_capability_columns",
     "get_columns_by_classification",
     "get_columns_by_disposition",
     "get_gold_contract_dependency",
