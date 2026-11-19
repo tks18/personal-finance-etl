@@ -201,6 +201,38 @@ class ExecutionPlan:
         val = dataset_id.value if isinstance(dataset_id, DatasetId) else str(dataset_id).lower()
         return any(d.value == val for d in self.active_bronze_datasets)
 
+    def is_silver_dataset_active(self, dataset_id: DatasetId | str) -> bool:
+        """Check whether a specific Silver dataset is active in this execution plan.
+
+        Parameters
+        ----------
+        dataset_id : DatasetId | str
+            Canonical Silver dataset identifier to check.
+
+        Returns
+        -------
+        bool
+            True if active in the Silver layer, False otherwise.
+        """
+        val = dataset_id.value if isinstance(dataset_id, DatasetId) else str(dataset_id).lower()
+        return any(d.value == val for d in self.active_silver_datasets)
+
+    def is_gold_dataset_active(self, dataset_id: DatasetId | str) -> bool:
+        """Check whether a specific Gold dataset is active in this execution plan.
+
+        Parameters
+        ----------
+        dataset_id : DatasetId | str
+            Canonical Gold dataset identifier to check.
+
+        Returns
+        -------
+        bool
+            True if active in the Gold layer, False otherwise.
+        """
+        val = dataset_id.value if isinstance(dataset_id, DatasetId) else str(dataset_id).lower()
+        return any(d.value == val for d in self.active_gold_datasets)
+
     def is_dataset_required(self, dataset_id: DatasetId | str) -> bool:
         """Check whether a specific Bronze dataset is required by this execution plan.
 
@@ -216,6 +248,28 @@ class ExecutionPlan:
         """
         val = dataset_id.value if isinstance(dataset_id, DatasetId) else str(dataset_id).lower()
         return any(d.value == val for d in self.required_bronze_datasets)
+
+    def is_contribution_active(
+        self, target_capability: CapabilityId, scope: ContributionScope
+    ) -> bool:
+        """Return True if an active cross-capability contribution matches target and scope.
+
+        Parameters
+        ----------
+        target_capability : CapabilityId
+            Target capability receiving the contribution.
+        scope : ContributionScope
+            Scope/semantic purpose of the contribution.
+
+        Returns
+        -------
+        bool
+            True if the contribution is active in this execution plan, else False.
+        """
+        return any(
+            c.target_capability == target_capability and c.scope == scope
+            for c in self.active_contributions
+        )
 
     def to_dict(self) -> dict[str, object]:
         """Convert the execution plan to a deterministic JSON-serializable dictionary.
