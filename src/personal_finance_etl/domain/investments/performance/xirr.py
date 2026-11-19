@@ -188,6 +188,7 @@ def _build_evaluation_row(
     pt_entry: dict[str, object],
     enable_benchmark: bool = True,
     enable_foreign_assets: bool = True,
+    enable_tax: bool = True,
 ) -> dict[str, object]:
     """Derive Mark-to-Market XIRR metrics and attribution differentials for a single date.
 
@@ -211,6 +212,8 @@ def _build_evaluation_row(
         Whether benchmark enrichment is active. When False, benchmark solver is bypassed.
     enable_foreign_assets : bool, default True
         Whether foreign asset enrichment is active. When False, local FX solver is bypassed.
+    enable_tax : bool, default True
+        Whether tax calculation is active. When False, after-tax solver is bypassed.
 
     Returns
     -------
@@ -224,7 +227,9 @@ def _build_evaluation_row(
     t_shadow_local = _numeric_value(pt_entry.get("shadow_val_local"))
 
     pxirr = _terminal_result(port_dates, port_amounts, t_val, d_obj)
-    at_pxirr = _terminal_result(port_dates, port_amounts, t_after_tax, d_obj)
+    at_pxirr = (
+        _terminal_result(port_dates, port_amounts, t_after_tax, d_obj) if enable_tax else None
+    )
     pxirr_local = (
         _terminal_result(port_dates, local_amounts, t_val_local, d_obj)
         if enable_foreign_assets
@@ -267,6 +272,7 @@ class PortfolioXIRRCalculator:
         portfolio_terminals: dict[date, TerminalValueDict] | dict[date, dict[str, float]],
         enable_benchmark: bool = True,
         enable_foreign_assets: bool = True,
+        enable_tax: bool = True,
     ) -> pl.DataFrame:
         """Calculate running portfolio, benchmark, after-tax, and local currency XIRR time-series.
 
@@ -282,6 +288,8 @@ class PortfolioXIRRCalculator:
             Whether benchmark enrichment is active. When False, benchmark solver is bypassed.
         enable_foreign_assets : bool, default True
             Whether foreign asset enrichment is active. When False, local FX solver is bypassed.
+        enable_tax : bool, default True
+            Whether tax calculation is active. When False, after-tax XIRR solver is bypassed.
 
         Returns
         -------
@@ -339,6 +347,7 @@ class PortfolioXIRRCalculator:
                 pt_entry=cast(dict[str, object], pt_entry),
                 enable_benchmark=enable_benchmark,
                 enable_foreign_assets=enable_foreign_assets,
+                enable_tax=enable_tax,
             )
             port_rows.append(row)
 

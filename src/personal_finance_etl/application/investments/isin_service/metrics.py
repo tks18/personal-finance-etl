@@ -33,7 +33,10 @@ from personal_finance_etl.domain.investments.contracts import (
     TradeRecord,
 )
 from personal_finance_etl.domain.investments.performance.returns import calculate_cagr
-from personal_finance_etl.domain.investments.performance.xirr import calculate_xirr
+from personal_finance_etl.domain.investments.performance.xirr import (
+    XirrResult,
+    calculate_xirr,
+)
 from personal_finance_etl.domain.market.fx import FXRateProvider
 from personal_finance_etl.domain.market.macro import FYMacroParametersTable
 
@@ -186,6 +189,7 @@ def compute_daily_terminals(
     get_fx_fn: Callable[[_IsinState, str, date, str], float | None],
     enable_benchmark: bool = True,
     enable_foreign_assets: bool = True,
+    enable_tax: bool = True,
 ) -> _DailyTerminals:
     """Compute portfolio terminal values, shadow benchmark values, and after-tax terminal value.
 
@@ -209,6 +213,8 @@ def compute_daily_terminals(
         Whether benchmark enrichment is active. When False, benchmark prices and shadow terminals are bypassed.
     enable_foreign_assets : bool, default True
         Whether foreign asset enrichment is active. When False, foreign currency conversion is bypassed.
+    enable_tax : bool, default True
+        Whether tax calculation is active. When False, after-tax terminal valuation is bypassed.
 
     Returns
     -------
@@ -252,8 +258,10 @@ def compute_daily_terminals(
         if enable_foreign_assets
         else terminal_val
     )
-    after_tax_terminal_val = compute_after_tax_terminal_val(
-        state, fy_table, m_date, m_price, remaining_ltcg
+    after_tax_terminal_val = (
+        compute_after_tax_terminal_val(state, fy_table, m_date, m_price, remaining_ltcg)
+        if enable_tax
+        else terminal_val
     )
 
     pt = state.isin_terminals.setdefault(m_date, TerminalValueRecord())
@@ -400,6 +408,7 @@ def compute_daily_metrics(
     state: _IsinState,
     enable_benchmark: bool = True,
     enable_foreign_assets: bool = True,
+    enable_tax: bool = True,
 ) -> InstrumentMetricsRecord:
     """Calculate XIRR, benchmark active return, CAGR, and drawdown metrics.
 
@@ -415,6 +424,8 @@ def compute_daily_metrics(
         Whether benchmark enrichment is active. When False, benchmark solver is bypassed.
     enable_foreign_assets : bool, default True
         Whether foreign asset enrichment is active. When False, local FX solver is bypassed.
+    enable_tax : bool, default True
+        Whether tax calculation is active. When False, after-tax solver is bypassed.
 
     Returns
     -------
@@ -434,9 +445,12 @@ def compute_daily_metrics(
         bm_xirr_val = None
         bm_xirr_status = "UNDEFINED"
 
-    after_tax_res = calculate_xirr(
-        state.cf_dates + [m_date], state.cf_amounts + [terminals.after_tax_terminal_val]
-    )
+    if enable_tax:
+        after_tax_res = calculate_xirr(
+            state.cf_dates + [m_date], state.cf_amounts + [terminals.after_tax_terminal_val]
+        )
+    else:
+        after_tax_res = XirrResult(value=None, status="UNDEFINED")
 
     inst_xirr = inst_xirr_res.value
     inst_active_return = (
@@ -506,6 +520,22 @@ def assemble_snapshots_df(isin_snapshots: list[SnapshotRecord]) -> pl.DataFrame 
         "Purchase_ID": pl.String,
         "Lot_Source_Type": pl.String,
         "Buy_Date": pl.Date,
+        "TAX_TYPE": pl.String,
+        "TAX_SUBTYPE": pl.String,
+        "LTCG_Threshold_Days": pl.Int64,
+        "Days_To_LTCG": pl.Int64,
+        "Holding_Type": pl.String,
+        "Tax_Rate": pl.Float64,
+        "Unrealized_LTCG": pl.Float64,
+        "Unrealized_STCG": pl.Float64,
+        "Unrealized_Gain": pl.Float64,
+        "Unrealized_LTCL": pl.Float64,
+        "Unrealized_STCL": pl.Float64,
+        "Unrealized_Loss": pl.Float64,
+        "LTCG_Tax_If_Sold": pl.Float64,
+        "STCG_Tax_If_Sold": pl.Float64,
+        "After_Tax_PL": pl.Float64,
+        "After_Tax_Close_Value": pl.Float64,
         "Lot_CAGR": pl.Float64,
         "Lot_CAGR_Status": pl.String,
         "Lot_CAGR_Local": pl.Float64,

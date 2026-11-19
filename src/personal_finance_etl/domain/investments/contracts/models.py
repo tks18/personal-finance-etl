@@ -257,13 +257,13 @@ class SnapshotRecord(BaseModel):
     Lot_ID: str
     Purchase_ID: str | None
     Lot_Source_Type: str
-    TAX_TYPE: str
-    TAX_SUBTYPE: str
+    TAX_TYPE: str | None = None
+    TAX_SUBTYPE: str | None = None
     Buy_Date: dt.date | None
     Age_Days: int
-    LTCG_Threshold_Days: int
-    Days_To_LTCG: int
-    Holding_Type: str
+    LTCG_Threshold_Days: int | None = None
+    Days_To_LTCG: int | None = None
+    Holding_Type: str | None = None
     Quantity: float
     Execution_Residual: float = 0.0
     Buy_Price: float
@@ -280,7 +280,7 @@ class SnapshotRecord(BaseModel):
     CAGR_Status: str = "UNDEFINED"
     XIRR: float | None
     XIRR_Status: str = "INVALID_INPUT"
-    After_Tax_XIRR: float | None
+    After_Tax_XIRR: float | None = None
 
     BM_Buy_Price: float | None = None
     BM_Market_Price: float | None = None
@@ -301,17 +301,17 @@ class SnapshotRecord(BaseModel):
 
     Max_Drawdown: float = 0.0
 
-    Tax_Rate: float
-    Unrealized_LTCG: float
-    Unrealized_STCG: float
-    Unrealized_Gain: float
-    Unrealized_LTCL: float
-    Unrealized_STCL: float
-    Unrealized_Loss: float
-    LTCG_Tax_If_Sold: float
-    STCG_Tax_If_Sold: float
-    After_Tax_PL: float
-    After_Tax_Close_Value: float
+    Tax_Rate: float | None = None
+    Unrealized_LTCG: float | None = None
+    Unrealized_STCG: float | None = None
+    Unrealized_Gain: float | None = None
+    Unrealized_LTCL: float | None = None
+    Unrealized_STCL: float | None = None
+    Unrealized_Loss: float | None = None
+    LTCG_Tax_If_Sold: float | None = None
+    STCG_Tax_If_Sold: float | None = None
+    After_Tax_PL: float | None = None
+    After_Tax_Close_Value: float | None = None
     Dietz_Day_Weight: float
     Outperforming_Lot_Ratio: float = 0.0
     Buy_Value_Local: float = 0.0

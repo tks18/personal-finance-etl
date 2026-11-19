@@ -73,7 +73,7 @@ If code evidence contradicts a phase, stop and amend the phase before changing t
 | 038 | Generalized ingestion certification | v10.0.0 | [x] |
 | 039 | Household and investment capability composition | v10.1.0 | [x] |
 | 040 | Benchmark and foreign-assets capability composition | v10.1.1 | [x] |
-| 041 | Tax capability composition | v10.1.2 | [ ] |
+| 041 | Tax capability composition | v10.1.2 | [x] |
 | 042 | Wealth, FIRE and simulation capability composition | v10.1.3 | [ ] |
 | 043 | Plan-aware analytical warehouse | v10.2.0 | [ ] |
 | 044 | Generalized recovery and replay semantics | v10.2.1 | [ ] |

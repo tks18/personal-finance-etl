@@ -500,6 +500,7 @@ class IsinPipeline:
                     tmp_dir=self.tmp_dir,
                     enable_benchmark=self.ctx.enable_benchmark,
                     enable_foreign_assets=self.ctx.enable_foreign_assets,
+                    enable_tax=self.ctx.enable_tax,
                 )
             )
         return tasks

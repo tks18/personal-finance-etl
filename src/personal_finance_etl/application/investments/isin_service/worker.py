@@ -81,6 +81,7 @@ class IsinTaskPayload(NamedTuple):
     tmp_dir: str
     enable_benchmark: bool = True
     enable_foreign_assets: bool = True
+    enable_tax: bool = True
 
 
 class IsinResultPayload(NamedTuple):
@@ -130,6 +131,7 @@ def _process_isin_worker(
         str,
         bool,
         bool,
+        bool,
     ],
 ) -> IsinResultPayload:
     """Execute chronological simulation for a single ISIN inside ProcessPoolExecutor child process.
@@ -161,6 +163,7 @@ def _process_isin_worker(
         tmp_dir,
         enable_benchmark,
         enable_foreign_assets,
+        enable_tax,
     ) = task
 
     processor = IsinProcessor(
@@ -171,6 +174,7 @@ def _process_isin_worker(
         fx_provider,
         enable_benchmark=enable_benchmark,
         enable_foreign_assets=enable_foreign_assets,
+        enable_tax=enable_tax,
     )
     try:
         res = processor.process(isin, p_inst, s_inst, m_inst, master_row, bm_map)

@@ -74,21 +74,21 @@ class LotValuationContext:
 class _LotTaxAttributes:
     """Holding classification, tax rates, taxable capital gains, and after-tax values."""
 
-    holding_type: str
-    ltcg_rate: float
-    stcg_rate: float
-    ltcg_thr: int
-    days_to_ltcg: int
-    unreal_ltcg: float
-    unreal_stcg: float
-    unreal_gain: float
-    unreal_ltcl: float
-    unreal_stcl: float
-    unreal_loss: float
-    ltcg_tax: float
-    stcg_tax: float
-    after_tax_pl: float
-    after_tax_cv: float
+    holding_type: str | None
+    ltcg_rate: float | None
+    stcg_rate: float | None
+    ltcg_thr: int | None
+    days_to_ltcg: int | None
+    unreal_ltcg: float | None
+    unreal_stcg: float | None
+    unreal_gain: float | None
+    unreal_ltcl: float | None
+    unreal_stcl: float | None
+    unreal_loss: float | None
+    ltcg_tax: float | None
+    stcg_tax: float | None
+    after_tax_pl: float | None
+    after_tax_cv: float | None
 
 
 @dataclass

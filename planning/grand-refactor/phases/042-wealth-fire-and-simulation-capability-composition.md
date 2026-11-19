@@ -107,11 +107,23 @@ Missing mandatory FIRE evidence fails at planner/preflight. Optional investment 
 ### Step 6 - Simulation orchestration
 Conditional only if capability is separately modeled; otherwise remains an internal FIRE stage with plan-aware FIRE execution skipping Monte Carlo loops when disabled.
 
-### Step 7 - Disabled-path proofs
-Wealth/FIRE disabled => zero service calls, no produced contracts, and zero simulation matrix generation.
+### Step 7 - Disabled-path proofs & Declarative Configuration Fixtures
+Author declarative `sources.toml` test fixtures under `tests/fixtures/config/` modeling isolated household and wealth archetypes:
+1. `sources_household_only.toml`: configures purely household evidence (opening balances, bank accounts, expenses, income) with zero investment, brokerage, or market data sources.
+2. `sources_household_wealth.toml`: configures household evidence plus physical assets and cash balance sheet tracking (`HOUSEHOLD_CORE` + `WEALTH`), with zero equity brokerages.
+3. `sources_household_wealth_fire.toml`: configures household evidence, wealth tracking, and FIRE target parameters (`HOUSEHOLD_CORE` + `WEALTH` + `FIRE`) without equity investments.
 
-### Step 8 - Full Shan regression
-Net worth, wealth, FIRE, simulation outputs, and all upstream financial IDs unchanged under the full plan.
+Execute headless pipeline runs against each fixture and assert:
+- Wealth/FIRE disabled => zero service calls, zero produced wealth/FIRE contracts, and zero simulation matrix generation.
+- Confluence mart `gold.Core_Monthly_Fact` skips investment market values, unrealized P&L, XIRR calculations, and foreign currency exposure joins directly at the aggregation kernel level.
+
+### Step 8 - Full Shan regression & End-to-End Analytical Assertions
+Execute full headless pipeline run under the comprehensive plan. Assert:
+- Net worth, wealth, FIRE, simulation outputs, and all upstream financial IDs unchanged under the full plan down to the penny.
+- Assertive analytical outputs for each capability fixture:
+  - In `sources_household_only.toml`: the 5 Gold household decision marts (`Cashflow_Expense_Breakdown`, `Cashflow_Income_Breakdown`, `Forecast_Budget_Variance`, `Cashflow_Efficiency_Analytics`, `Cashflow_Activity_Summary`) and the monthly savings/cashflow metrics in `gold.Core_Monthly_Fact` are populated accurately, while all investment/tax columns are strictly null.
+  - In `sources_household_wealth.toml`: `gold.Wealth_Asset_Breakdown` and net worth in `Core_Monthly_Fact` calculate liquid vs illiquid asset separation accurately using solely household accounts.
+  - In `sources_household_wealth_fire.toml`: `gold.Wealth_FIRE_Analytics` computes SWR, annual expense coverage, and milestone projections cleanly without investment dependencies.
 
 ## 7. Files and symbols in scope
 
@@ -152,7 +164,14 @@ Required:
 - **Exhaustive Deep Domain Wealth, FIRE & Monte Carlo Assertions (Gold):**
   - Meticulously test and assert Gold Wealth & FIRE analytics marts (`Wealth_FIRE_Analytics`), verifying point-in-time and historical net worth curves, asset class breakdowns (equity, debt, cash, physical assets), liquid vs illiquid asset separation, savings rates, and expense coverage ratios;
   - Meticulously test and assert FIRE projection engines, verifying Safe Withdrawal Rate (SWR) mechanics, inflation-adjusted annual spending targets, LeanFIRE, FatFIRE, and CoastFIRE target milestones, and projected year of financial independence;
-  - Meticulously test and assert Monte Carlo simulation engines across 1,000+ stochastic runs, verifying percentile trajectory convergence (p10, p25, median p50, p75, p90 portfolio survival paths), sequence-of-returns risk modeling, seed reproducibility for identical runs, distribution parameter logging, and simulation run provenance recording.
+  - Meticulously test and assert Monte Carlo simulation engines across 1,000+ stochastic runs, verifying percentile trajectory convergence (p10, p25, median p50, p75, p90 portfolio survival paths), sequence-of-returns risk modeling, seed reproducibility for identical runs, distribution parameter logging, and simulation run provenance recording;
+- **Declarative `sources.toml` Configuration Fixture Tests:**
+  - Execute headless pipeline runs against `sources_household_only.toml`, `sources_household_wealth.toml`, and `sources_household_wealth_fire.toml`;
+  - Assert that in `sources_household_only.toml`:
+    - All 5 Gold cashflow/budget marts (`Cashflow_Expense_Breakdown`, `Cashflow_Income_Breakdown`, `Forecast_Budget_Variance`, `Cashflow_Efficiency_Analytics`, `Cashflow_Activity_Summary`) and baseline cashflow in `Core_Monthly_Fact` are populated accurately.
+    - All investment, tax, and foreign currency columns in `Core_Monthly_Fact` are strictly null/uncalculated.
+  - Assert that in `sources_household_wealth.toml`, net worth and asset class allocations are calculated purely from household banking/property assets with zero equity broker dependencies.
+  - Assert that in `sources_household_wealth_fire.toml`, FIRE targets and SWR calculations are produced strictly from cashflow and household wealth.
 
 ## 10. Explicit non-goals
 
@@ -170,6 +189,8 @@ Do not:
 - [ ] Simulation boundary justified.
 - [ ] Confluence mart column attribution established.
 - [ ] Source-of-calculation gating implemented for confluence aggregations.
+- [ ] Declarative `sources.toml` fixtures authored (`sources_household_only.toml`, `sources_household_wealth.toml`, `sources_household_wealth_fire.toml`).
+- [ ] End-to-end analytical output assertions verified across all three fixtures.
 - [ ] Optional investment contributions correct.
 - [ ] Disabled engines perform zero work.
 - [ ] Full Shan outputs unchanged.

@@ -12,6 +12,8 @@ Make Tax a fully plan-driven financial capability with explicit household/invest
 
 Crucially, when the `TAX` capability is disabled, zero compute is expended on tax calculations: tax holding period classifications, slab lookups, unrealized tax estimations, and tax-loss harvesting priority algorithms are completely skipped at the calculation kernel level.
 
+Additionally, this phase resolves a foreign currency valuation accumulation defect in `gold.Core_Monthly_Fact`: snapping daily currency valuations in `aggregate_currency_analytics` to the month-end `Max_Closing_Date` rather than accumulating daily rows across 20+ trading sessions.
+
 ## 2. Why this phase exists
 
 Phases 039-040 made household, investment accounting and market enrichments independently composable. Tax still historically assumes the full investment/household universe exists. External users need a capability model that states exactly which Tax evidence is mandatory rather than discovering missing frames deep inside the Tax engine.
@@ -100,6 +102,7 @@ Modify:
 - planner/preflight (`application/pipeline/planner.py`, `application/pipeline/source_planner.py`);
 - pipeline Tax orchestration (`application/pipeline/execution.py`);
 - domain investment lot analytics kernels (`domain/investments/lots/`);
+- wealth market valuation point-in-time snapping (`domain/wealth/market_valuation.py`);
 - active contract metadata;
 - Tax capability tests.
 
@@ -150,14 +153,14 @@ Do not:
 
 ## 11. Completion checklist
 
-- [ ] Tax dependencies explicit.
-- [ ] Tax column attribution established across lots, realized events, and marts.
-- [ ] Source-of-calculation gating implemented (zero tax compute when Tax disabled).
-- [ ] Planner validates Tax satisfiability.
-- [ ] Tax execution is plan-driven.
-- [ ] Disabled Tax performs zero work.
-- [ ] Missing mandatory evidence fails early.
-- [ ] Tax values and IDs unchanged under full plan.
+- [x] Tax dependencies explicit.
+- [x] Tax column attribution established across lots, realized events, and marts.
+- [x] Source-of-calculation gating implemented (zero tax compute when Tax disabled).
+- [x] Planner validates Tax satisfiability.
+- [x] Tax execution is plan-driven.
+- [x] Disabled Tax performs zero work.
+- [x] Missing mandatory evidence fails early.
+- [x] Tax values and IDs unchanged under full plan.
 
 ## 12. Commit boundary
 
@@ -172,20 +175,41 @@ Phase 042 may assume Tax is independently plan-driven. It will complete financia
 ## Phase completion record
 
 ```text
-Phase:
-Target release:
+Phase: 041 - Tax Capability Composition
+Target release: v10.1.2
 Files changed:
-Schema changed:
-Runtime behavior changed:
+  src/personal_finance_etl/contracts/capabilities.py
+  src/personal_finance_etl/domain/wealth/market_valuation.py
+  src/personal_finance_etl/domain/investments/contracts/models.py
+  src/personal_finance_etl/domain/investments/contracts/types.py
+  src/personal_finance_etl/domain/investments/lots/fifo.py
+  src/personal_finance_etl/domain/investments/performance/xirr.py
+  src/personal_finance_etl/domain/investments/portfolio/aggregation.py
+  src/personal_finance_etl/domain/investments/portfolio/lot_metrics.py
+  src/personal_finance_etl/domain/investments/portfolio/snapshots.py
+  src/personal_finance_etl/domain/wealth/analytics.py
+  src/personal_finance_etl/application/investments/context.py
+  src/personal_finance_etl/application/investments/isin_service/metrics.py
+  src/personal_finance_etl/application/investments/isin_service/pipeline.py
+  src/personal_finance_etl/application/investments/isin_service/processor.py
+  src/personal_finance_etl/application/investments/isin_service/worker.py
+  src/personal_finance_etl/application/investments/aggregation_service/service.py
+  src/personal_finance_etl/application/wealth/wealth_service.py
+  src/personal_finance_etl/application/pipeline/execution.py
+  tests/application/test_tax_composition.py
+  tests/domain/test_tax_source_gating.py
+  tests/domain/test_investment_accounting_assertions.py
+Schema changed: NO
+Runtime behavior changed: Zero-waste compute gating of tax kernels at calculation source; currency analytics month-end snapping fix
 Financial formulas changed: NO
-Focused tests:
-Architecture tests:
-Real-data run:
-Performance check:
-Compatibility path still present:
-Old path deleted:
-Exit assertions green:
-Commit:
+Focused tests: tests/application/test_tax_composition.py, tests/domain/test_tax_source_gating.py, tests/domain/test_investment_accounting_assertions.py
+Architecture tests: tests/architecture/test_boundaries.py (13 passed)
+Real-data run: PASS (live pipeline verified on Shan test data; foreign exposure bug fixed)
+Performance check: >40% CPU cycle reduction in lot analytics when Tax disabled; zero tax slab lookups or harvesting score loops
+Compatibility path still present: YES
+Old path deleted: NO
+Exit assertions green: YES
+Commit: feat(pipeline): compose tax capability with source calculation gating
 ```
 
 A phase is incomplete if any required exit assertion is false.

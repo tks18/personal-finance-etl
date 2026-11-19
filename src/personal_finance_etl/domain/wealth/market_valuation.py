@@ -81,9 +81,18 @@ def aggregate_currency_analytics(
         Foreign currency exposure by month end date.
     """
     lf_inv_curr = df_inv_curr.lazy() if isinstance(df_inv_curr, pl.DataFrame) else df_inv_curr
+    lf_inv_curr_mapped = lf_inv_curr.with_columns(
+        pl.col("Closing_Date").dt.month_end().alias("MONTH_END_DATE")
+    )
+    lf_inv_curr_latest = lf_inv_curr_mapped.group_by("MONTH_END_DATE").agg(
+        pl.col("Closing_Date").max().alias("Max_Closing_Date")
+    )
     return (
-        lf_inv_curr.with_columns(pl.col("Closing_Date").dt.month_end().alias("MONTH_END_DATE"))
-        .filter(pl.col("CURRENCY_ID") != default_currency_id)
+        lf_inv_curr_mapped.join(lf_inv_curr_latest, on="MONTH_END_DATE")
+        .filter(
+            (pl.col("Closing_Date") == pl.col("Max_Closing_Date"))
+            & (pl.col("CURRENCY_ID") != default_currency_id)
+        )
         .group_by("MONTH_END_DATE")
         .agg(
             pl.col("Total_Current_Value")

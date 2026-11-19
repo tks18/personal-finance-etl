@@ -65,19 +65,37 @@ Establish a permanent Generic External Investment Fixture repository at `tests/f
 - `generic_domestic_trades.csv`: generic brokerage tradebook with column headers `Order_Date`, `Symbol`, `Order_Type`, `Exec_Shares`, `Price_Per_Share`, `Stamp_Duty`, `Brokerage`;
 - `generic_mf_transactions.xlsx`: mutual fund statement workbook with columns `Folio`, `Fund_Name`, `ISIN_Code`, `Date_Of_Txn`, `Type`, `Units_Count`, `Purchase_NAV`, `Net_Amount`;
 - `generic_us_trades.csv`: foreign equity trade export with columns `Ticker_Symbol`, `Txn_Timestamp`, `Side`, `Unit_Quantity`, `Share_Price`, `Gross_Value`;
-- `sources_generic_investments.toml`: typed configuration mapping these novel column names and date formats into canonical Bronze investment contracts.
+- Capability-specific typed source configurations:
+  - `sources_external_investments_domestic_only.toml`: domestic stocks + mutual funds without benchmark, foreign FX, or tax (`HOUSEHOLD_CORE` + `INVESTMENT_ACCOUNTING`).
+  - `sources_external_investments_benchmark.toml`: domestic trades enriched with benchmark index closing prices (`+ BENCHMARK_ENRICHMENT`).
+  - `sources_external_investments_foreign.toml`: domestic + US equities with USD/INR currency exchange rates (`+ FOREIGN_ASSET_ENRICHMENT`).
+  - `sources_external_investments_tax.toml`: domestic trades enriched with statutory capital gains tax calculations (`+ TAX`).
 
 ### Step 2 - Configure domestic source
-Configure domestic-only pipeline using `sources_generic_investments.toml`. Run diagnostics (`validate-config`, `check-sources`, `dry-run-admission`). Assert no hardcoded vendor assumptions.
+Configure domestic-only pipeline using `sources_external_investments_domestic_only.toml`. Run diagnostics (`validate-config`, `check-sources`, `dry-run-admission`). Assert no hardcoded vendor assumptions.
 
-### Step 3 - Full domestic run
-Execute pipeline. Assert no foreign provider calls; verify accounting, FIFO lot matching, and capital gains tax match expected scenario.
+### Step 3 - Full domestic run & Analytical Output Assertions
+Execute pipeline under domestic-only configuration. Assert:
+- Zero foreign provider calls; zero benchmark downloads.
+- Assertive analytical outputs:
+  - FIFO lot depletion, remaining cost basis, realized gains, and portfolio XIRR match expected ground-truth scenario down to the cent.
+  - Tax rates, thresholds, and liabilities are strictly null in `silver.investments_lots` and `silver.investments_realized`.
+  - Benchmark alpha/beta columns are strictly null in `gold.investments_by_isin`.
+  - Foreign currency exposure in `gold.core_monthly_fact` is strictly null/zero.
 
 ### Step 4 - Freeze foreign scenario
-Include foreign equity fixture `generic_us_trades.csv` and deterministic test provider fixtures for FX and US equity prices.
+Include foreign equity fixture `generic_us_trades.csv` and deterministic test provider fixtures for FX and US equity prices using `sources_external_investments_foreign.toml`.
 
-### Step 5 - Full foreign run
-Execute combined run. Assert exact provider requirements/ranges and expected valuation.
+### Step 5 - Full foreign run & Multi-Currency Assertions
+Execute combined foreign run. Assert:
+- Exact provider requirements and date ranges fetched for USD/INR exchange rates and US prices.
+- Multi-currency valuation mart (`gold.investments_by_currency`) accurately computes INR and USD asset splits.
+- `gold.core_monthly_fact` correctly reflects `Total_Foreign_Currency_Exposure` and `Foreign_Exposure_Pct` matching transaction-date exchange rates.
+
+### Step 5b - Benchmark & Tax Capability Fixture Runs
+Execute runs using `sources_external_investments_benchmark.toml` and `sources_external_investments_tax.toml`:
+- Benchmark run asserts Alpha/Beta and shadow market returns populate accurately.
+- Tax run asserts realized transactions reflect statutory STCG/LTCG holding period classification and rate calculations.
 
 ### Step 6 - Identity stability
 Reorder source rows/files and rerun. PURCHASE/SALE/LOT/REALIZED/RECON IDs remain stable for unchanged canonical scenario.
@@ -119,11 +137,16 @@ Production changes only for genuine generalized-contract defects; no vendor-spec
 ## 9. Tests and verification
 
 Mandatory:
-- domestic external topology;
-- zero inappropriate foreign provider calls;
-- foreign external topology;
+- domestic external topology via `sources_external_investments_domestic_only.toml`;
+- zero inappropriate foreign provider calls or benchmark downloads;
+- foreign external topology via `sources_external_investments_foreign.toml`;
 - exact FX/market request requirements;
-- accounting/FIFO/reconciliation expected values;
+- benchmark enrichment topology via `sources_external_investments_benchmark.toml`;
+- tax enrichment topology via `sources_external_investments_tax.toml`;
+- assertive verification of analytical outputs:
+  - domestic run asserts FIFO lots, realized gains, remaining cost basis, and portfolio XIRR equal expected ground-truth values down to the cent;
+  - domestic run asserts tax liabilities, benchmark shadow prices, and foreign exposures are null;
+  - foreign run asserts multi-currency valuation (`gold.investments_by_currency`) and forex P&L match transaction-date FX rates;
 - protected IDs stable across reorder/rerun;
 - capability failure matrix;
 - malformed source/mapping failures;
@@ -142,8 +165,11 @@ Do not:
 ## 11. Completion checklist
 
 - [ ] Canonical Bronze investment schemas slimmed down to essential financial columns.
+- [ ] Declarative investment capability fixtures authored (`sources_external_investments_*.toml`).
 - [ ] Domestic external investment topology passes.
 - [ ] Foreign external topology passes.
+- [ ] Benchmark and Tax enrichment runs pass.
+- [ ] End-to-end analytical outputs asserted against expected ground-truth arithmetic.
 - [ ] Provider requirements correct.
 - [ ] Financial identities stable.
 - [ ] Capability failures are early/actionable.

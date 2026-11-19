@@ -96,7 +96,9 @@ Establish a permanent Generic External Fixture repository at `tests/fixtures/ext
 - `generic_expenses.csv`: column names `Txn_Date`, `Category_Label`, `Spent_Amount`, `Payment_Mode`, `Notes` (dates formatted as `DD/MM/YYYY`);
 - `generic_accounts.xlsx`: multi-sheet workbook with sheets `Bank_Accounts` and `Category_Catalog` with custom header offsets and column names;
 - `generic_household.sqlite`: custom SQLite database with tables `custom_transactions`, `custom_categories`, `custom_accounts` and integer primary keys;
-- `sources_generic_household.toml`: typed public source configuration mapping those novel columns, date formats, and sheet/table selectors into canonical Bronze household contracts.
+- Capability-specific typed source configurations:
+  - `sources_external_household_only.toml`: maps novel columns, date formats, and sheet/table selectors into canonical Bronze household contracts (`HOUSEHOLD_CORE` only).
+  - `sources_external_household_wealth.toml`: pairs external household evidence with external cash balance sheets (`HOUSEHOLD_CORE` + `WEALTH`).
 
 ### Step 2 - Build Excel fixture/config
 Run diagnostics first (`validate-config`, `check-sources`, `dry-run-admission`), then full household-only pipeline against `generic_accounts.xlsx`. Assert Pre-Bronze retains raw vendor layout while Bronze and Silver reflect normalized canonical financial contracts.
@@ -107,8 +109,13 @@ Run diagnostics and full household pipeline against `generic_expenses.csv`. Prov
 ### Step 4 - Build SQLite fixture/config
 Run diagnostics and full household pipeline against `generic_household.sqlite`. Prove selector-driven table extraction without hardcoded `zcategory` assumptions.
 
-### Step 5 - Cross-topology canonical equivalence
-Where fixtures represent the same financial scenario, compare canonical Bronze and downstream household results after sorting by canonical identity. Source provenance differs; financial meaning should not.
+### Step 5 - Cross-topology canonical equivalence & Analytical Output Assertions
+Where fixtures represent the same financial scenario, compare canonical Bronze, Silver, and Gold analytical results:
+- Sort by canonical identity to verify source provenance differs while financial meaning remains byte-for-byte identical.
+- Assertive analytical outputs:
+  - In `sources_external_household_only.toml`: verify `Total_Expense`, `Total_Income`, and `Net_Cashflow_Month` in Gold marts (`gold.household_monthly_summary`, `gold.household_cashflow_breakdown`, `gold.core_monthly_fact`) strictly equal the ground-truth mathematical sums of the external test records down to the cent.
+  - In `sources_external_household_wealth.toml`: verify net worth, liquid asset totals, and balance sheet growth reflect external account balances without zero-filled investment placeholders.
+  - Assert that all investment-related tables and columns are omitted physically from the warehouse.
 
 ### Step 6 - Identity certification
 Excel/CSV derived IDs stable across reordered rows/reruns. SQLite trusted IDs preserved.
@@ -149,6 +156,9 @@ Mandatory:
 - Excel config-only onboarding;
 - CSV config-only onboarding;
 - non-Shan SQLite config-only onboarding;
+- execution of headless runs across `sources_external_household_only.toml` and `sources_external_household_wealth.toml`;
+- assertive verification of Gold analytical outputs: `Total_Expense`, `Total_Income`, and `Net_Cashflow_Month` in `gold.household_monthly_summary` strictly match external evidence ground truth;
+- verification that investment tables and columns are strictly omitted from DuckDB;
 - diagnostics pass before full run;
 - no source code changes between fixtures;
 - canonical scenario equivalence where designed;
@@ -175,6 +185,8 @@ Do not:
 - [ ] Excel external household topology passes.
 - [ ] CSV external household topology passes.
 - [ ] SQLite external household topology passes.
+- [ ] Declarative capability fixtures (`sources_external_household_only.toml`, `sources_external_household_wealth.toml`) authored and certified.
+- [ ] End-to-end analytical outputs asserted against expected mathematical ground truth.
 - [ ] No source-code customization required.
 - [ ] Identity semantics correct.
 - [ ] Failure diagnostics actionable.

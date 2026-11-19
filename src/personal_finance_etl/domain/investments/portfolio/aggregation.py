@@ -45,11 +45,13 @@ class GroupProcessor:
         analytics_calc: AdvancedAnalyticsCalculator,
         enable_benchmark: bool = True,
         enable_foreign_assets: bool = True,
+        enable_tax: bool = True,
     ) -> None:
         self.xirr_calc = PortfolioXIRRCalculator()
         self.analytics_calc = analytics_calc
         self.enable_benchmark = enable_benchmark
         self.enable_foreign_assets = enable_foreign_assets
+        self.enable_tax = enable_tax
 
     def run(
         self,
@@ -74,6 +76,7 @@ class GroupProcessor:
                 terminals,
                 enable_benchmark=self.enable_benchmark,
                 enable_foreign_assets=self.enable_foreign_assets,
+                enable_tax=self.enable_tax,
             )
             df_group = self.analytics_calc.calculate(df_group, unique_dates, terminals, cashflows)
 

@@ -63,10 +63,12 @@ class WealthService:
         rules: FinancialRules,
         root_seed: str = "default_seed",
         emitter: ObservabilityEmitter | None = None,
+        enable_tax: bool = True,
     ) -> None:
         self.rules = rules
         self.root_seed = root_seed
         self.emitter = emitter or get_global_emitter()
+        self.enable_tax = enable_tax
 
     def _build_core_models(
         self, dfs: Mapping[str, pl.DataFrame | pl.LazyFrame]
@@ -123,7 +125,7 @@ class WealthService:
                 dfs, base_lf, rules=self.rules
             ).build(),
             "df_p_tf_investment_analytics": InvestmentAnalyticsBuilder(
-                dfs, base_lf, rules=self.rules
+                dfs, base_lf, rules=self.rules, enable_tax=self.enable_tax
             ).build(),
         }
 
