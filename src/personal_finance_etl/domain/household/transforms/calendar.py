@@ -22,13 +22,14 @@ def get_stg_calendar_ref(
     f_exp_lazy: pl.LazyFrame,
     f_trans_lazy: pl.LazyFrame,
     f_opbal_lazy: pl.LazyFrame,
-    stg_mkt_lazy: pl.LazyFrame,
-    f_pur_lazy: pl.LazyFrame,
-    f_sale_lazy: pl.LazyFrame,
+    stg_mkt_lazy: pl.LazyFrame | None = None,
+    f_pur_lazy: pl.LazyFrame | None = None,
+    f_sale_lazy: pl.LazyFrame | None = None,
 ) -> pl.LazyFrame:
     """Translate stg_CalendarRef.
 
-    Unions the DATE columns from all 7 fact tables to find the min and max dates.
+    Unions the DATE columns from required household facts and optional investment streams
+    to determine the global min and max date boundaries for time intelligence.
 
     Parameters
     ----------
@@ -40,12 +41,12 @@ def get_stg_calendar_ref(
         Transfer transactions fact stream.
     f_opbal_lazy : pl.LazyFrame
         Opening balances fact stream.
-    stg_mkt_lazy : pl.LazyFrame
-        Market data staging stream.
-    f_pur_lazy : pl.LazyFrame
-        Investment purchases fact stream.
-    f_sale_lazy : pl.LazyFrame
-        Investment sales fact stream.
+    stg_mkt_lazy : pl.LazyFrame | None, default=None
+        Optional market data staging stream.
+    f_pur_lazy : pl.LazyFrame | None, default=None
+        Optional investment purchases fact stream.
+    f_sale_lazy : pl.LazyFrame | None, default=None
+        Optional investment sales fact stream.
 
     Returns
     -------
@@ -73,17 +74,21 @@ def get_stg_calendar_ref(
     opbal_cols = f_opbal_lazy.collect_schema().names()
     opbal_date_col = "Date" if "Date" in opbal_cols else "ZTXDATESTR"
 
-    df_union = pl.concat(
-        [
-            f_inc_lazy.select(safe_date_cast("DATE")),
-            f_exp_lazy.select(safe_date_cast("DATE")),
-            f_trans_lazy.select(safe_date_cast("DATE")),
-            f_opbal_lazy.select(safe_date_cast(opbal_date_col)),
-            stg_mkt_lazy.select(safe_date_cast("Date")),
-            f_pur_lazy.select(safe_date_cast("Date")),
-            f_sale_lazy.select(safe_date_cast("Date")),
-        ]
-    ).unique()
+    streams: list[pl.LazyFrame] = [
+        f_inc_lazy.select(safe_date_cast("DATE")),
+        f_exp_lazy.select(safe_date_cast("DATE")),
+        f_trans_lazy.select(safe_date_cast("DATE")),
+        f_opbal_lazy.select(safe_date_cast(opbal_date_col)),
+    ]
+    for opt_stream in (stg_mkt_lazy, f_pur_lazy, f_sale_lazy):
+        if opt_stream is not None:
+            names = opt_stream.collect_schema().names()
+            if "Date" in names:
+                streams.append(opt_stream.select(safe_date_cast("Date")))
+            elif "DATE" in names:
+                streams.append(opt_stream.select(safe_date_cast("DATE")))
+
+    df_union = pl.concat(streams).unique()
 
     df_bounds_lazy = df_union.drop_nulls().select(
         pl.min("DATE").alias("min_date"), pl.max("DATE").alias("max_date")

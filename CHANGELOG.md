@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [10.1.0](https://github.com/tks18/personal-finance-etl/compare/10.0.0...10.1.0) (2026-11-19)
+
+
+### Features 🔥
+
+* **contracts:** support cross-capability contribution queries ([6caaac9](https://github.com/tks18/personal-finance-etl/commit/6caaac92fd3bada54f9b0bc98870f13847f21456))
+* **domain:** compose calendar from optional investment streams ([5dfcf2c](https://github.com/tks18/personal-finance-etl/commit/5dfcf2c282dad142655d7ba8205732f22cb3ffbd))
+* **pipeline:** compose household and investment capabilities ([d1c6d40](https://github.com/tks18/personal-finance-etl/commit/d1c6d40c461cb9f16b47fd7ffc1d71556ba72537))
+
+
+### Tests 🧪
+
+* **application:** verify household and investment plan composition ([73786a7](https://github.com/tks18/personal-finance-etl/commit/73786a7f638c8c780974b38bb147c36d0ec6ff23))
+* **domain:** assert deep investment lots realized events and marts ([1b51cb1](https://github.com/tks18/personal-finance-etl/commit/1b51cb1c139ad6a931767c7abfc08b8f6214fe98))
+* **fixtures:** provide static household-only declarative config fixture ([ceec74d](https://github.com/tks18/personal-finance-etl/commit/ceec74dddfeab03aa6c0f8ad67d7392e77dad867))
+
+
+### Docs 📃
+
+* **refactor:** update roadmap and future capability composition plans ([7af6861](https://github.com/tks18/personal-finance-etl/commit/7af6861b660cfdb557b1385bd447b6ef4b0d6105))
+
 ## [10.0.0](https://github.com/tks18/personal-finance-etl/compare/10.0.0-rc.10...10.0.0) (2026-11-19)
 
 

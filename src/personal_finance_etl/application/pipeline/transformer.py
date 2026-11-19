@@ -169,12 +169,7 @@ class TransformationDAG:
         d_currency_lazy = transform_d_currency(
             extracted.require_lazy(DatasetId.HOUSEHOLD_CURRENCY),
             mappings["currency"],
-            extracted.require_lazy(DatasetId.MARKET_CURRENCY_MAPPING),
-        )
-
-        diagnostics.debug("Transforming Macro Parameters and Opening Balances...")
-        d_macro_parameters_lazy = transform_d_macro_parameters(
-            extracted.require_lazy(DatasetId.INVESTMENT_MACRO_PARAMETERS)
+            extracted.get_lazy(DatasetId.MARKET_CURRENCY_MAPPING),
         )
 
         dims: dict[str, pl.LazyFrame] = {
@@ -185,8 +180,21 @@ class TransformationDAG:
             "df_d_asset_category": d_asset_category_lazy,
             "df_d_asset_subcategory": d_asset_subcategory_lazy,
             "df_d_currency": d_currency_lazy,
-            "df_d_macro_parameters": d_macro_parameters_lazy,
         }
+
+        if self.plan is None or self.plan.is_capability_active(CapabilityId.INVESTMENT_ACCOUNTING):
+            diagnostics.debug("Transforming Macro Parameters and Opening Balances...")
+            d_macro_parameters_lazy = transform_d_macro_parameters(
+                extracted.require_lazy(DatasetId.INVESTMENT_MACRO_PARAMETERS)
+            )
+            dims["df_d_macro_parameters"] = d_macro_parameters_lazy
+        else:
+            self.emitter.emit_event(
+                event_code=EventCode.TRANSFORMATION_STAGE,
+                message="Capability 'investment_accounting' inactive in execution plan. Skipping df_d_macro_parameters.",
+                presentation_kind=PresentationKind.SKIP,
+                stage=EngineStage.TRANSFORMING,
+            )
 
         if self.plan is None or self.plan.is_capability_active(CapabilityId.BENCHMARK_ENRICHMENT):
             dims["df_d_benchmark_master"] = transform_d_investment_benchmark_master(
@@ -272,6 +280,17 @@ class TransformationDAG:
         if self.rules is None:
             raise ValueError("FinancialRules must be provided to TransformationDAG")
 
+        if self.plan is not None and not self.plan.is_capability_active(
+            CapabilityId.INVESTMENT_ACCOUNTING
+        ):
+            self.emitter.emit_event(
+                event_code=EventCode.TRANSFORMATION_STAGE,
+                message="Capability 'investment_accounting' inactive in execution plan. Skipping investment asset pipelines.",
+                presentation_kind=PresentationKind.SKIP,
+                stage=EngineStage.TRANSFORMING,
+            )
+            return {}
+
         mf_market_frame = extracted.get(DatasetId.MARKET_MF_HOLDINGS)
         if mf_market_frame is None or len(mf_market_frame.collect_schema().names()) == 0:
             diagnostics.debug("Empty incremental frames detected. Skipping AssetPipelines...")
@@ -335,9 +354,9 @@ class TransformationDAG:
         f_expense: pl.LazyFrame,
         f_transfer: pl.LazyFrame,
         f_opbal: pl.LazyFrame,
-        stg_mkt: pl.LazyFrame,
-        f_purchase: pl.LazyFrame,
-        f_sale: pl.LazyFrame,
+        stg_mkt: pl.LazyFrame | None = None,
+        f_purchase: pl.LazyFrame | None = None,
+        f_sale: pl.LazyFrame | None = None,
     ) -> pl.LazyFrame:
         """Extract global date bounds and compile master calendar dimension table.
 
@@ -351,12 +370,12 @@ class TransformationDAG:
             Transfer transactions stream.
         f_opbal : pl.LazyFrame
             Opening balances stream.
-        stg_mkt : pl.LazyFrame
-            Market data stream.
-        f_purchase : pl.LazyFrame
-            Investment purchases stream.
-        f_sale : pl.LazyFrame
-            Investment sales stream.
+        stg_mkt : pl.LazyFrame | None, default None
+            Optional market data stream.
+        f_purchase : pl.LazyFrame | None, default None
+            Optional investment purchases stream.
+        f_sale : pl.LazyFrame | None, default None
+            Optional investment sales stream.
 
         Returns
         -------
@@ -480,9 +499,9 @@ class TransformationDAG:
             f_expense=facts["df_f_expense_transactions"],
             f_transfer=facts["df_f_transfer_transactions"],
             f_opbal=facts["df_f_opening_balances"],
-            stg_mkt=assets["df_f_investment_market_data"],
-            f_purchase=assets["df_f_tf_inv_purchase"],
-            f_sale=assets["df_f_tf_inv_sale"],
+            stg_mkt=assets.get("df_f_investment_market_data"),
+            f_purchase=assets.get("df_f_tf_inv_purchase"),
+            f_sale=assets.get("df_f_tf_inv_sale"),
         )
 
         dag_nodes: dict[str, pl.LazyFrame] = {
@@ -493,16 +512,21 @@ class TransformationDAG:
             "df_d_asset_category": dims["df_d_asset_category"],
             "df_d_asset_subcategory": dims["df_d_asset_subcategory"],
             "df_d_currency": dims["df_d_currency"],
-            "df_d_macro_parameters": dims["df_d_macro_parameters"],
             "df_f_income_transactions": facts["df_f_income_transactions"],
             "df_f_expense_transactions": facts["df_f_expense_transactions"],
             "df_f_transfer_transactions": facts["df_f_transfer_transactions"],
             "df_f_opening_balances": facts["df_f_opening_balances"],
-            "df_f_investment_market_data": assets["df_f_investment_market_data"],
-            "df_f_tf_inv_purchase": assets["df_f_tf_inv_purchase"],
-            "df_f_tf_inv_sale": assets["df_f_tf_inv_sale"],
-            "df_d_investment_master": assets["df_d_investment_master"],
         }
+        if "df_d_macro_parameters" in dims:
+            dag_nodes["df_d_macro_parameters"] = dims["df_d_macro_parameters"]
+        if "df_f_investment_market_data" in assets:
+            dag_nodes["df_f_investment_market_data"] = assets["df_f_investment_market_data"]
+        if "df_f_tf_inv_purchase" in assets:
+            dag_nodes["df_f_tf_inv_purchase"] = assets["df_f_tf_inv_purchase"]
+        if "df_f_tf_inv_sale" in assets:
+            dag_nodes["df_f_tf_inv_sale"] = assets["df_f_tf_inv_sale"]
+        if "df_d_investment_master" in assets:
+            dag_nodes["df_d_investment_master"] = assets["df_d_investment_master"]
         if "df_d_benchmark_master" in dims:
             dag_nodes["df_d_benchmark_master"] = dims["df_d_benchmark_master"]
 

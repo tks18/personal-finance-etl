@@ -71,7 +71,7 @@ If code evidence contradicts a phase, stop and amend the phase before changing t
 | 036 | Strict canonical Bronze cutover | v10.0.0-rc9 | [x] |
 | 037 | Artifact-key operational provenance cutover | v10.0.0-rc10 | [x] |
 | 038 | Generalized ingestion certification | v10.0.0 | [x] |
-| 039 | Household and investment capability composition | v10.1.0 | [ ] |
+| 039 | Household and investment capability composition | v10.1.0 | [x] |
 | 040 | Benchmark and foreign-assets capability composition | v10.1.1 | [ ] |
 | 041 | Tax capability composition | v10.1.2 | [ ] |
 | 042 | Wealth, FIRE and simulation capability composition | v10.1.3 | [ ] |
@@ -113,9 +113,9 @@ Phases 026-030 preserve the same rigor through fixed-transport demolition, house
 
 Phases 031-035 preserve the same rigor through all investment/provider evidence migrations and complete fixed-topology demolition.
 
-Phases 036-040 preserve the same rigor through strict canonical Bronze, operational provenance cutover, v10 generalized-ingestion certification (including canonical static sample evidence repository `tests/fixtures/evidence/` retiring in-memory byte builders), and the first major capability-composition releases.
+Phases 036-040 preserve the same rigor through strict canonical Bronze, operational provenance cutover, v10 generalized-ingestion certification (including canonical static sample evidence repository `tests/fixtures/evidence/` retiring in-memory byte builders), and the first major capability-composition releases with source-of-calculation column gating (zero-waste compute).
 
-Phases 041-045 preserve the same rigor through Tax/Wealth/FIRE composition, plan-aware physical warehouse state (with capability-unified table naming across all Medallion layers), generalized replay/recovery, and PFETL-native configuration diagnostics.
+Phases 041-045 preserve the same rigor through Tax/Wealth/FIRE composition, plan-aware physical warehouse state (with capability-unified table naming across all Medallion layers and dynamic column-level DDL pruning from CapabilityColumnInventory), generalized replay/recovery, and PFETL-native configuration diagnostics.
 
 Phases 046-050 preserve the same rigor through external-user certification (slimming canonical Bronze and Silver schemas down to essential financial columns), performance hardening, public configuration freeze, and the final clean-install PFETL acceptance verifying end-to-end execution of FIFO, Tax, FIRE, and Wealth reporting on golden fixtures.
 
