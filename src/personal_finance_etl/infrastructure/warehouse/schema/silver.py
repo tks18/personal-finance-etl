@@ -359,8 +359,7 @@ CREATE TABLE IF NOT EXISTS silver.d_Macro_Parameters (
     Estimated_Ordinary_Income_Tax_Rate DOUBLE,
     -- Descriptors/Classifications
     Remarks TEXT,
-    artifact_id TEXT,
-    FOREIGN KEY(FY_Start_Date) REFERENCES silver.d_Calendar(Date)
+    artifact_id TEXT
 );
 
 CREATE TABLE IF NOT EXISTS silver.f_Investment_Market_Data (
