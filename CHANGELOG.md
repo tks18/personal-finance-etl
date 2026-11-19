@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [10.0.0](https://github.com/tks18/personal-finance-etl/compare/10.0.0-rc.10...10.0.0) (2026-11-19)
+
+
+### Features 🔥
+
+* **observability:** streamline desktop and cli progress narrative ([10099b7](https://github.com/tks18/personal-finance-etl/commit/10099b7b2b5c2108949ff7b71389ee305f893e95))
+
+
+### Tests 🧪
+
+* **application:** certify generalized ingestion pipeline ([72a47fa](https://github.com/tks18/personal-finance-etl/commit/72a47fabed5707401d9291592c78f18d8c610029))
+* **fixtures:** establish canonical static evidence repository ([c821359](https://github.com/tks18/personal-finance-etl/commit/c821359e39852698c58636c8bec16d940f0416bf))
+* **reorganize:** semantically rename ingestion and guard suites ([da1917a](https://github.com/tks18/personal-finance-etl/commit/da1917a0542844325780868fae643d4eacd93769))
+* **sanitize:** sweep phase commentary and update testing guidelines ([de53502](https://github.com/tks18/personal-finance-etl/commit/de53502f28e24777c7e8ba813da5061227b0d7e5))
+
+
+### Docs 📃
+
+* **refactor:** update grand refactor roadmap and certification phases ([c3a2f59](https://github.com/tks18/personal-finance-etl/commit/c3a2f59dbc9501ebb8ef959355179c409b8e1531))
+
+
+### Code Refactoring 🖌
+
+* **observability:** simplify routine event suppression logic ([79262ae](https://github.com/tks18/personal-finance-etl/commit/79262ae8eab5055e443bd80c00c971aec5f666de))
+* **pipeline:** demolish legacy bindings and sanitize contracts ([9d77b13](https://github.com/tks18/personal-finance-etl/commit/9d77b13f01fef507454e247e89738f85aeb9d943))
+
 ## [10.0.0-rc.10](https://github.com/tks18/personal-finance-etl/compare/10.0.0-rc.9...10.0.0-rc.10) (2026-11-19)
 
 
