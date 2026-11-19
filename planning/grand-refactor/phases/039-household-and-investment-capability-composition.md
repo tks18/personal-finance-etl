@@ -150,12 +150,12 @@ Do not:
 
 ## 11. Completion checklist
 
-- [ ] Household-only plan resolves.
-- [ ] Investment evidence not required/accessed.
-- [ ] Household transforms execute independently.
-- [ ] Optional investment contributions modeled explicitly.
-- [ ] Investment accounting remains correct when enabled.
-- [ ] Full Shan regression green.
+- [x] Household-only plan resolves.
+- [x] Investment evidence not required/accessed.
+- [x] Household transforms execute independently.
+- [x] Optional investment contributions modeled explicitly.
+- [x] Investment accounting remains correct when enabled.
+- [x] Full Shan regression green.
 
 ## 12. Commit boundary
 
@@ -170,20 +170,29 @@ Phase 040 may assume household and investment accounting are separable. It will 
 ## Phase completion record
 
 ```text
-Phase:
-Target release:
+Phase: Phase 039 - Household and Investment Capability Composition
+Target release: v10.1.0
 Files changed:
-Schema changed:
-Runtime behavior changed:
+  - src/personal_finance_etl/contracts/execution_plan.py
+  - src/personal_finance_etl/domain/household/transforms/calendar.py
+  - src/personal_finance_etl/application/pipeline/transformer.py
+  - src/personal_finance_etl/application/pipeline/execution.py
+  - tests/fixtures/sources_household_only.toml
+  - tests/application/test_capability_composition.py
+  - tests/domain/test_investment_accounting_assertions.py
+Schema changed: NO (Dynamic DDL deferred to Phase 043 per roadmap)
+Runtime behavior changed: YES (Household core runs independently without investment sources, transforms, or FIFO; full composed plan retains byte-stable deterministic IDs and outputs)
 Financial formulas changed: NO
 Focused tests:
-Architecture tests:
-Real-data run:
-Performance check:
-Compatibility path still present:
-Old path deleted:
-Exit assertions green:
-Commit:
+  - tests/application/test_capability_composition.py (5 passed)
+  - tests/domain/test_investment_accounting_assertions.py (4 passed)
+Architecture tests: tests/architecture/test_boundaries.py (13 passed)
+Real-data run: tests/domain/test_investment_accounting_assertions.py + tests/application/test_capability_composition.py leveraging static statements in tests/fixtures/evidence/
+Performance check: Fast gate (1.65s), Full audit suite green (178.24s)
+Compatibility path still present: YES (Full Shan baseline plan preserves all 30 analytical tables across household and investment accounting)
+Old path deleted: N/A
+Exit assertions green: YES
+Commit: feat(pipeline): compose household and investment capabilities
 ```
 
 A phase is incomplete if any required exit assertion is false.

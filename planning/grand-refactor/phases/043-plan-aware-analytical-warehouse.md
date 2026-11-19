@@ -60,7 +60,7 @@ Every table across all 4 Medallion layers strictly adopts the capability namespa
 
 All legacy prefixes (`pb_*`, `r_*`, `d_*`, `f_*`) are permanently demolished.
 
-### Plan-Aware Table Lifecycles
+### Plan-Aware Table and Column Lifecycles
 
 For a run:
 ```text
@@ -70,47 +70,48 @@ ExecutionPlan.active_pre_bronze_datasets
 ExecutionPlan.active_bronze_datasets
  -> create/rebuild exactly active Bronze tables
 
-ExecutionPlan.active_silver_datasets
- -> create/rebuild exactly active Silver tables
+ExecutionPlan.active_silver_datasets + active_column_inventory
+ -> create/rebuild exactly active Silver tables with strictly active columns
 
-ExecutionPlan.active_gold_datasets
- -> create/rebuild exactly active Gold tables
+ExecutionPlan.active_gold_datasets + active_column_inventory
+ -> create/rebuild exactly active Gold tables with strictly active columns
 
 Meta
- -> catalog/fingerprint exactly active contract universe
+ -> catalog/fingerprint exactly active contract and column universe
 ```
 
 When a capability was active previously and is now disabled:
 - its analytical tables across layers are deliberately removed during rebuild/transition;
-- stale data cannot survive and look current.
+- within shared/composite tables, columns belonging strictly to disabled capabilities are physically omitted from table DDL;
+- stale data or phantom empty columns cannot survive and masquerade as current truth.
 
-Common/core tables explicitly owned outside optional capabilities remain active as defined by the capability graph.
+Common/core tables and columns explicitly owned outside optional capabilities remain active as defined by the capability graph.
 
 ## 6. Detailed implementation sequence
 
-### Step 1 - Build active contract resolver
-From ExecutionPlan return ordered Silver/Gold DataContracts. Validate DatasetId/layer/producer consistency.
+### Step 1 - Build active contract and column resolver
+From ExecutionPlan return ordered Silver/Gold DataContracts and the exact active column subset from `CapabilityColumnInventory`. Validate DatasetId/layer/column/producer consistency.
 
-### Step 2 - Make Silver DDL active-set-aware
-Create/rebuild only active tables. Preserve publication order/dependencies.
+### Step 2 - Make Silver DDL active-set and active-column-aware
+Generate dynamic `CREATE TABLE` DDL containing strictly active columns for active Silver contracts. Preserve publication order and dependencies.
 
-### Step 3 - Make Gold DDL active-set-aware
-Same discipline.
+### Step 3 - Make Gold DDL active-set and active-column-aware
+Generate dynamic `CREATE TABLE` DDL containing strictly active columns for active Gold marts. For composite marts (`gold.investments_by_isin`, `gold.household_monthly_summary`), exclude benchmark, foreign FX, and tax columns when their respective capabilities are inactive.
 
-### Step 4 - Implement stale-table cleanup
-Compare existing managed analytical tables with target active set. Drop managed inactive tables inside DuckDB transaction. Never drop unknown/user tables.
+### Step 4 - Implement stale-table and stale-column cleanup
+Compare existing managed analytical tables with target active set. Drop managed inactive tables inside DuckDB transaction. Re-create tables with updated dynamic schemas when capabilities toggle. Never drop unknown/user tables.
 
 ### Step 5 - Update Meta/catalog
-Fingerprint/catalog active contract set + plan fingerprint. A partial warehouse is healthy, not "missing tables."
+Fingerprint/catalog active contract and column universe + plan fingerprint. A partial warehouse with pruned columns is healthy and deliberate, not "missing columns."
 
 ### Step 6 - Update backup/restore/integrity
-Integrity validates expected active set from persisted run/plan provenance, not global registry.
+Integrity validates expected active table and column set from persisted run/plan provenance, not global registry.
 
 ### Step 7 - Presentation behavior
-If CLI/Desktop/Power BI integration enumerates tables, it must tolerate capability-specific absence and expose active capabilities rather than treating absence as corruption.
+If CLI/Desktop/Power BI integration enumerates tables or columns, it must tolerate capability-specific absence and expose active capabilities rather than treating absence as corruption.
 
 ### Step 8 - Capability-switch matrix
-Run full -> household-only -> domestic investments -> full. At each step assert exact managed table set and no stale data.
+Run full -> household-only -> domestic investments -> full. At each step assert exact managed table set, exact column presence, and zero stale data or phantom null columns.
 
 ### Step 9 - Capability-unified physical table cutover
 Rename all physical tables across `pre_bronze`, `bronze`, `silver`, and `gold` to follow `<capability>_<entity>`. Demolish all legacy prefixes (`pb_*`, `r_*`, `d_*`, `f_*`). Update DataContract registry, DDL schemas, loaders, and downstream queries.
@@ -129,7 +130,7 @@ Standardize pipeline telemetry and presentation logging to reflect the modern Me
 - Emit structured layer-level lifecycle events (`PRE_BRONZE_ADMISSION`, `BRONZE_DELTA_UPSERT`, `SILVER_HARMONIZATION`, `GOLD_MART_MATERIALIZATION`) capturing exact active table counts, row counts, and capability tags.
 - Ensure detailed developer debug logs in `outputs/logs/` capture forensic table transitions (created, replaced, pruned) correlated with capability plan IDs.
 
-### Step 11 - Recovery
+### Step 12 - Recovery
 Failure during stale-table cleanup/rebuild rolls back DuckDB transaction completely.
 
 ## 7. Files and symbols in scope
@@ -183,8 +184,10 @@ Do not:
 
 - [ ] Physical table names unified across Medallion layers under Capability Graph.
 - [ ] Legacy table prefixes (`pb_*`, `r_*`, `d_*`, `f_*`) permanently demolished.
-- [ ] Silver DDL plan-aware.
-- [ ] Gold DDL plan-aware.
+- [ ] Silver DDL plan-aware and column-aware.
+- [ ] Gold DDL plan-aware and column-aware.
+- [ ] Silver and Gold DDL dynamically include strictly active columns from CapabilityColumnInventory.
+- [ ] Inactive capability columns physically omitted from DuckDB tables (zero phantom null columns).
 - [ ] Stale managed tables removed safely.
 - [ ] Meta/catalog plan-aware.
 - [ ] Backup/restore/integrity plan-aware.
