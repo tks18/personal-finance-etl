@@ -50,7 +50,7 @@ def get_stg_mf_market_data(
         df_transformed,
         num_cols,
         optional_cols={"XIRR", "Returns"},
-        source_col="__file_name__",
+        source_col="artifact_id",
     )
 
     df_transformed = (
@@ -161,12 +161,12 @@ def get_base_mf_transactions(raw_data: pl.LazyFrame) -> pl.LazyFrame:
     df_transformed = validate_and_parse_numerics(
         df_transformed,
         ["Units", "NAV", "Amount"],
-        source_col="__file_name__",
+        source_col="artifact_id",
     )
     df_transformed = validate_and_parse_dates(
         df_transformed,
         {"Date": ["%d %b %Y", "%d-%b-%Y", "%d-%m-%Y", "%Y-%m-%d"]},
-        source_col="__file_name__",
+        source_col="artifact_id",
     )
 
     return df_transformed
