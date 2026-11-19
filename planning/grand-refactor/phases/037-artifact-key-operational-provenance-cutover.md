@@ -142,14 +142,14 @@ Do not:
 
 ## 11. Completion checklist
 
-- [ ] Stable operational artifact key frozen.
-- [ ] Bronze rows carry it.
-- [ ] Changed-file deletion migrated.
-- [ ] Rename migrated.
-- [ ] Meta healing migrated.
-- [ ] Operational filename identity removed.
-- [ ] Recovery matrix green.
-- [ ] Full financial/ID regression green.
+- [x] Stable operational artifact key frozen.
+- [x] Bronze rows carry it.
+- [x] Changed-file deletion migrated.
+- [x] Rename migrated.
+- [x] Meta healing migrated.
+- [x] Operational filename identity removed.
+- [x] Recovery matrix green.
+- [x] Full financial/ID regression green.
 
 ## 12. Commit boundary
 
@@ -164,20 +164,42 @@ Phase 038 may assume the generalized ingestion architecture is complete end-to-e
 ## Phase completion record
 
 ```text
-Phase:
-Target release:
+Phase: 037 - Artifact-Key Operational Provenance Cutover
+Target release: v10.0.0-rc10
 Files changed:
-Schema changed:
-Runtime behavior changed:
+  - src/personal_finance_etl/contracts/canonical_fields.py
+  - src/personal_finance_etl/infrastructure/validation/canonical_schemas.py
+  - src/personal_finance_etl/infrastructure/warehouse/schema/bronze.py
+  - src/personal_finance_etl/infrastructure/warehouse/bronze.py
+  - src/personal_finance_etl/infrastructure/warehouse/meta/healing.py
+  - src/personal_finance_etl/infrastructure/providers/market/common.py
+  - src/personal_finance_etl/infrastructure/providers/files/csv.py
+  - src/personal_finance_etl/infrastructure/providers/files/excel.py
+  - src/personal_finance_etl/infrastructure/providers/files/sqlite.py
+  - src/personal_finance_etl/application/ingestion/market_sync.py
+  - src/personal_finance_etl/domain/common/dates.py
+  - src/personal_finance_etl/domain/common/validation.py
+  - src/personal_finance_etl/domain/household/transforms/transactions.py
+  - src/personal_finance_etl/domain/investments/transforms/indian_equity.py
+  - src/personal_finance_etl/domain/investments/transforms/mutual_funds.py
+  - src/personal_finance_etl/domain/investments/transforms/us_equity.py
+  - tests/contracts/test_canonical_fields.py
+  - tests/application/test_normalization_executor.py
+  - tests/application/test_generalized_vertical_slice.py
+  - tests/infrastructure/test_bronze_strict_canonical.py
+  - tests/infrastructure/test_artifact_provenance_cutover.py
+  - tests/architecture/test_bronze_canonical_guards.py
+Schema changed: YES (Removed __file_name__ and __folder_path__ from 19 Bronze Pandera schemas and 20 Bronze DDL tables; CANONICAL_PROVENANCE_FIELDS trimmed to frozenset({"artifact_id"}))
+Runtime behavior changed: YES (Bronze delete/upsert and Meta healing operate strictly via artifact_id; filenames retained only in Control Plane / Meta registry for human diagnostics)
 Financial formulas changed: NO
-Focused tests:
-Architecture tests:
-Real-data run:
-Performance check:
-Compatibility path still present:
-Old path deleted:
-Exit assertions green:
-Commit:
+Focused tests: tests/infrastructure/test_artifact_provenance_cutover.py, tests/infrastructure/test_bronze_strict_canonical.py
+Architecture tests: tests/architecture/test_bronze_canonical_guards.py (4 new AST guards prohibiting __file_name__ in delete/healing queries)
+Real-data run: tests/application/test_live_pipeline_e2e.py PASS (and full suite PASS across 1,100+ tests)
+Performance check: Sub-second DuckDB artifact-key delete and upsert
+Compatibility path still present: NO
+Old path deleted: YES (Demolished WHERE __file_name__ deletes, updates, and meta healing scans)
+Exit assertions green: YES
+Commit: refactor(lineage): key bronze operations by artifact
 ```
 
 A phase is incomplete if any required exit assertion is false.

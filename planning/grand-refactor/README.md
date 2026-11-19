@@ -69,7 +69,7 @@ If code evidence contradicts a phase, stop and amend the phase before changing t
 | 034 | Provider-generated market evidence migration | v10.0.0-rc7 | [x] |
 | 035 | Fixed-topology demolition | v10.0.0-rc8 | [x] |
 | 036 | Strict canonical Bronze cutover | v10.0.0-rc9 | [x] |
-| 037 | Artifact-key operational provenance cutover | v10.0.0-rc10 | [ ] |
+| 037 | Artifact-key operational provenance cutover | v10.0.0-rc10 | [x] |
 | 038 | Generalized ingestion certification | v10.0.0 | [ ] |
 | 039 | Household and investment capability composition | v10.1.0 | [ ] |
 | 040 | Benchmark and foreign-assets capability composition | v10.1.1 | [ ] |
@@ -115,9 +115,9 @@ Phases 031-035 preserve the same rigor through all investment/provider evidence 
 
 Phases 036-040 preserve the same rigor through strict canonical Bronze, operational provenance cutover, v10 generalized-ingestion certification (including canonical static sample evidence repository `tests/fixtures/evidence/` retiring in-memory byte builders), and the first major capability-composition releases.
 
-Phases 041-045 preserve the same rigor through Tax/Wealth/FIRE composition, plan-aware physical warehouse state, generalized replay/recovery, and PFETL-native configuration diagnostics.
+Phases 041-045 preserve the same rigor through Tax/Wealth/FIRE composition, plan-aware physical warehouse state (with capability-unified table naming across all Medallion layers), generalized replay/recovery, and PFETL-native configuration diagnostics.
 
-Phases 046-050 preserve the same rigor through external-user certification, performance hardening, public configuration freeze, and the final clean-install PFETL acceptance verifying end-to-end execution of FIFO, Tax, FIRE, and Wealth reporting on golden fixtures.
+Phases 046-050 preserve the same rigor through external-user certification (slimming canonical Bronze and Silver schemas down to essential financial columns), performance hardening, public configuration freeze, and the final clean-install PFETL acceptance verifying end-to-end execution of FIFO, Tax, FIRE, and Wealth reporting on golden fixtures.
 
 All 50 phases are specified and have passed the program-level QA described in `QA-REPORT.md`. Implementation remains phase-by-phase and every phase must finish green before the next begins.
 

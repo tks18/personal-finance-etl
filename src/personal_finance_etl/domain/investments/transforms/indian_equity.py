@@ -72,7 +72,7 @@ def get_stg_stock_market_data(raw_data: pl.LazyFrame, default_currency_id: str) 
         df_transformed,
         num_cols,
         optional_cols=optional_cols,
-        source_col="__file_name__",
+        source_col="artifact_id",
     )
     df_transformed = validate_and_parse_dates(
         df_transformed,
@@ -81,7 +81,7 @@ def get_stg_stock_market_data(raw_data: pl.LazyFrame, default_currency_id: str) 
             "Closing date": ["%d-%m-%Y", "%Y-%m-%d"],
         },
         optional_cols={"Buy date"},
-        source_col="__file_name__",
+        source_col="artifact_id",
     )
 
     df_transformed = _resolve_unrealised_pnl(df_transformed, has_typo, has_proper)
@@ -182,7 +182,7 @@ def get_base_stock_transactions(raw_data: pl.LazyFrame) -> pl.LazyFrame:
     df_transformed = validate_and_parse_numerics(
         df_transformed,
         ["Quantity", "Value"],
-        source_col="__file_name__",
+        source_col="artifact_id",
     )
     df_transformed = validate_and_parse_dates(
         df_transformed,
@@ -195,7 +195,7 @@ def get_base_stock_transactions(raw_data: pl.LazyFrame) -> pl.LazyFrame:
                 "%Y-%m-%d",
             ]
         },
-        source_col="__file_name__",
+        source_col="artifact_id",
     )
 
     return df_transformed

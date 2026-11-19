@@ -83,8 +83,6 @@ def _create_valid_raw_zcategory_df() -> pl.DataFrame:
             "syncTime": [1700000000000.0, 1700000001000.0, 1700000002000.0],
             "syncVersion": [1, 1, 1],
             "artifact_id": ["art_sqlite_001", "art_sqlite_001", "art_sqlite_001"],
-            "__file_name__": ["SOURCE_DB.sqlite", "SOURCE_DB.sqlite", "SOURCE_DB.sqlite"],
-            "__folder_path__": ["inputs", "inputs", "inputs"],
         },
         schema_overrides={"pUid": pl.String},
     )

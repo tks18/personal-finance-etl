@@ -606,8 +606,6 @@ def vault_parquet_chunks(
 
         df_final_chunks.append(
             df_year.with_columns(
-                pl.lit(filename).alias("__file_name__"),
-                pl.lit(virtual_path).alias("__folder_path__"),
                 pl.lit(artifact_id).alias("artifact_id"),
             )
         )

@@ -28,8 +28,6 @@ __all__ = [
 CANONICAL_PROVENANCE_FIELDS: frozenset[str] = frozenset(
     {
         "artifact_id",
-        "__file_name__",
-        "__folder_path__",
     }
 )
 

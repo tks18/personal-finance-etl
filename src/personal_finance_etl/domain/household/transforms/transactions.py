@@ -307,7 +307,7 @@ def _parse_opening_balance_fields(df: pl.LazyFrame) -> pl.LazyFrame:
         df,
         num_cols,
         optional_cols={amt_acc_source},
-        source_col="__file_name__",
+        source_col="artifact_id",
     )
     df_parsed = validate_and_parse_dates(
         df_parsed,
@@ -320,7 +320,7 @@ def _parse_opening_balance_fields(df: pl.LazyFrame) -> pl.LazyFrame:
             ]
         },
         optional_cols={date_source},
-        source_col="__file_name__",
+        source_col="artifact_id",
     )
     return df_parsed.with_columns(
         pl.col("Z_PK").cast(pl.Int64),

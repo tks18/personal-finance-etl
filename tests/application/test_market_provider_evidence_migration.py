@@ -273,11 +273,6 @@ def test_upsert_market_delta_persists_pre_bronze_and_bronze() -> None:
                     "Requested_Start": [date(2026, 1, 1), date(2026, 1, 1)],
                     "Requested_End": [date(2026, 1, 2), date(2026, 1, 2)],
                     "Is_Closure_Gap": [False, False],
-                    "__file_name__": [
-                        "currency_delta_2026_test.parquet",
-                        "currency_delta_2026_test.parquet",
-                    ],
-                    "__folder_path__": [v_path, v_path],
                     "artifact_id": [artifact_id, artifact_id],
                 }
             )
@@ -466,11 +461,7 @@ def test_upsert_market_delta_backfills_pre_bronze_when_delta_is_empty() -> None:
                     "Requested_Start": [date(2025, 1, 1), date(2025, 1, 1)],
                     "Requested_End": [date(2025, 1, 2), date(2025, 1, 2)],
                     "Is_Closure_Gap": [False, False],
-                    "__file_name__": ["currency_2025.parquet", "currency_2025.parquet"],
-                    "__folder_path__": [
-                        "virtual://currency_history/currency_2025.parquet",
-                        "virtual://currency_history/currency_2025.parquet",
-                    ],
+                    "artifact_id": ["sha256_mock_curr_2025", "sha256_mock_curr_2025"],
                 }
             )
             buf = io.BytesIO()

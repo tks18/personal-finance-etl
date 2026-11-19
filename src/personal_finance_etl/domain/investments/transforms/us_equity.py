@@ -55,7 +55,7 @@ def get_base_us_stock_transactions(raw_data: pl.LazyFrame) -> pl.LazyFrame:
                 "%d-%m-%Y",
             ]
         },
-        source_col="__file_name__",
+        source_col="artifact_id",
     )
 
     numeric_cols = [
@@ -70,7 +70,7 @@ def get_base_us_stock_transactions(raw_data: pl.LazyFrame) -> pl.LazyFrame:
         df_validated,
         numeric_cols,
         optional_cols={"Brokerage (INR)"},
-        source_col="__file_name__",
+        source_col="artifact_id",
     )
 
     cols: list[str | pl.Expr] = [

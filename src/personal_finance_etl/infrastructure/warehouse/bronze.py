@@ -72,7 +72,7 @@ class BronzeLayer:
         self,
         table_name: str,
         full_replace: bool,
-        filenames: list[str],
+        artifact_ids: list[str],
     ) -> None:
         """Clear partition slices or truncate in the Bronze table before row insertion.
 
@@ -82,24 +82,24 @@ class BronzeLayer:
             Physical table name.
         full_replace : bool
             Whether to truncate the entire table.
-        filenames : list[str]
-            Basenames of files to remove before re-inserting.
+        artifact_ids : list[str]
+            Artifact IDs of items to remove before re-inserting.
         """
         if full_replace:
             self.db_manager.conn.execute(f"DELETE FROM {table_name}")  # nosec B608
             diagnostics.debug("Bronze: Truncated %s for full replacement.", table_name)
         else:
-            placeholders = ", ".join(["?"] * len(filenames))
-            delete_query = f"DELETE FROM {table_name} WHERE __file_name__ IN ({placeholders})"  # nosec B608
+            placeholders = ", ".join(["?"] * len(artifact_ids))
+            delete_query = f"DELETE FROM {table_name} WHERE artifact_id IN ({placeholders})"  # nosec B608
             diagnostics.debug("Bronze SQL: %s", delete_query)
-            self.db_manager.conn.execute(delete_query, filenames)
+            self.db_manager.conn.execute(delete_query, artifact_ids)
 
     def _insert_bronze_records(
         self,
         table_name: str,
         df_filtered: pl.DataFrame,
     ) -> dict[str, int]:
-        """Insert filtered rows into the target table and return counts per file.
+        """Insert filtered rows into the target table and return counts per artifact.
 
         Parameters
         ----------
@@ -111,7 +111,7 @@ class BronzeLayer:
         Returns
         -------
         dict[str, int]
-            Mapping of file basename to inserted row count.
+            Mapping of artifact ID to inserted row count.
         """
         result: dict[str, int] = {}
         if df_filtered.height > 0:
@@ -126,9 +126,9 @@ class BronzeLayer:
             )
             self.db_manager.conn.unregister("temp_df")
 
-            counts = df_filtered.group_by("__file_name__").len()
+            counts = df_filtered.group_by("artifact_id").len()
             for row in counts.iter_rows():
-                result[row[0]] = row[1]
+                result[str(row[0])] = int(row[1])
         else:
             diagnostics.debug("Bronze: Upserted %s: 0 rows processed (empty source).", table_name)
         return result
@@ -140,7 +140,7 @@ class BronzeLayer:
         actionable_files: list[str],
         full_replace: bool = False,
     ) -> dict[str, int]:
-        """Upsert DataFrame into a Bronze table using file-level partition boundaries.
+        """Upsert DataFrame into a Bronze table using artifact-level partition boundaries.
 
         Parameters
         ----------
@@ -149,14 +149,14 @@ class BronzeLayer:
         table_name : str
             Physical Bronze table name (e.g. 'bronze.r_MF_Transactions').
         actionable_files : list[str]
-            List of filepaths actionable in this run.
+            List of filepaths or artifact IDs actionable in this run.
         full_replace : bool, default=False
             Whether to drop and replace the entire table.
 
         Returns
         -------
         dict[str, int]
-            Mapping of file name to inserted row count.
+            Mapping of artifact ID and file name to inserted row count.
         """
         if isinstance(df, pl.LazyFrame):
             compact_plan = df.explain().replace("\n", " | ")
@@ -168,12 +168,22 @@ class BronzeLayer:
         if not actionable_files:
             return {}
 
-        filenames = [os.path.basename(f) for f in actionable_files]
-        df_filtered = df.filter(pl.col("__file_name__").is_in(filenames))
+        artifact_to_file: dict[str, str] = {}
+        for f in actionable_files:
+            art_id = generate_file_id(f) if ("/" in f or "\\" in f or "." in f) else f
+            artifact_to_file[art_id] = os.path.basename(f)
 
-        self._prepare_bronze_table(table_name, full_replace, filenames)
+        artifact_ids = list(artifact_to_file.keys())
+        df_filtered = df.filter(pl.col("artifact_id").is_in(artifact_ids))
 
-        return self._insert_bronze_records(table_name, df_filtered)
+        self._prepare_bronze_table(table_name, full_replace, artifact_ids)
+
+        counts = self._insert_bronze_records(table_name, df_filtered)
+        for art_id, count in list(counts.items()):
+            fname = artifact_to_file.get(art_id)
+            if fname and fname not in counts:
+                counts[fname] = count
+        return counts
 
     def load(
         self,
@@ -236,26 +246,19 @@ class BronzeLayer:
             if not tables:
                 continue
 
-            old_name = os.path.basename(old_path)
-            new_name = os.path.basename(new_path)
             old_id = generate_file_id(old_path)
             new_id = generate_file_id(new_path)
 
             for table in tables:
                 try:
                     self.db_manager.conn.execute(
-                        f"UPDATE {table} SET __file_name__ = ? WHERE __file_name__ = ?",  # nosec B608
-                        [new_name, old_name],
+                        f"UPDATE {table} SET artifact_id = ? WHERE artifact_id = ?",  # nosec B608
+                        [new_id, old_id],
                     )
-                    try:
-                        self.db_manager.conn.execute(
-                            f"UPDATE {table} SET artifact_id = ? WHERE artifact_id = ?",  # nosec B608
-                            [new_id, old_id],
-                        )
-                    except duckdb.BinderException:
-                        pass
                 except (duckdb.BinderException, duckdb.CatalogException) as e:
-                    diagnostics.debug("Bronze: Could not rename %s in %s: %s", old_name, table, e)
+                    diagnostics.debug(
+                        "Bronze: Could not migrate artifact %s in %s: %s", old_id, table, e
+                    )
 
     def get_table(self, table_name: str) -> pl.DataFrame:
         """Read a table from the Bronze schema. Returns empty DataFrame if missing.

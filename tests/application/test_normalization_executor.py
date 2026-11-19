@@ -122,10 +122,10 @@ def test_executor_executes_all_rules_vectorized() -> None:
     # Assert Constant injected
     assert result_df["ORDER_NUM"].to_list() == [1, 1, 1]
 
-    # Assert Provenance preserved
+    # Assert Provenance preserved (artifact_id only; operational filename projected out)
     assert result_df["artifact_id"].to_list() == ["art_1", "art_1", "art_1"]
-    assert "__file_name__" in result_df.columns
-    assert "__folder_path__" in result_df.columns
+    assert "__file_name__" not in result_df.columns
+    assert "__folder_path__" not in result_df.columns
 
 
 def test_executor_missing_source_field_raises() -> None:

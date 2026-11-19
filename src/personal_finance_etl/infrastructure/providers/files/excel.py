@@ -6,7 +6,7 @@ Owns
 - In-memory parsing of Excel binary statements using fastexcel.
 - Header detection and normalization across financial statement structures.
 - Date extraction heuristics from file basenames.
-- Ingestion metadata tagging (__file_name__, __folder_path__, Month Date, __file_category__, artifact_id).
+- Ingestion metadata tagging (Month Date, __file_category__, artifact_id).
 
 Does not own
 -------------
@@ -197,10 +197,7 @@ class ExcelExtractor:
         else:
             df_data = df_data.filter(pl.col(first_col).is_not_null())
 
-        meta_exprs: list[pl.Expr] = [
-            pl.lit(filename).alias("__file_name__"),
-            pl.lit(folder_path).alias("__folder_path__"),
-        ]
+        meta_exprs: list[pl.Expr] = []
 
         if file_category is not None:
             meta_exprs.append(pl.lit(file_category).alias("__file_category__"))
@@ -217,7 +214,7 @@ class ExcelExtractor:
             except ValueError:
                 pass
 
-        final_df = df_data.with_columns(meta_exprs)
+        final_df = df_data.with_columns(meta_exprs) if meta_exprs else df_data
 
         diagnostics.debug(
             "Parsed %s in %.2fs - %d rows extracted",

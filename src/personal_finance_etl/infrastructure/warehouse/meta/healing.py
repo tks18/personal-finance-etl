@@ -15,11 +15,10 @@ Does not own
 
 from __future__ import annotations
 
-import os
-
 import duckdb
 
 from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
+from personal_finance_etl.infrastructure.control_plane.hashing import generate_file_id
 from personal_finance_etl.infrastructure.observability.diagnostics import (
     get_observability_diagnostics,
 )
@@ -75,7 +74,7 @@ class DuckDBRegistryHealer:
             if is_present and not contract.is_full_replace:
                 try:
                     rows = self.conn.execute(
-                        f"SELECT DISTINCT __file_name__ FROM {table}"  # nosec B608
+                        f"SELECT DISTINCT artifact_id FROM {table}"  # nosec B608
                     ).fetchall()
                     table_files[table] = {str(r[0]) for r in rows}
                 except duckdb.CatalogException:
@@ -139,10 +138,11 @@ class DuckDBRegistryHealer:
             target_table = b_contract.physical_table
             if not tables_exist.get(target_table, False):
                 return True
+            file_id = generate_file_id(path)
             if (
                 not b_contract.is_full_replace
                 and row_count > 0
-                and os.path.basename(path) not in table_files.get(target_table, set())
+                and file_id not in table_files.get(target_table, set())
             ):
                 return True
 
@@ -246,13 +246,13 @@ class DuckDBRegistryHealer:
                 ).fetchone()
 
                 if row:
-                    fname, cat, file_id = row
+                    _fname, cat, file_id = row
                     del_table = cat_to_table.get(cat)
-                    if del_table and tables_exist.get(del_table, False):
+                    if file_id and del_table and tables_exist.get(del_table, False):
                         try:
                             self.conn.execute(
-                                f"DELETE FROM {del_table} WHERE __file_name__ = ?",  # nosec B608
-                                [fname],
+                                f"DELETE FROM {del_table} WHERE artifact_id = ?",  # nosec B608
+                                [file_id],
                             )
                         except duckdb.CatalogException:
                             pass

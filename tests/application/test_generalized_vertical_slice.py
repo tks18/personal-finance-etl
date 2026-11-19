@@ -392,7 +392,7 @@ def test_happy_path_first_run(
         "S_NO",
     ]:
         assert can_col in b_df.columns
-    assert "__file_name__" in b_df.columns
+    assert "__file_name__" not in b_df.columns
     assert "artifact_id" in b_df.columns
 
     # 3. Assert Control Plane and Meta Layer synced
@@ -622,9 +622,8 @@ def test_rename_scenario(
     bronze_contract = get_bronze_contract_by_dataset_id(DatasetId.HOUSEHOLD_ZCATEGORY)
     assert bronze_contract is not None
     b_df = isolated_duckdb_manager.conn.query(
-        f"SELECT DISTINCT __file_name__, artifact_id FROM {bronze_contract.physical_table}"
+        f"SELECT DISTINCT artifact_id FROM {bronze_contract.physical_table}"
     ).pl()
-    assert b_df["__file_name__"].to_list() == ["household_renamed.sqlite"]
     assert b_df["artifact_id"].to_list() == [new_id]
 
 
@@ -1134,7 +1133,6 @@ def test_downstream_output_equivalence() -> None:
             "pUid": [None, "CAT_INC", None, "CAT_EXP"],
             "TYPE": [0, 0, 1, 1],
             "ORDERSEQ": [1, 2, 3, 4],
-            "__file_name__": ["f.sqlite", "f.sqlite", "f.sqlite", "f.sqlite"],
             "artifact_id": ["art1", "art1", "art1", "art1"],
         }
     )
@@ -1155,7 +1153,6 @@ def test_downstream_output_equivalence() -> None:
             "CATEGORY_ID": [None, "CAT_INC", None, "CAT_EXP"],
             "TYPE": [0, 0, 1, 1],
             "ORDER_SEQUENCE": [1, 2, 3, 4],
-            "__file_name__": ["f.sqlite", "f.sqlite", "f.sqlite", "f.sqlite"],
             "artifact_id": ["art1", "art1", "art1", "art1"],
         }
     )

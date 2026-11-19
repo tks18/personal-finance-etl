@@ -75,3 +75,44 @@ def test_all_canonical_schemas_enforce_strict_validation() -> None:
                 f"Canonical Bronze schema for dataset '{ds_id.value}' must have strict=True, "
                 f"got strict={schema.strict}."
             )
+
+
+def test_zero_filename_operational_predicates_in_bronze() -> None:
+    """Verify zero SQL operational predicates key by __file_name__ in warehouse/bronze.py."""
+    bronze_py = SRC_ROOT / "infrastructure" / "warehouse" / "bronze.py"
+    content = bronze_py.read_text(encoding="utf-8")
+    assert "__file_name__" not in content, (
+        f"Found prohibited __file_name__ reference in {bronze_py}. "
+        "All Bronze partition and identity operations must use artifact_id."
+    )
+
+
+def test_zero_filename_operational_predicates_in_meta_healing() -> None:
+    """Verify zero SQL operational predicates key by __file_name__ in warehouse/meta/healing.py."""
+    healing_py = SRC_ROOT / "infrastructure" / "warehouse" / "meta" / "healing.py"
+    content = healing_py.read_text(encoding="utf-8")
+    assert "__file_name__" not in content, (
+        f"Found prohibited __file_name__ reference in {healing_py}. "
+        "All Meta healing operations must use artifact_id."
+    )
+
+
+def test_bronze_ddl_contains_zero_filename_columns() -> None:
+    """Verify BRONZE_DDL contains zero __file_name__ or __folder_path__ columns."""
+    assert "__file_name__" not in BRONZE_DDL, (
+        "BRONZE_DDL must not declare operational column __file_name__."
+    )
+    assert "__folder_path__" not in BRONZE_DDL, (
+        "BRONZE_DDL must not declare operational column __folder_path__."
+    )
+
+
+def test_canonical_schemas_contain_zero_filename_columns() -> None:
+    """Verify no canonical Bronze schema declares __file_name__ or __folder_path__."""
+    for ds_id, schema in CANONICAL_BRONZE_SCHEMAS.items():
+        assert "__file_name__" not in schema.columns, (
+            f"Canonical schema for '{ds_id.value}' must not declare '__file_name__'."
+        )
+        assert "__folder_path__" not in schema.columns, (
+            f"Canonical schema for '{ds_id.value}' must not declare '__folder_path__'."
+        )
