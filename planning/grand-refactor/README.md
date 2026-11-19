@@ -70,7 +70,7 @@ If code evidence contradicts a phase, stop and amend the phase before changing t
 | 035 | Fixed-topology demolition | v10.0.0-rc8 | [x] |
 | 036 | Strict canonical Bronze cutover | v10.0.0-rc9 | [x] |
 | 037 | Artifact-key operational provenance cutover | v10.0.0-rc10 | [x] |
-| 038 | Generalized ingestion certification | v10.0.0 | [ ] |
+| 038 | Generalized ingestion certification | v10.0.0 | [x] |
 | 039 | Household and investment capability composition | v10.1.0 | [ ] |
 | 040 | Benchmark and foreign-assets capability composition | v10.1.1 | [ ] |
 | 041 | Tax capability composition | v10.1.2 | [ ] |

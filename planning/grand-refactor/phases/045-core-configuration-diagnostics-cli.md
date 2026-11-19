@@ -60,8 +60,12 @@ Outputs are human-readable and optionally structured only if existing CLI alread
 
 ## 6. Detailed implementation sequence
 
-### Step 1 - Define application diagnostic facade
+### Step 1 - Define application diagnostic facade and CLI tri-config support
 Expose cohesive methods returning typed results. CLI should not orchestrate Pandera/Polars/Control Plane internals.
+Add full support for tri-configuration CLI arguments across launcher and diagnostic subcommands:
+- `--config <path>`: Execution and storage settings (default `config.toml`);
+- `--rules <path>`: Financial policies and tax rules (default `rules.toml`);
+- `--sources <path>`: Evidence source topology, selectors, and mappings (default `sources.toml`).
 
 ### Step 2 - `validate-config`
 Validate schema/cross-object/capability semantics without source I/O.
@@ -89,6 +93,12 @@ CLI/presentation cannot import Pandera or implement mapping/identity algorithms.
 
 ### Step 10 - Documentation/help text
 Command `--help` states side effects precisely, especially dry run.
+
+### Step 11 - Diagnostic Telemetry & Developer Debug Logging Alignment
+Ensure diagnostic commands produce rich, structured observability for both human operators and forensic tooling:
+- Surface actionable remediation hints, field mapping diffs, and identity strategies cleanly in CLI narrative tables without cryptic stack traces.
+- Expose verbose developer debug logging (`outputs/logs/`) capturing source schema inference, Pandera constraint evaluations, selector path resolution, and artifact hashes.
+- Standardize dry-run admission telemetry so UI progress sinks display live per-file admission checks with progress percentages.
 
 ## 7. Files and symbols in scope
 
@@ -144,6 +154,7 @@ Do not:
 - [ ] Plan/contract preview works.
 - [ ] Admission dry run is non-mutating.
 - [ ] Errors are actionable.
+- [ ] Diagnostic telemetry and developer forensic logging verified.
 - [ ] CLI reuses application services.
 - [ ] No companion application scope leaked in.
 

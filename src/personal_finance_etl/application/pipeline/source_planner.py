@@ -77,7 +77,7 @@ class DatasetPlan:
     is_enabled : bool
         Whether this dataset is actively enabled for execution.
     mapping_plan : object | None, default None
-        Mapping and normalization plan (unresolved placeholder until Phase 018).
+        Mapping and normalization plan descriptor where configured.
     identity_strategy : BronzeIdentityStrategy | None, default None
         Bronze row identity strategy reference where configured.
     """

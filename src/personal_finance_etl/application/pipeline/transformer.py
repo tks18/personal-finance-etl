@@ -315,6 +315,12 @@ class TransformationDAG:
             extracted.require_lazy(DatasetId.INVESTMENT_BENCHMARK_MAPPING),
             self.rules.DEFAULT_CURRENCY_ID,
         )
+        if self.plan is not None and not self.plan.is_capability_active(
+            CapabilityId.BENCHMARK_ENRICHMENT
+        ):
+            d_tf_investment_master_lazy = d_tf_investment_master_lazy.with_columns(
+                pl.lit(None, dtype=pl.String).alias("BENCHMARK_ID")
+            )
 
         return {
             "df_f_investment_market_data": stg_investment_market_data_lazy,

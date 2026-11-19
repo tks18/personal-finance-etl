@@ -22,6 +22,7 @@ from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 from rich.console import Console
+from rich.progress import TaskID
 
 from personal_finance_etl.contracts.application import EngineStage
 from personal_finance_etl.contracts.lifecycle import FailureDomain
@@ -753,3 +754,85 @@ def test_sinks_suppress_per_file_validation_start_and_success() -> None:
     rich_sink.emit(fail_ev)
     assert rich_sink.rendered_count == 1
     assert "Validation failed" in output.getvalue()
+
+
+def test_sinks_suppress_per_file_ingestion_ticks_while_advancing_progress() -> None:
+    """Ensure desktop, tab, and rich narrative sinks suppress per-file extraction logs while forwarding progress."""
+    desktop_log = MagicMock()
+    desktop_progress = MagicMock()
+    desktop_sink = DesktopNarrativeSink(
+        log_callback=desktop_log,
+        progress_callback=desktop_progress,
+        suppress_per_entity_success=True,
+    )
+
+    output = io.StringIO()
+    console = Console(file=output, color_system=None, width=120)
+    mock_progress_bar = MagicMock()
+    mock_progress_bar.console = console
+    task_id = TaskID(1)
+    rich_sink = RichNarrativeSink(
+        console=console,
+        progress=mock_progress_bar,
+        task_id=task_id,
+        show_timestamps=False,
+        suppress_per_entity_success=True,
+    )
+
+    mock_tab = MagicMock()
+
+    file_ev = _make_event(
+        PresentationKind.PROGRESS,
+        "[market_stock_holdings] Ingested file (116/813): 'PL Statement - 10-08-2024.xlsx' -> Pre-Bronze & Bronze (67 rows)",
+        event_code=EventCode.EXTRACTION_BATCH,
+        progress=0.25,
+        entity_type="File",
+        entity_id="PL Statement - 10-08-2024.xlsx",
+        rows=67,
+    )
+
+    # 1. DesktopNarrativeSink: Suppresses log, dispatches progress
+    desktop_sink.emit(file_ev)
+    assert desktop_sink.emitted_count == 0
+    desktop_log.assert_not_called()
+    desktop_progress.assert_called_once_with(0.25)
+
+    # 2. BaseEngineTab: Suppresses log, dispatches progress
+    BaseEngineTab._process_observability_event(mock_tab, None, file_ev)
+    mock_tab._set_progress.assert_called_once_with(0.25)
+    mock_tab._log.assert_not_called()
+
+    # 3. RichNarrativeSink: Suppresses terminal line, updates Rich task
+    rich_sink.emit(file_ev)
+    assert rich_sink.rendered_count == 0
+    assert output.getvalue() == ""
+    mock_progress_bar.update.assert_called_once_with(1, completed=25.0)
+
+    # 4. Milestone events must not be suppressed
+    ds_start_ev = _make_event(
+        PresentationKind.STEP,
+        "Ingesting dataset 'market_stock_holdings' from 813 actionable file(s)...",
+        event_code=EventCode.EXTRACTION_START,
+        entity_type="dataset",
+        entity_id="market_stock_holdings",
+        rows=813,
+    )
+    ds_end_ev = _make_event(
+        PresentationKind.SUCCESS,
+        "Bronze: Table 'bronze.r_Stock_Market_Data' upserted 54471 rows from 813 files via generalized admission.",
+        event_code=EventCode.BRONZE_UPSERT,
+        entity_type="Table",
+        entity_id="bronze.r_Stock_Market_Data",
+        rows=54471,
+    )
+
+    desktop_sink.emit(ds_start_ev)
+    desktop_sink.emit(ds_end_ev)
+    assert desktop_sink.emitted_count == 2
+    assert desktop_log.call_count == 2
+
+    rich_sink.emit(ds_start_ev)
+    rich_sink.emit(ds_end_ev)
+    assert rich_sink.rendered_count == 2
+    assert "Ingesting dataset 'market_stock_holdings'" in output.getvalue()
+    assert "Bronze: Table 'bronze.r_Stock_Market_Data'" in output.getvalue()

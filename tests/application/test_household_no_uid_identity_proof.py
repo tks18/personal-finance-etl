@@ -1,5 +1,5 @@
 # pyright: reportPrivateUsage=false
-"""Verification suite for Phase 029: Household Transaction Evidence and No-UID Identity Proof.
+"""Verification suite for Household Transaction Evidence and No-UID Identity Proof.
 
 Owns
 ----

@@ -18,6 +18,8 @@ Does not own
 from __future__ import annotations
 
 import queue
+import shutil
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -72,6 +74,56 @@ def fixtures_dir(repo_root: Path) -> Path:
         Absolute path to tests/fixtures.
     """
     return repo_root / "tests" / "fixtures"
+
+
+@pytest.fixture(scope="session")
+def evidence_repo_dir(fixtures_dir: Path) -> Path:
+    """Return the absolute path to the canonical static evidence fixtures directory.
+
+    Parameters
+    ----------
+    fixtures_dir : Path
+        Project fixtures directory.
+
+    Returns
+    -------
+    Path
+        Absolute path to tests/fixtures/evidence.
+    """
+    return fixtures_dir / "evidence"
+
+
+@pytest.fixture
+def copy_evidence(
+    evidence_repo_dir: Path,
+) -> Callable[[str, Path], dict[str, str]]:
+    """Provide a factory fixture to copy a family of static evidence files into target test directory.
+
+    Parameters
+    ----------
+    evidence_repo_dir : Path
+        Canonical evidence repository directory.
+
+    Returns
+    -------
+    Callable[[str, Path], dict[str, str]]
+        Function copying static evidence files from family subdirectory into dest_dir.
+    """
+
+    def _copy(family: str, dest_dir: Path) -> dict[str, str]:
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        src_family_dir = evidence_repo_dir / family
+        copied: dict[str, str] = {}
+        for file in src_family_dir.rglob("*"):
+            if file.is_file():
+                rel_path = file.relative_to(src_family_dir)
+                dest_file = dest_dir / rel_path
+                dest_file.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(file, dest_file)
+                copied[str(rel_path).replace("\\", "/")] = str(dest_file).replace("\\", "/")
+        return copied
+
+    return _copy
 
 
 @pytest.fixture(scope="session")

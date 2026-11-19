@@ -91,17 +91,21 @@ No source code changes between fixtures.
 
 ## 6. Detailed implementation sequence
 
-### Step 1 - Define fixture contracts
-Write expected source->DatasetId matrix and financial scenario. Keep fixture data small but relationally meaningful: categories, assets/currency, income/expense transactions, opening state as required.
+### Step 1 - Define fixture contracts and Generic External Fixture Repository
+Establish a permanent Generic External Fixture repository at `tests/fixtures/external/household/` containing completely vendor-agnostic files with novel schemas:
+- `generic_expenses.csv`: column names `Txn_Date`, `Category_Label`, `Spent_Amount`, `Payment_Mode`, `Notes` (dates formatted as `DD/MM/YYYY`);
+- `generic_accounts.xlsx`: multi-sheet workbook with sheets `Bank_Accounts` and `Category_Catalog` with custom header offsets and column names;
+- `generic_household.sqlite`: custom SQLite database with tables `custom_transactions`, `custom_categories`, `custom_accounts` and integer primary keys;
+- `sources_generic_household.toml`: typed public source configuration mapping those novel columns, date formats, and sheet/table selectors into canonical Bronze household contracts.
 
 ### Step 2 - Build Excel fixture/config
-Run diagnostics first, then full household-only pipeline.
+Run diagnostics first (`validate-config`, `check-sources`, `dry-run-admission`), then full household-only pipeline against `generic_accounts.xlsx`. Assert Pre-Bronze retains raw vendor layout while Bronze and Silver reflect normalized canonical financial contracts.
 
 ### Step 3 - Build CSV fixture/config
-Use intentionally different source vocabulary/date representation to prove normalization.
+Run diagnostics and full household pipeline against `generic_expenses.csv`. Prove date parsing, string trimming, and column renaming normalize cleanly into Bronze.
 
 ### Step 4 - Build SQLite fixture/config
-Use non-Shan table names and stable IDs.
+Run diagnostics and full household pipeline against `generic_household.sqlite`. Prove selector-driven table extraction without hardcoded `zcategory` assumptions.
 
 ### Step 5 - Cross-topology canonical equivalence
 Where fixtures represent the same financial scenario, compare canonical Bronze and downstream household results after sorting by canonical identity. Source provenance differs; financial meaning should not.

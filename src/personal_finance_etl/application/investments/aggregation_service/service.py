@@ -134,21 +134,23 @@ class PostProcessor:
 
     def _build_master_metadata(self) -> pl.LazyFrame:
         """Construct LazyFrame of instrument metadata with sanitized null defaults."""
+        master_cols = [
+            "ISIN",
+            "INSTRUMENT_CLASS",
+            "INSTRUMENT_SUBTYPE",
+            "INSTRUMENT_TYPE",
+            "SECTOR",
+            "INDUSTRY",
+            "GEO",
+            "COUNTRY",
+        ]
+        if not self.ctx.isin_master:
+            return pl.LazyFrame(schema={c: pl.String for c in master_cols})
+
         master_records = [{"ISIN": k, **v} for k, v in self.ctx.isin_master.items()]
         return (
             pl.LazyFrame(master_records)
-            .select(
-                [
-                    "ISIN",
-                    "INSTRUMENT_CLASS",
-                    "INSTRUMENT_SUBTYPE",
-                    "INSTRUMENT_TYPE",
-                    "SECTOR",
-                    "INDUSTRY",
-                    "GEO",
-                    "COUNTRY",
-                ]
-            )
+            .select(master_cols)
             .with_columns(
                 pl.col("INSTRUMENT_TYPE").fill_null("Unknown"),
                 pl.col("SECTOR").fill_null("Unknown"),

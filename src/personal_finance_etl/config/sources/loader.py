@@ -584,7 +584,7 @@ def get_shan_baseline_sources(settings: Settings | None = None) -> list[SourceCo
             provider_type=ProviderType.CSV,
             location=col_master_loc,
             enabled=False,
-            description="Retired column mapping dictionary (retired in Phase 030)",
+            description="Retired column mapping dictionary (transitional retirement)",
         ),
         SourceConfig(
             source_id=SourceId("mf_holdings_excel"),
@@ -832,7 +832,7 @@ _HOUSEHOLD_ASSETS_FIELDS: list[SourceFieldDeclaration] = [
         name="ID",
         data_type="Int64",
         nullable=True,
-        description="Legacy primary key integer identifier",
+        description="Source primary key integer identifier",
     ),
     SourceFieldDeclaration(
         name="CARD_DAY_FIN",
@@ -1009,7 +1009,7 @@ _HOUSEHOLD_CURRENCY_FIELDS: list[SourceFieldDeclaration] = [
         name="ID",
         data_type="Int64",
         nullable=True,
-        description="Legacy primary key integer identifier",
+        description="Source primary key integer identifier",
     ),
     SourceFieldDeclaration(
         name="uid",
@@ -1161,7 +1161,7 @@ _HOUSEHOLD_INOUTCOME_FIELDS: list[SourceFieldDeclaration] = [
         name="AID",
         data_type="Int64",
         nullable=True,
-        description="Legacy primary key sequence integer",
+        description="Source primary key sequence integer",
     ),
     SourceFieldDeclaration(
         name="uid",
@@ -2703,7 +2703,7 @@ def get_shan_baseline_dataset_bindings() -> list[SourceDatasetConfig]:
             dataset_id=DatasetId.COMMON_COLUMN_MASTER,
             selector=CsvSelector(),
             enabled=False,
-            description="Retired column master mapping dataset (transitional retirement in Phase 030)",
+            description="Retired column master mapping dataset (transitional retirement)",
             identity=CompositeIdentity(fields=["TABLE_NAME", "OLD_COLUMN"]),
         ),
         SourceDatasetConfig(

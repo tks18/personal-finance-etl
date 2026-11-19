@@ -32,6 +32,9 @@ from personal_finance_etl.presentation.desktop.theme import (
     Color,
     ExportMode,
 )
+from personal_finance_etl.presentation.observability import (
+    should_suppress_narrative_event,
+)
 
 __all__ = ["BaseEngineTab"]
 
@@ -204,14 +207,8 @@ class BaseEngineTab(ctk.CTkFrame):  # type: ignore[misc]
         if not event.message.strip():
             return
 
-        # Suppress repetitive per-entity success/cache ticks from cluttering UI log
-        if event.event_code in (
-            EventCode.MARKET_TICKER_SUCCESS,
-            EventCode.MARKET_TICKER_CACHE_HIT,
-            EventCode.QUANT_ISIN_PROCESSED,
-            EventCode.VALIDATION_START,
-            EventCode.VALIDATION_SUCCESS,
-        ) and event.presentation_kind in (PresentationKind.STEP, PresentationKind.SUCCESS):
+        # Suppress repetitive per-entity ticks (tickers, validation, per-file ingestion) from cluttering UI log
+        if should_suppress_narrative_event(event):
             return
 
         tag = _DESKTOP_TAG_MAP.get(event.presentation_kind, "info")

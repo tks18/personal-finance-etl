@@ -118,6 +118,17 @@ Rename all physical tables across `pre_bronze`, `bronze`, `silver`, and `gold` t
 ### Step 10 - Architecture guards against legacy prefixes
 Add AST architectural tests verifying zero physical tables in DuckDB declare `r_`, `d_`, `f_`, or `pb_` prefixes.
 
+### Step 11 - Medallion Telemetry & Stage Narrative Standardization
+Standardize pipeline telemetry and presentation logging to reflect the modern Medallion architecture:
+- Update UI progress narrative and CLI output to display modern Medallion stage transitions:
+  - `Phase 1/5 [Discovery]: Discovering files and synchronizing Control Plane artifacts`
+  - `Phase 2/5 [Ingestion]: Admitting datasets into Pre-Bronze & Bronze Lakehouse`
+  - `Phase 3/5 [Harmonization]: Transforming normalized state into Silver Lakehouse`
+  - `Phase 4/5 [Analytics]: Executing quantitative, tax, and FIRE models`
+  - `Phase 5/5 [Gold Marts]: Materializing decision-ready Gold analytical surfaces`
+- Emit structured layer-level lifecycle events (`PRE_BRONZE_ADMISSION`, `BRONZE_DELTA_UPSERT`, `SILVER_HARMONIZATION`, `GOLD_MART_MATERIALIZATION`) capturing exact active table counts, row counts, and capability tags.
+- Ensure detailed developer debug logs in `outputs/logs/` capture forensic table transitions (created, replaced, pruned) correlated with capability plan IDs.
+
 ### Step 11 - Recovery
 Failure during stale-table cleanup/rebuild rolls back DuckDB transaction completely.
 
@@ -179,6 +190,7 @@ Do not:
 - [ ] Backup/restore/integrity plan-aware.
 - [ ] Capability-switch matrix green.
 - [ ] Full plan remains identical.
+- [ ] Modern Medallion stage narrative and structured layer telemetry certified.
 
 ## 12. Commit boundary
 

@@ -1,4 +1,4 @@
-"""Comprehensive test suite for Phase 026/027 typed DatasetCollection transport.
+"""Comprehensive test suite for typed DatasetCollection transport.
 
 Owns
 ----

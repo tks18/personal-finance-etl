@@ -85,6 +85,12 @@ Cache immutable compiled mapping/validation/identity plans per config fingerprin
 ### Step 8 - Re-profile after each meaningful fix
 Keep only improvements with measurable benefit and green correctness suite.
 
+### Step 8b - Observability Throughput & Telemetry Benchmarking
+Benchmark high-frequency telemetry under multi-file ingestion and multi-engine processing:
+- Ensure per-file ingestion events (`PresentationKind.PROGRESS`) and per-ticker progress updates do not saturate multiprocessing queues or degrade event dispatching throughput.
+- Verify that append-only forensic logging to JSONL (`outputs/logs/`) scales efficiently without blocking pipeline workers.
+- Verify that Desktop narrative formatting and UI sink updates run smoothly without freezing the GUI event loop.
+
 ### Step 9 - Define performance gates
 Set thresholds for full/cached runs as relative/absolute ranges appropriate to environment. Document noise methodology.
 
@@ -151,6 +157,7 @@ Do not:
 - [ ] External workload accepted.
 - [ ] Memory/materialization acceptable.
 - [ ] Correctness/recovery/observability unchanged.
+- [ ] Observability throughput and UI narrative rendering benchmarks satisfied.
 - [ ] Durable performance gate exists.
 
 ## 12. Commit boundary

@@ -121,7 +121,12 @@ Required:
 - full Shan Tax events/amounts/IDs identical;
 - unrelated outputs identical when Tax disabled;
 - architecture guard against direct Tax feature flags;
-- deterministic financial test cases using `tests/fixtures/evidence/` for capital gains tax calculations (LTCG / STCG, grandfathering rules, tax slabs, dividend withholding) against predictable real-world trades.
+- deterministic financial test cases using `tests/fixtures/evidence/` for capital gains tax calculations (LTCG / STCG, grandfathering rules, tax slabs, dividend withholding) against predictable real-world trades;
+- **Exhaustive Deep Domain Tax Assertions (Silver & Gold):**
+  - Meticulously test and assert Silver tax events (`f_Tax_Events`), validating deterministic `TAX` identity stability, event classification (LTCG, STCG, dividend, interest), Section 112A grandfathering fair market value (FMV) price lookups as of 31-Jan-2018, indexation calculations, and withholding tax amounts;
+  - Meticulously test and assert Gold tax summary marts (`Tax_Year_Summary`), validating annual aggregate taxable income, statutory exemptions (e.g. Section 112A ₹1L exemption), applicable slab brackets, cess percentages, and gross vs net tax liabilities;
+  - Meticulously test and assert Gold income breakdown marts (`Tax_Income_Breakdown`), verifying exact head-wise attribution across salary, capital gains, dividend income, and other sources;
+  - Meticulously test and assert Gold tax reconciliation marts (`Tax_Reconciliation`), asserting exact balance reconciliation between commercial book profit and statutory tax profit.
 
 ## 10. Explicit non-goals
 

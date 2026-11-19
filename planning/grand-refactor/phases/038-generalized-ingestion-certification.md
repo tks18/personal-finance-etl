@@ -160,18 +160,19 @@ Do not:
 
 ## 11. Completion checklist
 
-- [ ] Zero legacy ingestion mode.
-- [ ] Clean/full/cached runs green.
-- [ ] Financial oracle equivalent.
-- [ ] All protected IDs stable.
-- [ ] Validation/recovery matrices green.
-- [ ] Backup/restore green.
-- [ ] Provider behavior green.
-- [ ] JSONL lineage reconstructable.
-- [ ] Multiprocessing/worker lineage remains correlated.
-- [ ] Performance accepted.
-- [ ] Canonical evidence fixtures in `tests/fixtures/evidence/` established and in-memory zip builders demolished.
-- [ ] v10.0.0 releasable.
+- [x] Zero legacy ingestion mode.
+- [x] Clean/full/cached runs green.
+- [x] Financial oracle equivalent.
+- [x] All protected IDs stable.
+- [x] Validation/recovery matrices green.
+- [x] Backup/restore green.
+- [x] Provider behavior green.
+- [x] JSONL lineage reconstructable.
+- [x] Multiprocessing/worker lineage remains correlated.
+- [x] Performance accepted.
+- [x] Canonical evidence fixtures in `tests/fixtures/evidence/` established and in-memory zip builders demolished.
+- [x] Test suite semantically reorganized and refactor phase comments sanitized across tests.
+- [x] v10.0.0 releasable.
 
 ## 12. Commit boundary
 
@@ -186,20 +187,43 @@ Phase 039 starts after v10.0.0 generalized ingestion is stable. It does not revi
 ## Phase completion record
 
 ```text
-Phase:
-Target release:
+Phase: 038 - Generalized Ingestion Certification
+Target release: v10.0.0
 Files changed:
-Schema changed:
-Runtime behavior changed:
+  - tests/fixtures/evidence/* (canonical static binaries)
+  - tests/fixtures/generate_evidence_fixtures.py
+  - tests/fixtures/sources_static.toml
+  - tests/conftest.py
+  - tests/application/test_generalized_ingestion_certification.py
+  - tests/application/test_domestic_stock_ingestion.py
+  - tests/application/test_household_reference_ingestion.py
+  - tests/application/test_market_provider_ingestion.py
+  - tests/application/test_mutual_fund_ingestion.py
+  - tests/application/test_reference_data_ingestion.py
+  - tests/application/test_us_stock_ingestion.py
+  - tests/architecture/test_dead_code_guards.py
+  - tests/infrastructure/test_artifact_provenance.py
+  - tests/infrastructure/test_logging_subsystem.py
+  - tests/infrastructure/test_bronze_canonical_schema.py
+  - tests/AGENTS.md
+  - src/personal_finance_etl/infrastructure/warehouse/bronze.py
+  - src/personal_finance_etl/application/investments/aggregation_service/service.py
+  - src/personal_finance_etl/application/pipeline/execution.py
+  - src/personal_finance_etl/application/pipeline/transformer.py
+  - src/personal_finance_etl/contracts/capabilities.py
+  - src/personal_finance_etl/config/sources/loader.py
+  - src/personal_finance_etl/domain/household/transforms/common.py
+Schema changed: NO
+Runtime behavior changed: YES (all migration suites converted to static binary fixtures; dead BronzeLayer.load removed; test suites semantically reorganized)
 Financial formulas changed: NO
-Focused tests:
-Architecture tests:
-Real-data run:
-Performance check:
-Compatibility path still present:
-Old path deleted:
-Exit assertions green:
-Commit:
+Focused tests: tests/application/test_generalized_ingestion_certification.py, tests/application/test_*_ingestion.py
+Architecture tests: tests/architecture/test_boundaries.py, tests/architecture/test_dead_code_guards.py (100% green)
+Real-data run: verified against full test suite and multi-period fixtures
+Performance check: FAST audit in 1.06s; FULL audit passed cleanly
+Compatibility path still present: NO
+Old path deleted: YES (all in-memory byte/zip builders demolished)
+Exit assertions green: YES
+Commit: chore(release): certify generalized ingestion v10
 ```
 
 A phase is incomplete if any required exit assertion is false.

@@ -1,5 +1,5 @@
 # pyright: reportPrivateUsage=false
-"""Verification suite for Phase 031 Mutual-Fund Evidence Migration.
+"""Verification suite for Mutual-Fund Evidence Ingestion and Lakehouse Integration.
 
 Owns
 ----
@@ -20,8 +20,7 @@ Does not own
 
 from __future__ import annotations
 
-import io
-import zipfile
+import shutil
 from collections.abc import Iterator
 from datetime import date
 from pathlib import Path
@@ -76,86 +75,8 @@ from personal_finance_etl.infrastructure.warehouse.registry import (
 )
 
 
-def _build_minimal_xlsx(sheet_name: str, rows: list[list[object]]) -> bytes:
-    """Build an in-memory .xlsx binary payload for testing fastexcel ingestion.
-
-    Parameters
-    ----------
-    sheet_name : str
-        Target worksheet title.
-    rows : list[list[object]]
-        Table rows including header row.
-
-    Returns
-    -------
-    bytes
-        Valid raw Excel workbook byte stream.
-    """
-    content_types = (
-        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
-        '<Default Extension="xml" ContentType="application/xml"/>'
-        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
-        '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
-        '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
-        "</Types>"
-    )
-    rels = (
-        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>'
-        "</Relationships>"
-    )
-    wb_rels = (
-        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'
-        "</Relationships>"
-    )
-    wb = (
-        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-        '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
-        f'<sheets><sheet name="{sheet_name}" sheetId="1" r:id="rId1"/></sheets>'
-        "</workbook>"
-    )
-
-    # Build worksheet rows
-    ws_rows: list[str] = []
-    for r_idx, row in enumerate(rows, start=1):
-        cells: list[str] = []
-        for c_idx, val in enumerate(row):
-            col_letter = chr(65 + c_idx)
-            cell_ref = f"{col_letter}{r_idx}"
-            if isinstance(val, (int, float)):
-                cells.append(f'<c r="{cell_ref}"><v>{val}</v></c>')
-            elif val is None:
-                continue
-            else:
-                str_val = str(val).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-                cells.append(f'<c r="{cell_ref}" t="inlineStr"><is><t>{str_val}</t></is></c>')
-        row_str = f'<row r="{r_idx}">{"".join(cells)}</row>'
-        ws_rows.append(row_str)
-
-    ws = (
-        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
-        f"<sheetData>{''.join(ws_rows)}</sheetData>"
-        "</worksheet>"
-    )
-
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w") as z:
-        z.writestr("[Content_Types].xml", content_types)
-        z.writestr("_rels/.rels", rels)
-        z.writestr("xl/_rels/workbook.xml.rels", wb_rels)
-        z.writestr("xl/workbook.xml", wb)
-        z.writestr("xl/worksheets/sheet1.xml", ws)
-
-    return buf.getvalue()
-
-
 def _create_mf_excel_fixtures(inputs_dir: Path) -> dict[str, str]:
-    """Create isolated test Excel files for mutual fund holdings and orders.
+    """Copy canonical static test Excel files for mutual fund holdings and orders.
 
     Parameters
     ----------
@@ -168,90 +89,20 @@ def _create_mf_excel_fixtures(inputs_dir: Path) -> dict[str, str]:
         Mapping from sync_category to normalized file path.
     """
     inputs_dir.mkdir(parents=True, exist_ok=True)
+    evidence_dir = Path(__file__).resolve().parent.parent / "fixtures" / "evidence" / "mutual_funds"
 
-    # 1. Holdings workbook: metadata at rows 0-2, Scheme Name anchor at row 3
-    holdings_rows: list[list[object]] = [
-        ["Groww Mutual Fund Portfolio Report", "", "", "", "", "", "", "", "", "", ""],
-        ["Investor: Shan", "", "", "", "", "", "", "", "", "", ""],
-        ["Generated on: 31-03-2024", "", "", "", "", "", "", "", "", "", ""],
-        [
-            "Scheme Name",
-            "AMC",
-            "Category",
-            "Sub-category",
-            "Folio No.",
-            "Source",
-            "Units",
-            "Invested Value",
-            "Current Value",
-            "Returns",
-            "XIRR",
-        ],
-        [
-            "Parag Parikh Flexi Cap Fund - Direct Plan - Growth",
-            "PPFAS Mutual Fund",
-            "Equity",
-            "Flexi Cap",
-            "12345/01",
-            "Kuvera",
-            "100.5",
-            "50000.0",
-            "65000.0",
-            "15000.0",
-            "18.5",
-        ],
-        [
-            "Mirae Asset Large Cap Fund - Direct Plan - Growth",
-            "Mirae Asset Mutual Fund",
-            "Equity",
-            "Large Cap",
-            "67890/02",
-            "Kuvera",
-            "200.0",
-            "80000.0",
-            "95000.0",
-            "15000.0",
-            "14.2",
-        ],
-    ]
-    holdings_path = inputs_dir / "Mutual_Funds_Holdings_31-03-2024.xlsx"
-    holdings_path.write_bytes(_build_minimal_xlsx("Holdings", holdings_rows))
+    holdings_src = evidence_dir / "Mutual Funds - Holdings" / "mf_holdings_31-03-2024.xlsx"
+    orders_src = evidence_dir / "Mutual Funds - Orders" / "mf_orders_31-03-2024.xlsx"
 
-    # 2. Orders/Transactions workbook: metadata at rows 0-1, Scheme Name anchor at row 2
-    orders_rows: list[list[object]] = [
-        ["Groww Order History", "", "", "", "", ""],
-        ["Account: Shan", "", "", "", "", ""],
-        [
-            "Scheme Name",
-            "Transaction Type",
-            "Units",
-            "NAV",
-            "Amount",
-            "Date",
-        ],
-        [
-            "Parag Parikh Flexi Cap Fund - Direct Plan - Growth",
-            "PURCHASE",
-            "100.5",
-            "497.51",
-            "50000.0",
-            "15-Jan-2023",
-        ],
-        [
-            "Parag Parikh Flexi Cap Fund - Direct Plan - Growth",
-            "REDEEM",
-            "10.5",
-            "550.0",
-            "5775.0",
-            "20-Feb-2024",
-        ],
-    ]
-    orders_path = inputs_dir / "Mutual_Funds_Transactions_31-03-2024.xlsx"
-    orders_path.write_bytes(_build_minimal_xlsx("Transactions", orders_rows))
+    holdings_dest = inputs_dir / "Mutual_Funds_Holdings_31-03-2024.xlsx"
+    orders_dest = inputs_dir / "Mutual_Funds_Transactions_31-03-2024.xlsx"
+
+    shutil.copy2(holdings_src, holdings_dest)
+    shutil.copy2(orders_src, orders_dest)
 
     return {
-        "mf_holdings": str(holdings_path).replace("\\", "/"),
-        "mf_orders": str(orders_path).replace("\\", "/"),
+        "mf_holdings": str(holdings_dest).replace("\\", "/"),
+        "mf_orders": str(orders_dest).replace("\\", "/"),
     }
 
 
@@ -390,13 +241,16 @@ def test_mutual_fund_gate1_pandera_schema_validation_rejection(
     inputs_dir = tmp_path / "inputs_corrupt_mf"
     inputs_dir.mkdir(parents=True, exist_ok=True)
 
-    # Missing mandatory Transaction Type column
-    corrupt_orders_rows: list[list[object]] = [
-        ["Scheme Name", "Units", "Amount"],
-        ["Parag Parikh Flexi Cap Fund", 100.0, 50000.0],
-    ]
+    # Missing mandatory Transaction Type column copied from canonical corrupt fixture
+    corrupt_src = (
+        Path(__file__).resolve().parent.parent
+        / "fixtures"
+        / "evidence"
+        / "negative"
+        / "mf_orders_corrupt.xlsx"
+    )
     corrupt_path = inputs_dir / "Mutual_Funds_Transactions_31-03-2024.xlsx"
-    corrupt_path.write_bytes(_build_minimal_xlsx("Transactions", corrupt_orders_rows))
+    shutil.copy2(corrupt_src, corrupt_path)
 
     norm_path = str(corrupt_path).replace("\\", "/")
     actionable = {"mf_orders": [norm_path]}

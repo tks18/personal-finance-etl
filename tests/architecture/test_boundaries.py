@@ -381,7 +381,7 @@ def test_no_fixed_dataset_universe_dataclass() -> None:
 
     Governing Invariant
     -------------------
-    Phase 027 permanently demolishes ExtractionResult and prohibits fixed-field dataset
+    Permanently prohibits legacy ExtractionResult and fixed-field dataset
     universe dataclasses in contracts. All cross-boundary tabular collections must use
     contracts.dataset_collection.DatasetCollection.
     """

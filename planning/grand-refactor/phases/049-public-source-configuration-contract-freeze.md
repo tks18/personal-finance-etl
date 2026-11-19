@@ -89,6 +89,44 @@ Implement/test:
 ### Step 7 - Identifier freeze
 DatasetId, ProviderType, CapabilityId and policy enum serialized values reviewed. Rename only now if essential.
 
+### Step 7b - Demolition of Transitional column_master & DatasetId.COMMON_COLUMN_MASTER
+Permanently eradicate all traces of transitional `column_master` from the public contract and codebase:
+- Remove `column_master_csv` from default `SourceConfiguration` in `src/personal_finance_etl/config/sources/loader.py`.
+- Demolish `DatasetId.COMMON_COLUMN_MASTER` from `src/personal_finance_etl/contracts/datasets.py` and eradicate `DatasetOrigin.TRANSITIONAL_CONFIGURATION_DATASET`.
+- Demolish `COMMON_COLUMN_MASTER` from `BRONZE_CONTRACT_REGISTRY` in `src/personal_finance_etl/infrastructure/warehouse/contracts.py`, permanently reducing the Bronze contract count from 20 to the definitive 19 canonical financial contracts.
+- Demolish canonical bronze schema `CANONICAL_BRONZE_COMMON_COLUMN_MASTER_SCHEMA` from `canonical_schemas.py`, canonical field sets from `canonical_fields.py`, hashing table entries from `hashing.py`, and capability bronze bindings from `capabilities.py`.
+- Remove transitional runtime bypasses (`if ds_id == DatasetId.COMMON_COLUMN_MASTER: continue`) from `execution.py` and `bronze.py`.
+- Demolish `tests/config/test_column_master_parity.py` and delete legacy `COLUMN_MASTER.csv` from `tests/fixtures/`.
+- Update all test suites and topological guards (`test_topology.py`, `test_dataset_collection.py`, `test_admission_contracts.py`, `test_source_planner.py`, `test_admission_service.py`) to verify strictly 19 canonical Bronze contracts with zero transitional remnants.
+
+### Step 7c - Shan Production Cutover to sources.toml & loader.py Hardcoding Demolition
+Convert Shan's live production configuration in Google Drive to explicit TOML files and demolish all hardcoded Python configuration dictionaries:
+1. **Author Production `shan_personal_finance_sources.toml` & `shan_personal_finance_sources_Test.toml`:**
+   - In target directory `G:\My Drive\Docs\Financial Docs\Financial Planner\Analysis\ETL App\`, generate:
+     - `shan_personal_finance_sources.toml` (Production profile)
+     - `shan_personal_finance_sources_Test.toml` (Test profile)
+   - Declare all active Shan physical evidence sources:
+     - SQLite source directory: `location = "G:\My Drive\MoneyManager"` (dynamic folder location using latest-modified file discovery to automatically bind the newest `.mmbak` or `.sqlite` backup file on every pipeline run, preserving `SOURCE_DB_FOLDER` semantics);
+     - Typed table selectors for `zcategory`, `assetgroup`, `assets`, `currency`, and `inoutcome`;
+     - Brokerage statements directory: `G:\My Drive\Docs\Financial Docs\Statements` with file pattern selectors for `Tradebook.xlsx`, `INDmoney_Holding.xlsx`, and `Mutual_Funds_Orders.xlsx`;
+     - Static reference datasets directory: `G:\My Drive\Docs\Financial Docs\Financial Planner\Analysis\__dependencies__\` declaring `OPENING_BALANCE.csv`, `BENCHMARK_MASTER.csv`, `BENCHMARK_MAPPING.csv`, `MF_ISIN_MAPPING.csv`, `MACRO_PARAMETERS.csv`, and `CURRENCY_MAPPING.csv`;
+     - Pruned canonical column schemas established in Phases 046 & 047 (clean financial contracts without vendor baggage);
+     - Zero references to retired `column_master`.
+2. **Update `shan_personal_finance_ETL.toml` & `shan_personal_finance_ETL_Test.toml` (`Settings`):**
+   - Cleanly prune all redundant source file paths (`COLUMN_MASTER_PATH`, `MF_ISIN_CSV_PATH`, `BENCHMARK_MAPPING_CSV_PATH`, `BENCHMARK_MASTER_CSV_PATH`, `MACRO_PARAMETERS_CSV_PATH`, `OPENING_BALANCE_CSV_PATH`, `CURRENCY_MAPPING_CSV_PATH`, `SOURCE_DB_FOLDER`, `STATEMENTS_FOLDER`) that are now owned by `sources.toml`.
+   - Keep settings focused strictly on execution/storage environment (`TARGET_DB_BASE_PATH`, `TARGET_DB_NAME`, `RAW_DOCUMENT_STORE_NAME`, `LOGS_DIRECTORY`, `RETAIN_LAST_N_RUNS`, `FILE_HASH_POLICY`).
+3. **Update `shan_personal_finance_rules.toml` (`FinancialRules`):**
+   - Synchronize financial rules models with finalized capability IDs, tax schedules, inflation parameters, and withdrawal rates.
+4. **Demolish Hardcoded Python Dictionaries from `loader.py`:**
+   - Permanently delete all ~2,300 lines of hardcoded Python dictionaries from `src/personal_finance_etl/config/sources/loader.py`:
+     - `get_shan_baseline_sources()`
+     - `get_shan_baseline_dataset_bindings()`
+     - `get_shan_baseline_source_configuration()`
+     - all private field and mapping arrays (`_HOUSEHOLD_ASSETS_FIELDS`, etc.).
+   - Reduce `loader.py` to a lean module containing strictly Pydantic schema models (`SourceConfiguration`, `SourceConfig`, `SourceDatasetConfig`) and parser/serializer methods (`from_toml`, `to_toml`).
+   - Update `ServiceContainer.create_source_config()` to load exclusively from `sources.toml` (raising `FileNotFoundError` with clear remediation guidance if absent, rather than falling back to hardcoded code).
+   - Add architecture guards in `tests/architecture/` verifying zero hardcoded `SourceConfig` instances exist in `src/`.
+
 ### Step 8 - Golden configuration fixtures
 Promote external household/investment configurations to schema-v1 golden examples/tests.
 
@@ -105,7 +143,8 @@ Modify:
 - schema export;
 - version/compatibility validation;
 - golden configs/tests;
-- CLI schema/validation command if appropriate.
+- CLI schema/validation command if appropriate;
+- purge all transitional column_master configuration, contracts, and tests.
 
 Do not build docs portal or companion applications.
 
@@ -153,6 +192,8 @@ Do not:
 - [ ] Golden external configs pass.
 - [ ] Fingerprinting remains deterministic.
 - [ ] Future changes are guarded.
+- [ ] Transitional column_master completely demolished and DatasetId.COMMON_COLUMN_MASTER purged (Bronze contracts permanently reduced to 19).
+- [ ] Hardcoded configuration dictionaries demolished from loader.py; sources.toml is sole configuration authority.
 
 ## 12. Commit boundary
 
