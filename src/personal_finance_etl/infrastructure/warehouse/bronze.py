@@ -9,7 +9,7 @@ Owns
 
 Does not own
 -------------
-- Dynamic runtime schema evolution (prohibited by Phase 036 strict canonical cutover).
+- Dynamic runtime schema evolution (prohibited by strict canonical schemas).
 - Filesystem discovery or binary file parsing (owned by infrastructure.providers).
 - Raw binary vaulting or control plane state (owned by control plane).
 - DuckDB connection lifecycle (owned by infrastructure.warehouse.connection).
@@ -185,24 +185,6 @@ class BronzeLayer:
                 counts[fname] = count
         return counts
 
-    def load(
-        self,
-        extracted_data: DatasetCollection,
-        actionable_files: dict[str, list[str]],
-    ) -> None:
-        """Act as a deprecated compatibility stub for legacy bronze loading.
-
-        All datasets are natively ingested through DatasetIngestionService.
-
-        Parameters
-        ----------
-        extracted_data : DatasetCollection
-            Legacy extracted dataset collection (unused).
-        actionable_files : dict[str, list[str]]
-            Mapping of sync category to actionable file paths (unused).
-        """
-        return
-
     def migrate_identity(self, renames: list[tuple[str, str, str]]) -> None:
         """Migrate file identity (rename) in all Bronze tables without re-ingesting rows.
 
@@ -215,31 +197,9 @@ class BronzeLayer:
             return
 
         cats_to_tables: dict[str, list[str]] = {}
-        legacy_cat_map: dict[str, list[str]] = {
-            "sqlite_source": [
-                "bronze.r_SQLite_ZCategory",
-                "bronze.r_SQLite_AssetGroup",
-                "bronze.r_SQLite_Assets",
-                "bronze.r_SQLite_Currency",
-                "bronze.r_SQLite_InOutcome",
-            ],
-            "stock_pl": ["bronze.r_Stock_PL"],
-            "mf_holdings": ["bronze.r_Mutual_Funds_Holdings"],
-            "stock_orders": ["bronze.r_Stock_Orders"],
-            "mf_orders": ["bronze.r_Mutual_Funds_Orders"],
-            "us_stock_transactions": ["bronze.r_IND_Money_US_Stocks"],
-            "mf_isin": ["bronze.r_STG_MF_ISIN_Mapping"],
-            "benchmark_mapping": ["bronze.r_STG_Benchmark_Mapping"],
-            "opening_balances": ["bronze.r_Opening_Balances"],
-            "benchmark_master": ["bronze.r_Benchmark_Master"],
-            "macro_parameters": ["bronze.r_Macro_Parameters"],
-            "currency_mapping": ["bronze.r_Currency_Mapping"],
-        }
         for contract in BRONZE_CONTRACT_REGISTRY:
             cats_to_tables.setdefault(contract.dataset_id.value, []).append(contract.physical_table)
             cats_to_tables.setdefault(contract.sync_category, []).append(contract.physical_table)
-        for leg_cat, leg_tables in legacy_cat_map.items():
-            cats_to_tables.setdefault(leg_cat, []).extend(leg_tables)
 
         for old_path, new_path, category in renames:
             tables = cats_to_tables.get(category, [])
@@ -273,11 +233,12 @@ class BronzeLayer:
         pl.DataFrame
             Queried DataFrame or empty frame.
         """
+        raw_table = table_name.removeprefix("bronze.")
         try:
             return self.db_manager.conn.execute(
-                f"SELECT * FROM bronze.{table_name}"  # nosec B608
+                f"SELECT * FROM bronze.{raw_table}"  # nosec B608
             ).pl()
-        except duckdb.CatalogException:
+        except (duckdb.CatalogException, duckdb.BinderException):
             return pl.DataFrame()
 
     def get_dataset_collection(self) -> DatasetCollection:

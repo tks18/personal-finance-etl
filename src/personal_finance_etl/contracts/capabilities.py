@@ -186,6 +186,7 @@ CAPABILITY_REGISTRY: dict[CapabilityId, CapabilityDescriptor] = {
         required_bronze_datasets=(
             DatasetId.INVESTMENT_MF_ISIN_MAPPING,
             DatasetId.INVESTMENT_MACRO_PARAMETERS,
+            DatasetId.INVESTMENT_BENCHMARK_MAPPING,
             DatasetId.MARKET_MF_HOLDINGS,
             DatasetId.INVESTMENT_MF_ORDERS,
             DatasetId.MARKET_STOCK_HOLDINGS,

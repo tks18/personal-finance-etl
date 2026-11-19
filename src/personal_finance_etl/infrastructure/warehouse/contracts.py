@@ -117,35 +117,12 @@ class DataContract:
     publication_order: int
 
 
-_LEGACY_SYNC_CATEGORY_MAP: dict[DatasetId, str] = {
+_DATASET_SYNC_CATEGORY_MAP: dict[DatasetId, str] = {
     DatasetId.HOUSEHOLD_ZCATEGORY: "sqlite_source",
     DatasetId.HOUSEHOLD_ASSET_GROUP: "sqlite_source",
     DatasetId.HOUSEHOLD_ASSETS: "sqlite_source",
     DatasetId.HOUSEHOLD_CURRENCY: "sqlite_source",
     DatasetId.HOUSEHOLD_INOUTCOME: "sqlite_source",
-    DatasetId.MARKET_STOCK_HOLDINGS: "stock_pl",
-    DatasetId.MARKET_MF_HOLDINGS: "mf_holdings",
-    DatasetId.INVESTMENT_STOCK_ORDERS: "stock_orders",
-    DatasetId.INVESTMENT_MF_ORDERS: "mf_orders",
-    DatasetId.INVESTMENT_US_STOCK_TRANSACTIONS: "us_stock_transactions",
-    DatasetId.INVESTMENT_MF_ISIN_MAPPING: "mf_isin",
-    DatasetId.INVESTMENT_BENCHMARK_MAPPING: "benchmark_mapping",
-    DatasetId.HOUSEHOLD_OPENING_BALANCES: "opening_balances",
-    DatasetId.INVESTMENT_BENCHMARK_MASTER: "benchmark_master",
-    DatasetId.INVESTMENT_MACRO_PARAMETERS: "macro_parameters",
-    DatasetId.MARKET_CURRENCY_MAPPING: "currency_mapping",
-    DatasetId.MARKET_CURRENCY_FX_RATES: "currency_history",
-    DatasetId.MARKET_BENCHMARK_HISTORY: "benchmark",
-    DatasetId.MARKET_US_STOCK_PRICES: "us_stock_market",
-    DatasetId.COMMON_COLUMN_MASTER: "column_master",
-}
-
-_LEGACY_EXTRACTION_ATTR_MAP: dict[DatasetId, str] = {
-    DatasetId.HOUSEHOLD_ZCATEGORY: "zcategory",
-    DatasetId.HOUSEHOLD_ASSET_GROUP: "assetgroup",
-    DatasetId.HOUSEHOLD_ASSETS: "assets",
-    DatasetId.HOUSEHOLD_CURRENCY: "currency",
-    DatasetId.HOUSEHOLD_INOUTCOME: "inoutcome",
     DatasetId.MARKET_STOCK_HOLDINGS: "stock_pl",
     DatasetId.MARKET_MF_HOLDINGS: "mf_holdings",
     DatasetId.INVESTMENT_STOCK_ORDERS: "stock_orders",
@@ -176,13 +153,8 @@ class BronzeDataContract:
 
     @property
     def sync_category(self) -> str:
-        """Compatibility property returning legacy sync category."""
-        return _LEGACY_SYNC_CATEGORY_MAP.get(self.dataset_id, self.dataset_id.value)
-
-    @property
-    def extraction_attribute(self) -> str:
-        """Compatibility property returning legacy extraction attribute."""
-        return _LEGACY_EXTRACTION_ATTR_MAP.get(self.dataset_id, self.dataset_id.value)
+        """Control Plane artifact synchronization category."""
+        return _DATASET_SYNC_CATEGORY_MAP.get(self.dataset_id, self.dataset_id.value)
 
 
 BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [

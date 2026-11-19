@@ -8,7 +8,7 @@ Does not own
 -------------
 - Validation logic (owned by domain.common.validation).
 - Date calculation logic (owned by domain.common.dates).
-- Column mapping extraction (retired in Phase 030; owned by config.sources).
+- Column mapping extraction (owned by config.sources).
 """
 
 from __future__ import annotations

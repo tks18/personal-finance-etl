@@ -80,7 +80,7 @@ def test_registry_lookup_by_dataset_id() -> None:
     # Bronze lookup
     b_contract = get_bronze_contract_by_dataset_id(DatasetId.HOUSEHOLD_ZCATEGORY)
     assert b_contract is not None
-    assert b_contract.extraction_attribute == "zcategory"
+    assert b_contract.sync_category == "sqlite_source"
     assert b_contract.physical_table == "bronze.r_SQLite_ZCategory"
 
     # String lookup equivalence

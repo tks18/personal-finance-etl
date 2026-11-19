@@ -604,13 +604,18 @@ class PipelineExecutor:
         run_id : str
             Active pipeline execution ID.
         """
-        self._run_quant_engine(run_id)
-        self._run_tax_engine()
-        self._run_presentation_engine(cp, run_id)
+        if self.plan.is_capability_active(CapabilityId.INVESTMENT_ACCOUNTING):
+            self._run_quant_engine(run_id)
+        if self.plan.is_capability_active(CapabilityId.TAX):
+            self._run_tax_engine()
+        if self.plan.is_capability_active(CapabilityId.WEALTH) or self.plan.is_capability_active(
+            CapabilityId.FIRE
+        ):
+            self._run_presentation_engine(cp, run_id)
 
     def _run_discovery_phase(
         self, cp: ControlPlane
-    ) -> tuple[DatasetCollection, dict[str, list[str]], list[tuple[str, str, str]]]:
+    ) -> tuple[dict[str, list[str]], list[tuple[str, str, str]]]:
         """Execute Phase 1: File discovery, fingerprint sync, and change detection.
 
         Parameters
@@ -620,15 +625,15 @@ class PipelineExecutor:
 
         Returns
         -------
-        tuple[DatasetCollection, dict[str, list[str]], list[tuple[str, str, str]]]
-            Empty dataset collection, actionable path map, and list of file renames.
+        tuple[dict[str, list[str]], list[tuple[str, str, str]]]
+            Actionable path map and list of file renames.
         """
         t_ext_start = time.perf_counter()
         renames: list[tuple[str, str, str]] = []
         if not self.cfg.DISABLE_FILE_DISCOVERER:
             self.emitter.emit_event(
                 event_code=EventCode.EXTRACTION_START,
-                message="Phase 1/5: Discovery & Sync",
+                message="Phase 1/5 [Discovery]: Discovering files and synchronizing Control Plane artifacts",
                 presentation_kind=PresentationKind.STEP,
                 stage=EngineStage.DISCOVERING,
             )
@@ -685,9 +690,6 @@ class PipelineExecutor:
             stage=EngineStage.DISCOVERING,
         )
         return (
-            DatasetCollection(
-                frames={c.dataset_id: pl.DataFrame().lazy() for c in BRONZE_CONTRACT_REGISTRY}
-            ),
             actionable_all,
             renames,
         )
@@ -781,7 +783,6 @@ class PipelineExecutor:
         self,
         cp: ControlPlane,
         run_id: str,
-        extracted_data: DatasetCollection,
         actionable_all: dict[str, list[str]],
         renames: list[tuple[str, str, str]],
     ) -> tuple[BronzeLayer, DatasetCollection]:
@@ -793,8 +794,6 @@ class PipelineExecutor:
             Active ControlPlane instance.
         run_id : str
             Active pipeline execution ID.
-        extracted_data : DatasetCollection
-            Legacy extracted dataset collection (unused).
         actionable_all : dict[str, list[str]]
             Actionable file paths by category.
         renames : list[tuple[str, str, str]]
@@ -808,7 +807,7 @@ class PipelineExecutor:
         t_bronze_start = time.perf_counter()
         self.emitter.emit_event(
             event_code=EventCode.BRONZE_UPSERT,
-            message="Phase 2/5: Upserting new datasets into Bronze Lakehouse",
+            message="Phase 2/5 [Ingestion]: Admitting datasets into Pre-Bronze & Bronze Lakehouse",
             presentation_kind=PresentationKind.STEP,
             stage=EngineStage.EXTRACTING,
         )
@@ -835,34 +834,40 @@ class PipelineExecutor:
                                 pre_bronze.migrate_artifact_identity(old_id, new_id, pb_contract)
 
         # Ingest datasets declared in compiled source plan through generalized vertical slice
-        for sp in self.source_plan.source_plans:
-            if sp.provider_type == ProviderType.MARKET_DATA:
-                continue
-            for ds_plan in sp.dataset_plans:
-                ds_id = ds_plan.dataset_id
-                if ds_id == DatasetId.COMMON_COLUMN_MASTER:
-                    continue
-                pb_contract = get_pre_bronze_contract_by_dataset_id(ds_id)
-                b_contract = get_bronze_contract_by_dataset_id(ds_id)
-                sync_cat = b_contract.sync_category if b_contract else ds_id.value
-                dataset_actionable = actionable_all
-                if pb_contract and not pre_bronze.table_exists(pb_contract):
-                    if not actionable_all.get(sync_cat) and not actionable_all.get(ds_id.value):
-                        all_cat_files = cp.artifacts.get_all_paths_by_category().get(sync_cat, [])
-                        if all_cat_files:
-                            dataset_actionable = dict(actionable_all)
-                            dataset_actionable[sync_cat] = all_cat_files
-                            dataset_actionable[ds_id.value] = all_cat_files
-                self.ingestion_service.ingest_dataset(
-                    dataset_plan=ds_plan,
-                    source_config=self.source_config,
-                    cp=cp,
-                    pre_bronze=pre_bronze,
-                    bronze=bronze,
-                    meta_layer=meta_layer,
-                    actionable_files=dataset_actionable,
-                    run_id=run_id,
-                )
+        non_market_datasets = [
+            (sp, ds_plan)
+            for sp in self.source_plan.source_plans
+            if sp.provider_type != ProviderType.MARKET_DATA
+            for ds_plan in sp.dataset_plans
+            if ds_plan.dataset_id != DatasetId.COMMON_COLUMN_MASTER
+        ]
+        total_non_market = len(non_market_datasets)
+
+        for ds_idx, (_sp, ds_plan) in enumerate(non_market_datasets):
+            ds_id = ds_plan.dataset_id
+            pb_contract = get_pre_bronze_contract_by_dataset_id(ds_id)
+            b_contract = get_bronze_contract_by_dataset_id(ds_id)
+            sync_cat = b_contract.sync_category if b_contract else ds_id.value
+            dataset_actionable = actionable_all
+            if pb_contract and not pre_bronze.table_exists(pb_contract):
+                if not actionable_all.get(sync_cat) and not actionable_all.get(ds_id.value):
+                    all_cat_files = cp.artifacts.get_all_paths_by_category().get(sync_cat, [])
+                    if all_cat_files:
+                        dataset_actionable = dict(actionable_all)
+                        dataset_actionable[sync_cat] = all_cat_files
+                        dataset_actionable[ds_id.value] = all_cat_files
+            self.ingestion_service.ingest_dataset(
+                dataset_plan=ds_plan,
+                source_config=self.source_config,
+                cp=cp,
+                pre_bronze=pre_bronze,
+                bronze=bronze,
+                meta_layer=meta_layer,
+                actionable_files=dataset_actionable,
+                run_id=run_id,
+                current_dataset_idx=ds_idx,
+                total_datasets=total_non_market,
+            )
 
         elapsed_s = time.perf_counter() - t_bronze_start
         self.emitter.emit_event(
@@ -897,7 +902,7 @@ class PipelineExecutor:
         t_trans_start = time.perf_counter()
         self.emitter.emit_event(
             event_code=EventCode.TRANSFORMATION_STAGE,
-            message="Phase 3/5: Transforming and harmonizing data streams",
+            message="Phase 3/5 [Harmonization]: Transforming normalized state into Silver Lakehouse",
             presentation_kind=PresentationKind.STEP,
             stage=EngineStage.TRANSFORMING,
         )
@@ -946,7 +951,7 @@ class PipelineExecutor:
         t_eng_start = time.perf_counter()
         self.emitter.emit_event(
             event_code=EventCode.QUANT_ENGINE_START,
-            message="Phase 4/5: Executing Advanced Analytics & Monte Carlo engines",
+            message="Phase 4/5 [Analytics]: Executing quantitative, tax, and FIRE models",
             presentation_kind=PresentationKind.STEP,
             stage=EngineStage.ANALYZING,
         )
@@ -1014,7 +1019,7 @@ class PipelineExecutor:
         t_load_start = time.perf_counter()
         self.emitter.emit_event(
             event_code=EventCode.GOLD_REPLACE,
-            message="Phase 5/5: Fully replacing Silver and Gold analytical layers",
+            message="Phase 5/5 [Gold Marts]: Fully replacing Silver and Gold analytical layers",
             presentation_kind=PresentationKind.STEP,
             stage=EngineStage.PUBLISHING,
         )
@@ -1056,13 +1061,11 @@ class PipelineExecutor:
             with self.emitter.scope(
                 operation="phase_1_discovery", component="pipeline", stage=EngineStage.DISCOVERING
             ):
-                extracted_data, actionable_all, renames = self._run_discovery_phase(cp)
+                actionable_all, renames = self._run_discovery_phase(cp)
             with self.emitter.scope(
                 operation="phase_2_bronze", component="pipeline", stage=EngineStage.EXTRACTING
             ):
-                bronze, full_dataset = self._run_bronze_phase(
-                    cp, run_id, extracted_data, actionable_all, renames
-                )
+                bronze, full_dataset = self._run_bronze_phase(cp, run_id, actionable_all, renames)
             with self.emitter.scope(
                 operation="phase_3_transform", component="pipeline", stage=EngineStage.TRANSFORMING
             ):

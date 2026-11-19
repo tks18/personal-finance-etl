@@ -108,14 +108,14 @@ def resolve_market_emitter(
     emitter: EventEmitter | None = None,
     status_queue: EventQueue | None = None,
 ) -> EventEmitter:
-    """Resolve an EventEmitter from explicit instance, legacy status queue, or global default.
+    """Resolve an EventEmitter from explicit instance, status queue, or global default.
 
     Parameters
     ----------
     emitter : EventEmitter | None, optional
         Explicit canonical event emitter.
     status_queue : EventQueue | None, optional
-        Legacy multiprocessing status queue for UI forwarding.
+        Multiprocessing status queue for UI forwarding.
 
     Returns
     -------
