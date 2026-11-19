@@ -92,8 +92,6 @@ class SQLiteExtractor:
                 )
                 .lazy()
                 .with_columns(
-                    pl.lit(filename).alias("__file_name__"),
-                    pl.lit(folder_path).alias("__folder_path__"),
                     pl.lit(artifact_id).alias("artifact_id"),
                 )
             )

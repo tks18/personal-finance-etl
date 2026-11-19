@@ -4,7 +4,7 @@ Owns
 ----
 - Parsing in-memory CSV binary payloads into Polars LazyFrames.
 - Applying source-level schema overrides for configuration and mapping assets.
-- Ingestion metadata tagging (__file_name__, __folder_path__, artifact_id).
+- Ingestion metadata tagging (artifact_id).
 
 Does not own
 -------------
@@ -89,7 +89,5 @@ class CSVExtractor:
             try_parse_dates=try_parse_dates,
         )
         return df.lazy().with_columns(
-            pl.lit(filename).alias("__file_name__"),
-            pl.lit(folder_path).alias("__folder_path__"),
             pl.lit(artifact_id).alias("artifact_id"),
         )
