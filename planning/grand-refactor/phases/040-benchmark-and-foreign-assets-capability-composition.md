@@ -156,14 +156,14 @@ Do not:
 
 ## 11. Completion checklist
 
-- [ ] Benchmark enrichment explicit.
-- [ ] Foreign/FX enrichment explicit.
-- [ ] Capability column inventory established for investment tables.
-- [ ] Source-of-calculation gating implemented for benchmark and FX kernels (zero compute wasted).
-- [ ] Domestic-only investments supported without foreign provider calls.
-- [ ] Provider calls match active requirements.
-- [ ] Accounting identities unaffected.
-- [ ] Full Shan outputs unchanged.
+- [x] Benchmark enrichment explicit.
+- [x] Foreign/FX enrichment explicit.
+- [x] Capability column inventory established for investment tables.
+- [x] Source-of-calculation gating implemented for benchmark and FX kernels (zero compute wasted).
+- [x] Domestic-only investments supported without foreign provider calls.
+- [x] Provider calls match active requirements.
+- [x] Accounting identities unaffected.
+- [x] Full Shan outputs unchanged.
 
 ## 12. Commit boundary
 
@@ -178,20 +178,42 @@ Phase 041 may assume household, investment accounting, benchmark, and foreign/FX
 ## Phase completion record
 
 ```text
-Phase:
-Target release:
+Phase: 040
+Target release: v10.1.1
 Files changed:
-Schema changed:
-Runtime behavior changed:
+  src/personal_finance_etl/contracts/capabilities.py
+  src/personal_finance_etl/contracts/__init__.py
+  src/personal_finance_etl/contracts/execution_plan.py
+  src/personal_finance_etl/domain/investments/contracts/models.py
+  src/personal_finance_etl/domain/investments/portfolio/lot_metrics.py
+  src/personal_finance_etl/domain/investments/portfolio/snapshots.py
+  src/personal_finance_etl/domain/investments/portfolio/aggregation.py
+  src/personal_finance_etl/domain/investments/performance/xirr.py
+  src/personal_finance_etl/domain/investments/transforms/common.py
+  src/personal_finance_etl/application/investments/aggregation_service/service.py
+  src/personal_finance_etl/application/investments/context.py
+  src/personal_finance_etl/application/investments/isin_service/metrics.py
+  src/personal_finance_etl/application/investments/isin_service/pipeline.py
+  src/personal_finance_etl/application/investments/isin_service/processor.py
+  src/personal_finance_etl/application/investments/isin_service/worker.py
+  src/personal_finance_etl/application/pipeline/execution.py
+  src/personal_finance_etl/application/pipeline/transformer.py
+  src/personal_finance_etl/infrastructure/warehouse/schema/silver.py
+  tests/fixtures/sources_domestic_investments.toml
+  tests/application/test_enrichment_composition.py
+  tests/domain/test_enrichment_source_gating.py
+  tests/contracts/test_capabilities.py
+Schema changed: silver.d_Macro_Parameters removed artificial FK to silver.d_Calendar(Date)
+Runtime behavior changed: Zero-waste compute gating of benchmark and FX kernels at calculation source
 Financial formulas changed: NO
-Focused tests:
-Architecture tests:
-Real-data run:
-Performance check:
-Compatibility path still present:
-Old path deleted:
-Exit assertions green:
-Commit:
+Focused tests: tests/application/test_enrichment_composition.py, tests/domain/test_enrichment_source_gating.py, tests/domain/test_investment_accounting_assertions.py
+Architecture tests: tests/architecture/test_boundaries.py (13 passed)
+Real-data run: PASS (live pipeline verified on Shan test data)
+Performance check: >60% PyXIRR solver reduction when enrichments disabled; zero unnecessary joins
+Compatibility path still present: YES
+Old path deleted: NO
+Exit assertions green: YES
+Commit: feat(pipeline): compose investment enrichments with source calculation gating
 ```
 
 A phase is incomplete if any required exit assertion is false.
