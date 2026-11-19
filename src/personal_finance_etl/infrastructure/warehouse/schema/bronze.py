@@ -29,9 +29,7 @@ CREATE TABLE IF NOT EXISTS bronze.r_SQLite_ZCategory (
     SYNC_TIME DOUBLE,
     SYNC_VERSION BIGINT,
     ORDER_NUM BIGINT,
-    artifact_id VARCHAR,
-    __file_name__ VARCHAR,
-    __folder_path__ VARCHAR
+    artifact_id VARCHAR
 );
 
 CREATE TABLE IF NOT EXISTS bronze.r_SQLite_AssetGroup (
@@ -46,9 +44,7 @@ CREATE TABLE IF NOT EXISTS bronze.r_SQLite_AssetGroup (
     SYNC_TIME DOUBLE,
     SYNC_VERSION BIGINT,
     ORDER_NUM BIGINT,
-    artifact_id VARCHAR,
-    __file_name__ VARCHAR,
-    __folder_path__ VARCHAR
+    artifact_id VARCHAR
 );
 
 CREATE TABLE IF NOT EXISTS bronze.r_SQLite_Assets (
@@ -79,9 +75,7 @@ CREATE TABLE IF NOT EXISTS bronze.r_SQLite_Assets (
     SYNC_TIME DOUBLE,
     SYNC_VERSION BIGINT,
     ORDER_NUM BIGINT,
-    artifact_id VARCHAR,
-    __file_name__ VARCHAR,
-    __folder_path__ VARCHAR
+    artifact_id VARCHAR
 );
 
 CREATE TABLE IF NOT EXISTS bronze.r_SQLite_Currency (
@@ -106,9 +100,7 @@ CREATE TABLE IF NOT EXISTS bronze.r_SQLite_Currency (
     CURRENCY_CODE VARCHAR,
     CURRENCY_SYMBOL VARCHAR,
     ORDER_NUM BIGINT,
-    artifact_id VARCHAR,
-    __file_name__ VARCHAR,
-    __folder_path__ VARCHAR
+    artifact_id VARCHAR
 );
 
 CREATE TABLE IF NOT EXISTS bronze.r_SQLite_InOutcome (
@@ -153,17 +145,13 @@ CREATE TABLE IF NOT EXISTS bronze.r_SQLite_InOutcome (
     CONTENT VARCHAR,
     MEMO VARCHAR,
     ORDER_NUM BIGINT,
-    artifact_id VARCHAR,
-    __file_name__ VARCHAR,
-    __folder_path__ VARCHAR
+    artifact_id VARCHAR
 );
 
 CREATE TABLE IF NOT EXISTS bronze.r_MF_ISIN_Mapping (
     INSTRUMENT_NAME VARCHAR,
     ISIN VARCHAR,
-    artifact_id VARCHAR,
-    __file_name__ VARCHAR,
-    __folder_path__ VARCHAR
+    artifact_id VARCHAR
 );
 
 CREATE TABLE IF NOT EXISTS bronze.r_Benchmark_Mapping (
@@ -178,9 +166,7 @@ CREATE TABLE IF NOT EXISTS bronze.r_Benchmark_Mapping (
     Geo VARCHAR,
     Geo_Subtype VARCHAR,
     Ticker VARCHAR,
-    artifact_id VARCHAR,
-    __file_name__ VARCHAR,
-    __folder_path__ VARCHAR
+    artifact_id VARCHAR
 );
 
 CREATE TABLE IF NOT EXISTS bronze.r_Opening_Balances (
@@ -243,9 +229,7 @@ CREATE TABLE IF NOT EXISTS bronze.r_Opening_Balances (
     Balance_Date VARCHAR,
     Currency VARCHAR,
     ORDER_NUM BIGINT,
-    artifact_id VARCHAR,
-    __file_name__ VARCHAR,
-    __folder_path__ VARCHAR
+    artifact_id VARCHAR
 );
 
 CREATE TABLE IF NOT EXISTS bronze.r_Benchmark_Master (
@@ -253,9 +237,7 @@ CREATE TABLE IF NOT EXISTS bronze.r_Benchmark_Master (
     Benchmark_Name VARCHAR,
     yF_Ticker VARCHAR,
     Currency VARCHAR,
-    artifact_id VARCHAR,
-    __file_name__ VARCHAR,
-    __folder_path__ VARCHAR
+    artifact_id VARCHAR
 );
 
 CREATE TABLE IF NOT EXISTS bronze.r_Macro_Parameters (
@@ -282,18 +264,14 @@ CREATE TABLE IF NOT EXISTS bronze.r_Macro_Parameters (
     Default_LTCG DOUBLE,
     Default_STCG DOUBLE,
     Remarks VARCHAR,
-    artifact_id VARCHAR,
-    __file_name__ VARCHAR,
-    __folder_path__ VARCHAR
+    artifact_id VARCHAR
 );
 
 CREATE TABLE IF NOT EXISTS bronze.r_Column_Master (
     TABLE_NAME VARCHAR,
     OLD_COLUMN VARCHAR,
     NEW_COLUMN VARCHAR,
-    artifact_id VARCHAR,
-    __file_name__ VARCHAR,
-    __folder_path__ VARCHAR
+    artifact_id VARCHAR
 );
 
 CREATE TABLE IF NOT EXISTS bronze.r_MF_Market_Data (
@@ -310,9 +288,7 @@ CREATE TABLE IF NOT EXISTS bronze.r_MF_Market_Data (
     XIRR VARCHAR,
     "Month Date" DATE,
     __file_category__ VARCHAR,
-    artifact_id VARCHAR,
-    __file_name__ VARCHAR,
-    __folder_path__ VARCHAR
+    artifact_id VARCHAR
 );
 
 CREATE TABLE IF NOT EXISTS bronze.r_US_Stock_Transactions (
@@ -332,9 +308,7 @@ CREATE TABLE IF NOT EXISTS bronze.r_US_Stock_Transactions (
     "Order Amount (INR)" DOUBLE,
     "Brokerage (INR)" DOUBLE,
     __file_category__ VARCHAR,
-    artifact_id VARCHAR,
-    __file_name__ VARCHAR,
-    __folder_path__ VARCHAR
+    artifact_id VARCHAR
 );
 
 CREATE TABLE IF NOT EXISTS bronze.r_Currency_Mapping (
@@ -344,9 +318,7 @@ CREATE TABLE IF NOT EXISTS bronze.r_Currency_Mapping (
     yF_Ticker VARCHAR,
     Currency_Name VARCHAR,
     Is_Active BOOLEAN,
-    artifact_id VARCHAR,
-    __file_name__ VARCHAR,
-    __folder_path__ VARCHAR
+    artifact_id VARCHAR
 );
 
 CREATE TABLE IF NOT EXISTS bronze.r_Currency_FX_Data (
@@ -362,9 +334,7 @@ CREATE TABLE IF NOT EXISTS bronze.r_Currency_FX_Data (
     Requested_Start DATE,
     Requested_End DATE,
     Is_Closure_Gap BOOLEAN,
-    artifact_id VARCHAR,
-    __file_name__ VARCHAR,
-    __folder_path__ VARCHAR
+    artifact_id VARCHAR
 );
 
 CREATE TABLE IF NOT EXISTS bronze.r_MF_Transactions (
@@ -376,9 +346,7 @@ CREATE TABLE IF NOT EXISTS bronze.r_MF_Transactions (
     Date VARCHAR,
     "Month Date" DATE,
     __file_category__ VARCHAR,
-    artifact_id VARCHAR,
-    __file_name__ VARCHAR,
-    __folder_path__ VARCHAR
+    artifact_id VARCHAR
 );
 
 CREATE TABLE IF NOT EXISTS bronze.r_Stock_Market_Data (
@@ -395,9 +363,7 @@ CREATE TABLE IF NOT EXISTS bronze.r_Stock_Market_Data (
     Remark VARCHAR,
     "Month Date" DATE,
     __file_category__ VARCHAR,
-    artifact_id VARCHAR,
-    __file_name__ VARCHAR,
-    __folder_path__ VARCHAR
+    artifact_id VARCHAR
 );
 
 CREATE TABLE IF NOT EXISTS bronze.r_Stock_Transactions (
@@ -412,9 +378,7 @@ CREATE TABLE IF NOT EXISTS bronze.r_Stock_Transactions (
     "Execution date and time" VARCHAR,
     "Order status" VARCHAR,
     __file_category__ VARCHAR,
-    artifact_id VARCHAR,
-    __file_name__ VARCHAR,
-    __folder_path__ VARCHAR
+    artifact_id VARCHAR
 );
 
 CREATE TABLE IF NOT EXISTS bronze.r_Benchmark_Data (
@@ -429,9 +393,7 @@ CREATE TABLE IF NOT EXISTS bronze.r_Benchmark_Data (
     Requested_Start DATE,
     Requested_End DATE,
     Is_Closure_Gap BOOLEAN,
-    artifact_id VARCHAR,
-    __file_name__ VARCHAR,
-    __folder_path__ VARCHAR
+    artifact_id VARCHAR
 );
 
 CREATE TABLE IF NOT EXISTS bronze.r_US_Stock_Prices (
@@ -444,8 +406,6 @@ CREATE TABLE IF NOT EXISTS bronze.r_US_Stock_Prices (
     Requested_Start DATE,
     Requested_End DATE,
     Is_Closure_Gap BOOLEAN,
-    artifact_id VARCHAR,
-    __file_name__ VARCHAR,
-    __folder_path__ VARCHAR
+    artifact_id VARCHAR
 );
 """
