@@ -1,4 +1,4 @@
-"""Tests for Source and Canonical Bronze validation admission contracts (Phase 024).
+"""Tests for Source and Canonical Bronze validation admission contracts.
 
 Owns
 ----
@@ -107,7 +107,6 @@ def test_exact_legacy_route_documented() -> None:
     # 2. Bronze contract anchors
     contract = _get_bronze_contract(DatasetId.HOUSEHOLD_ZCATEGORY)
     assert contract.sync_category == "sqlite_source"
-    assert contract.extraction_attribute == "zcategory"
     assert contract.physical_table == "bronze.r_SQLite_ZCategory"
     assert contract.is_full_replace is True
 

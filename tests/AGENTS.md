@@ -12,14 +12,14 @@ The test suite directly mirrors the 7-layer clean architecture of `src/personal_
 
 | Layer Folder | Key Files | What It Protects |
 |---|---|---|
-| **Architecture** (`tests/architecture/`) | `test_boundaries.py`, `test_legacy_demolition.py`, `test_constitutional_certification.py` | **Sacred Ground.** Enforces 7-layer clean architecture, AST-level forbidden import checks, package structure, zero `TYPE_CHECKING` blocks, zero inline imports, and product invariants. |
-| **Contracts** (`tests/contracts/`) | `test_primitives.py`, `test_data_transport.py`, `test_datasets.py`, `test_sources.py`, `test_observability.py` | Immutability, Pydantic validation, stable dataset/source schemas, deterministic identity, and data transport integrity. |
-| **Config** (`tests/config/`) | `test_settings.py`, `test_financial_rules.py` | Configuration provenance, environment loading, rules fingerprinting, and Pydantic configuration schemas. |
+| **Architecture** (`tests/architecture/`) | `test_boundaries.py`, `test_dead_code_guards.py`, `test_constitutional_certification.py`, `test_bronze_canonical_guards.py`, `test_topology_guards.py` | **Sacred Ground.** Enforces 7-layer clean architecture, AST-level forbidden import checks, package structure, zero `TYPE_CHECKING` blocks, zero inline imports, and product invariants. |
+| **Contracts** (`tests/contracts/`) | `test_primitives.py`, `test_data_transport.py`, `test_datasets.py`, `test_sources.py`, `test_observability.py`, `test_dataset_collection.py`, `test_capabilities.py` | Immutability, Pydantic validation, stable dataset/source schemas, deterministic identity, and data transport integrity. |
+| **Config** (`tests/config/`) | `test_settings.py`, `test_financial_rules.py`, `test_topology.py`, `test_source_selectors.py` | Configuration provenance, environment loading, rules fingerprinting, source-agnostic topology, and Pydantic configuration schemas. |
 | **Domain** (`tests/domain/`) | `test_canonical_domains.py`, `test_investments_quant.py`, `test_status_unification.py`, `test_tax_domain.py`, `test_household_wealth_fire.py` | FIFO lot matching, corporate actions, XIRR/CAGR quant math, tax schedules, net worth, Numba Monte Carlo FIRE simulations. Pure numerical/business logic. |
-| **Infrastructure** (`tests/infrastructure/`) | `test_warehouse_and_cp.py`, `test_control_plane.py`, `test_providers.py`, `test_observability_emitter.py`, `test_forensic_debuggability.py`, `test_redaction_retention.py`, `test_legacy_logging_demolition.py`, `test_observability_certification.py` | DuckDB warehouse, SQLite Control Plane transactions, Raw Document Store, external providers, fan-out event emission, JSONL audit trails, PII/PAN redaction. |
-| **Application** (`tests/application/`) | `test_ingestion.py`, `test_pipeline_observability.py`, `test_forensic_pipeline.py`, `test_orchestration_bootstrap.py` | `ETLOrchestrator`, `ServiceContainer`, pipeline stages, file parsers, provider adapters, Pre-Bronze completeness checks. |
+| **Infrastructure** (`tests/infrastructure/`) | `test_warehouse_and_cp.py`, `test_control_plane.py`, `test_providers.py`, `test_observability_emitter.py`, `test_forensic_debuggability.py`, `test_redaction_retention.py`, `test_logging_subsystem.py`, `test_observability_certification.py`, `test_artifact_provenance.py`, `test_bronze_canonical_schema.py` | DuckDB warehouse, SQLite Control Plane transactions, Raw Document Store, external providers, fan-out event emission, JSONL audit trails, artifact provenance, PII/PAN redaction. |
+| **Application** (`tests/application/`) | `test_generalized_ingestion_certification.py`, `test_domestic_stock_ingestion.py`, `test_household_reference_ingestion.py`, `test_market_provider_ingestion.py`, `test_mutual_fund_ingestion.py`, `test_reference_data_ingestion.py`, `test_us_stock_ingestion.py`, `test_pipeline_observability.py`, `test_forensic_pipeline.py`, `test_orchestration_bootstrap.py` | `ETLOrchestrator`, `ServiceContainer`, pipeline stages, file parsers, provider adapters, Pre-Bronze admission, and generalized ingestion certification. |
 | **Presentation** (`tests/presentation/`) | `test_desktop_app.py`, `test_narrative.py` | CLI argument parsing, CustomTkinter tabs, rich narrative rendering, doc browser. |
-| **Fixtures** (`tests/fixtures/`) | `config.toml`, `financial_rules.toml`, `run_headless.py` | Shared test fixtures, mock configurations, and headless execution profiling script. |
+| **Fixtures** (`tests/fixtures/`) | `evidence/`, `config.toml`, `financial_rules.toml`, `run_headless.py`, `generate_evidence_fixtures.py` | Canonical static evidence binary repository, shared test fixtures, mock configurations, and headless execution profiling script. |
 
 ---
 
@@ -88,4 +88,5 @@ All tests automatically inherit standard typed fixtures from `tests/conftest.py`
 | `fixtures_dir` | `session` | `Path` | Absolute path to `tests/fixtures`. |
 | `rules_path` | `session` | `Path` | Path to `tests/fixtures/financial_rules.toml`. |
 | `config_path` | `session` | `Path` | Path to `tests/fixtures/config.toml`. |
+| `copy_evidence` | `function` | `Callable[[str, Path], dict[str, str]]` | Factory copying static binary fixtures from `tests/fixtures/evidence/` into `tmp_path`. |
 

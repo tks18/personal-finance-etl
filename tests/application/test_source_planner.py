@@ -66,7 +66,7 @@ def test_source_planner_compilation_all_required_satisfied(
     assert dp.is_required is True
     assert dp.is_enabled is True
     assert dp.change_detection is not None
-    assert dp.mapping_plan is None  # Placeholder until Phase 018
+    assert dp.mapping_plan is None
 
     # Verify source plan grouping
     sp = compiled.get_source_plan("household_db")

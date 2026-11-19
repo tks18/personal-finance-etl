@@ -1,4 +1,4 @@
-"""Architectural topology guard tests enforcing Phase 035 invariants.
+"""Architectural topology guard tests enforcing source-agnostic topology invariants.
 
 Owns
 ----
@@ -53,11 +53,14 @@ def test_zero_legacy_function_references_in_src() -> None:
             assert name not in content, f"Prohibited legacy symbol '{name}' found in {py_file}."
 
 
-def test_bronze_contract_has_no_extraction_attribute_field() -> None:
-    """Verify extraction_attribute is not a dataclass field on BronzeDataContract."""
+def test_bronze_contract_has_no_extraction_attribute() -> None:
+    """Verify extraction_attribute is completely demolished from BronzeDataContract."""
     field_names = {f.name for f in dataclasses.fields(BronzeDataContract)}
     assert "extraction_attribute" not in field_names, (
         "extraction_attribute must not be a dataclass field on BronzeDataContract."
+    )
+    assert not hasattr(BronzeDataContract, "extraction_attribute"), (
+        "extraction_attribute property must be completely demolished from BronzeDataContract."
     )
 
 

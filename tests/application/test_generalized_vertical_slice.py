@@ -1,5 +1,5 @@
 # pyright: reportPrivateUsage=false
-"""Comprehensive verification suite for Phase 025 generalized dataset vertical slice.
+"""Comprehensive verification suite for generalized dataset vertical slice.
 
 Owns
 ----
@@ -1237,7 +1237,6 @@ def test_full_shan_pipeline_financial_equivalence(
     _, full_extracted = executor._run_bronze_phase(
         cp=isolated_control_plane,
         run_id=run_id,
-        extracted_data=extracted,
         actionable_all=actionable_all,
         renames=[],
     )
@@ -1297,12 +1296,11 @@ def test_protected_ids_unchanged(
         "column_master": [col_master],
     }
     isolated_control_plane.artifacts.ingest_binaries(actionable_all)
-    extracted = executor.extract(isolated_control_plane, actionable_all)
+    _ = executor.extract(isolated_control_plane, actionable_all)
     run_id = isolated_control_plane.runs.start_run()
     _, full_extracted = executor._run_bronze_phase(
         cp=isolated_control_plane,
         run_id=run_id,
-        extracted_data=extracted,
         actionable_all=actionable_all,
         renames=[],
     )

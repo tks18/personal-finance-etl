@@ -180,7 +180,7 @@ def test_closed_provider_columns_absent_from_silver_ddl() -> None:
     ]
     assert len(active_provider_cols) == 0
 
-    # Total closed dispositions across all phases: 30 (phase 011) + 5 (phase 012) + 89 (phase 013) = 124
+    # Total closed dispositions: 124
     total_closed = [entry for entry in ALL_SILVER_COLUMN_DISPOSITIONS if not entry.is_active]
     assert len(total_closed) == 124
 

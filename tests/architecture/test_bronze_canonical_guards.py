@@ -1,4 +1,4 @@
-"""Architectural guards enforcing strict canonical Bronze invariants for Phase 036.
+"""Architectural guards enforcing strict canonical Bronze invariants.
 
 Owns
 ----

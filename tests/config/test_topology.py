@@ -174,7 +174,7 @@ def test_us_stock_transactions_optionality(
     us_source = next(s for s in sources if s.source_id == "us_stock_transactions")
     us_binding = next(b for b in bindings if b.source_id == "us_stock_transactions")
 
-    # Baseline is enabled in Phase 033
+    # Baseline is enabled in source configuration
     assert us_source.enabled is True
     assert us_binding.enabled is True
 
