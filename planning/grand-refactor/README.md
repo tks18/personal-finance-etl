@@ -68,7 +68,7 @@ If code evidence contradicts a phase, stop and amend the phase before changing t
 | 033 | US-investment evidence migration | v10.0.0-rc6 | [x] |
 | 034 | Provider-generated market evidence migration | v10.0.0-rc7 | [x] |
 | 035 | Fixed-topology demolition | v10.0.0-rc8 | [x] |
-| 036 | Strict canonical Bronze cutover | v10.0.0-rc9 | [ ] |
+| 036 | Strict canonical Bronze cutover | v10.0.0-rc9 | [x] |
 | 037 | Artifact-key operational provenance cutover | v10.0.0-rc10 | [ ] |
 | 038 | Generalized ingestion certification | v10.0.0 | [ ] |
 | 039 | Household and investment capability composition | v10.1.0 | [ ] |
