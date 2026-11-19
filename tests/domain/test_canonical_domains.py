@@ -191,8 +191,6 @@ def test_investments_rolling_average_buy_price() -> None:
     # Rolling buy price at Day 1 = 100, at Day 2 = (1000 + 2000)/20 = 150
     df_p = pl.DataFrame(
         {
-            "__file_name__": ["p.csv", "p.csv"],
-            "__folder_path__": ["/tmp", "/tmp"],
             "__file_category__": ["Indian", "Indian"],
             "artifact_id": ["sha256_p1", "sha256_p2"],
             "ISIN": ["INF001", "INF001"],
@@ -213,8 +211,6 @@ def test_investments_rolling_average_buy_price() -> None:
 
     df_s = pl.DataFrame(
         {
-            "__file_name__": ["s.csv"],
-            "__folder_path__": ["/tmp"],
             "__file_category__": ["Indian"],
             "artifact_id": ["sha256_s1"],
             "ISIN": ["INF001"],

@@ -23,7 +23,7 @@ from personal_finance_etl.contracts.datasets import (
 
 def test_provenance_fields_invariants() -> None:
     """Verify that canonical provenance fields contain the required pipeline lineage names."""
-    expected = {"artifact_id", "__file_name__", "__folder_path__"}
+    expected = {"artifact_id"}
     assert CANONICAL_PROVENANCE_FIELDS == expected
 
 
@@ -38,10 +38,11 @@ def test_all_bronze_datasets_registered() -> None:
 
 def test_is_valid_canonical_field_domain_and_provenance() -> None:
     """Verify is_valid_canonical_field accepts valid domain and provenance fields."""
-    # Provenance fields are valid for every registered dataset
+    # Provenance field is valid for every registered dataset
     assert is_valid_canonical_field(DatasetId.HOUSEHOLD_ZCATEGORY, "artifact_id")
-    assert is_valid_canonical_field(DatasetId.HOUSEHOLD_ZCATEGORY, "__file_name__")
-    assert is_valid_canonical_field(DatasetId.HOUSEHOLD_ZCATEGORY, "__folder_path__")
+    # Operational filename and path are no longer canonical bronze fields
+    assert not is_valid_canonical_field(DatasetId.HOUSEHOLD_ZCATEGORY, "__file_name__")
+    assert not is_valid_canonical_field(DatasetId.HOUSEHOLD_ZCATEGORY, "__folder_path__")
 
     # Domain fields are valid for their specific dataset
     assert is_valid_canonical_field(DatasetId.HOUSEHOLD_ZCATEGORY, "CATEGORY_NAME")
@@ -66,8 +67,8 @@ def test_get_canonical_fields_returns_union_with_provenance() -> None:
     assert "ASSET_GROUP" in fields
     assert "UID" in fields
     assert "artifact_id" in fields
-    assert "__file_name__" in fields
-    assert "__folder_path__" in fields
+    assert "__file_name__" not in fields
+    assert "__folder_path__" not in fields
 
 
 def test_get_canonical_fields_unregistered_returns_none() -> None:

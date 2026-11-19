@@ -136,8 +136,6 @@ def test_multi_file_lineage_preservation_and_resolution(
                 "Price": [50.0],
                 "Value": [5000.0],
                 "CURRENCY_ID": ["INR"],
-                "__file_name__": ["orders_jan.xlsx"],
-                "__folder_path__": ["Statements/Investments/HDFC"],
                 "artifact_id": [art_id_1],
             }
         )
@@ -149,8 +147,6 @@ def test_multi_file_lineage_preservation_and_resolution(
                 "Price": [55.0],
                 "Value": [2750.0],
                 "CURRENCY_ID": ["INR"],
-                "__file_name__": ["orders_feb.xlsx"],
-                "__folder_path__": ["Statements/Investments/HDFC"],
                 "artifact_id": [art_id_2],
             }
         )
