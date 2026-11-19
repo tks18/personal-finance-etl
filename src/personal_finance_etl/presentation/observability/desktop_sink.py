@@ -173,18 +173,28 @@ class DesktopNarrativeSink(ObservabilitySink):
         if event.presentation_kind == PresentationKind.INTERNAL:
             return
 
-        # Suppress repetitive per-entity success/cache ticks from cluttering the UI narrative
-        if (
-            self._suppress_per_entity_success
-            and event.event_code
-            in (
-                EventCode.MARKET_TICKER_SUCCESS,
-                EventCode.MARKET_TICKER_CACHE_HIT,
-                EventCode.QUANT_ISIN_PROCESSED,
-                EventCode.VALIDATION_START,
-                EventCode.VALIDATION_SUCCESS,
+        # Suppress repetitive per-entity ticks (tickers, validation, per-file ingestion) from cluttering UI narrative
+        if self._suppress_per_entity_success and (
+            (
+                event.event_code
+                in (
+                    EventCode.MARKET_TICKER_SUCCESS,
+                    EventCode.MARKET_TICKER_CACHE_HIT,
+                    EventCode.QUANT_ISIN_PROCESSED,
+                    EventCode.VALIDATION_START,
+                    EventCode.VALIDATION_SUCCESS,
+                )
+                and event.presentation_kind in (PresentationKind.STEP, PresentationKind.SUCCESS)
             )
-            and event.presentation_kind in (PresentationKind.STEP, PresentationKind.SUCCESS)
+            or (
+                event.context.entity_type == "File"
+                and (
+                    event.event_code in (EventCode.EXTRACTION_BATCH, EventCode.EXTRACTION_COMPLETED)
+                    or event.presentation_kind == PresentationKind.PROGRESS
+                )
+                and event.presentation_kind
+                in (PresentationKind.STEP, PresentationKind.SUCCESS, PresentationKind.PROGRESS)
+            )
         ):
             if self._progress_callback is not None and event.progress is not None:
                 self._progress_callback(float(event.progress))

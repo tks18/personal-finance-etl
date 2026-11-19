@@ -204,14 +204,26 @@ class BaseEngineTab(ctk.CTkFrame):  # type: ignore[misc]
         if not event.message.strip():
             return
 
-        # Suppress repetitive per-entity success/cache ticks from cluttering UI log
-        if event.event_code in (
-            EventCode.MARKET_TICKER_SUCCESS,
-            EventCode.MARKET_TICKER_CACHE_HIT,
-            EventCode.QUANT_ISIN_PROCESSED,
-            EventCode.VALIDATION_START,
-            EventCode.VALIDATION_SUCCESS,
-        ) and event.presentation_kind in (PresentationKind.STEP, PresentationKind.SUCCESS):
+        # Suppress repetitive per-entity ticks (tickers, validation, per-file ingestion) from cluttering UI log
+        if (
+            event.event_code
+            in (
+                EventCode.MARKET_TICKER_SUCCESS,
+                EventCode.MARKET_TICKER_CACHE_HIT,
+                EventCode.QUANT_ISIN_PROCESSED,
+                EventCode.VALIDATION_START,
+                EventCode.VALIDATION_SUCCESS,
+            )
+            and event.presentation_kind in (PresentationKind.STEP, PresentationKind.SUCCESS)
+        ) or (
+            event.context.entity_type == "File"
+            and (
+                event.event_code in (EventCode.EXTRACTION_BATCH, EventCode.EXTRACTION_COMPLETED)
+                or event.presentation_kind == PresentationKind.PROGRESS
+            )
+            and event.presentation_kind
+            in (PresentationKind.STEP, PresentationKind.SUCCESS, PresentationKind.PROGRESS)
+        ):
             return
 
         tag = _DESKTOP_TAG_MAP.get(event.presentation_kind, "info")

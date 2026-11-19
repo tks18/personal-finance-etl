@@ -193,6 +193,8 @@ class DatasetIngestionService:
         meta_layer: MetaLayer,
         actionable_files: Sequence[str] | dict[str, list[str]],
         run_id: str,
+        current_dataset_idx: int = 0,
+        total_datasets: int = 1,
     ) -> bool:
         """Execute the end-to-end generalized ingestion pipeline for a single dataset.
 
@@ -214,6 +216,10 @@ class DatasetIngestionService:
             Category-mapped actionable paths or explicit list of paths.
         run_id : str
             Active pipeline execution ID.
+        current_dataset_idx : int, default 0
+            Zero-based index of current dataset within active ingestion phase.
+        total_datasets : int, default 1
+            Total number of datasets scheduled for ingestion in active phase.
 
         Returns
         -------
@@ -255,6 +261,9 @@ class DatasetIngestionService:
             )
             return False
 
+        ds_slot = 0.20 / max(total_datasets, 1)
+        ds_base = 0.20 + (current_dataset_idx * ds_slot)
+
         diagnostics.info(
             "Generalized Ingestion: Ingesting dataset '%s' from %d actionable file(s)...",
             dataset_plan.dataset_id.value,
@@ -268,6 +277,7 @@ class DatasetIngestionService:
             ),
             severity=DiagnosticSeverity.INFO,
             presentation_kind=PresentationKind.STEP,
+            progress=ds_base,
             stage=EngineStage.EXTRACTING,
             entity_type="dataset",
             entity_id=dataset_plan.dataset_id.value,
@@ -275,7 +285,8 @@ class DatasetIngestionService:
         )
 
         total_rows_added = 0
-        for filepath in target_paths:
+        total_files = len(target_paths)
+        for file_idx, filepath in enumerate(target_paths, 1):
             norm_filepath = filepath.replace("\\", "/")
             filename = os.path.basename(norm_filepath)
             folder_path = os.path.dirname(norm_filepath)
@@ -446,6 +457,22 @@ class DatasetIngestionService:
             cp.artifacts.mark_synced([norm_filepath])
             meta_layer.register_file(norm_filepath, bronze_contract.sync_category, file_rows, cp)
 
+            file_progress = ds_base + ((file_idx / max(total_files, 1)) * ds_slot)
+            self.emitter.emit_event(
+                event_code=EventCode.EXTRACTION_BATCH,
+                message=(
+                    f"[{dataset_plan.dataset_id.value}] Ingested file ({file_idx}/{total_files}): "
+                    f"'{filename}' -> Pre-Bronze & Bronze ({file_rows:,} rows)"
+                ),
+                severity=DiagnosticSeverity.INFO,
+                presentation_kind=PresentationKind.PROGRESS,
+                progress=file_progress,
+                stage=EngineStage.EXTRACTING,
+                entity_type="File",
+                entity_id=filename,
+                rows=file_rows,
+            )
+
         self.emitter.emit_event(
             event_code=EventCode.BRONZE_UPSERT,
             message=(
@@ -454,6 +481,7 @@ class DatasetIngestionService:
             ),
             severity=DiagnosticSeverity.INFO,
             presentation_kind=PresentationKind.SUCCESS,
+            progress=ds_base + ds_slot,
             stage=EngineStage.EXTRACTING,
             entity_type="Table",
             entity_id=bronze_contract.physical_table,
