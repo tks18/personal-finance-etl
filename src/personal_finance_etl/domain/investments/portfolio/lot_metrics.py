@@ -118,7 +118,7 @@ class _LotBenchmarkMetrics:
 
     bm_buy: float | None
     m_bm_price_inr: float
-    lot_bm_ret: float
+    lot_bm_ret: float | None
     lot_bm_cagr: float | None
     lot_bm_cagr_status: str
     lot_bm_cagr_local: float | None

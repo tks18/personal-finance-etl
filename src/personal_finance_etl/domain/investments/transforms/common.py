@@ -457,13 +457,24 @@ def get_f_tf_investment_sale_data(
 
 def get_d_investment_master(
     master_refs: list[pl.LazyFrame],
-    stg_benchmark_mapping_lazy: pl.LazyFrame,
+    stg_benchmark_mapping_lazy: pl.LazyFrame | None,
     default_currency_id: str,
 ) -> pl.LazyFrame:
     """Translate d_InvestmentMaster dimensional data.
 
-    Unions the References into a single distinct dimension table,
-    then joins the Benchmark Mapping to pull in Sector, Industry, Tax flags, etc.
+    Parameters
+    ----------
+    master_refs : list[pl.LazyFrame]
+        List of reference dimension frames from individual asset pipelines.
+    stg_benchmark_mapping_lazy : pl.LazyFrame | None
+        Optional benchmark and taxonomy mapping frame. When None, metadata columns default to null.
+    default_currency_id : str
+        Default base portfolio currency identifier.
+
+    Returns
+    -------
+    pl.LazyFrame
+        Transformed investment master dimension table.
     """
     df_master_union = pl.concat(master_refs, how="diagonal_relaxed").unique(subset=["ISIN"])
 
@@ -477,7 +488,39 @@ def get_d_investment_master(
             pl.col("CURRENCY_ID").fill_null(default_currency_id)
         )
 
-    df_final = df_master_union.join(stg_benchmark_mapping_lazy, on="ISIN", how="left").select(
+    if stg_benchmark_mapping_lazy is None:
+        mapping_frame = pl.LazyFrame(
+            schema={
+                "ISIN": pl.String,
+                "Sector": pl.String,
+                "Industry": pl.String,
+                "Benchmark_ID": pl.String,
+                "Tax_Instrument_Type": pl.String,
+                "Tax_Instrument_Subtype": pl.String,
+                "Country": pl.String,
+                "Geo": pl.String,
+                "Geo_Subtype": pl.String,
+            }
+        )
+    else:
+        mapping_frame = stg_benchmark_mapping_lazy
+        mapping_cols = mapping_frame.collect_schema().names()
+        for col_name in (
+            "Sector",
+            "Industry",
+            "Benchmark_ID",
+            "Tax_Instrument_Type",
+            "Tax_Instrument_Subtype",
+            "Country",
+            "Geo",
+            "Geo_Subtype",
+        ):
+            if col_name not in mapping_cols:
+                mapping_frame = mapping_frame.with_columns(
+                    pl.lit(None, dtype=pl.String).alias(col_name)
+                )
+
+    df_final = df_master_union.join(mapping_frame, on="ISIN", how="left").select(
         [
             "ISIN",
             "INSTRUMENT_NAME",
