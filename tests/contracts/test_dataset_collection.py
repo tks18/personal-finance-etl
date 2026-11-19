@@ -264,7 +264,7 @@ def test_bronze_layer_get_dataset_collection(
     )
     isolated_duckdb_manager.conn.register("temp_zcat_df", zcat_df)
     isolated_duckdb_manager.conn.execute(
-        "CREATE TABLE bronze.r_SQLite_ZCategory AS SELECT * FROM temp_zcat_df"
+        "CREATE OR REPLACE TABLE bronze.r_SQLite_ZCategory AS SELECT * FROM temp_zcat_df"
     )
 
     cm_df = pl.DataFrame(
@@ -276,7 +276,7 @@ def test_bronze_layer_get_dataset_collection(
     )
     isolated_duckdb_manager.conn.register("temp_cm_df", cm_df)
     isolated_duckdb_manager.conn.execute(
-        "CREATE TABLE bronze.r_Column_Master AS SELECT * FROM temp_cm_df"
+        "CREATE OR REPLACE TABLE bronze.r_Column_Master AS SELECT * FROM temp_cm_df"
     )
 
     emitter = get_global_emitter()

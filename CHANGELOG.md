@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [10.0.0-rc.9](https://github.com/tks18/personal-finance-etl/compare/10.0.0-rc.8...10.0.0-rc.9) (2026-11-19)
+
+
+### Features 🔥
+
+* **validation:** enforce strict canonical bronze schemas ([d9a3b22](https://github.com/tks18/personal-finance-etl/commit/d9a3b22bb3ae0cdd8c3cbe15b7467d2506794498))
+* **warehouse:** centralize deterministic bronze table ddl ([c0d107f](https://github.com/tks18/personal-finance-etl/commit/c0d107f2bdae4f8ee09a09612ebfcb0a099e91fd))
+
+
+### Code Refactoring 🖌
+
+* **bronze:** demolish dynamic schema evolution and ddl ([890e7eb](https://github.com/tks18/personal-finance-etl/commit/890e7eb64c675b119207c4db0e11b45a12e63e36))
+* **contracts:** align canonical bronze field catalog ([ceae395](https://github.com/tks18/personal-finance-etl/commit/ceae3959c60fdc0e928ac4a90828ab98b55eb7c5))
+* **normalization:** enforce strict canonical projection ([394e933](https://github.com/tks18/personal-finance-etl/commit/394e933efc6430821a7d0a00dea7320382019322))
+
+
+### Tests 🧪
+
+* **migration:** update legacy table existence assertions ([8c3ffa7](https://github.com/tks18/personal-finance-etl/commit/8c3ffa7a210175a428fa70027347594b86e1c5da))
+* **warehouse:** add strict bronze tests and architecture guards ([fa02c73](https://github.com/tks18/personal-finance-etl/commit/fa02c731efe1aefaeedbfb3c909b1720d157a07a))
+
+
+### Docs 📃
+
+* **refactor:** complete phase 036 strict canonical bronze cutover ([efa8102](https://github.com/tks18/personal-finance-etl/commit/efa8102f9ae028591055084a7ac2623250b04606))
+
 ## [10.0.0-rc.8](https://github.com/tks18/personal-finance-etl/compare/10.0.0-rc.7...10.0.0-rc.8) (2026-11-18)
 
 

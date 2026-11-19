@@ -333,15 +333,14 @@ def test_reference_evidence_gate1_pandera_schema_validation_rejection(
             run_id="run_corrupt_test",
         )
 
-    # Assert bronze table was not created or populated
+    # Assert bronze table was not populated
     b_contract = get_bronze_contract_by_dataset_id(DatasetId.INVESTMENT_MACRO_PARAMETERS)
     assert b_contract is not None
-    schema_name, table_name = b_contract.physical_table.split(".")
-    res = isolated_duckdb_manager.conn.execute(
-        "SELECT table_name FROM information_schema.tables WHERE table_schema = ? AND table_name = ?",
-        [schema_name, table_name],
-    ).fetchall()
-    assert len(res) == 0
+    row_count = isolated_duckdb_manager.conn.execute(
+        f"SELECT count(*) FROM {b_contract.physical_table}"
+    ).fetchone()
+    assert row_count is not None
+    assert row_count[0] == 0
 
 
 def test_reference_evidence_natural_grain_collision_rejection(

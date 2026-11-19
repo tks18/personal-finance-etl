@@ -685,12 +685,12 @@ def test_malformed_source_schema_fails_gate_1(
     # Gate 1 failed
     assert exc_info.value.result.stage == ValidationStage.PRE_BRONZE
 
-    # Bronze table must NOT be mutated or exist
+    # Bronze table must NOT be mutated
     bronze_contract = get_bronze_contract_by_dataset_id(DatasetId.HOUSEHOLD_ZCATEGORY)
     assert bronze_contract is not None
     check = _fetch_scalar(
         isolated_duckdb_manager,
-        f"SELECT count(*) FROM information_schema.tables WHERE table_name = '{bronze_contract.physical_table.split('.')[-1]}'",
+        f"SELECT count(*) FROM {bronze_contract.physical_table}",
     )
     assert check == 0
 
@@ -738,12 +738,12 @@ def test_normalization_failure(
             run_id="run_norm_fail",
         )
 
-    # Bronze must NOT exist
+    # Bronze must NOT be mutated
     bronze_contract = get_bronze_contract_by_dataset_id(DatasetId.HOUSEHOLD_ZCATEGORY)
     assert bronze_contract is not None
     check = _fetch_scalar(
         isolated_duckdb_manager,
-        f"SELECT count(*) FROM information_schema.tables WHERE table_name = '{bronze_contract.physical_table.split('.')[-1]}'",
+        f"SELECT count(*) FROM {bronze_contract.physical_table}",
     )
     assert check == 0
 
@@ -850,7 +850,7 @@ def test_identity_uniqueness_fails_gate_2(
     assert bronze_contract is not None
     check = _fetch_scalar(
         isolated_duckdb_manager,
-        f"SELECT count(*) FROM information_schema.tables WHERE table_name = '{bronze_contract.physical_table.split('.')[-1]}'",
+        f"SELECT count(*) FROM {bronze_contract.physical_table}",
     )
     assert check == 0
 
@@ -935,12 +935,12 @@ def test_canonical_bronze_violation_fails_gate_2(
         ValidationStage.CANONICAL_BRONZE,
     )
 
-    # Bronze must NOT exist
+    # Bronze must NOT be mutated
     bronze_contract = get_bronze_contract_by_dataset_id(DatasetId.HOUSEHOLD_ZCATEGORY)
     assert bronze_contract is not None
     check = _fetch_scalar(
         isolated_duckdb_manager,
-        f"SELECT count(*) FROM information_schema.tables WHERE table_name = '{bronze_contract.physical_table.split('.')[-1]}'",
+        f"SELECT count(*) FROM {bronze_contract.physical_table}",
     )
     assert check == 0
 
@@ -994,12 +994,12 @@ def test_failure_after_pre_bronze(
     assert pb_contract is not None
     assert pre_bronze.table_exists(pb_contract)
 
-    # Bronze table does NOT exist
+    # Bronze table must NOT be mutated
     bronze_contract = get_bronze_contract_by_dataset_id(DatasetId.HOUSEHOLD_ZCATEGORY)
     assert bronze_contract is not None
     check = _fetch_scalar(
         isolated_duckdb_manager,
-        f"SELECT count(*) FROM information_schema.tables WHERE table_name = '{bronze_contract.physical_table.split('.')[-1]}'",
+        f"SELECT count(*) FROM {bronze_contract.physical_table}",
     )
     assert check == 0
 

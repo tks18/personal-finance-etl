@@ -157,13 +157,13 @@ Do not:
 
 ## 11. Completion checklist
 
-- [ ] Every Bronze dataset has explicit canonical schema.
-- [ ] Dynamic Bronze schema evolution is gone.
-- [ ] Source drift is contained in Pre-Bronze.
-- [ ] Canonical admission failures are atomic.
-- [ ] Existing DB compatibility is explicit.
-- [ ] Meta fingerprint semantics are correct.
-- [ ] Full financial/ID regression green.
+- [x] Every Bronze dataset has explicit canonical schema.
+- [x] Dynamic Bronze schema evolution is gone.
+- [x] Source drift is contained in Pre-Bronze.
+- [x] Canonical admission failures are atomic.
+- [x] Existing DB compatibility is explicit.
+- [x] Meta fingerprint semantics are correct.
+- [x] Full financial/ID regression green.
 
 ## 12. Commit boundary
 
@@ -178,20 +178,32 @@ Phase 037 may assume Bronze schema is now fully canonical and cannot absorb sour
 ## Phase completion record
 
 ```text
-Phase:
-Target release:
+Phase: 036
+Target release: v10.0.0-rc9
 Files changed:
-Schema changed:
-Runtime behavior changed:
+- src/personal_finance_etl/contracts/canonical_fields.py
+- src/personal_finance_etl/infrastructure/validation/canonical_schemas.py
+- src/personal_finance_etl/infrastructure/warehouse/schema/bronze.py
+- src/personal_finance_etl/infrastructure/warehouse/connection.py
+- src/personal_finance_etl/infrastructure/warehouse/bronze.py
+- src/personal_finance_etl/application/normalization/executor.py
+- tests/architecture/test_bronze_canonical_guards.py
+- tests/infrastructure/test_bronze_strict_canonical.py
+- tests/application/test_generalized_vertical_slice.py
+- tests/application/test_mutual_fund_evidence_migration.py
+- tests/application/test_reference_evidence_migration.py
+- tests/contracts/test_dataset_collection.py
+Schema changed: YES (Bronze DDL centralized and deterministically instantiated on schema initialization; dynamic schema evolution permanently removed)
+Runtime behavior changed: YES (Bronze validation enforces strict=True schemas rejecting unmapped drift; Bronze table mutation uses deterministic DDL and transactional deletion without dynamic schema mutation)
 Financial formulas changed: NO
-Focused tests:
-Architecture tests:
-Real-data run:
-Performance check:
-Compatibility path still present:
-Old path deleted:
-Exit assertions green:
-Commit:
+Focused tests: tests/infrastructure/test_bronze_strict_canonical.py, tests/contracts/test_dataset_collection.py, tests/application/test_generalized_vertical_slice.py
+Architecture tests: tests/architecture/test_boundaries.py, tests/architecture/test_bronze_canonical_guards.py
+Real-data run: 46/46 nodes successful (30.21s, FULLY_COMMITTED)
+Performance check: FAST audit 0.89s, FULL audit passed across all 6 engines (89.37s)
+Compatibility path still present: NO (dynamic schema evolution helper deleted)
+Old path deleted: YES (_evolve_schema deleted from BronzeLayer)
+Exit assertions green: YES (all 7 checklist items satisfied)
+Commit: refactor(bronze): enforce canonical schemas
 ```
 
 A phase is incomplete if any required exit assertion is false.

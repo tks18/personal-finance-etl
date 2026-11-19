@@ -32,6 +32,7 @@ from personal_finance_etl.config.sources.normalization import (
     ParseDateRule,
     TrimRule,
 )
+from personal_finance_etl.contracts.canonical_fields import get_canonical_fields
 
 __all__ = ["NormalizationExecutor"]
 
@@ -188,11 +189,19 @@ class NormalizationExecutor:
                     ) from e
 
         # 5. Project Expected Canonical Output Fields + Preserved Lineage Metadata
-        # If output fields are defined, select them along with any present provenance fields
+        # Enforce canonical projection: only expected canonical fields and provenance survive.
         if plan.expected_output_fields:
-            projected: list[str] = [
-                f for f in plan.expected_output_fields if f in current_schema_names
-            ]
+            target_fields: set[str] = set(plan.expected_output_fields)
+        else:
+            canon = get_canonical_fields(plan.dataset_id)
+            target_fields = set(canon) if canon is not None else set()
+
+        if target_fields:
+            projected: list[str] = (
+                [f for f in plan.expected_output_fields if f in current_schema_names]
+                if plan.expected_output_fields
+                else [f for f in target_fields if f in current_schema_names]
+            )
             for prov in plan.provenance_fields:
                 if prov in current_schema_names and prov not in projected:
                     projected.append(prov)

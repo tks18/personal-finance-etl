@@ -23,6 +23,7 @@ import psutil
 from personal_finance_etl.infrastructure.observability.diagnostics import (
     get_observability_diagnostics,
 )
+from personal_finance_etl.infrastructure.warehouse.schema.bronze import BRONZE_DDL
 from personal_finance_etl.infrastructure.warehouse.schema.gold import GOLD_DDL
 from personal_finance_etl.infrastructure.warehouse.schema.meta import META_DDL
 from personal_finance_etl.infrastructure.warehouse.schema.pre_bronze import PRE_BRONZE_DDL
@@ -104,6 +105,7 @@ class DuckDBManager:
         self.conn.execute("CREATE SCHEMA IF NOT EXISTS silver")
         self.conn.execute("CREATE SCHEMA IF NOT EXISTS gold")
         self.conn.execute(PRE_BRONZE_DDL)
+        self.conn.execute(BRONZE_DDL)
         self.conn.execute(META_DDL)
         self.conn.execute(
             "UPDATE meta.m_File_Registry SET file_type = 'parquet' WHERE (file_name LIKE '%.parquet' OR relative_path LIKE '%.parquet') AND file_type != 'parquet'"
