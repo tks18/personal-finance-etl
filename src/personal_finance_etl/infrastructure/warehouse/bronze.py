@@ -2,13 +2,14 @@
 
 Owns
 ----
-- Incremental upserting of raw extracted DataFrames into bronze.* DuckDB tables.
-- Table schema evolution for newly added source columns.
+- Incremental upserting of canonical DataFrames into bronze.* DuckDB tables.
+- Fixed canonical schema enforcement (no dynamic runtime schema evolution).
 - Identity migration during file renames without re-ingesting physical rows.
 - Full dataset reading from Bronze tables into an immutable DatasetCollection.
 
 Does not own
 -------------
+- Dynamic runtime schema evolution (prohibited by Phase 036 strict canonical cutover).
 - Filesystem discovery or binary file parsing (owned by infrastructure.providers).
 - Raw binary vaulting or control plane state (owned by control plane).
 - DuckDB connection lifecycle (owned by infrastructure.warehouse.connection).
@@ -21,6 +22,7 @@ import os
 import duckdb
 import polars as pl
 
+from personal_finance_etl.contracts.canonical_fields import get_canonical_fields
 from personal_finance_etl.contracts.dataset_collection import DatasetCollection
 from personal_finance_etl.contracts.datasets import DatasetId
 from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
@@ -66,65 +68,27 @@ class BronzeLayer:
         self.meta_layer = meta_layer
         self.emitter = emitter or get_global_emitter()
 
-    def _evolve_schema(self, table_name: str) -> None:
-        """Add any new columns found in schema_df to an existing bronze table.
-
-        Parameters
-        ----------
-        table_name : str
-            Target physical Bronze table name.
-        """
-        try:
-            table_cols = {
-                str(row[0]).lower()
-                for row in self.db_manager.conn.execute(f"DESCRIBE {table_name}").fetchall()  # nosec B608
-            }
-            for col_info in self.db_manager.conn.execute("DESCRIBE schema_df").fetchall():
-                col_name = str(col_info[0])
-                col_type = str(col_info[1])
-                if col_name.lower() not in table_cols:
-                    self.db_manager.conn.execute(
-                        f'ALTER TABLE {table_name} ADD COLUMN "{col_name}" {col_type}'  # nosec B608
-                    )
-                    diagnostics.debug(
-                        "Bronze: Evolved schema for %s: added column '%s' (%s)",
-                        table_name,
-                        col_name,
-                        col_type,
-                    )
-        except duckdb.CatalogException as e:
-            diagnostics.debug(
-                "Bronze: Table %s not yet created, skipping evolution: %s", table_name, e
-            )
-
     def _prepare_bronze_table(
         self,
         table_name: str,
         full_replace: bool,
         filenames: list[str],
     ) -> None:
-        """Create or clear partition slices in the Bronze table before row insertion.
+        """Clear partition slices or truncate in the Bronze table before row insertion.
 
         Parameters
         ----------
         table_name : str
             Physical table name.
         full_replace : bool
-            Whether to drop and replace the table.
+            Whether to truncate the entire table.
         filenames : list[str]
             Basenames of files to remove before re-inserting.
         """
         if full_replace:
-            self.db_manager.conn.execute(f"DROP TABLE IF EXISTS {table_name}")  # nosec B608
-            self.db_manager.conn.execute(
-                f"CREATE TABLE {table_name} AS SELECT * FROM schema_df"  # nosec B608
-            )
-            diagnostics.debug("Bronze: Re-created %s for full replacement.", table_name)
+            self.db_manager.conn.execute(f"DELETE FROM {table_name}")  # nosec B608
+            diagnostics.debug("Bronze: Truncated %s for full replacement.", table_name)
         else:
-            create_query = f"CREATE TABLE IF NOT EXISTS {table_name} AS SELECT * FROM schema_df"  # nosec B608
-            self.db_manager.conn.execute(create_query)
-            self._evolve_schema(table_name)
-
             placeholders = ", ".join(["?"] * len(filenames))
             delete_query = f"DELETE FROM {table_name} WHERE __file_name__ IN ({placeholders})"  # nosec B608
             diagnostics.debug("Bronze SQL: %s", delete_query)
@@ -207,12 +171,7 @@ class BronzeLayer:
         filenames = [os.path.basename(f) for f in actionable_files]
         df_filtered = df.filter(pl.col("__file_name__").is_in(filenames))
 
-        schema_df = df.head(0)
-        self.db_manager.conn.register("schema_df", schema_df)
-        try:
-            self._prepare_bronze_table(table_name, full_replace, filenames)
-        finally:
-            self.db_manager.conn.unregister("schema_df")
+        self._prepare_bronze_table(table_name, full_replace, filenames)
 
         return self._insert_bronze_records(table_name, df_filtered)
 
@@ -355,3 +314,34 @@ class BronzeLayer:
                     frames[contract.dataset_id] = pl.LazyFrame()
 
         return DatasetCollection(frames=frames)
+
+
+def verify_canonical_bronze_schemas(conn: duckdb.DuckDBPyConnection) -> list[str]:
+    """Verify that existing physical Bronze tables conform to canonical contracts.
+
+    Parameters
+    ----------
+    conn : duckdb.DuckDBPyConnection
+        Active DuckDB connection handle.
+
+    Returns
+    -------
+    list[str]
+        List of schema mismatch diagnostic messages, if any.
+    """
+    mismatches: list[str] = []
+    for contract in BRONZE_CONTRACT_REGISTRY:
+        table_name = contract.physical_table
+        ds_id = contract.dataset_id
+        try:
+            db_cols = {str(row[0]) for row in conn.execute(f"DESCRIBE {table_name}").fetchall()}  # nosec B608
+            permitted = get_canonical_fields(ds_id)
+            if permitted is not None:
+                extra_cols = db_cols - permitted
+                if extra_cols:
+                    mismatches.append(
+                        f"Table {table_name} contains unpermitted extra columns: {sorted(extra_cols)}"
+                    )
+        except duckdb.CatalogException:
+            continue
+    return mismatches
