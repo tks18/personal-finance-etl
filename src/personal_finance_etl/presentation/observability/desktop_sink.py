@@ -26,7 +26,54 @@ from personal_finance_etl.contracts.observability import (
     PresentationKind,
 )
 
-__all__ = ["DesktopNarrativeSink", "format_event_narrative", "format_failure_summary"]
+__all__ = [
+    "DesktopNarrativeSink",
+    "format_event_narrative",
+    "format_failure_summary",
+    "should_suppress_narrative_event",
+]
+
+_ROUTINE_TICK_CODES: Final[set[EventCode]] = {
+    EventCode.MARKET_TICKER_SUCCESS,
+    EventCode.MARKET_TICKER_CACHE_HIT,
+    EventCode.QUANT_ISIN_PROCESSED,
+    EventCode.VALIDATION_START,
+    EventCode.VALIDATION_SUCCESS,
+}
+
+_ROUTINE_FILE_CODES: Final[set[EventCode]] = {
+    EventCode.EXTRACTION_BATCH,
+    EventCode.EXTRACTION_COMPLETED,
+}
+
+
+def should_suppress_narrative_event(event: ObservabilityEvent) -> bool:
+    """Determine whether an observability event represents routine per-entity progress chatter.
+
+    Parameters
+    ----------
+    event : ObservabilityEvent
+        Canonical observability event to evaluate.
+
+    Returns
+    -------
+    bool
+        True if event is repetitive per-entity chatter that should be suppressed from presentation logs.
+    """
+    if (
+        event.presentation_kind in (PresentationKind.STEP, PresentationKind.SUCCESS)
+        and event.event_code in _ROUTINE_TICK_CODES
+    ):
+        return True
+
+    if event.context.entity_type == "File":
+        is_routine_file = event.event_code in _ROUTINE_FILE_CODES
+        is_progress = event.presentation_kind == PresentationKind.PROGRESS
+        if is_routine_file or is_progress:
+            return True
+
+    return False
+
 
 _KIND_TAG_MAP: Final[dict[PresentationKind, str]] = {
     PresentationKind.STEP: "step",
@@ -174,28 +221,7 @@ class DesktopNarrativeSink(ObservabilitySink):
             return
 
         # Suppress repetitive per-entity ticks (tickers, validation, per-file ingestion) from cluttering UI narrative
-        if self._suppress_per_entity_success and (
-            (
-                event.event_code
-                in (
-                    EventCode.MARKET_TICKER_SUCCESS,
-                    EventCode.MARKET_TICKER_CACHE_HIT,
-                    EventCode.QUANT_ISIN_PROCESSED,
-                    EventCode.VALIDATION_START,
-                    EventCode.VALIDATION_SUCCESS,
-                )
-                and event.presentation_kind in (PresentationKind.STEP, PresentationKind.SUCCESS)
-            )
-            or (
-                event.context.entity_type == "File"
-                and (
-                    event.event_code in (EventCode.EXTRACTION_BATCH, EventCode.EXTRACTION_COMPLETED)
-                    or event.presentation_kind == PresentationKind.PROGRESS
-                )
-                and event.presentation_kind
-                in (PresentationKind.STEP, PresentationKind.SUCCESS, PresentationKind.PROGRESS)
-            )
-        ):
+        if self._suppress_per_entity_success and should_suppress_narrative_event(event):
             if self._progress_callback is not None and event.progress is not None:
                 self._progress_callback(float(event.progress))
             return

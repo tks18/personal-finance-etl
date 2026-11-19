@@ -23,10 +23,12 @@ from rich.panel import Panel
 from rich.progress import Progress, TaskID
 
 from personal_finance_etl.contracts.observability import (
-    EventCode,
     ObservabilityEvent,
     ObservabilitySink,
     PresentationKind,
+)
+from personal_finance_etl.presentation.observability.desktop_sink import (
+    should_suppress_narrative_event,
 )
 
 __all__ = ["RichNarrativeSink"]
@@ -92,28 +94,7 @@ class RichNarrativeSink(ObservabilitySink):
             return
 
         # Suppress repetitive per-entity ticks (tickers, validation, per-file ingestion) from cluttering human run narrative
-        if self._suppress_per_entity_success and (
-            (
-                event.event_code
-                in (
-                    EventCode.MARKET_TICKER_SUCCESS,
-                    EventCode.MARKET_TICKER_CACHE_HIT,
-                    EventCode.QUANT_ISIN_PROCESSED,
-                    EventCode.VALIDATION_START,
-                    EventCode.VALIDATION_SUCCESS,
-                )
-                and event.presentation_kind in (PresentationKind.STEP, PresentationKind.SUCCESS)
-            )
-            or (
-                event.context.entity_type == "File"
-                and (
-                    event.event_code in (EventCode.EXTRACTION_BATCH, EventCode.EXTRACTION_COMPLETED)
-                    or event.presentation_kind == PresentationKind.PROGRESS
-                )
-                and event.presentation_kind
-                in (PresentationKind.STEP, PresentationKind.SUCCESS, PresentationKind.PROGRESS)
-            )
-        ):
+        if self._suppress_per_entity_success and should_suppress_narrative_event(event):
             return
 
         # Build formatted narrative line
