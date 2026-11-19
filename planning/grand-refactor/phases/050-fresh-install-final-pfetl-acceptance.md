@@ -29,8 +29,10 @@ The accepted implementation baseline at phase start is the post-Phase-049 reposi
 Use:
 - clean virtual environment/install according to project-supported packaging;
 - empty working data/control-plane/warehouse directories;
-- one golden external household configuration;
-- one golden investment configuration or a combined scenario;
+- permanent Generic Golden User benchmark scenario (`tests/fixtures/external/golden_user/`) featuring:
+  - `sources.toml` mapping completely novel/generic Excel, CSV, and SQLite schemas;
+  - `settings.toml` and `financial_rules.toml` with generic user parameters;
+  - generic evidence files across household budgeting, banking, domestic equities, mutual funds, and foreign assets;
 - canonical sample evidence repository (`tests/fixtures/evidence/`) serving as the public-facing golden reference dataset for new users and automated fresh-install acceptance runs;
 - frozen machine-readable config schema;
 - PFETL CLI/help;
@@ -106,25 +108,35 @@ configuration fingerprint -> plan -> source/artifact/provider request -> validat
 Repeat the lineage check for at least one multiprocessing/worker operation and prove worker/run/parent-operation correlation survives process boundaries.
 
 ### Step 12 - Existing-state upgrade acceptance
-Start from a preserved pre-refactor/v9.5.3-era operational state (Control Plane/Raw Store and a representative warehouse/backup according to supported migration policy), upgrade to the final code, execute the documented additive migrations/rebuilds, and prove the resulting financial state equals a clean final-version rebuild from the same evidence. Historical run/artifact provenance must remain readable. No manual SQL surgery is allowed.
+Start from a preserved pre-refactor/v9.5.3-era operational state (Control Plane/Raw Store and a representative warehouse/backup according to supported migration policy), upgrade to the final code using Shan's production configuration in `G:\My Drive\Docs\Financial Docs\Financial Planner\Analysis\ETL App\`:
+- `--config "G:\My Drive\Docs\Financial Docs\Financial Planner\Analysis\ETL App\shan_personal_finance_ETL.toml"`
+- `--rules "G:\My Drive\Docs\Financial Docs\Financial Planner\Analysis\ETL App\shan_personal_finance_rules.toml"`
+- `--sources "G:\My Drive\Docs\Financial Docs\Financial Planner\Analysis\ETL App\shan_personal_finance_sources.toml"`
+Execute the pipeline against real live evidence (with `shan_personal_finance_sources.toml` dynamically resolving the latest modified backup in `G:\My Drive\MoneyManager`), perform documented migrations, and prove the resulting financial state (FIFO lots, capital gains, tax liabilities, net worth, FIRE projections) equals the historical v9.5.3 regression oracle down to the penny. Historical run/artifact provenance must remain readable. No manual SQL surgery or hardcoded Python fallbacks are allowed.
 
-### Step 13 - Desktop/presentation acceptance
-Because Desktop is part of the main PFETL application, run the existing Desktop/presentation smoke path against the final core. It must:
+### Step 13 - Desktop & Telemetry Presentation Acceptance
+Because Desktop and CLI are the primary presentation layers of PFETL, run full acceptance against the modern core:
 - launch against the migrated configuration/runtime contracts;
 - execute the supported default/current run path without assuming fixed source topology;
+- UI progress bars receive smooth live updates per-file during generalized ingestion (`PresentationKind.PROGRESS` events with file name, row count, and percentage);
+- Stage narrative displays modern Medallion architecture stages (Discovery -> Ingestion -> Harmonization -> Analytics -> Gold Marts);
 - tolerate capability-specific Silver/Gold absence rather than reporting corruption;
 - expose run and snapshot/restore outcomes through the existing presentation contract;
+- append-only forensic logging in `outputs/logs/` captures complete end-to-end lineage from Ingestion to Monte Carlo without raw tracebacks;
 - avoid importing configuration/planning/validation implementation internals directly.
 
-This is compatibility certification of the existing Desktop, not a new Config Studio or GUI redesign.
+This is compatibility and telemetry certification of the existing Desktop, not a new Config Studio or GUI redesign.
 
 ### Step 14 - Performance acceptance
 Apply Phase-048 durable thresholds to first/full/cached relevant runs.
 
 ### Step 15 - Legacy absence audit
 Repository/runtime acceptance proves:
+- zero hardcoded configuration dictionaries in `loader.py` (configuration loaded exclusively from `sources.toml`);
+- zero references to `column_master` or `COMMON_COLUMN_MASTER` across `src/` and public configuration schemas;
+- canonical Bronze catalog contains exactly 19 active contracts (all 19 true financial evidence streams) and zero transitional configuration contracts;
 - no fixed ExtractionResult;
-- no column-master data path;
+- no column-master data path or transitional configuration bypasses;
 - no folder-name topology;
 - no dynamic Bronze schema evolution;
 - no filename operational identity;
@@ -223,12 +235,24 @@ Final mandatory acceptance matrix:
 - thresholds pass.
 
 ### Legacy
-- zero prohibited architecture references.
+- zero prohibited architecture references;
+- zero references to `column_master` or `COMMON_COLUMN_MASTER` across `src/` and configuration schemas;
+- canonical Bronze catalog contains strictly 19 active contracts.
 
-### Regression
+### Regression & End-to-End Continuum
 - Shan full financial oracle remains green;
 - external household/investment golden fixtures remain green;
-- static sample evidence suite (`tests/fixtures/evidence/`) executes end-to-end verifying zero-defect execution of FIFO lot matching, capital gains tax, FIRE simulations, and Wealth reporting on clean installs.
+- static sample evidence suite (`tests/fixtures/evidence/`) executes end-to-end verifying zero-defect execution of FIFO lot matching, capital gains tax, FIRE simulations, and Wealth reporting on clean installs;
+- **Generic Golden User End-to-End Acceptance (`tests/application/test_generic_user_e2e_acceptance.py`):**
+  - Executes a clean-install run using purely generic external evidence (`tests/fixtures/external/golden_user/`) and public TOML configurations without any Shan data or hardcoded Python configuration;
+  - Asserts complete source-agnostic pipeline execution from Discovery and Pre-Bronze raw admission through Monte Carlo stochastic simulation;
+- **Full End-to-End Multi-Layer Assertion Suite (From Ingestion to Monte Carlo):**
+  - **Ingestion & Control Plane:** Assert file discovery, SHA-256 fingerprinting, binary file payload storage in `Raw_Documents.sqlite`, file registration, and run manifest logging;
+  - **Meta Layer:** Assert `_meta_file_registry`, `_meta_ingestion_manifest`, `_meta_schema_catalog`, and `_meta_capability_state` correctly track all artifact IDs, row counts, and schema versions;
+  - **Pre-Bronze Layer:** Assert exact source-shaped raw admissions, dunder metadata columns (`__file_name__`, `__folder_path__`, `__source_file_id__`, `__ingested_at__`), and dry-run non-mutation;
+  - **Bronze Layer:** Assert Gate 1 & Gate 2 Pandera schema validations, dunder provenance admission (`__artifact_id__`), atomic delta replacement, and artifact-level deduplication;
+  - **Silver Layer:** Assert transformed and normalized financial facts across household transactions, asset groupings, currencies, investment orders, trade executions, lot allocations, realized capital gains, and tax events;
+  - **Gold Layer:** Assert final analytical marts across Household Budgeting, Investment Portfolio Summary, Tax Year Summary, Tax Income Breakdown, Tax Reconciliation, Wealth Net Worth curves, FIRE Milestones, and Monte Carlo stochastic survival distributions.
 
 ## 10. Explicit non-goals
 
@@ -253,13 +277,14 @@ Do not:
 - [ ] Capability switch correct.
 - [ ] Backup/restore correct.
 - [ ] Existing pre-refactor state upgrades correctly.
-- [ ] Desktop/presentation compatibility smoke passes.
+- [ ] Desktop/presentation compatibility smoke passes (live per-file progress loader, modern Medallion stages, forensic logging).
 - [ ] JSONL lineage reconstructable.
 - [ ] Multiprocessing/worker lineage reconstructable.
 - [ ] Performance gates pass.
-- [ ] Legacy architecture absent.
+- [ ] Legacy architecture absent (zero references to column_master, ExtractionResult, or legacy folder topology; exactly 19 Bronze contracts verified; loader.py hardcoded baseline deleted).
 - [ ] Shan oracle green.
 - [ ] External golden fixtures green.
+- [ ] Generic Golden User end-to-end acceptance green (source-agnostic proof from Ingestion to Monte Carlo on clean install).
 - [ ] All 50 phase contracts closed.
 - [ ] No unresolved core requirement deferred.
 

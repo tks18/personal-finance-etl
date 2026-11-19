@@ -60,20 +60,24 @@ Invalid capability combinations fail at planner/preflight with remediation.
 
 ## 6. Detailed implementation sequence
 
-### Step 1 - Freeze domestic scenario
-Define source files/tables, mappings, canonical transactions and expected purchase/sale/lot/realized outcomes.
+### Step 1 - Freeze domestic scenario and Generic External Investment Fixtures
+Establish a permanent Generic External Investment Fixture repository at `tests/fixtures/external/investments/`:
+- `generic_domestic_trades.csv`: generic brokerage tradebook with column headers `Order_Date`, `Symbol`, `Order_Type`, `Exec_Shares`, `Price_Per_Share`, `Stamp_Duty`, `Brokerage`;
+- `generic_mf_transactions.xlsx`: mutual fund statement workbook with columns `Folio`, `Fund_Name`, `ISIN_Code`, `Date_Of_Txn`, `Type`, `Units_Count`, `Purchase_NAV`, `Net_Amount`;
+- `generic_us_trades.csv`: foreign equity trade export with columns `Ticker_Symbol`, `Txn_Timestamp`, `Side`, `Unit_Quantity`, `Share_Price`, `Gross_Value`;
+- `sources_generic_investments.toml`: typed configuration mapping these novel column names and date formats into canonical Bronze investment contracts.
 
 ### Step 2 - Configure domestic source
-Use a different source vocabulary/shape from Shan. Run validate/check/dry-run.
+Configure domestic-only pipeline using `sources_generic_investments.toml`. Run diagnostics (`validate-config`, `check-sources`, `dry-run-admission`). Assert no hardcoded vendor assumptions.
 
 ### Step 3 - Full domestic run
-Assert no foreign provider calls; accounting/FIFO/reconciliation outputs match expected scenario.
+Execute pipeline. Assert no foreign provider calls; verify accounting, FIFO lot matching, and capital gains tax match expected scenario.
 
 ### Step 4 - Freeze foreign scenario
-Include foreign instrument/currency/transaction evidence and deterministic provider fixtures for FX/market.
+Include foreign equity fixture `generic_us_trades.csv` and deterministic test provider fixtures for FX and US equity prices.
 
 ### Step 5 - Full foreign run
-Assert exact provider requirements/ranges and expected valuation.
+Execute combined run. Assert exact provider requirements/ranges and expected valuation.
 
 ### Step 6 - Identity stability
 Reorder source rows/files and rerun. PURCHASE/SALE/LOT/REALIZED/RECON IDs remain stable for unchanged canonical scenario.

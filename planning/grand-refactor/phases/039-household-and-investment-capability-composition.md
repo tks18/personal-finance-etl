@@ -133,7 +133,12 @@ Required:
 - active contract set excludes investment accounting outputs;
 - full Shan outputs/IDs identical;
 - household-only runtime demonstrates skipped work;
-- capability integration tests leverage static sample fixtures from `tests/fixtures/evidence/` rather than synthetic in-memory frames.
+- capability integration tests leverage static sample fixtures from `tests/fixtures/evidence/` rather than synthetic in-memory frames;
+- **Exhaustive Deep Domain Investment Accounting Assertions (Silver & Gold):**
+  - Meticulously test and assert Silver investment lots (`f_Investment_Analytics_Lot`), verifying deterministic FIFO lot matching, purchase allocation, remaining lot quantities, unit cost basis, open/closed lot status, and byte-stable `LOT` ID generation;
+  - Meticulously test and assert Silver realized investment events (`f_Investment_Realized_Events`), validating realized capital gains/losses, holding duration in days, short-term vs long-term classification flags, and deterministic `REALIZED` IDs;
+  - Meticulously test and assert Silver reconciliation events (`f_Investment_Reconciliation_Events`), asserting automated detection of share quantity discrepancies between transaction order history and broker portfolio holdings snapshots (`RECON_GROUP` IDs);
+  - Meticulously test and assert Gold investment summary marts (`Investment_Portfolio_Summary`, `Investment_By_ISIN`, asset allocation breakdown) against known deterministic totals derived from static fixtures.
 
 ## 10. Explicit non-goals
 

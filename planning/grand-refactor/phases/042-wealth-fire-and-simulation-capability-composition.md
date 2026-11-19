@@ -114,7 +114,11 @@ Required:
 - disabled service call counts zero;
 - simulation boundary test/documented decision;
 - full Shan wealth/FIRE/simulation equivalence;
-- end-to-end headless wealth and FIRE Monte Carlo simulation tests driven by static sample fixtures from `tests/fixtures/evidence/`.
+- end-to-end headless wealth and FIRE Monte Carlo simulation tests driven by static sample fixtures from `tests/fixtures/evidence/`;
+- **Exhaustive Deep Domain Wealth, FIRE & Monte Carlo Assertions (Gold):**
+  - Meticulously test and assert Gold Wealth & FIRE analytics marts (`Wealth_FIRE_Analytics`), verifying point-in-time and historical net worth curves, asset class breakdowns (equity, debt, cash, physical assets), liquid vs illiquid asset separation, savings rates, and expense coverage ratios;
+  - Meticulously test and assert FIRE projection engines, verifying Safe Withdrawal Rate (SWR) mechanics, inflation-adjusted annual spending targets, LeanFIRE, FatFIRE, and CoastFIRE target milestones, and projected year of financial independence;
+  - Meticulously test and assert Monte Carlo simulation engines across 1,000+ stochastic runs, verifying percentile trajectory convergence (p10, p25, median p50, p75, p90 portfolio survival paths), sequence-of-returns risk modeling, seed reproducibility for identical runs, distribution parameter logging, and simulation run provenance recording.
 
 ## 10. Explicit non-goals
 
