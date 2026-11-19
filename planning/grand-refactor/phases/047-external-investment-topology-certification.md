@@ -12,6 +12,10 @@ Certify external investment use cases with at least:
 1. household + domestic investments with no foreign/FX requirement;
 2. household + foreign investments requiring FX/foreign-market evidence.
 
+Slim down and prune canonical Bronze and Silver investment schemas:
+- Prune vendor-specific columns from stock trades, mutual fund orders, and US equity transactions down to the essential financial attributes needed for FIFO lots, realized gains, and portfolio valuation (`ISIN`/`Instrument_Name`, `Date`, `Transaction_Type`, `Quantity`, `Price`, `Amount`, `Fees`/`Brokerage`, `Currency_ID`, `artifact_id`).
+- Pre-Bronze preserves full source-shaped brokerage exports, while Bronze and Silver expose clean, minimal investment contracts that any brokerage format can satisfy without carrying legacy vendor columns.
+
 Both configurations must use source shapes/topologies different from Shan's current vendors and require no source-code changes. Capability dependency failures must be diagnosed before financial execution.
 
 ## 2. Why this phase exists
@@ -133,6 +137,7 @@ Do not:
 
 ## 11. Completion checklist
 
+- [ ] Canonical Bronze investment schemas slimmed down to essential financial columns.
 - [ ] Domestic external investment topology passes.
 - [ ] Foreign external topology passes.
 - [ ] Provider requirements correct.

@@ -14,11 +14,17 @@ Certify that PFETL's generalized household ingestion works for three genuinely d
 2. CSV household evidence without stable source UIDs;
 3. SQLite household evidence with stable IDs but a schema/table layout different from Shan's source.
 
+Slim down and prune canonical Bronze and Silver household schemas:
+- Prune unnecessary vendor columns (e.g. 53 raw MoneyManager columns in `household_opening_balances` and `household_transactions`) down to only the fields that are financially meaningful and required for downstream analytics (`UID`, `Date`/`TRANSACTION_DATE`, `AMOUNT`, `ASSET_SUBCATEGORY_ID`, `CURRENCY_ID`, `DESCRIPTION`, `artifact_id`).
+- Pre-Bronze safely preserves all raw source-shaped columns, while Bronze and Silver expose clean, minimal financial contracts that any external user can easily map.
+
 Each fixture must configure PFETL without source-code changes and reach canonical household Silver/Gold outputs or the maximum household-only outputs allowed by the active capability plan.
 
 ## 2. Why this phase exists
 
-The architecture has already proven individual no-UID and household-only cases. External certification now tests the product claim at topology level: can a new user describe materially different evidence and still enter the same canonical financial model? This phase should expose any hidden assumptions that survived the migration.
+The architecture has already proven individual no-UID and household-only cases. External certification now tests the product claim at topology level: can a new user describe materially different evidence and still enter the same canonical financial model?
+
+Furthermore, canonical Bronze schemas historically retained dozens of vendor-specific columns (such as MoneyManager's 53 internal columns in opening balances). Expecting external users to map 50+ unused vendor fields is unusable; Bronze schemas must be slimmed down to the core financial attributes needed for downstream reconciliation, budgeting, and net worth calculations. This phase should expose any hidden assumptions that survived the migration.
 
 ## 3. Inherited repository state
 
@@ -161,6 +167,7 @@ Do not:
 
 ## 11. Completion checklist
 
+- [ ] Canonical Bronze household schemas slimmed down to essential financial columns.
 - [ ] Excel external household topology passes.
 - [ ] CSV external household topology passes.
 - [ ] SQLite external household topology passes.

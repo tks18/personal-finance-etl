@@ -10,6 +10,8 @@
 
 Freeze version 1 of PFETL's public source-configuration contract after reviewing every field against the external certification experience. Publish a machine-readable schema, explicit compatibility/deprecation rules, and stable identifier vocabularies needed by future companion tools.
 
+Publish the finalized, frozen canonical column catalogs across all datasets, certifying that external users configure only the clean, slimmed-down canonical fields established in Phases 046–047 without carrying legacy vendor columns.
+
 This is a contract-freeze phase, not a documentation-portal or Config Studio phase.
 
 ## 2. Why this phase exists
@@ -143,6 +145,7 @@ Do not:
 ## 11. Completion checklist
 
 - [ ] Public config surface identified.
+- [ ] Final slimmed canonical column catalog frozen and published.
 - [ ] Schema v1 field names finalized.
 - [ ] Enum/discriminator values finalized.
 - [ ] Machine-readable schema exported.
