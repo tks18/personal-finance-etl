@@ -236,7 +236,14 @@ class PipelineExecutor:
         self.db_manager = db_manager
         self.rules = rules
         self.emitter = emitter or get_global_emitter()
-        self.plan = plan or CapabilityPlanner().create_plan()
+        if plan is not None:
+            self.plan = plan
+        elif source_config is not None and source_config.capabilities.enabled is not None:
+            self.plan = CapabilityPlanner().create_plan(
+                requested_capabilities=source_config.capabilities.resolved_capabilities
+            )
+        else:
+            self.plan = CapabilityPlanner().create_plan()
         self.dfs: dict[str, pl.DataFrame] = {}
         self.provider_symbols: ProviderSymbolRegistry | None = None
         self.source_config = source_config or get_shan_baseline_source_configuration(settings=cfg)
@@ -282,11 +289,18 @@ class PipelineExecutor:
         extracted_data : DatasetCollection
             Extracted source datasets.
         """
-        self.provider_symbols = build_provider_symbol_registry(
-            currency_mapping=extracted_data.require_lazy(DatasetId.MARKET_CURRENCY_MAPPING),
-            benchmark_master=extracted_data.require_lazy(DatasetId.INVESTMENT_BENCHMARK_MASTER),
-            benchmark_mapping=extracted_data.require_lazy(DatasetId.INVESTMENT_BENCHMARK_MAPPING),
-        )
+        if (
+            self.plan.is_capability_active(CapabilityId.INVESTMENT_ACCOUNTING)
+            or self.plan.is_capability_active(CapabilityId.FOREIGN_ASSET_ENRICHMENT)
+            or self.plan.is_capability_active(CapabilityId.BENCHMARK_ENRICHMENT)
+        ):
+            self.provider_symbols = build_provider_symbol_registry(
+                currency_mapping=extracted_data.get(DatasetId.MARKET_CURRENCY_MAPPING),
+                benchmark_master=extracted_data.get(DatasetId.INVESTMENT_BENCHMARK_MASTER),
+                benchmark_mapping=extracted_data.get(DatasetId.INVESTMENT_BENCHMARK_MAPPING),
+            )
+        else:
+            self.provider_symbols = None
         transformer = TransformationDAG(
             self.cfg,
             self.status_queue,
