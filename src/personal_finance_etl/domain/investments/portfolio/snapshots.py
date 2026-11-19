@@ -13,6 +13,7 @@ Does not own
 - Presentation layer formatting or persistence (owned by presentation and infrastructure).
 """
 
+import math
 from datetime import date
 
 from personal_finance_etl.config.financial_rules import FinancialRules
@@ -25,6 +26,7 @@ from personal_finance_etl.domain.investments.lots.fifo import FIFOPortfolio
 from personal_finance_etl.domain.investments.performance.returns import calculate_cagr
 from personal_finance_etl.domain.investments.portfolio.lot_metrics import (
     LotValuationContext,
+    _LotBenchmarkMetrics,
     _LotFxAttribution,
     _LotTaxAttributes,
     compute_domestic_fx_attribution,
@@ -57,6 +59,8 @@ class SnapshotGenerator:
         rules: FinancialRules,
         isin: str,
         master_row: IsinMasterRecord,
+        enable_benchmark: bool = True,
+        enable_foreign_assets: bool = True,
     ) -> None:
         self.rules = rules
         self.isin = isin
@@ -64,6 +68,8 @@ class SnapshotGenerator:
         self.tax_subtype = str(master_row.get("TAX_SUBTYPE", "listed"))
         self.bench_id = master_row.get("BENCHMARK_ID")
         self.fy_table = fy_table
+        self.enable_benchmark = enable_benchmark
+        self.enable_foreign_assets = enable_foreign_assets
 
     def generate(
         self,
@@ -195,7 +201,19 @@ class SnapshotGenerator:
             day_weight = 1.0
 
         default_curr = getattr(self.rules, "DEFAULT_CURRENCY_ID", "INR_INR")
-        bm = compute_lot_benchmark_metrics(lot, ctx, age, lot_cagr, default_curr)
+        if self.enable_benchmark:
+            bm = compute_lot_benchmark_metrics(lot, ctx, age, lot_cagr, default_curr)
+        else:
+            bm = _LotBenchmarkMetrics(
+                bm_buy=None,
+                m_bm_price_inr=0.0,
+                lot_bm_ret=None,
+                lot_bm_cagr=None,
+                lot_bm_cagr_status="UNDEFINED",
+                lot_bm_cagr_local=None,
+                lot_alpha=None,
+                is_outperforming=False,
+            )
 
         pnl = (ctx.m_price - lot.price) * lot.qty
         close_val = lot.qty * ctx.m_price
@@ -209,26 +227,39 @@ class SnapshotGenerator:
             remaining_ltcg_exemption=ctx.remaining_ltcg_exemption,
         )
 
-        fx = self._compute_fx_attribution(
-            lot=lot,
-            ctx=ctx,
-            age=age,
-            buy_val_lot=buy_val_lot,
-            close_val=close_val,
-            pnl=pnl,
-            lot_cagr=lot_cagr,
-            lot_return=lot_return,
-        )
+        if self.enable_foreign_assets:
+            fx = self._compute_fx_attribution(
+                lot=lot,
+                ctx=ctx,
+                age=age,
+                buy_val_lot=buy_val_lot,
+                close_val=close_val,
+                pnl=pnl,
+                lot_cagr=lot_cagr,
+                lot_return=lot_return,
+            )
+        else:
+            fx = compute_domestic_fx_attribution(
+                lot=lot,
+                ctx=ctx,
+                buy_val_lot=buy_val_lot,
+                close_val=close_val,
+                pnl=pnl,
+                lot_cagr=lot_cagr,
+                lot_return=lot_return,
+            )
 
         record = SnapshotRecord(
             Closing_Date=ctx.m_date,
             ISIN=self.isin,
             CURRENCY_ID=(
                 fifo.active_lots[0].currency_id
-                if fifo.active_lots and fifo.active_lots[0].currency_id
+                if self.enable_foreign_assets
+                and fifo.active_lots
+                and fifo.active_lots[0].currency_id
                 else default_curr
             ),
-            BENCHMARK_ID=self.bench_id,
+            BENCHMARK_ID=self.bench_id if self.enable_benchmark else None,
             Lot_ID=lot.lot_id
             if lot.lot_id is not None
             else _raise_invariant(
@@ -261,7 +292,11 @@ class SnapshotGenerator:
             XIRR_Local=_rounded_optional(ctx.inst_metrics.get("xirr_local")),
             FX_XIRR_Impact=_rounded_optional(ctx.inst_metrics.get("fx_xirr_impact")),
             BM_Buy_Price=round(bm.bm_buy, 4) if bm.bm_buy else None,
-            BM_Market_Price=round(ctx.m_bm_price, 4),
+            BM_Market_Price=(
+                round(ctx.m_bm_price, 4)
+                if self.enable_benchmark and math.isfinite(ctx.m_bm_price)
+                else None
+            ),
             Lot_BM_CAGR=_rounded_optional(bm.lot_bm_cagr),
             Lot_BM_CAGR_Status=bm.lot_bm_cagr_status,
             Lot_BM_CAGR_Local=_rounded_optional(bm.lot_bm_cagr_local),
@@ -271,7 +306,7 @@ class SnapshotGenerator:
                 "P/L": round(pnl, 4),
             },
             Absolute_Return=round(lot_return, 8),
-            Lot_BM_Return=round(bm.lot_bm_ret, 8),
+            Lot_BM_Return=round(bm.lot_bm_ret, 8) if bm.lot_bm_ret is not None else None,
             BM_XIRR=_rounded_optional(ctx.inst_metrics.get("bm_xirr")),
             BM_XIRR_Local=_rounded_optional(ctx.inst_metrics.get("bm_xirr_local")),
             Active_Return=_rounded_optional(ctx.inst_metrics.get("active_return")),

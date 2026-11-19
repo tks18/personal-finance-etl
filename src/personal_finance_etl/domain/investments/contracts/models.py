@@ -282,20 +282,20 @@ class SnapshotRecord(BaseModel):
     XIRR_Status: str = "INVALID_INPUT"
     After_Tax_XIRR: float | None
 
-    BM_Buy_Price: float | None
-    BM_Market_Price: float
-    Lot_BM_Return: float = 0.0
+    BM_Buy_Price: float | None = None
+    BM_Market_Price: float | None = None
+    Lot_BM_Return: float | None = None
     Lot_BM_CAGR: float | None = None
     Lot_BM_CAGR_Status: str = "UNDEFINED"
     Lot_BM_CAGR_Local: float | None = None
     BM_CAGR: float | None = None
     BM_CAGR_Status: str = "UNDEFINED"
-    BM_XIRR: float | None
+    BM_XIRR: float | None = None
     BM_XIRR_Local: float | None = None
-    Active_Return: float | None
+    Active_Return: float | None = None
     Active_Return_Local: float | None = None
     Lot_Alpha: float | None = None
-    Is_Lagging_Benchmark: bool | None
+    Is_Lagging_Benchmark: bool | None = None
     XIRR_Local: float | None = None
     FX_XIRR_Impact: float | None = None
 

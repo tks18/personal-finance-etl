@@ -249,6 +249,26 @@ class ExecutionPlan:
         val = dataset_id.value if isinstance(dataset_id, DatasetId) else str(dataset_id).lower()
         return any(d.value == val for d in self.required_bronze_datasets)
 
+    def is_enrichment_required(self, enrichment_id: ExternalEnrichmentId | str) -> bool:
+        """Check whether a specific external provider enrichment is required by this execution plan.
+
+        Parameters
+        ----------
+        enrichment_id : ExternalEnrichmentId | str
+            Authoritative external enrichment identifier to check.
+
+        Returns
+        -------
+        bool
+            True if required by any active capability in the plan, False otherwise.
+        """
+        val = (
+            enrichment_id.value
+            if isinstance(enrichment_id, ExternalEnrichmentId)
+            else str(enrichment_id).lower()
+        )
+        return any(e.value == val for e in self.required_external_enrichments)
+
     def is_contribution_active(
         self, target_capability: CapabilityId, scope: ContributionScope
     ) -> bool:

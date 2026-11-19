@@ -186,6 +186,8 @@ def _build_evaluation_row(
     benchmark_amounts: list[float],
     benchmark_local_amounts: list[float],
     pt_entry: dict[str, object],
+    enable_benchmark: bool = True,
+    enable_foreign_assets: bool = True,
 ) -> dict[str, object]:
     """Derive Mark-to-Market XIRR metrics and attribution differentials for a single date.
 
@@ -205,6 +207,10 @@ def _build_evaluation_row(
         Accumulated benchmark shadow local cashflow amounts.
     pt_entry : dict[str, object]
         Terminal valuation snapshot for the date.
+    enable_benchmark : bool, default True
+        Whether benchmark enrichment is active. When False, benchmark solver is bypassed.
+    enable_foreign_assets : bool, default True
+        Whether foreign asset enrichment is active. When False, local FX solver is bypassed.
 
     Returns
     -------
@@ -219,9 +225,21 @@ def _build_evaluation_row(
 
     pxirr = _terminal_result(port_dates, port_amounts, t_val, d_obj)
     at_pxirr = _terminal_result(port_dates, port_amounts, t_after_tax, d_obj)
-    pxirr_local = _terminal_result(port_dates, local_amounts, t_val_local, d_obj)
-    bm_pxirr = _terminal_result(port_dates, benchmark_amounts, t_shadow, d_obj)
-    bm_pxirr_local = _terminal_result(port_dates, benchmark_local_amounts, t_shadow_local, d_obj)
+    pxirr_local = (
+        _terminal_result(port_dates, local_amounts, t_val_local, d_obj)
+        if enable_foreign_assets
+        else None
+    )
+    bm_pxirr = (
+        _terminal_result(port_dates, benchmark_amounts, t_shadow, d_obj)
+        if enable_benchmark
+        else None
+    )
+    bm_pxirr_local = (
+        _terminal_result(port_dates, benchmark_local_amounts, t_shadow_local, d_obj)
+        if enable_benchmark and enable_foreign_assets
+        else None
+    )
 
     def opt_diff(left: float | None, right: float | None) -> float | None:
         return left - right if left is not None and right is not None else None
@@ -247,6 +265,8 @@ class PortfolioXIRRCalculator:
         unique_dates: list[date],
         global_cashflows: list[CashflowDict],
         portfolio_terminals: dict[date, TerminalValueDict] | dict[date, dict[str, float]],
+        enable_benchmark: bool = True,
+        enable_foreign_assets: bool = True,
     ) -> pl.DataFrame:
         """Calculate running portfolio, benchmark, after-tax, and local currency XIRR time-series.
 
@@ -258,6 +278,10 @@ class PortfolioXIRRCalculator:
             Chronological portfolio cashflows including purchase, sale, and distribution flows.
         portfolio_terminals : dict[date, TerminalValueDict] | dict[date, dict[str, float]]
             Mapping of closing date to mark-to-market terminal valuations.
+        enable_benchmark : bool, default True
+            Whether benchmark enrichment is active. When False, benchmark solver is bypassed.
+        enable_foreign_assets : bool, default True
+            Whether foreign asset enrichment is active. When False, local FX solver is bypassed.
 
         Returns
         -------
@@ -313,6 +337,8 @@ class PortfolioXIRRCalculator:
                 benchmark_amounts=benchmark_amounts,
                 benchmark_local_amounts=benchmark_local_amounts,
                 pt_entry=cast(dict[str, object], pt_entry),
+                enable_benchmark=enable_benchmark,
+                enable_foreign_assets=enable_foreign_assets,
             )
             port_rows.append(row)
 

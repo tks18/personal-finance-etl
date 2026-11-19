@@ -498,6 +498,8 @@ class IsinPipeline:
                     rules=self.ctx.rules,
                     fx_provider=self.ctx.fx_provider,
                     tmp_dir=self.tmp_dir,
+                    enable_benchmark=self.ctx.enable_benchmark,
+                    enable_foreign_assets=self.ctx.enable_foreign_assets,
                 )
             )
         return tasks

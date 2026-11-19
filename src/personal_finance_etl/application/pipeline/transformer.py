@@ -301,11 +301,20 @@ class TransformationDAG:
                 "df_d_investment_master": pl.LazyFrame(),
             }
 
-        asset_pipelines: list[AssetPipeline] = [
-            MutualFundPipeline(),
-            StockPipeline(),
-            USStockPipeline(),
-        ]
+        asset_pipelines: list[AssetPipeline] = []
+        if extracted.get(DatasetId.MARKET_MF_HOLDINGS) is not None:
+            asset_pipelines.append(MutualFundPipeline())
+        if extracted.get(DatasetId.MARKET_STOCK_HOLDINGS) is not None:
+            asset_pipelines.append(StockPipeline())
+
+        is_foreign_active = self.plan is None or self.plan.is_capability_active(
+            CapabilityId.FOREIGN_ASSET_ENRICHMENT
+        )
+        if (
+            is_foreign_active
+            and extracted.get(DatasetId.INVESTMENT_US_STOCK_TRANSACTIONS) is not None
+        ):
+            asset_pipelines.append(USStockPipeline())
 
         asset_results: list[AssetPipelineResult] = []
         for pipeline in asset_pipelines:
@@ -329,9 +338,10 @@ class TransformationDAG:
         )
 
         diagnostics.debug("Building Investment Master...")
+        bm_mapping = extracted.get_lazy(DatasetId.INVESTMENT_BENCHMARK_MAPPING)
         d_tf_investment_master_lazy = get_d_investment_master(
             master_ref_lazy_list,
-            extracted.require_lazy(DatasetId.INVESTMENT_BENCHMARK_MAPPING),
+            bm_mapping,
             self.rules.DEFAULT_CURRENCY_ID,
         )
         if self.plan is not None and not self.plan.is_capability_active(

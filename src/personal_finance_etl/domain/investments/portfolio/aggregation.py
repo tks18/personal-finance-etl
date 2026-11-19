@@ -40,9 +40,16 @@ PORTFOLIO_COL_RENAMES: dict[str, str] = {
 class GroupProcessor:
     """Computes XIRR, MDD, and other core metrics at arbitrary group levels (Class, Subtype)."""
 
-    def __init__(self, analytics_calc: AdvancedAnalyticsCalculator):
+    def __init__(
+        self,
+        analytics_calc: AdvancedAnalyticsCalculator,
+        enable_benchmark: bool = True,
+        enable_foreign_assets: bool = True,
+    ) -> None:
         self.xirr_calc = PortfolioXIRRCalculator()
         self.analytics_calc = analytics_calc
+        self.enable_benchmark = enable_benchmark
+        self.enable_foreign_assets = enable_foreign_assets
 
     def run(
         self,
@@ -61,7 +68,13 @@ class GroupProcessor:
             terminals = group_terminals.get(key, {})
 
             # Use the exact same PyXIRR calculator as the portfolio uses!
-            df_group = self.xirr_calc.calculate(unique_dates, cashflows, terminals)
+            df_group = self.xirr_calc.calculate(
+                unique_dates,
+                cashflows,
+                terminals,
+                enable_benchmark=self.enable_benchmark,
+                enable_foreign_assets=self.enable_foreign_assets,
+            )
             df_group = self.analytics_calc.calculate(df_group, unique_dates, terminals, cashflows)
 
             df_group = df_group.rename(PORTFOLIO_COL_RENAMES)

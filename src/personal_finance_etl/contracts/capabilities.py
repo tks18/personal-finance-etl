@@ -35,6 +35,7 @@ from personal_finance_etl.contracts.semantic_inventory import (
 )
 
 __all__ = [
+    "CAPABILITY_COLUMN_INVENTORY",
     "CAPABILITY_REGISTRY",
     "COMMON_PRODUCED_SILVER_DATASETS",
     "CapabilityDescriptor",
@@ -45,6 +46,7 @@ __all__ = [
     "ContributionScope",
     "ExternalEnrichmentId",
     "ResolvedCapabilityGraph",
+    "get_capability_columns",
 ]
 
 
@@ -186,13 +188,13 @@ CAPABILITY_REGISTRY: dict[CapabilityId, CapabilityDescriptor] = {
         required_bronze_datasets=(
             DatasetId.INVESTMENT_MF_ISIN_MAPPING,
             DatasetId.INVESTMENT_MACRO_PARAMETERS,
-            DatasetId.INVESTMENT_BENCHMARK_MAPPING,
             DatasetId.MARKET_MF_HOLDINGS,
             DatasetId.INVESTMENT_MF_ORDERS,
             DatasetId.MARKET_STOCK_HOLDINGS,
             DatasetId.INVESTMENT_STOCK_ORDERS,
         ),
         optional_bronze_datasets=(
+            DatasetId.INVESTMENT_BENCHMARK_MAPPING,
             DatasetId.INVESTMENT_US_STOCK_TRANSACTIONS,
             DatasetId.COMMON_COLUMN_MASTER,
         ),
@@ -332,6 +334,174 @@ CAPABILITY_REGISTRY: dict[CapabilityId, CapabilityDescriptor] = {
         optional_contributions=(),
     ),
 }
+
+
+# Authoritative mapping of financial capabilities to their owned analytical columns across Silver and Gold
+CAPABILITY_COLUMN_INVENTORY: dict[CapabilityId, dict[DatasetId, tuple[str, ...]]] = {
+    CapabilityId.BENCHMARK_ENRICHMENT: {
+        DatasetId.INVESTMENT_LOT_ANALYTICS: (
+            "BENCHMARK_ID",
+            "BM_Buy_Price",
+            "BM_Market_Price",
+            "Lot_BM_Return",
+            "Lot_BM_CAGR",
+            "Lot_BM_CAGR_Status",
+            "Lot_BM_CAGR_Local",
+            "BM_CAGR",
+            "BM_CAGR_Status",
+            "BM_XIRR",
+            "BM_XIRR_Local",
+            "Active_Return",
+            "Active_Return_Local",
+            "Lot_Alpha",
+            "Is_Lagging_Benchmark",
+        ),
+        DatasetId.INVESTMENT_BY_ISIN: (
+            "BM_CAGR",
+            "BM_XIRR",
+            "BM_XIRR_Local",
+            "Active_Return",
+            "Active_Return_Local",
+            "Is_Lagging_Benchmark",
+        ),
+        DatasetId.INVESTMENT_PORTFOLIO_SUMMARY: (
+            "ISIN_BM_XIRR",
+            "ISIN_BM_XIRR_Local",
+            "ISIN_Active_Return",
+            "ISIN_Active_Return_Local",
+        ),
+        DatasetId.INVESTMENT_BY_CLASS: ("BM_XIRR", "Active_Return"),
+        DatasetId.INVESTMENT_BY_SUBTYPE: ("BM_XIRR", "Active_Return"),
+        DatasetId.INVESTMENT_BY_INSTRUMENT_TYPE: ("BM_XIRR", "Active_Return"),
+        DatasetId.INVESTMENT_BY_SECTOR: ("BM_XIRR", "Active_Return"),
+        DatasetId.INVESTMENT_BY_INDUSTRY: ("BM_XIRR", "Active_Return"),
+        DatasetId.INVESTMENT_BY_GEO: ("BM_XIRR", "Active_Return"),
+        DatasetId.INVESTMENT_BY_PORTFOLIO: ("BM_XIRR", "Active_Return"),
+        DatasetId.INVESTMENT_BY_COUNTRY: (
+            "BM_XIRR",
+            "Active_Return",
+            "BM_XIRR_Local",
+            "Active_Return_Local",
+        ),
+        DatasetId.INVESTMENT_BY_CURRENCY: (
+            "BM_XIRR",
+            "Active_Return",
+            "BM_XIRR_Local",
+            "Active_Return_Local",
+        ),
+    },
+    CapabilityId.FOREIGN_ASSET_ENRICHMENT: {
+        DatasetId.INVESTMENT_LOT_ANALYTICS: (
+            "CURRENCY_ID",
+            "Buy_Value_Local",
+            "Close_Value_Local",
+            "Blended_FX_Buy_Rate",
+            "Buy_Price_Local",
+            "Market_Price_Local",
+            "FX_Rate_Buy",
+            "FX_Rate_Snap",
+            "Currency_Appreciation_Pct",
+            "Absolute_Return_Local",
+            "Asset_PnL",
+            "Forex_PnL",
+            "Forex_Contribution_Pct",
+            "Asset_Return_Pct",
+            "Forex_Return_Pct",
+            "Lot_CAGR_Local",
+            "XIRR_Local",
+            "FX_XIRR_Impact",
+        ),
+        DatasetId.INVESTMENT_BY_ISIN: (
+            "CURRENCY_ID",
+            "Total_Invested_Value_Local",
+            "Total_Current_Value_Local",
+            "Current_FX_Rate",
+            "Blended_FX_Buy_Rate",
+            "Currency_Appreciation_Pct",
+            "Asset_PnL",
+            "Forex_PnL",
+            "Forex_Contribution_Pct",
+            "XIRR_Local",
+            "FX_XIRR_Impact",
+        ),
+        DatasetId.INVESTMENT_PORTFOLIO_SUMMARY: (
+            "CURRENCY_ID",
+            "ISIN_Market_Value_Local",
+            "ISIN_Book_Value_Local",
+            "ISIN_Asset_PnL",
+            "ISIN_Forex_PnL",
+            "ISIN_Forex_Contribution_Pct",
+            "ISIN_XIRR_Local",
+            "ISIN_FX_XIRR_Impact",
+        ),
+        DatasetId.INVESTMENT_BY_CLASS: ("Asset_PnL", "Forex_PnL", "Forex_Contribution_Pct"),
+        DatasetId.INVESTMENT_BY_SUBTYPE: ("Asset_PnL", "Forex_PnL", "Forex_Contribution_Pct"),
+        DatasetId.INVESTMENT_BY_INSTRUMENT_TYPE: (
+            "Asset_PnL",
+            "Forex_PnL",
+            "Forex_Contribution_Pct",
+        ),
+        DatasetId.INVESTMENT_BY_SECTOR: ("Asset_PnL", "Forex_PnL", "Forex_Contribution_Pct"),
+        DatasetId.INVESTMENT_BY_INDUSTRY: ("Asset_PnL", "Forex_PnL", "Forex_Contribution_Pct"),
+        DatasetId.INVESTMENT_BY_GEO: ("Asset_PnL", "Forex_PnL", "Forex_Contribution_Pct"),
+        DatasetId.INVESTMENT_BY_PORTFOLIO: ("Asset_PnL", "Forex_PnL", "Forex_Contribution_Pct"),
+        DatasetId.INVESTMENT_BY_COUNTRY: (
+            "Total_Invested_Value_Local",
+            "Total_Current_Value_Local",
+            "Current_FX_Rate",
+            "Blended_FX_Buy_Rate",
+            "Currency_Appreciation_Pct",
+            "Asset_PnL",
+            "Forex_PnL",
+            "Forex_Contribution_Pct",
+            "XIRR_Local",
+            "BM_XIRR_Local",
+            "Active_Return_Local",
+            "FX_XIRR_Impact",
+        ),
+        DatasetId.INVESTMENT_BY_CURRENCY: (
+            "Total_Invested_Value_Local",
+            "Total_Current_Value_Local",
+            "Current_FX_Rate",
+            "Blended_FX_Buy_Rate",
+            "Currency_Appreciation_Pct",
+            "Asset_PnL",
+            "Forex_PnL",
+            "Forex_Contribution_Pct",
+            "XIRR_Local",
+            "BM_XIRR_Local",
+            "Active_Return_Local",
+            "FX_XIRR_Impact",
+        ),
+    },
+}
+
+
+def get_capability_columns(
+    capability_id: CapabilityId,
+    dataset_id: DatasetId | None = None,
+) -> tuple[str, ...]:
+    """Retrieve owned analytical columns for a specific capability and optional dataset.
+
+    Parameters
+    ----------
+    capability_id : CapabilityId
+        Financial capability to query.
+    dataset_id : DatasetId | None, default None
+        Target dataset identifier. If None, returns all distinct columns across all datasets.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Tuple of owned column names.
+    """
+    table_map = CAPABILITY_COLUMN_INVENTORY.get(capability_id, {})
+    if dataset_id is not None:
+        return table_map.get(dataset_id, ())
+    all_cols: list[str] = []
+    for cols in table_map.values():
+        all_cols.extend(cols)
+    return tuple(dict.fromkeys(all_cols))
 
 
 @dataclass(frozen=True, slots=True)

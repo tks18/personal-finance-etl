@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [10.1.1](https://github.com/tks18/personal-finance-etl/compare/10.1.0...10.1.1) (2026-11-19)
+
+
+### Features 🔥
+
+* **contracts:** decouple benchmark mapping and map capability columns ([e2d748e](https://github.com/tks18/personal-finance-etl/commit/e2d748e695a47eb9a61484c0ad6b2c7f3786aebf))
+* **domain:** gate benchmark and fx calculations at source in kernels ([f23d202](https://github.com/tks18/personal-finance-etl/commit/f23d2022d43bc12ac43bec7dc0757739a0e6bfb4))
+* **pipeline:** compose benchmark and foreign enrichments in execution ([6c9701f](https://github.com/tks18/personal-finance-etl/commit/6c9701fe1c98b3ad4338d08857a479a75690e258))
+
+
+### Tests 🧪
+
+* **application:** verify enrichment plan composition and dag skipping ([e16cfc9](https://github.com/tks18/personal-finance-etl/commit/e16cfc9c0d8fc475d32270240fa03c7bae3ab4f5))
+* **domain:** assert pyxirr solver reduction and source gating ([b1d1b65](https://github.com/tks18/personal-finance-etl/commit/b1d1b651730a84235585735649bebcbc87553a5f))
+* **fixtures:** provide static domestic-only investment source fixture ([688be4e](https://github.com/tks18/personal-finance-etl/commit/688be4e2e8b8c00478848404dd854f772ea8321a))
+
+
+### Docs 📃
+
+* **refactor:** align phase 042 gold marts and household ownership ([e3cbf51](https://github.com/tks18/personal-finance-etl/commit/e3cbf514584c575ee53dfa4719d4f99f065f9202))
+* **refactor:** complete phase 040 benchmark and foreign composition ([ca106be](https://github.com/tks18/personal-finance-etl/commit/ca106be1131d3010b1131f2f2b8e9b2f37be05fb))
+
 ## [10.1.0](https://github.com/tks18/personal-finance-etl/compare/10.0.0...10.1.0) (2026-11-19)
 
 

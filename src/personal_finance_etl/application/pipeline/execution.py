@@ -495,6 +495,10 @@ class PipelineExecutor:
                 start_date=None,
                 end_date=None,
                 run_id=run_id,
+                enable_benchmark=self.plan.is_capability_active(CapabilityId.BENCHMARK_ENRICHMENT),
+                enable_foreign_assets=self.plan.is_capability_active(
+                    CapabilityId.FOREIGN_ASSET_ENRICHMENT
+                ),
             ),
             status_queue=self.status_queue,
             emitter=self.emitter,
