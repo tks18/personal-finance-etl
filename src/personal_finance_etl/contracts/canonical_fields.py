@@ -227,6 +227,7 @@ CANONICAL_BRONZE_FIELDS: dict[DatasetId, frozenset[str]] = {
             "ZWTIME",
             "ZZDATA1",
             "ZZDATA2",
+            "ORDER_NUM",
         }
     ),
     DatasetId.INVESTMENT_MF_ISIN_MAPPING: frozenset(
@@ -248,8 +249,6 @@ CANONICAL_BRONZE_FIELDS: dict[DatasetId, frozenset[str]] = {
             "Geo",
             "Geo_Subtype",
             "Ticker",
-            "Scheme Name",
-            "Benchmark Index",
         }
     ),
     DatasetId.INVESTMENT_BENCHMARK_MASTER: frozenset(
@@ -258,9 +257,6 @@ CANONICAL_BRONZE_FIELDS: dict[DatasetId, frozenset[str]] = {
             "Benchmark_Name",
             "yF_Ticker",
             "Currency",
-            "Index Name",
-            "Ticker",
-            "Description",
         }
     ),
     DatasetId.INVESTMENT_MACRO_PARAMETERS: frozenset(
@@ -288,9 +284,6 @@ CANONICAL_BRONZE_FIELDS: dict[DatasetId, frozenset[str]] = {
             "Default_LTCG",
             "Default_STCG",
             "Remarks",
-            "Parameter",
-            "Value",
-            "Effective_Date",
         }
     ),
     DatasetId.INVESTMENT_US_STOCK_TRANSACTIONS: frozenset(
@@ -362,7 +355,6 @@ CANONICAL_BRONZE_FIELDS: dict[DatasetId, frozenset[str]] = {
             "UID",
             "Currency_Code",
             "Target_Currency_Code",
-            "Ticker",
             "yF_Ticker",
             "Currency_Name",
             "Is_Active",
