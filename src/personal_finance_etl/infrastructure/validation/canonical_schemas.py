@@ -21,6 +21,7 @@ Owns
 - CANONICAL_BRONZE_MARKET_CURRENCY_FX_RATES_SCHEMA: Immutable pandera.polars.DataFrameSchema for DatasetId.MARKET_CURRENCY_FX_RATES.
 - CANONICAL_BRONZE_MARKET_BENCHMARK_HISTORY_SCHEMA: Immutable pandera.polars.DataFrameSchema for DatasetId.MARKET_BENCHMARK_HISTORY.
 - CANONICAL_BRONZE_MARKET_US_STOCK_PRICES_SCHEMA: Immutable pandera.polars.DataFrameSchema for DatasetId.MARKET_US_STOCK_PRICES.
+- CANONICAL_BRONZE_COMMON_COLUMN_MASTER_SCHEMA: Immutable pandera.polars.DataFrameSchema for DatasetId.COMMON_COLUMN_MASTER.
 - CANONICAL_BRONZE_SCHEMAS: Registry mapping DatasetIds to authoritative canonical Bronze schemas.
 - get_canonical_bronze_schema: Safe accessor for retrieving the canonical Bronze schema for a given DatasetId.
 - has_canonical_bronze_schema: Inspection predicate determining whether a DatasetId has a registered canonical schema.
@@ -79,9 +80,13 @@ CANONICAL_BRONZE_HOUSEHOLD_ZCATEGORY_SCHEMA: pa.DataFrameSchema = pa.DataFrameSc
         "SYNC_TIME": pa.Column(pl.Float64, nullable=True, name="SYNC_TIME"),
         "SYNC_VERSION": pa.Column(pl.Int64, nullable=True, name="SYNC_VERSION"),
         "ORDER_NUM": pa.Column(pl.Int64, nullable=True, required=False, name="ORDER_NUM"),
-        "artifact_id": pa.Column(pl.String, nullable=False, required=False, name="artifact_id"),
+        "artifact_id": pa.Column(pl.String, nullable=True, required=False, name="artifact_id"),
+        "__file_name__": pa.Column(pl.String, nullable=True, required=False, name="__file_name__"),
+        "__folder_path__": pa.Column(
+            pl.String, nullable=True, required=False, name="__folder_path__"
+        ),
     },
-    strict=False,
+    strict=True,
     name="canonical_bronze_household_zcategory",
 )
 
@@ -98,9 +103,13 @@ CANONICAL_BRONZE_HOUSEHOLD_ASSET_GROUP_SCHEMA: pa.DataFrameSchema = pa.DataFrame
         "SYNC_TIME": pa.Column(pl.Float64, nullable=True, name="SYNC_TIME"),
         "SYNC_VERSION": pa.Column(pl.Int64, nullable=True, name="SYNC_VERSION"),
         "ORDER_NUM": pa.Column(pl.Int64, nullable=True, required=False, name="ORDER_NUM"),
-        "artifact_id": pa.Column(pl.String, nullable=False, required=False, name="artifact_id"),
+        "artifact_id": pa.Column(pl.String, nullable=True, required=False, name="artifact_id"),
+        "__file_name__": pa.Column(pl.String, nullable=True, required=False, name="__file_name__"),
+        "__folder_path__": pa.Column(
+            pl.String, nullable=True, required=False, name="__folder_path__"
+        ),
     },
-    strict=False,
+    strict=True,
     name="canonical_bronze_household_asset_group",
 )
 
@@ -137,9 +146,13 @@ CANONICAL_BRONZE_HOUSEHOLD_ASSETS_SCHEMA: pa.DataFrameSchema = pa.DataFrameSchem
         "SYNC_TIME": pa.Column(pl.Float64, nullable=True, name="SYNC_TIME"),
         "SYNC_VERSION": pa.Column(pl.Int64, nullable=True, name="SYNC_VERSION"),
         "ORDER_NUM": pa.Column(pl.Int64, nullable=True, required=False, name="ORDER_NUM"),
-        "artifact_id": pa.Column(pl.String, nullable=False, required=False, name="artifact_id"),
+        "artifact_id": pa.Column(pl.String, nullable=True, required=False, name="artifact_id"),
+        "__file_name__": pa.Column(pl.String, nullable=True, required=False, name="__file_name__"),
+        "__folder_path__": pa.Column(
+            pl.String, nullable=True, required=False, name="__folder_path__"
+        ),
     },
-    strict=False,
+    strict=True,
     name="canonical_bronze_household_assets",
 )
 
@@ -168,9 +181,13 @@ CANONICAL_BRONZE_HOUSEHOLD_CURRENCY_SCHEMA: pa.DataFrameSchema = pa.DataFrameSch
             pl.String, nullable=True, required=False, name="CURRENCY_SYMBOL"
         ),
         "ORDER_NUM": pa.Column(pl.Int64, nullable=True, required=False, name="ORDER_NUM"),
-        "artifact_id": pa.Column(pl.String, nullable=False, required=False, name="artifact_id"),
+        "artifact_id": pa.Column(pl.String, nullable=True, required=False, name="artifact_id"),
+        "__file_name__": pa.Column(pl.String, nullable=True, required=False, name="__file_name__"),
+        "__folder_path__": pa.Column(
+            pl.String, nullable=True, required=False, name="__folder_path__"
+        ),
     },
-    strict=False,
+    strict=True,
     name="canonical_bronze_household_currency",
 )
 
@@ -231,9 +248,13 @@ CANONICAL_BRONZE_HOUSEHOLD_INOUTCOME_SCHEMA: pa.DataFrameSchema = pa.DataFrameSc
         "CONTENT": pa.Column(pl.String, nullable=True, required=False, name="CONTENT"),
         "MEMO": pa.Column(pl.String, nullable=True, required=False, name="MEMO"),
         "ORDER_NUM": pa.Column(pl.Int64, nullable=True, required=False, name="ORDER_NUM"),
-        "artifact_id": pa.Column(pl.String, nullable=False, required=False, name="artifact_id"),
+        "artifact_id": pa.Column(pl.String, nullable=True, required=False, name="artifact_id"),
+        "__file_name__": pa.Column(pl.String, nullable=True, required=False, name="__file_name__"),
+        "__folder_path__": pa.Column(
+            pl.String, nullable=True, required=False, name="__folder_path__"
+        ),
     },
-    strict=False,
+    strict=True,
     name="canonical_bronze_household_inoutcome",
 )
 
@@ -312,9 +333,13 @@ CANONICAL_BRONZE_HOUSEHOLD_OPENING_BALANCES_SCHEMA: pa.DataFrameSchema = pa.Data
         "Balance_Date": pa.Column(pl.String, nullable=True, required=False, name="Balance_Date"),
         "Currency": pa.Column(pl.String, nullable=True, required=False, name="Currency"),
         "ORDER_NUM": pa.Column(pl.Int64, nullable=True, required=False, name="ORDER_NUM"),
-        "artifact_id": pa.Column(pl.String, nullable=False, required=False, name="artifact_id"),
+        "artifact_id": pa.Column(pl.String, nullable=True, required=False, name="artifact_id"),
+        "__file_name__": pa.Column(pl.String, nullable=True, required=False, name="__file_name__"),
+        "__folder_path__": pa.Column(
+            pl.String, nullable=True, required=False, name="__folder_path__"
+        ),
     },
-    strict=False,
+    strict=True,
     name="canonical_bronze_household_opening_balances",
 )
 
@@ -324,9 +349,13 @@ CANONICAL_BRONZE_INVESTMENT_MF_ISIN_MAPPING_SCHEMA: pa.DataFrameSchema = pa.Data
             pl.String, nullable=False, unique=True, name="INSTRUMENT_NAME"
         ),
         "ISIN": pa.Column(pl.String, nullable=False, name="ISIN"),
-        "artifact_id": pa.Column(pl.String, nullable=False, required=False, name="artifact_id"),
+        "artifact_id": pa.Column(pl.String, nullable=True, required=False, name="artifact_id"),
+        "__file_name__": pa.Column(pl.String, nullable=True, required=False, name="__file_name__"),
+        "__folder_path__": pa.Column(
+            pl.String, nullable=True, required=False, name="__folder_path__"
+        ),
     },
-    strict=False,
+    strict=True,
     name="canonical_bronze_investment_mf_isin_mapping",
 )
 
@@ -347,9 +376,13 @@ CANONICAL_BRONZE_INVESTMENT_BENCHMARK_MAPPING_SCHEMA: pa.DataFrameSchema = pa.Da
         "Geo": pa.Column(pl.String, nullable=True, required=False, name="Geo"),
         "Geo_Subtype": pa.Column(pl.String, nullable=True, required=False, name="Geo_Subtype"),
         "Ticker": pa.Column(pl.String, nullable=True, required=False, name="Ticker"),
-        "artifact_id": pa.Column(pl.String, nullable=False, required=False, name="artifact_id"),
+        "artifact_id": pa.Column(pl.String, nullable=True, required=False, name="artifact_id"),
+        "__file_name__": pa.Column(pl.String, nullable=True, required=False, name="__file_name__"),
+        "__folder_path__": pa.Column(
+            pl.String, nullable=True, required=False, name="__folder_path__"
+        ),
     },
-    strict=False,
+    strict=True,
     name="canonical_bronze_investment_benchmark_mapping",
 )
 
@@ -359,9 +392,13 @@ CANONICAL_BRONZE_INVESTMENT_BENCHMARK_MASTER_SCHEMA: pa.DataFrameSchema = pa.Dat
         "Benchmark_Name": pa.Column(pl.String, nullable=False, name="Benchmark_Name"),
         "yF_Ticker": pa.Column(pl.String, nullable=True, required=False, name="yF_Ticker"),
         "Currency": pa.Column(pl.String, nullable=True, required=False, name="Currency"),
-        "artifact_id": pa.Column(pl.String, nullable=False, required=False, name="artifact_id"),
+        "artifact_id": pa.Column(pl.String, nullable=True, required=False, name="artifact_id"),
+        "__file_name__": pa.Column(pl.String, nullable=True, required=False, name="__file_name__"),
+        "__folder_path__": pa.Column(
+            pl.String, nullable=True, required=False, name="__folder_path__"
+        ),
     },
-    strict=False,
+    strict=True,
     name="canonical_bronze_investment_benchmark_master",
 )
 
@@ -420,9 +457,13 @@ CANONICAL_BRONZE_INVESTMENT_MACRO_PARAMETERS_SCHEMA: pa.DataFrameSchema = pa.Dat
         "Default_LTCG": pa.Column(pl.Float64, nullable=True, required=False, name="Default_LTCG"),
         "Default_STCG": pa.Column(pl.Float64, nullable=True, required=False, name="Default_STCG"),
         "Remarks": pa.Column(pl.String, nullable=True, required=False, name="Remarks"),
-        "artifact_id": pa.Column(pl.String, nullable=False, required=False, name="artifact_id"),
+        "artifact_id": pa.Column(pl.String, nullable=True, required=False, name="artifact_id"),
+        "__file_name__": pa.Column(pl.String, nullable=True, required=False, name="__file_name__"),
+        "__folder_path__": pa.Column(
+            pl.String, nullable=True, required=False, name="__folder_path__"
+        ),
     },
-    strict=False,
+    strict=True,
     name="canonical_bronze_investment_macro_parameters",
 )
 
@@ -434,9 +475,13 @@ CANONICAL_BRONZE_MARKET_CURRENCY_MAPPING_SCHEMA: pa.DataFrameSchema = pa.DataFra
         "yF_Ticker": pa.Column(pl.String, nullable=True, required=False, name="yF_Ticker"),
         "Currency_Name": pa.Column(pl.String, nullable=True, required=False, name="Currency_Name"),
         "Is_Active": pa.Column(pl.Boolean, nullable=True, required=False, name="Is_Active"),
-        "artifact_id": pa.Column(pl.String, nullable=False, required=False, name="artifact_id"),
+        "artifact_id": pa.Column(pl.String, nullable=True, required=False, name="artifact_id"),
+        "__file_name__": pa.Column(pl.String, nullable=True, required=False, name="__file_name__"),
+        "__folder_path__": pa.Column(
+            pl.String, nullable=True, required=False, name="__folder_path__"
+        ),
     },
-    strict=False,
+    strict=True,
     name="canonical_bronze_market_currency_mapping",
 )
 
@@ -459,9 +504,13 @@ CANONICAL_BRONZE_MARKET_MF_HOLDINGS_SCHEMA: pa.DataFrameSchema = pa.DataFrameSch
         "__file_category__": pa.Column(
             pl.String, nullable=True, required=False, name="__file_category__"
         ),
-        "artifact_id": pa.Column(pl.String, nullable=False, required=False, name="artifact_id"),
+        "artifact_id": pa.Column(pl.String, nullable=True, required=False, name="artifact_id"),
+        "__file_name__": pa.Column(pl.String, nullable=True, required=False, name="__file_name__"),
+        "__folder_path__": pa.Column(
+            pl.String, nullable=True, required=False, name="__folder_path__"
+        ),
     },
-    strict=False,
+    strict=True,
     name="canonical_bronze_market_mf_holdings",
 )
 
@@ -477,9 +526,13 @@ CANONICAL_BRONZE_INVESTMENT_MF_ORDERS_SCHEMA: pa.DataFrameSchema = pa.DataFrameS
         "__file_category__": pa.Column(
             pl.String, nullable=True, required=False, name="__file_category__"
         ),
-        "artifact_id": pa.Column(pl.String, nullable=False, required=False, name="artifact_id"),
+        "artifact_id": pa.Column(pl.String, nullable=True, required=False, name="artifact_id"),
+        "__file_name__": pa.Column(pl.String, nullable=True, required=False, name="__file_name__"),
+        "__folder_path__": pa.Column(
+            pl.String, nullable=True, required=False, name="__folder_path__"
+        ),
     },
-    strict=False,
+    strict=True,
     name="canonical_bronze_investment_mf_orders",
 )
 
@@ -502,9 +555,13 @@ CANONICAL_BRONZE_MARKET_STOCK_HOLDINGS_SCHEMA: pa.DataFrameSchema = pa.DataFrame
         "__file_category__": pa.Column(
             pl.String, nullable=True, required=False, name="__file_category__"
         ),
-        "artifact_id": pa.Column(pl.String, nullable=False, required=False, name="artifact_id"),
+        "artifact_id": pa.Column(pl.String, nullable=True, required=False, name="artifact_id"),
+        "__file_name__": pa.Column(pl.String, nullable=True, required=False, name="__file_name__"),
+        "__folder_path__": pa.Column(
+            pl.String, nullable=True, required=False, name="__folder_path__"
+        ),
     },
-    strict=False,
+    strict=True,
     name="canonical_bronze_market_stock_holdings",
 )
 
@@ -525,9 +582,13 @@ CANONICAL_BRONZE_INVESTMENT_STOCK_ORDERS_SCHEMA: pa.DataFrameSchema = pa.DataFra
         "__file_category__": pa.Column(
             pl.String, nullable=True, required=False, name="__file_category__"
         ),
-        "artifact_id": pa.Column(pl.String, nullable=False, required=False, name="artifact_id"),
+        "artifact_id": pa.Column(pl.String, nullable=True, required=False, name="artifact_id"),
+        "__file_name__": pa.Column(pl.String, nullable=True, required=False, name="__file_name__"),
+        "__folder_path__": pa.Column(
+            pl.String, nullable=True, required=False, name="__folder_path__"
+        ),
     },
-    strict=False,
+    strict=True,
     name="canonical_bronze_investment_stock_orders",
 )
 
@@ -557,9 +618,13 @@ CANONICAL_BRONZE_INVESTMENT_US_STOCK_TRANSACTIONS_SCHEMA: pa.DataFrameSchema = p
         "__file_category__": pa.Column(
             pl.String, nullable=True, required=False, name="__file_category__"
         ),
-        "artifact_id": pa.Column(pl.String, nullable=False, required=False, name="artifact_id"),
+        "artifact_id": pa.Column(pl.String, nullable=True, required=False, name="artifact_id"),
+        "__file_name__": pa.Column(pl.String, nullable=True, required=False, name="__file_name__"),
+        "__folder_path__": pa.Column(
+            pl.String, nullable=True, required=False, name="__folder_path__"
+        ),
     },
-    strict=False,
+    strict=True,
     name="canonical_bronze_investment_us_stock_transactions",
 )
 
@@ -577,9 +642,13 @@ CANONICAL_BRONZE_MARKET_CURRENCY_FX_RATES_SCHEMA: pa.DataFrameSchema = pa.DataFr
         "Requested_Start": pa.Column(pl.Date, nullable=False, name="Requested_Start"),
         "Requested_End": pa.Column(pl.Date, nullable=False, name="Requested_End"),
         "Is_Closure_Gap": pa.Column(pl.Boolean, nullable=False, name="Is_Closure_Gap"),
-        "artifact_id": pa.Column(pl.String, nullable=False, required=False, name="artifact_id"),
+        "artifact_id": pa.Column(pl.String, nullable=True, required=False, name="artifact_id"),
+        "__file_name__": pa.Column(pl.String, nullable=True, required=False, name="__file_name__"),
+        "__folder_path__": pa.Column(
+            pl.String, nullable=True, required=False, name="__folder_path__"
+        ),
     },
-    strict=False,
+    strict=True,
     name="canonical_bronze_market_currency_fx_rates",
 )
 
@@ -596,9 +665,13 @@ CANONICAL_BRONZE_MARKET_BENCHMARK_HISTORY_SCHEMA: pa.DataFrameSchema = pa.DataFr
         "Requested_Start": pa.Column(pl.Date, nullable=False, name="Requested_Start"),
         "Requested_End": pa.Column(pl.Date, nullable=False, name="Requested_End"),
         "Is_Closure_Gap": pa.Column(pl.Boolean, nullable=False, name="Is_Closure_Gap"),
-        "artifact_id": pa.Column(pl.String, nullable=False, required=False, name="artifact_id"),
+        "artifact_id": pa.Column(pl.String, nullable=True, required=False, name="artifact_id"),
+        "__file_name__": pa.Column(pl.String, nullable=True, required=False, name="__file_name__"),
+        "__folder_path__": pa.Column(
+            pl.String, nullable=True, required=False, name="__folder_path__"
+        ),
     },
-    strict=False,
+    strict=True,
     name="canonical_bronze_market_benchmark_history",
 )
 
@@ -613,9 +686,13 @@ CANONICAL_BRONZE_MARKET_US_STOCK_PRICES_SCHEMA: pa.DataFrameSchema = pa.DataFram
         "Requested_Start": pa.Column(pl.Date, nullable=False, name="Requested_Start"),
         "Requested_End": pa.Column(pl.Date, nullable=False, name="Requested_End"),
         "Is_Closure_Gap": pa.Column(pl.Boolean, nullable=False, name="Is_Closure_Gap"),
-        "artifact_id": pa.Column(pl.String, nullable=False, required=False, name="artifact_id"),
+        "artifact_id": pa.Column(pl.String, nullable=True, required=False, name="artifact_id"),
+        "__file_name__": pa.Column(pl.String, nullable=True, required=False, name="__file_name__"),
+        "__folder_path__": pa.Column(
+            pl.String, nullable=True, required=False, name="__folder_path__"
+        ),
     },
-    strict=False,
+    strict=True,
     name="canonical_bronze_market_us_stock_prices",
 )
 
