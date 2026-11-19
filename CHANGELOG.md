@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [10.1.2](https://github.com/tks18/personal-finance-etl/compare/10.1.1...10.1.2) (2026-11-19)
+
+
+### Bug Fixes 🛠
+
+* **wealth:** snap currency analytics to month end max closing date ([f423d1b](https://github.com/tks18/personal-finance-etl/commit/f423d1ba4013b8d33c5471b440fc753fd106146e))
+
+
+### Features 🔥
+
+* **application:** gate quant, tax, wealth in execution pipeline ([c10d055](https://github.com/tks18/personal-finance-etl/commit/c10d0550a37e2b6f4022917a17f60f1304094ce0))
+* **contracts:** register tax column inventory and nullable models ([79c9182](https://github.com/tks18/personal-finance-etl/commit/79c91827dbd575a9f300ff9f72de6b4263c381eb))
+* **domain:** gate tax calculations and pyxirr solvers at source ([28ad557](https://github.com/tks18/personal-finance-etl/commit/28ad557fa0653ab490df61aa9b3ae72f3d56ca9a))
+
+
+### Tests 🧪
+
+* **tax:** add tax capability composition and source gating tests ([86f77eb](https://github.com/tks18/personal-finance-etl/commit/86f77ebe998576b739700b47e46911d6b0e48f3d))
+
+
+### Docs 📃
+
+* **refactor:** specify capability matrix fixtures for future phases ([6546c43](https://github.com/tks18/personal-finance-etl/commit/6546c43969edbf8de5d7773796f9c8c4479eb929))
+* **refactor:** update phase 041 tax spec and grand refactor tracker ([454261a](https://github.com/tks18/personal-finance-etl/commit/454261af1400df7103b253f08783828d96d9c5ea))
+
 ### [10.1.1](https://github.com/tks18/personal-finance-etl/compare/10.1.0...10.1.1) (2026-11-19)
 
 
