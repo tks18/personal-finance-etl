@@ -172,7 +172,10 @@ def _run_composed_pipeline(tmp_path: Path, rules: FinancialRules) -> tuple[Setti
     """
     settings, cfg = _setup_composed_static_env(tmp_path)
     plan = CapabilityPlanner().create_plan(
-        [CapabilityId.HOUSEHOLD_CORE, CapabilityId.INVESTMENT_ACCOUNTING]
+        [
+            CapabilityId.HOUSEHOLD_CORE,
+            CapabilityId.INVESTMENT_ACCOUNTING,
+        ]
     )
     orchestrator = ETLOrchestrator(
         cfg=settings,
