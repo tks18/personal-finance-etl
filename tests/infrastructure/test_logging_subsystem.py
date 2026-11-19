@@ -1,4 +1,4 @@
-"""Legacy Logging Demolition and Live JSONL Production Certification Test Suite.
+"""Logging Subsystem and Live JSONL Production Certification Test Suite.
 
 Owns
 ----

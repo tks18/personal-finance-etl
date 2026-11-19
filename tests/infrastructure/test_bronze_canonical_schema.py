@@ -1,4 +1,4 @@
-"""Integration and unit tests verifying strict canonical Bronze cutover for Phase 036.
+"""Integration and unit tests verifying strict canonical Bronze schema enforcement.
 
 Owns
 ----

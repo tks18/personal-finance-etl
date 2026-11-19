@@ -1,5 +1,5 @@
 # pyright: reportPrivateUsage=false
-"""Verification suite for Phase 028 Household Reference Evidence Family migration.
+"""Verification suite for Household Reference Evidence Ingestion and Layer Publication.
 
 Owns
 ----

@@ -1,4 +1,4 @@
-"""Comprehensive verification test suite for Phase 034 market provider evidence migration.
+"""Comprehensive verification test suite for market provider evidence ingestion.
 
 Owns
 ----

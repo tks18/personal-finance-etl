@@ -1,5 +1,5 @@
 # pyright: reportPrivateUsage=false
-"""Verification suite for Phase 033 US Investment Evidence Migration.
+"""Verification suite for US Investment Evidence Ingestion and Lakehouse Integration.
 
 Owns
 ----
@@ -22,10 +22,8 @@ Does not own
 
 from __future__ import annotations
 
-import io
-import zipfile
+import shutil
 from collections.abc import Iterator
-from datetime import date, datetime
 from pathlib import Path
 
 import polars as pl
@@ -73,88 +71,8 @@ from personal_finance_etl.infrastructure.warehouse.registry import (
 )
 
 
-def _build_minimal_xlsx(sheet_name: str, rows: list[list[object]]) -> bytes:
-    """Build an in-memory .xlsx binary payload for testing fastexcel ingestion.
-
-    Parameters
-    ----------
-    sheet_name : str
-        Target worksheet title.
-    rows : list[list[object]]
-        Table rows including header row.
-
-    Returns
-    -------
-    bytes
-        Valid raw Excel workbook byte stream.
-    """
-    content_types = (
-        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
-        '<Default Extension="xml" ContentType="application/xml"/>'
-        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
-        '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
-        '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
-        "</Types>"
-    )
-    rels = (
-        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>'
-        "</Relationships>"
-    )
-    wb_rels = (
-        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'
-        "</Relationships>"
-    )
-    wb = (
-        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-        '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
-        f'<sheets><sheet name="{sheet_name}" sheetId="1" r:id="rId1"/></sheets>'
-        "</workbook>"
-    )
-
-    ws_rows: list[str] = []
-    for r_idx, row in enumerate(rows, start=1):
-        cells: list[str] = []
-        for c_idx, val in enumerate(row):
-            col_letter = chr(65 + c_idx)
-            cell_ref = f"{col_letter}{r_idx}"
-            if isinstance(val, (int, float)):
-                cells.append(f'<c r="{cell_ref}"><v>{val}</v></c>')
-            elif isinstance(val, (datetime, date)):
-                iso_str = val.isoformat()
-                cells.append(f'<c r="{cell_ref}" t="d"><v>{iso_str}</v></c>')
-            elif val is None:
-                continue
-            else:
-                str_val = str(val).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-                cells.append(f'<c r="{cell_ref}" t="inlineStr"><is><t>{str_val}</t></is></c>')
-        row_str = f'<row r="{r_idx}">{"".join(cells)}</row>'
-        ws_rows.append(row_str)
-
-    ws = (
-        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
-        f"<sheetData>{''.join(ws_rows)}</sheetData>"
-        "</worksheet>"
-    )
-
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w") as z:
-        z.writestr("[Content_Types].xml", content_types)
-        z.writestr("_rels/.rels", rels)
-        z.writestr("xl/_rels/workbook.xml.rels", wb_rels)
-        z.writestr("xl/workbook.xml", wb)
-        z.writestr("xl/worksheets/sheet1.xml", ws)
-
-    return buf.getvalue()
-
-
 def _create_us_stock_excel_fixtures(inputs_dir: Path) -> dict[str, str]:
-    """Create isolated test Excel file for foreign US stock transactions.
+    """Copy canonical static test Excel file for foreign US stock transactions.
 
     Parameters
     ----------
@@ -171,65 +89,22 @@ def _create_us_stock_excel_fixtures(inputs_dir: Path) -> dict[str, str]:
     )
     reports_dir.mkdir(parents=True, exist_ok=True)
 
-    rows: list[list[object]] = [
-        [
-            "Stock Name",
-            "ISIN",
-            "Stock Symbol",
-            "Yahoo Ticker",
-            "Order Date",
-            "Currency",
-            "Transaction Type",
-            "Order Type",
-            "Quantity",
-            "Price ($)",
-            "Order Amount ($)",
-            "Brokerage ($)",
-            "Exch Rate",
-            "Order Amount (INR)",
-            "Brokerage (INR)",
-        ],
-        [
-            "Apple Inc.",
-            "US0378331005",
-            "AAPL",
-            "AAPL",
-            datetime(2024, 1, 15, 14, 30, 0),
-            "USD",
-            "BUY",
-            "MARKET",
-            2.5,
-            180.0,
-            450.0,
-            0.0,
-            83.0,
-            37350.0,
-            0.0,
-        ],
-        [
-            "Apple Inc.",
-            "US0378331005",
-            "AAPL",
-            "AAPL",
-            datetime(2024, 3, 20, 15, 45, 0),
-            "USD",
-            "SELL",
-            "LIMIT",
-            1.0,
-            190.0,
-            190.0,
-            0.0,
-            83.5,
-            15865.0,
-            0.0,
-        ],
-    ]
-    file_bytes = _build_minimal_xlsx("02-2026", rows)
-    file_path = reports_dir / "02-2026.xlsx"
-    file_path.write_bytes(file_bytes)
+    evidence_dir = (
+        Path(__file__).resolve().parent.parent
+        / "fixtures"
+        / "evidence"
+        / "us_stocks"
+        / "IND Money (US Stocks)"
+        / "Transaction Reports"
+        / "2025-26"
+    )
+
+    src = evidence_dir / "02-2026.xlsx"
+    dest = reports_dir / "02-2026.xlsx"
+    shutil.copy2(src, dest)
 
     return {
-        "us_stock_transactions": str(file_path).replace("\\", "/"),
+        "us_stock_transactions": str(dest).replace("\\", "/"),
     }
 
 
@@ -331,32 +206,15 @@ def test_us_stock_gate1_source_validation_rejection(
     )
     malformed_dir.mkdir(parents=True, exist_ok=True)
 
-    # Missing non-nullable "Stock Name"
-    rows: list[list[object]] = [
-        [
-            "ISIN",
-            "Stock Symbol",
-            "Yahoo Ticker",
-            "Order Date",
-            "Currency",
-            "Transaction Type",
-            "Order Type",
-            "Quantity",
-        ],
-        [
-            "US0378331005",
-            "AAPL",
-            "AAPL",
-            datetime(2024, 1, 15, 14, 30, 0),
-            "USD",
-            "BUY",
-            "MARKET",
-            2.5,
-        ],
-    ]
-    file_bytes = _build_minimal_xlsx("02-2026", rows)
+    malformed_src = (
+        Path(__file__).resolve().parent.parent
+        / "fixtures"
+        / "evidence"
+        / "negative"
+        / "us_trades_malformed.xlsx"
+    )
     file_path = malformed_dir / "02-2026.xlsx"
-    file_path.write_bytes(file_bytes)
+    shutil.copy2(malformed_src, file_path)
 
     actionable = {"us_stock_transactions": [str(file_path).replace("\\", "/")]}
     isolated_control_plane.artifacts.ingest_binaries(actionable)
@@ -407,46 +265,16 @@ def test_us_stock_gate2_canonical_validation_rejection(
     )
     malformed_dir.mkdir(parents=True, exist_ok=True)
 
-    # Null value for non-nullable ISIN
-    rows: list[list[object]] = [
-        [
-            "Stock Name",
-            "ISIN",
-            "Stock Symbol",
-            "Yahoo Ticker",
-            "Order Date",
-            "Currency",
-            "Transaction Type",
-            "Order Type",
-            "Quantity",
-            "Price ($)",
-            "Order Amount ($)",
-            "Brokerage ($)",
-            "Exch Rate",
-            "Order Amount (INR)",
-            "Brokerage (INR)",
-        ],
-        [
-            "Apple Inc.",
-            None,  # ISIN is non-nullable in canonical schema
-            "AAPL",
-            "AAPL",
-            datetime(2024, 1, 15, 14, 30, 0),
-            "USD",
-            "BUY",
-            "MARKET",
-            2.5,
-            180.0,
-            450.0,
-            0.0,
-            83.0,
-            37350.0,
-            0.0,
-        ],
-    ]
-    file_bytes = _build_minimal_xlsx("02-2026", rows)
+    # Null value for non-nullable ISIN copied from canonical null-isin fixture
+    null_isin_src = (
+        Path(__file__).resolve().parent.parent
+        / "fixtures"
+        / "evidence"
+        / "negative"
+        / "us_trades_null_isin.xlsx"
+    )
     file_path = malformed_dir / "02-2026.xlsx"
-    file_path.write_bytes(file_bytes)
+    shutil.copy2(null_isin_src, file_path)
 
     actionable = {"us_stock_transactions": [str(file_path).replace("\\", "/")]}
     isolated_control_plane.artifacts.ingest_binaries(actionable)

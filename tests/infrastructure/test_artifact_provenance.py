@@ -1,4 +1,4 @@
-"""Integration and unit tests verifying artifact-key operational provenance cutover for Phase 037.
+"""Integration and unit tests verifying artifact-key operational provenance.
 
 Owns
 ----

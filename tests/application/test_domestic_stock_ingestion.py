@@ -1,5 +1,5 @@
 # pyright: reportPrivateUsage=false
-"""Verification suite for Phase 032 Domestic-Stock Evidence Migration.
+"""Verification suite for Domestic-Stock Ingestion and Lakehouse Integration.
 
 Owns
 ----
@@ -23,8 +23,7 @@ Does not own
 
 from __future__ import annotations
 
-import io
-import zipfile
+import shutil
 from collections.abc import Iterator
 from datetime import date
 from pathlib import Path
@@ -77,85 +76,8 @@ from personal_finance_etl.infrastructure.warehouse.registry import (
 )
 
 
-def _build_minimal_xlsx(sheet_name: str, rows: list[list[object]]) -> bytes:
-    """Build an in-memory .xlsx binary payload for testing fastexcel ingestion.
-
-    Parameters
-    ----------
-    sheet_name : str
-        Target worksheet title.
-    rows : list[list[object]]
-        Table rows including header row.
-
-    Returns
-    -------
-    bytes
-        Valid raw Excel workbook byte stream.
-    """
-    content_types = (
-        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
-        '<Default Extension="xml" ContentType="application/xml"/>'
-        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
-        '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
-        '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
-        "</Types>"
-    )
-    rels = (
-        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>'
-        "</Relationships>"
-    )
-    wb_rels = (
-        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'
-        "</Relationships>"
-    )
-    wb = (
-        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-        '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
-        f'<sheets><sheet name="{sheet_name}" sheetId="1" r:id="rId1"/></sheets>'
-        "</workbook>"
-    )
-
-    ws_rows: list[str] = []
-    for r_idx, row in enumerate(rows, start=1):
-        cells: list[str] = []
-        for c_idx, val in enumerate(row):
-            col_letter = chr(65 + c_idx)
-            cell_ref = f"{col_letter}{r_idx}"
-            if isinstance(val, (int, float)):
-                cells.append(f'<c r="{cell_ref}"><v>{val}</v></c>')
-            elif val is None:
-                continue
-            else:
-                str_val = str(val).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-                cells.append(f'<c r="{cell_ref}" t="inlineStr"><is><t>{str_val}</t></is></c>')
-        row_str = f'<row r="{r_idx}">{"".join(cells)}</row>'
-        ws_rows.append(row_str)
-
-    ws = (
-        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
-        f"<sheetData>{''.join(ws_rows)}</sheetData>"
-        "</worksheet>"
-    )
-
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w") as z:
-        z.writestr("[Content_Types].xml", content_types)
-        z.writestr("_rels/.rels", rels)
-        z.writestr("xl/_rels/workbook.xml.rels", wb_rels)
-        z.writestr("xl/workbook.xml", wb)
-        z.writestr("xl/worksheets/sheet1.xml", ws)
-
-    return buf.getvalue()
-
-
 def _create_stock_excel_fixtures(inputs_dir: Path) -> dict[str, str]:
-    """Create isolated test Excel files for domestic stock holdings and orders.
+    """Copy canonical static test Excel files for domestic stock holdings and orders.
 
     Parameters
     ----------
@@ -172,119 +94,22 @@ def _create_stock_excel_fixtures(inputs_dir: Path) -> dict[str, str]:
     stock_pl_dir.mkdir(parents=True, exist_ok=True)
     stock_orders_dir.mkdir(parents=True, exist_ok=True)
 
-    # 1. Stock PL Statement: Sheet "Trade Level", Anchor "Unrealised trades" at row index 1 (offset 2 -> headers at row 3)
-    pl_rows: list[list[object]] = [
-        ["Portfolio Profit and Loss Report"],
-        ["Unrealised trades"],
-        ["Detailed Stock Valuation Breakdown"],
-        [
-            "Stock name",
-            "ISIN",
-            "Quantity",
-            "Buy date",
-            "Buy price",
-            "Buy value",
-            "Closing date",
-            "Closing price",
-            "Closing value",
-            "Unrealised P&L",
-            "Remark",
-        ],
-        [
-            "RELIANCE IND",
-            "INE002A01018",
-            "10",
-            "15-01-2023",
-            "2400.0",
-            "24000.0",
-            "31-03-2024",
-            "2900.0",
-            "29000.0",
-            "5000.0",
-            "Long Term",
-        ],
-        [
-            "INFOSYS LTD",
-            "INE009A01021",
-            "20",
-            "10-02-2023",
-            "1500.0",
-            "30000.0",
-            "31-03-2024",
-            "1600.0",
-            "32000.0",
-            "2000.0",
-            "Long Term",
-        ],
-        [None, None, None, None, None, None, None, None, None, None, None],
-    ]
-    pl_bytes = _build_minimal_xlsx("Trade Level", pl_rows)
-    pl_path = stock_pl_dir / "PL Statement - 31-03-2024.xlsx"
-    pl_path.write_bytes(pl_bytes)
+    evidence_dir = (
+        Path(__file__).resolve().parent.parent / "fixtures" / "evidence" / "domestic_stocks"
+    )
 
-    # 2. Stock Orders Statement: Sheet "Sheet1", metadata at rows 0-4, headers at row 5
-    orders_rows: list[list[object]] = [
-        ["Name", "Thirumazhisai Kannan Sudharshan"],
-        ["Unique Client Code", "6353187399"],
-        [None],
-        ["Order history for stocks from 01-04-2023 to 31-03-2024"],
-        [None],
-        [
-            "Stock name",
-            "Symbol",
-            "ISIN",
-            "Type",
-            "Quantity",
-            "Value",
-            "Exchange",
-            "Exchange Order Id",
-            "Execution date and time",
-            "Order status",
-        ],
-        [
-            "RELIANCE IND",
-            "RELIANCE",
-            "INE002A01018",
-            "BUY",
-            "10",
-            "24000.0",
-            "NSE",
-            "1100000000000001",
-            "15-01-2023 10:30 AM",
-            "Executed",
-        ],
-        [
-            "INFOSYS LTD",
-            "INFY",
-            "INE009A01021",
-            "BUY",
-            "20",
-            "30000.0",
-            "NSE",
-            "1100000000000002",
-            "10-02-2023 11:15 AM",
-            "Executed",
-        ],
-        [
-            "INFOSYS LTD",
-            "INFY",
-            "INE009A01021",
-            "SELL",
-            "5",
-            "8000.0",
-            "NSE",
-            "1100000000000003",
-            "15-03-2024 02:00 PM",
-            "Executed",
-        ],
-    ]
-    orders_bytes = _build_minimal_xlsx("Sheet1", orders_rows)
-    orders_path = stock_orders_dir / "Orders - 01-04-2023 - 31-03-2024.xlsx"
-    orders_path.write_bytes(orders_bytes)
+    pl_src = evidence_dir / "Stock PL Statements" / "stock_pl_31-03-2024.xlsx"
+    orders_src = evidence_dir / "Stock - Orders" / "stock_orders_31-03-2024.xlsx"
+
+    pl_dest = stock_pl_dir / "PL Statement - 31-03-2024.xlsx"
+    orders_dest = stock_orders_dir / "Orders - 01-04-2023 - 31-03-2024.xlsx"
+
+    shutil.copy2(pl_src, pl_dest)
+    shutil.copy2(orders_src, orders_dest)
 
     return {
-        "stock_pl": str(pl_path).replace("\\", "/"),
-        "stock_orders": str(orders_path).replace("\\", "/"),
+        "stock_pl": str(pl_dest).replace("\\", "/"),
+        "stock_orders": str(orders_dest).replace("\\", "/"),
     }
 
 
@@ -408,28 +233,16 @@ def test_empty_stock_orders_statement_handling(
     orders_dir = inputs_dir / "Statements" / "Stock - Orders"
     orders_dir.mkdir(parents=True, exist_ok=True)
 
-    # Header-only workbook (6 rows: rows 0-4 metadata, row 5 headers, 0 data rows)
-    empty_rows: list[list[object]] = [
-        ["Name", "Thirumazhisai Kannan Sudharshan"],
-        ["Unique Client Code", "6353187399"],
-        [None],
-        ["Order history for stocks from 01-04-2026 to 30-04-2026"],
-        [None],
-        [
-            "Stock name",
-            "Symbol",
-            "ISIN",
-            "Type",
-            "Quantity",
-            "Value",
-            "Exchange",
-            "Exchange Order Id",
-            "Execution date and time",
-            "Order status",
-        ],
-    ]
+    # Header-only workbook copied from canonical empty fixture
+    empty_src = (
+        Path(__file__).resolve().parent.parent
+        / "fixtures"
+        / "evidence"
+        / "negative"
+        / "stock_orders_empty_31-03-2024.xlsx"
+    )
     empty_path = orders_dir / "Orders - 04-2026.xlsx"
-    empty_path.write_bytes(_build_minimal_xlsx("Sheet1", empty_rows))
+    shutil.copy2(empty_src, empty_path)
 
     norm_path = str(empty_path).replace("\\", "/")
     actionable = {"stock_orders": [norm_path]}
@@ -483,16 +296,16 @@ def test_stock_evidence_gate1_rejection(
     pl_dir = inputs_dir / "Statements" / "Stock PL Statements"
     pl_dir.mkdir(parents=True, exist_ok=True)
 
-    # Missing mandatory "Stock name" and "ISIN" columns
-    corrupt_rows: list[list[object]] = [
-        ["Portfolio Profit and Loss Report"],
-        ["Unrealised trades"],
-        ["Detailed Stock Valuation Breakdown"],
-        ["Corrupt_Header_1", "Corrupt_Header_2", "Quantity"],
-        ["VAL1", "VAL2", "10"],
-    ]
+    # Missing mandatory "Stock name" and "ISIN" columns copied from canonical corrupt fixture
+    corrupt_src = (
+        Path(__file__).resolve().parent.parent
+        / "fixtures"
+        / "evidence"
+        / "negative"
+        / "stock_pl_corrupt.xlsx"
+    )
     corrupt_path = pl_dir / "PL Statement - 31-03-2024.xlsx"
-    corrupt_path.write_bytes(_build_minimal_xlsx("Trade Level", corrupt_rows))
+    shutil.copy2(corrupt_src, corrupt_path)
 
     norm_path = str(corrupt_path).replace("\\", "/")
     actionable = {"stock_pl": [norm_path]}

@@ -1,4 +1,4 @@
-"""Legacy package demolition and canonical exports certification test suite.
+"""Architectural dead-code guards and canonical package exports test suite.
 
 Owns
 ----
