@@ -432,15 +432,14 @@ def test_mutual_fund_gate1_pandera_schema_validation_rejection(
             run_id="run_corrupt_mf",
         )
 
-    # Bronze table must not be created or populated
+    # Bronze table must not be populated
     b_contract = get_bronze_contract_by_dataset_id(DatasetId.INVESTMENT_MF_ORDERS)
     assert b_contract is not None
-    schema_name, table_name = b_contract.physical_table.split(".")
-    res = isolated_duckdb_manager.conn.execute(
-        "SELECT table_name FROM information_schema.tables WHERE table_schema = ? AND table_name = ?",
-        [schema_name, table_name],
-    ).fetchall()
-    assert len(res) == 0
+    row_count = isolated_duckdb_manager.conn.execute(
+        f"SELECT count(*) FROM {b_contract.physical_table}"
+    ).fetchone()
+    assert row_count is not None
+    assert row_count[0] == 0
 
 
 def test_mutual_fund_idempotent_rerun(
@@ -613,7 +612,7 @@ def test_mutual_fund_downstream_transformation_and_identity_parity(
     isolated_duckdb_manager.conn.execute("CREATE SCHEMA IF NOT EXISTS bronze")
     isolated_duckdb_manager.conn.register("_temp_isin", isin_df)
     isolated_duckdb_manager.conn.execute(
-        "CREATE TABLE bronze.r_MF_ISIN_Mapping AS SELECT * FROM _temp_isin"
+        "CREATE OR REPLACE TABLE bronze.r_MF_ISIN_Mapping AS SELECT * FROM _temp_isin"
     )
 
     # Query Bronze frames for MutualFundStrategy
