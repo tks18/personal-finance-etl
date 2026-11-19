@@ -38,23 +38,39 @@ Create exact contract, input, and column attribution table before edits.
 
 ## 5. Exact target state after this phase
 
-### Capability Specification
+### Capability Specification & Gold Mart Ownership
 
 ```text
+HOUSEHOLD_CORE
+  produces Silver: 10 household ledger tables + d_Calendar + d_Currency
+  produces Gold (Household Budget & Cashflow Decision Marts):
+    - gold.Cashflow_Expense_Breakdown
+    - gold.Cashflow_Income_Breakdown
+    - gold.Forecast_Budget_Variance
+    - gold.Cashflow_Efficiency_Analytics
+    - gold.Cashflow_Activity_Summary
+    - base monthly cashflow/savings in gold.Core_Monthly_Fact
+
 WEALTH
   requires HOUSEHOLD_CORE
-  optional investment contribution according to current methodology
-  produces net-worth/wealth Gold contracts
+  optional investment contribution (PORTFOLIO_VALUATION)
+  produces Gold (Wealth & Balance Sheet Marts):
+    - gold.Wealth_Asset_Breakdown
+    - enriches gold.Core_Monthly_Fact with Net Worth, asset allocation, and liquid vs illiquid breakdown
 
 FIRE
-  requires exact household/wealth state defined by methodology
+  requires HOUSEHOLD_CORE, WEALTH
   investment portfolio contribution explicit
-  produces FIRE analytical contracts
+  produces Gold (FIRE Analytical Contracts):
+    - gold.Wealth_FIRE_Analytics (milestones, SWR, expense coverage)
 
-SIMULATION (only if independently meaningful)
-  requires FIRE/wealth inputs as actually implemented
-  produces simulation-specific output/provenance
+SIMULATION (internal FIRE computational stage)
+  governed by plan toggle; produces Monte Carlo percentile trajectories and stochastic survival paths
 ```
+
+> [!NOTE]
+> **Column Master Retirement Clarification:**  
+> `Column_Master.csv` is completely retired from runtime mapping (all column mappings are owned 100% by `sources.toml`). `DatasetId.COMMON_COLUMN_MASTER` remains purely as an inert transitional enum placeholder, which will be completely demolished in Phase 049 (Step 7b). Users do not need or configure `Column_Master.csv`.
 
 If simulation is inseparable from FIRE in current methodology, do not manufacture a capability merely for symmetry. Record it as an internal FIRE stage.
 
@@ -62,10 +78,12 @@ If simulation is inseparable from FIRE in current methodology, do not manufactur
 
 - **No Cosmetic Late Pruning:** Do not calculate investment deltas or simulation trajectories only to drop them via `.select()` prior to publication.
 - **Confluence Mart Gating (`gold.Core_Monthly_Fact`):**
-  - **Household-Only Run:** The monthly aggregation kernel computes solely income, expense, cashflow, and liquid balance metrics (`Total_Income`, `Total_Cash_Income`, `Total_Expense`, `Net_Cashflow_Month`, `Opening_Balance_Asset`, `Liquid_Assets`, `Total_Liabilities`, `Total_Net_Worth`).
-  - Investment-dependent calculations (`Opening_Investment_Book_Value`, `Closing_Investment_Market_Value`, `Investment_Market_Value_Delta`, `Total_Assets_Market`, `Opening_Unrealized_PL`, `Closing_Unrealized_PL`, `Opening_Investment_XIRR`, `Closing_Investment_XIRR`) are completely skipped at the aggregation kernel level.
-  - Foreign exposure calculations (`Total_Foreign_Currency_Exposure`, `Foreign_Exposure_Pct`, `Closing_Forex_PnL`) are skipped when foreign asset enrichment is inactive.
-  - Macro parameters (`CPI_INDEX`, `INFLATION_YOY_PCT`) are skipped when macro enrichment is inactive.
+  - **Household-Only Run (`HOUSEHOLD_CORE`):** The monthly aggregation kernel computes solely income, expense, cashflow, and liquid balance metrics (`Total_Income`, `Total_Cash_Income`, `Total_Expense`, `Net_Cashflow_Month`, `Opening_Balance_Asset`, `Liquid_Assets`, `Total_Liabilities`, `Total_Net_Worth`).
+    - The 5 household cashflow & budget marts (`Cashflow_Expense_Breakdown`, `Cashflow_Income_Breakdown`, `Forecast_Budget_Variance`, `Cashflow_Efficiency_Analytics`, `Cashflow_Activity_Summary`) are fully populated.
+    - Investment-dependent calculations (`Opening_Investment_Book_Value`, `Closing_Investment_Market_Value`, `Investment_Market_Value_Delta`, `Total_Assets_Market`, `Opening_Unrealized_PL`, `Closing_Unrealized_PL`, `Opening_Investment_XIRR`, `Closing_Investment_XIRR`) are completely skipped at the aggregation kernel level.
+    - Foreign exposure calculations (`Total_Foreign_Currency_Exposure`, `Foreign_Exposure_Pct`, `Closing_Forex_PnL`) are skipped when foreign asset enrichment is inactive.
+    - Macro parameters (`CPI_INDEX`, `INFLATION_YOY_PCT`) are skipped when macro enrichment is inactive.
+  - **Wealth Active Run (`WEALTH`):** Net worth evolution, balance sheet growth, and asset class allocation are calculated and injected into `Core_Monthly_Fact` and `Wealth_Asset_Breakdown`.
 - **Simulation Gating:**
   - When simulation is disabled, the Monte Carlo loop (1,000+ stochastic iterations, percentile path calculations, and seed tracking) is **completely uninvoked**.
 
