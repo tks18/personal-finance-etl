@@ -147,7 +147,7 @@ class BronzeLayer:
         df : pl.DataFrame | pl.LazyFrame
             Source tabular data.
         table_name : str
-            Physical Bronze table name (e.g. 'bronze.r_MF_Transactions').
+            Physical Bronze table name (e.g. 'bronze.investment_mf_orders').
         actionable_files : list[str]
             List of filepaths or artifact IDs actionable in this run.
         full_replace : bool, default=False
