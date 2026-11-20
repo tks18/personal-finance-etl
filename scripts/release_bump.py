@@ -134,15 +134,41 @@ def interactive_wizard(repo_dir: Path) -> tuple[str | None, str | None, bool, bo
     # If currently in a pre-release
     if "current_pre_inc" in projections:
         options.append((f"Increment Pre-Release -> {projections['current_pre_inc']}", None, "rc"))
-        options.append((f"Promote Pre-Release to Final Stable -> {projections['promote_stable']}", "patch", None))
+        options.append(
+            (
+                f"Promote Pre-Release to Final Stable -> {projections['promote_stable']}",
+                "patch",
+                None,
+            )
+        )
 
     options.extend(
         [
-            (f"Next Major Release Candidate (RC) -> {projections.get('major_rc', 'Next Major RC')}", "major", "rc"),
-            (f"Next Minor Release Candidate (RC) -> {projections.get('minor_rc', 'Next Minor RC')}", "minor", "rc"),
-            (f"Next Patch Release Candidate (RC) -> {projections.get('patch_rc', 'Next Patch RC')}", "patch", "rc"),
-            (f"Next Major Alpha -> {projections.get('major', 'Next Major')}-alpha.0", "major", "alpha"),
-            (f"Next Major Beta  -> {projections.get('major', 'Next Major')}-beta.0", "major", "beta"),
+            (
+                f"Next Major Release Candidate (RC) -> {projections.get('major_rc', 'Next Major RC')}",
+                "major",
+                "rc",
+            ),
+            (
+                f"Next Minor Release Candidate (RC) -> {projections.get('minor_rc', 'Next Minor RC')}",
+                "minor",
+                "rc",
+            ),
+            (
+                f"Next Patch Release Candidate (RC) -> {projections.get('patch_rc', 'Next Patch RC')}",
+                "patch",
+                "rc",
+            ),
+            (
+                f"Next Major Alpha -> {projections.get('major', 'Next Major')}-alpha.0",
+                "major",
+                "alpha",
+            ),
+            (
+                f"Next Major Beta  -> {projections.get('major', 'Next Major')}-beta.0",
+                "major",
+                "beta",
+            ),
             (f"Production Major -> {projections.get('major', 'Next Major')}", "major", None),
             (f"Production Minor -> {projections.get('minor', 'Next Minor')}", "minor", None),
             (f"Production Patch -> {projections.get('patch', 'Next Patch')}", "patch", None),
@@ -153,7 +179,9 @@ def interactive_wizard(repo_dir: Path) -> tuple[str | None, str | None, bool, bo
     for idx, (label, _, _) in enumerate(options, 1):
         console.print(f"  [bold cyan]{idx}[/bold cyan]) {label}")
 
-    choice_str = Prompt.ask("\nChoose an option", choices=[str(i) for i in range(1, len(options) + 1)], default="1")
+    choice_str = Prompt.ask(
+        "\nChoose an option", choices=[str(i) for i in range(1, len(options) + 1)], default="1"
+    )
     selected_idx = int(choice_str) - 1
     _, chosen_release_as, chosen_prerelease = options[selected_idx]
 
@@ -167,7 +195,9 @@ def interactive_wizard(repo_dir: Path) -> tuple[str | None, str | None, bool, bo
             chosen_release_as = projections[key]
             chosen_prerelease = None
 
-    run_pipeline = Confirm.ask("Execute automated post-release pipeline (push -> PR -> draft release)?", default=True)
+    run_pipeline = Confirm.ask(
+        "Execute automated post-release pipeline (push -> PR -> draft release)?", default=True
+    )
     is_dry_run = Confirm.ask("Run in dry-run preview mode first?", default=False)
 
     return chosen_release_as, chosen_prerelease, run_pipeline, is_dry_run
@@ -250,17 +280,19 @@ def main(cli_args: list[str] | None = None) -> int:
     root_dir = get_project_root()
 
     # If no flags passed, or --interactive requested, launch interactive wizard
-    has_flags = any([
-        args.major,
-        args.minor,
-        args.patch,
-        args.rc,
-        args.alpha,
-        args.beta,
-        args.final,
-        args.pre,
-        args.as_version,
-    ])
+    has_flags = any(
+        [
+            args.major,
+            args.minor,
+            args.patch,
+            args.rc,
+            args.alpha,
+            args.beta,
+            args.final,
+            args.pre,
+            args.as_version,
+        ]
+    )
     if not has_flags or args.interactive:
         release_as, prerelease, run_pipeline, dry_run = interactive_wizard(root_dir)
     else:
@@ -310,12 +342,16 @@ def main(cli_args: list[str] | None = None) -> int:
         return ret
 
     if dry_run:
-        console.print("[yellow]Dry-run complete. Re-run without --dry-run to commit and tag.[/yellow]")
+        console.print(
+            "[yellow]Dry-run complete. Re-run without --dry-run to commit and tag.[/yellow]"
+        )
         return 0
 
     if run_pipeline:
         console.print("\n[bold cyan]Handing off to automated post-release pipeline...[/bold cyan]")
-        pipe_proc = subprocess.run(["uv", "run", "poe", "release:pipeline"], cwd=root_dir, check=False)
+        pipe_proc = subprocess.run(
+            ["uv", "run", "poe", "release:pipeline"], cwd=root_dir, check=False
+        )
         return pipe_proc.returncode
 
     return 0

@@ -21,6 +21,7 @@ def build():
     print("Building executable with PyInstaller...")
     sys.exit(subprocess.call(["pyinstaller", "--clean", "-y", "main.spec"]))
 
+
 def release_preview():
     """Preview release notes for the latest version in CHANGELOG.md."""
     sys.exit(run_release_cli(["--preview"]))
@@ -174,7 +175,13 @@ def commit_overrides_only():
     from scripts.auto_commit import main as auto_commit_main
 
     passed_args = sys.argv[1:]
-    sys.argv = [sys.argv[0], "--map", ".commit_overrides.json", "--only-mapped", "--run"] + passed_args
+    sys.argv = [
+        sys.argv[0],
+        "--map",
+        ".commit_overrides.json",
+        "--only-mapped",
+        "--run",
+    ] + passed_args
     sys.exit(auto_commit_main())
 
 
@@ -254,20 +261,26 @@ def publish_pypi(repo_dir: Path | None = None) -> int:
                 pass
 
     # Step B: Build distribution packages using uv build
-    console.print("\n[bold cyan]Step 4A: Building distribution packages with 'uv build'...[/bold cyan]")
+    console.print(
+        "\n[bold cyan]Step 4A: Building distribution packages with 'uv build'...[/bold cyan]"
+    )
     build_proc = subprocess.run(["uv", "build"], cwd=repo_dir, check=False)
     if build_proc.returncode != 0:
         console.print("[bold red]✘ uv build failed.[/bold red]")
         return build_proc.returncode
 
     # Identify built artifacts (.whl and .tar.gz)
-    new_packages = [str(p) for p in dist_dir.glob("*.whl")] + [str(p) for p in dist_dir.glob("*.tar.gz")]
+    new_packages = [str(p) for p in dist_dir.glob("*.whl")] + [
+        str(p) for p in dist_dir.glob("*.tar.gz")
+    ]
     if not new_packages:
         console.print("[bold red]✘ Error: No packages found in dist/ after uv build.[/bold red]")
         return 1
 
     # Step C: Publish packages with uv publish using private environment token
-    console.print("\n[bold cyan]Step 4B: Publishing distribution packages to PyPI with 'uv publish'...[/bold cyan]")
+    console.print(
+        "\n[bold cyan]Step 4B: Publishing distribution packages to PyPI with 'uv publish'...[/bold cyan]"
+    )
     publish_env = os.environ.copy()
     publish_env["UV_PUBLISH_TOKEN"] = token
 
@@ -294,28 +307,33 @@ def release_pipeline():
     console.print("\n[bold cyan]═════ Starting Automated Post-Release Pipeline ═════[/bold cyan]\n")
 
     # Step 1: Git Push with follow-tags (triggers pre-push hook running audit:full and saving audit_report.json)
-    console.print("[bold yellow]Step 1: Pushing commits and release tags to origin dev...[/bold yellow]")
+    console.print(
+        "[bold yellow]Step 1: Pushing commits and release tags to origin dev...[/bold yellow]"
+    )
     push_proc = subprocess.run(["git", "push", "--follow-tags", "origin", "dev"], check=False)
     if push_proc.returncode != 0:
         console.print("[bold red]Pipeline aborted: git push failed.[/bold red]")
         sys.exit(push_proc.returncode)
 
     # Step 2: Create/update PR from dev into master with Quality Gate certification attached
-    console.print("\n[bold yellow]Step 2: Creating/updating Pull Request into master with Quality Gate certification...[/bold yellow]")
+    console.print(
+        "\n[bold yellow]Step 2: Creating/updating Pull Request into master with Quality Gate certification...[/bold yellow]"
+    )
     pr_code = create_pr_main(["--run", "--head", "dev", "--base", "master"])
     if pr_code != 0:
         console.print("[bold red]Pipeline warning: PR creation had errors.[/bold red]")
 
     # Step 3: Create GitHub Draft Release for latest version
-    console.print("\n[bold yellow]Step 3: Creating GitHub Draft Release for latest version...[/bold yellow]")
+    console.print(
+        "\n[bold yellow]Step 3: Creating GitHub Draft Release for latest version...[/bold yellow]"
+    )
     from scripts.create_releases import run_release_cli
 
     rel_code = run_release_cli(["--latest", "--run", "--draft"])
     if rel_code != 0:
         console.print("[bold red]Pipeline warning: Draft release creation had errors.[/bold red]")
 
-    console.print("\n[bold green]═════ Automated Post-Release Pipeline Completed (CI publishes to PyPI on merge) ═════[/bold green]\n")
+    console.print(
+        "\n[bold green]═════ Automated Post-Release Pipeline Completed (CI publishes to PyPI on merge) ═════[/bold green]\n"
+    )
     sys.exit(0)
-
-
-
