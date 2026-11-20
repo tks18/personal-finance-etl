@@ -107,24 +107,26 @@ def get_pre_bronze_table_name(
     Returns
     -------
     str
-        Physical DuckDB table name prefixed with 'pre_bronze.pb_'.
+        Physical DuckDB table name prefixed with 'pre_bronze.'.
     """
     ds_str = dataset_id.value if isinstance(dataset_id, DatasetId) else str(dataset_id)
     clean_ds = sanitize_physical_identifier(ds_str)
     if source_id is not None:
         src_str = str(source_id)
         clean_src = sanitize_physical_identifier(src_str)
-        return f"pre_bronze.pb_{clean_src}_{clean_ds}"
-    return f"pre_bronze.pb_{clean_ds}"
+        return f"pre_bronze.{clean_src}_{clean_ds}"
+    return f"pre_bronze.{clean_ds}"
 
 
 def _validate_table_name(table_name: str) -> str:
-    """Validate that table name has expected pre_bronze.pb_ prefix and clean identifier."""
-    if not table_name.startswith("pre_bronze.pb_"):
+    """Validate that table name has expected pre_bronze. prefix and clean identifier."""
+    if not table_name.startswith("pre_bronze."):
+        raise ValueError(f"Pre-Bronze physical table must start with 'pre_bronze.': {table_name}")
+    if table_name.startswith("pre_bronze.pb_"):
         raise ValueError(
-            f"Pre-Bronze physical table must start with 'pre_bronze.pb_': {table_name}"
+            f"Pre-Bronze physical table contains deprecated 'pb_' prefix: {table_name}"
         )
-    raw_ident = table_name.removeprefix("pre_bronze.pb_")
+    raw_ident = table_name.removeprefix("pre_bronze.")
     sanitize_physical_identifier(raw_ident)
     return table_name
 

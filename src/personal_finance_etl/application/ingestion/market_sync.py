@@ -312,7 +312,7 @@ class CurrencyPipeline:
         pl.DataFrame
             Cached currency observation DataFrame or empty initialized schema.
         """
-        df_bronze_cached = self.bronze.get_table("r_Currency_FX_Data")
+        df_bronze_cached = self.bronze.get_table("market_currency_fx_rates")
         if df_bronze_cached.is_empty():
             diagnostics.debug(
                 "Bronze Cache: EMPTY. A full historical extraction will be performed."
@@ -350,13 +350,13 @@ class CurrencyPipeline:
         upsert_market_delta_and_register(
             bronze=self.bronze,
             df_delta=df_delta,
-            table_name="bronze.r_Currency_FX_Data",
+            table_name="bronze.market_currency_fx_rates",
             new_files=new_files,
             meta_file_type="currency_history",
             dataset_id=DatasetId.MARKET_CURRENCY_FX_RATES,
             frames=frames,
         )
-        df_bronze_full = self.bronze.get_table("r_Currency_FX_Data")
+        df_bronze_full = self.bronze.get_table("market_currency_fx_rates")
         if df_bronze_full.is_empty():
             return pl.LazyFrame(schema=CURRENCY_BRONZE_SCHEMA)
         return df_bronze_full.lazy()
@@ -507,7 +507,7 @@ class BenchmarkPipeline:
         pl.DataFrame
             Cached benchmark observations.
         """
-        df_bronze_cached = self.bronze.get_table("r_Benchmark_Data")
+        df_bronze_cached = self.bronze.get_table("market_benchmark_history")
         if df_bronze_cached.is_empty():
             diagnostics.debug(
                 "Bronze Cache: EMPTY. A full historical extraction will be performed."
@@ -545,13 +545,13 @@ class BenchmarkPipeline:
         upsert_market_delta_and_register(
             bronze=self.bronze,
             df_delta=df_new_raw,
-            table_name="bronze.r_Benchmark_Data",
+            table_name="bronze.market_benchmark_history",
             new_files=virtual_files,
             meta_file_type="benchmark_history",
             dataset_id=DatasetId.MARKET_BENCHMARK_HISTORY,
             frames=frames,
         )
-        return self.bronze.get_table("r_Benchmark_Data")
+        return self.bronze.get_table("market_benchmark_history")
 
     def process(
         self,
@@ -658,7 +658,7 @@ class USMarketPipeline:
         pl.DataFrame
             Cached US stock price table or empty initialized schema.
         """
-        df_bronze_cached = self.bronze.get_table("r_US_Stock_Prices")
+        df_bronze_cached = self.bronze.get_table("market_us_stock_prices")
         if df_bronze_cached.is_empty():
             diagnostics.debug(
                 "Bronze Cache: EMPTY. A full historical extraction will be performed."
@@ -691,13 +691,13 @@ class USMarketPipeline:
         upsert_market_delta_and_register(
             bronze=self.bronze,
             df_delta=df_delta,
-            table_name="bronze.r_US_Stock_Prices",
+            table_name="bronze.market_us_stock_prices",
             new_files=new_files,
             meta_file_type="us_stock_market",
             dataset_id=DatasetId.MARKET_US_STOCK_PRICES,
             frames=frames,
         )
-        df_bronze_full = self.bronze.get_table("r_US_Stock_Prices")
+        df_bronze_full = self.bronze.get_table("market_us_stock_prices")
         if df_bronze_full.is_empty():
             return pl.LazyFrame(schema=US_MARKET_BRONZE_SCHEMA)
         return df_bronze_full.lazy()

@@ -224,7 +224,7 @@ class ArtifactRepository:
         if not category:
             return None
         if category == "sqlite_source":
-            return "bronze.r_SQLite_Sources"
+            return "bronze.household_sqlite_sources"
         for contract in BRONZE_CONTRACT_REGISTRY:
             if contract.sync_category == category:
                 return contract.physical_table

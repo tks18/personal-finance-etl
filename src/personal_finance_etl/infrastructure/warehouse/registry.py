@@ -263,9 +263,13 @@ def _validate_pre_bronze_contracts() -> None:
 
         if not pb_contract.physical_table:
             raise ValueError(f"Pre-Bronze physical_table empty for {pb_contract.dataset_id}")
-        if not pb_contract.physical_table.startswith("pre_bronze.pb_"):
+        if not pb_contract.physical_table.startswith("pre_bronze."):
             raise ValueError(
-                f"Pre-Bronze table must start with 'pre_bronze.pb_': {pb_contract.physical_table}"
+                f"Pre-Bronze table must start with 'pre_bronze.': {pb_contract.physical_table}"
+            )
+        if pb_contract.physical_table.startswith("pre_bronze.pb_"):
+            raise ValueError(
+                f"Pre-Bronze table contains deprecated 'pb_' prefix: {pb_contract.physical_table}"
             )
 
         if pb_contract.physical_table in pre_bronze_tables:

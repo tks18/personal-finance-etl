@@ -145,7 +145,7 @@ class FinancialRules(BaseModel):
         if unknown:
             raise ValueError(
                 "Configured STCG/LTCG investment exclusion UID(s) do not exist in "
-                f"silver.d_Income_Subcategory: {unknown}"
+                f"silver.wealth_income_subcategory: {unknown}"
             )
 
     @classmethod

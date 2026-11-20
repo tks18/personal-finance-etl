@@ -114,7 +114,7 @@ class GoldContractDependency:
 SILVER_CONTRACT_SEMANTICS: dict[DatasetId, SilverContractSemantics] = {
     DatasetId.COMMON_CALENDAR: SilverContractSemantics(
         dataset_id=DatasetId.COMMON_CALENDAR,
-        physical_table="silver.d_Calendar",
+        physical_table="silver.common_calendar",
         row_grain="Calendar Day (Date)",
         identity_keys=("Date",),
         financial_domain="Common",
@@ -123,7 +123,7 @@ SILVER_CONTRACT_SEMANTICS: dict[DatasetId, SilverContractSemantics] = {
     ),
     DatasetId.WEALTH_INCOME_CATEGORY: SilverContractSemantics(
         dataset_id=DatasetId.WEALTH_INCOME_CATEGORY,
-        physical_table="silver.d_Income_Category",
+        physical_table="silver.wealth_income_category",
         row_grain="Income Category (Category_Id)",
         identity_keys=("UID",),
         financial_domain="Wealth",
@@ -132,7 +132,7 @@ SILVER_CONTRACT_SEMANTICS: dict[DatasetId, SilverContractSemantics] = {
     ),
     DatasetId.WEALTH_INCOME_SUBCATEGORY: SilverContractSemantics(
         dataset_id=DatasetId.WEALTH_INCOME_SUBCATEGORY,
-        physical_table="silver.d_Income_Subcategory",
+        physical_table="silver.wealth_income_subcategory",
         row_grain="Income Subcategory (Subcategory_Id)",
         identity_keys=("UID",),
         financial_domain="Wealth",
@@ -141,7 +141,7 @@ SILVER_CONTRACT_SEMANTICS: dict[DatasetId, SilverContractSemantics] = {
     ),
     DatasetId.WEALTH_EXPENSE_CATEGORY: SilverContractSemantics(
         dataset_id=DatasetId.WEALTH_EXPENSE_CATEGORY,
-        physical_table="silver.d_Expense_Category",
+        physical_table="silver.wealth_expense_category",
         row_grain="Expense Category (Category_Id)",
         identity_keys=("UID",),
         financial_domain="Wealth",
@@ -150,7 +150,7 @@ SILVER_CONTRACT_SEMANTICS: dict[DatasetId, SilverContractSemantics] = {
     ),
     DatasetId.WEALTH_EXPENSE_SUBCATEGORY: SilverContractSemantics(
         dataset_id=DatasetId.WEALTH_EXPENSE_SUBCATEGORY,
-        physical_table="silver.d_Expense_Subcategory",
+        physical_table="silver.wealth_expense_subcategory",
         row_grain="Expense Subcategory (Subcategory_Id)",
         identity_keys=("UID",),
         financial_domain="Wealth",
@@ -159,7 +159,7 @@ SILVER_CONTRACT_SEMANTICS: dict[DatasetId, SilverContractSemantics] = {
     ),
     DatasetId.WEALTH_ASSET_CATEGORY: SilverContractSemantics(
         dataset_id=DatasetId.WEALTH_ASSET_CATEGORY,
-        physical_table="silver.d_Asset_Category",
+        physical_table="silver.wealth_asset_category",
         row_grain="Asset Category (Category_Id)",
         identity_keys=("UID",),
         financial_domain="Wealth",
@@ -168,7 +168,7 @@ SILVER_CONTRACT_SEMANTICS: dict[DatasetId, SilverContractSemantics] = {
     ),
     DatasetId.WEALTH_ASSET_SUBCATEGORY: SilverContractSemantics(
         dataset_id=DatasetId.WEALTH_ASSET_SUBCATEGORY,
-        physical_table="silver.d_Asset_SubCategory",
+        physical_table="silver.wealth_asset_subcategory",
         row_grain="Asset Subcategory (Subcategory_Id)",
         identity_keys=("UID",),
         financial_domain="Wealth",
@@ -177,7 +177,7 @@ SILVER_CONTRACT_SEMANTICS: dict[DatasetId, SilverContractSemantics] = {
     ),
     DatasetId.COMMON_CURRENCY: SilverContractSemantics(
         dataset_id=DatasetId.COMMON_CURRENCY,
-        physical_table="silver.d_Currency",
+        physical_table="silver.common_currency",
         row_grain="Currency Specification (Currency_Id)",
         identity_keys=("UID",),
         financial_domain="Common",
@@ -186,7 +186,7 @@ SILVER_CONTRACT_SEMANTICS: dict[DatasetId, SilverContractSemantics] = {
     ),
     DatasetId.INVESTMENT_BENCHMARK_MASTER_DIM: SilverContractSemantics(
         dataset_id=DatasetId.INVESTMENT_BENCHMARK_MASTER_DIM,
-        physical_table="silver.d_Investment_Benchmark_Master",
+        physical_table="silver.investment_benchmark_master_dim",
         row_grain="Benchmark Master Specification (Benchmark_Code)",
         identity_keys=("ID",),
         financial_domain="Investments",
@@ -195,7 +195,7 @@ SILVER_CONTRACT_SEMANTICS: dict[DatasetId, SilverContractSemantics] = {
     ),
     DatasetId.COMMON_CURRENCY_FX_RATES: SilverContractSemantics(
         dataset_id=DatasetId.COMMON_CURRENCY_FX_RATES,
-        physical_table="silver.f_Currency_FX_Rates",
+        physical_table="silver.common_currency_fx_rates",
         row_grain="Daily Currency Exchange Rate (Base_Currency, Target_Currency, Date)",
         identity_keys=("Currency_ID", "Date"),
         financial_domain="Common",
@@ -204,7 +204,7 @@ SILVER_CONTRACT_SEMANTICS: dict[DatasetId, SilverContractSemantics] = {
     ),
     DatasetId.INVESTMENT_MASTER: SilverContractSemantics(
         dataset_id=DatasetId.INVESTMENT_MASTER,
-        physical_table="silver.d_Investment_Master",
+        physical_table="silver.investment_master",
         row_grain="Security Master Instrument (ISIN)",
         identity_keys=("ISIN",),
         financial_domain="Investments",
@@ -213,7 +213,7 @@ SILVER_CONTRACT_SEMANTICS: dict[DatasetId, SilverContractSemantics] = {
     ),
     DatasetId.INVESTMENT_MACRO_PARAMETERS_DIM: SilverContractSemantics(
         dataset_id=DatasetId.INVESTMENT_MACRO_PARAMETERS_DIM,
-        physical_table="silver.d_Macro_Parameters",
+        physical_table="silver.investment_macro_parameters_dim",
         row_grain="Financial Year Macro Assumptions (FY)",
         identity_keys=("FY",),
         financial_domain="Investments",
@@ -222,7 +222,7 @@ SILVER_CONTRACT_SEMANTICS: dict[DatasetId, SilverContractSemantics] = {
     ),
     DatasetId.WEALTH_INCOME_TRANSACTIONS: SilverContractSemantics(
         dataset_id=DatasetId.WEALTH_INCOME_TRANSACTIONS,
-        physical_table="silver.f_Income_Transactions",
+        physical_table="silver.wealth_income_transactions",
         row_grain="Ledger Income Transaction (Tx_Id)",
         identity_keys=("UID",),
         financial_domain="Wealth",
@@ -231,7 +231,7 @@ SILVER_CONTRACT_SEMANTICS: dict[DatasetId, SilverContractSemantics] = {
     ),
     DatasetId.WEALTH_EXPENSE_TRANSACTIONS: SilverContractSemantics(
         dataset_id=DatasetId.WEALTH_EXPENSE_TRANSACTIONS,
-        physical_table="silver.f_Expense_Transactions",
+        physical_table="silver.wealth_expense_transactions",
         row_grain="Ledger Expense Transaction (Tx_Id)",
         identity_keys=("UID",),
         financial_domain="Wealth",
@@ -240,7 +240,7 @@ SILVER_CONTRACT_SEMANTICS: dict[DatasetId, SilverContractSemantics] = {
     ),
     DatasetId.WEALTH_TRANSFER_TRANSACTIONS: SilverContractSemantics(
         dataset_id=DatasetId.WEALTH_TRANSFER_TRANSACTIONS,
-        physical_table="silver.f_Transfer_Transactions",
+        physical_table="silver.wealth_transfer_transactions",
         row_grain="Ledger Account Transfer (Tx_Id)",
         identity_keys=("UID",),
         financial_domain="Wealth",
@@ -249,7 +249,7 @@ SILVER_CONTRACT_SEMANTICS: dict[DatasetId, SilverContractSemantics] = {
     ),
     DatasetId.WEALTH_OPENING_BALANCES: SilverContractSemantics(
         dataset_id=DatasetId.WEALTH_OPENING_BALANCES,
-        physical_table="silver.f_Opening_Balances",
+        physical_table="silver.wealth_opening_balances",
         row_grain="Account Opening Balance (Asset_Id, Date)",
         identity_keys=("Z_PK",),
         financial_domain="Wealth",
@@ -258,7 +258,7 @@ SILVER_CONTRACT_SEMANTICS: dict[DatasetId, SilverContractSemantics] = {
     ),
     DatasetId.INVESTMENT_MARKET_DATA: SilverContractSemantics(
         dataset_id=DatasetId.INVESTMENT_MARKET_DATA,
-        physical_table="silver.f_Investment_Market_Data",
+        physical_table="silver.investment_market_data",
         row_grain="Investment Daily Market Quote (ISIN, Date)",
         identity_keys=("ISIN", "Date"),
         financial_domain="Investments",
@@ -267,7 +267,7 @@ SILVER_CONTRACT_SEMANTICS: dict[DatasetId, SilverContractSemantics] = {
     ),
     DatasetId.INVESTMENT_PURCHASE_DATA: SilverContractSemantics(
         dataset_id=DatasetId.INVESTMENT_PURCHASE_DATA,
-        physical_table="silver.f_Investment_Purchase_Data",
+        physical_table="silver.investment_purchase_data",
         row_grain="Investment Buy Order (Trade_Id)",
         identity_keys=("Purchase_ID",),
         financial_domain="Investments",
@@ -276,7 +276,7 @@ SILVER_CONTRACT_SEMANTICS: dict[DatasetId, SilverContractSemantics] = {
     ),
     DatasetId.INVESTMENT_SALE_DATA: SilverContractSemantics(
         dataset_id=DatasetId.INVESTMENT_SALE_DATA,
-        physical_table="silver.f_Investment_Sale_Data",
+        physical_table="silver.investment_sale_data",
         row_grain="Investment Sell Order (Trade_Id)",
         identity_keys=("Sale_ID",),
         financial_domain="Investments",
@@ -285,7 +285,7 @@ SILVER_CONTRACT_SEMANTICS: dict[DatasetId, SilverContractSemantics] = {
     ),
     DatasetId.INVESTMENT_BENCHMARK_DATA: SilverContractSemantics(
         dataset_id=DatasetId.INVESTMENT_BENCHMARK_DATA,
-        physical_table="silver.f_Investment_Benchmark_Data",
+        physical_table="silver.investment_benchmark_data",
         row_grain="Daily Benchmark Valuation (Benchmark_Code, Date)",
         identity_keys=("ID", "Date"),
         financial_domain="Investments",
@@ -294,7 +294,7 @@ SILVER_CONTRACT_SEMANTICS: dict[DatasetId, SilverContractSemantics] = {
     ),
     DatasetId.INVESTMENT_LOT_ANALYTICS: SilverContractSemantics(
         dataset_id=DatasetId.INVESTMENT_LOT_ANALYTICS,
-        physical_table="silver.f_Investment_Analytics_Lot",
+        physical_table="silver.investment_lot_analytics",
         row_grain="Tax Lot Position Snapshot (ISIN, Lot_Id, Closing_Date)",
         identity_keys=("Lot_ID", "Closing_Date"),
         financial_domain="Investments",
@@ -303,7 +303,7 @@ SILVER_CONTRACT_SEMANTICS: dict[DatasetId, SilverContractSemantics] = {
     ),
     DatasetId.INVESTMENT_REALIZED_EVENTS: SilverContractSemantics(
         dataset_id=DatasetId.INVESTMENT_REALIZED_EVENTS,
-        physical_table="silver.f_Investment_Realized_Events",
+        physical_table="silver.investment_realized_events",
         row_grain="Realized Capital Gain/Loss Event (Event_Id)",
         identity_keys=("Realized_Event_ID",),
         financial_domain="Investments",
@@ -312,7 +312,7 @@ SILVER_CONTRACT_SEMANTICS: dict[DatasetId, SilverContractSemantics] = {
     ),
     DatasetId.INVESTMENT_RECONCILIATION_EVENTS: SilverContractSemantics(
         dataset_id=DatasetId.INVESTMENT_RECONCILIATION_EVENTS,
-        physical_table="silver.f_Investment_Reconciliation_Events",
+        physical_table="silver.investment_reconciliation_events",
         row_grain="Investment Reconciliation Audit Event (Event_Id)",
         identity_keys=("Reconciliation_Event_ID",),
         financial_domain="Investments",
@@ -321,7 +321,7 @@ SILVER_CONTRACT_SEMANTICS: dict[DatasetId, SilverContractSemantics] = {
     ),
     DatasetId.TAX_EVENTS: SilverContractSemantics(
         dataset_id=DatasetId.TAX_EVENTS,
-        physical_table="silver.f_Tax_Events",
+        physical_table="silver.tax_events",
         row_grain="Tax Assessment Event (Event_Id)",
         identity_keys=("Tax_Event_ID",),
         financial_domain="Taxes",
@@ -335,7 +335,7 @@ SILVER_CONTRACT_SEMANTICS: dict[DatasetId, SilverContractSemantics] = {
 GOLD_CONTRACT_DEPENDENCIES: dict[DatasetId, GoldContractDependency] = {
     DatasetId.TAX_YEAR_SUMMARY: GoldContractDependency(
         dataset_id=DatasetId.TAX_YEAR_SUMMARY,
-        physical_table="gold.Tax_Year_Summary",
+        physical_table="gold.tax_year_summary",
         producer="TaxEngine",
         input_silver_datasets=(
             DatasetId.TAX_EVENTS,
@@ -376,7 +376,7 @@ GOLD_CONTRACT_DEPENDENCIES: dict[DatasetId, GoldContractDependency] = {
     ),
     DatasetId.TAX_INCOME_BREAKDOWN: GoldContractDependency(
         dataset_id=DatasetId.TAX_INCOME_BREAKDOWN,
-        physical_table="gold.Tax_Income_Breakdown",
+        physical_table="gold.tax_income_breakdown",
         producer="TaxEngine",
         input_silver_datasets=(
             DatasetId.TAX_EVENTS,
@@ -405,7 +405,7 @@ GOLD_CONTRACT_DEPENDENCIES: dict[DatasetId, GoldContractDependency] = {
     ),
     DatasetId.TAX_RECONCILIATION: GoldContractDependency(
         dataset_id=DatasetId.TAX_RECONCILIATION,
-        physical_table="gold.Tax_Reconciliation",
+        physical_table="gold.tax_reconciliation",
         producer="TaxEngine",
         input_silver_datasets=(
             DatasetId.TAX_EVENTS,
@@ -437,7 +437,7 @@ GOLD_CONTRACT_DEPENDENCIES: dict[DatasetId, GoldContractDependency] = {
     ),
     DatasetId.WEALTH_CORE_MONTHLY: GoldContractDependency(
         dataset_id=DatasetId.WEALTH_CORE_MONTHLY,
-        physical_table="gold.Core_Monthly_Fact",
+        physical_table="gold.wealth_core_monthly",
         producer="WealthPresentationEngine",
         input_silver_datasets=(
             DatasetId.COMMON_CALENDAR,
@@ -488,7 +488,7 @@ GOLD_CONTRACT_DEPENDENCIES: dict[DatasetId, GoldContractDependency] = {
     ),
     DatasetId.WEALTH_ASSET_BREAKDOWN: GoldContractDependency(
         dataset_id=DatasetId.WEALTH_ASSET_BREAKDOWN,
-        physical_table="gold.Wealth_Asset_Breakdown",
+        physical_table="gold.wealth_asset_breakdown",
         producer="WealthPresentationEngine",
         input_silver_datasets=(
             DatasetId.COMMON_CALENDAR,
@@ -535,7 +535,7 @@ GOLD_CONTRACT_DEPENDENCIES: dict[DatasetId, GoldContractDependency] = {
     ),
     DatasetId.WEALTH_CASHFLOW_EXPENSE_BREAKDOWN: GoldContractDependency(
         dataset_id=DatasetId.WEALTH_CASHFLOW_EXPENSE_BREAKDOWN,
-        physical_table="gold.Cashflow_Expense_Breakdown",
+        physical_table="gold.wealth_cashflow_expense_breakdown",
         producer="WealthPresentationEngine",
         input_silver_datasets=(
             DatasetId.WEALTH_EXPENSE_TRANSACTIONS,
@@ -560,7 +560,7 @@ GOLD_CONTRACT_DEPENDENCIES: dict[DatasetId, GoldContractDependency] = {
     ),
     DatasetId.WEALTH_CASHFLOW_INCOME_BREAKDOWN: GoldContractDependency(
         dataset_id=DatasetId.WEALTH_CASHFLOW_INCOME_BREAKDOWN,
-        physical_table="gold.Cashflow_Income_Breakdown",
+        physical_table="gold.wealth_cashflow_income_breakdown",
         producer="WealthPresentationEngine",
         input_silver_datasets=(
             DatasetId.WEALTH_INCOME_TRANSACTIONS,
@@ -586,7 +586,7 @@ GOLD_CONTRACT_DEPENDENCIES: dict[DatasetId, GoldContractDependency] = {
     ),
     DatasetId.FIRE_ANALYTICS: GoldContractDependency(
         dataset_id=DatasetId.FIRE_ANALYTICS,
-        physical_table="gold.Wealth_FIRE_Analytics",
+        physical_table="gold.fire_analytics",
         producer="WealthPresentationEngine",
         input_silver_datasets=(
             DatasetId.COMMON_CALENDAR,
@@ -615,7 +615,7 @@ GOLD_CONTRACT_DEPENDENCIES: dict[DatasetId, GoldContractDependency] = {
     ),
     DatasetId.WEALTH_BUDGET_VARIANCE: GoldContractDependency(
         dataset_id=DatasetId.WEALTH_BUDGET_VARIANCE,
-        physical_table="gold.Forecast_Budget_Variance",
+        physical_table="gold.wealth_budget_variance",
         producer="WealthPresentationEngine",
         input_silver_datasets=(
             DatasetId.WEALTH_EXPENSE_TRANSACTIONS,
@@ -633,7 +633,7 @@ GOLD_CONTRACT_DEPENDENCIES: dict[DatasetId, GoldContractDependency] = {
     ),
     DatasetId.INVESTMENT_PORTFOLIO_SUMMARY: GoldContractDependency(
         dataset_id=DatasetId.INVESTMENT_PORTFOLIO_SUMMARY,
-        physical_table="gold.Investment_Portfolio_Summary",
+        physical_table="gold.investment_portfolio_summary",
         producer="InvestmentQuantEngine",
         input_silver_datasets=(
             DatasetId.INVESTMENT_LOT_ANALYTICS,
@@ -665,7 +665,7 @@ GOLD_CONTRACT_DEPENDENCIES: dict[DatasetId, GoldContractDependency] = {
     ),
     DatasetId.WEALTH_CASHFLOW_EFFICIENCY: GoldContractDependency(
         dataset_id=DatasetId.WEALTH_CASHFLOW_EFFICIENCY,
-        physical_table="gold.Cashflow_Efficiency_Analytics",
+        physical_table="gold.wealth_cashflow_efficiency",
         producer="WealthPresentationEngine",
         input_silver_datasets=(
             DatasetId.WEALTH_INCOME_TRANSACTIONS,
@@ -683,7 +683,7 @@ GOLD_CONTRACT_DEPENDENCIES: dict[DatasetId, GoldContractDependency] = {
     ),
     DatasetId.WEALTH_CASHFLOW_ACTIVITY_SUMMARY: GoldContractDependency(
         dataset_id=DatasetId.WEALTH_CASHFLOW_ACTIVITY_SUMMARY,
-        physical_table="gold.Cashflow_Activity_Summary",
+        physical_table="gold.wealth_cashflow_activity_summary",
         producer="WealthPresentationEngine",
         input_silver_datasets=(
             DatasetId.WEALTH_INCOME_TRANSACTIONS,
@@ -713,7 +713,7 @@ GOLD_CONTRACT_DEPENDENCIES: dict[DatasetId, GoldContractDependency] = {
     ),
     DatasetId.INVESTMENT_BY_ISIN: GoldContractDependency(
         dataset_id=DatasetId.INVESTMENT_BY_ISIN,
-        physical_table="gold.Investment_By_ISIN",
+        physical_table="gold.investment_by_isin",
         producer="InvestmentQuantEngine",
         input_silver_datasets=(
             DatasetId.INVESTMENT_LOT_ANALYTICS,
@@ -749,7 +749,7 @@ GOLD_CONTRACT_DEPENDENCIES: dict[DatasetId, GoldContractDependency] = {
     ),
     DatasetId.INVESTMENT_BY_SUBTYPE: GoldContractDependency(
         dataset_id=DatasetId.INVESTMENT_BY_SUBTYPE,
-        physical_table="gold.Investment_By_Subtype",
+        physical_table="gold.investment_by_subtype",
         producer="InvestmentQuantEngine",
         input_silver_datasets=(
             DatasetId.INVESTMENT_LOT_ANALYTICS,
@@ -775,7 +775,7 @@ GOLD_CONTRACT_DEPENDENCIES: dict[DatasetId, GoldContractDependency] = {
     ),
     DatasetId.INVESTMENT_BY_CLASS: GoldContractDependency(
         dataset_id=DatasetId.INVESTMENT_BY_CLASS,
-        physical_table="gold.Investment_By_Class",
+        physical_table="gold.investment_by_class",
         producer="InvestmentQuantEngine",
         input_silver_datasets=(
             DatasetId.INVESTMENT_LOT_ANALYTICS,
@@ -798,7 +798,7 @@ GOLD_CONTRACT_DEPENDENCIES: dict[DatasetId, GoldContractDependency] = {
     ),
     DatasetId.INVESTMENT_BY_INSTRUMENT_TYPE: GoldContractDependency(
         dataset_id=DatasetId.INVESTMENT_BY_INSTRUMENT_TYPE,
-        physical_table="gold.Investment_By_Instrument_Type",
+        physical_table="gold.investment_by_instrument_type",
         producer="InvestmentQuantEngine",
         input_silver_datasets=(
             DatasetId.INVESTMENT_LOT_ANALYTICS,
@@ -823,7 +823,7 @@ GOLD_CONTRACT_DEPENDENCIES: dict[DatasetId, GoldContractDependency] = {
     ),
     DatasetId.INVESTMENT_BY_SECTOR: GoldContractDependency(
         dataset_id=DatasetId.INVESTMENT_BY_SECTOR,
-        physical_table="gold.Investment_By_Sector",
+        physical_table="gold.investment_by_sector",
         producer="InvestmentQuantEngine",
         input_silver_datasets=(
             DatasetId.INVESTMENT_LOT_ANALYTICS,
@@ -846,7 +846,7 @@ GOLD_CONTRACT_DEPENDENCIES: dict[DatasetId, GoldContractDependency] = {
     ),
     DatasetId.INVESTMENT_BY_INDUSTRY: GoldContractDependency(
         dataset_id=DatasetId.INVESTMENT_BY_INDUSTRY,
-        physical_table="gold.Investment_By_Industry",
+        physical_table="gold.investment_by_industry",
         producer="InvestmentQuantEngine",
         input_silver_datasets=(
             DatasetId.INVESTMENT_LOT_ANALYTICS,
@@ -869,7 +869,7 @@ GOLD_CONTRACT_DEPENDENCIES: dict[DatasetId, GoldContractDependency] = {
     ),
     DatasetId.INVESTMENT_BY_PORTFOLIO: GoldContractDependency(
         dataset_id=DatasetId.INVESTMENT_BY_PORTFOLIO,
-        physical_table="gold.Investment_By_Portfolio",
+        physical_table="gold.investment_by_portfolio",
         producer="InvestmentQuantEngine",
         input_silver_datasets=(
             DatasetId.INVESTMENT_LOT_ANALYTICS,
@@ -892,7 +892,7 @@ GOLD_CONTRACT_DEPENDENCIES: dict[DatasetId, GoldContractDependency] = {
     ),
     DatasetId.INVESTMENT_BY_GEO: GoldContractDependency(
         dataset_id=DatasetId.INVESTMENT_BY_GEO,
-        physical_table="gold.Investment_By_Geo",
+        physical_table="gold.investment_by_geo",
         producer="InvestmentQuantEngine",
         input_silver_datasets=(
             DatasetId.INVESTMENT_LOT_ANALYTICS,
@@ -915,7 +915,7 @@ GOLD_CONTRACT_DEPENDENCIES: dict[DatasetId, GoldContractDependency] = {
     ),
     DatasetId.INVESTMENT_BY_COUNTRY: GoldContractDependency(
         dataset_id=DatasetId.INVESTMENT_BY_COUNTRY,
-        physical_table="gold.Investment_By_Country",
+        physical_table="gold.investment_by_country",
         producer="InvestmentQuantEngine",
         input_silver_datasets=(
             DatasetId.INVESTMENT_LOT_ANALYTICS,
@@ -938,7 +938,7 @@ GOLD_CONTRACT_DEPENDENCIES: dict[DatasetId, GoldContractDependency] = {
     ),
     DatasetId.INVESTMENT_BY_CURRENCY: GoldContractDependency(
         dataset_id=DatasetId.INVESTMENT_BY_CURRENCY,
-        physical_table="gold.Investment_By_Currency",
+        physical_table="gold.investment_by_currency",
         producer="InvestmentQuantEngine",
         input_silver_datasets=(
             DatasetId.INVESTMENT_LOT_ANALYTICS,
