@@ -25,8 +25,9 @@ import tomllib
 from pathlib import Path
 from typing import Self
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, model_validator
 
+from personal_finance_etl.config.capabilities import CapabilitySelection
 from personal_finance_etl.config.settings import Settings
 from personal_finance_etl.config.sources.identity import (
     BronzeIdentityStrategy,
@@ -61,7 +62,6 @@ from personal_finance_etl.config.sources.selectors import (
 from personal_finance_etl.config.sources.validation import (
     validate_source_dataset_bindings,
 )
-from personal_finance_etl.contracts.capabilities import CapabilityId
 from personal_finance_etl.contracts.datasets import DatasetId
 from personal_finance_etl.contracts.sources import ProviderType, SourceId
 
@@ -77,32 +77,6 @@ __all__ = [
 
 CURRENT_SOURCE_CONFIG_SCHEMA_VERSION: str = "1.0.0"
 SUPPORTED_SOURCE_CONFIG_SCHEMA_VERSIONS: frozenset[str] = frozenset({"1.0.0", "1.0"})
-
-
-class CapabilitySelection(BaseModel):
-    """User-configured capability selection specification.
-
-    Parameters
-    ----------
-    enabled : tuple[CapabilityId, ...] | None, default None
-        Explicit list of requested financial execution capabilities.
-        If None, all registered capabilities are requested by default.
-    """
-
-    enabled: tuple[CapabilityId, ...] | None = None
-
-    @property
-    def resolved_capabilities(self) -> frozenset[CapabilityId]:
-        """Resolve requested capabilities to a set of CapabilityId enums.
-
-        Returns
-        -------
-        frozenset[CapabilityId]
-            Requested capabilities, or all registered capabilities if not explicitly configured.
-        """
-        if self.enabled is not None:
-            return frozenset(self.enabled)
-        return frozenset(CapabilityId)
 
 
 def _serialize_dataset_selector(sel: DatasetSelector) -> list[str]:
@@ -213,7 +187,7 @@ def _serialize_dataset_field(field: SourceFieldDeclaration) -> list[str]:
 
 
 class SourceConfiguration(BaseModel):
-    """Root configuration model defining external physical sources, dataset bindings, and capabilities.
+    """Root configuration model defining external physical sources and dataset bindings.
 
     Parameters
     ----------
@@ -223,18 +197,15 @@ class SourceConfiguration(BaseModel):
         Configured physical evidence sources.
     datasets : tuple[SourceDatasetConfig, ...], default ()
         Configured bindings of physical sources to canonical datasets.
-    capabilities : CapabilitySelection, default CapabilitySelection()
-        Configured execution capability selection.
     """
 
     schema_version: str = CURRENT_SOURCE_CONFIG_SCHEMA_VERSION
     sources: tuple[SourceConfig, ...] = ()
     datasets: tuple[SourceDatasetConfig, ...] = ()
-    capabilities: CapabilitySelection = Field(default_factory=CapabilitySelection)
 
     @model_validator(mode="after")
     def validate_aggregate_semantics(self) -> Self:
-        """Validate cross-model semantic consistency across sources, datasets, and capabilities.
+        """Validate cross-model semantic consistency across sources and datasets.
 
         Returns
         -------
@@ -386,14 +357,7 @@ class SourceConfiguration(BaseModel):
         lines: list[str] = [
             f'schema_version = "{self.schema_version}"',
             "",
-            "[capabilities]",
         ]
-        if self.capabilities.enabled is not None:
-            enabled_str = ", ".join(f'"{c.value}"' for c in self.capabilities.enabled)
-            lines.append(f"enabled = [{enabled_str}]")
-        else:
-            lines.append("# All capabilities active by default")
-        lines.append("")
 
         for src in self.sources:
             lines.append("[[sources]]")
@@ -2798,5 +2762,4 @@ def get_shan_baseline_source_configuration(
         schema_version=CURRENT_SOURCE_CONFIG_SCHEMA_VERSION,
         sources=tuple(get_shan_baseline_sources(settings=settings)),
         datasets=tuple(get_shan_baseline_dataset_bindings()),
-        capabilities=CapabilitySelection(enabled=tuple(CapabilityId)),
     )

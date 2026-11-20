@@ -29,7 +29,6 @@ from personal_finance_etl.application.pipeline.source_planner import (
 )
 from personal_finance_etl.config.settings import Settings
 from personal_finance_etl.config.sources.loader import (
-    CapabilitySelection,
     SourceConfiguration,
 )
 from personal_finance_etl.config.sources.model import SourceConfig, SourceDatasetConfig
@@ -203,7 +202,6 @@ def test_tax_requested_without_investment_evidence_fails_source_planning() -> No
     cfg = SourceConfiguration(
         sources=fake_sources,
         datasets=fake_datasets,
-        capabilities=CapabilitySelection(enabled=(CapabilityId.TAX,)),
     )
 
     plan = CapabilityPlanner().create_plan(requested_capabilities=(CapabilityId.TAX,))

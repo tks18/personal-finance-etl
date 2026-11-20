@@ -197,7 +197,9 @@ def test_domestic_stock_end_to_end_vertical_slice_admission(
         assert "artifact_id" not in pb_df.columns
 
     # 3. Verify Bronze tables created with NO synthetic row UIDs (IdentityRequirement.NONE)
-    b_holdings = isolated_duckdb_manager.conn.query("SELECT * FROM bronze.r_Stock_Market_Data").pl()
+    b_holdings = isolated_duckdb_manager.conn.query(
+        "SELECT * FROM bronze.market_stock_holdings"
+    ).pl()
     assert b_holdings.height == 2
     assert "artifact_id" in b_holdings.columns
     assert "Month Date" in b_holdings.columns
@@ -206,7 +208,9 @@ def test_domestic_stock_end_to_end_vertical_slice_admission(
     assert "UID" not in b_holdings.columns
     assert "ZUID" not in b_holdings.columns
 
-    b_orders = isolated_duckdb_manager.conn.query("SELECT * FROM bronze.r_Stock_Transactions").pl()
+    b_orders = isolated_duckdb_manager.conn.query(
+        "SELECT * FROM bronze.investment_stock_orders"
+    ).pl()
     assert b_orders.height == 3
     assert b_orders["Quantity"].dtype == pl.Float64
     assert b_orders["Value"].dtype == pl.Float64
@@ -278,7 +282,9 @@ def test_empty_stock_orders_statement_handling(
     )
     assert success is True
 
-    b_orders = isolated_duckdb_manager.conn.query("SELECT * FROM bronze.r_Stock_Transactions").pl()
+    b_orders = isolated_duckdb_manager.conn.query(
+        "SELECT * FROM bronze.investment_stock_orders"
+    ).pl()
     assert b_orders.height == 0
 
     isolated_duckdb_manager.close()
@@ -386,7 +392,7 @@ def test_stock_evidence_idempotent_rerun(
         run_id="run_idempotent_1",
     )
     res1 = isolated_duckdb_manager.conn.query(
-        "SELECT COUNT(*) FROM bronze.r_Stock_Transactions"
+        "SELECT COUNT(*) FROM bronze.investment_stock_orders"
     ).fetchone()
     assert res1 is not None
     count1 = res1[0]
@@ -404,7 +410,7 @@ def test_stock_evidence_idempotent_rerun(
         run_id="run_idempotent_2",
     )
     res2 = isolated_duckdb_manager.conn.query(
-        "SELECT COUNT(*) FROM bronze.r_Stock_Transactions"
+        "SELECT COUNT(*) FROM bronze.investment_stock_orders"
     ).fetchone()
     assert res2 is not None
     count2 = res2[0]

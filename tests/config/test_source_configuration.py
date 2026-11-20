@@ -21,9 +21,9 @@ import pytest
 from pydantic import ValidationError
 
 from personal_finance_etl.application.facade import PersonalFinanceEngine
+from personal_finance_etl.config.capabilities import CapabilitySelection
 from personal_finance_etl.config.sources.loader import (
     CURRENT_SOURCE_CONFIG_SCHEMA_VERSION,
-    CapabilitySelection,
     SourceConfiguration,
     get_shan_baseline_source_configuration,
 )
@@ -45,8 +45,6 @@ def test_source_configuration_baseline_roundtrip(sources_path: Path) -> None:
     assert cfg.schema_version == CURRENT_SOURCE_CONFIG_SCHEMA_VERSION
     assert len(cfg.sources) == 13
     assert len(cfg.datasets) == 17
-    assert cfg.capabilities.enabled is not None
-    assert set(cfg.capabilities.enabled) == set(CapabilityId)
 
     # Test round-trip serialization to TOML string
     toml_str = cfg.to_toml()
@@ -56,7 +54,6 @@ def test_source_configuration_baseline_roundtrip(sources_path: Path) -> None:
     assert reloaded.schema_version == cfg.schema_version
     assert len(reloaded.sources) == len(cfg.sources)
     assert len(reloaded.datasets) == len(cfg.datasets)
-    assert reloaded.capabilities.resolved_capabilities == cfg.capabilities.resolved_capabilities
 
 
 def test_baseline_factory_matches_fixture(sources_path: Path) -> None:

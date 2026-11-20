@@ -20,7 +20,6 @@ from typing import cast
 
 from personal_finance_etl.config.sources import (
     CURRENT_SOURCE_CONFIG_SCHEMA_VERSION,
-    CapabilitySelection,
     ColumnMapping,
     SourceConfig,
     SourceConfigFingerprint,
@@ -34,7 +33,6 @@ from personal_finance_etl.config.sources.normalization import (
     TrimRule,
 )
 from personal_finance_etl.config.sources.selectors import CsvSelector
-from personal_finance_etl.contracts.capabilities import CapabilityId
 from personal_finance_etl.contracts.datasets import DatasetId
 from personal_finance_etl.contracts.sources import ProviderType, SourceId
 
@@ -85,7 +83,6 @@ def test_fingerprint_invariance_to_shuffled_sources() -> None:
 
     shuffled_cfg = SourceConfiguration(
         schema_version=base_cfg.schema_version,
-        capabilities=base_cfg.capabilities,
         sources=tuple(shuffled_sources),
         datasets=base_cfg.datasets,
     )
@@ -106,7 +103,6 @@ def test_fingerprint_invariance_to_shuffled_datasets() -> None:
 
     shuffled_cfg = SourceConfiguration(
         schema_version=base_cfg.schema_version,
-        capabilities=base_cfg.capabilities,
         sources=base_cfg.sources,
         datasets=tuple(shuffled_datasets),
     )
@@ -128,7 +124,6 @@ def test_fingerprint_invariance_to_shuffled_mappings() -> None:
 
     reordered_cfg = SourceConfiguration(
         schema_version=base_cfg.schema_version,
-        capabilities=base_cfg.capabilities,
         sources=base_cfg.sources,
         datasets=tuple(datasets_copy),
     )
@@ -136,24 +131,6 @@ def test_fingerprint_invariance_to_shuffled_mappings() -> None:
 
     assert fp_reordered.content_hash == fp_base.content_hash
     assert fp_reordered.fingerprint == fp_base.fingerprint
-
-
-def test_fingerprint_invariance_to_shuffled_capabilities() -> None:
-    """Verify fingerprint is invariant to the ordering of requested capabilities."""
-    base_cfg = get_shan_baseline_source_configuration()
-    fp_base = compute_source_config_fingerprint(base_cfg)
-
-    reversed_caps = tuple(reversed(list(CapabilityId)))
-    cfg_reversed_caps = SourceConfiguration(
-        schema_version=base_cfg.schema_version,
-        capabilities=CapabilitySelection(enabled=reversed_caps),
-        sources=base_cfg.sources,
-        datasets=base_cfg.datasets,
-    )
-    fp_reversed = compute_source_config_fingerprint(cfg_reversed_caps)
-
-    assert fp_reversed.content_hash == fp_base.content_hash
-    assert fp_reversed.fingerprint == fp_base.fingerprint
 
 
 def test_fingerprint_sensitivity_to_normalization_rule_order() -> None:
@@ -205,7 +182,6 @@ def test_fingerprint_semantic_sensitivity() -> None:
     cfg_mut_source = SourceConfiguration(
         sources=tuple(sources_mut),
         datasets=base_cfg.datasets,
-        capabilities=base_cfg.capabilities,
     )
     assert compute_source_config_fingerprint(cfg_mut_source).content_hash != base_fp.content_hash
 
@@ -216,7 +192,6 @@ def test_fingerprint_semantic_sensitivity() -> None:
     cfg_mut_sel = SourceConfiguration(
         sources=base_cfg.sources,
         datasets=tuple(datasets_mut_sel),
-        capabilities=base_cfg.capabilities,
     )
     assert compute_source_config_fingerprint(cfg_mut_sel).content_hash != base_fp.content_hash
 
@@ -228,14 +203,5 @@ def test_fingerprint_semantic_sensitivity() -> None:
     cfg_mut_map = SourceConfiguration(
         sources=base_cfg.sources,
         datasets=tuple(datasets_mut_map),
-        capabilities=base_cfg.capabilities,
     )
     assert compute_source_config_fingerprint(cfg_mut_map).content_hash != base_fp.content_hash
-
-    # 4. Mutate capabilities
-    cfg_mut_caps = SourceConfiguration(
-        sources=base_cfg.sources,
-        datasets=base_cfg.datasets,
-        capabilities=CapabilitySelection(enabled=(CapabilityId.TAX,)),
-    )
-    assert compute_source_config_fingerprint(cfg_mut_caps).content_hash != base_fp.content_hash

@@ -28,3 +28,7 @@ RETAIN_LAST_N_RUNS = 12
 csv = true
 excel = false
 sqlite = true
+
+[capabilities]
+enabled = ["household_core", "investment_accounting", "benchmark_enrichment", "foreign_asset_enrichment", "tax", "wealth", "fire"]
+

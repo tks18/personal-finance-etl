@@ -199,11 +199,11 @@ def test_clean_rebuild_and_caching_idempotency(
 
     # Verify Bronze tables populated
     db_mgr.open()
-    df_mf = db_mgr.conn.query("SELECT * FROM bronze.r_MF_Transactions").pl()
+    df_mf = db_mgr.conn.query("SELECT * FROM bronze.investment_mf_orders").pl()
     assert df_mf.height > 0
     initial_mf_count = df_mf.height
 
-    df_stocks = db_mgr.conn.query("SELECT * FROM bronze.r_Stock_Transactions").pl()
+    df_stocks = db_mgr.conn.query("SELECT * FROM bronze.investment_stock_orders").pl()
     assert df_stocks.height > 0
     initial_stock_count = df_stocks.height
     db_mgr.close()
@@ -221,10 +221,10 @@ def test_clean_rebuild_and_caching_idempotency(
 
     # Verify zero duplicate rows in Bronze tables
     db_mgr.open()
-    df_mf_rerun = db_mgr.conn.query("SELECT * FROM bronze.r_MF_Transactions").pl()
+    df_mf_rerun = db_mgr.conn.query("SELECT * FROM bronze.investment_mf_orders").pl()
     assert df_mf_rerun.height == initial_mf_count
 
-    df_stocks_rerun = db_mgr.conn.query("SELECT * FROM bronze.r_Stock_Transactions").pl()
+    df_stocks_rerun = db_mgr.conn.query("SELECT * FROM bronze.investment_stock_orders").pl()
     assert df_stocks_rerun.height == initial_stock_count
     db_mgr.close()
 
@@ -337,7 +337,7 @@ def test_pre_bronze_and_bronze_dunder_provenance(
 
     db_mgr.open()
     # Check Pre-Bronze MF Orders table
-    pb_orders = db_mgr.conn.query("SELECT * FROM pre_bronze.pb_investment_mf_orders").pl()
+    pb_orders = db_mgr.conn.query("SELECT * FROM pre_bronze.investment_mf_orders").pl()
     assert pb_orders.height > 0
     assert "__source_id__" in pb_orders.columns
     assert "__dataset_id__" in pb_orders.columns
@@ -348,7 +348,7 @@ def test_pre_bronze_and_bronze_dunder_provenance(
     assert "artifact_id" not in pb_orders.columns
 
     # Check Bronze MF Transactions table
-    b_orders = db_mgr.conn.query("SELECT * FROM bronze.r_MF_Transactions").pl()
+    b_orders = db_mgr.conn.query("SELECT * FROM bronze.investment_mf_orders").pl()
     assert b_orders.height > 0
     assert "artifact_id" in b_orders.columns
     # Bronze must NOT contain Pre-Bronze dunder columns
@@ -395,7 +395,7 @@ def test_changed_artifact_and_rename_matrix(
     orchestrator.run()
 
     db_mgr.open()
-    initial_isin = db_mgr.conn.query("SELECT * FROM bronze.r_MF_ISIN_Mapping").pl()
+    initial_isin = db_mgr.conn.query("SELECT * FROM bronze.investment_mf_isin_mapping").pl()
     assert initial_isin.height == 2
     initial_art_id = initial_isin["artifact_id"][0]
     db_mgr.close()
@@ -423,7 +423,7 @@ def test_changed_artifact_and_rename_matrix(
     orchestrator_mod.run()
 
     db_mgr.open()
-    updated_isin = db_mgr.conn.query("SELECT * FROM bronze.r_MF_ISIN_Mapping").pl()
+    updated_isin = db_mgr.conn.query("SELECT * FROM bronze.investment_mf_isin_mapping").pl()
     # Old rows replaced atomically; new count is 3
     assert updated_isin.height == 3
     new_art_id = updated_isin["artifact_id"][0]
@@ -494,7 +494,7 @@ def test_validation_failure_rejection_gates(
         )
 
     # Assert 0 rows in bronze
-    b_stocks = db_mgr.conn.query("SELECT * FROM bronze.r_Stock_Market_Data").pl()
+    b_stocks = db_mgr.conn.query("SELECT * FROM bronze.market_stock_holdings").pl()
     assert b_stocks.height == 0
 
     cp.close()
@@ -557,7 +557,7 @@ def test_double_commit_crash_recovery(
     orchestrator.run()
 
     db_mgr.open()
-    df_mf = db_mgr.conn.query("SELECT * FROM bronze.r_MF_Transactions").pl()
+    df_mf = db_mgr.conn.query("SELECT * FROM bronze.investment_mf_orders").pl()
     assert df_mf.height > 0
     db_mgr.close()
 
@@ -660,7 +660,7 @@ def test_protected_financial_identity_stability(
 
     db_mgr.open()
     # Check household transaction deterministic UID stability
-    df_tx = db_mgr.conn.query("SELECT * FROM bronze.r_SQLite_InOutcome").pl()
+    df_tx = db_mgr.conn.query("SELECT * FROM bronze.household_inoutcome").pl()
     assert df_tx.height > 0
     tx_uids = df_tx["UID"].to_list()
     assert "TX_001" in tx_uids

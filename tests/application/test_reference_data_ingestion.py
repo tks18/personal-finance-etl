@@ -198,34 +198,42 @@ def test_reference_evidence_end_to_end_vertical_slice_admission(
         assert "artifact_id" in pb_df.columns
 
     # 3. Verify all 5 Bronze tables created with preserved natural grains (no unwanted synthetic UID)
-    b_mf = isolated_duckdb_manager.conn.query("SELECT * FROM bronze.r_MF_ISIN_Mapping").pl()
+    b_mf = isolated_duckdb_manager.conn.query(
+        "SELECT * FROM bronze.investment_mf_isin_mapping"
+    ).pl()
     assert b_mf.height == 2
     assert "INSTRUMENT_NAME" in b_mf.columns
     assert "ISIN" in b_mf.columns
     assert "UID" not in b_mf.columns
     assert set(b_mf["ISIN"]) == {"INF879O01019", "INF769K01018"}
 
-    b_bmap = isolated_duckdb_manager.conn.query("SELECT * FROM bronze.r_Benchmark_Mapping").pl()
+    b_bmap = isolated_duckdb_manager.conn.query(
+        "SELECT * FROM bronze.investment_benchmark_mapping"
+    ).pl()
     assert b_bmap.height == 5
     assert "ISIN" in b_bmap.columns
     assert "Benchmark_ID" in b_bmap.columns
     assert "UID" not in b_bmap.columns
     assert "NIFTY50" in set(b_bmap["Benchmark_ID"])
 
-    b_bmst = isolated_duckdb_manager.conn.query("SELECT * FROM bronze.r_Benchmark_Master").pl()
+    b_bmst = isolated_duckdb_manager.conn.query(
+        "SELECT * FROM bronze.investment_benchmark_master"
+    ).pl()
     assert b_bmst.height == 2
     assert "ID" in b_bmst.columns
     assert "Benchmark_Name" in b_bmst.columns
     assert "UID" not in b_bmst.columns
     assert set(b_bmst["ID"]) == {"NIFTY50", "SENSEX"}
 
-    b_macro = isolated_duckdb_manager.conn.query("SELECT * FROM bronze.r_Macro_Parameters").pl()
+    b_macro = isolated_duckdb_manager.conn.query(
+        "SELECT * FROM bronze.investment_macro_parameters"
+    ).pl()
     assert b_macro.height == 2
     assert "FY" in b_macro.columns
     assert "UID" not in b_macro.columns
     assert set(b_macro["FY"]) == {"2023-24", "2024-25"}
 
-    b_curr = isolated_duckdb_manager.conn.query("SELECT * FROM bronze.r_Currency_Mapping").pl()
+    b_curr = isolated_duckdb_manager.conn.query("SELECT * FROM bronze.market_currency_mapping").pl()
     assert b_curr.height == 2
     assert "UID" in b_curr.columns
     assert "Currency_Code" in b_curr.columns
@@ -522,9 +530,15 @@ def test_reference_evidence_downstream_transformation_parity(
         )
 
     # 1. Build and verify ProviderSymbolRegistry
-    curr_df = isolated_duckdb_manager.conn.query("SELECT * FROM bronze.r_Currency_Mapping").pl()
-    bmst_df = isolated_duckdb_manager.conn.query("SELECT * FROM bronze.r_Benchmark_Master").pl()
-    bmap_df = isolated_duckdb_manager.conn.query("SELECT * FROM bronze.r_Benchmark_Mapping").pl()
+    curr_df = isolated_duckdb_manager.conn.query(
+        "SELECT * FROM bronze.market_currency_mapping"
+    ).pl()
+    bmst_df = isolated_duckdb_manager.conn.query(
+        "SELECT * FROM bronze.investment_benchmark_master"
+    ).pl()
+    bmap_df = isolated_duckdb_manager.conn.query(
+        "SELECT * FROM bronze.investment_benchmark_mapping"
+    ).pl()
 
     registry = build_provider_symbol_registry(
         currency_mapping=curr_df,
@@ -539,7 +553,9 @@ def test_reference_evidence_downstream_transformation_parity(
 
     # 2. Transform Macro Parameters dimension
     macro_lf = (
-        isolated_duckdb_manager.conn.query("SELECT * FROM bronze.r_Macro_Parameters").pl().lazy()
+        isolated_duckdb_manager.conn.query("SELECT * FROM bronze.investment_macro_parameters")
+        .pl()
+        .lazy()
     )
     d_macro = transform_d_macro_parameters(macro_lf).collect()
     assert d_macro.height == 2

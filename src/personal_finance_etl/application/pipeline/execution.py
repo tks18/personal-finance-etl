@@ -238,12 +238,9 @@ class PipelineExecutor:
         self.emitter = emitter or get_global_emitter()
         if plan is not None:
             self.plan = plan
-        elif source_config is not None and source_config.capabilities.enabled is not None:
-            self.plan = CapabilityPlanner().create_plan(
-                requested_capabilities=source_config.capabilities.resolved_capabilities
-            )
         else:
-            self.plan = CapabilityPlanner().create_plan()
+            requested_caps = cfg.capabilities.resolved_capabilities
+            self.plan = CapabilityPlanner().create_plan(requested_capabilities=requested_caps)
         self.dfs: dict[str, pl.DataFrame] = {}
         self.provider_symbols: ProviderSymbolRegistry | None = None
         self.source_config = source_config or get_shan_baseline_source_configuration(settings=cfg)
@@ -1070,12 +1067,12 @@ class PipelineExecutor:
         t_load_start = time.perf_counter()
         self.emitter.emit_event(
             event_code=EventCode.GOLD_REPLACE,
-            message="Phase 5/5 [Gold Marts]: Fully replacing Silver and Gold analytical layers",
+            message="Phase 5/5 [Publication]: Publishing plan-aware Silver and Gold lakehouse layers",
             presentation_kind=PresentationKind.STEP,
             stage=EngineStage.PUBLISHING,
         )
-        SilverLayer(self.db_manager, emitter=self.emitter).load(self.dfs)
-        GoldLayer(self.db_manager, emitter=self.emitter).load(self.dfs)
+        SilverLayer(self.db_manager, emitter=self.emitter).load(self.dfs, plan=self.plan)
+        GoldLayer(self.db_manager, emitter=self.emitter).load(self.dfs, plan=self.plan)
         elapsed_s = time.perf_counter() - t_load_start
         self.emitter.emit_event(
             event_code=EventCode.GOLD_REPLACE,
@@ -1087,7 +1084,7 @@ class PipelineExecutor:
         )
 
         meta_layer = MetaLayer(self.db_manager, self.cfg, self.rules)
-        meta_layer.load(self.dfs, cp=cp)
+        meta_layer.load(self.dfs, cp=cp, plan=self.plan)
 
     def execute_phases(self, cp: ControlPlane, run_id: str) -> None:
         """Execute all five sequential ETL pipeline phases.

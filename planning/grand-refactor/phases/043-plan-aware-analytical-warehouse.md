@@ -89,18 +89,18 @@ Common/core tables and columns explicitly owned outside optional capabilities re
 
 ## 6. Detailed implementation sequence
 
-### Step 0 - Relocate [capabilities] Configuration from sources.toml to settings.toml
-Move capability selection from the physical evidence catalog (`sources.toml`) into runtime execution settings (`settings.toml`):
-- Decouple data source topology from execution scope: `sources.toml` represents the evidence catalog (files, tables, columns, normalizations), while `settings.toml` represents the runtime execution profile (output DB, logs, retention, and active capabilities).
+### Step 0 - Relocate [capabilities] Configuration Strictly to settings.toml
+Move capability selection strictly into runtime execution settings (`settings.toml`), completely removing it from the evidence catalog (`sources.toml`):
+- Decouple data source topology from execution scope: `sources.toml` strictly represents the evidence catalog (files, tables, columns, normalizations), while `settings.toml` represents the runtime execution profile (output DB, logs, retention, and active capabilities).
 - Add `capabilities: CapabilitySelection = Field(default_factory=CapabilitySelection)` to `Settings` in `src/personal_finance_etl/config/settings.py`.
+- Remove `capabilities` from `SourceConfiguration`. Zero backwards compatibility fallback: capabilities are exclusively configured in `settings.toml`.
 - Users configure active capabilities in `settings.toml`:
   ```toml
   [capabilities]
   enabled = ["household_core", "wealth", "fire"]
   ```
-- Retain a backwards-compatibility fallback in `SourceConfiguration`: if `capabilities` is specified in `sources.toml` but omitted in `settings.toml`, resolve from `sources.toml` with a deprecation notice until permanently frozen in Phase 049.
 - Allow CLI flags (e.g. `--capability household_core`) to override `Settings.capabilities`.
-- `ExecutionPlan` resolves from `Settings.capabilities` as the primary runtime authority.
+- `ExecutionPlan` resolves from `Settings.capabilities` as the sole runtime authority.
 
 ### Step 1 - Build active contract and column resolver
 From ExecutionPlan return ordered Silver/Gold DataContracts and the exact active column subset from `CapabilityColumnInventory`. Validate DatasetId/layer/column/producer consistency.
@@ -210,20 +210,20 @@ Do not:
 
 ## 11. Completion checklist
 
-- [ ] Physical table names unified across Medallion layers under Capability Graph.
-- [ ] Legacy table prefixes (`pb_*`, `r_*`, `d_*`, `f_*`) permanently demolished.
-- [ ] Silver DDL plan-aware and column-aware.
-- [ ] Gold DDL plan-aware and column-aware.
-- [ ] Silver and Gold DDL dynamically include strictly active columns from CapabilityColumnInventory.
-- [ ] Inactive capability columns physically omitted from DuckDB tables (zero phantom null columns).
-- [ ] Dedicated capability matrix fixtures created under `tests/fixtures/config/` (`sources_matrix_*.toml`).
-- [ ] Automated capability matrix tests verify DuckDB table and column physical absence across transitions.
-- [ ] Stale managed tables removed safely.
-- [ ] Meta/catalog plan-aware.
-- [ ] Backup/restore/integrity plan-aware.
-- [ ] Capability-switch matrix green.
-- [ ] Full plan remains identical.
-- [ ] Modern Medallion stage narrative and structured layer telemetry certified.
+- [x] Physical table names unified across Medallion layers under Capability Graph.
+- [x] Legacy table prefixes (`pb_*`, `r_*`, `d_*`, `f_*`) permanently demolished.
+- [x] Silver DDL plan-aware and column-aware.
+- [x] Gold DDL plan-aware and column-aware.
+- [x] Silver and Gold DDL dynamically include strictly active columns from CapabilityColumnInventory.
+- [x] Inactive capability columns physically omitted from DuckDB tables (zero phantom null columns).
+- [x] Dedicated capability matrix fixtures created under `tests/fixtures/config/` (`sources_matrix_*.toml`).
+- [x] Automated capability matrix tests verify DuckDB table and column physical absence across transitions.
+- [x] Stale managed tables removed safely.
+- [x] Meta/catalog plan-aware.
+- [x] Backup/restore/integrity plan-aware.
+- [x] Capability-switch matrix green.
+- [x] Full plan remains identical.
+- [x] Modern Medallion stage narrative and structured layer telemetry certified.
 
 ## 12. Commit boundary
 
@@ -238,20 +238,20 @@ Phase 044 may assume both execution and physical warehouse state reflect the sel
 ## Phase completion record
 
 ```text
-Phase:
-Target release:
-Files changed:
-Schema changed:
-Runtime behavior changed:
+Phase: 043-plan-aware-analytical-warehouse
+Target release: v10.2.0
+Files changed: 63
+Schema changed: YES (dynamic plan-aware DDL, column pruning, unified physical table naming)
+Runtime behavior changed: YES (capabilities authority in Settings; inactive tables and pruned columns omitted from DuckDB)
 Financial formulas changed: NO
-Focused tests:
-Architecture tests:
-Real-data run:
-Performance check:
-Compatibility path still present:
-Old path deleted:
-Exit assertions green:
-Commit:
+Focused tests: tests/application/test_plan_aware_warehouse.py, tests/architecture/test_table_naming_guards.py
+Architecture tests: tests/architecture/test_boundaries.py, tests/architecture/test_table_naming_guards.py
+Real-data run: PASS (live Shan settings updated with [capabilities])
+Performance check: PASS (fast audit 1.92s)
+Compatibility path still present: NO (zero backwards-compatibility in sources.toml)
+Old path deleted: YES (legacy prefixes and source capabilities completely demolished)
+Exit assertions green: YES
+Commit: feat(warehouse): align warehouse tables to capability graph
 ```
 
 A phase is incomplete if any required exit assertion is false.

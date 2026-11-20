@@ -19,9 +19,9 @@ Owns
   - Verification of broker quantities, reconstructed quantities, and net quantity adjustments.
   - Deterministic RECON_GROUP and RECON_EVENT IDs.
 - Deep domain verification of Gold investment summary marts:
-  - gold.Investment_By_ISIN position aggregation.
-  - gold.Investment_By_Instrument_Type asset allocation breakdown (Equity vs Mutual Fund).
-  - gold.Investment_By_Portfolio consolidated portfolio valuation.
+  - gold.investment_by_isin position aggregation.
+  - gold.investment_by_instrument_type asset allocation breakdown (Equity vs Mutual Fund).
+  - gold.investment_by_portfolio consolidated portfolio valuation.
 
 Does not own
 -------------
@@ -201,7 +201,7 @@ def test_silver_investment_lots_deterministic_fifo(
     try:
         df_lots: pl.DataFrame = db.conn.query(
             "SELECT Lot_ID, Closing_Date, ISIN, Quantity, Buy_Price, Close_Value, Holding_Type, "
-            "Lot_Source_Type, Purchase_ID FROM silver.f_Investment_Analytics_Lot "
+            "Lot_Source_Type, Purchase_ID FROM silver.investment_lot_analytics "
             "ORDER BY Lot_ID"
         ).pl()
 
@@ -270,7 +270,7 @@ def test_silver_realized_events_capital_gains(
         df_realized: pl.DataFrame = db.conn.query(
             "SELECT Realized_Event_ID, Sale_ID, Lot_ID, ISIN, Acquisition_Date, Disposal_Date, "
             "Quantity_Disposed, Acquisition_Price, Sale_Price, Realized_Gain_Loss, Holding_Type "
-            "FROM silver.f_Investment_Realized_Events ORDER BY Realized_Event_ID"
+            "FROM silver.investment_realized_events ORDER BY Realized_Event_ID"
         ).pl()
 
         # Exactly 2 realized disposal events in static statement evidence
@@ -311,7 +311,7 @@ def test_silver_reconciliation_events_discrepancy_detection(
         df_recon: pl.DataFrame = db.conn.query(
             "SELECT Reconciliation_Group_ID, Reconciliation_Event_ID, ISIN, Reconciliation_Date, "
             "Broker_Quantity, Reconstructed_Quantity, Quantity_Adjustment "
-            "FROM silver.f_Investment_Reconciliation_Events ORDER BY Reconciliation_Event_ID"
+            "FROM silver.investment_reconciliation_events ORDER BY Reconciliation_Event_ID"
         ).pl()
 
         # All IDs must conform to deterministic byte-stable format
@@ -358,10 +358,10 @@ def test_gold_investment_summary_marts(
     """Verify Gold investment analytics marts aggregate position totals and asset allocation."""
     _settings, db = _run_composed_pipeline(tmp_path, rules)
     try:
-        # 1. gold.Investment_By_ISIN
+        # 1. gold.investment_by_isin
         df_isin: pl.DataFrame = db.conn.query(
             "SELECT ISIN, Total_Quantity, Total_Invested_Value, Total_Current_Value, Unrealized_PL "
-            "FROM gold.Investment_By_ISIN ORDER BY ISIN"
+            "FROM gold.investment_by_isin ORDER BY ISIN"
         ).pl()
 
         assert df_isin.height == 4
@@ -376,16 +376,16 @@ def test_gold_investment_summary_marts(
         # Sum of current values across all ISINs must match total lot Close_Value exactly
         tot_isin_mv = float(df_isin.select(pl.col("Total_Current_Value").sum()).item())
         lot_close_row = db.conn.query(
-            "SELECT SUM(Close_Value) FROM silver.f_Investment_Analytics_Lot"
+            "SELECT SUM(Close_Value) FROM silver.investment_lot_analytics"
         ).fetchone()
         assert lot_close_row is not None
         lot_close_val = float(lot_close_row[0])
         assert abs(tot_isin_mv - lot_close_val) < 1e-4
 
-        # 2. gold.Investment_By_Instrument_Type asset allocation breakdown
+        # 2. gold.investment_by_instrument_type asset allocation breakdown
         df_type: pl.DataFrame = db.conn.query(
             "SELECT INSTRUMENT_TYPE, Total_Current_Value, Weight "
-            "FROM gold.Investment_By_Instrument_Type ORDER BY INSTRUMENT_TYPE"
+            "FROM gold.investment_by_instrument_type ORDER BY INSTRUMENT_TYPE"
         ).pl()
 
         assert df_type.height == 1
@@ -396,10 +396,10 @@ def test_gold_investment_summary_marts(
         tot_weight = float(df_type.select(pl.col("Weight").sum()).item())
         assert abs(tot_weight - 1.0) < 1e-4
 
-        # 3. gold.Investment_By_Subtype asset breakdown
+        # 3. gold.investment_by_subtype asset breakdown
         df_sub: pl.DataFrame = db.conn.query(
             "SELECT INSTRUMENT_SUBTYPE, Total_Current_Value, Weight "
-            "FROM gold.Investment_By_Subtype ORDER BY INSTRUMENT_SUBTYPE"
+            "FROM gold.investment_by_subtype ORDER BY INSTRUMENT_SUBTYPE"
         ).pl()
 
         assert df_sub.height == 3
@@ -411,9 +411,9 @@ def test_gold_investment_summary_marts(
             < 1e-4
         )
 
-        # 4. gold.Investment_By_Portfolio
+        # 4. gold.investment_by_portfolio
         df_port: pl.DataFrame = db.conn.query(
-            "SELECT Total_Current_Value, Weight FROM gold.Investment_By_Portfolio"
+            "SELECT Total_Current_Value, Weight FROM gold.investment_by_portfolio"
         ).pl()
         assert df_port.height >= 1
         port_mv = float(df_port.select("Total_Current_Value").item())

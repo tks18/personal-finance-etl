@@ -76,7 +76,16 @@ Three independent configurations satisfy the same canonical household contracts.
 - different table names from Shan;
 - configured selectors;
 - stable source IDs preserved;
-- no hard-coded `zcategory`/legacy table-name dependency.
+- no hard-coded `zcategory`/legacy table-name dependency;
+- Single-Source Divergence: certifies that a single SQLite container cleanly fans out into multiple distinct Bronze datasets (`household_transactions`, `household_categories`, `household_assets`) via typed table selectors.
+
+### Multi-Source Convergence & Row-Level Divergence Certification
+1. **Multi-Source Convergence (Unioning):**
+   - Certifies that when an external user provides separate evidence files or sheets (e.g. an Excel workbook with sheet `Income_Categories` and sheet `Expense_Categories`), PFETL normalizes and unions them into a single canonical `bronze.household_categories` evidence dataset using declarative constant injection (`transforms: { TYPE = 0 }` vs `transforms: { TYPE = 1 }`).
+2. **Single-Source Divergence (Semantic Fan-Out):**
+   - Certifies that when an external user provides a combined evidence table (such as Shan's monolithic category table or a unified cashflow log), Bronze ingests the complete evidence stream intact, and Silver's transformation contracts deterministically fan out the records into the 4 distinct Silver dimensions (`silver.wealth_income_category`, `silver.wealth_income_subcategory`, `silver.wealth_expense_category`, `silver.wealth_expense_subcategory`) without loss of financial meaning.
+3. **Inline Category Synthesis:**
+   - Certifies that when an external user provides a transaction log without an accompanying category master (e.g. a flat CSV with `Category` and `Subcategory` text columns), `SourcePlanner` dynamically synthesizes canonical category dimensions on the fly.
 
 All run:
 ```text

@@ -1,8 +1,4 @@
 schema_version = "1.0.0"
-
-[capabilities]
-enabled = ["household_core", "investment_accounting", "benchmark_enrichment", "foreign_asset_enrichment", "tax", "wealth", "fire"]
-
 [[sources]]
 source_id = "household_db"
 provider_type = "sqlite"

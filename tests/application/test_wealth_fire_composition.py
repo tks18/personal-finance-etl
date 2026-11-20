@@ -32,6 +32,7 @@ from personal_finance_etl.application.pipeline.execution import PipelineExecutor
 from personal_finance_etl.application.pipeline.planner import CapabilityPlanner
 from personal_finance_etl.application.pipeline.source_planner import SourcePlanner
 from personal_finance_etl.application.wealth import WealthService
+from personal_finance_etl.config.capabilities import CapabilitySelection
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
 from personal_finance_etl.config.sources.loader import SourceConfiguration
@@ -355,7 +356,7 @@ def test_source_planner_with_declarative_fixtures() -> None:
 
     # 1. Household only
     src_cfg_hh = SourceConfiguration.from_toml(fixtures_dir / "sources_household_only.toml")
-    plan_hh = cap_planner.create_plan(src_cfg_hh.capabilities.enabled)
+    plan_hh = cap_planner.create_plan([CapabilityId.HOUSEHOLD_CORE])
     planner_hh = SourcePlanner(src_cfg_hh, plan_hh)
     compiled_hh = planner_hh.compile_plan()
     assert plan_hh.active_capabilities == (CapabilityId.HOUSEHOLD_CORE,)
@@ -364,7 +365,7 @@ def test_source_planner_with_declarative_fixtures() -> None:
 
     # 2. Household + Wealth
     src_cfg_wealth = SourceConfiguration.from_toml(fixtures_dir / "sources_household_wealth.toml")
-    plan_wealth = cap_planner.create_plan(src_cfg_wealth.capabilities.enabled)
+    plan_wealth = cap_planner.create_plan([CapabilityId.HOUSEHOLD_CORE, CapabilityId.WEALTH])
     planner_wealth = SourcePlanner(src_cfg_wealth, plan_wealth)
     compiled_wealth = planner_wealth.compile_plan()
     assert plan_wealth.active_capabilities == (
@@ -378,7 +379,9 @@ def test_source_planner_with_declarative_fixtures() -> None:
     src_cfg_fire = SourceConfiguration.from_toml(
         fixtures_dir / "sources_household_wealth_fire.toml"
     )
-    plan_fire = cap_planner.create_plan(src_cfg_fire.capabilities.enabled)
+    plan_fire = cap_planner.create_plan(
+        [CapabilityId.HOUSEHOLD_CORE, CapabilityId.WEALTH, CapabilityId.FIRE]
+    )
     planner_fire = SourcePlanner(src_cfg_fire, plan_fire)
     compiled_fire = planner_fire.compile_plan()
     assert plan_fire.active_capabilities == (
@@ -441,11 +444,22 @@ def _setup_isolated_fixture_env(
 
     isolated_cfg = base_cfg.model_copy(update={"sources": tuple(updated_sources)})
 
+    active_caps: tuple[CapabilityId, ...]
+    if "household_only" in fixture_filename:
+        active_caps = (CapabilityId.HOUSEHOLD_CORE,)
+    elif "household_wealth_fire" in fixture_filename:
+        active_caps = (CapabilityId.HOUSEHOLD_CORE, CapabilityId.WEALTH, CapabilityId.FIRE)
+    elif "household_wealth" in fixture_filename:
+        active_caps = (CapabilityId.HOUSEHOLD_CORE, CapabilityId.WEALTH)
+    else:
+        active_caps = tuple(CapabilityId)
+
     settings = Settings(
         TARGET_DB_BASE_PATH=str(outputs_dir),
         TARGET_DB_NAME="test_warehouse.duckdb",
         RAW_DOCUMENT_STORE_NAME="test_cp.sqlite",
         DISABLE_FILE_DISCOVERER=False,
+        capabilities=CapabilitySelection(enabled=active_caps),
     )
     return settings, isolated_cfg
 
@@ -456,7 +470,7 @@ def test_end_to_end_household_only_fixture_analytical_assertions(
 ) -> None:
     """Verify end-to-end execution of sources_household_only.toml asserts DuckDB and SQLite outputs."""
     settings, cfg = _setup_isolated_fixture_env(tmp_path, "sources_household_only.toml")
-    plan = CapabilityPlanner().create_plan(cfg.capabilities.enabled)
+    plan = CapabilityPlanner().create_plan(settings.capabilities.enabled)
 
     orchestrator = ETLOrchestrator(
         cfg=settings,
@@ -473,12 +487,12 @@ def test_end_to_end_household_only_fixture_analytical_assertions(
     db.open()
 
     for mart in [
-        "gold.Cashflow_Expense_Breakdown",
-        "gold.Cashflow_Income_Breakdown",
-        "gold.Forecast_Budget_Variance",
-        "gold.Cashflow_Efficiency_Analytics",
-        "gold.Cashflow_Activity_Summary",
-        "gold.Core_Monthly_Fact",
+        "gold.wealth_cashflow_expense_breakdown",
+        "gold.wealth_cashflow_income_breakdown",
+        "gold.wealth_budget_variance",
+        "gold.wealth_cashflow_efficiency",
+        "gold.wealth_cashflow_activity_summary",
+        "gold.wealth_core_monthly",
     ]:
         row_cnt = db.conn.query(f"SELECT COUNT(*) FROM {mart}").fetchone()
         assert row_cnt is not None and row_cnt[0] > 0, f"{mart} should be populated"
@@ -486,11 +500,8 @@ def test_end_to_end_household_only_fixture_analytical_assertions(
     core_fact = db.conn.query(
         """
         SELECT 
-            Total_Income, Total_Expense, Net_Cashflow_Month, Total_Net_Worth,
-            Total_Assets_Market, Total_Net_Worth_Market, Opening_Balance_Asset_Market,
-            Closing_Investment_Book_Value, Closing_Investment_Market_Value,
-            Total_Foreign_Currency_Exposure
-        FROM gold.Core_Monthly_Fact LIMIT 1
+            Total_Income, Total_Expense, Net_Cashflow_Month, Total_Net_Worth
+        FROM gold.wealth_core_monthly LIMIT 1
         """
     ).fetchone()
     assert core_fact is not None
@@ -498,18 +509,24 @@ def test_end_to_end_household_only_fixture_analytical_assertions(
     assert core_fact[1] is not None
     assert core_fact[2] is not None
     assert core_fact[3] is not None
-    assert core_fact[4] is None
-    assert core_fact[5] is None
-    assert core_fact[6] is None
-    assert core_fact[7] is None
-    assert core_fact[8] is None
-    assert core_fact[9] is None
 
-    wb_cnt = db.conn.query("SELECT COUNT(*) FROM gold.Wealth_Asset_Breakdown").fetchone()
-    assert wb_cnt is not None and wb_cnt[0] == 0
+    # Pruned columns are physically absent from table DDL
+    fact_cols = {
+        row[1] for row in db.conn.query("PRAGMA table_info('gold.wealth_core_monthly')").fetchall()
+    }
+    assert "Total_Assets_Market" not in fact_cols
+    assert "Closing_Investment_Book_Value" not in fact_cols
+    assert "Total_Foreign_Currency_Exposure" not in fact_cols
 
-    fire_cnt = db.conn.query("SELECT COUNT(*) FROM gold.Wealth_FIRE_Analytics").fetchone()
-    assert fire_cnt is not None and fire_cnt[0] == 0
+    # Disabled capability tables do NOT exist in DuckDB
+    tables_in_gold = {
+        row[0]
+        for row in db.conn.query(
+            "SELECT table_name FROM information_schema.tables WHERE table_schema = 'gold'"
+        ).fetchall()
+    }
+    assert "wealth_asset_breakdown" not in tables_in_gold
+    assert "fire_analytics" not in tables_in_gold
 
     db.close()
 
@@ -535,7 +552,7 @@ def test_end_to_end_household_wealth_fixture_analytical_assertions(
 ) -> None:
     """Verify end-to-end execution of sources_household_wealth.toml asserts DuckDB and SQLite outputs."""
     settings, cfg = _setup_isolated_fixture_env(tmp_path, "sources_household_wealth.toml")
-    plan = CapabilityPlanner().create_plan(cfg.capabilities.enabled)
+    plan = CapabilityPlanner().create_plan(settings.capabilities.enabled)
 
     orchestrator = ETLOrchestrator(
         cfg=settings,
@@ -551,33 +568,38 @@ def test_end_to_end_household_wealth_fixture_analytical_assertions(
     db = DuckDBManager(settings.TARGET_DB_BASE_PATH, settings.TARGET_DB_NAME)
     db.open()
 
-    wb_cnt = db.conn.query("SELECT COUNT(*) FROM gold.Wealth_Asset_Breakdown").fetchone()
+    wb_cnt = db.conn.query("SELECT COUNT(*) FROM gold.wealth_asset_breakdown").fetchone()
     assert wb_cnt is not None and wb_cnt[0] > 0
 
     core_fact = db.conn.query(
         """
         SELECT 
-            Total_Net_Worth, Total_Net_Worth_Market, Total_Assets_Market,
-            Closing_Investment_Book_Value, Closing_Investment_Market_Value,
-            Total_Foreign_Currency_Exposure
-        FROM gold.Core_Monthly_Fact LIMIT 1
+            Total_Net_Worth, Total_Net_Worth_Market, Total_Assets_Market
+        FROM gold.wealth_core_monthly LIMIT 1
         """
     ).fetchone()
     assert core_fact is not None
     assert core_fact[0] is not None
     assert core_fact[1] is not None
     assert core_fact[2] is not None
-    assert core_fact[3] is None
-    assert core_fact[4] is None
-    assert core_fact[5] is None
+
+    fact_cols = {
+        row[1] for row in db.conn.query("PRAGMA table_info('gold.wealth_core_monthly')").fetchall()
+    }
+    assert "Closing_Investment_Book_Value" not in fact_cols
+    assert "Total_Foreign_Currency_Exposure" not in fact_cols
+
+    fire_cols = {
+        row[1] for row in db.conn.query("PRAGMA table_info('gold.fire_analytics')").fetchall()
+    }
+    assert "Months_To_FI_Base_P50" not in fire_cols
+    assert "Probability_Of_Success_Pct" not in fire_cols
 
     fire_row = db.conn.query(
         """
         SELECT 
-            Target_FI_Today, Coast_FI_Today, Lean_FI_Today, FI_Gap, Runway_Months_Linear,
-            Months_To_FI_Base_P50, Probability_Of_Success_Pct, Years_To_FI_P50,
-            Runway_Months_Base_P50, Terminal_Wealth_Nominal_P50, Target_FI_Total_Future_Nominal
-        FROM gold.Wealth_FIRE_Analytics LIMIT 1
+            Target_FI_Today, Coast_FI_Today, Lean_FI_Today, FI_Gap, Runway_Months_Linear
+        FROM gold.fire_analytics LIMIT 1
         """
     ).fetchone()
     assert fire_row is not None
@@ -586,12 +608,6 @@ def test_end_to_end_household_wealth_fixture_analytical_assertions(
     assert fire_row[2] is not None
     assert fire_row[3] is not None
     assert fire_row[4] is not None
-    assert fire_row[5] is None
-    assert fire_row[6] is None
-    assert fire_row[7] is None
-    assert fire_row[8] is None
-    assert fire_row[9] is None
-    assert fire_row[10] is None
 
     db.close()
 
@@ -615,7 +631,7 @@ def test_end_to_end_household_wealth_fire_fixture_analytical_assertions(
 ) -> None:
     """Verify end-to-end execution of sources_household_wealth_fire.toml asserts DuckDB and SQLite outputs."""
     settings, cfg = _setup_isolated_fixture_env(tmp_path, "sources_household_wealth_fire.toml")
-    plan = CapabilityPlanner().create_plan(cfg.capabilities.enabled)
+    plan = CapabilityPlanner().create_plan(settings.capabilities.enabled)
 
     orchestrator = ETLOrchestrator(
         cfg=settings,
@@ -631,7 +647,7 @@ def test_end_to_end_household_wealth_fire_fixture_analytical_assertions(
     db = DuckDBManager(settings.TARGET_DB_BASE_PATH, settings.TARGET_DB_NAME)
     db.open()
 
-    wb_cnt = db.conn.query("SELECT COUNT(*) FROM gold.Wealth_Asset_Breakdown").fetchone()
+    wb_cnt = db.conn.query("SELECT COUNT(*) FROM gold.wealth_asset_breakdown").fetchone()
     assert wb_cnt is not None and wb_cnt[0] > 0
 
     fire_row = db.conn.query(
@@ -640,7 +656,7 @@ def test_end_to_end_household_wealth_fire_fixture_analytical_assertions(
             Target_FI_Today, Coast_FI_Today, Lean_FI_Today, FI_Gap,
             Months_To_FI_Base_P50, Probability_Of_Success_Pct, Years_To_FI_P50,
             Runway_Months_Base_P50, Terminal_Wealth_Nominal_P50, Target_FI_Total_Future_Nominal
-        FROM gold.Wealth_FIRE_Analytics ORDER BY MONTH_START_DATE DESC LIMIT 1
+        FROM gold.fire_analytics ORDER BY MONTH_START_DATE DESC LIMIT 1
         """
     ).fetchone()
     assert fire_row is not None

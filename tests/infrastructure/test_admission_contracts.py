@@ -96,7 +96,7 @@ def test_exact_legacy_route_documented() -> None:
         -> category: 'zcategory'
         -> provider: SQLite (table ZCATEGORY)
         -> DatasetCollection keyed by DatasetId.HOUSEHOLD_ZCATEGORY
-        -> Bronze table: bronze.r_SQLite_ZCategory
+        -> Bronze table: bronze.household_zcategory
         -> downstream consumer: transform_d_income_category in domain.household.transforms
     """
     # 1. DatasetId exists and is represented in DatasetCollection
@@ -107,7 +107,7 @@ def test_exact_legacy_route_documented() -> None:
     # 2. Bronze contract anchors
     contract = _get_bronze_contract(DatasetId.HOUSEHOLD_ZCATEGORY)
     assert contract.sync_category == "sqlite_source"
-    assert contract.physical_table == "bronze.r_SQLite_ZCategory"
+    assert contract.physical_table == "bronze.household_zcategory"
     assert contract.is_full_replace is True
 
     # 3. Baseline source configuration binding

@@ -81,7 +81,7 @@ def test_registry_lookup_by_dataset_id() -> None:
     b_contract = get_bronze_contract_by_dataset_id(DatasetId.HOUSEHOLD_ZCATEGORY)
     assert b_contract is not None
     assert b_contract.sync_category == "sqlite_source"
-    assert b_contract.physical_table == "bronze.r_SQLite_ZCategory"
+    assert b_contract.physical_table == "bronze.household_zcategory"
 
     # String lookup equivalence
     b_contract_str = get_bronze_contract_by_dataset_id("household_zcategory")
@@ -91,7 +91,7 @@ def test_registry_lookup_by_dataset_id() -> None:
     s_contract = get_contract_by_dataset_id(DatasetId.COMMON_CALENDAR)
     assert s_contract is not None
     assert s_contract.contract_id == "df_d_calendar"
-    assert s_contract.physical_table == "silver.d_Calendar"
+    assert s_contract.physical_table == "silver.common_calendar"
 
     s_contract_str = get_contract_by_dataset_id("common_calendar")
     assert s_contract_str is s_contract
@@ -100,7 +100,7 @@ def test_registry_lookup_by_dataset_id() -> None:
     g_contract = get_contract_by_dataset_id(DatasetId.TAX_YEAR_SUMMARY)
     assert g_contract is not None
     assert g_contract.contract_id == "df_p_tax_year_summary"
-    assert g_contract.physical_table == "gold.Tax_Year_Summary"
+    assert g_contract.physical_table == "gold.tax_year_summary"
 
     # Non-existent lookup
     assert get_bronze_contract_by_dataset_id("non_existent_id") is None
@@ -110,32 +110,32 @@ def test_registry_lookup_by_dataset_id() -> None:
 def test_legacy_key_and_physical_table_immutability() -> None:
     """Assert byte-for-byte stability of legacy physical tables, contract_ids, and extraction attributes."""
     expected_bronze_tables = {
-        "bronze.r_SQLite_ZCategory",
-        "bronze.r_SQLite_AssetGroup",
-        "bronze.r_SQLite_Assets",
-        "bronze.r_SQLite_Currency",
-        "bronze.r_SQLite_InOutcome",
-        "bronze.r_MF_ISIN_Mapping",
-        "bronze.r_Benchmark_Mapping",
-        "bronze.r_Opening_Balances",
-        "bronze.r_Benchmark_Master",
-        "bronze.r_Macro_Parameters",
-        "bronze.r_Column_Master",
-        "bronze.r_MF_Market_Data",
-        "bronze.r_US_Stock_Transactions",
-        "bronze.r_Currency_Mapping",
-        "bronze.r_Currency_FX_Data",
-        "bronze.r_MF_Transactions",
-        "bronze.r_Stock_Market_Data",
-        "bronze.r_Stock_Transactions",
-        "bronze.r_Benchmark_Data",
-        "bronze.r_US_Stock_Prices",
+        "bronze.household_zcategory",
+        "bronze.household_asset_group",
+        "bronze.household_assets",
+        "bronze.household_currency",
+        "bronze.household_inoutcome",
+        "bronze.investment_mf_isin_mapping",
+        "bronze.investment_benchmark_mapping",
+        "bronze.household_opening_balances",
+        "bronze.investment_benchmark_master",
+        "bronze.investment_macro_parameters",
+        "bronze.common_column_master",
+        "bronze.market_mf_holdings",
+        "bronze.investment_us_stock_transactions",
+        "bronze.market_currency_mapping",
+        "bronze.market_currency_fx_rates",
+        "bronze.investment_mf_orders",
+        "bronze.market_stock_holdings",
+        "bronze.investment_stock_orders",
+        "bronze.market_benchmark_history",
+        "bronze.market_us_stock_prices",
     }
     actual_bronze_tables = {c.physical_table for c in BRONZE_CONTRACT_REGISTRY}
     assert actual_bronze_tables == expected_bronze_tables
 
     # Legacy get_contract_by_table remains functional
-    cal_contract = get_contract_by_table("silver.d_Calendar")
+    cal_contract = get_contract_by_table("silver.common_calendar")
     assert cal_contract is not None
     assert cal_contract.dataset_id == DatasetId.COMMON_CALENDAR
 
@@ -154,7 +154,7 @@ def test_validate_registry_rejects_duplicate_bronze_dataset_id(
     corrupted_bronze.append(
         BronzeDataContract(
             dataset_id=DatasetId.HOUSEHOLD_ZCATEGORY,
-            physical_table="bronze.r_SQLite_ZCategory_Dup",
+            physical_table="bronze.household_zcategory_Dup",
             is_full_replace=True,
             identity_requirement=IdentityRequirement.REQUIRED,
             grain="Household Category (Z_PK)",
@@ -179,7 +179,7 @@ def test_validate_registry_rejects_duplicate_analytical_dataset_id(
             DatasetId.COMMON_CALENDAR,
             "df_d_calendar_dup",
             "silver",
-            "silver.d_Calendar_Dup",
+            "silver.common_calendar_Dup",
             "Common",
             "Day",
             "CoreEngine",
@@ -199,7 +199,7 @@ def test_fingerprint_incorporates_dataset_id() -> None:
     meta1 = [
         {
             "dataset_id": "common_calendar",
-            "table_name": "silver.d_Calendar",
+            "table_name": "silver.common_calendar",
             "grain": "Day",
             "producer": "CoreEngine",
         },
@@ -207,7 +207,7 @@ def test_fingerprint_incorporates_dataset_id() -> None:
     meta2 = [
         {
             "dataset_id": "different_dataset",
-            "table_name": "silver.d_Calendar",
+            "table_name": "silver.common_calendar",
             "grain": "Day",
             "producer": "CoreEngine",
         },

@@ -197,7 +197,7 @@ def test_mutual_fund_end_to_end_vertical_slice_admission(
         assert "artifact_id" not in pb_df.columns
 
     # 3. Verify Bronze tables created with NO synthetic row UIDs (IdentityRequirement.NONE)
-    b_holdings = isolated_duckdb_manager.conn.query("SELECT * FROM bronze.r_MF_Market_Data").pl()
+    b_holdings = isolated_duckdb_manager.conn.query("SELECT * FROM bronze.market_mf_holdings").pl()
     assert b_holdings.height == 2
     assert "Scheme Name" in b_holdings.columns
     assert "Units" in b_holdings.columns
@@ -206,7 +206,7 @@ def test_mutual_fund_end_to_end_vertical_slice_admission(
     assert "UID" not in b_holdings.columns  # No artificial UID!
     assert b_holdings["Month Date"][0] == date(2024, 3, 31)
 
-    b_orders = isolated_duckdb_manager.conn.query("SELECT * FROM bronze.r_MF_Transactions").pl()
+    b_orders = isolated_duckdb_manager.conn.query("SELECT * FROM bronze.investment_mf_orders").pl()
     assert b_orders.height == 2
     assert "Scheme Name" in b_orders.columns
     assert "Transaction Type" in b_orders.columns
@@ -356,11 +356,11 @@ def test_mutual_fund_idempotent_rerun(
         )
 
     res_h1 = isolated_duckdb_manager.conn.query(
-        "SELECT COUNT(*) FROM bronze.r_MF_Market_Data"
+        "SELECT COUNT(*) FROM bronze.market_mf_holdings"
     ).fetchone()
     assert res_h1 is not None
     res_o1 = isolated_duckdb_manager.conn.query(
-        "SELECT COUNT(*) FROM bronze.r_MF_Transactions"
+        "SELECT COUNT(*) FROM bronze.investment_mf_orders"
     ).fetchone()
     assert res_o1 is not None
     counts_after_first: dict[str, int] = {
@@ -384,11 +384,11 @@ def test_mutual_fund_idempotent_rerun(
         )
 
     res_h2 = isolated_duckdb_manager.conn.query(
-        "SELECT COUNT(*) FROM bronze.r_MF_Market_Data"
+        "SELECT COUNT(*) FROM bronze.market_mf_holdings"
     ).fetchone()
     assert res_h2 is not None
     res_o2 = isolated_duckdb_manager.conn.query(
-        "SELECT COUNT(*) FROM bronze.r_MF_Transactions"
+        "SELECT COUNT(*) FROM bronze.investment_mf_orders"
     ).fetchone()
     assert res_o2 is not None
     counts_after_second: dict[str, int] = {
@@ -466,18 +466,20 @@ def test_mutual_fund_downstream_transformation_and_identity_parity(
     isolated_duckdb_manager.conn.execute("CREATE SCHEMA IF NOT EXISTS bronze")
     isolated_duckdb_manager.conn.register("_temp_isin", isin_df)
     isolated_duckdb_manager.conn.execute(
-        "CREATE OR REPLACE TABLE bronze.r_MF_ISIN_Mapping AS SELECT * FROM _temp_isin"
+        "CREATE OR REPLACE TABLE bronze.investment_mf_isin_mapping AS SELECT * FROM _temp_isin"
     )
 
     # Query Bronze frames for MutualFundStrategy
     bronze_holdings = (
-        isolated_duckdb_manager.conn.query("SELECT * FROM bronze.r_MF_Market_Data").pl().lazy()
+        isolated_duckdb_manager.conn.query("SELECT * FROM bronze.market_mf_holdings").pl().lazy()
     )
     bronze_orders = (
-        isolated_duckdb_manager.conn.query("SELECT * FROM bronze.r_MF_Transactions").pl().lazy()
+        isolated_duckdb_manager.conn.query("SELECT * FROM bronze.investment_mf_orders").pl().lazy()
     )
     bronze_isin = (
-        isolated_duckdb_manager.conn.query("SELECT * FROM bronze.r_MF_ISIN_Mapping").pl().lazy()
+        isolated_duckdb_manager.conn.query("SELECT * FROM bronze.investment_mf_isin_mapping")
+        .pl()
+        .lazy()
     )
 
     collection = DatasetCollection(

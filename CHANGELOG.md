@@ -2,6 +2,38 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [10.2.0](https://github.com/tks18/personal-finance-etl/compare/10.1.3...10.2.0) (2026-11-20)
+
+
+### Code Refactoring 🖌
+
+* **config:** relocate capability selection authority to settings ([51ce2aa](https://github.com/tks18/personal-finance-etl/commit/51ce2aa4ec0a38bd1689b9f9df02e8d857ad119c))
+* **warehouse:** unify lakehouse physical table naming across layers ([9fa6f07](https://github.com/tks18/personal-finance-etl/commit/9fa6f07e1a5ad7724fe6f00b8ccd2ad1c765db86))
+
+
+### Features 🔥
+
+* **pipeline:** prune stale managed tables in reverse publication order ([b2778f2](https://github.com/tks18/personal-finance-etl/commit/b2778f2f79e55232f2a6cf56fb8964e41e191dbb))
+* **warehouse:** generate plan-aware ddl for bronze silver and gold ([02e9e9a](https://github.com/tks18/personal-finance-etl/commit/02e9e9a9c433bc8eedd0c9c3d413025e9f37774a))
+* **warehouse:** implement column pruning and projection safeguards ([7b418ee](https://github.com/tks18/personal-finance-etl/commit/7b418ee14b879b1efe5d4d4035a499042e9acec8))
+
+
+### Tests 🧪
+
+* **application:** update integration suites for unified table naming ([c7ba3ee](https://github.com/tks18/personal-finance-etl/commit/c7ba3eed71636ef89ab5e0091421f4efdf81f6f2))
+* **architecture:** enforce table naming guards across warehouse catalog ([c1e0b6a](https://github.com/tks18/personal-finance-etl/commit/c1e0b6af52e048087b4f6e611b8a54869657135a))
+* **config:** update source loader and configuration test suites ([0e49425](https://github.com/tks18/personal-finance-etl/commit/0e494251cf10d2d505fc41c3bc5d50c7fe05f4b7))
+* **contracts:** update semantic inventory and domain table assertions ([794d934](https://github.com/tks18/personal-finance-etl/commit/794d9347c9cf81f0b9aa4347bdf89b60c3aab3fb))
+* **fixtures:** add dedicated capability matrix fixtures ([4dab0f1](https://github.com/tks18/personal-finance-etl/commit/4dab0f1874defdc7fcca72f96c52cc4365f82af0))
+* **infrastructure:** update warehouse and bronze schema test suites ([26d31fb](https://github.com/tks18/personal-finance-etl/commit/26d31fbe90cdf952f2baf1f8fdd08991ed1a0b71))
+* **warehouse:** add plan-aware warehouse lifecycle integration suite ([da6d78c](https://github.com/tks18/personal-finance-etl/commit/da6d78cfee086b381da3bfc92429e04a60e1a4e3))
+
+
+### Docs 📃
+
+* **refactor:** complete phase 043 plan-aware analytical warehouse ([c794f01](https://github.com/tks18/personal-finance-etl/commit/c794f0119431ce947dff2afeeb8105a861588430))
+* **refactor:** update grand refactor phase 043 completion checklist ([11cb30d](https://github.com/tks18/personal-finance-etl/commit/11cb30d89572335a9e830e355ab6d41608c4bccd))
+
 ### [10.1.3](https://github.com/tks18/personal-finance-etl/compare/10.1.2...10.1.3) (2026-11-20)
 
 

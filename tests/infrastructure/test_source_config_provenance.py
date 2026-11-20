@@ -11,6 +11,7 @@ Verifies:
 
 from __future__ import annotations
 
+import copy
 import sqlite3
 from pathlib import Path
 
@@ -21,11 +22,9 @@ from personal_finance_etl.config.sources.fingerprint import (
 )
 from personal_finance_etl.config.sources.loader import (
     CURRENT_SOURCE_CONFIG_SCHEMA_VERSION,
-    CapabilitySelection,
     SourceConfiguration,
     get_shan_baseline_source_configuration,
 )
-from personal_finance_etl.contracts.capabilities import CapabilityId
 from personal_finance_etl.contracts.event_transport import NullEventQueue
 from personal_finance_etl.contracts.observability import (
     EventCode,
@@ -192,11 +191,13 @@ def test_change_detection_against_latest_success(tmp_path: Path) -> None:
     # Comparing same hash -> False
     assert not cp.runs.has_source_config_changed_since_last_success(fp_a.content_hash)
 
-    # 4. Modified config B
+    # 4. Modified config B (e.g. modified location)
+    sources_b = list(cfg_a.sources)
+    sources_b[0] = copy.deepcopy(sources_b[0])
+    sources_b[0].location = sources_b[0].location + "_mutated"
     cfg_b = SourceConfiguration(
-        sources=cfg_a.sources,
+        sources=tuple(sources_b),
         datasets=cfg_a.datasets,
-        capabilities=CapabilitySelection(enabled=(CapabilityId.TAX,)),
     )
     fp_b = compute_source_config_fingerprint(cfg_b)
     assert fp_b.content_hash != fp_a.content_hash
@@ -257,10 +258,12 @@ def test_lifecycle_coordinator_provenance_integration(tmp_path: Path) -> None:
 
     # Now create Run 2 with modified source config
     sink.events.clear()
+    sources_b2 = list(cfg_a.sources)
+    sources_b2[0] = copy.deepcopy(sources_b2[0])
+    sources_b2[0].location = sources_b2[0].location + "_mutated2"
     cfg_b = SourceConfiguration(
-        sources=cfg_a.sources,
+        sources=tuple(sources_b2),
         datasets=cfg_a.datasets,
-        capabilities=CapabilitySelection(enabled=(CapabilityId.TAX,)),
     )
     fp_b = compute_source_config_fingerprint(cfg_b)
 

@@ -76,7 +76,7 @@ class ETLOrchestrator:
         if plan is not None:
             self.plan = plan
         else:
-            requested_caps = self.source_config.capabilities.resolved_capabilities
+            requested_caps = cfg.capabilities.resolved_capabilities
             self.plan = CapabilityPlanner().create_plan(requested_capabilities=requested_caps)
 
         if source_plan is not None:

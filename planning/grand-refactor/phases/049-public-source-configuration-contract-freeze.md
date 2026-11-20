@@ -131,6 +131,13 @@ Convert Shan's live production configuration in Google Drive to explicit TOML fi
    - Update `ServiceContainer.create_source_config()` to load exclusively from `sources.toml` (raising `FileNotFoundError` with clear remediation guidance if absent, rather than falling back to hardcoded code).
    - Add architecture guards in `tests/architecture/` verifying zero hardcoded `SourceConfig` instances exist in `src/`.
 
+### Step 7d - Demolition of Transitional silver_column_dispositions.json & Historical Manifest Helpers
+Permanently eradicate the transitional Silver column disposition JSON manifest and its associated code artifacts:
+- Delete `src/personal_finance_etl/contracts/silver_column_dispositions.json`.
+- Demolish `_load_silver_column_dispositions()`, `ALL_SILVER_COLUMN_DISPOSITIONS`, and `SILVER_COLUMN_DISPOSITIONS` from `src/personal_finance_etl/contracts/semantic_inventory.py` and `contracts/__init__.py`.
+- Update all internal schema assertions to rely directly on the declarative DDL specifications (`SILVER_TABLE_SCHEMAS`, `GOLD_TABLE_SCHEMAS`) and Pandera canonical schemas established in Phases 043, 046, and 047.
+- Add architecture AST guards in `tests/architecture/` asserting that `silver_column_dispositions.json` does not exist on disk and is never loaded.
+
 ### Step 8 - Golden configuration fixtures & User Starter Templates
 Promote external household and investment configurations to schema-v1 golden examples and distribute frozen user starter templates under `examples/templates/`:
 - `template_household_minimal.toml`: pure household budgeting and expense tracking (`[HOUSEHOLD_CORE]`).

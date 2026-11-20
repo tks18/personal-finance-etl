@@ -64,7 +64,7 @@ def test_pre_bronze_backup_restore_round_trip() -> None:
         pb_layer = PreBronzeLayer(db_mgr)
         contract_hh = PreBronzeDataContract(
             dataset_id=DatasetId.HOUSEHOLD_ZCATEGORY,
-            physical_table="pre_bronze.pb_household_zcategory",
+            physical_table="pre_bronze.household_zcategory",
             sync_strategy=SyncStrategy.FULL_REPLACE,
         )
         df_hh = pl.DataFrame({"cat_id": [1, 2, 3], "cat_name": ["Income", "Expense", "Transfer"]})
@@ -74,7 +74,7 @@ def test_pre_bronze_backup_restore_round_trip() -> None:
 
         contract_stock = PreBronzeDataContract(
             dataset_id=DatasetId.INVESTMENT_STOCK_ORDERS,
-            physical_table="pre_bronze.pb_investment_stock_orders",
+            physical_table="pre_bronze.investment_stock_orders",
             sync_strategy=SyncStrategy.INCREMENTAL,
         )
         df_stock = pl.DataFrame({"order_id": ["O1", "O2"], "symbol": ["TCS", "INFY"]})
@@ -130,7 +130,7 @@ def test_pre_bronze_failure_and_transaction_rollback(
 
     contract = PreBronzeDataContract(
         dataset_id=DatasetId.HOUSEHOLD_ASSETS,
-        physical_table="pre_bronze.pb_household_assets",
+        physical_table="pre_bronze.household_assets",
         sync_strategy=SyncStrategy.FULL_REPLACE,
     )
     df = pl.DataFrame({"asset_id": [101, 102], "asset_name": ["Checking", "Savings"]})
@@ -164,7 +164,7 @@ def test_pre_bronze_split_commit_recovery_convergence(
     pb_layer = PreBronzeLayer(isolated_duckdb_manager)
     contract = PreBronzeDataContract(
         dataset_id=DatasetId.INVESTMENT_STOCK_ORDERS,
-        physical_table="pre_bronze.pb_investment_stock_orders",
+        physical_table="pre_bronze.investment_stock_orders",
         sync_strategy=SyncStrategy.INCREMENTAL,
     )
     df = pl.DataFrame({"order_id": ["S1"], "symbol": ["WIPRO"]})
@@ -210,7 +210,7 @@ def test_pre_bronze_meta_catalog_publishing(
     # Write Pre-Bronze table
     contract = PreBronzeDataContract(
         dataset_id=DatasetId.INVESTMENT_STOCK_ORDERS,
-        physical_table="pre_bronze.pb_investment_stock_orders",
+        physical_table="pre_bronze.investment_stock_orders",
         sync_strategy=SyncStrategy.INCREMENTAL,
     )
     df = pl.DataFrame({"order_id": ["O1", "O2", "O3"], "symbol": ["A", "B", "C"]})
@@ -233,7 +233,7 @@ def test_pre_bronze_meta_catalog_publishing(
         "FROM meta.m_Table_Row_Counts WHERE schema_name = 'pre_bronze'"
     ).fetchall()
     assert len(row_counts) > 0
-    pb_metric = next(r for r in row_counts if r[1] == "pb_investment_stock_orders")
+    pb_metric = next(r for r in row_counts if r[1] == "investment_stock_orders")
     assert pb_metric[2] == 3
 
 
@@ -248,7 +248,7 @@ def test_pre_bronze_meta_healing_with_artifact_provenance(
 
     contract = PreBronzeDataContract(
         dataset_id=DatasetId.INVESTMENT_STOCK_ORDERS,
-        physical_table="pre_bronze.pb_investment_stock_orders",
+        physical_table="pre_bronze.investment_stock_orders",
         sync_strategy=SyncStrategy.INCREMENTAL,
     )
     df = pl.DataFrame({"order_id": ["D1", "D2"], "symbol": ["TCS", "INFY"]})
@@ -332,32 +332,32 @@ def test_pre_bronze_orphaned_table_cleanup_guard(
     isolated_duckdb_manager: DuckDBManager,
     isolated_settings: Settings,
 ) -> None:
-    """Verify _cleanup_orphaned_tables preserves contracted Pre-Bronze tables and drops rogue tables."""
+    """Verify _cleanup_orphaned_tables preserves contracted Pre-Bronze tables and unknown user tables."""
     isolated_duckdb_manager.open()
     isolated_duckdb_manager.ensure_schemas()
 
     # 1. Create a contracted Pre-Bronze table (declared in PRE_BRONZE_CONTRACT_REGISTRY)
-    contracted_table = "pre_bronze.pb_household_zcategory"
+    contracted_table = "pre_bronze.household_zcategory"
     isolated_duckdb_manager.conn.execute(f"CREATE TABLE {contracted_table} (id INT)")  # nosec B608
 
-    # 2. Create an uncontracted rogue scratch table in pre_bronze
-    rogue_table = "pre_bronze.pb_rogue_uncontracted_table"
-    isolated_duckdb_manager.conn.execute(f"CREATE TABLE {rogue_table} (id INT)")  # nosec B608
+    # 2. Create an uncontracted user scratch table in pre_bronze
+    user_table = "pre_bronze.user_scratch_table"
+    isolated_duckdb_manager.conn.execute(f"CREATE TABLE {user_table} (id INT)")  # nosec B608
 
     meta_layer = MetaLayer(isolated_duckdb_manager, isolated_settings)
     meta_layer.cleanup_orphaned_tables()
 
     # Verify contracted table is preserved
     contracted_check = isolated_duckdb_manager.conn.execute(
-        "SELECT 1 FROM information_schema.tables WHERE lower(table_schema) = 'pre_bronze' AND lower(table_name) = 'pb_household_zcategory'"
+        "SELECT 1 FROM information_schema.tables WHERE lower(table_schema) = 'pre_bronze' AND lower(table_name) = 'household_zcategory'"
     ).fetchall()
     assert len(contracted_check) == 1
 
-    # Verify rogue table was dropped as an orphan
-    rogue_check = isolated_duckdb_manager.conn.execute(
-        "SELECT 1 FROM information_schema.tables WHERE lower(table_schema) = 'pre_bronze' AND lower(table_name) = 'pb_rogue_uncontracted_table'"
+    # Verify unknown user table is strictly preserved per Phase 043 non-goal (never drop unknown tables)
+    user_check = isolated_duckdb_manager.conn.execute(
+        "SELECT 1 FROM information_schema.tables WHERE lower(table_schema) = 'pre_bronze' AND lower(table_name) = 'user_scratch_table'"
     ).fetchall()
-    assert len(rogue_check) == 0
+    assert len(user_check) == 1
 
 
 def test_managed_warehouse_schema_enumeration_centralized() -> None:
@@ -389,8 +389,8 @@ def test_old_database_compatibility_additive_initialization() -> None:
         raw_conn.execute("CREATE SCHEMA silver")
         raw_conn.execute("CREATE SCHEMA gold")
         raw_conn.execute("CREATE SCHEMA meta")
-        raw_conn.execute("CREATE TABLE bronze.r_legacy_sample (id INT, val TEXT)")
-        raw_conn.execute("INSERT INTO bronze.r_legacy_sample VALUES (42, 'retained')")
+        raw_conn.execute("CREATE TABLE bronze.legacy_sample (id INT, val TEXT)")
+        raw_conn.execute("INSERT INTO bronze.legacy_sample VALUES (42, 'retained')")
         raw_conn.close()
 
         # Open through DuckDBManager and execute ensure_schemas
@@ -408,7 +408,7 @@ def test_old_database_compatibility_additive_initialization() -> None:
         assert "pre_bronze" in schemata
 
         # Verify legacy bronze table was untouched
-        legacy_data = mgr.conn.execute("SELECT * FROM bronze.r_legacy_sample").fetchall()
+        legacy_data = mgr.conn.execute("SELECT * FROM bronze.legacy_sample").fetchall()
         assert legacy_data == [(42, "retained")]
 
         mgr.close()

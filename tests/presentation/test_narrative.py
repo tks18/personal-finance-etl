@@ -819,10 +819,10 @@ def test_sinks_suppress_per_file_ingestion_ticks_while_advancing_progress() -> N
     )
     ds_end_ev = _make_event(
         PresentationKind.SUCCESS,
-        "Bronze: Table 'bronze.r_Stock_Market_Data' upserted 54471 rows from 813 files via generalized admission.",
+        "Bronze: Table 'bronze.market_stock_holdings' upserted 54471 rows from 813 files via generalized admission.",
         event_code=EventCode.BRONZE_UPSERT,
         entity_type="Table",
-        entity_id="bronze.r_Stock_Market_Data",
+        entity_id="bronze.market_stock_holdings",
         rows=54471,
     )
 
@@ -835,4 +835,4 @@ def test_sinks_suppress_per_file_ingestion_ticks_while_advancing_progress() -> N
     rich_sink.emit(ds_end_ev)
     assert rich_sink.rendered_count == 2
     assert "Ingesting dataset 'market_stock_holdings'" in output.getvalue()
-    assert "Bronze: Table 'bronze.r_Stock_Market_Data'" in output.getvalue()
+    assert "Bronze: Table 'bronze.market_stock_holdings'" in output.getvalue()
