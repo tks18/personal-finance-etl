@@ -1,0 +1,1168 @@
+schema_version = "1.0.0"
+
+[capabilities]
+enabled = ["household_core", "wealth", "fire"]
+
+[[sources]]
+source_id = "household_db"
+provider_type = "sqlite"
+location = "evidence/household/SOURCE_DB.sqlite"
+enabled = true
+description = "External household money management SQLite database backup"
+
+[[sources]]
+source_id = "opening_balance_csv"
+provider_type = "csv"
+location = "evidence/reference/OPENING_BALANCE.csv"
+enabled = true
+description = "Historical household ledger opening balances"
+
+[[datasets]]
+source_id = "household_db"
+dataset_id = "household_zcategory"
+enabled = true
+description = "Household expense categories table"
+[datasets.selector]
+provider_type = "sqlite"
+table_name = "ZCATEGORY"
+[datasets.identity]
+strategy_type = "source_field"
+field = "UID"
+[datasets.mapping]
+"ID" = "S_NO"
+"C_IS_DEL" = "IS_DEL"
+"C_UTIME" = "MODIFY_DATE"
+"uid" = "UID"
+"NAME" = "CATEGORY_NAME"
+"ORDERSEQ" = "ORDER_SEQUENCE"
+"TYPE" = "TYPE"
+"STATUS" = "STATUS"
+"pUid" = "CATEGORY_ID"
+"isSynced" = "IS_SYNCED"
+"syncTime" = "SYNC_TIME"
+"syncVersion" = "SYNC_VERSION"
+[[datasets.fields]]
+name = "ID"
+data_type = "Int64"
+nullable = false
+unique = true
+description = "Primary surrogate integer key in source SQLite table"
+[[datasets.fields]]
+name = "C_IS_DEL"
+data_type = "Int64"
+nullable = true
+unique = false
+description = "Deletion indicator flag"
+[[datasets.fields]]
+name = "C_UTIME"
+data_type = "Int64"
+nullable = true
+unique = false
+description = "Record modification epoch millisecond timestamp"
+[[datasets.fields]]
+name = "uid"
+data_type = "String"
+nullable = false
+unique = true
+description = "Natural unique identifier string for the category"
+[[datasets.fields]]
+name = "NAME"
+data_type = "String"
+nullable = false
+unique = false
+description = "Category name"
+[[datasets.fields]]
+name = "ORDERSEQ"
+data_type = "Int64"
+nullable = true
+unique = false
+description = "Category display order sequence"
+[[datasets.fields]]
+name = "TYPE"
+data_type = "Int64"
+nullable = false
+unique = false
+description = "Category financial classification type code"
+[[datasets.fields]]
+name = "STATUS"
+data_type = "Int64"
+nullable = true
+unique = false
+description = "Category active or archived status code"
+[[datasets.fields]]
+name = "pUid"
+data_type = "String"
+nullable = true
+unique = false
+description = "Parent category UID reference for subcategories"
+[[datasets.fields]]
+name = "isSynced"
+data_type = "Int64"
+nullable = true
+unique = false
+description = "Cloud synchronization status flag"
+[[datasets.fields]]
+name = "syncTime"
+data_type = "Float64"
+nullable = true
+unique = false
+description = "Cloud synchronization epoch timestamp"
+[[datasets.fields]]
+name = "syncVersion"
+data_type = "Int64"
+nullable = true
+unique = false
+description = "Cloud synchronization schema or entity version"
+
+[[datasets]]
+source_id = "household_db"
+dataset_id = "household_asset_group"
+enabled = true
+description = "Household asset grouping table"
+[datasets.selector]
+provider_type = "sqlite"
+table_name = "ASSETGROUP"
+[datasets.identity]
+strategy_type = "source_field"
+field = "UID"
+[datasets.mapping]
+"DEVICE_ID" = "DEVICE_ID"
+"uid" = "UID"
+"IS_DEL" = "IS_DEL"
+"USETIME" = "USE_TIME"
+"ACC_GROUP_NAME" = "ASSET_GROUP"
+"TYPE" = "TYPE"
+"ORDERSEQ" = "ORDER_SEQUENCE"
+"isSynced" = "IS_SYNCED"
+"syncTime" = "SYNC_TIME"
+"syncVersion" = "SYNC_VERSION"
+[[datasets.fields]]
+name = "DEVICE_ID"
+data_type = "Int64"
+nullable = true
+unique = false
+description = "Source device identifier integer"
+[[datasets.fields]]
+name = "uid"
+data_type = "String"
+nullable = false
+unique = true
+description = "Natural unique identifier string for asset group"
+[[datasets.fields]]
+name = "IS_DEL"
+data_type = "Int64"
+nullable = true
+unique = false
+description = "Logical deletion flag (0 active, 1 deleted)"
+[[datasets.fields]]
+name = "USETIME"
+data_type = "Int64"
+nullable = true
+unique = false
+description = "Asset group last use epoch timestamp"
+[[datasets.fields]]
+name = "ACC_GROUP_NAME"
+data_type = "String"
+nullable = false
+unique = false
+description = "Asset group name"
+[[datasets.fields]]
+name = "TYPE"
+data_type = "Int64"
+nullable = false
+unique = false
+description = "Asset group financial classification type code"
+[[datasets.fields]]
+name = "ORDERSEQ"
+data_type = "Int64"
+nullable = true
+unique = false
+description = "Asset group display order sequence"
+[[datasets.fields]]
+name = "isSynced"
+data_type = "Int64"
+nullable = true
+unique = false
+description = "Cloud synchronization status flag"
+[[datasets.fields]]
+name = "syncTime"
+data_type = "Float64"
+nullable = true
+unique = false
+description = "Cloud synchronization epoch timestamp"
+[[datasets.fields]]
+name = "syncVersion"
+data_type = "Int64"
+nullable = true
+unique = false
+description = "Cloud synchronization schema or entity version"
+
+[[datasets]]
+source_id = "household_db"
+dataset_id = "household_assets"
+enabled = true
+description = "Household financial accounts and assets table"
+[datasets.selector]
+provider_type = "sqlite"
+table_name = "ASSETS"
+[datasets.identity]
+strategy_type = "source_field"
+field = "UID"
+[datasets.mapping]
+"ID" = "S_NO"
+"CARD_DAY_FIN" = "CARD_STATEMENT_DATE"
+"CARD_DAY_PAY" = "CARD_PAYMENT_DATE"
+"NIC_NAME" = "ASSET_NAME"
+"ORDERSEQ" = "ORDER_SEQUENCE"
+"ZDATA" = "IS_DEL"
+"ZDATA1" = "ASSET_DESCRIPTION"
+"ZDATA2" = "NOTES"
+"IS_TRANS_EXPENSE" = "TRANSFER_EXPENSE"
+"IS_CARD_AUTO_PAY" = "CARD_AUTOPAY"
+"APP_PACKAGE" = "APP_PACKAGE"
+"APP_NAME" = "APP_NAME"
+"SMS_TEL" = "SMS_TEL"
+"SMS_STRING" = "SMS_STRING"
+"A_UTIME" = "ADDED_TIME"
+"CARD_USAGE_HURDLE_TYPE" = "CARD_USAGE_HURDLE_TYPE"
+"CARD_USAGE_HURDLE_START_DATE" = "CARD_USAGE_HURDLE_START_DATE"
+"CARD_USAGE_HURDLE_AMOUNT" = "CARD_USAGE_HURDLE_AMOUNT"
+"uid" = "UID"
+"currencyUid" = "CURRENCY_ID"
+"cardAssetUid" = "AUTOPAY_ASSET_ID"
+"groupUid" = "ASSET_GROUP_ID"
+"isSynced" = "IS_SYNCED"
+"syncTime" = "SYNC_TIME"
+"syncVersion" = "SYNC_VERSION"
+[[datasets.fields]]
+name = "ID"
+data_type = "Int64"
+nullable = true
+unique = false
+description = "Source primary key integer identifier"
+[[datasets.fields]]
+name = "CARD_DAY_FIN"
+data_type = "String"
+nullable = true
+unique = false
+description = "Credit card statement closing day of month string"
+[[datasets.fields]]
+name = "CARD_DAY_PAY"
+data_type = "String"
+nullable = true
+unique = false
+description = "Credit card payment due day of month string"
+[[datasets.fields]]
+name = "NIC_NAME"
+data_type = "String"
+nullable = false
+unique = false
+description = "Asset account nickname or display name"
+[[datasets.fields]]
+name = "ORDERSEQ"
+data_type = "Int64"
+nullable = true
+unique = false
+description = "Asset display order sequence"
+[[datasets.fields]]
+name = "ZDATA"
+data_type = "String"
+nullable = true
+unique = false
+description = "Logical deletion flag mapped from ZDATA string"
+[[datasets.fields]]
+name = "ZDATA1"
+data_type = "String"
+nullable = true
+unique = false
+description = "Asset description note mapped from ZDATA1"
+[[datasets.fields]]
+name = "ZDATA2"
+data_type = "String"
+nullable = true
+unique = false
+description = "Additional asset notes mapped from ZDATA2"
+[[datasets.fields]]
+name = "IS_TRANS_EXPENSE"
+data_type = "Int64"
+nullable = true
+unique = false
+description = "Flag indicating if transfer is recorded as expense"
+[[datasets.fields]]
+name = "IS_CARD_AUTO_PAY"
+data_type = "Int64"
+nullable = true
+unique = false
+description = "Credit card autopay configuration flag"
+[[datasets.fields]]
+name = "APP_PACKAGE"
+data_type = "String"
+nullable = true
+unique = false
+description = "Associated banking mobile application package name"
+[[datasets.fields]]
+name = "APP_NAME"
+data_type = "String"
+nullable = true
+unique = false
+description = "Associated banking mobile application name"
+[[datasets.fields]]
+name = "SMS_TEL"
+data_type = "String"
+nullable = true
+unique = false
+description = "Banking SMS sender telephone or shortcode"
+[[datasets.fields]]
+name = "SMS_STRING"
+data_type = "String"
+nullable = true
+unique = false
+description = "Banking SMS parser pattern string"
+[[datasets.fields]]
+name = "A_UTIME"
+data_type = "Int64"
+nullable = true
+unique = false
+description = "Asset creation or addition epoch timestamp"
+[[datasets.fields]]
+name = "CARD_USAGE_HURDLE_TYPE"
+data_type = "Int64"
+nullable = true
+unique = false
+description = "Credit card annual fee waiver milestone type"
+[[datasets.fields]]
+name = "CARD_USAGE_HURDLE_START_DATE"
+data_type = "Float64"
+nullable = true
+unique = false
+description = "Credit card fee waiver milestone start date"
+[[datasets.fields]]
+name = "CARD_USAGE_HURDLE_AMOUNT"
+data_type = "Float64"
+nullable = true
+unique = false
+description = "Credit card spend hurdle target amount"
+[[datasets.fields]]
+name = "uid"
+data_type = "String"
+nullable = false
+unique = true
+description = "Natural unique identifier string for asset account"
+[[datasets.fields]]
+name = "currencyUid"
+data_type = "String"
+nullable = true
+unique = false
+description = "Foreign key UID reference to currency"
+[[datasets.fields]]
+name = "cardAssetUid"
+data_type = "String"
+nullable = true
+unique = false
+description = "Foreign key UID reference to autopay source asset"
+[[datasets.fields]]
+name = "groupUid"
+data_type = "String"
+nullable = true
+unique = false
+description = "Foreign key UID reference to asset group"
+[[datasets.fields]]
+name = "isSynced"
+data_type = "Int64"
+nullable = true
+unique = false
+description = "Cloud synchronization status flag"
+[[datasets.fields]]
+name = "syncTime"
+data_type = "Float64"
+nullable = true
+unique = false
+description = "Cloud synchronization epoch timestamp"
+[[datasets.fields]]
+name = "syncVersion"
+data_type = "Int64"
+nullable = true
+unique = false
+description = "Cloud synchronization schema or entity version"
+
+[[datasets]]
+source_id = "household_db"
+dataset_id = "household_currency"
+enabled = true
+description = "Household currency denominations table"
+[datasets.selector]
+provider_type = "sqlite"
+table_name = "CURRENCY"
+[datasets.identity]
+strategy_type = "source_field"
+field = "UID"
+[datasets.mapping]
+"ID" = "S_NO"
+"uid" = "UID"
+"NAME" = "CURRENCY_NAME"
+"ISO" = "ISO"
+"MAIN_ISO" = "MAIN_ISO"
+"IS_DEL" = "IS_DEL"
+"ORDER_SEQ" = "ORDER_SEQUENCE"
+"RATE" = "RATE"
+"SYMBOL" = "SYMBOL"
+"INSERT_TYPE" = "INSERT_TYPE"
+"SYMBOL_POSITION" = "SYMBOL_POSITION"
+"IS_MAIN_CURRENCY" = "IS_MAIN_CURRENCY"
+"IS_SHOW" = "IS_SHOW"
+"MODIFY_DATE" = "MODIFY_DATE"
+"DECIMAL_POINT" = "DECIMAL_POINT"
+"isSynced" = "IS_SYNCED"
+"syncTime" = "SYNC_TIME"
+"syncVersion" = "SYNC_VERSION"
+[[datasets.fields]]
+name = "ID"
+data_type = "Int64"
+nullable = true
+unique = false
+description = "Source primary key integer identifier"
+[[datasets.fields]]
+name = "uid"
+data_type = "String"
+nullable = false
+unique = true
+description = "Natural unique identifier string for currency"
+[[datasets.fields]]
+name = "NAME"
+data_type = "String"
+nullable = false
+unique = false
+description = "Currency name"
+[[datasets.fields]]
+name = "ISO"
+data_type = "String"
+nullable = true
+unique = false
+description = "Standard 3-letter currency ISO code"
+[[datasets.fields]]
+name = "MAIN_ISO"
+data_type = "String"
+nullable = true
+unique = false
+description = "Main base currency ISO code"
+[[datasets.fields]]
+name = "IS_DEL"
+data_type = "Int64"
+nullable = true
+unique = false
+description = "Logical deletion flag (0 active, 1 deleted)"
+[[datasets.fields]]
+name = "ORDER_SEQ"
+data_type = "Int64"
+nullable = true
+unique = false
+description = "Currency display order sequence"
+[[datasets.fields]]
+name = "RATE"
+data_type = "Float64"
+nullable = true
+unique = false
+description = "Exchange rate multiplier relative to base currency"
+[[datasets.fields]]
+name = "SYMBOL"
+data_type = "String"
+nullable = true
+unique = false
+description = "Currency symbol glyph"
+[[datasets.fields]]
+name = "INSERT_TYPE"
+data_type = "String"
+nullable = true
+unique = false
+description = "Currency entry insertion type code string"
+[[datasets.fields]]
+name = "SYMBOL_POSITION"
+data_type = "String"
+nullable = true
+unique = false
+description = "Currency symbol formatting display position string"
+[[datasets.fields]]
+name = "IS_MAIN_CURRENCY"
+data_type = "Int64"
+nullable = true
+unique = false
+description = "Flag indicating if this is primary base reporting currency"
+[[datasets.fields]]
+name = "IS_SHOW"
+data_type = "Int64"
+nullable = true
+unique = false
+description = "Visibility flag for currency selector"
+[[datasets.fields]]
+name = "MODIFY_DATE"
+data_type = "Int64"
+nullable = true
+unique = false
+description = "Currency modification epoch timestamp"
+[[datasets.fields]]
+name = "DECIMAL_POINT"
+data_type = "Int64"
+nullable = true
+unique = false
+description = "Number of decimal fractional digits for currency"
+[[datasets.fields]]
+name = "isSynced"
+data_type = "Int64"
+nullable = true
+unique = false
+description = "Cloud synchronization status flag"
+[[datasets.fields]]
+name = "syncTime"
+data_type = "Float64"
+nullable = true
+unique = false
+description = "Cloud synchronization epoch timestamp"
+[[datasets.fields]]
+name = "syncVersion"
+data_type = "Int64"
+nullable = true
+unique = false
+description = "Cloud synchronization schema or entity version"
+
+[[datasets]]
+source_id = "household_db"
+dataset_id = "household_inoutcome"
+enabled = true
+description = "Household financial ledger income and expense transactions table"
+[datasets.selector]
+provider_type = "sqlite"
+table_name = "INOUTCOME"
+[datasets.identity]
+strategy_type = "source_field"
+field = "UID"
+[datasets.mapping]
+"AID" = "S_NO"
+"uid" = "UID"
+"assetUid" = "ASSET_ID"
+"CARDDIVIDMONTH" = "CARDDIVIDMONTH"
+"ctgUid" = "CATEGORY_ID"
+"toAssetUid" = "TO_ASSET_ID"
+"ZCONTENT" = "DESCRIPTION"
+"ZDATE" = "TIMESTAMP"
+"WDATE" = "DATE"
+"wtime" = "TIME"
+"paid" = "PAID"
+"DO_TYPE" = "TRANSACTION_TYPE"
+"ZMONEY" = "BASE_AMOUNT"
+"txUidTrans" = "TRANSFER_UID"
+"ZDATA" = "FEES_NOTES"
+"SMS_RDATE" = "SMS_RDATE"
+"IN_ZMONEY" = "LOCAL_AMOUNT"
+"ASSET_NIC" = "ASSET_NAME"
+"CATEGORY_NAME" = "CATEGORY_NAME"
+"cardDivideUid" = "CARD_DIVIDE_ID"
+"CARD_DIVIDE_MONTH_STR" = "CARD_DIVIDE_MONTH_STR"
+"MARK" = "MARK"
+"txUidFee" = "TRANSFER_FEES"
+"SMS_ORIGIN" = "SMS_ORIGIN"
+"SMS_PARSE_CONTENT" = "SMS_PARSE_CONTENT"
+"IS_DEL" = "IS_DEL"
+"UTIME" = "UPDATED_TIME"
+"currencyUid" = "CURRENCY_ID"
+"AMOUNT_ACCOUNT" = "AMOUNT_ACCOUNT"
+"lat" = "LAT"
+"lng" = "LONG"
+"gstd" = "GSTD"
+"isSynced" = "IS_SYNCED"
+"syncTime" = "SYNC_TIME"
+"syncVersion" = "SYNC_VERSION"
+[[datasets.fields]]
+name = "AID"
+data_type = "Int64"
+nullable = true
+unique = false
+description = "Source primary key sequence integer"
+[[datasets.fields]]
+name = "uid"
+data_type = "String"
+nullable = false
+unique = true
+description = "Natural unique identifier string for transaction"
+[[datasets.fields]]
+name = "assetUid"
+data_type = "String"
+nullable = false
+unique = false
+description = "Foreign key UID reference to source asset account"
+[[datasets.fields]]
+name = "CARDDIVIDMONTH"
+data_type = "String"
+nullable = true
+unique = false
+description = "Credit card installment tenure in months"
+[[datasets.fields]]
+name = "ctgUid"
+data_type = "String"
+nullable = true
+unique = false
+description = "Foreign key UID reference to expense/income category"
+[[datasets.fields]]
+name = "toAssetUid"
+data_type = "String"
+nullable = true
+unique = false
+description = "Foreign key UID reference to destination asset account for transfers"
+[[datasets.fields]]
+name = "ZCONTENT"
+data_type = "String"
+nullable = true
+unique = false
+description = "Transaction description or merchant content"
+[[datasets.fields]]
+name = "ZDATE"
+data_type = "String"
+nullable = false
+unique = false
+description = "Transaction timestamp in epoch milliseconds or integer date"
+[[datasets.fields]]
+name = "WDATE"
+data_type = "String"
+nullable = true
+unique = false
+description = "Calendar date string of transaction (YYYY-MM-DD)"
+[[datasets.fields]]
+name = "wtime"
+data_type = "String"
+nullable = true
+unique = false
+description = "Time string of transaction (HH:MM:SS)"
+[[datasets.fields]]
+name = "paid"
+data_type = "String"
+nullable = true
+unique = false
+description = "Settlement payment status flag"
+[[datasets.fields]]
+name = "DO_TYPE"
+data_type = "String"
+nullable = false
+unique = false
+description = "Transaction type code (0 expense, 1 income, 2 transfer)"
+[[datasets.fields]]
+name = "ZMONEY"
+data_type = "String"
+nullable = false
+unique = false
+description = "Base currency transaction amount"
+[[datasets.fields]]
+name = "txUidTrans"
+data_type = "String"
+nullable = true
+unique = false
+description = "Foreign key reference UID linking two legs of transfer"
+[[datasets.fields]]
+name = "ZDATA"
+data_type = "String"
+nullable = true
+unique = false
+description = "Transaction fee, notes, or memo string"
+[[datasets.fields]]
+name = "SMS_RDATE"
+data_type = "String"
+nullable = true
+unique = false
+description = "Banking SMS receipt date string"
+[[datasets.fields]]
+name = "IN_ZMONEY"
+data_type = "String"
+nullable = true
+unique = false
+description = "Original currency transaction amount before conversion"
+[[datasets.fields]]
+name = "ASSET_NIC"
+data_type = "String"
+nullable = true
+unique = false
+description = "Denormalized asset account name at time of transaction"
+[[datasets.fields]]
+name = "CATEGORY_NAME"
+data_type = "String"
+nullable = true
+unique = false
+description = "Denormalized category name at time of transaction"
+[[datasets.fields]]
+name = "cardDivideUid"
+data_type = "String"
+nullable = true
+unique = false
+description = "Installment divide UID group identifier"
+[[datasets.fields]]
+name = "CARD_DIVIDE_MONTH_STR"
+data_type = "String"
+nullable = true
+unique = false
+description = "Installment month fraction string label"
+[[datasets.fields]]
+name = "MARK"
+data_type = "Int64"
+nullable = true
+unique = false
+description = "User bookmark or star flag"
+[[datasets.fields]]
+name = "txUidFee"
+data_type = "String"
+nullable = true
+unique = false
+description = "Foreign key reference UID for associated transfer fees"
+[[datasets.fields]]
+name = "SMS_ORIGIN"
+data_type = "String"
+nullable = true
+unique = false
+description = "Banking SMS sender origin code"
+[[datasets.fields]]
+name = "SMS_PARSE_CONTENT"
+data_type = "String"
+nullable = true
+unique = false
+description = "Raw matched SMS parse template content"
+[[datasets.fields]]
+name = "IS_DEL"
+data_type = "Int64"
+nullable = true
+unique = false
+description = "Logical deletion flag (0 active, 1 deleted)"
+[[datasets.fields]]
+name = "UTIME"
+data_type = "Int64"
+nullable = true
+unique = false
+description = "Transaction update or modification epoch timestamp"
+[[datasets.fields]]
+name = "currencyUid"
+data_type = "String"
+nullable = true
+unique = false
+description = "Foreign key UID reference to transaction currency"
+[[datasets.fields]]
+name = "AMOUNT_ACCOUNT"
+data_type = "Float64"
+nullable = true
+unique = false
+description = "Asset account balance impact amount"
+[[datasets.fields]]
+name = "lat"
+data_type = "Float64"
+nullable = true
+unique = false
+description = "Geolocation latitude coordinate"
+[[datasets.fields]]
+name = "lng"
+data_type = "Float64"
+nullable = true
+unique = false
+description = "Geolocation longitude coordinate"
+[[datasets.fields]]
+name = "gstd"
+data_type = "String"
+nullable = true
+unique = false
+description = "Goods and Services Tax GST identification or state code"
+[[datasets.fields]]
+name = "isSynced"
+data_type = "Int64"
+nullable = true
+unique = false
+description = "Cloud synchronization status flag"
+[[datasets.fields]]
+name = "syncTime"
+data_type = "Float64"
+nullable = true
+unique = false
+description = "Cloud synchronization epoch timestamp"
+[[datasets.fields]]
+name = "syncVersion"
+data_type = "Int64"
+nullable = true
+unique = false
+description = "Cloud synchronization schema or entity version"
+
+[[datasets]]
+source_id = "opening_balance_csv"
+dataset_id = "household_opening_balances"
+enabled = true
+[datasets.selector]
+provider_type = "csv"
+delimiter = ","
+encoding = "utf-8"
+has_header = true
+[datasets.identity]
+strategy_type = "source_field"
+field = "Z_PK"
+[datasets.mapping]
+"Z_PK" = "Z_PK"
+"Z_ENT" = "Z_ENT"
+"Z_OPT" = "Z_OPT"
+"ZASSET_GROUP" = "ZASSET_GROUP"
+"ZASSET_ID" = "ZASSET_ID"
+"ZCATEGORY_ID" = "ZCATEGORY_ID"
+"ZOPPOSITEAID" = "ZOPPOSITEAID"
+"ZAID" = "ZAID"
+"ZCATEGORYID" = "ZCATEGORYID"
+"ZCURRENCYID" = "ZCURRENCYID"
+"ZFEE_ID" = "ZFEE_ID"
+"ZISDEL" = "ZISDEL"
+"ZISSYNCED" = "ZISSYNCED"
+"ZMARK" = "ZMARK"
+"ZSYNCCHECK" = "ZSYNCCHECK"
+"ZSYNCVERSION" = "ZSYNCVERSION"
+"ZUTIME" = "ZUTIME"
+"ZDATE" = "ZDATE"
+"ZAMOUNT" = "ZAMOUNT"
+"ZAMOUNTACCOUNT" = "ZAMOUNTACCOUNT"
+"ZAMOUNTSUB" = "ZAMOUNTSUB"
+"ZSYNCTIME" = "ZSYNCTIME"
+"ZASSET_NAME" = "ZASSET_NAME"
+"ZASSET_NIC" = "ZASSET_NIC"
+"ZCARDDIVIDID" = "ZCARDDIVIDID"
+"ZCATEGORY_NAME" = "ZCATEGORY_NAME"
+"ZCONTENT" = "ZCONTENT"
+"ZDO_TYPE" = "ZDO_TYPE"
+"ZMONEY" = "ZMONEY"
+"ZASSETUID" = "ZASSETUID"
+"ZCARDDIVIDEMONTH" = "ZCARDDIVIDEMONTH"
+"ZCARDDIVIDEMONTHSTR" = "ZCARDDIVIDEMONTHSTR"
+"ZCARDDIVIDEUID" = "ZCARDDIVIDEUID"
+"ZCARDTIMESTAMPSTR" = "ZCARDTIMESTAMPSTR"
+"ZCATEGORYUID" = "ZCATEGORYUID"
+"ZCURRENCY" = "ZCURRENCY"
+"ZCURRENCYUID" = "ZCURRENCYUID"
+"ZGSTD" = "ZGSTD"
+"ZLAT" = "ZLAT"
+"ZLNG" = "ZLNG"
+"ZMEMO" = "ZMEMO"
+"ZPAID" = "ZPAID"
+"ZSMSORIGINE" = "ZSMSORIGINE"
+"ZSMSPARSECONTENTS" = "ZSMSPARSECONTENTS"
+"ZSMSRDATE" = "ZSMSRDATE"
+"ZTOASSETUID" = "ZTOASSETUID"
+"ZTXDATESTR" = "ZTXDATESTR"
+"ZTXUIDFEE" = "ZTXUIDFEE"
+"ZTXUIDTRANS" = "ZTXUIDTRANS"
+"ZUID" = "ZUID"
+"ZWTIME" = "ZWTIME"
+"ZZDATA1" = "ZZDATA1"
+"ZZDATA2" = "ZZDATA2"
+[[datasets.fields]]
+name = "Z_PK"
+data_type = "Int64"
+nullable = false
+unique = true
+description = "Primary surrogate integer key in opening balances"
+[[datasets.fields]]
+name = "Z_ENT"
+data_type = "Int64"
+nullable = true
+unique = false
+description = "Entity identifier integer"
+[[datasets.fields]]
+name = "Z_OPT"
+data_type = "Int64"
+nullable = true
+unique = false
+description = "Optimization sequence integer"
+[[datasets.fields]]
+name = "ZASSET_GROUP"
+data_type = "Int64"
+nullable = true
+unique = false
+description = "Foreign key reference integer to asset group"
+[[datasets.fields]]
+name = "ZASSET_ID"
+data_type = "Int64"
+nullable = true
+unique = false
+description = "Foreign key reference integer to asset account"
+[[datasets.fields]]
+name = "ZCATEGORY_ID"
+data_type = "Int64"
+nullable = true
+unique = false
+description = "Foreign key reference integer to category"
+[[datasets.fields]]
+name = "ZOPPOSITEAID"
+data_type = "Int64"
+nullable = true
+unique = false
+description = "Opposite transaction identifier integer"
+[[datasets.fields]]
+name = "ZAID"
+data_type = "Int64"
+nullable = true
+unique = false
+description = "Account asset identifier integer"
+[[datasets.fields]]
+name = "ZCATEGORYID"
+data_type = "Int64"
+nullable = true
+unique = false
+description = "Category identifier integer"
+[[datasets.fields]]
+name = "ZCURRENCYID"
+data_type = "Int64"
+nullable = true
+unique = false
+description = "Currency denomination identifier integer"
+[[datasets.fields]]
+name = "ZFEE_ID"
+data_type = "Int64"
+nullable = true
+unique = false
+description = "Transaction fee identifier integer"
+[[datasets.fields]]
+name = "ZISDEL"
+data_type = "Int64"
+nullable = true
+unique = false
+description = "Logical deletion flag integer"
+[[datasets.fields]]
+name = "ZISSYNCED"
+data_type = "Int64"
+nullable = true
+unique = false
+description = "Cloud synchronization status flag integer"
+[[datasets.fields]]
+name = "ZMARK"
+data_type = "Int64"
+nullable = true
+unique = false
+description = "User bookmark or star flag integer"
+[[datasets.fields]]
+name = "ZSYNCCHECK"
+data_type = "Int64"
+nullable = true
+unique = false
+description = "Cloud sync checksum verification flag integer"
+[[datasets.fields]]
+name = "ZSYNCVERSION"
+data_type = "Int64"
+nullable = true
+unique = false
+description = "Cloud sync schema or entity version integer"
+[[datasets.fields]]
+name = "ZUTIME"
+data_type = "Float64"
+nullable = true
+unique = false
+description = "Record modification epoch timestamp float"
+[[datasets.fields]]
+name = "ZDATE"
+data_type = "Float64"
+nullable = true
+unique = false
+description = "Opening balance date epoch timestamp float"
+[[datasets.fields]]
+name = "ZAMOUNT"
+data_type = "Float64"
+nullable = true
+unique = false
+description = "Base currency opening balance amount"
+[[datasets.fields]]
+name = "ZAMOUNTACCOUNT"
+data_type = "Float64"
+nullable = true
+unique = false
+description = "Asset account currency opening balance amount"
+[[datasets.fields]]
+name = "ZAMOUNTSUB"
+data_type = "Float64"
+nullable = true
+unique = false
+description = "Sub-account opening balance amount"
+[[datasets.fields]]
+name = "ZSYNCTIME"
+data_type = "Float64"
+nullable = true
+unique = false
+description = "Cloud sync epoch timestamp float"
+[[datasets.fields]]
+name = "ZASSET_NAME"
+data_type = "String"
+nullable = true
+unique = false
+description = "Denormalized asset account name string"
+[[datasets.fields]]
+name = "ZASSET_NIC"
+data_type = "String"
+nullable = true
+unique = false
+description = "Denormalized asset nickname string"
+[[datasets.fields]]
+name = "ZCARDDIVIDID"
+data_type = "String"
+nullable = true
+unique = false
+description = "Credit card divide installment group identifier"
+[[datasets.fields]]
+name = "ZCATEGORY_NAME"
+data_type = "String"
+nullable = true
+unique = false
+description = "Denormalized category name string"
+[[datasets.fields]]
+name = "ZCONTENT"
+data_type = "String"
+nullable = true
+unique = false
+description = "Opening balance description or narrative content"
+[[datasets.fields]]
+name = "ZDO_TYPE"
+data_type = "String"
+nullable = true
+unique = false
+description = "Transaction type code string"
+[[datasets.fields]]
+name = "ZMONEY"
+data_type = "String"
+nullable = true
+unique = false
+description = "Opening balance amount string representation"
+[[datasets.fields]]
+name = "ZASSETUID"
+data_type = "String"
+nullable = true
+unique = false
+description = "Foreign key UID reference to asset account"
+[[datasets.fields]]
+name = "ZCARDDIVIDEMONTH"
+data_type = "String"
+nullable = true
+unique = false
+description = "Credit card divide tenure month string"
+[[datasets.fields]]
+name = "ZCARDDIVIDEMONTHSTR"
+data_type = "String"
+nullable = true
+unique = false
+description = "Credit card divide month fraction string"
+[[datasets.fields]]
+name = "ZCARDDIVIDEUID"
+data_type = "String"
+nullable = true
+unique = false
+description = "Credit card divide identifier string"
+[[datasets.fields]]
+name = "ZCARDTIMESTAMPSTR"
+data_type = "String"
+nullable = true
+unique = false
+description = "Credit card closing timestamp string"
+[[datasets.fields]]
+name = "ZCATEGORYUID"
+data_type = "String"
+nullable = true
+unique = false
+description = "Foreign key UID reference to category"
+[[datasets.fields]]
+name = "ZCURRENCY"
+data_type = "String"
+nullable = true
+unique = false
+description = "Currency denomination string"
+[[datasets.fields]]
+name = "ZCURRENCYUID"
+data_type = "String"
+nullable = true
+unique = false
+description = "Foreign key UID reference to currency"
+[[datasets.fields]]
+name = "ZGSTD"
+data_type = "String"
+nullable = true
+unique = false
+description = "GST tax identification or state code"
+[[datasets.fields]]
+name = "ZLAT"
+data_type = "Float64"
+nullable = true
+unique = false
+description = "Geolocation latitude coordinate"
+[[datasets.fields]]
+name = "ZLNG"
+data_type = "Float64"
+nullable = true
+unique = false
+description = "Geolocation longitude coordinate"
+[[datasets.fields]]
+name = "ZMEMO"
+data_type = "String"
+nullable = true
+unique = false
+description = "Opening balance memo notes string"
+[[datasets.fields]]
+name = "ZPAID"
+data_type = "String"
+nullable = true
+unique = false
+description = "Settlement payment status string"
+[[datasets.fields]]
+name = "ZSMSORIGINE"
+data_type = "String"
+nullable = true
+unique = false
+description = "SMS sender origin code string"
+[[datasets.fields]]
+name = "ZSMSPARSECONTENTS"
+data_type = "String"
+nullable = true
+unique = false
+description = "Raw SMS parsed template content string"
+[[datasets.fields]]
+name = "ZSMSRDATE"
+data_type = "String"
+nullable = true
+unique = false
+description = "SMS receipt date string"
+[[datasets.fields]]
+name = "ZTOASSETUID"
+data_type = "String"
+nullable = true
+unique = false
+description = "Destination asset account UID reference string"
+[[datasets.fields]]
+name = "ZTXDATESTR"
+data_type = "String"
+nullable = true
+unique = false
+description = "Opening balance date string"
+[[datasets.fields]]
+name = "ZTXUIDFEE"
+data_type = "String"
+nullable = true
+unique = false
+description = "Transfer fee UID reference string"
+[[datasets.fields]]
+name = "ZTXUIDTRANS"
+data_type = "String"
+nullable = true
+unique = false
+description = "Transfer link UID reference string"
+[[datasets.fields]]
+name = "ZUID"
+data_type = "String"
+nullable = true
+unique = false
+description = "Record UID string if present"
+[[datasets.fields]]
+name = "ZWTIME"
+data_type = "String"
+nullable = true
+unique = false
+description = "Opening balance time string"
+[[datasets.fields]]
+name = "ZZDATA1"
+data_type = "String"
+nullable = true
+unique = false
+description = "Supplemental data field 1 string"
+[[datasets.fields]]
+name = "ZZDATA2"
+data_type = "String"
+nullable = true
+unique = false
+description = "Supplemental data field 2 string"

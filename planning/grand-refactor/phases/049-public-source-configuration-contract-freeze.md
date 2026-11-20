@@ -86,8 +86,12 @@ Implement/test:
 - additive unknown-field behavior follows chosen policy;
 - deprecated field handling explicit.
 
-### Step 7 - Identifier freeze
+### Step 7 - Identifier freeze & Public Configuration Triumvirate Schema Freeze
 DatasetId, ProviderType, CapabilityId and policy enum serialized values reviewed. Rename only now if essential.
+Formally freeze the public schemas of the PFETL configuration triumvirate:
+1. **`sources.toml` v1 Schema Freeze:** Freeze as a pure evidence catalog (sources, datasets, fields, normalizations). The transitional backwards-compatibility bridge for `capabilities` in `SourceConfiguration` is permanently eradicated.
+2. **`settings.toml` v1 Schema Freeze:** Freeze as the authoritative runtime execution profile owning `[capabilities] enabled = [...]`, warehouse paths, and logging.
+3. **`financial_rules.toml` v1 Schema Freeze:** Freeze capability-partitioned financial rules models (structured with canonical capability headings `[household]`, `[wealth]`, `[investments]`, `[benchmark]`, `[tax]`, `[fire]`) with machine-readable JSON Schema export. Migrate Shan's production `shan_personal_finance_rules.toml` to the finalized capability-headed structure.
 
 ### Step 7b - Demolition of Transitional column_master & DatasetId.COMMON_COLUMN_MASTER
 Permanently eradicate all traces of transitional `column_master` from the public contract and codebase:

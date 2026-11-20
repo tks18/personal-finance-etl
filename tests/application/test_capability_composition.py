@@ -138,10 +138,10 @@ def test_household_only_plan_resolution() -> None:
     assert not hh_plan.is_capability_active(CapabilityId.INVESTMENT_ACCOUNTING)
     assert not hh_plan.is_capability_active(CapabilityId.TAX)
 
-    # Exactly 12 active Silver datasets, 0 Gold datasets
-    assert hh_plan.active_analytical_dataset_count == 12
+    # Exactly 12 active Silver datasets, 6 Gold datasets (total 18)
+    assert hh_plan.active_analytical_dataset_count == 18
     assert len(hh_plan.active_silver_datasets) == 12
-    assert len(hh_plan.active_gold_datasets) == 0
+    assert len(hh_plan.active_gold_datasets) == 6
 
     expected_silver = {
         DatasetId.COMMON_CALENDAR,
@@ -200,8 +200,8 @@ def test_household_and_investment_cross_contributions() -> None:
         CapabilityId.WEALTH, ContributionScope.PORTFOLIO_VALUATION
     )
 
-    # Active analytical datasets count: 12 (Household) + 18 (Investments: 8 Silver + 10 Gold) = 30
-    assert plan_both.active_analytical_dataset_count == 30
+    # Active analytical datasets count: 18 (Household: 12 Silver + 6 Gold) + 19 (Investments: 8 Silver + 11 Gold) = 37
+    assert plan_both.active_analytical_dataset_count == 37
 
 
 def test_household_only_source_planner_satisfaction(tmp_path: Path) -> None:
@@ -255,10 +255,10 @@ def test_household_only_end_to_end_pipeline_execution(
     )
     orchestrator.run()
 
-    # 1. Verify produced table count matches active analytical contracts exactly
-    assert len(orchestrator.dfs) == 12
+    # 1. Verify produced table count matches active analytical contracts exactly (12 Silver + 6 Gold = 18)
+    assert len(orchestrator.dfs) == 18
 
-    expected_tables = {
+    expected_silver = {
         "df_d_income_category",
         "df_d_income_subcategory",
         "df_d_expense_category",
@@ -272,7 +272,15 @@ def test_household_only_end_to_end_pipeline_execution(
         "df_f_transfer_transactions",
         "df_f_opening_balances",
     }
-    assert set(orchestrator.dfs.keys()) == expected_tables
+    expected_gold = {
+        "df_p_tf_wealth_monthly_totals",
+        "df_p_tf_category_spend_analytics",
+        "df_p_tf_income_streams_monthly",
+        "df_p_tf_budget_forecast_monthly",
+        "df_p_tf_monthly_cashflow_summary",
+        "df_p_tf_cashflow_activity_summary",
+    }
+    assert set(orchestrator.dfs.keys()) == expected_silver | expected_gold
 
     # 2. Verify investment outputs are completely absent
     assert "df_d_macro_parameters" not in orchestrator.dfs
@@ -407,7 +415,7 @@ def test_composed_household_and_investments_execution(
 
     caps = [CapabilityId.HOUSEHOLD_CORE, CapabilityId.INVESTMENT_ACCOUNTING]
     composed_plan = CapabilityPlanner().create_plan(caps)
-    assert composed_plan.active_analytical_dataset_count == 30
+    assert composed_plan.active_analytical_dataset_count == 37
 
     orchestrator = ETLOrchestrator(
         cfg=settings,
@@ -419,8 +427,8 @@ def test_composed_household_and_investments_execution(
     )
     orchestrator.run()
 
-    # Must produce all 30 analytical tables under composed plan
-    assert len(orchestrator.dfs) == 30
+    # Must produce all 37 analytical tables under composed plan
+    assert len(orchestrator.dfs) == 37
     assert "df_f_investment_analytics_lot" in orchestrator.dfs
     assert "df_f_investment_realized_events" in orchestrator.dfs
     assert "df_f_investment_reconciliation_events" in orchestrator.dfs

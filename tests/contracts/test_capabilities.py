@@ -271,7 +271,14 @@ def test_subgraph_resolution_household_only() -> None:
 
     assert plan.active_capabilities == (CapabilityId.HOUSEHOLD_CORE,)
     assert plan.required_external_enrichments == frozenset()
-    assert plan.produced_gold_datasets == frozenset()
+    assert plan.produced_gold_datasets == {
+        DatasetId.WEALTH_CORE_MONTHLY,
+        DatasetId.WEALTH_CASHFLOW_EXPENSE_BREAKDOWN,
+        DatasetId.WEALTH_CASHFLOW_INCOME_BREAKDOWN,
+        DatasetId.WEALTH_BUDGET_VARIANCE,
+        DatasetId.WEALTH_CASHFLOW_EFFICIENCY,
+        DatasetId.WEALTH_CASHFLOW_ACTIVITY_SUMMARY,
+    }
 
     # Produced Silver includes 10 household + 2 common
     assert len(plan.produced_silver_datasets) == 12
@@ -302,7 +309,9 @@ def test_subgraph_resolution_fire_pulls_prerequisites() -> None:
     assert pos[CapabilityId.HOUSEHOLD_CORE] < pos[CapabilityId.WEALTH]
     assert pos[CapabilityId.WEALTH] < pos[CapabilityId.FIRE]
 
-    # Gold outputs include Wealth and FIRE
+    # Gold outputs include 6 Household + 2 Wealth/FIRE = 8 Gold datasets
+    assert len(plan.produced_gold_datasets) == 8
+    assert DatasetId.WEALTH_ASSET_BREAKDOWN in plan.produced_gold_datasets
     assert DatasetId.FIRE_ANALYTICS in plan.produced_gold_datasets
     assert DatasetId.WEALTH_CORE_MONTHLY in plan.produced_gold_datasets
     assert DatasetId.TAX_YEAR_SUMMARY not in plan.produced_gold_datasets

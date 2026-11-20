@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [10.1.3](https://github.com/tks18/personal-finance-etl/compare/10.1.2...10.1.3) (2026-11-20)
+
+
+### Features 🔥
+
+* **application:** orchestrate plan-aware wealth and fire services ([5f8cd64](https://github.com/tks18/personal-finance-etl/commit/5f8cd64e3e4385754dbcd6f531c26832f898c346))
+* **contracts:** register wealth and fire column inventory ([916fc9d](https://github.com/tks18/personal-finance-etl/commit/916fc9d66094b672f79b274397b8694a476526aa))
+* **domain:** gate wealth, forex and fire simulation at source ([35ee6ee](https://github.com/tks18/personal-finance-etl/commit/35ee6ee616f267c86371a215b26876c6e09cb807))
+
+
+### Tests 🧪
+
+* **fixtures:** author declarative household and wealth fixtures ([65c9b39](https://github.com/tks18/personal-finance-etl/commit/65c9b3917a6c6c777be1d5ad5f426619c3492c02))
+* **wealth:** add wealth and fire composition and gating suites ([e2f1f5a](https://github.com/tks18/personal-finance-etl/commit/e2f1f5aa5d7e153f382a6547aee1ab3c17854e57))
+
+
+### Docs 📃
+
+* **refactor:** complete phase 042 wealth and fire composition ([dd2db81](https://github.com/tks18/personal-finance-etl/commit/dd2db816b80d0c1be39183c8e488a467d20e78ba))
+
 ### [10.1.2](https://github.com/tks18/personal-finance-etl/compare/10.1.1...10.1.2) (2026-11-19)
 
 

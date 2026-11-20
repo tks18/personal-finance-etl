@@ -25,6 +25,7 @@ Phase 041 guarantees Tax composition with source-of-calculation column gating. H
 ## 4. Current codebase anchors
 
 Re-trace post-v10:
+
 - wealth service/presentation engine;
 - net-worth producers;
 - FIRE producers;
@@ -56,16 +57,15 @@ WEALTH
   optional investment contribution (PORTFOLIO_VALUATION)
   produces Gold (Wealth & Balance Sheet Marts):
     - gold.Wealth_Asset_Breakdown
+    - gold.Wealth_FIRE_Analytics (deterministic milestones, SWR, linear runway, expense coverage)
     - enriches gold.Core_Monthly_Fact with Net Worth, asset allocation, and liquid vs illiquid breakdown
 
-FIRE
+FIRE (Enrichment Capability)
   requires HOUSEHOLD_CORE, WEALTH
-  investment portfolio contribution explicit
-  produces Gold (FIRE Analytical Contracts):
-    - gold.Wealth_FIRE_Analytics (milestones, SWR, expense coverage)
-
-SIMULATION (internal FIRE computational stage)
-  governed by plan toggle; produces Monte Carlo percentile trajectories and stochastic survival paths
+  optional investment portfolio contribution explicit
+  enriches Gold at Column Level (CAPABILITY_COLUMN_INVENTORY):
+    - enriches gold.Wealth_FIRE_Analytics with Monte Carlo stochastic simulation columns (P10, P50, P90 percentile paths, probability of success, stressed runway, terminal wealth)
+  when inactive: Monte Carlo simulation loop (1,000+ stochastic iterations) is completely uninvoked at source, and simulation columns are emitted as null.
 ```
 
 > [!NOTE]
@@ -90,44 +90,56 @@ If simulation is inseparable from FIRE in current methodology, do not manufactur
 ## 6. Detailed implementation sequence
 
 ### Step 1 - Freeze Wealth/FIRE dependency and confluence column table
+
 Map every input DatasetId, produced Gold contract, and column attribution in composite marts.
 
 ### Step 2 - Decide simulation boundary from code
+
 Document whether simulation earns its own capability. Decision must follow current ownership and output semantics.
 
 ### Step 3 - Update capability graph
+
 Encode required/optional edges, active outputs, and column attribution rules.
 
 ### Step 4 - Make Wealth orchestration and confluence aggregation plan-driven
+
 Household-only wealth path must be valid if methodology supports it; investment contribution is absent and uncalculated, not fabricated with zeros.
 
 ### Step 5 - Make FIRE orchestration plan-driven
+
 Missing mandatory FIRE evidence fails at planner/preflight. Optional investment contribution handled explicitly at the calculation kernel.
 
 ### Step 6 - Simulation orchestration
+
 Conditional only if capability is separately modeled; otherwise remains an internal FIRE stage with plan-aware FIRE execution skipping Monte Carlo loops when disabled.
 
 ### Step 7 - Disabled-path proofs & Declarative Configuration Fixtures
+
 Author declarative `sources.toml` test fixtures under `tests/fixtures/config/` modeling isolated household and wealth archetypes:
+
 1. `sources_household_only.toml`: configures purely household evidence (opening balances, bank accounts, expenses, income) with zero investment, brokerage, or market data sources.
 2. `sources_household_wealth.toml`: configures household evidence plus physical assets and cash balance sheet tracking (`HOUSEHOLD_CORE` + `WEALTH`), with zero equity brokerages.
 3. `sources_household_wealth_fire.toml`: configures household evidence, wealth tracking, and FIRE target parameters (`HOUSEHOLD_CORE` + `WEALTH` + `FIRE`) without equity investments.
 
 Execute headless pipeline runs against each fixture and assert:
+
 - Wealth/FIRE disabled => zero service calls, zero produced wealth/FIRE contracts, and zero simulation matrix generation.
 - Confluence mart `gold.Core_Monthly_Fact` skips investment market values, unrealized P&L, XIRR calculations, and foreign currency exposure joins directly at the aggregation kernel level.
 
 ### Step 8 - Full Shan regression & End-to-End Analytical Assertions
+
 Execute full headless pipeline run under the comprehensive plan. Assert:
+
 - Net worth, wealth, FIRE, simulation outputs, and all upstream financial IDs unchanged under the full plan down to the penny.
 - Assertive analytical outputs for each capability fixture:
   - In `sources_household_only.toml`: the 5 Gold household decision marts (`Cashflow_Expense_Breakdown`, `Cashflow_Income_Breakdown`, `Forecast_Budget_Variance`, `Cashflow_Efficiency_Analytics`, `Cashflow_Activity_Summary`) and the monthly savings/cashflow metrics in `gold.Core_Monthly_Fact` are populated accurately, while all investment/tax columns are strictly null.
-  - In `sources_household_wealth.toml`: `gold.Wealth_Asset_Breakdown` and net worth in `Core_Monthly_Fact` calculate liquid vs illiquid asset separation accurately using solely household accounts.
-  - In `sources_household_wealth_fire.toml`: `gold.Wealth_FIRE_Analytics` computes SWR, annual expense coverage, and milestone projections cleanly without investment dependencies.
+  - In `sources_household_wealth.toml`: `gold.Wealth_Asset_Breakdown` and `gold.Wealth_FIRE_Analytics` (with deterministic milestones, SWR, linear runway) are populated using solely household accounts, while all Monte Carlo simulation columns are strictly null.
+  - In `sources_household_wealth_fire.toml`: `gold.Wealth_FIRE_Analytics` executes the Monte Carlo simulation engine and populates all 10 stochastic percentile columns (P10, P50, P90, probability of success).
 
 ## 7. Files and symbols in scope
 
 Modify:
+
 - wealth/FIRE/simulation capability descriptors;
 - planner;
 - orchestration;
@@ -152,6 +164,7 @@ Do not change formulas/assumptions in FinancialRules or domain engines.
 ## 9. Tests and verification
 
 Required:
+
 - exact dependency/output table and confluence column matrix;
 - household-only wealth case according to methodology;
 - verification that household-only monthly facts skip investment/forex calculations at source;
@@ -176,6 +189,7 @@ Required:
 ## 10. Explicit non-goals
 
 Do not:
+
 - alter FIRE assumptions;
 - alter net-worth methodology;
 - add new simulation algorithms;
@@ -184,17 +198,17 @@ Do not:
 
 ## 11. Completion checklist
 
-- [ ] Wealth capability explicit.
-- [ ] FIRE capability explicit.
-- [ ] Simulation boundary justified.
-- [ ] Confluence mart column attribution established.
-- [ ] Source-of-calculation gating implemented for confluence aggregations.
-- [ ] Declarative `sources.toml` fixtures authored (`sources_household_only.toml`, `sources_household_wealth.toml`, `sources_household_wealth_fire.toml`).
-- [ ] End-to-end analytical output assertions verified across all three fixtures.
-- [ ] Optional investment contributions correct.
-- [ ] Disabled engines perform zero work.
-- [ ] Full Shan outputs unchanged.
-- [ ] All major financial engines now plan-driven.
+- [x] Wealth capability explicit.
+- [x] FIRE capability explicit.
+- [x] Simulation boundary justified.
+- [x] Confluence mart column attribution established.
+- [x] Source-of-calculation gating implemented for confluence aggregations.
+- [x] Declarative `sources.toml` fixtures authored (`sources_household_only.toml`, `sources_household_wealth.toml`, `sources_household_wealth_fire.toml`).
+- [x] End-to-end analytical output assertions verified across all three fixtures.
+- [x] Optional investment contributions correct.
+- [x] Disabled engines perform zero work.
+- [x] Full Shan outputs unchanged.
+- [x] All major financial engines now plan-driven.
 
 ## 12. Commit boundary
 
@@ -209,20 +223,20 @@ Phase 043 may assume the logical active Silver/Gold contract set and column attr
 ## Phase completion record
 
 ```text
-Phase:
-Target release:
-Files changed:
-Schema changed:
-Runtime behavior changed:
+Phase: 042
+Target release: v10.1.3
+Files changed: src/personal_finance_etl/contracts/capabilities.py, src/personal_finance_etl/domain/fire/inflation.py, src/personal_finance_etl/domain/wealth/market_valuation.py, src/personal_finance_etl/domain/wealth/net_worth.py, src/personal_finance_etl/domain/fire/deterministic.py, src/personal_finance_etl/application/wealth/wealth_service.py, src/personal_finance_etl/application/pipeline/execution.py, tests/fixtures/sources_household_wealth.toml, tests/fixtures/sources_household_wealth_fire.toml, tests/domain/test_wealth_fire_source_gating.py, tests/application/test_wealth_fire_composition.py
+Schema changed: NO (Column inventory & gating aligned with existing 22 Gold contracts)
+Runtime behavior changed: YES (Source calculation gating for Wealth and FIRE simulation skips Monte Carlo and uncalculated columns)
 Financial formulas changed: NO
-Focused tests:
-Architecture tests:
-Real-data run:
-Performance check:
-Compatibility path still present:
-Old path deleted:
-Exit assertions green:
-Commit:
+Focused tests: tests/domain/test_wealth_fire_source_gating.py, tests/application/test_wealth_fire_composition.py, tests/contracts/test_capabilities.py
+Architecture tests: tests/architecture/test_boundaries.py
+Real-data run: tests/application/test_capability_composition.py
+Performance check: Full Quality Gate <200s, Fast Quality Gate <1s
+Compatibility path still present: YES
+Old path deleted: NO
+Exit assertions green: YES
+Commit: Pending user approval
 ```
 
 A phase is incomplete if any required exit assertion is false.

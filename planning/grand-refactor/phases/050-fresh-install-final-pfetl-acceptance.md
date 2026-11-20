@@ -116,7 +116,7 @@ For every combination, the acceptance suite assertively verifies:
 - **DuckDB Physical Catalog Purity:** queries `information_schema.tables` to assert only active Medallion tables exist in DuckDB; disabled tables are strictly absent (zero ghost tables).
 - **Schema & Column Purity:** inspects composite tables (`gold.household_monthly_summary`, `gold.investments_portfolio_summary`, `gold.core_monthly_fact`) to assert columns belonging to disabled capabilities are physically omitted or strictly null.
 - **Ground-Truth Analytical Accuracy:** asserts total expenses, cashflows, portfolio valuations, FIFO realized returns, tax liabilities, net worth, and FIRE milestones match deterministic mathematical ground truth down to the penny.
-- **Operational & Observability Purity:** verifies Control Plane records exact active capabilities and JSONL traces contain zero warnings or unhandled exceptions.
+- **Operational & Observability Purity:** verifies Control Plane records exact active capabilities across dual engines (`cp_runs` execution status, `cp_simulation_runs` recorded only when FIRE is active, `cp_external_provider_requests` recorded only when foreign FX or benchmark capabilities are active) and JSONL traces contain zero warnings or unhandled exceptions.
 
 ### Step 10 - Backup/restore
 Backup generalized state including Pre-Bronze/config provenance. Restore into clean target and verify outputs/next incremental run.
