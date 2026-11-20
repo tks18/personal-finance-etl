@@ -120,14 +120,14 @@ def test_warehouse_registry_and_fingerprints() -> None:
     """Verify registry validation and deterministic fingerprint calculation."""
     validate_registry()
 
-    c = get_contract_by_table("silver.d_Calendar")
+    c = get_contract_by_table("silver.common_calendar")
     assert c is not None
     assert c.layer == "silver"
     assert c.grain == "Calendar Day (Date)"
 
     metadata = [
-        {"table_name": "silver.d_Calendar", "grain": "Day", "producer": "CoreEngine"},
-        {"table_name": "gold.Tax_Year_Summary", "grain": "FY", "producer": "TaxEngine"},
+        {"table_name": "silver.common_calendar", "grain": "Day", "producer": "CoreEngine"},
+        {"table_name": "gold.tax_year_summary", "grain": "FY", "producer": "TaxEngine"},
     ]
     fp1 = generate_contract_registry_fingerprint(metadata)
     fp2 = generate_contract_registry_fingerprint(list(reversed(metadata)))

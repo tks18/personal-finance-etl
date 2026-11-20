@@ -303,7 +303,7 @@ def test_verify_canonical_bronze_schemas_audits_physical_tables(
 
     # 2. Inject an unpermitted column into a table
     temp_duckdb.conn.execute(
-        'ALTER TABLE bronze.r_SQLite_ZCategory ADD COLUMN "ILLEGAL_UNPERMITTED_COL" VARCHAR'
+        'ALTER TABLE bronze.household_zcategory ADD COLUMN "ILLEGAL_UNPERMITTED_COL" VARCHAR'
     )
     drifted_mismatches = verify_canonical_bronze_schemas(temp_duckdb.conn)
     assert len(drifted_mismatches) == 1

@@ -82,7 +82,7 @@ def test_pre_bronze_contract_registry_validation() -> None:
     contract = get_pre_bronze_contract_by_dataset_id(DatasetId.HOUSEHOLD_ZCATEGORY)
     assert contract is not None
     assert contract.dataset_id == DatasetId.HOUSEHOLD_ZCATEGORY
-    assert contract.physical_table == "pre_bronze.pb_household_zcategory"
+    assert contract.physical_table == "pre_bronze.household_zcategory"
     assert contract.sync_strategy == SyncStrategy.FULL_REPLACE
     assert contract.provenance_required is True
 
@@ -90,36 +90,36 @@ def test_pre_bronze_contract_registry_validation() -> None:
     assert contract_by_str == contract
 
     # Test lookup by physical table
-    contract_by_table = get_pre_bronze_contract_by_table("pre_bronze.pb_household_zcategory")
+    contract_by_table = get_pre_bronze_contract_by_table("pre_bronze.household_zcategory")
     assert contract_by_table == contract
 
     # Case-insensitive lookup
-    contract_case = get_pre_bronze_contract_by_table("PRE_BRONZE.PB_HOUSEHOLD_ZCATEGORY")
+    contract_case = get_pre_bronze_contract_by_table("PRE_BRONZE.HOUSEHOLD_ZCATEGORY")
     assert contract_case == contract
 
     # Unknown returns None
     assert get_pre_bronze_contract_by_dataset_id("unknown_dataset_xyz") is None
-    assert get_pre_bronze_contract_by_table("pre_bronze.pb_nonexistent") is None
+    assert get_pre_bronze_contract_by_table("pre_bronze.nonexistent") is None
 
 
 def test_pre_bronze_physical_table_naming_and_sanitization() -> None:
     """Verify deterministic physical table naming and rejection of SQL injection."""
     # Normal naming without source_id
     table_name = get_pre_bronze_table_name(DatasetId.INVESTMENT_STOCK_ORDERS)
-    assert table_name == "pre_bronze.pb_investment_stock_orders"
+    assert table_name == "pre_bronze.investment_stock_orders"
 
     # With source_id
     table_with_src = get_pre_bronze_table_name(
         DatasetId.INVESTMENT_STOCK_ORDERS, source_id=SourceId("zerodha")
     )
-    assert table_with_src == "pre_bronze.pb_zerodha_investment_stock_orders"
+    assert table_with_src == "pre_bronze.zerodha_investment_stock_orders"
 
     # Sanitization of safe separators (hyphens and periods)
     assert sanitize_physical_identifier("my-source.data") == "my_source_data"
 
     # Rejection of dangerous injection characters
     injection_candidates = [
-        "'; DROP TABLE pre_bronze.pb_test; --",
+        "'; DROP TABLE pre_bronze.test_table; --",
         "source'name",
         '"quoted_table"',
         "source--comment",
@@ -142,7 +142,7 @@ def test_pre_bronze_full_replace_persistence(isolated_pre_bronze_layer: PreBronz
     """Verify full table replacement creates, attaches provenance, and replaces table rows."""
     contract = PreBronzeDataContract(
         dataset_id=DatasetId.HOUSEHOLD_ZCATEGORY,
-        physical_table="pre_bronze.pb_household_zcategory",
+        physical_table="pre_bronze.household_zcategory",
         sync_strategy=SyncStrategy.FULL_REPLACE,
     )
 
@@ -204,7 +204,7 @@ def test_pre_bronze_incremental_artifact_keyed_write(
     """Verify artifact-keyed incremental write replaces changed artifacts and preserves siblings."""
     contract = PreBronzeDataContract(
         dataset_id=DatasetId.INVESTMENT_STOCK_ORDERS,
-        physical_table="pre_bronze.pb_investment_stock_orders",
+        physical_table="pre_bronze.investment_stock_orders",
         sync_strategy=SyncStrategy.INCREMENTAL,
     )
 
@@ -276,7 +276,7 @@ def test_pre_bronze_unchanged_artifact_no_duplication(
     """Verify that re-ingesting an unchanged artifact replaces rows idempotently without duplication."""
     contract = PreBronzeDataContract(
         dataset_id=DatasetId.MARKET_MF_HOLDINGS,
-        physical_table="pre_bronze.pb_market_mf_holdings",
+        physical_table="pre_bronze.market_mf_holdings",
         sync_strategy=SyncStrategy.INCREMENTAL,
     )
     df = pl.DataFrame(
@@ -299,7 +299,7 @@ def test_pre_bronze_artifact_rename_migration(isolated_pre_bronze_layer: PreBron
     """Verify artifact identity migration across file renames without re-extracting data."""
     contract = PreBronzeDataContract(
         dataset_id=DatasetId.INVESTMENT_MF_ORDERS,
-        physical_table="pre_bronze.pb_investment_mf_orders",
+        physical_table="pre_bronze.investment_mf_orders",
         sync_strategy=SyncStrategy.INCREMENTAL,
     )
     df = pl.DataFrame(
@@ -330,7 +330,7 @@ def test_pre_bronze_delete_artifact(isolated_pre_bronze_layer: PreBronzeLayer) -
     """Verify parameterized deletion of an artifact's rows from Pre-Bronze."""
     contract = PreBronzeDataContract(
         dataset_id=DatasetId.INVESTMENT_US_STOCK_TRANSACTIONS,
-        physical_table="pre_bronze.pb_investment_us_stock_transactions",
+        physical_table="pre_bronze.investment_us_stock_transactions",
         sync_strategy=SyncStrategy.INCREMENTAL,
     )
     df_a = pl.DataFrame({"symbol": ["AAPL", "GOOGL"], "shares": [10, 5]})
@@ -356,7 +356,7 @@ def test_pre_bronze_schema_evolution_on_incremental_write(
     """Verify that incremental writes dynamically evolve table schema when new columns appear."""
     contract = PreBronzeDataContract(
         dataset_id=DatasetId.INVESTMENT_STOCK_ORDERS,
-        physical_table="pre_bronze.pb_investment_stock_orders",
+        physical_table="pre_bronze.investment_stock_orders",
         sync_strategy=SyncStrategy.INCREMENTAL,
     )
 
@@ -398,7 +398,7 @@ def test_pre_bronze_read_api_filtering_and_lazy(
     """Verify read filtering by source_id and lazy frame evaluation."""
     contract = PreBronzeDataContract(
         dataset_id=DatasetId.INVESTMENT_STOCK_ORDERS,
-        physical_table="pre_bronze.pb_investment_stock_orders",
+        physical_table="pre_bronze.investment_stock_orders",
         sync_strategy=SyncStrategy.INCREMENTAL,
     )
     df_zerodha = pl.DataFrame({"order_id": ["Z1", "Z2"], "symbol": ["INFY", "TCS"]})
@@ -439,7 +439,7 @@ def test_pre_bronze_transaction_boundary_and_rollback(
 
     contract = PreBronzeDataContract(
         dataset_id=DatasetId.HOUSEHOLD_ZCATEGORY,
-        physical_table="pre_bronze.pb_household_zcategory",
+        physical_table="pre_bronze.household_zcategory",
         sync_strategy=SyncStrategy.FULL_REPLACE,
     )
     df = pl.DataFrame({"Category_ID": [1, 2], "Category_Name": ["A", "B"]})
