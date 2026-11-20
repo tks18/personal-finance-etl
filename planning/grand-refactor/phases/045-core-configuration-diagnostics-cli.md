@@ -67,8 +67,23 @@ Add full support for tri-configuration CLI arguments across launcher and diagnos
 - `--rules <path>`: Financial policies and tax rules (default `rules.toml`);
 - `--sources <path>`: Evidence source topology, selectors, and mappings (default `sources.toml`).
 
-### Step 2 - `validate-config`
-Validate schema/cross-object/capability semantics without source I/O.
+### Step 2 - `validate-config` & Capability-Scoped Financial Rules Validation
+Validate the full tri-configuration triumvirate (`settings.toml`, `sources.toml`, `financial_rules.toml`) without source I/O:
+1. **Settings & Plan Validation:** Validate `Settings` (paths, database names, retention) and resolve active `CapabilityId` set from `settings.capabilities`.
+2. **Sources Validation:** Validate `SourceConfiguration` schemas, dataset bindings, field types, and normalizations against active capabilities.
+3. **Capability-Scoped Financial Rules Contracts & Semantic Validation:**
+   - Partition `FinancialRules` parameters along the Capability Graph (`HOUSEHOLD_CORE`, `WEALTH`, `INVESTMENT_ACCOUNTING`, `BENCHMARK_ENRICHMENT`, `FOREIGN_ASSET_ENRICHMENT`, `TAX`, `FIRE`).
+   - **Logical TOML Heading Restructuring by Capability:**
+     Restructure `financial_rules.toml` so top-level headings map cleanly to capability namespaces (`[household]`, `[wealth]`, `[investments]`, `[benchmark]`, `[tax]`, `[fire]`), replacing disparate legacy root keys (`[income]`, `[expense]`, `[assets]`, `[assumptions]`) with an intuitive, unified heading hierarchy that aligns the configuration file directly with the capability model contracts.
+   - **Plan-Driven Scoped Validation:**
+     - If a capability is disabled (e.g. `TAX` or `FIRE` inactive in a household-only plan), its financial rules section is completely optional or omitted; a minimal 25-line rules file validates cleanly without errors.
+     - If a capability is enabled, its corresponding financial rules contract is strictly validated.
+   - **Concrete Mathematical & Probability Invariants:**
+     - Probabilities strictly bounded: $0.0 \le p \le 1.0$ (Merton jump probability, human capital shock probability).
+     - Stochastic matrix normalization: Markov transition matrix rows must each sum strictly to $1.0$.
+     - Numerical constraints: Monte Carlo iterations $\ge 100$, annual volatility $> 0.0$, SWR multiplier $> 0.0$, positive maximum months horizon.
+     - Tax schedule monotonicity: Tax slabs, indexation dates, and capital gains holding period thresholds must be strictly positive and monotonic.
+     - Disjoint classification invariant: Enforce zero overlap between contradictory category/subcategory classifications (e.g. an account UID cannot be configured as both a liquid cash pool and an illiquid asset; an expense cannot be both core essential and discretionary luxury).
 
 ### Step 3 - source reachability/selector checks
 Verify configured file/DB/provider reachability and table/sheet selectors. Do not mutate registry merely to check.

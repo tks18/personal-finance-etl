@@ -96,9 +96,15 @@ Establish a permanent Generic External Fixture repository at `tests/fixtures/ext
 - `generic_expenses.csv`: column names `Txn_Date`, `Category_Label`, `Spent_Amount`, `Payment_Mode`, `Notes` (dates formatted as `DD/MM/YYYY`);
 - `generic_accounts.xlsx`: multi-sheet workbook with sheets `Bank_Accounts` and `Category_Catalog` with custom header offsets and column names;
 - `generic_household.sqlite`: custom SQLite database with tables `custom_transactions`, `custom_categories`, `custom_accounts` and integer primary keys;
+- Minimal, Capability-Scoped Financial Rules Fixtures:
+  - `rules_household_minimal.toml`: concise 25-line financial rules declaring strictly household categorization (`[income]`, `[expense]`, `[budget]`) and zero tax or FIRE parameters. Proves external household users are never burdened with unneeded domain rules.
+  - `rules_household_wealth.toml`: pairs household categories with cashflow pools and illiquid asset rules (`[assets]`).
 - Capability-specific typed source configurations:
   - `sources_external_household_only.toml`: maps novel columns, date formats, and sheet/table selectors into canonical Bronze household contracts (`HOUSEHOLD_CORE` only).
   - `sources_external_household_wealth.toml`: pairs external household evidence with external cash balance sheets (`HOUSEHOLD_CORE` + `WEALTH`).
+- Dedicated runtime execution profiles:
+  - `settings_external_household_only.toml`: defines `[capabilities] enabled = ["household_core"]`.
+  - `settings_external_household_wealth.toml`: defines `[capabilities] enabled = ["household_core", "wealth"]`.
 
 ### Step 2 - Build Excel fixture/config
 Run diagnostics first (`validate-config`, `check-sources`, `dry-run-admission`), then full household-only pipeline against `generic_accounts.xlsx`. Assert Pre-Bronze retains raw vendor layout while Bronze and Silver reflect normalized canonical financial contracts.

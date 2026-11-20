@@ -89,6 +89,19 @@ Common/core tables and columns explicitly owned outside optional capabilities re
 
 ## 6. Detailed implementation sequence
 
+### Step 0 - Relocate [capabilities] Configuration from sources.toml to settings.toml
+Move capability selection from the physical evidence catalog (`sources.toml`) into runtime execution settings (`settings.toml`):
+- Decouple data source topology from execution scope: `sources.toml` represents the evidence catalog (files, tables, columns, normalizations), while `settings.toml` represents the runtime execution profile (output DB, logs, retention, and active capabilities).
+- Add `capabilities: CapabilitySelection = Field(default_factory=CapabilitySelection)` to `Settings` in `src/personal_finance_etl/config/settings.py`.
+- Users configure active capabilities in `settings.toml`:
+  ```toml
+  [capabilities]
+  enabled = ["household_core", "wealth", "fire"]
+  ```
+- Retain a backwards-compatibility fallback in `SourceConfiguration`: if `capabilities` is specified in `sources.toml` but omitted in `settings.toml`, resolve from `sources.toml` with a deprecation notice until permanently frozen in Phase 049.
+- Allow CLI flags (e.g. `--capability household_core`) to override `Settings.capabilities`.
+- `ExecutionPlan` resolves from `Settings.capabilities` as the primary runtime authority.
+
 ### Step 1 - Build active contract and column resolver
 From ExecutionPlan return ordered Silver/Gold DataContracts and the exact active column subset from `CapabilityColumnInventory`. Validate DatasetId/layer/column/producer consistency.
 

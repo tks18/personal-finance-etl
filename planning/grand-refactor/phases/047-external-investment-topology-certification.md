@@ -70,6 +70,12 @@ Establish a permanent Generic External Investment Fixture repository at `tests/f
   - `sources_external_investments_benchmark.toml`: domestic trades enriched with benchmark index closing prices (`+ BENCHMARK_ENRICHMENT`).
   - `sources_external_investments_foreign.toml`: domestic + US equities with USD/INR currency exchange rates (`+ FOREIGN_ASSET_ENRICHMENT`).
   - `sources_external_investments_tax.toml`: domestic trades enriched with statutory capital gains tax calculations (`+ TAX`).
+- Capability-specific financial rules fixtures:
+  - `rules_investments_domestic_only.toml`: rules declaring instrument categories, base currency, and scheme mappings without tax schedules or FIRE parameters.
+  - `rules_investments_tax.toml`: pairs accounting rules with statutory capital gains schedules (`[assumptions.tax]`).
+- Dedicated runtime execution profiles:
+  - `settings_external_investments_domestic_only.toml`: defines `[capabilities] enabled = ["household_core", "investment_accounting"]`.
+  - `settings_external_investments_tax.toml`: defines `[capabilities] enabled = ["household_core", "investment_accounting", "tax"]`.
 
 ### Step 2 - Configure domestic source
 Configure domestic-only pipeline using `sources_external_investments_domestic_only.toml`. Run diagnostics (`validate-config`, `check-sources`, `dry-run-admission`). Assert no hardcoded vendor assumptions.
