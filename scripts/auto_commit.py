@@ -147,7 +147,12 @@ def _infer_scope(filepath: str) -> str:
     if norm.startswith("src/personal_finance_etl/"):
         rel = norm.replace("src/personal_finance_etl/", "")
         parts = rel.split("/")
-        if len(parts) >= 2 and parts[0] in {"domain", "application", "infrastructure", "presentation"}:
+        if len(parts) >= 2 and parts[0] in {
+            "domain",
+            "application",
+            "infrastructure",
+            "presentation",
+        }:
             return parts[1].rstrip("_")
         return parts[0].rstrip("_")
     if norm.startswith("tests/"):
@@ -418,7 +423,9 @@ def prompt_interactive_group(
         console.print("  [bold cyan]4[/bold cyan] -> Skip this group")
         console.print("  [bold red]q[/bold red] -> Quit / Abort\n")
 
-        choice = Prompt.ask("[bold]Select option[/bold]", choices=["1", "2", "3", "4", "q"], default="1")
+        choice = Prompt.ask(
+            "[bold]Select option[/bold]", choices=["1", "2", "3", "4", "q"], default="1"
+        )
 
         if choice == "1":
             return group.message
@@ -430,7 +437,9 @@ def prompt_interactive_group(
                     console.print("[red]Commit message cannot be empty.[/red]")
                     continue
                 if len(custom_msg) > 72:
-                    console.print(f"[red]Message exceeds 72 characters ({len(custom_msg)} chars).[/red]")
+                    console.print(
+                        f"[red]Message exceeds 72 characters ({len(custom_msg)} chars).[/red]"
+                    )
                     continue
                 return custom_msg
 
@@ -483,8 +492,12 @@ def run_git_commit_group(
 
     if dry_run:
         verify_flag = " --no-verify" if no_verify else ""
-        console.print(f"[dim][DRY-RUN][/dim] git add -A -- {' '.join(paths_to_stage[:3])}{' ...' if len(paths_to_stage) > 3 else ''}")
-        console.print(f'[dim][DRY-RUN][/dim] git commit -m "{group.message}"{verify_flag} [dim]({len(group.files)} files)[/dim]')
+        console.print(
+            f"[dim][DRY-RUN][/dim] git add -A -- {' '.join(paths_to_stage[:3])}{' ...' if len(paths_to_stage) > 3 else ''}"
+        )
+        console.print(
+            f'[dim][DRY-RUN][/dim] git commit -m "{group.message}"{verify_flag} [dim]({len(group.files)} files)[/dim]'
+        )
         return True
 
     # 1. Clean the staging index to ensure pure isolation
@@ -512,7 +525,9 @@ def run_git_commit_group(
         errors="replace",
     )
     if not staged_proc.stdout.strip():
-        console.print(f"[yellow]Skipping group '{group.message}': no staged changes detected.[/yellow]")
+        console.print(
+            f"[yellow]Skipping group '{group.message}': no staged changes detected.[/yellow]"
+        )
         return True
 
     # 4. Execute atomic commit
@@ -539,7 +554,9 @@ def run_git_commit_group(
         subprocess.run(["git", "restore", "--staged", "."], capture_output=True, check=False)
         return False
 
-    console.print(f'[bold green][OK][/bold green] Committed ({len(group.files)} files): "[cyan]{group.message}[/cyan]"')
+    console.print(
+        f'[bold green][OK][/bold green] Committed ({len(group.files)} files): "[cyan]{group.message}[/cyan]"'
+    )
     return True
 
 
@@ -551,7 +568,9 @@ def run_upfront_quality_gate() -> bool:
     bool
         True if all checks pass cleanly, False otherwise.
     """
-    console.print("\n[bold cyan]Running Upfront Quality Gate Verification (Ruff + Mypy)...[/bold cyan]")
+    console.print(
+        "\n[bold cyan]Running Upfront Quality Gate Verification (Ruff + Mypy)...[/bold cyan]"
+    )
     proc = subprocess.run(
         ["uv", "run", "poe", "audit:fast"],
         capture_output=True,
@@ -583,26 +602,41 @@ def main() -> int:
         "--dry-run", action="store_true", help="Preview commits without executing git commands."
     )
     parser.add_argument(
-        "-i", "--interactive", action="store_true", help="Interactive group-by-group Commitlint wizard."
+        "-i",
+        "--interactive",
+        action="store_true",
+        help="Interactive group-by-group Commitlint wizard.",
     )
     parser.add_argument(
         "--run", action="store_true", help="Execute the commits immediately without prompting."
     )
     parser.add_argument(
-        "--map", "--overrides", dest="map_path", type=str, default=None,
-        help="Path to external gitignored JSON file containing Message-to-Paths overrides."
+        "--map",
+        "--overrides",
+        dest="map_path",
+        type=str,
+        default=None,
+        help="Path to external gitignored JSON file containing Message-to-Paths overrides.",
     )
     parser.add_argument(
-        "--only-mapped", "--only-overrides", dest="only_mapped", action="store_true",
-        help="Only commit files that are explicitly defined in the custom overrides map."
+        "--only-mapped",
+        "--only-overrides",
+        dest="only_mapped",
+        action="store_true",
+        help="Only commit files that are explicitly defined in the custom overrides map.",
     )
     parser.add_argument(
-        "-n", "--no-verify", dest="no_verify", action="store_true",
-        help="Bypass git pre-commit and commit-msg hooks."
+        "-n",
+        "--no-verify",
+        dest="no_verify",
+        action="store_true",
+        help="Bypass git pre-commit and commit-msg hooks.",
     )
     parser.add_argument(
-        "--skip-audit", dest="skip_audit", action="store_true",
-        help="Skip upfront quality gate verification."
+        "--skip-audit",
+        dest="skip_audit",
+        action="store_true",
+        help="Skip upfront quality gate verification.",
     )
     args = parser.parse_args()
 
@@ -652,8 +686,12 @@ def main() -> int:
     console.print("")
 
     if is_dry_run:
-        console.print("[dim]To execute these grouped commits, run: uv run python scripts/auto_commit.py --run[/dim]")
-        console.print("[dim]Or run interactively with:            uv run python scripts/auto_commit.py -i[/dim]")
+        console.print(
+            "[dim]To execute these grouped commits, run: uv run python scripts/auto_commit.py --run[/dim]"
+        )
+        console.print(
+            "[dim]Or run interactively with:            uv run python scripts/auto_commit.py -i[/dim]"
+        )
         return 0
 
     # Upfront Quality Gate Verification

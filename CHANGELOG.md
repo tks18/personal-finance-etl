@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [10.2.1](https://github.com/tks18/personal-finance-etl/compare/10.2.0...10.2.1) (2026-11-20)
+
+
+### Tests 🧪
+
+* **recovery:** verify generalized replay across multi-fixture state ([7470d21](https://github.com/tks18/personal-finance-etl/commit/7470d216d8864f629fa910175ec80be4d37072fa))
+
+
+### Features 🔥
+
+* **ci:** enhance quality gate and release tooling with dynamic metrics ([03df7e9](https://github.com/tks18/personal-finance-etl/commit/03df7e9b349959db9a253a6ffa18b0acddcead8e))
+* **pipeline:** implement config classifier and replay coordinator ([04e3189](https://github.com/tks18/personal-finance-etl/commit/04e3189ee7ad7e23afa9dc45ae7d2e80dfc964fb))
+* **pipeline:** integrate selective replay and pruning into execution ([391fd5f](https://github.com/tks18/personal-finance-etl/commit/391fd5f64c8a9930880555f0e574b2a4f8f7f53e))
+* **recovery:** declare config change classes and replay contracts ([7e8d558](https://github.com/tks18/personal-finance-etl/commit/7e8d55876d9832bf09c7d5de8af0edef3f129b8d))
+
+
+### Styling 🎨
+
+* **scripts:** format devops automation and release tooling ([60ac367](https://github.com/tks18/personal-finance-etl/commit/60ac3670ad6aa20b30b7fb1d5bc54418c63549f6))
+
+
+### Docs 📃
+
+* **refactor:** update phase 044 completion and roadmap specifications ([028dba7](https://github.com/tks18/personal-finance-etl/commit/028dba7b54e8c8f52cf9afe0438333499ca0e163))
+
 ## [10.2.0](https://github.com/tks18/personal-finance-etl/compare/10.1.3...10.2.0) (2026-11-20)
 
 

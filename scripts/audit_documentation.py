@@ -116,7 +116,11 @@ class DocumentationAuditor:
                 self._audit_function(node, rel_path, is_method=False)
 
     def _audit_class(self, node: ast.ClassDef, file_path: str) -> None:
-        if not self.include_private and node.name.startswith("_") and not node.name.startswith("__"):
+        if (
+            not self.include_private
+            and node.name.startswith("_")
+            and not node.name.startswith("__")
+        ):
             return
 
         cls_doc = ast.get_docstring(node)
@@ -232,9 +236,7 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    violations = run_audit(
-        include_private=args.strict, require_init_docs=args.require_init
-    )
+    violations = run_audit(include_private=args.strict, require_init_docs=args.require_init)
 
     if args.json:
         print(json.dumps([v.to_dict() for v in violations], indent=2))
@@ -249,7 +251,9 @@ def main() -> int:
         mode_label.append("REQUIRE DEDICATED __INIT__")
 
     print("=" * 80)
-    print(f"AST Documentation Auditor | Scope: src/personal_finance_etl | Mode: {', '.join(mode_label)}")
+    print(
+        f"AST Documentation Auditor | Scope: src/personal_finance_etl | Mode: {', '.join(mode_label)}"
+    )
     print("=" * 80)
 
     if not violations:

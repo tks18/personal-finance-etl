@@ -17,6 +17,7 @@ Certify that PFETL's generalized household ingestion works for three genuinely d
 Slim down and prune canonical Bronze and Silver household schemas:
 - Prune unnecessary vendor columns (e.g. 53 raw MoneyManager columns in `household_opening_balances` and `household_transactions`) down to only the fields that are financially meaningful and required for downstream analytics (`UID`, `Date`/`TRANSACTION_DATE`, `AMOUNT`, `ASSET_SUBCATEGORY_ID`, `CURRENCY_ID`, `DESCRIPTION`, `artifact_id`).
 - Pre-Bronze safely preserves all raw source-shaped columns, while Bronze and Silver expose clean, minimal financial contracts that any external user can easily map.
+- Permanently purge legacy provenance artifacts: verify that household contracts rely exclusively on `artifact_id` and explicit dataset binding, with zero reliance on folder names or legacy tags.
 
 Each fixture must configure PFETL without source-code changes and reach canonical household Silver/Gold outputs or the maximum household-only outputs allowed by the active capability plan.
 
