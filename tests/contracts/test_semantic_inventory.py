@@ -353,7 +353,7 @@ def test_future_silver_ddl_addition_fails_manifest_validation() -> None:
     """Verify that any unmapped column in Silver DDL fails parity validation."""
     ddl_cols_map = _get_ddl_silver_columns()
     # Artificially inject an unmanifested column into a table's list
-    ddl_cols_map["silver.d_Calendar"].append("New_Unclassified_Column")
+    ddl_cols_map["silver.common_calendar"].append("New_Unclassified_Column")
 
     ddl_table_col_pairs = {
         (table.lower(), col) for table, cols in ddl_cols_map.items() for col in cols
@@ -370,7 +370,7 @@ def test_semantic_inventory_query_helpers() -> None:
     """Verify behavior of semantic query functions and error handling."""
     # Silver semantics lookup
     sem = get_silver_contract_semantics(DatasetId.COMMON_CALENDAR)
-    assert sem.physical_table == "silver.d_Calendar"
+    assert sem.physical_table == "silver.common_calendar"
     assert sem.identity_keys == ("Date",)
 
     with pytest.raises(KeyError, match="not a registered Silver contract"):

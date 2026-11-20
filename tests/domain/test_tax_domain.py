@@ -230,7 +230,7 @@ def test_tax_classifier_validation(
     TaxClassifier.validate_subcategory_dimension(mock_subcategory_df)
 
     # Validation fails on missing credit UID
-    with pytest.raises(ValueError, match="do not exist in silver.d_Income_Subcategory"):
+    with pytest.raises(ValueError, match="do not exist in silver.wealth_income_subcategory"):
         TaxClassifier.validate_tax_credit_uids(mock_subcategory_df, {"CAT_NON_EXISTENT": "Head"})
 
     # Validation fails on duplicate dimension UID
