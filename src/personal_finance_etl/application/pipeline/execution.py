@@ -42,6 +42,7 @@ from personal_finance_etl.application.investments.context import (
 )
 from personal_finance_etl.application.investments.quant_service import InvestmentQuantEngine
 from personal_finance_etl.application.pipeline.planner import CapabilityPlanner
+from personal_finance_etl.application.pipeline.replay import ReplayCoordinator
 from personal_finance_etl.application.pipeline.source_planner import (
     CompiledSourcePlan,
     SourcePlanner,
@@ -69,6 +70,7 @@ from personal_finance_etl.contracts.observability import (
     EventCode,
     PresentationKind,
 )
+from personal_finance_etl.contracts.recovery import ReplayAction, ReplayPlan
 from personal_finance_etl.contracts.sources import ProviderType
 from personal_finance_etl.contracts.validation import DataFrameValidator
 from personal_finance_etl.domain.investments.classification import (
@@ -764,6 +766,7 @@ class PipelineExecutor:
         cp: ControlPlane,
         pre_bronze: PreBronzeLayer,
         bronze: BronzeLayer,
+        replay_plan: ReplayPlan | None = None,
     ) -> None:
         """Reconcile removed or disabled datasets by clearing stale DuckDB tables.
 
@@ -775,33 +778,39 @@ class PipelineExecutor:
             Active Pre-Bronze persistence layer.
         bronze : BronzeLayer
             Active Bronze persistence layer.
+        replay_plan : ReplayPlan | None, optional
+            Active replay plan containing potential PRUNE_DISABLED_DATASETS directives.
         """
+        removed: set[str] = set()
+
+        if replay_plan is not None:
+            for change in replay_plan.dataset_changes:
+                if change.action == ReplayAction.PRUNE_DISABLED_DATASETS:
+                    removed.add(change.dataset_id)
+
         latest_snap_id = cp.runs.get_latest_successful_run_source_config_snapshot_id()
-        if not latest_snap_id:
-            return
+        if latest_snap_id:
+            prior_snapshot = cp.runs.get_source_config_snapshot(latest_snap_id)
+            if prior_snapshot and prior_snapshot.get("canonical_payload"):
+                payload_raw = prior_snapshot.get("canonical_payload")
+                if isinstance(payload_raw, str):
+                    try:
+                        snapshot_data = _SnapshotPayload.model_validate_json(payload_raw)
+                        prior_dataset_ids: set[str] = {
+                            ds.dataset_id
+                            for ds in snapshot_data.datasets
+                            if ds.enabled and ds.dataset_id
+                        }
+                        current_dataset_ids: set[str] = {
+                            dp.dataset_id.value
+                            for sp in self.source_plan.source_plans
+                            for dp in sp.dataset_plans
+                            if dp.is_enabled
+                        }
+                        removed.update(prior_dataset_ids - current_dataset_ids)
+                    except Exception:
+                        pass
 
-        prior_snapshot = cp.runs.get_source_config_snapshot(latest_snap_id)
-        if not prior_snapshot or not prior_snapshot.get("canonical_payload"):
-            return
-
-        payload_raw = prior_snapshot.get("canonical_payload")
-        if not isinstance(payload_raw, str):
-            return
-
-        try:
-            snapshot_data = _SnapshotPayload.model_validate_json(payload_raw)
-        except Exception:
-            return
-
-        prior_dataset_ids: set[str] = {
-            ds.dataset_id for ds in snapshot_data.datasets if ds.enabled and ds.dataset_id
-        }
-
-        current_dataset_ids: set[str] = {
-            dp.dataset_id.value for sp in self.source_plan.source_plans for dp in sp.dataset_plans
-        }
-
-        removed = prior_dataset_ids - current_dataset_ids
         for ds_name in sorted(removed):
             try:
                 ds_id = DatasetId(ds_name)
@@ -833,6 +842,7 @@ class PipelineExecutor:
         run_id: str,
         actionable_all: dict[str, list[str]],
         renames: list[tuple[str, str, str]],
+        replay_plan: ReplayPlan | None = None,
     ) -> tuple[BronzeLayer, DatasetCollection]:
         """Execute Phase 2: Ingest discovered datasets into Pre-Bronze and Bronze Lakehouse.
 
@@ -846,6 +856,8 @@ class PipelineExecutor:
             Actionable file paths by category.
         renames : list[tuple[str, str, str]]
             Detected file renames.
+        replay_plan : ReplayPlan | None, optional
+            Evaluated configuration replay and migration directives.
 
         Returns
         -------
@@ -865,7 +877,32 @@ class PipelineExecutor:
         pre_bronze = PreBronzeLayer(self.db_manager, emitter=self.emitter)
 
         # Reconcile removed or disabled datasets
-        self._reconcile_removed_datasets(cp, pre_bronze, bronze)
+        self._reconcile_removed_datasets(cp, pre_bronze, bronze, replay_plan=replay_plan)
+
+        # Replay affected datasets triggered by configuration changes
+        if replay_plan is not None and replay_plan.affected_dataset_ids:
+            ReplayCoordinator.prepare_dataset_replay(
+                self.db_manager, replay_plan.affected_dataset_ids
+            )
+            all_paths_by_cat = cp.artifacts.get_all_paths_by_category()
+            for ds_name in replay_plan.affected_dataset_ids:
+                try:
+                    ds_id = DatasetId(ds_name)
+                except ValueError:
+                    continue
+                b_contract = get_bronze_contract_by_dataset_id(ds_id)
+                if b_contract:
+                    cat = b_contract.sync_category
+                    cat_files = all_paths_by_cat.get(cat, [])
+                    if cat_files:
+                        existing_cat = actionable_all.setdefault(cat, [])
+                        for p in cat_files:
+                            if p not in existing_cat:
+                                existing_cat.append(p)
+                        existing_ds = actionable_all.setdefault(ds_name, [])
+                        for p in cat_files:
+                            if p not in existing_ds:
+                                existing_ds.append(p)
 
         if renames:
             bronze.migrate_identity(renames)
@@ -1086,7 +1123,12 @@ class PipelineExecutor:
         meta_layer = MetaLayer(self.db_manager, self.cfg, self.rules)
         meta_layer.load(self.dfs, cp=cp, plan=self.plan)
 
-    def execute_phases(self, cp: ControlPlane, run_id: str) -> None:
+    def execute_phases(
+        self,
+        cp: ControlPlane,
+        run_id: str,
+        replay_plan: ReplayPlan | None = None,
+    ) -> None:
         """Execute all five sequential ETL pipeline phases.
 
         Parameters
@@ -1095,6 +1137,8 @@ class PipelineExecutor:
             Active ControlPlane instance.
         run_id : str
             Unique execution run ID.
+        replay_plan : ReplayPlan | None, optional
+            Evaluated configuration replay and migration directives.
         """
         self.cfg.validate_config()
         validate_registry()
@@ -1113,7 +1157,9 @@ class PipelineExecutor:
             with self.emitter.scope(
                 operation="phase_2_bronze", component="pipeline", stage=EngineStage.EXTRACTING
             ):
-                bronze, full_dataset = self._run_bronze_phase(cp, run_id, actionable_all, renames)
+                bronze, full_dataset = self._run_bronze_phase(
+                    cp, run_id, actionable_all, renames, replay_plan=replay_plan
+                )
             with self.emitter.scope(
                 operation="phase_3_transform", component="pipeline", stage=EngineStage.TRANSFORMING
             ):

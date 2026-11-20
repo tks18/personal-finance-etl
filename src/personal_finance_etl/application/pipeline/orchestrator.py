@@ -130,7 +130,7 @@ class ETLOrchestrator:
                 stage=EngineStage.INITIALIZING,
             )
 
-            self.executor.execute_phases(cp, run_id)
+            self.executor.execute_phases(cp, run_id, replay_plan=lifecycle.replay_plan)
             lifecycle.commit()
 
             total_time = time.perf_counter() - start_time
