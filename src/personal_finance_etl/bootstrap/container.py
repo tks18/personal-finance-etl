@@ -217,10 +217,10 @@ class ServiceContainer:
         src_cfg = source_config or self.create_source_config(sources_path, settings=cfg)
         active_queue: EventQueue = status_queue or cast(EventQueue, _NullEventQueue())
 
-        # If execution plan is not explicitly provided, resolve from source_config capability selection
+        # If execution plan is not explicitly provided, resolve from settings capability selection
         resolved_plan = plan
         if resolved_plan is None:
-            requested_caps = src_cfg.capabilities.resolved_capabilities
+            requested_caps = cfg.capabilities.resolved_capabilities
             resolved_plan = CapabilityPlanner().create_plan(requested_capabilities=requested_caps)
 
         # Compile non-I/O source plan

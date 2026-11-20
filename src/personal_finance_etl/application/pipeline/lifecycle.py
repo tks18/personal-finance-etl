@@ -175,7 +175,7 @@ class RunLifecycleCoordinator:
             Tuple of active ControlPlane instance, unique run_id string, and pending recovery run IDs.
         """
         self.db_manager.open()
-        self.db_manager.ensure_schemas()
+        self.db_manager.ensure_schemas(self.plan)
 
         cp = ControlPlane(self.cfg.TARGET_DB_BASE_PATH, self.cfg.RAW_DOCUMENT_STORE_NAME)
         cp.open()

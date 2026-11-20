@@ -25,6 +25,7 @@ import polars as pl
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
 from personal_finance_etl.config.sources.change_detection import SyncStrategy
+from personal_finance_etl.contracts.execution_plan import ExecutionPlan
 from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
 from personal_finance_etl.infrastructure.control_plane.hashing import (
     FILE_TYPE_MAP,
@@ -285,11 +286,19 @@ class MetaLayer:
                 ],
             )
 
-    def _record_data_contracts(self) -> None:
-        """Publish registered Pre-Bronze, Bronze, Silver, and Gold data contracts into DuckDB."""
+    def _record_data_contracts(self, plan: ExecutionPlan | None = None) -> None:
+        """Publish registered Pre-Bronze, Bronze, Silver, and Gold data contracts into DuckDB.
+
+        Parameters
+        ----------
+        plan : ExecutionPlan | None, optional
+            Active execution plan. If None, all registered data contracts are recorded.
+        """
         self.conn.execute("DELETE FROM meta.m_Data_Contracts")
 
         for pb_contract in PRE_BRONZE_CONTRACT_REGISTRY:
+            if plan is not None and not plan.is_pre_bronze_dataset_active(pb_contract.dataset_id):
+                continue
             self.conn.execute(
                 """
                 INSERT INTO meta.m_Data_Contracts 
@@ -309,6 +318,8 @@ class MetaLayer:
             )
 
         for b_contract in BRONZE_CONTRACT_REGISTRY:
+            if plan is not None and not plan.is_bronze_dataset_active(b_contract.dataset_id):
+                continue
             self.conn.execute(
                 """
                 INSERT INTO meta.m_Data_Contracts 
@@ -328,6 +339,15 @@ class MetaLayer:
             )
 
         for contract in DATA_CONTRACT_REGISTRY:
+            if plan is not None:
+                if contract.layer == "silver" and not plan.is_silver_dataset_active(
+                    contract.dataset_id
+                ):
+                    continue
+                if contract.layer == "gold" and not plan.is_gold_dataset_active(
+                    contract.dataset_id
+                ):
+                    continue
             self.conn.execute(
                 """
                 INSERT INTO meta.m_Data_Contracts 
@@ -346,29 +366,86 @@ class MetaLayer:
                 ],
             )
 
-    def cleanup_orphaned_tables(self) -> None:
-        """Drop any physical tables in pre_bronze/bronze/silver/gold schemas not declared in contracts."""
+    def cleanup_orphaned_tables(self, plan: ExecutionPlan | None = None) -> None:
+        """Drop any managed physical tables in pre_bronze/bronze/silver/gold schemas not active in plan.
+
+        Parameters
+        ----------
+        plan : ExecutionPlan | None, optional
+            Active execution plan. If None, all declared contracts are treated as active.
+
+        Notes
+        -----
+        Unknown or user-defined tables not present in any contract registry are strictly preserved.
+        """
         schema_placeholders = ", ".join(f"'{s}'" for s in PERSISTED_DATA_SCHEMAS)
         existing_tables = self.conn.execute(
             f"SELECT lower(table_schema), lower(table_name) "  # nosec B608
             f"FROM information_schema.tables WHERE lower(table_schema) IN ({schema_placeholders})"
         ).fetchall()
 
-        valid_physical_tables = {c.physical_table.lower() for c in PRE_BRONZE_CONTRACT_REGISTRY}
-        valid_physical_tables.update({c.physical_table.lower() for c in BRONZE_CONTRACT_REGISTRY})
-        valid_physical_tables.update({c.physical_table.lower() for c in DATA_CONTRACT_REGISTRY})
+        all_managed_tables: set[str] = {
+            c.physical_table.lower() for c in PRE_BRONZE_CONTRACT_REGISTRY
+        }
+        all_managed_tables.update(c.physical_table.lower() for c in BRONZE_CONTRACT_REGISTRY)
+        all_managed_tables.update(c.physical_table.lower() for c in DATA_CONTRACT_REGISTRY)
+
+        active_tables: set[str] = set()
+        if plan is None:
+            active_tables.update(all_managed_tables)
+        else:
+            active_tables.update(
+                c.physical_table.lower()
+                for c in PRE_BRONZE_CONTRACT_REGISTRY
+                if plan.is_pre_bronze_dataset_active(c.dataset_id)
+            )
+            active_tables.update(
+                c.physical_table.lower()
+                for c in BRONZE_CONTRACT_REGISTRY
+                if plan.is_bronze_dataset_active(c.dataset_id)
+            )
+            active_tables.update(
+                c.physical_table.lower()
+                for c in DATA_CONTRACT_REGISTRY
+                if (
+                    (c.layer == "silver" and plan.is_silver_dataset_active(c.dataset_id))
+                    or (c.layer == "gold" and plan.is_gold_dataset_active(c.dataset_id))
+                )
+            )
+
+        to_drop = [
+            f"{schema_name}.{table_name}"
+            for schema_name, table_name in existing_tables
+            if f"{schema_name}.{table_name}" in all_managed_tables
+            and f"{schema_name}.{table_name}" not in active_tables
+        ]
+        contract_order = {
+            c.physical_table.lower(): c.publication_order for c in DATA_CONTRACT_REGISTRY
+        }
+        to_drop.sort(key=lambda t: contract_order.get(t.lower(), 0), reverse=True)
+
+        for full_table_name in to_drop:
+            diagnostics.warning(
+                "MetaLayer: Dropping inactive managed physical table %s", full_table_name
+            )
+            self.conn.execute(f"DROP TABLE IF EXISTS {full_table_name}")  # nosec B608
 
         for schema_name, table_name in existing_tables:
             full_table_name = f"{schema_name}.{table_name}"
-            if full_table_name not in valid_physical_tables:
-                diagnostics.warning(
-                    "MetaLayer: Dropping orphaned physical table %s", full_table_name
+            if full_table_name not in all_managed_tables:
+                diagnostics.debug(
+                    "MetaLayer: Preserving unmanaged / user-defined table %s", full_table_name
                 )
-                self.conn.execute(f"DROP TABLE IF EXISTS {full_table_name} CASCADE")  # nosec B608
 
-    def _cleanup_orphaned_tables(self) -> None:
-        """Drop any physical tables not declared in contracts (internal alias)."""
-        self.cleanup_orphaned_tables()
+    def _cleanup_orphaned_tables(self, plan: ExecutionPlan | None = None) -> None:
+        """Drop any managed physical tables not declared in active contracts (internal alias).
+
+        Parameters
+        ----------
+        plan : ExecutionPlan | None, optional
+            Active execution plan.
+        """
+        self.cleanup_orphaned_tables(plan)
 
     def _mirror_latest_simulation(
         self,
@@ -423,7 +500,12 @@ class MetaLayer:
                 mirror_err,
             )
 
-    def load(self, dfs: dict[str, pl.DataFrame], cp: ControlPlane | None = None) -> None:
+    def load(
+        self,
+        dfs: dict[str, pl.DataFrame],
+        cp: ControlPlane | None = None,
+        plan: ExecutionPlan | None = None,
+    ) -> None:
         """Truncate and record latest table row counts, configurations, and simulation provenance.
 
         Parameters
@@ -432,13 +514,15 @@ class MetaLayer:
             Transformed DataFrames keyed by contract_id.
         cp : ControlPlane, optional
             Active control plane facade for mirroring simulation provenance.
+        plan : ExecutionPlan, optional
+            Active execution plan specifying active datasets and pruned columns.
         """
         diagnostics.info("Recording current table metrics and configurations to Meta Layer...")
 
         self._record_table_metrics(dfs)
         self._record_rules_and_settings()
-        self._record_data_contracts()
-        self.cleanup_orphaned_tables()
+        self._record_data_contracts(plan)
+        self.cleanup_orphaned_tables(plan)
 
         tables_metadata = [
             {
@@ -448,6 +532,9 @@ class MetaLayer:
                 "producer": c.producer,
             }
             for c in DATA_CONTRACT_REGISTRY
+            if plan is None
+            or (c.layer == "silver" and plan.is_silver_dataset_active(c.dataset_id))
+            or (c.layer == "gold" and plan.is_gold_dataset_active(c.dataset_id))
         ]
         contract_registry_fingerprint = generate_contract_registry_fingerprint(tables_metadata)
 
