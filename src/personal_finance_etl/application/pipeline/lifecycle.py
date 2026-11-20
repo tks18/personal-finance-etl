@@ -22,6 +22,7 @@ import traceback
 from pathlib import Path
 
 from personal_finance_etl.application.pipeline.planner import CapabilityPlanner
+from personal_finance_etl.application.pipeline.replay import ReplayCoordinator
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
 from personal_finance_etl.config.sources import (
@@ -44,6 +45,7 @@ from personal_finance_etl.contracts.observability import (
     ObservabilityContext,
     PresentationKind,
 )
+from personal_finance_etl.contracts.recovery import ReplayPlan
 from personal_finance_etl.infrastructure.control_plane import ControlPlane
 from personal_finance_etl.infrastructure.observability import (
     AsyncObservabilityListener,
@@ -104,6 +106,8 @@ class RunLifecycleCoordinator:
         self.forensic_sink: JsonlForensicSink | None = None
         self.async_listener: AsyncObservabilityListener | None = None
         self.queue_sink: ObservabilityQueueSink | None = None
+        self.replay_coordinator: ReplayCoordinator | None = None
+        self.replay_plan: ReplayPlan | None = None
 
     def _dump_configuration_logs(self) -> None:
         """Emit deterministic provenance fingerprint event and safe configuration summary."""
@@ -181,6 +185,12 @@ class RunLifecycleCoordinator:
         cp.open()
         cp.ensure_schema()
         self.cp = cp
+
+        # 0. Evaluate configuration replay and enforce identity policy guards upfront
+        self.replay_coordinator = ReplayCoordinator(
+            self.cfg, self.source_config, emitter=self.emitter
+        )
+        self.replay_plan = self.replay_coordinator.evaluate(cp)
 
         # 1. Authoritative SQLite State
         run_id = cp.runs.start_run(

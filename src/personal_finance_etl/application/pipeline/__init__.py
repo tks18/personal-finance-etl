@@ -18,6 +18,10 @@ from __future__ import annotations
 from personal_finance_etl.application.pipeline.execution import PipelineExecutor
 from personal_finance_etl.application.pipeline.lifecycle import RunLifecycleCoordinator
 from personal_finance_etl.application.pipeline.orchestrator import ETLOrchestrator
+from personal_finance_etl.application.pipeline.replay import (
+    ReplayCoordinator,
+    SourceConfigChangeClassifier,
+)
 from personal_finance_etl.application.pipeline.source_planner import (
     CompiledSourcePlan,
     DatasetPlan,
@@ -38,7 +42,9 @@ __all__ = [
     "ETLOrchestrator",
     "PipelineExecutor",
     "QueueStream",
+    "ReplayCoordinator",
     "RunLifecycleCoordinator",
+    "SourceConfigChangeClassifier",
     "SourcePlan",
     "SourcePlanner",
     "SourcePlanningError",
