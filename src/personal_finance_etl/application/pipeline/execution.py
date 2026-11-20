@@ -592,26 +592,30 @@ class PipelineExecutor:
             root_seed=run_id,
             emitter=self.emitter,
             enable_tax=self.plan.is_capability_active(CapabilityId.TAX),
+            plan=self.plan,
         )
         presentation_lazy = wealth_engine.run(self.dfs)
         materialized_presentation = materialize_presentation_graphs(presentation_lazy, self.emitter)
         self.dfs.update(materialized_presentation)
 
-        if cp and self.rules:
-            metadata = cp.runs.get_run_metadata(run_id)
-            cp.runs.log_simulation_run(
-                SimulationRunParams(
-                    run_id=str(run_id),
-                    root_seed=str(run_id),
-                    rules=self.rules,
-                    input_df=self.dfs.get("df_p_tf_wealth_risk_analytics_inputs"),
-                    result_df=self.dfs.get("df_p_tf_wealth_risk_analytics"),
-                    settings_snapshot_id=metadata.get("settings_snapshot_id"),
-                    rules_snapshot_id=metadata.get("rules_snapshot_id")
-                    if metadata.get("rules_snapshot_id") != "UNKNOWN"
-                    else None,
+        if cp and self.rules and self.plan.is_capability_active(CapabilityId.FIRE):
+            input_df = self.dfs.get("df_p_tf_wealth_risk_analytics_inputs")
+            result_df = self.dfs.get("df_p_tf_wealth_risk_analytics")
+            if input_df is not None and result_df is not None:
+                metadata = cp.runs.get_run_metadata(run_id)
+                cp.runs.log_simulation_run(
+                    SimulationRunParams(
+                        run_id=str(run_id),
+                        root_seed=str(run_id),
+                        rules=self.rules,
+                        input_df=input_df,
+                        result_df=result_df,
+                        settings_snapshot_id=metadata.get("settings_snapshot_id"),
+                        rules_snapshot_id=metadata.get("rules_snapshot_id")
+                        if metadata.get("rules_snapshot_id") != "UNKNOWN"
+                        else None,
+                    )
                 )
-            )
 
         if "df_p_tf_wealth_risk_analytics_inputs" in self.dfs:
             self.dfs.pop("df_p_tf_wealth_risk_analytics_inputs")
@@ -637,9 +641,27 @@ class PipelineExecutor:
                 presentation_kind=PresentationKind.SKIP,
                 stage=EngineStage.ANALYZING,
             )
-        if self.plan.is_capability_active(CapabilityId.WEALTH) or self.plan.is_capability_active(
-            CapabilityId.FIRE
-        ):
+
+        is_household = self.plan.is_capability_active(CapabilityId.HOUSEHOLD_CORE)
+        is_wealth = self.plan.is_capability_active(CapabilityId.WEALTH)
+        is_fire = self.plan.is_capability_active(CapabilityId.FIRE)
+
+        if not is_wealth:
+            self.emitter.emit_event(
+                event_code=EventCode.WEALTH_ENGINE_START,
+                message="Capability 'wealth' inactive in execution plan. Skipping Wealth Engine.",
+                presentation_kind=PresentationKind.SKIP,
+                stage=EngineStage.ANALYZING,
+            )
+        if not is_fire:
+            self.emitter.emit_event(
+                event_code=EventCode.FIRE_ENGINE_START,
+                message="Capability 'fire' inactive in execution plan. Skipping FIRE simulation engine.",
+                presentation_kind=PresentationKind.SKIP,
+                stage=EngineStage.ANALYZING,
+            )
+
+        if is_household or is_wealth or is_fire:
             self._run_presentation_engine(cp, run_id)
 
     def _run_discovery_phase(

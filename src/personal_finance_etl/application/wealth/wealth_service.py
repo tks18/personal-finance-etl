@@ -22,6 +22,8 @@ import polars.selectors as cs
 
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.contracts.application import EngineStage
+from personal_finance_etl.contracts.capabilities import CapabilityId
+from personal_finance_etl.contracts.execution_plan import ExecutionPlan
 from personal_finance_etl.contracts.observability import (
     EventCode,
     PresentationKind,
@@ -64,11 +66,31 @@ class WealthService:
         root_seed: str = "default_seed",
         emitter: ObservabilityEmitter | None = None,
         enable_tax: bool = True,
+        plan: ExecutionPlan | None = None,
     ) -> None:
         self.rules = rules
         self.root_seed = root_seed
         self.emitter = emitter or get_global_emitter()
-        self.enable_tax = enable_tax
+        self.plan = plan
+
+        if plan is not None:
+            self.is_household_active = plan.is_capability_active(CapabilityId.HOUSEHOLD_CORE)
+            self.is_wealth_active = plan.is_capability_active(CapabilityId.WEALTH)
+            self.is_fire_active = plan.is_capability_active(CapabilityId.FIRE)
+            self.is_investment_active = plan.is_capability_active(
+                CapabilityId.INVESTMENT_ACCOUNTING
+            )
+            self.is_foreign_active = plan.is_capability_active(
+                CapabilityId.FOREIGN_ASSET_ENRICHMENT
+            )
+            self.enable_tax = plan.is_capability_active(CapabilityId.TAX)
+        else:
+            self.is_household_active = True
+            self.is_wealth_active = True
+            self.is_fire_active = True
+            self.is_investment_active = True
+            self.is_foreign_active = True
+            self.enable_tax = enable_tax
 
     def _build_core_models(
         self, dfs: Mapping[str, pl.DataFrame | pl.LazyFrame]
@@ -96,7 +118,13 @@ class WealthService:
             return None
 
         net_worth_res = NetWorthBuilder(
-            dfs, inflation_res, ledger_res, self.rules.DEFAULT_CURRENCY_ID
+            dfs,
+            inflation_res,
+            ledger_res,
+            self.rules.DEFAULT_CURRENCY_ID,
+            is_investment_active=self.is_investment_active,
+            is_foreign_active=self.is_foreign_active,
+            is_wealth_active=self.is_wealth_active,
         ).build()
 
         return {
@@ -113,56 +141,78 @@ class WealthService:
     ) -> dict[str, pl.LazyFrame]:
         """Execute downstream presentation and analytical model builders."""
         results: dict[str, pl.LazyFrame] = {
-            "df_p_tf_net_worth_monthly_summary": base_lf["lf_nw_summary"],
             "df_p_tf_wealth_monthly_totals": base_lf["lf_monthly_totals"],
-            "df_p_tf_category_spend_analytics": SpendAnalyticsBuilder(
-                dfs, base_lf, rules=self.rules
-            ).build(),
-            "df_p_tf_income_streams_monthly": IncomeStreamsBuilder(
-                dfs, base_lf, rules=self.rules
-            ).build(),
-            "df_p_tf_budget_forecast_monthly": BudgetForecastBuilder(
-                dfs, base_lf, rules=self.rules
-            ).build(),
-            "df_p_tf_investment_analytics": InvestmentAnalyticsBuilder(
-                dfs, base_lf, rules=self.rules, enable_tax=self.enable_tax
-            ).build(),
         }
 
-        iterations = (
-            self.rules.assumptions.monte_carlo.iterations
-            if self.rules.assumptions and self.rules.assumptions.monte_carlo
-            else 1000
-        )
-        self.emitter.emit_event(
-            event_code=EventCode.FIRE_ENGINE_START,
-            message=f"Starting FIRE Monte Carlo simulation engine ({iterations:,} paths)...",
-            presentation_kind=PresentationKind.STEP,
-            stage=EngineStage.ANALYZING,
-            entity_type="Engine",
-            entity_id="MonteCarlo",
-            rows=iterations,
-        )
-        wealth_risk_res = WealthRiskAnalyticsBuilder(
-            dfs, base_lf, rules=self.rules, root_seed=self.root_seed
-        ).build()
-        results.update(wealth_risk_res)
-        self.emitter.emit_event(
-            event_code=EventCode.FIRE_ENGINE_COMPLETED,
-            message=f"FIRE Monte Carlo simulations complete — generated {len(wealth_risk_res)} risk models",
-            presentation_kind=PresentationKind.SUCCESS,
-            stage=EngineStage.ANALYZING,
-            entity_type="Engine",
-            entity_id="MonteCarlo",
-            rows=len(wealth_risk_res),
-        )
+        if self.is_wealth_active:
+            results["df_p_tf_net_worth_monthly_summary"] = base_lf["lf_nw_summary"]
 
-        results["df_p_tf_monthly_cashflow_summary"] = MonthlyCashflowSummaryBuilder(
-            dfs, base_lf, rules=self.rules
-        ).build()
-        results["df_p_tf_cashflow_activity_summary"] = CashflowStatementBuilder(
-            dfs, base_lf, rules=self.rules
-        ).build()
+        if self.is_household_active:
+            results["df_p_tf_category_spend_analytics"] = SpendAnalyticsBuilder(
+                dfs, base_lf, rules=self.rules
+            ).build()
+            results["df_p_tf_income_streams_monthly"] = IncomeStreamsBuilder(
+                dfs, base_lf, rules=self.rules
+            ).build()
+            results["df_p_tf_budget_forecast_monthly"] = BudgetForecastBuilder(
+                dfs, base_lf, rules=self.rules
+            ).build()
+            results["df_p_tf_monthly_cashflow_summary"] = MonthlyCashflowSummaryBuilder(
+                dfs, base_lf, rules=self.rules
+            ).build()
+            results["df_p_tf_cashflow_activity_summary"] = CashflowStatementBuilder(
+                dfs, base_lf, rules=self.rules
+            ).build()
+
+        if self.is_investment_active:
+            results["df_p_tf_investment_analytics"] = InvestmentAnalyticsBuilder(
+                dfs, base_lf, rules=self.rules, enable_tax=self.enable_tax
+            ).build()
+
+        if self.is_wealth_active:
+            if self.is_fire_active:
+                iterations = (
+                    self.rules.assumptions.monte_carlo.iterations
+                    if self.rules.assumptions and self.rules.assumptions.monte_carlo
+                    else 1000
+                )
+                self.emitter.emit_event(
+                    event_code=EventCode.FIRE_ENGINE_START,
+                    message=f"Starting FIRE Monte Carlo simulation engine ({iterations:,} paths)...",
+                    presentation_kind=PresentationKind.STEP,
+                    stage=EngineStage.ANALYZING,
+                    entity_type="Engine",
+                    entity_id="MonteCarlo",
+                    rows=iterations,
+                )
+            wealth_risk_res = WealthRiskAnalyticsBuilder(
+                dfs,
+                base_lf,
+                rules=self.rules,
+                root_seed=self.root_seed,
+                is_fire_active=self.is_fire_active,
+                is_investment_active=self.is_investment_active,
+            ).build()
+            results.update(wealth_risk_res)
+            if self.is_fire_active:
+                self.emitter.emit_event(
+                    event_code=EventCode.FIRE_ENGINE_COMPLETED,
+                    message=f"FIRE Monte Carlo simulations complete — generated {len(wealth_risk_res)} risk models",
+                    presentation_kind=PresentationKind.SUCCESS,
+                    stage=EngineStage.ANALYZING,
+                    entity_type="Engine",
+                    entity_id="MonteCarlo",
+                    rows=len(wealth_risk_res),
+                )
+            else:
+                self.emitter.emit_event(
+                    event_code=EventCode.FIRE_ENGINE_START,
+                    message="Capability 'fire' inactive in execution plan. Skipping FIRE simulation matrix.",
+                    presentation_kind=PresentationKind.SKIP,
+                    stage=EngineStage.ANALYZING,
+                    entity_type="Engine",
+                    entity_id="MonteCarlo",
+                )
 
         return results
 
