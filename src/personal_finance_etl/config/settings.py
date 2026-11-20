@@ -82,6 +82,9 @@ class Settings(BaseModel):
     # Capability Execution Scope
     capabilities: CapabilitySelection = Field(default_factory=CapabilitySelection)
 
+    # Replay & Identity Migration Policies
+    ALLOW_IDENTITY_REBUILD: bool = False
+
     # Observability & Forensic Logging
     LOGS_DIRECTORY: str = "logs/runs"
     RETAIN_LAST_N_RUNS: int = 12
