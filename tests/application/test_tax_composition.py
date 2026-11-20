@@ -251,6 +251,7 @@ def test_pipeline_executor_skips_tax_engine_when_tax_disabled() -> None:
 
     executor._run_quant_engine = MagicMock()  # type: ignore[method-assign]
     executor._run_tax_engine = MagicMock()  # type: ignore[method-assign]
+    executor._run_presentation_engine = MagicMock()  # type: ignore[method-assign]
     executor.run_engines(cp=None, run_id="test_run_tax_disabled")
 
     # Assert _run_quant_engine was called but _run_tax_engine was NEVER called
