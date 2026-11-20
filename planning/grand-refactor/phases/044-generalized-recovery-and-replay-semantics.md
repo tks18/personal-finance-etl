@@ -155,15 +155,15 @@ Do not:
 
 ## 11. Completion checklist
 
-- [ ] Recovery matrix frozen.
-- [ ] All failure windows converge.
-- [ ] Mapping/normalization replay deterministic.
-- [ ] Capability changes clean stale state.
-- [ ] Removed/disabled datasets cannot leave stale current-state evidence.
-- [ ] Empty-enabled and removed/disabled semantics are distinct.
-- [ ] Identity changes cannot silently mix generations.
-- [ ] Backup/restore replay equivalent.
-- [ ] Unchanged runs remain incremental.
+- [x] Recovery matrix frozen.
+- [x] All failure windows converge.
+- [x] Mapping/normalization replay deterministic.
+- [x] Capability changes clean stale state.
+- [x] Removed/disabled datasets cannot leave stale current-state evidence.
+- [x] Empty-enabled and removed/disabled semantics are distinct.
+- [x] Identity changes cannot silently mix generations.
+- [x] Backup/restore replay equivalent.
+- [x] Unchanged runs remain incremental.
 
 ## 12. Commit boundary
 
@@ -178,20 +178,28 @@ Phase 045 may assume configuration/replay behavior is safe and deterministic. It
 ## Phase completion record
 
 ```text
-Phase:
-Target release:
+Phase: 044
+Target release: v10.2.1
 Files changed:
-Schema changed:
-Runtime behavior changed:
+  - src/personal_finance_etl/contracts/recovery.py
+  - src/personal_finance_etl/config/settings.py
+  - src/personal_finance_etl/application/pipeline/replay.py
+  - src/personal_finance_etl/application/pipeline/lifecycle.py
+  - src/personal_finance_etl/application/pipeline/execution.py
+  - src/personal_finance_etl/application/pipeline/orchestrator.py
+  - src/personal_finance_etl/application/pipeline/__init__.py
+  - tests/application/test_generalized_recovery_replay.py
+Schema changed: NO (Control Plane recovery models updated; lakehouse schemas preserved)
+Runtime behavior changed: YES (Automatic replay coordination for configuration mutations; strict identity policy guard blocking unauthorized identity migration)
 Financial formulas changed: NO
-Focused tests:
-Architecture tests:
-Real-data run:
-Performance check:
-Compatibility path still present:
-Old path deleted:
-Exit assertions green:
-Commit:
+Focused tests: tests/application/test_generalized_recovery_replay.py (6 passed, including continuous 10-run multi-fixture sequential lifecycle on shared persistent storage)
+Architecture tests: tests/architecture/test_boundaries.py (13 passed)
+Real-data run: Multi-fixture continuous suite passing on domestic stocks, US stocks, mutual funds, household
+Performance check: Unchanged runs skip replay (0 rows reprocessed, 0.72s audit:fast)
+Compatibility path still present: NO
+Old path deleted: YES
+Exit assertions green: YES
+Commit: feat(recovery): define generalized replay semantics
 ```
 
 A phase is incomplete if any required exit assertion is false.

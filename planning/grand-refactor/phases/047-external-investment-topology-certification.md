@@ -15,6 +15,7 @@ Certify external investment use cases with at least:
 Slim down and prune canonical Bronze and Silver investment schemas:
 - Prune vendor-specific columns from stock trades, mutual fund orders, and US equity transactions down to the essential financial attributes needed for FIFO lots, realized gains, and portfolio valuation (`ISIN`/`Instrument_Name`, `Date`, `Transaction_Type`, `Quantity`, `Price`, `Amount`, `Fees`/`Brokerage`, `Currency_ID`, `artifact_id`).
 - Pre-Bronze preserves full source-shaped brokerage exports, while Bronze and Silver expose clean, minimal investment contracts that any brokerage format can satisfy without carrying legacy vendor columns.
+- Permanently demolish `__file_category__`: completely excise the legacy `__file_category__` column from Bronze table DDL, Pandera schemas (`CANONICAL_BRONZE_INVESTMENT_*_SCHEMA`), `CANONICAL_BRONZE_FIELDS`, Excel file readers, and source configurations. Authoritative row provenance is strictly owned by `artifact_id` and the 1-to-1 dataset binding, eliminating legacy folder-derived tags from financial lakehouse contracts.
 
 Both configurations must use source shapes/topologies different from Shan's current vendors and require no source-code changes. Capability dependency failures must be diagnosed before financial execution.
 

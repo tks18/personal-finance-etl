@@ -118,7 +118,9 @@ Convert Shan's live production configuration in Google Drive to explicit TOML fi
      - Zero references to retired `column_master`.
 2. **Update `shan_personal_finance_ETL.toml` & `shan_personal_finance_ETL_Test.toml` (`Settings`):**
    - Cleanly prune all redundant source file paths (`COLUMN_MASTER_PATH`, `MF_ISIN_CSV_PATH`, `BENCHMARK_MAPPING_CSV_PATH`, `BENCHMARK_MASTER_CSV_PATH`, `MACRO_PARAMETERS_CSV_PATH`, `OPENING_BALANCE_CSV_PATH`, `CURRENCY_MAPPING_CSV_PATH`, `SOURCE_DB_FOLDER`, `STATEMENTS_FOLDER`) that are now owned by `sources.toml`.
-   - Keep settings focused strictly on execution/storage environment (`TARGET_DB_BASE_PATH`, `TARGET_DB_NAME`, `RAW_DOCUMENT_STORE_NAME`, `LOGS_DIRECTORY`, `RETAIN_LAST_N_RUNS`, `FILE_HASH_POLICY`).
+   - Permanently excise `FILE_HASH_POLICY` from `Settings` and `settings.toml`: file change detection and hashing policies are strictly per-dataset concerns owned by `change_detection: ChangeDetectionPolicy` in `sources.toml`.
+   - Keep `Settings` focused strictly on execution/storage environment (`TARGET_DB_BASE_PATH`, `TARGET_DB_NAME`, `RAW_DOCUMENT_STORE_NAME`, `DISABLE_FILE_DISCOVERER`, `LOGS_DIRECTORY`, `RETAIN_LAST_N_RUNS`, `ALLOW_IDENTITY_REBUILD`, `capabilities`).
+   - Demolish all deprecated path fields and `FILE_HASH_POLICY` from `src/personal_finance_etl/config/settings.py`.
 3. **Update `shan_personal_finance_rules.toml` (`FinancialRules`):**
    - Synchronize financial rules models with finalized capability IDs, tax schedules, inflation parameters, and withdrawal rates.
 4. **Demolish Hardcoded Python Dictionaries from `loader.py`:**
