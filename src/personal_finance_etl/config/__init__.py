@@ -17,6 +17,7 @@ Does not own
 - UI configuration forms (owned by presentation).
 """
 
+from personal_finance_etl.config.capabilities import CapabilitySelection
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import FileHashPolicy, Settings
 from personal_finance_etl.config.sources import (
@@ -42,6 +43,7 @@ from personal_finance_etl.config.sources import (
 
 __all__ = [
     "BronzeIdentityStrategy",
+    "CapabilitySelection",
     "ChangeDetectionPolicy",
     "CompositeIdentity",
     "CsvSelector",

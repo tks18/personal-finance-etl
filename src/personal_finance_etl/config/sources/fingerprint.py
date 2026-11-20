@@ -85,10 +85,6 @@ def canonicalize_source_configuration(config: SourceConfiguration) -> dict[str, 
     dict[str, object]
         Deterministic canonical dictionary ready for JSON serialization.
     """
-    capabilities_data: list[str] | None = None
-    if config.capabilities.enabled is not None:
-        capabilities_data = sorted(c.value for c in config.capabilities.enabled)
-
     sources_data = [
         {
             "description": s.description,
@@ -185,7 +181,6 @@ def canonicalize_source_configuration(config: SourceConfiguration) -> dict[str, 
         )
 
     return {
-        "capabilities": capabilities_data,
         "datasets": datasets_data,
         "schema_version": config.schema_version,
         "sources": sources_data,

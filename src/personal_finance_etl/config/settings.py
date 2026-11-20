@@ -23,6 +23,8 @@ from typing import cast
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from personal_finance_etl.config.capabilities import CapabilitySelection
+
 
 class FileHashPolicy(BaseModel):
     """File content hashing policy flags for source deduplication across format categories."""
@@ -76,6 +78,9 @@ class Settings(BaseModel):
     RAW_DOCUMENT_STORE_NAME: str = "Personal_Finance_DB_Raw_Store.sqlite"
 
     FILE_HASH_POLICY: FileHashPolicy = Field(default_factory=FileHashPolicy)
+
+    # Capability Execution Scope
+    capabilities: CapabilitySelection = Field(default_factory=CapabilitySelection)
 
     # Observability & Forensic Logging
     LOGS_DIRECTORY: str = "logs/runs"

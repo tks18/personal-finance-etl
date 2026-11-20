@@ -117,6 +117,17 @@ class ExecutionPlan:
         return len(self.resolved_capabilities)
 
     @property
+    def active_pre_bronze_datasets(self) -> frozenset[DatasetId]:
+        """Set of all active Pre-Bronze staging datasets in this execution plan.
+
+        Returns
+        -------
+        frozenset[DatasetId]
+            Active Pre-Bronze datasets mirroring active Bronze evidence.
+        """
+        return self.active_bronze_datasets
+
+    @property
     def active_bronze_dataset_count(self) -> int:
         """Count of active Bronze datasets in this plan.
 
@@ -184,6 +195,21 @@ class ExecutionPlan:
         """
         val = dataset_id.value if isinstance(dataset_id, DatasetId) else str(dataset_id).lower()
         return any(d.value == val for d in self.active_analytical_datasets)
+
+    def is_pre_bronze_dataset_active(self, dataset_id: DatasetId | str) -> bool:
+        """Check whether a specific Pre-Bronze dataset is active in this execution plan.
+
+        Parameters
+        ----------
+        dataset_id : DatasetId | str
+            Canonical Pre-Bronze dataset identifier to check.
+
+        Returns
+        -------
+        bool
+            True if active in the Pre-Bronze layer, False otherwise.
+        """
+        return self.is_bronze_dataset_active(dataset_id)
 
     def is_bronze_dataset_active(self, dataset_id: DatasetId | str) -> bool:
         """Check whether a specific Bronze dataset is active (required or optional) in this execution plan.
