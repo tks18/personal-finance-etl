@@ -26,7 +26,6 @@ from personal_finance_etl.application.pipeline.source_planner import (
 from personal_finance_etl.bootstrap.container import ServiceContainer
 from personal_finance_etl.config.settings import Settings
 from personal_finance_etl.config.sources.loader import (
-    CapabilitySelection,
     SourceConfiguration,
 )
 from personal_finance_etl.config.sources.model import SourceConfig, SourceDatasetConfig
@@ -143,7 +142,6 @@ def test_source_planner_performs_no_io() -> None:
     cfg = SourceConfiguration(
         sources=fake_sources,
         datasets=fake_datasets,
-        capabilities=CapabilitySelection(enabled=(CapabilityId.HOUSEHOLD_CORE,)),
     )
 
     plan = CapabilityPlanner().create_plan(requested_capabilities=(CapabilityId.HOUSEHOLD_CORE,))
@@ -165,7 +163,6 @@ def test_source_planner_missing_required_dataset_fails(
     incomplete_cfg = SourceConfiguration(
         sources=source_config.sources,
         datasets=pruned_datasets,
-        capabilities=source_config.capabilities,
     )
 
     execution_plan = CapabilityPlanner().create_plan()

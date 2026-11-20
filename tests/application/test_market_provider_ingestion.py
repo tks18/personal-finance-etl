@@ -280,7 +280,7 @@ def test_upsert_market_delta_persists_pre_bronze_and_bronze() -> None:
             upsert_market_delta_and_register(
                 bronze=bronze,
                 df_delta=df_delta,
-                table_name="bronze.r_Currency_FX_Data",
+                table_name="bronze.market_currency_fx_rates",
                 new_files=[v_path],
                 meta_file_type="currency_history",
                 dataset_id=DatasetId.MARKET_CURRENCY_FX_RATES,
@@ -303,7 +303,7 @@ def test_upsert_market_delta_persists_pre_bronze_and_bronze() -> None:
             assert pb_rows[PRE_BRONZE_DATASET_ID][0] == "market_currency_fx_rates"
 
             # 2. Assert Bronze table exists and contains admitted rows
-            bronze_table = bronze.get_table("r_Currency_FX_Data")
+            bronze_table = bronze.get_table("market_currency_fx_rates")
             assert bronze_table.height == 2
             assert "FX_Rate" in bronze_table.columns
             assert "yF_Ticker" in bronze_table.columns
@@ -359,14 +359,14 @@ def test_upsert_market_delta_validation_failure_blocks_bronze() -> None:
                 upsert_market_delta_and_register(
                     bronze=bronze,
                     df_delta=df_invalid,
-                    table_name="bronze.r_Benchmark_Data",
+                    table_name="bronze.market_benchmark_history",
                     new_files=[v_path],
                     meta_file_type="benchmark_history",
                     dataset_id=DatasetId.MARKET_BENCHMARK_HISTORY,
                 )
 
             # Verify Bronze table was NOT created or modified
-            df_bronze = bronze.get_table("r_Benchmark_Data")
+            df_bronze = bronze.get_table("market_benchmark_history")
             assert df_bronze.is_empty()
         finally:
             db_mgr.close()
@@ -484,7 +484,7 @@ def test_upsert_market_delta_backfills_pre_bronze_when_delta_is_empty() -> None:
             upsert_market_delta_and_register(
                 bronze=bronze,
                 df_delta=pl.DataFrame(),
-                table_name="bronze.r_Currency_FX_Data",
+                table_name="bronze.market_currency_fx_rates",
                 new_files=[],
                 meta_file_type="currency_history",
                 dataset_id=DatasetId.MARKET_CURRENCY_FX_RATES,

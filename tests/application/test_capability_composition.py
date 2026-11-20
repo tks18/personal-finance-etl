@@ -308,15 +308,18 @@ def test_household_only_end_to_end_pipeline_execution(
 
     # Silver tables populated
     silver_counts = db.conn.query(
-        "SELECT COUNT(*) as cnt FROM silver.f_Expense_Transactions"
+        "SELECT COUNT(*) as cnt FROM silver.wealth_expense_transactions"
     ).fetchone()
     assert silver_counts is not None and silver_counts[0] > 0
 
-    # Inactive Silver investment tables must have 0 rows
-    lot_counts = db.conn.query(
-        "SELECT COUNT(*) as cnt FROM silver.f_Investment_Analytics_Lot"
-    ).fetchone()
-    assert lot_counts is not None and lot_counts[0] == 0
+    # Inactive Silver investment tables must NOT exist in DuckDB catalog
+    silver_tables = {
+        row[0]
+        for row in db.conn.query(
+            "SELECT table_name FROM information_schema.tables WHERE table_schema = 'silver'"
+        ).fetchall()
+    }
+    assert "investment_lot_analytics" not in silver_tables
 
     db.close()
 

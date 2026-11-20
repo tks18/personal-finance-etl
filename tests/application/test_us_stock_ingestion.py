@@ -4,7 +4,7 @@
 Owns
 ----
 - Vertical slice ingestion for foreign US equity trade evidence:
-  (INVESTMENT_US_STOCK_TRANSACTIONS -> bronze.r_US_Stock_Transactions).
+  (INVESTMENT_US_STOCK_TRANSACTIONS -> bronze.investment_us_stock_transactions).
 - Verification of zero artificial Bronze row UIDs (IdentityRequirement.NONE invariant).
 - Pre-Bronze operational provenance tracking (__artifact_id__, __source_id__, __dataset_id__).
 - Pandera schema validation enforcement (Gate 1 Source & Gate 2 Canonical Bronze) and rejection.
@@ -174,7 +174,7 @@ def test_us_stock_end_to_end_vertical_slice_admission(
 
     # 2. Assert Bronze Layer persistence and zero artificial UID invariant
     bronze_df = isolated_duckdb_manager.conn.query(
-        "SELECT * FROM bronze.r_US_Stock_Transactions"
+        "SELECT * FROM bronze.investment_us_stock_transactions"
     ).pl()
     assert bronze_df.height == 2
     assert "UID" not in bronze_df.columns  # IdentityRequirement.NONE invariant
@@ -354,7 +354,7 @@ def test_us_stock_idempotency_rerun(
         run_id="run_idempotent_1",
     )
     res1 = isolated_duckdb_manager.conn.query(
-        "SELECT COUNT(*) FROM bronze.r_US_Stock_Transactions"
+        "SELECT COUNT(*) FROM bronze.investment_us_stock_transactions"
     ).fetchone()
     assert res1 is not None
     count1 = res1[0]
@@ -372,7 +372,7 @@ def test_us_stock_idempotency_rerun(
         run_id="run_idempotent_2",
     )
     res2 = isolated_duckdb_manager.conn.query(
-        "SELECT COUNT(*) FROM bronze.r_US_Stock_Transactions"
+        "SELECT COUNT(*) FROM bronze.investment_us_stock_transactions"
     ).fetchone()
     assert res2 is not None
     count2 = res2[0]

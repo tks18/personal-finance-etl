@@ -392,7 +392,7 @@ def test_shan_trusted_id_preservation(
 
     # Check Bronze table has preserved exact original UIDs
     df_bronze = isolated_duckdb_manager.conn.execute(
-        "SELECT UID, DESCRIPTION, BASE_AMOUNT FROM bronze.r_SQLite_InOutcome ORDER BY UID"
+        "SELECT UID, DESCRIPTION, BASE_AMOUNT FROM bronze.household_inoutcome ORDER BY UID"
     ).pl()
     assert df_bronze.height == 2
     uids = df_bronze["UID"].to_list()
@@ -491,7 +491,7 @@ def test_external_no_uid_csv_ingestion_and_derived_identity(
     # 1. Verify Pre-Bronze contains raw source shape
     df_pb = isolated_duckdb_manager.conn.execute(
         "SELECT TxDate, AccountName, PayeeDescription, TransactionAmount, __artifact_id__ "
-        "FROM pre_bronze.pb_household_inoutcome"
+        "FROM pre_bronze.household_inoutcome"
     ).pl()
     assert df_pb.height == 2
     assert "TxDate" in df_pb.columns
@@ -499,7 +499,7 @@ def test_external_no_uid_csv_ingestion_and_derived_identity(
 
     # 2. Verify Bronze contains canonical schema and derived UIDs
     df_bronze = isolated_duckdb_manager.conn.execute(
-        "SELECT UID, DATE, ASSET_NAME, DESCRIPTION, BASE_AMOUNT FROM bronze.r_SQLite_InOutcome"
+        "SELECT UID, DATE, ASSET_NAME, DESCRIPTION, BASE_AMOUNT FROM bronze.household_inoutcome"
     ).pl()
     assert df_bronze.height == 2
 
@@ -614,7 +614,7 @@ def test_derived_identity_order_invariance(
     )
 
     df_1 = isolated_duckdb_manager.conn.execute(
-        "SELECT UID, DESCRIPTION FROM bronze.r_SQLite_InOutcome"
+        "SELECT UID, DESCRIPTION FROM bronze.household_inoutcome"
     ).pl()
     uid_map_1 = dict(zip(df_1["DESCRIPTION"].to_list(), df_1["UID"].to_list(), strict=True))
 
@@ -638,7 +638,7 @@ def test_derived_identity_order_invariance(
     )
 
     df_2 = isolated_duckdb_manager.conn.execute(
-        "SELECT UID, DESCRIPTION FROM bronze.r_SQLite_InOutcome"
+        "SELECT UID, DESCRIPTION FROM bronze.household_inoutcome"
     ).pl()
     uid_map_2 = dict(zip(df_2["DESCRIPTION"].to_list(), df_2["UID"].to_list(), strict=True))
 
@@ -736,7 +736,7 @@ def test_duplicate_identity_collision_atomicity(
     ]
     if "r_SQLite_InOutcome" in bronze_tables:
         res = isolated_duckdb_manager.conn.execute(
-            "SELECT count(*) FROM bronze.r_SQLite_InOutcome"
+            "SELECT count(*) FROM bronze.household_inoutcome"
         ).fetchone()
         assert res is not None
         assert res[0] == 0
@@ -829,7 +829,9 @@ def test_downstream_household_transforms_accept_external_evidence(
     )
 
     # Fetch canonical Bronze DataFrame
-    df_bronze = isolated_duckdb_manager.conn.execute("SELECT * FROM bronze.r_SQLite_InOutcome").pl()
+    df_bronze = isolated_duckdb_manager.conn.execute(
+        "SELECT * FROM bronze.household_inoutcome"
+    ).pl()
     assert df_bronze.height == 2
 
     # Feed into downstream domain transformation pipeline
