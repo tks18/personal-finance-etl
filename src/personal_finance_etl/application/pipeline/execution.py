@@ -138,8 +138,10 @@ def compute_artifact_sync_summary(
     SyncSummaryRecord
         Summary metrics dictionary matching SyncSummaryRecord contract.
     """
-    actionable_paths = [p for paths in actionable_all.values() for p in paths]
-    if not actionable_paths:
+    unique_actionable = sorted(
+        {p.replace("\\", "/") for paths in actionable_all.values() for p in paths}
+    )
+    if not unique_actionable:
         return {
             "run_id": run_id,
             "actionable_count": 0,
@@ -150,18 +152,17 @@ def compute_artifact_sync_summary(
             "sync_status": "NOT_REQUIRED",
         }
 
-    norm_actionable = {p.replace("\\", "/") for p in actionable_paths}
     reg_with_status = cp.artifacts.get_registry_with_status()
     synced_cnt = sum(
-        1 for p in norm_actionable if reg_with_status.get(p, (None, None, None))[2] == "SYNCED"
+        1 for p in unique_actionable if reg_with_status.get(p, (None, None, None))[2] == "SYNCED"
     )
     healed_cnt = cp.artifacts.count_events(run_id=run_id, event_type="HEALED")
-    failed_cnt = len(actionable_paths) - synced_cnt
+    failed_cnt = len(unique_actionable) - synced_cnt
     status_str = "COMPLETE" if failed_cnt == 0 else ("PARTIAL" if synced_cnt > 0 else "FAILED")
 
     return {
         "run_id": run_id,
-        "actionable_count": len(actionable_paths),
+        "actionable_count": len(unique_actionable),
         "synced_count": synced_cnt,
         "healed_count": healed_cnt,
         "failed_count": failed_cnt,

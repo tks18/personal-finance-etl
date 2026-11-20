@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [10.2.2](https://github.com/tks18/personal-finance-etl/compare/10.2.1...10.2.2) (2026-11-20)
+
+
+### Bug Fixes 🛠
+
+* **pipeline:** deduplicate actionable files in sync summary metrics ([135da19](https://github.com/tks18/personal-finance-etl/commit/135da193b0f1a3d07709221350197e57feb106c1))
+
 ### [10.2.1](https://github.com/tks18/personal-finance-etl/compare/10.2.0...10.2.1) (2026-11-20)
 
 

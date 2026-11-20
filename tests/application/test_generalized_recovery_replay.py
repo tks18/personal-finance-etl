@@ -666,3 +666,33 @@ def test_continuous_10_run_multi_fixture_sequential_state_machine(
     cp.open()
     assert len(cp.runs.get_recovery_required_runs()) == 0
     cp.close()
+
+
+def test_compute_artifact_sync_summary_deduplication(tmp_path: Path) -> None:
+    """Certify compute_artifact_sync_summary de-duplicates category and dataset ID dual keys."""
+    from personal_finance_etl.application.pipeline.execution import compute_artifact_sync_summary
+
+    cp = ControlPlane(str(tmp_path), "test_cp.sqlite")
+    cp.open()
+    cp.ensure_schema()
+    try:
+        run_id = cp.runs.start_run()
+
+        path_a = cp.artifacts.inject_virtual_file("tradebook.xlsx", "tradebook", b"dummy_a")
+        path_b = cp.artifacts.inject_virtual_file("statement.xlsx", "statement", b"dummy_b")
+        cp.artifacts.mark_synced([path_a, path_b])
+
+        actionable_all = {
+            "tradebook": [path_a],
+            "statement": [path_b],
+            "investment_stock_orders": [path_a],
+            "wealth_bank_transactions": [path_b],
+        }
+
+        summary = compute_artifact_sync_summary(actionable_all, cp, run_id)
+        assert summary.get("actionable_count") == 2
+        assert summary.get("synced_count") == 2
+        assert summary.get("failed_count") == 0
+        assert summary.get("sync_status") == "COMPLETE"
+    finally:
+        cp.close()
