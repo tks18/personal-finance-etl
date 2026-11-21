@@ -28,9 +28,6 @@ from personal_finance_etl.application.ingestion.asset_strategies import (
     StockPipeline,
     USStockPipeline,
 )
-from personal_finance_etl.application.ingestion.file_discovery import (
-    discover_source_plan_files,
-)
 from personal_finance_etl.application.ingestion.identity import (
     IdentityCollisionDiagnostic,
     IdentityCollisionError,
@@ -46,9 +43,6 @@ from personal_finance_etl.application.ingestion.market_sync import (
     CurrencyPipeline,
     USMarketPipeline,
 )
-from personal_finance_etl.application.ingestion.slice_runner import (
-    DatasetIngestionService,
-)
 
 __all__ = [
     "AdmissionPlan",
@@ -56,7 +50,6 @@ __all__ = [
     "AssetPipeline",
     "BenchmarkPipeline",
     "CurrencyPipeline",
-    "DatasetIngestionService",
     "IdentityCollisionDiagnostic",
     "IdentityCollisionError",
     "IdentityNotPermittedError",
@@ -68,6 +61,5 @@ __all__ = [
     "USMarketPipeline",
     "USStockPipeline",
     "compile_identity_plan",
-    "discover_source_plan_files",
     "execute_identity_plan",
 ]
