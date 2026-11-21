@@ -34,6 +34,11 @@ Does not own
 
 from __future__ import annotations
 
+from personal_finance_etl.config.sources.binding_model import (
+    CanonicalDatasetProductionConfig,
+    CanonicalRouteConfig,
+    SourceBindingConfig,
+)
 from personal_finance_etl.config.sources.change_detection import (
     ChangeDetectionPolicy,
     DriftStrategy,
@@ -96,6 +101,7 @@ from personal_finance_etl.config.sources.topology import (
     evaluate_bronze_topology_coverage,
 )
 from personal_finance_etl.config.sources.validation import (
+    validate_source_bindings,
     validate_source_dataset_bindings,
     validate_source_selector_compatibility,
 )
@@ -104,7 +110,9 @@ __all__ = [
     "CURRENT_SOURCE_CONFIG_SCHEMA_VERSION",
     "SUPPORTED_SOURCE_CONFIG_SCHEMA_VERSIONS",
     "BronzeIdentityStrategy",
+    "CanonicalDatasetProductionConfig",
     "CanonicalDtype",
+    "CanonicalRouteConfig",
     "CapabilitySelection",
     "CastRule",
     "ChangeDetectionPolicy",
@@ -125,6 +133,7 @@ __all__ = [
     "PROTECTED_FINANCIAL_NAMESPACES",
     "ParseDateRule",
     "RenameStrategy",
+    "SourceBindingConfig",
     "SourceConfig",
     "SourceConfigFingerprint",
     "SourceConfiguration",
@@ -144,6 +153,7 @@ __all__ = [
     "get_shan_baseline_sources",
     "mapping_list_to_dict",
     "resolve_change_detection_policy",
+    "validate_source_bindings",
     "validate_source_dataset_bindings",
     "validate_source_selector_compatibility",
 ]
