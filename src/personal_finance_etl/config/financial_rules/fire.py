@@ -18,9 +18,26 @@ Does not own
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from typing import Self
+
+from pydantic import BaseModel, Field, model_validator
 
 from personal_finance_etl.config.financial_rules.tax import TaxAssumptions
+
+__all__ = [
+    "AssumptionsRules",
+    "CMAAssumptions",
+    "FireAssumptions",
+    "FireCapabilityRules",
+    "GlidePathConfig",
+    "GuytonKlingerConfig",
+    "HumanCapitalConfig",
+    "InflationModelConfig",
+    "JumpDiffusionConfig",
+    "MacroAssumptions",
+    "MarkovRegimeConfig",
+    "MonteCarloAssumptions",
+]
 
 
 class MacroAssumptions(BaseModel):
@@ -72,6 +89,15 @@ class FireAssumptions(BaseModel):
     )
     human_capital_discount_rate: float = Field(..., description="Discount rate for human capital.")
 
+    @model_validator(mode="after")
+    def validate_swr(self) -> Self:
+        """Validate that SWR multiplier is strictly positive."""
+        if self.swr_multiplier <= 0.0:
+            raise ValueError(
+                f"SWR multiplier must be strictly positive (> 0.0), got {self.swr_multiplier}."
+            )
+        return self
+
 
 class MarkovRegimeConfig(BaseModel):
     """Three-state Markov regime switching parameters (Bull, Bear, Stagflation)."""
@@ -97,6 +123,22 @@ class MarkovRegimeConfig(BaseModel):
         description="Stagflation parameters: (drift, volatility, inflation target)",
     )
 
+    @model_validator(mode="after")
+    def validate_stochastic_matrix(self) -> Self:
+        """Validate bounded probabilities and stochastic matrix row normalization."""
+        for i, row in enumerate(self.transition_matrix):
+            for p in row:
+                if not 0.0 <= p <= 1.0:
+                    raise ValueError(
+                        f"Markov transition probability {p} must be bounded between 0.0 and 1.0."
+                    )
+            row_sum = sum(row)
+            if abs(row_sum - 1.0) > 1e-4:
+                raise ValueError(
+                    f"Markov transition matrix row {i} must sum strictly to 1.0 (got {row_sum:.4f})."
+                )
+        return self
+
 
 class HumanCapitalConfig(BaseModel):
     """Human capital income shock probabilities and severance coverage parameters."""
@@ -115,6 +157,16 @@ class HumanCapitalConfig(BaseModel):
         default=0.0,
         description="Percentage of core expenses covered by unemployment benefits or severance during a shock.",
     )
+
+    @model_validator(mode="after")
+    def validate_probabilities(self) -> Self:
+        """Validate probability bounds for human capital shock."""
+        if not 0.0 <= self.shock_probability <= 1.0:
+            raise ValueError(
+                "Human capital shock_probability must be bounded between 0.0 and 1.0 "
+                f"(got {self.shock_probability})."
+            )
+        return self
 
 
 class GlidePathConfig(BaseModel):
@@ -162,6 +214,16 @@ class JumpDiffusionConfig(BaseModel):
         default=0.005,
         description="Annual portfolio expense ratio or fee drag deducted from returns (e.g., 50 bps).",
     )
+
+    @model_validator(mode="after")
+    def validate_probabilities(self) -> Self:
+        """Validate probability bounds for Merton jump diffusion."""
+        if not 0.0 <= self.jump_probability_annual <= 1.0:
+            raise ValueError(
+                "Jump diffusion jump_probability_annual must be bounded between 0.0 and 1.0 "
+                f"(got {self.jump_probability_annual})."
+            )
+        return self
 
 
 class GuytonKlingerConfig(BaseModel):
@@ -227,6 +289,24 @@ class MonteCarloAssumptions(BaseModel):
     guyton_klinger: GuytonKlingerConfig = Field(default_factory=GuytonKlingerConfig)
     inflation_model: InflationModelConfig = Field(default_factory=InflationModelConfig)
 
+    @model_validator(mode="after")
+    def validate_numerical_constraints(self) -> Self:
+        """Validate Monte Carlo numerical boundaries and volatility constraints."""
+        if self.iterations < 100:
+            raise ValueError(
+                f"Monte Carlo iterations must be at least 100 (got {self.iterations})."
+            )
+        if self.annual_volatility <= 0.0:
+            raise ValueError(
+                "Monte Carlo annual_volatility must be strictly positive (> 0.0), "
+                f"got {self.annual_volatility}."
+            )
+        if self.max_months <= 0:
+            raise ValueError(
+                f"Monte Carlo max_months must be strictly positive (> 0), got {self.max_months}."
+            )
+        return self
+
 
 class CMAAssumptions(BaseModel):
     """Capital Market Assumptions (CMA) for long-term real returns and tail risk."""
@@ -237,6 +317,18 @@ class CMAAssumptions(BaseModel):
     fat_tail_multiplier: float = Field(
         1.2, description="Multiplier to adjust normal volatility for fat tails."
     )
+
+
+class FireCapabilityRules(BaseModel):
+    """Configuration rules for macroeconomic, FIRE, and Monte Carlo simulation policies."""
+
+    macro: MacroAssumptions = Field(...)
+    fire: FireAssumptions = Field(...)
+    monte_carlo: MonteCarloAssumptions = Field(...)
+    cma: CMAAssumptions = Field(
+        default_factory=lambda: CMAAssumptions(expected_real_return=0.05, fat_tail_multiplier=1.2)
+    )
+    target_allocations: dict[str, float] = Field(default_factory=dict)
 
 
 class AssumptionsRules(BaseModel):

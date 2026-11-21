@@ -1,0 +1,33 @@
+# =============================================================================
+# Minimal Household Capability Financial Rules
+# Demonstrates clean validation when only HOUSEHOLD_CORE is active.
+# All other capability sections (wealth, investments, tax, fire) are omitted.
+# =============================================================================
+
+# Income Classification Rules
+[household.income.active]
+category_ids = ["2"] # Salary
+sub_category_ids = []
+
+[household.income.dividends]
+category_ids = []
+sub_category_ids = ["E1FFA01B-86D4-4083-BC1A-A469299E5F41"] # Dividends
+
+[household.income.interest]
+category_ids = []
+sub_category_ids = ["951F62DE-F993-4937-91E7-F8EE15E4501B"] # Savings Bank Interest
+
+[household.income.non_cash]
+category_ids = ["60de392d-466e-488b-9b4f-5910f94a2a04"] # Non-Cash Income (EPF, PF Interest)
+sub_category_ids = []
+
+# Core Living Expenses
+[household.expense.core]
+category_ids = ["CB261E83-6B2F-4D5B-A25B-B5C9CDA1C0F5"] # Utilities & Broadband
+sub_category_ids = ["B6EAF9F2-E747-4204-A3A8-D26386BC051B"] # Clothing Essentials
+
+# Budget Allocation Rules (40% Core / 20% Non-Core / 30% Investments)
+[household.budget.income_allocation]
+core_expense_pct = 0.40
+non_core_expense_pct = 0.20
+investment_pct = 0.30
