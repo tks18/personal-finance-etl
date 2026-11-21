@@ -22,6 +22,7 @@ import threading
 from collections.abc import Callable
 from typing import cast
 
+from personal_finance_etl.application.diagnostics.service import DiagnosticService
 from personal_finance_etl.application.pipeline.orchestrator import ETLOrchestrator
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
@@ -116,6 +117,7 @@ def process_wrapper(
     status_queue: EventQueue | None = None,
     config_path: str = "config.toml",
     rules_path: str = "",
+    skip_preflight: bool = False,
 ) -> None:
     """Multiprocessing entry point for isolated pipeline execution.
 
@@ -127,6 +129,8 @@ def process_wrapper(
         Path to TOML configuration settings.
     rules_path : str
         Path to TOML financial rules policy.
+    skip_preflight : bool, default=False
+        Whether to skip Phase 0 pre-flight health checks.
     """
     if status_queue is None:
         status_queue = cast(EventQueue, multiprocessing.Queue())
@@ -141,8 +145,16 @@ def process_wrapper(
     try:
         cfg = Settings.from_toml(config_path) if config_path else Settings()
         rules = FinancialRules.from_toml(rules_path) if rules_path else None
+        diag_svc = DiagnosticService(emitter=emitter) if not skip_preflight else None
 
-        orchestrator = ETLOrchestrator(cfg, status_queue, rules)
+        orchestrator = ETLOrchestrator(
+            cfg,
+            status_queue,
+            rules,
+            emitter=emitter,
+            skip_preflight=skip_preflight,
+            diagnostic_service=diag_svc,
+        )
         orchestrator.run()
 
     finally:
@@ -157,11 +169,12 @@ class WorkerPoolCoordinator:
         status_queue: multiprocessing.Queue[ObservabilityEvent],
         config_path: str,
         rules_path: str,
+        skip_preflight: bool = False,
     ) -> multiprocessing.Process:
         """Spawn the multiprocessing pipeline child process."""
         process = multiprocessing.Process(
             target=process_wrapper,
-            args=(status_queue, config_path, rules_path),
+            args=(status_queue, config_path, rules_path, skip_preflight),
             daemon=True,
         )
         process.start()

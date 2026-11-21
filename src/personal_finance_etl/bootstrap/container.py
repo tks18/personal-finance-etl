@@ -19,6 +19,7 @@ import queue
 from pathlib import Path
 from typing import cast
 
+from personal_finance_etl.application.diagnostics import DiagnosticService
 from personal_finance_etl.application.facade import PersonalFinanceEngine
 from personal_finance_etl.application.pipeline.orchestrator import ETLOrchestrator
 from personal_finance_etl.application.pipeline.planner import CapabilityPlanner
@@ -187,6 +188,7 @@ class ServiceContainer:
         settings: Settings | None = None,
         source_config: SourceConfiguration | None = None,
         plan: ExecutionPlan | None = None,
+        skip_preflight: bool = False,
     ) -> ETLOrchestrator:
         """Assemble an ETLOrchestrator with all required dependencies wired.
 
@@ -206,6 +208,8 @@ class ServiceContainer:
             Pre-loaded SourceConfiguration instance.
         plan : ExecutionPlan | None, optional
             Pre-compiled ExecutionPlan instance.
+        skip_preflight : bool, default=False
+            Whether to skip Phase 0 pre-flight health checks.
 
         Returns
         -------
@@ -225,6 +229,7 @@ class ServiceContainer:
 
         # Compile non-I/O source plan
         source_plan: CompiledSourcePlan = SourcePlanner(src_cfg, resolved_plan).compile_plan()
+        diag_svc = self.create_diagnostic_service()
 
         return ETLOrchestrator(
             cfg,
@@ -233,7 +238,26 @@ class ServiceContainer:
             plan=resolved_plan,
             source_config=src_cfg,
             source_plan=source_plan,
+            skip_preflight=skip_preflight,
+            diagnostic_service=diag_svc,
         )
+
+    def create_diagnostic_service(
+        self, emitter: ObservabilityEmitter | None = None
+    ) -> DiagnosticService:
+        """Instantiate a DiagnosticService for configuration and admission diagnostics.
+
+        Parameters
+        ----------
+        emitter : ObservabilityEmitter | None, default None
+            Active observability emitter.
+
+        Returns
+        -------
+        DiagnosticService
+            Configured diagnostic service instance.
+        """
+        return DiagnosticService(emitter=emitter)
 
     def create_engine(self) -> PersonalFinanceEngine:
         """Assemble a PersonalFinanceEngine application façade bound to this container."""
