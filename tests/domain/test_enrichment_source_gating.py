@@ -17,7 +17,6 @@ from __future__ import annotations
 
 from dataclasses import replace
 from datetime import date
-from typing import Any
 from unittest.mock import patch
 
 import polars as pl
@@ -42,6 +41,7 @@ from personal_finance_etl.domain.investments.contracts import (
 from personal_finance_etl.domain.investments.performance import xirr as xirr_module
 from personal_finance_etl.domain.investments.performance.xirr import (
     PortfolioXIRRCalculator,
+    XirrResult,
 )
 
 
@@ -153,10 +153,10 @@ def test_pyxirr_solver_call_reduction_at_source() -> None:
     call_count_all = 0
     orig_calculate_xirr = xirr_module.calculate_xirr
 
-    def counted_calculate_xirr_all(*args: Any, **kwargs: Any) -> Any:
+    def counted_calculate_xirr_all(dates: list[date], amounts: list[float]) -> XirrResult:
         nonlocal call_count_all
         call_count_all += 1
-        return orig_calculate_xirr(*args, **kwargs)
+        return orig_calculate_xirr(dates, amounts)
 
     with patch.object(xirr_module, "calculate_xirr", side_effect=counted_calculate_xirr_all):
         df_all = calculator.calculate(
@@ -176,10 +176,10 @@ def test_pyxirr_solver_call_reduction_at_source() -> None:
 
     call_count_gated = 0
 
-    def counted_calculate_xirr_gated(*args: Any, **kwargs: Any) -> Any:
+    def counted_calculate_xirr_gated(dates: list[date], amounts: list[float]) -> XirrResult:
         nonlocal call_count_gated
         call_count_gated += 1
-        return orig_calculate_xirr(*args, **kwargs)
+        return orig_calculate_xirr(dates, amounts)
 
     with patch.object(xirr_module, "calculate_xirr", side_effect=counted_calculate_xirr_gated):
         df_gated = calculator.calculate(

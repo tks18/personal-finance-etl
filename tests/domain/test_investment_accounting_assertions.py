@@ -36,7 +36,7 @@ from pathlib import Path
 
 import polars as pl
 
-from personal_finance_etl.application.pipeline import ETLOrchestrator
+from personal_finance_etl.application.pipeline.orchestrator import ETLOrchestrator
 from personal_finance_etl.application.pipeline.planner import CapabilityPlanner
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings

@@ -34,10 +34,8 @@ from personal_finance_etl.application.ingestion.admission import AdmissionServic
 from personal_finance_etl.application.ingestion.slice_runner import (
     DatasetIngestionService,
 )
-from personal_finance_etl.application.pipeline import (
-    ETLOrchestrator,
-    RunLifecycleCoordinator,
-)
+from personal_finance_etl.application.pipeline.lifecycle import RunLifecycleCoordinator
+from personal_finance_etl.application.pipeline.orchestrator import ETLOrchestrator
 from personal_finance_etl.application.pipeline.planner import CapabilityPlanner
 from personal_finance_etl.application.pipeline.source_planner import SourcePlanner
 from personal_finance_etl.config.financial_rules import FinancialRules

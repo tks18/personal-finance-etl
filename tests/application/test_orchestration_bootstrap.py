@@ -15,12 +15,10 @@ from pathlib import Path
 import pytest
 
 from personal_finance_etl.application.facade import PersonalFinanceEngine
-from personal_finance_etl.application.pipeline import (
-    ETLOrchestrator,
-    PipelineExecutor,
-    QueueStream,
-    RunLifecycleCoordinator,
-)
+from personal_finance_etl.application.pipeline.execution import PipelineExecutor
+from personal_finance_etl.application.pipeline.lifecycle import RunLifecycleCoordinator
+from personal_finance_etl.application.pipeline.orchestrator import ETLOrchestrator
+from personal_finance_etl.application.pipeline.worker import QueueStream
 from personal_finance_etl.bootstrap.container import ServiceContainer
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings

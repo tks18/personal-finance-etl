@@ -17,7 +17,7 @@ Does not own
 
 from __future__ import annotations
 
-from typing import Any
+from pathlib import Path
 
 import polars as pl
 import pytest
@@ -72,16 +72,16 @@ def test_dataset_collection_instantiation_and_immutability() -> None:
     assert len(collection) == 2
 
     # Reject non-DatasetId key
-    bad_keys: dict[Any, Any] = {"not_a_dataset_id": lf}
+    bad_keys: dict[object, object] = {"not_a_dataset_id": lf}
     with pytest.raises(TypeError, match="DatasetCollection keys must be DatasetId instances"):
-        DatasetCollection(frames=bad_keys)
+        DatasetCollection(frames=bad_keys)  # type: ignore[arg-type]
 
     # Reject non-Polars frame
-    bad_values: dict[Any, Any] = {DatasetId.HOUSEHOLD_ZCATEGORY: [1, 2, 3]}
+    bad_values: dict[object, object] = {DatasetId.HOUSEHOLD_ZCATEGORY: [1, 2, 3]}
     with pytest.raises(
         TypeError, match="DatasetCollection frames must be Polars LazyFrame or DataFrame"
     ):
-        DatasetCollection(frames=bad_values)
+        DatasetCollection(frames=bad_values)  # type: ignore[arg-type]
 
 
 def test_dataset_collection_require_and_require_lazy() -> None:
@@ -247,7 +247,7 @@ def test_bronze_layer_get_dataset_collection(
     isolated_settings: Settings,
     isolated_duckdb_manager: DuckDBManager,
     isolated_control_plane: ControlPlane,
-    tmp_path: Any,
+    tmp_path: Path,
 ) -> None:
     """Verify BronzeLayer.get_dataset_collection() reconstructs lakehouse into DatasetCollection."""
     isolated_duckdb_manager.open()
