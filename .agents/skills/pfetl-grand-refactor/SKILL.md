@@ -1,157 +1,222 @@
 ---
 name: pfetl-grand-refactor
 description: >-
-  Use this skill when planning, executing, verifying, or committing any phase of the PFETL Grand Refactor
-  (Phases 001 through 050) across lakehouse contracts, source-agnostic topology, Pre-Bronze, validation,
-  and capability composition.
+  Use this skill when planning, implementing, reviewing, verifying, or preparing commits for any PFETL Grand Refactor phase (001-060), especially work involving SourceBindingId, Pre-Bronze, semantic interpretation, canonical production, satisfiability planning, Bronze/Silver/Gold contracts, capability composition, replay/recovery, external topology certification, or final contract freeze.
 ---
 
-# PFETL Grand Refactor Runbook & Execution Governance
+# PFETL Grand Refactor Execution Governance
 
-This skill governs the systematic, 50-phase architecture refactor of `personal-finance-etl` (v9.5.3 to v10.4.1+), transforming PFETL into a fully source-agnostic financial data engine while preserving PFETL-owned canonical Bronze, Silver, and Gold financial processing.
+Use this Skill to execute the Grand Refactor as one continuous phase-to-phase migration. The phase file is the implementation authority; this Skill supplies the operating discipline and permanent invariants.
 
----
+## 1. Load Authorities in Order
 
-## 1. Core Architecture Authorities
+Before changing code for a phase, read:
 
-Before implementing or planning any refactor phase, always consult:
-1. `planning/grand-refactor/README.md`: Master phase roadmap, status table, milestones, and batch authorities.
-2. `planning/grand-refactor/ARCHITECTURE.md`: Target data spine, configuration boundaries, stable identities (`DatasetId`, `SourceId`, `CapabilityId`), and migration discipline.
-3. `planning/grand-refactor/phases/<phase_num>-*.md`: Specific outcome, inherited state, target state, files in scope, non-goals, and completion checklist for the active phase.
-4. `AGENTS.md`: Seven-Layer Architecture boundary rules, prohibited imports, NumPy docstring standards, and quality gates.
+1. `planning/grand-refactor/phases/<active-phase>-*.md`
+2. `planning/grand-refactor/ARCHITECTURE.md`
+3. `planning/grand-refactor/README.md`
+4. root `AGENTS.md` and any nested `AGENTS.md` for touched workspaces
 
----
+Treat the previous completed phase handoff as inherited-state authority. v9.5.3 remains the historical financial/regression oracle; Phase 045 / v10.3.0 is the implementation baseline inherited by the post-045 canonicalization program.
 
-## 2. Standard Phase Execution Workflow
+If implementation evidence contradicts the phase, stop and amend the owning phase/architecture before silently redesigning the system.
 
-Every phase must be executed with zero skipped gates:
+## 2. Execute One Atomic Phase
 
-```mermaid
-flowchart TD
-    A["1. User Request (e.g. '/plan Phase 002')"] --> B["2. Load Phase Spec & Architecture Context"]
-    B --> C["3. Deep Codebase Research & Analysis"]
-    C --> D["4. Generate Implementation Plan Artifact"]
-    D --> E["5. User Review & Approval"]
-    E --> F["6. Incremental Code & Test Implementation"]
-    F --> G["7. Fast Quality Gate (uv run poe audit:fast)"]
-    G --> H["8. Architecture Boundary Gate (pytest tests/architecture/test_boundaries.py)"]
-    H --> I["9. Full Quality Gate Audit (uv run poe audit:full)"]
-    I --> J["10. Partition Semantic Commits in .commit_overrides.json"]
-    J --> K["11. Commit Preview (uv run poe commit:overrides:preview)"]
-    K --> L["12. User Independent Verification & Final Confirmation"]
-```
+For the active phase:
 
----
+1. Inspect the exact current symbols/files named by the phase.
+2. Confirm the inherited handoff actually exists.
+3. Implement only the phase-owned architectural outcome.
+4. Add/update focused tests and architecture guards as the phase requires.
+5. Run the phase-specific verification matrix.
+6. Run repository quality gates required by the phase/release boundary.
+7. Verify every unique completion-checklist assertion.
+8. Use `pfetl-conventional-commits` to preview semantically coherent commit groups/messages.
+9. Record the phase completion evidence only after the repository is green.
+10. Stop. Do not pull the next phase forward.
 
-## 3. Mandatory Invariants Across All 50 Phases
+A phase may exceed the nominal 3-4 hour sprint if cutting it would leave an unsafe half-state.
 
-1. **Governing Product Invariant:**
-   *Users configure their evidence and capabilities; PFETL owns the financial meaning.*
-   - Financial methodology is never user-configurable.
-   - Deterministic IDs (`PURCHASE`, `SALE`, `LOT`, `REALIZED`, `RECON_GROUP`, `TAX`) remain byte-stable.
-2. **Seven-Layer Clean Boundaries:**
-   - `contracts`: Pure, minimal cross-boundary types. Never import `domain`, `application`, `infrastructure`, or `presentation`.
-   - `config`: User-authored validated configuration models.
-   - `domain`: Pure financial logic and algorithms. Zero database, network, or UI imports.
-   - `infrastructure`: Warehouse, SQLite control plane, and external providers.
-   - `application`: Orchestration, pipelines, and planners.
-   - `bootstrap`: Dependency injection and composition root.
-   - `presentation`: UI and CLI only.
-3. **Double-Commit Integrity:**
-   - Commit DuckDB warehouse first, SQLite Control Plane second.
-   - Any crash between commits enforces `RECOVERY_REQUIRED` semantics.
-4. **Strict Typing Invariant (Zero-`Any` & Zero-`TYPE_CHECKING` Standard):**
-   - Every class, function, parameter, return value, and data structure across all 50 phases must be strictly and concretely typed.
-   - `Any` or untyped containers (`dict[Any, Any]`, `list[Any]`) are strictly forbidden. Use concrete types, TypeVars, generic protocols, or explicit type unions.
-   - `from typing import TYPE_CHECKING` and `if TYPE_CHECKING:` blocks are **strictly forbidden** anywhere in the repository (`tests/test_phase12_constitutional_certification.py`).
-   - Inline or deferred imports inside function, method, or class bodies are **strictly forbidden**. All imports must remain top-level.
-   - All code must pass both Mypy (`disallow_untyped_defs = True`) and Pyright/Pylance without diagnostics.
-5. **Full Quality Gate Audit Before Commit:**
-   - At the conclusion of each phase or sub-phase prior to committing, execute `uv run poe audit:full`.
-   - All 6 quality engines (Ruff Check, Ruff Format, Mypy Typecheck, Pyright Typecheck, Pylint Deep Analysis, Pytest Full Suite) must pass 100% green.
+## 3. Permanent Financial Invariant
 
----
-
-## 4. Semantic Commit Partitioning & Overrides Protocol
-
-Never mix codebase implementation, tests, planning documentation, and agent skills into a single monolithic commit. Every phase must partition changes into discrete, semantic commit groups in `.commit_overrides.json`:
-
-1. **Production Codebase:**
-   - Format: `feat(<scope>): ...` or `refactor(<scope>): ...`
-   - Scope: Target package or component (e.g. `contracts`, `config`, `domain`, `infrastructure`).
-   - Files: Only production source files under `src/`.
-   - Granularity: **Granular commits are required.** Do not force all production files into a single commit. When changes span distinct architectural layers, subsystems, or functional areas, partition them into multiple focused commits (e.g., `feat(contracts): ...` followed by `refactor(config): ...`).
-2. **Test Suite:**
-   - Format: `test(<scope>): ...`
-   - Scope: Tested component, layer, or subsystem (e.g. `contracts`, `config`, `domain`, `architecture`).
-   - Files: Only test files under `tests/`.
-   - Granularity: **Granular test commits are required.** Separate test files by architectural layer or subsystem corresponding to their source changes rather than forcing all test additions into a single commit.
-3. **Planning & Roadmap Documentation:**
-   - Format: `docs(refactor): ...`
-   - Scope: `refactor` or target milestone.
-   - Files: Files under `planning/grand-refactor/`.
-4. **Agent Skills & Developer Tooling:**
-   - Format: **ALWAYS `chore(skills): ...`** (Never `feat` or `refactor`, because skills are developer and agent execution aids, not runtime production code or features).
-   - Scope: `skills` or specific skill name.
-   - Files: Files under `.agents/skills/`.
-
-### Commit Header Rules
-- Header line must be **strictly <= 72 characters**.
-- Lowercase subject, no trailing punctuation.
-- Preview all overrides before confirming: `uv run poe commit:overrides:preview`.
-- **Never execute commits automatically.** Always allow the user to test independently and confirm before running `uv run poe commit:overrides`.
-
----
-
-## 5. Enterprise Testing Suite Architecture & Governance
-
-The `tests/` directory is an enterprise-grade architectural mirror of `src/personal_finance_etl/`. It is subject to the **exact same strict static typing, linting, and sandboxing standards as production code**.
-
-### 5.1 Seven-Layer Test Tree Mirroring `src/`
+For unchanged methodology:
 
 ```text
-tests/
-├── conftest.py                # Centralized typed fixture catalog & mock infrastructure
-├── architecture/              # Boundary enforcement, AST dependency rules, legacy demolition
-├── config/                    # Settings models, FinancialRules loading, TOML schema validation
-├── contracts/                 # Cross-boundary primitives, DatasetId/SourceId, data transport
-├── domain/                    # Pure financial calculation kernels (FIFO, FIRE, Tax, Wealth, Market)
-├── infrastructure/            # DuckDB warehouse, SQLite Control Plane, Observability sinks, Providers
-├── application/               # Pipeline orchestrators, data extraction, lifecycle coordinators
-├── presentation/              # Desktop GUI components, CLI argument parsing, narrative sinks
-└── fixtures/                  # Sanitized production rules (financial_rules.toml), config.toml, runners
+same evidence
++ same FinancialRules
++ same enabled capabilities
++ same market evidence
+= same financial truth
 ```
 
-- **Semantic Test File Naming:** Test filenames must directly describe the module or subsystem under test (e.g., `test_boundaries.py`, `test_financial_rules.py`, `test_forensic_pipeline.py`). **Legacy phase numbers in filenames (e.g., `test_phase12_*`) are permanently forbidden.**
-- **Modern Module Docstrings:** Every test file must contain a NumPy-style module docstring detailing `Owns` and `Does not own` scopes without historical phase references.
+Protected deterministic identity families include:
 
-### 5.2 Mandatory Consumption of Centralized Fixtures (`tests/conftest.py`)
+- PURCHASE
+- SALE
+- LOT
+- REALIZED
+- RECON_LOT_GROUP
+- RECON_GROUP
+- RECON_EVENT
+- TAX
 
-Ad-hoc manual setup in test functions is strictly prohibited. Every test must consume shared, typed fixtures:
+Any unexplained protected-ID or paise-level financial drift stops the phase unless the phase explicitly owns an intentional representation-only change.
 
-| Fixture Name | Type Signature | Purpose & Sandboxing Guarantee |
-|---|---|---|
-| `rules` | `FinancialRules` | Sanitized 442-line production ruleset (`tests/fixtures/financial_rules.toml`). Immutable per session. |
-| `mock_rules` | `FinancialRules` | Function-isolated, mutable copy of `FinancialRules` for tax overrides. |
-| `canonical_rules` | `FinancialRules` | Immutable session-scoped base rules model. |
-| `isolated_settings` | `Settings` | Fully sandboxed `Settings` instance rooted in `tmp_path` (guarantees 100% disk isolation). |
-| `isolated_duckdb_manager` | `DuckDBManager` | Function-isolated analytical warehouse instance connected to `tmp_path`. |
-| `isolated_sqlite_manager` | `SQLiteManager` | Function-isolated operational Control Plane SQLite connection in `tmp_path`. |
-| `isolated_control_plane` | `ControlPlane` | High-level Control Plane facade wired to `isolated_sqlite_manager`. |
-| `status_queue` | `EventQueue` | Typed `queue.Queue[ObservabilityEvent \| None]` capturing pipeline status events. |
-| `test_emitter` | `tuple[ObservabilityEmitter, MockRecordingSink]` | Dedicated forensic observability emitter with in-memory recording sink. |
-| `isolated_container` | `ServiceContainer` | Fresh DI composition root pre-wired with isolated settings, storage, and rules. |
-| `isolated_engine` | `PersonalFinanceEngine` | Fully composed high-level application facade. |
-| `isolated_live_settings` | `Settings` | Live-test settings configured for local `G:` drive; marked `@pytest.mark.live_data`. |
+Never change FIFO, reconciliation, Tax, XIRR, Wealth, FIRE or other financial methodology merely to simplify schema/architecture work.
 
-### 5.3 Strict Typing, Zero Pragmas & Offline-First Discipline
+## 4. Source and Canonical Identity Rules
 
-1. **Explicit Function Typing:** Every test function must be strictly typed:
-   ```python
-   def test_feature_behavior(isolated_settings: Settings, rules: FinancialRules) -> None:
-       ...
-   ```
-2. **Zero Suppression Pragmas:** `# pylint: skip-file` and `# flake8: noqa` are **strictly forbidden** anywhere in `tests/`.
-3. **Zero `Any` Types:** Zero `Any` types across all test functions, parameters, and assertions.
-4. **Zero `TYPE_CHECKING` Blocks:** Zero `from typing import TYPE_CHECKING` or `if TYPE_CHECKING:` conditional imports in tests.
-5. **Offline-First Mandate:** All standard tests must run 100% offline without network access or local cloud mounts. Integration tests requiring live user data must be explicitly marked with `@pytest.mark.live_data` so they can be skipped during CI (`pytest -m "not live_data"`).
+Keep these concepts separate:
+
+```text
+SourceId
+  physical evidence container/provider configuration
+
+SourceBindingId
+  configured physical tabular stream
+
+CanonicalRouteId
+  route from one binding into one canonical DatasetId
+
+DatasetId
+  PFETL canonical financial evidence/state identity
+```
+
+After the owning cutovers:
+
+- Pre-Bronze is keyed by `SourceBindingId`, not canonical `DatasetId`.
+- One binding may emit zero-to-many canonical routes/fragments.
+- One canonical DatasetId may consume zero-to-many routes/providers/registered recipes.
+- Multi-source composition is explicit; declaration/filesystem order never selects financial truth.
+- Source-row identity and canonical Bronze identity are separate.
+
+Do not reintroduce `SourceDatasetConfig.dataset_id` coupling once Phase 055 removes the compatibility path.
+
+## 5. Layer Ownership
+
+```text
+Raw / Control Plane
+  exact evidence + operational provenance
+
+Pre-Bronze
+  source-shaped tabular evidence, binding-keyed
+
+Semantic interpretation
+  bounded row-local source encoding -> canonical evidence meaning
+
+Bronze
+  PFETL canonical financial evidence
+
+Silver
+  PFETL reconstructed financial state / methodology
+
+Gold
+  PFETL analytical and decision surfaces
+```
+
+Silver/domain logic must not interpret source deletion flags, numeric source transaction/category codes, broker action strings, placeholder rows or provider topology after their canonical cutover.
+
+## 6. Bounded Semantic Interpretation
+
+Configuration may express deterministic bounded semantics such as:
+
+- existing normalization rules;
+- `MapValues`;
+- `Constant`;
+- `IncludeWhen`;
+- `ExcludeWhen`;
+- equality/membership/null/empty predicates.
+
+Do not add arbitrary Python/eval, SQL, user-authored Polars expressions, joins, aggregation, windows or financial formulas to source configuration.
+
+Unknown canonical-enum values fail by default. Source deletion/placeholder semantics are resolved before Bronze unless independently canonical.
+
+## 7. Canonical Production Rules
+
+Canonical production may:
+
+- consume canonical fragments;
+- execute `DIRECT` or explicit `UNION` source assembly;
+- consume supported provider evidence;
+- execute registered/versioned PFETL-owned canonical derivation recipes;
+- establish canonical identity after assembly;
+- enforce duplicate/grain rules;
+- run Gate 2 on the final assembled dataset;
+- run cross-dataset canonical integrity before Silver.
+
+It must not perform downstream financial calculations.
+
+Default duplicate behavior is fail. Do not add ordering-dependent keep-first/keep-last semantics to financial evidence.
+
+## 8. Satisfiability Planning Rules
+
+Keep capability planning and evidence producibility separate:
+
+- `ExecutionPlan` says what capabilities/canonical evidence are required.
+- `CanonicalSatisfiabilityPlanner` resolves how the current configuration can produce them.
+
+The planner must deterministically reject:
+
+- missing required producers;
+- multiple unresolved producers;
+- invalid explicit producer selections;
+- derived dependency cycles.
+
+Existing/stale Bronze cannot satisfy missing current configuration.
+
+## 9. DatasetContract Freeze Rules
+
+By Phase 059:
+
+- every Bronze/Silver/Gold DatasetId has exactly one authoritative DatasetContract;
+- Pre-Bronze remains dynamic/source-configured;
+- base DatasetContracts own complete schema, logical types, nullability, grain, keys, references, capability ownership, schema version and fingerprint;
+- active `ExecutionPlan` derives effective contracts without mutating base contracts;
+- DuckDB DDL, Bronze Pandera Gate-2 schema, capability-column indexes and machine-readable exports are generated adapters, not independent schema authorities;
+- extraction-ready contract modules remain free of Polars/Pandera/DuckDB/SQLite/provider behavior.
+
+Do not extract `pfetl-contracts` during the Grand Refactor. Phase 059 prepares the boundary; ecosystem extraction happens only after Phase 060 acceptance/readiness archaeology.
+
+## 10. Recovery, Replay and Observability
+
+Preserve existing persistence truth:
+
+1. DuckDB commits first.
+2. SQLite Control Plane commits second.
+3. Split failure yields `RECOVERY_REQUIRED`.
+
+Replay becomes binding/canonical-production aware. A changed binding/route/semantic rule must invalidate its affected canonical DatasetIds and downstream dependency closure. Identity-strategy changes that would mix generations require explicit rebuild semantics.
+
+Observability remains one emitter with existing downstream consumers. Add only bounded source-binding/canonical context. Preserve multiprocessing run/parent-operation lineage.
+
+## 11. Phase Families 046-060
+
+Use the phase files for exact work, but retain this program intent:
+
+- **046-051:** build SourceBinding/semantic-route/canonical-production/satisfiability architecture while preserving financial behavior.
+- **052-055:** migrate Shan household then investment/reference/provider evidence and delete the migration-only legacy architecture.
+- **056-057:** certify truly different external topologies and retire unused columns through consumer archaeology. These phases certify; they do not invent a parallel architecture.
+- **058:** profile and optimize the final architecture only.
+- **059:** freeze the complete PFETL contract universe and eliminate duplicate schema authority.
+- **060:** final clean-install + v10.3.0-upgrade + financial/recovery/observability/warehouse-parity acceptance.
+
+Phase 055 must hand Phase 056 exactly one production architecture.
+
+## 12. Testing Discipline
+
+Use the active phase test matrix. Add architecture guards when ownership becomes permanent so later phases cannot regress it.
+
+Typical local sequence:
+
+```powershell
+uv run poe audit:fast
+uv run pytest tests/architecture/test_boundaries.py
+uv run pytest <focused tests>
+```
+
+Run full quality/recovery/real-data/performance gates when the phase or release requires them. If the current environment cannot execute a mandatory runtime gate, record it as unverified rather than claiming success.
+
+## 13. Commit Discipline
+
+Do not hard-code file-per-commit or one-phase-one-commit rules in implementation plans. Use `pfetl-conventional-commits` to preview semantic grouping and Commitlint-compliant messages. Planning docs define coherent change boundaries; the commit Skill owns staging and message mechanics.
