@@ -1,92 +1,202 @@
 # AGENTS.md — Testing Workspace Guidelines
 
 > **Directory:** `tests/`  
-> **Test Runner:** Pytest via Astral `uv` (`uv run pytest`)  
+> **Test runner:** Pytest via Astral `uv` (`uv run pytest`)  
 > **Target Python:** `>=3.13`
 
 ---
 
-## 1. Test Suite Structure & Philosophy
+## 1. Purpose
 
-The test suite directly mirrors the 7-layer clean architecture of `src/personal_finance_etl/`, alongside dedicated test suites for architecture boundaries and fixtures:
+The test suite is an executable architectural mirror of `src/personal_finance_etl/`. Tests protect financial correctness, dependency boundaries, persistence/recovery semantics, configuration contracts, source/canonical separation and the active Grand Refactor phase handoff.
 
-| Layer Folder | Key Files | What It Protects |
-|---|---|---|
-| **Architecture** (`tests/architecture/`) | `test_boundaries.py`, `test_dead_code_guards.py`, `test_constitutional_certification.py`, `test_bronze_canonical_guards.py`, `test_topology_guards.py` | **Sacred Ground.** Enforces 7-layer clean architecture, AST-level forbidden import checks, package structure, zero `TYPE_CHECKING` blocks, zero inline imports, and product invariants. |
-| **Contracts** (`tests/contracts/`) | `test_primitives.py`, `test_data_transport.py`, `test_datasets.py`, `test_sources.py`, `test_observability.py`, `test_dataset_collection.py`, `test_capabilities.py` | Immutability, Pydantic validation, stable dataset/source schemas, deterministic identity, and data transport integrity. |
-| **Config** (`tests/config/`) | `test_settings.py`, `test_financial_rules.py`, `test_topology.py`, `test_source_selectors.py` | Configuration provenance, environment loading, rules fingerprinting, source-agnostic topology, and Pydantic configuration schemas. |
-| **Domain** (`tests/domain/`) | `test_canonical_domains.py`, `test_investments_quant.py`, `test_status_unification.py`, `test_tax_domain.py`, `test_household_wealth_fire.py` | FIFO lot matching, corporate actions, XIRR/CAGR quant math, tax schedules, net worth, Numba Monte Carlo FIRE simulations. Pure numerical/business logic. |
-| **Infrastructure** (`tests/infrastructure/`) | `test_warehouse_and_cp.py`, `test_control_plane.py`, `test_providers.py`, `test_observability_emitter.py`, `test_forensic_debuggability.py`, `test_redaction_retention.py`, `test_logging_subsystem.py`, `test_observability_certification.py`, `test_artifact_provenance.py`, `test_bronze_canonical_schema.py` | DuckDB warehouse, SQLite Control Plane transactions, Raw Document Store, external providers, fan-out event emission, JSONL audit trails, artifact provenance, PII/PAN redaction. |
-| **Application** (`tests/application/`) | `test_generalized_ingestion_certification.py`, `test_domestic_stock_ingestion.py`, `test_household_reference_ingestion.py`, `test_market_provider_ingestion.py`, `test_mutual_fund_ingestion.py`, `test_reference_data_ingestion.py`, `test_us_stock_ingestion.py`, `test_pipeline_observability.py`, `test_forensic_pipeline.py`, `test_orchestration_bootstrap.py` | `ETLOrchestrator`, `ServiceContainer`, pipeline stages, file parsers, provider adapters, Pre-Bronze admission, and generalized ingestion certification. |
-| **Presentation** (`tests/presentation/`) | `test_desktop_app.py`, `test_narrative.py` | CLI argument parsing, CustomTkinter tabs, rich narrative rendering, doc browser. |
-| **Fixtures** (`tests/fixtures/`) | `evidence/`, `config.toml`, `financial_rules.toml`, `run_headless.py`, `generate_evidence_fixtures.py` | Canonical static evidence binary repository, shared test fixtures, mock configurations, and headless execution profiling script. |
+Tests must not merely reproduce implementation details. They should encode the invariant that would make a regression dangerous.
 
 ---
 
-## 2. Test Execution Commands
+## 2. Test Tree
 
-Always run pytest via `uv`:
-
-```powershell
-# Run the complete test suite
-uv run pytest
-
-# Run architectural boundary enforcement tests (< 1 second)
-uv run pytest tests/architecture/test_boundaries.py
-
-# Run a specific layer or test file with concise tracebacks
-uv run pytest tests/domain/test_investments_quant.py -v --tb=short
-uv run pytest tests/contracts/
-
-# Run tests matching a specific name pattern
-uv run pytest -k "test_fifo"
-
-# Run headless ETL execution profile
-uv run python tests/fixtures/run_headless.py
+```text
+tests/
+├── conftest.py
+├── architecture/      # AST/import/legacy-demolition/product invariants
+├── contracts/         # identifiers, DatasetContracts, capability/provenance contracts
+├── config/            # Settings, FinancialRules, SourceConfiguration and fingerprints
+├── domain/            # pure financial kernels and calculations
+├── infrastructure/    # DuckDB, SQLite, providers, validation, observability, persistence
+├── application/       # planners, admission, canonical production, replay and orchestration
+├── presentation/      # CLI/Desktop/facade behavior
+└── fixtures/          # static source evidence/configurations and headless runners
 ```
 
----
-
-## 3. Test Authoring Rules for AI Agents
-
-1. **Mirror Layer Placement:**
-   - When writing tests for code in `src/personal_finance_etl/<layer>/`, always place the test in `tests/<layer>/`.
-   - Never create flat or unorganized test files directly in `tests/`.
-2. **Self-Documenting Test Names:**
-   - Follow the naming pattern: `test_<feature_or_component>_<condition>_<expected_outcome>()`.
-   - Per `ruff.toml`, docstrings are optional in `tests/` (`lint.per-file-ignores."tests/**" = ["D"]`). Self-documenting function names and readable assertions are preferred.
-3. **Never Touch or Weaken `tests/architecture/test_boundaries.py`:**
-   - If an import fails in `test_boundaries.py`, **do not alter the test to allow the import**. Instead, fix your code to respect the layer hierarchy (e.g. move domain logic out of infrastructure, or use `application.facade` instead of direct DB imports).
-4. **Database & File Isolation:**
-   - Always use `tmp_path` (or `pytest.MonkeyPatch`) when testing file persistence, DuckDB, or SQLite databases. Never write test outputs directly into production paths or repository roots.
-5. **Network Call Prohibition:**
-   - Tests must run 100% offline. Never make real HTTP/network calls (e.g. to `yfinance` or external market providers) during tests. Mock network boundaries or inject synthetic test fixtures.
-6. **Deterministic Assertions:**
-   - Avoid floating-point equality checks (`assert a == b`). Use `math.isclose()` or `pytest.approx()` with explicit tolerances when validating financial metrics (XIRR, CAGR, returns, tax amounts).
+Use semantic filenames that describe the subsystem. Do not create phase-numbered test files merely because a test was introduced during a particular phase.
 
 ---
 
-## 4. Centralized Enterprise Fixture Catalog (`tests/conftest.py`)
+## 3. Grand Refactor Test Boundaries
 
-All tests automatically inherit standard typed fixtures from `tests/conftest.py`. Never redefine local mock rules, status queues, or ad-hoc database managers:
+Tests must evolve with the owning phase. Do not assert future architecture before its phase introduces it, but once a phase cuts over an invariant, add a regression guard so later work cannot silently reintroduce the old model.
 
-| Fixture | Scope | Return Type | Description |
-|---|---|---|---|
-| `rules` | `function` | `FinancialRules` | Fresh, deep-copied instance of the canonical 442-line ruleset. Safe to mutate per-test without side effects. |
-| `mock_rules` | `function` | `FinancialRules` | Alias to `rules` for backwards-compatibility. |
-| `canonical_rules` | `session` | `FinancialRules` | Session-cached template loaded once from `tests/fixtures/financial_rules.toml`. |
-| `isolated_settings` | `function` | `Settings` | Ephemeral `Settings` pointing `TARGET_DB_BASE_PATH` and `LOGS_DIRECTORY` to `tmp_path`. |
-| `isolated_duckdb_manager` | `function` | `DuckDBManager` | Active DuckDB warehouse manager connected to an isolated database in `tmp_path`. |
-| `isolated_control_plane` | `function` | `ControlPlane` | Active Control Plane facade connected to an isolated SQLite database in `tmp_path`. |
-| `isolated_sqlite_manager` | `function` | `SQLiteManager` | Active SQLite connection manager targeting `tmp_path`. |
-| `status_queue` | `function` | `ThreadSafeStatusQueue` | Typed thread-safe status queue capturing events for pipeline tests. |
-| `test_emitter` | `function` | `tuple[ObservabilityEmitter, MemoryEventSink]` | Emitter pre-registered with an in-memory test sink for asserting emitted events. |
-| `isolated_container` | `function` | `ServiceContainer` | Fully wired composition root targeting the isolated `tmp_path` environment. |
-| `isolated_engine` | `function` | `PersonalFinanceEngine` | High-level engine façade backed by `isolated_container`. |
-| `isolated_live_settings` | `function` | `Settings` | Loads user test config from G: drive if mounted, redirecting outputs to `tmp_path`. Skips if G: is unmounted. |
-| `repo_root` | `session` | `Path` | Absolute path to project root. |
-| `fixtures_dir` | `session` | `Path` | Absolute path to `tests/fixtures`. |
-| `rules_path` | `session` | `Path` | Path to `tests/fixtures/financial_rules.toml`. |
-| `config_path` | `session` | `Path` | Path to `tests/fixtures/config.toml`. |
-| `copy_evidence` | `function` | `Callable[[str, Path], dict[str, str]]` | Factory copying static binary fixtures from `tests/fixtures/evidence/` into `tmp_path`. |
+### Source / canonical identity
 
+After the relevant cutovers, architecture and contract tests must enforce:
+
+- `SourceId` identifies physical source/provider configuration.
+- `SourceBindingId` identifies physical tabular streams.
+- Pre-Bronze runtime/persistence is binding-keyed, not canonical DatasetId-keyed.
+- `DatasetId` names PFETL canonical financial evidence/state only.
+- one binding may own multiple routes;
+- one canonical dataset may depend on multiple explicit routes/providers/registered recipes;
+- no declaration-order or filesystem-order producer selection.
+
+### Semantic interpretation
+
+Once Phase 049 is authoritative, tests must reject configuration/runtime paths that introduce:
+
+- arbitrary Python/eval callbacks;
+- SQL predicates/queries as semantic rules;
+- user-authored Polars expressions;
+- joins/aggregation/windows inside semantic mapping;
+- financial formulas in source configuration;
+- silent unknown canonical-enum values.
+
+Add focused tests for bounded rule ordering, include/exclude behavior, canonical enum mapping, placeholder/deleted-row filtering and deterministic rule fingerprints.
+
+### Canonical production
+
+Once Phase 050 is authoritative, tests must cover:
+
+- `DIRECT` source production;
+- explicit `UNION` across multiple routes;
+- provider production;
+- registered PFETL-owned derived production;
+- post-assembly canonical identity;
+- duplicate collision semantics;
+- grain/uniqueness enforcement;
+- Gate 2 on final assembled canonical datasets;
+- canonical cross-dataset integrity before Silver;
+- valid-empty vs absent/disabled/malformed distinctions.
+
+Never treat `unique()` / keep-first / keep-last behavior as an acceptable financial duplicate policy unless a DatasetContract explicitly defines the semantics.
+
+### Satisfiability planning
+
+Once Phase 051 is authoritative, tests must prove:
+
+- exactly one resolved producer per required active DatasetId;
+- missing producer diagnostics;
+- ambiguous producer diagnostics;
+- explicit source `UNION` selection;
+- optional unsatisfied datasets remain inactive rather than becoming fake empty evidence;
+- derived dependency cycle detection;
+- deterministic plan/fingerprint behavior;
+- stale existing Bronze cannot satisfy missing current configuration.
+
+### Silver source independence
+
+After the household/investment cutovers, architecture tests must prevent Silver/domain logic from interpreting retired source fields or vendor encodings such as historical category/transaction codes, deletion flags, broker action strings, placeholder rows or provider-specific symbol topology.
+
+If financial code needs meaning that only a source field currently supplies, stop and repair canonical evidence ownership rather than whitelisting the source field in Silver.
+
+### Unified contract authority
+
+By Phase 059, tests must prove:
+
+- every Bronze/Silver/Gold DatasetId has exactly one authoritative DatasetContract;
+- Pre-Bronze does not pretend to have a global canonical DatasetContract;
+- DDL/Pandera/capability-column indexes are derived from DatasetContracts rather than manually duplicated schema lists;
+- contract grain, keys and references point to existing columns/datasets;
+- base contracts remain immutable while effective contracts reflect the active ExecutionPlan;
+- contract serialization/fingerprints are deterministic and implementation-library-neutral;
+- physical warehouse schemas match effective contracts in final acceptance.
+
+---
+
+## 4. Financial Regression Oracles
+
+Architecture/schema migration must not silently change PFETL financial truth.
+
+For the Shan baseline and any equivalent external topology, compare protected downstream identities and financially meaningful outputs as required by the active phase.
+
+Protected identity families include:
+
+- `PURCHASE`;
+- `SALE`;
+- `LOT`;
+- `REALIZED`;
+- `RECON_LOT_GROUP`;
+- `RECON_GROUP`;
+- `RECON_EVENT`;
+- `TAX`.
+
+Any unexplained ID drift or paise-level value difference is a phase stop unless the phase explicitly documents an intentional representation change outside financial methodology.
+
+Do not fork financial engines merely to compare migration paths. Compare old/new preparation or canonical evidence while reusing the same PFETL-owned financial kernels.
+
+---
+
+## 5. Fixture Governance
+
+Use **static, sanitized evidence fixtures** for ordinary tests. Do not generate fake Excel/CSV evidence dynamically inside test functions when a stable fixture can represent the case.
+
+Fixture coverage should evolve toward topology families rather than Shan-only source names:
+
+```text
+tests/fixtures/evidence/
+├── shan/                       # regression oracle evidence
+├── external_household/        # alternate household topologies
+├── external_investment/       # alternate domestic/foreign broker topologies
+└── negative/                   # malformed mapping/schema/identity/ambiguity cases
+```
+
+Exact folder names may follow the phase implementation, but the ownership rule is fixed: fixtures model evidence/topology, not hidden code branches.
+
+Required external certification coverage eventually includes:
+
+- one physical source -> several canonical datasets;
+- several physical bindings -> one canonical dataset through explicit UNION;
+- CSV/Excel/SQLite household variants;
+- domestic-only and foreign investment variants;
+- multiple broker/action vocabularies;
+- invalid semantic mapping;
+- identity collision;
+- missing/ambiguous producer;
+- malformed Gate-1 and Gate-2 evidence.
+
+---
+
+## 6. Shared Fixtures and Isolation
+
+Prefer typed shared fixtures in `tests/conftest.py` for Settings, FinancialRules, storage managers, Control Plane, observability and composed application services. Add shared fixtures when a setup pattern is genuinely reused; do not force unrelated topology-specific evidence into one global fixture merely to avoid a few lines.
+
+All standard tests are offline-first and sandboxed under temporary paths. Live user-data tests must be explicitly marked `@pytest.mark.live_data` and excluded from normal CI when appropriate.
+
+Do not access personal cloud mounts, production databases or network services from ordinary unit/architecture tests.
+
+---
+
+## 7. Typing and Test-Code Standards
+
+- Every test function is explicitly typed and returns `None`.
+- Avoid `Any` and untyped generic containers when a concrete type can be modeled.
+- `# pylint: skip-file`, broad `noqa`, `TYPE_CHECKING` workarounds and inline/deferred imports are forbidden where architecture/quality rules prohibit them.
+- Test module docstrings describe ownership and purpose, not historical phase chronology.
+- Assert observable contracts/invariants, not incidental private implementation shape unless the test specifically guards architecture.
+
+---
+
+## 8. Phase Verification Discipline
+
+Use the active phase file as the test authority. A phase-specific checklist may require more than the generic repository gate.
+
+Typical focused sequence:
+
+```powershell
+uv run pytest tests/<affected area>/...
+uv run pytest tests/architecture/test_boundaries.py
+uv run poe audit:fast
+```
+
+Persistence/cutover phases additionally need the named rollback, replay, backup/restore and existing-state tests. Minor/certification releases additionally require the phase-specified full quality gate, Shan oracle, external fixture, observability and performance checks.
+
+When the environment cannot run a required gate, record it as unverified. Never convert an unavailable runtime check into a claimed pass.

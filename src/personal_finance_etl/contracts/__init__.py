@@ -37,6 +37,19 @@ from personal_finance_etl.contracts.canonical_fields import (
     get_canonical_fields,
     is_valid_canonical_field,
 )
+from personal_finance_etl.contracts.canonical_plans import (
+    CanonicalDatasetPlan,
+    CanonicalFragment,
+    CanonicalProducerKind,
+    CanonicalProductionPlan,
+    SourceAssemblyMode,
+    SourceBindingPlan,
+)
+from personal_finance_etl.contracts.canonical_semantics import (
+    HouseholdCategoryKind,
+    HouseholdTransactionKind,
+    InvestmentAction,
+)
 from personal_finance_etl.contracts.capabilities import (
     CAPABILITY_COLUMN_INVENTORY,
     CAPABILITY_REGISTRY,
@@ -58,6 +71,7 @@ from personal_finance_etl.contracts.dataset_collection import (
 )
 from personal_finance_etl.contracts.datasets import (
     BRONZE_DATASET_ORIGIN_MAP,
+    CANDIDATE_BRONZE_DATASETS,
     EXTERNAL_CONFIGURED_DATASETS,
     PROVIDER_GENERATED_DATASETS,
     TRANSITIONAL_DATASETS,
@@ -141,8 +155,13 @@ from personal_finance_etl.contracts.semantic_inventory import (
     get_silver_contract_semantics,
 )
 from personal_finance_etl.contracts.sources import (
+    CanonicalRouteId,
+    CanonicalRouteRef,
     ProviderType,
+    SourceBindingId,
     SourceId,
+    validate_canonical_route_id,
+    validate_source_binding_id,
     validate_source_id,
 )
 from personal_finance_etl.contracts.validation import (
@@ -160,11 +179,18 @@ __all__ = [
     "AdmissionDryRunResult",
     "ArtifactMetadata",
     "BRONZE_DATASET_ORIGIN_MAP",
+    "CANDIDATE_BRONZE_DATASETS",
     "CANONICAL_BRONZE_FIELDS",
     "CANONICAL_PROVENANCE_FIELDS",
     "CAPABILITY_COLUMN_INVENTORY",
     "CAPABILITY_REGISTRY",
     "COMMON_PRODUCED_SILVER_DATASETS",
+    "CanonicalDatasetPlan",
+    "CanonicalFragment",
+    "CanonicalProducerKind",
+    "CanonicalProductionPlan",
+    "CanonicalRouteId",
+    "CanonicalRouteRef",
     "CapabilityDescriptor",
     "CapabilityGraph",
     "CapabilityGraphError",
@@ -203,8 +229,11 @@ __all__ = [
     "FailureDomain",
     "GOLD_CONTRACT_DEPENDENCIES",
     "GoldContractDependency",
+    "HouseholdCategoryKind",
+    "HouseholdTransactionKind",
     "IdentityPreviewResult",
     "IdentityRequirement",
+    "InvestmentAction",
     "EventQueue",
     "MappingPreviewResult",
     "MissingDatasetError",
@@ -232,6 +261,9 @@ __all__ = [
     "SilverContractSemantics",
     "SnapshotOutcome",
     "SnapshotResult",
+    "SourceAssemblyMode",
+    "SourceBindingId",
+    "SourceBindingPlan",
     "SourceCheckDetail",
     "SourceCheckResult",
     "SourceId",
@@ -254,5 +286,7 @@ __all__ = [
     "get_silver_column_disposition",
     "get_silver_contract_semantics",
     "is_valid_canonical_field",
+    "validate_canonical_route_id",
+    "validate_source_binding_id",
     "validate_source_id",
 ]

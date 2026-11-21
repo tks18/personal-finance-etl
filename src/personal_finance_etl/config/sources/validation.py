@@ -3,7 +3,8 @@
 Owns
 ----
 - validate_source_selector_compatibility: Ensures a dataset selector matches its source provider type.
-- validate_source_dataset_bindings: Aggregate validation of source-dataset topologies.
+- validate_source_dataset_bindings: Aggregate validation of legacy source-dataset topologies.
+- validate_source_bindings: Aggregate validation of additive source binding and production topologies.
 
 Does not own
 ------------
@@ -15,12 +16,21 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 
+from personal_finance_etl.config.sources.binding_model import (
+    CanonicalDatasetProductionConfig,
+    SourceBindingConfig,
+)
 from personal_finance_etl.config.sources.model import SourceConfig, SourceDatasetConfig
 from personal_finance_etl.config.sources.selectors import DatasetSelector
 from personal_finance_etl.contracts.datasets import DatasetId
-from personal_finance_etl.contracts.sources import SourceId
+from personal_finance_etl.contracts.sources import (
+    CanonicalRouteId,
+    SourceBindingId,
+    SourceId,
+)
 
 __all__ = [
+    "validate_source_bindings",
     "validate_source_dataset_bindings",
     "validate_source_selector_compatibility",
 ]
@@ -104,3 +114,86 @@ def validate_source_dataset_bindings(
 
         # 3. Validate selector-provider compatibility
         validate_source_selector_compatibility(source, binding.selector)
+
+
+def validate_source_bindings(
+    sources: Sequence[SourceConfig] | Mapping[SourceId, SourceConfig],
+    bindings: Sequence[SourceBindingConfig],
+    productions: Sequence[CanonicalDatasetProductionConfig] | None = None,
+) -> None:
+    """Validate cross-object semantic consistency for additive source bindings and production plans.
+
+    Parameters
+    ----------
+    sources : Sequence[SourceConfig] | Mapping[SourceId, SourceConfig]
+        Collection of configured physical evidence sources.
+    bindings : Sequence[SourceBindingConfig]
+        Collection of physical tabular stream bindings.
+    productions : Sequence[CanonicalDatasetProductionConfig] | None, default None
+        Optional collection of canonical dataset production rules.
+
+    Raises
+    ------
+    ValueError
+        If duplicate binding IDs exist, any binding references an unknown SourceId,
+        selectors are incompatible with source providers, or production rules reference
+        non-existent source routes.
+    """
+    sources_map: dict[SourceId, SourceConfig]
+    if isinstance(sources, Mapping):
+        sources_map = dict(sources)
+    else:
+        sources_map = {}
+        for src in sources:
+            if src.source_id in sources_map:
+                raise ValueError(f"Duplicate source definition for source_id '{src.source_id}'.")
+            sources_map[src.source_id] = src
+
+    seen_bindings: set[SourceBindingId] = set()
+    routes_by_binding: dict[SourceBindingId, dict[CanonicalRouteId, DatasetId]] = {}
+
+    for binding in bindings:
+        # 1. Validate uniqueness of binding_id
+        if binding.binding_id in seen_bindings:
+            raise ValueError(f"Duplicate source binding identifier found: '{binding.binding_id}'.")
+        seen_bindings.add(binding.binding_id)
+
+        # 2. Validate SourceId reference exists
+        source = sources_map.get(binding.source_id)
+        if source is None:
+            known_ids = sorted(str(s) for s in sources_map.keys())
+            raise ValueError(
+                f"SourceBindingConfig '{binding.binding_id}' references unknown source_id '{binding.source_id}'. "
+                f"Available sources: {known_ids}."
+            )
+
+        # 3. Validate selector-provider compatibility
+        validate_source_selector_compatibility(source, binding.selector)
+
+        # 4. Catalog routes for cross-reference validation
+        binding_routes: dict[CanonicalRouteId, DatasetId] = {}
+        for r in binding.routes:
+            binding_routes[r.route_id] = r.target_dataset_id
+        routes_by_binding[binding.binding_id] = binding_routes
+
+    # 5. Validate productions if provided
+    if productions:
+        for prod in productions:
+            for route_ref in prod.source_routes:
+                matched_routes = routes_by_binding.get(route_ref.binding_id)
+                if matched_routes is None:
+                    raise ValueError(
+                        f"Canonical production for dataset '{prod.dataset_id}' references route '{route_ref.to_string()}', "
+                        f"but binding '{route_ref.binding_id}' does not exist."
+                    )
+                target_ds = matched_routes.get(route_ref.route_id)
+                if target_ds is None:
+                    raise ValueError(
+                        f"Canonical production for dataset '{prod.dataset_id}' references route '{route_ref.to_string()}', "
+                        f"but route '{route_ref.route_id}' does not exist in binding '{route_ref.binding_id}'."
+                    )
+                if target_ds != prod.dataset_id:
+                    raise ValueError(
+                        f"Route '{route_ref.to_string()}' targets dataset '{target_ds}', "
+                        f"which does not match production dataset '{prod.dataset_id}'."
+                    )

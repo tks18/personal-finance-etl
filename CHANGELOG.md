@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [10.3.1](https://github.com/tks18/personal-finance-etl/compare/10.3.0...10.3.1) (2026-11-21)
+
+
+### Others 🔧
+
+* update governance documents ([b7213b1](https://github.com/tks18/personal-finance-etl/commit/b7213b1cf4492ba6ca095c81c462b2787070d8fc))
+
+
+### Features 🔥
+
+* **config:** add additive source binding and production models ([c5207a5](https://github.com/tks18/personal-finance-etl/commit/c5207a5abb5ef385b986f1b85504c5c26eeb0fe2))
+* **contracts:** add canonical contract and source-binding vocabulary ([dc96fdf](https://github.com/tks18/personal-finance-etl/commit/dc96fdfb87923c6d95b1bf44de39c20abf741987))
+
+
+### Tests 🧪
+
+* **contracts:** add identity coupling, binding, and guard tests ([af52f3e](https://github.com/tks18/personal-finance-etl/commit/af52f3e2c2f4809f1c55e86994cebce1b5a02de5))
+
+
+### Docs 📃
+
+* add 10 additional phases for grand refactor plan ([8801ac2](https://github.com/tks18/personal-finance-etl/commit/8801ac26bd33c8c730d87d6cf48e4342e27af00d))
+* **refactor:** complete phase 046 contract foundation checklist ([91bc88a](https://github.com/tks18/personal-finance-etl/commit/91bc88a2c0ce9900b6c80c11cd7ec6250d90f2eb))
+* rename 46-50 to 56-60 phases ([e8c827a](https://github.com/tks18/personal-finance-etl/commit/e8c827a01ff7041ad8b8b0db3fcedf6e54f5b748))
+* update last 5 phases docs ([50da3ae](https://github.com/tks18/personal-finance-etl/commit/50da3ae6c949748507f40086603e6288a0e4de71))
+
 ## [10.3.0](https://github.com/tks18/personal-finance-etl/compare/10.2.2...10.3.0) (2026-11-21)
 
 
