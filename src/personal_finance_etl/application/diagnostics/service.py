@@ -51,6 +51,7 @@ from personal_finance_etl.config.sources.identity import (
     SourceFieldIdentity,
 )
 from personal_finance_etl.config.sources.loader import SourceConfiguration
+from personal_finance_etl.config.sources.model import SourceConfig, SourceDatasetConfig
 from personal_finance_etl.config.sources.selectors import (
     CsvSelector,
     ExcelSelector,
@@ -378,8 +379,6 @@ class DiagnosticService:
             p_loc = Path(loc)
             resolved_loc = str(p_loc.resolve()) if p_loc.exists() else loc
             selectors: list[DatasetSelectorStatus] = []
-            source_status = SourceReachabilityStatus.REACHABLE
-            msg = "Reachable"
 
             child_bindings = datasets_by_source.get(source.source_id, [])
             source_discovered_files: list[str] = []
@@ -389,186 +388,27 @@ class DiagnosticService:
                 )
             unique_source_files = sorted(set(source_discovered_files))
 
-            if source.provider_type == ProviderType.MARKET_DATA:
-                msg = "External market data stream provider (network managed)"
-            elif not child_bindings:
-                if p_loc.exists() or glob.glob(loc, recursive=True):
-                    msg = "Reachable location (no child datasets bound)"
-                else:
-                    source_status = SourceReachabilityStatus.UNREACHABLE
-                    msg = f"Path does not exist: {loc}"
-                    all_reachable = False
-            elif not unique_source_files:
-                if not p_loc.exists() and not glob.glob(loc, recursive=True):
-                    source_status = SourceReachabilityStatus.UNREACHABLE
-                    msg = f"Path does not exist: {loc}"
-                    all_reachable = False
-                else:
-                    source_status = SourceReachabilityStatus.UNREACHABLE
-                    msg = (
-                        f"Location exists at '{loc}', but no evidence files "
-                        "matched selectors or supported extensions"
-                    )
-                    all_reachable = False
-            else:
-                msg = f"Reachable ({len(unique_source_files)} evidence file(s) discovered)"
+            source_status, msg, is_loc_reachable = self._evaluate_source_location(
+                source, child_bindings, unique_source_files, p_loc, loc
+            )
+            if not is_loc_reachable:
+                all_reachable = False
 
             # Validate each dataset binding under this source
             for binding in child_bindings:
                 if not binding.enabled:
                     continue
                 ds_files = discovered_by_dataset.get(binding.dataset_id.value, [])
-                sel = binding.selector
-
-                if not ds_files:
-                    valid = False
+                sel_status, sel_issue, status_override = self._validate_binding_selector(
+                    binding, ds_files, sources_path, source.source_id
+                )
+                selectors.append(sel_status)
+                if sel_issue is not None:
+                    issues.append(sel_issue)
+                if status_override is not None:
                     all_reachable = False
                     if source_status == SourceReachabilityStatus.REACHABLE:
-                        source_status = SourceReachabilityStatus.INVALID_SELECTOR
-                    issues.append(
-                        DiagnosticIssue(
-                            category="SELECTOR",
-                            severity=DiagnosticSeverity.ERROR,
-                            location=sources_path,
-                            field=binding.dataset_id.value,
-                            message=(
-                                f"No matching evidence files found for dataset '{binding.dataset_id.value}' "
-                                f"under source '{source.source_id}'."
-                            ),
-                            remediation="Verify directory path, file_pattern, or extension filtering.",
-                        )
-                    )
-                    selectors.append(
-                        DatasetSelectorStatus(
-                            dataset_id=binding.dataset_id,
-                            selector_type=type(sel).__name__,
-                            selector_target=str(getattr(sel, "file_pattern", "all")),
-                            is_valid=False,
-                            details="No matching evidence files found",
-                        )
-                    )
-                    continue
-
-                sample_file = ds_files[0]
-
-                if isinstance(sel, SqliteSelector):
-                    try:
-                        conn = sqlite3.connect(f"file:{sample_file}?mode=ro", uri=True)
-                        cursor = conn.cursor()
-                        cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
-                        tables = tuple(row[0] for row in cursor.fetchall())
-                        conn.close()
-
-                        valid = sel.table_name in tables
-                        if not valid:
-                            all_reachable = False
-                            source_status = SourceReachabilityStatus.INVALID_SELECTOR
-                            issues.append(
-                                DiagnosticIssue(
-                                    category="SELECTOR",
-                                    severity=DiagnosticSeverity.ERROR,
-                                    location=sources_path,
-                                    field=binding.dataset_id.value,
-                                    message=(
-                                        f"Table '{sel.table_name}' not found in SQLite database '{sample_file}'."
-                                    ),
-                                    remediation=f"Available tables: {list(tables)}.",
-                                )
-                            )
-                        selectors.append(
-                            DatasetSelectorStatus(
-                                dataset_id=binding.dataset_id,
-                                selector_type="sqlite_table",
-                                selector_target=sel.table_name,
-                                is_valid=valid,
-                                details="Table present"
-                                if valid
-                                else f"Missing table '{sel.table_name}'",
-                                available_targets=tables,
-                            )
-                        )
-                    except Exception as e:
-                        all_reachable = False
-                        source_status = SourceReachabilityStatus.ERROR
-                        msg = f"Cannot open SQLite connection '{sample_file}': {e}"
-                        selectors.append(
-                            DatasetSelectorStatus(
-                                dataset_id=binding.dataset_id,
-                                selector_type="sqlite_table",
-                                selector_target=sel.table_name,
-                                is_valid=False,
-                                details=f"Connection error: {e}",
-                            )
-                        )
-
-                elif isinstance(sel, ExcelSelector):
-                    try:
-                        excel_reader = fastexcel.read_excel(str(sample_file))
-                        available_sheets = tuple(excel_reader.sheet_names)
-                        if sel.sheet_name:
-                            valid = sel.sheet_name in available_sheets
-                            target_repr = sel.sheet_name
-                        elif sel.candidate_sheets:
-                            valid = any(cs in available_sheets for cs in sel.candidate_sheets)
-                            target_repr = f"candidates: {sel.candidate_sheets}"
-                        else:
-                            valid = len(available_sheets) > 0
-                            target_repr = available_sheets[0] if available_sheets else "default"
-
-                        if not valid:
-                            all_reachable = False
-                            source_status = SourceReachabilityStatus.INVALID_SELECTOR
-                            issues.append(
-                                DiagnosticIssue(
-                                    category="SELECTOR",
-                                    severity=DiagnosticSeverity.ERROR,
-                                    location=sources_path,
-                                    field=binding.dataset_id.value,
-                                    message=(
-                                        f"Sheet target '{target_repr}' not found in Excel file '{sample_file}'."
-                                    ),
-                                    remediation=f"Available sheets: {list(available_sheets)}.",
-                                )
-                            )
-                        selectors.append(
-                            DatasetSelectorStatus(
-                                dataset_id=binding.dataset_id,
-                                selector_type="excel_sheet",
-                                selector_target=target_repr,
-                                is_valid=valid,
-                                details=(
-                                    "Sheet present"
-                                    if valid
-                                    else f"Missing sheet target '{target_repr}'"
-                                ),
-                                available_targets=available_sheets,
-                            )
-                        )
-                    except Exception as e:
-                        all_reachable = False
-                        source_status = SourceReachabilityStatus.ERROR
-                        msg = f"Cannot read Excel file '{sample_file}': {e}"
-                        selectors.append(
-                            DatasetSelectorStatus(
-                                dataset_id=binding.dataset_id,
-                                selector_type="excel_sheet",
-                                selector_target=sel.sheet_name or "default",
-                                is_valid=False,
-                                details=f"Read error: {e}",
-                            )
-                        )
-
-                elif isinstance(sel, CsvSelector):
-                    valid = os.path.isfile(sample_file) and os.path.getsize(sample_file) > 0
-                    selectors.append(
-                        DatasetSelectorStatus(
-                            dataset_id=binding.dataset_id,
-                            selector_type="csv_pattern",
-                            selector_target=sel.file_pattern or os.path.basename(sample_file),
-                            is_valid=valid,
-                            details=f"{len(ds_files)} matching file(s) found",
-                        )
-                    )
+                        source_status = status_override
 
             detail = SourceCheckDetail(
                 source_id=source.source_id,
@@ -586,6 +426,317 @@ class DiagnosticService:
             sources=tuple(source_details),
             issues=tuple(issues),
         )
+
+    @staticmethod
+    def _evaluate_source_location(
+        source: SourceConfig,
+        child_bindings: Sequence[SourceDatasetConfig],
+        unique_source_files: Sequence[str],
+        p_loc: Path,
+        loc: str,
+    ) -> tuple[SourceReachabilityStatus, str, bool]:
+        """Determine source reachability status, narrative message, and reachability flag.
+
+        Parameters
+        ----------
+        source : SourceConfig
+            Source configuration definition.
+        child_bindings : Sequence[SourceDatasetConfig]
+            Dataset bindings belonging to this source.
+        unique_source_files : Sequence[str]
+            Unique file paths discovered for this source.
+        p_loc : Path
+            Path object of the configured source location.
+        loc : str
+            Raw string of the configured source location.
+
+        Returns
+        -------
+        tuple[SourceReachabilityStatus, str, bool]
+            Status enum, human-readable message, and boolean reachability flag.
+        """
+        if source.provider_type == ProviderType.MARKET_DATA:
+            return (
+                SourceReachabilityStatus.REACHABLE,
+                "External market data stream provider (network managed)",
+                True,
+            )
+
+        if not child_bindings:
+            if p_loc.exists() or glob.glob(loc, recursive=True):
+                return (
+                    SourceReachabilityStatus.REACHABLE,
+                    "Reachable location (no child datasets bound)",
+                    True,
+                )
+            return (
+                SourceReachabilityStatus.UNREACHABLE,
+                f"Path does not exist: {loc}",
+                False,
+            )
+
+        if not unique_source_files:
+            if not p_loc.exists() and not glob.glob(loc, recursive=True):
+                return (
+                    SourceReachabilityStatus.UNREACHABLE,
+                    f"Path does not exist: {loc}",
+                    False,
+                )
+            return (
+                SourceReachabilityStatus.UNREACHABLE,
+                (
+                    f"Location exists at '{loc}', but no evidence files "
+                    "matched selectors or supported extensions"
+                ),
+                False,
+            )
+
+        return (
+            SourceReachabilityStatus.REACHABLE,
+            f"Reachable ({len(unique_source_files)} evidence file(s) discovered)",
+            True,
+        )
+
+    @staticmethod
+    def _inspect_sqlite_selector(
+        sel: SqliteSelector,
+        sample_file: str,
+        dataset_id: DatasetId,
+        sources_path: str,
+    ) -> tuple[DatasetSelectorStatus, DiagnosticIssue | None, bool]:
+        """Validate an SQLite table selector against a sample database file.
+
+        Parameters
+        ----------
+        sel : SqliteSelector
+            SQLite selector configuration.
+        sample_file : str
+            Path to sample database file.
+        dataset_id : DatasetId
+            Target canonical dataset identifier.
+        sources_path : str
+            Path to sources configuration file for issue location.
+
+        Returns
+        -------
+        tuple[DatasetSelectorStatus, DiagnosticIssue | None, bool]
+            Selector status model, optional diagnostic issue if invalid, and boolean valid flag.
+        """
+        try:
+            conn = sqlite3.connect(f"file:{sample_file}?mode=ro", uri=True)
+            cursor = conn.cursor()
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+            tables = tuple(row[0] for row in cursor.fetchall())
+            conn.close()
+
+            valid = sel.table_name in tables
+            issue: DiagnosticIssue | None = None
+            if not valid:
+                issue = DiagnosticIssue(
+                    category="SELECTOR",
+                    severity=DiagnosticSeverity.ERROR,
+                    location=sources_path,
+                    field=dataset_id.value,
+                    message=f"Table '{sel.table_name}' not found in SQLite database '{sample_file}'.",
+                    remediation=f"Available tables: {list(tables)}.",
+                )
+            status = DatasetSelectorStatus(
+                dataset_id=dataset_id,
+                selector_type="sqlite_table",
+                selector_target=sel.table_name,
+                is_valid=valid,
+                details="Table present" if valid else f"Missing table '{sel.table_name}'",
+                available_targets=tables,
+            )
+            return status, issue, valid
+        except Exception as e:
+            status = DatasetSelectorStatus(
+                dataset_id=dataset_id,
+                selector_type="sqlite_table",
+                selector_target=sel.table_name,
+                is_valid=False,
+                details=f"Connection error: {e}",
+            )
+            return status, None, False
+
+    @staticmethod
+    def _inspect_excel_selector(
+        sel: ExcelSelector,
+        sample_file: str,
+        dataset_id: DatasetId,
+        sources_path: str,
+    ) -> tuple[DatasetSelectorStatus, DiagnosticIssue | None, bool]:
+        """Validate an Excel sheet selector against a sample workbook file.
+
+        Parameters
+        ----------
+        sel : ExcelSelector
+            Excel selector configuration.
+        sample_file : str
+            Path to sample workbook file.
+        dataset_id : DatasetId
+            Target canonical dataset identifier.
+        sources_path : str
+            Path to sources configuration file for issue location.
+
+        Returns
+        -------
+        tuple[DatasetSelectorStatus, DiagnosticIssue | None, bool]
+            Selector status model, optional diagnostic issue if invalid, and boolean valid flag.
+        """
+        try:
+            excel_reader = fastexcel.read_excel(str(sample_file))
+            available_sheets = tuple(excel_reader.sheet_names)
+            if sel.sheet_name:
+                valid = sel.sheet_name in available_sheets
+                target_repr = sel.sheet_name
+            elif sel.candidate_sheets:
+                valid = any(cs in available_sheets for cs in sel.candidate_sheets)
+                target_repr = f"candidates: {sel.candidate_sheets}"
+            else:
+                valid = len(available_sheets) > 0
+                target_repr = available_sheets[0] if available_sheets else "default"
+
+            issue: DiagnosticIssue | None = None
+            if not valid:
+                issue = DiagnosticIssue(
+                    category="SELECTOR",
+                    severity=DiagnosticSeverity.ERROR,
+                    location=sources_path,
+                    field=dataset_id.value,
+                    message=f"Sheet target '{target_repr}' not found in Excel file '{sample_file}'.",
+                    remediation=f"Available sheets: {list(available_sheets)}.",
+                )
+            status = DatasetSelectorStatus(
+                dataset_id=dataset_id,
+                selector_type="excel_sheet",
+                selector_target=target_repr,
+                is_valid=valid,
+                details="Sheet present" if valid else f"Missing sheet target '{target_repr}'",
+                available_targets=available_sheets,
+            )
+            return status, issue, valid
+        except Exception as e:
+            status = DatasetSelectorStatus(
+                dataset_id=dataset_id,
+                selector_type="excel_sheet",
+                selector_target=sel.sheet_name or "default",
+                is_valid=False,
+                details=f"Read error: {e}",
+            )
+            return status, None, False
+
+    @staticmethod
+    def _inspect_csv_selector(
+        sel: CsvSelector,
+        sample_file: str,
+        dataset_id: DatasetId,
+        ds_files: Sequence[str],
+    ) -> DatasetSelectorStatus:
+        """Validate a CSV pattern selector against discovered files.
+
+        Parameters
+        ----------
+        sel : CsvSelector
+            CSV selector configuration.
+        sample_file : str
+            Path to sample CSV file.
+        dataset_id : DatasetId
+            Target canonical dataset identifier.
+        ds_files : Sequence[str]
+            All discovered files matching the dataset.
+
+        Returns
+        -------
+        DatasetSelectorStatus
+            Selector status model.
+        """
+        valid = os.path.isfile(sample_file) and os.path.getsize(sample_file) > 0
+        return DatasetSelectorStatus(
+            dataset_id=dataset_id,
+            selector_type="csv_pattern",
+            selector_target=sel.file_pattern or os.path.basename(sample_file),
+            is_valid=valid,
+            details=f"{len(ds_files)} matching file(s) found",
+        )
+
+    @classmethod
+    def _validate_binding_selector(
+        cls,
+        binding: SourceDatasetConfig,
+        ds_files: Sequence[str],
+        sources_path: str,
+        source_id: str,
+    ) -> tuple[DatasetSelectorStatus, DiagnosticIssue | None, SourceReachabilityStatus | None]:
+        """Validate a single dataset binding and its selector against discovered files.
+
+        Parameters
+        ----------
+        binding : SourceDatasetConfig
+            Dataset binding configuration.
+        ds_files : Sequence[str]
+            Discovered files for this dataset binding.
+        sources_path : str
+            Path to sources configuration file.
+        source_id : str
+            Owning source identifier.
+
+        Returns
+        -------
+        tuple[DatasetSelectorStatus, DiagnosticIssue | None, SourceReachabilityStatus | None]
+            Selector status, optional diagnostic issue, and optional status override.
+        """
+        sel = binding.selector
+        if not ds_files:
+            missing_issue = DiagnosticIssue(
+                category="SELECTOR",
+                severity=DiagnosticSeverity.ERROR,
+                location=sources_path,
+                field=binding.dataset_id.value,
+                message=(
+                    f"No matching evidence files found for dataset '{binding.dataset_id.value}' "
+                    f"under source '{source_id}'."
+                ),
+                remediation="Verify directory path, file_pattern, or extension filtering.",
+            )
+            status = DatasetSelectorStatus(
+                dataset_id=binding.dataset_id,
+                selector_type=type(sel).__name__,
+                selector_target=str(getattr(sel, "file_pattern", "all")),
+                is_valid=False,
+                details="No matching evidence files found",
+            )
+            return status, missing_issue, SourceReachabilityStatus.INVALID_SELECTOR
+
+        sample_file = ds_files[0]
+        if isinstance(sel, SqliteSelector):
+            selector_status, sqlite_issue, valid = cls._inspect_sqlite_selector(
+                sel, sample_file, binding.dataset_id, sources_path
+            )
+            override_status = None if valid else SourceReachabilityStatus.INVALID_SELECTOR
+            return selector_status, sqlite_issue, override_status
+
+        if isinstance(sel, ExcelSelector):
+            selector_status, excel_issue, valid = cls._inspect_excel_selector(
+                sel, sample_file, binding.dataset_id, sources_path
+            )
+            override_status = None if valid else SourceReachabilityStatus.INVALID_SELECTOR
+            return selector_status, excel_issue, override_status
+
+        if isinstance(sel, CsvSelector):
+            selector_status = cls._inspect_csv_selector(
+                sel, sample_file, binding.dataset_id, ds_files
+            )
+            return selector_status, None, None
+
+        fallback_status = DatasetSelectorStatus(
+            dataset_id=binding.dataset_id,
+            selector_type=type(sel).__name__,
+            selector_target="default",
+            is_valid=True,
+            details=f"{len(ds_files)} matching file(s) found",
+        )
+        return fallback_status, None, None
 
     def preview_mapping(
         self,
