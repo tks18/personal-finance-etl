@@ -192,7 +192,12 @@ def _handle_restore(
     sys.exit(0)
 
 
-def _run_etl_progress(engine: PersonalFinanceEngine, config_path: str, rules_path: str) -> None:
+def _run_etl_progress(
+    engine: PersonalFinanceEngine,
+    config_path: str,
+    rules_path: str,
+    skip_preflight: bool = False,
+) -> None:
     """Run pipeline with rich progress bar visualization and terminal event rendering.
 
     Parameters
@@ -203,6 +208,8 @@ def _run_etl_progress(engine: PersonalFinanceEngine, config_path: str, rules_pat
         Path to pipeline TOML configuration.
     rules_path : str
         Path to financial rules TOML configuration.
+    skip_preflight : bool, default=False
+        Whether to skip Phase 0 pre-flight health checks.
     """
     completion_event = threading.Event()
 
@@ -237,7 +244,7 @@ def _run_etl_progress(engine: PersonalFinanceEngine, config_path: str, rules_pat
             ):
                 completion_event.set()
 
-        engine.run_pipeline_async(config_path, rules_path, on_status)
+        engine.run_pipeline_async(config_path, rules_path, on_status, skip_preflight=skip_preflight)
 
         try:
             completion_event.wait()
@@ -284,6 +291,7 @@ def _run_cli_pipeline_iteration(
     rules_path: str | None,
     auto_mode: bool,
     cron_mode: bool,
+    skip_preflight: bool = False,
 ) -> tuple[str | None, str | None]:
     """Execute a single interactive or automated CLI pipeline run cycle.
 
@@ -299,6 +307,8 @@ def _run_cli_pipeline_iteration(
         Whether to bypass execution confirmation prompt.
     cron_mode : bool
         Whether the CLI is running under an automated cron runner.
+    skip_preflight : bool, default=False
+        Whether to bypass Phase 0 pre-flight health checks.
 
     Returns
     -------
@@ -331,7 +341,7 @@ def _run_cli_pipeline_iteration(
         sys.exit(0)
 
     console.print("\n[bold green]🚀 EXECUTING ETL PIPELINE...[/bold green]\n")
-    _run_etl_progress(engine, config_path, rules_path)
+    _run_etl_progress(engine, config_path, rules_path, skip_preflight=skip_preflight)
     console.print("\n[bold green]=== SYSTEM HALTED. OPERATION COMPLETE. ===[/bold green]\n")
 
     if cron_mode:
@@ -371,6 +381,11 @@ def main_cli(args: argparse.Namespace) -> None:
 
     while True:
         config_path, rules_path = _run_cli_pipeline_iteration(
-            engine, config_path, rules_path, auto_mode=auto_mode, cron_mode=cron_mode
+            engine,
+            config_path,
+            rules_path,
+            auto_mode=auto_mode,
+            cron_mode=cron_mode,
+            skip_preflight=bool(getattr(args, "skip_preflight", False)),
         )
         auto_mode = False
