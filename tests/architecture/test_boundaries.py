@@ -418,3 +418,45 @@ def test_no_fixed_dataset_universe_dataclass() -> None:
                 assert not legacy_field_fingerprints.issubset(field_names), (
                     f"Forbidden fixed dataset universe dataclass found in {py_file.name}: {node.name}"
                 )
+
+
+def test_canonical_foundation_contracts_have_zero_storage_or_dataframe_imports() -> None:
+    """Verify that canonical semantic, route, and plan foundation modules have zero storage or dataframe dependencies.
+
+    Governing Invariant: Architectural Foundation Contracts
+    -------------------------------------------------------
+    contracts.sources, contracts.canonical_semantics, and contracts.canonical_plans
+    must remain implementation-free and extraction-ready without polars, pandera, duckdb,
+    sqlite3, domain, application, infrastructure, or presentation dependencies.
+    """
+    foundation_files = [
+        SRC_ROOT / "contracts" / "sources.py",
+        SRC_ROOT / "contracts" / "canonical_semantics.py",
+        SRC_ROOT / "contracts" / "canonical_plans.py",
+        SRC_ROOT / "contracts" / "datasets.py",
+    ]
+    forbidden_modules = {
+        "polars",
+        "pandera",
+        "duckdb",
+        "sqlite3",
+        "personal_finance_etl.domain",
+        "personal_finance_etl.application",
+        "personal_finance_etl.infrastructure",
+        "personal_finance_etl.presentation",
+    }
+    violations: list[str] = []
+
+    for file_path in foundation_files:
+        assert file_path.is_file(), f"Expected foundation file missing: {file_path}"
+        imports = _extract_imported_modules(file_path)
+        for lineno, mod in imports:
+            for forbidden in forbidden_modules:
+                if mod == forbidden or mod.startswith(forbidden + "."):
+                    violations.append(
+                        f"{file_path.name}:{lineno} imports '{mod}' (forbidden in canonical foundation contracts)"
+                    )
+
+    assert not violations, "Forbidden imports in canonical foundation contracts:\n" + "\n".join(
+        violations
+    )
