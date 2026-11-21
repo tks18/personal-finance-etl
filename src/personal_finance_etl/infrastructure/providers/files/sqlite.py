@@ -43,19 +43,25 @@ class SQLiteExtractor:
         Returns
         -------
         str
-            Filesystem path to the latest .mmbak or .sqlite file.
+            Filesystem path to the latest .mmbak, .sqlite, .db, or .sqlite3 file.
 
         Raises
         ------
         FileNotFoundError
             If no matching database backup file is found.
         """
-        files = glob.glob(os.path.join(self.folder_path, "*.mmbak")) + glob.glob(
-            os.path.join(self.folder_path, "*.sqlite")
-        )
-        if not files:
+        files: list[str] = []
+        for ext in ("*.mmbak", "*.sqlite", "*.db", "*.sqlite3"):
+            files.extend(glob.glob(os.path.join(self.folder_path, ext)))
+            files.extend(glob.glob(os.path.join(self.folder_path, "**", ext), recursive=True))
+        clean_files = [
+            f
+            for f in sorted(set(files))
+            if os.path.isfile(f) and not os.path.basename(f).startswith(("~", "."))
+        ]
+        if not clean_files:
             raise FileNotFoundError(f"No database backup found in {self.folder_path}")
-        return max(files, key=os.path.getmtime)
+        return max(clean_files, key=os.path.getmtime)
 
     def extract_table(
         self, filename: str, folder_path: str, raw_bytes: bytes, table_name: str
