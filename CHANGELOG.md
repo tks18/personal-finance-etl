@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [10.3.0](https://github.com/tks18/personal-finance-etl/compare/10.2.2...10.3.0) (2026-11-21)
+
+
+### Features 🔥
+
+* **application:** introduce diagnostic service for config and sources ([e501a6b](https://github.com/tks18/personal-finance-etl/commit/e501a6b9f9ac1d58d92962406c72cf73895ff30e))
+* **cli:** add pfetl check command suite and retire shan-fin entrypoint ([f1c88e7](https://github.com/tks18/personal-finance-etl/commit/f1c88e709a0f7f66460b8e6b62e4e2853fc24200))
+* **config:** modularize financial rules by capability with validation ([b3662ed](https://github.com/tks18/personal-finance-etl/commit/b3662ed630abca7411aa683a0b2719f229273bb8))
+* **contracts:** add configuration diagnostics and preflight contracts ([b2bcfad](https://github.com/tks18/personal-finance-etl/commit/b2bcfadc89e21321978a1e3f89db89f9470b997e))
+* **infrastructure:** expand sqlite extractor backup format discovery ([58a9aef](https://github.com/tks18/personal-finance-etl/commit/58a9aef93c1659b0aadb5e5511acd66d2174d67e))
+* **pipeline:** integrate phase 0 preflight health check into runner ([4804ef6](https://github.com/tks18/personal-finance-etl/commit/4804ef64c4d0ce3a4a067c7f57b85ebe7fb6ea5c))
+
+
+### Tests 🧪
+
+* **diagnostics:** add validation tests and tighten typing across tests ([26ff1fb](https://github.com/tks18/personal-finance-etl/commit/26ff1fbdc1e1136e7922dcadbb095b822e4012e3))
+
+
+### Docs 📃
+
+* **diagnostics:** update cli docs and roadmap for phase 045 to 050 ([9bcba8b](https://github.com/tks18/personal-finance-etl/commit/9bcba8b7e98f2d2208bff48b3567d6d8ade2cc49))
+
+
+### Code Refactoring 🖌
+
+* **diagnostics:** decompose check_sources selector helpers ([6955830](https://github.com/tks18/personal-finance-etl/commit/69558305618ae17e83942144e3b1e24fb4374cb7))
+
 ### [10.2.2](https://github.com/tks18/personal-finance-etl/compare/10.2.1...10.2.2) (2026-11-20)
 
 

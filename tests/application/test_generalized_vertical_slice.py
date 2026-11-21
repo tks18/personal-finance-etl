@@ -31,9 +31,8 @@ Does not own
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from pathlib import Path
-from typing import Any
 from unittest.mock import MagicMock
 
 import polars as pl
@@ -90,7 +89,7 @@ from personal_finance_etl.infrastructure.warehouse.registry import (
 
 def _create_sqlite_db(
     db_path: Path,
-    zcat_rows: Sequence[dict[str, Any]] | None = None,
+    zcat_rows: Sequence[Mapping[str, object]] | None = None,
     create_zcategory: bool = True,
     custom_columns: dict[str, str] | None = None,
 ) -> Path:

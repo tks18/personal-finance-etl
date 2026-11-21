@@ -1,6 +1,6 @@
 [project]
 name = "personal-finance-etl"
-version = "10.2.2"
+version = "10.3.0"
 description = "Local-first personal financial systems platform for investment accounting, reconciliation, tax evidence, wealth analytics, FIRE planning, and BI."
 authors = [
   { name="Shan", email="tksudharshan@gmail.com" },
@@ -97,8 +97,8 @@ requires = ["hatchling>=1.27.0"]
 build-backend = "hatchling.build"
 
 [project.scripts]
-shan-fin = "personal_finance_etl.presentation.launcher:main"
-shan-fin-gui = "personal_finance_etl.presentation.desktop.app:main"
+pfetl = "personal_finance_etl.presentation.launcher:main"
+pfetl-gui = "personal_finance_etl.presentation.desktop.app:main"
 
 [tool.hatch.build.targets.wheel.force-include]
 "README.md" = "personal_finance_etl/README.md"

@@ -12,7 +12,15 @@ Does not own
 - Macroeconomic and FIRE forecasting assumptions (owned by config.financial_rules.fire).
 """
 
+from __future__ import annotations
+
 from pydantic import BaseModel, Field
+
+__all__ = [
+    "InvestmentInstrumentRules",
+    "InvestmentsCapabilityRules",
+    "PortfolioManagementRules",
+]
 
 
 class InvestmentInstrumentRules(BaseModel):
@@ -29,3 +37,12 @@ class PortfolioManagementRules(BaseModel):
         default=5.0,
         description="Threshold (in percentage points) for triggering a rebalance requirement.",
     )
+
+
+class InvestmentsCapabilityRules(BaseModel):
+    """Configuration rules for investment instruments and accounting."""
+
+    default_currency_id: str = "INR_INR"
+    mf_scheme_mappings: dict[str, str] = Field(default_factory=dict)
+    instruments: dict[str, InvestmentInstrumentRules] = Field(default_factory=dict)
+    portfolio_management: PortfolioManagementRules = Field(default_factory=PortfolioManagementRules)

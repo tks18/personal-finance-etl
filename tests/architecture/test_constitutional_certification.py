@@ -232,7 +232,7 @@ def test_financial_rules_model_completeness(rules: FinancialRules) -> None:
 
 
 def test_entry_points_resolution() -> None:
-    """Verify shan-fin and shan-fin-gui console script entry points are importable callables."""
+    """Verify pfetl and pfetl-gui console script entry points are importable callables."""
     launcher_mod = importlib.import_module("personal_finance_etl.presentation.launcher")
     desktop_mod = importlib.import_module("personal_finance_etl.presentation.desktop.app")
 

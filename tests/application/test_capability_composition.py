@@ -27,7 +27,7 @@ import shutil
 from pathlib import Path
 from typing import Protocol
 
-from personal_finance_etl.application.pipeline import ETLOrchestrator
+from personal_finance_etl.application.pipeline.orchestrator import ETLOrchestrator
 from personal_finance_etl.application.pipeline.planner import CapabilityPlanner
 from personal_finance_etl.application.pipeline.source_planner import SourcePlanner
 from personal_finance_etl.config.financial_rules import FinancialRules

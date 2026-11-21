@@ -15,7 +15,7 @@ import re
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Any
+from typing import cast
 
 import pytest
 from scripts.create_pr import format_audit_markdown
@@ -85,7 +85,7 @@ def test_format_release_title() -> None:
 
 def test_format_audit_markdown() -> None:
     """Verify audit markdown table includes appropriate release track badges."""
-    sample_audit: dict[str, Any] = {
+    sample_audit: dict[str, object] = {
         "timestamp": "2026-11-16T15:00:00",
         "all_passed": True,
         "total_duration_seconds": 12.34,
@@ -250,8 +250,8 @@ def test_dynamic_release_bump_projections(repo_root: Path) -> None:
 def test_package_json_has_no_hardcoded_versions(repo_root: Path) -> None:
     """Verify package.json scripts contain no hardcoded version strings."""
     pkg_path = repo_root / "package.json"
-    data: dict[str, Any] = json.loads(pkg_path.read_text(encoding="utf-8"))
-    scripts: dict[str, str] = data.get("scripts", {})
+    data = cast(dict[str, object], json.loads(pkg_path.read_text(encoding="utf-8")))
+    scripts = cast(dict[str, str], data.get("scripts", {}))
 
     for script_name, cmd in scripts.items():
         # Check that no script hardcodes a specific version like 10.0.0 or 10.0.0-rc.1

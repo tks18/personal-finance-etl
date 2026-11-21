@@ -49,11 +49,11 @@ No subcommand defaults to the Desktop application.
 
 | Command | Behavior |
 | --- | --- |
-| `shan-fin` | Desktop |
-| `shan-fin tkinter` | Desktop |
-| `shan-fin-gui` | Desktop directly |
-| `shan-fin cli` | Rich terminal CLI |
-| `shan-fin cli --docs` | open integrated documentation |
+| `pfetl` | Desktop |
+| `pfetl tkinter` | Desktop |
+| `pfetl-gui` | Desktop directly |
+| `pfetl cli` | Rich terminal CLI |
+| `pfetl cli --docs` | open integrated documentation |
 
 The installed scripts are declared in `pyproject.toml`.
 
@@ -64,7 +64,7 @@ The CLI supports several distinct workflows.
 ### Interactive pipeline run
 
 ```bash
-shan-fin cli --config path/to/config.toml --rules path/to/rules.toml
+pfetl cli --config path/to/config.toml --rules path/to/rules.toml
 ```
 
 The CLI can prompt for configuration/rules and retain recent selections.
@@ -72,7 +72,7 @@ The CLI can prompt for configuration/rules and retain recent selections.
 ### Automatic run
 
 ```bash
-shan-fin cli --config ... --rules ... --auto
+pfetl cli --config ... --rules ... --auto
 ```
 
 `--auto` skips the explicit ignite confirmation.
@@ -82,7 +82,7 @@ It does **not** make invalid configuration acceptable.
 ### Unattended / cron-style run
 
 ```bash
-shan-fin cli --config ... --rules ... --cron
+pfetl cli --config ... --rules ... --cron
 ```
 
 `--cron` implies automatic execution and exits after completion rather than entering the interactive restart menu.
@@ -90,19 +90,19 @@ shan-fin cli --config ... --rules ... --cron
 ### Snapshot
 
 ```bash
-shan-fin cli --config path/to/config.toml --snapshot
+pfetl cli --config path/to/config.toml --snapshot
 ```
 
 ### Restore
 
 ```bash
-shan-fin cli --config path/to/config.toml --restore path/to/backup.zip
+pfetl cli --config path/to/config.toml --restore path/to/backup.zip
 ```
 
 ### Documentation portal
 
 ```bash
-shan-fin cli --docs
+pfetl cli --docs
 ```
 
 ## Interactive lifecycle
