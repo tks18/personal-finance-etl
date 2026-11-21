@@ -30,9 +30,9 @@ For the active phase:
 3. Implement only the phase-owned architectural outcome.
 4. Add/update focused tests and architecture guards as the phase requires.
 5. Run the phase-specific verification matrix.
-6. Run repository quality gates required by the phase/release boundary.
+6. Run repository quality gates: run fast quality gate (`uv run poe audit:fast`) during development, followed by full quality gate (`uv run poe audit`) to conclude the phase.
 7. Verify every unique completion-checklist assertion.
-8. Use `pfetl-conventional-commits` to preview semantically coherent commit groups/messages.
+8. Use `pfetl-conventional-commits` to preview semantically coherent commit groups/messages. Never commit autonomously; the engineer reviews, tests, and executes commits.
 9. Record the phase completion evidence only after the repository is green.
 10. Stop. Do not pull the next phase forward.
 
@@ -203,20 +203,43 @@ Use the phase files for exact work, but retain this program intent:
 
 Phase 055 must hand Phase 056 exactly one production architecture.
 
-## 12. Testing Discipline
+## 12. Naming, Versioning & Stub Governance
 
-Use the active phase test matrix. Add architecture guards when ownership becomes permanent so later phases cannot regress it.
+- **Never name files, classes, functions, or docstrings after phase numbers.** Prohibited: `test_phase046_*`, `phase_046_*`, or referencing phase numbers in production comments/docstrings.
+- **Name all files and symbols strictly after their architectural, domain, or functional subject.** Example: `tests/contracts/test_source_dataset_identity_coupling.py` instead of `test_phase046_identity_overload.py`.
+- **Never hardcode transient release versions in docstrings.** Prohibited: referencing transient release numbers (e.g. `v10.3.0`, `v9.5.3`) in production or test docstrings. Docstrings must describe permanent contracts, behavior, and subsystem ownership. Versions belong exclusively in package metadata (`__init__.__version__`), `pyproject.toml`, `CHANGELOG.md`, and planning files.
+- **Compatibility and migration stubs require an explicit removal owner.** Any temporary bridge or legacy adapter must explicitly document its decommissioning owner (e.g. `Removal owner: Phase 055 (decommissioning legacy SourceDatasetConfig)`). Speculative or undocumented stubs are prohibited.
 
-Typical local sequence:
+## 13. Testing & Quality Gate Discipline
 
-```powershell
-uv run poe audit:fast
-uv run pytest tests/architecture/test_boundaries.py
-uv run pytest <focused tests>
-```
+Use a tiered verification strategy during refactor phases to balance velocity and rigor:
 
-Run full quality/recovery/real-data/performance gates when the phase or release requires them. If the current environment cannot execute a mandatory runtime gate, record it as unverified rather than claiming success.
+1. **Fast Iteration Loop (during development):**
+   ```powershell
+   uv run poe audit:fast
+   ```
+   Runs Ruff Check, Ruff Format, and Mypy in < 2s. Run frequently while editing.
 
-## 13. Commit Discipline
+2. **Static Deep Analysis & Focused Tests (before running full test suite):**
+   - Run Pyright and Pylint to catch deep typing and code analysis issues without triggering the 700+ test suite:
+     ```powershell
+     uv run pyright
+     uv run pylint src tests
+     ```
+   - Run focused pytest tests on affected subsystems and architecture boundary guards:
+     ```powershell
+     uv run pytest tests/architecture/test_boundaries.py tests/<affected_subsystem>/
+     ```
 
-Do not hard-code file-per-commit or one-phase-one-commit rules in implementation plans. Use `pfetl-conventional-commits` to preview semantic grouping and Commitlint-compliant messages. Planning docs define coherent change boundaries; the commit Skill owns staging and message mechanics.
+3. **Phase Conclusion (Full Quality Gate):**
+   Run the full suite **only at the very end** once all static tools and focused tests pass cleanly:
+   ```powershell
+   uv run poe audit
+   ```
+   Every engine (Ruff Check, Ruff Format, Mypy, Pyright, Pylint, and the full 700+ Pytest suite) must be 100% green before declaring the phase complete.
+
+## 14. Commit Discipline & Execution Boundary
+
+- Do not hard-code file-per-commit or one-phase-one-commit rules in implementation plans.
+- Use `pfetl-conventional-commits` to preview semantic grouping and Commitlint-compliant messages (headers strictly $\le 72$ chars).
+- **The AI assistant only previews commit groups and prepares `.commit_overrides.json`; the engineer tests and executes the commits.** Never execute commits autonomously.

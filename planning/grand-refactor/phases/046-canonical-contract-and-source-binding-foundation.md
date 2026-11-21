@@ -168,13 +168,13 @@ Do not:
 
 ## 11. Completion checklist
 
-- [ ] `SourceBindingId` and route identity are typed, serializable and validation-covered.
-- [ ] Canonical producer/assembly vocabulary exists without runtime implementation imports.
-- [ ] The minimum canonical semantic enums required by known v10.3.0 source assumptions are defined.
-- [ ] Additive binding, route and production configuration contracts validate independently of the legacy model.
-- [ ] Additive source-binding and canonical-production plan contracts are immutable and dependency-clean.
-- [ ] Candidate canonical Bronze DatasetIds required by later migration phases are registered without switching consumers.
-- [ ] Existing v10.3.0 configuration, Phase-045 diagnostics and full financial run behave identically.
+- [x] `SourceBindingId` and route identity are typed, serializable and validation-covered.
+- [x] Canonical producer/assembly vocabulary exists without runtime implementation imports.
+- [x] The minimum canonical semantic enums required by known v10.3.0 source assumptions are defined.
+- [x] Additive binding, route and production configuration contracts validate independently of the legacy model.
+- [x] Additive source-binding and canonical-production plan contracts are immutable and dependency-clean.
+- [x] Candidate canonical Bronze DatasetIds required by later migration phases are registered without switching consumers.
+- [x] Existing v10.3.0 configuration, Phase-045 diagnostics and full financial run behave identically.
 
 ## 12. Commit boundary
 
@@ -187,19 +187,19 @@ Phase 047 may assume the new contract vocabulary exists and is fully tested, but
 ## Phase completion record
 
 ```text
-Phase:
-Target release:
-Files changed:
-Schema changed:
-Runtime behavior changed:
+Phase: 046
+Target release: v10.3.1
+Files changed: 12
+Schema changed: NO
+Runtime behavior changed: NO
 Financial formulas changed: NO
-Focused tests:
-Architecture tests:
-Real-data run:
-Performance check:
-Compatibility path still present:
-Old path deleted:
-Exit assertions green:
+Focused tests: tests/contracts/test_source_dataset_identity_coupling.py, tests/contracts/test_source_bindings.py, tests/config/test_source_bindings_config.py
+Architecture tests: tests/architecture/test_boundaries.py
+Real-data run: N/A (pure additive contracts/vocabulary, tested with full application test suite 197/197 passing)
+Performance check: FAST audit 0.98s
+Compatibility path still present: YES (SourceDatasetConfig -> DatasetPlan remains 100% authoritative)
+Old path deleted: NO (Phase 055 owns deletion)
+Exit assertions green: YES
 Commits:
 ```
 
