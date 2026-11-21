@@ -22,6 +22,7 @@ from enum import StrEnum
 
 __all__ = [
     "BRONZE_DATASET_ORIGIN_MAP",
+    "CANDIDATE_BRONZE_DATASETS",
     "DatasetId",
     "DatasetOrigin",
     "EXTERNAL_CONFIGURED_DATASETS",
@@ -69,6 +70,22 @@ class DatasetId(StrEnum):
 
     # --- Common / Transitional Evidence (Bronze) ---
     COMMON_COLUMN_MASTER = "common_column_master"
+
+    # --- Candidate Canonical Bronze Evidence ---
+    # Transitional vocabulary for multi-source canonicalization; not yet runtime-authoritative.
+    HOUSEHOLD_CATEGORIES = "household_categories"
+    HOUSEHOLD_ASSET_CATEGORIES = "household_asset_categories"
+    HOUSEHOLD_TRANSACTIONS = "household_transactions"
+    INVESTMENT_TRANSACTIONS = "investment_transactions"
+    INVESTMENT_HOLDINGS = "investment_holdings"
+    INVESTMENT_INSTRUMENTS = "investment_instruments"
+    INVESTMENT_BENCHMARKS = "investment_benchmarks"
+    INVESTMENT_INSTRUMENT_BENCHMARK_ASSIGNMENTS = "investment_instrument_benchmark_assignments"
+    MARKET_PROVIDER_SYMBOL_MAPPINGS = "market_provider_symbol_mappings"
+    MARKET_FX_RATES = "market_fx_rates"
+    MARKET_BENCHMARK_PRICES = "market_benchmark_prices"
+    MARKET_INSTRUMENT_PRICES = "market_instrument_prices"
+    COMMON_CURRENCIES = "common_currencies"
 
     # --- Silver Dimensions ---
     COMMON_CALENDAR = "common_calendar"
@@ -175,6 +192,26 @@ EXTERNAL_CONFIGURED_DATASETS: frozenset[DatasetId] = frozenset(
     for k, v in BRONZE_DATASET_ORIGIN_MAP.items()
     if v
     in (DatasetOrigin.EXTERNAL_CONFIGURED_SOURCE, DatasetOrigin.TRANSITIONAL_CONFIGURATION_DATASET)
+)
+
+# Candidate canonical Bronze datasets declared for generic multi-source ingestion.
+# These datasets establish typed vocabulary ahead of generic canonical route cutovers.
+CANDIDATE_BRONZE_DATASETS: frozenset[DatasetId] = frozenset(
+    {
+        DatasetId.HOUSEHOLD_CATEGORIES,
+        DatasetId.HOUSEHOLD_ASSET_CATEGORIES,
+        DatasetId.HOUSEHOLD_TRANSACTIONS,
+        DatasetId.INVESTMENT_TRANSACTIONS,
+        DatasetId.INVESTMENT_HOLDINGS,
+        DatasetId.INVESTMENT_INSTRUMENTS,
+        DatasetId.INVESTMENT_BENCHMARKS,
+        DatasetId.INVESTMENT_INSTRUMENT_BENCHMARK_ASSIGNMENTS,
+        DatasetId.MARKET_PROVIDER_SYMBOL_MAPPINGS,
+        DatasetId.MARKET_FX_RATES,
+        DatasetId.MARKET_BENCHMARK_PRICES,
+        DatasetId.MARKET_INSTRUMENT_PRICES,
+        DatasetId.COMMON_CURRENCIES,
+    }
 )
 
 
