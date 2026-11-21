@@ -1,224 +1,249 @@
-# Phase 048 - Generalized Architecture Performance Hardening
+# Phase 058 - Generalized Architecture Performance Hardening
 
-**Target release:** v10.3.3  
-**Expected effort:** 3-4 hours  
-**Previous:** Phase 047  
-**Next:** Phase 049  
+**Target release:** v10.5.4  
+**Expected effort:** profiling-driven; target 3-5 hours, extend only to finish green  
+**Previous:** Phase 057  
+**Next:** Phase 059  
 **Risk:** High
 
 ## 1. Outcome
 
-Profile the completed generalized architecture, quantify overhead introduced by Pre-Bronze, Pandera, normalization, identity, planning and plan-aware publication, then optimize only measured bottlenecks while preserving all correctness/recovery/observability guarantees.
+Profile and harden the final generalized canonical architecture after external household/investment certification, quantify the cost of each new trust/composition boundary, and establish durable performance gates without weakening correctness, validation, recovery or observability.
 
-At phase end PFETL has an explicit approved performance envelope for full and cached Shan runs plus representative external workloads.
+This phase optimizes the architecture that will be frozen in Phase 059. It must not optimize transitional code because Phase 055 already removed it.
 
 ## 2. Why this phase exists
 
-The architecture deliberately prioritized correctness and safe migration. Performance should be tuned only after all paths are stable; otherwise optimization risks baking in transitional compatibility behavior. The historical ~27-second Shan workload is a useful reference, not an unconditional target if evidence volume/environment differs.
+Performance tuning before topology and contract stabilization risks preserving the wrong abstractions. By Phase 058, the final runtime path includes more than the old Pre-Bronze/Pandera architecture:
+
+```text
+Source planning
+-> Gate 1
+-> Pre-Bronze
+-> normalization
+-> semantic interpretation
+-> route/fragment production
+-> canonical assembly
+-> canonical identity
+-> Gate 2
+-> canonical integrity
+-> Silver/Gold engines
+```
+
+It also includes satisfiability planning, production fingerprints, replay dependency graphs and plan-aware physical publication. The cost of those boundaries must be measured directly.
 
 ## 3. Inherited repository state
 
-Phase 047 proves functional correctness across topologies. All major architectural layers are final. Existing observability can provide stage timing/lineage.
+Phase 057 guarantees:
+
+- household/investment external source topologies are certified;
+- protected financial identities and values are stable across equivalent source representations;
+- consumer-backed Bronze/Silver retirement is complete;
+- no migration/compatibility runtime path remains;
+- representative external static fixtures exist for performance sampling;
+- Phase 059 can freeze contracts after this performance pass.
 
 ## 4. Current codebase anchors
 
-Profile current branch using:
-- Shan full/fresh run;
-- Shan cached/no-change run;
-- external household fixture at scaled representative size if useful;
-- external investment fixture;
-- provider cached path.
+Profile the post-057 equivalents of:
 
-Break timing by:
-- discovery/sync;
-- source extraction;
-- source validation;
-- Pre-Bronze write/read;
-- normalization;
-- identity;
-- Bronze validation/write;
-- transformation;
-- analytical engines;
-- Silver/Gold/Meta publication.
+- source/binding planner compilation;
+- satisfiability and canonical production planning;
+- file/SQLite/Excel source providers;
+- Gate-1 validation;
+- Pre-Bronze persistence;
+- normalization and semantic rule execution;
+- route fragment creation and union assembly;
+- canonical identity and duplicate/grain checks;
+- Gate-2 Pandera adapter;
+- `CanonicalIntegrityValidator`;
+- provider-generated FX/benchmark/instrument price evidence;
+- Control Plane/replay lookups;
+- Silver/Gold/Meta publication;
+- observability emitter/consumers.
 
-Also inspect memory/materialization counts where tooling already exists.
+Use existing observability stage timings first. Temporary local profiling instrumentation must not become a second observability system.
 
 ## 5. Exact target state after this phase
 
-Produce a performance baseline table and approved thresholds/ranges.
+PFETL has a reproducible performance baseline and explicit accepted envelope for:
 
-Optimization principles:
-- eliminate accidental repeated collection;
-- avoid repeated parsing of same workbook/database;
-- avoid N+1 Control Plane/provenance lookups;
-- compile configuration/validation plans once per dataset/run;
-- reuse source/provider reads safely;
-- batch DuckDB writes;
-- retain lazy Polars execution where validation boundary permits;
-- never skip validation/recovery/observability to gain speed.
+- Shan fresh/full run;
+- Shan cached/no-change run;
+- external household run;
+- external domestic investment run;
+- external foreign/provider-assisted run;
+- at least one replay/rebuild scenario.
 
-No speculative rewrite without measured evidence.
+The baseline must identify cost for:
+
+| Area | Required measurement |
+|---|---|
+| planning | source + satisfiability + production plan compilation |
+| Gate 1 | source schema validation |
+| Pre-Bronze | write/read/materialization |
+| semantic | normalization + include/exclude + value mapping + constants |
+| assembly | fragment alignment + direct/union |
+| identity | canonical identity + duplicate/grain checks |
+| Gate 2 | canonical Pandera validation |
+| integrity | cross-dataset reference checks |
+| provider | cached/provider evidence planning and loading |
+| analytical | Silver/financial engines/Gold publication |
+| observability | event/JSONL overhead as part of real run |
+
+No optimization may alter financial outputs, protected identities, validation coverage or recovery semantics.
 
 ## 6. Detailed implementation sequence
 
-### Step 1 - Capture reproducible baseline
-Record environment/data artifact count/config fingerprint and run modes.
+### Step 1 - Freeze benchmark inputs
 
-### Step 2 - Instrument/inspect stage timing
-Use existing observability rather than adding a parallel profiler architecture. Temporary profiling hooks may be used locally but removed unless generally useful.
+Record environment assumptions, artifact counts, config/production-plan fingerprints, capability set and run mode for each benchmark. Do not compare timings from materially different datasets as if they were regressions.
 
-### Step 3 - Rank bottlenecks
-Document top contributors and regression vs accepted pre-refactor baseline.
+### Step 2 - Capture pre-optimization baseline
 
-### Step 4 - Fix repeated materialization
-Search for `.collect()`, dataframe copies and Pandera conversions introduced by new architecture. Consolidate at frozen validation boundary.
+Collect multiple samples where practical. Record median/range rather than a single lucky run. Preserve stage-level timings and peak-memory/materialization observations available through current tooling.
 
-### Step 5 - Fix repeated source/provider I/O
-Share safe workbook/SQLite/provider response parsing where multiple DatasetPlans use same artifact.
+### Step 3 - Rank measured bottlenecks
 
-### Step 6 - Optimize Pre-Bronze/Bronze writes
-Bulk operations, transaction reuse, projection before persistence where semantically valid.
+Classify each hotspot as:
 
-### Step 7 - Optimize plan/config compilation
-Cache immutable compiled mapping/validation/identity plans per config fingerprint/run.
+- CPU/dataframe work;
+- repeated I/O;
+- repeated plan/schema compilation;
+- unnecessary eager materialization;
+- persistence/transaction overhead;
+- provider/cache overhead;
+- observability overhead.
 
-### Step 8 - Re-profile after each meaningful fix
-Keep only improvements with measurable benefit and green correctness suite.
+Do not change code before a hotspot is measurable.
 
-### Step 8b - Observability Throughput & Telemetry Benchmarking
-Benchmark high-frequency telemetry under multi-file ingestion and multi-engine processing:
-- Ensure per-file ingestion events (`PresentationKind.PROGRESS`) and per-ticker progress updates do not saturate multiprocessing queues or degrade event dispatching throughput.
-- Verify that append-only forensic logging to JSONL (`outputs/logs/`) scales efficiently without blocking pipeline workers.
-- Verify that Desktop narrative formatting and UI sink updates run smoothly without freezing the GUI event loop.
+### Step 4 - Inspect plan/schema compilation reuse
 
-### Step 8c - Desktop GUI Pre-Flight Health Indicator & Non-Blocking UI Hardening
-Harden Desktop GUI under Phase 0 pre-flight execution and heavy processing:
-- Add visual status pill badges (Config status, Sources reachability, Rules validity, Pre-Flight overall health) directly to the top bar of `UnifiedETLTab`.
-- Wire the "▶ Run Pipeline" action to execute Phase 0 pre-flight diagnostics automatically; if errors exist, immediately surface the diagnostic table without mutating DuckDB or SQLite and halt.
-- Verify that GUI event loop remains fully responsive and non-blocking during streaming execution and status queue fan-out.
+Ensure immutable SourceBinding, semantic rule, satisfiability, canonical production and validation plans are not recompiled repeatedly within one run when fingerprints are unchanged.
 
-### Step 8d - Comprehensive FIRE & Monte Carlo Numerical Kernel Hardening & Test Suite
-Author and execute `tests/domain/test_fire_monte_carlo_engine.py` to exhaustively certify PFETL's heaviest analytical engine across 10 statistical, numerical, and performance dimensions:
-1. **Deterministic Seeding & Thread Reproducibility:** Verify that identical `root_seed` and monthly offsets produce bit-identical stochastic percentile trajectories across multiple threads (`prange`) and repeated invocations.
-2. **Markov Regime Switching (Bull, Bear, Stagflation):** Assert state transitions strictly obey the 3x3 transition matrix ($P_{ij}$); verify empirical state occupancy converges to the theoretical stationary distribution $\pi = \pi P$ over long horizons (e.g. 50,000 simulated months).
-3. **Jump-Diffusion & Tail Risk Shocks:** Assert Poisson jump arrival frequencies match `jump_probability_annual` and jump magnitudes properly compound negative drawdowns under asset shock events.
-4. **Human Capital Shock Simulation:** Verify stochastic income shock events obey `shock_probability`, durations remain bounded within `[shock_duration_min, shock_duration_max]`, and unemployment benefits accurately offset living expense burn.
-5. **Dynamic Glide Path & Debt Allocation:** Assert asset allocation dynamically shifts along the pre-retirement derisking window, holds FI target equity at retirement, and executes post-retirement re-risking with dynamic debt yield adjustments.
-6. **Guyton-Klinger Dynamic Guardrails:** Test the Capital Preservation Rule (spending cut by `gk_cut` when withdrawal rate exceeds initial rate by `gk_upper`) and Prosperity Rule (spending raised by `gk_raise` when withdrawal rate falls below `gk_lower`).
-7. **Stochastic Inflation Dynamics:** Verify mean-reverting inflation paths (Vasicek/Ornstein-Uhlenbeck drift) with hard boundary clipping to `inf_min` and `inf_max` preventing runaway or negative inflation anomalies.
-8. **Sequence of Returns Risk (SORR) Sensitivity:** Compare early-retirement bear market paths against late-retirement bear market paths; prove that early drawdowns significantly reduce portfolio survival probability, validating SORR sensitivity.
-9. **Boundary & Degeneracy Invariants:** Test extreme edge conditions ($0 starting net worth, negative monthly savings, 100% equity collapse, zero expense burn, and extreme target lifespan); assert zero NaN, Inf, or unhandled exceptions.
-10. **Vectorized Polars Batch UDF & Numba JIT Scale:** Benchmark 10,000 simulation iterations across 120 monthly rows; assert total execution time $< 1.5$ seconds with zero memory leaks and proper parallel scaling.
+Any cache must be run/config scoped and deterministic; it must not hide configuration changes.
 
-### Step 9 - Define performance gates
-Set thresholds for full/cached runs as relative/absolute ranges appropriate to environment. Document noise methodology.
+### Step 5 - Inspect semantic and fragment materialization
 
-### Step 10 - Final full regression
-All financial, recovery, validation, observability and external fixture tests.
+Look for repeated Polars collection, copies, per-rule scans or redundant projections introduced by semantic interpretation/route generation. Preserve the deterministic rule order and canonical projection firewall.
+
+### Step 6 - Inspect union/identity/integrity paths
+
+Measure schema alignment, union, canonical identity and cross-dataset integrity separately. Optimize only where contract semantics remain obvious and tests prove equivalence.
+
+### Step 7 - Inspect source/provider I/O reuse
+
+Avoid reopening the same workbook/database/provider payload unnecessarily when several bindings/routes consume one physical source. Reuse must not collapse SourceBindingId provenance or change change-detection behavior.
+
+### Step 8 - Inspect warehouse writes and Meta/catalog updates
+
+Batch safe persistence operations, reuse transactions and avoid redundant schema/catalog work while preserving Phase-043 plan-aware cleanup and Phase-044 recovery semantics.
+
+### Step 9 - Re-profile after each semantic optimization group
+
+Keep only changes with measurable benefit or clear memory reduction. Revert speculative changes that increase complexity without material improvement.
+
+### Step 10 - Encode durable performance gates
+
+Define environment-tolerant thresholds/ranges in the repository's benchmark/test convention. Prefer ratios/stage budgets where absolute timings are noisy. Include a documented procedure for interpreting legitimate variance.
+
+### Step 11 - Run correctness and recovery regression
+
+For every retained optimization, run protected-ID comparison, household/investment financial regression, validation failures, replay/recovery and observability lineage checks.
+
+### Step 12 - Publish the final performance evidence
+
+Record before/after table, accepted thresholds and remaining known hotspots. Phase 059 may freeze contracts only after this evidence is green.
 
 ## 7. Files and symbols in scope
 
-Modify measured hot paths only.
+Change only measured hot paths and benchmark/test infrastructure. Likely owners include:
 
-Potential modules:
-- validation adapter;
-- normalization/identity compiler/executor;
+- planners/compilers;
+- semantic rule executor;
+- canonical production/identity/integrity services;
 - Pre-Bronze/Bronze persistence;
-- provider read/session handling;
+- provider read/cache paths;
 - Control Plane lookup batching;
-- pipeline plan caching.
+- warehouse publication.
 
-Do not perform unrelated code-quality refactors.
+Do not perform general code-quality refactors merely because a profiler exposed a large function.
 
 ## 8. Cross-cutting impacts
 
-**Persistence:** semantics unchanged.
+**Correctness:** zero methodology/identity change permitted.
 
-**Identity:** outputs unchanged.
+**Validation:** both trust gates and canonical integrity remain mandatory.
 
-**Observability:** retain event fidelity; stage timings may improve.
+**Recovery:** transaction and replay behavior must remain identical.
 
-**Memory:** include peak/large-frame behavior where measurable.
+**Observability:** one emitter/three consumers stays intact; no event class is removed solely for speed.
 
-**Correctness:** no optimization may weaken a gate.
+**Memory:** materialization/peak-memory improvements count as legitimate wins even where wall-clock change is modest.
 
-**Performance:** this phase creates the durable benchmark/gate used by Phase 050.
+**Contract freeze:** the measured architecture is exactly what Phase 059 will freeze.
 
 ## 9. Tests and verification
 
 Required:
-- reproducible before/after timing table;
-- full and cached Shan runs;
-- representative external runs;
-- no new eager-collection regression;
-- no repeated source I/O where avoidable;
-- financial outputs/IDs identical;
-- recovery/validation suites green;
-- JSONL event lineage retained;
-- final thresholds encoded/documented in test/benchmark convention;
-- **FIRE & Monte Carlo Numerical Kernel Certification (`tests/domain/test_fire_monte_carlo_engine.py`):**
-  - Bit-identical reproducibility across random seeds and parallel threads (`prange`);
-  - Markov regime transition frequencies converging to theoretical stationary distribution ($\pi = \pi P$);
-  - Jump-diffusion shock distributions and cumulative asset drawdown compounding;
-  - Human capital unemployment shock probabilities and expense coverage offsets;
-  - Dynamic glide path asset allocation (derisking, target equity, re-risking, debt yields);
-  - Guyton-Klinger dynamic guardrail triggers (capital preservation cut vs prosperity raise);
-  - Stochastic inflation mean-reverting Vasicek paths with min/max bounding;
-  - Sequence of Returns Risk (SORR) early vs late market crash sensitivity;
-  - Numerical degeneracy and boundary invariants ($0 net worth, 100% equity crash, negative savings);
-  - Vectorized Polars batch UDF scale (10,000 iterations across 120 monthly rows in <1.5s).
+
+- reproducible pre/post benchmark table;
+- Shan fresh/full and cached/no-change runs;
+- external household/domestic/foreign representative runs;
+- replay/rebuild performance sample;
+- no repeated compilation/I/O/materialization regression without justification;
+- exact protected IDs and financial outputs after optimizations;
+- validation/integrity failure suites unchanged;
+- recovery/rollback green;
+- JSONL/multiprocessing lineage green;
+- durable performance thresholds encoded or documented in repository-standard form.
 
 ## 10. Explicit non-goals
 
 Do not:
-- remove Pandera validation for speed;
-- bypass Pre-Bronze;
-- weaken hashing/change detection;
+
+- bypass Gate 1, Gate 2 or canonical integrity;
 - suppress observability;
-- rewrite financial algorithms;
-- optimize synthetic microbenchmarks at expense of real workload.
+- weaken hashing/change detection;
+- change financial algorithms;
+- invent asynchronous/distributed execution;
+- micro-optimize tiny fixtures at the expense of real workloads;
+- begin contract extraction or package split.
 
 ## 11. Completion checklist
 
-- [ ] Baseline captured.
-- [ ] Bottlenecks measured/ranked.
-- [ ] Only evidence-backed optimizations applied.
-- [ ] Full/cached runtime accepted.
-- [ ] External workload accepted.
-- [ ] Memory/materialization acceptable.
-- [ ] Correctness/recovery/observability unchanged.
-- [ ] Observability throughput and UI narrative rendering benchmarks satisfied.
-- [ ] Durable performance gate exists.
-- [ ] Desktop GUI pre-flight health indicator verified and UI event loop non-blocking under full execution load.
-- [ ] Comprehensive FIRE & Monte Carlo numerical kernel test suite green across all 10 statistical, regime, and performance dimensions.
+- [ ] Stage-level cost is measured for planning, semantic interpretation, production assembly, identity, Gate 2 and canonical integrity rather than treating the pipeline as one opaque timer.
+- [ ] Shan fresh/cached and representative external workloads have reproducible accepted baselines.
+- [ ] Every retained optimization has measured benefit or justified memory reduction and preserves deterministic output.
+- [ ] No optimization weakens validation, provenance, observability, replay or recovery semantics.
+- [ ] Protected financial IDs and household/investment/Tax/Gold outputs remain exact after all performance changes.
+- [ ] Durable benchmark thresholds and interpretation guidance exist for Phase 060 acceptance.
+- [ ] No known performance blocker remains that would force a contract/API redesign after Phase 059 freeze.
 
 ## 12. Commit boundary
 
-```text
-perf(pipeline): harden generalized runtime
-```
+Use `pfetl-conventional-commits`. Group optimizations by measured subsystem or coherent performance cause, with benchmark evidence alongside the relevant change. Do not collapse unrelated hot-path changes into one `perf` commit.
 
-## 13. Handoff to Phase 049
+## 13. Handoff to Phase 059
 
-Phase 049 may assume the implementation is functionally and operationally mature across multiple topologies with accepted performance. It will freeze the public configuration contract only now, after real usage has validated the model.
+Phase 059 may assume the final canonical architecture is externally certified, consumer-pruned and performance-approved. It can now freeze the complete PFETL contract universe without knowingly fossilizing transitional schema, vendor residue or a performance architecture that still needs structural redesign.
 
 ## Phase completion record
 
 ```text
 Phase:
 Target release:
+Benchmark environments/scenarios:
+Baseline evidence:
+Optimizations retained:
 Files changed:
-Schema changed:
-Runtime behavior changed:
 Financial formulas changed: NO
-Focused tests:
-Architecture tests:
-Real-data run:
-Performance check:
-Compatibility path still present:
-Old path deleted:
+Protected IDs changed: NO
+Validation/recovery impact:
+Observability impact:
+Performance gates encoded:
 Exit assertions green:
-Commit:
+Commits:
 ```
 
 A phase is incomplete if any required exit assertion is false.
