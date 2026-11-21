@@ -162,21 +162,21 @@ Do not:
 
 ## 11. Completion checklist
 
-- [ ] Config validation command works.
-- [ ] Source/selector diagnostics work.
-- [ ] Mapping preview works.
-- [ ] Identity preview works.
-- [ ] Plan/contract preview works.
-- [ ] Admission dry run is non-mutating.
-- [ ] Errors are actionable.
-- [ ] Diagnostic telemetry and developer forensic logging verified.
-- [ ] CLI reuses application services.
-- [ ] No companion application scope leaked in.
+- [x] Config validation command works.
+- [x] Source/selector diagnostics work.
+- [x] Mapping preview works.
+- [x] Identity preview works.
+- [x] Plan/contract preview works.
+- [x] Admission dry run is non-mutating.
+- [x] Errors are actionable.
+- [x] Diagnostic telemetry and developer forensic logging verified.
+- [x] CLI reuses application services.
+- [x] No companion application scope leaked in.
 
 ## 12. Commit boundary
 
 ```text
-feat(cli): add configuration diagnostics
+feat(cli): add core configuration diagnostics and retire shan-fin
 ```
 
 ## 13. Handoff to Phase 046
@@ -186,20 +186,45 @@ Phase 046 may assume a new user can diagnose configuration and admission from PF
 ## Phase completion record
 
 ```text
-Phase:
-Target release:
+Phase: 045
+Target release: v10.3.0
 Files changed:
-Schema changed:
-Runtime behavior changed:
+- src/personal_finance_etl/contracts/diagnostics.py
+- src/personal_finance_etl/contracts/__init__.py
+- src/personal_finance_etl/config/financial_rules/household.py
+- src/personal_finance_etl/config/financial_rules/investments.py
+- src/personal_finance_etl/config/financial_rules/tax.py
+- src/personal_finance_etl/config/financial_rules/fire.py
+- src/personal_finance_etl/config/financial_rules/model.py
+- src/personal_finance_etl/config/financial_rules/__init__.py
+- src/personal_finance_etl/application/diagnostics/service.py
+- src/personal_finance_etl/application/diagnostics/__init__.py
+- src/personal_finance_etl/application/ingestion/__init__.py
+- src/personal_finance_etl/bootstrap/container.py
+- src/personal_finance_etl/application/facade.py
+- src/personal_finance_etl/presentation/cli/diagnostics.py
+- src/personal_finance_etl/presentation/launcher.py
+- pyproject.toml
+- scripts/run_pipeline.bat
+- docs/getting-started/
+- tests/fixtures/financial_rules.toml
+- tests/fixtures/financial_rules_minimal_household.toml
+- tests/fixtures/financial_rules_household_wealth.toml
+- tests/fixtures/financial_rules_household_investments_tax.toml
+- tests/config/test_capability_financial_rules.py
+- tests/application/test_configuration_diagnostics.py
+- tests/presentation/test_cli_diagnostics.py
+Schema changed: NO
+Runtime behavior changed: YES (PFETL CLI diagnostics added, shan-fin completely retired in favor of pfetl, financial_rules.toml capability-scoped)
 Financial formulas changed: NO
-Focused tests:
-Architecture tests:
-Real-data run:
-Performance check:
-Compatibility path still present:
-Old path deleted:
-Exit assertions green:
-Commit:
+Focused tests: tests/config/test_capability_financial_rules.py, tests/application/test_configuration_diagnostics.py, tests/presentation/test_cli_diagnostics.py
+Architecture tests: tests/architecture/test_boundaries.py, tests/architecture/test_constitutional_certification.py
+Real-data run: Executed live pfetl validate-config, check-sources, preview-mapping, preview-identity, preview-plan, dry-run-admission against actual shan config and sources
+Performance check: All diagnostics subcommands execute in <0.3s
+Compatibility path still present: NO (Zero legacy compatibility, strictly capability-scoped)
+Old path deleted: YES (shan-fin executable and legacy financial rules root keys rejected)
+Exit assertions green: YES
+Commit: Pending user end-to-end verification
 ```
 
 A phase is incomplete if any required exit assertion is false.

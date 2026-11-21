@@ -77,7 +77,7 @@ If code evidence contradicts a phase, stop and amend the phase before changing t
 | 042 | Wealth, FIRE and simulation capability composition | v10.1.3 | [x] |
 | 043 | Plan-aware analytical warehouse | v10.2.0 | [x] |
 | 044 | Generalized recovery and replay semantics | v10.2.1 | [x] |
-| 045 | Core configuration diagnostics CLI | v10.3.0 | [ ] |
+| 045 | Core configuration diagnostics CLI | v10.3.0 | [x] |
 | 046 | External household topology certification | v10.3.1 | [ ] |
 | 047 | External investment topology certification | v10.3.2 | [ ] |
 | 048 | Generalized architecture performance hardening | v10.3.3 | [ ] |

@@ -29,8 +29,8 @@ The important point is not the list. It is that each dependency belongs to a cle
 flowchart LR
     PY["Python environment"]
     PKG["personal-finance-etl"]
-    CLI["shan-fin"]
-    GUI["shan-fin-gui"]
+    CLI["pfetl"]
+    GUI["pfetl-gui"]
     CORE["application/domain/infrastructure"]
 
     PY --> PKG --> CLI
@@ -52,8 +52,8 @@ uv sync --group dev
 Then verify the installed entry points:
 
 ```bash
-uv run shan-fin --help
-uv run shan-fin cli --help
+uv run pfetl --help
+uv run pfetl cli --help
 ```
 
 The exact dependency set comes from `pyproject.toml`, not from this page. Documentation should explain the contract; package metadata should own exact versions.
@@ -71,8 +71,8 @@ or use the equivalent installer for the active Python environment.
 After installation:
 
 ```bash
-shan-fin --help
-shan-fin cli --help
+pfetl --help
+pfetl cli --help
 ```
 
 A successful import alone is useful, but the console entry points verify the package metadata as well.
@@ -83,8 +83,8 @@ The project declares:
 
 ```toml
 [project.scripts]
-shan-fin = "personal_finance_etl.presentation.launcher:main"
-shan-fin-gui = "personal_finance_etl.presentation.desktop.app:main"
+pfetl = "personal_finance_etl.presentation.launcher:main"
+pfetl-gui = "personal_finance_etl.presentation.desktop.app:main"
 ```
 
 Source: `pyproject.toml`
@@ -244,11 +244,11 @@ That is the purpose of [Quick Start](quick-start.md).
 
 ## Common installation failures
 
-### `shan-fin` is not found
+### `pfetl` is not found
 
 Confirm the environment containing the package is active and that its scripts directory is on the shell path.
 
-With `uv`, prefer `uv run shan-fin ...` while diagnosing.
+With `uv`, prefer `uv run pfetl ...` while diagnosing.
 
 ### Python requirement mismatch
 
@@ -261,7 +261,7 @@ Do not “solve” an incompatible interpreter by gradually downgrading random d
 First verify:
 
 1. the package imports;
-2. `shan-fin --help` works;
+2. `pfetl --help` works;
 3. the CLI starts;
 4. then diagnose the Desktop/Tk environment.
 

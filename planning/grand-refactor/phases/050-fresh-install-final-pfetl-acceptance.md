@@ -118,6 +118,69 @@ For every combination, the acceptance suite assertively verifies:
 - **Ground-Truth Analytical Accuracy:** asserts total expenses, cashflows, portfolio valuations, FIFO realized returns, tax liabilities, net worth, and FIRE milestones match deterministic mathematical ground truth down to the penny.
 - **Operational & Observability Purity:** verifies Control Plane records exact active capabilities across dual engines (`cp_runs` execution status, `cp_simulation_runs` recorded only when FIRE is active, `cp_external_provider_requests` recorded only when foreign FX or benchmark capabilities are active) and JSONL traces contain zero warnings or unhandled exceptions.
 
+### Step 9c - Master Full-Stack Multi-Layer Ground-Truth Acceptance Suite
+Author and execute `tests/application/test_full_lakehouse_ground_truth_acceptance.py`.
+This suite executes a complete pipeline run from zero state on a clean workspace using golden public configurations and asserts every single table, physical artifact, and mathematical value across all 6 architectural tiers—not merely asserting table existence or row counts, but strictly certifying deep financial numerical parity down to the penny/basis point:
+
+1. **Tier 1: SQLite Operational Control Plane (`Raw_Documents.sqlite`)**
+   - Query all 9 operational tables and assert forensic integrity:
+     - `documents`: Binary file payloads stored intact; SHA-256 hashes match physical disk files byte-for-byte.
+     - `file_provenance`: Every raw file linked to its deterministic file ID, source category, and discovery timestamp.
+     - `file_discovery_state`: Discovery state marked clean with zero missing or dangling files.
+     - `ingestion_manifest`: Recorded row counts, byte sizes, and parsing status match physical lakehouse admission.
+     - `run_history` (`cp_runs`): Execution status is `COMPLETED`, run duration recorded, zero unhandled errors.
+     - `run_capabilities` (`cp_run_capabilities`): Exact active capability set recorded.
+     - `simulation_runs` (`cp_simulation_runs`): Deterministic simulation seeds, parameter hashes, and run status logged.
+     - `simulation_fingerprints`: Input parameter fingerprints match active rules TOML.
+     - `external_provider_requests` (`cp_external_provider_requests`): Audit record of currency FX and benchmark fetches.
+
+2. **Tier 2: DuckDB Meta Catalog (`meta.*`)**
+   - Query all 5 lineage and catalog tables:
+     - `meta.file_registry`: Artifact IDs, physical file paths, and registration timestamps.
+     - `meta.ingestion_manifest`: Bronze admission mappings, table targets, and ingested row counts.
+     - `meta.schema_catalog`: Pandera schema fingerprints and schema versions.
+     - `meta.capability_state`: Snapshot of active capabilities and feature flags for the run.
+     - `meta.data_lineage`: End-to-end DAG traceability linking each Gold table back through Silver, Bronze, and Pre-Bronze to source artifact IDs.
+
+3. **Tier 3: Pre-Bronze Raw Store (`pre_bronze.*`)**
+   - Assert every admitted dataset matches exact source-shaped headers without truncation or unsolicited transformations.
+   - Assert system dunder metadata columns are present and populated on 100% of rows: `__file_name__`, `__folder_path__`, `__source_file_id__`, `__ingested_at__`, `__row_id__`.
+   - Assert Pre-Bronze row counts equal exact line/record counts of raw source files.
+
+4. **Tier 4: Canonical Bronze Lakehouse (`bronze.*`)**
+   - Assert all 19 active canonical datasets adhere strictly to their Pandera Gate 2 schema contracts.
+   - Assert deterministic identity columns (`__artifact_id__` and canonical primary keys) are populated and byte-stable.
+   - Assert deduplication and delta replacement semantics (zero duplicate rows, idempotent reruns produce identical state).
+
+5. **Tier 5: Normalized Silver Lakehouse (`silver.*`)**
+   - Assert all normalized ledger, dimension, and market series tables (`calendar`, `currency`, `household_transactions`, `investments_trades`, `investments_orders`, `investments_lots`, `investments_realized`, `market_prices`, `forex_rates`, `benchmarks`).
+   - Assert referential integrity (foreign keys between transactions, accounts, categories, and ISINs).
+   - Assert date continuity (uninterrupted monthly and daily calendar timelines).
+
+6. **Tier 6: Gold Decision Marts & Deep Financial Numerical Ground-Truth**
+   Assert mathematical ground-truth equations down to the penny/basis point:
+   - **Household Cashflow & Budget Reconciliation:**
+     $$\text{Closing Cash Balance} = \text{Opening Balance} + \sum \text{Cash Inflows} - \sum \text{Cash Outflows}$$
+     - Category expense breakdowns sum exactly to total monthly expenditure down to the cent.
+     - Core vs Non-Core expense splits reconcile with forward budget forecasts and variance tracking.
+   - **FIFO Investment Accounting Conservation:**
+     $$\sum \text{Remaining Open Lot Units} = \text{Active Portfolio Holdings (Shares)}$$
+     $$\text{Realized P/L} = \text{Sale Proceeds} - \text{Relieved Cost Basis} - \text{Brokerage/STT}$$
+     - Unrealized P/L equals current closing market value minus open lot cost basis.
+     - Portfolio XIRR and ISIN-level XIRRs match Newton-Raphson discounted cashflow convergence.
+   - **Statutory Capital Gains Tax Parity:**
+     - Short-Term vs Long-Term capital gains classification strictly adheres to asset-specific holding periods (12 months for equity, 24/36 months for other assets).
+     - Section 112A grandfathering relief (FMV as of 31-Jan-2018) is computed accurately.
+     - Tax liabilities match statutory tax rates and exemptions down to the penny.
+   - **Wealth & Net Worth Balance Sheet Parity:**
+     $$\text{Total Net Worth} = \text{Liquid Cash} + \text{Investments Market Value} + \text{Illiquid Assets} - \text{Liabilities}$$
+     $$\text{After-Tax Net Worth} = \text{Total Net Worth} - \text{Unrealized Capital Gains Tax Haircut}$$
+   - **FIRE Milestones & Monte Carlo Distributions:**
+     - Deterministic targets ($\text{Lean FI} = 20 \times \text{Core Spend}$, $\text{Target FI} = 25 \times \text{Total Spend}$, $\text{Coast FI}$) calculated accurately.
+     - Linear runway months $= \text{Liquid Assets} / \text{Monthly Burn}$.
+     - Monte Carlo stochastic percentile curves satisfy strict monotonicity: $\text{P10 Runway} \le \text{P50 Runway} \le \text{P90 Runway}$.
+     - Probability of success and terminal wealth nominal distribution match deterministic random seed reference baseline.
+
 ### Step 10 - Backup/restore
 Backup generalized state including Pre-Bronze/config provenance. Restore into clean target and verify outputs/next incremental run.
 
@@ -270,13 +333,18 @@ Final mandatory acceptance matrix:
 - **Generic Golden User End-to-End Acceptance (`tests/application/test_generic_user_e2e_acceptance.py`):**
   - Executes a clean-install run using purely generic external evidence (`tests/fixtures/external/golden_user/`) and public TOML configurations without any Shan data or hardcoded Python configuration;
   - Asserts complete source-agnostic pipeline execution from Discovery and Pre-Bronze raw admission through Monte Carlo stochastic simulation;
-- **Full End-to-End Multi-Layer Assertion Suite (From Ingestion to Monte Carlo):**
-  - **Ingestion & Control Plane:** Assert file discovery, SHA-256 fingerprinting, binary file payload storage in `Raw_Documents.sqlite`, file registration, and run manifest logging;
-  - **Meta Layer:** Assert `_meta_file_registry`, `_meta_ingestion_manifest`, `_meta_schema_catalog`, and `_meta_capability_state` correctly track all artifact IDs, row counts, and schema versions;
-  - **Pre-Bronze Layer:** Assert exact source-shaped raw admissions, dunder metadata columns (`__file_name__`, `__folder_path__`, `__source_file_id__`, `__ingested_at__`), and dry-run non-mutation;
-  - **Bronze Layer:** Assert Gate 1 & Gate 2 Pandera schema validations, dunder provenance admission (`__artifact_id__`), atomic delta replacement, and artifact-level deduplication;
-  - **Silver Layer:** Assert transformed and normalized financial facts across household transactions, asset groupings, currencies, investment orders, trade executions, lot allocations, realized capital gains, and tax events;
-  - **Gold Layer:** Assert final analytical marts across Household Budgeting, Investment Portfolio Summary, Tax Year Summary, Tax Income Breakdown, Tax Reconciliation, Wealth Net Worth curves, FIRE Milestones, and Monte Carlo stochastic survival distributions.
+- **Master Full-Stack Multi-Layer Ground-Truth Assertion Suite (`tests/application/test_full_lakehouse_ground_truth_acceptance.py`):**
+  - **Tier 1 (Operational Control Plane):** Assert all 9 SQLite tables (`documents`, `file_provenance`, `file_discovery_state`, `ingestion_manifest`, `cp_runs`, `cp_run_capabilities`, `cp_simulation_runs`, `simulation_fingerprints`, `cp_external_provider_requests`), SHA-256 byte hashes, binary blobs, and execution statuses;
+  - **Tier 2 (DuckDB Meta Catalog):** Assert all 5 metadata tables (`meta.file_registry`, `meta.ingestion_manifest`, `meta.schema_catalog`, `meta.capability_state`, `meta.data_lineage`), tracking artifact IDs, schema fingerprints, active capability masks, and end-to-end DAG lineage;
+  - **Tier 3 (Pre-Bronze Raw Store):** Assert all admitted source-shaped tables, system dunder columns (`__file_name__`, `__folder_path__`, `__source_file_id__`, `__ingested_at__`, `__row_id__`), and raw line count parity;
+  - **Tier 4 (Canonical Bronze Lakehouse):** Assert all 19 active canonical datasets, Gate 2 Pandera schema contracts, deterministic row IDs, artifact deduplication, and atomic delta replacement;
+  - **Tier 5 (Normalized Silver Lakehouse):** Assert normalized financial facts across household transactions, assets, categories, calendars, currencies, orders, trades, FIFO lots, realized gains, market prices, forex rates, and benchmark series;
+  - **Tier 6 (Gold Decision Marts & Financial Numerical Parity):** Assert mathematical ground-truth equations down to the penny/basis point:
+    - Cashflow equation balance ($\text{Opening} + \text{Inflows} - \text{Outflows} = \text{Closing}$);
+    - FIFO lot conservation ($\sum \text{Open Lot Shares} = \text{Holdings}$) and realized gains parity;
+    - Statutory Capital Gains Tax (Section 111A, Section 112A grandfathering, and tax provisions);
+    - Net Worth balance sheet reconciliation (book vs market value, liquid vs illiquid, after-tax net worth);
+    - Deterministic FIRE targets (Lean FI, Target FI, Coast FI, runway months) and Monte Carlo stochastic distribution monotonicity ($\text{P10} \le \text{P50} \le \text{P90}$).
 
 ## 10. Explicit non-goals
 
@@ -310,6 +378,7 @@ Do not:
 - [ ] External golden fixtures green.
 - [ ] Generic Golden User end-to-end acceptance green (source-agnostic proof from Ingestion to Monte Carlo on clean install).
 - [ ] Master Capability Matrix E2E test suite green across all 10 topological combinations with assertive catalog and analytical verifications.
+- [ ] Master Full-Stack Multi-Layer Ground-Truth Acceptance Suite green across all 6 tiers (Control Plane, Meta, Pre-Bronze, Bronze, Silver, Gold) with penny-accurate mathematical assertions.
 - [ ] All 50 phase contracts closed.
 - [ ] No unresolved core requirement deferred.
 

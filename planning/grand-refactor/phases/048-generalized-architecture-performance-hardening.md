@@ -91,6 +91,25 @@ Benchmark high-frequency telemetry under multi-file ingestion and multi-engine p
 - Verify that append-only forensic logging to JSONL (`outputs/logs/`) scales efficiently without blocking pipeline workers.
 - Verify that Desktop narrative formatting and UI sink updates run smoothly without freezing the GUI event loop.
 
+### Step 8c - Desktop GUI Pre-Flight Health Indicator & Non-Blocking UI Hardening
+Harden Desktop GUI under Phase 0 pre-flight execution and heavy processing:
+- Add visual status pill badges (Config status, Sources reachability, Rules validity, Pre-Flight overall health) directly to the top bar of `UnifiedETLTab`.
+- Wire the "▶ Run Pipeline" action to execute Phase 0 pre-flight diagnostics automatically; if errors exist, immediately surface the diagnostic table without mutating DuckDB or SQLite and halt.
+- Verify that GUI event loop remains fully responsive and non-blocking during streaming execution and status queue fan-out.
+
+### Step 8d - Comprehensive FIRE & Monte Carlo Numerical Kernel Hardening & Test Suite
+Author and execute `tests/domain/test_fire_monte_carlo_engine.py` to exhaustively certify PFETL's heaviest analytical engine across 10 statistical, numerical, and performance dimensions:
+1. **Deterministic Seeding & Thread Reproducibility:** Verify that identical `root_seed` and monthly offsets produce bit-identical stochastic percentile trajectories across multiple threads (`prange`) and repeated invocations.
+2. **Markov Regime Switching (Bull, Bear, Stagflation):** Assert state transitions strictly obey the 3x3 transition matrix ($P_{ij}$); verify empirical state occupancy converges to the theoretical stationary distribution $\pi = \pi P$ over long horizons (e.g. 50,000 simulated months).
+3. **Jump-Diffusion & Tail Risk Shocks:** Assert Poisson jump arrival frequencies match `jump_probability_annual` and jump magnitudes properly compound negative drawdowns under asset shock events.
+4. **Human Capital Shock Simulation:** Verify stochastic income shock events obey `shock_probability`, durations remain bounded within `[shock_duration_min, shock_duration_max]`, and unemployment benefits accurately offset living expense burn.
+5. **Dynamic Glide Path & Debt Allocation:** Assert asset allocation dynamically shifts along the pre-retirement derisking window, holds FI target equity at retirement, and executes post-retirement re-risking with dynamic debt yield adjustments.
+6. **Guyton-Klinger Dynamic Guardrails:** Test the Capital Preservation Rule (spending cut by `gk_cut` when withdrawal rate exceeds initial rate by `gk_upper`) and Prosperity Rule (spending raised by `gk_raise` when withdrawal rate falls below `gk_lower`).
+7. **Stochastic Inflation Dynamics:** Verify mean-reverting inflation paths (Vasicek/Ornstein-Uhlenbeck drift) with hard boundary clipping to `inf_min` and `inf_max` preventing runaway or negative inflation anomalies.
+8. **Sequence of Returns Risk (SORR) Sensitivity:** Compare early-retirement bear market paths against late-retirement bear market paths; prove that early drawdowns significantly reduce portfolio survival probability, validating SORR sensitivity.
+9. **Boundary & Degeneracy Invariants:** Test extreme edge conditions ($0 starting net worth, negative monthly savings, 100% equity collapse, zero expense burn, and extreme target lifespan); assert zero NaN, Inf, or unhandled exceptions.
+10. **Vectorized Polars Batch UDF & Numba JIT Scale:** Benchmark 10,000 simulation iterations across 120 monthly rows; assert total execution time $< 1.5$ seconds with zero memory leaks and proper parallel scaling.
+
 ### Step 9 - Define performance gates
 Set thresholds for full/cached runs as relative/absolute ranges appropriate to environment. Document noise methodology.
 
@@ -136,7 +155,18 @@ Required:
 - financial outputs/IDs identical;
 - recovery/validation suites green;
 - JSONL event lineage retained;
-- final thresholds encoded/documented in test/benchmark convention.
+- final thresholds encoded/documented in test/benchmark convention;
+- **FIRE & Monte Carlo Numerical Kernel Certification (`tests/domain/test_fire_monte_carlo_engine.py`):**
+  - Bit-identical reproducibility across random seeds and parallel threads (`prange`);
+  - Markov regime transition frequencies converging to theoretical stationary distribution ($\pi = \pi P$);
+  - Jump-diffusion shock distributions and cumulative asset drawdown compounding;
+  - Human capital unemployment shock probabilities and expense coverage offsets;
+  - Dynamic glide path asset allocation (derisking, target equity, re-risking, debt yields);
+  - Guyton-Klinger dynamic guardrail triggers (capital preservation cut vs prosperity raise);
+  - Stochastic inflation mean-reverting Vasicek paths with min/max bounding;
+  - Sequence of Returns Risk (SORR) early vs late market crash sensitivity;
+  - Numerical degeneracy and boundary invariants ($0 net worth, 100% equity crash, negative savings);
+  - Vectorized Polars batch UDF scale (10,000 iterations across 120 monthly rows in <1.5s).
 
 ## 10. Explicit non-goals
 
@@ -159,6 +189,8 @@ Do not:
 - [ ] Correctness/recovery/observability unchanged.
 - [ ] Observability throughput and UI narrative rendering benchmarks satisfied.
 - [ ] Durable performance gate exists.
+- [ ] Desktop GUI pre-flight health indicator verified and UI event loop non-blocking under full execution load.
+- [ ] Comprehensive FIRE & Monte Carlo numerical kernel test suite green across all 10 statistical, regime, and performance dimensions.
 
 ## 12. Commit boundary
 

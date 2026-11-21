@@ -105,23 +105,23 @@ See [Configuration Reference](../configuration/configuration-reference.md) and [
 The installed package exposes two console scripts:
 
 ```text
-shan-fin
-shan-fin-gui
+pfetl
+pfetl-gui
 ```
 
-`shan-fin` is the canonical launcher.
+`pfetl` is the canonical launcher.
 
 ```text
-shan-fin
+pfetl
     → Desktop
 
-shan-fin tkinter
+pfetl tkinter
     → Desktop
 
-shan-fin cli
+pfetl cli
     → Rich terminal CLI
 
-shan-fin-gui
+pfetl-gui
     → Desktop directly
 ```
 

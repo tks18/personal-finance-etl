@@ -123,6 +123,15 @@ Change one transaction; verify affected canonical/financial state and replay beh
 ### Step 10 - Full Shan regression
 External fixtures must not introduce special-case code that changes Shan outputs.
 
+### Step 11 - Desktop GUI Tri-Configuration & Diagnostic Actions Integration
+Modernize `src/personal_finance_etl/presentation/desktop/app.py` (`UnifiedETLTab`):
+- Add file picker inputs and recent history management for `sources.toml` alongside `config.toml` and `rules.toml`.
+- Add interactive diagnostic buttons to the control header:
+  - `Validate Config` (calls `PersonalFinanceEngine.validate_all_configs` and renders the issue table directly in the GUI log panel).
+  - `Check Sources` (calls `PersonalFinanceEngine.check_sources` and renders source reachability status in the GUI log panel).
+  - `Dry Run Admission` (runs non-mutating pre-bronze admission test).
+- Ensure desktop users can select custom investment topologies and run diagnostics before triggering pipeline execution.
+
 ## 7. Files and symbols in scope
 
 Create external investment fixtures/configs/provider test responses and certification tests.
@@ -182,6 +191,7 @@ Do not:
 - [ ] Capability failures are early/actionable.
 - [ ] No vendor-specific production branch added.
 - [ ] Shan regression green.
+- [ ] Desktop GUI supports tri-configuration (config.toml, sources.toml, rules.toml) and interactive diagnostic buttons.
 
 ## 12. Commit boundary
 

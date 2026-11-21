@@ -510,19 +510,19 @@ pip install personal-finance-etl
 ### Desktop
 
 ```bash
-shan-fin
+pfetl
 ```
 
 or:
 
 ```bash
-shan-fin-gui
+pfetl-gui
 ```
 
 ### Terminal
 
 ```bash
-shan-fin cli
+pfetl cli
 ```
 
 The package also ships the technical documentation so the same knowledge base is available from the application surfaces.
