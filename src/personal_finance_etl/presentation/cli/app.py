@@ -55,7 +55,7 @@ EngineStatus = ObservabilityEvent
 try:
     __version__ = importlib.metadata.version("personal-finance-etl")
 except importlib.metadata.PackageNotFoundError:
-    __version__ = "11.2.0"
+    __version__ = "unknown"
 
 if sys.platform == "win32":
     try:

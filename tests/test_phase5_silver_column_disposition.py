@@ -21,10 +21,16 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
+
 from personal_finance_etl.infrastructure.warehouse.contracts import DATA_CONTRACT_REGISTRY
 from personal_finance_etl.infrastructure.warehouse.schema.silver import SILVER_DDL
 
 MANIFEST_PATH = Path(".planning/v11/SILVER-DISPOSITION-MANIFEST.md")
+pytestmark = pytest.mark.skipif(
+    not MANIFEST_PATH.exists(),
+    reason="Phase 005 disposition manifest removed after v11 finalization",
+)
 
 EXPECTED_24_ACTIVE_SILVER_TABLES: list[str] = [
     # 15 Phase 006 Cutover Tables

@@ -13,6 +13,7 @@ Validates
 from __future__ import annotations
 
 import argparse
+import importlib.metadata
 import sys
 import tomllib
 from pathlib import Path
@@ -124,7 +125,7 @@ def test_operator_info_metadata() -> None:
     info = op.get_info()
 
     assert isinstance(info, SystemInfo)
-    assert info.version == "11.2.0"
+    assert info.version == importlib.metadata.version("personal-finance-etl")
     assert info.python_version == sys.version.split()[0]
     assert info.platform == sys.platform
     assert info.silver_tables_count == 24, "Silver layer must preserve all 24 canonical tables"

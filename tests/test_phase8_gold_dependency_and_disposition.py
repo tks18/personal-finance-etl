@@ -21,12 +21,18 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
+
 from personal_finance_etl.infrastructure.warehouse.contracts import (
     DATA_CONTRACT_REGISTRY,
 )
 from personal_finance_etl.infrastructure.warehouse.schema.gold import GOLD_DDL
 
 MANIFEST_PATH = Path(".planning/v11/GOLD-DISPOSITION-MANIFEST.md")
+pytestmark = pytest.mark.skipif(
+    not MANIFEST_PATH.exists(),
+    reason="Phase 008 disposition manifest removed after v11 finalization",
+)
 
 EXPECTED_22_ACTIVE_GOLD_TABLES: list[str] = [
     # 11 Phase 009 Cutover Tables (Household, Wealth, FIRE, Tax)

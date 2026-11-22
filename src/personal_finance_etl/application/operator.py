@@ -274,7 +274,7 @@ class OperatorService:
         try:
             ver = importlib.metadata.version("personal-finance-etl")
         except Exception:
-            ver = "11.2.0"
+            ver = "unknown"
 
         base_path = settings.database.target_db_base_path if settings else None
         duckdb_name = settings.database.target_db_name if settings else "Personal_Finance_DB.duckdb"
