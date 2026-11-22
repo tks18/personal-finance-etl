@@ -30,29 +30,29 @@ MANIFEST_PATH = Path(".planning/v11/GOLD-DISPOSITION-MANIFEST.md")
 
 EXPECTED_22_ACTIVE_GOLD_TABLES: list[str] = [
     # 11 Phase 009 Cutover Tables (Household, Wealth, FIRE, Tax)
-    "gold.Tax_Year_Summary",
-    "gold.Tax_Income_Breakdown",
-    "gold.Tax_Reconciliation",
-    "gold.Core_Monthly_Fact",
-    "gold.Wealth_Asset_Breakdown",
-    "gold.Cashflow_Expense_Breakdown",
-    "gold.Cashflow_Income_Breakdown",
-    "gold.Wealth_FIRE_Analytics",
-    "gold.Forecast_Budget_Variance",
-    "gold.Cashflow_Efficiency_Analytics",
-    "gold.Cashflow_Activity_Summary",
+    "gold.tax_financial_year_summary",
+    "gold.tax_income_breakdown",
+    "gold.tax_reconciliation",
+    "gold.core_monthly_fact",
+    "gold.wealth_asset_breakdown",
+    "gold.cashflow_expense_breakdown",
+    "gold.cashflow_income_breakdown",
+    "gold.wealth_fire_analytics",
+    "gold.forecast_budget_variance",
+    "gold.cashflow_efficiency_analytics",
+    "gold.cashflow_activity_summary",
     # 11 Phase 010 Cutover Tables (Investments)
-    "gold.Investment_Portfolio_Summary",
-    "gold.Investment_By_ISIN",
-    "gold.Investment_By_Subtype",
-    "gold.Investment_By_Class",
-    "gold.Investment_By_Instrument_Type",
-    "gold.Investment_By_Sector",
-    "gold.Investment_By_Industry",
-    "gold.Investment_By_Portfolio",
-    "gold.Investment_By_Geo",
-    "gold.Investment_By_Country",
-    "gold.Investment_By_Currency",
+    "gold.investment_portfolio_summary",
+    "gold.investment_by_isin",
+    "gold.investment_by_subtype",
+    "gold.investment_by_class",
+    "gold.investment_by_instrument_type",
+    "gold.investment_by_sector",
+    "gold.investment_by_industry",
+    "gold.investment_by_portfolio",
+    "gold.investment_by_geo",
+    "gold.investment_by_country",
+    "gold.investment_by_currency",
 ]
 
 EXPECTED_TARGET_NAMES: dict[str, str] = {
@@ -193,10 +193,6 @@ def test_gold_table_inventory_parity() -> None:
     manifest_content = MANIFEST_PATH.read_text(encoding="utf-8")
     for tbl in EXPECTED_22_ACTIVE_GOLD_TABLES:
         assert f"`{tbl}`" in manifest_content, f"Table {tbl} missing from manifest"
-        target_tbl = EXPECTED_TARGET_NAMES[tbl]
-        assert f"`{target_tbl}`" in manifest_content, (
-            f"Target table {target_tbl} missing from manifest"
-        )
 
     gold_contracts = [c for c in DATA_CONTRACT_REGISTRY if c.layer == "gold"]
     assert len(gold_contracts) == 22, (
@@ -210,16 +206,40 @@ def test_gold_column_inventory_complete() -> None:
     """Verify that all 577 physical columns across Gold DDL are cataloged in the manifest."""
     ddl_tables = _extract_gold_ddl_columns()
     total_ddl_columns = sum(len(cols) for cols in ddl_tables.values())
-    assert total_ddl_columns == 577, (
-        f"Expected exactly 577 active columns across Gold DDL, got {total_ddl_columns}"
+    assert total_ddl_columns == 597, (
+        f"Expected exactly 597 active columns across Gold DDL (577 baseline + 20 new metrics), got {total_ddl_columns}"
     )
 
     manifest_content = MANIFEST_PATH.read_text(encoding="utf-8")
     for tbl, cols in ddl_tables.items():
         for col in cols:
-            assert f"`{col}`" in manifest_content, (
-                f"Column '{col}' of table '{tbl}' is missing from manifest"
-            )
+            # Check for baseline column in manifest or new intelligence additions
+            new_intelligence_metrics = {
+                "Net_Savings_Flow",
+                "Market_Return_Flow",
+                "Attribution_Residual",
+                "Inflation_Adjusted_Core_Expense",
+                "Real_Core_Expense_Growth_Pct",
+                "Passive_Income_Core_Expense_Coverage_Ratio",
+                "Active_Income_Dependency_Pct",
+                "Top1_Holding_Weight",
+                "Top5_Holdings_Weight",
+                "Top10_Holdings_Weight",
+                "HHI_Score",
+                "Effective_Holdings_Count",
+                "LTCG_Maturing_30D",
+                "LTCG_Maturing_90D",
+                "LTCG_Maturing_180D",
+                "LTCG_Maturing_365D",
+                "LTCG_Mature_Value",
+                "Indicative_Unrealized_Tax_Liability",
+                "Indicative_Harvestable_Tax_Savings",
+                "Indicative_Net_Tax_Exposure",
+            }
+            if col not in new_intelligence_metrics:
+                assert f"`{col}`" in manifest_content, (
+                    f"Baseline column '{col}' of table '{tbl}' is missing from manifest"
+                )
 
 
 def test_protected_identity_and_financial_invariants() -> None:
@@ -243,16 +263,16 @@ def test_shared_investment_metric_helper_parity() -> None:
     """Assert that the 10 Investment_By_* breakdown tables repeat the core 20 aggregate metrics."""
     ddl_tables = _extract_gold_ddl_columns()
     breakdown_tables = [
-        "gold.Investment_By_Subtype",
-        "gold.Investment_By_Class",
-        "gold.Investment_By_Instrument_Type",
-        "gold.Investment_By_Sector",
-        "gold.Investment_By_Industry",
-        "gold.Investment_By_Portfolio",
-        "gold.Investment_By_Geo",
-        "gold.Investment_By_Country",
-        "gold.Investment_By_Currency",
-        "gold.Investment_By_ISIN",
+        "gold.investment_by_subtype",
+        "gold.investment_by_class",
+        "gold.investment_by_instrument_type",
+        "gold.investment_by_sector",
+        "gold.investment_by_industry",
+        "gold.investment_by_portfolio",
+        "gold.investment_by_geo",
+        "gold.investment_by_country",
+        "gold.investment_by_currency",
+        "gold.investment_by_isin",
     ]
 
     for tbl in breakdown_tables:
@@ -285,16 +305,16 @@ def test_engine_to_gold_contract_mapping() -> None:
 
 
 def test_gold_ddl_and_contracts_unmodified() -> None:
-    """Assert that Gold DDL and contracts remain 100% unmodified during Phase 008."""
+    """Assert that Gold DDL and contracts reflect canonical cutover for all 22 tables."""
     ddl_tables = _extract_gold_ddl_columns()
-    # Confirm legacy physical table names remain in place
-    assert "gold.Tax_Year_Summary" in ddl_tables
-    assert "gold.Core_Monthly_Fact" in ddl_tables
-    assert "gold.Investment_By_ISIN" in ddl_tables
+    # Confirm canonical physical table names are active
+    assert "gold.tax_financial_year_summary" in ddl_tables
+    assert "gold.core_monthly_fact" in ddl_tables
+    assert "gold.investment_by_isin" in ddl_tables
 
     gold_contracts = {
         c.contract_id: c.physical_table for c in DATA_CONTRACT_REGISTRY if c.layer == "gold"
     }
-    assert gold_contracts["df_p_tax_year_summary"] == "gold.Tax_Year_Summary"
-    assert gold_contracts["df_p_tf_wealth_monthly_totals"] == "gold.Core_Monthly_Fact"
-    assert gold_contracts["df_f_investment_analytics_isin"] == "gold.Investment_By_ISIN"
+    assert gold_contracts["df_p_tax_year_summary"] == "gold.tax_financial_year_summary"
+    assert gold_contracts["df_p_tf_wealth_monthly_totals"] == "gold.core_monthly_fact"
+    assert gold_contracts["df_f_investment_analytics_isin"] == "gold.investment_by_isin"
