@@ -30,8 +30,9 @@ from personal_finance_etl.application.ingestion.asset_strategies import (
 from personal_finance_etl.contracts.extraction import ExtractorEntityStatus
 from personal_finance_etl.infrastructure.providers.files.csv import (
     extract_benchmark_master_raw,
-    extract_currency_mapping_raw,
-    extract_stg_mf_isin_mapping,
+    extract_currency_reference_raw,
+    extract_instrument_master_raw,
+    extract_mutual_fund_instrument_mapping_raw,
 )
 from personal_finance_etl.infrastructure.providers.files.locator import (
     categorize_statement_files,
@@ -81,17 +82,17 @@ def test_statement_locator_categorization(tmp_path: Any) -> None:
 
 def test_csv_extraction_adapters() -> None:
     """Verify parsing and schema assignment for CSV evidence assets."""
-    # MF ISIN Mapping
+    # MF Instrument Mapping
     raw_isin = b"INSTRUMENT_NAME,ISIN\nTest Growth Fund,INF123456789\n"
-    lf_isin = extract_stg_mf_isin_mapping("isin.csv", "/data", raw_isin)
+    lf_isin = extract_mutual_fund_instrument_mapping_raw("isin.csv", "/data", raw_isin)
     df_isin = lf_isin.collect()
     assert df_isin.height == 1
     assert df_isin["ISIN"][0] == "INF123456789"
     assert df_isin["__file_name__"][0] == "isin.csv"
 
-    # Currency Mapping
+    # Currency Reference
     raw_curr = b"UID,Currency_Code,Target_Currency_Code,yF_Ticker,Currency_Name,Is_Active\nUSD,USD,INR,USDINR=X,US Dollar,true\n"
-    lf_curr = extract_currency_mapping_raw("curr.csv", "/data", raw_curr)
+    lf_curr = extract_currency_reference_raw("curr.csv", "/data", raw_curr)
     df_curr = lf_curr.collect()
     assert df_curr.height == 1
     assert df_curr["Currency_Code"][0] == "USD"
@@ -103,6 +104,18 @@ def test_csv_extraction_adapters() -> None:
     df_bench = lf_bench.collect()
     assert df_bench.height == 1
     assert df_bench["yF_Ticker"][0] == "^NSEI"
+
+    # Instrument Master
+    raw_inst = (
+        b"ISIN,Sector,Industry,Benchmark_ID,Yahoo_Ticker,Tax_Instrument_Type,"
+        b"Tax_Instrument_Subtype,Country,Geo,Geo_Subtype\n"
+        b"INF123,Tech,Software,BENCH1,INFY.NS,Equity,Listed,India,APAC,Indian Stocks\n"
+    )
+    lf_inst = extract_instrument_master_raw("inst.csv", "/data", raw_inst)
+    df_inst = lf_inst.collect()
+    assert df_inst.height == 1
+    assert df_inst["ISIN"][0] == "INF123"
+    assert df_inst["Sector"][0] == "Tech"
 
 
 def test_sqlite_extractor_base_tables(tmp_path: Any) -> None:

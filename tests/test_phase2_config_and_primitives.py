@@ -180,13 +180,13 @@ def test_settings_strict_v11_validation(tmp_path: Path):
     [sources]
     household_database = "C:\\\\Sources\\\\DB"
     statements_root = "C:\\\\Statements"
-    column_master = "C:\\\\Refs\\\\COLUMN_MASTER.csv"
-    mutual_fund_instrument_mapping = "C:\\\\Refs\\\\MF.csv"
-    instrument_master = "C:\\\\Refs\\\\BENCH.csv"
-    benchmark_master = "C:\\\\Refs\\\\MASTER.csv"
-    financial_year_parameters = "C:\\\\Refs\\\\MACRO.csv"
-    opening_balances = "C:\\\\Refs\\\\OPENING.csv"
-    currency_reference = "C:\\\\Refs\\\\CURRENCY.csv"
+    column_master = "C:\\\\Refs\\\\column_master.csv"
+    mutual_fund_instrument_mapping = "C:\\\\Refs\\\\mutual_fund_instrument_mapping.csv"
+    instrument_master = "C:\\\\Refs\\\\instrument_master.csv"
+    benchmark_master = "C:\\\\Refs\\\\benchmark_master.csv"
+    financial_year_parameters = "C:\\\\Refs\\\\financial_year_parameters.csv"
+    opening_balances = "C:\\\\Refs\\\\opening_balances.csv"
+    currency_reference = "C:\\\\Refs\\\\currency_reference.csv"
 
     [statement_patterns]
     stock_pl = "Custom PL"

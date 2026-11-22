@@ -7,13 +7,13 @@ disable_file_discoverer = false
 [sources]
 household_database = "...\\SOURCE_DB.db"
 statements_root = "...\\Statements"
-column_master = "...\\COLUMN_MASTER.csv"
-mutual_fund_instrument_mapping = "...\\MF_ISIN_MAPPING.csv"
-instrument_master = "...\\BENCHMARK_MAPPING.csv"
-benchmark_master = "...\\BENCHMARK_MASTER.csv"
-currency_reference = "...\\CURRENCY_MAPPING.csv"
-financial_year_parameters = "...\\MACRO_PARAMETERS.csv"
-opening_balances = "...\\OPENING_BALANCE.csv"
+column_master = "...\\column_master.csv"
+mutual_fund_instrument_mapping = "...\\mutual_fund_instrument_mapping.csv"
+instrument_master = "...\\instrument_master.csv"
+benchmark_master = "...\\benchmark_master.csv"
+currency_reference = "...\\currency_reference.csv"
+financial_year_parameters = "...\\financial_year_parameters.csv"
+opening_balances = "...\\opening_balances.csv"
 
 [statement_patterns]
 stock_pl = "Stock PL Statements"
