@@ -181,7 +181,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
     DataContract(
         "df_d_investment_master",
         "silver",
-        "silver.d_Investment_Master",
+        "silver.dim_instrument_master",
         "Investments",
         "ISIN",
         "CoreEngine",
@@ -236,7 +236,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
     DataContract(
         "df_f_investment_market_data",
         "silver",
-        "silver.f_Investment_Market_Data",
+        "silver.fact_investment_market_data",
         "Investments",
         "Quote",
         "CoreEngine",
@@ -245,7 +245,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
     DataContract(
         "df_f_tf_inv_purchase",
         "silver",
-        "silver.f_Investment_Purchase_Data",
+        "silver.fact_investment_purchases",
         "Investments",
         "Trade",
         "CoreEngine",
@@ -254,7 +254,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
     DataContract(
         "df_f_tf_inv_sale",
         "silver",
-        "silver.f_Investment_Sale_Data",
+        "silver.fact_investment_sales",
         "Investments",
         "Trade",
         "CoreEngine",
@@ -263,7 +263,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
     DataContract(
         "df_f_investment_benchmark_data",
         "silver",
-        "silver.f_Investment_Benchmark_Data",
+        "silver.fact_investment_benchmark_data",
         "Investments",
         "Quote",
         "CoreEngine",
@@ -272,7 +272,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
     DataContract(
         "df_f_investment_analytics_lot",
         "silver",
-        "silver.f_Investment_Analytics_Lot",
+        "silver.fact_investment_lot_analytics",
         "Investments",
         "ISIN-Lot",
         "InvestmentQuantEngine",
@@ -281,7 +281,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
     DataContract(
         "df_f_investment_realized_events",
         "silver",
-        "silver.f_Investment_Realized_Events",
+        "silver.fact_investment_realized_events",
         "Investments",
         "RealizedEvent",
         "InvestmentQuantEngine",
@@ -290,7 +290,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
     DataContract(
         "df_f_investment_reconciliation_events",
         "silver",
-        "silver.f_Investment_Reconciliation_Events",
+        "silver.fact_investment_reconciliation_events",
         "Investments",
         "ReconEvent",
         "InvestmentQuantEngine",
@@ -299,7 +299,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
     DataContract(
         "df_f_tax_events",
         "silver",
-        "silver.f_Tax_Events",
+        "silver.fact_tax_events",
         "Taxes",
         "TaxEvent",
         "TaxEngine",
