@@ -37,13 +37,8 @@ def transform_d_expense_category(
         )
         .select(
             [
-                "__file_name__",
-                "__folder_path__",
-                "S_NO",
-                "MODIFY_DATE",
                 "UID",
                 "CATEGORY_NAME",
-                "ORDER_SEQUENCE",
             ]
         )
     )
@@ -64,13 +59,8 @@ def transform_d_expense_subcategory(
         )
         .select(
             [
-                "__file_name__",
-                "__folder_path__",
-                "S_NO",
-                "MODIFY_DATE",
                 "UID",
                 "CATEGORY_NAME",
-                "ORDER_SEQUENCE",
                 "CATEGORY_ID",
             ]
         )
