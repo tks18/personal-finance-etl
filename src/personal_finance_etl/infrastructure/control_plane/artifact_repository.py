@@ -135,7 +135,10 @@ SQL_SELECT_PENDING_FILES = (
     "WHERE sync_status = 'PENDING_BRONZE' ORDER BY file_category, relative_path"
 )
 
-SQL_SELECT_ALL_PATHS_BY_CATEGORY = "SELECT file_category, relative_path FROM cp_file_registry ORDER BY file_category, relative_path"
+SQL_SELECT_ALL_PATHS_BY_CATEGORY = (
+    "SELECT file_category, relative_path FROM cp_file_registry "
+    "WHERE sync_status != 'REMOVED' ORDER BY file_category, relative_path"
+)
 
 SQL_SELECT_ALL_REGISTRY_STATUS = "SELECT relative_path, sync_status FROM cp_file_registry"
 
@@ -892,6 +895,12 @@ class ArtifactRepository:
                     )
                     continue
                 file_id, previous_status, last_run, digest, file_cat = row
+                if previous_status == "REMOVED":
+                    diagnostics.warning(
+                        "Artifact registry: Cannot mark REMOVED file as SYNCED without healing: %s",
+                        path,
+                    )
+                    continue
                 if previous_status == "SYNCED" and last_run == self.active_run_id:
                     continue
                 affected_table = self._resolve_table(file_cat)

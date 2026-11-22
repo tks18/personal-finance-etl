@@ -46,6 +46,7 @@ from personal_finance_etl.contracts.observability import (
 )
 from personal_finance_etl.infrastructure.control_plane.connection import SQLiteManager
 from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
+from personal_finance_etl.infrastructure.control_plane.hashing import normalize_path
 from personal_finance_etl.infrastructure.control_plane.run_repository import (
     RunRepository,
 )
@@ -452,3 +453,51 @@ def test_zero_bracket_prefixes_in_control_plane() -> None:
             violations.append(f"{py_path.name}: {matches}")
 
     assert not violations, f"Found legacy bracket prefixes in control_plane: {violations}"
+
+
+def test_artifact_repository_excludes_removed_paths_and_guards_mark_synced(
+    control_plane: ControlPlane, tmp_path: Path
+) -> None:
+    """Certify get_all_paths_by_category excludes REMOVED artifacts and mark_synced rejects them."""
+    cp = control_plane
+    cp.artifacts.active_run_id = cp.runs.start_run()
+
+    file_active = tmp_path / "active.sqlite"
+    file_obsolete = tmp_path / "obsolete.sqlite"
+    file_active.write_bytes(b"active-content")
+    file_obsolete.write_bytes(b"obsolete-content")
+
+    path_act = str(file_active)
+    path_obs = str(file_obsolete)
+
+    # Ingest two distinct artifacts
+    cp.artifacts.ingest_binaries(
+        {"sqlite_source": [path_act, path_obs]},
+        new_files={"sqlite_source": [path_act, path_obs]},
+        changed_files={},
+    )
+    cp.artifacts.mark_synced([path_act, path_obs])
+
+    # Mark obsolete file as REMOVED
+    cp.artifacts.mark_removed([path_obs])
+    status_map = cp.artifacts.get_all_registry()
+    norm_obs = normalize_path(path_obs)
+    norm_act = normalize_path(path_act)
+    assert status_map[norm_obs] == "REMOVED"
+    assert status_map[norm_act] == "SYNCED"
+
+    # get_all_paths_by_category must NOT include the REMOVED file
+    paths_by_cat = cp.artifacts.get_all_paths_by_category()
+    assert norm_act in paths_by_cat.get("sqlite_source", [])
+    assert norm_obs not in paths_by_cat.get("sqlite_source", [])
+
+    # mark_synced must refuse to resurrect a REMOVED file without healing
+    cp.artifacts.mark_synced([path_obs])
+    status_map_after = cp.artifacts.get_all_registry()
+    assert status_map_after[norm_obs] == "REMOVED"
+
+    # Only proper healing restores it to PENDING_BRONZE, allowing mark_synced
+    cp.artifacts.mark_healed([path_obs])
+    assert cp.artifacts.get_all_registry()[norm_obs] == "PENDING_BRONZE"
+    cp.artifacts.mark_synced([path_obs])
+    assert cp.artifacts.get_all_registry()[norm_obs] == "SYNCED"
