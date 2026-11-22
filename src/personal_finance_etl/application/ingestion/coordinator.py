@@ -177,37 +177,37 @@ class DataExtractor:
             "opbal": get_column_mapping(df_column_master, "ZOPBAL"),
         }
         config_frames = {
-            "raw_mutual_fund_instrument_mapping": self._read_config_csv_lazy(
+            "mutual_fund_instrument_mapping": self._read_config_csv_lazy(
                 pending_files,
                 self.cfg.sources.mutual_fund_instrument_mapping,
                 extract_mutual_fund_instrument_mapping_raw,
                 "mutual_fund_instrument_mapping",
             ),
-            "raw_instrument_master": self._read_config_csv_lazy(
+            "instrument_master": self._read_config_csv_lazy(
                 pending_files,
                 self.cfg.sources.instrument_master,
                 extract_instrument_master_raw,
                 "instrument_master",
             ),
-            "raw_opening_balances": self._read_config_csv_lazy(
+            "opening_balances": self._read_config_csv_lazy(
                 pending_files,
                 self.cfg.sources.opening_balances,
                 extract_opening_balances_raw,
                 "opening_balances",
             ),
-            "raw_benchmark_master": self._read_config_csv_lazy(
+            "benchmark_master": self._read_config_csv_lazy(
                 pending_files,
                 self.cfg.sources.benchmark_master,
                 extract_benchmark_master_raw,
                 "benchmark_master",
             ),
-            "raw_financial_year_parameters": self._read_config_csv_lazy(
+            "financial_year_parameters": self._read_config_csv_lazy(
                 pending_files,
                 self.cfg.sources.financial_year_parameters,
                 extract_financial_year_parameters_raw,
                 "financial_year_parameters",
             ),
-            "raw_currency_reference": self._read_config_csv_lazy(
+            "currency_reference": self._read_config_csv_lazy(
                 pending_files,
                 self.cfg.sources.currency_reference,
                 extract_currency_reference_raw,
@@ -274,28 +274,28 @@ class DataExtractor:
 
         if excel_count > 0:
             return {
-                "mf_market_data_raw": extract_mf_market_data_raw(
+                "mf_market_data": extract_mf_market_data_raw(
                     self._get_file_list_with_bytes(mf_holdings)
                 ),
-                "mf_transactions_raw": extract_mf_transactions_raw(
+                "mf_transactions": extract_mf_transactions_raw(
                     self._get_file_list_with_bytes(mf_orders)
                 ),
-                "stock_market_data_raw": extract_stock_market_data_raw(
+                "stock_market_data": extract_stock_market_data_raw(
                     self._get_file_list_with_bytes(stock_pl)
                 ),
-                "stock_transactions_raw": extract_stock_transactions_raw(
+                "stock_transactions": extract_stock_transactions_raw(
                     self._get_file_list_with_bytes(stock_orders)
                 ),
-                "us_stock_transactions_raw": extract_us_stock_transactions_raw(
+                "us_stock_transactions": extract_us_stock_transactions_raw(
                     self._get_file_list_with_bytes(us_stock_transactions)
                 ),
             }
         return {
-            "mf_market_data_raw": pl.LazyFrame(),
-            "mf_transactions_raw": pl.LazyFrame(),
-            "stock_market_data_raw": pl.LazyFrame(),
-            "stock_transactions_raw": pl.LazyFrame(),
-            "us_stock_transactions_raw": pl.LazyFrame(),
+            "mf_market_data": pl.LazyFrame(),
+            "mf_transactions": pl.LazyFrame(),
+            "stock_market_data": pl.LazyFrame(),
+            "stock_transactions": pl.LazyFrame(),
+            "us_stock_transactions": pl.LazyFrame(),
         }
 
     def _validate_extracted_streams(self, result: ExtractionResult) -> None:
@@ -310,22 +310,22 @@ class DataExtractor:
         )
 
         validation_frames = [
-            result.zcategory,
-            result.assetgroup,
-            result.assets,
-            result.currency,
-            result.inoutcome,
-            result.raw_mutual_fund_instrument_mapping,
-            result.raw_instrument_master,
-            result.mf_market_data_raw,
-            result.mf_transactions_raw,
-            result.stock_market_data_raw,
-            result.stock_transactions_raw,
-            result.raw_opening_balances,
-            result.raw_benchmark_master,
-            result.raw_financial_year_parameters,
-            result.us_stock_transactions_raw,
-            result.raw_currency_reference,
+            result.household_zcategory,
+            result.household_asset_group,
+            result.household_assets,
+            result.household_currency,
+            result.household_inoutcome,
+            result.mutual_fund_instrument_mapping,
+            result.instrument_master,
+            result.mf_market_data,
+            result.mf_transactions,
+            result.stock_market_data,
+            result.stock_transactions,
+            result.opening_balances,
+            result.benchmark_master,
+            result.financial_year_parameters,
+            result.us_stock_transactions,
+            result.currency_reference,
         ]
 
         try:
@@ -394,24 +394,24 @@ class DataExtractor:
         excel_frames = self._extract_excel_statements(pending_files)
 
         result = ExtractionResult(
-            zcategory=zcat,
-            assetgroup=agrp,
-            assets=asts,
-            currency=curr,
-            inoutcome=inout,
+            household_zcategory=zcat,
+            household_asset_group=agrp,
+            household_assets=asts,
+            household_currency=curr,
+            household_inoutcome=inout,
             mappings=mappings,
             column_master=df_column_master,
-            raw_mutual_fund_instrument_mapping=config_frames["raw_mutual_fund_instrument_mapping"],
-            raw_instrument_master=config_frames["raw_instrument_master"],
-            raw_opening_balances=config_frames["raw_opening_balances"],
-            raw_benchmark_master=config_frames["raw_benchmark_master"],
-            raw_financial_year_parameters=config_frames["raw_financial_year_parameters"],
-            raw_currency_reference=config_frames["raw_currency_reference"],
-            mf_market_data_raw=excel_frames["mf_market_data_raw"],
-            mf_transactions_raw=excel_frames["mf_transactions_raw"],
-            stock_market_data_raw=excel_frames["stock_market_data_raw"],
-            stock_transactions_raw=excel_frames["stock_transactions_raw"],
-            us_stock_transactions_raw=excel_frames["us_stock_transactions_raw"],
+            mutual_fund_instrument_mapping=config_frames["mutual_fund_instrument_mapping"],
+            instrument_master=config_frames["instrument_master"],
+            opening_balances=config_frames["opening_balances"],
+            benchmark_master=config_frames["benchmark_master"],
+            financial_year_parameters=config_frames["financial_year_parameters"],
+            currency_reference=config_frames["currency_reference"],
+            mf_market_data=excel_frames["mf_market_data"],
+            mf_transactions=excel_frames["mf_transactions"],
+            stock_market_data=excel_frames["stock_market_data"],
+            stock_transactions=excel_frames["stock_transactions"],
+            us_stock_transactions=excel_frames["us_stock_transactions"],
         )
 
         self._validate_extracted_streams(result)

@@ -99,12 +99,12 @@ class StockPipeline:
         """
         diagnostics.debug("Parsing unstructured Stock Excel files...")
         market_data = get_stg_stock_market_data(
-            extracted.stock_market_data_raw, rules.DEFAULT_CURRENCY_ID
+            extracted.stock_market_data, rules.DEFAULT_CURRENCY_ID
         )
         market_data_ref = get_stg_stock_market_data_ref(market_data)
 
         diagnostics.debug("Parsing Stock Trade Orders...")
-        base_orders = get_base_stock_transactions(extracted.stock_transactions_raw)
+        base_orders = get_base_stock_transactions(extracted.stock_transactions)
         purchase_trans = transform_stg_stock_trades(base_orders, trade_type="BUY")
         sale_trans = transform_stg_stock_trades(base_orders, trade_type="SELL")
 
@@ -211,7 +211,7 @@ class USStockPipeline:
             Normalized purchases, sales, and master references for US equities.
         """
         diagnostics.debug("Parsing US Stock Trade Orders...")
-        base_orders = get_base_us_stock_transactions(extracted.us_stock_transactions_raw)
+        base_orders = get_base_us_stock_transactions(extracted.us_stock_transactions)
         purchase_trans = transform_stg_us_stock_trades(base_orders, trade_type="BUY")
         sale_trans = transform_stg_us_stock_trades(base_orders, trade_type="SELL")
 
@@ -258,14 +258,14 @@ class MutualFundPipeline:
             Normalized MF market data, purchases, sales, and master references.
         """
         diagnostics.debug("Parsing unstructured Mutual Fund Excel files...")
-        mapping = extracted.raw_mutual_fund_instrument_mapping
+        mapping = extracted.mutual_fund_instrument_mapping
         market_data = get_stg_mf_market_data(
-            extracted.mf_market_data_raw, mapping, rules.DEFAULT_CURRENCY_ID
+            extracted.mf_market_data, mapping, rules.DEFAULT_CURRENCY_ID
         )
         market_data_ref = get_stg_mf_market_data_ref(market_data)
 
         diagnostics.debug("Parsing Mutual Fund Trade Orders...")
-        base_orders = get_base_mf_transactions(extracted.mf_transactions_raw)
+        base_orders = get_base_mf_transactions(extracted.mf_transactions)
         purchase_trans = transform_stg_mf_trades(
             base_orders, mapping, rules.MF_SCHEME_MAPPINGS, trade_type="PURCHASE"
         )

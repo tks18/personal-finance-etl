@@ -109,33 +109,31 @@ class TransformationDAG:
         diagnostics.debug("Transforming Base Dimensions...")
         mappings = extracted.mappings
         d_income_category_lazy = transform_d_income_category(
-            extracted.zcategory, mappings["category"], self.rules
+            extracted.household_zcategory, mappings["category"], self.rules
         )
         d_income_subcategory_lazy = transform_d_income_subcategory(
-            extracted.zcategory, mappings["category"], d_income_category_lazy, self.rules
+            extracted.household_zcategory, mappings["category"], d_income_category_lazy, self.rules
         )
         d_expense_category_lazy = transform_d_expense_category(
-            extracted.zcategory, mappings["category"]
+            extracted.household_zcategory, mappings["category"]
         )
         d_expense_subcategory_lazy = transform_d_expense_subcategory(
-            extracted.zcategory, mappings["category"], self.rules
+            extracted.household_zcategory, mappings["category"], self.rules
         )
         d_asset_category_lazy = transform_d_asset_category(
-            extracted.assetgroup, mappings["asset_group"], self.rules
+            extracted.household_asset_group, mappings["asset_group"], self.rules
         )
         d_asset_subcategory_lazy = transform_d_asset_subcategory(
-            extracted.assets, mappings["assets"], self.rules
+            extracted.household_assets, mappings["assets"], self.rules
         )
         d_currency_lazy = transform_d_currency(
-            extracted.currency, mappings["currency"], extracted.raw_currency_reference
+            extracted.household_currency, mappings["currency"], extracted.currency_reference
         )
 
         diagnostics.debug("Transforming Macro Parameters and Opening Balances...")
-        d_macro_parameters_lazy = transform_d_macro_parameters(
-            extracted.raw_financial_year_parameters
-        )
+        d_macro_parameters_lazy = transform_d_macro_parameters(extracted.financial_year_parameters)
         d_benchmark_master_lazy = transform_d_investment_benchmark_master(
-            extracted.raw_benchmark_master
+            extracted.benchmark_master
         )
 
         return {
@@ -177,10 +175,12 @@ class TransformationDAG:
         d_asset_subcategory_lazy = dims["df_d_asset_subcategory"]
 
         f_opening_balances_lazy = transform_f_opening_balances(
-            extracted.raw_opening_balances, extracted.mappings["opbal"]
+            extracted.opening_balances, extracted.mappings["opbal"]
         )
 
-        base_transactions_lazy = get_base_transactions(extracted.inoutcome, mappings["inoutcome"])
+        base_transactions_lazy = get_base_transactions(
+            extracted.household_inoutcome, mappings["inoutcome"]
+        )
         f_income_transactions_lazy = transform_f_income_transactions(
             base_transactions_lazy, self.rules, d_income_subcategory_lazy
         )
@@ -218,7 +218,7 @@ class TransformationDAG:
         if self.rules is None:
             raise ValueError("FinancialRules must be provided to TransformationDAG")
 
-        if len(extracted.mf_market_data_raw.collect_schema().names()) == 0:
+        if len(extracted.mf_market_data.collect_schema().names()) == 0:
             diagnostics.debug("Empty incremental frames detected. Skipping AssetPipelines...")
             return {
                 "df_f_investment_market_data": pl.LazyFrame(),
@@ -257,7 +257,7 @@ class TransformationDAG:
         diagnostics.debug("Building Investment Master...")
         d_tf_investment_master_lazy = get_d_investment_master(
             master_ref_lazy_list,
-            extracted.raw_instrument_master,
+            extracted.instrument_master,
             self.rules.DEFAULT_CURRENCY_ID,
         )
 
