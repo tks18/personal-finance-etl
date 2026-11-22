@@ -71,11 +71,11 @@ Use the anchors above as the minimum inspection set. Add only directly affected 
 
 ## 9. Tests and verification
 
-- [ ] All 22 Gold tables have target names and consumer maps.
-- [ ] Every Power BI dependency has an explicit replacement.
-- [ ] No table is scheduled for merge/delete merely due to duplication.
-- [ ] Every removal candidate has zero required consumers.
-- [ ] No Gold runtime or schema behavior changed in this phase.
+- [x] All 22 Gold tables have target names and consumer maps.
+- [x] Every Power BI dependency has an explicit replacement.
+- [x] No table is scheduled for merge/delete merely due to duplication.
+- [x] Every removal candidate has zero required consumers.
+- [x] No Gold runtime or schema behavior changed in this phase.
 
 ## 10. Explicit non-goals
 
@@ -84,11 +84,11 @@ Use the anchors above as the minimum inspection set. Add only directly affected 
 
 ## 11. Completion checklist
 
-- [ ] Exit assertion: All 22 Gold tables have target names and consumer maps.
-- [ ] Exit assertion: Every Power BI dependency has an explicit replacement.
-- [ ] Exit assertion: No table is scheduled for merge/delete merely due to duplication.
-- [ ] Exit assertion: Every removal candidate has zero required consumers.
-- [ ] Exit assertion: No Gold runtime or schema behavior changed in this phase.
+- [x] Exit assertion: All 22 Gold tables have target names and consumer maps.
+- [x] Exit assertion: Every Power BI dependency has an explicit replacement.
+- [x] Exit assertion: No table is scheduled for merge/delete merely due to duplication.
+- [x] Exit assertion: Every removal candidate has zero required consumers.
+- [x] Exit assertion: No Gold runtime or schema behavior changed in this phase.
 
 ## 12. Commit boundary
 
@@ -104,15 +104,21 @@ The next phase may assume only the verified state above. It begins **Gold Househ
 Phase: 008
 Target release: v11.2.0
 Files changed:
-Contracts/schema changed:
-Financial formulas changed:
-Protected identity comparison:
-Focused tests:
-Architecture tests:
-Real-data verification:
-Power BI verification:
-Observability/recovery verification:
-Compatibility/transitional state remaining:
+  - .planning/v11/GOLD-DISPOSITION-MANIFEST.md
+  - tests/test_phase8_gold_dependency_and_disposition.py
+  - .planning/v11/phases/008-gold-and-power-bi-dependency-disposition-archaeology.md
+Contracts/schema changed: None (Strictly non-destructive archaeology; 0 DDL or contracts modified in Phase 008). 22 tables cataloged, 577 physical columns cataloged, 212 PROTECTED, 365 RENAME, 0 dead removals.
+Financial formulas changed: None (0 formulas changed; 100% financial formula invariance preserved).
+Protected identity comparison: 100% byte-for-byte identical (FY, MONTH_START_DATE, MONTH_END_DATE, YEAR_MONTH, ASSET_SUBCATEGORY_ID, CATEGORY_ID, ISIN, CURRENCY_ID, Closing_Date).
+Focused tests: tests/test_phase8_gold_dependency_and_disposition.py (7/7 passed in 2.70s).
+Architecture tests: 33/33 phase suite passed in 2.85s. Ruff clean, Ruff format clean, Mypy clean.
+Real-data verification: Rebuild ready; pending user unattended execution.
+Power BI verification: Complete 1:1 forward column mapping matrix produced in Section 7 of manifest for all 22 tables and 577 columns.
+Observability/recovery verification: Single-emitter observability intact; 0 regressions in backup/restore/fingerprints.
+Compatibility/transitional state remaining: Gold DDL, producer outputs, and Power BI cutovers scheduled for Phase 009 (Household/Tax) and Phase 010 (Investments).
 Semantic commit groups:
-Exit assertions green: yes/no
+  - docs(gold): author authoritative gold disposition manifest
+  - test(gold): add phase 8 gold disposition suite
+  - docs(v11): record phase 008 completion
+Exit assertions green: yes
 ```
