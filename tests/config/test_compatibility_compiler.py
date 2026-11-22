@@ -94,7 +94,7 @@ def test_compiler_translates_single_binding_preserving_all_attributes() -> None:
     selector = SqliteSelector(table_name="ZCATEGORY")
     cd_policy = ChangeDetectionPolicy(sync_strategy=SyncStrategy.FULL_REPLACE)
     ident = SourceFieldIdentity(field="UID")
-    mapping = [ColumnMapping(source_field="Z_PK", canonical_field="category_id")]
+    mapping = [ColumnMapping(source_field="Z_PK", canonical_field="CATEGORY_ID")]
     norm: list[NormalizationRule] = [TrimRule(field="ZNAME", mode="both")]
     fields = [SourceFieldDeclaration(name="Z_PK", data_type="Int64", nullable=False)]
 
