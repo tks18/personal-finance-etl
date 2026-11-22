@@ -16,7 +16,7 @@ Does not own
 from __future__ import annotations
 
 GOLD_DDL = """
-CREATE TABLE IF NOT EXISTS gold.Tax_Year_Summary (
+CREATE TABLE IF NOT EXISTS gold.tax_financial_year_summary (
     FY TEXT PRIMARY KEY,
     Total_Ledger_Income DOUBLE,
     Total_Investment_Gain_Loss DOUBLE,
@@ -31,10 +31,14 @@ CREATE TABLE IF NOT EXISTS gold.Tax_Year_Summary (
     Ledger_Tax_Estimate_Complete BOOLEAN,
     Total_Event_Count BIGINT,
     Ready_Count BIGINT,
-    Check_Required_Count BIGINT
+    Check_Required_Count BIGINT,
+    -- Indicative Tax Exposure Summary
+    Indicative_Unrealized_Tax_Liability DOUBLE,
+    Indicative_Harvestable_Tax_Savings DOUBLE,
+    Indicative_Net_Tax_Exposure DOUBLE
 );
 
-CREATE TABLE IF NOT EXISTS gold.Tax_Income_Breakdown (
+CREATE TABLE IF NOT EXISTS gold.tax_income_breakdown (
     FY TEXT,
     Income_Head TEXT,
     Tax_Sub_Head TEXT,
@@ -49,7 +53,7 @@ CREATE TABLE IF NOT EXISTS gold.Tax_Income_Breakdown (
     Check_Required_Count BIGINT
 );
 
-CREATE TABLE IF NOT EXISTS gold.Tax_Reconciliation (
+CREATE TABLE IF NOT EXISTS gold.tax_reconciliation (
     FY TEXT,
     Tax_Sub_Head TEXT,
     Ledger_Tax_Event_Amount DOUBLE,
@@ -76,7 +80,7 @@ CREATE TABLE IF NOT EXISTS gold.Tax_Reconciliation (
     PRIMARY KEY(FY, Tax_Sub_Head)
 );
 
-CREATE TABLE IF NOT EXISTS gold.Wealth_Asset_Breakdown (
+CREATE TABLE IF NOT EXISTS gold.wealth_asset_breakdown (
     -- Identifiers
     MONTH_START_DATE DATE,
     MONTH_END_DATE DATE,
@@ -119,7 +123,7 @@ CREATE TABLE IF NOT EXISTS gold.Wealth_Asset_Breakdown (
     Months_of_Runway DOUBLE
 );
 
-CREATE TABLE IF NOT EXISTS gold.Core_Monthly_Fact (
+CREATE TABLE IF NOT EXISTS gold.core_monthly_fact (
     -- Identifiers
     MONTH_START_DATE DATE,
     MONTH_END_DATE DATE,
@@ -166,10 +170,17 @@ CREATE TABLE IF NOT EXISTS gold.Core_Monthly_Fact (
     -- Risk & Weights
     Foreign_Exposure_Pct DOUBLE,
     CPI_INDEX DOUBLE,
-    INFLATION_YOY_PCT DOUBLE
+    INFLATION_YOY_PCT DOUBLE,
+    -- Net-Worth Change Attribution
+    Net_Savings_Flow DOUBLE,
+    Market_Return_Flow DOUBLE,
+    Attribution_Residual DOUBLE,
+    -- Inflation-Adjusted Lifestyle / Real Expense Growth
+    Inflation_Adjusted_Core_Expense DOUBLE,
+    Real_Core_Expense_Growth_Pct DOUBLE
 );
 
-CREATE TABLE IF NOT EXISTS gold.Cashflow_Expense_Breakdown (
+CREATE TABLE IF NOT EXISTS gold.cashflow_expense_breakdown (
     -- Identifiers
     MONTH_START_DATE DATE,
     MONTH_END_DATE DATE,
@@ -190,7 +201,7 @@ CREATE TABLE IF NOT EXISTS gold.Cashflow_Expense_Breakdown (
     Cumulative_YTD_Spend DOUBLE
 );
 
-CREATE TABLE IF NOT EXISTS gold.Cashflow_Income_Breakdown (
+CREATE TABLE IF NOT EXISTS gold.cashflow_income_breakdown (
     -- Identifiers
     MONTH_START_DATE DATE,
     MONTH_END_DATE DATE,
@@ -210,7 +221,7 @@ CREATE TABLE IF NOT EXISTS gold.Cashflow_Income_Breakdown (
     Cumulative_YTD_Income DOUBLE
 );
 
-CREATE TABLE IF NOT EXISTS gold.Wealth_FIRE_Analytics (
+CREATE TABLE IF NOT EXISTS gold.wealth_fire_analytics (
     -- Identifiers
     MONTH_START_DATE DATE,
     MONTH_END_DATE DATE,
@@ -253,7 +264,7 @@ CREATE TABLE IF NOT EXISTS gold.Wealth_FIRE_Analytics (
     FI_Velocity DOUBLE
 );
 
-CREATE TABLE IF NOT EXISTS gold.Forecast_Budget_Variance (
+CREATE TABLE IF NOT EXISTS gold.forecast_budget_variance (
     -- Identifiers
     MONTH_START_DATE DATE,
     MONTH_END_DATE DATE,
@@ -287,7 +298,7 @@ CREATE TABLE IF NOT EXISTS gold.Forecast_Budget_Variance (
     Zero_Income_Runway_Months DOUBLE
 );
 
-CREATE TABLE IF NOT EXISTS gold.Investment_Portfolio_Summary (
+CREATE TABLE IF NOT EXISTS gold.investment_portfolio_summary (
     -- Identifiers
     MONTH_START_DATE DATE,
     Max_Closing_Date DATE,
@@ -331,7 +342,7 @@ CREATE TABLE IF NOT EXISTS gold.Investment_Portfolio_Summary (
     Tax_Harvesting_Priority_Score DOUBLE
 );
 
-CREATE TABLE IF NOT EXISTS gold.Cashflow_Efficiency_Analytics (
+CREATE TABLE IF NOT EXISTS gold.cashflow_efficiency_analytics (
     -- Identifiers
     MONTH_START_DATE DATE,
     MONTH_END_DATE DATE,
@@ -380,10 +391,13 @@ CREATE TABLE IF NOT EXISTS gold.Cashflow_Efficiency_Analytics (
     YoY_Net_Worth_Growth_Pct DOUBLE,
     YoY_Net_Worth_Growth_Pct_Real DOUBLE,
     Expense_to_NW_Ratio DOUBLE,
-    Emergency_Fund_Coverage DOUBLE
+    Emergency_Fund_Coverage DOUBLE,
+    -- Income Resilience
+    Passive_Income_Core_Expense_Coverage_Ratio DOUBLE,
+    Active_Income_Dependency_Pct DOUBLE
 );
 
-CREATE TABLE IF NOT EXISTS gold.Investment_By_ISIN (
+CREATE TABLE IF NOT EXISTS gold.investment_by_isin (
     -- Identifiers
     Closing_Date DATE NOT NULL,
     ISIN TEXT NOT NULL,
@@ -440,7 +454,7 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_ISIN (
     FY_Realized_Net_PnL DOUBLE
 );
 
-CREATE TABLE IF NOT EXISTS gold.Investment_By_Subtype (
+CREATE TABLE IF NOT EXISTS gold.investment_by_subtype (
     -- Identifiers
     Closing_Date DATE NOT NULL,
     INSTRUMENT_SUBTYPE TEXT NOT NULL,
@@ -474,7 +488,7 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_Subtype (
     FY_Realized_Net_PnL DOUBLE
 );
 
-CREATE TABLE IF NOT EXISTS gold.Investment_By_Class (
+CREATE TABLE IF NOT EXISTS gold.investment_by_class (
     -- Identifiers
     Closing_Date DATE NOT NULL,
     INSTRUMENT_CLASS TEXT NOT NULL,
@@ -506,7 +520,7 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_Class (
     FY_Realized_Net_PnL DOUBLE
 );
 
-CREATE TABLE IF NOT EXISTS gold.Investment_By_Instrument_Type (
+CREATE TABLE IF NOT EXISTS gold.investment_by_instrument_type (
     -- Identifiers
     Closing_Date DATE NOT NULL,
     INSTRUMENT_TYPE TEXT NOT NULL,
@@ -538,7 +552,7 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_Instrument_Type (
     FY_Realized_Net_PnL DOUBLE
 );
 
-CREATE TABLE IF NOT EXISTS gold.Investment_By_Sector (
+CREATE TABLE IF NOT EXISTS gold.investment_by_sector (
     -- Identifiers
     Closing_Date DATE NOT NULL,
     SECTOR TEXT NOT NULL,
@@ -570,7 +584,7 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_Sector (
     FY_Realized_Net_PnL DOUBLE
 );
 
-CREATE TABLE IF NOT EXISTS gold.Investment_By_Industry (
+CREATE TABLE IF NOT EXISTS gold.investment_by_industry (
     -- Identifiers
     Closing_Date DATE NOT NULL,
     INDUSTRY TEXT NOT NULL,
@@ -602,7 +616,7 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_Industry (
     FY_Realized_Net_PnL DOUBLE
 );
 
-CREATE TABLE IF NOT EXISTS gold.Investment_By_Portfolio (
+CREATE TABLE IF NOT EXISTS gold.investment_by_portfolio (
     -- Identifiers
     Closing_Date DATE NOT NULL,
     -- Position Values
@@ -630,10 +644,22 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_Portfolio (
     Unrealized_Loss DOUBLE,
     FY_Realized_Gain DOUBLE,
     FY_Realized_Loss DOUBLE,
-    FY_Realized_Net_PnL DOUBLE
+    FY_Realized_Net_PnL DOUBLE,
+    -- Portfolio Concentration
+    Top1_Holding_Weight DOUBLE,
+    Top5_Holdings_Weight DOUBLE,
+    Top10_Holdings_Weight DOUBLE,
+    HHI_Score DOUBLE,
+    Effective_Holdings_Count DOUBLE,
+    -- LTCG Maturity Ladder
+    LTCG_Maturing_30D DOUBLE,
+    LTCG_Maturing_90D DOUBLE,
+    LTCG_Maturing_180D DOUBLE,
+    LTCG_Maturing_365D DOUBLE,
+    LTCG_Mature_Value DOUBLE
 );
 
-CREATE TABLE IF NOT EXISTS gold.Investment_By_Geo (
+CREATE TABLE IF NOT EXISTS gold.investment_by_geo (
     -- Identifiers
     Closing_Date DATE NOT NULL,
     GEO TEXT NOT NULL,
@@ -665,7 +691,7 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_Geo (
     FY_Realized_Net_PnL DOUBLE
 );
 
-CREATE TABLE IF NOT EXISTS gold.Investment_By_Country (
+CREATE TABLE IF NOT EXISTS gold.investment_by_country (
     -- Identifiers
     Closing_Date DATE NOT NULL,
     COUNTRY TEXT NOT NULL,
@@ -707,7 +733,7 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_Country (
     FY_Realized_Net_PnL DOUBLE
 );
 
-CREATE TABLE IF NOT EXISTS gold.Investment_By_Currency (
+CREATE TABLE IF NOT EXISTS gold.investment_by_currency (
     -- Identifiers
     Closing_Date DATE NOT NULL,
     CURRENCY_ID TEXT NOT NULL,
@@ -749,7 +775,7 @@ CREATE TABLE IF NOT EXISTS gold.Investment_By_Currency (
     FY_Realized_Net_PnL DOUBLE
 );
 
-CREATE TABLE IF NOT EXISTS gold.Cashflow_Activity_Summary (
+CREATE TABLE IF NOT EXISTS gold.cashflow_activity_summary (
     -- Identifiers
     MONTH_START_DATE DATE,
     MONTH_END_DATE DATE,
@@ -779,15 +805,15 @@ CREATE TABLE IF NOT EXISTS gold.Cashflow_Activity_Summary (
 );
 
 -- Additive migrations for tax estimate coverage fields.
-ALTER TABLE gold.Tax_Year_Summary ADD COLUMN IF NOT EXISTS Total_Estimated_Ledger_Tax DOUBLE;
-ALTER TABLE gold.Tax_Year_Summary ADD COLUMN IF NOT EXISTS Ledger_Tax_Estimate_Count BIGINT;
-ALTER TABLE gold.Tax_Year_Summary ADD COLUMN IF NOT EXISTS Ledger_Tax_Estimate_Missing_Count BIGINT;
-ALTER TABLE gold.Tax_Year_Summary ADD COLUMN IF NOT EXISTS Investment_Tax_Estimate_Complete BOOLEAN;
-ALTER TABLE gold.Tax_Year_Summary ADD COLUMN IF NOT EXISTS Ledger_Tax_Estimate_Complete BOOLEAN;
-ALTER TABLE gold.Tax_Income_Breakdown ADD COLUMN IF NOT EXISTS Estimated_Tax_Complete BOOLEAN;
-ALTER TABLE gold.Tax_Reconciliation ADD COLUMN IF NOT EXISTS Estimated_Investment_Tax_Complete BOOLEAN;
-ALTER TABLE gold.Tax_Reconciliation ADD COLUMN IF NOT EXISTS Estimated_Ledger_Tax DOUBLE;
-ALTER TABLE gold.Tax_Reconciliation ADD COLUMN IF NOT EXISTS Ledger_Tax_Estimate_Count BIGINT;
-ALTER TABLE gold.Tax_Reconciliation ADD COLUMN IF NOT EXISTS Ledger_Tax_Estimate_Missing_Count BIGINT;
-ALTER TABLE gold.Tax_Reconciliation ADD COLUMN IF NOT EXISTS Estimated_Ledger_Tax_Complete BOOLEAN;
+ALTER TABLE gold.tax_financial_year_summary ADD COLUMN IF NOT EXISTS Total_Estimated_Ledger_Tax DOUBLE;
+ALTER TABLE gold.tax_financial_year_summary ADD COLUMN IF NOT EXISTS Ledger_Tax_Estimate_Count BIGINT;
+ALTER TABLE gold.tax_financial_year_summary ADD COLUMN IF NOT EXISTS Ledger_Tax_Estimate_Missing_Count BIGINT;
+ALTER TABLE gold.tax_financial_year_summary ADD COLUMN IF NOT EXISTS Investment_Tax_Estimate_Complete BOOLEAN;
+ALTER TABLE gold.tax_financial_year_summary ADD COLUMN IF NOT EXISTS Ledger_Tax_Estimate_Complete BOOLEAN;
+ALTER TABLE gold.tax_income_breakdown ADD COLUMN IF NOT EXISTS Estimated_Tax_Complete BOOLEAN;
+ALTER TABLE gold.tax_reconciliation ADD COLUMN IF NOT EXISTS Estimated_Investment_Tax_Complete BOOLEAN;
+ALTER TABLE gold.tax_reconciliation ADD COLUMN IF NOT EXISTS Estimated_Ledger_Tax DOUBLE;
+ALTER TABLE gold.tax_reconciliation ADD COLUMN IF NOT EXISTS Ledger_Tax_Estimate_Count BIGINT;
+ALTER TABLE gold.tax_reconciliation ADD COLUMN IF NOT EXISTS Ledger_Tax_Estimate_Missing_Count BIGINT;
+ALTER TABLE gold.tax_reconciliation ADD COLUMN IF NOT EXISTS Estimated_Ledger_Tax_Complete BOOLEAN;
 """

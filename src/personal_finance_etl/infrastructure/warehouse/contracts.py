@@ -309,7 +309,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
     DataContract(
         "df_p_tax_year_summary",
         "gold",
-        "gold.Tax_Year_Summary",
+        "gold.tax_financial_year_summary",
         "Taxes",
         "FY",
         "TaxEngine",
@@ -318,7 +318,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
     DataContract(
         "df_p_tax_income_breakdown",
         "gold",
-        "gold.Tax_Income_Breakdown",
+        "gold.tax_income_breakdown",
         "Taxes",
         "FY-Head-SubHead-Source",
         "TaxEngine",
@@ -327,7 +327,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
     DataContract(
         "df_p_tax_reconciliation",
         "gold",
-        "gold.Tax_Reconciliation",
+        "gold.tax_reconciliation",
         "Taxes",
         "FY-SubHead",
         "TaxEngine",
@@ -336,7 +336,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
     DataContract(
         "df_p_tf_wealth_monthly_totals",
         "gold",
-        "gold.Core_Monthly_Fact",
+        "gold.core_monthly_fact",
         "Wealth",
         "Month",
         "WealthPresentationEngine",
@@ -345,7 +345,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
     DataContract(
         "df_p_tf_net_worth_monthly_summary",
         "gold",
-        "gold.Wealth_Asset_Breakdown",
+        "gold.wealth_asset_breakdown",
         "Wealth",
         "Month-Asset",
         "WealthPresentationEngine",
@@ -354,7 +354,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
     DataContract(
         "df_p_tf_category_spend_analytics",
         "gold",
-        "gold.Cashflow_Expense_Breakdown",
+        "gold.cashflow_expense_breakdown",
         "Wealth",
         "Month-ExpenseCategory",
         "WealthPresentationEngine",
@@ -363,7 +363,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
     DataContract(
         "df_p_tf_income_streams_monthly",
         "gold",
-        "gold.Cashflow_Income_Breakdown",
+        "gold.cashflow_income_breakdown",
         "Wealth",
         "Month-IncomeCategory",
         "WealthPresentationEngine",
@@ -372,7 +372,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
     DataContract(
         "df_p_tf_wealth_risk_analytics",
         "gold",
-        "gold.Wealth_FIRE_Analytics",
+        "gold.wealth_fire_analytics",
         "Wealth",
         "Month",
         "WealthPresentationEngine",
@@ -381,7 +381,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
     DataContract(
         "df_p_tf_budget_forecast_monthly",
         "gold",
-        "gold.Forecast_Budget_Variance",
+        "gold.forecast_budget_variance",
         "Wealth",
         "Month",
         "WealthPresentationEngine",
@@ -390,7 +390,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
     DataContract(
         "df_p_tf_investment_analytics",
         "gold",
-        "gold.Investment_Portfolio_Summary",
+        "gold.investment_portfolio_summary",
         "Investments",
         "Month-ISIN",
         "InvestmentQuantEngine",
@@ -399,7 +399,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
     DataContract(
         "df_p_tf_monthly_cashflow_summary",
         "gold",
-        "gold.Cashflow_Efficiency_Analytics",
+        "gold.cashflow_efficiency_analytics",
         "Wealth",
         "Month",
         "WealthPresentationEngine",
@@ -408,7 +408,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
     DataContract(
         "df_p_tf_cashflow_activity_summary",
         "gold",
-        "gold.Cashflow_Activity_Summary",
+        "gold.cashflow_activity_summary",
         "Wealth",
         "Month",
         "WealthPresentationEngine",
@@ -417,7 +417,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
     DataContract(
         "df_f_investment_analytics_isin",
         "gold",
-        "gold.Investment_By_ISIN",
+        "gold.investment_by_isin",
         "Investments",
         "Date-ISIN",
         "InvestmentQuantEngine",
@@ -426,7 +426,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
     DataContract(
         "df_f_investment_analytics_subtype",
         "gold",
-        "gold.Investment_By_Subtype",
+        "gold.investment_by_subtype",
         "Investments",
         "Date-Subtype",
         "InvestmentQuantEngine",
@@ -435,7 +435,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
     DataContract(
         "df_f_investment_analytics_class",
         "gold",
-        "gold.Investment_By_Class",
+        "gold.investment_by_class",
         "Investments",
         "Date-Class",
         "InvestmentQuantEngine",
@@ -444,7 +444,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
     DataContract(
         "df_f_investment_analytics_instrument_type",
         "gold",
-        "gold.Investment_By_Instrument_Type",
+        "gold.investment_by_instrument_type",
         "Investments",
         "Date-InstrumentType",
         "InvestmentQuantEngine",
@@ -453,7 +453,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
     DataContract(
         "df_f_investment_analytics_sector",
         "gold",
-        "gold.Investment_By_Sector",
+        "gold.investment_by_sector",
         "Investments",
         "Date-Sector",
         "InvestmentQuantEngine",
@@ -462,7 +462,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
     DataContract(
         "df_f_investment_analytics_industry",
         "gold",
-        "gold.Investment_By_Industry",
+        "gold.investment_by_industry",
         "Investments",
         "Date-Industry",
         "InvestmentQuantEngine",
@@ -471,7 +471,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
     DataContract(
         "df_f_investment_analytics_portfolio",
         "gold",
-        "gold.Investment_By_Portfolio",
+        "gold.investment_by_portfolio",
         "Investments",
         "Date",
         "InvestmentQuantEngine",
@@ -480,7 +480,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
     DataContract(
         "df_f_investment_analytics_geo",
         "gold",
-        "gold.Investment_By_Geo",
+        "gold.investment_by_geo",
         "Investments",
         "Date-Geo",
         "InvestmentQuantEngine",
@@ -489,7 +489,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
     DataContract(
         "df_f_investment_analytics_country",
         "gold",
-        "gold.Investment_By_Country",
+        "gold.investment_by_country",
         "Investments",
         "Date-Country",
         "InvestmentQuantEngine",
@@ -498,7 +498,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
     DataContract(
         "df_f_investment_analytics_currency",
         "gold",
-        "gold.Investment_By_Currency",
+        "gold.investment_by_currency",
         "Investments",
         "Date-Currency",
         "InvestmentQuantEngine",
