@@ -100,7 +100,6 @@ class FIFOPortfolio:
         fy_table: FYMacroParametersTable,
         default_currency_id: str,
         isin: str,
-        enable_tax: bool = True,
     ):
         self._active_lots: deque[TaxLot] = deque()
         self.tax_type = tax_type
@@ -108,7 +107,6 @@ class FIFOPortfolio:
         self.fy_table = fy_table
         self.default_currency_id = default_currency_id
         self.isin = isin
-        self.enable_tax = enable_tax
         self._reconciler = LotReconciler(isin)
 
     @property
@@ -175,16 +173,11 @@ class FIFOPortfolio:
             },
         )
 
-        if self.enable_tax:
-            ltcg_rate, stcg_rate = self.fy_table.get_tax_rates(
-                self.tax_type, self.tax_subtype, lbd or sell_date, sell_date
-            )
-            rate = ltcg_rate if ht_sale == "LTCG" else stcg_rate
-            applied_rate: float | None = rate
-            estimated_tax: float | None = max(0.0, pnl) * rate if pnl > 0 else 0.0
-        else:
-            applied_rate = None
-            estimated_tax = None
+        ltcg_rate, stcg_rate = self.fy_table.get_tax_rates(
+            self.tax_type, self.tax_subtype, lbd or sell_date, sell_date
+        )
+        applied_rate = ltcg_rate if ht_sale == "LTCG" else stcg_rate
+        estimated_tax = max(0.0, pnl) * applied_rate if pnl > 0 else 0.0
 
         shadow_qty_sold = (
             lot.shadow_qty

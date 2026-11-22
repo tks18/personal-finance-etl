@@ -35,12 +35,10 @@ class InvestmentAnalyticsBuilder:
         dfs: Mapping[str, pl.DataFrame | pl.LazyFrame],
         base_lf: Mapping[str, pl.LazyFrame],
         rules: FinancialRules,
-        enable_tax: bool = True,
     ) -> None:
         self.dfs = dfs
         self.base_lf = base_lf
         self.rules = rules
-        self.enable_tax = enable_tax
 
     def _prepare_monthly_base(
         self,
@@ -107,15 +105,11 @@ class InvestmentAnalyticsBuilder:
             pl.col("Buy_Value_Local").sum().fill_null(0.0).alias("ISIN_Book_Value_Local"),
             pl.col("Asset_PnL").sum().fill_null(0.0).alias("ISIN_Asset_PnL"),
             pl.col("Forex_PnL").sum().fill_null(0.0).alias("ISIN_Forex_PnL"),
-            (
-                pl.when(pl.col("P/L") < 0)
-                .then(pl.col("P/L"))
-                .otherwise(0.0)
-                .sum()
-                .alias("ISIN_Harvestable_Loss")
-                if self.enable_tax
-                else pl.lit(None, dtype=pl.Float64).alias("ISIN_Harvestable_Loss")
-            ),
+            pl.when(pl.col("P/L") < 0)
+            .then(pl.col("P/L"))
+            .otherwise(0.0)
+            .sum()
+            .alias("ISIN_Harvestable_Loss"),
         )
 
     def _compute_weights_and_drift(self, lf_isin_agg: pl.LazyFrame) -> pl.LazyFrame:
@@ -190,7 +184,7 @@ class InvestmentAnalyticsBuilder:
             .alias("Monthly_Market_Value_Change_Pct")
         )
 
-        tax_score_expr = (
+        return lf_isin_agg.with_columns(
             pl.when(pl.col("ISIN_Harvestable_Loss") < 0)
             .then(
                 (pl.col("ISIN_Harvestable_Loss").abs() / pl.col("ISIN_Book_Value")) * 0.5
@@ -198,11 +192,7 @@ class InvestmentAnalyticsBuilder:
             )
             .otherwise(0.0)
             .alias("Tax_Harvesting_Priority_Score")
-            if self.enable_tax
-            else pl.lit(None, dtype=pl.Float64).alias("Tax_Harvesting_Priority_Score")
-        )
-
-        return lf_isin_agg.with_columns(tax_score_expr).with_columns(
+        ).with_columns(
             safe_divide(pl.col("ISIN_Forex_PnL"), pl.col("ISIN_Unrealized_PnL")).alias(
                 "ISIN_Forex_Contribution_Pct"
             )

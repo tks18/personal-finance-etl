@@ -59,7 +59,6 @@ from personal_finance_etl.contracts.observability import (
     PresentationKind,
 )
 from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
-from personal_finance_etl.infrastructure.control_plane.hashing import generate_file_id
 from personal_finance_etl.infrastructure.observability.diagnostics import (
     get_observability_diagnostics,
 )
@@ -108,14 +107,14 @@ def resolve_market_emitter(
     emitter: EventEmitter | None = None,
     status_queue: EventQueue | None = None,
 ) -> EventEmitter:
-    """Resolve an EventEmitter from explicit instance, status queue, or global default.
+    """Resolve an EventEmitter from explicit instance, legacy status queue, or global default.
 
     Parameters
     ----------
     emitter : EventEmitter | None, optional
         Explicit canonical event emitter.
     status_queue : EventQueue | None, optional
-        Multiprocessing status queue for UI forwarding.
+        Legacy multiprocessing status queue for UI forwarding.
 
     Returns
     -------
@@ -602,11 +601,11 @@ def vault_parquet_chunks(
             filename=filename, category=category, raw_bytes=raw_bytes
         )
         injected_files.append(virtual_path)
-        artifact_id = generate_file_id(virtual_path)
 
         df_final_chunks.append(
             df_year.with_columns(
-                pl.lit(artifact_id).alias("artifact_id"),
+                pl.lit(filename).alias("__file_name__"),
+                pl.lit(virtual_path).alias("__folder_path__"),
             )
         )
 

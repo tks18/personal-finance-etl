@@ -2,9 +2,8 @@
 
 Owns
 ----
-- Root FinancialRules configuration model composed of capability-scoped policies.
-- TOML deserialization and plan-driven validation.
-- Dimension validation for investment exclusions.
+- Root FinancialRules configuration model composed of domain policies.
+- TOML deserialization and dimension validation for investment exclusions.
 - Export flattening for database audit and rule governance tables.
 
 Does not own
@@ -23,47 +22,19 @@ from typing import Self, cast
 import polars as pl
 from pydantic import BaseModel, Field
 
-from personal_finance_etl.config.financial_rules.fire import (
-    AssumptionsRules,
-    FireCapabilityRules,
-)
+from personal_finance_etl.config.financial_rules.fire import AssumptionsRules
 from personal_finance_etl.config.financial_rules.household import (
     AssetRules,
     BudgetRules,
     ExpenseRules,
-    HouseholdCapabilityRules,
     IncomeRules,
-    WealthCapabilityRules,
 )
 from personal_finance_etl.config.financial_rules.investments import (
-    InvestmentsCapabilityRules,
+    InvestmentInstrumentRules,
     PortfolioManagementRules,
 )
-from personal_finance_etl.config.financial_rules.tax import (
-    TaxCapabilityRules,
-)
-from personal_finance_etl.contracts.capabilities import CapabilityId
-from personal_finance_etl.contracts.diagnostics import DiagnosticIssue, DiagnosticSeverity
-from personal_finance_etl.contracts.execution_plan import ExecutionPlan
 
-__all__ = ["BenchmarkCapabilityRules", "FinancialRules"]
-
-
-class BenchmarkCapabilityRules(BaseModel):
-    """Configuration rules for market benchmark enrichment."""
-
-    default_benchmark_index: str = Field(
-        default="NIFTY 50",
-        description="Primary benchmark index identifier for relative alpha calculation.",
-    )
-    fallback_risk_free_rate: float = Field(
-        default=0.06,
-        description="Annualized risk-free rate used for Sharpe ratio calculation (e.g. 0.06 for 6%).",
-    )
-    track_benchmark_alpha: bool = Field(
-        default=True,
-        description="Whether to compute alpha and beta tracking metrics against the benchmark index.",
-    )
+__all__ = ["FinancialRules"]
 
 
 def _map_rule_domain(first_key: str) -> str:
@@ -126,103 +97,28 @@ def _flatten_data_to_records(node: object, path: list[str], records: list[dict[s
 
 
 class FinancialRules(BaseModel):
-    """Root configuration composed of capability-scoped domain policy models."""
+    """Root configuration composed of domain policies, assumptions, and audit rules."""
 
-    household: HouseholdCapabilityRules = Field(default_factory=HouseholdCapabilityRules)
-    wealth: WealthCapabilityRules = Field(default_factory=WealthCapabilityRules)
-    investments: InvestmentsCapabilityRules = Field(default_factory=InvestmentsCapabilityRules)
-    tax: TaxCapabilityRules | None = None
-    fire: FireCapabilityRules | None = None
-    benchmark: BenchmarkCapabilityRules = Field(default_factory=BenchmarkCapabilityRules)
+    income: IncomeRules = Field(default_factory=IncomeRules)
+    expense: ExpenseRules = Field(default_factory=ExpenseRules)
+    assets: AssetRules = Field(default_factory=AssetRules)
+    investments: dict[str, InvestmentInstrumentRules] = Field(default_factory=dict)
+    assumptions: AssumptionsRules = Field(...)
+    budget: BudgetRules = Field(default_factory=BudgetRules)
+    portfolio_management: PortfolioManagementRules = Field(default_factory=PortfolioManagementRules)
 
-    # Pure convenience properties for internal domain calculation access
-    @property
-    def income(self) -> IncomeRules:
-        """Household income classification rules."""
-        return self.household.income
-
-    @property
-    def expense(self) -> ExpenseRules:
-        """Household expense classification rules."""
-        return self.household.expense
-
-    @property
-    def budget(self) -> BudgetRules:
-        """Household budget allocation and smoothing rules."""
-        return self.household.budget
-
-    @property
-    def assets(self) -> AssetRules:
-        """Wealth asset liquidity classification rules."""
-        return self.wealth.assets
-
-    @property
-    def portfolio_management(self) -> PortfolioManagementRules:
-        """Investment portfolio drift and rebalance rules."""
-        return self.investments.portfolio_management
-
-    @property
-    def DEFAULT_CURRENCY_ID(self) -> str:
-        """Base currency identifier."""
-        return self.investments.default_currency_id
-
-    @property
-    def MF_SCHEME_MAPPINGS(self) -> dict[str, str]:
-        """Mutual fund scheme name normalization mappings."""
-        return self.investments.mf_scheme_mappings
-
-    @property
-    def assumptions(self) -> AssumptionsRules:
-        """Domain view projection assembling statutory tax policies and simulation parameters for calculation engines."""
-        if self.fire is None or self.tax is None:
-            raise AttributeError(
-                "Capability rules [tax] and [fire] must be configured to access assumptions."
-            )
-        return AssumptionsRules.model_construct(
-            macro=self.fire.macro,
-            fire=self.fire.fire,
-            monte_carlo=self.fire.monte_carlo,
-            tax=self.tax,
-            cma=self.fire.cma,
-            target_allocations=self.fire.target_allocations,
-        )
-
-    def validate_against_plan(self, plan: ExecutionPlan) -> list[DiagnosticIssue]:
-        """Validate that all capabilities enabled in the execution plan have configured rules."""
-        issues: list[DiagnosticIssue] = []
-        if CapabilityId.TAX in plan.active_capabilities:
-            if self.tax is None:
-                issues.append(
-                    DiagnosticIssue(
-                        category="RULES",
-                        severity=DiagnosticSeverity.ERROR,
-                        location="financial_rules.toml",
-                        field="tax",
-                        message="Active capability 'tax' requires a configured [tax] section in financial rules.",
-                        remediation="Add a valid [tax] section with rates and statutory parameters.",
-                    )
-                )
-        if CapabilityId.FIRE in plan.active_capabilities:
-            if self.fire is None:
-                issues.append(
-                    DiagnosticIssue(
-                        category="RULES",
-                        severity=DiagnosticSeverity.ERROR,
-                        location="financial_rules.toml",
-                        field="fire",
-                        message="Active capability 'fire' requires a configured [fire] section in financial rules.",
-                        remediation="Add a valid [fire] section with macro, fire, and monte_carlo parameters.",
-                    )
-                )
-        return issues
+    # Transactional rules
+    DEFAULT_CURRENCY_ID: str = "INR_INR"
+    MF_SCHEME_MAPPINGS: dict[str, str] = Field(default_factory=dict)
 
     def validate_investment_exclusion_uids(
         self, df_subcategory: pl.DataFrame | pl.LazyFrame
     ) -> None:
-        """Validate configured investment exclusions against the actual subcategory dimension."""
-        if self.tax is None:
-            return
+        """Validate configured investment exclusions against the actual subcategory dimension.
 
+        Pydantic can validate duplicate/overlapping configuration values, but only the
+        materialized dimension can establish whether a UID exists in the current source data.
+        """
         if isinstance(df_subcategory, pl.LazyFrame):
             # Materialization Boundary: VALIDATION_DIAGNOSTIC
             # Materialize subcategory dimension to validate configured investment exclusions
@@ -235,8 +131,8 @@ class FinancialRules(BaseModel):
                 "Income subcategory dimension must contain UID to validate investment exclusions."
             )
 
-        configured = set(self.tax.investment_exclusions.stcg_sub_cat_ids)
-        configured.update(self.tax.investment_exclusions.ltcg_sub_cat_ids)
+        configured = set(self.assumptions.tax.investment_exclusions.stcg_sub_cat_ids)
+        configured.update(self.assumptions.tax.investment_exclusions.ltcg_sub_cat_ids)
         if not configured:
             return
 
@@ -249,7 +145,7 @@ class FinancialRules(BaseModel):
         if unknown:
             raise ValueError(
                 "Configured STCG/LTCG investment exclusion UID(s) do not exist in "
-                f"silver.wealth_income_subcategory: {unknown}"
+                f"silver.d_Income_Subcategory: {unknown}"
             )
 
     @classmethod
@@ -261,49 +157,18 @@ class FinancialRules(BaseModel):
 
         with open(path_str, "rb") as f:
             data = tomllib.load(f)
-
-        # Strict capability-scoping enforcement: Disallow non-capability top-level root keys
-        non_capability_keys = {
-            "income",
-            "expense",
-            "assumptions",
-            "assets",
-            "DEFAULT_CURRENCY_ID",
-            "MF_SCHEME_MAPPINGS",
-        }
-        found_invalid = non_capability_keys.intersection(data.keys())
-        if found_invalid:
-            raise ValueError(
-                f"Non-capability root keys {sorted(found_invalid)} are forbidden. "
-                "Financial rules must strictly use capability namespaces: "
-                "[household], [wealth], [investments], [tax], [fire], [benchmark]."
-            )
-
-        return cls.model_validate(data)
+            return cls.model_validate(data)
 
     @classmethod
     def from_dict(cls, data: Mapping[str, object]) -> Self:
         """Instantiate FinancialRules directly from a raw configuration dictionary."""
-        # Strict capability-scoping enforcement: Disallow non-capability top-level root keys
-        non_capability_keys = {
-            "income",
-            "expense",
-            "assumptions",
-            "assets",
-            "DEFAULT_CURRENCY_ID",
-            "MF_SCHEME_MAPPINGS",
-        }
-        found_invalid = non_capability_keys.intersection(data.keys())
-        if found_invalid:
-            raise ValueError(
-                f"Non-capability root keys {sorted(found_invalid)} are forbidden. "
-                "Financial rules must strictly use capability namespaces: "
-                "[household], [wealth], [investments], [tax], [fire], [benchmark]."
-            )
         return cls.model_validate(data)
 
     def export_to_db_records(self) -> list[dict[str, str]]:
-        """Flatten the rules dynamically into records for database auditing."""
+        """Flatten the rules dynamically into records for database auditing.
+
+        Automatically scales to handle new nested parameters added to the schema.
+        """
         records: list[dict[str, str]] = []
         data = self.model_dump()
         _flatten_data_to_records(data, [], records)

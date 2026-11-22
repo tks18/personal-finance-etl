@@ -71,9 +71,6 @@ class QuantRunOptions:
     start_date: date | None = None
     end_date: date | None = None
     run_id: str = "UNKNOWN"
-    enable_benchmark: bool = True
-    enable_foreign_assets: bool = True
-    enable_tax: bool = True
 
 
 @dataclass
@@ -91,9 +88,6 @@ class RunContext:
     rules: FinancialRules
     df_fx: pl.DataFrame | None = None
     run_id: str = "UNKNOWN"
-    enable_benchmark: bool = True
-    enable_foreign_assets: bool = True
-    enable_tax: bool = True
 
     def __post_init__(self) -> None:
         """Initialize transient and computed attributes after dataclass creation."""
@@ -194,9 +188,6 @@ class RunContext:
             rules=options.rules,
             df_fx=loaded_fx,
             run_id=options.run_id,
-            enable_benchmark=options.enable_benchmark,
-            enable_foreign_assets=options.enable_foreign_assets,
-            enable_tax=options.enable_tax,
         )
 
 

@@ -6,15 +6,12 @@ Owns
 - ExtractorEntityResult structured outcome for single-entity workers.
 - ExtractionBatchResult aggregated outcomes across concurrent extraction workers.
 - ExtractionCompletenessError raised on missing required market evidence.
-- AssetPipelineResult standardized outcome for individual asset class extraction pipelines.
 
 Does not own
 -------------
 - Provider implementation details (owned by infrastructure.providers).
 - Bronze warehouse persistence (owned by infrastructure.warehouse.bronze).
 """
-
-from __future__ import annotations
 
 from collections.abc import Iterator
 from dataclasses import dataclass, field
@@ -161,6 +158,30 @@ class ExtractionBatchResult:
     def __iter__(self) -> Iterator[pl.DataFrame | list[str]]:
         """Iterate over (combined_frame, injected_files) pair."""
         return iter((self.combined_frame, self.injected_files))
+
+
+@dataclass
+class ExtractionResult:
+    """Consolidated raw extracted evidence streams across all ingestion sources."""
+
+    zcategory: pl.LazyFrame
+    assetgroup: pl.LazyFrame
+    assets: pl.LazyFrame
+    currency: pl.LazyFrame
+    inoutcome: pl.LazyFrame
+    mappings: dict[str, dict[str, str]]
+    stg_mf_isin_mapping: pl.LazyFrame
+    stg_benchmark_mapping: pl.LazyFrame
+    mf_market_data_raw: pl.LazyFrame
+    mf_transactions_raw: pl.LazyFrame
+    stock_market_data_raw: pl.LazyFrame
+    stock_transactions_raw: pl.LazyFrame
+    raw_opening_balances: pl.LazyFrame
+    raw_benchmark_master: pl.LazyFrame
+    raw_macro_parameters: pl.LazyFrame
+    column_master: pl.DataFrame | pl.LazyFrame
+    us_stock_transactions_raw: pl.LazyFrame
+    currency_mapping_raw: pl.LazyFrame
 
 
 @dataclass

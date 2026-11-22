@@ -22,7 +22,6 @@ from personal_finance_etl.presentation.observability.desktop_sink import (
     DesktopNarrativeSink,
     format_event_narrative,
     format_failure_summary,
-    should_suppress_narrative_event,
 )
 
 __all__ = [
@@ -30,5 +29,4 @@ __all__ = [
     "RichNarrativeSink",
     "format_event_narrative",
     "format_failure_summary",
-    "should_suppress_narrative_event",
 ]

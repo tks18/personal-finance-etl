@@ -1,3 +1,0 @@
-UID,Currency_Code,Target_Currency_Code,yF_Ticker,Currency_Name,Is_Active
-USD_INR,USD,INR,USDINR=X,US Dollar to Indian Rupee,true
-EUR_INR,EUR,INR,EURINR=X,Euro to Indian Rupee,true

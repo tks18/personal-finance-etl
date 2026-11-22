@@ -33,10 +33,7 @@ from personal_finance_etl.domain.investments.contracts import (
     TradeRecord,
 )
 from personal_finance_etl.domain.investments.performance.returns import calculate_cagr
-from personal_finance_etl.domain.investments.performance.xirr import (
-    XirrResult,
-    calculate_xirr,
-)
+from personal_finance_etl.domain.investments.performance.xirr import calculate_xirr
 from personal_finance_etl.domain.market.fx import FXRateProvider
 from personal_finance_etl.domain.market.macro import FYMacroParametersTable
 
@@ -187,9 +184,6 @@ def compute_daily_terminals(
     fy_table: FYMacroParametersTable,
     fx_provider: FXRateProvider | None,
     get_fx_fn: Callable[[_IsinState, str, date, str], float | None],
-    enable_benchmark: bool = True,
-    enable_foreign_assets: bool = True,
-    enable_tax: bool = True,
 ) -> _DailyTerminals:
     """Compute portfolio terminal values, shadow benchmark values, and after-tax terminal value.
 
@@ -209,12 +203,6 @@ def compute_daily_terminals(
         Currency FX provider.
     get_fx_fn : Callable[[_IsinState, str, date, str], float | None]
         FX rate retriever function.
-    enable_benchmark : bool, default True
-        Whether benchmark enrichment is active. When False, benchmark prices and shadow terminals are bypassed.
-    enable_foreign_assets : bool, default True
-        Whether foreign asset enrichment is active. When False, foreign currency conversion is bypassed.
-    enable_tax : bool, default True
-        Whether tax calculation is active. When False, after-tax terminal valuation is bypassed.
 
     Returns
     -------
@@ -223,18 +211,13 @@ def compute_daily_terminals(
     """
     m_price = float(m_row.get("Closing_Price") or 0.0)
     remaining_ltcg = float(m_row.get("Equity_LTCG_Exemption") or 0.0)
-
-    if enable_benchmark:
-        m_bm_price = state.bm_provider.get_bm_price(m_date)
-        if not m_bm_price or m_bm_price <= 0:
-            m_bm_price = float("nan")
-    else:
+    m_bm_price = state.bm_provider.get_bm_price(m_date)
+    if not m_bm_price or m_bm_price <= 0:
         m_bm_price = float("nan")
 
     fx_rate_snap = 1.0
     if (
-        enable_foreign_assets
-        and state.fifo.active_lots
+        state.fifo.active_lots
         and state.fifo.active_lots[0].currency_id
         and state.fifo.active_lots[0].currency_id != state.default_curr
         and fx_provider
@@ -242,26 +225,14 @@ def compute_daily_terminals(
         fx_val = get_fx_fn(state, isin, m_date, state.fifo.active_lots[0].currency_id)
         fx_rate_snap = fx_val if fx_val is not None else float("nan")
 
-    m_bm_price_inr = m_bm_price * fx_rate_snap if enable_benchmark else float("nan")
+    m_bm_price_inr = m_bm_price * fx_rate_snap
     terminal_val = state.fifo.get_terminal_value(m_price)
-    shadow_terminal_val = (
-        state.fifo.get_shadow_terminal_value(m_bm_price_inr) if enable_benchmark else 0.0
-    )
-    shadow_terminal_val_local = (
-        state.fifo.get_shadow_terminal_value(m_bm_price)
-        if enable_benchmark and enable_foreign_assets
-        else 0.0
-    )
+    shadow_terminal_val = state.fifo.get_shadow_terminal_value(m_bm_price_inr)
+    shadow_terminal_val_local = state.fifo.get_shadow_terminal_value(m_bm_price)
 
-    val_local = (
-        compute_terminal_val_local(state, isin, m_date, m_price, fx_provider, get_fx_fn)
-        if enable_foreign_assets
-        else terminal_val
-    )
-    after_tax_terminal_val = (
-        compute_after_tax_terminal_val(state, fy_table, m_date, m_price, remaining_ltcg)
-        if enable_tax
-        else terminal_val
+    val_local = compute_terminal_val_local(state, isin, m_date, m_price, fx_provider, get_fx_fn)
+    after_tax_terminal_val = compute_after_tax_terminal_val(
+        state, fy_table, m_date, m_price, remaining_ltcg
     )
 
     pt = state.isin_terminals.setdefault(m_date, TerminalValueRecord())
@@ -287,7 +258,6 @@ def compute_cagr_and_drawdown(
     m_date: date,
     terminals: _DailyTerminals,
     state: _IsinState,
-    enable_benchmark: bool = True,
 ) -> tuple[float | None, str, float | None, str, float]:
     """Derive volume-weighted CAGR and running peak max drawdown.
 
@@ -299,8 +269,6 @@ def compute_cagr_and_drawdown(
         Daily price and valuation container.
     state : _IsinState
         Simulation state tracking holdings and peak prices.
-    enable_benchmark : bool, default True
-        Whether benchmark enrichment is active. When False, benchmark CAGR is bypassed.
 
     Returns
     -------
@@ -326,7 +294,7 @@ def compute_cagr_and_drawdown(
             inst_cagr_res = calculate_cagr(avg_cost, terminals.m_price, inst_age)
             inst_cagr = inst_cagr_res.value
             inst_cagr_status = inst_cagr_res.status
-        if enable_benchmark and avg_bm_cost > 0:
+        if avg_bm_cost > 0:
             inst_bm_cagr_res = calculate_cagr(avg_bm_cost, terminals.m_bm_price_inr, inst_age)
             inst_bm_cagr = inst_bm_cagr_res.value
             inst_bm_cagr_status = inst_bm_cagr_res.status
@@ -352,8 +320,6 @@ def compute_local_xirr_metrics(
     m_date: date,
     terminals: _DailyTerminals,
     state: _IsinState,
-    enable_benchmark: bool = True,
-    enable_foreign_assets: bool = True,
 ) -> tuple[float | None, str, float | None, str]:
     """Derive local currency asset and benchmark XIRRs.
 
@@ -365,40 +331,26 @@ def compute_local_xirr_metrics(
         Daily terminal valuations.
     state : _IsinState
         Simulation state with cashflow history.
-    enable_benchmark : bool, default True
-        Whether benchmark enrichment is active.
-    enable_foreign_assets : bool, default True
-        Whether foreign asset enrichment is active.
 
     Returns
     -------
     tuple[float | None, str, float | None, str]
         Tuple of (local XIRR, status, benchmark local XIRR, status).
     """
-    if not enable_foreign_assets:
-        return (None, "UNDEFINED", None, "UNDEFINED")
-
     cf_dates_local = [c.date for c in state.isin_cashflows if c.date <= m_date]
     cf_amounts_local = [c.amount_local for c in state.isin_cashflows if c.date <= m_date]
     xirr_local_res = calculate_xirr(
         cf_dates_local + [m_date], cf_amounts_local + [terminals.val_local]
     )
-    if enable_benchmark:
-        bm_cf_local = state.bm_cf_amounts_local[: len(cf_dates_local)]
-        bm_xirr_local_res = calculate_xirr(
-            cf_dates_local + [m_date], bm_cf_local + [terminals.shadow_terminal_val_local]
-        )
-        bm_val = bm_xirr_local_res.value
-        bm_st = bm_xirr_local_res.status
-    else:
-        bm_val = None
-        bm_st = "UNDEFINED"
-
+    bm_cf_local = state.bm_cf_amounts_local[: len(cf_dates_local)]
+    bm_xirr_local_res = calculate_xirr(
+        cf_dates_local + [m_date], bm_cf_local + [terminals.shadow_terminal_val_local]
+    )
     return (
         xirr_local_res.value,
         xirr_local_res.status,
-        bm_val,
-        bm_st,
+        bm_xirr_local_res.value,
+        bm_xirr_local_res.status,
     )
 
 
@@ -406,9 +358,6 @@ def compute_daily_metrics(
     m_date: date,
     terminals: _DailyTerminals,
     state: _IsinState,
-    enable_benchmark: bool = True,
-    enable_foreign_assets: bool = True,
-    enable_tax: bool = True,
 ) -> InstrumentMetricsRecord:
     """Calculate XIRR, benchmark active return, CAGR, and drawdown metrics.
 
@@ -420,12 +369,6 @@ def compute_daily_metrics(
         Computed terminal values.
     state : _IsinState
         Current simulation state.
-    enable_benchmark : bool, default True
-        Whether benchmark enrichment is active. When False, benchmark solver is bypassed.
-    enable_foreign_assets : bool, default True
-        Whether foreign asset enrichment is active. When False, local FX solver is bypassed.
-    enable_tax : bool, default True
-        Whether tax calculation is active. When False, after-tax solver is bypassed.
 
     Returns
     -------
@@ -435,24 +378,15 @@ def compute_daily_metrics(
     inst_xirr_res = calculate_xirr(
         state.cf_dates + [m_date], state.cf_amounts + [terminals.terminal_val]
     )
-    if enable_benchmark:
-        bm_xirr_res = calculate_xirr(
-            state.cf_dates + [m_date], state.bm_cf_amounts + [terminals.shadow_terminal_val]
-        )
-        bm_xirr_val = bm_xirr_res.value
-        bm_xirr_status = bm_xirr_res.status
-    else:
-        bm_xirr_val = None
-        bm_xirr_status = "UNDEFINED"
-
-    if enable_tax:
-        after_tax_res = calculate_xirr(
-            state.cf_dates + [m_date], state.cf_amounts + [terminals.after_tax_terminal_val]
-        )
-    else:
-        after_tax_res = XirrResult(value=None, status="UNDEFINED")
+    bm_xirr_res = calculate_xirr(
+        state.cf_dates + [m_date], state.bm_cf_amounts + [terminals.shadow_terminal_val]
+    )
+    after_tax_res = calculate_xirr(
+        state.cf_dates + [m_date], state.cf_amounts + [terminals.after_tax_terminal_val]
+    )
 
     inst_xirr = inst_xirr_res.value
+    bm_xirr_val = bm_xirr_res.value
     inst_active_return = (
         inst_xirr - bm_xirr_val if inst_xirr is not None and bm_xirr_val is not None else None
     )
@@ -460,16 +394,8 @@ def compute_daily_metrics(
         inst_xirr < bm_xirr_val if inst_xirr is not None and bm_xirr_val is not None else None
     )
 
-    cagr, cagr_st, bm_cagr, bm_cagr_st, max_dd = compute_cagr_and_drawdown(
-        m_date, terminals, state, enable_benchmark=enable_benchmark
-    )
-    xirr_loc, xirr_loc_st, bm_loc, bm_loc_st = compute_local_xirr_metrics(
-        m_date,
-        terminals,
-        state,
-        enable_benchmark=enable_benchmark,
-        enable_foreign_assets=enable_foreign_assets,
-    )
+    cagr, cagr_st, bm_cagr, bm_cagr_st, max_dd = compute_cagr_and_drawdown(m_date, terminals, state)
+    xirr_loc, xirr_loc_st, bm_loc, bm_loc_st = compute_local_xirr_metrics(m_date, terminals, state)
 
     return {
         "cagr": cagr,
@@ -479,7 +405,7 @@ def compute_daily_metrics(
         "xirr": inst_xirr,
         "xirr_status": inst_xirr_res.status,
         "bm_xirr": bm_xirr_val,
-        "bm_xirr_status": bm_xirr_status,
+        "bm_xirr_status": bm_xirr_res.status,
         "after_tax_xirr": after_tax_res.value,
         "after_tax_xirr_status": after_tax_res.status,
         "active_return": inst_active_return,
@@ -520,22 +446,6 @@ def assemble_snapshots_df(isin_snapshots: list[SnapshotRecord]) -> pl.DataFrame 
         "Purchase_ID": pl.String,
         "Lot_Source_Type": pl.String,
         "Buy_Date": pl.Date,
-        "TAX_TYPE": pl.String,
-        "TAX_SUBTYPE": pl.String,
-        "LTCG_Threshold_Days": pl.Int64,
-        "Days_To_LTCG": pl.Int64,
-        "Holding_Type": pl.String,
-        "Tax_Rate": pl.Float64,
-        "Unrealized_LTCG": pl.Float64,
-        "Unrealized_STCG": pl.Float64,
-        "Unrealized_Gain": pl.Float64,
-        "Unrealized_LTCL": pl.Float64,
-        "Unrealized_STCL": pl.Float64,
-        "Unrealized_Loss": pl.Float64,
-        "LTCG_Tax_If_Sold": pl.Float64,
-        "STCG_Tax_If_Sold": pl.Float64,
-        "After_Tax_PL": pl.Float64,
-        "After_Tax_Close_Value": pl.Float64,
         "Lot_CAGR": pl.Float64,
         "Lot_CAGR_Status": pl.String,
         "Lot_CAGR_Local": pl.Float64,

@@ -63,11 +63,6 @@ class EventCode(StrEnum):
     RECOVERY_SNAPSHOT = "RECOVERY_SNAPSHOT"
     RECOVERY_RESTORE = "RECOVERY_RESTORE"
 
-    # Phase 0: Pre-Flight Health Checks
-    PREFLIGHT_START = "PREFLIGHT_START"
-    PREFLIGHT_SUCCESS = "PREFLIGHT_SUCCESS"
-    PREFLIGHT_FAILED = "PREFLIGHT_FAILED"
-
     # Discovery & Ingestion / Providers
     DISCOVERY_START = "DISCOVERY_START"
     DISCOVERY_COMPLETED = "DISCOVERY_COMPLETED"
@@ -75,9 +70,6 @@ class EventCode(StrEnum):
     EXTRACTION_BATCH = "EXTRACTION_BATCH"
     EXTRACTION_COMPLETED = "EXTRACTION_COMPLETED"
     SCHEMA_VALIDATION = "SCHEMA_VALIDATION"
-    VALIDATION_START = "VALIDATION_START"
-    VALIDATION_SUCCESS = "VALIDATION_SUCCESS"
-    VALIDATION_FAILED = "VALIDATION_FAILED"
     PROVIDER_DISCOVERY = "PROVIDER_DISCOVERY"
     PROVIDER_BATCH_INGEST = "PROVIDER_BATCH_INGEST"
     PROVIDER_FILE_ERROR = "PROVIDER_FILE_ERROR"
@@ -119,8 +111,6 @@ class EventCode(StrEnum):
 
     # System, Diagnostics & Raw Stream Telemetry
     SYSTEM_CONFIG_FINGERPRINT = "SYSTEM_CONFIG_FINGERPRINT"
-    SYSTEM_SOURCE_CONFIG_FINGERPRINT = "SYSTEM_SOURCE_CONFIG_FINGERPRINT"
-    SYSTEM_SOURCE_CONFIG_CHANGED = "SYSTEM_SOURCE_CONFIG_CHANGED"
     SYSTEM_MEMORY_SAMPLE = "SYSTEM_MEMORY_SAMPLE"
     SYSTEM_TEARDOWN = "SYSTEM_TEARDOWN"
     RAW_STDOUT = "RAW_STDOUT"
@@ -401,8 +391,6 @@ class ObservabilityContextDict(TypedDict):
     commit_state: NotRequired[str | None]
     settings_fingerprint: NotRequired[str | None]
     rules_fingerprint: NotRequired[str | None]
-    plan_fingerprint: NotRequired[str | None]
-    source_config_fingerprint: NotRequired[str | None]
 
 
 @dataclass(frozen=True)
@@ -449,10 +437,6 @@ class ObservabilityContext:
         Cryptographic SHA-256 fingerprint digest of active Settings configuration.
     rules_fingerprint : str | None, default=None
         Cryptographic SHA-256 fingerprint digest of active FinancialRules policies.
-    plan_fingerprint : str | None, default=None
-        Cryptographic SHA-256 fingerprint digest of active ExecutionPlan.
-    source_config_fingerprint : str | None, default=None
-        Cryptographic SHA-256 fingerprint digest of active SourceConfiguration.
     """
 
     run_id: str = ""
@@ -473,8 +457,6 @@ class ObservabilityContext:
     commit_state: CommitState | None = None
     settings_fingerprint: str | None = None
     rules_fingerprint: str | None = None
-    plan_fingerprint: str | None = None
-    source_config_fingerprint: str | None = None
 
     def with_updates(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
@@ -495,8 +477,6 @@ class ObservabilityContext:
         commit_state: CommitState | None = None,
         settings_fingerprint: str | None = None,
         rules_fingerprint: str | None = None,
-        plan_fingerprint: str | None = None,
-        source_config_fingerprint: str | None = None,
     ) -> ObservabilityContext:
         """Create a new context instance with selected scalar updates."""
         return ObservabilityContext(
@@ -525,14 +505,6 @@ class ObservabilityContext:
             ),
             rules_fingerprint=(
                 rules_fingerprint if rules_fingerprint is not None else self.rules_fingerprint
-            ),
-            plan_fingerprint=(
-                plan_fingerprint if plan_fingerprint is not None else self.plan_fingerprint
-            ),
-            source_config_fingerprint=(
-                source_config_fingerprint
-                if source_config_fingerprint is not None
-                else self.source_config_fingerprint
             ),
         )
 
@@ -571,10 +543,6 @@ class ObservabilityContext:
             out["settings_fingerprint"] = self.settings_fingerprint
         if self.rules_fingerprint is not None:
             out["rules_fingerprint"] = self.rules_fingerprint
-        if self.plan_fingerprint is not None:
-            out["plan_fingerprint"] = self.plan_fingerprint
-        if self.source_config_fingerprint is not None:
-            out["source_config_fingerprint"] = self.source_config_fingerprint
         return out
 
     @classmethod
@@ -641,14 +609,6 @@ class ObservabilityContext:
             ),
             rules_fingerprint=(
                 str(data["rules_fingerprint"]) if data.get("rules_fingerprint") else None
-            ),
-            plan_fingerprint=(
-                str(data["plan_fingerprint"]) if data.get("plan_fingerprint") else None
-            ),
-            source_config_fingerprint=(
-                str(data["source_config_fingerprint"])
-                if data.get("source_config_fingerprint")
-                else None
             ),
         )
 

@@ -71,7 +71,7 @@ class TaxGoldFormatter:
         Returns
         -------
         pl.LazyFrame
-            LazyFrame for gold.tax_year_summary.
+            LazyFrame for gold.Tax_Year_Summary.
         """
         aggregated = self.lf_events.group_by("FY").agg(build_fy_agg_expressions())
         return (

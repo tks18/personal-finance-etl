@@ -19,7 +19,6 @@ from __future__ import annotations
 import polars as pl
 
 from personal_finance_etl.contracts.application import EngineStage
-from personal_finance_etl.contracts.execution_plan import ExecutionPlan
 from personal_finance_etl.contracts.observability import (
     DiagnosticSeverity,
     EventCode,
@@ -34,27 +33,9 @@ from personal_finance_etl.infrastructure.observability.diagnostics import (
 )
 from personal_finance_etl.infrastructure.warehouse.connection import DuckDBManager
 from personal_finance_etl.infrastructure.warehouse.registry import DATA_CONTRACT_REGISTRY
-from personal_finance_etl.infrastructure.warehouse.schema.silver import (
-    generate_silver_ddl,
-)
+from personal_finance_etl.infrastructure.warehouse.schema.silver import SILVER_DDL
 
 diagnostics = get_observability_diagnostics("personal_finance_etl.warehouse.silver")
-
-SILVER_DIMENSION_TABLES: frozenset[str] = frozenset(
-    {
-        "silver.common_calendar",
-        "silver.wealth_income_category",
-        "silver.wealth_income_subcategory",
-        "silver.wealth_expense_category",
-        "silver.wealth_expense_subcategory",
-        "silver.wealth_asset_category",
-        "silver.wealth_asset_subcategory",
-        "silver.common_currency",
-        "silver.investment_benchmark_master_dim",
-        "silver.investment_master",
-        "silver.investment_macro_parameters_dim",
-    }
-)
 
 
 class SilverLayer:
@@ -104,7 +85,7 @@ class SilverLayer:
 
     @staticmethod
     def _validate_investment_master(df: pl.DataFrame) -> None:
-        """Enforce non-null constraints on critical columns in silver.investment_master.
+        """Enforce non-null constraints on critical columns in d_Investment_Master.
 
         Parameters
         ----------
@@ -122,7 +103,7 @@ class SilverLayer:
                 missing = df.filter(pl.col(col_name).is_null())
                 if missing.height > 0:
                     diagnostics.error(
-                        "CRITICAL: Found %d rows with missing %s in silver.investment_master.",
+                        "CRITICAL: Found %d rows with missing %s in d_Investment_Master.",
                         missing.height,
                         col_name,
                     )
@@ -135,7 +116,7 @@ class SilverLayer:
 
         if critical_errors:
             raise ValueError(
-                f"Critical data-quality violation in silver.investment_master: Missing {', '.join(critical_errors)}"
+                f"Critical data-quality violation in d_Investment_Master: Missing {', '.join(critical_errors)}"
             )
 
     def _write(self, df: pl.DataFrame | pl.LazyFrame, table_name: str) -> int:
@@ -161,19 +142,11 @@ class SilverLayer:
         if df.height == 0:
             return 0
 
-        if table_name in SILVER_DIMENSION_TABLES:
+        if "d_" in table_name:
             df = self._sanitize_dimension_strings(df)
 
-        if table_name == "silver.investment_master":
+        if table_name == "silver.d_Investment_Master":
             self._validate_investment_master(df)
-
-        pragma_info = self.db_manager.conn.execute(
-            f"PRAGMA table_info('{table_name}')"  # nosec B608
-        ).fetchall()
-        target_columns = {row[1] for row in pragma_info}
-        if target_columns:
-            selected_cols = [c for c in df.columns if c in target_columns]
-            df = df.select(selected_cols)
 
         self.db_manager.conn.register("temp_df", df)
         self.db_manager.conn.execute(
@@ -182,42 +155,23 @@ class SilverLayer:
         self.db_manager.conn.unregister("temp_df")
         return df.height
 
-    def load(
-        self,
-        dfs: dict[str, pl.DataFrame],
-        plan: ExecutionPlan | None = None,
-    ) -> None:
-        """Re-create plan-aware silver tables and insert transformed DataFrames.
+    def load(self, dfs: dict[str, pl.DataFrame]) -> None:
+        """Truncate all silver.* tables and re-insert transformed DataFrames.
 
         Parameters
         ----------
         dfs : dict[str, pl.DataFrame]
             Transformed DataFrames keyed by contract_id.
-        plan : ExecutionPlan, optional
-            Active execution plan. If None, full silver schema is initialized.
         """
         diagnostics.info("Loading transformed datasets into Silver layer...")
 
-        managed_silver_tables = [
-            c.physical_table
-            for c in sorted(
-                (c for c in DATA_CONTRACT_REGISTRY if c.layer == "silver"),
-                key=lambda c: c.publication_order,
-                reverse=True,
-            )
-        ]
-        self.db_manager.conn.execute("CREATE SCHEMA IF NOT EXISTS silver")
-        for tbl in managed_silver_tables:
-            self.db_manager.conn.execute(f"DROP TABLE IF EXISTS {tbl}")  # nosec B608
-
-        self.db_manager.conn.execute(generate_silver_ddl(plan))
-
-        active_contracts = [
-            c
-            for c in DATA_CONTRACT_REGISTRY
-            if c.layer == "silver" and (plan is None or c.dataset_id in plan.active_silver_datasets)
-        ]
-        contracts = sorted(active_contracts, key=lambda c: c.publication_order)
+        contracts = sorted(
+            (c for c in DATA_CONTRACT_REGISTRY if c.layer == "silver"),
+            key=lambda c: c.publication_order,
+        )
+        self.db_manager.conn.execute("DROP SCHEMA IF EXISTS silver CASCADE")
+        self.db_manager.conn.execute("CREATE SCHEMA silver")
+        self.db_manager.conn.execute(SILVER_DDL)
 
         total_rows = 0
         tables_built = 0

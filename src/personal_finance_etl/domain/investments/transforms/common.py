@@ -16,6 +16,7 @@ Does not own
 """
 
 from collections.abc import Mapping
+from datetime import UTC, datetime
 
 import polars as pl
 
@@ -35,12 +36,14 @@ def get_purchase_reference(
     Groups by Instrument, ISIN, Date, and Price, then sums the Quantity.
     Returns: ISIN, Date, Price, Quantity, Value
     """
-    group_cols: list[str | pl.Expr] = [
+    group_cols = [
+        "__file_name__",
+        "__folder_path__",
+        "__file_category__",
         "ISIN",
         pl.col(instrument_col).alias("Instrument name"),
         pl.col(date_col).alias("Date"),
         pl.col(price_col).alias("Price"),
-        "artifact_id",
     ]
     if extra_group_cols:
         group_cols.extend(extra_group_cols)
@@ -116,12 +119,14 @@ def get_sale_reference(
 
     Also calculates the Rolling Average Buy Price based on historical purchases.
     """
-    group_cols: list[str | pl.Expr] = [
+    group_cols = [
+        "__file_name__",
+        "__folder_path__",
+        "__file_category__",
         "ISIN",
         pl.col(instrument_col).alias("Instrument name"),
         pl.col(date_col).alias("Date"),
         pl.col(price_col).alias("Sell_Price"),
-        "artifact_id",
     ]
     if extra_group_cols:
         group_cols.extend(extra_group_cols)
@@ -177,10 +182,26 @@ def _fallback_local_columns(df: pl.LazyFrame, pairs: list[tuple[str, str]]) -> p
 def _normalize_market_data_metadata(df_union: pl.LazyFrame) -> pl.LazyFrame:
     """Fill default metadata flags and dates for stage market data."""
     cols = df_union.collect_schema().names()
+    default_time = datetime(2000, 1, 1, tzinfo=UTC)
     return df_union.with_columns(
+        pl.col("__file_category__").fill_null("Indian")
+        if "__file_category__" in cols
+        else pl.lit("Indian").alias("__file_category__"),
+        pl.col("Data_Provider").fill_null("Broker Statement")
+        if "Data_Provider" in cols
+        else pl.lit("Broker Statement").alias("Data_Provider"),
+        pl.col("Extraction_Time").fill_null(default_time)
+        if "Extraction_Time" in cols
+        else pl.lit(default_time).alias("Extraction_Time"),
         pl.col("Is_Imputed").fill_null(False)
         if "Is_Imputed" in cols
         else pl.lit(False).alias("Is_Imputed"),
+        pl.col("Requested_Start").fill_null(pl.col("Date"))
+        if "Requested_Start" in cols
+        else pl.col("Date").alias("Requested_Start"),
+        pl.col("Requested_End").fill_null(pl.col("Date"))
+        if "Requested_End" in cols
+        else pl.col("Date").alias("Requested_End"),
         pl.col("Is_Closure_Gap").fill_null(False)
         if "Is_Closure_Gap" in cols
         else pl.lit(False).alias("Is_Closure_Gap"),
@@ -208,25 +229,27 @@ def transform_stg_investment_market_data(
     select_cols = [
         "Date",
         "ISIN",
-        "CURRENCY_ID",
+        "__file_category__",
         "Quantity",
-        "Closing_Price",
-        "Buy_Price",
-        "Closing_Value",
-        "Buy_Value",
         "Closing_Price_Local",
         "Buy_Price_Local",
         "Closing_Value_Local",
         "Buy_Value_Local",
         "FX_Rate",
+        "Closing_Price",
+        "Buy_Price",
+        "Closing_Value",
+        "Buy_Value",
         "Unit_PnL",
         "Total_PnL",
+        "CURRENCY_ID",
+        "Data_Provider",
+        "Extraction_Time",
+        "Requested_Start",
+        "Requested_End",
         "Is_Closure_Gap",
         "Is_Imputed",
     ]
-    if "artifact_id" in df_union.collect_schema().names():
-        select_cols.append("artifact_id")
-
     return (
         df_union.select(select_cols)
         .unique()
@@ -353,13 +376,22 @@ def get_f_tf_investment_purchase_data(
 ) -> pl.LazyFrame:
     """Translate DAX UNION + SUMMARIZE for Purchases."""
     df_union = pl.concat(refs, how="diagonal_relaxed")
+    cols = df_union.collect_schema().names()
+    if "__file_category__" not in cols:
+        df_union = df_union.with_columns(pl.lit("Indian").alias("__file_category__"))
+    else:
+        df_union = df_union.with_columns(pl.col("__file_category__").fill_null("Indian"))
+
     pairs = [("Price_Local", "Price"), ("Value_Local", "Value")]
     df_union = _fallback_local_columns(df_union, pairs)
     df_union = _normalize_currency_and_fx(df_union, default_currency_id)
 
     select_cols = [
+        "__file_name__",
+        "__folder_path__",
         "ISIN",
         "Date",
+        "__file_category__",
         "Price_Local",
         "Value_Local",
         "FX_Rate",
@@ -367,7 +399,6 @@ def get_f_tf_investment_purchase_data(
         "Quantity",
         "Value",
         "CURRENCY_ID",
-        "artifact_id",
     ]
     return (
         df_union.select(select_cols)
@@ -386,8 +417,12 @@ def get_f_tf_investment_sale_data(
 ) -> pl.LazyFrame:
     """Translate DAX UNION + SUMMARIZE for Sales."""
     df_union = pl.concat(refs, how="diagonal_relaxed")
-    cols = df_union.collect_schema().names()
 
+    cols = df_union.collect_schema().names()
+    if "__file_category__" not in cols:
+        df_union = df_union.with_columns(pl.lit("Indian").alias("__file_category__"))
+    else:
+        df_union = df_union.with_columns(pl.col("__file_category__").fill_null("Indian"))
     if "Sell_Price_Local" not in cols:
         df_union = df_union.with_columns(pl.col("Sell_Price").alias("Sell_Price_Local"))
     else:
@@ -427,8 +462,11 @@ def get_f_tf_investment_sale_data(
         )
 
     select_cols = [
+        "__file_name__",
+        "__folder_path__",
         "ISIN",
         "Date",
+        "__file_category__",
         "Quantity",
         "Sell_Price_Local",
         "Sell_Value_Local",
@@ -440,7 +478,6 @@ def get_f_tf_investment_sale_data(
         "Unit_PnL",
         "Total_PnL",
         "CURRENCY_ID",
-        "artifact_id",
     ]
     df_final = (
         df_union.select(select_cols)
@@ -457,24 +494,13 @@ def get_f_tf_investment_sale_data(
 
 def get_d_investment_master(
     master_refs: list[pl.LazyFrame],
-    stg_benchmark_mapping_lazy: pl.LazyFrame | None,
+    stg_benchmark_mapping_lazy: pl.LazyFrame,
     default_currency_id: str,
 ) -> pl.LazyFrame:
     """Translate d_InvestmentMaster dimensional data.
 
-    Parameters
-    ----------
-    master_refs : list[pl.LazyFrame]
-        List of reference dimension frames from individual asset pipelines.
-    stg_benchmark_mapping_lazy : pl.LazyFrame | None
-        Optional benchmark and taxonomy mapping frame. When None, metadata columns default to null.
-    default_currency_id : str
-        Default base portfolio currency identifier.
-
-    Returns
-    -------
-    pl.LazyFrame
-        Transformed investment master dimension table.
+    Unions the References into a single distinct dimension table,
+    then joins the Benchmark Mapping to pull in Sector, Industry, Tax flags, etc.
     """
     df_master_union = pl.concat(master_refs, how="diagonal_relaxed").unique(subset=["ISIN"])
 
@@ -488,39 +514,7 @@ def get_d_investment_master(
             pl.col("CURRENCY_ID").fill_null(default_currency_id)
         )
 
-    if stg_benchmark_mapping_lazy is None:
-        mapping_frame = pl.LazyFrame(
-            schema={
-                "ISIN": pl.String,
-                "Sector": pl.String,
-                "Industry": pl.String,
-                "Benchmark_ID": pl.String,
-                "Tax_Instrument_Type": pl.String,
-                "Tax_Instrument_Subtype": pl.String,
-                "Country": pl.String,
-                "Geo": pl.String,
-                "Geo_Subtype": pl.String,
-            }
-        )
-    else:
-        mapping_frame = stg_benchmark_mapping_lazy
-        mapping_cols = mapping_frame.collect_schema().names()
-        for col_name in (
-            "Sector",
-            "Industry",
-            "Benchmark_ID",
-            "Tax_Instrument_Type",
-            "Tax_Instrument_Subtype",
-            "Country",
-            "Geo",
-            "Geo_Subtype",
-        ):
-            if col_name not in mapping_cols:
-                mapping_frame = mapping_frame.with_columns(
-                    pl.lit(None, dtype=pl.String).alias(col_name)
-                )
-
-    df_final = df_master_union.join(mapping_frame, on="ISIN", how="left").select(
+    df_final = df_master_union.join(stg_benchmark_mapping_lazy, on="ISIN", how="left").select(
         [
             "ISIN",
             "INSTRUMENT_NAME",
@@ -537,6 +531,7 @@ def get_d_investment_master(
             pl.col("Country").alias("COUNTRY"),
             pl.col("Geo").alias("GEO"),
             pl.col("Geo_Subtype").alias("GEO_SUBTYPE"),
+            pl.col("Yahoo_Ticker").alias("YAHOO_TICKER"),
             "CURRENCY_ID",
         ]
     )

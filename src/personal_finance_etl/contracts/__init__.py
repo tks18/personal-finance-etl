@@ -5,19 +5,10 @@ Owns
 - Typed messages and results crossing architectural and process boundaries.
 - Pipeline lifecycle state enums (CommitState, FailureDomain).
 - Tabular data transport contract (EngineDataTransport).
-- Canonical dataset identifiers (DatasetId).
-- Source identity and provider contracts (SourceId, ProviderType, validate_source_id).
 - Extraction batch and entity outcomes (ExtractionBatchResult, ExtractorEntityResult).
 - Snapshot and restore outcome contracts (SnapshotResult, RestoreResult).
 - Canonical event transport queue contracts.
 - Canonical typed observability and telemetry contracts (ObservabilityEvent, EventCode).
-- Authoritative Silver and Gold semantic inventories, column classifications, and dispositions.
-- Canonical provenance and artifact metadata contracts (ProvenanceRef, ArtifactMetadata).
-- Canonical Bronze field vocabularies and validation (CANONICAL_BRONZE_FIELDS, CANONICAL_PROVENANCE_FIELDS).
-- Provider-neutral market vocabulary and symbol mapping contracts (ProviderSymbolMapping, ProviderSymbolRegistry).
-- Financial capability graph, descriptors, and resolution (CapabilityId, CapabilityDescriptor, CapabilityGraph).
-- Cross-boundary tabular validation contracts and protocol (ValidationStage, ValidationContext, ValidationResult, ValidationError, DataFrameValidator).
-- Typed dataset collection and runtime transport contracts (DatasetCollection, DatasetRuntimeMetadata, MissingDatasetError).
 
 Does not own
 -------------
@@ -31,93 +22,7 @@ from personal_finance_etl.contracts.application import (
     EngineExecutionResult,
     EngineStage,
 )
-from personal_finance_etl.contracts.canonical_fields import (
-    CANONICAL_BRONZE_FIELDS,
-    CANONICAL_PROVENANCE_FIELDS,
-    get_canonical_fields,
-    is_valid_canonical_field,
-)
-from personal_finance_etl.contracts.canonical_plans import (
-    AmbiguousCanonicalProducerError,
-    CanonicalDatasetPlan,
-    CanonicalFragment,
-    CanonicalProducerCandidate,
-    CanonicalProducerKind,
-    CanonicalProductionPlan,
-    CyclicCanonicalDependencyError,
-    InvalidExplicitProducerSelectionError,
-    SatisfiabilityPlanningError,
-    SourceAssemblyMode,
-    SourceBindingPlan,
-    UnsatisfiedCanonicalEvidenceError,
-)
-from personal_finance_etl.contracts.canonical_recipes import (
-    CanonicalIntegrityError,
-    CanonicalProductionError,
-    CanonicalProductionResult,
-    CanonicalRecipeDescriptor,
-    ConflictingDuplicateIdentityError,
-    IdenticalEvidenceCollisionError,
-    IncompatibleFragmentSchemaError,
-    MissingRequiredColumnError,
-    UndeclaredUnionRouteError,
-    UnresolvedRecipeError,
-)
-from personal_finance_etl.contracts.canonical_semantics import (
-    HouseholdCategoryKind,
-    HouseholdTransactionKind,
-    InvestmentAction,
-)
-from personal_finance_etl.contracts.capabilities import (
-    CAPABILITY_COLUMN_INVENTORY,
-    CAPABILITY_REGISTRY,
-    COMMON_PRODUCED_SILVER_DATASETS,
-    FUTURE_CAPABILITY_CANDIDATES,
-    CapabilityDescriptor,
-    CapabilityGraph,
-    CapabilityGraphError,
-    CapabilityId,
-    ContributionDescriptor,
-    ContributionScope,
-    ExternalEnrichmentId,
-    ResolvedCapabilityGraph,
-    get_capability_columns,
-    get_future_capability_bronze_requirements,
-)
-from personal_finance_etl.contracts.dataset_collection import (
-    DatasetCollection,
-    DatasetRuntimeMetadata,
-    MissingDatasetError,
-)
-from personal_finance_etl.contracts.datasets import (
-    BRONZE_DATASET_ORIGIN_MAP,
-    CANDIDATE_BRONZE_DATASETS,
-    EXTERNAL_CONFIGURED_DATASETS,
-    PROVIDER_GENERATED_DATASETS,
-    TRANSITIONAL_DATASETS,
-    DatasetId,
-    DatasetOrigin,
-    IdentityRequirement,
-    get_bronze_dataset_origin,
-)
-from personal_finance_etl.contracts.diagnostics import (
-    AdmissionDryRunResult,
-    ConfigValidationResult,
-    DatasetAdmissionDryRunStatus,
-    DatasetSelectorStatus,
-    DiagnosticIssue,
-    IdentityPreviewResult,
-    MappingPreviewResult,
-    PlanPreviewResult,
-    PreflightCheckFailedError,
-    ProducerResolutionPreview,
-    SourceCheckDetail,
-    SourceCheckResult,
-    SourceReachabilityStatus,
-    UnsatisfiedEvidencePreview,
-)
 from personal_finance_etl.contracts.event_transport import EventQueue, NullEventQueue
-from personal_finance_etl.contracts.execution_plan import ExecutionPlan
 from personal_finance_etl.contracts.extraction import (
     ExtractionBatchResult,
     ExtractionCompletenessError,
@@ -130,10 +35,6 @@ from personal_finance_etl.contracts.lifecycle import (
     FailureDomain,
     SyncSummaryRecord,
     classify_failure_domain,
-)
-from personal_finance_etl.contracts.market import (
-    ProviderSymbolMapping,
-    ProviderSymbolRegistry,
 )
 from personal_finance_etl.contracts.observability import (
     DiagnosticSeverity,
@@ -150,97 +51,16 @@ from personal_finance_etl.contracts.observability import (
     ObservabilitySink,
     PresentationKind,
 )
-from personal_finance_etl.contracts.provenance import (
-    ArtifactMetadata,
-    ProvenanceRef,
-)
 from personal_finance_etl.contracts.recovery import (
     RestoreOutcome,
     RestoreResult,
     SnapshotOutcome,
     SnapshotResult,
 )
-from personal_finance_etl.contracts.semantic_inventory import (
-    ALL_SILVER_COLUMN_DISPOSITIONS,
-    GOLD_CONTRACT_DEPENDENCIES,
-    SILVER_COLUMN_DISPOSITIONS,
-    SILVER_CONTRACT_SEMANTICS,
-    ColumnClassification,
-    ColumnDisposition,
-    GoldContractDependency,
-    SilverColumnDisposition,
-    SilverContractSemantics,
-    get_columns_by_classification,
-    get_columns_by_disposition,
-    get_gold_contract_dependency,
-    get_silver_column_disposition,
-    get_silver_contract_semantics,
-)
-from personal_finance_etl.contracts.sources import (
-    CanonicalRouteId,
-    CanonicalRouteRef,
-    ProviderType,
-    SourceBindingId,
-    SourceId,
-    validate_canonical_route_id,
-    validate_source_binding_id,
-    validate_source_id,
-)
-from personal_finance_etl.contracts.validation import (
-    DataFrameValidator,
-    ValidationCheckFailure,
-    ValidationContext,
-    ValidationError,
-    ValidationExample,
-    ValidationResult,
-    ValidationStage,
-)
 
 __all__ = [
-    "ALL_SILVER_COLUMN_DISPOSITIONS",
-    "AdmissionDryRunResult",
-    "AmbiguousCanonicalProducerError",
-    "ArtifactMetadata",
-    "BRONZE_DATASET_ORIGIN_MAP",
-    "CANDIDATE_BRONZE_DATASETS",
-    "CANONICAL_BRONZE_FIELDS",
-    "CANONICAL_PROVENANCE_FIELDS",
-    "CAPABILITY_COLUMN_INVENTORY",
-    "CAPABILITY_REGISTRY",
-    "COMMON_PRODUCED_SILVER_DATASETS",
-    "CanonicalDatasetPlan",
-    "CanonicalFragment",
-    "CanonicalIntegrityError",
-    "CanonicalProducerCandidate",
-    "CanonicalProducerKind",
-    "CanonicalProductionError",
-    "CanonicalProductionPlan",
-    "CanonicalProductionResult",
-    "CanonicalRecipeDescriptor",
-    "CanonicalRouteId",
-    "CanonicalRouteRef",
-    "CapabilityDescriptor",
-    "CapabilityGraph",
-    "CapabilityGraphError",
-    "CapabilityId",
-    "ColumnClassification",
-    "ColumnDisposition",
     "CommitState",
-    "ConfigValidationResult",
-    "ConflictingDuplicateIdentityError",
-    "CyclicCanonicalDependencyError",
-    "DataFrameValidator",
-    "ContributionDescriptor",
-    "ContributionScope",
-    "DatasetAdmissionDryRunStatus",
-    "DatasetCollection",
-    "DatasetId",
-    "DatasetOrigin",
-    "DatasetRuntimeMetadata",
-    "DatasetSelectorStatus",
-    "DiagnosticIssue",
     "DiagnosticSeverity",
-    "EXTERNAL_CONFIGURED_DATASETS",
     "EngineDataTransport",
     "EngineExecutionResult",
     "EngineStage",
@@ -249,29 +69,13 @@ __all__ = [
     "EventCode",
     "EventEmitter",
     "EventOutcome",
-    "ExecutionPlan",
-    "ExternalEnrichmentId",
     "ExtractionBatchResult",
     "ExtractionCompletenessError",
     "ExtractionProviderRequest",
     "ExtractorEntityResult",
     "ExtractorEntityStatus",
     "FailureDomain",
-    "GOLD_CONTRACT_DEPENDENCIES",
-    "GoldContractDependency",
-    "FUTURE_CAPABILITY_CANDIDATES",
-    "HouseholdCategoryKind",
-    "HouseholdTransactionKind",
-    "IdenticalEvidenceCollisionError",
-    "IdentityPreviewResult",
-    "IdentityRequirement",
-    "IncompatibleFragmentSchemaError",
-    "InvalidExplicitProducerSelectionError",
-    "InvestmentAction",
     "EventQueue",
-    "MappingPreviewResult",
-    "MissingDatasetError",
-    "MissingRequiredColumnError",
     "NullEventQueue",
     "NullObservabilitySink",
     "ObservabilityContext",
@@ -279,56 +83,11 @@ __all__ = [
     "ObservabilityEvent",
     "ObservabilityEventDict",
     "ObservabilitySink",
-    "PlanPreviewResult",
-    "PreflightCheckFailedError",
-    "ProducerResolutionPreview",
-    "PROVIDER_GENERATED_DATASETS",
     "PresentationKind",
-    "ProvenanceRef",
-    "ProviderSymbolMapping",
-    "ProviderSymbolRegistry",
-    "ProviderType",
-    "ResolvedCapabilityGraph",
     "RestoreOutcome",
     "RestoreResult",
-    "SILVER_COLUMN_DISPOSITIONS",
-    "SILVER_CONTRACT_SEMANTICS",
-    "SatisfiabilityPlanningError",
-    "SilverColumnDisposition",
-    "SilverContractSemantics",
     "SnapshotOutcome",
     "SnapshotResult",
-    "SourceAssemblyMode",
-    "SourceBindingId",
-    "SourceBindingPlan",
-    "SourceCheckDetail",
-    "SourceCheckResult",
-    "SourceId",
-    "SourceReachabilityStatus",
     "SyncSummaryRecord",
-    "TRANSITIONAL_DATASETS",
-    "UndeclaredUnionRouteError",
-    "UnresolvedRecipeError",
-    "UnsatisfiedCanonicalEvidenceError",
-    "UnsatisfiedEvidencePreview",
-    "ValidationCheckFailure",
-    "ValidationContext",
-    "ValidationError",
-    "ValidationExample",
-    "ValidationResult",
-    "ValidationStage",
     "classify_failure_domain",
-    "get_bronze_dataset_origin",
-    "get_canonical_fields",
-    "get_capability_columns",
-    "get_columns_by_classification",
-    "get_columns_by_disposition",
-    "get_future_capability_bronze_requirements",
-    "get_gold_contract_dependency",
-    "get_silver_column_disposition",
-    "get_silver_contract_semantics",
-    "is_valid_canonical_field",
-    "validate_canonical_route_id",
-    "validate_source_binding_id",
-    "validate_source_id",
 ]

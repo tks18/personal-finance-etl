@@ -85,18 +85,12 @@ class IsinProcessor:
         end_date: date | None,
         rules: FinancialRules,
         fx_provider: FXRateProvider | None = None,
-        enable_benchmark: bool = True,
-        enable_foreign_assets: bool = True,
-        enable_tax: bool = True,
     ) -> None:
         self.fy_table = fy_table
         self.start_date = start_date
         self.end_date = end_date
         self.rules = rules
         self.fx_provider = fx_provider
-        self.enable_benchmark = enable_benchmark
-        self.enable_foreign_assets = enable_foreign_assets
-        self.enable_tax = enable_tax
 
     def process(
         self,
@@ -176,25 +170,9 @@ class IsinProcessor:
     ) -> None:
         """Calculate terminals, metrics, and lot snapshots for an active market day."""
         terminals = compute_daily_terminals(
-            m_row,
-            m_date,
-            state,
-            isin,
-            self.fy_table,
-            self.fx_provider,
-            self._get_fx,
-            enable_benchmark=self.enable_benchmark,
-            enable_foreign_assets=self.enable_foreign_assets,
-            enable_tax=self.enable_tax,
+            m_row, m_date, state, isin, self.fy_table, self.fx_provider, self._get_fx
         )
-        metrics = compute_daily_metrics(
-            m_date,
-            terminals,
-            state,
-            enable_benchmark=self.enable_benchmark,
-            enable_foreign_assets=self.enable_foreign_assets,
-            enable_tax=self.enable_tax,
-        )
+        metrics = compute_daily_metrics(m_date, terminals, state)
 
         execution_residual = float(m_row.get("Execution_Residual") or 0.0)
         remaining_ltcg = float(m_row.get("Equity_LTCG_Exemption") or 0.0)
@@ -224,25 +202,10 @@ class IsinProcessor:
         bench_id = master_row.get("BENCHMARK_ID")
 
         bm_provider = BenchmarkPriceProvider(bench_id, None, prebuilt_map=bm_map)
-        snapshot_generator = SnapshotGenerator(
-            self.fy_table,
-            self.rules,
-            isin,
-            master_row,
-            enable_benchmark=self.enable_benchmark,
-            enable_foreign_assets=self.enable_foreign_assets,
-            enable_tax=self.enable_tax,
-        )
+        snapshot_generator = SnapshotGenerator(self.fy_table, self.rules, isin, master_row)
 
         default_curr = getattr(self.rules, "DEFAULT_CURRENCY_ID", "INR_INR")
-        fifo = FIFOPortfolio(
-            tax_type,
-            tax_subtype,
-            self.fy_table,
-            default_curr,
-            isin,
-            enable_tax=self.enable_tax,
-        )
+        fifo = FIFOPortfolio(tax_type, tax_subtype, self.fy_table, default_curr, isin)
 
         first_p_date = (
             to_date_obj(p_inst[0]["Date"])
@@ -254,8 +217,7 @@ class IsinProcessor:
 
         # Pre-Quant FX gate: warn when an instrument is in a foreign currency but has no
         # FX provider or when the provider cannot supply a rate.
-        if self.enable_foreign_assets:
-            FXValidationGate(self.rules, self.fx_provider).validate(isin, master_row, first_p_date)
+        FXValidationGate(self.rules, self.fx_provider).validate(isin, master_row, first_p_date)
 
         return _IsinState(
             first_p_date=first_p_date,

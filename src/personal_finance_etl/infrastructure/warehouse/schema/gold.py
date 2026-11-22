@@ -1,10 +1,10 @@
-"""Declarative DuckDB Gold presentation layer schema definitions and plan-aware DDL generator.
+"""Declarative DuckDB Gold presentation layer schema definitions.
 
 Owns
 ----
-- Declarative column specifications for all 22 Gold presentation marts.
-- Plan-aware DDL generator dynamically creating active marts with strictly active columns.
-- Column pruning engine omitting inactive capability columns from physical Gold tables.
+- Declarative DuckDB DDL statements for presentation tables in the Gold layer.
+- Table schemas for tax summaries, wealth asset breakdown, core monthly facts, cashflow summaries,
+  FIRE analytics, budget variance, and multi-dimensional investment analytics.
 
 Does not own
 -------------
@@ -15,766 +15,779 @@ Does not own
 
 from __future__ import annotations
 
-from personal_finance_etl.contracts.capabilities import (
-    CAPABILITY_COLUMN_INVENTORY,
-    CapabilityId,
-)
-from personal_finance_etl.contracts.datasets import DatasetId
-from personal_finance_etl.contracts.execution_plan import ExecutionPlan
-from personal_finance_etl.infrastructure.warehouse.contracts import DATA_CONTRACT_REGISTRY
+GOLD_DDL = """
+CREATE TABLE IF NOT EXISTS gold.Tax_Year_Summary (
+    FY TEXT PRIMARY KEY,
+    Total_Ledger_Income DOUBLE,
+    Total_Investment_Gain_Loss DOUBLE,
+    Total_Tax_Credits DOUBLE,
+    Total_Estimated_Investment_Tax DOUBLE,
+    Investment_Tax_Estimate_Count BIGINT,
+    Investment_Tax_Estimate_Missing_Count BIGINT,
+    Investment_Tax_Estimate_Complete BOOLEAN,
+    Total_Estimated_Ledger_Tax DOUBLE,
+    Ledger_Tax_Estimate_Count BIGINT,
+    Ledger_Tax_Estimate_Missing_Count BIGINT,
+    Ledger_Tax_Estimate_Complete BOOLEAN,
+    Total_Event_Count BIGINT,
+    Ready_Count BIGINT,
+    Check_Required_Count BIGINT
+);
 
-__all__ = ["GOLD_DDL", "GOLD_TABLE_SCHEMAS", "generate_gold_ddl"]
+CREATE TABLE IF NOT EXISTS gold.Tax_Income_Breakdown (
+    FY TEXT,
+    Income_Head TEXT,
+    Tax_Sub_Head TEXT,
+    Source_Type TEXT,
+    Event_Amount_INR DOUBLE,
+    Estimated_Tax_INR DOUBLE,
+    Estimated_Tax_Event_Count BIGINT,
+    Estimated_Tax_Missing_Count BIGINT,
+    Estimated_Tax_Complete BOOLEAN,
+    Event_Count BIGINT,
+    Ready_Count BIGINT,
+    Check_Required_Count BIGINT
+);
 
-_GOLD_COLUMN_CAPABILITY_MAP: dict[tuple[DatasetId, str], CapabilityId] = {}
-for _cap_id, _ds_map in CAPABILITY_COLUMN_INVENTORY.items():
-    for _ds_id, _cols in _ds_map.items():
-        for _col in _cols:
-            _GOLD_COLUMN_CAPABILITY_MAP[(_ds_id, _col)] = _cap_id
+CREATE TABLE IF NOT EXISTS gold.Tax_Reconciliation (
+    FY TEXT,
+    Tax_Sub_Head TEXT,
+    Ledger_Tax_Event_Amount DOUBLE,
+    Excluded_Non_Taxable_Amount DOUBLE,
+    Excluded_Non_Taxable_Event_Count BIGINT,
+    Excluded_Investment_Ledger_Amount DOUBLE,
+    Excluded_Investment_Ledger_Event_Count BIGINT,
+    Quant_Realized_Gain_Loss DOUBLE,
+    Estimated_Investment_Tax DOUBLE,
+    Estimated_Tax_Event_Count BIGINT,
+    Estimated_Tax_Missing_Count BIGINT,
+    Estimated_Investment_Tax_Complete BOOLEAN,
+    Estimated_Ledger_Tax DOUBLE,
+    Ledger_Tax_Estimate_Count BIGINT,
+    Ledger_Tax_Estimate_Missing_Count BIGINT,
+    Estimated_Ledger_Tax_Complete BOOLEAN,
+    Tax_Credit_Amount DOUBLE,
+    Tax_Event_Amount DOUBLE,
+    Investment_Source_Difference_INR DOUBLE,
+    Ledger_Event_Count BIGINT,
+    Quant_Event_Count BIGINT,
+    Tax_Credit_Event_Count BIGINT,
+    Check_Required_Count BIGINT,
+    PRIMARY KEY(FY, Tax_Sub_Head)
+);
 
-GOLD_TABLE_SCHEMAS: dict[
-    DatasetId,
-    tuple[tuple[tuple[str, str], ...], tuple[str, ...]],
-] = {
-    DatasetId.TAX_YEAR_SUMMARY: (
-        (
-            ("FY", "FY TEXT PRIMARY KEY"),
-            ("Total_Ledger_Income", "Total_Ledger_Income DOUBLE"),
-            ("Total_Investment_Gain_Loss", "Total_Investment_Gain_Loss DOUBLE"),
-            ("Total_Tax_Credits", "Total_Tax_Credits DOUBLE"),
-            ("Total_Estimated_Investment_Tax", "Total_Estimated_Investment_Tax DOUBLE"),
-            ("Investment_Tax_Estimate_Count", "Investment_Tax_Estimate_Count BIGINT"),
-            (
-                "Investment_Tax_Estimate_Missing_Count",
-                "Investment_Tax_Estimate_Missing_Count BIGINT",
-            ),
-            ("Investment_Tax_Estimate_Complete", "Investment_Tax_Estimate_Complete BOOLEAN"),
-            ("Total_Estimated_Ledger_Tax", "Total_Estimated_Ledger_Tax DOUBLE"),
-            ("Ledger_Tax_Estimate_Count", "Ledger_Tax_Estimate_Count BIGINT"),
-            ("Ledger_Tax_Estimate_Missing_Count", "Ledger_Tax_Estimate_Missing_Count BIGINT"),
-            ("Ledger_Tax_Estimate_Complete", "Ledger_Tax_Estimate_Complete BOOLEAN"),
-            ("Total_Event_Count", "Total_Event_Count BIGINT"),
-            ("Ready_Count", "Ready_Count BIGINT"),
-        ),
-        ("Check_Required_Count BIGINT",),
-    ),
-    DatasetId.TAX_INCOME_BREAKDOWN: (
-        (
-            ("FY", "FY TEXT"),
-            ("Income_Head", "Income_Head TEXT"),
-            ("Tax_Sub_Head", "Tax_Sub_Head TEXT"),
-            ("Source_Type", "Source_Type TEXT"),
-            ("Event_Amount_INR", "Event_Amount_INR DOUBLE"),
-            ("Estimated_Tax_INR", "Estimated_Tax_INR DOUBLE"),
-            ("Estimated_Tax_Event_Count", "Estimated_Tax_Event_Count BIGINT"),
-            ("Estimated_Tax_Missing_Count", "Estimated_Tax_Missing_Count BIGINT"),
-            ("Estimated_Tax_Complete", "Estimated_Tax_Complete BOOLEAN"),
-            ("Event_Count", "Event_Count BIGINT"),
-            ("Ready_Count", "Ready_Count BIGINT"),
-        ),
-        ("Check_Required_Count BIGINT",),
-    ),
-    DatasetId.TAX_RECONCILIATION: (
-        (
-            ("FY", "FY TEXT"),
-            ("Tax_Sub_Head", "Tax_Sub_Head TEXT"),
-            ("Ledger_Tax_Event_Amount", "Ledger_Tax_Event_Amount DOUBLE"),
-            ("Excluded_Non_Taxable_Amount", "Excluded_Non_Taxable_Amount DOUBLE"),
-            ("Excluded_Non_Taxable_Event_Count", "Excluded_Non_Taxable_Event_Count BIGINT"),
-            ("Excluded_Investment_Ledger_Amount", "Excluded_Investment_Ledger_Amount DOUBLE"),
-            (
-                "Excluded_Investment_Ledger_Event_Count",
-                "Excluded_Investment_Ledger_Event_Count BIGINT",
-            ),
-            ("Quant_Realized_Gain_Loss", "Quant_Realized_Gain_Loss DOUBLE"),
-            ("Estimated_Investment_Tax", "Estimated_Investment_Tax DOUBLE"),
-            ("Estimated_Tax_Event_Count", "Estimated_Tax_Event_Count BIGINT"),
-            ("Estimated_Tax_Missing_Count", "Estimated_Tax_Missing_Count BIGINT"),
-            ("Estimated_Investment_Tax_Complete", "Estimated_Investment_Tax_Complete BOOLEAN"),
-            ("Estimated_Ledger_Tax", "Estimated_Ledger_Tax DOUBLE"),
-            ("Ledger_Tax_Estimate_Count", "Ledger_Tax_Estimate_Count BIGINT"),
-            ("Ledger_Tax_Estimate_Missing_Count", "Ledger_Tax_Estimate_Missing_Count BIGINT"),
-            ("Estimated_Ledger_Tax_Complete", "Estimated_Ledger_Tax_Complete BOOLEAN"),
-            ("Tax_Credit_Amount", "Tax_Credit_Amount DOUBLE"),
-            ("Tax_Event_Amount", "Tax_Event_Amount DOUBLE"),
-            ("Investment_Source_Difference_INR", "Investment_Source_Difference_INR DOUBLE"),
-            ("Ledger_Event_Count", "Ledger_Event_Count BIGINT"),
-            ("Quant_Event_Count", "Quant_Event_Count BIGINT"),
-            ("Tax_Credit_Event_Count", "Tax_Credit_Event_Count BIGINT"),
-        ),
-        (
-            "Check_Required_Count BIGINT",
-            "PRIMARY KEY(FY, Tax_Sub_Head)",
-        ),
-    ),
-    DatasetId.WEALTH_ASSET_BREAKDOWN: (
-        (
-            ("MONTH_START_DATE", "MONTH_START_DATE DATE"),
-            ("MONTH_END_DATE", "MONTH_END_DATE DATE"),
-            ("ASSET_SUBCATEGORY_ID", "ASSET_SUBCATEGORY_ID TEXT"),
-            ("Opening_Balance", "Opening_Balance DOUBLE"),
-            ("Closing_Balance", "Closing_Balance DOUBLE"),
-            ("Closing_Balance_Market", "Closing_Balance_Market DOUBLE"),
-            ("All_Time_High_Balance", "All_Time_High_Balance DOUBLE"),
-            ("Liquid_Assets", "Liquid_Assets DOUBLE"),
-            ("Liquid_Assets_Market", "Liquid_Assets_Market DOUBLE"),
-            ("Closing_Asset_PnL", "Closing_Asset_PnL DOUBLE"),
-            ("Closing_Forex_PnL", "Closing_Forex_PnL DOUBLE"),
-            ("MoM_Balance_Growth_%", '"MoM_Balance_Growth_%" DOUBLE'),
-            ("YoY_Balance_Growth_%", '"YoY_Balance_Growth_%" DOUBLE'),
-            ("Organic_Growth_Value", "Organic_Growth_Value DOUBLE"),
-            ("Organic_Yield_%", '"Organic_Yield_%" DOUBLE'),
-            ("Drawdown_From_Peak", "Drawdown_From_Peak DOUBLE"),
-            ("Investment_Contribution_Pct", "Investment_Contribution_Pct DOUBLE"),
-            ("Savings_to_NW_Ratio", "Savings_to_NW_Ratio DOUBLE"),
-            ("Income_Inflow", "Income_Inflow DOUBLE"),
-            ("Cash_Income_Inflow", "Cash_Income_Inflow DOUBLE"),
-            ("Non_Cash_Income_Inflow", "Non_Cash_Income_Inflow DOUBLE"),
-            ("Expense_Outflow", "Expense_Outflow DOUBLE"),
-            ("Core_Expense_Outflow", "Core_Expense_Outflow DOUBLE"),
-            ("Cash_Expense_Outflow", "Cash_Expense_Outflow DOUBLE"),
-            ("Non_Cash_Expense_Outflow", "Non_Cash_Expense_Outflow DOUBLE"),
-            ("Net_Transfers", "Net_Transfers DOUBLE"),
-            ("Net_Cashflow_Month", "Net_Cashflow_Month DOUBLE"),
-            ("Surplus_Deficit_Month", "Surplus_Deficit_Month DOUBLE"),
-            ("Cumulative_Net_Savings", "Cumulative_Net_Savings DOUBLE"),
-            ("3M_Avg_Expense", '"3M_Avg_Expense" DOUBLE'),
-            ("3M_Avg_Core_Expense", '"3M_Avg_Core_Expense" DOUBLE'),
-            ("3M_Avg_Income", '"3M_Avg_Income" DOUBLE'),
-            ("Months_of_Runway", "Months_of_Runway DOUBLE"),
-        ),
-        (),
-    ),
-    DatasetId.WEALTH_CORE_MONTHLY: (
-        (
-            ("MONTH_START_DATE", "MONTH_START_DATE DATE"),
-            ("MONTH_END_DATE", "MONTH_END_DATE DATE"),
-            ("Months_Elapsed", "Months_Elapsed BIGINT"),
-            ("Total_Income", "Total_Income DOUBLE"),
-            ("Total_Cash_Income", "Total_Cash_Income DOUBLE"),
-            ("Total_Non_Cash_Income", "Total_Non_Cash_Income DOUBLE"),
-            ("Total_Expense", "Total_Expense DOUBLE"),
-            ("Total_Core_Expense", "Total_Core_Expense DOUBLE"),
-            ("Total_Cash_Expense", "Total_Cash_Expense DOUBLE"),
-            ("Total_Non_Cash_Expense", "Total_Non_Cash_Expense DOUBLE"),
-            ("Net_Cashflow_Month", "Net_Cashflow_Month DOUBLE"),
-            ("Opening_Balance_Asset", "Opening_Balance_Asset DOUBLE"),
-            ("Opening_Balance_Asset_Market", "Opening_Balance_Asset_Market DOUBLE"),
-            ("Closing_Balance_Asset", "Closing_Balance_Asset DOUBLE"),
-            ("Closing_Balance_Asset_Market", "Closing_Balance_Asset_Market DOUBLE"),
-            ("Asset_Delta", "Asset_Delta DOUBLE"),
-            ("Asset_Market_Delta", "Asset_Market_Delta DOUBLE"),
-            ("Total_Assets", "Total_Assets DOUBLE"),
-            ("Total_Assets_Market", "Total_Assets_Market DOUBLE"),
-            ("Opening_Investment_Book_Value", "Opening_Investment_Book_Value DOUBLE"),
-            ("Closing_Investment_Book_Value", "Closing_Investment_Book_Value DOUBLE"),
-            ("Investment_Book_Value_Delta", "Investment_Book_Value_Delta DOUBLE"),
-            ("Opening_Investment_Market_Value", "Opening_Investment_Market_Value DOUBLE"),
-            ("Closing_Investment_Market_Value", "Closing_Investment_Market_Value DOUBLE"),
-            ("Investment_Market_Value_Delta", "Investment_Market_Value_Delta DOUBLE"),
-            ("Liquid_Assets", "Liquid_Assets DOUBLE"),
-            ("Liquid_Assets_Market", "Liquid_Assets_Market DOUBLE"),
-            ("Total_Liabilities", "Total_Liabilities DOUBLE"),
-            ("Total_Net_Worth", "Total_Net_Worth DOUBLE"),
-            ("Total_Net_Worth_Market", "Total_Net_Worth_Market DOUBLE"),
-            ("Total_Foreign_Currency_Exposure", "Total_Foreign_Currency_Exposure DOUBLE"),
-            ("Opening_Unrealized_PL", "Opening_Unrealized_PL DOUBLE"),
-            ("Closing_Unrealized_PL", "Closing_Unrealized_PL DOUBLE"),
-            ("Closing_Asset_PnL", "Closing_Asset_PnL DOUBLE"),
-            ("Closing_Forex_PnL", "Closing_Forex_PnL DOUBLE"),
-            ("Opening_Investment_XIRR", "Opening_Investment_XIRR DOUBLE"),
-            ("Closing_Investment_XIRR", "Closing_Investment_XIRR DOUBLE"),
-            ("Foreign_Exposure_Pct", "Foreign_Exposure_Pct DOUBLE"),
-            ("CPI_INDEX", "CPI_INDEX DOUBLE"),
-            ("INFLATION_YOY_PCT", "INFLATION_YOY_PCT DOUBLE"),
-        ),
-        (),
-    ),
-    DatasetId.WEALTH_CASHFLOW_EXPENSE_BREAKDOWN: (
-        (
-            ("MONTH_START_DATE", "MONTH_START_DATE DATE"),
-            ("MONTH_END_DATE", "MONTH_END_DATE DATE"),
-            ("YEAR_MONTH", "YEAR_MONTH TEXT"),
-            ("CATEGORY_ID", "CATEGORY_ID TEXT"),
-            ("CATEGORY_NAME", "CATEGORY_NAME TEXT"),
-            ("CATEGORY_GROUPS", "CATEGORY_GROUPS TEXT"),
-            ("Spend_Type", "Spend_Type TEXT"),
-            ("Is_Core_Expense", "Is_Core_Expense BOOLEAN"),
-            ("Is_Investment", "Is_Investment BOOLEAN"),
-            ("Is_Discretionary", "Is_Discretionary BOOLEAN"),
-            ("Total_Monthly_Spend", "Total_Monthly_Spend DOUBLE"),
-            ("Cash_Spend", "Cash_Spend DOUBLE"),
-            ("Non_Cash_Spend", "Non_Cash_Spend DOUBLE"),
-            ("Trailing_3M_Avg_Spend", "Trailing_3M_Avg_Spend DOUBLE"),
-            ("Cumulative_YTD_Spend", "Cumulative_YTD_Spend DOUBLE"),
-        ),
-        (),
-    ),
-    DatasetId.WEALTH_CASHFLOW_INCOME_BREAKDOWN: (
-        (
-            ("MONTH_START_DATE", "MONTH_START_DATE DATE"),
-            ("MONTH_END_DATE", "MONTH_END_DATE DATE"),
-            ("YEAR_MONTH", "YEAR_MONTH TEXT"),
-            ("CATEGORY_ID", "CATEGORY_ID TEXT"),
-            ("CATEGORY_NAME", "CATEGORY_NAME TEXT"),
-            ("CATEGORY_GROUPS", "CATEGORY_GROUPS TEXT"),
-            ("Is_Active_Income", "Is_Active_Income BOOLEAN"),
-            ("Is_Passive_Income", "Is_Passive_Income BOOLEAN"),
-            ("Is_Dividend_Income", "Is_Dividend_Income BOOLEAN"),
-            ("Is_Interest_Income", "Is_Interest_Income BOOLEAN"),
-            ("Is_Non_Cash_Income", "Is_Non_Cash_Income BOOLEAN"),
-            ("Total_Monthly_Income", "Total_Monthly_Income DOUBLE"),
-            ("Trailing_3M_Avg_Income", "Trailing_3M_Avg_Income DOUBLE"),
-            ("Cumulative_YTD_Income", "Cumulative_YTD_Income DOUBLE"),
-        ),
-        (),
-    ),
-    DatasetId.FIRE_ANALYTICS: (
-        (
-            ("MONTH_START_DATE", "MONTH_START_DATE DATE"),
-            ("MONTH_END_DATE", "MONTH_END_DATE DATE"),
-            ("YEAR_MONTH", "YEAR_MONTH TEXT"),
-            ("Projected_FI_Date_P50", "Projected_FI_Date_P50 DATE"),
-            ("Total_Income", "Total_Income DOUBLE"),
-            ("Total_Cash_Income", "Total_Cash_Income DOUBLE"),
-            ("Trailing_6M_Avg_Spend", "Trailing_6M_Avg_Spend DOUBLE"),
-            ("Trailing_12M_Avg_Spend", "Trailing_12M_Avg_Spend DOUBLE"),
-            ("Trailing_6M_Avg_Savings", "Trailing_6M_Avg_Savings DOUBLE"),
-            ("Trailing_12M_Avg_Savings", "Trailing_12M_Avg_Savings DOUBLE"),
-            ("Target_FI_Today", "Target_FI_Today DOUBLE"),
-            ("Coast_FI_Today", "Coast_FI_Today DOUBLE"),
-            ("Lean_FI_Today", "Lean_FI_Today DOUBLE"),
-            ("Target_FI_Total_Future_Nominal", "Target_FI_Total_Future_Nominal DOUBLE"),
-            ("FI_Gap", "FI_Gap DOUBLE"),
-            ("FI_Gap_Monthly_Trend", "FI_Gap_Monthly_Trend DOUBLE"),
-            ("Terminal_Wealth_Nominal_P50", "Terminal_Wealth_Nominal_P50 DOUBLE"),
-            ("Real_Return_Assumed_Pct", "Real_Return_Assumed_Pct DOUBLE"),
-            ("Wealth_Velocity", "Wealth_Velocity DOUBLE"),
-            ("Wealth_Acceleration", "Wealth_Acceleration DOUBLE"),
-            ("Real_NW_CAGR_3Y", "Real_NW_CAGR_3Y DOUBLE"),
-            ("Current_FI_Coverage_Pct", "Current_FI_Coverage_Pct DOUBLE"),
-            ("Estimated_Months_To_FI_Linear", "Estimated_Months_To_FI_Linear DOUBLE"),
-            ("Months_To_FI_Conservative_P90", "Months_To_FI_Conservative_P90 DOUBLE"),
-            ("Months_To_FI_Base_P50", "Months_To_FI_Base_P50 DOUBLE"),
-            ("Months_To_FI_Aggressive_P10", "Months_To_FI_Aggressive_P10 DOUBLE"),
-            ("Probability_Of_Success_Pct", "Probability_Of_Success_Pct DOUBLE"),
-            ("Years_To_FI_P50", "Years_To_FI_P50 DOUBLE"),
-            ("Runway_Months_Linear", "Runway_Months_Linear DOUBLE"),
-            ("Runway_Months_Stressed_P10", "Runway_Months_Stressed_P10 DOUBLE"),
-            ("Runway_Months_Base_P50", "Runway_Months_Base_P50 DOUBLE"),
-            ("Withdrawal_Rate_If_Retired_Now", "Withdrawal_Rate_If_Retired_Now DOUBLE"),
-            ("Savings_Rate_Required", "Savings_Rate_Required DOUBLE"),
-            ("Savings_Rate_Actual", "Savings_Rate_Actual DOUBLE"),
-            ("FI_Velocity", "FI_Velocity DOUBLE"),
-        ),
-        (),
-    ),
-    DatasetId.WEALTH_BUDGET_VARIANCE: (
-        (
-            ("MONTH_START_DATE", "MONTH_START_DATE DATE"),
-            ("MONTH_END_DATE", "MONTH_END_DATE DATE"),
-            ("YEAR_MONTH", "YEAR_MONTH TEXT"),
-            ("Is_Core_Overspent", "Is_Core_Overspent BOOLEAN"),
-            ("Is_NonCore_Overspent", "Is_NonCore_Overspent BOOLEAN"),
-            ("Is_Investment_Underfunded", "Is_Investment_Underfunded BOOLEAN"),
-            ("Is_Income_Volatile", "Is_Income_Volatile BOOLEAN"),
-            ("Is_Budget_Month_Healthy", "Is_Budget_Month_Healthy BOOLEAN"),
-            ("Total_Income", "Total_Income DOUBLE"),
-            ("Actual_Income", "Actual_Income DOUBLE"),
-            ("Budget_Income", "Budget_Income DOUBLE"),
-            ("Budget_Core_Expense_Target", "Budget_Core_Expense_Target DOUBLE"),
-            ("Budget_NonCore_Expense_Target", "Budget_NonCore_Expense_Target DOUBLE"),
-            ("Budget_Investment_Target", "Budget_Investment_Target DOUBLE"),
-            ("Budget_Surplus_Buffer", "Budget_Surplus_Buffer DOUBLE"),
-            ("Budget_Total_Expense_Target", "Budget_Total_Expense_Target DOUBLE"),
-            ("Actual_Core_Expense", "Actual_Core_Expense DOUBLE"),
-            ("Actual_NonCore_Expense", "Actual_NonCore_Expense DOUBLE"),
-            ("Investment_Deployed", "Investment_Deployed DOUBLE"),
-            ("Investment_Redeemed", "Investment_Redeemed DOUBLE"),
-            ("Actual_Investment", "Actual_Investment DOUBLE"),
-            ("Actual_Savings", "Actual_Savings DOUBLE"),
-            ("Emergency_Fund_Gap", "Emergency_Fund_Gap DOUBLE"),
-            ("Rule_Core_Pct_Budget", "Rule_Core_Pct_Budget DOUBLE"),
-            ("Rule_NonCore_Pct_Budget", "Rule_NonCore_Pct_Budget DOUBLE"),
-            ("Rule_Investment_Pct_Budget", "Rule_Investment_Pct_Budget DOUBLE"),
-            ("Zero_Income_Runway_Months", "Zero_Income_Runway_Months DOUBLE"),
-        ),
-        (),
-    ),
-    DatasetId.INVESTMENT_PORTFOLIO_SUMMARY: (
-        (
-            ("MONTH_START_DATE", "MONTH_START_DATE DATE"),
-            ("Max_Closing_Date", "Max_Closing_Date DATE"),
-            ("ISIN", "ISIN TEXT"),
-            ("CURRENCY_ID", "CURRENCY_ID TEXT"),
-            ("INSTRUMENT_NAME", "INSTRUMENT_NAME TEXT"),
-            ("INSTRUMENT_CLASS", "INSTRUMENT_CLASS TEXT"),
-            ("INSTRUMENT_TYPE", "INSTRUMENT_TYPE TEXT"),
-            ("INSTRUMENT_SUBTYPE", "INSTRUMENT_SUBTYPE TEXT"),
-            ("SECTOR", "SECTOR TEXT"),
-            ("Rebalance_Required", "Rebalance_Required BOOLEAN"),
-            ("ISIN_Market_Value", "ISIN_Market_Value DOUBLE"),
-            ("ISIN_Book_Value", "ISIN_Book_Value DOUBLE"),
-            ("ISIN_Market_Value_Local", "ISIN_Market_Value_Local DOUBLE"),
-            ("ISIN_Book_Value_Local", "ISIN_Book_Value_Local DOUBLE"),
-            ("ISIN_Unrealized_PnL", "ISIN_Unrealized_PnL DOUBLE"),
-            ("ISIN_Asset_PnL", "ISIN_Asset_PnL DOUBLE"),
-            ("ISIN_Forex_PnL", "ISIN_Forex_PnL DOUBLE"),
-            ("ISIN_Forex_Contribution_Pct", "ISIN_Forex_Contribution_Pct DOUBLE"),
-            ("ISIN_XIRR_Local", "ISIN_XIRR_Local DOUBLE"),
-            ("ISIN_FX_XIRR_Impact", "ISIN_FX_XIRR_Impact DOUBLE"),
-            ("ISIN_BM_XIRR", "ISIN_BM_XIRR DOUBLE"),
-            ("ISIN_BM_XIRR_Local", "ISIN_BM_XIRR_Local DOUBLE"),
-            ("ISIN_Active_Return", "ISIN_Active_Return DOUBLE"),
-            ("ISIN_Active_Return_Local", "ISIN_Active_Return_Local DOUBLE"),
-            ("ISIN_Weight", "ISIN_Weight DOUBLE"),
-            ("Class_Weight", "Class_Weight DOUBLE"),
-            ("Class_Target_Weight", "Class_Target_Weight DOUBLE"),
-            ("Class_Drift", "Class_Drift DOUBLE"),
-            ("Sector_Weight", "Sector_Weight DOUBLE"),
-            ("Monthly_Market_Value_Change_Pct", "Monthly_Market_Value_Change_Pct DOUBLE"),
-            ("ISIN_Harvestable_Loss", "ISIN_Harvestable_Loss DOUBLE"),
-            ("Tax_Harvesting_Priority_Score", "Tax_Harvesting_Priority_Score DOUBLE"),
-        ),
-        (),
-    ),
-    DatasetId.WEALTH_CASHFLOW_EFFICIENCY: (
-        (
-            ("MONTH_START_DATE", "MONTH_START_DATE DATE"),
-            ("MONTH_END_DATE", "MONTH_END_DATE DATE"),
-            ("YEAR_MONTH", "YEAR_MONTH TEXT"),
-            ("Is_Surplus_Month", "Is_Surplus_Month BOOLEAN"),
-            ("Is_Investment_Target_Met", "Is_Investment_Target_Met BOOLEAN"),
-            ("Total_Income", "Total_Income DOUBLE"),
-            ("Total_Cash_Income", "Total_Cash_Income DOUBLE"),
-            ("Total_Non_Cash_Income", "Total_Non_Cash_Income DOUBLE"),
-            ("Total_Expense", "Total_Expense DOUBLE"),
-            ("Active_Income", "Active_Income DOUBLE"),
-            ("Passive_Income", "Passive_Income DOUBLE"),
-            ("Dividend_Income", "Dividend_Income DOUBLE"),
-            ("Interest_Income", "Interest_Income DOUBLE"),
-            ("Core_Expense", "Core_Expense DOUBLE"),
-            ("NonCore_Expense", "NonCore_Expense DOUBLE"),
-            ("Total_Cash_Expense", "Total_Cash_Expense DOUBLE"),
-            ("Total_Non_Cash_Expense", "Total_Non_Cash_Expense DOUBLE"),
-            ("Total_Investment_Deployed", "Total_Investment_Deployed DOUBLE"),
-            ("Total_Investment_Redeemed", "Total_Investment_Redeemed DOUBLE"),
-            ("Redemption_Gain_Loss_Value", "Redemption_Gain_Loss_Value DOUBLE"),
-            ("Net_Investment_Flow", "Net_Investment_Flow DOUBLE"),
-            ("Gross_Surplus", "Gross_Surplus DOUBLE"),
-            ("Net_Surplus_After_Invest", "Net_Surplus_After_Invest DOUBLE"),
-            ("Income_MoM_Delta", "Income_MoM_Delta DOUBLE"),
-            ("Expense_MoM_Delta", "Expense_MoM_Delta DOUBLE"),
-            ("Investment_MoM_Delta", "Investment_MoM_Delta DOUBLE"),
-            ("Trailing_3M_Avg_Income", "Trailing_3M_Avg_Income DOUBLE"),
-            ("Trailing_3M_Avg_Expense", "Trailing_3M_Avg_Expense DOUBLE"),
-            ("Trailing_3M_Avg_Investment", "Trailing_3M_Avg_Investment DOUBLE"),
-            ("Savings_Rate_Pct", "Savings_Rate_Pct DOUBLE"),
-            ("Investment_Rate_Pct", "Investment_Rate_Pct DOUBLE"),
-            ("Active_Income_Share_Pct", "Active_Income_Share_Pct DOUBLE"),
-            ("Passive_Income_Share_Pct", "Passive_Income_Share_Pct DOUBLE"),
-            ("Core_Expense_Share_Pct", "Core_Expense_Share_Pct DOUBLE"),
-            ("NonCore_Expense_Share_Pct", "NonCore_Expense_Share_Pct DOUBLE"),
-            ("Income_MoM_Pct", "Income_MoM_Pct DOUBLE"),
-            ("Expense_MoM_Pct", "Expense_MoM_Pct DOUBLE"),
-            ("Trailing_3M_Avg_Savings_Rate", "Trailing_3M_Avg_Savings_Rate DOUBLE"),
-            ("Trailing_3M_Avg_Investment_Rate", "Trailing_3M_Avg_Investment_Rate DOUBLE"),
-            ("Liquidity_Ratio_Months", "Liquidity_Ratio_Months DOUBLE"),
-            ("Debt_to_Asset_Ratio_Pct", "Debt_to_Asset_Ratio_Pct DOUBLE"),
-            ("YoY_Net_Worth_Growth_Pct", "YoY_Net_Worth_Growth_Pct DOUBLE"),
-            ("YoY_Net_Worth_Growth_Pct_Real", "YoY_Net_Worth_Growth_Pct_Real DOUBLE"),
-            ("Expense_to_NW_Ratio", "Expense_to_NW_Ratio DOUBLE"),
-            ("Emergency_Fund_Coverage", "Emergency_Fund_Coverage DOUBLE"),
-        ),
-        (),
-    ),
-    DatasetId.INVESTMENT_BY_ISIN: (
-        (
-            ("Closing_Date", "Closing_Date DATE NOT NULL"),
-            ("ISIN", "ISIN TEXT NOT NULL"),
-            ("CURRENCY_ID", "CURRENCY_ID TEXT"),
-            ("Total_Invested_Value", "Total_Invested_Value DOUBLE"),
-            ("Total_Current_Value", "Total_Current_Value DOUBLE"),
-            ("Total_Quantity", "Total_Quantity DOUBLE"),
-            ("Total_Stocks", "Total_Stocks DOUBLE"),
-            ("Total_Invested_Value_Local", "Total_Invested_Value_Local DOUBLE"),
-            ("Total_Current_Value_Local", "Total_Current_Value_Local DOUBLE"),
-            ("Current_FX_Rate", "Current_FX_Rate DOUBLE"),
-            ("Blended_FX_Buy_Rate", "Blended_FX_Buy_Rate DOUBLE"),
-            ("Currency_Appreciation_Pct", "Currency_Appreciation_Pct DOUBLE"),
-            ("Unrealized_PL", "Unrealized_PL DOUBLE"),
-            ("Asset_PnL", "Asset_PnL DOUBLE"),
-            ("Forex_PnL", "Forex_PnL DOUBLE"),
-            ("Forex_Contribution_Pct", "Forex_Contribution_Pct DOUBLE"),
-            ("Absolute_Return", "Absolute_Return DOUBLE"),
-            ("CAGR", "CAGR DOUBLE"),
-            ("XIRR", "XIRR DOUBLE"),
-            ("XIRR_Local", "XIRR_Local DOUBLE"),
-            ("FX_XIRR_Impact", "FX_XIRR_Impact DOUBLE"),
-            ("After_Tax_XIRR", "After_Tax_XIRR DOUBLE"),
-            ("BM_CAGR", "BM_CAGR DOUBLE"),
-            ("BM_XIRR", "BM_XIRR DOUBLE"),
-            ("BM_XIRR_Local", "BM_XIRR_Local DOUBLE"),
-            ("Active_Return", "Active_Return DOUBLE"),
-            ("Active_Return_Local", "Active_Return_Local DOUBLE"),
-            ("Is_Lagging_Benchmark", "Is_Lagging_Benchmark BIGINT"),
-            ("Outperforming_Lot_Ratio", "Outperforming_Lot_Ratio DOUBLE"),
-            ("Max_Drawdown", "Max_Drawdown DOUBLE"),
-            ("Weight", "Weight DOUBLE"),
-            ("Unrealized_LTCG", "Unrealized_LTCG DOUBLE"),
-            ("Unrealized_STCG", "Unrealized_STCG DOUBLE"),
-            ("Unrealized_Gain", "Unrealized_Gain DOUBLE"),
-            ("Unrealized_LTCL", "Unrealized_LTCL DOUBLE"),
-            ("Unrealized_STCL", "Unrealized_STCL DOUBLE"),
-            ("Unrealized_Loss", "Unrealized_Loss DOUBLE"),
-            ("LTCG_Tax_If_Sold", "LTCG_Tax_If_Sold DOUBLE"),
-            ("STCG_Tax_If_Sold", "STCG_Tax_If_Sold DOUBLE"),
-            ("FY_Realized_LTCG", "FY_Realized_LTCG DOUBLE"),
-            ("FY_Realized_STCG", "FY_Realized_STCG DOUBLE"),
-            ("FY_Realized_Gain", "FY_Realized_Gain DOUBLE"),
-            ("FY_Realized_LTCL", "FY_Realized_LTCL DOUBLE"),
-            ("FY_Realized_STCL", "FY_Realized_STCL DOUBLE"),
-            ("FY_Realized_Loss", "FY_Realized_Loss DOUBLE"),
-            ("FY_Realized_Net_PnL", "FY_Realized_Net_PnL DOUBLE"),
-        ),
-        (),
-    ),
-    DatasetId.INVESTMENT_BY_SUBTYPE: (
-        (
-            ("Closing_Date", "Closing_Date DATE NOT NULL"),
-            ("INSTRUMENT_SUBTYPE", "INSTRUMENT_SUBTYPE TEXT NOT NULL"),
-            ("INSTRUMENT_CLASS", "INSTRUMENT_CLASS TEXT NOT NULL"),
-            ("Total_Invested_Value", "Total_Invested_Value DOUBLE"),
-            ("Total_Current_Value", "Total_Current_Value DOUBLE"),
-            ("Total_Quantity", "Total_Quantity DOUBLE"),
-            ("Total_Stocks", "Total_Stocks DOUBLE"),
-            ("Unrealized_PL", "Unrealized_PL DOUBLE"),
-            ("Asset_PnL", "Asset_PnL DOUBLE"),
-            ("Forex_PnL", "Forex_PnL DOUBLE"),
-            ("Forex_Contribution_Pct", "Forex_Contribution_Pct DOUBLE"),
-            ("Absolute_Return", "Absolute_Return DOUBLE"),
-            ("XIRR", "XIRR DOUBLE"),
-            ("After_Tax_XIRR", "After_Tax_XIRR DOUBLE"),
-            ("BM_XIRR", "BM_XIRR DOUBLE"),
-            ("Active_Return", "Active_Return DOUBLE"),
-            ("Max_Drawdown", "Max_Drawdown DOUBLE"),
-            ("Weight", "Weight DOUBLE"),
-            ("Unrealized_Gain", "Unrealized_Gain DOUBLE"),
-            ("Unrealized_Loss", "Unrealized_Loss DOUBLE"),
-            ("FY_Realized_Gain", "FY_Realized_Gain DOUBLE"),
-            ("FY_Realized_Loss", "FY_Realized_Loss DOUBLE"),
-            ("FY_Realized_Net_PnL", "FY_Realized_Net_PnL DOUBLE"),
-        ),
-        (),
-    ),
-    DatasetId.INVESTMENT_BY_CLASS: (
-        (
-            ("Closing_Date", "Closing_Date DATE NOT NULL"),
-            ("INSTRUMENT_CLASS", "INSTRUMENT_CLASS TEXT NOT NULL"),
-            ("Total_Invested_Value", "Total_Invested_Value DOUBLE"),
-            ("Total_Current_Value", "Total_Current_Value DOUBLE"),
-            ("Total_Quantity", "Total_Quantity DOUBLE"),
-            ("Total_Stocks", "Total_Stocks DOUBLE"),
-            ("Unrealized_PL", "Unrealized_PL DOUBLE"),
-            ("Asset_PnL", "Asset_PnL DOUBLE"),
-            ("Forex_PnL", "Forex_PnL DOUBLE"),
-            ("Forex_Contribution_Pct", "Forex_Contribution_Pct DOUBLE"),
-            ("Absolute_Return", "Absolute_Return DOUBLE"),
-            ("XIRR", "XIRR DOUBLE"),
-            ("After_Tax_XIRR", "After_Tax_XIRR DOUBLE"),
-            ("BM_XIRR", "BM_XIRR DOUBLE"),
-            ("Active_Return", "Active_Return DOUBLE"),
-            ("Max_Drawdown", "Max_Drawdown DOUBLE"),
-            ("Weight", "Weight DOUBLE"),
-            ("Unrealized_Gain", "Unrealized_Gain DOUBLE"),
-            ("Unrealized_Loss", "Unrealized_Loss DOUBLE"),
-            ("FY_Realized_Gain", "FY_Realized_Gain DOUBLE"),
-            ("FY_Realized_Loss", "FY_Realized_Loss DOUBLE"),
-            ("FY_Realized_Net_PnL", "FY_Realized_Net_PnL DOUBLE"),
-        ),
-        (),
-    ),
-    DatasetId.INVESTMENT_BY_INSTRUMENT_TYPE: (
-        (
-            ("Closing_Date", "Closing_Date DATE NOT NULL"),
-            ("INSTRUMENT_TYPE", "INSTRUMENT_TYPE TEXT NOT NULL"),
-            ("Total_Invested_Value", "Total_Invested_Value DOUBLE"),
-            ("Total_Current_Value", "Total_Current_Value DOUBLE"),
-            ("Total_Quantity", "Total_Quantity DOUBLE"),
-            ("Total_Stocks", "Total_Stocks DOUBLE"),
-            ("Unrealized_PL", "Unrealized_PL DOUBLE"),
-            ("Asset_PnL", "Asset_PnL DOUBLE"),
-            ("Forex_PnL", "Forex_PnL DOUBLE"),
-            ("Forex_Contribution_Pct", "Forex_Contribution_Pct DOUBLE"),
-            ("Absolute_Return", "Absolute_Return DOUBLE"),
-            ("XIRR", "XIRR DOUBLE"),
-            ("After_Tax_XIRR", "After_Tax_XIRR DOUBLE"),
-            ("BM_XIRR", "BM_XIRR DOUBLE"),
-            ("Active_Return", "Active_Return DOUBLE"),
-            ("Max_Drawdown", "Max_Drawdown DOUBLE"),
-            ("Weight", "Weight DOUBLE"),
-            ("Unrealized_Gain", "Unrealized_Gain DOUBLE"),
-            ("Unrealized_Loss", "Unrealized_Loss DOUBLE"),
-            ("FY_Realized_Gain", "FY_Realized_Gain DOUBLE"),
-            ("FY_Realized_Loss", "FY_Realized_Loss DOUBLE"),
-            ("FY_Realized_Net_PnL", "FY_Realized_Net_PnL DOUBLE"),
-        ),
-        (),
-    ),
-    DatasetId.INVESTMENT_BY_SECTOR: (
-        (
-            ("Closing_Date", "Closing_Date DATE NOT NULL"),
-            ("SECTOR", "SECTOR TEXT NOT NULL"),
-            ("Total_Invested_Value", "Total_Invested_Value DOUBLE"),
-            ("Total_Current_Value", "Total_Current_Value DOUBLE"),
-            ("Total_Quantity", "Total_Quantity DOUBLE"),
-            ("Total_Stocks", "Total_Stocks DOUBLE"),
-            ("Unrealized_PL", "Unrealized_PL DOUBLE"),
-            ("Asset_PnL", "Asset_PnL DOUBLE"),
-            ("Forex_PnL", "Forex_PnL DOUBLE"),
-            ("Forex_Contribution_Pct", "Forex_Contribution_Pct DOUBLE"),
-            ("Absolute_Return", "Absolute_Return DOUBLE"),
-            ("XIRR", "XIRR DOUBLE"),
-            ("After_Tax_XIRR", "After_Tax_XIRR DOUBLE"),
-            ("BM_XIRR", "BM_XIRR DOUBLE"),
-            ("Active_Return", "Active_Return DOUBLE"),
-            ("Max_Drawdown", "Max_Drawdown DOUBLE"),
-            ("Weight", "Weight DOUBLE"),
-            ("Unrealized_Gain", "Unrealized_Gain DOUBLE"),
-            ("Unrealized_Loss", "Unrealized_Loss DOUBLE"),
-            ("FY_Realized_Gain", "FY_Realized_Gain DOUBLE"),
-            ("FY_Realized_Loss", "FY_Realized_Loss DOUBLE"),
-            ("FY_Realized_Net_PnL", "FY_Realized_Net_PnL DOUBLE"),
-        ),
-        (),
-    ),
-    DatasetId.INVESTMENT_BY_INDUSTRY: (
-        (
-            ("Closing_Date", "Closing_Date DATE NOT NULL"),
-            ("INDUSTRY", "INDUSTRY TEXT NOT NULL"),
-            ("Total_Invested_Value", "Total_Invested_Value DOUBLE"),
-            ("Total_Current_Value", "Total_Current_Value DOUBLE"),
-            ("Total_Quantity", "Total_Quantity DOUBLE"),
-            ("Total_Stocks", "Total_Stocks DOUBLE"),
-            ("Unrealized_PL", "Unrealized_PL DOUBLE"),
-            ("Asset_PnL", "Asset_PnL DOUBLE"),
-            ("Forex_PnL", "Forex_PnL DOUBLE"),
-            ("Forex_Contribution_Pct", "Forex_Contribution_Pct DOUBLE"),
-            ("Absolute_Return", "Absolute_Return DOUBLE"),
-            ("XIRR", "XIRR DOUBLE"),
-            ("After_Tax_XIRR", "After_Tax_XIRR DOUBLE"),
-            ("BM_XIRR", "BM_XIRR DOUBLE"),
-            ("Active_Return", "Active_Return DOUBLE"),
-            ("Max_Drawdown", "Max_Drawdown DOUBLE"),
-            ("Weight", "Weight DOUBLE"),
-            ("Unrealized_Gain", "Unrealized_Gain DOUBLE"),
-            ("Unrealized_Loss", "Unrealized_Loss DOUBLE"),
-            ("FY_Realized_Gain", "FY_Realized_Gain DOUBLE"),
-            ("FY_Realized_Loss", "FY_Realized_Loss DOUBLE"),
-            ("FY_Realized_Net_PnL", "FY_Realized_Net_PnL DOUBLE"),
-        ),
-        (),
-    ),
-    DatasetId.INVESTMENT_BY_PORTFOLIO: (
-        (
-            ("Closing_Date", "Closing_Date DATE NOT NULL"),
-            ("Total_Invested_Value", "Total_Invested_Value DOUBLE"),
-            ("Total_Current_Value", "Total_Current_Value DOUBLE"),
-            ("Total_Quantity", "Total_Quantity DOUBLE"),
-            ("Total_Stocks", "Total_Stocks DOUBLE"),
-            ("Unrealized_PL", "Unrealized_PL DOUBLE"),
-            ("Asset_PnL", "Asset_PnL DOUBLE"),
-            ("Forex_PnL", "Forex_PnL DOUBLE"),
-            ("Forex_Contribution_Pct", "Forex_Contribution_Pct DOUBLE"),
-            ("Absolute_Return", "Absolute_Return DOUBLE"),
-            ("XIRR", "XIRR DOUBLE"),
-            ("After_Tax_XIRR", "After_Tax_XIRR DOUBLE"),
-            ("BM_XIRR", "BM_XIRR DOUBLE"),
-            ("Active_Return", "Active_Return DOUBLE"),
-            ("Max_Drawdown", "Max_Drawdown DOUBLE"),
-            ("Weight", "Weight DOUBLE"),
-            ("Unrealized_Gain", "Unrealized_Gain DOUBLE"),
-            ("Unrealized_Loss", "Unrealized_Loss DOUBLE"),
-            ("FY_Realized_Gain", "FY_Realized_Gain DOUBLE"),
-            ("FY_Realized_Loss", "FY_Realized_Loss DOUBLE"),
-            ("FY_Realized_Net_PnL", "FY_Realized_Net_PnL DOUBLE"),
-        ),
-        (),
-    ),
-    DatasetId.INVESTMENT_BY_GEO: (
-        (
-            ("Closing_Date", "Closing_Date DATE NOT NULL"),
-            ("GEO", "GEO TEXT NOT NULL"),
-            ("Total_Invested_Value", "Total_Invested_Value DOUBLE"),
-            ("Total_Current_Value", "Total_Current_Value DOUBLE"),
-            ("Total_Quantity", "Total_Quantity DOUBLE"),
-            ("Total_Stocks", "Total_Stocks DOUBLE"),
-            ("Unrealized_PL", "Unrealized_PL DOUBLE"),
-            ("Asset_PnL", "Asset_PnL DOUBLE"),
-            ("Forex_PnL", "Forex_PnL DOUBLE"),
-            ("Forex_Contribution_Pct", "Forex_Contribution_Pct DOUBLE"),
-            ("Absolute_Return", "Absolute_Return DOUBLE"),
-            ("XIRR", "XIRR DOUBLE"),
-            ("After_Tax_XIRR", "After_Tax_XIRR DOUBLE"),
-            ("BM_XIRR", "BM_XIRR DOUBLE"),
-            ("Active_Return", "Active_Return DOUBLE"),
-            ("Max_Drawdown", "Max_Drawdown DOUBLE"),
-            ("Weight", "Weight DOUBLE"),
-            ("Unrealized_Gain", "Unrealized_Gain DOUBLE"),
-            ("Unrealized_Loss", "Unrealized_Loss DOUBLE"),
-            ("FY_Realized_Gain", "FY_Realized_Gain DOUBLE"),
-            ("FY_Realized_Loss", "FY_Realized_Loss DOUBLE"),
-            ("FY_Realized_Net_PnL", "FY_Realized_Net_PnL DOUBLE"),
-        ),
-        (),
-    ),
-    DatasetId.INVESTMENT_BY_COUNTRY: (
-        (
-            ("Closing_Date", "Closing_Date DATE NOT NULL"),
-            ("COUNTRY", "COUNTRY TEXT NOT NULL"),
-            ("Total_Invested_Value", "Total_Invested_Value DOUBLE"),
-            ("Total_Current_Value", "Total_Current_Value DOUBLE"),
-            ("Total_Quantity", "Total_Quantity DOUBLE"),
-            ("Total_Stocks", "Total_Stocks DOUBLE"),
-            ("Total_Invested_Value_Local", "Total_Invested_Value_Local DOUBLE"),
-            ("Total_Current_Value_Local", "Total_Current_Value_Local DOUBLE"),
-            ("Current_FX_Rate", "Current_FX_Rate DOUBLE"),
-            ("Blended_FX_Buy_Rate", "Blended_FX_Buy_Rate DOUBLE"),
-            ("Currency_Appreciation_Pct", "Currency_Appreciation_Pct DOUBLE"),
-            ("Unrealized_PL", "Unrealized_PL DOUBLE"),
-            ("Asset_PnL", "Asset_PnL DOUBLE"),
-            ("Forex_PnL", "Forex_PnL DOUBLE"),
-            ("Forex_Contribution_Pct", "Forex_Contribution_Pct DOUBLE"),
-            ("Absolute_Return", "Absolute_Return DOUBLE"),
-            ("XIRR", "XIRR DOUBLE"),
-            ("After_Tax_XIRR", "After_Tax_XIRR DOUBLE"),
-            ("BM_XIRR", "BM_XIRR DOUBLE"),
-            ("Active_Return", "Active_Return DOUBLE"),
-            ("XIRR_Local", "XIRR_Local DOUBLE"),
-            ("BM_XIRR_Local", "BM_XIRR_Local DOUBLE"),
-            ("Active_Return_Local", "Active_Return_Local DOUBLE"),
-            ("FX_XIRR_Impact", "FX_XIRR_Impact DOUBLE"),
-            ("Max_Drawdown", "Max_Drawdown DOUBLE"),
-            ("Weight", "Weight DOUBLE"),
-            ("Unrealized_Gain", "Unrealized_Gain DOUBLE"),
-            ("Unrealized_Loss", "Unrealized_Loss DOUBLE"),
-            ("FY_Realized_Gain", "FY_Realized_Gain DOUBLE"),
-            ("FY_Realized_Loss", "FY_Realized_Loss DOUBLE"),
-            ("FY_Realized_Net_PnL", "FY_Realized_Net_PnL DOUBLE"),
-        ),
-        (),
-    ),
-    DatasetId.INVESTMENT_BY_CURRENCY: (
-        (
-            ("Closing_Date", "Closing_Date DATE NOT NULL"),
-            ("CURRENCY_ID", "CURRENCY_ID TEXT NOT NULL"),
-            ("Total_Invested_Value", "Total_Invested_Value DOUBLE"),
-            ("Total_Current_Value", "Total_Current_Value DOUBLE"),
-            ("Total_Quantity", "Total_Quantity DOUBLE"),
-            ("Total_Stocks", "Total_Stocks DOUBLE"),
-            ("Total_Invested_Value_Local", "Total_Invested_Value_Local DOUBLE"),
-            ("Total_Current_Value_Local", "Total_Current_Value_Local DOUBLE"),
-            ("Current_FX_Rate", "Current_FX_Rate DOUBLE"),
-            ("Blended_FX_Buy_Rate", "Blended_FX_Buy_Rate DOUBLE"),
-            ("Currency_Appreciation_Pct", "Currency_Appreciation_Pct DOUBLE"),
-            ("Unrealized_PL", "Unrealized_PL DOUBLE"),
-            ("Asset_PnL", "Asset_PnL DOUBLE"),
-            ("Forex_PnL", "Forex_PnL DOUBLE"),
-            ("Forex_Contribution_Pct", "Forex_Contribution_Pct DOUBLE"),
-            ("Absolute_Return", "Absolute_Return DOUBLE"),
-            ("XIRR", "XIRR DOUBLE"),
-            ("XIRR_Local", "XIRR_Local DOUBLE"),
-            ("FX_XIRR_Impact", "FX_XIRR_Impact DOUBLE"),
-            ("After_Tax_XIRR", "After_Tax_XIRR DOUBLE"),
-            ("BM_XIRR", "BM_XIRR DOUBLE"),
-            ("BM_XIRR_Local", "BM_XIRR_Local DOUBLE"),
-            ("Active_Return", "Active_Return DOUBLE"),
-            ("Active_Return_Local", "Active_Return_Local DOUBLE"),
-            ("Max_Drawdown", "Max_Drawdown DOUBLE"),
-            ("Weight", "Weight DOUBLE"),
-            ("Unrealized_Gain", "Unrealized_Gain DOUBLE"),
-            ("Unrealized_Loss", "Unrealized_Loss DOUBLE"),
-            ("FY_Realized_Gain", "FY_Realized_Gain DOUBLE"),
-            ("FY_Realized_Loss", "FY_Realized_Loss DOUBLE"),
-            ("FY_Realized_Net_PnL", "FY_Realized_Net_PnL DOUBLE"),
-        ),
-        (),
-    ),
-    DatasetId.WEALTH_CASHFLOW_ACTIVITY_SUMMARY: (
-        (
-            ("MONTH_START_DATE", "MONTH_START_DATE DATE"),
-            ("MONTH_END_DATE", "MONTH_END_DATE DATE"),
-            ("YEAR_MONTH", "YEAR_MONTH TEXT"),
-            ("Opening_Cash_Balance", "Opening_Cash_Balance DOUBLE"),
-            ("Closing_Cash_Balance", "Closing_Cash_Balance DOUBLE"),
-            ("Net_Cash_Movement", "Net_Cash_Movement DOUBLE"),
-            ("Cash_Inflow_Operating", "Cash_Inflow_Operating DOUBLE"),
-            ("Cash_Outflow_Operating", "Cash_Outflow_Operating DOUBLE"),
-            ("Net_Cashflow_Operating", "Net_Cashflow_Operating DOUBLE"),
-            ("Cash_Inflow_Investing", "Cash_Inflow_Investing DOUBLE"),
-            ("Cash_Outflow_Investing", "Cash_Outflow_Investing DOUBLE"),
-            ("Net_Cashflow_Investing", "Net_Cashflow_Investing DOUBLE"),
-            ("Cash_Inflow_Financing", "Cash_Inflow_Financing DOUBLE"),
-            ("Cash_Outflow_Financing", "Cash_Outflow_Financing DOUBLE"),
-            ("Net_Cashflow_Financing", "Net_Cashflow_Financing DOUBLE"),
-            ("Internal_Transfer_Inflow", "Internal_Transfer_Inflow DOUBLE"),
-            ("Internal_Transfer_Outflow", "Internal_Transfer_Outflow DOUBLE"),
-            ("Net_Internal_Transfers", "Net_Internal_Transfers DOUBLE"),
-            ("Total_Cash_Expenses", "Total_Cash_Expenses DOUBLE"),
-            ("Total_Non_Cash_Expenses", "Total_Non_Cash_Expenses DOUBLE"),
-            ("Total_Cash_Inflow", "Total_Cash_Inflow DOUBLE"),
-            ("Total_Cash_Outflow", "Total_Cash_Outflow DOUBLE"),
-            ("Calculated_Net_Cashflow", "Calculated_Net_Cashflow DOUBLE"),
-            ("Unreconciled_Difference", "Unreconciled_Difference DOUBLE"),
-        ),
-        (),
-    ),
-}
+CREATE TABLE IF NOT EXISTS gold.Wealth_Asset_Breakdown (
+    -- Identifiers
+    MONTH_START_DATE DATE,
+    MONTH_END_DATE DATE,
+    ASSET_SUBCATEGORY_ID TEXT,
+    -- Position Values
+    Opening_Balance DOUBLE,
+    Closing_Balance DOUBLE,
+    Closing_Balance_Market DOUBLE,
+    All_Time_High_Balance DOUBLE,
+    Liquid_Assets DOUBLE,
+    Liquid_Assets_Market DOUBLE,
+    -- Absolute Returns
+    Closing_Asset_PnL DOUBLE,
+    Closing_Forex_PnL DOUBLE,
+    -- Performance Returns
+    "MoM_Balance_Growth_%" DOUBLE,
+    "YoY_Balance_Growth_%" DOUBLE,
+    Organic_Growth_Value DOUBLE,
+    "Organic_Yield_%" DOUBLE,
+    -- Risk & Weights
+    Drawdown_From_Peak DOUBLE,
+    Investment_Contribution_Pct DOUBLE,
+    Savings_to_NW_Ratio DOUBLE,
+    -- Cashflow
+    Income_Inflow DOUBLE,
+    Cash_Income_Inflow DOUBLE,
+    Non_Cash_Income_Inflow DOUBLE,
+    Expense_Outflow DOUBLE,
+    Core_Expense_Outflow DOUBLE,
+    Cash_Expense_Outflow DOUBLE,
+    Non_Cash_Expense_Outflow DOUBLE,
+    Net_Transfers DOUBLE,
+    Net_Cashflow_Month DOUBLE,
+    Surplus_Deficit_Month DOUBLE,
+    Cumulative_Net_Savings DOUBLE,
+    -- Trailing Averages
+    "3M_Avg_Expense" DOUBLE,
+    "3M_Avg_Core_Expense" DOUBLE,
+    "3M_Avg_Income" DOUBLE,
+    Months_of_Runway DOUBLE
+);
 
+CREATE TABLE IF NOT EXISTS gold.Core_Monthly_Fact (
+    -- Identifiers
+    MONTH_START_DATE DATE,
+    MONTH_END_DATE DATE,
+    -- Descriptors/Classifications
+    Months_Elapsed BIGINT,
+    -- Position Values
+    Total_Income DOUBLE,
+    Total_Cash_Income DOUBLE,
+    Total_Non_Cash_Income DOUBLE,
+    Total_Expense DOUBLE,
+    Total_Core_Expense DOUBLE,
+    Total_Cash_Expense DOUBLE,
+    Total_Non_Cash_Expense DOUBLE,
+    Net_Cashflow_Month DOUBLE,
+    Opening_Balance_Asset DOUBLE,
+    Opening_Balance_Asset_Market DOUBLE,
+    Closing_Balance_Asset DOUBLE,
+    Closing_Balance_Asset_Market DOUBLE,
+    Asset_Delta DOUBLE,
+    Asset_Market_Delta DOUBLE,
+    Total_Assets DOUBLE,
+    Total_Assets_Market DOUBLE,
+    Opening_Investment_Book_Value DOUBLE,
+    Closing_Investment_Book_Value DOUBLE,
+    Investment_Book_Value_Delta DOUBLE,
+    Opening_Investment_Market_Value DOUBLE,
+    Closing_Investment_Market_Value DOUBLE,
+    Investment_Market_Value_Delta DOUBLE,
+    Liquid_Assets DOUBLE,
+    Liquid_Assets_Market DOUBLE,
+    Total_Liabilities DOUBLE,
+    Total_Net_Worth DOUBLE,
+    Total_Net_Worth_Market DOUBLE,
+    -- Local/FX Values
+    Total_Foreign_Currency_Exposure DOUBLE,
+    -- Absolute Returns
+    Opening_Unrealized_PL DOUBLE,
+    Closing_Unrealized_PL DOUBLE,
+    Closing_Asset_PnL DOUBLE,
+    Closing_Forex_PnL DOUBLE,
+    -- Performance Returns
+    Opening_Investment_XIRR DOUBLE,
+    Closing_Investment_XIRR DOUBLE,
+    -- Risk & Weights
+    Foreign_Exposure_Pct DOUBLE,
+    CPI_INDEX DOUBLE,
+    INFLATION_YOY_PCT DOUBLE
+);
 
-def generate_gold_ddl(plan: ExecutionPlan | None = None) -> str:
-    """Generate dynamic DDL statements for active Gold presentation marts with column pruning.
+CREATE TABLE IF NOT EXISTS gold.Cashflow_Expense_Breakdown (
+    -- Identifiers
+    MONTH_START_DATE DATE,
+    MONTH_END_DATE DATE,
+    YEAR_MONTH TEXT,
+    CATEGORY_ID TEXT,
+    -- Descriptors/Classifications
+    CATEGORY_NAME TEXT,
+    CATEGORY_GROUPS TEXT,
+    Spend_Type TEXT,
+    Is_Core_Expense BOOLEAN,
+    Is_Investment BOOLEAN,
+    Is_Discretionary BOOLEAN,
+    -- Position Values
+    Total_Monthly_Spend DOUBLE,
+    Cash_Spend DOUBLE,
+    Non_Cash_Spend DOUBLE,
+    Trailing_3M_Avg_Spend DOUBLE,
+    Cumulative_YTD_Spend DOUBLE
+);
 
-    Parameters
-    ----------
-    plan : ExecutionPlan | None, optional
-        Active execution plan. If None, generates DDL for all 22 Gold marts with all columns.
+CREATE TABLE IF NOT EXISTS gold.Cashflow_Income_Breakdown (
+    -- Identifiers
+    MONTH_START_DATE DATE,
+    MONTH_END_DATE DATE,
+    YEAR_MONTH TEXT,
+    CATEGORY_ID TEXT,
+    -- Descriptors/Classifications
+    CATEGORY_NAME TEXT,
+    CATEGORY_GROUPS TEXT,
+    Is_Active_Income BOOLEAN,
+    Is_Passive_Income BOOLEAN,
+    Is_Dividend_Income BOOLEAN,
+    Is_Interest_Income BOOLEAN,
+    Is_Non_Cash_Income BOOLEAN,
+    -- Position Values
+    Total_Monthly_Income DOUBLE,
+    Trailing_3M_Avg_Income DOUBLE,
+    Cumulative_YTD_Income DOUBLE
+);
 
-    Returns
-    -------
-    str
-        Concatenated SQL DDL string initializing active Gold marts.
-    """
-    ddl_statements: list[str] = []
-    contracts = sorted(
-        (c for c in DATA_CONTRACT_REGISTRY if c.layer == "gold"),
-        key=lambda c: c.publication_order,
-    )
-    for contract in contracts:
-        ds_id = contract.dataset_id
-        if plan is not None and not plan.is_gold_dataset_active(ds_id):
-            continue
+CREATE TABLE IF NOT EXISTS gold.Wealth_FIRE_Analytics (
+    -- Identifiers
+    MONTH_START_DATE DATE,
+    MONTH_END_DATE DATE,
+    YEAR_MONTH TEXT,
+    -- Descriptors/Classifications
+    Projected_FI_Date_P50 DATE,
+    -- Position Values
+    Total_Income DOUBLE,
+    Total_Cash_Income DOUBLE,
+    Trailing_6M_Avg_Spend DOUBLE,
+    Trailing_12M_Avg_Spend DOUBLE,
+    Trailing_6M_Avg_Savings DOUBLE,
+    Trailing_12M_Avg_Savings DOUBLE,
+    Target_FI_Today DOUBLE,
+    Coast_FI_Today DOUBLE,
+    Lean_FI_Today DOUBLE,
+    Target_FI_Total_Future_Nominal DOUBLE,
+    FI_Gap DOUBLE,
+    FI_Gap_Monthly_Trend DOUBLE,
+    Terminal_Wealth_Nominal_P50 DOUBLE,
+    -- Performance Returns
+    Real_Return_Assumed_Pct DOUBLE,
+    Wealth_Velocity DOUBLE,
+    Wealth_Acceleration DOUBLE,
+    Real_NW_CAGR_3Y DOUBLE,
+    -- Risk & Weights
+    Current_FI_Coverage_Pct DOUBLE,
+    Estimated_Months_To_FI_Linear DOUBLE,
+    Months_To_FI_Conservative_P90 DOUBLE,
+    Months_To_FI_Base_P50 DOUBLE,
+    Months_To_FI_Aggressive_P10 DOUBLE,
+    Probability_Of_Success_Pct DOUBLE,
+    Years_To_FI_P50 DOUBLE,
+    Runway_Months_Linear DOUBLE,
+    Runway_Months_Stressed_P10 DOUBLE,
+    Runway_Months_Base_P50 DOUBLE,
+    Withdrawal_Rate_If_Retired_Now DOUBLE,
+    Savings_Rate_Required DOUBLE,
+    Savings_Rate_Actual DOUBLE,
+    FI_Velocity DOUBLE
+);
 
-        schema = GOLD_TABLE_SCHEMAS.get(ds_id)
-        if schema is None:
-            continue
+CREATE TABLE IF NOT EXISTS gold.Forecast_Budget_Variance (
+    -- Identifiers
+    MONTH_START_DATE DATE,
+    MONTH_END_DATE DATE,
+    YEAR_MONTH TEXT,
+    -- Descriptors/Classifications
+    Is_Core_Overspent BOOLEAN,
+    Is_NonCore_Overspent BOOLEAN,
+    Is_Investment_Underfunded BOOLEAN,
+    Is_Income_Volatile BOOLEAN,
+    Is_Budget_Month_Healthy BOOLEAN,
+    -- Position Values
+    Total_Income DOUBLE,
+    Actual_Income DOUBLE,
+    Budget_Income DOUBLE,
+    Budget_Core_Expense_Target DOUBLE,
+    Budget_NonCore_Expense_Target DOUBLE,
+    Budget_Investment_Target DOUBLE,
+    Budget_Surplus_Buffer DOUBLE,
+    Budget_Total_Expense_Target DOUBLE,
+    Actual_Core_Expense DOUBLE,
+    Actual_NonCore_Expense DOUBLE,
+    Investment_Deployed DOUBLE,
+    Investment_Redeemed DOUBLE,
+    Actual_Investment DOUBLE,
+    Actual_Savings DOUBLE,
+    Emergency_Fund_Gap DOUBLE,
+    -- Risk & Weights
+    Rule_Core_Pct_Budget DOUBLE,
+    Rule_NonCore_Pct_Budget DOUBLE,
+    Rule_Investment_Pct_Budget DOUBLE,
+    Zero_Income_Runway_Months DOUBLE
+);
 
-        cols, constrs = schema
-        active_elements: list[str] = []
+CREATE TABLE IF NOT EXISTS gold.Investment_Portfolio_Summary (
+    -- Identifiers
+    MONTH_START_DATE DATE,
+    Max_Closing_Date DATE,
+    ISIN TEXT,
+    CURRENCY_ID TEXT,
+    -- Descriptors/Classifications
+    INSTRUMENT_NAME TEXT,
+    INSTRUMENT_CLASS TEXT,
+    INSTRUMENT_TYPE TEXT,
+    INSTRUMENT_SUBTYPE TEXT,
+    SECTOR TEXT,
+    Rebalance_Required BOOLEAN,
+    -- Position Values
+    ISIN_Market_Value DOUBLE,
+    ISIN_Book_Value DOUBLE,
+    -- Local/FX Values
+    ISIN_Market_Value_Local DOUBLE,
+    ISIN_Book_Value_Local DOUBLE,
+    -- Absolute Returns
+    ISIN_Unrealized_PnL DOUBLE,
+    ISIN_Asset_PnL DOUBLE,
+    ISIN_Forex_PnL DOUBLE,
+    ISIN_Forex_Contribution_Pct DOUBLE,
+    -- Performance Returns
+    ISIN_XIRR_Local DOUBLE,
+    ISIN_FX_XIRR_Impact DOUBLE,
+    -- Benchmark Comparisons
+    ISIN_BM_XIRR DOUBLE,
+    ISIN_BM_XIRR_Local DOUBLE,
+    ISIN_Active_Return DOUBLE,
+    ISIN_Active_Return_Local DOUBLE,
+    -- Risk & Weights
+    ISIN_Weight DOUBLE,
+    Class_Weight DOUBLE,
+    Class_Target_Weight DOUBLE,
+    Class_Drift DOUBLE,
+    Sector_Weight DOUBLE,
+    Monthly_Market_Value_Change_Pct DOUBLE,
+    -- Tax & Harvesting
+    ISIN_Harvestable_Loss DOUBLE,
+    Tax_Harvesting_Priority_Score DOUBLE
+);
 
-        for col_name, col_sql in cols:
-            cap_id = _GOLD_COLUMN_CAPABILITY_MAP.get((ds_id, col_name))
-            if cap_id is not None and plan is not None:
-                if not plan.is_capability_active(cap_id):
-                    continue
-            active_elements.append(f"    {col_sql}")
+CREATE TABLE IF NOT EXISTS gold.Cashflow_Efficiency_Analytics (
+    -- Identifiers
+    MONTH_START_DATE DATE,
+    MONTH_END_DATE DATE,
+    YEAR_MONTH TEXT,
+    -- Descriptors/Classifications
+    Is_Surplus_Month BOOLEAN,
+    Is_Investment_Target_Met BOOLEAN,
+    -- Position Values
+    Total_Income DOUBLE,
+    Total_Cash_Income DOUBLE,
+    Total_Non_Cash_Income DOUBLE,
+    Total_Expense DOUBLE,
+    Active_Income DOUBLE,
+    Passive_Income DOUBLE,
+    Dividend_Income DOUBLE,
+    Interest_Income DOUBLE,
+    Core_Expense DOUBLE,
+    NonCore_Expense DOUBLE,
+    Total_Cash_Expense DOUBLE,
+    Total_Non_Cash_Expense DOUBLE,
+    Total_Investment_Deployed DOUBLE,
+    Total_Investment_Redeemed DOUBLE,
+    Redemption_Gain_Loss_Value DOUBLE,
+    Net_Investment_Flow DOUBLE,
+    Gross_Surplus DOUBLE,
+    Net_Surplus_After_Invest DOUBLE,
+    Income_MoM_Delta DOUBLE,
+    Expense_MoM_Delta DOUBLE,
+    Investment_MoM_Delta DOUBLE,
+    Trailing_3M_Avg_Income DOUBLE,
+    Trailing_3M_Avg_Expense DOUBLE,
+    Trailing_3M_Avg_Investment DOUBLE,
+    -- Risk & Weights
+    Savings_Rate_Pct DOUBLE,
+    Investment_Rate_Pct DOUBLE,
+    Active_Income_Share_Pct DOUBLE,
+    Passive_Income_Share_Pct DOUBLE,
+    Core_Expense_Share_Pct DOUBLE,
+    NonCore_Expense_Share_Pct DOUBLE,
+    Income_MoM_Pct DOUBLE,
+    Expense_MoM_Pct DOUBLE,
+    Trailing_3M_Avg_Savings_Rate DOUBLE,
+    Trailing_3M_Avg_Investment_Rate DOUBLE,
+    Liquidity_Ratio_Months DOUBLE,
+    Debt_to_Asset_Ratio_Pct DOUBLE,
+    YoY_Net_Worth_Growth_Pct DOUBLE,
+    YoY_Net_Worth_Growth_Pct_Real DOUBLE,
+    Expense_to_NW_Ratio DOUBLE,
+    Emergency_Fund_Coverage DOUBLE
+);
 
-        for constr_sql in constrs:
-            active_elements.append(f"    {constr_sql}")
+CREATE TABLE IF NOT EXISTS gold.Investment_By_ISIN (
+    -- Identifiers
+    Closing_Date DATE NOT NULL,
+    ISIN TEXT NOT NULL,
+    CURRENCY_ID TEXT,
+    -- Position Values
+    Total_Invested_Value DOUBLE,
+    Total_Current_Value DOUBLE,
+    Total_Quantity DOUBLE,
+    Total_Stocks DOUBLE,
+    -- Local/FX Values
+    Total_Invested_Value_Local DOUBLE,
+    Total_Current_Value_Local DOUBLE,
+    Current_FX_Rate DOUBLE,
+    Blended_FX_Buy_Rate DOUBLE,
+    Currency_Appreciation_Pct DOUBLE,
+    -- Absolute Returns
+    Unrealized_PL DOUBLE,
+    Asset_PnL DOUBLE,
+    Forex_PnL DOUBLE,
+    Forex_Contribution_Pct DOUBLE,
+    Absolute_Return DOUBLE,
+    -- Performance Returns
+    CAGR DOUBLE,
+    XIRR DOUBLE,
+    XIRR_Local DOUBLE,
+    FX_XIRR_Impact DOUBLE,
+    After_Tax_XIRR DOUBLE,
+    -- Benchmark Comparisons
+    BM_CAGR DOUBLE,
+    BM_XIRR DOUBLE,
+    BM_XIRR_Local DOUBLE,
+    Active_Return DOUBLE,
+    Active_Return_Local DOUBLE,
+    Is_Lagging_Benchmark BIGINT,
+    Outperforming_Lot_Ratio DOUBLE,
+    -- Risk & Weights
+    Max_Drawdown DOUBLE,
+    Weight DOUBLE,
+    -- Tax & Harvesting
+    Unrealized_LTCG DOUBLE,
+    Unrealized_STCG DOUBLE,
+    Unrealized_Gain DOUBLE,
+    Unrealized_LTCL DOUBLE,
+    Unrealized_STCL DOUBLE,
+    Unrealized_Loss DOUBLE,
+    LTCG_Tax_If_Sold DOUBLE,
+    STCG_Tax_If_Sold DOUBLE,
+    FY_Realized_LTCG DOUBLE,
+    FY_Realized_STCG DOUBLE,
+    FY_Realized_Gain DOUBLE,
+    FY_Realized_LTCL DOUBLE,
+    FY_Realized_STCL DOUBLE,
+    FY_Realized_Loss DOUBLE,
+    FY_Realized_Net_PnL DOUBLE
+);
 
-        body = ",\n".join(active_elements)
-        ddl_statements.append(f"CREATE TABLE IF NOT EXISTS {contract.physical_table} (\n{body}\n);")
+CREATE TABLE IF NOT EXISTS gold.Investment_By_Subtype (
+    -- Identifiers
+    Closing_Date DATE NOT NULL,
+    INSTRUMENT_SUBTYPE TEXT NOT NULL,
+    -- Descriptors/Classifications
+    INSTRUMENT_CLASS TEXT NOT NULL,
+    -- Position Values
+    Total_Invested_Value DOUBLE,
+    Total_Current_Value DOUBLE,
+    Total_Quantity DOUBLE,
+    Total_Stocks DOUBLE,
+    -- Absolute Returns
+    Unrealized_PL DOUBLE,
+    Asset_PnL DOUBLE,
+    Forex_PnL DOUBLE,
+    Forex_Contribution_Pct DOUBLE,
+    Absolute_Return DOUBLE,
+    -- Performance Returns
+    XIRR DOUBLE,
+    After_Tax_XIRR DOUBLE,
+    -- Benchmark Comparisons
+    BM_XIRR DOUBLE,
+    Active_Return DOUBLE,
+    -- Risk & Weights
+    Max_Drawdown DOUBLE,
+    Weight DOUBLE,
+    -- Tax & Harvesting
+    Unrealized_Gain DOUBLE,
+    Unrealized_Loss DOUBLE,
+    FY_Realized_Gain DOUBLE,
+    FY_Realized_Loss DOUBLE,
+    FY_Realized_Net_PnL DOUBLE
+);
 
-    return "\n\n".join(ddl_statements)
+CREATE TABLE IF NOT EXISTS gold.Investment_By_Class (
+    -- Identifiers
+    Closing_Date DATE NOT NULL,
+    INSTRUMENT_CLASS TEXT NOT NULL,
+    -- Position Values
+    Total_Invested_Value DOUBLE,
+    Total_Current_Value DOUBLE,
+    Total_Quantity DOUBLE,
+    Total_Stocks DOUBLE,
+    -- Absolute Returns
+    Unrealized_PL DOUBLE,
+    Asset_PnL DOUBLE,
+    Forex_PnL DOUBLE,
+    Forex_Contribution_Pct DOUBLE,
+    Absolute_Return DOUBLE,
+    -- Performance Returns
+    XIRR DOUBLE,
+    After_Tax_XIRR DOUBLE,
+    -- Benchmark Comparisons
+    BM_XIRR DOUBLE,
+    Active_Return DOUBLE,
+    -- Risk & Weights
+    Max_Drawdown DOUBLE,
+    Weight DOUBLE,
+    -- Tax & Harvesting
+    Unrealized_Gain DOUBLE,
+    Unrealized_Loss DOUBLE,
+    FY_Realized_Gain DOUBLE,
+    FY_Realized_Loss DOUBLE,
+    FY_Realized_Net_PnL DOUBLE
+);
 
+CREATE TABLE IF NOT EXISTS gold.Investment_By_Instrument_Type (
+    -- Identifiers
+    Closing_Date DATE NOT NULL,
+    INSTRUMENT_TYPE TEXT NOT NULL,
+    -- Position Values
+    Total_Invested_Value DOUBLE,
+    Total_Current_Value DOUBLE,
+    Total_Quantity DOUBLE,
+    Total_Stocks DOUBLE,
+    -- Absolute Returns
+    Unrealized_PL DOUBLE,
+    Asset_PnL DOUBLE,
+    Forex_PnL DOUBLE,
+    Forex_Contribution_Pct DOUBLE,
+    Absolute_Return DOUBLE,
+    -- Performance Returns
+    XIRR DOUBLE,
+    After_Tax_XIRR DOUBLE,
+    -- Benchmark Comparisons
+    BM_XIRR DOUBLE,
+    Active_Return DOUBLE,
+    -- Risk & Weights
+    Max_Drawdown DOUBLE,
+    Weight DOUBLE,
+    -- Tax & Harvesting
+    Unrealized_Gain DOUBLE,
+    Unrealized_Loss DOUBLE,
+    FY_Realized_Gain DOUBLE,
+    FY_Realized_Loss DOUBLE,
+    FY_Realized_Net_PnL DOUBLE
+);
 
-GOLD_DDL: str = generate_gold_ddl(plan=None)
+CREATE TABLE IF NOT EXISTS gold.Investment_By_Sector (
+    -- Identifiers
+    Closing_Date DATE NOT NULL,
+    SECTOR TEXT NOT NULL,
+    -- Position Values
+    Total_Invested_Value DOUBLE,
+    Total_Current_Value DOUBLE,
+    Total_Quantity DOUBLE,
+    Total_Stocks DOUBLE,
+    -- Absolute Returns
+    Unrealized_PL DOUBLE,
+    Asset_PnL DOUBLE,
+    Forex_PnL DOUBLE,
+    Forex_Contribution_Pct DOUBLE,
+    Absolute_Return DOUBLE,
+    -- Performance Returns
+    XIRR DOUBLE,
+    After_Tax_XIRR DOUBLE,
+    -- Benchmark Comparisons
+    BM_XIRR DOUBLE,
+    Active_Return DOUBLE,
+    -- Risk & Weights
+    Max_Drawdown DOUBLE,
+    Weight DOUBLE,
+    -- Tax & Harvesting
+    Unrealized_Gain DOUBLE,
+    Unrealized_Loss DOUBLE,
+    FY_Realized_Gain DOUBLE,
+    FY_Realized_Loss DOUBLE,
+    FY_Realized_Net_PnL DOUBLE
+);
+
+CREATE TABLE IF NOT EXISTS gold.Investment_By_Industry (
+    -- Identifiers
+    Closing_Date DATE NOT NULL,
+    INDUSTRY TEXT NOT NULL,
+    -- Position Values
+    Total_Invested_Value DOUBLE,
+    Total_Current_Value DOUBLE,
+    Total_Quantity DOUBLE,
+    Total_Stocks DOUBLE,
+    -- Absolute Returns
+    Unrealized_PL DOUBLE,
+    Asset_PnL DOUBLE,
+    Forex_PnL DOUBLE,
+    Forex_Contribution_Pct DOUBLE,
+    Absolute_Return DOUBLE,
+    -- Performance Returns
+    XIRR DOUBLE,
+    After_Tax_XIRR DOUBLE,
+    -- Benchmark Comparisons
+    BM_XIRR DOUBLE,
+    Active_Return DOUBLE,
+    -- Risk & Weights
+    Max_Drawdown DOUBLE,
+    Weight DOUBLE,
+    -- Tax & Harvesting
+    Unrealized_Gain DOUBLE,
+    Unrealized_Loss DOUBLE,
+    FY_Realized_Gain DOUBLE,
+    FY_Realized_Loss DOUBLE,
+    FY_Realized_Net_PnL DOUBLE
+);
+
+CREATE TABLE IF NOT EXISTS gold.Investment_By_Portfolio (
+    -- Identifiers
+    Closing_Date DATE NOT NULL,
+    -- Position Values
+    Total_Invested_Value DOUBLE,
+    Total_Current_Value DOUBLE,
+    Total_Quantity DOUBLE,
+    Total_Stocks DOUBLE,
+    -- Absolute Returns
+    Unrealized_PL DOUBLE,
+    Asset_PnL DOUBLE,
+    Forex_PnL DOUBLE,
+    Forex_Contribution_Pct DOUBLE,
+    Absolute_Return DOUBLE,
+    -- Performance Returns
+    XIRR DOUBLE,
+    After_Tax_XIRR DOUBLE,
+    -- Benchmark Comparisons
+    BM_XIRR DOUBLE,
+    Active_Return DOUBLE,
+    -- Risk & Weights
+    Max_Drawdown DOUBLE,
+    Weight DOUBLE,
+    -- Tax & Harvesting
+    Unrealized_Gain DOUBLE,
+    Unrealized_Loss DOUBLE,
+    FY_Realized_Gain DOUBLE,
+    FY_Realized_Loss DOUBLE,
+    FY_Realized_Net_PnL DOUBLE
+);
+
+CREATE TABLE IF NOT EXISTS gold.Investment_By_Geo (
+    -- Identifiers
+    Closing_Date DATE NOT NULL,
+    GEO TEXT NOT NULL,
+    -- Position Values
+    Total_Invested_Value DOUBLE,
+    Total_Current_Value DOUBLE,
+    Total_Quantity DOUBLE,
+    Total_Stocks DOUBLE,
+    -- Absolute Returns
+    Unrealized_PL DOUBLE,
+    Asset_PnL DOUBLE,
+    Forex_PnL DOUBLE,
+    Forex_Contribution_Pct DOUBLE,
+    Absolute_Return DOUBLE,
+    -- Performance Returns
+    XIRR DOUBLE,
+    After_Tax_XIRR DOUBLE,
+    -- Benchmark Comparisons
+    BM_XIRR DOUBLE,
+    Active_Return DOUBLE,
+    -- Risk & Weights
+    Max_Drawdown DOUBLE,
+    Weight DOUBLE,
+    -- Tax & Harvesting
+    Unrealized_Gain DOUBLE,
+    Unrealized_Loss DOUBLE,
+    FY_Realized_Gain DOUBLE,
+    FY_Realized_Loss DOUBLE,
+    FY_Realized_Net_PnL DOUBLE
+);
+
+CREATE TABLE IF NOT EXISTS gold.Investment_By_Country (
+    -- Identifiers
+    Closing_Date DATE NOT NULL,
+    COUNTRY TEXT NOT NULL,
+    -- Position Values
+    Total_Invested_Value DOUBLE,
+    Total_Current_Value DOUBLE,
+    Total_Quantity DOUBLE,
+    Total_Stocks DOUBLE,
+    -- Local/FX Values
+    Total_Invested_Value_Local DOUBLE,
+    Total_Current_Value_Local DOUBLE,
+    Current_FX_Rate DOUBLE,
+    Blended_FX_Buy_Rate DOUBLE,
+    Currency_Appreciation_Pct DOUBLE,
+    -- Absolute Returns
+    Unrealized_PL DOUBLE,
+    Asset_PnL DOUBLE,
+    Forex_PnL DOUBLE,
+    Forex_Contribution_Pct DOUBLE,
+    Absolute_Return DOUBLE,
+    -- Performance Returns
+    XIRR DOUBLE,
+    After_Tax_XIRR DOUBLE,
+    -- Benchmark Comparisons
+    BM_XIRR DOUBLE,
+    Active_Return DOUBLE,
+    XIRR_Local DOUBLE,
+    BM_XIRR_Local DOUBLE,
+    Active_Return_Local DOUBLE,
+    FX_XIRR_Impact DOUBLE,
+    -- Risk & Weights
+    Max_Drawdown DOUBLE,
+    Weight DOUBLE,
+    -- Tax & Harvesting
+    Unrealized_Gain DOUBLE,
+    Unrealized_Loss DOUBLE,
+    FY_Realized_Gain DOUBLE,
+    FY_Realized_Loss DOUBLE,
+    FY_Realized_Net_PnL DOUBLE
+);
+
+CREATE TABLE IF NOT EXISTS gold.Investment_By_Currency (
+    -- Identifiers
+    Closing_Date DATE NOT NULL,
+    CURRENCY_ID TEXT NOT NULL,
+    -- Position Values
+    Total_Invested_Value DOUBLE,
+    Total_Current_Value DOUBLE,
+    Total_Quantity DOUBLE,
+    Total_Stocks DOUBLE,
+    -- Local/FX Values
+    Total_Invested_Value_Local DOUBLE,
+    Total_Current_Value_Local DOUBLE,
+    Current_FX_Rate DOUBLE,
+    Blended_FX_Buy_Rate DOUBLE,
+    Currency_Appreciation_Pct DOUBLE,
+    -- Absolute Returns
+    Unrealized_PL DOUBLE,
+    Asset_PnL DOUBLE,
+    Forex_PnL DOUBLE,
+    Forex_Contribution_Pct DOUBLE,
+    Absolute_Return DOUBLE,
+    -- Performance Returns
+    XIRR DOUBLE,
+    XIRR_Local DOUBLE,
+    FX_XIRR_Impact DOUBLE,
+    After_Tax_XIRR DOUBLE,
+    -- Benchmark Comparisons
+    BM_XIRR DOUBLE,
+    BM_XIRR_Local DOUBLE,
+    Active_Return DOUBLE,
+    Active_Return_Local DOUBLE,
+    -- Risk & Weights
+    Max_Drawdown DOUBLE,
+    Weight DOUBLE,
+    -- Tax & Harvesting
+    Unrealized_Gain DOUBLE,
+    Unrealized_Loss DOUBLE,
+    FY_Realized_Gain DOUBLE,
+    FY_Realized_Loss DOUBLE,
+    FY_Realized_Net_PnL DOUBLE
+);
+
+CREATE TABLE IF NOT EXISTS gold.Cashflow_Activity_Summary (
+    -- Identifiers
+    MONTH_START_DATE DATE,
+    MONTH_END_DATE DATE,
+    YEAR_MONTH TEXT,
+    -- Position Values
+    Opening_Cash_Balance DOUBLE,
+    Closing_Cash_Balance DOUBLE,
+    Net_Cash_Movement DOUBLE,
+    Cash_Inflow_Operating DOUBLE,
+    Cash_Outflow_Operating DOUBLE,
+    Net_Cashflow_Operating DOUBLE,
+    Cash_Inflow_Investing DOUBLE,
+    Cash_Outflow_Investing DOUBLE,
+    Net_Cashflow_Investing DOUBLE,
+    Cash_Inflow_Financing DOUBLE,
+    Cash_Outflow_Financing DOUBLE,
+    Net_Cashflow_Financing DOUBLE,
+    Internal_Transfer_Inflow DOUBLE,
+    Internal_Transfer_Outflow DOUBLE,
+    Net_Internal_Transfers DOUBLE,
+    Total_Cash_Expenses DOUBLE,
+    Total_Non_Cash_Expenses DOUBLE,
+    Total_Cash_Inflow DOUBLE,
+    Total_Cash_Outflow DOUBLE,
+    Calculated_Net_Cashflow DOUBLE,
+    Unreconciled_Difference DOUBLE
+);
+
+-- Additive migrations for tax estimate coverage fields.
+ALTER TABLE gold.Tax_Year_Summary ADD COLUMN IF NOT EXISTS Total_Estimated_Ledger_Tax DOUBLE;
+ALTER TABLE gold.Tax_Year_Summary ADD COLUMN IF NOT EXISTS Ledger_Tax_Estimate_Count BIGINT;
+ALTER TABLE gold.Tax_Year_Summary ADD COLUMN IF NOT EXISTS Ledger_Tax_Estimate_Missing_Count BIGINT;
+ALTER TABLE gold.Tax_Year_Summary ADD COLUMN IF NOT EXISTS Investment_Tax_Estimate_Complete BOOLEAN;
+ALTER TABLE gold.Tax_Year_Summary ADD COLUMN IF NOT EXISTS Ledger_Tax_Estimate_Complete BOOLEAN;
+ALTER TABLE gold.Tax_Income_Breakdown ADD COLUMN IF NOT EXISTS Estimated_Tax_Complete BOOLEAN;
+ALTER TABLE gold.Tax_Reconciliation ADD COLUMN IF NOT EXISTS Estimated_Investment_Tax_Complete BOOLEAN;
+ALTER TABLE gold.Tax_Reconciliation ADD COLUMN IF NOT EXISTS Estimated_Ledger_Tax DOUBLE;
+ALTER TABLE gold.Tax_Reconciliation ADD COLUMN IF NOT EXISTS Ledger_Tax_Estimate_Count BIGINT;
+ALTER TABLE gold.Tax_Reconciliation ADD COLUMN IF NOT EXISTS Ledger_Tax_Estimate_Missing_Count BIGINT;
+ALTER TABLE gold.Tax_Reconciliation ADD COLUMN IF NOT EXISTS Estimated_Ledger_Tax_Complete BOOLEAN;
+"""

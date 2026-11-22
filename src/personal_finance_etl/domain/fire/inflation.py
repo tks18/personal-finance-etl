@@ -48,9 +48,7 @@ class InflationBuilder:
 
     def _build_monthly_calendar(self, lf_open: pl.LazyFrame, lf_cal: pl.LazyFrame) -> pl.LazyFrame:
         """Derive monthly start and end dates from the earliest opening balance to today."""
-        cols = lf_open.collect_schema().names()
-        date_col = "Date" if "Date" in cols else "ZTXDATESTR"
-        lf_min_date = lf_open.select(pl.col(date_col).min().alias("min_open_date")).fill_null(
+        lf_min_date = lf_open.select(pl.col("ZTXDATESTR").min().alias("min_open_date")).fill_null(
             date(2000, 1, 1)
         )
 
@@ -109,7 +107,7 @@ class InflationBuilder:
         d_cal = self.dfs.get("df_d_calendar")
         d_macro = self.dfs.get("df_d_macro_parameters")
 
-        if f_open is None or d_cal is None:
+        if f_open is None or d_cal is None or d_macro is None:
             return {
                 "lf_months": pl.LazyFrame(),
                 "lf_inflation": pl.LazyFrame(),
@@ -117,7 +115,7 @@ class InflationBuilder:
                 "cpi_result": CpiResult(
                     value=None,
                     status=CalculationStatus.MISSING_INPUT,
-                    reason="Required inputs missing (f_open or d_cal)",
+                    reason="Required inputs missing (f_open, d_cal, or d_macro)",
                 ),
             }
 
@@ -125,27 +123,13 @@ class InflationBuilder:
         lf_cal = (d_cal.lazy() if isinstance(d_cal, pl.DataFrame) else d_cal).rename(
             {"Date": "DATE", "Year": "YEAR", "Month": "MONTH"}
         )
+        lf_macro = (d_macro.lazy() if isinstance(d_macro, pl.DataFrame) else d_macro).select(
+            pl.col("FY_Start_Date").cast(pl.Date), pl.col("Inflation_Rate").cast(pl.Float64)
+        )
 
         lf_months = self._build_monthly_calendar(lf_open, lf_cal)
-
-        if d_macro is not None:
-            lf_macro = (d_macro.lazy() if isinstance(d_macro, pl.DataFrame) else d_macro).select(
-                pl.col("FY_Start_Date").cast(pl.Date), pl.col("Inflation_Rate").cast(pl.Float64)
-            )
-            lf_inflation = self._build_inflation_series(lf_months, lf_macro)
-            cpi_result = self._resolve_latest_cpi(lf_inflation)
-        else:
-            fallback_rate = self.rules.assumptions.macro.fallback_inflation_rate
-            lf_inflation = (
-                lf_months.sort("MONTH_START_DATE")
-                .with_columns(
-                    pl.lit(fallback_rate).alias("INFLATION_YOY_PCT"),
-                    ((pl.lit(fallback_rate) + 1.0).pow(1.0 / 12.0)).alias("monthly_factor"),
-                )
-                .with_columns((pl.col("monthly_factor").cum_prod() * 100.0).alias("CPI_INDEX"))
-                .select(["MONTH_START_DATE", "INFLATION_YOY_PCT", "CPI_INDEX"])
-            )
-            cpi_result = self._resolve_latest_cpi(lf_inflation)
+        lf_inflation = self._build_inflation_series(lf_months, lf_macro)
+        cpi_result = self._resolve_latest_cpi(lf_inflation)
 
         return {
             "lf_months": lf_months,

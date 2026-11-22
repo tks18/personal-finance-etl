@@ -15,22 +15,17 @@ Does not own
 
 from __future__ import annotations
 
+import os
+
 import duckdb
 
 from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
-from personal_finance_etl.infrastructure.control_plane.hashing import generate_file_id
 from personal_finance_etl.infrastructure.observability.diagnostics import (
     get_observability_diagnostics,
-)
-from personal_finance_etl.infrastructure.warehouse.contracts import (
-    PRE_BRONZE_ARTIFACT_ID,
-    PRE_BRONZE_CONTRACT_REGISTRY,
-    PreBronzeDataContract,
 )
 from personal_finance_etl.infrastructure.warehouse.registry import (
     BRONZE_CONTRACT_REGISTRY,
     BronzeDataContract,
-    get_bronze_contract_by_dataset_id,
 )
 
 diagnostics = get_observability_diagnostics("personal_finance_etl.warehouse.meta.healing")
@@ -51,7 +46,7 @@ class DuckDBRegistryHealer:
         self.conn = conn
 
     def _inspect_bronze_table_files(self) -> tuple[dict[str, bool], dict[str, set[str]]]:
-        """Check presence of physical Pre-Bronze and Bronze tables and scan distinct loaded filenames.
+        """Check presence of physical bronze tables and scan distinct loaded filenames.
 
         Returns
         -------
@@ -62,7 +57,7 @@ class DuckDBRegistryHealer:
             f"{r[0]}.{r[1]}".lower()
             for r in self.conn.execute(
                 "SELECT lower(table_schema), lower(table_name) "
-                "FROM information_schema.tables WHERE lower(table_schema) IN ('bronze', 'pre_bronze')"
+                "FROM information_schema.tables WHERE lower(table_schema) = 'bronze'"
             ).fetchall()
         }
         tables_exist: dict[str, bool] = {}
@@ -74,18 +69,13 @@ class DuckDBRegistryHealer:
             if is_present and not contract.is_full_replace:
                 try:
                     rows = self.conn.execute(
-                        f"SELECT DISTINCT artifact_id FROM {table}"  # nosec B608
+                        f"SELECT DISTINCT __file_name__ FROM {table}"  # nosec B608
                     ).fetchall()
                     table_files[table] = {str(r[0]) for r in rows}
                 except duckdb.CatalogException:
                     table_files[table] = set()
             else:
                 table_files[table] = set()
-
-        for pb_contract in PRE_BRONZE_CONTRACT_REGISTRY:
-            pb_table = pb_contract.physical_table
-            tables_exist[pb_table] = pb_table.lower() in existing_tables
-
         return tables_exist, table_files
 
     @staticmethod
@@ -93,11 +83,10 @@ class DuckDBRegistryHealer:
         path: str,
         status: str | None,
         duckdb_paths: set[str],
-        tables_exist: dict[str, bool],
-        bronze_contracts: list[BronzeDataContract],
-        pb_contracts: list[PreBronzeDataContract],
+        table_exists: bool,
+        b_contract: BronzeDataContract | None,
         row_count: int,
-        table_files: dict[str, set[str]],
+        files_in_table: set[str],
     ) -> bool:
         """Determine if an individual synced file is absent or dropped from DuckDB.
 
@@ -109,16 +98,14 @@ class DuckDBRegistryHealer:
             Sync status string from control plane registry.
         duckdb_paths : set[str]
             Set of paths present in DuckDB m_File_Registry.
-        tables_exist : dict[str, bool]
-            Map of physical table name to existence in DuckDB.
-        bronze_contracts : list[BronzeDataContract]
-            Matching bronze contracts for this category.
-        pb_contracts : list[PreBronzeDataContract]
-            Matching Pre-Bronze contracts for this category.
+        table_exists : bool
+            Whether target bronze table exists.
+        b_contract : BronzeDataContract | None
+            Matching bronze contract if found.
         row_count : int
             DuckDB row count for this file.
-        table_files : dict[str, set[str]]
-            Distinct filenames loaded per table.
+        files_in_table : set[str]
+            Distinct filenames loaded in table.
 
         Returns
         -------
@@ -127,26 +114,14 @@ class DuckDBRegistryHealer:
         """
         if status != "SYNCED":
             return False
-        if path not in duckdb_paths:
+        if path not in duckdb_paths or not table_exists:
             return True
-
-        for pb in pb_contracts:
-            if not tables_exist.get(pb.physical_table, False):
-                return True
-
-        for b_contract in bronze_contracts:
-            target_table = b_contract.physical_table
-            if not tables_exist.get(target_table, False):
-                return True
-            file_id = generate_file_id(path)
-            if (
-                not b_contract.is_full_replace
-                and row_count > 0
-                and file_id not in table_files.get(target_table, set())
-            ):
-                return True
-
-        return False
+        return (
+            b_contract is not None
+            and not b_contract.is_full_replace
+            and row_count > 0
+            and os.path.basename(path) not in files_in_table
+        )
 
     def _heal_missing_sync_records(
         self,
@@ -154,8 +129,7 @@ class DuckDBRegistryHealer:
         duckdb_paths: set[str],
         duckdb_row_counts: dict[str, int],
         synced_registry: dict[str, str],
-        cat_to_bronze_contracts: dict[str, list[BronzeDataContract]],
-        cat_to_pb_contracts: dict[str, list[PreBronzeDataContract]],
+        cat_to_contract: dict[str, BronzeDataContract],
         tables_exist: dict[str, bool],
         table_files: dict[str, set[str]],
     ) -> int:
@@ -171,10 +145,8 @@ class DuckDBRegistryHealer:
             Row counts per path in DuckDB.
         synced_registry : dict[str, str]
             Map of path to sync status in SQLite.
-        cat_to_bronze_contracts : dict[str, list[BronzeDataContract]]
-            Map of category to list of bronze contracts.
-        cat_to_pb_contracts : dict[str, list[PreBronzeDataContract]]
-            Map of category to list of pre-bronze contracts.
+        cat_to_contract : dict[str, BronzeDataContract]
+            Map of category to bronze contract.
         tables_exist : dict[str, bool]
             Map of table name to existence flag.
         table_files : dict[str, set[str]]
@@ -189,21 +161,18 @@ class DuckDBRegistryHealer:
         raw_all: dict[str, list[str]] = cp.artifacts.get_all_paths_by_category()
 
         for cat, paths in raw_all.items():
-            b_contracts = cat_to_bronze_contracts.get(cat, [])
-            pb_contracts = cat_to_pb_contracts.get(cat, [])
+            b_contract = cat_to_contract.get(cat)
+            target_table = b_contract.physical_table if b_contract else None
+            table_exists = tables_exist.get(target_table, False) if target_table else True
+            files_in_table: set[str] = (
+                table_files.get(target_table, set()) if target_table else set()
+            )
 
             for path in paths:
                 status = synced_registry.get(path)
                 row_count = duckdb_row_counts.get(path, 0)
                 if self._is_sync_record_missing(
-                    path,
-                    status,
-                    duckdb_paths,
-                    tables_exist,
-                    b_contracts,
-                    pb_contracts,
-                    row_count,
-                    table_files,
+                    path, status, duckdb_paths, table_exists, b_contract, row_count, files_in_table
                 ):
                     cp.artifacts.db.conn.execute(
                         "UPDATE cp_file_registry SET sync_status = 'PENDING_BRONZE' WHERE relative_path = ?",
@@ -241,35 +210,21 @@ class DuckDBRegistryHealer:
         for duckdb_path in duckdb_paths:
             if duckdb_path not in synced_registry:
                 row = self.conn.execute(
-                    "SELECT file_name, file_category, file_id FROM meta.m_File_Registry WHERE relative_path = ?",
+                    "SELECT file_name, file_category FROM meta.m_File_Registry WHERE relative_path = ?",
                     [duckdb_path],
                 ).fetchone()
 
                 if row:
-                    _fname, cat, file_id = row
+                    fname, cat = row
                     del_table = cat_to_table.get(cat)
-                    if file_id and del_table and tables_exist.get(del_table, False):
+                    if del_table and tables_exist.get(del_table, False):
                         try:
                             self.conn.execute(
-                                f"DELETE FROM {del_table} WHERE artifact_id = ?",  # nosec B608
-                                [file_id],
+                                f"DELETE FROM {del_table} WHERE __file_name__ = ?",  # nosec B608
+                                [fname],
                             )
                         except duckdb.CatalogException:
                             pass
-
-                    # Prune associated rows in Pre-Bronze tables using explicit artifact provenance
-                    if file_id:
-                        pre_bronze_tables = self.conn.execute(
-                            "SELECT table_name FROM information_schema.tables WHERE table_schema = 'pre_bronze'"
-                        ).fetchall()
-                        for (tbl_name,) in pre_bronze_tables:
-                            try:
-                                self.conn.execute(
-                                    f"DELETE FROM pre_bronze.{tbl_name} WHERE {PRE_BRONZE_ARTIFACT_ID} = ?",  # nosec B608
-                                    [file_id],
-                                )
-                            except duckdb.CatalogException:
-                                pass
 
                 self.conn.execute(
                     "DELETE FROM meta.m_File_Registry WHERE relative_path = ?",
@@ -305,20 +260,7 @@ class DuckDBRegistryHealer:
         duckdb_paths = {r[0] for r in duckdb_rows}
         duckdb_row_counts = {r[0]: r[1] for r in duckdb_rows}
 
-        cat_to_bronze_contracts: dict[str, list[BronzeDataContract]] = {}
-        for c in BRONZE_CONTRACT_REGISTRY:
-            cat_to_bronze_contracts.setdefault(c.sync_category, []).append(c)
-            cat_to_bronze_contracts.setdefault(c.dataset_id.value, []).append(c)
-
-        cat_to_pb_contracts: dict[str, list[PreBronzeDataContract]] = {}
-        for pb in PRE_BRONZE_CONTRACT_REGISTRY:
-            cat_to_pb_contracts.setdefault(str(pb.binding_id), []).append(pb)
-            if pb.dataset_id is not None:
-                cat_to_pb_contracts.setdefault(pb.dataset_id.value, []).append(pb)
-                b_match = get_bronze_contract_by_dataset_id(pb.dataset_id)
-                if b_match is not None:
-                    cat_to_pb_contracts.setdefault(b_match.sync_category, []).append(pb)
-
+        cat_to_contract = {c.sync_category: c for c in BRONZE_CONTRACT_REGISTRY}
         cat_to_table = {c.sync_category: c.physical_table for c in BRONZE_CONTRACT_REGISTRY}
 
         deleted_count = self._prune_dangling_duckdb_files(
@@ -329,8 +271,7 @@ class DuckDBRegistryHealer:
             duckdb_paths,
             duckdb_row_counts,
             synced_registry,
-            cat_to_bronze_contracts,
-            cat_to_pb_contracts,
+            cat_to_contract,
             tables_exist,
             table_files,
         )

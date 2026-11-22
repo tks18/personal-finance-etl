@@ -1,3 +1,51 @@
+const tracker = {
+  readVersion: function (contents) {
+    const match = contents.match(/(?:version|__version__) = "([^"]+)"/);
+    if (!match) return null;
+    // Convert Python 5.0.0b3 to SemVer 5.0.0-b3 so the tool can "see" it
+    return match[1].replace(/(\d+)([ab]|rc)(\d+)/, '$1-$2$3');
+  },
+  writeVersion: function (contents, version) {
+    // Strip the hyphen for Python: 5.0.0-b3 -> 5.0.0b3
+    const pythonVersion = version.replace(/-([ab]|rc)/, '$1');
+    return contents.replace(
+      /(version|__version__) = "[^"]+"/,
+      (m, p1) => `${p1} = "${pythonVersion}"`,
+    );
+  },
+};
+
+const versionInfoTracker = {
+  readVersion: function (contents) {
+    const match = contents.match(/StringStruct\('FileVersion', '([^']+)'\)/);
+    if (!match) return null;
+    return match[1];
+  },
+  writeVersion: function (contents, version) {
+    // Convert SemVer '4.1.1' to '4, 1, 1, 0' for Windows fixed info
+    const tupleParts = version.split('.').concat(['0', '0', '0', '0']).slice(0, 4);
+    const tupleStr = tupleParts.join(', ');
+    
+    let newContents = contents.replace(
+      /filevers=\(\d+, \d+, \d+, \d+\)/g,
+      `filevers=(${tupleStr})`
+    );
+    newContents = newContents.replace(
+      /prodvers=\(\d+, \d+, \d+, \d+\)/g,
+      `prodvers=(${tupleStr})`
+    );
+    newContents = newContents.replace(
+      /StringStruct\('FileVersion', '[^']+'\)/g,
+      `StringStruct('FileVersion', '${version}')`
+    );
+    newContents = newContents.replace(
+      /StringStruct\('ProductVersion', '[^']+'\)/g,
+      `StringStruct('ProductVersion', '${version}')`
+    );
+    return newContents;
+  },
+};
+
 module.exports = {
   'tag-prefix': '',
   scripts: {
@@ -65,12 +113,6 @@ module.exports = {
       hidden: false,
     },
   ],
-  packageFiles: [
-    {
-      filename: 'package.json',
-      type: 'json',
-    },
-  ],
   bumpFiles: [
     {
       filename: 'package.json',
@@ -78,15 +120,15 @@ module.exports = {
     },
     {
       filename: 'pyproject.toml',
-      updater: './scripts/updaters/python.js',
+      updater: tracker,
     },
     {
       filename: 'src/personal_finance_etl/__init__.py',
-      updater: './scripts/updaters/python.js',
+      updater: tracker,
     },
     {
       filename: 'version_info.txt',
-      updater: './scripts/updaters/version_info.js',
-    },
+      updater: versionInfoTracker,
+    }
   ],
 };

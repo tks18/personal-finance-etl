@@ -1,3 +1,0 @@
-FY,FY_Start_Date,FY_End_Date,Debt_MF_Cutoff_Date,Inflation_Rate,Risk_Free_Rate,Estimated_Ordinary_Income_Tax_Rate,Equity_LTCG_Exemption,Equity_Listed_LTCG,Equity_Listed_STCG,Equity_Unlisted_LTCG,Equity_Unlisted_STCG,Gold_LTCG,Gold_STCG,Debt_MF_Pre_Cutoff_LTCG,Debt_MF_Pre_Cutoff_STCG,Debt_MF_Post_Cutoff_LTCG,Debt_MF_Post_Cutoff_STCG,Other_Debt_LTCG,Other_Debt_STCG,Default_LTCG,Default_STCG,Remarks
-2023-24,2023-04-01,2024-03-31,2023-03-31,0.06,0.07,0.30,100000,0.10,0.15,0.20,0.30,0.20,0.30,0.20,0.30,0.30,0.30,0.20,0.30,0.20,0.30,Finance Act 2023
-2024-25,2024-04-01,2025-03-31,2023-03-31,0.06,0.07,0.30,125000,0.125,0.20,0.20,0.30,0.20,0.30,0.20,0.30,0.30,0.30,0.20,0.30,0.20,0.30,Finance Act 2024

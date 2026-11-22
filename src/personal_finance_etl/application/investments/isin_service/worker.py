@@ -79,9 +79,6 @@ class IsinTaskPayload(NamedTuple):
     rules: FinancialRules
     fx_provider: FXRateProvider | None
     tmp_dir: str
-    enable_benchmark: bool = True
-    enable_foreign_assets: bool = True
-    enable_tax: bool = True
 
 
 class IsinResultPayload(NamedTuple):
@@ -129,9 +126,6 @@ def _process_isin_worker(
         FinancialRules,
         FXRateProvider | None,
         str,
-        bool,
-        bool,
-        bool,
     ],
 ) -> IsinResultPayload:
     """Execute chronological simulation for a single ISIN inside ProcessPoolExecutor child process.
@@ -161,21 +155,9 @@ def _process_isin_worker(
         rules,
         fx_provider,
         tmp_dir,
-        enable_benchmark,
-        enable_foreign_assets,
-        enable_tax,
     ) = task
 
-    processor = IsinProcessor(
-        fy_table,
-        start_date,
-        end_date,
-        rules,
-        fx_provider,
-        enable_benchmark=enable_benchmark,
-        enable_foreign_assets=enable_foreign_assets,
-        enable_tax=enable_tax,
-    )
+    processor = IsinProcessor(fy_table, start_date, end_date, rules, fx_provider)
     try:
         res = processor.process(isin, p_inst, s_inst, m_inst, master_row, bm_map)
 

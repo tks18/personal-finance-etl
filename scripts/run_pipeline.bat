@@ -5,8 +5,8 @@ setlocal
 :: Personal Finance ETL - Unattended Cron Execution Script
 :: =====================================================================
 
-:: Change this to your compiled cli.exe or keep as "uv run pfetl"
-set "CLI_EXECUTABLE=uv run pfetl"
+:: Change this to your compiled cli.exe or keep as "uv run shan-fin"
+set "CLI_EXECUTABLE=uv run shan-fin"
 
 :: Configuration Paths
 set "CONFIG_PATH=D:\Path\To\Settings\config.toml"
