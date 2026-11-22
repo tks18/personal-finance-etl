@@ -18,6 +18,7 @@ Does not own
 from __future__ import annotations
 
 from personal_finance_etl.contracts.datasets import DatasetId, IdentityRequirement
+from personal_finance_etl.contracts.sources import SourceBindingId
 from personal_finance_etl.infrastructure.warehouse.contracts import (
     BRONZE_CONTRACT_REGISTRY,
     DATA_CONTRACT_REGISTRY,
@@ -43,9 +44,11 @@ __all__ = [
     "PreBronzeDataContract",
     "SyncStrategy",
     "WarehouseLayer",
+    "create_pre_bronze_contract_for_binding",
     "get_bronze_contract_by_dataset_id",
     "get_contract_by_dataset_id",
     "get_contract_by_table",
+    "get_pre_bronze_contract_by_binding_id",
     "get_pre_bronze_contract_by_dataset_id",
     "get_pre_bronze_contract_by_table",
     "validate_registry",
@@ -113,6 +116,72 @@ def get_bronze_contract_by_dataset_id(
     return None
 
 
+def get_pre_bronze_contract_by_binding_id(
+    binding_id: SourceBindingId | str,
+) -> PreBronzeDataContract | None:
+    """Find a PreBronzeDataContract matching the given SourceBindingId.
+
+    Parameters
+    ----------
+    binding_id : SourceBindingId | str
+        Authoritative source binding identifier to look up.
+
+    Returns
+    -------
+    PreBronzeDataContract | None
+        Matching PreBronzeDataContract if found, otherwise None.
+    """
+    target = str(binding_id)
+    for contract in PRE_BRONZE_CONTRACT_REGISTRY:
+        if str(contract.binding_id) == target:
+            return contract
+    return None
+
+
+def create_pre_bronze_contract_for_binding(
+    binding: object,
+) -> PreBronzeDataContract:
+    """Create a dynamic PreBronzeDataContract for a physical source binding descriptor.
+
+    Parameters
+    ----------
+    binding : object
+        SourceBindingPlan or SourceBindingConfig instance.
+
+    Returns
+    -------
+    PreBronzeDataContract
+        Authoritative Pre-Bronze contract for the given binding.
+    """
+    binding_id_raw = getattr(binding, "binding_id", None)
+    if binding_id_raw is None:
+        raise ValueError(f"Binding object lacks required 'binding_id': {binding!r}")
+    b_id = SourceBindingId(str(binding_id_raw))
+
+    cd = getattr(binding, "change_detection", None)
+    sync = (
+        getattr(cd, "sync_strategy", SyncStrategy.INCREMENTAL)
+        if cd is not None
+        else SyncStrategy.INCREMENTAL
+    )
+
+    routes = getattr(binding, "routes", ())
+    target_ds: DatasetId | None = None
+    if routes:
+        first_route = routes[0]
+        raw_ds = getattr(first_route, "target_dataset_id", None)
+        if isinstance(raw_ds, DatasetId):
+            target_ds = raw_ds
+
+    return PreBronzeDataContract(
+        binding_id=b_id,
+        physical_table=f"pre_bronze.{b_id}",
+        sync_strategy=sync,
+        provenance_required=True,
+        dataset_id=target_ds,
+    )
+
+
 def get_pre_bronze_contract_by_dataset_id(
     dataset_id: DatasetId | str,
 ) -> PreBronzeDataContract | None:
@@ -130,7 +199,9 @@ def get_pre_bronze_contract_by_dataset_id(
     """
     val = str(dataset_id)
     for contract in PRE_BRONZE_CONTRACT_REGISTRY:
-        if contract.dataset_id.value == val or contract.dataset_id == dataset_id:
+        if contract.dataset_id is not None and (
+            contract.dataset_id.value == val or contract.dataset_id == dataset_id
+        ):
             return contract
     return None
 
@@ -247,22 +318,22 @@ def _validate_pre_bronze_contracts() -> None:
     Raises
     ------
     ValueError
-        If duplicate table mappings, duplicate dataset IDs, invalid prefixes,
+        If duplicate table mappings, duplicate binding IDs, invalid prefixes,
         or invalid sync strategies are found.
     """
     pre_bronze_tables: set[str] = set()
-    pre_bronze_dataset_ids: set[str] = set()
+    pre_bronze_binding_ids: set[str] = set()
 
     for pb_contract in PRE_BRONZE_CONTRACT_REGISTRY:
-        if not pb_contract.dataset_id:
-            raise ValueError("Pre-Bronze contract missing DatasetId.")
-        ds_val = str(pb_contract.dataset_id)
-        if ds_val in pre_bronze_dataset_ids:
-            raise ValueError(f"Duplicate Pre-Bronze DatasetId found: {ds_val}")
-        pre_bronze_dataset_ids.add(ds_val)
+        if not pb_contract.binding_id:
+            raise ValueError("Pre-Bronze contract missing binding_id.")
+        b_val = str(pb_contract.binding_id)
+        if b_val in pre_bronze_binding_ids:
+            raise ValueError(f"Duplicate Pre-Bronze SourceBindingId found: {b_val}")
+        pre_bronze_binding_ids.add(b_val)
 
         if not pb_contract.physical_table:
-            raise ValueError(f"Pre-Bronze physical_table empty for {pb_contract.dataset_id}")
+            raise ValueError(f"Pre-Bronze physical_table empty for {pb_contract.binding_id}")
         if not pb_contract.physical_table.startswith("pre_bronze."):
             raise ValueError(
                 f"Pre-Bronze table must start with 'pre_bronze.': {pb_contract.physical_table}"
@@ -281,7 +352,7 @@ def _validate_pre_bronze_contracts() -> None:
             SyncStrategy.INCREMENTAL,
         ):
             raise ValueError(
-                f"Pre-Bronze contract '{pb_contract.dataset_id}' has invalid sync_strategy: {pb_contract.sync_strategy}"
+                f"Pre-Bronze contract '{pb_contract.binding_id}' has invalid sync_strategy: {pb_contract.sync_strategy}"
             )
 
 

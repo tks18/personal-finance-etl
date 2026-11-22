@@ -72,11 +72,11 @@ LEGACY_TABLE_LITERALS = frozenset(
 
 
 def test_pre_bronze_contracts_unified_naming() -> None:
-    """Verify all Pre-Bronze contracts follow physical_table == pre_bronze.{dataset_id.value}."""
+    """Verify all Pre-Bronze contracts follow physical_table == pre_bronze.{contract.binding_id}."""
     for contract in PRE_BRONZE_CONTRACT_REGISTRY:
-        expected = f"pre_bronze.{contract.dataset_id.value}"
+        expected = f"pre_bronze.{contract.binding_id}"
         assert contract.physical_table == expected, (
-            f"Pre-Bronze contract {contract.dataset_id.value} physical_table "
+            f"Pre-Bronze contract {contract.binding_id} physical_table "
             f"'{contract.physical_table}' must equal '{expected}'."
         )
         bare_table = contract.physical_table.split(".", maxsplit=1)[-1]

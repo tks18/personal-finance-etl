@@ -74,8 +74,9 @@ def test_legacy_pre_bronze_table_naming_mirrors_canonical_dataset_id() -> None:
         c for c in PRE_BRONZE_CONTRACT_REGISTRY if c.dataset_id == DatasetId.HOUSEHOLD_ZCATEGORY
     )
 
-    # Pre-Bronze physical table is keyed by canonical DatasetId, not SourceBindingId
-    assert pb_contract.physical_table == f"pre_bronze.{DatasetId.HOUSEHOLD_ZCATEGORY.value}"
+    # Pre-Bronze physical table is now keyed by SourceBindingId
+    assert pb_contract.physical_table == f"pre_bronze.{pb_contract.binding_id}"
+    assert pb_contract.binding_id == "household_db__household_zcategory"
     assert pb_contract.dataset_id == DatasetId.HOUSEHOLD_ZCATEGORY
 
 

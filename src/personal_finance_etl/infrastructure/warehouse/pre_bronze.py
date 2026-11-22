@@ -27,7 +27,7 @@ import polars as pl
 
 from personal_finance_etl.config.sources.change_detection import SyncStrategy
 from personal_finance_etl.contracts.datasets import DatasetId
-from personal_finance_etl.contracts.sources import SourceId
+from personal_finance_etl.contracts.sources import SourceBindingId, SourceId
 from personal_finance_etl.infrastructure.observability import (
     ObservabilityEmitter,
     get_global_emitter,
@@ -38,12 +38,14 @@ from personal_finance_etl.infrastructure.observability.diagnostics import (
 from personal_finance_etl.infrastructure.warehouse.connection import DuckDBManager
 from personal_finance_etl.infrastructure.warehouse.contracts import (
     PRE_BRONZE_ARTIFACT_ID,
+    PRE_BRONZE_BINDING_ID,
     PRE_BRONZE_DATASET_ID,
     PRE_BRONZE_PROVENANCE_COLUMNS,
     PRE_BRONZE_SOURCE_ID,
     PreBronzeDataContract,
 )
 from personal_finance_etl.infrastructure.warehouse.registry import (
+    get_pre_bronze_contract_by_binding_id,
     get_pre_bronze_contract_by_dataset_id,
 )
 
@@ -92,15 +94,15 @@ def sanitize_physical_identifier(name: object) -> str:
 
 
 def get_pre_bronze_table_name(
-    dataset_id: DatasetId | str,
+    identifier: SourceBindingId | DatasetId | str,
     source_id: SourceId | str | None = None,
 ) -> str:
     """Derive deterministic PFETL-controlled physical table name for Pre-Bronze.
 
     Parameters
     ----------
-    dataset_id : DatasetId | str
-        Authoritative dataset identifier.
+    identifier : SourceBindingId | DatasetId | str
+        Authoritative source binding or legacy dataset identifier.
     source_id : SourceId | str | None, default=None
         Optional source identifier for source-scoped tables.
 
@@ -109,13 +111,13 @@ def get_pre_bronze_table_name(
     str
         Physical DuckDB table name prefixed with 'pre_bronze.'.
     """
-    ds_str = dataset_id.value if isinstance(dataset_id, DatasetId) else str(dataset_id)
-    clean_ds = sanitize_physical_identifier(ds_str)
+    id_str = identifier.value if isinstance(identifier, DatasetId) else str(identifier)
+    clean_id = sanitize_physical_identifier(id_str)
     if source_id is not None:
         src_str = str(source_id)
         clean_src = sanitize_physical_identifier(src_str)
-        return f"pre_bronze.{clean_src}_{clean_ds}"
-    return f"pre_bronze.{clean_ds}"
+        return f"pre_bronze.{clean_src}__{clean_id}"
+    return f"pre_bronze.{clean_id}"
 
 
 def _validate_table_name(table_name: str) -> str:
@@ -153,7 +155,7 @@ class PreBronzeLayer:
     def _prepare_provenance_frame(
         self,
         df: pl.DataFrame,
-        dataset_id: DatasetId,
+        contract_or_dataset: PreBronzeDataContract | DatasetId | None,
         artifact_id: str | None,
         source_id: SourceId | str | None,
     ) -> pl.DataFrame:
@@ -172,9 +174,24 @@ class PreBronzeLayer:
             src_val = str(source_id) if source_id is not None else None
             res = res.with_columns(pl.lit(src_val).cast(pl.String).alias(PRE_BRONZE_SOURCE_ID))
 
-        if PRE_BRONZE_DATASET_ID not in res.columns:
+        binding_id_val: str | None = None
+        dataset_id_val: str | None = None
+        if isinstance(contract_or_dataset, PreBronzeDataContract):
+            binding_id_val = str(contract_or_dataset.binding_id)
+            if contract_or_dataset.dataset_id is not None:
+                dataset_id_val = contract_or_dataset.dataset_id.value
+        elif isinstance(contract_or_dataset, DatasetId):
+            dataset_id_val = contract_or_dataset.value
+            binding_id_val = contract_or_dataset.value
+
+        if PRE_BRONZE_BINDING_ID not in res.columns and binding_id_val is not None:
             res = res.with_columns(
-                pl.lit(dataset_id.value).cast(pl.String).alias(PRE_BRONZE_DATASET_ID)
+                pl.lit(binding_id_val).cast(pl.String).alias(PRE_BRONZE_BINDING_ID)
+            )
+
+        if PRE_BRONZE_DATASET_ID not in res.columns and dataset_id_val is not None:
+            res = res.with_columns(
+                pl.lit(dataset_id_val).cast(pl.String).alias(PRE_BRONZE_DATASET_ID)
             )
 
         return res
@@ -262,9 +279,7 @@ class PreBronzeLayer:
         """
         table_name = _validate_table_name(contract.physical_table)
         mat_df = df.collect() if isinstance(df, pl.LazyFrame) else df
-        prepared_df = self._prepare_provenance_frame(
-            mat_df, contract.dataset_id, artifact_id, source_id
-        )
+        prepared_df = self._prepare_provenance_frame(mat_df, contract, artifact_id, source_id)
 
         self.db_manager.conn.register("_pb_temp_df", prepared_df)
         try:
@@ -312,9 +327,7 @@ class PreBronzeLayer:
         """
         table_name = _validate_table_name(contract.physical_table)
         mat_df = df.collect() if isinstance(df, pl.LazyFrame) else df
-        prepared_df = self._prepare_provenance_frame(
-            mat_df, contract.dataset_id, artifact_id, source_id
-        )
+        prepared_df = self._prepare_provenance_frame(mat_df, contract, artifact_id, source_id)
 
         # Collect target artifact IDs to replace
         if artifact_id:
@@ -474,7 +487,7 @@ class PreBronzeLayer:
 
     def read(
         self,
-        dataset_id: DatasetId | str,
+        target: PreBronzeDataContract | SourceBindingId | DatasetId | str | None,
         source_id: SourceId | str | None = None,
         include_provenance: bool = True,
     ) -> pl.DataFrame:
@@ -482,24 +495,49 @@ class PreBronzeLayer:
 
         Parameters
         ----------
-        dataset_id : DatasetId | str
-            Authoritative dataset identifier to query.
+        target : PreBronzeDataContract | SourceBindingId | DatasetId | str | None
+            Authoritative contract, source binding identifier, or legacy canonical dataset identifier.
         source_id : SourceId | str | None, default=None
             Optional source identifier to filter rows.
         include_provenance : bool, default=True
-            Whether to retain __artifact_id__, __source_id__, and __dataset_id__ columns.
+            Whether to retain __artifact_id__, __source_id__, __binding_id__, and __dataset_id__ columns.
 
         Returns
         -------
         pl.DataFrame
             Source-shaped Polars DataFrame, or empty DataFrame if table does not exist.
         """
-        contract = get_pre_bronze_contract_by_dataset_id(dataset_id)
-        table_name = (
-            contract.physical_table
-            if contract is not None
-            else get_pre_bronze_table_name(dataset_id)
-        )
+        if target is None:
+            return pl.DataFrame()
+
+        table_name: str
+        if isinstance(target, PreBronzeDataContract):
+            table_name = target.physical_table
+        else:
+            target_str = target.value if isinstance(target, DatasetId) else str(target)
+            if "__" in target_str:
+                table_name = get_pre_bronze_table_name(target_str)
+            else:
+                # Check by binding_id contract first
+                binding_contract = get_pre_bronze_contract_by_binding_id(target_str)
+                if binding_contract is not None and self.table_exists(
+                    binding_contract.physical_table
+                ):
+                    table_name = binding_contract.physical_table
+                elif self.table_exists(f"pre_bronze.{target_str}"):
+                    table_name = f"pre_bronze.{target_str}"
+                else:
+                    # Check by dataset_id contract (transitional compatibility)
+                    ds_contract = get_pre_bronze_contract_by_dataset_id(target_str)
+                    if ds_contract is not None and self.table_exists(ds_contract.physical_table):
+                        table_name = ds_contract.physical_table
+                    elif source_id is not None and self.table_exists(
+                        get_pre_bronze_table_name(target_str, source_id=source_id)
+                    ):
+                        table_name = get_pre_bronze_table_name(target_str, source_id=source_id)
+                    else:
+                        table_name = get_pre_bronze_table_name(target_str)
+
         _validate_table_name(table_name)
 
         if not self.table_exists(table_name):
@@ -521,7 +559,7 @@ class PreBronzeLayer:
 
     def read_lazy(
         self,
-        dataset_id: DatasetId | str,
+        target: PreBronzeDataContract | SourceBindingId | DatasetId | str | None,
         source_id: SourceId | str | None = None,
         include_provenance: bool = True,
     ) -> pl.LazyFrame:
@@ -529,12 +567,12 @@ class PreBronzeLayer:
 
         Parameters
         ----------
-        dataset_id : DatasetId | str
-            Authoritative dataset identifier to query.
+        target : PreBronzeDataContract | SourceBindingId | DatasetId | str | None
+            Authoritative contract, source binding identifier, or legacy canonical dataset identifier.
         source_id : SourceId | str | None, default=None
             Optional source identifier to filter rows.
         include_provenance : bool, default=True
-            Whether to retain __artifact_id__, __source_id__, and __dataset_id__ columns.
+            Whether to retain __artifact_id__, __source_id__, __binding_id__, and __dataset_id__ columns.
 
         Returns
         -------
@@ -542,7 +580,38 @@ class PreBronzeLayer:
             Source-shaped Polars LazyFrame.
         """
         return self.read(
-            dataset_id,
+            target,
             source_id=source_id,
             include_provenance=include_provenance,
         ).lazy()
+
+    def detect_and_upgrade_legacy_tables(self) -> list[str]:
+        """Detect and drop legacy DatasetId-keyed Pre-Bronze tables for deterministic rebuild.
+
+        Returns
+        -------
+        list[str]
+            List of dropped legacy physical table names.
+        """
+        try:
+            existing_tables = [
+                str(r[0]).lower()
+                for r in self.db_manager.conn.execute(
+                    "SELECT table_name FROM information_schema.tables WHERE lower(table_schema) = 'pre_bronze'"
+                ).fetchall()
+            ]
+        except Exception:
+            return []
+
+        dropped: list[str] = []
+        for tbl in existing_tables:
+            # Legacy tables were named directly after canonical DatasetId values without '__' separator
+            if "__" not in tbl:
+                full_tbl = f"pre_bronze.{tbl}"
+                diagnostics.info(
+                    "Pre-Bronze upgrade: Dropping legacy Pre-Bronze table '%s' for binding-keyed rebuild.",
+                    full_tbl,
+                )
+                self.db_manager.conn.execute(f"DROP TABLE IF EXISTS {full_tbl}")  # nosec B608
+                dropped.append(full_tbl)
+        return dropped
