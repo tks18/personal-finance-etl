@@ -45,14 +45,14 @@ from personal_finance_etl.infrastructure.warehouse.connection import DuckDBManag
 def test_settings_log_configuration(tmp_path: Path) -> None:
     """Verify Settings defines default log directory and retention, resolving relative paths."""
     cfg = Settings()
-    assert cfg.LOGS_DIRECTORY == "logs/runs"
-    assert cfg.RETAIN_LAST_N_RUNS == 12
+    assert cfg.observability.logs_directory == "logs/runs"
+    assert cfg.observability.retain_last_n_runs == 12
 
     # Without target base path
     assert cfg.resolve_logs_dir() == Path("logs/runs")
 
     # With target base path
-    cfg.TARGET_DB_BASE_PATH = str(tmp_path)
+    cfg.database.target_db_base_path = str(tmp_path)
     assert cfg.resolve_logs_dir() == tmp_path / "logs/runs"
 
 
@@ -287,10 +287,10 @@ class _MockStatusQueue:
 def test_run_lifecycle_coordinator_async_pipeline_wiring(tmp_path: Path) -> None:
     """Verify RunLifecycleCoordinator wires queue sink to emitter and drains on teardown."""
     cfg = Settings()
-    cfg.TARGET_DB_BASE_PATH = str(tmp_path)
-    cfg.TARGET_DB_NAME = "async_test.duckdb"
-    cfg.RAW_DOCUMENT_STORE_NAME = "async_test_raw.db"
-    cfg.LOGS_DIRECTORY = "logs/runs"
+    cfg.database.target_db_base_path = str(tmp_path)
+    cfg.database.target_db_name = "async_test.duckdb"
+    cfg.database.raw_document_store_name = "async_test_raw.db"
+    cfg.observability.logs_directory = "logs/runs"
 
     db_path = str(tmp_path / "async_test.duckdb")
     db_mgr = DuckDBManager(db_path)

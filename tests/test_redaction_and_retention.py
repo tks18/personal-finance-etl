@@ -24,7 +24,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
 
-from personal_finance_etl.config.settings import Settings
+from personal_finance_etl.config.settings import (
+    DatabaseSettings,
+    ObservabilitySettings,
+    Settings,
+)
 from personal_finance_etl.contracts.application import EngineStage
 from personal_finance_etl.contracts.observability import (
     DiagnosticSeverity,
@@ -129,9 +133,11 @@ def test_redact_dict_scrubs_nested_structures() -> None:
 def test_fingerprint_config_produces_safe_summary() -> None:
     """Verify fingerprint_config summarizes configuration without leaking secret paths."""
     cfg = Settings(
-        TARGET_DB_BASE_PATH="/path/to/private/vault",
-        TARGET_DB_NAME="MyFinances.duckdb",
-        RETAIN_LAST_N_RUNS=15,
+        database=DatabaseSettings(
+            target_db_base_path="/path/to/private/vault",
+            target_db_name="MyFinances.duckdb",
+        ),
+        observability=ObservabilitySettings(retain_last_n_runs=15),
     )
 
     summary = fingerprint_config(cfg)

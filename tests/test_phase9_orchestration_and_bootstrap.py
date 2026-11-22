@@ -59,7 +59,7 @@ def test_service_container_wiring(mock_rules: FinancialRules, tmp_path: Path) ->
     assert isinstance(rules, FinancialRules)
 
     # Storage & Control Plane
-    cfg.TARGET_DB_BASE_PATH = str(tmp_path)
+    cfg.database.target_db_base_path = str(tmp_path)
     db_mgr = container.create_duckdb_manager(cfg)
     assert db_mgr.base_path == str(tmp_path)
 
@@ -86,7 +86,7 @@ def test_personal_finance_engine_facade(tmp_path: Path) -> None:
 
     # Configuration validation
     valid = engine.validate_config("tests/financial_rules.toml")
-    # A financial rules file is not a valid Settings file (missing fields like STATEMENTS_FOLDER)
+    # A financial rules file is not a valid Settings file (missing sections like [database] and [sources])
     assert isinstance(valid, bool)
 
     # Preferences
@@ -106,9 +106,9 @@ def test_personal_finance_engine_facade(tmp_path: Path) -> None:
 def test_run_lifecycle_coordinator_transitions(tmp_path: Path) -> None:
     """Verify RunLifecycleCoordinator initialization, transaction states, and commit convergence."""
     cfg = Settings()
-    cfg.TARGET_DB_BASE_PATH = str(tmp_path)
-    cfg.TARGET_DB_NAME = "test_lifecycle.duckdb"
-    cfg.RAW_DOCUMENT_STORE_NAME = "test_lifecycle_raw.db"
+    cfg.database.target_db_base_path = str(tmp_path)
+    cfg.database.target_db_name = "test_lifecycle.duckdb"
+    cfg.database.raw_document_store_name = "test_lifecycle_raw.db"
 
     class MockStatusQueue:
         def __init__(self) -> None:
@@ -118,7 +118,7 @@ def test_run_lifecycle_coordinator_transitions(tmp_path: Path) -> None:
             self.items.append(status)
 
     q = MockStatusQueue()
-    db_manager = DuckDBManager(cfg.TARGET_DB_BASE_PATH, cfg.TARGET_DB_NAME)
+    db_manager = DuckDBManager(cfg.database.target_db_base_path, cfg.database.target_db_name)
     lifecycle = RunLifecycleCoordinator(cfg, q, db_manager, rules=None)
 
     assert lifecycle.commit_state == CommitState.NOT_STARTED
@@ -141,15 +141,15 @@ def test_run_lifecycle_coordinator_transitions(tmp_path: Path) -> None:
 def test_run_lifecycle_rollback_on_failure(tmp_path: Path) -> None:
     """Verify RunLifecycleCoordinator rolls back cleanly on exception and sets ROLLED_BACK state."""
     cfg = Settings()
-    cfg.TARGET_DB_BASE_PATH = str(tmp_path)
-    cfg.TARGET_DB_NAME = "test_rollback.duckdb"
-    cfg.RAW_DOCUMENT_STORE_NAME = "test_rollback_raw.db"
+    cfg.database.target_db_base_path = str(tmp_path)
+    cfg.database.target_db_name = "test_rollback.duckdb"
+    cfg.database.raw_document_store_name = "test_rollback_raw.db"
 
     class MockStatusQueue:
         def put(self, status: Any, block: bool = True, timeout: float | None = None) -> None:
             pass
 
-    db_manager = DuckDBManager(cfg.TARGET_DB_BASE_PATH, cfg.TARGET_DB_NAME)
+    db_manager = DuckDBManager(cfg.database.target_db_base_path, cfg.database.target_db_name)
     lifecycle = RunLifecycleCoordinator(cfg, MockStatusQueue(), db_manager, rules=None)
 
     cp, run_id, _ = lifecycle.initialize()
@@ -172,15 +172,15 @@ def test_run_lifecycle_rollback_on_failure(tmp_path: Path) -> None:
 def test_run_lifecycle_split_commit_recovery_marker(tmp_path: Path) -> None:
     """Verify split-commit divergence marks RECOVERY_REQUIRED when SQLite commit fails."""
     cfg = Settings()
-    cfg.TARGET_DB_BASE_PATH = str(tmp_path)
-    cfg.TARGET_DB_NAME = "test_split_commit.duckdb"
-    cfg.RAW_DOCUMENT_STORE_NAME = "test_split_commit_raw.db"
+    cfg.database.target_db_base_path = str(tmp_path)
+    cfg.database.target_db_name = "test_split_commit.duckdb"
+    cfg.database.raw_document_store_name = "test_split_commit_raw.db"
 
     class MockStatusQueue:
         def put(self, status: Any, block: bool = True, timeout: float | None = None) -> None:
             pass
 
-    db_manager = DuckDBManager(cfg.TARGET_DB_BASE_PATH, cfg.TARGET_DB_NAME)
+    db_manager = DuckDBManager(cfg.database.target_db_base_path, cfg.database.target_db_name)
     lifecycle = RunLifecycleCoordinator(cfg, MockStatusQueue(), db_manager, rules=None)
 
     cp, run_id, _ = lifecycle.initialize()

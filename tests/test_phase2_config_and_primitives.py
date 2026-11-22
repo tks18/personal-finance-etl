@@ -28,7 +28,11 @@ from personal_finance_etl.config.financial_rules import (
     TaxHeadConfig,
     TaxSubHeadConfig,
 )
-from personal_finance_etl.config.settings import Settings
+from personal_finance_etl.config.settings import Settings, StatementPatternsSettings
+from personal_finance_etl.infrastructure.providers.files.locator import (
+    categorize_statement_files,
+)
+from pydantic import ValidationError
 from personal_finance_etl.domain.common.dates import (
     add_fy_if_missing,
     get_file_name,
@@ -141,8 +145,19 @@ def test_settings_toml_loading_and_flatten():
     assert toml_path.exists()
 
     cfg = Settings.from_toml(str(toml_path))
-    assert cfg.TARGET_DB_NAME == "Personal_Finance_DB.duckdb"
-    assert cfg.FILE_HASH_POLICY.csv is True
+    assert isinstance(cfg.statement_patterns, StatementPatternsSettings)
+    assert cfg.database.target_db_name == "Personal_Finance_DB.duckdb"
+    assert cfg.statement_patterns.stock_pl == "Stock PL Statements"
+    assert cfg.statement_patterns.us_stock_transactions == [
+        "IND Money (US Stocks)",
+        "Transaction Reports",
+    ]
+    assert cfg.hash_policy.reference_data == "CONTENT"
+    assert cfg.hash_policy.statements == "NONE"
+    assert cfg.hash_policy.household_database == "CONTENT"
+    assert cfg.hash_policy.should_check_hash("column_master") is True
+    assert cfg.hash_policy.should_check_hash("stock_pl") is False
+    assert cfg.hash_policy.should_check_hash("sqlite_source") is True
 
     records = cfg.export_to_db_records()
     assert isinstance(records, list)
@@ -151,6 +166,71 @@ def test_settings_toml_loading_and_flatten():
         assert "Setting_Group" in r
         assert "Setting_Key" in r
         assert "Setting_Value" in r
+
+
+def test_settings_strict_v11_validation(tmp_path: Path):
+    """Verify strict v11 TOML validation, custom patterns, and rejection of legacy keys."""
+    valid_v11 = """
+    [database]
+    target_db_base_path = "C:\\\\Target"
+    target_db_name = "custom.duckdb"
+    raw_document_store_name = "custom_raw.sqlite"
+    disable_file_discoverer = true
+
+    [sources]
+    household_database = "C:\\\\Sources\\\\DB"
+    statements_root = "C:\\\\Statements"
+    column_master = "C:\\\\Refs\\\\COLUMN_MASTER.csv"
+    mutual_fund_instrument_mapping = "C:\\\\Refs\\\\MF.csv"
+    instrument_master = "C:\\\\Refs\\\\BENCH.csv"
+    benchmark_master = "C:\\\\Refs\\\\MASTER.csv"
+    financial_year_parameters = "C:\\\\Refs\\\\MACRO.csv"
+    opening_balances = "C:\\\\Refs\\\\OPENING.csv"
+    currency_reference = "C:\\\\Refs\\\\CURRENCY.csv"
+
+    [statement_patterns]
+    stock_pl = "Custom PL"
+    mf_holdings = "Custom Holdings"
+    stock_orders = "Custom Stock Orders"
+    mf_orders = "Custom MF Orders"
+    us_stock_transactions = ["Custom US", "Monthly Reports"]
+
+    [hash_policy]
+    household_database = "CONTENT"
+    statements = "NONE"
+    reference_data = "CONTENT"
+
+    [observability]
+    logs_directory = "logs/test"
+    retain_last_n_runs = 5
+    """
+    toml_file = tmp_path / "valid_v11.toml"
+    toml_file.write_text(valid_v11, encoding="utf-8")
+
+    cfg = Settings.from_toml(str(toml_file))
+    assert cfg.database.target_db_base_path == "C:\\Target"
+    assert cfg.database.target_db_name == "custom.duckdb"
+    assert cfg.database.disable_file_discoverer is True
+    assert cfg.sources.household_database == "C:\\Sources\\DB"
+    assert cfg.statement_patterns.stock_pl == "Custom PL"
+    assert cfg.statement_patterns.us_stock_transactions == ["Custom US", "Monthly Reports"]
+    assert cfg.hash_policy.reference_data == "CONTENT"
+    assert cfg.observability.logs_directory == "logs/test"
+
+    # Test dynamic statement categorization using custom patterns
+    (tmp_path / "Custom PL").mkdir(parents=True)
+    (tmp_path / "Custom PL" / "statement.xlsx").write_text("pl")
+    cats = categorize_statement_files(str(tmp_path), strict=False, patterns=cfg.statement_patterns)
+    assert len(cats["stock_pl"]) == 1
+
+    # Verify legacy keys or unrecognized sections raise ValidationError
+    legacy_content = """
+    TARGET_DB_BASE_PATH = "C:\\\\Target"
+    """
+    bad_file = tmp_path / "legacy.toml"
+    bad_file.write_text(legacy_content, encoding="utf-8")
+    with pytest.raises(ValidationError):
+        Settings.from_toml(str(bad_file))
 
 
 def test_preferences_manager(tmp_path: Path):

@@ -114,7 +114,7 @@ class DataExtractor:
         if sqlite_files:
             sqlite_path = sqlite_files[0]
             sqlite_bytes = self._get_bytes(sqlite_path)
-            extractor = SQLiteExtractor(self.cfg.SOURCE_DB_FOLDER)
+            extractor = SQLiteExtractor(self.cfg.sources.household_database)
             tables = extractor.extract_base_tables(
                 os.path.basename(sqlite_path), os.path.dirname(sqlite_path), sqlite_bytes
             )
@@ -163,10 +163,10 @@ class DataExtractor:
         self, pending_files: dict[str, list[str]]
     ) -> tuple[pl.DataFrame, dict[str, dict[str, str]], dict[str, pl.LazyFrame]]:
         """Extract column master mappings and configuration CSV lazyframes."""
-        column_master_bytes = self._get_bytes(self.cfg.COLUMN_MASTER_PATH)
+        column_master_bytes = self._get_bytes(self.cfg.sources.column_master)
         df_column_master = pl.read_csv(io.BytesIO(column_master_bytes)).with_columns(
-            pl.lit(os.path.basename(self.cfg.COLUMN_MASTER_PATH)).alias("__file_name__"),
-            pl.lit(os.path.dirname(self.cfg.COLUMN_MASTER_PATH)).alias("__folder_path__"),
+            pl.lit(os.path.basename(self.cfg.sources.column_master)).alias("__file_name__"),
+            pl.lit(os.path.dirname(self.cfg.sources.column_master)).alias("__folder_path__"),
         )
         mappings = {
             "category": get_column_mapping(df_column_master, "CATEGORY"),
@@ -178,35 +178,38 @@ class DataExtractor:
         }
         config_frames = {
             "stg_mf_isin_mapping": self._read_config_csv_lazy(
-                pending_files, self.cfg.MF_ISIN_CSV_PATH, extract_stg_mf_isin_mapping, "mf_isin"
+                pending_files,
+                self.cfg.sources.mutual_fund_instrument_mapping,
+                extract_stg_mf_isin_mapping,
+                "mf_isin",
             ),
             "stg_benchmark_mapping": self._read_config_csv_lazy(
                 pending_files,
-                self.cfg.BENCHMARK_MAPPING_CSV_PATH,
+                self.cfg.sources.instrument_master,
                 extract_stg_benchmark_mapping,
                 "benchmark_mapping",
             ),
             "raw_opening_balances": self._read_config_csv_lazy(
                 pending_files,
-                self.cfg.OPENING_BALANCE_CSV_PATH,
+                self.cfg.sources.opening_balances,
                 extract_opening_balances_raw,
                 "opening_balances",
             ),
             "raw_benchmark_master": self._read_config_csv_lazy(
                 pending_files,
-                self.cfg.BENCHMARK_MASTER_CSV_PATH,
+                self.cfg.sources.benchmark_master,
                 extract_benchmark_master_raw,
                 "benchmark_master",
             ),
             "raw_macro_parameters": self._read_config_csv_lazy(
                 pending_files,
-                self.cfg.MACRO_PARAMETERS_CSV_PATH,
+                self.cfg.sources.financial_year_parameters,
                 extract_macro_parameters_raw,
                 "macro_parameters",
             ),
             "currency_mapping_raw": self._read_config_csv_lazy(
                 pending_files,
-                self.cfg.CURRENCY_MAPPING_CSV_PATH,
+                self.cfg.sources.currency_reference,
                 extract_currency_mapping_raw,
                 "currency_mapping",
             ),

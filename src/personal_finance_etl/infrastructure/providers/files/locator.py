@@ -17,6 +17,7 @@ from __future__ import annotations
 import glob
 import os
 
+from personal_finance_etl.config.settings import StatementPatternsSettings
 from personal_finance_etl.infrastructure.observability.diagnostics import (
     get_observability_diagnostics,
 )
@@ -26,13 +27,15 @@ __all__ = ["categorize_statement_files"]
 diagnostics = get_observability_diagnostics(__name__)
 
 
-def _match_category(filepath: str) -> str | None:
+def _match_category(filepath: str, patterns: StatementPatternsSettings) -> str | None:
     """Classify an Excel file path into its corresponding statement category.
 
     Parameters
     ----------
     filepath : str
         Normalized file path.
+    patterns : StatementPatternsSettings
+        Configured folder and filename keyword patterns.
 
     Returns
     -------
@@ -41,16 +44,17 @@ def _match_category(filepath: str) -> str | None:
     """
     if not filepath.endswith(".xlsx"):
         return None
-    if "Stock PL Statements" in filepath:
+    if patterns.stock_pl and patterns.stock_pl in filepath:
         return "stock_pl"
-    if "Mutual Funds - Holdings" in filepath:
+    if patterns.mf_holdings and patterns.mf_holdings in filepath:
         return "mf_holdings"
-    if "Stock - Orders" in filepath:
+    if patterns.stock_orders and patterns.stock_orders in filepath:
         return "stock_orders"
-    if "Mutual Funds - Orders" in filepath:
+    if patterns.mf_orders and patterns.mf_orders in filepath:
         return "mf_orders"
-    if "IND Money (US Stocks)" in filepath and "Transaction Reports" in filepath:
-        return "us_stock_transactions"
+    if patterns.us_stock_transactions:
+        if all(kw in filepath for kw in patterns.us_stock_transactions):
+            return "us_stock_transactions"
     return None
 
 
@@ -78,7 +82,11 @@ def _validate_required_categories(categories: dict[str, list[str]], strict: bool
             )
 
 
-def categorize_statement_files(folder_path: str, strict: bool = True) -> dict[str, list[str]]:
+def categorize_statement_files(
+    folder_path: str,
+    strict: bool = True,
+    patterns: StatementPatternsSettings | None = None,
+) -> dict[str, list[str]]:
     """Perform a single directory traversal to categorize all statement files.
 
     Parameters
@@ -88,12 +96,15 @@ def categorize_statement_files(folder_path: str, strict: bool = True) -> dict[st
     strict : bool, optional
         Whether to raise FileNotFoundError if any non-optional category has no files.
         Defaults to True.
+    patterns : StatementPatternsSettings, optional
+        Custom statement folder and filename keyword patterns. Defaults to None.
 
     Returns
     -------
     dict[str, list[str]]
         Dictionary mapping category names to lists of normalized filepaths.
     """
+    active_patterns = patterns or StatementPatternsSettings()
     all_files = glob.glob(os.path.join(folder_path, "**", "*.*"), recursive=True)
     all_files = [f.replace("\\", "/") for f in all_files if not os.path.basename(f).startswith("~")]
     diagnostics.debug(f"Scanning directory: {folder_path} - Found {len(all_files)} total blobs.")
@@ -107,7 +118,7 @@ def categorize_statement_files(folder_path: str, strict: bool = True) -> dict[st
     }
 
     for f in all_files:
-        cat = _match_category(f)
+        cat = _match_category(f, active_patterns)
         if cat is not None:
             categories[cat].append(f)
 

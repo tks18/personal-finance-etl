@@ -58,7 +58,9 @@ class ETLOrchestrator:
         self.rules = rules
         self.status_queue = status_queue or NullEventQueue()
         self.emitter = emitter or get_global_emitter()
-        self.db_manager = DuckDBManager(cfg.TARGET_DB_BASE_PATH, cfg.TARGET_DB_NAME)
+        self.db_manager = DuckDBManager(
+            cfg.database.target_db_base_path, cfg.database.target_db_name
+        )
         self.executor = PipelineExecutor(
             cfg, self.status_queue, self.db_manager, rules, emitter=self.emitter
         )

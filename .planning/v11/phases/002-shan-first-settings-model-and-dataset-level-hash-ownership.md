@@ -76,11 +76,11 @@ Use the anchors above as the minimum inspection set. Add only directly affected 
 
 ## 9. Tests and verification
 
-- [ ] The new Settings model loads a migrated production-shaped config successfully.
-- [ ] Current hash-enabled/hash-disabled behavior is reproduced for every known source category.
-- [ ] No runtime consumer reads the old `FILE_HASH_POLICY.csv/excel/sqlite` model.
-- [ ] `FinancialRules` remains a separate configuration authority.
-- [ ] Settings snapshots remain auditable after the nested-name change.
+- [x] The new Settings model loads a migrated production-shaped config successfully.
+- [x] Current hash-enabled/hash-disabled behavior is reproduced for every known source category.
+- [x] No runtime consumer reads the old `FILE_HASH_POLICY.csv/excel/sqlite` model.
+- [x] `FinancialRules` remains a separate configuration authority.
+- [x] Settings snapshots remain auditable after the nested-name change.
 
 ## 10. Explicit non-goals
 
@@ -89,11 +89,11 @@ Use the anchors above as the minimum inspection set. Add only directly affected 
 
 ## 11. Completion checklist
 
-- [ ] Exit assertion: The new Settings model loads a migrated production-shaped config successfully.
-- [ ] Exit assertion: Current hash-enabled/hash-disabled behavior is reproduced for every known source category.
-- [ ] Exit assertion: No runtime consumer reads the old `FILE_HASH_POLICY.csv/excel/sqlite` model.
-- [ ] Exit assertion: `FinancialRules` remains a separate configuration authority.
-- [ ] Exit assertion: Settings snapshots remain auditable after the nested-name change.
+- [x] Exit assertion: The new Settings model loads a migrated production-shaped config successfully.
+- [x] Exit assertion: Current hash-enabled/hash-disabled behavior is reproduced for every known source category.
+- [x] Exit assertion: No runtime consumer reads the old `FILE_HASH_POLICY.csv/excel/sqlite` model.
+- [x] Exit assertion: `FinancialRules` remains a separate configuration authority.
+- [x] Exit assertion: Settings snapshots remain auditable after the nested-name change.
 
 ## 12. Commit boundary
 
@@ -109,15 +109,46 @@ The next phase may assume only the verified state above. It begins **Reference D
 Phase: 002
 Target release: v11.1.0
 Files changed:
-Contracts/schema changed:
-Financial formulas changed:
-Protected identity comparison:
-Focused tests:
-Architecture tests:
-Real-data verification:
-Power BI verification:
-Observability/recovery verification:
-Compatibility/transitional state remaining:
+- src/personal_finance_etl/config/settings.py
+- src/personal_finance_etl/config/__init__.py
+- src/personal_finance_etl/infrastructure/providers/files/locator.py
+- src/personal_finance_etl/infrastructure/control_plane/file_sync.py
+- src/personal_finance_etl/infrastructure/warehouse/meta/layer.py
+- src/personal_finance_etl/infrastructure/observability/redaction.py
+- src/personal_finance_etl/application/facade.py
+- src/personal_finance_etl/application/ingestion/coordinator.py
+- src/personal_finance_etl/application/pipeline/execution.py
+- src/personal_finance_etl/application/pipeline/lifecycle.py
+- src/personal_finance_etl/application/pipeline/orchestrator.py
+- src/personal_finance_etl/bootstrap/container.py
+- tests/config.toml
+- tests/test_configuration_provenance.py
+- tests/test_forensic_pipeline.py
+- tests/test_legacy_logging_demolition.py
+- tests/test_phase2_config_and_primitives.py
+- tests/test_phase9_orchestration_and_bootstrap.py
+- tests/test_redaction_and_retention.py
+External files migrated:
+- g:/My Drive/Docs/Financial Docs/Financial Planner/Analysis/ETL App/shan_personal_finance_ETL.toml
+- g:/My Drive/Docs/Financial Docs/Financial Planner/Analysis/ETL App/shan_personal_finance_ETL_Test.toml
+Contracts/schema changed: Strict v11 typed Settings schema with 5 groups ([database], [sources], [statement_patterns], [hash_policy], [observability]) and extra='forbid'
+Financial formulas changed: None
+Protected identity comparison: N/A
+Focused tests: 195/195 passed (including config provenance, primitives, forensic pipeline, and lifecycle)
+Architecture tests: tests/test_architecture_boundaries.py (passed)
+Real-data verification: Loaded and validated shan_personal_finance_ETL.toml and shan_personal_finance_ETL_Test.toml against live Google Drive paths
+Power BI verification: N/A
+Observability/recovery verification: Strict typed fingerprinting and logging retention verified in tests/test_forensic_pipeline.py and test_redaction_and_retention.py
+Static analysis verification:
+- pyright: 0 errors, 0 warnings, 0 informations
+- pylint src: 10.00/10 rating
+- mypy: no issues found in 199 source files
+- ruff: all checks passed, formatting clean
+- documentation: 100% documented, zero AST audit violations
+Compatibility/transitional state remaining: None. All legacy flat keys, normalizers, and UPPERCASE property shims completely eradicated.
 Semantic commit groups:
-Exit assertions green: yes/no
+- refactor(config): implement strict v11 typed settings schema and parameterize statement patterns
+- refactor(core): migrate pipeline, coordinator, container, and meta to typed settings attributes
+- test(config): update test fixtures and provenance suites to strict typed settings models
+Exit assertions green: yes
 ```

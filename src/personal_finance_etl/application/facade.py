@@ -123,9 +123,9 @@ class PersonalFinanceEngine:
             )
         cfg = Settings.from_toml(config_path)
         backup_mgr = SystemBackupManager(
-            cfg.TARGET_DB_BASE_PATH,
-            sqlite_db_name=cfg.RAW_DOCUMENT_STORE_NAME,
-            duckdb_name=cfg.TARGET_DB_NAME,
+            cfg.database.target_db_base_path,
+            sqlite_db_name=cfg.database.raw_document_store_name,
+            duckdb_name=cfg.database.target_db_name,
         )
         return backup_mgr.create_snapshot()
 
@@ -151,9 +151,9 @@ class PersonalFinanceEngine:
             )
         cfg = Settings.from_toml(config_path)
         backup_mgr = SystemBackupManager(
-            cfg.TARGET_DB_BASE_PATH,
-            sqlite_db_name=cfg.RAW_DOCUMENT_STORE_NAME,
-            duckdb_name=cfg.TARGET_DB_NAME,
+            cfg.database.target_db_base_path,
+            sqlite_db_name=cfg.database.raw_document_store_name,
+            duckdb_name=cfg.database.target_db_name,
         )
         return backup_mgr.restore_snapshot(backup_zip_path)
 

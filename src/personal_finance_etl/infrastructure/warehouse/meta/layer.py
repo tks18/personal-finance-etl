@@ -139,8 +139,7 @@ class MetaLayer:
         file_type = FILE_TYPE_MAP.get(ext, "UNKNOWN")
 
         file_id = generate_file_id(file_path)
-        policy_attr = ext.lstrip(".").lower()
-        should_hash = getattr(self.cfg.FILE_HASH_POLICY, policy_attr, False)
+        should_hash = self.cfg.hash_policy.should_check_hash(category)
 
         if should_hash and os.path.exists(file_path):
             file_hash = compute_file_hash(file_path)
