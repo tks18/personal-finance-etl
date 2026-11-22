@@ -77,11 +77,11 @@ Use the anchors above as the minimum inspection set. Add only directly affected 
 
 ## 9. Tests and verification
 
-- [ ] No runtime import under `personal_finance_etl.presentation.docs` remains.
-- [ ] `pywebview`, portal-only Markdown runtime and bundled Mermaid/svg-pan-zoom assets are absent from the runtime/package graph.
-- [ ] `pfetl`/current launcher still starts CLI/Desktop paths without docs-specific failure.
-- [ ] README and retained `/docs` links resolve to repository Markdown rather than the removed portal.
-- [ ] PyInstaller spec contains no docs/browser assets or hidden imports.
+- [x] No runtime import under `personal_finance_etl.presentation.docs` remains.
+- [x] `pywebview`, portal-only Markdown runtime and bundled Mermaid/svg-pan-zoom assets are absent from the runtime/package graph.
+- [x] `pfetl`/current launcher still starts CLI/Desktop paths without docs-specific failure.
+- [x] README and retained `/docs` links resolve to repository Markdown rather than the removed portal.
+- [x] PyInstaller spec contains no docs/browser assets or hidden imports.
 
 ## 10. Explicit non-goals
 
@@ -90,11 +90,11 @@ Use the anchors above as the minimum inspection set. Add only directly affected 
 
 ## 11. Completion checklist
 
-- [ ] Exit assertion: No runtime import under `personal_finance_etl.presentation.docs` remains.
-- [ ] Exit assertion: `pywebview`, portal-only Markdown runtime and bundled Mermaid/svg-pan-zoom assets are absent from the runtime/package graph.
-- [ ] Exit assertion: `pfetl`/current launcher still starts CLI/Desktop paths without docs-specific failure.
-- [ ] Exit assertion: README and retained `/docs` links resolve to repository Markdown rather than the removed portal.
-- [ ] Exit assertion: PyInstaller spec contains no docs/browser assets or hidden imports.
+- [x] Exit assertion: No runtime import under `personal_finance_etl.presentation.docs` remains.
+- [x] Exit assertion: `pywebview`, portal-only Markdown runtime and bundled Mermaid/svg-pan-zoom assets are absent from the runtime/package graph.
+- [x] Exit assertion: `pfetl`/current launcher still starts CLI/Desktop paths without docs-specific failure.
+- [x] Exit assertion: README and retained `/docs` links resolve to repository Markdown rather than the removed portal.
+- [x] Exit assertion: PyInstaller spec contains no docs/browser assets or hidden imports.
 
 ## 12. Commit boundary
 
@@ -110,15 +110,40 @@ The next phase may assume only the verified state above. It begins **Shan-First 
 Phase: 001
 Target release: v11.0.1
 Files changed:
-Contracts/schema changed:
-Financial formulas changed:
-Protected identity comparison:
-Focused tests:
-Architecture tests:
-Real-data verification:
-Power BI verification:
-Observability/recovery verification:
-Compatibility/transitional state remaining:
+- src/personal_finance_etl/presentation/launcher.py
+- src/personal_finance_etl/presentation/cli/app.py
+- src/personal_finance_etl/presentation/desktop/app.py
+- src/personal_finance_etl/presentation/__init__.py
+- pyproject.toml
+- uv.lock
+- main.spec
+- poe_tasks.toml
+- README.md
+- tests/test_architecture_boundaries.py
+- tests/test_phase10_presentation.py
+Files deleted:
+- src/personal_finance_etl/presentation/docs/*
+- mkdocs.yml
+- .readthedocs.yaml
+- .github/workflows/deploy-docs.yml
+- docs/manifest.json
+- docs/requirements.txt
+- docs/overrides/*
+- docs/assets/javascripts/*
+- docs/assets/stylesheets/*
+Contracts/schema changed: None
+Financial formulas changed: None
+Protected identity comparison: N/A
+Focused tests: tests/test_phase10_presentation.py, tests/test_architecture_boundaries.py (PASS)
+Architecture tests: tests/test_architecture_boundaries.py (PASS)
+Real-data verification: N/A
+Power BI verification: N/A
+Observability/recovery verification: N/A
+Compatibility/transitional state remaining: None
 Semantic commit groups:
-Exit assertions green: yes/no
+- refactor(presentation): remove docs viewer and CLI --docs flag
+- chore(deps): prune pywebview, markdown, mkdocs dependencies
+- chore(docs): remove portal generators and update README links
+- test(presentation): update tests for docs runtime removal
+Exit assertions green: yes
 ```
