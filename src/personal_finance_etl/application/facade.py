@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import multiprocessing
 import os
+import threading
 from collections.abc import Callable
 from typing import Protocol
 
@@ -189,7 +190,7 @@ class PersonalFinanceEngine:
         config_path: str,
         rules_path: str,
         on_status: Callable[[ObservabilityEvent], None],
-    ) -> None:
+    ) -> threading.Thread:
         """Spawn the multiprocessing ETL pipeline and stream status updates to on_status."""
         if config_path:
             self.add_recent_config(config_path)
@@ -197,7 +198,7 @@ class PersonalFinanceEngine:
             self.add_recent_rules(rules_path)
         status_queue: multiprocessing.Queue[ObservabilityEvent] = multiprocessing.Queue()
         process = WorkerPoolCoordinator.spawn_process(status_queue, config_path, rules_path)
-        WorkerPoolCoordinator.monitor_queue(process, status_queue, on_status)
+        return WorkerPoolCoordinator.monitor_queue(process, status_queue, on_status)
 
     def run_pipeline_sync(
         self,

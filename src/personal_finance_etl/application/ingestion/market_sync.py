@@ -189,7 +189,7 @@ def emit_market_sync_completed(
             f"({cached_cnt} cached, {fetched_cnt} fetched, {total_quotes:,} quotes)"
         ),
         presentation_kind=PresentationKind.SUCCESS,
-        progress=1.0,
+        progress=None,
         rows=total_quotes,
         stage=EngineStage.TRANSFORMING,
     )
