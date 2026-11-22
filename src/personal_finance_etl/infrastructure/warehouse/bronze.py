@@ -328,7 +328,7 @@ class BronzeLayer:
         Parameters
         ----------
         table_name : str
-            Table name within bronze schema.
+            Table name within bronze schema (with or without 'bronze.' prefix).
 
         Returns
         -------
@@ -336,8 +336,9 @@ class BronzeLayer:
             Queried DataFrame or empty frame.
         """
         try:
+            target = table_name if table_name.startswith("bronze.") else f"bronze.{table_name}"
             return self.db_manager.conn.execute(
-                f"SELECT * FROM bronze.{table_name}"  # nosec B608
+                f"SELECT * FROM {target}"  # nosec B608
             ).pl()
         except duckdb.CatalogException:
             return pl.DataFrame()
@@ -384,22 +385,22 @@ class BronzeLayer:
                 return pl.DataFrame()
 
         return ExtractionResult(
-            zcategory=_get_lf("bronze.r_SQLite_ZCategory"),
-            assetgroup=_get_lf("bronze.r_SQLite_AssetGroup"),
-            assets=_get_lf("bronze.r_SQLite_Assets"),
-            currency=_get_lf("bronze.r_SQLite_Currency"),
-            inoutcome=_get_lf("bronze.r_SQLite_InOutcome"),
+            household_zcategory=_get_lf("bronze.household_zcategory"),
+            household_asset_group=_get_lf("bronze.household_asset_group"),
+            household_assets=_get_lf("bronze.household_assets"),
+            household_currency=_get_lf("bronze.household_currency"),
+            household_inoutcome=_get_lf("bronze.household_inoutcome"),
             mappings=original_mappings,
-            raw_mutual_fund_instrument_mapping=_get_lf("bronze.r_MF_ISIN_Mapping"),
-            raw_instrument_master=_get_lf("bronze.r_Benchmark_Mapping"),
-            mf_market_data_raw=_get_lf("bronze.r_MF_Market_Data"),
-            mf_transactions_raw=_get_lf("bronze.r_MF_Transactions"),
-            stock_market_data_raw=_get_lf("bronze.r_Stock_Market_Data"),
-            stock_transactions_raw=_get_lf("bronze.r_Stock_Transactions"),
-            raw_opening_balances=_get_lf("bronze.r_Opening_Balances"),
-            raw_benchmark_master=_get_lf("bronze.r_Benchmark_Master"),
-            raw_financial_year_parameters=_get_lf("bronze.r_Macro_Parameters"),
-            column_master=_get_df("bronze.r_Column_Master"),
-            us_stock_transactions_raw=_get_lf("bronze.r_US_Stock_Transactions"),
-            raw_currency_reference=_get_lf("bronze.r_Currency_Mapping"),
+            column_master=_get_df("bronze.column_master"),
+            mutual_fund_instrument_mapping=_get_lf("bronze.mutual_fund_instrument_mapping"),
+            instrument_master=_get_lf("bronze.instrument_master"),
+            opening_balances=_get_lf("bronze.opening_balances"),
+            benchmark_master=_get_lf("bronze.benchmark_master"),
+            financial_year_parameters=_get_lf("bronze.financial_year_parameters"),
+            currency_reference=_get_lf("bronze.currency_reference"),
+            mf_market_data=_get_lf("bronze.mf_market_data"),
+            mf_transactions=_get_lf("bronze.mf_transactions"),
+            stock_market_data=_get_lf("bronze.stock_market_data"),
+            stock_transactions=_get_lf("bronze.stock_transactions"),
+            us_stock_transactions=_get_lf("bronze.us_stock_transactions"),
         )

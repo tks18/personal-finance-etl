@@ -102,27 +102,27 @@ See [Configuration Reference](../configuration/configuration-reference.md) and [
 
 ## One application, two interfaces
 
-The installed package exposes two console scripts:
+The installed package exposes one canonical console command:
 
 ```text
-shan-fin
-shan-fin-gui
+pfetl
 ```
 
-`shan-fin` is the canonical launcher.
-
 ```text
-shan-fin
-    → Desktop
+pfetl
+    → Desktop operations console (default)
 
-shan-fin tkinter
-    → Desktop
+pfetl run
+    → Rich terminal ETL pipeline
 
-shan-fin cli
-    → Rich terminal CLI
+pfetl status
+    → Point-in-time lock, run health, and sync summary
 
-shan-fin-gui
-    → Desktop directly
+pfetl doctor
+    → Actionable diagnostic health checks
+
+pfetl info
+    → Runtime environment and warehouse inventory
 ```
 
 Both interfaces call the same application façade:

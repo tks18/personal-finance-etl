@@ -96,14 +96,9 @@ def transform_d_asset_category(
         .filter(pl.col("IS_DEL").fill_null("0") == "0")
         .select(
             [
-                "__file_name__",
-                "__folder_path__",
-                "DEVICE_ID",
                 "UID",
-                "USE_TIME",
                 "ASSET_GROUP",
                 "TYPE",
-                "ORDER_SEQUENCE",
             ]
         )
     )
@@ -207,21 +202,11 @@ def transform_d_asset_subcategory(
         .filter(pl.col("IS_DEL").fill_null("0") == "0")
         .select(
             [
-                "__file_name__",
-                "__folder_path__",
-                "S_NO",
-                "CARD_STATEMENT_DATE",
-                "CARD_PAYMENT_DATE",
+                "UID",
                 "ASSET_NAME",
-                "ORDER_SEQUENCE",
                 "ASSET_DESCRIPTION",
                 "NOTES",
-                "TRANSFER_EXPENSE",
-                "CARD_AUTOPAY",
-                "ADDED_TIME",
-                "UID",
                 "CURRENCY_ID",
-                "AUTOPAY_ASSET_ID",
                 "ASSET_GROUP_ID",
             ]
         )

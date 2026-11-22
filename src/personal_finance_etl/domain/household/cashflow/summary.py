@@ -214,6 +214,10 @@ class MonthlyCashflowSummaryBuilder:
             safe_divide("Net_Investment_Flow", "Total_Cash_Income").alias("Investment_Rate_Pct"),
             safe_divide("Active_Income", "Total_Cash_Income").alias("Active_Income_Share_Pct"),
             safe_divide("Passive_Income", "Total_Cash_Income").alias("Passive_Income_Share_Pct"),
+            safe_divide("Passive_Income", "Total_Core_Expense").alias(
+                "Passive_Income_Core_Expense_Coverage_Ratio"
+            ),
+            safe_divide("Active_Income", "Total_Cash_Income").alias("Active_Income_Dependency_Pct"),
             safe_divide("Total_Core_Expense", "Total_Expense").alias("Core_Expense_Share_Pct"),
             safe_divide("NonCore_Expense", "Total_Expense").alias("NonCore_Expense_Share_Pct"),
             safe_divide("Equity_Deployed", "Total_Investment_Deployed").alias(
@@ -344,5 +348,7 @@ class MonthlyCashflowSummaryBuilder:
                 "YoY_Net_Worth_Growth_Pct_Real",
                 "Expense_to_NW_Ratio",
                 "Emergency_Fund_Coverage",
+                "Passive_Income_Core_Expense_Coverage_Ratio",
+                "Active_Income_Dependency_Pct",
             ]
         )

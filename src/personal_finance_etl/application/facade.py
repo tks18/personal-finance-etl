@@ -20,6 +20,12 @@ import os
 from collections.abc import Callable
 from typing import Protocol
 
+from personal_finance_etl.application.operator import (
+    DoctorReport,
+    OperatorService,
+    SystemInfo,
+    SystemStatus,
+)
 from personal_finance_etl.application.pipeline.orchestrator import ETLOrchestrator
 from personal_finance_etl.application.pipeline.worker import WorkerPoolCoordinator
 from personal_finance_etl.config.financial_rules import FinancialRules
@@ -102,6 +108,25 @@ class PersonalFinanceEngine:
             return True
         except Exception:
             return False
+
+    # --- Operator Services ---
+
+    def get_system_status(self, config_path: str | None = None) -> SystemStatus:
+        """Query system status, lock state, and latest run telemetry read-only."""
+        op = OperatorService(config_path=config_path)
+        return op.get_status()
+
+    def get_system_info(self, config_path: str | None = None) -> SystemInfo:
+        """Inspect runtime environment, configured paths, and warehouse table inventory."""
+        op = OperatorService(config_path=config_path)
+        return op.get_info()
+
+    def run_doctor(
+        self, config_path: str | None = None, rules_path: str | None = None
+    ) -> DoctorReport:
+        """Execute actionable system health checks without raising unhandled exceptions."""
+        op = OperatorService(config_path=config_path, rules_path=rules_path)
+        return op.run_doctor()
 
     # --- Database Operations ---
 

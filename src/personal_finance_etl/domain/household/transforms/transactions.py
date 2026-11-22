@@ -32,30 +32,21 @@ __all__ = [
 ]
 
 BASE_TRANSACTION_COLS = [
-    "__file_name__",
-    "__folder_path__",
-    "S_NO",
     "UID",
-    "ASSET_ID",
-    "CARDDIVIDMONTH",
-    "CATEGORY_ID",
-    "TO_ASSET_ID",
-    "DESCRIPTION",
-    "TIMESTAMP",
     "DATE",
     "TIME",
+    "DESCRIPTION",
     "PAID",
     "TRANSACTION_TYPE",
     "BASE_AMOUNT",
-    "TRANSFER_UID",
-    "FEES_NOTES",
-    "LOCAL_AMOUNT",
-    "MARK",
-    "TRANSFER_FEES",
-    "UPDATED_TIME",
-    "CURRENCY_ID",
     "AMOUNT_ACCOUNT",
+    "LOCAL_AMOUNT",
     "EXCH_RATE",
+    "ASSET_ID",
+    "CATEGORY_ID",
+    "TO_ASSET_ID",
+    "TRANSFER_UID",
+    "CURRENCY_ID",
 ]
 
 
@@ -294,8 +285,8 @@ def _parse_opening_balance_fields(df: pl.LazyFrame) -> pl.LazyFrame:
     """Validate numerics, dates, and types for opening balances."""
     df_parsed = validate_and_parse_numerics(
         df,
-        ["ZAMOUNT", "ZAMOUNTACCOUNT", "ZAMOUNTSUB", "ZDATE"],
-        optional_cols={"ZAMOUNTACCOUNT", "ZAMOUNTSUB", "ZDATE"},
+        ["ZAMOUNTACCOUNT"],
+        optional_cols={"ZAMOUNTACCOUNT"},
         source_col="__file_name__",
     )
     df_parsed = validate_and_parse_dates(
@@ -313,9 +304,7 @@ def _parse_opening_balance_fields(df: pl.LazyFrame) -> pl.LazyFrame:
     )
     return df_parsed.with_columns(
         [
-            pl.col("Z_PK").cast(pl.Int64),
             pl.col("ZUTIME").cast(pl.Int64),
-            pl.col("ZDO_TYPE").cast(pl.Int64),
         ]
     )
 
@@ -327,23 +316,17 @@ def transform_f_opening_balances(
     df_transformed = raw_data.rename(column_mapping).select(
         [
             "__file_name__",
-            "__folder_path__",
-            "Z_PK",
             "ZUTIME",
-            "ZDATE",
-            "ZAMOUNT",
             "ZAMOUNTACCOUNT",
-            "ZAMOUNTSUB",
-            "ZCONTENT",
-            "ZDO_TYPE",
             "ZASSETUID",
-            "ZCATEGORYUID",
-            "ZCURRENCYUID",
-            "ZTOASSETUID",
             "ZTXDATESTR",
-            "ZTXUIDFEE",
-            "ZTXUIDTRANS",
-            "ZUID",
         ]
     )
-    return _parse_opening_balance_fields(df_transformed)
+    return _parse_opening_balance_fields(df_transformed).select(
+        [
+            "ZASSETUID",
+            "ZAMOUNTACCOUNT",
+            "ZTXDATESTR",
+            "ZUTIME",
+        ]
+    )

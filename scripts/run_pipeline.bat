@@ -5,8 +5,8 @@ setlocal
 :: Personal Finance ETL - Unattended Cron Execution Script
 :: =====================================================================
 
-:: Change this to your compiled cli.exe or keep as "uv run shan-fin"
-set "CLI_EXECUTABLE=uv run shan-fin"
+:: Change this to your compiled cli.exe or keep as "uv run pfetl"
+set "CLI_EXECUTABLE=uv run pfetl"
 
 :: Configuration Paths
 set "CONFIG_PATH=D:\Path\To\Settings\config.toml"
@@ -16,7 +16,7 @@ echo [%DATE% %TIME%] [Cron Job] Starting Personal Finance ETL Pipeline...
 echo [%DATE% %TIME%] Executable: %CLI_EXECUTABLE%
 echo ---------------------------------------------------------------------
 
-"%CLI_EXECUTABLE%" cli --config="%CONFIG_PATH%" --rules="%RULES_PATH%" --auto --cron
+"%CLI_EXECUTABLE%" run --config="%CONFIG_PATH%" --rules="%RULES_PATH%" --auto --cron
 
 if %ERRORLEVEL% equ 0 (
     echo [%DATE% %TIME%] [Cron Job] Pipeline completed successfully.

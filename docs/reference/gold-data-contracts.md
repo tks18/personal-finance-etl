@@ -8,35 +8,35 @@ Gold is not allowed to become a second financial engine. Its contract is present
 
 | Contract ID | Physical table | Domain | Grain | Producer | Order |
 |---|---|---|---|---|---:|
-| `df_p_tax_year_summary` | `gold.Tax_Year_Summary` | Taxes | `FY` | `TaxEngine` | 302 |
-| `df_p_tax_income_breakdown` | `gold.Tax_Income_Breakdown` | Taxes | `FY-Head-SubHead-Source` | `TaxEngine` | 303 |
-| `df_p_tax_reconciliation` | `gold.Tax_Reconciliation` | Taxes | `FY-SubHead` | `TaxEngine` | 304 |
-| `df_p_tf_wealth_monthly_totals` | `gold.Core_Monthly_Fact` | Wealth | `Month` | `WealthPresentationEngine` | 110 |
-| `df_p_tf_net_worth_monthly_summary` | `gold.Wealth_Asset_Breakdown` | Wealth | `Month-Asset` | `WealthPresentationEngine` | 110 |
-| `df_p_tf_category_spend_analytics` | `gold.Cashflow_Expense_Breakdown` | Wealth | `Month-ExpenseCategory` | `WealthPresentationEngine` | 120 |
-| `df_p_tf_income_streams_monthly` | `gold.Cashflow_Income_Breakdown` | Wealth | `Month-IncomeCategory` | `WealthPresentationEngine` | 130 |
-| `df_p_tf_wealth_risk_analytics` | `gold.Wealth_FIRE_Analytics` | Wealth | `Month` | `WealthPresentationEngine` | 140 |
-| `df_p_tf_budget_forecast_monthly` | `gold.Forecast_Budget_Variance` | Wealth | `Month` | `WealthPresentationEngine` | 160 |
-| `df_p_tf_investment_analytics` | `gold.Investment_Portfolio_Summary` | Investments | `Month-ISIN` | `InvestmentQuantEngine` | 170 |
-| `df_p_tf_monthly_cashflow_summary` | `gold.Cashflow_Efficiency_Analytics` | Wealth | `Month` | `WealthPresentationEngine` | 180 |
-| `df_p_tf_cashflow_activity_summary` | `gold.Cashflow_Activity_Summary` | Wealth | `Month` | `WealthPresentationEngine` | 190 |
-| `df_f_investment_analytics_isin` | `gold.Investment_By_ISIN` | Investments | `Date-ISIN` | `InvestmentQuantEngine` | 200 |
-| `df_f_investment_analytics_subtype` | `gold.Investment_By_Subtype` | Investments | `Date-Subtype` | `InvestmentQuantEngine` | 210 |
-| `df_f_investment_analytics_class` | `gold.Investment_By_Class` | Investments | `Date-Class` | `InvestmentQuantEngine` | 220 |
-| `df_f_investment_analytics_instrument_type` | `gold.Investment_By_Instrument_Type` | Investments | `Date-InstrumentType` | `InvestmentQuantEngine` | 230 |
-| `df_f_investment_analytics_sector` | `gold.Investment_By_Sector` | Investments | `Date-Sector` | `InvestmentQuantEngine` | 240 |
-| `df_f_investment_analytics_industry` | `gold.Investment_By_Industry` | Investments | `Date-Industry` | `InvestmentQuantEngine` | 250 |
-| `df_f_investment_analytics_portfolio` | `gold.Investment_By_Portfolio` | Investments | `Date` | `InvestmentQuantEngine` | 260 |
-| `df_f_investment_analytics_geo` | `gold.Investment_By_Geo` | Investments | `Date-Geo` | `InvestmentQuantEngine` | 270 |
-| `df_f_investment_analytics_country` | `gold.Investment_By_Country` | Investments | `Date-Country` | `InvestmentQuantEngine` | 280 |
-| `df_f_investment_analytics_currency` | `gold.Investment_By_Currency` | Investments | `Date-Currency` | `InvestmentQuantEngine` | 290 |
+| `df_p_tax_year_summary` | `gold.tax_financial_year_summary` | Taxes | `FY` | `TaxEngine` | 302 |
+| `df_p_tax_income_breakdown` | `gold.tax_income_head_breakdown` | Taxes | `FY-Head-SubHead-Source` | `TaxEngine` | 303 |
+| `df_p_tax_reconciliation` | `gold.tax_subhead_reconciliation` | Taxes | `FY-SubHead` | `TaxEngine` | 304 |
+| `df_p_tf_wealth_monthly_totals` | `gold.core_monthly_fact` | Wealth | `Month` | `WealthPresentationEngine` | 110 |
+| `df_p_tf_net_worth_monthly_summary` | `gold.wealth_asset_breakdown` | Wealth | `Month-Asset` | `WealthPresentationEngine` | 110 |
+| `df_p_tf_category_spend_analytics` | `gold.cashflow_expense_breakdown` | Wealth | `Month-ExpenseCategory` | `WealthPresentationEngine` | 120 |
+| `df_p_tf_income_streams_monthly` | `gold.cashflow_income_breakdown` | Wealth | `Month-IncomeCategory` | `WealthPresentationEngine` | 130 |
+| `df_p_tf_wealth_risk_analytics` | `gold.wealth_fire_analytics` | Wealth | `Month` | `WealthPresentationEngine` | 140 |
+| `df_p_tf_budget_forecast_monthly` | `gold.forecast_budget_variance` | Wealth | `Month` | `WealthPresentationEngine` | 160 |
+| `df_p_tf_investment_analytics` | `gold.investment_portfolio_summary` | Investments | `Month-ISIN` | `InvestmentQuantEngine` | 170 |
+| `df_p_tf_monthly_cashflow_summary` | `gold.cashflow_efficiency_analytics` | Wealth | `Month` | `WealthPresentationEngine` | 180 |
+| `df_p_tf_cashflow_activity_summary` | `gold.cashflow_activity_summary` | Wealth | `Month` | `WealthPresentationEngine` | 190 |
+| `df_f_investment_analytics_isin` | `gold.investment_by_isin` | Investments | `Date-ISIN` | `InvestmentQuantEngine` | 200 |
+| `df_f_investment_analytics_subtype` | `gold.investment_by_subtype` | Investments | `Date-Subtype` | `InvestmentQuantEngine` | 210 |
+| `df_f_investment_analytics_class` | `gold.investment_by_class` | Investments | `Date-Class` | `InvestmentQuantEngine` | 220 |
+| `df_f_investment_analytics_instrument_type` | `gold.investment_by_instrument_type` | Investments | `Date-InstrumentType` | `InvestmentQuantEngine` | 230 |
+| `df_f_investment_analytics_sector` | `gold.investment_by_sector` | Investments | `Date-Sector` | `InvestmentQuantEngine` | 240 |
+| `df_f_investment_analytics_industry` | `gold.investment_by_industry` | Investments | `Date-Industry` | `InvestmentQuantEngine` | 250 |
+| `df_f_investment_analytics_portfolio` | `gold.investment_by_portfolio` | Investments | `Date` | `InvestmentQuantEngine` | 260 |
+| `df_f_investment_analytics_geo` | `gold.investment_by_geo` | Investments | `Date-Geo` | `InvestmentQuantEngine` | 270 |
+| `df_f_investment_analytics_country` | `gold.investment_by_country` | Investments | `Date-Country` | `InvestmentQuantEngine` | 280 |
+| `df_f_investment_analytics_currency` | `gold.investment_by_currency` | Investments | `Date-Currency` | `InvestmentQuantEngine` | 290 |
 
 
 ## Physical schemas
 
 The following tables are generated directly from `schema/gold.py`.
 
-### `gold.Tax_Year_Summary`
+### `gold.tax_financial_year_summary`
 
 **Contract ID:** `df_p_tax_year_summary`  
 **Grain:** `FY`  
@@ -60,12 +60,15 @@ The following tables are generated directly from `schema/gold.py`.
 | `Ledger_Tax_Estimate_Complete` | `BOOLEAN` | Field |
 | `Total_Event_Count` | `BIGINT` | Field |
 | `Ready_Count` | `BIGINT` | Field |
+| `Indicative_Unrealized_Tax_Liability` | `DOUBLE` | Tax Exposure Summary |
+| `Indicative_Harvestable_Tax_Savings` | `DOUBLE` | Tax Exposure Summary |
+| `Indicative_Net_Tax_Exposure` | `DOUBLE` | Tax Exposure Summary |
 
 **Table constraints**
 
 - `Check_Required_Count BIGINT`
 
-### `gold.Tax_Income_Breakdown`
+### `gold.tax_income_head_breakdown`
 
 **Contract ID:** `df_p_tax_income_breakdown`  
 **Grain:** `FY-Head-SubHead-Source`  
@@ -91,7 +94,7 @@ The following tables are generated directly from `schema/gold.py`.
 
 - `Check_Required_Count BIGINT`
 
-### `gold.Tax_Reconciliation`
+### `gold.tax_subhead_reconciliation`
 
 **Contract ID:** `df_p_tax_reconciliation`  
 **Grain:** `FY-SubHead`  
@@ -129,7 +132,7 @@ The following tables are generated directly from `schema/gold.py`.
 - `Check_Required_Count BIGINT`
 - `PRIMARY KEY(FY, Tax_Sub_Head)`
 
-### `gold.Wealth_Asset_Breakdown`
+### `gold.wealth_asset_breakdown`
 
 **Contract ID:** `df_p_tf_net_worth_monthly_summary`  
 **Grain:** `Month-Asset`  
@@ -173,7 +176,7 @@ The following tables are generated directly from `schema/gold.py`.
 | `"3M_Avg_Income"` | `DOUBLE` | Trailing Averages |
 | `Months_of_Runway` | `DOUBLE` | Trailing Averages |
 
-### `gold.Core_Monthly_Fact`
+### `gold.core_monthly_fact`
 
 **Contract ID:** `df_p_tf_wealth_monthly_totals`  
 **Grain:** `Month`  
@@ -223,8 +226,13 @@ The following tables are generated directly from `schema/gold.py`.
 | `Foreign_Exposure_Pct` | `DOUBLE` | Risk & Weights |
 | `CPI_INDEX` | `DOUBLE` | Risk & Weights |
 | `INFLATION_YOY_PCT` | `DOUBLE` | Risk & Weights |
+| `Net_Savings_Flow` | `DOUBLE` | Net-Worth Attribution |
+| `Market_Return_Flow` | `DOUBLE` | Net-Worth Attribution |
+| `Attribution_Residual` | `DOUBLE` | Net-Worth Attribution |
+| `Inflation_Adjusted_Core_Expense` | `DOUBLE` | Real Expense Growth |
+| `Real_Core_Expense_Growth_Pct` | `DOUBLE` | Real Expense Growth |
 
-### `gold.Cashflow_Expense_Breakdown`
+### `gold.cashflow_expense_breakdown`
 
 **Contract ID:** `df_p_tf_category_spend_analytics`  
 **Grain:** `Month-ExpenseCategory`  
@@ -250,7 +258,7 @@ The following tables are generated directly from `schema/gold.py`.
 | `Trailing_3M_Avg_Spend` | `DOUBLE` | Position Values |
 | `Cumulative_YTD_Spend` | `DOUBLE` | Position Values |
 
-### `gold.Cashflow_Income_Breakdown`
+### `gold.cashflow_income_breakdown`
 
 **Contract ID:** `df_p_tf_income_streams_monthly`  
 **Grain:** `Month-IncomeCategory`  
@@ -275,7 +283,7 @@ The following tables are generated directly from `schema/gold.py`.
 | `Trailing_3M_Avg_Income` | `DOUBLE` | Position Values |
 | `Cumulative_YTD_Income` | `DOUBLE` | Position Values |
 
-### `gold.Wealth_FIRE_Analytics`
+### `gold.wealth_fire_analytics`
 
 **Contract ID:** `df_p_tf_wealth_risk_analytics`  
 **Grain:** `Month`  
@@ -321,7 +329,7 @@ The following tables are generated directly from `schema/gold.py`.
 | `Savings_Rate_Actual` | `DOUBLE` | Risk & Weights |
 | `FI_Velocity` | `DOUBLE` | Risk & Weights |
 
-### `gold.Forecast_Budget_Variance`
+### `gold.forecast_budget_variance`
 
 **Contract ID:** `df_p_tf_budget_forecast_monthly`  
 **Grain:** `Month`  
@@ -359,7 +367,7 @@ The following tables are generated directly from `schema/gold.py`.
 | `Rule_Investment_Pct_Budget` | `DOUBLE` | Risk & Weights |
 | `Zero_Income_Runway_Months` | `DOUBLE` | Risk & Weights |
 
-### `gold.Investment_Portfolio_Summary`
+### `gold.investment_portfolio_summary`
 
 **Contract ID:** `df_p_tf_investment_analytics`  
 **Grain:** `Month-ISIN`  
@@ -401,8 +409,18 @@ The following tables are generated directly from `schema/gold.py`.
 | `Monthly_Market_Value_Change_Pct` | `DOUBLE` | Risk & Weights |
 | `ISIN_Harvestable_Loss` | `DOUBLE` | Tax & Harvesting |
 | `Tax_Harvesting_Priority_Score` | `DOUBLE` | Tax & Harvesting |
+| `Top1_Holding_Weight` | `DOUBLE` | Portfolio Concentration |
+| `Top5_Holdings_Weight` | `DOUBLE` | Portfolio Concentration |
+| `Top10_Holdings_Weight` | `DOUBLE` | Portfolio Concentration |
+| `HHI_Score` | `DOUBLE` | Portfolio Concentration |
+| `Effective_Holdings_Count` | `DOUBLE` | Portfolio Concentration |
+| `LTCG_Maturing_30D` | `DOUBLE` | LTCG Maturity Ladder |
+| `LTCG_Maturing_90D` | `DOUBLE` | LTCG Maturity Ladder |
+| `LTCG_Maturing_180D` | `DOUBLE` | LTCG Maturity Ladder |
+| `LTCG_Maturing_365D` | `DOUBLE` | LTCG Maturity Ladder |
+| `LTCG_Mature_Value` | `DOUBLE` | LTCG Maturity Ladder |
 
-### `gold.Cashflow_Efficiency_Analytics`
+### `gold.cashflow_efficiency_analytics`
 
 **Contract ID:** `df_p_tf_monthly_cashflow_summary`  
 **Grain:** `Month`  
@@ -457,8 +475,10 @@ The following tables are generated directly from `schema/gold.py`.
 | `YoY_Net_Worth_Growth_Pct_Real` | `DOUBLE` | Risk & Weights |
 | `Expense_to_NW_Ratio` | `DOUBLE` | Risk & Weights |
 | `Emergency_Fund_Coverage` | `DOUBLE` | Risk & Weights |
+| `Passive_Income_Core_Expense_Coverage_Ratio` | `DOUBLE` | Income Resilience |
+| `Active_Income_Dependency_Pct` | `DOUBLE` | Income Resilience |
 
-### `gold.Investment_By_ISIN`
+### `gold.investment_by_isin`
 
 **Contract ID:** `df_f_investment_analytics_isin`  
 **Grain:** `Date-ISIN`  
@@ -515,7 +535,7 @@ The following tables are generated directly from `schema/gold.py`.
 | `FY_Realized_Loss` | `DOUBLE` | Tax & Harvesting |
 | `FY_Realized_Net_PnL` | `DOUBLE` | Tax & Harvesting |
 
-### `gold.Investment_By_Subtype`
+### `gold.investment_by_subtype`
 
 **Contract ID:** `df_f_investment_analytics_subtype`  
 **Grain:** `Date-Subtype`  
@@ -549,7 +569,7 @@ The following tables are generated directly from `schema/gold.py`.
 | `FY_Realized_Loss` | `DOUBLE` | Tax & Harvesting |
 | `FY_Realized_Net_PnL` | `DOUBLE` | Tax & Harvesting |
 
-### `gold.Investment_By_Class`
+### `gold.investment_by_class`
 
 **Contract ID:** `df_f_investment_analytics_class`  
 **Grain:** `Date-Class`  
@@ -582,7 +602,7 @@ The following tables are generated directly from `schema/gold.py`.
 | `FY_Realized_Loss` | `DOUBLE` | Tax & Harvesting |
 | `FY_Realized_Net_PnL` | `DOUBLE` | Tax & Harvesting |
 
-### `gold.Investment_By_Instrument_Type`
+### `gold.investment_by_instrument_type`
 
 **Contract ID:** `df_f_investment_analytics_instrument_type`  
 **Grain:** `Date-InstrumentType`  
@@ -615,7 +635,7 @@ The following tables are generated directly from `schema/gold.py`.
 | `FY_Realized_Loss` | `DOUBLE` | Tax & Harvesting |
 | `FY_Realized_Net_PnL` | `DOUBLE` | Tax & Harvesting |
 
-### `gold.Investment_By_Sector`
+### `gold.investment_by_sector`
 
 **Contract ID:** `df_f_investment_analytics_sector`  
 **Grain:** `Date-Sector`  
@@ -648,7 +668,7 @@ The following tables are generated directly from `schema/gold.py`.
 | `FY_Realized_Loss` | `DOUBLE` | Tax & Harvesting |
 | `FY_Realized_Net_PnL` | `DOUBLE` | Tax & Harvesting |
 
-### `gold.Investment_By_Industry`
+### `gold.investment_by_industry`
 
 **Contract ID:** `df_f_investment_analytics_industry`  
 **Grain:** `Date-Industry`  
@@ -681,7 +701,7 @@ The following tables are generated directly from `schema/gold.py`.
 | `FY_Realized_Loss` | `DOUBLE` | Tax & Harvesting |
 | `FY_Realized_Net_PnL` | `DOUBLE` | Tax & Harvesting |
 
-### `gold.Investment_By_Portfolio`
+### `gold.investment_by_portfolio`
 
 **Contract ID:** `df_f_investment_analytics_portfolio`  
 **Grain:** `Date`  
@@ -713,7 +733,7 @@ The following tables are generated directly from `schema/gold.py`.
 | `FY_Realized_Loss` | `DOUBLE` | Tax & Harvesting |
 | `FY_Realized_Net_PnL` | `DOUBLE` | Tax & Harvesting |
 
-### `gold.Investment_By_Geo`
+### `gold.investment_by_geo`
 
 **Contract ID:** `df_f_investment_analytics_geo`  
 **Grain:** `Date-Geo`  
@@ -746,7 +766,7 @@ The following tables are generated directly from `schema/gold.py`.
 | `FY_Realized_Loss` | `DOUBLE` | Tax & Harvesting |
 | `FY_Realized_Net_PnL` | `DOUBLE` | Tax & Harvesting |
 
-### `gold.Investment_By_Country`
+### `gold.investment_by_country`
 
 **Contract ID:** `df_f_investment_analytics_country`  
 **Grain:** `Date-Country`  
@@ -788,7 +808,7 @@ The following tables are generated directly from `schema/gold.py`.
 | `FY_Realized_Loss` | `DOUBLE` | Tax & Harvesting |
 | `FY_Realized_Net_PnL` | `DOUBLE` | Tax & Harvesting |
 
-### `gold.Investment_By_Currency`
+### `gold.investment_by_currency`
 
 **Contract ID:** `df_f_investment_analytics_currency`  
 **Grain:** `Date-Currency`  
@@ -830,7 +850,7 @@ The following tables are generated directly from `schema/gold.py`.
 | `FY_Realized_Loss` | `DOUBLE` | Tax & Harvesting |
 | `FY_Realized_Net_PnL` | `DOUBLE` | Tax & Harvesting |
 
-### `gold.Cashflow_Activity_Summary`
+### `gold.cashflow_activity_summary`
 
 **Contract ID:** `df_p_tf_cashflow_activity_summary`  
 **Grain:** `Month`  

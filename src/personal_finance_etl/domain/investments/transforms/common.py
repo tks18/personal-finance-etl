@@ -387,8 +387,6 @@ def get_f_tf_investment_purchase_data(
     df_union = _normalize_currency_and_fx(df_union, default_currency_id)
 
     select_cols = [
-        "__file_name__",
-        "__folder_path__",
         "ISIN",
         "Date",
         "__file_category__",
@@ -462,8 +460,6 @@ def get_f_tf_investment_sale_data(
         )
 
     select_cols = [
-        "__file_name__",
-        "__folder_path__",
         "ISIN",
         "Date",
         "__file_category__",

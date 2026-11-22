@@ -120,7 +120,7 @@ A first run should use a rules file whose semantics are understood, not one gene
 ## 6. Launch the CLI interactively
 
 ```bash
-shan-fin cli --config "C:/Finance/config.toml" --rules "C:/Finance/rules.toml"
+pfetl run --config "C:/Finance/config.toml" --rules "C:/Finance/rules.toml"
 ```
 
 Without `--auto`, the CLI keeps the human confirmation step.
@@ -129,17 +129,11 @@ That is useful during setup because it gives one last boundary between configura
 
 ## 7. Launch the Desktop
 
-Either:
-
 ```bash
-shan-fin
+pfetl
 ```
 
-or:
-
-```bash
-shan-fin-gui
-```
+(or explicitly `pfetl --gui`).
 
 The Desktop uses the same application façade and pipeline as the CLI.
 
@@ -150,7 +144,7 @@ Choose based on workflow, not financial behavior.
 Once the environment is stable:
 
 ```bash
-shan-fin cli \
+pfetl run \
   --config "C:/Finance/config.toml" \
   --rules "C:/Finance/rules.toml" \
   --cron
@@ -246,22 +240,20 @@ The system is designed to surface disagreement. Do not treat every reconciliatio
 Once the state is trusted:
 
 ```bash
-shan-fin cli --config "C:/Finance/config.toml" --snapshot
+pfetl snapshot --config "C:/Finance/config.toml"
 ```
 
 Snapshots coordinate the DuckDB and SQLite application state.
 
 For restore semantics and validation, see [Backup and Restore](../architecture/backup-and-restore.md).
 
-## 14. Open the integrated docs
+## 14. Run operator diagnostics
 
 ```bash
-shan-fin cli --docs
+pfetl doctor
 ```
 
-The package includes the documentation tree and loads it through the documentation manifest/rendering layer.
-
-This is useful for a local-first project: operational documentation travels with the application instead of requiring a browser tab scavenger hunt.
+Verify that all configuration, storage, and runtime checks pass cleanly.
 
 ## 15. Common first-run failures
 

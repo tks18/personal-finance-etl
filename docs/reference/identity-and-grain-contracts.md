@@ -8,52 +8,52 @@ Those concepts overlap, but they are not synonyms. A table can have a valid phys
 
 | Layer | Dataset | Grain |
 |---|---|---|
-| Gold | `gold.Core_Monthly_Fact` | `Month` |
-| Gold | `gold.Wealth_Asset_Breakdown` | `Month-Asset` |
-| Gold | `gold.Cashflow_Expense_Breakdown` | `Month-ExpenseCategory` |
-| Gold | `gold.Cashflow_Income_Breakdown` | `Month-IncomeCategory` |
-| Gold | `gold.Wealth_FIRE_Analytics` | `Month` |
-| Gold | `gold.Forecast_Budget_Variance` | `Month` |
-| Gold | `gold.Investment_Portfolio_Summary` | `Month-ISIN` |
-| Gold | `gold.Cashflow_Efficiency_Analytics` | `Month` |
-| Gold | `gold.Cashflow_Activity_Summary` | `Month` |
-| Gold | `gold.Investment_By_ISIN` | `Date-ISIN` |
-| Gold | `gold.Investment_By_Subtype` | `Date-Subtype` |
-| Gold | `gold.Investment_By_Class` | `Date-Class` |
-| Gold | `gold.Investment_By_Instrument_Type` | `Date-InstrumentType` |
-| Gold | `gold.Investment_By_Sector` | `Date-Sector` |
-| Gold | `gold.Investment_By_Industry` | `Date-Industry` |
-| Gold | `gold.Investment_By_Portfolio` | `Date` |
-| Gold | `gold.Investment_By_Geo` | `Date-Geo` |
-| Gold | `gold.Investment_By_Country` | `Date-Country` |
-| Gold | `gold.Investment_By_Currency` | `Date-Currency` |
-| Gold | `gold.Tax_Year_Summary` | `FY` |
-| Gold | `gold.Tax_Income_Breakdown` | `FY-Head-SubHead-Source` |
-| Gold | `gold.Tax_Reconciliation` | `FY-SubHead` |
-| Silver | `silver.d_Calendar` | `Day` |
-| Silver | `silver.d_Income_Category` | `Category` |
-| Silver | `silver.d_Income_Subcategory` | `Subcategory` |
-| Silver | `silver.d_Expense_Category` | `Category` |
-| Silver | `silver.d_Expense_Subcategory` | `Subcategory` |
-| Silver | `silver.d_Asset_Category` | `Category` |
-| Silver | `silver.d_Asset_SubCategory` | `Subcategory` |
-| Silver | `silver.d_Currency` | `Currency` |
-| Silver | `silver.d_Investment_Benchmark_Master` | `Benchmark` |
-| Silver | `silver.f_Currency_FX_Rates` | `Date-Currency` |
-| Silver | `silver.d_Investment_Master` | `ISIN` |
-| Silver | `silver.d_Macro_Parameters` | `FinancialYear` |
-| Silver | `silver.f_Income_Transactions` | `Transaction` |
-| Silver | `silver.f_Expense_Transactions` | `Transaction` |
-| Silver | `silver.f_Transfer_Transactions` | `Transaction` |
-| Silver | `silver.f_Opening_Balances` | `Balance` |
-| Silver | `silver.f_Investment_Market_Data` | `Quote` |
-| Silver | `silver.f_Investment_Purchase_Data` | `Trade` |
-| Silver | `silver.f_Investment_Sale_Data` | `Trade` |
-| Silver | `silver.f_Investment_Benchmark_Data` | `Quote` |
-| Silver | `silver.f_Investment_Analytics_Lot` | `ISIN-Lot` |
-| Silver | `silver.f_Investment_Realized_Events` | `RealizedEvent` |
-| Silver | `silver.f_Investment_Reconciliation_Events` | `ReconEvent` |
-| Silver | `silver.f_Tax_Events` | `TaxEvent` |
+| Gold | `gold.core_monthly_fact` | `Month` |
+| Gold | `gold.wealth_asset_breakdown` | `Month-Asset` |
+| Gold | `gold.cashflow_expense_breakdown` | `Month-ExpenseCategory` |
+| Gold | `gold.cashflow_income_breakdown` | `Month-IncomeCategory` |
+| Gold | `gold.wealth_fire_analytics` | `Month` |
+| Gold | `gold.forecast_budget_variance` | `Month` |
+| Gold | `gold.investment_portfolio_summary` | `Month-ISIN` |
+| Gold | `gold.cashflow_efficiency_analytics` | `Month` |
+| Gold | `gold.cashflow_activity_summary` | `Month` |
+| Gold | `gold.investment_by_isin` | `Date-ISIN` |
+| Gold | `gold.investment_by_subtype` | `Date-Subtype` |
+| Gold | `gold.investment_by_class` | `Date-Class` |
+| Gold | `gold.investment_by_instrument_type` | `Date-InstrumentType` |
+| Gold | `gold.investment_by_sector` | `Date-Sector` |
+| Gold | `gold.investment_by_industry` | `Date-Industry` |
+| Gold | `gold.investment_by_portfolio` | `Date` |
+| Gold | `gold.investment_by_geo` | `Date-Geo` |
+| Gold | `gold.investment_by_country` | `Date-Country` |
+| Gold | `gold.investment_by_currency` | `Date-Currency` |
+| Gold | `gold.tax_financial_year_summary` | `FY` |
+| Gold | `gold.tax_income_head_breakdown` | `FY-Head-SubHead-Source` |
+| Gold | `gold.tax_subhead_reconciliation` | `FY-SubHead` |
+| Silver | `silver.dim_calendar` | `Day` |
+| Silver | `silver.dim_income_category` | `Category` |
+| Silver | `silver.dim_income_subcategory` | `Subcategory` |
+| Silver | `silver.dim_expense_category` | `Category` |
+| Silver | `silver.dim_expense_subcategory` | `Subcategory` |
+| Silver | `silver.dim_asset_category` | `Category` |
+| Silver | `silver.dim_asset_subcategory` | `Subcategory` |
+| Silver | `silver.dim_currency` | `Currency` |
+| Silver | `silver.dim_benchmark_master` | `Benchmark` |
+| Silver | `silver.fact_currency_fx_rates` | `Date-Currency` |
+| Silver | `silver.dim_instrument_master` | `ISIN` |
+| Silver | `silver.ref_financial_year_parameters` | `FinancialYear` |
+| Silver | `silver.fact_income_transactions` | `Transaction` |
+| Silver | `silver.fact_expense_transactions` | `Transaction` |
+| Silver | `silver.fact_transfer_transactions` | `Transaction` |
+| Silver | `silver.fact_opening_balances` | `Balance` |
+| Silver | `silver.fact_investment_market_data` | `Quote` |
+| Silver | `silver.fact_investment_purchases` | `Trade` |
+| Silver | `silver.fact_investment_sales` | `Trade` |
+| Silver | `silver.fact_investment_benchmark_data` | `Quote` |
+| Silver | `silver.fact_investment_lot_analytics` | `ISIN-Lot` |
+| Silver | `silver.fact_investment_realized_events` | `RealizedEvent` |
+| Silver | `silver.fact_investment_reconciliation_events` | `ReconEvent` |
+| Silver | `silver.fact_tax_events` | `TaxEvent` |
 
 
 ## Deterministic identity namespaces
@@ -102,7 +102,7 @@ The `v2` marker is a **technical identity protocol version**, not an application
 
 ## Grain is not primary-key syntax
 
-Consider `gold.Investment_By_ISIN` with grain `Date-ISIN`.
+Consider `gold.investment_by_isin` with grain `Date-ISIN`.
 
 The grain tells downstream analytics that one row represents one instrument on one valuation date. Whether the physical table declares a composite SQL primary key is secondary to that semantic contract.
 

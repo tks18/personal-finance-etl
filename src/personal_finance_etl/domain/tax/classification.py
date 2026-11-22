@@ -180,7 +180,7 @@ class TaxClassifier:
         if unknown:
             raise ValueError(
                 "Configured tax-credit subcategory UID(s) do not exist in "
-                f"silver.d_Income_Subcategory: {unknown}"
+                f"silver.dim_income_subcategory: {unknown}"
             )
 
     @staticmethod

@@ -162,13 +162,8 @@ def transform_d_income_category(
         )
         .select(
             [
-                "__file_name__",
-                "__folder_path__",
-                "S_NO",
-                "MODIFY_DATE",
                 "UID",
                 "CATEGORY_NAME",
-                "ORDER_SEQUENCE",
             ]
         )
         .with_columns(
@@ -274,13 +269,8 @@ def transform_d_income_subcategory(
         )
         .select(
             [
-                "__file_name__",
-                "__folder_path__",
-                "S_NO",
-                "MODIFY_DATE",
                 "UID",
                 "CATEGORY_NAME",
-                "ORDER_SEQUENCE",
                 "CATEGORY_ID",
             ]
         )

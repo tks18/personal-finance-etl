@@ -35,22 +35,10 @@ def transform_d_currency(
         .filter(pl.col("IS_DEL").fill_null("0") == "0")
         .select(
             [
-                "__file_name__",
-                "__folder_path__",
-                "S_NO",
                 "UID",
                 "CURRENCY_NAME",
                 "ISO",
-                "MAIN_ISO",
-                "ORDER_SEQUENCE",
-                "RATE",
                 "SYMBOL",
-                "INSERT_TYPE",
-                "SYMBOL_POSITION",
-                "IS_MAIN_CURRENCY",
-                "IS_SHOW",
-                "MODIFY_DATE",
-                "DECIMAL_POINT",
             ]
         )
     )
@@ -76,12 +64,10 @@ def transform_d_investment_benchmark_master(raw_data: pl.LazyFrame) -> pl.LazyFr
     """Execute the PQ logic for the Benchmark Master table."""
     return raw_data.rename({"Currency": "CURRENCY_ID"}).select(
         [
-            "__file_name__",
-            "__folder_path__",
             "ID",
+            "CURRENCY_ID",
             "Benchmark_Name",
             "yF_Ticker",
-            "CURRENCY_ID",
         ]
     )
 
@@ -99,8 +85,6 @@ def transform_d_macro_parameters(raw_data: pl.LazyFrame) -> pl.LazyFrame:
     ).select(
         [
             "FY",
-            "__file_name__",
-            "__folder_path__",
             "FY_Start_Date",
             "FY_End_Date",
             "Debt_MF_Cutoff_Date",

@@ -2,6 +2,90 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [11.3.0](https://github.com/tks18/personal-finance-etl/compare/11.2.0...11.3.0) (2026-11-22)
+
+
+### Features 🔥
+
+* **cli:** establish canonical pfetl command and operator CLI routing ([0bbc222](https://github.com/tks18/personal-finance-etl/commit/0bbc22269faab43ed430e1d79b7ab7d7d74ab216))
+* **diagnostics:** add operator status, doctor, and info query services ([e57768e](https://github.com/tks18/personal-finance-etl/commit/e57768e54f9e6f2d0e554382cdd32fd7a6ae9b96))
+
+
+### Tests 🧪
+
+* **cli:** add phase 13 pfetl command and operator services suite ([5ef989e](https://github.com/tks18/personal-finance-etl/commit/5ef989e7b576494ad357466104dfac4bc76bac0d))
+
+
+### Docs 📃
+
+* **cli:** update documentation and guides for canonical pfetl command ([11356c7](https://github.com/tks18/personal-finance-etl/commit/11356c7a9c08ca09dc0ac3e494c04940953498cc))
+* **v11:** finalize v11 roadmap and certify completion at phase 013 ([9eeb368](https://github.com/tks18/personal-finance-etl/commit/9eeb3688d89342e544fdcdf9f1e21b67fdc16193))
+* **v11:** record phase 013 completion record and exit assertions ([3dbe312](https://github.com/tks18/personal-finance-etl/commit/3dbe312fb839d9acd4ccdebf966e92e6a454ecf7))
+
+
+### Code Refactoring 🖌
+
+* **version:** resolve dynamic package version without hardcoding ([95a1c8d](https://github.com/tks18/personal-finance-etl/commit/95a1c8dbc2490eedfc95440df2213af01d587ef2))
+
+
+### Others 🔧
+
+* **release:** synchronize v11.2.0 metadata and phase 13 references ([c32bc3e](https://github.com/tks18/personal-finance-etl/commit/c32bc3efc58ce987b2e7924730fa1e98015f825c))
+* **v11:** remove .agents and .planning directories after completion ([c0e77bc](https://github.com/tks18/personal-finance-etl/commit/c0e77bc41d111192a1e924e0b76bf5e2afa0ccce))
+
+
+### Bug Fixes 🛠
+
+* **cli:** update ascii banner to PFETL and fix operator typing ([405bdd2](https://github.com/tks18/personal-finance-etl/commit/405bdd2eb3a0a80b184fd1af13ed066c4de673b7))
+* **operator:** decompose doctor checks to satisfy pylint branch limit ([7e7e09e](https://github.com/tks18/personal-finance-etl/commit/7e7e09e4b9fb18a03b6055e8a5feb1e45a846d3f))
+
+## [11.2.0](https://github.com/tks18/personal-finance-etl/compare/11.1.1...11.2.0) (2026-11-22)
+
+
+### Code Refactoring 🖌
+
+* **contracts:** standardize extr. attributes to semantic vocabulary ([98c9308](https://github.com/tks18/personal-finance-etl/commit/98c9308dd61bf3a7107be874e492d7ca51b79124))
+* **household:** drop dead columns from household & reference ([46be67c](https://github.com/tks18/personal-finance-etl/commit/46be67ce9d90f8b8b47e5e74ff49f09315d2a7be))
+* **pipeline:** align ingestion transformers and market sync ([fd0af30](https://github.com/tks18/personal-finance-etl/commit/fd0af30d1be94e1ca454a8e0ec5194bbb9052dbd))
+* **warehouse:** rename bronze tables to semantic snake_case ([6d628b0](https://github.com/tks18/personal-finance-etl/commit/6d628b0ba3468d96efb3ed506e765ff53809120c))
+* **warehouse:** rename bronze tables to semantic snake_case ([373071d](https://github.com/tks18/personal-finance-etl/commit/373071ddfa056562d53daba05807c3f21f4d35c7))
+* **warehouse:** rename bronze tables to semantic snake_case ([44b64ca](https://github.com/tks18/personal-finance-etl/commit/44b64cadecb3fbde4f36e57414a9e114a6a0f197))
+* **warehouse:** rename household and reference tables to dim names ([7ec70b2](https://github.com/tks18/personal-finance-etl/commit/7ec70b2f269a491053fb67c02cb2efef3aa1b48c))
+* **warehouse:** rename household and reference tables to dim names ([ae74f29](https://github.com/tks18/personal-finance-etl/commit/ae74f29769667a4cb1e49125bf69dd786fe8f49a))
+
+
+### Features 🔥
+
+* **analytics:** add attribution, expense growth, and resilience ([bc7ac0c](https://github.com/tks18/personal-finance-etl/commit/bc7ac0c0653c57f7edbefc256c284fa117c9d7fb))
+* **quant:** add concentration, ltcg ladder, and tax exposure metrics ([df7d80c](https://github.com/tks18/personal-finance-etl/commit/df7d80cc36c951950a85163b525e24b1238b2aed))
+
+
+### Tests 🧪
+
+* **bronze:** add phase 4 semantic bronze naming and rebuild suite ([081be1b](https://github.com/tks18/personal-finance-etl/commit/081be1b32cddb2f06897981516e6b8855611d8de))
+* **gold:** add phase 8 gold disposition suite ([234f41f](https://github.com/tks18/personal-finance-etl/commit/234f41fde572678a78c912f87a72e6fe75efc753))
+* **gold:** add phase 9-12 gold cutover and intelligence test suite ([4e9efa1](https://github.com/tks18/personal-finance-etl/commit/4e9efa14b87194fd3ad47e7df6c095a53083718c))
+* **silver:** add phase 6 household cutover tests ([af05f01](https://github.com/tks18/personal-finance-etl/commit/af05f01ce572335632ffbe312c04dc7cd31af62b))
+* **silver:** add phase 6 household cutover tests ([071cc48](https://github.com/tks18/personal-finance-etl/commit/071cc480b0939876f40f30259943151db571f92b))
+* **silver:** add phase 7 investment cutover ([ff47786](https://github.com/tks18/personal-finance-etl/commit/ff477861556dd6829b2cb9a9de358f4316cac0c6))
+* **silver:** assertions for silver disposition ([e1671b4](https://github.com/tks18/personal-finance-etl/commit/e1671b44f07df3d9d7113cacdac021f1c39eeab8))
+* **silver:** assertions for silver disposition ([ecf432d](https://github.com/tks18/personal-finance-etl/commit/ecf432d0ab3a0b4c20237644c668d8079ce5da91))
+* **silver:** assertions for silver disposition ([7679c6b](https://github.com/tks18/personal-finance-etl/commit/7679c6b45b0a380df74fb51d565f329413c1418d))
+
+
+### Docs 📃
+
+* **gold:** author authoritative gold disposition manifest ([5daeb0a](https://github.com/tks18/personal-finance-etl/commit/5daeb0a562061b6a1e810875573c72f9d8f1a2ec))
+* **silver:** column disposition and consumer manifest ([bad02b2](https://github.com/tks18/personal-finance-etl/commit/bad02b2a690b3d0feb0081366700549dce232ab3))
+* **v11:** record completion of consolidated phases 9 to 12 ([201275d](https://github.com/tks18/personal-finance-etl/commit/201275d40c3a204380df1decb0dbb0ffa446f3ab))
+* **v11:** record phase 005 completion ([87f1b49](https://github.com/tks18/personal-finance-etl/commit/87f1b495d43d5f013052c1b5dc1cccf9860a195e))
+* **v11:** record phase 008 completion ([9e8d313](https://github.com/tks18/personal-finance-etl/commit/9e8d3139e62c4a6cce268d6d5487e2060b626fa7))
+* **v11:** update phase 004 semantic bronze naming plan ([775fc56](https://github.com/tks18/personal-finance-etl/commit/775fc5661bc2c2615a4fa915928010aa1a321bb5))
+* **warehouse:** update gold contracts for 22 tables and 6 metrics ([ccf25b0](https://github.com/tks18/personal-finance-etl/commit/ccf25b0bc3445c8ff121b5ba7da8cb84d85032d7))
+* **warehouse:** update silver contracts and architecture ([2fa001c](https://github.com/tks18/personal-finance-etl/commit/2fa001c458635d9e9ddd7dd5ce7037fcf3251698))
+* **warehouse:** update silver contracts and architecture ([0b892b3](https://github.com/tks18/personal-finance-etl/commit/0b892b37d9f9643f873ed72ad88f48099d49dfbc))
+* **warehouse:** update silver contracts for investment tables ([af0f309](https://github.com/tks18/personal-finance-etl/commit/af0f309a0a82ce577c8d1f25edbe6ece381dfdc6))
+
 ### [11.1.1](https://github.com/tks18/personal-finance-etl/compare/11.1.0...11.1.1) (2026-11-22)
 
 
