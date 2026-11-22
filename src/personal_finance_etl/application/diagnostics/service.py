@@ -57,6 +57,7 @@ from personal_finance_etl.config.sources.selectors import (
     ExcelSelector,
     SqliteSelector,
 )
+from personal_finance_etl.contracts.canonical_plans import SourceBindingPlan
 from personal_finance_etl.contracts.capabilities import CapabilityId
 from personal_finance_etl.contracts.datasets import DatasetId, DatasetOrigin
 from personal_finance_etl.contracts.diagnostics import (
@@ -346,6 +347,7 @@ class DiagnosticService:
             plans_to_discover = source_plan.source_plans
         else:
             synthetic_plans: list[SourcePlan] = []
+            topology = source_cfg.compile_binding_topology()
             for src in source_cfg.sources:
                 if not src.enabled:
                     continue
@@ -364,6 +366,24 @@ class DiagnosticService:
                     for b in source_cfg.datasets
                     if b.source_id == src.source_id and b.enabled
                 ]
+                bps = [
+                    SourceBindingPlan(
+                        binding_id=b_cfg.binding_id,
+                        source_id=b_cfg.source_id,
+                        provider_type=src.provider_type,
+                        location=src.location,
+                        selector=b_cfg.selector,
+                        change_detection=b_cfg.change_detection or ChangeDetectionPolicy(),
+                        enabled=b_cfg.enabled,
+                        route_ids=tuple(r.route_id for r in b_cfg.routes),
+                        binding_config=b_cfg,
+                        target_dataset_id=(
+                            b_cfg.routes[0].target_dataset_id if b_cfg.routes else None
+                        ),
+                    )
+                    for b_cfg in topology.bindings
+                    if b_cfg.source_id == src.source_id and b_cfg.enabled
+                ]
                 synthetic_plans.append(
                     SourcePlan(
                         source_id=src.source_id,
@@ -371,6 +391,7 @@ class DiagnosticService:
                         location=src.location,
                         enabled=src.enabled,
                         dataset_plans=tuple(dps),
+                        binding_plans=tuple(bps),
                     )
                 )
             plans_to_discover = synthetic_plans

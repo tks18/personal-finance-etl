@@ -45,7 +45,6 @@ from personal_finance_etl.infrastructure.observability.diagnostics import (
 from personal_finance_etl.infrastructure.warehouse.connection import DuckDBManager
 from personal_finance_etl.infrastructure.warehouse.registry import (
     get_bronze_contract_by_dataset_id,
-    get_pre_bronze_contract_by_dataset_id,
 )
 
 __all__ = ["ReplayCoordinator", "SourceConfigChangeClassifier"]
@@ -554,12 +553,21 @@ class ReplayCoordinator:
             except ValueError:
                 continue
 
-            pb_contract = get_pre_bronze_contract_by_dataset_id(ds_id)
-            if pb_contract:
-                try:
-                    db_manager.conn.execute(f"DELETE FROM {pb_contract.physical_table}")
-                except Exception:
-                    pass
+            # Clear all Pre-Bronze tables associated with this dataset
+            try:
+                pb_tables = [
+                    str(r[0])
+                    for r in db_manager.conn.execute(
+                        "SELECT table_name FROM information_schema.tables "
+                        "WHERE lower(table_schema) = 'pre_bronze' AND "
+                        "(lower(table_name) = ? OR lower(table_name) LIKE ?)",
+                        [ds_name.lower(), f"%__{ds_name.lower()}"],
+                    ).fetchall()
+                ]
+                for tbl in pb_tables:
+                    db_manager.conn.execute(f"DELETE FROM pre_bronze.{tbl}")
+            except Exception:
+                pass
 
             b_contract = get_bronze_contract_by_dataset_id(ds_id)
             if b_contract:
