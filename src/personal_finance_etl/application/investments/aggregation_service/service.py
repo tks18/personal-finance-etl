@@ -347,7 +347,7 @@ class PostProcessor:
         df_port: pl.DataFrame,
     ) -> pl.LazyFrame:
         """Construct portfolio-wide aggregate table."""
-        return (
+        base_port = (
             self._aggregate_level(lazy_df_agg, ["Closing_Date"])
             .join(
                 df_port.lazy().rename(PORTFOLIO_COL_RENAMES),
@@ -356,6 +356,120 @@ class PostProcessor:
             )
             .with_columns(pl.lit(1.0).alias("Weight"))
             .drop(list(self._FX_LOCAL_COLUMNS), strict=False)
+        )
+
+        schema_names = set(lazy_df_agg.collect_schema().names())
+
+        # Portfolio Concentration (Top 1, 5, 10 weights, HHI, and Effective Holdings Count)
+        if "Close_Value" in schema_names and "ISIN" in schema_names:
+            isin_weights = (
+                lazy_df_agg.group_by(["Closing_Date", "ISIN"])
+                .agg(pl.col("Close_Value").sum().fill_null(0.0).alias("ISIN_Val"))
+                .with_columns(
+                    pl.when(pl.col("ISIN_Val").sum().over("Closing_Date") > 0)
+                    .then(pl.col("ISIN_Val") / pl.col("ISIN_Val").sum().over("Closing_Date"))
+                    .otherwise(0.0)
+                    .alias("w")
+                )
+                .sort(["Closing_Date", "w"], descending=[False, True])
+            )
+            concentration = (
+                isin_weights.group_by("Closing_Date")
+                .agg(
+                    pl.col("w").slice(0, 1).sum().fill_null(0.0).alias("Top1_Holding_Weight"),
+                    pl.col("w").slice(0, 5).sum().fill_null(0.0).alias("Top5_Holdings_Weight"),
+                    pl.col("w").slice(0, 10).sum().fill_null(0.0).alias("Top10_Holdings_Weight"),
+                    (pl.col("w") ** 2).sum().fill_null(0.0).alias("HHI_Score"),
+                )
+                .with_columns(
+                    pl.when(pl.col("HHI_Score") > 0.0)
+                    .then(1.0 / pl.col("HHI_Score"))
+                    .otherwise(0.0)
+                    .alias("Effective_Holdings_Count")
+                )
+            )
+        else:
+            concentration = base_port.select("Closing_Date").with_columns(
+                pl.lit(0.0).alias("Top1_Holding_Weight"),
+                pl.lit(0.0).alias("Top5_Holdings_Weight"),
+                pl.lit(0.0).alias("Top10_Holdings_Weight"),
+                pl.lit(0.0).alias("HHI_Score"),
+                pl.lit(0.0).alias("Effective_Holdings_Count"),
+            )
+
+        # LTCG Maturity Ladder (aggregates by Days_To_LTCG)
+        if (
+            "Close_Value" in schema_names
+            and "Holding_Type" in schema_names
+            and "Days_To_LTCG" in schema_names
+        ):
+            ltcg_ladder = lazy_df_agg.group_by("Closing_Date").agg(
+                pl.col("Close_Value")
+                .filter(
+                    (pl.col("Holding_Type").fill_null("") == "STCG")
+                    & (pl.col("Days_To_LTCG").fill_null(0) > 0)
+                    & (pl.col("Days_To_LTCG").fill_null(0) <= 30)
+                )
+                .sum()
+                .fill_null(0.0)
+                .alias("LTCG_Maturing_30D"),
+                pl.col("Close_Value")
+                .filter(
+                    (pl.col("Holding_Type").fill_null("") == "STCG")
+                    & (pl.col("Days_To_LTCG").fill_null(0) > 30)
+                    & (pl.col("Days_To_LTCG").fill_null(0) <= 90)
+                )
+                .sum()
+                .fill_null(0.0)
+                .alias("LTCG_Maturing_90D"),
+                pl.col("Close_Value")
+                .filter(
+                    (pl.col("Holding_Type").fill_null("") == "STCG")
+                    & (pl.col("Days_To_LTCG").fill_null(0) > 90)
+                    & (pl.col("Days_To_LTCG").fill_null(0) <= 180)
+                )
+                .sum()
+                .fill_null(0.0)
+                .alias("LTCG_Maturing_180D"),
+                pl.col("Close_Value")
+                .filter(
+                    (pl.col("Holding_Type").fill_null("") == "STCG")
+                    & (pl.col("Days_To_LTCG").fill_null(0) > 180)
+                    & (pl.col("Days_To_LTCG").fill_null(0) <= 365)
+                )
+                .sum()
+                .fill_null(0.0)
+                .alias("LTCG_Maturing_365D"),
+                pl.col("Close_Value")
+                .filter(pl.col("Holding_Type").fill_null("") == "LTCG")
+                .sum()
+                .fill_null(0.0)
+                .alias("LTCG_Mature_Value"),
+            )
+        else:
+            ltcg_ladder = base_port.select("Closing_Date").with_columns(
+                pl.lit(0.0).alias("LTCG_Maturing_30D"),
+                pl.lit(0.0).alias("LTCG_Maturing_90D"),
+                pl.lit(0.0).alias("LTCG_Maturing_180D"),
+                pl.lit(0.0).alias("LTCG_Maturing_365D"),
+                pl.lit(0.0).alias("LTCG_Mature_Value"),
+            )
+
+        return (
+            base_port.join(concentration, on=["Closing_Date"], how="left")
+            .join(ltcg_ladder, on=["Closing_Date"], how="left")
+            .with_columns(
+                pl.col("Top1_Holding_Weight").fill_null(0.0),
+                pl.col("Top5_Holdings_Weight").fill_null(0.0),
+                pl.col("Top10_Holdings_Weight").fill_null(0.0),
+                pl.col("HHI_Score").fill_null(0.0),
+                pl.col("Effective_Holdings_Count").fill_null(0.0),
+                pl.col("LTCG_Maturing_30D").fill_null(0.0),
+                pl.col("LTCG_Maturing_90D").fill_null(0.0),
+                pl.col("LTCG_Maturing_180D").fill_null(0.0),
+                pl.col("LTCG_Maturing_365D").fill_null(0.0),
+                pl.col("LTCG_Mature_Value").fill_null(0.0),
+            )
         )
 
     def run(

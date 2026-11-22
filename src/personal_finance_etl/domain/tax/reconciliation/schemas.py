@@ -45,6 +45,9 @@ TAX_YEAR_SUMMARY_SCHEMA = pl.Schema(
         "Total_Event_Count": pl.Int64,
         "Ready_Count": pl.Int64,
         "Check_Required_Count": pl.Int64,
+        "Indicative_Unrealized_Tax_Liability": pl.Float64,
+        "Indicative_Harvestable_Tax_Savings": pl.Float64,
+        "Indicative_Net_Tax_Exposure": pl.Float64,
     }
 )
 
@@ -194,6 +197,15 @@ def build_fy_completeness_columns() -> list[pl.Expr]:
         )
         .otherwise(pl.lit(None, dtype=pl.Boolean))
         .alias("Ledger_Tax_Estimate_Complete"),
+        pl.when(pl.col("Investment_Tax_Estimate_Count") > 0)
+        .then(pl.col("_Investment_Tax_Sum"))
+        .otherwise(0.0)
+        .alias("Indicative_Unrealized_Tax_Liability"),
+        pl.lit(0.0).alias("Indicative_Harvestable_Tax_Savings"),
+        pl.when(pl.col("Investment_Tax_Estimate_Count") > 0)
+        .then(pl.col("_Investment_Tax_Sum"))
+        .otherwise(0.0)
+        .alias("Indicative_Net_Tax_Exposure"),
     ]
 
 
