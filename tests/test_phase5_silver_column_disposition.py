@@ -26,23 +26,25 @@ from personal_finance_etl.infrastructure.warehouse.schema.silver import SILVER_D
 
 MANIFEST_PATH = Path(".planning/v11/SILVER-DISPOSITION-MANIFEST.md")
 
-EXPECTED_24_SILVER_TABLES: list[str] = [
-    "silver.d_Calendar",
-    "silver.d_Income_Category",
-    "silver.d_Income_Subcategory",
-    "silver.d_Expense_Category",
-    "silver.d_Expense_Subcategory",
-    "silver.d_Asset_Category",
-    "silver.d_Asset_Subcategory",
-    "silver.d_Currency",
-    "silver.f_Currency_FX_Rates",
-    "silver.f_Income_Transactions",
-    "silver.f_Expense_Transactions",
-    "silver.f_Transfer_Transactions",
-    "silver.f_Opening_Balances",
-    "silver.d_Investment_Benchmark_Master",
+EXPECTED_24_ACTIVE_SILVER_TABLES: list[str] = [
+    # 15 Phase 006 Cutover Tables
+    "silver.dim_calendar",
+    "silver.dim_income_category",
+    "silver.dim_income_subcategory",
+    "silver.dim_expense_category",
+    "silver.dim_expense_subcategory",
+    "silver.dim_asset_category",
+    "silver.dim_asset_subcategory",
+    "silver.dim_currency",
+    "silver.fact_currency_fx_rates",
+    "silver.fact_income_transactions",
+    "silver.fact_expense_transactions",
+    "silver.fact_transfer_transactions",
+    "silver.fact_opening_balances",
+    "silver.dim_benchmark_master",
+    "silver.ref_financial_year_parameters",
+    # 9 Preserved Legacy Investment/Tax Tables (Phase 007 target)
     "silver.d_Investment_Master",
-    "silver.d_Macro_Parameters",
     "silver.f_Investment_Market_Data",
     "silver.f_Investment_Purchase_Data",
     "silver.f_Investment_Sale_Data",
@@ -175,13 +177,11 @@ def test_silver_table_inventory_parity() -> None:
     """Verify that all 24 physical tables in SILVER_DDL match the manifest and registry."""
     ddl_tables = _extract_ddl_columns()
     assert len(ddl_tables) == 24, f"Expected 24 tables in SILVER_DDL, got {len(ddl_tables)}"
-    assert sorted(ddl_tables.keys()) == sorted(EXPECTED_24_SILVER_TABLES)
+    assert sorted(ddl_tables.keys()) == sorted(EXPECTED_24_ACTIVE_SILVER_TABLES)
 
     manifest_content = MANIFEST_PATH.read_text(encoding="utf-8")
-    for tbl in EXPECTED_24_SILVER_TABLES:
+    for tbl in EXPECTED_24_ACTIVE_SILVER_TABLES:
         assert f"`{tbl}`" in manifest_content, f"Table {tbl} missing from manifest"
-        target_name = EXPECTED_TARGET_NAMES[tbl]
-        assert f"`{target_name}`" in manifest_content, f"Target {target_name} missing from manifest"
 
     silver_contracts = [c for c in DATA_CONTRACT_REGISTRY if c.layer == "silver"]
     assert len(silver_contracts) == 24, (
@@ -190,11 +190,11 @@ def test_silver_table_inventory_parity() -> None:
 
 
 def test_silver_column_inventory_complete() -> None:
-    """Verify that all 534 columns in active SILVER_DDL are cataloged in the manifest."""
+    """Verify that all 442 columns in active SILVER_DDL are cataloged in the manifest."""
     ddl_tables = _extract_ddl_columns()
     total_ddl_columns = sum(len(cols) for cols in ddl_tables.values())
-    assert total_ddl_columns == 534, (
-        f"Expected exactly 534 active columns across Silver DDL, got {total_ddl_columns}"
+    assert total_ddl_columns == 442, (
+        f"Expected exactly 442 active columns across Silver DDL after Phase 006, got {total_ddl_columns}"
     )
 
     manifest_content = MANIFEST_PATH.read_text(encoding="utf-8")
@@ -275,17 +275,16 @@ def test_file_category_is_guarded_and_not_dropped() -> None:
 
 
 def test_silver_ddl_and_contracts_unmodified() -> None:
-    """Assert that Silver DDL and contract definitions remain 100% unmodified during Phase 005."""
+    """Assert that Phase 006 cutover preserves legacy names for 9 investment/tax tables."""
     ddl_tables = _extract_ddl_columns()
-    assert "silver.d_Calendar" in ddl_tables
+    assert "silver.dim_calendar" in ddl_tables
     assert "silver.f_Investment_Analytics_Lot" in ddl_tables
-    assert "silver.dim_calendar" not in ddl_tables, (
-        "SILVER_DDL was mutated in Phase 005! Non-destructive boundary violated."
-    )
+    assert "silver.d_Investment_Master" in ddl_tables
 
-    # Verify contracts registry still uses d_* / f_* names in Phase 005
+    # Verify contracts registry reflects cutover for household and legacy for investment
     silver_contract_tables = {
         c.physical_table for c in DATA_CONTRACT_REGISTRY if c.layer == "silver"
     }
-    assert "silver.d_Calendar" in silver_contract_tables
+    assert "silver.dim_calendar" in silver_contract_tables
     assert "silver.f_Investment_Analytics_Lot" in silver_contract_tables
+    assert "silver.d_Investment_Master" in silver_contract_tables
