@@ -28,7 +28,7 @@ __all__ = ["build_argument_parser", "main"]
 try:
     __version__ = importlib.metadata.version("personal-finance-etl")
 except Exception:
-    __version__ = "11.4.0"
+    __version__ = "11.2.0"
 
 
 def build_argument_parser() -> argparse.ArgumentParser:

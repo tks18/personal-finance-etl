@@ -124,7 +124,7 @@ def test_operator_info_metadata() -> None:
     info = op.get_info()
 
     assert isinstance(info, SystemInfo)
-    assert info.version == "11.4.0"
+    assert info.version == "11.2.0"
     assert info.python_version == sys.version.split()[0]
     assert info.platform == sys.platform
     assert info.silver_tables_count == 24, "Silver layer must preserve all 24 canonical tables"
