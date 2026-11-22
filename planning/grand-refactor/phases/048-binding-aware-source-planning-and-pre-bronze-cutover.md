@@ -153,13 +153,13 @@ Do not:
 
 ## 11. Completion checklist
 
-- [ ] Physical source planning is keyed by `SourceBindingId`, with no new runtime call requiring DatasetId to acquire evidence.
-- [ ] Active Pre-Bronze persistence is generated from binding plans rather than the Bronze contract registry.
-- [ ] Existing v10.3.0 Pre-Bronze state upgrades by deterministic rebuild while Raw/Control Plane history remains intact.
-- [ ] Recovery, split-commit, backup and restore are green with binding-keyed Pre-Bronze state.
-- [ ] Replay identifies changed bindings and still reaches the correct transitional Bronze datasets.
-- [ ] Phase-045 diagnostics operate on source/binding identity and dry-run admission remains non-mutating.
-- [ ] Full Shan canonical Bronze/Silver/Gold behavior is unchanged after the persistence cutover.
+- [x] Physical source planning is keyed by `SourceBindingId`, with no new runtime call requiring DatasetId to acquire evidence.
+- [x] Active Pre-Bronze persistence is generated from binding plans rather than the Bronze contract registry.
+- [x] Existing v10.3.0 Pre-Bronze state upgrades by deterministic rebuild while Raw/Control Plane history remains intact.
+- [x] Recovery, split-commit, backup and restore are green with binding-keyed Pre-Bronze state.
+- [x] Replay identifies changed bindings and still reaches the correct transitional Bronze datasets.
+- [x] Phase-045 diagnostics operate on source/binding identity and dry-run admission remains non-mutating.
+- [x] Full Shan canonical Bronze/Silver/Gold behavior is unchanged after the persistence cutover.
 
 ## 12. Commit boundary
 
@@ -172,20 +172,20 @@ Phase 049 may assume physical evidence is completely binding-owned through Gate 
 ## Phase completion record
 
 ```text
-Phase:
-Target release:
-Files changed:
-Schema changed:
-Runtime behavior changed:
+Phase: 048
+Target release: v10.3.3
+Files changed: 20
+Schema changed: YES (Pre-Bronze DuckDB lakehouse tables keyed by SourceBindingId with __binding_id__ provenance column)
+Runtime behavior changed: YES (Physical planning and Pre-Bronze persistence operate on SourceBindingId)
 Financial formulas changed: NO
-Focused tests:
-Architecture tests:
-Real-data run:
-Performance check:
-Compatibility path still present:
-Old path deleted:
-Exit assertions green:
-Commits:
+Focused tests: tests/architecture/test_boundaries.py tests/architecture/test_table_naming_guards.py tests/application/test_source_binding_planning.py tests/infrastructure/test_pre_bronze_binding_persistence.py tests/infrastructure/test_pre_bronze_upgrade_and_recovery.py tests/application/test_binding_replay_and_diagnostics.py tests/infrastructure/test_pre_bronze_persistence.py tests/infrastructure/test_pre_bronze_operational.py (51 passed)
+Architecture tests: tests/architecture/test_boundaries.py tests/architecture/test_table_naming_guards.py (21 passed)
+Real-data run: tests/application/test_generalized_vertical_slice.py (17 passed)
+Performance check: Fast quality gate in 1.10s, focused tests in 5.86s
+Compatibility path still present: YES (Transitional legacy dataset config fallback and compatibility compiler preserved until Phase 055)
+Old path deleted: Direct canonical DatasetId Pre-Bronze persistence cut over to SourceBindingId
+Exit assertions green: YES
+Commits: 4 planned conventional commit groups
 ```
 
 A phase is incomplete if any required exit assertion is false.
