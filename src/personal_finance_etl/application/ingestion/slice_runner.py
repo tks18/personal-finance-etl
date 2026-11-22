@@ -24,6 +24,12 @@ from pathlib import Path
 import polars as pl
 
 from personal_finance_etl.application.ingestion.admission import AdmissionService
+from personal_finance_etl.application.ingestion.identity import (
+    compile_identity_plan,
+    execute_identity_plan,
+)
+from personal_finance_etl.application.ingestion.route_compiler import RouteCompiler
+from personal_finance_etl.application.ingestion.route_executor import RouteExecutor
 from personal_finance_etl.application.pipeline.source_planner import DatasetPlan
 from personal_finance_etl.config.sources.binding_model import SourceBindingConfig
 from personal_finance_etl.config.sources.compiler import derive_source_binding_id
@@ -243,10 +249,14 @@ class DatasetIngestionService:
         validator: DataFrameValidator | None = None,
         admission_service: AdmissionService | None = None,
         emitter: ObservabilityEmitter | None = None,
+        route_compiler: RouteCompiler | None = None,
+        route_executor: RouteExecutor | None = None,
     ) -> None:
         self.emitter = emitter or get_global_emitter()
         self.validator = validator or PanderaDataFrameValidator(emitter=self.emitter)
         self.admission_service = admission_service or AdmissionService()
+        self.route_compiler = route_compiler or RouteCompiler()
+        self.route_executor = route_executor or RouteExecutor()
 
     def _resolve_raw_bytes(self, filepath: str, cp: ControlPlane) -> bytes:
         """Resolve raw file bytes from Control Plane artifact store or physical disk.
@@ -480,7 +490,7 @@ class DatasetIngestionService:
             if "artifact_id" not in raw_df.columns:
                 raw_df = raw_df.with_columns(pl.lit(artifact_id).alias("artifact_id"))
 
-            # 4. Admission Normalization & Row Identity Derivation
+            # 4. Canonical Route Interpretation & Row Identity Derivation
             legacy_ds_config = _resolve_transitional_dataset_config(
                 binding_plan, b_cfg, legacy_ds_config, target_ds_id
             )
@@ -491,13 +501,44 @@ class DatasetIngestionService:
             ) and legacy_ds_config.identity.field not in ("Z_PK", "UID", "ZUID"):
                 id_col = legacy_ds_config.identity.field
 
-            admission_plan = self.admission_service.compile_admission_plan(
-                dataset_config=legacy_ds_config,
-                bronze_contract=bronze_contract,
-                available_source_columns=raw_df.columns,
-                id_column=id_col,
-            )
-            admitted_lf = self.admission_service.execute_admission(admission_plan, raw_df)
+            matching_route = None
+            if b_cfg is not None and b_cfg.routes:
+                matching_route = next(
+                    (r for r in b_cfg.routes if r.target_dataset_id == target_ds_id),
+                    None,
+                )
+
+            if matching_route is not None and (
+                matching_route.predicates or matching_route.semantics
+            ):
+                compiled_route = self.route_compiler.compile(
+                    matching_route,
+                    binding_id=binding_plan.binding_id,
+                    available_source_columns=raw_df.columns,
+                )
+                mat_fragment = self.route_executor.execute(compiled_route, raw_df)
+                routed_df = mat_fragment.frame
+
+                if legacy_ds_config.identity is not None:
+                    ident_plan = compile_identity_plan(
+                        contract=bronze_contract,
+                        available_fields=set(routed_df.columns),
+                        strategy=legacy_ds_config.identity,
+                        allow_optional_identity=True,
+                    )
+                    if ident_plan.strategy is not None:
+                        ident_res = execute_identity_plan(ident_plan, routed_df, id_column=id_col)
+                        assert isinstance(ident_res, pl.DataFrame)
+                        routed_df = ident_res
+                admitted_lf = routed_df.lazy()
+            else:
+                admission_plan = self.admission_service.compile_admission_plan(
+                    dataset_config=legacy_ds_config,
+                    bronze_contract=bronze_contract,
+                    available_source_columns=raw_df.columns,
+                    id_column=id_col,
+                )
+                admitted_lf = self.admission_service.execute_admission(admission_plan, raw_df)
 
             # 5. Gate 2: Canonical Bronze Validation (CANONICAL_BRONZE)
             canonical_schema = get_canonical_bronze_schema(target_ds_id)

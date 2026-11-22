@@ -43,23 +43,37 @@ from personal_finance_etl.application.ingestion.market_sync import (
     CurrencyPipeline,
     USMarketPipeline,
 )
+from personal_finance_etl.application.ingestion.route_compiler import (
+    CompiledRoutePlan,
+    RouteCompiler,
+)
+from personal_finance_etl.application.ingestion.route_executor import (
+    MaterializedCanonicalFragment,
+    RouteExecutor,
+    UnmappedSemanticValueError,
+)
 
 __all__ = [
     "AdmissionPlan",
     "AdmissionService",
     "AssetPipeline",
     "BenchmarkPipeline",
+    "CompiledRoutePlan",
     "CurrencyPipeline",
     "IdentityCollisionDiagnostic",
     "IdentityCollisionError",
     "IdentityNotPermittedError",
     "IdentityPlan",
+    "MaterializedCanonicalFragment",
     "MissingIdentityFieldError",
     "MissingIdentityStrategyError",
     "MutualFundPipeline",
+    "RouteCompiler",
+    "RouteExecutor",
     "StockPipeline",
     "USMarketPipeline",
     "USStockPipeline",
+    "UnmappedSemanticValueError",
     "compile_identity_plan",
     "execute_identity_plan",
 ]
