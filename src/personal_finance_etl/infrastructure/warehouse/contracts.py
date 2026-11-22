@@ -53,9 +53,17 @@ BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
     BronzeDataContract("assets", "sqlite_source", "bronze.r_SQLite_Assets", True),
     BronzeDataContract("currency", "sqlite_source", "bronze.r_SQLite_Currency", True),
     BronzeDataContract("inoutcome", "sqlite_source", "bronze.r_SQLite_InOutcome", True),
-    BronzeDataContract("stg_mf_isin_mapping", "mf_isin", "bronze.r_MF_ISIN_Mapping", True),
     BronzeDataContract(
-        "stg_benchmark_mapping", "benchmark_mapping", "bronze.r_Benchmark_Mapping", True
+        "raw_mutual_fund_instrument_mapping",
+        "mutual_fund_instrument_mapping",
+        "bronze.r_MF_ISIN_Mapping",
+        True,
+    ),
+    BronzeDataContract(
+        "raw_instrument_master",
+        "instrument_master",
+        "bronze.r_Benchmark_Mapping",
+        True,
     ),
     BronzeDataContract(
         "raw_opening_balances", "opening_balances", "bronze.r_Opening_Balances", True
@@ -64,7 +72,10 @@ BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
         "raw_benchmark_master", "benchmark_master", "bronze.r_Benchmark_Master", True
     ),
     BronzeDataContract(
-        "raw_macro_parameters", "macro_parameters", "bronze.r_Macro_Parameters", True
+        "raw_financial_year_parameters",
+        "financial_year_parameters",
+        "bronze.r_Macro_Parameters",
+        True,
     ),
     BronzeDataContract("column_master", "column_master", "bronze.r_Column_Master", True),
     BronzeDataContract("mf_market_data_raw", "mf_holdings", "bronze.r_MF_Market_Data", False),
@@ -75,7 +86,10 @@ BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
         False,
     ),
     BronzeDataContract(
-        "currency_mapping_raw", "currency_mapping", "bronze.r_Currency_Mapping", True
+        "raw_currency_reference",
+        "currency_reference",
+        "bronze.r_Currency_Mapping",
+        True,
     ),
     BronzeDataContract("currency_fx_raw", "currency_history", "bronze.r_Currency_FX_Data", False),
     BronzeDataContract("mf_transactions_raw", "mf_orders", "bronze.r_MF_Transactions", False),

@@ -518,10 +518,10 @@ class PipelineExecutor:
             .get_latest_sqlite_backup()
             .replace("\\", "/")
         ]
-        discovered_files["mf_isin"] = [
+        discovered_files["mutual_fund_instrument_mapping"] = [
             self.cfg.sources.mutual_fund_instrument_mapping.replace("\\", "/")
         ]
-        discovered_files["benchmark_mapping"] = [
+        discovered_files["instrument_master"] = [
             self.cfg.sources.instrument_master.replace("\\", "/")
         ]
         discovered_files["opening_balances"] = [
@@ -530,10 +530,10 @@ class PipelineExecutor:
         discovered_files["benchmark_master"] = [
             self.cfg.sources.benchmark_master.replace("\\", "/")
         ]
-        discovered_files["macro_parameters"] = [
+        discovered_files["financial_year_parameters"] = [
             self.cfg.sources.financial_year_parameters.replace("\\", "/")
         ]
-        discovered_files["currency_mapping"] = [
+        discovered_files["currency_reference"] = [
             self.cfg.sources.currency_reference.replace("\\", "/")
         ]
         discovered_files["column_master"] = [self.cfg.sources.column_master.replace("\\", "/")]
