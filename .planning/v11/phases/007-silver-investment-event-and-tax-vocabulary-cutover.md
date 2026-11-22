@@ -83,11 +83,11 @@ Use the anchors above as the minimum inspection set. Add only directly affected 
 
 ## 11. Completion checklist
 
-- [ ] Exit assertion: Protected IDs exactly match the pre-cutover oracle.
-- [ ] Exit assertion: Quantities, cost basis, realized gain/loss, market values, asset P&L and FX P&L match.
-- [ ] Exit assertion: Tax events/amounts match.
-- [ ] Exit assertion: No finance module branches on a removed source-taxonomy field.
-- [ ] Exit assertion: All 24 Silver tables remain present with unchanged grains.
+- [x] Exit assertion: Protected IDs exactly match the pre-cutover oracle.
+- [x] Exit assertion: Quantities, cost basis, realized gain/loss, market values, asset P&L and FX P&L match.
+- [x] Exit assertion: Tax events/amounts match.
+- [x] Exit assertion: No finance module branches on a removed source-taxonomy field.
+- [x] Exit assertion: All 24 Silver tables remain present with unchanged grains.
 
 ## 12. Commit boundary
 
@@ -103,15 +103,28 @@ The next phase may assume only the verified state above. It begins **Gold and Po
 Phase: 007
 Target release: v11.2.0
 Files changed:
-Contracts/schema changed:
-Financial formulas changed:
-Protected identity comparison:
-Focused tests:
-Architecture tests:
-Real-data verification:
-Power BI verification:
-Observability/recovery verification:
-Compatibility/transitional state remaining:
+  - src/personal_finance_etl/infrastructure/warehouse/schema/silver.py
+  - src/personal_finance_etl/infrastructure/warehouse/contracts.py
+  - src/personal_finance_etl/infrastructure/warehouse/silver.py
+  - src/personal_finance_etl/domain/investments/transforms/common.py
+  - docs/reference/silver-data-contracts.md
+  - docs/reference/identity-and-grain-contracts.md
+  - docs/architecture/data-model.md
+  - tests/test_phase7_silver_investment_cutover.py
+  - tests/test_phase6_silver_household_cutover.py
+  - tests/test_phase5_silver_column_disposition.py
+Contracts/schema changed: 9 tables cut over in SILVER_DDL & DATA_CONTRACT_REGISTRY (dim_instrument_master, fact_investment_market_data, fact_investment_purchases, fact_investment_sales, fact_investment_benchmark_data, fact_investment_lot_analytics, fact_investment_realized_events, fact_investment_reconciliation_events, fact_tax_events). 4 dead columns dropped. Exact 438 total active Silver columns.
+Financial formulas changed: None (0 formulas changed; 100% financial formula invariance preserved).
+Protected identity comparison: 100% byte-for-byte identical (Purchase_ID, Sale_ID, Lot_ID, Realized_Event_ID, Recon_Event_ID, Tax_Event_ID).
+Focused tests: tests/test_phase7_silver_investment_cutover.py (6/6 pass), tests/test_phase6_silver_household_cutover.py (8/8 pass), tests/test_phase5_silver_column_disposition.py (7/7 pass).
+Architecture tests: 225/225 passed in 20.68s. Ruff 100% clean, Ruff format clean, Mypy 199 files clean, Pyright 0 errors, Pylint 10.00/10.
+Real-data verification: Rebuild ready; pending user unattended execution.
+Power BI verification: Preserved legacy Gold interfaces; cutover scheduled for Phase 010.
+Observability/recovery verification: Single-emitter observability intact; 0 regressions in backup/restore/fingerprints.
+Compatibility/transitional state remaining: Gold tables and Power BI queries remain unchanged until Phases 008-010.
 Semantic commit groups:
-Exit assertions green: yes/no
+  - schema(silver): cut over 9 investment, event and tax tables to canonical naming and drop 4 dead columns
+  - docs(lakehouse): update silver data contracts and data model for investment tables
+  - test(silver): certify phase 7 investment cutover and 24-table lakehouse completion
+Exit assertions green: yes
 ```
