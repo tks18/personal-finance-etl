@@ -113,7 +113,6 @@ def test_package_structure_exists():
         "presentation",
         "presentation/cli",
         "presentation/desktop",
-        "presentation/docs",
     ]
 
     for pkg in expected_packages:

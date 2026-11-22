@@ -1,6 +1,6 @@
 [project]
 name = "personal-finance-etl"
-version = "11.0.0"
+version = "11.0.1"
 description = "Local-first personal financial systems platform for investment accounting, reconciliation, tax evidence, wealth analytics, FIRE planning, and BI."
 authors = [
   { name="Shan", email="tksudharshan@gmail.com" },
@@ -50,7 +50,6 @@ dependencies = [
     "customtkinter>=6.0.0",
     "duckdb>=1.5.5",
     "fastexcel>=0.20.2",
-    "markdown>=3.7",
     "numba>=0.66.0",
     "pillow>=12.3.0",
     "polars>=1.42.1",
@@ -59,7 +58,6 @@ dependencies = [
     "pydantic>=2.13.4",
     "python-dateutil>=2.9.0.post0",
     "pyxirr>=0.10.8",
-    "pywebview>=5.3.2",
     "rich>=15.0.0",
     "tkcalendar>=1.6.1",
     "types-psutil>=7.2.2.20260518",
@@ -81,15 +79,9 @@ dev = [
     "tkreload>=1.0.4",
     "vulture>=2.16",
 ]
-docs = [
-    "mkdocs>=1.6.0",
-    "mkdocs-material>=9.5.0",
-    "mkdocs-minify-plugin>=0.8.0",
-    "pymdown-extensions>=10.14",
-]
 
 [tool.uv]
-default-groups = ["dev", "docs"]
+default-groups = ["dev"]
 
 [build-system]
 requires = ["hatchling>=1.27.0"]
@@ -101,7 +93,6 @@ shan-fin-gui = "personal_finance_etl.presentation.desktop.app:main"
 
 [tool.hatch.build.targets.wheel.force-include]
 "README.md" = "personal_finance_etl/README.md"
-"docs" = "personal_finance_etl/docs"
 
 [tool.hatch.build.targets.sdist]
 exclude = [
@@ -112,11 +103,10 @@ exclude = [
 
 [project.urls]
 Homepage = "https://github.com/tks18/personal-finance-etl"
-Documentation = "https://tks18.github.io/personal-finance-etl/"
+Documentation = "https://github.com/tks18/personal-finance-etl/blob/master/docs/README.md"
 Repository = "https://github.com/tks18/personal-finance-etl"
 Issues = "https://github.com/tks18/personal-finance-etl/issues"
 Changelog = "https://github.com/tks18/personal-finance-etl/blob/master/CHANGELOG.md"
-Wiki = "https://github.com/tks18/personal-finance-etl/wiki"
 
 [tool.bandit]
 exclude_dirs = [

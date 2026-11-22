@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [11.0.1](https://github.com/tks18/personal-finance-etl/compare/11.0.0...11.0.1) (2026-11-22)
+
+
+### Docs 📃
+
+* update new phase docs ([57b51c0](https://github.com/tks18/personal-finance-etl/commit/57b51c09416c6f2faf171da6d154b9e6256fe2af))
+
+
+### Code Refactoring 🖌
+
+* **presentation:** remove docs viewer and CLI --docs flag ([7249284](https://github.com/tks18/personal-finance-etl/commit/724928409842476271a324164bcc83120eb884c7))
+
+
+### Others 🔧
+
+* **deps:** prune pywebview, markdown, mkdocs dependencies ([8ab3529](https://github.com/tks18/personal-finance-etl/commit/8ab35294ea710df96bd56a208974d02f37d8c317))
+* **docs:** remove portal generators and update README links ([b231283](https://github.com/tks18/personal-finance-etl/commit/b231283032854b906fc10dca04bc7e0f3dad3f8f))
+
+
+### Tests 🧪
+
+* **presentation:** update tests for docs runtime removal ([70e11da](https://github.com/tks18/personal-finance-etl/commit/70e11daad6dc15166549ec63271a1cea5b5e4be0))
+
 ### [11.0.0](https://github.com/tks18/personal-finance-etl/compare/10.4.1...11.0.0) (2026-11-22)
 
 ### Changed ⚡

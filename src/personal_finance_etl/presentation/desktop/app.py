@@ -34,7 +34,6 @@ from personal_finance_etl.contracts.observability import (
 from personal_finance_etl.infrastructure.filesystem.paths import resource_path
 from personal_finance_etl.presentation.desktop.base_tab import BaseEngineTab
 from personal_finance_etl.presentation.desktop.theme import Color
-from personal_finance_etl.presentation.docs.guides_window import show_guides_window
 
 __all__ = ["DesktopApp", "UnifiedETLTab", "main"]
 
@@ -103,21 +102,6 @@ class UnifiedETLTab(BaseEngineTab):
             font=ctk.CTkFont(family="Segoe UI", size=15, weight="bold"),
             text_color=Color.TEXT,
         ).pack(anchor="w")
-
-        guides_btn_frame = ctk.CTkFrame(hdr, fg_color="transparent")
-        guides_btn_frame.grid(row=0, column=1, padx=(0, 16), pady=(12, 0), sticky="e")
-
-        ctk.CTkButton(
-            guides_btn_frame,
-            text="📚 Guides & About",
-            width=140,
-            height=32,
-            font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"),
-            fg_color="#1E293B",
-            hover_color="#334155",
-            corner_radius=6,
-            command=show_guides_window,
-        ).pack(anchor="e")
 
         ctk.CTkLabel(
             text_block,

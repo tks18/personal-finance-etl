@@ -41,7 +41,6 @@ from personal_finance_etl.contracts.observability import (
     ObservabilityEvent,
     PresentationKind,
 )
-from personal_finance_etl.presentation.docs.guides_window import show_guides_window
 from personal_finance_etl.presentation.observability import RichNarrativeSink
 
 __all__ = ["LOGO", "EngineStatus", "get_file_interactive", "main_cli", "print_bootloader"]
@@ -348,11 +347,6 @@ def main_cli(args: argparse.Namespace) -> None:
     args : argparse.Namespace
         Parsed command-line arguments.
     """
-    if getattr(args, "docs", False):
-        console.print("[bold cyan]Initializing Documentation Engine...[/bold cyan]")
-        show_guides_window()
-        sys.exit(0)
-
     print_bootloader()
 
     engine = PersonalFinanceEngine()

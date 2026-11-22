@@ -1,10 +1,9 @@
-"""Human-facing presentation surfaces: CLI, Desktop GUI, and Documentation browser.
+"""Human-facing presentation surfaces: CLI and Desktop GUI.
 
 Owns
 ----
 - CLI commands and argument parsing.
 - Desktop GUI (CustomTkinter) application, views, base tabs, and theme configuration.
-- Packaged documentation browser and markdown renderer.
 - Human-facing application launcher.
 
 Does not own

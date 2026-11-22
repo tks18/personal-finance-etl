@@ -1,0 +1,3 @@
+interface:
+  display_name: "PFETL v11 Implementation"
+  short_description: "Execute Shan-first PFETL v11 phases safely"

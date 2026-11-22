@@ -6,8 +6,7 @@ PyInstaller.config.CONF['upx_dir'] = r"C:\Tools\_bins_\upx"
 
 datas = [
     ('README.md', '.'),
-    ('docs', 'docs'),
-    ('src/personal_finance_etl/presentation/docs/assets', 'personal_finance_etl/presentation/docs/assets'),
+    ('docs/assets/images', 'docs/assets/images'),
 ]
 datas += collect_data_files('personal_finance_etl')
 binaries = []
@@ -30,8 +29,6 @@ hiddenimports = [
     'PIL',
 ]
 hiddenimports += collect_submodules('personal_finance_etl')
-hiddenimports += collect_submodules('webview')
-hiddenimports += collect_submodules('markdown.extensions')
 
 
 a = Analysis(
