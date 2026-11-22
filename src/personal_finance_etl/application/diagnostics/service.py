@@ -260,6 +260,14 @@ class DiagnosticService:
                 )
             )
 
+        compiled_count = 0
+        if source_config is not None:
+            try:
+                topology = source_config.compile_binding_topology()
+                compiled_count = len(topology.bindings)
+            except Exception:
+                pass
+
         is_valid = not any(i.severity == DiagnosticSeverity.ERROR for i in issues)
         return ConfigValidationResult(
             is_valid=is_valid,
@@ -269,6 +277,7 @@ class DiagnosticService:
             settings_path=config_path,
             rules_path=rules_path,
             sources_path=sources_path,
+            compiled_bindings_count=compiled_count,
         )
 
     def check_sources(
@@ -759,6 +768,16 @@ class DiagnosticService:
         pre_rules = tuple(str(r) for r in plan.pre_rename_rules)
         post_rules = tuple(str(r) for r in plan.post_rename_rules)
 
+        # Derive compiled binding ID and route ID
+        topology = source_cfg.compile_binding_topology()
+        compiled_prod = topology.get_production(target_id)
+        source_binding_id: str | None = None
+        canonical_route_id: str | None = None
+        if compiled_prod and compiled_prod.source_routes:
+            ref = compiled_prod.source_routes[0]
+            source_binding_id = str(ref.binding_id)
+            canonical_route_id = str(ref.route_id)
+
         return MappingPreviewResult(
             dataset_id=target_id,
             source_id=binding.source_id,
@@ -768,6 +787,8 @@ class DiagnosticService:
             post_rename_rules=post_rules,
             expected_canonical_fields=plan.expected_output_fields,
             provenance_fields=plan.provenance_fields,
+            source_binding_id=source_binding_id,
+            canonical_route_id=canonical_route_id,
         )
 
     def preview_identity(

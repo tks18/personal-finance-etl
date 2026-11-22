@@ -96,10 +96,15 @@ def handle_validate_config(args: argparse.Namespace, engine: PersonalFinanceEngi
         console.print(f"[bold]Active Capabilities:[/bold] {caps_str}\n")
 
     if result.is_valid:
+        binding_info = (
+            f", and {result.compiled_bindings_count} compiled source bindings."
+            if result.compiled_bindings_count > 0
+            else "."
+        )
         console.print(
             Panel(
                 "[bold green]✓ ALL CONFIGURATION FILES ARE VALID & CONTRACT-COMPLIANT.[/bold green]\n"
-                f"Resolved {len(result.active_capabilities)} capabilities and {len(result.active_datasets)} active Bronze datasets.",
+                f"Resolved {len(result.active_capabilities)} capabilities, {len(result.active_datasets)} active Bronze datasets{binding_info}",
                 title="[bold green]Validation Passed[/bold green]",
                 border_style="green",
             )
@@ -240,11 +245,20 @@ def handle_preview_mapping(args: argparse.Namespace, engine: PersonalFinanceEngi
         console.print(f"[bold red]Failed to preview mapping for '{dataset_id}':[/bold red] {e}")
         return 1
 
+    header_lines = [
+        f"[bold]Dataset:[/bold] [cyan]{preview.dataset_id.value}[/cyan]",
+        f"[bold]Bound Source:[/bold] [yellow]{preview.source_id if preview.source_id else 'None'}[/yellow]",
+        f"[bold]Provider Type:[/bold] [magenta]{preview.provider_type.value if preview.provider_type else 'None'}[/magenta]",
+    ]
+    if preview.source_binding_id:
+        route_str = f" (Route: [cyan]{preview.canonical_route_id or 'direct'}[/cyan])"
+        header_lines.append(
+            f"[bold]Compiled Binding:[/bold] [blue]{preview.source_binding_id}[/blue]{route_str}"
+        )
+
     console.print(
         Panel(
-            f"[bold]Dataset:[/bold] [cyan]{preview.dataset_id.value}[/cyan]\n"
-            f"[bold]Bound Source:[/bold] [yellow]{preview.source_id if preview.source_id else 'None'}[/yellow]\n"
-            f"[bold]Provider Type:[/bold] [magenta]{preview.provider_type.value if preview.provider_type else 'None'}[/magenta]",
+            "\n".join(header_lines),
             title="[bold green]Dataset Normalization & Mapping Preview[/bold green]",
             border_style="green",
         )
