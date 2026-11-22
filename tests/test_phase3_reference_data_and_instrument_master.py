@@ -181,31 +181,31 @@ def test_zero_runtime_presence_of_benchmark_mapping() -> None:
     """Verify legacy benchmark_mapping concept is completely removed from runtime contracts."""
     # 1. ExtractionResult dataclass fields
     fields = ExtractionResult.__dataclass_fields__
-    assert "raw_instrument_master" in fields
+    assert "instrument_master" in fields
     assert "stg_benchmark_mapping" not in fields
-    assert "raw_mutual_fund_instrument_mapping" in fields
+    assert "mutual_fund_instrument_mapping" in fields
     assert "stg_mf_isin_mapping" not in fields
-    assert "raw_financial_year_parameters" in fields
+    assert "financial_year_parameters" in fields
     assert "raw_macro_parameters" not in fields
-    assert "raw_currency_reference" in fields
+    assert "currency_reference" in fields
     assert "currency_mapping_raw" not in fields
 
     # 2. BRONZE_CONTRACT_REGISTRY sync categories
     categories = {c.sync_category: c.extraction_attribute for c in BRONZE_CONTRACT_REGISTRY}
     assert "instrument_master" in categories
-    assert categories["instrument_master"] == "raw_instrument_master"
+    assert categories["instrument_master"] == "instrument_master"
     assert "benchmark_mapping" not in categories
 
     assert "mutual_fund_instrument_mapping" in categories
-    assert categories["mutual_fund_instrument_mapping"] == "raw_mutual_fund_instrument_mapping"
+    assert categories["mutual_fund_instrument_mapping"] == "mutual_fund_instrument_mapping"
     assert "mf_isin" not in categories
 
     assert "financial_year_parameters" in categories
-    assert categories["financial_year_parameters"] == "raw_financial_year_parameters"
+    assert categories["financial_year_parameters"] == "financial_year_parameters"
     assert "macro_parameters" not in categories
 
     assert "currency_reference" in categories
-    assert categories["currency_reference"] == "raw_currency_reference"
+    assert categories["currency_reference"] == "currency_reference"
     assert "currency_mapping" not in categories
 
     # 3. FILE_TYPE_MAP
