@@ -37,6 +37,52 @@ __all__ = ["discover_source_plan_files"]
 diagnostics = get_observability_diagnostics(__name__)
 
 
+def _match_source_files(
+    norm_location: str, provider_type: ProviderType, selector: object
+) -> list[str]:
+    """Match physical files for a given provider type, selector, and location."""
+    if provider_type == ProviderType.SQLITE:
+        if os.path.isfile(norm_location):
+            return [norm_location]
+        if os.path.isdir(norm_location):
+            extractor = SQLiteExtractor(norm_location)
+            latest_backup = extractor.get_latest_sqlite_backup()
+            if latest_backup:
+                return [normalize_path(latest_backup)]
+        return []
+
+    if provider_type in (ProviderType.CSV, ProviderType.EXCEL):
+        pattern: str | None = None
+        if isinstance(selector, (CsvSelector, ExcelSelector)):
+            pattern = selector.file_pattern
+
+        if os.path.isfile(norm_location):
+            return [norm_location]
+        if os.path.isdir(norm_location):
+            if pattern:
+                if "**" not in pattern and not os.path.isabs(pattern):
+                    search_pattern = os.path.join(norm_location, "**", pattern)
+                else:
+                    search_pattern = os.path.join(norm_location, pattern)
+                raw_matches = glob.glob(search_pattern, recursive=True)
+            else:
+                ext_pattern = "*.csv" if provider_type == ProviderType.CSV else "*.[xX][lL][sS]*"
+                search_pattern = os.path.join(norm_location, "**", ext_pattern)
+                raw_matches = glob.glob(search_pattern, recursive=True)
+            return [
+                normalize_path(p)
+                for p in raw_matches
+                if not os.path.basename(p).startswith(("~", "."))
+            ]
+
+        raw_matches = glob.glob(norm_location, recursive=True)
+        return [
+            normalize_path(p) for p in raw_matches if not os.path.basename(p).startswith(("~", "."))
+        ]
+
+    return []
+
+
 def discover_source_plan_files(
     source_plans: Sequence[SourcePlan] | Iterable[SourcePlan],
 ) -> dict[str, list[str]]:
@@ -50,7 +96,7 @@ def discover_source_plan_files(
     Returns
     -------
     dict[str, list[str]]
-        Dictionary mapping canonical dataset_id.value to sorted, unique normalized filepaths.
+        Dictionary mapping SourceBindingId and canonical dataset_id values to sorted, unique normalized filepaths.
     """
     discovered: dict[str, list[str]] = {}
 
@@ -68,65 +114,38 @@ def discover_source_plan_files(
 
         norm_location = normalize_path(location)
 
-        for dp in sp.dataset_plans:
-            if not dp.is_enabled:
-                continue
+        # Prefer binding_plans for physical evidence discovery
+        if sp.binding_plans:
+            for bp in sp.binding_plans:
+                if not bp.enabled:
+                    continue
 
-            ds_key = dp.dataset_id.value
-            matched_files: list[str] = []
+                matched_files = sorted(
+                    set(_match_source_files(norm_location, bp.provider_type, bp.selector))
+                )
+                if matched_files:
+                    b_key = str(bp.binding_id)
+                    discovered.setdefault(b_key, []).extend(matched_files)
+                    discovered[b_key] = sorted(set(discovered[b_key]))
 
-            if dp.provider_type == ProviderType.SQLITE:
-                # SQLite source: either a single DB file or a backup directory
-                if os.path.isfile(norm_location):
-                    matched_files = [norm_location]
-                elif os.path.isdir(norm_location):
-                    extractor = SQLiteExtractor(norm_location)
-                    latest_backup = extractor.get_latest_sqlite_backup()
-                    if latest_backup:
-                        matched_files = [normalize_path(latest_backup)]
-            elif dp.provider_type in (ProviderType.CSV, ProviderType.EXCEL):
-                selector = dp.selector
-                pattern: str | None = None
-                if isinstance(selector, (CsvSelector, ExcelSelector)):
-                    pattern = selector.file_pattern
+                    # Attach transitional dataset_id keys for compatibility
+                    for dp in sp.dataset_plans:
+                        if dp.dataset_id.value in b_key or dp.selector == bp.selector:
+                            ds_key = dp.dataset_id.value
+                            discovered.setdefault(ds_key, []).extend(matched_files)
+                            discovered[ds_key] = sorted(set(discovered[ds_key]))
+        else:
+            # Fallback for source plans with only dataset_plans
+            for dp in sp.dataset_plans:
+                if not dp.is_enabled:
+                    continue
 
-                if os.path.isfile(norm_location):
-                    # Direct single file location
-                    matched_files = [norm_location]
-                elif os.path.isdir(norm_location):
-                    # Directory traversal
-                    if pattern:
-                        if "**" not in pattern and not os.path.isabs(pattern):
-                            search_pattern = os.path.join(norm_location, "**", pattern)
-                        else:
-                            search_pattern = os.path.join(norm_location, pattern)
-                        raw_matches = glob.glob(search_pattern, recursive=True)
-                    else:
-                        # Default extension discovery across directory tree
-                        ext_pattern = (
-                            "*.csv" if dp.provider_type == ProviderType.CSV else "*.[xX][lL][sS]*"
-                        )
-                        search_pattern = os.path.join(norm_location, "**", ext_pattern)
-                        raw_matches = glob.glob(search_pattern, recursive=True)
-
-                    # Filter out temporary lock files and hidden files
-                    matched_files = [
-                        normalize_path(p)
-                        for p in raw_matches
-                        if not os.path.basename(p).startswith(("~", "."))
-                    ]
-                else:
-                    # Location may itself be a glob pattern (e.g. 'inputs/Statements/**/*.xlsx')
-                    raw_matches = glob.glob(norm_location, recursive=True)
-                    matched_files = [
-                        normalize_path(p)
-                        for p in raw_matches
-                        if not os.path.basename(p).startswith(("~", "."))
-                    ]
-
-            matched_files = sorted(set(matched_files))
-            if matched_files:
-                discovered.setdefault(ds_key, []).extend(matched_files)
-                discovered[ds_key] = sorted(set(discovered[ds_key]))
+                ds_key = dp.dataset_id.value
+                matched_files = sorted(
+                    set(_match_source_files(norm_location, dp.provider_type, dp.selector))
+                )
+                if matched_files:
+                    discovered.setdefault(ds_key, []).extend(matched_files)
+                    discovered[ds_key] = sorted(set(discovered[ds_key]))
 
     return discovered

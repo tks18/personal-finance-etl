@@ -25,23 +25,31 @@ from personal_finance_etl.config.sources.change_detection import (
     ChangeDetectionPolicy,
     resolve_change_detection_policy,
 )
+from personal_finance_etl.config.sources.compiler import derive_source_binding_id
 from personal_finance_etl.config.sources.identity import BronzeIdentityStrategy
 from personal_finance_etl.config.sources.loader import SourceConfiguration
 from personal_finance_etl.config.sources.selectors import (
     DatasetSelector,
     MarketProviderSelector,
 )
+from personal_finance_etl.contracts.canonical_plans import SourceBindingPlan
 from personal_finance_etl.contracts.datasets import (
     BRONZE_DATASET_ORIGIN_MAP,
     DatasetId,
     DatasetOrigin,
 )
 from personal_finance_etl.contracts.execution_plan import ExecutionPlan
-from personal_finance_etl.contracts.sources import ProviderType, SourceId
+from personal_finance_etl.contracts.sources import (
+    CanonicalRouteId,
+    ProviderType,
+    SourceBindingId,
+    SourceId,
+)
 
 __all__ = [
     "CompiledSourcePlan",
     "DatasetPlan",
+    "SourceBindingPlan",
     "SourcePlan",
     "SourcePlanner",
     "SourcePlanningError",
@@ -97,7 +105,7 @@ class DatasetPlan:
 
 @dataclass(frozen=True, slots=True)
 class SourcePlan:
-    """Immutable compiled execution plan for an evidence source and its child datasets.
+    """Immutable compiled execution plan for an evidence source and its child bindings.
 
     Parameters
     ----------
@@ -109,15 +117,18 @@ class SourcePlan:
         Configured filesystem location or URI.
     enabled : bool
         Whether the source is operationally enabled.
-    dataset_plans : tuple[DatasetPlan, ...]
-        Compiled plans for datasets bound to this source.
+    binding_plans : tuple[SourceBindingPlan, ...], default ()
+        Compiled physical source binding plans owned by this source.
+    dataset_plans : tuple[DatasetPlan, ...], default ()
+        Transitional compiled plans for datasets bound to this source.
     """
 
     source_id: SourceId
     provider_type: ProviderType
     location: str
     enabled: bool
-    dataset_plans: tuple[DatasetPlan, ...]
+    binding_plans: tuple[SourceBindingPlan, ...] = ()
+    dataset_plans: tuple[DatasetPlan, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,15 +139,57 @@ class CompiledSourcePlan:
     ----------
     source_plans : tuple[SourcePlan, ...]
         All compiled source plans.
-    dataset_plans : tuple[DatasetPlan, ...]
-        All compiled dataset plans in deterministic order.
+    binding_plans : tuple[SourceBindingPlan, ...], default ()
+        All compiled source binding plans in deterministic order.
+    dataset_plans : tuple[DatasetPlan, ...], default ()
+        Transitional compiled dataset plans in deterministic order.
     """
 
     source_plans: tuple[SourcePlan, ...]
-    dataset_plans: tuple[DatasetPlan, ...]
+    binding_plans: tuple[SourceBindingPlan, ...] = ()
+    dataset_plans: tuple[DatasetPlan, ...] = ()
+
+    def get_binding_plan(self, binding_id: SourceBindingId | str) -> SourceBindingPlan | None:
+        """Find a source binding plan by logical SourceBindingId.
+
+        Parameters
+        ----------
+        binding_id : SourceBindingId | str
+            Target source binding identifier.
+
+        Returns
+        -------
+        SourceBindingPlan | None
+            Matching SourceBindingPlan if compiled, else None.
+        """
+        target = str(binding_id)
+        for bp in self.binding_plans:
+            if str(bp.binding_id) == target:
+                return bp
+        return None
+
+    def is_binding_enabled(self, binding_id: SourceBindingId | str) -> bool:
+        """Return True if binding has a compiled plan and is actively enabled.
+
+        Parameters
+        ----------
+        binding_id : SourceBindingId | str
+            Target source binding identifier.
+
+        Returns
+        -------
+        bool
+            True if the binding plan exists and is enabled, else False.
+        """
+        bp = self.get_binding_plan(binding_id)
+        return bp.enabled if bp is not None else False
 
     def get_dataset_plan(self, dataset_id: DatasetId | str) -> DatasetPlan | None:
         """Find a dataset plan by canonical DatasetId.
+
+        Removal Owner
+        -------------
+        Phase 055 (decommissioning transitional DatasetPlan lookups).
 
         Parameters
         ----------
@@ -175,6 +228,10 @@ class CompiledSourcePlan:
 
     def is_dataset_enabled(self, dataset_id: DatasetId | str) -> bool:
         """Return True if dataset has a compiled plan and is actively enabled.
+
+        Removal Owner
+        -------------
+        Phase 055 (decommissioning transitional dataset enablement check).
 
         Parameters
         ----------
@@ -268,8 +325,58 @@ class SourcePlanner:
             if is_enabled:
                 satisfied_datasets.add(binding.dataset_id)
 
+        # Compile physical source binding plans from decoupled topology
+        topology = self.source_config.compile_binding_topology()
+        legacy_ds_by_binding_id = {
+            derive_source_binding_id(ds.source_id, ds.dataset_id): ds
+            for ds in self.source_config.datasets
+        }
+        binding_plans_list: list[SourceBindingPlan] = []
+        for b_cfg in topology.bindings:
+            src = sources_by_id.get(b_cfg.source_id)
+            if src is None:
+                raise SourcePlanningError(
+                    f"Binding '{b_cfg.binding_id}' references unknown source '{b_cfg.source_id}'."
+                )
+
+            is_active = any(
+                self.execution_plan.is_bronze_dataset_active(r.target_dataset_id)
+                for r in b_cfg.routes
+            )
+            is_b_enabled = b_cfg.enabled and src.enabled and is_active
+
+            policy = b_cfg.change_detection or resolve_change_detection_policy(
+                file_type=src.provider_type.value,
+                is_full_replace=False,
+                hash_policy=FileHashPolicy(),
+                is_provider_generated=False,
+            )
+
+            legacy_ds = legacy_ds_by_binding_id.get(b_cfg.binding_id)
+            target_ds_id = (
+                legacy_ds.dataset_id
+                if legacy_ds is not None
+                else (b_cfg.routes[0].target_dataset_id if b_cfg.routes else None)
+            )
+
+            bp = SourceBindingPlan(
+                binding_id=b_cfg.binding_id,
+                source_id=b_cfg.source_id,
+                provider_type=src.provider_type,
+                location=src.location,
+                enabled=is_b_enabled,
+                selector=b_cfg.selector,
+                change_detection=policy,
+                route_ids=tuple(r.route_id for r in b_cfg.routes),
+                binding_config=b_cfg,
+                legacy_dataset_config=legacy_ds,
+                target_dataset_id=target_ds_id,
+            )
+            binding_plans_list.append(bp)
+
         # Compile provider-generated dataset plans dynamically based on ExecutionPlan
         provider_dataset_plans: list[DatasetPlan] = []
+        provider_binding_plans: list[SourceBindingPlan] = []
         for provider_ds_id in (
             DatasetId.MARKET_CURRENCY_FX_RATES,
             DatasetId.MARKET_BENCHMARK_HISTORY,
@@ -297,6 +404,28 @@ class SourcePlanner:
             )
             provider_dataset_plans.append(prov_plan)
             dataset_plans_list.append(prov_plan)
+
+            prov_bp = SourceBindingPlan(
+                binding_id=derive_source_binding_id(
+                    SourceId("provider_market_data"), provider_ds_id
+                ),
+                source_id=SourceId("provider_market_data"),
+                provider_type=ProviderType.MARKET_DATA,
+                location="provider://market_data",
+                enabled=is_act,
+                selector=MarketProviderSelector(feed_name="yahoo_finance"),
+                change_detection=resolve_change_detection_policy(
+                    file_type="market_data",
+                    is_full_replace=False,
+                    hash_policy=FileHashPolicy(),
+                    is_provider_generated=True,
+                ),
+                route_ids=(CanonicalRouteId("direct"),),
+                target_dataset_id=provider_ds_id,
+            )
+            provider_binding_plans.append(prov_bp)
+            binding_plans_list.append(prov_bp)
+
             if is_act:
                 satisfied_datasets.add(provider_ds_id)
 
@@ -317,6 +446,10 @@ class SourcePlanner:
         for dp in dataset_plans_list:
             ds_by_source.setdefault(dp.source_id, []).append(dp)
 
+        bindings_by_source: dict[SourceId, list[SourceBindingPlan]] = {}
+        for bp in binding_plans_list:
+            bindings_by_source.setdefault(bp.source_id, []).append(bp)
+
         source_plans_list: list[SourcePlan] = []
         for src in self.source_config.sources:
             sp = SourcePlan(
@@ -324,6 +457,7 @@ class SourcePlanner:
                 provider_type=src.provider_type,
                 location=src.location,
                 enabled=src.enabled,
+                binding_plans=tuple(bindings_by_source.get(src.source_id, [])),
                 dataset_plans=tuple(ds_by_source.get(src.source_id, [])),
             )
             source_plans_list.append(sp)
@@ -336,11 +470,13 @@ class SourcePlanner:
                 provider_type=ProviderType.MARKET_DATA,
                 location="provider://market_data",
                 enabled=any(dp.is_enabled for dp in provider_dataset_plans),
+                binding_plans=tuple(provider_binding_plans),
                 dataset_plans=tuple(provider_dataset_plans),
             )
         )
 
         return CompiledSourcePlan(
             source_plans=tuple(source_plans_list),
+            binding_plans=tuple(binding_plans_list),
             dataset_plans=tuple(dataset_plans_list),
         )
