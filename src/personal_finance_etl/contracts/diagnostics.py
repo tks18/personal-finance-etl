@@ -49,9 +49,11 @@ __all__ = [
     "MappingPreviewResult",
     "PlanPreviewResult",
     "PreflightCheckFailedError",
+    "ProducerResolutionPreview",
     "SourceCheckDetail",
     "SourceCheckResult",
     "SourceReachabilityStatus",
+    "UnsatisfiedEvidencePreview",
 ]
 
 
@@ -288,6 +290,62 @@ class IdentityPreviewResult:
 
 
 @dataclass(frozen=True, slots=True)
+class ProducerResolutionPreview:
+    """Diagnostic preview of a resolved canonical evidence producer.
+
+    Parameters
+    ----------
+    dataset_id : DatasetId
+        Canonical target dataset identifier.
+    producer_kind : str
+        Producer mechanism ('source', 'provider', 'derived').
+    assembly_mode : str | None
+        Source assembly mode ('direct', 'union') if producer_kind is source.
+    is_required : bool
+        Whether this dataset is required by active capabilities.
+    is_enabled : bool
+        Whether this dataset is operationally enabled.
+    source_routes : tuple[str, ...], default ()
+        Referenced source routes formatted as 'binding_id/route_id'.
+    recipe_name : str | None, default None
+        Derivation recipe name if producer_kind is derived.
+    provider_type : str | None, default None
+        External provider type if producer_kind is provider.
+    dependencies : tuple[DatasetId, ...], default ()
+        Upstream canonical dataset dependencies.
+    """
+
+    dataset_id: DatasetId
+    producer_kind: str
+    assembly_mode: str | None = None
+    is_required: bool = True
+    is_enabled: bool = True
+    source_routes: tuple[str, ...] = ()
+    recipe_name: str | None = None
+    provider_type: str | None = None
+    dependencies: tuple[DatasetId, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class UnsatisfiedEvidencePreview:
+    """Diagnostic preview of an unsatisfied required canonical dataset.
+
+    Parameters
+    ----------
+    dataset_id : DatasetId
+        Unsatisfied canonical dataset identifier.
+    required_by_capabilities : tuple[str, ...], default ()
+        Capabilities mandating this dataset.
+    reason : str, default "No configured producer"
+        Diagnostic explanation.
+    """
+
+    dataset_id: DatasetId
+    required_by_capabilities: tuple[str, ...] = ()
+    reason: str = "No configured producer"
+
+
+@dataclass(frozen=True, slots=True)
 class PlanPreviewResult:
     """Execution plan topology, active capabilities, and contract inventory preview.
 
@@ -311,6 +369,14 @@ class PlanPreviewResult:
         External market data feeds required.
     ordered_engine_stages : tuple[EngineStage, ...]
         Pipeline execution stages governed by this plan.
+    production_plan_fingerprint : str | None, default None
+        Optional cryptographic SHA-256 fingerprint of the canonical production plan.
+    is_satisfiable : bool, default True
+        Whether the required canonical evidence is completely satisfiable.
+    producer_resolutions : tuple[ProducerResolutionPreview, ...], default ()
+        Diagnostic previews of all resolved canonical dataset producers.
+    unsatisfied_evidence : tuple[UnsatisfiedEvidencePreview, ...], default ()
+        Diagnostic previews of any unsatisfied canonical evidence requirements.
     """
 
     plan_fingerprint: str
@@ -322,6 +388,10 @@ class PlanPreviewResult:
     active_gold_datasets: tuple[DatasetId, ...]
     required_external_enrichments: tuple[ExternalEnrichmentId, ...]
     ordered_engine_stages: tuple[EngineStage, ...]
+    production_plan_fingerprint: str | None = None
+    is_satisfiable: bool = True
+    producer_resolutions: tuple[ProducerResolutionPreview, ...] = ()
+    unsatisfied_evidence: tuple[UnsatisfiedEvidencePreview, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
