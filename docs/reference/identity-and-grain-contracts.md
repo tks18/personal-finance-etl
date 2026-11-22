@@ -8,28 +8,28 @@ Those concepts overlap, but they are not synonyms. A table can have a valid phys
 
 | Layer | Dataset | Grain |
 |---|---|---|
-| Gold | `gold.Core_Monthly_Fact` | `Month` |
-| Gold | `gold.Wealth_Asset_Breakdown` | `Month-Asset` |
-| Gold | `gold.Cashflow_Expense_Breakdown` | `Month-ExpenseCategory` |
-| Gold | `gold.Cashflow_Income_Breakdown` | `Month-IncomeCategory` |
-| Gold | `gold.Wealth_FIRE_Analytics` | `Month` |
-| Gold | `gold.Forecast_Budget_Variance` | `Month` |
-| Gold | `gold.Investment_Portfolio_Summary` | `Month-ISIN` |
-| Gold | `gold.Cashflow_Efficiency_Analytics` | `Month` |
-| Gold | `gold.Cashflow_Activity_Summary` | `Month` |
-| Gold | `gold.Investment_By_ISIN` | `Date-ISIN` |
-| Gold | `gold.Investment_By_Subtype` | `Date-Subtype` |
-| Gold | `gold.Investment_By_Class` | `Date-Class` |
-| Gold | `gold.Investment_By_Instrument_Type` | `Date-InstrumentType` |
-| Gold | `gold.Investment_By_Sector` | `Date-Sector` |
-| Gold | `gold.Investment_By_Industry` | `Date-Industry` |
-| Gold | `gold.Investment_By_Portfolio` | `Date` |
-| Gold | `gold.Investment_By_Geo` | `Date-Geo` |
-| Gold | `gold.Investment_By_Country` | `Date-Country` |
-| Gold | `gold.Investment_By_Currency` | `Date-Currency` |
-| Gold | `gold.Tax_Year_Summary` | `FY` |
-| Gold | `gold.Tax_Income_Breakdown` | `FY-Head-SubHead-Source` |
-| Gold | `gold.Tax_Reconciliation` | `FY-SubHead` |
+| Gold | `gold.core_monthly_fact` | `Month` |
+| Gold | `gold.wealth_asset_breakdown` | `Month-Asset` |
+| Gold | `gold.cashflow_expense_breakdown` | `Month-ExpenseCategory` |
+| Gold | `gold.cashflow_income_breakdown` | `Month-IncomeCategory` |
+| Gold | `gold.wealth_fire_analytics` | `Month` |
+| Gold | `gold.forecast_budget_variance` | `Month` |
+| Gold | `gold.investment_portfolio_summary` | `Month-ISIN` |
+| Gold | `gold.cashflow_efficiency_analytics` | `Month` |
+| Gold | `gold.cashflow_activity_summary` | `Month` |
+| Gold | `gold.investment_by_isin` | `Date-ISIN` |
+| Gold | `gold.investment_by_subtype` | `Date-Subtype` |
+| Gold | `gold.investment_by_class` | `Date-Class` |
+| Gold | `gold.investment_by_instrument_type` | `Date-InstrumentType` |
+| Gold | `gold.investment_by_sector` | `Date-Sector` |
+| Gold | `gold.investment_by_industry` | `Date-Industry` |
+| Gold | `gold.investment_by_portfolio` | `Date` |
+| Gold | `gold.investment_by_geo` | `Date-Geo` |
+| Gold | `gold.investment_by_country` | `Date-Country` |
+| Gold | `gold.investment_by_currency` | `Date-Currency` |
+| Gold | `gold.tax_financial_year_summary` | `FY` |
+| Gold | `gold.tax_income_head_breakdown` | `FY-Head-SubHead-Source` |
+| Gold | `gold.tax_subhead_reconciliation` | `FY-SubHead` |
 | Silver | `silver.dim_calendar` | `Day` |
 | Silver | `silver.dim_income_category` | `Category` |
 | Silver | `silver.dim_income_subcategory` | `Subcategory` |
@@ -102,7 +102,7 @@ The `v2` marker is a **technical identity protocol version**, not an application
 
 ## Grain is not primary-key syntax
 
-Consider `gold.Investment_By_ISIN` with grain `Date-ISIN`.
+Consider `gold.investment_by_isin` with grain `Date-ISIN`.
 
 The grain tells downstream analytics that one row represents one instrument on one valuation date. Whether the physical table declares a composite SQL primary key is secondary to that semantic contract.
 
