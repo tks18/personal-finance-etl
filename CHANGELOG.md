@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [11.3.1](https://github.com/tks18/personal-finance-etl/compare/11.3.0...11.3.1) (2026-11-22)
+
+
+### Bug Fixes 🛠
+
+* **cli:** wait for pipeline thread join instead of milestone event ([7575cc8](https://github.com/tks18/personal-finance-etl/commit/7575cc81d77f4ab61f5616ebd97657e30cb9c8b4))
+
 ## [11.3.0](https://github.com/tks18/personal-finance-etl/compare/11.2.0...11.3.0) (2026-11-22)
 
 
