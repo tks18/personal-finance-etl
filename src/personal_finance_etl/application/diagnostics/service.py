@@ -794,10 +794,24 @@ class DiagnosticService:
         compiled_prod = topology.get_production(target_id)
         source_binding_id: str | None = None
         canonical_route_id: str | None = None
+        predicates: tuple[str, ...] = ()
+        semantic_rules: tuple[str, ...] = ()
         if compiled_prod and compiled_prod.source_routes:
             ref = compiled_prod.source_routes[0]
             source_binding_id = str(ref.binding_id)
             canonical_route_id = str(ref.route_id)
+            binding_cfg = topology.get_binding(ref.binding_id)
+            if binding_cfg is not None:
+                route_cfg = next(
+                    (r for r in binding_cfg.routes if r.route_id == ref.route_id),
+                    None,
+                )
+                if route_cfg is not None:
+                    predicates = tuple(
+                        f"{p.rule}({p.field} {p.operator.value} {p.value if p.value is not None else ''})".strip()
+                        for p in route_cfg.predicates
+                    )
+                    semantic_rules = tuple(f"{s.rule}({s.field})" for s in route_cfg.semantics)
 
         return MappingPreviewResult(
             dataset_id=target_id,
@@ -810,6 +824,8 @@ class DiagnosticService:
             provenance_fields=plan.provenance_fields,
             source_binding_id=source_binding_id,
             canonical_route_id=canonical_route_id,
+            predicates=predicates,
+            semantic_rules=semantic_rules,
         )
 
     def preview_identity(
