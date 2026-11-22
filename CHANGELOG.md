@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [10.3.5](https://github.com/tks18/personal-finance-etl/compare/10.3.4...10.3.5) (2026-11-22)
+
+
+### Features 🔥
+
+* **contracts:** add canonical derivation recipe & production contracts ([baf1601](https://github.com/tks18/personal-finance-etl/commit/baf1601c94cc962542f61daba04ed3985e2936e6))
+* **ingestion:** add canonical production engine & gate-2 integration ([1847386](https://github.com/tks18/personal-finance-etl/commit/184738651b702d00ceaf52e32280def8602f43a3))
+* **ingestion:** add canonical recipe registry & integrity validator ([d3756ac](https://github.com/tks18/personal-finance-etl/commit/d3756ac4b94cadbdc0576bd602e060ad7be54790))
+
+
+### Tests 🧪
+
+* **config:** align investment fixtures with canonical validation ([c2dc014](https://github.com/tks18/personal-finance-etl/commit/c2dc014e4d4eb7384f712c253832182ceb4c0831))
+
+
+### Docs 📃
+
+* **refactor:** complete phase 049 and 050 refactor phase records ([6b8406c](https://github.com/tks18/personal-finance-etl/commit/6b8406cbe66d776938483de954dfd7a6d7d58c78))
+
 ### [10.3.4](https://github.com/tks18/personal-finance-etl/compare/10.3.3...10.3.4) (2026-11-22)
 
 
