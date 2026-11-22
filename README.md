@@ -507,19 +507,16 @@ pip install personal-finance-etl
 ### Desktop
 
 ```bash
-shan-fin
-```
-
-or:
-
-```bash
-shan-fin-gui
+pfetl
 ```
 
 ### Terminal
 
 ```bash
-shan-fin cli
+pfetl run
+pfetl status
+pfetl doctor
+pfetl info
 ```
 
 The package also ships the technical documentation so the same knowledge base is available from the application surfaces.

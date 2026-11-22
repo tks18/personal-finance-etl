@@ -49,13 +49,17 @@ No subcommand defaults to the Desktop application.
 
 | Command | Behavior |
 | --- | --- |
-| `shan-fin` | Desktop |
-| `shan-fin tkinter` | Desktop |
-| `shan-fin-gui` | Desktop directly |
-| `shan-fin cli` | Rich terminal CLI |
-| `shan-fin cli --docs` | open integrated documentation |
+| `pfetl` | Desktop operations console (default) |
+| `pfetl --gui` | Desktop operations console |
+| `pfetl run` | Rich terminal pipeline execution |
+| `pfetl status` | Show pipeline lock, last run health, and sync summary |
+| `pfetl doctor` | Actionable health checks (config, stores, providers) |
+| `pfetl info` | Display system metadata, paths, and warehouse inventory |
+| `pfetl snapshot` | Coordinated DuckDB/SQLite backup snapshot |
+| `pfetl restore <file>` | Restore database pair from backup archive |
+| `pfetl --version` | Display application version |
 
-The installed scripts are declared in `pyproject.toml`.
+The installed script is declared in `pyproject.toml`.
 
 ## CLI operating modes
 
@@ -64,7 +68,7 @@ The CLI supports several distinct workflows.
 ### Interactive pipeline run
 
 ```bash
-shan-fin cli --config path/to/config.toml --rules path/to/rules.toml
+pfetl run --config path/to/config.toml --rules path/to/rules.toml
 ```
 
 The CLI can prompt for configuration/rules and retain recent selections.
@@ -72,7 +76,7 @@ The CLI can prompt for configuration/rules and retain recent selections.
 ### Automatic run
 
 ```bash
-shan-fin cli --config ... --rules ... --auto
+pfetl run --config ... --rules ... --auto
 ```
 
 `--auto` skips the explicit ignite confirmation.
@@ -82,7 +86,7 @@ It does **not** make invalid configuration acceptable.
 ### Unattended / cron-style run
 
 ```bash
-shan-fin cli --config ... --rules ... --cron
+pfetl run --config ... --rules ... --cron
 ```
 
 `--cron` implies automatic execution and exits after completion rather than entering the interactive restart menu.
@@ -90,19 +94,21 @@ shan-fin cli --config ... --rules ... --cron
 ### Snapshot
 
 ```bash
-shan-fin cli --config path/to/config.toml --snapshot
+pfetl snapshot --config path/to/config.toml
 ```
 
 ### Restore
 
 ```bash
-shan-fin cli --config path/to/config.toml --restore path/to/backup.zip
+pfetl restore path/to/backup.zip --config path/to/config.toml
 ```
 
-### Documentation portal
+### Operator Status & Diagnostics
 
 ```bash
-shan-fin cli --docs
+pfetl status
+pfetl doctor
+pfetl info
 ```
 
 ## Interactive lifecycle
