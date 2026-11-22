@@ -164,24 +164,24 @@ class ExtractionBatchResult:
 class ExtractionResult:
     """Consolidated raw extracted evidence streams across all ingestion sources."""
 
-    zcategory: pl.LazyFrame
-    assetgroup: pl.LazyFrame
-    assets: pl.LazyFrame
-    currency: pl.LazyFrame
-    inoutcome: pl.LazyFrame
+    household_zcategory: pl.LazyFrame
+    household_asset_group: pl.LazyFrame
+    household_assets: pl.LazyFrame
+    household_currency: pl.LazyFrame
+    household_inoutcome: pl.LazyFrame
     mappings: dict[str, dict[str, str]]
-    raw_mutual_fund_instrument_mapping: pl.LazyFrame
-    raw_instrument_master: pl.LazyFrame
-    mf_market_data_raw: pl.LazyFrame
-    mf_transactions_raw: pl.LazyFrame
-    stock_market_data_raw: pl.LazyFrame
-    stock_transactions_raw: pl.LazyFrame
-    raw_opening_balances: pl.LazyFrame
-    raw_benchmark_master: pl.LazyFrame
-    raw_financial_year_parameters: pl.LazyFrame
     column_master: pl.DataFrame | pl.LazyFrame
-    us_stock_transactions_raw: pl.LazyFrame
-    raw_currency_reference: pl.LazyFrame
+    mutual_fund_instrument_mapping: pl.LazyFrame
+    instrument_master: pl.LazyFrame
+    opening_balances: pl.LazyFrame
+    benchmark_master: pl.LazyFrame
+    financial_year_parameters: pl.LazyFrame
+    currency_reference: pl.LazyFrame
+    mf_market_data: pl.LazyFrame
+    mf_transactions: pl.LazyFrame
+    stock_market_data: pl.LazyFrame
+    stock_transactions: pl.LazyFrame
+    us_stock_transactions: pl.LazyFrame
 
 
 @dataclass
