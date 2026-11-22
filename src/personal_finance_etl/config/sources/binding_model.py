@@ -26,6 +26,7 @@ from personal_finance_etl.config.sources.mapping import ColumnMapping
 from personal_finance_etl.config.sources.model import SourceFieldDeclaration
 from personal_finance_etl.config.sources.normalization import NormalizationRule
 from personal_finance_etl.config.sources.selectors import DatasetSelector
+from personal_finance_etl.config.sources.semantics import PredicateRule, SemanticRule
 from personal_finance_etl.contracts.canonical_plans import (
     CanonicalProducerKind,
     SourceAssemblyMode,
@@ -56,6 +57,16 @@ def _empty_column_mappings() -> list[ColumnMapping]:
 
 def _empty_normalization_rules() -> list[NormalizationRule]:
     """Create an empty list of NormalizationRule instances."""
+    return []
+
+
+def _empty_predicate_rules() -> list[PredicateRule]:
+    """Create an empty list of PredicateRule instances."""
+    return []
+
+
+def _empty_semantic_rules() -> list[SemanticRule]:
+    """Create an empty list of SemanticRule instances."""
     return []
 
 
@@ -91,6 +102,10 @@ class CanonicalRouteConfig(BaseModel):
         Declarative column translation rules from source names to canonical names.
     normalization : list[NormalizationRule], default empty list
         Ordered list of bounded normalization transformations to apply.
+    predicates : list[PredicateRule], default empty list
+        Ordered list of bounded row-local include/exclude filter predicates.
+    semantics : list[SemanticRule], default empty list
+        Ordered list of bounded categorical semantic mappings and constant assignments.
     identity : BronzeIdentityStrategy | None, default None
         Optional explicit row identity strategy override.
     """
@@ -101,6 +116,8 @@ class CanonicalRouteConfig(BaseModel):
     enabled: bool = True
     mapping: list[ColumnMapping] = Field(default_factory=_empty_column_mappings)
     normalization: list[NormalizationRule] = Field(default_factory=_empty_normalization_rules)
+    predicates: list[PredicateRule] = Field(default_factory=_empty_predicate_rules)
+    semantics: list[SemanticRule] = Field(default_factory=_empty_semantic_rules)
     identity: BronzeIdentityStrategy | None = None
 
     @field_validator("route_id", mode="before")
