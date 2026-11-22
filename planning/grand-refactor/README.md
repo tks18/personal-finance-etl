@@ -142,8 +142,8 @@ The phase files are implementation authorities, not release-note summaries. Each
 
 The program is complete only when Phase 060 passes without waived mandatory gates.
 
-At that point PFETL Core must support heterogeneous supported source topologies through configuration while keeping financial meaning, deterministic downstream identities, recovery semantics and observability under PFETL ownership. The physical warehouse must match the active effective DatasetContracts, and the same financial evidence must converge to the same Silver/Gold truth regardless of supported source topology.
+At that point PFETL Core must support heterogeneous supported source topologies through configuration while keeping financial meaning, deterministic downstream identities, recovery semantics and observability under PFETL ownership. The physical warehouse must match the active effective DatasetContracts, and the same financial evidence must converge to the same Silver/Gold truth regardless of supported source topology. All built-in PFETL Core user surfaces—including the Tkinter Desktop GUI (`presentation.desktop`) and Terminal CLI (`presentation.cli`)—are fully modernized, clean, and integrated with the diagnostics and capability suites.
 
-Completion does **not** include Config Studio, Analytics Studio, the dedicated documentation portal or contract-package extraction. Those are separate ecosystem programs after Core acceptance.
+Completion does **not** include external standalone tools such as Config Studio, Analytics Studio, the dedicated documentation portal or contract-package extraction. Those are separate ecosystem programs after Core acceptance.
 
 A post-060 ecosystem-readiness archaeology may determine that the internal contract modules are ready to extract into `pfetl-contracts`. Do not introduce a Phase 061 merely to perform extraction if the Phase-059 freeze already made the boundary mechanically separable.

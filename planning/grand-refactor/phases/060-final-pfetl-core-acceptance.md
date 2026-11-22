@@ -75,20 +75,21 @@ A clean supported user can complete:
 
 ```text
 install
- -> obtain/author SourceConfiguration v1
+ -> launch modernized Desktop GUI or CLI
+ -> author/select config triad (settings, rules, sources)
  -> validate-config
  -> check-sources
- -> preview-mapping / identity / plan
+ -> preview-mapping / identity / satisfiability
  -> dry-run-admission
- -> first committed run
- -> inspect active canonical/effective contracts
+ -> first committed run (with live telemetry streaming)
+ -> inspect active canonical/effective contracts & capabilities
  -> unchanged rerun
  -> evidence-change rerun
  -> semantic-mapping change/replay
  -> identity-policy change/rebuild
- -> capability disable/re-enable
+ -> capability disable/re-enable (via UI toggle or CLI flag)
  -> controlled failure/remediation
- -> backup/restore
+ -> backup/restore (GUI snapshot/restore modal or CLI)
  -> observability reconstruction
 ```
 
@@ -239,9 +240,24 @@ run/config fingerprint
 
 Certify multiprocessing worker lineage, including the ISIN worker path where applicable, under the one-emitter/existing-consumer architecture.
 
-### Step 19 - Desktop/presentation compatibility smoke
+### Step 19 - Desktop GUI & Terminal CLI Modernization and Acceptance
 
-Verify the existing Desktop/presentation surface can still initiate/observe supported runs and snapshot/restore outcomes against the final capability-aware Core. No Config Studio work is introduced.
+Modernize and certify the built-in Tkinter Desktop UI (`presentation.desktop`) and Terminal CLI (`presentation.cli`) so that all PFETL Core user surfaces are clean, modern, and fully integrated with the final generalized engine:
+
+1. **Desktop Tkinter (`presentation.desktop`) Modernization:**
+   - **Configuration Triad Support:** Upgrade `UnifiedETLTab` to accept the full configuration triad (`settings.toml`, `rules.toml`, and `sources.toml`) with persistent recent paths and automatic cross-config path detection.
+   - **Interactive Diagnostics Suite:** Integrate native CTk buttons and status cards for `Validate Config` (`engine.validate_all_configs`), `Check Sources` (`engine.check_sources`), `Preview Plan / Satisfiability` (`engine.preview_plan`), and `Dry-Run Admission` (`engine.dry_run_admission`).
+   - **Active Capabilities Viewer & Toggles:** Display the active capability set in the UI, allowing interactive toggling of optional capabilities (e.g. Benchmark, Foreign Assets, Tax, FIRE, Simulation) before running.
+   - **Live Telemetry & Observability:** Ensure `desktop_sink.py` renders real-time pipeline phase transitions, progress bars, and structured forensic diagnostics directly in the console text box without UI freezing or multiprocessing deadlocks.
+   - **Multi-Layer Backup/Restore:** Upgrade database snapshot and restore dialogs to safely handle both DuckDB analytical warehouse and SQLite Control Plane transactional state (`ActiveDatabaseState`).
+
+2. **Terminal CLI (`presentation.cli`) Polish & Modernization:**
+   - **Uniform Triad Options:** Ensure all CLI commands (`run`, `validate-config`, `check-sources`, `preview-plan`, `preview-mapping`, `preview-identity`, `dry-run-admission`, `snapshot`, `restore`) uniformly accept `--config`, `--rules`, and `--sources`.
+   - **Headless / Cron Mode:** Ensure `pfetl run --cron` executes cleanly in unattended environments with zero interactive prompts, clean Rich narrative streaming, and deterministic exit codes (`0` = success, `1` = validation error, `2` = pipeline error, `3` = recovery required).
+   - **Capability Overrides:** Allow CLI capability filtering (`--capabilities`) and pre-flight bypass (`--skip-preflight`) for scripted workflows.
+
+3. **Strict Architecture Enforcement:**
+   - Presentation layers must strictly consume `PersonalFinanceEngine` and application service contracts; no direct imports of DuckDB, SQLite, or Pandera internals are permitted in presentation code.
 
 ### Step 20 - Performance gate
 
@@ -371,7 +387,8 @@ Do not:
 - [ ] Shan's protected IDs and financially meaningful outputs remain exact, including Tax/reconciliation and deterministic simulation semantics where applicable.
 - [ ] External household and investment golden topologies still run without source-code changes after the contract freeze.
 - [ ] End-to-end JSONL/Control Plane lineage and multiprocessing context are reconstructable through the final canonical architecture.
-- [ ] Desktop/presentation compatibility, Phase-058 performance thresholds and zero-legacy architecture audits are green.
+- [ ] Desktop GUI (Tkinter) and Terminal CLI modernization and acceptance: full configuration triad selection, interactive diagnostics (validate, check-sources, preview-plan, dry-run), capability toggles, live telemetry streaming, and multi-layer backup/restore verified.
+- [ ] Phase-058 performance thresholds and zero-legacy architecture audits are green.
 - [ ] All 60 phase contracts are closed with no unresolved Core requirement deferred to an invented continuation phase.
 
 ## 12. Commit boundary

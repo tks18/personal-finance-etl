@@ -346,7 +346,7 @@ Phases 056-060 certify and freeze the architecture; they do not create an altern
 - 057 certifies external investment topologies, provider/reference portability and protected identity equivalence, then retires unused columns.
 - 058 profiles the final architecture and optimizes measured bottlenecks without weakening validation, observability or recovery.
 - 059 freezes the complete identifier/configuration/capability/Bronze/Silver/Gold contract universe and eliminates duplicate schema authority.
-- 060 certifies clean installation, supported v10.3.0-state upgrade, external topologies, Shan financial equivalence, replay/recovery, contract-to-warehouse parity, Desktop compatibility and multiprocessing observability.
+- 060 certifies clean installation, supported v10.3.0-state upgrade, external topologies, Shan financial equivalence, replay/recovery, contract-to-warehouse parity, Tkinter Desktop GUI and Terminal CLI modernization, and multiprocessing observability.
 
 Certification phases may repair a generic defect exposed by a fixture. They must never introduce fixture-specific financial semantics or hidden topology branches.
 
@@ -356,6 +356,6 @@ Certification phases may repair a generic defect exposed by a fixture. They must
 - `COMMON_COLUMN_MASTER`, deprecated Settings source paths and other transitional schema/config authorities must not survive the Phase-059 freeze unless explicitly re-justified as non-authoritative runtime inputs.
 - Removing/disabling a source binding or canonical dataset cannot leave stale current-state evidence, while historical Raw/Control Plane provenance remains governed by retention policy.
 - Configured-but-empty evidence is distinct from absent, disabled and malformed evidence.
-- Existing Desktop/presentation surfaces remain compatible with capability-aware runtime state; Config Studio is out of scope for this program.
+- Built-in Desktop Tkinter GUI (`presentation.desktop`) and Terminal CLI (`presentation.cli`) are fully modernized within Core in Phase 060 to support the complete configuration triad, interactive diagnostics (validate, check-sources, preview-plan, dry-run), capability toggles, and live telemetry streaming; future standalone web/cloud "Studios" remain separate ecosystem programs.
 - Final acceptance covers clean install and representative v10.3.0 operational-state upgrade.
 - No post-060 Phase 061 is implied. Contract extraction into a future `pfetl-contracts` repository is an ecosystem program if Phase 059 made the boundary extraction-ready.
