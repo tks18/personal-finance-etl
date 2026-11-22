@@ -14,10 +14,23 @@ Does not own
 """
 
 from personal_finance_etl.config.financial_rules import FinancialRules
-from personal_finance_etl.config.settings import FileHashPolicy, Settings
+from personal_finance_etl.config.settings import (
+    DatabaseSettings,
+    HashPolicy,
+    ObservabilitySettings,
+    Settings,
+    SourceHashPolicy,
+    SourcesSettings,
+    StatementPatternsSettings,
+)
 
 __all__ = [
-    "FileHashPolicy",
+    "DatabaseSettings",
     "FinancialRules",
+    "HashPolicy",
+    "ObservabilitySettings",
     "Settings",
+    "SourceHashPolicy",
+    "SourcesSettings",
+    "StatementPatternsSettings",
 ]

@@ -3,7 +3,8 @@
 Owns
 ----
 - Pipeline environment settings (source databases, output warehouse paths, dependency paths).
-- File hashing policy configurations for source deduplication.
+- Statement file/folder pattern definitions for statement discovery.
+- Evidence-source hashing policy configurations for source change detection.
 - Configuration validation ensuring required source directories and files exist.
 - Dynamic flattening of settings for database auditing.
 
@@ -18,18 +19,128 @@ from __future__ import annotations
 
 import os
 import tomllib
+from enum import StrEnum
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
-class FileHashPolicy(BaseModel):
-    """File content hashing policy flags for source deduplication across format categories."""
+class HashPolicy(StrEnum):
+    """Evidence hash policy mode determining change detection behavior."""
 
-    csv: bool = True
-    excel: bool = False
-    sqlite: bool = False
+    NONE = "NONE"
+    CONTENT = "CONTENT"
+
+
+class SourceHashPolicy(BaseModel):
+    """Evidence-source hash policy flags for source deduplication across categories."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    household_database: HashPolicy = HashPolicy.CONTENT
+    statements: HashPolicy = HashPolicy.NONE
+    reference_data: HashPolicy = HashPolicy.CONTENT
+
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce_values(cls, data: Any) -> Any:
+        """Coerce boolean and case-insensitive strings to canonical HashPolicy."""
+        if isinstance(data, dict):
+            dict_data = cast("dict[str, Any]", data)
+            coerced: dict[str, Any] = {}
+            for k, v in dict_data.items():
+                if isinstance(v, bool):
+                    coerced[k] = HashPolicy.CONTENT if v else HashPolicy.NONE
+                elif isinstance(v, str):
+                    upper_v = v.strip().upper()
+                    if upper_v in ("TRUE", "CONTENT"):
+                        coerced[k] = HashPolicy.CONTENT
+                    elif upper_v in ("FALSE", "NONE"):
+                        coerced[k] = HashPolicy.NONE
+                    else:
+                        coerced[k] = v
+                else:
+                    coerced[k] = v
+            return coerced
+        return data
+
+    def should_check_hash(self, category: str) -> bool:
+        """Evaluate if an evidence stream category requires SHA-256 hash comparison.
+
+        Parameters
+        ----------
+        category : str
+            The evidence stream or category identifier.
+
+        Returns
+        -------
+        bool
+            True if SHA-256 content drift checks should run, False otherwise.
+        """
+        if category in ("sqlite_source", "household_database"):
+            return self.household_database == HashPolicy.CONTENT
+        if category in (
+            "stock_pl",
+            "mf_holdings",
+            "stock_orders",
+            "mf_orders",
+            "us_stock_transactions",
+            "statements",
+        ):
+            return self.statements == HashPolicy.CONTENT
+        # Default for reference categories (column_master, mf_isin, benchmark_mapping, etc.)
+        return self.reference_data == HashPolicy.CONTENT
+
+
+class DatabaseSettings(BaseModel):
+    """Runtime database and raw store persistence paths."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    target_db_base_path: str = ""
+    target_db_name: str = "Personal_Finance_DB.duckdb"
+    raw_document_store_name: str = "Personal_Finance_DB_Raw_Store.sqlite"
+    disable_file_discoverer: bool = False
+
+
+class SourcesSettings(BaseModel):
+    """The nine frozen evidence sources and location paths."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    household_database: str = ""
+    statements_root: str = ""
+    column_master: str = ""
+    mutual_fund_instrument_mapping: str = ""
+    instrument_master: str = ""
+    benchmark_master: str = ""
+    currency_reference: str = ""
+    financial_year_parameters: str = ""
+    opening_balances: str = ""
+
+
+class StatementPatternsSettings(BaseModel):
+    """Folder and filename keyword patterns for statement categorization."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    stock_pl: str = "Stock PL Statements"
+    mf_holdings: str = "Mutual Funds - Holdings"
+    stock_orders: str = "Stock - Orders"
+    mf_orders: str = "Mutual Funds - Orders"
+    us_stock_transactions: list[str] = Field(
+        default_factory=lambda: ["IND Money (US Stocks)", "Transaction Reports"]
+    )
+
+
+class ObservabilitySettings(BaseModel):
+    """Forensic logging and observability parameters."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    logs_directory: str = "logs/runs"
+    retain_last_n_runs: int = 12
 
 
 def _flatten_settings_to_records(
@@ -66,31 +177,13 @@ def _flatten_settings_to_records(
 class Settings(BaseModel):
     """Execution environment settings, warehouse paths, and dependency file locations."""
 
-    SOURCE_DB_FOLDER: str = ""
-    TARGET_DB_BASE_PATH: str = ""
-    TARGET_DB_NAME: str = "Personal_Finance_DB.duckdb"
+    model_config = ConfigDict(extra="forbid")
 
-    # Raw Store Config
-    DISABLE_FILE_DISCOVERER: bool = False
-    RAW_DOCUMENT_STORE_NAME: str = "Personal_Finance_DB_Raw_Store.sqlite"
-
-    # Dependencies
-    COLUMN_MASTER_PATH: str = ""
-    MF_ISIN_CSV_PATH: str = ""
-    BENCHMARK_MAPPING_CSV_PATH: str = ""
-    BENCHMARK_MASTER_CSV_PATH: str = ""
-    MACRO_PARAMETERS_CSV_PATH: str = ""
-    OPENING_BALANCE_CSV_PATH: str = ""
-    CURRENCY_MAPPING_CSV_PATH: str = ""
-
-    # Statements
-    STATEMENTS_FOLDER: str = ""
-
-    FILE_HASH_POLICY: FileHashPolicy = Field(default_factory=FileHashPolicy)
-
-    # Observability & Forensic Logging
-    LOGS_DIRECTORY: str = "logs/runs"
-    RETAIN_LAST_N_RUNS: int = 12
+    database: DatabaseSettings = Field(default_factory=DatabaseSettings)
+    sources: SourcesSettings = Field(default_factory=SourcesSettings)
+    statement_patterns: StatementPatternsSettings = Field(default_factory=StatementPatternsSettings)
+    hash_policy: SourceHashPolicy = Field(default_factory=SourceHashPolicy)
+    observability: ObservabilitySettings = Field(default_factory=ObservabilitySettings)
 
     def resolve_logs_dir(self) -> Path:
         """Resolve the active logs directory path against target base path if relative.
@@ -100,10 +193,10 @@ class Settings(BaseModel):
         Path
             Absolute or fully qualified Path to the forensic log directory.
         """
-        raw_path = Path(self.LOGS_DIRECTORY)
-        if raw_path.is_absolute() or not self.TARGET_DB_BASE_PATH:
+        raw_path = Path(self.observability.logs_directory)
+        if raw_path.is_absolute() or not self.database.target_db_base_path:
             return raw_path
-        return Path(self.TARGET_DB_BASE_PATH) / raw_path
+        return Path(self.database.target_db_base_path) / raw_path
 
     @classmethod
     def from_toml(cls, filepath: str | os.PathLike[str]) -> Settings:
@@ -126,8 +219,7 @@ class Settings(BaseModel):
         with open(path_str, "rb") as f:
             data = tomllib.load(f)
 
-        cfg = cls(**data)
-        return cfg
+        return cls(**data)
 
     def validate_config(self) -> None:
         """Validate that all necessary files and folders exist before starting.
@@ -138,25 +230,24 @@ class Settings(BaseModel):
             If any required directory or file is missing or invalid.
         """
         required_dirs = [
-            ("SOURCE_DB_FOLDER", self.SOURCE_DB_FOLDER),
-            ("STATEMENTS_FOLDER", self.STATEMENTS_FOLDER),
+            ("household_database", self.sources.household_database),
+            ("statements_root", self.sources.statements_root),
         ]
 
         required_files = [
-            ("COLUMN_MASTER_PATH", self.COLUMN_MASTER_PATH),
-            ("MF_ISIN_CSV_PATH", self.MF_ISIN_CSV_PATH),
-            ("BENCHMARK_MAPPING_CSV_PATH", self.BENCHMARK_MAPPING_CSV_PATH),
-            ("BENCHMARK_MASTER_CSV_PATH", self.BENCHMARK_MASTER_CSV_PATH),
-            ("MACRO_PARAMETERS_CSV_PATH", self.MACRO_PARAMETERS_CSV_PATH),
-            ("OPENING_BALANCE_CSV_PATH", self.OPENING_BALANCE_CSV_PATH),
-            ("CURRENCY_MAPPING_CSV_PATH", self.CURRENCY_MAPPING_CSV_PATH),
+            ("column_master", self.sources.column_master),
+            ("mutual_fund_instrument_mapping", self.sources.mutual_fund_instrument_mapping),
+            ("instrument_master", self.sources.instrument_master),
+            ("benchmark_master", self.sources.benchmark_master),
+            ("financial_year_parameters", self.sources.financial_year_parameters),
+            ("opening_balances", self.sources.opening_balances),
+            ("currency_reference", self.sources.currency_reference),
         ]
 
         errors: list[str] = []
 
-        # TARGET_DB_BASE_PATH is created automatically if missing, but cannot be blank
-        if not self.TARGET_DB_BASE_PATH:
-            errors.append("TARGET_DB_BASE_PATH is empty in configuration.")
+        if not self.database.target_db_base_path:
+            errors.append("target_db_base_path is empty in configuration.")
 
         for name, path in required_dirs:
             if not path or not os.path.isdir(path):
