@@ -19,7 +19,7 @@ from __future__ import annotations
 import os
 from collections.abc import Sequence
 
-from personal_finance_etl.config.settings import FileHashPolicy
+from personal_finance_etl.config.settings import SourceHashPolicy
 from personal_finance_etl.infrastructure.control_plane.artifact_repository import (
     ArtifactRepository,
 )
@@ -83,7 +83,7 @@ class FileSyncService:
     def sync_with_disk(
         self,
         discovered_files: dict[str, list[str]],
-        hash_policy: FileHashPolicy,
+        hash_policy: SourceHashPolicy,
         full_replace_categories: list[str],
     ) -> SyncDeltaResult:
         """Synchronize the scan as one atomic control-plane operation.
@@ -92,7 +92,7 @@ class FileSyncService:
         ----------
         discovered_files : dict[str, list[str]]
             Category-mapped list of discovered filesystem paths.
-        hash_policy : FileHashPolicy
+        hash_policy : SourceHashPolicy
             Policy determining which file types require SHA-256 drift checks.
         full_replace_categories : list[str]
             Categories that replace full datasets upon each discovery.
@@ -373,7 +373,7 @@ class FileSyncService:
     def _sync_with_disk(
         self,
         discovered_files: dict[str, list[str]],
-        hash_policy: FileHashPolicy,
+        hash_policy: SourceHashPolicy,
         full_replace_categories: list[str],
     ) -> SyncDeltaResult:
         """Synchronize discovered disk files against SQLite artifact metadata registry.
@@ -382,7 +382,7 @@ class FileSyncService:
         ----------
         discovered_files : dict[str, list[str]]
             Mapping of category names to lists of disk file paths.
-        hash_policy : FileHashPolicy
+        hash_policy : SourceHashPolicy
             Hashing strategy for file integrity checks.
         full_replace_categories : list[str]
             Categories where any change triggers full replacement.
@@ -417,8 +417,11 @@ class FileSyncService:
         for category, filepaths in normalized_by_category.items():
             new_files[category] = []
             changed_files[category] = []
-            file_type = FILE_TYPE_MAP.get(category, "csv")
-            should_check_hash = bool(getattr(hash_policy, file_type, False))
+            if hasattr(hash_policy, "should_check_hash"):
+                should_check_hash = hash_policy.should_check_hash(category)
+            else:
+                file_type = FILE_TYPE_MAP.get(category, "csv")
+                should_check_hash = bool(getattr(hash_policy, file_type, False))
             active_paths = set(filepaths)
             all_active_paths.update(active_paths)
 

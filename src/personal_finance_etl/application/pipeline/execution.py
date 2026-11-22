@@ -514,25 +514,29 @@ class PipelineExecutor:
             Category-mapped discovery dictionary to populate.
         """
         discovered_files["sqlite_source"] = [
-            SQLiteExtractor(self.cfg.SOURCE_DB_FOLDER).get_latest_sqlite_backup().replace("\\", "/")
+            SQLiteExtractor(self.cfg.sources.household_database)
+            .get_latest_sqlite_backup()
+            .replace("\\", "/")
         ]
-        discovered_files["mf_isin"] = [self.cfg.MF_ISIN_CSV_PATH.replace("\\", "/")]
+        discovered_files["mf_isin"] = [
+            self.cfg.sources.mutual_fund_instrument_mapping.replace("\\", "/")
+        ]
         discovered_files["benchmark_mapping"] = [
-            self.cfg.BENCHMARK_MAPPING_CSV_PATH.replace("\\", "/")
+            self.cfg.sources.instrument_master.replace("\\", "/")
         ]
         discovered_files["opening_balances"] = [
-            self.cfg.OPENING_BALANCE_CSV_PATH.replace("\\", "/")
+            self.cfg.sources.opening_balances.replace("\\", "/")
         ]
         discovered_files["benchmark_master"] = [
-            self.cfg.BENCHMARK_MASTER_CSV_PATH.replace("\\", "/")
+            self.cfg.sources.benchmark_master.replace("\\", "/")
         ]
         discovered_files["macro_parameters"] = [
-            self.cfg.MACRO_PARAMETERS_CSV_PATH.replace("\\", "/")
+            self.cfg.sources.financial_year_parameters.replace("\\", "/")
         ]
         discovered_files["currency_mapping"] = [
-            self.cfg.CURRENCY_MAPPING_CSV_PATH.replace("\\", "/")
+            self.cfg.sources.currency_reference.replace("\\", "/")
         ]
-        discovered_files["column_master"] = [self.cfg.COLUMN_MASTER_PATH.replace("\\", "/")]
+        discovered_files["column_master"] = [self.cfg.sources.column_master.replace("\\", "/")]
         self.emitter.emit_event(
             event_code=EventCode.EXTRACTION_COMPLETED,
             message="Injected 8 dynamic configuration assets (7 CSV, 1 SQLite DB)",
@@ -558,14 +562,18 @@ class PipelineExecutor:
         """
         t_ext_start = time.perf_counter()
         renames: list[tuple[str, str, str]] = []
-        if not self.cfg.DISABLE_FILE_DISCOVERER:
+        if not self.cfg.database.disable_file_discoverer:
             self.emitter.emit_event(
                 event_code=EventCode.EXTRACTION_START,
                 message="Phase 1/5: Discovery & Sync",
                 presentation_kind=PresentationKind.STEP,
                 stage=EngineStage.DISCOVERING,
             )
-            discovered_files = categorize_statement_files(self.cfg.STATEMENTS_FOLDER, strict=True)
+            discovered_files = categorize_statement_files(
+                self.cfg.sources.statements_root,
+                strict=True,
+                patterns=self.cfg.statement_patterns,
+            )
             self._inject_configuration_assets(discovered_files)
 
             full_replace_categories = list(
@@ -576,7 +584,7 @@ class PipelineExecutor:
                 )
             )
             new_files, changed_files, _, renames = cp.file_sync.sync_with_disk(
-                discovered_files, self.cfg.FILE_HASH_POLICY, full_replace_categories
+                discovered_files, self.cfg.hash_policy, full_replace_categories
             )
 
             pending_files = cp.artifacts.get_pending_files()
@@ -819,8 +827,8 @@ class PipelineExecutor:
         self.cfg.validate_config()
         validate_registry()
 
-        diagnostics.debug("Target Database: %s", self.cfg.TARGET_DB_BASE_PATH)
-        diagnostics.debug("Source Extractor Folder: %s", self.cfg.STATEMENTS_FOLDER)
+        diagnostics.debug("Target Database: %s", self.cfg.database.target_db_base_path)
+        diagnostics.debug("Source Extractor Folder: %s", self.cfg.sources.statements_root)
 
         with self.emitter.scope(
             operation="pipeline_execution",

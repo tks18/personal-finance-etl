@@ -325,8 +325,32 @@ def fingerprint_config(settings: Settings | Mapping[str, object]) -> ConfigFinge
     """
     if isinstance(settings, Settings):
         raw_dict = settings.model_dump(mode="python")
+        target_db_name = settings.database.target_db_name
+        disable_file_discoverer = settings.database.disable_file_discoverer
+        retain_last_n_runs = settings.observability.retain_last_n_runs
+        logs_directory = settings.observability.logs_directory
     else:
         raw_dict = dict(settings)
+        db_raw = raw_dict.get("database")
+        obs_raw = raw_dict.get("observability")
+        db_data: dict[str, object] = (
+            cast("dict[str, object]", db_raw) if isinstance(db_raw, dict) else {}
+        )
+        obs_data: dict[str, object] = (
+            cast("dict[str, object]", obs_raw) if isinstance(obs_raw, dict) else {}
+        )
+
+        target_db_name = str(db_data.get("target_db_name") or raw_dict.get("target_db_name") or "")
+        disable_file_discoverer = bool(
+            db_data.get("disable_file_discoverer")
+            if "disable_file_discoverer" in db_data
+            else raw_dict.get("disable_file_discoverer", False)
+        )
+        raw_retain = obs_data.get("retain_last_n_runs") or raw_dict.get("retain_last_n_runs") or 12
+        retain_last_n_runs = int(cast(int, raw_retain))
+        logs_directory = str(
+            obs_data.get("logs_directory") or raw_dict.get("logs_directory") or "logs/runs"
+        )
 
     # Compute deterministic hash over sorted canonical JSON
     canonical_json = json.dumps(raw_dict, sort_keys=True, separators=(",", ":"), default=str)
@@ -334,10 +358,10 @@ def fingerprint_config(settings: Settings | Mapping[str, object]) -> ConfigFinge
 
     safe_summary: ConfigFingerprintDict = {
         "config_hash": f"sha256_{config_hash[:16]}",
-        "target_db_name": str(raw_dict.get("TARGET_DB_NAME", "")),
-        "disable_file_discoverer": bool(raw_dict.get("DISABLE_FILE_DISCOVERER", False)),
-        "retain_last_n_runs": int(cast(int, raw_dict.get("RETAIN_LAST_N_RUNS", 12))),
-        "logs_directory": str(raw_dict.get("LOGS_DIRECTORY", "logs/runs")),
+        "target_db_name": target_db_name,
+        "disable_file_discoverer": disable_file_discoverer,
+        "retain_last_n_runs": retain_last_n_runs,
+        "logs_directory": logs_directory,
     }
     return safe_summary
 

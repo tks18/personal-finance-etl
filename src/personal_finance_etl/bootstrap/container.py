@@ -80,18 +80,18 @@ class ServiceContainer:
 
     def create_duckdb_manager(self, cfg: Settings) -> DuckDBManager:
         """Instantiate a DuckDBManager bound to the configured database path."""
-        return DuckDBManager(cfg.TARGET_DB_BASE_PATH, cfg.TARGET_DB_NAME)
+        return DuckDBManager(cfg.database.target_db_base_path, cfg.database.target_db_name)
 
     def create_control_plane(self, cfg: Settings) -> ControlPlane:
         """Instantiate a ControlPlane bound to the configured SQLite document store."""
-        return ControlPlane(cfg.TARGET_DB_BASE_PATH, cfg.RAW_DOCUMENT_STORE_NAME)
+        return ControlPlane(cfg.database.target_db_base_path, cfg.database.raw_document_store_name)
 
     def create_backup_manager(self, cfg: Settings) -> SystemBackupManager:
         """Instantiate a SystemBackupManager bound to the active DuckDB and SQLite pair."""
         return SystemBackupManager(
-            cfg.TARGET_DB_BASE_PATH,
-            sqlite_db_name=cfg.RAW_DOCUMENT_STORE_NAME,
-            duckdb_name=cfg.TARGET_DB_NAME,
+            cfg.database.target_db_base_path,
+            sqlite_db_name=cfg.database.raw_document_store_name,
+            duckdb_name=cfg.database.target_db_name,
         )
 
     def create_orchestrator(

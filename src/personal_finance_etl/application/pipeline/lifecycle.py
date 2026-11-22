@@ -126,7 +126,10 @@ class RunLifecycleCoordinator:
         self.db_manager.open()
         self.db_manager.ensure_schemas()
 
-        cp = ControlPlane(self.cfg.TARGET_DB_BASE_PATH, self.cfg.RAW_DOCUMENT_STORE_NAME)
+        cp = ControlPlane(
+            self.cfg.database.target_db_base_path,
+            self.cfg.database.raw_document_store_name,
+        )
         cp.open()
         cp.ensure_schema()
         self.cp = cp
@@ -459,7 +462,7 @@ class RunLifecycleCoordinator:
             logs_dir = self.cfg.resolve_logs_dir()
             retention_mgr = LogRetentionManager(
                 logs_dir=logs_dir,
-                retain_last_n_runs=self.cfg.RETAIN_LAST_N_RUNS,
+                retain_last_n_runs=self.cfg.observability.retain_last_n_runs,
             )
             retention_mgr.prune_expired_traces()
         except Exception as retention_err:
