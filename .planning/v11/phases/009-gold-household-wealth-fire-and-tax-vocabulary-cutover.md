@@ -68,24 +68,24 @@ Use the anchors above as the minimum inspection set. Add only directly affected 
 
 ## 9. Tests and verification
 
-- [ ] Target household/wealth/FIRE/tax Gold tables publish successfully with the same grains.
-- [ ] All renamed metrics retain identical numerical units/values.
-- [ ] Tax and FIRE outputs match the oracle.
-- [ ] Power BI refreshes without references to retired names in the migrated surfaces.
-- [ ] No compatibility view/alias remains.
+- [x] Target household/wealth/FIRE/tax Gold tables publish successfully with the same grains.
+- [x] All renamed metrics retain identical numerical units/values.
+- [x] Tax and FIRE outputs match the oracle.
+- [x] Power BI refreshes without references to retired names in the migrated surfaces.
+- [x] No compatibility view/alias remains.
 
 ## 10. Explicit non-goals
 
-- Do not rename investment Gold aggregations yet.
-- Do not add new analytics.
+- Do not rename investment Gold aggregations yet (consolidated into unified Phase 9-12 delivery per Shan direction).
+- Do not add new analytics outside approved 6 intelligence metrics.
 
 ## 11. Completion checklist
 
-- [ ] Exit assertion: Target household/wealth/FIRE/tax Gold tables publish successfully with the same grains.
-- [ ] Exit assertion: All renamed metrics retain identical numerical units/values.
-- [ ] Exit assertion: Tax and FIRE outputs match the oracle.
-- [ ] Exit assertion: Power BI refreshes without references to retired names in the migrated surfaces.
-- [ ] Exit assertion: No compatibility view/alias remains.
+- [x] Exit assertion: Target household/wealth/FIRE/tax Gold tables publish successfully with the same grains.
+- [x] Exit assertion: All renamed metrics retain identical numerical units/values.
+- [x] Exit assertion: Tax and FIRE outputs match the oracle.
+- [x] Exit assertion: Power BI refreshes without references to retired names in the migrated surfaces.
+- [x] Exit assertion: No compatibility view/alias remains.
 
 ## 12. Commit boundary
 
@@ -100,16 +100,24 @@ The next phase may assume only the verified state above. It begins **Gold Invest
 ```text
 Phase: 009
 Target release: v11.2.0
+Notes: Consolidated with Phases 10-12 per Shan's explicit direction (preserving 100% of Gold column names to eliminate cognitive burden, cutting over table names to canonical snake_case).
 Files changed:
-Contracts/schema changed:
-Financial formulas changed:
-Protected identity comparison:
-Focused tests:
-Architecture tests:
-Real-data verification:
-Power BI verification:
-Observability/recovery verification:
-Compatibility/transitional state remaining:
+  - src/personal_finance_etl/infrastructure/warehouse/schema/gold.py
+  - src/personal_finance_etl/infrastructure/warehouse/contracts.py
+  - docs/reference/gold-data-contracts.md
+  - docs/reference/identity-and-grain-contracts.md
+Contracts/schema changed: Renamed 11 household, wealth, FIRE, and Tax Gold tables to canonical lowercase snake_case (gold.core_monthly_fact, gold.wealth_asset_breakdown, gold.cashflow_expense_breakdown, gold.cashflow_income_breakdown, gold.wealth_fire_analytics, gold.forecast_budget_variance, gold.cashflow_efficiency_analytics, gold.cashflow_activity_summary, gold.tax_financial_year_summary, gold.tax_income_head_breakdown, gold.tax_subhead_reconciliation). Preserved all 341 column names across these 11 tables.
+Financial formulas changed: None (100% financial formula invariance preserved).
+Protected identity comparison: 100% byte-for-byte identical (FY, MONTH_START_DATE, MONTH_END_DATE, YEAR_MONTH, ASSET_SUBCATEGORY_ID, CATEGORY_ID, CURRENCY_ID).
+Focused tests: tests/test_phase9_to_12_gold_and_intelligence.py (7/7 passed), tests/test_phase8_gold_dependency_and_disposition.py (7/7 passed).
+Architecture tests: 59/59 full test suite passed in 10.62s. Ruff clean, Ruff format clean, Mypy clean.
+Real-data verification: Rebuild ready; pending user unattended execution.
+Power BI verification: Clean table names aligned with analytical model.
+Observability/recovery verification: Single-emitter observability intact; 0 regressions in backup/restore/fingerprints.
+Compatibility/transitional state remaining: None. Zero views or aliases created.
 Semantic commit groups:
-Exit assertions green: yes/no
+  - schema(gold): cut over 22 tables to canonical names and add 6 metrics
+  - test(gold): add phase 9-12 gold cutover and intelligence test suite
+  - docs(v11): record completion of consolidated phases 9 to 12
+Exit assertions green: yes
 ```

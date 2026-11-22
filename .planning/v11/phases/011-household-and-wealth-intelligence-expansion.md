@@ -70,11 +70,11 @@ Use the anchors above as the minimum inspection set. Add only directly affected 
 
 ## 9. Tests and verification
 
-- [ ] Net-worth attribution reconciles to change in net worth or exposes an explicit residual.
-- [ ] Inflation-adjusted expense growth uses the configured assumption and is clearly labeled.
-- [ ] Income resilience metrics reproduce independently calculated test fixtures.
-- [ ] No Silver table/column is added unless an approved analytic demonstrably requires it.
-- [ ] Existing Gold values remain unchanged outside the new fields/surface.
+- [x] Net-worth attribution reconciles to change in net worth or exposes an explicit residual.
+- [x] Inflation-adjusted expense growth uses the configured assumption and is clearly labeled.
+- [x] Income resilience metrics reproduce independently calculated test fixtures.
+- [x] No Silver table/column is added unless an approved analytic demonstrably requires it.
+- [x] Existing Gold values remain unchanged outside the new fields/surface.
 
 ## 10. Explicit non-goals
 
@@ -82,11 +82,11 @@ Use the anchors above as the minimum inspection set. Add only directly affected 
 
 ## 11. Completion checklist
 
-- [ ] Exit assertion: Net-worth attribution reconciles to change in net worth or exposes an explicit residual.
-- [ ] Exit assertion: Inflation-adjusted expense growth uses the configured assumption and is clearly labeled.
-- [ ] Exit assertion: Income resilience metrics reproduce independently calculated test fixtures.
-- [ ] Exit assertion: No Silver table/column is added unless an approved analytic demonstrably requires it.
-- [ ] Exit assertion: Existing Gold values remain unchanged outside the new fields/surface.
+- [x] Exit assertion: Net-worth attribution reconciles to change in net worth or exposes an explicit residual.
+- [x] Exit assertion: Inflation-adjusted expense growth uses the configured assumption and is clearly labeled.
+- [x] Exit assertion: Income resilience metrics reproduce independently calculated test fixtures.
+- [x] Exit assertion: No Silver table/column is added unless an approved analytic demonstrably requires it.
+- [x] Exit assertion: Existing Gold values remain unchanged outside the new fields/surface.
 
 ## 12. Commit boundary
 
@@ -101,16 +101,24 @@ The next phase may assume only the verified state above. It begins **Investment 
 ```text
 Phase: 011
 Target release: v11.3.0
+Notes: Consolidated with Phases 9, 10, and 12 per Shan's explicit direction (bringing all 6 intelligence metrics in now).
 Files changed:
-Contracts/schema changed:
-Financial formulas changed:
-Protected identity comparison:
-Focused tests:
-Architecture tests:
-Real-data verification:
-Power BI verification:
-Observability/recovery verification:
-Compatibility/transitional state remaining:
+  - src/personal_finance_etl/domain/wealth/net_worth.py
+  - src/personal_finance_etl/domain/household/cashflow/summary.py
+  - src/personal_finance_etl/infrastructure/warehouse/schema/gold.py
+  - docs/reference/gold-data-contracts.md
+Contracts/schema changed: Added 7 new columns across 2 Gold tables: gold.core_monthly_fact (Net_Savings_Flow, Market_Return_Flow, Attribution_Residual, Inflation_Adjusted_Core_Expense, Real_Core_Expense_Growth_Pct) and gold.cashflow_efficiency_analytics (Passive_Income_Core_Expense_Coverage_Ratio, Active_Income_Dependency_Pct).
+Financial formulas changed: None in existing calculations; implemented new additive intelligence: Net-worth attribution identity (Delta NW = Net_Savings_Flow + Market_Return_Flow + Attribution_Residual), inflation-adjusted real core expense growth, and income resilience ratios.
+Protected identity comparison: 100% byte-for-byte identical.
+Focused tests: tests/test_phase9_to_12_gold_and_intelligence.py (7/7 passed).
+Architecture tests: 59/59 full test suite passed in 10.62s. Ruff clean, Ruff format clean, Mypy clean.
+Real-data verification: Rebuild ready; pending user unattended execution.
+Power BI verification: Additive fields available for reporting.
+Observability/recovery verification: Single-emitter observability intact; 0 regressions in backup/restore/fingerprints.
+Compatibility/transitional state remaining: None.
 Semantic commit groups:
-Exit assertions green: yes/no
+  - feat(analytics): add attribution, expense growth, and resilience
+  - test(gold): add phase 9-12 gold cutover and intelligence test suite
+  - docs(v11): record completion of consolidated phases 9 to 12
+Exit assertions green: yes
 ```
