@@ -43,16 +43,16 @@ EXPECTED_24_ACTIVE_SILVER_TABLES: list[str] = [
     "silver.fact_opening_balances",
     "silver.dim_benchmark_master",
     "silver.ref_financial_year_parameters",
-    # 9 Preserved Legacy Investment/Tax Tables (Phase 007 target)
-    "silver.d_Investment_Master",
-    "silver.f_Investment_Market_Data",
-    "silver.f_Investment_Purchase_Data",
-    "silver.f_Investment_Sale_Data",
-    "silver.f_Investment_Benchmark_Data",
-    "silver.f_Investment_Analytics_Lot",
-    "silver.f_Investment_Realized_Events",
-    "silver.f_Investment_Reconciliation_Events",
-    "silver.f_Tax_Events",
+    # 9 Phase 007 Cutover Tables
+    "silver.dim_instrument_master",
+    "silver.fact_investment_market_data",
+    "silver.fact_investment_purchases",
+    "silver.fact_investment_sales",
+    "silver.fact_investment_benchmark_data",
+    "silver.fact_investment_lot_analytics",
+    "silver.fact_investment_realized_events",
+    "silver.fact_investment_reconciliation_events",
+    "silver.fact_tax_events",
 ]
 
 EXPECTED_TARGET_NAMES: dict[str, str] = {
@@ -193,8 +193,8 @@ def test_silver_column_inventory_complete() -> None:
     """Verify that all 442 columns in active SILVER_DDL are cataloged in the manifest."""
     ddl_tables = _extract_ddl_columns()
     total_ddl_columns = sum(len(cols) for cols in ddl_tables.values())
-    assert total_ddl_columns == 442, (
-        f"Expected exactly 442 active columns across Silver DDL after Phase 006, got {total_ddl_columns}"
+    assert total_ddl_columns == 438, (
+        f"Expected exactly 438 active columns across Silver DDL after Phase 007, got {total_ddl_columns}"
     )
 
     manifest_content = MANIFEST_PATH.read_text(encoding="utf-8")
@@ -275,16 +275,16 @@ def test_file_category_is_guarded_and_not_dropped() -> None:
 
 
 def test_silver_ddl_and_contracts_unmodified() -> None:
-    """Assert that Phase 006 cutover preserves legacy names for 9 investment/tax tables."""
+    """Assert that Silver DDL and contracts reflect canonical cutover for all 24 tables."""
     ddl_tables = _extract_ddl_columns()
     assert "silver.dim_calendar" in ddl_tables
-    assert "silver.f_Investment_Analytics_Lot" in ddl_tables
-    assert "silver.d_Investment_Master" in ddl_tables
+    assert "silver.fact_investment_lot_analytics" in ddl_tables
+    assert "silver.dim_instrument_master" in ddl_tables
 
-    # Verify contracts registry reflects cutover for household and legacy for investment
+    # Verify contracts registry reflects canonical names for all 24 silver tables
     silver_contract_tables = {
         c.physical_table for c in DATA_CONTRACT_REGISTRY if c.layer == "silver"
     }
     assert "silver.dim_calendar" in silver_contract_tables
-    assert "silver.f_Investment_Analytics_Lot" in silver_contract_tables
-    assert "silver.d_Investment_Master" in silver_contract_tables
+    assert "silver.fact_investment_lot_analytics" in silver_contract_tables
+    assert "silver.dim_instrument_master" in silver_contract_tables
