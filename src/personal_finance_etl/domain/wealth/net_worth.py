@@ -422,8 +422,46 @@ class NetWorthBuilder:
             )
         )
 
-        return lf_monthly_totals.join(
+        lf_monthly_totals = lf_monthly_totals.join(
             cast(pl.LazyFrame, self.inflation_res["lf_inflation"]),
             on="MONTH_START_DATE",
             how="left",
         ).drop("Total_Liabilities_Negative", strict=False)
+
+        # Net-Worth Change Attribution & Inflation-Adjusted Real Expense Growth
+        net_savings_flow = pl.col("Total_Income") - pl.col("Total_Expense")
+        market_return_flow = (
+            (pl.col("Closing_Unrealized_PL") - pl.col("Opening_Unrealized_PL"))
+            + pl.col("Closing_Asset_PnL").fill_null(0.0)
+            + pl.col("Closing_Forex_PnL").fill_null(0.0)
+        )
+        attribution_residual = pl.col("Asset_Market_Delta") - (
+            net_savings_flow + market_return_flow
+        )
+
+        cpi_ratio = (
+            pl.when(pl.col("CPI_INDEX").is_not_null() & (pl.col("CPI_INDEX") > 0))
+            .then(pl.col("CPI_INDEX") / 100.0)
+            .otherwise(1.0)
+        )
+        inflation_adj_core_expense = pl.col("Total_Core_Expense") / cpi_ratio
+
+        prev_core = pl.col("Total_Core_Expense").shift(12)
+        yoy_core_nominal = (pl.col("Total_Core_Expense") - prev_core) / prev_core
+        real_core_growth = (
+            pl.when(
+                prev_core.is_not_null()
+                & (prev_core > 0)
+                & pl.col("INFLATION_YOY_PCT").is_not_null()
+            )
+            .then(((1.0 + yoy_core_nominal) / (1.0 + pl.col("INFLATION_YOY_PCT"))) - 1.0)
+            .otherwise(0.0)
+        )
+
+        return lf_monthly_totals.with_columns(
+            net_savings_flow.alias("Net_Savings_Flow"),
+            market_return_flow.alias("Market_Return_Flow"),
+            attribution_residual.alias("Attribution_Residual"),
+            inflation_adj_core_expense.alias("Inflation_Adjusted_Core_Expense"),
+            real_core_growth.alias("Real_Core_Expense_Growth_Pct"),
+        )
