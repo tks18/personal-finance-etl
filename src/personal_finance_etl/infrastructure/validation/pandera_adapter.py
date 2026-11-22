@@ -307,6 +307,7 @@ class PanderaDataFrameValidator(DataFrameValidator):
                 failures=(),
                 remediation=None,
                 duration_ms=duration_ms,
+                binding_id=context.binding_id,
             )
 
         except pa.errors.SchemaErrors as exc:
@@ -329,6 +330,7 @@ class PanderaDataFrameValidator(DataFrameValidator):
                 failures=failures,
                 remediation=remediation,
                 duration_ms=duration_ms,
+                binding_id=context.binding_id,
             )
 
             diagnostics.warning(
@@ -412,6 +414,7 @@ class PanderaDataFrameValidator(DataFrameValidator):
                 failures=failures,
                 remediation=remediation,
                 duration_ms=duration_ms,
+                binding_id=context.binding_id,
             )
 
             diagnostics.warning(

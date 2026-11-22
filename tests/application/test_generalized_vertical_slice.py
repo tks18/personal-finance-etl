@@ -1118,7 +1118,7 @@ def test_backup_restore_includes_pre_bronze(
             "SELECT table_name FROM information_schema.tables WHERE table_schema = 'pre_bronze'"
         ).fetchall()
     ]
-    assert "household_zcategory" in pb_tables
+    assert "household_db__household_zcategory" in pb_tables
 
 
 def test_downstream_output_equivalence() -> None:
@@ -1347,7 +1347,7 @@ def test_migration_template_checklist_contract() -> None:
             # Provider datasets are dynamically synthesized in SourcePlanner without user file bindings
             pb_contract = get_pre_bronze_contract_by_dataset_id(ds_id)
             assert pb_contract is not None, f"Item F: Missing PreBronzeDataContract for {ds_id}"
-            assert pb_contract.physical_table == f"pre_bronze.{ds_id.value}"
+            assert pb_contract.physical_table == f"pre_bronze.{pb_contract.binding_id}"
             bronze_contract = get_bronze_contract_by_dataset_id(ds_id)
             assert bronze_contract is not None, f"Item H: Missing BronzeDataContract for {ds_id}"
             assert has_canonical_bronze_schema(ds_id), (
@@ -1380,7 +1380,7 @@ def test_migration_template_checklist_contract() -> None:
         assert pb_contract is not None, f"Item F: Missing PreBronzeDataContract for {ds_id}"
 
         # G. Pre-Bronze physical table naming standard compliant
-        assert pb_contract.physical_table == f"pre_bronze.{ds_id.value}", (
+        assert pb_contract.physical_table == f"pre_bronze.{pb_contract.binding_id}", (
             f"Item G: Table naming non-compliant: {pb_contract.physical_table}"
         )
 

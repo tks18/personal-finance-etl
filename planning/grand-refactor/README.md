@@ -90,8 +90,8 @@ If code evidence contradicts a phase, stop and amend the owning phase or archite
 | 044 | Generalized recovery and replay semantics | v10.2.1 | [x] |
 | 045 | Core configuration diagnostics CLI | v10.3.0 | [x] |
 | 046 | Canonical contract and source-binding foundation | v10.3.1 | [x] |
-| 047 | Source-binding configuration and compatibility compilation | v10.3.2 | [ ] |
-| 048 | Binding-aware source planning and Pre-Bronze cutover | v10.3.3 | [ ] |
+| 047 | Source-binding configuration and compatibility compilation | v10.3.2 | [x] |
+| 048 | Binding-aware source planning and Pre-Bronze cutover | v10.3.3 | [x] |
 | 049 | Semantic interpretation and canonical route execution | v10.3.4 | [ ] |
 | 050 | Canonical production engine and Gate-2 integration | v10.3.5 | [ ] |
 | 051 | Canonical satisfiability planner and production graph | v10.4.0 | [ ] |

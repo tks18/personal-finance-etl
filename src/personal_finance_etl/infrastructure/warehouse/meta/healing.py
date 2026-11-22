@@ -259,10 +259,13 @@ class DuckDBRegistryHealer:
 
                     # Prune associated rows in Pre-Bronze tables using explicit artifact provenance
                     if file_id:
-                        for pb_contract in PRE_BRONZE_CONTRACT_REGISTRY:
+                        pre_bronze_tables = self.conn.execute(
+                            "SELECT table_name FROM information_schema.tables WHERE table_schema = 'pre_bronze'"
+                        ).fetchall()
+                        for (tbl_name,) in pre_bronze_tables:
                             try:
                                 self.conn.execute(
-                                    f"DELETE FROM {pb_contract.physical_table} WHERE {PRE_BRONZE_ARTIFACT_ID} = ?",  # nosec B608
+                                    f"DELETE FROM pre_bronze.{tbl_name} WHERE {PRE_BRONZE_ARTIFACT_ID} = ?",  # nosec B608
                                     [file_id],
                                 )
                             except duckdb.CatalogException:
@@ -309,10 +312,12 @@ class DuckDBRegistryHealer:
 
         cat_to_pb_contracts: dict[str, list[PreBronzeDataContract]] = {}
         for pb in PRE_BRONZE_CONTRACT_REGISTRY:
-            cat_to_pb_contracts.setdefault(pb.dataset_id.value, []).append(pb)
-            b_match = get_bronze_contract_by_dataset_id(pb.dataset_id)
-            if b_match is not None:
-                cat_to_pb_contracts.setdefault(b_match.sync_category, []).append(pb)
+            cat_to_pb_contracts.setdefault(str(pb.binding_id), []).append(pb)
+            if pb.dataset_id is not None:
+                cat_to_pb_contracts.setdefault(pb.dataset_id.value, []).append(pb)
+                b_match = get_bronze_contract_by_dataset_id(pb.dataset_id)
+                if b_match is not None:
+                    cat_to_pb_contracts.setdefault(b_match.sync_category, []).append(pb)
 
         cat_to_table = {c.sync_category: c.physical_table for c in BRONZE_CONTRACT_REGISTRY}
 

@@ -24,6 +24,7 @@ from datetime import date
 
 import polars as pl
 
+from personal_finance_etl.config.sources.compiler import derive_source_binding_id
 from personal_finance_etl.contracts.application import EngineStage
 from personal_finance_etl.contracts.datasets import DatasetId
 from personal_finance_etl.contracts.event_transport import EventQueue
@@ -78,6 +79,7 @@ from personal_finance_etl.infrastructure.validation import (
 from personal_finance_etl.infrastructure.warehouse.bronze import BronzeLayer
 from personal_finance_etl.infrastructure.warehouse.pre_bronze import PreBronzeLayer
 from personal_finance_etl.infrastructure.warehouse.registry import (
+    get_pre_bronze_contract_by_binding_id,
     get_pre_bronze_contract_by_dataset_id,
 )
 
@@ -148,7 +150,10 @@ def upsert_market_delta_and_register(
         Individual yearly chunk DataFrames corresponding to new_files.
     """
     if dataset_id is not None:
-        pb_contract = get_pre_bronze_contract_by_dataset_id(dataset_id)
+        binding_id = derive_source_binding_id("provider_market_data", dataset_id)
+        pb_contract = get_pre_bronze_contract_by_binding_id(
+            binding_id
+        ) or get_pre_bronze_contract_by_dataset_id(dataset_id)
         if pb_contract is not None:
             pb_layer = PreBronzeLayer(bronze.db_manager, emitter=bronze.emitter)
             if df_delta.is_empty() and not pb_layer.table_exists(pb_contract):
@@ -163,7 +168,7 @@ def upsert_market_delta_and_register(
                                 contract=pb_contract,
                                 df=chunk_frame,
                                 artifact_id=artifact_id,
-                                source_id=SourceId("market_data"),
+                                source_id=SourceId("provider_market_data"),
                             )
                         except Exception as e:
                             diagnostics.warning("Failed to backfill chunk %s: %s", v_path, e)
@@ -174,14 +179,24 @@ def upsert_market_delta_and_register(
                             contract=pb_contract,
                             df=existing_bronze,
                             artifact_id="cached_bronze_initial_sync",
-                            source_id=SourceId("market_data"),
+                            source_id=SourceId("provider_market_data"),
                         )
+
+            if df_delta.is_empty() and pb_layer.table_exists(pb_contract):
+                pending_market_files = bronze.cp.artifacts.get_pending_files().get(
+                    meta_file_type, []
+                )
+                if pending_market_files:
+                    bronze.cp.artifacts.mark_synced(pending_market_files)
 
     if not df_delta.is_empty():
         diagnostics.debug("Upserting new Parquet chunks for %s...", table_name)
         if dataset_id is not None:
             # 1. Gate 1 Validation & Pre-Bronze Persistence
-            pb_contract = get_pre_bronze_contract_by_dataset_id(dataset_id)
+            binding_id = derive_source_binding_id("provider_market_data", dataset_id)
+            pb_contract = get_pre_bronze_contract_by_binding_id(
+                binding_id
+            ) or get_pre_bronze_contract_by_dataset_id(dataset_id)
             if pb_contract is not None:
                 pb_layer = PreBronzeLayer(bronze.db_manager, emitter=bronze.emitter)
                 if frames and len(frames) == len(new_files):
@@ -191,7 +206,7 @@ def upsert_market_delta_and_register(
                             contract=pb_contract,
                             df=chunk_frame,
                             artifact_id=artifact_id,
-                            source_id=SourceId("market_data"),
+                            source_id=SourceId("provider_market_data"),
                         )
                 else:
                     for v_path in new_files:
@@ -200,7 +215,7 @@ def upsert_market_delta_and_register(
                             contract=pb_contract,
                             df=df_delta,
                             artifact_id=artifact_id,
-                            source_id=SourceId("market_data"),
+                            source_id=SourceId("provider_market_data"),
                         )
 
             # 2. Gate 2 Validation against Canonical Bronze Pandera Schema

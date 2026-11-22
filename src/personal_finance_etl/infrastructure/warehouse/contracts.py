@@ -22,14 +22,17 @@ from enum import StrEnum
 
 from personal_finance_etl.config.sources.change_detection import SyncStrategy
 from personal_finance_etl.contracts.datasets import DatasetId, IdentityRequirement
+from personal_finance_etl.contracts.sources import SourceBindingId
 
 # Standard Pre-Bronze operational provenance column names
 PRE_BRONZE_ARTIFACT_ID: str = "__artifact_id__"
 PRE_BRONZE_SOURCE_ID: str = "__source_id__"
+PRE_BRONZE_BINDING_ID: str = "__binding_id__"
 PRE_BRONZE_DATASET_ID: str = "__dataset_id__"
 PRE_BRONZE_PROVENANCE_COLUMNS: tuple[str, ...] = (
     PRE_BRONZE_ARTIFACT_ID,
     PRE_BRONZE_SOURCE_ID,
+    PRE_BRONZE_BINDING_ID,
     PRE_BRONZE_DATASET_ID,
 )
 
@@ -65,6 +68,7 @@ __all__ = [
     "MANAGED_WAREHOUSE_SCHEMAS",
     "PERSISTED_DATA_SCHEMAS",
     "PRE_BRONZE_ARTIFACT_ID",
+    "PRE_BRONZE_BINDING_ID",
     "PRE_BRONZE_CONTRACT_REGISTRY",
     "PRE_BRONZE_DATASET_ID",
     "PRE_BRONZE_PROVENANCE_COLUMNS",
@@ -87,20 +91,53 @@ class PreBronzeDataContract:
 
     Parameters
     ----------
-    dataset_id : DatasetId
-        Canonical logical dataset identity.
+    binding_id : SourceBindingId
+        Authoritative physical source binding identity.
     physical_table : str
-        PFETL-controlled physical table name in DuckDB (e.g. 'pre_bronze.household_zcategory').
+        PFETL-controlled physical table name in DuckDB (e.g. 'pre_bronze.sqlite_source__household_zcategory').
     sync_strategy : SyncStrategy, default=SyncStrategy.INCREMENTAL
         Warehouse synchronization mode (full-replace vs incremental).
     provenance_required : bool, default=True
         Whether rows must carry explicit operational provenance metadata.
+    dataset_id : DatasetId | None, default=None
+        Transitional canonical dataset identity. Removal Owner: Phase 055 (decommissioning legacy SourceDatasetConfig).
     """
 
-    dataset_id: DatasetId
+    binding_id: SourceBindingId
     physical_table: str
     sync_strategy: SyncStrategy = SyncStrategy.INCREMENTAL
     provenance_required: bool = True
+    dataset_id: DatasetId | None = None
+
+    def __init__(
+        self,
+        binding_id: SourceBindingId | str | None = None,
+        physical_table: str = "",
+        sync_strategy: SyncStrategy = SyncStrategy.INCREMENTAL,
+        provenance_required: bool = True,
+        dataset_id: DatasetId | str | None = None,
+    ) -> None:
+        resolved_binding: SourceBindingId
+        if binding_id is None and dataset_id is not None:
+            raw_id = dataset_id.value if isinstance(dataset_id, DatasetId) else str(dataset_id)
+            resolved_binding = SourceBindingId(raw_id)
+        elif binding_id is not None:
+            resolved_binding = SourceBindingId(str(binding_id))
+        else:
+            raise ValueError("PreBronzeDataContract requires either binding_id or dataset_id.")
+
+        resolved_ds = (
+            dataset_id
+            if isinstance(dataset_id, DatasetId)
+            else DatasetId(dataset_id)
+            if dataset_id is not None
+            else None
+        )
+        object.__setattr__(self, "binding_id", resolved_binding)
+        object.__setattr__(self, "physical_table", physical_table)
+        object.__setattr__(self, "sync_strategy", sync_strategy)
+        object.__setattr__(self, "provenance_required", provenance_required)
+        object.__setattr__(self, "dataset_id", resolved_ds)
 
 
 @dataclass
@@ -135,7 +172,7 @@ _DATASET_SYNC_CATEGORY_MAP: dict[DatasetId, str] = {
     DatasetId.INVESTMENT_MACRO_PARAMETERS: "macro_parameters",
     DatasetId.MARKET_CURRENCY_MAPPING: "currency_mapping",
     DatasetId.MARKET_CURRENCY_FX_RATES: "currency_history",
-    DatasetId.MARKET_BENCHMARK_HISTORY: "benchmark",
+    DatasetId.MARKET_BENCHMARK_HISTORY: "benchmark_history",
     DatasetId.MARKET_US_STOCK_PRICES: "us_stock_market",
     DatasetId.COMMON_COLUMN_MASTER: "column_master",
 }
@@ -300,15 +337,40 @@ BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
     ),
 ]
 
+_DATASET_BASELINE_SOURCE_MAP: dict[DatasetId, str] = {
+    DatasetId.HOUSEHOLD_ZCATEGORY: "household_db",
+    DatasetId.HOUSEHOLD_ASSET_GROUP: "household_db",
+    DatasetId.HOUSEHOLD_ASSETS: "household_db",
+    DatasetId.HOUSEHOLD_CURRENCY: "household_db",
+    DatasetId.HOUSEHOLD_INOUTCOME: "household_db",
+    DatasetId.INVESTMENT_MF_ISIN_MAPPING: "mf_isin_csv",
+    DatasetId.INVESTMENT_BENCHMARK_MAPPING: "benchmark_mapping_csv",
+    DatasetId.HOUSEHOLD_OPENING_BALANCES: "opening_balance_csv",
+    DatasetId.INVESTMENT_BENCHMARK_MASTER: "benchmark_master_csv",
+    DatasetId.INVESTMENT_MACRO_PARAMETERS: "macro_parameters_csv",
+    DatasetId.COMMON_COLUMN_MASTER: "column_master_csv",
+    DatasetId.MARKET_MF_HOLDINGS: "mf_holdings_excel",
+    DatasetId.INVESTMENT_US_STOCK_TRANSACTIONS: "us_stock_transactions",
+    DatasetId.MARKET_CURRENCY_MAPPING: "currency_mapping_csv",
+    DatasetId.INVESTMENT_MF_ORDERS: "mf_orders_excel",
+    DatasetId.MARKET_STOCK_HOLDINGS: "stock_pl_excel",
+    DatasetId.INVESTMENT_STOCK_ORDERS: "stock_orders_excel",
+}
+
 # Authoritative registry for Pre-Bronze warehouse layer
 PRE_BRONZE_CONTRACT_REGISTRY: list[PreBronzeDataContract] = [
     PreBronzeDataContract(
-        dataset_id=b.dataset_id,
-        physical_table=f"pre_bronze.{b.dataset_id.value}",
+        binding_id=SourceBindingId(
+            f"{_DATASET_BASELINE_SOURCE_MAP.get(b.dataset_id, 'provider_market_data')}__{b.dataset_id.value}"
+        ),
+        physical_table=(
+            f"pre_bronze.{_DATASET_BASELINE_SOURCE_MAP.get(b.dataset_id, 'provider_market_data')}__{b.dataset_id.value}"
+        ),
         sync_strategy=(
             SyncStrategy.FULL_REPLACE if b.is_full_replace else SyncStrategy.INCREMENTAL
         ),
         provenance_required=True,
+        dataset_id=b.dataset_id,
     )
     for b in BRONZE_CONTRACT_REGISTRY
 ]

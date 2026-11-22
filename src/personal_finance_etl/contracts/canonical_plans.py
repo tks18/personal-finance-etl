@@ -108,6 +108,12 @@ class SourceBindingPlan:
         Optional resolved change-detection and synchronization policy descriptor.
     route_ids : tuple[CanonicalRouteId, ...], default ()
         Compiled canonical routes owned by this binding.
+    binding_config : object | None, default None
+        Optional authoritative source binding configuration descriptor.
+    legacy_dataset_config : object | None, default None
+        Optional legacy source dataset configuration descriptor for transitional compatibility.
+    target_dataset_id : DatasetId | None, default None
+        Optional transitional target canonical dataset identifier.
     """
 
     binding_id: SourceBindingId
@@ -118,6 +124,9 @@ class SourceBindingPlan:
     selector: object | None = None
     change_detection: object | None = None
     route_ids: tuple[CanonicalRouteId, ...] = ()
+    binding_config: object | None = None
+    legacy_dataset_config: object | None = None
+    target_dataset_id: DatasetId | None = None
 
 
 @dataclass(frozen=True, slots=True)

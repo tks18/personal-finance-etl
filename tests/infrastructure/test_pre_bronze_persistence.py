@@ -82,7 +82,7 @@ def test_pre_bronze_contract_registry_validation() -> None:
     contract = get_pre_bronze_contract_by_dataset_id(DatasetId.HOUSEHOLD_ZCATEGORY)
     assert contract is not None
     assert contract.dataset_id == DatasetId.HOUSEHOLD_ZCATEGORY
-    assert contract.physical_table == "pre_bronze.household_zcategory"
+    assert contract.physical_table == f"pre_bronze.{contract.binding_id}"
     assert contract.sync_strategy == SyncStrategy.FULL_REPLACE
     assert contract.provenance_required is True
 
@@ -90,11 +90,11 @@ def test_pre_bronze_contract_registry_validation() -> None:
     assert contract_by_str == contract
 
     # Test lookup by physical table
-    contract_by_table = get_pre_bronze_contract_by_table("pre_bronze.household_zcategory")
+    contract_by_table = get_pre_bronze_contract_by_table(f"pre_bronze.{contract.binding_id}")
     assert contract_by_table == contract
 
     # Case-insensitive lookup
-    contract_case = get_pre_bronze_contract_by_table("PRE_BRONZE.HOUSEHOLD_ZCATEGORY")
+    contract_case = get_pre_bronze_contract_by_table(f"PRE_BRONZE.{contract.binding_id.upper()}")
     assert contract_case == contract
 
     # Unknown returns None
@@ -112,7 +112,7 @@ def test_pre_bronze_physical_table_naming_and_sanitization() -> None:
     table_with_src = get_pre_bronze_table_name(
         DatasetId.INVESTMENT_STOCK_ORDERS, source_id=SourceId("zerodha")
     )
-    assert table_with_src == "pre_bronze.zerodha_investment_stock_orders"
+    assert table_with_src == "pre_bronze.zerodha__investment_stock_orders"
 
     # Sanitization of safe separators (hyphens and periods)
     assert sanitize_physical_identifier("my-source.data") == "my_source_data"

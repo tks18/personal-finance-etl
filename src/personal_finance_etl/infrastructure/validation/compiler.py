@@ -17,6 +17,7 @@ from __future__ import annotations
 import pandera.polars as pa
 import polars as pl
 
+from personal_finance_etl.config.sources.binding_model import SourceBindingConfig
 from personal_finance_etl.config.sources.model import SourceDatasetConfig
 
 __all__ = [
@@ -46,13 +47,15 @@ POLARS_TYPE_MAP: dict[str, type[pl.DataType] | pl.DataType] = {
 }
 
 
-def compile_source_schema(config: SourceDatasetConfig) -> pa.DataFrameSchema:
-    """Compile a declarative SourceDatasetConfig into a Pandera Polars DataFrameSchema.
+def compile_source_schema(
+    config: SourceDatasetConfig | SourceBindingConfig,
+) -> pa.DataFrameSchema:
+    """Compile a declarative source binding or dataset configuration into a Pandera Schema.
 
     Parameters
     ----------
-    config : SourceDatasetConfig
-        Configured dataset binding containing declared source fields.
+    config : SourceDatasetConfig | SourceBindingConfig
+        Configured source binding containing declared source fields.
 
     Returns
     -------
@@ -65,25 +68,28 @@ def compile_source_schema(config: SourceDatasetConfig) -> pa.DataFrameSchema:
         If config.fields is empty, contains duplicate field names, or references
         an unknown/unsupported data type.
     """
+    ident = (
+        f"binding '{config.binding_id}'"
+        if isinstance(config, SourceBindingConfig)
+        else f"dataset '{config.dataset_id}'"
+    )
     if not config.fields:
         raise ValueError(
-            f"Cannot compile source schema for dataset '{config.dataset_id}': "
+            f"Cannot compile source schema for {ident}: "
             "config.fields is empty. Declare at least one SourceFieldDeclaration."
         )
 
     columns: dict[str, pa.Column] = {}
     for field in config.fields:
         if field.name in columns:
-            raise ValueError(
-                f"Duplicate source field declaration '{field.name}' in dataset '{config.dataset_id}'."
-            )
+            raise ValueError(f"Duplicate source field declaration '{field.name}' in {ident}.")
 
         norm_type = field.data_type.strip().lower()
         if norm_type not in POLARS_TYPE_MAP:
             supported = sorted(set(POLARS_TYPE_MAP.keys()))
             raise ValueError(
                 f"Unsupported or unknown data type '{field.data_type}' for source field '{field.name}' "
-                f"in dataset '{config.dataset_id}'. Supported types: {supported}."
+                f"in {ident}. Supported types: {supported}."
             )
 
         dtype = POLARS_TYPE_MAP[norm_type]
@@ -94,8 +100,13 @@ def compile_source_schema(config: SourceDatasetConfig) -> pa.DataFrameSchema:
             name=field.name,
         )
 
+    schema_name = (
+        f"pre_bronze_{config.binding_id}"
+        if isinstance(config, SourceBindingConfig)
+        else f"pre_bronze_{config.dataset_id.value}"
+    )
     return pa.DataFrameSchema(
         columns=columns,
         strict=False,
-        name=f"pre_bronze_{config.dataset_id.value}",
+        name=schema_name,
     )

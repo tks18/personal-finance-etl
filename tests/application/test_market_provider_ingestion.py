@@ -299,7 +299,7 @@ def test_upsert_market_delta_persists_pre_bronze_and_bronze() -> None:
             assert PRE_BRONZE_SOURCE_ID in pb_rows.columns
             assert PRE_BRONZE_DATASET_ID in pb_rows.columns
             assert pb_rows[PRE_BRONZE_ARTIFACT_ID][0] == artifact_id
-            assert pb_rows[PRE_BRONZE_SOURCE_ID][0] == "market_data"
+            assert pb_rows[PRE_BRONZE_SOURCE_ID][0] == "provider_market_data"
             assert pb_rows[PRE_BRONZE_DATASET_ID][0] == "market_currency_fx_rates"
 
             # 2. Assert Bronze table exists and contains admitted rows

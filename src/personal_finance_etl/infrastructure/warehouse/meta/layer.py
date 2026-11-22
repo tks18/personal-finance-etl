@@ -230,21 +230,23 @@ class MetaLayer:
             )
 
         # Record Pre-Bronze table metrics if physical tables exist in DuckDB
-        for pb_contract in PRE_BRONZE_CONTRACT_REGISTRY:
+        pre_bronze_tables = self.conn.execute(
+            "SELECT table_name FROM information_schema.tables WHERE table_schema = 'pre_bronze'"
+        ).fetchall()
+        for (tbl_name,) in pre_bronze_tables:
             try:
                 row = self.conn.execute(
-                    f"SELECT count(*) FROM {pb_contract.physical_table}"  # nosec B608
+                    f"SELECT count(*) FROM pre_bronze.{tbl_name}"  # nosec B608
                 ).fetchone()
                 if row is not None:
                     count = int(row[0])
-                    schema_part, table_part = pb_contract.physical_table.split(".", maxsplit=1)
                     self.conn.execute(
                         """
                         INSERT INTO meta.m_Table_Row_Counts
                         (schema_name, table_name, row_count, generated_at)
                         VALUES (?, ?, ?, CURRENT_TIMESTAMP)
                         """,
-                        [schema_part, table_part, count],
+                        ["pre_bronze", tbl_name, count],
                     )
             except duckdb.CatalogException:
                 pass
@@ -297,8 +299,13 @@ class MetaLayer:
         self.conn.execute("DELETE FROM meta.m_Data_Contracts")
 
         for pb_contract in PRE_BRONZE_CONTRACT_REGISTRY:
-            if plan is not None and not plan.is_pre_bronze_dataset_active(pb_contract.dataset_id):
+            if (
+                plan is not None
+                and pb_contract.dataset_id is not None
+                and not plan.is_pre_bronze_dataset_active(pb_contract.dataset_id)
+            ):
                 continue
+            contract_id = str(pb_contract.binding_id)
             self.conn.execute(
                 """
                 INSERT INTO meta.m_Data_Contracts 
@@ -306,7 +313,7 @@ class MetaLayer:
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 [
-                    pb_contract.dataset_id.value,
+                    contract_id,
                     WarehouseLayer.PRE_BRONZE.value,
                     pb_contract.physical_table,
                     "PreBronze",
@@ -397,7 +404,7 @@ class MetaLayer:
             active_tables.update(
                 c.physical_table.lower()
                 for c in PRE_BRONZE_CONTRACT_REGISTRY
-                if plan.is_pre_bronze_dataset_active(c.dataset_id)
+                if c.dataset_id is None or plan.is_pre_bronze_dataset_active(c.dataset_id)
             )
             active_tables.update(
                 c.physical_table.lower()

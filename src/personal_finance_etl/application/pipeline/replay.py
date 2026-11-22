@@ -45,7 +45,6 @@ from personal_finance_etl.infrastructure.observability.diagnostics import (
 from personal_finance_etl.infrastructure.warehouse.connection import DuckDBManager
 from personal_finance_etl.infrastructure.warehouse.registry import (
     get_bronze_contract_by_dataset_id,
-    get_pre_bronze_contract_by_dataset_id,
 )
 
 __all__ = ["ReplayCoordinator", "SourceConfigChangeClassifier"]
@@ -254,6 +253,19 @@ class SourceConfigChangeClassifier:
                     )
                 )
 
+        # 9. Classify compiled topology deltas if prior snapshot contained compiled topology
+        prior_topology = prior_data.get("compiled_topology")
+        curr_topology = current_canonical.get("compiled_topology")
+        if isinstance(prior_topology, dict) and isinstance(curr_topology, dict):
+            top_deltas = SourceConfigChangeClassifier.classify_topology_deltas(
+                cast("dict[str, object]", prior_topology),
+                cast("dict[str, object]", curr_topology),
+            )
+            existing_dataset_ids = {c.dataset_id for c in dataset_changes}
+            for td in top_deltas:
+                if td.dataset_id not in existing_dataset_ids:
+                    dataset_changes.append(td)
+
         # Determine overall action
         overall_action = ReplayAction.NO_REPLAY
         if requires_identity_rebuild:
@@ -271,6 +283,144 @@ class SourceConfigChangeClassifier:
             requires_analytical_rebuild=bool(affected_datasets or requires_identity_rebuild),
             blocked_reason=blocked_reason,
         )
+
+    @staticmethod
+    def classify_topology_deltas(
+        prior_topology: dict[str, object] | None,
+        current_topology_dict: dict[str, object],
+    ) -> list[DatasetChangeDetail]:
+        """Classify semantic deltas in compiled source binding topology.
+
+        Parameters
+        ----------
+        prior_topology : dict[str, object] | None
+            Canonical dictionary of prior compiled topology snapshot.
+        current_topology_dict : dict[str, object]
+            Canonical dictionary of active compiled topology.
+
+        Returns
+        -------
+        list[DatasetChangeDetail]
+            Classified change details for bindings, routes, and productions.
+        """
+        if not prior_topology:
+            return []
+
+        deltas: list[DatasetChangeDetail] = []
+
+        prior_bindings_raw = prior_topology.get("bindings", [])
+        curr_bindings_raw = current_topology_dict.get("bindings", [])
+
+        prior_bindings_list = (
+            cast("list[dict[str, object]]", prior_bindings_raw)
+            if isinstance(prior_bindings_raw, list)
+            else []
+        )
+        curr_bindings_list = (
+            cast("list[dict[str, object]]", curr_bindings_raw)
+            if isinstance(curr_bindings_raw, list)
+            else []
+        )
+
+        prior_bindings = {
+            str(b.get("binding_id")): b for b in prior_bindings_list if "binding_id" in b
+        }
+        curr_bindings = {
+            str(b.get("binding_id")): b for b in curr_bindings_list if "binding_id" in b
+        }
+
+        for b_id, curr_b in curr_bindings.items():
+            prior_b = prior_bindings.get(b_id)
+            if prior_b is None:
+                continue
+
+            # Check binding metadata: selector, fields, change_detection, enabled
+            if (
+                prior_b.get("selector") != curr_b.get("selector")
+                or prior_b.get("fields") != curr_b.get("fields")
+                or prior_b.get("change_detection") != curr_b.get("change_detection")
+                or prior_b.get("enabled") != curr_b.get("enabled")
+            ):
+                deltas.append(
+                    DatasetChangeDetail(
+                        dataset_id=b_id,
+                        change_class=ConfigChangeClass.SOURCE_BINDING,
+                        action=ReplayAction.NO_REPLAY,
+                        details={"reason": f"Binding '{b_id}' configuration altered"},
+                    )
+                )
+
+            # Check routes within binding
+            prior_r_list = (
+                cast("list[dict[str, object]]", prior_b.get("routes", []))
+                if isinstance(prior_b.get("routes"), list)
+                else []
+            )
+            curr_r_list = (
+                cast("list[dict[str, object]]", curr_b.get("routes", []))
+                if isinstance(curr_b.get("routes"), list)
+                else []
+            )
+
+            prior_routes = {str(r.get("route_id")): r for r in prior_r_list if "route_id" in r}
+            curr_routes = {str(r.get("route_id")): r for r in curr_r_list if "route_id" in r}
+
+            for r_id, curr_r in curr_routes.items():
+                prior_r = prior_routes.get(r_id)
+                if prior_r is None:
+                    continue
+
+                if (
+                    prior_r.get("mapping") != curr_r.get("mapping")
+                    or prior_r.get("normalization") != curr_r.get("normalization")
+                    or prior_r.get("identity") != curr_r.get("identity")
+                    or prior_r.get("enabled") != curr_r.get("enabled")
+                ):
+                    target_d_id = str(curr_r.get("target_dataset_id", b_id))
+                    deltas.append(
+                        DatasetChangeDetail(
+                            dataset_id=target_d_id,
+                            change_class=ConfigChangeClass.CANONICAL_ROUTE,
+                            action=ReplayAction.NO_REPLAY,
+                            details={"reason": f"Route '{r_id}' in binding '{b_id}' altered"},
+                        )
+                    )
+
+        # Check productions
+        prior_p_raw = prior_topology.get("productions", [])
+        curr_p_raw = current_topology_dict.get("productions", [])
+
+        prior_prods_list = (
+            cast("list[dict[str, object]]", prior_p_raw) if isinstance(prior_p_raw, list) else []
+        )
+        curr_prods_list = (
+            cast("list[dict[str, object]]", curr_p_raw) if isinstance(curr_p_raw, list) else []
+        )
+
+        prior_prods = {str(p.get("dataset_id")): p for p in prior_prods_list if "dataset_id" in p}
+        curr_prods = {str(p.get("dataset_id")): p for p in curr_prods_list if "dataset_id" in p}
+
+        for d_id, curr_p in curr_prods.items():
+            prior_p = prior_prods.get(d_id)
+            if prior_p is None:
+                continue
+
+            if (
+                prior_p.get("assembly_mode") != curr_p.get("assembly_mode")
+                or prior_p.get("producer_kind") != curr_p.get("producer_kind")
+                or prior_p.get("source_routes") != curr_p.get("source_routes")
+                or prior_p.get("enabled") != curr_p.get("enabled")
+            ):
+                deltas.append(
+                    DatasetChangeDetail(
+                        dataset_id=d_id,
+                        change_class=ConfigChangeClass.CANONICAL_PRODUCTION,
+                        action=ReplayAction.NO_REPLAY,
+                        details={"reason": f"Production rule for dataset '{d_id}' altered"},
+                    )
+                )
+
+        return deltas
 
 
 class ReplayCoordinator:
@@ -403,12 +553,21 @@ class ReplayCoordinator:
             except ValueError:
                 continue
 
-            pb_contract = get_pre_bronze_contract_by_dataset_id(ds_id)
-            if pb_contract:
-                try:
-                    db_manager.conn.execute(f"DELETE FROM {pb_contract.physical_table}")
-                except Exception:
-                    pass
+            # Clear all Pre-Bronze tables associated with this dataset
+            try:
+                pb_tables = [
+                    str(r[0])
+                    for r in db_manager.conn.execute(
+                        "SELECT table_name FROM information_schema.tables "
+                        "WHERE lower(table_schema) = 'pre_bronze' AND "
+                        "(lower(table_name) = ? OR lower(table_name) LIKE ?)",
+                        [ds_name.lower(), f"%__{ds_name.lower()}"],
+                    ).fetchall()
+                ]
+                for tbl in pb_tables:
+                    db_manager.conn.execute(f"DELETE FROM pre_bronze.{tbl}")
+            except Exception:
+                pass
 
             b_contract = get_bronze_contract_by_dataset_id(ds_id)
             if b_contract:
