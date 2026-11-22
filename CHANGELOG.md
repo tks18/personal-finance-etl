@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [10.4.1](https://github.com/tks18/personal-finance-etl/compare/10.4.0...10.4.1) (2026-11-22)
+
+
+### Features 🔥
+
+* **config:** add declarative canonical household routes ([80d1ff2](https://github.com/tks18/personal-finance-etl/commit/80d1ff2ad7b0c97c1438bb232113ed71e7ca8c63))
+* **contracts:** register candidate household bronze contracts ([7252f7c](https://github.com/tks18/personal-finance-etl/commit/7252f7ccbff7c99a78fd28d18ab7de6cc5f7c23e))
+* **ingestion:** enable parallel canonical bronze ingestion ([527c41e](https://github.com/tks18/personal-finance-etl/commit/527c41e22fa282dac586169f8a932c8e92bf5598))
+* **warehouse:** add candidate household bronze schemas and ddl ([ee6ade9](https://github.com/tks18/personal-finance-etl/commit/ee6ade997fd982478648ebea0cccc2413ee36ce1))
+
+
+### Tests 🧪
+
+* **application:** add household routes and parity tests ([b6e268c](https://github.com/tks18/personal-finance-etl/commit/b6e268c1fd86e51cde3f0212756685579ab5f328))
+
+
+### Docs 📃
+
+* **refactor:** complete phase 052 household migration record ([7d7ae90](https://github.com/tks18/personal-finance-etl/commit/7d7ae90aeb07327dc4dbc35cf4b68cf9e5e87e4d))
+
 ## [10.4.0](https://github.com/tks18/personal-finance-etl/compare/10.3.5...10.4.0) (2026-11-22)
 
 
