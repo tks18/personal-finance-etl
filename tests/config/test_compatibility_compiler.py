@@ -216,9 +216,19 @@ def test_compiler_has_explicit_decommissioning_contract() -> None:
 def test_baseline_source_configuration_compiles_cleanly() -> None:
     """Verify baseline configuration compiles all 17 dataset bindings with zero errors."""
     config = get_shan_baseline_source_configuration()
-    topology = config.compile_binding_topology()
-    assert len(topology.bindings) == 17
-    assert len(topology.productions) == 17
-    for b in topology.bindings:
+
+    # Legacy 1:1 topology compilation without candidate routes
+    topology_1to1 = config.compile_binding_topology(include_candidate_household=False)
+    assert len(topology_1to1.bindings) == 17
+    assert len(topology_1to1.productions) == 17
+    for b in topology_1to1.bindings:
         assert len(b.routes) == 1
         assert b.routes[0].route_id == "direct"
+
+    # Multi-route topology with candidate canonical household routes (Phase 052)
+    topology_with_candidates = config.compile_binding_topology(include_candidate_household=True)
+    assert len(topology_with_candidates.bindings) == 17
+    assert len(topology_with_candidates.productions) == 23
+    target_b = topology_with_candidates.get_binding("household_db__household_zcategory")
+    assert target_b is not None
+    assert len(target_b.routes) == 2

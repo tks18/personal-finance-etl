@@ -289,8 +289,17 @@ class SourceConfiguration(BaseModel):
         target = str(source_id)
         return tuple(ds for ds in self.datasets if str(ds.source_id) == target)
 
-    def compile_binding_topology(self) -> CompiledSourceBindingTopology:
+    def compile_binding_topology(
+        self,
+        *,
+        include_candidate_household: bool = True,
+    ) -> CompiledSourceBindingTopology:
         """Compile legacy 1:1 dataset bindings into the decoupled source binding topology.
+
+        Parameters
+        ----------
+        include_candidate_household : bool, default True
+            Whether to attach candidate canonical routes and productions for household datasets.
 
         Removal Owner
         -------------
@@ -301,7 +310,10 @@ class SourceConfiguration(BaseModel):
         CompiledSourceBindingTopology
             Deterministic compiled topology container.
         """
-        return CompatibilitySourceBindingCompiler.compile(self)
+        return CompatibilitySourceBindingCompiler.compile(
+            self,
+            include_candidate_household_routes=include_candidate_household,
+        )
 
     @classmethod
     def from_dict(cls, data: dict[str, object]) -> SourceConfiguration:

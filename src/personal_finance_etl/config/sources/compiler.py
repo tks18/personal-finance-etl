@@ -31,6 +31,10 @@ from personal_finance_etl.config.sources.binding_model import (
     CanonicalRouteConfig,
     SourceBindingConfig,
 )
+from personal_finance_etl.config.sources.household_routes import (
+    build_household_canonical_production,
+    build_household_canonical_route,
+)
 from personal_finance_etl.config.sources.model import SourceConfig, SourceDatasetConfig
 from personal_finance_etl.config.sources.validation import validate_source_bindings
 from personal_finance_etl.contracts.canonical_plans import (
@@ -203,13 +207,20 @@ class CompatibilitySourceBindingCompiler:
     """
 
     @classmethod
-    def compile(cls, source_config: _SourceConfigHolder) -> CompiledSourceBindingTopology:
+    def compile(
+        cls,
+        source_config: _SourceConfigHolder,
+        *,
+        include_candidate_household_routes: bool = True,
+    ) -> CompiledSourceBindingTopology:
         """Compile a complete SourceConfiguration instance into a CompiledSourceBindingTopology.
 
         Parameters
         ----------
         source_config : _SourceConfigHolder
             Authoritative source configuration instance providing sources and datasets.
+        include_candidate_household_routes : bool, default True
+            Whether to attach candidate canonical routes and productions for household datasets.
 
         Returns
         -------
@@ -219,6 +230,7 @@ class CompatibilitySourceBindingCompiler:
         return cls.compile_bindings(
             sources=source_config.sources,
             datasets=source_config.datasets,
+            include_candidate_household_routes=include_candidate_household_routes,
         )
 
     @classmethod
@@ -226,6 +238,8 @@ class CompatibilitySourceBindingCompiler:
         cls,
         sources: Sequence[SourceConfig],
         datasets: Sequence[SourceDatasetConfig],
+        *,
+        include_candidate_household_routes: bool = True,
     ) -> CompiledSourceBindingTopology:
         """Compile collections of sources and dataset bindings into a topology.
 
@@ -235,6 +249,8 @@ class CompatibilitySourceBindingCompiler:
             Configured physical evidence sources.
         datasets : Sequence[SourceDatasetConfig]
             Legacy source dataset bindings.
+        include_candidate_household_routes : bool, default True
+            Whether to attach candidate canonical routes and productions for household datasets.
 
         Returns
         -------
@@ -267,6 +283,16 @@ class CompatibilitySourceBindingCompiler:
             )
 
             # 2. Compile physical tabular stream binding
+            binding_routes = [route]
+            canonical_route = None
+            if include_candidate_household_routes and ds.source_id in (
+                SourceId("household_db"),
+                SourceId("opening_balance_csv"),
+            ):
+                canonical_route = build_household_canonical_route(ds.dataset_id)
+                if canonical_route is not None:
+                    binding_routes.append(canonical_route)
+
             binding = SourceBindingConfig(
                 binding_id=binding_id,
                 source_id=ds.source_id,
@@ -275,7 +301,7 @@ class CompatibilitySourceBindingCompiler:
                 description=ds.description,
                 change_detection=ds.change_detection,
                 fields=list(ds.fields),
-                routes=[route],
+                routes=binding_routes,
             )
 
             # 3. Compile transitional DIRECT source production definition
@@ -291,6 +317,12 @@ class CompatibilitySourceBindingCompiler:
             compiled_productions.append(production)
             binding_by_id[binding_id] = binding
             production_by_dataset_id[ds.dataset_id] = production
+
+            if canonical_route is not None:
+                canonical_prod = build_household_canonical_production(binding_id, ds.dataset_id)
+                if canonical_prod is not None:
+                    compiled_productions.append(canonical_prod)
+                    production_by_dataset_id[canonical_prod.dataset_id] = canonical_prod
 
         # Validate aggregate compiled topology
         validate_source_bindings(
