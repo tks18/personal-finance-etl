@@ -24,9 +24,8 @@ from pathlib import Path
 import polars as pl
 
 from personal_finance_etl.application.ingestion.admission import AdmissionService
-from personal_finance_etl.application.ingestion.identity import (
-    compile_identity_plan,
-    execute_identity_plan,
+from personal_finance_etl.application.ingestion.canonical_production import (
+    CanonicalProductionEngine,
 )
 from personal_finance_etl.application.ingestion.route_compiler import RouteCompiler
 from personal_finance_etl.application.ingestion.route_executor import RouteExecutor
@@ -45,7 +44,12 @@ from personal_finance_etl.config.sources.selectors import (
     SqliteSelector,
 )
 from personal_finance_etl.contracts.application import EngineStage
-from personal_finance_etl.contracts.canonical_plans import SourceBindingPlan
+from personal_finance_etl.contracts.canonical_plans import (
+    CanonicalDatasetPlan,
+    CanonicalProducerKind,
+    SourceAssemblyMode,
+    SourceBindingPlan,
+)
 from personal_finance_etl.contracts.datasets import DatasetId
 from personal_finance_etl.contracts.observability import (
     DiagnosticSeverity,
@@ -251,12 +255,16 @@ class DatasetIngestionService:
         emitter: ObservabilityEmitter | None = None,
         route_compiler: RouteCompiler | None = None,
         route_executor: RouteExecutor | None = None,
+        production_engine: CanonicalProductionEngine | None = None,
     ) -> None:
         self.emitter = emitter or get_global_emitter()
         self.validator = validator or PanderaDataFrameValidator(emitter=self.emitter)
         self.admission_service = admission_service or AdmissionService()
         self.route_compiler = route_compiler or RouteCompiler()
         self.route_executor = route_executor or RouteExecutor()
+        self.production_engine = production_engine or CanonicalProductionEngine(
+            validator=self.validator
+        )
 
     def _resolve_raw_bytes(self, filepath: str, cp: ControlPlane) -> bytes:
         """Resolve raw file bytes from Control Plane artifact store or physical disk.
@@ -517,20 +525,22 @@ class DatasetIngestionService:
                     available_source_columns=raw_df.columns,
                 )
                 mat_fragment = self.route_executor.execute(compiled_route, raw_df)
-                routed_df = mat_fragment.frame
-
-                if legacy_ds_config.identity is not None:
-                    ident_plan = compile_identity_plan(
-                        contract=bronze_contract,
-                        available_fields=set(routed_df.columns),
-                        strategy=legacy_ds_config.identity,
-                        allow_optional_identity=True,
-                    )
-                    if ident_plan.strategy is not None:
-                        ident_res = execute_identity_plan(ident_plan, routed_df, id_column=id_col)
-                        assert isinstance(ident_res, pl.DataFrame)
-                        routed_df = ident_res
-                admitted_lf = routed_df.lazy()
+                canonical_ds_plan = CanonicalDatasetPlan(
+                    dataset_id=target_ds_id,
+                    producer_kind=CanonicalProducerKind.SOURCE,
+                    assembly_mode=SourceAssemblyMode.DIRECT,
+                    is_required=True,
+                    is_enabled=True,
+                )
+                admitted_df, _ = self.production_engine.produce(
+                    plan=canonical_ds_plan,
+                    fragments=[mat_fragment],
+                    contract=bronze_contract,
+                    identity_strategy=legacy_ds_config.identity,
+                    run_id=run_id,
+                    allow_identical_collapse=True,
+                )
+                admitted_lf = admitted_df.lazy()
             else:
                 admission_plan = self.admission_service.compile_admission_plan(
                     dataset_config=legacy_ds_config,
@@ -540,18 +550,18 @@ class DatasetIngestionService:
                 )
                 admitted_lf = self.admission_service.execute_admission(admission_plan, raw_df)
 
-            # 5. Gate 2: Canonical Bronze Validation (CANONICAL_BRONZE)
-            canonical_schema = get_canonical_bronze_schema(target_ds_id)
-            canonical_ctx = ValidationContext(
-                stage=ValidationStage.CANONICAL_BRONZE,
-                dataset_id=target_ds_id,
-                source_id=binding_plan.source_id,
-                contract_id=bronze_contract.physical_table,
-                run_id=run_id,
-            )
-            self.validator.validate(
-                admitted_lf, canonical_schema, canonical_ctx, raise_on_error=True
-            )
+                # 5. Gate 2: Canonical Bronze Validation (CANONICAL_BRONZE)
+                canonical_schema = get_canonical_bronze_schema(target_ds_id)
+                canonical_ctx = ValidationContext(
+                    stage=ValidationStage.CANONICAL_BRONZE,
+                    dataset_id=target_ds_id,
+                    source_id=binding_plan.source_id,
+                    contract_id=bronze_contract.physical_table,
+                    run_id=run_id,
+                )
+                self.validator.validate(
+                    admitted_lf, canonical_schema, canonical_ctx, raise_on_error=True
+                )
 
             # 6. Canonical Bronze Persistence
             row_counts = bronze.upsert_table(
