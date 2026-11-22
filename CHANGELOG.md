@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [10.3.4](https://github.com/tks18/personal-finance-etl/compare/10.3.3...10.3.4) (2026-11-22)
+
+
+### Features 🔥
+
+* **config:** introduce predicate and semantic interpretation rules ([7ad584d](https://github.com/tks18/personal-finance-etl/commit/7ad584d2b6f973f9ccc97555a0ab9f4855804dee))
+* **diagnostics:** enrich preview with predicate and semantic rules ([8ed0288](https://github.com/tks18/personal-finance-etl/commit/8ed0288b074658a4e7b476ee5744675f2916b3af))
+* **ingestion:** impl. canonical route compiler and vectorized executor ([686c802](https://github.com/tks18/personal-finance-etl/commit/686c802d02a5a0933811519c7480b8bbba9f532b))
+* **normalization:** export rule expression builder for route execution ([42fbb8b](https://github.com/tks18/personal-finance-etl/commit/42fbb8bc20e3b59021970c489a0ed83c7fe3dd92))
+
+
+### Docs 📃
+
+* **refactor:** complete phase 049 semantic specifications ([1dc2b03](https://github.com/tks18/personal-finance-etl/commit/1dc2b03beedbc5664baa5e3deadcbef44628fed8))
+
 ### [10.3.3](https://github.com/tks18/personal-finance-etl/compare/10.3.2...10.3.3) (2026-11-22)
 
 
