@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [11.1.1](https://github.com/tks18/personal-finance-etl/compare/11.1.0...11.1.1) (2026-11-22)
+
+
+### Code Refactoring 🖌
+
+* **ingestion:** retire benchmark_mapping for instrument_master ([a92d52b](https://github.com/tks18/personal-finance-etl/commit/a92d52bd1172bd3c9ae0798cf94c321e632bcef4))
+* **transforms:** align reference data across domain and bronze ([3f4a7ae](https://github.com/tks18/personal-finance-etl/commit/3f4a7aee2f85dd53aa353e9114d22ab1a043c399))
+
+
+### Docs 📃
+
+* **v11:** phase 003 reference data cleanup and migration plan ([3f81d72](https://github.com/tks18/personal-finance-etl/commit/3f81d72539f72f4cf1ff6f0e1d2ded3b58218061))
+
+
+### Tests 🧪
+
+* **ref-data:** add phase 3 reference data and instrument master suite ([fae064a](https://github.com/tks18/personal-finance-etl/commit/fae064af28170204511a5a225677200b4ecd3ab1))
+
 ## [11.1.0](https://github.com/tks18/personal-finance-etl/compare/11.0.1...11.1.0) (2026-11-22)
 
 
