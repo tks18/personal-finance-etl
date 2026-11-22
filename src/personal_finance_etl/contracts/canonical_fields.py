@@ -426,6 +426,67 @@ CANONICAL_BRONZE_FIELDS: dict[DatasetId, frozenset[str]] = {
             "NEW_COLUMN",
         }
     ),
+    # --- Candidate Canonical Household Datasets (Phase 052) ---
+    DatasetId.HOUSEHOLD_CATEGORIES: frozenset(
+        {
+            "category_id",
+            "category_name",
+            "category_kind",
+            "parent_category_id",
+        }
+    ),
+    DatasetId.HOUSEHOLD_ASSET_CATEGORIES: frozenset(
+        {
+            "asset_category_id",
+            "asset_category_name",
+        }
+    ),
+    DatasetId.HOUSEHOLD_ACCOUNTS: frozenset(
+        {
+            "asset_id",
+            "asset_name",
+            "asset_category_id",
+            "currency_id",
+            "description",
+            "notes",
+        }
+    ),
+    DatasetId.COMMON_CURRENCIES: frozenset(
+        {
+            "currency_id",
+            "currency_name",
+            "iso_code",
+            "symbol",
+        }
+    ),
+    DatasetId.HOUSEHOLD_TRANSACTIONS: frozenset(
+        {
+            "transaction_id",
+            "transaction_date",
+            "transaction_time",
+            "transaction_kind",
+            "asset_id",
+            "to_asset_id",
+            "category_id",
+            "currency_id",
+            "base_amount",
+            "local_amount",
+            "account_amount",
+            "exchange_rate",
+            "description",
+            "transfer_id",
+        }
+    ),
+    DatasetId.HOUSEHOLD_ACCOUNT_BALANCES: frozenset(
+        {
+            "opening_balance_id",
+            "balance_date",
+            "asset_id",
+            "currency_id",
+            "opening_amount",
+            "opening_amount_account",
+        }
+    ),
 }
 
 

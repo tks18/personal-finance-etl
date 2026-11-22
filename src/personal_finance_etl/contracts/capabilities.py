@@ -45,8 +45,10 @@ __all__ = [
     "ContributionDescriptor",
     "ContributionScope",
     "ExternalEnrichmentId",
+    "FUTURE_CAPABILITY_CANDIDATES",
     "ResolvedCapabilityGraph",
     "get_capability_columns",
+    "get_future_capability_bronze_requirements",
 ]
 
 
@@ -336,6 +338,37 @@ CAPABILITY_REGISTRY: dict[CapabilityId, CapabilityDescriptor] = {
         optional_contributions=(),
     ),
 }
+
+
+# Candidate canonical Bronze dataset requirements for future capability cutovers
+FUTURE_CAPABILITY_CANDIDATES: dict[CapabilityId, tuple[DatasetId, ...]] = {
+    CapabilityId.HOUSEHOLD_CORE: (
+        DatasetId.HOUSEHOLD_CATEGORIES,
+        DatasetId.HOUSEHOLD_ASSET_CATEGORIES,
+        DatasetId.HOUSEHOLD_ACCOUNTS,
+        DatasetId.COMMON_CURRENCIES,
+        DatasetId.HOUSEHOLD_TRANSACTIONS,
+        DatasetId.HOUSEHOLD_ACCOUNT_BALANCES,
+    ),
+}
+
+
+def get_future_capability_bronze_requirements(
+    capability_id: CapabilityId,
+) -> tuple[DatasetId, ...] | None:
+    """Retrieve candidate canonical Bronze datasets for a future capability cutover.
+
+    Parameters
+    ----------
+    capability_id : CapabilityId
+        Target capability identifier.
+
+    Returns
+    -------
+    tuple[DatasetId, ...] | None
+        Tuple of candidate canonical DatasetIds if registered, else None.
+    """
+    return FUTURE_CAPABILITY_CANDIDATES.get(capability_id)
 
 
 # Authoritative mapping of financial capabilities to their owned analytical columns across Silver and Gold

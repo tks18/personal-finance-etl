@@ -238,6 +238,8 @@ def test_candidate_canonical_bronze_dataset_ids_registration() -> None:
     expected_candidates = {
         DatasetId.HOUSEHOLD_CATEGORIES,
         DatasetId.HOUSEHOLD_ASSET_CATEGORIES,
+        DatasetId.HOUSEHOLD_ACCOUNTS,
+        DatasetId.HOUSEHOLD_ACCOUNT_BALANCES,
         DatasetId.HOUSEHOLD_TRANSACTIONS,
         DatasetId.INVESTMENT_TRANSACTIONS,
         DatasetId.INVESTMENT_HOLDINGS,
