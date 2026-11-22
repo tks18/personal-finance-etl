@@ -48,61 +48,53 @@ class BronzeDataContract:
 
 
 BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
-    BronzeDataContract("zcategory", "sqlite_source", "bronze.r_SQLite_ZCategory", True),
-    BronzeDataContract("assetgroup", "sqlite_source", "bronze.r_SQLite_AssetGroup", True),
-    BronzeDataContract("assets", "sqlite_source", "bronze.r_SQLite_Assets", True),
-    BronzeDataContract("currency", "sqlite_source", "bronze.r_SQLite_Currency", True),
-    BronzeDataContract("inoutcome", "sqlite_source", "bronze.r_SQLite_InOutcome", True),
+    BronzeDataContract("household_zcategory", "sqlite_source", "bronze.household_zcategory", True),
     BronzeDataContract(
-        "raw_mutual_fund_instrument_mapping",
+        "household_asset_group", "sqlite_source", "bronze.household_asset_group", True
+    ),
+    BronzeDataContract("household_assets", "sqlite_source", "bronze.household_assets", True),
+    BronzeDataContract("household_currency", "sqlite_source", "bronze.household_currency", True),
+    BronzeDataContract("household_inoutcome", "sqlite_source", "bronze.household_inoutcome", True),
+    BronzeDataContract("column_master", "column_master", "bronze.column_master", True),
+    BronzeDataContract(
         "mutual_fund_instrument_mapping",
-        "bronze.r_MF_ISIN_Mapping",
+        "mutual_fund_instrument_mapping",
+        "bronze.mutual_fund_instrument_mapping",
         True,
     ),
     BronzeDataContract(
-        "raw_instrument_master",
         "instrument_master",
-        "bronze.r_Benchmark_Mapping",
+        "instrument_master",
+        "bronze.instrument_master",
         True,
     ),
+    BronzeDataContract("opening_balances", "opening_balances", "bronze.opening_balances", True),
+    BronzeDataContract("benchmark_master", "benchmark_master", "bronze.benchmark_master", True),
     BronzeDataContract(
-        "raw_opening_balances", "opening_balances", "bronze.r_Opening_Balances", True
-    ),
-    BronzeDataContract(
-        "raw_benchmark_master", "benchmark_master", "bronze.r_Benchmark_Master", True
-    ),
-    BronzeDataContract(
-        "raw_financial_year_parameters",
         "financial_year_parameters",
-        "bronze.r_Macro_Parameters",
+        "financial_year_parameters",
+        "bronze.financial_year_parameters",
         True,
     ),
-    BronzeDataContract("column_master", "column_master", "bronze.r_Column_Master", True),
-    BronzeDataContract("mf_market_data_raw", "mf_holdings", "bronze.r_MF_Market_Data", False),
     BronzeDataContract(
-        "us_stock_transactions_raw",
+        "currency_reference",
+        "currency_reference",
+        "bronze.currency_reference",
+        True,
+    ),
+    BronzeDataContract("mf_market_data", "mf_holdings", "bronze.mf_market_data", False),
+    BronzeDataContract("mf_transactions", "mf_orders", "bronze.mf_transactions", False),
+    BronzeDataContract("stock_market_data", "stock_pl", "bronze.stock_market_data", False),
+    BronzeDataContract("stock_transactions", "stock_orders", "bronze.stock_transactions", False),
+    BronzeDataContract(
         "us_stock_transactions",
-        "bronze.r_US_Stock_Transactions",
+        "us_stock_transactions",
+        "bronze.us_stock_transactions",
         False,
     ),
-    BronzeDataContract(
-        "raw_currency_reference",
-        "currency_reference",
-        "bronze.r_Currency_Mapping",
-        True,
-    ),
-    BronzeDataContract("currency_fx_raw", "currency_history", "bronze.r_Currency_FX_Data", False),
-    BronzeDataContract("mf_transactions_raw", "mf_orders", "bronze.r_MF_Transactions", False),
-    BronzeDataContract("stock_market_data_raw", "stock_pl", "bronze.r_Stock_Market_Data", False),
-    BronzeDataContract(
-        "stock_transactions_raw", "stock_orders", "bronze.r_Stock_Transactions", False
-    ),
-    BronzeDataContract(
-        "benchmark_history_raw", "benchmark_history", "bronze.r_Benchmark_Data", False
-    ),
-    BronzeDataContract(
-        "us_stock_market_data_raw", "us_stock_market", "bronze.r_US_Stock_Prices", False
-    ),
+    BronzeDataContract("currency_fx_rates", "currency_history", "bronze.currency_fx_rates", False),
+    BronzeDataContract("benchmark_history", "benchmark_history", "bronze.benchmark_history", False),
+    BronzeDataContract("us_stock_prices", "us_stock_market", "bronze.us_stock_prices", False),
 ]
 
 # Lightweight registry for Silver and Gold analytical layers
