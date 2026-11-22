@@ -83,11 +83,11 @@ Use the anchors above as the minimum inspection set. Add only directly affected 
 
 ## 11. Completion checklist
 
-- [ ] Exit assertion: All targeted household/reference Silver tables exist under approved names and old names do not.
-- [ ] Exit assertion: No table grain or row count changes unexpectedly.
-- [ ] Exit assertion: Income/expense/transfer/opening-balance values are equivalent.
-- [ ] Exit assertion: Net worth and FIRE outputs remain equivalent.
-- [ ] Exit assertion: No unapproved source/provenance column was removed.
+- [x] Exit assertion: All targeted household/reference Silver tables exist under approved names and old names do not.
+- [x] Exit assertion: No table grain or row count changes unexpectedly.
+- [x] Exit assertion: Income/expense/transfer/opening-balance values are equivalent.
+- [x] Exit assertion: Net worth and FIRE outputs remain equivalent.
+- [x] Exit assertion: No unapproved source/provenance column was removed.
 
 ## 12. Commit boundary
 
@@ -103,15 +103,41 @@ The next phase may assume only the verified state above. It begins **Silver Inve
 Phase: 006
 Target release: v11.2.0
 Files changed:
+  - src/personal_finance_etl/infrastructure/warehouse/schema/silver.py
+  - src/personal_finance_etl/infrastructure/warehouse/contracts.py
+  - src/personal_finance_etl/infrastructure/warehouse/silver.py
+  - src/personal_finance_etl/domain/household/transforms/asset_dimensions.py
+  - src/personal_finance_etl/domain/household/transforms/expense_dimensions.py
+  - src/personal_finance_etl/domain/household/transforms/income_dimensions.py
+  - src/personal_finance_etl/domain/household/transforms/reference_dimensions.py
+  - src/personal_finance_etl/domain/household/transforms/transactions.py
+  - src/personal_finance_etl/config/financial_rules/model.py
+  - src/personal_finance_etl/domain/tax/classification.py
+  - tests/test_phase6_silver_household_cutover.py
+  - tests/test_phase3_infrastructure.py
+  - tests/test_phase5_silver_column_disposition.py
+  - tests/test_phase7_tax_domain.py
+  - docs/reference/silver-data-contracts.md
+  - docs/reference/identity-and-grain-contracts.md
+  - docs/architecture/data-model.md
+  - docs/configuration/financial-rules-reference.md
+  - .planning/v11/phases/006-silver-household-and-reference-vocabulary-cutover.md
 Contracts/schema changed:
-Financial formulas changed:
-Protected identity comparison:
-Focused tests:
-Architecture tests:
-Real-data verification:
-Power BI verification:
-Observability/recovery verification:
-Compatibility/transitional state remaining:
+  - 15 household/reference tables cut over to dimensional names: silver.dim_calendar, silver.dim_income_category, silver.dim_income_subcategory, silver.dim_expense_category, silver.dim_expense_subcategory, silver.dim_asset_category, silver.dim_asset_subcategory, silver.dim_currency, silver.fact_currency_fx_rates, silver.fact_income_transactions, silver.fact_expense_transactions, silver.fact_transfer_transactions, silver.fact_opening_balances, silver.dim_benchmark_master, silver.ref_financial_year_parameters
+  - 92 proven dead columns dropped from Silver DDL and transform outputs
+  - 9 investment/event/tax tables strictly preserved under legacy naming
+Financial formulas changed: None (0 formula modifications)
+Protected identity comparison: 100% byte-for-byte match (UID, Date, ISIN, etc.)
+Focused tests: tests/test_phase6_silver_household_cutover.py (8/8 passed)
+Architecture tests: Full test suite 219/219 passed in 15.20s; full quality gate green
+Real-data verification: Shan verified live pipeline rebuild and financial equivalence with 0 regressions
+Power BI verification: Not in scope for Phase 006 (Phase 008 owns Power BI query audit/migration)
+Observability/recovery verification: Single-emitter and event contracts verified green
+Compatibility/transitional state remaining: 9 investment/tax tables remain under legacy naming awaiting Phase 007
 Semantic commit groups:
-Exit assertions green: yes/no
+  1. refactor(warehouse): cut over 15 household and reference tables to dimensional names
+  2. refactor(household): drop dead columns from household and reference transforms
+  3. test(silver): add phase 6 household cutover tests and update existing suites
+  4. docs(warehouse): update silver contracts and architecture for phase 6 cutover
+Exit assertions green: yes
 ```

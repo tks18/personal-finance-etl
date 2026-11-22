@@ -49,7 +49,7 @@ The schema definition for a shared calendar starts with a real key, not an impli
 
 ```sql
 -- infrastructure/warehouse/schema/silver.py (SILVER_DDL)
-CREATE TABLE IF NOT EXISTS silver.d_Calendar (
+CREATE TABLE IF NOT EXISTS silver.dim_calendar (
     Date DATE PRIMARY KEY,
     Day BIGINT,
     Day_Name TEXT,
@@ -80,14 +80,14 @@ The boundary between Silver and Gold is semantic, not simply “detail versus ag
 
 Three shared foundations connect otherwise distinct financial questions:
 
-- `silver.d_Calendar` defines the date grain and period attributes.
-- `silver.d_Currency` defines currency identity.
-- `silver.f_Currency_FX_Rates` represents historical FX evidence at its date/currency grain.
+- `silver.dim_calendar` defines the date grain and period attributes.
+- `silver.dim_currency` defines currency identity.
+- `silver.fact_currency_fx_rates` represents historical FX evidence at its date/currency grain.
 
 ```mermaid
 erDiagram
-    D_CALENDAR ||--o{ F_CURRENCY_FX_RATES : dates
-    D_CURRENCY ||--o{ F_CURRENCY_FX_RATES : denominates
+    DIM_CALENDAR ||--o{ FACT_CURRENCY_FX_RATES : dates
+    DIM_CURRENCY ||--o{ FACT_CURRENCY_FX_RATES : denominates
 ```
 
 A local-currency investment return and an INR-reporting return answer different questions. FX is therefore modelled as evidence used in conversion and attribution, not merely a formatting operation on a Gold column.
@@ -98,12 +98,12 @@ The household model has category/subcategory dimensions for income, expenses and
 
 ```mermaid
 erDiagram
-    D_INCOME_CATEGORY ||--o{ D_INCOME_SUBCATEGORY : contains
-    D_INCOME_SUBCATEGORY ||--o{ F_INCOME_TRANSACTIONS : classifies
-    D_EXPENSE_CATEGORY ||--o{ D_EXPENSE_SUBCATEGORY : contains
-    D_EXPENSE_SUBCATEGORY ||--o{ F_EXPENSE_TRANSACTIONS : classifies
-    D_ASSET_SUBCATEGORY ||--o{ F_TRANSFER_TRANSACTIONS : participates
-    D_ASSET_SUBCATEGORY ||--o{ F_OPENING_BALANCES : initializes
+    DIM_INCOME_CATEGORY ||--o{ DIM_INCOME_SUBCATEGORY : contains
+    DIM_INCOME_SUBCATEGORY ||--o{ FACT_INCOME_TRANSACTIONS : classifies
+    DIM_EXPENSE_CATEGORY ||--o{ DIM_EXPENSE_SUBCATEGORY : contains
+    DIM_EXPENSE_SUBCATEGORY ||--o{ FACT_EXPENSE_TRANSACTIONS : classifies
+    DIM_ASSET_SUBCATEGORY ||--o{ FACT_TRANSFER_TRANSACTIONS : participates
+    DIM_ASSET_SUBCATEGORY ||--o{ FACT_OPENING_BALANCES : initializes
 ```
 
 The canonicalization pipeline separates source shape from economic meaning. Source-specific parsing belongs at ingestion/provider boundaries. Domain household transforms apply validated financial policy and derive canonical facts. A transfer is not relabelled as an expense simply because its source amount is negative.
@@ -130,8 +130,8 @@ erDiagram
     D_INVESTMENT_MASTER ||--o{ F_INVESTMENT_PURCHASE_DATA : instrument
     D_INVESTMENT_MASTER ||--o{ F_INVESTMENT_SALE_DATA : instrument
     D_INVESTMENT_MASTER ||--o{ F_INVESTMENT_MARKET_DATA : instrument
-    D_INVESTMENT_BENCHMARK_MASTER ||--o{ F_INVESTMENT_BENCHMARK_DATA : benchmark
-    D_CURRENCY ||--o{ F_CURRENCY_FX_RATES : currency
+    DIM_BENCHMARK_MASTER ||--o{ F_INVESTMENT_BENCHMARK_DATA : benchmark
+    DIM_CURRENCY ||--o{ FACT_CURRENCY_FX_RATES : currency
 ```
 
 `silver.d_Investment_Master` supplies canonical instrument attributes. `silver.f_Investment_Purchase_Data` and `silver.f_Investment_Sale_Data` are trade-grain facts. `silver.f_Investment_Market_Data` is market/valuation evidence. Combining these inputs into a portfolio snapshot requires an algorithm, not a join that assumes market value and cost basis are the same thing.

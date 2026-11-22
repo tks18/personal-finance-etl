@@ -508,7 +508,7 @@ unknown = sorted(configured - available)
 if unknown:
     raise ValueError(
         "Configured STCG/LTCG investment exclusion UID(s) do not exist in "
-        f"silver.d_Income_Subcategory: {unknown}"
+        f"silver.dim_income_subcategory: {unknown}"
     )
 ```
 
