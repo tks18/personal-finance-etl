@@ -1,6 +1,6 @@
 [project]
 name = "personal-finance-etl"
-version = "10.4.1"
+version = "11.0.0"
 description = "Local-first personal financial systems platform for investment accounting, reconciliation, tax evidence, wealth analytics, FIRE planning, and BI."
 authors = [
   { name="Shan", email="tksudharshan@gmail.com" },
@@ -67,7 +67,6 @@ dependencies = [
     "yfinance>=1.5.1",
     "uuid>=1.30",
     "filelock>=4.0.3",
-    "pandera>=0.35.0",
 ]
 
 [dependency-groups]
@@ -97,8 +96,8 @@ requires = ["hatchling>=1.27.0"]
 build-backend = "hatchling.build"
 
 [project.scripts]
-pfetl = "personal_finance_etl.presentation.launcher:main"
-pfetl-gui = "personal_finance_etl.presentation.desktop.app:main"
+shan-fin = "personal_finance_etl.presentation.launcher:main"
+shan-fin-gui = "personal_finance_etl.presentation.desktop.app:main"
 
 [tool.hatch.build.targets.wheel.force-include]
 "README.md" = "personal_finance_etl/README.md"
@@ -136,9 +135,3 @@ exclude_dirs = [
     "_df_cache",
 ]
 skips = ["B101", "B110", "B404", "B603", "B607", "B608"]
-
-[tool.pytest.ini_options]
-pythonpath = [".", "src"]
-markers = [
-    "live_data: mark test as requiring local live test data on G: drive",
-]

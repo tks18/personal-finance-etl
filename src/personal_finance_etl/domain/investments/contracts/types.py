@@ -141,8 +141,8 @@ class RealizedEventDict(TypedDict, total=False):
     Asset_PnL_Local: float
     Asset_PnL: float
     Forex_PnL: float
-    Applied_Rate: float | None
-    Estimated_Tax: float | None
+    Applied_Rate: float
+    Estimated_Tax: float
     shadow_qty_sold: float
 
 

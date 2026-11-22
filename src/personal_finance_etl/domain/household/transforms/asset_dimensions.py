@@ -90,21 +90,22 @@ def transform_d_asset_category(
     df_lazy: pl.LazyFrame, column_mapping: dict[str, str], rules: FinancialRules | None = None
 ) -> pl.LazyFrame:
     """Execute the PQ logic for Asset Categories (ASSETGROUP)."""
-    cols = [
-        "UID",
-        "ASSET_GROUP",
-        "artifact_id",
-    ]
-
-    active_mapping = {
-        k: v for k, v in column_mapping.items() if k in df_lazy.collect_schema().names()
-    }
-
     df_transformed = (
-        df_lazy.rename(active_mapping)
+        df_lazy.rename(column_mapping)
         .with_columns(pl.col("IS_DEL").cast(pl.String))
         .filter(pl.col("IS_DEL").fill_null("0") == "0")
-        .select(cols)
+        .select(
+            [
+                "__file_name__",
+                "__folder_path__",
+                "DEVICE_ID",
+                "UID",
+                "USE_TIME",
+                "ASSET_GROUP",
+                "TYPE",
+                "ORDER_SEQUENCE",
+            ]
+        )
     )
 
     if rules:
@@ -200,25 +201,30 @@ def transform_d_asset_subcategory(
     df_lazy: pl.LazyFrame, column_mapping: dict[str, str], rules: FinancialRules | None = None
 ) -> pl.LazyFrame:
     """Execute the PQ logic for Asset Subcategories (ASSETS)."""
-    cols = [
-        "ASSET_NAME",
-        "ASSET_DESCRIPTION",
-        "NOTES",
-        "UID",
-        "CURRENCY_ID",
-        "ASSET_GROUP_ID",
-        "artifact_id",
-    ]
-
-    active_mapping = {
-        k: v for k, v in column_mapping.items() if k in df_lazy.collect_schema().names()
-    }
-
     df_transformed = (
-        df_lazy.rename(active_mapping)
+        df_lazy.rename(column_mapping)
         .with_columns(pl.col("IS_DEL").cast(pl.String))
         .filter(pl.col("IS_DEL").fill_null("0") == "0")
-        .select(cols)
+        .select(
+            [
+                "__file_name__",
+                "__folder_path__",
+                "S_NO",
+                "CARD_STATEMENT_DATE",
+                "CARD_PAYMENT_DATE",
+                "ASSET_NAME",
+                "ORDER_SEQUENCE",
+                "ASSET_DESCRIPTION",
+                "NOTES",
+                "TRANSFER_EXPENSE",
+                "CARD_AUTOPAY",
+                "ADDED_TIME",
+                "UID",
+                "CURRENCY_ID",
+                "AUTOPAY_ASSET_ID",
+                "ASSET_GROUP_ID",
+            ]
+        )
     )
 
     if rules:

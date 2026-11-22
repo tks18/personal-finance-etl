@@ -12,40 +12,11 @@ build = { cmd = "uv run python -c \"from scripts.tasks import build; build()\"",
 "docs:serve" = { cmd = "uv run mkdocs serve", help = "Start local hot-reloading documentation server" }
 "docs:build" = { cmd = "uv run mkdocs build --strict", help = "Build static documentation site with strict linting" }
 
-# Dynamic Semantic Release & Version Management (Single Orchestration Engine)
-release = { cmd = "uv run python scripts/release_bump.py", help = "Dynamic semantic release manager (interactive wizard)" }
-"release:bump" = { cmd = "uv run python scripts/release_bump.py", help = "Dynamic semantic release manager (supports flags: --major, --minor, --patch, --rc, --alpha, --beta, --final, --as, --pipeline, --dry-run)" }
-"release:patch" = { cmd = "uv run python scripts/release_bump.py --patch", help = "Bump next patch version" }
-"release:minor" = { cmd = "uv run python scripts/release_bump.py --minor", help = "Bump next minor version" }
-"release:major" = { cmd = "uv run python scripts/release_bump.py --major", help = "Bump next major version" }
-"release:rc" = { cmd = "uv run python scripts/release_bump.py --rc", help = "Increment release candidate (rc)" }
-"release:alpha" = { cmd = "uv run python scripts/release_bump.py --alpha", help = "Increment alpha pre-release" }
-"release:beta" = { cmd = "uv run python scripts/release_bump.py --beta", help = "Increment beta pre-release" }
-"release:major:rc" = { cmd = "uv run python scripts/release_bump.py --major --rc", help = "Start next major release candidate (e.g. 10.0.0-rc.1)" }
-"release:minor:rc" = { cmd = "uv run python scripts/release_bump.py --minor --rc", help = "Start next minor release candidate" }
-"release:patch:rc" = { cmd = "uv run python scripts/release_bump.py --patch --rc", help = "Start next patch release candidate" }
-"release:final" = { cmd = "uv run python scripts/release_bump.py --final", help = "Promote pre-release to final production release" }
-
-# End-to-End Release Pipelines (Bump -> Push -> PR with Quality Gate -> Draft Release -> CI PyPI Publish)
-"release:flow" = { cmd = "uv run python scripts/release_bump.py --pipeline", help = "Interactive release with automated post-release pipeline" }
-"release:flow:bump" = { cmd = "uv run python scripts/release_bump.py --pipeline", help = "Dynamic release with automated post-release pipeline" }
-"release:flow:patch" = { cmd = "uv run python scripts/release_bump.py --patch --pipeline", help = "Bump patch version and run full post-release pipeline" }
-"release:flow:minor" = { cmd = "uv run python scripts/release_bump.py --minor --pipeline", help = "Bump minor version and run full post-release pipeline" }
-"release:flow:major" = { cmd = "uv run python scripts/release_bump.py --major --pipeline", help = "Bump major version and run full post-release pipeline" }
-"release:flow:rc" = { cmd = "uv run python scripts/release_bump.py --rc --pipeline", help = "Increment RC and run full post-release pipeline" }
-"release:flow:alpha" = { cmd = "uv run python scripts/release_bump.py --alpha --pipeline", help = "Increment alpha and run full post-release pipeline" }
-"release:flow:beta" = { cmd = "uv run python scripts/release_bump.py --beta --pipeline", help = "Increment beta and run full post-release pipeline" }
-"release:flow:major:rc" = { cmd = "uv run python scripts/release_bump.py --major --rc --pipeline", help = "Start next major RC and run full post-release pipeline" }
-"release:flow:minor:rc" = { cmd = "uv run python scripts/release_bump.py --minor --rc --pipeline", help = "Start next minor RC and run full post-release pipeline" }
-"release:flow:patch:rc" = { cmd = "uv run python scripts/release_bump.py --patch --rc --pipeline", help = "Start next patch RC and run full post-release pipeline" }
-"release:flow:final" = { cmd = "uv run python scripts/release_bump.py --final --pipeline", help = "Promote RC to final production release and run full post-release pipeline" }
-
-# GitHub Release & Artifact Management
+# GitHub Release Management
 "release:preview" = { cmd = "uv run python -c \"from scripts.tasks import release_preview; release_preview()\"", help = "Preview release notes for latest version in CHANGELOG.md" }
 "release:preview:all" = { cmd = "uv run python -c \"from scripts.tasks import release_preview_all; release_preview_all()\"", help = "Preview full release notes for all versions in CHANGELOG.md" }
 "release:dry-run" = { cmd = "uv run python -c \"from scripts.tasks import release_dry_run; release_dry_run()\"", help = "Display dry-run summary of matching Git tags and changelog entries" }
 "release:latest" = { cmd = "uv run python -c \"from scripts.tasks import release_latest; release_latest()\"", help = "Publish the latest version from CHANGELOG.md to GitHub" }
-"release:latest:prerelease" = { cmd = "uv run python -c \"from scripts.tasks import release_latest_prerelease; release_latest_prerelease()\"", help = "Publish the latest version from CHANGELOG.md explicitly marked as a pre-release" }
 "release:latest:draft" = { cmd = "uv run python -c \"from scripts.tasks import release_latest_draft; release_latest_draft()\"", help = "Publish latest version as a GitHub draft release" }
 "release:all" = { cmd = "uv run python -c \"from scripts.tasks import release_all; release_all()\"", help = "Publish all unreleased tags interactively to GitHub" }
 "release:all:draft" = { cmd = "uv run python -c \"from scripts.tasks import release_all_draft; release_all_draft()\"", help = "Publish all unreleased tags as GitHub drafts" }
@@ -58,12 +29,12 @@ release = { cmd = "uv run python scripts/release_bump.py", help = "Dynamic seman
 
 # Quality Gate & Diagnostics Tasks
 audit = { cmd = "uv run python -c \"from scripts.tasks import audit; audit()\"", help = "Run Full Quality Gate (Ruff, Mypy, Pyright, Pylint, Pytest)" }
-"audit:fast" = { cmd = "uv run python -c \"from scripts.tasks import audit_fast; audit_fast()\"", help = "Run Fast Quality Gate (< 2s: Ruff Lint, Ruff Format, Mypy)" }
-"audit:fix" = { cmd = "uv run python -c \"from scripts.tasks import audit_fast_fix; audit_fast_fix()\"", help = "Run Fast Quality Gate with automatic Ruff lint and format fixing" }
-"audit:full" = { cmd = "uv run python -c \"from scripts.tasks import audit_full; audit_full()\"", help = "Run Full Quality Gate (all 6 engines: Ruff, Mypy, Pyright, Pylint, Pytest)" }
-"audit:csv" = { cmd = "uv run python -c \"from scripts.tasks import audit_csv; audit_csv()\"", help = "Run Full Quality Gate and export structured CSV report" }
-"audit:json" = { cmd = "uv run python -c \"from scripts.tasks import audit_json; audit_json()\"", help = "Run Full Quality Gate and export structured JSON report" }
-"audit:docs" = { cmd = "uv run python scripts/audit_documentation.py", help = "Run AST-level documentation compliance auditor" }
+audit-fast = { cmd = "uv run python -c \"from scripts.tasks import audit_fast; audit_fast()\"", help = "Run Fast Quality Gate (< 2s: Ruff Lint, Ruff Format, Mypy)" }
+"audit-fast:fix" = { cmd = "uv run python -c \"from scripts.tasks import audit_fast_fix; audit_fast_fix()\"", help = "Run Fast Quality Gate with automatic Ruff lint and format fixing" }
+audit-full = { cmd = "uv run python -c \"from scripts.tasks import audit_full; audit_full()\"", help = "Run Full Quality Gate (all 6 engines: Ruff, Mypy, Pyright, Pylint, Pytest)" }
+audit-csv = { cmd = "uv run python -c \"from scripts.tasks import audit_csv; audit_csv()\"", help = "Run Full Quality Gate and export structured CSV report" }
+audit-json = { cmd = "uv run python -c \"from scripts.tasks import audit_json; audit_json()\"", help = "Run Full Quality Gate and export structured JSON report" }
+audit-docs = { cmd = "uv run python scripts/audit_documentation.py", help = "Run AST-level documentation compliance auditor" }
 
 # Git Hooks Orchestration
 install-hooks = { cmd = "uv run python -c \"from scripts.tasks import install_hooks; install_hooks()\"", help = "Install Git pre-commit and pre-push quality hooks" }

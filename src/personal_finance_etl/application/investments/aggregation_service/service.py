@@ -57,20 +57,12 @@ class PostProcessor:
 
     def __init__(self, ctx: RunContext) -> None:
         self.ctx = ctx
-        self.enable_benchmark: bool = getattr(ctx, "enable_benchmark", True)
-        self.enable_foreign_assets: bool = getattr(ctx, "enable_foreign_assets", True)
-        self.enable_tax: bool = getattr(ctx, "enable_tax", True)
         self.xirr_calc = PortfolioXIRRCalculator()
         self.analytics_calc = AdvancedAnalyticsCalculator(ctx.fy_table, ctx.rules)
         self.weights_calc = PortfolioWeightsCalculator()
         self.gains_calc = RealizedGainsCalculator(ctx)
         self.harvest_calc = HarvestRecommendationCalculator()
-        self.group_calc = GroupProcessor(
-            self.analytics_calc,
-            enable_benchmark=self.enable_benchmark,
-            enable_foreign_assets=self.enable_foreign_assets,
-            enable_tax=self.enable_tax,
-        )
+        self.group_calc = GroupProcessor(self.analytics_calc)
 
     _FX_LOCAL_COLUMNS: tuple[str, ...] = (
         "Total_Invested_Value_Local",
@@ -91,12 +83,7 @@ class PostProcessor:
     ) -> pl.DataFrame:
         """Calculate portfolio-level XIRR and extended risk/performance analytics."""
         df_port = self.xirr_calc.calculate(
-            unique_dates,
-            pipeline_res.global_cf,
-            pipeline_res.global_pt,
-            enable_benchmark=self.enable_benchmark,
-            enable_foreign_assets=self.enable_foreign_assets,
-            enable_tax=self.enable_tax,
+            unique_dates, pipeline_res.global_cf, pipeline_res.global_pt
         )
         return self.analytics_calc.calculate(
             df_port, unique_dates, pipeline_res.global_pt, pipeline_res.global_cf
@@ -147,23 +134,21 @@ class PostProcessor:
 
     def _build_master_metadata(self) -> pl.LazyFrame:
         """Construct LazyFrame of instrument metadata with sanitized null defaults."""
-        master_cols = [
-            "ISIN",
-            "INSTRUMENT_CLASS",
-            "INSTRUMENT_SUBTYPE",
-            "INSTRUMENT_TYPE",
-            "SECTOR",
-            "INDUSTRY",
-            "GEO",
-            "COUNTRY",
-        ]
-        if not self.ctx.isin_master:
-            return pl.LazyFrame(schema={c: pl.String for c in master_cols})
-
         master_records = [{"ISIN": k, **v} for k, v in self.ctx.isin_master.items()]
         return (
             pl.LazyFrame(master_records)
-            .select(master_cols)
+            .select(
+                [
+                    "ISIN",
+                    "INSTRUMENT_CLASS",
+                    "INSTRUMENT_SUBTYPE",
+                    "INSTRUMENT_TYPE",
+                    "SECTOR",
+                    "INDUSTRY",
+                    "GEO",
+                    "COUNTRY",
+                ]
+            )
             .with_columns(
                 pl.col("INSTRUMENT_TYPE").fill_null("Unknown"),
                 pl.col("SECTOR").fill_null("Unknown"),
@@ -398,24 +383,8 @@ class PostProcessor:
         df_port = self._compute_portfolio_level(unique_dates, pipeline_res)
 
         lazy_df = self.weights_calc.calculate(lazy_df)
-        if self.enable_tax:
-            lazy_df = self.gains_calc.calculate(lazy_df, unique_dates, pipeline_res.global_re)
-            lazy_df = self.harvest_calc.calculate(lazy_df, rules=self.ctx.rules)
-        else:
-            lazy_df = lazy_df.with_columns(
-                pl.lit(None, dtype=pl.String).alias("FY"),
-                pl.lit(None, dtype=pl.Float64).alias("FY_Realized_LTCG"),
-                pl.lit(None, dtype=pl.Float64).alias("FY_Realized_STCG"),
-                pl.lit(None, dtype=pl.Float64).alias("FY_Realized_Gain"),
-                pl.lit(None, dtype=pl.Float64).alias("FY_Realized_LTCL"),
-                pl.lit(None, dtype=pl.Float64).alias("FY_Realized_STCL"),
-                pl.lit(None, dtype=pl.Float64).alias("FY_Realized_Loss"),
-                pl.lit(None, dtype=pl.Float64).alias("FY_Realized_Net_PnL"),
-                pl.lit(None, dtype=pl.Float64).alias("Equity_LTCG_Exemption"),
-                pl.lit(None, dtype=pl.Boolean).alias("Stepup_Eligible"),
-                pl.lit(None, dtype=pl.Boolean).alias("Can_Harvest_Loss"),
-                pl.lit(None, dtype=pl.String).alias("Harvest_Recommendation"),
-            )
+        lazy_df = self.gains_calc.calculate(lazy_df, unique_dates, pipeline_res.global_re)
+        lazy_df = self.harvest_calc.calculate(lazy_df, rules=self.ctx.rules)
 
         groups = self._compute_group_analytics(unique_dates, pipeline_res)
 

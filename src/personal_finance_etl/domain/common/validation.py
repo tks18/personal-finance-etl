@@ -288,7 +288,7 @@ def validate_and_parse_numerics(
     numeric_cols: list[str],
     *,
     optional_cols: set[str] | None = None,
-    source_col: str = "artifact_id",
+    source_col: str = "__file_name__",
     sheet: str | None = None,
     row_id_col: str | None = None,
 ) -> pl.LazyFrame:
@@ -304,19 +304,15 @@ def validate_and_parse_numerics(
         return lf
 
     opt_set = optional_cols or set()
-    active_source_col = (
-        source_col
-        if source_col in schema.names()
-        else ("artifact_id" if "artifact_id" in schema.names() else None)
-    )
+    has_source = source_col in schema.names()
     has_row_id = row_id_col is not None and row_id_col in schema.names()
 
     invalid_checks = [_build_numeric_validation_expr(c, c in opt_set) for c in available_cols]
 
     if invalid_checks:
         select_cols = available_cols.copy()
-        if active_source_col is not None:
-            select_cols.append(active_source_col)
+        if has_source:
+            select_cols.append(source_col)
         if has_row_id and row_id_col is not None:
             select_cols.append(row_id_col)
 
@@ -327,9 +323,7 @@ def validate_and_parse_numerics(
         )
         if bad_rows.height > 0:
             row_dict = bad_rows.row(0, named=True)
-            source_val = (
-                str(row_dict.get(active_source_col)) if active_source_col is not None else None
-            )
+            source_val = str(row_dict.get(source_col)) if has_source else None
             row_id_val = str(row_dict.get(row_id_col)) if has_row_id and row_id_col else None
             _diagnose_numeric_failure(
                 row_dict, available_cols, opt_set, source_val, sheet, row_id_val

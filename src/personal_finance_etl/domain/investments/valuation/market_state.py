@@ -20,13 +20,13 @@ from typing import cast
 
 import polars as pl
 
-from personal_finance_etl.domain.investments.classification import filter_us_market_trades
 from personal_finance_etl.domain.investments.contracts import MarketSpineRecord, TradeRecord
 from personal_finance_etl.domain.investments.lots.ordering import sort_purchases, sort_sales
 
 EMPTY_US_MARKET_SCHEMA: dict[str, type[pl.DataType] | pl.DataType] = {
     "Date": pl.Date,
     "ISIN": pl.String,
+    "__file_category__": pl.String,
     "Quantity": pl.Float64,
     "Closing_Price_Local": pl.Float64,
     "Buy_Price_Local": pl.Float64,
@@ -40,6 +40,10 @@ EMPTY_US_MARKET_SCHEMA: dict[str, type[pl.DataType] | pl.DataType] = {
     "Unit_PnL": pl.Float64,
     "Total_PnL": pl.Float64,
     "CURRENCY_ID": pl.String,
+    "Data_Provider": pl.String,
+    "Extraction_Time": pl.String,
+    "Requested_Start": pl.Date,
+    "Requested_End": pl.Date,
     "Is_Closure_Gap": pl.Boolean,
     "Is_Imputed": pl.Boolean,
 }
@@ -167,7 +171,9 @@ def _build_us_fifo_spine(
         ["ISIN", "Date", "Quantity", "Value_Local", "Value", "CURRENCY_ID"]
     ).sort(["ISIN", "Date"])
     df_s_us = (
-        filter_us_market_trades(df_sale).select(["ISIN", "Date", "Quantity"]).sort(["ISIN", "Date"])
+        df_sale.filter(pl.col("__file_category__") == "US Stocks")
+        .select(["ISIN", "Date", "Quantity"])
+        .sort(["ISIN", "Date"])
     )
 
     buys: defaultdict[str, defaultdict[date, list[TradeRecord]]] = defaultdict(
@@ -389,13 +395,17 @@ def _join_fx_and_calculate_pnl(
             ]
         )
         .with_columns(
-            (pl.col("Unit_PnL") * pl.col("Quantity")).alias("Total_PnL"),
+            [
+                (pl.col("Unit_PnL") * pl.col("Quantity")).alias("Total_PnL"),
+                pl.lit("US Stocks").alias("__file_category__"),
+            ]
         )
         .filter(pl.col("Quantity") >= 0)
         .select(
             [
                 "Date",
                 "ISIN",
+                "__file_category__",
                 "Quantity",
                 "Closing_Price_Local",
                 "Buy_Price_Local",
@@ -409,6 +419,10 @@ def _join_fx_and_calculate_pnl(
                 "Unit_PnL",
                 "Total_PnL",
                 "CURRENCY_ID",
+                "Data_Provider",
+                "Extraction_Time",
+                "Requested_Start",
+                "Requested_End",
                 "Is_Closure_Gap",
                 "Is_Imputed",
             ]
@@ -436,7 +450,7 @@ def transform_us_market_data(
     if df_purchase.is_empty():
         return pl.DataFrame(schema=EMPTY_US_MARKET_SCHEMA).lazy()
 
-    us_purchases = filter_us_market_trades(df_purchase)
+    us_purchases = df_purchase.filter(pl.col("__file_category__") == "US Stocks")
     if us_purchases.is_empty():
         return pl.DataFrame(schema=EMPTY_US_MARKET_SCHEMA).lazy()
 

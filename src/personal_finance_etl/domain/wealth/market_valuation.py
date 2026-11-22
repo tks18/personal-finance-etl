@@ -81,18 +81,9 @@ def aggregate_currency_analytics(
         Foreign currency exposure by month end date.
     """
     lf_inv_curr = df_inv_curr.lazy() if isinstance(df_inv_curr, pl.DataFrame) else df_inv_curr
-    lf_inv_curr_mapped = lf_inv_curr.with_columns(
-        pl.col("Closing_Date").dt.month_end().alias("MONTH_END_DATE")
-    )
-    lf_inv_curr_latest = lf_inv_curr_mapped.group_by("MONTH_END_DATE").agg(
-        pl.col("Closing_Date").max().alias("Max_Closing_Date")
-    )
     return (
-        lf_inv_curr_mapped.join(lf_inv_curr_latest, on="MONTH_END_DATE")
-        .filter(
-            (pl.col("Closing_Date") == pl.col("Max_Closing_Date"))
-            & (pl.col("CURRENCY_ID") != default_currency_id)
-        )
+        lf_inv_curr.with_columns(pl.col("Closing_Date").dt.month_end().alias("MONTH_END_DATE"))
+        .filter(pl.col("CURRENCY_ID") != default_currency_id)
         .group_by("MONTH_END_DATE")
         .agg(
             pl.col("Total_Current_Value")
@@ -107,8 +98,6 @@ def inject_portfolio_market_values(
     lf_monthly_totals: pl.LazyFrame,
     dfs: Mapping[str, pl.DataFrame | pl.LazyFrame],
     default_currency_id: str,
-    is_investment_active: bool = True,
-    is_foreign_active: bool = True,
 ) -> pl.LazyFrame:
     """Join portfolio and currency valuations into monthly totals.
 
@@ -120,20 +109,16 @@ def inject_portfolio_market_values(
         Input DataFrames map containing portfolio and currency marts.
     default_currency_id : str
         Default base currency ID.
-    is_investment_active : bool, default True
-        Whether INVESTMENT_ACCOUNTING capability is active.
-    is_foreign_active : bool, default True
-        Whether FOREIGN_ASSET_ENRICHMENT capability is active.
 
     Returns
     -------
     pl.LazyFrame
         Adjusted monthly totals with mark-to-market valuations.
     """
-    df_inv_port = dfs.get("df_f_investment_analytics_portfolio") if is_investment_active else None
+    df_inv_port = dfs.get("df_f_investment_analytics_portfolio")
     if df_inv_port is not None:
         lf_inv_port_agg = aggregate_portfolio_analytics(df_inv_port)
-        df_inv_curr = dfs.get("df_f_investment_analytics_currency") if is_foreign_active else None
+        df_inv_curr = dfs.get("df_f_investment_analytics_currency")
 
         if df_inv_curr is not None:
             lf_foreign_exposure = aggregate_currency_analytics(df_inv_curr, default_currency_id)
@@ -142,76 +127,68 @@ def inject_portfolio_market_values(
             ).with_columns(pl.col("Total_Foreign_Currency_Exposure").fill_null(0.0))
         else:
             lf_inv_port_agg = lf_inv_port_agg.with_columns(
-                pl.lit(None, dtype=pl.Float64).alias("Total_Foreign_Currency_Exposure"),
-                pl.lit(None, dtype=pl.Float64).alias("Closing_Forex_PnL"),
+                pl.lit(0.0).alias("Total_Foreign_Currency_Exposure")
             )
 
-        lf_res = lf_monthly_totals.join(
-            lf_inv_port_agg,
-            on="MONTH_END_DATE",
-            how="left",
-        ).with_columns(
-            pl.col("Closing_Investment_Market_Value").fill_null(0.0),
-            pl.col("Closing_Investment_Book_Value").fill_null(0.0),
-            pl.col("Closing_Investment_XIRR").fill_null(0.0),
-            pl.col("Closing_Unrealized_PL").fill_null(0.0),
-            pl.col("Closing_Asset_PnL").fill_null(0.0),
-        )
-
-        if is_foreign_active and df_inv_curr is not None:
-            lf_res = lf_res.with_columns(
+        return (
+            lf_monthly_totals.join(
+                lf_inv_port_agg,
+                on="MONTH_END_DATE",
+                how="left",
+            )
+            .with_columns(
+                pl.col("Closing_Investment_Market_Value").fill_null(0.0),
+                pl.col("Closing_Investment_Book_Value").fill_null(0.0),
+                pl.col("Closing_Investment_XIRR").fill_null(0.0),
+                pl.col("Closing_Unrealized_PL").fill_null(0.0),
+                pl.col("Closing_Asset_PnL").fill_null(0.0),
                 pl.col("Closing_Forex_PnL").fill_null(0.0),
                 pl.col("Total_Foreign_Currency_Exposure").fill_null(0.0),
-            ).with_columns(
+            )
+            .with_columns(
                 pl.when(pl.col("Total_Net_Worth") > 0)
                 .then(pl.col("Total_Foreign_Currency_Exposure") / pl.col("Total_Net_Worth"))
                 .otherwise(0.0)
                 .alias("Foreign_Exposure_Pct")
             )
-        else:
-            lf_res = lf_res.with_columns(
-                pl.lit(None, dtype=pl.Float64).alias("Closing_Forex_PnL"),
-                pl.lit(None, dtype=pl.Float64).alias("Total_Foreign_Currency_Exposure"),
-                pl.lit(None, dtype=pl.Float64).alias("Foreign_Exposure_Pct"),
+            .with_columns(
+                pl.when(pl.col("Closing_Investment_Book_Value") > 0)
+                .then(
+                    pl.col("Total_Assets")
+                    - pl.col("Closing_Investment_Book_Value")
+                    + pl.col("Closing_Investment_Market_Value")
+                )
+                .otherwise(pl.col("Total_Assets"))
+                .alias("Total_Assets_Market"),
+                pl.when(pl.col("Closing_Investment_Book_Value") > 0)
+                .then(
+                    pl.col("Total_Net_Worth")
+                    - pl.col("Closing_Investment_Book_Value")
+                    + pl.col("Closing_Investment_Market_Value")
+                )
+                .otherwise(pl.col("Total_Net_Worth"))
+                .alias("Total_Net_Worth_Market"),
+                pl.when(pl.col("Closing_Investment_Book_Value") > 0)
+                .then(
+                    pl.col("Liquid_Assets")
+                    - pl.col("Closing_Investment_Book_Value")
+                    + pl.col("Closing_Investment_Market_Value")
+                )
+                .otherwise(pl.col("Liquid_Assets"))
+                .alias("Liquid_Assets_Market"),
             )
-
-        return lf_res.with_columns(
-            pl.when(pl.col("Closing_Investment_Book_Value") > 0)
-            .then(
-                pl.col("Total_Assets")
-                - pl.col("Closing_Investment_Book_Value")
-                + pl.col("Closing_Investment_Market_Value")
-            )
-            .otherwise(pl.col("Total_Assets"))
-            .alias("Total_Assets_Market"),
-            pl.when(pl.col("Closing_Investment_Book_Value") > 0)
-            .then(
-                pl.col("Total_Net_Worth")
-                - pl.col("Closing_Investment_Book_Value")
-                + pl.col("Closing_Investment_Market_Value")
-            )
-            .otherwise(pl.col("Total_Net_Worth"))
-            .alias("Total_Net_Worth_Market"),
-            pl.when(pl.col("Closing_Investment_Book_Value") > 0)
-            .then(
-                pl.col("Liquid_Assets")
-                - pl.col("Closing_Investment_Book_Value")
-                + pl.col("Closing_Investment_Market_Value")
-            )
-            .otherwise(pl.col("Liquid_Assets"))
-            .alias("Liquid_Assets_Market"),
         )
 
     return lf_monthly_totals.with_columns(
         pl.col("Total_Assets").alias("Total_Assets_Market"),
         pl.col("Total_Net_Worth").alias("Total_Net_Worth_Market"),
         pl.col("Liquid_Assets").alias("Liquid_Assets_Market"),
-        pl.lit(None, dtype=pl.Float64).alias("Closing_Investment_Market_Value"),
-        pl.lit(None, dtype=pl.Float64).alias("Closing_Investment_Book_Value"),
-        pl.lit(None, dtype=pl.Float64).alias("Closing_Investment_XIRR"),
-        pl.lit(None, dtype=pl.Float64).alias("Closing_Unrealized_PL"),
-        pl.lit(None, dtype=pl.Float64).alias("Closing_Asset_PnL"),
-        pl.lit(None, dtype=pl.Float64).alias("Closing_Forex_PnL"),
-        pl.lit(None, dtype=pl.Float64).alias("Total_Foreign_Currency_Exposure"),
-        pl.lit(None, dtype=pl.Float64).alias("Foreign_Exposure_Pct"),
+        pl.lit(0.0).alias("Closing_Investment_Market_Value"),
+        pl.lit(0.0).alias("Closing_Investment_Book_Value"),
+        pl.lit(0.0).alias("Closing_Investment_XIRR"),
+        pl.lit(0.0).alias("Closing_Unrealized_PL"),
+        pl.lit(0.0).alias("Closing_Asset_PnL"),
+        pl.lit(0.0).alias("Closing_Forex_PnL"),
+        pl.lit(0.0).alias("Total_Foreign_Currency_Exposure"),
+        pl.lit(0.0).alias("Foreign_Exposure_Pct"),
     )

@@ -35,17 +35,11 @@ class NetWorthBuilder:
         inflation_res: InflationCalendarResult | Mapping[str, object],
         ledger_res: Mapping[str, pl.LazyFrame],
         default_currency_id: str,
-        is_investment_active: bool = True,
-        is_foreign_active: bool = True,
-        is_wealth_active: bool = True,
     ) -> None:
         self.dfs = dfs
         self.inflation_res = inflation_res
         self.ledger_res = ledger_res
         self.default_currency_id = default_currency_id
-        self.is_investment_active = is_investment_active
-        self.is_foreign_active = is_foreign_active
-        self.is_wealth_active = is_wealth_active
 
     def build(self) -> dict[str, pl.LazyFrame]:
         """Build Net Worth analytical LazyFrames.
@@ -286,49 +280,48 @@ class NetWorthBuilder:
         pl.LazyFrame
             Enhanced LazyFrame incorporating mark-to-market valuations and unrealized PnL.
         """
-        if self.is_investment_active:
-            df_inv_isin = self.dfs.get("df_f_investment_analytics_isin")
-            df_inv_master = self.dfs.get("df_d_investment_master")
+        df_inv_isin = self.dfs.get("df_f_investment_analytics_isin")
+        df_inv_master = self.dfs.get("df_d_investment_master")
 
-            if df_inv_isin is not None and df_inv_master is not None:
-                lf_inv_agg = self._aggregate_isin_market_values(df_inv_isin, df_inv_master)
-                return (
-                    lf_nw_summary.join(
-                        lf_inv_agg, on=["MONTH_END_DATE", "ASSET_SUBCATEGORY_ID"], how="left"
-                    )
-                    .with_columns(
-                        pl.col("Asset_Market_Value").fill_null(0.0),
-                        pl.col("Asset_Book_Value").fill_null(0.0),
-                        pl.col("Closing_Asset_PnL").fill_null(0.0),
-                        pl.col("Closing_Forex_PnL").fill_null(0.0),
-                    )
-                    .with_columns(
-                        pl.when(pl.col("Asset_Book_Value") > 0)
-                        .then(
-                            pl.col("Closing_Balance")
-                            - pl.col("Asset_Book_Value")
-                            + pl.col("Asset_Market_Value")
-                        )
-                        .otherwise(pl.col("Closing_Balance"))
-                        .alias("Closing_Balance_Market")
-                    )
-                    .with_columns(
-                        pl.when(pl.col("Is_Liquid"))
-                        .then(pl.col("Closing_Balance"))
-                        .otherwise(0.0)
-                        .alias("Liquid_Assets"),
-                        pl.when(pl.col("Is_Liquid"))
-                        .then(pl.col("Closing_Balance_Market"))
-                        .otherwise(0.0)
-                        .alias("Liquid_Assets_Market"),
-                    )
-                    .drop(["Asset_Market_Value", "Asset_Book_Value"])
+        if df_inv_isin is not None and df_inv_master is not None:
+            lf_inv_agg = self._aggregate_isin_market_values(df_inv_isin, df_inv_master)
+            return (
+                lf_nw_summary.join(
+                    lf_inv_agg, on=["MONTH_END_DATE", "ASSET_SUBCATEGORY_ID"], how="left"
                 )
+                .with_columns(
+                    pl.col("Asset_Market_Value").fill_null(0.0),
+                    pl.col("Asset_Book_Value").fill_null(0.0),
+                    pl.col("Closing_Asset_PnL").fill_null(0.0),
+                    pl.col("Closing_Forex_PnL").fill_null(0.0),
+                )
+                .with_columns(
+                    pl.when(pl.col("Asset_Book_Value") > 0)
+                    .then(
+                        pl.col("Closing_Balance")
+                        - pl.col("Asset_Book_Value")
+                        + pl.col("Asset_Market_Value")
+                    )
+                    .otherwise(pl.col("Closing_Balance"))
+                    .alias("Closing_Balance_Market")
+                )
+                .with_columns(
+                    pl.when(pl.col("Is_Liquid"))
+                    .then(pl.col("Closing_Balance"))
+                    .otherwise(0.0)
+                    .alias("Liquid_Assets"),
+                    pl.when(pl.col("Is_Liquid"))
+                    .then(pl.col("Closing_Balance_Market"))
+                    .otherwise(0.0)
+                    .alias("Liquid_Assets_Market"),
+                )
+                .drop(["Asset_Market_Value", "Asset_Book_Value"])
+            )
 
         return lf_nw_summary.with_columns(
             pl.col("Closing_Balance").alias("Closing_Balance_Market"),
-            pl.lit(None, dtype=pl.Float64).alias("Closing_Asset_PnL"),
-            pl.lit(None, dtype=pl.Float64).alias("Closing_Forex_PnL"),
+            pl.lit(0.0).alias("Closing_Asset_PnL"),
+            pl.lit(0.0).alias("Closing_Forex_PnL"),
             pl.when(pl.col("Is_Liquid"))
             .then(pl.col("Closing_Balance"))
             .otherwise(0.0)
@@ -383,108 +376,51 @@ class NetWorthBuilder:
         """Construct portfolio-level net worth and balance totals per month."""
         lf_monthly_totals = self._aggregate_monthly_balance_totals(lf_nw_summary)
         lf_monthly_totals = inject_portfolio_market_values(
-            lf_monthly_totals,
-            self.dfs,
-            self.default_currency_id,
-            is_investment_active=self.is_investment_active,
-            is_foreign_active=self.is_foreign_active,
+            lf_monthly_totals, self.dfs, self.default_currency_id
         )
 
-        if self.is_investment_active:
-            lf_monthly_totals = (
-                lf_monthly_totals.sort("MONTH_START_DATE")
-                .with_columns(
-                    pl.col("Total_Net_Worth")
-                    .shift(1)
-                    .fill_null(0.0)
-                    .alias("Opening_Balance_Asset"),
-                    pl.col("Total_Net_Worth_Market")
-                    .shift(1)
-                    .fill_null(0.0)
-                    .alias("Opening_Balance_Asset_Market"),
+        lf_monthly_totals = (
+            lf_monthly_totals.sort("MONTH_START_DATE")
+            .with_columns(
+                pl.col("Total_Net_Worth").shift(1).fill_null(0.0).alias("Opening_Balance_Asset"),
+                pl.col("Total_Net_Worth_Market")
+                .shift(1)
+                .fill_null(0.0)
+                .alias("Opening_Balance_Asset_Market"),
+                pl.col("Closing_Investment_Book_Value")
+                .shift(1)
+                .fill_null(0.0)
+                .alias("Opening_Investment_Book_Value"),
+                pl.col("Closing_Investment_Market_Value")
+                .shift(1)
+                .fill_null(0.0)
+                .alias("Opening_Investment_Market_Value"),
+                pl.col("Closing_Investment_XIRR")
+                .shift(1)
+                .fill_null(0.0)
+                .alias("Opening_Investment_XIRR"),
+                pl.col("Closing_Unrealized_PL")
+                .shift(1)
+                .fill_null(0.0)
+                .alias("Opening_Unrealized_PL"),
+            )
+            .with_columns(
+                pl.col("Total_Net_Worth").alias("Closing_Balance_Asset"),
+                pl.col("Total_Net_Worth_Market").alias("Closing_Balance_Asset_Market"),
+                (pl.col("Total_Net_Worth") - pl.col("Opening_Balance_Asset")).alias("Asset_Delta"),
+                (pl.col("Total_Net_Worth_Market") - pl.col("Opening_Balance_Asset_Market")).alias(
+                    "Asset_Market_Delta"
+                ),
+                (
                     pl.col("Closing_Investment_Book_Value")
-                    .shift(1)
-                    .fill_null(0.0)
-                    .alias("Opening_Investment_Book_Value"),
+                    - pl.col("Opening_Investment_Book_Value")
+                ).alias("Investment_Book_Value_Delta"),
+                (
                     pl.col("Closing_Investment_Market_Value")
-                    .shift(1)
-                    .fill_null(0.0)
-                    .alias("Opening_Investment_Market_Value"),
-                    pl.col("Closing_Investment_XIRR")
-                    .shift(1)
-                    .fill_null(0.0)
-                    .alias("Opening_Investment_XIRR"),
-                    pl.col("Closing_Unrealized_PL")
-                    .shift(1)
-                    .fill_null(0.0)
-                    .alias("Opening_Unrealized_PL"),
-                )
-                .with_columns(
-                    pl.col("Total_Net_Worth").alias("Closing_Balance_Asset"),
-                    pl.col("Total_Net_Worth_Market").alias("Closing_Balance_Asset_Market"),
-                    (pl.col("Total_Net_Worth") - pl.col("Opening_Balance_Asset")).alias(
-                        "Asset_Delta"
-                    ),
-                    (
-                        pl.col("Total_Net_Worth_Market") - pl.col("Opening_Balance_Asset_Market")
-                    ).alias("Asset_Market_Delta"),
-                    (
-                        pl.col("Closing_Investment_Book_Value")
-                        - pl.col("Opening_Investment_Book_Value")
-                    ).alias("Investment_Book_Value_Delta"),
-                    (
-                        pl.col("Closing_Investment_Market_Value")
-                        - pl.col("Opening_Investment_Market_Value")
-                    ).alias("Investment_Market_Value_Delta"),
-                )
+                    - pl.col("Opening_Investment_Market_Value")
+                ).alias("Investment_Market_Value_Delta"),
             )
-        else:
-            lf_monthly_totals = (
-                lf_monthly_totals.sort("MONTH_START_DATE")
-                .with_columns(
-                    pl.col("Total_Net_Worth")
-                    .shift(1)
-                    .fill_null(0.0)
-                    .alias("Opening_Balance_Asset"),
-                    pl.col("Total_Net_Worth_Market")
-                    .shift(1)
-                    .fill_null(0.0)
-                    .alias("Opening_Balance_Asset_Market"),
-                    pl.lit(None, dtype=pl.Float64).alias("Opening_Investment_Book_Value"),
-                    pl.lit(None, dtype=pl.Float64).alias("Opening_Investment_Market_Value"),
-                    pl.lit(None, dtype=pl.Float64).alias("Opening_Investment_XIRR"),
-                    pl.lit(None, dtype=pl.Float64).alias("Opening_Unrealized_PL"),
-                )
-                .with_columns(
-                    pl.col("Total_Net_Worth").alias("Closing_Balance_Asset"),
-                    pl.col("Total_Net_Worth_Market").alias("Closing_Balance_Asset_Market"),
-                    (pl.col("Total_Net_Worth") - pl.col("Opening_Balance_Asset")).alias(
-                        "Asset_Delta"
-                    ),
-                    (
-                        pl.col("Total_Net_Worth_Market") - pl.col("Opening_Balance_Asset_Market")
-                    ).alias("Asset_Market_Delta"),
-                    pl.lit(None, dtype=pl.Float64).alias("Investment_Book_Value_Delta"),
-                    pl.lit(None, dtype=pl.Float64).alias("Investment_Market_Value_Delta"),
-                )
-            )
-
-        if not self.is_wealth_active:
-            lf_monthly_totals = lf_monthly_totals.with_columns(
-                pl.lit(None, dtype=pl.Float64).alias("Total_Assets_Market"),
-                pl.lit(None, dtype=pl.Float64).alias("Total_Net_Worth_Market"),
-                pl.lit(None, dtype=pl.Float64).alias("Opening_Balance_Asset_Market"),
-                pl.lit(None, dtype=pl.Float64).alias("Closing_Balance_Asset_Market"),
-                pl.lit(None, dtype=pl.Float64).alias("Asset_Market_Delta"),
-                pl.lit(None, dtype=pl.Float64).alias("Liquid_Assets_Market"),
-            )
-
-        if not self.is_foreign_active:
-            lf_monthly_totals = lf_monthly_totals.with_columns(
-                pl.lit(None, dtype=pl.Float64).alias("Closing_Forex_PnL"),
-                pl.lit(None, dtype=pl.Float64).alias("Total_Foreign_Currency_Exposure"),
-                pl.lit(None, dtype=pl.Float64).alias("Foreign_Exposure_Pct"),
-            )
+        )
 
         return lf_monthly_totals.join(
             cast(pl.LazyFrame, self.inflation_res["lf_inflation"]),

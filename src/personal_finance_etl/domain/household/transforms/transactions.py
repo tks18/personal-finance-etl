@@ -32,20 +32,30 @@ __all__ = [
 ]
 
 BASE_TRANSACTION_COLS = [
+    "__file_name__",
+    "__folder_path__",
+    "S_NO",
     "UID",
-    "DATE",
     "ASSET_ID",
+    "CARDDIVIDMONTH",
     "CATEGORY_ID",
-    "CURRENCY_ID",
     "TO_ASSET_ID",
-    "TRANSFER_UID",
-    "TIME",
     "DESCRIPTION",
+    "TIMESTAMP",
+    "DATE",
+    "TIME",
+    "PAID",
+    "TRANSACTION_TYPE",
     "BASE_AMOUNT",
-    "AMOUNT_ACCOUNT",
+    "TRANSFER_UID",
+    "FEES_NOTES",
     "LOCAL_AMOUNT",
+    "MARK",
+    "TRANSFER_FEES",
+    "UPDATED_TIME",
+    "CURRENCY_ID",
+    "AMOUNT_ACCOUNT",
     "EXCH_RATE",
-    "artifact_id",
 ]
 
 
@@ -92,10 +102,7 @@ def get_base_transactions(df_lazy: pl.LazyFrame, column_mapping: dict[str, str])
 
     Reads INOUTCOME once, renames columns, and filters deleted rows.
     """
-    active_mapping = {
-        k: v for k, v in column_mapping.items() if k in df_lazy.collect_schema().names()
-    }
-    df_renamed = df_lazy.rename(active_mapping)
+    df_renamed = df_lazy.rename(column_mapping)
     raw_columns = set(df_renamed.collect_schema().names())
     required_columns = {"IS_DEL", "UID", "BASE_AMOUNT"}
     missing_columns = sorted(required_columns - raw_columns)
@@ -112,6 +119,10 @@ def get_base_transactions(df_lazy: pl.LazyFrame, column_mapping: dict[str, str])
                 pl.col("LOCAL_AMOUNT").cast(pl.Float64, strict=False),
                 pl.col("AMOUNT_ACCOUNT").cast(pl.Float64, strict=False),
                 pl.col("TRANSACTION_TYPE").cast(pl.Int64, strict=False),
+                pl.col("CARDDIVIDMONTH").cast(pl.Int64, strict=False),
+                pl.col("TIMESTAMP").cast(pl.Int64, strict=False),
+                pl.col("UPDATED_TIME").cast(pl.Int64, strict=False),
+                pl.col("S_NO").cast(pl.Int64, strict=False),
             ]
         )
         .filter(pl.col("IS_DEL").fill_null("0") == "0")
@@ -258,8 +269,15 @@ def transform_f_transfer_transactions(
 
     return (
         df_joined_cat.filter((pl.col("TRANSACTION_TYPE") == 3) | (pl.col("TRANSACTION_TYPE") == 4))
+        .select(BASE_TRANSACTION_COLS + ["ASSET_GROUP"])
         .with_columns(
             pl.when(pl.col("TRANSACTION_TYPE") == 3)
+            .then(pl.lit("Out"))
+            .otherwise(pl.lit("In"))
+            .alias("TRANSFER_TYPE")
+        )
+        .with_columns(
+            pl.when(pl.col("TRANSFER_TYPE") == "Out")
             .then(pl.col("BASE_AMOUNT") * -1)
             .otherwise(pl.col("BASE_AMOUNT"))
             .alias("AMOUNT_PROPER"),
@@ -268,76 +286,36 @@ def transform_f_transfer_transactions(
             .otherwise(pl.col("DATE").cast(pl.Date, strict=False))
             .alias("ADJUSTED_DATE_FOR_ANALYSIS"),
         )
-        .select(
-            [
-                "UID",
-                "DATE",
-                "ADJUSTED_DATE_FOR_ANALYSIS",
-                "ASSET_ID",
-                "TO_ASSET_ID",
-                "CATEGORY_ID",
-                "CURRENCY_ID",
-                "TRANSFER_UID",
-                "TIME",
-                "DESCRIPTION",
-                "BASE_AMOUNT",
-                "AMOUNT_ACCOUNT",
-                "AMOUNT_PROPER",
-                "LOCAL_AMOUNT",
-                "EXCH_RATE",
-                "artifact_id",
-            ]
-        )
+        .drop("ASSET_GROUP")
     )
 
 
 def _parse_opening_balance_fields(df: pl.LazyFrame) -> pl.LazyFrame:
     """Validate numerics, dates, and types for opening balances."""
-    cols = df.collect_schema().names()
-    date_source = "Date" if "Date" in cols else "ZTXDATESTR"
-    asset_source = "ASSET_SUBCATEGORY_ID" if "ASSET_SUBCATEGORY_ID" in cols else "ZASSETUID"
-    curr_source = "CURRENCY_ID" if "CURRENCY_ID" in cols else "ZCURRENCYUID"
-    amt_source = "Opening_Amount" if "Opening_Amount" in cols else "ZAMOUNT"
-    amt_acc_source = (
-        "Opening_Amount_Account" if "Opening_Amount_Account" in cols else "ZAMOUNTACCOUNT"
-    )
-
-    num_cols = [c for c in [amt_source, amt_acc_source] if c in cols]
     df_parsed = validate_and_parse_numerics(
         df,
-        num_cols,
-        optional_cols={amt_acc_source},
-        source_col="artifact_id",
+        ["ZAMOUNT", "ZAMOUNTACCOUNT", "ZAMOUNTSUB", "ZDATE"],
+        optional_cols={"ZAMOUNTACCOUNT", "ZAMOUNTSUB", "ZDATE"},
+        source_col="__file_name__",
     )
     df_parsed = validate_and_parse_dates(
         df_parsed,
         {
-            date_source: [
+            "ZTXDATESTR": [
                 "%Y-%m-%d %H:%M:%S",
                 "%Y-%m-%d",
                 "%d-%m-%Y %H:%M:%S",
                 "%d-%m-%Y",
             ]
         },
-        optional_cols={date_source},
-        source_col="artifact_id",
+        optional_cols={"ZTXDATESTR"},
+        source_col="__file_name__",
     )
     return df_parsed.with_columns(
-        pl.col("Z_PK").cast(pl.Int64),
-        pl.col(date_source).alias("Date"),
-        pl.col(asset_source).cast(pl.String).alias("ASSET_SUBCATEGORY_ID"),
-        pl.col(curr_source).cast(pl.String).alias("CURRENCY_ID"),
-        pl.col(amt_source).alias("Opening_Amount"),
-        pl.col(amt_acc_source).alias("Opening_Amount_Account"),
-    ).select(
         [
-            "Z_PK",
-            "Date",
-            "ASSET_SUBCATEGORY_ID",
-            "CURRENCY_ID",
-            "Opening_Amount",
-            "Opening_Amount_Account",
-            "artifact_id",
+            pl.col("Z_PK").cast(pl.Int64),
+            pl.col("ZUTIME").cast(pl.Int64),
+            pl.col("ZDO_TYPE").cast(pl.Int64),
         ]
     )
 
@@ -346,5 +324,26 @@ def transform_f_opening_balances(
     raw_data: pl.LazyFrame, column_mapping: dict[str, str]
 ) -> pl.LazyFrame:
     """Execute the PQ logic for Opening Balances."""
-    df_transformed = raw_data.rename(column_mapping)
+    df_transformed = raw_data.rename(column_mapping).select(
+        [
+            "__file_name__",
+            "__folder_path__",
+            "Z_PK",
+            "ZUTIME",
+            "ZDATE",
+            "ZAMOUNT",
+            "ZAMOUNTACCOUNT",
+            "ZAMOUNTSUB",
+            "ZCONTENT",
+            "ZDO_TYPE",
+            "ZASSETUID",
+            "ZCATEGORYUID",
+            "ZCURRENCYUID",
+            "ZTOASSETUID",
+            "ZTXDATESTR",
+            "ZTXUIDFEE",
+            "ZTXUIDTRANS",
+            "ZUID",
+        ]
+    )
     return _parse_opening_balance_fields(df_transformed)

@@ -20,23 +20,11 @@ import os
 from collections.abc import Callable
 from typing import Protocol
 
-from personal_finance_etl.application.diagnostics.service import DiagnosticService
 from personal_finance_etl.application.pipeline.orchestrator import ETLOrchestrator
 from personal_finance_etl.application.pipeline.worker import WorkerPoolCoordinator
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
-from personal_finance_etl.config.sources.loader import SourceConfiguration
-from personal_finance_etl.contracts.datasets import DatasetId
-from personal_finance_etl.contracts.diagnostics import (
-    AdmissionDryRunResult,
-    ConfigValidationResult,
-    IdentityPreviewResult,
-    MappingPreviewResult,
-    PlanPreviewResult,
-    SourceCheckResult,
-)
 from personal_finance_etl.contracts.event_transport import EventQueue
-from personal_finance_etl.contracts.execution_plan import ExecutionPlan
 from personal_finance_etl.contracts.observability import ObservabilityEvent
 from personal_finance_etl.contracts.recovery import (
     ActiveDatabaseState,
@@ -45,7 +33,6 @@ from personal_finance_etl.contracts.recovery import (
     SnapshotOutcome,
     SnapshotResult,
 )
-from personal_finance_etl.infrastructure.observability import ObservabilityEmitter
 from personal_finance_etl.infrastructure.preferences import PreferencesManager
 from personal_finance_etl.infrastructure.recovery.backup import SystemBackupManager
 
@@ -59,12 +46,8 @@ class ContainerProtocol(Protocol):
         self,
         config_path: str | None = None,
         rules_path: str | None = None,
-        sources_path: str | None = None,
         status_queue: EventQueue | None = None,
         settings: Settings | None = None,
-        source_config: SourceConfiguration | None = None,
-        plan: ExecutionPlan | None = None,
-        skip_preflight: bool = False,
     ) -> ETLOrchestrator:
         """Create and wire an ETLOrchestrator with configuration and observability.
 
@@ -74,18 +57,10 @@ class ContainerProtocol(Protocol):
             Path to application settings YAML.
         rules_path : str | None, optional
             Path to financial rules YAML.
-        sources_path : str | None, optional
-            Path to source configuration TOML.
         status_queue : EventQueue | None, optional
             Queue transport for canonical runtime events.
         settings : Settings | None, optional
             Pre-loaded settings instance.
-        source_config : SourceConfiguration | None, optional
-            Pre-loaded SourceConfiguration instance.
-        plan : ExecutionPlan | None, optional
-            Pre-compiled execution plan.
-        skip_preflight : bool, default=False
-            Whether to skip Phase 0 pre-flight health checks.
 
         Returns
         -------
@@ -127,102 +102,6 @@ class PersonalFinanceEngine:
             return True
         except Exception:
             return False
-
-    def validate_sources_config(self, path: str) -> bool:
-        """Validate whether a source configuration TOML file parses and validates correctly.
-
-        Parameters
-        ----------
-        path : str
-            Filesystem path to source configuration TOML file.
-
-        Returns
-        -------
-        bool
-            True if the configuration is valid, False otherwise.
-        """
-        try:
-            SourceConfiguration.from_toml(path)
-            return True
-        except Exception:
-            return False
-
-    # --- Configuration Diagnostics & Admission Previews ---
-
-    def validate_all_configs(
-        self,
-        config_path: str = "config.toml",
-        rules_path: str = "rules.toml",
-        sources_path: str = "sources.toml",
-    ) -> ConfigValidationResult:
-        """Execute full tri-configuration validation across settings, sources, and rules."""
-        diag_svc = DiagnosticService()
-        return diag_svc.validate_configuration(
-            config_path=config_path,
-            rules_path=rules_path,
-            sources_path=sources_path,
-        )
-
-    def check_sources(
-        self,
-        sources_path: str = "sources.toml",
-        config_path: str | None = None,
-    ) -> SourceCheckResult:
-        """Check reachability and selectors across all configured evidence sources."""
-        diag_svc = DiagnosticService()
-        return diag_svc.check_sources(sources_path=sources_path, config_path=config_path)
-
-    def preview_mapping(
-        self,
-        dataset_id: DatasetId | str,
-        sources_path: str = "sources.toml",
-    ) -> MappingPreviewResult:
-        """Preview column mapping and normalization sequence for a target dataset."""
-        diag_svc = DiagnosticService()
-        return diag_svc.preview_mapping(dataset_id=dataset_id, sources_path=sources_path)
-
-    def preview_identity(
-        self,
-        dataset_id: DatasetId | str,
-        sources_path: str = "sources.toml",
-        config_path: str | None = None,
-        sample_limit: int = 10,
-    ) -> IdentityPreviewResult:
-        """Preview row identity derivation strategy, sample IDs, and collision diagnostics."""
-        diag_svc = DiagnosticService()
-        return diag_svc.preview_identity(
-            dataset_id=dataset_id,
-            sources_path=sources_path,
-            config_path=config_path,
-            sample_limit=sample_limit,
-        )
-
-    def preview_plan(
-        self,
-        config_path: str = "config.toml",
-        sources_path: str = "sources.toml",
-    ) -> PlanPreviewResult:
-        """Preview resolved capability execution plan, active datasets, and stages."""
-        diag_svc = DiagnosticService()
-        return diag_svc.preview_plan(config_path=config_path, sources_path=sources_path)
-
-    def dry_run_admission(
-        self,
-        dataset_selector: str | None = None,
-        config_path: str = "config.toml",
-        rules_path: str | None = None,
-        sources_path: str = "sources.toml",
-        emitter: ObservabilityEmitter | None = None,
-    ) -> AdmissionDryRunResult:
-        """Execute in-memory admission dry run without lakehouse or control plane mutation."""
-        diag_svc = DiagnosticService(emitter=emitter)
-        return diag_svc.dry_run_admission(
-            dataset_selector=dataset_selector,
-            config_path=config_path,
-            rules_path=rules_path,
-            sources_path=sources_path,
-            emitter=emitter,
-        )
 
     # --- Database Operations ---
 
@@ -285,29 +164,14 @@ class PersonalFinanceEngine:
         config_path: str,
         rules_path: str,
         on_status: Callable[[ObservabilityEvent], None],
-        skip_preflight: bool = False,
     ) -> None:
-        """Spawn the multiprocessing ETL pipeline and stream status updates to on_status.
-
-        Parameters
-        ----------
-        config_path : str
-            Path to pipeline settings TOML configuration.
-        rules_path : str
-            Path to financial rules TOML configuration.
-        on_status : Callable[[ObservabilityEvent], None]
-            Callback invoked for each streamed observability event.
-        skip_preflight : bool, default=False
-            Whether to skip Phase 0 pre-flight health checks.
-        """
+        """Spawn the multiprocessing ETL pipeline and stream status updates to on_status."""
         if config_path:
             self.add_recent_config(config_path)
         if rules_path:
             self.add_recent_rules(rules_path)
         status_queue: multiprocessing.Queue[ObservabilityEvent] = multiprocessing.Queue()
-        process = WorkerPoolCoordinator.spawn_process(
-            status_queue, config_path, rules_path, skip_preflight=skip_preflight
-        )
+        process = WorkerPoolCoordinator.spawn_process(status_queue, config_path, rules_path)
         WorkerPoolCoordinator.monitor_queue(process, status_queue, on_status)
 
     def run_pipeline_sync(
@@ -315,21 +179,8 @@ class PersonalFinanceEngine:
         config_path: str = "config.toml",
         rules_path: str = "",
         status_queue: EventQueue | None = None,
-        skip_preflight: bool = False,
     ) -> None:
-        """Execute the ETL pipeline synchronously in the current thread (ideal for profiling/testing).
-
-        Parameters
-        ----------
-        config_path : str, default="config.toml"
-            Path to pipeline settings TOML configuration.
-        rules_path : str, default=""
-            Path to financial rules TOML configuration.
-        status_queue : EventQueue | None, default=None
-            Queue for transmitting observability events.
-        skip_preflight : bool, default=False
-            Whether to skip Phase 0 pre-flight health checks.
-        """
+        """Execute the ETL pipeline synchronously in the current thread (ideal for profiling/testing)."""
         if config_path:
             self.add_recent_config(config_path)
         if rules_path:
@@ -339,17 +190,9 @@ class PersonalFinanceEngine:
                 config_path=config_path,
                 rules_path=rules_path,
                 status_queue=status_queue,
-                skip_preflight=skip_preflight,
             )
         else:
             cfg = Settings.from_toml(config_path) if config_path else Settings()
             rules = FinancialRules.from_toml(rules_path) if rules_path else None
-            diag_svc = DiagnosticService()
-            orchestrator = ETLOrchestrator(
-                cfg,
-                status_queue,
-                rules,
-                skip_preflight=skip_preflight,
-                diagnostic_service=diag_svc,
-            )
+            orchestrator = ETLOrchestrator(cfg, status_queue, rules)
         orchestrator.run()

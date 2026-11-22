@@ -20,9 +20,7 @@ from typing import Protocol, runtime_checkable
 import polars as pl
 
 from personal_finance_etl.config.financial_rules import FinancialRules
-from personal_finance_etl.contracts.dataset_collection import DatasetCollection
-from personal_finance_etl.contracts.datasets import DatasetId
-from personal_finance_etl.contracts.extraction import AssetPipelineResult
+from personal_finance_etl.contracts.extraction import AssetPipelineResult, ExtractionResult
 from personal_finance_etl.domain.investments.transforms.common import (
     get_purchase_reference,
     get_sale_reference,
@@ -62,7 +60,7 @@ class AssetPipeline(Protocol):
 
     def process(
         self,
-        extracted: DatasetCollection,
+        extracted: ExtractionResult,
         d_asset_subcategory_lazy: pl.LazyFrame,
         rules: FinancialRules,
         diagnostics: ObservabilityDiagnostics,
@@ -76,7 +74,7 @@ class StockPipeline:
 
     def process(
         self,
-        extracted: DatasetCollection,
+        extracted: ExtractionResult,
         d_asset_subcategory_lazy: pl.LazyFrame,
         rules: FinancialRules,
         diagnostics: ObservabilityDiagnostics,
@@ -85,7 +83,7 @@ class StockPipeline:
 
         Parameters
         ----------
-        extracted : DatasetCollection
+        extracted : ExtractionResult
             Raw extracted workbook data.
         d_asset_subcategory_lazy : pl.LazyFrame
             Reference dimension for asset subcategories.
@@ -101,14 +99,12 @@ class StockPipeline:
         """
         diagnostics.debug("Parsing unstructured Stock Excel files...")
         market_data = get_stg_stock_market_data(
-            extracted.require_lazy(DatasetId.MARKET_STOCK_HOLDINGS), rules.DEFAULT_CURRENCY_ID
+            extracted.stock_market_data_raw, rules.DEFAULT_CURRENCY_ID
         )
         market_data_ref = get_stg_stock_market_data_ref(market_data)
 
         diagnostics.debug("Parsing Stock Trade Orders...")
-        base_orders = get_base_stock_transactions(
-            extracted.require_lazy(DatasetId.INVESTMENT_STOCK_ORDERS)
-        )
+        base_orders = get_base_stock_transactions(extracted.stock_transactions_raw)
         purchase_trans = transform_stg_stock_trades(base_orders, trade_type="BUY")
         sale_trans = transform_stg_stock_trades(base_orders, trade_type="SELL")
 
@@ -191,7 +187,7 @@ class USStockPipeline:
 
     def process(
         self,
-        extracted: DatasetCollection,
+        extracted: ExtractionResult,
         d_asset_subcategory_lazy: pl.LazyFrame,
         rules: FinancialRules,
         diagnostics: ObservabilityDiagnostics,
@@ -200,8 +196,8 @@ class USStockPipeline:
 
         Parameters
         ----------
-        extracted : DatasetCollection
-            Raw extracted dataset collection.
+        extracted : ExtractionResult
+            Raw extracted workbook data.
         d_asset_subcategory_lazy : pl.LazyFrame
             Reference dimension for asset subcategories.
         rules : FinancialRules
@@ -215,9 +211,7 @@ class USStockPipeline:
             Normalized purchases, sales, and master references for US equities.
         """
         diagnostics.debug("Parsing US Stock Trade Orders...")
-        base_orders = get_base_us_stock_transactions(
-            extracted.require_lazy(DatasetId.INVESTMENT_US_STOCK_TRANSACTIONS)
-        )
+        base_orders = get_base_us_stock_transactions(extracted.us_stock_transactions_raw)
         purchase_trans = transform_stg_us_stock_trades(base_orders, trade_type="BUY")
         sale_trans = transform_stg_us_stock_trades(base_orders, trade_type="SELL")
 
@@ -240,7 +234,7 @@ class MutualFundPipeline:
 
     def process(
         self,
-        extracted: DatasetCollection,
+        extracted: ExtractionResult,
         d_asset_subcategory_lazy: pl.LazyFrame,
         rules: FinancialRules,
         diagnostics: ObservabilityDiagnostics,
@@ -249,8 +243,8 @@ class MutualFundPipeline:
 
         Parameters
         ----------
-        extracted : DatasetCollection
-            Raw extracted dataset collection.
+        extracted : ExtractionResult
+            Raw extracted workbook data.
         d_asset_subcategory_lazy : pl.LazyFrame
             Reference dimension for asset subcategories.
         rules : FinancialRules
@@ -264,18 +258,14 @@ class MutualFundPipeline:
             Normalized MF market data, purchases, sales, and master references.
         """
         diagnostics.debug("Parsing unstructured Mutual Fund Excel files...")
-        mapping = extracted.require_lazy(DatasetId.INVESTMENT_MF_ISIN_MAPPING)
+        mapping = extracted.stg_mf_isin_mapping
         market_data = get_stg_mf_market_data(
-            extracted.require_lazy(DatasetId.MARKET_MF_HOLDINGS),
-            mapping,
-            rules.DEFAULT_CURRENCY_ID,
+            extracted.mf_market_data_raw, mapping, rules.DEFAULT_CURRENCY_ID
         )
         market_data_ref = get_stg_mf_market_data_ref(market_data)
 
         diagnostics.debug("Parsing Mutual Fund Trade Orders...")
-        base_orders = get_base_mf_transactions(
-            extracted.require_lazy(DatasetId.INVESTMENT_MF_ORDERS)
-        )
+        base_orders = get_base_mf_transactions(extracted.mf_transactions_raw)
         purchase_trans = transform_stg_mf_trades(
             base_orders, mapping, rules.MF_SCHEME_MAPPINGS, trade_type="PURCHASE"
         )

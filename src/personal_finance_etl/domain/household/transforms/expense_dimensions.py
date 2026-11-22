@@ -27,24 +27,25 @@ def transform_d_expense_category(
     df_lazy: pl.LazyFrame, column_mapping: dict[str, str]
 ) -> pl.LazyFrame:
     """Execute the PQ logic for Expense Categories (TYPE = 1)."""
-    cols = [
-        "UID",
-        "CATEGORY_NAME",
-        "artifact_id",
-    ]
-
-    active_mapping = {
-        k: v for k, v in column_mapping.items() if k in df_lazy.collect_schema().names()
-    }
     return (
-        df_lazy.rename(active_mapping)
+        df_lazy.rename(column_mapping)
         .with_columns(pl.col("IS_DEL").cast(pl.String))
         .filter(pl.col("IS_DEL").fill_null("0") == "0")
         .filter(
             (pl.col("TYPE") == 1)
             & (pl.col("CATEGORY_ID").is_null() | (pl.col("CATEGORY_ID").str.len_chars() < 1))
         )
-        .select(cols)
+        .select(
+            [
+                "__file_name__",
+                "__folder_path__",
+                "S_NO",
+                "MODIFY_DATE",
+                "UID",
+                "CATEGORY_NAME",
+                "ORDER_SEQUENCE",
+            ]
+        )
     )
 
 
@@ -52,18 +53,8 @@ def transform_d_expense_subcategory(
     df_lazy: pl.LazyFrame, column_mapping: dict[str, str], rules: FinancialRules | None = None
 ) -> pl.LazyFrame:
     """Execute the PQ logic for Expense Subcategories."""
-    cols = [
-        "UID",
-        "CATEGORY_NAME",
-        "CATEGORY_ID",
-        "artifact_id",
-    ]
-
-    active_mapping = {
-        k: v for k, v in column_mapping.items() if k in df_lazy.collect_schema().names()
-    }
     df_transformed = (
-        df_lazy.rename(active_mapping)
+        df_lazy.rename(column_mapping)
         .with_columns(pl.col("IS_DEL").cast(pl.String))
         .filter(pl.col("IS_DEL").fill_null("0") == "0")
         .filter(
@@ -71,7 +62,18 @@ def transform_d_expense_subcategory(
             & pl.col("CATEGORY_ID").is_not_null()
             & (pl.col("CATEGORY_ID").str.len_chars() > 0)
         )
-        .select(cols)
+        .select(
+            [
+                "__file_name__",
+                "__folder_path__",
+                "S_NO",
+                "MODIFY_DATE",
+                "UID",
+                "CATEGORY_NAME",
+                "ORDER_SEQUENCE",
+                "CATEGORY_ID",
+            ]
+        )
     )
 
     if rules:

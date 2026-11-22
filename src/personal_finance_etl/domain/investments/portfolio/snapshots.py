@@ -13,7 +13,6 @@ Does not own
 - Presentation layer formatting or persistence (owned by presentation and infrastructure).
 """
 
-import math
 from datetime import date
 
 from personal_finance_etl.config.financial_rules import FinancialRules
@@ -26,7 +25,6 @@ from personal_finance_etl.domain.investments.lots.fifo import FIFOPortfolio
 from personal_finance_etl.domain.investments.performance.returns import calculate_cagr
 from personal_finance_etl.domain.investments.portfolio.lot_metrics import (
     LotValuationContext,
-    _LotBenchmarkMetrics,
     _LotFxAttribution,
     _LotTaxAttributes,
     compute_domestic_fx_attribution,
@@ -59,9 +57,6 @@ class SnapshotGenerator:
         rules: FinancialRules,
         isin: str,
         master_row: IsinMasterRecord,
-        enable_benchmark: bool = True,
-        enable_foreign_assets: bool = True,
-        enable_tax: bool = True,
     ) -> None:
         self.rules = rules
         self.isin = isin
@@ -69,9 +64,6 @@ class SnapshotGenerator:
         self.tax_subtype = str(master_row.get("TAX_SUBTYPE", "listed"))
         self.bench_id = master_row.get("BENCHMARK_ID")
         self.fy_table = fy_table
-        self.enable_benchmark = enable_benchmark
-        self.enable_foreign_assets = enable_foreign_assets
-        self.enable_tax = enable_tax
 
     def generate(
         self,
@@ -203,87 +195,40 @@ class SnapshotGenerator:
             day_weight = 1.0
 
         default_curr = getattr(self.rules, "DEFAULT_CURRENCY_ID", "INR_INR")
-        if self.enable_benchmark:
-            bm = compute_lot_benchmark_metrics(lot, ctx, age, lot_cagr, default_curr)
-        else:
-            bm = _LotBenchmarkMetrics(
-                bm_buy=None,
-                m_bm_price_inr=0.0,
-                lot_bm_ret=None,
-                lot_bm_cagr=None,
-                lot_bm_cagr_status="UNDEFINED",
-                lot_bm_cagr_local=None,
-                lot_alpha=None,
-                is_outperforming=False,
-            )
+        bm = compute_lot_benchmark_metrics(lot, ctx, age, lot_cagr, default_curr)
 
         pnl = (ctx.m_price - lot.price) * lot.qty
         close_val = lot.qty * ctx.m_price
         buy_val_lot = lot.qty * lot.price
 
-        if self.enable_tax:
-            tax = self._compute_tax_attributes(
-                lot_date=lbd,
-                m_date=ctx.m_date,
-                pnl=pnl,
-                close_val=close_val,
-                remaining_ltcg_exemption=ctx.remaining_ltcg_exemption,
-            )
-        else:
-            holding_type = self.fy_table.get_holding_type(
-                self.tax_type, self.tax_subtype, lot.date or ctx.m_date, ctx.m_date
-            )
-            tax = _LotTaxAttributes(
-                holding_type=holding_type,
-                ltcg_rate=None,
-                stcg_rate=None,
-                ltcg_thr=None,
-                days_to_ltcg=None,
-                unreal_ltcg=None,
-                unreal_stcg=None,
-                unreal_gain=None,
-                unreal_ltcl=None,
-                unreal_stcl=None,
-                unreal_loss=None,
-                ltcg_tax=None,
-                stcg_tax=None,
-                after_tax_pl=None,
-                after_tax_cv=None,
-            )
+        tax = self._compute_tax_attributes(
+            lot_date=lbd,
+            m_date=ctx.m_date,
+            pnl=pnl,
+            close_val=close_val,
+            remaining_ltcg_exemption=ctx.remaining_ltcg_exemption,
+        )
 
-        if self.enable_foreign_assets:
-            fx = self._compute_fx_attribution(
-                lot=lot,
-                ctx=ctx,
-                age=age,
-                buy_val_lot=buy_val_lot,
-                close_val=close_val,
-                pnl=pnl,
-                lot_cagr=lot_cagr,
-                lot_return=lot_return,
-            )
-        else:
-            fx = compute_domestic_fx_attribution(
-                lot=lot,
-                ctx=ctx,
-                buy_val_lot=buy_val_lot,
-                close_val=close_val,
-                pnl=pnl,
-                lot_cagr=lot_cagr,
-                lot_return=lot_return,
-            )
+        fx = self._compute_fx_attribution(
+            lot=lot,
+            ctx=ctx,
+            age=age,
+            buy_val_lot=buy_val_lot,
+            close_val=close_val,
+            pnl=pnl,
+            lot_cagr=lot_cagr,
+            lot_return=lot_return,
+        )
 
         record = SnapshotRecord(
             Closing_Date=ctx.m_date,
             ISIN=self.isin,
             CURRENCY_ID=(
                 fifo.active_lots[0].currency_id
-                if self.enable_foreign_assets
-                and fifo.active_lots
-                and fifo.active_lots[0].currency_id
+                if fifo.active_lots and fifo.active_lots[0].currency_id
                 else default_curr
             ),
-            BENCHMARK_ID=self.bench_id if self.enable_benchmark else None,
+            BENCHMARK_ID=self.bench_id,
             Lot_ID=lot.lot_id
             if lot.lot_id is not None
             else _raise_invariant(
@@ -293,8 +238,8 @@ class SnapshotGenerator:
             ),
             Purchase_ID=lot.purchase_id,
             Lot_Source_Type=lot.lot_source_type,
-            TAX_TYPE=self.tax_type if self.enable_tax else None,
-            TAX_SUBTYPE=self.tax_subtype if self.enable_tax else None,
+            TAX_TYPE=self.tax_type,
+            TAX_SUBTYPE=self.tax_subtype,
             Buy_Date=lbd,
             Age_Days=age,
             LTCG_Threshold_Days=tax.ltcg_thr,
@@ -312,19 +257,11 @@ class SnapshotGenerator:
             CAGR_Status=ctx.inst_metrics.get("cagr_status", "UNDEFINED"),
             XIRR=_rounded_optional(ctx.inst_metrics.get("xirr")),
             XIRR_Status=ctx.inst_metrics.get("xirr_status", "INVALID_INPUT"),
-            After_Tax_XIRR=(
-                _rounded_optional(ctx.inst_metrics.get("after_tax_xirr"))
-                if self.enable_tax
-                else None
-            ),
+            After_Tax_XIRR=_rounded_optional(ctx.inst_metrics.get("after_tax_xirr")),
             XIRR_Local=_rounded_optional(ctx.inst_metrics.get("xirr_local")),
             FX_XIRR_Impact=_rounded_optional(ctx.inst_metrics.get("fx_xirr_impact")),
             BM_Buy_Price=round(bm.bm_buy, 4) if bm.bm_buy else None,
-            BM_Market_Price=(
-                round(ctx.m_bm_price, 4)
-                if self.enable_benchmark and math.isfinite(ctx.m_bm_price)
-                else None
-            ),
+            BM_Market_Price=round(ctx.m_bm_price, 4),
             Lot_BM_CAGR=_rounded_optional(bm.lot_bm_cagr),
             Lot_BM_CAGR_Status=bm.lot_bm_cagr_status,
             Lot_BM_CAGR_Local=_rounded_optional(bm.lot_bm_cagr_local),
@@ -334,7 +271,7 @@ class SnapshotGenerator:
                 "P/L": round(pnl, 4),
             },
             Absolute_Return=round(lot_return, 8),
-            Lot_BM_Return=round(bm.lot_bm_ret, 8) if bm.lot_bm_ret is not None else None,
+            Lot_BM_Return=round(bm.lot_bm_ret, 8),
             BM_XIRR=_rounded_optional(ctx.inst_metrics.get("bm_xirr")),
             BM_XIRR_Local=_rounded_optional(ctx.inst_metrics.get("bm_xirr_local")),
             Active_Return=_rounded_optional(ctx.inst_metrics.get("active_return")),
@@ -342,21 +279,17 @@ class SnapshotGenerator:
             Lot_Alpha=_rounded_optional(bm.lot_alpha),
             Is_Lagging_Benchmark=ctx.inst_metrics.get("is_lagging"),
             Max_Drawdown=round(ctx.inst_metrics.get("max_drawdown", 0.0), 8),
-            Tax_Rate=(
-                (tax.ltcg_rate if tax.holding_type == "LTCG" else tax.stcg_rate)
-                if self.enable_tax
-                else None
-            ),
-            Unrealized_LTCG=_rounded_optional(tax.unreal_ltcg, 4),
-            Unrealized_STCG=_rounded_optional(tax.unreal_stcg, 4),
-            Unrealized_Gain=_rounded_optional(tax.unreal_gain, 4),
-            Unrealized_LTCL=_rounded_optional(tax.unreal_ltcl, 4),
-            Unrealized_STCL=_rounded_optional(tax.unreal_stcl, 4),
-            Unrealized_Loss=_rounded_optional(tax.unreal_loss, 4),
-            LTCG_Tax_If_Sold=_rounded_optional(tax.ltcg_tax, 4),
-            STCG_Tax_If_Sold=_rounded_optional(tax.stcg_tax, 4),
-            After_Tax_PL=_rounded_optional(tax.after_tax_pl, 4),
-            After_Tax_Close_Value=_rounded_optional(tax.after_tax_cv, 4),
+            Tax_Rate=tax.ltcg_rate if tax.holding_type == "LTCG" else tax.stcg_rate,
+            Unrealized_LTCG=round(tax.unreal_ltcg, 4),
+            Unrealized_STCG=round(tax.unreal_stcg, 4),
+            Unrealized_Gain=round(tax.unreal_gain, 4),
+            Unrealized_LTCL=round(tax.unreal_ltcl, 4),
+            Unrealized_STCL=round(tax.unreal_stcl, 4),
+            Unrealized_Loss=round(tax.unreal_loss, 4),
+            LTCG_Tax_If_Sold=round(tax.ltcg_tax, 4),
+            STCG_Tax_If_Sold=round(tax.stcg_tax, 4),
+            After_Tax_PL=round(tax.after_tax_pl, 4),
+            After_Tax_Close_Value=round(tax.after_tax_cv, 4),
             Dietz_Day_Weight=round(day_weight, 6),
             Buy_Value_Local=round(fx.buy_val_local, 4),
             Close_Value_Local=round(fx.close_val_local, 4),

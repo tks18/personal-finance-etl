@@ -50,7 +50,7 @@ def get_stg_mf_market_data(
         df_transformed,
         num_cols,
         optional_cols={"XIRR", "Returns"},
-        source_col="artifact_id",
+        source_col="__file_name__",
     )
 
     df_transformed = (
@@ -62,27 +62,31 @@ def get_stg_mf_market_data(
         .join(
             stg_mf_isin_mapping_lazy, left_on="Scheme Name", right_on="INSTRUMENT_NAME", how="left"
         )
+        # Final Select (Ensure output matches your expected schema)
+        .select(
+            [
+                "__file_name__",
+                "__folder_path__",
+                "__file_category__",
+                "Month Date",
+                "Scheme Name",
+                "AMC",
+                "Category",
+                "Sub-category",
+                "Folio No.",
+                "Source",
+                "Units",
+                "Invested Value",
+                "Current Value",
+                "Returns",
+                "XIRR",
+                "CURRENCY_ID",
+                "ISIN",
+            ]
+        )
     )
 
-    cols = [
-        "Month Date",
-        "Scheme Name",
-        "AMC",
-        "Category",
-        "Sub-category",
-        "Folio No.",
-        "Source",
-        "Units",
-        "Invested Value",
-        "Current Value",
-        "Returns",
-        "XIRR",
-        "CURRENCY_ID",
-        "ISIN",
-        "artifact_id",
-    ]
-
-    return df_transformed.select(cols)
+    return df_transformed
 
 
 def get_stg_mf_market_data_ref(stg_mf_market_data_lazy: pl.LazyFrame) -> pl.LazyFrame:
@@ -96,6 +100,7 @@ def get_stg_mf_market_data_ref(stg_mf_market_data_lazy: pl.LazyFrame) -> pl.Lazy
         # SUMMARIZE (Group By)
         .group_by(
             [
+                "__file_category__",
                 pl.col("Month Date").alias("Date"),
                 "ISIN",
                 pl.col("Scheme Name").alias("Instrument Name"),
@@ -137,17 +142,6 @@ def get_base_mf_transactions(raw_data: pl.LazyFrame) -> pl.LazyFrame:
     df_combined = raw_data
 
     scheme_clean = pl.col("Scheme Name").cast(pl.String).str.strip_chars()
-    cols = [
-        "Month Date",
-        "Scheme Name",
-        "Transaction Type",
-        "Units",
-        "NAV",
-        "Amount",
-        "Date",
-        "artifact_id",
-    ]
-
     df_transformed = df_combined.filter(
         scheme_clean.is_not_null()
         & (scheme_clean != "")
@@ -156,17 +150,30 @@ def get_base_mf_transactions(raw_data: pl.LazyFrame) -> pl.LazyFrame:
                 ["NO TRANSACTIONS FOUND", "NO DATA FOUND", "NO TRANSACTION FOUND"]
             )
         )
-    ).select(cols)
+    ).select(
+        [
+            "__file_name__",
+            "__folder_path__",
+            "__file_category__",
+            "Month Date",
+            "Scheme Name",
+            "Transaction Type",
+            "Units",
+            "NAV",
+            "Amount",
+            "Date",
+        ]
+    )
 
     df_transformed = validate_and_parse_numerics(
         df_transformed,
         ["Units", "NAV", "Amount"],
-        source_col="artifact_id",
+        source_col="__file_name__",
     )
     df_transformed = validate_and_parse_dates(
         df_transformed,
         {"Date": ["%d %b %Y", "%d-%b-%Y", "%d-%m-%Y", "%Y-%m-%d"]},
-        source_col="artifact_id",
+        source_col="__file_name__",
     )
 
     return df_transformed

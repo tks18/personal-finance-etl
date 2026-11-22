@@ -1,0 +1,14 @@
+# ==============================================================================
+# Bandit Security Analysis Configuration
+# Repository: personal-finance-etl
+# Python: >=3.13
+# Linked Native Configurations:
+#   - Pylint: .pylintrc
+#   - Flake8: .flake8
+#   - Codacy: .codacy.yml
+# ==============================================================================
+
+[bandit]
+exclude = tests,scripts,docs,.planning,build,dist,outputs,backups,scratch,node_modules,.yarn,.venv,_df_cache
+skips = B101,B110,B404,B603,B607,B608
+

@@ -18,7 +18,6 @@ from __future__ import annotations
 import polars as pl
 
 from personal_finance_etl.contracts.application import EngineStage
-from personal_finance_etl.contracts.execution_plan import ExecutionPlan
 from personal_finance_etl.contracts.observability import (
     DiagnosticSeverity,
     EventCode,
@@ -33,9 +32,7 @@ from personal_finance_etl.infrastructure.observability.diagnostics import (
 )
 from personal_finance_etl.infrastructure.warehouse.connection import DuckDBManager
 from personal_finance_etl.infrastructure.warehouse.registry import DATA_CONTRACT_REGISTRY
-from personal_finance_etl.infrastructure.warehouse.schema.gold import (
-    generate_gold_ddl,
-)
+from personal_finance_etl.infrastructure.warehouse.schema.gold import GOLD_DDL
 
 diagnostics = get_observability_diagnostics("personal_finance_etl.warehouse.gold")
 
@@ -58,20 +55,7 @@ class GoldLayer:
         self.emitter = emitter or get_global_emitter()
 
     def _write(self, df: pl.DataFrame | pl.LazyFrame, table_name: str) -> int:
-        """Write DataFrame or LazyFrame into a Gold presentation table.
-
-        Parameters
-        ----------
-        df : pl.DataFrame | pl.LazyFrame
-            Data to publish.
-        table_name : str
-            Physical Gold table name.
-
-        Returns
-        -------
-        int
-            Number of rows inserted.
-        """
+        """Write DataFrame or LazyFrame into a Gold presentation table."""
         if isinstance(df, pl.LazyFrame):
             compact_plan = df.explain().replace("\n", " | ")
             diagnostics.debug("Physical Plan for Gold '%s': %s", table_name, compact_plan)
@@ -82,14 +66,6 @@ class GoldLayer:
         if df.height == 0:
             return 0
 
-        pragma_info = self.db_manager.conn.execute(
-            f"PRAGMA table_info('{table_name}')"  # nosec B608
-        ).fetchall()
-        target_columns = {row[1] for row in pragma_info}
-        if target_columns:
-            selected_cols = [c for c in df.columns if c in target_columns]
-            df = df.select(selected_cols)
-
         self.db_manager.conn.register("temp_df", df)
         self.db_manager.conn.execute(
             f"INSERT INTO {table_name} BY NAME SELECT * FROM temp_df"  # nosec B608
@@ -97,42 +73,17 @@ class GoldLayer:
         self.db_manager.conn.unregister("temp_df")
         return df.height
 
-    def load(
-        self,
-        dfs: dict[str, pl.DataFrame],
-        plan: ExecutionPlan | None = None,
-    ) -> None:
-        """Re-create plan-aware gold tables and insert presentation DataFrames.
-
-        Parameters
-        ----------
-        dfs : dict[str, pl.DataFrame]
-            Presentation DataFrames keyed by contract_id.
-        plan : ExecutionPlan, optional
-            Active execution plan. If None, full gold schema is initialized.
-        """
+    def load(self, dfs: dict[str, pl.DataFrame]) -> None:
+        """Truncate all gold.* tables and re-insert presentation DataFrames."""
         diagnostics.info("Loading presentation datasets into Gold layer...")
 
-        managed_gold_tables = [
-            c.physical_table
-            for c in sorted(
-                (c for c in DATA_CONTRACT_REGISTRY if c.layer == "gold"),
-                key=lambda c: c.publication_order,
-                reverse=True,
-            )
-        ]
-        self.db_manager.conn.execute("CREATE SCHEMA IF NOT EXISTS gold")
-        for tbl in managed_gold_tables:
-            self.db_manager.conn.execute(f"DROP TABLE IF EXISTS {tbl}")  # nosec B608
-
-        self.db_manager.conn.execute(generate_gold_ddl(plan))
-
-        active_contracts = [
-            c
-            for c in DATA_CONTRACT_REGISTRY
-            if c.layer == "gold" and (plan is None or c.dataset_id in plan.active_gold_datasets)
-        ]
-        contracts = sorted(active_contracts, key=lambda c: c.publication_order)
+        contracts = sorted(
+            (c for c in DATA_CONTRACT_REGISTRY if c.layer == "gold"),
+            key=lambda c: c.publication_order,
+        )
+        self.db_manager.conn.execute("DROP SCHEMA IF EXISTS gold CASCADE")
+        self.db_manager.conn.execute("CREATE SCHEMA gold")
+        self.db_manager.conn.execute(GOLD_DDL)
 
         total_rows = 0
         tables_built = 0

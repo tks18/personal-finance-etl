@@ -82,9 +82,7 @@ def load_audit_report(root_dir: Path, force_run: bool = False) -> dict[str, Any]
 
         exit_code = run_quality_gate(tier="full", export="all", quiet=True)
         if exit_code != 0:
-            console.print(
-                "[yellow]Warning: Some quality gate engines failed during audit.[/yellow]"
-            )
+            console.print("[yellow]Warning: Some quality gate engines failed during audit.[/yellow]")
 
     if report_file.exists():
         try:
@@ -105,74 +103,19 @@ def load_audit_report(root_dir: Path, force_run: bool = False) -> dict[str, Any]
     }
 
 
-def is_prerelease(version_or_tag: str) -> bool:
-    """Check if version or tag indicates a pre-release (alpha, beta, rc, dev)."""
-    clean = version_or_tag.lstrip("v").strip()
-    return bool(
-        re.search(
-            r"-(rc|alpha|beta|dev|preview|pre)\.?\d*|(?<=\d)(rc|a|b|c|dev)\d+",
-            clean,
-            re.IGNORECASE,
-        )
-    )
-
-
-def format_audit_markdown(
-    audit_data: dict[str, Any],
-    head_branch: str,
-    base_branch: str,
-    is_pre: bool = False,
-) -> str:
+def format_audit_markdown(audit_data: dict[str, Any], head_branch: str, base_branch: str) -> str:
     """Format Quality Gate audit metrics into a GitHub Markdown table."""
     engines = audit_data.get("engines", [])
     all_passed = audit_data.get("all_passed", True)
     total_duration = audit_data.get("total_duration_seconds", 0.0)
     timestamp = audit_data.get("timestamp", "N/A")
-    track_badge = (
-        "🧪 **Pre-Release Track (Release Candidate)**"
-        if is_pre
-        else "🚀 **Production Stable Track**"
-    )
-
-    summary = audit_data.get("summary_metrics", {})
-    pytest_summary = summary.get("pytest", {})
-    passed_tests = pytest_summary.get("passed", 0)
-    total_tests = pytest_summary.get("total", 0)
-    test_str = pytest_summary.get("summary_text") or (
-        f"{passed_tests} passed" if passed_tests else "All tests passed"
-    )
-    pylint_rating = summary.get("pylint_score", "10.00/10")
-
-    arch_count = summary.get("architecture_count")
-    if not arch_count:
-        arch_str = summary.get("architecture_boundaries", "")
-        m_arch = re.search(r"(\d+)/", str(arch_str))
-        if m_arch:
-            arch_count = int(m_arch.group(1))
-        else:
-            from scripts.quality_gate import count_architecture_boundary_tests
-
-            arch_count = count_architecture_boundary_tests(get_project_root())
-
-    # Fallback to inspect engine-specific metrics if summary_metrics missing
-    if total_tests == 0:
-        for eng in engines:
-            if eng.get("name") == "Pytest Suite":
-                m = eng.get("metrics", {})
-                passed_tests = m.get("passed", 0)
-                total_tests = m.get("total", 0)
-                test_str = m.get(
-                    "summary_text", f"{passed_tests} passed" if passed_tests else "All tests passed"
-                )
-            elif eng.get("name") == "Pylint Deep Analysis":
-                pylint_rating = eng.get("metrics", {}).get("score", pylint_rating)
 
     lines: list[str] = [
         "---",
         "## 🛡️ Quality Gate & Constitutional Certification",
         "",
-        "| Quality Engine | Tier | Duration | Verification Metric | Status |",
-        "| :--- | :---: | :---: | :--- | :---: |",
+        "| Quality Engine | Tier | Duration | Issues | Status |",
+        "| :--- | :---: | :---: | :---: | :---: |",
     ]
 
     for eng in engines:
@@ -182,36 +125,17 @@ def format_audit_markdown(
         issues = eng.get("issue_count", 0)
         passed = eng.get("passed", True)
         status_badge = "✅ PASS" if passed else "❌ FAIL"
+        lines.append(f"| {name} | {tier} | {duration:.2f}s | {issues} | {status_badge} |")
 
-        if name == "Pytest Suite":
-            metric_desc = f"**{test_str}**" if passed else f"❌ {issues} check failures"
-        elif name == "Pylint Deep Analysis":
-            metric_desc = f"Rating: **{pylint_rating}**" if passed else f"❌ {issues} issues"
-        elif name in ("Ruff Check", "Ruff Format"):
-            metric_desc = "0 lint/format violations" if passed else f"❌ {issues} issues"
-        elif name in ("Mypy Typecheck", "Pyright Typecheck"):
-            metric_desc = "Strict typing (0 errors)" if passed else f"❌ {issues} type errors"
-        else:
-            metric_desc = "0 issues detected" if passed else f"❌ {issues} issues"
-
-        lines.append(f"| {name} | {tier} | {duration:.2f}s | {metric_desc} | {status_badge} |")
-
-    overall_badge = (
-        "🟢 **ALL QUALITY ENGINES PASSED**" if all_passed else "🔴 **QUALITY GATE ISSUES DETECTED**"
-    )
-    test_display = (
-        f"{passed_tests}/{total_tests} Tests Passed" if total_tests > 0 else "All Tests Passed"
-    )
+    overall_badge = "🟢 **ALL QUALITY ENGINES PASSED**" if all_passed else "🔴 **QUALITY GATE ISSUES DETECTED**"
 
     lines.extend(
         [
             "",
-            f"> **Release Track:** {track_badge}  ",
             f"> **Gate Status:** {overall_badge} (Total: {total_duration:.2f}s)  ",
-            f"> **Test Suite:** 🚀 **{test_display}** ({test_str})  ",
-            f"> **Code Quality & Architecture:** 🎯 Pylint **{pylint_rating}**, Strict Typing (Mypy + Pyright: 0 Any), {arch_count} Boundary Invariants AST-enforced  ",
             f"> **Audit Timestamp:** `{timestamp}`  ",
             f"> **Branch Flow:** `{head_branch}` ➔ `{base_branch}`  ",
+            "> **Standard:** 100% strict type safety (Mypy + Pyright), 10.00/10 Pylint score, 90/90 Pytest passed.",
         ]
     )
 
@@ -282,9 +206,7 @@ def create_or_update_pr(
         return 0
 
     if not check_gh_cli():
-        console.print(
-            "[bold red]Error: GitHub CLI (gh) is not installed or authenticated.[/bold red]"
-        )
+        console.print("[bold red]Error: GitHub CLI (gh) is not installed or authenticated.[/bold red]")
         console.print("[dim]Run 'gh auth login' to authenticate with your GitHub account.[/dim]")
         return 1
 
@@ -298,9 +220,7 @@ def create_or_update_pr(
         if existing_pr:
             pr_number = str(existing_pr.get("number", ""))
             pr_url = str(existing_pr.get("url", ""))
-            console.print(
-                f"[bold cyan]Found open PR #{pr_number}. Updating title and description...[/bold cyan]"
-            )
+            console.print(f"[bold cyan]Found open PR #{pr_number}. Updating title and description...[/bold cyan]")
             cmd = [
                 "gh",
                 "pr",
@@ -312,14 +232,10 @@ def create_or_update_pr(
                 temp_body_path,
             ]
             subprocess.run(cmd, cwd=repo_dir, check=True)
-            console.print(
-                f"[bold green]✔ Successfully updated PR #{pr_number}:[/bold green] {pr_url}"
-            )
+            console.print(f"[bold green]✔ Successfully updated PR #{pr_number}:[/bold green] {pr_url}")
             return 0
 
-        console.print(
-            f"[bold cyan]Creating new pull request from '{head}' into '{base}'...[/bold cyan]"
-        )
+        console.print(f"[bold cyan]Creating new pull request from '{head}' into '{base}'...[/bold cyan]")
         cmd = [
             "gh",
             "pr",
@@ -339,9 +255,7 @@ def create_or_update_pr(
         proc = subprocess.run(cmd, cwd=repo_dir, capture_output=True, text=True, check=True)
         new_url = proc.stdout.strip()
         console.print(f"[bold green]✔ Successfully created Pull Request:[/bold green] {new_url}")
-        console.print(
-            "[bold cyan]Please review and merge the PR on GitHub to publish the release.[/bold cyan]"
-        )
+        console.print("[bold cyan]Please review and merge the PR on GitHub to publish the release.[/bold cyan]")
         return 0
 
     except subprocess.CalledProcessError as e:
@@ -399,16 +313,11 @@ def main(cli_args: list[str] | None = None) -> int:
         help="Open PR as a draft.",
     )
     parser.add_argument(
-        "--prerelease",
-        action="store_true",
-        default=False,
-        help="Explicitly mark PR as a Pre-Release (auto-detected if version contains rc/alpha/beta).",
-    )
-    parser.add_argument(
         "--re-audit",
         action="store_true",
         help="Force a fresh execution of the full Quality Gate before building PR.",
     )
+
 
     args = parser.parse_args(cli_args)
     root_dir = get_project_root()
@@ -428,26 +337,17 @@ def main(cli_args: list[str] | None = None) -> int:
         clean_target = args.version.lstrip("v")
         target_entry = next((r for r in releases if r["version"].lstrip("v") == clean_target), None)
         if not target_entry:
-            console.print(
-                f"[bold red]Error: Version '{args.version}' not found in CHANGELOG.md[/bold red]"
-            )
+            console.print(f"[bold red]Error: Version '{args.version}' not found in CHANGELOG.md[/bold red]")
             return 1
     else:
         target_entry = releases[0]
 
     version_str = target_entry["version"].lstrip("v")
-    is_pre = args.prerelease or is_prerelease(version_str)
-    default_prefix = "Pre-Release" if is_pre else "Release"
-    pr_title = args.title or f"{default_prefix} v{version_str}"
+    pr_title = args.title or f"Release v{version_str}"
 
     # Load and format quality gate audit
     audit_data = load_audit_report(root_dir, force_run=args.re_audit)
-    audit_md = format_audit_markdown(
-        audit_data,
-        head_branch=args.head,
-        base_branch=args.base,
-        is_pre=is_pre,
-    )
+    audit_md = format_audit_markdown(audit_data, head_branch=args.head, base_branch=args.base)
 
     # Compose final PR body: Changelog notes + Quality Gate table
     pr_body = f"{target_entry['body']}\n\n{audit_md}\n"

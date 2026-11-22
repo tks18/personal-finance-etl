@@ -21,9 +21,7 @@ import tomllib
 from pathlib import Path
 from typing import cast
 
-from pydantic import BaseModel, ConfigDict, Field
-
-from personal_finance_etl.config.capabilities import CapabilitySelection
+from pydantic import BaseModel, Field
 
 
 class FileHashPolicy(BaseModel):
@@ -66,10 +64,9 @@ def _flatten_settings_to_records(
 
 
 class Settings(BaseModel):
-    """Execution environment settings, warehouse paths, and runtime configurations."""
+    """Execution environment settings, warehouse paths, and dependency file locations."""
 
-    model_config = ConfigDict(extra="ignore")
-
+    SOURCE_DB_FOLDER: str = ""
     TARGET_DB_BASE_PATH: str = ""
     TARGET_DB_NAME: str = "Personal_Finance_DB.duckdb"
 
@@ -77,20 +74,7 @@ class Settings(BaseModel):
     DISABLE_FILE_DISCOVERER: bool = False
     RAW_DOCUMENT_STORE_NAME: str = "Personal_Finance_DB_Raw_Store.sqlite"
 
-    FILE_HASH_POLICY: FileHashPolicy = Field(default_factory=FileHashPolicy)
-
-    # Capability Execution Scope
-    capabilities: CapabilitySelection = Field(default_factory=CapabilitySelection)
-
-    # Replay & Identity Migration Policies
-    ALLOW_IDENTITY_REBUILD: bool = False
-
-    # Observability & Forensic Logging
-    LOGS_DIRECTORY: str = "logs/runs"
-    RETAIN_LAST_N_RUNS: int = 12
-
-    # Deprecated source paths (retained as optional for backward compatibility during demolition)
-    SOURCE_DB_FOLDER: str = ""
+    # Dependencies
     COLUMN_MASTER_PATH: str = ""
     MF_ISIN_CSV_PATH: str = ""
     BENCHMARK_MAPPING_CSV_PATH: str = ""
@@ -98,7 +82,15 @@ class Settings(BaseModel):
     MACRO_PARAMETERS_CSV_PATH: str = ""
     OPENING_BALANCE_CSV_PATH: str = ""
     CURRENCY_MAPPING_CSV_PATH: str = ""
+
+    # Statements
     STATEMENTS_FOLDER: str = ""
+
+    FILE_HASH_POLICY: FileHashPolicy = Field(default_factory=FileHashPolicy)
+
+    # Observability & Forensic Logging
+    LOGS_DIRECTORY: str = "logs/runs"
+    RETAIN_LAST_N_RUNS: int = 12
 
     def resolve_logs_dir(self) -> Path:
         """Resolve the active logs directory path against target base path if relative.
@@ -138,15 +130,47 @@ class Settings(BaseModel):
         return cfg
 
     def validate_config(self) -> None:
-        """Validate that required runtime environment settings exist before starting.
+        """Validate that all necessary files and folders exist before starting.
 
         Raises
         ------
         FileNotFoundError
-            If TARGET_DB_BASE_PATH is empty in configuration.
+            If any required directory or file is missing or invalid.
         """
+        required_dirs = [
+            ("SOURCE_DB_FOLDER", self.SOURCE_DB_FOLDER),
+            ("STATEMENTS_FOLDER", self.STATEMENTS_FOLDER),
+        ]
+
+        required_files = [
+            ("COLUMN_MASTER_PATH", self.COLUMN_MASTER_PATH),
+            ("MF_ISIN_CSV_PATH", self.MF_ISIN_CSV_PATH),
+            ("BENCHMARK_MAPPING_CSV_PATH", self.BENCHMARK_MAPPING_CSV_PATH),
+            ("BENCHMARK_MASTER_CSV_PATH", self.BENCHMARK_MASTER_CSV_PATH),
+            ("MACRO_PARAMETERS_CSV_PATH", self.MACRO_PARAMETERS_CSV_PATH),
+            ("OPENING_BALANCE_CSV_PATH", self.OPENING_BALANCE_CSV_PATH),
+            ("CURRENCY_MAPPING_CSV_PATH", self.CURRENCY_MAPPING_CSV_PATH),
+        ]
+
+        errors: list[str] = []
+
+        # TARGET_DB_BASE_PATH is created automatically if missing, but cannot be blank
         if not self.TARGET_DB_BASE_PATH:
-            raise FileNotFoundError("TARGET_DB_BASE_PATH is empty in configuration.")
+            errors.append("TARGET_DB_BASE_PATH is empty in configuration.")
+
+        for name, path in required_dirs:
+            if not path or not os.path.isdir(path):
+                errors.append(f"Directory {name} not found: '{path}'")
+
+        for name, path in required_files:
+            if not path or not os.path.isfile(path):
+                errors.append(f"File {name} not found: '{path}'")
+
+        if errors:
+            raise FileNotFoundError(
+                "Configuration Validation Failed. The following paths are missing or invalid:\n"
+                + "\n".join(errors)
+            )
 
     def export_to_db_records(self) -> list[dict[str, str]]:
         """Flatten the settings dynamically into a list of records for database auditing.

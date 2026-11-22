@@ -1,0 +1,36 @@
+# ==============================================================================
+# Prospector Configuration
+# Repository: personal-finance-etl
+# Python: >=3.13 | Aligned with: Ruff (line-length: 100), Mypy (strict), Pylint (.pylintrc)
+# ==============================================================================
+strictness: medium
+test-warnings: false
+doc-warnings: false
+
+ignore-paths:
+  - tests
+  - scripts
+  - docs
+  - outputs
+  - backups
+  - scratch
+  - build
+  - dist
+  - .planning
+  - src/personal_finance_etl/infrastructure/warehouse/schema
+  - src/personal_finance_etl/infrastructure/control_plane/schema.py
+  - src/personal_finance_etl/domain/fire/simulation.py
+  - src/personal_finance_etl/presentation/docs/assets
+
+pycodestyle:
+  max-line-length: 100
+  disable:
+    - E501  # Handled exclusively by Ruff formatter
+
+mccabe:
+  max-complexity: 15
+
+pylint:
+  options:
+    rcfile: .pylintrc
+

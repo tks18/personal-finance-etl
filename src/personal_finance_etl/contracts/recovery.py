@@ -21,90 +21,11 @@ from pathlib import Path
 
 __all__ = [
     "ActiveDatabaseState",
-    "ConfigChangeClass",
-    "DatasetChangeDetail",
-    "IdentityPolicyViolationError",
-    "ReplayAction",
-    "ReplayPlan",
     "RestoreOutcome",
     "RestoreResult",
     "SnapshotOutcome",
     "SnapshotResult",
 ]
-
-
-class ConfigChangeClass(StrEnum):
-    """Categorical classification of source or runtime configuration deltas."""
-
-    NO_CHANGE = "NO_CHANGE"
-    SOURCE_METADATA = "SOURCE_METADATA"
-    CHANGE_DETECTION = "CHANGE_DETECTION"
-    MAPPING_SEMANTICS = "MAPPING_SEMANTICS"
-    NORMALIZATION_SEMANTICS = "NORMALIZATION_SEMANTICS"
-    IDENTITY_STRATEGY = "IDENTITY_STRATEGY"
-    CAPABILITY_SELECTION = "CAPABILITY_SELECTION"
-    DATASET_STATE = "DATASET_STATE"
-    FINANCIAL_RULES = "FINANCIAL_RULES"
-    SOURCE_BINDING = "SOURCE_BINDING"
-    CANONICAL_ROUTE = "CANONICAL_ROUTE"
-    CANONICAL_PRODUCTION = "CANONICAL_PRODUCTION"
-
-
-class ReplayAction(StrEnum):
-    """Actionable remediation directives derived from configuration change classification."""
-
-    NO_REPLAY = "NO_REPLAY"
-    REPLAY_AFFECTED_DATASETS = "REPLAY_AFFECTED_DATASETS"
-    REQUIRE_IDENTITY_REBUILD = "REQUIRE_IDENTITY_REBUILD"
-    PRUNE_DISABLED_DATASETS = "PRUNE_DISABLED_DATASETS"
-    REBUILD_ANALYTICAL = "REBUILD_ANALYTICAL"
-
-
-class IdentityPolicyViolationError(RuntimeError):
-    """Raised when an identity strategy change is detected without explicit rebuild authorization."""
-
-    def __init__(self, dataset_id: str, old_identity: str, new_identity: str) -> None:
-        message = (
-            f"Identity policy change detected for dataset '{dataset_id}'. "
-            f"Old strategy: {old_identity} -> New strategy: {new_identity}. "
-            "Silent incremental continuation is strictly prohibited as it mixes distinct identity generations. "
-            "To authorize an explicit full dataset rebuild and identity migration, set allow_identity_rebuild=True."
-        )
-        super().__init__(message)
-        self.dataset_id = dataset_id
-        self.old_identity = old_identity
-        self.new_identity = new_identity
-
-
-@dataclass(frozen=True, slots=True)
-class DatasetChangeDetail:
-    """Semantic change detail for a single dataset across configuration revisions."""
-
-    dataset_id: str
-    change_class: ConfigChangeClass
-    action: ReplayAction
-    details: dict[str, str] = field(default_factory=lambda: dict[str, str]())
-
-
-@dataclass(frozen=True, slots=True)
-class ReplayPlan:
-    """Authoritative execution plan for pipeline recovery, replay, and migration."""
-
-    overall_action: ReplayAction
-    dataset_changes: list[DatasetChangeDetail] = field(
-        default_factory=lambda: list[DatasetChangeDetail]()
-    )
-    affected_dataset_ids: list[str] = field(default_factory=lambda: list[str]())
-    requires_identity_rebuild: bool = False
-    requires_analytical_rebuild: bool = False
-    blocked_reason: str | None = None
-
-    @property
-    def is_blocked(self) -> bool:
-        """Return True if execution is blocked by an uncertified change policy."""
-        return self.overall_action == ReplayAction.REQUIRE_IDENTITY_REBUILD or bool(
-            self.blocked_reason
-        )
 
 
 class SnapshotOutcome(StrEnum):

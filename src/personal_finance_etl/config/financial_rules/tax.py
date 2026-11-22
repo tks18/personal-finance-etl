@@ -23,60 +23,30 @@ from pydantic import BaseModel, Field, model_validator
 TaxabilityType = Literal["taxable", "non_taxable", "review"]
 TaxMethodType = Literal["ordinary_rate", "capital_gains", "exempt", "review"]
 
-__all__ = [
-    "InvestmentExclusionsConfig",
-    "TaxAssumptions",
-    "TaxCapabilityRules",
-    "TaxHeadConfig",
-    "TaxRates",
-    "TaxSubHeadConfig",
-    "TaxMethodType",
-    "TaxabilityType",
-]
-
 
 class TaxRates(BaseModel):
     """Statutory Long Term and Short Term capital gains tax rates across asset classes."""
 
     equity_ltcg: float = Field(
-        default=0.125, description="LTCG tax rate for listed Indian equity (Section 112A)."
+        0.125, description="LTCG tax rate for listed Indian equity (Section 112A)."
     )
     equity_stcg: float = Field(
-        default=0.20, description="STCG tax rate for listed Indian equity (Section 111A)."
+        0.20, description="STCG tax rate for listed Indian equity (Section 111A)."
     )
     # Foreign listed equity (US stocks via LRS) — post-Budget 2024:
     #   LTCG (> 24 months): 12.5% concessional rate (same as Default_LTCG).
     #   STCG (≤ 24 months): investor's income-tax slab rate (same as Default_STCG).
     foreign_equity_ltcg: float = Field(
-        default=0.125,
+        0.125,
         description="LTCG tax rate for foreign listed equity (US stocks via LRS) — 12.5% post-Budget 2024.",
     )
     foreign_equity_stcg: float = Field(
-        default=0.30,
-        description="STCG tax rate for foreign listed equity (US stocks via LRS) — slab rate.",
+        0.30, description="STCG tax rate for foreign listed equity (US stocks via LRS) — slab rate."
     )
-    debt_ltcg: float = Field(default=0.20, description="LTCG tax rate for debt.")
-    debt_stcg: float = Field(default=0.30, description="STCG tax rate for debt.")
-    gold_ltcg: float = Field(default=0.20, description="LTCG tax rate for gold.")
-    gold_stcg: float = Field(default=0.30, description="STCG tax rate for gold.")
-
-    @model_validator(mode="after")
-    def validate_rates_non_negative(self) -> Self:
-        """Validate that all statutory tax rates are non-negative."""
-        for field_name in (
-            "equity_ltcg",
-            "equity_stcg",
-            "foreign_equity_ltcg",
-            "foreign_equity_stcg",
-            "debt_ltcg",
-            "debt_stcg",
-            "gold_ltcg",
-            "gold_stcg",
-        ):
-            val = getattr(self, field_name)
-            if val < 0.0:
-                raise ValueError(f"Tax rate '{field_name}' cannot be negative (got {val}).")
-        return self
+    debt_ltcg: float = Field(0.20, description="LTCG tax rate for debt.")
+    debt_stcg: float = Field(0.30, description="STCG tax rate for debt.")
+    gold_ltcg: float = Field(0.20, description="LTCG tax rate for gold.")
+    gold_stcg: float = Field(0.30, description="STCG tax rate for gold.")
 
 
 class TaxSubHeadConfig(BaseModel):
@@ -316,7 +286,7 @@ def _check_investment_exclusions(
             seen_sub_cats[uid] = f"investment_exclusions.{exclusion_type}"
 
 
-class TaxCapabilityRules(BaseModel):
+class TaxAssumptions(BaseModel):
     """Statutory tax rules, holding thresholds, exemption limits, and head mappings."""
 
     debt_mf_cutoff_date: str = Field(
@@ -379,21 +349,4 @@ class TaxCapabilityRules(BaseModel):
         _check_investment_exclusions(
             seen_sub_cats, seen_credit_sub_cats, self.investment_exclusions
         )
-
-        for k, v in self.ltcg_threshold_months.items():
-            if v <= 0:
-                raise ValueError(
-                    f"Holding period threshold months for '{k}' must be strictly positive (> 0), got {v}."
-                )
-
-        if self.fallback_equity_ltcg_exemption < 0.0:
-            raise ValueError(
-                "Equity LTCG exemption limit cannot be negative, "
-                f"got {self.fallback_equity_ltcg_exemption}."
-            )
-
         return self
-
-
-# Backward-compatible type alias for domain consumers
-TaxAssumptions = TaxCapabilityRules

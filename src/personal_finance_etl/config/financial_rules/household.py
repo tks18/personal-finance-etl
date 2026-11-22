@@ -13,31 +13,7 @@ Does not own
 - Tax statutory rates and rules (owned by config.financial_rules.tax).
 """
 
-from __future__ import annotations
-
-from typing import Self
-
-from pydantic import BaseModel, Field, model_validator
-
-__all__ = [
-    "ActiveIncomeRules",
-    "AssetRules",
-    "BudgetAlerts",
-    "BudgetRules",
-    "BudgetSmoothing",
-    "CashflowAssetRules",
-    "CoreExpenseRules",
-    "DigitalAssetRules",
-    "DividendIncomeRules",
-    "ExpenseRules",
-    "HouseholdCapabilityRules",
-    "IlliquidAssetRules",
-    "IncomeAllocationRules",
-    "IncomeRules",
-    "InterestIncomeRules",
-    "NonCashIncomeRules",
-    "WealthCapabilityRules",
-]
+from pydantic import BaseModel, Field
 
 
 class ActiveIncomeRules(BaseModel):
@@ -166,39 +142,3 @@ class AssetRules(BaseModel):
     illiquid: IlliquidAssetRules = Field(default_factory=IlliquidAssetRules)
     cashflow: CashflowAssetRules = Field(default_factory=CashflowAssetRules)
     digital: DigitalAssetRules = Field(default_factory=DigitalAssetRules)
-
-
-class HouseholdCapabilityRules(BaseModel):
-    """Configuration rules for household transactions, income, expense, and budget."""
-
-    income: IncomeRules = Field(default_factory=IncomeRules)
-    expense: ExpenseRules = Field(default_factory=ExpenseRules)
-    budget: BudgetRules = Field(default_factory=BudgetRules)
-
-
-class WealthCapabilityRules(BaseModel):
-    """Configuration rules for wealth asset liquidity and cashflow conduits."""
-
-    assets: AssetRules = Field(default_factory=AssetRules)
-
-    @model_validator(mode="after")
-    def validate_disjoint_classifications(self) -> Self:
-        """Validate disjoint classification between cash pools, illiquid assets, and non-cash sources."""
-        cash_pools = set(self.assets.cashflow.cash_pools)
-        illiquid_cats = set(self.assets.illiquid.category_ids)
-        non_cash = set(self.assets.cashflow.non_cash_pnl_sources)
-
-        pool_illiquid_overlap = cash_pools.intersection(illiquid_cats)
-        if pool_illiquid_overlap:
-            raise ValueError(
-                "Disjoint classification violation: accounts cannot be both liquid cash pool "
-                f"and illiquid asset: {sorted(pool_illiquid_overlap)}"
-            )
-
-        pool_non_cash_overlap = cash_pools.intersection(non_cash)
-        if pool_non_cash_overlap:
-            raise ValueError(
-                "Disjoint classification violation: accounts cannot be both liquid cash pool "
-                f"and non-cash PnL source: {sorted(pool_non_cash_overlap)}"
-            )
-        return self

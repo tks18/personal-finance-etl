@@ -120,7 +120,7 @@ A first run should use a rules file whose semantics are understood, not one gene
 ## 6. Launch the CLI interactively
 
 ```bash
-pfetl cli --config "C:/Finance/config.toml" --rules "C:/Finance/rules.toml"
+shan-fin cli --config "C:/Finance/config.toml" --rules "C:/Finance/rules.toml"
 ```
 
 Without `--auto`, the CLI keeps the human confirmation step.
@@ -132,13 +132,13 @@ That is useful during setup because it gives one last boundary between configura
 Either:
 
 ```bash
-pfetl
+shan-fin
 ```
 
 or:
 
 ```bash
-pfetl-gui
+shan-fin-gui
 ```
 
 The Desktop uses the same application façade and pipeline as the CLI.
@@ -150,7 +150,7 @@ Choose based on workflow, not financial behavior.
 Once the environment is stable:
 
 ```bash
-pfetl cli \
+shan-fin cli \
   --config "C:/Finance/config.toml" \
   --rules "C:/Finance/rules.toml" \
   --cron
@@ -246,7 +246,7 @@ The system is designed to surface disagreement. Do not treat every reconciliatio
 Once the state is trusted:
 
 ```bash
-pfetl cli --config "C:/Finance/config.toml" --snapshot
+shan-fin cli --config "C:/Finance/config.toml" --snapshot
 ```
 
 Snapshots coordinate the DuckDB and SQLite application state.
@@ -256,7 +256,7 @@ For restore semantics and validation, see [Backup and Restore](../architecture/b
 ## 14. Open the integrated docs
 
 ```bash
-pfetl cli --docs
+shan-fin cli --docs
 ```
 
 The package includes the documentation tree and loads it through the documentation manifest/rendering layer.

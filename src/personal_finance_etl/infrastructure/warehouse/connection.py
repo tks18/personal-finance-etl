@@ -4,7 +4,7 @@ Owns
 ----
 - Single persistent DuckDB database file lifecycle and long-lived connection handle.
 - Memory and threading PRAGMA tuning for analytical queries.
-- Schema creation (pre_bronze, bronze, silver, gold, meta) and DDL initialization.
+- Schema creation (bronze, silver, gold, meta) and DDL initialization.
 - Safe connection shutdown with VACUUM and CHECKPOINT maintenance.
 
 Does not own
@@ -20,23 +20,12 @@ import os
 import duckdb
 import psutil
 
-from personal_finance_etl.contracts.execution_plan import ExecutionPlan
 from personal_finance_etl.infrastructure.observability.diagnostics import (
     get_observability_diagnostics,
 )
-from personal_finance_etl.infrastructure.warehouse.schema.bronze import (
-    generate_bronze_ddl,
-)
-from personal_finance_etl.infrastructure.warehouse.schema.gold import (
-    generate_gold_ddl,
-)
+from personal_finance_etl.infrastructure.warehouse.schema.gold import GOLD_DDL
 from personal_finance_etl.infrastructure.warehouse.schema.meta import META_DDL
-from personal_finance_etl.infrastructure.warehouse.schema.pre_bronze import (
-    generate_pre_bronze_ddl,
-)
-from personal_finance_etl.infrastructure.warehouse.schema.silver import (
-    generate_silver_ddl,
-)
+from personal_finance_etl.infrastructure.warehouse.schema.silver import SILVER_DDL
 
 diagnostics = get_observability_diagnostics("personal_finance_etl.warehouse.connection")
 
@@ -106,24 +95,12 @@ class DuckDBManager:
                 self._conn.close()
                 self._conn = None
 
-    def ensure_schemas(self, plan: ExecutionPlan | None = None) -> None:
-        """Create pre_bronze, bronze, silver, gold, and meta schemas and initialize DDL tables.
-
-        Parameters
-        ----------
-        plan : ExecutionPlan | None, optional
-            Active execution plan. If None, full schemas with all columns are initialized.
-        """
+    def ensure_schemas(self) -> None:
+        """Create bronze, silver, gold, and meta schemas and initialize DDL tables."""
         self.conn.execute("CREATE SCHEMA IF NOT EXISTS meta")
-        self.conn.execute("CREATE SCHEMA IF NOT EXISTS pre_bronze")
         self.conn.execute("CREATE SCHEMA IF NOT EXISTS bronze")
         self.conn.execute("CREATE SCHEMA IF NOT EXISTS silver")
         self.conn.execute("CREATE SCHEMA IF NOT EXISTS gold")
-        self.conn.execute(generate_pre_bronze_ddl(plan))
-        self.conn.execute(generate_bronze_ddl(plan))
         self.conn.execute(META_DDL)
-        self.conn.execute(
-            "UPDATE meta.m_File_Registry SET file_type = 'parquet' WHERE (file_name LIKE '%.parquet' OR relative_path LIKE '%.parquet') AND file_type != 'parquet'"
-        )
-        self.conn.execute(generate_silver_ddl(plan))
-        self.conn.execute(generate_gold_ddl(plan))
+        self.conn.execute(SILVER_DDL)
+        self.conn.execute(GOLD_DDL)

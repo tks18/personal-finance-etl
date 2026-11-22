@@ -35,15 +35,11 @@ class WealthRiskAnalyticsBuilder:
         base_lf: Mapping[str, pl.LazyFrame],
         rules: FinancialRules,
         root_seed: str = "default_seed",
-        is_fire_active: bool = True,
-        is_investment_active: bool = True,
     ) -> None:
         self.dfs = dfs
         self.base_lf = base_lf
         self.rules = rules
         self.root_seed = root_seed
-        self.is_fire_active = is_fire_active
-        self.is_investment_active = is_investment_active
         # Cache DOB parts once to avoid repeated string splits in LazyFrame expressions
         dob_parts = rules.assumptions.monte_carlo.date_of_birth.split("-")
         self._dob_year = int(dob_parts[0])
@@ -87,53 +83,48 @@ class WealthRiskAnalyticsBuilder:
             .sort("MONTH_START_DATE")
         )
 
-        if self.is_investment_active:
-            df_inv_port = self.dfs.get("df_f_investment_analytics_portfolio")
-            if df_inv_port is not None:
-                lf_inv_port = (
-                    df_inv_port.lazy() if isinstance(df_inv_port, pl.DataFrame) else df_inv_port
-                )
-                lf_inv_port_mapped = lf_inv_port.with_columns(
-                    pl.col("Closing_Date").dt.month_end().alias("MONTH_END_DATE")
-                )
-                lf_inv_port_agg = lf_inv_port_mapped.filter(
-                    pl.col("Closing_Date") == pl.col("Closing_Date").max().over("MONTH_END_DATE")
-                ).select(
-                    [
-                        "MONTH_END_DATE",
-                        pl.col("Total_Current_Value").alias("Port_Market_Value"),
-                        pl.col("Total_Invested_Value").alias("Port_Book_Value"),
-                    ]
-                )
+        df_inv_port = self.dfs.get("df_f_investment_analytics_portfolio")
+        if df_inv_port is not None:
+            lf_inv_port = (
+                df_inv_port.lazy() if isinstance(df_inv_port, pl.DataFrame) else df_inv_port
+            )
+            lf_inv_port_mapped = lf_inv_port.with_columns(
+                pl.col("Closing_Date").dt.month_end().alias("MONTH_END_DATE")
+            )
+            lf_inv_port_agg = lf_inv_port_mapped.filter(
+                pl.col("Closing_Date") == pl.col("Closing_Date").max().over("MONTH_END_DATE")
+            ).select(
+                [
+                    "MONTH_END_DATE",
+                    pl.col("Total_Current_Value").alias("Port_Market_Value"),
+                    pl.col("Total_Invested_Value").alias("Port_Book_Value"),
+                ]
+            )
 
-                lf_fire_base = (
-                    lf_fire_base.join(
-                        lf_inv_port_agg,
-                        on="MONTH_END_DATE",
-                        how="left",
-                    )
-                    .with_columns(
-                        pl.col("Port_Market_Value").fill_null(0.0),
-                        pl.col("Port_Book_Value").fill_null(0.0),
-                    )
-                    .with_columns(
-                        pl.when(pl.col("Port_Market_Value") > pl.col("Port_Book_Value"))
-                        .then(
-                            pl.col("Total_Net_Worth_Market")
-                            - (
-                                (pl.col("Port_Market_Value") - pl.col("Port_Book_Value"))
-                                * self._tax_rate
-                            )
+            lf_fire_base = (
+                lf_fire_base.join(
+                    lf_inv_port_agg,
+                    on="MONTH_END_DATE",
+                    how="left",
+                )
+                .with_columns(
+                    pl.col("Port_Market_Value").fill_null(0.0),
+                    pl.col("Port_Book_Value").fill_null(0.0),
+                )
+                .with_columns(
+                    pl.when(pl.col("Port_Market_Value") > pl.col("Port_Book_Value"))
+                    .then(
+                        pl.col("Total_Net_Worth_Market")
+                        - (
+                            (pl.col("Port_Market_Value") - pl.col("Port_Book_Value"))
+                            * self._tax_rate
                         )
-                        .otherwise(pl.col("Total_Net_Worth_Market"))
-                        .alias("Total_Net_Worth_Market_Af_Tax")
                     )
-                    .drop(["Port_Market_Value", "Port_Book_Value"])
+                    .otherwise(pl.col("Total_Net_Worth_Market"))
+                    .alias("Total_Net_Worth_Market_Af_Tax")
                 )
-            else:
-                lf_fire_base = lf_fire_base.with_columns(
-                    pl.col("Total_Net_Worth_Market").alias("Total_Net_Worth_Market_Af_Tax")
-                )
+                .drop(["Port_Market_Value", "Port_Book_Value"])
+            )
         else:
             lf_fire_base = lf_fire_base.with_columns(
                 pl.col("Total_Net_Worth_Market").alias("Total_Net_Worth_Market_Af_Tax")
@@ -345,32 +336,18 @@ class WealthRiskAnalyticsBuilder:
                 (pl.col("FI_Gap_Total") - pl.col("FI_Gap_Total").shift(1)).alias(
                     "FI_Gap_Total_Monthly_Trend"
                 ),
-                pl.when(pl.lit(self.is_fire_active))
-                .then(
-                    safe_divide(safe_divide("FI_Gap", "Months_To_FI_Base_P50"), "Total_Cash_Income")
-                )
-                .otherwise(pl.lit(None, dtype=pl.Float64))
-                .alias("Savings_Rate_Required"),
-                pl.when(pl.lit(self.is_fire_active))
-                .then(
-                    safe_divide(
-                        safe_divide("FI_Gap_Total", "Months_To_FI_Base_P50"), "Total_Cash_Income"
-                    )
-                )
-                .otherwise(pl.lit(None, dtype=pl.Float64))
-                .alias("Savings_Rate_Required_Total"),
+                safe_divide(
+                    safe_divide("FI_Gap", "Months_To_FI_Base_P50"), "Total_Cash_Income"
+                ).alias("Savings_Rate_Required"),
+                safe_divide(
+                    safe_divide("FI_Gap_Total", "Months_To_FI_Base_P50"), "Total_Cash_Income"
+                ).alias("Savings_Rate_Required_Total"),
                 (pl.col("Months_To_FI_Base_P50") / 12.0).alias("Years_To_FI_P50"),
-                pl.when(pl.lit(self.is_fire_active))
-                .then(pl.col("Target_FI_Future_Nominal_P50").fill_null(pl.col("Target_FI_Today")))
-                .otherwise(pl.lit(None, dtype=pl.Float64))
+                pl.col("Target_FI_Future_Nominal_P50")
+                .fill_null(pl.col("Target_FI_Today"))
                 .alias("Target_FI_Future_Nominal"),
-                pl.when(pl.lit(self.is_fire_active))
-                .then(
-                    pl.col("Target_FI_Future_Nominal_P50").fill_null(
-                        pl.col("Target_FI_Today_Total")
-                    )
-                )
-                .otherwise(pl.lit(None, dtype=pl.Float64))
+                pl.col("Target_FI_Future_Nominal_P50")
+                .fill_null(pl.col("Target_FI_Today_Total"))
                 .alias("Target_FI_Total_Future_Nominal"),
                 pl.when(
                     pl.col("Months_To_FI_Base_P50").is_not_nan()
@@ -504,21 +481,9 @@ class WealthRiskAnalyticsBuilder:
         lf_monthly_totals = self.base_lf["lf_monthly_totals"]
         lf_fire_base = self._prepare_base_inputs(lf_monthly_totals)
         lf_fire_forecast, lf_fire_inputs = self._compute_rolling_projections(lf_fire_base)
-        if self.is_fire_active:
-            lf_fire_mc = self._execute_monte_carlo_simulations(
-                lf_fire_forecast, cma_real_return, cma_fat_tail
-            )
-        else:
-            lf_fire_mc = lf_fire_forecast.with_columns(
-                pl.lit(None, dtype=pl.Float64).alias("Months_To_FI_Conservative_P90"),
-                pl.lit(None, dtype=pl.Float64).alias("Months_To_FI_Base_P50"),
-                pl.lit(None, dtype=pl.Float64).alias("Months_To_FI_Aggressive_P10"),
-                pl.lit(None, dtype=pl.Float64).alias("Probability_Of_Success_Pct"),
-                pl.lit(None, dtype=pl.Float64).alias("Target_FI_Future_Nominal_P50"),
-                pl.lit(None, dtype=pl.Float64).alias("Runway_Months_Stressed_P10"),
-                pl.lit(None, dtype=pl.Float64).alias("Runway_Months_Base_P50"),
-                pl.lit(None, dtype=pl.Float64).alias("Terminal_Wealth_Nominal_P50"),
-            )
+        lf_fire_mc = self._execute_monte_carlo_simulations(
+            lf_fire_forecast, cma_real_return, cma_fat_tail
+        )
         lf_fire_analyzed = self._compute_milestones_and_trends(lf_fire_mc, cma_real_return)
         lf_final = self._assemble_final_projection(lf_fire_analyzed)
 
