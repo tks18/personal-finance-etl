@@ -2,6 +2,43 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [11.3.0](https://github.com/tks18/personal-finance-etl/compare/11.2.0...11.3.0) (2026-11-22)
+
+
+### Features 🔥
+
+* **cli:** establish canonical pfetl command and operator CLI routing ([0bbc222](https://github.com/tks18/personal-finance-etl/commit/0bbc22269faab43ed430e1d79b7ab7d7d74ab216))
+* **diagnostics:** add operator status, doctor, and info query services ([e57768e](https://github.com/tks18/personal-finance-etl/commit/e57768e54f9e6f2d0e554382cdd32fd7a6ae9b96))
+
+
+### Tests 🧪
+
+* **cli:** add phase 13 pfetl command and operator services suite ([5ef989e](https://github.com/tks18/personal-finance-etl/commit/5ef989e7b576494ad357466104dfac4bc76bac0d))
+
+
+### Docs 📃
+
+* **cli:** update documentation and guides for canonical pfetl command ([11356c7](https://github.com/tks18/personal-finance-etl/commit/11356c7a9c08ca09dc0ac3e494c04940953498cc))
+* **v11:** finalize v11 roadmap and certify completion at phase 013 ([9eeb368](https://github.com/tks18/personal-finance-etl/commit/9eeb3688d89342e544fdcdf9f1e21b67fdc16193))
+* **v11:** record phase 013 completion record and exit assertions ([3dbe312](https://github.com/tks18/personal-finance-etl/commit/3dbe312fb839d9acd4ccdebf966e92e6a454ecf7))
+
+
+### Code Refactoring 🖌
+
+* **version:** resolve dynamic package version without hardcoding ([95a1c8d](https://github.com/tks18/personal-finance-etl/commit/95a1c8dbc2490eedfc95440df2213af01d587ef2))
+
+
+### Others 🔧
+
+* **release:** synchronize v11.2.0 metadata and phase 13 references ([c32bc3e](https://github.com/tks18/personal-finance-etl/commit/c32bc3efc58ce987b2e7924730fa1e98015f825c))
+* **v11:** remove .agents and .planning directories after completion ([c0e77bc](https://github.com/tks18/personal-finance-etl/commit/c0e77bc41d111192a1e924e0b76bf5e2afa0ccce))
+
+
+### Bug Fixes 🛠
+
+* **cli:** update ascii banner to PFETL and fix operator typing ([405bdd2](https://github.com/tks18/personal-finance-etl/commit/405bdd2eb3a0a80b184fd1af13ed066c4de673b7))
+* **operator:** decompose doctor checks to satisfy pylint branch limit ([7e7e09e](https://github.com/tks18/personal-finance-etl/commit/7e7e09e4b9fb18a03b6055e8a5feb1e45a846d3f))
+
 ## [11.2.0](https://github.com/tks18/personal-finance-etl/compare/11.1.1...11.2.0) (2026-11-22)
 
 
